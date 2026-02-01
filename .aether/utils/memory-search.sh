@@ -47,13 +47,9 @@ search_working_memory() {
 
     local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-    # Search and update access metadata in single jq operation
-    # For exact match (content equals query): relevance = 1.0
-    # For contains match (content includes query): relevance = 0.7
-    # Sort by relevance (descending), then last_accessed (descending)
+    # Update access metadata for matched items and write to file
     jq --arg query "$query" \
        --arg timestamp "$timestamp" \
-       --argjson limit "$limit" \
        '
        # Update access metadata for matches
        .working_memory.items |= map(
@@ -63,7 +59,19 @@ search_working_memory() {
          else
            .
          end
-       ) |
+       )
+       ' "$MEMORY_FILE" > /tmp/memory_search_update.tmp
+
+    atomic_write_from_file "$MEMORY_FILE" /tmp/memory_search_update.tmp
+    rm -f /tmp/memory_search_update.tmp
+
+    # Search and return matches with relevance scores
+    # For exact match (content equals query): relevance = 1.0
+    # For contains match (content includes query): relevance = 0.7
+    # Sort by relevance (descending), then last_accessed (descending)
+    jq --arg query "$query" \
+       --argjson limit "$limit" \
+       '
        # Find matches and calculate relevance
        .working_memory.items
        | map(select(.content | ascii_downcase | contains($query | ascii_downcase)))
