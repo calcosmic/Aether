@@ -13,11 +13,11 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 3 of 10 (Pheromone Communication)
-Plan: 1 of 8 tasks in current phase
+Plan: 3 of 8 tasks in current phase
 Status: In progress
-Last activity: 2026-02-01 — Completed FOCUS pheromone emission command
+Last activity: 2026-02-01 — Completed FEEDBACK pheromone emission command
 
-Progress: [███░░░░░░░] 22%
+Progress: [███░░░░░░░] 25%
 
 ## Recent Changes
 
@@ -88,6 +88,8 @@ Recent decisions affecting current work:
 
 - **Unique Worker Ant Castes**: Designed from first principles for autonomous emergence, not copied from any system
 - **Standalone Architecture**: Aether is its own framework, not dependent on CDS or any external system
+- **Pheromone Command Pattern**: All pheromone commands (init, focus, redirect, feedback) follow bash/jq pattern with atomic-write for consistency and safety
+- **FEEDBACK Pheromone Implementation**: Rewrote feedback.md from Python to bash/jq to match init.md pattern, uses decay_rate: 21600 (6-hour half-life)
 
 ### Pending Todos
 
@@ -115,11 +117,11 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-01 (Phase 3 Plan 1 - FOCUS pheromone emission)
-Stopped at: Completed Phase 3 Plan 1, ready for Plan 2 (REDIRECT command)
+Last session: 2026-02-01 (Phase 3 Plan 3 - FEEDBACK pheromone emission)
+Stopped at: Completed Phase 3 Plan 3 (FEEDBACK command), ready for Plan 4 (Pheromone cleanup)
 Resume file: .planning/phases/03-pheromone-communication/.continue-here.md
 
 **Progress Summary:**
 - ✅ Phase 1: Colony Foundation (8/8 tasks) - State schemas, file locking, atomic writes
 - ✅ Phase 2: Worker Ant Castes (9/9 tasks) - 6 caste prompts, spawning pattern, commands
-- 🔄 Phase 3: Pheromone Communication (1/8 tasks) - FOCUS pheromone emission complete
+- 🔄 Phase 3: Pheromone Communication (3/8 tasks) - FOCUS, REDIRECT, and FEEDBACK pheromone emission complete
