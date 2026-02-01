@@ -4,7 +4,7 @@ description: Show phase details - Queen reviews phase status, tasks, and caste a
 ---
 
 <objective>
-Display detailed phase information including tasks, caste assignments, status, and requirements mapping. Enables Queen to review phase details before execution.
+Display detailed phase information including tasks, caste assignments, status, requirements mapping, and check-in status. Enables Queen to review phase details before execution and make decisions at phase boundaries.
 </objective>
 
 <process>
@@ -104,7 +104,52 @@ If phase is "completed":
   /ant:review {phase_id} - Review completed phase
 ```
 
-## Step 7: For Phase List View
+## Step 7: Check for Queen Check-In
+
+Check if colony is paused at phase boundary awaiting Queen review:
+
+```bash
+# Check for Queen check-in
+checkin_status=$(jq -r '.colony_status.queen_checkin.status // "none"' "$COLONY_STATE")
+
+if [ "$checkin_status" = "awaiting_review" ]; then
+    echo ""
+    echo "QUEEN CHECK-IN REQUIRED"
+    echo ""
+    echo "Colony is paused at phase boundary, awaiting your review."
+    echo ""
+    echo "Options:"
+    echo "  /ant:continue              - Approve and continue to next phase"
+    echo "  /ant:adjust [type]         - Adjust pheromones before continuing"
+    echo "                              Examples: /ant:adjust focus \"area\" 0.9"
+    echo "                                           /ant:adjust redirect \"pattern\" 0.8"
+    echo "  /ant:execute {phase}       - Retry this phase with different approach"
+    echo ""
+
+    # Show phase summary
+    checkin_phase=$(jq -r '.colony_status.queen_checkin.phase' "$COLONY_STATE")
+    echo "Phase Summary:"
+    echo "  Phase: $checkin_phase"
+
+    # Show tasks completed (if available)
+    task_count=$(jq -r ".phases.roadmap[$checkin_phase-1].tasks | length" "$COLONY_STATE")
+    if [ "$task_count" != "null" ] && [ "$task_count" -gt 0 ]; then
+        echo "  Tasks completed: $task_count"
+    fi
+
+    # Show state history
+    transitions=$(jq -r '.state_machine.transitions_count' "$COLONY_STATE")
+    echo "  State transitions: $transitions"
+
+    # Show latest checkpoint
+    latest_checkpoint=$(jq -r '.checkpoints.latest_checkpoint' "$COLONY_STATE")
+    if [ "$latest_checkpoint" != "null" ]; then
+        echo "  Latest checkpoint: $latest_checkpoint"
+    fi
+fi
+```
+
+## Step 8: For Phase List View
 
 ```
 ╔══════════════════════════════════════════════════════════════╗
@@ -239,6 +284,36 @@ Colony state persists safely across context refreshes with corruption-proof JSON
   /ant:execute 2 - Execute Phase 2
   /ant:status - View colony status
 ```
+
+# Example: Phase View with Check-In Required
+
+```
+╔══════════════════════════════════════════════════════════════╗
+║  Phase 5: Phase Boundaries                                   ║
+╠══════════════════════════════════════════════════════════════╣
+║  Status: in_progress                                         ║
+║  Caste: route_setter                                         ║
+╚══════════════════════════════════════════════════════════════╝
+
+QUEEN CHECK-IN REQUIRED
+
+Colony is paused at phase boundary, awaiting your review.
+
+Options:
+  /ant:continue              - Approve and continue to next phase
+  /ant:adjust [type]         - Adjust pheromones before continuing
+                              Examples: /ant:adjust focus "area" 0.9
+                                           /ant:adjust redirect "pattern" 0.8
+  /ant:execute {phase}       - Retry this phase with different approach
+
+Phase Summary:
+  Phase: 5
+  Tasks completed: 5
+  State transitions: 8
+  Latest checkpoint: checkpoint_7.json
+```
+
+# Example: Phase View Without Check-In (Normal Display)
 
 # Example: Phase List View
 
