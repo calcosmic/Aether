@@ -13,11 +13,11 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 6 of 10 (Autonomous Emergence)
-Plan: 0/8 started
-Status: Ready to plan
-Last activity: 2026-02-01 — Phase 5 complete and verified (9/9 must-haves)
+Plan: 1/8 complete
+Status: In progress
+Last activity: 2026-02-01 — Completed 06-01: Capability Gap Detection
 
-Progress: [████████░░] 50%
+Progress: [████████░░] 50% → [████████░░] 51%
 
 ## Recent Changes
 
@@ -63,9 +63,9 @@ Progress: [████████░░] 50%
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 36
+- Total plans completed: 37
 - Average duration: 4 min
-- Total execution time: 2.4 hours
+- Total execution time: 2.5 hours
 
 **By Phase:**
 
@@ -76,10 +76,11 @@ Progress: [████████░░] 50%
 | 3 | 6 | 30 min | 5.0 min |
 | 4 | 5 | 20 min | 4.0 min |
 | 5 | 8 | 25 min | 3.1 min |
+| 6 | 1 | 4 min | 4.0 min |
 
 **Recent Trend:**
-- Last 8 plans: 3.1 min avg
-- Trend: Phase 5 complete, ready for Phase 6
+- Last 8 plans: 3.3 min avg
+- Trend: Phase 6 in progress (1/8 complete)
 
 *Updated after each plan completion*
 
@@ -116,6 +117,10 @@ Recent decisions affecting current work:
 - **Queen Check-In System**: Implemented CHECKIN pheromone type with null decay_rate (persists until Queen decision). Created emit_checkin_pheromone(), check_phase_boundary() infrastructure, and await_queen_decision() functions. Created /ant:continue command for approving phase completion and clearing CHECKIN pheromone. Created /ant:adjust command for pheromone modification during check-in (only works when queen_checkin.status is "awaiting_review"). Enhanced /ant:phase command to display QUEEN CHECK-IN REQUIRED section with options and phase summary when colony is paused.
 - **Memory-Driven Adaptation**: Implemented adapt_next_phase_from_memory() function that reads previous phase patterns from memory.json (confidence > 0.7), extracts focus_preferences, constraints, success_patterns, and failure_patterns. Emits FOCUS pheromones (strength 0.8) for high-value areas, REDIRECT pheromones (strength 0.9) for constraints via direct jq updates. Stores adaptation in next phase's roadmap entry with inherited_focus, inherited_constraints, success_patterns, failure_patterns, adapted_from, adapted_at. Integrated into await_queen_decision() for automatic adaptation at phase boundaries. Uses direct jq updates (no wrapper functions) for pheromone emission since Phase 3 created .md commands not bash functions.
 - **Emergence Guard**: Implemented emergence guard in /ant:focus and /ant:redirect commands that blocks Queen intervention during EXECUTING state with clear error message explaining alternatives (wait for VERIFYING, use FEEDBACK, review status). /ant:feedback allowed during EXECUTING (informational, not directional). Enforces Aether's core philosophy of "structure at boundaries, emergence within phases."
+- **Capability Gap Detection**: Implemented spawn-decision.sh with 5 functions for autonomous spawn decision logic. analyze_task_requirements extracts technical domains, frameworks, skills from task descriptions. compare_capabilities identifies gaps between required and available capabilities. detect_capability_gaps decides spawn vs attempt based on gaps/failures. calculate_spawn_score uses multi-factor formula (gap_score × 0.40 + priority × 0.20 + load × 0.15 + budget × 0.15 + resources × 0.10) with threshold 0.6. map_gap_to_specialist maps capability gaps to specialist castes using keyword lookup with semantic fallback.
+- **Spawn Decision Threshold**: Set to 0.6 based on multi-factor scoring where gap_score has highest weight (40%). Balances autonomous action (spawning when needed) with resource conservation (not over-spawning).
+- **Specialist Mapping**: Hybrid approach uses direct keyword lookup from worker_ants.json specialist_mappings.capability_to_caste for known patterns, with semantic analysis as fallback for novel capability gaps.
+- **Worker Ant Capability Assessment**: All 6 Worker Ant prompts now have "Capability Gap Detection" section with 5-step workflow (Extract requirements → Compare to own capabilities → Identify gaps → Calculate spawn score → Map to specialist). Each caste has caste-specific capabilities listed from worker_ants.json.
 
 ### Pending Todos
 
@@ -143,9 +148,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-01 (Phase 5 Complete - Phase Boundaries)
-Stopped at: Phase 5 complete and verified (9/9 must-haves, 13/13 requirements)
-Resume file: .planning/phases/05-phase-boundaries/.continue-here.md
+Last session: 2026-02-01 (Phase 6 Plan 1 - Capability Gap Detection)
+Stopped at: Completed 06-01: Capability Gap Detection with Worker Spawns Workers (2/2 tasks)
+Resume file: None
 
 **Progress Summary:**
 - ✅ Phase 1: Colony Foundation (8/8 tasks) - State schemas, file locking, atomic writes
@@ -153,4 +158,4 @@ Resume file: .planning/phases/05-phase-boundaries/.continue-here.md
 - ✅ Phase 3: Pheromone Communication (6/6 tasks) - FOCUS, REDIRECT, FEEDBACK emission, all Worker Ant response, verification complete
 - ✅ Phase 4: Triple-Layer Memory (5/5 plans) - Working Memory, DAST compression, LRU eviction, pattern extraction, associative links, compression triggers, cross-layer search complete
 - ✅ Phase 5: Phase Boundaries (9/9 plans) - State machine, pheromone-triggered transitions, checkpoints, recovery, crash detection, Queen check-in, memory adaptation, emergence guard complete
-- ⏭️ Ready for Phase 6: Autonomous Emergence
+- 🔄 Phase 6: Autonomous Emergence (1/8 plans) - Capability gap detection with specialist mapping complete
