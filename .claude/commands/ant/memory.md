@@ -1,414 +1,321 @@
 ---
 name: ant:memory
-description: View AETHER memory system - working, short-term, and long-term memory contents
+description: View Queen Ant Colony memory - pheromone trails, learned preferences, patterns
 ---
 
 <objective>
-Display the contents and state of AETHER's triple-layer memory system including working memory (current session), short-term memory (compressed sessions), and long-term memory (persistent patterns).
+Display the colony's memory system including pheromone history, learned preferences from Queen's signals, detected patterns, and associative links.
 </objective>
 
 <reference>
-# `/ant:memory` - View Memory System
+# `/ant:memory` - View Colony Memory
 
 ## What It Shows
 
-Displays the complete state of AETHER's three-layer memory architecture:
+Displays the colony's learned patterns and preferences from pheromone signals:
 
 ```
 /ant:memory
 ```
 
-## Memory Layers
+## Memory Sections
 
-### 1. Working Memory (Current Session)
+### 1. Learned Preferences
 
-Shows active session memory with recent messages, contexts, and facts:
+Shows what the colony has learned from Queen's pheromone patterns:
 
 ```
-💭 WORKING MEMORY (Current Session)
+🧠 LEARNED PREFERENCES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Capacity: 85,400 / 200,000 tokens (42.7%)
-Age: 47 minutes
-Messages: 47
+FOCUS TOPICS (What Queen prioritizes)
+  WebSocket security (3 occurrences)
+  message reliability (2 occurrences)
+  authentication (1 occurrence)
+  test coverage (1 occurrence)
 
-RECENT MESSAGES (Last 10)
-  [47] Goal-Agent → Orchestrator: "Task 4: Create login UI"
-  [46] Orchestrator → Frontend-Specialist: "Spawning for UI design gap"
-  [45] Frontend-Specialist → Goal-Agent: "UI component library selected: shadcn/ui"
-  ...
+AVOID PATTERNS (What Queen redirects away from)
+  string concatenation for SQL (2 occurrences) → ⚠️ One more becomes constraint
+  callback patterns (1 occurrence)
+  MongoDB for this project (1 occurrence)
 
-ACTIVE CONTEXTS
-  [project] Blog platform with markdown support
-  [tech_stack] Python, FastAPI, React, PostgreSQL
-  [goal] "Build authentication system"
-
-FACTS
-  [f1] PostgreSQL chosen for primary database
-  [f2] JWT token expiration: 24 hours
-  [f3] Password requirements: min 12 chars, must include special char
-
-PATTERNS (Detected)
-  [p1] Spawn occurs when capability gap detected
-  [p2] API endpoints follow RESTful conventions
-  [p3] Frontend components follow atomic design pattern
+FEEDBACK CATEGORIES
+  Quality: 12 positive, 3 negative
+  Speed: 5 "too slow", 8 "good pace"
+  Direction: 2 "wrong approach" corrections
 ```
 
-### 2. Short-Term Memory (Recent Sessions)
+### 2. Pheromone History
 
-Shows compressed recent sessions:
+Shows recent pheromone signals and their impact:
 
 ```
-🗂️ SHORT-TERM MEMORY (Recent Sessions)
+🌸 PHEROMONE HISTORY (Last 10)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Capacity: 3 / 10 sessions
-Total Items: 127
-Compression Ratio: 14.2x
+[1] INIT - "Build a real-time chat application"
+  Time: 2 hours ago
+  Strength: 1.0 (persistent)
+  Impact: Colony mobilized, 5 phases created
 
-SESSION 1 (47 minutes ago)
-  Goal: "Build authentication system"
-  Duration: 47 seconds
-  Tasks: 5/5 completed
-  Key Learnings:
-    - PostgreSQL connection pooling reduces latency by 40%
-    - JWT refresh token pattern prevents frequent re-login
-  Errors Logged: 1 (MEDIUM)
+[2] FOCUS - "WebSocket security"
+  Time: 47 minutes ago
+  Strength: 0.7 (decayed to 0.3)
+  Impact: Executor prioritized security, Verifier increased scrutiny
 
-SESSION 2 (2 hours ago)
-  Goal: "Create REST API with JWT authentication"
-  Duration: 2 minutes 14 seconds
-  Tasks: 8/8 completed
-  Key Learnings:
-    - OpenAPI specification auto-generation reduces docs overhead
-    - Rate limiting prevents brute force attacks
-  Errors Logged: 2 (1 HIGH, 1 LOW)
+[3] FOCUS - "message reliability"
+  Time: 23 minutes ago
+  Strength: 0.5 (decayed to 0.2)
+  Impact: Message queue implemented, Redis configured
 
-SESSION 3 (5 hours ago)
-  Goal: "Add real-time notifications"
-  Duration: 1 minute 33 seconds
-  Tasks: 4/6 completed (2 failed)
-  Key Learnings:
-    - WebSocket connections need heartbeat mechanism
-    - Redis pub/sub scales better than direct connections
-  Errors Logged: 3 (1 CRITICAL, 2 MEDIUM)
+[4] FEEDBACK - "Great progress on WebSocket layer"
+  Time: 15 minutes ago
+  Strength: 0.5
+  Category: quality (positive)
+  Impact: Pattern recorded for reuse
+
+[5] REDIRECT - "Don't use callbacks"
+  Time: 10 minutes ago
+  Strength: 0.7
+  Impact: Planner adjusted to use async/await
 ```
 
-### 3. Long-Term Memory (Persistent)
+### 3. Detected Patterns
 
-Shows persistent patterns, best practices, and anti-patterns:
+Shows patterns the colony has extracted from work:
 
 ```
-📚 LONG-TERM MEMORY (Persistent)
+📊 DETECTED PATTERNS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Total Patterns: 34
-Best Practices: 18
-Anti-Patterns: 7
-Created: 23 days ago
+PERFORMANCE PATTERNS
+  → WebSocket pooling reduces connections by 40%
+  → Redis pub/sub scales better than direct connections
+  → Message queue prevents data loss during reconnects
 
-PATTERNS (Database)
-  [pdb-1] Connection pooling essential for multi-agent concurrency
-  [pdb-2] Foreign key indexes improve query performance 3x
-  [pdb-3] Transaction isolation level: READ_COMMITTED optimal
+ARCHITECTURE PATTERNS
+  → Layered architecture enables parallel development
+  → Event-driven patterns work best for real-time features
 
-PATTERNS (API Design)
-  [api-1] RESTful naming: plural nouns, lowercase with underscores
-  [api-2] Version APIs via URL path (/v1/, /v2/)
-  [api-3] HTTP status codes: 201 for created, 204 for no-content
+SECURITY PATTERNS
+  → JWT token validation at entry point prevents bypass
+  → Parameterized queries prevent SQL injection
 
-PATTERNS (Agent Spawning)
-  [as-1] Spawn when capability gap > 30%
-  [as-2] Max depth 5 prevents spawn loops
-  [as-3] Specialist agents terminate after task completion
-
-BEST PRACTICES
-  [bp-1] Always validate inputs before database queries
-  [bp-2] Use parameterized queries to prevent SQL injection
-  [bp-3] Implement circuit breakers for external service calls
-  [bp-4] Log all errors with context (stack trace, state, inputs)
-  [bp-5] Compress working memory when > 60% capacity
-
-ANTI-PATTERNS (What to Avoid)
-  [ap-1] Don't spawn agents for capabilities that exist
-  [ap-2] Don't use string interpolation for SQL queries
-  [ap-3] Don't hardcode configuration values
-  [ap-4] Don't ignore error messages from spawned agents
-  [ap-5] Don't let working memory exceed 80% (performance degrades)
+QUALITY PATTERNS
+  → Parallel testing reduces total test time by 60%
+  → Load testing before deployment prevents production issues
 ```
 
-### 4. Associative Links
+### 4. Best Practices
 
-Shows relationships between memory items:
+Shows best practices learned from successful executions:
+
+```
+✅ BEST PRACTICES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SPAWNING
+  [bp-1] Spawn specialists when capability gap > 30%
+  [bp-2] Max subagent depth 3 prevents complexity explosion
+  [bp-3] Terminating subagents after task completion frees resources
+
+COMMUNICATION
+  [bp-4] Peer-to-peer coordination reduces bottleneck
+  [bp-5] Pheromone signals guide without commands
+  [bp-6] Focus on areas, not specific implementations
+
+EXECUTION
+  [bp-7] Implement in priority order based on focus pheromones
+  [bp-8] Test critical paths before edge cases
+  [bp-9] Compress memory between phases
+```
+
+### 5. Anti-Patterns
+
+Shows what to avoid (learned from redirects and errors):
+
+```
+❌ ANTI-PATTERNS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+APPROACHES TO AVOID
+  [ap-1] String concatenation for SQL (security risk)
+  [ap-2] Callback hell (use async/await)
+  [ap-3] Monolithic architecture (prevents parallel development)
+
+BEHAVIORS TO AVOID
+  [ap-4] Spawning without clear purpose (resource waste)
+  [ap-5] Ignoring redirect pheromones (leads to constraints)
+  [ap-6] Exceeding subagent depth limit (confusion)
+```
+
+### 6. Associative Network
+
+Shows relationships between learned concepts:
 
 ```
 🔗 ASSOCIATIVE NETWORK
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Total Links: 89
+STRONG ASSOCIATIONS (>0.8)
+  WebSocket security ←→ JWT validation (0.94)
+  message reliability ←→ Redis pub/sub (0.89)
+  real-time features ←→ event-driven architecture (0.87)
 
-STRONG LINKS (Association > 0.8)
-  [L-47] JWT authentication ←→ token refresh pattern (0.94)
-  [L-45] PostgreSQL ←→ connection pooling (0.89)
-  [L-38] WebSocket ←→ heartbeat mechanism (0.87)
-  [L-32] Agent spawning ←→ capability detection (0.85)
+MEDIUM ASSOCIATIONS (0.5-0.8)
+  authentication ←→ session management (0.76)
+  performance ←→ connection pooling (0.72)
+  testing ←→ load testing (0.68)
 
-MEDIUM LINKS (Association 0.5-0.8)
-  [L-23] API design ←→ OpenAPI specification (0.76)
-  [L-19] FastAPI ←→ automatic validation (0.72)
-  [L-15] React ←→ component library (0.68)
-  ... (41 more)
-
-WEAK LINKS (Association < 0.5)
-  [L-8] Markdown parsing ←→ frontend rendering (0.42)
-  [L-3] Database indexing ←→ query optimization (0.38)
-  ... (29 more)
+WEAK ASSOCIATIONS (<0.5)
+  markdown parsing ←→ frontend rendering (0.42)
+  database indexing ←→ query optimization (0.38)
 
 RECENTLY ACTIVATED
-  Last 5 minutes: JWT, PostgreSQL, agent spawning, WebSocket
-  Last hour: +12 API design, +8 React, +5 database
+  Last 5 minutes: WebSocket, security, JWT
+  Last hour: +authentication, +session, +Redis
 ```
 
 ## Usage Examples
 
-### View All Memory Layers
+### View All Memory
 
 ```bash
 /ant:memory
 ```
 
-Shows all four sections (working, short-term, long-term, associative).
-
-### View Specific Layer
-
-```bash/ant:memory --layer working
-```
-
-Shows only working memory contents.
-
-```bash/ant:memory --layer short-term
-```
-
-Shows only short-term memory (recent sessions).
-
-```bash/ant:memory --layer long-term
-```
-
-Shows only long-term memory (persistent patterns).
-
-```bash/ant:memory --layer associative
-```
-
-Shows only associative network links.
+Shows all sections.
 
 ### Search Memory
 
-```bash/ant:memory --search "authentication"
+```bash
+/ant:memory --search "WebSocket"
 ```
 
-Search all memory layers for "authentication".
+Search for "WebSocket" across all memory.
 
-```bash/ant:memory --search "JWT" --layer long-term
-```
-
-Search only long-term memory for "JWT".
-
-### Query Specific Pattern
-
-```bash/ant:memory --pattern "pdb-1"
-```
-
-Show details of specific pattern by ID.
-
-### Export Memory
-
-```bash/ant:memory --export memory_backup.json
-```
-
-Export all memory to JSON file.
-
-## Memory Operations
-
-### Compress Working Memory
-
-When working memory exceeds 60%, compress to short-term:
-
-```bash/ant:memory --compress
-```
-
-This:
-1. Compresses current session to key learnings
-2. Stores in short-term memory
-3. Clears working memory (keeps active context)
-4. Frees up tokens for new work
-
-### Promote to Long-Term
-
-Move important patterns from short-term to long-term:
-
-```bash/ant:memory --promote "connection pooling"
-```
-
-Promotes patterns matching "connection pooling" to persistent memory.
-
-### Forget Specific Items
-
-Remove specific memory items:
-
-```bash/ant:memory --forget "pdb-1"
-```
-
-Removes pattern from memory (use with caution).
-
-## Memory Capacity Planning
-
-| Memory Type | Capacity | When to Act | Action |
-|-------------|----------|-------------|--------|
-| Working | 200k tokens | > 60% (120k) | Compress to short-term |
-| Working | 200k tokens | > 80% (160k) | Compress immediately |
-| Short-Term | 10 sessions | > 8 sessions | Review and promote |
-| Short-Term | 10 sessions | = 10 sessions | Auto-compress to long-term |
-| Long-Term | Unlimited | N/A | Manual curation only |
-
-## Memory Compression Algorithm
-
-When compressing working memory, AETHER:
-
-1. **Extracts Key Learnings**: Identifies important patterns
-2. **Removes Redundancy**: Deduplicates similar information
-3. **Preserves Context**: Keeps project state and goals
-4. **Creates Summary**: Generates condensed session summary
-5. **Stores References**: Maintains links to important details
-
-Result: 10-20x compression while preserving critical information.
-
-## Association Scoring
-
-Links are scored based on:
-
-- **Co-occurrence**: How often items appear together (0-0.4)
-- **Semantic similarity**: Related meaning (0-0.3)
-- **Causal relationship**: One causes/influences other (0-0.3)
-
-Total score: 0-1.0
-
-**Strong links** (>0.8) are automatically activated when either item is accessed.
-
-## Memory Query Syntax
-
-### Basic Search
+### View Specific Section
 
 ```bash
-/ant:memory "authentication"
+/ant:memory --section preferences
 ```
 
-Finds all items containing "authentication".
+Shows only learned preferences.
 
-### Boolean Operators
-
-```bash/ant:memory "authentication AND JWT"
-/ant:memory "database OR cache"
-/ant:memory "authentication NOT OAuth"
+```bash
+/ant:memory --section patterns
 ```
 
-### Wildcards
+Shows only detected patterns.
 
-```bash/ant:memory "auth*"
+```bash
+/ant:memory --section associations
 ```
 
-Matches "authentication", "auth", "authorize", etc.
+Shows only associative network.
 
-### Field Search
+### View Associations
 
-```bash/ant:memory "pattern:database"
-/ant:memory "best_practice:validation"
-/ant:memory "anti_pattern:hardcode"
+```bash
+/ant:memory --associated "JWT"
 ```
 
-### Association Query
+Shows all concepts strongly associated with "JWT".
 
-```bash/ant:memory --associated "JWT"
+## Pheromone Learning
+
+The colony learns from pheromone patterns:
+
+### Focus Learning
+
+```
+After 3+ focuses on "WebSocket security":
+  → Pattern: "Queen prioritizes WebSocket security"
+  → Behavior: Executor always includes security in WebSocket work
+  → Association: WebSocket ←→ security (strong link)
 ```
 
-Shows all items strongly associated with "JWT".
+### Redirect Learning
 
-## Memory Health Indicators
+```
+After 1 redirect:
+  → Logged in ERROR_LEDGER
 
-### Healthy Memory
+After 2 redirects:
+  → Pattern detected
 
-- ✅ Working memory 40-60%
-- ✅ Short-term 5-7 sessions
-- ✅ Strong associations forming
-- ✅ Regular compression occurring
+After 3 redirects:
+  → FLAGGED_ISSUE created
+  → Constraint created: validate_approach_before_use
+  → Blocks approach BEFORE execution
+```
 
-### Warning Signs
+### Feedback Learning
 
-- ⚠️ Working memory > 70%
-- ⚠️ Short-term > 8 sessions
-- ⚠️ Few associative links
-- ⚠️ No recent compression
+```
+Positive feedback ("Great work"):
+  → Pattern recorded
+  → Reused in similar contexts
 
-### Critical Issues
+Negative feedback ("Too many bugs"):
+  → Verifier intensifies testing
+  → Pattern: "Increase scrutiny when quality feedback"
+```
 
-- 🚨 Working memory > 85%
-- 🚨 Short-term = 10 sessions
-- 🚨 No associative links (isolated knowledge)
+## Memory Compression
+
+Between phases, Synthesizer Ant compresses memory:
+
+```
+Phase Complete:
+  → Extract key learnings
+  → Identify new patterns
+  → Compress to summary
+  → Store in short-term memory
+
+After 10 phases:
+  → Promote to long-term memory
+  → Persistent patterns available for all future work
+```
+
+## Research Foundation
+
+Based on Phase 5 research:
+- **Verification Feedback Loops**: Learning from feedback improves 39%
+- **Explainable Verification**: Understanding why patterns work
+
+Based on Phase 4 research:
+- **Adaptive Personalization**: Systems learn user preferences
+- **Anticipatory Context**: Predicting needs based on patterns
 
 ## Related Commands
 
 ```
-/ant                    # Show system overview
-/ant:status            # Show system status with memory stats
-/ant:errors            # View error ledger
-/ant:build <goal>     # Execute new goal
+/ant           # System overview
+/ant:status    # Colony status with memory stats
+/ant:errors    # Error ledger
+/ant:focus     # Add focus pheromone (teaches preferences)
 ```
 
 ## Tips for Memory Management
 
-### When to Compress
+### When Patterns Form
 
-- After completing a major goal
-- When working memory exceeds 60%
-- Before starting a new complex task
-- When system feels "slow" (memory bloat)
+- **3+ focuses** on same topic → Preference learned
+- **3+ redirects** on same pattern → Constraint created
+- **5+ positive feedback** → Best practice established
 
-### What Gets Promoted to Long-Term
+### Forgetting Patterns
 
-- Repeated patterns (occurs in 3+ sessions)
-- Critical best practices (security, performance)
-- Important anti-patterns (avoid mistakes)
-- High-value associations (strong links)
+Patterns can be forgotten if:
+- Never used again after 30 days
+- Superseded by better approach
+- Project-specific and project complete
 
-### When to Forget
+### Strong Associations
 
-- Outdated patterns (superseded by new knowledge)
-- Project-specific details (project completed)
-- Incorrect information (was never true)
-- Duplicate patterns (keep only best version)
-
-## Memory System Architecture
-
-```
-┌─────────────────────────────────────────────────┐
-│                 AETHER MEMORY                   │
-└─────────────────────────────────────────────────┘
-                        │
-        ┌───────────────┼───────────────┐
-        │               │               │
-   ┌────▼────┐    ┌────▼────┐    ┌────▼────┐
-   │ WORKING │    │ SHORT-  │    │  LONG-  │
-   │  200k   │────▶ TERM    │────▶  TERM   │
-   │ tokens  │    │ 10 sess │    │permanent │
-   └────┬────┘    └────┬────┘    └────┬────┘
-        │              │              │
-        │         ┌────▼────┐        │
-        └────────▶│ASSOCIA- │◀───────┘
-                  │ TIVE    │
-                  │ NETWORK │
-                  └─────────┘
-```
-
-Flow: Working → compress → Short-term → promote → Long-term
-
-All layers connected by associative network.
+Associations strengthen when:
+- Concepts appear together frequently
+- One causes the other consistently
+- Queen focuses on both together
 </reference>
