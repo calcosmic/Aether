@@ -13,8 +13,25 @@
 SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AETHER_ROOT="$(cd "$SCRIPT_PATH/../.." && pwd)"
 
-source "$AETHER_ROOT/.aether/utils/atomic-write.sh"
-source "$AETHER_ROOT/.aether/utils/file-lock.sh"
+# Try to source from AETHER_ROOT, fallback to relative paths
+if [ -f "$AETHER_ROOT/.aether/utils/atomic-write.sh" ]; then
+    source "$AETHER_ROOT/.aether/utils/atomic-write.sh"
+else
+    source ".aether/utils/atomic-write.sh"
+fi
+
+if [ -f "$AETHER_ROOT/.aether/utils/file-lock.sh" ]; then
+    source "$AETHER_ROOT/.aether/utils/file-lock.sh"
+else
+    source ".aether/utils/file-lock.sh"
+fi
+
+# Source spawn-outcome-tracker for meta-learning
+if [ -f "$AETHER_ROOT/.aether/utils/spawn-outcome-tracker.sh" ]; then
+    source "$AETHER_ROOT/.aether/utils/spawn-outcome-tracker.sh"
+else
+    source ".aether/utils/spawn-outcome-tracker.sh"
+fi
 
 # Configuration
 COLONY_STATE_FILE="$AETHER_ROOT/.aether/data/COLONY_STATE.json"
@@ -28,6 +45,41 @@ get_timestamp() {
 # Helper: Get current epoch timestamp
 get_epoch() {
     date +%s
+}
+
+# Derive task type from task context using keyword matching
+# Arguments: task_context
+# Returns: task_type string (database, frontend, backend, api, testing, security, etc.)
+derive_task_type() {
+    local task_context="$1"
+    local task_lower=$(echo "$task_context" | tr '[:upper:]' '[:lower:]')
+
+    # Priority order for task type detection
+    if [[ "$task_lower" =~ (database|sql|nosql|mongo|postgres|mysql|schema|migration|query) ]]; then
+        echo "database"
+    elif [[ "$task_lower" =~ (frontend|ui|ux|css|html|component|view|template) ]]; then
+        echo "frontend"
+    elif [[ "$task_lower" =~ (backend|server|endpoint|route|controller|service) ]]; then
+        echo "backend"
+    elif [[ "$task_lower" =~ (api|rest|graphql|webhook|integration) ]]; then
+        echo "api"
+    elif [[ "$task_lower" =~ (test|testing|spec|validation|verify|quality|assert) ]]; then
+        echo "testing"
+    elif [[ "$task_lower" =~ (security|auth|authentication|authorization|encryption|csrf|xss) ]]; then
+        echo "security"
+    elif [[ "$task_lower" =~ (performance|optimization|cache|speed|latency|scalability) ]]; then
+        echo "performance"
+    elif [[ "$task_lower" =~ (devops|deploy|ci/cd|pipeline|docker|kubernetes|infrastructure) ]]; then
+        echo "devops"
+    elif [[ "$task_lower" =~ (analyze|analysis|research|investigate|explore) ]]; then
+        echo "analysis"
+    elif [[ "$task_lower" =~ (plan|planning|design|architect|structure) ]]; then
+        echo "planning"
+    elif [[ "$task_lower" =~ (implement|code|write|create|build|develop) ]]; then
+        echo "implementation"
+    else
+        echo "general"
+    fi
 }
 
 # Check if spawning is allowed based on resource constraints
@@ -166,7 +218,29 @@ record_outcome() {
         return 1
     fi
 
+    # Extract spawn details from history
+    local spawn_details
+    spawn_details=$(jq -r ".spawn_tracking.spawn_history[] | select(.id == \"$spawn_id\")" "$COLONY_STATE_FILE")
+
+    if [ -z "$spawn_details" ]; then
+        echo "Spawn ID not found: $spawn_id" >&2
+        release_lock
+        return 1
+    fi
+
+    local specialist_type=$(echo "$spawn_details" | jq -r '.specialist')
+    local task_context=$(echo "$spawn_details" | jq -r '.task')
+
+    # Derive task type from context
+    local task_type
+    task_type=$(derive_task_type "$task_context")
+
     # Update spawn history entry and performance metrics
+    local perf_field="successful_spawns"
+    if [ "$outcome" = "failure" ]; then
+        perf_field="failed_spawns"
+    fi
+
     local updated_state
     updated_state=$(jq "
         .spawn_tracking.spawn_history |= map(
@@ -179,7 +253,7 @@ record_outcome() {
             end
         ) |
         .spawn_tracking.depth -= 1 |
-        .performance_metrics.$( [ "$outcome" == "success" ] && echo "successful_spawns" || echo "failed_spawns" ) += 1 |
+        .performance_metrics.$perf_field += 1 |
         .resource_budgets.current_spawns -= 1
     " "$COLONY_STATE_FILE")
 
@@ -189,8 +263,15 @@ record_outcome() {
         return 1
     fi
 
-    # Release lock
+    # Release lock before calling outcome tracking (which acquires its own lock)
     release_lock
+
+    # Record outcome for meta-learning confidence tracking
+    if [ "$outcome" = "success" ]; then
+        record_successful_spawn "$specialist_type" "$task_type" "$spawn_id"
+    else
+        record_failed_spawn "$specialist_type" "$task_type" "$spawn_id" "$notes"
+    fi
 
     return 0
 }
@@ -251,4 +332,4 @@ reset_spawn_counters() {
 }
 
 # Export functions
-export -f can_spawn record_spawn record_outcome get_spawn_history get_spawn_stats reset_spawn_counters
+export -f can_spawn record_spawn record_outcome get_spawn_history get_spawn_stats reset_spawn_counters derive_task_type get_specialist_confidence
