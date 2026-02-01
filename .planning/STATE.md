@@ -13,11 +13,11 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 5 of 10 (Phase Boundaries)
-Plan: 2/5 complete
+Plan: 3/5 complete
 Status: In Progress
-Last activity: 2026-02-01 — Completed 05-02: Pheromone-Triggered State Transitions
+Last activity: 2026-02-01 — Completed 05-03: Checkpoint System
 
-Progress: [████████░░] 45%
+Progress: [█████████░] 50%
 
 ## Recent Changes
 
@@ -63,19 +63,23 @@ Progress: [████████░░] 45%
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 3.5 min
-- Total execution time: 0.06 hours
+- Total plans completed: 29
+- Average duration: 4 min
+- Total execution time: 1.9 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 5 | 1 | 3.5 min | 3.5 min |
+| 1 | 8 | 35 min | 4.4 min |
+| 2 | 9 | 32 min | 3.6 min |
+| 3 | 6 | 30 min | 5.0 min |
+| 4 | 5 | 20 min | 4.0 min |
+| 5 | 3 | 14 min | 4.7 min |
 
 **Recent Trend:**
-- Last 1 plans: 3.5 min
-- Trend: Starting Phase 5
+- Last 3 plans: 4.7 min avg
+- Trend: Steady progress through Phase 5
 
 *Updated after each plan completion*
 
@@ -105,6 +109,7 @@ Recent decisions affecting current work:
 - **Queen Memory Command**: Created /ant:memory command with search, status, verify, and compress subcommands for Queen interaction with memory system.
 - **State Machine Foundation**: Implemented state-machine.sh with 9 valid state transitions using case statement for bash 3.x compatibility (macOS). Functions: get_current_state, get_valid_states, is_valid_state, is_valid_transition, validate_transition. State history stored in state_machine.state_history.
 - **Pheromone-Triggered State Transitions**: Implemented transition_state() function with file locking, atomic writes, and pheromone trigger recording. Acquires lock before transition, validates with is_valid_transition(), updates COLONY_STATE.json atomically via jq, records metadata (from, to, trigger, timestamp, checkpoint) in state_machine.state_history. Trap cleanup ensures lock release on errors.
+- **Checkpoint System**: Implemented checkpoint.sh with save_checkpoint() capturing complete colony state (COLONY_STATE, pheromones, worker_ants, memory), load_checkpoint() for recovery, rotate_checkpoints() (keeps 10 most recent), and list_checkpoints(). Checkpoint reference file stores full path to latest checkpoint. Pre/post-transition checkpoints integrated into transition_state(). JSON validation with python3 ensures integrity.
 
 ### Pending Todos
 
@@ -132,8 +137,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-01 (Phase 5 Plan 2: Pheromone-Triggered State Transitions)
-Stopped at: Completed 05-02-PLAN.md (transition_state with locking and atomic writes)
+Last session: 2026-02-01 (Phase 5 Plan 3: Checkpoint System)
+Stopped at: Completed 05-03-PLAN.md (checkpoint save/load/rotate with pre/post-transition integration)
 Resume file: None
 
 **Progress Summary:**
@@ -141,4 +146,4 @@ Resume file: None
 - ✅ Phase 2: Worker Ant Castes (9/9 tasks) - 6 caste prompts, spawning pattern, commands
 - ✅ Phase 3: Pheromone Communication (6/6 tasks) - FOCUS, REDIRECT, FEEDBACK emission, all Worker Ant response, verification complete
 - ✅ Phase 4: Triple-Layer Memory (5/5 plans) - Working Memory, DAST compression, LRU eviction, pattern extraction, associative links, compression triggers, cross-layer search complete
-- 🔄 Phase 5: Phase Boundaries (2/5 plans) - State machine foundation, pheromone-triggered transitions complete
+- 🔄 Phase 5: Phase Boundaries (3/5 plans) - State machine foundation, pheromone-triggered transitions, checkpoint system complete
