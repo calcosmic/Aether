@@ -13,11 +13,11 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 4 of 10 (Triple-Layer Memory)
-Plan: 3 of N plans complete
-Status: In progress - LRU eviction, pattern extraction, associative links ready
-Last activity: 2026-02-01 — Completed Phase 4 Plan 3: Short-term LRU eviction, Long-term pattern extraction, associative links
+Plan: 4 of N plans complete
+Status: In progress - Compression triggers ready
+Last activity: 2026-02-01 — Completed Phase 4 Plan 4: Compression triggers (phase boundary, token threshold, pattern extraction)
 
-Progress: [████████░░] 75%
+Progress: [████████░░] 80%
 
 ## Recent Changes
 
@@ -99,6 +99,7 @@ Recent decisions affecting current work:
 - **Long-term Pattern Extraction**: Implemented extract_pattern_to_long_term, extract_high_value_patterns, detect_patterns_across_sessions. Pattern types: success_pattern, failure_pattern, preference, constraint. Similarity detection via jq contains() (case-insensitive substring).
 - **Associative Links**: Implemented create_associative_link for bidirectional cross-layer connections. Patterns link to originating sessions with "extracted_from" type. Reverse links stored in session metadata.related_patterns.
 - **Confidence Scoring**: Patterns appearing 3+ times get higher confidence (0.5 + occurrences * 0.1, max 1.0).
+- **Compression Triggers**: Implemented phase boundary compression (prepare_compression_data → Architect Ant LLM → trigger_phase_boundary_compression), token threshold trigger (80% capacity), and automatic pattern extraction after session creation and before eviction. Bash prepares data, LLM compresses, bash processes result.
 
 ### Pending Todos
 
@@ -126,12 +127,12 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-01 (Phase 4 Plan 3 - LRU and Pattern Extraction)
-Stopped at: Completed Phase 4 Plan 3 - Short-term LRU eviction, Long-term pattern extraction, associative links
+Last session: 2026-02-01 (Phase 4 Plan 4 - Compression Triggers)
+Stopped at: Completed Phase 4 Plan 4 - Compression triggers with bash data preparation, LLM DAST compression, and automatic pattern extraction
 Resume file: .planning/phases/04-triple-layer-memory/.continue-here.md (to be created)
 
 **Progress Summary:**
 - ✅ Phase 1: Colony Foundation (8/8 tasks) - State schemas, file locking, atomic writes
 - ✅ Phase 2: Worker Ant Castes (9/9 tasks) - 6 caste prompts, spawning pattern, commands
 - ✅ Phase 3: Pheromone Communication (6/6 tasks) - FOCUS, REDIRECT, FEEDBACK emission, all Worker Ant response, verification complete
-- 🔄 Phase 4: Triple-Layer Memory (3/N plans) - Working Memory, DAST compression, LRU eviction, pattern extraction, associative links ready
+- 🔄 Phase 4: Triple-Layer Memory (4/N plans) - Working Memory, DAST compression, LRU eviction, pattern extraction, associative links, compression triggers ready
