@@ -12,12 +12,12 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 
 ## Current Position
 
-Phase: 6 of 10 (Autonomous Emergence)
-Plan: 5/5 complete
-Status: Complete
-Last activity: 2026-02-01 — Phase 6 complete and verified (8/8 must-haves)
+Phase: 7 of 10 (Colony Verification)
+Plan: 1/?? complete
+Status: In progress
+Last activity: 2026-02-01 — Completed 07-01: Vote Aggregation Infrastructure
 
-Progress: [████████░░] 60% → [████████░░] 60%
+Progress: [████████░░] 60% → [█████████░] 70%
 
 ## Recent Changes
 
@@ -128,6 +128,7 @@ Recent decisions affecting current work:
 - **Spawn Outcome Tracking**: Implemented spawn-outcome-tracker.sh with confidence scoring for meta-learning. record_successful_spawn() increments confidence by 0.1, record_failed_spawn() decrements by 0.15 (asymmetric penalty makes failures more impactful). Confidence defaults to 0.5 (neutral Bayesian prior) and ranges 0.0-1.0. All outcomes tracked in COLONY_STATE.json meta_learning section (specialist_confidence, spawn_outcomes, last_updated).
 - **Meta-Learning Integration**: Updated spawn-tracker.sh to integrate outcome tracking. record_outcome() extracts specialist_type and task_context from spawn_history, derives task_type using keyword matching, and calls confidence tracking functions. get_specialist_confidence() exported for spawning decisions. Feeds Phase 8 Bayesian confidence updating.
 - **Safeguard Verification Testing**: Created comprehensive test suite (test-spawning-safeguards.sh) with 6 test categories covering all spawning safeguards. Verified all safeguards work correctly: depth limit blocks at max depth (3), circuit breaker trips after 3 failures, spawn budget enforces max 10 spawns, same-specialist cache prevents duplicates, confidence scoring caps at 1.0/floors at 0.0, meta-learning data populated correctly. Updated all 6 Worker Ant prompts with "Testing Safeguards" section including test suite command, safeguard behavior summary table, and manual reset instructions. All 25 tests passed.
+- **Vote Aggregation Infrastructure**: Created watcher_weights.json (all Watchers start at 1.0), vote-aggregator.sh (supermajority 67% with Critical veto), issue-deduper.sh (SHA256 fingerprinting, severity sorting), weight-calculator.sh (asymmetric belief calibration: correct_reject +0.15, incorrect_approve -0.2), verification section in COLONY_STATE.json. All utilities use atomic-write.sh and git root detection for path resolution. Use awk instead of bc for floating-point comparison (bc lacks ternary operator).
 
 ### Pending Todos
 
@@ -155,8 +156,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-01 (Phase 6 Plan 5 - Safeguard Verification Testing)
-Stopped at: Completed 06-05: Safeguard Verification Testing (3/3 tasks)
+Last session: 2026-02-01 (Phase 7 Plan 1 - Vote Aggregation Infrastructure)
+Stopped at: Completed 07-01: Vote Aggregation Infrastructure (5/5 tasks)
 Resume file: None
 
 **Progress Summary:**
@@ -166,3 +167,4 @@ Resume file: None
 - ✅ Phase 4: Triple-Layer Memory (5/5 plans) - Working Memory, DAST compression, LRU eviction, pattern extraction, associative links, compression triggers, cross-layer search complete
 - ✅ Phase 5: Phase Boundaries (9/9 plans) - State machine, pheromone-triggered transitions, checkpoints, recovery, crash detection, Queen check-in, memory adaptation, emergence guard complete
 - ✅ Phase 6: Autonomous Emergence (5/5 plans) - Capability gap detection, Task tool spawning with context inheritance, circuit breaker safeguards, spawn outcome tracking, safeguard verification testing complete. Verified: 8/8 must-haves (100%)
+- 🔄 Phase 7: Colony Verification (1/?? plans) - Vote aggregation infrastructure complete. Watcher weights initialized, supermajority calculation (67% threshold), Critical veto, issue deduplication, belief calibration implemented
