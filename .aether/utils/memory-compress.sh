@@ -8,6 +8,43 @@
 #   clear_working_memory
 #   get_compression_stats
 
+# COMPRESSION TRIGGER WIRING
+# ===========================
+#
+# Who calls what, when:
+#
+# 1. PHASE BOUNDARY COMPRESSION
+#    - Trigger: pheromones.json has phase_complete signal
+#    - Caller: Phase boundary orchestrator (future) or manual Queen command
+#    - Sequence:
+#      a. prepare_compression_data(phase_number)
+#         → Creates /tmp/working_memory_for_compression_{phase}.json
+#      b. Architect Ant reads temp file, applies DAST compression (LLM task)
+#         → Produces compressed_json string
+#      c. trigger_phase_boundary_compression(phase_number, compressed_json)
+#         → Stores in Short-term, clears Working Memory
+#
+# 2. TOKEN THRESHOLD COMPRESSION
+#    - Trigger: Working Memory reaches 80% capacity (160k tokens)
+#    - Caller: auto_compress_if_needed() called during add_working_memory_item
+#    - Sequence: Same as phase boundary compression
+#
+# 3. PATTERN EXTRACTION
+#    - Trigger: After Short-term session created, or before eviction
+#    - Caller: create_short_term_session() calls trigger_pattern_extraction()
+#    - Sequence:
+#      a. trigger_pattern_extraction()
+#         → Scans Short-term sessions for high-value items
+#         → Calls extract_pattern_to_long_term() for repeated patterns
+#         → Updates Long-term Memory with associative links
+#
+# FILES INVOLVED:
+# - .aether/utils/memory-compress.sh: This file (bash functions)
+# - .aether/workers/architect-ant.md: DAST compression prompt for LLM
+# - .aether/data/memory.json: All three memory layers
+# - .aether/data/pheromones.json: Phase completion signals
+# - .aether/data/COLONY_STATE.json: Current phase tracking
+
 # Source atomic-write utilities
 MEMORY_COMPRESS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -113,6 +150,57 @@ clear_working_memory() {
     atomic_write_from_file "$MEMORY_FILE" /tmp/memory_clear_wm.tmp
     rm -f /tmp/memory_clear_wm.tmp
 
+    return 0
+}
+
+# Prepare Working Memory data for compression
+# Who calls: Phase boundary orchestrator or manual Queen command
+# When: At phase completion or when compression is needed
+# Arguments: phase_number
+# Returns: 0 (data ready) with file path to stdout, or 1 (skip compression)
+# Side effects: Creates temporary file /tmp/working_memory_for_compression_{phase}.json
+prepare_compression_data() {
+    local phase="$1"
+
+    if [ -z "$phase" ]; then
+        echo "Error: phase_number is required" >&2
+        return 1
+    fi
+
+    # Check if phase is complete (read pheromones.json for phase_complete signal)
+    local phase_complete=$(jq -r '.active_pheromones[] | select(.type == "INIT") | .id' "$MEMORY_COMPRESS_DIR/../data/pheromones.json" 2>/dev/null)
+
+    # Get current Working Memory items
+    local items=$(jq '.working_memory.items' "$MEMORY_FILE")
+    local current_tokens=$(jq -r '.working_memory.current_tokens' "$MEMORY_FILE")
+    local item_count=$(jq -r '.working_memory.items | length' "$MEMORY_FILE")
+
+    # If Working Memory is empty or below threshold, return 1 (skip compression)
+    if [ "$item_count" -eq 0 ]; then
+        echo "Working Memory is empty, skipping compression" >&2
+        return 1
+    fi
+
+    # Create temporary file with Working Memory items
+    local temp_file="/tmp/working_memory_for_compression_${phase}.json"
+    local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    jq -n \
+       --arg phase "$phase" \
+       --argjson items "$items" \
+       --argjson tokens "$current_tokens" \
+       --argjson count "$item_count" \
+       --arg ts "$timestamp" \
+       '{
+         "phase": $phase,
+         "items": $items,
+         "total_tokens": $tokens,
+         "item_count": $count,
+         "prepared_at": $ts
+       }' > "$temp_file"
+
+    # Output file path to stdout (for Architect Ant to read)
+    echo "$temp_file"
     return 0
 }
 
