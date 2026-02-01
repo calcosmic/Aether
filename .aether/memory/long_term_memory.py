@@ -140,7 +140,8 @@ class LongTermMemory:
         "best_practices",
         "anti_patterns",
         "preferences",
-        "learnings"
+        "learnings",
+        "testing_patterns"  # Emergent testing: learned testing approaches
     ]
 
     def __init__(self, storage_path: str = ".aether/memory/long_term.json"):

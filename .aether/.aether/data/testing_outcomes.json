@@ -1,0 +1,128 @@
+[
+  {
+    "task_id": "add_user_auth",
+    "task_description": "Add user authentication",
+    "approach": "test_first",
+    "outcome": "success",
+    "time_to_complete": 45,
+    "defects_found": 0,
+    "rework_needed": false,
+    "timestamp": "2026-02-01T12:39:05.580164",
+    "metadata": {}
+  },
+  {
+    "task_id": "fix_login_bug",
+    "task_description": "Fix login bug",
+    "approach": "test_after",
+    "outcome": "had_bugs",
+    "time_to_complete": 30,
+    "defects_found": 2,
+    "rework_needed": true,
+    "timestamp": "2026-02-01T12:39:05.580482",
+    "metadata": {}
+  },
+  {
+    "task_id": "add_payment_api",
+    "task_description": "Add payment API",
+    "approach": "test_parallel",
+    "outcome": "success",
+    "time_to_complete": 38,
+    "defects_found": 0,
+    "rework_needed": false,
+    "timestamp": "2026-02-01T12:39:05.581088",
+    "metadata": {}
+  },
+  {
+    "task_id": "add_user_auth",
+    "task_description": "Add user authentication",
+    "approach": "test_first",
+    "outcome": "success",
+    "time_to_complete": 45,
+    "defects_found": 0,
+    "rework_needed": false,
+    "timestamp": "2026-02-01T12:40:51.138080",
+    "metadata": {}
+  },
+  {
+    "task_id": "fix_login_bug",
+    "task_description": "Fix login bug",
+    "approach": "test_after",
+    "outcome": "had_bugs",
+    "time_to_complete": 30,
+    "defects_found": 2,
+    "rework_needed": true,
+    "timestamp": "2026-02-01T12:40:51.138352",
+    "metadata": {}
+  },
+  {
+    "task_id": "add_payment_api",
+    "task_description": "Add payment API",
+    "approach": "test_parallel",
+    "outcome": "success",
+    "time_to_complete": 38,
+    "defects_found": 0,
+    "rework_needed": false,
+    "timestamp": "2026-02-01T12:40:51.138968",
+    "metadata": {}
+  },
+  {
+    "task_id": "test_task_with_test_first",
+    "task_description": "Test task with test_first",
+    "approach": "test_first",
+    "outcome": "success",
+    "time_to_complete": 0,
+    "defects_found": 0,
+    "rework_needed": false,
+    "timestamp": "2026-02-01T12:40:53.857716",
+    "metadata": {
+      "agent": "executor",
+      "test_path": null,
+      "impl_path": null
+    }
+  },
+  {
+    "task_id": "test_task_with_test_after",
+    "task_description": "Test task with test_after",
+    "approach": "test_after",
+    "outcome": "success",
+    "time_to_complete": 0,
+    "defects_found": 0,
+    "rework_needed": false,
+    "timestamp": "2026-02-01T12:40:53.857985",
+    "metadata": {
+      "agent": "executor",
+      "test_path": null,
+      "impl_path": null
+    }
+  },
+  {
+    "task_id": "test_task_with_test_parallel",
+    "task_description": "Test task with test_parallel",
+    "approach": "test_parallel",
+    "outcome": "success",
+    "time_to_complete": 0,
+    "defects_found": 0,
+    "rework_needed": false,
+    "timestamp": "2026-02-01T12:40:53.858587",
+    "metadata": {
+      "agent": "executor",
+      "test_path": null,
+      "impl_path": null
+    }
+  },
+  {
+    "task_id": "test_task_with_no_test",
+    "task_description": "Test task with no_test",
+    "approach": "no_test",
+    "outcome": "success",
+    "time_to_complete": 0,
+    "defects_found": 0,
+    "rework_needed": false,
+    "timestamp": "2026-02-01T12:40:53.858746",
+    "metadata": {
+      "agent": "executor",
+      "test_path": null,
+      "impl_path": null
+    }
+  }
+]

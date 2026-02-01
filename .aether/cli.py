@@ -296,6 +296,89 @@ def main():
         help="Phase identifier (default: 'manual')"
     )
 
+    # ============================================================
+    # /ant:testing (Emergent Testing Integration)
+    # ============================================================
+    testing_parser = subparsers.add_parser(
+        "testing",
+        help="Testing guidance and outcomes",
+        description="Access emergent testing features - guide testing approaches and view learned patterns."
+    )
+    testing_subparsers = testing_parser.add_subparsers(
+        dest="testing_action",
+        title="Testing Actions",
+        description="Use 'testing <action> --help' for action-specific help",
+        metavar="ACTION"
+    )
+
+    # testing focus
+    testing_focus_parser = testing_subparsers.add_parser(
+        "focus",
+        help="Guide colony toward testing approach",
+        description="Emit focus pheromone for specific testing approach (pheromone guidance, not command)."
+    )
+    testing_focus_parser.add_argument(
+        "approach",
+        nargs="?",
+        choices=["test_first", "test_after", "test_parallel", "comprehensive"],
+        help="Testing approach to guide toward (leave empty for general testing focus)"
+    )
+    testing_focus_parser.add_argument(
+        "--strength", "-s",
+        type=float,
+        default=0.7,
+        help="Signal strength 0.0-1.0 (default: 0.7)"
+    )
+
+    # testing outcomes
+    testing_outcomes_parser = testing_subparsers.add_parser(
+        "outcomes",
+        help="Show testing outcomes summary",
+        description="Display summary of testing outcomes and learned patterns."
+    )
+
+    # testing trends
+    testing_trends_parser = testing_subparsers.add_parser(
+        "trends",
+        help="Show testing outcome trends",
+        description="Display trends in testing outcomes over time."
+    )
+    testing_trends_parser.add_argument(
+        "--window", "-w",
+        type=int,
+        default=20,
+        help="Window size for trend analysis (default: 20)"
+    )
+
+    # testing recommend
+    testing_recommend_parser = testing_subparsers.add_parser(
+        "recommend",
+        help="Get recommended testing approach",
+        description="Get AI-recommended testing approach based on learned outcomes."
+    )
+
+    # testing feedback
+    testing_feedback_parser = testing_subparsers.add_parser(
+        "feedback",
+        help="Provide testing outcome feedback",
+        description="Record testing outcome for colony learning."
+    )
+    testing_feedback_parser.add_argument(
+        "task",
+        help="Task description"
+    )
+    testing_feedback_parser.add_argument(
+        "outcome",
+        choices=["success", "had_bugs", "failed_tests", "needed_refactor", "caused_breakage"],
+        help="Outcome of the task"
+    )
+    testing_feedback_parser.add_argument(
+        "--strength", "-s",
+        type=float,
+        default=0.6,
+        help="Signal strength 0.0-1.0 (default: 0.6)"
+    )
+
     # Parse arguments
     args = parser.parse_args()
 
@@ -571,6 +654,169 @@ async def run_command(args: argparse.Namespace) -> int:
 
         else:
             memory_parser.print_help()
+            return 0
+
+    # ============================================================
+    # testing (Emergent Testing Integration)
+    # ============================================================
+    elif args.command == "testing":
+        # Import outcome tracker
+        try:
+            from .memory.outcome_tracker import OutcomeTracker
+        except ImportError:
+            try:
+                from aether.memory.outcome_tracker import OutcomeTracker
+            except ImportError:
+                from memory.outcome_tracker import OutcomeTracker
+
+        # Get memory from commands if available
+        memory = None
+        if hasattr(commands, 'system') and commands.system:
+            memory = commands.system.memory_layer
+
+        if args.testing_action == "focus":
+            from .queen_ant_system import QueenAntSystem
+            system = QueenAntSystem()
+            await system.start()
+
+            approach = args.approach
+            result = await system.focus_testing(approach=approach, strength=args.strength)
+
+            print(f"🎯 {result['message']}")
+            if approach:
+                print(f"   Approach: {approach}")
+            print(f"   Strength: {args.strength}")
+            print()
+            return 0
+
+        elif args.testing_action == "outcomes":
+            from .queen_ant_system import QueenAntSystem
+            system = QueenAntSystem()
+            await system.start()
+
+            summary = await system.get_testing_outcomes()
+
+            print("╔══════════════════════════════════════════════════════════════╗")
+            print("║            📊 Testing Outcomes Summary                       ║")
+            print("╠══════════════════════════════════════════════════════════════╣")
+            print()
+
+            if summary.get("total_outcomes", 0) == 0:
+                print("   No testing outcomes recorded yet.")
+                print("   The colony is still learning!")
+                print()
+            else:
+                print(f"   Total outcomes: {summary['total_outcomes']}")
+                print(f"   Approaches analyzed: {summary['approaches_analyzed']}")
+                print(f"   Overall success rate: {summary['overall_success_rate']*100:.1f}%")
+                print()
+
+                if summary.get("best_approach"):
+                    print(f"   🏆 Best approach: {summary['best_approach']}")
+                print()
+
+                if summary.get("approach_breakdown"):
+                    print("   Approach Breakdown:")
+                    for approach, metrics in summary["approach_breakdown"].items():
+                        print(f"      {approach}:")
+                        print(f"         Success: {metrics['success_rate']*100:.0f}%")
+                        print(f"         Defects: {metrics['avg_defects']:.1f} avg")
+                        print(f"         Time: {metrics['avg_time']:.0f}min avg")
+                        print(f"         Confidence: {metrics['confidence']:.0%} (n={metrics['sample_size']})")
+                        print()
+
+            print("╚══════════════════════════════════════════════════════════════╝")
+            return 0
+
+        elif args.testing_action == "trends":
+            from .queen_ant_system import QueenAntSystem
+            system = QueenAntSystem()
+            await system.start()
+
+            trends = await system.get_testing_trends(window_size=args.window)
+
+            if "error" in trends:
+                print(f"⚠️  {trends['error']}")
+                return 0
+
+            print("╔══════════════════════════════════════════════════════════════╗")
+            print("║            📈 Testing Outcome Trends                         ║")
+            print("╠══════════════════════════════════════════════════════════════╣")
+            print()
+            print(f"   Window size: {args.window} most recent outcomes")
+            print()
+
+            if trends.get("recent"):
+                print("   Recent Performance:")
+                for approach, metrics in trends["recent"].items():
+                    print(f"      {approach}: {metrics['success_rate']*100:.0f}% success, {metrics['avg_defects']:.1f} defects")
+                print()
+
+            if trends.get("older"):
+                print("   Previous Performance:")
+                for approach, metrics in trends["older"].items():
+                    print(f"      {approach}: {metrics['success_rate']*100:.0f}% success, {metrics['avg_defects']:.1f} defects")
+                print()
+
+            if trends.get("trend"):
+                trend_emoji = "📈" if trends["trend"] == "improving" else "📉"
+                print(f"   Overall trend: {trend_emoji} {trends['trend'].capitalize()}")
+                print()
+
+            print("╚══════════════════════════════════════════════════════════════╝")
+            return 0
+
+        elif args.testing_action == "recommend":
+            from .queen_ant_system import QueenAntSystem
+            system = QueenAntSystem()
+            await system.start()
+
+            recommendation = await system.recommend_testing_approach()
+
+            print("╔══════════════════════════════════════════════════════════════╗")
+            print("║            🎯 Testing Approach Recommendation                ║")
+            print("╠══════════════════════════════════════════════════════════════╣")
+            print()
+
+            approach = recommendation["recommended_approach"]
+            confidence = recommendation["confidence"]
+
+            print(f"   Recommended: {approach}")
+            print(f"   Confidence: {confidence:.0%}")
+            print(f"   Based on {recommendation['sample_size']} outcomes")
+            print()
+
+            if recommendation.get("analysis"):
+                print("   Analysis:")
+                for appr, metrics in recommendation["analysis"].items():
+                    marker = "→" if appr == approach else " "
+                    print(f"      {marker} {appr}: {metrics['success_rate']*100:.0f}% success, {metrics['avg_defects']:.1f} defects")
+                print()
+
+            print("╚══════════════════════════════════════════════════════════════╝")
+            return 0
+
+        elif args.testing_action == "feedback":
+            from .queen_ant_system import QueenAntSystem
+            system = QueenAntSystem()
+            await system.start()
+
+            result = await system.feedback_testing_outcome(
+                task=args.task,
+                outcome=args.outcome,
+                strength=args.strength
+            )
+
+            print(f"✅ {result['message']}")
+            print(f"   Task: {result['task']}")
+            print(f"   Outcome: {result['outcome']}")
+            print()
+            print("   This feedback helps the colony learn!")
+            print()
+            return 0
+
+        else:
+            testing_parser.print_help()
             return 0
 
     return 0

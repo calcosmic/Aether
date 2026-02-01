@@ -222,6 +222,171 @@ class QueenAntSystem:
             }
         }
 
+    # ============================================================
+    # TESTING GUIDANCE (Emergent Testing Integration)
+    # ============================================================
+
+    async def focus_testing(
+        self,
+        approach: Optional[str] = None,
+        strength: float = 0.7
+    ) -> Dict[str, Any]:
+        """
+        /ant:focus testing [approach]
+
+        Guide colony toward specific testing approach.
+
+        This is pheromone-based guidance, not a command.
+        Colony chooses whether to follow based on evidence.
+
+        Args:
+            approach: Testing approach (test_first, test_after, test_parallel, comprehensive)
+            strength: Signal strength (0.0 to 1.0)
+
+        Returns:
+            Focus signal information
+        """
+        if approach:
+            message = f"Testing approach: {approach}"
+        else:
+            message = "Focus on testing quality"
+
+        signal = await self.pheromone_commands.focus(message, strength=strength)
+
+        # Update Executor Ant preferences (if exists)
+        executor = self.colony.worker_ants.get("executor")
+        if executor and approach:
+            executor.testing_approach = approach
+
+        return {
+            "message": f"Focusing on {message}",
+            "signal": signal.to_dict() if hasattr(signal, 'to_dict') else {
+                "type": signal.signal_type.value,
+                "content": signal.content,
+                "strength": signal.strength
+            }
+        }
+
+    async def feedback_testing_outcome(
+        self,
+        task: str,
+        outcome: str,
+        strength: float = 0.6
+    ) -> Dict[str, Any]:
+        """
+        /ant:feedback <task> had <outcome>
+
+        Provide feedback on testing outcome for learning.
+
+        This helps the colony learn which testing approaches work best.
+
+        Args:
+            task: Task description
+            outcome: Outcome (success, had_bugs, failed_tests, needed_refactor)
+            strength: Signal strength
+
+        Returns:
+            Feedback confirmation
+        """
+        message = f"Testing outcome for '{task}': {outcome}"
+
+        await self.pheromone_commands.feedback(message, strength=strength)
+
+        # Store in memory if available
+        if self.memory_layer:
+            await self.memory_layer.add_to_working(
+                content=message,
+                metadata={
+                    "type": "testing_feedback",
+                    "task": task,
+                    "outcome": outcome
+                },
+                item_type="feedback"
+            )
+
+        return {
+            "message": "Feedback recorded for learning",
+            "task": task,
+            "outcome": outcome
+        }
+
+    async def get_testing_outcomes(self) -> Dict[str, Any]:
+        """
+        /ant:testing outcomes
+
+        Get summary of testing outcomes and learned patterns.
+
+        Returns:
+            Testing outcome summary
+        """
+        try:
+            from .memory.outcome_tracker import OutcomeTracker
+        except ImportError:
+            from memory.outcome_tracker import OutcomeTracker
+
+        # Create outcome tracker
+        tracker = OutcomeTracker(self.memory_layer)
+
+        # Get summary
+        summary = await tracker.get_summary()
+
+        return summary
+
+    async def get_testing_trends(self, window_size: int = 20) -> Dict[str, Any]:
+        """
+        /ant:testing trends
+
+        Get trends in testing outcomes over time.
+
+        Args:
+            window_size: Number of recent outcomes to analyze
+
+        Returns:
+            Trend analysis
+        """
+        try:
+            from .memory.outcome_tracker import OutcomeTracker
+        except ImportError:
+            from memory.outcome_tracker import OutcomeTracker
+
+        tracker = OutcomeTracker(self.memory_layer)
+        trends = await tracker.get_trends(window_size)
+
+        return trends
+
+    async def recommend_testing_approach(
+        self,
+        task_context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        /ant:testing recommend
+
+        Get recommended testing approach based on learned outcomes.
+
+        Args:
+            task_context: Optional context about the task
+
+        Returns:
+            Recommended approach with confidence
+        """
+        try:
+            from .memory.outcome_tracker import OutcomeTracker
+        except ImportError:
+            from memory.outcome_tracker import OutcomeTracker
+
+        tracker = OutcomeTracker(self.memory_layer)
+        approach, confidence = await tracker.recommend_approach(task_context)
+
+        # Get analysis for context
+        analysis = await tracker.analyze_approaches()
+
+        return {
+            "recommended_approach": approach,
+            "confidence": confidence,
+            "analysis": analysis,
+            "sample_size": sum(a.get("sample_size", 0) for a in analysis.values())
+        }
+
     async def status(self) -> Dict[str, Any]:
         """
         /ant:status

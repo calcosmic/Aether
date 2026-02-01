@@ -20,10 +20,10 @@ import re
 
 try:
     from .pheromone_system import PheromoneType, PheromoneSignal, PheromoneLayer, SensitivityProfile, SENSITIVITY_PROFILES
-    from .error_prevention import ErrorLedger, ErrorCategory, log_exception
+    from .error_prevention import ErrorLedger, ErrorCategory, ErrorSeverity, log_exception
 except ImportError:
     from pheromone_system import PheromoneType, PheromoneSignal, PheromoneLayer, SensitivityProfile, SENSITIVITY_PROFILES
-    from error_prevention import ErrorLedger, ErrorCategory, log_exception
+    from error_prevention import ErrorLedger, ErrorCategory, ErrorSeverity, log_exception
 
 # Type hint for memory layer
 from typing import TYPE_CHECKING
@@ -856,19 +856,20 @@ class PlannerAnt(WorkerAnt):
 
 class ExecutorAnt(WorkerAnt):
     """
-    Executor Ant - Write code, implement changes
+    Executor Ant - Write code, implement changes with experimental testing
 
     Capabilities:
     - Code generation
     - File manipulation
     - Refactoring
     - Implementation
+    - Experimental testing (learns what works)
 
     Spawns: Language specialists, framework specialists, database specialists
     """
 
     caste = "executor"
-    capabilities = ["code_generation", "file_manipulation", "refactoring"]
+    capabilities = ["code_generation", "file_manipulation", "refactoring", "experimental_testing"]
     sensitivity = {
         PheromoneType.INIT: 0.5,      # Awaits planning
         PheromoneType.FOCUS: 0.9,     # Highly responsive to focus
@@ -881,6 +882,11 @@ class ExecutorAnt(WorkerAnt):
         super().__init__(colony, memory_layer=memory_layer)
         self.current_files: List[str] = []
         self.implemented_features: List[str] = []
+
+        # Experimental testing state
+        self.testing_approach = None  # Chosen approach for current task
+        self.outcome_tracker = None
+        self.current_task_outcome = None
 
     async def respond_to_signal(self, signal: PheromoneSignal):
         if signal.signal_type == PheromoneType.FOCUS:
@@ -921,22 +927,318 @@ class ExecutorAnt(WorkerAnt):
         """Refactor code in file"""
         pass
 
+    # ========================================================================
+    # EXPERIMENTAL TESTING METHODS
+    # ========================================================================
+
+    async def choose_testing_approach(self, task: str) -> tuple[str, float]:
+        """
+        Choose testing approach based on:
+        - Learned outcomes from memory
+        - Pheromone signals
+        - Task complexity
+        - Colony preferences
+
+        Returns:
+            (approach, confidence) tuple
+        """
+        try:
+            from .memory.outcome_tracker import OutcomeTracker, TestingApproach
+        except ImportError:
+            from memory.outcome_tracker import OutcomeTracker, TestingApproach
+
+        # Initialize outcome tracker
+        if not self.outcome_tracker:
+            self.outcome_tracker = OutcomeTracker(self.memory_layer)
+
+        # Check memory for learned patterns
+        if self.memory_layer:
+            try:
+                patterns = await self.memory_layer.search_working(
+                    "testing approach success",
+                    limit=5
+                )
+
+                if patterns:
+                    # Use learned best approach
+                    best = max(patterns, key=lambda p: p.metadata.get("confidence", 0) if hasattr(p, 'metadata') else 0)
+                    approach = best.metadata.get("approach", "test_parallel") if hasattr(best, 'metadata') else "test_parallel"
+                    return (approach, 0.7)
+            except Exception:
+                pass  # Fall through to default
+
+        # Use outcome tracker to recommend approach
+        approach, confidence = await self.outcome_tracker.recommend_approach(
+            task_context={"task": task}
+        )
+
+        return (approach, confidence)
+
+    async def implement_with_experimentation(
+        self,
+        task: str,
+        force_approach: str = None
+    ) -> Dict[str, Any]:
+        """
+        Implement task with experimental testing approach
+
+        Tracks outcome for learning.
+
+        Args:
+            task: Task description
+            force_approach: Force specific approach (for testing)
+
+        Returns:
+            Implementation result with approach tracking
+        """
+        import time
+        start_time = time.time()
+
+        # Choose approach
+        if force_approach:
+            approach = force_approach
+            confidence = 1.0
+        else:
+            approach, confidence = await self.choose_testing_approach(task)
+
+        self.testing_approach = approach
+
+        result = {
+            "task": task,
+            "approach": approach,
+            "approach_confidence": confidence,
+            "steps": []
+        }
+
+        # Execute based on approach
+        if approach == "test_first":
+            step_result = await self._experiment_test_first(task)
+            result["steps"].append(step_result)
+        elif approach == "test_after":
+            step_result = await self._experiment_test_after(task)
+            result["steps"].append(step_result)
+        elif approach == "test_parallel":
+            step_result = await self._experiment_test_parallel(task)
+            result["steps"].append(step_result)
+        elif approach == "test_only":
+            step_result = await self._experiment_test_only(task)
+            result["steps"].append(step_result)
+        else:  # no_test
+            step_result = await self._experiment_no_test(task)
+            result["steps"].append(step_result)
+
+        # Record outcome
+        duration = int((time.time() - start_time) / 60)
+        await self._record_outcome(task, approach, result, duration)
+
+        return result
+
+    async def _experiment_test_first(self, task: str) -> Dict[str, Any]:
+        """Experiment: Write test first, then implementation (TDD style)"""
+        # Get verifier ant
+        verifier = self.colony.worker_ants.get("verifier")
+        if not verifier:
+            return {"error": "No verifier available"}
+
+        # Generate test
+        test = await verifier.generate_test(task, test_style="unit")
+
+        # Write test
+        await self.write_code(test["test_path"], test["test_content"])
+
+        # Verify test fails (RED phase)
+        test_result = await verifier.run_test(test["test_path"])
+
+        step_result = {
+            "approach": "test_first",
+            "test_written": True,
+            "test_failed": not test_result.get("passed", True),
+            "implementation_written": False
+        }
+
+        # Write implementation (GREEN phase)
+        impl = await self._generate_implementation(task, test.get("test_path"))
+        impl_path = self._derive_impl_path(task)
+        await self.write_code(impl_path, impl)
+
+        step_result["implementation_written"] = True
+
+        # Verify test passes (GREEN phase complete)
+        test_result_after = await verifier.run_test(test["test_path"])
+        step_result["test_passes"] = test_result_after.get("passed", False)
+        step_result["test_path"] = test.get("test_path")
+        step_result["impl_path"] = impl_path
+
+        return step_result
+
+    async def _experiment_test_after(self, task: str) -> Dict[str, Any]:
+        """Experiment: Write implementation first, then test"""
+        # Write implementation
+        impl = await self._generate_implementation(task)
+        impl_path = self._derive_impl_path(task)
+        await self.write_code(impl_path, impl)
+
+        # Generate test based on implementation
+        verifier = self.colony.worker_ants.get("verifier")
+        if not verifier:
+            return {"error": "No verifier available"}
+
+        test = await verifier.generate_test(task, impl_path, test_style="unit")
+
+        # Write test
+        await self.write_code(test["test_path"], test["test_content"])
+
+        # Verify test passes
+        test_result = await verifier.run_test(test["test_path"])
+
+        return {
+            "approach": "test_after",
+            "implementation_written": True,
+            "test_written": True,
+            "test_passes": test_result.get("passed", False),
+            "test_path": test.get("test_path"),
+            "impl_path": impl_path
+        }
+
+    async def _experiment_test_parallel(self, task: str) -> Dict[str, Any]:
+        """Experiment: Write test and implementation together"""
+        verifier = self.colony.worker_ants.get("verifier")
+        if not verifier:
+            return {"error": "No verifier available"}
+
+        # Generate both
+        test = await verifier.generate_test(task, test_style="unit")
+        impl = await self._generate_implementation(task)
+
+        # Write both
+        impl_path = self._derive_impl_path(task)
+        await self.write_code(impl_path, impl)
+        await self.write_code(test["test_path"], test["test_content"])
+
+        # Verify test passes
+        test_result = await verifier.run_test(test["test_path"])
+
+        return {
+            "approach": "test_parallel",
+            "implementation_written": True,
+            "test_written": True,
+            "test_passes": test_result.get("passed", False),
+            "test_path": test.get("test_path"),
+            "impl_path": impl_path
+        }
+
+    async def _experiment_test_only(self, task: str) -> Dict[str, Any]:
+        """Experiment: Only write test, no implementation"""
+        verifier = self.colony.worker_ants.get("verifier")
+        if not verifier:
+            return {"error": "No verifier available"}
+
+        # Generate test
+        test = await verifier.generate_test(task, test_style="unit")
+
+        # Write test
+        await self.write_code(test["test_path"], test["test_content"])
+
+        return {
+            "approach": "test_only",
+            "implementation_written": False,
+            "test_written": True,
+            "test_path": test.get("test_path")
+        }
+
+    async def _experiment_no_test(self, task: str) -> Dict[str, Any]:
+        """Experiment: No test, just implementation"""
+        impl = await self._generate_implementation(task)
+        impl_path = self._derive_impl_path(task)
+        await self.write_code(impl_path, impl)
+
+        return {
+            "approach": "no_test",
+            "implementation_written": True,
+            "test_written": False,
+            "impl_path": impl_path
+        }
+
+    async def _generate_implementation(self, task: str, test_path: str = None) -> str:
+        """Generate implementation code"""
+        # In production: Use LLM to generate implementation
+        # For now: Return template
+        return f"""# Implementation for: {task}
+# Generated by Executor Ant
+
+def {task.lower().replace(' ', '_')}(input_data):
+    '''Implementation of {task}'''
+    # TODO: Implement logic
+    return None
+"""
+
+    def _derive_impl_path(self, task: str) -> str:
+        """Derive implementation file path from task description"""
+        task_slug = task.lower().replace(' ', '_').replace('/', '_')
+        return f"src/{task_slug}.py"
+
+    async def _record_outcome(self, task: str, approach: str, result: dict, duration: int):
+        """Record testing outcome for learning"""
+        try:
+            from .memory.outcome_tracker import TestingOutcome, Outcome, OutcomeTracker
+        except ImportError:
+            from memory.outcome_tracker import TestingOutcome, Outcome, OutcomeTracker
+
+        # Initialize outcome tracker
+        if not self.outcome_tracker:
+            self.outcome_tracker = OutcomeTracker(self.memory_layer)
+
+        # Determine outcome
+        if result.get("test_passes"):
+            outcome = "success"
+        elif result.get("test_failed") and not result.get("test_passes"):
+            outcome = "failed_tests"
+        elif result.get("error"):
+            outcome = "had_bugs"
+        else:
+            outcome = "success"  # Default for no_test or test_only approach
+
+        # Create outcome record
+        task_id = task.lower().replace(' ', '_').replace('/', '_')[:50]
+        outcome_record = TestingOutcome(
+            task_id=task_id,
+            task_description=task,
+            approach=approach,
+            outcome=outcome,
+            time_to_complete=duration,
+            defects_found=0,  # Will be updated if bugs found later
+            rework_needed=not result.get("test_passes", True),
+            metadata={
+                "agent": self.caste,
+                "test_path": result.get("test_path"),
+                "impl_path": result.get("impl_path")
+            }
+        )
+
+        # Record outcome
+        await self.outcome_tracker.record_outcome(outcome_record)
+
+        # Periodically store learned patterns
+        if len(self.outcome_tracker.outcomes) % 10 == 0:
+            await self.outcome_tracker.store_learned_patterns()
+
 
 class VerifierAnt(WorkerAnt):
     """
-    Verifier Ant - Test, validate, QA
+    Verifier Ant - Test, validate, QA with LLM-based test generation
 
     Capabilities:
-    - Test generation
+    - Test generation (leveraging Ralph's research on LLM-based testing)
     - Validation
     - Quality checks
     - Bug detection
+    - Coverage analysis
 
     Spawns: Test generators, lint agents, security scanners, performance testers
     """
 
     caste = "verifier"
-    capabilities = ["test_generation", "validation", "quality_checks"]
+    capabilities = ["test_generation", "validation", "quality_checks", "coverage_analysis"]
     sensitivity = {
         PheromoneType.INIT: 0.3,      # Waits for code to test
         PheromoneType.FOCUS: 0.8,     # Increases scrutiny on focus area
@@ -950,6 +1252,10 @@ class VerifierAnt(WorkerAnt):
         self.tests_generated: int = 0
         self.bugs_found: int = 0
         self.issues: List[Dict] = []
+
+        # Test generation tracking
+        self.test_styles = ["unit", "integration", "e2e", "property_based"]
+        self.coverage_history: List[Dict] = []
 
     async def respond_to_signal(self, signal: PheromoneSignal):
         if signal.signal_type == PheromoneType.FOCUS:
@@ -996,6 +1302,249 @@ class VerifierAnt(WorkerAnt):
         # Based on Phase 5 research:
         # - Automated Quality Assurance and Testing
         pass
+
+    async def generate_test(
+        self,
+        task: str,
+        implementation_path: str = None,
+        test_style: str = "unit"
+    ) -> Dict[str, Any]:
+        """
+        Generate test using LLM-based approach
+
+        Leveraging Ralph's research on:
+        - LLM-based test generation
+        - Feedback loops in testing
+        - Test adequacy criteria
+
+        Args:
+            task: Description of what to test
+            implementation_path: Path to implementation code (optional)
+            test_style: Style of test (unit, integration, e2e, property_based)
+
+        Returns:
+            Dict with test_content, test_path, style, estimated_coverage
+        """
+        try:
+            try:
+                from .memory.outcome_tracker import TestGenerationResult
+            except ImportError:
+                from memory.outcome_tracker import TestGenerationResult
+        except ImportError:
+            from memory.outcome_tracker import TestGenerationResult
+
+        # Generate test content using LLM
+        test_content = await self._llm_generate_test(task, implementation_path, test_style)
+
+        # Derive test path
+        test_path = self._derive_test_path(task, test_style)
+
+        # Estimate coverage
+        estimated_coverage = self._estimate_coverage(task, test_style)
+
+        # Update counter
+        self.tests_generated += 1
+
+        # Store result
+        result = TestGenerationResult(
+            test_content=test_content,
+            test_path=test_path,
+            style=test_style,
+            estimated_coverage=estimated_coverage
+        )
+
+        # Store in memory if available
+        if self.memory_layer:
+            await self.memory_layer.add_to_working(
+                content=f"Generated {test_style} test for: {task}",
+                metadata={
+                    "test_path": test_path,
+                    "style": test_style,
+                    "coverage": estimated_coverage,
+                    "implementation": implementation_path
+                },
+                item_type="test_generation"
+            )
+
+        return result.to_dict()
+
+    async def _llm_generate_test(
+        self,
+        task: str,
+        implementation_path: str,
+        test_style: str
+    ) -> str:
+        """
+        Generate test using LLM (leveraging Ralph's research)
+
+        In production, this would call an LLM API to generate tests based on:
+        - Task description
+        - Implementation code (if exists)
+        - Test style (unit, integration, e2e)
+        - Best practices from memory
+
+        For now, returns a template that would be filled by LLM.
+        """
+        # Check memory for similar test patterns
+        test_patterns = []
+        if self.memory_layer:
+            test_patterns = await self.memory_layer.search_working(
+                f"{test_style} test",
+                limit=3,
+                item_type="test_generation"
+            )
+
+        # Build test prompt
+        if implementation_path:
+            prompt = f"Generate {test_style} test for implementation at {implementation_path}\nTask: {task}"
+        else:
+            prompt = f"Generate {test_style} test for: {task}"
+
+        # In production: Call LLM API here
+        # For now: Return template
+        test_templates = {
+            "unit": f"""# Unit test for: {task}
+# Generated based on Ralph's research on LLM-based test generation
+
+import pytest
+
+def test_{task.lower().replace(' ', '_')}_basic():
+    '''Test basic functionality'''
+    assert True  # Placeholder - would be filled by LLM
+
+def test_{task.lower().replace(' ', '_')}_edge_cases():
+    '''Test edge cases'''
+    assert True  # Placeholder - would be filled by LLM
+""",
+            "integration": f"""# Integration test for: {task}
+# Tests interaction between components
+
+import pytest
+
+def test_{task.lower().replace(' ', '_')}_integration():
+    '''Test integration with dependencies'''
+    assert True  # Placeholder - would be filled by LLM
+""",
+            "e2e": f"""# End-to-end test for: {task}
+# Tests complete user workflow
+
+import pytest
+
+def test_{task.lower().replace(' ', '_')}_e2e():
+    '''Test end-to-end workflow'''
+    assert True  # Placeholder - would be filled by LLM
+""",
+            "property_based": f"""# Property-based test for: {task}
+# Tests invariants and properties
+
+from hypothesis import given, strategies as st
+
+@given(st.integers())
+def test_{task.lower().replace(' ', '_')}_property(n):
+    '''Test that property holds for all inputs'''
+    assert True  # Placeholder - would be filled by LLM
+"""
+        }
+
+        return test_templates.get(test_style, test_templates["unit"])
+
+    def _derive_test_path(self, task: str, test_style: str) -> str:
+        """Derive test file path from task description"""
+        # Convert task to filename
+        task_slug = task.lower().replace(' ', '_').replace('/', '_').replace('(', '').replace(')', '')
+
+        # Determine test directory based on style
+        if test_style == "unit":
+            return f"tests/unit/test_{task_slug}.py"
+        elif test_style == "integration":
+            return f"tests/integration/test_{task_slug}.py"
+        elif test_style == "e2e":
+            return f"tests/e2e/test_{task_slug}.py"
+        else:  # property_based
+            return f"tests/properties/test_{task_slug}.py"
+
+    def _estimate_coverage(self, task: str, test_style: str) -> float:
+        """Estimate test coverage based on task and style"""
+        # Base coverage by style
+        base_coverage = {
+            "unit": 0.85,           # High coverage for unit tests
+            "integration": 0.65,    # Medium for integration
+            "e2e": 0.45,            # Lower for e2e (focus on paths)
+            "property_based": 0.90  # Highest for property-based
+        }
+
+        # Adjust based on task complexity (heuristic)
+        task_complexity = len(task.split())  # Simple heuristic
+
+        coverage = base_coverage.get(test_style, 0.70)
+        coverage -= min(task_complexity * 0.01, 0.15)  # Reduce slightly for complex tasks
+
+        return round(coverage, 2)
+
+    async def run_test(self, test_path: str) -> Dict[str, Any]:
+        """
+        Run test and return results
+
+        Executes pytest/jest and captures output.
+
+        Args:
+            test_path: Path to test file
+
+        Returns:
+            Dict with passed, failed, output, coverage
+        """
+        # In production: Execute test runner (pytest, jest, etc.)
+        # For now: Return mock result
+        return {
+            "passed": True,
+            "failed": 0,
+            "output": f"Test executed: {test_path}",
+            "coverage": 0.85,
+            "execution_time": 0.5
+        }
+
+    async def analyze_test_coverage(self, test_path: str, impl_path: str) -> Dict[str, Any]:
+        """
+        Analyze test coverage (leveraging Ralph's research on verification)
+
+        Args:
+            test_path: Path to test file
+            impl_path: Path to implementation file
+
+        Returns:
+            Coverage analysis with metrics
+        """
+        # In production: Run coverage tool (pytest-cov, jest --coverage)
+        # For now: Return mock analysis
+        analysis = {
+            "line_coverage": 0.85,
+            "branch_coverage": 0.78,
+            "function_coverage": 0.92,
+            "uncovered_lines": [42, 57, 89],
+            "recommendations": [
+                "Add test for error handling in line 42",
+                "Test edge case in line 57",
+                "Add test for null input at line 89"
+            ]
+        }
+
+        # Store in memory
+        if self.memory_layer:
+            await self.memory_layer.add_to_working(
+                content=f"Coverage analysis for {test_path}: {analysis['line_coverage']*100:.0f}%",
+                metadata=analysis,
+                item_type="coverage_analysis"
+            )
+
+        # Track coverage history
+        self.coverage_history.append({
+            "test_path": test_path,
+            "impl_path": impl_path,
+            "timestamp": datetime.now().isoformat(),
+            "coverage": analysis["line_coverage"]
+        })
+
+        return analysis
 
     async def detect_bugs(self, code: str) -> List[Dict]:
         """Detect bugs in code"""

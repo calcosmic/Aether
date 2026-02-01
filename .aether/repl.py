@@ -59,6 +59,7 @@ class AetherREPL:
         self.command_names = [
             "init", "plan", "phase", "execute", "review",
             "focus", "redirect", "feedback", "status", "memory",
+            "testing",  # NEW: Emergent testing commands
             "colonize", "pause-colony", "resume-colony",
             "help", "quit", "exit", "clear"
         ]
@@ -75,6 +76,7 @@ class AetherREPL:
             "feedback": "Provide guidance: feedback <message>",
             "status": "Show colony status",
             "memory": "Memory system: memory [status|working|short-term|long-term|compress]",
+            "testing": "Emergent testing: testing [focus|outcomes|trends|recommend|feedback]",
             "colonize": "Analyze codebase before starting",
             "pause-colony": "Save session mid-phase",
             "resume-colony": "Restore saved session",
@@ -439,6 +441,135 @@ class AetherREPL:
                     print("   Available: status, working, short-term, long-term, compress")
                     print()
 
+        elif cmd == "testing":
+            # Emergent testing commands
+            if not args:
+                print("❌ Usage: testing <subcommand>")
+                print("   Available: focus, outcomes, trends, recommend, feedback")
+                return
+
+            # Import QueenAntSystem
+            try:
+                from .queen_ant_system import QueenAntSystem
+            except ImportError:
+                try:
+                    from queen_ant_system import QueenAntSystem
+                except ImportError:
+                    from aether.queen_ant_system import QueenAntSystem
+
+            system = QueenAntSystem()
+            await system.start()
+
+            subcommand = args[0].lower()
+
+            if subcommand == "focus":
+                # testing focus [approach]
+                approach = args[1] if len(args) > 1 else None
+                result = await system.focus_testing(approach=approach)
+
+                print(f"🎯 {result['message']}")
+                if approach:
+                    print(f"   Approach: {approach}")
+                print()
+
+            elif subcommand == "outcomes":
+                # testing outcomes
+                summary = await system.get_testing_outcomes()
+
+                print("╔══════════════════════════════════════════════════════════════╗")
+                print("║            📊 Testing Outcomes Summary                       ║")
+                print("╠══════════════════════════════════════════════════════════════╣")
+                print()
+
+                if summary.get("total_outcomes", 0) == 0:
+                    print("   No testing outcomes recorded yet.")
+                    print("   The colony is still learning!")
+                    print()
+                else:
+                    print(f"   Total outcomes: {summary['total_outcomes']}")
+                    print(f"   Approaches analyzed: {summary['approaches_analyzed']}")
+                    print(f"   Overall success rate: {summary['overall_success_rate']*100:.1f}%")
+                    print()
+
+                    if summary.get("best_approach"):
+                        print(f"   🏆 Best approach: {summary['best_approach']}")
+                    print()
+
+                print("╚══════════════════════════════════════════════════════════════╝")
+
+            elif subcommand == "trends":
+                # testing trends [--window N]
+                window = 20
+                for i, arg in enumerate(args[1:], 1):
+                    if arg in ["--window", "-w"] and i + 1 < len(args):
+                        window = int(args[i + 1])
+
+                trends = await system.get_testing_trends(window_size=window)
+
+                if "error" in trends:
+                    print(f"⚠️  {trends['error']}")
+                    return
+
+                print("╔══════════════════════════════════════════════════════════════╗")
+                print("║            📈 Testing Outcome Trends                         ║")
+                print("╠══════════════════════════════════════════════════════════════╣")
+                print()
+                print(f"   Window: {window} most recent outcomes")
+                print()
+
+                if trends.get("recent"):
+                    print("   Recent:")
+                    for approach, metrics in trends["recent"].items():
+                        print(f"      {approach}: {metrics['success_rate']*100:.0f}% success")
+                    print()
+
+                print("╚══════════════════════════════════════════════════════════════╝")
+
+            elif subcommand == "recommend":
+                # testing recommend
+                recommendation = await system.recommend_testing_approach()
+
+                print("╔══════════════════════════════════════════════════════════════╗")
+                print("║            🎯 Testing Approach Recommendation                ║")
+                print("╠══════════════════════════════════════════════════════════════╣")
+                print()
+
+                print(f"   Recommended: {recommendation['recommended_approach']}")
+                print(f"   Confidence: {recommendation['confidence']:.0%}")
+                print(f"   Based on {recommendation['sample_size']} outcomes")
+                print()
+
+                print("╚══════════════════════════════════════════════════════════════╝")
+
+            elif subcommand == "feedback":
+                # testing feedback <task> <outcome>
+                if len(args) < 3:
+                    print("❌ Usage: testing feedback <task> <outcome>")
+                    print("   Outcomes: success, had_bugs, failed_tests, needed_refactor, caused_breakage")
+                    return
+
+                task = args[1]
+                outcome = args[2]
+
+                valid_outcomes = ["success", "had_bugs", "failed_tests", "needed_refactor", "caused_breakage"]
+                if outcome not in valid_outcomes:
+                    print(f"❌ Invalid outcome. Choose from: {', '.join(valid_outcomes)}")
+                    return
+
+                result = await system.feedback_testing_outcome(task=task, outcome=outcome)
+
+                print(f"✅ {result['message']}")
+                print(f"   Task: {result['task']}")
+                print(f"   Outcome: {result['outcome']}")
+                print()
+                print("   This feedback helps the colony learn!")
+                print()
+
+            else:
+                print(f"❌ Unknown testing subcommand: {subcommand}")
+                print("   Available: focus, outcomes, trends, recommend, feedback")
+                print()
+
         elif cmd == "colonize":
             output = await self.commands.colonize()
             print(output)
@@ -467,10 +598,11 @@ class AetherREPL:
         core = ["init", "plan", "phase", "execute", "review"]
         guidance = ["focus", "redirect", "feedback"]
         info = ["status", "memory", "colonize"]
+        testing = ["testing"]  # NEW: Emergent testing
         session = ["pause-colony", "resume-colony"]
         system = ["help", "clear", "quit", "exit"]
 
-        for cmd_list in [core, guidance, info, session, system]:
+        for cmd_list in [core, guidance, info, testing, session, system]:
             for cmd in cmd_list:
                 description = self.command_help.get(cmd, "")
                 print(f"  {cmd:15} {description}")
@@ -491,6 +623,13 @@ class AetherREPL:
         print("  memory short-term - Show compressed sessions")
         print("  memory long-term <query> - Search persistent knowledge")
         print("  memory compress   - Compress working to short-term")
+        print()
+        print("🧪 Testing Subcommands:")
+        print("  testing focus [approach]     - Guide testing approach (pheromone)")
+        print("  testing outcomes             - Show testing outcomes summary")
+        print("  testing trends [--window N]  - Show outcome trends")
+        print("  testing recommend            - Get AI-recommended approach")
+        print("  testing feedback <task> <outcome> - Record outcome for learning")
         print()
 
 
