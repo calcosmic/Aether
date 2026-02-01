@@ -2,50 +2,62 @@
 
 **Advanced Engine for Transformative Human-Enhanced Reasoning**
 
-> The first AI system where agents autonomously spawn other agents without human orchestration.
+> The first AI system where Worker Ants autonomously spawn other Worker Ants without human orchestration.
 
 ---
 
 ## 🚀 What is AETHER?
 
-AETHER is a revolutionary multi-agent system that represents a paradigm shift in AI development:
+AETHER is a revolutionary multi-agent system built on the **Queen Ant Colony** model - a phased autonomy system representing a paradigm shift in AI development:
 
 **Current Systems**: Human → Orchestrator → Agents
-**AETHER**: Agents spawn agents, figure out what to do, self-organize
+**AETHER**: Queen provides intention → Worker Ants spawn Worker Ants → Colony self-organizes
 
 **No existing system does this.**
+
+The Queen Ant Colony combines:
+- **Autonomous spawning**: Worker Ants detect capability gaps and spawn specialists
+- **Phased autonomy**: Structure at phase boundaries, pure emergence within
+- **Pheromone signals**: User guides via signals (not commands) with strength/decay
 
 ---
 
 ## ⭐ Revolutionary Features
 
-### 1. Autonomous Agent Spawning
-Agents detect capability gaps and spawn specialists autonomously - no human direction required.
+### 1. Autonomous Worker Ant Spawning
+Worker Ants detect capability gaps and spawn specialist Worker Ants autonomously - no human direction required.
 
 **No existing system does this:**
 - AutoGen: Humans define all agents
 - LangGraph: Predefined workflows only
 - CDS: Human-orchestrated specialists
-- **AETHER: Agents spawn agents AUTONOMOUSLY** ⭐
+- **AETHER: Worker Ants spawn Worker Ants AUTONOMOUSLY** ⭐
 
-### 2. Triple-Layer Memory System
-- **Working Memory**: Current session (200k token budget)
-- **Short-Term Memory**: 10 compressed recent sessions
-- **Long-Term Memory**: Persistent knowledge with intelligent forgetting
+### 2. Queen Ant Colony Architecture
+- **6 Worker Ant Castes**: Mapper, Planner, Executor, Verifier, Researcher, Synthesizer
+- **Pheromone Signals**: Init, Focus, Redirect, Feedback (with decay)
+- **Phased Autonomy**: Structure at boundaries, pure emergence within phases
+- **User as Queen**: Provides intention via signals, not commands
 
-### 3. Error Prevention System
-- Track every mistake with full details
-- Auto-flag after 3 occurrences
-- Auto-create constraints from learned patterns
-- Validate BEFORE action (not after)
+### 3. Pheromone Signal System
+- **Init**: Strong attract signal, persists (initial goal)
+- **Focus**: Medium attract, 1-hour half-life (guide attention)
+- **Redirect**: Strong repel, 24-hour half-life (warn away)
+- **Feedback**: Variable strength, 6-hour half-life (teach preferences)
 
-**Result**: A system that never makes the same mistake twice.
+### 4. Session Persistence
+- **pause-colony**: Save state mid-phase
+- **resume-colony**: Restore in new session with clean context
+- Full state restoration: goal, pheromones, phase progress, Worker Ant states
 
-### 4. Semantic AETHER Protocol (SAP)
-Intent-based messaging achieving 10-100x bandwidth reduction over traditional communication.
+### 5. Codebase Colonization
+Colony analyzes existing codebase to understand:
+- Tech stack and dependencies
+- Architecture patterns
+- Code conventions
+- Integration points
 
-### 5. Goal Decomposition
-Autonomous planning and task breakdown without human intervention.
+New code seamlessly matches existing patterns.
 
 ---
 
@@ -61,10 +73,15 @@ Ant colonies demonstrate **emergent intelligence** without central control:
 
 ```
 Traditional: Human → Orchestrator → Agents
-AETHER:    Goal → Agent → Detects Gap → Spawns → Coordinates → Complete
+AETHER:    Queen (signals) → Colony → Ants spawn Ants → Self-organize → Complete
 ```
 
 This is **paradigm-shifting technology**.
+
+The Queen Ant Colony model preserves autonomous spawning while adding:
+- **Phase boundaries** for user visibility and review
+- **Pheromone signals** for continuous user guidance
+- **Checkpoints** for context refresh and course correction
 
 ---
 
@@ -72,23 +89,34 @@ This is **paradigm-shifting technology**.
 
 ```
 AETHER/
-├── .aether/                    # Core implementation
-│   ├── aether.py              # Unified AETHER system (834 lines)
-│   ├── agent_spawn.py         # Autonomous spawning system (450 lines)
-│   ├── memory_system.py       # Triple-layer memory (680 lines)
-│   ├── error_prevention.py    # Learning system (610 lines)
-│   ├── CONSTRAINTS.yaml       # Error prevention rules
-│   ├── ERROR_LEDGER.md        # Error tracking template
-│   └── FLAGGED_ISSUES.md      # Recurring error tracker
-├── .claude/                    # Slash commands
-│   └── commands/ant/          # /ant: command system
-│       ├── ant.md             # System overview
-│       ├── build.md           # Execute goals
-│       ├── status.md          # System status
-│       ├── memory.md          # Memory state
-│       └── errors.md          # Error ledger
-├── .ralph/                     # Research agent outputs
-│   ├── research/              # Research documents (25 docs, 383K+ words)
+├── .aether/                         # Queen Ant Colony implementation
+│   ├── QUEEN_ANT_ARCHITECTURE.md    # Complete architecture documentation
+│   ├── INTERACTIVE_COMMANDS_DESIGN.md  # CDS-like interactive design
+│   ├── HANDOFF.md                   # Context handoff format
+│   ├── worker_ants.py               # 6 Worker Ant castes (850+ lines)
+│   ├── pheromone_system.py          # Signal system with decay (600+ lines)
+│   ├── phase_engine.py              # Phase execution (700+ lines)
+│   ├── queen_ant_system.py          # Unified system (300+ lines)
+│   ├── interactive_commands.py      # CDS-like commands (1000+ lines)
+│   └── demo.py                      # Demo and tests
+├── .claude/                         # Slash commands
+│   └── commands/ant/               # /ant: command system (13 commands)
+│       ├── ant.md                  # System overview
+│       ├── init.md                 # Initialize project
+│       ├── plan.md                 # Show all phases
+│       ├── phase.md                # Show phase details
+│       ├── execute.md              # Execute a phase
+│       ├── review.md               # Review completed phase
+│       ├── focus.md                # Guide colony attention
+│       ├── redirect.md             # Warn colony away
+│       ├── feedback.md             # Provide guidance
+│       ├── status.md               # Colony status
+│       ├── memory.md               # Learned patterns
+│       ├── colonize.md             # Analyze codebase
+│       ├── pause-colony.md         # Save session
+│       └── resume-colony.md        # Restore session
+├── .ralph/                          # Research agent outputs
+│   ├── research/                   # Research documents (25 docs, 383K+ words)
 │   │   ├── CONTEXT_ENGINE_RESEARCH.md
 │   │   ├── MULTI_AGENT_ORCHESTRATION_RESEARCH.md
 │   │   ├── AGENT_ARCHITECTURE_COMMUNICATION_RESEARCH.md
@@ -119,8 +147,8 @@ AETHER/
 │   │   ├── PHASE_7_TASK_7_3_Development_Workflow_and_Tooling.md
 │   │   ├── PHASE_7_TASK_7_4_Testing_and_Validation_Strategy.md
 │   │   └── PHASE_7_TASK_7_5_Deployment_and_Operations_Plan.md
-│   ├── RESEARCH_COMPLETE.md    # Research corpus summary
-│   └── status.json            # Research progress tracker
+│   ├── RESEARCH_COMPLETE.md         # Research corpus summary
+│   └── status.json                 # Research progress tracker
 └── README.md
 ```
 
@@ -128,55 +156,67 @@ AETHER/
 
 ## 🧪 Run the Demos
 
-### Unified AETHER System
+### Queen Ant Colony Demo
 
 ```bash
-# Run the complete AETHER system
-python3 .aether/aether.py
+# Run the complete Queen Ant Colony system
+python3 .aether/demo.py
 ```
 
-**Output**: Spawns 10 agents autonomously to build an authentication system
-- 4/5 tasks completed
-- 28 semantic messages exchanged
-- Memory compression active
-- Error prevention validated (9/9 actions safe)
-
-### Individual Component Demos
-
-```bash
-# Autonomous Agent Spawning
-python3 .aether/agent_spawn.py
-
-# Triple-Layer Memory System
-python3 .aether/memory_system.py
-
-# Error Prevention System
-python3 .aether/error_prevention.py
-```
+**Output**: Demonstrates the complete workflow:
+- Initialize colony with goal
+- Emit pheromone signals
+- Execute phase with Worker Ant spawning
+- Colony self-organizes to complete tasks
 
 ### `/ant:` Command Interface
 
-The `/ant:` commands provide a user-friendly interface to AETHER:
+The `/ant:` commands provide a user-friendly interface to the Queen Ant Colony:
 
+**Core Workflow:**
 ```
-/ant                    # Show system overview
-/ant:build <goal>     # Execute a goal (e.g., "Build a blog with comments")
-/ant:status            # Show agent hierarchy and system stats
-/ant:memory            # Show memory state (working/short-term/long-term)
-/ant:errors            # Show error ledger and flagged issues
+/ant                     # Show system overview
+/ant:init <goal>        # Initialize project
+/ant:plan               # Show all phases
+/ant:phase [N]          # Show phase details
+/ant:execute <N>        # Execute a phase
+/ant:review <N>         # Review completed phase
+```
+
+**Guidance Commands:**
+```
+/ant:focus <area>       # Guide colony attention
+/ant:redirect <pattern> # Warn colony away from approach
+/ant:feedback <msg>     # Provide guidance
+```
+
+**Status Commands:**
+```
+/ant:status             # Colony status
+/ant:memory             # Learned patterns
+```
+
+**Session Management:**
+```
+/ant:colonize           # Analyze codebase before starting
+/ant:pause-colony       # Save session mid-phase
+/ant:resume-colony      # Restore session in new context
 ```
 
 **Example**:
 ```bash
-/ant:build "Create a REST API with user authentication"
+/ant:init "Create a REST API with user authentication"
+/ant:focus "security"
+/ant:focus "test coverage"
+/ant:execute 1
 ```
 
-AETHER will:
-1. Decompose goal into subtasks
-2. Spawn specialist agents for each subtask
-3. Coordinate execution autonomously
-4. Learn from any mistakes
-5. Report results when complete
+The Queen Ant Colony will:
+1. Create phase structure based on goal
+2. Worker Ants spawn other Worker Ants as needed
+3. Colony self-organizes to complete tasks
+4. Check in at phase boundaries for review
+5. Learn from pheromone feedback
 
 ---
 
@@ -240,11 +280,13 @@ Current AI development systems require humans to:
 
 **AETHER changes everything:**
 
-- Agents figure out what needs to be done
-- Agents spawn the right specialists
-- Agents coordinate their own work
-- Agents improve their own strategies
-- Agents discover novel approaches
+- Worker Ants figure out what needs to be done
+- Worker Ants spawn the right specialists autonomously
+- Colony coordinates its own work
+- Colony improves strategies based on pheromones
+- Colony discovers novel approaches
+- User provides guidance via signals (not commands)
+- Phase boundaries provide visibility and review checkpoints
 
 This is not incremental improvement. This is a **paradigm shift**.
 
@@ -254,14 +296,15 @@ This is not incremental improvement. This is a **paradigm shift**.
 
 ### Completed ✅
 - [x] Phase 1: Context Engine Foundation (5 research documents)
-- [x] Phase 2: Unified AETHER System implementation (834 lines)
+- [x] Phase 2: Queen Ant Colony System (6 castes, pheromones, phased autonomy)
 - [x] Phase 3: Semantic Codebase Understanding (5 research documents)
 - [x] Phase 4: Predictive & Anticipatory Systems (5 research documents)
 - [x] Phase 5: Advanced Verification & Quality (5 research documents)
 - [x] Phase 6: Integration & Synthesis (5 research documents)
 - [x] Phase 7: Implementation Planning (5 research documents)
-- [x] `/ant:` Command System (5 commands)
-- [x] Individual component prototypes (spawning, memory, error prevention)
+- [x] `/ant:` Command System (13 commands with CDS-like interactivity)
+- [x] Session Persistence (pause/resume colony)
+- [x] Codebase Colonization
 
 ---
 
@@ -289,9 +332,11 @@ MIT License - See LICENSE file for details
 
 **Last Updated**: February 2, 2026
 
-- ✅ **Working System**: AETHER successfully spawns agents autonomously (demonstrated with 10 agents)
+- ✅ **Working System**: Queen Ant Colony with autonomous Worker Ant spawning
 - ✅ **Research Complete**: 383,000+ words across 25 documents with 758+ references
-- ✅ **Command Interface**: `/ant:` commands ready for use
+- ✅ **Command Interface**: 13 `/ant:` commands with CDS-like interactivity
+- ✅ **Session Persistence**: pause/resume for mid-phase checkpointing
+- ✅ **Codebase Colonization**: Analyze existing code before building
 - ✅ **All Research Phases Complete**: Phases 1, 3, 4, 5, 6, 7 - comprehensive research corpus ready for implementation
 
 ---
