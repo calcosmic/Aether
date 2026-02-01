@@ -644,6 +644,44 @@ reset_circuit_breaker
 
 This is useful if you've resolved the underlying issue and want to retry spawns.
 
+## Testing Safeguards
+
+To verify spawning safeguards work correctly, run the test suite:
+
+```bash
+bash .aether/utils/test-spawning-safeguards.sh
+```
+
+This tests:
+- Depth limit (prevents infinite chains)
+- Circuit breaker (triggers after 3 failures)
+- Spawn budget (max 10 per phase)
+- Same-specialist cache (prevents duplicates)
+- Confidence scoring (tracks specialist performance)
+- Meta-learning data (populates correctly)
+
+All tests should pass. If any test fails, investigate the safeguard before spawning specialists.
+
+### Safeguard Behavior Summary
+
+| Safeguard | Trigger | Behavior | Reset |
+|-----------|---------|----------|-------|
+| Depth limit | depth >= 3 | Blocks spawn, consolidates work | Auto on specialist completion |
+| Circuit breaker | 3 failures of same type | 30-min cooldown | Auto after cooldown or manual reset |
+| Spawn budget | current_spawns >= 10 | Blocks spawn, phase limit | Auto on phase reset |
+| Same-specialist cache | Pending spawn of same type | Waits for existing | Auto on specialist completion |
+
+### Manual Reset
+
+If you've resolved the underlying issue and want to retry spawns:
+
+```bash
+source .aether/utils/circuit-breaker.sh
+reset_circuit_breaker
+```
+
+This is useful after fixing the root cause of repeated failures.
+
 ## Example Behavior
 
 **Scenario**: Phase boundary after Phase 1 implementation
