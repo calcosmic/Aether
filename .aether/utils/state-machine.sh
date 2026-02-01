@@ -78,6 +78,93 @@ validate_transition() {
     fi
 }
 
+# Get next checkpoint number
+# Returns: Next checkpoint number from COLONY_STATE.json
+get_next_checkpoint_number() {
+    jq -r '.checkpoints.checkpoint_count // 0' "$COLONY_STATE"
+}
+
+# Transition colony state with pheromone trigger, file locking, and atomic writes
+# Args: new_state, [trigger_pheromone]
+# Returns: 0 on success, 1 on failure
+transition_state() {
+    local new_state="$1"
+    local trigger_pheromone="${2:-manual}"
+
+    # Acquire file lock to prevent concurrent transitions
+    if ! acquire_lock "$COLONY_STATE"; then
+        echo "Failed to acquire lock for state transition" >&2
+        return 1
+    fi
+
+    # Ensure lock is released on exit
+    trap release_lock EXIT TERM INT
+
+    # Read current state
+    local current_state=$(get_current_state)
+
+    # Validate transition
+    if ! is_valid_transition "$current_state" "$new_state"; then
+        echo "Invalid transition: $current_state -> $new_state" >&2
+        release_lock
+        return 1
+    fi
+
+    # Generate transition metadata
+    local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    local checkpoint="checkpoint_$(get_next_checkpoint_number).json"
+
+    # Update COLONY_STATE.json via jq with atomic write
+    local temp_file="/tmp/state_transition.$$.tmp"
+    if ! jq --arg current "$current_state" \
+       --arg new "$new_state" \
+       --arg trigger "$trigger_pheromone" \
+       --arg timestamp "$timestamp" \
+       --arg checkpoint "$checkpoint" \
+       '
+       .colony_status.state = $new |
+       .state_machine.last_transition = $timestamp |
+       .state_machine.transitions_count += 1 |
+       .state_machine.state_history += [{
+         "from": $current,
+         "to": $new,
+         "trigger": $trigger,
+         "timestamp": $timestamp,
+         "checkpoint": $checkpoint
+       }]
+       ' "$COLONY_STATE" > "$temp_file"; then
+        echo "Failed to update state with jq" >&2
+        rm -f "$temp_file"
+        release_lock
+        return 1
+    fi
+
+    # Atomic write to COLONY_STATE.json
+    if ! atomic_write_from_file "$COLONY_STATE" "$temp_file"; then
+        echo "Failed to write state transition atomically" >&2
+        rm -f "$temp_file"
+        release_lock
+        return 1
+    fi
+
+    # Cleanup temp file
+    rm -f "$temp_file"
+
+    # Release lock
+    release_lock
+
+    # Reset trap since we've cleaned up
+    trap - EXIT TERM INT
+
+    # Echo confirmation message
+    echo "State transition: $current_state -> $new_state"
+    echo "Trigger: $trigger_pheromone"
+    echo "Timestamp: $timestamp"
+
+    return 0
+}
+
 # Export functions for use in other scripts
 export -f get_current_state get_valid_states is_valid_state
 export -f is_valid_transition validate_transition
+export -f get_next_checkpoint_number transition_state

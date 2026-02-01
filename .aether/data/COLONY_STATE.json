@@ -1,0 +1,182 @@
+{
+  "$schema": "Aether Colony State v2.0",
+  "colony_metadata": {
+    "version": "2.0.0",
+    "created_at": null,
+    "last_updated": null,
+    "session_id": null
+  },
+  "queen_intention": {
+    "goal": null,
+    "initialized_at": null,
+    "context": ""
+  },
+  "colony_status": {
+    "state": "IDLE",
+    "state_history": [],
+    "current_phase": null,
+    "phases_completed": []
+  },
+  "state_machine": {
+    "valid_states": [
+      "IDLE",
+      "INIT",
+      "PLANNING",
+      "EXECUTING",
+      "VERIFYING",
+      "COMPLETED",
+      "FAILED"
+    ],
+    "last_transition": "2026-02-01T17:34:24Z",
+    "transitions_count": 2,
+    "state_history": [
+      {
+        "from": "IDLE",
+        "to": "INIT",
+        "trigger": "INIT_pheromone",
+        "timestamp": "2026-02-01T17:33:40Z",
+        "checkpoint": "checkpoint_0.json"
+      },
+      {
+        "from": "IDLE",
+        "to": "INIT",
+        "trigger": "INIT_pheromone",
+        "timestamp": "2026-02-01T17:34:24Z",
+        "checkpoint": "checkpoint_0.json"
+      }
+    ]
+  },
+  "resource_budgets": {
+    "max_spawns_per_phase": 10,
+    "current_spawns": 0,
+    "max_spawn_depth": 3,
+    "circuit_breaker_trips": 0,
+    "circuit_breaker_cooldown_until": null
+  },
+  "phases": {
+    "total_phases": 10,
+    "roadmap": [
+      {
+        "id": 1,
+        "name": "Colony Foundation",
+        "status": "pending",
+        "goal": "Colony state persists safely across context refreshes with corruption-proof JSON storage and pheromone signal system",
+        "caste": "colonizer",
+        "tasks": [],
+        "started_at": null,
+        "completed_at": null
+      },
+      {
+        "id": 2,
+        "name": "Worker Ant Castes",
+        "status": "pending",
+        "goal": "Six Worker Ant castes exist as prompt files and can spawn via Task tool with inherited context",
+        "caste": "route_setter",
+        "tasks": [],
+        "started_at": null,
+        "completed_at": null
+      },
+      {
+        "id": 3,
+        "name": "Pheromone Communication",
+        "status": "pending",
+        "goal": "Colony coordinates through stigmergic pheromone signals with time-based decay and caste-specific sensitivity",
+        "caste": "builder",
+        "tasks": [],
+        "started_at": null,
+        "completed_at": null
+      },
+      {
+        "id": 4,
+        "name": "Triple-Layer Memory",
+        "status": "pending",
+        "goal": "Colony memory compresses across three layers (Working → Short-term → Long-term) preventing context rot",
+        "caste": "architect",
+        "tasks": [],
+        "started_at": null,
+        "completed_at": null
+      },
+      {
+        "id": 5,
+        "name": "Phase Boundaries",
+        "status": "pending",
+        "goal": "Colony operates through explicit state machine with phase boundaries, checkpoints, and recovery capability",
+        "caste": "route_setter",
+        "tasks": [],
+        "started_at": null,
+        "completed_at": null
+      },
+      {
+        "id": 6,
+        "name": "Autonomous Emergence",
+        "status": "pending",
+        "goal": "Worker Ants detect capability gaps and spawn specialists automatically with safeguards against infinite loops",
+        "caste": "builder",
+        "tasks": [],
+        "started_at": null,
+        "completed_at": null
+      },
+      {
+        "id": 7,
+        "name": "Colony Verification",
+        "status": "pending",
+        "goal": "Multiple verifier perspectives validate outputs with weighted voting and belief calibration",
+        "caste": "watcher",
+        "tasks": [],
+        "started_at": null,
+        "completed_at": null
+      },
+      {
+        "id": 8,
+        "name": "Colony Learning",
+        "status": "pending",
+        "goal": "Colony learns which specialists work best for which tasks using Bayesian confidence scoring",
+        "caste": "architect",
+        "tasks": [],
+        "started_at": null,
+        "completed_at": null
+      },
+      {
+        "id": 9,
+        "name": "Stigmergic Events",
+        "status": "pending",
+        "goal": "Pub/sub event bus enables colony-wide asynchronous coordination between Worker Ants",
+        "caste": "scout",
+        "tasks": [],
+        "started_at": null,
+        "completed_at": null
+      },
+      {
+        "id": 10,
+        "name": "Colony Maturity",
+        "status": "pending",
+        "goal": "End-to-end colony validation with comprehensive testing and production readiness",
+        "caste": "watcher",
+        "tasks": [],
+        "started_at": null,
+        "completed_at": null
+      }
+    ]
+  },
+  "meta_learning": {
+    "spawn_outcomes": {},
+    "specialist_confidence": {},
+    "last_updated": null
+  },
+  "checkpoints": {
+    "latest_checkpoint": null,
+    "checkpoint_count": 0,
+    "auto_checkpoint_enabled": true
+  },
+  "events": {
+    "event_log": [],
+    "max_log_entries": 1000
+  },
+  "performance_metrics": {
+    "total_execution_time_seconds": 0,
+    "phases_completed": 0,
+    "total_spawns": 0,
+    "successful_spawns": 0,
+    "failed_spawns": 0
+  }
+}
