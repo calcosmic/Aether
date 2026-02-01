@@ -68,7 +68,7 @@ Each task was committed atomically:
 
 1. **Task 1: Implement transition_state() function in state-machine.sh** - `ae64f4e` (feat)
 
-**Plan metadata:** (to be added after SUMMARY.md creation)
+**Plan metadata:** `99b3028` (docs: complete plan)
 
 _Note: TDD tasks may have multiple commits (test → feat → refactor)_
 
