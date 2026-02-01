@@ -262,5 +262,68 @@ list_checkpoints() {
         done
 }
 
+# Detect crash and recover from last checkpoint
+# Returns: 0 if crash detected and recovered, 1 if no crash
+detect_crash_and_recover() {
+    # Read current colony state
+    local current_state=$(jq -r '.colony_status.state' "$COLONY_STATE")
+    local current_phase=$(jq -r '.colony_status.current_phase' "$COLONY_STATE")
+
+    # Check for crash indicators: EXECUTING or VERIFYING with no active workers
+    if [ "$current_state" = "EXECUTING" ] || [ "$current_state" = "VERIFYING" ]; then
+        # Check if worker_ants.json exists
+        if [ -f "$WORKER_ANTS_FILE" ]; then
+            local active_workers=$(jq -r '.active_workers | length' "$WORKER_ANTS_FILE")
+
+            if [ "$active_workers" = "0" ] || [ "$active_workers" = "" ] || [ "$active_workers" = "null" ]; then
+                echo "Crash detected: State=$current_state but no active workers"
+                echo "Recovering from last checkpoint..."
+                load_checkpoint "latest"
+
+                # Transition to PLANNING for retry
+                # Source state-machine.sh to get transition_state function
+                source "$_AETHER_UTILS_DIR/state-machine.sh"
+
+                # Only transition if we're not already in PLANNING
+                if [ "$current_state" != "PLANNING" ]; then
+                    transition_state "PLANNING" "crash_recovery"
+                fi
+
+                return 0
+            fi
+        fi
+    fi
+
+    # Check for timeout (30 minutes in EXECUTING/VERIFYING)
+    local last_transition=$(jq -r '.state_machine.last_transition' "$COLONY_STATE")
+    if [ -n "$last_transition" ] && [ "$last_transition" != "null" ]; then
+        # Get current time in seconds since epoch
+        local current_time=$(date +%s)
+        local last_time=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$last_transition" +%s 2>/dev/null || echo 0)
+
+        # Calculate elapsed time
+        local elapsed=$((current_time - last_time))
+
+        # 30 minutes = 1800 seconds
+        if [ $elapsed -gt 1800 ]; then
+            if [ "$current_state" = "EXECUTING" ] || [ "$current_state" = "VERIFYING" ]; then
+                echo "Timeout detected: State=$current_state for >30 minutes"
+                echo "Recovering from last checkpoint..."
+                load_checkpoint "latest"
+
+                # Source state-machine.sh to get transition_state function
+                source "$_AETHER_UTILS_DIR/state-machine.sh"
+
+                # Transition to PLANNING for retry
+                transition_state "PLANNING" "timeout_recovery"
+                return 0
+            fi
+        fi
+    fi
+
+    # No crash detected
+    return 1
+}
+
 # Export functions for use in other scripts
-export -f save_checkpoint load_checkpoint rotate_checkpoints list_checkpoints
+export -f save_checkpoint load_checkpoint rotate_checkpoints list_checkpoints detect_crash_and_recover
