@@ -13,11 +13,11 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 3 of 10 (Pheromone Communication)
-Plan: 3 of 8 tasks in current phase
+Plan: 4 of 8 tasks in current phase
 Status: In progress
-Last activity: 2026-02-01 — Completed FEEDBACK pheromone emission command
+Last activity: 2026-02-01 — Added pheromone response sections to Colonizer, Route-setter, and Builder Ants
 
-Progress: [███░░░░░░░] 25%
+Progress: [████░░░░░░] 38%
 
 ## Recent Changes
 
@@ -117,11 +117,11 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-01 (Phase 3 Plan 3 - FEEDBACK pheromone emission)
-Stopped at: Completed Phase 3 Plan 3 (FEEDBACK command), ready for Plan 4 (Pheromone cleanup)
+Last session: 2026-02-01 (Phase 3 Plan 4 - Pheromone response in Worker Ants)
+Stopped at: Completed Phase 3 Plan 4 (Worker Ant pheromone response), ready for Plan 5
 Resume file: .planning/phases/03-pheromone-communication/.continue-here.md
 
 **Progress Summary:**
 - ✅ Phase 1: Colony Foundation (8/8 tasks) - State schemas, file locking, atomic writes
 - ✅ Phase 2: Worker Ant Castes (9/9 tasks) - 6 caste prompts, spawning pattern, commands
-- 🔄 Phase 3: Pheromone Communication (3/8 tasks) - FOCUS, REDIRECT, and FEEDBACK pheromone emission complete
+- 🔄 Phase 3: Pheromone Communication (4/8 tasks) - FOCUS, REDIRECT, FEEDBACK emission, and Worker Ant response complete
