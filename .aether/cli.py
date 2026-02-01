@@ -15,6 +15,7 @@ import argparse
 import asyncio
 import sys
 from typing import Optional
+from datetime import datetime
 
 
 def main():
@@ -231,6 +232,79 @@ def main():
         help="Enable command history"
     )
 
+    # ============================================================
+    # /ant:memory
+    # ============================================================
+    memory_parser = subparsers.add_parser(
+        "memory",
+        help="Memory system operations",
+        description="Access triple-layer memory system (working, short-term, long-term)."
+    )
+    memory_subparsers = memory_parser.add_subparsers(
+        dest="memory_action",
+        title="Memory Actions",
+        description="Use 'memory <action> --help' for action-specific help",
+        metavar="ACTION"
+    )
+
+    # memory status
+    memory_status_parser = memory_subparsers.add_parser(
+        "status",
+        help="Show memory system status",
+        description="Display status of all three memory layers."
+    )
+
+    # memory working
+    memory_working_parser = memory_subparsers.add_parser(
+        "working",
+        help="Show working memory contents",
+        description="Display current working memory contents."
+    )
+    memory_working_parser.add_argument(
+        "query",
+        nargs="?",
+        help="Search query (leave empty to show all)"
+    )
+
+    # memory short-term
+    memory_short_parser = memory_subparsers.add_parser(
+        "short-term",
+        help="Show short-term memory sessions",
+        description="Display compressed sessions in short-term memory."
+    )
+    memory_short_parser.add_argument(
+        "query",
+        nargs="?",
+        help="Search query (leave empty to show all)"
+    )
+
+    # memory long-term
+    memory_long_parser = memory_subparsers.add_parser(
+        "long-term",
+        help="Search long-term memory",
+        description="Search persistent knowledge in long-term memory."
+    )
+    memory_long_parser.add_argument(
+        "query",
+        help="Search query"
+    )
+    memory_long_parser.add_argument(
+        "--category", "-c",
+        help="Filter by category"
+    )
+
+    # memory compress
+    memory_compress_parser = memory_subparsers.add_parser(
+        "compress",
+        help="Manually compress working to short-term",
+        description="Trigger compression of working memory to short-term."
+    )
+    memory_compress_parser.add_argument(
+        "--phase", "-p",
+        default="manual",
+        help="Phase identifier (default: 'manual')"
+    )
+
     # Parse arguments
     args = parser.parse_args()
 
@@ -383,6 +457,132 @@ async def run_command(args: argparse.Namespace) -> int:
         repl = AetherREPL(commands)
         await repl.run(history_enabled=args.history)
         return 0
+
+    # ============================================================
+    # memory
+    # ============================================================
+    elif args.command == "memory":
+        # Import memory system
+        try:
+            from .memory.triple_layer_memory import TripleLayerMemory
+        except ImportError:
+            from aether.memory.triple_layer_memory import TripleLayerMemory
+
+        # Get memory from commands if available
+        if not hasattr(commands, 'memory_layer') or commands.memory_layer is None:
+            memory = TripleLayerMemory()
+        else:
+            memory = commands.memory_layer
+
+        if args.memory_action == "status":
+            status = memory.get_status()
+            print("╔══════════════════════════════════════════════════════════════╗")
+            print("║                  🧠 Memory System Status                    ║")
+            print("╠══════════════════════════════════════════════════════════════╣")
+            print()
+
+            # Working memory
+            working = status["triple_layer_memory"]["working"]
+            print(f"📝 WORKING MEMORY")
+            print(f"   Items: {working['item_count']}")
+            print(f"   Tokens: {working['used_tokens']}/{working['max_tokens']} ({working['usage_percent']:.1f}%)")
+            print()
+
+            # Short-term memory
+            short_term = status["triple_layer_memory"]["short_term"]
+            print(f"📚 SHORT-TERM MEMORY")
+            print(f"   Sessions: {short_term['session_count']}/{short_term['max_sessions']}")
+            print(f"   Saved tokens: {short_term['total_saved_tokens']}")
+            print(f"   Avg compression: {short_term['avg_compression_ratio']}x")
+            print()
+
+            # Long-term memory
+            long_term = status["triple_layer_memory"]["long_term"]
+            print(f"💾 LONG-TERM MEMORY")
+            print(f"   Total patterns: {long_term['total_patterns']}")
+            if long_term['categories']:
+                print(f"   Categories:")
+                for cat, count in long_term['categories'].items():
+                    if count > 0:
+                        print(f"      {cat}: {count}")
+            print()
+
+            print("╚══════════════════════════════════════════════════════════════╝")
+            return 0
+
+        elif args.memory_action == "working":
+            if hasattr(args, 'query') and args.query:
+                results = await memory.search_working(args.query, limit=10)
+                print(f"📝 Working Memory Search: '{args.query}'")
+                print()
+                for item in results:
+                    print(f"  [{item.metadata.get('type', 'general')}] {item.content}")
+                if not results:
+                    print("  No matches found")
+            else:
+                status = memory.working.get_status()
+                print(f"📝 Working Memory ({status['item_count']} items, {status['used_tokens']} tokens)")
+                print()
+                for item in list(memory.working.items.values())[:10]:
+                    print(f"  [{item.metadata.get('type', 'general')}] {item.content[:60]}...")
+                if status['item_count'] > 10:
+                    print(f"  ... and {status['item_count'] - 10} more items")
+            print()
+            return 0
+
+        elif args.memory_action == "short-term":
+            if hasattr(args, 'query') and args.query:
+                results = await memory.short_term.search(args.query, limit=5)
+                print(f"📚 Short-Term Memory Search: '{args.query}'")
+                print()
+                for session in results:
+                    print(f"  {session.session_id}")
+                    print(f"  {session.content}")
+                if not results:
+                    print("  No matches found")
+            else:
+                status = memory.short_term.get_status()
+                print(f"📚 Short-Term Memory ({status['session_count']} sessions)")
+                print()
+                for session in memory.short_term.sessions.values():
+                    print(f"  {session.session_id}")
+                    print(f"  Compression: {session.compression_ratio:.2f}x")
+                    print(f"  {session.content[:80]}...")
+                    print()
+            return 0
+
+        elif args.memory_action == "long-term":
+            category = getattr(args, 'category', None)
+            results = await memory.long_term.search(args.query, categories=[category] if category else None, limit=10)
+            print(f"💾 Long-Term Memory Search: '{args.query}'")
+            if category:
+                print(f"   Category: {category}")
+            print()
+            for pattern in results:
+                print(f"  [{pattern.category}] {pattern.key}")
+                print(f"  Confidence: {pattern.confidence:.2f} | Occurrences: {pattern.occurrences}")
+                print(f"  {pattern.value}")
+                print()
+            if not results:
+                print("  No matches found")
+            print()
+            return 0
+
+        elif args.memory_action == "compress":
+            print("🔄 Compressing working memory to short-term...")
+            session_id = await memory.compress_to_short_term({
+                "phase": getattr(args, 'phase', 'manual'),
+                "trigger": "manual",
+                "timestamp": datetime.now().isoformat()
+            })
+            print(f"   Session: {session_id}")
+            print(f"   Working memory: {memory.working.item_count} items, {memory.working.used_tokens} tokens")
+            print()
+            return 0
+
+        else:
+            memory_parser.print_help()
+            return 0
 
     return 0
 

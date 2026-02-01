@@ -455,6 +455,193 @@ class PhaseSummaryVisualizer:
         return "\n".join(lines)
 
 
+class MemoryVisualizer:
+    """
+    Memory system visualization
+
+    Shows:
+    - All three memory layers
+    - Token usage and compression stats
+    - Memory contents
+    """
+
+    def render_memory_status(self, memory_status: Dict[str, Any]) -> str:
+        """
+        Render complete memory system status
+
+        Args:
+            memory_status: Status dictionary from TripleLayerMemory.get_status()
+
+        Returns:
+            Formatted memory status display
+        """
+        lines = []
+
+        lines.append("╔══════════════════════════════════════════════════════════════╗")
+        lines.append("║                  🧠 Memory System Status                    ║")
+        lines.append("╠══════════════════════════════════════════════════════════════╣")
+        lines.append("")
+
+        tlm = memory_status.get("triple_layer_memory", {})
+
+        # Working Memory
+        working = tlm.get("working", {})
+        lines.append("📝 WORKING MEMORY (Immediate Context)")
+        lines.append(f"   Items: {working.get('item_count', 0)}")
+        lines.append(f"   Tokens: {working.get('used_tokens', 0)}/{working.get('max_tokens', 200000)} "
+                    f"({working.get('usage_percent', 0):.1f}%)")
+
+        # Progress bar for token usage
+        usage_percent = working.get('usage_percent', 0) / 100
+        bar_width = 30
+        filled = int(bar_width * usage_percent)
+        bar = "█" * filled + "░" * (bar_width - filled)
+        lines.append(f"   Usage: [{bar}]")
+        lines.append("")
+
+        # Short-Term Memory
+        short_term = tlm.get("short_term", {})
+        lines.append("📚 SHORT-TERM MEMORY (Compressed Sessions)")
+        lines.append(f"   Sessions: {short_term.get('session_count', 0)}/{short_term.get('max_sessions', 10)}")
+        lines.append(f"   Saved tokens: {short_term.get('total_saved_tokens', 0)}")
+        lines.append(f"   Avg compression: {short_term.get('avg_compression_ratio', 0):.2f}x")
+
+        # Session progress
+        session_count = short_term.get('session_count', 0)
+        max_sessions = short_term.get('max_sessions', 10)
+        filled = int(bar_width * min(session_count / max_sessions, 1))
+        bar = "█" * filled + "░" * (bar_width - filled)
+        lines.append(f"   Capacity: [{bar}] {session_count}/{max_sessions}")
+        lines.append("")
+
+        # Long-Term Memory
+        long_term = tlm.get("long_term", {})
+        lines.append("💾 LONG-TERM MEMORY (Persistent Knowledge)")
+        lines.append(f"   Total patterns: {long_term.get('total_patterns', 0)}")
+
+        categories = long_term.get('categories', {})
+        if categories:
+            lines.append(f"   Categories:")
+            for cat, count in categories.items():
+                if count > 0:
+                    lines.append(f"      {cat}: {count}")
+
+        lines.append("")
+
+        lines.append("╚══════════════════════════════════════════════════════════════╝")
+
+        return "\n".join(lines)
+
+    def render_working_memory(self, working_memory: Dict[str, Any]) -> str:
+        """
+        Render working memory contents
+
+        Args:
+            working_memory: Working memory dict
+
+        Returns:
+            Formatted working memory display
+        """
+        lines = []
+
+        lines.append("╔══════════════════════════════════════════════════════════════╗")
+        lines.append("║                    📝 Working Memory Contents               ║")
+        lines.append("╠══════════════════════════════════════════════════════════════╣")
+        lines.append("")
+
+        items = working_memory.get('items', [])
+        if not items:
+            lines.append("  (empty)")
+        else:
+            for item in items[:20]:  # Show first 20
+                item_type = item.get('metadata', {}).get('type', 'general')
+                content = item.get('content', '')[:80]
+                lines.append(f"  [{item_type}] {content}...")
+
+            if len(items) > 20:
+                lines.append(f"  ... and {len(items) - 20} more items")
+
+        lines.append("")
+        lines.append("╚══════════════════════════════════════════════════════════════╝")
+
+        return "\n".join(lines)
+
+    def render_short_term_sessions(self, sessions: List[Dict[str, Any]]) -> str:
+        """
+        Render short-term memory sessions
+
+        Args:
+            sessions: List of session summaries
+
+        Returns:
+            Formatted sessions display
+        """
+        lines = []
+
+        lines.append("╔══════════════════════════════════════════════════════════════╗")
+        lines.append("║                  📚 Short-Term Memory Sessions              ║")
+        lines.append("╠══════════════════════════════════════════════════════════════╣")
+        lines.append("")
+
+        if not sessions:
+            lines.append("  (no sessions)")
+        else:
+            for session in sessions:
+                lines.append(f"📦 {session.get('session_id', 'unknown')}")
+                lines.append(f"   Compression: {session.get('compression_ratio', 0):.2f}x "
+                            f"({session.get('original_tokens', 0)} → {session.get('compressed_tokens', 0)} tokens)")
+                lines.append(f"   Age: {session.get('age_hours', 0):.1f} hours")
+                lines.append(f"   Content: {session.get('content', '')[:100]}...")
+                lines.append("")
+
+        lines.append("╚══════════════════════════════════════════════════════════════╝")
+
+        return "\n".join(lines)
+
+    def render_long_term_patterns(self, patterns: List[Dict[str, Any]]) -> str:
+        """
+        Render long-term memory patterns
+
+        Args:
+            patterns: List of knowledge patterns
+
+        Returns:
+            Formatted patterns display
+        """
+        lines = []
+
+        lines.append("╔══════════════════════════════════════════════════════════════╗")
+        lines.append("║                 💾 Long-Term Memory Patterns               ║")
+        lines.append("╠══════════════════════════════════════════════════════════════╣")
+        lines.append("")
+
+        if not patterns:
+            lines.append("  (no patterns)")
+        else:
+            # Group by category
+            by_category: Dict[str, List[Dict]] = {}
+            for pattern in patterns:
+                cat = pattern.get('category', 'other')
+                if cat not in by_category:
+                    by_category[cat] = []
+                by_category[cat].append(pattern)
+
+            for category, cat_patterns in by_category.items():
+                lines.append(f"📁 {category.upper()}: {len(cat_patterns)} patterns")
+                for pattern in cat_patterns[:5]:  # Show first 5 per category
+                    confidence = pattern.get('confidence', 0)
+                    occurrences = pattern.get('occurrences', 1)
+                    value = pattern.get('value', '')[:80]
+                    lines.append(f"   [{confidence:.2f}★ x{occurrences}] {value}...")
+                if len(cat_patterns) > 5:
+                    lines.append(f"   ... and {len(cat_patterns) - 5} more")
+                lines.append("")
+
+        lines.append("╚══════════════════════════════════════════════════════════════╝")
+
+        return "\n".join(lines)
+
+
 # Convenience functions for quick rendering
 
 def render_progress(completed: int, total: int, label: str = "") -> str:
@@ -479,3 +666,27 @@ def render_errors(errors: List[Dict[str, Any]]) -> str:
     """Quick error ledger rendering"""
     display = ErrorDisplay()
     return display.render_error_ledger(errors)
+
+
+def render_memory_status(memory_status: Dict[str, Any]) -> str:
+    """Quick memory status rendering"""
+    viz = MemoryVisualizer()
+    return viz.render_memory_status(memory_status)
+
+
+def render_working_memory(working_memory: Dict[str, Any]) -> str:
+    """Quick working memory rendering"""
+    viz = MemoryVisualizer()
+    return viz.render_working_memory(working_memory)
+
+
+def render_short_term_sessions(sessions: List[Dict[str, Any]]) -> str:
+    """Quick short-term sessions rendering"""
+    viz = MemoryVisualizer()
+    return viz.render_short_term_sessions(sessions)
+
+
+def render_long_term_patterns(patterns: List[Dict[str, Any]]) -> str:
+    """Quick long-term patterns rendering"""
+    viz = MemoryVisualizer()
+    return viz.render_long_term_patterns(patterns)

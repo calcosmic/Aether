@@ -9,6 +9,7 @@ Provides command history, tab completion, and live status.
 import asyncio
 import sys
 from typing import Optional, List
+from datetime import datetime
 
 try:
     from prompt_toolkit import PromptSession
@@ -73,7 +74,7 @@ class AetherREPL:
             "redirect": "Warn colony away: redirect <pattern>",
             "feedback": "Provide guidance: feedback <message>",
             "status": "Show colony status",
-            "memory": "Show learned patterns",
+            "memory": "Memory system: memory [status|working|short-term|long-term|compress]",
             "colonize": "Analyze codebase before starting",
             "pause-colony": "Save session mid-phase",
             "resume-colony": "Restore saved session",
@@ -305,8 +306,135 @@ class AetherREPL:
             print(output)
 
         elif cmd == "memory":
-            output = await self.commands.memory()
-            print(output)
+            # Memory subcommands
+            if not args:
+                # Default: show memory status
+                output = await self.commands.memory()
+                print(output)
+            else:
+                # Import memory system
+                try:
+                    from .memory.triple_layer_memory import TripleLayerMemory
+                except ImportError:
+                    from aether.memory.triple_layer_memory import TripleLayerMemory
+
+                # Get or create memory
+                if not hasattr(self.commands, 'memory_layer') or self.commands.memory_layer is None:
+                    memory = TripleLayerMemory()
+                else:
+                    memory = self.commands.memory_layer
+
+                subcommand = args[0].lower()
+
+                if subcommand == "status":
+                    status = memory.get_status()
+                    print("╔══════════════════════════════════════════════════════════════╗")
+                    print("║                  🧠 Memory System Status                    ║")
+                    print("╠══════════════════════════════════════════════════════════════╣")
+                    print()
+
+                    # Working memory
+                    working = status["triple_layer_memory"]["working"]
+                    print(f"📝 WORKING MEMORY")
+                    print(f"   Items: {working['item_count']}")
+                    print(f"   Tokens: {working['used_tokens']}/{working['max_tokens']} ({working['usage_percent']:.1f}%)")
+                    print()
+
+                    # Short-term memory
+                    short_term = status["triple_layer_memory"]["short_term"]
+                    print(f"📚 SHORT-TERM MEMORY")
+                    print(f"   Sessions: {short_term['session_count']}/{short_term['max_sessions']}")
+                    print(f"   Saved tokens: {short_term['total_saved_tokens']}")
+                    print(f"   Avg compression: {short_term['avg_compression_ratio']}x")
+                    print()
+
+                    # Long-term memory
+                    long_term = status["triple_layer_memory"]["long_term"]
+                    print(f"💾 LONG-TERM MEMORY")
+                    print(f"   Total patterns: {long_term['total_patterns']}")
+                    if long_term['categories']:
+                        print(f"   Categories:")
+                        for cat, count in long_term['categories'].items():
+                            if count > 0:
+                                print(f"      {cat}: {count}")
+                    print()
+
+                    print("╚══════════════════════════════════════════════════════════════╝")
+
+                elif subcommand == "working":
+                    query = " ".join(args[1:]) if len(args) > 1 else None
+                    if query:
+                        results = await memory.search_working(query, limit=10)
+                        print(f"📝 Working Memory Search: '{query}'")
+                        print()
+                        for item in results:
+                            print(f"  [{item.metadata.get('type', 'general')}] {item.content}")
+                        if not results:
+                            print("  No matches found")
+                    else:
+                        status = memory.working.get_status()
+                        print(f"📝 Working Memory ({status['item_count']} items, {status['used_tokens']} tokens)")
+                        print()
+                        for item in list(memory.working.items.values())[:10]:
+                            print(f"  [{item.metadata.get('type', 'general')}] {item.content[:60]}...")
+                        if status['item_count'] > 10:
+                            print(f"  ... and {status['item_count'] - 10} more items")
+                    print()
+
+                elif subcommand == "short-term":
+                    query = " ".join(args[1:]) if len(args) > 1 else None
+                    if query:
+                        results = await memory.short_term.search(query, limit=5)
+                        print(f"📚 Short-Term Memory Search: '{query}'")
+                        print()
+                        for session in results:
+                            print(f"  {session.session_id}")
+                            print(f"  {session.content}")
+                        if not results:
+                            print("  No matches found")
+                    else:
+                        status = memory.short_term.get_status()
+                        print(f"📚 Short-Term Memory ({status['session_count']} sessions)")
+                        print()
+                        for session in memory.short_term.sessions.values():
+                            print(f"  {session.session_id}")
+                            print(f"  Compression: {session.compression_ratio:.2f}x")
+                            print(f"  {session.content[:80]}...")
+                            print()
+
+                elif subcommand == "long-term":
+                    if len(args) < 2:
+                        print("❌ Usage: memory long-term <query> [--category <cat>]")
+                        return
+                    query = " ".join(args[1:])
+                    # Simple parsing (doesn't handle --category flag in basic form)
+                    results = await memory.long_term.search(query, limit=10)
+                    print(f"💾 Long-Term Memory Search: '{query}'")
+                    print()
+                    for pattern in results:
+                        print(f"  [{pattern.category}] {pattern.key}")
+                        print(f"  Confidence: {pattern.confidence:.2f} | Occurrences: {pattern.occurrences}")
+                        print(f"  {pattern.value}")
+                        print()
+                    if not results:
+                        print("  No matches found")
+                    print()
+
+                elif subcommand == "compress":
+                    print("🔄 Compressing working memory to short-term...")
+                    session_id = await memory.compress_to_short_term({
+                        "phase": "manual",
+                        "trigger": "repl",
+                        "timestamp": datetime.now().isoformat()
+                    })
+                    print(f"   Session: {session_id}")
+                    print(f"   Working memory: {memory.working.item_count} items, {memory.working.used_tokens} tokens")
+                    print()
+
+                else:
+                    print(f"❌ Unknown memory subcommand: {subcommand}")
+                    print("   Available: status, working, short-term, long-term, compress")
+                    print()
 
         elif cmd == "colonize":
             output = await self.commands.colonize()
@@ -353,6 +481,13 @@ class AetherREPL:
         print("  • Use TAB to complete commands")
         print("  • Use UP/DOWN arrows for command history")
         print("  • Use 'clear' to clean the screen")
+        print()
+        print("🧠 Memory Subcommands:")
+        print("  memory status     - Show all memory layers")
+        print("  memory working    - Show working memory")
+        print("  memory short-term - Show compressed sessions")
+        print("  memory long-term <query> - Search persistent knowledge")
+        print("  memory compress   - Compress working to short-term")
         print()
 
 
