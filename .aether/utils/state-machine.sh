@@ -181,7 +181,63 @@ transition_state() {
     return 0
 }
 
+# Archive state history to memory system if exceeds MAX_HISTORY entries
+# Returns: 0 on success (no-op if history <= MAX_HISTORY)
+archive_state_history() {
+    local MAX_HISTORY=100
+    local history_length=$(jq -r '.state_machine.state_history | length' "$COLONY_STATE")
+
+    # Only archive if history exceeds MAX_HISTORY
+    if [ "$history_length" -gt "$MAX_HISTORY" ]; then
+        echo "State history exceeds $MAX_HISTORY entries ($history_length), archiving..."
+
+        # Extract full history
+        local full_history=$(jq -r '.state_machine.state_history' "$COLONY_STATE")
+
+        # Create archive entry
+        local archive_entry=$(echo "$full_history" | jq -c --arg timestamp "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" '{
+          type: "state_history_archive",
+          content: .,
+          timestamp: $timestamp,
+          metadata: {
+            source: "state_machine",
+            entries: length
+          }
+        }')
+
+        # Add to Working Memory (if memory-ops.sh exists)
+        if [ -f ".aether/utils/memory-ops.sh" ]; then
+            source .aether/utils/memory-ops.sh
+            echo "$archive_entry" | jq -c '.' | \
+                add_working_memory_item "state_history_archive" 0.3
+            echo "State history archived to Working Memory"
+        else
+            echo "Warning: memory-ops.sh not found, trimming history without archive"
+        fi
+
+        # Keep only last 100 entries in state
+        local temp_file="/tmp/state_archive.$$.tmp"
+        if ! jq '.state_machine.state_history = .state_machine.state_history[-100:]' \
+           "$COLONY_STATE" > "$temp_file"; then
+            echo "Failed to trim state history" >&2
+            rm -f "$temp_file"
+            return 1
+        fi
+
+        if ! atomic_write_from_file "$COLONY_STATE" "$temp_file"; then
+            echo "Failed to write trimmed state history" >&2
+            rm -f "$temp_file"
+            return 1
+        fi
+
+        rm -f "$temp_file"
+        echo "State history trimmed: $history_length entries -> 100 entries"
+    fi
+
+    return 0
+}
+
 # Export functions for use in other scripts
 export -f get_current_state get_valid_states is_valid_state
 export -f is_valid_transition validate_transition
-export -f get_next_checkpoint_number transition_state
+export -f get_next_checkpoint_number transition_state archive_state_history
