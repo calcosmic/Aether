@@ -1,31 +1,6 @@
 {
   "$schema": "Aether Pheromone Signals v2.0",
-  "active_pheromones": [
-    {
-      "id": "focus_1769959644",
-      "type": "FOCUS",
-      "strength": 0.7,
-      "created_at": "2026-02-01T15:27:24Z",
-      "decay_rate": 3600,
-      "metadata": {
-        "source": "queen",
-        "caste": null,
-        "context": "test authentication"
-      }
-    },
-    {
-      "id": "redirect_1769959645",
-      "type": "REDIRECT",
-      "strength": 0.9,
-      "created_at": "2026-02-01T15:27:25Z",
-      "decay_rate": 86400,
-      "metadata": {
-        "source": "queen",
-        "caste": null,
-        "context": "synchronous patterns"
-      }
-    }
-  ],
+  "active_pheromones": [],
   "pheromone_types": {
     "INIT": {
       "description": "Queen sets colony intention - strongest attract signal that establishes goal",

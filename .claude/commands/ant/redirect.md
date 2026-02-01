@@ -1,254 +1,209 @@
 ---
 name: ant:redirect
-description: Emit redirect pheromone - warn colony away from approach or pattern
+description: Emit REDIRECT pheromone - Queen warns colony away from specific approaches
 ---
 
 <objective>
-Emit a redirect pheromone (strong repel signal) to warn the colony away from a specific approach, pattern, or technology.
+Emit a REDIRECT pheromone to warn the colony away from specific approaches or patterns.
+
+The REDIRECT pheromone is a strong repel signal (strength 0.9) with a 24-hour half-life.
+It creates avoidance patterns for Builder, exclusion from Route-setter planning, and
+validation constraints for Watcher.
 </objective>
 
 <process>
-You are the **Queen Ant Colony** emitting a redirect pheromone to warn the colony.
+You are the **Queen Ant Colony** receiving a redirect command from the Queen.
 
 ## Step 1: Validate Input
-
-```python
-if not args:
-    return """❌ Usage: /ant:redirect "<pattern>"
-
-Examples:
-  /ant:redirect "Don't use string concatenation for SQL"
-  /ant:redirect "Avoid callbacks, use async/await"
-  /ant:redirect "Don't use MongoDB for this"
-"""
+Check if redirect pattern argument is provided:
+```bash
+if [ -z "$1" ]; then
+  echo "Usage: /ant:redirect \"<pattern to avoid>\""
+  echo ""
+  echo "Example:"
+  echo "  /ant:redirect \"synchronous patterns\""
+  echo "  /ant:redirect \"blocking I/O operations\""
+  echo "  /ant:redirect \"global state mutations\""
+  exit 1
+fi
 ```
 
-## Step 2: Load Colony State
-
-```python
-import json
-from datetime import datetime
-
-with open('.aether/COLONY_STATE.json', 'r') as f:
-    state = json.load(f)
-
-pheromones = state.get('pheromones', [])
-error_ledger = state.get('error_ledger', {})
+## Step 2: Load State
+Set the pheromones file path:
+```bash
+PHEROMONES=".aether/data/pheromones.json"
 ```
 
-## Step 3: Create Redirect Pheromone
+## Step 3: Create REDIRECT Pheromone
+Create the REDIRECT pheromone object with timestamp and append to active_pheromones:
+```bash
+timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+pheromone_id="redirect_$(date +%s)"
 
-```python
-pattern = " ".join(args)
+jq --arg id "$pheromone_id" \
+   --arg timestamp "$timestamp" \
+   --arg pattern "$1" \
+   '
+   .active_pheromones += [{
+     "id": $id,
+     "type": "REDIRECT",
+     "strength": 0.9,
+     "created_at": $timestamp,
+     "decay_rate": 86400,
+     "metadata": {
+       "source": "queen",
+       "caste": null,
+       "context": $pattern
+     }
+   }]
+   ' "$PHEROMONES" > /tmp/pheromones.tmp
 
-redirect_pheromone = {
-    "signal_type": "REDIRECT",
-    "content": pattern,
-    "strength": 0.7,  # Strong repel
-    "created_at": datetime.now().isoformat(),
-    "half_life_hours": 24.0,  # 24 hour half-life
-    "is_active": True,
-    "metadata": {
-        "occurrences": 1,
-        "first_occurrence": datetime.now().isoformat(),
-        "pattern": pattern.lower()
-    }
-}
+# Atomic write
+.aether/utils/atomic-write.sh atomic_write_from_file "$PHEROMONES" /tmp/pheromones.tmp
 ```
 
-## Step 4: Check for Existing Redirect on Same Pattern
-
-```python
-pattern_lower = redirect_pheromone['content'].lower()
-
-existing = None
-for p in pheromones:
-    if (p['signal_type'] == 'REDIRECT' and
-        p.get('is_active', True) and
-        pattern_lower in p['content'].lower()):
-        existing = p
-        break
-
-if existing:
-    # Increment occurrences
-    occurrences = existing['metadata'].get('occurrences', 1) + 1
-    existing['metadata']['occurrences'] = occurrences
-    existing['strength'] = min(1.0, existing['strength'] + 0.1)
-    existing['created_at'] = datetime.now().isoformat()
-
-    # After 3 occurrences, create constraint
-    if occurrences >= 3:
-        # Add to error ledger as FLAGGED_ISSUE
-        error_ledger[pattern_lower] = {
-            "category": "constraint",
-            "pattern": pattern,
-            "occurrences": occurrences,
-            "created_at": existing['metadata']['first_occurrence'],
-            "became_constraint_at": datetime.now().isoformat(),
-            "severity": "high",
-            "prevention": "Avoid this pattern - flagged by Queen after 3 redirects"
-        }
-
-        state['error_ledger'] = error_ledger
-else:
-    # Add new redirect pheromone
-    pheromones.append(redirect_pheromone)
-    occurrences = 1
-```
-
-## Step 5: Save Updated State
-
-```python
-state['pheromones'] = pheromones
-
-with open('.aether/COLONY_STATE.json', 'w') as f:
-    json.dump(state, f, indent=2)
-```
-
-## Step 6: Display Response
+## Step 4: Present Results
+Show the Queen (user) the REDIRECT signal was emitted:
 
 ```
-🐜 Queen Ant Colony - Redirect Pheromone Emitted
+╔══════════════════════════════════════════════════════════════╗
+║  REDIRECT Pheromone Emitted                                  ║
+╠══════════════════════════════════════════════════════════════╣
+║  Avoid: "{pattern}"                                           ║
+║  Type: REDIRECT (repel signal)                                ║
+║  Strength: 90%                                                ║
+║  Half-Life: 24 hours                                          ║
+║                                                               ║
+║  Colony Response:                                             ║
+║  ✓ Builder will avoid {pattern}                               ║
+║  ✓ Route-setter will exclude from planning                    ║
+║  ✓ Watcher will validate against constraint                   ║
+╚══════════════════════════════════════════════════════════════╝
 
-"{pattern}"
+Colony will steer away from this approach.
+Signal will decay over 24 hours.
 
-Signal: REDIRECT (strength: 70%)
-Duration: 24 hours
-
-COLONY RESPONDING:
-  ✓ Executor avoiding {pattern}
-  ✓ Planner avoiding in future plans
-  ✓ Verifier validating against {pattern}
-```
-
-Show occurrence status:
-```python
-if occurrences == 1:
-    occurrence_msg = "OCCURRENCES: 1/3 (will become constraint after 3)"
-elif occurrences == 2:
-    occurrence_msg = "OCCURRENCES: 2/3 (one more becomes constraint)"
-elif occurrences >= 3:
-    occurrence_msg = f"⚠️  CONSTRAINT CREATED: '{pattern}' now enforced"
-```
-
-## Step 7: Show Learning Progress
-
-```
-LEARNING PROGRESS:
-  Occurrence 1: Logged in ERROR_LEDGER
-  Occurrence 2: Pattern detected
-  Occurrence 3: ⚠️  FLAGGED_ISSUE created, constraint enforced
-
-After 3 occurrences, the pattern becomes a permanent constraint
-that validates BEFORE execution.
-```
-
-## Step 8: Show Next Steps
-
-```
-📋 NEXT STEPS:
-  1. /ant:status            - Check colony response
-  2. /ant:memory            - View learned patterns/constraints
-  3. /ant:focus <area>      - Guide toward alternative approach
-
-💡 REDIRECT TIP:
-   Use redirect to warn the colony away from patterns you
-   don't want. After 3 redirects on the same pattern, it
-   becomes a permanent constraint.
-
-🔄 CONTEXT: Safe to continue - colony is avoiding pattern
+Next Steps:
+  /ant:status   - View all active pheromones
+  /ant:focus    - Guide colony attention (optional)
 ```
 
 </process>
 
 <context>
-@.aether/pheromone_system.py
-@.aether/error_prevention.py
-@.aether/worker_ants.py
+# AETHER ARCHITECTURE - REDIRECT Pheromone
 
-Redirect Pheromone Properties:
-- Type: REDIRECT (strong repel)
-- Default strength: 0.7 (70%)
-- Half-life: 24 hours
-- Effect: Warns colony away from pattern
+## REDIRECT Signal Characteristics
 
-Learning Progression:
-1. **Occurrence 1**: Logged in ERROR_LEDGER
-2. **Occurrence 2**: Pattern detected, warning issued
-3. **Occurrence 3+**: FLAGGED_ISSUE created, constraint enforced
+- **Type**: Strong repel signal
+- **Default Strength**: 0.9 (90%)
+- **Half-Life**: 24 hours (86400 seconds)
+- **Decay Formula**: Strength(t) = 0.9 × e^(-t/86400)
+- **Purpose**: Warn colony away from specific approaches or patterns
 
-Constraint Behavior:
-- Added to error_ledger with category "constraint"
-- Validated BEFORE execution
-- Executor must avoid or get explicit warning
-- Planner excludes from future plans
-- Verifier checks against constraint
+## Caste Sensitivity to REDIRECT
+
+Different castes have different sensitivity to REDIRECT signals:
+
+| Caste | REDIRECT Sensitivity | Effective Strength |
+|-------|---------------------|-------------------|
+| Colonizer | 0.9 | 0.81 |
+| Route-setter | 0.8 | 0.72 |
+| Builder | 0.7 | 0.63 |
+| Watcher | 1.0 | 0.90 |
+| Scout | 0.8 | 0.72 |
+| Architect | 0.9 | 0.81 |
+
+**Effective Strength** = Signal Strength × Caste Sensitivity
+
+## Colony Behavior
+
+### Builder Ant (Sensitivity: 0.7)
+- Will avoid implementing redirected patterns
+- Seeks alternative approaches when encountering redirected context
+- Lower sensitivity allows flexibility when no alternatives exist
+
+### Route-setter Ant (Sensitivity: 0.8)
+- Excludes redirected patterns from phase planning
+- Avoids creating tasks that require redirected approaches
+- Medium sensitivity allows strategic exceptions
+
+### Watcher Ant (Sensitivity: 1.0)
+- Validates implementation against redirect constraints
+- Highest sensitivity ensures redirected patterns are caught
+- Will flag violations even in edge cases
+
+### Colonizer Ant (Sensitivity: 0.9)
+- Avoids indexing redirected patterns as favorable approaches
+- High sensitivity prevents colony from "rediscovering" bad patterns
+
+### Scout Ant (Sensitivity: 0.8)
+- Avoids researching redirected approaches
+- Seeks alternative information sources
+
+### Architect Ant (Sensitivity: 0.9)
+- Avoids compressing redirected patterns into long-term memory
+- High sensitivity prevents bad patterns from becoming institutional knowledge
+
+## Learning Patterns
+
+After 3+ REDIRECT signals on the same pattern:
+- Pattern added to `learning_patterns.redirect_constraints`
+- Colony treats as permanent constraint (even after signal decays)
+- Requires explicit Queen override to remove
+
+## Signal Combinations
+
+REDIRECT combines with other signals:
+
+- **INIT + REDIRECT**: Goal established with avoidance patterns
+- **FOCUS + REDIRECT**: Increased attention in area, but avoiding specific patterns
+- **FEEDBACK + REDIRECT**: Strong behavioral adjustment - avoid this AND do that instead
+
+## Examples
+
+```bash
+# Warn against synchronous patterns
+/ant:redirect "synchronous patterns"
+
+# Warn against blocking I/O
+/ant:redirect "blocking I/O operations"
+
+# Warn against global state
+/ant:redirect "global state mutations"
+```
+
 </context>
 
 <reference>
-# Redirect Examples
+# Pheromone Schema
 
-## Common Redirects
+REDIRECT pheromone objects follow this schema:
 
-```bash
-# Security
-/ant:redirect "Don't use string concatenation for SQL"
-/ant:redirect "Avoid hardcoded credentials"
-/ant:redirect "Don't store passwords in plain text"
-
-# Architecture
-/ant:redirect "Avoid callbacks, use async/await"
-/ant:redirect "Don't use MongoDB for this project"
-/ant:redirect "Avoid monolithic structure"
-
-# Code Quality
-/ant:redirect "Don't use var, use const/let"
-/ant:redirect "Avoid any types"
-/ant:redirect "Don't skip tests"
+```json
+{
+  "id": "redirect_1738400000",
+  "type": "REDIRECT",
+  "strength": 0.9,
+  "created_at": "2026-02-01T15:25:00Z",
+  "decay_rate": 86400,
+  "metadata": {
+    "source": "queen",
+    "caste": null,
+    "context": "pattern to avoid"
+  }
+}
 ```
 
-## Constraint Creation Example
-
-```
-# User issues 3rd redirect
-/ant:redirect "Don't use string concatenation for SQL"
-
-# Output:
-🐜 Queen Ant Colony - Redirect Pheromone Emitted
-
-"Don't use string concatenation for SQL"
-
-Signal: REDIRECT (strength: 70%)
-
-COLONY RESPONDING:
-  ✓ Executor avoiding string concatenation
-  ✓ Planner using parameterized queries
-  ✓ Verifier validating SQL before execution
-
-⚠️  CONSTRAINT CREATED: 'string concatenation for SQL' now enforced
-
-LEARNING PROGRESS:
-  Occurrence 1: ✓ Logged in ERROR_LEDGER
-  Occurrence 2: ✓ Pattern detected
-  Occurrence 3: ✓ FLAGGED_ISSUE created, constraint enforced
-
-Future SQL operations will be validated against this constraint.
-```
-
-## Worker Ant Response
-
-| Caste | Response to Redirect |
-|-------|---------------------|
-| Mapper | Avoids mapping redirected patterns |
-| Planner | Excludes from plans |
-| Executor | Avoids implementation |
-| Verifier | Validates against constraint |
-| Researcher | Seeks alternatives |
-| Synthesizer | Extracts avoidance pattern |
+Key fields:
+- `decay_rate`: 86400 (24 hours in seconds) - determines half-life
+- `strength`: 0.9 (90%) - default REDIRECT strength
+- `metadata.context`: The pattern or approach to avoid
+- `metadata.caste`: null for Queen signals (Worker Ants set caste when emitting)
 </reference>
 
 <allowed-tools>
-Read
 Write
 Bash
+Read
 </allowed-tools>

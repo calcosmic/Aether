@@ -12,18 +12,6 @@
         "caste": null,
         "context": "test authentication"
       }
-    },
-    {
-      "id": "redirect_1769959645",
-      "type": "REDIRECT",
-      "strength": 0.9,
-      "created_at": "2026-02-01T15:27:25Z",
-      "decay_rate": 86400,
-      "metadata": {
-        "source": "queen",
-        "caste": null,
-        "context": "synchronous patterns"
-      }
     }
   ],
   "pheromone_types": {
