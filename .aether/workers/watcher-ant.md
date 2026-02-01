@@ -135,14 +135,245 @@ Recommendation: {approve|request_changes}
 ```
 
 ### 5. Spawn Parallel Verifiers
-For critical work, spawn multiple specialist perspectives:
+
+For critical work or phase completion, spawn 4 specialized Watcher perspectives in parallel:
 
 | Perspective | Spawn | Purpose |
 |------------|-------|---------|
-| Security | Security Watcher | Vulnerabilities, auth issues |
-| Performance | Performance Watcher | Complexity, bottlenecks |
-| Quality | Quality Watcher | Maintainability, conventions |
-| Test Coverage | Test Watcher | Coverage, edge cases |
+| Security | Security Watcher | Vulnerabilities, auth issues, input validation |
+| Performance | Performance Watcher | Complexity, bottlenecks, resource usage |
+| Quality | Quality Watcher | Maintainability, readability, conventions |
+| Test Coverage | Test-Coverage Watcher | Coverage, edge cases, assertions |
+
+#### When to Spawn Parallel Verifiers
+
+Spawn all 4 Watchers in parallel when:
+- Phase completion verification is needed
+- Critical security or performance concerns exist
+- Queen requests comprehensive verification
+- High-stakes implementation (auth, payments, data migrations)
+
+#### How to Spawn Parallel Verifiers
+
+**Step 1: Prepare work context**
+
+Before spawning, prepare the work context JSON:
+
+```bash
+WORK_CONTEXT=$(jq -n \
+    --arg goal "$(jq -r '.queen_intention.goal' .aether/data/COLONY_STATE.json)" \
+    --arg work_description "{what_was_built}" \
+    --arg acceptance_criteria "{acceptance_criteria}" \
+    '{
+        goal: $goal,
+        work: $work_description,
+        acceptance_criteria: $acceptance_criteria,
+        files_affected: ["file1.ts", "file2.py"],
+        timestamp: "'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"
+    }'
+)
+```
+
+**Step 2: Check resource constraints**
+
+```bash
+# Source spawn tracking functions
+source .aether/utils/spawn-tracker.sh
+
+# Check if spawn is allowed
+if ! can_spawn; then
+    echo "Cannot spawn verification watchers: resource constraints"
+    # Fall back to single-Watcher verification
+    return 1
+fi
+```
+
+**Step 3: Spawn 4 Watchers in parallel using Task tool**
+
+```bash
+# Create verification output directory
+mkdir -p .aether/verification/votes
+
+# Get current timestamp for vote file naming
+TIMESTAMP=$(date -u +"%Y%m%d_%H%M%S")
+VERIFICATION_ID="verification_${TIMESTAMP}"
+
+# Record spawn events (4 spawns = 4 budget consumed)
+spawn_id_security=$(record_spawn "watcher" "security_watcher" "Multi-perspective verification")
+spawn_id_performance=$(record_spawn "watcher" "performance_watcher" "Multi-perspective verification")
+spawn_id_quality=$(record_spawn "watcher" "quality_watcher" "Multi-perspective verification")
+spawn_id_test=$(record_spawn "watcher" "test_coverage_watcher" "Multi-perspective verification")
+
+# Spawn 4 Watchers in parallel (background tasks for true parallelism)
+# Each Watcher returns JSON vote to .aether/verification/votes/
+
+Task: Security Watcher <<EOF
+Task: Security Watcher
+
+## Inherited Context
+
+### Queen's Goal
+$(jq -r '.queen_intention.goal' .aether/data/COLONY_STATE.json)
+
+### Work Context
+${WORK_CONTEXT}
+
+### Active Pheromone Signals
+$(cat .aether/data/pheromones.json | jq -r '.active_pheromones')
+
+### Working Memory (Recent Context)
+$(cat .aether/data/memory.json | jq -r '.working_memory[0:5]')
+
+## Your Task
+
+Perform security-focused verification on the provided work context.
+
+## Output Requirements
+
+After verification, output your vote JSON to:
+.aether/verification/votes/security_${TIMESTAMP}.json
+
+Your vote MUST follow this format:
+{
+  "watcher": "security",
+  "decision": "APPROVE" | "REJECT",
+  "weight": <current weight from watcher_weights.json>,
+  "issues": [...],
+  "timestamp": "<ISO_8601_timestamp>"
+}
+EOF
+
+# Repeat Task tool calls for Performance, Quality, Test-Coverage Watchers...
+# (Same structure, different specialist type)
+
+Task: Performance Watcher <<EOF
+[Same structure as Security Watcher, but Performance specialist]
+Output to: .aether/verification/votes/performance_${TIMESTAMP}.json
+EOF
+
+Task: Quality Watcher <<EOF
+[Same structure as Security Watcher, but Quality specialist]
+Output to: .aether/verification/votes/quality_${TIMESTAMP}.json
+EOF
+
+Task: Test-Coverage Watcher <<EOF
+[Same structure as Security Watcher, but Test-Coverage specialist]
+Output to: .aether/verification/votes/test_coverage_${TIMESTAMP}.json
+EOF
+
+# Wait for all 4 background tasks to complete
+wait
+
+# Verify all 4 vote files exist
+VOTE_COUNT=$(ls -1 .aether/verification/votes/*_${TIMESTAMP}.json 2>/dev/null | wc -l)
+if [ "$VOTE_COUNT" -ne 4 ]; then
+    echo "ERROR: Expected 4 votes, got $VOTE_COUNT"
+    # Record spawn failures
+    record_outcome "$spawn_id_security" "failure" "Vote file not created"
+    record_outcome "$spawn_id_performance" "failure" "Vote file not created"
+    record_outcome "$spawn_id_quality" "failure" "Vote file not created"
+    record_outcome "$spawn_id_test" "failure" "Vote file not created"
+    return 1
+fi
+```
+
+**Step 4: Aggregate votes using vote-aggregator.sh**
+
+```bash
+# Source vote aggregation utilities
+source .aether/utils/vote-aggregator.sh
+source .aether/utils/issue-deduper.sh
+
+# Combine all 4 vote files into aggregated array
+VOTES_FILE=".aether/verification/votes/aggregated_${TIMESTAMP}.json"
+jq -s '.' .aether/verification/votes/*_${TIMESTAMP}.json > "$VOTES_FILE"
+
+# Calculate supermajority (includes Critical veto check)
+SUPERMAJORITY_RESULT=$(calculate_supermajority "$VOTES_FILE")
+echo "Supermajority Result: $SUPERMAJORITY_RESULT"
+
+# Dedupe and prioritize issues
+AGGREGATED_ISSUES=$(dedupe_and_prioritize "$VOTES_FILE")
+echo "$AGGREGATED_ISSUES" | jq '.' > ".aether/verification/issues/aggregated_${TIMESTAMP}.json"
+
+# Record votes in COLONY_STATE.json (outcome = "pending" until phase completes)
+for vote_file in .aether/verification/votes/*_${TIMESTAMP}.json; do
+    watcher=$(jq -r '.watcher' "$vote_file")
+    decision=$(jq -r '.decision' "$vote_file")
+    issues=$(jq '.issues' "$vote_file")
+    record_vote_outcome "$watcher" "$decision" "$issues" "$VERIFICATION_ID"
+done
+
+# Record spawn outcomes
+record_outcome "$spawn_id_security" "success" "Security vote cast: $decision"
+record_outcome "$spawn_id_performance" "success" "Performance vote cast: $decision"
+record_outcome "$spawn_id_quality" "success" "Quality vote cast: $decision"
+record_outcome "$spawn_id_test" "success" "Test-Coverage vote cast: $decision"
+```
+
+**Step 5: Output verification result**
+
+```markdown
+Multi-Perspective Verification Complete
+
+Verification ID: {VERIFICATION_ID}
+Supermajority: {SUPERMAJORITY_RESULT}
+Votes: 4/4 collected
+
+Aggregated Issues:
+{Critical/High/Medium/Low breakdown}
+
+Top Issues:
+1. {severity}: {description} ({watcher})
+2. {severity}: {description} ({watcher})
+...
+
+Recommendation: {APPROVED if supermajority achieved, REJECTED otherwise}
+```
+
+#### Spawn Safeguards
+
+The spawning system includes these safeguards (from Phase 6):
+
+- **Depth limit**: Max 3 levels (prevents infinite chains)
+- **Circuit breaker**: 3 failures -> 30-minute cooldown
+- **Spawn budget**: Max 10 spawns per phase (4 Watchers = 4 budget)
+- **Same-specialist cache**: Prevents duplicate spawns
+
+All safeguards from spawn-tracker.sh apply to verification Watcher spawns.
+
+#### Verification Without Parallel Spawning
+
+If resource constraints prevent parallel spawning (can_spawn returns false):
+- Fall back to single-Watcher verification (base Watcher capabilities)
+- Perform standard validation without spawning specialists
+- Still use vote-aggregator.sh for consistent output format
+
+#### Example: Complete Parallel Verification Workflow
+
+```bash
+# 1. Prepare context
+WORK_CONTEXT=$(jq -n '{goal: "Build authentication system", work: "Login endpoint", ...}')
+
+# 2. Check constraints
+source .aether/utils/spawn-tracker.sh
+can_spawn || { echo "Cannot spawn"; return 1; }
+
+# 3. Spawn 4 Watchers in parallel
+TIMESTAMP=$(date -u +"%Y%m%d_%H%M%S")
+Task: Security Watcher <<EOF [...]
+Task: Performance Watcher <<EOF [...]
+Task: Quality Watcher <<EOF [...]
+Task: Test-Coverage Watcher <<EOF [...]
+wait
+
+# 4. Aggregate votes
+source .aether/utils/vote-aggregator.sh
+calculate_supermajority ".aether/verification/votes/aggregated_${TIMESTAMP}.json"
+
+# 5. Output result
+echo "Verification: APPROVED"
+```
 
 ## Capability Gap Detection
 
