@@ -338,5 +338,10 @@
         "timestamp": "2026-02-01T18:52:56Z"
       }
     ]
+  },
+  "verification": {
+    "votes": [],
+    "verification_history": [],
+    "last_updated": null
   }
 }
