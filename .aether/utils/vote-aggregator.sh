@@ -82,10 +82,7 @@ calculate_supermajority() {
 
     # Check for Critical veto FIRST (any Critical severity REJECT blocks approval)
     local has_critical
-    has_critical=$(jq '
-        [.[] | select(.decision == "REJECT")] |
-        any(.issues[]?; .severity == "Critical")
-    ' "$votes_file")
+    has_critical=$(jq '[.[] | select(.decision == "REJECT")] | [.[].issues[]? // {}] | any(.severity == "Critical")' "$votes_file")
 
     if [ "$has_critical" == "true" ]; then
         echo "REJECTED (Critical veto)"

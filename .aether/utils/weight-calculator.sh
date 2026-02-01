@@ -57,9 +57,13 @@ get_watcher_weight() {
 clamp_weight() {
     local weight="$1"
 
-    # Use bc for floating-point comparison
+    # Use awk for floating-point comparison and clamping
     local clamped
-    clamped=$(echo "scale=1; $weight < $MIN_WEIGHT ? $MIN_WEIGHT : ($weight > $MAX_WEIGHT ? $MAX_WEIGHT : $weight)" | bc)
+    clamped=$(awk -v w="$weight" -v min="$MIN_WEIGHT" -v max="$MAX_WEIGHT" 'BEGIN {
+        if (w < min) print min
+        else if (w > max) print max
+        else print w
+    }')
 
     echo "$clamped"
 }
@@ -124,18 +128,18 @@ update_watcher_weight() {
 
     # Calculate new weight
     local new_weight
-    new_weight=$(echo "scale=1; $current_weight + $adjustment" | bc)
+    new_weight=$(awk "BEGIN {print $current_weight + $adjustment}")
 
     # Apply domain expertise bonus if issue_category matches watcher_type
     # This doubles the weight adjustment for domain-matching issues
     if [ -n "$issue_category" ] && [ "$issue_category" == "$watcher_type" ]; then
         # For domain expertise, we boost the weight more significantly
         # If adjustment is positive, multiply by 2. If negative, apply less penalty
-        if [ "$(echo "$adjustment > 0" | bc)" == "1" ]; then
-            new_weight=$(echo "scale=1; $new_weight * 2" | bc)
+        if [ "$(awk "BEGIN {print ($adjustment > 0) ? 1 : 0}")" == "1" ]; then
+            new_weight=$(awk "BEGIN {print $new_weight * 2}")
         else
             # For incorrect votes in domain, reduce the penalty (only apply half)
-            new_weight=$(echo "scale=1; $current_weight + ($adjustment / 2)" | bc)
+            new_weight=$(awk "BEGIN {print $current_weight + ($adjustment / 2)}")
         fi
     fi
 
