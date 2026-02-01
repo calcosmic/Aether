@@ -169,16 +169,126 @@ Decimal phases appear between their surrounding integers in numeric order.
 8. Next phase adapts based on previous phase learnings (colony memory influences planning)
 9. Emergence occurs within phases (Worker Ants work autonomously, Queen doesn't intervene)
 
-**Colony Tasks**:
-- [ ] 05-01: Define state machine schema in COLONY_STATE.json (states, transitions, history)
-- [ ] 05-02: Implement state transition logic (pheromone-based triggers)
-- [ ] 05-03: Implement pre-transition checkpoint (save colony state to checkpoint.json)
-- [ ] 05-04: Implement post-transition checkpoint (save colony state to checkpoint.json)
-- [ ] 05-05: Implement recovery mechanism (load from checkpoint on failure)
-- [ ] 05-06: Implement state history logging (track all transitions for debugging)
-- [ ] 05-07: Implement phase boundary Queen check-in (pause for Queen review)
-- [ ] 05-08: Implement next phase adaptation (read colony memory from previous phase)
-- [ ] 05-09: Implement within-phase emergence (no Queen intervention until boundary)
+**Plans:** 9 plans in 4 waves
+
+**Colony Tasks:**
+- [ ] 05-01-PLAN.md — State machine schema and transition validation
+- [ ] 05-02-PLAN.md — Pheromone-triggered state transitions with file locking
+- [ ] 05-03-PLAN.md — Checkpoint system with save/load/rotate functions
+- [ ] 05-04-PLAN.md — Pre/post-transition checkpoint integration and recovery
+- [ ] 05-05-PLAN.md — Crash detection and /ant:recover command
+- [ ] 05-06-PLAN.md — State history logging with archival to memory
+- [ ] 05-07-PLAN.md — Phase boundary Queen check-in with CHECKIN pheromone
+- [ ] 05-08-PLAN.md — Next phase adaptation from previous phase memory
+- [ ] 05-09-PLAN.md — Emergence guard (no Queen intervention during EXECUTING)
+**Plans:** 9 plans in 4 waves
+
+**Colony Tasks:**
+- [ ] 05-01-PLAN.md — State machine schema and transition validation
+- [ ] 05-02-PLAN.md — Pheromone-triggered state transitions with file locking
+- [ ] 05-03-PLAN.md — Checkpoint system with save/load/rotate functions
+- [ ] 05-04-PLAN.md — Pre/post-transition checkpoint integration and recovery
+- [ ] 05-05-PLAN.md — Crash detection and /ant:recover command
+- [ ] 05-06-PLAN.md — State history logging with archival to memory
+- [ ] 05-07-PLAN.md — Phase boundary Queen check-in with CHECKIN pheromone
+- [ ] 05-08-PLAN.md — Next phase adaptation from previous phase memory
+- [ ] 05-09-PLAN.md — Emergence guard (no Queen intervention during EXECUTING)
+**Plans:** 9 plans in 4 waves
+
+**Colony Tasks:**
+- [ ] 05-01-PLAN.md — State machine schema and transition validation
+- [ ] 05-02-PLAN.md — Pheromone-triggered state transitions with file locking
+- [ ] 05-03-PLAN.md — Checkpoint system with save/load/rotate functions
+- [ ] 05-04-PLAN.md — Pre/post-transition checkpoint integration and recovery
+- [ ] 05-05-PLAN.md — Crash detection and /ant:recover command
+- [ ] 05-06-PLAN.md — State history logging with archival to memory
+- [ ] 05-07-PLAN.md — Phase boundary Queen check-in with CHECKIN pheromone
+- [ ] 05-08-PLAN.md — Next phase adaptation from previous phase memory
+- [ ] 05-09-PLAN.md — Emergence guard (no Queen intervention during EXECUTING)
+**Plans:** 9 plans in 4 waves
+
+**Colony Tasks:**
+- [ ] 05-01-PLAN.md — State machine schema and transition validation
+- [ ] 05-02-PLAN.md — Pheromone-triggered state transitions with file locking
+- [ ] 05-03-PLAN.md — Checkpoint system with save/load/rotate functions
+- [ ] 05-04-PLAN.md — Pre/post-transition checkpoint integration and recovery
+- [ ] 05-05-PLAN.md — Crash detection and /ant:recover command
+- [ ] 05-06-PLAN.md — State history logging with archival to memory
+- [ ] 05-07-PLAN.md — Phase boundary Queen check-in with CHECKIN pheromone
+- [ ] 05-08-PLAN.md — Next phase adaptation from previous phase memory
+- [ ] 05-09-PLAN.md — Emergence guard (no Queen intervention during EXECUTING)
+**Plans:** 9 plans in 4 waves
+
+**Colony Tasks:**
+- [ ] 05-01-PLAN.md — State machine schema and transition validation
+- [ ] 05-02-PLAN.md — Pheromone-triggered state transitions with file locking
+- [ ] 05-03-PLAN.md — Checkpoint system with save/load/rotate functions
+- [ ] 05-04-PLAN.md — Pre/post-transition checkpoint integration and recovery
+- [ ] 05-05-PLAN.md — Crash detection and /ant:recover command
+- [ ] 05-06-PLAN.md — State history logging with archival to memory
+- [ ] 05-07-PLAN.md — Phase boundary Queen check-in with CHECKIN pheromone
+- [ ] 05-08-PLAN.md — Next phase adaptation from previous phase memory
+- [ ] 05-09-PLAN.md — Emergence guard (no Queen intervention during EXECUTING)
+**Plans:** 9 plans in 4 waves
+
+**Colony Tasks:**
+- [ ] 05-01-PLAN.md — State machine schema and transition validation
+- [ ] 05-02-PLAN.md — Pheromone-triggered state transitions with file locking
+- [ ] 05-03-PLAN.md — Checkpoint system with save/load/rotate functions
+- [ ] 05-04-PLAN.md — Pre/post-transition checkpoint integration and recovery
+- [ ] 05-05-PLAN.md — Crash detection and /ant:recover command
+- [ ] 05-06-PLAN.md — State history logging with archival to memory
+- [ ] 05-07-PLAN.md — Phase boundary Queen check-in with CHECKIN pheromone
+- [ ] 05-08-PLAN.md — Next phase adaptation from previous phase memory
+- [ ] 05-09-PLAN.md — Emergence guard (no Queen intervention during EXECUTING)
+**Plans:** 9 plans in 4 waves
+
+**Colony Tasks:**
+- [ ] 05-01-PLAN.md — State machine schema and transition validation
+- [ ] 05-02-PLAN.md — Pheromone-triggered state transitions with file locking
+- [ ] 05-03-PLAN.md — Checkpoint system with save/load/rotate functions
+- [ ] 05-04-PLAN.md — Pre/post-transition checkpoint integration and recovery
+- [ ] 05-05-PLAN.md — Crash detection and /ant:recover command
+- [ ] 05-06-PLAN.md — State history logging with archival to memory
+- [ ] 05-07-PLAN.md — Phase boundary Queen check-in with CHECKIN pheromone
+- [ ] 05-08-PLAN.md — Next phase adaptation from previous phase memory
+- [ ] 05-09-PLAN.md — Emergence guard (no Queen intervention during EXECUTING)
+**Plans:** 9 plans in 4 waves
+
+**Colony Tasks:**
+- [ ] 05-01-PLAN.md — State machine schema and transition validation
+- [ ] 05-02-PLAN.md — Pheromone-triggered state transitions with file locking
+- [ ] 05-03-PLAN.md — Checkpoint system with save/load/rotate functions
+- [ ] 05-04-PLAN.md — Pre/post-transition checkpoint integration and recovery
+- [ ] 05-05-PLAN.md — Crash detection and /ant:recover command
+- [ ] 05-06-PLAN.md — State history logging with archival to memory
+- [ ] 05-07-PLAN.md — Phase boundary Queen check-in with CHECKIN pheromone
+- [ ] 05-08-PLAN.md — Next phase adaptation from previous phase memory
+- [ ] 05-09-PLAN.md — Emergence guard (no Queen intervention during EXECUTING)
+**Plans:** 9 plans in 4 waves
+
+**Colony Tasks:**
+- [ ] 05-01-PLAN.md — State machine schema and transition validation
+- [ ] 05-02-PLAN.md — Pheromone-triggered state transitions with file locking
+- [ ] 05-03-PLAN.md — Checkpoint system with save/load/rotate functions
+- [ ] 05-04-PLAN.md — Pre/post-transition checkpoint integration and recovery
+- [ ] 05-05-PLAN.md — Crash detection and /ant:recover command
+- [ ] 05-06-PLAN.md — State history logging with archival to memory
+- [ ] 05-07-PLAN.md — Phase boundary Queen check-in with CHECKIN pheromone
+- [ ] 05-08-PLAN.md — Next phase adaptation from previous phase memory
+- [ ] 05-09-PLAN.md — Emergence guard (no Queen intervention during EXECUTING)
+**Plans:** 9 plans in 4 waves
+
+**Colony Tasks:**
+- [ ] 05-01-PLAN.md — State machine schema and transition validation
+- [ ] 05-02-PLAN.md — Pheromone-triggered state transitions with file locking
+- [ ] 05-03-PLAN.md — Checkpoint system with save/load/rotate functions
+- [ ] 05-04-PLAN.md — Pre/post-transition checkpoint integration and recovery
+- [ ] 05-05-PLAN.md — Crash detection and /ant:recover command
+- [ ] 05-06-PLAN.md — State history logging with archival to memory
+- [ ] 05-07-PLAN.md — Phase boundary Queen check-in with CHECKIN pheromone
+- [ ] 05-08-PLAN.md — Next phase adaptation from previous phase memory
+- [ ] 05-09-PLAN.md — Emergence guard (no Queen intervention during EXECUTING)
 
 ### Phase 6: Autonomous Emergence
 
@@ -342,7 +452,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 2. Worker Ant Castes | 9/9 | Complete | 2026-02-01 |
 | 3. Pheromone Communication | 6/6 | Complete | 2026-02-01 |
 | 4. Triple-Layer Memory | 5/5 | Complete | 2026-02-01 |
-| 5. Phase Boundaries | 0/9 | Not started | - |
+| 5. Phase Boundaries | 9/9 | Planned | 2026-02-01 |
 | 6. Autonomous Emergence | 0/8 | Not started | - |
 | 7. Colony Verification | 0/10 | Not started | - |
 | 8. Colony Learning | 0/6 | Not started | - |
