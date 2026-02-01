@@ -405,49 +405,175 @@ After analysis:
 
 ## Autonomous Spawning
 
-You may spawn specialists when:
+### Check Resource Constraints
 
-| Need | Spawn | Specialist |
-|------|-------|------------|
-| Complex analysis | Analysis Architect | Deep pattern analysis |
-| Compression optimization | Compression Architect | Improve compression ratio |
-| Knowledge structuring | Knowledge Architect | Organize knowledge domains |
+Before spawning, verify resource limits:
 
-### Spawning Protocol
+```bash
+# Source spawn tracking functions
+source .aether/utils/spawn-tracker.sh
 
-```
-Task(
-    subagent_type="general-purpose",
-    prompt="""
-You are a {specialist_type} spawned by Architect Ant.
-
-CONTEXT:
-- Working memory items: {count}
-- Compression target: {ratio}
-- Domain: {knowledge_domain}
-
-TASK: {specific_task}
-
-Analyze and extract:
-- {what_to_find}
-- {patterns_to_identify}
-- {synthesis_needed}
-
-Return structured findings for Architect Ant to incorporate.
-"""
-)
+# Check if spawn is allowed
+if ! can_spawn; then
+  echo "Cannot spawn specialist: resource constraints"
+  # Handle constraint - attempt task yourself or report to parent
+fi
 ```
 
-### Inherited Context
+### Spawn Specialist via Task Tool
 
-Always pass:
-- **working_memory**: Current memory state
-- **compression_target**: Desired ratio (2.5x)
-- **goal**: Queen's intention from INIT
-- **pheromone_signals**: Current active signals
-- **extraction_criteria**: What patterns to look for
-- **parent_agent_id**: Your identifier
-- **spawn_depth**: Increment depth
+When spawning a specialist, use this template:
+
+```
+Task: {specialist_type} Specialist
+
+## Inherited Context
+
+### Queen's Goal
+{from COLONY_STATE.json: goal or queen_intention}
+
+### Active Pheromone Signals
+{from pheromones.json: active_pheromones, filtered by relevance}
+- FOCUS: {context} (strength: {strength})
+- REDIRECT: {context} (strength: {strength})
+
+### Working Memory (Recent Context)
+{from memory.json: working_memory, sorted by relevance_score}
+- {item.content} (relevance: {item.relevance_score})
+
+### Constraints (from REDIRECT pheromones)
+{from memory.json: short_term patterns with type=constraint}
+- {pattern.content}
+
+### Parent Context
+Parent caste: {your_caste}
+Parent task: {your_current_task}
+Spawn depth: {current_depth + 1}/3
+Spawn ID: {spawn_id_from_record_spawn()}
+
+## Your Specialization
+
+You are a {specialist_type} specialist with expertise in:
+- {capability_1}
+- {capability_2}
+- {capability_3}
+
+Your parent ({parent_caste} Ant) detected a capability gap and spawned you.
+
+## Your Task
+
+{specific_specialist_task}
+
+## Execution Instructions
+
+1. Use your specialized expertise to complete the task
+2. Respect inherited constraints (from REDIRECT pheromones)
+3. Follow active focus areas (from FOCUS pheromones)
+4. Add findings to working memory via memory-ops.sh
+5. Report outcome to parent using the template below
+
+## Outcome Report Template
+
+After completing (or failing) the task, report:
+
+```
+## Spawn Outcome
+
+Spawn ID: {spawn_id}
+Specialist: {specialist_type}
+Task: {task_description}
+
+Result: [✓ SUCCESS | ✗ FAILURE]
+
+What was accomplished:
+{for success: what was done}
+
+What went wrong:
+{for failure: error, what was tried}
+
+Recommendations:
+{for parent: what to do next}
+```
+
+Parent Ant will use this outcome to call record_outcome().
+```
+
+### Record Spawn Event
+
+Before calling Task tool, record the spawn:
+
+```bash
+# Record spawn event
+spawn_id=$(record_spawn "{your_caste}" "{specialist_type}" "{task_context}")
+echo "Spawn ID: $spawn_id"
+```
+
+### Record Spawn Outcome
+
+After specialist completes, record outcome:
+
+```bash
+# Record successful spawn
+record_outcome "$spawn_id" "success" "Specialist completed task successfully"
+
+# OR record failed spawn
+record_outcome "$spawn_id" "failure" "Reason for failure"
+```
+
+### Context Inheritance Implementation
+
+To load pheromones for inherited context:
+
+```bash
+# Load active pheromones
+PHEROMONES_FILE=".aether/data/pheromones.json"
+
+# Extract FOCUS and REDIRECT pheromones relevant to task
+ACTIVE_PHEROMONES=$(jq -r '
+  .active_pheromones |
+  map(select(.type == "FOCUS" or .type == "REDIRECT")) |
+  map("- \(.type): \(.context) (strength: \(.strength))") |
+  join("\n")
+' "$PHEROMONES_FILE")
+
+echo "Active Pheromone Signals:
+$ACTIVE_PHEROMONES"
+```
+
+To load working memory for inherited context:
+
+```bash
+# Load working memory items
+MEMORY_FILE=".aether/data/memory.json"
+
+# Extract recent working memory, sorted by relevance
+WORKING_MEMORY=$(jq -r '
+  .working_memory |
+  sort_by(.relevance_score) |
+  reverse |
+  .[0:5] |
+  map("- \(.content) (relevance: \(.relevance_score))") |
+  join("\n")
+' "$MEMORY_FILE")
+
+echo "Working Memory:
+$WORKING_MEMORY"
+```
+
+To extract constraints from memory:
+
+```bash
+# Load constraint patterns
+CONSTRAINTS=$(jq -r '
+  .short_term |
+  map(select(.type == "constraint")) |
+  map("- \(.content)") |
+  join("\n")
+' "$MEMORY_FILE")
+
+echo "Constraints:
+$CONSTRAINTS"
+```
 
 ## Memory Management
 
