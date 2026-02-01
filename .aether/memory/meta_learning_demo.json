@@ -1,0 +1,371 @@
+{
+  "capability_confidence": {
+    "('database_specialist', 'database')": {
+      "specialist_type": "database_specialist",
+      "task_category": "database",
+      "alpha": 3.0,
+      "beta": 1.0,
+      "confidence_score": 0.75,
+      "confidence_interval": [
+        0.37044763207167314,
+        1.0
+      ],
+      "total_spawns": 1,
+      "successful_spawns": 1,
+      "failed_spawns": 0,
+      "avg_completion_time": 2400.0,
+      "avg_quality_score": 0.85,
+      "avg_innovation_score": 0.2,
+      "generalizes_to": [],
+      "generalization_confidence": {},
+      "sample_size": 3
+    },
+    "('database_specialist', 'sql')": {
+      "specialist_type": "database_specialist",
+      "task_category": "sql",
+      "alpha": 1.0,
+      "beta": 1.0,
+      "confidence_score": 0.5,
+      "confidence_interval": [
+        0.0,
+        1.0
+      ],
+      "total_spawns": 0,
+      "successful_spawns": 0,
+      "failed_spawns": 0,
+      "avg_completion_time": 0.0,
+      "avg_quality_score": 0.0,
+      "avg_innovation_score": 0.0,
+      "generalizes_to": [],
+      "generalization_confidence": {},
+      "sample_size": 0
+    },
+    "('frontend_specialist', 'frontend')": {
+      "specialist_type": "frontend_specialist",
+      "task_category": "frontend",
+      "alpha": 1.0,
+      "beta": 1.0,
+      "confidence_score": 0.5,
+      "confidence_interval": [
+        0.0,
+        1.0
+      ],
+      "total_spawns": 0,
+      "successful_spawns": 0,
+      "failed_spawns": 0,
+      "avg_completion_time": 0.0,
+      "avg_quality_score": 0.0,
+      "avg_innovation_score": 0.0,
+      "generalizes_to": [],
+      "generalization_confidence": {},
+      "sample_size": 0
+    },
+    "('frontend_specialist', 'react')": {
+      "specialist_type": "frontend_specialist",
+      "task_category": "react",
+      "alpha": 2.0,
+      "beta": 1.0,
+      "confidence_score": 0.6666666666666666,
+      "confidence_interval": [
+        0.2046902362914556,
+        1.0
+      ],
+      "total_spawns": 1,
+      "successful_spawns": 1,
+      "failed_spawns": 0,
+      "avg_completion_time": 3600.0,
+      "avg_quality_score": 0.6,
+      "avg_innovation_score": 0.5,
+      "generalizes_to": [],
+      "generalization_confidence": {},
+      "sample_size": 2
+    },
+    "('frontend_specialist', 'vue')": {
+      "specialist_type": "frontend_specialist",
+      "task_category": "vue",
+      "alpha": 1.0,
+      "beta": 1.0,
+      "confidence_score": 0.5,
+      "confidence_interval": [
+        0.0,
+        1.0
+      ],
+      "total_spawns": 0,
+      "successful_spawns": 0,
+      "failed_spawns": 0,
+      "avg_completion_time": 0.0,
+      "avg_quality_score": 0.0,
+      "avg_innovation_score": 0.0,
+      "generalizes_to": [],
+      "generalization_confidence": {},
+      "sample_size": 0
+    },
+    "('api_specialist', 'api')": {
+      "specialist_type": "api_specialist",
+      "task_category": "api",
+      "alpha": 1.0,
+      "beta": 1.0,
+      "confidence_score": 0.5,
+      "confidence_interval": [
+        0.0,
+        1.0
+      ],
+      "total_spawns": 0,
+      "successful_spawns": 0,
+      "failed_spawns": 0,
+      "avg_completion_time": 0.0,
+      "avg_quality_score": 0.0,
+      "avg_innovation_score": 0.0,
+      "generalizes_to": [],
+      "generalization_confidence": {},
+      "sample_size": 0
+    },
+    "('api_specialist', 'websocket')": {
+      "specialist_type": "api_specialist",
+      "task_category": "websocket",
+      "alpha": 1.0,
+      "beta": 1.0,
+      "confidence_score": 0.5,
+      "confidence_interval": [
+        0.0,
+        1.0
+      ],
+      "total_spawns": 0,
+      "successful_spawns": 0,
+      "failed_spawns": 0,
+      "avg_completion_time": 0.0,
+      "avg_quality_score": 0.0,
+      "avg_innovation_score": 0.0,
+      "generalizes_to": [],
+      "generalization_confidence": {},
+      "sample_size": 0
+    },
+    "('security_specialist', 'authentication')": {
+      "specialist_type": "security_specialist",
+      "task_category": "authentication",
+      "alpha": 1.0,
+      "beta": 1.0,
+      "confidence_score": 0.5,
+      "confidence_interval": [
+        0.0,
+        1.0
+      ],
+      "total_spawns": 0,
+      "successful_spawns": 0,
+      "failed_spawns": 0,
+      "avg_completion_time": 0.0,
+      "avg_quality_score": 0.0,
+      "avg_innovation_score": 0.0,
+      "generalizes_to": [],
+      "generalization_confidence": {},
+      "sample_size": 0
+    },
+    "('security_specialist', 'jwt')": {
+      "specialist_type": "security_specialist",
+      "task_category": "jwt",
+      "alpha": 3.0,
+      "beta": 1.0,
+      "confidence_score": 0.75,
+      "confidence_interval": [
+        0.37044763207167314,
+        1.0
+      ],
+      "total_spawns": 1,
+      "successful_spawns": 1,
+      "failed_spawns": 0,
+      "avg_completion_time": 1800.0,
+      "avg_quality_score": 0.9,
+      "avg_innovation_score": 0.3,
+      "generalizes_to": [],
+      "generalization_confidence": {},
+      "sample_size": 3
+    },
+    "('security_specialist', 'owasp')": {
+      "specialist_type": "security_specialist",
+      "task_category": "owasp",
+      "alpha": 1.0,
+      "beta": 1.0,
+      "confidence_score": 0.5,
+      "confidence_interval": [
+        0.0,
+        1.0
+      ],
+      "total_spawns": 0,
+      "successful_spawns": 0,
+      "failed_spawns": 0,
+      "avg_completion_time": 0.0,
+      "avg_quality_score": 0.0,
+      "avg_innovation_score": 0.0,
+      "generalizes_to": [],
+      "generalization_confidence": {},
+      "sample_size": 0
+    },
+    "('test_specialist', 'testing')": {
+      "specialist_type": "test_specialist",
+      "task_category": "testing",
+      "alpha": 1.0,
+      "beta": 1.0,
+      "confidence_score": 0.5,
+      "confidence_interval": [
+        0.0,
+        1.0
+      ],
+      "total_spawns": 0,
+      "successful_spawns": 0,
+      "failed_spawns": 0,
+      "avg_completion_time": 0.0,
+      "avg_quality_score": 0.0,
+      "avg_innovation_score": 0.0,
+      "generalizes_to": [],
+      "generalization_confidence": {},
+      "sample_size": 0
+    },
+    "('test_specialist', 'unit')": {
+      "specialist_type": "test_specialist",
+      "task_category": "unit",
+      "alpha": 1.0,
+      "beta": 1.0,
+      "confidence_score": 0.5,
+      "confidence_interval": [
+        0.0,
+        1.0
+      ],
+      "total_spawns": 0,
+      "successful_spawns": 0,
+      "failed_spawns": 0,
+      "avg_completion_time": 0.0,
+      "avg_quality_score": 0.0,
+      "avg_innovation_score": 0.0,
+      "generalizes_to": [],
+      "generalization_confidence": {},
+      "sample_size": 0
+    },
+    "('performance_specialist', 'optimization')": {
+      "specialist_type": "performance_specialist",
+      "task_category": "optimization",
+      "alpha": 1.0,
+      "beta": 1.0,
+      "confidence_score": 0.5,
+      "confidence_interval": [
+        0.0,
+        1.0
+      ],
+      "total_spawns": 0,
+      "successful_spawns": 0,
+      "failed_spawns": 0,
+      "avg_completion_time": 0.0,
+      "avg_quality_score": 0.0,
+      "avg_innovation_score": 0.0,
+      "generalizes_to": [],
+      "generalization_confidence": {},
+      "sample_size": 0
+    },
+    "('realtime_specialist', 'websocket')": {
+      "specialist_type": "realtime_specialist",
+      "task_category": "websocket",
+      "alpha": 1.0,
+      "beta": 1.0,
+      "confidence_score": 0.5,
+      "confidence_interval": [
+        0.0,
+        1.0
+      ],
+      "total_spawns": 0,
+      "successful_spawns": 0,
+      "failed_spawns": 0,
+      "avg_completion_time": 0.0,
+      "avg_quality_score": 0.0,
+      "avg_innovation_score": 0.0,
+      "generalizes_to": [],
+      "generalization_confidence": {},
+      "sample_size": 0
+    }
+  },
+  "spawn_history": [
+    {
+      "event_id": "spawn_20260201143109_0",
+      "timestamp": "2026-02-01T14:31:09.365561",
+      "parent_agent": "Executor",
+      "task_description": "Implement JWT authentication",
+      "task_category": "jwt",
+      "specialist_type": "security_specialist",
+      "capability_gap": [
+        "authentication",
+        "jwt"
+      ],
+      "inherited_context": {
+        "goal": "Build REST API"
+      },
+      "outcome": "success",
+      "completion_time": 1800,
+      "quality_score": 0.9,
+      "innovation_score": 0.3,
+      "user_feedback": null,
+      "peer_feedback": []
+    },
+    {
+      "event_id": "spawn_20260201143109_1",
+      "timestamp": "2026-02-01T14:31:09.365569",
+      "parent_agent": "Executor",
+      "task_description": "Setup PostgreSQL database",
+      "task_category": "database",
+      "specialist_type": "database_specialist",
+      "capability_gap": [
+        "database",
+        "sql"
+      ],
+      "inherited_context": {
+        "goal": "Build REST API"
+      },
+      "outcome": "success",
+      "completion_time": 2400,
+      "quality_score": 0.85,
+      "innovation_score": 0.2,
+      "user_feedback": null,
+      "peer_feedback": []
+    },
+    {
+      "event_id": "spawn_20260201143109_2",
+      "timestamp": "2026-02-01T14:31:09.365574",
+      "parent_agent": "Executor",
+      "task_description": "Create React frontend",
+      "task_category": "react",
+      "specialist_type": "frontend_specialist",
+      "capability_gap": [
+        "frontend",
+        "react"
+      ],
+      "inherited_context": {
+        "goal": "Build REST API"
+      },
+      "outcome": "partial_success",
+      "completion_time": 3600,
+      "quality_score": 0.6,
+      "innovation_score": 0.5,
+      "user_feedback": null,
+      "peer_feedback": []
+    }
+  ],
+  "active_specialist_types": [
+    "security_specialist",
+    "performance_specialist",
+    "database_specialist",
+    "frontend_specialist",
+    "realtime_specialist",
+    "api_specialist",
+    "test_specialist"
+  ],
+  "deprecated_specialist_types": [],
+  "emergent_capabilities": {},
+  "generalization_matrix": {
+    "security_specialist": {
+      "authentication": 0.1,
+      "security": 0.1
+    },
+    "database_specialist": {
+      "sql": 0.1,
+      "orm": 0.1,
+      "migrations": 0.1
+    }
+  }
+}

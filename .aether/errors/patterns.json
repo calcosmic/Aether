@@ -1,0 +1,21 @@
+{
+  "spawning_NameError": {
+    "pattern_id": "spawning_NameError",
+    "category": "spawning",
+    "error_type": "NameError",
+    "occurrence_count": 2,
+    "flagged": false,
+    "flag_threshold": 3,
+    "flag_reason": "",
+    "first_occurrence": "2026-02-01T14:43:06.542798",
+    "last_occurrence": "2026-02-01T14:43:09.245318",
+    "frequency_trend": "stable",
+    "systematic_fix": "",
+    "systematic_prevention": "",
+    "fix_deployed": false,
+    "error_ids": [
+      "err_20260201_144242_8",
+      "err_20260201_144309_2"
+    ]
+  }
+}

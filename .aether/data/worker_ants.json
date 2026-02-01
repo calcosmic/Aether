@@ -1,0 +1,8 @@
+{
+  "mapper": {"status": "idle", "current_task": null, "subagents_spawned": 0},
+  "planner": {"status": "idle", "current_task": null, "subagents_spawned": 0},
+  "executor": {"status": "idle", "current_task": null, "subagents_spawned": 0},
+  "verifier": {"status": "idle", "current_task": null, "subagents_spawned": 0},
+  "researcher": {"status": "idle", "current_task": null, "subagents_spawned": 0},
+  "synthesizer": {"status": "idle", "current_task": null, "subagents_spawned": 0}
+}
