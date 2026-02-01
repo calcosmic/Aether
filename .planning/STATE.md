@@ -8,16 +8,16 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 
 **Unique Architecture:** Aether is a completely standalone multi-agent system designed from first principles. Not dependent on CDS, Ralph, or any external framework. All Worker Ant castes (Colonizer, Planner, Executor, Verifier, Researcher, Synthesizer), pheromone communication, and phased autonomy are uniquely Aether.
 
-**Current focus:** Phase 3 - Pheromone Communication (Stigmergic Signals with Caste Sensitivity)
+**Current focus:** Phase 4 - Triple-Layer Memory (Working → Short-term → Long-term with associative links)
 
 ## Current Position
 
-Phase: 3 of 10 (Pheromone Communication)
-Plan: 6 of 6 tasks in current phase
-Status: Phase complete
-Last activity: 2026-02-01 — Verified pheromone communication system (commands and Worker Ant responses)
+Phase: 3 of 10 (Pheromone Communication) - COMPLETE → Ready for Phase 4
+Plan: 6 of 6 tasks complete
+Status: Phase 3 verified and passed
+Last activity: 2026-02-01 — Phase 3 complete (Pheromone Communication), ready to begin Phase 4
 
-Progress: [█████████] 100%
+Progress: [███░░░░░░░] 30%
 
 ## Recent Changes
 

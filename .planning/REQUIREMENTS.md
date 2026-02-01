@@ -13,20 +13,20 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **CMD-02**: User can view colony status with `/ant:status`
 - [ ] **CMD-03**: User can view phase details with `/ant:phase [N]`
 - [ ] **CMD-04**: User can execute phase with `/ant:execute <N>`
-- [ ] **CMD-05**: User can emit focus pheromone with `/ant:focus <area>`
-- [ ] **CMD-06**: User can emit redirect pheromone with `/ant:redirect <pattern>`
-- [ ] **CMD-07**: User can emit feedback pheromone with `/ant:feedback <msg>`
+- [x] **CMD-05**: User can emit focus pheromone with `/ant:focus <area>`
+- [x] **CMD-06**: User can emit redirect pheromone with `/ant:redirect <pattern>`
+- [x] **CMD-07**: User can emit feedback pheromone with `/ant:feedback <msg>`
 
 ### Pheromone Signal System
 
-- [ ] **PH-01**: System emits INIT pheromone when user initializes project
-- [ ] **PH-02**: INIT pheromone persists until phase complete
-- [ ] **PH-03**: FOCUS pheromone decays over 1 hour
-- [ ] **PH-04**: REDIRECT pheromone decays over 24 hours
-- [ ] **PH-05**: FEEDBACK pheromone decays over 6 hours
-- [ ] **PH-06**: Worker Ants detect pheromones based on sensitivity profile
-- [ ] **PH-07**: Effective strength = signal strength × ant sensitivity
-- [ ] **PH-08**: Colony responds to pheromone signal combinations
+- [x] **PH-01**: System emits INIT pheromone when user initializes project
+- [x] **PH-02**: INIT pheromone persists until phase complete
+- [x] **PH-03**: FOCUS pheromone decays over 1 hour
+- [x] **PH-04**: REDIRECT pheromone decays over 24 hours
+- [x] **PH-05**: FEEDBACK pheromone decays over 6 hours
+- [x] **PH-06**: Worker Ants detect pheromones based on sensitivity profile
+- [x] **PH-07**: Effective strength = signal strength × ant sensitivity
+- [x] **PH-08**: Colony responds to pheromone signal combinations
 
 ### State Persistence
 
