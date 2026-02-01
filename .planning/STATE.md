@@ -13,11 +13,11 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 6 of 10 (Autonomous Emergence)
-Plan: 1/8 complete
+Plan: 2/8 complete
 Status: In progress
-Last activity: 2026-02-01 — Completed 06-01: Capability Gap Detection
+Last activity: 2026-02-01 — Completed 06-02: Task Tool Spawning
 
-Progress: [████████░░] 50% → [████████░░] 51%
+Progress: [████████░░] 51% → [████████░░] 52%
 
 ## Recent Changes
 
@@ -63,9 +63,9 @@ Progress: [████████░░] 50% → [████████░�
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 37
+- Total plans completed: 38
 - Average duration: 4 min
-- Total execution time: 2.5 hours
+- Total execution time: 2.6 hours
 
 **By Phase:**
 
@@ -76,11 +76,11 @@ Progress: [████████░░] 50% → [████████░�
 | 3 | 6 | 30 min | 5.0 min |
 | 4 | 5 | 20 min | 4.0 min |
 | 5 | 8 | 25 min | 3.1 min |
-| 6 | 1 | 4 min | 4.0 min |
+| 6 | 2 | 11 min | 5.5 min |
 
 **Recent Trend:**
-- Last 8 plans: 3.3 min avg
-- Trend: Phase 6 in progress (1/8 complete)
+- Last 8 plans: 3.4 min avg
+- Trend: Phase 6 in progress (2/8 complete)
 
 *Updated after each plan completion*
 
@@ -121,6 +121,9 @@ Recent decisions affecting current work:
 - **Spawn Decision Threshold**: Set to 0.6 based on multi-factor scoring where gap_score has highest weight (40%). Balances autonomous action (spawning when needed) with resource conservation (not over-spawning).
 - **Specialist Mapping**: Hybrid approach uses direct keyword lookup from worker_ants.json specialist_mappings.capability_to_caste for known patterns, with semantic analysis as fallback for novel capability gaps.
 - **Worker Ant Capability Assessment**: All 6 Worker Ant prompts now have "Capability Gap Detection" section with 5-step workflow (Extract requirements → Compare to own capabilities → Identify gaps → Calculate spawn score → Map to specialist). Each caste has caste-specific capabilities listed from worker_ants.json.
+- **Task Tool Spawning Infrastructure**: Implemented spawn-tracker.sh with can_spawn(), record_spawn(), record_outcome() for resource budget enforcement (max 10 spawns/phase, depth 3) and spawn lifecycle tracking. All 6 Worker Ants updated with comprehensive spawning template including resource constraints checking, full context inheritance (Queen's Goal, Pheromones, Working Memory, Constraints), and spawn lifecycle management (record before Task tool, record outcome after completion).
+- **Context Inheritance Implementation**: Template includes explicit jq commands to load pheromones (FOCUS, REDIRECT from pheromones.json), working memory (top 5 by relevance), and constraints (constraint patterns from short-term memory) for passing to spawned specialists.
+- **Spawn Lifecycle Tracking**: Each spawn generates unique spawn_id with timestamp, records parent caste, specialist type, task context, depth, and outcome. Performance metrics track successful/failed spawns and average spawn duration.
 
 ### Pending Todos
 
@@ -148,8 +151,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-01 (Phase 6 Plan 1 - Capability Gap Detection)
-Stopped at: Completed 06-01: Capability Gap Detection with Worker Spawns Workers (2/2 tasks)
+Last session: 2026-02-01 (Phase 6 Plan 2 - Task Tool Spawning)
+Stopped at: Completed 06-02: Task Tool Spawning with Context Inheritance (3/3 tasks)
 Resume file: None
 
 **Progress Summary:**
@@ -158,4 +161,4 @@ Resume file: None
 - ✅ Phase 3: Pheromone Communication (6/6 tasks) - FOCUS, REDIRECT, FEEDBACK emission, all Worker Ant response, verification complete
 - ✅ Phase 4: Triple-Layer Memory (5/5 plans) - Working Memory, DAST compression, LRU eviction, pattern extraction, associative links, compression triggers, cross-layer search complete
 - ✅ Phase 5: Phase Boundaries (9/9 plans) - State machine, pheromone-triggered transitions, checkpoints, recovery, crash detection, Queen check-in, memory adaptation, emergence guard complete
-- 🔄 Phase 6: Autonomous Emergence (1/8 plans) - Capability gap detection with specialist mapping complete
+- 🔄 Phase 6: Autonomous Emergence (2/8 plans) - Capability gap detection and Task tool spawning with context inheritance complete
