@@ -326,8 +326,197 @@ archive_state_history() {
     return 0
 }
 
+# Helper function to generate random strings for pheromone IDs
+# Args: length (default 6)
+# Returns: Random alphanumeric string
+random_string() {
+    local length=${1:-6}
+    LC_ALL=C tr -dc 'a-zA-Z0-9' < /dev/urandom | fold -w "$length" | head -n 1
+}
+
+# Adapt next phase from previous phase memory using high-confidence patterns
+# Args: current_phase (optional, defaults to colony current phase)
+# Returns: 0 on success, 1 on failure
+adapt_next_phase_from_memory() {
+    local current_phase="${1:-$(jq -r '.colony_status.current_phase // 1' "$COLONY_STATE")}"
+    local next_phase=$((current_phase + 1))
+    local memory_file=".aether/data/memory.json"
+    local pheromones_file=".aether/data/pheromones.json"
+
+    echo "Adapting next phase $next_phase from previous phase $current_phase..."
+
+    # Check if memory file exists
+    if [ ! -f "$memory_file" ]; then
+        echo "Memory file not found. Skipping adaptation."
+        return 0
+    fi
+
+    # Read previous phase compressed memory from short-term
+    local phase_memory=$(jq -r "
+        .short_term_memory.sessions[] |
+        select(.phase == $current_phase) |
+        .compressed_content
+    " "$memory_file" 2>/dev/null)
+
+    if [ -n "$phase_memory" ]; then
+        echo "  Found compressed memory from phase $current_phase"
+    fi
+
+    # Read high-confidence patterns from long-term (confidence > 0.7)
+    local patterns_json=$(jq -c "
+        .long_term_memory.patterns[] |
+        select(.confidence > 0.7) |
+        select(.metadata.related_phases[]? == $current_phase)
+    " "$memory_file" 2>/dev/null)
+
+    if [ -z "$patterns_json" ]; then
+        echo "  No high-confidence patterns found for phase $current_phase"
+        return 0
+    fi
+
+    echo "  Found high-confidence patterns from previous phase"
+
+    # Extract pattern types
+    local focus_areas=$(echo "$patterns_json" | jq -r 'select(.type == "focus_preference") | .pattern')
+    local constraints=$(echo "$patterns_json" | jq -r 'select(.type == "constraint") | .pattern')
+    local success_patterns=$(echo "$patterns_json" | jq -r 'select(.type == "success_pattern") | .pattern')
+    local failure_patterns=$(echo "$patterns_json" | jq -r 'select(.type == "failure_pattern") | .pattern')
+
+    # Count patterns
+    local focus_count=$(echo "$focus_areas" | grep -c . 2>/dev/null || echo 0)
+    local constraint_count=$(echo "$constraints" | grep -c . 2>/dev/null || echo 0)
+    local success_count=$(echo "$success_patterns" | grep -c . 2>/dev/null || echo 0)
+    local failure_count=$(echo "$failure_patterns" | grep -c . 2>/dev/null || echo 0)
+
+    echo "  Patterns extracted: $focus_count focus, $constraint_count constraints, $success_count successes, $failure_count failures"
+
+    # Emit FOCUS pheromones for high-value areas
+    if [ -n "$focus_areas" ]; then
+        echo "$focus_areas" | while IFS= read -r area; do
+            if [ -n "$area" ]; then
+                local pheromone_id="focus_$(date +%s)_$(random_string 6)"
+                local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+                local strength=0.8
+
+                # Direct jq update to pheromones.json
+                jq --arg id "$pheromone_id" \
+                   --arg area "$area" \
+                   --arg strength "$strength" \
+                   --arg timestamp "$timestamp" \
+                   --arg phase "$next_phase" \
+                   '.active_pheromones += [{
+                     "id": $id,
+                     "type": "FOCUS",
+                     "strength": ($strength | tonumber),
+                     "created_at": $timestamp,
+                     "decay_rate": 3600,
+                     "metadata": {
+                       "source": "memory_adaptation",
+                       "phase": $phase,
+                       "context": $area
+                     }
+                   }]' "$pheromones_file" > /tmp/pheromones.tmp
+
+                atomic_write_from_file "$pheromones_file" /tmp/pheromones.tmp
+                rm -f /tmp/pheromones.tmp
+
+                echo "  → FOCUS: $area (strength: $strength)"
+            fi
+        done
+    fi
+
+    # Emit REDIRECT pheromones for constraints
+    if [ -n "$constraints" ]; then
+        echo "$constraints" | while IFS= read -r pattern; do
+            if [ -n "$pattern" ]; then
+                local pheromone_id="redirect_$(date +%s)_$(random_string 6)"
+                local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+                local strength=0.9
+
+                # Direct jq update to pheromones.json
+                jq --arg id "$pheromone_id" \
+                   --arg pattern "$pattern" \
+                   --arg strength "$strength" \
+                   --arg timestamp "$timestamp" \
+                   --arg phase "$next_phase" \
+                   '.active_pheromones += [{
+                     "id": $id,
+                     "type": "REDIRECT",
+                     "strength": ($strength | tonumber),
+                     "created_at": $timestamp,
+                     "decay_rate": 86400,
+                     "metadata": {
+                       "source": "memory_adaptation",
+                       "phase": $phase,
+                       "context": $pattern
+                     }
+                   }]' "$pheromones_file" > /tmp/pheromones.tmp
+
+                atomic_write_from_file "$pheromones_file" /tmp/pheromones.tmp
+                rm -f /tmp/pheromones.tmp
+
+                echo "  → REDIRECT: $pattern (strength: $strength)"
+            fi
+        done
+    fi
+
+    # Store adaptation in colony state
+    local adapted_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    # Convert pattern lists to JSON arrays
+    local focus_json=$(echo "$focus_areas" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+    local constraints_json=$(echo "$constraints" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+    local successes_json=$(echo "$success_patterns" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+    local failures_json=$(echo "$failure_patterns" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+
+    # Update colony state with adaptation
+    local temp_state="/tmp/state_adapt.$$.tmp"
+    if ! jq --arg next "$next_phase" \
+       --argjson focus "$focus_json" \
+       --argjson constraints "$constraints_json" \
+       --argjson successes "$successes_json" \
+       --argjson failures "$failures_json" \
+       --arg adapted_at "$adapted_at" \
+       --arg adapted_from "$current_phase" \
+       '
+       if .phases.roadmap[$next | tonumber - 1] then
+         .phases.roadmap[$next | tonumber - 1].adaptation = {
+           "inherited_focus": $focus,
+           "inherited_constraints": $constraints,
+           "success_patterns": $successes,
+           "failure_patterns": $failures,
+           "adapted_from": $adapted_from,
+           "adapted_at": $adapted_at
+         }
+       else
+         .
+       end
+       ' "$COLONY_STATE" > "$temp_state"; then
+        echo "Failed to update adaptation in colony state" >&2
+        rm -f "$temp_state"
+        return 1
+    fi
+
+    if ! atomic_write_from_file "$COLONY_STATE" "$temp_state"; then
+        echo "Failed to write adaptation to colony state" >&2
+        rm -f "$temp_state"
+        return 1
+    fi
+
+    rm -f "$temp_state"
+
+    echo "Adaptation stored for phase $next_phase"
+    echo "  Focus areas: $focus_count"
+    echo "  Constraints: $constraint_count"
+    echo "  Success patterns: $success_count"
+    echo "  Failure patterns: $failure_count"
+
+    return 0
+}
+
 # Export functions for use in other scripts
 export -f get_current_state get_valid_states is_valid_state
 export -f is_valid_transition validate_transition
 export -f get_next_checkpoint_number transition_state archive_state_history
 export -f emit_checkin_pheromone check_phase_boundary await_queen_decision
+export -f adapt_next_phase_from_memory random_string
