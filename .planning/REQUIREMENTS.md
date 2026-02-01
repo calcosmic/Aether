@@ -175,8 +175,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | STATE-05, STATE-06, STATE-07 | Phase 1 | Pending |
 | CASTE-01, CASTE-02, CASTE-03, CASTE-04 | Phase 2 | Pending |
 | CASTE-05, CASTE-06, CASTE-07 | Phase 2 | Pending |
-| PHASE-01, PHASE-02, PHASE-03, PHASE-04 | Phase 5 | Pending |
-| PHASE-05, PHASE-06 | Phase 5 | Pending |
+| PHASE-01, PHASE-02, PHASE-03, PHASE-04 | Phase 5 | Complete |
+| PHASE-05, PHASE-06 | Phase 5 | Complete |
 | SPAWN-01, SPAWN-02, SPAWN-03, SPAWN-04 | Phase 6 | Pending |
 | SPAWN-05, SPAWN-06, SPAWN-07, SPAWN-08 | Phase 6 | Pending |
 | MEM-01, MEM-02, MEM-03, MEM-04, MEM-05 | Phase 4 | Pending |
@@ -184,7 +184,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | VOTE-01, VOTE-02, VOTE-03, VOTE-04, VOTE-05 | Phase 7 | Pending |
 | VOTE-06, VOTE-07, VOTE-08, VOTE-09, VOTE-10 | Phase 7 | Pending |
 | META-01, META-02, META-03, META-04, META-05, META-06 | Phase 8 | Pending |
-| SM-01, SM-02, SM-03, SM-04, SM-05, SM-06, SM-07 | Phase 5 | Pending |
+| SM-01, SM-02, SM-03, SM-04, SM-05, SM-06, SM-07 | Phase 5 | Complete |
 | EVENT-01, EVENT-02, EVENT-03, EVENT-04, EVENT-05 | Phase 9 | Pending |
 | EVENT-06, EVENT-07 | Phase 9 | Pending |
 

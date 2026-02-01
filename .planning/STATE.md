@@ -8,16 +8,16 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 
 **Unique Architecture:** Aether is a completely standalone multi-agent system designed from first principles. Not dependent on CDS, Ralph, or any external framework. All Worker Ant castes (Colonizer, Planner, Executor, Verifier, Researcher, Synthesizer), pheromone communication, and phased autonomy are uniquely Aether.
 
-**Current focus:** Phase 5 - Phase Boundaries (State machine with checkpoints and recovery)
+**Current focus:** Phase 6 - Autonomous Emergence (Capability gap detection with Worker-spawns-Workers)
 
 ## Current Position
 
-Phase: 5 of 10 (Phase Boundaries)
-Plan: 8/8 complete
-Status: Phase complete
-Last activity: 2026-02-01 — Completed 05-08: Memory-Driven Adaptation
+Phase: 6 of 10 (Autonomous Emergence)
+Plan: 0/8 started
+Status: Ready to plan
+Last activity: 2026-02-01 — Phase 5 complete and verified (9/9 must-haves)
 
-Progress: [██████████] 80%
+Progress: [████████░░] 50%
 
 ## Recent Changes
 
@@ -115,6 +115,7 @@ Recent decisions affecting current work:
 - **State History Archival**: Implemented archive_state_history() function that monitors state_history length and archives old entries to Working Memory when exceeding 100 entries. Integrated into transition_state() after state update, before checkpoint. History limited to 100 most recent entries with low relevance score (0.3) for archived data. Graceful degradation if memory-ops.sh not found (still trims history).
 - **Queen Check-In System**: Implemented CHECKIN pheromone type with null decay_rate (persists until Queen decision). Created emit_checkin_pheromone(), check_phase_boundary() infrastructure, and await_queen_decision() functions. Created /ant:continue command for approving phase completion and clearing CHECKIN pheromone. Created /ant:adjust command for pheromone modification during check-in (only works when queen_checkin.status is "awaiting_review"). Enhanced /ant:phase command to display QUEEN CHECK-IN REQUIRED section with options and phase summary when colony is paused.
 - **Memory-Driven Adaptation**: Implemented adapt_next_phase_from_memory() function that reads previous phase patterns from memory.json (confidence > 0.7), extracts focus_preferences, constraints, success_patterns, and failure_patterns. Emits FOCUS pheromones (strength 0.8) for high-value areas, REDIRECT pheromones (strength 0.9) for constraints via direct jq updates. Stores adaptation in next phase's roadmap entry with inherited_focus, inherited_constraints, success_patterns, failure_patterns, adapted_from, adapted_at. Integrated into await_queen_decision() for automatic adaptation at phase boundaries. Uses direct jq updates (no wrapper functions) for pheromone emission since Phase 3 created .md commands not bash functions.
+- **Emergence Guard**: Implemented emergence guard in /ant:focus and /ant:redirect commands that blocks Queen intervention during EXECUTING state with clear error message explaining alternatives (wait for VERIFYING, use FEEDBACK, review status). /ant:feedback allowed during EXECUTING (informational, not directional). Enforces Aether's core philosophy of "structure at boundaries, emergence within phases."
 
 ### Pending Todos
 
@@ -142,13 +143,14 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-01 (Phase 5 Plan 8: Memory-Driven Adaptation)
-Stopped at: Completed 05-08-PLAN.md (adapt_next_phase_from_memory, automatic FOCUS/REDIRECT emission, adaptation storage)
-Resume file: None
+Last session: 2026-02-01 (Phase 5 Complete - Phase Boundaries)
+Stopped at: Phase 5 complete and verified (9/9 must-haves, 13/13 requirements)
+Resume file: .planning/phases/05-phase-boundaries/.continue-here.md
 
 **Progress Summary:**
 - ✅ Phase 1: Colony Foundation (8/8 tasks) - State schemas, file locking, atomic writes
 - ✅ Phase 2: Worker Ant Castes (9/9 tasks) - 6 caste prompts, spawning pattern, commands
 - ✅ Phase 3: Pheromone Communication (6/6 tasks) - FOCUS, REDIRECT, FEEDBACK emission, all Worker Ant response, verification complete
 - ✅ Phase 4: Triple-Layer Memory (5/5 plans) - Working Memory, DAST compression, LRU eviction, pattern extraction, associative links, compression triggers, cross-layer search complete
-- ✅ Phase 5: Phase Boundaries (8/8 plans) - State machine foundation, pheromone-triggered transitions, checkpoint system, recovery integration, crash detection, Queen check-in system, memory-driven adaptation complete
+- ✅ Phase 5: Phase Boundaries (9/9 plans) - State machine, pheromone-triggered transitions, checkpoints, recovery, crash detection, Queen check-in, memory adaptation, emergence guard complete
+- ⏭️ Ready for Phase 6: Autonomous Emergence

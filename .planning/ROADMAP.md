@@ -29,7 +29,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 2: Worker Ant Castes** - Six Worker Ant prompt behaviors with Task tool spawning (Colonizer, Route-setter, Builder, Watcher, Scout, Architect)
 - [ ] **Phase 3: Pheromone Communication** - Stigmergic signals (INIT, FOCUS, REDIRECT, FEEDBACK) with caste sensitivity
 - [ ] **Phase 4: Triple-Layer Memory** - Working → Short-term (DAST 2.5x) → Long-term with associative links
-- [ ] **Phase 5: Phase Boundaries** - State machine with Queen check-ins and colony checkpoints
+- [x] **Phase 5: Phase Boundaries** - State machine with Queen check-ins and colony checkpoints
 - [ ] **Phase 6: Autonomous Emergence** - Capability gap detection with Worker-spawns-Workers and safeguards
 - [ ] **Phase 7: Colony Verification** - Multi-perspective verification with weighted voting and belief calibration
 - [ ] **Phase 8: Colony Learning** - Meta-learning loop with Bayesian confidence scoring for specialist selection
@@ -452,7 +452,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 2. Worker Ant Castes | 9/9 | Complete | 2026-02-01 |
 | 3. Pheromone Communication | 6/6 | Complete | 2026-02-01 |
 | 4. Triple-Layer Memory | 5/5 | Complete | 2026-02-01 |
-| 5. Phase Boundaries | 9/9 | Planned | 2026-02-01 |
+| 5. Phase Boundaries | 9/9 | Complete | 2026-02-01 |
 | 6. Autonomous Emergence | 0/8 | Not started | - |
 | 7. Colony Verification | 0/10 | Not started | - |
 | 8. Colony Learning | 0/6 | Not started | - |
