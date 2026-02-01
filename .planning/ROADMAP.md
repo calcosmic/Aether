@@ -351,11 +351,11 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans:** 5 plans in 4 waves
 
 **Colony Tasks**:
-- [ ] 07-01-PLAN.md — Vote aggregation infrastructure (schemas, bash utilities)
-- [ ] 07-02-PLAN.md — Security Watcher prompt (vulnerabilities, auth, input validation)
-- [ ] 07-03-PLAN.md — Performance, Quality, Test-Coverage Watcher prompts
-- [ ] 07-04-PLAN.md — Parallel watcher spawning via Task tool
-- [ ] 07-05-PLAN.md — Issue management and supermajority testing
+- [x] 07-01-PLAN.md — Vote aggregation infrastructure (schemas, bash utilities)
+- [x] 07-02-PLAN.md — Security Watcher prompt (vulnerabilities, auth, input validation)
+- [x] 07-03-PLAN.md — Performance, Quality, Test-Coverage Watcher prompts
+- [x] 07-04-PLAN.md — Parallel watcher spawning via Task tool
+- [x] 07-05-PLAN.md — Issue management and supermajority testing
 
 **Wave Structure:**
 - Wave 1: Vote aggregation infrastructure (schemas, bash utilities) - 07-01
@@ -463,7 +463,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 4. Triple-Layer Memory | 5/5 | Complete | 2026-02-01 |
 | 5. Phase Boundaries | 9/9 | Complete | 2026-02-01 |
 | 6. Autonomous Emergence | 5/5 | Complete | 2026-02-01 |
-| 7. Colony Verification | 5/5 | Planned | - |
+| 7. Colony Verification | 5/5 | Complete | 2026-02-01 |
 | 8. Colony Learning | 0/6 | Not started | - |
 | 9. Stigmergic Events | 0/7 | Not started | - |
 | 10. Colony Maturity | 0/10 | Not started | - |
