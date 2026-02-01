@@ -309,19 +309,22 @@ Decimal phases appear between their surrounding integers in numeric order.
 6. Resource budget limits total spawns (max 10 per phase, tracked in state)
 7. Circuit breaker prevents infinite loops (depth limit 3, same-specialist cache)
 8. Spawn outcomes tracked for meta-learning (success/failure recorded)
+
+**Plans:** 5 plans in 5 waves
+
 **Colony Tasks**:
 - [ ] 06-01-PLAN.md — Capability gap detection and specialist mapping (Wave 1)
 - [ ] 06-02-PLAN.md — Task tool spawning with context inheritance and budget tracking (Wave 2)
 - [ ] 06-03-PLAN.md — Spawn depth limit and circuit breaker (Wave 3)
-- [ ] 06-04-PLAN.md — Spawn outcome tracking and safeguard testing (Wave 4)
-
-**Plans:** 4 plans in 4 waves
+- [ ] 06-04-PLAN.md — Spawn outcome tracking for meta-learning (Wave 4)
+- [ ] 06-05-PLAN.md — Testing spawning safeguards and verification (Wave 5)
 
 **Wave Structure:**
 - Wave 1: Capability detection + Specialist mapping (06-01)
 - Wave 2: Spawning infrastructure + Budget tracking (06-02)
 - Wave 3: Depth limit + Circuit breaker (06-03)
-- Wave 4: Meta-learning + Testing (06-04)
+- Wave 4: Meta-learning + Outcome tracking (06-04)
+- Wave 5: Safeguard testing + Verification (06-05)
 
 ### Phase 7: Colony Verification
 
