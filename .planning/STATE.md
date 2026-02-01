@@ -13,11 +13,11 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 4 of 10 (Triple-Layer Memory)
-Plan: 4 of N plans complete
-Status: In progress - Compression triggers ready
-Last activity: 2026-02-01 — Completed Phase 4 Plan 4: Compression triggers (phase boundary, token threshold, pattern extraction)
+Plan: 5 of N plans complete
+Status: In progress - Cross-layer search implemented
+Last activity: 2026-02-01 — Completed Phase 4 Plan 5: Cross-layer search with relevance ranking and Queen command
 
-Progress: [████████░░] 80%
+Progress: [████████░░] 85%
 
 ## Recent Changes
 
@@ -100,6 +100,9 @@ Recent decisions affecting current work:
 - **Associative Links**: Implemented create_associative_link for bidirectional cross-layer connections. Patterns link to originating sessions with "extracted_from" type. Reverse links stored in session metadata.related_patterns.
 - **Confidence Scoring**: Patterns appearing 3+ times get higher confidence (0.5 + occurrences * 0.1, max 1.0).
 - **Compression Triggers**: Implemented phase boundary compression (prepare_compression_data → Architect Ant LLM → trigger_phase_boundary_compression), token threshold trigger (80% capacity), and automatic pattern extraction after session creation and before eviction. Bash prepares data, LLM compresses, bash processes result.
+- **Cross-Layer Memory Search**: Implemented search_memory(), search_working_memory(), search_short_term_memory(), search_long_term_memory() with relevance ranking. Exact match = 1.0, contains = 0.7. Layer priority: Working (0) > Short-term (1) > Long-term (2). Updates access metadata via atomic writes.
+- **Memory Status and Verification**: Implemented get_memory_status() displaying all three layers with 200k token limit, and verify_token_limit() confirming max_capacity_tokens=200000 and compression at 80% (160k tokens).
+- **Queen Memory Command**: Created /ant:memory command with search, status, verify, and compress subcommands for Queen interaction with memory system.
 
 ### Pending Todos
 
@@ -127,12 +130,12 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-01 (Phase 4 Plan 4 - Compression Triggers)
-Stopped at: Completed Phase 4 Plan 4 - Compression triggers with bash data preparation, LLM DAST compression, and automatic pattern extraction
+Last session: 2026-02-01 (Phase 4 Plan 5 - Cross-layer Search)
+Stopped at: Completed Phase 4 Plan 5 - Cross-layer search with relevance ranking and Queen command interface
 Resume file: .planning/phases/04-triple-layer-memory/.continue-here.md (to be created)
 
 **Progress Summary:**
 - ✅ Phase 1: Colony Foundation (8/8 tasks) - State schemas, file locking, atomic writes
 - ✅ Phase 2: Worker Ant Castes (9/9 tasks) - 6 caste prompts, spawning pattern, commands
 - ✅ Phase 3: Pheromone Communication (6/6 tasks) - FOCUS, REDIRECT, FEEDBACK emission, all Worker Ant response, verification complete
-- 🔄 Phase 4: Triple-Layer Memory (4/N plans) - Working Memory, DAST compression, LRU eviction, pattern extraction, associative links, compression triggers ready
+- 🔄 Phase 4: Triple-Layer Memory (5/N plans) - Working Memory, DAST compression, LRU eviction, pattern extraction, associative links, compression triggers, cross-layer search complete
