@@ -18,6 +18,16 @@ from enum import Enum
 from datetime import datetime, timedelta
 import asyncio
 
+# Optional semantic layer import
+try:
+    from .semantic_layer import SemanticPheromoneLayer, create_semantic_layer
+except ImportError:
+    try:
+        from semantic_layer import SemanticPheromoneLayer, create_semantic_layer
+    except ImportError:
+        SemanticPheromoneLayer = None
+        create_semantic_layer = None
+
 
 class PheromoneType(Enum):
     """Types of pheromone signals from Queen"""
@@ -163,12 +173,22 @@ class PheromoneLayer:
     - Tracks signal strength and decay
     - Propagates signals to Worker Ants
     - Maintains signal history
+    - Semantic understanding (optional)
     """
 
-    def __init__(self):
+    def __init__(self, enable_semantic: bool = True):
         self.signals: List[PheromoneSignal] = []
         self.signal_history: List[PheromoneSignal] = []
         self.max_history: int = 1000
+
+        # Optional semantic layer
+        self.semantic_layer: Optional[SemanticPheromoneLayer] = None
+        if enable_semantic and create_semantic_layer is not None:
+            try:
+                self.semantic_layer = create_semantic_layer()
+                print("✅ Semantic layer enabled for pheromones")
+            except Exception as e:
+                print(f"⚠️  Failed to enable semantic layer: {e}")
 
     async def emit(
         self,
@@ -198,6 +218,18 @@ class PheromoneLayer:
         )
 
         self.signals.append(signal)
+
+        # Add to semantic index if enabled
+        if self.semantic_layer is not None:
+            signal_id = f"{signal_type.value}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')[:17]}"
+            self.semantic_layer.add_signal(
+                signal_id=signal_id,
+                content=content,
+                metadata={**(metadata or {}), "signal_type": signal_type.value, "strength": strength}
+            )
+            # Store signal_id in metadata for later retrieval
+            signal.metadata["semantic_id"] = signal_id
+
         return signal
 
     def get_active_signals(self, signal_type: Optional[PheromoneType] = None) -> List[PheromoneSignal]:
@@ -259,6 +291,95 @@ class PheromoneLayer:
             "by_type": active_by_type,
             "total_history": len(self.signal_history),
             "strongest_signal": self.get_active_signals()[0] if self.get_active_signals() else None
+        }
+
+    # ========================================================================
+    # SEMANTIC SEARCH METHODS
+    # ========================================================================
+
+    def find_similar_signals_semantic(
+        self,
+        query: str,
+        top_k: int = 5,
+        threshold: float = 0.6,
+        signal_type: Optional[PheromoneType] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Find semantically similar signals using vector embeddings
+
+        Args:
+            query: Query text
+            top_k: Maximum results
+            threshold: Minimum similarity (0-1)
+            signal_type: Optional signal type filter
+
+        Returns:
+            List of similar signals with similarity scores
+        """
+        if self.semantic_layer is None:
+            return []
+
+        signal_type_str = signal_type.value if signal_type else None
+        return self.semantic_layer.find_similar_signals(
+            query=query,
+            top_k=top_k,
+            threshold=threshold,
+            signal_type=signal_type_str
+        )
+
+    def get_semantic_distance(self, text1: str, text2: str) -> float:
+        """
+        Calculate semantic distance between two texts
+
+        Args:
+            text1: First text
+            text2: Second text
+
+        Returns:
+            Cosine similarity (0-1, higher = more similar)
+        """
+        if self.semantic_layer is None:
+            return 0.0
+        return self.semantic_layer.semantic_distance(text1, text2)
+
+    def compress_redundant_signals(self, signals: List[PheromoneSignal]) -> List[PheromoneSignal]:
+        """
+        Compress redundant signals using semantic similarity
+
+        Args:
+            signals: List of signals to compress
+
+        Returns:
+            Compressed list
+        """
+        if self.semantic_layer is None:
+            return signals
+
+        # Convert to dict format
+        signal_dicts = [
+            {
+                "id": s.metadata.get("semantic_id", f"signal_{i}"),
+                "content": s.content,
+                "signal_type": s.signal_type.value
+            }
+            for i, s in enumerate(signals)
+        ]
+
+        # Compress
+        compressed_dicts = self.semantic_layer.compress_redundant_signals(signal_dicts)
+
+        # Map back to signals (preserve signal objects)
+        compressed_contents = {d["content"] for d in compressed_dicts}
+        return [s for s in signals if s.content in compressed_contents]
+
+    def get_semantic_stats(self) -> Dict[str, Any]:
+        """Get semantic layer statistics"""
+        if self.semantic_layer is None:
+            return {"enabled": False}
+
+        return {
+            "enabled": True,
+            **self.semantic_layer.get_compression_stats()
         }
 
     def find_similar_signals(
@@ -545,9 +666,14 @@ class PheromoneCommands:
 
 
 # Factory functions
-def create_pheromone_layer() -> PheromoneLayer:
-    """Create a new pheromone layer"""
-    return PheromoneLayer()
+def create_pheromone_layer(enable_semantic: bool = True) -> PheromoneLayer:
+    """
+    Create a new pheromone layer
+
+    Args:
+        enable_semantic: Whether to enable semantic understanding (default: True)
+    """
+    return PheromoneLayer(enable_semantic=enable_semantic)
 
 
 def create_sensitivity_profile(

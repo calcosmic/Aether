@@ -314,6 +314,54 @@ class QueenAntSystem:
             "total_flagged": len(flagged)
         }
 
+    async def semantic_search(
+        self,
+        query: str,
+        top_k: int = 5,
+        threshold: float = 0.6,
+        signal_type: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        /ant:semantic-search <query>
+
+        Search for semantically similar pheromone signals.
+
+        Args:
+            query: Search query text
+            top_k: Maximum number of results
+            threshold: Minimum similarity (0-1)
+            signal_type: Optional filter by signal type
+        """
+        # Convert signal_type string to enum if provided
+        signal_type_enum = None
+        if signal_type:
+            try:
+                signal_type_enum = PheromoneType(signal_type)
+            except ValueError:
+                return {"error": f"Invalid signal_type: {signal_type}"}
+
+        results = self.pheromone_layer.find_similar_signals_semantic(
+            query=query,
+            top_k=top_k,
+            threshold=threshold,
+            signal_type=signal_type_enum
+        )
+
+        return {
+            "query": query,
+            "results_count": len(results),
+            "results": results,
+            "semantic_enabled": self.pheromone_layer.semantic_layer is not None
+        }
+
+    async def semantic_stats(self) -> Dict[str, Any]:
+        """
+        /ant:semantic-stats
+
+        Show semantic layer statistics.
+        """
+        return self.pheromone_layer.get_semantic_stats()
+
     # ============================================================
     # INTERNAL METHODS
     # ============================================================
@@ -334,7 +382,7 @@ class QueenAntSystem:
         """Get system information"""
         return {
             "name": "Queen Ant Colony System",
-            "version": "1.1.0",
+            "version": "1.2.0",
             "description": "Phased autonomy with user as pheromone source",
             "worker_ants": list(self.colony.worker_ants.keys()),
             "pheromone_types": [t.value for t in PheromoneType],
@@ -343,8 +391,11 @@ class QueenAntSystem:
                 "autonomous_spawning": True,
                 "state_machine_orchestration": True,
                 "checkpointing": True,
-                "state_recovery": True
+                "state_recovery": True,
+                "error_prevention": True,
+                "semantic_communication": self.pheromone_layer.semantic_layer is not None
             },
+            "semantic_stats": self.pheromone_layer.get_semantic_stats(),
             "research_based": True,
             "research_documents": 25,
             "research_words": 383515
