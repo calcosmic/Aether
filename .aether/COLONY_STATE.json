@@ -1,0 +1,123 @@
+{
+  "goal": "Build a simple REST API for task management",
+  "current_phase_id": 1,
+  "created_at": "2025-02-01T00:00:00Z",
+  "status": "organizing",
+  "phases": [
+    {
+      "id": 1,
+      "name": "Foundation - API Infrastructure Setup",
+      "description": "Establish the core infrastructure and architectural foundation for the task management REST API.",
+      "status": "pending",
+      "tasks": [
+        {"id": "1.1", "description": "Research and select appropriate Python framework", "status": "pending"},
+        {"id": "1.2", "description": "Initialize project structure with virtual environment", "status": "pending"},
+        {"id": "1.3", "description": "Create basic application entry point with health check", "status": "pending"},
+        {"id": "1.4", "description": "Design and implement Task data models", "status": "pending"},
+        {"id": "1.5", "description": "Set up in-memory data storage with basic CRUD", "status": "pending"},
+        {"id": "1.6", "description": "Implement logging, error handling, CORS", "status": "pending"}
+      ],
+      "milestones": [
+        "Running API server with health check",
+        "Complete project structure configured",
+        "Task data model with in-memory storage"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Core Implementation - Task CRUD Endpoints",
+      "description": "Implement the complete set of CRUD endpoints for task management.",
+      "status": "pending",
+      "tasks": [
+        {"id": "2.1", "description": "Design REST API endpoint structure", "status": "pending"},
+        {"id": "2.2", "description": "Implement POST /tasks endpoint", "status": "pending"},
+        {"id": "2.3", "description": "Implement GET /tasks endpoint with filtering", "status": "pending"},
+        {"id": "2.4", "description": "Implement GET /tasks/{id} endpoint", "status": "pending"},
+        {"id": "2.5", "description": "Implement PUT /tasks/{id} endpoint", "status": "pending"},
+        {"id": "2.6", "description": "Implement DELETE /tasks/{id} endpoint", "status": "pending"}
+      ],
+      "milestones": [
+        "Complete CRUD functionality for tasks",
+        "Appropriate HTTP status codes",
+        "Full task management via HTTP"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Enhancement - Advanced Features",
+      "description": "Add advanced features including validation, workflows, and queries.",
+      "status": "pending",
+      "tasks": [
+        {"id": "3.1", "description": "Implement comprehensive request validation", "status": "pending"},
+        {"id": "3.2", "description": "Add task status workflow management", "status": "pending"},
+        {"id": "3.3", "description": "Implement advanced query capabilities", "status": "pending"},
+        {"id": "3.4", "description": "Add task priority levels", "status": "pending"},
+        {"id": "3.5", "description": "Implement bulk operations endpoint", "status": "pending"},
+        {"id": "3.6", "description": "Add API rate limiting", "status": "pending"}
+      ],
+      "milestones": [
+        "Comprehensive input validation",
+        "Advanced query capabilities",
+        "Task status workflow management"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "Quality Assurance - Testing & Documentation",
+      "description": "Ensure API reliability and maintainability through testing and documentation.",
+      "status": "pending",
+      "tasks": [
+        {"id": "4.1", "description": "Write comprehensive unit tests", "status": "pending"},
+        {"id": "4.2", "description": "Create integration tests", "status": "pending"},
+        {"id": "4.3", "description": "Generate OpenAPI/Swagger documentation", "status": "pending"},
+        {"id": "4.4", "description": "Create README with setup instructions", "status": "pending"},
+        {"id": "4.5", "description": "Set up Docker containerization", "status": "pending"},
+        {"id": "4.6", "description": "Implement CI/CD pipeline", "status": "pending"}
+      ],
+      "milestones": [
+        "Test coverage above 80%",
+        "Complete API documentation",
+        "Dockerized application"
+      ]
+    }
+  ],
+  "pheromones": [
+    {
+      "signal_type": "INIT",
+      "content": "Build a simple REST API for task management",
+      "strength": 1.0,
+      "created_at": "2025-02-01T00:00:00Z",
+      "half_life_hours": null,
+      "is_active": true
+    }
+  ],
+  "worker_ants": {
+    "mapper": {"status": "idle", "current_task": null, "spawned_subagents": 0},
+    "planner": {"status": "idle", "current_task": null, "spawned_subagents": 0},
+    "executor": {"status": "idle", "current_task": null, "spawned_subagents": 0},
+    "verifier": {"status": "idle", "current_task": null, "spawned_subagents": 0},
+    "researcher": {"status": "idle", "current_task": null, "spawned_subagents": 0},
+    "synthesizer": {"status": "idle", "current_task": null, "spawned_subagents": 0}
+  },
+  "feedback_history": {},
+  "learned_patterns": {},
+  "error_ledger": {},
+  "meta_learning": {
+    "total_spawns": 0,
+    "successful_spawns": 0,
+    "failed_spawns": 0,
+    "active_specialist_types": [
+      "database_specialist",
+      "frontend_specialist",
+      "api_specialist",
+      "security_specialist",
+      "test_specialist",
+      "performance_specialist",
+      "realtime_specialist"
+    ],
+    "deprecated_specialist_types": [],
+    "capability_confidence": {},
+    "spawn_events": [],
+    "generalization_matrix": {}
+  }
+}

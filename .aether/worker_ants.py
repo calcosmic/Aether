@@ -21,9 +21,11 @@ import re
 try:
     from .pheromone_system import PheromoneType, PheromoneSignal, PheromoneLayer, SensitivityProfile, SENSITIVITY_PROFILES
     from .error_prevention import ErrorLedger, ErrorCategory, ErrorSeverity, log_exception
+    from .memory.meta_learner import MetaLearner, TaskOutcome
 except ImportError:
     from pheromone_system import PheromoneType, PheromoneSignal, PheromoneLayer, SensitivityProfile, SENSITIVITY_PROFILES
     from error_prevention import ErrorLedger, ErrorCategory, ErrorSeverity, log_exception
+    from memory.meta_learner import MetaLearner, TaskOutcome
 
 # Type hint for memory layer
 from typing import TYPE_CHECKING
@@ -207,7 +209,7 @@ class WorkerAnt:
         "kubernetes": "devops_specialist",
     }
 
-    def __init__(self, colony: 'Colony', error_ledger: Optional[ErrorLedger] = None, memory_layer: Optional['TripleLayerMemory'] = None):
+    def __init__(self, colony: 'Colony', error_ledger: Optional[ErrorLedger] = None, memory_layer: Optional['TripleLayerMemory'] = None, meta_learner: Optional[MetaLearner] = None):
         self.colony = colony
         self.subagents: List[Subagent] = []
         self.current_task: Optional[str] = None
@@ -224,6 +226,9 @@ class WorkerAnt:
 
         # Triple-Layer Memory (optional)
         self.memory_layer = memory_layer
+
+        # Meta-Learning System (optional)
+        self.meta_learner = meta_learner
 
     async def detect_pheromones(self) -> List[PheromoneSignal]:
         """Detect relevant pheromones based on sensitivity"""
@@ -336,6 +341,72 @@ class WorkerAnt:
         # Default to moderate proficiency for listed capabilities
         return 0.7 if capability in self.capabilities else 0.0
 
+    async def _categorize_task(self, task: Task) -> str:
+        """
+        Categorize task into a primary category for meta-learning.
+
+        Returns the primary category (e.g., "database", "security", "frontend").
+        """
+        description_lower = task.description.lower()
+
+        # Define category patterns
+        category_patterns = [
+            ("database", ["database", "sql", "query", "orm", "migration", "postgres", "mysql", "mongodb"]),
+            ("frontend", ["react", "vue", "angular", "frontend", "ui", "css", "html", "javascript"]),
+            ("api", ["api", "endpoint", "route", "controller", "rest", "graphql", "websocket"]),
+            ("security", ["auth", "jwt", "oauth", "session", "security", "encrypt", "vulnerability"]),
+            ("testing", ["test", "spec", "mock", "unit", "integration", "e2e"]),
+            ("performance", ["optimization", "cache", "performance", "profiling", "load"]),
+            ("devops", ["deploy", "docker", "k8s", "ci", "cd", "infrastructure"]),
+        ]
+
+        # Find best matching category
+        best_category = "general"
+        best_match_count = 0
+
+        for category, patterns in category_patterns:
+            match_count = sum(1 for pattern in patterns if pattern in description_lower)
+            if match_count > best_match_count:
+                best_category = category
+                best_match_count = match_count
+
+        return best_category
+
+    async def record_task_outcome(
+        self,
+        spawn_event_id: str,
+        outcome: TaskOutcome,
+        quality_score: float,
+        innovation_score: float,
+        duration: float,
+        user_feedback: Optional[str] = None,
+        peer_feedback: Optional[List[str]] = None
+    ):
+        """
+        Record the outcome of a spawned specialist task.
+
+        This should be called when a specialist completes its work.
+
+        Args:
+            spawn_event_id: Event ID from meta_learner.record_spawn()
+            outcome: Task outcome (SUCCESS, PARTIAL_SUCCESS, FAILURE, etc.)
+            quality_score: Quality of work (0.0 to 1.0)
+            innovation_score: How innovative was the solution (0.0 to 1.0)
+            duration: Time to complete (seconds)
+            user_feedback: Optional user feedback
+            peer_feedback: Optional feedback from other agents
+        """
+        if self.meta_learner:
+            self.meta_learner.record_outcome(
+                event_id=spawn_event_id,
+                outcome=outcome,
+                quality_score=quality_score,
+                innovation_score=innovation_score,
+                duration=duration,
+                user_feedback=user_feedback,
+                peer_feedback=peer_feedback
+            )
+
     async def determine_specialist_type(self, capability_gaps: Set[str]) -> str:
         """
         Determine what type of specialist to spawn based on capability gaps
@@ -402,8 +473,28 @@ class WorkerAnt:
                 # No gaps, can handle ourselves
                 return None
 
-            # Determine specialist type
-            specialist_type = await self.determine_specialist_type(gaps)
+            # Determine specialist type using meta-learning if available
+            specialist_type = None
+
+            # Step 1: Get meta-learner recommendation
+            if self.meta_learner:
+                # Determine primary task category
+                task_category = await self._categorize_task(task)
+
+                # Get recommendation
+                recommended_specialist, confidence = self.meta_learner.recommend_specialist(
+                    task_description=task.description,
+                    task_category=task_category,
+                    capability_gap=gaps
+                )
+
+                # Use recommendation if confidence is sufficient
+                if recommended_specialist and confidence > 0.4:
+                    specialist_type = recommended_specialist
+
+            # Step 2: Fall back to rule-based mapping if no recommendation
+            if not specialist_type:
+                specialist_type = await self.determine_specialist_type(gaps)
 
             # Create inherited context
             inherited = InheritedContext(
@@ -419,6 +510,25 @@ class WorkerAnt:
             # Generate spawning reason
             reason = f"Capability gaps detected: {', '.join(gaps)}. Need {specialist_type}"
 
+            # Record spawn event in meta-learner
+            spawn_event_id = None
+            task_category = await self._categorize_task(task)
+
+            if self.meta_learner:
+                spawn_event_id = self.meta_learner.record_spawn(
+                    parent_agent=self.caste,
+                    task_description=task.description,
+                    task_category=task_category,
+                    specialist_type=specialist_type,
+                    capability_gap=gaps,
+                    inherited_context={
+                        "goal": inherited.goal,
+                        "pheromones": [p.to_dict() for p in inherited.pheromone_signals] if hasattr(p, 'to_dict') else list(inherited.pheromone_signals),
+                        "working_memory": inherited.working_memory,
+                        "constraints": inherited.constraints
+                    }
+                )
+
             # Spawn the specialist
             specialist = Subagent(
                 name=f"autonomous_{specialist_type}_{len(self.subagents)}",
@@ -428,7 +538,8 @@ class WorkerAnt:
                 inherited_context=inherited,
                 capabilities=required,  # Store as set of strings
                 depth=depth,
-                spawning_reason=reason
+                spawning_reason=reason,
+                spawn_event_id=spawn_event_id  # Track for outcome recording
             )
 
             # Update resource budget
@@ -1687,7 +1798,7 @@ class Colony:
     Worker Ants autonomously spawn specialists based on capability gaps.
     """
 
-    def __init__(self, memory_layer: Optional['TripleLayerMemory'] = None):
+    def __init__(self, memory_layer: Optional['TripleLayerMemory'] = None, meta_learner: Optional[MetaLearner] = None):
         self.worker_ants: Dict[str, WorkerAnt] = {}
         self.pheromones: List[PheromoneSignal] = []
         self.subagents: List[Subagent] = []
@@ -1703,17 +1814,20 @@ class Colony:
         # Triple-Layer Memory System
         self.memory_layer = memory_layer
 
+        # Meta-Learning System
+        self.meta_learner = meta_learner or MetaLearner()
+
         # Initialize Worker Ants
         self._init_worker_ants()
 
     def _init_worker_ants(self):
         """Initialize all Worker Ant castes"""
-        self.worker_ants["mapper"] = MapperAnt(self, memory_layer=self.memory_layer)
-        self.worker_ants["planner"] = PlannerAnt(self, memory_layer=self.memory_layer)
-        self.worker_ants["executor"] = ExecutorAnt(self, memory_layer=self.memory_layer)
-        self.worker_ants["verifier"] = VerifierAnt(self, memory_layer=self.memory_layer)
-        self.worker_ants["researcher"] = ResearcherAnt(self, memory_layer=self.memory_layer)
-        self.worker_ants["synthesizer"] = SynthesizerAnt(self, memory_layer=self.memory_layer)
+        self.worker_ants["mapper"] = MapperAnt(self, memory_layer=self.memory_layer, meta_learner=self.meta_learner)
+        self.worker_ants["planner"] = PlannerAnt(self, memory_layer=self.memory_layer, meta_learner=self.meta_learner)
+        self.worker_ants["executor"] = ExecutorAnt(self, memory_layer=self.memory_layer, meta_learner=self.meta_learner)
+        self.worker_ants["verifier"] = VerifierAnt(self, memory_layer=self.memory_layer, meta_learner=self.meta_learner)
+        self.worker_ants["researcher"] = ResearcherAnt(self, memory_layer=self.memory_layer, meta_learner=self.meta_learner)
+        self.worker_ants["synthesizer"] = SynthesizerAnt(self, memory_layer=self.memory_layer, meta_learner=self.meta_learner)
 
     def set_memory_layer(self, memory_layer: 'TripleLayerMemory') -> None:
         """Set or update the memory layer for all Worker Ants"""
