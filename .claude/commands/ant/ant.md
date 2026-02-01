@@ -8,25 +8,26 @@ Display Queen Ant Colony system overview including how it works, key features, a
 </objective>
 
 <reference>
-# `/ant` - Queen Ant Colony System
+# `/ant` - Aether Queen Ant Colony System
 
-## What is the Queen Ant System?
+## What is Aether?
 
-A phased autonomy system where:
-- **Queen (User)** provides intention via pheromones (signals, not commands)
-- **Colony** self-organizes within phases (pure emergence)
-- **Phase boundaries** provide checkpoints for Queen review
-- **Pheromones** guide behavior with strength/decay (signals, not orders)
+Aether is a **unique, standalone multi-agent system** built from first principles on ant colony intelligence. Unlike AutoGen, LangGraph, CrewAI, or any other framework, Aether implements:
 
-## Key Difference from Original AETHER
+- **True Autonomous Spawning** - Worker Ants spawn Worker Ants without human orchestration
+- **Pheromone Communication** - Stigmergic signals guide colony behavior (not commands)
+- **Phased Autonomy** - Structure at boundaries, pure emergence within
+- **Queen-Based Control** - User provides intention via pheromones, colony self-organizes
 
-| Aspect | Original AETHER | Queen Ant Model |
-|--------|-----------------|-----------------|
-| User role | Provide goal, wait | Signal provider, observer |
-| Structure | Pure emergence | Phased autonomy |
-| Visibility | Limited | Phase checkpoints |
-| Planning | Autonomous | Queen reviews at boundaries |
-| Feedback | After completion | Continuous via pheromones |
+## Aether vs Other Frameworks
+
+| Aspect | AutoGen/LangGraph/CrewAI | Aether |
+|--------|-------------------------|--------|
+| Agent definition | Human predefines all agents | Colony creates agents autonomously |
+| Workflow | Human defines orchestration | Colony self-organizes via pheromones |
+| Spawning | Manual or predefined | Autonomous - Workers spawn Workers |
+| Communication | Message passing | Stigmergic pheromone signals |
+| Control flow | Predefined state machines | Emergent behavior within phases |
 
 ## Getting Started
 
@@ -103,20 +104,63 @@ Review what was built, then continue.
 
 ## Key Features
 
-- **6 Worker Ant Castes**: Mapper, Planner, Executor, Verifier, Researcher, Synthesizer
-- **Pheromone Signals**: Init, Focus, Redirect, Feedback
-- **Phased Autonomy**: Structure at boundaries, emergence within
-- **Learning System**: Colony learns from your patterns over time
+- **6 Unique Worker Ant Castes**: Colonizer, Route-setter, Builder, Watcher, Scout, Architect (designed from first principles)
+- **Pheromone Signal System**: Init, Focus, Redirect, Feedback (unique stigmergic communication)
+- **Phased Autonomy**: Structure at boundaries, pure emergence within phases
+- **Triple-Layer Memory**: Working → Short-term → Long-term with associative links
+- **Voting-Based Verification**: Multi-perspective verification with belief calibration
+- **Meta-Learning Loop**: Colony learns which specialists work best for which tasks
 
-## Research Foundation
+## Worker Ant Castes (Detailed)
 
-Built on **25 research documents** (383K words, 758 references):
-- Phase 1: Context Engine Foundation
-- Phase 3: Semantic Codebase Understanding
-- Phase 4: Predictive & Anticipatory Systems
-- Phase 5: Advanced Verification & Quality
-- Phase 6: Integration & Synthesis
-- Phase 7: Implementation Planning
+| Caste | Function | Sensitivity | Spawns |
+|-------|----------|-------------|--------|
+| **Colonizer** | Codebase colonization, semantic indexing | INIT=1.0, FOCUS=0.7 | graph_builder, pattern_matcher |
+| **Route-setter** | Goal decomposition, phase planning | INIT=1.0, REDIRECT=0.8 | estimator, dependency_analyzer |
+| **Builder** | Code implementation, autonomous spawning | FOCUS=0.9, REDIRECT=0.9 | language_specialist, database_specialist |
+| **Watcher** | Testing, validation, LLM-based test generation | FOCUS=0.8, FEEDBACK=0.9 | test_generator, security_scanner |
+| **Scout** | Information gathering, research | FOCUS=0.9, INIT=0.7 | search_agent, documentation_reader |
+| **Architect** | Memory compression, pattern extraction | FEEDBACK=0.6 | pattern_matcher, compression_agent |
+
+## Pheromone Signals (Detailed)
+
+| Signal | Strength | Duration | Effect | Learning |
+|--------|----------|----------|--------|----------|
+| **INIT** | 1.0 | Persists | Mobilize colony | - |
+| **FOCUS** | 0.7 | 1hr half-life | Prioritize area | 3+ → Preference learned |
+| **REDIRECT** | 0.7 | 24hr half-life | Avoid pattern | 3+ → Constraint created |
+| **FEEDBACK** | 0.5-0.7 | 6hr half-life | Adjust behavior | Category-dependent |
+
+## Autonomous Spawning System
+
+### Capability Detection
+- Analyzes task requirements vs own capabilities
+- Uses semantic pattern matching for task categorization
+- Spawns specialists based on capability gaps
+
+### Resource Budgets
+- Max subagents: 10 per phase
+- Max spawn depth: 3 levels (parent → child → grandchild)
+- Circuit breaker: 3 failed spawns → cooldown
+
+### Specialist Mappings
+- database/sql → database_specialist
+- frontend (react/vue) → frontend_specialist
+- api/websocket → api_specialist
+- authentication/jwt → security_specialist
+- testing → test_specialist
+- performance → optimization_specialist
+
+## Aether Architecture
+
+Aether is **not** another framework wrapper. It's a complete standalone system with:
+
+- **Unique caste system** - Each Worker Ant type has distinct behaviors and spawning capabilities
+- **Stigmergic communication** - Environment (pheromones) as communication medium
+- **Autonomous recruitment** - Workers detect capability gaps and spawn specialists automatically
+- **Colony intelligence** - No central brain, distributed computation via emergence
+
+This architecture is inspired by research on ant colonies, multi-agent systems, and stigmergic communication, but all implementations are uniquely Aether.
 
 ## Example Session
 

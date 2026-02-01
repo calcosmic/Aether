@@ -40,12 +40,12 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Worker Ant Castes
 
-- [ ] **CASTE-01**: Mapper Ant explores codebase and builds semantic index
-- [ ] **CASTE-02**: Planner Ant creates phase structures and task breakdown
-- [ ] **CASTE-03**: Executor Ant implements code and runs commands
-- [ ] **CASTE-04**: Verifier Ant validates implementation and tests
-- [ ] **CASTE-05**: Researcher Ant gathers information and searches docs
-- [ ] **CASTE-06**: Synthesizer Ant compresses memory and extracts patterns
+- [ ] **CASTE-01**: Colonizer Ant colonizes codebase and builds semantic index
+- [ ] **CASTE-02**: Route-setter Ant creates phase structures and task breakdown
+- [ ] **CASTE-03**: Builder Ant implements code and runs commands
+- [ ] **CASTE-04**: Watcher Ant validates implementation and tests
+- [ ] **CASTE-05**: Scout Ant gathers information and searches docs
+- [ ] **CASTE-06**: Architect Ant compresses memory and extracts patterns
 - [ ] **CASTE-07**: Each caste can spawn specialists based on capability gaps
 
 ### Phase Execution
@@ -87,7 +87,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **VOTE-01**: System spawns 4 verifier perspectives in parallel
 - [ ] **VOTE-02**: Security-focused verifier validates security aspects
 - [ ] **VOTE-03**: Performance-focused verifier validates performance aspects
-- [ ] **VOTE-04**: Quality-focused verifier validates code quality aspects
+- [ ] **VOTE-04**: Quality-focused validator validates code quality aspects
 - [ ] **VOTE-05**: Test-coverage verifier validates test completeness
 - [ ] **VOTE-06**: Each verifier casts weighted vote (APPROVE/REJECT)
 - [ ] **VOTE-07**: Weight based on historical reliability (belief calibration)
@@ -165,23 +165,34 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CMD-01 CMD-07 | Phase 1 | Pending |
-| PH-01 PH-08 | Phase 3 | Pending |
-| STATE-01 STATE-07 | Phase 1 | Pending |
-| CASTE-01 CASTE-07 | Phase 2 | Pending |
-| PHASE-01 PHASE-06 | Phase 4 | Pending |
-| SPAWN-01 SPAWN-08 | Phase 4 | Pending |
-| MEM-01 MEM-11 | Phase 3 | Pending |
-| VOTE-01 VOTE-10 | Phase 5 | Pending |
-| META-01 META-06 | Phase 6 | Pending |
-| SM-01 SM-07 | Phase 4 | Pending |
-| EVENT-01 EVENT-07 | Phase 6 | Pending |
+| CMD-01, CMD-02 | Phase 1 | Pending |
+| CMD-03, CMD-04 | Phase 2 | Pending |
+| CMD-05, CMD-06, CMD-07 | Phase 3 | Pending |
+| PH-01, PH-02 | Phase 3 | Pending |
+| PH-03, PH-04, PH-05 | Phase 3 | Pending |
+| PH-06, PH-07, PH-08 | Phase 3 | Pending |
+| STATE-01, STATE-02, STATE-03, STATE-04 | Phase 1 | Pending |
+| STATE-05, STATE-06, STATE-07 | Phase 1 | Pending |
+| CASTE-01, CASTE-02, CASTE-03, CASTE-04 | Phase 2 | Pending |
+| CASTE-05, CASTE-06, CASTE-07 | Phase 2 | Pending |
+| PHASE-01, PHASE-02, PHASE-03, PHASE-04 | Phase 5 | Pending |
+| PHASE-05, PHASE-06 | Phase 5 | Pending |
+| SPAWN-01, SPAWN-02, SPAWN-03, SPAWN-04 | Phase 6 | Pending |
+| SPAWN-05, SPAWN-06, SPAWN-07, SPAWN-08 | Phase 6 | Pending |
+| MEM-01, MEM-02, MEM-03, MEM-04, MEM-05 | Phase 4 | Pending |
+| MEM-06, MEM-07, MEM-08, MEM-09, MEM-10, MEM-11 | Phase 4 | Pending |
+| VOTE-01, VOTE-02, VOTE-03, VOTE-04, VOTE-05 | Phase 7 | Pending |
+| VOTE-06, VOTE-07, VOTE-08, VOTE-09, VOTE-10 | Phase 7 | Pending |
+| META-01, META-02, META-03, META-04, META-05, META-06 | Phase 8 | Pending |
+| SM-01, SM-02, SM-03, SM-04, SM-05, SM-06, SM-07 | Phase 5 | Pending |
+| EVENT-01, EVENT-02, EVENT-03, EVENT-04, EVENT-05 | Phase 9 | Pending |
+| EVENT-06, EVENT-07 | Phase 9 | Pending |
 
 **Coverage:**
 - v1 requirements: 52 total
-- Mapped to phases: Pending (roadmap not created yet)
-- Unmapped: 0 ✓
+- Mapped to phases: 52/52 ✓
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-01*
-*Last updated: 2026-02-01 after initial definition*
+*Last updated: 2026-02-01 after roadmap creation*

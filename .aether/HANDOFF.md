@@ -48,12 +48,12 @@ This is the **complete architecture**. Read it first.
 
 | Caste | Role | Spawns |
 |-------|------|--------|
-| **Mapper** | Explore, index, understand codebase | Graph agents, search agents |
-| **Planner** | Create structured phase plans | Estimators, risk assessors |
-| **Executor** | Write code, implement | Language/framework specialists |
-| **Verifier** | Test, validate, QA | Test generators, security scanners |
-| **Researcher** | Find information, context | Search agents, crawlers |
-| **Synthesizer** | Compress memory, extract patterns | Analysis agents |
+| **Colonizer** | Colonize, index, understand codebase | Graph agents, search agents |
+| **Route-setter** | Create structured phase plans | Estimators, risk assessors |
+| **Builder** | Build code, implement | Language/framework specialists |
+| **Watcher** | Watch, validate, QA | Test generators, security scanners |
+| **Scout** | Scout for information, context | Search agents, crawlers |
+| **Architect** | Architect memory, extract patterns | Analysis agents |
 
 These are **always available**. They don't emerge - they're the colony's structure.
 
@@ -66,8 +66,8 @@ These are **always available**. They don't emerge - they're the colony's structu
    → Intention pheromone released
 
 2. Colony detects pheromone
-   → Mapper explores codebase
-   → Planner creates phase structure
+   → Colonizer explores codebase
+   → Route-setter creates phase structure
 
 3. /ant:phase
    → Queen reviews phase plan

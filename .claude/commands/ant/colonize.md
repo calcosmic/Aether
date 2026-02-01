@@ -29,11 +29,11 @@ Colony mobilizing Worker Ants...
 ## Step 2: Spawn Worker Ants in Parallel
 Use the Task tool to spawn specialist Worker Ants that analyze different aspects:
 
-### Spawn 1: Mapper Agent
+### Spawn 1: Colonizer Agent
 ```
-Task: Mapper Agent - Explore codebase structure
+Task: Colonizer Agent - Explore codebase structure
 
-You are the Mapper Ant. Explore the codebase to understand:
+You are the Colonizer Ant. Explore the codebase to understand:
 1. Directory structure and file organization
 2. Main entry points and key modules
 3. Dependency relationships between components
@@ -43,11 +43,11 @@ Focus on understanding the STRUCTURE and ORGANIZATION.
 Return your findings as a structured summary.
 ```
 
-### Spawn 2: Researcher Agent
+### Spawn 2: Scout Agent
 ```
-Task: Researcher Agent - Identify technologies
+Task: Scout Agent - Identify technologies
 
-You are the Researcher Ant. Identify:
+You are the Scout Ant. Identify:
 1. Programming languages and their versions
 2. Frameworks and libraries used
 3. Database technologies
@@ -58,11 +58,11 @@ Focus on understanding the TECH STACK.
 Return your findings as a structured summary.
 ```
 
-### Spawn 3: Planner Agent
+### Spawn 3: Route-setter Agent
 ```
-Task: Planner Agent - Analyze architecture
+Task: Route-setter Agent - Analyze architecture
 
-You are the Planner Ant. Analyze:
+You are the Route-setter Ant. Analyze:
 1. Architectural patterns (MVC, layered, microservices, etc.)
 2. Design patterns used (Factory, Repository, etc.)
 3. Code organization principles
@@ -72,11 +72,11 @@ Focus on understanding the ARCHITECTURE.
 Return your findings as a structured summary.
 ```
 
-### Spawn 4: Synthesizer Agent
+### Spawn 4: Architect Agent
 ```
-Task: Synthesizer Agent - Extract patterns
+Task: Architect Agent - Extract patterns
 
-You are the Synthesizer Ant. Extract and synthesize:
+You are the Architect Ant. Extract and synthesize:
 1. Code conventions (naming, formatting, style)
 2. Common patterns used throughout codebase
 3. Best practices that seem to be followed
@@ -86,11 +86,11 @@ Focus on understanding CONVENTIONS and PATTERNS.
 Return your findings as a structured summary.
 ```
 
-### Spawn 5: Verifier Agent
+### Spawn 5: Watcher Agent
 ```
-Task: Verifier Agent - Find issues
+Task: Watcher Agent - Find issues
 
-You are the Verifier Ant. Identify:
+You are the Watcher Ant. Identify:
 1. Common errors or issues in the code
 2. Missing tests or test coverage gaps
 3. Code quality concerns
@@ -117,19 +117,19 @@ Present findings in this format:
 ✅ CODEBASE COLONIZED
 
 TECHNOLOGIES:
-  [List from Researcher Agent]
+  [List from Scout Agent]
 
 ARCHITECTURE:
-  [List from Planner Agent]
+  [List from Route-setter Agent]
 
 PATTERNS:
-  [List from Synthesizer Agent]
+  [List from Architect Agent]
 
 CONVENTIONS:
-  [List from Synthesizer Agent]
+  [List from Architect Agent]
 
 ISSUES FOUND:
-  [List from Verifier Agent]
+  [List from Watcher Agent]
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -141,20 +141,18 @@ Next: /ant:init "<your goal>" to start building with this context
 </process>
 
 <context>
-@.aether/worker_ants.py
-@.aether/memory/triple_layer_memory.py
-
-Worker Ant Castes:
-- Mapper: semantic_exploration, dependency_mapping, pattern_detection
+Aether Worker Ant Castes (unique to this system):
+- Colonizer: codebase_colonization, semantic_indexing, dependency_mapping, pattern_detection
 - Researcher: web_search, documentation_lookup, context_gathering
 - Planner: goal_decomposition, phase_planning, dependency_analysis
 - Synthesizer: memory_compression, pattern_extraction, knowledge_synthesis
 - Verifier: test_generation, validation, quality_checks
 
-Spawning:
+Aether Spawning System (unique autonomous recruitment):
 - Use Task tool to create specialist agents
 - Inherit context: current goal, pheromone signals, constraints
 - Resource budget: max 10 subagents, max depth 3
+- Workers spawn Workers autonomously (no Queen approval needed)
 </context>
 
 <reference>

@@ -83,8 +83,8 @@ for task in tasks:
         # Determine which ant should handle this task
         task_desc = task['description'].lower()
 
-        if any(word in task_desc for word in ["explore", "map", "understand"]):
-            await self._spawn_mapper_agent(task)
+        if any(word in task_desc for word in ["explore", "colonize", "understand"]):
+            await self._spawn_colonizer_agent(task)
         elif any(word in task_desc for word in ["plan", "design"]):
             await self._spawn_planner_agent(task)
         elif any(word in task_desc for word in ["implement", "write", "create", "build"]):
@@ -123,7 +123,7 @@ YOUR ROLE:
 5. When all tasks complete, report phase completion
 
 WORKER ANT CASTES TO SPAWN:
-- Mapper: Exploration tasks
+- Colonizer: Colonization tasks
 - Planner: Planning tasks
 - Executor: Implementation tasks
 - Verifier: Testing tasks
@@ -215,27 +215,191 @@ ISSUES RESOLVED:
 </process>
 
 <context>
-@.aether/phase_engine.py
-@.aether/worker_ants.py
-@.aether/pheromone_system.py
+# AETHER AUTONOMOUS SPAWNING SYSTEM - Claude Native Implementation
 
-Phased Autonomy:
+## Autonomous Spawning Decision Flow
+
+When a Worker Ant receives a task, it follows this decision process:
+
+### Step 1: Capability Gap Detection
+Analyze task requirements vs own capabilities:
+```
+required_capabilities = analyze_task_requirements(task)
+my_capabilities = get_my_capabilities()
+gaps = required_capabilities - my_capabilities
+```
+
+Task analysis uses semantic pattern matching:
+- Database patterns: database, sql, query, orm, migration, postgres, mysql, mongodb
+- API patterns: api, endpoint, route, controller, rest, graphql, websocket
+- Auth patterns: auth, login, jwt, session, oauth, password
+- Testing patterns: test, spec, mock, unit, integration, e2e
+- DevOps patterns: deploy, docker, k8s, ci, cd, infrastructure
+- Security patterns: security, encrypt, vulnerability, owasp
+
+### Step 2: Resource Budget Check
+Before spawning, verify resource limits:
+- current_subagents < max_subagents (10 per phase)
+- spawn_depth < max_depth (3 levels max)
+- spawning_disabled == false (circuit breaker check)
+
+### Step 3: Specialist Type Determination
+Map capability gaps to specialist types:
+```
+if "database" in gaps: return "database_specialist"
+if "auth" or "security" in gaps: return "security_specialist"
+if "testing" in gaps: return "test_specialist"
+if "frontend" or "ui" in gaps: return "frontend_specialist"
+if "backend" or "api" in gaps: return "api_specialist"
+if "devops" or "deployment" in gaps: return "devops_specialist"
+return "general_specialist"
+```
+
+### Step 4: Inherited Context Creation
+Create context package for spawned specialist:
+```python
+inherited = {
+    "parent_agent_id": parent_id,
+    "parent_task": current_task,
+    "goal": get_goal_from_init_pheromone(),
+    "pheromone_signals": get_active_pheromones(),
+    "working_memory": get_relevant_working_memory(),
+    "relevant_code": await semantic_search_for_code(task),
+    "constraints": get_constraints_from_redirect_pheromones()
+}
+```
+
+### Step 5: Spawn via Task Tool
+```
+Task: {specialist_type}
+
+You are a {specialist_type} spawned by {parent_caste}.
+
+TASK: {task_description}
+
+INHERITED CONTEXT:
+- Goal: {goal}
+- Active Pheromones: {pheromone_signals}
+- Parent's Context: {working_memory}
+- Constraints: {constraints}
+- Relevant Code: {relevant_code}
+
+CAPABILITY GAPS DETECTED: {gaps}
+REASON: {spawning_reason}
+
+Execute autonomously. Report results when complete.
+```
+
+## Worker Ant Caste Assignments
+
+When tasks are ready, assign to appropriate caste:
+
+### Task Type → Caste Mapping
+- **Exploration/Colonization** → Colonizer Ant
+- **Planning/Design** → Route-setter Ant
+- **Implementation** → Builder Ant
+- **Testing/Validation** → Watcher Ant
+- **Research** → Scout Ant
+- **Memory/Synthesis** → Architect Ant
+
+## Pheromone-Based Behavior Modification
+
+Active pheromones modify how each caste behaves:
+
+### FOCUS Pheromone Effects
+- Colonizer: Colonizes focused area first
+- Planner: Plans focused tasks earlier
+- Executor: Prioritizes focused work (sensitivity 0.9)
+- Verifier: Intensifies testing in focused area
+- Researcher: Researches focused topic first
+
+### REDIRECT Pheromone Effects
+- Executor: Strongly avoids pattern (sensitivity 0.9)
+- Planner: Avoids in future plans (sensitivity 0.8)
+- Verifier: Validates against constraint
+
+### FEEDBACK Pheromone Effects
+- Positive: Pattern reinforced, stored for reuse
+- Quality: Verifier intensifies, Executor reviews code
+- Speed: Executor parallelizes, Planner simplifies
+- Direction: Planner pivots, Executor adjusts
+
+## Resource Budget Tracking
+
+Track spawning to prevent infinite loops:
+```python
+resource_budget = {
+    "max_subagents": 10,
+    "max_depth": 3,
+    "current_subagents": 0,
+    "spawning_disabled": false
+}
+```
+
+Circuit breaker triggers:
+- 3 failed spawns on same specialist type → cooldown
+- Max subagents reached → disable spawning
+- Max depth exceeded → must handle task personally
+
+## Meta-Learning Integration (Future)
+
+Track spawn outcomes for learning:
+```python
+spawn_event = {
+    "parent_agent": caste,
+    "task_description": task,
+    "task_category": categorize(task),
+    "specialist_type": specialist,
+    "capability_gap": gaps,
+    "timestamp": now()
+}
+
+outcome = {
+    "success": bool,
+    "quality_score": 0.0-1.0,
+    "innovation_score": 0.0-1.0,
+    "duration": seconds,
+    "user_feedback": str
+}
+```
+
+Bayesian confidence scoring:
+```
+confidence = (successes + 1) / (successes + failures + 2)
+```
+
+## Pure Emergence Within Phases
+
+During phase execution:
+- Worker Ants self-organize (no central coordination)
+- Spawn specialists based on local needs
+- Coordinate peer-to-peer
+- Respond to pheromones in real-time
+- No Queen intervention until phase boundary
+
+## Task Assignment Example
+
+```
+Task: "Implement JWT authentication"
+
+Analysis:
+- Contains "jwt", "authentication" → security domain
+- Requires implementation → Executor task
+- Capability gap: "auth", "jwt" → security_specialist needed
+
+Flow:
+1. Executor detects capability gap
+2. Checks resource budget (0/10 used, depth 0)
+3. Determines specialist: security_specialist
+4. Creates inherited context with goal, pheromones, constraints
+5. Spawns via Task tool
+6. Tracks spawn event for meta-learning
+```
+
+Aether Phased Autonomy:
 - Structure at boundaries (phases)
 - Emergence within phases
 - Checkpoints between phases
-
-Pure Emergence:
-- No central coordination during execution
-- Worker Ants self-organize
-- Peer-to-peer communication
-- Respond to pheromones in real-time
-
-Task Assignment:
-- Mapper: Exploration, codebase understanding
-- Planner: Planning, design, structure
-- Executor: Implementation, writing code
-- Verifier: Testing, validation, QA
-- Researcher: Research, information gathering
 </context>
 
 <reference>

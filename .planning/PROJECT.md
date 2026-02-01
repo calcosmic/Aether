@@ -2,11 +2,18 @@
 
 ## What This Is
 
-Aether is a revolutionary multi-agent system where Worker Ants autonomously spawn other Worker Ants without human orchestration. The user (Queen) provides high-level intention via pheromone signals (INIT, FOCUS, REDIRECT, FEEDBACK), and the colony self-organizes to complete tasks through emergent intelligence.
+Aether is a **unique, standalone multi-agent system** built from first principles on ant colony intelligence. Worker Ants autonomously spawn other Worker Ants without human orchestration. The Queen (user) provides high-level intention via pheromone signals (INIT, FOCUS, REDIRECT, FEEDBACK), and the colony self-organizes to complete tasks through emergent intelligence.
 
-This is a **Claude-native system** - commands like `/ant:init "Build a REST API"` work directly in Claude (like CDS), not as Python scripts. The system uses prompt files and JSON state for persistence, with the Task tool enabling autonomous agent spawning.
+This is a **Claude-native system** - commands like `/ant:init "Build a REST API"` work directly in Claude. The system uses prompt files and JSON state for persistence, with the Task tool enabling autonomous agent spawning.
 
-**What makes it unique:** No existing system (AutoGen, LangGraph, CrewAI) supports true autonomous agent spawning - they all require humans to define agent roles, workflows, and orchestration logic. Aether will be the first.
+**What makes it unique:**
+
+1. **Autonomous Agent Spawning** - Worker Ants spawn Worker Ants without human orchestration (no other system does this)
+2. **Unique Caste Architecture** - Six Worker Ant types designed from first principles for emergence (Colonizer, Route-setter, Builder, Watcher, Scout, Architect)
+3. **Pheromone Communication** - Stigmergic signaling system unlike any command/orchestration pattern
+4. **Phased Autonomy** - Structure at boundaries, pure emergence within phases
+
+Unlike AutoGen, LangGraph, CrewAI, or any other framework, Aether requires **zero predefined workflows, agent roles, or orchestration logic**. The colony self-organizes.
 
 ## Core Value
 
@@ -21,7 +28,7 @@ If this works, everything else follows. If this fails, nothing else matters.
 *(Already working in existing Python system)*
 
 - ✓ **Pheromone Signal System** — INIT, FOCUS, REDIRECT, FEEDBACK signals with decay
-- ✓ **Six Worker Ant Castes** — Mapper, Planner, Executor, Verifier, Researcher, Synthesizer
+- ✓ **Six Worker Ant Castes** — Colonizer, Route-setter, Builder, Watcher, Scout, Architect
 - ✓ **Phase-Based Execution** — Structure at boundaries, emergence within
 - ✓ **Basic State Persistence** — JSON file storage (`.aether/COLONY_STATE.json`)
 
@@ -94,18 +101,19 @@ The Python system (`.aether/*.py`) demonstrates:
 - **Claude-Native Only** — Must work as prompt commands, not Python scripts
 - **JSON State Persistence** — State stored in `.aether/data/*.json` files
 - **Task Tool for Spawning** — Autonomous spawning uses Claude's Task tool
-- **CDS for Development** — Using CDS framework to manage this project (temporary, will remove)
+- **Standalone Architecture** — Aether is its own system, not dependent on CDS or any other framework
 - **No External Dependencies** — No vector DBs, no embedding services, use Claude's native capabilities
+- **Unique Design** — All architectures, patterns, and implementations are uniquely Aether (inspired by research, not copied)
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Claude-native vs Python | Commands work directly in Claude like CDS, not separate tool | ✓ Good |
-| Hybrid spawning architecture | Task tool for execution + prompts for specialist creation | — Pending |
+| Claude-native vs Python | Commands work directly in Claude, not separate tool | ✓ Good |
+| Unique Worker Ant castes | Designed from first principles for autonomous emergence, not copied from any system | — Pending |
+| Pheromone-based communication | Stigmergic signals enable true emergence, unlike command/orchestration patterns | — Pending |
 | Claude-native semantic understanding | Use Claude's understanding vs external embeddings | — Pending |
-| All 4 HIGH PRIORITY in v1 | Ralph's research shows these are the revolutionary features | — Pending |
-| CDS for development | Use CDS to build Aether, then remove both CDS and Ralph | — Pending |
+| Standalone system | Aether is its own framework, not dependent on CDS or any external system | ✓ Confirmed |
 
 ---
 *Last updated: 2025-02-01 after project initialization*

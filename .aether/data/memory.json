@@ -1,5 +1,136 @@
 {
-  "working_memory": [],
-  "short_term_memory": [],
-  "long_term_memory": []
+  "$schema": "Aether Triple-Layer Memory v2.0",
+  "working_memory": {
+    "description": "Immediate context for current session - 200k token capacity",
+    "max_capacity_tokens": 200000,
+    "current_tokens": 0,
+    "eviction_threshold_percent": 80,
+    "eviction_policy": "LRU",
+    "items": [],
+    "item_schema": {
+      "id": "uuid",
+      "type": "observation|task_result|decision|code_snippet|user_input",
+      "content": "",
+      "metadata": {
+        "timestamp": "ISO-8601",
+        "relevance_score": 0.0,
+        "access_count": 0,
+        "last_accessed": "ISO-8601",
+        "source": "queen|worker_ant",
+        "caste": null
+      },
+      "associative_links": []
+    }
+  },
+  "short_term_memory": {
+    "description": "Compressed recent sessions - DAST 2.5x compression, max 10 sessions",
+    "max_sessions": 10,
+    "current_sessions": 0,
+    "compression_ratio": 2.5,
+    "compression_method": "DAST",
+    "sessions": [],
+    "session_schema": {
+      "id": "uuid",
+      "session_id": "",
+      "compressed_at": "ISO-8601",
+      "original_tokens": 0,
+      "compressed_tokens": 0,
+      "phase": null,
+      "summary": "",
+      "key_decisions": [],
+      "high_value_items": []
+    },
+    "eviction_policy": "LRU"
+  },
+  "long_term_memory": {
+    "description": "Persistent patterns and learned expertise - associative links",
+    "patterns": [],
+    "pattern_schema": {
+      "id": "uuid",
+      "type": "success_pattern|failure_pattern|preference|constraint",
+      "pattern": "",
+      "confidence": 0.0,
+      "occurrences": 0,
+      "created_at": "ISO-8601",
+      "last_seen": "ISO-8601",
+      "associative_links": [],
+      "metadata": {
+        "context": "",
+        "related_castes": [],
+        "related_phases": []
+      }
+    },
+    "learned_preferences": {
+      "focus_preferences": [],
+      "redirect_constraints": []
+    }
+  },
+  "compression": {
+    "dast_algorithm": "Discriminative Abstractive Summarization Technique",
+    "target_ratio": 2.5,
+    "preserves": [
+      "key_decisions",
+      "outcomes",
+      "learned_patterns",
+      "blockers_encountered",
+      "solutions_found"
+    ],
+    "discards": [
+      "intermediate_steps",
+      "failed_attempts",
+      "redundant_context"
+    ],
+    "triggers": [
+      {
+        "trigger": "phase_boundary",
+        "description": "Compress Working Memory to Short-term at phase completion"
+      },
+      {
+        "trigger": "token_threshold",
+        "description": "Compress when Working Memory exceeds 80% capacity"
+      },
+      {
+        "trigger": "manual",
+        "description": "Queen can trigger compression via /ant:memory compress"
+      }
+    ]
+  },
+  "pattern_extraction": {
+    "description": "Extract high-value items from Short-term to Long-term",
+    "triggers": [
+      {
+        "trigger": "high_relevance",
+        "threshold": 0.8,
+        "description": "Items with relevance score > 0.8"
+      },
+      {
+        "trigger": "repeated_success",
+        "threshold": 3,
+        "description": "Patterns that appear 3+ times successfully"
+      }
+    ],
+    "associative_linking": {
+      "description": "Create semantic connections between related items",
+      "link_types": [
+        "similar_context",
+        "causal_relationship",
+        "temporal_proximity",
+        "caste_affinity"
+      ]
+    }
+  },
+  "search": {
+    "description": "Cross-layer search with relevance ranking",
+    "query_processing": "semantic",
+    "ranking_method": "relevance_score × recency_boost",
+    "max_results_per_layer": 20,
+    "result_aggregation": "combined_ranked"
+  },
+  "metrics": {
+    "total_compressions": 0,
+    "total_pattern_extractions": 0,
+    "average_compression_ratio": 0.0,
+    "working_memory_evictions": 0,
+    "short_term_evictions": 0
+  }
 }

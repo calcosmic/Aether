@@ -50,13 +50,13 @@
         │                │                │
         ▼                ▼                ▼
 ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│   MAPPER     │  │   PLANNER    │  │  EXECUTOR    │
-│  Explore     │  │  Structure   │  │  Implement   │
+│ COLONIZER    │  │ROUTE-SETTER │  │   BUILDER    │
+│  Colonize    │  │  Structure   │  │  Build       │
 └──────────────┘  └──────────────┘  └──────────────┘
         │                │                │
 ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│  RESEARCHER  │  │ SYNTHESIZER  │  │  VERIFIER    │
-│  Context     │  │  Memory      │  │   Quality    │
+│    SCOUT     │  │  ARCHITECT   │  │   WATCHER    │
+│  Scouting    │  │  Memory      │  │   Quality    │
 └──────────────┘  └──────────────┘  └──────────────┘
                          │
                          │ Spawn subagents
@@ -103,9 +103,9 @@ The Queen is NOT a commander. The Queen is a **signal source**.
 
 ### What the Queen Does NOT Do
 
-- ❌ "Executor, write this function" (direct command)
-- ❌ "Planner, create a plan" (assignment)
-- ❌ "Verifier, test this" (task assignment)
+- ❌ "Builder, write this function" (direct command)
+- ❌ "Route-setter, create a plan" (assignment)
+- ❌ "Watcher, test this" (task assignment)
 - ❌ "Stop working on X" (direct intervention)
 
 ### The Queen's Workflow
@@ -115,8 +115,8 @@ The Queen is NOT a commander. The Queen is a **signal source**.
    → Intention pheromone released
 
 2. Colony detects pheromone
-   → Mapper explores codebase
-   → Planner creates phase structure
+   → Colonizer explores codebase
+   → Route-setter creates phase structure
 
 3. /ant:phase
    → Queen reviews phase plan
@@ -144,9 +144,9 @@ The Queen is NOT a commander. The Queen is a **signal source**.
 
 Six pre-defined castes with specific roles and capabilities.
 
-### 1. Mapper Ant
+### 1. Colonizer Ant
 
-**Purpose**: Explore, index, understand codebase
+**Purpose**: Colonize, index, understand codebase
 
 **Capabilities**:
 - Semantic codebase exploration
@@ -160,8 +160,8 @@ Six pre-defined castes with specific roles and capabilities.
 - Pattern matchers
 
 **Responds to**:
-- `/ant:init` (new project → start mapping)
-- `/ant:focus "module X"` (map specific area)
+- `/ant:init` (new project → start colonizing)
+- `/ant:focus "module X"` (colonize specific area)
 
 **Outputs**:
 - Semantic index
@@ -170,7 +170,7 @@ Six pre-defined castes with specific roles and capabilities.
 
 ---
 
-### 2. Planner Ant
+### 2. Route-setter Ant
 
 **Purpose**: Create structured phase plans
 
@@ -196,7 +196,7 @@ Six pre-defined castes with specific roles and capabilities.
 
 ---
 
-### 3. Executor Ant
+### 3. Builder Ant
 
 **Purpose**: Write code, implement changes
 
@@ -222,9 +222,9 @@ Six pre-defined castes with specific roles and capabilities.
 
 ---
 
-### 4. Verifier Ant
+### 4. Watcher Ant
 
-**Purpose**: Test, validate, QA
+**Purpose**: Watch, validate, QA
 
 **Capabilities**:
 - Test generation
@@ -249,9 +249,9 @@ Six pre-defined castes with specific roles and capabilities.
 
 ---
 
-### 5. Researcher Ant
+### 5. Scout Ant
 
-**Purpose**: Find information, context
+**Purpose**: Scout for information, context
 
 **Capabilities**:
 - Web search
@@ -276,9 +276,9 @@ Six pre-defined castes with specific roles and capabilities.
 
 ---
 
-### 6. Synthesizer Ant
+### 6. Architect Ant
 
-**Purpose**: Compress memory, extract patterns
+**Purpose**: Architect memory, extract patterns
 
 **Capabilities**:
 - Memory compression

@@ -24,6 +24,42 @@
         "caste": null,
         "context": "synchronous patterns"
       }
+    },
+    {
+      "id": "feedback_1769959695",
+      "type": "FEEDBACK",
+      "strength": 0.5,
+      "created_at": "2026-02-01T15:28:15Z",
+      "decay_rate": 21600,
+      "metadata": {
+        "source": "queen",
+        "caste": null,
+        "context": "Great progress on API"
+      }
+    },
+    {
+      "id": "feedback_1769959711",
+      "type": "FEEDBACK",
+      "strength": 0.5,
+      "created_at": "2026-02-01T15:28:31Z",
+      "decay_rate": 21600,
+      "metadata": {
+        "source": "queen",
+        "caste": null,
+        "context": "great progress on API"
+      }
+    },
+    {
+      "id": "focus_1769960275",
+      "type": "FOCUS",
+      "strength": 0.7,
+      "created_at": "2026-02-01T15:37:55Z",
+      "decay_rate": 3600,
+      "metadata": {
+        "source": "queen",
+        "caste": null,
+        "context": "test authentication"
+      }
     }
   ],
   "pheromone_types": {

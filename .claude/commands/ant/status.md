@@ -4,7 +4,7 @@ description: Show Queen Ant Colony status - Worker Ants, pheromones, phase progr
 ---
 
 <objective>
-Display comprehensive colony status including Worker Ant activity, active pheromones, phase progress, and colony health.
+Display comprehensive colony status including Worker Ant activity, active pheromones, phase progress, and colony health for the Aether v2 system.
 </objective>
 
 <process>
@@ -12,229 +12,388 @@ You are the **Queen Ant Colony** displaying comprehensive status.
 
 ## Step 1: Load Colony State
 
-Read from `.aether/COLONY_STATE.json`:
-```python
-import json
-from datetime import datetime
+Read all state files from `.aether/data/`:
+```bash
+# Load colony state
+COLONY_STATE=".aether/data/COLONY_STATE.json"
+WORKER_ANTS=".aether/data/worker_ants.json"
+PHEROMONES=".aether/data/pheromones.json"
+MEMORY=".aether/data/memory.json"
 
-with open('.aether/COLONY_STATE.json', 'r') as f:
-    state = json.load(f)
+# Check if colony is initialized
+if [ ! -f "$COLONY_STATE" ]; then
+  echo "⚠️  Colony not initialized"
+  echo "Use /ant:init <goal> to initialize the colony"
+  exit 1
+fi
+
+# Extract key values
+GOAL=$(jq -r '.queen_intention.goal' "$COLONY_STATE")
+STATE=$(jq -r '.colony_status.state' "$COLONY_STATE")
+CURRENT_PHASE=$(jq -r '.colony_status.current_phase' "$COLONY_STATE")
+SESSION_ID=$(jq -r '.colony_metadata.session_id' "$COLONY_STATE")
+CREATED_AT=$(jq -r '.colony_metadata.created_at' "$COLONY_STATE")
 ```
 
 ## Step 2: Display Status Header
 
 ```
-🐜 QUEEN ANT COLONY STATUS
-
-{timestamp}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+╔══════════════════════════════════════════════════════════════╗
+║  🐜 Queen Ant Colony Status                                 ║
+╠══════════════════════════════════════════════════════════════╣
+║  Session: {session_id}                                       ║
+║  State: {state}                                              ║
+║  Initialized: {created_at}                                   ║
+╚══════════════════════════════════════════════════════════════╝
 ```
 
-## Step 3: Display Goal and Phase
+## Step 3: Display Goal and Current Phase
 
 ```
-GOAL: {goal}
+🎯 Queen's Intention:
+"{goal}"
 
-CURRENT PHASE: Phase {id} - {name} [{status}]
-  Progress: {completed_tasks}/{total_tasks} tasks ({percentage}%)
-  Started: {start_time}
-  Active subagents: {count}
+📍 Current Phase: Phase {id} - {name}
+   Status: {status}
+   Caste: {assigned_caste}
+   Goal: {phase_goal}
 ```
 
-## Step 4: Display Worker Ant Activity
+## Step 4: Display Worker Ant Status
 
 ```
-WORKER ANTS:
+🐜 Worker Ant Colony:
 ```
 
-For each of the 6 castes, show:
-```python
-worker_ants = state.get('worker_ants', {})
+For each caste, display status:
+```bash
+# Parse worker_ants.json
+for caste in colonizer route_setter builder watcher scout architect; do
+  status=$(jq -r ".castes.$caste.status" "$WORKER_ANTS")
+  current_task=$(jq -r ".castes.$caste.current_task" "$WORKER_ANTS")
+  spawns=$(jq -r ".castes.$caste.spawn_data.subagents_spawned" "$WORKER_ANTS")
+  tasks_completed=$(jq -r ".castes.$caste.performance.tasks_completed" "$WORKER_ANTS")
 
-for caste_name, ant_state in worker_ants.items():
-    status = ant_state.get('status', 'IDLE')
-    current_task = ant_state.get('current_task', 'None')
-    spawned_count = ant_state.get('spawned_subagents', 0)
+  name=$(jq -r ".castes.$caste.name" "$WORKER_ANTS")
 
-    caste_display = caste_name.upper()
+  if [ "$status" = "idle" ]; then
+    echo "  ☁️  $name - IDLE"
+  elif [ "$status" = "ready" ]; then
+    echo "  ✋ $name - READY"
+  elif [ "$status" = "active" ]; then
+    echo "  🏃 $name - ACTIVE: $current_task"
+  else
+    echo "  ⚠️  $name - $status"
+  fi
 
-    if status == 'ACTIVE':
-        print(f"  {caste_display} [ACTIVE]: {current_task}")
-        if spawned_count > 0:
-            print(f"    → {spawned_count} subagents active")
-    else:
-        print(f"  {caste_display} [{status}]: {current_task}")
+  if [ "$spawns" -gt 0 ]; then
+    echo "     └─ Spawns: $spawns"
+  fi
+done
 ```
 
 ## Step 5: Display Active Pheromones
 
 ```
-ACTIVE PHEROMONES: {count}
+🌿 Active Pheromones:
 ```
 
-```python
-pheromones = state.get('pheromones', [])
+```bash
+# Count and display active pheromones
+pheromone_count=$(jq '.active_pheromones | length' "$PHEROMONES")
 
-for pheromone in pheromones:
-    if pheromone.get('is_active', True):
-        signal_type = pheromone['signal_type']
-        content = pheromone['content']
-        strength = pheromone.get('current_strength', pheromone['strength']) * 100
-
-        print(f"  [{signal_type}] {content} (strength: {strength:.0f}%)")
+if [ "$pheromone_count" -eq 0 ]; then
+  echo "  No active pheromones"
+else
+  jq -r '.active_pheromones[] | "  [\(.type)] \(.metadata.context) (strength: \(.strength * 100)%)"' "$PHEROMONES"
+fi
 ```
 
 ## Step 6: Display Phase Progress
 
 ```
-PHASE PROGRESS:
-  Completed: {completed_count}
-  In Progress: {in_progress_count}
-  Pending: {pending_count}
-  Total: {total_phases}
-
-OVERALL PROGRESS: {overall_percentage}%
+📊 Phase Progress:
 ```
 
-## Step 7: Display Colony Health
+```bash
+# Calculate phase progress
+completed=$(jq '[.phases.roadmap[] | select(.status == "completed")] | length' "$COLONY_STATE")
+in_progress=$(jq '[.phases.roadmap[] | select(.status == "in_progress")] | length' "$COLONY_STATE")
+pending=$(jq '[.phases.roadmap[] | select(.status == "pending" or .status == "ready")] | length' "$COLONY_STATE")
+total=10
 
-```
-COLONY HEALTH:
-  • Pheromone signals: {signal_count} active
-  • Memory utilization: {memory_usage}%
-  • Agent spawn depth: {current_depth}/{max_depth}
-  • Circuit breakers: {breaker_status}
-```
+percentage=$((completed * 100 / total))
 
-## Step 8: Display Recent Activity
-
-```
-RECENT ACTIVITY:
-  • {timestamp} - {activity_1}
-  • {timestamp} - {activity_2}
-  • {timestamp} - {activity_3}
+echo "  Completed: $completed/$total"
+echo "  In Progress: $in_progress"
+echo "  Pending: $pending"
+echo "  Overall: $percentage%"
 ```
 
-## Step 9: Display Available Actions
+Display progress bar:
+```
+  [$([######..........] for 60%, etc.)
+```
+
+## Step 7: Display Resource Budgets
+
+```
+⚡ Resource Budgets:
+```
+
+```bash
+# Show resource usage
+current_spawns=$(jq '.resource_budgets.current_spawns' "$COLONY_STATE")
+max_spawns=$(jq '.resource_budgets.max_spawns_per_phase' "$COLONY_STATE")
+breaker_trips=$(jq '.resource_budgets.circuit_breaker_trips' "$COLONY_STATE")
+
+echo "  Spawns: $current_spawns/$max_spawns this phase"
+echo "  Circuit Breaker Trips: $breaker_trips"
+```
+
+## Step 8: Display Memory Status
+
+```
+🧠 Memory Status:
+```
+
+```bash
+# Show memory layer status
+working_items=$(jq '.working_memory.items | length' "$MEMORY")
+working_tokens=$(jq '.working_memory.current_tokens' "$MEMORY")
+working_max=$(jq '.working_memory.max_capacity_tokens' "$MEMORY")
+working_pct=$((working_tokens * 100 / working_max))
+
+short_term_sessions=$(jq '.short_term_memory.sessions | length' "$MEMORY")
+short_term_max=$(jq '.short_term_memory.max_sessions' "$MEMORY")
+
+long_term_patterns=$(jq '.long_term_memory.patterns | length' "$MEMORY")
+
+echo "  Working Memory: $working_tokens/$working_max tokens ($working_pct%)"
+echo "    - Items: $working_items"
+echo "  Short-term Memory: $short_term_sessions/$short_term_max sessions"
+echo "  Long-term Memory: $long_term_patterns patterns"
+```
+
+## Step 9: Display Performance Metrics
+
+```
+📈 Performance:
+```
+
+```bash
+# Show metrics
+total_time=$(jq '.performance_metrics.total_execution_time_seconds' "$COLONY_STATE")
+phases_complete=$(jq '.performance_metrics.phases_completed' "$COLONY_STATE")
+total_spawns=$(jq '.performance_metrics.total_spawns' "$COLONY_STATE")
+success_rate=$(jq '.performance_metrics.successful_spawns / .total_spawns * 100' "$COLONY_STATE")
+
+echo "  Total Execution: ${total_time}s"
+echo "  Phases Completed: $phases_complete"
+echo "  Total Spawns: $total_spawns"
+echo "  Success Rate: ${success_rate}%"
+```
+
+## Step 10: Display Available Actions
 
 Based on current state, show relevant actions:
 
 ```
-📋 AVAILABLE ACTIONS:
+📋 Available Actions:
 
-  1. /ant:phase             - View current phase details
-  2. /ant:focus <area>      - Add focus pheromone
-  3. /ant:status            - Refresh this status
-  4. /ant:memory            - View learned patterns
-```
-
-If phase is IN_PROGRESS, add:
-```
-  5. /ant:review {id}       - Review phase progress
+  /ant:plan     - Show full 10-phase roadmap
+  /ant:phase N  - View phase details
+  /ant:execute N - Execute a phase
+  /ant:focus    - Emit focus pheromone
+  /ant:redirect - Emit redirect pheromone
+  /ant:feedback - Emit feedback pheromone
 ```
 
-If phase is AWAITING_REVIEW, add:
+If colony is not initialized:
 ```
-  5. /ant:review {id}       - Review completed phase
-  6. /ant:feedback "<msg>"  - Provide feedback
+  /ant:init <goal> - Initialize the colony
+```
+
+## Step 11: Display State History (Optional)
+
+If state has history:
+```
+📜 Recent State Transitions:
+```
+
+```bash
+jq -r '.colony_status.state_history[-5:] | .[] | "  \(.timestamp) - \(.from_state) → \(.to_state)"' "$COLONY_STATE"
 ```
 
 </process>
 
 <context>
-@.aether/worker_ants.py
-@.aether/pheromone_system.py
-@.aether/phase_engine.py
+# AETHER COLONY STATUS - Complete Caste Information
 
-Worker Ant Castes (6):
-1. Mapper - Exploration, codebase understanding
-2. Planner - Goal decomposition, phase planning
-3. Executor - Code implementation, spawning
-4. Verifier - Testing, validation, QA
-5. Researcher - Information gathering, research
-6. Synthesizer - Knowledge synthesis, memory compression
+## Worker Ant Castes (6 unique castes with detailed profiles)
 
-Pheromone Types:
-- INIT: Strong attract, triggers planning (100% strength, no decay)
-- FOCUS: Medium attract, guides attention (70% strength, 1hr half-life)
-- REDIRECT: Strong repel, warns away (70% strength, 24hr half-life)
-- FEEDBACK: Variable, adjusts behavior (50% strength, 6hr half-life)
+### 1. Colonizer Ant
+- **Purpose**: Colonizes codebase, builds semantic index, detects patterns
+- **Sensitivity**: INIT=1.0, FOCUS=0.8, REDIRECT=0.9, FEEDBACK=0.7
+- **Status Values**: idle, ready, active, blocked, spawning
+- **Capabilities**: codebase_analysis, semantic_indexing, pattern_detection, dependency_mapping
+
+### 2. Route-setter Ant
+- **Purpose**: Creates phase structures, task breakdown, dependency analysis
+- **Sensitivity**: INIT=1.0, FOCUS=0.9, REDIRECT=0.8, FEEDBACK=0.8
+- **Status Values**: idle, ready, active, blocked, spawning
+- **Capabilities**: phase_planning, task_breakdown, dependency_analysis, resource_allocation
+
+### 3. Builder Ant
+- **Purpose**: Implements code, runs commands, file manipulation
+- **Sensitivity**: INIT=0.9, FOCUS=1.0, REDIRECT=0.7, FEEDBACK=0.9
+- **Status Values**: idle, ready, active, blocked, spawning
+- **Capabilities**: code_implementation, command_execution, file_operations, testing_setup
+
+### 4. Watcher Ant
+- **Purpose**: Validates implementation, testing, quality checks
+- **Sensitivity**: INIT=0.8, FOCUS=0.9, REDIRECT=1.0, FEEDBACK=1.0
+- **Status Values**: idle, ready, active, blocked, spawning
+- **Capabilities**: validation, testing, quality_checks, security_review
+
+### 5. Scout Ant
+- **Purpose**: Gathers information, searches docs, context retrieval
+- **Sensitivity**: INIT=0.9, FOCUS=0.7, REDIRECT=0.8, FEEDBACK=0.8
+- **Status Values**: idle, ready, active, blocked, spawning
+- **Capabilities**: information_gathering, documentation_search, context_retrieval
+
+### 6. Architect Ant
+- **Purpose**: Memory compression, pattern extraction, knowledge synthesis
+- **Sensitivity**: INIT=0.8, FOCUS=0.8, REDIRECT=0.9, FEEDBACK=1.0
+- **Status Values**: idle, ready, active, blocked, spawning
+- **Capabilities**: memory_compression, pattern_extraction, knowledge_synthesis
+
+## Pheromone Signal Types
+
+### INIT
+- **Purpose**: Set colony intention, mobilize colony
+- **Strength**: 1.0 (maximum)
+- **Duration**: Persists until phase complete
+- **Effect**: Strong attract, all castes respond
+
+### FOCUS
+- **Purpose**: Guide colony attention to specific area
+- **Strength**: 0.7 (default)
+- **Duration**: 1 hour half-life
+- **Effect**: Medium attract, guides prioritization
+
+### REDIRECT
+- **Purpose**: Warn colony away from approach/pattern
+- **Strength**: 0.9
+- **Duration**: 24 hour half-life
+- **Effect**: Strong repel, prevents bad patterns
+
+### FEEDBACK
+- **Purpose**: Adjust colony behavior based on Queen's feedback
+- **Strength**: 0.5-0.7 (variable)
+- **Duration**: 6 hour half-life
+- **Effect**: Variable, adjusts behavior
+
+## Colony State Machine
+
+### States
+- **IDLE**: No active phase
+- **INIT**: Colony initializing
+- **PLANNING**: Phase planning in progress
+- **EXECUTING**: Phase execution in progress
+- **VERIFYING**: Phase verification in progress
+- **COMPLETED**: Phase complete, awaiting review
+- **FAILED**: Phase failed
+
+## Aether v2 10-Phase Roadmap
+
+1. Colony Foundation - JSON state persistence and pheromone signal layer
+2. Worker Ant Castes - Six Worker Ant prompt behaviors with Task tool spawning
+3. Pheromone Communication - Stigmergic signals with caste sensitivity
+4. Triple-Layer Memory - Working → Short-term → Long-term with associative links
+5. Phase Boundaries - State machine with Queen check-ins and checkpoints
+6. Autonomous Emergence - Capability gap detection with Worker-spawns-Workers
+7. Colony Verification - Multi-perspective verification with weighted voting
+8. Colony Learning - Meta-learning loop with Bayesian confidence scoring
+9. Stigmergic Events - Event bus for colony-wide pub/sub communication
+10. Colony Maturity - End-to-end testing and production readiness
 </context>
 
 <reference>
-# Worker Ant Status Values
-
-- IDLE: No active task
-- ACTIVE: Working on task
-- SPAWNING: Creating subagent
-- COORDINATING: Communicating with other ants
-- BLOCKED: Waiting for dependency
-
-# Example Full Output
+# Example Full Output (Colony Initialized)
 
 ```
-🐜 QUEEN ANT COLONY STATUS
+╔══════════════════════════════════════════════════════════════╗
+║  🐜 Queen Ant Colony Status                                 ║
+╠══════════════════════════════════════════════════════════════╣
+║  Session: session_1738392000_12345                          ║
+║  State: INIT                                                ║
+║  Initialized: 2025-02-01T15:00:00Z                          ║
+╚══════════════════════════════════════════════════════════════╝
 
-2025-02-01 15:30:45
+🎯 Queen's Intention:
+"Build the Aether colony infrastructure"
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📍 Current Phase: Phase 1 - Colony Foundation
+   Status: ready
+   Caste: colonizer
+   Goal: Colony state persists safely across context refreshes
 
-GOAL: Build a real-time chat application
+🐜 Worker Ant Colony:
+  ✋ Colonizer Ant - READY
+  ✋ Route-setter Ant - READY
+  ✋ Builder Ant - READY
+  ✋ Watcher Ant - READY
+  ✋ Scout Ant - READY
+  ✋ Architect Ant - READY
 
-CURRENT PHASE: Phase 2 - Real-time Communication [IN_PROGRESS]
-  Progress: 5/8 tasks (62%)
-  Started: 2025-02-01 14:00:00
-  Active subagents: 5
+🌿 Active Pheromones:
+  [INIT] Build the Aether colony infrastructure (strength: 100%)
 
-WORKER ANTS:
-  MAPPER [IDLE]: None
-  PLANNER [IDLE]: None
-  EXECUTOR [ACTIVE]: Implementing message persistence
-    → 3 subagents active
-  VERIFIER [ACTIVE]: Testing message delivery
-    → 2 subagents active
-  RESEARCHER [IDLE]: None
-  SYNTHESIZER [IDLE]: None
+📊 Phase Progress:
+  Completed: 0/10
+  In Progress: 0
+  Pending: 10
+  Overall: 0%
+  [░░░░░░░░░░░]
 
-ACTIVE PHEROMONES: 3
-  [INIT] Build chat app (strength: 100%)
-  [FOCUS] WebSocket security (strength: 65%)
-  [FOCUS] message reliability (strength: 45%)
+⚡ Resource Budgets:
+  Spawns: 0/10 this phase
+  Circuit Breaker Trips: 0
 
-PHASE PROGRESS:
-  Completed: 1
-  In Progress: 1
-  Pending: 3
-  Total: 5
+🧠 Memory Status:
+  Working Memory: 0/200000 tokens (0%)
+    - Items: 1
+  Short-term Memory: 0/10 sessions
+  Long-term Memory: 0 patterns
 
-OVERALL PROGRESS: 40%
+📈 Performance:
+  Total Execution: 0s
+  Phases Completed: 0
+  Total Spawns: 0
+  Success Rate: 0%
 
-COLONY HEALTH:
-  • Pheromone signals: 3 active
-  • Memory utilization: 45%
-  • Agent spawn depth: 2/3
-  • Circuit breakers: None active
+📋 Available Actions:
 
-RECENT ACTIVITY:
-  • 15:28 - Executor completed message queue implementation
-  • 15:25 - Verifier found issue with message ordering
-  • 15:20 - Mapper completed WebSocket layer analysis
+  /ant:plan     - Show full 10-phase roadmap
+  /ant:phase 1  - View phase details
+  /ant:execute 1 - Execute Phase 1
+  /ant:focus    - Emit focus pheromone
+```
 
-📋 AVAILABLE ACTIONS:
+# Example Output (Colony Not Initialized)
 
-  1. /ant:phase             - View current phase details
-  2. /ant:focus <area>      - Add focus pheromone
-  3. /ant:status            - Refresh this status
-  4. /ant:memory            - View learned patterns
-  5. /ant:review 2          - Review phase progress
+```
+⚠️  Colony not initialized
+
+Use /ant:init <goal> to initialize the colony
+
+Example: /ant:init "Build a REST API"
 ```
 </reference>
 
 <allowed-tools>
 Read
-Write
 Bash
 Glob
-Grep
 </allowed-tools>

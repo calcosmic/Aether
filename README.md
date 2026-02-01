@@ -82,10 +82,14 @@ Ant colonies demonstrate **superlinear intelligence**:
 
 **Autonomous Agent Spawning**: When a Worker Ant encounters a capability gap, it spawns a specialist:
 
+## Key Innovation
+
+**Autonomous Agent Spawning**: When a Worker Ant encounters a capability gap, it spawns a specialist:
+
 ```
-Mapper Ant → "Need security analysis" → spawns Security Researcher Ant
-Planner Ant → "Need database schema" → spawns Database Designer Ant
-Executor Ant → "Need API tests" → spawns Test Generator Ant
+Colonizer Ant → "Need security analysis" → spawns Security Scout Ant
+Route-setter Ant → "Need database schema" → spawns Database Designer Ant
+Builder Ant → "Need API tests" → spawns Test Generator Watcher Ant
 ```
 
 **No existing system does this.**
@@ -122,7 +126,7 @@ Executor Ant → "Need API tests" → spawns Test Generator Ant
 
 | Caste | Function | Spawns When... |
 |-------|----------|----------------|
-| **Mapper** | Explores codebase, builds semantic index | System init or new codebase |
+| **Colonizer** | Colonizes codebase, builds semantic index | System init or new codebase |
 | **Planner** | Creates phase structures, task breakdown | Goal requires decomposition |
 | **Executor** | Implements code, runs commands | Concrete tasks identified |
 | **Verifier** | Validates implementation, tests | Executor completes work |
@@ -148,6 +152,7 @@ Commands create brittle dependencies. Signals create adaptive behavior.
 | **Init** | Set colony intention | Persists | Strong attract, establishes goal |
 | **Focus** | Guide attention to area | 1 hour | Medium attract, guides prioritization |
 | **Redirect** | Warn away from approach | 24 hours | Strong repel, prevents bad patterns |
+| **Feedback** | Adjust behavior based on observations | 6 hours | Variable, adjusts behavior |
 | **Feedback** | Teach preferences | 6 hours | Variable strength, shapes behavior |
 
 **Usage**: Emit signals, don't issue commands. Let colony self-organize.
