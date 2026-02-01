@@ -8,16 +8,16 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 
 **Unique Architecture:** Aether is a completely standalone multi-agent system designed from first principles. Not dependent on CDS, Ralph, or any external framework. All Worker Ant castes (Colonizer, Planner, Executor, Verifier, Researcher, Synthesizer), pheromone communication, and phased autonomy are uniquely Aether.
 
-**Current focus:** Phase 4 - Triple-Layer Memory (Working → Short-term → Long-term with associative links)
+**Current focus:** Phase 5 - Phase Boundaries (State machine with checkpoints and recovery)
 
 ## Current Position
 
-Phase: 4 of 10 (Triple-Layer Memory)
-Plan: 5/5 complete
-Status: COMPLETE — Verified 15/15 must-haves
-Last activity: 2026-02-01 — Phase 4 complete and verified
+Phase: 5 of 10 (Phase Boundaries)
+Plan: 2/5 complete
+Status: In Progress
+Last activity: 2026-02-01 — Completed 05-02: Pheromone-Triggered State Transitions
 
-Progress: [████████░░] 40%
+Progress: [████████░░] 45%
 
 ## Recent Changes
 
@@ -63,19 +63,19 @@ Progress: [████████░░] 40%
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
-- Average duration: - min
-- Total execution time: 0.0 hours
+- Total plans completed: 1
+- Average duration: 3.5 min
+- Total execution time: 0.06 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 5 | 1 | 3.5 min | 3.5 min |
 
 **Recent Trend:**
-- Last 5 plans: -
-- Trend: -
+- Last 1 plans: 3.5 min
+- Trend: Starting Phase 5
 
 *Updated after each plan completion*
 
@@ -103,6 +103,7 @@ Recent decisions affecting current work:
 - **Cross-Layer Memory Search**: Implemented search_memory(), search_working_memory(), search_short_term_memory(), search_long_term_memory() with relevance ranking. Exact match = 1.0, contains = 0.7. Layer priority: Working (0) > Short-term (1) > Long-term (2). Updates access metadata via atomic writes.
 - **Memory Status and Verification**: Implemented get_memory_status() displaying all three layers with 200k token limit, and verify_token_limit() confirming max_capacity_tokens=200000 and compression at 80% (160k tokens).
 - **Queen Memory Command**: Created /ant:memory command with search, status, verify, and compress subcommands for Queen interaction with memory system.
+- **State Machine Foundation**: Implemented state-machine.sh with 9 valid state transitions using case statement for bash 3.x compatibility (macOS). Functions: get_current_state, get_valid_states, is_valid_state, is_valid_transition, validate_transition. State history remains under colony_status per current schema.
 
 ### Pending Todos
 
@@ -130,13 +131,13 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-01 (Phase 4 Complete - Triple-Layer Memory)
-Stopped at: Phase 4 complete and verified (15/15 must-haves)
-Resume file: .planning/phases/04-triple-layer-memory/.continue-here.md
+Last session: 2026-02-01 (Phase 5 Plan 1: State Machine Foundation)
+Stopped at: Completed 05-01-PLAN.md (state-machine.sh with transition validation)
+Resume file: None
 
 **Progress Summary:**
 - ✅ Phase 1: Colony Foundation (8/8 tasks) - State schemas, file locking, atomic writes
 - ✅ Phase 2: Worker Ant Castes (9/9 tasks) - 6 caste prompts, spawning pattern, commands
 - ✅ Phase 3: Pheromone Communication (6/6 tasks) - FOCUS, REDIRECT, FEEDBACK emission, all Worker Ant response, verification complete
 - ✅ Phase 4: Triple-Layer Memory (5/5 plans) - Working Memory, DAST compression, LRU eviction, pattern extraction, associative links, compression triggers, cross-layer search complete
-- ⏭️ Ready for Phase 5: Phase Boundaries
+- 🔄 Phase 5: Phase Boundaries (1/5 plans) - State machine foundation with transition validation complete
