@@ -40,6 +40,13 @@ try:
         ResearcherAnt,
         SynthesizerAnt
     )
+    from .state_machine import (
+        AetherStateMachine,
+        StateMachinePhaseEngine,
+        Event,
+        EventType,
+        create_state_machine
+    )
 except ImportError:
     from pheromone_system import (
         PheromoneType,
@@ -57,6 +64,13 @@ except ImportError:
         VerifierAnt,
         ResearcherAnt,
         SynthesizerAnt
+    )
+    from state_machine import (
+        AetherStateMachine,
+        StateMachinePhaseEngine,
+        Event,
+        EventType,
+        create_state_machine
     )
 
 
@@ -192,7 +206,12 @@ class PhaseEngine:
     6. Compresses memory between phases
     """
 
-    def __init__(self, colony: Colony, pheromone_layer: PheromoneLayer):
+    def __init__(
+        self,
+        colony: Colony,
+        pheromone_layer: PheromoneLayer,
+        use_state_machine: bool = True
+    ):
         self.colony = colony
         self.pheromone_layer = pheromone_layer
         self.phases: List[Phase] = []
@@ -206,6 +225,15 @@ class PhaseEngine:
         self.verifier: VerifierAnt = colony.worker_ants["verifier"]
         self.researcher: ResearcherAnt = colony.worker_ants["researcher"]
         self.synthesizer: SynthesizerAnt = colony.worker_ants["synthesizer"]
+
+        # State Machine (optional, for production-grade orchestration)
+        self.use_state_machine = use_state_machine
+        self.state_machine: Optional[AetherStateMachine] = None
+        self.sm_phase_engine: Optional[StateMachinePhaseEngine] = None
+
+        if use_state_machine:
+            self.state_machine = create_state_machine(colony)
+            self.sm_phase_engine = StateMachinePhaseEngine(colony, self.state_machine)
 
     async def initiate_project(self, goal: str) -> Phase:
         """
@@ -259,7 +287,18 @@ class PhaseEngine:
         - Coordinate peer-to-peer
 
         No Queen intervention during execution.
+
+        With state machine enabled:
+        - Explicit state transitions
+        - Checkpointing before/after transitions
+        - State recovery capability
+        - Full observability
         """
+        # Use state machine if enabled
+        if self.use_state_machine and self.sm_phase_engine:
+            return await self.sm_phase_engine.execute_phase_with_state_machine(phase)
+
+        # Original execution without state machine
         phase.status = PhaseStatus.IN_PROGRESS
         phase.started_at = datetime.now()
 
@@ -519,7 +558,7 @@ class PhaseEngine:
 
     def get_phase_summary(self) -> Dict[str, Any]:
         """Get summary of all phases"""
-        return {
+        summary = {
             "total_phases": len(self.phases),
             "current_phase": self.current_phase.to_dict() if self.current_phase else None,
             "phases": [p.to_dict() for p in self.phases],
@@ -529,6 +568,48 @@ class PhaseEngine:
                 "pending": sum(1 for p in self.phases if p.status in [PhaseStatus.PENDING, PhaseStatus.PLANNING])
             }
         }
+
+        # Add state machine info if enabled
+        if self.use_state_machine and self.state_machine:
+            summary["state_machine"] = self.state_machine.get_state_machine_summary()
+
+        return summary
+
+    def get_state_machine_status(self) -> Optional[Dict[str, Any]]:
+        """Get state machine status (if enabled)"""
+        if not self.use_state_machine or not self.state_machine:
+            return {
+                "enabled": False,
+                "message": "State machine not enabled"
+            }
+
+        return {
+            "enabled": True,
+            "current_state": self.state_machine.get_current_state(),
+            "transition_history": self.state_machine.get_state_history(),
+            "checkpoints": self.state_machine.get_checkpoints(),
+            "event_log": self.state_machine.get_event_log()
+        }
+
+    async def recover_state(self, checkpoint_id: str) -> Optional[Dict[str, Any]]:
+        """Recover state from checkpoint (if state machine enabled)"""
+        if not self.use_state_machine or not self.state_machine:
+            return {
+                "error": "State machine not enabled"
+            }
+
+        try:
+            recovered_state = await self.state_machine.recover_from_checkpoint(checkpoint_id)
+            return {
+                "success": True,
+                "recovered_state": recovered_state,
+                "checkpoint_id": checkpoint_id
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "checkpoint_id": checkpoint_id
+            }
 
     async def respond_to_pheromones(self):
         """

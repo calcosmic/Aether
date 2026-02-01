@@ -213,6 +213,22 @@ class QueenAntSystem:
             "phases": phase_summary
         }
 
+    async def state_machine(self) -> Dict[str, Any]:
+        """
+        /ant:state-machine
+
+        Show state machine status and history.
+        """
+        return self.phase_engine.get_state_machine_status()
+
+    async def recover(self, checkpoint_id: str) -> Dict[str, Any]:
+        """
+        /ant:recover <checkpoint_id>
+
+        Recover state from checkpoint.
+        """
+        return await self.phase_engine.recover_state(checkpoint_id)
+
     async def memory(self) -> Dict[str, Any]:
         """
         /ant:memory
@@ -265,10 +281,17 @@ class QueenAntSystem:
         """Get system information"""
         return {
             "name": "Queen Ant Colony System",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "description": "Phased autonomy with user as pheromone source",
             "worker_ants": list(self.colony.worker_ants.keys()),
             "pheromone_types": [t.value for t in PheromoneType],
+            "state_machine_enabled": self.phase_engine.use_state_machine,
+            "features": {
+                "autonomous_spawning": True,
+                "state_machine_orchestration": True,
+                "checkpointing": True,
+                "state_recovery": True
+            },
             "research_based": True,
             "research_documents": 25,
             "research_words": 383515
@@ -353,6 +376,27 @@ async def demo_queen_ant_system():
     print(f"   Avoid patterns: {memory['pheromone_patterns']['avoid_patterns']}")
 
     print("\n" + "=" * 60)
+    print("STEP 7: State Machine Status")
+    print("=" * 60)
+
+    sm_status = await system.state_machine()
+    if sm_status.get("enabled"):
+        print(f"\n🔄 State Machine Enabled:")
+        print(f"   Current State: {sm_status['current_state']['state']}")
+        print(f"   Transitions: {sm_status['current_state']['transition_count']}")
+        print(f"   Checkpoints: {sm_status['current_state']['checkpoint_count']}")
+
+        if sm_status.get("transition_history"):
+            print(f"\n📊 Recent Transitions:")
+            for t in sm_status["transition_history"][-3:]:
+                print(f"   {t['from_state']} → {t['to_state']} ({t['event']['type']})")
+
+        if sm_status.get("checkpoints"):
+            print(f"\n💾 Recent Checkpoints:")
+            for c in sm_status["checkpoints"][-3:]:
+                print(f"   {c['id']}: {c['state']['phase']}")
+
+    print("\n" + "=" * 60)
     print("Demo Complete")
     print("=" * 60)
     print("\nKey Points:")
@@ -361,6 +405,7 @@ async def demo_queen_ant_system():
     print("  ✅ Pheromones guide behavior (signals, not orders)")
     print("  ✅ Phase boundaries provide checkpoints")
     print("  ✅ Pure emergence within structured phases")
+    print("  ✅ State machine enables production-grade reliability")
 
 
 # ============================================================
