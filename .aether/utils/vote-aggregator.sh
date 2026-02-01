@@ -8,8 +8,13 @@
 #   decision=$(calculate_supermajority "$votes_file")
 
 # Source required utilities
-SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AETHER_ROOT="$(cd "$SCRIPT_PATH/../.." && pwd)"
+# Find Aether root: use git root or current directory
+if git rev-parse --show-toplevel >/dev/null 2>&1; then
+    AETHER_ROOT="$(git rev-parse --show-toplevel)"
+else
+    # Fallback: assume we're in the repo root
+    AETHER_ROOT="$(pwd)"
+fi
 
 if [ -f "$AETHER_ROOT/.aether/utils/atomic-write.sh" ]; then
     source "$AETHER_ROOT/.aether/utils/atomic-write.sh"
