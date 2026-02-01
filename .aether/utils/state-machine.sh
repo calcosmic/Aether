@@ -219,6 +219,57 @@ emit_checkin_pheromone() {
     return 0
 }
 
+# Check if phase boundary conditions are met
+# Returns: 0 if at boundary, 1 if not
+# Note: For Phase 5, this is infrastructure-only. Actual detection will be in Phase 6+
+check_phase_boundary() {
+    local current_state=$(get_current_state)
+    local current_phase=$(jq -r '.colony_status.current_phase' "$COLONY_STATE")
+
+    # Phase boundary = EXECUTING → VERIFYING transition
+    # Trigger: All phase tasks complete
+    if [ "$current_state" = "EXECUTING" ]; then
+        # Placeholder infrastructure for phase boundary detection
+        # Actual detection will be implemented in Phase 6+ when Worker Ants execute phases
+        # For now, provide structure for Queen check-ins
+        return 1  # Not at boundary (infrastructure only)
+    fi
+
+    # Infrastructure placeholder for phase_tasks_complete check
+    # This will be implemented when Worker Ants execute phases
+    return 1
+}
+
+# Set queen_checkin status and pause colony for Queen review
+# Args: phase_number
+# Returns: 0 on success, 1 on failure
+await_queen_decision() {
+    local phase="$1"
+    local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    # Set queen_checkin status
+    jq --arg phase "$phase" \
+       --arg timestamp "$timestamp" \
+       '.colony_status.queen_checkin = {
+         "phase": $phase,
+         "status": "awaiting_review",
+         "timestamp": $timestamp,
+         "queen_decision": null
+       }' "$COLONY_STATE" > /tmp/state.tmp
+
+    atomic_write_from_file "$COLONY_STATE" /tmp/state.tmp
+    rm -f /tmp/state.tmp
+
+    # Display check-in message
+    echo ""
+    echo "COLONY CHECK-IN: Phase $phase complete"
+    echo "   Review with: /ant:phase $phase"
+    echo "   Options: /ant:continue, /ant:adjust, /ant:execute {phase}"
+    echo ""
+
+    return 0
+}
+
 # Archive state history to memory system if exceeds MAX_HISTORY entries
 # Returns: 0 on success (no-op if history <= MAX_HISTORY)
 archive_state_history() {
@@ -279,4 +330,4 @@ archive_state_history() {
 export -f get_current_state get_valid_states is_valid_state
 export -f is_valid_transition validate_transition
 export -f get_next_checkpoint_number transition_state archive_state_history
-export -f emit_checkin_pheromone
+export -f emit_checkin_pheromone check_phase_boundary await_queen_decision
