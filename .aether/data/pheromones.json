@@ -60,6 +60,18 @@
         "caste": null,
         "context": "test authentication"
       }
+    },
+    {
+      "id": "checkin_1769968078",
+      "type": "CHECKIN",
+      "strength": 1.0,
+      "created_at": "2026-02-01T17:47:58Z",
+      "decay_rate": null,
+      "metadata": {
+        "source": "colony",
+        "phase": "5",
+        "context": "Phase boundary - awaiting Queen review"
+      }
     }
   ],
   "pheromone_types": {

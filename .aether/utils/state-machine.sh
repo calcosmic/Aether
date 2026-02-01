@@ -159,6 +159,9 @@ transition_state() {
     # Cleanup temp file
     rm -f "$temp_file"
 
+    # Archive old history if exceeds 100 entries
+    archive_state_history
+
     # Post-transition checkpoint
     echo "Saving post-transition checkpoint..."
     if ! save_checkpoint "post_${current_state}_to_${new_state}"; then
@@ -177,6 +180,41 @@ transition_state() {
     echo "State transition: $current_state -> $new_state"
     echo "Trigger: $trigger_pheromone"
     echo "Timestamp: $timestamp"
+
+    return 0
+}
+
+# Emit CHECKIN pheromone for phase boundary Queen notification
+# Args: phase_number
+# Returns: 0 on success, 1 on failure
+emit_checkin_pheromone() {
+    local phase="$1"
+    local pheromone_id="checkin_$(date +%s)"
+    local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    local pheromones_file=".aether/data/pheromones.json"
+
+    # Add CHECKIN pheromone to pheromones.json
+    jq --arg id "$pheromone_id" \
+       --arg phase "$phase" \
+       --arg timestamp "$timestamp" \
+       --arg context "Phase boundary - awaiting Queen review" \
+       '.active_pheromones += [{
+         "id": $id,
+         "type": "CHECKIN",
+         "strength": 1.0,
+         "created_at": $timestamp,
+         "decay_rate": null,
+         "metadata": {
+           "source": "colony",
+           "phase": $phase,
+           "context": $context
+         }
+       }]' "$pheromones_file" > /tmp/pheromones.tmp
+
+    atomic_write_from_file "$pheromones_file" /tmp/pheromones.tmp
+    rm -f /tmp/pheromones.tmp
+
+    echo "CHECKIN pheromone emitted for phase $phase"
 
     return 0
 }
@@ -241,3 +279,4 @@ archive_state_history() {
 export -f get_current_state get_valid_states is_valid_state
 export -f is_valid_transition validate_transition
 export -f get_next_checkpoint_number transition_state archive_state_history
+export -f emit_checkin_pheromone
