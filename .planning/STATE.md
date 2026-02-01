@@ -13,11 +13,11 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 5 of 10 (Phase Boundaries)
-Plan: 9/9 complete
+Plan: 8/8 complete
 Status: Phase complete
-Last activity: 2026-02-01 — Completed 05-09: Emergence Guard Implementation
+Last activity: 2026-02-01 — Completed 05-08: Memory-Driven Adaptation
 
-Progress: [██████████] 90%
+Progress: [██████████] 80%
 
 ## Recent Changes
 
@@ -63,7 +63,7 @@ Progress: [██████████] 90%
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 37
+- Total plans completed: 36
 - Average duration: 4 min
 - Total execution time: 2.4 hours
 
@@ -75,10 +75,10 @@ Progress: [██████████] 90%
 | 2 | 9 | 32 min | 3.6 min |
 | 3 | 6 | 30 min | 5.0 min |
 | 4 | 5 | 20 min | 4.0 min |
-| 5 | 9 | 27 min | 3.0 min |
+| 5 | 8 | 25 min | 3.1 min |
 
 **Recent Trend:**
-- Last 9 plans: 3.0 min avg
+- Last 8 plans: 3.1 min avg
 - Trend: Phase 5 complete, ready for Phase 6
 
 *Updated after each plan completion*
@@ -114,7 +114,7 @@ Recent decisions affecting current work:
 - **Crash Recovery Integration**: Implemented detect_crash_and_recover() function that identifies crash conditions (EXECUTING/VERIFYING with no active workers) and timeout conditions (>30 minutes in EXECUTING/VERIFYING). Automatically loads latest checkpoint and transitions to PLANNING for recovery. Created /ant:recover command for manual checkpoint restoration. Integrated crash detection into /ant:status for automatic self-healing on every status request.
 - **State History Archival**: Implemented archive_state_history() function that monitors state_history length and archives old entries to Working Memory when exceeding 100 entries. Integrated into transition_state() after state update, before checkpoint. History limited to 100 most recent entries with low relevance score (0.3) for archived data. Graceful degradation if memory-ops.sh not found (still trims history).
 - **Queen Check-In System**: Implemented CHECKIN pheromone type with null decay_rate (persists until Queen decision). Created emit_checkin_pheromone(), check_phase_boundary() infrastructure, and await_queen_decision() functions. Created /ant:continue command for approving phase completion and clearing CHECKIN pheromone. Created /ant:adjust command for pheromone modification during check-in (only works when queen_checkin.status is "awaiting_review"). Enhanced /ant:phase command to display QUEEN CHECK-IN REQUIRED section with options and phase summary when colony is paused.
-- **Emergence Guard Implementation**: Implemented state-based emergence guard blocking Queen FOCUS/REDIRECT commands during EXECUTING state while allowing FEEDBACK pheromone. FOCUS and REDIRECT check colony_status.state before emitting directional pheromones, blocking during EXECUTING with clear error message explaining why and suggesting alternatives (wait for VERIFYING, use FEEDBACK, review status). FEEDBACK allowed during all states as informational signal. Implements Aether philosophy: structure at boundaries, pure emergence within phases.
+- **Memory-Driven Adaptation**: Implemented adapt_next_phase_from_memory() function that reads previous phase patterns from memory.json (confidence > 0.7), extracts focus_preferences, constraints, success_patterns, and failure_patterns. Emits FOCUS pheromones (strength 0.8) for high-value areas, REDIRECT pheromones (strength 0.9) for constraints via direct jq updates. Stores adaptation in next phase's roadmap entry with inherited_focus, inherited_constraints, success_patterns, failure_patterns, adapted_from, adapted_at. Integrated into await_queen_decision() for automatic adaptation at phase boundaries. Uses direct jq updates (no wrapper functions) for pheromone emission since Phase 3 created .md commands not bash functions.
 
 ### Pending Todos
 
@@ -142,8 +142,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-01 (Phase 5 Plan 9: Emergence Guard Implementation)
-Stopped at: Completed 05-09-PLAN.md (emergence guard for FOCUS/REDIRECT, FEEDBACK allowed during EXECUTING)
+Last session: 2026-02-01 (Phase 5 Plan 8: Memory-Driven Adaptation)
+Stopped at: Completed 05-08-PLAN.md (adapt_next_phase_from_memory, automatic FOCUS/REDIRECT emission, adaptation storage)
 Resume file: None
 
 **Progress Summary:**
@@ -151,4 +151,4 @@ Resume file: None
 - ✅ Phase 2: Worker Ant Castes (9/9 tasks) - 6 caste prompts, spawning pattern, commands
 - ✅ Phase 3: Pheromone Communication (6/6 tasks) - FOCUS, REDIRECT, FEEDBACK emission, all Worker Ant response, verification complete
 - ✅ Phase 4: Triple-Layer Memory (5/5 plans) - Working Memory, DAST compression, LRU eviction, pattern extraction, associative links, compression triggers, cross-layer search complete
-- ✅ Phase 5: Phase Boundaries (9/9 plans) - State machine foundation, pheromone-triggered transitions, checkpoint system, recovery integration, crash detection, Queen check-in system, emergence guard complete
+- ✅ Phase 5: Phase Boundaries (8/8 plans) - State machine foundation, pheromone-triggered transitions, checkpoint system, recovery integration, crash detection, Queen check-in system, memory-driven adaptation complete
