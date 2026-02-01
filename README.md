@@ -195,9 +195,33 @@ python3 .aether/memory_demo.py
 python3 .aether/repl.py
 ```
 
+### `/ant:` Slash Commands (Claude Code)
+
+When using Claude Code, all commands are available with `/ant:` prefix:
+
+```
+/ant:init <goal>        # Initialize project with goal
+/ant:plan               # Show all phases with tasks
+/ant:phase [N]          # Show phase details (or current phase)
+/ant:execute <N>        # Execute a phase (emergent execution)
+/ant:review <N>         # Review completed phase
+
+/ant:focus <area>       # Emit focus pheromone to guide attention
+/ant:redirect <pattern> # Emit redirect pheromone to warn away
+/ant:feedback <msg>     # Emit feedback pheromone to teach
+
+/ant:status             # Show colony status
+/ant:memory             # Show triple-layer memory status
+/ant:colonize           # Analyze codebase before starting
+/ant:pause-colony       # Save session mid-phase
+/ant:resume-colony      # Restore saved session
+```
+
+**Why `/ant:`?** The prefix clearly distinguishes colony commands from native Claude Code commands.
+
 ### REPL Commands
 
-The REPL provides all colony commands without `/ant:` prefix:
+The REPL provides all colony commands without `/ant:` prefix (like any good REPL):
 
 ```
 # Core Workflow
