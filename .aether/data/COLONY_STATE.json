@@ -103,7 +103,7 @@
   },
   "resource_budgets": {
     "max_spawns_per_phase": 10,
-    "current_spawns": 0,
+    "current_spawns": 2,
     "max_spawn_depth": 3,
     "circuit_breaker_trips": 0,
     "circuit_breaker_cooldown_until": null
@@ -230,9 +230,29 @@
     ]
   },
   "meta_learning": {
-    "spawn_outcomes": [],
-    "specialist_confidence": {},
-    "last_updated": null
+    "spawn_outcomes": [
+      {
+        "spawn_id": "spawn_1769972599",
+        "specialist": "database_specialist",
+        "task_type": "database",
+        "outcome": "success",
+        "timestamp": "2026-02-01T19:03:19Z"
+      },
+      {
+        "spawn_id": "spawn_1769972600",
+        "specialist": "database_specialist",
+        "task_type": "database",
+        "outcome": "failure",
+        "reason": "Could not connect to database",
+        "timestamp": "2026-02-01T19:03:20Z"
+      }
+    ],
+    "specialist_confidence": {
+      "database_specialist": {
+        "database": 0.45
+      }
+    },
+    "last_updated": "2026-02-01T19:03:20Z"
   },
   "checkpoints": {
     "latest_checkpoint": "checkpoint_16.json",
@@ -247,14 +267,55 @@
     "total_execution_time_seconds": 0,
     "phases_completed": 0,
     "total_spawns": 0,
-    "successful_spawns": 1,
-    "failed_spawns": 0,
+    "successful_spawns": 2,
+    "failed_spawns": 1,
     "avg_spawn_duration_seconds": 0
   },
   "spawn_tracking": {
-    "depth": 0,
-    "total_spawns": 1,
-    "spawn_history": [],
+    "depth": 2,
+    "total_spawns": 5,
+    "spawn_history": [
+      {
+        "id": "spawn_1769972583",
+        "parent": "builder",
+        "specialist": "database_specialist",
+        "task": "Database schema migration",
+        "timestamp": "2026-02-01T19:03:03Z",
+        "depth": 1,
+        "outcome": "pending"
+      },
+      {
+        "id": "spawn_1769972583",
+        "parent": "builder",
+        "specialist": "database_specialist",
+        "task": "Database backup",
+        "timestamp": "2026-02-01T19:03:03Z",
+        "depth": 2,
+        "outcome": "pending"
+      },
+      {
+        "id": "spawn_1769972599",
+        "parent": "builder",
+        "specialist": "database_specialist",
+        "task": "Database schema migration",
+        "timestamp": "2026-02-01T19:03:19Z",
+        "depth": 3,
+        "outcome": "success",
+        "completed_at": "2026-02-01T19:03:19Z",
+        "notes": "Migration completed"
+      },
+      {
+        "id": "spawn_1769972600",
+        "parent": "builder",
+        "specialist": "database_specialist",
+        "task": "Database backup",
+        "timestamp": "2026-02-01T19:03:20Z",
+        "depth": 3,
+        "outcome": "failure",
+        "completed_at": "2026-02-01T19:03:20Z",
+        "notes": "Could not connect to database"
+      }
+    ],
     "failed_specialist_types": [],
     "cooldown_specialists": [],
     "circuit_breaker_history": [
