@@ -127,6 +127,9 @@ create_short_term_session() {
     atomic_write_from_file "$MEMORY_FILE" /tmp/memory_add_session.tmp
     rm -f /tmp/memory_add_session.tmp
 
+    # Automatically trigger pattern extraction after creating session
+    trigger_pattern_extraction
+
     # Check if eviction needed (max 10 sessions)
     current_sessions=$(jq -r '.short_term_memory.current_sessions' "$MEMORY_FILE")
     max_sessions=$(jq -r '.short_term_memory.max_sessions' "$MEMORY_FILE")
@@ -593,16 +596,15 @@ detect_patterns_across_sessions() {
 
     local detected_count=0
 
-    # Count occurrences of each item
-    declare -A item_counts
+    # Count occurrences using jq and process each unique item
+    local unique_items=$(echo "$all_items" | sort | uniq)
+
     while IFS= read -r item; do
         [ -z "$item" ] && continue
-        item_counts["$item"]=$((${item_counts["$item"]:-0} + 1))
-    done <<< "$all_items"
 
-    # For items appearing 3+ times, extract as high-confidence pattern
-    for item in "${!item_counts[@]}"; do
-        local count=${item_counts[$item]}
+        # Count occurrences of this item
+        local count=$(echo "$all_items" | grep -cxF "$item")
+
         if [ "$count" -ge 3 ]; then
             # Check if pattern already exists
             local exists=$(jq -r --arg content "$(echo "$item" | tr '[:upper:]' '[:lower:]')" \
@@ -631,9 +633,24 @@ detect_patterns_across_sessions() {
                 detected_count=$((detected_count + 1))
             fi
         fi
-    done
+    done <<< "$unique_items"
 
     echo "$detected_count"
+}
+
+# Trigger pattern extraction from Short-term to Long-term Memory
+# Who calls: create_short_term_session() after creating session, evict_short_term_session() before eviction
+# When: After Short-term session created or before session evicted
+# Arguments: none
+# Returns: number of patterns extracted
+# Side effects: Extracts high-value patterns and repeated patterns to Long-term Memory
+trigger_pattern_extraction() {
+    # Use detect_patterns_across_sessions which handles all pattern detection
+    # This avoids associative array complexity and duplicates logic
+    # Note: extract_pattern_to_long_term() already increments metrics.total_pattern_extractions
+    local detected=$(detect_patterns_across_sessions)
+
+    echo "$detected"
 }
 
 # Create associative link between items across layers
