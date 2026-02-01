@@ -96,7 +96,7 @@ logs/
 .ralph/watch_research.sh
 
 # Keep example configs but ignore runtime state
-.ralphrc.example
+.ralphrc
 
 # Session files
 *.session
