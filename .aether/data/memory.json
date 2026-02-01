@@ -3,7 +3,7 @@
   "working_memory": {
     "description": "Immediate context for current session - 200k token capacity",
     "max_capacity_tokens": 200000,
-    "current_tokens": 424,
+    "current_tokens": 431,
     "eviction_threshold_percent": 80,
     "eviction_policy": "LRU",
     "items": [
@@ -321,6 +321,21 @@
         },
         "associative_links": [],
         "token_count": 21
+      },
+      {
+        "id": "wm_1769962443_912f285e",
+        "type": "test",
+        "content": "Test update functionality",
+        "metadata": {
+          "timestamp": "2026-02-01T16:14:03Z",
+          "relevance_score": 0.9,
+          "access_count": 1,
+          "last_accessed": "2026-02-01T16:14:03Z",
+          "source": "queen",
+          "caste": null
+        },
+        "associative_links": [],
+        "token_count": 7
       }
     ],
     "item_schema": {
@@ -342,10 +357,24 @@
   "short_term_memory": {
     "description": "Compressed recent sessions - DAST 2.5x compression, max 10 sessions",
     "max_sessions": 10,
-    "current_sessions": 0,
+    "current_sessions": 1,
     "compression_ratio": 2.5,
     "compression_method": "DAST",
-    "sessions": [],
+    "sessions": [
+      {
+        "id": "phase_1_test",
+        "session_id": "phase_1_test",
+        "compressed_at": "2026-02-01T12:00:00Z",
+        "original_tokens": 10000,
+        "compressed_tokens": 4000,
+        "phase": 1,
+        "summary": "Test session",
+        "key_decisions": [],
+        "outcomes": [],
+        "high_value_items": [],
+        "compression_ratio": 2.50
+      }
+    ],
     "session_schema": {
       "id": "uuid",
       "session_id": "",
@@ -444,7 +473,7 @@
     "result_aggregation": "combined_ranked"
   },
   "metrics": {
-    "total_compressions": 0,
+    "total_compressions": 1,
     "total_pattern_extractions": 0,
     "average_compression_ratio": 0.0,
     "working_memory_evictions": 0,
