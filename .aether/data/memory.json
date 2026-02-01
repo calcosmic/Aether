@@ -381,9 +381,11 @@
       "compressed_at": "ISO-8601",
       "original_tokens": 0,
       "compressed_tokens": 0,
+      "compression_ratio": 0.0,
       "phase": null,
       "summary": "",
       "key_decisions": [],
+      "outcomes": [],
       "high_value_items": []
     },
     "eviction_policy": "LRU"
