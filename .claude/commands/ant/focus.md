@@ -27,7 +27,35 @@ fi
 focus_area="$1"
 ```
 
-## Step 2: Emit FOCUS Pheromone
+## Step 2: Check Colony State for Emergence Guard
+
+```bash
+# Check colony state for emergence guard
+COLONY_STATE=".aether/data/COLONY_STATE.json"
+if [ -f "$COLONY_STATE" ]; then
+    colony_state=$(jq -r '.colony_status.state' "$COLONY_STATE")
+
+    # Block Queen intervention during EXECUTING state (emergence period)
+    if [ "$colony_state" = "EXECUTING" ]; then
+        echo "⚠️  Colony is EXECUTING - Queen intervention blocked"
+        echo ""
+        echo "The colony is currently in emergence mode. Worker Ants are working"
+        echo "autonomously based on existing pheromone signals."
+        echo ""
+        echo "Phase boundaries are the only time for direction changes."
+        echo ""
+        echo "Options:"
+        echo "  - Wait for VERIFYING state (phase boundary check-in)"
+        echo "  - Use FEEDBACK pheromone: /ant:feedback \"message\" (provides input without breaking emergence)"
+        echo "  - Review colony status: /ant:status"
+        echo ""
+        echo "Current state: EXECUTING"
+        exit 1
+    fi
+fi
+```
+
+## Step 3: Emit FOCUS Pheromone
 
 Create the FOCUS pheromone signal:
 ```bash
@@ -59,7 +87,7 @@ jq --arg id "$pheromone_id" \
 atomic_write_from_file .aether/data/pheromones.json /tmp/pheromones.tmp
 ```
 
-## Step 3: Present Results
+## Step 4: Present Results
 
 Show the Queen (user) the focus pheromone emission:
 
