@@ -230,7 +230,7 @@
     ]
   },
   "meta_learning": {
-    "spawn_outcomes": {},
+    "spawn_outcomes": [],
     "specialist_confidence": {},
     "last_updated": null
   },
@@ -247,16 +247,35 @@
     "total_execution_time_seconds": 0,
     "phases_completed": 0,
     "total_spawns": 0,
-    "successful_spawns": 0,
+    "successful_spawns": 1,
     "failed_spawns": 0,
     "avg_spawn_duration_seconds": 0
   },
   "spawn_tracking": {
     "depth": 0,
-    "total_spawns": 0,
+    "total_spawns": 1,
     "spawn_history": [],
     "failed_specialist_types": [],
     "cooldown_specialists": [],
-    "circuit_breaker_history": []
+    "circuit_breaker_history": [
+      {
+        "specialist": "database_specialist",
+        "failures": 1,
+        "reason": "Connection timeout",
+        "timestamp": "2026-02-01T18:52:56Z"
+      },
+      {
+        "specialist": "database_specialist",
+        "failures": 1,
+        "reason": "Connection timeout",
+        "timestamp": "2026-02-01T18:52:56Z"
+      },
+      {
+        "specialist": "database_specialist",
+        "failures": 1,
+        "reason": "Connection timeout",
+        "timestamp": "2026-02-01T18:52:56Z"
+      }
+    ]
   }
 }
