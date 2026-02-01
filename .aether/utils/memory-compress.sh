@@ -283,6 +283,53 @@ trigger_phase_boundary_compression() {
     return 0
 }
 
+# Check if Working Memory exceeds 80% capacity threshold
+# Who calls: auto_compress_if_needed()
+# When: Before adding new Working Memory items
+# Arguments: none
+# Returns: 1 if compression needed, 0 if not
+# Side effects: None (read-only check)
+check_token_threshold() {
+    local current_tokens=$(jq -r '.working_memory.current_tokens' "$MEMORY_FILE")
+    local max_capacity=$(jq -r '.working_memory.max_capacity_tokens' "$MEMORY_FILE")
+    local threshold=$((max_capacity * 80 / 100))
+
+    if [ "$current_tokens" -ge "$threshold" ]; then
+        return 1  # Compression needed
+    else
+        return 0  # No compression needed
+    fi
+}
+
+# Auto-compress if token threshold exceeded
+# Who calls: add_working_memory_item() in memory-ops.sh (future integration)
+# When: Working Memory reaches 80% capacity
+# Arguments: none
+# Returns: 1 if compression needed (caller must coordinate with Architect Ant), 0 if not
+# Side effects: Prepares compression data if threshold exceeded
+auto_compress_if_needed() {
+    # Check threshold first
+    if ! check_token_threshold; then
+        return 0  # No compression needed
+    fi
+
+    # Threshold exceeded: get current phase and prepare data
+    # Use absolute path for COLONY_STATE.json
+    local colony_state_file="${MEMORY_COMPRESS_DIR}/../data/COLONY_STATE.json"
+    if [ ! -f "$colony_state_file" ]; then
+        colony_state_file="$(pwd)/.aether/data/COLONY_STATE.json"
+    fi
+
+    local current_phase=$(jq -r '.colony_status.current_phase // "1"' "$colony_state_file")
+
+    # Prepare compression data for Architect Ant
+    prepare_compression_data "$current_phase"
+
+    # Return signal that compression is needed
+    # Note: Caller must coordinate with Architect Ant to complete compression
+    return 1
+}
+
 # Get compression statistics
 # Arguments: none
 # Returns: Formatted statistics
