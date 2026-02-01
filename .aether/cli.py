@@ -322,7 +322,10 @@ async def run_command(args: argparse.Namespace) -> int:
     try:
         from .interactive_commands import InteractiveCommands
     except ImportError:
-        from aether.interactive_commands import InteractiveCommands
+        try:
+            from aether.interactive_commands import InteractiveCommands
+        except ImportError:
+            from interactive_commands import InteractiveCommands
 
     commands = InteractiveCommands()
 
@@ -449,7 +452,10 @@ async def run_command(args: argparse.Namespace) -> int:
         try:
             from .memory.triple_layer_memory import TripleLayerMemory
         except ImportError:
-            from aether.memory.triple_layer_memory import TripleLayerMemory
+            try:
+                from aether.memory.triple_layer_memory import TripleLayerMemory
+            except ImportError:
+                from memory.triple_layer_memory import TripleLayerMemory
 
         # Get memory from commands if available
         if not hasattr(commands, 'memory_layer') or commands.memory_layer is None:

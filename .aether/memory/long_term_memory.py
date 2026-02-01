@@ -165,8 +165,14 @@ class LongTermMemory:
             "category_counts": {cat: 0 for cat in self.CATEGORIES}
         }
 
-        # Load from storage
-        asyncio.create_task(self._load_from_storage())
+        # Load from storage (only if event loop is running)
+        self._loaded = False
+        try:
+            loop = asyncio.get_running_loop()
+            asyncio.create_task(self._load_from_storage())
+        except RuntimeError:
+            # No event loop running - will load lazily when needed
+            pass
 
     async def _load_from_storage(self):
         """Load patterns from persistent storage"""

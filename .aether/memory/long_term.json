@@ -1,0 +1,22 @@
+{
+  "tech_stack": {},
+  "conventions": {},
+  "patterns": {
+    "testing_strategy": {
+      "pattern_id": "patterns_eaab8635",
+      "category": "patterns",
+      "key": "testing_strategy",
+      "value": "Jest + Cypress combination for full coverage",
+      "occurrences": 1,
+      "confidence": 0.85,
+      "created_at": "2026-02-01T12:07:19.385141",
+      "updated_at": "2026-02-01T12:07:19.385142",
+      "metadata": {}
+    }
+  },
+  "errors": {},
+  "best_practices": {},
+  "anti_patterns": {},
+  "preferences": {},
+  "learnings": {}
+}
