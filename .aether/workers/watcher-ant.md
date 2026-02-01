@@ -231,6 +231,41 @@ if ! can_spawn; then
 fi
 ```
 
+### Check Same-Specialist Cache
+
+Before spawning, verify we haven't already spawned this specialist type for this task:
+
+```bash
+# Check for existing spawns of same specialist for same task
+COLONY_STATE=".aether/data/COLONY_STATE.json"
+SPECIALIST_TYPE="database_specialist"  # Example - use your detected specialist
+TASK_CONTEXT="Database schema migration"  # Example - use your task context
+
+existing_spawn=$(jq -r "
+  .spawn_tracking.spawn_history |
+  map(select(.specialist == \"$SPECIALIST_TYPE\" and .task == \"$TASK_CONTEXT\" and .outcome == \"pending\")) |
+  length
+" "$COLONY_STATE")
+
+if [ "$existing_spawn" -gt 0 ]; then
+  echo "Specialist $SPECIALIST_TYPE already spawned for this task"
+  echo "Waiting for existing specialist to complete"
+  # Don't spawn - wait for existing specialist
+fi
+```
+
+### Circuit Breaker Checks
+
+The `can_spawn()` function now checks:
+1. **Spawn budget**: current_spawns < 10 per phase
+2. **Spawn depth**: depth < 3 (prevents infinite chains)
+3. **Circuit breaker**: trips < 3 and cooldown expired
+
+If circuit breaker is triggered:
+- 3 failed spawns of same specialist type
+- 30-minute cooldown period
+- Error message shows which specialist is blocked and when cooldown expires
+
 ### Spawn Specialist via Task Tool
 
 When spawning a specialist, use this template:
@@ -418,9 +453,22 @@ $CONSTRAINTS"
 ## Circuit Breakers
 
 Stop spawning if:
-- 3 failed spawns → cooldown
-- Depth limit 3 → consolidate validation
-- Phase spawn limit (10) → complete current validation
+- **3 failed spawns** → Cooldown period triggered
+- **Depth limit 3 reached** → Consolidate work at current level
+- **Phase spawn limit (10)** → Complete current work first
+- **Same-specialist cache hit** → Wait for existing specialist
+
+### Circuit Breaker Reset
+
+Circuit breaker auto-resets after 30-minute cooldown.
+To manually reset, use:
+
+```bash
+source .aether/utils/circuit-breaker.sh
+reset_circuit_breaker
+```
+
+This is useful if you've resolved the underlying issue and want to retry spawns.
 
 ## Example Behavior
 
