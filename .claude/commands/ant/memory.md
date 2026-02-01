@@ -1,389 +1,272 @@
 ---
 name: ant:memory
-description: View Queen Ant Colony memory - learned preferences, pheromone patterns
+description: Colony memory operations (search, status, verify, compress)
 ---
 
 <objective>
-Display colony's learned patterns from pheromone signals including focus topics, avoid patterns, and feedback categories.
+Provide Queen with comprehensive memory operations:
+- Search across all three memory layers with relevance ranking
+- View memory statistics and usage
+- Verify 200k token limit enforcement
+- Trigger manual compression of Working Memory
 </objective>
 
 <process>
-You are the **Queen Ant Colony** displaying learned patterns and memory.
+You are the **Queen Ant Colony** managing colony memory.
 
-## Step 1: Load Colony State
+## Step 1: Parse Subcommand
 
-```python
-import json
-from datetime import datetime
-from collections import Counter
-
-with open('.aether/COLONY_STATE.json', 'r') as f:
-    state = json.load(f)
-
-pheromones = state.get('pheromones', [])
-feedback_history = state.get('feedback_history', {})
-error_ledger = state.get('error_ledger', {})
-learned_patterns = state.get('learned_patterns', {})
+The user provides a subcommand and optional arguments:
+```bash
+subcommand="$1"  # search, status, verify, compress
+arg1="$2"        # query for search, or empty
+arg2="$3"        # optional limit for search
 ```
 
-## Step 2: Display Header
+## Step 2: Execute Subcommand
 
-```
-🐜 Queen Ant Colony - Learned Patterns & Memory
+### Subcommand: search
+Search all three memory layers for query:
+```bash
+# Source memory search utilities
+source .aether/utils/memory-search.sh
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-```
+# Get query argument
+query="$1"
+limit="${2:-20}"
 
-## Step 3: Analyze Focus Patterns
+# Validate query provided
+if [ -z "$query" ]; then
+  echo "Usage: /ant:memory search \"<query>\" [limit]"
+  exit 1
+fi
 
-```python
-# Group focus pheromones by topic
-focus_topics = []
-
-for p in pheromones:
-    if p['signal_type'] == 'FOCUS':
-        content = p['content'].lower()
-        occurrences = p.get('metadata', {}).get('occurrences', 1)
-        focus_topics.append((content, occurrences))
-
-# Count occurrences
-topic_counts = Counter([topic for topic, _ in focus_topics])
+# Search across all layers
+search_memory "$query" "$limit"
 ```
 
-Display:
+### Subcommand: status
+Show memory statistics:
+```bash
+# Source memory search utilities
+source .aether/utils/memory-search.sh
 
-```
-LEARNED PREFERENCES:
-
-FOCUS TOPICS:
-```
-
-```python
-if topic_counts:
-    for topic, count in topic_counts.most_common():
-        if count >= 3:
-            print(f"  ✓ {topic} ({count} occurrences) - PREFERENCE LEARNED")
-        elif count == 2:
-            print(f"  • {topic} ({count} occurrences) - Pattern emerging")
-        else:
-            print(f"  • {topic} ({count} occurrence)")
-else:
-    print("  No focus patterns yet")
+# Get memory status
+get_memory_status
 ```
 
-## Step 4: Analyze Avoid Patterns (Redirects)
+### Subcommand: verify
+Verify 200k token limit enforcement:
+```bash
+# Source memory search utilities
+source .aether/utils/memory-search.sh
 
-```python
-# Group redirect pheromones
-avoid_patterns = []
+# Verify token limit
+verify_token_limit
+exit_code=$?
 
-for p in pheromones:
-    if p['signal_type'] == 'REDIRECT':
-        content = p['content'].lower()
-        occurrences = p.get('metadata', {}).get('occurrences', 1)
-        avoid_patterns.append((content, occurrences))
-
-pattern_counts = Counter([pattern for pattern, _ in avoid_patterns])
+echo ""
+echo "Max capacity tokens: 200000"
+echo "Compression triggers at 80% (160000 tokens) to prevent overflow"
+exit $exit_code
 ```
 
-Display:
+### Subcommand: compress
+Trigger manual compression of Working Memory:
+```bash
+# Source memory compression utilities
+source .aether/utils/memory-compress.sh
 
-```
-AVOID PATTERNS:
-```
+# Get current phase from COLONY_STATE.json
+current_phase=$(jq -r '.colony_status.current_phase // "1"' .aether/data/COLONY_STATE.json)
 
-```python
-if pattern_counts:
-    for pattern, count in pattern_counts.most_common():
-        if count >= 3:
-            print(f"  ✓ {pattern} ({count} occurrences) - CONSTRAINT ENFORCED")
-        elif count == 2:
-            print(f"  • {pattern} ({count} occurrences) - One more becomes constraint")
-        else:
-            print(f"  • {pattern} ({count} occurrence)")
-else:
-    print("  No avoid patterns yet")
-```
+# Prepare compression data
+temp_file=$(prepare_compression_data "$current_phase")
 
-## Step 5: Display Constraints from Error Ledger
-
-```python
-constraints = {k: v for k, v in error_ledger.items() if v.get('category') == 'constraint'}
-```
-
-```
-ACTIVE CONSTRAINTS:
-```
-
-```python
-if constraints:
-    for pattern, constraint in constraints.items():
-        print(f"  ⚠️  {constraint.get('pattern', pattern)}")
-        print(f"    Created: {constraint.get('became_constraint_at', 'N/A')}")
-        print(f"    Severity: {constraint.get('severity', 'high').upper()}")
-else:
-    print("  No constraints yet (need 3+ redirects on same pattern)")
+if [ $? -eq 0 ]; then
+  echo "Working Memory data prepared for compression: $temp_file"
+  echo ""
+  echo "NOTE: Manual compression requires Architect Ant (LLM) to apply DAST compression."
+  echo "The prepared file contains Working Memory items ready for compression."
+  echo ""
+  echo "To complete compression:"
+  echo "1. Architect Ant reads: $temp_file"
+  echo "2. Architect Ant applies DAST compression (2.5x ratio)"
+  echo "3. Architect Ant outputs compressed JSON"
+  echo "4. Run: trigger_phase_boundary_compression $current_phase '<compressed_json>'"
+else
+  echo "Working Memory is empty or below compression threshold. No compression needed."
+fi
 ```
 
-## Step 6: Display Feedback Summary
+## Step 3: Present Results
 
-```
-FEEDBACK CATEGORIES:
-```
+Format output based on subcommand:
 
-```python
-if feedback_history:
-    for category, data in feedback_history.items():
-        total = data.get('count', 0)
-        positive = data.get('positive', 0)
-        negative = data.get('negative', 0)
-
-        print(f"  {category.upper()}: {total} total")
-
-        if positive > 0:
-            print(f"    {positive} positive")
-        if negative > 0:
-            print(f"    {negative} negative")
-
-        if positive >= 5:
-            print(f"    → Best practice established")
-
-        if category == 'quality' and negative >= 3:
-            print(f"    → Quality intensified")
-
-        # Show recent feedback
-        recent = data.get('recent', [])
-        if recent:
-            print(f"    Recent: '{recent[-1]['message']}'")
-else:
-    print("  No feedback history yet")
+**For search:**
+```json
+[
+  {
+    "id": "wm_...",
+    "content": "matching content",
+    "layer": "working_memory",
+    "relevance": 0.7,
+    ...
+  },
+  ...
+]
 ```
 
-## Step 7: Display Learning Status
-
+**For status:**
 ```
-LEARNING STATUS:
-```
+MEMORY STATUS
 
-```python
-# Calculate learning metrics
-total_focus = sum(topic_counts.values())
-strong_patterns = sum(1 for count in topic_counts.values() if count >= 3)
-total_redirect = sum(pattern_counts.values())
-constraints_count = len(constraints)
-total_feedback = sum(data.get('count', 0) for data in feedback_history.values())
+Working Memory:
+  Items: {count}
+  Tokens: {current} / {max} (200,000) ({percent}%)
+  Eviction Threshold: {threshold} tokens (80%)
+  Max Capacity: 200,000 tokens (hard limit)
 
-print(f"  Focus patterns learned: {strong_patterns}")
-print(f"  Constraints enforced: {constraints_count}")
-print(f"  Total feedback processed: {total_feedback}")
-print(f"  Colony maturity: {'early': 'EARLY', 'developing': 'DEVELOPING', 'mature': 'MATURE'}.get(
-    'mature' if strong_patterns >= 5 else 'developing' if strong_patterns >= 2 else 'early'
-)}")
-```
+Short-term Memory:
+  Sessions: {current} / {max} ({percent}%)
+  Compression Ratio: 2.5x target
 
-## Step 8: Display How Learning Works
+Long-term Memory:
+  Patterns: {count}
+  Types: success={n}, failure={n}, preference={n}, constraint={n}
 
-```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-HOW LEARNING WORKS:
-
-Focus Pheromones:
-  • 1 occurrence: Topic noted
-  • 2 occurrences: Pattern emerging
-  • 3+ occurrences: Preference learned
-
-Redirect Pheromones:
-  • 1 occurrence: Logged in ERROR_LEDGER
-  • 2 occurrences: Pattern detected
-  • 3+ occurrences: Constraint created and enforced
-
-Feedback:
-  • 5+ positive: Best practice established
-  • 3+ quality issues: Verifier intensifies
-  • 3+ speed issues: Optimization prioritized
+Metrics:
+  Total Compressions: {n}
+  Average Compression Ratio: {ratio}
+  Working Memory Evictions: {n}
+  Short-term Evictions: {n}
+  Pattern Extractions: {n}
 ```
 
-## Step 9: Display Next Steps
-
+**For verify:**
 ```
-📋 NEXT STEPS:
+TOKEN LIMIT VERIFICATION
+Max Capacity: 200000 tokens
+Current Usage: {current} tokens ({percent}%)
+Compression Threshold: 160000 tokens (80%)
+Status: PASS - Current usage within safe limits
+```
 
-  1. /ant:status            - Check colony status
-  2. /ant:focus <area>      - Add focus (teaches preferences)
-  3. /ant:redirect <pattern> - Avoid pattern (teaches constraints)
-  4. /ant:feedback "<msg>"   - Provide feedback
+**For compress:**
+```
+Working Memory data prepared for compression: /tmp/working_memory_for_compression_{phase}.json
 
-💡 MEMORY TIP:
-   Colony learns from your signals over time.
-   Repeated patterns become learned preferences that
-   influence autonomous decisions.
+NOTE: Manual compression requires Architect Ant (LLM) to apply DAST compression.
+The prepared file contains Working Memory items ready for compression.
 
-🔄 CONTEXT: Safe to continue - memory display only
+To complete compression:
+1. Architect Ant reads: /tmp/working_memory_for_compression_{phase}.json
+2. Architect Ant applies DAST compression (2.5x ratio)
+3. Architect Ant outputs compressed JSON
+4. Run: trigger_phase_boundary_compression {phase} '<compressed_json>'
+```
+
+## Step 4: Handle Errors
+
+**Invalid subcommand:**
+```bash
+echo "Error: Unknown subcommand '$subcommand'"
+echo ""
+echo "Available subcommands:"
+echo "  search \"<query>\" [limit]  - Search all memory layers"
+echo "  status                      - Show memory statistics"
+echo "  verify                      - Verify 200k token limit"
+echo "  compress                    - Trigger manual compression"
+exit 1
+```
+
+**Missing arguments:**
+```bash
+case "$subcommand" in
+  search)
+    if [ -z "$arg1" ]; then
+      echo "Error: search requires a query"
+      echo "Usage: /ant:memory search \"<query>\" [limit]"
+      exit 1
+    fi
+    ;;
+esac
 ```
 
 </process>
 
 <context>
-@.aether/pheromone_system.py
-@.aether/memory/triple_layer_memory.py
-@.aether/error_prevention.py
+# AETHER TRIPLE-LAYER MEMORY
 
-Learning Mechanisms:
-- **Focus patterns**: 3+ occurrences → learned preference
-- **Redirect patterns**: 3+ occurrences → constraint enforced
-- **Feedback patterns**: 5+ positive → best practice
+## Memory Architecture
 
-Memory Storage:
-- Short-term: Recent pheromones and feedback
-- Long-term: Learned patterns and constraints
-- Error ledger: Constraints and flagged issues
+The colony uses three memory layers:
+
+1. **Working Memory** - Immediate context, 200k token capacity
+2. **Short-term Memory** - Compressed sessions, max 10 sessions
+3. **Long-term Memory** - Persistent patterns, associative links
+
+## 200k Token Limit
+
+Working Memory has a **hard limit of 200,000 tokens**:
+- Max capacity: 200,000 tokens
+- Compression threshold: 160,000 tokens (80%)
+- When threshold is reached, compression is triggered automatically
+- Compression prevents overflow by moving data to Short-term Memory
+
+This is enforced by the compression system:
+- `auto_compress_if_needed()` checks threshold before adding items
+- Compression at 80% ensures we never exceed 200k tokens
+
+## Search Ranking
+
+Search results are ranked by:
+1. **Layer priority**: Working Memory (0) > Short-term (1) > Long-term (2)
+2. **Relevance score**: exact match = 1.0, contains match = 0.7
+3. **Recency**: more recent items appear first
+
+## Compression
+
+Compression uses **DAST (Discriminative Abstractive Summarization Technique)**:
+- Preserves: key_decisions, outcomes, learned_patterns, blockers_encountered, solutions_found
+- Discards: intermediate_steps, failed_attempts, redundant_context
+- Target ratio: 2.5x compression
+
+Compression triggers:
+1. **Phase boundary**: When phase completes
+2. **Token threshold**: When Working Memory exceeds 80% (160k tokens)
+3. **Manual**: Via `/ant:memory compress`
+
 </context>
 
 <reference>
-# `/ant:memory` - View Colony Memory
+# Memory Search Functions
 
-## What It Shows
+The following functions are available in `.aether/utils/memory-search.sh`:
 
-Displays the colony's learned patterns and preferences from pheromone signals.
+## Cross-layer Search
+- `search_memory(query, [limit])` - Search all three layers, combine and rank results
+- `search_working_memory(query, [limit])` - Search Working Memory, update access metadata
+- `search_short_term_memory(query, [limit])` - Search Short-term Memory sessions
+- `search_long_term_memory(query, [limit])` - Search Long-term Memory patterns
 
-## Memory Sections
+## Status and Verification
+- `get_memory_status()` - Display formatted memory statistics
+- `verify_token_limit()` - Verify 200k token limit enforcement
 
-### 1. Learned Preferences
+## Memory Compression
 
-Shows what the colony has learned from Queen's pheromone patterns:
+The following functions are available in `.aether/utils/memory-compress.sh`:
 
-```
-🧠 LEARNED PREFERENCES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- `prepare_compression_data(phase)` - Prepare Working Memory for compression
+- `trigger_phase_boundary_compression(phase, compressed_json)` - Process compressed result
+- `create_short_term_session(phase, compressed_json)` - Store compressed session
+- `clear_working_memory()` - Clear Working Memory after compression
 
-FOCUS TOPICS (What Queen prioritizes)
-  WebSocket security (3 occurrences)
-  message reliability (2 occurrences)
-  authentication (1 occurrence)
-  test coverage (1 occurrence)
-
-AVOID PATTERNS (What Queen redirects away from)
-  string concatenation for SQL (2 occurrences) → ⚠️ One more becomes constraint
-  callback patterns (1 occurrence)
-  MongoDB for this project (1 occurrence)
-
-FEEDBACK CATEGORIES
-  Quality: 12 positive, 3 negative
-  Speed: 5 "too slow", 8 "good pace"
-  Direction: 2 "wrong approach" corrections
-```
-
-### 2. Best Practices
-
-Shows best practices learned from successful executions:
-
-```
-✅ BEST PRACTICES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-SPAWNING
-  [bp-1] Spawn specialists when capability gap > 30%
-  [bp-2] Max subagent depth 3 prevents complexity explosion
-  [bp-3] Terminating subagents after task completion frees resources
-
-COMMUNICATION
-  [bp-4] Peer-to-peer coordination reduces bottleneck
-  [bp-5] Pheromone signals guide without commands
-  [bp-6] Focus on areas, not specific implementations
-
-EXECUTION
-  [bp-7] Implement in priority order based on focus pheromones
-  [bp-8] Test critical paths before edge cases
-  [bp-9] Compress memory between phases
-```
-
-### 3. Anti-Patterns
-
-Shows what to avoid (learned from redirects and errors):
-
-```
-❌ ANTI-PATTERNS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-APPROACHES TO AVOID
-  [ap-1] String concatenation for SQL (security risk)
-  [ap-2] Callback hell (use async/await)
-  [ap-3] Monolithic architecture (prevents parallel development)
-
-BEHAVIORS TO AVOID
-  [ap-4] Spawning without clear purpose (resource waste)
-  [ap-5] Ignoring redirect pheromones (leads to constraints)
-  [ap-6] Exceeding subagent depth limit (confusion)
-```
-
-## Pheromone Learning
-
-The colony learns from pheromone patterns:
-
-### Focus Learning
-
-```
-After 3+ focuses on "WebSocket security":
-  → Pattern: "Queen prioritizes WebSocket security"
-  → Behavior: Executor always includes security in WebSocket work
-  → Association: WebSocket ←→ security (strong link)
-```
-
-### Redirect Learning
-
-```
-After 1 redirect:
-  → Logged in ERROR_LEDGER
-
-After 2 redirects:
-  → Pattern detected
-
-After 3 redirects:
-  → FLAGGED_ISSUE created
-  → Constraint created: validate_approach_before_use
-  → Blocks approach BEFORE execution
-```
-
-### Feedback Learning
-
-```
-Positive feedback ("Great work"):
-  → Pattern recorded
-  → Reused in similar contexts
-
-Negative feedback ("Too many bugs"):
-  → Verifier intensifies testing
-  → Pattern: "Increase scrutiny when quality feedback"
-```
-
-## When Patterns Form
-
-- **3+ focuses** on same topic → Preference learned
-- **3+ redirects** on same pattern → Constraint created
-- **5+ positive feedback** → Best practice established
-
-## Research Foundation
-
-Based on Phase 5 research:
-- **Verification Feedback Loops**: Learning from feedback improves 39%
-- **Explainable Verification**: Understanding why patterns work
-
-Based on Phase 4 research:
-- **Adaptive Personalization**: Systems learn user preferences
-- **Anticipatory Context**: Predicting needs based on patterns
-
-## Related Commands
-
-```
-/ant:status    # Colony status with memory stats
-/ant:focus     # Add focus pheromone (teaches preferences)
-/ant:redirect  # Add redirect pheromone (teaches constraints)
-```
 </reference>
 
 <allowed-tools>
-Read
-Write
 Bash
+Write
+Read
 </allowed-tools>
