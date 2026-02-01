@@ -183,15 +183,6 @@ def main():
     )
 
     # ============================================================
-    # /ant:memory
-    # ============================================================
-    memory_parser = subparsers.add_parser(
-        "memory",
-        help="Show learned patterns and memory",
-        description="Display colony memory including learned preferences and constraints."
-    )
-
-    # ============================================================
     # /ant:colonize
     # ============================================================
     colonize_parser = subparsers.add_parser(
@@ -410,14 +401,6 @@ async def run_command(args: argparse.Namespace) -> int:
     # ============================================================
     elif args.command == "status":
         output = await commands.status()
-        print(output)
-        return 0
-
-    # ============================================================
-    # memory
-    # ============================================================
-    elif args.command == "memory":
-        output = await commands.memory()
         print(output)
         return 0
 

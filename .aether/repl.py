@@ -316,7 +316,10 @@ class AetherREPL:
                 try:
                     from .memory.triple_layer_memory import TripleLayerMemory
                 except ImportError:
-                    from aether.memory.triple_layer_memory import TripleLayerMemory
+                    try:
+                        from memory.triple_layer_memory import TripleLayerMemory
+                    except ImportError:
+                        from aether.memory.triple_layer_memory import TripleLayerMemory
 
                 # Get or create memory
                 if not hasattr(self.commands, 'memory_layer') or self.commands.memory_layer is None:
@@ -493,7 +496,10 @@ class AetherREPL:
 
 async def main():
     """Main entry point for standalone REPL"""
-    from .interactive_commands import InteractiveCommands
+    try:
+        from .interactive_commands import InteractiveCommands
+    except ImportError:
+        from interactive_commands import InteractiveCommands
 
     commands = InteractiveCommands()
     repl = AetherREPL(commands)

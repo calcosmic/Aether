@@ -50,6 +50,9 @@ class InteractiveCommands:
         # Initialize project
         result = await self.system.init(goal)
 
+        # Mark as started so other commands work
+        self.started = True
+
         # Get phase plan
         plan = await self.system.phase_commands.plan()
         phases = plan.get("phases", [])
@@ -971,14 +974,19 @@ class InteractiveCommands:
         except:
             return time_str
 
-    def _format_duration(self, start_str: str, end_str: str) -> str:
-        """Format duration between two times"""
+    def _format_duration(self, start_str: str, end_str: str = None) -> str:
+        """Format duration between two times (or from start to now if end not provided)"""
         try:
-            start = datetime.fromisoformat(start_str)
-            end = datetime.fromisoformat(end_str)
+            from datetime import datetime as dt
+            start = dt.fromisoformat(start_str)
+            end = dt.fromisoformat(end_str) if end_str else dt.now()
             duration = end - start
             minutes = int(duration.total_seconds() / 60)
-            return f"{minutes} minutes"
+            if minutes < 60:
+                return f"{minutes} minutes"
+            hours = minutes // 60
+            mins = minutes % 60
+            return f"{hours}h {mins}m"
         except:
             return "Unknown"
 
