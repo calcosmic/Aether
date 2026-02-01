@@ -103,7 +103,8 @@ Recent decisions affecting current work:
 - **Cross-Layer Memory Search**: Implemented search_memory(), search_working_memory(), search_short_term_memory(), search_long_term_memory() with relevance ranking. Exact match = 1.0, contains = 0.7. Layer priority: Working (0) > Short-term (1) > Long-term (2). Updates access metadata via atomic writes.
 - **Memory Status and Verification**: Implemented get_memory_status() displaying all three layers with 200k token limit, and verify_token_limit() confirming max_capacity_tokens=200000 and compression at 80% (160k tokens).
 - **Queen Memory Command**: Created /ant:memory command with search, status, verify, and compress subcommands for Queen interaction with memory system.
-- **State Machine Foundation**: Implemented state-machine.sh with 9 valid state transitions using case statement for bash 3.x compatibility (macOS). Functions: get_current_state, get_valid_states, is_valid_state, is_valid_transition, validate_transition. State history remains under colony_status per current schema.
+- **State Machine Foundation**: Implemented state-machine.sh with 9 valid state transitions using case statement for bash 3.x compatibility (macOS). Functions: get_current_state, get_valid_states, is_valid_state, is_valid_transition, validate_transition. State history stored in state_machine.state_history.
+- **Pheromone-Triggered State Transitions**: Implemented transition_state() function with file locking, atomic writes, and pheromone trigger recording. Acquires lock before transition, validates with is_valid_transition(), updates COLONY_STATE.json atomically via jq, records metadata (from, to, trigger, timestamp, checkpoint) in state_machine.state_history. Trap cleanup ensures lock release on errors.
 
 ### Pending Todos
 
@@ -131,8 +132,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-01 (Phase 5 Plan 1: State Machine Foundation)
-Stopped at: Completed 05-01-PLAN.md (state-machine.sh with transition validation)
+Last session: 2026-02-01 (Phase 5 Plan 2: Pheromone-Triggered State Transitions)
+Stopped at: Completed 05-02-PLAN.md (transition_state with locking and atomic writes)
 Resume file: None
 
 **Progress Summary:**
@@ -140,4 +141,4 @@ Resume file: None
 - ✅ Phase 2: Worker Ant Castes (9/9 tasks) - 6 caste prompts, spawning pattern, commands
 - ✅ Phase 3: Pheromone Communication (6/6 tasks) - FOCUS, REDIRECT, FEEDBACK emission, all Worker Ant response, verification complete
 - ✅ Phase 4: Triple-Layer Memory (5/5 plans) - Working Memory, DAST compression, LRU eviction, pattern extraction, associative links, compression triggers, cross-layer search complete
-- 🔄 Phase 5: Phase Boundaries (1/5 plans) - State machine foundation with transition validation complete
+- 🔄 Phase 5: Phase Boundaries (2/5 plans) - State machine foundation, pheromone-triggered transitions complete
