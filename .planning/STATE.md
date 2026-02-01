@@ -13,11 +13,11 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 3 of 10 (Pheromone Communication)
-Plan: 4 of 8 tasks in current phase
+Plan: 5 of 8 tasks in current phase
 Status: In progress
-Last activity: 2026-02-01 — Added pheromone response sections to Colonizer, Route-setter, and Builder Ants
+Last activity: 2026-02-01 — Added pheromone response sections to Watcher, Scout, and Architect Ants
 
-Progress: [████░░░░░░] 38%
+Progress: [█████░░░░░] 50%
 
 ## Recent Changes
 
@@ -90,6 +90,7 @@ Recent decisions affecting current work:
 - **Standalone Architecture**: Aether is its own framework, not dependent on CDS or any external system
 - **Pheromone Command Pattern**: All pheromone commands (init, focus, redirect, feedback) follow bash/jq pattern with atomic-write for consistency and safety
 - **FEEDBACK Pheromone Implementation**: Rewrote feedback.md from Python to bash/jq to match init.md pattern, uses decay_rate: 21600 (6-hour half-life)
+- **Pheromone Response in Worker Ants**: All 6 Worker Ants (Colonizer, Route-setter, Builder, Watcher, Scout, Architect) now have pheromone reading and interpretation sections with caste-specific sensitivities, decay calculations, and response thresholds
 
 ### Pending Todos
 
@@ -117,11 +118,11 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-01 (Phase 3 Plan 4 - Pheromone response in Worker Ants)
-Stopped at: Completed Phase 3 Plan 4 (Worker Ant pheromone response), ready for Plan 5
+Last session: 2026-02-01 (Phase 3 Plan 5 - Worker Ant pheromone response for Watcher, Scout, Architect)
+Stopped at: Completed Phase 3 Plan 5 (Remaining Worker Ants pheromone response), ready for Plan 6
 Resume file: .planning/phases/03-pheromone-communication/.continue-here.md
 
 **Progress Summary:**
 - ✅ Phase 1: Colony Foundation (8/8 tasks) - State schemas, file locking, atomic writes
 - ✅ Phase 2: Worker Ant Castes (9/9 tasks) - 6 caste prompts, spawning pattern, commands
-- 🔄 Phase 3: Pheromone Communication (4/8 tasks) - FOCUS, REDIRECT, FEEDBACK emission, and Worker Ant response complete
+- 🔄 Phase 3: Pheromone Communication (5/8 tasks) - FOCUS, REDIRECT, FEEDBACK emission, and all Worker Ant response complete
