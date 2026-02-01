@@ -248,6 +248,15 @@
     "phases_completed": 0,
     "total_spawns": 0,
     "successful_spawns": 0,
-    "failed_spawns": 0
+    "failed_spawns": 0,
+    "avg_spawn_duration_seconds": 0
+  },
+  "spawn_tracking": {
+    "depth": 0,
+    "total_spawns": 0,
+    "spawn_history": [],
+    "failed_specialist_types": [],
+    "cooldown_specialists": [],
+    "circuit_breaker_history": []
   }
 }
