@@ -372,7 +372,11 @@
         "key_decisions": [],
         "outcomes": [],
         "high_value_items": [],
-        "compression_ratio": 2.50
+        "compression_ratio": 2.50,
+        "metadata": {
+          "context": "",
+          "related_patterns": []
+        }
       }
     ],
     "session_schema": {
@@ -386,7 +390,11 @@
       "summary": "",
       "key_decisions": [],
       "outcomes": [],
-      "high_value_items": []
+      "high_value_items": [],
+      "metadata": {
+        "context": "",
+        "related_patterns": []
+      }
     },
     "eviction_policy": "LRU"
   },
