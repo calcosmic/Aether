@@ -763,8 +763,8 @@ class MapperAnt(WorkerAnt):
     }
     spawns = ["graph_builder", "search_agent", "pattern_matcher"]
 
-    def __init__(self, colony: 'Colony', memory_layer: Optional['TripleLayerMemory'] = None):
-        super().__init__(colony, memory_layer=memory_layer)
+    def __init__(self, colony: 'Colony', memory_layer: Optional['TripleLayerMemory'] = None, meta_learner: Optional[MetaLearner] = None):
+        super().__init__(colony, memory_layer=memory_layer, meta_learner=meta_learner)
         self.semantic_index: Dict[str, Any] = {}
         self.dependency_graph: Dict[str, List[str]] = {}
 
@@ -840,8 +840,8 @@ class PlannerAnt(WorkerAnt):
     }
     spawns = ["estimator", "dependency_analyzer", "risk_assessor"]
 
-    def __init__(self, colony: 'Colony', memory_layer: Optional['TripleLayerMemory'] = None):
-        super().__init__(colony, memory_layer=memory_layer)
+    def __init__(self, colony: 'Colony', memory_layer: Optional['TripleLayerMemory'] = None, meta_learner: Optional[MetaLearner] = None):
+        super().__init__(colony, memory_layer=memory_layer, meta_learner=meta_learner)
         self.current_plan: Optional[Dict] = None
         self.phases: List[Dict] = []
 
@@ -989,8 +989,8 @@ class ExecutorAnt(WorkerAnt):
     }
     spawns = ["language_specialist", "framework_specialist", "database_specialist"]
 
-    def __init__(self, colony: 'Colony', memory_layer: Optional['TripleLayerMemory'] = None):
-        super().__init__(colony, memory_layer=memory_layer)
+    def __init__(self, colony: 'Colony', memory_layer: Optional['TripleLayerMemory'] = None, meta_learner: Optional[MetaLearner] = None):
+        super().__init__(colony, memory_layer=memory_layer, meta_learner=meta_learner)
         self.current_files: List[str] = []
         self.implemented_features: List[str] = []
 
@@ -1358,8 +1358,8 @@ class VerifierAnt(WorkerAnt):
     }
     spawns = ["test_generator", "lint_agent", "security_scanner", "performance_tester"]
 
-    def __init__(self, colony: 'Colony', memory_layer: Optional['TripleLayerMemory'] = None):
-        super().__init__(colony, memory_layer=memory_layer)
+    def __init__(self, colony: 'Colony', memory_layer: Optional['TripleLayerMemory'] = None, meta_learner: Optional[MetaLearner] = None):
+        super().__init__(colony, memory_layer=memory_layer, meta_learner=meta_learner)
         self.tests_generated: int = 0
         self.bugs_found: int = 0
         self.issues: List[Dict] = []
@@ -1685,8 +1685,8 @@ class ResearcherAnt(WorkerAnt):
     }
     spawns = ["search_agent", "crawler", "documentation_reader", "api_explorer"]
 
-    def __init__(self, colony: 'Colony', memory_layer: Optional['TripleLayerMemory'] = None):
-        super().__init__(colony, memory_layer=memory_layer)
+    def __init__(self, colony: 'Colony', memory_layer: Optional['TripleLayerMemory'] = None, meta_learner: Optional[MetaLearner] = None):
+        super().__init__(colony, memory_layer=memory_layer, meta_learner=meta_learner)
         self.knowledge_base: Dict[str, Any] = {}
         self.research_cache: Dict[str, Any] = {}
 
@@ -1749,8 +1749,8 @@ class SynthesizerAnt(WorkerAnt):
     }
     spawns = ["analysis_agent", "pattern_matcher", "compression_agent"]
 
-    def __init__(self, colony: 'Colony', memory_layer: Optional['TripleLayerMemory'] = None):
-        super().__init__(colony, memory_layer=memory_layer)
+    def __init__(self, colony: 'Colony', memory_layer: Optional['TripleLayerMemory'] = None, meta_learner: Optional[MetaLearner] = None):
+        super().__init__(colony, memory_layer=memory_layer, meta_learner=meta_learner)
         self.patterns: List[Dict] = []
         self.best_practices: List[str] = []
         self.anti_patterns: List[str] = []
