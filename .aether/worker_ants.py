@@ -20,8 +20,10 @@ import re
 
 try:
     from .pheromone_system import PheromoneType, PheromoneSignal, PheromoneLayer, SensitivityProfile, SENSITIVITY_PROFILES
+    from .error_prevention import ErrorLedger, ErrorCategory, log_exception
 except ImportError:
     from pheromone_system import PheromoneType, PheromoneSignal, PheromoneLayer, SensitivityProfile, SENSITIVITY_PROFILES
+    from error_prevention import ErrorLedger, ErrorCategory, log_exception
 
 
 # ============================================================================
@@ -200,7 +202,7 @@ class WorkerAnt:
         "kubernetes": "devops_specialist",
     }
 
-    def __init__(self, colony: 'Colony'):
+    def __init__(self, colony: 'Colony', error_ledger: Optional[ErrorLedger] = None):
         self.colony = colony
         self.subagents: List[Subagent] = []
         self.current_task: Optional[str] = None
@@ -210,6 +212,10 @@ class WorkerAnt:
         self.resource_budget = ResourceBudget()
         self.spawning_history: List[SpawningDecision] = []
         self.active = True
+
+        # Error logging
+        self.error_ledger = error_ledger or colony.error_ledger if colony else None
+        self.agent_id = f"{self.caste}_ant_{id(self)}"
 
     async def detect_pheromones(self) -> List[PheromoneSignal]:
         """Detect relevant pheromones based on sensitivity"""
@@ -361,71 +367,95 @@ class WorkerAnt:
         This is the core of autonomous spawning - agents detect they
         lack capabilities and spawn appropriate specialists.
         """
-        # Check resource budget
-        if not self.resource_budget.can_spawn(depth):
-            # Circuit breaker triggered
-            if self.resource_budget.current_subagents >= self.resource_budget.max_subagents:
-                self.resource_budget.disable_spawning()
+        try:
+            # Check resource budget
+            if not self.resource_budget.can_spawn(depth):
+                # Circuit breaker triggered - log error
+                if self.resource_budget.current_subagents >= self.resource_budget.max_subagents:
+                    self.resource_budget.disable_spawning()
+                    if self.error_ledger:
+                        self.error_ledger.log_error(
+                            symptom="Spawning limit reached: max_subagents exceeded",
+                            error_type="SpawningLimitError",
+                            category=ErrorCategory.SPAWNING,
+                            function="spawn_specialist_autonomously",
+                            agent_id=self.agent_id,
+                            task_context=task.description,
+                            severity=ErrorSeverity.MEDIUM
+                        )
+                return None
+
+            # Analyze capability gaps
+            required = await self.analyze_task_requirements(task)
+            my_capabilities = set(self.capabilities)
+            gaps = required - my_capabilities
+
+            if not gaps:
+                # No gaps, can handle ourselves
+                return None
+
+            # Determine specialist type
+            specialist_type = await self.determine_specialist_type(gaps)
+
+            # Create inherited context
+            inherited = InheritedContext(
+                parent_agent_id=id(self),
+                parent_task=self.current_task or "unknown",
+                goal=self._get_current_goal(),
+                pheromone_signals=self.colony.pheromones.copy(),
+                working_memory=self._get_working_memory(),
+                relevant_code=await self._get_relevant_code(task),
+                constraints=self._get_constraints()
+            )
+
+            # Generate spawning reason
+            reason = f"Capability gaps detected: {', '.join(gaps)}. Need {specialist_type}"
+
+            # Spawn the specialist
+            specialist = Subagent(
+                name=f"autonomous_{specialist_type}_{len(self.subagents)}",
+                purpose=f"Address capability gaps: {', '.join(gaps)}",
+                parent=self,
+                spawned_at=datetime.now(),
+                inherited_context=inherited,
+                capabilities=required,  # Store as set of strings
+                depth=depth,
+                spawning_reason=reason
+            )
+
+            # Update resource budget
+            self.resource_budget.current_subagents += 1
+            self.subagents.append(specialist)
+            self.colony.register_subagent(specialist)
+
+            # Record spawning decision
+            decision = SpawningDecision(
+                timestamp=datetime.now(),
+                parent_agent=self.caste,
+                task=task.description,
+                capability_gaps=gaps,  # Use set of strings directly
+                specialist_type=specialist_type,
+                reason=reason,
+                depth=depth
+            )
+            self.spawning_history.append(decision)
+
+            self.last_activity = datetime.now()
+
+            return specialist
+
+        except Exception as e:
+            # Log spawning error
+            if self.error_ledger:
+                log_exception(
+                    self.error_ledger,
+                    e,
+                    symptom=f"Failed to spawn specialist for task: {task.description}",
+                    agent_id=self.agent_id,
+                    task_context=task.description,
+                    category=ErrorCategory.SPAWNING
+                )
             return None
-
-        # Analyze capability gaps
-        required = await self.analyze_task_requirements(task)
-        my_capabilities = set(self.capabilities)
-        gaps = required - my_capabilities
-
-        if not gaps:
-            # No gaps, can handle ourselves
-            return None
-
-        # Determine specialist type
-        specialist_type = await self.determine_specialist_type(gaps)
-
-        # Create inherited context
-        inherited = InheritedContext(
-            parent_agent_id=id(self),
-            parent_task=self.current_task or "unknown",
-            goal=self._get_current_goal(),
-            pheromone_signals=self.colony.pheromones.copy(),
-            working_memory=self._get_working_memory(),
-            relevant_code=await self._get_relevant_code(task),
-            constraints=self._get_constraints()
-        )
-
-        # Generate spawning reason
-        reason = f"Capability gaps detected: {', '.join(gaps)}. Need {specialist_type}"
-
-        # Spawn the specialist
-        specialist = Subagent(
-            name=f"autonomous_{specialist_type}_{len(self.subagents)}",
-            purpose=f"Address capability gaps: {', '.join(gaps)}",
-            parent=self,
-            spawned_at=datetime.now(),
-            inherited_context=inherited,
-            capabilities=required,  # Store as set of strings
-            depth=depth,
-            spawning_reason=reason
-        )
-
-        # Update resource budget
-        self.resource_budget.current_subagents += 1
-        self.subagents.append(specialist)
-        self.colony.register_subagent(specialist)
-
-        # Record spawning decision
-        decision = SpawningDecision(
-            timestamp=datetime.now(),
-            parent_agent=self.caste,
-            task=task.description,
-            capability_gaps=gaps,  # Use set of strings directly
-            specialist_type=specialist_type,
-            reason=reason,
-            depth=depth
-        )
-        self.spawning_history.append(decision)
-
-        self.last_activity = datetime.now()
-
-        return specialist
 
     async def delegate_or_handle(self, task: Task, depth: int = 0) -> Any:
         """
@@ -1039,6 +1069,9 @@ class Colony:
 
         # Autonomous spawning tracking
         self.spawning_decisions: List[SpawningDecision] = []
+
+        # Error prevention system
+        self.error_ledger = ErrorLedger()
 
         # Initialize Worker Ants
         self._init_worker_ants()

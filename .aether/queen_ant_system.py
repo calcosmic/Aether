@@ -31,6 +31,7 @@ try:
         create_phase_engine,
         PhaseCommands
     )
+    from .error_prevention import ErrorLedger
 except ImportError:
     from worker_ants import Colony, create_colony
     from pheromone_system import (
@@ -46,6 +47,7 @@ except ImportError:
         create_phase_engine,
         PhaseCommands
     )
+    from error_prevention import ErrorLedger
 
 
 class QueenAntSystem:
@@ -247,18 +249,69 @@ class QueenAntSystem:
             }
         }
 
-    async def errors(self) -> Dict[str, Any]:
+    async def errors(self, show_all: bool = False) -> Dict[str, Any]:
         """
         /ant:errors
 
         Show error ledger and flagged issues.
+
+        Args:
+            show_all: If True, show all errors. If False, show only flagged and unresolved.
         """
-        # This would integrate with the error prevention system
-        # For now, return placeholder
+        ledger = self.colony.error_ledger
+
+        if show_all:
+            # Show full error report
+            return {
+                "summary": ledger.get_summary(),
+                "flagged_patterns": [p.get_summary() for p in ledger.get_flagged_patterns()],
+                "unresolved_errors": [e.get_summary() for e in ledger.get_unresolved_errors()[:20]],
+                "recent_errors": [e.get_summary() for e in ledger.get_recent_errors(24)],
+                "status_report": ledger.get_status_report()
+            }
+        else:
+            # Show summary and flagged issues only
+            summary = ledger.get_summary()
+            flagged = ledger.get_flagged_patterns()
+
+            return {
+                "summary": summary,
+                "flagged_patterns": [p.get_summary() for p in flagged],
+                "unresolved_count": summary['unresolved_errors'],
+                "flagged_count": summary['flagged_patterns'],
+                "message": ledger.get_status_report() if flagged else "No flagged issues. System healthy."
+            }
+
+    async def error_flagged(self) -> Dict[str, Any]:
+        """
+        /ant:error-flagged
+
+        Show only flagged patterns (recurring issues).
+        """
+        ledger = self.colony.error_ledger
+        flagged = ledger.get_flagged_patterns()
+
+        if not flagged:
+            return {
+                "flagged_patterns": [],
+                "message": "No flagged patterns. System healthy."
+            }
+
         return {
-            "error_ledger": {},
-            "flagged_issues": [],
-            "message": "Error prevention system integration pending"
+            "flagged_patterns": [
+                {
+                    "pattern_id": p.pattern_id,
+                    "error_type": p.error_type,
+                    "category": p.category.value,
+                    "occurrences": p.occurrence_count,
+                    "flag_reason": p.flag_reason,
+                    "first_occurrence": p.first_occurrence.isoformat(),
+                    "last_occurrence": p.last_occurrence.isoformat(),
+                    "systematic_fix_deployed": p.fix_deployed
+                }
+                for p in flagged
+            ],
+            "total_flagged": len(flagged)
         }
 
     # ============================================================
