@@ -16,12 +16,7 @@
     "state_history": [],
     "current_phase": null,
     "phases_completed": [],
-    "queen_checkin": {
-      "phase": "5",
-      "status": "approved",
-      "timestamp": "2026-02-01T17:49:51Z",
-      "queen_decision": "continue"
-    }
+    "queen_checkin": null
   },
   "state_machine": {
     "valid_states": [

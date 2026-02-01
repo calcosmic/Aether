@@ -60,6 +60,18 @@
         "caste": null,
         "context": "test authentication"
       }
+    },
+    {
+      "id": "focus_1769968255",
+      "type": "FOCUS",
+      "strength": 0.9,
+      "created_at": "2026-02-01T17:50:55Z",
+      "decay_rate": 3600,
+      "metadata": {
+        "source": "queen",
+        "caste": null,
+        "context": "test area"
+      }
     }
   ],
   "pheromone_types": {
