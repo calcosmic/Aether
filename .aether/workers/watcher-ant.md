@@ -144,6 +144,76 @@ For critical work, spawn multiple specialist perspectives:
 | Quality | Quality Watcher | Maintainability, conventions |
 | Test Coverage | Test Watcher | Coverage, edge cases |
 
+## Capability Gap Detection
+
+Before attempting any task, assess whether you need specialist support.
+
+### Step 1: Extract Task Requirements
+
+Given: "{task_description}"
+
+Required capabilities:
+- Technical: [database, frontend, backend, api, security, testing, performance, devops]
+- Frameworks: [react, vue, django, fastapi, etc.]
+- Skills: [analysis, planning, implementation, validation]
+
+### Step 2: Compare to Your Capabilities
+
+Your capabilities (Watcher Ant):
+- validation
+- testing
+- quality_checks
+- security_review
+- performance_analysis
+
+### Step 3: Identify Gaps
+
+Explicit mismatch examples:
+- "database schema validation" → Requires database expertise (check if you have it)
+- "framework-specific testing" → Requires framework specialist (check if you have it)
+- "deep security audit" → Requires security specialization (check if you have it)
+
+### Step 4: Calculate Spawn Score
+
+Use multi-factor scoring:
+```bash
+gap_score=0.8        # Large capability gap (0-1)
+priority=0.9         # High priority task (0-1)
+load=0.3             # Colony lightly loaded (0-1, inverted)
+budget_remaining=0.7 # 7/10 spawns available (0-1)
+resources=0.8        # System resources available (0-1)
+
+spawn_score = (
+    0.8 * 0.40 +     # gap_score
+    0.9 * 0.20 +     # priority
+    0.3 * 0.15 +     # load (inverted)
+    0.7 * 0.15 +     # budget_remaining
+    0.8 * 0.10       # resources
+) = 0.68
+```
+
+Decision: If spawn_score >= 0.6, spawn specialist. Otherwise, attempt task.
+
+### Step 5: Map Gap to Specialist
+
+Capability gap → Specialist caste:
+- database → scout (Scout with database expertise)
+- react → builder (Builder with React specialization)
+- api → route_setter (Route-setter with API design focus)
+- testing → watcher (Watcher with testing specialization)
+- security → watcher (Watcher with security focus)
+- performance → architect (Architect with performance optimization)
+- documentation → scout (Scout with documentation expertise)
+- infrastructure → builder (Builder with infrastructure focus)
+
+If no direct mapping, use semantic analysis of task description.
+
+### Spawn Decision
+
+After analysis:
+- If spawn_score >= 0.6: Proceed to "Check Resource Constraints" in existing spawning section
+- If spawn_score < 0.6: Attempt task yourself, monitor for difficulties
+
 ## Autonomous Spawning
 
 You may spawn specialists when:
