@@ -1,25 +1,101 @@
 """
-Queen Ant Colony - Worker Ant Castes
+Queen Ant Colony - Worker Ant Castes with Autonomous Spawning
 
-Six pre-defined specialist castes that respond to pheromones
-and spawn subagents as needed.
+Six specialist castes that respond to pheromones and autonomously spawn
+specialists based on capability gap detection.
 
 Based on research from:
 - Phase 6: Multi-Agent System Integration Patterns
 - Phase 1: Context Engine Foundation
 - Phase 3: Semantic Codebase Understanding
+- Autonomous Agent Spawning Research
 """
 
-from typing import List, Dict, Any, Optional, Callable
+from typing import List, Dict, Any, Optional, Callable, Set
 from dataclasses import dataclass, field
 from enum import Enum
 import asyncio
 from datetime import datetime, timedelta
+import re
 
 try:
     from .pheromone_system import PheromoneType, PheromoneSignal, PheromoneLayer, SensitivityProfile, SENSITIVITY_PROFILES
 except ImportError:
     from pheromone_system import PheromoneType, PheromoneSignal, PheromoneLayer, SensitivityProfile, SENSITIVITY_PROFILES
+
+
+# ============================================================================
+# AUTONOMOUS SPAWNING - NEW DATA STRUCTURES
+# ============================================================================
+
+@dataclass(frozen=True)
+class Capability:
+    """A capability that an agent may have (immutable and hashable)"""
+    name: str
+    category: str  # technical, domain, skill
+    proficiency: float = 0.5  # 0.0 to 1.0
+
+
+@dataclass
+class Task:
+    """A task that needs to be done"""
+    id: str
+    description: str
+    required_capabilities: Set[str] = field(default_factory=set)  # Use capability names (strings)
+    context: Dict[str, Any] = field(default_factory=dict)
+    priority: float = 0.5
+    estimated_effort: float = 1.0  # hours
+
+
+@dataclass
+class ResourceBudget:
+    """Resource budget for spawning subagents"""
+    max_subagents: int = 10
+    max_depth: int = 3  # Max spawning depth
+    current_subagents: int = 0
+    spawning_disabled: bool = False
+
+    def can_spawn(self, depth: int = 0) -> bool:
+        """Check if spawning is allowed"""
+        if self.spawning_disabled:
+            return False
+        if self.current_subagents >= self.max_subagents:
+            return False
+        if depth >= self.max_depth:
+            return False
+        return True
+
+    def disable_spawning(self):
+        """Circuit breaker - disable spawning"""
+        self.spawning_disabled = True
+
+    def enable_spawning(self):
+        """Re-enable spawning after circuit breaker"""
+        self.spawning_disabled = False
+
+
+@dataclass
+class InheritedContext:
+    """Context passed from parent to spawned subagent"""
+    parent_agent_id: str
+    parent_task: str
+    goal: str
+    pheromone_signals: List[PheromoneSignal] = field(default_factory=list)
+    working_memory: Dict[str, Any] = field(default_factory=dict)
+    relevant_code: List[str] = field(default_factory=list)
+    constraints: List[str] = field(default_factory=list)
+
+
+@dataclass
+class SpawningDecision:
+    """Record of autonomous spawning decision"""
+    timestamp: datetime
+    parent_agent: str
+    task: str
+    capability_gaps: Set[str]  # Use capability names (strings)
+    specialist_type: str
+    reason: str
+    depth: int
 
 
 class PheromoneType(Enum):
@@ -52,31 +128,88 @@ class PheromoneSignal:
 
 @dataclass
 class Subagent:
-    """A spawned subagent"""
+    """A spawned subagent with autonomous capabilities"""
     name: str
     purpose: str
     parent: 'WorkerAnt'
     spawned_at: datetime
     status: str = "active"  # active, completed, terminated
+    inherited_context: Optional[InheritedContext] = None
+    capabilities: Set[Capability] = field(default_factory=set)
+    depth: int = 0  # Spawning depth
+    spawning_reason: str = ""  # Why was this agent spawned?
 
     def terminate(self):
         """Terminate this subagent"""
         self.status = "terminated"
 
+    def get_context_summary(self) -> str:
+        """Get summary of inherited context"""
+        if not self.inherited_context:
+            return "No inherited context"
+        return f"Goal: {self.inherited_context.goal}, Parent task: {self.inherited_context.parent_task}"
+
 
 class WorkerAnt:
-    """Base class for all Worker Ant castes"""
+    """Base class for all Worker Ant castes with autonomous spawning"""
 
     caste: str
     capabilities: List[str]
     sensitivity: Dict[PheromoneType, float]
     spawns: List[str]  # Types of subagents this caste can spawn
 
+    # Capability taxonomy for autonomous spawning
+    CAPABILITY_TAXONOMY = {
+        # Technical capabilities
+        "database": {"sql", "orm", "migrations", "query_optimization"},
+        "frontend": {"react", "vue", "angular", "css", "html", "javascript"},
+        "backend": {"api", "rest", "graphql", "websocket", "microservices"},
+        "devops": {"docker", "kubernetes", "ci_cd", "deployment", "monitoring"},
+        "security": {"authentication", "authorization", "encryption", "owasp"},
+        "testing": {"unit", "integration", "e2e", "tdd", "mocking"},
+        "performance": {"optimization", "caching", "profiling", "load_testing"},
+        # Domain capabilities
+        "auth": {"jwt", "oauth", "sessions", "passwords", "2fa"},
+        "data": {"etl", "pipelines", "validation", "transformation"},
+        "ui": {"design", "ux", "accessibility", "responsive"},
+        # Skill capabilities
+        "analysis": {"debugging", "investigation", "root_cause"},
+        "planning": {"estimation", "dependency_analysis", "risk_assessment"},
+        "communication": {"documentation", "coordination", "negotiation"},
+    }
+
+    # Specialist type mappings
+    SPECIALIST_MAPPING = {
+        "database": "database_specialist",
+        "sql": "database_specialist",
+        "react": "frontend_specialist",
+        "vue": "frontend_specialist",
+        "angular": "frontend_specialist",
+        "api": "api_specialist",
+        "websocket": "realtime_specialist",
+        "authentication": "security_specialist",
+        "jwt": "security_specialist",
+        "oauth": "security_specialist",
+        "testing": "test_specialist",
+        "unit": "test_specialist",
+        "performance": "optimization_specialist",
+        "optimization": "optimization_specialist",
+        "security": "security_specialist",
+        "deployment": "devops_specialist",
+        "docker": "devops_specialist",
+        "kubernetes": "devops_specialist",
+    }
+
     def __init__(self, colony: 'Colony'):
         self.colony = colony
         self.subagents: List[Subagent] = []
         self.current_task: Optional[str] = None
         self.last_activity: datetime = datetime.now()
+
+        # Autonomous spawning components
+        self.resource_budget = ResourceBudget()
+        self.spawning_history: List[SpawningDecision] = []
+        self.active = True
 
     async def detect_pheromones(self) -> List[PheromoneSignal]:
         """Detect relevant pheromones based on sensitivity"""
@@ -123,6 +256,270 @@ class WorkerAnt:
         # Direct communication, not through central coordinator
         pass
 
+    # ========================================================================
+    # AUTONOMOUS SPAWNING METHODS
+    # ========================================================================
+
+    async def detect_capability_gap(self, task: Task) -> bool:
+        """
+        Detect if this ant lacks capability for a task
+
+        Analyzes task requirements against own capabilities to identify gaps.
+        Returns True if gaps exist that would prevent task completion.
+        """
+        required = await self.analyze_task_requirements(task)
+        my_capabilities = set(self.capabilities)
+
+        # Check for capability gaps
+        gaps = required - my_capabilities
+
+        # Also check for proficiency gaps
+        for cap in required & my_capabilities:
+            my_proficiency = self._get_capability_proficiency(cap)
+            if my_proficiency < 0.5:  # Low proficiency threshold
+                gaps.add(cap)
+
+        return len(gaps) > 0
+
+    async def analyze_task_requirements(self, task: Task) -> Set[str]:
+        """
+        Analyze task to determine required capabilities
+
+        Uses semantic analysis of task description to identify
+        what capabilities are needed.
+        """
+        required = set()
+
+        # Extract capability keywords from task description
+        description_lower = task.description.lower()
+
+        # Check against capability taxonomy
+        for category, keywords in self.CAPABILITY_TAXONOMY.items():
+            for keyword in keywords:
+                if keyword in description_lower:
+                    required.add(category)
+                    break
+
+        # Add common pattern detections
+        if re.search(r'(database|sql|query|orm)', description_lower):
+            required.add("database")
+        if re.search(r'(api|endpoint|route|controller)', description_lower):
+            required.add("backend")
+        if re.search(r'(test|spec|mock)', description_lower):
+            required.add("testing")
+        if re.search(r'(auth|login|jwt|session)', description_lower):
+            required.add("auth")
+        if re.search(r'(deploy|docker|k8s|ci/cd)', description_lower):
+            required.add("devops")
+        if re.search(r'(security|encrypt|vulnerability)', description_lower):
+            required.add("security")
+
+        return required
+
+    def _get_capability_proficiency(self, capability: str) -> float:
+        """Get proficiency level for a capability"""
+        # Base implementation - override in subclasses
+        # Default to moderate proficiency for listed capabilities
+        return 0.7 if capability in self.capabilities else 0.0
+
+    async def determine_specialist_type(self, capability_gaps: Set[str]) -> str:
+        """
+        Determine what type of specialist to spawn based on capability gaps
+
+        Maps capability gaps to appropriate specialist types.
+        """
+        # Use specialist mapping if available
+        for gap in capability_gaps:
+            if gap in self.SPECIALIST_MAPPING:
+                return self.SPECIALIST_MAPPING[gap]
+
+        # Fallback: determine from most common gap
+        if "database" in capability_gaps or "sql" in capability_gaps:
+            return "database_specialist"
+        if "auth" in capability_gaps or "security" in capability_gaps:
+            return "security_specialist"
+        if "testing" in capability_gaps:
+            return "test_specialist"
+        if "frontend" in capability_gaps or "ui" in capability_gaps:
+            return "frontend_specialist"
+        if "backend" in capability_gaps or "api" in capability_gaps:
+            return "api_specialist"
+        if "devops" in capability_gaps or "deployment" in capability_gaps:
+            return "devops_specialist"
+
+        # Default: general specialist
+        return "general_specialist"
+
+    async def spawn_specialist_autonomously(
+        self,
+        task: Task,
+        depth: int = 0
+    ) -> Optional[Subagent]:
+        """
+        Spawn specialist based on autonomous capability gap detection
+
+        This is the core of autonomous spawning - agents detect they
+        lack capabilities and spawn appropriate specialists.
+        """
+        # Check resource budget
+        if not self.resource_budget.can_spawn(depth):
+            # Circuit breaker triggered
+            if self.resource_budget.current_subagents >= self.resource_budget.max_subagents:
+                self.resource_budget.disable_spawning()
+            return None
+
+        # Analyze capability gaps
+        required = await self.analyze_task_requirements(task)
+        my_capabilities = set(self.capabilities)
+        gaps = required - my_capabilities
+
+        if not gaps:
+            # No gaps, can handle ourselves
+            return None
+
+        # Determine specialist type
+        specialist_type = await self.determine_specialist_type(gaps)
+
+        # Create inherited context
+        inherited = InheritedContext(
+            parent_agent_id=id(self),
+            parent_task=self.current_task or "unknown",
+            goal=self._get_current_goal(),
+            pheromone_signals=self.colony.pheromones.copy(),
+            working_memory=self._get_working_memory(),
+            relevant_code=await self._get_relevant_code(task),
+            constraints=self._get_constraints()
+        )
+
+        # Generate spawning reason
+        reason = f"Capability gaps detected: {', '.join(gaps)}. Need {specialist_type}"
+
+        # Spawn the specialist
+        specialist = Subagent(
+            name=f"autonomous_{specialist_type}_{len(self.subagents)}",
+            purpose=f"Address capability gaps: {', '.join(gaps)}",
+            parent=self,
+            spawned_at=datetime.now(),
+            inherited_context=inherited,
+            capabilities=required,  # Store as set of strings
+            depth=depth,
+            spawning_reason=reason
+        )
+
+        # Update resource budget
+        self.resource_budget.current_subagents += 1
+        self.subagents.append(specialist)
+        self.colony.register_subagent(specialist)
+
+        # Record spawning decision
+        decision = SpawningDecision(
+            timestamp=datetime.now(),
+            parent_agent=self.caste,
+            task=task.description,
+            capability_gaps=gaps,  # Use set of strings directly
+            specialist_type=specialist_type,
+            reason=reason,
+            depth=depth
+        )
+        self.spawning_history.append(decision)
+
+        self.last_activity = datetime.now()
+
+        return specialist
+
+    async def delegate_or_handle(self, task: Task, depth: int = 0) -> Any:
+        """
+        Decide whether to handle task personally or delegate to specialist
+
+        This is the main decision point for autonomous spawning.
+        """
+        # Check if spawning is allowed
+        if not self.resource_budget.can_spawn(depth):
+            # Must handle ourselves
+            return await self.execute(task)
+
+        # Detect capability gaps
+        if await self.detect_capability_gap(task):
+            # Spawn specialist and delegate
+            specialist = await self.spawn_specialist_autonomously(task, depth)
+            if specialist:
+                # Delegate to specialist
+                return await self._delegate_to_specialist(specialist, task)
+
+        # Handle ourselves
+        return await self.execute(task)
+
+    async def execute(self, task: Task) -> Any:
+        """
+        Execute a task (override in subclasses)
+
+        Default implementation - should be overridden by specific castes.
+        """
+        self.current_task = task.description
+        self.last_activity = datetime.now()
+        return {"status": "completed", "agent": self.caste}
+
+    async def _delegate_to_specialist(self, specialist: Subagent, task: Task) -> Any:
+        """Delegate task to spawned specialist"""
+        # In a full implementation, this would actually execute the specialist
+        # For now, return a placeholder
+        return {
+            "status": "delegated",
+            "specialist": specialist.name,
+            "purpose": specialist.purpose,
+            "context_inherited": specialist.inherited_context is not None
+        }
+
+    def _get_current_goal(self) -> str:
+        """Get current goal from pheromones"""
+        for signal in self.colony.pheromones:
+            if signal.signal_type == PheromoneType.INIT:
+                return signal.content
+        return "unknown"
+
+    def _get_working_memory(self) -> Dict[str, Any]:
+        """Get current working memory"""
+        return {
+            "current_task": self.current_task,
+            "subagents_count": len(self.subagents),
+            "last_activity": self.last_activity
+        }
+
+    async def _get_relevant_code(self, task: Task) -> List[str]:
+        """Get relevant code for task context"""
+        # In full implementation, would use semantic search
+        return []
+
+    def _get_constraints(self) -> List[str]:
+        """Get current constraints"""
+        constraints = []
+
+        # Extract from redirect pheromones
+        for signal in self.colony.pheromones:
+            if signal.signal_type == PheromoneType.REDIRECT and signal.is_active():
+                constraints.append(f"Avoid: {signal.content}")
+
+        return constraints
+
+    def get_spawning_summary(self) -> Dict[str, Any]:
+        """Get summary of autonomous spawning activity"""
+        return {
+            "total_spawned": len(self.subagents),
+            "resource_budget": {
+                "used": self.resource_budget.current_subagents,
+                "max": self.resource_budget.max_subagents,
+                "disabled": self.resource_budget.spawning_disabled
+            },
+            "spawning_history": [
+                {
+                    "timestamp": d.timestamp.isoformat(),
+                    "specialist": d.specialist_type,
+                    "reason": d.reason
+                }
+                for d in self.spawning_history[-10:]  # Last 10
+            ]
+        }
+
 
 class MapperAnt(WorkerAnt):
     """
@@ -159,23 +556,23 @@ class MapperAnt(WorkerAnt):
             await self.map_specific_area(signal.content)
 
     async def explore_codebase(self, goal: str):
-        """Explore entire codebase for new goal"""
+        """Explore entire codebase for new goal using autonomous spawning"""
         self.current_task = f"Exploring codebase for: {goal}"
 
-        # Spawn graph builder
-        graph_builder = self.spawn_subagent(
-            "graph_builder",
-            "Build dependency graph for codebase"
+        # AUTONOMOUS SPAWNING: Detect if we need help and spawn specialists
+        task = Task(
+            id="explore_1",
+            description=f"Explore and map codebase for: {goal}",
+            priority=0.8
         )
 
-        # Spawn search agents
-        search_agent = self.spawn_subagent(
-            "search_agent",
-            "Search for relevant code patterns"
-        )
+        # Use autonomous spawning to handle the task
+        result = await self.delegate_or_handle(task)
 
-        # Build semantic index
+        # Build semantic index ourselves
         await self.build_semantic_index()
+
+        return result
 
     async def map_specific_area(self, area: str):
         """Map a specific area of codebase"""
@@ -627,10 +1024,10 @@ class SynthesizerAnt(WorkerAnt):
 
 class Colony:
     """
-    The Colony - Manages Worker Ants and pheromones
+    The Colony - Manages Worker Ants and pheromones with autonomous spawning
 
     Colony self-organizes based on pheromones.
-    Worker Ants coordinate peer-to-peer.
+    Worker Ants autonomously spawn specialists based on capability gaps.
     """
 
     def __init__(self):
@@ -639,6 +1036,9 @@ class Colony:
         self.subagents: List[Subagent] = []
         self.current_phase: Optional[Dict] = None
         self.phases: List[Dict] = []
+
+        # Autonomous spawning tracking
+        self.spawning_decisions: List[SpawningDecision] = []
 
         # Initialize Worker Ants
         self._init_worker_ants()
@@ -673,23 +1073,88 @@ class Colony:
                 await ant.respond_to_pheromones(signals)
 
     def register_subagent(self, subagent: Subagent):
-        """Register a spawned subagent"""
+        """Register a spawned subagent and track spawning decision"""
         self.subagents.append(subagent)
 
+        # Track spawning decision
+        if subagent.inherited_context and subagent.spawning_reason:
+            decision = SpawningDecision(
+                timestamp=datetime.now(),
+                parent_agent=subagent.parent.caste,
+                task=subagent.purpose,
+                capability_gaps=subagent.capabilities,  # Already a set of strings
+                specialist_type=subagent.name,
+                reason=subagent.spawning_reason,
+                depth=subagent.depth
+            )
+            self.spawning_decisions.append(decision)
+
     def get_status(self) -> Dict:
-        """Get colony status"""
+        """Get colony status including autonomous spawning information"""
         return {
             "worker_ants": {
                 name: {
                     "current_task": ant.current_task,
                     "subagents_count": len(ant.subagents),
-                    "last_activity": ant.last_activity
+                    "last_activity": ant.last_activity,
+                    "spawning_summary": ant.get_spawning_summary()
                 }
                 for name, ant in self.worker_ants.items()
             },
             "active_pheromones": len([p for p in self.pheromones if p.is_active()]),
             "total_subagents": len(self.subagents),
-            "current_phase": self.current_phase
+            "current_phase": self.current_phase,
+            "autonomous_spawning": {
+                "total_decisions": len(self.spawning_decisions),
+                "recent_decisions": [
+                    {
+                        "timestamp": d.timestamp.isoformat(),
+                        "parent": d.parent_agent,
+                        "specialist": d.specialist_type,
+                        "reason": d.reason
+                    }
+                    for d in self.spawning_decisions[-5:]  # Last 5
+                ]
+            }
+        }
+
+    def get_autonomous_spawning_report(self) -> Dict[str, Any]:
+        """Get detailed report of autonomous spawning activity"""
+        # Aggregate by parent caste
+        by_parent = {}
+        for decision in self.spawning_decisions:
+            parent = decision.parent_agent
+            if parent not in by_parent:
+                by_parent[parent] = {"count": 0, "specialists": {}}
+            by_parent[parent]["count"] += 1
+
+            specialist = decision.specialist_type
+            if specialist not in by_parent[parent]["specialists"]:
+                by_parent[parent]["specialists"][specialist] = 0
+            by_parent[parent]["specialists"][specialist] += 1
+
+        # Aggregate by specialist type
+        by_specialist = {}
+        for decision in self.spawning_decisions:
+            specialist = decision.specialist_type
+            if specialist not in by_specialist:
+                by_specialist[specialist] = 0
+            by_specialist[specialist] += 1
+
+        return {
+            "total_spawned": len(self.spawning_decisions),
+            "by_parent_caste": by_parent,
+            "by_specialist_type": by_specialist,
+            "recent_activity": [
+                {
+                    "timestamp": d.timestamp.isoformat(),
+                    "parent": d.parent_agent,
+                    "specialist": d.specialist_type,
+                    "reason": d.reason,
+                    "depth": d.depth
+                }
+                for d in self.spawning_decisions[-10:]  # Last 10
+            ]
         }
 
     async def execute_phase(self, phase: Dict):
@@ -727,5 +1192,82 @@ class Colony:
 
 # Factory function
 def create_colony() -> Colony:
-    """Create a new Queen Ant colony"""
+    """Create a new Queen Ant colony with autonomous spawning"""
     return Colony()
+
+
+# ============================================================================
+# AUTONOMOUS SPAWNING DEMO
+# ============================================================================
+
+async def demo_autonomous_spawning():
+    """
+    Demonstrate autonomous agent spawning
+
+    This shows how Worker Ants detect capability gaps and
+    autonomously spawn specialists to handle tasks.
+    """
+    print("=" * 70)
+    print("🐜 AUTONOMOUS AGENT SPAWNING DEMO")
+    print("=" * 70)
+    print()
+
+    # Create colony
+    colony = create_colony()
+    print("✅ Colony created with 6 Worker Ant castes")
+    print()
+
+    # Emit INIT pheromone to trigger activity
+    await colony.receive_pheromone(
+        PheromoneType.INIT,
+        "Build a REST API with JWT authentication and database integration",
+        strength=1.0
+    )
+    print("✅ INIT pheromone emitted: Build REST API with JWT auth and database")
+    print()
+
+    # Mapper Ant responds with autonomous spawning
+    print("🐜 Mapper Ant detects task and autonomously spawns specialists...")
+    mapper = colony.worker_ants["mapper"]
+    result = await mapper.explore_codebase("Build REST API with JWT auth")
+    print()
+
+    # Check spawning results
+    status = colony.get_status()
+    spawning_summary = status["autonomous_spawning"]
+    print(f"📊 SPAWNING SUMMARY:")
+    print(f"   Total autonomous decisions: {spawning_summary['total_decisions']}")
+    print()
+
+    if spawning_summary["recent_decisions"]:
+        print("📝 RECENT SPAWNING DECISIONS:")
+        for i, decision in enumerate(spawning_summary["recent_decisions"], 1):
+            print(f"   {i}. {decision['parent']} → {decision['specialist']}")
+            print(f"      Reason: {decision['reason']}")
+        print()
+
+    # Show detailed report
+    report = colony.get_autonomous_spawning_report()
+    print("📈 AUTONOMOUS SPAWNING REPORT:")
+    print(f"   Total spawned: {report['total_spawned']}")
+    print(f"   By parent caste: {list(report['by_parent_caste'].keys())}")
+    print(f"   By specialist type: {list(report['by_specialist_type'].keys())}")
+    print()
+
+    print("=" * 70)
+    print("✨ DEMO COMPLETE")
+    print()
+    print("Key Takeaways:")
+    print("  • Worker Ants autonomously detect capability gaps")
+    print("  • They spawn appropriate specialists without human direction")
+    print("  • Each spawning decision is tracked with reasoning")
+    print("  • Resource budgets prevent infinite spawning")
+    print("  • Context inheritance ensures specialists have needed context")
+    print("=" * 70)
+
+    return colony
+
+
+if __name__ == "__main__":
+    # Run the demo
+    asyncio.run(demo_autonomous_spawning())
