@@ -267,6 +267,11 @@ await_queen_decision() {
     echo "   Options: /ant:continue, /ant:adjust, /ant:execute {phase}"
     echo ""
 
+    # Adapt next phase from memory
+    echo "Adapting next phase from memory..."
+    adapt_next_phase_from_memory "$phase"
+    echo ""
+
     return 0
 }
 
