@@ -32,6 +32,7 @@ try:
         PhaseCommands
     )
     from .error_prevention import ErrorLedger
+    from .memory.triple_layer_memory import TripleLayerMemory
 except ImportError:
     from worker_ants import Colony, create_colony
     from pheromone_system import (
@@ -48,6 +49,7 @@ except ImportError:
         PhaseCommands
     )
     from error_prevention import ErrorLedger
+    from memory.triple_layer_memory import TripleLayerMemory
 
 
 class QueenAntSystem:
@@ -87,6 +89,9 @@ class QueenAntSystem:
         # Learning and memory
         self.pheromone_history = PheromoneHistory(self.pheromone_layer)
 
+        # Triple-Layer Memory System
+        self.memory_layer: Optional[TripleLayerMemory] = None
+
         # System state
         self.started_at: Optional[datetime] = None
         self.current_goal: Optional[str] = None
@@ -94,6 +99,29 @@ class QueenAntSystem:
     async def start(self):
         """Start the Queen Ant system"""
         self.started_at = datetime.now()
+
+        # Initialize triple-layer memory
+        self.memory_layer = TripleLayerMemory(
+            working_max_tokens=200_000,
+            short_term_max_sessions=10,
+            long_term_storage_path=".aether/memory/long_term.json"
+        )
+
+        # Reinitialize phase_engine with memory_layer
+        try:
+            from .phase_engine import create_phase_engine
+        except ImportError:
+            from phase_engine import create_phase_engine
+        self.phase_engine = create_phase_engine(
+            self.colony,
+            self.pheromone_layer,
+            use_state_machine=True,
+            memory_layer=self.memory_layer
+        )
+
+        # Update phase commands reference
+        self.phase_commands = PhaseCommands(self.phase_engine)
+
         # System is ready to receive Queen's signals
 
     async def stop(self):
@@ -204,7 +232,7 @@ class QueenAntSystem:
         pheromone_status = self.pheromone_commands.get_status()
         phase_summary = self.phase_engine.get_phase_summary()
 
-        return {
+        result = {
             "system": {
                 "started_at": self.started_at.isoformat() if self.started_at else None,
                 "current_goal": self.current_goal,
@@ -214,6 +242,12 @@ class QueenAntSystem:
             "pheromones": pheromone_status,
             "phases": phase_summary
         }
+
+        # Add memory status if available
+        if self.memory_layer:
+            result["memory"] = self.memory_layer.get_status()
+
+        return result
 
     async def state_machine(self) -> Dict[str, Any]:
         """
@@ -235,18 +269,105 @@ class QueenAntSystem:
         """
         /ant:memory
 
-        Show memory state and learned patterns.
+        Show memory state from triple-layer memory system.
         """
-        # Get learned preferences from pheromone history
+        if not self.memory_layer:
+            return {
+                "message": "Memory system not initialized. Call start() first.",
+                "learned_preferences": self.pheromone_history.get_learned_preferences()
+            }
+
+        # Get triple-layer memory status
+        memory_status = self.memory_layer.get_status()
+
+        # Also include pheromone-based learning (backwards compatibility)
         learned = self.pheromone_history.get_learned_preferences()
 
         return {
+            "triple_layer_memory": memory_status["triple_layer_memory"],
             "learned_preferences": learned,
             "pheromone_patterns": {
                 "focus_topics": list(learned.get("focus_topics", {}).keys())[:10],
                 "avoid_patterns": list(learned.get("avoid_patterns", {}).keys())[:10],
                 "feedback_categories": learned.get("feedback_categories", {})
             }
+        }
+
+    async def memory_status(self) -> Dict[str, Any]:
+        """
+        /ant:memory status
+
+        Show detailed memory system status.
+        """
+        if not self.memory_layer:
+            return {"error": "Memory system not initialized"}
+
+        return self.memory_layer.get_status()
+
+    async def memory_search(
+        self,
+        query: str,
+        layers: Optional[List[str]] = None,
+        limit: int = 10
+    ) -> Dict[str, Any]:
+        """
+        /ant:memory search <query>
+
+        Search across all memory layers.
+
+        Args:
+            query: Search query
+            layers: Layers to search (default: all)
+            limit: Max results per layer
+        """
+        if not self.memory_layer:
+            return {"error": "Memory system not initialized"}
+
+        results = await self.memory_layer.retrieve(
+            query=query,
+            layers=layers,
+            limit=limit
+        )
+
+        return {
+            "query": query,
+            "results_count": len(results),
+            "results": [
+                {
+                    "content": r.content,
+                    "layer": r.layer,
+                    "relevance": r.relevance_score,
+                    "source_id": r.source_id
+                }
+                for r in results
+            ]
+        }
+
+    async def memory_compress(self, phase_metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        /ant:memory compress
+
+        Manually compress working memory to short-term.
+
+        Args:
+            phase_metadata: Optional metadata about the session
+        """
+        if not self.memory_layer:
+            return {"error": "Memory system not initialized"}
+
+        metadata = phase_metadata or {
+            "trigger": "manual",
+            "timestamp": datetime.now().isoformat()
+        }
+
+        session_id = await self.memory_layer.compress_to_short_term(metadata)
+
+        compression_stats = self.memory_layer.get_compression_stats()
+
+        return {
+            "session_id": session_id,
+            "message": "Working memory compressed to short-term",
+            "compression_stats": compression_stats
         }
 
     async def errors(self, show_all: bool = False) -> Dict[str, Any]:
@@ -382,7 +503,7 @@ class QueenAntSystem:
         """Get system information"""
         return {
             "name": "Queen Ant Colony System",
-            "version": "1.2.0",
+            "version": "1.4.0",
             "description": "Phased autonomy with user as pheromone source",
             "worker_ants": list(self.colony.worker_ants.keys()),
             "pheromone_types": [t.value for t in PheromoneType],
@@ -393,7 +514,8 @@ class QueenAntSystem:
                 "checkpointing": True,
                 "state_recovery": True,
                 "error_prevention": True,
-                "semantic_communication": self.pheromone_layer.semantic_layer is not None
+                "semantic_communication": self.pheromone_layer.semantic_layer is not None,
+                "triple_layer_memory": self.memory_layer is not None
             },
             "semantic_stats": self.pheromone_layer.get_semantic_stats(),
             "research_based": True,

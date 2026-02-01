@@ -25,6 +25,11 @@ except ImportError:
     from pheromone_system import PheromoneType, PheromoneSignal, PheromoneLayer, SensitivityProfile, SENSITIVITY_PROFILES
     from error_prevention import ErrorLedger, ErrorCategory, log_exception
 
+# Type hint for memory layer
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from .memory.triple_layer_memory import TripleLayerMemory
+
 
 # ============================================================================
 # AUTONOMOUS SPAWNING - NEW DATA STRUCTURES
@@ -202,7 +207,7 @@ class WorkerAnt:
         "kubernetes": "devops_specialist",
     }
 
-    def __init__(self, colony: 'Colony', error_ledger: Optional[ErrorLedger] = None):
+    def __init__(self, colony: 'Colony', error_ledger: Optional[ErrorLedger] = None, memory_layer: Optional['TripleLayerMemory'] = None):
         self.colony = colony
         self.subagents: List[Subagent] = []
         self.current_task: Optional[str] = None
@@ -216,6 +221,9 @@ class WorkerAnt:
         # Error logging
         self.error_ledger = error_ledger or colony.error_ledger if colony else None
         self.agent_id = f"{self.caste}_ant_{id(self)}"
+
+        # Triple-Layer Memory (optional)
+        self.memory_layer = memory_layer
 
     async def detect_pheromones(self) -> List[PheromoneSignal]:
         """Detect relevant pheromones based on sensitivity"""
@@ -487,7 +495,77 @@ class WorkerAnt:
         """
         self.current_task = task.description
         self.last_activity = datetime.now()
-        return {"status": "completed", "agent": self.caste}
+
+        # Check memory for relevant context before executing
+        if self.memory_layer:
+            context = await self._get_memory_context(task)
+            if context:
+                # Context is available - could use it to improve execution
+                pass
+
+        result = {"status": "completed", "agent": self.caste}
+
+        # Store result in working memory if available
+        if self.memory_layer:
+            await self._store_in_memory(task, result)
+
+        return result
+
+    async def _get_memory_context(self, task: Task) -> Optional[List]:
+        """
+        Retrieve relevant context from working memory
+
+        Args:
+            task: Task being executed
+
+        Returns:
+            Relevant context items or None
+        """
+        if not self.memory_layer:
+            return None
+
+        # Search for relevant items based on task description
+        query_words = task.description.lower().split()[:3]  # First 3 words
+        relevant_items = []
+
+        for word in query_words:
+            items = await self.memory_layer.search_working(word, limit=3, item_type=self.caste)
+            relevant_items.extend(items)
+
+        return relevant_items if relevant_items else None
+
+    async def _store_in_memory(self, task: Task, result: Any) -> Optional[str]:
+        """
+        Store task execution result in working memory
+
+        Args:
+            task: Task that was executed
+            result: Result of execution
+
+        Returns:
+            Item ID if stored, None otherwise
+        """
+        if not self.memory_layer:
+            return None
+
+        # Create content to store
+        content = f"{self.caste} completed task: {task.description}"
+        if isinstance(result, dict):
+            content += f". Result: {result.get('status', 'unknown')}"
+
+        # Store in working memory
+        item_id = await self.memory_layer.add_to_working(
+            content=content,
+            metadata={
+                "type": self.caste,
+                "task_id": task.id,
+                "agent_id": self.agent_id,
+                "task_priority": task.priority
+            },
+            item_type=self.caste
+        )
+
+        return item_id
 
     async def _delegate_to_specialist(self, specialist: Subagent, task: Task) -> Any:
         """Delegate task to spawned specialist"""
@@ -574,8 +652,8 @@ class MapperAnt(WorkerAnt):
     }
     spawns = ["graph_builder", "search_agent", "pattern_matcher"]
 
-    def __init__(self, colony: 'Colony'):
-        super().__init__(colony)
+    def __init__(self, colony: 'Colony', memory_layer: Optional['TripleLayerMemory'] = None):
+        super().__init__(colony, memory_layer=memory_layer)
         self.semantic_index: Dict[str, Any] = {}
         self.dependency_graph: Dict[str, List[str]] = {}
 
@@ -651,8 +729,8 @@ class PlannerAnt(WorkerAnt):
     }
     spawns = ["estimator", "dependency_analyzer", "risk_assessor"]
 
-    def __init__(self, colony: 'Colony'):
-        super().__init__(colony)
+    def __init__(self, colony: 'Colony', memory_layer: Optional['TripleLayerMemory'] = None):
+        super().__init__(colony, memory_layer=memory_layer)
         self.current_plan: Optional[Dict] = None
         self.phases: List[Dict] = []
 
@@ -799,8 +877,8 @@ class ExecutorAnt(WorkerAnt):
     }
     spawns = ["language_specialist", "framework_specialist", "database_specialist"]
 
-    def __init__(self, colony: 'Colony'):
-        super().__init__(colony)
+    def __init__(self, colony: 'Colony', memory_layer: Optional['TripleLayerMemory'] = None):
+        super().__init__(colony, memory_layer=memory_layer)
         self.current_files: List[str] = []
         self.implemented_features: List[str] = []
 
@@ -867,8 +945,8 @@ class VerifierAnt(WorkerAnt):
     }
     spawns = ["test_generator", "lint_agent", "security_scanner", "performance_tester"]
 
-    def __init__(self, colony: 'Colony'):
-        super().__init__(colony)
+    def __init__(self, colony: 'Colony', memory_layer: Optional['TripleLayerMemory'] = None):
+        super().__init__(colony, memory_layer=memory_layer)
         self.tests_generated: int = 0
         self.bugs_found: int = 0
         self.issues: List[Dict] = []
@@ -947,8 +1025,8 @@ class ResearcherAnt(WorkerAnt):
     }
     spawns = ["search_agent", "crawler", "documentation_reader", "api_explorer"]
 
-    def __init__(self, colony: 'Colony'):
-        super().__init__(colony)
+    def __init__(self, colony: 'Colony', memory_layer: Optional['TripleLayerMemory'] = None):
+        super().__init__(colony, memory_layer=memory_layer)
         self.knowledge_base: Dict[str, Any] = {}
         self.research_cache: Dict[str, Any] = {}
 
@@ -1011,8 +1089,8 @@ class SynthesizerAnt(WorkerAnt):
     }
     spawns = ["analysis_agent", "pattern_matcher", "compression_agent"]
 
-    def __init__(self, colony: 'Colony'):
-        super().__init__(colony)
+    def __init__(self, colony: 'Colony', memory_layer: Optional['TripleLayerMemory'] = None):
+        super().__init__(colony, memory_layer=memory_layer)
         self.patterns: List[Dict] = []
         self.best_practices: List[str] = []
         self.anti_patterns: List[str] = []
@@ -1060,7 +1138,7 @@ class Colony:
     Worker Ants autonomously spawn specialists based on capability gaps.
     """
 
-    def __init__(self):
+    def __init__(self, memory_layer: Optional['TripleLayerMemory'] = None):
         self.worker_ants: Dict[str, WorkerAnt] = {}
         self.pheromones: List[PheromoneSignal] = []
         self.subagents: List[Subagent] = []
@@ -1073,17 +1151,28 @@ class Colony:
         # Error prevention system
         self.error_ledger = ErrorLedger()
 
+        # Triple-Layer Memory System
+        self.memory_layer = memory_layer
+
         # Initialize Worker Ants
         self._init_worker_ants()
 
     def _init_worker_ants(self):
         """Initialize all Worker Ant castes"""
-        self.worker_ants["mapper"] = MapperAnt(self)
-        self.worker_ants["planner"] = PlannerAnt(self)
-        self.worker_ants["executor"] = ExecutorAnt(self)
-        self.worker_ants["verifier"] = VerifierAnt(self)
-        self.worker_ants["researcher"] = ResearcherAnt(self)
-        self.worker_ants["synthesizer"] = SynthesizerAnt(self)
+        self.worker_ants["mapper"] = MapperAnt(self, memory_layer=self.memory_layer)
+        self.worker_ants["planner"] = PlannerAnt(self, memory_layer=self.memory_layer)
+        self.worker_ants["executor"] = ExecutorAnt(self, memory_layer=self.memory_layer)
+        self.worker_ants["verifier"] = VerifierAnt(self, memory_layer=self.memory_layer)
+        self.worker_ants["researcher"] = ResearcherAnt(self, memory_layer=self.memory_layer)
+        self.worker_ants["synthesizer"] = SynthesizerAnt(self, memory_layer=self.memory_layer)
+
+    def set_memory_layer(self, memory_layer: 'TripleLayerMemory') -> None:
+        """Set or update the memory layer for all Worker Ants"""
+        self.memory_layer = memory_layer
+
+        # Update all Worker Ants
+        for ant in self.worker_ants.values():
+            ant.memory_layer = memory_layer
 
     async def receive_pheromone(self, signal_type: PheromoneType, content: str, strength: float = 0.5):
         """Receive pheromone signal from Queen"""
@@ -1224,9 +1313,9 @@ class Colony:
 
 
 # Factory function
-def create_colony() -> Colony:
+def create_colony(memory_layer: Optional['TripleLayerMemory'] = None) -> Colony:
     """Create a new Queen Ant colony with autonomous spawning"""
-    return Colony()
+    return Colony(memory_layer=memory_layer)
 
 
 # ============================================================================

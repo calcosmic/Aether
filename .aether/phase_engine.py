@@ -73,6 +73,11 @@ except ImportError:
         create_state_machine
     )
 
+# Type hint for memory layer (optional)
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from .memory.triple_layer_memory import TripleLayerMemory
+
 
 class PhaseStatus(Enum):
     """Status of a phase"""
@@ -210,7 +215,8 @@ class PhaseEngine:
         self,
         colony: Colony,
         pheromone_layer: PheromoneLayer,
-        use_state_machine: bool = True
+        use_state_machine: bool = True,
+        memory_layer: Optional['TripleLayerMemory'] = None
     ):
         self.colony = colony
         self.pheromone_layer = pheromone_layer
@@ -234,6 +240,9 @@ class PhaseEngine:
         if use_state_machine:
             self.state_machine = create_state_machine(colony)
             self.sm_phase_engine = StateMachinePhaseEngine(colony, self.state_machine)
+
+        # Triple-Layer Memory System (optional)
+        self.memory_layer = memory_layer
 
     async def initiate_project(self, goal: str) -> Phase:
         """
@@ -439,24 +448,75 @@ class PhaseEngine:
         """
         Compress phase memory after completion.
 
-        Synthesizer Ant:
+        With Triple-Layer Memory:
+        - Compress working memory to short-term
+        - Extract patterns for long-term
+        - Store phase metadata
+
+        Fallback to Synthesizer Ant:
         - Extracts key learnings
         - Identifies patterns
-        - Compresses to short-term memory
         """
-        # Spawn compression agents
-        await self.synthesizer.compress_phase_memory(phase.to_dict())
+        if self.memory_layer:
+            # Use Triple-Layer Memory system
+            session_metadata = {
+                "phase_id": phase.id,
+                "phase_name": phase.name,
+                "goal": phase.metadata.get("goal", ""),
+                "duration": str(phase.actual_duration) if phase.actual_duration else "unknown",
+                "tasks_completed": len([t for t in phase.tasks if t.status == "completed"]),
+                "issues_resolved": len(phase.issues_found),
+                "timestamp": datetime.now().isoformat()
+            }
 
-        # Extract patterns
-        patterns = await self.synthesizer.extract_patterns(phase.to_dict())
-        phase.patterns_extracted = patterns
+            # Compress working memory to short-term
+            session_id = await self.memory_layer.compress_to_short_term(session_metadata)
 
-        # Identify key learnings
-        phase.key_learnings = [
-            f"Completed {phase.name} in {phase.actual_duration}",
-            f"Spawned {phase.agents_spawned} agents",
-            f"{len(phase.issues_found)} issues found and resolved"
-        ]
+            # Store phase completion in long-term memory
+            await self.memory_layer.store_long_term(
+                category="best_practices",
+                key=f"phase_{phase.id}_completion",
+                value=f"Phase {phase.id} ({phase.name}) completed successfully in {session_metadata['duration']}",
+                confidence=0.9
+            )
+
+            # Store key learnings
+            if phase.key_learnings:
+                for learning in phase.key_learnings[:3]:
+                    await self.memory_layer.store_long_term(
+                        category="learnings",
+                        key=f"phase_{phase.id}_learning",
+                        value=learning,
+                        confidence=0.7
+                    )
+
+            # Store resolved issues
+            for issue in phase.issues_found:
+                await self.memory_layer.learn_from_error(
+                    error_category=issue.get("category", "general"),
+                    symptom=issue.get("symptom", ""),
+                    fix=issue.get("fix", ""),
+                    prevention=issue.get("prevention", "")
+                )
+
+            # Track session in phase
+            phase.compressed_session_id = session_id
+
+        else:
+            # Fallback: Use Synthesizer Ant
+            await self.synthesizer.compress_phase_memory(phase.to_dict())
+
+            # Extract patterns
+            patterns = await self.synthesizer.extract_patterns(phase.to_dict())
+            phase.patterns_extracted = patterns
+
+        # Identify key learnings (always do this)
+        if not phase.key_learnings:
+            phase.key_learnings = [
+                f"Completed {phase.name} in {phase.actual_duration}",
+                f"Spawned {phase.agents_spawned} agents",
+                f"{len(phase.issues_found)} issues found and resolved"
+            ]
 
     async def _phase_checkin(self, phase: Phase):
         """
@@ -732,6 +792,11 @@ class PhaseCommands:
 
 
 # Factory function
-def create_phase_engine(colony: Colony, pheromone_layer: PheromoneLayer) -> PhaseEngine:
+def create_phase_engine(
+    colony: Colony,
+    pheromone_layer: PheromoneLayer,
+    use_state_machine: bool = True,
+    memory_layer: Optional['TripleLayerMemory'] = None
+) -> PhaseEngine:
     """Create a new phase engine"""
-    return PhaseEngine(colony, pheromone_layer)
+    return PhaseEngine(colony, pheromone_layer, use_state_machine, memory_layer)

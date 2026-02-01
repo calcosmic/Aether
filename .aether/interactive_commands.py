@@ -793,29 +793,71 @@ class InteractiveCommands:
         output.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         output.append("")
 
-        learned = result.get("learned_preferences", {})
-        output.append("LEARNED PREFERENCES:")
-        output.append("")
+        # Check if triple-layer memory is available
+        tlm = result.get("triple_layer_memory")
+        if tlm:
+            # Show triple-layer memory status
+            working = tlm.get("working", {})
+            short_term = tlm.get("short_term", {})
+            long_term = tlm.get("long_term", {})
 
-        focus_topics = learned.get("focus_topics", {})
-        if focus_topics:
-            output.append("FOCUS TOPICS:")
-            for topic, count in list(focus_topics.items())[:5]:
-                output.append(f"  {topic} ({count} occurrence{'s' if count > 1 else ''})")
-
-        avoid_patterns = learned.get("avoid_patterns", {})
-        if avoid_patterns:
+            output.append("📝 WORKING MEMORY (Immediate Context)")
+            output.append(f"   Items: {working.get('item_count', 0)}")
+            output.append(f"   Tokens: {working.get('used_tokens', 0)}/{working.get('max_tokens', 200000)} "
+                        f"({working.get('usage_percent', 0):.1f}%)")
             output.append("")
-            output.append("AVOID PATTERNS:")
-            for pattern, count in list(avoid_patterns.items())[:3]:
-                output.append(f"  {pattern} ({count} occurrence{'s' if count > 1 else ''})")
 
-        feedback_categories = learned.get("feedback_categories", {})
-        if feedback_categories:
+            output.append("📚 SHORT-TERM MEMORY (Compressed Sessions)")
+            output.append(f"   Sessions: {short_term.get('session_count', 0)}/{short_term.get('max_sessions', 10)}")
+            output.append(f"   Saved tokens: {short_term.get('total_saved_tokens', 0)}")
+            output.append(f"   Avg compression: {short_term.get('avg_compression_ratio', 0):.2f}x")
             output.append("")
-            output.append("FEEDBACK CATEGORIES:")
-            for category, items in list(feedback_categories.items())[:3]:
-                output.append(f"  {category.capitalize()}: {len(items)} feedback")
+
+            output.append("💾 LONG-TERM MEMORY (Persistent Knowledge)")
+            output.append(f"   Total patterns: {long_term.get('total_patterns', 0)}")
+            categories = long_term.get('categories', {})
+            if categories:
+                output.append(f"   Categories:")
+                for cat, count in categories.items():
+                    if count > 0:
+                        output.append(f"      {cat}: {count}")
+            output.append("")
+
+            # Show pheromone-based learning (backward compatibility)
+            learned = result.get("learned_preferences", {})
+            if learned.get("focus_topics") or learned.get("avoid_patterns"):
+                output.append("🧠 PHEROMONE-BASED LEARNING")
+                output.append("")
+
+                focus_topics = learned.get("focus_topics", {})
+                if focus_topics:
+                    output.append(f"   Focus topics: {list(focus_topics.keys())[:5]}")
+
+                avoid_patterns = learned.get("avoid_patterns", {})
+                if avoid_patterns:
+                    output.append(f"   Avoid patterns: {list(avoid_patterns.keys())[:3]}")
+
+        else:
+            # Fallback to pheromone-based learning only
+            output.append("🧠 PHEROMONE-BASED LEARNING")
+            output.append("")
+
+            learned = result.get("learned_preferences", {})
+            output.append("LEARNED PREFERENCES:")
+            output.append("")
+
+            focus_topics = learned.get("focus_topics", {})
+            if focus_topics:
+                output.append("FOCUS TOPICS:")
+                for topic, count in list(focus_topics.items())[:5]:
+                    output.append(f"  {topic} ({count} occurrence{'s' if count > 1 else ''})")
+
+            avoid_patterns = learned.get("avoid_patterns", {})
+            if avoid_patterns:
+                output.append("")
+                output.append("AVOID PATTERNS:")
+                for pattern, count in list(avoid_patterns.items())[:3]:
+                    output.append(f"  {pattern} ({count} occurrence{'s' if count > 1 else ''})")
 
         output.append("")
         output.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
@@ -823,8 +865,8 @@ class InteractiveCommands:
         output.append("📋 NEXT STEPS:")
         output.append("")
         output.append("  1. /ant:status            - Check colony status")
-        output.append("  2. /ant:focus <area>      - Add focus (teaches preferences)")
-        output.append("  3. /ant:redirect <pattern> - Avoid pattern (teaches constraints)")
+        output.append("  2. /ant:memory status     - Full memory status")
+        output.append("  3. /ant:focus <area>      - Add focus (teaches preferences)")
         output.append("")
         output.append("💡 MEMORY TIP:")
         output.append("  Colony learns from your signals over time.")
@@ -832,6 +874,61 @@ class InteractiveCommands:
         output.append("  3+ redirects → Constraint created")
         output.append("")
         output.append("🔄 CONTEXT: Lightweight - safe to continue")
+
+        return "\n".join(output)
+
+    async def memory_status(self) -> str:
+        """Show detailed memory system status"""
+        if not self.system.memory_layer:
+            return "❌ Memory system not initialized. Call start() first."
+
+        result = self.system.memory_layer.get_status()
+
+        output = []
+        output.append("🐜 Queen Ant Colony - Memory System Status")
+        output.append("")
+        output.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        output.append("")
+
+        tlm = result.get("triple_layer_memory", {})
+
+        # Working Memory
+        working = tlm.get("working", {})
+        output.append("📝 WORKING MEMORY")
+        output.append(f"   Items: {working.get('item_count', 0)}")
+        output.append(f"   Tokens: {working.get('used_tokens', 0)}/{working.get('max_tokens', 200000)}")
+        output.append("")
+
+        # Short-Term Memory
+        short_term = tlm.get("short_term", {})
+        output.append("📚 SHORT-TERM MEMORY")
+        output.append(f"   Sessions: {short_term.get('session_count', 0)}/{short_term.get('max_sessions', 10)}")
+        output.append(f"   Saved tokens: {short_term.get('total_saved_tokens', 0)}")
+        output.append(f"   Avg compression: {short_term.get('avg_compression_ratio', 0):.2f}x")
+        output.append("")
+
+        # Long-Term Memory
+        long_term = tlm.get("long_term", {})
+        output.append("💾 LONG-TERM MEMORY")
+        output.append(f"   Total patterns: {long_term.get('total_patterns', 0)}")
+        categories = long_term.get('categories', {})
+        if categories:
+            for cat, count in categories.items():
+                if count > 0:
+                    output.append(f"   {cat}: {count}")
+        output.append("")
+
+        output.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        output.append("")
+        output.append("📋 NEXT STEPS:")
+        output.append("")
+        output.append("  1. /ant:memory working    - Show working memory contents")
+        output.append("  2. /ant:memory short-term - Show compressed sessions")
+        output.append("  3. /ant:memory long-term - Search persistent knowledge")
+        output.append("")
+        output.append("💡 TIP:")
+        output.append("  Use 'memory <subcommand>' to explore memory layers")
+        output.append("")
 
         return "\n".join(output)
 
