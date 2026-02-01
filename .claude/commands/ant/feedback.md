@@ -1,319 +1,185 @@
 ---
 name: ant:feedback
-description: Emit feedback pheromone - provide guidance to colony
+description: Emit FEEDBACK pheromone - provide guidance to colony based on observations
 ---
 
 <objective>
-Emit a feedback pheromone to guide colony behavior based on Queen's observations, preferences, or corrections.
+Emit a FEEDBACK pheromone to guide colony behavior based on Queen's observations, preferences, or corrections.
+
+The FEEDBACK pheromone has a 6-hour half-life and adjusts colony behavior through caste-sensitive responses.
 </objective>
 
 <process>
-You are the **Queen Ant Colony** receiving and processing feedback from the Queen.
+You are the **Queen Ant Colony** receiving feedback from the Queen.
 
 ## Step 1: Validate Input
 
-```python
-if not args:
-    return """❌ Usage: /ant:feedback "<message>"
-
-Examples:
-  /ant:feedback "Great progress on WebSocket layer"
-  /ant:feedback "Too slow, need to speed up"
-  /ant:feedback "This approach is wrong"
-  /ant:feedback "Need more test coverage"
-"""
+```bash
+if [ -z "$1" ]; then
+  echo "❌ Usage: /ant:feedback \"<message>\""
+  echo ""
+  echo "Examples:"
+  echo "  /ant:feedback \"Great progress on API layer\""
+  echo "  /ant:feedback \"Need more test coverage\""
+  echo "  /ant:feedback \"Too slow, speed up\""
+  echo "  /ant:feedback \"This approach is wrong\""
+  exit 1
+fi
 ```
 
-## Step 2: Load Colony State
+## Step 2: Load State
 
-```python
-import json
-from datetime import datetime
-
-with open('.aether/COLONY_STATE.json', 'r') as f:
-    state = json.load(f)
-
-pheromones = state.get('pheromones', [])
-feedback_history = state.get('feedback_history', {})
+```bash
+PHEROMONES=".aether/data/pheromones.json"
 ```
 
-## Step 3: Categorize Feedback
+## Step 3: Create FEEDBACK Pheromone
 
-Analyze the feedback message to determine category:
+```bash
+timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+pheromone_id="feedback_$(date +%s)"
 
-```python
-message = " ".join(args).lower()
-
-# Categorize feedback
-category = None
-strength = 0.5
-
-# Positive feedback
-if any(word in message for word in ["great", "good", "perfect", "excellent", "love", "amazing"]):
-    category = "positive"
-    strength = 0.5
-
-# Quality feedback
-elif any(word in message for word in ["bug", "quality", "error", "issue", "broken", "wrong"]):
-    category = "quality"
-    strength = 0.6
-
-# Speed feedback
-elif any(word in message for word in ["slow", "fast", "speed", "quick", "pace"]):
-    category = "speed"
-    strength = 0.5
-
-# Direction feedback
-elif any(word in message for word in ["approach", "direction", "wrong way", "pivot"]):
-    category = "direction"
-    strength = 0.7
-
-# Default: general feedback
-else:
-    category = "general"
+jq --arg id "$pheromone_id" \
+   --arg timestamp "$timestamp" \
+   --arg context "$1" \
+   '
+   .active_pheromones += [{
+     "id": $id,
+     "type": "FEEDBACK",
+     "strength": 0.5,
+     "created_at": $timestamp,
+     "decay_rate": 21600,
+     "metadata": {
+       "source": "queen",
+       "caste": null,
+       "context": $context
+     }
+   }]
+   ' "$PHEROMONES" > /tmp/pheromones.tmp
 ```
 
-## Step 4: Create Feedback Pheromone
+## Step 4: Atomic Write
 
-```python
-feedback_pheromone = {
-    "signal_type": "FEEDBACK",
-    "content": " ".join(args),
-    "strength": strength,
-    "created_at": datetime.now().isoformat(),
-    "half_life_hours": 6.0,  # 6 hour half-life
-    "is_active": True,
-    "metadata": {
-        "category": category,
-        "timestamp": datetime.now().isoformat()
-    }
-}
+```bash
+.aether/utils/atomic-write.sh atomic_write_from_file "$PHEROMONES" /tmp/pheromones.tmp
 ```
 
-## Step 5: Update Feedback History
-
-```python
-# Update feedback counts
-if category not in feedback_history:
-    feedback_history[category] = {
-        "count": 0,
-        "positive": 0,
-        "negative": 0,
-        "recent": []
-    }
-
-feedback_history[category]["count"] += 1
-feedback_history[category]["recent"].append({
-    "message": " ".join(args),
-    "timestamp": datetime.now().isoformat()
-})
-
-# Track positive vs negative
-if category == "positive":
-    feedback_history[category]["positive"] += 1
-elif category in ["quality", "speed", "direction"]:
-    feedback_history[category]["negative"] += 1
-
-# Keep only last 10
-feedback_history[category]["recent"] = feedback_history[category]["recent"][-10:]
-
-state['feedback_history'] = feedback_history
-```
-
-## Step 6: Add to Pheromones
-
-```python
-pheromones.append(feedback_pheromone)
-state['pheromones'] = pheromones
-```
-
-## Step 7: Save Updated State
-
-```python
-with open('.aether/COLONY_STATE.json', 'w') as f:
-    json.dump(state, f, indent=2)
-```
-
-## Step 8: Display Response
+## Step 5: Display Results
 
 ```
-🐜 Queen Ant Colony - Feedback Recorded
-
-"{message}"
-
-Category: {category}
-Strength: {strength}
-```
-
-Show colony response based on category:
-
-```python
-responses = {
-    "positive": """
-COLONY RESPONDING:
-  ✓ Synthesizer recording positive pattern
-  ✓ Executor continuing current approach
-  ✓ Pattern reinforced for future reuse
-""",
-    "quality": """
-COLONY RESPONDING:
-  ✓ Verifier intensifying testing
-  ✓ Executor reviewing recent code
-  ✓ Quality checks increased
-""",
-    "speed": """
-COLONY RESPONDING:
-  ✓ Executor increasing parallelization
-  ✓ Planner simplifying next tasks
-  ✓ Optimizing for speed
-""",
-    "direction": """
-COLONY RESPONDING:
-  ✓ Planner pivoting approach
-  ✓ Executor adjusting direction
-  ✓ Re-evaluating current path
-""",
-    "general": """
-COLONY RESPONDING:
-  ✓ Synthesizer recording feedback
-  ✓ Colony adjusting behavior
-  ✓ Pattern stored for reference
-"""
-}
-```
-
-## Step 9: Show Learning Status
-
-```
-FEEDBACK HISTORY:
-  Positive: {positive_count}
-  Quality: {quality_count} (positive: {quality_pos}, negative: {quality_neg})
-  Speed: {speed_count}
-  Direction: {direction_count}
-
-LEARNING STATUS:
-  {positive_count >= 5}: "Best practices established from positive feedback"
-  {quality_neg >= 3}: "Quality intensified due to negative feedback"
-  {speed_count >= 3}: "Speed optimization pattern learned"
-```
-
-## Step 10: Show Next Steps
-
-```
-📋 NEXT STEPS:
-  1. /ant:memory            - View learned patterns
-  2. /ant:status            - Check colony status
-  3. /ant:phase             - View phase progress
-
-💡 FEEDBACK TIP:
-   Colony learns from patterns over time.
-   • 5+ positive feedback → Best practice established
-   • 3+ quality issues → Verifier intensifies
-   • 3+ speed issues → Optimization prioritized
-
-🔄 CONTEXT: Safe to continue - colony has adjusted
+╔══════════════════════════════════════════════════════════════╗
+║  🐜 FEEDBACK Pheromone Emitted                                ║
+╠══════════════════════════════════════════════════════════════╣
+║  Message: "{feedback}"                                        ║
+║  Type: FEEDBACK (guidance signal)                             ║
+║  Strength: 50%                                                ║
+║  Half-Life: 6 hours                                          ║
+║                                                               ║
+║  Colony Response:                                             ║
+║  ✓ All castes will adjust based on feedback                  ║
+║  ✓ Architect will record pattern for learning                 ║
+║  ✓ Future decisions will consider guidance                    ║
+╚══════════════════════════════════════════════════════════════╝
 ```
 
 </process>
 
 <context>
-@.aether/pheromone_system.py
-@.aether/worker_ants.py
+# AETHER FEEDBACK PHEROMONE SYSTEM
 
-Feedback Pheromone Properties:
-- Type: FEEDBACK (variable strength)
-- Strength: 0.5-0.7 depending on category
-- Half-life: 6 hours
-- Effect: Adjusts colony behavior
+## FEEDBACK Pheromone Properties
+- **Type**: FEEDBACK
+- **Default Strength**: 0.5
+- **Half-Life**: 6 hours (21600 seconds)
+- **Effect**: Adjusts colony behavior based on Queen observations
 
-Categories:
-- **Positive**: Reinforces current pattern (strength: 0.5)
-- **Quality**: Intensifies testing (strength: 0.6)
-- **Speed**: Optimizes for speed (strength: 0.5)
-- **Direction**: Pivots approach (strength: 0.7)
-- **General**: Records for reference (strength: 0.5)
+## Caste Sensitivities
 
-Colony Response by Category:
-- **Positive**: Pattern reinforced, stored for reuse
-- **Quality**: Verifier intensifies testing, Executor reviews code
-- **Speed**: Executor parallelizes, Planner simplifies
-- **Direction**: Planner pivots, Executor adjusts
+Each caste responds differently to FEEDBACK signals:
+
+| Caste | Sensitivity | Response |
+|-------|-------------|----------|
+| Colonizer | 0.7 | Moderate - adjusts exploration patterns |
+| Route-setter | 0.8 | Responds - adjusts planning approach |
+| Builder | 0.9 | Strong response - modifies implementation |
+| Watcher | 1.0 | Very strong - intensifies verification |
+| Scout | 0.8 | Responds - adjusts information gathering |
+| Architect | 1.0 | Very strong - records for learning |
+
+## Feedback Examples
+
+### Positive Feedback
+```
+/ant:feedback "Great progress on API layer"
+```
+- Effect: Pattern reinforced for reuse
+- Architect: Records positive pattern
+- Colony: Continues current approach
+
+### Quality Feedback
+```
+/ant:feedback "Need more test coverage"
+/ant:feedback "Quality issues in authentication"
+```
+- Effect: Testing intensified
+- Watcher: Increases verification
+- Builder: Reviews recent code
+
+### Speed Feedback
+```
+/ant:feedback "Too slow, speed up"
+```
+- Effect: Optimizes for speed
+- Builder: Increases parallelization
+- Route-setter: Simplifies tasks
+
+### Direction Feedback
+```
+/ant:feedback "This approach is wrong"
+/ant:feedback "Need to pivot architecture"
+```
+- Effect: Pivots approach
+- Route-setter: Replans with new direction
+- Builder: Adjusts implementation
+
+## Learning Integration
+
+FEEDBACK pheromones are recorded in memory.json for pattern learning:
+- 3+ similar feedback → preference/constraint established
+- Architect caste analyzes feedback history
+- Patterns influence future autonomous decisions
+
 </context>
 
 <reference>
-# Feedback Examples by Category
+# FEEDBACK Signal Schema
 
-## Positive Feedback
+```json
+{
+  "id": "feedback_1234567890",
+  "type": "FEEDBACK",
+  "strength": 0.5,
+  "created_at": "2025-02-01T12:00:00Z",
+  "decay_rate": 21600,
+  "metadata": {
+    "source": "queen",
+    "caste": null,
+    "context": "Great progress on API layer"
+  }
+}
 ```
-/ant:feedback "Great progress on WebSocket layer"
-/ant:feedback "Perfect implementation"
-/ant:feedback "Love this approach"
-```
-→ Pattern reinforced for future reuse
 
-## Quality Feedback
-```
-/ant:feedback "Too many bugs in this feature"
-/ant:feedback "Quality issues in the API layer"
-/ant:feedback "Need more test coverage"
-```
-→ Verifier intensifies, testing increases
+# Decay Calculation
 
-## Speed Feedback
-```
-/ant:feedback "Too slow, need to speed up"
-/ant:feedback "Great pace, keep it up"
-```
-→ Optimizes execution speed
+After 6 hours: strength × 0.5 = 0.25
+After 12 hours: strength × 0.25 = 0.125
+After 18 hours: strength × 0.125 = 0.0625
 
-## Direction Feedback
-```
-/ant:feedback "This approach is wrong"
-/ant:feedback "Need to pivot to different architecture"
-```
-→ Planner pivots, Executor adjusts
-
-# Learning Thresholds
-
-| Threshold | Effect |
-|-----------|--------|
-| 5+ positive | Best practice established |
-| 3+ quality issues | Quality intensified |
-| 3+ speed issues | Speed prioritized |
-| 3+ direction changes | Approach reconsidered |
-
-# Example Output
-
-```
-🐜 Queen Ant Colony - Feedback Recorded
-
-"Great progress on WebSocket layer"
-
-Category: positive
-Strength: 0.5
-
-COLONY RESPONDING:
-  ✓ Synthesizer recording positive pattern
-  ✓ Executor continuing current approach
-  ✓ Pattern reinforced for future reuse
-
-FEEDBACK HISTORY:
-  Positive: 12
-  Quality: 5 (positive: 3, negative: 2)
-  Speed: 3
-  Direction: 1
-
-LEARNING STATUS:
-  ✓ Best practices established from positive feedback
-
-📋 NEXT STEPS:
-  1. /ant:memory            - View learned patterns
-  2. /ant:status            - Check colony status
-```
+Worker Ants interpret decay on-read based on time elapsed.
 </reference>
 
 <allowed-tools>
-Read
 Write
 Bash
+Read
 </allowed-tools>
