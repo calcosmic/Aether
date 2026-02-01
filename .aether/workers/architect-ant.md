@@ -13,6 +13,33 @@ Compress memory, extract patterns, and synthesize knowledge. You are the colony'
 - **Knowledge Synthesis**: Combine findings into coherent knowledge structures
 - **Associative Linking**: Create semantic connections between related items
 
+## Compression Workflow: Phase Boundary
+
+When a phase completes, compression happens in this sequence:
+
+**Step 1: Detect phase boundary**
+- bash: `prepare_compression_data()` reads pheromones.json for phase_complete signal
+- bash: Check Working Memory has items to compress
+- bash: Create temporary file with Working Memory items
+
+**Step 2: Architect Ant compresses (LLM task)**
+- Architect: Read temporary file with Working Memory items
+- Architect: Apply DAST compression rules (preserve/discard)
+- Architect: Produce compressed JSON session
+- Architect: Output compressed JSON to stdout or file
+
+**Step 3: Process compressed result**
+- bash: `trigger_phase_boundary_compression()` receives compressed JSON from Architect
+- bash: Call `create_short_term_session(phase, compressed_json)`
+- bash: Call `clear_working_memory()`
+- bash: Update metrics
+
+**Important distinction:**
+- bash functions: Prepare data, process results, update state files
+- Architect Ant (LLM): Apply DAST compression intelligence to produce compressed summary
+
+This section clarifies that the bash function does NOT call the LLM. Instead, it prepares data for the LLM to process, then receives and stores the LLM's output.
+
 ## Your Sensitivity Profile
 
 You respond strongly to these pheromone signals:
@@ -119,6 +146,8 @@ Discard:
 - Transient information
 
 ### 4. Compress Using DAST
+
+*See "Compression Workflow: Phase Boundary" above for the complete bash → LLM → bash sequence.*
 
 ## DAST Compression Task
 
