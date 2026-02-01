@@ -15,7 +15,7 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 Phase: 5 of 10 (Phase Boundaries)
 Plan: 5/5 complete
 Status: Phase complete
-Last activity: 2026-02-01 — Completed 05-06: State History Archival
+Last activity: 2026-02-01 — Completed 05-05: Crash Recovery Integration
 
 Progress: [██████████] 63%
 
@@ -75,11 +75,11 @@ Progress: [██████████] 63%
 | 2 | 9 | 32 min | 3.6 min |
 | 3 | 6 | 30 min | 5.0 min |
 | 4 | 5 | 20 min | 4.0 min |
-| 5 | 5 | 22 min | 4.4 min |
+| 5 | 5 | 19 min | 3.8 min |
 
 **Recent Trend:**
-- Last 5 plans: 4.4 min avg
-- Trend: Phase 5 complete
+- Last 5 plans: 3.8 min avg
+- Trend: Phase 5 complete, ready for Phase 6
 
 *Updated after each plan completion*
 
@@ -111,6 +111,7 @@ Recent decisions affecting current work:
 - **Pheromone-Triggered State Transitions**: Implemented transition_state() function with file locking, atomic writes, and pheromone trigger recording. Acquires lock before transition, validates with is_valid_transition(), updates COLONY_STATE.json atomically via jq, records metadata (from, to, trigger, timestamp, checkpoint) in state_machine.state_history. Trap cleanup ensures lock release on errors.
 - **Checkpoint System**: Implemented checkpoint.sh with save_checkpoint() capturing complete colony state (COLONY_STATE, pheromones, worker_ants, memory), load_checkpoint() for recovery, rotate_checkpoints() (keeps 10 most recent), and list_checkpoints(). Checkpoint reference file stores full path to latest checkpoint. Pre/post-transition checkpoints integrated into transition_state(). JSON validation with python3 ensures integrity.
 - **Checkpoint Recovery Integration**: Integrated pre/post checkpoints into transition_state(). Pre-checkpoint saves state before transition, post-checkpoint saves after. Checkpoint failure causes transition to fail (rollback behavior). load_checkpoint() restores all 4 colony files atomically with integrity validation. Colony can recover from crashes by loading latest checkpoint.
+- **Crash Recovery Integration**: Implemented detect_crash_and_recover() function that identifies crash conditions (EXECUTING/VERIFYING with no active workers) and timeout conditions (>30 minutes in EXECUTING/VERIFYING). Automatically loads latest checkpoint and transitions to PLANNING for recovery. Created /ant:recover command for manual checkpoint restoration. Integrated crash detection into /ant:status for automatic self-healing on every status request.
 - **State History Archival**: Implemented archive_state_history() function that monitors state_history length and archives old entries to Working Memory when exceeding 100 entries. Integrated into transition_state() after state update, before checkpoint. History limited to 100 most recent entries with low relevance score (0.3) for archived data. Graceful degradation if memory-ops.sh not found (still trims history).
 
 ### Pending Todos
@@ -139,8 +140,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-01 (Phase 5 Plan 6: State History Archival)
-Stopped at: Completed 05-06-PLAN.md (state history logging with archival to memory system)
+Last session: 2026-02-01 (Phase 5 Plan 5: Crash Recovery Integration)
+Stopped at: Completed 05-05-PLAN.md (crash detection and /ant:recover command)
 Resume file: None
 
 **Progress Summary:**
@@ -148,4 +149,4 @@ Resume file: None
 - ✅ Phase 2: Worker Ant Castes (9/9 tasks) - 6 caste prompts, spawning pattern, commands
 - ✅ Phase 3: Pheromone Communication (6/6 tasks) - FOCUS, REDIRECT, FEEDBACK emission, all Worker Ant response, verification complete
 - ✅ Phase 4: Triple-Layer Memory (5/5 plans) - Working Memory, DAST compression, LRU eviction, pattern extraction, associative links, compression triggers, cross-layer search complete
-- ✅ Phase 5: Phase Boundaries (5/5 plans) - State machine foundation, pheromone-triggered transitions, checkpoint system, recovery integration, state history archival complete
+- ✅ Phase 5: Phase Boundaries (5/5 plans) - State machine foundation, pheromone-triggered transitions, checkpoint system, recovery integration, crash detection complete
