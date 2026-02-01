@@ -45,12 +45,19 @@ Worker Ants detect capability gaps and spawn specialist Worker Ants autonomously
 - **Redirect**: Strong repel, 24-hour half-life (warn away)
 - **Feedback**: Variable strength, 6-hour half-life (teach preferences)
 
-### 4. Session Persistence
+### 4. Triple-Layer Memory System
+- **Working Memory**: 200k tokens for immediate context and task execution
+- **Short-Term Memory**: 10 compressed sessions with DAST 2.5x compression
+- **Long-Term Memory**: Persistent patterns, learnings, and error prevention
+- **Automatic Compression**: Phase-boundary memory compression
+- **Worker Ant Integration**: All ants read/write working memory
+
+### 5. Session Persistence
 - **pause-colony**: Save state mid-phase
 - **resume-colony**: Restore in new session with clean context
 - Full state restoration: goal, pheromones, phase progress, Worker Ant states
 
-### 5. Codebase Colonization
+### 6. Codebase Colonization
 Colony analyzes existing codebase to understand:
 - Tech stack and dependencies
 - Architecture patterns
@@ -96,11 +103,19 @@ AETHER/
 │   ├── worker_ants.py               # 6 Worker Ant castes (850+ lines)
 │   ├── pheromone_system.py          # Signal system with decay (600+ lines)
 │   ├── phase_engine.py              # Phase execution (700+ lines)
-│   ├── queen_ant_system.py          # Unified system (300+ lines)
+│   ├── queen_ant_system.py          # Unified system (650+ lines)
 │   ├── interactive_commands.py      # CDS-like commands (1000+ lines)
-│   └── demo.py                      # Demo and tests
+│   ├── memory/                      # Triple-Layer Memory system
+│   │   ├── working_memory.py        # 200k token working memory
+│   │   ├── short_term_memory.py     # DAST 2.5x compression
+│   │   ├── long_term_memory.py      # Persistent pattern storage
+│   │   └── triple_layer_memory.py   # Memory orchestration
+│   ├── cli.py                       # Command-line interface
+│   ├── repl.py                      # Interactive REPL
+│   ├── demo.py                      # Queen Ant Colony demo
+│   └── memory_demo.py               # Memory integration demo
 ├── .claude/                         # Slash commands
-│   └── commands/ant/               # /ant: command system (13 commands)
+│   └── commands/ant/               # /ant: command system (15+ commands)
 │       ├── ant.md                  # System overview
 │       ├── init.md                 # Initialize project
 │       ├── plan.md                 # Show all phases
@@ -111,7 +126,10 @@ AETHER/
 │       ├── redirect.md             # Warn colony away
 │       ├── feedback.md             # Provide guidance
 │       ├── status.md               # Colony status
-│       ├── memory.md               # Learned patterns
+│       ├── memory.md               # Memory overview
+│       ├── memory-status.md        # Memory system status
+│       ├── memory-search.md        # Search memory
+│       ├── memory-compress.md      # Manual compression
 │       ├── colonize.md             # Analyze codebase
 │       ├── pause-colony.md         # Save session
 │       └── resume-colony.md        # Restore session
@@ -169,6 +187,20 @@ python3 .aether/demo.py
 - Execute phase with Worker Ant spawning
 - Colony self-organizes to complete tasks
 
+### Memory Integration Demo
+
+```bash
+# Run the Triple-Layer Memory integration demo
+python3 .aether/memory_demo.py
+```
+
+**Output**: Demonstrates the complete memory system:
+- Working Memory: Add, search, flush items
+- Short-Term Memory: DAST 2.5x compression
+- Long-Term Memory: Pattern storage and search
+- Cross-Layer Retrieval: Search across all layers
+- Queen Ant Integration: Full system with memory
+
 ### `/ant:` Command Interface
 
 The `/ant:` commands provide a user-friendly interface to the Queen Ant Colony:
@@ -193,7 +225,10 @@ The `/ant:` commands provide a user-friendly interface to the Queen Ant Colony:
 **Status Commands:**
 ```
 /ant:status             # Colony status
-/ant:memory             # Learned patterns
+/ant:memory             # Triple-layer memory status
+/ant:memory status      # Detailed memory system status
+/ant:memory search <q>  # Search across all memory layers
+/ant:memory compress    # Manual compression to short-term
 ```
 
 **Session Management:**
@@ -297,6 +332,8 @@ This is not incremental improvement. This is a **paradigm shift**.
 ### Completed ✅
 - [x] Phase 1: Context Engine Foundation (5 research documents)
 - [x] Phase 2: Queen Ant Colony System (6 castes, pheromones, phased autonomy)
+- [x] Phase 3: Triple-Layer Memory System (working, short-term, long-term)
+- [x] Memory Integration with Queen Ant System
 - [x] Phase 3: Semantic Codebase Understanding (5 research documents)
 - [x] Phase 4: Predictive & Anticipatory Systems (5 research documents)
 - [x] Phase 5: Advanced Verification & Quality (5 research documents)
@@ -330,11 +367,13 @@ MIT License - See LICENSE file for details
 
 ## 📍 Current Status
 
-**Last Updated**: February 2, 2026
+**Last Updated**: February 1, 2026
 
 - ✅ **Working System**: Queen Ant Colony with autonomous Worker Ant spawning
+- ✅ **Triple-Layer Memory**: Working (200k tokens), Short-Term (2.5x compression), Long-Term (persistent)
+- ✅ **Memory Integration**: Full QueenAntSystem integration with automatic phase-boundary compression
 - ✅ **Research Complete**: 383,000+ words across 25 documents with 758+ references
-- ✅ **Command Interface**: 13 `/ant:` commands with CDS-like interactivity
+- ✅ **Command Interface**: 13+ `/ant:` commands with CDS-like interactivity
 - ✅ **Session Persistence**: pause/resume for mid-phase checkpointing
 - ✅ **Codebase Colonization**: Analyze existing code before building
 - ✅ **All Research Phases Complete**: Phases 1, 3, 4, 5, 6, 7 - comprehensive research corpus ready for implementation
