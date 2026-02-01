@@ -12,142 +12,147 @@ You are the **Queen Ant Colony** emitting a focus pheromone to guide the colony.
 
 ## Step 1: Validate Input
 
-Extract the focus area from arguments:
-```python
-if not args:
-    return """❌ Usage: /ant:focus "<area>"
+Check if focus area argument is provided:
+```bash
+if [ -z "$1" ]; then
+  echo "Usage: /ant:focus \"<area>\""
+  echo ""
+  echo "Examples:"
+  echo "  /ant:focus \"WebSocket security\""
+  echo "  /ant:focus \"database optimization\""
+  echo "  /ant:focus \"user authentication\""
+  exit 1
+fi
 
-Examples:
-  /ant:focus "WebSocket security"
-  /ant:focus "database optimization"
-  /ant:focus "user authentication"
-"""
+focus_area="$1"
 ```
 
-## Step 2: Load Colony State
+## Step 2: Emit FOCUS Pheromone
 
-```python
-import json
-from datetime import datetime
+Create the FOCUS pheromone signal:
+```bash
+# Source atomic-write utility
+source .aether/utils/atomic-write.sh
 
-with open('.aether/COLONY_STATE.json', 'r') as f:
-    state = json.load(f)
+timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+pheromone_id="focus_$(date +%s)"
 
-pheromones = state.get('pheromones', [])
+jq --arg id "$pheromone_id" \
+   --arg timestamp "$timestamp" \
+   --arg focus "$focus_area" \
+   '
+   .active_pheromones += [{
+     "id": $id,
+     "type": "FOCUS",
+     "strength": 0.7,
+     "created_at": $timestamp,
+     "decay_rate": 3600,
+     "metadata": {
+       "source": "queen",
+       "caste": null,
+       "context": $focus
+     }
+   }]
+   ' .aether/data/pheromones.json > /tmp/pheromones.tmp
+
+# Atomic write
+atomic_write_from_file .aether/data/pheromones.json /tmp/pheromones.tmp
 ```
 
-## Step 3: Create Focus Pheromone
+## Step 3: Present Results
 
-```python
-focus_pheromone = {
-    "signal_type": "FOCUS",
-    "content": " ".join(args),  # The focus area
-    "strength": 0.7,  # Medium strength
-    "created_at": datetime.now().isoformat(),
-    "half_life_hours": 1.0,  # 1 hour half-life
-    "is_active": True,
-    "metadata": {
-        "occurrences": 1,  # Track occurrences for learning
-        "first_occurrence": datetime.now().isoformat()
-    }
-}
-```
-
-## Step 4: Check for Existing Focus on Same Topic
-
-```python
-focus_content = focus_pheromone['content'].lower()
-
-# Check if there's already a focus on this topic
-existing = None
-for p in pheromones:
-    if (p['signal_type'] == 'FOCUS' and
-        p.get('is_active', True) and
-        focus_content in p['content'].lower()):
-        existing = p
-        break
-
-if existing:
-    # Increment occurrences
-    existing['metadata']['occurrences'] = existing['metadata'].get('occurrences', 1) + 1
-    existing['strength'] = min(1.0, existing['strength'] + 0.1)  # Boost strength
-    existing['created_at'] = datetime.now().isoformat()  # Refresh timestamp
-else:
-    # Add new focus pheromone
-    pheromones.append(focus_pheromone)
-```
-
-## Step 5: Save Updated State
-
-```python
-state['pheromones'] = pheromones
-
-with open('.aether/COLONY_STATE.json', 'w') as f:
-    json.dump(state, f, indent=2)
-```
-
-## Step 6: Display Response
+Show the Queen (user) the focus pheromone emission:
 
 ```
-🐜 Queen Ant Colony - Focus Pheromone Emitted
+╔══════════════════════════════════════════════════════════════╗
+║  FOCUS Pheromone Emitted                                     ║
+╠══════════════════════════════════════════════════════════════╣
+║  Area: "{focus_area}"                                        ║
+║  Type: FOCUS (attract signal)                                ║
+║  Strength: 70%                                               ║
+║  Half-Life: 1 hour                                          ║
+║                                                               ║
+║  Colony Response:                                            ║
+║  Builder will prioritize {focus_area}                        ║
+║  Route-setter will include in planning                       ║
+║  Scout will research {focus_area} first                      ║
+╚══════════════════════════════════════════════════════════════╝
 
-"{focus_area}"
+COLONY RESPONDING
 
-Signal: FOCUS (strength: 70%)
-Duration: 1 hour half-life
-
-COLONY RESPONDING:
-  ✓ Executor prioritizing {focus_area}
-  ✓ Planner considering {focus_area} in next plan
-  ✓ Verifier focusing tests on {focus_area}
-  ✓ Researcher prioritizing {focus_area} topics
-```
-
-If existing focus was found:
-```
-OCCURRENCES: {count}
-  {count < 3}: Pattern emerging
-  {count >= 3}: Preference learned
-```
-
-## Step 7: Show Next Steps
-
-```
-📋 NEXT STEPS:
-  1. /ant:status            - Check colony response
-  2. /ant:phase             - View phase with new focus
-  3. /ant:memory            - View learned patterns
-
-💡 FOCUS TIP:
-   Repeated focuses on the same topic teach the colony
-   your preferences. After 3+ occurrences, it becomes a
-   learned preference.
-
-🔄 CONTEXT: Safe to continue - colony is adjusting focus
+Next Steps:
+  /ant:status   - View colony response to focus
+  /ant:plan     - Show how focus influences planning
+  /ant:redirect - Warn colony away from approaches (if needed)
 ```
 
 </process>
 
 <context>
-@.aether/pheromone_system.py
-@.aether/worker_ants.py
+# AETHER PHEROMONE SIGNAL SYSTEM - Claude Native Implementation
 
-Focus Pheromone Properties:
-- Type: FOCUS (medium attract)
-- Default strength: 0.7 (70%)
-- Half-life: 1 hour
-- Effect: Guides colony attention without forcing
+## Signal Decay Formula
+```
+Strength(t) = InitialStrength × e^(-t/HalfLife)
+```
 
-Worker Ant Response:
-- Executor: Prioritizes focused area in task selection
-- Planner: Incorporates focus into next phase plan
-- Verifier: Intensifies testing in focused area
-- Researcher: Prioritizes research in focused area
+Where:
+- InitialStrength: Signal strength at creation (0.0 to 1.0)
+- t: Time elapsed since signal creation
+- HalfLife: Time for signal to lose 50% strength
 
-Learning:
-- 3+ occurrences on same topic → Preference learned
-- Stored in memory as learned pattern
-- Influences future autonomous decisions
+Example calculation for FOCUS (half-life = 1 hour):
+- t=0: Strength = 0.7 × 1.0 = 0.7 (100%)
+- t=30m: Strength = 0.7 × 0.5^0.5 = 0.49 (70%)
+- t=1h: Strength = 0.7 × 0.5 = 0.35 (50%)
+- t=2h: Strength = 0.7 × 0.25 = 0.175 (25%)
+- t=4h: Strength = 0.7 × 0.0625 = 0.044 (~6%, expires)
+
+## Signal Types and Properties
+
+### INIT Signal
+- **Purpose**: Set colony intention, trigger planning
+- **Default Strength**: 1.0 (maximum)
+- **Half-Life**: Persists (no decay until phase complete)
+- **Effect**: Strong attract, mobilizes colony
+
+### FOCUS Signal
+- **Purpose**: Guide colony attention to specific area
+- **Default Strength**: 0.7
+- **Half-Life**: 1 hour (3600 seconds)
+- **Effect**: Medium attract, guides prioritization
+- **Caste Responses**:
+  - Colonizer (sensitivity 0.8): Colonizes focused area first
+  - Route-setter (sensitivity 0.9): Incorporates into priorities
+  - Builder (sensitivity 1.0): Highly responsive, prioritizes focused work
+  - Watcher (sensitivity 0.9): Intensifies testing
+  - Scout (sensitivity 0.7): Researches focused topic first
+  - Architect (sensitivity 0.8): Extracts patterns from focused area
+
+### REDIRECT Signal
+- **Purpose**: Warn colony away from approach/pattern
+- **Default Strength**: 0.9
+- **Half-Life**: 24 hours
+- **Effect**: Strong repel, prevents bad patterns
+
+### FEEDBACK Signal
+- **Purpose**: Adjust colony behavior based on Queen's feedback
+- **Default Strength**: 0.5-0.7 (variable based on category)
+- **Half-Life**: 6 hours
+- **Effect**: Variable, adjusts behavior
+
+## Effective Strength Calculation
+
+```
+EffectiveStrength = SignalStrength(t) × CasteSensitivity
+```
+
+Example: FOCUS signal (strength 0.5 after decay)
+- Colonizer: 0.5 × 0.8 = 0.40 (moderate response)
+- Builder: 0.5 × 1.0 = 0.50 (strong response)
+- Architect: 0.5 × 0.8 = 0.40 (moderate response)
+
+Response threshold: 0.1 (below threshold, no response)
 </context>
 
 <reference>
@@ -165,18 +170,7 @@ Learning:
 
 1. **Immediate Effect**: Colony adjusts current work to prioritize focus area
 2. **Lasting Effect**: Pheromone decays over 1 hour half-life
-3. **Learning Effect**: After 3+ occurrences, becomes learned preference
-
-## Colony Response by Caste
-
-| Caste | Response to Focus |
-|-------|------------------|
-| Mapper | Explores focused area first |
-| Planner | Plans tasks in focused area early |
-| Executor | Prioritizes focused tasks |
-| Verifier | Intensifies testing in focused area |
-| Researcher | Researches focused topics first |
-| Synthesizer | Extracts patterns from focused area |
+3. **Builder Response**: Highly responsive (sensitivity 1.0), prioritizes focused tasks
 
 ## Focus vs Other Pheromones
 
@@ -184,12 +178,12 @@ Learning:
 |-----------|----------|----------|--------|
 | INIT | 100% | Until phase complete | Triggers planning |
 | FOCUS | 70% | 1hr half-life | Guides attention |
-| REDIRECT | 70% | 24hr half-life | Warns away |
+| REDIRECT | 90% | 24hr half-life | Warns away |
 | FEEDBACK | 50% | 6hr half-life | Adjusts behavior |
 </reference>
 
 <allowed-tools>
-Read
 Write
 Bash
+Read
 </allowed-tools>
