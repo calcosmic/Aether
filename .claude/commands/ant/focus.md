@@ -1,81 +1,195 @@
 ---
-name: ant:memory
-description: View Queen Ant Colony memory - learned preferences, pheromone patterns
+name: ant:focus
+description: Emit focus pheromone - guide colony attention to specific area
 ---
 
 <objective>
-Display colony's learned patterns from pheromone signals including focus topics, avoid patterns, and feedback categories.
+Emit a focus pheromone (medium-strength attract signal) to guide the colony's attention toward a specific area, topic, or approach.
 </objective>
 
-<reference>
-# `/ant:memory` - Usage
+<process>
+You are the **Queen Ant Colony** emitting a focus pheromone to guide the colony.
 
-## Command
+## Step 1: Validate Input
 
-```
-/ant:memory
-```
+Extract the focus area from arguments:
+```python
+if not args:
+    return """❌ Usage: /ant:focus "<area>"
 
-## What It Shows
-
-- Learned focus topics (what Queen prioritizes)
-- Learned avoid patterns (what Queen redirects away from)
-- Feedback categories and counts
-
-## Output Example
-
-```
-LEARNED PREFERENCES:
-
-FOCUS TOPICS:
-  WebSocket security (3 occurrences)
-  message reliability (2 occurrences)
-  authentication (1 occurrence)
-
-AVOID PATTERNS:
-  string concatenation for SQL (2 occurrences) → One more becomes constraint
-
-FEEDBACK CATEGORIES:
-  Quality: 12 positive, 3 negative
-  Speed: 5 "too slow", 8 "good pace"
-  Direction: 2 "wrong approach" corrections
+Examples:
+  /ant:focus "WebSocket security"
+  /ant:focus "database optimization"
+  /ant:focus "user authentication"
+"""
 ```
 
-## How Learning Works
+## Step 2: Load Colony State
 
-- **3+ focuses** on same topic → Preference learned
-- **3+ redirects** on same pattern → Constraint created
-- **5+ positive feedback** → Best practice established
+```python
+import json
+from datetime import datetime
 
-## Output
+with open('.aether/COLONY_STATE.json', 'r') as f:
+    state = json.load(f)
+
+pheromones = state.get('pheromones', [])
+```
+
+## Step 3: Create Focus Pheromone
+
+```python
+focus_pheromone = {
+    "signal_type": "FOCUS",
+    "content": " ".join(args),  # The focus area
+    "strength": 0.7,  # Medium strength
+    "created_at": datetime.now().isoformat(),
+    "half_life_hours": 1.0,  # 1 hour half-life
+    "is_active": True,
+    "metadata": {
+        "occurrences": 1,  # Track occurrences for learning
+        "first_occurrence": datetime.now().isoformat()
+    }
+}
+```
+
+## Step 4: Check for Existing Focus on Same Topic
+
+```python
+focus_content = focus_pheromone['content'].lower()
+
+# Check if there's already a focus on this topic
+existing = None
+for p in pheromones:
+    if (p['signal_type'] == 'FOCUS' and
+        p.get('is_active', True) and
+        focus_content in p['content'].lower()):
+        existing = p
+        break
+
+if existing:
+    # Increment occurrences
+    existing['metadata']['occurrences'] = existing['metadata'].get('occurrences', 1) + 1
+    existing['strength'] = min(1.0, existing['strength'] + 0.1)  # Boost strength
+    existing['created_at'] = datetime.now().isoformat()  # Refresh timestamp
+else:
+    # Add new focus pheromone
+    pheromones.append(focus_pheromone)
+```
+
+## Step 5: Save Updated State
+
+```python
+state['pheromones'] = pheromones
+
+with open('.aether/COLONY_STATE.json', 'w') as f:
+    json.dump(state, f, indent=2)
+```
+
+## Step 6: Display Response
+
+```
+🐜 Queen Ant Colony - Focus Pheromone Emitted
+
+"{focus_area}"
+
+Signal: FOCUS (strength: 70%)
+Duration: 1 hour half-life
+
+COLONY RESPONDING:
+  ✓ Executor prioritizing {focus_area}
+  ✓ Planner considering {focus_area} in next plan
+  ✓ Verifier focusing tests on {focus_area}
+  ✓ Researcher prioritizing {focus_area} topics
+```
+
+If existing focus was found:
+```
+OCCURRENCES: {count}
+  {count < 3}: Pattern emerging
+  {count >= 3}: Preference learned
+```
+
+## Step 7: Show Next Steps
 
 ```
 📋 NEXT STEPS:
-  1. /ant:status            - Check colony status
-  2. /ant:focus <area>      - Add focus (teaches preferences)
-  3. /ant:redirect <pattern> - Avoid pattern (teaches constraints)
+  1. /ant:status            - Check colony response
+  2. /ant:phase             - View phase with new focus
+  3. /ant:memory            - View learned patterns
 
-💡 MEMORY TIP:
-  Colony learns from your signals over time.
+💡 FOCUS TIP:
+   Repeated focuses on the same topic teach the colony
+   your preferences. After 3+ occurrences, it becomes a
+   learned preference.
+
+🔄 CONTEXT: Safe to continue - colony is adjusting focus
 ```
 
-## Related Commands
+</process>
 
+<context>
+@.aether/pheromone_system.py
+@.aether/worker_ants.py
+
+Focus Pheromone Properties:
+- Type: FOCUS (medium attract)
+- Default strength: 0.7 (70%)
+- Half-life: 1 hour
+- Effect: Guides colony attention without forcing
+
+Worker Ant Response:
+- Executor: Prioritizes focused area in task selection
+- Planner: Incorporates focus into next phase plan
+- Verifier: Intensifies testing in focused area
+- Researcher: Prioritizes research in focused area
+
+Learning:
+- 3+ occurrences on same topic → Preference learned
+- Stored in memory as learned pattern
+- Influences future autonomous decisions
+</context>
+
+<reference>
+# Focus Examples
+
+## Correct Usage
 ```
-/ant:status    - Check colony status
-/ant:focus     - Add focus pheromone
-/ant:redirect  - Add redirect pheromone
+/ant:focus "WebSocket security"
+/ant:focus "database query optimization"
+/ant:focus "user authentication flow"
+/ant:focus "error handling"
 ```
+
+## What Happens
+
+1. **Immediate Effect**: Colony adjusts current work to prioritize focus area
+2. **Lasting Effect**: Pheromone decays over 1 hour half-life
+3. **Learning Effect**: After 3+ occurrences, becomes learned preference
+
+## Colony Response by Caste
+
+| Caste | Response to Focus |
+|-------|------------------|
+| Mapper | Explores focused area first |
+| Planner | Plans tasks in focused area early |
+| Executor | Prioritizes focused tasks |
+| Verifier | Intensifies testing in focused area |
+| Researcher | Researches focused topics first |
+| Synthesizer | Extracts patterns from focused area |
+
+## Focus vs Other Pheromones
+
+| Pheromone | Strength | Duration | Effect |
+|-----------|----------|----------|--------|
+| INIT | 100% | Until phase complete | Triggers planning |
+| FOCUS | 70% | 1hr half-life | Guides attention |
+| REDIRECT | 70% | 24hr half-life | Warns away |
+| FEEDBACK | 50% | 6hr half-life | Adjusts behavior |
 </reference>
 
-<script>
-from .aether.interactive_commands import get_commands
-
-async def main(args):
-    commands = get_commands()
-
-    if not commands.started:
-        return "❌ No project initialized. Run /ant:init <goal> first."
-
-    return await commands.memory()
-</script>
+<allowed-tools>
+Read
+Write
+Bash
+</allowed-tools>
