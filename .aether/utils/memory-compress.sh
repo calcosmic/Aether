@@ -69,8 +69,11 @@ if [ ! -f "$MEMORY_FILE" ]; then
 fi
 
 # Create Short-term Memory session from compressed JSON
+# Who calls: trigger_phase_boundary_compression() after Architect Ant produces output
+# When: After phase boundary compression or token threshold compression
 # Arguments: phase, compressed_json
 # Returns: session_id
+# Side effects: Adds session to short_term_memory.sessions, may trigger LRU eviction
 create_short_term_session() {
     local phase="$1"
     local compressed_json="$2"
@@ -136,8 +139,11 @@ create_short_term_session() {
 }
 
 # Clear Working Memory after compression
+# Who calls: trigger_phase_boundary_compression() after creating Short-term session
+# When: After compression stores data to Short-term Memory
 # Arguments: none
 # Returns: 0 on success
+# Side effects: Sets working_memory.items to [], current_tokens to 0
 clear_working_memory() {
     # Set working_memory.items to empty array
     # Set working_memory.current_tokens to 0
@@ -323,8 +329,11 @@ get_compression_stats() {
 }
 
 # Evict oldest Short-term Memory session (LRU policy)
+# Who calls: create_short_term_session() when current_sessions > max_sessions
+# When: Short-term Memory exceeds max_sessions (10)
 # Arguments: none
 # Returns: 0 on success
+# Side effects: Removes oldest session, extracts high-value patterns before eviction
 evict_short_term_session() {
     local max_sessions=$(jq -r '.short_term_memory.max_sessions' "$MEMORY_FILE")
     local current_sessions=$(jq -r '.short_term_memory.current_sessions' "$MEMORY_FILE")
@@ -360,8 +369,11 @@ evict_short_term_session() {
 }
 
 # Extract pattern to Long-term Memory
+# Who calls: extract_high_value_patterns(), detect_patterns_across_sessions()
+# When: High-value item found or pattern appears 3+ times
 # Arguments: pattern_type, pattern_content, confidence, context, source_session_id
 # Returns: pattern_id
+# Side effects: Adds pattern to long_term_memory.patterns, creates associative link
 extract_pattern_to_long_term() {
     local pattern_type="$1"
     local pattern_content="$2"
@@ -425,8 +437,11 @@ extract_pattern_to_long_term() {
 }
 
 # Extract high-value patterns from a session
+# Who calls: evict_short_term_session(), trigger_pattern_extraction()
+# When: Session eviction or after session creation
 # Arguments: session_id
 # Returns: number of patterns extracted
+# Side effects: Updates existing patterns or extracts new ones to Long-term Memory
 extract_high_value_patterns() {
     local session_id="$1"
 
@@ -516,8 +531,11 @@ extract_high_value_patterns() {
 }
 
 # Detect patterns across all Short-term sessions
+# Who calls: trigger_pattern_extraction()
+# When: After session creation or manual trigger
 # Arguments: none
 # Returns: number of patterns detected
+# Side effects: Extracts repeated patterns (3+ occurrences) to Long-term Memory
 detect_patterns_across_sessions() {
     # Get all high_value_items across all sessions
     local all_items=$(jq -r '
