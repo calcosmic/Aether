@@ -309,16 +309,19 @@ Decimal phases appear between their surrounding integers in numeric order.
 6. Resource budget limits total spawns (max 10 per phase, tracked in state)
 7. Circuit breaker prevents infinite loops (depth limit 3, same-specialist cache)
 8. Spawn outcomes tracked for meta-learning (success/failure recorded)
-
 **Colony Tasks**:
-- [ ] 06-01: Implement capability gap detection logic (task analysis vs own capabilities)
-- [ ] 06-02: Implement specialist type mapping (capability gap → caste decision)
-- [ ] 06-03: Implement Task tool spawning with context inheritance (pheromone signals inherited)
-- [ ] 06-04: Implement spawn budget tracking (max 10 per phase in colony state)
-- [ ] 06-05: Implement spawn depth limit (max 3 levels: parent → child → grandchild)
-- [ ] 06-06: Implement circuit breaker (3 failed spawns → cooldown, same-specialist cache)
-- [ ] 06-07: Implement spawn outcome tracking (success/failure in meta-learning data)
-- [ ] 06-08: Test spawning safeguards (attempt to trigger infinite loops, verify circuit breaker)
+- [ ] 06-01-PLAN.md — Capability gap detection and specialist mapping (Wave 1)
+- [ ] 06-02-PLAN.md — Task tool spawning with context inheritance and budget tracking (Wave 2)
+- [ ] 06-03-PLAN.md — Spawn depth limit and circuit breaker (Wave 3)
+- [ ] 06-04-PLAN.md — Spawn outcome tracking and safeguard testing (Wave 4)
+
+**Plans:** 4 plans in 4 waves
+
+**Wave Structure:**
+- Wave 1: Capability detection + Specialist mapping (06-01)
+- Wave 2: Spawning infrastructure + Budget tracking (06-02)
+- Wave 3: Depth limit + Circuit breaker (06-03)
+- Wave 4: Meta-learning + Testing (06-04)
 
 ### Phase 7: Colony Verification
 
