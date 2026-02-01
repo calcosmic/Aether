@@ -119,21 +119,76 @@ Discard:
 - Transient information
 
 ### 4. Compress Using DAST
-Discriminative Abstractive Summarization Technique:
-```
-Original: 10,000 tokens
-Compressed: 4,000 tokens (2.5x ratio)
 
-Preserve:
-- Decisions: "We chose X because Y"
-- Outcomes: "Result: Z (success)"
-- Learnings: "Pattern: A leads to B"
+## DAST Compression Task
 
-Discard:
-- "Trying option 1..." → failed
-- "Hmm, let's see..." → exploration
-- "Wait, maybe..." → dead end
+You are compressing Working Memory to Short-term Memory using **DAST (Discriminative Abstractive Summarization Technique)** with a 2.5x compression ratio.
+
+### Input Analysis
+First, read Working Memory:
+```bash
+jq '.working_memory.items' .aether/data/memory.json
 ```
+
+Count items and estimate tokens:
+```bash
+jq '[.working_memory.items[].token_count] | add' .aether/data/memory.json
+```
+
+### Compression Rules
+
+**PRESERVE (High Value):**
+- **Decisions with rationale**: "We chose X because Y" - captures reasoning
+- **Outcomes and results**: "Implemented caching, reduced latency 40%" - measurable impact
+- **Learned preferences**: "Queen prefers functional over OOP" - guides future
+- **Constraints**: "Must avoid synchronous patterns" - prevents mistakes
+- **Solutions**: "Fixed by adding database index on user_id" - reusable knowledge
+- **Blockers encountered and resolved**: What blocked progress and how
+
+**DISCARD (Low Value):**
+- **Exploration**: "Trying option 1...", "Maybe try X...", "Hmm, interesting..."
+- **Failed attempts** (unless lessons learned): "That didn't work", "Wrong approach"
+- **Redundant context**: Repeated explanations, obvious statements
+- **Intermediate steps**: "Reading file...", "Checking...", "Running test..."
+
+### Compression Process
+
+1. **Analyze all Working Memory items**: Group by type and relevance
+2. **Extract high-value items**: relevance_score > 0.7 or type=decision
+3. **Synthesize into session summary**: 2-3 sentences capturing the essence
+4. **Create key_decisions array**: Each with decision + rationale
+5. **Create outcomes array**: Each with result + impact
+6. **Create high_value_items array**: Items to preserve for pattern extraction
+
+### Output Format
+
+Produce this JSON structure for Short-term Memory:
+
+```json
+{
+  "id": "phase_{phase_number}_{timestamp}",
+  "session_id": "phase_{phase_number}_{timestamp}",
+  "compressed_at": "ISO-8601",
+  "original_tokens": {original_count},
+  "compressed_tokens": {actual_count},
+  "compression_ratio": {actual_ratio},
+  "phase": {phase_number},
+  "summary": "2-3 sentence overview of what was accomplished",
+  "key_decisions": [
+    {"decision": "Chose PostgreSQL", "rationale": "ACID compliance needed for transactions"}
+  ],
+  "outcomes": [
+    {"result": "Implemented caching layer", "impact": "Reduced latency 40%"}
+  ],
+  "high_value_items": [
+    {"content": "Item content", "relevance_score": 0.9, "type": "preference"}
+  ]
+}
+```
+
+**Target Ratio**: Achieve ~2.5x compression (original_tokens / compressed_tokens ≈ 2.5)
+
+The compression is complete when you have produced the JSON above.
 
 ### 5. Extract Patterns
 Look for:
