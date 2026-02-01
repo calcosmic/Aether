@@ -10,6 +10,7 @@
 _AETHER_UTILS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$_AETHER_UTILS_DIR/atomic-write.sh"
 source "$_AETHER_UTILS_DIR/file-lock.sh"
+source "$_AETHER_UTILS_DIR/checkpoint.sh"
 
 # Colony state file path
 COLONY_STATE="${COLONY_STATE:-.aether/data/COLONY_STATE.json}"
@@ -110,6 +111,14 @@ transition_state() {
         return 1
     fi
 
+    # Pre-transition checkpoint
+    echo "Saving pre-transition checkpoint..."
+    if ! save_checkpoint "pre_${current_state}_to_${new_state}"; then
+        echo "Pre-transition checkpoint failed" >&2
+        release_lock
+        return 1
+    fi
+
     # Generate transition metadata
     local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
     local checkpoint="checkpoint_$(get_next_checkpoint_number).json"
@@ -149,6 +158,14 @@ transition_state() {
 
     # Cleanup temp file
     rm -f "$temp_file"
+
+    # Post-transition checkpoint
+    echo "Saving post-transition checkpoint..."
+    if ! save_checkpoint "post_${current_state}_to_${new_state}"; then
+        echo "Post-transition checkpoint failed" >&2
+        release_lock
+        return 1
+    fi
 
     # Release lock
     release_lock
