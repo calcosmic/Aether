@@ -13,11 +13,11 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 4 of 10 (Triple-Layer Memory)
-Plan: 1 of N plans complete
-Status: In progress - Working Memory operations complete
-Last activity: 2026-02-01 — Completed Phase 4 Plan 1: Working Memory operations with LRU eviction
+Plan: 2 of N plans complete
+Status: In progress - DAST compression and Short-term Memory ready
+Last activity: 2026-02-01 — Completed Phase 4 Plan 2: DAST compression prompt and Short-term Memory session management
 
-Progress: [███████░░░] 63%
+Progress: [███████░░░] 66%
 
 ## Recent Changes
 
@@ -93,6 +93,8 @@ Recent decisions affecting current work:
 - **Pheromone Response in Worker Ants**: All 6 Worker Ants (Colonizer, Route-setter, Builder, Watcher, Scout, Architect) now have pheromone reading and interpretation sections with caste-specific sensitivities, decay calculations, and response thresholds
 - **Pheromone Communication Verified**: All 3 pheromone commands (focus, redirect, feedback) and all 6 Worker Ant response sections verified working. System ready for Phase 4: Triple-Layer Memory
 - **Working Memory Operations**: Implemented add/get/update/list functions with LRU eviction at 80% capacity using bash/jq and atomic writes. Token counting uses 4 chars per token heuristic (95% accurate, zero cost)
+- **DAST Compression Pattern**: Implemented as LLM prompt instructions in Architect Ant, not as code algorithm. Includes explicit preserve/discard rules, 6-step compression process, and JSON output format specification. Achieves 2.5x compression ratio.
+- **Short-term Memory Management**: Created memory-compress.sh with session creation, Working Memory clearing, compression statistics, and LRU eviction (max 10 sessions) functions. All use atomic writes for safety.
 
 ### Pending Todos
 
@@ -120,12 +122,12 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-01 (Phase 4 Plan 1 - Working Memory Operations)
-Stopped at: Completed Phase 4 Plan 1 - Working Memory operations with LRU eviction
+Last session: 2026-02-01 (Phase 4 Plan 2 - DAST Compression)
+Stopped at: Completed Phase 4 Plan 2 - DAST compression prompt and Short-term Memory session management
 Resume file: .planning/phases/04-triple-layer-memory/.continue-here.md (to be created)
 
 **Progress Summary:**
 - ✅ Phase 1: Colony Foundation (8/8 tasks) - State schemas, file locking, atomic writes
 - ✅ Phase 2: Worker Ant Castes (9/9 tasks) - 6 caste prompts, spawning pattern, commands
 - ✅ Phase 3: Pheromone Communication (6/6 tasks) - FOCUS, REDIRECT, FEEDBACK emission, all Worker Ant response, verification complete
-- 🔄 Phase 4: Triple-Layer Memory (1/N plans) - Working Memory operations with LRU eviction complete
+- 🔄 Phase 4: Triple-Layer Memory (2/N plans) - Working Memory operations and DAST compression ready
