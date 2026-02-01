@@ -3,14 +3,331 @@
   "working_memory": {
     "description": "Immediate context for current session - 200k token capacity",
     "max_capacity_tokens": 200000,
-    "current_tokens": 0,
+    "current_tokens": 424,
     "eviction_threshold_percent": 80,
     "eviction_policy": "LRU",
-    "items": [],
+    "items": [
+      {
+        "id": "wm_1769962358_61ce3a66",
+        "type": "observation",
+        "content": "Test observation",
+        "metadata": {
+          "timestamp": "2026-02-01T16:12:38Z",
+          "relevance_score": 0.8,
+          "access_count": 1,
+          "last_accessed": "2026-02-01T16:12:43Z",
+          "source": "queen",
+          "caste": null
+        },
+        "associative_links": [],
+        "token_count": 4
+      },
+      {
+        "id": "wm_1769962382_9dcae428",
+        "type": "observation",
+        "content": "Large test item 1 with enough content to trigger eviction when capacity is reached",
+        "metadata": {
+          "timestamp": "2026-02-01T16:13:02Z",
+          "relevance_score": 0.5,
+          "access_count": 0,
+          "last_accessed": "2026-02-01T16:13:02Z",
+          "source": "queen",
+          "caste": null
+        },
+        "associative_links": [],
+        "token_count": 21
+      },
+      {
+        "id": "wm_1769962382_f577916f",
+        "type": "observation",
+        "content": "Large test item 2 with enough content to trigger eviction when capacity is reached",
+        "metadata": {
+          "timestamp": "2026-02-01T16:13:02Z",
+          "relevance_score": 0.5,
+          "access_count": 0,
+          "last_accessed": "2026-02-01T16:13:02Z",
+          "source": "queen",
+          "caste": null
+        },
+        "associative_links": [],
+        "token_count": 21
+      },
+      {
+        "id": "wm_1769962382_45ac50d7",
+        "type": "observation",
+        "content": "Large test item 3 with enough content to trigger eviction when capacity is reached",
+        "metadata": {
+          "timestamp": "2026-02-01T16:13:02Z",
+          "relevance_score": 0.5,
+          "access_count": 0,
+          "last_accessed": "2026-02-01T16:13:02Z",
+          "source": "queen",
+          "caste": null
+        },
+        "associative_links": [],
+        "token_count": 21
+      },
+      {
+        "id": "wm_1769962382_b8fb4b55",
+        "type": "observation",
+        "content": "Large test item 4 with enough content to trigger eviction when capacity is reached",
+        "metadata": {
+          "timestamp": "2026-02-01T16:13:02Z",
+          "relevance_score": 0.5,
+          "access_count": 0,
+          "last_accessed": "2026-02-01T16:13:02Z",
+          "source": "queen",
+          "caste": null
+        },
+        "associative_links": [],
+        "token_count": 21
+      },
+      {
+        "id": "wm_1769962383_e3107fe2",
+        "type": "observation",
+        "content": "Large test item 5 with enough content to trigger eviction when capacity is reached",
+        "metadata": {
+          "timestamp": "2026-02-01T16:13:03Z",
+          "relevance_score": 0.5,
+          "access_count": 0,
+          "last_accessed": "2026-02-01T16:13:03Z",
+          "source": "queen",
+          "caste": null
+        },
+        "associative_links": [],
+        "token_count": 21
+      },
+      {
+        "id": "wm_1769962383_c883abde",
+        "type": "observation",
+        "content": "Large test item 6 with enough content to trigger eviction when capacity is reached",
+        "metadata": {
+          "timestamp": "2026-02-01T16:13:03Z",
+          "relevance_score": 0.5,
+          "access_count": 0,
+          "last_accessed": "2026-02-01T16:13:03Z",
+          "source": "queen",
+          "caste": null
+        },
+        "associative_links": [],
+        "token_count": 21
+      },
+      {
+        "id": "wm_1769962383_eff90564",
+        "type": "observation",
+        "content": "Large test item 7 with enough content to trigger eviction when capacity is reached",
+        "metadata": {
+          "timestamp": "2026-02-01T16:13:03Z",
+          "relevance_score": 0.5,
+          "access_count": 0,
+          "last_accessed": "2026-02-01T16:13:03Z",
+          "source": "queen",
+          "caste": null
+        },
+        "associative_links": [],
+        "token_count": 21
+      },
+      {
+        "id": "wm_1769962383_ee7ebe0e",
+        "type": "observation",
+        "content": "Large test item 8 with enough content to trigger eviction when capacity is reached",
+        "metadata": {
+          "timestamp": "2026-02-01T16:13:03Z",
+          "relevance_score": 0.5,
+          "access_count": 0,
+          "last_accessed": "2026-02-01T16:13:03Z",
+          "source": "queen",
+          "caste": null
+        },
+        "associative_links": [],
+        "token_count": 21
+      },
+      {
+        "id": "wm_1769962383_56c6f46d",
+        "type": "observation",
+        "content": "Large test item 9 with enough content to trigger eviction when capacity is reached",
+        "metadata": {
+          "timestamp": "2026-02-01T16:13:03Z",
+          "relevance_score": 0.5,
+          "access_count": 0,
+          "last_accessed": "2026-02-01T16:13:03Z",
+          "source": "queen",
+          "caste": null
+        },
+        "associative_links": [],
+        "token_count": 21
+      },
+      {
+        "id": "wm_1769962383_4f26465b",
+        "type": "observation",
+        "content": "Large test item 10 with enough content to trigger eviction when capacity is reached",
+        "metadata": {
+          "timestamp": "2026-02-01T16:13:03Z",
+          "relevance_score": 0.5,
+          "access_count": 0,
+          "last_accessed": "2026-02-01T16:13:03Z",
+          "source": "queen",
+          "caste": null
+        },
+        "associative_links": [],
+        "token_count": 21
+      },
+      {
+        "id": "wm_1769962383_5722a524",
+        "type": "observation",
+        "content": "Large test item 11 with enough content to trigger eviction when capacity is reached",
+        "metadata": {
+          "timestamp": "2026-02-01T16:13:03Z",
+          "relevance_score": 0.5,
+          "access_count": 0,
+          "last_accessed": "2026-02-01T16:13:03Z",
+          "source": "queen",
+          "caste": null
+        },
+        "associative_links": [],
+        "token_count": 21
+      },
+      {
+        "id": "wm_1769962384_f945f63a",
+        "type": "observation",
+        "content": "Large test item 12 with enough content to trigger eviction when capacity is reached",
+        "metadata": {
+          "timestamp": "2026-02-01T16:13:04Z",
+          "relevance_score": 0.5,
+          "access_count": 0,
+          "last_accessed": "2026-02-01T16:13:04Z",
+          "source": "queen",
+          "caste": null
+        },
+        "associative_links": [],
+        "token_count": 21
+      },
+      {
+        "id": "wm_1769962384_953091a3",
+        "type": "observation",
+        "content": "Large test item 13 with enough content to trigger eviction when capacity is reached",
+        "metadata": {
+          "timestamp": "2026-02-01T16:13:04Z",
+          "relevance_score": 0.5,
+          "access_count": 0,
+          "last_accessed": "2026-02-01T16:13:04Z",
+          "source": "queen",
+          "caste": null
+        },
+        "associative_links": [],
+        "token_count": 21
+      },
+      {
+        "id": "wm_1769962384_f66be2f4",
+        "type": "observation",
+        "content": "Large test item 14 with enough content to trigger eviction when capacity is reached",
+        "metadata": {
+          "timestamp": "2026-02-01T16:13:04Z",
+          "relevance_score": 0.5,
+          "access_count": 0,
+          "last_accessed": "2026-02-01T16:13:04Z",
+          "source": "queen",
+          "caste": null
+        },
+        "associative_links": [],
+        "token_count": 21
+      },
+      {
+        "id": "wm_1769962384_9fd5cebe",
+        "type": "observation",
+        "content": "Large test item 15 with enough content to trigger eviction when capacity is reached",
+        "metadata": {
+          "timestamp": "2026-02-01T16:13:04Z",
+          "relevance_score": 0.5,
+          "access_count": 0,
+          "last_accessed": "2026-02-01T16:13:04Z",
+          "source": "queen",
+          "caste": null
+        },
+        "associative_links": [],
+        "token_count": 21
+      },
+      {
+        "id": "wm_1769962384_cb3052d5",
+        "type": "observation",
+        "content": "Large test item 16 with enough content to trigger eviction when capacity is reached",
+        "metadata": {
+          "timestamp": "2026-02-01T16:13:04Z",
+          "relevance_score": 0.5,
+          "access_count": 0,
+          "last_accessed": "2026-02-01T16:13:04Z",
+          "source": "queen",
+          "caste": null
+        },
+        "associative_links": [],
+        "token_count": 21
+      },
+      {
+        "id": "wm_1769962384_bf0fbe41",
+        "type": "observation",
+        "content": "Large test item 17 with enough content to trigger eviction when capacity is reached",
+        "metadata": {
+          "timestamp": "2026-02-01T16:13:04Z",
+          "relevance_score": 0.5,
+          "access_count": 0,
+          "last_accessed": "2026-02-01T16:13:04Z",
+          "source": "queen",
+          "caste": null
+        },
+        "associative_links": [],
+        "token_count": 21
+      },
+      {
+        "id": "wm_1769962384_93501640",
+        "type": "observation",
+        "content": "Large test item 18 with enough content to trigger eviction when capacity is reached",
+        "metadata": {
+          "timestamp": "2026-02-01T16:13:04Z",
+          "relevance_score": 0.5,
+          "access_count": 0,
+          "last_accessed": "2026-02-01T16:13:04Z",
+          "source": "queen",
+          "caste": null
+        },
+        "associative_links": [],
+        "token_count": 21
+      },
+      {
+        "id": "wm_1769962385_b7bd5405",
+        "type": "observation",
+        "content": "Large test item 19 with enough content to trigger eviction when capacity is reached",
+        "metadata": {
+          "timestamp": "2026-02-01T16:13:05Z",
+          "relevance_score": 0.5,
+          "access_count": 0,
+          "last_accessed": "2026-02-01T16:13:05Z",
+          "source": "queen",
+          "caste": null
+        },
+        "associative_links": [],
+        "token_count": 21
+      },
+      {
+        "id": "wm_1769962385_bdfbd88f",
+        "type": "observation",
+        "content": "Large test item 20 with enough content to trigger eviction when capacity is reached",
+        "metadata": {
+          "timestamp": "2026-02-01T16:13:05Z",
+          "relevance_score": 0.5,
+          "access_count": 0,
+          "last_accessed": "2026-02-01T16:13:05Z",
+          "source": "queen",
+          "caste": null
+        },
+        "associative_links": [],
+        "token_count": 21
+      }
+    ],
     "item_schema": {
       "id": "uuid",
       "type": "observation|task_result|decision|code_snippet|user_input",
       "content": "",
+      "token_count": 0,
       "metadata": {
         "timestamp": "ISO-8601",
         "relevance_score": 0.0,
