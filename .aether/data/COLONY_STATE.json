@@ -12,11 +12,16 @@
     "context": ""
   },
   "colony_status": {
-    "state": "COMPLETED",
+    "state": "IDLE",
     "state_history": [],
     "current_phase": null,
     "phases_completed": [],
-    "queen_checkin": null
+    "queen_checkin": {
+      "phase": "1",
+      "status": "awaiting_review",
+      "timestamp": "2026-02-01T17:58:27Z",
+      "queen_decision": null
+    }
   },
   "state_machine": {
     "valid_states": [
@@ -124,7 +129,23 @@
         "caste": "route_setter",
         "tasks": [],
         "started_at": null,
-        "completed_at": null
+        "completed_at": null,
+        "adaptation": {
+          "inherited_focus": [
+            "Use atomic writes for state files"
+          ],
+          "inherited_constraints": [
+            "Avoid synchronous patterns in async systems"
+          ],
+          "success_patterns": [
+            "jq with atomic writes produces reliable state updates"
+          ],
+          "failure_patterns": [
+            "Direct file manipulation causes race conditions"
+          ],
+          "adapted_from": "1",
+          "adapted_at": "2026-02-01T17:59:03Z"
+        }
       },
       {
         "id": 3,

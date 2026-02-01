@@ -72,6 +72,114 @@
         "caste": null,
         "context": "test area"
       }
+    },
+    {
+      "id": "feedback_1769968616",
+      "type": "FEEDBACK",
+      "strength": 0.5,
+      "created_at": "2026-02-01T17:56:56Z",
+      "decay_rate": 21600,
+      "metadata": {
+        "source": "queen",
+        "caste": null,
+        "context": "Test feedback during EXECUTING"
+      }
+    },
+    {
+      "id": "focus_1769968629_iSxYL9",
+      "type": "FOCUS",
+      "strength": 0.8,
+      "created_at": "2026-02-01T17:57:09Z",
+      "decay_rate": 3600,
+      "metadata": {
+        "source": "memory_adaptation",
+        "phase": "2",
+        "context": "Use atomic writes for state files"
+      }
+    },
+    {
+      "id": "redirect_1769968629_nHXqg6",
+      "type": "REDIRECT",
+      "strength": 0.9,
+      "created_at": "2026-02-01T17:57:09Z",
+      "decay_rate": 86400,
+      "metadata": {
+        "source": "memory_adaptation",
+        "phase": "2",
+        "context": "Avoid synchronous patterns in async systems"
+      }
+    },
+    {
+      "id": "focus_1769968652_ji2DI3",
+      "type": "FOCUS",
+      "strength": 0.8,
+      "created_at": "2026-02-01T17:57:32Z",
+      "decay_rate": 3600,
+      "metadata": {
+        "source": "memory_adaptation",
+        "phase": "2",
+        "context": "Use atomic writes for state files"
+      }
+    },
+    {
+      "id": "redirect_1769968652_4SOUi9",
+      "type": "REDIRECT",
+      "strength": 0.9,
+      "created_at": "2026-02-01T17:57:32Z",
+      "decay_rate": 86400,
+      "metadata": {
+        "source": "memory_adaptation",
+        "phase": "2",
+        "context": "Avoid synchronous patterns in async systems"
+      }
+    },
+    {
+      "id": "focus_1769968707_O4CjWB",
+      "type": "FOCUS",
+      "strength": 0.8,
+      "created_at": "2026-02-01T17:58:27Z",
+      "decay_rate": 3600,
+      "metadata": {
+        "source": "memory_adaptation",
+        "phase": "2",
+        "context": "Use atomic writes for state files"
+      }
+    },
+    {
+      "id": "redirect_1769968707_KW6TXa",
+      "type": "REDIRECT",
+      "strength": 0.9,
+      "created_at": "2026-02-01T17:58:27Z",
+      "decay_rate": 86400,
+      "metadata": {
+        "source": "memory_adaptation",
+        "phase": "2",
+        "context": "Avoid synchronous patterns in async systems"
+      }
+    },
+    {
+      "id": "focus_1769968742_B3eVZU",
+      "type": "FOCUS",
+      "strength": 0.8,
+      "created_at": "2026-02-01T17:59:02Z",
+      "decay_rate": 3600,
+      "metadata": {
+        "source": "memory_adaptation",
+        "phase": "2",
+        "context": "Use atomic writes for state files"
+      }
+    },
+    {
+      "id": "redirect_1769968742_pgCrS5",
+      "type": "REDIRECT",
+      "strength": 0.9,
+      "created_at": "2026-02-01T17:59:02Z",
+      "decay_rate": 86400,
+      "metadata": {
+        "source": "memory_adaptation",
+        "phase": "2",
+        "context": "Avoid synchronous patterns in async systems"
+      }
     }
   ],
   "pheromone_types": {

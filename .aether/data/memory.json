@@ -233,7 +233,85 @@
   },
   "long_term_memory": {
     "description": "Persistent patterns and learned expertise - associative links",
-    "patterns": [],
+    "patterns": [
+      {
+        "id": "pattern_test_1",
+        "type": "focus_preference",
+        "pattern": "Use atomic writes for state files",
+        "confidence": 0.9,
+        "occurrences": 5,
+        "created_at": "2026-02-01T10:00:00Z",
+        "last_seen": "2026-02-01T16:00:00Z",
+        "associative_links": [],
+        "metadata": {
+          "context": "State file persistence",
+          "related_castes": [
+            "builder"
+          ],
+          "related_phases": [
+            1
+          ]
+        }
+      },
+      {
+        "id": "pattern_test_2",
+        "type": "constraint",
+        "pattern": "Avoid synchronous patterns in async systems",
+        "confidence": 0.8,
+        "occurrences": 3,
+        "created_at": "2026-02-01T10:00:00Z",
+        "last_seen": "2026-02-01T16:00:00Z",
+        "associative_links": [],
+        "metadata": {
+          "context": "Async architecture",
+          "related_castes": [
+            "builder"
+          ],
+          "related_phases": [
+            1
+          ]
+        }
+      },
+      {
+        "id": "pattern_test_3",
+        "type": "success_pattern",
+        "pattern": "jq with atomic writes produces reliable state updates",
+        "confidence": 0.95,
+        "occurrences": 7,
+        "created_at": "2026-02-01T10:00:00Z",
+        "last_seen": "2026-02-01T16:00:00Z",
+        "associative_links": [],
+        "metadata": {
+          "context": "State management",
+          "related_castes": [
+            "builder",
+            "route_setter"
+          ],
+          "related_phases": [
+            1
+          ]
+        }
+      },
+      {
+        "id": "pattern_test_4",
+        "type": "failure_pattern",
+        "pattern": "Direct file manipulation causes race conditions",
+        "confidence": 0.85,
+        "occurrences": 4,
+        "created_at": "2026-02-01T10:00:00Z",
+        "last_seen": "2026-02-01T16:00:00Z",
+        "associative_links": [],
+        "metadata": {
+          "context": "File operations",
+          "related_castes": [
+            "builder"
+          ],
+          "related_phases": [
+            1
+          ]
+        }
+      }
+    ],
     "pattern_schema": {
       "id": "uuid",
       "type": "success_pattern|failure_pattern|preference|constraint",
