@@ -139,17 +139,14 @@ Decimal phases appear between their surrounding integers in numeric order.
 6. Queen can query memory and get ranked results from all three layers
 7. Context window never exceeds 200k tokens (compression triggers prevent overflow)
 
+**Plans:** 5 plans in 5 waves
+
 **Colony Tasks**:
-- [ ] 04-01: Implement Working Memory schema in memory.json (items with metadata, timestamps, relevance)
-- [ ] 04-02: Implement Working Memory read/write/update operations
-- [ ] 04-03: Implement LRU eviction policy for Working Memory (evict at 80% capacity)
-- [ ] 04-04: Implement DAST compression algorithm prompt (2.5x compression ratio, preserves semantics)
-- [ ] 04-05: Implement Short-term Memory schema (compressed sessions with metadata)
-- [ ] 04-06: Implement Short-term Memory LRU eviction (max 10 sessions, LRU eviction)
-- [ ] 04-07: Implement Long-term Memory schema (persistent patterns with associative links)
-- [ ] 04-08: Implement phase boundary compression trigger (Architect compresses Working → Short-term)
-- [ ] 04-09: Implement pattern extraction trigger (high-value items Short-term → Long-term)
-- [ ] 04-10: Implement cross-layer search with relevance ranking
+- [ ] 04-01-PLAN.md — Working Memory operations (add, get, update, list) with LRU eviction at 80% capacity
+- [ ] 04-02-PLAN.md — DAST compression prompt enhancement and Short-term Memory schema verification
+- [ ] 04-03-PLAN.md — Short-term LRU eviction (max 10 sessions) and Long-term pattern extraction
+- [ ] 04-04-PLAN.md — Phase boundary compression trigger and pattern extraction trigger
+- [ ] 04-05-PLAN.md — Cross-layer search with relevance ranking and /ant:memory command
 
 ### Phase 5: Phase Boundaries
 
@@ -339,12 +336,12 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Execution Order:**
 Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10
 
-| Phase | Colony Tasks | Status | Completed |
-|-------|--------------|--------|-----------|
+| Phase | Plans | Status | Completed |
+|-------|-------|--------|-----------|
 | 1. Colony Foundation | 8/8 | Complete | 2026-02-01 |
 | 2. Worker Ant Castes | 9/9 | Complete | 2026-02-01 |
 | 3. Pheromone Communication | 6/6 | Complete | 2026-02-01 |
-| 4. Triple-Layer Memory | 0/10 | Not started | - |
+| 4. Triple-Layer Memory | 5 plans in 5 waves | Ready for execution | - |
 | 5. Phase Boundaries | 0/9 | Not started | - |
 | 6. Autonomous Emergence | 0/8 | Not started | - |
 | 7. Colony Verification | 0/10 | Not started | - |
