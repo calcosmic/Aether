@@ -28,13 +28,41 @@ if [ -z "$1" ]; then
 fi
 ```
 
-## Step 2: Load State
+## Step 2: Check Colony State for Emergence Guard
+
+```bash
+# Check colony state for emergence guard
+COLONY_STATE=".aether/data/COLONY_STATE.json"
+if [ -f "$COLONY_STATE" ]; then
+    colony_state=$(jq -r '.colony_status.state' "$COLONY_STATE")
+
+    # Block Queen intervention during EXECUTING state (emergence period)
+    if [ "$colony_state" = "EXECUTING" ]; then
+        echo "⚠️  Colony is EXECUTING - Queen intervention blocked"
+        echo ""
+        echo "The colony is currently in emergence mode. Worker Ants are working"
+        echo "autonomously based on existing pheromone signals."
+        echo ""
+        echo "Phase boundaries are the only time for direction changes."
+        echo ""
+        echo "Options:"
+        echo "  - Wait for VERIFYING state (phase boundary check-in)"
+        echo "  - Use FEEDBACK pheromone: /ant:feedback \"message\" (provides input without breaking emergence)"
+        echo "  - Review colony status: /ant:status"
+        echo ""
+        echo "Current state: EXECUTING"
+        exit 1
+    fi
+fi
+```
+
+## Step 3: Load State
 Set the pheromones file path:
 ```bash
 PHEROMONES=".aether/data/pheromones.json"
 ```
 
-## Step 3: Create REDIRECT Pheromone
+## Step 4: Create REDIRECT Pheromone
 Create the REDIRECT pheromone object with timestamp and append to active_pheromones:
 ```bash
 timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -62,7 +90,7 @@ jq --arg id "$pheromone_id" \
 .aether/utils/atomic-write.sh atomic_write_from_file "$PHEROMONES" /tmp/pheromones.tmp
 ```
 
-## Step 4: Present Results
+## Step 5: Present Results
 Show the Queen (user) the REDIRECT signal was emitted:
 
 ```
