@@ -204,6 +204,79 @@ prepare_compression_data() {
     return 0
 }
 
+# Trigger phase boundary compression - receives compressed JSON from Architect Ant
+# Who calls: Phase boundary orchestrator after Architect Ant produces compressed_json
+# When: After Architect Ant completes DAST compression
+# Arguments: phase_number, compressed_json (string)
+# Returns: 0 on success, outputs compression summary
+# Side effects: Creates Short-term session, clears Working Memory, updates metrics
+trigger_phase_boundary_compression() {
+    local phase="$1"
+    local compressed_json="$2"
+
+    if [ -z "$phase" ] || [ -z "$compressed_json" ]; then
+        echo "Error: phase_number and compressed_json are required" >&2
+        return 1
+    fi
+
+    # Validate compressed_json is valid JSON
+    if ! echo "$compressed_json" | jq . >/dev/null 2>&1; then
+        echo "Error: compressed_json must be valid JSON" >&2
+        return 1
+    fi
+
+    # Validate required fields
+    local id=$(echo "$compressed_json" | jq -r '.id // empty')
+    local session_id=$(echo "$compressed_json" | jq -r '.session_id // empty')
+    local compressed_at=$(echo "$compressed_json" | jq -r '.compressed_at // empty')
+    local summary=$(echo "$compressed_json" | jq -r '.summary // empty')
+    local original_tokens=$(echo "$compressed_json" | jq -r '.original_tokens // 0')
+    local compressed_tokens=$(echo "$compressed_json" | jq -r '.compressed_tokens // 0')
+
+    if [ -z "$id" ] || [ -z "$session_id" ] || [ -z "$compressed_at" ] || [ -z "$summary" ]; then
+        echo "Error: compressed_json missing required fields (id, session_id, compressed_at, summary)" >&2
+        return 1
+    fi
+
+    # Get Working Memory token count before clearing
+    local wm_tokens=$(jq -r '.working_memory.current_tokens' "$MEMORY_FILE")
+
+    # Calculate compression_ratio
+    local compression_ratio
+    if [ "$compressed_tokens" -gt 0 ]; then
+        compression_ratio=$(echo "scale=2; $original_tokens / $compressed_tokens" | bc)
+    else
+        compression_ratio=0
+    fi
+
+    # Call create_short_term_session(phase, compressed_json)
+    create_short_term_session "$phase" "$compressed_json"
+
+    # Call clear_working_memory()
+    clear_working_memory
+
+    # Update metrics.average_compression_ratio
+    jq --argjson ratio "$compression_ratio" '
+       if .metrics.average_compression_ratio == 0 then
+         .metrics.average_compression_ratio = $ratio
+       else
+         .metrics.average_compression_ratio = ((.metrics.average_compression_ratio * (.metrics.total_compressions - 1)) + $ratio) / .metrics.total_compressions
+       end
+       ' "$MEMORY_FILE" > /tmp/memory_update_ratio.tmp
+
+    atomic_write_from_file "$MEMORY_FILE" /tmp/memory_update_ratio.tmp
+    rm -f /tmp/memory_update_ratio.tmp
+
+    # Return compression summary
+    echo "Phase $phase compression complete:"
+    echo "  Items compressed: $wm_tokens tokens"
+    echo "  Original tokens: $original_tokens"
+    echo "  Compressed tokens: $compressed_tokens"
+    echo "  Compression ratio: ${compression_ratio}x"
+
+    return 0
+}
+
 # Get compression statistics
 # Arguments: none
 # Returns: Formatted statistics
