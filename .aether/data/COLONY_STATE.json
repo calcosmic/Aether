@@ -164,8 +164,8 @@
     "last_updated": null
   },
   "checkpoints": {
-    "latest_checkpoint": null,
-    "checkpoint_count": 0,
+    "latest_checkpoint": "checkpoint_3.json",
+    "checkpoint_count": 4,
     "auto_checkpoint_enabled": true
   },
   "events": {
