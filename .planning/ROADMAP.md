@@ -171,7 +171,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Plans:** 9 plans in 4 waves
 
-**Colony Tasks:**
+**Colony Tasks**:
 - [ ] 05-01-PLAN.md — State machine schema and transition validation
 - [ ] 05-02-PLAN.md — Pheromone-triggered state transitions with file locking
 - [ ] 05-03-PLAN.md — Checkpoint system with save/load/rotate functions
@@ -183,7 +183,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] 05-09-PLAN.md — Emergence guard (no Queen intervention during EXECUTING)
 **Plans:** 9 plans in 4 waves
 
-**Colony Tasks:**
+**Colony Tasks**:
 - [ ] 05-01-PLAN.md — State machine schema and transition validation
 - [ ] 05-02-PLAN.md — Pheromone-triggered state transitions with file locking
 - [ ] 05-03-PLAN.md — Checkpoint system with save/load/rotate functions
@@ -195,7 +195,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] 05-09-PLAN.md — Emergence guard (no Queen intervention during EXECUTING)
 **Plans:** 9 plans in 4 waves
 
-**Colony Tasks:**
+**Colony Tasks**:
 - [ ] 05-01-PLAN.md — State machine schema and transition validation
 - [ ] 05-02-PLAN.md — Pheromone-triggered state transitions with file locking
 - [ ] 05-03-PLAN.md — Checkpoint system with save/load/rotate functions
@@ -207,7 +207,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] 05-09-PLAN.md — Emergence guard (no Queen intervention during EXECUTING)
 **Plans:** 9 plans in 4 waves
 
-**Colony Tasks:**
+**Colony Tasks**:
 - [ ] 05-01-PLAN.md — State machine schema and transition validation
 - [ ] 05-02-PLAN.md — Pheromone-triggered state transitions with file locking
 - [ ] 05-03-PLAN.md — Checkpoint system with save/load/rotate functions
@@ -219,7 +219,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] 05-09-PLAN.md — Emergence guard (no Queen intervention during EXECUTING)
 **Plans:** 9 plans in 4 waves
 
-**Colony Tasks:**
+**Colony Tasks**:
 - [ ] 05-01-PLAN.md — State machine schema and transition validation
 - [ ] 05-02-PLAN.md — Pheromone-triggered state transitions with file locking
 - [ ] 05-03-PLAN.md — Checkpoint system with save/load/rotate functions
@@ -231,7 +231,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] 05-09-PLAN.md — Emergence guard (no Queen intervention during EXECUTING)
 **Plans:** 9 plans in 4 waves
 
-**Colony Tasks:**
+**Colony Tasks**:
 - [ ] 05-01-PLAN.md — State machine schema and transition validation
 - [ ] 05-02-PLAN.md — Pheromone-triggered state transitions with file locking
 - [ ] 05-03-PLAN.md — Checkpoint system with save/load/rotate functions
@@ -243,7 +243,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] 05-09-PLAN.md — Emergence guard (no Queen intervention during EXECUTING)
 **Plans:** 9 plans in 4 waves
 
-**Colony Tasks:**
+**Colony Tasks**:
 - [ ] 05-01-PLAN.md — State machine schema and transition validation
 - [ ] 05-02-PLAN.md — Pheromone-triggered state transitions with file locking
 - [ ] 05-03-PLAN.md — Checkpoint system with save/load/rotate functions
@@ -255,7 +255,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] 05-09-PLAN.md — Emergence guard (no Queen intervention during EXECUTING)
 **Plans:** 9 plans in 4 waves
 
-**Colony Tasks:**
+**Colony Tasks**:
 - [ ] 05-01-PLAN.md — State machine schema and transition validation
 - [ ] 05-02-PLAN.md — Pheromone-triggered state transitions with file locking
 - [ ] 05-03-PLAN.md — Checkpoint system with save/load/rotate functions
@@ -267,7 +267,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] 05-09-PLAN.md — Emergence guard (no Queen intervention during EXECUTING)
 **Plans:** 9 plans in 4 waves
 
-**Colony Tasks:**
+**Colony Tasks**:
 - [ ] 05-01-PLAN.md — State machine schema and transition validation
 - [ ] 05-02-PLAN.md — Pheromone-triggered state transitions with file locking
 - [ ] 05-03-PLAN.md — Checkpoint system with save/load/rotate functions
@@ -279,10 +279,10 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] 05-09-PLAN.md — Emergence guard (no Queen intervention during EXECUTING)
 **Plans:** 9 plans in 4 waves
 
-**Colony Tasks:**
+**Colony Tasks**:
 - [ ] 05-01-PLAN.md — State machine schema and transition validation
 - [ ] 05-02-PLAN.md — Pheromone-triggered state transitions with file locking
-- [ ] 05-03-PLAN.md — Checkpoint system with save/load/rotate functions
+- [ ] 05-03-PLAN.md — Checkpoint system with save/save/load/rotate functions
 - [ ] 05-04-PLAN.md — Pre/post-transition checkpoint integration and recovery
 - [ ] 05-05-PLAN.md — Crash detection and /ant:recover command
 - [ ] 05-06-PLAN.md — State history logging with archival to memory
@@ -348,17 +348,20 @@ Decimal phases appear between their surrounding integers in numeric order.
 9. Colony aggregates issues from all watchers (unified issue report)
 10. Colony records vote for meta-learning (update reliability scores)
 
+**Plans:** 5 plans in 4 waves
+
 **Colony Tasks**:
-- [ ] 07-01: Create Security Watcher prompt (vulnerabilities, auth, input validation)
-- [ ] 07-02: Create Performance Watcher prompt (complexity, bottlenecks, resources)
-- [ ] 07-03: Create Quality Watcher prompt (maintainability, readability, conventions)
-- [ ] 07-04: Create Test-Coverage Watcher prompt (completeness, edge cases, assertions)
-- [ ] 07-05: Implement parallel watcher spawning via Task tool
-- [ ] 07-06: Implement weighted voting schema (belief calibration scores)
-- [ ] 07-07: Implement supermajority calculation (67% threshold)
-- [ ] 07-08: Implement issue aggregation (combine issues from all watchers)
-- [ ] 07-09: Implement vote recording (track for meta-learning)
-- [ ] 07-10: Test voting system (verify supermajority logic, check weight updates)
+- [ ] 07-01-PLAN.md — Vote aggregation infrastructure (schemas, bash utilities)
+- [ ] 07-02-PLAN.md — Security Watcher prompt (vulnerabilities, auth, input validation)
+- [ ] 07-03-PLAN.md — Performance, Quality, Test-Coverage Watcher prompts
+- [ ] 07-04-PLAN.md — Parallel watcher spawning via Task tool
+- [ ] 07-05-PLAN.md — Issue management and supermajority testing
+
+**Wave Structure:**
+- Wave 1: Vote aggregation infrastructure (schemas, bash utilities) - 07-01
+- Wave 2: Four Watcher prompts (Security, Performance, Quality, Test-coverage) - 07-02, 07-03
+- Wave 3: Parallel spawning integration - 07-04
+- Wave 4: Issue management and testing - 07-05
 
 ### Phase 8: Colony Learning
 
@@ -460,7 +463,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 4. Triple-Layer Memory | 5/5 | Complete | 2026-02-01 |
 | 5. Phase Boundaries | 9/9 | Complete | 2026-02-01 |
 | 6. Autonomous Emergence | 5/5 | Complete | 2026-02-01 |
-| 7. Colony Verification | 0/10 | Not started | - |
+| 7. Colony Verification | 5/5 | Planned | - |
 | 8. Colony Learning | 0/6 | Not started | - |
 | 9. Stigmergic Events | 0/7 | Not started | - |
 | 10. Colony Maturity | 0/10 | Not started | - |
