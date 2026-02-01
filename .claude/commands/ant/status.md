@@ -27,6 +27,12 @@ if [ ! -f "$COLONY_STATE" ]; then
   exit 1
 fi
 
+# Source checkpoint utility for crash detection
+source .aether/utils/checkpoint.sh
+
+# Auto-detect and recover from crashes
+detect_crash_and_recover
+
 # Extract key values
 GOAL=$(jq -r '.queen_intention.goal' "$COLONY_STATE")
 STATE=$(jq -r '.colony_status.state' "$COLONY_STATE")
