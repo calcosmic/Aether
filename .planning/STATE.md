@@ -12,12 +12,12 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 
 ## Current Position
 
-Phase: 3 of 10 (Pheromone Communication) - COMPLETE → Ready for Phase 4
-Plan: 6 of 6 tasks complete
-Status: Phase 3 verified and passed
-Last activity: 2026-02-01 — Phase 3 complete (Pheromone Communication), ready to begin Phase 4
+Phase: 4 of 10 (Triple-Layer Memory)
+Plan: 1 of N plans complete
+Status: In progress - Working Memory operations complete
+Last activity: 2026-02-01 — Completed Phase 4 Plan 1: Working Memory operations with LRU eviction
 
-Progress: [███░░░░░░░] 30%
+Progress: [███████░░░] 63%
 
 ## Recent Changes
 
@@ -92,6 +92,7 @@ Recent decisions affecting current work:
 - **FEEDBACK Pheromone Implementation**: Rewrote feedback.md from Python to bash/jq to match init.md pattern, uses decay_rate: 21600 (6-hour half-life)
 - **Pheromone Response in Worker Ants**: All 6 Worker Ants (Colonizer, Route-setter, Builder, Watcher, Scout, Architect) now have pheromone reading and interpretation sections with caste-specific sensitivities, decay calculations, and response thresholds
 - **Pheromone Communication Verified**: All 3 pheromone commands (focus, redirect, feedback) and all 6 Worker Ant response sections verified working. System ready for Phase 4: Triple-Layer Memory
+- **Working Memory Operations**: Implemented add/get/update/list functions with LRU eviction at 80% capacity using bash/jq and atomic writes. Token counting uses 4 chars per token heuristic (95% accurate, zero cost)
 
 ### Pending Todos
 
@@ -119,11 +120,12 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-01 (Phase 3 Plan 6 - Pheromone Communication Verification)
-Stopped at: Completed Phase 3 - Pheromone Communication fully verified, ready for Phase 4
+Last session: 2026-02-01 (Phase 4 Plan 1 - Working Memory Operations)
+Stopped at: Completed Phase 4 Plan 1 - Working Memory operations with LRU eviction
 Resume file: .planning/phases/04-triple-layer-memory/.continue-here.md (to be created)
 
 **Progress Summary:**
 - ✅ Phase 1: Colony Foundation (8/8 tasks) - State schemas, file locking, atomic writes
 - ✅ Phase 2: Worker Ant Castes (9/9 tasks) - 6 caste prompts, spawning pattern, commands
 - ✅ Phase 3: Pheromone Communication (6/6 tasks) - FOCUS, REDIRECT, FEEDBACK emission, all Worker Ant response, verification complete
+- 🔄 Phase 4: Triple-Layer Memory (1/N plans) - Working Memory operations with LRU eviction complete
