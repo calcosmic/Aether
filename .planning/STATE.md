@@ -13,9 +13,9 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 9 of 10 (Stigmergic Events)
-Plan: 0/7 complete
-Status: Not started
-Last activity: 2026-02-02 — Phase 8 complete and verified (25/25 must-haves)
+Plan: 1/7 complete
+Status: In progress
+Last activity: 2026-02-02 — Completed 09-01-PLAN.md (Event Bus Schema and Initialization)
 
 Progress: [█████████] 78% → [████████░] 80%
 
@@ -138,6 +138,8 @@ Recent decisions affecting current work:
 - **Bayesian Spawn Outcome Tracking**: Integrated Bayesian confidence scoring into spawn-outcome-tracker.sh. Migrated COLONY_STATE.json meta_learning.specialist_confidence schema from float to object with alpha, beta, confidence, total_spawns, successful_spawns, failed_spawns, last_updated fields. Enhanced record_successful_spawn() to increment alpha via update_bayesian_parameters(), record_failed_spawn() to increment beta, both recalculate confidence via α/(α+β) formula. Updated get_specialist_confidence() to support optional full_object parameter, get_meta_learning_stats() displays α, β, confidence, totals. Removed SUCCESS_INCREMENT and FAILURE_DECREMENT constants (asymmetric penalty now automatic via Beta distribution). All function signatures unchanged (backward compatible).
 - **Confidence Learning Integration**: Integrated Bayesian confidence scoring into spawn-decision.sh for intelligent specialist selection. Added recommend_specialist_by_confidence() function that queries COLONY_STATE.json meta_learning.specialist_confidence for highest-confidence specialist by task type. Added get_weighted_specialist_scores() for ranking specialists with sample size weighting. Enhanced map_gap_to_specialist() to consult meta-learning before semantic analysis (source field tracks origin). Integrated Bayesian recommendations into detect_capability_gaps() spawn decision workflow (PRIMARY integration point). Configuration constants: MIN_CONFIDENCE_FOR_RECOMMENDATION=0.7 (70% threshold), MIN_SAMPLES_FOR_RECOMMENDATION=5 (min spawns before trusting), META_LEARNING_ENABLED=true (disable for semantic-only). Sample size weighting prevents over-reliance on sparse data (0.5-1.0 weight based on 10 samples for full weight). Functions handle missing COLONY_STATE_FILE gracefully (return "none|0.0"). Meta-learning recommendation requires confidence >= 0.7 and samples >= 5 before overriding semantic analysis.
 - **Bayesian Meta-Learning Test Suite**: Created comprehensive test suite (test-bayesian-learning.sh) with 41 tests across 9 test suites achieving 100% pass rate. Tests validate Beta distribution calculations (prior, success, failure, confidence), sample size weighting (prevents overconfidence), alpha/beta updating (spawn outcomes), spawn outcome recording (COLONY_STATE.json updates), specialist recommendation (threshold-based), Phase 8 vs Phase 6 comparison (Bayesian improvements documented), confidence statistics (comprehensive JSON), Bayesian prior initialization (uniform prior), and weighted specialist scores (ranking). Test suite uses backup/restore pattern for COLONY_STATE.json to ensure idempotency. Float comparison tolerance set to 0.000002 to accommodate bc rounding (bc outputs 0.666666 not 0.666667). Test helper functions normalize bc output (add leading zero if missing). Unique test specialist names (test_specialist_2) prevent conflicts with existing data. All tests demonstrate Bayesian advantages: automatic asymmetric penalty, sample size weighting, confidence threshold (0.7) and sample minimum (5) for recommendations, weighted confidence more conservative for small samples. Phase 8 complete except learning feedback loops (08-05).
+- **Event Bus Schema**: Created events.json with complete pub/sub infrastructure (topics, subscriptions, event_log, metrics, config). Single file storage with ring buffer configuration (max_event_log_size=1000, event_retention_hours=168) for unbounded growth prevention. Pre-populated 6 common topics (phase_complete, error, spawn_request, task_started, task_completed, task_failed). Per-subscriber delivery state tracking via last_event_delivered timestamp for pull-based delivery. Metrics track publish rate, delivery latency, backlog for observability.
+- **Event Bus Initialization**: Created event-bus.sh utility with initialize_event_bus() function. EVENTS_FILE uses git rev-parse to find repository root. Sources atomic-write.sh and file-lock.sh for safety patterns. Validates existing JSON, creates new file with complete schema if not exists. Foundation for publish/subscribe operations in subsequent plans.
 
 ### Pending Todos
 
@@ -165,8 +167,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-02 (Phase 8 - Colony Learning)
-Stopped at: Phase 8 complete and verified (25/25 must-haves)
+Last session: 2026-02-02 (Phase 9 - Stigmergic Events)
+Stopped at: Completed 09-01-PLAN.md (Event Bus Schema and Initialization)
 Resume file: None
 
 **Progress Summary:**
