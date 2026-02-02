@@ -9,11 +9,11 @@ Requirements for v2.0 reactive event integration. Each maps to roadmap phases.
 
 ### Event Polling
 
-- [ ] **POLL-01**: Worker Ant calls `get_events_for_subscriber()` at execution start to check for relevant events
-- [ ] **POLL-02**: Worker Ant subscribes to event topics (phase_complete, error, spawn_request, task_started, task_completed, task_failed)
-- [ ] **POLL-03**: Worker Ant calls `mark_events_delivered()` after processing events to prevent reprocessing
-- [ ] **POLL-04**: Worker Ant receives only events matching its subscription criteria (topic filtering)
-- [ ] **POLL-05**: Different Worker Ant castes prioritize different events based on caste-specific sensitivity profiles
+- [x] **POLL-01**: Worker Ant calls `get_events_for_subscriber()` at execution start to check for relevant events
+- [x] **POLL-02**: Worker Ant subscribes to event topics (phase_complete, error, spawn_request, task_started, task_completed, task_failed)
+- [x] **POLL-03**: Worker Ant calls `mark_events_delivered()` after processing events to prevent reprocessing
+- [x] **POLL-04**: Worker Ant receives only events matching its subscription criteria (topic filtering)
+- [x] **POLL-05**: Different Worker Ant castes prioritize different events based on caste-specific sensitivity profiles
 
 ### Visual Indicators
 
@@ -65,11 +65,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| POLL-01 | Phase 11 | Pending |
-| POLL-02 | Phase 11 | Pending |
-| POLL-03 | Phase 11 | Pending |
-| POLL-04 | Phase 11 | Pending |
-| POLL-05 | Phase 11 | Pending |
+| POLL-01 | Phase 11 | Complete |
+| POLL-02 | Phase 11 | Complete |
+| POLL-03 | Phase 11 | Complete |
+| POLL-04 | Phase 11 | Complete |
+| POLL-05 | Phase 11 | Complete |
 | VISUAL-01 | Phase 12 | Pending |
 | VISUAL-02 | Phase 12 | Pending |
 | VISUAL-03 | Phase 12 | Pending |
@@ -91,4 +91,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 ---
 
 *Requirements defined: 2026-02-02*
-*Last updated: 2026-02-02 after v2.0 roadmap creation*
+*Last updated: 2026-02-02 after Phase 11 completion*
