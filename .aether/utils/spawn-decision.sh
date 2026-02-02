@@ -263,6 +263,80 @@ calculate_spawn_score() {
     echo "$spawn_score"
 }
 
+# Recommend specialist by Bayesian confidence for a task type
+# Arguments: task_type, min_confidence (default 0.7), min_samples (default 5)
+# Returns: "specialist_caste|confidence" or "none|0.0" if no confident recommendation
+recommend_specialist_by_confidence() {
+    local task_type="$1"
+    local min_confidence="${2:-$MIN_CONFIDENCE_FOR_RECOMMENDATION}"
+    local min_samples="${3:-$MIN_SAMPLES_FOR_RECOMMENDATION}"
+
+    # Validate meta-learning is enabled
+    if [ "$META_LEARNING_ENABLED" != "true" ]; then
+        echo "none|0.0"
+        return 0
+    fi
+
+    # Validate COLONY_STATE_FILE exists
+    if [ ! -f "$COLONY_STATE_FILE" ]; then
+        echo "none|0.0"
+        return 0
+    fi
+
+    # Find best specialist for this task type from COLONY_STATE.json
+    local best=$(jq -r "
+        .meta_learning.specialist_confidence |
+        to_entries[] |
+        select(.value | has(\"$task_type\")) |
+        select(.value.\"$task_type\".total_spawns >= $min_samples) |
+        select(.value.\"$task_type\".confidence >= $min_confidence) |
+        \"\(.key)|\(.value.\"$task_type\".confidence)\"
+    " "$COLONY_STATE_FILE" 2>/dev/null | sort -t'|' -k2 -nr | head -1)
+
+    if [ -n "$best" ] && [[ "$best" != *"|"* ]]; then
+        # Handle jq error case (no valid data)
+        echo "none|0.0"
+    elif [ -n "$best" ]; then
+        echo "$best"
+    else
+        echo "none|0.0"
+    fi
+}
+
+# Get all specialists with weighted confidence scores for a task type
+# Arguments: task_type
+# Returns: Ranked list of specialists with alpha/beta/confidence/weight/weighted_score
+get_weighted_specialist_scores() {
+    local task_type="$1"
+
+    # Validate COLONY_STATE_FILE exists
+    if [ ! -f "$COLONY_STATE_FILE" ]; then
+        return 1
+    fi
+
+    # Get all specialists with this task type
+    jq -r "
+        .meta_learning.specialist_confidence |
+        to_entries[] |
+        select(.value | has(\"$task_type\")) |
+        \"\(.key)|\(.value.\"$task_type\".alpha)|\(.value.\"$task_type\".beta)|\(.value.\"$task_type\".confidence)|\(.value.\"$task_type\".total_spawns)\"
+    " "$COLONY_STATE_FILE" 2>/dev/null | while IFS='|' read -r specialist alpha beta confidence total_spawns; do
+        # Skip if data missing
+        [ -z "$specialist" ] && continue
+
+        # Calculate sample size weight (min 10 samples for full weight)
+        local weight=$(echo "scale=6; $total_spawns / 10" | bc)
+        if (( $(echo "$weight > 1.0" | bc -l) )); then
+            weight=1.0
+        fi
+
+        # Apply weighting: weighted = raw * (0.5 + 0.5 * weight)
+        local weighted=$(echo "scale=6; $confidence * (0.5 + 0.5 * $weight)" | bc)
+
+        echo "$specialist|$alpha|$beta|$confidence|$total_spawns|$weight|$weighted"
+    done | sort -t'|' -k7 -nr  # Sort by weighted confidence descending
+}
+
 # Map capability gaps to appropriate specialist caste
 # Arguments: gaps (JSON array), task_description
 # Returns: JSON with caste name and specialization
@@ -353,3 +427,5 @@ export -f compare_capabilities
 export -f detect_capability_gaps
 export -f calculate_spawn_score
 export -f map_gap_to_specialist
+export -f recommend_specialist_by_confidence
+export -f get_weighted_specialist_scores
