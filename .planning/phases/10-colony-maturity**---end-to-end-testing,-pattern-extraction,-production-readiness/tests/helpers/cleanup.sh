@@ -16,6 +16,7 @@ GIT_ROOT=$(get_git_root)
 DATA_DIR="${GIT_ROOT}/.aether/data"
 BACKUPS_DIR="${GIT_ROOT}/.aether/backups"
 CHECKPOINTS_DIR="${GIT_ROOT}/.aether/data/checkpoints"
+VERIFICATION_DIR="${GIT_ROOT}/.aether/verification"
 
 # Cleanup test colony state
 # Returns: 0 on success, 1 on failure
@@ -59,6 +60,18 @@ cleanup_test_colony() {
         echo "# Checkpoints cleaned"
     else
         echo "# Checkpoints directory does not exist (nothing to clean)"
+    fi
+
+    # Clean verification directory
+    if [ -d "$VERIFICATION_DIR" ]; then
+        echo "# Cleaning verification directory: $VERIFICATION_DIR"
+
+        # Remove votes
+        find "$VERIFICATION_DIR/votes" -type f -delete 2>/dev/null || true
+
+        echo "# Verification cleaned"
+    else
+        echo "# Verification directory does not exist (nothing to clean)"
     fi
 
     # Verify clean slate
