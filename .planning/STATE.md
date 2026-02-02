@@ -13,11 +13,11 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 8 of 10 (Colony Learning)
-Plan: 1/5 complete
+Plan: 2/5 complete
 Status: In progress
-Last activity: 2026-02-02 — Plan 08-01: Bayesian Confidence Library complete
+Last activity: 2026-02-02 — Plan 08-02: Bayesian Spawn Outcome Tracking complete
 
-Progress: [████████░] 70% → [████████░] 72%
+Progress: [████████░] 72% → [████████░] 74%
 
 ## Recent Changes
 
@@ -135,6 +135,7 @@ Recent decisions affecting current work:
 - **Parallel Watcher Spawning**: Integrated parallel spawning capability into base Watcher Ant (.aether/workers/watcher-ant.md). Implemented 5-step workflow (prepare context, check constraints, spawn 4 Watchers in parallel via Task tool, aggregate votes via vote-aggregator.sh, output result). Each spawned Watcher inherits context (Queen's Goal, pheromones, working memory, constraints) and outputs JSON vote to .aether/verification/votes/. Includes spawn safeguards (depth limit, circuit breaker, spawn budget, same-specialist cache) and fallback to single-Watcher verification if resource constraints prevent parallel spawning.
 - **Voting System Test Suite**: Created comprehensive test suite (.aether/utils/test-voting-system.sh) with 5 test categories, 17 tests, 100% pass rate. Tests supermajority edge cases (0/4, 1/4, 2/4, 3/4, 4/4 APPROVE), Critical veto power (blocks approval despite supermajority, doesn't over-veto), issue deduplication (merges duplicates, tags multi-watcher, severity sorting), weight calculator (asymmetric updates: correct_reject +0.15, correct_approve +0.1, incorrect_approve -0.2; clamping at [0.1, 3.0]; domain expertise bonus ×2), and vote recording (COLONY_STATE.json verification.votes, outcome="pending"). All tests use awk instead of bc for floating-point comparison. Phase 7 complete, ready for Phase 8 Colony Learning.
 - **Bayesian Confidence Library**: Implemented bayesian-confidence.sh with Beta distribution confidence calculation for statistically sound meta-learning. Functions: update_bayesian_parameters(alpha, beta, outcome) updates alpha/beta based on success/failure, calculate_confidence(alpha, beta) returns alpha/(alpha+beta), calculate_weighted_confidence(alpha, beta) applies sample size weighting, get_confidence_stats(alpha, beta) returns comprehensive JSON, initialize_bayesian_prior() returns Beta(1,1) uniform prior. Uses bc for all floating-point arithmetic with scale=6 precision. Sample size weighting prevents overconfidence from small samples (<10). Replaces Phase 6's simple +0.1/-0.15 arithmetic with mathematically principled Bayesian inference.
+- **Bayesian Spawn Outcome Tracking**: Integrated Bayesian confidence scoring into spawn-outcome-tracker.sh. Migrated COLONY_STATE.json meta_learning.specialist_confidence schema from float to object with alpha, beta, confidence, total_spawns, successful_spawns, failed_spawns, last_updated fields. Enhanced record_successful_spawn() to increment alpha via update_bayesian_parameters(), record_failed_spawn() to increment beta, both recalculate confidence via α/(α+β) formula. Updated get_specialist_confidence() to support optional full_object parameter, get_meta_learning_stats() displays α, β, confidence, totals. Removed SUCCESS_INCREMENT and FAILURE_DECREMENT constants (asymmetric penalty now automatic via Beta distribution). All function signatures unchanged (backward compatible).
 
 ### Pending Todos
 
@@ -162,8 +163,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-02 (Phase 8 Plan 1 - Bayesian Confidence Library)
-Stopped at: Completed 08-01: Bayesian Confidence Library (1/1 tasks)
+Last session: 2026-02-02 (Phase 8 Plan 2 - Bayesian Spawn Outcome Tracking)
+Stopped at: Completed 08-02: Bayesian Spawn Outcome Tracking (5/5 tasks + 1 bug fix)
 Resume file: None
 
 **Progress Summary:**
@@ -174,4 +175,4 @@ Resume file: None
 - ✅ Phase 5: Phase Boundaries (9/9 plans) - State machine, pheromone-triggered transitions, checkpoints, recovery, crash detection, Queen check-in, memory adaptation, emergence guard complete
 - ✅ Phase 6: Autonomous Emergence (5/5 plans) - Capability gap detection, Task tool spawning with context inheritance, circuit breaker safeguards, spawn outcome tracking, safeguard verification testing complete. Verified: 8/8 must-haves (100%)
 - ✅ Phase 7: Colony Verification (5/5 plans) - Vote aggregation infrastructure (07-01), Security Watcher (07-02), specialized Watcher prompts (07-03), parallel Watcher spawning (07-04), and voting system test suite (07-05) complete. Watcher weights initialized, supermajority calculation (67% threshold), Critical veto, issue deduplication, belief calibration, parallel spawning workflow, and comprehensive testing (17 tests, 100% pass rate) implemented. Complete set of 4 specialized Watchers (Security, Performance, Quality, Test-Coverage) ready for comprehensive multi-perspective verification. Phase 7 complete.
-- 🔄 Phase 8: Colony Learning (1/5 plans) - Bayesian confidence library (08-01) complete. Beta distribution confidence calculation with alpha/beta parameter updating, sample size weighting, and bc arithmetic (scale=6). Ready for integration with spawn-outcome-tracker.sh (08-02).
+- 🔄 Phase 8: Colony Learning (2/5 plans) - Bayesian confidence library (08-01) and Bayesian spawn outcome tracking (08-02) complete. Beta distribution confidence calculation with alpha/beta parameter updating, sample size weighting, and bc arithmetic (scale=6). COLONY_STATE.json schema migrated to Bayesian object structure. spawn-outcome-tracker.sh enhanced with Bayesian updating (α increment on success, β increment on failure). Backward compatible API maintained. Ready for confidence learning integration (08-03).
