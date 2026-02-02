@@ -50,8 +50,6 @@ LOCK_FILE="$AETHER_ROOT/.aether/locks/spawn_outcome_tracker.lock"
 
 # Constants
 DEFAULT_CONFIDENCE=0.5
-SUCCESS_INCREMENT=0.1
-FAILURE_DECREMENT=0.15
 MAX_CONFIDENCE=1.0
 MIN_CONFIDENCE=0.0
 
@@ -204,20 +202,24 @@ record_failed_spawn() {
     return 0
 }
 
-# Get confidence score for specialist-task pairing
-# Arguments: specialist_type, task_type
-# Returns: confidence score (0.0 - 1.0)
+# Get confidence score for specialist-task pairing (Bayesian)
+# Arguments: specialist_type, task_type, [full_object=false]
+# Returns: confidence score (0.0 - 1.0) or full Bayesian object if full_object=true
 get_specialist_confidence() {
     local specialist_type="$1"
     local task_type="$2"
+    local full_object="${3:-false}"
 
-    # Read confidence from state (default to DEFAULT_CONFIDENCE)
-    local confidence
-    confidence=$(jq -r "
-        .meta_learning.specialist_confidence.\"$specialist_type\".\"$task_type\" // $DEFAULT_CONFIDENCE
+    local result=$(jq -r "
+        .meta_learning.specialist_confidence.\"$specialist_type\".\"$task_type\"
+        // {\"alpha\": 1, \"beta\": 1, \"confidence\": 0.5}
     " "$COLONY_STATE_FILE")
 
-    echo "$confidence"
+    if [ "$full_object" = "true" ]; then
+        echo "$result"
+    else
+        echo "$result" | jq -r '.confidence // 0.5'
+    fi
 }
 
 # Get all spawn outcomes for a specialist
@@ -232,24 +234,27 @@ get_specialist_outcomes() {
     " "$COLONY_STATE_FILE"
 }
 
-# Get overall meta-learning statistics
-# Returns: Formatted statistics
+# Get overall meta-learning statistics (Bayesian)
+# Returns: Formatted statistics with alpha/beta/counts
 get_meta_learning_stats() {
-    echo "=== Meta-Learning Statistics ==="
-    echo "Total Outcomes Recorded: $(jq -r '.meta_learning.spawn_outcomes | length' "$COLONY_STATE_FILE")"
-    echo "Last Updated: $(jq -r '.meta_learning.last_updated // "Never"' "$COLONY_STATE_FILE")"
-    echo ""
-    echo "Specialist Confidence Scores:"
+    echo "Meta-Learning Statistics (Bayesian Beta Distribution)"
+    echo "======================================================"
+
     jq -r '
         .meta_learning.specialist_confidence |
         to_entries[] |
-        "  \(.key):" +
-        (
-            .value |
-            to_entries[] |
-            "    \(.key): \(.value)"
-        )
-    ' "$COLONY_STATE_FILE" 2>/dev/null || echo "  No confidence data yet"
+        .key as $specialist |
+        .value |
+        to_entries[] |
+        "\($specialist) → \(.key): α=\(.value.alpha), β=\(.value.beta), confidence=\(.value.confidence), total=\(.value.total_spawns), successes=\(.value.successful_spawns), failures=\(.value.failed_spawns)"
+    ' "$COLONY_STATE_FILE" | while IFS= read -r line; do
+        echo "  $line"
+    done
+
+    echo ""
+    echo "  Confidence formula: α / (α + β)"
+    echo "  Prior: α=1, β=1 (confidence=0.5)"
+    echo "  Success: increment α, Failure: increment β"
 }
 
 # Export functions
