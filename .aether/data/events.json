@@ -24,18 +24,82 @@
     "task_failed": {
       "description": "Worker Ant failed to complete a task",
       "subscriber_count": 0
+    },
+    "custom_topic": {
+      "description": "Auto-created topic",
+      "subscriber_count": 0
     }
   },
   "subscriptions": [],
-  "event_log": [],
+  "event_log": [
+    {
+      "id": "evt_1770032886_f57b42ce",
+      "topic": "task_started",
+      "type": "task_started",
+      "data": {
+        "task_id": "09-02",
+        "phase": 9
+      },
+      "metadata": {
+        "publisher": "executor",
+        "publisher_caste": "builder",
+        "timestamp": "2026-02-02T11:48:06Z",
+        "correlation_id": "corr_1770032886_9b4ad555"
+      }
+    },
+    {
+      "id": "evt_1770032886_534d4744",
+      "topic": "task_completed",
+      "type": "task_completed",
+      "data": {
+        "task_id": "09-02",
+        "status": "success"
+      },
+      "metadata": {
+        "publisher": "executor",
+        "publisher_caste": "builder",
+        "timestamp": "2026-02-02T11:48:06Z",
+        "correlation_id": "corr_1770032886_2bb6f17a"
+      }
+    },
+    {
+      "id": "evt_1770032886_e65fadaa",
+      "topic": "error",
+      "type": "error_occurred",
+      "data": {
+        "error_code": 500,
+        "message": "Test error"
+      },
+      "metadata": {
+        "publisher": "worker",
+        "publisher_caste": "scout",
+        "timestamp": "2026-02-02T11:48:06Z",
+        "correlation_id": "corr_1770032886_de8fd51f"
+      }
+    },
+    {
+      "id": "evt_1770032893_d8aac3c5",
+      "topic": "custom_topic",
+      "type": "custom_event",
+      "data": {
+        "test": "data"
+      },
+      "metadata": {
+        "publisher": "test_publisher",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:48:13Z",
+        "correlation_id": "corr_1770032893_b3c58731"
+      }
+    }
+  ],
   "metrics": {
-    "total_published": 0,
+    "total_published": 4,
     "total_subscriptions": 0,
     "total_delivered": 0,
     "publish_rate_per_minute": 0.0,
     "average_delivery_latency_ms": 0,
-    "backlog_count": 0,
-    "last_updated": null
+    "backlog_count": 4,
+    "last_updated": "2026-02-02T11:48:13Z"
   },
   "config": {
     "max_event_log_size": 1000,
