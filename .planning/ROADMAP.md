@@ -384,10 +384,10 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans:** 4 plans in 4 waves
 
 **Colony Tasks**:
-- [ ] 08-01-PLAN.md — Bayesian confidence library with Beta distribution (Wave 1)
-- [ ] 08-02-PLAN.md — COLONY_STATE.json schema update and spawn-outcome-tracker.sh enhancement (Wave 2)
-- [ ] 08-03-PLAN.md — spawn-decision.sh enhancement with Bayesian recommendation (Wave 3)
-- [ ] 08-04-PLAN.md — Test suite for Bayesian meta-learning (Wave 4)
+- [x] 08-01-PLAN.md — Bayesian confidence library with Beta distribution (Wave 1)
+- [x] 08-02-PLAN.md — COLONY_STATE.json schema update and spawn-outcome-tracker.sh enhancement (Wave 2)
+- [x] 08-03-PLAN.md — spawn-decision.sh enhancement with Bayesian recommendation (Wave 3)
+- [x] 08-04-PLAN.md — Test suite for Bayesian meta-learning (Wave 4)
 
 **Wave Structure:**
 - Wave 1: Bayesian confidence library - 08-01
@@ -470,7 +470,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 5. Phase Boundaries | 9/9 | Complete | 2026-02-01 |
 | 6. Autonomous Emergence | 5/5 | Complete | 2026-02-01 |
 | 7. Colony Verification | 5/5 | Complete | 2026-02-01 |
-| 8. Colony Learning | 0/6 | Not started | - |
+| 8. Colony Learning | 4/4 | Complete | 2026-02-02 |
 | 9. Stigmergic Events | 0/7 | Not started | - |
 | 10. Colony Maturity | 0/10 | Not started | - |
 

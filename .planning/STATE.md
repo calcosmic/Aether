@@ -8,16 +8,16 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 
 **Unique Architecture:** Aether is a completely standalone multi-agent system designed from first principles. Not dependent on CDS, Ralph, or any external framework. All Worker Ant castes (Colonizer, Planner, Executor, Verifier, Researcher, Synthesizer), pheromone communication, and phased autonomy are uniquely Aether.
 
-**Current focus:** Phase 8 - Colony Learning (Bayesian confidence scoring and meta-learning)
+**Current focus:** Phase 9 - Stigmergic Events (pub/sub event bus for colony-wide coordination)
 
 ## Current Position
 
-Phase: 8 of 10 (Colony Learning)
-Plan: 4/5 complete
-Status: In progress
-Last activity: 2026-02-02 — Plan 08-04: Bayesian Meta-Learning Test Suite complete
+Phase: 9 of 10 (Stigmergic Events)
+Plan: 0/7 complete
+Status: Not started
+Last activity: 2026-02-02 — Phase 8 complete and verified (25/25 must-haves)
 
-Progress: [█████████] 78% → [█████████] 80%
+Progress: [█████████] 78% → [████████░] 80%
 
 ## Recent Changes
 
@@ -165,8 +165,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-02 (Phase 8 Plan 4 - Bayesian Meta-Learning Test Suite)
-Stopped at: Completed 08-04: Bayesian Meta-Learning Test Suite (1/1 tasks)
+Last session: 2026-02-02 (Phase 8 - Colony Learning)
+Stopped at: Phase 8 complete and verified (25/25 must-haves)
 Resume file: None
 
 **Progress Summary:**
@@ -176,5 +176,5 @@ Resume file: None
 - ✅ Phase 4: Triple-Layer Memory (5/5 plans) - Working Memory, DAST compression, LRU eviction, pattern extraction, associative links, compression triggers, cross-layer search complete
 - ✅ Phase 5: Phase Boundaries (9/9 plans) - State machine, pheromone-triggered transitions, checkpoints, recovery, crash detection, Queen check-in, memory adaptation, emergence guard complete
 - ✅ Phase 6: Autonomous Emergence (5/5 plans) - Capability gap detection, Task tool spawning with context inheritance, circuit breaker safeguards, spawn outcome tracking, safeguard verification testing complete. Verified: 8/8 must-haves (100%)
-- ✅ Phase 7: Colony Verification (5/5 plans) - Vote aggregation infrastructure (07-01), Security Watcher (07-02), specialized Watcher prompts (07-03), parallel Watcher spawning (07-04), and voting system test suite (07-05) complete. Watcher weights initialized, supermajority calculation (67% threshold), Critical veto, issue deduplication, belief calibration, parallel spawning workflow, and comprehensive testing (17 tests, 100% pass rate) implemented. Complete set of 4 specialized Watchers (Security, Performance, Quality, Test-Coverage) ready for comprehensive multi-perspective verification. Phase 7 complete.
-- 🔄 Phase 8: Colony Learning (4/5 plans) - Bayesian confidence library (08-01), Bayesian spawn outcome tracking (08-02), confidence learning integration (08-03), and Bayesian meta-learning test suite (08-04) complete. Beta distribution confidence calculation with alpha/beta parameter updating, sample size weighting, and bc arithmetic (scale=6). COLONY_STATE.json schema migrated to Bayesian object structure. spawn-outcome-tracker.sh enhanced with Bayesian updating (α increment on success, β increment on failure). spawn-decision.sh integrated with Bayesian confidence for intelligent specialist selection (recommend_specialist_by_confidence, get_weighted_specialist_scores). Enhanced map_gap_to_specialist() and detect_capability_gaps() to use meta-learning recommendations. Confidence threshold 0.7 and sample minimum 5 prevent premature strong recommendations. Comprehensive test suite with 41 tests across 9 test suites achieving 100% pass rate. Tests validate Beta distribution calculations, sample size weighting, alpha/beta updating, spawn outcome recording, specialist recommendation, Phase 8 vs Phase 6 improvements, confidence statistics, Bayesian prior initialization, and weighted specialist scores. Backward compatible API maintained. Ready for learning feedback loops (08-05).
+- ✅ Phase 7: Colony Verification (5/5 plans) - Vote aggregation infrastructure (07-01), Security Watcher (07-02), specialized Watcher prompts (07-03), parallel Watcher spawning (07-04), and voting system test suite (07-05) complete. Watcher weights initialized, supermajority calculation (67% threshold), Critical veto, issue deduplication, belief calibration, parallel spawning workflow, and comprehensive testing (17 tests, 100% pass rate) implemented. Complete set of 4 specialized Watchers (Security, Performance, Quality, Test-Coverage) ready for comprehensive multi-perspective verification. Phase 7 complete, verified 23/23 must-haves (100%).
+- ✅ Phase 8: Colony Learning (4/4 plans) - Bayesian confidence library (08-01), Bayesian spawn outcome tracking (08-02), confidence learning integration (08-03), and Bayesian meta-learning test suite (08-04) complete. Beta distribution confidence calculation with alpha/beta parameter updating, sample size weighting, and bc arithmetic (scale=6). COLONY_STATE.json schema migrated to Bayesian object structure. spawn-outcome-tracker.sh enhanced with Bayesian updating (α increment on success, β increment on failure). spawn-decision.sh integrated with Bayesian confidence for intelligent specialist selection (recommend_specialist_by_confidence, get_weighted_specialist_scores). Enhanced map_gap_to_specialist() and detect_capability_gaps() to use meta-learning recommendations. Confidence threshold 0.7 and sample minimum 5 prevent premature strong recommendations. Comprehensive test suite with 41 tests across 9 test suites achieving 100% pass rate. Tests validate Beta distribution calculations, sample size weighting, alpha/beta updating, spawn outcome recording, specialist recommendation, Phase 8 vs Phase 6 improvements, confidence statistics, Bayesian prior initialization, and weighted specialist scores. Backward compatible API maintained. Phase 8 verified 25/25 must-haves (100%).
