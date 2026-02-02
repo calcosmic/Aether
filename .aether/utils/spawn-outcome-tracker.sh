@@ -131,7 +131,7 @@ record_successful_spawn() {
     return 0
 }
 
-# Record a failed spawn and decrement confidence (asymmetric penalty)
+# Record a failed spawn and decrement confidence (Bayesian beta increment)
 # Arguments: specialist_type, task_type, spawn_id, failure_reason
 # Returns: 0 on success, 1 on failure
 record_failed_spawn() {
@@ -148,22 +148,39 @@ record_failed_spawn() {
 
     local timestamp=$(get_timestamp)
 
-    # Get current confidence (default to DEFAULT_CONFIDENCE if not exists)
-    local current_confidence
-    current_confidence=$(jq -r "
-        .meta_learning.specialist_confidence.\"$specialist_type\".\"$task_type\" // $DEFAULT_CONFIDENCE
+    # Get current alpha/beta (default to prior 1,1)
+    local current=$(jq -r "
+        .meta_learning.specialist_confidence.\"$specialist_type\".\"$task_type\"
+        // {\"alpha\": 1, \"beta\": 1, \"confidence\": 0.5}
     " "$COLONY_STATE_FILE")
 
-    # Calculate new confidence with asymmetric penalty (capped at MIN_CONFIDENCE)
-    local new_confidence=$(echo "$current_confidence - $FAILURE_DECREMENT" | bc)
-    if (( $(echo "$new_confidence < $MIN_CONFIDENCE" | bc -l) )); then
-        new_confidence=$MIN_CONFIDENCE
-    fi
+    local alpha=$(echo "$current" | jq -r '.alpha // 1')
+    local beta=$(echo "$current" | jq -r '.beta // 1')
 
-    # Update state atomically
+    # Update Bayesian parameters: increment beta for failure
+    local new_alpha=$alpha
+    local new_beta=$(update_bayesian_parameters "$alpha" "$beta" "failure")
+
+    # Calculate new confidence
+    local new_confidence=$(calculate_confidence "$new_alpha" "$new_beta")
+
+    # Calculate derived stats
+    local total_spawns=$(echo "$new_alpha + $new_beta - 2" | bc)
+    local successful_spawns=$(echo "$new_alpha - 1" | bc)
+    local failed_spawns=$(echo "$new_beta - 1" | bc)
+
+    # Update state atomically with full Bayesian object
     local updated_state
     updated_state=$(jq "
-        .meta_learning.specialist_confidence.\"$specialist_type\".\"$task_type\" = $new_confidence |
+        .meta_learning.specialist_confidence.\"$specialist_type\".\"$task_type\" = {
+            \"alpha\": $new_alpha,
+            \"beta\": $new_beta,
+            \"confidence\": $new_confidence,
+            \"total_spawns\": $total_spawns,
+            \"successful_spawns\": $successful_spawns,
+            \"failed_spawns\": $failed_spawns,
+            \"last_updated\": \"$timestamp\"
+        } |
         .meta_learning.spawn_outcomes += [{
             \"spawn_id\": \"$spawn_id\",
             \"specialist\": \"$specialist_type\",
