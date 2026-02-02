@@ -180,14 +180,7 @@ publish_event() {
            .metrics.total_published += 1 |
            .metrics.backlog_count += 1 |
            .metrics.last_updated = $timestamp |
-           if .topics[$topic] then
-             .topics[$topic]
-           else
-             .topics[$topic] = {
-               "description": "Auto-created topic",
-               "subscriber_count": 0
-             }
-           end
+           (.topics[$topic] //= {"description": "Auto-created topic", "subscriber_count": 0})
            ' "$EVENTS_FILE" > "$temp_file"
     else
         # Without caste - use null
@@ -214,14 +207,7 @@ publish_event() {
            .metrics.total_published += 1 |
            .metrics.backlog_count += 1 |
            .metrics.last_updated = $timestamp |
-           if .topics[$topic] then
-             .topics[$topic]
-           else
-             .topics[$topic] = {
-               "description": "Auto-created topic",
-               "subscriber_count": 0
-             }
-           end
+           (.topics[$topic] //= {"description": "Auto-created topic", "subscriber_count": 0})
            ' "$EVENTS_FILE" > "$temp_file"
     fi
 
@@ -257,8 +243,16 @@ publish_event() {
 # Arguments: none
 # Returns: 0 on success, 1 on failure
 trim_event_log() {
-    local max_size=$(jq -r '.config.max_event_log_size' "$EVENTS_FILE")
-    local current_size=$(jq -r '.event_log | length' "$EVENTS_FILE")
+    local max_size=$(jq -r '.config.max_event_log_size' "$EVENTS_FILE" 2>/dev/null || echo "1000")
+    local current_size=$(jq -r '.event_log | length' "$EVENTS_FILE" 2>/dev/null || echo "0")
+
+    # Handle null/empty values - ensure numeric comparison
+    if [[ ! "$current_size" =~ ^[0-9]+$ ]] || [ -z "$current_size" ]; then
+        current_size=0
+    fi
+    if [[ ! "$max_size" =~ ^[0-9]+$ ]] || [ -z "$max_size" ]; then
+        max_size=1000
+    fi
 
     if [ "$current_size" -gt "$max_size" ]; then
         local trim_count=$((current_size - max_size))
@@ -267,8 +261,12 @@ trim_event_log() {
         # Keep most recent events (ring buffer)
         jq --argjson keep "$max_size" \
            '
-           .event_log = .event_log[-($keep):] |
-           .metrics.backlog_count = (.event_log | length)
+           if .event_log then
+             .event_log = .event_log[-($keep):] |
+             .metrics.backlog_count = (.event_log | length)
+           else
+             .
+           end
            ' "$EVENTS_FILE" > "$temp_file"
 
         if [ $? -eq 0 ]; then
@@ -298,7 +296,10 @@ subscribe_to_events() {
     local subscriber_id="$1"
     local subscriber_caste="$2"
     local topic_pattern="$3"
-    local filter_criteria="${4:-{}}"
+    local filter_criteria="$4"
+    if [ -z "$filter_criteria" ]; then
+        filter_criteria="{}"
+    fi
 
     # Validate arguments
     if [ -z "$subscriber_id" ] || [ -z "$subscriber_caste" ] || [ -z "$topic_pattern" ]; then

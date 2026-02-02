@@ -28,57 +28,80 @@
     "custom_topic": {
       "description": "Auto-created topic",
       "subscriber_count": 0
+    },
+    "no_caste_topic": {
+      "description": "Auto-created topic",
+      "subscriber_count": 0
+    },
+    "unique_test": {
+      "description": "Auto-created topic",
+      "subscriber_count": 0
     }
   },
   "subscriptions": [],
   "event_log": [
     {
-      "id": "evt_1770032886_f57b42ce",
+      "id": "evt_1770033022_7062f6da",
       "topic": "task_started",
       "type": "task_started",
       "data": {
-        "task_id": "09-02",
+        "task_id": "test-01",
         "phase": 9
       },
       "metadata": {
-        "publisher": "executor",
-        "publisher_caste": "builder",
-        "timestamp": "2026-02-02T11:48:06Z",
-        "correlation_id": "corr_1770032886_9b4ad555"
+        "publisher": "test_publisher",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:50:22Z",
+        "correlation_id": "corr_1770033022_c04623dc"
       }
     },
     {
-      "id": "evt_1770032886_534d4744",
+      "id": "evt_1770033022_3e319673",
       "topic": "task_completed",
       "type": "task_completed",
       "data": {
-        "task_id": "09-02",
+        "task_id": "test-02",
         "status": "success"
       },
       "metadata": {
         "publisher": "executor",
         "publisher_caste": "builder",
-        "timestamp": "2026-02-02T11:48:06Z",
-        "correlation_id": "corr_1770032886_2bb6f17a"
+        "timestamp": "2026-02-02T11:50:22Z",
+        "correlation_id": "corr_1770033022_ea7800e2"
       }
     },
     {
-      "id": "evt_1770032886_e65fadaa",
+      "id": "evt_1770033023_9ca736a2",
       "topic": "error",
       "type": "error_occurred",
       "data": {
-        "error_code": 500,
-        "message": "Test error"
+        "error_code": 404,
+        "message": "Not found"
       },
       "metadata": {
         "publisher": "worker",
         "publisher_caste": "scout",
-        "timestamp": "2026-02-02T11:48:06Z",
-        "correlation_id": "corr_1770032886_de8fd51f"
+        "timestamp": "2026-02-02T11:50:23Z",
+        "correlation_id": "corr_1770033023_628fc842"
       }
     },
     {
-      "id": "evt_1770032893_d8aac3c5",
+      "id": "evt_1770033023_58fbfb5d",
+      "topic": "spawn_request",
+      "type": "spawn_specialist",
+      "data": {
+        "specialist_type": "database",
+        "reason": "capability gap"
+      },
+      "metadata": {
+        "publisher": "route_setter",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:50:23Z",
+        "correlation_id": "corr_1770033023_f08d2093"
+      }
+    },
+    {
+      "id": "evt_1770033023_4a5524fd",
       "topic": "custom_topic",
       "type": "custom_event",
       "data": {
@@ -87,19 +110,75 @@
       "metadata": {
         "publisher": "test_publisher",
         "publisher_caste": null,
-        "timestamp": "2026-02-02T11:48:13Z",
-        "correlation_id": "corr_1770032893_b3c58731"
+        "timestamp": "2026-02-02T11:50:23Z",
+        "correlation_id": "corr_1770033023_ff8151e1"
+      }
+    },
+    {
+      "id": "evt_1770033023_88214790",
+      "topic": "no_caste_topic",
+      "type": "no_caste_event",
+      "data": {
+        "test": "data"
+      },
+      "metadata": {
+        "publisher": "test_publisher",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:50:23Z",
+        "correlation_id": "corr_1770033023_18070133"
+      }
+    },
+    {
+      "id": "evt_1770033023_47d97290",
+      "topic": "unique_test",
+      "type": "test1",
+      "data": {
+        "i": 1
+      },
+      "metadata": {
+        "publisher": "test",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:50:23Z",
+        "correlation_id": "corr_1770033023_0a09ae60"
+      }
+    },
+    {
+      "id": "evt_1770033024_e5d1139a",
+      "topic": "unique_test",
+      "type": "test2",
+      "data": {
+        "i": 2
+      },
+      "metadata": {
+        "publisher": "test",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:50:24Z",
+        "correlation_id": "corr_1770033024_82412d21"
+      }
+    },
+    {
+      "id": "evt_1770033024_a717ba6d",
+      "topic": "unique_test",
+      "type": "test3",
+      "data": {
+        "i": 3
+      },
+      "metadata": {
+        "publisher": "test",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:50:24Z",
+        "correlation_id": "corr_1770033024_37310e35"
       }
     }
   ],
   "metrics": {
-    "total_published": 4,
+    "total_published": 9,
     "total_subscriptions": 0,
     "total_delivered": 0,
     "publish_rate_per_minute": 0.0,
     "average_delivery_latency_ms": 0,
-    "backlog_count": 4,
-    "last_updated": "2026-02-02T11:48:13Z"
+    "backlog_count": 9,
+    "last_updated": "2026-02-02T11:50:24Z"
   },
   "config": {
     "max_event_log_size": 1000,
