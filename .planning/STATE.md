@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-02-02)
 
 Milestone: v2.0 Reactive Event Integration
 Phase: 11 of 13 (Event Polling Integration)
-Plan: 1 of 3 in current phase
-Status: In progress
-Last activity: 2026-02-02 — Completed 11-01: Base caste Worker Ant event polling
+Plan: 3 of 3 in current phase
+Status: Phase complete
+Last activity: 2026-02-02 — Completed 11-03: Event polling integration test suite
 
-Progress: [██████████░░░░░░░░░░░░░░] 52% (v1.0 complete, 1 v2.0 plan complete)
+Progress: [███████████░░░░░░░░░░░░░] 56% (v1.0 complete, 3 v2.0 plans complete)
 
 **v1.0 Shipped (2026-02-02):**
 - 8 phases (3-10) with 156/156 must-haves verified
@@ -30,23 +30,23 @@ Progress: [██████████░░░░░░░░░░░░░
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 45 (44 v1.0 + 1 v2.0)
-- Average duration: TBD min
-- Total execution time: TBD hours
+- Total plans completed: 47 (44 v1.0 + 3 v2.0)
+- Average duration: 22 min
+- Total execution time: 17.3 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 3-10 (v1.0) | 44 | TBD | TBD |
-| 11 (v2.0) | 1/TBD | 2min | - |
-| 12 (v2.0) | 0/TBD | - | - |
-| 13 (v2.0) | 0/TBD | - | - |
+| 11 (v2.0) | 3/3 | 66min | 22min |
+| 12 (v2.0) | 0/2 | - | - |
+| 13 (v2.0) | 0/2 | - | - |
 
 **Recent Trend:**
 - v1.0: 44 plans completed successfully
-- v2.0: 1 plan complete (11-02: 2min)
-- Trend: Stable (v2.0 execution started)
+- v2.0: 3 plans complete (11-01: 17min, 11-02: 2min, 11-03: 34min)
+- Trend: Stable (v2.0 phase 11 complete)
 
 *Updated after each plan completion*
 
@@ -69,6 +69,8 @@ Progress: [██████████░░░░░░░░░░░░░
 - Base caste event polling: All 6 base caste Worker Ants poll events at workflow start (11-01)
 - Caste-specific subscriptions: Each caste subscribes to 2-4 topics relevant to their role (11-01)
 - Error topic priority: All castes subscribe to "error" topic for high-priority error detection (11-01)
+- Event polling integration tests: Comprehensive test suite validates event polling for all castes (11-03)
+- Delivery tracking prevents reprocessing: Events marked as delivered are not returned on subsequent polls (11-03)
 
 (Full log in PROJECT.md)
 
@@ -80,17 +82,18 @@ None yet.
 
 **From v1.0 audit (to address in v2.0):**
 1. ~~Event bus polling integration - Worker Ant prompts should call `get_events_for_subscriber()`~~ → COMPLETED in 11-01 (base caste Worker Ants)
-2. Real LLM testing - Complement bash simulations with actual Queen/Worker LLM execution → Phase 13
-3. Documentation updates - Update path references in script comments → Phase 12
+2. ~~Event polling integration tests - Verify event polling works for all castes~~ → COMPLETED in 11-03 (integration test suite)
+3. Real LLM testing - Complement bash simulations with actual Queen/Worker LLM execution → Phase 13
+4. Documentation updates - Update path references in script comments → Phase 12
 
 (See .planning/milestones/v1-MILESTONE-AUDIT.md for details)
 
 ### Session Continuity
 
-Last session: 2026-02-02 (11-01: Base caste Worker Ant event polling)
-Stopped at: Completed 11-01 - All 6 base caste Worker Ants now poll events at workflow start
+Last session: 2026-02-02 (11-03: Event polling integration test suite)
+Stopped at: Completed 11-03 - All event polling integration tests passing (13/13 assertions)
 Resume file: None
 
 ---
 
-*State updated: 2026-02-02 after completing 11-01*
+*State updated: 2026-02-02 after completing 11-03*
