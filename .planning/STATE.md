@@ -13,11 +13,11 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 9 of 10 (Stigmergic Events)
-Plan: 6/7 complete
+Plan: 4/7 complete
 Status: In progress
-Last activity: 2026-02-02 — Completed 09-06-PLAN.md (Async Event Delivery Verification)
+Last activity: 2026-02-02 — Completed 09-04-PLAN.md (Event Filtering and Pull-based Delivery)
 
-Progress: [█████████] 85%
+Progress: [████████░] 82%
 
 ## Recent Changes
 
@@ -63,7 +63,7 @@ Progress: [█████████] 85%
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 48
+- Total plans completed: 47
 - Average duration: 4 min
 - Total execution time: 3.1 hours
 
@@ -79,11 +79,11 @@ Progress: [█████████] 85%
 | 6 | 5 | 28 min | 5.6 min |
 | 7 | 5 | 6 min | 1.2 min |
 | 8 | 4 | 16 min | 4.0 min |
-| 9 | 3 | 8 min | 2.7 min |
+| 9 | 4 | 13 min | 3.3 min |
 
 **Recent Trend:**
-- Last 3 plans: 2.7 min avg
-- Trend: Phase 9 progressing (6/7 complete)
+- Last 4 plans: 3.3 min avg
+- Trend: Phase 9 progressing (4/7 complete)
 
 *Updated after each plan completion*
 
@@ -144,6 +144,7 @@ Recent decisions affecting current work:
 - **Event Bus Initialization**: Created event-bus.sh utility with initialize_event_bus() function. EVENTS_FILE uses git rev-parse to find repository root. Sources atomic-write.sh and file-lock.sh for safety patterns. Validates existing JSON, creates new file with complete schema if not exists. Foundation for publish/subscribe operations in subsequent plans.
 - **Event Publish Operation**: Implemented publish_event() function with generate_event_id(), generate_correlation_id(), trim_event_log(). Non-blocking publish writes events to event_log with unique IDs (evt_<timestamp>_<random>), topic, type, data, metadata (publisher, caste, timestamp, correlation_id). File locking prevents concurrent corruption, atomic writes prevent partial event corruption. Ring buffer enforces 1000 event max (keeps most recent). Dynamic topic creation via //= operator (prevents document corruption). Metrics updated atomically (total_published, backlog_count, last_updated). Input validation (JSON validation, required arguments). Comprehensive test suite (9 test categories) validates all publish scenarios.
 - **Async Event Delivery Verification**: Verified publish_event() implements true async semantics (returns immediately after write, no waiting for subscribers, no background processes). Added comprehensive async design documentation to event-bus.sh header explaining pull-based delivery pattern optimal for prompt-based Worker Ants. Created test-event-async.sh with 10 test categories verifying non-blocking behavior (publish returns immediately, independent subscriber polling, concurrent publishes, decoupled delivery). Confirmed no subscriber calls in publish_event() implementation.
+- **Event Filtering and Pull-Based Delivery**: Implemented get_events_for_subscriber() with topic pattern filtering (jq test() for wildcards), filter criteria matching (JSON key-value), and since-last-delivered polling semantics. Uses variable binding (. as $event) for correct filter criteria reference. Returns empty array immediately if no events (non-blocking). Implemented mark_events_delivered() for delivery tracking, updating last_event_delivered timestamp and delivery_count per subscription. Metrics updated (total_delivered, backlog_count). Pull-based delivery pattern optimal for prompt-based Worker Ants (subscribers poll when executing, events not pushed). Comprehensive test suite (test-event-filtering.sh) with 10 test categories covering all filtering and delivery scenarios.
 
 ### Pending Todos
 
@@ -172,7 +173,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02 (Phase 9 - Stigmergic Events)
-Stopped at: Completed 09-06-PLAN.md (Async Event Delivery Verification)
+Stopped at: Completed 09-04-PLAN.md (Event Filtering and Pull-Based Delivery)
 Resume file: None
 
 **Progress Summary:**
