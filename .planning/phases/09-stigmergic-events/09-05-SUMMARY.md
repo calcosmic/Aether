@@ -15,7 +15,8 @@ requires:
 provides:
   - cleanup_old_events() function for time-based event retention
   - get_event_history() function for querying events with filters
-  - export_event_log() function for exporting events to files
+  - export_event_log() function for exporting events to files (JSON/text)
+  - get_event_stats() function for comprehensive statistics
   - Ring buffer enforcement (max_event_log_size=1000)
   - Time-based cleanup (event_retention_hours=168, 7 days)
 affects: [phase-10, debugging, event-replay]
@@ -27,8 +28,9 @@ tech-stack:
     - Ring buffer pattern for unbounded growth prevention
     - Time-based cleanup with configurable retention
     - Cross-platform date handling (macOS/Linux)
-    - Event export to JSON/CSV formats
+    - Event export to JSON/text formats
     - Query events with topic pattern and timestamp filters
+    - Comprehensive statistics aggregation
 
 key-files:
   created:
@@ -40,7 +42,7 @@ key-decisions:
   - "Ring buffer: Keeps most recent 1000 events (configurable via max_event_log_size)"
   - "Time-based cleanup: Removes events older than 7 days (configurable via event_retention_hours)"
   - "Cross-platform date: Uses -v flag for macOS and -d flag for Linux"
-  - "Export formats: JSON (default) and CSV for analysis"
+  - "Export formats: JSON (default) for programmatic access, text for human readability"
 
 patterns-established:
   - "Pattern 1: Ring buffer - trim_event_log() keeps most recent N events to prevent unbounded growth"
@@ -49,19 +51,19 @@ patterns-established:
   - "Pattern 4: Event export - export_event_log() writes events to file for external analysis"
 
 # Metrics
-duration: 3min
+duration: 49min
 completed: 2026-02-02
 ---
 
 # Phase 9: Stigmergic Events - Plan 05 Summary
 
-**Event logging with ring buffer for unbounded growth prevention, time-based cleanup for retention management, event history querying with filters, and event export to files**
+**Event logging with ring buffer for unbounded growth prevention, time-based cleanup for retention management, event history querying with filters, event export to files, and comprehensive statistics**
 
 ## Performance
 
-- **Duration:** 3 min
-- **Started:** 2026-02-02T12:05:00Z
-- **Completed:** 2026-02-02T12:08:00Z
+- **Duration:** 49 min
+- **Started:** 2026-02-02T11:35:00Z
+- **Completed:** 2026-02-02T12:24:00Z
 - **Tasks:** 2
 - **Files modified:** 2
 
@@ -69,7 +71,8 @@ completed: 2026-02-02
 
 - Implemented `cleanup_old_events()` with time-based retention (7 days default, configurable)
 - Implemented `get_event_history()` for querying events with topic pattern, limit, and timestamp filters
-- Implemented `export_event_log()` for exporting events to JSON or CSV files
+- Implemented `export_event_log()` for exporting events to JSON or human-readable text format
+- Implemented `get_event_stats()` for comprehensive statistics (topics, types, publishers, time range)
 - Ring buffer enforcement via trim_event_log() (keeps most recent 1000 events)
 - Cross-platform date handling (macOS -v flag, Linux -d flag)
 - Created test suite (test-event-logging.sh) with 9 test categories
@@ -78,21 +81,21 @@ completed: 2026-02-02
 
 Each task was committed atomically:
 
-1. **Task 1: Implement event logging functions (cleanup, history, export)** - `EVENT_LOGGING_COMMIT` (feat)
-2. **Task 2: Create test script for event logging** - `EVENT_LOGGING_TEST_COMMIT` (test)
+1. **Task 1: Implement event logging functions (cleanup, history, export, stats)** - `d782861` (feat)
+2. **Task 2: Create test script for event logging** - `45fea6b` (test)
 
-**Plan metadata:** (to be committed)
+**Plan metadata:** `bbb57e9` (docs), `d8d3ae4` (STATE.md)
 
 ## Files Created/Modified
 
-- `.aether/utils/event-bus.sh` - Added cleanup_old_events(), get_event_history(), export_event_log() functions
-- `.aether/utils/test-event-logging.sh` - Test suite with 9 test categories (ring buffer, time cleanup, history query, export)
+- `.aether/utils/event-bus.sh` - Added cleanup_old_events(), get_event_history(), export_event_log(), get_event_stats() functions
+- `.aether/utils/test-event-logging.sh` - Test suite with 9 test categories (ring buffer, time cleanup, history query, export, stats)
 
 ## Decisions Made
 
 - **Ring buffer size:** 1000 events default (configurable via max_event_log_size) - balances memory usage with debugging capability
 - **Retention period:** 7 days default (configurable via event_retention_hours) - provides reasonable history for debugging while preventing stale data accumulation
-- **Export formats:** JSON (default) for programmatic access, CSV for spreadsheet analysis
+- **Export formats:** JSON (default) for programmatic access, text format for human readability
 - **Cross-platform compatibility:** Separate date command invocations for macOS (-v) and Linux (-d) with OSTYPE detection
 
 ## Deviations from Plan
@@ -137,20 +140,22 @@ get_event_history "" "" "2026-02-01T00:00:00Z"
 # Export all events to JSON
 export_event_log "/tmp/events.json"
 
-# Export error events to CSV
-export_event_log "/tmp/errors.csv" "csv" "error.*"
+# Export error events to human-readable text
+export_event_log "/tmp/errors.txt" "text" "error.*"
 ```
 
 **Key Functions Exported:**
 - `cleanup_old_events([retention_hours])` - Remove events older than retention period
 - `get_event_history([topic_pattern], [limit], [since_timestamp])` - Query events with filters
-- `export_event_log(output_file, [format], [topic_pattern])` - Export events to file
+- `export_event_log(output_file, [format], [topic_pattern])` - Export events to file (json/text)
+- `get_event_stats()` - Returns comprehensive statistics (topics, types, publishers, time range)
 
 **Verification Results:**
 - Ring buffer trims old events: PASS
 - Time-based cleanup removes expired events: PASS
 - Event history query with filters: PASS
-- Event export to JSON/CSV: PASS
+- Event export to JSON/text: PASS
+- Event statistics aggregation: PASS
 - Cross-platform date handling: PASS
 
 ---
