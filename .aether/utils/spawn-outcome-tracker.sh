@@ -1,14 +1,13 @@
 #!/bin/bash
 # Aether Spawn Outcome Tracker
-# Implements confidence scoring for meta-learning with asymmetric penalty
+# Enhanced with Bayesian Beta distribution confidence scoring
+# Phase 8: Replaces simple +0.1/-0.15 arithmetic with α/(α+β) formula
 #
-# Confidence scoring rules:
-# - Start at 0.5 (neutral)
-# - Success: +0.1 (up to max 1.0)
-# - Failure: -0.15 (down to min 0.0, asymmetric penalty)
-#
-# Asymmetric penalty makes failures more impactful, which feeds into
-# Phase 8 Bayesian confidence updating.
+# Bayesian inference with Beta(α,β) distribution:
+# - Prior: Beta(1,1) represents uniform distribution (no prior knowledge)
+# - Success: α_new = α_old + 1 (increment alpha)
+# - Failure: β_new = β_old + 1 (increment beta)
+# - Confidence (posterior mean): μ = α / (α + β)
 #
 # Usage:
 #   source .aether/utils/spawn-outcome-tracker.sh
@@ -36,6 +35,13 @@ if [ -f "$AETHER_ROOT/.aether/utils/file-lock.sh" ]; then
     source "$AETHER_ROOT/.aether/utils/file-lock.sh"
 else
     source ".aether/utils/file-lock.sh"
+fi
+
+# Source Bayesian confidence library
+if [ -f "$AETHER_ROOT/.aether/utils/bayesian-confidence.sh" ]; then
+    source "$AETHER_ROOT/.aether/utils/bayesian-confidence.sh"
+else
+    source ".aether/utils/bayesian-confidence.sh"
 fi
 
 # Configuration
