@@ -27,6 +27,59 @@ jq -r '.watcher_weights.security' .aether/data/watcher_weights.json
 
 ## Your Workflow
 
+### 0. Check Events
+
+Before starting work, check for colony events:
+
+```bash
+# Source event bus
+source .aether/utils/event-bus.sh
+
+# Get events for this specialist Watcher
+my_caste="security-watcher"
+my_id="${CASTE_ID:-$(basename "$0" .md)}"
+events=$(get_events_for_subscriber "$my_id" "$my_caste")
+
+# Process events if present
+if [ "$events" != "[]" ]; then
+  echo "Received $(echo "$events" | jq 'length') events"
+
+  # Check for errors related to security
+  error_count=$(echo "$events" | jq -r '[.[] | select(.topic == "error")] | length')
+  if [ "$error_count" -gt 0 ]; then
+    echo "Errors detected - review events before verification"
+  fi
+
+  # Check for task failures (high priority for verification)
+  failed_count=$(echo "$events" | jq -r '[.[] | select(.topic == "task_failed")] | length')
+  if [ "$failed_count" -gt 0 ]; then
+    echo "Task failures detected - may require deeper verification"
+  fi
+
+  # Security-specific event handling
+  # Check for Critical severity security issues
+  critical_count=$(echo "$events" | jq -r '[.[] | select(.data.severity == "Critical")] | length')
+  if [ "$critical_count" -gt 0 ]; then
+    echo "Critical security issues detected - prioritize these in verification"
+  fi
+fi
+
+# Always mark events as delivered
+mark_events_delivered "$my_id" "$my_caste" "$events"
+```
+
+#### Subscribe to Event Topics
+
+When first initialized, subscribe to relevant event topics:
+
+```bash
+# Subscribe to security-specific topics with filter criteria
+subscribe_to_events "$my_id" "$my_caste" "task_completed" '{"category": "security"}'
+subscribe_to_events "$my_id" "$my_caste" "task_failed" '{}'
+subscribe_to_events "$my_id" "$my_caste" "error" '{"category": "security"}'
+subscribe_to_events "$my_id" "$my_caste" "error" '{"severity": "Critical"}'
+```
+
 ### 1. Receive Work to Verify
 
 Extract from context:

@@ -24,6 +24,59 @@ jq -r '.watcher_weights.test_coverage' .aether/data/watcher_weights.json
 
 ## Your Workflow
 
+### 0. Check Events
+
+Before starting work, check for colony events:
+
+```bash
+# Source event bus
+source .aether/utils/event-bus.sh
+
+# Get events for this specialist Watcher
+my_caste="test-coverage-watcher"
+my_id="${CASTE_ID:-$(basename "$0" .md)}"
+events=$(get_events_for_subscriber "$my_id" "$my_caste")
+
+# Process events if present
+if [ "$events" != "[]" ]; then
+  echo "Received $(echo "$events" | jq 'length') events"
+
+  # Check for errors related to testing
+  error_count=$(echo "$events" | jq -r '[.[] | select(.topic == "error")] | length')
+  if [ "$error_count" -gt 0 ]; then
+    echo "Errors detected - review events before verification"
+  fi
+
+  # Check for task failures (high priority for verification)
+  failed_count=$(echo "$events" | jq -r '[.[] | select(.topic == "task_failed")] | length')
+  if [ "$failed_count" -gt 0 ]; then
+    echo "Task failures detected - may require deeper verification"
+  fi
+
+  # Testing-specific event handling
+  # Check for coverage check events
+  coverage_count=$(echo "$events" | jq -r '[.[] | select(.data.type == "coverage_check")] | length')
+  if [ "$coverage_count" -gt 0 ]; then
+    echo "Coverage check events detected - review coverage metrics in verification"
+  fi
+fi
+
+# Always mark events as delivered
+mark_events_delivered "$my_id" "$my_caste" "$events"
+```
+
+#### Subscribe to Event Topics
+
+When first initialized, subscribe to relevant event topics:
+
+```bash
+# Subscribe to testing-specific topics with filter criteria
+subscribe_to_events "$my_id" "$my_caste" "task_completed" '{"category": "testing"}'
+subscribe_to_events "$my_id" "$my_caste" "task_failed" '{}'
+subscribe_to_events "$my_id" "$my_caste" "error" '{"category": "testing"}'
+subscribe_to_events "$my_id" "$my_caste" "task_completed" '{"type": "coverage_check"}'
+```
+
 ### 1. Receive Work to Verify
 
 Extract from context:
