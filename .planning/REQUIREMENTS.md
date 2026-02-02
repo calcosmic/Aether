@@ -65,23 +65,23 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| POLL-01 | Phase 1 | Pending |
-| POLL-02 | Phase 1 | Pending |
-| POLL-03 | Phase 1 | Pending |
-| POLL-04 | Phase 1 | Pending |
-| POLL-05 | Phase 1 | Pending |
-| VISUAL-01 | Phase 2 | Pending |
-| VISUAL-02 | Phase 2 | Pending |
-| VISUAL-03 | Phase 2 | Pending |
-| VISUAL-04 | Phase 2 | Pending |
-| TEST-01 | Phase 3 | Pending |
-| TEST-02 | Phase 3 | Pending |
-| TEST-03 | Phase 3 | Pending |
-| TEST-04 | Phase 3 | Pending |
-| TEST-05 | Phase 3 | Pending |
-| TEST-06 | Phase 3 | Pending |
-| DOCS-01 | Phase 2 | Pending |
-| DOCS-02 | Phase 2 | Pending |
+| POLL-01 | Phase 11 | Pending |
+| POLL-02 | Phase 11 | Pending |
+| POLL-03 | Phase 11 | Pending |
+| POLL-04 | Phase 11 | Pending |
+| POLL-05 | Phase 11 | Pending |
+| VISUAL-01 | Phase 12 | Pending |
+| VISUAL-02 | Phase 12 | Pending |
+| VISUAL-03 | Phase 12 | Pending |
+| VISUAL-04 | Phase 12 | Pending |
+| DOCS-01 | Phase 12 | Pending |
+| DOCS-02 | Phase 12 | Pending |
+| TEST-01 | Phase 13 | Pending |
+| TEST-02 | Phase 13 | Pending |
+| TEST-03 | Phase 13 | Pending |
+| TEST-04 | Phase 13 | Pending |
+| TEST-05 | Phase 13 | Pending |
+| TEST-06 | Phase 13 | Pending |
 
 **Coverage:**
 - v2 requirements: 16 total
@@ -91,4 +91,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 ---
 
 *Requirements defined: 2026-02-02*
-*Last updated: 2026-02-02 after initial definition*
+*Last updated: 2026-02-02 after v2.0 roadmap creation*
