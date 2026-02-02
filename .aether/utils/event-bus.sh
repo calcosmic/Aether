@@ -205,7 +205,7 @@ publish_event() {
              }
            }] |
            .metrics.total_published += 1 |
-           .metrics.backlog_count += 1 |
+           .metrics.backlog_count = (.event_log | length) |
            .metrics.last_updated = $timestamp |
            (.topics[$topic] //= {"description": "Auto-created topic", "subscriber_count": 0})
            ' "$EVENTS_FILE" > "$temp_file"
@@ -232,7 +232,7 @@ publish_event() {
              }
            }] |
            .metrics.total_published += 1 |
-           .metrics.backlog_count += 1 |
+           .metrics.backlog_count = (.event_log | length) |
            .metrics.last_updated = $timestamp |
            (.topics[$topic] //= {"description": "Auto-created topic", "subscriber_count": 0})
            ' "$EVENTS_FILE" > "$temp_file"
@@ -289,8 +289,7 @@ trim_event_log() {
         local temp_file="/tmp/event_trim.$$.tmp"
 
         # Keep most recent events (ring buffer)
-        jq --argjson keep "$max_size" \
-           '
+        jq --argjson keep "$max_size" '
            if .event_log then
              .event_log = .event_log[-($keep):] |
              .metrics.backlog_count = (.event_log | length)
@@ -544,6 +543,7 @@ get_events_for_subscriber() {
     # Collect matching events from all subscriptions
     local matching_events="[]"
     local subscription_timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    local seen_events="{}"  # Track seen event IDs to prevent duplicates
 
     while IFS= read -r sub; do
         # Skip empty lines
@@ -578,9 +578,16 @@ get_events_for_subscriber() {
            map(. + {delivered_at: $timestamp})
            ' "$EVENTS_FILE")
 
-        # Accumulate matching events
+        # Deduplicate events by ID (keep first occurrence)
         if [ "$events" != "[]" ]; then
-            matching_events=$(echo "$matching_events" | jq --argjson new "$events" '. + $new')
+            matching_events=$(echo "$matching_events" | jq --argjson new "$events" --argjson seen "$seen_events" '
+                # Combine arrays
+                . + $new |
+                # Deduplicate by ID, keeping first occurrence
+                unique_by(.id)
+            ')
+            # Update seen events
+            seen_events=$(echo "$matching_events" | jq 'reduce .[] as $e ({}; .[$e.id] = true)')
         fi
     done <<< "$subscriptions"
 
@@ -635,6 +642,9 @@ mark_events_delivered() {
         return 1
     fi
 
+    # Get count of unique events (deduplicated by ID)
+    local unique_count=$(echo "$events_json" | jq 'unique_by(.id) | length')
+
     # Acquire file lock
     if ! acquire_lock "$EVENTS_FILE"; then
         echo "Error: Failed to acquire event bus lock" >&2
@@ -644,9 +654,11 @@ mark_events_delivered() {
     local temp_file="/tmp/event_mark_delivered.$$.tmp"
 
     # Update all subscriptions for this subscriber
+    # FIXED: Use unique_count instead of count to avoid over-counting duplicate deliveries
+    # FIXED: Don't decrement backlog_count - it will be recalculated from event_log length
     jq --arg subscriber "$subscriber_id" \
        --arg latest "$latest_timestamp" \
-       --argjson count "$(echo "$events_json" | jq 'length')" \
+       --argjson count "$unique_count" \
        '
        .subscriptions |= map(
          if .subscriber_id == $subscriber then
@@ -657,7 +669,6 @@ mark_events_delivered() {
          end
        ) |
        .metrics.total_delivered += $count |
-       .metrics.backlog_count -= $count |
        .metrics.last_updated = $latest
        ' "$EVENTS_FILE" > "$temp_file"
 
@@ -724,6 +735,7 @@ cleanup_old_events() {
     local temp_file="/tmp/event_cleanup.$$.tmp"
 
     # Remove events older than cutoff
+    # FIXED: Recalculate backlog_count from event_log length
     jq --arg cutoff "$cutoff_timestamp" \
        '
        .event_log = [.event_log[] | select(.metadata.timestamp > $cutoff)] |
