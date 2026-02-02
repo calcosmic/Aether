@@ -309,13 +309,13 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans:** 7 plans in 4 waves
 
 **Colony Tasks**:
-- [ ] 09-01-PLAN.md — Event bus schema and initialization (Wave 1)
-- [ ] 09-02-PLAN.md — Publish operation with non-blocking async (Wave 2)
-- [ ] 09-03-PLAN.md — Subscribe operation with topic patterns (Wave 2)
-- [ ] 09-04-PLAN.md — Event filtering and pull-based delivery (Wave 3)
-- [ ] 09-05-PLAN.md — Event logging with ring buffer and cleanup (Wave 4)
-- [ ] 09-06-PLAN.md — Async non-blocking delivery verification (Wave 3)
-- [ ] 09-07-PLAN.md — Event metrics tracking (Wave 4)
+- [x] 09-01-PLAN.md — Event bus schema and initialization (Wave 1)
+- [x] 09-02-PLAN.md — Publish operation with non-blocking async (Wave 2)
+- [x] 09-03-PLAN.md — Subscribe operation with topic patterns (Wave 2)
+- [x] 09-04-PLAN.md — Event filtering and pull-based delivery (Wave 3)
+- [x] 09-05-PLAN.md — Event logging with ring buffer and cleanup (Wave 4)
+- [x] 09-06-PLAN.md — Async non-blocking delivery verification (Wave 3)
+- [x] 09-07-PLAN.md — Event metrics tracking (Wave 4)
 
 **Wave Structure:**
 - Wave 1: Event bus schema + initialization (09-01)

@@ -13,11 +13,11 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 9 of 10 (Stigmergic Events)
-Plan: 4/7 complete
+Plan: 5/7 complete
 Status: In progress
-Last activity: 2026-02-02 — Completed 09-04-PLAN.md (Event Filtering and Pull-based Delivery)
+Last activity: 2026-02-02 — Completed 09-07-PLAN.md (Event Metrics)
 
-Progress: [████████░] 82%
+Progress: [█████████] 88%
 
 ## Recent Changes
 
@@ -145,6 +145,7 @@ Recent decisions affecting current work:
 - **Event Publish Operation**: Implemented publish_event() function with generate_event_id(), generate_correlation_id(), trim_event_log(). Non-blocking publish writes events to event_log with unique IDs (evt_<timestamp>_<random>), topic, type, data, metadata (publisher, caste, timestamp, correlation_id). File locking prevents concurrent corruption, atomic writes prevent partial event corruption. Ring buffer enforces 1000 event max (keeps most recent). Dynamic topic creation via //= operator (prevents document corruption). Metrics updated atomically (total_published, backlog_count, last_updated). Input validation (JSON validation, required arguments). Comprehensive test suite (9 test categories) validates all publish scenarios.
 - **Async Event Delivery Verification**: Verified publish_event() implements true async semantics (returns immediately after write, no waiting for subscribers, no background processes). Added comprehensive async design documentation to event-bus.sh header explaining pull-based delivery pattern optimal for prompt-based Worker Ants. Created test-event-async.sh with 10 test categories verifying non-blocking behavior (publish returns immediately, independent subscriber polling, concurrent publishes, decoupled delivery). Confirmed no subscriber calls in publish_event() implementation.
 - **Event Filtering and Pull-Based Delivery**: Implemented get_events_for_subscriber() with topic pattern filtering (jq test() for wildcards), filter criteria matching (JSON key-value), and since-last-delivered polling semantics. Uses variable binding (. as $event) for correct filter criteria reference. Returns empty array immediately if no events (non-blocking). Implemented mark_events_delivered() for delivery tracking, updating last_event_delivered timestamp and delivery_count per subscription. Metrics updated (total_delivered, backlog_count). Pull-based delivery pattern optimal for prompt-based Worker Ants (subscribers poll when executing, events not pushed). Comprehensive test suite (test-event-filtering.sh) with 10 test categories covering all filtering and delivery scenarios.
+- **Event Metrics Tracking**: Created event-metrics.sh with calculate_publish_rate() (sliding window over last 60 seconds), calculate_delivery_latency() (placeholder approximation), update_event_metrics() (publish/subscribe/deliver operations), get_event_metrics() (real-time metrics query), and get_metrics_summary() (human-readable output). Metrics automatically updated on all event bus operations via existing integration in event-bus.sh (lines 44, 262, 415, 682). Comprehensive test suite (test-event-metrics.sh) with 10 test categories validates all metrics functionality.
 
 ### Pending Todos
 
@@ -173,7 +174,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02 (Phase 9 - Stigmergic Events)
-Stopped at: Completed 09-04-PLAN.md (Event Filtering and Pull-Based Delivery)
+Stopped at: Completed 09-07-PLAN.md (Event Metrics)
 Resume file: None
 
 **Progress Summary:**
