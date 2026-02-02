@@ -13,11 +13,11 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 9 of 10 (Stigmergic Events)
-Plan: 1/7 complete
+Plan: 2/7 complete
 Status: In progress
-Last activity: 2026-02-02 — Completed 09-01-PLAN.md (Event Bus Schema and Initialization)
+Last activity: 2026-02-02 — Completed 09-02-PLAN.md (Publish Operation)
 
-Progress: [█████████] 78% → [████████░] 80%
+Progress: [█████████] 80% → [████████░] 82%
 
 ## Recent Changes
 
@@ -63,9 +63,9 @@ Progress: [█████████] 78% → [████████░] 80
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 43
+- Total plans completed: 45
 - Average duration: 4 min
-- Total execution time: 2.9 hours
+- Total execution time: 3.0 hours
 
 **By Phase:**
 
@@ -140,6 +140,7 @@ Recent decisions affecting current work:
 - **Bayesian Meta-Learning Test Suite**: Created comprehensive test suite (test-bayesian-learning.sh) with 41 tests across 9 test suites achieving 100% pass rate. Tests validate Beta distribution calculations (prior, success, failure, confidence), sample size weighting (prevents overconfidence), alpha/beta updating (spawn outcomes), spawn outcome recording (COLONY_STATE.json updates), specialist recommendation (threshold-based), Phase 8 vs Phase 6 comparison (Bayesian improvements documented), confidence statistics (comprehensive JSON), Bayesian prior initialization (uniform prior), and weighted specialist scores (ranking). Test suite uses backup/restore pattern for COLONY_STATE.json to ensure idempotency. Float comparison tolerance set to 0.000002 to accommodate bc rounding (bc outputs 0.666666 not 0.666667). Test helper functions normalize bc output (add leading zero if missing). Unique test specialist names (test_specialist_2) prevent conflicts with existing data. All tests demonstrate Bayesian advantages: automatic asymmetric penalty, sample size weighting, confidence threshold (0.7) and sample minimum (5) for recommendations, weighted confidence more conservative for small samples. Phase 8 complete except learning feedback loops (08-05).
 - **Event Bus Schema**: Created events.json with complete pub/sub infrastructure (topics, subscriptions, event_log, metrics, config). Single file storage with ring buffer configuration (max_event_log_size=1000, event_retention_hours=168) for unbounded growth prevention. Pre-populated 6 common topics (phase_complete, error, spawn_request, task_started, task_completed, task_failed). Per-subscriber delivery state tracking via last_event_delivered timestamp for pull-based delivery. Metrics track publish rate, delivery latency, backlog for observability.
 - **Event Bus Initialization**: Created event-bus.sh utility with initialize_event_bus() function. EVENTS_FILE uses git rev-parse to find repository root. Sources atomic-write.sh and file-lock.sh for safety patterns. Validates existing JSON, creates new file with complete schema if not exists. Foundation for publish/subscribe operations in subsequent plans.
+- **Event Publish Operation**: Implemented publish_event() function with generate_event_id(), generate_correlation_id(), trim_event_log(). Non-blocking publish writes events to event_log with unique IDs (evt_<timestamp>_<random>), topic, type, data, metadata (publisher, caste, timestamp, correlation_id). File locking prevents concurrent corruption, atomic writes prevent partial event corruption. Ring buffer enforces 1000 event max (keeps most recent). Dynamic topic creation via //= operator (prevents document corruption). Metrics updated atomically (total_published, backlog_count, last_updated). Input validation (JSON validation, required arguments). Comprehensive test suite (9 test categories) validates all publish scenarios.
 
 ### Pending Todos
 
@@ -168,7 +169,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02 (Phase 9 - Stigmergic Events)
-Stopped at: Completed 09-01-PLAN.md (Event Bus Schema and Initialization)
+Stopped at: Completed 09-02-PLAN.md (Publish Operation)
 Resume file: None
 
 **Progress Summary:**
