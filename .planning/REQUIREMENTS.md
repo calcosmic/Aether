@@ -17,10 +17,10 @@ Requirements for v2.0 reactive event integration. Each maps to roadmap phases.
 
 ### Visual Indicators
 
-- [ ] **VISUAL-01**: User sees activity state (🟢 ACTIVE, ⚪ IDLE, 🔴 ERROR, ⏳ PENDING) for each Worker Ant in status output
-- [ ] **VISUAL-02**: Command output shows step progress during multi-step operations (e.g., "Step 1/3: Initializing...")
-- [ ] **VISUAL-03**: `/ant:status` displays visual dashboard showing all Worker Ant activity with emoji indicators
-- [ ] **VISUAL-04**: User sees pheromone signal strength visually using progress bars (e.g., `[======] 1.0` for full strength)
+- [x] **VISUAL-01**: User sees activity state (🟢 ACTIVE, ⚪ IDLE, 🔴 ERROR, ⏳ PENDING) for each Worker Ant in status output
+- [x] **VISUAL-02**: Command output shows step progress during multi-step operations (e.g., "Step 1/3: Initializing...")
+- [x] **VISUAL-03**: `/ant:status` displays visual dashboard showing all Worker Ant activity with emoji indicators
+- [x] **VISUAL-04**: User sees pheromone signal strength visually using progress bars (e.g., `[======] 1.0` for full strength)
 
 ### E2E Testing
 
@@ -33,8 +33,8 @@ Requirements for v2.0 reactive event integration. Each maps to roadmap phases.
 
 ### Documentation
 
-- [ ] **DOCS-01**: All path references in `.aether/utils/` script comments are accurate
-- [ ] **DOCS-02**: All docstrings in `.claude/commands/ant/` prompts have accurate path references
+- [x] **DOCS-01**: All path references in `.aether/utils/` script comments are accurate
+- [x] **DOCS-02**: All docstrings in `.claude/commands/ant/` prompts have accurate path references
 
 ## v2.x Requirements
 
@@ -70,12 +70,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | POLL-03 | Phase 11 | Complete |
 | POLL-04 | Phase 11 | Complete |
 | POLL-05 | Phase 11 | Complete |
-| VISUAL-01 | Phase 12 | Pending |
-| VISUAL-02 | Phase 12 | Pending |
-| VISUAL-03 | Phase 12 | Pending |
-| VISUAL-04 | Phase 12 | Pending |
-| DOCS-01 | Phase 12 | Pending |
-| DOCS-02 | Phase 12 | Pending |
+| VISUAL-01 | Phase 12 | Complete |
+| VISUAL-02 | Phase 12 | Complete |
+| VISUAL-03 | Phase 12 | Complete |
+| VISUAL-04 | Phase 12 | Complete |
+| DOCS-01 | Phase 12 | Complete |
+| DOCS-02 | Phase 12 | Complete |
 | TEST-01 | Phase 13 | Pending |
 | TEST-02 | Phase 13 | Pending |
 | TEST-03 | Phase 13 | Pending |
