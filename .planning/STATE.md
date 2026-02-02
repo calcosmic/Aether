@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-02-02)
 
 Milestone: v2.0 Reactive Event Integration
 Phase: 12 of 13 (Visual Indicators & Documentation)
-Plan: 1 of 2 in current phase
-Status: In progress
-Last activity: 2026-02-02 — Phase 12-01 completed (visual indicators)
+Plan: 2 of 2 in current phase
+Status: Phase complete, verified
+Last activity: 2026-02-02 — Phase 12-02 executed and verified (path audit)
 
-Progress: [██████████████░░░░░░░░░░] 62% (v1.0 complete, Phase 11-01 complete)
+Progress: [███████████████░░░░░░░░░] 65% (v1.0 complete, Phase 12 complete)
 
 **v1.0 Shipped (2026-02-02):**
 - 8 phases (3-10) with 156/156 must-haves verified
@@ -30,9 +30,9 @@ Progress: [██████████████░░░░░░░░░
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 48 (44 v1.0 + 4 v2.0)
-- Average duration: 21 min
-- Total execution time: 17.6 hours
+- Total plans completed: 50 (44 v1.0 + 6 v2.0)
+- Average duration: 20 min
+- Total execution time: 17.7 hours
 
 **By Phase:**
 
@@ -40,13 +40,13 @@ Progress: [██████████████░░░░░░░░░
 |-------|-------|-------|----------|
 | 3-10 (v1.0) | 44 | TBD | TBD |
 | 11 (v2.0) | 3/3 | 66min | 22min |
-| 12 (v2.0) | 1/2 | 3min | 3min |
+| 12 (v2.0) | 2/2 | 10min | 5min |
 | 13 (v2.0) | 0/2 | - | - |
 
 **Recent Trend:**
 - v1.0: 44 plans completed successfully
-- v2.0: 4 plans complete (11-01: 17min, 11-02: 2min, 11-03: 34min, 12-01: 3min)
-- Trend: Stable (v2.0 phase 11 complete, phase 12 in progress)
+- v2.0: 6 plans complete (11-01: 17min, 11-02: 2min, 11-03: 34min, 12-01: 3min, 12-02: 7min)
+- Trend: Stable (v2.0 phase 11 complete, phase 12 complete)
 
 *Updated after each plan completion*
 
@@ -73,6 +73,9 @@ Progress: [██████████████░░░░░░░░░
 - Delivery tracking prevents reprocessing: Events marked as delivered are not returned on subsequent polls (11-03)
 - Visual status indicators with emoji pairs: All status indicators use emojis with text labels for accessibility (12-01)
 - Step progress tracking: Multi-step commands display real-time progress with [✓]/[→]/[ ] indicators (12-01)
+- Git root detection for paths: Utility scripts use git root detection to work from subdirectories (12-02)
+- Bash syntax corrections: Command prompts use correct source-then-call pattern for functions (12-02)
+- Data path standardization: All data files use .aether/data/ prefix consistently (12-02)
 
 (Full log in PROJECT.md)
 
@@ -86,17 +89,17 @@ None yet.
 1. ~~Event bus polling integration - Worker Ant prompts should call `get_events_for_subscriber()`~~ → COMPLETED in 11-01 (base caste Worker Ants)
 2. ~~Event polling integration tests - Verify event polling works for all castes~~ → COMPLETED in 11-03 (integration test suite)
 3. ~~Visual status indicators - Add emoji-based status indicators for Worker Ants~~ → COMPLETED in 12-01 (emoji status with text labels)
-4. Real LLM testing - Complement bash simulations with actual Queen/Worker LLM execution → Phase 13
-5. Documentation updates - Update path references in script comments → Phase 12-02
+4. ~~Documentation updates - Update path references in script comments~~ → COMPLETED in 12-02 (verified and fixed all paths)
+5. Real LLM testing - Complement bash simulations with actual Queen/Worker LLM execution → Phase 13
 
 (See .planning/milestones/v1-MILESTONE-AUDIT.md for details)
 
 ### Session Continuity
 
-Last session: 2026-02-02 (Phase 12-01 execution)
-Stopped at: Completed Phase 12-01 (visual indicators), ready for Phase 12-02 (documentation)
+Last session: 2026-02-02 (Phase 12-02 execution)
+Stopped at: Completed Phase 12-02 (path audit), Phase 12 complete
 Resume file: None
 
 ---
 
-*State updated: 2026-02-02 after Phase 12-01 completion*
+*State updated: 2026-02-02 after Phase 12-02 completion*
