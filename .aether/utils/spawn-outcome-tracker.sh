@@ -84,8 +84,9 @@ record_successful_spawn() {
     local beta=$(echo "$current" | jq -r '.beta // 1')
 
     # Update Bayesian parameters: increment alpha for success
-    local new_alpha=$(update_bayesian_parameters "$alpha" "$beta" "success")
-    local new_beta=$beta
+    local updated_params=$(update_bayesian_parameters "$alpha" "$beta" "success")
+    local new_alpha=$(echo "$updated_params" | cut -d' ' -f1)
+    local new_beta=$(echo "$updated_params" | cut -d' ' -f2)
 
     # Calculate new confidence
     local new_confidence=$(calculate_confidence "$new_alpha" "$new_beta")
@@ -156,8 +157,9 @@ record_failed_spawn() {
     local beta=$(echo "$current" | jq -r '.beta // 1')
 
     # Update Bayesian parameters: increment beta for failure
-    local new_alpha=$alpha
-    local new_beta=$(update_bayesian_parameters "$alpha" "$beta" "failure")
+    local updated_params=$(update_bayesian_parameters "$alpha" "$beta" "failure")
+    local new_alpha=$(echo "$updated_params" | cut -d' ' -f1)
+    local new_beta=$(echo "$updated_params" | cut -d' ' -f2)
 
     # Calculate new confidence
     local new_confidence=$(calculate_confidence "$new_alpha" "$new_beta")
