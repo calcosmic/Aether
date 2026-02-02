@@ -258,11 +258,11 @@ publish_event() {
     # Trim event log if exceeds max size (ring buffer)
     trim_event_log
 
-    # Update publish metrics
-    update_event_metrics "publish" > /dev/null 2>&1
-
-    # Release lock
+    # Release lock BEFORE calling update_event_metrics to avoid deadlock
     release_lock
+
+    # Update publish metrics (after releasing lock)
+    update_event_metrics "publish" > /dev/null 2>&1
 
     # Return event ID (non-blocking - write complete, returns immediately)
     echo "$event_id"
@@ -411,11 +411,11 @@ subscribe_to_events() {
 
     rm -f "$temp_file"
 
-    # Update subscribe metrics
-    update_event_metrics "subscribe" > /dev/null 2>&1
-
-    # Release lock
+    # Release lock BEFORE calling update_event_metrics to avoid deadlock
     release_lock
+
+    # Update subscribe metrics (after releasing lock)
+    update_event_metrics "subscribe" > /dev/null 2>&1
 
     # Return subscription ID
     echo "$sub_id"
@@ -678,11 +678,11 @@ mark_events_delivered() {
 
     rm -f "$temp_file"
 
-    # Update delivery metrics
-    update_event_metrics "deliver" > /dev/null 2>&1
-
-    # Release lock
+    # Release lock BEFORE calling update_event_metrics to avoid deadlock
     release_lock
+
+    # Update delivery metrics (after releasing lock)
+    update_event_metrics "deliver" > /dev/null 2>&1
 
     return 0
 }
