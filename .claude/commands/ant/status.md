@@ -41,7 +41,41 @@ SESSION_ID=$(jq -r '.colony_metadata.session_id' "$COLONY_STATE")
 CREATED_AT=$(jq -r '.colony_metadata.created_at' "$COLONY_STATE")
 ```
 
-## Step 2: Display Status Header
+## Step 2: Define Helper Functions
+
+```bash
+# Map status to emoji with text label for accessibility
+get_status_emoji() {
+  local status=$1
+  case $status in
+    ACTIVE|active)   echo "🟢 ACTIVE" ;;
+    IDLE|idle)     echo "⚪ IDLE" ;;
+    PENDING|pending|ready|READY)  echo "⏳ PENDING" ;;
+    ERROR|error)    echo "🔴 ERROR" ;;
+    *)        echo "❓ UNKNOWN" ;;
+  esac
+}
+
+# Display pheromone strength as visual progress bar
+show_progress_bar() {
+  local value=$1  # 0.0 to 1.0
+  local width=${2:-20}
+
+  # Clamp value to 0.0-1.0 range
+  value=$(awk -v v="$value" 'BEGIN {print (v < 0 ? 0 : (v > 1 ? 1 : v))}')
+
+  local filled=$(awk -v v="$value" -v w="$width" 'BEGIN {printf "%.0f", v * w}')
+  local empty=$((width - filled))
+
+  # Build bar with box-drawing character
+  printf "["
+  printf "━%.0s" $(seq 1 $filled)
+  printf " %.0s" $(seq 1 $empty)
+  printf "] %.2f\n" "$value"
+}
+```
+
+## Step 3: Display Status Header
 
 ```
 ╔══════════════════════════════════════════════════════════════╗
@@ -53,7 +87,7 @@ CREATED_AT=$(jq -r '.colony_metadata.created_at' "$COLONY_STATE")
 ╚══════════════════════════════════════════════════════════════╝
 ```
 
-## Step 3: Display Goal and Current Phase
+## Step 4: Display Goal and Current Phase
 
 ```
 🎯 Queen's Intention:
@@ -65,57 +99,74 @@ CREATED_AT=$(jq -r '.colony_metadata.created_at' "$COLONY_STATE")
    Goal: {phase_goal}
 ```
 
-## Step 4: Display Worker Ant Status
+## Step 5: Display Worker Ant Status
 
 ```
 🐜 Worker Ant Colony:
 ```
 
-For each caste, display status:
+Group workers by activity state with emoji indicators:
 ```bash
-# Parse worker_ants.json
-for caste in colonizer route_setter builder watcher scout architect; do
-  status=$(jq -r ".castes.$caste.status" "$WORKER_ANTS")
-  current_task=$(jq -r ".castes.$caste.current_task" "$WORKER_ANTS")
-  spawns=$(jq -r ".castes.$caste.spawn_data.subagents_spawned" "$WORKER_ANTS")
-  tasks_completed=$(jq -r ".castes.$caste.performance.tasks_completed" "$WORKER_ANTS")
+# Parse worker_ants.json and group by status
+declare -a active_workers=()
+declare -a idle_workers=()
+declare -a error_workers=()
+declare -a pending_workers=()
 
-  name=$(jq -r ".castes.$caste.name" "$WORKER_ANTS")
-
-  if [ "$status" = "idle" ]; then
-    echo "  ☁️  $name - IDLE"
-  elif [ "$status" = "ready" ]; then
-    echo "  ✋ $name - READY"
-  elif [ "$status" = "active" ]; then
-    echo "  🏃 $name - ACTIVE: $current_task"
-  else
-    echo "  ⚠️  $name - $status"
-  fi
-
-  if [ "$spawns" -gt 0 ]; then
-    echo "     └─ Spawns: $spawns"
-  fi
+# Extract worker registry data
+jq -r '.worker_registry | to_entries[] | "\(.key)|\(.value.status)|\(.value.caste // "N/A")"' "$WORKER_ANTS" | while IFS='|' read -r worker_id status caste; do
+  case $status in
+    active|ACTIVE)
+      echo "  🟢 ACTIVE: $worker_id ($caste)"
+      ;;
+    idle|IDLE)
+      echo "  ⚪ IDLE: $worker_id ($caste)"
+      ;;
+    error|ERROR)
+      echo "  🔴 ERROR: $worker_id ($caste)"
+      ;;
+    pending|PENDING|ready|READY)
+      echo "  ⏳ PENDING: $worker_id ($caste)"
+      ;;
+    *)
+      echo "  ❓ UNKNOWN: $worker_id ($caste) - $status"
+      ;;
+  esac
 done
+
+# Count workers by status
+active_count=$(jq '[.worker_registry[] | select(.status == "ACTIVE" or .status == "active")] | length' "$WORKER_ANTS")
+idle_count=$(jq '[.worker_registry[] | select(.status == "IDLE" or .status == "idle")] | length' "$WORKER_ANTS")
+error_count=$(jq '[.worker_registry[] | select(.status == "ERROR" or .status == "error")] | length' "$WORKER_ANTS")
+pending_count=$(jq '[.worker_registry[] | select(.status == "PENDING" or .status == "pending" or .status == "ready" or .status == "READY")] | length' "$WORKER_ANTS")
+
+echo ""
+echo "Summary: 🟢 $active_count ACTIVE | ⚪ $idle_count IDLE | 🔴 $error_count ERROR | ⏳ $pending_count PENDING"
 ```
 
-## Step 5: Display Active Pheromones
+## Step 6: Display Active Pheromones
 
 ```
 🌿 Active Pheromones:
 ```
 
 ```bash
-# Count and display active pheromones
+# Count and display active pheromones with progress bars
 pheromone_count=$(jq '.active_pheromones | length' "$PHEROMONES")
 
 if [ "$pheromone_count" -eq 0 ]; then
   echo "  No active pheromones"
 else
-  jq -r '.active_pheromones[] | "  [\(.type)] \(.metadata.context) (strength: \(.strength * 100)%)"' "$PHEROMONES"
+  jq -r '.active_pheromones[] | "\(.type)|\(.signal)|\(.strength)|\(.timestamp)"' "$PHEROMONES" | while IFS='|' read -r type signal strength timestamp; do
+    echo "  [$type] $signal"
+    echo "    Strength: $(show_progress_bar "$strength")"
+    echo "    Updated: $timestamp"
+    echo ""
+  done
 fi
 ```
 
-## Step 6: Display Phase Progress
+## Step 7: Display Phase Progress
 
 ```
 📊 Phase Progress:
@@ -141,7 +192,7 @@ Display progress bar:
   [$([######..........] for 60%, etc.)
 ```
 
-## Step 7: Display Resource Budgets
+## Step 8: Display Resource Budgets
 
 ```
 ⚡ Resource Budgets:
@@ -157,7 +208,7 @@ echo "  Spawns: $current_spawns/$max_spawns this phase"
 echo "  Circuit Breaker Trips: $breaker_trips"
 ```
 
-## Step 8: Display Memory Status
+## Step 9: Display Memory Status
 
 ```
 🧠 Memory Status:
@@ -181,7 +232,7 @@ echo "  Short-term Memory: $short_term_sessions/$short_term_max sessions"
 echo "  Long-term Memory: $long_term_patterns patterns"
 ```
 
-## Step 9: Display Performance Metrics
+## Step 10: Display Performance Metrics
 
 ```
 📈 Performance:
@@ -200,7 +251,7 @@ echo "  Total Spawns: $total_spawns"
 echo "  Success Rate: ${success_rate}%"
 ```
 
-## Step 10: Display Available Actions
+## Step 11: Display Available Actions
 
 Based on current state, show relevant actions:
 
@@ -220,7 +271,7 @@ If colony is not initialized:
   /ant:init <goal> - Initialize the colony
 ```
 
-## Step 11: Display State History (Optional)
+## Step 12: Display State History (Optional)
 
 If state has history:
 ```
