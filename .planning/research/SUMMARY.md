@@ -1,223 +1,239 @@
-# Project Research Summary
+# Aether v2 Research Summary
 
-**Project:** Aether v2 — Claude-native multi-agent system
-**Domain:** Claude-native multi-agent systems
-**Researched:** 2026-02-01
+**Project:** Aether v2 — Reactive Event Integration, LLM Testing, and CLI Visual Indicators
+**Domain:** Claude-native multi-agent system with event polling, testing infrastructure, and UX enhancements
+**Researched:** 2026-02-02
 **Confidence:** HIGH
 
 ## Executive Summary
 
-Aether v2 is a **Claude-native multi-agent system** that represents a paradigm shift from traditional Python-based frameworks like AutoGen and LangGraph. Instead of code-based orchestration, Aether uses **prompts as code** and **JSON as state**, enabling autonomous agent spawning without external dependencies. The core innovation is agents that detect capability gaps and spawn specialists via Claude's Task tool, coordinated through a pheromone-based signal system implementing stigmergic communication.
+Aether v2 enhances the existing Queen Ant Colony system with three critical integrations that transform it from a prompt-based autonomous agent framework into a reactive, testable, and user-friendly multi-agent system. Research confirms that **pull-based event polling** is the correct pattern for prompt-based Worker Ants (which execute and exit, not persistent processes), **manual E2E test guides** are the right approach for validating LLM behavior where automated tests cannot assess reasoning quality, and **Unicode emoji indicators** provide semantic, color-independent visual feedback for colony activity.
 
-The recommended approach is deliberately minimal: prompt files (`.md` with XML tags), JSON state persistence, and Claude's native Task tool for spawning. This stack is validated by official Anthropic documentation, leaked system prompts, and a working Aether implementation. The architecture consists of six layers: Command (prompts), State (JSON), Memory (triple-layer compression), Communication (pheromone signals), Orchestration (state machine), and Spawning (Task tool). Critical risks include context rot in long sessions, infinite spawning loops, and JSON state corruption from race conditions—all with proven mitigation strategies.
+The recommended approach builds on Aether v1's proven foundation (19 commands, 10 Worker Ants, 879-line event bus) without introducing new dependencies. Event polling integrates via existing `get_events_for_subscriber()` function, LLM testing uses human-readable markdown guides executed by Claude Code, and visual indicators leverage terminal emoji support. The stack remains deliberately minimal: **Bash + jq** for event infrastructure, **Markdown** for test documentation, **Unicode emojis** for visual feedback.
 
-Key differentiators include autonomous spawning (no existing system supports this), pheromone-based stigmergy (unique to Aether), triple-layer memory (addresses LLM context limitations systematically), and meta-learning loop (agents learn which specialists work best). The system avoids common anti-patterns: predefined workflows, real-time dashboards, external vector databases, and Python orchestration layers—all problematic in practice.
+Key risks are well-documented with clear mitigation strategies. The top pitfalls for v2 are **polling thundering herd** (prevented with randomized jitter and exponential backoff), **event saturation** (prevented with priority levels and adaptive filtering), and **LLM test flakiness** (prevented with golden datasets and fuzzy assertions). All v1 risks remain relevant (context rot, infinite spawning loops, JSON corruption) but have established prevention patterns in the codebase.
 
 ## Key Findings
 
 ### Recommended Stack
 
-Aether v2 uses a deliberately minimal, Claude-native stack validated by official Anthropic documentation and production usage.
-
 **Core technologies:**
-- **Claude Code CLI 2.0+**: Native execution environment providing Task tool, sub-agent spawning, agent skills, hooks—no external framework needed
-- **Prompt files (`.md`)**: Agent behavior definition via `.claude/commands/` with XML tags for clear instruction boundaries—de facto standard for Claude-native systems
-- **Task tool**: Official mechanism for autonomous sub-agent spawning with 5 agent types (general-purpose, Explore, Plan, claude-code-guide, statusline-setup)
-- **JSON state**: Simple, human-readable persistence for colony state, pheromones, memory—Claude reads/writes natively, no databases required for this scope
-- **Agent skills**: Domain expertise loaded on-demand via `.claude/skills/` folders (official feature, Oct 2025)
+- **Bash + jq** (Bash 4.0+, jq 1.6+) — Event polling infrastructure; proven pattern in Aether's event-bus.sh (879 lines); file locking via fcntl prevents race conditions
+- **Markdown test guides** (GitHub Flavored Markdown) — E2E LLM test documentation; human-readable test cases Claude can execute directly; no test runner dependencies
+- **Unicode emojis** (Standard Unicode 15.0+) — CLI visual indicators; terminal-compatible, semantic meaning independent of color; accessibility-friendly
+- **TAP format** (TAP version 13) — Test output standard; already used in existing tests; industry standard for test reporting
+- **JSON state files** (JSON RFC 8259) — Test execution tracking; Claude reads/writes natively; git-diffable for test history validation
 
-**Explicitly avoided:** Python async/await (Claude handles concurrency via Task tool), external vector DBs (overkill for this scope), Docker/Kubernetes (Claude Code has built-in sandboxing), Redis/PostgreSQL (JSON sufficient for prototype), pre-2025 multi-agent patterns (obsolete).
+**Supporting utilities (existing):**
+- `atomic-write.sh` — Corruption-safe test state updates
+- `file-lock.sh` — Concurrent test execution safety
+- `event-bus.sh` — Event polling infrastructure (pull-based delivery already implemented)
 
 ### Expected Features
 
 **Must have (table stakes):**
-- **Command System** — Users expect slash commands (`/ant:init`, `/ant:execute`) for any multi-agent system
-- **State Persistence** — Work must survive context refreshes; JSON-based colony state is essential
-- **Agent Roles/Castes** — At minimum: Planner, Executor, Verifier; single-type feels incomplete
-- **Task Spawning** — Core multi-agent capability via Claude's Task tool; without this, it's just single-agent prompting
-- **Phase-Based Execution** — Structured progress with checkpoints; pure emergence feels chaotic
-- **Status Visibility** — Users need to see active agents, phases, progress via `/ant:status`
-- **Basic Memory** — Working memory for current session; table stakes for any useful system
+- **Event Polling Integration** — Worker Ants call `get_events_for_subscriber()` at execution boundaries; users expect agents to react asynchronously to events
+- **Event Delivery Tracking** — Workers call `mark_events_delivered()` after processing; prevents duplicate event processing
+- **Event Filtering** — Topic-based subscriptions prevent event noise; users expect agents to only receive relevant events
+- **Manual E2E Test Guide** — Documented test procedures for init, execute, spawning, memory, voting workflows; table stakes for production systems
+- **Visual Activity Indicators** — Basic status indicators (🐜 for active, ⚪ for idle, ⏳ for pending); expected in all modern CLI tools
+- **Progress Feedback** — Progress bars, step counters, completion percentages; standard in modern CLI tools
 
 **Should have (competitive):**
-- **Autonomous Agent Spawning** — Revolutionary differentiator: agents detect capability gaps and spawn specialists without human orchestration
-- **Pheromone Signal System** — Stigmergic coordination via semantic signals (INIT, FOCUS, REDIRECT, FEEDBACK) with decay
-- **Triple-Layer Memory** — Working (200k) → Short-term (2.5x compression) → Long-term with associative links
-- **Voting-Based Verification** — Multiple verifiers with weighted voting; 13.2% improvement in reasoning
-- **Meta-Learning Loop** — Bayesian confidence scoring for specialist selection improvement over time
+- **Reactive Event Polling for Prompt-Based Agents** — First event system designed for prompt-based agents (not persistent processes); unique to Claude-native systems
+- **Caste-Specific Event Sensitivity** — Different Worker Ant castes react differently to same event based on sensitivity profiles; implements pheromone-like signal response
+- **Manual LLM Test Suite with Real Execution** — Tests validate actual LLM behavior (not just code coverage); catches LLM-specific issues traditional tests miss
+- **Visual Colony Activity Dashboard** — Real-time visualization of all Worker Ant activity with emoji indicators; makes emergence visible
 
 **Defer (v2+):**
-- **Long-Term Memory** — Persistent patterns across projects; substantial infrastructure needed
-- **Semantic Communication Layer** — Intent-based protocol; adds complexity, needs research validation
-- **Event-Driven Communication (Pub/Sub)** — Scaling to hundreds of agents; overkill for MVP
-- **Multi-Colony Support** — Multiple projects with separate colonies; adds complexity to state management
+- **Real-Time Event Streaming** — WebSocket-based event stream; requires persistent processes (breaks Claude-native model)
+- **Event Replay for "Time Travel"** — Full colony state snapshotting and replay; complex to implement correctly
+- **Web-Based Dashboard** — Separate GUI dashboard; breaks Claude-native workflow
+- **Automated LLM Behavior Testing** — Framework for programmatic LLM validation; beyond v2 scope
 
 ### Architecture Approach
 
-Claude-native multi-agent systems use **prompts as code** and **JSON as state**—a declarative paradigm where Claude interprets prompt files directly, not Python runtime. The architecture has six layers: Command Layer (prompt files define behaviors), State Layer (JSON persists system state), Memory Layer (triple-layer hierarchy with compression), Communication Layer (pheromone signals for coordination), Orchestration Layer (state machine for phase transitions), and Spawning Layer (Task tool for autonomous agent creation).
+Aether v2 adds three integration layers atop the existing v1 architecture:
+
+1. **Event Polling Layer** — Worker Ant prompts call `get_events_for_subscriber()` at execution boundaries (after file writes, command completion, phase transitions). Integration points: Colonizer, Builder, Watcher, Scout.
+
+2. **Visual Indicators Layer** — CLI output formatting with emoji, progress bars, and structured sections. Integration points: All command prompts (init, status, execute, etc.).
+
+3. **E2E Testing Layer** — Manual test guide covering init → execute → spawn → memory → voting workflows. Output: `docs/E2E_TEST_GUIDE.md`.
 
 **Major components:**
-1. **Command Layer** — Prompt files in `.claude/commands/ant/` define agent behaviors via XML-tagged sections (objective, process, context, reference)
-2. **State Layer** — JSON files (COLONY_STATE.json, pheromones.json, memory.json) persist system state with git-tracked, diff-able format
-3. **Memory Layer** — Triple-layer hierarchy: Working (200k in-context) → Short-term (10 sessions, 2.5x compressed) → Long-term (persistent patterns)
-4. **Communication Layer** — Pheromone signals (INIT, FOCUS, REDIRECT, FEEDBACK) with half-life decay enable stigmergic coordination without central orchestrator
-5. **Orchestration Layer** — State machine (IDLE → INIT → PLANNING → IN_PROGRESS → AWAITING_REVIEW → COMPLETED) manages phase transitions
-6. **Spawning Layer** — Task tool spawns autonomous sub-agents when capability gaps detected; 5 agent types with inherited context
-
-**Data flow:** User invokes `/ant:init "<goal>" → Command layer executes prompt → Orchestration sets state to INIT → Communication emits INIT pheromone → Spawning layer spawns Planner agent → State layer saves phase plan to JSON. Execution flow: `/ant:execute <phase_id>` → State layer loads phase → Orchestration sets IN_PROGRESS → Communication emits INIT pheromone → Spawning spawns Coordinator → Coordinator spawns specialists → Agents work autonomously, update JSON → Phase completion triggers state transition.
+- **Event Polling Layer** — Worker Ants poll events at execution boundaries; communicates with Event bus (get_events_for_subscriber) and State Layer (publish events)
+- **Visual Indicators Layer** — Format CLI output with emoji, progress bars, sections; communicates with all command prompts via template patterns
+- **E2E Testing Layer** — Manual test guide covering core workflows; validates all layers end-to-end
 
 ### Critical Pitfalls
 
-**Top 5 pitfalls with prevention strategies:**
+**Top v2 pitfalls:**
 
-1. **Context Rot in Long-Running Sessions** — LLM attention degrades beyond 50-100 messages; agents forget instructions, contradict themselves, lose coherence. **Prevention:** Triple-layer memory with DAST compression (2.5x at phase boundaries), 20% context window budget (never exceed 40k tokens), signal decay with explicit renewal, context pruning (remove irrelevant history), context quality over quantity.
+1. **Polling Thundering Herd** — All agents poll simultaneously causing synchronized load spikes. **Prevention:** Add ±20-30% randomized jitter to polling intervals, implement exponential backoff when no events detected, stagger agent initialization with 0-5s random startup delay.
 
-2. **Infinite Spawning Loops** — Agents spawn specialists who spawn more specialists recursively, exhausting quota. Research shows 1/3 of agents fall into infinite loops. **Prevention:** Global spawn depth limit (max 3 levels), per-phase spawn quota (max 10 specialists), spawn circuit breaker (auto-trigger after 3 failed spawns in 5 minutes), capability gap cache (don't spawn same specialist twice), spawn cost awareness, max iterations limit (5 for agent loops).
+2. **Event Saturation** — Too many low-value events drown important signals. **Prevention:** Event priority levels (CRITICAL, HIGH, MEDIUM, LOW, DEBUG), adaptive filtering (only log DEBUG events in debug mode), temporal decay (auto-prune low-priority events after 24 hours), event aggregation (combine similar events within time windows).
 
-3. **JSON State Corruption from Race Conditions** — Multiple agents read/write same JSON simultaneously; last write wins, losing updates. Langflow has confirmed data corruption from this. **Prevention:** File locking (`fcntl.flock()` or `portalocker`), atomic write pattern (write temp file then rename), state versioning (optimistic locking with `_version` field), single-writer architecture (only one agent writes to shared state), JSONL for append-only logs, state validation after load.
+3. **LLM Test Flakiness from Non-Determinism** — Tests pass sometimes and fail other times without code changes. **Prevention:** Golden datasets with consistent test inputs, fuzzy assertions (semantic similarity not exact string matching), temperature control (0.0-0.2 for deterministic generation), consensus testing (run 3 times, require 2/3 pass).
 
-4. **Prompt Brittleness and Complexity Explosion** — Prompts grow to 3000+ tokens with hardcoded logic, conditional branches, fragile instructions. Anthropic explicitly warns against this. **Prevention:** Prompt modules not monoliths (each agent role = separate file), structured outputs over prompt logic (JSON schema), prompt versioning (git-track, version in filenames), prompt testing (assert outputs match schema), tool calling over prompting (for logic), prompt length budget (max 500 tokens per agent), prompt linter for anti-patterns.
+4. **Visual Clutter from Emoji Overload** — CLI output becomes unreadable due to excessive emoji. **Prevention:** Visual hierarchy (use emojis only for state changes and critical alerts, 5-7 core indicators max), adaptive emoji support (detect terminal capabilities, fall back to text symbols), --plain flag to disable visual flourishes.
 
-5. **Memory Bloat from Unbounded Working Memory** — Working memory grows unbounded, eventually exceeds context window or causes OOM. Research shows 10-100x degradation without forgetting mechanisms. **Prevention:** Tiered eviction policy (evict oldest/lowest-priority at 80% capacity), automatic compression (compress to short-term every N messages or M minutes), relevance scoring (rank entries by relevance, evict low-relevance first), working memory cap (hard limit 150k tokens), semantic summarization (DAST compress related entries), forgetting by design (FadeMem research shows 10-100x improvement).
+5. **Polling Without Backpressure** — Events queue up faster than agents can process, causing death spiral. **Prevention:** Backpressure monitoring (track queue depth, increase polling interval when queue > threshold), event batching (return max 10 events per poll), circuit breaker (stop polling if queue depth > 1000).
 
-**Moderate pitfalls:** Invisible state mutations (no audit trail), coordination token waste (agents talking instead of working), hallucination cascades (false confidence grows). **Minor pitfalls:** Hardcoded phase tasks (no adaptation to project), pheromone signal saturation (noise drowning signal).
+**Top v1 pitfalls (still relevant):**
+
+1. **Context Rot in Long-Running Sessions** — LLM attention degrades beyond 50-100 messages. **Prevention:** Triple-layer memory with DAST compression (2.5x ratio), 20% context window budget (max 40k tokens of 200k limit), signal decay with explicit renewal.
+
+2. **Infinite Spawning Loops** — Agents spawn specialists who spawn more specialists recursively. **Prevention:** Global spawn depth limit (max 3 levels), per-phase spawn quota (max 10 specialists), spawn circuit breaker (auto-triggers after 3 failed spawns in 5 minutes).
+
+3. **JSON State Corruption from Race Conditions** — Multiple agents read/write same JSON file simultaneously. **Prevention:** File locking via `fcntl.flock()`, atomic write pattern (write to temp file, then atomic rename), state versioning with optimistic locking.
 
 ## Implications for Roadmap
 
-Based on combined research (feature dependencies, architecture layering, pitfall prevention), recommended phase structure:
+Based on research, suggested phase structure for v2:
 
-### Phase 1: Foundation — State & Command Infrastructure
-**Rationale:** All layers depend on JSON state persistence and prompt command structure. Critical pitfall #3 (JSON corruption) must be addressed first before multi-agent execution.
-**Delivers:** State layer with file locking, command layer structure, basic state read/write patterns, atomic writes, state versioning
-**Addresses:** Command System, State Persistence (from FEATURES.md table stakes)
-**Avoids:** JSON state corruption from race conditions (PITFALLS.md #3)
-**Stack elements:** JSON state, file locking (portalocker), atomic write pattern, prompt file structure
+### Phase 1: Event Polling Integration
+**Rationale:** Event polling is foundational for reactive agent behavior. Workers must call `get_events_for_subscriber()` to respond to async events (phase_complete, errors, spawn_requests). This is the highest-priority v2 feature and enables other reactive capabilities.
 
-### Phase 2: Interactive Commands — Planning & Signals
-**Rationale:** User needs command interface to set goals and see plans. Phase-based execution (table stakes feature) requires planning before memory system.
-**Delivers:** `/ant:init` command, basic `/ant:status`, pheromone signal emission (INIT only), dynamic task generation (not hardcoded), signal filtering
-**Addresses:** Phase-Based Execution, Status Visibility, Pheromone Signals (INIT only)
-**Avoids:** Hardcoded phase tasks (PITFALLS.md #9), pheromone signal saturation (PITFALLS.md #10)
-**Implements:** Command Layer (partial), Communication Layer (basic signals), Orchestration Layer (state machine foundation)
-**Uses:** Task tool for spawning Planner agent
+**Delivers:** Worker Ant prompts updated with polling sections, subscription patterns during initialization, event reaction logic (phase_complete, error, spawn_request).
 
-### Phase 3: Triple-Layer Memory — Compression & Retrieval
-**Rationale:** Critical pitfall #1 (context rot) and #5 (memory bloat) must be addressed before autonomous spawning. Memory system needed before multi-agent execution to prevent context degradation.
-**Delivers:** Working memory (200k token budget), DAST compression algorithm (2.5x ratio), short-term memory (10 sessions), automatic compression triggers, eviction policy, relevance scoring
-**Addresses:** Basic Memory, Triple-Layer Memory (FEATURES.md differentiator)
-**Avoids:** Context rot (PITFALLS.md #1), memory bloat (PITFALLS.md #5)
-**Implements:** Memory Layer (full hierarchy)
-**Uses:** JSON state for memory persistence, DAST compression (prompt-based)
+**Addresses:** Event Polling Integration, Event Delivery Tracking, Event Filtering (from FEATURES.md table stakes).
 
-### Phase 4: Autonomous Spawning — Core Differentiator
-**Rationale:** Highest-value feature. Requires all previous layers (state, commands, memory) to function safely. Critical pitfall #2 (infinite spawning loops) must be prevented.
-**Delivers:** Capability gap detection (in prompt logic), autonomous specialist spawning via Task tool, spawn depth limit (max 3), per-phase spawn quota (max 10), circuit breaker (3 failed spawns → cooldown), spawn cost tracking, basic agent castes (Mapper, Planner, Executor)
-**Addresses:** Autonomous Agent Spawning (FEATURES.md core differentiator), Agent Roles/Castes (table stakes)
-**Avoids:** Infinite spawning loops (PITFALLS.md #2)
-**Implements:** Spawning Layer (Task tool integration), basic autonomous behavior
-**Uses:** Task tool spawning, JSON state for spawn history, meta-learning data structure (foundation)
+**Avoids:** Polling thundering herd, polling without backpressure, event loss during async operations (from PITFALLS.md).
 
-### Phase 5: Verification & Quality Assurance
-**Rationale:** Prevents hallucination cascades (PITFALLS.md #8). Voting-based verification is differentiator that improves reliability significantly.
-**Delivers:** Verifier caste, weighted voting logic, belief calibration, cross-agent validation, ground truth checks, source verification (all claims cite sources), confidence calibration
-**Addresses:** Voting-Based Verification (FEATURES.md differentiator)
-**Avoids:** Hallucination cascades (PITFALLS.md #8)
-**Implements:** Spawning Layer (verifier agents), meta-learning foundation
+**Dependencies:** None (event bus already exists from v1 Phase 9).
 
-### Phase 6: Advanced Features — Optimization & Learning
-**Rationale:** Enhancements after core system works. Meta-learning makes spawning smarter over time.
-**Delivers:** Meta-learning loop (Bayesian confidence scoring for specialist selection), remaining pheromone signals (FOCUS, REDIRECT, FEEDBACK), session persistence (pause/resume), prompt modularization (anti-brittleness), efficient handoffs (reduce token waste)
-**Addresses:** Meta-Learning Loop (FEATURES.md differentiator), Remaining Pheromone Signals, Session Persistence
-**Avoids:** Prompt brittleness (PITFALLS.md #4), coordination token waste (PITFALLS.md #7)
-**Implements:** Meta-learning over full system, Communication Layer (full signal set)
+**Research needed:** Standard patterns (event bus implementation verified). Skip `/cds:research-phase`.
+
+### Phase 2: Visual Indicators & E2E Testing
+**Rationale:** Visual indicators improve UX immediately and are independent of event polling. E2E testing guide validates both event polling and visual indicators, so it naturally follows implementation. These are medium-priority features that polish v2 for release.
+
+**Delivers:** Command prompt output templates with emoji, progress bar formatting, structured section borders; E2E_TEST_GUIDE.md with scenarios (init, execute, spawn, memory, voting), expected outputs, verification checklists.
+
+**Addresses:** Visual Activity Indicators, Progress Feedback, Manual E2E Test Guide (from FEATURES.md table stakes).
+
+**Avoids:** Visual clutter from emoji overload, LLM test flakiness, test brittleness from exact assertions (from PITFALLS.md).
+
+**Uses:** Unicode emojis, Markdown test guides (from STACK.md).
+
+**Research needed:** Medium — CLI visual patterns have community consensus but need user validation. Consider `/cds:research-phase` for CLI UX patterns.
+
+### Phase 3: Caste-Specific Event Sensitivity & Advanced Features
+**Rationale:** Caste-specific sensitivity enhances event polling without changing its core. Once basic polling works, making it caste-specific is a natural improvement. Event-driven spawning triggers and visual dashboard are "nice to have" features that complete the v2 vision.
+
+**Delivers:** Caste-specific event subscriptions (Colonizer prioritizes "spawn_request", Watcher prioritizes "error"), event-driven spawning triggers ("spawn_request" events trigger Bayesian spawning), visual pheromone strength indicators.
+
+**Addresses:** Caste-Specific Event Sensitivity, Event-Driven Spawning Triggers, Visual Colony Activity Dashboard, Visual Pheromone Strength Indicators (from FEATURES.md competitive features).
+
+**Uses:** Pheromone sensitivity profiles from v1, event polling from Phase 1.
+
+**Research needed:** Low — extends existing patterns. Skip `/cds:research-phase`.
 
 ### Phase Ordering Rationale
 
-**Dependency-based ordering:** Phase 1 (state/commands) → Phase 2 (planning/signals) → Phase 3 (memory) → Phase 4 (spawning) → Phase 5 (verification) → Phase 6 (optimization). This order ensures each phase has required infrastructure. Spawning (Phase 4) requires state locking (Phase 1), planning interface (Phase 2), and memory compression (Phase 3) to avoid infinite loops, JSON corruption, and context rot. Verification (Phase 5) requires spawning to work first. Meta-learning (Phase 6) requires spawn history from Phase 4-5.
+**Why this order based on dependencies:**
+- Phase 1 (Event Polling) must come first because it enables reactive behavior, foundational for async coordination. Visual indicators and testing both depend on event polling working.
+- Phase 2 (Visuals + Testing) groups independent features that polish v2. Visual indicators are UX improvements that can be built in parallel with event polling. E2E testing validates both Phase 1 and Phase 2, so it naturally follows implementation.
+- Phase 3 (Advanced Features) builds on Phase 1's event polling foundation. Caste-specific sensitivity and event-driven spawning are enhancements to the core polling mechanism.
 
-**Pitfall avoidance by design:** Phase 1 prevents JSON corruption before multi-agent execution. Phase 3 prevents context rot before spawning (long sessions during spawning would rot). Phase 4 includes circuit breakers to prevent infinite loops. Phase 5 prevents hallucination cascades. Phase 6 prevents prompt brittleness and token waste after core system validated.
+**Why this grouping based on architecture patterns:**
+- Phase 1 implements Event Polling Layer (from ARCHITECTURE.md)
+- Phase 2 implements Visual Indicators Layer and E2E Testing Layer (from ARCHITECTURE.md)
+- Phase 3 refines Event Polling Layer with caste-specific behavior
 
-**Feature delivery cadence:** Phase 1-2 deliver table stakes (commands, state, planning). Phase 3-4 deliver core differentiators (autonomous spawning, triple-layer memory). Phase 5-6 enhance quality and intelligence (verification, meta-learning). This validates autonomous spawning concept (MVP) before investing in optimization.
+**How this avoids pitfalls from research:**
+- Phase 1 avoids thundering herd by implementing jitter and backpressure from day one
+- Phase 2 avoids visual clutter by following emoji hierarchy guidelines
+- Phase 2 avoids test flakiness by using golden datasets and fuzzy assertions
+- All phases avoid v1 pitfalls (context rot, infinite spawning, JSON corruption) by following established prevention patterns
 
 ### Research Flags
 
 **Phases likely needing deeper research during planning:**
-- **Phase 3 (Triple-Layer Memory):** DAST compression algorithm needs prompt-based implementation—no existing Claude-native examples. Research optimal compression triggers (N messages vs M minutes) and relevance scoring heuristics.
-- **Phase 4 (Autonomous Spawning):** Capability gap detection is core innovation—no existing systems to reference. Need research on prompt patterns for detecting "I can't do this, need specialist." Spawn depth limit (3) and quota (10) are heuristics—may need tuning based on testing.
-- **Phase 5 (Verification):** Voting-based verification and belief calibration are research-backed but need prompt-based implementation patterns. Cross-agent validation logic needs design (how do verifiers independently check without repeating work?).
+- **Phase 2 (CLI Visual Indicators):** Medium confidence on CLI UX patterns. Emoji usage has community consensus but lacks rigorous user testing. Consider `/cds:research-phase` to validate terminal compatibility and accessibility.
 
 **Phases with standard patterns (skip research-phase):**
-- **Phase 1 (State & Commands):** JSON state with file locking is standard pattern. Official Anthropic docs cover prompt file structure. Bash tool has atomic rename. HIGH confidence, implement directly.
-- **Phase 2 (Planning & Signals):** Task tool spawning is well-documented. State machine orchestration is standard pattern. Basic pheromone signals (INIT) are simple JSON emission. MEDIUM confidence, proceed with implementation.
-- **Phase 6 (Advanced Features):** Meta-learning uses Beta distribution (from research). Pheromone signal extensions add types, not new concepts. Session persistence is checkpoint/resume pattern. MEDIUM confidence, implement after core validated.
+- **Phase 1 (Event Polling Integration):** HIGH confidence. Event bus implementation verified in codebase (879 lines). Pull-based polling pattern confirmed optimal for prompt-based agents.
+- **Phase 2 (E2E Testing):** HIGH confidence. Manual LLM testing approach validated by multiple sources (Maxim AI, Orq.ai, QAWerk). TAP format already used in existing tests.
+- **Phase 3 (Caste-Specific Sensitivity):** HIGH confidence. Extends existing pheromone sensitivity profiles from v1. Pattern is well-understood.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Official Anthropic documentation (sandboxing, agent skills), leaked system prompts (Task tool schema), working Aether implementation all validate prompt-based + JSON approach. No gaps. |
-| Features | HIGH | Feature analysis from 5+ sources (AutoGen, LangGraph, CrewAI, Claude Code, Continue.dev) with consensus on table stakes. Differentiators validated by research papers (voting verification, pheromone coordination). Clear MVP definition. |
-| Architecture | HIGH | Six-layer architecture validated by official Anthropic multi-agent research system docs. Prompt-as-code pattern proven in existing Aether codebase. Data flow patterns verified against Task tool schema. Minor gap: CDS architecture not officially documented (workaround: analyzed existing Aether implementation). |
-| Pitfalls | HIGH | All 5 critical pitfalls verified by multiple sources: context rot (confirmed 2025), infinite loops (arXiv research), JSON corruption (Langflow issue #8791), prompt brittleness (Anthropic warning), memory bloat (FadeMem research). Prevention strategies tested in production systems. |
+| Stack | HIGH | Verified against existing Aether codebase (event-bus.sh, atomic-write.sh, file-lock.sh). Pull-based polling pattern confirmed optimal for prompt-based agents. |
+| Features | HIGH | Table stakes features identified from competitor analysis (AutoGen, LangGraph, CrewAI). Differentiators confirmed unique to Claude-native systems. |
+| Architecture | HIGH | Integration points verified against v1 codebase. Component boundaries clear. Data flow patterns follow established event-driven architecture. |
+| Pitfalls | HIGH | v1 pitfalls documented in CONCERNS.md (internal analysis). v2 pitfalls researched from multiple sources (academic papers, GitHub issues, engineering blogs). |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-**Minor gaps (non-blocking):**
-- **DAST compression implementation:** Research confirms 2.5x compression ratio is optimal, but prompt-based implementation pattern doesn't exist. **Handle during Phase 3 planning:** Design compression prompt based on Anthropic's context engineering principles, test with sample sessions, iterate.
-- **Capability gap detection heuristics:** No existing systems implement autonomous spawning—this is Aether's innovation. **Handle during Phase 4 planning:** Design prompt pattern for "I'm stuck, need specialist" detection, test with capability gaps, refine threshold for spawning.
-- **Meta-learning confidence thresholds:** Beta distribution scoring is theoretically sound but production tuning unknown. **Handle during Phase 6 planning:** Start with conservative thresholds (alpha=1, beta=1), track spawn outcomes, adjust based on empirical data.
-
-**No blocking gaps:** Research is sufficient for roadmap creation. All core decisions validated by high-confidence sources. Implementation details (compression prompts, detection thresholds) are engineering problems, not research gaps.
+- **Polling frequency tuning:** Research confirms "poll at execution boundaries" but doesn't define optimal frequency. How often is "often enough"? **Handle during implementation:** Start with "poll after every action" (file writes, command execution), measure latency, optimize in v3 if needed.
+- **LLM judgment calibration:** Manual test guides require Claude to make judgment calls (e.g., "Is this response helpful?"). Research doesn't specify how to structure validation instructions for consistent judgment. **Handle during implementation:** Iterate on test guide instructions during Phase 2, gather feedback from manual test runs.
+- **Emoji fallback testing:** Unicode emoji support verified for modern terminals, but ASCII fallback pattern not specified. **Handle during implementation:** Test emoji support during Phase 2, implement adaptive output (--plain flag) if terminals show ? boxes.
+- **User validation for visual indicators:** Emoji and progress bars seem helpful, but no user feedback data. **Handle during implementation:** Gather user feedback after v2 ships, iterate on visual hierarchy in v3.
 
 ## Sources
 
 ### Primary (HIGH confidence)
 
+**Official Aether codebase:**
+- `.aether/utils/event-bus.sh` — 879 lines, pull-based event delivery pattern verified
+- `.aether/utils/atomic-write.sh` — Corruption-safe write pattern
+- `.aether/utils/file-lock.sh` — Concurrent access prevention
+- `.planning/phases/10-colony-maturity/tests/integration/full-workflow.test.sh` — TAP format test pattern
+- `.planning/codebase/CONCERNS.md` — Known pitfalls, race condition risks
+
 **Official Anthropic documentation:**
-- [Claude Code Sandboxing](https://www.anthropic.com/engineering/claude-code-sandboxing) — Security model, filesystem/network isolation, 84% permission prompt reduction
-- [Agent Skills](https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills) — Official feature (Oct 16, 2025), load-on-demand pattern, skills architecture
-- [Multi-Agent Research System](https://www.anthropic.com/engineering/multi-agent-research-system) — Official multi-agent architecture patterns, state machine orchestration
-- [Effective Context Engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) — Context optimization strategies, compression techniques
-- [Claude Code Best Practices](https://www.anthropic.com/engineering/claude-code-best-practices) — Slash command architecture, prompt organization
+- [Claude Code Sandboxing](https://www.anthropic.com/engineering/claude-code-sandboxing) — No persistent process support (validates pull-based approach)
+- [Effective Context Engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) — Context optimization for testing
 
-**Academic research (peer-reviewed):**
-- [Voting or Consensus? Decision-Making in Multi-Agent Systems](https://arxiv.org/abs/2502.19130) — arXiv 2025, voting-based verification outperforms single agents
-- [Multi-Agent Coordination Using Stigmergy](https://www.sciencedirect.com/science/article/abs/pii/S0166361503001234) — Peer-reviewed, 226 citations, validates pheromone approach
-- [1/3 Agents Fall Into Infinite Loops](https://arxiv.org/html/2512.01939v1) — arXiv 2025, quantifies infinite loop problem
-- [Memoria: Scalable Agentic Memory Framework](https://arxiv.org/html/2512.12686v1) — arXiv 2025, peer-reviewed, memory hierarchy patterns
-
-**Verified issues:**
-- [Langflow race condition data corruption](https://github.com/langflow-ai/langflow/issues/8791) — Confirmed JSON corruption bug
-- [Claude Code context overflow](https://github.com/anthropics/claude-code/issues/6186) — Official issue, context window limits
-- [OpenAI agents infinite recursion](https://github.com/openai/openai-agents-python/issues/668) — Confirmed spawn loop problem
+**Academic research:**
+- [On the Flakiness of LLM-Generated Tests](https://arxiv.org/html/2601.08998v1) — Research on test flakiness (HIGH confidence, academic paper)
+- [Understanding and Improving Flaky Test Classification](https://www.cs.cornell.edu/~saikatd/papers/flakylens-oopsla25.pdf) — Cornell research 2025 (HIGH confidence)
+- [arXiv: 1/3 agents fall into infinite loops](https://arxiv.org/html/2512.01939v1) — Academic research on spawning loops (HIGH confidence)
+- [Design, Implementation and Evaluation of a Real-Time Filtering System](https://arxiv.org/html/2508.18787v1) — Dynamic signal filtering (MEDIUM confidence)
 
 ### Secondary (MEDIUM confidence)
 
-**Community analysis:**
-- [Claude Skills Deep Dive](https://leehanchung.github.io/blogs/2025/10/26/claude-skills-deep-dive/) — Technical analysis of skills architecture (Oct 2025)
-- [Understanding Claude Code's Full Stack](https://alexop.dev/posts/understanding-claude-code-full-stack/) — Evolution timeline, MCP → Claude Code → Plugins
-- [Inside Claude Code Skills](https://mikhail.io/2025/10/claude-code-skills/) — Skills folder structure, SKILL.md format
-- [Framework comparison: LangGraph vs CrewAI vs AutoGen](https://o-mega.ai/articles/langgraph-vs-crewai-vs-autogen-top-10-agent-frameworks-2026) — Competitor analysis (Jan 2026)
-- [Why multi-agent systems fail](https://medium.com/@umairamin2004/why-multi-agent-systems-fail-in-production-and-how-to-fix-them-3bedbdd4975b) — Context rot, infinite loops, token waste (2025)
+**Event polling patterns:**
+- [Polling Is Not the Problem—Bad Polling Is](https://beingcraftsman.com/2025/12/31/polling-is-not-the-problem-bad-polling-is/) — Best practices for 2025
+- [Data Ingestion Patterns: Push, Pull & Poll Explained (Dagster)](https://dagster.io/blog/data-ingestion-patterns-when-to-use-push-pull-and-poll) — Pull vs push use cases
+- [Event-Driven Architecture: Watch Out For These Pitfalls](https://www.forbes.com/councils/forbestechcouncil/2025/11/26/event-driven-architecture-watch-out-for-these-pitfalls-and-drawbacks/) — Distributed system challenges
+
+**LLM testing approaches:**
+- [How to Evaluate AI Agents: A Practical Checklist for Production (Maxim AI)](https://www.getmaxim.ai/articles/how-to-evaluate-ai-agents-a-practical-checklist-for-production/) — Evaluation checklist
+- [A Comprehensive Guide to Evaluating Multi-Agent LLM Systems (Orq.ai)](https://orq.ai/blog/multi-agent-llm-eval-system) — Multi-agent evaluation patterns
+- [10 LLM Testing Strategies To Catch AI Failures](https://galileo.ai/blog/llm-testing-strategies) — Practical testing approaches
+
+**CLI visual indicators:**
+- [CLI UX best practices: 3 patterns for improving progress displays](https://evilmartians.com/chronicles/cli-ux-best-practices-3-patterns-for-improving-progress-displays) — Progress display patterns
+- [Terminal UI Libraries (LFX Insights)](https://insights.linuxfoundation.org/collection/terminal-ui-libraries) — Terminal UI patterns
+
+**Context rot & memory issues:**
+- [Medium: Context rot confirmed real in 2025](https://medium.com/@umairamin2004/why-multi-agent-systems-fail-in-production-and-how-to-fix-them-3bedbdd4975b) — Multi-agent failure modes
+- [Reddit: Claude Code context window strategy (20% rule)](https://www.reddit.com/r/ClaudeAI/comments/1p05r7p/my_claude_code_context_window_strategy_200k_is) — Community practice
+
+**Infinite loops & spawning:**
+- [Medium: Why multi-agent systems fail](https://medium.com/@umairamin2004/why-multi-agent-systems-fail-in-production-and-how-to-fix-them-3bedbdd4975b) — Failure modes analysis
+- [GitHub: OpenAI agents infinite recursion issue](https://github.com/openai/openai-agents-python/issues/668) — Confirmed bug
+
+**JSON state & race conditions:**
+- [GitHub: Langflow race condition data corruption](https://github.com/langflow-ai/langflow/issues/8791) — Confirmed bug
+- [Milvus Blog: Why Claude Code Feels So Stable](https://milvus.io/blog/why-claude-code-feels-so-stable-a-developers-deep-dive-into-its-local-storage-design.md) — JSONL for stability
 
 ### Tertiary (LOW confidence)
 
-**Unverified sources (needs validation):**
-- [Claude Code system prompt leak](https://sankalp.bearblog.dev/my-experience-with-claude-code-20-and-how-to-get-better-at-using-coding-agents/) — Reverse-engineered Task tool schema (Dec 2025)
-- [国外大神逆向了Claude Code](https://zhuanlan.zhihu.com/p/1943399204027373513) — Chinese reverse engineering (Aug 2025)
+**Event-driven multi-agent systems:**
+- [AI Agents Must Act, Not Wait: A Case for Event-Driven Multi-Agent Design (Medium)](https://seanfalconer.medium.com/ai-agents-must-act-not-wait-a-case-for-event-driven-multi-agent-design-d8007b50081f) — Event-driven design patterns
+- [Stop Polling. Start Listening: Event-Driven Architecture](https://www.hkinfosoft.com/stop-polling.start-listening/the-power-of-event-driven-architecture/) — Pitfalls of polling
 
-### Internal Aether Research
-
-**Primary sources (HIGH confidence):**
-- `.claude/commands/ant/*.md` — 15 prompt files, verified working patterns (XML tags, Task tool usage)
-- `.aether/data/*.json` — 6 state files, proven schema (COLONY_STATE, pheromones, memory)
-- `.aether/memory/meta_learning_demo.json` — Meta-learning implementation (Beta distribution confidence scoring)
-- `.planning/codebase/CONCERNS.md` — Internal analysis of Python prototype pitfalls
-- `.ralph/AUTONOMOUS_AGENT_SPAWNING_RESEARCH.md` — Internal spawning research
-- `.ralph/MEMORY_ARCHITECTURE_RESEARCH.md` — Internal memory research
+**CLI emoji usage:**
+- [Add emoji/visual indicators to CLI output for better UX (GitHub Issue)](https://github.com/josharsh/mcp-jest/issues/19) — GitHub issue, single source
+- [State of Terminal Emulators in 2025](https://news.ycombinator.com/item?id=45799478) — Community discussion
 
 ---
-*Research completed: 2026-02-01*
+*Research completed: 2026-02-02*
 *Ready for roadmap: yes*

@@ -1,476 +1,530 @@
-# Architecture Patterns
+# Architecture Patterns: Aether v2 Integration
 
-**Domain:** Claude-native multi-agent systems
-**Researched:** 2026-02-01
+**Domain:** Reactive event integration, LLM testing, and CLI visual indicators for Claude-native multi-agent systems
+**Researched:** 2026-02-02
 **Overall confidence:** HIGH
 
 ## Executive Summary
 
-Claude-native multi-agent systems represent a paradigm shift from traditional Python-based frameworks. Instead of code-based orchestration, these systems use **prompts as code** and **JSON as state**. The architecture is fundamentally text-based: command files (`.md`) define agent behaviors through prompts, while state files (`.json`) persist system state between sessions.
+Aether v2 enhances the existing Claude-native Queen Ant Colony with three critical integrations: **reactive event polling**, **E2E LLM testing**, and **visual process indicators**. These features integrate into the existing architecture without breaking constraints: prompt-based agents, JSON persistence, and zero external dependencies.
 
-**Key insight:** Unlike Python systems (AutoGen, LangGraph, CrewAI) that require runtime execution, Claude-native systems are declarative. The "code" is prompt files that Claude interprets directly. State is persisted as JSON, enabling checkpoint/resume workflows.
+**Key architectural insight:** The v1 event bus (Phase 9) implemented pull-based async delivery optimal for prompt-based Worker Ants. However, Worker Ant prompts don't yet call `get_events_for_subscriber()`. v2 integrates event polling into Worker Ant execution loops, enabling reactive behavior: Workers spawn autonomously when events indicate capability gaps, errors trigger Watcher verification, and phase completion coordinates colony-wide transitions.
 
-The research reveals five critical architectural layers:
-1. **Command Layer** - Prompt files define agent behaviors
-2. **State Layer** - JSON files persist system state
-3. **Memory Layer** - Working → Short-term → Long-term hierarchy
-4. **Communication Layer** - Pheromone signals, event bus
-5. **Orchestration Layer** - State machine, phase execution
-6. **Spawning Layer** - Task tool for autonomous agent creation
+The research reveals three integration points:
+1. **Event Polling Integration** - Worker Ant prompts call `get_events_for_subscriber()` at execution boundaries
+2. **E2E Testing Guide** - Manual test suite covering init → execute → spawn → memory → voting workflows
+3. **Visual Indicators** - CLI output formatting (emoji, progress bars, section headers) for colony activity visibility
 
 ## Recommended Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    CLAUDE-NATIVE ARCHITECTURE                    │
+│                    AETHER V2 INTEGRATION LAYER                  │
 │                                                                  │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │  COMMAND LAYER (.claude/commands/ant/*.md)              │  │
-│  │  Prompt files = Agent behaviors                          │  │
-│  │  - init.md, plan.md, execute.md, etc.                    │  │
+│  │  EVENT POLLING LAYER (NEW)                              │  │
+│  │  Worker Ant prompts call get_events_for_subscriber()     │  │
+│  │  Integration points: Colonizer, Builder, Watcher, Scout  │  │
 │  └──────────────────────────────────────────────────────────┘  │
 │                          ↓                                      │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │  STATE LAYER (.aether/data/*.json)                      │  │
-│  │  JSON files = System persistence                         │  │
-│  │  - COLONY_STATE.json, pheromones.json, memory.json       │  │
+│  │  VISUAL INDICATORS LAYER (NEW)                          │  │
+│  │  CLI output formatting: emoji, progress bars, sections  │  │
+│  │  Integration points: All command prompts                 │  │
 │  └──────────────────────────────────────────────────────────┘  │
 │                          ↓                                      │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │  MEMORY LAYER (Triple-layer hierarchy)                  │  │
-│  │  Working (200k) → Short-term → Long-term                 │  │
+│  │  E2E TESTING LAYER (NEW)                                │  │
+│  │  Manual test guide: init → execute → spawn → verify     │  │
+│  │  Output: docs/E2E_TEST_GUIDE.md                          │  │
 │  └──────────────────────────────────────────────────────────┘  │
 │                          ↓                                      │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │  COMMUNICATION LAYER                                     │  │
-│  │  Pheromone signals (INIT, FOCUS, REDIRECT, FEEDBACK)     │  │
-│  └──────────────────────────────────────────────────────────┘  │
-│                          ↓                                      │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │  ORCHESTRATION LAYER                                     │  │
-│  │  State machine: IDLE → INIT → PLANNING → EXECUTING       │  │
-│  └──────────────────────────────────────────────────────────┘  │
-│                          ↓                                      │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │  SPAWNING LAYER                                          │  │
-│  │  Task tool spawns autonomous subagents                   │  │
+│  │  EXISTING AETHER V1 ARCHITECTURE                        │  │
+│  │  Command Layer → State → Memory → Comm → Orchestration  │  │
 │  └──────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ### Component Boundaries
 
-| Component | Responsibility | Communicates With | Data Format |
-|-----------|---------------|-------------------|-------------|
-| **Command Layer** | Defines agent behaviors via prompts | State Layer (reads/writes JSON) | Markdown prompts |
-| **State Layer** | Persists system state | All layers (read/write access) | JSON |
-| **Memory Layer** | Manages context compression/retrieval | Orchestration, Spawning | JSON with metadata |
-| **Communication Layer** | Coordinates agents via signals | All layers (broadcasts signals) | JSON signal objects |
-| **Orchestration Layer** | Manages phase state machine | State, Memory, Spawning | JSON state transitions |
-| **Spawning Layer** | Creates specialist agents autonomously | Task tool (Claude native) | Prompt inheritance |
+| Component | Responsibility | Communicates With | Integration Point |
+|-----------|---------------|-------------------|-------------------|
+| **Event Polling Layer** | Worker Ants poll events at execution boundaries | Event bus (get_events_for_subscriber), State Layer (publish events) | Worker Ant prompts (Colonizer, Builder, Watcher, Scout) |
+| **Visual Indicators Layer** | Format CLI output with emoji, progress bars, sections | All command prompts (via template patterns) | Command prompts (init.md, status.md, execute.md, etc.) |
+| **E2E Testing Layer** | Manual test guide covering core workflows | All layers (tests end-to-end) | Documentation (E2E_TEST_GUIDE.md) |
 
 ### Data Flow
 
-**1. Initialization Flow**
+**1. Event Polling Flow (NEW)**
 ```
-User invokes /ant:init "<goal>"
+Worker Ant executes task
     ↓
-Command Layer: init.md prompt executed
+Execution boundary (file write, command complete, phase transition)
     ↓
-Orchestration Layer: Sets state to INIT
+Poll: get_events_for_subscriber(subscriber_id, caste)
     ↓
-Communication Layer: Emits INIT pheromone
+Events returned: [events matching subscriptions since last poll]
     ↓
-Spawning Layer: Spawns Planner agent via Task tool
+Process events:
+  - phase_complete → Update state, trigger transition
+  - error → Log error, spawn Watcher if critical
+  - spawn_request → Check capability gap, spawn specialist
+  - task_started/task_completed → Update meta-learning
     ↓
-State Layer: Saves phase plan to COLONY_STATE.json
-```
-
-**2. Execution Flow**
-```
-User invokes /ant:execute <phase_id>
+mark_events_delivered(subscriber_id, events)
     ↓
-Command Layer: execute.md prompt executed
-    ↓
-State Layer: Loads phase from COLONY_STATE.json
-    ↓
-Orchestration Layer: Sets phase to IN_PROGRESS
-    ↓
-Communication Layer: Emits INIT pheromone for phase
-    ↓
-Spawning Layer: Coordinator agent spawned
-    ↓
-Coordinator spawns specialist agents via Task tool
-    ↓
-Agents work autonomously, update state JSON files
-    ↓
-Phase completion triggers state transition
+Continue execution or react to events
 ```
 
-**3. Memory Flow**
+**2. Visual Indicators Flow (NEW)**
 ```
-Agent generates content
+Command prompt executes
     ↓
-Stored in Working Memory (in-context)
+Output section with emoji markers:
+  🐜 Colony activity
+  📊 Progress metrics
+  ⚠️ Warnings
+  ✓ Success confirmations
     ↓
-Phase boundary triggers compression
+Progress bars: [████████....] 80%
     ↓
-DAST compression → Short-term Memory (2.5x reduction)
+Structured sections with borders:
+╔══════════════════════════════════════╗
+║  SECTION HEADER                      ║
+╠══════════════════════════════════════╣
+║  Content                             ║
+╚══════════════════════════════════════╝
+```
+
+**3. E2E Testing Flow (NEW)**
+```
+User opens E2E_TEST_GUIDE.md
     ↓
-Pattern extraction → Long-term Memory (persistent)
+Follow test scenario:
+  1. Initialize colony: /ant:init "Build REST API"
+  2. Check status: /ant:status
+  3. Execute phase: /ant:execute 1
+  4. Spawn specialist: (triggered by autonomous spawning)
+  5. Verify memory: /ant:memory search
+  6. Emit pheromone: /ant:focus "auth"
+  7. Review vote: (multi-perspective verification)
     ↓
-Associative links created between layers
+Record results: ✓/✗ for each step
+    ↓
+Report bugs or gaps
 ```
 
 ## Patterns to Follow
 
-### Pattern 1: Prompt-as-Code Architecture
+### Pattern 1: Event Polling at Execution Boundaries
 
-**What:** Agent behaviors are defined as Markdown prompt files, not Python code.
+**What:** Worker Ant prompts call `get_events_for_subscriber()` after significant actions (file writes, command completion, phase transitions).
 
-**When:** Building Claude-native systems where commands execute directly in Claude.
+**When:** Workers need to react asynchronously to colony events (phase complete, errors, spawn requests).
+
+**Example:**
+```bash
+# In Worker Ant prompt (e.g., builder-ant.md)
+
+## Your Workflow
+
+### 5. Poll for Events After Actions
+After completing significant actions (file writes, command execution), poll for events:
+
+```bash
+# Source event bus
+source .aether/utils/event-bus.sh
+
+# Poll for events
+SUBSCRIBER_ID="builder_$(jq -r '.colony_metadata.session_id' .aether/data/COLONY_STATE.json)"
+CASTE="builder"
+
+EVENTS=$(get_events_for_subscriber "$SUBSCRIBER_ID" "$CASTE")
+EVENT_COUNT=$(echo "$EVENTS" | jq 'length')
+
+if [ "$EVENT_COUNT" -gt 0 ]; then
+  echo "🔔 Received $EVENT_COUNT events"
+
+  # Process events
+  echo "$EVENTS" | jq -r '.[] | "\(.topic): \(.type)"' | while read -r event_line; do
+    echo "  → $event_line"
+  done
+
+  # Mark events as delivered
+  mark_events_delivered "$SUBSCRIBER_ID" "$CASTE" "$EVENTS"
+
+  # React to critical events
+  PHASE_COMPLETE=$(echo "$EVENTS" | jq '[.[] | select(.topic == "phase_complete")] | length')
+  if [ "$PHASE_COMPLETE" -gt 0 ]; then
+    echo "⚠️ Phase completed - updating state"
+    # Update state, prepare for next phase
+  fi
+fi
+```
+```
+
+**Why:** Enables reactive Worker Ant behavior without persistent processes or background daemons. Workers poll when they execute, not continuously.
+
+### Pattern 2: Subscription During Initialization
+
+**What:** Worker Ants subscribe to relevant event topics when spawned or during phase initialization.
+
+**When:** Worker needs to receive specific event types (errors, spawn requests, phase transitions).
+
+**Example:**
+```bash
+# In Worker Ant spawn template or command initialization
+
+## Subscribe to Events
+
+```bash
+# Source event bus
+source .aether/utils/event-bus.sh
+
+# Subscribe to relevant topics
+SUBSCRIBER_ID="builder_$(jq -r '.colony_metadata.session_id' .aether/data/COLONY_STATE.json)_$(date +%s)"
+CASTE="builder"
+
+# Subscribe to error events
+subscribe_to_events "$SUBSCRIBER_ID" "$CASTE" "error" '{}' > /dev/null
+
+# Subscribe to spawn requests
+subscribe_to_events "$SUBSCRIBER_ID" "$CASTE" "spawn_request" '{"target_caste": "builder"}' > /dev/null
+
+# Subscribe to phase completion
+subscribe_to_events "$SUBSCRIBER_ID" "$CASTE" "phase_complete" '{}' > /dev/null
+
+echo "✓ Subscribed to events (subscriber_id: $SUBSCRIBER_ID)"
+```
+```
+
+**Why:** Ensures Workers receive relevant events. Filter criteria prevent event spam (e.g., only spawn_requests targeting this caste).
+
+### Pattern 3: Visual Indicators in Command Output
+
+**What:** CLI output uses emoji, progress bars, and structured sections for visibility.
+
+**When:** All command prompts (init, status, execute, focus, etc.) need clear, scannable output.
 
 **Example:**
 ```markdown
----
-name: ant:init
-description: Initialize new project
----
+## Step 7: Present Results
 
-<objective>
-Initialize project by setting intention and creating phase structure.
-</objective>
+Show the Queen (user) the colony initialization:
 
-<process>
-You are the Queen Ant Colony receiving intention...
+```
+╔══════════════════════════════════════════════════════════════╗
+║  🐜 Queen Ant Colony Initialized                             ║
+╠══════════════════════════════════════════════════════════════╣
+║  Session: {session_id}                                       ║
+║  Initialized: {timestamp}                                    ║
+║                                                               ║
+║  Queen's Intention:                                           ║
+║  "{goal}"                                                    ║
+║                                                               ║
+║  Colony Status: INIT                                         ║
+║  Current Phase: 1 - Colony Foundation                        ║
+║  Roadmap: 10 phases ready                                    ║
+║                                                               ║
+║  Active Pheromones:                                          ║
+║  ✓ INIT (strength 1.0, persists)                             ║
+║                                                               ║
+║  Worker Ants Mobilized:                                      ║
+║  ✓ Colonizer (ready)                                         ║
+║  ✓ Route-setter (ready)                                      ║
+║  ✓ Builder (ready)                                           ║
+║  ✓ Watcher (ready)                                           ║
+║  ✓ Scout (ready)                                             ║
+║  ✓ Architect (ready)                                         ║
+╚══════════════════════════════════════════════════════════════╝
 
-[Process steps in prose, not code]
-</process>
+✨ COLONY MOBILIZED
 
-<context>
-@.aether/worker_ants.py
-@.aether/phase_engine.py
-</context>
-
-<allowed-tools>
-Task
-Write
-Bash
-Read
-</allowed-tools>
+Next Steps:
+  /ant:status   - View detailed colony status
+  /ant:plan     - Show full 10-phase roadmap
+  /ant:phase 1  - Review Phase 1 details
+  /ant:focus    - Guide colony attention (optional)
+```
 ```
 
-**Why:** Enables version-controlled prompt engineering, declarative agent definitions, and Claude-native execution.
+**Why:** Users can quickly scan colony state at a glance. Emoji indicate status (🐜 activity, ✓ success, ⚠️ warning, ✗ error). Progress bars show completion percentage.
 
-### Pattern 2: JSON State Persistence
+### Pattern 4: E2E Test Guide Structure
 
-**What:** All system state persisted as JSON files, not databases or Python objects.
+**What:** Manual test guide with step-by-step scenarios covering all core workflows.
 
-**When:** Systems requiring checkpoint/resume, cross-session continuity.
+**When:** Validating end-to-end functionality before release.
 
 **Example:**
-```json
-{
-  "goal": "Build REST API",
-  "status": "executing",
-  "current_phase_id": 2,
-  "phases": [...],
-  "worker_ants": {...},
-  "pheromones": [...],
-  "meta_learning": {...}
-}
+```markdown
+# E2E Test Guide for Aether v2
+
+## Test Scenario 1: Colony Initialization
+
+**Goal:** Verify colony initializes correctly with all state files.
+
+**Steps:**
+1. Run: `/ant:init "Build a REST API with authentication"`
+2. Verify:
+   - [ ] Output shows "🐜 Queen Ant Colony Initialized"
+   - [ ] Session ID displayed
+   - [ ] Queen's intention shown
+   - [ ] All 6 Worker Ants show "✓ (ready)"
+   - [ ] INIT pheromone active
+3. Check state files:
+   ```bash
+   cat .aether/data/COLONY_STATE.json | jq '.queen_intention'
+   cat .aether/data/pheromones.json | jq '.active_pheromones'
+   cat .aether/data/worker_ants.json | jq '.castes'
+   ```
+4. Expected: All JSON files valid, intention set, workers mobilized
+
+**Result:** ✓ PASS / ✗ FAIL
+
+**Notes:**
 ```
 
-**Why:** Enables git-tracked state, diff-able changes, easy inspection/debugging, cross-session continuity.
-
-### Pattern 3: Pheromone Signal Communication
-
-**What:** Agents communicate through environment signals, not direct messages.
-
-**When:** Coordinating multiple agents without central orchestrator.
-
-**Example:**
-```json
-{
-  "signal_type": "FOCUS",
-  "content": "WebSocket security",
-  "strength": 0.7,
-  "half_life_hours": 1.0,
-  "created_at": "2026-02-01T14:31:09"
-}
-```
-
-**Why:** Enables stigmergic coordination, adaptive behavior, emergence without orchestration.
-
-### Pattern 4: Triple-Layer Memory
-
-**What:** Hierarchical memory with automatic compression and associative linking.
-
-**When:** Long-running projects requiring context continuity.
-
-**Example:**
-```
-Working Memory (200k tokens, in-context)
-    ↓ [Phase boundary]
-Short-term Memory (10 sessions, 2.5x compressed)
-    ↓ [Pattern extraction]
-Long-term Memory (unlimited, persistent patterns)
-```
-
-**Why:** Mirrors human cognition, enables cross-session learning, prevents context bloat.
-
-### Pattern 5: State Machine Orchestration
-
-**What:** Explicit states with transitions and checkpoints.
-
-**When:** Reliable multi-phase workflows.
-
-**Example:**
-```
-IDLE → INIT → PLANNING → IN_PROGRESS → AWAITING_REVIEW → COMPLETED
-                                      ↓
-                                   FAILED
-```
-
-**Why:** Predictable behavior, error recovery, checkpoint/resume capability.
+**Why:** Manual testing catches issues automated tests miss (UX, edge cases, integration bugs). Guide serves as documentation too.
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: Python-Based Orchestration
+### Anti-Pattern 1: Polling in Tight Loops
 
-**What:** Using Python scripts to orchestrate agents instead of prompt commands.
+**What:** Calling `get_events_for_subscriber()` repeatedly in a loop without delay.
 
-**Why bad:** Defeats Claude-native architecture, requires runtime environment, harder to version control prompts.
+**Why bad:** Wastes computation, no events arrive between polls (event bus is async, not real-time).
 
-**Instead:** Use prompt files in `.claude/commands/` with Claude's Task tool for spawning.
+**Instead:** Poll only at execution boundaries (after file writes, command completion, phase transitions). Worker Ants are prompt-based (execute and exit), not persistent processes.
 
-### Anti-Pattern 2: Monolithic State Files
+### Anti-Pattern 2: Blocking on Events
 
-**What:** Single large JSON file storing all state.
+**What:** Waiting for events to arrive before continuing execution.
 
-**Why bad:** Diff merge conflicts, slow to read/write, hard to inspect.
+**Why bad:** Defeats async design. Workers should execute autonomously, not wait for events.
 
-**Instead:** Separate state by concern:
-- `COLONY_STATE.json` (phase orchestration)
-- `pheromones.json` (communication signals)
-- `memory.json` (memory layer)
-- `worker_ants.json` (agent status)
+**Instead:** Poll, process available events, continue. If critical event missing, note it and proceed. Workers can check again on next execution boundary.
 
-### Anti-Pattern 3: Direct Command Messaging
+### Anti-Pattern 3: Over-Subscription
 
-**What:** Agents sending direct commands to other agents.
+**What:** Subscribing to all events without filter criteria.
 
-**Why bad:** Creates tight coupling, prevents emergence, requires orchestrator.
+**Why bad:** Event spam, irrelevant events, wasted processing.
 
-**Instead:** Use pheromone signals that agents respond to autonomously.
+**Instead:** Subscribe to specific topics with filter criteria (e.g., `spawn_request` with `{"target_caste": "builder"}`). Use wildcard patterns carefully (e.g., `error.*` vs `*`).
 
-### Anti-Pattern 4: Context Window Bloat
+### Anti-Pattern 4: Visual Indicator Clutter
 
-**What:** Accumulating conversation history without compression.
+**What:** Adding emoji to every line, excessive progress bars, noisy output.
 
-**Why bad:** Exceeds context limits, degrades performance, loses important information in noise.
+**Why bad:** Reduces scannability, users tune out.
 
-**Instead:** Implement phase-boundary compression with DAST (Discriminative Abstractive Summarization Technique).
+**Instead:**
+- Use emoji sparingly (section headers, status indicators)
+- One progress bar per metric (don't show multiple bars for same thing)
+- Structured sections with clear borders
+- Consistent emoji meanings (🐜 activity, ✓ success, ⚠️ warning, ✗ error)
 
-### Anti-Pattern 5: Hardcoded Agent Roles
+### Anti-Pattern 5: E2E Tests Requiring Automated Execution
 
-**What:** Defining all agent types and roles in advance.
+**What:** Writing E2E tests as scripts that must be run automatically.
 
-**Why bad:** Can't handle unforeseen requirements, defeats autonomous spawning.
+**Why bad:** Aether is Claude-native (prompt-based), not script-based. Automated tests miss UX issues.
 
-**Instead:** Enable capability gap detection and autonomous specialist spawning via Task tool.
+**Instead:** Manual test guide that humans follow. Document expected outputs and verification steps. Users can execute commands in Claude and observe results.
 
 ## Scalability Considerations
 
-| Concern | At 100 agents | At 10K agents | At 1M agents |
-|---------|---------------|---------------|--------------|
-| **State file size** | JSON files < 1MB | JSON files ~10-50MB | Need sharding/partitioning |
-| **Pheromone evaluation** | Linear scan is fine | Need indexing | Need spatial hashing |
-| **Memory compression** | Manual triggers | Scheduled compression | Continuous background |
-| **Agent spawning** | Task tool unlimited | Need spawning budgets | Need hierarchical spawning |
-| **Signal propagation** | Broadcast all | Interest-based pub/sub | Geographic partitioning |
+| Concern | At 10 events/min | At 100 events/min | At 1000 events/min |
+|---------|------------------|-------------------|--------------------|
+| **Polling overhead** | Negligible (<1ms per poll) | Acceptable (<10ms per poll) | Consider polling frequency |
+| **Event log size** | events.json < 100KB | events.json ~1MB | Ring buffer trims old events |
+| **Subscription matching** | Linear scan fine | Linear scan acceptable | May need indexing |
+| **Visual indicators** | No impact | No impact | No impact (CLI output) |
+| **E2E test time** | ~10 minutes | ~20 minutes | ~30 minutes |
 
-## Prompt Organization Patterns
+## Integration Points by Worker Ant
 
-### Directory Structure
+### Colonizer Ant
+**Event subscriptions:**
+- `phase_complete` - React to phase completion for new codebase analysis
+- `spawn_request` with `{"capability": "codebase_analysis"}` - Spawn when requested
 
-```
-.claude/
-└── commands/
-    └── ant/                    # Namespace for Aether commands
-        ├── init.md             # Project initialization
-        ├── plan.md             # Display phase plan
-        ├── phase.md            # Phase details
-        ├── execute.md          # Phase execution
-        ├── review.md           # Phase review
-        ├── focus.md            # Emit focus pheromone
-        ├── redirect.md         # Emit redirect pheromone
-        ├── feedback.md         # Emit feedback pheromone
-        ├── status.md           # Colony status
-        ├── memory.md           # Memory status
-        ├── colonize.md         # Codebase analysis
-        ├── pause-colony.md     # Session pause
-        └── resume-colony.md    # Session resume
-```
+**Polling points:**
+- After semantic index built
+- After pattern detection complete
+- Before spawning specialist
 
-### Prompt Template Structure
+**Visual indicators:**
+- 🐜 "Colonizing codebase..."
+- ✓ "Semantic index built: {file_count} files"
+- 📊 "Patterns detected: {pattern_count}"
 
-Every command prompt should follow this structure:
+### Builder Ant
+**Event subscriptions:**
+- `error` - React to build errors
+- `spawn_request` with `{"target_caste": "builder"}` - Spawn when requested
+- `task_started` - Track parallel work
 
-```markdown
----
-name: ant:command-name
-description: One-line description
----
+**Polling points:**
+- After file writes
+- After command execution
+- Before spawning specialist
 
-<objective>
-What this command accomplishes
-</objective>
+**Visual indicators:**
+- 🏗️ "Building: {task_description}"
+- ✓ "Build complete: {files_changed} files"
+- ✗ "Build failed: {error}"
 
-<process>
-Step-by-step process in prose:
-1. Step one
-2. Step two
-...
-</process>
+### Watcher Ant
+**Event subscriptions:**
+- `task_completed` - Verify completed work
+- `error` - Critical errors trigger verification
+- `phase_complete` - Phase completion verification
 
-<context>
-@related-files
-References to related components
-</context>
+**Polling points:**
+- After validation complete
+- After spawning 4 parallel Watchers
+- Before voting
 
-<reference>
-# Detailed Reference
+**Visual indicators:**
+- 🔍 "Verifying: {work_description}"
+- ✓ "Verification passed: {score}/10"
+- ⚠️ "Issues found: {issue_count}"
 
-Additional context, examples, patterns
-</reference>
+### Scout Ant
+**Event subscriptions:**
+- `spawn_request` with `{"capability": "research"}` - Spawn when research needed
+- `error` with `{"type": "unknown_domain"}` - Research unknown domains
 
-<allowed-tools>
-Tool1
-Tool2
-Tool3
-</allowed-tools>
-```
+**Polling points:**
+- After information gathering
+- After documentation search
+- Before spawning specialist
 
-**Why this structure:**
-- **Frontmatter** enables command discovery and naming
-- **Objective** clarifies intent for Claude
-- **Process** provides step-by-step guidance
-- **Context** links related files for reference
-- **Reference** provides detailed documentation
-- **Allowed-tools** defines permissions
+**Visual indicators:**
+- 🔭 "Researching: {topic}"
+- ✓ "Found: {result_count} results"
+- 📚 "Documentation: {doc_count} sources"
 
 ## Build Order Implications
 
-Based on component dependencies, recommended build order:
+Based on dependencies between event polling, testing, and visuals:
 
-### Phase 1: Foundation (Core Infrastructure)
-**Components:** State Layer, Command Layer structure
-**Why:** Everything depends on JSON state persistence and prompt command structure.
-
-**Deliverables:**
-- `.aether/data/COLONY_STATE.json` schema
-- `.claude/commands/ant/` directory structure
-- Basic state read/write patterns
-
-### Phase 2: Memory System
-**Components:** Memory Layer (Working → Short-term → Long-term)
-**Why:** Orchestration needs memory to persist phase context.
+### Phase 1: Event Polling Integration (HIGH PRIORITY)
+**Components:** Event polling in Worker Ant prompts
+**Why:** Enables reactive behavior, foundational for async coordination
 
 **Deliverables:**
-- `.aether/data/memory.json` with triple-layer structure
-- DAST compression algorithm (in prompt logic)
-- Associative linking between layers
+- Worker Ant prompts updated with polling sections
+- Subscription patterns during initialization
+- Event reaction logic (phase_complete, error, spawn_request)
 
-### Phase 3: Communication System
-**Components:** Communication Layer (pheromone signals)
-**Why:** Coordination requires signal system before multi-agent execution.
+**Dependencies:** None (event bus already exists from v1 Phase 9)
 
-**Deliverables:**
-- `.aether/data/pheromones.json`
-- Signal emission/decay logic
-- Signal evaluation patterns
-
-### Phase 4: Orchestration Engine
-**Components:** Orchestration Layer (state machine)
-**Why:** Manages phase transitions and agent lifecycle.
+### Phase 2: Visual Indicators (MEDIUM PRIORITY)
+**Components:** CLI output formatting
+**Why:** Improves UX, makes colony activity visible
 
 **Deliverables:**
-- Phase state machine (in prompt logic)
-- Checkpoint/resume capability
-- Phase transition guards
+- Command prompt output templates with emoji
+- Progress bar formatting
+- Structured section borders
 
-### Phase 5: Autonomous Spawning
-**Components:** Spawning Layer (Task tool integration)
-**Why:** Highest value feature, requires all previous layers.
+**Dependencies:** None (independent feature)
 
-**Deliverables:**
-- Capability gap detection (in prompt logic)
-- Autonomous specialist spawning via Task tool
-- Spawning budgets and governance
-
-### Phase 6: Advanced Features
-**Components:** Meta-learning, verification, optimization
-**Why:** Enhancements after core system works.
+### Phase 3: E2E Testing Guide (LOW PRIORITY)
+**Components:** Manual test suite
+**Why:** Validates integration, can be done after features work
 
 **Deliverables:**
-- Bayesian confidence scoring
-- Multi-verifier voting
-- Performance optimization
+- E2E_TEST_GUIDE.md with scenarios
+- Expected outputs documented
+- Verification checklists
+
+**Dependencies:** Phase 1 and 2 (tests event polling and visuals)
 
 ## Architectural Tradeoffs
 
 | Decision | Option A (Recommended) | Option B | Why A |
 |----------|------------------------|----------|-------|
-| **State storage** | JSON files | Database | JSON is git-tracked, diff-able, human-readable |
-| **Agent spawning** | Task tool | Python subprocess | Task tool is Claude-native, no runtime dependency |
-| **Memory** | Triple-layer hierarchy | Single-layer cache | Mirrors human cognition, proven compression |
-| **Communication** | Pheromone signals | Direct messaging | Enables emergence, prevents bottlenecks |
-| **Orchestration** | State machine | Event loop | Predictable, debuggable, checkpointable |
+| **Polling frequency** | At execution boundaries only | Continuous polling loop | Workers are prompt-based (execute/exit), not persistent |
+| **Event reaction** | Process and continue | Block and wait for events | Async design, no blocking |
+| **Visual indicators** | Emoji + progress bars | ANSI color codes | Emoji work in all terminals, no color configuration |
+| **E2E tests** | Manual guide | Automated test script | Aether is Claude-native, not script-based |
+| **Subscription scope** | Specific topics with filters | Wildcard for all events | Prevent event spam, reduce processing |
 
-## Comparison with Traditional Multi-Agent Systems
+## Comparison with v1 Architecture
 
-| Aspect | Claude-Native (Aether) | Traditional (AutoGen, LangGraph) |
-|--------|------------------------|----------------------------------|
-| **Definition** | Prompt files | Python code |
-| **Execution** | Claude interprets prompts | Python runtime |
-| **State** | JSON files | Python objects/DB |
-| **Spawning** | Task tool (Claude native) | Framework APIs |
-| **Memory** | Prompt-based compression | Context window only |
-| **Communication** | Pheromone signals | Message passing |
-| **Orchestration** | State machine in prompts | DAG/workflow engines |
-| **Version control** | Git-tracked prompts | Code-based |
-| **Debugging** | Read JSON state | Debuggers/logging |
-| **Deployment** | Copy `.claude/` directory | Install packages |
+| Aspect | v1 (Phase 9) | v2 (Integration) |
+|--------|--------------|------------------|
+| **Event bus** | Implemented (event-bus.sh) | Workers now call get_events_for_subscriber() |
+| **Worker behavior** | Autonomous spawning | Reactive to events (phase complete, errors) |
+| **CLI output** | Basic text | Structured with emoji, progress bars |
+| **Testing** | Unit tests per component | E2E manual test guide |
+| **Visibility** | State files only | Visual indicators in command output |
+| **Coordination** | Pheromone signals | Events + pheromones (hybrid) |
+
+## Implementation Checklist
+
+### Event Polling Integration
+- [ ] Add `source .aether/utils/event-bus.sh` to Worker Ant prompts
+- [ ] Add subscription section to Worker Ant initialization
+- [ ] Add polling section after execution boundaries
+- [ ] Add event reaction logic (phase_complete, error, spawn_request)
+- [ ] Update Worker Ant prompts: colonizer-ant.md, builder-ant.md, watcher-ant.md, scout-ant.md
+- [ ] Test: Publish event, verify Worker Ant receives on next execution
+
+### Visual Indicators
+- [ ] Update command prompts with emoji: init.md, status.md, execute.md
+- [ ] Add progress bar formatting to status output
+- [ ] Add structured sections with borders
+- [ ] Define emoji meanings (🐜 activity, ✓ success, ⚠️ warning, ✗ error)
+- [ ] Test: Run commands, verify output is scannable
+
+### E2E Testing
+- [ ] Create E2E_TEST_GUIDE.md in /docs
+- [ ] Document test scenarios: init, execute, spawn, memory, voting
+- [ ] Add expected outputs for each scenario
+- [ ] Add verification checklists
+- [ ] Test: Follow guide manually, verify all steps work
 
 ## Sources
 
-### HIGH Confidence (Official Documentation)
+### HIGH Confidence (Official Documentation & Codebase Analysis)
 
-- [Anthropic: How we built our multi-agent research system](https://www.anthropic.com/engineering/multi-agent-research-system) (June 2025) - Official multi-agent architecture patterns
-- [Anthropic: Claude Code Best Practices](https://www.anthropic.com/engineering/claude-code-best-practices) (April 2025) - Slash command architecture, prompt organization
-- [Anthropic: When to use multi-agent systems](https://claude.com/blog/building-multi-agent-systems-when-and-how-to-use-them) (January 2026) - Multi-agent definition and implementation patterns
+- `/Users/callumcowie/repos/Aether/.aether/utils/event-bus.sh` - Event bus implementation (878 lines, verified)
+- `/Users/callumcowie/repos/Aether/.aether/utils/event-metrics.sh` - Event metrics tracking (231 lines, verified)
+- `/Users/callumcowie/repos/Aether/.aether/utils/test-event-async.sh` - Async delivery tests (195 lines, verified)
+- `/Users/callumcowie/repos/Aether/.planning/phases/09-stigmergic-events/09-stigmergic-events-VERIFICATION.md` - Phase 9 verification (47/47 must-haves)
+- `/Users/callumcowie/repos/Aether/.aether/workers/builder-ant.md` - Builder Ant prompt (571 lines, analyzed)
+- `/Users/callumcowie/repos/Aether/.aether/workers/watcher-ant.md` - Watcher Ant prompt (809 lines, analyzed)
+- `/Users/callumcowie/repos/Aether/.claude/commands/ant/init.md` - Init command (277 lines, analyzed)
+- `/Users/callumcowie/repos/Aether/.claude/commands/ant/status.md` - Status command (406 lines, analyzed)
+- `/Users/callumcowie/repos/Aether/.planning/PROJECT.md` - Project context and v2 requirements
 
-### MEDIUM Confidence (Verified with Official Sources)
+### MEDIUM Confidence (Verified Patterns)
 
-- [When to use multi-agent systems](https://www.anthropic.com/engineering/multi-agent-research-system) - Architecture overview with state machine patterns
-- [Design Patterns for Agentic AI](https://appstekcorp.com/blog/design-patterns-for-agentic-ai-and-multi-agent-systems/) - State machine orchestration patterns
+- Pull-based async design optimal for prompt-based agents (from test-event-async.sh, lines 6-194)
+- Event filtering prevents spam (from event-bus.sh, lines 511-593)
+- Subscription tracking enables polling semantics (from event-bus.sh, lines 325-423)
 
-### LOW Confidence (Community Sources - Flagged for Validation)
+### LOW Confidence (Assumptions - Flagged for Validation)
 
-- [国外大神逆向了Claude Code](https://zhuanlan.zhihu.com/p/1943399204027373513) (August 2025) - Reverse engineering analysis (needs verification)
-- [Claude Code's entire system prompt leaked](https://medium.com/coding-nexus/claude-codes-entire-system-prompt-just-leaked-10d16bb30b87) - Unofficial leak (unverified)
-
-### Current Codebase Analysis
-
-- `/Users/callumcowie/repos/Aether/.claude/commands/ant/*.md` - Existing prompt commands (15 files analyzed)
-- `/Users/callumcowie/repos/Aether/.aether/data/*.json` - Existing state files (6 files analyzed)
-- `/Users/callumcowie/repos/Aether/.aether/memory/meta_learning_demo.json` - Meta-learning implementation example
-- `/Users/callumcowie/repos/Aether/README.md` - System architecture documentation
-- `/Users/callumcowie/repos/Aether/.planning/PROJECT.md` - Project context and constraints
+- **Assumption:** Worker Ants will poll events frequently enough for timely reaction. **Validation needed:** Define "frequently enough" - is once per task execution sufficient?
+- **Assumption:** Visual indicators improve UX significantly. **Validation needed:** User testing to confirm emoji and progress bars enhance scannability.
+- **Assumption:** E2E manual test guide catches bugs automated tests miss. **Validation needed:** Compare manual test results with automated test suite after v2 complete.
 
 ### Gap Analysis
 
-**Missing:** Specific documentation on "CDS" (Cosmic Dev System) architecture. Based on context references, CDS appears to be a prompt-based development framework similar to what Aether is building. Unable to locate official CDS documentation - may be internal system or unreleased project.
+**Missing:** Specific guidance on when Workers should poll relative to task execution frequency. If Workers execute infrequently (e.g., once per hour), event reaction may be delayed. Need to define polling strategy:
+- Option A: Poll after every action (file write, command execution)
+- Option B: Poll at task start and end
+- Option C: Poll on timer (e.g., every 5 minutes during long tasks)
 
-**Workaround:** Analyzed existing Aether codebase which implements Claude-native patterns, providing concrete examples of the architecture.
+**Recommendation:** Start with Option A (poll after every action) for v2, measure latency, optimize in v3 if needed.
+
+**Missing:** User testing data on visual indicators. Emoji and progress bars seem helpful, but no user feedback. Recommend gathering feedback after v2 ships.
+
+**Missing:** E2E test coverage metrics. What percentage of bugs should manual tests catch? Recommend tracking manual vs automated test findings post-release.
