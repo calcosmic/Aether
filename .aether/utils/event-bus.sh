@@ -41,6 +41,7 @@ EVENTS_FILE="$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")/.aether
 # Source required utilities
 source "$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")/.aether/utils/atomic-write.sh"
 source "$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")/.aether/utils/file-lock.sh"
+source "$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")/.aether/utils/event-metrics.sh"
 
 # Initialize event bus (create events.json if not exists)
 # Arguments: none
@@ -257,6 +258,9 @@ publish_event() {
     # Trim event log if exceeds max size (ring buffer)
     trim_event_log
 
+    # Update publish metrics
+    update_event_metrics "publish" > /dev/null 2>&1
+
     # Release lock
     release_lock
 
@@ -406,6 +410,9 @@ subscribe_to_events() {
     fi
 
     rm -f "$temp_file"
+
+    # Update subscribe metrics
+    update_event_metrics "subscribe" > /dev/null 2>&1
 
     # Release lock
     release_lock
@@ -671,11 +678,201 @@ mark_events_delivered() {
 
     rm -f "$temp_file"
 
+    # Update delivery metrics
+    update_event_metrics "deliver" > /dev/null 2>&1
+
     # Release lock
     release_lock
 
     return 0
 }
 
+# Cleanup old events based on retention time
+# Arguments: [retention_hours] (optional, defaults to config.event_retention_hours)
+# Returns: 0 on success, 1 on failure
+cleanup_old_events() {
+    local retention_hours="${1:-}"
+
+    if [ -z "$retention_hours" ]; then
+        # Read from config if not specified
+        retention_hours=$(jq -r '.config.event_retention_hours' "$EVENTS_FILE")
+    fi
+
+    if [ ! -f "$EVENTS_FILE" ]; then
+        echo "Error: Event bus not initialized" >&2
+        return 1
+    fi
+
+    # Calculate cutoff timestamp (macOS and Linux compatible)
+    local cutoff_timestamp
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS
+        cutoff_timestamp=$(date -v-${retention_hours}H -u +"%Y-%m-%dT%H:%M:%SZ")
+    else
+        # Linux
+        cutoff_timestamp=$(date -d "$retention_hours hours ago" -u +"%Y-%m-%dT%H:%M:%SZ")
+    fi
+
+    echo "Cleaning up events older than $retention_hours hours (before $cutoff_timestamp)..."
+
+    # Acquire file lock
+    if ! acquire_lock "$EVENTS_FILE"; then
+        echo "Error: Failed to acquire event bus lock" >&2
+        return 1
+    fi
+
+    local temp_file="/tmp/event_cleanup.$$.tmp"
+
+    # Remove events older than cutoff
+    jq --arg cutoff "$cutoff_timestamp" \
+       '
+       .event_log = [.event_log[] | select(.metadata.timestamp > $cutoff)] |
+       .metrics.backlog_count = (.event_log | length)
+       ' "$EVENTS_FILE" > "$temp_file"
+
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to cleanup old events" >&2
+        rm -f "$temp_file"
+        release_lock
+        return 1
+    fi
+
+    # Atomic write
+    if ! atomic_write_from_file "$EVENTS_FILE" "$temp_file"; then
+        echo "Error: Failed to write cleanup to event bus" >&2
+        rm -f "$temp_file"
+        release_lock
+        return 1
+    fi
+
+    rm -f "$temp_file"
+
+    # Release lock
+    release_lock
+
+    echo "Cleanup complete"
+    return 0
+}
+
+# Get event history with optional filtering
+# Arguments: [topic_pattern] [limit] [since_timestamp]
+# Returns: JSON array of events
+get_event_history() {
+    local topic_pattern="${1:-}"
+    local limit="${2:-}"
+    local since_timestamp="${3:-}"
+
+    if [ ! -f "$EVENTS_FILE" ]; then
+        echo "Error: Event bus not initialized" >&2
+        return 1
+    fi
+
+    local jq_filter='.event_log'
+
+    # Apply topic filter if specified
+    if [ -n "$topic_pattern" ]; then
+        jq_filter="$jq_filter | map(select(.topic | test(\"$topic_pattern\")))"
+    fi
+
+    # Apply since filter if specified
+    if [ -n "$since_timestamp" ]; then
+        jq_filter="$jq_filter | map(select(.metadata.timestamp > \"$since_timestamp\"))"
+    fi
+
+    # Apply limit if specified (take most recent N)
+    if [ -n "$limit" ]; then
+        jq_filter="$jq_filter | .[-($limit):]"
+    fi
+
+    # Execute query
+    jq "$jq_filter" "$EVENTS_FILE"
+}
+
+# Export event log to file
+# Arguments: output_file [format] [topic_pattern]
+# format: "json" (default) or "text"
+# Returns: 0 on success, 1 on failure
+export_event_log() {
+    local output_file="$1"
+    local format="${2:-json}"
+    local topic_pattern="${3:-}"
+
+    if [ -z "$output_file" ]; then
+        echo "Error: output_file is required" >&2
+        return 1
+    fi
+
+    if [ ! -f "$EVENTS_FILE" ]; then
+        echo "Error: Event bus not initialized" >&2
+        return 1
+    fi
+
+    # Get events (optionally filtered by topic)
+    local events
+    if [ -n "$topic_pattern" ]; then
+        events=$(get_event_history "$topic_pattern")
+    else
+        events=$(jq -r '.event_log' "$EVENTS_FILE")
+    fi
+
+    # Export based on format
+    case "$format" in
+        json)
+            echo "$events" | jq '.' > "$output_file"
+            ;;
+        text)
+            # Human-readable text format
+            {
+                echo "=== Event Log Export ==="
+                echo "Exported at: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+                echo "Total events: $(echo "$events" | jq 'length')"
+                echo ""
+                echo "$events" | jq -r '.[] |
+                    "\(.metadata.timestamp) [\(.topic)] \(.type)\n  Publisher: \(.metadata.publisher)\n  Data: \(.data | tojson)\n"'
+            } > "$output_file"
+            ;;
+        *)
+            echo "Error: Invalid format '$format'. Use 'json' or 'text'" >&2
+            return 1
+            ;;
+    esac
+
+    echo "Event log exported to $output_file"
+    return 0
+}
+
+# Get event log statistics
+# Arguments: none
+# Returns: JSON with event statistics
+get_event_stats() {
+    if [ ! -f "$EVENTS_FILE" ]; then
+        echo "Error: Event bus not initialized" >&2
+        return 1
+    fi
+
+    jq '
+    {
+        "total_events": (.event_log | length),
+        "topics": (.event_log | group_by(.topic) | map({
+            topic: (.[0].topic // "unknown"),
+            count: length
+        })),
+        "types": (.event_log | group_by(.type) | map({
+            type: (.[0].type // "unknown"),
+            count: length
+        })),
+        "publishers": (.event_log | group_by(.metadata.publisher) | map({
+            publisher: (.[0].metadata.publisher // "unknown"),
+            count: length
+        })),
+        "time_range": {
+            "earliest": ([.event_log[].metadata.timestamp] | min),
+            "latest": ([.event_log[].metadata.timestamp] | max)
+        },
+        "metrics": .metrics
+    }
+    ' "$EVENTS_FILE"
+}
+
 # Export all functions
-export -f initialize_event_bus generate_event_id generate_correlation_id publish_event trim_event_log generate_subscription_id subscribe_to_events unsubscribe_from_events list_subscriptions get_events_for_subscriber mark_events_delivered
+export -f initialize_event_bus generate_event_id generate_correlation_id publish_event trim_event_log generate_subscription_id subscribe_to_events unsubscribe_from_events list_subscriptions get_events_for_subscriber mark_events_delivered cleanup_old_events get_event_history export_event_log get_event_stats
