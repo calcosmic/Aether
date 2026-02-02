@@ -228,8 +228,26 @@ detect_capability_gaps() {
         reason="Failure after $failure_count attempts, spawning specialist for assistance"
     fi
 
-    # Pattern recognition from meta_learning (placeholder for now)
-    # This will be enhanced in later phases with actual meta-learning integration
+    # Meta-learning pattern recognition
+    # If spawning, use Bayesian confidence to recommend which specialist
+    if [ "$decision" = "spawn" ] && [ "$META_LEARNING_ENABLED" = "true" ]; then
+        # Try to get Bayesian recommendation for specialist type
+        local task_type_for_rec=""
+        if [ -n "$gaps" ]; then
+            task_type_for_rec=$(echo "$gaps" | jq -r '.[0]' 2>/dev/null || echo "general")
+        fi
+
+        if [ -n "$task_type_for_rec" ]; then
+            local meta_rec=$(recommend_specialist_by_confidence "$task_type_for_rec" "$MIN_CONFIDENCE_FOR_RECOMMENDATION" "$MIN_SAMPLES_FOR_RECOMMENDATION")
+            local rec_caste=$(echo "$meta_rec" | cut -d'|' -f1)
+            local rec_confidence=$(echo "$meta_rec" | cut -d'|' -f2)
+
+            # Enhance reason with Bayesian recommendation if available
+            if [ "$rec_caste" != "none" ] && [ -n "$rec_confidence" ] && [ "$rec_confidence" != "0.0" ]; then
+                reason="$reason (Bayesian recommendation: $rec_caste with confidence=$rec_confidence)"
+            fi
+        fi
+    fi
 
     # Build result JSON
     local result=$(jq -n \
