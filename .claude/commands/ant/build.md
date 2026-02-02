@@ -12,6 +12,43 @@ You are the **Queen Ant Colony** mobilizing to build a phase with pure emergence
 
 ## Step 1: Validate Input
 
+Initialize step tracking:
+```bash
+# Step tracking for progress display
+declare -a STEPS=("Validate Input" "Load Colony State" "Emit Build Signal" "Set Phase to In Progress" "Spawn Phase Coordinator")
+declare -a STEP_STATUS=("in_progress" "pending" "pending" "pending" "pending")
+
+show_step_progress() {
+  echo ""
+  echo "📊 Build Progress:"
+  for i in "${!STEPS[@]}"; do
+    local step_num=$((i + 1))
+    local step="${STEPS[$i]}"
+    local status="${STEP_STATUS[$i]}"
+
+    case $status in
+      completed) echo "  [✓] Step $step_num/5: $step" ;;
+      in_progress) echo "  [→] Step $step_num/5: $step..." ;;
+      failed) echo "  [🔴] Step $step_num/5: $step — failed" ;;
+      *) echo "  [ ] Step $step_num/5: $step" ;;
+    esac
+  done
+  echo ""
+}
+
+# Mark current step as in progress
+update_step_status() {
+  local step_num=$1
+  local status=$2
+  STEP_STATUS[$((step_num - 1))]=$status
+  show_step_progress
+}
+
+# Show initial progress
+show_step_progress
+```
+
+
 ```bash
 PHASE_ID="${1:-}"
 
@@ -24,7 +61,17 @@ if [ -z "$PHASE_ID" ] || ! [[ "$PHASE_ID" =~ ^[0-9]+$ ]]; then
 fi
 ```
 
+Mark step 1 complete:
+```bash
+update_step_status 1 "completed"
+```
+
 ## Step 2: Load Colony State
+
+Mark step 2 in progress:
+```bash
+update_step_status 2 "in_progress"
+```
 
 ```bash
 COLONY_STATE=".aether/data/COLONY_STATE.json"
@@ -58,7 +105,17 @@ if [ "$PHASE_STATUS" = "in_progress" ]; then
 fi
 ```
 
+Mark step 2 complete:
+```bash
+update_step_status 2 "completed"
+```
+
 ## Step 3: Emit Build Signal
+
+Mark step 3 in progress:
+```bash
+update_step_status 3 "in_progress"
+```
 
 ```
 ╔══════════════════════════════════════════════════════════════╗
@@ -72,7 +129,17 @@ Emitting BUILD pheromone...
 Colony mobilizing with pure emergence...
 ```
 
+Mark step 3 complete:
+```bash
+update_step_status 3 "completed"
+```
+
 ## Step 4: Set Phase to In Progress
+
+Mark step 4 in progress:
+```bash
+update_step_status 4 "in_progress"
+```
 
 ```bash
 timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -89,10 +156,22 @@ jq --argjson phase_id "$PHASE_ID" \
    .state_machine.transitions_count += 1
    ' "$COLONY_STATE" > /tmp/colony_state.tmp
 
-.aether/utils/atomic-write.sh atomic_write_from_file "$COLONY_STATE" /tmp/colony_state.tmp
+# Source atomic-write utility and use atomic_write_from_file
+source .aether/utils/atomic-write.sh
+atomic_write_from_file "$COLONY_STATE" /tmp/colony_state.tmp
+```
+
+Mark step 4 complete:
+```bash
+update_step_status 4 "completed"
 ```
 
 ## Step 5: Spawn Phase Coordinator
+
+Mark step 5 in progress:
+```bash
+update_step_status 5 "in_progress"
+```
 
 Use Task tool to spawn a coordinator that manages the phase:
 
@@ -145,6 +224,11 @@ RESOURCE CONSTRAINTS:
 Execute the phase. Report when complete.
 ```
 
+Mark step 5 complete:
+```bash
+update_step_status 5 "completed"
+```
+
 ## Step 6: Monitor Progress (For Coordinator)
 
 The coordinator should track:
@@ -183,7 +267,9 @@ jq --argjson phase_id "$PHASE_ID" \
    .state_machine.transitions_count += 1
    ' "$COLONY_STATE" > /tmp/colony_state.tmp
 
-.aether/utils/atomic-write.sh atomic_write_from_file "$COLONY_STATE" /tmp/colony_state.tmp
+# Source atomic-write utility and use atomic_write_from_file
+source .aether/utils/atomic-write.sh
+atomic_write_from_file "$COLONY_STATE" /tmp/colony_state.tmp
 ```
 
 Display completion:

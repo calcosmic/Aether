@@ -12,6 +12,43 @@ You are the **Queen Ant Colony** mobilizing to execute a phase with pure emergen
 
 ## Step 1: Validate Input
 
+Initialize step tracking (using bash for progress display):
+```bash
+# Step tracking for progress display
+declare -a STEPS=("Validate Input" "Load Colony State" "Emit Init Pheromone for Phase" "Set Phase to In Progress" "Spawn Worker Ants for Execution" "Execute with Emergence")
+declare -a STEP_STATUS=("in_progress" "pending" "pending" "pending" "pending" "pending")
+
+show_step_progress() {
+  echo ""
+  echo "📊 Execution Progress:"
+  for i in "${!STEPS[@]}"; do
+    local step_num=$((i + 1))
+    local step="${STEPS[$i]}"
+    local status="${STEP_STATUS[$i]}"
+
+    case $status in
+      completed) echo "  [✓] Step $step_num/6: $step" ;;
+      in_progress) echo "  [→] Step $step_num/6: $step..." ;;
+      failed) echo "  [🔴] Step $step_num/6: $step — failed" ;;
+      *) echo "  [ ] Step $step_num/6: $step" ;;
+    esac
+  done
+  echo ""
+}
+
+# Mark current step as in progress
+update_step_status() {
+  local step_num=$1
+  local status=$2
+  STEP_STATUS[$((step_num - 1))]=$status
+  show_step_progress
+}
+
+# Show initial progress
+show_step_progress
+```
+
+
 ```python
 if not args or not args[0].isdigit():
     return """❌ Usage: /ant:execute <phase_id>
@@ -23,7 +60,17 @@ Example:
 phase_id = int(args[0])
 ```
 
+Mark step 1 complete:
+```bash
+update_step_status 1 "completed"
+```
+
 ## Step 2: Load Colony State
+
+Mark step 2 in progress:
+```bash
+update_step_status 2 "in_progress"
+```
 
 ```python
 import json
@@ -45,7 +92,17 @@ if phase['status'] == 'in_progress':
     return f"⏸️  Phase {phase_id} is already in progress"
 ```
 
+Mark step 2 complete:
+```bash
+update_step_status 2 "completed"
+```
+
 ## Step 3: Emit Init Pheromone for Phase
+
+Mark step 3 in progress:
+```bash
+update_step_status 3 "in_progress"
+```
 
 ```
 🐜 Queen Ant Colony - Phase Execution
@@ -60,7 +117,17 @@ Colony mobilizing...
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
+Mark step 3 complete:
+```bash
+update_step_status 3 "completed"
+```
+
 ## Step 4: Set Phase to In Progress
+
+Mark step 4 in progress:
+```bash
+update_step_status 4 "in_progress"
+```
 
 ```python
 phase['status'] = 'in_progress'
@@ -71,7 +138,17 @@ with open('.aether/COLONY_STATE.json', 'w') as f:
     json.dump(state, f, indent=2)
 ```
 
+Mark step 4 complete:
+```bash
+update_step_status 4 "completed"
+```
+
 ## Step 5: Spawn Worker Ants for Execution
+
+Mark step 5 in progress:
+```bash
+update_step_status 5 "in_progress"
+```
 
 Use Task tool to spawn Worker Ants to execute tasks:
 
@@ -95,7 +172,17 @@ for task in tasks:
             await self._spawn_researcher_agent(task)
 ```
 
+Mark step 5 complete:
+```bash
+update_step_status 5 "completed"
+```
+
 ## Step 6: Execute with Emergence
+
+Mark step 6 in progress:
+```bash
+update_step_status 6 "in_progress"
+```
 
 Instead of sequential execution, use pure emergence:
 
@@ -212,6 +299,10 @@ ISSUES RESOLVED:
    Refresh Claude with /ant:review {phase_id} before continuing.
 ```
 
+Mark step 6 complete:
+```bash
+update_step_status 6 "completed"
+```
 </process>
 
 <context>

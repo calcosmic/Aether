@@ -17,6 +17,43 @@ Aether v2 has a fixed 10-phase roadmap for building the colony infrastructure.
 You are the **Queen Ant Colony** receiving an intention from the Queen.
 
 ## Step 1: Validate Preconditions
+
+Initialize step tracking:
+```bash
+# Step tracking for progress display
+declare -a STEPS=("Validate Preconditions" "Receive Intention" "Initialize Colony State" "Emit INIT Pheromone" "Set Worker Ants to Ready" "Initialize Working Memory" "Present Results")
+declare -a STEP_STATUS=("in_progress" "pending" "pending" "pending" "pending" "pending" "pending")
+
+show_step_progress() {
+  echo ""
+  echo "📊 Initialization Progress:"
+  for i in "${!STEPS[@]}"; do
+    local step_num=$((i + 1))
+    local step="${STEPS[$i]}"
+    local status="${STEP_STATUS[$i]}"
+
+    case $status in
+      completed) echo "  [✓] Step $step_num/7: $step" ;;
+      in_progress) echo "  [→] Step $step_num/7: $step..." ;;
+      failed) echo "  [🔴] Step $step_num/7: $step — failed" ;;
+      *) echo "  [ ] Step $step_num/7: $step" ;;
+    esac
+  done
+  echo ""
+}
+
+# Mark current step as in progress
+update_step_status() {
+  local step_num=$1
+  local status=$2
+  STEP_STATUS[$((step_num - 1))]=$status
+  show_step_progress
+}
+
+# Show initial progress
+show_step_progress
+```
+
 Check if colony is already initialized:
 ```bash
 # Check if COLONY_STATE.json exists and has a goal
@@ -31,13 +68,33 @@ if [ -f .aether/data/COLONY_STATE.json ]; then
 fi
 ```
 
+Mark step 1 complete:
+```bash
+update_step_status 1 "completed"
+```
+
 ## Step 2: Receive Intention
+
+Mark step 2 in progress:
+```bash
+update_step_status 2 "in_progress"
+```
 The user provides a goal. Store it as the colony's intention:
 ```
 🐜 Queen's Intention: "{goal}"
 ```
 
+Mark step 2 complete:
+```bash
+update_step_status 2 "completed"
+```
+
 ## Step 3: Initialize Colony State
+
+Mark step 3 in progress:
+```bash
+update_step_status 3 "in_progress"
+```
 Update COLONY_STATE.json with the Queen's intention:
 ```bash
 # Generate session ID
@@ -66,7 +123,17 @@ jq --arg goal "$1" \
 .aether/utils/atomic-write.sh atomic_write_from_file .aether/data/COLONY_STATE.json /tmp/colony_state.tmp
 ```
 
+Mark step 3 complete:
+```bash
+update_step_status 3 "completed"
+```
+
 ## Step 4: Emit INIT Pheromone
+
+Mark step 4 in progress:
+```bash
+update_step_status 4 "in_progress"
+```
 Create the INIT pheromone signal:
 ```bash
 timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -94,7 +161,17 @@ jq --arg id "$pheromone_id" \
 .aether/utils/atomic-write.sh atomic_write_from_file .aether/data/pheromones.json /tmp/pheromones.tmp
 ```
 
+Mark step 4 complete:
+```bash
+update_step_status 4 "completed"
+```
+
 ## Step 5: Set Worker Ants to Ready State
+
+Mark step 5 in progress:
+```bash
+update_step_status 5 "in_progress"
+```
 All Worker Ants should be mobilized (status: ready, not idle):
 ```bash
 jq '
@@ -108,7 +185,17 @@ jq '
 .aether/utils/atomic-write.sh atomic_write_from_file .aether/data/worker_ants.json /tmp/worker_ants.tmp
 ```
 
+Mark step 5 complete:
+```bash
+update_step_status 5 "completed"
+```
+
 ## Step 6: Initialize Working Memory
+
+Mark step 6 in progress:
+```bash
+update_step_status 6 "in_progress"
+```
 Add the intention to working memory:
 ```bash
 timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -138,7 +225,17 @@ jq --arg id "$memory_id" \
 .aether/utils/atomic-write.sh atomic_write_from_file .aether/data/memory.json /tmp/memory.tmp
 ```
 
+Mark step 6 complete:
+```bash
+update_step_status 6 "completed"
+```
+
 ## Step 7: Present Results
+
+Mark step 7 in progress:
+```bash
+update_step_status 7 "in_progress"
+```
 Show the Queen (user) the colony initialization:
 
 ```
@@ -176,6 +273,10 @@ Next Steps:
   /ant:focus    - Guide colony attention (optional)
 ```
 
+Mark step 7 complete:
+```bash
+update_step_status 7 "completed"
+```
 </process>
 
 <context>
