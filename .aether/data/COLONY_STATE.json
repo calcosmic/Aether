@@ -245,6 +245,21 @@
         "outcome": "failure",
         "reason": "Could not connect to database",
         "timestamp": "2026-02-01T19:03:20Z"
+      },
+      {
+        "spawn_id": "test_spawn_1",
+        "specialist": "test_specialist",
+        "task_type": "test_task",
+        "outcome": "success",
+        "timestamp": "2026-02-02T11:04:58Z"
+      },
+      {
+        "spawn_id": "test_spawn_2",
+        "specialist": "test_specialist",
+        "task_type": "test_task",
+        "outcome": "failure",
+        "reason": "Test failure",
+        "timestamp": "2026-02-02T11:05:05Z"
       }
     ],
     "specialist_confidence": {
@@ -258,9 +273,20 @@
           "failed_spawns": 0,
           "last_updated": "2026-02-02T00:00:00Z"
         }
+      },
+      "test_specialist": {
+        "test_task": {
+          "alpha": 2,
+          "beta": 2,
+          "confidence": 0.500000,
+          "total_spawns": 2,
+          "successful_spawns": 1,
+          "failed_spawns": 1,
+          "last_updated": "2026-02-02T11:05:05Z"
+        }
       }
     },
-    "last_updated": "2026-02-01T19:03:20Z"
+    "last_updated": "2026-02-02T11:05:05Z"
   },
   "checkpoints": {
     "latest_checkpoint": "checkpoint_16.json",
