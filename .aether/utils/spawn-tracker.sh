@@ -332,4 +332,4 @@ reset_spawn_counters() {
 }
 
 # Export functions
-export -f can_spawn record_spawn record_outcome get_spawn_history get_spawn_stats reset_spawn_counters derive_task_type get_specialist_confidence
+export -f can_spawn record_spawn record_outcome get_spawn_history get_spawn_stats reset_spawn_counters derive_task_type

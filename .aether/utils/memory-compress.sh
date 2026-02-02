@@ -177,7 +177,13 @@ prepare_compression_data() {
     fi
 
     # Check if phase is complete (read pheromones.json for phase_complete signal)
-    local phase_complete=$(jq -r '.active_pheromones[] | select(.type == "INIT") | .id' "$MEMORY_COMPRESS_DIR/../data/pheromones.json" 2>/dev/null)
+    # Use git root detection for robustness when executed from subdirectories
+    local pheromones_file="$MEMORY_FILE"  # memory.json and pheromones.json are in same directory
+    if [ ! -f "$pheromones_file" ]; then
+        # Fallback to relative path from script directory
+        pheromones_file="${MEMORY_COMPRESS_DIR}/../data/pheromones.json"
+    fi
+    local phase_complete=$(jq -r '.active_pheromones[] | select(.type == "INIT") | .id' "$pheromones_file" 2>/dev/null)
 
     # Get current Working Memory items
     local items=$(jq '.working_memory.items' "$MEMORY_FILE")

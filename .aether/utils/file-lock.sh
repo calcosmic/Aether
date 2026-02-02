@@ -8,7 +8,14 @@
 #   # ... critical section ...
 #   release_lock /path/to/file.lock
 
-LOCK_DIR=".aether/locks"
+# Aether root detection - use git root if available, otherwise use current directory
+if git rev-parse --show-toplevel >/dev/null 2>&1; then
+    AETHER_ROOT="$(git rev-parse --show-toplevel)"
+else
+    AETHER_ROOT="$(pwd)"
+fi
+
+LOCK_DIR="$AETHER_ROOT/.aether/locks"
 LOCK_TIMEOUT=300  # 5 minutes max lock time
 LOCK_RETRY_INTERVAL=0.5  # Wait 500ms between retries
 LOCK_MAX_RETRIES=100  # Total 50 seconds max wait

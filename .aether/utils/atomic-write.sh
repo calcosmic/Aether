@@ -7,8 +7,15 @@
 #   atomic_write /path/to/file.json "content"
 #   atomic_write_from_file /path/to/target.json /path/to/temp.json
 
-TEMP_DIR=".aether/temp"
-BACKUP_DIR=".aether/backups"
+# Aether root detection - use git root if available, otherwise use current directory
+if git rev-parse --show-toplevel >/dev/null 2>&1; then
+    AETHER_ROOT="$(git rev-parse --show-toplevel)"
+else
+    AETHER_ROOT="$(pwd)"
+fi
+
+TEMP_DIR="$AETHER_ROOT/.aether/temp"
+BACKUP_DIR="$AETHER_ROOT/.aether/backups"
 
 # Create directories
 mkdir -p "$TEMP_DIR" "$BACKUP_DIR"
