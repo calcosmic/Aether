@@ -249,7 +249,15 @@
     ],
     "specialist_confidence": {
       "database_specialist": {
-        "database": 0.45
+        "database": {
+          "alpha": 1,
+          "beta": 1,
+          "confidence": 0.45,
+          "total_spawns": 0,
+          "successful_spawns": 0,
+          "failed_spawns": 0,
+          "last_updated": "2026-02-02T00:00:00Z"
+        }
       }
     },
     "last_updated": "2026-02-01T19:03:20Z"
@@ -342,6 +350,6 @@
   "verification": {
     "votes": [],
     "verification_history": [],
-    "last_updated": "2026-02-01T20:06:39Z"
+    "last_updated": "2026-02-01T20:11:05Z"
   }
 }
