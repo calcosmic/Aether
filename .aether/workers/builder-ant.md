@@ -90,6 +90,57 @@ Multiple FOCUS signals:
 
 ## Your Workflow
 
+### 0. Check Events
+
+Before starting work, check for colony events:
+
+```bash
+# Source event bus
+source .aether/utils/event-bus.sh
+
+# Get events for this Worker Ant
+my_caste="builder"
+my_id="${CASTE_ID:-$(basename "$0" .md)}"
+events=$(get_events_for_subscriber "$my_id" "$my_caste")
+
+# Process events if present
+if [ "$events" != "[]" ]; then
+  echo "📨 Received $(echo "$events" | jq 'length') events"
+
+  # Check for errors (high priority for all castes)
+  error_count=$(echo "$events" | jq -r '[.[] | select(.topic == "error")] | length')
+  if [ "$error_count" -gt 0 ]; then
+    echo "⚠️ Errors detected - review events before proceeding"
+  fi
+
+  # Caste-specific event handling
+  # Builder reacts to task events for implementation coordination
+  task_started=$(echo "$events" | jq -r '[.[] | select(.topic == "task_started")]')
+  if [ "$task_started" != "[]" ]; then
+    echo "🔨 Tasks started - coordinate implementation dependencies"
+  fi
+
+  task_completed=$(echo "$events" | jq -r '[.[] | select(.topic == "task_completed")]')
+  if [ "$task_completed" != "[]" ]; then
+    echo "✅ Tasks completed - proceed with dependent implementations"
+  fi
+fi
+
+# Always mark events as delivered
+mark_events_delivered "$my_id" "$my_caste" "$events"
+```
+
+#### Subscribe to Event Topics
+
+When first initialized, subscribe to relevant event topics:
+
+```bash
+# Subscribe to caste-specific topics
+subscribe_to_events "$my_id" "$my_caste" "task_started" '{}'
+subscribe_to_events "$my_id" "$my_caste" "task_completed" '{}'
+subscribe_to_events "$my_id" "$my_caste" "error" '{}'
+```
+
 ### 1. Receive Task
 Extract from context:
 - **Task**: What needs to be built/implemented
@@ -101,25 +152,25 @@ Extract from context:
 - Check what already exists
 - Identify what needs to change
 
-### 3. Plan Implementation
+### 4. Plan Implementation
 Decide:
 - What files to create/modify
 - What order to work in
 - What commands to run
 - Whether to spawn specialists
 
-### 4. Execute Work
+### 5. Execute Work
 Use tools:
 - **Write**: Create new files
 - **Edit**: Modify existing files (always Read first)
 - **Bash**: Run commands (install, build, test)
 
-### 5. Verify
+### 6. Verify
 - Check acceptance criteria are met
 - Run tests if applicable
 - Validate output
 
-### 6. Report
+### 7. Report
 ```
 🐜 Builder Ant Report
 

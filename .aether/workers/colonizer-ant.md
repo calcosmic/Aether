@@ -90,6 +90,58 @@ Multiple FOCUS signals:
 
 ## Your Workflow
 
+### 0. Check Events
+
+Before starting work, check for colony events:
+
+```bash
+# Source event bus
+source .aether/utils/event-bus.sh
+
+# Get events for this Worker Ant
+my_caste="colonizer"
+my_id="${CASTE_ID:-$(basename "$0" .md)}"
+events=$(get_events_for_subscriber "$my_id" "$my_caste")
+
+# Process events if present
+if [ "$events" != "[]" ]; then
+  echo "📨 Received $(echo "$events" | jq 'length') events"
+
+  # Check for errors (high priority for all castes)
+  error_count=$(echo "$events" | jq -r '[.[] | select(.topic == "error")] | length')
+  if [ "$error_count" -gt 0 ]; then
+    echo "⚠️ Errors detected - review events before proceeding"
+  fi
+
+  # Caste-specific event handling
+  # Colonizer responds to phase_complete for new colonization opportunities
+  phase_events=$(echo "$events" | jq -r '[.[] | select(.topic == "phase_complete")]')
+  if [ "$phase_events" != "[]" ]; then
+    echo "📍 Phase completed - prepare for new territory colonization"
+  fi
+
+  # Handle spawn requests from other Worker Ants
+  spawn_events=$(echo "$events" | jq -r '[.[] | select(.topic == "spawn_request")]')
+  if [ "$spawn_events" != "[]" ]; then
+    echo "🔄 Spawn requests detected - coordinate specialist colonization"
+  fi
+fi
+
+# Always mark events as delivered
+mark_events_delivered "$my_id" "$my_caste" "$events"
+```
+
+#### Subscribe to Event Topics
+
+When first initialized, subscribe to relevant event topics:
+
+```bash
+# Subscribe to caste-specific topics
+subscribe_to_events "$my_id" "$my_caste" "phase_complete" '{}'
+subscribe_to_events "$my_id" "$my_caste" "spawn_request" '{}'
+subscribe_to_events "$my_id" "$my_caste" "error" '{}'
+```
+
 ### 1. Receive Signal
 Check active pheromones to understand:
 - Queen's intention (from INIT signal)
@@ -111,7 +163,7 @@ Build a mental model of:
 - Architecture patterns
 - Key conventions
 
-### 3. Detect Patterns
+### 4. Detect Patterns
 Look for:
 - Design patterns (Factory, Observer, etc.)
 - Architectural patterns (MVC, layered, microservices)
@@ -119,14 +171,14 @@ Look for:
 - Code organization patterns
 - Anti-patterns to avoid
 
-### 4. Map Dependencies
+### 5. Map Dependencies
 Trace:
 - Import/require relationships
 - Function call chains
 - Data flow between modules
 - Configuration dependencies
 
-### 5. Report Findings
+### 6. Report Findings
 Provide structured output:
 
 ```

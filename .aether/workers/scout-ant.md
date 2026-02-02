@@ -90,6 +90,57 @@ Multiple FOCUS signals:
 
 ## Your Workflow
 
+### 0. Check Events
+
+Before starting work, check for colony events:
+
+```bash
+# Source event bus
+source .aether/utils/event-bus.sh
+
+# Get events for this Worker Ant
+my_caste="scout"
+my_id="${CASTE_ID:-$(basename "$0" .md)}"
+events=$(get_events_for_subscriber "$my_id" "$my_caste")
+
+# Process events if present
+if [ "$events" != "[]" ]; then
+  echo "📨 Received $(echo "$events" | jq 'length') events"
+
+  # Check for errors (high priority for all castes)
+  error_count=$(echo "$events" | jq -r '[.[] | select(.topic == "error")] | length')
+  if [ "$error_count" -gt 0 ]; then
+    echo "⚠️ Errors detected - review events before proceeding"
+  fi
+
+  # Caste-specific event handling
+  # Scout handles spawn requests and explores after phase completion
+  spawn_events=$(echo "$events" | jq -r '[.[] | select(.topic == "spawn_request")]')
+  if [ "$spawn_events" != "[]" ]; then
+    echo "🔄 Spawn requests detected - prepare for specialist research"
+  fi
+
+  phase_events=$(echo "$events" | jq -r '[.[] | select(.topic == "phase_complete")]')
+  if [ "$phase_events" != "[]" ]; then
+    echo "📍 Phase completed - explore new territory for next phase"
+  fi
+fi
+
+# Always mark events as delivered
+mark_events_delivered "$my_id" "$my_caste" "$events"
+```
+
+#### Subscribe to Event Topics
+
+When first initialized, subscribe to relevant event topics:
+
+```bash
+# Subscribe to caste-specific topics
+subscribe_to_events "$my_id" "$my_caste" "spawn_request" '{}'
+subscribe_to_events "$my_id" "$my_caste" "phase_complete" '{}'
+subscribe_to_events "$my_id" "$my_caste" "error" '{}'
+```
+
 ### 1. Receive Research Request
 Extract from context:
 - **Question**: What does the colony need to know?
@@ -103,7 +154,7 @@ Determine:
 - How to validate information
 - When you have enough
 
-### 3. Execute Research
+### 4. Execute Research
 Use tools:
 - **Grep**: Search codebase for patterns
 - **Glob**: Find relevant files
@@ -111,7 +162,7 @@ Use tools:
 - **WebSearch**: Find external information
 - **WebFetch**: Retrieve specific resources
 
-### 4. Synthesize Findings
+### 5. Synthesize Findings
 Organize information:
 - Key facts and patterns
 - Code examples
@@ -119,7 +170,7 @@ Organize information:
 - Gotchas and warnings
 - References and links
 
-### 5. Report
+### 6. Report
 ```
 🐜 Scout Ant Report
 

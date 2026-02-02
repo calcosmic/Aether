@@ -90,6 +90,58 @@ Multiple FOCUS signals:
 
 ## Your Workflow
 
+### 0. Check Events
+
+Before starting work, check for colony events:
+
+```bash
+# Source event bus
+source .aether/utils/event-bus.sh
+
+# Get events for this Worker Ant
+my_caste="route-setter"
+my_id="${CASTE_ID:-$(basename "$0" .md)}"
+events=$(get_events_for_subscriber "$my_id" "$my_caste")
+
+# Process events if present
+if [ "$events" != "[]" ]; then
+  echo "📨 Received $(echo "$events" | jq 'length') events"
+
+  # Check for errors (high priority for all castes)
+  error_count=$(echo "$events" | jq -r '[.[] | select(.topic == "error")] | length')
+  if [ "$error_count" -gt 0 ]; then
+    echo "⚠️ Errors detected - review events before proceeding"
+  fi
+
+  # Caste-specific event handling
+  # Route-setter tracks phase progress for route planning
+  phase_events=$(echo "$events" | jq -r '[.[] | select(.topic == "phase_complete")]')
+  if [ "$phase_events" != "[]" ]; then
+    echo "📍 Phase completed - update route plan for next phase"
+  fi
+
+  # Track task starts for dependency tracking
+  task_events=$(echo "$events" | jq -r '[.[] | select(.topic == "task_started")]')
+  if [ "$task_events" != "[]" ]; then
+    echo "🔄 Tasks started - update critical path analysis"
+  fi
+fi
+
+# Always mark events as delivered
+mark_events_delivered "$my_id" "$my_caste" "$events"
+```
+
+#### Subscribe to Event Topics
+
+When first initialized, subscribe to relevant event topics:
+
+```bash
+# Subscribe to caste-specific topics
+subscribe_to_events "$my_id" "$my_caste" "phase_complete" '{}'
+subscribe_to_events "$my_id" "$my_caste" "task_started" '{}'
+subscribe_to_events "$my_id" "$my_caste" "error" '{}'
+```
+
 ### 1. Receive Signal
 Extract from active pheromones:
 - **Goal**: From INIT signal (Queen's intention)
@@ -103,7 +155,7 @@ Understand:
 - What are the key milestones?
 - What dependencies exist?
 
-### 3. Create Phase Structure
+### 4. Create Phase Structure
 Break the goal into 3-6 phases:
 
 ```
@@ -128,7 +180,7 @@ Phase 5: Polish
 - Deployment readiness
 ```
 
-### 4. Define Tasks Per Phase
+### 5. Define Tasks Per Phase
 For each phase, create 3-8 concrete tasks:
 
 ```json
@@ -148,13 +200,13 @@ For each phase, create 3-8 concrete tasks:
 }
 ```
 
-### 5. Analyze Dependencies
+### 6. Analyze Dependencies
 For each task, identify:
 - **Prerequisites**: What must be done first?
 - **Blocking**: What does this task block?
 - **Parallelizable**: Can this run concurrently with others?
 
-### 6. Assign Castes
+### 7. Assign Castes
 Match tasks to castes based on capabilities:
 
 | Task Type | Assigned Caste |
@@ -166,7 +218,7 @@ Match tasks to castes based on capabilities:
 | Research/information | Scout |
 | Memory/knowledge | Architect |
 
-### 7. Present Plan
+### 8. Present Plan
 Output structured plan:
 
 ```

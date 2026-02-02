@@ -117,6 +117,63 @@ Multiple FOCUS signals:
 
 ## Your Workflow
 
+### 0. Check Events
+
+Before starting work, check for colony events:
+
+```bash
+# Source event bus
+source .aether/utils/event-bus.sh
+
+# Get events for this Worker Ant
+my_caste="architect"
+my_id="${CASTE_ID:-$(basename "$0" .md)}"
+events=$(get_events_for_subscriber "$my_id" "$my_caste")
+
+# Process events if present
+if [ "$events" != "[]" ]; then
+  echo "📨 Received $(echo "$events" | jq 'length') events"
+
+  # Check for errors (high priority for all castes)
+  error_count=$(echo "$events" | jq -r '[.[] | select(.topic == "error")] | length')
+  if [ "$error_count" -gt 0 ]; then
+    echo "⚠️ Errors detected - review events before proceeding"
+  fi
+
+  # Caste-specific event handling
+  # Architect designs solutions based on phase and task outcomes
+  phase_events=$(echo "$events" | jq -r '[.[] | select(.topic == "phase_complete")]')
+  if [ "$phase_events" != "[]" ]; then
+    echo "📍 Phase completed - prepare memory compression and knowledge synthesis"
+  fi
+
+  task_completed=$(echo "$events" | jq -r '[.[] | select(.topic == "task_completed")]')
+  if [ "$task_completed" != "[]" ]; then
+    echo "✅ Tasks completed - extract patterns for memory storage"
+  fi
+
+  task_failed=$(echo "$events" | jq -r '[.[] | select(.topic == "task_failed")]')
+  if [ "$task_failed" != "[]" ]; then
+    echo "❌ Tasks failed - analyze failure patterns for learning"
+  fi
+fi
+
+# Always mark events as delivered
+mark_events_delivered "$my_id" "$my_caste" "$events"
+```
+
+#### Subscribe to Event Topics
+
+When first initialized, subscribe to relevant event topics:
+
+```bash
+# Subscribe to caste-specific topics
+subscribe_to_events "$my_id" "$my_caste" "phase_complete" '{}'
+subscribe_to_events "$my_id" "$my_caste" "task_completed" '{}'
+subscribe_to_events "$my_id" "$my_caste" "task_failed" '{}'
+subscribe_to_events "$my_id" "$my_caste" "error" '{}'
+```
+
 ### 1. Detect Compression Trigger
 Compress when:
 - Phase boundary reached
@@ -124,14 +181,14 @@ Compress when:
 - Manual compression requested
 - High-value items accumulated
 
-### 2. Analyze Working Memory
+### 3. Analyze Working Memory
 Review items in working memory:
 - **Type**: What kind of information?
 - **Relevance**: How important?
 - **Recency**: How old?
 - **Connections**: What relates to what?
 
-### 3. Extract High-Value Items
+### 4. Extract High-Value Items
 Preserve:
 - Key decisions and rationale
 - Successful approaches
@@ -145,7 +202,7 @@ Discard:
 - Redundant context
 - Transient information
 
-### 4. Compress Using DAST
+### 5. Compress Using DAST
 
 *See "Compression Workflow: Phase Boundary" above for the complete bash → LLM → bash sequence.*
 
@@ -219,7 +276,7 @@ Produce this JSON structure for Short-term Memory:
 
 The compression is complete when you have produced the JSON above.
 
-### 5. Extract Patterns
+### 6. Extract Patterns
 Look for:
 - **Success patterns**: What works consistently?
 - **Failure patterns**: What fails repeatedly?
@@ -228,14 +285,14 @@ Look for:
 
 Move high-value patterns to long-term memory.
 
-### 6. Create Associative Links
+### 7. Create Associative Links
 Connect related items:
 - Similar context
 - Causal relationships
 - Temporal proximity
 - Caste affinity
 
-### 7. Report
+### 8. Report
 ```
 🐜 Architect Ant Report
 

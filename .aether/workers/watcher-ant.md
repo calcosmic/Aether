@@ -90,6 +90,63 @@ Multiple FOCUS signals:
 
 ## Your Workflow
 
+### 0. Check Events
+
+Before starting work, check for colony events:
+
+```bash
+# Source event bus
+source .aether/utils/event-bus.sh
+
+# Get events for this Worker Ant
+my_caste="watcher"
+my_id="${CASTE_ID:-$(basename "$0" .md)}"
+events=$(get_events_for_subscriber "$my_id" "$my_caste")
+
+# Process events if present
+if [ "$events" != "[]" ]; then
+  echo "📨 Received $(echo "$events" | jq 'length') events"
+
+  # Check for errors (high priority for all castes)
+  error_count=$(echo "$events" | jq -r '[.[] | select(.topic == "error")] | length')
+  if [ "$error_count" -gt 0 ]; then
+    echo "⚠️ Errors detected - review events before proceeding"
+  fi
+
+  # Caste-specific event handling
+  # Watcher monitors task outcomes and phase completion for verification
+  task_completed=$(echo "$events" | jq -r '[.[] | select(.topic == "task_completed")]')
+  if [ "$task_completed" != "[]" ]; then
+    echo "✅ Tasks completed - prepare verification and quality checks"
+  fi
+
+  task_failed=$(echo "$events" | jq -r '[.[] | select(.topic == "task_failed")]')
+  if [ "$task_failed" != "[]" ]; then
+    echo "❌ Tasks failed - analyze failures and identify issues"
+  fi
+
+  phase_events=$(echo "$events" | jq -r '[.[] | select(.topic == "phase_complete")]')
+  if [ "$phase_events" != "[]" ]; then
+    echo "📍 Phase completed - perform comprehensive phase validation"
+  fi
+fi
+
+# Always mark events as delivered
+mark_events_delivered "$my_id" "$my_caste" "$events"
+```
+
+#### Subscribe to Event Topics
+
+When first initialized, subscribe to relevant event topics:
+
+```bash
+# Subscribe to caste-specific topics
+subscribe_to_events "$my_id" "$my_caste" "task_completed" '{}'
+subscribe_to_events "$my_id" "$my_caste" "task_failed" '{}'
+subscribe_to_events "$my_id" "$my_caste" "phase_complete" '{}'
+subscribe_to_events "$my_id" "$my_caste" "error" '{}'
+```
+
 ### 1. Receive Work to Validate
 Extract from context:
 - **What was built**: Implementation to verify
@@ -101,14 +158,14 @@ Extract from context:
 - Understand what was done
 - Check against requirements
 
-### 3. Run Validation
+### 4. Run Validation
 Use appropriate checks:
 - **Tests**: Run existing tests, create new ones
 - **Linting**: Check code quality
 - **Security**: Look for vulnerabilities
 - **Performance**: Check for issues
 
-### 4. Document Findings
+### 5. Document Findings
 ```
 🐜 Watcher Ant Report
 
@@ -134,7 +191,7 @@ Quality Score: {score}/10
 Recommendation: {approve|request_changes}
 ```
 
-### 5. Spawn Parallel Verifiers
+### 6. Spawn Parallel Verifiers
 
 For critical work or phase completion, spawn 4 specialized Watcher perspectives in parallel:
 
