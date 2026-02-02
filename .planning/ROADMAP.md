@@ -52,7 +52,11 @@ Aether v2.0 transforms the Queen Ant Colony from a prompt-based autonomous agent
 4. Worker Ant receives only events matching its subscription criteria (topic filtering works)
 5. Different Worker Ant castes prioritize different events based on caste-specific sensitivity profiles
 
-**Plans**: TBD
+**Plans**: 3 plans in 2 waves
+
+- [ ] [11-01-PLAN.md](.planning/phases/11-event-polling-integration/11-01-PLAN.md) — Add event polling to 6 base caste Worker Ants (colonizer, route-setter, builder, watcher, scout, architect)
+- [ ] [11-02-PLAN.md](.planning/phases/11-event-polling-integration/11-02-PLAN.md) — Add event polling to 4 specialist Watchers (security, performance, quality, test-coverage)
+- [ ] [11-03-PLAN.md](.planning/phases/11-event-polling-integration/11-03-PLAN.md) — Create and run integration test suite for event polling
 
 ### Phase 12: Visual Indicators & Documentation
 
@@ -98,7 +102,7 @@ Phases execute in numeric order: 11 → 12 → 13
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 3-10 | v1.0 | 44/44 | Complete | 2026-02-02 |
-| 11. Event Polling Integration | v2.0 | 0/TBD | Not started | - |
+| 11. Event Polling Integration | v2.0 | 0/3 | Ready to execute | - |
 | 12. Visual Indicators & Documentation | v2.0 | 0/TBD | Not started | - |
 | 13. E2E Testing | v2.0 | 0/TBD | Not started | - |
 
