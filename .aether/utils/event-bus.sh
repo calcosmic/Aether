@@ -554,7 +554,7 @@ get_events_for_subscriber() {
            --arg caste "$subscriber_caste" \
            --arg timestamp "$subscription_timestamp" \
            '
-           [.event_log[] |
+           [.event_log[] | . as $event |
            select(
              # Topic pattern matching (wildcard support via test())
              (.topic | test($pattern)) and
@@ -563,7 +563,7 @@ get_events_for_subscriber() {
              # Filter criteria matching (if specified)
              (
                $filter == {} or
-               (.data | to_entries | all(.key as $k | $filter[$k] == .value))
+               ($filter | to_entries | all(.key as $k | .value as $v | $event.data[$k] == $v))
              )
            )
            ] |
@@ -651,7 +651,7 @@ mark_events_delivered() {
        ) |
        .metrics.total_delivered += $count |
        .metrics.backlog_count -= $count |
-       .metrics.last_updated = ($latest | todate)
+       .metrics.last_updated = $latest
        ' "$EVENTS_FILE" > "$temp_file"
 
     if [ $? -ne 0 ]; then
