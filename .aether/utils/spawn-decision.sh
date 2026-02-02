@@ -22,8 +22,25 @@ else
     fi
 fi
 
-# Worker ants data file
-WORKER_ANTS_FILE=".aether/data/worker_ants.json"
+# Source Bayesian confidence library for meta-learning recommendations
+if [ -f "${AETHER_ROOT}/.aether/utils/bayesian-confidence.sh" ]; then
+    source "${AETHER_ROOT}/.aether/utils/bayesian-confidence.sh"
+else
+    # Try relative path from current directory
+    if [ -f ".aether/utils/bayesian-confidence.sh" ]; then
+        source ".aether/utils/bayesian-confidence.sh"
+    fi
+fi
+
+# Colony state file (contains meta_learning.specialist_confidence)
+COLONY_STATE_FILE="${AETHER_ROOT}/.aether/data/COLONY_STATE.json"
+# Keep WORKER_ANTS_FILE for caste capabilities/mappings
+WORKER_ANTS_FILE="${AETHER_ROOT}/.aether/data/worker_ants.json"
+
+# Meta-learning configuration
+MIN_CONFIDENCE_FOR_RECOMMENDATION=0.7  # 70% - minimum confidence to use meta-learning
+MIN_SAMPLES_FOR_RECOMMENDATION=5      # Minimum spawns before trusting confidence
+META_LEARNING_ENABLED=true             # Can be disabled to fall back to semantic-only
 
 # Capability taxonomy
 TECHNICAL_DOMAINS="database|frontend|backend|api|security|testing|performance|devops"
