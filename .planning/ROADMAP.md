@@ -344,17 +344,19 @@ Decimal phases appear between their surrounding integers in numeric order.
 8. Infinite loops prevented (circuit breakers trigger, depth limits enforced)
 9. All critical pitfalls from research addressed (no regressions)
 
+**Plans:** 4 plans in 4 waves
+
 **Colony Tasks**:
-- [ ] 10-01: End-to-end integration test (run full workflow from init to completion)
-- [ ] 10-02: Test autonomous spawning (verify capability gap detection and specialist selection)
-- [ ] 10-03: Test memory compression (verify no context rot after extended session)
-- [ ] 10-04: Test voting verification (verify supermajority logic and issue aggregation)
-- [ ] 10-05: Test meta-learning (verify confidence updates and recommendation improvements)
-- [ ] 10-06: Test event-driven communication (verify pub/sub scalability and filtering)
-- [ ] 10-07: Test state corruption prevention (verify file locking and atomic writes under load)
-- [ ] 10-08: Test infinite loop prevention (verify circuit breakers and depth limits)
-- [ ] 10-09: Create colony documentation (README with quickstart and examples)
-- [ ] 10-10: Performance optimization (identify and address bottlenecks)
+- [ ] 10-01-PLAN.md — Test infrastructure and end-to-end workflow validation (Wave 1)
+- [ ] 10-02-PLAN.md — Component integration tests (spawning, memory, voting, meta-learning) (Wave 2)
+- [ ] 10-03-PLAN.md — Stress tests (concurrency, spawn limits, event scalability) (Wave 3)
+- [ ] 10-04-PLAN.md — Performance measurement, metrics tracking, documentation (Wave 4)
+
+**Wave Structure:**
+- Wave 1: Test infrastructure + Full workflow test - 10-01
+- Wave 2: Component integration tests - 10-02
+- Wave 3: Stress tests - 10-03
+- Wave 4: Performance + Documentation - 10-04
 
 ## Progress
 
@@ -372,7 +374,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 7. Colony Verification | 5/5 | Complete | 2026-02-01 |
 | 8. Colony Learning | 4/4 | Complete | 2026-02-02 |
 | 9. Stigmergic Events | 7/7 | Complete | 2026-02-02 |
-| 10. Colony Maturity | 0/10 | Not started | - |
+| 10. Colony Maturity | 4/4 | Planned | - |
 
 ## Aether's Unique Approach
 
