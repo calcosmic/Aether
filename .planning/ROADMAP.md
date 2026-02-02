@@ -31,8 +31,8 @@ Aether v2.0 transforms the Queen Ant Colony from a prompt-based autonomous agent
 
 **Milestone Goal:** Enable Worker Ants to react asynchronously to colony events through proactive event polling, with enhanced visual feedback and comprehensive testing.
 
-- [ ] **Phase 11: Event Polling Integration** - Worker Ants react to colony events via polling
-- [ ] **Phase 12: Visual Indicators & Documentation** - CLI visual feedback and path cleanup
+- ✅ **Phase 11: Event Polling Integration** - Worker Ants react to colony events via polling
+- 🚧 **Phase 12: Visual Indicators & Documentation** - CLI visual feedback and path cleanup
 - [ ] **Phase 13: E2E Testing** - Manual test guide for core workflows
 
 ## Phase Details
@@ -54,9 +54,9 @@ Aether v2.0 transforms the Queen Ant Colony from a prompt-based autonomous agent
 
 **Plans**: 3 plans in 2 waves
 
-- [ ] [11-01-PLAN.md](.planning/phases/11-event-polling-integration/11-01-PLAN.md) — Add event polling to 6 base caste Worker Ants (colonizer, route-setter, builder, watcher, scout, architect)
-- [ ] [11-02-PLAN.md](.planning/phases/11-event-polling-integration/11-02-PLAN.md) — Add event polling to 4 specialist Watchers (security, performance, quality, test-coverage)
-- [ ] [11-03-PLAN.md](.planning/phases/11-event-polling-integration/11-03-PLAN.md) — Create and run integration test suite for event polling
+- ✅ [11-01-PLAN.md](.planning/phases/11-event-polling-integration/11-01-PLAN.md) — Add event polling to 6 base caste Worker Ants (colonizer, route-setter, builder, watcher, scout, architect)
+- ✅ [11-02-PLAN.md](.planning/phases/11-event-polling-integration/11-02-PLAN.md) — Add event polling to 4 specialist Watchers (security, performance, quality, test-coverage)
+- ✅ [11-03-PLAN.md](.planning/phases/11-event-polling-integration/11-03-PLAN.md) — Create and run integration test suite for event polling
 
 ### Phase 12: Visual Indicators & Documentation
 
@@ -74,7 +74,10 @@ Aether v2.0 transforms the Queen Ant Colony from a prompt-based autonomous agent
 5. All path references in `.aether/utils/` script comments are accurate
 6. All docstrings in `.claude/commands/ant/` prompts have accurate path references
 
-**Plans**: TBD
+**Plans**: 2 plans in 1 wave
+
+- [ ] [12-01-PLAN.md](.planning/phases/12-visual-indicators-documentation/12-01-PLAN.md) — Add visual indicators to /ant:status and step progress to multi-step commands
+- [ ] [12-02-PLAN.md](.planning/phases/12-visual-indicators-documentation/12-02-PLAN.md) — Audit and fix path references in utility scripts and command prompts
 
 ### Phase 13: E2E Testing
 
@@ -103,7 +106,7 @@ Phases execute in numeric order: 11 → 12 → 13
 |-------|-----------|----------------|--------|-----------|
 | 3-10 | v1.0 | 44/44 | Complete | 2026-02-02 |
 | 11. Event Polling Integration | v2.0 | 3/3 | Complete | 2026-02-02 |
-| 12. Visual Indicators & Documentation | v2.0 | 0/TBD | Not started | - |
+| 12. Visual Indicators & Documentation | v2.0 | 0/2 | Not started | - |
 | 13. E2E Testing | v2.0 | 0/TBD | Not started | - |
 
 ---
