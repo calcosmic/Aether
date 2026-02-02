@@ -108,8 +108,28 @@ setup_test_colony() {
     "active_specialist_types": [],
     "deprecated_specialist_types": [],
     "specialist_confidence": {},
+    "spawn_outcomes": [],
+    "last_updated": "$timestamp"
+  },
+  "resource_budgets": {
+    "max_spawns_per_phase": 10,
+    "current_spawns": 0,
+    "max_spawn_depth": 3,
+    "circuit_breaker_trips": 0,
+    "circuit_breaker_cooldown_until": null
+  },
+  "spawn_tracking": {
+    "depth": 0,
+    "total_spawns": 0,
     "spawn_history": [],
-    "generalization_matrix": {}
+    "failed_specialist_types": [],
+    "cooldown_specialists": [],
+    "circuit_breaker_history": []
+  },
+  "performance_metrics": {
+    "successful_spawns": 0,
+    "failed_spawns": 0,
+    "avg_spawn_duration_seconds": 0
   },
   "checkpoints": {
     "checkpoint_count": 0,
@@ -208,6 +228,22 @@ EOF
         "memory_management",
         "pattern_extraction"
       ]
+    }
+  },
+  "specialist_mappings": {
+    "capability_to_caste": {
+      "database": "scout",
+      "security": "watcher",
+      "testing": "watcher",
+      "api": "route_setter",
+      "frontend": "builder",
+      "backend": "builder",
+      "performance": "architect",
+      "documentation": "scout",
+      "infrastructure": "builder",
+      "research": "scout",
+      "planning": "route_setter",
+      "memory": "architect"
     }
   },
   "spawn_count": 0,
