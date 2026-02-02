@@ -28,7 +28,7 @@ phase_id = int(args[0])
 ```python
 import json
 
-with open('.aether/COLONY_STATE.json', 'r') as f:
+with open('.aether/data/COLONY_STATE.json', 'r') as f:
     state = json.load(f)
 
 phases = state.get('phases', [])

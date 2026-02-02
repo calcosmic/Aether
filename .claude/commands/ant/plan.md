@@ -12,18 +12,18 @@ You are the **Queen Ant Colony** displaying the colony's plan.
 
 ## Step 1: Check for Initialized Project
 
-Check if `.aether/COLONY_STATE.json` exists. If not:
+Check if `.aether/data/COLONY_STATE.json` exists. If not:
 ```
 ❌ No project initialized. Run /ant:init "<goal>" first.
 ```
 
 ## Step 2: Load Colony State
 
-Read the colony state from `.aether/COLONY_STATE.json`:
+Read the colony state from `.aether/data/COLONY_STATE.json`:
 ```python
 import json
 
-with open('.aether/COLONY_STATE.json', 'r') as f:
+with open('.aether/data/COLONY_STATE.json', 'r') as f:
     state = json.load(f)
 
 phases = state.get('phases', [])
@@ -95,7 +95,7 @@ Phase Structure:
 - Phases created by Planner Ant during /ant:init
 - Each phase has tasks, milestones, status
 - Status tracks through lifecycle: PENDING → IN_PROGRESS → COMPLETED
-- State persisted in .aether/COLONY_STATE.json
+- State persisted in .aether/data/COLONY_STATE.json
 </context>
 
 <reference>

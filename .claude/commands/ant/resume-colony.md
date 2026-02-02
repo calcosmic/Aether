@@ -66,7 +66,7 @@ RESTORED PHASE: Phase {session_info.get('current_phase_id')} - {phase_name}
 
 ## Step 4: Restore Colony State
 
-Create or restore `.aether/COLONY_STATE.json`:
+Create or restore `.aether/data/COLONY_STATE.json`:
 
 ```python
 state = {
@@ -83,7 +83,7 @@ state = {
     "resumed_from": paused_at
 }
 
-with open('.aether/COLONY_STATE.json', 'w') as f:
+with open('.aether/data/COLONY_STATE.json', 'w') as f:
     json.dump(state, f, indent=2)
 ```
 

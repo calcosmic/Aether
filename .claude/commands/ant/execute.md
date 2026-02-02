@@ -76,7 +76,7 @@ update_step_status 2 "in_progress"
 import json
 from datetime import datetime
 
-with open('.aether/COLONY_STATE.json', 'r') as f:
+with open('.aether/data/COLONY_STATE.json', 'r') as f:
     state = json.load(f)
 
 phases = state.get('phases', [])
@@ -134,7 +134,7 @@ phase['status'] = 'in_progress'
 phase['started_at'] = datetime.now().isoformat()
 state['current_phase_id'] = phase_id
 
-with open('.aether/COLONY_STATE.json', 'w') as f:
+with open('.aether/data/COLONY_STATE.json', 'w') as f:
     json.dump(state, f, indent=2)
 ```
 
@@ -220,7 +220,7 @@ IMPORTANT:
 - Tasks can complete in parallel when dependencies allow
 - Each task spawns a specialist agent
 - Agents self-organize and coordinate
-- Update .aether/COLONY_STATE.json as tasks complete
+- Update .aether/data/COLONY_STATE.json as tasks complete
 
 Execute the phase with pure emergence.
 ```
@@ -257,7 +257,7 @@ duration = completed - started
 
 phase['duration'] = str(duration)
 
-with open('.aether/COLONY_STATE.json', 'w') as f:
+with open('.aether/data/COLONY_STATE.json', 'w') as f:
     json.dump(state, f, indent=2)
 ```
 

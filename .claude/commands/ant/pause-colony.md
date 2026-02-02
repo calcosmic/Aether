@@ -17,7 +17,7 @@ import json
 from datetime import datetime
 import os
 
-with open('.aether/COLONY_STATE.json', 'r') as f:
+with open('.aether/data/COLONY_STATE.json', 'r') as f:
     state = json.load(f)
 ```
 
@@ -216,7 +216,7 @@ state['pause_history'].append({
     'phase_status': current_phase['status'] if current_phase else None
 })
 
-with open('.aether/COLONY_STATE.json', 'w') as f:
+with open('.aether/data/COLONY_STATE.json', 'w') as f:
     json.dump(state, f, indent=2)
 ```
 

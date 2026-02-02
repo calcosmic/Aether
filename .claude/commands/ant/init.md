@@ -120,7 +120,9 @@ jq --arg goal "$1" \
    ' .aether/data/COLONY_STATE.json > /tmp/colony_state.tmp
 
 # Atomic write
-.aether/utils/atomic-write.sh atomic_write_from_file .aether/data/COLONY_STATE.json /tmp/colony_state.tmp
+# Source atomic-write utility and use atomic_write_from_file
+source .aether/utils/atomic-write.sh
+atomic_write_from_file .aether/data/COLONY_STATE.json /tmp/colony_state.tmp
 ```
 
 Mark step 3 complete:
@@ -158,7 +160,8 @@ jq --arg id "$pheromone_id" \
    ' .aether/data/pheromones.json > /tmp/pheromones.tmp
 
 # Atomic write
-.aether/utils/atomic-write.sh atomic_write_from_file .aether/data/pheromones.json /tmp/pheromones.tmp
+# Source atomic-write utility (already sourced above, just call function)
+atomic_write_from_file .aether/data/pheromones.json /tmp/pheromones.tmp
 ```
 
 Mark step 4 complete:
@@ -182,7 +185,8 @@ jq '
 ' .aether/data/worker_ants.json > /tmp/worker_ants.tmp
 
 # Atomic write
-.aether/utils/atomic-write.sh atomic_write_from_file .aether/data/worker_ants.json /tmp/worker_ants.tmp
+# Source atomic-write utility (already sourced above, just call function)
+atomic_write_from_file .aether/data/worker_ants.json /tmp/worker_ants.tmp
 ```
 
 Mark step 5 complete:
@@ -222,7 +226,8 @@ jq --arg id "$memory_id" \
 ' .aether/data/memory.json > /tmp/memory.tmp
 
 # Atomic write
-.aether/utils/atomic-write.sh atomic_write_from_file .aether/data/memory.json /tmp/memory.tmp
+# Source atomic-write utility (already sourced above, just call function)
+atomic_write_from_file .aether/data/memory.json /tmp/memory.tmp
 ```
 
 Mark step 6 complete:

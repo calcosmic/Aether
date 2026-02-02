@@ -87,7 +87,9 @@ jq --arg id "$pheromone_id" \
    ' "$PHEROMONES" > /tmp/pheromones.tmp
 
 # Atomic write
-.aether/utils/atomic-write.sh atomic_write_from_file "$PHEROMONES" /tmp/pheromones.tmp
+# Source atomic-write utility and use atomic_write_from_file
+source .aether/utils/atomic-write.sh
+atomic_write_from_file "$PHEROMONES" /tmp/pheromones.tmp
 ```
 
 ## Step 5: Present Results
