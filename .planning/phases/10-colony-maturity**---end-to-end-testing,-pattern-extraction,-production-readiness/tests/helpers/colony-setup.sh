@@ -257,6 +257,40 @@ EOF
     fi
 
     echo "# Worker ants initialized at: $WORKER_ANTS_FILE"
+
+    # Initialize memory.json with three-layer memory structure
+    MEMORY_FILE="${GIT_ROOT}/.aether/data/memory.json"
+    cat > "$MEMORY_FILE" <<EOF
+{
+  "working_memory": {
+    "max_capacity_tokens": 200000,
+    "current_tokens": 0,
+    "items": []
+  },
+  "short_term_memory": {
+    "max_sessions": 10,
+    "current_sessions": 0,
+    "sessions": []
+  },
+  "long_term_memory": {
+    "patterns": []
+  },
+  "metrics": {
+    "total_compressions": 0,
+    "average_compression_ratio": 0,
+    "working_memory_evictions": 0,
+    "short_term_evictions": 0,
+    "total_pattern_extractions": 0
+  }
+}
+EOF
+
+    if [ $? -ne 0 ]; then
+        echo "# Error: Failed to create memory.json" >&2
+        return 1
+    fi
+
+    echo "# Memory initialized at: $MEMORY_FILE"
     echo "# Test colony setup complete"
     echo "# Colony ID: $colony_id"
 
@@ -278,6 +312,11 @@ verify_colony_state() {
 
     if [ ! -f "$WORKER_ANTS_FILE" ]; then
         echo "# Error: Worker ants file not found: $WORKER_ANTS_FILE" >&2
+        return 1
+    fi
+
+    if [ ! -f "${GIT_ROOT}/.aether/data/memory.json" ]; then
+        echo "# Error: Memory file not found" >&2
         return 1
     fi
 
