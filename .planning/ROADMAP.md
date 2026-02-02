@@ -381,13 +381,19 @@ Decimal phases appear between their surrounding integers in numeric order.
 5. Colony adapts recommendations over time (continuous learning as outcomes accumulate)
 6. Beta distribution prevents overconfidence from small samples (alpha=1, beta=1 prior)
 
+**Plans:** 4 plans in 4 waves
+
 **Colony Tasks**:
-- [ ] 08-01: Implement meta_learning.json schema (specialist types, success/failure counts, confidence scores)
-- [ ] 08-02: Implement spawn outcome tracking (record success/failure after each spawn)
-- [ ] 08-03: Implement Beta distribution confidence scoring (alpha = successes + 1, beta = failures + 1)
-- [ ] 08-04: Implement specialist recommendation logic (select highest confidence for task type)
-- [ ] 08-05: Implement confidence score updates (increment alpha/beta based on outcomes)
-- [ ] 08-06: Test meta-learning loop (verify confidence updates, check recommendation accuracy)
+- [ ] 08-01-PLAN.md — Bayesian confidence library with Beta distribution (Wave 1)
+- [ ] 08-02-PLAN.md — COLONY_STATE.json schema update and spawn-outcome-tracker.sh enhancement (Wave 2)
+- [ ] 08-03-PLAN.md — spawn-decision.sh enhancement with Bayesian recommendation (Wave 3)
+- [ ] 08-04-PLAN.md — Test suite for Bayesian meta-learning (Wave 4)
+
+**Wave Structure:**
+- Wave 1: Bayesian confidence library - 08-01
+- Wave 2: Schema update + outcome tracking enhancement - 08-02
+- Wave 3: Specialist recommendation integration - 08-03
+- Wave 4: Testing and verification - 08-04
 
 ### Phase 9: Stigmergic Events
 
