@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-02-02)
 
 Milestone: v2.0 Reactive Event Integration
 Phase: 11 of 13 (Event Polling Integration)
-Plan: 2 of TBD in current phase
+Plan: 1 of 3 in current phase
 Status: In progress
-Last activity: 2026-02-02 — Completed 11-02: Specialist Watcher event polling
+Last activity: 2026-02-02 — Completed 11-01: Base caste Worker Ant event polling
 
-Progress: [███████████░░░░░░░░░░░░░] 52% (v1.0 complete, 1 v2.0 plan complete)
+Progress: [██████████░░░░░░░░░░░░░░] 52% (v1.0 complete, 1 v2.0 plan complete)
 
 **v1.0 Shipped (2026-02-02):**
 - 8 phases (3-10) with 156/156 must-haves verified
@@ -66,7 +66,9 @@ Progress: [███████████░░░░░░░░░░░░
 - Unicode emojis selected for terminal compatibility and accessibility
 - Manual E2E test guide approach chosen over automated testing for LLM behavior validation
 - Event polling boundaries: execution start, after file writes, after command completion
-- Specialist Watcher subscriptions: Each specialist subscribes to specialty-specific topics with JSON filter criteria (11-02)
+- Base caste event polling: All 6 base caste Worker Ants poll events at workflow start (11-01)
+- Caste-specific subscriptions: Each caste subscribes to 2-4 topics relevant to their role (11-01)
+- Error topic priority: All castes subscribe to "error" topic for high-priority error detection (11-01)
 
 (Full log in PROJECT.md)
 
@@ -77,7 +79,7 @@ None yet.
 ### Blockers/Concerns
 
 **From v1.0 audit (to address in v2.0):**
-1. ~~Event bus polling integration - Worker Ant prompts should call `get_events_for_subscriber()`~~ → COMPLETED in 11-02 (specialist Watchers)
+1. ~~Event bus polling integration - Worker Ant prompts should call `get_events_for_subscriber()`~~ → COMPLETED in 11-01 (base caste Worker Ants)
 2. Real LLM testing - Complement bash simulations with actual Queen/Worker LLM execution → Phase 13
 3. Documentation updates - Update path references in script comments → Phase 12
 
@@ -85,10 +87,10 @@ None yet.
 
 ### Session Continuity
 
-Last session: 2026-02-02 (11-02: Specialist Watcher event polling)
-Stopped at: Completed 11-02 - Specialist Watchers now have event polling capability
+Last session: 2026-02-02 (11-01: Base caste Worker Ant event polling)
+Stopped at: Completed 11-01 - All 6 base caste Worker Ants now poll events at workflow start
 Resume file: None
 
 ---
 
-*State updated: 2026-02-02 after completing 11-02*
+*State updated: 2026-02-02 after completing 11-01*
