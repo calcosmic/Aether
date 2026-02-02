@@ -339,7 +339,7 @@ get_weighted_specialist_scores() {
 
 # Map capability gaps to appropriate specialist caste
 # Arguments: gaps (JSON array), task_description
-# Returns: JSON with caste name and specialization
+# Returns: JSON with caste name, specialization, and source (meta_learning or semantic_analysis)
 map_gap_to_specialist() {
     local gaps="$1"
     local task_description="$2"
@@ -347,6 +347,41 @@ map_gap_to_specialist() {
     # Convert to lowercase for matching
     local task_lower=$(echo "$task_description" | tr '[:upper:]' '[:lower:]')
 
+    # Determine primary task type from gaps
+    local primary_task_type=""
+    if [ -n "$gaps" ]; then
+        primary_task_type=$(echo "$gaps" | jq -r '.[0]' 2>/dev/null || echo "general")
+    else
+        primary_task_type="general"
+    fi
+
+    # Try Bayesian meta-learning recommendation first
+    if [ "$META_LEARNING_ENABLED" = "true" ]; then
+        local meta_learning_result=$(recommend_specialist_by_confidence "$primary_task_type" "$MIN_CONFIDENCE_FOR_RECOMMENDATION" "$MIN_SAMPLES_FOR_RECOMMENDATION")
+        local specialist_caste=$(echo "$meta_learning_result" | cut -d'|' -f1)
+        local confidence=$(echo "$meta_learning_result" | cut -d'|' -f2)
+
+        # Check if we got a valid recommendation (not "none" and confidence meets threshold)
+        if [ "$specialist_caste" != "none" ] && [ -n "$confidence" ] && [ "$confidence" != "0.0" ]; then
+            # Validate confidence is a number and meets threshold
+            local conf_check=$(echo "$confidence >= $MIN_CONFIDENCE_FOR_RECOMMENDATION" | bc -l 2>/dev/null || echo "0")
+            if [ "$conf_check" -eq 1 ]; then
+                # Use meta-learning recommendation
+                local specialization="$primary_task_type specialist (confidence: $confidence)"
+                # Build result JSON
+                local result=$(jq -n \
+                    --arg caste "$specialist_caste" \
+                    --arg specialization "$specialization" \
+                    --argjson confidence "$confidence" \
+                    --arg source "meta_learning" \
+                    '{caste: $caste, specialization: $specialization, confidence: $confidence, source: $source}')
+                echo "$result"
+                return 0
+            fi
+        fi
+    fi
+
+    # Fallback to semantic analysis (existing logic)
     # Get specialist mappings from worker_ants.json
     local mappings=$(jq -r '.specialist_mappings.capability_to_caste // {}' "$WORKER_ANTS_FILE")
 
@@ -364,7 +399,7 @@ map_gap_to_specialist() {
             specialization="$gap specialist"
             break
         fi
-    done <<< "$(echo "$gaps" | jq -r '.[]')"
+    done <<< "$(echo "$gaps" | jq -r '.[]' 2>/dev/null || echo "")"
 
     # Fallback to semantic analysis if no direct mapping
     if [ -z "$specialist_caste" ]; then
@@ -412,11 +447,12 @@ map_gap_to_specialist() {
         fi
     fi
 
-    # Build result JSON
+    # Build result JSON with semantic_analysis source
     local result=$(jq -n \
         --arg caste "$specialist_caste" \
         --arg specialization "$specialization" \
-        '{caste: $caste, specialization: $specialization}')
+        --arg source "semantic_analysis" \
+        '{caste: $caste, specialization: $specialization, source: $source}')
 
     echo "$result"
 }
