@@ -25,36 +25,64 @@ If this works, everything else follows. If this fails, nothing else matters.
 
 ### Validated
 
-*(Already working in existing Python system)*
+*(Shipped in v1 - 2026-02-02)*
 
-- ✓ **Pheromone Signal System** — INIT, FOCUS, REDIRECT, FEEDBACK signals with decay
-- ✓ **Six Worker Ant Castes** — Colonizer, Route-setter, Builder, Watcher, Scout, Architect
-- ✓ **Phase-Based Execution** — Structure at boundaries, emergence within
-- ✓ **Basic State Persistence** — JSON file storage (`.aether/COLONY_STATE.json`)
+- ✓ **Claude-Native Command System** — 19 commands in `.claude/commands/ant/` — v1
+- ✓ **Pheromone Signal System** — INIT, FOCUS, REDIRECT, FEEDBACK with time-based decay (1h, 6h, 24h) — v1
+- ✓ **Six Worker Ant Castes** — Colonizer, Route-setter, Builder, Watcher, Scout, Architect (plus 4 specialist watchers) — v1
+- ✓ **Autonomous Agent Spawning** — Capability gap detection with Bayesian confidence scoring — v1
+- ✓ **Triple-Layer Memory** — Working (200k) → Short-term (10 sessions, 2.5x DAST) → Long-term (patterns) — v1
+- ✓ **Voting-Based Verification** — 4 watchers with weighted voting and Critical veto — v1
+- ✓ **State Machine Orchestration** — 7 states with checkpoint recovery — v1
+- ✓ **Event-Driven Communication** — Pub/sub event bus with async delivery — v1
+- ✓ **Meta-Learning Loop** — Bayesian confidence for specialist selection — v1
+- ✓ **Phase-Based Execution** — Structure at boundaries, emergence within — v1
+- ✓ **Basic State Persistence** — JSON file storage with atomic writes and file locking — v1
 
 ### Active
 
-*(Current scope - building toward these)*
+*(Next milestone work - TBD)*
 
-- [ ] **Claude-Native Command System** — Commands are prompt files in `.claude/commands/ant/`, execute directly in Claude
-- [ ] **Autonomous Agent Spawning** — Workers detect capability gaps and spawn specialists via Task tool (Ralph #1)
-- [ ] **Semantic Communication Layer** — Intent-based communication using Claude's native understanding (Ralph #2)
-- [ ] **Triple-Layer Memory** — Working (200k) → Short-term (DAST 2.5x) → Long-term with associative links (Ralph #3)
-- [ ] **Voting-Based Verification** — Multiple verifiers with weighted voting and belief calibration (Ralph #5)
-- [ ] **State Machine Orchestration** — Explicit states, transitions, checkpointing for reliability
-- [ ] **Event-Driven Communication** — Pub/sub backbone for scalable asynchronous coordination
-- [ ] **Meta-Learning Loop** — Bayesian confidence scoring for specialist selection improvement
+- [ ] **Event Bus Integration** — Worker Ant prompts call `get_events_for_subscriber()` for pull-based delivery
+- [ ] **Real LLM Testing** — Complement bash simulations with actual Queen/Worker LLM execution tests
+- [ ] **Documentation Updates** — Update path references in script comments
 
 ### Out of Scope
 
-*(Explicit boundaries - these are the Python system, not Claude-native)*
+*(Explicit boundaries - these remain out of scope)*
 
 - **Python CLI/REPL interfaces** — Replaced by Claude-native prompt commands
 - **Async/await implementation** — Claude handles concurrency via Task tool
 - **External vector databases** — Using Claude's native semantic understanding
 - **`python3 .aether/demo.py` execution** — System runs via `/ant:` commands in Claude
+- **Predefined workflows** — Defeats emergence; use phased autonomy instead
+- **Direct command patterns** — Use pheromone signals instead
 
 ## Context
+
+### Current State (v1 Shipped - 2026-02-02)
+
+**Delivered:** A fully functional Claude-native multi-agent system with 156/156 must-haves verified across 8 phases.
+
+**Codebase:**
+- 19 commands (5,629 lines) — `/ant:init`, `/ant:status`, `/ant:focus`, etc.
+- 10 Worker Ant prompts (4,453 lines) — 6 base castes + 4 specialist watchers
+- 26 utility scripts (7,882 lines) — spawning, memory, voting, events, state machine
+- 13 test suites — integration (33 assertions), stress (20), performance (8)
+- 5 data schemas — COLONY_STATE, pheromones, memory, events, watcher_weights
+
+**Performance Baselines (Apple M1 Max):**
+- colony_init: 0.020s median
+- spawn_decision: 0.023s median
+- full_workflow: 0.068s median
+- event_publish: 0.101s median (identified bottleneck)
+
+**All Ralph's Top 5 Recommendations Implemented:**
+1. ✓ Autonomous Agent Spawning — Bayesian confidence scoring with meta-learning
+2. ✓ Semantic Communication — Pheromone signals with caste-specific sensitivity
+3. ✓ Triple-Layer Memory — DAST compression (2.5x) with associative links
+4. ✓ State Machine — 7 states with checkpoint recovery
+5. ✓ Voting-Based Verification — 4 watchers, weighted voting, Critical veto
 
 ### Background
 
@@ -77,25 +105,6 @@ Aether is based on **383,000+ words of research** across 25 documents by Ralph (
 
 4. **Voting improves reasoning 13.2%** — Multi-perspective verification with weighted voting outperforms single verifiers.
 
-### Existing Codebase
-
-The Python system (`.aether/*.py`) demonstrates:
-- Pheromone system with signal decay
-- Six Worker Ant implementations
-- Phase engine with state machine
-- Triple-layer memory system
-- Meta-learning for specialist selection
-
-**Our job:** Extract the concepts, discard the implementation, rebuild as Claude-native prompts.
-
-### Ralph's Top 5 Recommendations (All in v1)
-
-1. **Autonomous Agent Spawning** (HIGH) — Agents detect capability gaps and spawn specialists
-2. **Semantic Communication Layer** (HIGH) — Intent-based communication, 10-100x bandwidth reduction
-3. **Triple-Layer Memory** (HIGH) — Working → Short-term (DAST) → Long-term with associative links
-4. **State Machine Orchestration** (MEDIUM) — Explicit states, checkpointing, reliability
-5. **Voting-Based Verification** (MEDIUM) — Multi-perspective with weighted voting, 13.2% improvement
-
 ## Constraints
 
 - **Claude-Native Only** — Must work as prompt commands, not Python scripts
@@ -109,11 +118,18 @@ The Python system (`.aether/*.py`) demonstrates:
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Claude-native vs Python | Commands work directly in Claude, not separate tool | ✓ Good |
-| Unique Worker Ant castes | Designed from first principles for autonomous emergence, not copied from any system | — Pending |
-| Pheromone-based communication | Stigmergic signals enable true emergence, unlike command/orchestration patterns | — Pending |
-| Claude-native semantic understanding | Use Claude's understanding vs external embeddings | — Pending |
-| Standalone system | Aether is its own framework, not dependent on CDS or any external system | ✓ Confirmed |
+| Claude-native vs Python | Commands work directly in Claude, not separate tool | ✓ Good — 19 commands shipped |
+| Unique Worker Ant castes | Designed from first principles for autonomous emergence, not copied from any system | ✓ Good — 6 base + 4 specialist castes working |
+| Pheromone-based communication | Stigmergic signals enable true emergence, unlike command/orchestration patterns | ✓ Good — 4 signal types with decay working |
+| Claude-native semantic understanding | Use Claude's understanding vs external embeddings | ✓ Good — No vector DBs needed |
+| Standalone system | Aether is its own framework, not dependent on CDS or any external system | ✓ Confirmed — Zero dependencies |
+| Bayesian meta-learning | Beta distribution confidence scoring prevents overconfidence | ✓ Good — Alpha/beta parameters updating correctly |
+| Pull-based event delivery | Workers poll vs background processes for prompt-based agents | ✓ Good — Async without persistent processes |
+
+## Next Milestone Goals
+
+*(TBD - User will define v2 goals)*
 
 ---
-*Last updated: 2025-02-01 after project initialization*
+
+*Last updated: 2026-02-02 after v1 milestone completion*
