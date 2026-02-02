@@ -2,6 +2,32 @@
 # Aether Event Bus Utility
 # Implements pub/sub event system for colony-wide coordination
 #
+# ## Async Non-Blocking Design
+#
+# The event bus uses pull-based delivery for optimal compatibility with
+# prompt-based Worker Ants (which are not persistent processes):
+#
+# - **Publish**: Worker Ants publish events via publish_event()
+#   - Writes event to events.json event_log
+#   - Returns immediately with event_id (non-blocking)
+#   - Does NOT wait for subscribers
+#   - Does NOT call subscriber code
+#
+# - **Subscribe**: Worker Ants register interest via subscribe_to_events()
+#   - Records subscription in events.json
+#   - Returns subscription_id
+#
+# - **Deliver**: Worker Ants poll for events via get_events_for_subscriber()
+#   - Returns events matching subscriptions since last poll
+#   - Worker Ant processes events when they execute
+#   - Marks events as delivered via mark_events_delivered()
+#
+# This design provides true async semantics:
+# - Publishers and subscribers are decoupled
+# - No background processes or daemons required
+# - Works naturally with prompt-based agents (execute, poll, exit)
+# - Concurrent publishes safe (file locking prevents corruption)
+#
 # Usage:
 #   source .aether/utils/event-bus.sh
 #   initialize_event_bus
@@ -472,5 +498,184 @@ list_subscriptions() {
     fi
 }
 
+# Get events for a subscriber (pull-based delivery)
+# Arguments: subscriber_id, subscriber_caste
+# Returns: JSON array of matching events (empty array if none)
+get_events_for_subscriber() {
+    local subscriber_id="$1"
+    local subscriber_caste="${2:-}"
+
+    if [ -z "$subscriber_id" ]; then
+        echo "Error: subscriber_id is required" >&2
+        return 1
+    fi
+
+    # Check if events.json exists
+    if [ ! -f "$EVENTS_FILE" ]; then
+        echo "Error: Event bus not initialized" >&2
+        return 1
+    fi
+
+    # Acquire file lock for read
+    if ! acquire_lock "$EVENTS_FILE"; then
+        echo "Error: Failed to acquire event bus lock" >&2
+        return 1
+    fi
+
+    # Get all subscriptions for this subscriber
+    local subscriptions=$(jq -c --arg subscriber "$subscriber_id" \
+       '.subscriptions[] | select(.subscriber_id == $subscriber)' \
+       "$EVENTS_FILE")
+
+    # If no subscriptions, return empty array
+    if [ -z "$subscriptions" ]; then
+        release_lock
+        echo "[]"
+        return 0
+    fi
+
+    # Collect matching events from all subscriptions
+    local matching_events="[]"
+    local subscription_timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    while IFS= read -r sub; do
+        # Skip empty lines
+        [ -z "$sub" ] && continue
+
+        local topic_pattern=$(echo "$sub" | jq -r '.topic_pattern')
+        local filter_criteria=$(echo "$sub" | jq -c '.filter_criteria')
+        local last_delivered=$(echo "$sub" | jq -r '.last_event_delivered // "null"')
+
+        # Find events matching topic pattern (with wildcard support)
+        # jq test() function performs regex matching
+        local events=$(jq -c --arg pattern "$topic_pattern" \
+           --argjson filter "$filter_criteria" \
+           --arg last "$last_delivered" \
+           --arg caste "$subscriber_caste" \
+           --arg timestamp "$subscription_timestamp" \
+           '
+           [.event_log[] |
+           select(
+             # Topic pattern matching (wildcard support via test())
+             (.topic | test($pattern)) and
+             # Only events since last delivery (or all if never delivered)
+             (.metadata.timestamp > $last or $last == "null") and
+             # Filter criteria matching (if specified)
+             (
+               $filter == {} or
+               (.data | to_entries | all(.key as $k | $filter[$k] == .value))
+             )
+           )
+           ] |
+           # Add delivery timestamp for tracking
+           map(. + {delivered_at: $timestamp})
+           ' "$EVENTS_FILE")
+
+        # Accumulate matching events
+        if [ "$events" != "[]" ]; then
+            matching_events=$(echo "$matching_events" | jq --argjson new "$events" '. + $new')
+        fi
+    done <<< "$subscriptions"
+
+    # Release lock
+    release_lock
+
+    # Return matching events (empty array if none)
+    echo "$matching_events"
+    return 0
+}
+
+# Mark events as delivered for a subscriber
+# Arguments: subscriber_id, subscriber_caste, events_json_array
+# Returns: 0 on success, 1 on failure
+mark_events_delivered() {
+    local subscriber_id="$1"
+    local subscriber_caste="${2:-}"
+    local events_json="$3"
+
+    if [ -z "$subscriber_id" ]; then
+        echo "Error: subscriber_id is required" >&2
+        return 1
+    fi
+
+    if [ -z "$events_json" ]; then
+        echo "Error: events_json is required" >&2
+        return 1
+    fi
+
+    # Check if events.json exists
+    if [ ! -f "$EVENTS_FILE" ]; then
+        echo "Error: Event bus not initialized" >&2
+        return 1
+    fi
+
+    # Validate events_json is valid JSON array
+    if ! echo "$events_json" | python3 -c "import json, sys; data=json.load(sys.stdin); assert isinstance(data, list)" 2>/dev/null; then
+        echo "Error: events_json must be a valid JSON array" >&2
+        return 1
+    fi
+
+    # If empty array, nothing to mark
+    if [ "$events_json" = "[]" ]; then
+        return 0
+    fi
+
+    # Get the most recent event timestamp
+    local latest_timestamp=$(echo "$events_json" | jq -r '[.[].metadata.timestamp] | max' 2>/dev/null)
+
+    if [ -z "$latest_timestamp" ] || [ "$latest_timestamp" = "null" ]; then
+        echo "Error: Could not determine latest event timestamp" >&2
+        return 1
+    fi
+
+    # Acquire file lock
+    if ! acquire_lock "$EVENTS_FILE"; then
+        echo "Error: Failed to acquire event bus lock" >&2
+        return 1
+    fi
+
+    local temp_file="/tmp/event_mark_delivered.$$.tmp"
+
+    # Update all subscriptions for this subscriber
+    jq --arg subscriber "$subscriber_id" \
+       --arg latest "$latest_timestamp" \
+       --argjson count "$(echo "$events_json" | jq 'length')" \
+       '
+       .subscriptions |= map(
+         if .subscriber_id == $subscriber then
+           .last_event_delivered = $latest |
+           .delivery_count += $count
+         else
+           .
+         end
+       ) |
+       .metrics.total_delivered += $count |
+       .metrics.backlog_count -= $count |
+       .metrics.last_updated = ($latest | todate)
+       ' "$EVENTS_FILE" > "$temp_file"
+
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to mark events as delivered" >&2
+        rm -f "$temp_file"
+        release_lock
+        return 1
+    fi
+
+    # Atomic write
+    if ! atomic_write_from_file "$EVENTS_FILE" "$temp_file"; then
+        echo "Error: Failed to write delivery update to event bus" >&2
+        rm -f "$temp_file"
+        release_lock
+        return 1
+    fi
+
+    rm -f "$temp_file"
+
+    # Release lock
+    release_lock
+
+    return 0
+}
+
 # Export all functions
-export -f initialize_event_bus generate_event_id generate_correlation_id publish_event trim_event_log generate_subscription_id subscribe_to_events unsubscribe_from_events list_subscriptions
+export -f initialize_event_bus generate_event_id generate_correlation_id publish_event trim_event_log generate_subscription_id subscribe_to_events unsubscribe_from_events list_subscriptions get_events_for_subscriber mark_events_delivered
