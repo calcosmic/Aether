@@ -12,12 +12,12 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 
 ## Current Position
 
-Phase: 7 of 10 (Colony Verification)
-Plan: 5/5 complete
-Status: Complete
-Last activity: 2026-02-01 — Phase 7 complete and verified (23/23 must-haves)
+Phase: 8 of 10 (Colony Learning)
+Plan: 1/5 complete
+Status: In progress
+Last activity: 2026-02-02 — Plan 08-01: Bayesian Confidence Library complete
 
-Progress: [████████░] 70% → [████████░] 70%
+Progress: [████████░] 70% → [████████░] 72%
 
 ## Recent Changes
 
@@ -134,6 +134,7 @@ Recent decisions affecting current work:
 - **Specialized Watcher Prompts**: Created three additional specialized Watcher prompts for multi-perspective verification. Performance Watcher (.aether/workers/performance-watcher.md) specializes in algorithmic complexity analysis, I/O bottlenecks (N+1 queries), memory leaks, and blocking operations. Quality Watcher (.aether/workers/quality-watcher.md) specializes in maintainability (cyclomatic complexity >10, functions >100 lines), readability (naming, magic numbers), conventions, and code duplication. Test-Coverage Watcher (.aether/workers/test-coverage-watcher.md) specializes in test completeness (happy/sad/error paths), coverage metrics (>70% branches), assertion quality, and edge cases (null, empty, boundary values). All three follow the same JSON vote format as Security Watcher for seamless integration with vote-aggregator.sh. Complete set of 4 specialized Watchers (Security, Performance, Quality, Test-Coverage) ready for parallel spawning.
 - **Parallel Watcher Spawning**: Integrated parallel spawning capability into base Watcher Ant (.aether/workers/watcher-ant.md). Implemented 5-step workflow (prepare context, check constraints, spawn 4 Watchers in parallel via Task tool, aggregate votes via vote-aggregator.sh, output result). Each spawned Watcher inherits context (Queen's Goal, pheromones, working memory, constraints) and outputs JSON vote to .aether/verification/votes/. Includes spawn safeguards (depth limit, circuit breaker, spawn budget, same-specialist cache) and fallback to single-Watcher verification if resource constraints prevent parallel spawning.
 - **Voting System Test Suite**: Created comprehensive test suite (.aether/utils/test-voting-system.sh) with 5 test categories, 17 tests, 100% pass rate. Tests supermajority edge cases (0/4, 1/4, 2/4, 3/4, 4/4 APPROVE), Critical veto power (blocks approval despite supermajority, doesn't over-veto), issue deduplication (merges duplicates, tags multi-watcher, severity sorting), weight calculator (asymmetric updates: correct_reject +0.15, correct_approve +0.1, incorrect_approve -0.2; clamping at [0.1, 3.0]; domain expertise bonus ×2), and vote recording (COLONY_STATE.json verification.votes, outcome="pending"). All tests use awk instead of bc for floating-point comparison. Phase 7 complete, ready for Phase 8 Colony Learning.
+- **Bayesian Confidence Library**: Implemented bayesian-confidence.sh with Beta distribution confidence calculation for statistically sound meta-learning. Functions: update_bayesian_parameters(alpha, beta, outcome) updates alpha/beta based on success/failure, calculate_confidence(alpha, beta) returns alpha/(alpha+beta), calculate_weighted_confidence(alpha, beta) applies sample size weighting, get_confidence_stats(alpha, beta) returns comprehensive JSON, initialize_bayesian_prior() returns Beta(1,1) uniform prior. Uses bc for all floating-point arithmetic with scale=6 precision. Sample size weighting prevents overconfidence from small samples (<10). Replaces Phase 6's simple +0.1/-0.15 arithmetic with mathematically principled Bayesian inference.
 
 ### Pending Todos
 
@@ -161,8 +162,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-01 (Phase 7 Plan 5 - Voting System Test Suite)
-Stopped at: Completed 07-05: Voting System Test Suite (2/2 tasks)
+Last session: 2026-02-02 (Phase 8 Plan 1 - Bayesian Confidence Library)
+Stopped at: Completed 08-01: Bayesian Confidence Library (1/1 tasks)
 Resume file: None
 
 **Progress Summary:**
@@ -172,4 +173,5 @@ Resume file: None
 - ✅ Phase 4: Triple-Layer Memory (5/5 plans) - Working Memory, DAST compression, LRU eviction, pattern extraction, associative links, compression triggers, cross-layer search complete
 - ✅ Phase 5: Phase Boundaries (9/9 plans) - State machine, pheromone-triggered transitions, checkpoints, recovery, crash detection, Queen check-in, memory adaptation, emergence guard complete
 - ✅ Phase 6: Autonomous Emergence (5/5 plans) - Capability gap detection, Task tool spawning with context inheritance, circuit breaker safeguards, spawn outcome tracking, safeguard verification testing complete. Verified: 8/8 must-haves (100%)
-- ✅ Phase 7: Colony Verification (5/5 plans) - Vote aggregation infrastructure (07-01), Security Watcher (07-02), specialized Watcher prompts (07-03), parallel Watcher spawning (07-04), and voting system test suite (07-05) complete. Watcher weights initialized, supermajority calculation (67% threshold), Critical veto, issue deduplication, belief calibration, parallel spawning workflow, and comprehensive testing (17 tests, 100% pass rate) implemented. Complete set of 4 specialized Watchers (Security, Performance, Quality, Test-Coverage) ready for comprehensive multi-perspective verification. Phase 7 complete, ready for Phase 8 Colony Learning.
+- ✅ Phase 7: Colony Verification (5/5 plans) - Vote aggregation infrastructure (07-01), Security Watcher (07-02), specialized Watcher prompts (07-03), parallel Watcher spawning (07-04), and voting system test suite (07-05) complete. Watcher weights initialized, supermajority calculation (67% threshold), Critical veto, issue deduplication, belief calibration, parallel spawning workflow, and comprehensive testing (17 tests, 100% pass rate) implemented. Complete set of 4 specialized Watchers (Security, Performance, Quality, Test-Coverage) ready for comprehensive multi-perspective verification. Phase 7 complete.
+- 🔄 Phase 8: Colony Learning (1/5 plans) - Bayesian confidence library (08-01) complete. Beta distribution confidence calculation with alpha/beta parameter updating, sample size weighting, and bc arithmetic (scale=6). Ready for integration with spawn-outcome-tracker.sh (08-02).
