@@ -160,7 +160,9 @@ Central orchestrator becomes bottleneck and single point of failure.
 
 ## Current Progress
 
-**Phase**: 4 of 10 complete ✓
+**v1 Milestone**: ✅ SHIPPED (2026-02-02)
+
+All 52 requirements satisfied. 8 phases (3-10), 156/156 must-haves verified.
 
 | Phase | Status |
 |-------|--------|
@@ -168,20 +170,22 @@ Central orchestrator becomes bottleneck and single point of failure.
 | 2. Worker Ant Castes | ✅ Complete |
 | 3. Pheromone Communication | ✅ Complete |
 | 4. Triple-Layer Memory | ✅ Complete |
-| 5. Phase Boundaries | ⏭️ Next |
-| 6. Autonomous Emergence | – |
-| 7. Colony Verification | – |
-| 8. Colony Learning | – |
-| 9. Stigmergic Events | – |
-| 10. Colony Maturity | – |
+| 5. Phase Boundaries | ✅ Complete |
+| 6. Autonomous Emergence | ✅ Complete |
+| 7. Colony Verification | ✅ Complete |
+| 8. Colony Learning | ✅ Complete |
+| 9. Stigmergic Events | ✅ Complete |
+| 10. Colony Maturity | ✅ Complete |
 
 **What's Working:**
-- ✅ Colony state persistence (corruption-safe JSON)
-- ✅ All 6 Worker Ant castes as prompt files
-- ✅ Pheromone emission (INIT, FOCUS, REDIRECT, FEEDBACK)
-- ✅ Triple-layer memory (200k limit, DAST compression)
-- ✅ Cross-layer search with relevance ranking
-- ✅ /ant: commands for Queen interaction
+- ✅ Autonomous spawning with Bayesian meta-learning
+- ✅ Pheromone signals (INIT, FOCUS, REDIRECT, FEEDBACK) with time-based decay
+- ✅ Triple-layer memory (Working → Short-term DAST → Long-term patterns)
+- ✅ Multi-perspective verification (4 watchers, weighted voting, Critical veto)
+- ✅ Event-driven coordination (pub/sub event bus, async delivery)
+- ✅ State machine (7 states, checkpoints, recovery)
+- ✅ 19 commands, 10 Worker Ants, 26 utility scripts
+- ✅ Comprehensive testing (41+ assertions, stress tests, performance baselines)
 
 ---
 
