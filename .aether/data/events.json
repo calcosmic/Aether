@@ -1,0 +1,45 @@
+{
+  "$schema": "Aether Event Bus v1.0",
+  "topics": {
+    "phase_complete": {
+      "description": "Phase execution completed",
+      "subscriber_count": 0
+    },
+    "error": {
+      "description": "Error occurred during execution",
+      "subscriber_count": 0
+    },
+    "spawn_request": {
+      "description": "Request to spawn specialist Worker Ant",
+      "subscriber_count": 0
+    },
+    "task_started": {
+      "description": "Worker Ant started executing a task",
+      "subscriber_count": 0
+    },
+    "task_completed": {
+      "description": "Worker Ant completed a task successfully",
+      "subscriber_count": 0
+    },
+    "task_failed": {
+      "description": "Worker Ant failed to complete a task",
+      "subscriber_count": 0
+    }
+  },
+  "subscriptions": [],
+  "event_log": [],
+  "metrics": {
+    "total_published": 0,
+    "total_subscriptions": 0,
+    "total_delivered": 0,
+    "publish_rate_per_minute": 0.0,
+    "average_delivery_latency_ms": 0,
+    "backlog_count": 0,
+    "last_updated": null
+  },
+  "config": {
+    "max_event_log_size": 1000,
+    "max_subscriptions_per_topic": 50,
+    "event_retention_hours": 168
+  }
+}
