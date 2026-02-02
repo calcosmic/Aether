@@ -41,11 +41,12 @@ If this works, everything else follows. If this fails, nothing else matters.
 
 ### Active
 
-*(Next milestone work - TBD)*
+*(v2 milestone - Reactive Event Integration)*
 
-- [ ] **Event Bus Integration** — Worker Ant prompts call `get_events_for_subscriber()` for pull-based delivery
-- [ ] **Real LLM Testing** — Complement bash simulations with actual Queen/Worker LLM execution tests
-- [ ] **Documentation Updates** — Update path references in script comments
+- [ ] **Event Bus Polling Integration** — Worker Ant prompts call `get_events_for_subscriber()` for reactive event handling
+- [ ] **E2E LLM Test Guide** — Manual test suite covering core workflows (init, execute, spawning, memory, voting)
+- [ ] **Documentation Cleanup** — Audit and fix all stale path references in scripts and docstrings
+- [ ] **Visual Process Indicators** — Add 🐜 emojis and visual markers to help users see colony activity at a glance
 
 ### Out of Scope
 
@@ -126,10 +127,18 @@ Aether is based on **383,000+ words of research** across 25 documents by Ralph (
 | Bayesian meta-learning | Beta distribution confidence scoring prevents overconfidence | ✓ Good — Alpha/beta parameters updating correctly |
 | Pull-based event delivery | Workers poll vs background processes for prompt-based agents | ✓ Good — Async without persistent processes |
 
-## Next Milestone Goals
+## Current Milestone: v2.0 Reactive Event Integration
 
-*(TBD - User will define v2 goals)*
+**Goal:** Enable Worker Ants to react asynchronously to colony events through proactive event polling, with enhanced visual feedback for users.
+
+**Target features:**
+- Event bus polling integration - Worker Ants call `get_events_for_subscriber()` to react to events
+- E2E LLM test guide - Manual test suite for core workflows
+- Documentation cleanup - Fix all stale path references
+- Visual process indicators - 🐜 emojis and visual markers for colony activity
+
+**Future v3 preview:** Command consolidation (19 → 9-11 commands) to improve usability
 
 ---
 
-*Last updated: 2026-02-02 after v1 milestone completion*
+*Last updated: 2026-02-02 after v2.0 milestone initialization*
