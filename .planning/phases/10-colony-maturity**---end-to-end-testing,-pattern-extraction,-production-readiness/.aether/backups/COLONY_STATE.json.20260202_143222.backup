@@ -1,8 +1,8 @@
 {
-  "colony_id": "test_colony_1770041255",
-  "goal": "Performance test goal",
+  "colony_id": "test_colony_1770039141",
+  "goal": "Infinite loop prevention test",
   "colony_status": {
-    "state": "INIT",
+    "state": "IDLE",
     "current_phase": 1,
     "queen_checkin": null
   },
@@ -16,7 +16,7 @@
       "COMPLETED",
       "FAILED"
     ],
-    "last_transition": "2026-02-02T14:07:35Z",
+    "last_transition": "2026-02-02T13:32:21Z",
     "transitions_count": 0,
     "state_history": []
   },
@@ -70,19 +70,38 @@
     "deprecated_specialist_types": [],
     "specialist_confidence": {},
     "spawn_outcomes": [],
-    "last_updated": "2026-02-02T14:07:35Z"
+    "last_updated": "2026-02-02T13:32:21Z"
   },
   "resource_budgets": {
     "max_spawns_per_phase": 10,
-    "current_spawns": 0,
+    "current_spawns": 2,
     "max_spawn_depth": 3,
     "circuit_breaker_trips": 0,
     "circuit_breaker_cooldown_until": null
   },
   "spawn_tracking": {
-    "depth": 0,
-    "total_spawns": 0,
-    "spawn_history": [],
+    "depth": 2,
+    "total_spawns": 2,
+    "spawn_history": [
+      {
+        "id": "spawn_1770039141",
+        "parent": "builder",
+        "specialist": "loop_test_specialist",
+        "task": "Loop test 1",
+        "timestamp": "2026-02-02T13:32:21Z",
+        "depth": 1,
+        "outcome": "pending"
+      },
+      {
+        "id": "spawn_1770039141",
+        "parent": "builder",
+        "specialist": "loop_test_specialist",
+        "task": "Loop test 3",
+        "timestamp": "2026-02-02T13:32:21Z",
+        "depth": 2,
+        "outcome": "pending"
+      }
+    ],
     "failed_specialist_types": [],
     "cooldown_specialists": [],
     "circuit_breaker_history": []
@@ -101,6 +120,6 @@
     "issues": [],
     "outcome": "pending"
   },
-  "created_at": "2026-02-02T14:07:35Z",
-  "updated_at": "2026-02-02T14:07:35Z"
+  "created_at": "2026-02-02T13:32:21Z",
+  "updated_at": "2026-02-02T13:32:21Z"
 }

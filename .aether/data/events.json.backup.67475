@@ -1,0 +1,2014 @@
+{
+  "$schema": "Aether Event Bus v1.0",
+  "topics": {
+    "phase_complete": {
+      "description": "Phase execution completed",
+      "subscriber_count": 5
+    },
+    "error": {
+      "description": "Error occurred during execution",
+      "subscriber_count": 0
+    },
+    "spawn_request": {
+      "description": "Request to spawn specialist Worker Ant",
+      "subscriber_count": 4
+    },
+    "task_started": {
+      "description": "Worker Ant started executing a task",
+      "subscriber_count": 0
+    },
+    "task_completed": {
+      "description": "Worker Ant completed a task successfully",
+      "subscriber_count": 0
+    },
+    "task_failed": {
+      "description": "Worker Ant failed to complete a task",
+      "subscriber_count": 0
+    },
+    "custom_topic": {
+      "description": "Auto-created topic",
+      "subscriber_count": 0
+    },
+    "no_caste_topic": {
+      "description": "Auto-created topic",
+      "subscriber_count": 0
+    },
+    "unique_test": {
+      "description": "Auto-created topic",
+      "subscriber_count": 0
+    },
+    "error.*": {
+      "description": "Auto-created topic from subscription",
+      "subscriber_count": 8
+    },
+    "task_*": {
+      "description": "Auto-created topic from subscription",
+      "subscriber_count": 3
+    },
+    "test": {
+      "description": "Auto-created topic",
+      "subscriber_count": 0
+    },
+    "test_topic": {
+      "description": "Auto-created topic from subscription",
+      "subscriber_count": 3
+    },
+    "concurrent": {
+      "description": "Auto-created topic",
+      "subscriber_count": 0
+    },
+    "no_subs_topic": {
+      "description": "Auto-created topic",
+      "subscriber_count": 1
+    },
+    "speed_test": {
+      "description": "Auto-created topic",
+      "subscriber_count": 0
+    }
+  },
+  "subscriptions": [
+    {
+      "id": "sub_1770033325_1556f081",
+      "subscriber_id": "logger",
+      "subscriber_caste": "architect",
+      "topic_pattern": "error.*",
+      "filter_criteria": {},
+      "created_at": "2026-02-02T11:55:25Z",
+      "last_event_delivered": null,
+      "delivery_count": 0
+    },
+    {
+      "id": "sub_1770033325_bb15d019",
+      "subscriber_id": "coordinator",
+      "subscriber_caste": "route_setter",
+      "topic_pattern": "spawn_request",
+      "filter_criteria": {
+        "specialist_type": "database"
+      },
+      "created_at": "2026-02-02T11:55:25Z",
+      "last_event_delivered": null,
+      "delivery_count": 0
+    },
+    {
+      "id": "sub_1770033325_e69eee62",
+      "subscriber_id": "executor",
+      "subscriber_caste": "builder",
+      "topic_pattern": "task_*",
+      "filter_criteria": {},
+      "created_at": "2026-02-02T11:55:25Z",
+      "last_event_delivered": null,
+      "delivery_count": 0
+    },
+    {
+      "id": "sub_1770033325_2c5d221f",
+      "subscriber_id": "error_collector",
+      "subscriber_caste": "architect",
+      "topic_pattern": "error.*",
+      "filter_criteria": {},
+      "created_at": "2026-02-02T11:55:25Z",
+      "last_event_delivered": null,
+      "delivery_count": 0
+    },
+    {
+      "id": "sub_1770033326_b98fd91f",
+      "subscriber_id": "db_specialist",
+      "subscriber_caste": "builder",
+      "topic_pattern": "spawn_request",
+      "filter_criteria": {
+        "specialist_type": "database"
+      },
+      "created_at": "2026-02-02T11:55:26Z",
+      "last_event_delivered": null,
+      "delivery_count": 0
+    },
+    {
+      "id": "sub_1770033326_612d8e4a",
+      "subscriber_id": "default_test",
+      "subscriber_caste": "watcher",
+      "topic_pattern": "phase_complete",
+      "filter_criteria": {},
+      "created_at": "2026-02-02T11:55:26Z",
+      "last_event_delivered": null,
+      "delivery_count": 0
+    },
+    {
+      "id": "sub_1770033395_4c376207",
+      "subscriber_id": "verifier",
+      "subscriber_caste": "watcher",
+      "topic_pattern": "phase_complete",
+      "filter_criteria": {
+        "min_phase": 5
+      },
+      "created_at": "2026-02-02T11:56:35Z",
+      "last_event_delivered": "2026-02-02T11:56:35Z",
+      "delivery_count": 1
+    },
+    {
+      "id": "sub_1770033395_c65d0093",
+      "subscriber_id": "logger",
+      "subscriber_caste": "architect",
+      "topic_pattern": "error.*",
+      "filter_criteria": {},
+      "created_at": "2026-02-02T11:56:35Z",
+      "last_event_delivered": null,
+      "delivery_count": 0
+    },
+    {
+      "id": "sub_1770033406_2023554e",
+      "subscriber_id": "verifier",
+      "subscriber_caste": "watcher",
+      "topic_pattern": "phase_complete",
+      "filter_criteria": {
+        "phase": 8
+      },
+      "created_at": "2026-02-02T11:56:46Z",
+      "last_event_delivered": "2026-02-02T11:56:35Z",
+      "delivery_count": 1
+    },
+    {
+      "id": "sub_1770033406_7f48dc18",
+      "subscriber_id": "logger",
+      "subscriber_caste": "architect",
+      "topic_pattern": "error.*",
+      "filter_criteria": {},
+      "created_at": "2026-02-02T11:56:46Z",
+      "last_event_delivered": null,
+      "delivery_count": 0
+    },
+    {
+      "id": "sub_1770033449_53e27c28",
+      "subscriber_id": "subscriber1",
+      "subscriber_caste": "watcher",
+      "topic_pattern": "test_topic",
+      "filter_criteria": {},
+      "created_at": "2026-02-02T11:57:29Z",
+      "last_event_delivered": null,
+      "delivery_count": 0
+    },
+    {
+      "id": "sub_1770033449_0f07adac",
+      "subscriber_id": "subscriber2",
+      "subscriber_caste": "architect",
+      "topic_pattern": "test_topic",
+      "filter_criteria": {},
+      "created_at": "2026-02-02T11:57:29Z",
+      "last_event_delivered": null,
+      "delivery_count": 0
+    },
+    {
+      "id": "sub_1770033449_39038941",
+      "subscriber_id": "subscriber3",
+      "subscriber_caste": "builder",
+      "topic_pattern": "test_topic",
+      "filter_criteria": {},
+      "created_at": "2026-02-02T11:57:29Z",
+      "last_event_delivered": null,
+      "delivery_count": 0
+    },
+    {
+      "id": "sub_1770033451_236dc9a0",
+      "subscriber_id": "late_subscriber",
+      "subscriber_caste": "watcher",
+      "topic_pattern": "no_subs_topic",
+      "filter_criteria": {},
+      "created_at": "2026-02-02T11:57:31Z",
+      "last_event_delivered": null,
+      "delivery_count": 0
+    },
+    {
+      "id": "sub_1770033610_7348e7c0",
+      "subscriber_id": "verifier",
+      "subscriber_caste": "watcher",
+      "topic_pattern": "phase_complete",
+      "filter_criteria": {
+        "phase": 8
+      },
+      "created_at": "2026-02-02T12:00:10Z",
+      "last_event_delivered": null,
+      "delivery_count": 0
+    },
+    {
+      "id": "sub_1770033610_49b2b23a",
+      "subscriber_id": "logger",
+      "subscriber_caste": "architect",
+      "topic_pattern": "error.*",
+      "filter_criteria": {},
+      "created_at": "2026-02-02T12:00:10Z",
+      "last_event_delivered": null,
+      "delivery_count": 0
+    },
+    {
+      "id": "sub_1770033610_0fff25ec",
+      "subscriber_id": "task_monitor",
+      "subscriber_caste": "scout",
+      "topic_pattern": "task_*",
+      "filter_criteria": {},
+      "created_at": "2026-02-02T12:00:10Z",
+      "last_event_delivered": null,
+      "delivery_count": 0
+    }
+  ],
+  "event_log": [
+    {
+      "id": "evt_1770033022_7062f6da",
+      "topic": "task_started",
+      "type": "task_started",
+      "data": {
+        "task_id": "test-01",
+        "phase": 9
+      },
+      "metadata": {
+        "publisher": "test_publisher",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:50:22Z",
+        "correlation_id": "corr_1770033022_c04623dc"
+      }
+    },
+    {
+      "id": "evt_1770033022_3e319673",
+      "topic": "task_completed",
+      "type": "task_completed",
+      "data": {
+        "task_id": "test-02",
+        "status": "success"
+      },
+      "metadata": {
+        "publisher": "executor",
+        "publisher_caste": "builder",
+        "timestamp": "2026-02-02T11:50:22Z",
+        "correlation_id": "corr_1770033022_ea7800e2"
+      }
+    },
+    {
+      "id": "evt_1770033023_9ca736a2",
+      "topic": "error",
+      "type": "error_occurred",
+      "data": {
+        "error_code": 404,
+        "message": "Not found"
+      },
+      "metadata": {
+        "publisher": "worker",
+        "publisher_caste": "scout",
+        "timestamp": "2026-02-02T11:50:23Z",
+        "correlation_id": "corr_1770033023_628fc842"
+      }
+    },
+    {
+      "id": "evt_1770033023_58fbfb5d",
+      "topic": "spawn_request",
+      "type": "spawn_specialist",
+      "data": {
+        "specialist_type": "database",
+        "reason": "capability gap"
+      },
+      "metadata": {
+        "publisher": "route_setter",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:50:23Z",
+        "correlation_id": "corr_1770033023_f08d2093"
+      }
+    },
+    {
+      "id": "evt_1770033023_4a5524fd",
+      "topic": "custom_topic",
+      "type": "custom_event",
+      "data": {
+        "test": "data"
+      },
+      "metadata": {
+        "publisher": "test_publisher",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:50:23Z",
+        "correlation_id": "corr_1770033023_ff8151e1"
+      }
+    },
+    {
+      "id": "evt_1770033023_88214790",
+      "topic": "no_caste_topic",
+      "type": "no_caste_event",
+      "data": {
+        "test": "data"
+      },
+      "metadata": {
+        "publisher": "test_publisher",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:50:23Z",
+        "correlation_id": "corr_1770033023_18070133"
+      }
+    },
+    {
+      "id": "evt_1770033023_47d97290",
+      "topic": "unique_test",
+      "type": "test1",
+      "data": {
+        "i": 1
+      },
+      "metadata": {
+        "publisher": "test",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:50:23Z",
+        "correlation_id": "corr_1770033023_0a09ae60"
+      }
+    },
+    {
+      "id": "evt_1770033024_e5d1139a",
+      "topic": "unique_test",
+      "type": "test2",
+      "data": {
+        "i": 2
+      },
+      "metadata": {
+        "publisher": "test",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:50:24Z",
+        "correlation_id": "corr_1770033024_82412d21"
+      }
+    },
+    {
+      "id": "evt_1770033024_a717ba6d",
+      "topic": "unique_test",
+      "type": "test3",
+      "data": {
+        "i": 3
+      },
+      "metadata": {
+        "publisher": "test",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:50:24Z",
+        "correlation_id": "corr_1770033024_37310e35"
+      }
+    },
+    {
+      "id": "evt_1770033395_a1c199be",
+      "topic": "phase_complete",
+      "type": "phase_8_complete",
+      "data": {
+        "phase": 8,
+        "status": "success"
+      },
+      "metadata": {
+        "publisher": "queen",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:56:35Z",
+        "correlation_id": "corr_1770033395_37623eed"
+      }
+    },
+    {
+      "id": "evt_1770033395_01573c58",
+      "topic": "error",
+      "type": "error_occurred",
+      "data": {
+        "error_code": 500,
+        "message": "Database error"
+      },
+      "metadata": {
+        "publisher": "worker",
+        "publisher_caste": "builder",
+        "timestamp": "2026-02-02T11:56:35Z",
+        "correlation_id": "corr_1770033395_f8a3b70a"
+      }
+    },
+    {
+      "id": "evt_1770033395_2ec4e5fd",
+      "topic": "task_started",
+      "type": "task_started",
+      "data": {
+        "task_id": "123"
+      },
+      "metadata": {
+        "publisher": "executor",
+        "publisher_caste": "builder",
+        "timestamp": "2026-02-02T11:56:35Z",
+        "correlation_id": "corr_1770033395_5e999d22"
+      }
+    },
+    {
+      "id": "evt_1770033448_629d7082",
+      "topic": "test",
+      "type": "test_event",
+      "data": {
+        "test": "data"
+      },
+      "metadata": {
+        "publisher": "test_publisher",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:28Z",
+        "correlation_id": "corr_1770033448_10c52e50"
+      }
+    },
+    {
+      "id": "evt_1770033449_4fecdb07",
+      "topic": "test_topic",
+      "type": "test_async",
+      "data": {
+        "async": "test"
+      },
+      "metadata": {
+        "publisher": "publisher",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:29Z",
+        "correlation_id": "corr_1770033449_594b1c02"
+      }
+    },
+    {
+      "id": "evt_1770033449_442a64de",
+      "topic": "test_topic",
+      "type": "test_inactive",
+      "data": {
+        "inactive": "subscribers"
+      },
+      "metadata": {
+        "publisher": "publisher",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:29Z",
+        "correlation_id": "corr_1770033449_2f486176"
+      }
+    },
+    {
+      "id": "evt_1770033450_cb9bd395",
+      "topic": "concurrent",
+      "type": "conc3",
+      "data": {
+        "i": 3
+      },
+      "metadata": {
+        "publisher": "p3",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:30Z",
+        "correlation_id": "corr_1770033450_96e44307"
+      }
+    },
+    {
+      "id": "evt_1770033450_9e95ef92",
+      "topic": "concurrent",
+      "type": "conc2",
+      "data": {
+        "i": 2
+      },
+      "metadata": {
+        "publisher": "p2",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:30Z",
+        "correlation_id": "corr_1770033450_c06ccfff"
+      }
+    },
+    {
+      "id": "evt_1770033450_e0393d87",
+      "topic": "concurrent",
+      "type": "conc1",
+      "data": {
+        "i": 1
+      },
+      "metadata": {
+        "publisher": "p1",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:30Z",
+        "correlation_id": "corr_1770033450_c4b94776"
+      }
+    },
+    {
+      "id": "evt_1770033451_bc3c74a5",
+      "topic": "no_subs_topic",
+      "type": "no_subs",
+      "data": {
+        "test": "data"
+      },
+      "metadata": {
+        "publisher": "publisher",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:31Z",
+        "correlation_id": "corr_1770033451_b5a92157"
+      }
+    },
+    {
+      "id": "evt_1770033451_660aba2f",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 1
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:31Z",
+        "correlation_id": "corr_1770033451_ebed4f6f"
+      }
+    },
+    {
+      "id": "evt_1770033452_8f32c897",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 2
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:32Z",
+        "correlation_id": "corr_1770033452_53a88502"
+      }
+    },
+    {
+      "id": "evt_1770033452_8f95fe14",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 3
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:32Z",
+        "correlation_id": "corr_1770033452_692d6929"
+      }
+    },
+    {
+      "id": "evt_1770033452_acdd1939",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 4
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:32Z",
+        "correlation_id": "corr_1770033452_511564ad"
+      }
+    },
+    {
+      "id": "evt_1770033452_755dc29d",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 5
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:32Z",
+        "correlation_id": "corr_1770033452_27985750"
+      }
+    },
+    {
+      "id": "evt_1770033452_6233def1",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 6
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:32Z",
+        "correlation_id": "corr_1770033452_6b315d8d"
+      }
+    },
+    {
+      "id": "evt_1770033452_1923214c",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 7
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:33Z",
+        "correlation_id": "corr_1770033452_aff53de4"
+      }
+    },
+    {
+      "id": "evt_1770033453_03a8b109",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 8
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:33Z",
+        "correlation_id": "corr_1770033453_ecab3347"
+      }
+    },
+    {
+      "id": "evt_1770033453_0c4117cc",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 9
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:33Z",
+        "correlation_id": "corr_1770033453_498087d9"
+      }
+    },
+    {
+      "id": "evt_1770033453_d8f5e9a0",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 10
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:33Z",
+        "correlation_id": "corr_1770033453_43c5681c"
+      }
+    },
+    {
+      "id": "evt_1770033453_ec13fa4b",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 11
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:33Z",
+        "correlation_id": "corr_1770033453_c5913293"
+      }
+    },
+    {
+      "id": "evt_1770033453_642ac141",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 12
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:33Z",
+        "correlation_id": "corr_1770033453_ec8d998c"
+      }
+    },
+    {
+      "id": "evt_1770033454_443d2491",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 13
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:34Z",
+        "correlation_id": "corr_1770033454_e2020267"
+      }
+    },
+    {
+      "id": "evt_1770033454_0b7a2b5b",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 14
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:34Z",
+        "correlation_id": "corr_1770033454_85523449"
+      }
+    },
+    {
+      "id": "evt_1770033454_c72cf4ec",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 15
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:34Z",
+        "correlation_id": "corr_1770033454_f482fa35"
+      }
+    },
+    {
+      "id": "evt_1770033454_679e5ba2",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 16
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:34Z",
+        "correlation_id": "corr_1770033454_25484694"
+      }
+    },
+    {
+      "id": "evt_1770033454_bbb8edd2",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 17
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:34Z",
+        "correlation_id": "corr_1770033454_88b4866b"
+      }
+    },
+    {
+      "id": "evt_1770033455_08ed6ed8",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 18
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:35Z",
+        "correlation_id": "corr_1770033455_ffd09892"
+      }
+    },
+    {
+      "id": "evt_1770033455_e64d711a",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 19
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:35Z",
+        "correlation_id": "corr_1770033455_312e913c"
+      }
+    },
+    {
+      "id": "evt_1770033455_aeced461",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 20
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:35Z",
+        "correlation_id": "corr_1770033455_3d56e88b"
+      }
+    },
+    {
+      "id": "evt_1770033455_9da1ae25",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 21
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:35Z",
+        "correlation_id": "corr_1770033455_053abaa4"
+      }
+    },
+    {
+      "id": "evt_1770033455_640a2e88",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 22
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:35Z",
+        "correlation_id": "corr_1770033455_418a711b"
+      }
+    },
+    {
+      "id": "evt_1770033456_e517f219",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 23
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:36Z",
+        "correlation_id": "corr_1770033456_36cb4815"
+      }
+    },
+    {
+      "id": "evt_1770033456_73ac45b3",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 24
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:36Z",
+        "correlation_id": "corr_1770033456_194d79eb"
+      }
+    },
+    {
+      "id": "evt_1770033456_ab341fb5",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 25
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:36Z",
+        "correlation_id": "corr_1770033456_cfb6a435"
+      }
+    },
+    {
+      "id": "evt_1770033456_1599981c",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 26
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:36Z",
+        "correlation_id": "corr_1770033456_517bf15f"
+      }
+    },
+    {
+      "id": "evt_1770033456_8a40c90f",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 27
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:36Z",
+        "correlation_id": "corr_1770033456_a8830013"
+      }
+    },
+    {
+      "id": "evt_1770033457_24b1dddb",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 28
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:37Z",
+        "correlation_id": "corr_1770033457_7fe64887"
+      }
+    },
+    {
+      "id": "evt_1770033457_e8c0f7c4",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 29
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:37Z",
+        "correlation_id": "corr_1770033457_8b5a8102"
+      }
+    },
+    {
+      "id": "evt_1770033457_66d769a7",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 30
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:37Z",
+        "correlation_id": "corr_1770033457_dfa6150a"
+      }
+    },
+    {
+      "id": "evt_1770033457_d6a6c75a",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 31
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:37Z",
+        "correlation_id": "corr_1770033457_1ce4d9e2"
+      }
+    },
+    {
+      "id": "evt_1770033457_87d6c2a2",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 32
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:37Z",
+        "correlation_id": "corr_1770033457_9099141e"
+      }
+    },
+    {
+      "id": "evt_1770033457_376f1fdd",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 33
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:37Z",
+        "correlation_id": "corr_1770033457_f6f42653"
+      }
+    },
+    {
+      "id": "evt_1770033458_9dfedb5b",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 34
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:38Z",
+        "correlation_id": "corr_1770033458_625955fa"
+      }
+    },
+    {
+      "id": "evt_1770033458_e7a62b04",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 35
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:38Z",
+        "correlation_id": "corr_1770033458_1c088666"
+      }
+    },
+    {
+      "id": "evt_1770033458_5e55662b",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 36
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:38Z",
+        "correlation_id": "corr_1770033458_24cfebbe"
+      }
+    },
+    {
+      "id": "evt_1770033458_829ad09c",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 37
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:38Z",
+        "correlation_id": "corr_1770033458_88e6b9ae"
+      }
+    },
+    {
+      "id": "evt_1770033458_6114aea6",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 38
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:38Z",
+        "correlation_id": "corr_1770033458_e3122c03"
+      }
+    },
+    {
+      "id": "evt_1770033459_085230ba",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 39
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:39Z",
+        "correlation_id": "corr_1770033459_a86b223b"
+      }
+    },
+    {
+      "id": "evt_1770033459_ad56f437",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 40
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:39Z",
+        "correlation_id": "corr_1770033459_3b983a30"
+      }
+    },
+    {
+      "id": "evt_1770033459_03f507f5",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 41
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:39Z",
+        "correlation_id": "corr_1770033459_735bdff6"
+      }
+    },
+    {
+      "id": "evt_1770033459_a4251787",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 42
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:39Z",
+        "correlation_id": "corr_1770033459_6b881d79"
+      }
+    },
+    {
+      "id": "evt_1770033459_614bfba1",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 43
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:39Z",
+        "correlation_id": "corr_1770033459_dc2fd5eb"
+      }
+    },
+    {
+      "id": "evt_1770033460_83c9e279",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 44
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:40Z",
+        "correlation_id": "corr_1770033460_8f26aa91"
+      }
+    },
+    {
+      "id": "evt_1770033460_25647128",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 45
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:40Z",
+        "correlation_id": "corr_1770033460_f537faf6"
+      }
+    },
+    {
+      "id": "evt_1770033460_0b9bc67a",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 46
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:40Z",
+        "correlation_id": "corr_1770033460_a936450d"
+      }
+    },
+    {
+      "id": "evt_1770033460_6620917d",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 47
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:40Z",
+        "correlation_id": "corr_1770033460_58f1ed0f"
+      }
+    },
+    {
+      "id": "evt_1770033461_5a0f972c",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 48
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:41Z",
+        "correlation_id": "corr_1770033461_568ee241"
+      }
+    },
+    {
+      "id": "evt_1770033461_37424c68",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 49
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:41Z",
+        "correlation_id": "corr_1770033461_5dc90211"
+      }
+    },
+    {
+      "id": "evt_1770033461_6083d60b",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 50
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:41Z",
+        "correlation_id": "corr_1770033461_6e4a74ea"
+      }
+    },
+    {
+      "id": "evt_1770033461_d304d364",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 51
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:41Z",
+        "correlation_id": "corr_1770033461_29a8d554"
+      }
+    },
+    {
+      "id": "evt_1770033461_7ceb8f96",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 52
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:41Z",
+        "correlation_id": "corr_1770033461_a6f6b7af"
+      }
+    },
+    {
+      "id": "evt_1770033461_69138ab7",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 53
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:42Z",
+        "correlation_id": "corr_1770033462_6d137893"
+      }
+    },
+    {
+      "id": "evt_1770033462_dde31321",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 54
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:42Z",
+        "correlation_id": "corr_1770033462_e29d625d"
+      }
+    },
+    {
+      "id": "evt_1770033462_1029062f",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 55
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:42Z",
+        "correlation_id": "corr_1770033462_d99d5cfc"
+      }
+    },
+    {
+      "id": "evt_1770033462_9f2511cf",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 56
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:42Z",
+        "correlation_id": "corr_1770033462_a0dd55be"
+      }
+    },
+    {
+      "id": "evt_1770033462_0764b816",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 57
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:42Z",
+        "correlation_id": "corr_1770033462_4f2344f3"
+      }
+    },
+    {
+      "id": "evt_1770033462_38be6c86",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 58
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:42Z",
+        "correlation_id": "corr_1770033462_418a672e"
+      }
+    },
+    {
+      "id": "evt_1770033463_94845daf",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 59
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:43Z",
+        "correlation_id": "corr_1770033463_5b84e917"
+      }
+    },
+    {
+      "id": "evt_1770033463_b8148a1c",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 60
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:43Z",
+        "correlation_id": "corr_1770033463_63db3897"
+      }
+    },
+    {
+      "id": "evt_1770033463_937781c6",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 61
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:43Z",
+        "correlation_id": "corr_1770033463_a15fd3ad"
+      }
+    },
+    {
+      "id": "evt_1770033463_3b75e306",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 62
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:43Z",
+        "correlation_id": "corr_1770033463_c9682f7e"
+      }
+    },
+    {
+      "id": "evt_1770033463_860bb1a8",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 63
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:43Z",
+        "correlation_id": "corr_1770033463_4b85f7cf"
+      }
+    },
+    {
+      "id": "evt_1770033464_abb24b64",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 64
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:44Z",
+        "correlation_id": "corr_1770033464_121c01cc"
+      }
+    },
+    {
+      "id": "evt_1770033464_05aa62f5",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 65
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:44Z",
+        "correlation_id": "corr_1770033464_cd6ceaef"
+      }
+    },
+    {
+      "id": "evt_1770033464_9488cdd0",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 66
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:44Z",
+        "correlation_id": "corr_1770033464_f592e952"
+      }
+    },
+    {
+      "id": "evt_1770033464_7e51f2ee",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 67
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:44Z",
+        "correlation_id": "corr_1770033464_986f7ffa"
+      }
+    },
+    {
+      "id": "evt_1770033464_146f0ef9",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 68
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:44Z",
+        "correlation_id": "corr_1770033464_a85ec7d2"
+      }
+    },
+    {
+      "id": "evt_1770033465_68d9867c",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 69
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:45Z",
+        "correlation_id": "corr_1770033465_683b7ec2"
+      }
+    },
+    {
+      "id": "evt_1770033465_02811bfa",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 70
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:45Z",
+        "correlation_id": "corr_1770033465_2811bb13"
+      }
+    },
+    {
+      "id": "evt_1770033465_67c217cc",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 71
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:45Z",
+        "correlation_id": "corr_1770033465_0d9dc364"
+      }
+    },
+    {
+      "id": "evt_1770033465_b443e4d8",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 72
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:45Z",
+        "correlation_id": "corr_1770033465_d2553f89"
+      }
+    },
+    {
+      "id": "evt_1770033465_b20f1ae9",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 73
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:45Z",
+        "correlation_id": "corr_1770033465_5dd83664"
+      }
+    },
+    {
+      "id": "evt_1770033466_f809471b",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 74
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:46Z",
+        "correlation_id": "corr_1770033466_789501dc"
+      }
+    },
+    {
+      "id": "evt_1770033466_9aada47e",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 75
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:46Z",
+        "correlation_id": "corr_1770033466_137f9aac"
+      }
+    },
+    {
+      "id": "evt_1770033466_82d62b68",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 76
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:46Z",
+        "correlation_id": "corr_1770033466_5d8abf74"
+      }
+    },
+    {
+      "id": "evt_1770033466_7cec71c2",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 77
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:46Z",
+        "correlation_id": "corr_1770033466_be95de02"
+      }
+    },
+    {
+      "id": "evt_1770033466_3996a575",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 78
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:46Z",
+        "correlation_id": "corr_1770033466_ebed567e"
+      }
+    },
+    {
+      "id": "evt_1770033466_6ea59ac7",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 79
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:47Z",
+        "correlation_id": "corr_1770033467_9c02ce17"
+      }
+    },
+    {
+      "id": "evt_1770033467_19027a66",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 80
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:47Z",
+        "correlation_id": "corr_1770033467_482d0945"
+      }
+    },
+    {
+      "id": "evt_1770033467_0141029e",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 81
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:47Z",
+        "correlation_id": "corr_1770033467_02ac338a"
+      }
+    },
+    {
+      "id": "evt_1770033467_5919dc18",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 82
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:47Z",
+        "correlation_id": "corr_1770033467_5aebc9d5"
+      }
+    },
+    {
+      "id": "evt_1770033467_e59f5642",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 83
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:47Z",
+        "correlation_id": "corr_1770033467_16d3bb5d"
+      }
+    },
+    {
+      "id": "evt_1770033467_1ba8f6a8",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 84
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:47Z",
+        "correlation_id": "corr_1770033467_17a027ab"
+      }
+    },
+    {
+      "id": "evt_1770033468_dfa49662",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 85
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:48Z",
+        "correlation_id": "corr_1770033468_0d12cab7"
+      }
+    },
+    {
+      "id": "evt_1770033468_08ca5062",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 86
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:48Z",
+        "correlation_id": "corr_1770033468_b68c5eb6"
+      }
+    },
+    {
+      "id": "evt_1770033468_d53433db",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 87
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:48Z",
+        "correlation_id": "corr_1770033468_0b08008d"
+      }
+    },
+    {
+      "id": "evt_1770033468_03f50fd5",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 88
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:48Z",
+        "correlation_id": "corr_1770033468_9a465ba4"
+      }
+    },
+    {
+      "id": "evt_1770033468_7cd7c783",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 89
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:48Z",
+        "correlation_id": "corr_1770033468_258e6ed4"
+      }
+    },
+    {
+      "id": "evt_1770033469_4b4c2b1f",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 90
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:49Z",
+        "correlation_id": "corr_1770033469_add2df88"
+      }
+    },
+    {
+      "id": "evt_1770033469_1b0739a3",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 91
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:49Z",
+        "correlation_id": "corr_1770033469_e6dfb8ea"
+      }
+    },
+    {
+      "id": "evt_1770033469_3c2b14a5",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 92
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:49Z",
+        "correlation_id": "corr_1770033469_7922a706"
+      }
+    },
+    {
+      "id": "evt_1770033469_6bebd0b3",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 93
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:49Z",
+        "correlation_id": "corr_1770033469_daa94016"
+      }
+    },
+    {
+      "id": "evt_1770033469_3528a0ba",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 94
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:49Z",
+        "correlation_id": "corr_1770033469_350a699c"
+      }
+    },
+    {
+      "id": "evt_1770033470_6b034eef",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 95
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:50Z",
+        "correlation_id": "corr_1770033470_47d202bc"
+      }
+    },
+    {
+      "id": "evt_1770033470_68583efb",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 96
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:50Z",
+        "correlation_id": "corr_1770033470_2190184e"
+      }
+    },
+    {
+      "id": "evt_1770033470_079be496",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 97
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:50Z",
+        "correlation_id": "corr_1770033470_3c022fa7"
+      }
+    },
+    {
+      "id": "evt_1770033470_bcebdff2",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 98
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:50Z",
+        "correlation_id": "corr_1770033470_1c04793a"
+      }
+    },
+    {
+      "id": "evt_1770033470_68ce9cf3",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 99
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:50Z",
+        "correlation_id": "corr_1770033470_57f74dcb"
+      }
+    },
+    {
+      "id": "evt_1770033471_a0ec7212",
+      "topic": "speed_test",
+      "type": "speed_event",
+      "data": {
+        "i": 100
+      },
+      "metadata": {
+        "publisher": "speed_tester",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T11:57:51Z",
+        "correlation_id": "corr_1770033471_754c0c49"
+      }
+    },
+    {
+      "id": "evt_1770033610_748a280f",
+      "topic": "phase_complete",
+      "type": "phase_8_complete",
+      "data": {
+        "phase": 8,
+        "status": "success"
+      },
+      "metadata": {
+        "publisher": "queen",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T12:00:10Z",
+        "correlation_id": "corr_1770033610_ee59de55"
+      }
+    },
+    {
+      "id": "evt_1770033611_0089b84f",
+      "topic": "error",
+      "type": "error_occurred",
+      "data": {
+        "error_code": 500,
+        "message": "Database error"
+      },
+      "metadata": {
+        "publisher": "worker",
+        "publisher_caste": "builder",
+        "timestamp": "2026-02-02T12:00:11Z",
+        "correlation_id": "corr_1770033611_9b842862"
+      }
+    },
+    {
+      "id": "evt_1770033611_8c5e5324",
+      "topic": "error",
+      "type": "error_critical",
+      "data": {
+        "error_code": 503,
+        "severity": "critical"
+      },
+      "metadata": {
+        "publisher": "worker",
+        "publisher_caste": "builder",
+        "timestamp": "2026-02-02T12:00:11Z",
+        "correlation_id": "corr_1770033611_1d721756"
+      }
+    },
+    {
+      "id": "evt_1770033611_760852a2",
+      "topic": "task_started",
+      "type": "task_started",
+      "data": {
+        "task_id": "123",
+        "name": "build API"
+      },
+      "metadata": {
+        "publisher": "executor",
+        "publisher_caste": "builder",
+        "timestamp": "2026-02-02T12:00:11Z",
+        "correlation_id": "corr_1770033611_aa3816af"
+      }
+    },
+    {
+      "id": "evt_1770033611_acf9da3a",
+      "topic": "task_completed",
+      "type": "task_completed",
+      "data": {
+        "task_id": "123",
+        "status": "success"
+      },
+      "metadata": {
+        "publisher": "executor",
+        "publisher_caste": "builder",
+        "timestamp": "2026-02-02T12:00:11Z",
+        "correlation_id": "corr_1770033611_e73467d0"
+      }
+    }
+  ],
+  "metrics": {
+    "total_published": 124,
+    "total_subscriptions": 18,
+    "total_delivered": 1,
+    "publish_rate_per_minute": 0.0,
+    "average_delivery_latency_ms": 0,
+    "backlog_count": 123,
+    "last_updated": "2026-02-02T12:00:11Z"
+  },
+  "config": {
+    "max_event_log_size": 1000,
+    "max_subscriptions_per_topic": 50,
+    "event_retention_hours": 168
+  }
+}

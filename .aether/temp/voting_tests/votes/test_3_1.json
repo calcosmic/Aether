@@ -1,0 +1,8 @@
+[
+  {"watcher": "security", "decision": "REJECT", "weight": 1.0, "issues": [
+    {"severity": "Critical", "category": "auth", "description": "Missing auth", "location": "app.py:10"}
+  ], "timestamp": "2026-02-01T20:00:00Z"},
+  {"watcher": "quality", "decision": "REJECT", "weight": 1.0, "issues": [
+    {"severity": "Critical", "category": "auth", "description": "Missing auth", "location": "app.py:10"}
+  ], "timestamp": "2026-02-01T20:00:00Z"}
+]

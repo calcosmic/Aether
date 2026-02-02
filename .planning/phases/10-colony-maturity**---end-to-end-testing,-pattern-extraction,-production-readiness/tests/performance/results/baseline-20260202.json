@@ -1,0 +1,74 @@
+{
+  "timestamp": "2026-02-02T14:05:38Z",
+  "hardware": {
+    "cpu": "Apple M1 Max",
+    "ram": "64GB",
+    "disk": "SSD"
+  },
+  "operations": {
+    "colony_init": {
+      "median_s": 0.020160000,
+      "min_s": 0.019845000,
+      "max_s": 0.021593000,
+      "file_io_count": 0,
+      "token_estimate": 0,
+      "memory_kb": 2464
+    },
+    "pheromone_emit": {
+      "median_s": 0.012023000,
+      "min_s": 0.011868000,
+      "max_s": 0.012818000,
+      "file_io_count": 0,
+      "token_estimate": 70,
+      "memory_kb": 2512
+    },
+    "state_transition": {
+      "median_s": 0.009828000,
+      "min_s": 0.009107000,
+      "max_s": 0.010059000,
+      "file_io_count": 0,
+      "token_estimate": 0,
+      "memory_kb": 2512
+    },
+    "memory_compress": {
+      "median_s": 0.011883000,
+      "min_s": 0.010956000,
+      "max_s": 0.012111000,
+      "file_io_count": 0,
+      "token_estimate": 0,
+      "memory_kb": 2512
+    },
+    "spawn_decision": {
+      "median_s": 0.023036000,
+      "min_s": 0.022536000,
+      "max_s": 0.025616000,
+      "file_io_count": 0,
+      "token_estimate": 0,
+      "memory_kb": 3296
+    },
+    "vote_aggregation": {
+      "median_s": 0.045602000,
+      "min_s": 0.043264000,
+      "max_s": 0.049454000,
+      "file_io_count": 0,
+      "token_estimate": 0,
+      "memory_kb": 3440
+    },
+    "event_publish": {
+      "median_s": 0.101733000,
+      "min_s": 0.092744000,
+      "max_s": 0.109913000,
+      "file_io_count": 0,
+      "token_estimate": 0,
+      "memory_kb": 3760
+    },
+    "full_workflow": {
+      "median_s": 0.068970000,
+      "min_s": 0.067600000,
+      "max_s": 0.070746000,
+      "file_io_count": 0,
+      "token_estimate": 0,
+      "memory_kb": 3760
+    }
+  }
+}

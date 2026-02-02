@@ -1,204 +1,77 @@
 {
-  "$schema": "Aether Worker Ants v2.0",
-  "castes": {
+  "active_workers": [],
+  "worker_registry": {
     "colonizer": {
-      "name": "Colonizer Ant",
-      "description": "Colonizes codebase, builds semantic index, detects patterns",
-      "status": "idle",
-      "current_task": null,
-      "current_phase": null,
+      "caste": "colonizer",
+      "status": "IDLE",
       "capabilities": [
         "codebase_analysis",
         "semantic_indexing",
-        "pattern_detection",
-        "dependency_mapping",
-        "architecture_understanding"
-      ],
-      "sensitivity_profile": {
-        "INIT": 1.0,
-        "FOCUS": 0.8,
-        "REDIRECT": 0.9,
-        "FEEDBACK": 0.7
-      },
-      "spawn_data": {
-        "subagents_spawned": 0,
-        "spawn_history": [],
-        "max_depth": 3
-      },
-      "performance": {
-        "tasks_completed": 0,
-        "success_rate": 0.0,
-        "last_active": null
-      }
+        "structure_mapping"
+      ]
     },
-    "route_setter": {
-      "name": "Route-setter Ant",
-      "description": "Creates phase structures, breaks down tasks, analyzes dependencies",
-      "status": "idle",
-      "current_task": null,
-      "current_phase": null,
+    "route-setter": {
+      "caste": "route-setter",
+      "status": "IDLE",
       "capabilities": [
         "phase_planning",
-        "task_breakdown",
-        "dependency_analysis",
-        "resource_allocation",
-        "route_optimization"
-      ],
-      "sensitivity_profile": {
-        "INIT": 1.0,
-        "FOCUS": 0.9,
-        "REDIRECT": 0.8,
-        "FEEDBACK": 0.8
-      },
-      "spawn_data": {
-        "subagents_spawned": 0,
-        "spawn_history": [],
-        "max_depth": 3
-      },
-      "performance": {
-        "tasks_completed": 0,
-        "success_rate": 0.0,
-        "last_active": null
-      }
+        "route_establishment",
+        "coordination"
+      ]
     },
     "builder": {
-      "name": "Builder Ant",
-      "description": "Implements code, runs commands, manipulates files",
-      "status": "idle",
-      "current_task": null,
-      "current_phase": null,
+      "caste": "builder",
+      "status": "IDLE",
       "capabilities": [
-        "code_implementation",
-        "command_execution",
-        "file_operations",
-        "testing_setup",
-        "build_automation"
-      ],
-      "sensitivity_profile": {
-        "INIT": 0.9,
-        "FOCUS": 1.0,
-        "REDIRECT": 0.7,
-        "FEEDBACK": 0.9
-      },
-      "spawn_data": {
-        "subagents_spawned": 0,
-        "spawn_history": [],
-        "max_depth": 3
-      },
-      "performance": {
-        "tasks_completed": 0,
-        "success_rate": 0.0,
-        "last_active": null
-      }
+        "code_generation",
+        "implementation",
+        "testing"
+      ]
     },
     "watcher": {
-      "name": "Watcher Ant",
-      "description": "Validates implementation, runs tests, checks quality",
-      "status": "idle",
-      "current_task": null,
-      "current_phase": null,
+      "caste": "watcher",
+      "status": "IDLE",
       "capabilities": [
-        "validation",
-        "testing",
-        "quality_checks",
-        "security_review",
-        "performance_analysis"
-      ],
-      "sensitivity_profile": {
-        "INIT": 0.8,
-        "FOCUS": 0.9,
-        "REDIRECT": 1.0,
-        "FEEDBACK": 1.0
-      },
-      "spawn_data": {
-        "subagents_spawned": 0,
-        "spawn_history": [],
-        "max_depth": 3
-      },
-      "performance": {
-        "tasks_completed": 0,
-        "success_rate": 0.0,
-        "last_active": null
-      }
+        "verification",
+        "quality_assurance",
+        "validation"
+      ]
     },
     "scout": {
-      "name": "Scout Ant",
-      "description": "Gathers information, searches documentation, retrieves context",
-      "status": "idle",
-      "current_task": null,
-      "current_phase": null,
+      "caste": "scout",
+      "status": "IDLE",
       "capabilities": [
+        "research",
         "information_gathering",
-        "documentation_search",
-        "context_retrieval",
-        "external_research",
-        "domain_knowledge"
-      ],
-      "sensitivity_profile": {
-        "INIT": 0.9,
-        "FOCUS": 0.7,
-        "REDIRECT": 0.8,
-        "FEEDBACK": 0.8
-      },
-      "spawn_data": {
-        "subagents_spawned": 0,
-        "spawn_history": [],
-        "max_depth": 3
-      },
-      "performance": {
-        "tasks_completed": 0,
-        "success_rate": 0.0,
-        "last_active": null
-      }
+        "context_analysis"
+      ]
     },
     "architect": {
-      "name": "Architect Ant",
-      "description": "Compresses memory, extracts patterns, synthesizes knowledge",
-      "status": "idle",
-      "current_task": null,
-      "current_phase": null,
+      "caste": "architect",
+      "status": "IDLE",
       "capabilities": [
-        "memory_compression",
-        "pattern_extraction",
         "knowledge_synthesis",
-        "associative_linking",
-        "long_term_storage"
-      ],
-      "sensitivity_profile": {
-        "INIT": 0.8,
-        "FOCUS": 0.8,
-        "REDIRECT": 0.9,
-        "FEEDBACK": 1.0
-      },
-      "spawn_data": {
-        "subagents_spawned": 0,
-        "spawn_history": [],
-        "max_depth": 3
-      },
-      "performance": {
-        "tasks_completed": 0,
-        "success_rate": 0.0,
-        "last_active": null
-      }
+        "memory_management",
+        "pattern_extraction"
+      ]
     }
-  },
-  "active_workers": [],
-  "worker_pool": {
-    "max_concurrent": 10,
-    "current_count": 0,
-    "spawn_queue": []
   },
   "specialist_mappings": {
     "capability_to_caste": {
       "database": "scout",
       "security": "watcher",
       "testing": "watcher",
-      "api_design": "route_setter",
+      "api": "route_setter",
       "frontend": "builder",
       "backend": "builder",
-      "infrastructure": "builder",
+      "performance": "architect",
       "documentation": "scout",
-      "optimization": "architect"
+      "infrastructure": "builder",
+      "research": "scout",
+      "planning": "route_setter",
+      "memory": "architect"
     }
-  }
+  },
+  "spawn_count": 0,
+  "last_updated": "2026-02-02T14:07:35Z"
 }

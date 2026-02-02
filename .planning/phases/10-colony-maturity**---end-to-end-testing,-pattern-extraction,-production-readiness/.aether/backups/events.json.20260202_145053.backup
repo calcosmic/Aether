@@ -1,0 +1,110 @@
+{
+  "$schema": "Aether Event Bus v1.0",
+  "topics": {
+    "phase_complete": {
+      "description": "Phase execution completed",
+      "subscriber_count": 0
+    },
+    "error": {
+      "description": "Error occurred during execution",
+      "subscriber_count": 0
+    },
+    "spawn_request": {
+      "description": "Request to spawn specialist Worker Ant",
+      "subscriber_count": 0
+    },
+    "task_started": {
+      "description": "Worker Ant started executing a task",
+      "subscriber_count": 0
+    },
+    "task_completed": {
+      "description": "Worker Ant completed a task successfully",
+      "subscriber_count": 0
+    },
+    "task_failed": {
+      "description": "Worker Ant failed to complete a task",
+      "subscriber_count": 0
+    },
+    "error_occurred": {
+      "description": "Auto-created topic",
+      "subscriber_count": 0
+    },
+    "latency_test": {
+      "description": "Auto-created topic",
+      "subscriber_count": 0
+    }
+  },
+  "subscriptions": [],
+  "event_log": [
+    {
+      "id": "evt_1770040051_592169c4",
+      "topic": "task_completed",
+      "type": "task",
+      "data": {
+        "task_id": "1"
+      },
+      "metadata": {
+        "publisher": "test_publisher",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T13:47:31Z",
+        "correlation_id": "corr_1770040051_3dce94d9"
+      }
+    },
+    {
+      "id": "evt_1770040102_8bb7984c",
+      "topic": "error_occurred",
+      "type": "error",
+      "data": {
+        "error": "test"
+      },
+      "metadata": {
+        "publisher": "test_publisher",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T13:48:22Z",
+        "correlation_id": "corr_1770040102_f2734fcb"
+      }
+    },
+    {
+      "id": "evt_1770040152_938990a2",
+      "topic": "phase_complete",
+      "type": "phase",
+      "data": {
+        "phase": 1
+      },
+      "metadata": {
+        "publisher": "test_publisher",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T13:49:12Z",
+        "correlation_id": "corr_1770040152_d78cf044"
+      }
+    },
+    {
+      "id": "evt_1770040203_d76e7730",
+      "topic": "latency_test",
+      "type": "test",
+      "data": {
+        "index": 1
+      },
+      "metadata": {
+        "publisher": "latency_publisher",
+        "publisher_caste": null,
+        "timestamp": "2026-02-02T13:50:03Z",
+        "correlation_id": "corr_1770040203_df77402e"
+      }
+    }
+  ],
+  "metrics": {
+    "total_published": 4,
+    "total_subscriptions": 0,
+    "total_delivered": 0,
+    "publish_rate_per_minute": 0.0,
+    "average_delivery_latency_ms": 0,
+    "backlog_count": 4,
+    "last_updated": "2026-02-02T13:50:03Z"
+  },
+  "config": {
+    "max_event_log_size": 1000,
+    "max_subscriptions_per_topic": 50,
+    "event_retention_hours": 168
+  }
+}

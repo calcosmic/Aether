@@ -1,7 +1,7 @@
 # AETHER v2
 
 <div align="center">
-  <img src="aetherlogo" alt="Aether Logo" width="600">
+  <img src="aether-logo.png" alt="Aether Logo" width="600">
 </div>
 
 > **"The whole is greater than the sum of its parts."** — Aristotle 🐜

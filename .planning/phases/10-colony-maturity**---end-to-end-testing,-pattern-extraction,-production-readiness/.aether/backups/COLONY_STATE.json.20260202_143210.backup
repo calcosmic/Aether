@@ -1,8 +1,8 @@
 {
-  "colony_id": "test_colony_1770041255",
-  "goal": "Performance test goal",
+  "colony_id": "test_colony_1770039130",
+  "goal": "Same-specialist cache test",
   "colony_status": {
-    "state": "INIT",
+    "state": "IDLE",
     "current_phase": 1,
     "queen_checkin": null
   },
@@ -16,7 +16,7 @@
       "COMPLETED",
       "FAILED"
     ],
-    "last_transition": "2026-02-02T14:07:35Z",
+    "last_transition": "2026-02-02T13:32:10Z",
     "transitions_count": 0,
     "state_history": []
   },
@@ -70,7 +70,7 @@
     "deprecated_specialist_types": [],
     "specialist_confidence": {},
     "spawn_outcomes": [],
-    "last_updated": "2026-02-02T14:07:35Z"
+    "last_updated": "2026-02-02T13:32:10Z"
   },
   "resource_budgets": {
     "max_spawns_per_phase": 10,
@@ -81,14 +81,26 @@
   },
   "spawn_tracking": {
     "depth": 0,
-    "total_spawns": 0,
-    "spawn_history": [],
+    "total_spawns": 1,
+    "spawn_history": [
+      {
+        "id": "spawn_1770039130",
+        "parent": "builder",
+        "specialist": "cache_test_specialist",
+        "task": "Identical task for duplicate detection",
+        "timestamp": "2026-02-02T13:32:10Z",
+        "depth": 1,
+        "outcome": "success",
+        "completed_at": "2026-02-02T13:32:10Z",
+        "notes": "First spawn completed"
+      }
+    ],
     "failed_specialist_types": [],
     "cooldown_specialists": [],
     "circuit_breaker_history": []
   },
   "performance_metrics": {
-    "successful_spawns": 0,
+    "successful_spawns": 1,
     "failed_spawns": 0,
     "avg_spawn_duration_seconds": 0
   },
@@ -101,6 +113,6 @@
     "issues": [],
     "outcome": "pending"
   },
-  "created_at": "2026-02-02T14:07:35Z",
-  "updated_at": "2026-02-02T14:07:35Z"
+  "created_at": "2026-02-02T13:32:10Z",
+  "updated_at": "2026-02-02T13:32:10Z"
 }
