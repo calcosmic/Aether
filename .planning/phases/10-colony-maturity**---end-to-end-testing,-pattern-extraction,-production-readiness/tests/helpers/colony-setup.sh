@@ -291,6 +291,31 @@ EOF
     fi
 
     echo "# Memory initialized at: $MEMORY_FILE"
+
+    # Initialize watcher_weights.json
+    WATCHER_WEIGHTS_FILE="${GIT_ROOT}/.aether/data/watcher_weights.json"
+    cat > "$WATCHER_WEIGHTS_FILE" <<EOF
+{
+  "watcher_weights": {
+    "security": 1.0,
+    "performance": 1.0,
+    "quality": 1.0,
+    "test_coverage": 1.0
+  },
+  "weight_bounds": {
+    "min": 0.1,
+    "max": 3.0
+  },
+  "last_updated": "$timestamp"
+}
+EOF
+
+    if [ $? -ne 0 ]; then
+        echo "# Error: Failed to create watcher_weights.json" >&2
+        return 1
+    fi
+
+    echo "# Watcher weights initialized at: $WATCHER_WEIGHTS_FILE"
     echo "# Test colony setup complete"
     echo "# Colony ID: $colony_id"
 
