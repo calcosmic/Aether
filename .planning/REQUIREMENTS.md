@@ -9,11 +9,11 @@ Requirements for v4.1 Cleanup & Enforcement. Each maps to roadmap phases.
 
 ### Cleanup
 
-- [ ] **CLEAN-01**: Wire pheromone-decay into plan.md, pause-colony.md, resume-colony.md, colonize.md — replacing inline decay formulas with aether-utils.sh pheromone-batch calls
-- [ ] **CLEAN-02**: Wire memory-compress into continue.md — replacing manual array truncation logic with aether-utils.sh memory-compress call
-- [ ] **CLEAN-03**: Wire error-pattern-check into build.md — replacing manual error categorization with aether-utils.sh error-pattern-check call
-- [ ] **CLEAN-04**: Wire error-summary into continue.md and build.md — replacing manual error counting with aether-utils.sh error-summary call
-- [ ] **CLEAN-05**: Remove pheromone-combine, memory-token-count, memory-search, error-dedup from aether-utils.sh
+- [x] **CLEAN-01**: Wire pheromone-decay into plan.md, pause-colony.md, resume-colony.md, colonize.md — replacing inline decay formulas with aether-utils.sh pheromone-batch calls
+- [x] **CLEAN-02**: Wire memory-compress into continue.md — replacing manual array truncation logic with aether-utils.sh memory-compress call
+- [x] **CLEAN-03**: Wire error-pattern-check into build.md — replacing manual error categorization with aether-utils.sh error-pattern-check call
+- [x] **CLEAN-04**: Wire error-summary into continue.md and build.md — replacing manual error counting with aether-utils.sh error-summary call
+- [x] **CLEAN-05**: Remove pheromone-combine, memory-token-count, memory-search, error-dedup from aether-utils.sh
 
 ### Enforcement
 
@@ -47,11 +47,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CLEAN-01 | Phase 22 | Pending |
-| CLEAN-02 | Phase 22 | Pending |
-| CLEAN-03 | Phase 22 | Pending |
-| CLEAN-04 | Phase 22 | Pending |
-| CLEAN-05 | Phase 22 | Pending |
+| CLEAN-01 | Phase 22 | Complete |
+| CLEAN-02 | Phase 22 | Complete |
+| CLEAN-03 | Phase 22 | Complete |
+| CLEAN-04 | Phase 22 | Complete |
+| CLEAN-05 | Phase 22 | Complete |
 | ENFO-01 | Phase 23 | Pending |
 | ENFO-02 | Phase 23 | Pending |
 | ENFO-03 | Phase 23 | Pending |
