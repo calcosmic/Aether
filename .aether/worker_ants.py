@@ -523,7 +523,7 @@ class WorkerAnt:
                     capability_gap=gaps,
                     inherited_context={
                         "goal": inherited.goal,
-                        "pheromones": [p.to_dict() for p in inherited.pheromone_signals] if hasattr(p, 'to_dict') else list(inherited.pheromone_signals),
+                        "pheromones": [p.to_dict() for p in inherited.pheromone_signals] if inherited.pheromone_signals and all(hasattr(p, 'to_dict') for p in inherited.pheromone_signals) else list(inherited.pheromone_signals),
                         "working_memory": inherited.working_memory,
                         "constraints": inherited.constraints
                     }

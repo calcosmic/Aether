@@ -10,9 +10,9 @@
     "first_occurrence": "2026-02-01T14:43:06.542798",
     "last_occurrence": "2026-02-01T14:43:09.245318",
     "frequency_trend": "stable",
-    "systematic_fix": "",
-    "systematic_prevention": "",
-    "fix_deployed": false,
+    "systematic_fix": "Check hasattr variables are defined before use, especially in list comprehensions",
+    "systematic_prevention": "Add linting rules for undefined variables in ternary expressions",
+    "fix_deployed": true,
     "error_ids": [
       "err_20260201_144242_8",
       "err_20260201_144309_2"
