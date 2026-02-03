@@ -13,6 +13,7 @@ Use the Read tool to read these files (in parallel):
 - `.aether/data/COLONY_STATE.json`
 - `.aether/data/pheromones.json`
 - `.aether/data/PROJECT_PLAN.json`
+- `.aether/data/errors.json`
 
 If `COLONY_STATE.json` has `goal: null`, output:
 
@@ -117,6 +118,35 @@ If no active signals after filtering:
 ```
   (no active pheromones)
 ```
+
+```
+---------------------------------------------------
+```
+
+```
+ERRORS
+```
+
+If `errors.json` was read successfully and has content:
+
+Display flagged patterns first (if any exist in `flagged_patterns` array):
+```
+  ⚠ FLAGGED PATTERNS:
+    <category>: <count> occurrences — "<description from first error of that category>"
+```
+
+Then show recent errors (last 5 from `errors` array, newest first):
+```
+  Recent:
+    [<severity>] <category>: <description> (phase <phase>)
+```
+
+If `errors` array is empty and `flagged_patterns` is empty:
+```
+  (no errors recorded)
+```
+
+If `errors.json` doesn't exist or couldn't be read, skip this section silently.
 
 ```
 ---------------------------------------------------
