@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-02-03)
 
 **Core value:** Autonomous Emergence -- Worker Ants autonomously spawn Worker Ants; Queen provides signals not commands
-**Current focus:** v4.0 Hybrid Foundation -- Phase 20 VERIFIED. Ready for Phase 21: Command Integration
+**Current focus:** v4.0 Hybrid Foundation -- Phase 21: Command Integration (plan 02 of N complete)
 
 ## Current Position
 
 Milestone: v4.0 Hybrid Foundation
-Phase: 20 of 21 (Utility Modules) -- VERIFIED
-Plan: 4 of 4 complete
-Status: Phase verified (5/5 must-haves passed), ready for Phase 21
-Last activity: 2026-02-03 -- Phase 20 verified (5/5 must-haves passed)
+Phase: 21 of 21 (Command Integration)
+Plan: 2 complete (21-01, 21-02)
+Status: In progress
+Last activity: 2026-02-03 -- Completed 21-02-PLAN.md (pheromone math integration)
 
-Progress: [##############......] 78% (v4.0: 7/9 plans)
+Progress: [###############.....] 82% (v4.0: 9/11 plans)
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -25,7 +25,7 @@ Progress: [##############......] 78% (v4.0: 7/9 plans)
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 68 (44 v1.0 + 6 v2.0 + 11 v3.0 + 7 v4.0)
+- Total plans completed: 70 (44 v1.0 + 6 v2.0 + 11 v3.0 + 9 v4.0)
 - Average duration: ~20 min
 - Total execution time: ~18 hours
 
@@ -43,6 +43,7 @@ Progress: [##############......] 78% (v4.0: 7/9 plans)
 | 17 (v3.0) | 3/3 | 4min | 1min |
 | 19 (v4.0) | 3/3 | 4min | 1min |
 | 20 (v4.0) | 4/4 | 8min | 2min |
+| 21 (v4.0) | 2/? | 4min | 2min |
 
 **Recent Trend:**
 - v3.0 averaged ~1-2 min per plan (prompt-only changes)
@@ -53,6 +54,8 @@ Progress: [##############......] 78% (v4.0: 7/9 plans)
 - v4.0 plan 05 (20-02): 2 min (6 state validation subcommands)
 - v4.0 plan 06 (20-03): 2 min (3 memory operation subcommands)
 - v4.0 plan 07 (20-04): 2 min (4 error tracking subcommands, all 18 verified)
+- v4.0 plan 08 (21-01): 2 min (phase plan creation for command integration)
+- v4.0 plan 09 (21-02): 2 min (pheromone math integration in 6 worker specs)
 
 *Updated after each plan completion*
 
@@ -87,6 +90,8 @@ Progress: [##############......] 78% (v4.0: 7/9 plans)
 - continue.md Phase Completion Summary (Step 3) is display-only retrospective, distinct from Step 8 prospective display
 - Bayesian spawn tracking: alpha/beta in COLONY_STATE.json, confidence = alpha/(alpha+beta), advisory not blocking
 - Spawn confidence thresholds: >=0.5 go, 0.3-0.5 caution, <0.3 prefer alternative
+- Worker spec Bash tool invocation uses Run/Result format for worked examples
+- Spawning scenario inline math also updated to Bash tool invocations for consistency
 
 **v4.0 decisions:**
 - Hybrid architecture: prompts for reasoning, shell for deterministic ops
@@ -127,9 +132,9 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-03
-Stopped at: Phase 20 verified. Ready for Phase 21: Command Integration.
+Stopped at: Completed 21-02-PLAN.md (pheromone math integration in 6 worker specs)
 Resume file: None
 
 ---
 
-*State updated: 2026-02-03 after Phase 20 verification (5/5 must-haves passed, 18 subcommands verified)*
+*State updated: 2026-02-03 after 21-02 completion (pheromone math -> pheromone-effective in all 6 worker specs)*
