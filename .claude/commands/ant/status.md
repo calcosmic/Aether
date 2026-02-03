@@ -27,6 +27,15 @@ Colony not initialized.
 
 Stop here.
 
+**Validation:** After reading each state file, verify the content is valid JSON. If any file contains invalid JSON (corrupted data), output an error message:
+
+```
+  WARNING: <filename> contains invalid data.
+  Recovery: Run /ant:init to reinitialize state files.
+```
+
+Continue displaying status for the files that are valid. Skip sections for corrupted files.
+
 ### Step 2: Compute Pheromone Decay
 
 For each signal in `pheromones.json`, compute current strength:
@@ -35,7 +44,24 @@ For each signal in `pheromones.json`, compute current strength:
 2. Otherwise: `current_strength = strength * e^(-0.693 * elapsed_seconds / half_life_seconds)`
 3. Mark signals below 0.05 strength as expired
 
+### Step 2.5: Clean Expired Pheromones
+
+If any signals were marked as expired in Step 2 (current_strength < 0.05), remove them from the `signals` array and use the Write tool to write the cleaned `pheromones.json` back to disk. This ensures expired signals are garbage-collected during normal status checks.
+
+If no signals are expired, skip this step (do not rewrite the file unnecessarily).
+
 ### Step 3: Display Status
+
+Show step progress at the start of output:
+
+```
+  ✓ Step 1: Read State
+  ✓ Step 2: Compute Pheromone Decay
+  ✓ Step 2.5: Clean Expired Pheromones
+  ✓ Step 3: Display Status
+```
+
+Then output the status display below.
 
 Output this header (filling in values from `COLONY_STATE.json`):
 
