@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-02-03)
 
 Milestone: v4.0 Hybrid Foundation
 Phase: 19 of 21 (Audit Fixes + Utility Scaffold)
-Plan: Not started
-Status: Roadmap created, awaiting plan-phase
-Last activity: 2026-02-03 -- v4.0 roadmap created (3 phases, 38 requirements mapped)
+Plan: 1 of 3 complete
+Status: In progress
+Last activity: 2026-02-03 -- Completed 19-01-PLAN.md (canonical v3 state schema)
 
-Progress: [....................] 0% (v4.0: 0/9 plans)
+Progress: [##..................] 11% (v4.0: 1/9 plans)
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -25,7 +25,7 @@ Progress: [....................] 0% (v4.0: 0/9 plans)
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 61 (44 v1.0 + 6 v2.0 + 11 v3.0)
+- Total plans completed: 62 (44 v1.0 + 6 v2.0 + 11 v3.0 + 1 v4.0)
 - Average duration: ~20 min
 - Total execution time: ~18 hours
 
@@ -41,10 +41,11 @@ Progress: [....................] 0% (v4.0: 0/9 plans)
 | 15 (v3.0) | 3/3 | 4min | 1min |
 | 16 (v3.0) | 3/3 | 6min | 2min |
 | 17 (v3.0) | 3/3 | 4min | 1min |
+| 19 (v4.0) | 1/3 | 1min | 1min |
 
 **Recent Trend:**
 - v3.0 averaged ~1-2 min per plan (prompt-only changes)
-- v4.0 will involve actual shell scripts -- expect longer per plan
+- v4.0 plan 01: 1 min (schema canonicalization + field fix)
 
 *Updated after each plan completion*
 
@@ -87,6 +88,8 @@ Progress: [....................] 0% (v4.0: 0/9 plans)
 - Total utility code stays under 300 lines
 - Fix all 11 audit issues before building new modules
 - Audit fixes + scaffold first (Phase 19), then modules (Phase 20), then integration (Phase 21)
+- spawn_outcomes added to canonical COLONY_STATE.json reset state (was missing from working copy)
+- Pheromone auto-emit templates get id field using auto_<unix_timestamp>_<4_random_hex> pattern
 
 ### Pending Todos
 
@@ -107,10 +110,10 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-03
-Stopped at: v4.0 roadmap created -- 3 phases (19-21), 38 requirements mapped, ready for plan-phase 19
+Last session: 2026-02-03T16:39:39Z
+Stopped at: Completed 19-01-PLAN.md (canonical v3 state schema, FIX-01/02/03/07/09)
 Resume file: None
 
 ---
 
-*State updated: 2026-02-03 after v4.0 roadmap creation*
+*State updated: 2026-02-03 after 19-01 plan completion*
