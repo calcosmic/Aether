@@ -17,11 +17,11 @@ Requirements for v4.1 Cleanup & Enforcement. Each maps to roadmap phases.
 
 ### Enforcement
 
-- [ ] **ENFO-01**: Add spawn-check subcommand to aether-utils.sh — reads COLONY_STATE.json, checks worker count (<= 5) and spawn depth (<= 3), returns pass/fail JSON
-- [ ] **ENFO-02**: Update all 6 worker specs to call spawn-check before spawning — hard gate that prevents spawn if check fails
-- [ ] **ENFO-03**: Add pheromone-validate subcommand to aether-utils.sh — checks non-empty content, minimum length (>= 20 chars), returns pass/fail JSON
-- [ ] **ENFO-04**: Update continue.md auto-pheromone step to call pheromone-validate before writing pheromone
-- [ ] **ENFO-05**: Add post-action validation checklist to worker specs — deterministic checks (state validated, spawn limits checked) that workers must complete before reporting done
+- [x] **ENFO-01**: Add spawn-check subcommand to aether-utils.sh — reads COLONY_STATE.json, checks worker count (<= 5) and spawn depth (<= 3), returns pass/fail JSON
+- [x] **ENFO-02**: Update all 6 worker specs to call spawn-check before spawning — hard gate that prevents spawn if check fails
+- [x] **ENFO-03**: Add pheromone-validate subcommand to aether-utils.sh — checks non-empty content, minimum length (>= 20 chars), returns pass/fail JSON
+- [x] **ENFO-04**: Update continue.md auto-pheromone step to call pheromone-validate before writing pheromone
+- [x] **ENFO-05**: Add post-action validation checklist to worker specs — deterministic checks (state validated, spawn limits checked) that workers must complete before reporting done
 
 ## v2 Requirements
 
@@ -52,11 +52,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CLEAN-03 | Phase 22 | Complete |
 | CLEAN-04 | Phase 22 | Complete |
 | CLEAN-05 | Phase 22 | Complete |
-| ENFO-01 | Phase 23 | Pending |
-| ENFO-02 | Phase 23 | Pending |
-| ENFO-03 | Phase 23 | Pending |
-| ENFO-04 | Phase 23 | Pending |
-| ENFO-05 | Phase 23 | Pending |
+| ENFO-01 | Phase 23 | Complete |
+| ENFO-02 | Phase 23 | Complete |
+| ENFO-03 | Phase 23 | Complete |
+| ENFO-04 | Phase 23 | Complete |
+| ENFO-05 | Phase 23 | Complete |
 
 **Coverage:**
 - v1 requirements: 10 total
@@ -65,4 +65,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-03*
-*Last updated: 2026-02-03 after roadmap creation*
+*Last updated: 2026-02-03 after Phase 23 completion*

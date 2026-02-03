@@ -6,7 +6,7 @@
 - v2.0 Event & Visual -- Phases 11-13 (shipped 2026-02-02)
 - v3.0 Rebuild -- Phases 14-18 (shipped 2026-02-03)
 - v4.0 Hybrid Foundation -- Phases 19-21 (shipped 2026-02-03)
-- **v4.1 Cleanup & Enforcement** -- Phases 22-23 (in progress)
+- **v4.1 Cleanup & Enforcement** -- Phases 22-23 (shipped 2026-02-03)
 
 ## Overview
 
@@ -15,7 +15,7 @@ v4.1 closes the gap between what aether-utils.sh provides and what commands/spec
 ## Phases
 
 - [x] **Phase 22: Cleanup** - Wire orphaned subcommands into commands, remove dead ones, eliminate inline formulas
-- [ ] **Phase 23: Enforcement** - Add spawn-check and pheromone-validate subcommands, enforce spec compliance
+- [x] **Phase 23: Enforcement** - Add spawn-check and pheromone-validate subcommands, enforce spec compliance
 
 ## Phase Details
 
@@ -48,8 +48,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 23-01-PLAN.md -- Add spawn-check and pheromone-validate subcommands to aether-utils.sh (ENFO-01, ENFO-03)
-- [ ] 23-02-PLAN.md -- Wire enforcement gates into worker specs, continue.md, and build.md (ENFO-02, ENFO-04, ENFO-05)
+- [x] 23-01-PLAN.md -- Add spawn-check and pheromone-validate subcommands to aether-utils.sh (ENFO-01, ENFO-03)
+- [x] 23-02-PLAN.md -- Wire enforcement gates into worker specs, continue.md, and build.md (ENFO-02, ENFO-04, ENFO-05)
 
 ## Progress
 
@@ -58,7 +58,7 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 22. Cleanup | v4.1 | 2/2 | ✓ Complete | 2026-02-03 |
-| 23. Enforcement | v4.1 | 0/2 | Not started | - |
+| 23. Enforcement | v4.1 | 2/2 | ✓ Complete | 2026-02-03 |
 
 ---
 *Roadmap created: 2026-02-03*
