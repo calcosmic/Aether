@@ -52,23 +52,23 @@ Requirements for restoring the sophistication, visual identity, and depth lost d
 
 ### Enhanced Dashboard
 
-- [ ] **DASH-01**: status.md shows full colony health with workers, pheromones, errors, memory, events
-- [ ] **DASH-02**: Pheromone section shows each active signal with computed decay bar
-- [ ] **DASH-03**: Error section shows recent errors and flagged patterns from errors.json
-- [ ] **DASH-04**: Memory section shows recent learnings from memory.json
+- [x] **DASH-01**: status.md shows full colony health with workers, pheromones, errors, memory, events
+- [x] **DASH-02**: Pheromone section shows each active signal with computed decay bar
+- [x] **DASH-03**: Error section shows recent errors and flagged patterns from errors.json
+- [x] **DASH-04**: Memory section shows recent learnings from memory.json
 
 ### Phase Review
 
-- [ ] **REV-01**: continue.md shows phase completion summary before advancing
-- [ ] **REV-02**: Phase review shows tasks completed, key decisions, errors encountered
-- [ ] **REV-03**: Learning extraction stores insights to memory.json before phase transition
+- [x] **REV-01**: continue.md shows phase completion summary before advancing
+- [x] **REV-02**: Phase review shows tasks completed, key decisions, errors encountered
+- [x] **REV-03**: Learning extraction stores insights to memory.json before phase transition
 
 ### Spawn Tracking
 
-- [ ] **SPAWN-01**: COLONY_STATE.json includes spawn_outcomes field per caste
-- [ ] **SPAWN-02**: build.md records spawn events when Phase Lead is spawned
-- [ ] **SPAWN-03**: continue.md records spawn success/failure on phase completion
-- [ ] **SPAWN-04**: Workers check spawn history confidence before spawning (alpha / (alpha + beta))
+- [x] **SPAWN-01**: COLONY_STATE.json includes spawn_outcomes field per caste
+- [x] **SPAWN-02**: build.md records spawn events when Phase Lead is spawned
+- [x] **SPAWN-03**: continue.md records spawn success/failure on phase completion
+- [x] **SPAWN-04**: Workers check spawn history confidence before spawning (alpha / (alpha + beta))
 
 ## v3.x Requirements
 
@@ -126,17 +126,17 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SPEC-03 | Phase 16 | Complete |
 | SPEC-04 | Phase 16 | Complete |
 | SPEC-05 | Phase 16 | Complete |
-| DASH-01 | Phase 17 | Pending |
-| DASH-02 | Phase 17 | Pending |
-| DASH-03 | Phase 17 | Pending |
-| DASH-04 | Phase 17 | Pending |
-| REV-01 | Phase 17 | Pending |
-| REV-02 | Phase 17 | Pending |
-| REV-03 | Phase 17 | Pending |
-| SPAWN-01 | Phase 17 | Pending |
-| SPAWN-02 | Phase 17 | Pending |
-| SPAWN-03 | Phase 17 | Pending |
-| SPAWN-04 | Phase 17 | Pending |
+| DASH-01 | Phase 17 | Complete |
+| DASH-02 | Phase 17 | Complete |
+| DASH-03 | Phase 17 | Complete |
+| DASH-04 | Phase 17 | Complete |
+| REV-01 | Phase 17 | Complete |
+| REV-02 | Phase 17 | Complete |
+| REV-03 | Phase 17 | Complete |
+| SPAWN-01 | Phase 17 | Complete |
+| SPAWN-02 | Phase 17 | Complete |
+| SPAWN-03 | Phase 17 | Complete |
+| SPAWN-04 | Phase 17 | Complete |
 
 **Coverage:**
 - v3.0 requirements: 36 total
@@ -146,4 +146,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 ---
 
 *Requirements defined: 2026-02-03*
-*Last updated: 2026-02-03 after Phase 16 completion*
+*Last updated: 2026-02-03 after Phase 17 completion — all v3.0 requirements complete*

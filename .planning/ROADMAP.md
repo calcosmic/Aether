@@ -8,7 +8,7 @@ Aether delivers autonomous emergence through Claude-native skill prompts, JSON s
 
 - ✅ **v1.0 Queen Ant Colony** — Phases 3-10 (shipped 2026-02-02)
 - ✅ **v2.0 Reactive Event Integration** — Phases 11-13 (shipped 2026-02-02)
-- 🚧 **v3.0 Restore the Soul** — Phases 14-17 (in progress)
+- ✅ **v3.0 Restore the Soul** — Phases 14-17 (shipped 2026-02-03)
 
 ## Phases
 
@@ -51,14 +51,14 @@ Aether delivers autonomous emergence through Claude-native skill prompts, JSON s
 
 </details>
 
-### 🚧 v3.0 Restore the Soul (In Progress)
+### ✅ v3.0 Restore the Soul (Shipped 2026-02-03)
 
 **Milestone Goal:** Restore the sophistication, visual identity, and depth lost during the Claude-native rebuild. No new Python, no new bash scripts, no new commands — restore capabilities through JSON state, enriched command prompts, and deeper worker specs.
 
 - [x] **Phase 14: Visual Identity** — Commands display rich formatted output with box-drawing, progress indicators, and grouped visual elements
 - [x] **Phase 15: Infrastructure State** — JSON state files for errors, memory, and events integrated into core commands
 - [x] **Phase 16: Worker Knowledge** — Deep worker specs with pheromone math, specialist watcher modes, and spawning scenarios
-- [ ] **Phase 17: Integration & Dashboard** — Unified status dashboard, phase review, and spawn outcome tracking
+- [x] **Phase 17: Integration & Dashboard** — Unified status dashboard, phase review, and spawn outcome tracking
 
 ## Phase Details
 
@@ -150,9 +150,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 17-01: Rebuild status.md as a full colony health dashboard reading all JSON state files
-- [ ] 17-02: Add phase review workflow to continue.md showing completion summary and learning extraction
-- [ ] 17-03: Add spawn outcome tracking to COLONY_STATE.json, build.md, and continue.md with Bayesian confidence
+- [x] 17-01: Rebuild status.md as a full colony health dashboard reading all JSON state files
+- [x] 17-02: Add phase review workflow to continue.md showing completion summary and learning extraction
+- [x] 17-03: Add spawn outcome tracking to COLONY_STATE.json, build.md, and continue.md with Bayesian confidence
 
 ## Progress
 
@@ -168,7 +168,7 @@ Phases execute in numeric order: 14 -> 15 -> 16 -> 17
 | 14. Visual Identity | v3.0 | 2/2 | Complete | 2026-02-03 |
 | 15. Infrastructure State | v3.0 | 3/3 | Complete | 2026-02-03 |
 | 16. Worker Knowledge | v3.0 | 3/3 | Complete | 2026-02-03 |
-| 17. Integration & Dashboard | v3.0 | 0/3 | Not started | - |
+| 17. Integration & Dashboard | v3.0 | 3/3 | Complete | 2026-02-03 |
 
 ---
 
