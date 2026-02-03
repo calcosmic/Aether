@@ -35,7 +35,7 @@ shift 2>/dev/null || true
 case "$cmd" in
   help)
     cat <<'EOF'
-{"ok":true,"commands":["help","version","pheromone-decay","pheromone-effective","pheromone-batch","pheromone-cleanup","pheromone-combine","validate-state","memory-token-count","memory-compress","memory-search","error-add","error-pattern-check","error-summary","error-dedup"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
+{"ok":true,"commands":["help","version","pheromone-decay","pheromone-effective","pheromone-batch","pheromone-cleanup","validate-state","memory-compress","error-add","error-pattern-check","error-summary"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
 EOF
     ;;
   version)
@@ -72,14 +72,6 @@ EOF
     atomic_write "$DATA_DIR/pheromones.json" "$result"
     after=$(echo "$result" | jq '.signals | length')
     json_ok "{\"removed\":$((before - after)),\"remaining\":$after}"
-    ;;
-  pheromone-combine)
-    [[ $# -ge 2 ]] || json_err "Usage: pheromone-combine <signal1_strength> <signal2_strength>"
-    json_ok "$(jq -n --arg s1 "$1" --arg s2 "$2" '{
-      net_effect: ((($s1|tonumber) - ($s2|tonumber)) | if . < 0 then 0 else . end | . * 1000 | round / 1000),
-      dominant: (if ($s1|tonumber) >= ($s2|tonumber) then "signal1" else "signal2" end),
-      ratio: (if ($s2|tonumber) == 0 then null else (($s1|tonumber) / ($s2|tonumber)) | . * 1000 | round / 1000 end)
-    }')"
     ;;
   validate-state)
     case "${1:-}" in
@@ -157,10 +149,6 @@ EOF
         ;;
     esac
     ;;
-  memory-token-count)
-    [[ -f "$DATA_DIR/memory.json" ]] || json_err "memory.json not found"
-    json_ok "$(jq '{tokens: ([.. | strings] | join(" ") | split(" ") | length | . * 1.3 | floor)}' "$DATA_DIR/memory.json")"
-    ;;
   memory-compress)
     [[ -f "$DATA_DIR/memory.json" ]] || json_err "memory.json not found"
     threshold="${1:-10000}"
@@ -177,18 +165,6 @@ EOF
     atomic_write "$DATA_DIR/memory.json" "$result"
     tokens=$(echo "$result" | jq '[.. | strings] | join(" ") | split(" ") | length | . * 1.3 | floor')
     json_ok "{\"compressed\":true,\"tokens\":$tokens}"
-    ;;
-  memory-search)
-    [[ $# -ge 1 ]] || json_err "Usage: memory-search <keyword>"
-    [[ -f "$DATA_DIR/memory.json" ]] || json_err "memory.json not found"
-    json_ok "$(jq --arg kw "$1" '
-      ($kw | ascii_downcase) as $k |
-      {
-        phase_learnings: [.phase_learnings[]? | select(tostring | ascii_downcase | contains($k))],
-        decisions: [.decisions[]? | select(tostring | ascii_downcase | contains($k))],
-        patterns: [.patterns[]? | select(tostring | ascii_downcase | contains($k))]
-      }
-    ' "$DATA_DIR/memory.json")"
     ;;
   error-add)
     [[ $# -ge 3 ]] || json_err "Usage: error-add <category> <severity> <description>"
@@ -218,22 +194,6 @@ EOF
       by_category: (.errors | group_by(.category) | map({key: .[0].category, value: length}) | from_entries),
       by_severity: (.errors | group_by(.severity) | map({key: .[0].severity, value: length}) | from_entries)
     }' "$DATA_DIR/errors.json")"
-    ;;
-  error-dedup)
-    [[ -f "$DATA_DIR/errors.json" ]] || json_err "errors.json not found"
-    before=$(jq '.errors | length' "$DATA_DIR/errors.json")
-    result=$(jq '
-      .errors |= (group_by(.category + "|" + .description) | map(
-        sort_by(.timestamp) | . as $grp |
-        [$grp[0]] + [$grp[range(1;length)] | select(
-          (.timestamp | sub("\\.[0-9]+Z$";"Z") | fromdate) -
-          ($grp[0].timestamp | sub("\\.[0-9]+Z$";"Z") | fromdate) > 60
-        )]
-      ) | flatten)
-    ' "$DATA_DIR/errors.json") || json_err "Failed to process errors.json"
-    atomic_write "$DATA_DIR/errors.json" "$result"
-    after=$(echo "$result" | jq '.errors | length')
-    json_ok "{\"removed\":$((before - after)),\"remaining\":$after}"
     ;;
   *)
     json_err "Unknown command: $cmd"
