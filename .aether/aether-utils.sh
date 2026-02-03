@@ -35,7 +35,7 @@ shift 2>/dev/null || true
 case "$cmd" in
   help)
     cat <<'EOF'
-{"ok":true,"commands":["help","version","pheromone-decay","pheromone-effective","pheromone-batch","pheromone-cleanup","pheromone-combine"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
+{"ok":true,"commands":["help","version","pheromone-decay","pheromone-effective","pheromone-batch","pheromone-cleanup","pheromone-combine","validate-state"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
 EOF
     ;;
   version)
@@ -80,6 +80,82 @@ EOF
       dominant: (if ($s1|tonumber) >= ($s2|tonumber) then "signal1" else "signal2" end),
       ratio: (if ($s2|tonumber) == 0 then null else (($s1|tonumber) / ($s2|tonumber)) | . * 1000 | round / 1000 end)
     }')"
+    ;;
+  validate-state)
+    case "${1:-}" in
+      colony)
+        [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "COLONY_STATE.json not found"
+        json_ok "$(jq '
+          def chk(f;t): if has(f) then (if (.[f]|type) as $a | t | any(. == $a) then "pass" else "fail: \(f) is \(.[f]|type), expected \(t|join("|"))" end) else "fail: missing \(f)" end;
+          {file:"COLONY_STATE.json", checks:[
+            chk("goal";["null","string"]),
+            chk("state";["string"]),
+            chk("current_phase";["number"]),
+            chk("workers";["object"]),
+            chk("spawn_outcomes";["object"])
+          ]} | . + {pass: ([.checks[] | select(. == "pass")] | length) == (.checks | length)}
+        ' "$DATA_DIR/COLONY_STATE.json")"
+        ;;
+      pheromones)
+        [[ -f "$DATA_DIR/pheromones.json" ]] || json_err "pheromones.json not found"
+        json_ok "$(jq '
+          def arr(f): if has(f) and (.[f]|type) == "array" then "pass" else "fail: \(f) not array" end;
+          def sig: ["id","type","content","strength","created_at"] as $req | [. as $s | $req[] | select($s[.] == null)] |
+            if length == 0 then "pass" else "fail: signal missing \(join(","))" end;
+          {file:"pheromones.json", checks:[
+            arr("signals"),
+            (.signals | if length == 0 then "pass" else [.[] | sig] | map(select(. != "pass")) |
+              if length == 0 then "pass" else .[0] end end)
+          ]} | . + {pass: ([.checks[] | select(. == "pass")] | length) == (.checks | length)}
+        ' "$DATA_DIR/pheromones.json")"
+        ;;
+      errors)
+        [[ -f "$DATA_DIR/errors.json" ]] || json_err "errors.json not found"
+        json_ok "$(jq '
+          def arr(f): if has(f) and (.[f]|type) == "array" then "pass" else "fail: \(f) not array" end;
+          def erchk: ["id","category","severity","description","timestamp"] as $req | [. as $e | $req[] | select($e[.] == null)] |
+            if length == 0 then "pass" else "fail: error missing \(join(","))" end;
+          {file:"errors.json", checks:[
+            arr("errors"), arr("flagged_patterns"),
+            (.errors | if length == 0 then "pass" else [.[] | erchk] | map(select(. != "pass")) |
+              if length == 0 then "pass" else .[0] end end)
+          ]} | . + {pass: ([.checks[] | select(. == "pass")] | length) == (.checks | length)}
+        ' "$DATA_DIR/errors.json")"
+        ;;
+      memory)
+        [[ -f "$DATA_DIR/memory.json" ]] || json_err "memory.json not found"
+        json_ok "$(jq '
+          def arr(f): if has(f) and (.[f]|type) == "array" then "pass" else "fail: \(f) not array" end;
+          {file:"memory.json", checks:[arr("phase_learnings"), arr("decisions"), arr("patterns")]}
+          | . + {pass: ([.checks[] | select(. == "pass")] | length) == (.checks | length)}
+        ' "$DATA_DIR/memory.json")"
+        ;;
+      events)
+        [[ -f "$DATA_DIR/events.json" ]] || json_err "events.json not found"
+        json_ok "$(jq '
+          def arr(f): if has(f) and (.[f]|type) == "array" then "pass" else "fail: \(f) not array" end;
+          def evchk: ["id","type","source","content","timestamp"] as $req | [. as $e | $req[] | select($e[.] == null)] |
+            if length == 0 then "pass" else "fail: event missing \(join(","))" end;
+          {file:"events.json", checks:[
+            arr("events"),
+            (.events | if length == 0 then "pass" else [.[] | evchk] | map(select(. != "pass")) |
+              if length == 0 then "pass" else .[0] end end)
+          ]} | . + {pass: ([.checks[] | select(. == "pass")] | length) == (.checks | length)}
+        ' "$DATA_DIR/events.json")"
+        ;;
+      all)
+        results=()
+        for target in colony pheromones errors memory events; do
+          results+=("$(bash "$SCRIPT_DIR/aether-utils.sh" validate-state "$target" 2>/dev/null || echo '{"ok":false}')")
+        done
+        combined=$(printf '%s\n' "${results[@]}" | jq -s '[.[] | .result // {file:"unknown",pass:false}]')
+        all_pass=$(echo "$combined" | jq 'all(.pass)')
+        json_ok "{\"pass\":$all_pass,\"files\":$combined}"
+        ;;
+      *)
+        json_err "Usage: validate-state colony|pheromones|errors|memory|events|all"
+        ;;
+    esac
     ;;
   *)
     json_err "Unknown command: $cmd"
