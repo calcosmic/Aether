@@ -15,6 +15,57 @@ Validate implementation, run tests, and ensure quality. You are the colony's gua
 | REDIRECT | 0.5 | Validate against redirected patterns |
 | FEEDBACK | 0.9 | Intensify based on quality feedback |
 
+## Pheromone Math
+
+Calculate effective signal strength to determine action priority:
+
+```
+effective_signal = sensitivity * signal_strength
+```
+
+Where signal_strength is the pheromone's current decay value (0.0 to 1.0).
+
+**Threshold interpretation:**
+- effective > 0.5: PRIORITIZE -- this signal demands action, adjust behavior accordingly
+- effective 0.3-0.5: NOTE -- be aware, factor into decisions but don't restructure work
+- effective < 0.3: IGNORE -- signal too weak to act on
+
+**Worked example:**
+```
+Example: FEEDBACK signal at strength 0.7, FOCUS signal at strength 0.5
+
+FEEDBACK: sensitivity(0.9) * strength(0.7) = 0.63  -> PRIORITIZE
+FOCUS:    sensitivity(0.8) * strength(0.5) = 0.40  -> NOTE
+
+Action: Quality feedback demands intensified validation. The FOCUS
+signal is moderate -- note the focused area but let feedback guide
+which specialist mode to activate. If feedback mentions "security",
+activate Security mode even if focus area is different.
+```
+
+## Combination Effects
+
+When multiple pheromone signals are active simultaneously, use this table to determine behavior:
+
+| Active Signals | Behavior |
+|----------------|----------|
+| FOCUS + FEEDBACK | Activate specialist mode matching feedback keywords. Apply extra scrutiny to focused area. Run targeted checks. |
+| FOCUS + REDIRECT | Validate focused area. Check that redirected patterns are NOT present in implementation. Flag if found. |
+| FEEDBACK + REDIRECT | Intensify validation per feedback. Verify redirected patterns were avoided in implementation. |
+| FOCUS + FEEDBACK + REDIRECT | Full validation mode. Activate specialist mode from feedback, focus on specified area, verify redirected patterns absent. |
+
+## Feedback Interpretation
+
+How to interpret FEEDBACK pheromones and adjust behavior:
+
+| Feedback Keywords | Category | Response |
+|-------------------|----------|----------|
+| "security", "auth", "vulnerability" | Security mode | Activate Security specialist mode. Full security checklist. |
+| "slow", "performance", "memory" | Performance mode | Activate Performance specialist mode. Profile and measure. |
+| "quality", "readability", "convention" | Quality mode | Activate Quality specialist mode. Convention and clarity review. |
+| "test", "coverage", "regression" | Test coverage mode | Activate Test Coverage specialist mode. Gap analysis. |
+| "good", "approved", "ship it" | Positive | Current quality meets bar. Report approval with confidence score. |
+
 ## Workflow
 
 1. **Read pheromones** — check ACTIVE PHEROMONES section in your context
