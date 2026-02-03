@@ -16,33 +16,33 @@ Requirements for adding a thin shell utility layer and fixing all audit-identifi
 
 ### Pheromone Math
 
-- [ ] **PHER-01**: `pheromone-decay <strength> <elapsed_seconds> <half_life>` computes current strength using exponential decay formula
-- [ ] **PHER-02**: `pheromone-effective <sensitivity> <strength>` computes effective signal (sensitivity × strength)
-- [ ] **PHER-03**: `pheromone-batch` reads pheromones.json and outputs all signals with current computed strengths
-- [ ] **PHER-04**: `pheromone-cleanup` removes expired signals (strength < 0.05) from pheromones.json
-- [ ] **PHER-05**: `pheromone-combine <signal1_strength> <signal2_strength>` computes combination effect for conflicting signals
+- [x] **PHER-01**: `pheromone-decay <strength> <elapsed_seconds> <half_life>` computes current strength using exponential decay formula
+- [x] **PHER-02**: `pheromone-effective <sensitivity> <strength>` computes effective signal (sensitivity × strength)
+- [x] **PHER-03**: `pheromone-batch` reads pheromones.json and outputs all signals with current computed strengths
+- [x] **PHER-04**: `pheromone-cleanup` removes expired signals (strength < 0.05) from pheromones.json
+- [x] **PHER-05**: `pheromone-combine <signal1_strength> <signal2_strength>` computes combination effect for conflicting signals
 
 ### State Validation
 
-- [ ] **VALID-01**: `validate-state colony` validates COLONY_STATE.json against expected schema (required fields, types)
-- [ ] **VALID-02**: `validate-state pheromones` validates pheromones.json (signal array structure, required fields per signal)
-- [ ] **VALID-03**: `validate-state errors` validates errors.json (error record structure, valid categories, severity levels)
-- [ ] **VALID-04**: `validate-state memory` validates memory.json (phase_learnings, decisions, patterns arrays)
-- [ ] **VALID-05**: `validate-state events` validates events.json (event record structure, valid types)
-- [ ] **VALID-06**: `validate-state all` runs all validators and reports aggregate pass/fail
+- [x] **VALID-01**: `validate-state colony` validates COLONY_STATE.json against expected schema (required fields, types)
+- [x] **VALID-02**: `validate-state pheromones` validates pheromones.json (signal array structure, required fields per signal)
+- [x] **VALID-03**: `validate-state errors` validates errors.json (error record structure, valid categories, severity levels)
+- [x] **VALID-04**: `validate-state memory` validates memory.json (phase_learnings, decisions, patterns arrays)
+- [x] **VALID-05**: `validate-state events` validates events.json (event record structure, valid types)
+- [x] **VALID-06**: `validate-state all` runs all validators and reports aggregate pass/fail
 
 ### Memory Operations
 
-- [ ] **MEM-01**: `memory-token-count` approximates token count of memory.json (word count × 1.3)
-- [ ] **MEM-02**: `memory-compress` removes oldest entries when token count exceeds threshold (default 10000)
-- [ ] **MEM-03**: `memory-search <keyword>` finds memory entries matching keyword across all arrays
+- [x] **MEM-01**: `memory-token-count` approximates token count of memory.json (word count × 1.3)
+- [x] **MEM-02**: `memory-compress` removes oldest entries when token count exceeds threshold (default 10000)
+- [x] **MEM-03**: `memory-search <keyword>` finds memory entries matching keyword across all arrays
 
 ### Error Tracking
 
-- [ ] **ERR-01**: `error-add <category> <severity> <description>` appends error with timestamp and auto-increment ID
-- [ ] **ERR-02**: `error-pattern-check` detects categories with 3+ occurrences and outputs flagged patterns
-- [ ] **ERR-03**: `error-summary` outputs counts by category and severity
-- [ ] **ERR-04**: `error-dedup` removes duplicate errors (same category + description within 60 seconds)
+- [x] **ERR-01**: `error-add <category> <severity> <description>` appends error with timestamp and auto-increment ID
+- [x] **ERR-02**: `error-pattern-check` detects categories with 3+ occurrences and outputs flagged patterns
+- [x] **ERR-03**: `error-summary` outputs counts by category and severity
+- [x] **ERR-04**: `error-dedup` removes duplicate errors (same category + description within 60 seconds)
 
 ### Audit Fixes — Critical
 
@@ -113,24 +113,24 @@ Deferred to future release. Tracked but not in current roadmap.
 | FIX-09 | Phase 19 | Complete |
 | FIX-10 | Phase 19 | Complete |
 | FIX-11 | Phase 19 | Complete |
-| PHER-01 | Phase 20 | Pending |
-| PHER-02 | Phase 20 | Pending |
-| PHER-03 | Phase 20 | Pending |
-| PHER-04 | Phase 20 | Pending |
-| PHER-05 | Phase 20 | Pending |
-| VALID-01 | Phase 20 | Pending |
-| VALID-02 | Phase 20 | Pending |
-| VALID-03 | Phase 20 | Pending |
-| VALID-04 | Phase 20 | Pending |
-| VALID-05 | Phase 20 | Pending |
-| VALID-06 | Phase 20 | Pending |
-| MEM-01 | Phase 20 | Pending |
-| MEM-02 | Phase 20 | Pending |
-| MEM-03 | Phase 20 | Pending |
-| ERR-01 | Phase 20 | Pending |
-| ERR-02 | Phase 20 | Pending |
-| ERR-03 | Phase 20 | Pending |
-| ERR-04 | Phase 20 | Pending |
+| PHER-01 | Phase 20 | Complete |
+| PHER-02 | Phase 20 | Complete |
+| PHER-03 | Phase 20 | Complete |
+| PHER-04 | Phase 20 | Complete |
+| PHER-05 | Phase 20 | Complete |
+| VALID-01 | Phase 20 | Complete |
+| VALID-02 | Phase 20 | Complete |
+| VALID-03 | Phase 20 | Complete |
+| VALID-04 | Phase 20 | Complete |
+| VALID-05 | Phase 20 | Complete |
+| VALID-06 | Phase 20 | Complete |
+| MEM-01 | Phase 20 | Complete |
+| MEM-02 | Phase 20 | Complete |
+| MEM-03 | Phase 20 | Complete |
+| ERR-01 | Phase 20 | Complete |
+| ERR-02 | Phase 20 | Complete |
+| ERR-03 | Phase 20 | Complete |
+| ERR-04 | Phase 20 | Complete |
 | INT-01 | Phase 21 | Pending |
 | INT-02 | Phase 21 | Pending |
 | INT-03 | Phase 21 | Pending |
@@ -144,4 +144,4 @@ Deferred to future release. Tracked but not in current roadmap.
 
 ---
 *Requirements defined: 2026-02-03*
-*Last updated: 2026-02-03 after Phase 19 completion*
+*Last updated: 2026-02-03 after Phase 20 completion*
