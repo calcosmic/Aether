@@ -13,6 +13,9 @@ Use the Read tool to read these files (in parallel):
 - `.aether/data/COLONY_STATE.json`
 - `.aether/data/pheromones.json`
 - `.aether/data/PROJECT_PLAN.json`
+- `.aether/data/errors.json`
+- `.aether/data/memory.json`
+- `.aether/data/events.json`
 
 If `COLONY_STATE.json` has `goal: null`, output `No colony initialized. Run /ant:init first.` and stop.
 
@@ -33,7 +36,37 @@ All phases complete. Colony has finished the project plan.
 
 Stop here.
 
-### Step 3: Clean Expired Pheromones
+### Step 3: Extract Phase Learnings
+
+Review the completed phase by analyzing:
+- Tasks completed in this phase (from PROJECT_PLAN.json -- look at the current phase's tasks)
+- Errors encountered during this phase (from errors.json -- filter by `phase` field matching current phase)
+- Events that occurred (from events.json -- recent events related to this phase)
+- Flagged patterns (from errors.json `flagged_patterns` array)
+
+Read `.aether/data/memory.json`. Append a phase learning entry to the `phase_learnings` array:
+
+```json
+{
+  "id": "learn_<unix_timestamp>_<4_random_hex>",
+  "phase": <current_phase_number>,
+  "phase_name": "<phase name from PROJECT_PLAN.json>",
+  "learnings": [
+    "<specific thing learned -- what worked, what didn't, what to remember>",
+    "<another specific learning>"
+  ],
+  "errors_encountered": <count of errors with this phase number>,
+  "timestamp": "<ISO-8601 UTC>"
+}
+```
+
+Learnings must be SPECIFIC and ACTIONABLE. Good: "TypeScript strict mode caught 12 type errors early." Bad: "Phase completed successfully." Draw from actual task outcomes, errors, and events -- not boilerplate.
+
+If the `phase_learnings` array exceeds 20 entries, remove the oldest entries to keep only 20.
+
+Use the Write tool to write the updated memory.json.
+
+### Step 4: Clean Expired Pheromones
 
 Compute current strength for each signal in `pheromones.json`:
 1. If `half_life_seconds` is null -> keep (persistent)
@@ -42,14 +75,42 @@ Compute current strength for each signal in `pheromones.json`:
 
 Use the Write tool to write the cleaned `pheromones.json` (keep only non-expired signals).
 
-### Step 4: Update Colony State
+### Step 5: Write Events
+
+Read `.aether/data/events.json`. Append two events to the `events` array:
+
+```json
+{
+  "id": "evt_<unix_timestamp>_<4_random_hex>",
+  "type": "learnings_extracted",
+  "source": "continue",
+  "content": "Extracted <N> learnings from Phase <id>: <name>",
+  "timestamp": "<ISO-8601 UTC>"
+}
+```
+
+```json
+{
+  "id": "evt_<unix_timestamp>_<4_random_hex>",
+  "type": "phase_advanced",
+  "source": "continue",
+  "content": "Advanced from Phase <current> to Phase <next>",
+  "timestamp": "<ISO-8601 UTC>"
+}
+```
+
+If the `events` array exceeds 100 entries, remove the oldest entries to keep only 100.
+
+Use the Write tool to write the updated events.json.
+
+### Step 6: Update Colony State
 
 Use the Write tool to update `COLONY_STATE.json`:
 - Set `current_phase` to the next phase number
 - Set `state` to `"READY"`
 - Set all workers to `"idle"`
 
-### Step 5: Display Result
+### Step 7: Display Result
 
 Output this header at the start of your response:
 
@@ -64,9 +125,11 @@ Then show step progress:
 ```
   ✓ Step 1: Read State
   ✓ Step 2: Determine Next Phase
-  ✓ Step 3: Clean Expired Pheromones
-  ✓ Step 4: Update Colony State
-  ✓ Step 5: Display Result
+  ✓ Step 3: Extract Phase Learnings
+  ✓ Step 4: Clean Expired Pheromones
+  ✓ Step 5: Write Events
+  ✓ Step 6: Update Colony State
+  ✓ Step 7: Display Result
 ```
 
 Then output a divider and the result:
@@ -81,6 +144,10 @@ Phase <current> approved. Advancing to Phase <next>.
 
   Tasks: <count>
   State: READY
+
+  Learnings Extracted:
+    - <learning 1>
+    - <learning 2>
 
 Next Steps:
   /ant:build <next>      Start building Phase <next>
