@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-02-03)
 
 **Core value:** Autonomous Emergence -- Worker Ants autonomously spawn Worker Ants; Queen provides signals not commands
-**Current focus:** v4.0 Hybrid Foundation -- Phase 20: Utility Modules (plan 03 complete)
+**Current focus:** v4.0 Hybrid Foundation -- Phase 20: Utility Modules COMPLETE. Ready for Phase 21: Integration
 
 ## Current Position
 
 Milestone: v4.0 Hybrid Foundation
-Phase: 20 of 21 (Utility Modules)
-Plan: 3 of 4 complete
-Status: In progress
-Last activity: 2026-02-03 -- Completed 20-03-PLAN.md (memory operation subcommands)
+Phase: 20 of 21 (Utility Modules) -- COMPLETE
+Plan: 4 of 4 complete
+Status: Phase complete -- ready for Phase 21 (Integration)
+Last activity: 2026-02-03 -- Completed 20-04-PLAN.md (error tracking subcommands)
 
-Progress: [###########.........] 67% (v4.0: 6/9 plans)
+Progress: [##############......] 78% (v4.0: 7/9 plans)
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -25,7 +25,7 @@ Progress: [###########.........] 67% (v4.0: 6/9 plans)
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 67 (44 v1.0 + 6 v2.0 + 11 v3.0 + 6 v4.0)
+- Total plans completed: 68 (44 v1.0 + 6 v2.0 + 11 v3.0 + 7 v4.0)
 - Average duration: ~20 min
 - Total execution time: ~18 hours
 
@@ -42,7 +42,7 @@ Progress: [###########.........] 67% (v4.0: 6/9 plans)
 | 16 (v3.0) | 3/3 | 6min | 2min |
 | 17 (v3.0) | 3/3 | 4min | 1min |
 | 19 (v4.0) | 3/3 | 4min | 1min |
-| 20 (v4.0) | 3/4 | 6min | 2min |
+| 20 (v4.0) | 4/4 | 8min | 2min |
 
 **Recent Trend:**
 - v3.0 averaged ~1-2 min per plan (prompt-only changes)
@@ -52,6 +52,7 @@ Progress: [###########.........] 67% (v4.0: 6/9 plans)
 - v4.0 plan 04 (20-01): 2 min (5 pheromone math subcommands)
 - v4.0 plan 05 (20-02): 2 min (6 state validation subcommands)
 - v4.0 plan 06 (20-03): 2 min (3 memory operation subcommands)
+- v4.0 plan 07 (20-04): 2 min (4 error tracking subcommands, all 18 verified)
 
 *Updated after each plan completion*
 
@@ -102,6 +103,9 @@ Progress: [###########.........] 67% (v4.0: 6/9 plans)
 - validate-state all uses recursive self-invocation for each target file
 - Token approximation: word count * 1.3 via jq recursive string descent
 - Two-pass memory compression: hard limits first (20/30), then token-threshold aggressive halving (10/15)
+- error-add accepts any string as category (no validation against 12 known categories)
+- error-dedup groups by category+description, keeps earliest, drops others within 60s window
+- jq from_entries requires {key, value} not {key, count} -- use `value:` field name
 
 ### Pending Todos
 
@@ -123,9 +127,9 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-03
-Stopped at: Completed 20-03-PLAN.md (memory operations). Ready for 20-04 (error tracking).
+Stopped at: Completed 20-04-PLAN.md (error tracking). Phase 20 complete. Ready for Phase 21 (Integration).
 Resume file: None
 
 ---
 
-*State updated: 2026-02-03 after 20-03 completion (3 memory subcommands: token-count, compress, search)*
+*State updated: 2026-02-03 after 20-04 completion (4 error subcommands: add, pattern-check, summary, dedup -- Phase 20 complete)*
