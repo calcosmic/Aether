@@ -35,7 +35,7 @@ shift 2>/dev/null || true
 case "$cmd" in
   help)
     cat <<'EOF'
-{"ok":true,"commands":["help","version","pheromone-decay","pheromone-effective","pheromone-batch","pheromone-cleanup","validate-state","memory-compress","error-add","error-pattern-check","error-summary"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
+{"ok":true,"commands":["help","version","pheromone-decay","pheromone-effective","pheromone-batch","pheromone-cleanup","pheromone-validate","validate-state","spawn-check","memory-compress","error-add","error-pattern-check","error-summary"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
 EOF
     ;;
   version)
@@ -72,6 +72,17 @@ EOF
     atomic_write "$DATA_DIR/pheromones.json" "$result"
     after=$(echo "$result" | jq '.signals | length')
     json_ok "{\"removed\":$((before - after)),\"remaining\":$after}"
+    ;;
+  pheromone-validate)
+    content="${1:-}"
+    len=${#content}
+    if [[ -z "$content" ]]; then
+      json_ok '{"pass":false,"reason":"empty","length":0,"min_length":20}'
+    elif [[ $len -lt 20 ]]; then
+      json_ok "{\"pass\":false,\"reason\":\"too_short\",\"length\":$len,\"min_length\":20}"
+    else
+      json_ok "{\"pass\":true,\"length\":$len,\"min_length\":20}"
+    fi
     ;;
   validate-state)
     case "${1:-}" in
@@ -194,6 +205,23 @@ EOF
       by_category: (.errors | group_by(.category) | map({key: .[0].category, value: length}) | from_entries),
       by_severity: (.errors | group_by(.severity) | map({key: .[0].severity, value: length}) | from_entries)
     }' "$DATA_DIR/errors.json")"
+    ;;
+  spawn-check)
+    depth="${1:-1}"
+    [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "COLONY_STATE.json not found"
+    json_ok "$(jq --arg d "$depth" '
+      (.workers | to_entries | map(select(.value != "idle")) | length) as $active |
+      ($d | tonumber) as $depth |
+      {
+        pass: ($active < 5 and $depth < 3),
+        active_workers: $active,
+        max_workers: 5,
+        current_depth: $depth,
+        max_depth: 3
+      } | if .pass == false then
+        . + {reason: (if $active >= 5 then "worker_limit" elif $depth >= 3 then "depth_limit" else "unknown" end)}
+      else . end
+    ' "$DATA_DIR/COLONY_STATE.json")"
     ;;
   *)
     json_err "Unknown command: $cmd"
