@@ -2,18 +2,19 @@
 
 ## Overview
 
-Aether delivers autonomous emergence through Claude-native skill prompts, JSON state, and recursive worker spawning. v1.0 built the foundation (phases 3-10), v2.0 added reactive event integration (phases 11-13), and v3.0 restores the sophistication lost during the Claude-native rebuild — visual identity, deep worker knowledge, infrastructure state, and an integrated dashboard that makes emergence visible.
+Aether delivers autonomous emergence through Claude-native skill prompts, JSON state, and recursive worker spawning. v1.0 built the foundation (phases 3-10), v2.0 added reactive event integration (phases 11-13), v3.0 restored sophistication lost during the rebuild (phases 14-17), and v4.0 adds a thin shell utility layer for deterministic operations while fixing all audit-identified issues.
 
 ## Milestones
 
 - ✅ **v1.0 Queen Ant Colony** — Phases 3-10 (shipped 2026-02-02)
 - ✅ **v2.0 Reactive Event Integration** — Phases 11-13 (shipped 2026-02-02)
 - ✅ **v3.0 Restore the Soul** — Phases 14-17 (shipped 2026-02-03)
+- **v4.0 Hybrid Foundation** — Phases 19-21
 
 ## Phases
 
 <details>
-<summary>✅ v1.0 Queen Ant Colony (Phases 3-10) — SHIPPED 2026-02-02</summary>
+<summary>v1.0 Queen Ant Colony (Phases 3-10) — SHIPPED 2026-02-02</summary>
 
 **Full details archived in:** .planning/milestones/v1-ROADMAP.md
 
@@ -29,7 +30,7 @@ Aether delivers autonomous emergence through Claude-native skill prompts, JSON s
 </details>
 
 <details>
-<summary>✅ v2.0 Reactive Event Integration (Phases 11-13) — SHIPPED 2026-02-02</summary>
+<summary>v2.0 Reactive Event Integration (Phases 11-13) — SHIPPED 2026-02-02</summary>
 
 **Summary:**
 - 3 phases (11-13), 6 plans
@@ -51,7 +52,8 @@ Aether delivers autonomous emergence through Claude-native skill prompts, JSON s
 
 </details>
 
-### ✅ v3.0 Restore the Soul (Shipped 2026-02-03)
+<details>
+<summary>v3.0 Restore the Soul (Phases 14-17) — SHIPPED 2026-02-03</summary>
 
 **Milestone Goal:** Restore the sophistication, visual identity, and depth lost during the Claude-native rebuild. No new Python, no new bash scripts, no new commands — restore capabilities through JSON state, enriched command prompts, and deeper worker specs.
 
@@ -59,8 +61,6 @@ Aether delivers autonomous emergence through Claude-native skill prompts, JSON s
 - [x] **Phase 15: Infrastructure State** — JSON state files for errors, memory, and events integrated into core commands
 - [x] **Phase 16: Worker Knowledge** — Deep worker specs with pheromone math, specialist watcher modes, and spawning scenarios
 - [x] **Phase 17: Integration & Dashboard** — Unified status dashboard, phase review, and spawn outcome tracking
-
-## Phase Details
 
 ### Phase 14: Visual Identity
 
@@ -76,11 +76,7 @@ Aether delivers autonomous emergence through Claude-native skill prompts, JSON s
 3. Pheromone display shows each active signal with a computed decay strength bar reflecting time-based decay
 4. Worker listing groups ants by status (active, idle, error) with distinct emoji indicators for each group
 
-**Plans**: 2 plans
-
-Plans:
-- [x] 14-01: Add box-drawing headers and step progress indicators to command prompts (init.md, build.md, continue.md, status.md, phase.md)
-- [x] 14-02: Add pheromone decay bar rendering and worker activity grouping to status-displaying commands
+**Plans**: 2/2 complete
 
 ---
 
@@ -99,12 +95,7 @@ Plans:
 4. Running `/ant:continue` at a phase boundary extracts learnings and stores them in memory.json before advancing
 5. State-changing commands (init, build, continue) write event records to events.json with type, source, and timestamp
 
-**Plans**: 3 plans
-
-Plans:
-- [x] 15-01: Create JSON schemas and integrate state file initialization into init.md (errors.json, memory.json, events.json)
-- [x] 15-02: Integrate error logging and event writing into build.md; add pattern flagging logic
-- [x] 15-03: Integrate memory extraction into continue.md; add decision logging to commands (focus.md, redirect.md, feedback.md)
+**Plans**: 3/3 complete
 
 ---
 
@@ -123,12 +114,7 @@ Plans:
 4. Every worker spec reads events.json at startup and describes how to filter and react to recent events
 5. Every worker spec includes a complete spawning scenario with a full Task tool prompt example showing recursive spec propagation
 
-**Plans**: 3 plans
-
-Plans:
-- [x] 16-01: Expand watcher-ant.md with 4 specialist modes (security, performance, quality, test-coverage)
-- [x] 16-02: Add pheromone math, combination effects, and feedback interpretation to all 6 worker specs
-- [x] 16-03: Add event awareness and spawning scenario examples to all 6 worker specs
+**Plans**: 3/3 complete
 
 ---
 
@@ -147,17 +133,88 @@ Plans:
 4. Running `/ant:continue` shows a phase completion summary (tasks completed, key decisions, errors encountered) before advancing to the next phase
 5. COLONY_STATE.json includes spawn_outcomes per caste with alpha/beta parameters, and workers check spawn confidence before spawning
 
-**Plans**: 3 plans
+**Plans**: 3/3 complete
+
+</details>
+
+### v4.0 Hybrid Foundation
+
+**Milestone Goal:** Add a thin shell utility layer for deterministic operations and fix all 11 audit-identified issues. The system becomes hybrid: prompts reason and decide, shell scripts compute and validate. This makes pheromone math, state validation, memory management, and error tracking reliable instead of LLM-approximated.
+
+- [ ] **Phase 19: Audit Fixes + Utility Scaffold** — Fix all 11 audit issues and create the aether-utils.sh scaffold with subcommand dispatch
+- [ ] **Phase 20: Utility Modules** — Implement all 4 utility modules (pheromone math, state validation, memory ops, error tracking)
+- [ ] **Phase 21: Command Integration** — Update command prompts to call utilities where deterministic results are needed
+
+## Phase Details
+
+### Phase 19: Audit Fixes + Utility Scaffold
+
+**Goal**: The existing system is stable and correct -- all audit issues are resolved, state fields are canonical, and the utility script scaffold is ready for module implementation.
+
+**Depends on**: Phase 17 (v3.0 complete)
+
+**Requirements**: FIX-01, FIX-02, FIX-03, FIX-04, FIX-05, FIX-06, FIX-07, FIX-08, FIX-09, FIX-10, FIX-11, UTIL-01, UTIL-02, UTIL-03, UTIL-04
+
+**Success Criteria** (what must be TRUE):
+1. Running `source .aether/utils/atomic-write.sh` succeeds without errors, and `acquire_lock` / `release_lock` are available as functions (file-lock.sh sourced correctly)
+2. COLONY_STATE.json has exactly one `goal` field at `.goal` and one `current_phase` field at `.current_phase` -- all commands read and write these canonical paths without referencing old/duplicate fields
+3. Running `bash .aether/aether-utils.sh help` prints available subcommands and exits 0 -- the script dispatches subcommands, sources shared infrastructure, and outputs JSON on both success and error
+4. Temp files created during state operations include PID and timestamp in their names (no collisions under concurrent access), and all jq operations check exit codes before writing results
+5. Running a state-modifying operation creates a timestamped backup in `.aether/data/backups/` before writing, with at most 3 backups retained per file
 
 Plans:
-- [x] 17-01: Rebuild status.md as a full colony health dashboard reading all JSON state files
-- [x] 17-02: Add phase review workflow to continue.md showing completion summary and learning extraction
-- [x] 17-03: Add spawn outcome tracking to COLONY_STATE.json, build.md, and continue.md with Bayesian confidence
+- [ ] 19-01
+- [ ] 19-02
+- [ ] 19-03
+
+---
+
+### Phase 20: Utility Modules
+
+**Goal**: All deterministic operations that LLMs get wrong -- pheromone decay math, state schema validation, memory token management, and error pattern detection -- are handled by shell functions that produce correct, reproducible results.
+
+**Depends on**: Phase 19
+
+**Requirements**: PHER-01, PHER-02, PHER-03, PHER-04, PHER-05, VALID-01, VALID-02, VALID-03, VALID-04, VALID-05, VALID-06, MEM-01, MEM-02, MEM-03, ERR-01, ERR-02, ERR-03, ERR-04
+
+**Success Criteria** (what must be TRUE):
+1. Running `aether-utils pheromone-decay 1.0 3600 3600` outputs JSON with `strength` approximately 0.5 (exponential decay at one half-life), and `aether-utils pheromone-batch` reads pheromones.json and outputs all signals with their current computed strengths
+2. Running `aether-utils validate-state all` checks every JSON state file against its schema and reports per-file pass/fail with specific field-level errors for any violations
+3. Running `aether-utils memory-token-count` outputs an approximate token count of memory.json, and `aether-utils memory-compress` removes oldest entries when the count exceeds the threshold
+4. Running `aether-utils error-add build high "Test failure in auth module"` appends a timestamped, auto-ID error record to errors.json, and `aether-utils error-pattern-check` flags categories with 3+ occurrences
+5. Every subcommand outputs valid JSON to stdout on success and returns non-zero with a JSON error message on invalid input or missing files
+
+Plans:
+- [ ] 20-01
+- [ ] 20-02
+- [ ] 20-03
+- [ ] 20-04
+
+---
+
+### Phase 21: Command Integration
+
+**Goal**: Command prompts delegate deterministic operations to aether-utils.sh instead of asking the LLM to compute them -- pheromone decay, error logging, state validation, and cleanup happen via shell calls that produce reliable results.
+
+**Depends on**: Phase 20
+
+**Requirements**: INT-01, INT-02, INT-03, INT-04, INT-05
+
+**Success Criteria** (what must be TRUE):
+1. status.md instructs Claude to run `aether-utils pheromone-batch` via Bash tool and render decay bars from the JSON output, instead of computing decay math inline
+2. build.md instructs Claude to run `aether-utils error-add` via Bash tool when logging errors, instead of manually constructing and writing error JSON
+3. continue.md instructs Claude to run `aether-utils pheromone-cleanup` via Bash tool at phase boundaries, removing expired signals deterministically
+4. Worker ant specs document that `aether-utils pheromone-effective` should be called via Bash tool to compute signal response strength, replacing inline multiplication
+5. init.md instructs Claude to run `aether-utils validate-state all` via Bash tool after creating state files, confirming initialization correctness
+
+Plans:
+- [ ] 21-01
+- [ ] 21-02
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 14 -> 15 -> 16 -> 17
+Phases execute in numeric order: 19 -> 20 -> 21
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -169,6 +226,9 @@ Phases execute in numeric order: 14 -> 15 -> 16 -> 17
 | 15. Infrastructure State | v3.0 | 3/3 | Complete | 2026-02-03 |
 | 16. Worker Knowledge | v3.0 | 3/3 | Complete | 2026-02-03 |
 | 17. Integration & Dashboard | v3.0 | 3/3 | Complete | 2026-02-03 |
+| 19. Audit Fixes + Utility Scaffold | v4.0 | 0/3 | Pending | - |
+| 20. Utility Modules | v4.0 | 0/4 | Pending | - |
+| 21. Command Integration | v4.0 | 0/2 | Pending | - |
 
 ---
 

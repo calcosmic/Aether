@@ -4,22 +4,23 @@
 
 See: .planning/PROJECT.md (updated 2026-02-03)
 
-**Core value:** Autonomous Emergence — Worker Ants autonomously spawn Worker Ants; Queen provides signals not commands
-**Current focus:** v3.0 Restore the Soul -- COMPLETE
+**Core value:** Autonomous Emergence -- Worker Ants autonomously spawn Worker Ants; Queen provides signals not commands
+**Current focus:** v4.0 Hybrid Foundation -- Phase 19: Audit Fixes + Utility Scaffold
 
 ## Current Position
 
-Milestone: v3.0 Restore the Soul
-Phase: 17 of 17 (Integration & Dashboard)
-Plan: 3 of 3 in current phase
-Status: v3.0 COMPLETE — Phase 17 VERIFIED ✓ (5/5 must-haves)
-Last activity: 2026-02-03 — Phase 17 verified, v3.0 milestone complete
+Milestone: v4.0 Hybrid Foundation
+Phase: 19 of 21 (Audit Fixes + Utility Scaffold)
+Plan: Not started
+Status: Roadmap created, awaiting plan-phase
+Last activity: 2026-02-03 -- v4.0 roadmap created (3 phases, 38 requirements mapped)
 
-Progress: [████████████████████] 100% (v1.0 + v2.0 + v3.0 complete, 11/11 plans done)
+Progress: [....................] 0% (v4.0: 0/9 plans)
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
 - v2.0 Shipped (2026-02-02): 3 phases, 6 plans, event polling + visual indicators + E2E testing
+- v3.0 Shipped (2026-02-03): 4 phases, 11 plans, visual identity + infrastructure state + worker knowledge + dashboard
 
 ## Performance Metrics
 
@@ -42,11 +43,8 @@ Progress: [████████████████████] 100% (v
 | 17 (v3.0) | 3/3 | 4min | 1min |
 
 **Recent Trend:**
-- 16-03 completed in 3 min
-- 17-01 completed in 1 min
-- 17-02 completed in 1 min
-- 17-03 completed in 2 min
-- Trend: Fast (prompt-only changes, no code)
+- v3.0 averaged ~1-2 min per plan (prompt-only changes)
+- v4.0 will involve actual shell scripts -- expect longer per plan
 
 *Updated after each plan completion*
 
@@ -55,11 +53,11 @@ Progress: [████████████████████] 100% (v
 ### Decisions Summary
 
 **v3.0 decisions:**
-- No new Python, bash scripts, or commands — restore via JSON state + enriched prompts + deeper specs
+- No new Python, bash scripts, or commands -- restore via JSON state + enriched prompts + deeper specs
 - 4-phase structure: Visual Identity -> Infrastructure State -> Worker Knowledge -> Integration & Dashboard
 - Worker specs target ~200 lines each (from ~90 now)
 - Specialist watcher modes folded into watcher-ant.md (not separate files)
-- events.json is a log (not a queue) — workers filter by timestamp
+- events.json is a log (not a queue) -- workers filter by timestamp
 - Fixed-width ~55 char box-drawing headers using +/=/| characters for all commands
 - Unicode checkmark for step progress indicators
 - Status command gets richest header (session/state/goal metadata)
@@ -82,18 +80,26 @@ Progress: [████████████████████] 100% (v
 - Bayesian spawn tracking: alpha/beta in COLONY_STATE.json, confidence = alpha/(alpha+beta), advisory not blocking
 - Spawn confidence thresholds: >=0.5 go, 0.3-0.5 caution, <0.3 prefer alternative
 
+**v4.0 decisions:**
+- Hybrid architecture: prompts for reasoning, shell for deterministic ops
+- Single wrapper script (aether-utils.sh) with subcommand dispatch
+- All subcommands output JSON to stdout
+- Total utility code stays under 300 lines
+- Fix all 11 audit issues before building new modules
+- Audit fixes + scaffold first (Phase 19), then modules (Phase 20), then integration (Phase 21)
+
 ### Pending Todos
 
 None yet.
 
 ### Open Issues (identified post-v3.0 audit)
 
-1. ~~**route-setter contradicts plan.md**~~ FIXED — removed caste field from output format, removed Caste Assignment Guide, added "do NOT assign castes" to workflow and heuristics.
-2. ~~**colonize doesn't persist findings**~~ FIXED — added Step 5 to write findings to memory.json decisions array and log codebase_colonized event.
-3. ~~**Worker state tracking inconsistent**~~ FIXED — colonize.md sets colonizer active/idle, plan.md sets route-setter active/idle.
-4. **No enforcement of spawn limits** — Depth-3 and max-5 limits are stated in every worker spec but are purely advisory. An LLM under context pressure could ignore them.
-5. **Auto-pheromone content quality unbounded** — continue.md Step 4.5 says "be specific, reference actual task outcomes" but has no structural enforcement. The LLM could produce boilerplate FEEDBACK content that provides no signal.
-6. **All spec instructions are advisory** — Every "MUST" in worker specs (read spec before spawning, compute effective_signal, check spawn_outcomes) has no enforcement mechanism. Works when the LLM is diligent, fails silently when it isn't.
+1. ~~**route-setter contradicts plan.md**~~ FIXED
+2. ~~**colonize doesn't persist findings**~~ FIXED
+3. ~~**Worker state tracking inconsistent**~~ FIXED
+4. **No enforcement of spawn limits** -- Depth-3 and max-5 limits are stated in every worker spec but are purely advisory. An LLM under context pressure could ignore them.
+5. **Auto-pheromone content quality unbounded** -- continue.md Step 4.5 says "be specific, reference actual task outcomes" but has no structural enforcement.
+6. **All spec instructions are advisory** -- Every "MUST" in worker specs has no enforcement mechanism. Works when the LLM is diligent, fails silently when it isn't.
 
 ### Blockers/Concerns
 
@@ -102,9 +108,9 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-03
-Stopped at: Phase 17 verified ✓ (5/5 must-haves) -- v3.0 Restore the Soul COMPLETE
+Stopped at: v4.0 roadmap created -- 3 phases (19-21), 38 requirements mapped, ready for plan-phase 19
 Resume file: None
 
 ---
 
-*State updated: 2026-02-03 after Phase 17 verification (passed) -- v3.0 Restore the Soul milestone complete*
+*State updated: 2026-02-03 after v4.0 roadmap creation*
