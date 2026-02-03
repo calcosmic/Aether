@@ -245,26 +245,19 @@ After the watcher returns, use Write tool to update:
 
 **Log Errors:** If the ant reported any failures or issues in its report:
 
-Read `.aether/data/errors.json`. For each failure, append an error record to the `errors` array:
-
-```json
-{
-  "id": "err_<unix_timestamp>_<4_random_hex>",
-  "category": "<one of: syntax, import, runtime, type, spawning, phase, verification, api, file, logic, performance, security>",
-  "severity": "<one of: critical, high, medium, low>",
-  "description": "<what went wrong>",
-  "root_cause": "<why it happened, if apparent from the ant's report>",
-  "phase": <phase_number>,
-  "task_id": "<task_id if applicable, otherwise null>",
-  "timestamp": "<ISO-8601 UTC>"
-}
+For each failure, use the Bash tool to run:
+```
+bash .aether/aether-utils.sh error-add "<category>" "<severity>" "<description>"
 ```
 
-**Log Watcher Issues:** For each issue in the watcher report with severity `HIGH` or `CRITICAL`, append an error record to the `errors` array using the same format as above, with:
-- `category`: `"verification"`
-- `severity`: the issue's severity (lowercased)
-- `description`: the issue's description
-- `root_cause`: the issue's recommendation (from the watcher report)
+Where `category` is one of: syntax, import, runtime, type, spawning, phase, verification, api, file, logic, performance, security. And `severity` is one of: critical, high, medium, low.
+
+Each call returns `{"ok":true,"result":"<error_id>"}`. Note the returned error IDs for event logging.
+
+**Log Watcher Issues:** For each issue in the watcher report with severity `HIGH` or `CRITICAL`, use the Bash tool to run:
+```
+bash .aether/aether-utils.sh error-add "verification" "<severity_lowercased>" "<description>"
+```
 
 **Write Watcher Verification Event:** Append to events.json:
 

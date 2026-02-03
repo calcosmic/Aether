@@ -170,12 +170,12 @@ If the `events` array exceeds 100 entries, remove the oldest entries to keep onl
 
 ### Step 5: Clean Expired Pheromones
 
-Compute current strength for each signal in `pheromones.json`:
-1. If `half_life_seconds` is null -> keep (persistent)
-2. Otherwise: `current_strength = strength * e^(-0.693 * elapsed_seconds / half_life_seconds)`
-3. Remove signals where `current_strength < 0.05`
+Use the Bash tool to run:
+```
+bash .aether/aether-utils.sh pheromone-cleanup
+```
 
-Use the Write tool to write the cleaned `pheromones.json` (keep only non-expired signals).
+This removes signals with `current_strength` below 0.05 from `pheromones.json` and returns `{"ok":true,"result":{"removed":N,"remaining":N}}`. The cleanup result (removed count) can be mentioned in the display output.
 
 ### Step 6: Write Events
 

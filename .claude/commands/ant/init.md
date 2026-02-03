@@ -140,6 +140,17 @@ Read `.aether/data/events.json`. Append to the `events` array:
 
 Use the Write tool to write the updated events.json.
 
+### Step 6.5: Validate State Files
+
+Use the Bash tool to run:
+```
+bash .aether/aether-utils.sh validate-state all
+```
+
+This validates all state files (COLONY_STATE.json, pheromones.json, errors.json, memory.json, events.json) and returns `{"ok":true,"result":{"pass":true|false,"files":[...]}}`.
+
+If `pass` is false, output a warning identifying which file(s) failed validation. This catches initialization bugs immediately.
+
 ### Step 7: Display Result
 
 Output this header at the start of your response:
@@ -159,6 +170,7 @@ Then show step progress:
   ✓ Step 4: Create State Files
   ✓ Step 5: Emit INIT Pheromone
   ✓ Step 6: Write Init Event
+  ✓ Step 6.5: Validate State Files
   ✓ Step 7: Display Result
 ```
 
