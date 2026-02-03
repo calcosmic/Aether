@@ -143,7 +143,7 @@ Aether delivers autonomous emergence through Claude-native skill prompts, JSON s
 
 - [x] **Phase 19: Audit Fixes + Utility Scaffold** — Fix all 11 audit issues and create the aether-utils.sh scaffold with subcommand dispatch
 - [x] **Phase 20: Utility Modules** — Implement all 4 utility modules (pheromone math, state validation, memory ops, error tracking)
-- [ ] **Phase 21: Command Integration** — Update command prompts to call utilities where deterministic results are needed
+- [x] **Phase 21: Command Integration** — Update command prompts to call utilities where deterministic results are needed
 
 ## Phase Details
 
@@ -214,8 +214,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 21-01-PLAN.md -- Integrate pheromone-batch, pheromone-cleanup, error-add, and validate-state into core commands
-- [ ] 21-02-PLAN.md -- Replace inline pheromone math with pheromone-effective in all 6 worker specs
+- [x] 21-01-PLAN.md -- Integrate pheromone-batch, pheromone-cleanup, error-add, and validate-state into core commands
+- [x] 21-02-PLAN.md -- Replace inline pheromone math with pheromone-effective in all 6 worker specs
 
 ## Progress
 
@@ -234,7 +234,7 @@ Phases execute in numeric order: 19 -> 20 -> 21
 | 17. Integration & Dashboard | v3.0 | 3/3 | Complete | 2026-02-03 |
 | 19. Audit Fixes + Utility Scaffold | v4.0 | 3/3 | Complete | 2026-02-03 |
 | 20. Utility Modules | v4.0 | 4/4 | Complete | 2026-02-03 |
-| 21. Command Integration | v4.0 | 0/2 | Pending | - |
+| 21. Command Integration | v4.0 | 2/2 | Complete | 2026-02-03 |
 
 ---
 

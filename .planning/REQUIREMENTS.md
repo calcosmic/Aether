@@ -66,11 +66,11 @@ Requirements for adding a thin shell utility layer and fixing all audit-identifi
 
 ### Command Integration
 
-- [ ] **INT-01**: status.md calls `aether-utils pheromone-batch` for decay bar rendering instead of Claude computing decay
-- [ ] **INT-02**: build.md calls `aether-utils error-add` when logging errors
-- [ ] **INT-03**: continue.md calls `aether-utils pheromone-cleanup` at phase boundaries
-- [ ] **INT-04**: Worker specs document `aether-utils pheromone-effective` for computing signal response
-- [ ] **INT-05**: init.md calls `aether-utils validate-state all` after state file creation
+- [x] **INT-01**: status.md calls `aether-utils pheromone-batch` for decay bar rendering instead of Claude computing decay
+- [x] **INT-02**: build.md calls `aether-utils error-add` when logging errors
+- [x] **INT-03**: continue.md calls `aether-utils pheromone-cleanup` at phase boundaries
+- [x] **INT-04**: Worker specs document `aether-utils pheromone-effective` for computing signal response
+- [x] **INT-05**: init.md calls `aether-utils validate-state all` after state file creation
 
 ## v4.x Requirements
 
@@ -131,11 +131,11 @@ Deferred to future release. Tracked but not in current roadmap.
 | ERR-02 | Phase 20 | Complete |
 | ERR-03 | Phase 20 | Complete |
 | ERR-04 | Phase 20 | Complete |
-| INT-01 | Phase 21 | Pending |
-| INT-02 | Phase 21 | Pending |
-| INT-03 | Phase 21 | Pending |
-| INT-04 | Phase 21 | Pending |
-| INT-05 | Phase 21 | Pending |
+| INT-01 | Phase 21 | Complete |
+| INT-02 | Phase 21 | Complete |
+| INT-03 | Phase 21 | Complete |
+| INT-04 | Phase 21 | Complete |
+| INT-05 | Phase 21 | Complete |
 
 **Coverage:**
 - v4.0 requirements: 38 total
