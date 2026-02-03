@@ -7,6 +7,20 @@
 #   atomic_write /path/to/file.json "content"
 #   atomic_write_from_file /path/to/target.json /path/to/temp.json
 
+# Source required utilities
+# Get the directory where this script is located
+_AETHER_UTILS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# If BASH_SOURCE[0] is empty (can happen in some contexts), use relative path
+if [ -z "$_AETHER_UTILS_DIR" ] || [ "$_AETHER_UTILS_DIR" = "$(pwd)" ]; then
+    _AETHER_UTILS_DIR="$(pwd)/.aether/utils"
+fi
+# Verify the path exists and file-lock.sh is there
+if [ ! -f "$_AETHER_UTILS_DIR/file-lock.sh" ]; then
+    # Try one more fallback - relative to script location
+    _AETHER_UTILS_DIR="$(dirname "${BASH_SOURCE[0]}")"
+fi
+source "$_AETHER_UTILS_DIR/file-lock.sh"
+
 # Aether root detection - use git root if available, otherwise use current directory
 if git rev-parse --show-toplevel >/dev/null 2>&1; then
     AETHER_ROOT="$(git rev-parse --show-toplevel)"
@@ -15,13 +29,13 @@ else
 fi
 
 TEMP_DIR="$AETHER_ROOT/.aether/temp"
-BACKUP_DIR="$AETHER_ROOT/.aether/backups"
+BACKUP_DIR="$AETHER_ROOT/.aether/data/backups"
 
 # Create directories
 mkdir -p "$TEMP_DIR" "$BACKUP_DIR"
 
 # Number of backups to keep
-MAX_BACKUPS=5
+MAX_BACKUPS=3
 
 # Atomic write: write content to file via temporary file
 # Arguments: target_file, content
