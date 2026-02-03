@@ -10,12 +10,12 @@ See: .planning/PROJECT.md (updated 2026-02-03)
 ## Current Position
 
 Milestone: v3.0 Restore the Soul
-Phase: 16 of 17 (Worker Knowledge) -- VERIFIED ✓
-Plan: 3 of 3 in current phase
-Status: Phase verified, ready for Phase 17
-Last activity: 2026-02-03 — Phase 16 verified (5/5 must-haves passed)
+Phase: 17 of 17 (Integration & Dashboard)
+Plan: 1 of 3 in current phase
+Status: In progress
+Last activity: 2026-02-03 — Completed 17-01-PLAN.md (status dashboard enhancement)
 
-Progress: [███████████████████░] 90% (v1.0 + v2.0 complete, v3.0: 8/11 plans done)
+Progress: [████████████████████] 93% (v1.0 + v2.0 complete, v3.0: 9/11 plans done)
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -24,7 +24,7 @@ Progress: [███████████████████░] 90% (v1
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 58 (44 v1.0 + 6 v2.0 + 8 v3.0)
+- Total plans completed: 59 (44 v1.0 + 6 v2.0 + 9 v3.0)
 - Average duration: ~20 min
 - Total execution time: ~18 hours
 
@@ -39,13 +39,13 @@ Progress: [███████████████████░] 90% (v1
 | 14 (v3.0) | 2/2 | 4min | 2min |
 | 15 (v3.0) | 3/3 | 4min | 1min |
 | 16 (v3.0) | 3/3 | 6min | 2min |
+| 17 (v3.0) | 1/3 | 1min | 1min |
 
 **Recent Trend:**
-- 15-02 completed in 1 min
-- 15-03 completed in 2 min
 - 16-01 completed in 1 min
 - 16-02 completed in 2 min
 - 16-03 completed in 3 min
+- 17-01 completed in 1 min
 - Trend: Fast (prompt-only changes, no code)
 
 *Updated after each plan completion*
@@ -75,6 +75,7 @@ Progress: [███████████████████░] 90% (v1
 - memory.json phase_learnings capped at 20, decisions capped at 30
 - Phase learnings extracted at continue boundaries, decisions logged by pheromone commands
 - status.md reads errors.json and displays ERRORS section with flagged patterns and recent errors
+- status.md reads all 6 JSON state files and displays MEMORY (last 3 learnings, decision count) and EVENTS (last 5, relative timestamps) sections
 - Event awareness and memory reading sections placed between Feedback Interpretation and Workflow in all worker specs
 - Each caste spawns a different caste in its spawning scenario (full cross-caste diversity)
 
@@ -89,9 +90,9 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-03
-Stopped at: Phase 16 verified ✓ (5/5 must-haves). Ready for Phase 17: Integration & Dashboard.
+Stopped at: Completed 17-01-PLAN.md (status dashboard enhancement)
 Resume file: None
 
 ---
 
-*State updated: 2026-02-03 after Phase 16 verification (passed)*
+*State updated: 2026-02-03 after 17-01 completion*
