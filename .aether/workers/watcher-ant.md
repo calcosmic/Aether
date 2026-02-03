@@ -263,6 +263,28 @@ Quality Score: {score}/10
 Recommendation: {approve|request_changes}
 ```
 
+## Post-Action Validation (Mandatory)
+
+Before reporting your results, complete these deterministic checks:
+
+1. **State Validation:** Use the Bash tool to run:
+   ```
+   bash .aether/aether-utils.sh validate-state colony
+   ```
+   If `pass` is false, include the validation failure in your report.
+
+2. **Spawn Accounting:** Report your spawn count: "Spawned: {N}/5 sub-ants". Confirm you did not exceed depth limits.
+
+3. **Report Format:** Verify your report follows the Output Format section above.
+
+Include check results at the end of your report:
+```
+Post-Action Validation:
+  State: {pass|fail}
+  Spawns: {N}/5 (depth {your_depth}/3)
+  Format: {pass|fail}
+```
+
 ## You Can Spawn Other Ants
 
 When you encounter a capability gap, spawn a specialist using the Task tool.
@@ -275,6 +297,27 @@ When you encounter a capability gap, spawn a specialist using the Task tool.
 - **scout** `.aether/workers/scout-ant.md` — Research, find information, read docs
 - **architect** `.aether/workers/architect-ant.md` — Synthesize knowledge, extract patterns
 
+### Spawn Gate (Mandatory)
+
+Before spawning, you MUST pass the spawn-check gate. Use the Bash tool to run:
+```
+bash .aether/aether-utils.sh spawn-check <your_depth>
+```
+
+Where `<your_depth>` is your current spawn depth (1 if spawned by the build command, 2 if spawned by another ant, 3 if spawned by a sub-ant).
+
+This returns JSON: `{"ok":true,"result":{"pass":true|false,...}}`.
+
+**If `pass` is false: DO NOT SPAWN.** Report the blocked spawn to your parent:
+```
+Spawn blocked: {reason} (active_workers: {N}, depth: {N})
+Task that needed spawning: {description}
+```
+
+**If `pass` is true:** Proceed to the confidence check and then spawn.
+
+If the command fails, DO NOT SPAWN. Treat failure as a blocked spawn.
+
 **To spawn:**
 1. Use the Read tool to read the caste's spec file (e.g. `.aether/workers/scout-ant.md`)
 2. Use the Task tool with `subagent_type="general-purpose"`
@@ -282,6 +325,7 @@ When you encounter a capability gap, spawn a specialist using the Task tool.
    - `--- WORKER SPEC ---` followed by the **full contents** of the spec file you just read
    - `--- ACTIVE PHEROMONES ---` followed by the pheromone block (copy from your context)
    - `--- TASK ---` followed by the task description, colony goal, and any constraints
+4. In the TASK section, include: `You are at depth <your_depth + 1>.`
 
 This ensures every spawned ant gets the full spec with sensitivity tables, workflow, output format, AND this spawning guide — so it can spawn further ants recursively.
 
@@ -348,7 +392,7 @@ make a recommendation in my Watcher report.
 
 The spawned builder receives its full spec (with sensitivity tables, pheromone math, combination effects, feedback interpretation, event awareness, AND this spawning guide) — enabling it to spawn further ants if needed (e.g., spawning a scout to research optimization techniques).
 
-**Spawn limits:**
-- Max 5 sub-ants per ant
+**Spawn limits (enforced by spawn-check):**
+- Max 5 active workers colony-wide
 - Max depth 3 (ant -> sub-ant -> sub-sub-ant, no deeper)
-- If a spawn fails, don't retry — report the gap to parent
+- If spawn-check fails, don't spawn -- report the gap to parent
