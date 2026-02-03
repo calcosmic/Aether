@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-02-03)
 
 **Core value:** Autonomous Emergence — Worker Ants autonomously spawn Worker Ants; Queen provides signals not commands
-**Current focus:** Phase 16 — Worker Knowledge (v3.0 Restore the Soul)
+**Current focus:** Phase 17 — Integration & Dashboard (v3.0 Restore the Soul)
 
 ## Current Position
 
 Milestone: v3.0 Restore the Soul
-Phase: 16 of 17 (Worker Knowledge)
-Plan: 2 of 3 in current phase
-Status: In progress
-Last activity: 2026-02-03 — Completed 16-02-PLAN.md (Pheromone Math & Feedback Knowledge)
+Phase: 16 of 17 (Worker Knowledge) -- COMPLETE
+Plan: 3 of 3 in current phase
+Status: Phase complete
+Last activity: 2026-02-03 — Completed 16-03-PLAN.md (Event Awareness, Memory & Spawning)
 
-Progress: [██████████████████░░] 86% (v1.0 + v2.0 complete, v3.0: 7/11 plans done)
+Progress: [███████████████████░] 90% (v1.0 + v2.0 complete, v3.0: 8/11 plans done)
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -24,7 +24,7 @@ Progress: [██████████████████░░] 86% (v1
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 57 (44 v1.0 + 6 v2.0 + 7 v3.0)
+- Total plans completed: 58 (44 v1.0 + 6 v2.0 + 8 v3.0)
 - Average duration: ~20 min
 - Total execution time: ~18 hours
 
@@ -38,14 +38,14 @@ Progress: [██████████████████░░] 86% (v1
 | 13 (v2.0) | 1/1 | 3min | 3min |
 | 14 (v3.0) | 2/2 | 4min | 2min |
 | 15 (v3.0) | 3/3 | 4min | 1min |
-| 16 (v3.0) | 2/3 | 3min | 1.5min |
+| 16 (v3.0) | 3/3 | 6min | 2min |
 
 **Recent Trend:**
-- 15-01 completed in 1 min
 - 15-02 completed in 1 min
 - 15-03 completed in 2 min
 - 16-01 completed in 1 min
 - 16-02 completed in 2 min
+- 16-03 completed in 3 min
 - Trend: Fast (prompt-only changes, no code)
 
 *Updated after each plan completion*
@@ -75,6 +75,8 @@ Progress: [██████████████████░░] 86% (v1
 - memory.json phase_learnings capped at 20, decisions capped at 30
 - Phase learnings extracted at continue boundaries, decisions logged by pheromone commands
 - status.md reads errors.json and displays ERRORS section with flagged patterns and recent errors
+- Event awareness and memory reading sections placed between Feedback Interpretation and Workflow in all worker specs
+- Each caste spawns a different caste in its spawning scenario (full cross-caste diversity)
 
 ### Pending Todos
 
@@ -87,9 +89,9 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-03
-Stopped at: Completed 16-02-PLAN.md (Pheromone Math & Feedback Knowledge)
+Stopped at: Completed 16-03-PLAN.md (Event Awareness, Memory & Spawning) -- Phase 16 complete
 Resume file: None
 
 ---
 
-*State updated: 2026-02-03 after 16-02 completion*
+*State updated: 2026-02-03 after 16-03 completion*
