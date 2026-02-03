@@ -3,215 +3,108 @@ name: ant:focus
 description: Emit focus pheromone - guide colony attention to specific area
 ---
 
-<objective>
-Emit a focus pheromone (medium-strength attract signal) to guide the colony's attention toward a specific area, topic, or approach.
-</objective>
+You are the **Queen Ant Colony**. Emit a FOCUS pheromone to guide colony attention.
 
-<process>
-You are the **Queen Ant Colony** emitting a focus pheromone to guide the colony.
+## Instructions
 
-## Step 1: Validate Input
+The focus area is: `$ARGUMENTS`
 
-Check if focus area argument is provided:
-```bash
-if [ -z "$1" ]; then
-  echo "Usage: /ant:focus \"<area>\""
-  echo ""
-  echo "Examples:"
-  echo "  /ant:focus \"WebSocket security\""
-  echo "  /ant:focus \"database optimization\""
-  echo "  /ant:focus \"user authentication\""
-  exit 1
-fi
+### Step 1: Validate Input
 
-focus_area="$1"
-```
-
-## Step 2: Check Colony State for Emergence Guard
-
-```bash
-# Check colony state for emergence guard
-COLONY_STATE=".aether/data/COLONY_STATE.json"
-if [ -f "$COLONY_STATE" ]; then
-    colony_state=$(jq -r '.colony_status.state' "$COLONY_STATE")
-
-    # Block Queen intervention during EXECUTING state (emergence period)
-    if [ "$colony_state" = "EXECUTING" ]; then
-        echo "⚠️  Colony is EXECUTING - Queen intervention blocked"
-        echo ""
-        echo "The colony is currently in emergence mode. Worker Ants are working"
-        echo "autonomously based on existing pheromone signals."
-        echo ""
-        echo "Phase boundaries are the only time for direction changes."
-        echo ""
-        echo "Options:"
-        echo "  - Wait for VERIFYING state (phase boundary check-in)"
-        echo "  - Use FEEDBACK pheromone: /ant:feedback \"message\" (provides input without breaking emergence)"
-        echo "  - Review colony status: /ant:status"
-        echo ""
-        echo "Current state: EXECUTING"
-        exit 1
-    fi
-fi
-```
-
-## Step 3: Emit FOCUS Pheromone
-
-Create the FOCUS pheromone signal:
-```bash
-# Source atomic-write utility
-source .aether/utils/atomic-write.sh
-
-timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-pheromone_id="focus_$(date +%s)"
-
-jq --arg id "$pheromone_id" \
-   --arg timestamp "$timestamp" \
-   --arg focus "$focus_area" \
-   '
-   .active_pheromones += [{
-     "id": $id,
-     "type": "FOCUS",
-     "strength": 0.7,
-     "created_at": $timestamp,
-     "decay_rate": 3600,
-     "metadata": {
-       "source": "queen",
-       "caste": null,
-       "context": $focus
-     }
-   }]
-   ' .aether/data/pheromones.json > /tmp/pheromones.tmp
-
-# Atomic write
-atomic_write_from_file .aether/data/pheromones.json /tmp/pheromones.tmp
-```
-
-## Step 4: Present Results
-
-Show the Queen (user) the focus pheromone emission:
+If `$ARGUMENTS` is empty or blank, output:
 
 ```
-╔══════════════════════════════════════════════════════════════╗
-║  FOCUS Pheromone Emitted                                     ║
-╠══════════════════════════════════════════════════════════════╣
-║  Area: "{focus_area}"                                        ║
-║  Type: FOCUS (attract signal)                                ║
-║  Strength: 70%                                               ║
-║  Half-Life: 1 hour                                          ║
-║                                                               ║
-║  Colony Response:                                            ║
-║  Builder will prioritize {focus_area}                        ║
-║  Route-setter will include in planning                       ║
-║  Scout will research {focus_area} first                      ║
-╚══════════════════════════════════════════════════════════════╝
+Usage: /ant:focus "<area>"
 
-COLONY RESPONDING
+Examples:
+  /ant:focus "WebSocket security"
+  /ant:focus "database optimization"
+  /ant:focus "user authentication flow"
+```
+
+Stop here.
+
+### Step 2: Read State
+
+Use the Read tool to read `.aether/data/COLONY_STATE.json`.
+
+If `goal` is null, output `No colony initialized. Run /ant:init first.` and stop.
+
+### Step 3: Append FOCUS Signal
+
+Use the Read tool to read `.aether/data/pheromones.json`.
+
+Add a new signal to the `signals` array and use the Write tool to write the updated file:
+
+```json
+{
+  "id": "focus_<unix_timestamp>",
+  "type": "FOCUS",
+  "content": "<the focus area>",
+  "strength": 0.7,
+  "half_life_seconds": 3600,
+  "created_at": "<ISO-8601 UTC timestamp>"
+}
+```
+
+Preserve all existing signals in the array.
+
+### Step 4: Log Decision
+
+Read `.aether/data/memory.json`. Append a decision record to the `decisions` array:
+
+```json
+{
+  "id": "dec_<unix_timestamp>_<4_random_hex>",
+  "type": "focus",
+  "content": "<the focus area>",
+  "context": "Phase <current_phase> -- <colony state>",
+  "phase": <current_phase from COLONY_STATE.json>,
+  "timestamp": "<ISO-8601 UTC>"
+}
+```
+
+If the `decisions` array exceeds 30 entries, remove the oldest entries to keep only 30.
+
+Use the Write tool to write the updated memory.json.
+
+### Step 5: Write Event
+
+Read `.aether/data/events.json`. Append to the `events` array:
+
+```json
+{
+  "id": "evt_<unix_timestamp>_<4_random_hex>",
+  "type": "pheromone_emitted",
+  "source": "focus",
+  "content": "FOCUS: <content> (strength 0.7, half-life 1hr)",
+  "timestamp": "<ISO-8601 UTC>"
+}
+```
+
+If the `events` array exceeds 100 entries, remove the oldest entries to keep only 100.
+
+Use the Write tool to write the updated events.json.
+
+### Step 6: Display Result
+
+```
+FOCUS pheromone emitted
+
+  Area: "<focus area>"
+  Strength: 0.7
+  Half-life: 1 hour
+
+  Colony response by sensitivity:
+    builder (0.9)    — strong: will prioritize this area
+    scout (0.9)      — strong: will research this first
+    watcher (0.8)    — strong: will increase scrutiny here
+    colonizer (0.7)  — moderate: will explore this area
+    route-setter (0.5) — moderate: will factor into planning
+    architect (0.4)  — weak: will note for patterns
 
 Next Steps:
-  /ant:status   - View colony response to focus
-  /ant:plan     - Show how focus influences planning
-  /ant:redirect - Warn colony away from approaches (if needed)
+  /ant:redirect "<pattern>"  Warn colony away from something
+  /ant:status                View all active pheromones
+  /ant:build <phase>         Start building (focus will influence workers)
 ```
-
-</process>
-
-<context>
-# AETHER PHEROMONE SIGNAL SYSTEM - Claude Native Implementation
-
-## Signal Decay Formula
-```
-Strength(t) = InitialStrength × e^(-t/HalfLife)
-```
-
-Where:
-- InitialStrength: Signal strength at creation (0.0 to 1.0)
-- t: Time elapsed since signal creation
-- HalfLife: Time for signal to lose 50% strength
-
-Example calculation for FOCUS (half-life = 1 hour):
-- t=0: Strength = 0.7 × 1.0 = 0.7 (100%)
-- t=30m: Strength = 0.7 × 0.5^0.5 = 0.49 (70%)
-- t=1h: Strength = 0.7 × 0.5 = 0.35 (50%)
-- t=2h: Strength = 0.7 × 0.25 = 0.175 (25%)
-- t=4h: Strength = 0.7 × 0.0625 = 0.044 (~6%, expires)
-
-## Signal Types and Properties
-
-### INIT Signal
-- **Purpose**: Set colony intention, trigger planning
-- **Default Strength**: 1.0 (maximum)
-- **Half-Life**: Persists (no decay until phase complete)
-- **Effect**: Strong attract, mobilizes colony
-
-### FOCUS Signal
-- **Purpose**: Guide colony attention to specific area
-- **Default Strength**: 0.7
-- **Half-Life**: 1 hour (3600 seconds)
-- **Effect**: Medium attract, guides prioritization
-- **Caste Responses**:
-  - Colonizer (sensitivity 0.8): Colonizes focused area first
-  - Route-setter (sensitivity 0.9): Incorporates into priorities
-  - Builder (sensitivity 1.0): Highly responsive, prioritizes focused work
-  - Watcher (sensitivity 0.9): Intensifies testing
-  - Scout (sensitivity 0.7): Researches focused topic first
-  - Architect (sensitivity 0.8): Extracts patterns from focused area
-
-### REDIRECT Signal
-- **Purpose**: Warn colony away from approach/pattern
-- **Default Strength**: 0.9
-- **Half-Life**: 24 hours
-- **Effect**: Strong repel, prevents bad patterns
-
-### FEEDBACK Signal
-- **Purpose**: Adjust colony behavior based on Queen's feedback
-- **Default Strength**: 0.5-0.7 (variable based on category)
-- **Half-Life**: 6 hours
-- **Effect**: Variable, adjusts behavior
-
-## Effective Strength Calculation
-
-```
-EffectiveStrength = SignalStrength(t) × CasteSensitivity
-```
-
-Example: FOCUS signal (strength 0.5 after decay)
-- Colonizer: 0.5 × 0.8 = 0.40 (moderate response)
-- Builder: 0.5 × 1.0 = 0.50 (strong response)
-- Architect: 0.5 × 0.8 = 0.40 (moderate response)
-
-Response threshold: 0.1 (below threshold, no response)
-</context>
-
-<reference>
-# Focus Examples
-
-## Correct Usage
-```
-/ant:focus "WebSocket security"
-/ant:focus "database query optimization"
-/ant:focus "user authentication flow"
-/ant:focus "error handling"
-```
-
-## What Happens
-
-1. **Immediate Effect**: Colony adjusts current work to prioritize focus area
-2. **Lasting Effect**: Pheromone decays over 1 hour half-life
-3. **Builder Response**: Highly responsive (sensitivity 1.0), prioritizes focused tasks
-
-## Focus vs Other Pheromones
-
-| Pheromone | Strength | Duration | Effect |
-|-----------|----------|----------|--------|
-| INIT | 100% | Until phase complete | Triggers planning |
-| FOCUS | 70% | 1hr half-life | Guides attention |
-| REDIRECT | 90% | 24hr half-life | Warns away |
-| FEEDBACK | 50% | 6hr half-life | Adjusts behavior |
-</reference>
-
-<allowed-tools>
-Write
-Bash
-Read
-</allowed-tools>

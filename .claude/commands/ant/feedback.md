@@ -3,185 +3,111 @@ name: ant:feedback
 description: Emit FEEDBACK pheromone - provide guidance to colony based on observations
 ---
 
-<objective>
-Emit a FEEDBACK pheromone to guide colony behavior based on Queen's observations, preferences, or corrections.
+You are the **Queen Ant Colony**. Emit a FEEDBACK pheromone to adjust colony behavior.
 
-The FEEDBACK pheromone has a 6-hour half-life and adjusts colony behavior through caste-sensitive responses.
-</objective>
+## Instructions
 
-<process>
-You are the **Queen Ant Colony** receiving feedback from the Queen.
+The feedback message is: `$ARGUMENTS`
 
-## Step 1: Validate Input
+### Step 1: Validate Input
 
-```bash
-if [ -z "$1" ]; then
-  echo "❌ Usage: /ant:feedback \"<message>\""
-  echo ""
-  echo "Examples:"
-  echo "  /ant:feedback \"Great progress on API layer\""
-  echo "  /ant:feedback \"Need more test coverage\""
-  echo "  /ant:feedback \"Too slow, speed up\""
-  echo "  /ant:feedback \"This approach is wrong\""
-  exit 1
-fi
-```
-
-## Step 2: Load State
-
-```bash
-PHEROMONES=".aether/data/pheromones.json"
-```
-
-## Step 3: Create FEEDBACK Pheromone
-
-```bash
-timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-pheromone_id="feedback_$(date +%s)"
-
-jq --arg id "$pheromone_id" \
-   --arg timestamp "$timestamp" \
-   --arg context "$1" \
-   '
-   .active_pheromones += [{
-     "id": $id,
-     "type": "FEEDBACK",
-     "strength": 0.5,
-     "created_at": $timestamp,
-     "decay_rate": 21600,
-     "metadata": {
-       "source": "queen",
-       "caste": null,
-       "context": $context
-     }
-   }]
-   ' "$PHEROMONES" > /tmp/pheromones.tmp
-```
-
-## Step 4: Atomic Write
-
-```bash
-# Source atomic-write utility and use atomic_write_from_file
-source .aether/utils/atomic-write.sh
-atomic_write_from_file "$PHEROMONES" /tmp/pheromones.tmp
-```
-
-## Step 5: Display Results
+If `$ARGUMENTS` is empty or blank, output:
 
 ```
-╔══════════════════════════════════════════════════════════════╗
-║  🐜 FEEDBACK Pheromone Emitted                                ║
-╠══════════════════════════════════════════════════════════════╣
-║  Message: "{feedback}"                                        ║
-║  Type: FEEDBACK (guidance signal)                             ║
-║  Strength: 50%                                                ║
-║  Half-Life: 6 hours                                          ║
-║                                                               ║
-║  Colony Response:                                             ║
-║  ✓ All castes will adjust based on feedback                  ║
-║  ✓ Architect will record pattern for learning                 ║
-║  ✓ Future decisions will consider guidance                    ║
-╚══════════════════════════════════════════════════════════════╝
+Usage: /ant:feedback "<message>"
+
+Examples:
+  /ant:feedback "Great progress on the API layer"
+  /ant:feedback "Need more test coverage"
+  /ant:feedback "Too slow, simplify the approach"
+  /ant:feedback "Wrong direction, reconsider architecture"
 ```
 
-</process>
+Stop here.
 
-<context>
-# AETHER FEEDBACK PHEROMONE SYSTEM
+### Step 2: Read State
 
-## FEEDBACK Pheromone Properties
-- **Type**: FEEDBACK
-- **Default Strength**: 0.5
-- **Half-Life**: 6 hours (21600 seconds)
-- **Effect**: Adjusts colony behavior based on Queen observations
+Use the Read tool to read `.aether/data/COLONY_STATE.json`.
 
-## Caste Sensitivities
+If `goal` is null, output `No colony initialized. Run /ant:init first.` and stop.
 
-Each caste responds differently to FEEDBACK signals:
+### Step 3: Append FEEDBACK Signal
 
-| Caste | Sensitivity | Response |
-|-------|-------------|----------|
-| Colonizer | 0.7 | Moderate - adjusts exploration patterns |
-| Route-setter | 0.8 | Responds - adjusts planning approach |
-| Builder | 0.9 | Strong response - modifies implementation |
-| Watcher | 1.0 | Very strong - intensifies verification |
-| Scout | 0.8 | Responds - adjusts information gathering |
-| Architect | 1.0 | Very strong - records for learning |
+Use the Read tool to read `.aether/data/pheromones.json`.
 
-## Feedback Examples
-
-### Positive Feedback
-```
-/ant:feedback "Great progress on API layer"
-```
-- Effect: Pattern reinforced for reuse
-- Architect: Records positive pattern
-- Colony: Continues current approach
-
-### Quality Feedback
-```
-/ant:feedback "Need more test coverage"
-/ant:feedback "Quality issues in authentication"
-```
-- Effect: Testing intensified
-- Watcher: Increases verification
-- Builder: Reviews recent code
-
-### Speed Feedback
-```
-/ant:feedback "Too slow, speed up"
-```
-- Effect: Optimizes for speed
-- Builder: Increases parallelization
-- Route-setter: Simplifies tasks
-
-### Direction Feedback
-```
-/ant:feedback "This approach is wrong"
-/ant:feedback "Need to pivot architecture"
-```
-- Effect: Pivots approach
-- Route-setter: Replans with new direction
-- Builder: Adjusts implementation
-
-## Learning Integration
-
-FEEDBACK pheromones are recorded in memory.json for pattern learning:
-- 3+ similar feedback → preference/constraint established
-- Architect caste analyzes feedback history
-- Patterns influence future autonomous decisions
-
-</context>
-
-<reference>
-# FEEDBACK Signal Schema
+Add a new signal to the `signals` array and use the Write tool to write the updated file:
 
 ```json
 {
-  "id": "feedback_1234567890",
+  "id": "feedback_<unix_timestamp>",
   "type": "FEEDBACK",
+  "content": "<the feedback message>",
   "strength": 0.5,
-  "created_at": "2025-02-01T12:00:00Z",
-  "decay_rate": 21600,
-  "metadata": {
-    "source": "queen",
-    "caste": null,
-    "context": "Great progress on API layer"
-  }
+  "half_life_seconds": 21600,
+  "created_at": "<ISO-8601 UTC timestamp>"
 }
 ```
 
-# Decay Calculation
+Preserve all existing signals in the array.
 
-After 6 hours: strength × 0.5 = 0.25
-After 12 hours: strength × 0.25 = 0.125
-After 18 hours: strength × 0.125 = 0.0625
+### Step 4: Log Decision
 
-Worker Ants interpret decay on-read based on time elapsed.
-</reference>
+Read `.aether/data/memory.json`. Append a decision record to the `decisions` array:
 
-<allowed-tools>
-Write
-Bash
-Read
-</allowed-tools>
+```json
+{
+  "id": "dec_<unix_timestamp>_<4_random_hex>",
+  "type": "feedback",
+  "content": "<the feedback message>",
+  "context": "Phase <current_phase> -- <colony state>",
+  "phase": <current_phase from COLONY_STATE.json>,
+  "timestamp": "<ISO-8601 UTC>"
+}
+```
+
+If the `decisions` array exceeds 30 entries, remove the oldest entries to keep only 30.
+
+Use the Write tool to write the updated memory.json.
+
+### Step 5: Write Event
+
+Read `.aether/data/events.json`. Append to the `events` array:
+
+```json
+{
+  "id": "evt_<unix_timestamp>_<4_random_hex>",
+  "type": "pheromone_emitted",
+  "source": "feedback",
+  "content": "FEEDBACK: <content> (strength 0.5, half-life 6hr)",
+  "timestamp": "<ISO-8601 UTC>"
+}
+```
+
+If the `events` array exceeds 100 entries, remove the oldest entries to keep only 100.
+
+Use the Write tool to write the updated events.json.
+
+### Step 6: Display Result
+
+```
+FEEDBACK pheromone emitted
+
+  Message: "<feedback>"
+  Strength: 0.5
+  Half-life: 6 hours
+
+  Colony response by sensitivity:
+    watcher (0.9)      — strong: will intensify verification
+    builder (0.7)      — moderate: will adjust implementation
+    route-setter (0.7) — moderate: will adjust planning
+    architect (0.6)    — moderate: will record for learning
+    colonizer (0.5)    — moderate: will adjust exploration
+    scout (0.5)        — moderate: will adjust research focus
+
+  FEEDBACK can be emitted at any time, even during /ant:build.
+  It provides gentle guidance without breaking emergence.
+
+Next Steps:
+  /ant:status          View colony status and all pheromones
+  /ant:focus "<area>"  Strengthen attention on specific area
+```

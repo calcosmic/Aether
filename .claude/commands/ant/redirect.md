@@ -3,237 +3,110 @@ name: ant:redirect
 description: Emit REDIRECT pheromone - Queen warns colony away from specific approaches
 ---
 
-<objective>
-Emit a REDIRECT pheromone to warn the colony away from specific approaches or patterns.
+You are the **Queen Ant Colony**. Emit a REDIRECT pheromone to warn the colony away from a pattern.
 
-The REDIRECT pheromone is a strong repel signal (strength 0.9) with a 24-hour half-life.
-It creates avoidance patterns for Builder, exclusion from Route-setter planning, and
-validation constraints for Watcher.
-</objective>
+## Instructions
 
-<process>
-You are the **Queen Ant Colony** receiving a redirect command from the Queen.
+The pattern to avoid is: `$ARGUMENTS`
 
-## Step 1: Validate Input
-Check if redirect pattern argument is provided:
-```bash
-if [ -z "$1" ]; then
-  echo "Usage: /ant:redirect \"<pattern to avoid>\""
-  echo ""
-  echo "Example:"
-  echo "  /ant:redirect \"synchronous patterns\""
-  echo "  /ant:redirect \"blocking I/O operations\""
-  echo "  /ant:redirect \"global state mutations\""
-  exit 1
-fi
-```
+### Step 1: Validate Input
 
-## Step 2: Check Colony State for Emergence Guard
-
-```bash
-# Check colony state for emergence guard
-COLONY_STATE=".aether/data/COLONY_STATE.json"
-if [ -f "$COLONY_STATE" ]; then
-    colony_state=$(jq -r '.colony_status.state' "$COLONY_STATE")
-
-    # Block Queen intervention during EXECUTING state (emergence period)
-    if [ "$colony_state" = "EXECUTING" ]; then
-        echo "⚠️  Colony is EXECUTING - Queen intervention blocked"
-        echo ""
-        echo "The colony is currently in emergence mode. Worker Ants are working"
-        echo "autonomously based on existing pheromone signals."
-        echo ""
-        echo "Phase boundaries are the only time for direction changes."
-        echo ""
-        echo "Options:"
-        echo "  - Wait for VERIFYING state (phase boundary check-in)"
-        echo "  - Use FEEDBACK pheromone: /ant:feedback \"message\" (provides input without breaking emergence)"
-        echo "  - Review colony status: /ant:status"
-        echo ""
-        echo "Current state: EXECUTING"
-        exit 1
-    fi
-fi
-```
-
-## Step 3: Load State
-Set the pheromones file path:
-```bash
-PHEROMONES=".aether/data/pheromones.json"
-```
-
-## Step 4: Create REDIRECT Pheromone
-Create the REDIRECT pheromone object with timestamp and append to active_pheromones:
-```bash
-timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-pheromone_id="redirect_$(date +%s)"
-
-jq --arg id "$pheromone_id" \
-   --arg timestamp "$timestamp" \
-   --arg pattern "$1" \
-   '
-   .active_pheromones += [{
-     "id": $id,
-     "type": "REDIRECT",
-     "strength": 0.9,
-     "created_at": $timestamp,
-     "decay_rate": 86400,
-     "metadata": {
-       "source": "queen",
-       "caste": null,
-       "context": $pattern
-     }
-   }]
-   ' "$PHEROMONES" > /tmp/pheromones.tmp
-
-# Atomic write
-# Source atomic-write utility and use atomic_write_from_file
-source .aether/utils/atomic-write.sh
-atomic_write_from_file "$PHEROMONES" /tmp/pheromones.tmp
-```
-
-## Step 5: Present Results
-Show the Queen (user) the REDIRECT signal was emitted:
+If `$ARGUMENTS` is empty or blank, output:
 
 ```
-╔══════════════════════════════════════════════════════════════╗
-║  REDIRECT Pheromone Emitted                                  ║
-╠══════════════════════════════════════════════════════════════╣
-║  Avoid: "{pattern}"                                           ║
-║  Type: REDIRECT (repel signal)                                ║
-║  Strength: 90%                                                ║
-║  Half-Life: 24 hours                                          ║
-║                                                               ║
-║  Colony Response:                                             ║
-║  ✓ Builder will avoid {pattern}                               ║
-║  ✓ Route-setter will exclude from planning                    ║
-║  ✓ Watcher will validate against constraint                   ║
-╚══════════════════════════════════════════════════════════════╝
+Usage: /ant:redirect "<pattern to avoid>"
 
-Colony will steer away from this approach.
-Signal will decay over 24 hours.
-
-Next Steps:
-  /ant:status   - View all active pheromones
-  /ant:focus    - Guide colony attention (optional)
+Examples:
+  /ant:redirect "Don't use JWT for sessions"
+  /ant:redirect "Avoid synchronous I/O"
+  /ant:redirect "No global mutable state"
 ```
 
-</process>
+Stop here.
 
-<context>
-# AETHER ARCHITECTURE - REDIRECT Pheromone
+### Step 2: Read State
 
-## REDIRECT Signal Characteristics
+Use the Read tool to read `.aether/data/COLONY_STATE.json`.
 
-- **Type**: Strong repel signal
-- **Default Strength**: 0.9 (90%)
-- **Half-Life**: 24 hours (86400 seconds)
-- **Decay Formula**: Strength(t) = 0.9 × e^(-t/86400)
-- **Purpose**: Warn colony away from specific approaches or patterns
+If `goal` is null, output `No colony initialized. Run /ant:init first.` and stop.
 
-## Caste Sensitivity to REDIRECT
+### Step 3: Append REDIRECT Signal
 
-Different castes have different sensitivity to REDIRECT signals:
+Use the Read tool to read `.aether/data/pheromones.json`.
 
-| Caste | REDIRECT Sensitivity | Effective Strength |
-|-------|---------------------|-------------------|
-| Colonizer | 0.9 | 0.81 |
-| Route-setter | 0.8 | 0.72 |
-| Builder | 0.7 | 0.63 |
-| Watcher | 1.0 | 0.90 |
-| Scout | 0.8 | 0.72 |
-| Architect | 0.9 | 0.81 |
-
-**Effective Strength** = Signal Strength × Caste Sensitivity
-
-## Colony Behavior
-
-### Builder Ant (Sensitivity: 0.7)
-- Will avoid implementing redirected patterns
-- Seeks alternative approaches when encountering redirected context
-- Lower sensitivity allows flexibility when no alternatives exist
-
-### Route-setter Ant (Sensitivity: 0.8)
-- Excludes redirected patterns from phase planning
-- Avoids creating tasks that require redirected approaches
-- Medium sensitivity allows strategic exceptions
-
-### Watcher Ant (Sensitivity: 1.0)
-- Validates implementation against redirect constraints
-- Highest sensitivity ensures redirected patterns are caught
-- Will flag violations even in edge cases
-
-### Colonizer Ant (Sensitivity: 0.9)
-- Avoids indexing redirected patterns as favorable approaches
-- High sensitivity prevents colony from "rediscovering" bad patterns
-
-### Scout Ant (Sensitivity: 0.8)
-- Avoids researching redirected approaches
-- Seeks alternative information sources
-
-### Architect Ant (Sensitivity: 0.9)
-- Avoids compressing redirected patterns into long-term memory
-- High sensitivity prevents bad patterns from becoming institutional knowledge
-
-## Learning Patterns
-
-After 3+ REDIRECT signals on the same pattern:
-- Pattern added to `learning_patterns.redirect_constraints`
-- Colony treats as permanent constraint (even after signal decays)
-- Requires explicit Queen override to remove
-
-## Signal Combinations
-
-REDIRECT combines with other signals:
-
-- **INIT + REDIRECT**: Goal established with avoidance patterns
-- **FOCUS + REDIRECT**: Increased attention in area, but avoiding specific patterns
-- **FEEDBACK + REDIRECT**: Strong behavioral adjustment - avoid this AND do that instead
-
-## Examples
-
-```bash
-# Warn against synchronous patterns
-/ant:redirect "synchronous patterns"
-
-# Warn against blocking I/O
-/ant:redirect "blocking I/O operations"
-
-# Warn against global state
-/ant:redirect "global state mutations"
-```
-
-</context>
-
-<reference>
-# Pheromone Schema
-
-REDIRECT pheromone objects follow this schema:
+Add a new signal to the `signals` array and use the Write tool to write the updated file:
 
 ```json
 {
-  "id": "redirect_1738400000",
+  "id": "redirect_<unix_timestamp>",
   "type": "REDIRECT",
+  "content": "<the pattern to avoid>",
   "strength": 0.9,
-  "created_at": "2026-02-01T15:25:00Z",
-  "decay_rate": 86400,
-  "metadata": {
-    "source": "queen",
-    "caste": null,
-    "context": "pattern to avoid"
-  }
+  "half_life_seconds": 86400,
+  "created_at": "<ISO-8601 UTC timestamp>"
 }
 ```
 
-Key fields:
-- `decay_rate`: 86400 (24 hours in seconds) - determines half-life
-- `strength`: 0.9 (90%) - default REDIRECT strength
-- `metadata.context`: The pattern or approach to avoid
-- `metadata.caste`: null for Queen signals (Worker Ants set caste when emitting)
-</reference>
+Preserve all existing signals in the array.
 
-<allowed-tools>
-Write
-Bash
-Read
-</allowed-tools>
+### Step 4: Log Decision
+
+Read `.aether/data/memory.json`. Append a decision record to the `decisions` array:
+
+```json
+{
+  "id": "dec_<unix_timestamp>_<4_random_hex>",
+  "type": "redirect",
+  "content": "<the pattern to avoid>",
+  "context": "Phase <current_phase> -- <colony state>",
+  "phase": <current_phase from COLONY_STATE.json>,
+  "timestamp": "<ISO-8601 UTC>"
+}
+```
+
+If the `decisions` array exceeds 30 entries, remove the oldest entries to keep only 30.
+
+Use the Write tool to write the updated memory.json.
+
+### Step 5: Write Event
+
+Read `.aether/data/events.json`. Append to the `events` array:
+
+```json
+{
+  "id": "evt_<unix_timestamp>_<4_random_hex>",
+  "type": "pheromone_emitted",
+  "source": "redirect",
+  "content": "REDIRECT: <content> (strength 0.9, half-life 24hr)",
+  "timestamp": "<ISO-8601 UTC>"
+}
+```
+
+If the `events` array exceeds 100 entries, remove the oldest entries to keep only 100.
+
+Use the Write tool to write the updated events.json.
+
+### Step 6: Display Result
+
+```
+REDIRECT pheromone emitted
+
+  Avoid: "<pattern>"
+  Strength: 0.9
+  Half-life: 24 hours
+
+  Colony response by sensitivity:
+    builder (0.9)      — strong: will avoid this pattern in code
+    route-setter (0.8) — strong: will exclude from planning
+    watcher (0.5)      — moderate: will validate against constraint
+    scout (0.4)        — weak: will note when researching
+    colonizer (0.3)    — weak: will note in codebase analysis
+    architect (0.3)    — weak: will note for patterns
+
+  REDIRECT signals act as hard constraints during /ant:build.
+  Workers with high sensitivity will refuse approaches matching this pattern.
+
+Next Steps:
+  /ant:focus "<area>"   Guide attention toward something
+  /ant:status           View all active pheromones
+```
