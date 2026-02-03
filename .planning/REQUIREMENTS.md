@@ -1,49 +1,85 @@
-# Requirements: Aether v2.0 Reactive Event Integration
+# Requirements: Aether v3.0 Restore the Soul
 
-**Defined:** 2026-02-02
-**Core Value:** Autonomous Emergence - Worker Ants autonomously spawn Worker Ants; Queen provides signals not commands
+**Defined:** 2026-02-03
+**Core Value:** Autonomous Emergence — Worker Ants autonomously spawn Worker Ants; Queen provides signals not commands
 
-## v2 Requirements
+## v3.0 Requirements
 
-Requirements for v2.0 reactive event integration. Each maps to roadmap phases.
+Requirements for restoring the sophistication, visual identity, and depth lost during the v3-rebuild. Each maps to roadmap phases.
 
-### Event Polling
+### Visual Identity
 
-- [x] **POLL-01**: Worker Ant calls `get_events_for_subscriber()` at execution start to check for relevant events
-- [x] **POLL-02**: Worker Ant subscribes to event topics (phase_complete, error, spawn_request, task_started, task_completed, task_failed)
-- [x] **POLL-03**: Worker Ant calls `mark_events_delivered()` after processing events to prevent reprocessing
-- [x] **POLL-04**: Worker Ant receives only events matching its subscription criteria (topic filtering)
-- [x] **POLL-05**: Different Worker Ant castes prioritize different events based on caste-specific sensitivity profiles
+- [ ] **VIS-01**: Commands display box-drawing headers for major sections
+- [ ] **VIS-02**: Multi-step commands show step progress with [✓]/[→]/[ ] indicators
+- [ ] **VIS-03**: Pheromone display includes computed decay strength bars
+- [ ] **VIS-04**: Worker activity grouped by status with emoji indicators
 
-### Visual Indicators
+### Specialist Watchers
 
-- [x] **VISUAL-01**: User sees activity state (🟢 ACTIVE, ⚪ IDLE, 🔴 ERROR, ⏳ PENDING) for each Worker Ant in status output
-- [x] **VISUAL-02**: Command output shows step progress during multi-step operations (e.g., "Step 1/3: Initializing...")
-- [x] **VISUAL-03**: `/ant:status` displays visual dashboard showing all Worker Ant activity with emoji indicators
-- [x] **VISUAL-04**: User sees pheromone signal strength visually using progress bars (e.g., `[======] 1.0` for full strength)
+- [ ] **WATCH-01**: watcher-ant.md contains 4 specialist modes (security, performance, quality, test-coverage)
+- [ ] **WATCH-02**: Mode activation triggered by pheromone context
+- [ ] **WATCH-03**: Each mode has severity rubric (Critical/High/Medium/Low)
+- [ ] **WATCH-04**: Each mode has specific detection pattern checklist
 
-### E2E Testing
+### Worker Spec Depth
 
-- [x] **TEST-01**: E2E test guide documents init workflow with steps, expected outputs, and verification checks
-- [x] **TEST-02**: E2E test guide documents execute workflow with autonomous spawning verification
-- [x] **TEST-03**: E2E test guide documents spawning workflow with Bayesian confidence verification
-- [x] **TEST-04**: E2E test guide documents memory workflow with DAST compression verification
-- [x] **TEST-05**: E2E test guide documents voting workflow with weighted voting and Critical veto verification
-- [x] **TEST-06**: E2E test guide documents event workflow with polling, delivery, and tracking verification
+- [ ] **SPEC-01**: Each worker spec includes pheromone math examples (sensitivity × strength = effective signal)
+- [ ] **SPEC-02**: Each worker spec includes combination effects for conflicting signals
+- [ ] **SPEC-03**: Each worker spec includes feedback interpretation guide
+- [ ] **SPEC-04**: Each worker spec includes event awareness at startup
+- [ ] **SPEC-05**: Each worker spec includes spawning scenario with full Task tool prompt example
 
-### Documentation
+### Error Tracking
 
-- [x] **DOCS-01**: All path references in `.aether/utils/` script comments are accurate
-- [x] **DOCS-02**: All docstrings in `.claude/commands/ant/` prompts have accurate path references
+- [ ] **ERR-01**: errors.json stores error records with id, category, severity, description, root_cause, phase, timestamp
+- [ ] **ERR-02**: build.md logs errors to errors.json when phase encounters failures
+- [ ] **ERR-03**: Pattern flagging triggers after 3 occurrences of same error category
+- [ ] **ERR-04**: status.md displays recent errors and flagged patterns
 
-## v2.x Requirements
+### Colony Memory
+
+- [ ] **MEM-01**: memory.json stores phase_learnings, decisions, and patterns arrays
+- [ ] **MEM-02**: continue.md extracts learnings at phase boundaries before advancing
+- [ ] **MEM-03**: Commands log significant decisions to memory.json
+- [ ] **MEM-04**: Workers read relevant memory entries at startup for context
+
+### Event Awareness
+
+- [ ] **EVT-01**: events.json stores event records with id, type, source, content, timestamp
+- [ ] **EVT-02**: Commands write events on state changes (init, phase start/complete, errors, spawns)
+- [ ] **EVT-03**: Workers read events.json at startup and filter by timestamp for recent events
+- [ ] **EVT-04**: init.md creates all JSON state files (errors.json, memory.json, events.json)
+
+### Enhanced Dashboard
+
+- [ ] **DASH-01**: status.md shows full colony health with workers, pheromones, errors, memory, events
+- [ ] **DASH-02**: Pheromone section shows each active signal with computed decay bar
+- [ ] **DASH-03**: Error section shows recent errors and flagged patterns from errors.json
+- [ ] **DASH-04**: Memory section shows recent learnings from memory.json
+
+### Phase Review
+
+- [ ] **REV-01**: continue.md shows phase completion summary before advancing
+- [ ] **REV-02**: Phase review shows tasks completed, key decisions, errors encountered
+- [ ] **REV-03**: Learning extraction stores insights to memory.json before phase transition
+
+### Spawn Tracking
+
+- [ ] **SPAWN-01**: COLONY_STATE.json includes spawn_outcomes field per caste
+- [ ] **SPAWN-02**: build.md records spawn events when Phase Lead is spawned
+- [ ] **SPAWN-03**: continue.md records spawn success/failure on phase completion
+- [ ] **SPAWN-04**: Workers check spawn history confidence before spawning (alpha / (alpha + beta))
+
+## v3.x Requirements
 
 Deferred to future release. Tracked but not in current roadmap.
 
-### Enhanced Features
+### Advanced Features
 
-- **VISUAL-10**: Real-time event streaming UI - Users see events flow in real-time
-- **TEST-10**: Historical event replay - Test suite replays events from events.json for deterministic testing
+- **ADV-01**: Real-time event streaming UI — Users see events flow in real-time
+- **ADV-02**: Web-based colony dashboard — Visual GUI for colony monitoring
+- **ADV-03**: Automated LLM behavior testing — Programmatic LLM validation framework
+- **ADV-04**: Event replay for time-travel debugging — Full colony state snapshotting
 
 ## Out of Scope
 
@@ -51,13 +87,13 @@ Explicitly excluded. Documented to prevent scope creep.
 
 | Feature | Reason |
 |---------|--------|
-| Push-based event delivery (background daemons) | Breaks Claude-native model; requires persistent processes |
-| Automated LLM testing only | LLMs are non-deterministic; manual tests catch reasoning issues |
-| Color-based indicators (ANSI colors) | Not universally supported; breaks in some terminals/log files |
-| Complex event schemas (Avro/Protobuf) | Overkill for colony-scale; adds build step and schema registry |
-| Web-based dashboard | Breaks Claude-native workflow; requires separate server |
-| Real-time event streaming | Creates complexity without value for prompt-based agents |
-| Command consolidation (19 → 9-11) | Planned for v3; out of scope for v2 |
+| Python runtime restoration | Claude-native model replaces Python; commands use Read/Write/Task tools |
+| Bash event bus restoration | 890-line event-bus.sh replaced by simple events.json log |
+| Bash utility scripts | Memory-search.sh, spawn-tracker.sh etc. replaced by JSON state |
+| Separate specialist watcher files | 4 modes folded into watcher-ant.md (per constraint: no new commands) |
+| New commands beyond existing 12 | Restore by enriching existing commands, not adding new ones |
+| External dependencies | No vector DBs, embedding services, or external tools |
+| Worker specs exceeding ~200 lines | Keep deep but focused; trim not cut |
 
 ## Traceability
 
@@ -65,30 +101,49 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| POLL-01 | Phase 11 | Complete |
-| POLL-02 | Phase 11 | Complete |
-| POLL-03 | Phase 11 | Complete |
-| POLL-04 | Phase 11 | Complete |
-| POLL-05 | Phase 11 | Complete |
-| VISUAL-01 | Phase 12 | Complete |
-| VISUAL-02 | Phase 12 | Complete |
-| VISUAL-03 | Phase 12 | Complete |
-| VISUAL-04 | Phase 12 | Complete |
-| DOCS-01 | Phase 12 | Complete |
-| DOCS-02 | Phase 12 | Complete |
-| TEST-01 | Phase 13 | Complete |
-| TEST-02 | Phase 13 | Complete |
-| TEST-03 | Phase 13 | Complete |
-| TEST-04 | Phase 13 | Complete |
-| TEST-05 | Phase 13 | Complete |
-| TEST-06 | Phase 13 | Complete |
+| VIS-01 | Phase 14 | Pending |
+| VIS-02 | Phase 14 | Pending |
+| VIS-03 | Phase 14 | Pending |
+| VIS-04 | Phase 14 | Pending |
+| ERR-01 | Phase 15 | Pending |
+| ERR-02 | Phase 15 | Pending |
+| ERR-03 | Phase 15 | Pending |
+| ERR-04 | Phase 15 | Pending |
+| MEM-01 | Phase 15 | Pending |
+| MEM-02 | Phase 15 | Pending |
+| MEM-03 | Phase 15 | Pending |
+| MEM-04 | Phase 15 | Pending |
+| EVT-01 | Phase 15 | Pending |
+| EVT-02 | Phase 15 | Pending |
+| EVT-03 | Phase 15 | Pending |
+| EVT-04 | Phase 15 | Pending |
+| WATCH-01 | Phase 16 | Pending |
+| WATCH-02 | Phase 16 | Pending |
+| WATCH-03 | Phase 16 | Pending |
+| WATCH-04 | Phase 16 | Pending |
+| SPEC-01 | Phase 16 | Pending |
+| SPEC-02 | Phase 16 | Pending |
+| SPEC-03 | Phase 16 | Pending |
+| SPEC-04 | Phase 16 | Pending |
+| SPEC-05 | Phase 16 | Pending |
+| DASH-01 | Phase 17 | Pending |
+| DASH-02 | Phase 17 | Pending |
+| DASH-03 | Phase 17 | Pending |
+| DASH-04 | Phase 17 | Pending |
+| REV-01 | Phase 17 | Pending |
+| REV-02 | Phase 17 | Pending |
+| REV-03 | Phase 17 | Pending |
+| SPAWN-01 | Phase 17 | Pending |
+| SPAWN-02 | Phase 17 | Pending |
+| SPAWN-03 | Phase 17 | Pending |
+| SPAWN-04 | Phase 17 | Pending |
 
 **Coverage:**
-- v2 requirements: 16 total
-- Mapped to phases: 16
-- Unmapped: 0 ✓
+- v3.0 requirements: 36 total
+- Mapped to phases: 36
+- Unmapped: 0
 
 ---
 
-*Requirements defined: 2026-02-02*
-*Last updated: 2026-02-02 after Phase 13 completion - v2.0 SHIPPED*
+*Requirements defined: 2026-02-03*
+*Last updated: 2026-02-03 after roadmap creation*
