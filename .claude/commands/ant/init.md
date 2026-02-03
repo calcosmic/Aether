@@ -16,7 +16,9 @@ If `$ARGUMENTS` is empty or blank, output:
 ```
 Aether Colony
 
-  What would you like to build?
+  Initialize the colony with a goal. This creates the colony state,
+  resets all workers to idle, emits an INIT pheromone, and prepares
+  state files (errors, memory, events) for tracking.
 
   Usage: /ant:init "<your goal here>"
 
