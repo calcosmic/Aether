@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-02-03)
 
 **Core value:** Autonomous Emergence -- Worker Ants autonomously spawn Worker Ants; Queen provides signals not commands
-**Current focus:** v4.0 Hybrid Foundation -- Phase 20: Utility Modules (plan 02 complete)
+**Current focus:** v4.0 Hybrid Foundation -- Phase 20: Utility Modules (plan 03 complete)
 
 ## Current Position
 
 Milestone: v4.0 Hybrid Foundation
 Phase: 20 of 21 (Utility Modules)
-Plan: 2 of 4 complete
+Plan: 3 of 4 complete
 Status: In progress
-Last activity: 2026-02-03 -- Completed 20-02-PLAN.md (state validation subcommands)
+Last activity: 2026-02-03 -- Completed 20-03-PLAN.md (memory operation subcommands)
 
-Progress: [#########...........] 56% (v4.0: 5/9 plans)
+Progress: [###########.........] 67% (v4.0: 6/9 plans)
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -25,7 +25,7 @@ Progress: [#########...........] 56% (v4.0: 5/9 plans)
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 66 (44 v1.0 + 6 v2.0 + 11 v3.0 + 5 v4.0)
+- Total plans completed: 67 (44 v1.0 + 6 v2.0 + 11 v3.0 + 6 v4.0)
 - Average duration: ~20 min
 - Total execution time: ~18 hours
 
@@ -42,7 +42,7 @@ Progress: [#########...........] 56% (v4.0: 5/9 plans)
 | 16 (v3.0) | 3/3 | 6min | 2min |
 | 17 (v3.0) | 3/3 | 4min | 1min |
 | 19 (v4.0) | 3/3 | 4min | 1min |
-| 20 (v4.0) | 2/4 | 4min | 2min |
+| 20 (v4.0) | 3/4 | 6min | 2min |
 
 **Recent Trend:**
 - v3.0 averaged ~1-2 min per plan (prompt-only changes)
@@ -51,6 +51,7 @@ Progress: [#########...........] 56% (v4.0: 5/9 plans)
 - v4.0 plan 03: 2 min (aether-utils.sh scaffold + colony docs, FIX-11)
 - v4.0 plan 04 (20-01): 2 min (5 pheromone math subcommands)
 - v4.0 plan 05 (20-02): 2 min (6 state validation subcommands)
+- v4.0 plan 06 (20-03): 2 min (3 memory operation subcommands)
 
 *Updated after each plan completion*
 
@@ -99,6 +100,8 @@ Progress: [#########...........] 56% (v4.0: 5/9 plans)
 - Bash `local` keyword only valid inside functions; case branches use plain variable assignment
 - Inline jq type-checking for state validation (no shared helper function, more compact)
 - validate-state all uses recursive self-invocation for each target file
+- Token approximation: word count * 1.3 via jq recursive string descent
+- Two-pass memory compression: hard limits first (20/30), then token-threshold aggressive halving (10/15)
 
 ### Pending Todos
 
@@ -120,9 +123,9 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-03
-Stopped at: Completed 20-02-PLAN.md (state validation). Ready for 20-03 (memory operations).
+Stopped at: Completed 20-03-PLAN.md (memory operations). Ready for 20-04 (error tracking).
 Resume file: None
 
 ---
 
-*State updated: 2026-02-03 after 20-02 completion (6 validate-state subcommands, all verified)*
+*State updated: 2026-02-03 after 20-03 completion (3 memory subcommands: token-count, compress, search)*
