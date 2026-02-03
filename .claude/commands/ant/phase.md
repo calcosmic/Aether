@@ -3,363 +3,85 @@ name: ant:phase
 description: Show phase details - Queen reviews phase status, tasks, and caste assignment
 ---
 
-<objective>
-Display detailed phase information including tasks, caste assignments, status, requirements mapping, and check-in status. Enables Queen to review phase details before execution and make decisions at phase boundaries.
-</objective>
+You are the **Queen Ant Colony**. Display phase details from the project plan.
 
-<process>
-You are the **Queen Ant Colony** displaying phase details.
+## Instructions
 
-## Step 1: Parse Arguments
+The argument is: `$ARGUMENTS`
 
-User can call:
-- `/ant:phase` - Show current phase
-- `/ant:phase N` - Show specific phase
-- `/ant:phase list` - List all phases
+### Step 1: Read State
 
-```bash
-PHASE_NUM="${1:-current}"
-```
+Use the Read tool to read these files (in parallel):
+- `.aether/data/COLONY_STATE.json`
+- `.aether/data/PROJECT_PLAN.json`
 
-## Step 2: Load Colony State
+If `COLONY_STATE.json` has `goal: null`, output `No colony initialized. Run /ant:init first.` and stop.
 
-```bash
-COLONY_STATE=".aether/data/COLONY_STATE.json"
-ROADMAP=".planning/ROADMAP.md"
+If `PROJECT_PLAN.json` has empty `phases` array, output `No project plan. Run /ant:plan first.` and stop.
 
-if [ ! -f "$COLONY_STATE" ]; then
-  echo "⚠️  Colony not initialized"
-  echo "Use /ant:init <goal> to initialize the colony"
-  exit 1
-fi
+### Step 2: Determine What to Show
 
-# Get current phase
-CURRENT_PHASE=$(jq -r '.colony_status.current_phase' "$COLONY_STATE")
-```
+- If `$ARGUMENTS` is empty -> show the current phase (from `COLONY_STATE.current_phase`). If `current_phase` is 0 or beyond the last phase, show phase 1.
+- If `$ARGUMENTS` is a number -> show that specific phase
+- If `$ARGUMENTS` is "list" or "all" -> show all phases in summary
 
-## Step 3: Display Phase Information
+### Step 3a: Single Phase View
 
-For single phase view:
+Find the phase by ID in `PROJECT_PLAN.json`.
+
+Output this header:
 
 ```
-╔══════════════════════════════════════════════════════════════╗
-║  Phase {id}: {name}                                          ║
-╠══════════════════════════════════════════════════════════════╣
-║  Status: {status}                                            ║
-║  Caste: {assigned_caste}                                     ║
-║  Progress: {completed}/{total} tasks ({percentage}%)        ║
-╚══════════════════════════════════════════════════════════════╝
-
-🎯 Goal:
-{phase_goal}
-
-📋 Tasks ({task_count} total):
++=====================================================+
+|  AETHER COLONY :: PHASE <id>                         |
++=====================================================+
 ```
 
-Display each task with status:
-```
-  [{status}] {task_id}: {description}
-      Caste: {assigned_caste}
-      Requirements: {req_list}
-```
-
-## Step 4: Show Requirements Mapping
+Then display:
 
 ```
-📐 Requirements Covered:
-{requirements_list}
+Phase <id>: <name>
+Status: <status>
 
-📦 Dependencies:
-{dependency_list}
+<description>
+
+Tasks:
+  [<status_icon>] <task_id>: <description> (<caste>)
+    depends_on: <deps or "none">
+
+Success Criteria:
+  - <criterion>
+
+---
+Next Steps:
+  /ant:build <id>       Build this phase
+  /ant:phase <next_id>  View next phase
+  /ant:status           Colony status
 ```
 
-## Step 5: Show Success Criteria
+Status icons: `[ ]` pending, `[~]` in_progress, `[x]` completed
+
+### Step 3b: List View
+
+Output this header:
 
 ```
-✅ Success Criteria ({count}):
-{success_criteria_list}
++=====================================================+
+|  AETHER COLONY :: ALL PHASES                         |
++=====================================================+
 ```
 
-## Step 6: Show Available Actions
-
-Based on phase status:
+Then display all phases as a summary:
 
 ```
-📋 Available Actions:
+Goal: "<goal>"
+
+  [<icon>] Phase <id>: <name>
+       <completed>/<total> tasks | <status>
+
+(repeat for each phase)
+
+Legend: [x] completed  [~] in progress  [ ] pending
+
+/ant:phase <id> for details
 ```
-
-If phase is "ready" or "pending":
-```
-  /ant:execute {phase_id} - Execute this phase
-```
-
-If phase is "in_progress":
-```
-  /ant:status - View detailed status
-  /ant:focus <area> - Guide colony attention
-```
-
-If phase is "completed":
-```
-  /ant:review {phase_id} - Review completed phase
-```
-
-## Step 7: Check for Queen Check-In
-
-Check if colony is paused at phase boundary awaiting Queen review:
-
-```bash
-# Check for Queen check-in
-checkin_status=$(jq -r '.colony_status.queen_checkin.status // "none"' "$COLONY_STATE")
-
-if [ "$checkin_status" = "awaiting_review" ]; then
-    echo ""
-    echo "QUEEN CHECK-IN REQUIRED"
-    echo ""
-    echo "Colony is paused at phase boundary, awaiting your review."
-    echo ""
-    echo "Options:"
-    echo "  /ant:continue              - Approve and continue to next phase"
-    echo "  /ant:adjust [type]         - Adjust pheromones before continuing"
-    echo "                              Examples: /ant:adjust focus \"area\" 0.9"
-    echo "                                           /ant:adjust redirect \"pattern\" 0.8"
-    echo "  /ant:execute {phase}       - Retry this phase with different approach"
-    echo ""
-
-    # Show phase summary
-    checkin_phase=$(jq -r '.colony_status.queen_checkin.phase' "$COLONY_STATE")
-    echo "Phase Summary:"
-    echo "  Phase: $checkin_phase"
-
-    # Show tasks completed (if available)
-    task_count=$(jq -r ".phases.roadmap[$checkin_phase-1].tasks | length" "$COLONY_STATE")
-    if [ "$task_count" != "null" ] && [ "$task_count" -gt 0 ]; then
-        echo "  Tasks completed: $task_count"
-    fi
-
-    # Show state history
-    transitions=$(jq -r '.state_machine.transitions_count' "$COLONY_STATE")
-    echo "  State transitions: $transitions"
-
-    # Show latest checkpoint
-    latest_checkpoint=$(jq -r '.checkpoints.latest_checkpoint' "$COLONY_STATE")
-    if [ "$latest_checkpoint" != "null" ]; then
-        echo "  Latest checkpoint: $latest_checkpoint"
-    fi
-fi
-```
-
-## Step 8: For Phase List View
-
-```
-╔══════════════════════════════════════════════════════════════╗
-║  Aether v2 - 10 Phase Roadmap                               ║
-╠══════════════════════════════════════════════════════════════╣
-║  Progress: Phase {current}/10 - {overall_percentage}%      ║
-╚══════════════════════════════════════════════════════════════╝
-
-{phase_list_with_status}
-```
-
-</process>
-
-<context>
-# AETHER PHASE STRUCTURE
-
-## All 10 Phases
-
-1. **Colony Foundation** (caste: colonizer)
-   - JSON state persistence and pheromone signal layer
-
-2. **Worker Ant Castes** (caste: route_setter)
-   - Six Worker Ant prompt behaviors with Task tool spawning
-
-3. **Pheromone Communication** (caste: builder)
-   - Stigmergic signals with caste sensitivity
-
-4. **Triple-Layer Memory** (caste: architect)
-   - Working → Short-term → Long-term with associative links
-
-5. **Phase Boundaries** (caste: route_setter)
-   - State machine with Queen check-ins and checkpoints
-
-6. **Autonomous Emergence** (caste: builder)
-   - Capability gap detection with Worker-spawns-Workers
-
-7. **Colony Verification** (caste: watcher)
-   - Multi-perspective verification with weighted voting
-
-8. **Colony Learning** (caste: architect)
-   - Meta-learning loop with Bayesian confidence scoring
-
-9. **Stigmergic Events** (caste: scout)
-   - Event bus for colony-wide pub/sub communication
-
-10. **Colony Maturity** (caste: watcher)
-    - End-to-end testing and production readiness
-
-## Phase Status Values
-
-- **pending**: Not started, waiting for previous phases
-- **ready**: Ready to begin execution
-- **in_progress**: Currently executing
-- **completed**: Successfully completed
-- **failed**: Failed, needs recovery
-
-## Caste Assignments
-
-Each phase has a primary caste that leads the work:
-- **colonizer**: Exploration and mapping
-- **route_setter**: Planning and structure
-- **builder**: Implementation and execution
-- **watcher**: Validation and quality
-- **scout**: Research and information
-- **architect**: Memory and knowledge
-
-Other castes may be spawned as specialists during phase execution.
-</context>
-
-<reference>
-# Example: Single Phase View
-
-```
-╔══════════════════════════════════════════════════════════════╗
-║  Phase 1: Colony Foundation                                  ║
-╠══════════════════════════════════════════════════════════════╣
-║  Status: completed                                           ║
-║  Caste: colonizer                                            ║
-║  Progress: 8/8 tasks (100%)                                 ║
-╚══════════════════════════════════════════════════════════════╝
-
-🎯 Goal:
-Colony state persists safely across context refreshes with corruption-proof JSON storage and pheromone signal system
-
-📋 Tasks (8 total):
-  [✓] 01-01: Create colony state schema (COLONY_STATE.json)
-      Caste: builder
-      Requirements: STATE-01
-
-  [✓] 01-02: Create pheromone signal schema (pheromones.json)
-      Caste: builder
-      Requirements: STATE-02
-
-  [✓] 01-03: Create Worker Ant state schema (worker_ants.json)
-      Caste: builder
-      Requirements: STATE-03
-
-  [✓] 01-04: Create memory schema (memory.json)
-      Caste: builder
-      Requirements: STATE-04
-
-  [✓] 01-05: Implement file locking mechanism
-      Caste: builder
-      Requirements: STATE-06
-
-  [✓] 01-06: Implement atomic write pattern
-      Caste: builder
-      Requirements: STATE-07
-
-  [✓] 01-07: Create /ant:init command prompt
-      Caste: builder
-      Requirements: CMD-01
-
-  [✓] 01-08: Create /ant:status command prompt
-      Caste: builder
-      Requirements: CMD-02
-
-📐 Requirements Covered:
-- CMD-01: User can initialize project with /ant:init
-- CMD-02: User can view colony status with /ant:status
-- STATE-01 through STATE-07: State persistence requirements
-
-✅ Success Criteria (5):
-1. Queen can initialize colony and see COLONY_STATE.json created
-2. Queen can run /ant:status and see colony state
-3. Colony state persists across context refreshes
-4. Multiple Worker Ants can read/write without corruption
-5. Atomic writes prevent partial state corruption
-
-📋 Available Actions:
-  /ant:phase 2 - View next phase
-  /ant:execute 2 - Execute Phase 2
-  /ant:status - View colony status
-```
-
-# Example: Phase View with Check-In Required
-
-```
-╔══════════════════════════════════════════════════════════════╗
-║  Phase 5: Phase Boundaries                                   ║
-╠══════════════════════════════════════════════════════════════╣
-║  Status: in_progress                                         ║
-║  Caste: route_setter                                         ║
-╚══════════════════════════════════════════════════════════════╝
-
-QUEEN CHECK-IN REQUIRED
-
-Colony is paused at phase boundary, awaiting your review.
-
-Options:
-  /ant:continue              - Approve and continue to next phase
-  /ant:adjust [type]         - Adjust pheromones before continuing
-                              Examples: /ant:adjust focus "area" 0.9
-                                           /ant:adjust redirect "pattern" 0.8
-  /ant:execute {phase}       - Retry this phase with different approach
-
-Phase Summary:
-  Phase: 5
-  Tasks completed: 5
-  State transitions: 8
-  Latest checkpoint: checkpoint_7.json
-```
-
-# Example: Phase View Without Check-In (Normal Display)
-
-# Example: Phase List View
-
-```
-╔══════════════════════════════════════════════════════════════╗
-║  Aether v2 - 10 Phase Roadmap                               ║
-╠══════════════════════════════════════════════════════════════╣
-║  Progress: Phase 1/10 - 10%                                ║
-╚══════════════════════════════════════════════════════════════╝
-
-  [✓] Phase 1: Colony Foundation (colonizer)
-      8/8 tasks • 5 requirements • 100%
-
-  [→] Phase 2: Worker Ant Castes (route_setter)
-      0/9 tasks • 7 requirements • 0%
-
-  [ ] Phase 3: Pheromone Communication (builder)
-      0/8 tasks • 8 requirements • 0%
-
-  [ ] Phase 4: Triple-Layer Memory (architect)
-      0/10 tasks • 11 requirements • 0%
-
-  [ ] Phase 5: Phase Boundaries (route_setter)
-      0/9 tasks • 13 requirements • 0%
-
-  [ ] Phase 6: Autonomous Emergence (builder)
-      0/8 tasks • 8 requirements • 0%
-
-  [ ] Phase 7: Colony Verification (watcher)
-      0/10 tasks • 10 requirements • 0%
-
-  [ ] Phase 8: Colony Learning (architect)
-      0/6 tasks • 6 requirements • 0%
-
-  [ ] Phase 9: Stigmergic Events (scout)
-      0/7 tasks • 7 requirements • 0%
-
-  [ ] Phase 10: Colony Maturity (watcher)
-      0/10 tasks • all requirements • 0%
-
-Legend: [✓] completed [→] in progress [ ] pending
-```
-</reference>
-
-<allowed-tools>
-Read
-Bash
-Grep
-</allowed-tools>
