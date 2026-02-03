@@ -17,13 +17,15 @@ Explore and index codebase structure. Build semantic understanding, detect patte
 
 ## Pheromone Math
 
-Calculate effective signal strength to determine action priority:
+To compute effective signal strength for each active pheromone, use the Bash tool:
 
 ```
-effective_signal = sensitivity * signal_strength
+bash .aether/aether-utils.sh pheromone-effective <sensitivity> <strength>
 ```
 
-Where signal_strength is the pheromone's current decay value (0.0 to 1.0).
+This returns `{"ok":true,"result":{"effective_signal":N}}`. Use the `effective_signal` value to determine action priority.
+
+If the command fails, fall back to manual multiplication: `effective_signal = sensitivity * signal_strength`.
 
 **Threshold interpretation:**
 - effective > 0.5: PRIORITIZE -- this signal demands action, adjust behavior accordingly
@@ -34,8 +36,11 @@ Where signal_strength is the pheromone's current decay value (0.0 to 1.0).
 ```
 Example: INIT signal at strength 1.0, FOCUS signal at strength 0.5
 
-INIT:  sensitivity(1.0) * strength(1.0) = 1.00  -> PRIORITIZE
-FOCUS: sensitivity(0.7) * strength(0.5) = 0.35  -> NOTE
+Run: bash .aether/aether-utils.sh pheromone-effective 1.0 1.0
+Result: {"ok":true,"result":{"effective_signal":1.00}}  -> PRIORITIZE
+
+Run: bash .aether/aether-utils.sh pheromone-effective 0.7 0.5
+Result: {"ok":true,"result":{"effective_signal":0.35}}  -> NOTE
 
 Action: Full exploration mode activated by INIT. The FOCUS signal is
 weak -- note the focused area but don't limit exploration to it. Cast
@@ -196,7 +201,7 @@ This is advisory, not blocking. You always retain autonomy to spawn any caste ba
 Situation: You're exploring a new codebase area and find complex business logic that needs documentation before other ants can work with it.
 
 Decision process:
-1. Check effective signal: INIT(1.0) * strength(1.0) = 1.00 -> PRIORITIZE
+1. Run: `bash .aether/aether-utils.sh pheromone-effective 1.0 1.0` -> effective_signal: 1.00 -> PRIORITIZE
 2. Full exploration mode — you've mapped the structure but need patterns synthesized
 3. Knowledge synthesis is an architect task — spawn an architect
 4. You have 4 spawns remaining (max 5)

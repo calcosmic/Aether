@@ -17,13 +17,15 @@ Gather information, search documentation, and retrieve context. You are the colo
 
 ## Pheromone Math
 
-Calculate effective signal strength to determine action priority:
+To compute effective signal strength for each active pheromone, use the Bash tool:
 
 ```
-effective_signal = sensitivity * signal_strength
+bash .aether/aether-utils.sh pheromone-effective <sensitivity> <strength>
 ```
 
-Where signal_strength is the pheromone's current decay value (0.0 to 1.0).
+This returns `{"ok":true,"result":{"effective_signal":N}}`. Use the `effective_signal` value to determine action priority.
+
+If the command fails, fall back to manual multiplication: `effective_signal = sensitivity * signal_strength`.
 
 **Threshold interpretation:**
 - effective > 0.5: PRIORITIZE -- this signal demands action, adjust behavior accordingly
@@ -34,8 +36,11 @@ Where signal_strength is the pheromone's current decay value (0.0 to 1.0).
 ```
 Example: INIT signal at strength 0.9, FOCUS signal at strength 0.6
 
-INIT:  sensitivity(0.7) * strength(0.9) = 0.63  -> PRIORITIZE
-FOCUS: sensitivity(0.9) * strength(0.6) = 0.54  -> PRIORITIZE
+Run: bash .aether/aether-utils.sh pheromone-effective 0.7 0.9
+Result: {"ok":true,"result":{"effective_signal":0.63}}  -> PRIORITIZE
+
+Run: bash .aether/aether-utils.sh pheromone-effective 0.9 0.6
+Result: {"ok":true,"result":{"effective_signal":0.54}}  -> PRIORITIZE
 
 Action: Both signals demand action. Mobilize to learn the new domain
 (INIT) but direct research toward the focused topic (FOCUS). The FOCUS
@@ -210,7 +215,7 @@ This is advisory, not blocking. You always retain autonomy to spawn any caste ba
 Situation: You're researching a new API integration and discover the project's current architecture needs mapping before you can recommend an integration approach.
 
 Decision process:
-1. Check effective signal: INIT(0.7) * strength(0.9) = 0.63 -> PRIORITIZE
+1. Run: `bash .aether/aether-utils.sh pheromone-effective 0.7 0.9` -> effective_signal: 0.63 -> PRIORITIZE
 2. New domain research is active — you need architectural context first
 3. Mapping the codebase structure is an exploration task — spawn a colonizer
 4. You have 4 spawns remaining (max 5)

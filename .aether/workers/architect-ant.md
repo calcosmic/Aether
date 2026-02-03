@@ -17,13 +17,15 @@ Synthesize knowledge, extract patterns, and coordinate documentation. You are th
 
 ## Pheromone Math
 
-Calculate effective signal strength to determine action priority:
+To compute effective signal strength for each active pheromone, use the Bash tool:
 
 ```
-effective_signal = sensitivity * signal_strength
+bash .aether/aether-utils.sh pheromone-effective <sensitivity> <strength>
 ```
 
-Where signal_strength is the pheromone's current decay value (0.0 to 1.0).
+This returns `{"ok":true,"result":{"effective_signal":N}}`. Use the `effective_signal` value to determine action priority.
+
+If the command fails, fall back to manual multiplication: `effective_signal = sensitivity * signal_strength`.
 
 **Threshold interpretation:**
 - effective > 0.5: PRIORITIZE -- this signal demands action, adjust behavior accordingly
@@ -34,8 +36,11 @@ Where signal_strength is the pheromone's current decay value (0.0 to 1.0).
 ```
 Example: FEEDBACK signal at strength 0.8, FOCUS signal at strength 0.9
 
-FEEDBACK: sensitivity(0.6) * strength(0.8) = 0.48  -> NOTE
-FOCUS:    sensitivity(0.4) * strength(0.9) = 0.36  -> NOTE
+Run: bash .aether/aether-utils.sh pheromone-effective 0.6 0.8
+Result: {"ok":true,"result":{"effective_signal":0.48}}  -> NOTE
+
+Run: bash .aether/aether-utils.sh pheromone-effective 0.4 0.9
+Result: {"ok":true,"result":{"effective_signal":0.36}}  -> NOTE
 
 Action: Both signals are in the NOTE range -- architect is relatively
 insensitive to most signals (low sensitivity values). Factor both into
@@ -200,7 +205,7 @@ This is advisory, not blocking. You always retain autonomy to spawn any caste ba
 Situation: You're synthesizing project patterns and need current test results to validate a quality pattern hypothesis. You need validation data before you can assign confidence scores.
 
 Decision process:
-1. Check effective signal: FEEDBACK(0.6) * strength(0.8) = 0.48 -> NOTE
+1. Run: `bash .aether/aether-utils.sh pheromone-effective 0.6 0.8` -> effective_signal: 0.48 -> NOTE
 2. Feedback is moderate — factor it in but don't restructure work
 3. Getting test results is a validation task — spawn a watcher
 4. You have 4 spawns remaining (max 5)

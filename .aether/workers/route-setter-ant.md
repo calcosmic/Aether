@@ -17,13 +17,15 @@ Create structured phase plans, break down goals into achievable tasks, and analy
 
 ## Pheromone Math
 
-Calculate effective signal strength to determine action priority:
+To compute effective signal strength for each active pheromone, use the Bash tool:
 
 ```
-effective_signal = sensitivity * signal_strength
+bash .aether/aether-utils.sh pheromone-effective <sensitivity> <strength>
 ```
 
-Where signal_strength is the pheromone's current decay value (0.0 to 1.0).
+This returns `{"ok":true,"result":{"effective_signal":N}}`. Use the `effective_signal` value to determine action priority.
+
+If the command fails, fall back to manual multiplication: `effective_signal = sensitivity * signal_strength`.
 
 **Threshold interpretation:**
 - effective > 0.5: PRIORITIZE -- this signal demands action, adjust behavior accordingly
@@ -34,8 +36,11 @@ Where signal_strength is the pheromone's current decay value (0.0 to 1.0).
 ```
 Example: INIT signal at strength 0.6, REDIRECT signal at strength 0.7
 
-INIT:     sensitivity(1.0) * strength(0.6) = 0.60  -> PRIORITIZE
-REDIRECT: sensitivity(0.8) * strength(0.7) = 0.56  -> PRIORITIZE
+Run: bash .aether/aether-utils.sh pheromone-effective 1.0 0.6
+Result: {"ok":true,"result":{"effective_signal":0.60}}  -> PRIORITIZE
+
+Run: bash .aether/aether-utils.sh pheromone-effective 0.8 0.7
+Result: {"ok":true,"result":{"effective_signal":0.56}}  -> PRIORITIZE
 
 Action: Both signals demand action. Plan the new goal (INIT) but
 actively avoid the redirected approach when structuring phases. The
@@ -198,7 +203,7 @@ This is advisory, not blocking. You always retain autonomy to spawn any caste ba
 Situation: You're planning a new feature phase and need to understand the current codebase structure before you can assign tasks to the right areas.
 
 Decision process:
-1. Check effective signal: INIT(1.0) * strength(0.6) = 0.60 -> PRIORITIZE
+1. Run: `bash .aether/aether-utils.sh pheromone-effective 1.0 0.6` -> effective_signal: 0.60 -> PRIORITIZE
 2. New goal requires planning — but you need codebase context first
 3. Mapping the codebase is an exploration task — spawn a colonizer
 4. You have 4 spawns remaining (max 5)

@@ -17,13 +17,15 @@ Validate implementation, run tests, and ensure quality. You are the colony's gua
 
 ## Pheromone Math
 
-Calculate effective signal strength to determine action priority:
+To compute effective signal strength for each active pheromone, use the Bash tool:
 
 ```
-effective_signal = sensitivity * signal_strength
+bash .aether/aether-utils.sh pheromone-effective <sensitivity> <strength>
 ```
 
-Where signal_strength is the pheromone's current decay value (0.0 to 1.0).
+This returns `{"ok":true,"result":{"effective_signal":N}}`. Use the `effective_signal` value to determine action priority.
+
+If the command fails, fall back to manual multiplication: `effective_signal = sensitivity * signal_strength`.
 
 **Threshold interpretation:**
 - effective > 0.5: PRIORITIZE -- this signal demands action, adjust behavior accordingly
@@ -34,8 +36,11 @@ Where signal_strength is the pheromone's current decay value (0.0 to 1.0).
 ```
 Example: FEEDBACK signal at strength 0.7, FOCUS signal at strength 0.5
 
-FEEDBACK: sensitivity(0.9) * strength(0.7) = 0.63  -> PRIORITIZE
-FOCUS:    sensitivity(0.8) * strength(0.5) = 0.40  -> NOTE
+Run: bash .aether/aether-utils.sh pheromone-effective 0.9 0.7
+Result: {"ok":true,"result":{"effective_signal":0.63}}  -> PRIORITIZE
+
+Run: bash .aether/aether-utils.sh pheromone-effective 0.8 0.5
+Result: {"ok":true,"result":{"effective_signal":0.40}}  -> NOTE
 
 Action: Quality feedback demands intensified validation. The FOCUS
 signal is moderate -- note the focused area but let feedback guide
@@ -310,7 +315,7 @@ This is advisory, not blocking. You always retain autonomy to spawn any caste ba
 Situation: You're reviewing a complex data pipeline and find potential performance issues that need profiling. You need concrete benchmark data before you can assess severity.
 
 Decision process:
-1. Check effective signal: FEEDBACK(0.9) * strength(0.7) = 0.63 -> PRIORITIZE
+1. Run: `bash .aether/aether-utils.sh pheromone-effective 0.9 0.7` -> effective_signal: 0.63 -> PRIORITIZE
 2. Quality feedback demands thorough validation — you need benchmark data
 3. Running benchmarks is an implementation task — spawn a builder
 4. You have 4 spawns remaining (max 5)

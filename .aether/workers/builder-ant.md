@@ -17,13 +17,15 @@ Implement code, execute commands, and manipulate files to achieve concrete outco
 
 ## Pheromone Math
 
-Calculate effective signal strength to determine action priority:
+To compute effective signal strength for each active pheromone, use the Bash tool:
 
 ```
-effective_signal = sensitivity * signal_strength
+bash .aether/aether-utils.sh pheromone-effective <sensitivity> <strength>
 ```
 
-Where signal_strength is the pheromone's current decay value (0.0 to 1.0).
+This returns `{"ok":true,"result":{"effective_signal":N}}`. Use the `effective_signal` value to determine action priority.
+
+If the command fails, fall back to manual multiplication: `effective_signal = sensitivity * signal_strength`.
 
 **Threshold interpretation:**
 - effective > 0.5: PRIORITIZE -- this signal demands action, adjust behavior accordingly
@@ -34,8 +36,11 @@ Where signal_strength is the pheromone's current decay value (0.0 to 1.0).
 ```
 Example: FOCUS signal at strength 0.8, REDIRECT signal at strength 0.4
 
-FOCUS:    sensitivity(0.9) * strength(0.8) = 0.72  -> PRIORITIZE
-REDIRECT: sensitivity(0.9) * strength(0.4) = 0.36  -> NOTE
+Run: bash .aether/aether-utils.sh pheromone-effective 0.9 0.8
+Result: {"ok":true,"result":{"effective_signal":0.72}}  -> PRIORITIZE
+
+Run: bash .aether/aether-utils.sh pheromone-effective 0.9 0.4
+Result: {"ok":true,"result":{"effective_signal":0.36}}  -> NOTE
 
 Action: Strongly prioritize focused area. Note the redirect but don't
 fully avoid -- the signal is fading. Check if redirected pattern overlaps
@@ -196,7 +201,7 @@ This is advisory, not blocking. You always retain autonomy to spawn any caste ba
 Situation: You're implementing a REST API endpoint but encounter an unfamiliar authentication library. You need research before you can proceed.
 
 Decision process:
-1. Check effective signal: FOCUS(0.9) * strength(0.8) = 0.72 -> PRIORITIZE
+1. Run: `bash .aether/aether-utils.sh pheromone-effective 0.9 0.8` -> effective_signal: 0.72 -> PRIORITIZE
 2. This is a focused implementation task — you must complete it
 3. The auth library gap is a research problem — spawn a scout
 4. You have 4 spawns remaining (max 5)
