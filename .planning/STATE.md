@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-02-03)
 
 **Core value:** Autonomous Emergence — Worker Ants autonomously spawn Worker Ants; Queen provides signals not commands
-**Current focus:** Phase 15 — Infrastructure State, Plan 02 complete (v3.0 Restore the Soul)
+**Current focus:** Phase 15 — Infrastructure State complete (v3.0 Restore the Soul)
 
 ## Current Position
 
 Milestone: v3.0 Restore the Soul
 Phase: 15 of 17 (Infrastructure State)
-Plan: 2 of 3 in current phase
-Status: In progress
-Last activity: 2026-02-03 — Completed 15-02-PLAN.md
+Plan: 3 of 3 in current phase
+Status: Phase complete
+Last activity: 2026-02-03 — Completed 15-03-PLAN.md
 
-Progress: [██████████████████░░] 79% (v1.0 + v2.0 complete, v3.0: 4/11 plans done)
+Progress: [██████████████████░░] 81% (v1.0 + v2.0 complete, v3.0: 5/11 plans done)
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -24,7 +24,7 @@ Progress: [██████████████████░░] 79% (v1
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 54 (44 v1.0 + 6 v2.0 + 4 v3.0)
+- Total plans completed: 55 (44 v1.0 + 6 v2.0 + 5 v3.0)
 - Average duration: ~20 min
 - Total execution time: ~18 hours
 
@@ -37,11 +37,11 @@ Progress: [██████████████████░░] 79% (v1
 | 12 (v2.0) | 2/2 | 10min | 5min |
 | 13 (v2.0) | 1/1 | 3min | 3min |
 | 14 (v3.0) | 2/2 | 4min | 2min |
-| 15 (v3.0) | 2/3 | 2min | 1min |
+| 15 (v3.0) | 3/3 | 4min | 1min |
 
 **Recent Trend:**
-- 15-01 completed in 1 min
 - 15-02 completed in 1 min
+- 15-03 completed in 2 min
 - Trend: Fast (prompt-only changes, no code)
 
 *Updated after each plan completion*
@@ -68,6 +68,8 @@ Progress: [██████████████████░░] 79% (v1
 - Error schema: 8 fields (id, category, severity, description, root_cause, phase, task_id, timestamp), 12 categories
 - Pattern flagging at 3+ errors of same category, stored in errors.json flagged_patterns array
 - Retention limits: 50 errors, 100 events (oldest trimmed on write)
+- memory.json phase_learnings capped at 20, decisions capped at 30
+- Phase learnings extracted at continue boundaries, decisions logged by pheromone commands
 
 ### Pending Todos
 
@@ -80,9 +82,9 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-03
-Stopped at: Completed 15-02-PLAN.md (build.md error logging and event writing)
+Stopped at: Completed 15-03-PLAN.md (memory & event integration for continue/focus/redirect/feedback)
 Resume file: None
 
 ---
 
-*State updated: 2026-02-03 after 15-02 plan completion*
+*State updated: 2026-02-03 after 15-03 plan completion*
