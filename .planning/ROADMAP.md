@@ -162,10 +162,12 @@ Aether delivers autonomous emergence through Claude-native skill prompts, JSON s
 4. Temp files created during state operations include PID and timestamp in their names (no collisions under concurrent access), and all jq operations check exit codes before writing results
 5. Running a state-modifying operation creates a timestamped backup in `.aether/data/backups/` before writing, with at most 3 backups retained per file
 
+**Plans:** 3 plans
+
 Plans:
-- [ ] 19-01
-- [ ] 19-02
-- [ ] 19-03
+- [ ] 19-01-PLAN.md -- Canonicalize v3 state schema and verify command field paths
+- [ ] 19-02-PLAN.md -- Harden atomic-write backup dir/rotation, add pheromone cleanup and validation guidance
+- [ ] 19-03-PLAN.md -- Create aether-utils.sh scaffold and document colony system
 
 ---
 
@@ -226,7 +228,7 @@ Phases execute in numeric order: 19 -> 20 -> 21
 | 15. Infrastructure State | v3.0 | 3/3 | Complete | 2026-02-03 |
 | 16. Worker Knowledge | v3.0 | 3/3 | Complete | 2026-02-03 |
 | 17. Integration & Dashboard | v3.0 | 3/3 | Complete | 2026-02-03 |
-| 19. Audit Fixes + Utility Scaffold | v4.0 | 0/3 | Pending | - |
+| 19. Audit Fixes + Utility Scaffold | v4.0 | 0/3 | Planned | - |
 | 20. Utility Modules | v4.0 | 0/4 | Pending | - |
 | 21. Command Integration | v4.0 | 0/2 | Pending | - |
 
