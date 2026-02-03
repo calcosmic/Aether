@@ -211,9 +211,11 @@ Plans:
 4. Worker ant specs document that `aether-utils pheromone-effective` should be called via Bash tool to compute signal response strength, replacing inline multiplication
 5. init.md instructs Claude to run `aether-utils validate-state all` via Bash tool after creating state files, confirming initialization correctness
 
+**Plans:** 2 plans
+
 Plans:
-- [ ] 21-01
-- [ ] 21-02
+- [ ] 21-01-PLAN.md -- Integrate pheromone-batch, pheromone-cleanup, error-add, and validate-state into core commands
+- [ ] 21-02-PLAN.md -- Replace inline pheromone math with pheromone-effective in all 6 worker specs
 
 ## Progress
 
