@@ -29,6 +29,8 @@ Use the Read tool to read these files (in parallel):
 - `.aether/data/COLONY_STATE.json`
 - `.aether/data/pheromones.json`
 - `.aether/data/PROJECT_PLAN.json`
+- `.aether/data/errors.json`
+- `.aether/data/events.json`
 
 **Validate:**
 - If `COLONY_STATE.json` has `goal: null` -> output `No colony initialized. Run /ant:init first.` and stop.
@@ -66,6 +68,22 @@ Use Write tool to update `COLONY_STATE.json`:
 - Set `current_phase` to the phase number
 
 Set the phase's `status` to `"in_progress"` in `PROJECT_PLAN.json`.
+
+**Write Phase Started Event:** Read `.aether/data/events.json` (if not already in memory from Step 2). Append to the `events` array:
+
+```json
+{
+  "id": "evt_<unix_timestamp>_<4_random_hex>",
+  "type": "phase_started",
+  "source": "build",
+  "content": "Phase <id>: <name> started",
+  "timestamp": "<ISO-8601 UTC>"
+}
+```
+
+If the `events` array exceeds 100 entries, remove the oldest entries to keep only 100.
+
+Use the Write tool to write the updated events.json.
 
 ### Step 5: Spawn One Ant
 
