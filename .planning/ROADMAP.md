@@ -55,7 +55,7 @@ Aether delivers autonomous emergence through Claude-native skill prompts, JSON s
 
 **Milestone Goal:** Restore the sophistication, visual identity, and depth lost during the Claude-native rebuild. No new Python, no new bash scripts, no new commands — restore capabilities through JSON state, enriched command prompts, and deeper worker specs.
 
-- [ ] **Phase 14: Visual Identity** — Commands display rich formatted output with box-drawing, progress indicators, and grouped visual elements
+- [x] **Phase 14: Visual Identity** — Commands display rich formatted output with box-drawing, progress indicators, and grouped visual elements
 - [ ] **Phase 15: Infrastructure State** — JSON state files for errors, memory, and events integrated into core commands
 - [ ] **Phase 16: Worker Knowledge** — Deep worker specs with pheromone math, specialist watcher modes, and spawning scenarios
 - [ ] **Phase 17: Integration & Dashboard** — Unified status dashboard, phase review, and spawn outcome tracking
@@ -79,8 +79,8 @@ Aether delivers autonomous emergence through Claude-native skill prompts, JSON s
 **Plans**: 2 plans
 
 Plans:
-- [ ] 14-01: Add box-drawing headers and step progress indicators to command prompts (init.md, build.md, continue.md, status.md, phase.md)
-- [ ] 14-02: Add pheromone decay bar rendering and worker activity grouping to status-displaying commands
+- [x] 14-01: Add box-drawing headers and step progress indicators to command prompts (init.md, build.md, continue.md, status.md, phase.md)
+- [x] 14-02: Add pheromone decay bar rendering and worker activity grouping to status-displaying commands
 
 ---
 
@@ -165,7 +165,7 @@ Phases execute in numeric order: 14 -> 15 -> 16 -> 17
 | 11. Event Polling Integration | v2.0 | 3/3 | Complete | 2026-02-02 |
 | 12. Visual Indicators & Documentation | v2.0 | 2/2 | Complete | 2026-02-02 |
 | 13. E2E Testing | v2.0 | 1/1 | Complete | 2026-02-02 |
-| 14. Visual Identity | v3.0 | 0/2 | Not started | - |
+| 14. Visual Identity | v3.0 | 2/2 | Complete | 2026-02-03 |
 | 15. Infrastructure State | v3.0 | 0/3 | Not started | - |
 | 16. Worker Knowledge | v3.0 | 0/3 | Not started | - |
 | 17. Integration & Dashboard | v3.0 | 0/3 | Not started | - |

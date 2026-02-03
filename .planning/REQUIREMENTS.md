@@ -9,10 +9,10 @@ Requirements for restoring the sophistication, visual identity, and depth lost d
 
 ### Visual Identity
 
-- [ ] **VIS-01**: Commands display box-drawing headers for major sections
-- [ ] **VIS-02**: Multi-step commands show step progress with [✓]/[→]/[ ] indicators
-- [ ] **VIS-03**: Pheromone display includes computed decay strength bars
-- [ ] **VIS-04**: Worker activity grouped by status with emoji indicators
+- [x] **VIS-01**: Commands display box-drawing headers for major sections
+- [x] **VIS-02**: Multi-step commands show step progress with [✓]/[→]/[ ] indicators
+- [x] **VIS-03**: Pheromone display includes computed decay strength bars
+- [x] **VIS-04**: Worker activity grouped by status with emoji indicators
 
 ### Specialist Watchers
 
@@ -101,10 +101,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| VIS-01 | Phase 14 | Pending |
-| VIS-02 | Phase 14 | Pending |
-| VIS-03 | Phase 14 | Pending |
-| VIS-04 | Phase 14 | Pending |
+| VIS-01 | Phase 14 | Complete |
+| VIS-02 | Phase 14 | Complete |
+| VIS-03 | Phase 14 | Complete |
+| VIS-04 | Phase 14 | Complete |
 | ERR-01 | Phase 15 | Pending |
 | ERR-02 | Phase 15 | Pending |
 | ERR-03 | Phase 15 | Pending |
@@ -146,4 +146,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 ---
 
 *Requirements defined: 2026-02-03*
-*Last updated: 2026-02-03 after roadmap creation*
+*Last updated: 2026-02-03 after Phase 14 completion*
