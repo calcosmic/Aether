@@ -2,26 +2,27 @@
 
 ## What This Is
 
-Aether is a **unique, standalone multi-agent system** built from first principles on ant colony intelligence. Worker Ants autonomously spawn other Worker Ants without human orchestration. The Queen (user) provides high-level intention via pheromone signals (INIT, FOCUS, REDIRECT, FEEDBACK), and the colony self-organizes to complete tasks through emergent intelligence.
+Aether is a **standalone multi-agent system** that applies ant colony intelligence to autonomous agent orchestration, built natively for Claude Code. Worker Ants spawn other Worker Ants through bio-inspired pheromone signaling. The Queen (user) provides high-level intention via pheromone signals (INIT, FOCUS, REDIRECT, FEEDBACK), and the colony self-organizes to complete tasks through emergent intelligence.
 
-This is a **hybrid prompt+code system** — commands like `/ant:init "Build a REST API"` work directly in Claude Code as skill prompts. Prompts handle reasoning and orchestration; a thin shell utility layer (`aether-utils.sh`, 241 lines, 18 subcommands) handles deterministic operations (pheromone math, state validation, memory management, error tracking) that LLMs get wrong.
+This is a **hybrid prompt+code system** — commands like `/ant:init "Build a REST API"` work directly in Claude Code as skill prompts. Prompts handle reasoning and orchestration; a thin shell utility layer (`aether-utils.sh`, 229 lines, 13 subcommands) handles deterministic operations (pheromone math, state validation, spawn enforcement, memory management, error tracking) that LLMs get wrong.
 
-**What makes it unique:**
+**What makes it different:**
 
-1. **Autonomous Agent Spawning** — Worker Ants spawn Worker Ants without human orchestration (no other system does this)
-2. **Unique Caste Architecture** — Six Worker Ant types with specialist watcher modes, designed from first principles for emergence
-3. **Pheromone Communication** — Stigmergic signaling with exponential decay, caste sensitivity profiles, and combination effects
+Autonomous agent spawning is not unique to Aether — systems like AutoGen (ADAS/Meta Agent Search), AutoAgents, and OpenAI's Agents SDK support dynamic agent creation. What Aether does differently is the coordination model:
+
+1. **Stigmergic Communication** — Pheromone signaling with exponential decay, caste sensitivity profiles, and combination effects (not direct commands or message passing)
+2. **Caste Architecture** — Six Worker Ant types with specialist watcher modes, each with different pheromone sensitivities
+3. **Bayesian Spawn Tracking** — Spawn outcomes tracked per caste with alpha/beta updates, so the colony learns which specialists succeed
 4. **Phased Autonomy** — Structure at boundaries, pure emergence within phases
 5. **Colony Memory** — Error tracking, phase learnings, and event awareness that persists across sessions
-6. **Hybrid Determinism** — Shell utilities for math/validation, prompts for reasoning/orchestration
-
-Unlike AutoGen, LangGraph, CrewAI, or any other framework, Aether requires **zero predefined workflows, agent roles, or orchestration logic**. The colony self-organizes.
+6. **Hybrid Determinism** — Shell utilities for math/validation/enforcement, prompts for reasoning/orchestration
+7. **Claude Code Native** — Entire system is markdown skill prompts + thin shell layer, not a Python/Node framework
 
 ## Core Value
 
-**Autonomous Emergence**: Worker Ants detect capability gaps and spawn specialists automatically; pure emergence within structured phases; Queen provides signals not commands.
+**Stigmergic Emergence**: Worker Ants detect capability gaps and spawn specialists through pheromone-guided coordination; pure emergence within structured phases; Queen provides signals not commands.
 
-If this works, everything else follows. If this fails, nothing else matters.
+If this works, everything else follows. If this fails, nothing else matters. Note: the system has not yet been run end-to-end on a real project — components are tested individually but colony self-organization is unproven in practice.
 
 ## Requirements
 
@@ -117,7 +118,7 @@ Aether is based on **383,000+ words of research** across 25 documents by Ralph (
 - Multi-agent orchestration patterns
 - Semantic communication protocols (AINP, SACP)
 - Context engines and memory architecture
-- Autonomous spawning research (confirmed: no existing system has autonomous spawning)
+- Autonomous spawning research (other systems like AutoGen ADAS, AutoAgents, OpenAI Agents SDK have dynamic agent creation; Aether's contribution is the stigmergic coordination model)
 - Verification and quality systems
 
 ## Constraints
@@ -129,7 +130,7 @@ Aether is based on **383,000+ words of research** across 25 documents by Ralph (
 - **No External Dependencies** — No vector DBs, no embedding services, no Node.js, no Python
 - **Shell Utilities Only** — Utility layer uses bash+jq only, stays thin (<300 lines total)
 - **No New Commands** — Functionality enriched in existing 12 commands, not new ones
-- **Unique Design** — All architectures uniquely Aether (inspired by research, not copied)
+- **Novel Coordination** — Stigmergic pheromone model is Aether's differentiator (spawning concept exists elsewhere; coordination approach is novel)
 
 ## Key Decisions
 
@@ -144,7 +145,7 @@ Aether is based on **383,000+ words of research** across 25 documents by Ralph (
 | Enrich existing commands vs add new | Fold review/errors/memory into status/continue rather than new commands | ✓ Good — v3.0 |
 | Hybrid prompt+code | Prompts for reasoning, shell scripts for deterministic math/validation | ✓ Good — v4.0, 18 subcommands at 241 lines |
 | Single wrapper script | aether-utils.sh with subcommands vs separate scripts | ✓ Good — v4.0, clean dispatch pattern |
-| Pheromone-based communication | Stigmergic signals enable true emergence | ✓ Good — 4 signal types with decay working |
+| Pheromone-based communication | Stigmergic signals (vs direct commands in AutoGen/CrewAI) provide different coordination affordances | ✓ Good — 4 signal types with decay working |
 | Standalone system | Aether is its own framework, zero dependencies | ✓ Confirmed |
 | Pattern flagging stays LLM responsibility | error-add records, LLM analyzes patterns in context | ✓ Good — v4.0, clear boundary |
 | validate-state after init | Catch schema errors immediately after state creation | ✓ Good — v4.0, prevents silent corruption |
