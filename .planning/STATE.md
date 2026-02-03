@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-02-03)
 
 **Core value:** Autonomous Emergence -- Worker Ants autonomously spawn Worker Ants; Queen provides signals not commands
-**Current focus:** v4.0 Hybrid Foundation -- Phase 21: Command Integration (plan 02 of N complete)
+**Current focus:** v4.0 Hybrid Foundation -- Phase 21: Command Integration COMPLETE
 
 ## Current Position
 
 Milestone: v4.0 Hybrid Foundation
-Phase: 21 of 21 (Command Integration)
-Plan: 2 complete (21-01, 21-02)
-Status: In progress
-Last activity: 2026-02-03 -- Completed 21-02-PLAN.md (pheromone math integration)
+Phase: 21 of 21 (Command Integration) -- COMPLETE
+Plan: 2 of 2 complete (21-01, 21-02)
+Status: Phase complete
+Last activity: 2026-02-03 -- Completed 21-01-PLAN.md (aether-utils integration in 4 core commands)
 
-Progress: [###############.....] 82% (v4.0: 9/11 plans)
+Progress: [####################] 100% (v4.0: 11/11 plans)
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -25,7 +25,7 @@ Progress: [###############.....] 82% (v4.0: 9/11 plans)
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 70 (44 v1.0 + 6 v2.0 + 11 v3.0 + 9 v4.0)
+- Total plans completed: 71 (44 v1.0 + 6 v2.0 + 11 v3.0 + 10 v4.0)
 - Average duration: ~20 min
 - Total execution time: ~18 hours
 
@@ -43,7 +43,7 @@ Progress: [###############.....] 82% (v4.0: 9/11 plans)
 | 17 (v3.0) | 3/3 | 4min | 1min |
 | 19 (v4.0) | 3/3 | 4min | 1min |
 | 20 (v4.0) | 4/4 | 8min | 2min |
-| 21 (v4.0) | 2/? | 4min | 2min |
+| 21 (v4.0) | 2/2 | 6min | 3min |
 
 **Recent Trend:**
 - v3.0 averaged ~1-2 min per plan (prompt-only changes)
@@ -56,6 +56,7 @@ Progress: [###############.....] 82% (v4.0: 9/11 plans)
 - v4.0 plan 07 (20-04): 2 min (4 error tracking subcommands, all 18 verified)
 - v4.0 plan 08 (21-01): 2 min (phase plan creation for command integration)
 - v4.0 plan 09 (21-02): 2 min (pheromone math integration in 6 worker specs)
+- v4.0 plan 10 (21-01): 2 min (aether-utils integration in status, build, continue, init)
 
 *Updated after each plan completion*
 
@@ -111,6 +112,8 @@ Progress: [###############.....] 82% (v4.0: 9/11 plans)
 - error-add accepts any string as category (no validation against 12 known categories)
 - error-dedup groups by category+description, keeps earliest, drops others within 60s window
 - jq from_entries requires {key, value} not {key, count} -- use `value:` field name
+- Pattern flagging stays inline in build.md -- error-add handles individual errors, LLM handles pattern detection
+- validate-state inserted as Step 6.5 in init.md (between Write Init Event and Display Result)
 
 ### Pending Todos
 
@@ -132,9 +135,9 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-03
-Stopped at: Completed 21-02-PLAN.md (pheromone math integration in 6 worker specs)
+Stopped at: Phase 21 complete. v4.0 Hybrid Foundation milestone complete.
 Resume file: None
 
 ---
 
-*State updated: 2026-02-03 after 21-02 completion (pheromone math -> pheromone-effective in all 6 worker specs)*
+*State updated: 2026-02-03 after 21-01 completion (aether-utils integration in 4 core commands, Phase 21 complete, v4.0 complete)*
