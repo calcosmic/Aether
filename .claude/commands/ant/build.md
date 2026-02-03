@@ -262,6 +262,17 @@ If the `events` array exceeds 100 entries, remove the oldest entries to keep onl
 
 Use the Write tool to write the updated events.json.
 
+**Record Spawn Outcomes:** Read `.aether/data/COLONY_STATE.json`. Look at the ant's report to identify which castes were spawned (look for mentions of "spawned a builder", "spawned a scout", "spawned a watcher", etc. in the report, or caste names mentioned in the context of spawning).
+
+For each caste that was spawned during the phase:
+- If the phase completed successfully: increment `alpha` and `successes` for that caste in `spawn_outcomes`
+- If the phase failed: increment `beta` and `failures` for that caste in `spawn_outcomes`
+- Increment `total_spawns` for that caste regardless of outcome
+
+If the report doesn't clearly identify which castes were spawned, skip spawn outcome tracking for this phase.
+
+Use the Write tool to write the updated COLONY_STATE.json (this write can be combined with the state update already in Step 6).
+
 ### Step 7: Display Results
 
 Show step progress:

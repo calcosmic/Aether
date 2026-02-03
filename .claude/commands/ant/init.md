@@ -61,6 +61,14 @@ Use the Write tool to write `.aether/data/COLONY_STATE.json`:
     "watcher": "idle",
     "scout": "idle",
     "architect": "idle"
+  },
+  "spawn_outcomes": {
+    "colonizer":    {"alpha": 1, "beta": 1, "total_spawns": 0, "successes": 0, "failures": 0},
+    "route-setter": {"alpha": 1, "beta": 1, "total_spawns": 0, "successes": 0, "failures": 0},
+    "builder":      {"alpha": 1, "beta": 1, "total_spawns": 0, "successes": 0, "failures": 0},
+    "watcher":      {"alpha": 1, "beta": 1, "total_spawns": 0, "successes": 0, "failures": 0},
+    "scout":        {"alpha": 1, "beta": 1, "total_spawns": 0, "successes": 0, "failures": 0},
+    "architect":    {"alpha": 1, "beta": 1, "total_spawns": 0, "successes": 0, "failures": 0}
   }
 }
 ```
