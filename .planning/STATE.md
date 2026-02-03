@@ -10,10 +10,10 @@ See: .planning/PROJECT.md (updated 2026-02-03)
 ## Current Position
 
 Milestone: v3.0 Restore the Soul
-Phase: 16 of 17 (Worker Knowledge) -- COMPLETE
+Phase: 16 of 17 (Worker Knowledge) -- VERIFIED ✓
 Plan: 3 of 3 in current phase
-Status: Phase complete
-Last activity: 2026-02-03 — Completed 16-03-PLAN.md (Event Awareness, Memory & Spawning)
+Status: Phase verified, ready for Phase 17
+Last activity: 2026-02-03 — Phase 16 verified (5/5 must-haves passed)
 
 Progress: [███████████████████░] 90% (v1.0 + v2.0 complete, v3.0: 8/11 plans done)
 
@@ -89,9 +89,9 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-03
-Stopped at: Completed 16-03-PLAN.md (Event Awareness, Memory & Spawning) -- Phase 16 complete
+Stopped at: Phase 16 verified ✓ (5/5 must-haves). Ready for Phase 17: Integration & Dashboard.
 Resume file: None
 
 ---
 
-*State updated: 2026-02-03 after 16-03 completion*
+*State updated: 2026-02-03 after Phase 16 verification (passed)*

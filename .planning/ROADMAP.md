@@ -57,7 +57,7 @@ Aether delivers autonomous emergence through Claude-native skill prompts, JSON s
 
 - [x] **Phase 14: Visual Identity** — Commands display rich formatted output with box-drawing, progress indicators, and grouped visual elements
 - [x] **Phase 15: Infrastructure State** — JSON state files for errors, memory, and events integrated into core commands
-- [ ] **Phase 16: Worker Knowledge** — Deep worker specs with pheromone math, specialist watcher modes, and spawning scenarios
+- [x] **Phase 16: Worker Knowledge** — Deep worker specs with pheromone math, specialist watcher modes, and spawning scenarios
 - [ ] **Phase 17: Integration & Dashboard** — Unified status dashboard, phase review, and spawn outcome tracking
 
 ## Phase Details
@@ -126,9 +126,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 16-01: Expand watcher-ant.md with 4 specialist modes (security, performance, quality, test-coverage)
-- [ ] 16-02: Add pheromone math, combination effects, and feedback interpretation to all 6 worker specs
-- [ ] 16-03: Add event awareness and spawning scenario examples to all 6 worker specs
+- [x] 16-01: Expand watcher-ant.md with 4 specialist modes (security, performance, quality, test-coverage)
+- [x] 16-02: Add pheromone math, combination effects, and feedback interpretation to all 6 worker specs
+- [x] 16-03: Add event awareness and spawning scenario examples to all 6 worker specs
 
 ---
 
@@ -167,7 +167,7 @@ Phases execute in numeric order: 14 -> 15 -> 16 -> 17
 | 13. E2E Testing | v2.0 | 1/1 | Complete | 2026-02-02 |
 | 14. Visual Identity | v3.0 | 2/2 | Complete | 2026-02-03 |
 | 15. Infrastructure State | v3.0 | 3/3 | Complete | 2026-02-03 |
-| 16. Worker Knowledge | v3.0 | 0/3 | Not started | - |
+| 16. Worker Knowledge | v3.0 | 3/3 | Complete | 2026-02-03 |
 | 17. Integration & Dashboard | v3.0 | 0/3 | Not started | - |
 
 ---

@@ -16,18 +16,18 @@ Requirements for restoring the sophistication, visual identity, and depth lost d
 
 ### Specialist Watchers
 
-- [ ] **WATCH-01**: watcher-ant.md contains 4 specialist modes (security, performance, quality, test-coverage)
-- [ ] **WATCH-02**: Mode activation triggered by pheromone context
-- [ ] **WATCH-03**: Each mode has severity rubric (Critical/High/Medium/Low)
-- [ ] **WATCH-04**: Each mode has specific detection pattern checklist
+- [x] **WATCH-01**: watcher-ant.md contains 4 specialist modes (security, performance, quality, test-coverage)
+- [x] **WATCH-02**: Mode activation triggered by pheromone context
+- [x] **WATCH-03**: Each mode has severity rubric (Critical/High/Medium/Low)
+- [x] **WATCH-04**: Each mode has specific detection pattern checklist
 
 ### Worker Spec Depth
 
-- [ ] **SPEC-01**: Each worker spec includes pheromone math examples (sensitivity × strength = effective signal)
-- [ ] **SPEC-02**: Each worker spec includes combination effects for conflicting signals
-- [ ] **SPEC-03**: Each worker spec includes feedback interpretation guide
-- [ ] **SPEC-04**: Each worker spec includes event awareness at startup
-- [ ] **SPEC-05**: Each worker spec includes spawning scenario with full Task tool prompt example
+- [x] **SPEC-01**: Each worker spec includes pheromone math examples (sensitivity × strength = effective signal)
+- [x] **SPEC-02**: Each worker spec includes combination effects for conflicting signals
+- [x] **SPEC-03**: Each worker spec includes feedback interpretation guide
+- [x] **SPEC-04**: Each worker spec includes event awareness at startup
+- [x] **SPEC-05**: Each worker spec includes spawning scenario with full Task tool prompt example
 
 ### Error Tracking
 
@@ -41,13 +41,13 @@ Requirements for restoring the sophistication, visual identity, and depth lost d
 - [x] **MEM-01**: memory.json stores phase_learnings, decisions, and patterns arrays
 - [x] **MEM-02**: continue.md extracts learnings at phase boundaries before advancing
 - [x] **MEM-03**: Commands log significant decisions to memory.json
-- [ ] **MEM-04**: Workers read relevant memory entries at startup for context
+- [x] **MEM-04**: Workers read relevant memory entries at startup for context
 
 ### Event Awareness
 
 - [x] **EVT-01**: events.json stores event records with id, type, source, content, timestamp
 - [x] **EVT-02**: Commands write events on state changes (init, phase start/complete, errors, spawns)
-- [ ] **EVT-03**: Workers read events.json at startup and filter by timestamp for recent events
+- [x] **EVT-03**: Workers read events.json at startup and filter by timestamp for recent events
 - [x] **EVT-04**: init.md creates all JSON state files (errors.json, memory.json, events.json)
 
 ### Enhanced Dashboard
@@ -112,20 +112,20 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MEM-01 | Phase 15 | Complete |
 | MEM-02 | Phase 15 | Complete |
 | MEM-03 | Phase 15 | Complete |
-| MEM-04 | Phase 16 | Pending |
+| MEM-04 | Phase 16 | Complete |
 | EVT-01 | Phase 15 | Complete |
 | EVT-02 | Phase 15 | Complete |
-| EVT-03 | Phase 16 | Pending |
+| EVT-03 | Phase 16 | Complete |
 | EVT-04 | Phase 15 | Complete |
-| WATCH-01 | Phase 16 | Pending |
-| WATCH-02 | Phase 16 | Pending |
-| WATCH-03 | Phase 16 | Pending |
-| WATCH-04 | Phase 16 | Pending |
-| SPEC-01 | Phase 16 | Pending |
-| SPEC-02 | Phase 16 | Pending |
-| SPEC-03 | Phase 16 | Pending |
-| SPEC-04 | Phase 16 | Pending |
-| SPEC-05 | Phase 16 | Pending |
+| WATCH-01 | Phase 16 | Complete |
+| WATCH-02 | Phase 16 | Complete |
+| WATCH-03 | Phase 16 | Complete |
+| WATCH-04 | Phase 16 | Complete |
+| SPEC-01 | Phase 16 | Complete |
+| SPEC-02 | Phase 16 | Complete |
+| SPEC-03 | Phase 16 | Complete |
+| SPEC-04 | Phase 16 | Complete |
+| SPEC-05 | Phase 16 | Complete |
 | DASH-01 | Phase 17 | Pending |
 | DASH-02 | Phase 17 | Pending |
 | DASH-03 | Phase 17 | Pending |
@@ -146,4 +146,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 ---
 
 *Requirements defined: 2026-02-03*
-*Last updated: 2026-02-03 after Phase 15 completion*
+*Last updated: 2026-02-03 after Phase 16 completion*
