@@ -141,7 +141,7 @@ Aether delivers autonomous emergence through Claude-native skill prompts, JSON s
 
 **Milestone Goal:** Add a thin shell utility layer for deterministic operations and fix all 11 audit-identified issues. The system becomes hybrid: prompts reason and decide, shell scripts compute and validate. This makes pheromone math, state validation, memory management, and error tracking reliable instead of LLM-approximated.
 
-- [ ] **Phase 19: Audit Fixes + Utility Scaffold** — Fix all 11 audit issues and create the aether-utils.sh scaffold with subcommand dispatch
+- [x] **Phase 19: Audit Fixes + Utility Scaffold** — Fix all 11 audit issues and create the aether-utils.sh scaffold with subcommand dispatch
 - [ ] **Phase 20: Utility Modules** — Implement all 4 utility modules (pheromone math, state validation, memory ops, error tracking)
 - [ ] **Phase 21: Command Integration** — Update command prompts to call utilities where deterministic results are needed
 
@@ -165,9 +165,9 @@ Aether delivers autonomous emergence through Claude-native skill prompts, JSON s
 **Plans:** 3 plans
 
 Plans:
-- [ ] 19-01-PLAN.md -- Canonicalize v3 state schema and verify command field paths
-- [ ] 19-02-PLAN.md -- Harden atomic-write backup dir/rotation, add pheromone cleanup and validation guidance
-- [ ] 19-03-PLAN.md -- Create aether-utils.sh scaffold and document colony system
+- [x] 19-01-PLAN.md -- Canonicalize v3 state schema and verify command field paths
+- [x] 19-02-PLAN.md -- Harden atomic-write backup dir/rotation, add pheromone cleanup and validation guidance
+- [x] 19-03-PLAN.md -- Create aether-utils.sh scaffold and document colony system
 
 ---
 
@@ -228,7 +228,7 @@ Phases execute in numeric order: 19 -> 20 -> 21
 | 15. Infrastructure State | v3.0 | 3/3 | Complete | 2026-02-03 |
 | 16. Worker Knowledge | v3.0 | 3/3 | Complete | 2026-02-03 |
 | 17. Integration & Dashboard | v3.0 | 3/3 | Complete | 2026-02-03 |
-| 19. Audit Fixes + Utility Scaffold | v4.0 | 0/3 | Planned | - |
+| 19. Audit Fixes + Utility Scaffold | v4.0 | 3/3 | Complete | 2026-02-03 |
 | 20. Utility Modules | v4.0 | 0/4 | Pending | - |
 | 21. Command Integration | v4.0 | 0/2 | Pending | - |
 

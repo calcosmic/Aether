@@ -9,10 +9,10 @@ Requirements for adding a thin shell utility layer and fixing all audit-identifi
 
 ### Utility Layer
 
-- [ ] **UTIL-01**: `aether-utils.sh` exists as a single entry point with subcommand dispatch (e.g., `aether-utils pheromone-decay 0.9 3600`)
-- [ ] **UTIL-02**: Utility script sources `file-lock.sh` and `atomic-write.sh` for shared infrastructure
-- [ ] **UTIL-03**: All subcommands output JSON to stdout for prompt consumption
-- [ ] **UTIL-04**: All subcommands return non-zero exit code on error with JSON error message
+- [x] **UTIL-01**: `aether-utils.sh` exists as a single entry point with subcommand dispatch (e.g., `aether-utils pheromone-decay 0.9 3600`)
+- [x] **UTIL-02**: Utility script sources `file-lock.sh` and `atomic-write.sh` for shared infrastructure
+- [x] **UTIL-03**: All subcommands output JSON to stdout for prompt consumption
+- [x] **UTIL-04**: All subcommands return non-zero exit code on error with JSON error message
 
 ### Pheromone Math
 
@@ -46,23 +46,23 @@ Requirements for adding a thin shell utility layer and fixing all audit-identifi
 
 ### Audit Fixes — Critical
 
-- [ ] **FIX-01**: atomic-write.sh sources file-lock.sh so acquire_lock/release_lock are available
-- [ ] **FIX-02**: COLONY_STATE.json uses single canonical path for goal (`.goal`) and current_phase (`.current_phase`)
-- [ ] **FIX-03**: All commands read/write using canonical field paths consistently
+- [x] **FIX-01**: atomic-write.sh sources file-lock.sh so acquire_lock/release_lock are available
+- [x] **FIX-02**: COLONY_STATE.json uses single canonical path for goal (`.goal`) and current_phase (`.current_phase`)
+- [x] **FIX-03**: All commands read/write using canonical field paths consistently
 
 ### Audit Fixes — High Priority
 
-- [ ] **FIX-04**: Temp files use unique suffixes (PID + timestamp) to prevent race conditions
-- [ ] **FIX-05**: All jq operations check exit code and report errors instead of silently failing
-- [ ] **FIX-06**: State file backups created before critical updates (rotate last 3)
-- [ ] **FIX-07**: Pheromone schema uses consistent field names between creation and reads
-- [ ] **FIX-08**: State files validated on load (validate-state called before operations)
+- [x] **FIX-04**: Temp files use unique suffixes (PID + timestamp) to prevent race conditions
+- [x] **FIX-05**: All jq operations check exit code and report errors instead of silently failing
+- [x] **FIX-06**: State file backups created before critical updates (rotate last 3)
+- [x] **FIX-07**: Pheromone schema uses consistent field names between creation and reads
+- [x] **FIX-08**: State files validated on load (validate-state called before operations)
 
 ### Audit Fixes — Medium Priority
 
-- [ ] **FIX-09**: Worker ant status uses consistent casing (lowercase: "ready", "active", "error", "idle")
-- [ ] **FIX-10**: Expired pheromones cleaned up automatically (pheromone-cleanup called during reads)
-- [ ] **FIX-11**: Colony mode documented in init.md and ant.md help text
+- [x] **FIX-09**: Worker ant status uses consistent casing (lowercase: "ready", "active", "error", "idle")
+- [x] **FIX-10**: Expired pheromones cleaned up automatically (pheromone-cleanup called during reads)
+- [x] **FIX-11**: Colony mode documented in init.md and ant.md help text
 
 ### Command Integration
 
@@ -98,21 +98,21 @@ Deferred to future release. Tracked but not in current roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| UTIL-01 | Phase 19 | Pending |
-| UTIL-02 | Phase 19 | Pending |
-| UTIL-03 | Phase 19 | Pending |
-| UTIL-04 | Phase 19 | Pending |
-| FIX-01 | Phase 19 | Pending |
-| FIX-02 | Phase 19 | Pending |
-| FIX-03 | Phase 19 | Pending |
-| FIX-04 | Phase 19 | Pending |
-| FIX-05 | Phase 19 | Pending |
-| FIX-06 | Phase 19 | Pending |
-| FIX-07 | Phase 19 | Pending |
-| FIX-08 | Phase 19 | Pending |
-| FIX-09 | Phase 19 | Pending |
-| FIX-10 | Phase 19 | Pending |
-| FIX-11 | Phase 19 | Pending |
+| UTIL-01 | Phase 19 | Complete |
+| UTIL-02 | Phase 19 | Complete |
+| UTIL-03 | Phase 19 | Complete |
+| UTIL-04 | Phase 19 | Complete |
+| FIX-01 | Phase 19 | Complete |
+| FIX-02 | Phase 19 | Complete |
+| FIX-03 | Phase 19 | Complete |
+| FIX-04 | Phase 19 | Complete |
+| FIX-05 | Phase 19 | Complete |
+| FIX-06 | Phase 19 | Complete |
+| FIX-07 | Phase 19 | Complete |
+| FIX-08 | Phase 19 | Complete |
+| FIX-09 | Phase 19 | Complete |
+| FIX-10 | Phase 19 | Complete |
+| FIX-11 | Phase 19 | Complete |
 | PHER-01 | Phase 20 | Pending |
 | PHER-02 | Phase 20 | Pending |
 | PHER-03 | Phase 20 | Pending |
@@ -144,4 +144,4 @@ Deferred to future release. Tracked but not in current roadmap.
 
 ---
 *Requirements defined: 2026-02-03*
-*Last updated: 2026-02-03 after initial definition*
+*Last updated: 2026-02-03 after Phase 19 completion*
