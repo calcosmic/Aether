@@ -31,24 +31,24 @@ Requirements for restoring the sophistication, visual identity, and depth lost d
 
 ### Error Tracking
 
-- [ ] **ERR-01**: errors.json stores error records with id, category, severity, description, root_cause, phase, timestamp
-- [ ] **ERR-02**: build.md logs errors to errors.json when phase encounters failures
-- [ ] **ERR-03**: Pattern flagging triggers after 3 occurrences of same error category
-- [ ] **ERR-04**: status.md displays recent errors and flagged patterns
+- [x] **ERR-01**: errors.json stores error records with id, category, severity, description, root_cause, phase, timestamp
+- [x] **ERR-02**: build.md logs errors to errors.json when phase encounters failures
+- [x] **ERR-03**: Pattern flagging triggers after 3 occurrences of same error category
+- [x] **ERR-04**: status.md displays recent errors and flagged patterns
 
 ### Colony Memory
 
-- [ ] **MEM-01**: memory.json stores phase_learnings, decisions, and patterns arrays
-- [ ] **MEM-02**: continue.md extracts learnings at phase boundaries before advancing
-- [ ] **MEM-03**: Commands log significant decisions to memory.json
+- [x] **MEM-01**: memory.json stores phase_learnings, decisions, and patterns arrays
+- [x] **MEM-02**: continue.md extracts learnings at phase boundaries before advancing
+- [x] **MEM-03**: Commands log significant decisions to memory.json
 - [ ] **MEM-04**: Workers read relevant memory entries at startup for context
 
 ### Event Awareness
 
-- [ ] **EVT-01**: events.json stores event records with id, type, source, content, timestamp
-- [ ] **EVT-02**: Commands write events on state changes (init, phase start/complete, errors, spawns)
+- [x] **EVT-01**: events.json stores event records with id, type, source, content, timestamp
+- [x] **EVT-02**: Commands write events on state changes (init, phase start/complete, errors, spawns)
 - [ ] **EVT-03**: Workers read events.json at startup and filter by timestamp for recent events
-- [ ] **EVT-04**: init.md creates all JSON state files (errors.json, memory.json, events.json)
+- [x] **EVT-04**: init.md creates all JSON state files (errors.json, memory.json, events.json)
 
 ### Enhanced Dashboard
 
@@ -105,18 +105,18 @@ Which phases cover which requirements. Updated during roadmap creation.
 | VIS-02 | Phase 14 | Complete |
 | VIS-03 | Phase 14 | Complete |
 | VIS-04 | Phase 14 | Complete |
-| ERR-01 | Phase 15 | Pending |
-| ERR-02 | Phase 15 | Pending |
-| ERR-03 | Phase 15 | Pending |
-| ERR-04 | Phase 15 | Pending |
-| MEM-01 | Phase 15 | Pending |
-| MEM-02 | Phase 15 | Pending |
-| MEM-03 | Phase 15 | Pending |
-| MEM-04 | Phase 15 | Pending |
-| EVT-01 | Phase 15 | Pending |
-| EVT-02 | Phase 15 | Pending |
-| EVT-03 | Phase 15 | Pending |
-| EVT-04 | Phase 15 | Pending |
+| ERR-01 | Phase 15 | Complete |
+| ERR-02 | Phase 15 | Complete |
+| ERR-03 | Phase 15 | Complete |
+| ERR-04 | Phase 15 | Complete |
+| MEM-01 | Phase 15 | Complete |
+| MEM-02 | Phase 15 | Complete |
+| MEM-03 | Phase 15 | Complete |
+| MEM-04 | Phase 16 | Pending |
+| EVT-01 | Phase 15 | Complete |
+| EVT-02 | Phase 15 | Complete |
+| EVT-03 | Phase 16 | Pending |
+| EVT-04 | Phase 15 | Complete |
 | WATCH-01 | Phase 16 | Pending |
 | WATCH-02 | Phase 16 | Pending |
 | WATCH-03 | Phase 16 | Pending |
@@ -146,4 +146,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 ---
 
 *Requirements defined: 2026-02-03*
-*Last updated: 2026-02-03 after Phase 14 completion*
+*Last updated: 2026-02-03 after Phase 15 completion*

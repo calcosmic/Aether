@@ -5,15 +5,15 @@
 See: .planning/PROJECT.md (updated 2026-02-03)
 
 **Core value:** Autonomous Emergence — Worker Ants autonomously spawn Worker Ants; Queen provides signals not commands
-**Current focus:** Phase 15 — Infrastructure State complete (v3.0 Restore the Soul)
+**Current focus:** Phase 15 complete, ready for Phase 16 — Worker Knowledge (v3.0 Restore the Soul)
 
 ## Current Position
 
 Milestone: v3.0 Restore the Soul
-Phase: 15 of 17 (Infrastructure State)
+Phase: 15 of 17 (Infrastructure State) -- VERIFIED ✓
 Plan: 3 of 3 in current phase
-Status: Phase complete
-Last activity: 2026-02-03 — Completed 15-03-PLAN.md
+Status: Phase verified, ready for Phase 16
+Last activity: 2026-02-03 — Phase 15 verified (5/5 must-haves passed)
 
 Progress: [██████████████████░░] 81% (v1.0 + v2.0 complete, v3.0: 5/11 plans done)
 
@@ -40,6 +40,7 @@ Progress: [██████████████████░░] 81% (v1
 | 15 (v3.0) | 3/3 | 4min | 1min |
 
 **Recent Trend:**
+- 15-01 completed in 1 min
 - 15-02 completed in 1 min
 - 15-03 completed in 2 min
 - Trend: Fast (prompt-only changes, no code)
@@ -70,6 +71,7 @@ Progress: [██████████████████░░] 81% (v1
 - Retention limits: 50 errors, 100 events (oldest trimmed on write)
 - memory.json phase_learnings capped at 20, decisions capped at 30
 - Phase learnings extracted at continue boundaries, decisions logged by pheromone commands
+- status.md reads errors.json and displays ERRORS section with flagged patterns and recent errors
 
 ### Pending Todos
 
@@ -82,9 +84,9 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-03
-Stopped at: Completed 15-03-PLAN.md (memory & event integration for continue/focus/redirect/feedback)
+Stopped at: Phase 15 verified ✓ (5/5 must-haves). Ready for Phase 16: Worker Knowledge.
 Resume file: None
 
 ---
 
-*State updated: 2026-02-03 after 15-03 plan completion*
+*State updated: 2026-02-03 after Phase 15 verification (passed)*
