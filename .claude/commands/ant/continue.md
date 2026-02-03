@@ -126,11 +126,12 @@ Read `.aether/data/pheromones.json` (if not already in memory from Step 1).
 
 ```json
 {
+  "id": "auto_<unix_timestamp>_<4_random_hex>",
   "type": "FEEDBACK",
   "content": "<summary of what worked and what didn't from the phase learnings — be specific, reference actual task outcomes>",
   "strength": 0.5,
   "half_life_seconds": 21600,
-  "emitted_at": "<ISO-8601 UTC>",
+  "created_at": "<ISO-8601 UTC>",
   "source": "auto:continue",
   "auto": true
 }
@@ -140,11 +141,12 @@ Read `.aether/data/pheromones.json` (if not already in memory from Step 1).
 
 ```json
 {
+  "id": "auto_<unix_timestamp>_<4_random_hex>",
   "type": "REDIRECT",
   "content": "Avoid repeating: <description of the flagged pattern and its root causes>",
   "strength": 0.9,
   "half_life_seconds": 86400,
-  "emitted_at": "<ISO-8601 UTC>",
+  "created_at": "<ISO-8601 UTC>",
   "source": "auto:continue",
   "auto": true
 }
