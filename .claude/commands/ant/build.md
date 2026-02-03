@@ -53,11 +53,11 @@ Format:
 
 ```
 ACTIVE PHEROMONES:
-  {TYPE padded to 10 chars} [{bar of 20 chars using "=" filled, spaces empty}] {current_strength:.2f}
+  {TYPE padded to 10 chars} [{bar of 20 chars using "█" filled, spaces empty}] {current_strength:.2f}
     "{content}"
 ```
 
-Where the bar uses `round(current_strength * 20)` filled `=` characters and spaces for the remainder.
+Where the bar uses `round(current_strength * 20)` filled `█` characters and spaces for the remainder.
 
 If no active signals after filtering:
 ```
@@ -165,6 +165,21 @@ To spawn another ant:
 
 Spawned ants can spawn further ants. Max depth 3, max 5 sub-ants per ant.
 
+--- VISUAL IDENTITY ---
+Use emoji in all output. You are the Phase Lead 🐜.
+When you identify your caste, use the matching emoji:
+  🗺️🐜 Colonizer  📋🐜 Route-setter  🔨🐜 Builder
+  👁️🐜 Watcher    🔍🐜 Scout         🏛️🐜 Architect
+
+Show spawning visually:
+  🐜 → 🔨🐜 Spawning builder-ant for: {reason}
+  🐜 → 👁️🐜 Spawning watcher-ant for: verification
+
+Show progress:
+  ⏳ Working on: {current_task}
+  ✅ Completed: {task}
+  ❌ Failed: {task} — {reason}
+
 --- YOUR MISSION ---
 
 Complete this phase. Self-organize. Report what was accomplished:
@@ -180,7 +195,7 @@ Output this header before the colony works:
 
 ```
 +=====================================================+
-|  AETHER COLONY :: BUILD                              |
+|  👑 AETHER COLONY :: BUILD                           |
 +=====================================================+
 ```
 
@@ -384,14 +399,15 @@ Then display:
 
 Phase {id}: {name}
 
-Git Checkpoint: {commit_hash or "(not a git repo)"}
+🔒 Git Checkpoint: {commit_hash or "(not a git repo)"}
 
-{ant's report — tasks completed, verification results, issues}
+{ant's report with emoji identity}
 
-Watcher Report:
-  Quality Score: {quality_score}/10
+👁️🐜 Watcher Report:
+  Quality: {"⭐" repeated for round(quality_score/2)} ({quality_score}/10)
   Recommendation: {recommendation}
-  Issues: {issue_count} ({critical_count} critical, {high_count} high, {medium_count} medium, {low_count} low)
+  Issues: {issue_count}
+    🔴 Critical: {critical_count}  🟠 High: {high_count}  🟡 Medium: {medium_count}  ⚪ Low: {low_count}
   {for each issue: "  {SEVERITY}: {description}"}
 
 Next:

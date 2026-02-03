@@ -59,7 +59,7 @@ Next Steps:
   /ant:status           Colony status
 ```
 
-Status icons: `[ ]` pending, `[~]` in_progress, `[x]` completed
+Status icons: `[ ]` pending, `[~]` in_progress, `[x]` completed, or use emoji: ⬜ pending, ⏳ in_progress, ✅ completed
 
 ### Step 3b: List View
 

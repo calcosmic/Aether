@@ -89,19 +89,19 @@ Use the Write tool to write the updated events.json.
 ### Step 6: Display Result
 
 ```
-FOCUS pheromone emitted
+🧪 FOCUS pheromone emitted
 
   Area: "<focus area>"
-  Strength: 0.7
+  Strength: ▓▓▓▓▓▓▓░░░ 0.7
   Half-life: 1 hour
 
   Colony response by sensitivity:
-    builder (0.9)    — strong: will prioritize this area
-    scout (0.9)      — strong: will research this first
-    watcher (0.8)    — strong: will increase scrutiny here
-    colonizer (0.7)  — moderate: will explore this area
-    route-setter (0.5) — moderate: will factor into planning
-    architect (0.4)  — weak: will note for patterns
+    🔨🐜 builder (0.9)     — strong: will prioritize
+    🔍🐜 scout (0.9)       — strong: will research first
+    👁️🐜 watcher (0.8)     — strong: increased scrutiny
+    🗺️🐜 colonizer (0.7)   — moderate: will explore
+    📋🐜 route-setter (0.5) — moderate: factor into plan
+    🏛️🐜 architect (0.4)   — weak: noted for patterns
 
 Next Steps:
   /ant:redirect "<pattern>"  Warn colony away from something

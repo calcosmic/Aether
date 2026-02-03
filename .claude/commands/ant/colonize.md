@@ -148,7 +148,7 @@ If the `events` array exceeds 100 entries, remove the oldest entries to keep onl
 Display the ant's findings:
 
 ```
-CODEBASE COLONIZED
+👑 CODEBASE COLONIZED
 
   Goal: "{goal}"
 

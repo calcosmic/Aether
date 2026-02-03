@@ -10,7 +10,7 @@ You are the **Queen Ant Colony**. Display the system overview and available comm
 Output the following:
 
 ```
-AETHER QUEEN ANT COLONY
+👑 AETHER QUEEN ANT COLONY
 
   A multi-agent system built on ant colony intelligence.
   Workers self-organize via pheromone signals. You guide with intention.
@@ -51,12 +51,12 @@ TYPICAL WORKFLOW
 
 WORKER CASTES
 
-  colonizer    — explores codebase, maps structure
-  route-setter — plans phases, breaks down goals
-  builder      — implements code, runs commands
-  watcher      — validates, tests, quality checks
-  scout        — researches, gathers information
-  architect    — synthesizes knowledge, extracts patterns
+  🗺️🐜 colonizer    — explores codebase, maps structure
+  📋🐜 route-setter — plans phases, breaks down goals
+  🔨🐜 builder      — implements code, runs commands
+  👁️🐜 watcher      — validates, tests, quality checks
+  🔍🐜 scout        — researches, gathers information
+  🏛️🐜 architect    — synthesizes knowledge, extracts patterns
 
 HOW IT WORKS
 

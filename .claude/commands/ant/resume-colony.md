@@ -42,7 +42,7 @@ Read the HANDOFF.md for context about what was happening, then display:
 
 ```
 +=====================================================+
-|  AETHER COLONY :: RESUMED                            |
+|  👑 AETHER COLONY :: RESUMED                         |
 +=====================================================+
 
   Goal: "<goal>"
@@ -51,10 +51,10 @@ Read the HANDOFF.md for context about what was happening, then display:
   Phase: <current_phase>
 
 ACTIVE PHEROMONES
-  {TYPE padded to 10 chars} [{bar of 20 chars using "=" filled, spaces empty}] {current_strength:.2f}
+  {TYPE padded to 10 chars} [{bar of 20 chars using "█" filled, spaces empty}] {current_strength:.2f}
     "{content}"
 
-  Where the bar uses round(current_strength * 20) filled "=" characters and spaces for the remainder.
+  Where the bar uses round(current_strength * 20) filled "█" characters and spaces for the remainder.
 
   If no active signals: (no active pheromones)
 
@@ -63,13 +63,15 @@ WORKERS
   If ALL workers have "idle" status, display:
     All 6 workers idle -- colony ready
 
-  Otherwise, group by status with emoji + text label:
+  Otherwise, group by status with caste emoji:
     Active:
-      [ant emoji] <worker_name>: currently executing
+      🔨🐜 builder: currently executing
     Idle:
-      [white circle emoji] <worker_name>, <worker_name>, ...
-    Error:
-      [red circle emoji] <worker_name>: <error detail if available>
+      🗺️🐜 colonizer  📋🐜 route-setter  👁️🐜 watcher  🔍🐜 scout  🏛️🐜 architect
+
+  Use the correct caste emoji for each worker:
+    colonizer: 🗺️🐜  route-setter: 📋🐜  builder: 🔨🐜
+    watcher: 👁️🐜  scout: 🔍🐜  architect: 🏛️🐜
 
 PHASE PROGRESS
   Phase <id>: <name> [<status>]

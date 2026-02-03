@@ -157,7 +157,7 @@ Output this header at the start of your response:
 
 ```
 +=====================================================+
-|  AETHER COLONY :: INIT                               |
+|  👑 AETHER COLONY :: INIT                            |
 +=====================================================+
 ```
 
@@ -179,7 +179,7 @@ Then output a divider and the result:
 ```
 ---
 
-Aether Colony — Ready
+👑 Aether Colony — Ready
 
   Session: <session_id>
 
@@ -187,7 +187,9 @@ Aether Colony — Ready
   "<goal>"
 
   Colony Status: READY
-  Workers: colonizer, route-setter, builder, watcher, scout, architect
+  Workers:
+    🗺️ colonizer  📋 route-setter  🔨 builder
+    👁️ watcher    🔍 scout         🏛️ architect
 
 Next Steps:
   /ant:plan     Generate project plan

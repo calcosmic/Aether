@@ -43,13 +43,12 @@ Before advancing, display a summary of the completed phase using data from the s
 Output:
 
 ```
----------------------------------------------------
 PHASE <N> REVIEW: <phase_name>
----------------------------------------------------
-
+───────────────────────────────
   Tasks:
-    [x] <task_id>: <description>
-    [x] <task_id>: <description>
+    ✅ <task_id>: <description>
+    ✅ <task_id>: <description>
+    ❌ <task_id>: <description> (deferred)
     ...
     Completed: <N>/<total>
 
@@ -256,7 +255,7 @@ Output this header at the start of your response:
 
 ```
 +=====================================================+
-|  AETHER COLONY :: CONTINUE                           |
+|  👑 AETHER COLONY :: CONTINUE                        |
 +=====================================================+
 ```
 
@@ -291,10 +290,10 @@ Phase <current> approved. Advancing to Phase <next>.
     - <learning 1>
     - <learning 2>
 
-  Auto-Emitted Pheromones:
-    FEEDBACK (strength 0.5, half-life 6h): "<first 80 chars of content>"
+  🧪 Auto-Emitted Pheromones:
+    FEEDBACK (0.5, 6h): "<first 80 chars of content>"
     {if REDIRECT was emitted:}
-    REDIRECT (strength 0.9, half-life 24h): "<first 80 chars of content>"
+    REDIRECT (0.9, 24h): "<first 80 chars of content>"
 
 Next Steps:
   /ant:build <next>      Start building Phase <next>

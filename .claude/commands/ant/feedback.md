@@ -90,19 +90,19 @@ Use the Write tool to write the updated events.json.
 ### Step 6: Display Result
 
 ```
-FEEDBACK pheromone emitted
+🧪 FEEDBACK pheromone emitted
 
   Message: "<feedback>"
-  Strength: 0.5
+  Strength: ▓▓▓▓▓░░░░░ 0.5
   Half-life: 6 hours
 
   Colony response by sensitivity:
-    watcher (0.9)      — strong: will intensify verification
-    builder (0.7)      — moderate: will adjust implementation
-    route-setter (0.7) — moderate: will adjust planning
-    architect (0.6)    — moderate: will record for learning
-    colonizer (0.5)    — moderate: will adjust exploration
-    scout (0.5)        — moderate: will adjust research focus
+    👁️🐜 watcher (0.9)      — strong: will intensify verification
+    🔨🐜 builder (0.7)      — moderate: will adjust implementation
+    📋🐜 route-setter (0.7) — moderate: will adjust planning
+    🏛️🐜 architect (0.6)    — moderate: will record for learning
+    🗺️🐜 colonizer (0.5)    — moderate: will adjust exploration
+    🔍🐜 scout (0.5)        — moderate: will adjust research focus
 
   FEEDBACK can be emitted at any time, even during /ant:build.
   It provides gentle guidance without breaking emergence.

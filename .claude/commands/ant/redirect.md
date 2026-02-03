@@ -89,19 +89,19 @@ Use the Write tool to write the updated events.json.
 ### Step 6: Display Result
 
 ```
-REDIRECT pheromone emitted
+🧪 REDIRECT pheromone emitted
 
   Avoid: "<pattern>"
-  Strength: 0.9
+  Strength: ▓▓▓▓▓▓▓▓▓░ 0.9
   Half-life: 24 hours
 
   Colony response by sensitivity:
-    builder (0.9)      — strong: will avoid this pattern in code
-    route-setter (0.8) — strong: will exclude from planning
-    watcher (0.5)      — moderate: will validate against constraint
-    scout (0.4)        — weak: will note when researching
-    colonizer (0.3)    — weak: will note in codebase analysis
-    architect (0.3)    — weak: will note for patterns
+    🔨🐜 builder (0.9)      — strong: will avoid this pattern in code
+    📋🐜 route-setter (0.8) — strong: will exclude from planning
+    👁️🐜 watcher (0.5)      — moderate: will validate against constraint
+    🔍🐜 scout (0.4)        — weak: will note when researching
+    🗺️🐜 colonizer (0.3)    — weak: will note in codebase analysis
+    🏛️🐜 architect (0.3)    — weak: will note for patterns
 
   REDIRECT signals act as hard constraints during /ant:build.
   Workers with high sensitivity will refuse approaches matching this pattern.

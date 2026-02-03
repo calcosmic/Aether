@@ -77,7 +77,7 @@ Run `/ant:resume-colony` in a new session.
 
 ```
 +=====================================================+
-|  AETHER COLONY :: PAUSED                             |
+|  👑 AETHER COLONY :: PAUSED                          |
 +=====================================================+
 
   Goal: "<goal>"

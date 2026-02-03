@@ -75,7 +75,7 @@ Output this header (filling in values from `COLONY_STATE.json`):
 
 ```
 +=====================================================+
-|  AETHER COLONY STATUS                                |
+|  👑 AETHER COLONY STATUS                             |
 |-----------------------------------------------------|
 |  Session: <session_id>                               |
 |  State:   <state>                                    |
@@ -102,22 +102,23 @@ If ALL workers have `"idle"` status (the common case), display a compact summary
   All 6 workers idle -- colony ready
 ```
 
-Otherwise, group by status with emoji + text label:
+Otherwise, group by status with caste emoji:
 
 ```
   Active:
-    [ant emoji] <worker_name>: currently executing
+    🔨🐜 builder: executing phase 3
 
   Idle:
-    [white circle emoji] <worker_name>, <worker_name>, ...
-
-  Error:
-    [red circle emoji] <worker_name>: <error detail if available>
+    🗺️🐜 colonizer  📋🐜 route-setter  👁️🐜 watcher  🔍🐜 scout  🏛️🐜 architect
 ```
+
+Use the correct caste emoji for each worker:
+- colonizer: 🗺️🐜  route-setter: 📋🐜  builder: 🔨🐜
+- watcher: 👁️🐜  scout: 🔍🐜  architect: 🏛️🐜
 
 Only show groups that have at least one worker. End with a summary line:
 ```
-  [ant emoji] <N> active | [white circle emoji] <N> idle | [red circle emoji] <N> error
+  🐜 <N> active | ⚪ <N> idle
 ```
 
 ```
@@ -125,7 +126,7 @@ Only show groups that have at least one worker. End with a summary line:
 ```
 
 ```
-ACTIVE PHEROMONES
+🧪 ACTIVE PHEROMONES
 ```
 
 For each non-expired signal, display with a visual strength bar:
@@ -136,17 +137,17 @@ For each non-expired signal, display with a visual strength bar:
 ```
 
 Where the bar has 20 characters total:
-- Filled portion: repeat `=` for `round(current_strength * 20)` times
+- Filled portion: repeat `█` (full block) for `round(current_strength * 20)` times
 - Empty portion: fill remaining with spaces
 - Wrap in square brackets
 
 Examples:
 ```
-  INIT       [====================] 1.00  (persistent)
+  INIT       [████████████████████] 1.00  (persistent)
     "Build a REST API with authentication"
-  FOCUS      [===============     ] 0.75
+  FOCUS      [███████████████     ] 0.75
     "WebSocket security"
-  REDIRECT   [======              ] 0.30
+  REDIRECT   [██████              ] 0.30
     "Don't use JWT for sessions"
 ```
 
@@ -160,22 +161,27 @@ If no active signals after filtering:
 ```
 
 ```
-ERRORS
+💀 ERRORS
 ```
 
 If `errors.json` was read successfully and has content:
 
 Display flagged patterns first (if any exist in `flagged_patterns` array):
 ```
-  ⚠ FLAGGED PATTERNS:
+  ⚠️ FLAGGED PATTERNS:
     <category>: <count> occurrences — "<description from first error of that category>"
 ```
 
 Then show recent errors (last 5 from `errors` array, newest first):
 ```
   Recent:
-    [<severity>] <category>: <description> (phase <phase>)
+    🔴 [critical] <category>: <description> (phase <phase>)
+    🟠 [high] <category>: <description> (phase <phase>)
+    🟡 [medium] <category>: <description> (phase <phase>)
+    ⚪ [low] <category>: <description> (phase <phase>)
 ```
+
+Use the severity emoji that matches: 🔴 critical, 🟠 high, 🟡 medium, ⚪ low.
 
 If `errors` array is empty and `flagged_patterns` is empty:
 ```
@@ -189,7 +195,7 @@ If `errors.json` doesn't exist or couldn't be read, skip this section silently.
 ```
 
 ```
-MEMORY
+🧠 MEMORY
 ```
 
 If `memory.json` was read successfully and has content:
@@ -219,7 +225,7 @@ If `memory.json` doesn't exist or couldn't be read, skip this section silently.
 ```
 
 ```
-EVENTS
+📡 EVENTS
 ```
 
 If `events.json` was read successfully and has content:
