@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-02-03)
 
 **Core value:** Autonomous Emergence -- Worker Ants autonomously spawn Worker Ants; Queen provides signals not commands
-**Current focus:** Planning next milestone
+**Current focus:** v4.1 Cleanup & Enforcement
 
 ## Current Position
 
-Milestone: v4.0 Hybrid Foundation -- SHIPPED
-Phase: 21 of 21 (Command Integration) -- last phase of v4.0
-Plan: Complete
-Status: Milestone complete, archived, tagged v4.0
-Last activity: 2026-02-03 -- v4.0 milestone complete
+Milestone: v4.1 Cleanup & Enforcement
+Phase: 22 of 23 (Cleanup) -- ready to plan
+Plan: None yet
+Status: Ready to plan
+Last activity: 2026-02-03 -- v4.1 roadmap created
 
-Progress: [####################] 100% (v4.0: 9/9 plans, 38/38 requirements)
+Progress: [____________________] 0% (v4.1: 0/? plans, 0/10 requirements)
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -42,11 +42,11 @@ None.
 
 ### Open Issues
 
-1. **No enforcement of spawn limits** -- Depth-3 and max-5 limits are stated in every worker spec but are purely advisory
-2. **Auto-pheromone content quality unbounded** -- continue.md Step 4.5 says "be specific, reference actual task outcomes" but has no structural enforcement
-3. **All spec instructions are advisory** -- Every "MUST" in worker specs has no enforcement mechanism
-4. **8 orphaned subcommands** -- pheromone-decay, pheromone-combine, memory-token-count, memory-compress, memory-search, error-pattern-check, error-summary, error-dedup have no consumers
-5. **4 commands retain inline decay formulas** -- plan.md, pause-colony.md, resume-colony.md, colonize.md
+1. **8 orphaned subcommands** -- being addressed in Phase 22 (wire 4, remove 4)
+2. **4 commands retain inline decay formulas** -- being addressed in Phase 22 (CLEAN-01)
+3. **No enforcement of spawn limits** -- being addressed in Phase 23 (ENFO-01, ENFO-02)
+4. **Auto-pheromone content quality unbounded** -- being addressed in Phase 23 (ENFO-03, ENFO-04)
+5. **All spec instructions are advisory** -- being addressed in Phase 23 (ENFO-05)
 
 ### Blockers/Concerns
 
@@ -55,9 +55,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-03
-Stopped at: v4.0 milestone archived and tagged
+Stopped at: v4.1 roadmap created, ready to plan Phase 22
 Resume file: None
 
 ---
 
-*State updated: 2026-02-03 after v4.0 milestone completion*
+*State updated: 2026-02-03 after v4.1 roadmap creation*

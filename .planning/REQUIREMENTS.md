@@ -47,22 +47,22 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CLEAN-01 | Pending | Pending |
-| CLEAN-02 | Pending | Pending |
-| CLEAN-03 | Pending | Pending |
-| CLEAN-04 | Pending | Pending |
-| CLEAN-05 | Pending | Pending |
-| ENFO-01 | Pending | Pending |
-| ENFO-02 | Pending | Pending |
-| ENFO-03 | Pending | Pending |
-| ENFO-04 | Pending | Pending |
-| ENFO-05 | Pending | Pending |
+| CLEAN-01 | Phase 22 | Pending |
+| CLEAN-02 | Phase 22 | Pending |
+| CLEAN-03 | Phase 22 | Pending |
+| CLEAN-04 | Phase 22 | Pending |
+| CLEAN-05 | Phase 22 | Pending |
+| ENFO-01 | Phase 23 | Pending |
+| ENFO-02 | Phase 23 | Pending |
+| ENFO-03 | Phase 23 | Pending |
+| ENFO-04 | Phase 23 | Pending |
+| ENFO-05 | Phase 23 | Pending |
 
 **Coverage:**
 - v1 requirements: 10 total
-- Mapped to phases: 0
-- Unmapped: 10 ⚠️
+- Mapped to phases: 10
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-03*
-*Last updated: 2026-02-03 after initial definition*
+*Last updated: 2026-02-03 after roadmap creation*
