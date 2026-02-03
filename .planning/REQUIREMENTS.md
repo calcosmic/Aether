@@ -1,149 +1,147 @@
-# Requirements: Aether v3.0 Restore the Soul
+# Requirements: Aether v4.0 Hybrid Foundation
 
 **Defined:** 2026-02-03
 **Core Value:** Autonomous Emergence — Worker Ants autonomously spawn Worker Ants; Queen provides signals not commands
 
-## v3.0 Requirements
+## v4.0 Requirements
 
-Requirements for restoring the sophistication, visual identity, and depth lost during the v3-rebuild. Each maps to roadmap phases.
+Requirements for adding a thin shell utility layer and fixing all audit-identified issues. The system becomes hybrid: prompts for reasoning, shell for deterministic operations.
 
-### Visual Identity
+### Utility Layer
 
-- [x] **VIS-01**: Commands display box-drawing headers for major sections
-- [x] **VIS-02**: Multi-step commands show step progress with [✓]/[→]/[ ] indicators
-- [x] **VIS-03**: Pheromone display includes computed decay strength bars
-- [x] **VIS-04**: Worker activity grouped by status with emoji indicators
+- [ ] **UTIL-01**: `aether-utils.sh` exists as a single entry point with subcommand dispatch (e.g., `aether-utils pheromone-decay 0.9 3600`)
+- [ ] **UTIL-02**: Utility script sources `file-lock.sh` and `atomic-write.sh` for shared infrastructure
+- [ ] **UTIL-03**: All subcommands output JSON to stdout for prompt consumption
+- [ ] **UTIL-04**: All subcommands return non-zero exit code on error with JSON error message
 
-### Specialist Watchers
+### Pheromone Math
 
-- [x] **WATCH-01**: watcher-ant.md contains 4 specialist modes (security, performance, quality, test-coverage)
-- [x] **WATCH-02**: Mode activation triggered by pheromone context
-- [x] **WATCH-03**: Each mode has severity rubric (Critical/High/Medium/Low)
-- [x] **WATCH-04**: Each mode has specific detection pattern checklist
+- [ ] **PHER-01**: `pheromone-decay <strength> <elapsed_seconds> <half_life>` computes current strength using exponential decay formula
+- [ ] **PHER-02**: `pheromone-effective <sensitivity> <strength>` computes effective signal (sensitivity × strength)
+- [ ] **PHER-03**: `pheromone-batch` reads pheromones.json and outputs all signals with current computed strengths
+- [ ] **PHER-04**: `pheromone-cleanup` removes expired signals (strength < 0.05) from pheromones.json
+- [ ] **PHER-05**: `pheromone-combine <signal1_strength> <signal2_strength>` computes combination effect for conflicting signals
 
-### Worker Spec Depth
+### State Validation
 
-- [x] **SPEC-01**: Each worker spec includes pheromone math examples (sensitivity × strength = effective signal)
-- [x] **SPEC-02**: Each worker spec includes combination effects for conflicting signals
-- [x] **SPEC-03**: Each worker spec includes feedback interpretation guide
-- [x] **SPEC-04**: Each worker spec includes event awareness at startup
-- [x] **SPEC-05**: Each worker spec includes spawning scenario with full Task tool prompt example
+- [ ] **VALID-01**: `validate-state colony` validates COLONY_STATE.json against expected schema (required fields, types)
+- [ ] **VALID-02**: `validate-state pheromones` validates pheromones.json (signal array structure, required fields per signal)
+- [ ] **VALID-03**: `validate-state errors` validates errors.json (error record structure, valid categories, severity levels)
+- [ ] **VALID-04**: `validate-state memory` validates memory.json (phase_learnings, decisions, patterns arrays)
+- [ ] **VALID-05**: `validate-state events` validates events.json (event record structure, valid types)
+- [ ] **VALID-06**: `validate-state all` runs all validators and reports aggregate pass/fail
+
+### Memory Operations
+
+- [ ] **MEM-01**: `memory-token-count` approximates token count of memory.json (word count × 1.3)
+- [ ] **MEM-02**: `memory-compress` removes oldest entries when token count exceeds threshold (default 10000)
+- [ ] **MEM-03**: `memory-search <keyword>` finds memory entries matching keyword across all arrays
 
 ### Error Tracking
 
-- [x] **ERR-01**: errors.json stores error records with id, category, severity, description, root_cause, phase, timestamp
-- [x] **ERR-02**: build.md logs errors to errors.json when phase encounters failures
-- [x] **ERR-03**: Pattern flagging triggers after 3 occurrences of same error category
-- [x] **ERR-04**: status.md displays recent errors and flagged patterns
+- [ ] **ERR-01**: `error-add <category> <severity> <description>` appends error with timestamp and auto-increment ID
+- [ ] **ERR-02**: `error-pattern-check` detects categories with 3+ occurrences and outputs flagged patterns
+- [ ] **ERR-03**: `error-summary` outputs counts by category and severity
+- [ ] **ERR-04**: `error-dedup` removes duplicate errors (same category + description within 60 seconds)
 
-### Colony Memory
+### Audit Fixes — Critical
 
-- [x] **MEM-01**: memory.json stores phase_learnings, decisions, and patterns arrays
-- [x] **MEM-02**: continue.md extracts learnings at phase boundaries before advancing
-- [x] **MEM-03**: Commands log significant decisions to memory.json
-- [x] **MEM-04**: Workers read relevant memory entries at startup for context
+- [ ] **FIX-01**: atomic-write.sh sources file-lock.sh so acquire_lock/release_lock are available
+- [ ] **FIX-02**: COLONY_STATE.json uses single canonical path for goal (`.goal`) and current_phase (`.current_phase`)
+- [ ] **FIX-03**: All commands read/write using canonical field paths consistently
 
-### Event Awareness
+### Audit Fixes — High Priority
 
-- [x] **EVT-01**: events.json stores event records with id, type, source, content, timestamp
-- [x] **EVT-02**: Commands write events on state changes (init, phase start/complete, errors, spawns)
-- [x] **EVT-03**: Workers read events.json at startup and filter by timestamp for recent events
-- [x] **EVT-04**: init.md creates all JSON state files (errors.json, memory.json, events.json)
+- [ ] **FIX-04**: Temp files use unique suffixes (PID + timestamp) to prevent race conditions
+- [ ] **FIX-05**: All jq operations check exit code and report errors instead of silently failing
+- [ ] **FIX-06**: State file backups created before critical updates (rotate last 3)
+- [ ] **FIX-07**: Pheromone schema uses consistent field names between creation and reads
+- [ ] **FIX-08**: State files validated on load (validate-state called before operations)
 
-### Enhanced Dashboard
+### Audit Fixes — Medium Priority
 
-- [x] **DASH-01**: status.md shows full colony health with workers, pheromones, errors, memory, events
-- [x] **DASH-02**: Pheromone section shows each active signal with computed decay bar
-- [x] **DASH-03**: Error section shows recent errors and flagged patterns from errors.json
-- [x] **DASH-04**: Memory section shows recent learnings from memory.json
+- [ ] **FIX-09**: Worker ant status uses consistent casing (lowercase: "ready", "active", "error", "idle")
+- [ ] **FIX-10**: Expired pheromones cleaned up automatically (pheromone-cleanup called during reads)
+- [ ] **FIX-11**: Colony mode documented in init.md and ant.md help text
 
-### Phase Review
+### Command Integration
 
-- [x] **REV-01**: continue.md shows phase completion summary before advancing
-- [x] **REV-02**: Phase review shows tasks completed, key decisions, errors encountered
-- [x] **REV-03**: Learning extraction stores insights to memory.json before phase transition
+- [ ] **INT-01**: status.md calls `aether-utils pheromone-batch` for decay bar rendering instead of Claude computing decay
+- [ ] **INT-02**: build.md calls `aether-utils error-add` when logging errors
+- [ ] **INT-03**: continue.md calls `aether-utils pheromone-cleanup` at phase boundaries
+- [ ] **INT-04**: Worker specs document `aether-utils pheromone-effective` for computing signal response
+- [ ] **INT-05**: init.md calls `aether-utils validate-state all` after state file creation
 
-### Spawn Tracking
-
-- [x] **SPAWN-01**: COLONY_STATE.json includes spawn_outcomes field per caste
-- [x] **SPAWN-02**: build.md records spawn events when Phase Lead is spawned
-- [x] **SPAWN-03**: continue.md records spawn success/failure on phase completion
-- [x] **SPAWN-04**: Workers check spawn history confidence before spawning (alpha / (alpha + beta))
-
-## v3.x Requirements
+## v4.x Requirements
 
 Deferred to future release. Tracked but not in current roadmap.
 
-### Advanced Features
+### Advanced Utilities
 
-- **ADV-01**: Real-time event streaming UI — Users see events flow in real-time
-- **ADV-02**: Web-based colony dashboard — Visual GUI for colony monitoring
-- **ADV-03**: Automated LLM behavior testing — Programmatic LLM validation framework
-- **ADV-04**: Event replay for time-travel debugging — Full colony state snapshotting
+- **ADV-01**: `spawn-recommend` — Bayesian analysis of spawn history to recommend caste for capability gap
+- **ADV-02**: `context-budget` — Track token usage across conversation and warn at thresholds
+- **ADV-03**: `state-diff` — Show what changed in state files since last checkpoint
+- **ADV-04**: `pheromone-simulate` — Project pheromone strengths forward in time
 
 ## Out of Scope
 
-Explicitly excluded. Documented to prevent scope creep.
-
 | Feature | Reason |
 |---------|--------|
-| Python runtime restoration | Claude-native model replaces Python; commands use Read/Write/Task tools |
-| Bash event bus restoration | 890-line event-bus.sh replaced by simple events.json log |
-| Bash utility scripts | Memory-search.sh, spawn-tracker.sh etc. replaced by JSON state |
-| Separate specialist watcher files | 4 modes folded into watcher-ant.md (per constraint: no new commands) |
-| New commands beyond existing 12 | Restore by enriching existing commands, not adding new ones |
-| External dependencies | No vector DBs, embedding services, or external tools |
-| Worker specs exceeding ~200 lines | Keep deep but focused; trim not cut |
+| Node.js utilities | Shell keeps zero external dependencies |
+| Python utilities | Shell keeps zero external dependencies |
+| Rewriting commands as scripts | Commands stay as prompts; scripts are called helpers |
+| New commands | Utility layer accessed via Bash tool from existing commands |
+| GUI/web dashboard | CLI-only, Claude Code native |
+| Persistent daemon processes | Against Claude-native architecture |
 
 ## Traceability
 
-Which phases cover which requirements. Updated during roadmap creation.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| VIS-01 | Phase 14 | Complete |
-| VIS-02 | Phase 14 | Complete |
-| VIS-03 | Phase 14 | Complete |
-| VIS-04 | Phase 14 | Complete |
-| ERR-01 | Phase 15 | Complete |
-| ERR-02 | Phase 15 | Complete |
-| ERR-03 | Phase 15 | Complete |
-| ERR-04 | Phase 15 | Complete |
-| MEM-01 | Phase 15 | Complete |
-| MEM-02 | Phase 15 | Complete |
-| MEM-03 | Phase 15 | Complete |
-| MEM-04 | Phase 16 | Complete |
-| EVT-01 | Phase 15 | Complete |
-| EVT-02 | Phase 15 | Complete |
-| EVT-03 | Phase 16 | Complete |
-| EVT-04 | Phase 15 | Complete |
-| WATCH-01 | Phase 16 | Complete |
-| WATCH-02 | Phase 16 | Complete |
-| WATCH-03 | Phase 16 | Complete |
-| WATCH-04 | Phase 16 | Complete |
-| SPEC-01 | Phase 16 | Complete |
-| SPEC-02 | Phase 16 | Complete |
-| SPEC-03 | Phase 16 | Complete |
-| SPEC-04 | Phase 16 | Complete |
-| SPEC-05 | Phase 16 | Complete |
-| DASH-01 | Phase 17 | Complete |
-| DASH-02 | Phase 17 | Complete |
-| DASH-03 | Phase 17 | Complete |
-| DASH-04 | Phase 17 | Complete |
-| REV-01 | Phase 17 | Complete |
-| REV-02 | Phase 17 | Complete |
-| REV-03 | Phase 17 | Complete |
-| SPAWN-01 | Phase 17 | Complete |
-| SPAWN-02 | Phase 17 | Complete |
-| SPAWN-03 | Phase 17 | Complete |
-| SPAWN-04 | Phase 17 | Complete |
+| UTIL-01 | Phase 19 | Pending |
+| UTIL-02 | Phase 19 | Pending |
+| UTIL-03 | Phase 19 | Pending |
+| UTIL-04 | Phase 19 | Pending |
+| FIX-01 | Phase 19 | Pending |
+| FIX-02 | Phase 19 | Pending |
+| FIX-03 | Phase 19 | Pending |
+| FIX-04 | Phase 19 | Pending |
+| FIX-05 | Phase 19 | Pending |
+| FIX-06 | Phase 19 | Pending |
+| FIX-07 | Phase 19 | Pending |
+| FIX-08 | Phase 19 | Pending |
+| FIX-09 | Phase 19 | Pending |
+| FIX-10 | Phase 19 | Pending |
+| FIX-11 | Phase 19 | Pending |
+| PHER-01 | Phase 20 | Pending |
+| PHER-02 | Phase 20 | Pending |
+| PHER-03 | Phase 20 | Pending |
+| PHER-04 | Phase 20 | Pending |
+| PHER-05 | Phase 20 | Pending |
+| VALID-01 | Phase 20 | Pending |
+| VALID-02 | Phase 20 | Pending |
+| VALID-03 | Phase 20 | Pending |
+| VALID-04 | Phase 20 | Pending |
+| VALID-05 | Phase 20 | Pending |
+| VALID-06 | Phase 20 | Pending |
+| MEM-01 | Phase 20 | Pending |
+| MEM-02 | Phase 20 | Pending |
+| MEM-03 | Phase 20 | Pending |
+| ERR-01 | Phase 20 | Pending |
+| ERR-02 | Phase 20 | Pending |
+| ERR-03 | Phase 20 | Pending |
+| ERR-04 | Phase 20 | Pending |
+| INT-01 | Phase 21 | Pending |
+| INT-02 | Phase 21 | Pending |
+| INT-03 | Phase 21 | Pending |
+| INT-04 | Phase 21 | Pending |
+| INT-05 | Phase 21 | Pending |
 
 **Coverage:**
-- v3.0 requirements: 36 total
-- Mapped to phases: 36
+- v4.0 requirements: 38 total
+- Mapped to phases: 38
 - Unmapped: 0
 
 ---
-
 *Requirements defined: 2026-02-03*
-*Last updated: 2026-02-03 after Phase 17 completion — all v3.0 requirements complete*
+*Last updated: 2026-02-03 after initial definition*
