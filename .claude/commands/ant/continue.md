@@ -112,6 +112,10 @@ If the `phase_learnings` array exceeds 20 entries, remove the oldest entries to 
 
 Use the Write tool to write the updated memory.json.
 
+**Update Spawn Outcomes:** Read `.aether/data/COLONY_STATE.json`. Review the events in `events.json` for events of type `phase_completed` or `phase_failed` related to the current phase. If the phase completed successfully, look at events.json for spawn-related events or the build report to identify which castes contributed. For each identified caste, increment `alpha` and `successes` in `spawn_outcomes`. If the phase failed, increment `beta` and `failures` for identified castes. Increment `total_spawns` regardless. Write the updated COLONY_STATE.json.
+
+If no castes can be identified from events, skip this step.
+
 ### Step 5: Clean Expired Pheromones
 
 Compute current strength for each signal in `pheromones.json`:

@@ -180,6 +180,31 @@ When you encounter a capability gap, spawn a specialist using the Task tool.
 
 This ensures every spawned ant gets the full spec with sensitivity tables, workflow, output format, AND this spawning guide — so it can spawn further ants recursively.
 
+### Spawn Confidence Check
+
+Before spawning, read `.aether/data/COLONY_STATE.json` and check `spawn_outcomes` for the target caste:
+
+```
+confidence = alpha / (alpha + beta)
+```
+
+**Interpretation:**
+- confidence >= 0.5: Spawn freely -- this caste has a positive track record
+- confidence 0.3-0.5: Spawn with caution -- consider if another caste could handle the task
+- confidence < 0.3: Prefer an alternative caste -- this caste has a poor track record
+
+**Example:**
+```
+spawn_outcomes.scout: {alpha: 3, beta: 4}
+confidence = 3 / (3 + 4) = 0.43
+
+Scout has marginal confidence. Consider: could a colonizer handle this
+research task instead? If the task specifically needs web research (scout
+specialty), spawn anyway. If it's codebase exploration, use a colonizer.
+```
+
+This is advisory, not blocking. You always retain autonomy to spawn any caste based on task requirements.
+
 ### Spawning Scenario
 
 Situation: You're researching a new API integration and discover the project's current architecture needs mapping before you can recommend an integration approach.
