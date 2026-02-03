@@ -66,7 +66,16 @@ PHASE <N> REVIEW: <phase_name>
 
 Get task data from `PROJECT_PLAN.json` -- look at the current phase's `tasks` array. Show `[x]` for completed, `[ ]` for incomplete.
 
-Get error data from `errors.json` -- filter the `errors` array by `phase` field matching the current phase number. Count by severity level.
+Use the Bash tool to run:
+```
+bash .aether/aether-utils.sh error-summary
+```
+
+This returns JSON: `{"ok":true,"result":{"total":N,"by_category":{...},"by_severity":{...}}}`. Use the `by_severity` counts for the display above.
+
+For phase-specific error counts, also filter `errors.json` entries where `phase` matches the current phase number.
+
+If the command fails, fall back to showing "Errors: Unable to compute".
 
 Get decision data from `memory.json` -- count the `decisions` array entries. Show last 3 decisions.
 

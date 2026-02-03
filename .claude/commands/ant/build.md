@@ -271,14 +271,21 @@ bash .aether/aether-utils.sh error-add "verification" "<severity_lowercased>" "<
 }
 ```
 
-**Check Pattern Flagging:** Count errors in the `errors` array by `category`. If any category has 3 or more errors and is not already in `flagged_patterns`, add:
+**Check Pattern Flagging:** Use the Bash tool to run:
+```
+bash .aether/aether-utils.sh error-pattern-check
+```
+
+This returns JSON: `{"ok":true,"result":[{"category":"...","count":N,"first_seen":"...","last_seen":"..."},...]}`
+
+For each category in the result that is not already in `flagged_patterns`, add:
 
 ```json
 {
   "category": "<the category>",
   "count": <total_count>,
-  "first_seen": "<timestamp of earliest error in this category>",
-  "last_seen": "<timestamp of latest error in this category>",
+  "first_seen": "<first_seen from result>",
+  "last_seen": "<last_seen from result>",
   "flagged_at": "<current ISO-8601 UTC>",
   "description": "Recurring <category> errors -- <count> occurrences detected"
 }
@@ -286,7 +293,18 @@ bash .aether/aether-utils.sh error-add "verification" "<severity_lowercased>" "<
 
 If the category already exists in `flagged_patterns`, update its `count`, `last_seen`, and `description`.
 
+If the command fails, fall back to manual counting from the errors.json data already in memory.
+
 If the `errors` array exceeds 50 entries, remove the oldest entries to keep only 50.
+
+**Get Error Summary:** Use the Bash tool to run:
+```
+bash .aether/aether-utils.sh error-summary
+```
+
+This returns JSON: `{"ok":true,"result":{"total":N,"by_category":{...},"by_severity":{...}}}`. Use these counts for the issue summary in Step 7 display.
+
+If the command fails, derive counts manually from the errors.json data already in memory.
 
 Use the Write tool to write the updated errors.json.
 
