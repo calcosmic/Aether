@@ -1,5 +1,35 @@
 # Project Milestones: Aether
 
+## v4.0 Hybrid Foundation (Shipped: 2026-02-03)
+
+**Delivered:** A thin shell utility layer (`aether-utils.sh`, 241 lines, 18 subcommands) that handles deterministic operations — pheromone math, state validation, memory management, error tracking — making the system hybrid: prompts reason and decide, shell scripts compute and validate. All 11 audit-identified issues fixed.
+
+**Phases completed:** 19-21 (9 plans total)
+
+**Key accomplishments:**
+
+- **Utility Layer** — `aether-utils.sh` with 18 subcommands for deterministic operations, all outputting JSON
+- **Audit Fixes** — All 11 issues resolved: state schema canonicalization, file-lock sourcing, race conditions, backups, jq error handling, pheromone schema, state integrity validation
+- **Pheromone Math Engine** — Exponential decay, effective signal computation, batch processing, cleanup, combination effects
+- **State Validation** — Schema enforcement for all 5 JSON state files with field-level error reporting
+- **Memory & Error Operations** — Token counting, compression, pattern detection, deduplication
+- **Command Integration** — 4 core commands and 6 worker specs delegate to shell utilities
+
+**Stats:**
+
+- 44 files changed, 4,780 insertions, 500 deletions
+- 241 lines of bash+jq utility code (under 300-line budget)
+- 38/38 requirements satisfied
+- 3 phases, 9 plans
+- 31 commits
+- 1 day (2026-02-03)
+
+**Git range:** `8115765` → `3ca1b16`
+
+**What's next:** v5.0 — TBD
+
+---
+
 ## v1 Queen Ant Colony (Shipped: 2026-02-02)
 
 **Delivered:** A fully functional Claude-native multi-agent system where Worker Ants autonomously spawn Worker Ants without human orchestration, guided by pheromone signals and enhanced by Bayesian meta-learning.

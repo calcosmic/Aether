@@ -1,10 +1,10 @@
-# Aether v3: Claude-Native Queen Ant Colony
+# Aether v4: Claude-Native Queen Ant Colony
 
 ## What This Is
 
 Aether is a **unique, standalone multi-agent system** built from first principles on ant colony intelligence. Worker Ants autonomously spawn other Worker Ants without human orchestration. The Queen (user) provides high-level intention via pheromone signals (INIT, FOCUS, REDIRECT, FEEDBACK), and the colony self-organizes to complete tasks through emergent intelligence.
 
-This is a **hybrid prompt+code system** — commands like `/ant:init "Build a REST API"` work directly in Claude Code as skill prompts. Prompts handle reasoning and orchestration; a thin shell utility layer (`aether-utils.sh`) handles deterministic operations (pheromone math, state validation, memory management, error tracking) that LLMs get wrong.
+This is a **hybrid prompt+code system** — commands like `/ant:init "Build a REST API"` work directly in Claude Code as skill prompts. Prompts handle reasoning and orchestration; a thin shell utility layer (`aether-utils.sh`, 241 lines, 18 subcommands) handles deterministic operations (pheromone math, state validation, memory management, error tracking) that LLMs get wrong.
 
 **What makes it unique:**
 
@@ -13,6 +13,7 @@ This is a **hybrid prompt+code system** — commands like `/ant:init "Build a RE
 3. **Pheromone Communication** — Stigmergic signaling with exponential decay, caste sensitivity profiles, and combination effects
 4. **Phased Autonomy** — Structure at boundaries, pure emergence within phases
 5. **Colony Memory** — Error tracking, phase learnings, and event awareness that persists across sessions
+6. **Hybrid Determinism** — Shell utilities for math/validation, prompts for reasoning/orchestration
 
 Unlike AutoGen, LangGraph, CrewAI, or any other framework, Aether requires **zero predefined workflows, agent roles, or orchestration logic**. The colony self-organizes.
 
@@ -48,23 +49,19 @@ If this works, everything else follows. If this fails, nothing else matters.
 - ✓ **Phase Lead Emergence Model** — One ant spawned per phase, self-organizes everything — v3
 - ✓ **Recursive Spec Propagation** — Spawned ants get full spec + pheromones at any depth — v3
 
+*(Shipped in v4.0 — 2026-02-03)*
+
+- ✓ **Utility Layer** — `aether-utils.sh` wrapper script with 18 subcommands for deterministic operations — v4.0
+- ✓ **Pheromone Math Engine** — Decay calculation, signal combination, effective strength computation in shell — v4.0
+- ✓ **State Validator** — Schema validation for all JSON state files, prevents field drift and corruption — v4.0
+- ✓ **Memory Operations** — Token counting, memory compression, eviction logic in shell — v4.0
+- ✓ **Error Tracker** — Pattern counting, category aggregation, deduplication in shell — v4.0
+- ✓ **Audit Fix: All 11 issues** — File-lock sourcing, state field consistency, race conditions, jq error handling, state backups, pheromone schema, state integrity, worker status casing, expired pheromone cleanup, colony mode documentation — v4.0
+- ✓ **Command Integration** — Core command prompts delegate to aether-utils.sh for deterministic operations — v4.0
+
 ### Active
 
-*(v4.0 milestone — Hybrid Foundation)*
-
-- [ ] **Utility Layer** — `aether-utils.sh` wrapper script with subcommands for deterministic operations
-- [ ] **Pheromone Math Engine** — Decay calculation, signal combination, effective strength computation in shell
-- [ ] **State Validator** — Schema validation for all JSON state files, prevents field drift and corruption
-- [ ] **Memory Operations** — Token counting, memory compression, eviction logic in shell
-- [ ] **Error Tracker** — Pattern counting, category aggregation, deduplication in shell
-- [ ] **Audit Fix: file-lock sourcing** — Fix broken dependency chain in atomic-write.sh
-- [ ] **Audit Fix: state field consistency** — Resolve 3 "goal" fields and 2 "current_phase" fields to single canonical paths
-- [ ] **Audit Fix: race conditions** — Fix temp file creation and concurrent state access
-- [ ] **Audit Fix: jq error handling** — Add error handling for jq failures to prevent silent corruption
-- [ ] **Audit Fix: state backups** — Add backup rotation before critical state updates
-- [ ] **Audit Fix: pheromone schema** — Reconcile old vs new field names between creates and reads
-- [ ] **Audit Fix: state integrity** — Add validation on state file load
-- [ ] **Command Integration** — Update command prompts to call aether-utils.sh for deterministic operations
+*(No active milestone — use `/cds:new-milestone` to start next)*
 
 ### Out of Scope
 
@@ -79,29 +76,34 @@ If this works, everything else follows. If this fails, nothing else matters.
 - **External vector databases** — Using Claude's native semantic understanding
 - **Predefined workflows** — Defeats emergence; use phased autonomy instead
 - **Code for reasoning/orchestration** — Prompts handle decisions; code handles math
+- **GUI/web dashboard** — CLI-only, Claude Code native
+- **Persistent daemon processes** — Against Claude-native architecture
 
 ## Context
 
-### Current State (post v3.0 — 2026-02-03)
+### Current State (post v4.0 — 2026-02-03)
 
 **What exists (working):**
 - 12 commands as Claude Code skill prompts (init, plan, build, status, phase, continue, focus, redirect, feedback, pause-colony, resume-colony, colonize, ant)
 - 6 worker ant specs (~200 lines each) with pheromone math, spawning scenarios, event awareness
 - 6 state files: COLONY_STATE.json, pheromones.json, PROJECT_PLAN.json, errors.json, memory.json, events.json
-- 2 utility scripts: atomic-write.sh, file-lock.sh
+- `aether-utils.sh` — 241-line utility wrapper with 18 subcommands (pheromone math, state validation, memory ops, error tracking)
+- 2 infrastructure scripts: atomic-write.sh, file-lock.sh
 - Full visual identity: box-drawing headers, step progress, pheromone decay bars
 - 4 specialist watcher modes in watcher-ant.md
 - Spawn outcome tracking with Bayesian confidence
+- 4 core commands (status, build, continue, init) delegate to aether-utils.sh
+- 6 worker specs use pheromone-effective for deterministic signal computation
 
-**What's broken (from audit):**
-- 3 critical issues: file-lock dependency chain, inconsistent state fields, missing utility functions
-- 5 high issues: race conditions, jq error handling, missing backups, schema mismatches, no integrity validation
-- Pure-prompt approach unreliable for: pheromone decay math, memory token counting, error pattern detection, schema enforcement
+**Known tech debt (from v4.0 audit):**
+- 8 orphaned subcommands with no current consumers
+- 4 commands retain inline decay formulas (plan.md, pause-colony.md, resume-colony.md, colonize.md)
+- Inline LLM duplicates of memory-compress and error-pattern-check
 
-**What's needed (v4.0 hybrid):**
-- Thin utility layer for deterministic operations
-- Audit fixes for production stability
-- Command updates to call utilities where appropriate
+**Advisory-only enforcement:**
+- No enforcement of spawn limits (depth-3 and max-5 are stated but purely advisory)
+- Auto-pheromone content quality unbounded
+- All spec instructions are advisory (works when LLM is diligent, fails silently when not)
 
 ### Background
 
@@ -134,26 +136,13 @@ Aether is based on **383,000+ words of research** across 25 documents by Ralph (
 | Specialist modes vs separate specs | Watcher specializations inside watcher-ant.md, not 4 separate files | ✓ Good — v3.0 |
 | JSON state for infrastructure | errors.json, memory.json, events.json as state files | ✓ Good — v3.0 |
 | Enrich existing commands vs add new | Fold review/errors/memory into status/continue rather than new commands | ✓ Good — v3.0 |
-| Hybrid prompt+code | Prompts for reasoning, shell scripts for deterministic math/validation | — Pending |
-| Single wrapper script | aether-utils.sh with subcommands vs separate scripts | — Pending |
+| Hybrid prompt+code | Prompts for reasoning, shell scripts for deterministic math/validation | ✓ Good — v4.0, 18 subcommands at 241 lines |
+| Single wrapper script | aether-utils.sh with subcommands vs separate scripts | ✓ Good — v4.0, clean dispatch pattern |
 | Pheromone-based communication | Stigmergic signals enable true emergence | ✓ Good — 4 signal types with decay working |
 | Standalone system | Aether is its own framework, zero dependencies | ✓ Confirmed |
-
-## Current Milestone: v4.0 Hybrid Foundation
-
-**Goal:** Add a thin shell utility layer for deterministic operations and fix all audit-identified issues. The system becomes hybrid: prompts reason and decide, code computes and validates. This makes pheromone math, state validation, memory management, and error tracking reliable.
-
-**Target deliverables:**
-- `aether-utils.sh` — Single wrapper script with subcommands for all deterministic operations
-- Pheromone math: `aether-utils pheromone-decay <strength> <elapsed_seconds>`, `aether-utils pheromone-effective <sensitivity> <strength>`
-- State validation: `aether-utils validate-state <file>` — Schema enforcement for all JSON state files
-- Memory ops: `aether-utils memory-compress`, `aether-utils memory-token-count` — Deterministic memory management
-- Error tracking: `aether-utils error-pattern-check`, `aether-utils error-add` — Pattern detection and deduplication
-- All 8 audit issues fixed (3 critical + 5 high priority)
-- Command prompts updated to call utilities where deterministic results are needed
-
-**Design principle:** Prompts call utilities via Bash tool. Utilities output JSON that prompts can reason about. The boundary is clear: if it needs judgment, the prompt handles it. If it needs math or validation, the script handles it.
+| Pattern flagging stays LLM responsibility | error-add records, LLM analyzes patterns in context | ✓ Good — v4.0, clear boundary |
+| validate-state after init | Catch schema errors immediately after state creation | ✓ Good — v4.0, prevents silent corruption |
 
 ---
 
-*Last updated: 2026-02-03 after v4.0 initialization (hybrid prompt+code approach)*
+*Last updated: 2026-02-03 after v4.0 milestone*
