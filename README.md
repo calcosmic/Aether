@@ -1,4 +1,4 @@
-# AETHER v2
+# AETHER v3
 
 <div align="center">
   <img src="aether-logo.png" alt="Aether Logo" width="600">
@@ -48,17 +48,17 @@ When a Worker Ant encounters a capability gap, it spawns a specialist. The colon
 ### Autonomous Agent Spawning
 
 ```
-Colonizer Ant  →  "Need security analysis"  →  spawns Security Scout
-Route-setter   →  "Need database schema"    →  spawns Database Architect
-Builder        →  "Need API tests"          →  spawns Test Generator
+Builder Ant  →  "Need auth library docs"   →  reads scout spec  →  spawns Scout
+Colonizer    →  "Complex business logic"   →  reads architect spec → spawns Architect
+Scout        →  "Need codebase structure"  →  reads colonizer spec → spawns Colonizer
 ```
 
-**No existing system does this.**
+Each caste spec includes pheromone sensitivity tables, spawning instructions, and worked examples. Spawned ants inherit the full spec chain and can spawn further ants recursively (max depth 3).
 
-- **AutoGen**: Humans define all agents
-- **LangGraph**: Predefined DAGs
-- **CrewAI**: Human-designed teams
-- **Aether**: Colony spawns itself
+**Spawning intelligence is guided by:**
+- **Pheromone sensitivity** — different castes respond differently to the same signal
+- **Bayesian confidence** — spawn outcomes tracked per caste (`alpha/beta`), low-confidence castes trigger alternative consideration
+- **Capability gap detection** — ants identify what they can't do and pick the right specialist
 
 ---
 
@@ -81,41 +81,24 @@ Queen emits **pheromone signals**. Colony self-organizes.
 | **Builder** | Implements code, runs commands |
 | **Watcher** | Validates, tests, quality checks |
 | **Scout** | Researches, finds information |
-| **Architect** | Compresses memory, extracts patterns |
+| **Architect** | Synthesizes knowledge, extracts patterns |
 
 **Each can spawn others** based on local needs.
 
 ### 3. Pheromone Communication
 
-| Signal | Purpose | Duration |
-|--------|---------|----------|
-| **INIT** | Set colony goal | Persists |
-| **FOCUS** | Guide attention | 1 hour |
-| **REDIRECT** | Warn away from approach | 24 hours |
-| **FEEDBACK** | Teach preferences | 6 hours |
+| Signal | Purpose | Duration | Strength |
+|--------|---------|----------|----------|
+| **INIT** | Set colony goal | Persists | 1.0 |
+| **FOCUS** | Guide attention | 1 hour | 0.7 |
+| **REDIRECT** | Warn away from approach | 24 hours | 0.9 |
+| **FEEDBACK** | Teach preferences | 6 hours | 0.5 |
 
-**Signals, not commands.** Colony responds to combination.
+**Signals, not commands.** Pheromones decay exponentially (`strength * e^(-0.693 * elapsed / half_life)`). Each caste has different sensitivity values, so the same signal produces different effective strengths per caste. Ants compute `effective_signal = sensitivity * current_strength` and act based on thresholds.
 
-### 4. Triple-Layer Memory
+FEEDBACK and REDIRECT pheromones are also **auto-emitted** at phase boundaries — summarizing what worked/didn't and flagging recurring error patterns.
 
-```
-┌──────────────────────────────────────────────────┐
-│  WORKING MEMORY   │  SHORT-TERM    │  LONG-TERM  │
-│  (200k tokens)    │  (10 sessions) │  (patterns) │
-│  Immediate        │  Compressed    │  Persistent │
-└──────────────────────────────────────────────────┘
-         │                   │                  │
-         └──── 2.5x DAST compression ──────────────┘
-```
-
-Human cognition mirrored:
-- **Working**: Current task context
-- **Short-term**: Recent sessions (2.5x compressed)
-- **Long-term**: Persistent patterns, learned expertise
-
-**Cross-layer search** returns ranked results from all layers.
-
-### 5. Phased Autonomy
+### 4. Phased Autonomy
 
 ```
 Structure ──────────────┐  Phase Boundary  ────────────┐
@@ -144,12 +127,6 @@ Traditional systems fail when:
 
 **Aether's Solution**: Workers spawn Workers.
 
-### Problem: Context Rot
-
-LLMs forget everything between sessions.
-
-**Aether's Solution**: Triple-layer memory with automatic compression. Patterns persist across sessions.
-
 ### Problem: Orchestrator Bottleneck
 
 Central orchestrator becomes bottleneck and single point of failure.
@@ -158,92 +135,54 @@ Central orchestrator becomes bottleneck and single point of failure.
 
 ---
 
-## Current Progress
+## Current Status
 
-**v1 Milestone**: ✅ SHIPPED (2026-02-02)
-
-All 52 requirements satisfied. 8 phases (3-10), 156/156 must-haves verified.
-
-| Phase | Status |
-|-------|--------|
-| 1. Colony Foundation | ✅ Complete |
-| 2. Worker Ant Castes | ✅ Complete |
-| 3. Pheromone Communication | ✅ Complete |
-| 4. Triple-Layer Memory | ✅ Complete |
-| 5. Phase Boundaries | ✅ Complete |
-| 6. Autonomous Emergence | ✅ Complete |
-| 7. Colony Verification | ✅ Complete |
-| 8. Colony Learning | ✅ Complete |
-| 9. Stigmergic Events | ✅ Complete |
-| 10. Colony Maturity | ✅ Complete |
+**v3**: Rebuilt from first principles. Stripped ~1.3MB of dead code from v2, rewrote all commands as clean Claude Code slash-command prompts. No Python, no bash scripts — the entire system is markdown prompts and JSON state.
 
 **What's Working:**
-- ✅ Autonomous spawning with Bayesian meta-learning
-- ✅ Pheromone signals (INIT, FOCUS, REDIRECT, FEEDBACK) with time-based decay
-- ✅ Triple-layer memory (Working → Short-term DAST → Long-term patterns)
-- ✅ Multi-perspective verification (4 watchers, weighted voting, Critical veto)
-- ✅ Event-driven coordination (pub/sub event bus, async delivery)
-- ✅ State machine (7 states, checkpoints, recovery)
-- ✅ 19 commands, 10 Worker Ants, 26 utility scripts
-- ✅ Comprehensive testing (41+ assertions, stress tests, performance baselines)
+- 4 pheromone types (INIT, FOCUS, REDIRECT, FEEDBACK) with exponential decay math
+- 6 worker castes with per-caste sensitivity tables, combination effects, and feedback interpretation
+- Pure emergence: `/ant:build` spawns one ant that self-organizes the entire phase
+- Recursive spawning with full spec chain propagation (depth 3, max 5 sub-ants)
+- Bayesian spawn confidence tracking — alpha/beta updated per caste on phase outcomes
+- Mandatory watcher verification after every build (quality score, recommendation, issue severity)
+- Auto-emitted pheromones at phase boundaries (FEEDBACK always, REDIRECT on flagged patterns)
+- Git checkpoints before phase execution for rollback capability
+- Worker state tracking (active/idle) across all commands
+- Environment-aware planning (detects project type, injects tool constraints)
+- Event logging, error tracking with pattern flagging (3+ occurrences)
+- Colony memory (phase learnings, decisions) persisted across sessions
+- Colonization findings persisted to memory for use by planner and builders
+- 13 commands, 6 worker specs, pure JSON state management
 
 ---
 
 ## Usage
 
-### Initialize Colony
+### Quick Start
 
 ```bash
 /ant:init "Build a REST API with PostgreSQL"
+/ant:plan
+/ant:build 1
 ```
 
-### Colony Commands
+### All Commands
 
-```
-/ant:status          # Show colony state
-/ant:phase 1         # Show phase details
-/ant:focus "auth"    # Guide attention to area
-/ant:memory          # Search triple-layer memory
-```
-
-### Memory System
-
-```bash
-/ant:memory search "database"      # Search all layers
-/ant:memory status                 # Show memory statistics
-/ant:memory verify                 # Check 200k token limit
-```
-
----
-
-## Architecture Sketch
-
-```
-                    ┌──────────────────┐
-                    │   QUEEN SIGNAL   │
-                    │  (Intention)     │
-                    └────────┬─────────┘
-                             │
-                    ┌────────▼─────────┐
-                    │  PHEROMONE LAYER │
-                    │  Init•Focus•Red  │
-                    └────────┬─────────┘
-                             │
-        ┌────────────────────┼────────────────────┐
-        │                    │                    │
-┌───────▼──────┐    ┌───────▼──────┐    ┌───────▼──────┐
-│  WORKING     │    │  SHORT-TERM  │    │  LONG-TERM   │
-│  200k tokens │    │  10 sessions │    │  Patterns    │
-└──────────────┘    └──────────────┘    └──────────────┘
-        │                    │                    │
-        └────────────────────┼────────────────────┘
-                             │
-                    ┌────────▼─────────┐
-                    │   WORKER ANTS    │
-                    │  (6 Castes)      │
-                    │  Spawn each other│
-                    └──────────────────┘
-```
+| Command | Purpose |
+|---------|---------|
+| `/ant:init "<goal>"` | Set colony intention and initialize |
+| `/ant:colonize` | Analyze existing codebase |
+| `/ant:plan` | Generate project plan (colony self-organizes) |
+| `/ant:build <N>` | Execute phase N (one ant spawned, self-organizes) |
+| `/ant:focus "<area>"` | Guide attention (0.7 strength, 1hr decay) |
+| `/ant:redirect "<pat>"` | Warn away from pattern (0.9, 24hr decay) |
+| `/ant:feedback "<msg>"` | Adjust behavior (0.5, 6hr decay) |
+| `/ant:status` | Colony status, pheromones, progress |
+| `/ant:phase [N\|list]` | View phase details |
+| `/ant:continue` | Approve phase, advance to next |
+| `/ant:pause-colony` | Save state for session break |
+| `/ant:resume-colony` | Restore from pause |
 
 ---
 
@@ -282,28 +221,36 @@ Aether translates this to AI:
 ```
 .aether/
 ├── data/
-│   ├── COLONY_STATE.json    # Colony state
-│   ├── pheromones.json      # Signal layer
-│   └── memory.json          # Triple-layer memory
+│   ├── COLONY_STATE.json    # Colony state, workers, spawn outcomes
+│   ├── pheromones.json      # Decaying pheromone signals
+│   ├── PROJECT_PLAN.json    # Phase plan with tasks and success criteria
+│   ├── errors.json          # Error log + flagged patterns
+│   ├── events.json          # Event log (capped at 100)
+│   └── memory.json          # Phase learnings + decisions
 ├── utils/
-│   ├── memory-ops.sh        # Working Memory operations
-│   ├── memory-compress.sh   # DAST compression
-│   ├── memory-search.sh     # Cross-layer search
-│   ├── atomic-write.sh      # Corruption-safe writes
-│   └── file-lock.sh         # Concurrent access prevention
+│   └── atomic-write.sh      # Corruption-safe writes
 ├── workers/
-│   ├── colonizer-ant.md     # Codebase exploration
-│   ├── route-setter-ant.md  # Phase planning
-│   ├── builder-ant.md       # Code implementation
-│   ├── watcher-ant.md       # Validation/testing
-│   ├── scout-ant.md         # Research/information
-│   └── architect-ant.md     # Memory compression
-└── .claude/commands/ant/
-    ├── init.md              # Initialize colony
+│   ├── colonizer-ant.md     # Codebase exploration spec
+│   ├── route-setter-ant.md  # Phase planning spec
+│   ├── builder-ant.md       # Code implementation spec
+│   ├── watcher-ant.md       # Validation/testing spec (4 specialist modes)
+│   ├── scout-ant.md         # Research/information spec
+│   └── architect-ant.md     # Knowledge synthesis spec
+└── HANDOFF.md               # Session handoff (for pause/resume)
+.claude/commands/ant/
+    ├── ant.md               # Help overview
+    ├── init.md              # Initialize colony + create state files
+    ├── colonize.md          # Analyze codebase, persist findings
+    ├── plan.md              # Generate plan (environment-aware)
+    ├── build.md             # Execute phase (git checkpoint, watcher verification)
+    ├── continue.md          # Advance phase (auto-emit pheromones)
     ├── focus.md             # Emit FOCUS signal
     ├── redirect.md          # Emit REDIRECT signal
     ├── feedback.md          # Emit FEEDBACK signal
-    └── memory.md            # Memory operations
+    ├── status.md            # Colony status dashboard
+    ├── phase.md             # Phase details
+    ├── pause-colony.md      # Save session state
+    └── resume-colony.md     # Restore session state
 ```
 
 ---
