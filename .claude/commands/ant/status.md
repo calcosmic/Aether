@@ -56,12 +56,31 @@ Between each major section (WORKERS, ACTIVE PHEROMONES, PHASE PROGRESS, NEXT ACT
 
 ```
 WORKERS
-  colonizer:    <status>
-  route-setter: <status>
-  builder:      <status>
-  watcher:      <status>
-  scout:        <status>
-  architect:    <status>
+```
+
+Display workers grouped by their status from `COLONY_STATE.json`:
+
+If ALL workers have `"idle"` status (the common case), display a compact summary:
+```
+  All 6 workers idle -- colony ready
+```
+
+Otherwise, group by status with emoji + text label:
+
+```
+  Active:
+    [ant emoji] <worker_name>: currently executing
+
+  Idle:
+    [white circle emoji] <worker_name>, <worker_name>, ...
+
+  Error:
+    [red circle emoji] <worker_name>: <error detail if available>
+```
+
+Only show groups that have at least one worker. End with a summary line:
+```
+  [ant emoji] <N> active | [white circle emoji] <N> idle | [red circle emoji] <N> error
 ```
 
 ```
@@ -72,13 +91,32 @@ WORKERS
 ACTIVE PHEROMONES
 ```
 
-For each non-expired signal, display:
+For each non-expired signal, display with a visual strength bar:
+
 ```
-  <TYPE> (strength <current_strength:.2f>, <time_remaining or "persistent">)
-    "<content>"
+  {TYPE padded to 10 chars} [{bar}] {current_strength:.2f}
+    "{content}"
 ```
 
-If no active signals: `  (none)`
+Where the bar has 20 characters total:
+- Filled portion: repeat `=` for `round(current_strength * 20)` times
+- Empty portion: fill remaining with spaces
+- Wrap in square brackets
+
+Examples:
+```
+  INIT       [====================] 1.00  (persistent)
+    "Build a REST API with authentication"
+  FOCUS      [===============     ] 0.75
+    "WebSocket security"
+  REDIRECT   [======              ] 0.30
+    "Don't use JWT for sessions"
+```
+
+If no active signals after filtering:
+```
+  (no active pheromones)
+```
 
 ```
 ---------------------------------------------------
