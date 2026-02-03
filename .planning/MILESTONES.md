@@ -1,4 +1,4 @@
-# Project Milestones: Aether v2
+# Project Milestones: Aether
 
 ## v1 Queen Ant Colony (Shipped: 2026-02-02)
 
@@ -25,11 +25,48 @@
 
 **Git range:** Initial commit → 29ecc25
 
-**Issues to address in v2:**
-- Event bus polling integration into Worker Ant prompts
-- Real LLM execution tests (complement bash simulations)
-- Update path references in script comments
+---
 
-**What's next:** TBD (user will define next milestone goals)
+## v2 Reactive Event Integration (Shipped: 2026-02-02)
+
+**Delivered:** Event polling integration, visual indicators, and comprehensive E2E testing that transformed the colony from prompt-based execution to reactive coordination.
+
+**Phases completed:** 11-13 (6 plans total)
+
+**Key accomplishments:**
+
+- **Event Polling Integration** — Worker Ants call get_events_for_subscriber() at execution boundaries; caste-specific subscriptions
+- **Visual Indicators** — Emoji status (🟢/⚪/🔴/⏳), step progress ([✓]/[→]/[ ]), pheromone strength bars
+- **E2E Test Guide** — 94 verification checks across 6 workflows (init, execute, spawning, memory, voting, events)
+- **Documentation Cleanup** — All path references verified and corrected
+
+**Stats:**
+
+- 16/16 requirements satisfied
+- 3 phases, 6 plans
+- All existing Worker Ant specs updated with event polling
+
+**Git range:** 29ecc25 → 8c91880
+
+---
+
+## v3-rebuild (Shipped: 2026-02-03)
+
+**Delivered:** Complete rewrite from Python/bash to Claude-native skill prompts using Read/Write/Task tools. 19 commands consolidated to 12, 10 worker specs consolidated to 6, all bash utilities replaced by JSON state.
+
+**Key accomplishments:**
+
+- **Claude-Native Execution** — Commands use Read/Write tools directly, no bash/jq
+- **Clean State Schema** — 3 JSON files (COLONY_STATE, pheromones, PROJECT_PLAN)
+- **Phase Lead Emergence** — One ant spawned per phase, self-organizes everything
+- **Recursive Spec Propagation** — Spawned ants get full spec + pheromones at any depth
+
+**Stats:**
+
+- 12 commands (skill prompts)
+- 6 worker ant specs (~90 lines each)
+- 3 JSON state files
+- 2 utility scripts (atomic-write.sh, file-lock.sh)
+- ~30,710 lines removed, capabilities to restore in v3.0
 
 ---
