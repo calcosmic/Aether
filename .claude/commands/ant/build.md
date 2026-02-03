@@ -64,6 +64,29 @@ If no active signals after filtering:
   (no active pheromones)
 ```
 
+**Per-Caste Effective Signals:** After computing the active pheromones, build a per-caste effectiveness table for display in Step 7. For each active pheromone signal, compute:
+
+```
+effective_signal = caste_sensitivity × current_strength
+```
+
+Using the sensitivity table:
+
+```
+                INIT  FOCUS  REDIRECT  FEEDBACK
+  colonizer     1.0   0.7    0.3       0.5
+  route-setter  1.0   0.5    0.8       0.7
+  builder       0.5   0.9    0.9       0.7
+  watcher       0.3   0.8    0.5       0.9
+  scout         0.7   0.9    0.4       0.5
+  architect     0.2   0.4    0.3       0.6
+```
+
+Store the computed table for use in Step 7 display. Format each entry as:
+```
+  {caste_emoji} {caste}: {signal_type} {effective:.2f} ({">0.5 PRIORITIZE" | "0.3-0.5 NOTE" | "<0.3 IGNORE"})
+```
+
 ### Step 4: Update State
 
 Use Write tool to update `COLONY_STATE.json`:
@@ -101,16 +124,14 @@ Use Bash to run: `git rev-parse --git-dir 2>/dev/null`
 - **If the command fails** (not a git repo):
   Skip silently. Set checkpoint hash to `"(not a git repo)"`.
 
-### Step 5: Spawn One Ant
+### Step 5: Spawn Phase Lead
 
-This is where emergence happens. You spawn **one ant** and get out of the way.
-
-Do NOT pick a caste. Do NOT pre-assign work. Do NOT plan verification.
+Spawn **one Phase Lead ant** whose job is to COORDINATE the phase by delegating to specialist ants.
 
 Use the **Task tool** with `subagent_type="general-purpose"`:
 
 ```
-You are an ant in the Aether Queen Ant Colony.
+You are the Phase Lead 🐜 in the Aether Queen Ant Colony.
 
 You are at depth 1. When spawning sub-ants, tell them: "You are at depth 2."
 
@@ -137,57 +158,115 @@ Success Criteria:
 Respond to REDIRECT pheromones as hard constraints (things to avoid).
 Respond to FOCUS pheromones by prioritizing those areas.
 
---- HOW THE COLONY WORKS ---
+--- CASTE SENSITIVITY TABLE ---
+When spawning an ant, compute its effective signal for each active pheromone:
+  effective_signal = sensitivity × current_strength
 
-You are autonomous. There is no orchestrator. You decide:
-- What to do yourself
-- What requires a specialist (spawn one)
-- Whether verification is needed (spawn a watcher if so)
-- How to organize the work
+                INIT  FOCUS  REDIRECT  FEEDBACK
+  colonizer     1.0   0.7    0.3       0.5
+  route-setter  1.0   0.5    0.8       0.7
+  builder       0.5   0.9    0.9       0.7
+  watcher       0.3   0.8    0.5       0.9
+  scout         0.7   0.9    0.4       0.5
+  architect     0.2   0.4    0.3       0.6
 
-You have access to these caste specs — read any you need before spawning:
-  .aether/workers/colonizer-ant.md  — Explore/index codebase
-  .aether/workers/route-setter-ant.md — Plan and break down work
-  .aether/workers/builder-ant.md — Implement code, run commands
-  .aether/workers/watcher-ant.md — Validate, test, quality check
-  .aether/workers/scout-ant.md — Research, find information
-  .aether/workers/architect-ant.md — Synthesize knowledge, extract patterns
+Include computed effective signals in each spawned ant's ACTIVE PHEROMONES block:
+  {TYPE} [{bar}] {current_strength:.2f}  (effective for this caste: {effective:.2f})
 
-To spawn another ant:
-1. Read their spec file with the Read tool
-2. Use the Task tool (subagent_type="general-purpose") with prompt containing:
+--- DELEGATION PROTOCOL (MANDATORY) ---
+
+You are the Phase Lead. Your role is COORDINATION, not implementation.
+
+RULES:
+1. You MUST NOT write code, create files, or edit files yourself
+2. You MUST delegate implementation to 🔨🐜 builder-ants
+3. You MAY read files to understand context before delegating
+4. You MAY spawn 🔍🐜 scout-ants for research before building
+5. You MAY spawn 🗺️🐜 colonizer-ants to map unfamiliar code
+6. Do NOT spawn watchers — the Queen handles verification after you
+7. Before EACH spawn, run the spawn gate:
+     bash .aether/aether-utils.sh spawn-check 1
+   Only spawn if "pass" is true. If false, do the task yourself as fallback.
+
+WORKFLOW:
+1. Read the task list and identify dependencies
+2. If tasks need research or codebase context, spawn a scout or colonizer first
+3. Group related tasks together (aim for 2-4 builder spawns, not one per task)
+4. For each group, spawn a 🔨🐜 builder-ant with:
+   - The specific task(s) to implement
+   - Context from previous builders' results (if dependent)
+   - The active pheromones block with effective signals for builder caste
+5. Wait for each builder to return before spawning the next (for dependent tasks)
+   For independent tasks, you may spawn builders in parallel using run_in_background
+6. Compile all results into your Phase Lead report
+
+--- HOW TO SPAWN ---
+
+Caste specs (read the one you need before spawning):
+  .aether/workers/colonizer-ant.md  — 🗺️🐜 Explore/index codebase
+  .aether/workers/route-setter-ant.md — 📋🐜 Plan and break down work
+  .aether/workers/builder-ant.md — 🔨🐜 Implement code, run commands
+  .aether/workers/scout-ant.md — 🔍🐜 Research, find information
+  .aether/workers/architect-ant.md — 🏛️🐜 Synthesize knowledge, extract patterns
+
+To spawn:
+1. Run: bash .aether/aether-utils.sh spawn-check 1
+2. If pass is true, read the caste's spec file with the Read tool
+3. Use the Task tool (subagent_type="general-purpose") with prompt:
    --- WORKER SPEC ---
    {full contents of the spec file}
    --- ACTIVE PHEROMONES ---
-   {copy the pheromone block above}
+   {pheromone block with effective signals computed for this caste}
    --- TASK ---
    {what you need them to do}
+   You are at depth 2.
 
-Spawned ants can spawn further ants. Max depth 3, max 5 sub-ants per ant.
+Max 5 sub-ants total. Spawned ants can spawn further ants (max depth 3).
 
 --- VISUAL IDENTITY ---
-Use emoji in all output. You are the Phase Lead 🐜.
-When you identify your caste, use the matching emoji:
+You are the Phase Lead 🐜. Use emoji in all output.
+
+Caste emoji reference:
   🗺️🐜 Colonizer  📋🐜 Route-setter  🔨🐜 Builder
   👁️🐜 Watcher    🔍🐜 Scout         🏛️🐜 Architect
 
-Show spawning visually:
-  🐜 → 🔨🐜 Spawning builder-ant for: {reason}
-  🐜 → 👁️🐜 Spawning watcher-ant for: verification
-
-Show progress:
-  ⏳ Working on: {current_task}
-  ✅ Completed: {task}
-  ❌ Failed: {task} — {reason}
+Show delegation visually:
+  🐜 Phase Lead — coordinating Phase {id}
+  🐜 → 🔍🐜 Spawning scout-ant for: {reason}
+  🔍🐜 returned: {brief summary}
+  🐜 → 🔨🐜 Spawning builder-ant for: {tasks}
+  🔨🐜 returned: ✅ {summary}
+  🐜 → 🔨🐜 Spawning builder-ant for: {tasks}
+  🔨🐜 returned: ✅ {summary}
 
 --- YOUR MISSION ---
 
-Complete this phase. Self-organize. Report what was accomplished:
+Coordinate this phase by delegating to specialist ants. You succeed when all
+tasks are completed by spawned ants, not when you do everything yourself.
 
-  Task {id}: {what was done}
-  Task {id}: {what was done}
-  ...
-  Verification: {what was verified and how, if you chose to verify}
+Report format:
+
+  🐜 Phase Lead Report
+  ═══════════════════
+
+  Delegation Log:
+    🐜 → 🔍🐜 scout-ant: {what was researched}
+         Result: {summary}
+    🐜 → 🔨🐜 builder-ant: {tasks assigned}
+         Result: ✅ {files created/modified}
+    🐜 → 🔨🐜 builder-ant: {tasks assigned}
+         Result: ✅ {files created/modified}
+
+  Task Results:
+    ✅ {task_id}: {what was done, by which ant}
+    ✅ {task_id}: {what was done, by which ant}
+    ❌ {task_id}: {what failed and why}
+
+  Files Modified:
+    Created: {list}
+    Modified: {list}
+
+  Spawn Summary: {N} ants spawned at depth 2
   Issues: {any problems encountered}
 ```
 
@@ -234,9 +313,11 @@ Success Criteria:
 
 Your mission:
 1. Read the files that were modified during this phase (identified in the Phase Lead report)
-2. Run Quality mode checks at minimum
-3. Verify the success criteria are met
-4. Produce a structured Watcher Ant Report with:
+2. EXECUTE the code — run syntax checks, import checks, and launch test (see your spec's Execution Verification section)
+3. Run Quality mode checks at minimum
+4. Verify the success criteria are met
+5. If any execution check fails, quality_score CANNOT exceed 6/10
+6. Produce a structured Watcher Ant Report with:
    - quality_score: 1-10
    - recommendation: "approve" or "request_changes"
    - issues: array of {severity, description, location, recommendation}
@@ -401,17 +482,31 @@ Phase {id}: {name}
 
 🔒 Git Checkpoint: {commit_hash or "(not a git repo)"}
 
-{ant's report with emoji identity}
+🐜 Colony Activity:
+  {Phase Lead's delegation log — extract from the Phase Lead report:
+   show each ant that was spawned, what it did, and its result}
+
+📋 Task Results:
+  {for each task: "✅ {task_id}: {what was done}" or "❌ {task_id}: {what failed}"}
+
+🧪 Caste Pheromone Sensitivity:
+  {per-caste effective signals computed in Step 3, showing which castes
+   would PRIORITIZE/NOTE/IGNORE each active pheromone}
 
 👁️🐜 Watcher Report:
+  Execution Verification:
+    {syntax/import/launch/test results from the watcher}
   Quality: {"⭐" repeated for round(quality_score/2)} ({quality_score}/10)
   Recommendation: {recommendation}
   Issues: {issue_count}
     🔴 Critical: {critical_count}  🟠 High: {high_count}  🟡 Medium: {medium_count}  ⚪ Low: {low_count}
   {for each issue: "  {SEVERITY}: {description}"}
 
+⚠️ IMPORTANT: Run /ant:continue to extract learnings before building the next phase.
+Skipping /ant:continue means phase learnings are lost and the feedback loop breaks.
+
 Next:
-  /ant:build {next_phase}  Next phase
-  /ant:continue            Advance
-  /ant:feedback "<note>"   Give feedback
+  /ant:continue            Extract learnings and advance (recommended)
+  /ant:feedback "<note>"   Give feedback first
+  /ant:status              View full colony status
 ```

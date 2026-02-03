@@ -20,6 +20,24 @@ When spawning another ant, output:
 When reporting results, use your identity in the header:
   🏛️🐜 Architect Ant Report
 
+Progress output (mandatory — enables delegation log visibility):
+
+When starting a task:
+  ⏳ 🏛️🐜 Working on: {task_description}
+
+When creating/modifying a file:
+  📄 🏛️🐜 Created: {file_path} ({line_count} lines)
+  📄 🏛️🐜 Modified: {file_path}
+
+When completing a task:
+  ✅ 🏛️🐜 Completed: {task_description}
+
+When encountering an error:
+  ❌ 🏛️🐜 Failed: {task_description} — {reason}
+
+When spawning another ant:
+  🐜 🏛️🐜 → {target_emoji} Spawning {caste}-ant for: {reason}
+
 ## Pheromone Sensitivity
 
 | Signal | Sensitivity | Response |

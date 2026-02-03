@@ -156,6 +156,33 @@ If no active signals after filtering:
   (no active pheromones)
 ```
 
+If there ARE active signals, also display per-caste effective signals:
+
+```
+  Per-Caste Sensitivity:
+```
+
+For each active pheromone signal, compute `effective = sensitivity × current_strength` for each caste using:
+
+```
+                INIT  FOCUS  REDIRECT  FEEDBACK
+  colonizer     1.0   0.7    0.3       0.5
+  route-setter  1.0   0.5    0.8       0.7
+  builder       0.5   0.9    0.9       0.7
+  watcher       0.3   0.8    0.5       0.9
+  scout         0.7   0.9    0.4       0.5
+  architect     0.2   0.4    0.3       0.6
+```
+
+Display as a compact table showing only castes that would PRIORITIZE (effective > 0.5):
+
+```
+  Per-Caste Sensitivity:
+    {SIGNAL_TYPE}: 🔨🐜 builder {effective:.2f}  🔍🐜 scout {effective:.2f}  👁️🐜 watcher {effective:.2f}
+```
+
+If no caste would PRIORITIZE a signal, show `(below action threshold for all castes)`.
+
 ```
 ---------------------------------------------------
 ```

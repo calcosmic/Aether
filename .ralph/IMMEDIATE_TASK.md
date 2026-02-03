@@ -2,7 +2,30 @@
 
 ## Your Current Objective
 
-✅ **COMPLETED**: Created `.ralph/CONTEXT_ENGINE_RESEARCH.md`
+🔴 **CRITICAL SYSTEM AUDIT**: Comprehensive audit of Aether Queen Ant Colony system
+
+Read `.ralph/SYSTEM_AUDIT_TASK.md` for complete instructions.
+
+## Summary
+
+The Aether system had a recent collapse due to schema mismatches between command files and state JSON files. Your task is to:
+
+1. **Audit every command file** for bugs and errors
+2. **Audit every state file** for schema issues
+3. **Audit every utility script** for bash errors
+4. **Fix issues immediately** as you find them
+5. **Generate comprehensive report** at `.ralph/SYSTEM_AUDIT_REPORT.md`
+
+## Key Constraints
+
+- **NO upgrades or new features**
+- **NO architectural changes**
+- **ONLY fix what is broken**
+- **Focus on reliability and robustness**
+
+## Priority
+
+This is the highest priority task. The system must be reliable before any user can depend on it for their development work.
 
 ## Task Completed
 
