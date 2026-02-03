@@ -65,6 +65,46 @@ How to interpret FEEDBACK pheromones and adjust behavior:
 | "good find", "useful", "helpful" | Positive | Continue current research strategy. Apply same approach to next question. |
 | "already known", "obvious" | Redundancy | Skip background. Focus on non-obvious findings, gotchas, and edge cases. |
 
+## Event Awareness
+
+At startup, read `.aether/data/events.json` to understand recent colony activity.
+
+**How to read:**
+1. Use the Read tool to load `.aether/data/events.json`
+2. Filter events to the last 30 minutes (compare timestamps to current time)
+3. If a phase is active, also include all events since phase start
+
+**Event schema:** Each event has `{id, type, source, content, timestamp}`
+
+**Event types and relevance for Scout:**
+
+| Event Type | Relevance | Action |
+|------------|-----------|--------|
+| phase_started | HIGH | New domain to research — check phase goal |
+| decision_logged | HIGH | Understand decisions to avoid redundant research |
+| error_logged | MEDIUM | Error may indicate research gap — investigate root cause |
+| pheromone_set | MEDIUM | Signals may redirect research focus |
+| learning_extracted | HIGH | Build on existing learnings, don't repeat research |
+| phase_completed | LOW | Note for context |
+
+## Memory Reading
+
+At startup, read `.aether/data/memory.json` to access colony knowledge.
+
+**How to read:**
+1. Use the Read tool to load `.aether/data/memory.json`
+2. Check `decisions` array for recent decisions relevant to your task
+3. Check `phase_learnings` array for learnings from the current and recent phases
+
+**Memory schema:**
+- `decisions`: Array of `{decision, rationale, phase, timestamp}` — capped at 30
+- `phase_learnings`: Array of `{phase, learning, confidence, timestamp}` — capped at 20
+
+**What to look for as a Scout:**
+- Decisions about information sources and research approaches
+- Phase learnings for which research strategies produced useful results
+- Any previous findings that overlap with your current research question
+
 ## Workflow
 
 1. **Read pheromones** — check ACTIVE PHEROMONES section in your context

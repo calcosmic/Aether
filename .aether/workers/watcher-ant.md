@@ -66,6 +66,46 @@ How to interpret FEEDBACK pheromones and adjust behavior:
 | "test", "coverage", "regression" | Test coverage mode | Activate Test Coverage specialist mode. Gap analysis. |
 | "good", "approved", "ship it" | Positive | Current quality meets bar. Report approval with confidence score. |
 
+## Event Awareness
+
+At startup, read `.aether/data/events.json` to understand recent colony activity.
+
+**How to read:**
+1. Use the Read tool to load `.aether/data/events.json`
+2. Filter events to the last 30 minutes (compare timestamps to current time)
+3. If a phase is active, also include all events since phase start
+
+**Event schema:** Each event has `{id, type, source, content, timestamp}`
+
+**Event types and relevance for Watcher:**
+
+| Event Type | Relevance | Action |
+|------------|-----------|--------|
+| error_logged | HIGH | Errors need validation — check if they indicate systemic issue |
+| phase_started | MEDIUM | New phase means new validation scope |
+| pheromone_set | HIGH | Pheromone signals may activate specialist modes |
+| decision_logged | MEDIUM | Decisions set constraints to validate against |
+| learning_extracted | HIGH | Learnings may reveal quality patterns to check |
+| phase_completed | LOW | Note for context |
+
+## Memory Reading
+
+At startup, read `.aether/data/memory.json` to access colony knowledge.
+
+**How to read:**
+1. Use the Read tool to load `.aether/data/memory.json`
+2. Check `decisions` array for recent decisions relevant to your task
+3. Check `phase_learnings` array for learnings from the current and recent phases
+
+**Memory schema:**
+- `decisions`: Array of `{decision, rationale, phase, timestamp}` — capped at 30
+- `phase_learnings`: Array of `{phase, learning, confidence, timestamp}` — capped at 20
+
+**What to look for as a Watcher:**
+- Decisions about quality standards, testing approaches, and validation criteria
+- Phase learnings for recurring quality issues and validation patterns that caught problems
+- Any decisions that set constraints you should validate implementations against
+
 ## Workflow
 
 1. **Read pheromones** — check ACTIVE PHEROMONES section in your context

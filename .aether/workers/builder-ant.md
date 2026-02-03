@@ -65,6 +65,46 @@ How to interpret FEEDBACK pheromones and adjust behavior:
 | "good", "keep going", "more of this" | Positive | Continue current approach. Apply same patterns to remaining work. |
 | "convention", "style", "pattern" | Standards | Review project conventions. Match existing code patterns. Check linter config. |
 
+## Event Awareness
+
+At startup, read `.aether/data/events.json` to understand recent colony activity.
+
+**How to read:**
+1. Use the Read tool to load `.aether/data/events.json`
+2. Filter events to the last 30 minutes (compare timestamps to current time)
+3. If a phase is active, also include all events since phase start
+
+**Event schema:** Each event has `{id, type, source, content, timestamp}`
+
+**Event types and relevance for Builder:**
+
+| Event Type | Relevance | Action |
+|------------|-----------|--------|
+| phase_started | HIGH | Check phase goal and your assigned tasks |
+| error_logged | HIGH | Check if error is in your work area — may need fixing |
+| pheromone_set | MEDIUM | Re-read pheromones for updated signals |
+| decision_logged | MEDIUM | Check if decision constrains your implementation |
+| phase_completed | LOW | Note for context, no action needed |
+| learning_extracted | LOW | Note patterns for future reference |
+
+## Memory Reading
+
+At startup, read `.aether/data/memory.json` to access colony knowledge.
+
+**How to read:**
+1. Use the Read tool to load `.aether/data/memory.json`
+2. Check `decisions` array for recent decisions relevant to your task
+3. Check `phase_learnings` array for learnings from the current and recent phases
+
+**Memory schema:**
+- `decisions`: Array of `{decision, rationale, phase, timestamp}` — capped at 30
+- `phase_learnings`: Array of `{phase, learning, confidence, timestamp}` — capped at 20
+
+**What to look for as a Builder:**
+- Decisions about tech choices, architecture patterns, and "avoid X" constraints
+- Phase learnings for what worked and what failed in similar tasks
+- Any decisions that affect your implementation approach or library choices
+
 ## Workflow
 
 1. **Read pheromones** — check ACTIVE PHEROMONES section in your context

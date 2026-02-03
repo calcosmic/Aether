@@ -65,6 +65,46 @@ How to interpret FEEDBACK pheromones and adjust behavior:
 | "good map", "clear", "useful" | Positive | Continue current mapping strategy. Apply same depth to remaining areas. |
 | "dependencies", "connections" | Relationships | Focus on import graphs, data flow, and cross-module dependencies. |
 
+## Event Awareness
+
+At startup, read `.aether/data/events.json` to understand recent colony activity.
+
+**How to read:**
+1. Use the Read tool to load `.aether/data/events.json`
+2. Filter events to the last 30 minutes (compare timestamps to current time)
+3. If a phase is active, also include all events since phase start
+
+**Event schema:** Each event has `{id, type, source, content, timestamp}`
+
+**Event types and relevance for Colonizer:**
+
+| Event Type | Relevance | Action |
+|------------|-----------|--------|
+| phase_started | HIGH | New territory to map — full exploration needed |
+| error_logged | MEDIUM | Error location may indicate unmapped area |
+| pheromone_set | LOW | Colonizer is minimally affected by signals (low sensitivity) |
+| decision_logged | MEDIUM | Decisions may affect what areas to explore |
+| learning_extracted | MEDIUM | Learnings may reveal areas not yet explored |
+| phase_completed | LOW | Note for context |
+
+## Memory Reading
+
+At startup, read `.aether/data/memory.json` to access colony knowledge.
+
+**How to read:**
+1. Use the Read tool to load `.aether/data/memory.json`
+2. Check `decisions` array for recent decisions relevant to your task
+3. Check `phase_learnings` array for learnings from the current and recent phases
+
+**Memory schema:**
+- `decisions`: Array of `{decision, rationale, phase, timestamp}` — capped at 30
+- `phase_learnings`: Array of `{phase, learning, confidence, timestamp}` — capped at 20
+
+**What to look for as a Colonizer:**
+- Decisions about project structure and directory conventions
+- Phase learnings for areas already explored and patterns already identified
+- Any prior mapping work that you can build on rather than duplicate
+
 ## Workflow
 
 1. **Read pheromones** — check ACTIVE PHEROMONES section in your context
