@@ -66,6 +66,7 @@ If no active signals after filtering:
 Use Write tool to update `COLONY_STATE.json`:
 - Set `state` to `"EXECUTING"`
 - Set `current_phase` to the phase number
+- Set `workers.builder` to `"active"`
 
 Set the phase's `status` to `"in_progress"` in `PROJECT_PLAN.json`.
 
@@ -84,6 +85,18 @@ Set the phase's `status` to `"in_progress"` in `PROJECT_PLAN.json`.
 If the `events` array exceeds 100 entries, remove the oldest entries to keep only 100.
 
 Use the Write tool to write the updated events.json.
+
+### Step 4.5: Git Checkpoint
+
+Before spawning the colony ant, create a git checkpoint for rollback capability.
+
+Use Bash to run: `git rev-parse --git-dir 2>/dev/null`
+
+- **If the command succeeds** (exit code 0 — this is a git repo):
+  Run: `git add -A && git commit --allow-empty -m "aether-checkpoint: pre-phase-$PHASE_NUMBER"`
+  Store the resulting commit hash (from the output) for display in Step 7.
+- **If the command fails** (not a git repo):
+  Skip silently. Set checkpoint hash to `"(not a git repo)"`.
 
 ### Step 5: Spawn One Ant
 
@@ -174,9 +187,48 @@ Phase {id}: {name}
 Colony is self-organizing...
 ```
 
+### Step 5.5: Watcher Verification (Mandatory)
+
+After the Phase Lead ant returns, spawn a **mandatory watcher verification**.
+
+1. Use the Read tool to read `.aether/workers/watcher-ant.md`
+2. Use the **Task tool** with `subagent_type="general-purpose"`:
+
+```
+--- WORKER SPEC ---
+{full contents of .aether/workers/watcher-ant.md}
+
+--- ACTIVE PHEROMONES ---
+{pheromone block from Step 3}
+
+--- PHASE LEAD REPORT ---
+{the full report returned by the Phase Lead ant from Step 5}
+
+--- TASK ---
+You are being spawned as a mandatory post-build watcher.
+
+Phase {id}: {phase_name}
+
+Success Criteria:
+{list success_criteria from the phase}
+
+Your mission:
+1. Read the files that were modified during this phase (identified in the Phase Lead report)
+2. Run Quality mode checks at minimum
+3. Verify the success criteria are met
+4. Produce a structured Watcher Ant Report with:
+   - quality_score: 1-10
+   - recommendation: "approve" or "request_changes"
+   - issues: array of {severity, description, location, recommendation}
+
+Focus on HIGH and CRITICAL severity issues. These will be logged as errors.
+```
+
+Store the watcher's report (quality_score, recommendation, issues) for use in Steps 6 and 7.
+
 ### Step 6: Record Outcome
 
-After the ant returns, use Write tool to update:
+After the watcher returns, use Write tool to update:
 
 **`PROJECT_PLAN.json`:**
 - Mark tasks as `"completed"` or `"failed"` based on the ant's report
@@ -185,6 +237,8 @@ After the ant returns, use Write tool to update:
 **`COLONY_STATE.json`:**
 - Set `state` to `"READY"`
 - Advance `current_phase` if phase completed
+- Set `workers.builder` to `"idle"`
+- Set `workers.watcher` to `"idle"`
 
 **Log Errors:** If the ant reported any failures or issues in its report:
 
@@ -199,6 +253,24 @@ Read `.aether/data/errors.json`. For each failure, append an error record to the
   "root_cause": "<why it happened, if apparent from the ant's report>",
   "phase": <phase_number>,
   "task_id": "<task_id if applicable, otherwise null>",
+  "timestamp": "<ISO-8601 UTC>"
+}
+```
+
+**Log Watcher Issues:** For each issue in the watcher report with severity `HIGH` or `CRITICAL`, append an error record to the `errors` array using the same format as above, with:
+- `category`: `"verification"`
+- `severity`: the issue's severity (lowercased)
+- `description`: the issue's description
+- `root_cause`: the issue's recommendation (from the watcher report)
+
+**Write Watcher Verification Event:** Append to events.json:
+
+```json
+{
+  "id": "evt_<unix_timestamp>_<4_random_hex>",
+  "type": "watcher_verification",
+  "source": "build",
+  "content": "Watcher verified Phase <id>: score=<quality_score>/10, recommendation=<recommendation>, issues=<issue_count>",
   "timestamp": "<ISO-8601 UTC>"
 }
 ```
@@ -282,7 +354,9 @@ Show step progress:
   ✓ Step 2: Read State
   ✓ Step 3: Compute Active Pheromones
   ✓ Step 4: Update State
+  ✓ Step 4.5: Git Checkpoint
   ✓ Step 5: Spawn Colony Ant
+  ✓ Step 5.5: Watcher Verification
   ✓ Step 6: Record Outcome
   ✓ Step 7: Display Results
 ```
@@ -294,7 +368,15 @@ Then display:
 
 Phase {id}: {name}
 
+Git Checkpoint: {commit_hash or "(not a git repo)"}
+
 {ant's report — tasks completed, verification results, issues}
+
+Watcher Report:
+  Quality Score: {quality_score}/10
+  Recommendation: {recommendation}
+  Issues: {issue_count} ({critical_count} critical, {high_count} high, {medium_count} medium, {low_count} low)
+  {for each issue: "  {SEVERITY}: {description}"}
 
 Next:
   /ant:build {next_phase}  Next phase

@@ -1,141 +1,188 @@
 ---
 name: ant:plan
-description: Show all phases with tasks, milestones, and status
+description: Show project plan or generate project-specific phases
 ---
 
-<objective>
-Display the complete phase plan showing all phases, their tasks, milestones, and current status.
-</objective>
+You are the **Queen**. Your only job is to emit a signal and let the colony plan.
 
-<process>
-You are the **Queen Ant Colony** displaying the colony's plan.
+## Instructions
 
-## Step 1: Check for Initialized Project
+### Step 1: Read State
 
-Check if `.aether/data/COLONY_STATE.json` exists. If not:
-```
-❌ No project initialized. Run /ant:init "<goal>" first.
-```
+Use the Read tool to read these files (in parallel):
+- `.aether/data/COLONY_STATE.json`
+- `.aether/data/pheromones.json`
+- `.aether/data/PROJECT_PLAN.json`
 
-## Step 2: Load Colony State
-
-Read the colony state from `.aether/data/COLONY_STATE.json`:
-```python
-import json
-
-with open('.aether/data/COLONY_STATE.json', 'r') as f:
-    state = json.load(f)
-
-phases = state.get('phases', [])
-current_phase_id = state.get('current_phase_id')
-goal = state.get('goal')
-```
-
-## Step 3: Display Phase Plan
-
-Format and display all phases:
+**Validate:** If `COLONY_STATE.json` has `goal: null`, output:
 
 ```
-🐜 QUEEN ANT COLONY - PHASE PLAN
-
-GOAL: {goal}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-PHASE {id}: {name} [{status}]
-  Description: {description}
-  Tasks: {count}
-  {List each task with status indicator}
-
-  Milestones:
-    • {milestone_1}
-    • {milestone_2}
+No colony initialized. Run /ant:init "<goal>" first.
 ```
 
-Task Status Indicators:
-- ⏳ Pending
-- 🔄 In Progress
-- ✅ Complete
-- ❌ Failed
+Stop here.
 
-Phase Status:
-- PENDING
-- PLANNING
-- IN_PROGRESS
-- AWAITING_REVIEW
-- APPROVED
-- COMPLETED
-- FAILED
+### Step 2: Check Existing Plan
 
-## Step 4: Show Current Phase
+If `PROJECT_PLAN.json` already has phases (non-empty `phases` array), skip to **Step 5** (Display Plan).
 
-Highlight the current phase with `[← CURRENT]` marker.
+### Step 3: Compute Active Pheromones
 
-## Step 5: Display Next Steps
+For each signal in `pheromones.json`:
+
+1. If `half_life_seconds` is null, persists at original strength
+2. Otherwise: `current_strength = strength * e^(-0.693 * elapsed_seconds / half_life_seconds)`
+3. Filter out signals where `current_strength < 0.05`
+
+Format:
 
 ```
-📋 NEXT STEPS:
-
-  1. /ant:phase {id}           - Review Phase {id} details
-  2. /ant:execute {id}         - Start executing Phase {id}
-  3. /ant:focus <area>         - Add focus guidance (optional)
-
-💡 RECOMMENDATION: Review current phase with /ant:phase {id} before executing
-
-🔄 CONTEXT: This command is lightweight - safe to continue
+ACTIVE PHEROMONES:
+- {TYPE} (strength {current_strength:.2f}): "{content}"
 ```
 
-</process>
+### Step 4: Spawn One Ant
 
-<context>
-@.aether/phase_engine.py
-@.aether/worker_ants.py
+Do NOT hardcode a caste. Spawn one ant and let it figure out how to plan.
 
-Phase Structure:
-- Phases created by Planner Ant during /ant:init
-- Each phase has tasks, milestones, status
-- Status tracks through lifecycle: PENDING → IN_PROGRESS → COMPLETED
-- State persisted in .aether/data/COLONY_STATE.json
-</context>
+**Detect Project Type:** Before spawning, use Bash to check for project markers:
+- `test -f package.json && echo "node"` — Node.js/JavaScript/TypeScript
+- `test -f requirements.txt -o -f pyproject.toml && echo "python"` — Python
+- `test -f Cargo.toml && echo "rust"` — Rust
+- `test -f go.mod && echo "go"` — Go
 
-<reference>
-# Phase Status Flow
+If none found, set project type to `"greenfield"`. If multiple found, list all detected types.
 
-```
-PENDING → PLANNING → IN_PROGRESS → AWAITING_REVIEW → APPROVED → COMPLETED
-                                      ↓
-                                   FAILED
-```
+Update `COLONY_STATE.json` — set `state` to `"PLANNING"` before spawning.
 
-## Example Output
+Use the **Task tool** with `subagent_type="general-purpose"`:
 
 ```
-PHASE 1: Foundation [PENDING]
-  Description: Setup project structure, configure development environment
-  Tasks: 5
-  ⏳ Setup project structure
-  ⏳ Configure development environment
-  ⏳ Initialize database schema
-  ⏳ Setup WebSocket server
-  ⏳ Implement basic message routing
+You are an ant in the Aether Queen Ant Colony.
 
-  Milestones:
-    • WebSocket server running
-    • Database connected
+The Queen has signalled: plan the project.
 
-PHASE 2: Real-time Communication [PENDING]
-  Description: Implement WebSocket connection handling and message queue
-  Tasks: 8
-  ⏳ Implement WebSocket connection handling
-  ⏳ Create message queue system
-  ...
+--- COLONY CONTEXT ---
+
+Goal: "{goal}"
+
+--- ACTIVE PHEROMONES ---
+{pheromone block from Step 3}
+
+Respond to REDIRECT pheromones as hard constraints (things to avoid).
+Respond to FOCUS pheromones by prioritizing those areas.
+
+--- EXECUTION ENVIRONMENT ---
+
+Detected project type: {detected_type or "greenfield"}
+
+Available tools:
+- Read — read any file
+- Write — create or overwrite files
+- Edit — precise string replacement in files
+- Bash — run shell commands (git, npm, pip, cargo, make, etc.)
+- Task — spawn sub-agents
+- Glob — find files by pattern
+- Grep — search file contents
+
+Hard constraints (plans MUST NOT include tasks that require these):
+- No browser or GUI interaction (headless environment)
+- No file downloads except via curl/wget in Bash
+- No interactive input (no prompts, no stdin)
+- No external API calls without credentials already in the project
+- No Docker unless a Dockerfile is already present and Docker is running
+- No database servers unless connection config already exists in the project
+
+Plans should only include tasks achievable with the tools and constraints above.
+
+--- HOW THE COLONY WORKS ---
+
+You are autonomous. There is no orchestrator. You decide how to plan this.
+
+If you need to understand an existing codebase first, spawn a colonizer.
+If you need to research something, spawn a scout.
+Read their spec before spawning:
+  .aether/workers/colonizer-ant.md  — Explore/index codebase
+  .aether/workers/route-setter-ant.md — Plan and break down work
+  .aether/workers/builder-ant.md — Implement code, run commands
+  .aether/workers/watcher-ant.md — Validate, test, quality check
+  .aether/workers/scout-ant.md — Research, find information
+  .aether/workers/architect-ant.md — Synthesize knowledge, extract patterns
+
+To spawn another ant:
+1. Read their spec file with the Read tool
+2. Use the Task tool (subagent_type="general-purpose") with prompt containing:
+   --- WORKER SPEC ---
+   {full contents of the spec file}
+   --- ACTIVE PHEROMONES ---
+   {copy the pheromone block above}
+   --- TASK ---
+   {what you need them to do}
+
+Spawned ants can spawn further ants. Max depth 3, max 5 sub-ants per ant.
+
+--- YOUR MISSION ---
+
+Create a project plan for the goal above.
+
+Break it into 3-6 phases. Each phase should have concrete tasks (3-8 per phase).
+Do NOT assign castes to tasks — just describe the work. The colony will self-organize at execution time.
+Set dependency IDs on tasks that require earlier tasks to complete first.
+
+Write the result to .aether/data/PROJECT_PLAN.json using the Write tool:
+
+{
+  "goal": "the original goal",
+  "generated_at": "ISO-8601 timestamp",
+  "phases": [
+    {
+      "id": 1,
+      "name": "Phase name",
+      "description": "What this phase accomplishes",
+      "status": "pending",
+      "tasks": [
+        {
+          "id": "1.1",
+          "description": "Concrete task description",
+          "status": "pending",
+          "depends_on": []
+        }
+      ],
+      "success_criteria": ["Observable outcome 1", "Observable outcome 2"]
+    }
+  ]
+}
+
+Report what you planned and why.
 ```
-</reference>
 
-<allowed-tools>
-Read
-Write
-Bash
-Glob
-Grep
-</allowed-tools>
+After the ant finishes, set `state` back to `"READY"` in `COLONY_STATE.json`.
+
+### Step 5: Display Plan
+
+Read `.aether/data/PROJECT_PLAN.json` and display:
+
+```
+PROJECT PLAN
+
+Goal: {goal}
+
+Phase {id}: {name} [{STATUS}]
+  {description}
+
+  Tasks:
+    [{status_icon}] {id}: {description}
+
+  Success Criteria:
+    - {criterion}
+
+---
+(repeat for each phase)
+
+NEXT STEPS:
+  /ant:build {first_phase_id}  Start building
+  /ant:focus "<area>"          Focus colony attention
+  /ant:status                  View colony status
+```
+
+Status icons: pending = `[ ]`, in_progress = `[~]`, completed = `[x]`
