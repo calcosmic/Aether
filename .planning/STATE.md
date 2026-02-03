@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-02-03)
 
 Milestone: v3.0 Restore the Soul
 Phase: 14 of 17 (Visual Identity)
-Plan: 0 of 2 in current phase
-Status: Ready to plan
-Last activity: 2026-02-03 — Roadmap created for v3.0 milestone (phases 14-17, 11 plans, 36 requirements)
+Plan: 1 of 2 in current phase
+Status: In progress
+Last activity: 2026-02-03 — Completed 14-01-PLAN.md (command headers + step progress)
 
-Progress: [██████████████░░░░░░] 70% (v1.0 + v2.0 complete, v3.0 starting)
+Progress: [███████████████░░░░░] 73% (v1.0 + v2.0 complete, v3.0: 1/11 plans done)
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -24,7 +24,7 @@ Progress: [██████████████░░░░░░] 70% (v1
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 50 (44 v1.0 + 6 v2.0)
+- Total plans completed: 51 (44 v1.0 + 6 v2.0 + 1 v3.0)
 - Average duration: ~20 min
 - Total execution time: ~18 hours
 
@@ -36,10 +36,11 @@ Progress: [██████████████░░░░░░] 70% (v1
 | 11 (v2.0) | 3/3 | 66min | 22min |
 | 12 (v2.0) | 2/2 | 10min | 5min |
 | 13 (v2.0) | 1/1 | 3min | 3min |
+| 14 (v3.0) | 1/2 | 2min | 2min |
 
 **Recent Trend:**
-- v2.0 plans averaged 11 min each
-- Trend: Stable
+- 14-01 completed in 2 min
+- Trend: Fast (prompt-only changes, no code)
 
 *Updated after each plan completion*
 
@@ -53,6 +54,9 @@ Progress: [██████████████░░░░░░] 70% (v1
 - Worker specs target ~200 lines each (from ~90 now)
 - Specialist watcher modes folded into watcher-ant.md (not separate files)
 - events.json is a log (not a queue) — workers filter by timestamp
+- Fixed-width ~55 char box-drawing headers using +/=/| characters for all commands
+- Unicode checkmark for step progress indicators
+- Status command gets richest header (session/state/goal metadata)
 
 ### Pending Todos
 
@@ -65,9 +69,9 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-03
-Stopped at: Roadmap created for v3.0, ready to plan Phase 14
+Stopped at: Completed 14-01-PLAN.md, ready for 14-02
 Resume file: None
 
 ---
 
-*State updated: 2026-02-03 after v3.0 roadmap creation*
+*State updated: 2026-02-03 after completing 14-01 (command headers)*
