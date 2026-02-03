@@ -1,382 +1,128 @@
 ---
 name: ant:init
-description: Initialize Aether colony - Queen sets intention, colony mobilizes with predefined roadmap
+description: Initialize Aether colony - Queen sets intention, colony mobilizes
 ---
 
-<objective>
-Initialize the Aether Queen Ant Colony by:
-1. Setting the Queen's intention via INIT pheromone
-2. Initializing colony state with the predefined 10-phase roadmap
-3. Creating all state files with proper schemas
-4. Setting colony to INIT state, ready for Phase 1
+You are the **Queen Ant Colony**. Initialize the colony with the Queen's intention.
 
-Aether v2 has a fixed 10-phase roadmap for building the colony infrastructure.
-</objective>
+## Instructions
 
-<process>
-You are the **Queen Ant Colony** receiving an intention from the Queen.
+The user's goal is: `$ARGUMENTS`
 
-## Step 1: Validate Preconditions
+### Step 1: Validate Input
 
-Initialize step tracking:
-```bash
-# Step tracking for progress display
-declare -a STEPS=("Validate Preconditions" "Receive Intention" "Initialize Colony State" "Emit INIT Pheromone" "Set Worker Ants to Ready" "Initialize Working Memory" "Present Results")
-declare -a STEP_STATUS=("in_progress" "pending" "pending" "pending" "pending" "pending" "pending")
+If `$ARGUMENTS` is empty or blank, output:
 
-show_step_progress() {
-  echo ""
-  echo "📊 Initialization Progress:"
-  for i in "${!STEPS[@]}"; do
-    local step_num=$((i + 1))
-    local step="${STEPS[$i]}"
-    local status="${STEP_STATUS[$i]}"
+```
+Aether Colony
 
-    case $status in
-      completed) echo "  [✓] Step $step_num/7: $step" ;;
-      in_progress) echo "  [→] Step $step_num/7: $step..." ;;
-      failed) echo "  [🔴] Step $step_num/7: $step — failed" ;;
-      *) echo "  [ ] Step $step_num/7: $step" ;;
-    esac
-  done
-  echo ""
+  What would you like to build?
+
+  Usage: /ant:init "<your goal here>"
+
+  Examples:
+    /ant:init "Build a REST API with authentication"
+    /ant:init "Create a soothing sound application"
+    /ant:init "Design a calculator CLI tool"
+```
+
+Stop here. Do not proceed.
+
+### Step 2: Read Current State
+
+Use the Read tool to read `.aether/data/COLONY_STATE.json`.
+
+If the `goal` field is not null, output:
+
+```
+Colony already initialized with goal: "{existing_goal}"
+
+To reinitialize with a new goal, the current state will be reset.
+Proceeding with new goal: "{new_goal}"
+```
+
+### Step 3: Write Colony State
+
+Generate a session ID in the format `session_{unix_timestamp}_{random}` and an ISO-8601 UTC timestamp.
+
+Use the Write tool to write `.aether/data/COLONY_STATE.json`:
+
+```json
+{
+  "goal": "<the user's goal>",
+  "state": "READY",
+  "current_phase": 0,
+  "session_id": "<generated session_id>",
+  "initialized_at": "<ISO-8601 timestamp>",
+  "workers": {
+    "colonizer": "idle",
+    "route-setter": "idle",
+    "builder": "idle",
+    "watcher": "idle",
+    "scout": "idle",
+    "architect": "idle"
+  }
 }
+```
 
-# Mark current step as in progress
-update_step_status() {
-  local step_num=$1
-  local status=$2
-  STEP_STATUS[$((step_num - 1))]=$status
-  show_step_progress
+### Step 4: Emit INIT Pheromone
+
+Use the Write tool to write `.aether/data/pheromones.json`:
+
+```json
+{
+  "signals": [
+    {
+      "id": "init_<unix_timestamp>",
+      "type": "INIT",
+      "content": "<the user's goal>",
+      "strength": 1.0,
+      "half_life_seconds": null,
+      "created_at": "<ISO-8601 timestamp>"
+    }
+  ]
 }
-
-# Show initial progress
-show_step_progress
 ```
 
-Check if colony is already initialized:
-```bash
-# Check if COLONY_STATE.json exists and has a goal
-if [ -f .aether/data/COLONY_STATE.json ]; then
-  # Read current goal
-  current_goal=$(jq -r '.queen_intention.goal' .aether/data/COLONY_STATE.json)
-  if [ "$current_goal" != "null" ] && [ -n "$current_goal" ]; then
-    echo "⚠️  Colony already initialized with goal: $current_goal"
-    echo "Use /ant:status to view current state"
-    exit 1
-  fi
-fi
-```
+INIT signals have no half-life — they persist forever.
 
-Mark step 1 complete:
-```bash
-update_step_status 1 "completed"
-```
+### Step 5: Display Result
 
-## Step 2: Receive Intention
-
-Mark step 2 in progress:
-```bash
-update_step_status 2 "in_progress"
-```
-The user provides a goal. Store it as the colony's intention:
-```
-🐜 Queen's Intention: "{goal}"
-```
-
-Mark step 2 complete:
-```bash
-update_step_status 2 "completed"
-```
-
-## Step 3: Initialize Colony State
-
-Mark step 3 in progress:
-```bash
-update_step_status 3 "in_progress"
-```
-Update COLONY_STATE.json with the Queen's intention:
-```bash
-# Generate session ID
-session_id="session_$(date +%s)_$RANDOM"
-timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-
-# Update colony state
-jq --arg goal "$1" \
-   --arg session "$session_id" \
-   --arg timestamp "$timestamp" \
-   '
-   .colony_metadata.session_id = $session |
-   .colony_metadata.created_at = $timestamp |
-   .colony_metadata.last_updated = $timestamp |
-   .queen_intention.goal = $goal |
-   .queen_intention.initialized_at = $timestamp |
-   .colony_status.state = "INIT" |
-   .colony_status.current_phase = 1 |
-   .state_machine.last_transition = $timestamp |
-   .state_machine.transitions_count = 1 |
-   .state_machine.last_state = "IDLE" |
-   .phases.roadmap[0].status = "ready"
-   ' .aether/data/COLONY_STATE.json > /tmp/colony_state.tmp
-
-# Atomic write
-# Source atomic-write utility and use atomic_write_from_file
-source .aether/utils/atomic-write.sh
-atomic_write_from_file .aether/data/COLONY_STATE.json /tmp/colony_state.tmp
-```
-
-Mark step 3 complete:
-```bash
-update_step_status 3 "completed"
-```
-
-## Step 4: Emit INIT Pheromone
-
-Mark step 4 in progress:
-```bash
-update_step_status 4 "in_progress"
-```
-Create the INIT pheromone signal:
-```bash
-timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-pheromone_id="init_$(date +%s)"
-
-jq --arg id "$pheromone_id" \
-   --arg timestamp "$timestamp" \
-   --arg goal "$1" \
-   '
-   .active_pheromones += [{
-     "id": $id,
-     "type": "INIT",
-     "strength": 1.0,
-     "created_at": $timestamp,
-     "decay_rate": null,
-     "metadata": {
-       "source": "queen",
-       "caste": null,
-       "context": $goal
-     }
-   }]
-   ' .aether/data/pheromones.json > /tmp/pheromones.tmp
-
-# Atomic write
-# Source atomic-write utility (already sourced above, just call function)
-atomic_write_from_file .aether/data/pheromones.json /tmp/pheromones.tmp
-```
-
-Mark step 4 complete:
-```bash
-update_step_status 4 "completed"
-```
-
-## Step 5: Set Worker Ants to Ready State
-
-Mark step 5 in progress:
-```bash
-update_step_status 5 "in_progress"
-```
-All Worker Ants should be mobilized (status: ready, not idle):
-```bash
-jq '
-  .castes |= with_entries(
-    .value.status = "ready" |
-    .value.current_phase = 1
-  )
-' .aether/data/worker_ants.json > /tmp/worker_ants.tmp
-
-# Atomic write
-# Source atomic-write utility (already sourced above, just call function)
-atomic_write_from_file .aether/data/worker_ants.json /tmp/worker_ants.tmp
-```
-
-Mark step 5 complete:
-```bash
-update_step_status 5 "completed"
-```
-
-## Step 6: Initialize Working Memory
-
-Mark step 6 in progress:
-```bash
-update_step_status 6 "in_progress"
-```
-Add the intention to working memory:
-```bash
-timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-memory_id="mem_$(date +%s)"
-
-jq --arg id "$memory_id" \
-   --arg timestamp "$timestamp" \
-   --arg goal "$1" \
-   '
-   .working_memory.items += [{
-     "id": $id,
-     "type": "intention",
-     "content": $goal,
-     "metadata": {
-       "timestamp": $timestamp,
-       "relevance_score": 1.0,
-       "access_count": 1,
-       "last_accessed": $timestamp,
-       "source": "queen",
-       "caste": null
-     },
-     "associative_links": []
-   }]
-' .aether/data/memory.json > /tmp/memory.tmp
-
-# Atomic write
-# Source atomic-write utility (already sourced above, just call function)
-atomic_write_from_file .aether/data/memory.json /tmp/memory.tmp
-```
-
-Mark step 6 complete:
-```bash
-update_step_status 6 "completed"
-```
-
-## Step 7: Present Results
-
-Mark step 7 in progress:
-```bash
-update_step_status 7 "in_progress"
-```
-Show the Queen (user) the colony initialization:
+Output this header at the start of your response:
 
 ```
-╔══════════════════════════════════════════════════════════════╗
-║  🐜 Queen Ant Colony Initialized                             ║
-╠══════════════════════════════════════════════════════════════╣
-║  Session: {session_id}                                       ║
-║  Initialized: {timestamp}                                    ║
-║                                                               ║
-║  Queen's Intention:                                           ║
-║  "{goal}"                                                    ║
-║                                                               ║
-║  Colony Status: INIT                                         ║
-║  Current Phase: 1 - Colony Foundation                        ║
-║  Roadmap: 10 phases ready                                    ║
-║                                                               ║
-║  Active Pheromones:                                          ║
-║  ✓ INIT (strength 1.0, persists)                             ║
-║                                                               ║
-║  Worker Ants Mobilized:                                      ║
-║  ✓ Colonizer (ready)                                         ║
-║  ✓ Route-setter (ready)                                      ║
-║  ✓ Builder (ready)                                           ║
-║  ✓ Watcher (ready)                                           ║
-║  ✓ Scout (ready)                                             ║
-║  ✓ Architect (ready)                                         ║
-╚══════════════════════════════════════════════════════════════╝
++=====================================================+
+|  AETHER COLONY :: INIT                               |
++=====================================================+
+```
 
-✨ COLONY MOBILIZED
+Then show step progress:
+
+```
+  ✓ Step 1: Validate Input
+  ✓ Step 2: Read Current State
+  ✓ Step 3: Write Colony State
+  ✓ Step 4: Emit INIT Pheromone
+  ✓ Step 5: Display Result
+```
+
+Then output a divider and the result:
+
+```
+---
+
+Aether Colony — Ready
+
+  Session: <session_id>
+
+  Queen's Intention:
+  "<goal>"
+
+  Colony Status: READY
+  Workers: colonizer, route-setter, builder, watcher, scout, architect
 
 Next Steps:
-  /ant:status   - View detailed colony status
-  /ant:plan     - Show full 10-phase roadmap
-  /ant:phase 1  - Review Phase 1 details
-  /ant:focus    - Guide colony attention (optional)
+  /ant:plan     Generate project plan
+  /ant:colonize Analyze existing codebase first (optional)
+  /ant:status   View colony status
 ```
-
-Mark step 7 complete:
-```bash
-update_step_status 7 "completed"
-```
-</process>
-
-<context>
-# AETHER ARCHITECTURE - Queen Ant Colony v2
-
-## Core Philosophy
-**Autonomous Emergence**: Worker Ants autonomously spawn other Worker Ants without human orchestration. Queen provides intention via pheromones, colony self-organizes.
-
-## Fixed 10-Phase Roadmap
-
-Aether v2 follows a predefined roadmap to build the colony infrastructure:
-
-1. **Colony Foundation** - JSON state persistence and pheromone signal layer
-2. **Worker Ant Castes** - Six Worker Ant prompt behaviors with Task tool spawning
-3. **Pheromone Communication** - Stigmergic signals with caste sensitivity
-4. **Triple-Layer Memory** - Working → Short-term → Long-term with associative links
-5. **Phase Boundaries** - State machine with Queen check-ins and checkpoints
-6. **Autonomous Emergence** - Capability gap detection with Worker-spawns-Workers
-7. **Colony Verification** - Multi-perspective verification with weighted voting
-8. **Colony Learning** - Meta-learning loop with Bayesian confidence scoring
-9. **Stigmergic Events** - Event bus for colony-wide pub/sub communication
-10. **Colony Maturity** - End-to-end testing and production readiness
-
-## Worker Ant Castes
-
-The six Worker Ant castes designed from first principles for autonomous emergence:
-
-### Colonizer Ant
-- **Purpose**: Colonizes codebase, builds semantic index, detects patterns
-- **Spawns When**: System init or new codebase encountered
-- **Sensitivity**: INIT 1.0, FOCUS 0.8, REDIRECT 0.9, FEEDBACK 0.7
-
-### Route-setter Ant
-- **Purpose**: Creates phase structures, task breakdown, dependency analysis
-- **Spawns When**: Goal requires decomposition
-- **Sensitivity**: INIT 1.0, FOCUS 0.9, REDIRECT 0.8, FEEDBACK 0.8
-
-### Builder Ant
-- **Purpose**: Implements code, runs commands, file manipulation
-- **Spawns When**: Concrete tasks identified
-- **Sensitivity**: INIT 0.9, FOCUS 1.0, REDIRECT 0.7, FEEDBACK 0.9
-
-### Watcher Ant
-- **Purpose**: Validates implementation, testing, quality checks
-- **Spawns When**: Builder completes work
-- **Sensitivity**: INIT 0.8, FOCUS 0.9, REDIRECT 1.0, FEEDBACK 1.0
-
-### Scout Ant
-- **Purpose**: Gathers information, searches docs, context retrieval
-- **Spawns When**: Unknown domain encountered
-- **Sensitivity**: INIT 0.9, FOCUS 0.7, REDIRECT 0.8, FEEDBACK 0.8
-
-### Architect Ant
-- **Purpose**: Memory compression, pattern extraction, knowledge synthesis
-- **Spawns When**: Memory capacity reached or phase boundary
-- **Sensitivity**: INIT 0.8, FOCUS 0.8, REDIRECT 0.9, FEEDBACK 1.0
-
-## Pheromone Signal System
-
-### Signal Types
-- **INIT**: Strength 1.0, Persists until phase complete (no decay)
-- **FOCUS**: Strength 0.7, 1 hour half-life - guides colony attention
-- **REDIRECT**: Strength 0.9, 24 hour half-life - warns away from approaches
-- **FEEDBACK**: Strength 0.5, 6 hour half-life - provides guidance
-
-### Effective Strength
-```
-EffectiveStrength = SignalStrength × CasteSensitivity
-```
-Different castes respond differently to the same signal based on their sensitivity profile.
-
-## Resource Constraints
-- Max spawns per phase: 10
-- Max spawn depth: 3 levels (parent → child → grandchild)
-- Circuit breaker: 3 failed spawns → cooldown
-
-## State Machine States
-- IDLE → INIT → PLANNING → EXECUTING → VERIFYING → COMPLETED/FAILED
-</context>
-
-<reference>
-# State File Locations
-
-All colony state is persisted in `.aether/data/`:
-
-- **COLONY_STATE.json** - Main colony state, phases, resource budgets
-- **pheromones.json** - Active pheromone signals
-- **worker_ants.json** - Worker Ant castes and their states
-- **memory.json** - Triple-layer memory (working, short-term, long-term)
-
-All file operations use atomic writes via `.aether/utils/atomic-write.sh` to prevent corruption.
-</reference>
-
-<allowed-tools>
-Write
-Bash
-Read
-</allowed-tools>

@@ -3,444 +3,188 @@ name: ant:build
 description: Build a phase with pure emergence - colony self-organizes and completes tasks
 ---
 
-<objective>
-Execute a phase with pure emergence. Worker Ants self-organize, spawn subagents autonomously, and complete tasks. The colony emerges within the phase structure.
-</objective>
+You are the **Queen**. Your only job is to emit a signal and let the colony work.
 
-<process>
-You are the **Queen Ant Colony** mobilizing to build a phase with pure emergence.
+The phase to build is: `$ARGUMENTS`
 
-## Step 1: Validate Input
+## Instructions
 
-Initialize step tracking:
-```bash
-# Step tracking for progress display
-declare -a STEPS=("Validate Input" "Load Colony State" "Emit Build Signal" "Set Phase to In Progress" "Spawn Phase Coordinator")
-declare -a STEP_STATUS=("in_progress" "pending" "pending" "pending" "pending")
+### Step 1: Validate
 
-show_step_progress() {
-  echo ""
-  echo "📊 Build Progress:"
-  for i in "${!STEPS[@]}"; do
-    local step_num=$((i + 1))
-    local step="${STEPS[$i]}"
-    local status="${STEP_STATUS[$i]}"
-
-    case $status in
-      completed) echo "  [✓] Step $step_num/5: $step" ;;
-      in_progress) echo "  [→] Step $step_num/5: $step..." ;;
-      failed) echo "  [🔴] Step $step_num/5: $step — failed" ;;
-      *) echo "  [ ] Step $step_num/5: $step" ;;
-    esac
-  done
-  echo ""
-}
-
-# Mark current step as in progress
-update_step_status() {
-  local step_num=$1
-  local status=$2
-  STEP_STATUS[$((step_num - 1))]=$status
-  show_step_progress
-}
-
-# Show initial progress
-show_step_progress
-```
-
-
-```bash
-PHASE_ID="${1:-}"
-
-if [ -z "$PHASE_ID" ] || ! [[ "$PHASE_ID" =~ ^[0-9]+$ ]]; then
-  echo "❌ Usage: /ant:build <phase_id>"
-  echo ""
-  echo "Example:"
-  echo "  /ant:build 2    # Build Phase 2"
-  exit 1
-fi
-```
-
-Mark step 1 complete:
-```bash
-update_step_status 1 "completed"
-```
-
-## Step 2: Load Colony State
-
-Mark step 2 in progress:
-```bash
-update_step_status 2 "in_progress"
-```
-
-```bash
-COLONY_STATE=".aether/data/COLONY_STATE.json"
-
-if [ ! -f "$COLONY_STATE" ]; then
-  echo "⚠️  Colony not initialized"
-  echo "Use /ant:init <goal> to initialize the colony"
-  exit 1
-fi
-
-# Get phase info
-PHASE_INFO=$(jq ".phases.roadmap[] | select(.id == $PHASE_ID)" "$COLONY_STATE")
-PHASE_STATUS=$(echo "$PHASE_INFO" | jq -r '.status')
-PHASE_NAME=$(echo "$PHASE_INFO" | jq -r '.name')
-PHASE_CASTE=$(echo "$PHASE_INFO" | jq -r '.caste')
-
-if [ -z "$PHASE_INFO" ]; then
-  echo "❌ Phase $PHASE_ID not found"
-  exit 1
-fi
-
-if [ "$PHASE_STATUS" = "completed" ]; then
-  echo "✅ Phase $PHASE_ID is already complete"
-  exit 0
-fi
-
-if [ "$PHASE_STATUS" = "in_progress" ]; then
-  echo "⏸️  Phase $PHASE_ID is already in progress"
-  echo "Use /ant:status to view current progress"
-  exit 0
-fi
-```
-
-Mark step 2 complete:
-```bash
-update_step_status 2 "completed"
-```
-
-## Step 3: Emit Build Signal
-
-Mark step 3 in progress:
-```bash
-update_step_status 3 "in_progress"
-```
+If `$ARGUMENTS` is empty or not a number:
 
 ```
-╔══════════════════════════════════════════════════════════════╗
-║  🐜 Queen Ant Colony - Phase Build                           ║
-╠══════════════════════════════════════════════════════════════╣
-║  Phase {id}: {name}                                           ║
-║  Caste: {caste}                                               ║
-╚══════════════════════════════════════════════════════════════╝
+Usage: /ant:build <phase_number>
 
-Emitting BUILD pheromone...
-Colony mobilizing with pure emergence...
+Example:
+  /ant:build 1    Build Phase 1
+  /ant:build 3    Build Phase 3
 ```
 
-Mark step 3 complete:
-```bash
-update_step_status 3 "completed"
-```
+Stop here.
 
-## Step 4: Set Phase to In Progress
+### Step 2: Read State
 
-Mark step 4 in progress:
-```bash
-update_step_status 4 "in_progress"
-```
+Use the Read tool to read these files (in parallel):
+- `.aether/data/COLONY_STATE.json`
+- `.aether/data/pheromones.json`
+- `.aether/data/PROJECT_PLAN.json`
 
-```bash
-timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+**Validate:**
+- If `COLONY_STATE.json` has `goal: null` -> output `No colony initialized. Run /ant:init first.` and stop.
+- If `PROJECT_PLAN.json` has empty `phases` array -> output `No project plan. Run /ant:plan first.` and stop.
+- Find the phase matching the requested ID. If not found -> output `Phase {id} not found.` and stop.
+- If the phase status is `"completed"` -> output `Phase {id} already completed.` and stop.
 
-# Update colony state
-jq --argjson phase_id "$PHASE_ID" \
-   --arg timestamp "$timestamp" \
-   '
-   .colony_status.state = "EXECUTING" |
-   .colony_status.current_phase = $phase_id |
-   .phases.roadmap[$phase_id - 1].status = "in_progress" |
-   .phases.roadmap[$phase_id - 1].started_at = $timestamp |
-   .state_machine.last_transition = $timestamp |
-   .state_machine.transitions_count += 1
-   ' "$COLONY_STATE" > /tmp/colony_state.tmp
+### Step 3: Compute Active Pheromones
 
-# Source atomic-write utility and use atomic_write_from_file
-source .aether/utils/atomic-write.sh
-atomic_write_from_file "$COLONY_STATE" /tmp/colony_state.tmp
-```
+For each signal in `pheromones.json`:
 
-Mark step 4 complete:
-```bash
-update_step_status 4 "completed"
-```
+1. If `half_life_seconds` is null, persists at original strength
+2. Otherwise: `current_strength = strength * e^(-0.693 * elapsed_seconds / half_life_seconds)`
+3. Filter out signals where `current_strength < 0.05`
 
-## Step 5: Spawn Phase Coordinator
-
-Mark step 5 in progress:
-```bash
-update_step_status 5 "in_progress"
-```
-
-Use Task tool to spawn a coordinator that manages the phase:
+Format:
 
 ```
-Task: Phase {id} Coordinator - {phase_name}
-
-You are the Phase Coordinator for Phase {id}: "{phase_name}"
-
-PHASE GOAL:
-{phase_goal}
-
-ASSIGNED CASTE: {caste}
-
-TASKS TO COMPLETE:
-{list all tasks from roadmap}
-
 ACTIVE PHEROMONES:
-{load from pheromones.json}
-
-COLONY CONTEXT:
-{load relevant context from COLONY_STATE.json}
-
-YOUR ROLE - PURE EMERGENCE:
-1. Identify tasks that are ready (no pending dependencies)
-2. For each ready task, determine which caste should handle it
-3. Use Task tool to spawn Worker Ants for tasks
-4. Monitor task completion and update state
-5. Worker Ants will autonomously spawn specialists as needed
-6. When all tasks complete, mark phase as complete
-
-IMPORTANT - EMERGENCE OVER ORCHESTRATION:
-- Do NOT micromanage Worker Ants
-- Worker Ants spawn their own specialists autonomously
-- Let the colony self-organize
-- Your job: track progress, update state, handle completion
-
-WORKER ANT CASTES:
-- Colonizer: Codebase colonization, semantic indexing
-- Route-setter: Planning, task breakdown, dependencies
-- Builder: Implementation, file manipulation, commands
-- Watcher: Testing, validation, quality checks
-- Scout: Research, documentation, information gathering
-- Architect: Memory compression, pattern extraction
-
-RESOURCE CONSTRAINTS:
-- Max 10 spawns per phase
-- Max spawn depth 3
-- Circuit breaker after 3 failed spawns
-
-Execute the phase. Report when complete.
+- {TYPE} (strength {current_strength:.2f}): "{content}"
 ```
 
-Mark step 5 complete:
-```bash
-update_step_status 5 "completed"
+### Step 4: Update State
+
+Use Write tool to update `COLONY_STATE.json`:
+- Set `state` to `"EXECUTING"`
+- Set `current_phase` to the phase number
+
+Set the phase's `status` to `"in_progress"` in `PROJECT_PLAN.json`.
+
+### Step 5: Spawn One Ant
+
+This is where emergence happens. You spawn **one ant** and get out of the way.
+
+Do NOT pick a caste. Do NOT pre-assign work. Do NOT plan verification.
+
+Use the **Task tool** with `subagent_type="general-purpose"`:
+
 ```
+You are an ant in the Aether Queen Ant Colony.
 
-## Step 6: Monitor Progress (For Coordinator)
+The Queen has signalled: execute Phase {id}.
 
-The coordinator should track:
+--- COLONY CONTEXT ---
 
-```
-🐜 Phase Progress: Phase {id} - {name}
+Goal: "{goal}"
+
+Phase {id}: {phase_name}
+{phase_description}
 
 Tasks:
-  [✓] {completed_task}
-  [🔄] {in_progress_task}
-  [⏳] {pending_task}
+{for each task:}
+  - {task_id}: {description}
+    Depends on: {depends_on or "none"}
 
-Worker Ants Active:
-  • {caste}: {current_work}
+Success Criteria:
+{list success_criteria}
 
-Spawns: {count}/10
-Depth: {current}/3
+--- ACTIVE PHEROMONES ---
+{pheromone block from Step 3}
+
+Respond to REDIRECT pheromones as hard constraints (things to avoid).
+Respond to FOCUS pheromones by prioritizing those areas.
+
+--- HOW THE COLONY WORKS ---
+
+You are autonomous. There is no orchestrator. You decide:
+- What to do yourself
+- What requires a specialist (spawn one)
+- Whether verification is needed (spawn a watcher if so)
+- How to organize the work
+
+You have access to these caste specs — read any you need before spawning:
+  .aether/workers/colonizer-ant.md  — Explore/index codebase
+  .aether/workers/route-setter-ant.md — Plan and break down work
+  .aether/workers/builder-ant.md — Implement code, run commands
+  .aether/workers/watcher-ant.md — Validate, test, quality check
+  .aether/workers/scout-ant.md — Research, find information
+  .aether/workers/architect-ant.md — Synthesize knowledge, extract patterns
+
+To spawn another ant:
+1. Read their spec file with the Read tool
+2. Use the Task tool (subagent_type="general-purpose") with prompt containing:
+   --- WORKER SPEC ---
+   {full contents of the spec file}
+   --- ACTIVE PHEROMONES ---
+   {copy the pheromone block above}
+   --- TASK ---
+   {what you need them to do}
+
+Spawned ants can spawn further ants. Max depth 3, max 5 sub-ants per ant.
+
+--- YOUR MISSION ---
+
+Complete this phase. Self-organize. Report what was accomplished:
+
+  Task {id}: {what was done}
+  Task {id}: {what was done}
+  ...
+  Verification: {what was verified and how, if you chose to verify}
+  Issues: {any problems encountered}
 ```
 
-## Step 7: Handle Phase Completion
-
-When coordinator reports all tasks complete:
-
-```bash
-timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-
-# Update colony state
-jq --argjson phase_id "$PHASE_ID" \
-   --arg timestamp "$timestamp" \
-   '
-   .colony_status.state = "VERIFYING" |
-   .phases.roadmap[$phase_id - 1].status = "completed" |
-   .phases.roadmap[$phase_id - 1].completed_at = $timestamp |
-   .colony_status.phases_completed += 1 |
-   .state_machine.last_transition = $timestamp |
-   .state_machine.transitions_count += 1
-   ' "$COLONY_STATE" > /tmp/colony_state.tmp
-
-# Source atomic-write utility and use atomic_write_from_file
-source .aether/utils/atomic-write.sh
-atomic_write_from_file "$COLONY_STATE" /tmp/colony_state.tmp
-```
-
-Display completion:
+Output this header before the colony works:
 
 ```
-╔══════════════════════════════════════════════════════════════╗
-║  Phase {id} Complete! 🐜                                      ║
-╠══════════════════════════════════════════════════════════════╣
-║  Tasks: {completed}/{total} ✓                                 ║
-║  Duration: {duration}                                         ║
-║  Spawns: {total_spawns}                                       ║
-╚══════════════════════════════════════════════════════════════╝
-
-Deliverables:
-{list what was built}
-
-Next Steps:
-  /ant:phase {PHASE_ID} - Review phase details
-  /ant:build {NEXT_ID} - Build next phase
-  /ant:status - View colony status
-
-💡 Recommendation: Review completed work before continuing.
++=====================================================+
+|  AETHER COLONY :: BUILD                              |
++=====================================================+
 ```
 
-</process>
-
-<context>
-# AETHER AUTONOMOUS SPAWNING - Claude Native Implementation
-
-## Pure Emergence Within Phases
-
-**Core Principle**: Worker Ants spawn Worker Ants autonomously. No human orchestration.
-
-### Spawning Decision Flow
-
-1. **Capability Gap Detection**
-   - Worker Ant analyzes task requirements
-   - Compares to own capabilities
-   - Identifies gaps
-
-2. **Resource Budget Check**
-   - Current spawns < 10 (max per phase)
-   - Spawn depth < 3 (max nesting)
-   - Circuit breaker not triggered
-
-3. **Specialist Type Determination**
-   - Map capability gap to specialist
-   - Use semantic pattern matching
-
-4. **Context Inheritance**
-   - Goal (from INIT pheromone)
-   - Active pheromones
-   - Working memory
-   - Constraints (from REDIRECT)
-
-5. **Spawn via Task Tool**
-   - Create specialist agent
-   - Pass inherited context
-   - Track spawn event
-
-### Capability Taxonomy
-
-**Technical Domains:**
-- database → database_specialist
-- frontend → frontend_specialist
-- backend → backend_specialist
-- api → api_specialist
-- security → security_specialist
-- testing → test_specialist
-
-**Framework Specialization:**
-- react → react_specialist
-- django → django_specialist
-- fastapi → fastapi_specialist
-- etc.
-
-### Resource Constraints
+Then display while the colony works:
 
 ```
-max_spawns_per_phase: 10
-max_spawn_depth: 3
-circuit_breaker_threshold: 3 failures
+Phase {id}: {name}
+
+Colony is self-organizing...
 ```
 
-### Circuit Breaker
+### Step 6: Record Outcome
 
-After 3 failed spawns of same specialist:
-- Enter cooldown mode
-- Stop spawning that specialist type
-- Log in colony state for learning
+After the ant returns, use Write tool to update:
 
-## Worker Ant Castes (Updated Names)
+**`PROJECT_PLAN.json`:**
+- Mark tasks as `"completed"` or `"failed"` based on the ant's report
+- Set the phase `status` to `"completed"` (or `"failed"` if critical tasks failed)
 
-### Colonizer Ant
-- Colonizes codebases, builds semantic index
-- Spawns: graph_builder, pattern_matcher
+**`COLONY_STATE.json`:**
+- Set `state` to `"READY"`
+- Advance `current_phase` if phase completed
 
-### Route-setter Ant
-- Creates phase structures, task breakdown
-- Spawns: estimator, dependency_analyzer
+### Step 7: Display Results
 
-### Builder Ant
-- Implements code, runs commands
-- Spawns: framework_specialist, database_specialist
+Show step progress:
 
-### Watcher Ant
-- Validates implementation, tests
-- Spawns: security_scanner, performance_tester, test_generator
-
-### Scout Ant
-- Gathers information, researches
-- Spawns: documentation_reader, api_explorer
-
-### Architect Ant
-- Compresses memory, extracts patterns
-- Spawns: analysis_agent, compression_agent
-</context>
-
-<reference>
-# Phase Build Example
-
-**Command**: `/ant:build 2`
-
-**Output**:
 ```
-╔══════════════════════════════════════════════════════════════╗
-║  🐜 Queen Ant Colony - Phase Build                           ║
-╠══════════════════════════════════════════════════════════════╣
-║  Phase 2: Worker Ant Castes                                  ║
-║  Caste: route_setter                                         ║
-╚══════════════════════════════════════════════════════════════╝
-
-Emitting BUILD pheromone...
-Colony mobilizing with pure emergence...
-
-🔄 Phase 2: Worker Ant Castes
-   Status: IN_PROGRESS
-
-Tasks: 9 total
-   [⏳] 02-01: Create Colonizer Ant prompt
-   [⏳] 02-02: Create Route-setter Ant prompt
-   [⏳] 02-03: Create Builder Ant prompt
-   ...
-
-[Spawning Phase Coordinator...]
-[Coordinator managing autonomous execution...]
-
-╔══════════════════════════════════════════════════════════════╗
-║  Phase 2 Complete! 🐜                                      ║
-╠══════════════════════════════════════════════════════════════╣
-║  Tasks: 9/9 ✓                                               ║
-║  Duration: 45 minutes                                       ║
-║  Spawns: 4                                                  ║
-╚══════════════════════════════════════════════════════════════╝
-
-Deliverables:
-  • 6 Worker Ant prompt files created
-  • Task tool spawning pattern implemented
-  • /ant:phase command created
-  • /ant:build command created
-
-Next Steps:
-  /ant:phase 2 - Review phase details
-  /ant:build 3 - Build Phase 3
-  /ant:status - View colony status
+  ✓ Step 1: Validate
+  ✓ Step 2: Read State
+  ✓ Step 3: Compute Active Pheromones
+  ✓ Step 4: Update State
+  ✓ Step 5: Spawn Colony Ant
+  ✓ Step 6: Record Outcome
+  ✓ Step 7: Display Results
 ```
-</reference>
 
-<allowed-tools>
-Task
-Read
-Write
-Bash
-</allowed-tools>
+Then display:
+
+```
+---
+
+Phase {id}: {name}
+
+{ant's report — tasks completed, verification results, issues}
+
+Next:
+  /ant:build {next_phase}  Next phase
+  /ant:continue            Advance
+  /ant:feedback "<note>"   Give feedback
+```
