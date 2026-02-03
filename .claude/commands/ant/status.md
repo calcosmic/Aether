@@ -51,7 +51,7 @@ Output this header (filling in values from `COLONY_STATE.json`):
 
 Then display the following sections, filling in values from the state files.
 
-Between each major section (WORKERS, ACTIVE PHEROMONES, PHASE PROGRESS, NEXT ACTIONS), output a divider:
+Between each major section (WORKERS, ACTIVE PHEROMONES, ERRORS, MEMORY, EVENTS, PHASE PROGRESS, NEXT ACTIONS), output a divider:
 
 ```
 ---------------------------------------------------
@@ -149,6 +149,59 @@ If `errors` array is empty and `flagged_patterns` is empty:
 ```
 
 If `errors.json` doesn't exist or couldn't be read, skip this section silently.
+
+```
+---------------------------------------------------
+```
+
+```
+MEMORY
+```
+
+If `memory.json` was read successfully and has content:
+
+Display recent phase learnings (last 3 from `phase_learnings` array, newest first):
+```
+  Recent Learnings:
+    Phase <phase>: <first learning from learnings array>
+    Phase <phase>: <first learning from learnings array>
+    Phase <phase>: <first learning from learnings array>
+```
+
+Display decision count:
+```
+  Decisions logged: <count of decisions array>
+```
+
+If `phase_learnings` array is empty and `decisions` array is empty:
+```
+  (no memory recorded)
+```
+
+If `memory.json` doesn't exist or couldn't be read, skip this section silently.
+
+```
+---------------------------------------------------
+```
+
+```
+EVENTS
+```
+
+If `events.json` was read successfully and has content:
+
+Display recent events (last 5 from `events` array, newest first):
+```
+  Recent:
+    [<type>] <content> (<relative time, e.g., "2m ago", "1h ago">)
+```
+
+If `events` array is empty:
+```
+  (no events recorded)
+```
+
+If `events.json` doesn't exist or couldn't be read, skip this section silently.
 
 ```
 ---------------------------------------------------
