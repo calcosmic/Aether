@@ -35,7 +35,7 @@ shift 2>/dev/null || true
 case "$cmd" in
   help)
     cat <<'EOF'
-{"ok":true,"commands":["help","version","pheromone-decay","pheromone-effective","pheromone-batch","pheromone-cleanup","pheromone-combine","validate-state"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
+{"ok":true,"commands":["help","version","pheromone-decay","pheromone-effective","pheromone-batch","pheromone-cleanup","pheromone-combine","validate-state","memory-token-count","memory-compress","memory-search"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
 EOF
     ;;
   version)
@@ -156,6 +156,39 @@ EOF
         json_err "Usage: validate-state colony|pheromones|errors|memory|events|all"
         ;;
     esac
+    ;;
+  memory-token-count)
+    [[ -f "$DATA_DIR/memory.json" ]] || json_err "memory.json not found"
+    json_ok "$(jq '{tokens: ([.. | strings] | join(" ") | split(" ") | length | . * 1.3 | floor)}' "$DATA_DIR/memory.json")"
+    ;;
+  memory-compress)
+    [[ -f "$DATA_DIR/memory.json" ]] || json_err "memory.json not found"
+    threshold="${1:-10000}"
+    result=$(jq --arg th "$threshold" '
+      .phase_learnings |= (if length > 20 then .[-20:] else . end) |
+      .decisions |= (if length > 30 then .[-30:] else . end) |
+      . as $trimmed |
+      ([.. | strings] | join(" ") | split(" ") | length | . * 1.3 | floor) as $tokens |
+      if $tokens > ($th|tonumber) then
+        .phase_learnings |= (if length > 10 then .[-10:] else . end) |
+        .decisions |= (if length > 15 then .[-15:] else . end)
+      else . end
+    ' "$DATA_DIR/memory.json") || json_err "Failed to process memory.json"
+    atomic_write "$DATA_DIR/memory.json" "$result"
+    tokens=$(echo "$result" | jq '[.. | strings] | join(" ") | split(" ") | length | . * 1.3 | floor')
+    json_ok "{\"compressed\":true,\"tokens\":$tokens}"
+    ;;
+  memory-search)
+    [[ $# -ge 1 ]] || json_err "Usage: memory-search <keyword>"
+    [[ -f "$DATA_DIR/memory.json" ]] || json_err "memory.json not found"
+    json_ok "$(jq --arg kw "$1" '
+      ($kw | ascii_downcase) as $k |
+      {
+        phase_learnings: [.phase_learnings[]? | select(tostring | ascii_downcase | contains($k))],
+        decisions: [.decisions[]? | select(tostring | ascii_downcase | contains($k))],
+        patterns: [.patterns[]? | select(tostring | ascii_downcase | contains($k))]
+      }
+    ' "$DATA_DIR/memory.json")"
     ;;
   *)
     json_err "Unknown command: $cmd"
