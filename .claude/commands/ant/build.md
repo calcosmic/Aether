@@ -186,6 +186,82 @@ After the ant returns, use Write tool to update:
 - Set `state` to `"READY"`
 - Advance `current_phase` if phase completed
 
+**Log Errors:** If the ant reported any failures or issues in its report:
+
+Read `.aether/data/errors.json`. For each failure, append an error record to the `errors` array:
+
+```json
+{
+  "id": "err_<unix_timestamp>_<4_random_hex>",
+  "category": "<one of: syntax, import, runtime, type, spawning, phase, verification, api, file, logic, performance, security>",
+  "severity": "<one of: critical, high, medium, low>",
+  "description": "<what went wrong>",
+  "root_cause": "<why it happened, if apparent from the ant's report>",
+  "phase": <phase_number>,
+  "task_id": "<task_id if applicable, otherwise null>",
+  "timestamp": "<ISO-8601 UTC>"
+}
+```
+
+**Check Pattern Flagging:** Count errors in the `errors` array by `category`. If any category has 3 or more errors and is not already in `flagged_patterns`, add:
+
+```json
+{
+  "category": "<the category>",
+  "count": <total_count>,
+  "first_seen": "<timestamp of earliest error in this category>",
+  "last_seen": "<timestamp of latest error in this category>",
+  "flagged_at": "<current ISO-8601 UTC>",
+  "description": "Recurring <category> errors -- <count> occurrences detected"
+}
+```
+
+If the category already exists in `flagged_patterns`, update its `count`, `last_seen`, and `description`.
+
+If the `errors` array exceeds 50 entries, remove the oldest entries to keep only 50.
+
+Use the Write tool to write the updated errors.json.
+
+For each error logged, also append an `error_logged` event to events.json:
+
+```json
+{
+  "id": "evt_<unix_timestamp>_<4_random_hex>",
+  "type": "error_logged",
+  "source": "build",
+  "content": "<category>/<severity>: <description>",
+  "timestamp": "<ISO-8601 UTC>"
+}
+```
+
+For each newly flagged pattern, append a `pattern_flagged` event:
+
+```json
+{
+  "id": "evt_<unix_timestamp>_<4_random_hex>",
+  "type": "pattern_flagged",
+  "source": "build",
+  "content": "Pattern flagged: <category> errors -- <count> occurrences",
+  "timestamp": "<ISO-8601 UTC>"
+}
+```
+
+**Write Outcome Event:** Append to events.json:
+
+```json
+{
+  "id": "evt_<unix_timestamp>_<4_random_hex>",
+  "type": "<phase_completed or phase_failed>",
+  "source": "build",
+  "content": "Phase <id>: <name> <completed|failed> (<completed_count>/<total_count> tasks done)",
+  "timestamp": "<ISO-8601 UTC>"
+}
+```
+
+If the `events` array exceeds 100 entries, remove the oldest entries to keep only 100.
+
+Use the Write tool to write the updated events.json.
+
 ### Step 7: Display Results
 
 Show step progress:
