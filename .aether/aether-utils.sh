@@ -35,7 +35,7 @@ shift 2>/dev/null || true
 case "$cmd" in
   help)
     cat <<'EOF'
-{"ok":true,"commands":["help","version","pheromone-decay","pheromone-effective","pheromone-batch","pheromone-cleanup","pheromone-combine","validate-state","memory-token-count","memory-compress","memory-search"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
+{"ok":true,"commands":["help","version","pheromone-decay","pheromone-effective","pheromone-batch","pheromone-cleanup","pheromone-combine","validate-state","memory-token-count","memory-compress","memory-search","error-add","error-pattern-check","error-summary","error-dedup"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
 EOF
     ;;
   version)
@@ -189,6 +189,51 @@ EOF
         patterns: [.patterns[]? | select(tostring | ascii_downcase | contains($k))]
       }
     ' "$DATA_DIR/memory.json")"
+    ;;
+  error-add)
+    [[ $# -ge 3 ]] || json_err "Usage: error-add <category> <severity> <description>"
+    [[ -f "$DATA_DIR/errors.json" ]] || json_err "errors.json not found"
+    id="err_$(date -u +%s)_$(head -c 2 /dev/urandom | od -An -tx1 | tr -d ' ')"
+    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    updated=$(jq --arg id "$id" --arg cat "$1" --arg sev "$2" --arg desc "$3" --arg ts "$ts" '
+      .errors += [{id:$id, category:$cat, severity:$sev, description:$desc, root_cause:null, phase:null, task_id:null, timestamp:$ts}] |
+      if (.errors|length) > 50 then .errors = .errors[-50:] else . end
+    ' "$DATA_DIR/errors.json") || json_err "Failed to update errors.json"
+    atomic_write "$DATA_DIR/errors.json" "$updated"
+    json_ok "\"$id\""
+    ;;
+  error-pattern-check)
+    [[ -f "$DATA_DIR/errors.json" ]] || json_err "errors.json not found"
+    json_ok "$(jq '
+      .errors | group_by(.category) | map(select(length >= 3) |
+        {category: .[0].category, count: length,
+         first_seen: (sort_by(.timestamp) | first.timestamp),
+         last_seen: (sort_by(.timestamp) | last.timestamp)})
+    ' "$DATA_DIR/errors.json")"
+    ;;
+  error-summary)
+    [[ -f "$DATA_DIR/errors.json" ]] || json_err "errors.json not found"
+    json_ok "$(jq '{
+      total: (.errors | length),
+      by_category: (.errors | group_by(.category) | map({key: .[0].category, value: length}) | from_entries),
+      by_severity: (.errors | group_by(.severity) | map({key: .[0].severity, value: length}) | from_entries)
+    }' "$DATA_DIR/errors.json")"
+    ;;
+  error-dedup)
+    [[ -f "$DATA_DIR/errors.json" ]] || json_err "errors.json not found"
+    before=$(jq '.errors | length' "$DATA_DIR/errors.json")
+    result=$(jq '
+      .errors |= (group_by(.category + "|" + .description) | map(
+        sort_by(.timestamp) | . as $grp |
+        [$grp[0]] + [$grp[range(1;length)] | select(
+          (.timestamp | sub("\\.[0-9]+Z$";"Z") | fromdate) -
+          ($grp[0].timestamp | sub("\\.[0-9]+Z$";"Z") | fromdate) > 60
+        )]
+      ) | flatten)
+    ' "$DATA_DIR/errors.json") || json_err "Failed to process errors.json"
+    atomic_write "$DATA_DIR/errors.json" "$result"
+    after=$(echo "$result" | jq '.errors | length')
+    json_ok "{\"removed\":$((before - after)),\"remaining\":$after}"
     ;;
   *)
     json_err "Unknown command: $cmd"
