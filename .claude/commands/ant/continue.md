@@ -36,7 +36,53 @@ All phases complete. Colony has finished the project plan.
 
 Stop here.
 
-### Step 3: Extract Phase Learnings
+### Step 3: Phase Completion Summary
+
+Before advancing, display a summary of the completed phase using data from the state files read in Step 1.
+
+Output:
+
+```
+---------------------------------------------------
+PHASE <N> REVIEW: <phase_name>
+---------------------------------------------------
+
+  Tasks:
+    [x] <task_id>: <description>
+    [x] <task_id>: <description>
+    ...
+    Completed: <N>/<total>
+
+  Errors:
+    <count> errors encountered
+    (list severity counts: N critical, N high, N medium, N low)
+
+  Decisions:
+    <count> decisions logged during this phase
+    (list last 3 decisions from memory.json decisions array: "<content>")
+
+---------------------------------------------------
+```
+
+Get task data from `PROJECT_PLAN.json` -- look at the current phase's `tasks` array. Show `[x]` for completed, `[ ]` for incomplete.
+
+Get error data from `errors.json` -- filter the `errors` array by `phase` field matching the current phase number. Count by severity level.
+
+Get decision data from `memory.json` -- count the `decisions` array entries. Show last 3 decisions.
+
+If no errors were encountered during this phase:
+```
+  Errors: None
+```
+
+If no decisions were logged:
+```
+  Decisions: None
+```
+
+This step is DISPLAY ONLY -- it reads state but does not write anything. The purpose is to give the user a retrospective before the phase advances.
+
+### Step 4: Extract Phase Learnings
 
 Review the completed phase by analyzing:
 - Tasks completed in this phase (from PROJECT_PLAN.json -- look at the current phase's tasks)
@@ -66,7 +112,7 @@ If the `phase_learnings` array exceeds 20 entries, remove the oldest entries to 
 
 Use the Write tool to write the updated memory.json.
 
-### Step 4: Clean Expired Pheromones
+### Step 5: Clean Expired Pheromones
 
 Compute current strength for each signal in `pheromones.json`:
 1. If `half_life_seconds` is null -> keep (persistent)
@@ -75,7 +121,7 @@ Compute current strength for each signal in `pheromones.json`:
 
 Use the Write tool to write the cleaned `pheromones.json` (keep only non-expired signals).
 
-### Step 5: Write Events
+### Step 6: Write Events
 
 Read `.aether/data/events.json`. Append two events to the `events` array:
 
@@ -103,14 +149,14 @@ If the `events` array exceeds 100 entries, remove the oldest entries to keep onl
 
 Use the Write tool to write the updated events.json.
 
-### Step 6: Update Colony State
+### Step 7: Update Colony State
 
 Use the Write tool to update `COLONY_STATE.json`:
 - Set `current_phase` to the next phase number
 - Set `state` to `"READY"`
 - Set all workers to `"idle"`
 
-### Step 7: Display Result
+### Step 8: Display Result
 
 Output this header at the start of your response:
 
@@ -125,11 +171,12 @@ Then show step progress:
 ```
   ✓ Step 1: Read State
   ✓ Step 2: Determine Next Phase
-  ✓ Step 3: Extract Phase Learnings
-  ✓ Step 4: Clean Expired Pheromones
-  ✓ Step 5: Write Events
-  ✓ Step 6: Update Colony State
-  ✓ Step 7: Display Result
+  ✓ Step 3: Phase Completion Summary
+  ✓ Step 4: Extract Phase Learnings
+  ✓ Step 5: Clean Expired Pheromones
+  ✓ Step 6: Write Events
+  ✓ Step 7: Update Colony State
+  ✓ Step 8: Display Result
 ```
 
 Then output a divider and the result:
