@@ -48,7 +48,15 @@ Format:
 
 ```
 ACTIVE PHEROMONES:
-- {TYPE} (strength {current_strength:.2f}): "{content}"
+  {TYPE padded to 10 chars} [{bar of 20 chars using "=" filled, spaces empty}] {current_strength:.2f}
+    "{content}"
+```
+
+Where the bar uses `round(current_strength * 20)` filled `=` characters and spaces for the remainder.
+
+If no active signals after filtering:
+```
+  (no active pheromones)
 ```
 
 ### Step 4: Update State
