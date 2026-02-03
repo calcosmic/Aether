@@ -65,7 +65,35 @@ Use the Write tool to write `.aether/data/COLONY_STATE.json`:
 }
 ```
 
-### Step 4: Emit INIT Pheromone
+### Step 4: Create State Files
+
+Use the Write tool to create these three files:
+
+**`.aether/data/errors.json`:**
+```json
+{
+  "errors": [],
+  "flagged_patterns": []
+}
+```
+
+**`.aether/data/memory.json`:**
+```json
+{
+  "phase_learnings": [],
+  "decisions": [],
+  "patterns": []
+}
+```
+
+**`.aether/data/events.json`:**
+```json
+{
+  "events": []
+}
+```
+
+### Step 5: Emit INIT Pheromone
 
 Use the Write tool to write `.aether/data/pheromones.json`:
 
@@ -86,7 +114,23 @@ Use the Write tool to write `.aether/data/pheromones.json`:
 
 INIT signals have no half-life — they persist forever.
 
-### Step 5: Display Result
+### Step 6: Write Init Event
+
+Read `.aether/data/events.json`. Append to the `events` array:
+
+```json
+{
+  "id": "evt_<unix_timestamp>_<4_random_hex>",
+  "type": "colony_initialized",
+  "source": "init",
+  "content": "Colony initialized with goal: <the user's goal>",
+  "timestamp": "<ISO-8601 UTC>"
+}
+```
+
+Use the Write tool to write the updated events.json.
+
+### Step 7: Display Result
 
 Output this header at the start of your response:
 
@@ -102,8 +146,10 @@ Then show step progress:
   ✓ Step 1: Validate Input
   ✓ Step 2: Read Current State
   ✓ Step 3: Write Colony State
-  ✓ Step 4: Emit INIT Pheromone
-  ✓ Step 5: Display Result
+  ✓ Step 4: Create State Files
+  ✓ Step 5: Emit INIT Pheromone
+  ✓ Step 6: Write Init Event
+  ✓ Step 7: Display Result
 ```
 
 Then output a divider and the result:
