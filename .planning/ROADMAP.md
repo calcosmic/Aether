@@ -29,11 +29,11 @@ v4.1 closes the gap between what aether-utils.sh provides and what commands/spec
   3. build.md calls aether-utils.sh error-pattern-check instead of manual error categorization
   4. continue.md and build.md call aether-utils.sh error-summary instead of manual error counting
   5. pheromone-combine, memory-token-count, memory-search, and error-dedup are removed from aether-utils.sh
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 22-01: TBD
-- [ ] 22-02: TBD
+- [ ] 22-01-PLAN.md -- Wire pheromone-batch into 4 commands, remove 4 dead subcommands (CLEAN-01, CLEAN-05)
+- [ ] 22-02-PLAN.md -- Wire memory-compress, error-pattern-check, error-summary into continue.md and build.md (CLEAN-02, CLEAN-03, CLEAN-04)
 
 ### Phase 23: Enforcement
 **Goal**: Worker spec instructions have deterministic enforcement gates -- spawn limits and pheromone quality are validated by shell code before actions proceed
@@ -57,7 +57,7 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 22. Cleanup | v4.1 | 0/TBD | Not started | - |
+| 22. Cleanup | v4.1 | 0/2 | Planned | - |
 | 23. Enforcement | v4.1 | 0/TBD | Not started | - |
 
 ---
