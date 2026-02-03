@@ -168,7 +168,29 @@ Read `.aether/data/pheromones.json` (if not already in memory from Step 1).
 }
 ```
 
-Append these to the `signals` array in `pheromones.json`. Use the Write tool to write the updated file.
+Before appending each pheromone, validate its content. Use the Bash tool to run:
+```
+bash .aether/aether-utils.sh pheromone-validate "<the pheromone content string>"
+```
+
+This returns JSON: `{"ok":true,"result":{"pass":true|false,...}}`.
+
+**If `pass` is false:** Do not append this pheromone. Instead, append a rejection event to events.json:
+```json
+{
+  "id": "evt_<unix_timestamp>_<4_random_hex>",
+  "type": "pheromone_rejected",
+  "source": "continue",
+  "content": "Auto-pheromone rejected: <reason> (length: <N>, min: 20)",
+  "timestamp": "<ISO-8601 UTC>"
+}
+```
+
+**If `pass` is true:** Proceed to append the pheromone.
+
+If the command fails (non-zero exit), skip validation and append the pheromone anyway (fail-open for auto-emitted pheromones).
+
+Append validated pheromones to the `signals` array in `pheromones.json`. Use the Write tool to write the updated file.
 
 **Log Events:** For each auto-emitted pheromone, append to events.json:
 

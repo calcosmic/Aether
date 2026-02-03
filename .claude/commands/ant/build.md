@@ -112,6 +112,8 @@ Use the **Task tool** with `subagent_type="general-purpose"`:
 ```
 You are an ant in the Aether Queen Ant Colony.
 
+You are at depth 1. When spawning sub-ants, tell them: "You are at depth 2."
+
 The Queen has signalled: execute Phase {id}.
 
 --- COLONY CONTEXT ---
