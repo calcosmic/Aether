@@ -14,6 +14,8 @@ Use the Read tool to read these files (in parallel):
 - `.aether/data/pheromones.json`
 - `.aether/data/PROJECT_PLAN.json`
 - `.aether/data/errors.json`
+- `.aether/data/memory.json`
+- `.aether/data/events.json`
 
 If `COLONY_STATE.json` has `goal: null`, output:
 
