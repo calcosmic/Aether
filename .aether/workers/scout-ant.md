@@ -180,6 +180,44 @@ When you encounter a capability gap, spawn a specialist using the Task tool.
 
 This ensures every spawned ant gets the full spec with sensitivity tables, workflow, output format, AND this spawning guide — so it can spawn further ants recursively.
 
+### Spawning Scenario
+
+Situation: You're researching a new API integration and discover the project's current architecture needs mapping before you can recommend an integration approach.
+
+Decision process:
+1. Check effective signal: INIT(0.7) * strength(0.9) = 0.63 -> PRIORITIZE
+2. New domain research is active — you need architectural context first
+3. Mapping the codebase structure is an exploration task — spawn a colonizer
+4. You have 4 spawns remaining (max 5)
+
+Spawn prompt example:
+
+Use the Task tool with `subagent_type="general-purpose"` and this prompt:
+
+```
+--- WORKER SPEC ---
+{Read and paste the FULL contents of .aether/workers/colonizer-ant.md here}
+
+--- ACTIVE PHEROMONES ---
+{Copy the ACTIVE PHEROMONES block from your context here}
+
+--- TASK ---
+Map the current API integration layer and module structure.
+
+Colony goal: Research and recommend approach for Stripe API integration
+Constraints:
+- Map all files in src/integrations/ and src/api/
+- Identify: existing integration patterns, HTTP client usage, error handling
+- Document the dependency graph between API modules
+- Return findings as structured Colonizer Ant Report
+
+Phase context: I'm researching Stripe integration options but need to
+understand the existing integration architecture before I can recommend
+where and how to add the Stripe module.
+```
+
+The spawned colonizer receives its full spec (with sensitivity tables, pheromone math, combination effects, feedback interpretation, event awareness, AND this spawning guide) — enabling it to spawn further ants if needed (e.g., spawning an architect to synthesize the patterns found).
+
 **Spawn limits:**
 - Max 5 sub-ants per ant
 - Max depth 3 (ant -> sub-ant -> sub-sub-ant, no deeper)

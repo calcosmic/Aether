@@ -166,6 +166,43 @@ When you encounter a capability gap, spawn a specialist using the Task tool.
 
 This ensures every spawned ant gets the full spec with sensitivity tables, workflow, output format, AND this spawning guide — so it can spawn further ants recursively.
 
+### Spawning Scenario
+
+Situation: You're implementing a REST API endpoint but encounter an unfamiliar authentication library. You need research before you can proceed.
+
+Decision process:
+1. Check effective signal: FOCUS(0.9) * strength(0.8) = 0.72 -> PRIORITIZE
+2. This is a focused implementation task — you must complete it
+3. The auth library gap is a research problem — spawn a scout
+4. You have 4 spawns remaining (max 5)
+
+Spawn prompt example:
+
+Use the Task tool with `subagent_type="general-purpose"` and this prompt:
+
+```
+--- WORKER SPEC ---
+{Read and paste the FULL contents of .aether/workers/scout-ant.md here}
+
+--- ACTIVE PHEROMONES ---
+{Copy the ACTIVE PHEROMONES block from your context here}
+
+--- TASK ---
+Research the authentication library used in this project.
+
+Colony goal: Implement POST /api/auth/login endpoint
+Constraints:
+- Find the auth library in package.json or imports
+- Document: initialization, token generation, verification
+- Check for common gotchas (async/sync, error handling)
+- Return findings as structured Scout Ant Report
+
+Phase context: We are building the auth endpoint. I need to understand
+the auth library API before I can implement the token flow.
+```
+
+The spawned scout receives its full spec (with sensitivity tables, pheromone math, combination effects, feedback interpretation, event awareness, AND this spawning guide) — enabling it to spawn further ants if needed (e.g., spawning a colonizer to map the auth module).
+
 **Spawn limits:**
 - Max 5 sub-ants per ant
 - Max depth 3 (ant -> sub-ant -> sub-sub-ant, no deeper)

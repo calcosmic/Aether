@@ -166,6 +166,44 @@ When you encounter a capability gap, spawn a specialist using the Task tool.
 
 This ensures every spawned ant gets the full spec with sensitivity tables, workflow, output format, AND this spawning guide — so it can spawn further ants recursively.
 
+### Spawning Scenario
+
+Situation: You're exploring a new codebase area and find complex business logic that needs documentation before other ants can work with it.
+
+Decision process:
+1. Check effective signal: INIT(1.0) * strength(1.0) = 1.00 -> PRIORITIZE
+2. Full exploration mode — you've mapped the structure but need patterns synthesized
+3. Knowledge synthesis is an architect task — spawn an architect
+4. You have 4 spawns remaining (max 5)
+
+Spawn prompt example:
+
+Use the Task tool with `subagent_type="general-purpose"` and this prompt:
+
+```
+--- WORKER SPEC ---
+{Read and paste the FULL contents of .aether/workers/architect-ant.md here}
+
+--- ACTIVE PHEROMONES ---
+{Copy the ACTIVE PHEROMONES block from your context here}
+
+--- TASK ---
+Synthesize and document the business logic patterns in the billing module.
+
+Colony goal: Map and document the billing system for upcoming refactor
+Constraints:
+- Analyze the patterns in src/billing/ (I found 12 files, 3 key abstractions)
+- Document: pricing calculation flow, discount logic, invoice generation
+- Extract success patterns and identify anti-patterns
+- Return findings as structured Architect Ant Report
+
+Phase context: I've mapped the billing directory structure and dependencies.
+The business logic is too complex for a simple map — it needs pattern
+extraction and knowledge synthesis before builders can work with it.
+```
+
+The spawned architect receives its full spec (with sensitivity tables, pheromone math, combination effects, feedback interpretation, event awareness, AND this spawning guide) — enabling it to spawn further ants if needed (e.g., spawning a scout to research billing domain patterns).
+
 **Spawn limits:**
 - Max 5 sub-ants per ant
 - Max depth 3 (ant -> sub-ant -> sub-sub-ant, no deeper)

@@ -170,6 +170,44 @@ When you encounter a capability gap, spawn a specialist using the Task tool.
 
 This ensures every spawned ant gets the full spec with sensitivity tables, workflow, output format, AND this spawning guide — so it can spawn further ants recursively.
 
+### Spawning Scenario
+
+Situation: You're synthesizing project patterns and need current test results to validate a quality pattern hypothesis. You need validation data before you can assign confidence scores.
+
+Decision process:
+1. Check effective signal: FEEDBACK(0.6) * strength(0.8) = 0.48 -> NOTE
+2. Feedback is moderate — factor it in but don't restructure work
+3. Getting test results is a validation task — spawn a watcher
+4. You have 4 spawns remaining (max 5)
+
+Spawn prompt example:
+
+Use the Task tool with `subagent_type="general-purpose"` and this prompt:
+
+```
+--- WORKER SPEC ---
+{Read and paste the FULL contents of .aether/workers/watcher-ant.md here}
+
+--- ACTIVE PHEROMONES ---
+{Copy the ACTIVE PHEROMONES block from your context here}
+
+--- TASK ---
+Run the test suite and report quality metrics for the auth module.
+
+Colony goal: Synthesize quality patterns across the project
+Constraints:
+- Run all tests in tests/auth/ and tests/integration/auth/
+- Report: pass/fail counts, coverage percentage, flaky test indicators
+- Note any recurring failure patterns or skipped tests
+- Return findings as structured Watcher Ant Report
+
+Phase context: I'm extracting quality patterns and hypothesize that
+the auth module has declining test reliability. I need concrete test
+results to validate or refute this pattern before documenting it.
+```
+
+The spawned watcher receives its full spec (with sensitivity tables, pheromone math, combination effects, feedback interpretation, event awareness, specialist modes, AND this spawning guide) — enabling it to spawn further ants if needed (e.g., spawning a builder to fix failing tests).
+
 **Spawn limits:**
 - Max 5 sub-ants per ant
 - Max depth 3 (ant -> sub-ant -> sub-sub-ant, no deeper)

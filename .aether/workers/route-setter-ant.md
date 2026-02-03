@@ -186,6 +186,44 @@ When you encounter a capability gap, spawn a specialist using the Task tool.
 
 This ensures every spawned ant gets the full spec with sensitivity tables, workflow, output format, AND this spawning guide — so it can spawn further ants recursively.
 
+### Spawning Scenario
+
+Situation: You're planning a new feature phase and need to understand the current codebase structure before you can assign tasks to the right areas.
+
+Decision process:
+1. Check effective signal: INIT(1.0) * strength(0.6) = 0.60 -> PRIORITIZE
+2. New goal requires planning — but you need codebase context first
+3. Mapping the codebase is an exploration task — spawn a colonizer
+4. You have 4 spawns remaining (max 5)
+
+Spawn prompt example:
+
+Use the Task tool with `subagent_type="general-purpose"` and this prompt:
+
+```
+--- WORKER SPEC ---
+{Read and paste the FULL contents of .aether/workers/colonizer-ant.md here}
+
+--- ACTIVE PHEROMONES ---
+{Copy the ACTIVE PHEROMONES block from your context here}
+
+--- TASK ---
+Map the current project structure relevant to the notifications feature.
+
+Colony goal: Plan the notifications feature implementation phase
+Constraints:
+- Map directories: src/api/, src/services/, src/models/
+- Identify: existing notification-related code, event system patterns
+- Document where new notification code should live based on conventions
+- Return findings as structured Colonizer Ant Report
+
+Phase context: I'm planning the notifications feature but need to
+understand the existing project structure and conventions before I can
+create a phase plan with correctly scoped tasks and caste assignments.
+```
+
+The spawned colonizer receives its full spec (with sensitivity tables, pheromone math, combination effects, feedback interpretation, event awareness, AND this spawning guide) — enabling it to spawn further ants if needed (e.g., spawning a scout to research notification design patterns).
+
 **Spawn limits:**
 - Max 5 sub-ants per ant
 - Max depth 3 (ant -> sub-ant -> sub-sub-ant, no deeper)

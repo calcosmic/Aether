@@ -280,6 +280,44 @@ When you encounter a capability gap, spawn a specialist using the Task tool.
 
 This ensures every spawned ant gets the full spec with sensitivity tables, workflow, output format, AND this spawning guide — so it can spawn further ants recursively.
 
+### Spawning Scenario
+
+Situation: You're reviewing a complex data pipeline and find potential performance issues that need profiling. You need concrete benchmark data before you can assess severity.
+
+Decision process:
+1. Check effective signal: FEEDBACK(0.9) * strength(0.7) = 0.63 -> PRIORITIZE
+2. Quality feedback demands thorough validation — you need benchmark data
+3. Running benchmarks is an implementation task — spawn a builder
+4. You have 4 spawns remaining (max 5)
+
+Spawn prompt example:
+
+Use the Task tool with `subagent_type="general-purpose"` and this prompt:
+
+```
+--- WORKER SPEC ---
+{Read and paste the FULL contents of .aether/workers/builder-ant.md here}
+
+--- ACTIVE PHEROMONES ---
+{Copy the ACTIVE PHEROMONES block from your context here}
+
+--- TASK ---
+Run performance benchmarks on the data pipeline module.
+
+Colony goal: Validate data pipeline performance under load
+Constraints:
+- Profile the transform pipeline in src/pipeline/transform.ts
+- Measure: throughput (records/sec), memory usage, latency percentiles
+- Test with 100, 1000, and 10000 record datasets
+- Return findings as structured Builder Ant Report with metrics
+
+Phase context: I found potential O(n^2) patterns in the pipeline.
+I need concrete benchmark data to determine severity before I can
+make a recommendation in my Watcher report.
+```
+
+The spawned builder receives its full spec (with sensitivity tables, pheromone math, combination effects, feedback interpretation, event awareness, AND this spawning guide) — enabling it to spawn further ants if needed (e.g., spawning a scout to research optimization techniques).
+
 **Spawn limits:**
 - Max 5 sub-ants per ant
 - Max depth 3 (ant -> sub-ant -> sub-sub-ant, no deeper)
