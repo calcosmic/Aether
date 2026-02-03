@@ -108,9 +108,16 @@ Read `.aether/data/memory.json`. Append a phase learning entry to the `phase_lea
 
 Learnings must be SPECIFIC and ACTIONABLE. Good: "TypeScript strict mode caught 12 type errors early." Bad: "Phase completed successfully." Draw from actual task outcomes, errors, and events -- not boilerplate.
 
-If the `phase_learnings` array exceeds 20 entries, remove the oldest entries to keep only 20.
-
 Use the Write tool to write the updated memory.json.
+
+Then use the Bash tool to run:
+```
+bash .aether/aether-utils.sh memory-compress
+```
+
+This enforces retention limits (phase_learnings <= 20, decisions <= 30) and compresses if over token threshold. Returns `{"ok":true,"result":{"compressed":true,"tokens":N}}`.
+
+If the command fails, the Write tool already saved the data -- no action needed.
 
 **Update Spawn Outcomes:** Read `.aether/data/COLONY_STATE.json`. Review the events in `events.json` for events of type `phase_completed` or `phase_failed` related to the current phase. If the phase completed successfully, look at events.json for spawn-related events or the build report to identify which castes contributed. For each identified caste, increment `alpha` and `successes` in `spawn_outcomes`. If the phase failed, increment `beta` and `failures` for identified castes. Increment `total_spawns` regardless. Write the updated COLONY_STATE.json.
 
