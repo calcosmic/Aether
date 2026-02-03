@@ -1,4 +1,4 @@
-# Aether v4: Claude-Native Queen Ant Colony
+# Aether v4.1: Claude-Native Queen Ant Colony
 
 ## What This Is
 
@@ -61,7 +61,13 @@ If this works, everything else follows. If this fails, nothing else matters.
 
 ### Active
 
-*(No active milestone — use `/cds:new-milestone` to start next)*
+*(v4.1 Cleanup & Enforcement — 2026-02-03)*
+
+- [ ] **Orphan audit** — Audit 8 orphaned subcommands; wire in useful ones, remove dead ones
+- [ ] **Inline formula elimination** — Replace inline decay formulas in plan.md, pause-colony.md, resume-colony.md, colonize.md with aether-utils.sh calls
+- [ ] **Spawn limit enforcement** — Shell validation gate in aether-utils.sh that checks worker count and spawn depth before allowing spawn
+- [ ] **Pheromone quality enforcement** — Prompt-level guardrails with structured validation steps for auto-pheromone content; shell checks for non-empty and minimum length
+- [ ] **Spec compliance enforcement** — Hybrid enforcement: shell gates for deterministic checks (validate-state called, spawn limits respected), prompt guardrails for judgment-based instructions
 
 ### Out of Scope
 
@@ -95,15 +101,15 @@ If this works, everything else follows. If this fails, nothing else matters.
 - 4 core commands (status, build, continue, init) delegate to aether-utils.sh
 - 6 worker specs use pheromone-effective for deterministic signal computation
 
-**Known tech debt (from v4.0 audit):**
-- 8 orphaned subcommands with no current consumers
-- 4 commands retain inline decay formulas (plan.md, pause-colony.md, resume-colony.md, colonize.md)
-- Inline LLM duplicates of memory-compress and error-pattern-check
+**Known tech debt (from v4.0 audit — being addressed in v4.1):**
+- 8 orphaned subcommands with no current consumers → audit in v4.1
+- 4 commands retain inline decay formulas → replace in v4.1
+- Inline LLM duplicates of memory-compress and error-pattern-check → address in v4.1
 
-**Advisory-only enforcement:**
-- No enforcement of spawn limits (depth-3 and max-5 are stated but purely advisory)
-- Auto-pheromone content quality unbounded
-- All spec instructions are advisory (works when LLM is diligent, fails silently when not)
+**Advisory-only enforcement (being addressed in v4.1):**
+- No enforcement of spawn limits → shell validation gate in v4.1
+- Auto-pheromone content quality unbounded → hybrid enforcement in v4.1
+- All spec instructions are advisory → hybrid enforcement in v4.1
 
 ### Background
 
@@ -145,4 +151,4 @@ Aether is based on **383,000+ words of research** across 25 documents by Ralph (
 
 ---
 
-*Last updated: 2026-02-03 after v4.0 milestone*
+*Last updated: 2026-02-03 after v4.1 milestone start*
