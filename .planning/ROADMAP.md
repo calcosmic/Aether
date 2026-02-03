@@ -45,11 +45,11 @@ Plans:
   3. Running aether-utils.sh pheromone-validate returns pass/fail JSON checking non-empty content and minimum length (>= 20 chars)
   4. continue.md auto-pheromone step calls pheromone-validate before writing and rejects invalid pheromones
   5. Worker specs include a post-action validation checklist of deterministic checks (state validated, spawn limits checked) that must pass before reporting done
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 23-01: TBD
-- [ ] 23-02: TBD
+- [ ] 23-01-PLAN.md -- Add spawn-check and pheromone-validate subcommands to aether-utils.sh (ENFO-01, ENFO-03)
+- [ ] 23-02-PLAN.md -- Wire enforcement gates into worker specs, continue.md, and build.md (ENFO-02, ENFO-04, ENFO-05)
 
 ## Progress
 
@@ -58,7 +58,7 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 22. Cleanup | v4.1 | 2/2 | ✓ Complete | 2026-02-03 |
-| 23. Enforcement | v4.1 | 0/TBD | Not started | - |
+| 23. Enforcement | v4.1 | 0/2 | Not started | - |
 
 ---
 *Roadmap created: 2026-02-03*
