@@ -186,11 +186,13 @@ Plans:
 4. Running `aether-utils error-add build high "Test failure in auth module"` appends a timestamped, auto-ID error record to errors.json, and `aether-utils error-pattern-check` flags categories with 3+ occurrences
 5. Every subcommand outputs valid JSON to stdout on success and returns non-zero with a JSON error message on invalid input or missing files
 
+**Plans:** 4 plans
+
 Plans:
-- [ ] 20-01
-- [ ] 20-02
-- [ ] 20-03
-- [ ] 20-04
+- [ ] 20-01-PLAN.md -- Pheromone math (decay, effective, batch, cleanup, combine)
+- [ ] 20-02-PLAN.md -- State validation (colony, pheromones, errors, memory, events, all)
+- [ ] 20-03-PLAN.md -- Memory operations (token-count, compress, search)
+- [ ] 20-04-PLAN.md -- Error tracking (add, pattern-check, summary, dedup)
 
 ---
 
@@ -229,7 +231,7 @@ Phases execute in numeric order: 19 -> 20 -> 21
 | 16. Worker Knowledge | v3.0 | 3/3 | Complete | 2026-02-03 |
 | 17. Integration & Dashboard | v3.0 | 3/3 | Complete | 2026-02-03 |
 | 19. Audit Fixes + Utility Scaffold | v4.0 | 3/3 | Complete | 2026-02-03 |
-| 20. Utility Modules | v4.0 | 0/4 | Pending | - |
+| 20. Utility Modules | v4.0 | 0/4 | Planned | - |
 | 21. Command Integration | v4.0 | 0/2 | Pending | - |
 
 ---
