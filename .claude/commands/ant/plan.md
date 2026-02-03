@@ -53,7 +53,7 @@ Do NOT hardcode a caste. Spawn one ant and let it figure out how to plan.
 
 If none found, set project type to `"greenfield"`. If multiple found, list all detected types.
 
-Update `COLONY_STATE.json` — set `state` to `"PLANNING"` before spawning.
+Update `COLONY_STATE.json` — set `state` to `"PLANNING"` and `workers.route-setter` to `"active"` before spawning.
 
 Use the **Task tool** with `subagent_type="general-purpose"`:
 
@@ -156,7 +156,9 @@ Write the result to .aether/data/PROJECT_PLAN.json using the Write tool:
 Report what you planned and why.
 ```
 
-After the ant finishes, set `state` back to `"READY"` in `COLONY_STATE.json`.
+After the ant finishes, update `COLONY_STATE.json`:
+- Set `state` to `"READY"`
+- Set `workers.route-setter` to `"idle"`
 
 ### Step 5: Display Plan
 

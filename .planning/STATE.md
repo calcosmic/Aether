@@ -86,6 +86,15 @@ Progress: [████████████████████] 100% (v
 
 None yet.
 
+### Open Issues (identified post-v3.0 audit)
+
+1. ~~**route-setter contradicts plan.md**~~ FIXED — removed caste field from output format, removed Caste Assignment Guide, added "do NOT assign castes" to workflow and heuristics.
+2. ~~**colonize doesn't persist findings**~~ FIXED — added Step 5 to write findings to memory.json decisions array and log codebase_colonized event.
+3. ~~**Worker state tracking inconsistent**~~ FIXED — colonize.md sets colonizer active/idle, plan.md sets route-setter active/idle.
+4. **No enforcement of spawn limits** — Depth-3 and max-5 limits are stated in every worker spec but are purely advisory. An LLM under context pressure could ignore them.
+5. **Auto-pheromone content quality unbounded** — continue.md Step 4.5 says "be specific, reference actual task outcomes" but has no structural enforcement. The LLM could produce boilerplate FEEDBACK content that provides no signal.
+6. **All spec instructions are advisory** — Every "MUST" in worker specs (read spec before spawning, compute effective_signal, check spawn_outcomes) has no enforcement mechanism. Works when the LLM is diligent, fails silently when it isn't.
+
 ### Blockers/Concerns
 
 None yet.

@@ -111,9 +111,8 @@ At startup, read `.aether/data/memory.json` to access colony knowledge.
 1. **Read pheromones** — check ACTIVE PHEROMONES section in your context
 2. **Analyze goal** — what does success look like? Key milestones? Dependencies?
 3. **Create phase structure** — break goal into 3-6 phases
-4. **Define tasks per phase** — 3-8 concrete tasks each
-5. **Assign castes** — match tasks to the right caste
-6. **Write PROJECT_PLAN.json** — structured output
+4. **Define tasks per phase** — 3-8 concrete tasks each (do NOT assign castes — the colony self-organizes)
+5. **Write PROJECT_PLAN.json** — structured output
 
 ## Output Format
 
@@ -130,7 +129,7 @@ Write the plan to `.aether/data/PROJECT_PLAN.json`:
       "description": "What this phase accomplishes",
       "status": "pending",
       "tasks": [
-        {"id": "1.1", "description": "Task", "caste": "builder", "status": "pending", "depends_on": []}
+        {"id": "1.1", "description": "Task", "status": "pending", "depends_on": []}
       ],
       "success_criteria": ["Observable behavior 1"]
     }
@@ -145,24 +144,7 @@ Write the plan to `.aether/data/PROJECT_PLAN.json`:
 - **Just right**: "Implement POST /users endpoint" -> one clear outcome
 - Each phase should produce observable value and enable Queen review
 - Minimize serial dependencies to enable parallelism
-
-## Caste Assignment Guide
-
-| Task Type | Caste |
-|-----------|-------|
-| Codebase analysis | colonizer |
-| Planning/structure | route-setter |
-| Implementation | builder |
-| Testing/validation | watcher |
-| Research/information | scout |
-| Knowledge synthesis | architect |
-| database, sql, migrations | scout (research) or builder (implement) |
-| frontend, react, css, html | builder |
-| backend, api, rest, websocket | builder |
-| security, auth, encryption | watcher (audit) or scout (research) |
-| testing, unit, integration, e2e | watcher |
-| performance, caching, profiling | watcher |
-| documentation, coordination | architect |
+- Do NOT assign castes to tasks — the colony self-organizes at execution time
 
 ## You Can Spawn Other Ants
 

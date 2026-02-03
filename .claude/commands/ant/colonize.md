@@ -3,188 +3,163 @@ name: ant:colonize
 description: Colonize codebase - analyze existing code before starting project
 ---
 
-<objective>
-Analyze existing codebase to understand:
-- Tech stack and technologies used
-- Architecture patterns and design decisions
-- Code conventions and patterns
-- Dependencies and integrations
-- Known issues and anti-patterns
+You are the **Queen**. Your only job is to emit a signal and let the colony explore.
 
-Colony uses this context to generate code that matches your existing patterns.
-</objective>
+## Instructions
 
-<process>
-You are the **Queen Ant Colony** mobilizing Worker Ants to analyze the codebase.
+### Step 1: Read State
 
-## Step 1: Emit Init Pheromone
-First, acknowledge the colonization request and emit an init pheromone:
+Use the Read tool to read these files (in parallel):
+- `.aether/data/COLONY_STATE.json`
+- `.aether/data/pheromones.json`
+
+If `COLONY_STATE.json` has `goal: null`, output:
+
 ```
-🐜 Queen Ant Colony - Colonize Codebase
+No colony initialized. Run /ant:init "<goal>" first.
 
-Emitting INIT pheromone...
-Colony mobilizing Worker Ants...
+Colonization works best when the colony knows the goal,
+so it can focus analysis on what's relevant.
 ```
 
-## Step 2: Spawn Worker Ants in Parallel
-Use the Task tool to spawn specialist Worker Ants that analyze different aspects:
+Stop here.
 
-### Spawn 1: Colonizer Agent
+### Step 2: Compute Active Pheromones
+
+For each signal in `pheromones.json`:
+1. If `half_life_seconds` is null, persists at original strength
+2. Otherwise: `current_strength = strength * e^(-0.693 * elapsed_seconds / half_life_seconds)`
+3. Filter out signals where `current_strength < 0.05`
+
+Format:
+
 ```
-Task: Colonizer Agent - Explore codebase structure
+ACTIVE PHEROMONES:
+- {TYPE} (strength {current_strength:.2f}): "{content}"
+```
 
-You are the Colonizer Ant. Explore the codebase to understand:
+### Step 3: Update State
+
+Use Write tool to update `COLONY_STATE.json`:
+- Set `state` to `"EXECUTING"`
+- Set `workers.colonizer` to `"active"`
+
+### Step 4: Spawn One Ant
+
+Do NOT hardcode which castes to spawn. Let the colony self-organize.
+
+Use the **Task tool** with `subagent_type="general-purpose"`:
+
+```
+You are an ant in the Aether Queen Ant Colony.
+
+The Queen has signalled: colonize the codebase.
+
+--- COLONY CONTEXT ---
+
+Goal: "{goal}"
+
+--- ACTIVE PHEROMONES ---
+{pheromone block from Step 2}
+
+Respond to REDIRECT pheromones as hard constraints (things to avoid).
+Respond to FOCUS pheromones by prioritizing those areas.
+
+--- HOW THE COLONY WORKS ---
+
+You are autonomous. There is no orchestrator. You decide how to explore this codebase.
+
+If you need help, spawn specialists. Read their spec before spawning:
+  .aether/workers/colonizer-ant.md  — Explore/index codebase
+  .aether/workers/route-setter-ant.md — Plan and break down work
+  .aether/workers/builder-ant.md — Implement code, run commands
+  .aether/workers/watcher-ant.md — Validate, test, quality check
+  .aether/workers/scout-ant.md — Research, find information
+  .aether/workers/architect-ant.md — Synthesize knowledge, extract patterns
+
+To spawn another ant:
+1. Read their spec file with the Read tool
+2. Use the Task tool (subagent_type="general-purpose") with prompt containing:
+   --- WORKER SPEC ---
+   {full contents of the spec file}
+   --- ACTIVE PHEROMONES ---
+   {copy the pheromone block above}
+   --- TASK ---
+   {what you need them to do}
+
+Spawned ants can spawn further ants. Max depth 3, max 5 sub-ants per ant.
+
+--- YOUR MISSION ---
+
+Understand this codebase. Analyze:
 1. Directory structure and file organization
 2. Main entry points and key modules
-3. Dependency relationships between components
-4. Important patterns or architectural decisions
+3. Architecture patterns and design decisions
+4. Tech stack (languages, frameworks, dependencies)
+5. Code conventions (naming, formatting, style)
+6. Dependencies between components
 
-Focus on understanding the STRUCTURE and ORGANIZATION.
-Return your findings as a structured summary.
+Focus on what's relevant to the colony goal.
+
+Use Glob, Grep, and Read tools to explore. Report your findings.
 ```
 
-### Spawn 2: Scout Agent
-```
-Task: Scout Agent - Identify technologies
+### Step 5: Persist Findings
 
-You are the Scout Ant. Identify:
-1. Programming languages and their versions
-2. Frameworks and libraries used
-3. Database technologies
-4. Testing frameworks
-5. Build tools and dev dependencies
+After the ant returns, save its findings so they survive the session.
 
-Focus on understanding the TECH STACK.
-Return your findings as a structured summary.
-```
+Read `.aether/data/memory.json`. Append a decision record to the `decisions` array:
 
-### Spawn 3: Route-setter Agent
-```
-Task: Route-setter Agent - Analyze architecture
-
-You are the Route-setter Ant. Analyze:
-1. Architectural patterns (MVC, layered, microservices, etc.)
-2. Design patterns used (Factory, Repository, etc.)
-3. Code organization principles
-4. Integration approaches
-
-Focus on understanding the ARCHITECTURE.
-Return your findings as a structured summary.
+```json
+{
+  "id": "dec_<unix_timestamp>_<4_random_hex>",
+  "type": "colonization",
+  "content": "<summarize the ant's key findings: project type, tech stack, architecture patterns, conventions, and recommendations — keep under 500 chars>",
+  "context": "Codebase colonized for goal: <goal>",
+  "phase": 0,
+  "timestamp": "<ISO-8601 UTC>"
+}
 ```
 
-### Spawn 4: Architect Agent
-```
-Task: Architect Agent - Extract patterns
+If the `decisions` array exceeds 30 entries, remove the oldest entries to keep only 30.
 
-You are the Architect Ant. Extract and synthesize:
-1. Code conventions (naming, formatting, style)
-2. Common patterns used throughout codebase
-3. Best practices that seem to be followed
-4. Any anti-patterns to avoid
+Use the Write tool to write the updated memory.json.
 
-Focus on understanding CONVENTIONS and PATTERNS.
-Return your findings as a structured summary.
-```
+**Write Event:** Read `.aether/data/events.json`. Append to the `events` array:
 
-### Spawn 5: Watcher Agent
-```
-Task: Watcher Agent - Find issues
-
-You are the Watcher Ant. Identify:
-1. Common errors or issues in the code
-2. Missing tests or test coverage gaps
-3. Code quality concerns
-4. Security or performance issues
-
-Focus on understanding ISSUES and QUALITY.
-Return your findings as a structured summary.
+```json
+{
+  "id": "evt_<unix_timestamp>_<4_random_hex>",
+  "type": "codebase_colonized",
+  "source": "colonize",
+  "content": "Codebase colonized: <project type>, <primary language/framework>",
+  "timestamp": "<ISO-8601 UTC>"
+}
 ```
 
-## Step 3: Synthesize Results
-After all Worker Ants complete, synthesize their findings into a comprehensive codebase analysis.
+If the `events` array exceeds 100 entries, remove the oldest entries to keep only 100. Write the updated events.json.
 
-## Step 4: Store in Memory
-Store the colonization results in triple-layer memory:
-- Add to working memory with type "colonization"
-- Store patterns in long-term memory
-- Update colony state
+### Step 6: Display Results
 
-## Step 5: Report Results
-Present findings in this format:
+Display the ant's findings:
 
 ```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✅ CODEBASE COLONIZED
+CODEBASE COLONIZED
 
-TECHNOLOGIES:
-  [List from Scout Agent]
+  Goal: "{goal}"
 
-ARCHITECTURE:
-  [List from Route-setter Agent]
+{ant's report — structure, tech stack, architecture, conventions, recommendations}
 
-PATTERNS:
-  [List from Architect Agent]
+  Findings saved to memory.json
 
-CONVENTIONS:
-  [List from Architect Agent]
-
-ISSUES FOUND:
-  [List from Watcher Agent]
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-✨ COMMAND COMPLETE
-
-Next: /ant:init "<your goal>" to start building with this context
+Next:
+  /ant:plan              Generate project plan
+  /ant:focus "<area>"    Focus on specific area
+  /ant:redirect "<pat>"  Warn against patterns found
 ```
 
-</process>
+### Step 7: Reset State
 
-<context>
-Aether Worker Ant Castes (unique to this system):
-- Colonizer: codebase_colonization, semantic_indexing, dependency_mapping, pattern_detection
-- Researcher: web_search, documentation_lookup, context_gathering
-- Planner: goal_decomposition, phase_planning, dependency_analysis
-- Synthesizer: memory_compression, pattern_extraction, knowledge_synthesis
-- Verifier: test_generation, validation, quality_checks
-
-Aether Spawning System (unique autonomous recruitment):
-- Use Task tool to create specialist agents
-- Inherit context: current goal, pheromone signals, constraints
-- Resource budget: max 10 subagents, max depth 3
-- Workers spawn Workers autonomously (no Queen approval needed)
-</context>
-
-<reference>
-# Autonomous Spawning Logic
-
-When spawning specialists, use this logic:
-
-1. **Detect Capability Gap**: Task requires capability you don't have
-2. **Analyze Requirements**: Semantic analysis of task description
-3. **Determine Specialist Type**: Map gaps to specialist types
-4. **Spawn Specialist**: Use Task tool with inherited context
-
-**Capability Taxonomy**:
-- Technical: database, frontend, backend, devops, security, testing, performance
-- Domain: auth, data, ui
-- Skill: analysis, planning, communication
-
-**Specialist Mapping**:
-- database/sql → database_specialist
-- react/vue/angular → frontend_specialist
-- api/websocket → api_specialist
-- authentication/jwt → security_specialist
-- testing/unit → test_specialist
-- performance → optimization_specialist
-</reference>
-
-<allowed-tools>
-Read
-Glob
-Grep
-Bash
-Task
-Write
-AskUserQuestion
-</allowed-tools>
+Use Write tool to update `COLONY_STATE.json`:
+- Set `state` to `"READY"`
+- Set `workers.colonizer` to `"idle"`
