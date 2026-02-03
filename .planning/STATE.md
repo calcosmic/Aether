@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-02-03)
 
 **Core value:** Autonomous Emergence -- Worker Ants autonomously spawn Worker Ants; Queen provides signals not commands
-**Current focus:** v4.0 Hybrid Foundation -- Phase 20: Utility Modules (plan 01 complete)
+**Current focus:** v4.0 Hybrid Foundation -- Phase 20: Utility Modules (plan 02 complete)
 
 ## Current Position
 
 Milestone: v4.0 Hybrid Foundation
 Phase: 20 of 21 (Utility Modules)
-Plan: 1 of 4 complete
+Plan: 2 of 4 complete
 Status: In progress
-Last activity: 2026-02-03 -- Completed 20-01-PLAN.md (pheromone math subcommands)
+Last activity: 2026-02-03 -- Completed 20-02-PLAN.md (state validation subcommands)
 
-Progress: [########............] 44% (v4.0: 4/9 plans)
+Progress: [#########...........] 56% (v4.0: 5/9 plans)
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -25,7 +25,7 @@ Progress: [########............] 44% (v4.0: 4/9 plans)
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 65 (44 v1.0 + 6 v2.0 + 11 v3.0 + 4 v4.0)
+- Total plans completed: 66 (44 v1.0 + 6 v2.0 + 11 v3.0 + 5 v4.0)
 - Average duration: ~20 min
 - Total execution time: ~18 hours
 
@@ -42,7 +42,7 @@ Progress: [########............] 44% (v4.0: 4/9 plans)
 | 16 (v3.0) | 3/3 | 6min | 2min |
 | 17 (v3.0) | 3/3 | 4min | 1min |
 | 19 (v4.0) | 3/3 | 4min | 1min |
-| 20 (v4.0) | 1/4 | 2min | 2min |
+| 20 (v4.0) | 2/4 | 4min | 2min |
 
 **Recent Trend:**
 - v3.0 averaged ~1-2 min per plan (prompt-only changes)
@@ -50,6 +50,7 @@ Progress: [########............] 44% (v4.0: 4/9 plans)
 - v4.0 plan 02: 1 min (backup dir fix, pheromone cleanup, state validation)
 - v4.0 plan 03: 2 min (aether-utils.sh scaffold + colony docs, FIX-11)
 - v4.0 plan 04 (20-01): 2 min (5 pheromone math subcommands)
+- v4.0 plan 05 (20-02): 2 min (6 state validation subcommands)
 
 *Updated after each plan completion*
 
@@ -96,6 +97,8 @@ Progress: [########............] 44% (v4.0: 4/9 plans)
 - Pheromone auto-emit templates get id field using auto_<unix_timestamp>_<4_random_hex> pattern
 - Initialize LOCK_ACQUIRED/CURRENT_LOCK before sourcing file-lock.sh under set -u
 - Bash `local` keyword only valid inside functions; case branches use plain variable assignment
+- Inline jq type-checking for state validation (no shared helper function, more compact)
+- validate-state all uses recursive self-invocation for each target file
 
 ### Pending Todos
 
@@ -117,9 +120,9 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-03
-Stopped at: Completed 20-01-PLAN.md (pheromone math). Ready for 20-02 (state validation).
+Stopped at: Completed 20-02-PLAN.md (state validation). Ready for 20-03 (memory operations).
 Resume file: None
 
 ---
 
-*State updated: 2026-02-03 after 20-01 completion (5 pheromone subcommands, all verified)*
+*State updated: 2026-02-03 after 20-02 completion (6 validate-state subcommands, all verified)*
