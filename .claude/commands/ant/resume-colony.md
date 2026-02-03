@@ -27,10 +27,14 @@ Stop here.
 
 ### Step 2: Compute Pheromone Decay
 
-For each signal in `pheromones.json`, compute current strength:
-1. If `half_life_seconds` is null -> persists at original strength
-2. Otherwise: `current_strength = strength * e^(-0.693 * elapsed_seconds / half_life_seconds)`
-3. Note which signals are still active (strength >= 0.05)
+Use the Bash tool to run:
+```
+bash .aether/aether-utils.sh pheromone-batch
+```
+
+This returns JSON: `{"ok":true,"result":[...signals with current_strength...]}`. Parse the `result` array. Signals with `current_strength >= 0.05` are still active.
+
+If the command fails, treat as "no active pheromones."
 
 ### Step 3: Display Restored State
 

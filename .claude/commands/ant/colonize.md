@@ -26,10 +26,14 @@ Stop here.
 
 ### Step 2: Compute Active Pheromones
 
-For each signal in `pheromones.json`:
-1. If `half_life_seconds` is null, persists at original strength
-2. Otherwise: `current_strength = strength * e^(-0.693 * elapsed_seconds / half_life_seconds)`
-3. Filter out signals where `current_strength < 0.05`
+Use the Bash tool to run:
+```
+bash .aether/aether-utils.sh pheromone-batch
+```
+
+This returns JSON: `{"ok":true,"result":[...signals with current_strength...]}`. Parse the `result` array. Filter out signals where `current_strength < 0.05`.
+
+If the command fails, treat as "no active pheromones."
 
 Format:
 
