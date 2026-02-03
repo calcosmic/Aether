@@ -38,17 +38,25 @@ Continue displaying status for the files that are valid. Skip sections for corru
 
 ### Step 2: Compute Pheromone Decay
 
-For each signal in `pheromones.json`, compute current strength:
+Use the Bash tool to run:
+```
+bash .aether/aether-utils.sh pheromone-batch
+```
 
-1. If `half_life_seconds` is null -> signal persists at original strength
-2. Otherwise: `current_strength = strength * e^(-0.693 * elapsed_seconds / half_life_seconds)`
-3. Mark signals below 0.05 strength as expired
+This returns JSON: `{"ok":true,"result":[...signals with current_strength...]}`. Parse the `result` array. Each signal object includes a `current_strength` field with the decayed value. Signals with `current_strength < 0.05` are effectively expired.
+
+If the command fails (file not found, invalid JSON), treat as "no active pheromones."
 
 ### Step 2.5: Clean Expired Pheromones
 
-If any signals were marked as expired in Step 2 (current_strength < 0.05), remove them from the `signals` array and use the Write tool to write the cleaned `pheromones.json` back to disk. This ensures expired signals are garbage-collected during normal status checks.
+If any signals from Step 2 had `current_strength < 0.05`, use the Bash tool to run:
+```
+bash .aether/aether-utils.sh pheromone-cleanup
+```
 
-If no signals are expired, skip this step (do not rewrite the file unnecessarily).
+This removes expired signals from `pheromones.json` and returns `{"ok":true,"result":{"removed":N,"remaining":N}}`.
+
+If no signals are expired, skip this step.
 
 ### Step 3: Display Status
 
