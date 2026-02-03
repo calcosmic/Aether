@@ -1,6 +1,0 @@
-[
-  {"watcher": "security", "decision": "APPROVE", "weight": 1.0, "issues": [], "timestamp": "2026-02-01T20:00:00Z"},
-  {"watcher": "performance", "decision": "APPROVE", "weight": 1.0, "issues": [], "timestamp": "2026-02-01T20:00:00Z"},
-  {"watcher": "quality", "decision": "APPROVE", "weight": 1.0, "issues": [], "timestamp": "2026-02-01T20:00:00Z"},
-  {"watcher": "test_coverage", "decision": "REJECT", "weight": 1.0, "issues": [], "timestamp": "2026-02-01T20:00:00Z"}
-]
