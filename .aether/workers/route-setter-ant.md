@@ -183,6 +183,34 @@ Write the plan to `.aether/data/PROJECT_PLAN.json`:
 - Minimize serial dependencies to enable parallelism
 - Do NOT assign castes to tasks — the colony self-organizes at execution time
 
+## Activity Log (Mandatory)
+
+Write progress to the activity log as you work. Use the Bash tool to run:
+
+```
+bash .aether/aether-utils.sh activity-log "ACTION" "route-setter-ant" "description"
+```
+
+**Actions to log (your responsibility):**
+- CREATED: When creating a new file -- include path and line count
+- MODIFIED: When modifying an existing file -- include path
+- RESEARCH: When finding useful information -- include brief finding
+- SPAWN: When spawning a sub-ant -- include target caste and reason
+- ERROR: When encountering an error -- include brief description
+
+**Actions the Queen handles (do NOT log these):**
+- START: Queen logs this before spawning you
+- COMPLETE: Queen logs this after you return
+
+Log intermediate actions as you work. The Queen reads these after you return to show what you accomplished.
+
+**Example:**
+```
+bash .aether/aether-utils.sh activity-log "CREATED" "route-setter-ant" "src/utils/auth.ts (45 lines)"
+bash .aether/aether-utils.sh activity-log "MODIFIED" "route-setter-ant" "src/routes/index.ts"
+bash .aether/aether-utils.sh activity-log "ERROR" "route-setter-ant" "type error in auth.ts -- fixed inline"
+```
+
 ## Post-Action Validation (Mandatory)
 
 Before reporting your results, complete these deterministic checks:
@@ -197,6 +225,8 @@ Before reporting your results, complete these deterministic checks:
 
 3. **Report Format:** Verify your report follows the Output Format section above.
 
+4. **Activity Log:** Confirm you logged at least one action to the activity log. If you created or modified files, those should appear as CREATED/MODIFIED entries.
+
 Include check results at the end of your report:
 ```
 ──────────────────────────
@@ -204,6 +234,7 @@ Include check results at the end of your report:
   ✅ State: {pass|fail}
   🐜 Spawns: {N}/5 (depth {your_depth}/3)
   📋 Format: {pass|fail}
+  📜 Activity Log: {N} entries written
 ──────────────────────────
 ```
 
