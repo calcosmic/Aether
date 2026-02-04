@@ -15,9 +15,9 @@ Requirements for v4.3 Live Visibility & Auto-Learning. Each maps to roadmap phas
 
 ### Auto-Learning
 
-- [ ] **LEARN-01**: build.md Step 7 automatically extracts phase learnings from completed work (errors, events, task outcomes) and writes to memory.json, using the same extraction logic currently in continue.md
-- [ ] **LEARN-02**: build.md Step 7 auto-emits FEEDBACK pheromone summarizing what worked and what didn't, validated via pheromone-validate before writing
-- [ ] **LEARN-03**: continue.md skips learning extraction if learnings were already extracted by build (detects via event log or memory.json timestamp)
+- [x] **LEARN-01**: build.md Step 7 automatically extracts phase learnings from completed work (errors, events, task outcomes) and writes to memory.json, using the same extraction logic currently in continue.md
+- [x] **LEARN-02**: build.md Step 7 auto-emits FEEDBACK pheromone summarizing what worked and what didn't, validated via pheromone-validate before writing
+- [x] **LEARN-03**: continue.md skips learning extraction if learnings were already extracted by build (detects via event log or memory.json timestamp)
 
 ## v2 Requirements
 
@@ -46,9 +46,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | VIS-01 | Phase 25 | Complete |
 | VIS-02 | Phase 25 | Complete |
 | VIS-03 | Phase 25 | Complete |
-| LEARN-01 | Phase 26 | Pending |
-| LEARN-02 | Phase 26 | Pending |
-| LEARN-03 | Phase 26 | Pending |
+| LEARN-01 | Phase 26 | Complete |
+| LEARN-02 | Phase 26 | Complete |
+| LEARN-03 | Phase 26 | Complete |
 
 **Coverage:**
 - v1 requirements: 6 total
@@ -57,4 +57,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-04*
-*Last updated: 2026-02-04 after Phase 25 completion*
+*Last updated: 2026-02-04 after Phase 26 completion*
