@@ -22,7 +22,7 @@ Autonomous agent spawning is not unique to Aether — systems like AutoGen (ADAS
 
 **Stigmergic Emergence**: Worker Ants detect capability gaps and spawn specialists through pheromone-guided coordination; pure emergence within structured phases; Queen provides signals not commands.
 
-If this works, everything else follows. If this fails, nothing else matters. Note: the system has not yet been run end-to-end on a real project — components are tested individually but colony self-organization is unproven in practice.
+If this works, everything else follows. If this fails, nothing else matters. The system has been run end-to-end on a real project (filmstrip packaging, 2026-02-04) — colony self-organization works but revealed 32 field notes of improvements needed.
 
 ## Requirements
 
@@ -84,7 +84,44 @@ If this works, everything else follows. If this fails, nothing else matters. Not
 
 ### Active
 
-(None — next milestone requirements TBD)
+**Current Milestone: v4.4 Colony Hardening & Real-World Readiness**
+
+**Goal:** Address all 23 actionable findings from the first real-world test, fixing bugs, improving colony intelligence, adding new capabilities, and resolving open design questions.
+
+**Target features:**
+
+*Bug fixes:*
+- [ ] Fix pheromone decay math (FOCUS strength growing instead of decaying)
+- [ ] Add phase attribution to error tracking (errors.json missing phase field)
+- [ ] Fix activity log append vs overwrite (history lost between phases)
+- [ ] Wire decision logging during execution phases (only Phase 0 entries recorded)
+
+*Critical UX:*
+- [ ] Context clear prompting after every command that completes meaningful work
+- [ ] Auto-continue mode to reduce /ant:continue friction between phases
+
+*Colony intelligence:*
+- [ ] Multi-ant colonization (multiple ants review codebase independently, compare notes)
+- [ ] Adaptive caste usage based on project complexity (lean mode for simple tasks)
+- [ ] Phase Lead auto-approval for simple/predetermined phases
+- [ ] Aggressive wave parallelism for independent tasks
+- [ ] Same-file conflict prevention (tasks touching same file go to same worker)
+- [ ] Watcher scoring rubric with meaningful granularity (not flat 8/10)
+- [ ] Tech debt report generation at project completion
+- [ ] Colony overhead scaling (lightweight mode for small projects)
+
+*New capabilities:*
+- [ ] Animated build indicators (spinners, moving dots, color per caste)
+- [ ] Pheromone recommendations to user at appropriate moments
+- [ ] Colonizer visual output (emojis/progress markers missing in colonize)
+- [ ] Pheromone-first flow (colonize → pheromone injection → plan)
+
+*Design decisions → implement:*
+- [ ] Auto-spawned reviewer/debugger ants at appropriate lifecycle stages
+- [ ] Per-project vs global learning tiers with promotion mechanism
+- [ ] Organizer/archivist ant for stale files, dead code, orphaned configs
+- [ ] Recursive ant spawning (ants can delegate to sub-ants with depth limits)
+- [ ] Pheromone user documentation (when/why to use each signal type)
 
 ### Out of Scope
 
@@ -101,10 +138,12 @@ If this works, everything else follows. If this fails, nothing else matters. Not
 - **Code for reasoning/orchestration** — Prompts handle decisions; code handles math
 - **GUI/web dashboard** — CLI-only, Claude Code native
 - **Persistent daemon processes** — Against Claude-native architecture
+- **NPM packaging/distribution** — Deferred until core system stabilizes (field note 16)
+- **Deployment model for external repos** — Deferred until core system stabilizes (field note 6)
 
 ## Context
 
-### Current State (post v4.3 — 2026-02-04)
+### Current State (post v4.3, pre v4.4 — 2026-02-04)
 
 **What exists (working):**
 - 12 commands as Claude Code skill prompts (init, plan, build, status, phase, continue, focus, redirect, feedback, pause-colony, resume-colony, colonize, ant)
@@ -118,9 +157,20 @@ If this works, everything else follows. If this fails, nothing else matters. Not
 - Spawn enforcement gates in all 6 worker specs
 - Pheromone validation in continue.md
 
-**Known issues:**
+**Known issues (from v4.3 + field test):**
 - continue.md Step 6 writes learnings_extracted event unconditionally even when Step 4 was skipped (cosmetic)
 - continue.md Step 8 display template lacks skip-case guidance (LLM handles contextually)
+- Pheromone decay math broken — FOCUS strength grows instead of decaying (field note 17)
+- Error tracking missing phase attribution (field note 18)
+- Activity log overwrites instead of appending across phases (field note 19)
+- Decision log unused during execution phases (field note 20)
+
+**First real-world test results (2026-02-04):**
+- Tested on filmstrip packaging project — 5 phases, 21 tasks, 100% completion rate
+- Found real symlink bug via E2E testing phase
+- Learning propagation worked cross-phase
+- REDIRECT pheromone respected across all phases
+- 32 field notes captured in `.planning/v5-FIELD-NOTES.md`
 
 ### Background
 
@@ -167,4 +217,4 @@ Aether is based on **383,000+ words of research** across 25 documents by Ralph (
 
 ---
 
-*Last updated: 2026-02-04 after v4.3 milestone*
+*Last updated: 2026-02-04 after v4.4 milestone initialization*
