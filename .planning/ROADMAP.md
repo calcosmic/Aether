@@ -123,7 +123,7 @@ Plans:
 | Phase | Name | Plans | Status |
 |-------|------|-------|--------|
 | 27 | Bug Fixes & Safety Foundation | 2 plans | ✓ Complete |
-| 28 | UX & Friction Reduction | 2 plans | Planned |
+| 28 | UX & Friction Reduction | 2 plans | ✓ Complete |
 | 29 | Colony Intelligence & Quality Signals | TBD | Pending |
 | 30 | Automation & New Capabilities | TBD | Pending |
 | 31 | Architecture Evolution | TBD | Pending |
@@ -184,4 +184,4 @@ Phases with standard patterns (skip research):
 ---
 
 _Roadmap created: 2026-02-04_
-_Last updated: 2026-02-04 — Phase 28 planned_
+_Last updated: 2026-02-04 — Phase 28 complete_

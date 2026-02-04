@@ -16,8 +16,8 @@ Requirements for v4.4 Colony Hardening & Real-World Readiness. Each maps to road
 
 ### Critical UX
 
-- [ ] **UX-01**: Every command that completes meaningful work prompts user with "safe to /clear" after verifying state persistence
-- [ ] **UX-02**: Auto-continue mode (`/ant:continue --all`) runs remaining phases without manual approval at each boundary
+- [x] **UX-01**: Every command that completes meaningful work prompts user with "safe to /clear" after verifying state persistence
+- [x] **UX-02**: Auto-continue mode (`/ant:continue --all`) runs remaining phases without manual approval at each boundary
 
 ### Colony Intelligence
 
@@ -45,7 +45,7 @@ Requirements for v4.4 Colony Hardening & Real-World Readiness. Each maps to road
 
 ### Flow & Documentation
 
-- [ ] **FLOW-01**: Pheromone-first flow — colonize suggests pheromone injection before planning
+- [x] **FLOW-01**: Pheromone-first flow — colonize suggests pheromone injection before planning
 - [ ] **FLOW-02**: Organizer/archivist ant reports stale files, dead code, orphaned configs (report-only, conservative)
 - [ ] **FLOW-03**: Pheromone user documentation — when/why to use FOCUS, REDIRECT, FEEDBACK with practical scenarios
 
@@ -89,9 +89,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BUG-03 | Phase 27 | Complete |
 | BUG-04 | Phase 27 | Complete |
 | INT-02 | Phase 27 | Complete |
-| UX-01 | Phase 28 | Pending |
-| UX-02 | Phase 28 | Pending |
-| FLOW-01 | Phase 28 | Pending |
+| UX-01 | Phase 28 | Complete |
+| UX-02 | Phase 28 | Complete |
+| FLOW-01 | Phase 28 | Complete |
 | INT-01 | Phase 29 | Pending |
 | INT-03 | Phase 29 | Pending |
 | INT-04 | Phase 29 | Pending |
@@ -116,4 +116,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-04*
-*Last updated: 2026-02-04 — Phase 27 requirements (BUG-01, BUG-02, BUG-03, BUG-04, INT-02) marked Complete*
+*Last updated: 2026-02-04 — Phase 28 requirements (UX-01, UX-02, FLOW-01) marked Complete*
