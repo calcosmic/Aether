@@ -516,7 +516,85 @@ Use the Write tool to write the updated events.json.
 
 Use the Write tool to write the updated COLONY_STATE.json (this write can be combined with the state update already in Step 6).
 
-### Step 7: Display Results
+### Step 7: Extract Learnings, Emit Pheromones, Display Results
+
+#### Step 7a: Extract Phase Learnings
+
+Read `.aether/data/memory.json`. The Queen already has in memory from prior steps: worker_results (Step 5c), watcher_report (Step 5.5), errors.json and events.json (Step 6), and PROJECT_PLAN.json task outcomes (Step 6). No redundant file reads needed beyond memory.json.
+
+Synthesize actionable learnings from worker outcomes, watcher report, errors, and events. Each learning MUST be attributed to the worker/caste that produced it (e.g., "builder-ant: bcrypt 12 rounds caused 800ms delay"). Capture both successes AND failures. Even clean phases get learnings ("X approach worked well").
+
+**Quality guard:** Each learning must reference a specific event, error, or outcome. Generic learnings like "Phase completed successfully" are not acceptable.
+
+Append a learning entry to memory.json `phase_learnings` array:
+
+```json
+{
+  "id": "learn_<unix_timestamp>_<4_random_hex>",
+  "phase": <phase_number>,
+  "phase_name": "<name>",
+  "learnings": ["<caste>: <specific learning>", ...],
+  "errors_encountered": <count>,
+  "timestamp": "<ISO-8601 UTC>"
+}
+```
+
+Write the updated memory.json. Then run:
+```
+bash .aether/aether-utils.sh memory-compress
+```
+
+If memory-compress reports `compressed:true`, note the before/after learning count for display in Step 7e so eviction is visible to the user.
+
+Note: spawn_outcomes already updated in Step 6 -- do NOT update them here.
+
+#### Step 7b: Emit FEEDBACK Pheromone
+
+Read `.aether/data/pheromones.json` (if not already in memory). Always emit a FEEDBACK pheromone with balanced summary of what worked + what failed. Include the actual learnings in the pheromone body so colony can read them without checking memory.json.
+
+```json
+{
+  "id": "auto_<unix_timestamp>_<4_random_hex>",
+  "type": "FEEDBACK",
+  "content": "<balanced summary>",
+  "strength": 0.5,
+  "half_life_seconds": 21600,
+  "created_at": "<ISO-8601 UTC>",
+  "source": "auto:build",
+  "auto": true
+}
+```
+
+Validate via: `bash .aether/aether-utils.sh pheromone-validate "<content>"`
+- If pass:false -> skip pheromone, log `pheromone_rejected` event
+- If pass:true -> append to pheromones.json
+- If command fails -> append anyway (fail-open)
+
+Conditionally emit a REDIRECT pheromone if `errors.json` has `flagged_patterns` entries related to this phase (same logic as continue.md Step 4.5). Use `source: "auto:build"`.
+
+Log `pheromone_auto_emitted` event for each emitted pheromone (source: "build").
+
+#### Step 7c: Clean Expired Pheromones
+
+Run: `bash .aether/aether-utils.sh pheromone-cleanup`
+
+#### Step 7d: Write Auto-Learning Flag Event
+
+Append to events.json:
+
+```json
+{
+  "id": "evt_<unix_timestamp>_<4_random_hex>",
+  "type": "auto_learnings_extracted",
+  "source": "build",
+  "content": "Auto-extracted <N> learnings from Phase <id>: <name>",
+  "timestamp": "<ISO-8601 UTC>"
+}
+```
+
+If events array exceeds 100 entries, trim oldest to 100. Write updated events.json and pheromones.json.
+
+#### Step 7e: Display Results
 
 Show step progress:
 
@@ -531,7 +609,11 @@ Show step progress:
   ✓ Step 5c: Execute Workers
   ✓ Step 5.5: Watcher Verification
   ✓ Step 6: Record Outcome
-  ✓ Step 7: Display Results
+  ✓ Step 7a: Extract Phase Learnings
+  ✓ Step 7b: Emit Pheromones
+  ✓ Step 7c: Clean Expired Pheromones
+  ✓ Step 7d: Write Events
+  ✓ Step 7e: Display Results
 ```
 
 Then display:
@@ -563,11 +645,18 @@ Phase {id}: {name}
     🔴 Critical: {critical_count}  🟠 High: {high_count}  🟡 Medium: {medium_count}  ⚪ Low: {low_count}
   {for each issue: "  {SEVERITY}: {description}"}
 
-⚠️ IMPORTANT: Run /ant:continue to extract learnings before building the next phase.
-Skipping /ant:continue means phase learnings are lost and the feedback loop breaks.
+📚 Learnings Extracted:
+  - <learning 1>
+  - <learning 2>
+  {if memory-compress trimmed: "⚠️ Memory compressed: <before> -> <after> learnings (oldest evicted)"}
+
+🧪 Auto-Emitted Pheromones:
+  FEEDBACK (0.5, 6h): "<first 80 chars>"
+  {if REDIRECT emitted:}
+  REDIRECT (0.9, 24h): "<first 80 chars>"
 
 Next:
-  /ant:continue            Extract learnings and advance (recommended)
+  /ant:continue            Advance to next phase
   /ant:feedback "<note>"   Give feedback first
   /ant:status              View full colony status
 ```
