@@ -33,9 +33,9 @@ v4.3 addresses two gaps found during codebase analysis: (1) workers output progr
   5. Activity log is cleared at phase start to prevent stale data
 **Plans:** 3 plans
 Plans:
-- [ ] 25-01-PLAN.md — Activity log subcommands in aether-utils.sh
-- [ ] 25-02-PLAN.md — Activity log instructions in all 6 worker specs
-- [ ] 25-03-PLAN.md — Restructure build.md: Phase Lead as planner, Queen as executor
+- [x] 25-01-PLAN.md — Activity log subcommands in aether-utils.sh
+- [x] 25-02-PLAN.md — Activity log instructions in all 6 worker specs
+- [x] 25-03-PLAN.md — Restructure build.md: Phase Lead as planner, Queen as executor
 
 ### Phase 26: Auto-Learning
 **Goal**: Phase learnings are automatically captured at the end of build execution — no manual `/ant:continue` required for learning extraction

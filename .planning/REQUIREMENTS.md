@@ -9,9 +9,9 @@ Requirements for v4.3 Live Visibility & Auto-Learning. Each maps to roadmap phas
 
 ### Live Visibility
 
-- [ ] **VIS-01**: Workers write structured progress lines to `.aether/data/activity.log` as they work (task start, file create/modify, task complete, spawn events)
-- [ ] **VIS-02**: build.md orchestrates worker spawns sequentially through the Queen rather than delegating all spawning to the Phase Lead, so the user sees incremental results between each worker
-- [ ] **VIS-03**: Queen displays each worker's activity log output and result summary after each worker returns, before spawning the next
+- [x] **VIS-01**: Workers write structured progress lines to `.aether/data/activity.log` as they work (task start, file create/modify, task complete, spawn events)
+- [x] **VIS-02**: build.md orchestrates worker spawns sequentially through the Queen rather than delegating all spawning to the Phase Lead, so the user sees incremental results between each worker
+- [x] **VIS-03**: Queen displays each worker's activity log output and result summary after each worker returns, before spawning the next
 
 ### Auto-Learning
 
@@ -43,9 +43,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| VIS-01 | Phase 25 | Pending |
-| VIS-02 | Phase 25 | Pending |
-| VIS-03 | Phase 25 | Pending |
+| VIS-01 | Phase 25 | Complete |
+| VIS-02 | Phase 25 | Complete |
+| VIS-03 | Phase 25 | Complete |
 | LEARN-01 | Phase 26 | Pending |
 | LEARN-02 | Phase 26 | Pending |
 | LEARN-03 | Phase 26 | Pending |
@@ -57,4 +57,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-04*
-*Last updated: 2026-02-04 after initial definition*
+*Last updated: 2026-02-04 after Phase 25 completion*
