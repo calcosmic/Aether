@@ -37,9 +37,11 @@ Plans:
 **Goal**: Users can run multi-phase colony builds without losing state on context clear and without manually approving every phase boundary
 **Depends on**: Phase 27
 **Requirements**: UX-01, UX-02, FLOW-01
+**Plans:** 2 plans
 
 Plans:
-- [ ] TBD
+- [ ] 28-01-PLAN.md — Add safe-to-clear messages to build/continue/colonize and pheromone-first suggestions to colonize
+- [ ] 28-02-PLAN.md — Add auto-continue --all loop to continue.md with Task tool build delegation
 
 **Success Criteria:**
 1. After any command that completes meaningful work (/ant:build, /ant:continue, /ant:colonize), the output ends with a "safe to /clear" message confirming state has been persisted
@@ -121,7 +123,7 @@ Plans:
 | Phase | Name | Plans | Status |
 |-------|------|-------|--------|
 | 27 | Bug Fixes & Safety Foundation | 2 plans | ✓ Complete |
-| 28 | UX & Friction Reduction | TBD | Pending |
+| 28 | UX & Friction Reduction | 2 plans | Planned |
 | 29 | Colony Intelligence & Quality Signals | TBD | Pending |
 | 30 | Automation & New Capabilities | TBD | Pending |
 | 31 | Architecture Evolution | TBD | Pending |
@@ -182,4 +184,4 @@ Phases with standard patterns (skip research):
 ---
 
 _Roadmap created: 2026-02-04_
-_Last updated: 2026-02-04 — Phase 27 complete_
+_Last updated: 2026-02-04 — Phase 28 planned_
