@@ -145,7 +145,7 @@ If the `events` array exceeds 100 entries, remove the oldest entries to keep onl
 
 ### Step 6: Display Results
 
-Display the ant's findings:
+Display the ant's findings, then analyze the findings to suggest specific pheromones:
 
 ```
 👑 CODEBASE COLONIZED
@@ -156,10 +156,31 @@ Display the ant's findings:
 
   Findings saved to memory.json
 
+Suggested Pheromone Injections:
+  Based on colonization findings:
+
+  /ant:focus "<specific area identified from the ant's report>"
+    Why: <concrete reason derived from the analysis — reference actual finding>
+
+  {if the ant identified problematic patterns, anti-patterns, or risks:}
+  /ant:redirect "<specific pattern to avoid based on the ant's findings>"
+    Why: <concrete reason derived from the analysis — reference actual finding>
+
+  Skip these if you want the colony to plan without guidance.
+
 Next:
   /ant:plan              Generate project plan
-  /ant:focus "<area>"    Focus on specific area
-  /ant:redirect "<pat>"  Warn against patterns found
+  /ant:focus "<area>"    Inject focus before planning
+  /ant:redirect "<pat>"  Inject constraint before planning
+```
+
+**CRITICAL:** The pheromone suggestions MUST be derived from the ACTUAL colonizer ant report returned in Step 4. Analyze the ant's specific findings — its tech stack observations, architectural patterns, code quality issues, conventions detected — and formulate 1-2 concrete focus/redirect suggestions that reference those findings. Do NOT output generic boilerplate like "consider focusing on important areas."
+
+If the ant's report contains no clear focus areas or problematic patterns, display instead:
+
+```
+  No specific pheromone injections suggested — analysis was clean.
+  You can still inject guidance manually if you have preferences.
 ```
 
 ### Step 7: Reset State
@@ -167,3 +188,14 @@ Next:
 Use Write tool to update `COLONY_STATE.json`:
 - Set `state` to `"READY"`
 - Set `workers.colonizer` to `"idle"`
+
+### Step 8: Persistence Confirmation
+
+After resetting state in Step 7, display:
+
+```
+---
+All state persisted. Safe to /clear context if needed.
+  State: .aether/data/ (6 files validated)
+  Resume: /ant:resume-colony
+```
