@@ -43,8 +43,17 @@ EOF
     ;;
   pheromone-decay)
     [[ $# -ge 3 ]] || json_err "Usage: pheromone-decay <strength> <elapsed_seconds> <half_life>"
-    json_ok "$(jq -n --arg s "$1" --arg e "$2" --arg h "$3" \
-      '{strength: (($s|tonumber) * ((-0.693147180559945 * ($e|tonumber) / ($h|tonumber)) | exp) | . * 1000000 | round / 1000000)}')"
+    json_ok "$(jq -n --arg s "$1" --arg e "$2" --arg h "$3" '
+      ($s|tonumber) as $strength |
+      ([$e|tonumber, 0] | max) as $elapsed |
+      ($h|tonumber) as $half_life |
+      if $elapsed > ($half_life * 10) then
+        {strength: 0}
+      else
+        ($strength * ((-0.693147180559945 * $elapsed / $half_life) | exp)) as $decayed |
+        {strength: ([$decayed, $strength] | min | . * 1000000 | round / 1000000)}
+      end
+    ')"
     ;;
   pheromone-effective)
     [[ $# -ge 2 ]] || json_err "Usage: pheromone-effective <sensitivity> <strength>"
@@ -57,7 +66,14 @@ EOF
     json_ok "$(jq --arg now "$now" '.signals | map(. + {
       current_strength: (
         if .half_life_seconds == null then .strength
-        else .strength * ((-0.693147180559945 * (($now|tonumber) - (.created_at | sub("\\.[0-9]+Z$";"Z") | fromdate)) / .half_life_seconds) | exp)
+        else
+          (($now|tonumber) - (.created_at | sub("\\.[0-9]+Z$";"Z") | fromdate)) as $elapsed |
+          if $elapsed < 0 then .strength
+          elif $elapsed > (.half_life_seconds * 10) then 0
+          else
+            (.strength * ((-0.693147180559945 * $elapsed / .half_life_seconds) | exp)) as $d |
+            if $d > .strength then .strength else $d end
+          end
         end | . * 1000 | round / 1000)
     })' "$DATA_DIR/pheromones.json")" || json_err "Failed to read pheromones.json"
     ;;
@@ -67,7 +83,14 @@ EOF
     before=$(jq '.signals | length' "$DATA_DIR/pheromones.json")
     result=$(jq --arg now "$now" '.signals |= map(select(
       .half_life_seconds == null or
-      (.strength * ((-0.693147180559945 * (($now|tonumber) - (.created_at | sub("\\.[0-9]+Z$";"Z") | fromdate)) / .half_life_seconds) | exp)) >= 0.05
+      (
+        (($now|tonumber) - (.created_at | sub("\\.[0-9]+Z$";"Z") | fromdate)) as $elapsed |
+        if $elapsed < 0 then true
+        elif $elapsed > (.half_life_seconds * 10) then false
+        else
+          (.strength * ((-0.693147180559945 * $elapsed / .half_life_seconds) | exp)) >= 0.05
+        end
+      )
     ))' "$DATA_DIR/pheromones.json") || json_err "Failed to process pheromones.json"
     atomic_write "$DATA_DIR/pheromones.json" "$result"
     after=$(echo "$result" | jq '.signals | length')
