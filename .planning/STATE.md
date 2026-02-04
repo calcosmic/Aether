@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 
 Milestone: v4.4 Colony Hardening & Real-World Readiness
 Phase: 27 of 32 (Bug Fixes & Safety Foundation)
-Plan: Not yet planned
-Status: Roadmap created, awaiting phase planning
-Last activity: 2026-02-04 -- Roadmap created for v4.4
+Plan: 1 of 2 complete
+Status: In progress
+Last activity: 2026-02-04 -- Completed 27-01-PLAN.md (bug fixes: decay guards, activity log, error-add)
 
-Progress: [--------------------] 0% (v4.4: 0/6 phases)
+Progress: [##------------------] 8% (v4.4: 1/12 plans est.)
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -29,8 +29,8 @@ Progress: [--------------------] 0% (v4.4: 0/6 phases)
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 82 (44 v1.0 + 6 v2.0 + 11 v3.0 + 9 v4.0 + 4 v4.1 + 4 v4.2 + 4 v4.3)
-- Average duration: ~20 min
+- Total plans completed: 83 (44 v1.0 + 6 v2.0 + 11 v3.0 + 9 v4.0 + 4 v4.1 + 4 v4.2 + 4 v4.3 + 1 v4.4)
+- Average duration: ~19 min
 - Total execution time: ~19 hours
 
 ## Accumulated Context
@@ -38,6 +38,9 @@ Progress: [--------------------] 0% (v4.4: 0/6 phases)
 ### Decisions Summary
 
 See PROJECT.md Key Decisions table for full history.
+
+**v4.4 decisions:**
+- 27-01: Used jq max/min for decay clamping, cp instead of mv for log archiving, regex validation for phase arg
 
 ### Pending Todos
 
@@ -54,9 +57,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-04
-Stopped at: v4.4 roadmap created -- ready for /cds:plan-phase 27
+Stopped at: Completed 27-01-PLAN.md -- ready for 27-02-PLAN.md
 Resume file: none
 
 ---
 
-*State updated: 2026-02-04 after v4.4 roadmap creation*
+*State updated: 2026-02-04 after 27-01 plan execution*
