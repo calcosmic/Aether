@@ -727,3 +727,25 @@ Next:
   /ant:feedback "<note>"   Give feedback first
   /ant:status              View full colony status
 ```
+
+### Step 7f: Persistence Confirmation
+
+After displaying the "Next:" block above, run state validation.
+
+Use the Bash tool to run: `bash .aether/aether-utils.sh validate-state all`
+
+If the result contains `"pass":true`:
+
+```
+---
+All state persisted. Safe to /clear context if needed.
+  State: .aether/data/ (6 files validated)
+  Resume: /ant:resume-colony
+```
+
+If the result contains `"pass":false`:
+
+```
+---
+WARNING: State validation issue detected. Check /ant:status before clearing.
+```

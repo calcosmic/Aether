@@ -317,3 +317,14 @@ Next Steps:
   /ant:focus "<area>"    Guide colony attention before building
   /ant:redirect "<pat>"  Set constraints before building
 ```
+
+### Step 9: Persistence Confirmation
+
+After displaying the result above, add a state persistence confirmation:
+
+```
+---
+All state persisted. Safe to /clear context if needed.
+  State: .aether/data/ (6 files validated)
+  Resume: /ant:resume-colony
+```
