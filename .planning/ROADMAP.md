@@ -16,7 +16,7 @@ v4.3 addresses two gaps found during codebase analysis: (1) workers output progr
 
 ## Phases
 
-- [ ] **Phase 25: Live Visibility** - Activity log + incremental Queen display so users see worker progress during execution
+- [x] **Phase 25: Live Visibility** - Activity log + incremental Queen display so users see worker progress during execution (completed 2026-02-04)
 - [ ] **Phase 26: Auto-Learning** - Automatic learning extraction in build.md, skip duplicate extraction in continue.md
 
 ## Phase Details
@@ -54,7 +54,7 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 25. Live Visibility | v4.3 | 0/3 | ○ Pending | - |
+| 25. Live Visibility | v4.3 | 3/3 | ✓ Complete | 2026-02-04 |
 | 26. Auto-Learning | v4.3 | 0/? | ○ Pending | - |
 
 ---
