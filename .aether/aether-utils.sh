@@ -201,12 +201,18 @@ EOF
     json_ok "{\"compressed\":true,\"tokens\":$tokens}"
     ;;
   error-add)
-    [[ $# -ge 3 ]] || json_err "Usage: error-add <category> <severity> <description>"
+    [[ $# -ge 3 ]] || json_err "Usage: error-add <category> <severity> <description> [phase]"
     [[ -f "$DATA_DIR/errors.json" ]] || json_err "errors.json not found"
     id="err_$(date -u +%s)_$(head -c 2 /dev/urandom | od -An -tx1 | tr -d ' ')"
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-    updated=$(jq --arg id "$id" --arg cat "$1" --arg sev "$2" --arg desc "$3" --arg ts "$ts" '
-      .errors += [{id:$id, category:$cat, severity:$sev, description:$desc, root_cause:null, phase:null, task_id:null, timestamp:$ts}] |
+    phase_val="${4:-null}"
+    if [[ "$phase_val" =~ ^[0-9]+$ ]]; then
+      phase_jq="$phase_val"
+    else
+      phase_jq="null"
+    fi
+    updated=$(jq --arg id "$id" --arg cat "$1" --arg sev "$2" --arg desc "$3" --argjson phase "$phase_jq" --arg ts "$ts" '
+      .errors += [{id:$id, category:$cat, severity:$sev, description:$desc, root_cause:null, phase:$phase, task_id:null, timestamp:$ts}] |
       if (.errors|length) > 50 then .errors = .errors[-50:] else . end
     ' "$DATA_DIR/errors.json") || json_err "Failed to update errors.json"
     atomic_write "$DATA_DIR/errors.json" "$updated"
@@ -262,11 +268,18 @@ EOF
     [[ -z "$phase_num" ]] && json_err "Usage: activity-log-init <phase_num> [phase_name]"
     log_file="$DATA_DIR/activity.log"
     archive_file="$DATA_DIR/activity-phase-${phase_num}.log"
+    # Copy current log to per-phase archive (preserve combined log intact)
     if [ -f "$log_file" ] && [ -s "$log_file" ]; then
-      mv "$log_file" "$archive_file"
+      # Handle retry scenario: don't overwrite existing archive
+      if [ -f "$archive_file" ]; then
+        archive_file="$DATA_DIR/activity-phase-${phase_num}-$(date -u +%s).log"
+      fi
+      cp "$log_file" "$archive_file"
     fi
+    # Append phase header to combined log (NOT truncate)
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-    echo "# Phase $phase_num: ${phase_name:-unnamed} -- $ts" > "$log_file"
+    echo "" >> "$log_file"
+    echo "# Phase $phase_num: ${phase_name:-unnamed} -- $ts" >> "$log_file"
     archived_flag="false"
     [ -f "$archive_file" ] && archived_flag="true"
     json_ok "{\"archived\":$archived_flag}"
