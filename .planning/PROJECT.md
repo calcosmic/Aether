@@ -1,4 +1,4 @@
-# Aether v4.1: Claude-Native Queen Ant Colony
+# Aether v4.3: Claude-Native Queen Ant Colony
 
 ## What This Is
 
@@ -60,15 +60,29 @@ If this works, everything else follows. If this fails, nothing else matters. Not
 - ✓ **Audit Fix: All 11 issues** — File-lock sourcing, state field consistency, race conditions, jq error handling, state backups, pheromone schema, state integrity, worker status casing, expired pheromone cleanup, colony mode documentation — v4.0
 - ✓ **Command Integration** — Core command prompts delegate to aether-utils.sh for deterministic operations — v4.0
 
+*(Shipped in v4.1 — 2026-02-03)*
+
+- ✓ **Orphan audit** — 4 dead subcommands removed, 4 wired to consumers — v4.1
+- ✓ **Inline formula elimination** — All inline decay formulas replaced with aether-utils.sh calls — v4.1
+- ✓ **Spawn limit enforcement** — spawn-check subcommand + gates in all 6 worker specs — v4.1
+- ✓ **Pheromone quality enforcement** — pheromone-validate subcommand + gate in continue.md — v4.1
+- ✓ **Spec compliance enforcement** — Post-action validation checklist in all worker specs — v4.1
+
+*(Shipped in v4.2 — 2026-02-03)*
+
+- ✓ **Per-caste pheromone computation** — Caste sensitivity applied to signal display — v4.2
+- ✓ **Watcher execution verification** — Watchers actually run code, not just read it — v4.2
+- ✓ **Build output & delegation log** — Queen displays what workers did — v4.2
+- ✓ **Worker progress output** — All 6 castes emit structured progress markers — v4.2
+- ✓ **Learning extraction flow** — continue.md prompted after each phase — v4.2
+
 ### Active
 
-*(v4.1 Cleanup & Enforcement — 2026-02-03)*
+*(v4.3 Live Visibility & Auto-Learning — 2026-02-04)*
 
-- [ ] **Orphan audit** — Audit 8 orphaned subcommands; wire in useful ones, remove dead ones
-- [ ] **Inline formula elimination** — Replace inline decay formulas in plan.md, pause-colony.md, resume-colony.md, colonize.md with aether-utils.sh calls
-- [ ] **Spawn limit enforcement** — Shell validation gate in aether-utils.sh that checks worker count and spawn depth before allowing spawn
-- [ ] **Pheromone quality enforcement** — Prompt-level guardrails with structured validation steps for auto-pheromone content; shell checks for non-empty and minimum length
-- [ ] **Spec compliance enforcement** — Hybrid enforcement: shell gates for deterministic checks (validate-state called, spawn limits respected), prompt guardrails for judgment-based instructions
+- [ ] **Activity log file** — Workers write progress to `.aether/data/activity.log` during execution for real-time visibility
+- [ ] **Incremental Queen updates** — Queen displays worker results between spawns instead of waiting for entire Phase Lead return
+- [ ] **Automatic learning extraction** — build.md Step 7 extracts phase learnings automatically instead of requiring separate `/ant:continue` call
 
 ### Out of Scope
 
@@ -88,29 +102,22 @@ If this works, everything else follows. If this fails, nothing else matters. Not
 
 ## Context
 
-### Current State (post v4.0 — 2026-02-03)
+### Current State (post v4.2 — 2026-02-03)
 
 **What exists (working):**
 - 12 commands as Claude Code skill prompts (init, plan, build, status, phase, continue, focus, redirect, feedback, pause-colony, resume-colony, colonize, ant)
-- 6 worker ant specs (~200 lines each) with pheromone math, spawning scenarios, event awareness
+- 6 worker ant specs (~200 lines each) with pheromone math, spawning scenarios, event awareness, progress output
 - 6 state files: COLONY_STATE.json, pheromones.json, PROJECT_PLAN.json, errors.json, memory.json, events.json
-- `aether-utils.sh` — 241-line utility wrapper with 18 subcommands (pheromone math, state validation, memory ops, error tracking)
+- `aether-utils.sh` utility wrapper with subcommands (pheromone math, state validation, spawn enforcement, memory ops, error tracking)
 - 2 infrastructure scripts: atomic-write.sh, file-lock.sh
-- Full visual identity: box-drawing headers, step progress, pheromone decay bars
-- 4 specialist watcher modes in watcher-ant.md
-- Spawn outcome tracking with Bayesian confidence
-- 4 core commands (status, build, continue, init) delegate to aether-utils.sh
-- 6 worker specs use pheromone-effective for deterministic signal computation
+- Full visual identity: box-drawing headers, step progress, pheromone decay bars, caste emoji
+- Delegation protocol: Phase Lead reports what workers did via delegation log
+- Spawn enforcement gates in all 6 worker specs
+- Pheromone validation in continue.md
 
-**Known tech debt (from v4.0 audit — being addressed in v4.1):**
-- 8 orphaned subcommands with no current consumers → audit in v4.1
-- 4 commands retain inline decay formulas → replace in v4.1
-- Inline LLM duplicates of memory-compress and error-pattern-check → address in v4.1
-
-**Advisory-only enforcement (being addressed in v4.1):**
-- No enforcement of spawn limits → shell validation gate in v4.1
-- Auto-pheromone content quality unbounded → hybrid enforcement in v4.1
-- All spec instructions are advisory → hybrid enforcement in v4.1
+**Known issues (being addressed in v4.3):**
+- Workers output progress markers but they're invisible until Phase Lead returns (Task tool subagents don't stream)
+- Learning extraction requires manual `/ant:continue` — easy to forget, loses learnings if context clears first
 
 ### Background
 
@@ -150,6 +157,9 @@ Aether is based on **383,000+ words of research** across 25 documents by Ralph (
 | Pattern flagging stays LLM responsibility | error-add records, LLM analyzes patterns in context | ✓ Good — v4.0, clear boundary |
 | validate-state after init | Catch schema errors immediately after state creation | ✓ Good — v4.0, prevents silent corruption |
 
+| Activity log for live visibility | Workers write to file during execution; Queen reads between spawns | — Pending |
+| Auto-learning in build Step 7 | Prevent learning loss from forgotten /ant:continue calls | — Pending |
+
 ---
 
-*Last updated: 2026-02-03 after v4.1 milestone start*
+*Last updated: 2026-02-04 after v4.3 milestone start*

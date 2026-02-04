@@ -2,19 +2,19 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-03)
+See: .planning/PROJECT.md (updated 2026-02-04)
 
 **Core value:** Autonomous Emergence -- Worker Ants autonomously spawn Worker Ants; Queen provides signals not commands
-**Current focus:** v4.2 Colony Hardening (from test session) -- COMPLETE
+**Current focus:** v4.3 Live Visibility & Auto-Learning
 
 ## Current Position
 
-Milestone: v4.2 Colony Hardening
-Phase: 24 (Colony Hardening) -- complete
-Status: All 5 test-session issues resolved. No formal plans — driven by HANDOFF.md.
-Last activity: 2026-02-03 -- All issues implemented, validated, committed, pushed
+Milestone: v4.3 Live Visibility & Auto-Learning
+Phase: 25 (Live Visibility) -- pending, needs planning
+Status: Milestone initialized, roadmap created, ready for phase planning
+Last activity: 2026-02-04 -- Milestone v4.3 initialized
 
-Progress: [====================] 100% (v4.2: 5/5 issues from test session)
+Progress: [░░░░░░░░░░░░░░░░░░░░] 0% (v4.3: 0/2 phases)
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -37,25 +37,13 @@ Progress: [====================] 100% (v4.2: 5/5 issues from test session)
 
 See PROJECT.md Key Decisions table for full history.
 
-| Plan | Decision | Rationale |
-|------|----------|-----------|
-| 22-01 | Followed plan exactly | Pure text replacement, no architectural changes needed |
-| 22-02 | Phase-specific error filtering kept as manual supplement | error-summary returns global totals only; no phase filter param |
-| 22-02 | Graceful fallback on all utility calls | Commands degrade gracefully if shell execution fails |
-| 23-01 | Followed plan exactly | Pure shell edits, no architectural changes needed |
-| 23-02 | Followed plan exactly | Pure text insertions, no architectural changes needed |
-
 ### Pending Todos
 
 None.
 
 ### Open Issues
 
-1. ~~**8 orphaned subcommands**~~ RESOLVED: 4 dead subcommands removed (CLEAN-05), 4 wired to consumers (CLEAN-01 through CLEAN-04)
-2. ~~**4 commands retain inline decay formulas**~~ RESOLVED in 22-01 (CLEAN-01)
-3. ~~**No enforcement of spawn limits**~~ RESOLVED: ENFO-01 done (spawn-check subcommand in 23-01), ENFO-02 done (spawn gate in all worker specs in 23-02)
-4. ~~**Auto-pheromone content quality unbounded**~~ RESOLVED: ENFO-03 done (pheromone-validate subcommand in 23-01), ENFO-04 done (validation gate in continue.md in 23-02)
-5. ~~**All spec instructions are advisory**~~ RESOLVED: ENFO-05 done (post-action validation checklist in all worker specs in 23-02)
+None.
 
 ### Blockers/Concerns
 
@@ -63,10 +51,10 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-03T21:00:00Z
-Stopped at: v4.2 Colony Hardening complete -- all 5 test-session issues resolved
-Resume file: .planning/phases/24-colony-hardening/.continue-here.md
+Last session: 2026-02-04
+Stopped at: v4.3 milestone initialized, ready for /cds:plan-phase 25
+Resume file: none
 
 ---
 
-*State updated: 2026-02-03 after v4.2 colony hardening*
+*State updated: 2026-02-04 after v4.3 milestone initialization*

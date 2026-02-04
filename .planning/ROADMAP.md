@@ -1,4 +1,4 @@
-# Roadmap: Aether v4.1
+# Roadmap: Aether v4.3
 
 ## Milestones
 
@@ -6,60 +6,53 @@
 - v2.0 Event & Visual -- Phases 11-13 (shipped 2026-02-02)
 - v3.0 Rebuild -- Phases 14-18 (shipped 2026-02-03)
 - v4.0 Hybrid Foundation -- Phases 19-21 (shipped 2026-02-03)
-- **v4.1 Cleanup & Enforcement** -- Phases 22-23 (shipped 2026-02-03)
+- v4.1 Cleanup & Enforcement -- Phases 22-23 (shipped 2026-02-03)
+- v4.2 Colony Hardening -- Phase 24 (shipped 2026-02-03)
+- **v4.3 Live Visibility & Auto-Learning** -- Phases 25-26
 
 ## Overview
 
-v4.1 closes the gap between what aether-utils.sh provides and what commands/specs actually use. Phase 22 wires 4 orphaned-but-useful subcommands into their natural consumers and removes 4 dead ones, eliminating all inline LLM duplicates of deterministic logic. Phase 23 adds enforcement gates so that spawn limits and pheromone quality are checked by shell code, not just advisory prompt text.
+v4.3 addresses two gaps found during codebase analysis: (1) workers output progress markers but they're invisible to users because Task tool subagents don't stream output — fixed by having the Queen orchestrate spawns directly and display results incrementally; (2) learning extraction requires a manual `/ant:continue` call that's easy to forget — fixed by auto-extracting learnings in build.md Step 7.
 
 ## Phases
 
-- [x] **Phase 22: Cleanup** - Wire orphaned subcommands into commands, remove dead ones, eliminate inline formulas
-- [x] **Phase 23: Enforcement** - Add spawn-check and pheromone-validate subcommands, enforce spec compliance
+- [ ] **Phase 25: Live Visibility** - Activity log + incremental Queen display so users see worker progress during execution
+- [ ] **Phase 26: Auto-Learning** - Automatic learning extraction in build.md, skip duplicate extraction in continue.md
 
 ## Phase Details
 
-### Phase 22: Cleanup
-**Goal**: Every aether-utils.sh subcommand is either consumed by a command or spec, or removed -- no orphans, no inline duplicates
-**Depends on**: Phase 21 (v4.0 complete)
-**Requirements**: CLEAN-01, CLEAN-02, CLEAN-03, CLEAN-04, CLEAN-05
+### Phase 25: Live Visibility
+**Goal**: Users see what each worker did as it completes, not after the entire Phase Lead returns — workers write to activity log, Queen spawns workers directly and displays results incrementally
+**Depends on**: Phase 24 (v4.2 complete)
+**Requirements**: VIS-01, VIS-02, VIS-03
 **Success Criteria** (what must be TRUE):
-  1. plan.md, pause-colony.md, resume-colony.md, and colonize.md call aether-utils.sh pheromone-batch for decay calculation instead of inline formulas
-  2. continue.md calls aether-utils.sh memory-compress instead of manual array truncation logic
-  3. build.md calls aether-utils.sh error-pattern-check instead of manual error categorization
-  4. continue.md and build.md call aether-utils.sh error-summary instead of manual error counting
-  5. pheromone-combine, memory-token-count, memory-search, and error-dedup are removed from aether-utils.sh
-**Plans**: 2 plans
+  1. Workers write structured progress lines to `.aether/data/activity.log` with timestamps, caste emoji, and action type
+  2. build.md spawns workers sequentially through the Queen (not delegated to Phase Lead) so each worker's results are visible before the next spawns
+  3. After each worker returns, the Queen displays that worker's activity log entries and result summary to the user
+  4. The Phase Lead role changes from "spawn and manage all workers" to "plan task assignments" — execution moves to Queen level
+  5. Activity log is cleared at phase start to prevent stale data
+**Plans**: TBD (created during /cds:plan-phase)
 
-Plans:
-- [x] 22-01-PLAN.md -- Wire pheromone-batch into 4 commands, remove 4 dead subcommands (CLEAN-01, CLEAN-05)
-- [x] 22-02-PLAN.md -- Wire memory-compress, error-pattern-check, error-summary into continue.md and build.md (CLEAN-02, CLEAN-03, CLEAN-04)
-
-### Phase 23: Enforcement
-**Goal**: Worker spec instructions have deterministic enforcement gates -- spawn limits and pheromone quality are validated by shell code before actions proceed
-**Depends on**: Phase 22
-**Requirements**: ENFO-01, ENFO-02, ENFO-03, ENFO-04, ENFO-05
+### Phase 26: Auto-Learning
+**Goal**: Phase learnings are automatically captured at the end of build execution — no manual `/ant:continue` required for learning extraction
+**Depends on**: Phase 25
+**Requirements**: LEARN-01, LEARN-02, LEARN-03
 **Success Criteria** (what must be TRUE):
-  1. Running aether-utils.sh spawn-check returns pass/fail JSON based on worker count (max 5) and spawn depth (max 3) from COLONY_STATE.json
-  2. All 6 worker specs call spawn-check before spawning and halt if the check fails
-  3. Running aether-utils.sh pheromone-validate returns pass/fail JSON checking non-empty content and minimum length (>= 20 chars)
-  4. continue.md auto-pheromone step calls pheromone-validate before writing and rejects invalid pheromones
-  5. Worker specs include a post-action validation checklist of deterministic checks (state validated, spawn limits checked) that must pass before reporting done
-**Plans**: 2 plans
-
-Plans:
-- [x] 23-01-PLAN.md -- Add spawn-check and pheromone-validate subcommands to aether-utils.sh (ENFO-01, ENFO-03)
-- [x] 23-02-PLAN.md -- Wire enforcement gates into worker specs, continue.md, and build.md (ENFO-02, ENFO-04, ENFO-05)
+  1. build.md Step 7 reads errors.json, events.json, and task outcomes, then synthesizes actionable learnings and appends to memory.json (same logic as continue.md Step 4)
+  2. build.md Step 7 auto-emits a FEEDBACK pheromone summarizing what worked/failed, validated via pheromone-validate before writing
+  3. continue.md detects whether learnings were already extracted (checks memory.json for learnings from current phase) and skips extraction if so
+  4. Learning extraction in build.md respects existing memory-compress limits (20 learnings max)
+**Plans**: TBD (created during /cds:plan-phase)
 
 ## Progress
 
-**Execution Order:** 22 -> 23
+**Execution Order:** 25 -> 26
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 22. Cleanup | v4.1 | 2/2 | ✓ Complete | 2026-02-03 |
-| 23. Enforcement | v4.1 | 2/2 | ✓ Complete | 2026-02-03 |
+| 25. Live Visibility | v4.3 | 0/? | ○ Pending | - |
+| 26. Auto-Learning | v4.3 | 0/? | ○ Pending | - |
 
 ---
-*Roadmap created: 2026-02-03*
-*Milestone: v4.1 Cleanup & Enforcement*
+*Roadmap created: 2026-02-04*
+*Milestone: v4.3 Live Visibility & Auto-Learning*

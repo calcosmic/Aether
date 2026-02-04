@@ -1,45 +1,41 @@
-# Requirements: Aether v4.1
+# Requirements: Aether v4.3
 
-**Defined:** 2026-02-03
+**Defined:** 2026-02-04
 **Core Value:** Autonomous Emergence — Worker Ants autonomously spawn Worker Ants; Queen provides signals not commands
 
 ## v1 Requirements
 
-Requirements for v4.1 Cleanup & Enforcement. Each maps to roadmap phases.
+Requirements for v4.3 Live Visibility & Auto-Learning. Each maps to roadmap phases.
 
-### Cleanup
+### Live Visibility
 
-- [x] **CLEAN-01**: Wire pheromone-decay into plan.md, pause-colony.md, resume-colony.md, colonize.md — replacing inline decay formulas with aether-utils.sh pheromone-batch calls
-- [x] **CLEAN-02**: Wire memory-compress into continue.md — replacing manual array truncation logic with aether-utils.sh memory-compress call
-- [x] **CLEAN-03**: Wire error-pattern-check into build.md — replacing manual error categorization with aether-utils.sh error-pattern-check call
-- [x] **CLEAN-04**: Wire error-summary into continue.md and build.md — replacing manual error counting with aether-utils.sh error-summary call
-- [x] **CLEAN-05**: Remove pheromone-combine, memory-token-count, memory-search, error-dedup from aether-utils.sh
+- [ ] **VIS-01**: Workers write structured progress lines to `.aether/data/activity.log` as they work (task start, file create/modify, task complete, spawn events)
+- [ ] **VIS-02**: build.md orchestrates worker spawns sequentially through the Queen rather than delegating all spawning to the Phase Lead, so the user sees incremental results between each worker
+- [ ] **VIS-03**: Queen displays each worker's activity log output and result summary after each worker returns, before spawning the next
 
-### Enforcement
+### Auto-Learning
 
-- [x] **ENFO-01**: Add spawn-check subcommand to aether-utils.sh — reads COLONY_STATE.json, checks worker count (<= 5) and spawn depth (<= 3), returns pass/fail JSON
-- [x] **ENFO-02**: Update all 6 worker specs to call spawn-check before spawning — hard gate that prevents spawn if check fails
-- [x] **ENFO-03**: Add pheromone-validate subcommand to aether-utils.sh — checks non-empty content, minimum length (>= 20 chars), returns pass/fail JSON
-- [x] **ENFO-04**: Update continue.md auto-pheromone step to call pheromone-validate before writing pheromone
-- [x] **ENFO-05**: Add post-action validation checklist to worker specs — deterministic checks (state validated, spawn limits checked) that workers must complete before reporting done
+- [ ] **LEARN-01**: build.md Step 7 automatically extracts phase learnings from completed work (errors, events, task outcomes) and writes to memory.json, using the same extraction logic currently in continue.md
+- [ ] **LEARN-02**: build.md Step 7 auto-emits FEEDBACK pheromone summarizing what worked and what didn't, validated via pheromone-validate before writing
+- [ ] **LEARN-03**: continue.md skips learning extraction if learnings were already extracted by build (detects via event log or memory.json timestamp)
 
 ## v2 Requirements
 
 Deferred to future release. Tracked but not in current roadmap.
 
-### Advanced Enforcement
+### Advanced Visibility
 
-- **ENFO-06**: Automated compliance scoring — shell utility that reads worker output and scores spec compliance
-- **ENFO-07**: Pheromone content quality scoring — semantic analysis of pheromone descriptions beyond length checks
+- **VIS-04**: `/ant:status` shows real-time worker activity when polled from a second terminal during execution
+- **VIS-05**: Activity log rotation and cleanup for long-running colonies
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Enforcing LLM reasoning quality | Can't deterministically check "did the LLM think carefully?" — judgment stays with prompts |
-| New subcommands beyond spawn-check and pheromone-validate | Keep utility layer thin (<300 lines) |
-| Rewriting worker specs from scratch | Targeted edits to add enforcement gates, not full rewrites |
+| Streaming subagent output | Claude Code Task tool doesn't support streaming — architectural constraint |
+| Real-time terminal dashboard | Requires persistent daemon process — against Claude-native architecture |
 | New commands | v4.0 decision: enrich existing 12 commands, don't add new ones |
+| Separate activity viewer command | Activity visibility integrated into build.md flow |
 
 ## Traceability
 
@@ -47,22 +43,18 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CLEAN-01 | Phase 22 | Complete |
-| CLEAN-02 | Phase 22 | Complete |
-| CLEAN-03 | Phase 22 | Complete |
-| CLEAN-04 | Phase 22 | Complete |
-| CLEAN-05 | Phase 22 | Complete |
-| ENFO-01 | Phase 23 | Complete |
-| ENFO-02 | Phase 23 | Complete |
-| ENFO-03 | Phase 23 | Complete |
-| ENFO-04 | Phase 23 | Complete |
-| ENFO-05 | Phase 23 | Complete |
+| VIS-01 | Phase 25 | Pending |
+| VIS-02 | Phase 25 | Pending |
+| VIS-03 | Phase 25 | Pending |
+| LEARN-01 | Phase 26 | Pending |
+| LEARN-02 | Phase 26 | Pending |
+| LEARN-03 | Phase 26 | Pending |
 
 **Coverage:**
-- v1 requirements: 10 total
-- Mapped to phases: 10
-- Unmapped: 0
+- v1 requirements: 6 total
+- Mapped to phases: 6
+- Unmapped: 0 ✓
 
 ---
-*Requirements defined: 2026-02-03*
-*Last updated: 2026-02-03 after Phase 23 completion*
+*Requirements defined: 2026-02-04*
+*Last updated: 2026-02-04 after initial definition*
