@@ -178,6 +178,24 @@ Respond to FOCUS pheromones by prioritizing those areas.
   scout         0.7   0.9    0.4       0.5
   architect     0.2   0.4    0.3       0.6
 
+--- CONFLICT PREVENTION RULE ---
+CRITICAL: Tasks that modify the SAME FILE must be assigned to the SAME WORKER.
+
+Before creating your plan:
+1. For each task, identify which files it will likely create or modify
+2. If two tasks reference the same file path, they MUST go to the same worker in the same wave
+3. If unsure about file overlap, group tasks conservatively (same worker)
+
+This prevents parallel write conflicts where one builder overwrites another's work.
+
+Example:
+  Task 3.1: Add auth routes to src/routes/index.ts
+  Task 3.2: Add API routes to src/routes/index.ts
+  -> Both touch src/routes/index.ts -> assign to SAME builder-ant
+
+  Task 3.3: Create middleware at src/middleware/auth.ts
+  -> Different file -> can go to a different builder-ant
+
 Available worker castes:
   🗺️🐜 colonizer-ant — Explore/index codebase
   📋🐜 route-setter-ant — Plan and break down work (rarely needed as worker)
@@ -261,6 +279,15 @@ bash .aether/aether-utils.sh activity-log-init {phase_number} "{phase_name}"
 ```
 
 **2. Parse the plan:** Extract waves and worker assignments from the Phase Lead's plan output. Track: wave number, caste, task description, task IDs, dependencies.
+
+**2b. Validate file overlap (Queen backup check):**
+
+Before executing workers, scan the parsed plan for file conflicts. For each pair of worker assignments in the SAME wave:
+1. Extract file paths mentioned in their task descriptions (look for paths like `src/...`, `*.ts`, `*.js`, etc.)
+2. If two workers in the same wave reference the same file path, MERGE those task assignments into a single worker
+3. Log the merge: `bash .aether/aether-utils.sh activity-log "MERGE" "queen" "Merged tasks for {worker_a} and {worker_b}: shared file {filepath}"`
+
+This is a backup check. If the Phase Lead followed the CONFLICT PREVENTION RULE correctly, no merges will be needed. But LLM instruction following is probabilistic, so the Queen validates.
 
 **3. Initialize counters:** `completed_workers = 0`, `total_workers = {from plan}`, `worker_results = []`
 
