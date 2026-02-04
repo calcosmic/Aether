@@ -92,6 +92,20 @@ This step is DISPLAY ONLY -- it reads state but does not write anything. The pur
 
 ### Step 4: Extract Phase Learnings
 
+**Duplicate Detection:** Before extracting learnings, check `events.json` (already in memory from Step 1) for an event where:
+- `type` is `"auto_learnings_extracted"`
+- `content` contains `"Phase <current_phase_number>:"`
+
+If such an event is found AND `$ARGUMENTS` does NOT contain "force" or "--force":
+- Output: `"📚 Learnings already captured during build (auto-extracted at <event_timestamp>) -- skipping extraction."`
+- Skip the rest of Step 4 AND Step 4.5 (pheromone emission)
+- Proceed directly to Step 5
+
+If no matching event is found, OR if `$ARGUMENTS` contains "force" or "--force":
+- Proceed with the existing extraction logic below
+
+---
+
 Review the completed phase by analyzing:
 - Tasks completed in this phase (from PROJECT_PLAN.json -- look at the current phase's tasks)
 - Errors encountered during this phase (from errors.json -- filter by `phase` field matching current phase)
@@ -132,6 +146,8 @@ If the command fails, the Write tool already saved the data -- no action needed.
 If no castes can be identified from events, skip this step.
 
 ### Step 4.5: Auto-Emit Pheromones
+
+If Step 4 was skipped due to auto-extraction detection, skip this step as well and proceed to Step 5.
 
 After extracting learnings, automatically emit pheromones based on phase outcomes.
 
