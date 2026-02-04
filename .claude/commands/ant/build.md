@@ -350,7 +350,7 @@ Issues: {any failures or errors}
 
 ### Step 5.5: Watcher Verification (Mandatory)
 
-After the Phase Lead ant returns, spawn a **mandatory watcher verification**.
+After all workers complete (Step 5c), spawn a **mandatory watcher verification**.
 
 1. Use the Read tool to read `.aether/workers/watcher-ant.md`
 2. Use the **Task tool** with `subagent_type="general-purpose"`:
@@ -362,8 +362,8 @@ After the Phase Lead ant returns, spawn a **mandatory watcher verification**.
 --- ACTIVE PHEROMONES ---
 {pheromone block from Step 3}
 
---- PHASE LEAD REPORT ---
-{the full report returned by the Phase Lead ant from Step 5}
+--- PHASE BUILD REPORT ---
+{the Phase Build Report compiled at the end of Step 5c, containing all worker results}
 
 --- TASK ---
 You are being spawned as a mandatory post-build watcher.
@@ -374,7 +374,7 @@ Success Criteria:
 {list success_criteria from the phase}
 
 Your mission:
-1. Read the files that were modified during this phase (identified in the Phase Lead report)
+1. Read the files that were modified during this phase (identified in the Phase Build Report)
 2. EXECUTE the code — run syntax checks, import checks, and launch test (see your spec's Execution Verification section)
 3. Run Quality mode checks at minimum
 4. Verify the success criteria are met
@@ -394,7 +394,7 @@ Store the watcher's report (quality_score, recommendation, issues) for use in St
 After the watcher returns, use Write tool to update:
 
 **`PROJECT_PLAN.json`:**
-- Mark tasks as `"completed"` or `"failed"` based on the ant's report
+- Mark tasks as `"completed"` or `"failed"` based on worker results from Step 5c
 - Set the phase `status` to `"completed"` (or `"failed"` if critical tasks failed)
 
 **`COLONY_STATE.json`:**
@@ -508,14 +508,11 @@ If the `events` array exceeds 100 entries, remove the oldest entries to keep onl
 
 Use the Write tool to write the updated events.json.
 
-**Record Spawn Outcomes:** Read `.aether/data/COLONY_STATE.json`. Look at the ant's report to identify which castes were spawned (look for mentions of "spawned a builder", "spawned a scout", "spawned a watcher", etc. in the report, or caste names mentioned in the context of spawning).
+**Record Spawn Outcomes:** The Queen has explicit knowledge of which castes were spawned during Step 5c (it did the spawning). For each caste that was spawned:
 
-For each caste that was spawned during the phase:
 - If the phase completed successfully: increment `alpha` and `successes` for that caste in `spawn_outcomes`
 - If the phase failed: increment `beta` and `failures` for that caste in `spawn_outcomes`
 - Increment `total_spawns` for that caste regardless of outcome
-
-If the report doesn't clearly identify which castes were spawned, skip spawn outcome tracking for this phase.
 
 Use the Write tool to write the updated COLONY_STATE.json (this write can be combined with the state update already in Step 6).
 
@@ -529,7 +526,9 @@ Show step progress:
   ✓ Step 3: Compute Active Pheromones
   ✓ Step 4: Update State
   ✓ Step 4.5: Git Checkpoint
-  ✓ Step 5: Spawn Colony Ant
+  ✓ Step 5a: Phase Lead Planning
+  ✓ Step 5b: Plan Checkpoint
+  ✓ Step 5c: Execute Workers
   ✓ Step 5.5: Watcher Verification
   ✓ Step 6: Record Outcome
   ✓ Step 7: Display Results
@@ -545,8 +544,8 @@ Phase {id}: {name}
 🔒 Git Checkpoint: {commit_hash or "(not a git repo)"}
 
 🐜 Colony Activity:
-  {Phase Lead's delegation log — extract from the Phase Lead report:
-   show each ant that was spawned, what it did, and its result}
+  {Per-worker results from Step 5c -- for each worker: caste, task, result}
+  Activity Log: .aether/data/activity.log ({line_count} entries)
 
 📋 Task Results:
   {for each task: "✅ {task_id}: {what was done}" or "❌ {task_id}: {what failed}"}
