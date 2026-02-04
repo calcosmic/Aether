@@ -1,239 +1,200 @@
-# Aether v2 Research Summary
+# Project Research Summary
 
-**Project:** Aether v2 — Reactive Event Integration, LLM Testing, and CLI Visual Indicators
-**Domain:** Claude-native multi-agent system with event polling, testing infrastructure, and UX enhancements
-**Researched:** 2026-02-02
+**Project:** Aether v4.4 -- Colony Hardening & Real-World Readiness
+**Domain:** Multi-agent colony system hardening (Claude Code-native, stigmergic coordination)
+**Researched:** 2026-02-04
 **Confidence:** HIGH
 
 ## Executive Summary
 
-Aether v2 enhances the existing Queen Ant Colony system with three critical integrations that transform it from a prompt-based autonomous agent framework into a reactive, testable, and user-friendly multi-agent system. Research confirms that **pull-based event polling** is the correct pattern for prompt-based Worker Ants (which execute and exit, not persistent processes), **manual E2E test guides** are the right approach for validating LLM behavior where automated tests cannot assess reasoning quality, and **Unicode emoji indicators** provide semantic, color-independent visual feedback for colony activity.
+Aether v4.4 addresses 23 actionable findings from the first real-world field test. The research reveals a system whose core architecture is sound but whose execution layer has critical bugs (pheromone decay growing instead of decaying, activity log overwriting instead of appending), missing safety mechanisms (no file conflict prevention, no error phase attribution), and unnecessary friction (10 manual approvals for 5 straightforward phases). The good news: every fix stays within the existing bash+jq stack with zero new dependencies. The bad news: the most ambitious v4.4 goal -- recursive ant spawning -- is blocked by a verified Claude Code platform constraint (Task tool unavailable to subagents, GitHub #4182). The architecture must route around this reality rather than fight it.
 
-The recommended approach builds on Aether v1's proven foundation (19 commands, 10 Worker Ants, 879-line event bus) without introducing new dependencies. Event polling integrates via existing `get_events_for_subscriber()` function, LLM testing uses human-readable markdown guides executed by Claude Code, and visual indicators leverage terminal emoji support. The stack remains deliberately minimal: **Bash + jq** for event infrastructure, **Markdown** for test documentation, **Unicode emojis** for visual feedback.
+The recommended approach is a six-phase build that starts with bug fixes and safety (decay math, activity log, error attribution, conflict prevention), then UX friction reduction (context clear prompting, auto-continue), then colony intelligence improvements (adaptive complexity, watcher scoring calibration, multi-ant colonization), then new automation capabilities (auto-reviewer, pheromone-first flow, tech debt reporting), then architecture evolution (two-tier learning, spawn tree engine), and finally polish (archivist ant, pheromone docs, colonizer visuals). This ordering is driven by three constraints: broken foundations invalidate every feature built on top; UX friction causes user abandonment faster than missing features; and the spawn tree engine depends on validated platform behavior and calibrated quality signals.
 
-Key risks are well-documented with clear mitigation strategies. The top pitfalls for v2 are **polling thundering herd** (prevented with randomized jitter and exponential backoff), **event saturation** (prevented with priority levels and adaptive filtering), and **LLM test flakiness** (prevented with golden datasets and fuzzy assertions). All v1 risks remain relevant (context rot, infinite spawning loops, JSON corruption) but have established prevention patterns in the codebase.
+The key risks are: (1) building recursive spawning without validating the platform constraint first -- a 30-minute test prevents weeks of wrong architecture; (2) adding auto-review before fixing the flat 8/10 watcher scores -- automation of meaningless scores is worse than no automation; and (3) global learning promotion creating stale cross-project knowledge that silently degrades output quality. All three are mitigable with the phased approach and explicit validation gates described below.
 
 ## Key Findings
 
 ### Recommended Stack
 
-**Core technologies:**
-- **Bash + jq** (Bash 4.0+, jq 1.6+) — Event polling infrastructure; proven pattern in Aether's event-bus.sh (879 lines); file locking via fcntl prevents race conditions
-- **Markdown test guides** (GitHub Flavored Markdown) — E2E LLM test documentation; human-readable test cases Claude can execute directly; no test runner dependencies
-- **Unicode emojis** (Standard Unicode 15.0+) — CLI visual indicators; terminal-compatible, semantic meaning independent of color; accessibility-friendly
-- **TAP format** (TAP version 13) — Test output standard; already used in existing tests; industry standard for test reporting
-- **JSON state files** (JSON RFC 8259) — Test execution tracking; Claude reads/writes natively; git-diffable for test history validation
+No new dependencies. All v4.4 work uses the existing bash+jq stack. The critical stack insight is that the pheromone decay bug was NOT a formula error -- the formula in `aether-utils.sh` is mathematically correct. The root cause was deployment: during the field test, `aether-utils.sh` did not exist in the target repo, so Claude fell back to LLM-computed exponential math and got the sign wrong, producing growth instead of decay. The fix is two-part: defensive guards in the utility (clamp negative elapsed, cap at initial strength, floor at zero) AND eliminating all LLM math fallback paths.
 
-**Supporting utilities (existing):**
-- `atomic-write.sh` — Corruption-safe test state updates
-- `file-lock.sh` — Concurrent test execution safety
-- `event-bus.sh` — Event polling infrastructure (pull-based delivery already implemented)
+**Core technologies (unchanged):**
+- **bash 4.0+ / jq 1.6+**: All utilities, decay math, state management -- already the foundation
+- **ANSI escape codes**: Color-coded output per caste (cyan=colonizer, yellow=route-setter, green=builder, magenta=watcher, blue=scout) -- no tput dependency needed
+- **JSON files**: Two-tier learning storage (`~/.aether/` for global, `.aether/data/` for project) -- consistent with existing state management
+- **noclobber pattern**: Atomic lock acquisition for file conflict prevention -- already implemented in `file-lock.sh`
+
+**Critical version note:** jq's `exp()` function (used for decay) returns IEEE754 doubles -- sufficient for signal strengths rounded to 3-6 decimal places. LLMs must NEVER compute transcendental functions; always delegate to `aether-utils.sh`.
+
+**New aether-utils.sh subcommands (5 total, ~43 lines, stays under 400-line budget):**
+- `learning-promote`, `learning-global-read`, `error-add-phased`, `activity-log-append`, `progress-bar`
 
 ### Expected Features
 
-**Must have (table stakes):**
-- **Event Polling Integration** — Worker Ants call `get_events_for_subscriber()` at execution boundaries; users expect agents to react asynchronously to events
-- **Event Delivery Tracking** — Workers call `mark_events_delivered()` after processing; prevents duplicate event processing
-- **Event Filtering** — Topic-based subscriptions prevent event noise; users expect agents to only receive relevant events
-- **Manual E2E Test Guide** — Documented test procedures for init, execute, spawning, memory, voting workflows; table stakes for production systems
-- **Visual Activity Indicators** — Basic status indicators (🐜 for active, ⚪ for idle, ⏳ for pending); expected in all modern CLI tools
-- **Progress Feedback** — Progress bars, step counters, completion percentages; standard in modern CLI tools
+**Must have (table stakes -- every production multi-agent system has these):**
+- File conflict prevention in parallel execution -- field-tested failure (notes 10, 13)
+- Persistent cross-session memory with structured retrieval
+- Error attribution to execution context (phase, worker, caste)
+- State persistence before context clear -- non-negotiable per field note 5
+- Auto-continue / batch execution -- eliminates 10 manual approvals
+- Automated code review at build boundaries with calibrated scoring
+- Adaptive complexity scaling -- full colony overhead kills simple projects (field note 31)
+- Task delegation depth limits with anti-loop protection
 
-**Should have (competitive):**
-- **Reactive Event Polling for Prompt-Based Agents** — First event system designed for prompt-based agents (not persistent processes); unique to Claude-native systems
-- **Caste-Specific Event Sensitivity** — Different Worker Ant castes react differently to same event based on sensitivity profiles; implements pheromone-like signal response
-- **Manual LLM Test Suite with Real Execution** — Tests validate actual LLM behavior (not just code coverage); catches LLM-specific issues traditional tests miss
-- **Visual Colony Activity Dashboard** — Real-time visualization of all Worker Ant activity with emoji indicators; makes emergence visible
+**Should have (differentiators -- no competitor has these):**
+- Stigmergic conflict prevention via pheromone file-ownership signals
+- Multi-perspective colonization (3 colonizers with synthesis)
+- Pheromone-driven planning (signals shape plan before creation)
+- Bayesian caste learning (track which castes succeed on which task types)
+- Tiered learning with project-to-global promotion (unique cross-project meta-learning)
+- Tech debt surfacing as colony output (aggregate cross-phase issues)
+- Pheromone recommendations to user (ants guide the Queen)
 
-**Defer (v2+):**
-- **Real-Time Event Streaming** — WebSocket-based event stream; requires persistent processes (breaks Claude-native model)
-- **Event Replay for "Time Travel"** — Full colony state snapshotting and replay; complex to implement correctly
-- **Web-Based Dashboard** — Separate GUI dashboard; breaks Claude-native workflow
-- **Automated LLM Behavior Testing** — Framework for programmatic LLM validation; beyond v2 scope
+**Defer (v5+):**
+- Unlimited recursive delegation -- anti-feature; context degrades at each level, vulnerable to recursive blocking attacks
+- Agent-to-agent direct messaging -- destroys stigmergic model
+- Complex memory hierarchies (vector DB, embeddings) -- overkill for JSON-scale data
+- Web dashboard for colony visualization -- breaks CLI-only constraint
 
 ### Architecture Approach
 
-Aether v2 adds three integration layers atop the existing v1 architecture:
-
-1. **Event Polling Layer** — Worker Ant prompts call `get_events_for_subscriber()` at execution boundaries (after file writes, command completion, phase transitions). Integration points: Colonizer, Builder, Watcher, Scout.
-
-2. **Visual Indicators Layer** — CLI output formatting with emoji, progress bars, and structured sections. Integration points: All command prompts (init, status, execute, etc.).
-
-3. **E2E Testing Layer** — Manual test guide covering init → execute → spawn → memory → voting workflows. Output: `docs/E2E_TEST_GUIDE.md`.
+The architecture remains Queen-mediated hub-and-spoke, with four new subsystems layered on top: (1) a spawn tree engine where workers signal sub-spawn needs through structured output blocks and the Queen fulfills them, working around the Task tool nesting limitation; (2) a two-tier learning system with project-local memory and global cross-project knowledge in `~/.aether/`; (3) an adaptive complexity system with three modes (LIGHTWEIGHT/STANDARD/FULL) set at colonization time via a single `mode` field in COLONY_STATE.json; and (4) auto-spawned lifecycle ants (reviewer after builders, archivist at milestones) that reuse existing worker specs with modified prompts rather than adding new castes.
 
 **Major components:**
-- **Event Polling Layer** — Worker Ants poll events at execution boundaries; communicates with Event bus (get_events_for_subscriber) and State Layer (publish events)
-- **Visual Indicators Layer** — Format CLI output with emoji, progress bars, sections; communicates with all command prompts via template patterns
-- **E2E Testing Layer** — Manual test guide covering core workflows; validates all layers end-to-end
+1. **Spawn Tree Engine** -- replaces flat wave execution with tree-structured delegation; workers include `SPAWN REQUEST` blocks in output; Queen parses and fulfills; depth tracked logically in COLONY_STATE.json
+2. **Two-Tier Learning** -- `memory.json` (project, existing) + `~/.aether/learnings.json` (global, new); promotion via occurrence counting across projects; global learnings injected as FEEDBACK pheromones at `/ant:init`
+3. **Adaptive Complexity** -- single `mode` field in COLONY_STATE.json; colonizer assesses file count, language diversity, dependency density, task count; inline conditional checks in all commands (no duplicate command files)
+4. **Lifecycle Ants** -- reviewer (watcher-ant in "review mode") auto-spawned after builders; archivist (architect-ant in "hygiene mode") auto-spawned at FULL-mode milestones; advisory only, never blocking
+5. **Same-File Conflict Prevention** -- Phase Lead groups overlapping-file tasks to same worker at planning time; file-lock.sh provides byte-level safety net; no git worktrees or container isolation needed
 
 ### Critical Pitfalls
 
-**Top v2 pitfalls:**
+1. **Recursive spawning blocked by Claude Code platform (CP-1)** -- Task tool unavailable to subagents. Validate with a 30-minute test before designing any recursive feature. If blocked, use Queen-mediated spawn tree (workers request, Queen fulfills). Never attempt `claude -p` subprocess hack.
 
-1. **Polling Thundering Herd** — All agents poll simultaneously causing synchronized load spikes. **Prevention:** Add ±20-30% randomized jitter to polling intervals, implement exponential backoff when no events detected, stagger agent initialization with 0-5s random startup delay.
+2. **Context telephone at delegation depth (CP-2)** -- Information degrades at each delegation level. Include verbatim colony goal at EVERY spawn depth. Limit effective depth to 2 until depth-3 proves value. Add "delegation chain" section to every Task prompt showing full hierarchy.
 
-2. **Event Saturation** — Too many low-value events drown important signals. **Prevention:** Event priority levels (CRITICAL, HIGH, MEDIUM, LOW, DEBUG), adaptive filtering (only log DEBUG events in debug mode), temporal decay (auto-prune low-priority events after 24 hours), event aggregation (combine similar events within time windows).
+3. **Auto-reviewer creates blocking bottleneck (CP-3)** -- Must fix watcher scoring rubric FIRST. Reviewer must be advisory only (never blocking). Max 2 build-review iterations per task, then log remaining as tech debt. Only CRITICAL findings trigger rebuild.
 
-3. **LLM Test Flakiness from Non-Determinism** — Tests pass sometimes and fail other times without code changes. **Prevention:** Golden datasets with consistent test inputs, fuzzy assertions (semantic similarity not exact string matching), temperature control (0.0-0.2 for deterministic generation), consensus testing (run 3 times, require 2/3 pass).
+4. **Same-file parallel write conflicts (CP-4)** -- Already observed in field test. Fix at planning time: tasks touching same file go to same worker. Sequential fallback for unavoidable overlaps. Do NOT use git worktrees.
 
-4. **Visual Clutter from Emoji Overload** — CLI output becomes unreadable due to excessive emoji. **Prevention:** Visual hierarchy (use emojis only for state changes and critical alerts, 5-7 core indicators max), adaptive emoji support (detect terminal capabilities, fall back to text symbols), --plain flag to disable visual flourishes.
-
-5. **Polling Without Backpressure** — Events queue up faster than agents can process, causing death spiral. **Prevention:** Backpressure monitoring (track queue depth, increase polling interval when queue > threshold), event batching (return max 10 events per poll), circuit breaker (stop polling if queue depth > 1000).
-
-**Top v1 pitfalls (still relevant):**
-
-1. **Context Rot in Long-Running Sessions** — LLM attention degrades beyond 50-100 messages. **Prevention:** Triple-layer memory with DAST compression (2.5x ratio), 20% context window budget (max 40k tokens of 200k limit), signal decay with explicit renewal.
-
-2. **Infinite Spawning Loops** — Agents spawn specialists who spawn more specialists recursively. **Prevention:** Global spawn depth limit (max 3 levels), per-phase spawn quota (max 10 specialists), spawn circuit breaker (auto-triggers after 3 failed spawns in 5 minutes).
-
-3. **JSON State Corruption from Race Conditions** — Multiple agents read/write same JSON file simultaneously. **Prevention:** File locking via `fcntl.flock()`, atomic write pattern (write to temp file, then atomic rename), state versioning with optimistic locking.
+5. **Global learning creates stale knowledge (CP-5)** -- Start with empty global tier, manual promotion only. Cap at 50 entries with decay. Tag learnings by tech stack; filter at retrieval time. Never auto-promote without user approval gate.
 
 ## Implications for Roadmap
 
-Based on research, suggested phase structure for v2:
+Based on combined research, here is the recommended six-phase structure.
 
-### Phase 1: Event Polling Integration
-**Rationale:** Event polling is foundational for reactive agent behavior. Workers must call `get_events_for_subscriber()` to respond to async events (phase_complete, errors, spawn_requests). This is the highest-priority v2 feature and enables other reactive capabilities.
+### Phase 1: Bug Fixes & Safety Foundation
+**Rationale:** Broken foundations invalidate every feature built on top. These are field-tested bugs with known fixes.
+**Delivers:** Reliable pheromone decay, persistent activity logs, phase-attributed errors, wired decision logging, same-file conflict prevention
+**Addresses:** Pheromone decay math (field note 17), activity log overwrite (field note 19), error phase attribution (field note 18), decision log wiring (field note 20), same-file conflicts (field notes 10, 13)
+**Avoids:** CP-4 (file conflicts), pheromone growth bug
+**Stack:** Defensive guards in `aether-utils.sh` (`activity-log-append`, `error-add-phased`), conflict prevention rule in Phase Lead prompt
+**Risk:** LOW -- all fixes are well-understood with verified root causes
 
-**Delivers:** Worker Ant prompts updated with polling sections, subscription patterns during initialization, event reaction logic (phase_complete, error, spawn_request).
+### Phase 2: Critical UX & Friction Reduction
+**Rationale:** Without these, users abandon the system due to friction, not capability. Field note 5 marks context clear prompting as non-negotiable.
+**Delivers:** Context-clear-safe commands (every command ends with "safe to /clear"), auto-continue mode (`/ant:continue --all`), pheromone-first flow (colonize suggests pheromone injection before planning)
+**Addresses:** Context clear prompting (field note 5), auto-continue (field note 26), pheromone-first flow reordering
+**Avoids:** User abandonment from 10 manual approvals; state loss on context clear
+**Stack:** Prompt text changes in command files; `validate-state` call before clear suggestion
+**Risk:** LOW -- prompt text changes and UX flow reordering only
 
-**Addresses:** Event Polling Integration, Event Delivery Tracking, Event Filtering (from FEATURES.md table stakes).
+### Phase 3: Colony Intelligence & Quality Signals
+**Rationale:** Calibrated quality signals are prerequisites for auto-review (Phase 4) and adaptive complexity (Phase 5). Multi-ant colonization and aggressive parallelism unlock colony-level improvements.
+**Delivers:** Watcher scoring rubric with meaningful variance, multi-ant colonization with synthesis, aggressive wave parallelism, Phase Lead auto-approval for low-complexity plans
+**Addresses:** Watcher scoring (field note 24), multi-ant colonization (field note 7), parallelism (field note 10), auto-approval (field note 22)
+**Avoids:** CP-3 prerequisite (review fatigue -- must calibrate scoring before adding automation)
+**Stack:** Rubric definition in watcher-ant.md; colonize.md multi-colonizer spawning; build.md parallelism in wave execution
+**Risk:** MEDIUM -- watcher rubric needs empirical validation to confirm score variance
 
-**Avoids:** Polling thundering herd, polling without backpressure, event loss during async operations (from PITFALLS.md).
+### Phase 4: Automation & New Capabilities
+**Rationale:** With calibrated quality signals in place, automation becomes meaningful. Auto-reviewer, tech debt reporting, and animated indicators all depend on reliable scoring and persistent logs.
+**Delivers:** Auto-spawned reviewer (advisory, post-wave), auto-spawned debugger (on test failure), tech debt report generation, pheromone recommendations after builds, animated build indicators (progress bars, caste colors)
+**Addresses:** Auto-reviewer/debugger (field note 8), tech debt surfacing (field note 11), pheromone recommendations (field note 9), animated indicators (field note 15)
+**Avoids:** CP-3 (review fatigue -- reviewer is advisory only, severity-gated display, max 2 iterations)
+**Stack:** build.md Step 5c modification for reviewer auto-spawn; ANSI progress bars via `progress-bar` subcommand; tech debt aggregation from activity log
+**Risk:** MEDIUM -- auto-reviewer false positive rate needs tuning; animated output limited by Task tool buffering (static progress bars are the fallback)
 
-**Dependencies:** None (event bus already exists from v1 Phase 9).
+### Phase 5: Architecture Evolution
+**Rationale:** Two-tier learning and the spawn tree engine are the most complex additions. They benefit from having all preceding infrastructure (bug fixes, calibrated scoring, auto-review) in place. Platform constraint validation must happen before spawn tree implementation.
+**Delivers:** Two-tier learning system (project + global with manual promotion), spawn tree engine (Queen-mediated recursive delegation), adaptive complexity mode (LIGHTWEIGHT/STANDARD/FULL per phase)
+**Addresses:** Tiered learning (field note 12), recursive spawning (field note 23), adaptive complexity (field notes 31, 21)
+**Avoids:** CP-1 (platform limitation -- validate first), CP-2 (context telephone -- depth limit 2), CP-5 (stale knowledge -- manual promotion, cap at 50), CP-6 (wrong mode -- user confirmation always)
+**Stack:** `~/.aether/learnings.json` (new global store), COLONY_STATE.json `mode` and `spawn_tree` fields, 3 new aether-utils.sh subcommands, build.md major rewrite for tree execution
+**Risk:** HIGH -- spawn tree is the core execution loop rewrite; two-tier learning promotion heuristics are unproven; adaptive mode thresholds need empirical tuning
 
-**Research needed:** Standard patterns (event bus implementation verified). Skip `/cds:research-phase`.
-
-### Phase 2: Visual Indicators & E2E Testing
-**Rationale:** Visual indicators improve UX immediately and are independent of event polling. E2E testing guide validates both event polling and visual indicators, so it naturally follows implementation. These are medium-priority features that polish v2 for release.
-
-**Delivers:** Command prompt output templates with emoji, progress bar formatting, structured section borders; E2E_TEST_GUIDE.md with scenarios (init, execute, spawn, memory, voting), expected outputs, verification checklists.
-
-**Addresses:** Visual Activity Indicators, Progress Feedback, Manual E2E Test Guide (from FEATURES.md table stakes).
-
-**Avoids:** Visual clutter from emoji overload, LLM test flakiness, test brittleness from exact assertions (from PITFALLS.md).
-
-**Uses:** Unicode emojis, Markdown test guides (from STACK.md).
-
-**Research needed:** Medium — CLI visual patterns have community consensus but need user validation. Consider `/cds:research-phase` for CLI UX patterns.
-
-### Phase 3: Caste-Specific Event Sensitivity & Advanced Features
-**Rationale:** Caste-specific sensitivity enhances event polling without changing its core. Once basic polling works, making it caste-specific is a natural improvement. Event-driven spawning triggers and visual dashboard are "nice to have" features that complete the v2 vision.
-
-**Delivers:** Caste-specific event subscriptions (Colonizer prioritizes "spawn_request", Watcher prioritizes "error"), event-driven spawning triggers ("spawn_request" events trigger Bayesian spawning), visual pheromone strength indicators.
-
-**Addresses:** Caste-Specific Event Sensitivity, Event-Driven Spawning Triggers, Visual Colony Activity Dashboard, Visual Pheromone Strength Indicators (from FEATURES.md competitive features).
-
-**Uses:** Pheromone sensitivity profiles from v1, event polling from Phase 1.
-
-**Research needed:** Low — extends existing patterns. Skip `/cds:research-phase`.
+### Phase 6: Polish & Safety Rails
+**Rationale:** Lowest priority, highest sensitivity to user trust. Ship last with maximum safety rails and dry-run enforcement.
+**Delivers:** Organizer/archivist ant (report-only file staleness), pheromone user documentation, colonizer visual output restoration, learning promotion mechanism (auto-suggestion with batch user approval)
+**Addresses:** Archivist ant (field note 14), pheromone docs (field note 16), colonizer visuals (field note 15), learning promotion UX
+**Avoids:** CP-7 (false deletion -- report only, protected file patterns, dry-run enforcement for first 3 runs)
+**Stack:** architect-ant.md with archivist task prompt; protected file pattern list; documentation in pheromone command files
+**Risk:** LOW-MEDIUM -- archivist has trust risk if safety rails are insufficient; documentation is straightforward
 
 ### Phase Ordering Rationale
 
-**Why this order based on dependencies:**
-- Phase 1 (Event Polling) must come first because it enables reactive behavior, foundational for async coordination. Visual indicators and testing both depend on event polling working.
-- Phase 2 (Visuals + Testing) groups independent features that polish v2. Visual indicators are UX improvements that can be built in parallel with event polling. E2E testing validates both Phase 1 and Phase 2, so it naturally follows implementation.
-- Phase 3 (Advanced Features) builds on Phase 1's event polling foundation. Caste-specific sensitivity and event-driven spawning are enhancements to the core polling mechanism.
-
-**Why this grouping based on architecture patterns:**
-- Phase 1 implements Event Polling Layer (from ARCHITECTURE.md)
-- Phase 2 implements Visual Indicators Layer and E2E Testing Layer (from ARCHITECTURE.md)
-- Phase 3 refines Event Polling Layer with caste-specific behavior
-
-**How this avoids pitfalls from research:**
-- Phase 1 avoids thundering herd by implementing jitter and backpressure from day one
-- Phase 2 avoids visual clutter by following emoji hierarchy guidelines
-- Phase 2 avoids test flakiness by using golden datasets and fuzzy assertions
-- All phases avoid v1 pitfalls (context rot, infinite spawning, JSON corruption) by following established prevention patterns
+- **Phase 1 before everything:** Bug fixes remove invalid system behavior that would corrupt testing of all subsequent features. Conflict prevention is required before any increase in parallelism.
+- **Phase 2 before Phase 3:** UX friction reduction lets developers actually USE the system through multi-phase sessions, generating the field data needed to validate Phase 3 improvements.
+- **Phase 3 before Phase 4:** Calibrated watcher scoring is a hard prerequisite for meaningful auto-review. Adding auto-review on top of flat 8/10 scores is theater.
+- **Phase 4 before Phase 5:** Automation features (auto-reviewer, tech debt) validate the quality signal pipeline that adaptive complexity and the spawn tree engine depend on for mode selection and sub-spawn quality gates.
+- **Phase 5 before Phase 6:** Architecture evolution provides the infrastructure (global learning tier, spawn tree) that the archivist and learning promotion mechanism build upon.
+- **Phase 6 last:** Archivist and learning promotion are high-sensitivity features that benefit from all prior infrastructure and maximum user trust built through successful earlier phases.
 
 ### Research Flags
 
-**Phases likely needing deeper research during planning:**
-- **Phase 2 (CLI Visual Indicators):** Medium confidence on CLI UX patterns. Emoji usage has community consensus but lacks rigorous user testing. Consider `/cds:research-phase` to validate terminal compatibility and accessibility.
+Phases likely needing deeper research during planning:
+- **Phase 3 (Colony Intelligence):** Watcher scoring rubric design requires testing against intentionally varied code quality to confirm meaningful score differentiation. Multi-colonizer synthesis pattern is novel -- no documented precedent.
+- **Phase 5 (Architecture Evolution):** Spawn tree engine requires a 30-minute platform validation test before any implementation. Adaptive mode thresholds (file count, language count, task count) need empirical calibration. Two-tier learning promotion heuristics (substring matching for deduplication) are crude and may need refinement.
 
-**Phases with standard patterns (skip research-phase):**
-- **Phase 1 (Event Polling Integration):** HIGH confidence. Event bus implementation verified in codebase (879 lines). Pull-based polling pattern confirmed optimal for prompt-based agents.
-- **Phase 2 (E2E Testing):** HIGH confidence. Manual LLM testing approach validated by multiple sources (Maxim AI, Orq.ai, QAWerk). TAP format already used in existing tests.
-- **Phase 3 (Caste-Specific Sensitivity):** HIGH confidence. Extends existing pheromone sensitivity profiles from v1. Pattern is well-understood.
+Phases with standard patterns (skip research-phase):
+- **Phase 1 (Bug Fixes):** All fixes have verified root causes and known solutions. Defensive math guards, append mode, field addition are straightforward.
+- **Phase 2 (UX):** Context clear prompting and auto-continue are prompt text changes with no architectural risk.
+- **Phase 4 (Automation):** Auto-reviewer follows well-documented patterns (Zencoder post-execution verification, Amazon Q review agent). ANSI progress bars are a solved problem.
+- **Phase 6 (Polish):** Archivist is report-only (no architectural risk). Documentation is documentation.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Verified against existing Aether codebase (event-bus.sh, atomic-write.sh, file-lock.sh). Pull-based polling pattern confirmed optimal for prompt-based agents. |
-| Features | HIGH | Table stakes features identified from competitor analysis (AutoGen, LangGraph, CrewAI). Differentiators confirmed unique to Claude-native systems. |
-| Architecture | HIGH | Integration points verified against v1 codebase. Component boundaries clear. Data flow patterns follow established event-driven architecture. |
-| Pitfalls | HIGH | v1 pitfalls documented in CONCERNS.md (internal analysis). v2 pitfalls researched from multiple sources (academic papers, GitHub issues, engineering blogs). |
+| Stack | HIGH | Zero new dependencies. All solutions verified against existing codebase. Decay math root cause confirmed by testing actual field data. |
+| Features | MEDIUM-HIGH | Table stakes validated against AutoGen, CrewAI, LangGraph, OpenAI Agents SDK. Differentiators are novel (no competitor comparison possible). Anti-features well-supported by industry failures. |
+| Architecture | HIGH | Based on direct codebase analysis of all 13 commands, 6 worker specs, 3 utilities. Platform constraints verified via Claude Code documentation and GitHub issues. |
+| Pitfalls | HIGH | 5 of 7 critical pitfalls grounded in Aether's own field test data. Remaining 2 supported by multi-agent systems research (Google DeepMind, ROMA framework, 30 Failure Modes study). |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Polling frequency tuning:** Research confirms "poll at execution boundaries" but doesn't define optimal frequency. How often is "often enough"? **Handle during implementation:** Start with "poll after every action" (file writes, command execution), measure latency, optimize in v3 if needed.
-- **LLM judgment calibration:** Manual test guides require Claude to make judgment calls (e.g., "Is this response helpful?"). Research doesn't specify how to structure validation instructions for consistent judgment. **Handle during implementation:** Iterate on test guide instructions during Phase 2, gather feedback from manual test runs.
-- **Emoji fallback testing:** Unicode emoji support verified for modern terminals, but ASCII fallback pattern not specified. **Handle during implementation:** Test emoji support during Phase 2, implement adaptive output (--plain flag) if terminals show ? boxes.
-- **User validation for visual indicators:** Emoji and progress bars seem helpful, but no user feedback data. **Handle during implementation:** Gather user feedback after v2 ships, iterate on visual hierarchy in v3.
+- **Recursive spawning platform validation:** Must test whether Task tool is truly unavailable to subagents in current Claude Code version before designing spawn tree. A 30-minute test at the start of Phase 5 planning resolves this definitively.
+- **Watcher scoring rubric calibration:** No existing data on what makes a "good" rubric for Aether's code review context. Must test against varied quality code during Phase 3 implementation. Expect 2-3 iterations to calibrate.
+- **Adaptive mode thresholds:** File count, language count, and task count thresholds for LIGHTWEIGHT/STANDARD/FULL mode selection are educated guesses. Need 5+ real project runs to validate. Start conservative (default to STANDARD/FULL, only trigger LIGHTWEIGHT for obviously trivial projects).
+- **Global learning substring matching:** The proposed deduplication mechanism (case-insensitive substring match) will produce false positives for short strings and false negatives for paraphrased learnings. Acceptable for v4.4 MVP but should be revisited if global tier exceeds 20 entries.
+- **Auto-continue user agency:** Design question -- full auto (run all phases) vs semi-auto (auto-continue but pause on watcher failures). Field data from Phase 2 deployment will inform the right default.
+- **CLI animation limitations:** Task tool buffers all output. Live spinners and streaming progress are impossible. Static progress bars between worker completions are the only viable pattern. This is a platform constraint, not a gap to fix.
 
 ## Sources
 
-### Primary (HIGH confidence)
+### Primary (HIGH confidence -- verified by testing or direct analysis)
+- Aether v4.3 codebase: 13 commands, 6 worker specs, 3 utility files, 6 state files
+- v5 Field Notes: 32 notes from 2026-02-04 live test on filmstrip project
+- Decay math verification: jq `exp()` tested with known values; negative elapsed confirmed as root cause
+- [Claude Code Task tool limitation -- GitHub #4182](https://github.com/anthropics/claude-code/issues/4182)
+- [Claude Code subagent documentation](https://code.claude.com/docs/en/sub-agents)
+- [Anthropic multi-agent research system](https://www.anthropic.com/engineering/multi-agent-research-system)
 
-**Official Aether codebase:**
-- `.aether/utils/event-bus.sh` — 879 lines, pull-based event delivery pattern verified
-- `.aether/utils/atomic-write.sh` — Corruption-safe write pattern
-- `.aether/utils/file-lock.sh` — Concurrent access prevention
-- `.planning/phases/10-colony-maturity/tests/integration/full-workflow.test.sh` — TAP format test pattern
-- `.planning/codebase/CONCERNS.md` — Known pitfalls, race condition risks
+### Secondary (MEDIUM-HIGH confidence -- verified with official sources + multiple community sources)
+- Multi-agent coordination: [Google DeepMind Scaling Agent Systems](https://arxiv.org/html/2512.08296v1), ROMA framework, [Galileo coordination strategies](https://galileo.ai/blog/multi-agent-coordination-strategies)
+- Competitor analysis: AutoGen, CrewAI, LangGraph, OpenAI Agents SDK official documentation
+- File conflict prevention: [Swarm-IOSM](https://dev.to/rokoss21/parallel-agents-are-easy-shipping-without-chaos-isnt-1kek), Cursor 2.0 worktree approach, Claude multi-agent file locking
+- Memory architectures: [CrewAI memory docs](https://docs.crewai.com/en/concepts/memory), [G-Memory hierarchical MAS](https://arxiv.org/abs/2506.07398), [Agentic Memory](https://arxiv.org/html/2601.01885v1)
+- Code review accuracy: [CodeAnt analysis](https://www.codeant.ai/blogs/ai-code-review-accuracy), Stack Overflow 2025 Developer Survey
 
-**Official Anthropic documentation:**
-- [Claude Code Sandboxing](https://www.anthropic.com/engineering/claude-code-sandboxing) — No persistent process support (validates pull-based approach)
-- [Effective Context Engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) — Context optimization for testing
-
-**Academic research:**
-- [On the Flakiness of LLM-Generated Tests](https://arxiv.org/html/2601.08998v1) — Research on test flakiness (HIGH confidence, academic paper)
-- [Understanding and Improving Flaky Test Classification](https://www.cs.cornell.edu/~saikatd/papers/flakylens-oopsla25.pdf) — Cornell research 2025 (HIGH confidence)
-- [arXiv: 1/3 agents fall into infinite loops](https://arxiv.org/html/2512.01939v1) — Academic research on spawning loops (HIGH confidence)
-- [Design, Implementation and Evaluation of a Real-Time Filtering System](https://arxiv.org/html/2508.18787v1) — Dynamic signal filtering (MEDIUM confidence)
-
-### Secondary (MEDIUM confidence)
-
-**Event polling patterns:**
-- [Polling Is Not the Problem—Bad Polling Is](https://beingcraftsman.com/2025/12/31/polling-is-not-the-problem-bad-polling-is/) — Best practices for 2025
-- [Data Ingestion Patterns: Push, Pull & Poll Explained (Dagster)](https://dagster.io/blog/data-ingestion-patterns-when-to-use-push-pull-and-poll) — Pull vs push use cases
-- [Event-Driven Architecture: Watch Out For These Pitfalls](https://www.forbes.com/councils/forbestechcouncil/2025/11/26/event-driven-architecture-watch-out-for-these-pitfalls-and-drawbacks/) — Distributed system challenges
-
-**LLM testing approaches:**
-- [How to Evaluate AI Agents: A Practical Checklist for Production (Maxim AI)](https://www.getmaxim.ai/articles/how-to-evaluate-ai-agents-a-practical-checklist-for-production/) — Evaluation checklist
-- [A Comprehensive Guide to Evaluating Multi-Agent LLM Systems (Orq.ai)](https://orq.ai/blog/multi-agent-llm-eval-system) — Multi-agent evaluation patterns
-- [10 LLM Testing Strategies To Catch AI Failures](https://galileo.ai/blog/llm-testing-strategies) — Practical testing approaches
-
-**CLI visual indicators:**
-- [CLI UX best practices: 3 patterns for improving progress displays](https://evilmartians.com/chronicles/cli-ux-best-practices-3-patterns-for-improving-progress-displays) — Progress display patterns
-- [Terminal UI Libraries (LFX Insights)](https://insights.linuxfoundation.org/collection/terminal-ui-libraries) — Terminal UI patterns
-
-**Context rot & memory issues:**
-- [Medium: Context rot confirmed real in 2025](https://medium.com/@umairamin2004/why-multi-agent-systems-fail-in-production-and-how-to-fix-them-3bedbdd4975b) — Multi-agent failure modes
-- [Reddit: Claude Code context window strategy (20% rule)](https://www.reddit.com/r/ClaudeAI/comments/1p05r7p/my_claude_code_context_window_strategy_200k_is) — Community practice
-
-**Infinite loops & spawning:**
-- [Medium: Why multi-agent systems fail](https://medium.com/@umairamin2004/why-multi-agent-systems-fail-in-production-and-how-to-fix-them-3bedbdd4975b) — Failure modes analysis
-- [GitHub: OpenAI agents infinite recursion issue](https://github.com/openai/openai-agents-python/issues/668) — Confirmed bug
-
-**JSON state & race conditions:**
-- [GitHub: Langflow race condition data corruption](https://github.com/langflow-ai/langflow/issues/8791) — Confirmed bug
-- [Milvus Blog: Why Claude Code Feels So Stable](https://milvus.io/blog/why-claude-code-feels-so-stable-a-developers-deep-dive-into-its-local-storage-design.md) — JSONL for stability
-
-### Tertiary (LOW confidence)
-
-**Event-driven multi-agent systems:**
-- [AI Agents Must Act, Not Wait: A Case for Event-Driven Multi-Agent Design (Medium)](https://seanfalconer.medium.com/ai-agents-must-act-not-wait-a-case-for-event-driven-multi-agent-design-d8007b50081f) — Event-driven design patterns
-- [Stop Polling. Start Listening: Event-Driven Architecture](https://www.hkinfosoft.com/stop-polling.start-listening/the-power-of-event-driven-architecture/) — Pitfalls of polling
-
-**CLI emoji usage:**
-- [Add emoji/visual indicators to CLI output for better UX (GitHub Issue)](https://github.com/josharsh/mcp-jest/issues/19) — GitHub issue, single source
-- [State of Terminal Emulators in 2025](https://news.ycombinator.com/item?id=45799478) — Community discussion
+### Tertiary (MEDIUM confidence -- single source or community patterns)
+- Two-tier memory promotion heuristics: [AIS practical memory patterns](https://www.ais.com/practical-memory-patterns-for-reliable-longer-horizon-agent-workflows/), [arXiv Memory OS](https://arxiv.org/abs/2506.06326)
+- Claude Code swarm orchestration: [community gist -- TeammateTool pattern](https://gist.github.com/kieranklaassen/4f2aba89594a4aea4ad64d753984b2ea)
+- Dead code cleanup: [Meta SCARF framework](https://engineering.fb.com/2023/10/24/data-infrastructure/automating-dead-code-cleanup/), [Varonis archival best practices](https://www.varonis.com/blog/4-secrets-for-archiving-stale-data-efficiently)
 
 ---
-*Research completed: 2026-02-02*
+*Research completed: 2026-02-04*
 *Ready for roadmap: yes*

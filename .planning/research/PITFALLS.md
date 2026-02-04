@@ -1,888 +1,344 @@
-# Domain Pitfalls
+# Pitfalls Research
 
-**Domain:** Multi-Agent Systems with Event Polling, LLM Testing, and CLI Visual Indicators
-**Researched:** 2026-02-02
-**Overall Confidence:** MEDIUM
+**Domain:** Multi-agent colony system hardening (v4.4)
+**Researched:** 2026-02-04
+**Confidence:** HIGH (grounded in Aether's own field-test data + current multi-agent research)
+
+**Scope:** This research covers NEW pitfalls for v4.4 features only. Pitfalls from v1-v4 (context rot, infinite spawning, JSON corruption, prompt brittleness) are already mitigated. See prior research for those.
+
+---
 
 ## Critical Pitfalls
 
-Mistakes that cause rewrites or major issues.
+Mistakes that cause rewrites, system instability, or fundamental design flaws.
 
-### Pitfall 1: Context Rot in Long-Running Sessions
+### CP-1: Recursive Spawning Hits Claude Code's Task Tool Limitation
 
-**What goes wrong:**
-As conversations extend beyond 50-100 messages, LLM attention degrades. Agents forget earlier instructions, contradict themselves, and lose coherence. Research confirms context rot is "real with long-running chats" in 2025.
+**What goes wrong:** Aether's worker specs say ants can spawn sub-ants up to depth 3, but Claude Code's Task tool is NOT available to subagents. Subagents spawned via Task cannot themselves use Task to spawn further subagents. The "recursive spawning" that the v4.4 design envisions (Phase Lead spawns workers, workers spawn sub-workers) is broken at depth 2+ in current Claude Code.
 
-**Why it happens:**
-LLMs have limited attention spans. Claude Sonnet 4.5 maintains focus for ~30 hours internally, but production systems often exceed this. Each token added dilutes attention to earlier tokens. Multi-agent systems compound this by passing degraded context between agents.
+**Why it happens:** Claude Code exposes a restricted tool set to subagents: Bash, Glob, Grep, Read, Write, Edit, WebFetch, WebSearch -- but NOT Task. This is a platform constraint, not an Aether bug. GitHub issue #4182 (closed as duplicate, 8 upvotes) confirms this limitation. The current worker specs include spawning instructions that cannot actually execute in subagent context.
 
-**Consequences:**
-- Agents ignore pheromone signals emitted hours ago
-- Spawned specialists receive incorrect context from parent
-- Contradictory behaviors emerge (e.g., Executor violates Redirect signals)
-- User instructions forgotten mid-session
-- Quality degrades gradually, making it hard to detect
+**How to detect early:**
+- Test actual recursive spawning in a live run -- does a depth-2 ant successfully spawn a depth-3 ant?
+- Check if the v5 field test ever achieved depth-2+ spawning (review spawn logs)
+- The field notes don't mention recursive spawning succeeding or failing -- it may never have been tested at depth 2+
 
-**Prevention:**
-1. **Triple-layer memory with aggressive compression**: DAST (Discriminative Abstractive Summarization Technique) compresses working memory 2.5x at phase boundaries
-2. **Context window budgeting**: Never exceed 20% of 200k token limit for active context. Reddit community confirms this strategy
-3. **Signal decay with explicit renewal**: Pheromone signals have half-lives (1-24 hours). Critical signals must be re-emitted before decay
-4. **Context pruning**: Remove irrelevant historical context, keep only signals and current task state
-5. **Context quality over quantity**: 2025 research emphasizes optimizing context quality, not maximizing token count
+**Prevention strategy:**
+- Before implementing deeper recursive delegation, validate the platform capability with a simple test: spawn a subagent, have it attempt to spawn another subagent via Task tool, observe whether it succeeds
+- If Task tool is unavailable to subagents (likely), there IS a viable workaround: `claude -p` via Bash. The parent ant writes context to a temp file, invokes `claude -p` with the worker spec, and reads a structured result file. This loses structured Task tool benefits (progress tracking, type system) but enables recursive delegation
+- Design the recursive spawning feature to gracefully degrade: if Task tool is available, use it; if not, fall back to `claude -p` wrapper; if neither works, report the gap to parent and handle inline
+- Consider whether the hub-and-spoke model (Queen as sole spawner) is actually the CORRECT architecture given platform constraints, rather than fighting the platform. The Queen already serializes context well -- recursive delegation adds complexity with unclear benefit
 
-**Detection:**
-- Agent contradicts earlier instruction (warning sign)
-- Spawned specialist asks questions parent should know
-- Pheromone signals ignored despite recent emission
-- Response quality drops measurably over time
-- Agent "loses the plot" mid-task
+**Recovery if it happens:** Fall back to hub-and-spoke with enhanced Phase Lead plans that pre-decompose work so deep nesting is unnecessary.
 
-**Phase to address:** Phase 3 (Triple-Layer Memory implementation)
+**Phase to address:** FIRST -- this is a foundational platform constraint that shapes every other feature. Must be validated before designing recursive delegation.
+
+**Confidence:** HIGH -- platform limitation confirmed via GitHub issue #4182 and Claude Code subagent documentation.
 
 ---
 
-### Pitfall 2: Infinite Spawning Loops
+### CP-2: Context Telephone -- Information Degrades at Each Delegation Level
 
-**What goes wrong:**
-Agents spawn specialists who spawn more specialists recursively, exhausting quota and creating infinite trees. OpenAI agents Python repo has active issues about this. Research shows "more than one-third of agents fall into infinite loops during task execution."
+**What goes wrong:** When Ant A spawns Ant B, it serializes relevant context into the Task prompt. Ant B starts with zero conversation history. If Ant B spawns Ant C (via workaround or future Task tool support), it must serialize its understanding -- already a lossy compression of A's context -- into C's prompt. By depth 3, the original intent is mutated or lost entirely. Google Research calls this the "telephone game" of agent delegation chains.
 
-**Why it happens:**
-Agent detects capability gap → spawns specialist → specialist detects different gap → spawns another specialist → loop. No global visibility into spawn tree depth or quota. Circuit breaker never triggers because each spawn looks legitimate locally.
+**Why it happens:** Each Task invocation creates a fresh agent with its own context window. There is no shared memory between parent and child during execution. The parent must decide what context to include, and this decision is itself an LLM judgment call that can be wrong. Multi-agent research documents "intent mutation in delegation chains" where each hop introduces lossy compression.
 
-**Consequences:**
-- API quota exhaustion (95% wasted in failed pilots)
-- Cost explosion (each spawn = new API call)
-- System hangs waiting for spawn tree that never completes
-- Claude Code rate limiting kicks in
-- User abandons system due to cost/speed
+**How to detect early:**
+- Depth-3 agents produce work that diverges from the colony goal
+- Sub-agents ask for clarification that was already provided to their parent
+- Results from deep delegation chains are lower quality than depth-1 results
+- The same task produces different results when executed at depth 1 vs depth 3
 
-**Prevention:**
-1. **Global spawn depth limit**: Max 3 levels deep (configurable). Aether Python prototype has this at lines 61-64
-2. **Per-phase spawn quota**: Max 10 specialists per phase (configurable)
-3. **Spawn circuit breaker**: Auto-triggers after 3 failed spawns in 5 minutes, requires cooldown before reset
-4. **Capability gap cache**: Before spawning, check if this gap was already addressed. Don't spawn same specialist twice for same task
-5. **Spawn cost awareness**: Each spawn decrement quota, display remaining to user
-6. **Max iterations limit**: Set `max_iterations = 5` for any agent loop (industry best practice)
+**Prevention strategy:**
+- Include the VERBATIM colony goal, current phase context, and active pheromones at EVERY spawn level (Aether already does this in worker specs -- preserve this pattern)
+- Add a "delegation chain" section to every Task prompt: "Colony goal > Phase goal > Parent task > Your task" so deep agents see the full hierarchy without relying on intermediate summarization
+- Keep context lean at each level: pass the colony goal verbatim (NEVER summarize it), pass only relevant pheromones, pass the specific task with acceptance criteria
+- Set a quality gate: if a sub-agent's output doesn't reference or align with the colony goal, the parent should re-do the work itself rather than delegating again
+- Limit effective depth to 2 (Queen -> Phase Lead -> Worker) until proven that depth 3 adds value. The field test showed most value at depth 1-2
 
-**Detection:**
-- Spawn depth exceeds 3 levels
-- Same specialist type spawned multiple times for same task
-- Phase quota exhausted before completion
-- Agent spends more time spawning than working
-- API cost spikes unexpectedly
+**Recovery if it happens:** Parent ant completes the sub-task inline with full context rather than re-delegating deeper.
 
-**Phase to address:** Phase 1 (Autonomous Spawning with circuit breakers)
+**Phase to address:** Same phase as recursive spawning implementation.
+
+**Confidence:** HIGH -- well-documented in multi-agent literature (Google Chain of Agents, ROMA framework, MegaAgent research).
 
 ---
 
-### Pitfall 3: JSON State Corruption from Race Conditions
+### CP-3: Auto-Reviewer Creates Blocking Bottleneck (Review Fatigue)
 
-**What goes wrong:**
-Multiple agents read/write same JSON file simultaneously. Last write wins, losing intermediate updates. Langflow GitHub issue #8791 documents actual "data corruption" from this. Aether's meta-learning state and pheromone history are vulnerable.
+**What goes wrong:** Auto-spawned reviewer ants block builders from completing their work or create a flood of low-value findings that the colony must process. If every builder output gets reviewed, and reviews produce "request changes" verdicts, the build-review-rebuild cycle loops indefinitely. The 2025 Stack Overflow Developer Survey found 46% of developers distrust AI code review accuracy. Alert fatigue -- desensitization from too many irrelevant warnings -- erodes trust faster than missed issues.
 
-**Why it happens:**
-Claude Code spawns agents in parallel for speed. Each agent reads JSON, modifies in memory, writes back. No file locking or atomic updates. Python's `json.load()` → modify → `json.dump()` is not atomic. Two agents doing this simultaneously = race condition.
+**Why it happens:** The watcher ant already scores everything 8/10 (field note 24). Adding an auto-reviewer that is ALSO uncalibrated will either (a) rubber-stamp everything (useless) or (b) flag too many issues (blocking). When reviewers cannot distinguish "critical bug" from "style preference," everything becomes noise. One real-world team iterated on thresholds for three weeks before finding a workable false positive rate of ~12.5%.
 
-**Consequences:**
-- Meta-learning confidence scores lost (alpha/beta counts corrupted)
-- Pheromone signals overwritten (emitted signals disappear)
-- Spawn history incomplete (events missing)
-- Colony state inconsistent (working memory says X, short-term says Y)
-- Silent corruption — no error, just wrong data
+**How to detect early:**
+- Review scores cluster around a single value (already happening at 8/10)
+- Build-review cycles exceed 2 iterations for the same task
+- Colony throughput drops after adding auto-review (more spawns, same or less output)
+- User starts dismissing review findings without reading them
+- Auto-reviewer flags the same types of issues repeatedly without the colony learning from them
 
-**Prevention:**
-1. **File locking**: Use `fcntl.flock()` or `portalocker` for all JSON writes
-2. **Atomic write pattern**: Write to temp file, then atomic rename (prevents partial writes)
-3. **State versioning**: Add `_version` field to all JSON. Read version, modify, write only if version unchanged (optimistic locking)
-4. **Single-writer architecture**: Only one agent (Queen?) should write to shared state. Others send messages
-5. **JSONL over JSON**: Use JSONL (JSON Lines) for append-only logs like spawn history. Claude Code uses this for session storage
-6. **State validation**: After load, validate JSON schema. Reject corrupted files with clear error
+**Prevention strategy:**
+- Auto-reviewer must be ADVISORY only, never blocking. It produces findings; the Queen or Phase Lead decides whether to act. Only CRITICAL findings (security vulnerabilities, data loss risks, crashes) should trigger a rebuild request
+- Fix the watcher scoring rubric BEFORE adding auto-review. Without calibrated scoring, auto-review is theater. The rubric must produce meaningfully different scores for different quality levels -- test by running watcher on intentionally bad code vs good code and verifying scores differ
+- Implement severity-gated display: show top 5 findings by severity in the build output, full report available via /ant:status
+- Set a max-iteration cap on build-review cycles: 2 iterations max, then log remaining findings as tech debt and proceed
+- Use pheromone signals to control review intensity: strong FEEDBACK pheromone about quality triggers deeper review; no quality signals triggers lightweight check only
+- Track auto-reviewer accuracy over time: if findings are dismissed >50% of the time, the reviewer needs recalibration
 
-**Detection:**
-- Confidence scores don't sum correctly (alpha + beta ≠ total)
-- Pheromone signal count decreases over time
-- JSON parse errors on startup
-- Spawn history has gaps in timestamps
-- Inconsistent state between memory layers
+**Recovery if it happens:** Disable auto-reviewer for the current phase, collect the backlog of findings into a tech debt report, let the user decide what matters.
 
-**Phase to address:** Phase 2 (Interactive Commands with state management)
+**Phase to address:** Must be implemented AFTER watcher scoring rubric is fixed (field note 24). Without calibrated scoring, auto-review is meaningless.
+
+**Confidence:** HIGH -- supported by Aether field data (flat 8/10 scores) and industry research on AI code review accuracy (CodeAnt, Stack Overflow survey).
 
 ---
 
-### Pitfall 4: Prompt Brittleness and Complexity Explosion
+### CP-4: Same-File Parallel Write Conflicts (Last-Write-Wins)
 
-**What goes wrong:**
-Prompts grow to 3000+ tokens with hardcoded logic, conditional branches, and fragile instructions. Small changes break behavior. Anthropic explicitly warns against "hardcoded, complex, brittle logic in prompts."
+**What goes wrong:** Two or more builder ants modify the same file concurrently. Each ant reads the file at spawn time, makes changes in isolation, and writes back. The last ant to write overwrites all changes from earlier ants. This already happened in the v5 field test (note 13): "one builder had to reapply Phase 1 changes" because another builder overwrote its work.
 
-**Why it happens:**
-Each edge case gets added as prompt instruction. "If X, then do Y, unless Z." Prompt becomes control flow. No refactoring. Prompts are copy-pasted between agents with slight variations. One change requires updating 10 files.
+**Why it happens:** Claude Code Task tool agents operate in isolated contexts. They share the filesystem but have no awareness of each other's pending changes. Aether's file-lock.sh prevents simultaneous byte-level writes (race condition), but it does NOT prevent semantic conflicts -- two agents can both read version N of a file, make different changes, and write version N+1a and N+1b, with N+1b destroying N+1a's changes.
 
-**Consequences:**
-- Prompts unmaintainable (3000+ tokens of conditional logic)
-- Behavior changes unpredictably from minor wording tweaks
-- New features require prompt surgery
-- Prompts diverge between agents (same caste, different behavior)
-- Testing impossible — can't unit test prompt logic
+**How to detect early:**
+- Git diff shows expected changes are missing after a parallel wave completes
+- Watcher reports that previously verified work has reverted
+- Builder reports "file doesn't contain expected code" when building on another builder's work
+- The same learning keeps re-appearing: "parallel workers writing to same file causes conflicts" (field notes 10, 13, 30)
 
-**Prevention:**
-1. **Prompt modules, not monoliths**: Each agent role = separate prompt file. Import/include, don't copy-paste
-2. **Structured outputs over prompt logic**: Use Claude's structured outputs (JSON schema) instead of "if X then output Y" instructions
-3. **Prompt versioning**: Git-track prompts. Version in filenames (e.g., `executor-v3.md`)
-4. **Prompt testing**: Assert outputs match expected schema. CI tests for prompt behavior
-5. **Tool calling over prompting**: For logic, use tools/functions. Prompts should describe goals, not algorithms
-6. **Prompt length budget**: Max 500 tokens per agent prompt. Use includes/shared sections for common text
-7. **Prompt linter**: Check for anti-patterns (over-specific logic, hardcoded values, branching)
+**Prevention strategy:**
+- **Task-level file ownership (primary approach):** Phase Lead or Queen must analyze which tasks touch which files and assign overlapping-file tasks to the SAME worker. This is the approach the field test already learned (notes 10, 13, 30). Implement as a rule in route-setter-ant.md and build.md
+- **File reservation system:** Before a wave starts, the Queen declares which files each worker will modify. Tasks are reassigned to eliminate overlaps. Add a `files_touched` field to task definitions in PROJECT_PLAN.json
+- **Sequential fallback for shared files:** If two tasks MUST modify the same file and MUST be separate workers, run them in separate waves (sequential), never in the same wave (parallel)
+- **Do NOT use git worktree isolation.** It is the industry standard for multi-agent coding (Cursor 2.0 uses it) but is heavyweight for Aether's shell-based architecture and would require managing multiple working directories. Not appropriate for v4.4
 
-**Detection:**
-- Prompt file exceeds 500 tokens
-- Same instruction repeated across 3+ agent prompts
-- Prompt contains "if X then Y" conditional logic
-- Wording changes cause behavior regressions
-- Can't explain prompt logic in 1 sentence
+**Recovery if it happens:** `git diff` to identify missing changes, then re-run the overwritten worker's tasks on the current file state.
 
-**Phase to address:** Phase 4 (Agent Architecture with prompt modularization)
+**Phase to address:** Early -- this is a known, field-tested bug. Should be in the first batch alongside bug fixes.
+
+**Confidence:** HIGH -- directly observed in Aether v5 field test, confirmed as common pattern in multi-agent coding literature.
 
 ---
 
-### Pitfall 5: Memory Bloat from Unbounded Working Memory
+### CP-5: Two-Tier Learning Creates Stale Global Knowledge
 
-**What goes wrong:**
-Working memory grows unbounded. Every file read, tool call, and intermediate result stored. Eventually exceeds context window or causes OOM. Research on "memory overload" shows 10-100x degradation without forgetting mechanisms.
+**What goes wrong:** Global learnings (stored in `~/.aether/`) get applied to projects where they are wrong or harmful. A learning like "always use ESM imports" is correct for a Node.js project but wrong for a legacy CommonJS project. As the global tier accumulates learnings from diverse projects, the noise-to-signal ratio increases and learnings start contradicting each other.
 
-**Why it happens:**
-No eviction policy. Working memory treated as "save everything" log. Compression only happens at phase boundaries, but phases can run for hours. Short-term memory compression is manual, not automatic.
+**Why it happens:** Promotion from project-local to global is a classification problem: "is this learning universal?" LLMs are bad at this judgment because they lack ground truth about all possible project contexts. The 2025 Agentic Memory paper found that retrieval accuracy degrades as similar memories accumulate, making disambiguation harder, and that "utility-based deletion prevents memory bloat and error propagation, yielding up to 10% performance gains over naive strategies."
 
-**Consequences:**
-- Context window overflow (Claude Code has GitHub issue #6186 about this)
-- Token count exceeds 200k, truncation loses critical info
-- Memory search slows (linear scan of 1000s of entries)
-- JSON files become megabytes (slow load/save)
-- Agent attention diluted by irrelevant historical context
+**How to detect early:**
+- Global learnings contradict project-local conventions (global says "use TypeScript" but project is JavaScript)
+- Colony applies a global learning and a watcher flags the result as wrong
+- Same learning appears in global tier with conflicting versions from different projects
+- Global learning count exceeds ~30 entries without curation
 
-**Prevention:**
-1. **Tiered eviction policy**: When working memory hits 80% capacity, evict oldest/lowest-priority entries
-2. **Automatic compression**: Compress to short-term every N messages or M minutes, not just at phase boundaries
-3. **Relevance scoring**: Rank entries by relevance to current task. Evict low-relevance first
-4. **Working memory cap**: Hard limit at 150k tokens (leave 50k buffer). Explicit error if exceeded
-5. **Semantic summarization**: Use DAST to compress related entries into single summary
-6. **Forgetting by design**: Not everything needs to be remembered. FadeMem research shows strategic forgetting improves efficiency 10-100x
+**Prevention strategy:**
+- **Conservative promotion:** Default to local-only. A learning must meet ALL of: (a) validated across 2+ projects, (b) not specific to a tech stack/framework/version, (c) user-approved. Never auto-promote
+- **User-approved promotion:** When a learning seems universal, present it at project completion (not mid-execution). Batch all promotion candidates into a single review. This avoids promotion spam during builds
+- **Tagged learnings:** Every global learning carries metadata: `{source_project, promoted_at, applied_count, success_count, failure_count, tech_tags}`. If failure_count exceeds threshold, auto-demote back to the source project's local tier
+- **Scoped retrieval:** When applying global learnings, filter by relevance to current project. A learning tagged `[node, esm, packaging]` should not apply to a Python project. Use the project's tech stack (from COLONY_STATE or colonizer output) as a filter
+- **Decay mechanism:** Global learnings that haven't been applied in 6 months lose strength. Reuse the pheromone decay math -- learnings have a half-life. Eventually they fall below threshold and are archived, not deleted
+- **Hard cap:** Maximum 50 global learnings. When adding the 51st, the least-used/oldest learning is evicted. This forces quality over quantity
 
-**Detection:**
-- Working memory token count > 150k
-- JSON file > 1MB
-- Search takes > 1 second
-- Context truncation warnings
-- Agent responses reference old, irrelevant context
+**Recovery if it happens:** Add a `suppress` mechanism: user marks a global learning as "not applicable to this project" without deleting it from the global tier. The colony tracks suppressions to inform future scoped retrieval.
 
-**Phase to address:** Phase 3 (Triple-Layer Memory with automatic compression)
+**Phase to address:** Implement the two-tier structure with local-only first. Delay the promotion mechanism to a separate phase. Start with: (1) local learnings enhanced, (2) global tier exists but is empty, (3) manual promotion only. Auto-promotion is a later feature.
+
+**Confidence:** MEDIUM -- the architecture is well-supported by research but the promotion heuristics are unproven in Aether's specific context. Will need empirical tuning.
 
 ---
 
-### Pitfall 6: Polling Thundering Herd (V2)
+### CP-6: Adaptive Mode Selects Wrong Complexity Level
 
-**What goes wrong:**
-All agents start polling simultaneously at the same interval, creating synchronized load spikes. The system appears functional during development but collapses under concurrent load when multiple agents poll events.json or external services simultaneously. Resources become saturated, response times spike, and the system becomes unresponsive.
+**What goes wrong:** The system classifies a complex project as "simple" and runs in lightweight mode, skipping Phase Lead planning, caste specialization, and watcher verification. Critical tasks get under-planned and under-verified. Conversely, a simple project gets classified as "complex" and drowns in colony overhead (already experienced in field note 31 -- 21 tasks of config changes with full colony machinery).
 
-**Why it happens:**
-Developers naturally use the same polling interval across all agents for simplicity. Without randomized jitter, all agents synchronize their polling cycles. This is exacerbated when polling is triggered by shared events (like phase completion) rather than independent timers.
+**Why it happens:** Complexity classification is inherently ambiguous. A project with 5 tasks might be simple (config changes) or complex (distributed system migration). Task count is a poor proxy for complexity. Google DeepMind's 2025 "Scaling Agent Systems" paper found that "coordination yields diminishing or negative returns once single-agent baselines exceed ~45%" -- the threshold for "when multi-agent helps" is task-dependent, not project-dependent. Their research also showed sequential reasoning tasks degraded 39-70% with multi-agent overhead.
 
-**Consequences:**
-- Synchronized I/O spikes cause system freezes
-- events.json file contention leads to read/write errors
-- Multiple agents waste cycles polling when no events exist
-- System appears unresponsive during polling spikes
-- Resource exhaustion (CPU, disk I/O) at regular intervals
+**How to detect early:**
+- Lightweight mode produces incomplete or buggy results on a phase that seemed simple
+- Full colony mode on a simple phase takes 3x longer with no quality improvement vs. inline execution
+- User manually overrides the adaptive mode selection frequently
+- Watcher scores are consistently low in lightweight mode (indicating the mode was wrong)
 
-**Prevention:**
-1. **Randomized jitter**: Add ±20-30% jitter to all polling intervals
-2. **Exponential backoff**: When no events detected, increase interval exponentially (max 60s)
-3. **Staggered initialization**: Add random startup delay (0-5s) before first poll
-4. **Agent-type intervals**: Different agents poll at different rates (VerifierAnt: 10s, ExecutorAnt: 2s)
-5. **Event-based triggers**: Only poll when notified of new events, not continuously
-6. **Minimum interval enforcement**: Never poll faster than 1 second regardless of triggers
+**Prevention strategy:**
+- **User confirmation always:** The adaptive mode SUGGESTS, the user confirms. One-line prompt: "Suggested: lightweight mode (3 tasks, no file overlap, no novel domain). Accept? [Y/override]"
+- **Conservative default:** When uncertain, default to full colony mode. Unnecessary overhead is recoverable; missed critical review on a complex phase is not
+- **Multi-factor classification:** Do NOT use task count alone. Score based on: (a) number of distinct files touched, (b) file overlap between tasks, (c) task dependencies (sequential chain = complex), (d) domain novelty (no prior learnings = complex), (e) pheromone signal intensity (strong FOCUS/REDIRECT = complex situation). Require 3+ "simple" factors to trigger lightweight mode
+- **Per-phase, not per-project:** Mode selection happens per phase, not per project. A project might have simple config phases and complex architecture phases. The filmstrip project had phases 3-5 that were simple but phases 1-2 that were genuinely complex
+- **Ratchet mechanism:** Start in the suggested mode. If a watcher or reviewer flags issues, automatically escalate to full colony mode for the NEXT phase. Do not try to change mode mid-phase
 
-**Detection:**
-- Monitor for synchronized request patterns in logs
-- Watch for CPU/disk I/O spikes at regular intervals
-- Check events.json for contention (multiple readers/writers blocking)
-- Track polling rate vs. event processing rate
+**Recovery if it happens:** Re-run the phase in full colony mode. The lightweight output becomes context that the full colony can build on rather than starting from scratch.
 
-**Phase to address:** Phase 1 (Reactive Event Integration)
+**Phase to address:** Late -- adaptive mode depends on having reliable quality signals (calibrated watcher, functional auto-reviewer) to detect when the wrong mode was selected.
+
+**Confidence:** MEDIUM -- concept well-supported by DeepMind research, but specific thresholds need empirical tuning in Aether.
 
 ---
 
-### Pitfall 7: Event Saturation - Signal Drowning in Noise (V2)
+### CP-7: Archivist Ant Deletes or Archives Important Files
 
-**What goes wrong:**
-The event system generates too many low-value events, making it impossible to identify important signals. Agents spend more time processing irrelevant events than doing useful work. The events.json file grows unbounded, causing performance degradation.
+**What goes wrong:** The archivist ant identifies a file as "stale" and archives or recommends deletion, but the file was actually critical -- just rarely accessed. Examples: disaster recovery configs, seasonal feature flags, migration scripts needed only during upgrades, test fixtures accessed only by CI, environment-specific configs (staging, production).
 
-**Why it happens:**
-Developers log events eagerly for debugging without considering long-term impact. There's no filtering or prioritization of events by importance. Every state transition, pheromone detection, and task update gets logged indiscriminately.
+**Why it happens:** Staleness heuristics based on last-modified time or import analysis are unreliable. Meta's SCARF framework found that static analysis alone misidentifies code used via reflection, dynamic imports, or rare execution paths. The problem compounds with LLM-based analysis because the LLM may not understand the full deployment context (CI pipelines, multi-environment setups) from reading files alone.
 
-**Consequences:**
-- events.json grows unbounded (megabytes, then gigabytes)
-- Event processing becomes bottleneck (agents spend 80% time filtering events)
-- Important signals lost in noise (Redirect pheromones ignored)
-- File I/O slows (reading massive files takes seconds)
-- Memory exhaustion (loading all events into RAM)
+**How to detect early:**
+- Tests start failing after an archivist run
+- Builds break because a config or fixture file is missing
+- User asks "where did X go?" after an archivist phase
+- Git log shows archivist-archived files that are later manually restored
 
-**Prevention:**
-1. **Event priority levels**: CRITICAL, HIGH, MEDIUM, LOW, DEBUG — only log CRITICAL/HIGH by default
-2. **Adaptive filtering**: Only log DEBUG events when system in "debug mode"
-3. **Contextual relevance scoring**: Use research-based adaptive filtering for data saturation
-4. **Temporal decay**: Auto-prune low-priority events after 24 hours, high-priority after 7 days
-5. **Event aggregation**: Combine similar events within time windows (e.g., "5 files read" not 5 separate events)
-6. **Size-based rotation**: Rotate events.json when it exceeds 10MB
+**Prevention strategy:**
+- **Report only, never act:** The archivist produces a REPORT with three confidence tiers: (a) confidently stale -- recommend archival with reasoning, (b) probably stale -- recommend user review, (c) unclear -- flag for awareness. The USER decides. This matches field note 14's design exactly -- follow it
+- **Protected file patterns:** Maintain a hardcoded list of patterns that are NEVER flagged as stale: `*.test.*`, `*.spec.*`, `*.config.*`, `*.env*`, `Dockerfile*`, `*.lock`, `migrations/*`, `.github/*`, `.ci/*`, `*.fixture.*`. These are commonly low-access but critical
+- **Cross-reference before flagging:** Before flagging any file, the archivist must check: (a) is it imported/required by any other file? (b) is it referenced in package.json, CI configs, Dockerfiles, or Makefiles? (c) does it appear in any test configuration? If yes to ANY, it is NOT stale regardless of modification date
+- **Dry run enforcement:** The archivist's first 3 runs on any project MUST be report-only. Only after the user has validated accuracy and explicitly opted in should it gain the ability to move files
+- **Git-based safety:** Before any archival, confirm the file is committed to git. Archival means moving to `.archived/` with a manifest file explaining why, not deletion. Recovery is always `git checkout -- <file>` or moving back from `.archived/`
 
-**Detection:**
-- Monitor events.json size growth rate (alert if > 1MB/hour)
-- Track ratio of events processed vs. meaningful actions taken (should be > 1:10)
-- Measure agent latency attributable to event processing (should be < 20% of total)
-- Alert when event processing exceeds 50% of agent CPU time
+**Recovery if it happens:** `git checkout -- <file>` for immediate restore. Review and update protected file patterns to prevent recurrence.
 
-**Phase to address:** Phase 1 (Reactive Event Integration)
+**Phase to address:** Late -- the archivist is a nice-to-have, not a core fix. Implement after bug fixes, conflict prevention, auto-reviewer, and adaptive mode.
 
----
-
-### Pitfall 8: LLM Test Flakiness from Non-Determinism (V2)
-
-**What goes wrong:**
-Tests generated by LLMs pass sometimes and fail other times without code changes. This erodes trust in the testing system. Developers start ignoring test failures or disabling tests, defeating the purpose of verification.
-
-**Why it happens:**
-LLMs are inherently non-deterministic. The same prompt can produce different outputs across runs. Test assertions may be too strict (exact string matching) or too permissive (catching nothing). Insufficient context provided to LLMs causes flakiness.
-
-**Consequences:**
-- CI builds fail randomly (same code, different result)
-- Developers lose trust in test suite (ignore failures)
-- Time wasted debugging "flaky" tests instead of real issues
-- Test suite disabled entirely (defeating purpose of verification)
-- False confidence (tests pass but bugs exist)
-
-**Prevention:**
-1. **Golden datasets**: Use consistent test inputs with known expected outputs
-2. **Fuzzy assertions**: Semantic similarity, not exact string matching (e.g., "contains 'user authenticated'")
-3. **Temperature control**: Set temperature 0.0-0.2 for deterministic test generation
-4. **Comprehensive context**: Provide code under test, requirements, examples to LLM
-5. **Consensus testing**: Run LLM tests 3 times, require 2/3 to pass (majority vote)
-6. **Separate test suites**: Isolate LLM tests from traditional unit tests (different CI jobs)
-7. **Flakiness tracking**: Track test pass rate over time, flag tests with < 80% consistency
-
-**Detection:**
-- Track test flakiness rate (tests that pass < 80% of time without code changes)
-- Monitor correlation between test failures and LLM model version changes
-- Flag tests with high variance in execution time (> 2x deviation)
-- Alert when same test fails 2x in 10 runs with no code changes
-
-**Phase to address:** Phase 2 (LLM Testing Integration)
-
----
-
-### Pitfall 9: Visual Clutter - Emoji Overload (V2)
-
-**What goes wrong:**
-The CLI output becomes unreadable due to excessive emoji and visual indicators. Users can't quickly identify important information amidst decorative symbols. The terminal output looks "busy" but communicates poorly. In terminals without emoji support, output appears as garbled characters.
-
-**Why it happens:**
-Developers add emojis to every status message for visual appeal without considering information hierarchy. There's no distinction between decorative and functional indicators. The system doesn't check for terminal Unicode support before using emojis.
-
-**Consequences:**
-- Users can't find errors in verbose emoji-filled output
-- Terminal renders as garbled text in CI/CD logs (no emoji support)
-- Accessibility issues (screen readers announce emoji names, not semantic meaning)
-- Output scrolls too fast to read (too much visual noise)
-- Professional appearance lost (looks like toy, not tool)
-
-**Prevention:**
-1. **Visual hierarchy**: Use emojis only for state changes and critical alerts (5-7 core indicators max)
-2. **Adaptive emoji support**: Detect terminal capabilities, fall back to text symbols (+, x, >)
-3. **Core indicators only**: ✓ success, ✗ error, ⚠ warning, ⟳ in-progress, ℹ info
-4. **Color coding primary**: Use ANSI colors as primary indicator, emojis as secondary
-5. **--plain flag**: Provide option to disable all visual flourishes
-6. **Clarity over decoration**: Follow "Clarity and Control" principles for terminal UX
-
-**Detection:**
-- User complaints about unreadable output
-- Terminal rendering issues in CI/CD logs (garbled characters)
-- Time to scan output for errors increases (> 5 seconds to find error)
-- A/B test shows users find plain-text output faster to parse
-
-**Phase to address:** Phase 2 (CLI Visual Indicators)
-
----
-
-### Pitfall 10: Test Generation Without Coverage Goals (V2)
-
-**What goes wrong:**
-The LLM generates many tests that cover the same happy path while missing edge cases and error conditions. Coverage reports look good (80%+) but critical failure modes remain untested. The system passes all tests but fails in production.
-
-**Why it happens:**
-LLMs tend to generate obvious, straightforward tests. Without explicit coverage goals, they focus on normal operation rather than boundary conditions. There's no feedback loop to identify what's NOT being tested.
-
-**Consequences:**
-- False confidence (high coverage, low protection)
-- Production bugs in untested edge cases (null inputs, concurrent access)
-- Test suite passes but system crashes on invalid input
-- Time wasted writing redundant tests (same path tested 10x)
-- Missing tests for error handling (exceptions, timeouts)
-
-**Prevention:**
-1. **Coverage targets before generation**: Require branch coverage > 70%, line coverage > 80%
-2. **Explicit edge case prompting**: "Generate tests for: null inputs, empty strings, negative numbers, concurrent access"
-3. **Coverage gap feedback**: Analyze coverage, feed gaps back to LLM for additional tests
-4. **Property-based testing**: Use Hypothesis for data validation logic (test invariants, not examples)
-5. **Uncovered code list**: Maintain list of untested functions, require explicit sign-off
-6. **Negative test requirement**: Require at least 1 error test per function (what happens on failure?)
-
-**Detection:**
-- Coverage reports show high line coverage (80%+) but low branch coverage (< 50%)
-- Production bugs occur in code paths with no tests
-- Mutation testing survival rate > 20% (tests too weak to kill mutants)
-- Test suite passes but code crashes on edge case (e.g., empty input)
-
-**Phase to address:** Phase 2 (LLM Testing Integration)
-
----
-
-### Pitfall 11: Polling Without Backpressure (V2)
-
-**What goes wrong:**
-When events queue up faster than agents can process them, the system falls into a death spiral. Polling continues to add more events to the queue while processing falls further behind. Memory usage grows unbounded until the system crashes.
-
-**Why it happens:**
-The polling loop doesn't check if the previous event was processed before fetching new ones. There's no mechanism to detect "falling behind" and slow down polling. The get_events_for_subscriber() function may return all pending events without batching.
-
-**Consequences:**
-- Memory exhaustion (event queue grows without bound)
-- Event processing latency increases (events processed hours after creation)
-- System becomes unresponsive (all resources dedicated to event processing)
-- Crash due to OOM (queue exceeds available RAM)
-- Critical events lost (queue overflow drops oldest events)
-
-**Prevention:**
-1. **Backpressure monitoring**: Track processing queue depth, increase polling interval when queue > threshold
-2. **Event batching**: Return max N events per poll (e.g., 10), process fully before next poll
-3. **Circuit breaker**: Stop polling if queue depth > critical_threshold (e.g., 1000 events)
-4. **Processing lag tracking**: Monitor time from event creation to processing, alert if > 60 seconds
-5. **Priority queues**: Process CRITICAL events first, drop LOW events if overloaded
-6. **Queue depth limits**: Hard limit on queue size (e.g., 1000 events), drop oldest when exceeded
-
-**Detection:**
-- Memory usage grows steadily over time (linear growth)
-- Event processing latency increases (events take longer to process)
-- Queue depth metrics show monotonic growth (never decreases)
-- System becomes sluggish (all CPU spent polling/processing)
-
-**Phase to address:** Phase 1 (Reactive Event Integration)
-
----
-
-### Pitfall 12: Event Loss During Async Operations (V2)
-
-**What goes wrong:**
-Events published during async operations are lost because the publisher doesn't wait for confirmation. The events.json file is written but the write fails silently. Critical state transitions are never recorded, causing agents to miss important signals.
-
-**Why it happens:**
-The publish() function returns immediately without waiting for fsync(). Error handling in async code is incomplete (unhandled promise rejections). File locking is not used, causing race conditions between writers.
-
-**Consequences:**
-- Agents miss expected events (no response to pheromones)
-- Event logs have gaps in sequence numbers (missing events)
-- Critical signals lost (Redirect pheromone not recorded, agent continues banned approach)
-- State inconsistency (some agents see event, others don't)
-- Silent data loss (no error, just missing events)
-
-**Prevention:**
-1. **Write-ahead logging (WAL)**: Write to log first, then to events.json, can recover from log
-2. **Atomic file operations**: Write to temp file, then atomic rename (prevents partial writes)
-3. **Explicit error handling**: All async operations have .catch() handlers, log errors
-4. **Event replay**: On startup, check for unprocessed events, re-send to subscribers
-5. **File locking**: Use flock() for events.json writes, prevent concurrent writes
-6. **Unhandled rejection tracking**: Monitor for unhandled promise rejections, alert immediately
-
-**Detection:**
-- Agents miss expected events (no response to pheromones)
-- Event logs have gaps in sequence numbers
-- Error logs show file write failures (ENOSPC, EACCES)
-- State inconsistency between agents (some see event, others don't)
-
-**Phase to address:** Phase 1 (Reactive Event Integration)
-
----
-
-### Pitfall 13: Test Brittleness from Exact Assertions (V2)
-
-**What goes wrong:**
-LLM-generated tests use exact string matching for assertions. Any minor change in output formatting (added spaces, different wording) causes test failures even when functionality is correct. Developers waste time fixing tests instead of features.
-
-**Why it happens:**
-LLMs generate tests based on examples that use exact matching. There's no guidance on appropriate assertion strategies. The test framework defaults to strict equality without providing semantic comparison tools.
-
-**Consequences:**
-- High test failure rate after refactoring (no functionality changes)
-- Tests fail on whitespace-only changes (e.g., code formatting)
-- Developer time spent on test maintenance > feature development
-- Tests become "brittle" (break easily, low signal-to-noise ratio)
-- Team loses trust in tests (ignore failures, disable suite)
-
-**Prevention:**
-1. **Semantic assertions**: "Contains substring", "matches pattern", "JSON structure match" instead of exact equality
-2. **Normalization**: Strip whitespace, lowercase before text comparison
-3. **Custom matchers**: Provide matchers for common patterns (JSON has field X, datetime within Y, ID format Z)
-4. **Assertion strategy guidelines**: Document and provide examples of good assertions to LLM
-5. **Snapshot testing**: Use snapshot testing for complex outputs, intelligent diffing
-6. **Assertion libraries**: Provide assertion helpers (assertContains, assertMatchesRegex, assertJsonStructure)
-
-**Detection:**
-- High test failure rate after refactoring (no functionality changes)
-- Tests failing on whitespace-only changes
-- Developer time spent on test maintenance > feature development
-- Tests use exact equality (assertEqual, assertStrictEqual) extensively
-
-**Phase to address:** Phase 2 (LLM Testing Integration)
-
----
-
-## Moderate Pitfalls
-
-Mistakes that cause delays or technical debt.
-
-### Pitfall 14: Invisible State Mutations
-
-**What goes wrong:**
-Agent modifies shared state without logging. Other agents can't reproduce or debug issues. Research identifies this as a top failure mode: "invisible state mutations."
-
-**Why it happens:**
-No audit trail. JSON files mutated in place. No "who changed what, when" tracking. State changes are side effects of agent actions, not explicit operations.
-
-**Consequences:**
-- Impossible to debug ("why is confidence score 0.75?")
-- Can't roll back bad state changes
-- Reproducing bugs requires replaying entire session
-- No accountability for bad decisions
-
-**Prevention:**
-1. **Audit log**: Every state change logged with timestamp, agent, and reason
-2. **Immutable operations**: Don't mutate in place. Create new version, link to old
-3. **State diff tools**: Show what changed between operations
-4. **Undo/redo**: Track state history for rollback
-5. **Explicit state transitions**: State changes are first-class operations, not side effects
-
-**Phase to address:** Phase 2 (Interactive Commands with audit logging)
-
----
-
-### Pitfall 15: Coordination Token Waste
-
-**What goes wrong:**
-Agents spend tokens talking to each other instead of working. "Token budgets lost to coordination chatter." Multi-agent systems can waste 95% of tokens on internal communication.
-
-**Why it happens:**
-Every spawn includes full context. Agents re-state what they know. Verbose handoffs. No compression of shared context.
-
-**Consequences:**
-- API costs 10-20x higher than necessary
-- Slower execution (more tokens = slower responses)
-- Context window fills with chatter
-- Effective work rate drops
-
-**Prevention:**
-1. **Minimal handoff context**: Spawn with only task + relevant context, not full conversation
-2. **Shared context compression**: Maintain shared state separately, don't duplicate in each message
-3. **Structured handoffs**: Use JSON schemas for handoffs, not natural language summaries
-4. **Token budget monitoring**: Track coordination vs. work tokens. Alert if coordination > 30%
-5. **Result caching**: Don't re-compute what another agent already did
-
-**Phase to address:** Phase 4 (Agent Architecture with efficient handoffs)
-
----
-
-### Pitfall 16: Hallucination Cascades
-
-**What goes wrong:**
-One agent hallucinates fact, next agent builds on it, third agent "verifies" it. False confidence grows. Research on multi-agent systems shows "hallucination propagation" as a critical failure mode.
-
-**Why it happens:**
-Agents trust each other's output. No ground truth verification. Confidence scores treat hallucinated info as real. No cross-checking against authoritative sources.
-
-**Consequences:**
-- System confidently asserts falsehoods
-- Bugs introduced based on hallucinated APIs
-- Time wasted debugging non-existent issues
-- User loses trust in system
-
-**Prevention:**
-1. **Source verification**: All claims must cite sources (docs, code, web search)
-2. **Confidence calibration**: Low confidence should trigger verification, not blind trust
-3. **Cross-agent validation**: Verifier agents independently check, don't just confirm
-4. **Ground truth checks**: Validate against codebase/docs, not other agents
-5. **Hallucination detection**: Flag claims without sources or with low confidence
-
-**Phase to address:** Phase 5 (Verification with cross-checking)
-
----
-
-## Minor Pitfalls
-
-Mistakes that cause annoyance but are fixable.
-
-### Pitfall 17: Hardcoded Phase Tasks
-
-**What goes wrong:**
-Every phase returns same predefined task list. No adaptation to actual project needs. Aether Python prototype has this at lines 918-955.
-
-**Why it happens:**
-Template-based generation. Planner Ant doesn't analyze codebase, just returns hardcoded list.
-
-**Consequences:**
-- Generic tasks that don't match project
-- Wasted time on irrelevant work
-- Missed project-specific needs
-- Feels like "scripted demo" not intelligent system
-
-**Prevention:**
-1. **Dynamic task generation**: Planner analyzes goal + codebase → custom tasks
-2. **Context-aware planning**: Tasks depend on project state, not templates
-3. **User feedback loop**: Allow user to adjust tasks before execution
-4. **Task prioritization**: Rank tasks by impact/dependencies
-
-**Phase to address:** Phase 2 (Interactive Commands with dynamic planning)
-
----
-
-### Pitfall 18: Pheromone Signal Saturation
-
-**What goes wrong:**
-Too many signals emitted. Agents can't distinguish important from noise. Signal decay doesn't clear fast enough.
-
-**Why it happens:**
-Every action emits signal. No filtering. Signals accumulate faster than decay.
-
-**Consequences:**
-- Agents ignore all signals (noise drowning signal)
-- Redirect signals ineffective
-- Focus signals lost in noise
-- Signal system becomes useless
-
-**Prevention:**
-1. **Signal emission threshold**: Only emit if confidence > threshold or importance > threshold
-2. **Signal coalescing**: Merge similar signals (e.g., multiple "focus database" → one stronger signal)
-3. **Faster decay for low-importance**: Weak signals decay in hours, strong in days
-4. **Signal cap**: Max N active signals. Drop weakest when exceeded
-5. **Signal relevance scoring**: Boost signals relevant to current task
-
-**Phase to address:** Phase 2 (Interactive Commands with signal optimization)
-
----
-
-## Phase-Specific Warnings
-
-| Phase Topic | Likely Pitfall | Mitigation |
-|-------------|---------------|------------|
-| **Phase 1: Autonomous Spawning** | Infinite spawn loops | Circuit breaker + depth limit + spawn cost tracking |
-| **Phase 1: Reactive Event Integration** | Polling thundering herd | Randomized jitter + exponential backoff + staggered init |
-| **Phase 1: Reactive Event Integration** | Event saturation | Priority levels + adaptive filtering + temporal decay |
-| **Phase 1: Reactive Event Integration** | No backpressure | Queue depth monitoring + circuit breaker + priority queues |
-| **Phase 1: Reactive Event Integration** | Event loss during async | Write-ahead logging + atomic writes + file locking |
-| **Phase 2: Interactive Commands** | JSON state corruption | File locking + atomic writes + state versioning |
-| **Phase 2: LLM Testing Integration** | Test flakiness from non-determinism | Golden datasets + fuzzy assertions + consensus testing |
-| **Phase 2: LLM Testing Integration** | Missing coverage goals | Coverage targets before generation + gap feedback + negative tests |
-| **Phase 2: LLM Testing Integration** | Brittleness from exact assertions | Semantic assertions + normalization + custom matchers |
-| **Phase 2: CLI Visual Indicators** | Visual clutter from emoji overload | Visual hierarchy + adaptive emoji support + --plain flag |
-| **Phase 3: Triple-Layer Memory** | Context rot + memory bloat | Automatic compression + eviction policy + 20% context budget |
-| **Phase 4: Agent Architecture** | Prompt brittleness | Prompt modules + structured outputs + 500-token budget |
-| **Phase 5: Verification** | Hallucination cascades | Source verification + cross-agent validation + ground truth checks |
-| **Phase 6: Research Synthesis** | Coordination token waste | Minimal handoffs + shared context + token monitoring |
-
----
-
-## Pitfall-to-Phase Mapping
-
-| Pitfall | Prevention Phase | Verification |
-|---------|------------------|--------------|
-| Context rot | Phase 3 (Memory compression) | Test 100-message session for coherence |
-| Infinite spawning | Phase 1 (Circuit breakers) | Spawn depth never exceeds 3 |
-| JSON corruption | Phase 2 (File locking) | Concurrent agent writes don't lose data |
-| Prompt brittleness | Phase 4 (Prompt modules) | Change 1 instruction, only 1 file affected |
-| Memory bloat | Phase 3 (Eviction policy) | Working memory stays under 150k tokens |
-| State mutations | Phase 2 (Audit logging) | Every state change has timestamp + agent |
-| Token waste | Phase 4 (Efficient handoffs) | Coordination tokens < 30% of total |
-| Hallucination cascades | Phase 5 (Verification) | All claims cite sources |
-| Hardcoded tasks | Phase 2 (Dynamic planning) | Tasks adapt to project needs |
-| Signal saturation | Phase 2 (Signal filtering) | < 10 active signals at any time |
-| **Polling thundering herd** | **Phase 1 (Event polling)** | **Request patterns have jitter, no synchronized spikes** |
-| **Event saturation** | **Phase 1 (Event filtering)** | **events.json < 10MB, processing latency < 1s** |
-| **LLM test flakiness** | **Phase 2 (LLM testing)** | **Test pass rate > 80% across 10 runs** |
-| **Visual clutter** | **Phase 2 (CLI indicators)** | **Plain mode works, emoji < 10% of output** |
-| **Coverage gaps** | **Phase 2 (LLM testing)** | **Branch coverage > 70%, mutation score < 20%** |
-| **No backpressure** | **Phase 1 (Event polling)** | **Queue depth never exceeds threshold** |
-| **Event loss** | **Phase 1 (Event persistence)** | **No gaps in event sequence numbers** |
-| **Brittle assertions** | **Phase 2 (LLM testing)** | **Refactoring doesn't break tests** |
-
----
-
-## "Looks Done But Isn't" Checklist
-
-Things that appear complete but are missing critical pieces.
-
-### v1 Pitfalls (Already Addressed)
-- [ ] **Autonomous spawning**: Often missing circuit breaker reset — verify spawn depth limit actually prevents infinite loops
-- [ ] **Memory compression**: Often missing automatic trigger — verify compression happens without manual command
-- [ ] **State persistence**: Often missing atomic writes — verify concurrent agents don't corrupt JSON
-- [ ] **Prompt modularity**: Often missing shared sections — verify changing instruction doesn't require editing 10 files
-- [ ] **Pheromone signals**: Often missing relevance scoring — verify agents distinguish important signals from noise
-- [ ] **Verification**: Often missing ground truth checks — verify agents don't just confirm each other's hallucinations
-- [ ] **Session persistence**: Often missing context restoration — verify resume has same working memory state
-- [ ] **Meta-learning**: Often missing validation — verify confidence scores actually improve spawn decisions
-
-### v2 Pitfalls (New)
-- [ ] **Event polling**: Often missing backpressure — verify queue depth monitoring and adaptive intervals
-- [ ] **Event filtering**: Often missing priority levels — verify events are tagged and filtered by importance
-- [ ] **LLM tests**: Often missing edge cases — verify error paths and boundary conditions are tested
-- [ ] **Test assertions**: Often missing semantic matching — verify tests use fuzzy assertions not exact strings
-- [ ] **Visual indicators**: Often missing terminal capability detection — verify fallback for non-Unicode terminals
-- [ ] **Error handling**: Often missing from async operations — verify all promises have .catch() handlers
-- [ ] **Event persistence**: Often missing atomic writes — verify temp file + rename pattern
-- [ ] **Agent coordination**: Often missing deadlock prevention — verify timeout on all agent communication
-- [ ] **Resource cleanup**: Often missing on agent termination — verify subagents are cleaned up, files closed
-- [ ] **Test isolation**: Often missing state reset between tests — verify tests don't depend on execution order
-
----
-
-## Recovery Strategies
-
-When pitfalls occur despite prevention, how to recover.
-
-### v1 Pitfalls
-| Pitfall | Recovery Cost | Recovery Steps |
-|---------|---------------|----------------|
-| **Context rot** | HIGH | Compress working memory to short-term, reload compressed state, clear stale signals |
-| **Infinite spawn loop** | LOW | Kill spawn tree, reset circuit breaker, add spawn depth check to prevent recurrence |
-| **JSON corruption** | HIGH | Restore from last checkpoint, implement file locking before next run |
-| **Prompt brittleness** | MEDIUM | Refactor prompt into modules, version control, A/B test changes |
-| **Memory bloat** | MEDIUM | Force manual compression, implement automatic eviction policy |
-| **State mutation bug** | MEDIUM | Replay audit log to identify bad state, revert to pre-bug checkpoint |
-| **Token waste** | LOW | Compress handoff context, implement shared state store |
-| **Hallucination cascade** | HIGH | Identify hallucination source, mark as untrusted, regenerate with verification |
-
-### v2 Pitfalls
-| Pitfall | Recovery Cost | Recovery Steps |
-|---------|---------------|----------------|
-| **Polling thundering herd** | HIGH | 1. Identify all polling locations. 2. Add random jitter (20-30%). 3. Implement staggered restart. 4. Add monitoring for synchronized patterns. |
-| **Event saturation** | MEDIUM | 1. Stop non-critical event logging. 2. Partition events by priority. 3. Prune old events. 4. Implement aggregation for similar events. |
-| **Flaky LLM tests** | HIGH | 1. Isolate flaky tests in separate suite. 2. Add retry logic (3 runs). 3. Implement golden datasets. 4. Switch to semantic assertions. |
-| **Visual clutter** | LOW | 1. Audit emoji usage. 2. Remove decorative emojis. 3. Implement adaptive output. 4. Add --plain flag. |
-| **Missing coverage** | MEDIUM | 1. Run coverage analysis. 2. Identify uncovered paths. 3. Explicitly prompt LLM for edge cases. 4. Add property-based tests. |
-| **Queue overflow** | HIGH | 1. Stop polling immediately. 2. Implement backpressure. 3. Batch processing. 4. Add circuit breaker. |
-| **Event loss** | HIGH | 1. Identify missing events. 2. Implement write-ahead logging. 3. Add atomic file operations. 4. Replay from backup. |
-| **Brittle assertions** | MEDIUM | 1. Replace exact assertions with semantic matchers. 2. Add normalization. 3. Use snapshot testing for complex outputs. |
+**Confidence:** HIGH -- false deletion is a well-documented problem (Meta SCARF framework, Varonis archival research, community reports of AI-generated orphan files).
 
 ---
 
 ## Technical Debt Patterns
 
-Shortcuts that seem reasonable but create long-term problems.
+Patterns that don't break immediately but accumulate cost over time.
 
-### v1 Technical Debt
-| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
-|----------|-------------------|----------------|-----------------|
-| **Hardcoded specialist types** | Quick prototype | Can't adapt to new domains | Never — blocks autonomous spawning |
-| **Manual memory compression** | Simpler implementation | Sessions rot between phases | MVP only, must auto-compress in Phase 3 |
-| **No file locking** | Simpler code | Data corruption under load | Single-agent only, never in multi-agent |
-| **Monolithic prompts** | Faster initial dev | Unmaintainable at 5+ agents | Never — starts causing problems immediately |
-| **JSON for everything** | Simple, human-readable | Slow at scale, no querying | MVP only, migrate to SQLite/db at scale |
-| **Stub verification** | Appears to work | Hallucinations propagate | Never — verification is critical |
-| **No audit trail** | Less code | Impossible to debug | Never, debugging multi-agent is hard enough |
-| **Signal spam** | More "activity" | System becomes unusable | Never, signals must be selective |
-
-### v2 Technical Debt
-| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
-|----------|-------------------|----------------|-----------------|
-| **Hardcoded polling intervals** | Quick implementation, no configuration | Cannot tune per deployment, all agents synchronized | Never - use config with jitter from day 1 |
-| **Logging all events to single file** | Simple pub/sub implementation | File contention, unbounded growth, no pruning | MVP only, must add partitioning before Phase 2 |
-| **Using exact string assertions in tests** | Easy to generate, obvious failures | Brittle tests, high maintenance cost | Prototype only, must replace before integration |
-| **Emoji decorations without detection** | Looks modern, adds visual interest | Garbled output in some terminals, accessibility issues | Never - implement adaptive output from start |
-| **Synchronous test generation (block on LLM)** | Simple control flow | Slow feedback loop, poor UX | Local testing only, must be async for production |
-| **Ignoring LLM non-determinism** | Tests pass initially | Flaky tests in CI, lost trust in testing | Never - address from Phase 2 start |
-
----
-
-## Integration Gotchas
-
-Common mistakes when connecting to external services.
-
-### v1 Integration Issues
-| Integration | Common Mistake | Correct Approach |
-|-------------|----------------|------------------|
-| **Claude API** | Ignoring token limits in streaming responses | Track tokens proactively, budget for full response |
-| **File system** | Assuming write operations are atomic | Use write-then-rename pattern for atomicity |
-| **Git integration** | Committing without diff review | Always show user what will be committed before running `git commit` |
-| **Web search** | Trusting search results without verification | Treat as LOW confidence until verified with official docs |
-| **Code execution** | Running commands without dry-run | Show user command, ask confirmation, then execute |
-| **MCP servers** | Loading all servers globally (context overflow) | Load servers agent-scoped, unload when not needed |
-| **JSON persistence** | Mutating in place, losing history | Version all state, keep audit trail |
-
-### v2 Integration Issues
-| Integration | Common Mistake | Correct Approach |
-|-------------|----------------|------------------|
-| **LLM API for test generation** | No retry logic, fail-fast on rate limits | Exponential backoff, queue requests, respect rate limits |
-| **File system for events.json** | No file locking, async writes without fsync | Use file locks, write-ahead logging, atomic renames |
-| **Terminal output** | Assume Unicode support, no width calculation | Detect capability, use unicode-width library, provide plain fallback |
-| **Git operations for state recovery** | Assume clean working directory | Check status, stash changes, handle merge conflicts |
-| **Subprocess spawning (new agents)** | No process cleanup, orphan processes | Track PIDs, implement graceful shutdown, use process groups |
+| Pattern | What Accumulates | Warning Sign | Prevention |
+|---------|-----------------|--------------|------------|
+| Learning duplication | Same learning stored multiple times with slight wording variations across phases | `memory.json` phase_learnings array contains near-duplicates ("parallel workers cause conflicts" vs "same-file parallel writes lose data") | Implement semantic deduplication before storage: hash content, skip if similarity > 0.8 to existing entry |
+| Event log bloat | events.json grows without bound as phases accumulate | File exceeds 100KB, worker startup slows from reading full events | Implement event archival at phase boundaries (same pattern as activity-log-init) |
+| Spawn outcome drift | Alpha/beta values in spawn_outcomes accumulate indefinitely, making early outcomes permanently dominate | Bayesian confidence barely moves after 20+ spawns even when recent outcomes differ | Implement sliding window: only count the last 20 spawn outcomes per caste, not lifetime total |
+| Pheromone signal accumulation | Decayed pheromones still present in signals array consuming read time | pheromones.json contains 20+ signals, most at negligible strength | pheromone-cleanup exists but must be called at every phase boundary, not just on demand |
+| Worker spec size creep | As features are added (activity logging, spawn gates, post-validation, reviewer triggers), worker specs grow past 400 lines | Spawning cost per agent increases; spec injection consumes large portion of Task prompt token budget | Extract shared infrastructure (spawn gates, activity logging, post-validation) into a worker-common section that all specs reference |
+| Stale decision log | Decisions from early phases remain in memory.json but are no longer relevant | Decision array at cap (30) with entries from phase 0 still present, colony confused by outdated constraints | Auto-archive decisions older than 5 phases; keep recent decisions that are still constraint-relevant |
 
 ---
 
 ## Performance Traps
 
-Patterns that work at small scale but fail as usage grows.
+Issues that degrade colony throughput or user experience.
 
-### v1 Performance Traps
-| Trap | Symptoms | Prevention | When It Breaks |
-|------|----------|------------|----------------|
-| **Linear search memory** | Search slows as memory grows | Add inverted index or vector search | > 1000 memory entries |
-| **Synchronous JSON I/O** | UI freezes during save | Use background threads for file ops | > 1MB JSON files |
-| **No connection pooling** | Each operation opens new connection | Pool connections to external services | > 10 operations/minute |
-| **Redundant embeddings** | CPU spike on repeated text | Cache embeddings with LRU | > 100 embeddings/session |
-| **In-memory vector store** | RAM usage grows unbounded | Use disk-based vector DB | > 10k vectors |
-| **Unbounded log growth** | Disk space fills | Rotate/compress logs, keep retention policy | > 1GB logs |
-| **No rate limiting** | API quota exhaustion | Track usage, throttle before limit | > 100 spawns/hour |
-
-### v2 Performance Traps
-| Trap | Symptoms | Prevention | When It Breaks |
-|------|----------|------------|----------------|
-| **Monolithic events.json file** | Read/write contention, slow polling | Partition by agent type, implement event rotation | > 5 agents, > 100 events/hour |
-| **Unbounded event retention** | File grows until disk full | Temporal decay (auto-prune events > 24h), size limits | > 1000 events in file |
-| **Synchronous LLM calls** | Agents block waiting for tests | Async test generation with callbacks | > 10 test generations/hour |
-| **No event batching** | High overhead per event | Batch reads/writes, coalesce similar events | > 50 events/minute |
-| **Linear event search** | Slow get_events_for_subscriber | Index by subscriber, maintain read caches | > 500 events in file |
-
----
-
-## Security Mistakes
-
-Domain-specific security issues beyond general web security.
-
-### v1 Security Issues
-| Mistake | Risk | Prevention |
-|---------|------|------------|
-| **eval() on JSON keys** | Code injection if JSON tampered | Use `json.loads()` with proper parsing |
-| **Unsafe file paths** | Path traversal attacks | Validate/sanitize all file paths, whitelist allowed dirs |
-| **No auth on operations** | Unauthorized colony control | Add authentication for all colony-changing operations |
-| **Plain text secrets** | Credentials exposed if filesystem compromised | Encrypt sensitive data at rest |
-| **Arbitrary code execution** | Agent runs malicious commands | Sandbox command execution, whitelist allowed commands |
-| **Unchecked imports** | Code injection via import paths | Whitelist allowed modules, validate import paths |
-| **Error leakage** | Stack traces expose system internals | Sanitize error output before display |
-
-### v2 Security Issues
-| Mistake | Risk | Prevention |
-|---------|------|------------|
-| **LLM prompt injection in test generation** | LLM generates malicious tests or code | Sanitize user input, use prompt templates, validate outputs |
-| **Events.json path traversal** | Write files outside intended directory | Validate paths, use chroot, absolute paths only |
-| **Terminal escape sequences in output** | Code execution via ANSI escape codes | Strip control characters, use safe output libraries |
-| **Subprocess injection in agent spawning** | Arbitrary command execution | Whitelist allowed commands, use argument arrays (not strings) |
-| **Test execution with elevated privileges** | Tests modify system files | Run tests in isolated environment, drop privileges |
+| Trap | Impact | Detection | Mitigation |
+|------|--------|-----------|------------|
+| Context serialization cost | Queen serializes full state (6 JSON files) into every worker prompt; can be 5K-10K tokens per spawn, reducing worker's available context | Measure worker prompt token count; if >30% is state serialization, overhead is excessive | Only include relevant state per worker type: builders need learnings + task + pheromones; watchers need errors + learnings + pheromones; scouts need pheromones only |
+| Sequential wave bottleneck | Queen spawns workers one-at-a-time within waves, waiting for each to complete | Phases with 5+ independent tasks still take 5x single-task time despite being parallelizable | Investigate parallel Task invocation (if Claude Code supports it) or `claude -p` via Bash for fire-and-forget parallel spawning with file-based result collection |
+| Activity log I/O contention | Multiple parallel workers append to the same activity.log file simultaneously | Log entries appear interleaved, corrupted, or missing when workers run concurrently | One log file per worker (`activity-{worker_id}.log`), merged by Queen after wave completes |
+| Memory.json full read on every spawn | Every worker reads full memory.json at startup even if it only needs the 3 most recent learnings | Worker startup overhead grows linearly with project lifetime | Add a `memory-recent` subcommand to aether-utils.sh that returns only last N learnings and decisions |
+| Auto-reviewer doubles spawn count | Every build task gets a follow-up review task, doubling the number of spawns per phase | Colony throughput halves; token costs double; user waits twice as long | Review only at wave boundaries (batch review after N tasks complete), not per-task. Or: only review tasks touching files flagged by pheromones |
+| Global learning retrieval overhead | At project start, colony reads all 50 global learnings and filters for relevance | Colonize/init command is slow; irrelevant learnings consume context | Pre-filter global learnings by tech-stack tags before injecting into worker context. Store a project-level "applicable globals" cache |
 
 ---
 
 ## UX Pitfalls
 
-Common user experience mistakes in this domain.
+Issues that degrade the user's experience of the colony.
 
-| Pitfall | User Impact | Better Approach |
-|---------|-------------|-----------------|
-| **Excessive emoji use (v2)** | Unreadable in some terminals, visual noise | Use sparingly (5-7 core indicators), adaptive output |
-| **No progress indication for long tasks** | User thinks system hung, force-quits | Show spinner, update progress bar, estimate completion |
-| **Output scrolls too fast to read** | Missed errors, lost information | Pagination, log levels, summary after completion |
-| **No distinction between ant castes** | Hard to track who's doing what | Color-code by caste, prefix with caste name |
-| **Silent failures** | User doesn't know something failed | Always show error message, even if "recoverable" |
-| **Inconsistent status terminology** | Confusion about what "in progress" means | Define controlled vocabulary, use consistently |
+| Pitfall | User Impact | Detection | Mitigation |
+|---------|-------------|-----------|------------|
+| Auto-continue removes user agency | User loses ability to course-correct between phases; colony runs ahead and makes irreversible changes | User uses /ant:pause-colony frequently; user expresses surprise at unexpected changes | Auto-continue requires explicit opt-in per session. Prompt once: "Build remaining N phases automatically? [Y/phase-by-phase]". Default to phase-by-phase |
+| Review findings overwhelm user | Auto-reviewer produces 15+ findings per phase; user can't process them all and starts ignoring all findings | User stops reading review reports; review acceptance rate drops below 20% | Display top 5 findings by severity in build output. Full report available via /ant:status. Never show LOW-severity findings in main output |
+| Adaptive mode feels opaque | System chooses lightweight or full mode without explaining why; user can't build mental model | User asks "why did it skip the planner?" or is surprised when mode changes between phases | ALWAYS display the mode decision and brief reasoning: "Mode: lightweight (3 tasks, no file overlap, no dependencies). Override with /ant:redirect" |
+| Learning promotion spam | System constantly asks "promote this learning to global?" during builds | User starts auto-approving without reading; worthless learnings pollute global tier | NEVER prompt for promotion during execution. Batch ALL promotion candidates at project completion as a single review step |
+| Archivist creates anxiety | User worries the archivist might delete something important even though it only reports | User refuses to run archivist; user checks git status nervously after every archivist report | Frame archivist output explicitly as SUGGESTIONS: "Found 3 potentially stale files. No action taken. Review at your convenience:" |
+| Context collapse during animated output | Animated build indicators (spinners, progress bars) consume LLM context tokens, triggering compaction mid-display (field note 13) | Display cuts off mid-phase; user sees "[context compacted]" during build output | Animations MUST use ANSI escape sequences via Bash tool, NOT LLM-generated text tokens. The LLM should invoke a Bash command that renders the animation, keeping zero animation tokens in the conversation context |
+| Recursive delegation feels like a black box | With recursive spawning, user can't tell what's happening 2-3 levels deep; colony feels unpredictable | User asks "what's happening?" during long recursive delegation chains | Activity log must capture entries from ALL depth levels. Display delegation tree: "Queen > Phase Lead > Builder > Scout (researching auth library)" |
+
+---
+
+## "Looks Done But Isn't" Checklist
+
+Features that appear complete in code review but fail in practice.
+
+- [ ] **Recursive spawning "works" in spec but not on platform:** Worker specs contain spawning instructions but the Task tool may not be available to subagents. Test with ACTUAL spawning at depth 2+, not just spec review. If it silently fails, the spec is misleading
+- [ ] **File conflict prevention "works" for planned files but not emergent ones:** Phase Lead assigns file ownership, but a builder might create an UNEXPECTED new file that another builder also independently creates. Prevention must handle both planned modifications AND unplanned file creation
+- [ ] **Auto-reviewer "works" but scores are meaningless:** A reviewer that always says "approved" or always outputs 8/10 is technically functioning but providing zero signal. Validate by running reviewer on intentionally bad code -- scores MUST vary meaningfully across quality levels
+- [ ] **Adaptive mode "works" for the test project but not edge cases:** 1 phase, 2 tasks = lightweight. But 1 phase, 2 tasks, both modifying the same critical production file = should NOT be lightweight. Test with edge cases that look simple but aren't
+- [ ] **Learning promotion "works" but promoted learnings are project-specific:** "Use filmstrip v2.1.0 for CLI packaging" is NOT a global learning. Promotion logic must distinguish universal patterns ("group same-file tasks to one worker") from project-specific conventions
+- [ ] **Activity log append "works" but phase archives are inaccessible:** Fixing the overwrite bug (field note 19) is necessary but not sufficient. Verify that archived phase logs (`activity-phase-N.log`) are actually readable and that the naming scheme doesn't collide across milestones
+- [ ] **Pheromone decay "works" after math fix but signals still accumulate:** Fixing the decay formula (field note 17) makes individual signals decay correctly, but the signals array still grows unbounded. Verify pheromone-cleanup runs at every phase boundary
+- [ ] **Watcher scoring rubric "works" but is gameable:** A rubric that awards points for PRESENCE of tests/error-handling/types might score a file with trivial empty tests and bare catch blocks as 9/10. Validate rubric rewards QUALITY not merely presence
+- [ ] **Context clear prompting "works" but state isn't fully persisted:** System says "safe to /clear" but a critical state update was in LLM working memory, not yet written to JSON. Clear prompting must call validate-state and confirm ALL files pass before suggesting clear
+
+---
+
+## Recovery Strategies
+
+When pitfalls are encountered despite prevention.
+
+| Failure Mode | Immediate Recovery | Long-term Fix |
+|--------------|-------------------|---------------|
+| Recursive delegation infinite loop (A spawns B spawns A pattern) | `/ant:pause-colony`, review spawn logs, identify the cycle | Add cycle detection: if an ant spawns the same caste for the same task description within a phase, block the spawn and report |
+| File overwritten by parallel worker | `git checkout -- <file>` to restore last committed version, then re-run the overwritten worker on current file state | Implement file reservation in Phase Lead planning; enforce during worker spawning |
+| Auto-reviewer blocks all progress | Disable auto-reviewer for current phase, proceed with Queen review only | Tune severity thresholds: only CRITICAL blocks; recalibrate against project-specific quality bar |
+| Stale global learning causes incorrect implementation | Mark learning as suppressed for this project via `suppress` flag in global tier; fix the bug manually | Add tech-stack filtering to global learning retrieval; track suppression frequency to auto-demote bad learnings |
+| Archivist archives needed file | Restore from `.archived/` directory or `git checkout -- <file>`; update protected file patterns | Expand protected patterns list; require cross-reference check before any file can be flagged |
+| Wrong adaptive mode selected mid-project | Re-run the affected phase in correct mode; lightweight output serves as prior art for full colony run | Improve classification factors; make user override prompt more prominent; remember user overrides as project-level learning |
+| Context collapse mid-phase | `/ant:resume-colony` to pick up from last checkpoint state; all JSON state files should be intact | Implement proactive clear prompts when context reaches 70% of window; ensure all state is written before suggesting clear |
+| Task tool unavailable to subagent | Subagent completes work itself (inline) rather than delegating; reports blocked spawn to parent | Implement `claude -p` fallback wrapper with structured input/output via temp files |
+| Delegation chain produces wrong output at depth 3 | Parent ant re-does the sub-task with full context rather than re-delegating | Reduce max depth to 2; include verbatim colony goal at every level; add quality gate checking alignment |
+
+---
+
+## Pitfall-to-Phase Mapping
+
+Recommended ordering based on dependency analysis and field-test priority.
+
+| Priority | Phase Topic | Pitfall(s) Addressed | Why This Order |
+|----------|------------|---------------------|---------------|
+| 1 | Bug fixes: decay math, activity log append, error phase attribution, decision log wiring | Prerequisite for all other features | These are field-tested bugs with known fixes. Ship first for system credibility and to unblock downstream features |
+| 2 | Platform validation: recursive spawning feasibility test | CP-1 (Task tool limitation), CP-2 (context telephone) | Must validate platform constraints BEFORE designing features that depend on recursive delegation. 30 minutes of testing saves weeks of wrong architecture |
+| 3 | File conflict prevention: task-level file ownership + reservation system | CP-4 (last-write-wins) | Blocking problem already observed in production. Required before any feature that increases parallelism. Enables safe concurrent worker execution |
+| 4 | Watcher scoring calibration: meaningful rubric with variance across quality levels | CP-3 prerequisite (review fatigue) | Auto-reviewer depends on calibrated scoring. Fix the measuring instrument before adding automation that relies on it |
+| 5 | Auto-reviewer ants: advisory review after build waves | CP-3 (review fatigue) | Now that scoring works, add automated review as advisory layer. Start lightweight (post-wave only, not per-task) |
+| 6 | Two-tier learning: local tier improvements + empty global tier with manual promotion | CP-5 (stale global knowledge) | Start with local-tier quality improvements before adding global promotion complexity. Manual promotion keeps human in the loop |
+| 7 | Adaptive complexity mode: per-phase lightweight/full selection with user confirmation | CP-6 (wrong mode selection) | Requires calibrated quality signals (from phases 4-5) to detect when wrong mode was selected |
+| 8 | Learning promotion mechanism: auto-suggestion with batch user approval | CP-5 (stale global knowledge) | Only after local tier is proven across 2+ projects and learnings have accumulated to evaluate promotion candidates |
+| 9 | Archivist ant: report-only file staleness analysis | CP-7 (false deletion) | Lowest priority, highest risk of user trust damage. Ship last with maximum safety rails and dry-run enforcement |
 
 ---
 
 ## Sources
 
-### Event Polling & Reactive Systems
-- [Polling Is Not the Problem—Bad Polling Is](https://beingcraftsman.com/2025/12/31/polling-is-not-the-problem-bad-polling-is/) — HIGH confidence, best practices for 2025
-- [Stop Polling. Start Listening: Event-Driven Architecture](https://www.hkinfosoft.com/stop-polling.start-listening/the-power-of-event-driven-architecture/) — MEDIUM confidence, pitfalls of polling
-- [Event-Driven Architecture: Watch Out For These Pitfalls](https://www.forbes.com/councils/forbestechcouncil/2025/11/26/event-driven-architecture-watch-out-for-these-pitfalls-and-drawbacks/) — MEDIUM confidence, distributed system challenges
-- [Managing Data Saturation in AI Systems](https://www.researchgate.net/publication/394929583_Managing_Data_Saturation_in_AI_Systems_A_Cross_Domain_Framework_Integrating_Human_Insights_and_Algorithmic_Verification) — MEDIUM confidence, saturation filtering strategies
-- [Design, Implementation and Evaluation of a Real-Time Filtering System](https://arxiv.org/html/2508.18787v1) — MEDIUM confidence, dynamic signal filtering
+### Directly Observed (Aether Field Test -- HIGH confidence)
+- v5 Field Notes: 32 notes from 2026-02-04 live test on filmstrip project
+- Aether v4.3 codebase: worker specs, aether-utils.sh, state files, command prompts
 
-### LLM Testing & Non-Determinism
-- [On the Flakiness of LLM-Generated Tests](https://arxiv.org/html/2601.08998v1) — HIGH confidence, research paper on test flakiness
-- [10 LLM Testing Strategies To Catch AI Failures](https://galileo.ai/blog/llm-testing-strategies) — MEDIUM confidence, practical testing approaches
-- [LLM-As-Judge: 7 Best Practices & Evaluation Templates](https://www.montecarlodata.com/blog-llm-as-judge/) — MEDIUM confidence, avoiding flaky evaluations
-- [Defeating Nondeterminism in LLM Inference](https://medium.com/lunas-orbit/mira-muratis-new-ai-lab-wants-to-fix-a-hidden-problem-in-llms-6ab72dffd6fe) — LOW confidence, needs verification
-- [Understanding and Improving Flaky Test Classification](https://www.cs.cornell.edu/~saikatd/papers/flakylens-oopsla25.pdf) — HIGH confidence, Cornell research 2025
-- [AI-Powered Testing Solutions for Resolving Flaky Tests](https://www.testmu.ai/blog/ai-powered-testing-solutions-for-flaky-tests/) — MEDIUM confidence, AI tools for flaky tests
+### Platform Documentation (HIGH confidence)
+- [Claude Code Subagent Documentation](https://code.claude.com/docs/en/sub-agents) -- subagent isolation model, available tools
+- [Claude Code Issue #4182: Sub-Agent Task Tool Not Exposed](https://github.com/anthropics/claude-code/issues/4182) -- nested Task spawning not supported, closed as duplicate
+- [Claude Code Subagents: Common Mistakes & Best Practices](https://claudekit.cc/blog/vc-04-subagents-from-basic-to-deep-dive-i-misunderstood) -- context handoff problem, workarounds
+- [Best practices for Claude Code subagents](https://www.pubnub.com/blog/best-practices-for-claude-code-sub-agents/) -- pipeline patterns, tool restriction, orchestration
 
-### CLI Visual Indicators
-- [CLI UX best practices: 3 patterns for improving progress displays](https://evilmartians.com/chronicles/cli-ux-best-practices-3-patterns-for-improving-progress-displays) — MEDIUM confidence, progress display patterns
-- [Simple UX Principles for Creating Killer Terminal Scripts](https://www.transifex.com/blog/2020/ux-terminal-scripts) — MEDIUM confidence, clarity and control principles
-- [State of Terminal Emulators in 2025](https://news.ycombinator.com/item?id=45799478) — LOW confidence, community discussion on emoji usage
-- [Add emoji/visual indicators to CLI output for better UX](https://github.com/josharsh/mcp-jest/issues/19) — LOW confidence, GitHub issue, single source
-- [Building CLI Apps in Rust — What You Should Consider](https://betterprogramming.pub/building-cli-apps-in-rust-what-you-should-consider-99cdcc67710c) — MEDIUM confidence, adaptive emoji usage
+### Multi-Agent Systems Research (HIGH confidence)
+- [Anti-Patterns in Multi-Agent Gen AI Solutions](https://medium.com/@armankamran/anti-patterns-in-multi-agent-gen-ai-solutions-enterprise-pitfalls-and-best-practices-ea39118f3b70) -- delegation chain failures, intent mutation, step budgets
+- [30 Failure Modes in Multi-Agent AI](https://medium.com/@rakesh.sheshadri44/the-dark-psychology-of-multi-agent-ai-30-failure-modes-that-can-break-your-entire-system-023bcdfffe46) -- infinite loops, context collapse, catastrophic forgetting, alignment drift
+- [ROMA: Recursive Open Meta-Agent Framework](https://arxiv.org/html/2602.01848) -- structured recursive delegation with Atomizer/Planner/Executor/Aggregator pattern
+- [Towards a Science of Scaling Agent Systems (Google DeepMind)](https://arxiv.org/html/2512.08296v1) -- capability saturation at 45%, 17.2x error amplification in independent agents, topology-dependent performance, sequential task degradation 39-70%
+- [Why Your Multi-Agent System is Failing: The 17x Error Trap](https://towardsdatascience.com/why-your-multi-agent-system-is-failing-escaping-the-17x-error-trap-of-the-bag-of-agents/) -- centralized coordination (4.4x error) vs independent agents (17.2x error)
+- [Why Multi-Agent LLM Systems Fail](https://arxiv.org/html/2503.13657v1) -- systematic failure taxonomy
+- [Multi-Agent Coordination Strategies (Galileo)](https://galileo.ai/blog/multi-agent-coordination-strategies) -- step budgets, DAG enforcement, escalation logic
 
-### Context Rot & Memory Issues
-- [Medium: Context rot confirmed real in 2025](https://medium.com/@umairamin2004/why-multi-agent-systems-fail-in-production-and-how-to-fix-them-3bedbdd4975b) — MEDIUM confidence, 2025
-- [Reddit: Claude Code context window strategy (20% rule)](https://www.reddit.com/r/ClaudeAI/comments/1p05r7p/my_claude_code_context_window_strategy_200k_is) — MEDIUM confidence, community practice
-- [Claude Sonnet 4.5 maintains 30+ hour focus](https://sparkco.ai/blog/mastering-claudes-context-window-a-2025-deep-dive) — LOW confidence, marketing claim
-- [AWS: Context window overflow breakdown](https://aws.amazon.com/blogs/security/context-window-overflow-breaking-the-barrier/) — HIGH confidence, official AWS
-- [GitHub: Agent-scoped MCP servers to prevent overflow](https://github.com/anthropics/claude-code/issues/6186) — HIGH confidence, official issue
-- [Anthropic: Context editing docs](https://platform.claude.com/docs/en/build-with-claude/context-editing) — HIGH confidence, official docs
-- [Medium: Context quality over quantity](https://hyperdev.matsuoka.com/p/how-claude-code-got-better-by-protecting) — MEDIUM confidence, 2025 analysis
+### Context and Delegation Chain Research (HIGH confidence)
+- [Chain of Agents: LLMs Collaborating on Long-Context Tasks (Google Research)](https://research.google/blog/chain-of-agents-large-language-models-collaborating-on-long-context-tasks/) -- worker-manager pattern, sequential context passing, "telephone game" mitigation
+- [Multi-Agent Orchestration: Running 10+ Claude Instances in Parallel](https://dev.to/bredmond1019/multi-agent-orchestration-running-10-claude-instances-in-parallel-part-3-29da) -- practical parallel Claude agent patterns
 
-### Infinite Loops & Spawning
-- [Medium: Why multi-agent systems fail](https://medium.com/@umairamin2004/why-multi-agent-systems-fail-in-production-and-how-to-fix-them-3bedbdd4975b) — MEDIUM confidence, cites infinite loops as top failure
-- [arXiv: 1/3 agents fall into infinite loops](https://arxiv.org/html/2512.01939v1) — HIGH confidence, academic research
-- [Science Direct: Infinite planning loops](https://www.sciencedirect.com/science/article/pii/S1566253525006712) — HIGH confidence, academic taxonomy
-- [Substack: Set max_iterations=5](https://pub.towardsai.net/building-ai-agents-in-2025-your-zero-to-hero-guide-328884708efa) — MEDIUM confidence, best practice guide
-- [ServiceNow: Eliminate recursive loops](https://www.servicenow.com/community/ceg-ai-coe-articles/limit-assist-consumption-by-designing-ai-agents-which-avoid/ta-p/3450013) — MEDIUM confidence, recent article
-- [GitHub: OpenAI agents infinite recursion issue](https://github.com/openai/openai-agents-python/issues/668) — HIGH confidence, confirmed bug
-- [The New Stack: Recursive security loops](https://thenewstack.io/is-your-ai-assistant-creating-a-recursive-security-loop/) — MEDIUM confidence, security analysis
+### Memory and Learning Research (MEDIUM-HIGH confidence)
+- [Agentic Memory: Unified Long-Term and Short-Term Memory Management](https://arxiv.org/html/2601.01885v1) -- learnable memory management, selective addition/deletion, 10% performance gain from utility-based deletion
+- [Memory in LLM-based Multi-agent Systems](https://www.researchgate.net/publication/398392208_Memory_in_LLM-based_Multi-agent_Systems_Mechanisms_Challenges_and_Collective_Intelligence) -- shared vs local memory tradeoffs, write contention, O(N^2) communication scaling
+- [The Agent's Memory Dilemma: Is Forgetting a Bug or a Feature?](https://medium.com/@tao-hpu/the-agents-memory-dilemma-is-forgetting-a-bug-or-a-feature-a7e8421793d4) -- strategic forgetting improves performance
+- [Why Multi-Agent Systems Need Memory Engineering (MongoDB)](https://www.mongodb.com/company/blog/technical/why-multi-agent-systems-need-memory-engineering) -- Anthropic's own coordination failures ("50 subagents for simple queries"), memory engineering patterns
 
-### JSON State & Race Conditions
-- [GitHub: Langflow race condition data corruption](https://github.com/langflow-ai/langflow/issues/8791) — HIGH confidence, confirmed bug
-- [Medium: Invisible state mutations](https://medium.com/@sahin.samia/engineering-challenges-and-failure-modes-in-agentic-ai-systems-a-practical-guide-f9c43aa0ae3f) — HIGH confidence, 2025 guide
-- [IETF Draft: HTTP profile for agentic state](https://datatracker.ietf.org/doc/draft-jurkovikj-httpapi-agentic-state/) — HIGH confidence, standards body
-- [arXiv: Safeguarding multi-agent data](https://arxiv.org/html/2505.12490v1) — HIGH confidence, academic paper
-- [Claude SDK: JSON serialization bug](https://github.com/anthropics/claude-agent-sdk-python/issues/510) — HIGH confidence, official issue
-- [Claude SDK: Structured output errors](https://github.com/anthropics/claude-agent-sdk-typescript/issues/77) — HIGH confidence, official issue
-- [Milvus Blog: Claude Code JSONL for stability](https://milvus.io/blog/why-claude-code-feels-so-stable-a-developers-deep-dive-into-its-local-storage-design.md) — MEDIUM confidence, technical analysis
+### Code Review Research (MEDIUM confidence)
+- [How Accurate Is AI Code Review in 2026?](https://www.codeant.ai/blogs/ai-code-review-accuracy) -- false positive rates, developer trust gap, threshold tuning
+- [Top AI Code Review Tools 2026](https://www.secondtalent.com/resources/top-ai-code-review-tools-for-development-teams/) -- alert fatigue, context-aware analysis, ~12.5% manageable false positive rate
+- Stack Overflow 2025 Developer Survey -- 46% of developers distrust AI code review accuracy
 
-### Prompt Brittleness & Complexity
-- [Anthropic: Effective context engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) — HIGH confidence, official Anthropic engineering blog
-- [Orq.ai: Prompt brittleness and error accumulation](https://orq.ai/blog/llm-agents) — MEDIUM confidence, 2025 analysis
-- [arXiv: Multiple tools increase prompt complexity](https://arxiv.org/html/2512.08769v1) — HIGH confidence, academic research
-- [Maxim.ai: Hardcoded prompt logic creates fragility](https://www.getmaxim.ai/articles/improving-prompt-engineering-for-enterprise-ai-agents/) — MEDIUM confidence, enterprise guide
-- [Medium: Why your multi-agent system is failing](https://towardsdatascience.com/why-your-multi-agent-system-is-failing-escaping-the-17x-error-trap-of-the-bag-of-agents/) — MEDIUM confidence, technical analysis
+### File Conflict Prevention (MEDIUM-HIGH confidence)
+- [Parallel Agents Are Easy. Shipping Without Chaos Isn't.](https://dev.to/rokoss21/parallel-agents-are-easy-shipping-without-chaos-isnt-1kek) -- file conflict in multi-agent coding, prevention over resolution
+- [Multi-Agent Coding: Parallel Development Guide](https://www.digitalapplied.com/blog/multi-agent-coding-parallel-development) -- workspace isolation, modular task decomposition, Cursor 2.0 git worktree approach
 
-### Memory & Forgetting
-- [Ranjankumar.in: State management in multi-agent systems](https://ranjankumar.in/building-agents-that-remember-state-management-in-multi-agent-ai-systems) — MEDIUM confidence, 2025 retrospective
-- [Medium: Engineering challenges in agentic AI](https://medium.com/@sahin.samia/engineering-challenges-and-failure-modes-in-agentic-ai-systems-a-practical-guide-f9c43aa0ae3f) — HIGH confidence, comprehensive guide
-- [Galileo.ai: Agent failure modes guide](https://galileo.ai/blog/agent-failure-modes-guide) — MEDIUM confidence, 2025 guide
-- [Composio: AI agent pilots fail](https://composio.dev/blog/why-ai-agent-pilots-fail-2026-integration-roadmap) — MEDIUM confidence, 2025 report
-
-### Coordination & Token Waste
-- [Towards Data Science: Why your multi-agent system is failing](https://towardsdatascience.com/why-your-multi-agent-system-is-failing-escaping-the-17x-error-trap-of-the-bag-of-agents/) — HIGH confidence, explicitly discusses coordination token waste
-- [Medium: Building effective enterprise agents](https://www.bcg.com/assets/2025/building-effective-enterprise-agents.pdf) — MEDIUM confidence, BCG report
-- [Orq.ai: Why do multi-agent LLM systems fail](https://orq.ai/blog/why-do-multi-agent-llm-systems-fail) — MEDIUM confidence, analysis
-
-### Hallucination & Verification
-- [Galileo.ai: 7 AI agent failure modes](https://galileo.ai/blog/agent-failure-modes-guide) — MEDIUM confidence, covers hallucination propagation
-- [Medium: Why multi-agent systems fail](https://medium.com/@umairamin2004/why-multi-agent-systems-fail-in-production-and-how-to-fix-them-3bedbdd4975b) — MEDIUM confidence, discusses hallucination cascades
-
-### Aether-Specific Issues
-- [Aether concerns document](/Users/callumcowie/repos/Aether/.planning/codebase/CONCERNS.md) — HIGH confidence, internal analysis of Python prototype
-- [Aether autonomous spawning research](/Users/callumcowie/repos/Aether/.ralph/AUTONOMOUS_AGENT_SPAWNING_RESEARCH.md) — HIGH confidence, internal research
-- [Aether memory architecture research](/Users/callumcowie/repos/Aether/.ralph/MEMORY_ARCHITECTURE_RESEARCH.md) — HIGH confidence, internal research
-- `/Users/callumcowie/repos/Aether/.aether/worker_ants.py` — Current event system and agent structure
-- `/Users/callumcowie/repos/Aether/.aether/error_prevention.py` — Error tracking and pattern detection
-- `/Users/callumcowie/repos/Aether/.aether/queen_ant_system.py` — System integration and commands
-
----
-
-**Pitfalls research for: Multi-Agent Reactive Event Integration with LLM Testing**
-**Researched: 2026-02-02**
-**Confidence: MEDIUM (some sources need verification, especially LLM non-determinism solutions)**
+### Automated Cleanup Research (MEDIUM confidence)
+- [Automating Dead Code Cleanup (Meta Engineering)](https://engineering.fb.com/2023/10/24/data-infrastructure/automating-dead-code-cleanup/) -- SCARF framework, static + dynamic analysis, false positive challenges
+- [Stale Data Archiving Best Practices (Varonis)](https://www.varonis.com/blog/4-secrets-for-archiving-stale-data-efficiently) -- identification before disposition, audit trails

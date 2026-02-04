@@ -1,19 +1,21 @@
-# Stack Research
+# Stack Research: Colony Hardening & Real-World Readiness
 
-**Domain:** Claude-native multi-agent system enhancements (event polling, LLM testing, CLI visual indicators)
-**Researched:** 2026-02-02
+**Domain:** Multi-agent colony system hardening (v4.4)
+**Researched:** 2026-02-04
 **Confidence:** HIGH
+
+---
 
 ## Executive Summary
 
-This research focuses on the **technology stack for Aether v2 enhancements**: reactive event polling integration, E2E LLM test guides, and CLI visual indicators. These enhancements build on Aether v1's proven foundation (19 commands, 10 Worker Ants, 26 utility scripts, pub/sub event bus).
+This research investigates six technical domains needed for Aether v4.4: CLI animation, recursive spawning, two-tier learning, pheromone decay math, automated code review patterns, and file conflict prevention. All solutions stay within the bash+jq constraint. The most critical finding is the **root cause of the pheromone decay bug** (field note 17): during the filmstrip test, `.aether/aether-utils.sh` did not exist in the target repo, so Claude fell back to LLM-computed math and got it wrong. The fix is both defensive math AND ensuring utilities are available in target repos.
 
 **Key findings:**
-1. **Pull-based event polling** is the correct pattern for prompt-based Worker Ants (execute, poll, exit - not persistent daemons)
-2. **Markdown test guides** executed by Claude provide the right balance of structure and LLM judgment for E2E testing
-3. **Unicode emojis** (🐜, ✓, ✗, ⟳) offer semantic, color-independent visual indicators for colony activity
-
-The stack remains deliberately minimal: **Bash + jq** for event infrastructure, **Markdown** for test documentation, **Unicode emojis** for visual feedback. No new dependencies required - all enhancements leverage existing Aether utilities (event-bus.sh, atomic-write.sh, file-lock.sh).
+1. **CLI animation** is a non-starter in Claude Code's execution model -- Task tool output is buffered, not streamed. Focus on rich static output (progress bars, structured reports) rather than live spinners.
+2. **Recursive spawning** is blocked by Claude Code platform -- sub-agents cannot spawn further sub-agents via Task tool. The existing depth-tracking pattern is the correct workaround.
+3. **Decay math** is correct in aether-utils.sh but needs defensive guards (clamp negative elapsed, cap at initial strength). The real fix is ensuring utils are deployable to target repos.
+4. **Two-tier learning** maps cleanly to Claude Code's existing `~/.claude/` (global) and `.claude/` (project) directory structure.
+5. **File conflict prevention** requires task-level coordination (same-file tasks to same worker), not file-level locking.
 
 ---
 
@@ -21,61 +23,389 @@ The stack remains deliberately minimal: **Bash + jq** for event infrastructure, 
 
 ### Core Technologies
 
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| **Bash + jq** | Bash 4.0+, jq 1.6+ | Event polling infrastructure | Already used in Aether's event-bus.sh (879 lines). Proven pattern for pull-based event delivery. File locking via fcntl prevents race conditions. jq handles JSON querying efficiently. |
-| **Markdown test guides** | GitHub Flavored Markdown | E2E LLM test documentation | Human-readable test cases that Claude can execute directly. No test runner dependencies. Fits Claude-native constraint (prompts as code). |
-| **Unicode emojis** | Standard Unicode 15.0+ | CLI visual indicators | Terminal-compatible, no external dependencies. 🐜 for colony activity, ✓/✗ for status, ⟳ for processing. Works across macOS/Linux terminals. |
-| **TAP format** | TAP version 13 | Test output standard | Already used in existing tests (full-workflow.test.sh). Human-readable, parseable by CI tools. Industry standard for test reporting. |
-| **JSON state files** | JSON RFC 8259 | Test execution tracking | Claude reads/writes natively. Git-diffable for test history validation. No database overhead for test suites. |
+All v4.4 additions use existing stack. No new dependencies.
 
-### Supporting Libraries
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| **bash** | 4.0+ (macOS ships 3.2; Homebrew provides 5.x) | All utility functions, decay math, activity logging | Already the utility layer language. No change needed. |
+| **jq** | 1.6+ | JSON manipulation, `exp` for decay math, `fromdate` for timestamps | Already used. IEEE754 double precision is sufficient for decay calculations (verified). |
+| **ANSI escape codes** | Standard (ECMA-48) | Color-coded output per caste, progress bars | No dependency needed -- `printf "\e[32m"` works in all modern terminals. More reliable than `tput` for Claude Code's execution context. |
+| **Claude Code Task tool** | Current | Agent spawning (single-level only) | Platform constraint: sub-agents CANNOT spawn sub-agents. Recursive patterns must use workarounds. |
+| **JSON files** | RFC 8259 | Two-tier learning storage (`~/.aether/learnings.json` for global, `.aether/data/memory.json` for project) | Stays consistent with existing state management. No new storage technology. |
+| **mkdir -p / noclobber** | POSIX | Atomic lock acquisition, file conflict prevention | Already used in `file-lock.sh`. The `(set -o noclobber; echo $$ > "$lock_file")` pattern is correct for local FS. |
 
-| Library | Version | Purpose | When to Use |
-|---------|---------|---------|-------------|
-| **atomic-write.sh** | Existing Aether utility | Corruption-safe test state updates | Use when writing test results JSON. Prevents test data corruption from concurrent test runs. |
-| **file-lock.sh** | Existing Aether utility | Concurrent test execution safety | Use when tests access shared colony state. Prevents race conditions in parallel test scenarios. |
-| **event-bus.sh** | Existing Aether utility (879 lines) | Event polling for test orchestration | Use `get_events_for_subscriber()` for reactive test triggers. Already implements pull-based delivery. |
-| **event-metrics.sh** | Existing Aether utility | Test performance tracking | Use to capture test execution timing, event delivery latency. Already integrated with event bus. |
+### Supporting Patterns (New for v4.4)
+
+| Pattern | Purpose | Implementation |
+|---------|---------|----------------|
+| **Static progress bars** | Show phase/worker completion visually | `printf` with ANSI colors + Unicode block chars. `filled = round(progress * 20)` of `\u2588` chars. Already partially implemented in build.md Step 5c. |
+| **Caste color coding** | Visual distinction per worker type | Fixed ANSI color per caste: colonizer=cyan(36), route-setter=yellow(33), builder=green(32), watcher=magenta(35), scout=blue(34), architect=white(37). |
+| **Defensive decay math** | Prevent strength growth bug | Three guards: clamp elapsed >= 0, cap result <= initial strength, floor at 0.001 (skip computation if elapsed > 10 * half_life). |
+| **Same-file task grouping** | Prevent parallel write conflicts | Phase Lead groups tasks touching the same file to a single worker. Prompt-level enforcement, not file-level locking. |
+| **Global learning store** | Cross-project learnings | `~/.aether/global_learnings.json` with promotion from project memory. Architect ant synthesizes, user approves. |
+| **Spawn depth tracking** | Enforce recursion limits in prompt-only regime | Depth counter passed in every spawn prompt (`You are at depth N`). spawn-check utility enforces max_depth=3. Already implemented. |
 
 ### Development Tools
 
 | Tool | Purpose | Notes |
 |------|---------|-------|
-| **Manual test execution via Claude Code** | Run E2E LLM tests | Claude interprets test guide markdown, executes commands, validates results. No test runner needed. |
-| **Git diff for test result validation** | Verify test outcomes | Test results committed to repo allow `git diff` to catch regressions. Part of documentation cleanup goal. |
-| **Terminal with Unicode support** | Render emoji indicators | Most modern terminals (iTerm2, Terminal.app, GNOME Terminal) support Unicode 15.0 emojis. Verify with `echo "🐜"` |
+| **aether-utils.sh** (extended) | All new deterministic operations | Add subcommands: `learning-promote`, `learning-global-read`, `activity-log-append` (fix overwrite bug), `error-add-phased` (add phase field). Stays under 400 lines. |
+| **Git worktrees** | NOT recommended for this system | Overkill for Aether's hub-and-spoke model. Workers write sequentially, not in parallel filesystem isolation. |
 
 ---
 
-## Installation
+## Critical Fix: Pheromone Decay Math
+
+### Root Cause Analysis (HIGH confidence)
+
+The field note reports FOCUS signal growing from 0.7 to 8.005. Working backwards:
+
+```
+0.7 * e^x = 8.005
+e^x = 11.436
+x = ln(11.436) = 2.436
+
+Since x = -0.693 * elapsed / half_life:
+-0.693 * elapsed / 3600 = 2.436
+elapsed = -12,653 seconds (NEGATIVE)
+```
+
+A negative elapsed time means `(now - created_at)` was negative -- the system believed the pheromone was created in the future.
+
+**Root cause is NOT the formula.** The formula in `aether-utils.sh` is mathematically correct (verified by direct jq testing). The root cause is **deployment**: during the filmstrip test, `.aether/aether-utils.sh` did not exist in the target repo (field note 6 confirms this). When the utility call fails, the prompt instructs Claude to "fall back to manual calculation." Claude (an LLM) attempted to compute `e^(-0.693 * t / h)` and got the sign wrong, producing exponential GROWTH instead of decay.
+
+### The Fix (Two Parts)
+
+**Part 1: Defensive math in aether-utils.sh** (guards against any future edge cases):
 
 ```bash
-# Core (already installed in Aether)
-# jq for JSON manipulation
-brew install jq  # macOS
-# apt-get install jq  # Linux
-
-# Existing Aether utilities (no installation needed)
-source .aether/utils/event-bus.sh
-source .aether/utils/atomic-write.sh
-source .aether/utils/file-lock.sh
-
-# Dev dependencies (for test guide creation)
-# None required - use existing Claude Code CLI
+pheromone-decay)
+  [[ $# -ge 3 ]] || json_err "Usage: pheromone-decay <strength> <elapsed_seconds> <half_life>"
+  json_ok "$(jq -n --arg s "$1" --arg e "$2" --arg h "$3" '
+    ($s|tonumber) as $strength |
+    ([$e|tonumber, 0] | max) as $elapsed |     # GUARD 1: clamp elapsed >= 0
+    ($h|tonumber) as $half_life |
+    if $elapsed > ($half_life * 10) then
+      {strength: 0}                             # GUARD 2: skip computation, effectively zero
+    else
+      ($strength * ((-0.693147180559945 * $elapsed / $half_life) | exp)) as $decayed |
+      {strength: ([$decayed, $strength] | min | . * 1000000 | round / 1000000)}  # GUARD 3: cap at initial
+    end
+  ')"
+  ;;
 ```
+
+Same guards needed in `pheromone-batch` and `pheromone-cleanup`.
+
+**Part 2: Eliminate LLM fallback path.** When the utility is unavailable, commands should NOT attempt manual math. Instead:
+- If `pheromone-batch` fails, treat all pheromones as active at their initial strength (fail-open, slightly wrong but never catastrophically wrong)
+- Remove all "fall back to manual multiplication" instructions from worker specs
+- The LLM should NEVER compute `exp()`, `ln()`, or any transcendental function
+
+### Formula Reference
+
+The correct half-life exponential decay formula:
+
+```
+N(t) = N0 * e^(-ln(2) * t / t_half)
+
+Where:
+  N(t)    = current strength
+  N0      = initial strength
+  t       = elapsed seconds (MUST be >= 0)
+  t_half  = half-life in seconds
+  ln(2)   = 0.693147180559945
+
+Equivalently:
+  N(t) = N0 * (1/2)^(t / t_half)
+
+In jq:
+  .strength * ((-0.693147180559945 * $elapsed / .half_life_seconds) | exp)
+```
+
+jq's `exp` function uses IEEE754 double precision (C math library). Precision is sufficient -- 15-16 significant digits, more than enough for signal strengths rounded to 3-6 decimal places.
+
+**Known jq issues to guard against:**
+- `fromdate` does NOT support fractional seconds (strips via regex `sub("\\.[0-9]+Z$";"Z")` -- already handled)
+- `fromdate` has a known DST/timezone bug on some macOS versions (tested on current system: NOT affected in CET/February)
+- `now` may return exponential notation -- use `now | floor` for integer epoch
+
+---
+
+## CLI Animation & Visual Output
+
+### What Works in Claude Code
+
+Claude Code's Task tool returns output only on completion -- there is no streaming of sub-agent output to the user. This means:
+
+| Pattern | Works? | Why |
+|---------|--------|-----|
+| Live spinners (background process) | NO | Task tool buffers all output. User sees nothing until agent returns. |
+| Streaming progress updates | NO | No stdout streaming from sub-agents to parent. |
+| Static progress bars between workers | YES | Queen displays progress after each worker completes (already implemented in build.md Step 5c). |
+| Color-coded output per caste | YES | ANSI escape codes in printf output. Rendered when Queen displays results. |
+| Rich structured reports | YES | Worker reports rendered by Queen with emoji + ANSI formatting. |
+| Activity log polling | YES | Queen reads activity log between worker spawns (implemented in v4.3). |
+
+### Recommended Color Scheme
+
+Use ANSI 256-color mode for caste identification. These colors are visually distinct even in default terminal themes:
+
+```bash
+# Caste color definitions (ANSI escape codes)
+COLOR_COLONIZER="\e[36m"    # Cyan
+COLOR_ROUTESETTER="\e[33m"  # Yellow
+COLOR_BUILDER="\e[32m"      # Green
+COLOR_WATCHER="\e[35m"      # Magenta
+COLOR_SCOUT="\e[34m"        # Blue
+COLOR_ARCHITECT="\e[37m"    # White/bright
+COLOR_QUEEN="\e[1;33m"      # Bold yellow
+COLOR_RESET="\e[0m"         # Reset
+
+# Usage in aether-utils.sh output:
+printf "${COLOR_BUILDER}[BUILDER]${COLOR_RESET} Created: %s\n" "$file"
+```
+
+**Why ANSI over tput:** Claude Code executes bash in a pseudo-terminal. `tput` queries terminfo for capabilities, adding overhead and a potential failure point if `TERM` is not set correctly. ANSI escape codes are a direct standard (ECMA-48, 1976) supported by every modern terminal. For a utility that runs thousands of times, hardcoded ANSI is simpler and more reliable.
+
+### Progress Bar Pattern
+
+Already partially implemented. The canonical pattern for aether-utils.sh:
+
+```bash
+# progress-bar subcommand: progress-bar <completed> <total> <label>
+progress-bar)
+  completed="${1:-0}"
+  total="${2:-1}"
+  label="${3:-Progress}"
+  width=20
+  filled=$(( completed * width / total ))
+  empty=$(( width - filled ))
+  bar=$(printf '%*s' "$filled" '' | tr ' ' '#')
+  space=$(printf '%*s' "$empty" '' | tr ' ' '-')
+  printf "\r%s [%s%s] %d/%d" "$label" "$bar" "$space" "$completed" "$total"
+  ;;
+```
+
+Unicode block characters (`\u2588`) are prettier but may not render in all terminals. Stick with ASCII `#` and `-` for maximum compatibility, with emoji prefix for caste identification.
+
+### What NOT to Build
+
+| Pattern | Why Not |
+|---------|---------|
+| Background spinner processes | Claude Code sandbox kills background processes. Task tool is synchronous. |
+| ncurses/dialog TUI | External dependency, overkill for status output. |
+| tmux pane splitting | Requires tmux installation, not available in all Claude Code environments. |
+| Animated cursor movement | ANSI cursor codes (`\e[A`, `\e[2K`) are fragile in buffered output contexts. |
+
+---
+
+## Recursive Agent Spawning
+
+### Platform Reality (HIGH confidence)
+
+Claude Code's Task tool enforces **single-level delegation**. Sub-agents spawned via Task cannot themselves use the Task tool -- it is not available in their tool set.
+
+This was confirmed by:
+- GitHub Issue #4182 (July 2025): explicit feature request for nested sub-agent spawning
+- GitHub Issue #1770 (June 2025): testing revealed agents resort to workarounds (bash subprocess calls) when Task tool is unavailable
+- Claude Code documentation: Task tool creates ephemeral workers with isolated 200k context windows, no recursive access
+
+### Aether's Current Workaround (Already Correct)
+
+Aether already handles this via prompt-level depth tracking:
+
+1. Worker specs include spawn-check gate: `bash .aether/aether-utils.sh spawn-check <depth>`
+2. Depth passed in every spawn prompt: `You are at depth <N>.`
+3. Max depth enforced at 3 levels
+4. Max 5 active workers colony-wide
+
+**This is the right pattern.** The v4.4 improvement is not "enable recursive spawning" (platform-blocked) but rather:
+
+### Improvement: Smarter Hub-and-Spoke
+
+Since recursive spawning is impossible, optimize the existing hub-and-spoke:
+
+| Change | How | Why |
+|--------|-----|-----|
+| **Phase Lead spawns workers directly** | Already implemented in v4.3 -- Queen spawns, not Phase Lead | Avoids the need for Phase Lead to have Task tool access |
+| **Worker result chaining** | Pass previous worker output as context to dependent workers | Workers in Wave 2 get Wave 1 results without needing to spawn scouts |
+| **Capability gap reporting** | Workers report "I need X" in their output instead of spawning | Queen reads reports and spawns follow-up workers |
+| **Auto-reviewer pattern** | Queen auto-spawns watcher after every builder | Already implemented in Step 5.5. Extend to auto-spawn debugger on failure. |
+
+### Auto-Spawned Reviewer/Debugger Pattern (field note 8)
+
+The Queen already spawns a mandatory watcher (Step 5.5). Extend this to:
+
+```
+After each worker completes:
+  IF worker reported ERROR:
+    Auto-spawn debugger (builder-ant with error context)
+    Retry up to 2 times (already implemented in Step 5c)
+
+After watcher completes:
+  IF watcher quality_score < 6:
+    Auto-spawn builder with watcher's issue list as fix instructions
+    Re-run watcher verification on fixes
+
+After all phases complete:
+  Auto-spawn architect for tech debt synthesis
+  Auto-spawn watcher for project-wide quality report
+```
+
+This gives the EFFECT of recursive spawning (builder encounters problem, debugger fixes it, watcher verifies) while staying within the flat hub-and-spoke model.
+
+---
+
+## Two-Tier Learning System
+
+### Architecture
+
+Maps to Claude Code's existing directory conventions:
+
+```
+~/.aether/                          # Global (cross-project)
+  global_learnings.json             # Promoted learnings
+  global_errors.json                # Cross-project error patterns
+  config.json                       # User preferences
+
+.aether/data/                       # Project-specific (per-repo)
+  memory.json                       # Project learnings (already exists)
+  errors.json                       # Project errors (already exists)
+```
+
+### Learning Promotion Mechanism
+
+```
+PROJECT LEARNING (auto, every phase)
+  |
+  v
+PROMOTION CANDIDATE (architect-ant synthesis, batch)
+  |
+  v
+USER APPROVAL (optional gate)
+  |
+  v
+GLOBAL LEARNING (persists across projects)
+```
+
+**Promotion criteria** (architect-ant evaluates):
+1. **Project-agnostic** -- Does this learning apply beyond this specific codebase? ("Use parameterized SQL" = yes. "The auth module is in src/auth/" = no.)
+2. **Repeated** -- Has this learning appeared in 2+ projects? Auto-promote.
+3. **High-confidence** -- Was this learning validated by watcher verification?
+4. **Actionable** -- Can a worker act on this learning without additional context?
+
+### Implementation in aether-utils.sh
+
+```bash
+learning-promote)
+  # Move a learning from project to global
+  [[ $# -ge 2 ]] || json_err "Usage: learning-promote <learning_id> <reason>"
+  learning_id="$1"
+  reason="$2"
+  global_file="$HOME/.aether/global_learnings.json"
+  project_file="$DATA_DIR/memory.json"
+
+  # Ensure global directory exists
+  mkdir -p "$HOME/.aether"
+  [[ -f "$global_file" ]] || echo '{"learnings":[],"promoted_count":0}' > "$global_file"
+
+  # Extract learning from project memory
+  learning=$(jq --arg id "$learning_id" '.phase_learnings[] | select(.id == $id)' "$project_file")
+  [[ -n "$learning" ]] || json_err "Learning $learning_id not found"
+
+  # Add to global with promotion metadata
+  updated=$(jq --argjson learn "$learning" --arg reason "$reason" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+    .learnings += [$learn + {promoted_at: $ts, promotion_reason: $reason}] |
+    .promoted_count += 1
+  ' "$global_file")
+  atomic_write "$global_file" "$updated"
+  json_ok '"promoted"'
+  ;;
+
+learning-global-read)
+  # Read global learnings for injection into worker context
+  global_file="$HOME/.aether/global_learnings.json"
+  [[ -f "$global_file" ]] || json_ok '{"learnings":[]}'
+  json_ok "$(cat "$global_file")"
+  ;;
+```
+
+### Integration Points
+
+| Command | How It Uses Global Learnings |
+|---------|------------------------------|
+| `/ant:init` | Read global learnings and inject relevant ones into colony context |
+| `/ant:build` | Include global learnings in Phase Lead prompt as "cross-project wisdom" |
+| `/ant:continue` | After extracting phase learnings, suggest promotion candidates to user |
+| `/ant:status` | Show count of global learnings available |
+
+---
+
+## File Conflict Prevention
+
+### The Problem (field notes 10, 13)
+
+Multiple builders editing the same file in parallel causes last-write-wins conflicts. Phase 1: one builder overwrote another's work. Phase 2: same issue recurred.
+
+### Solution: Prevention Over Resolution (HIGH confidence)
+
+The 2025 multi-agent coordination consensus is clear: **prevent conflicts at task assignment time, don't resolve them after the fact.**
+
+### Implementation: Same-File Task Grouping
+
+This is a **prompt-level** solution, not a code-level one. The Phase Lead's task assignment prompt already groups tasks into waves. Add a constraint:
+
+```markdown
+--- CONFLICT PREVENTION RULE ---
+Tasks that modify the same file MUST be assigned to the same worker.
+Before assigning tasks, check which files each task will likely touch.
+Group file-overlapping tasks together. This prevents parallel write conflicts.
+
+Example:
+  Task 1: Add auth routes to routes/index.ts
+  Task 2: Add API routes to routes/index.ts
+  -> Both touch routes/index.ts -> assign to SAME builder-ant
+
+  Task 3: Write auth middleware in middleware/auth.ts
+  -> Different file -> can go to a DIFFERENT builder-ant
+```
+
+### Backup: File-Level Locking (Already Exists)
+
+The existing `file-lock.sh` provides file-level locking via `noclobber`:
+
+```bash
+# Atomic lock acquisition (already implemented)
+(set -o noclobber; echo $$ > "$lock_file") 2>/dev/null
+```
+
+This is correct for local filesystem use. No changes needed. The limitation is that workers spawned via Task tool run in the same process context and share the filesystem -- locking prevents corruption but doesn't prevent logical conflicts (two workers both successfully writing different content to the same file, with the last write winning).
+
+**The lock prevents corruption. Task grouping prevents logical conflicts. Both are needed.**
+
+### What NOT to Do
+
+| Anti-Pattern | Why |
+|--------------|-----|
+| Git worktrees per worker | Overkill. Workers run sequentially within waves. Merge conflicts would require git resolution logic -- more complexity than the problem warrants. |
+| File-level OCC (optimistic concurrency) | Would require read-before-write versioning. Adds per-file version tracking overhead to every write. |
+| Distributed lock manager | External dependency. Aether runs on local filesystem only. |
 
 ---
 
 ## Alternatives Considered
 
-| Recommended | Alternative | When to Use Alternative |
-|-------------|-------------|-------------------------|
-| **Pull-based event polling** | Push-based webhooks | Push when you need real-time event delivery to external systems. Pull is better for prompt-based agents (Worker Ants execute, poll, exit - no persistent process). |
-| **Markdown test guides** | Automated test frameworks (Jest, pytest) | Automated frameworks when you have deterministic, repeatable tests. Markdown guides for LLM tests where you need Claude's judgment (e.g., "Did this response meet quality standards?"). |
-| **Unicode emojis** | ASCII art or colored output | ASCII when terminal doesn't support Unicode (legacy systems). Colored output when you need severity indicators (red=error, green=success). Emojis for semantic meaning (🐜=colony activity). |
-| **TAP format** | Custom test output formats | Custom formats when you have specific reporting needs (e.g., JUnit XML for CI). TAP for simplicity and broad tool support. |
-| **JSON test state** | SQLite or external database | SQLite for complex test relationships and queries. JSON for simple test tracking and git diffing. Aether's scope fits JSON. |
+| Category | Recommended | Alternative | Why Not Alternative |
+|----------|-------------|-------------|---------------------|
+| CLI animation | Static progress bars + color | Live spinners via background bash processes | Task tool buffers output. Background processes killed by sandbox. Spinner would spin in the void. |
+| Decay math | jq `exp()` with defensive guards | `bc -l` for arbitrary precision | jq is already loaded for JSON processing. IEEE754 double is more than sufficient. Adding `bc` is a new dependency for zero practical benefit. |
+| Color output | ANSI escape codes (`\e[32m`) | `tput setaf 2` | `tput` queries terminfo database, adds syscall overhead, fails if TERM unset. ANSI is direct, standard since 1976. |
+| File conflict prevention | Task grouping in Phase Lead prompt | File-level locks per write | Locks prevent corruption but not logical conflicts. Task grouping prevents both. |
+| Recursive spawning | Hub-and-spoke with capability gap reporting | `claude -p` subprocess calls (hack) | Loses all context, no observability, unreliable, and actively discouraged by Anthropic. |
+| Global learnings | `~/.aether/global_learnings.json` | SQLite database in `~/.aether/` | External dependency (sqlite3 binary). JSON is consistent with existing stack. Global learnings are small (tens to hundreds of entries). |
+| Learning promotion | Architect-ant synthesis + user approval gate | Automatic frequency-based promotion | Risk of promoting false positives. User gate prevents bad learnings from propagating. Low overhead (few promotions per project). |
+| Activity log persistence | Append mode with phase rotation | Single growing log file | Current bug is overwrite. Fix is append (`>>`) with archival at phase boundaries. Rotation prevents unbounded growth. |
 
 ---
 
@@ -83,344 +413,71 @@ source .aether/utils/file-lock.sh
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| **Python async/await for event delivery** | Claude Code doesn't support persistent async processes. Worker Ants are prompt-based (execute, poll, exit), not long-running daemons. | Pull-based polling via `get_events_for_subscriber()` - Worker Ants call this when they execute, process events, mark delivered, exit. |
-| **External test frameworks (Jest, Mocha, pytest)** | Violates "Claude-Native Only" constraint. Requires Node.js/Python runtime. Adds dependency overhead for simple validation tests. | Markdown test guides executed by Claude Code. Claude reads test steps, executes commands, validates results. |
-| **WebSocket or real-time push notifications** | Worker Ants aren't persistent processes - can't maintain WebSocket connections. Push requires daemon processes. | Event bus polling: Workers pull events when they run. Publishers push to events.json (non-blocking), Workers pull on next execution. |
-| **Heavy test runners with assertion libraries** | Overkill for manual LLM testing. You want Claude's judgment, not programmatic assertions (e.g., "Is this code review helpful?"). | Human-readable test guides with validation steps. Claude executes step, observes result, makes judgment call based on instructions. |
-| **Colored terminal output libraries** | Color alone doesn't convey semantic meaning. Red/green problematic for colorblind users. | Emojis: 🐜 (colony activity), ✓ (success), ✗ (failure), ⟳ (processing), ⚠ (warning), 🔍 (inspecting). Universal symbols, color-independent. |
-| **External vector databases for test artifacts** | Overkill for test suite scope. Adds infrastructure dependency. Aether constraint: "No External Dependencies." | JSON files for test results. Git-tracked, diff-able, human-readable. Search with jq when needed. |
+| **Node.js/Python for any utility** | Violates bash+jq-only constraint. Adds runtime dependency. | bash+jq handles everything v4.4 needs. |
+| **`bc` for decay math** | Unnecessary precision (jq's IEEE754 double is sufficient). New dependency. | jq `exp()` function with defensive guards. |
+| **`tput` for colors** | Indirect (queries terminfo), fragile if TERM unset, extra syscall per color change. | Direct ANSI escape codes: `\e[32m` for green, `\e[0m` for reset. |
+| **Background bash processes for animation** | Claude Code sandbox may kill background processes. Task tool is synchronous -- user sees nothing during execution. | Rich static output displayed by Queen between worker spawns. |
+| **tmux/screen for parallel output** | External dependency. Not available in all Claude Code environments. Not useful -- workers are sequential within waves. | Activity log + Queen-driven display between spawns. |
+| **Git worktrees for workspace isolation** | Massive overkill. Workers write sequentially. Merge resolution adds more complexity than it prevents. | Same-file task grouping in Phase Lead prompt. |
+| **Vector databases for learning storage** | External dependency. Overkill for tens-to-hundreds of learning entries. | JSON files with jq queries. Full-text search unnecessary -- learnings are short strings. |
+| **LLM-computed math (any transcendental function)** | Root cause of the 8.005 decay bug. LLMs cannot reliably compute exp(), ln(), or trigonometric functions. | Always use aether-utils.sh. If utility unavailable, fail-open with raw strength values, NEVER attempt manual computation. |
+| **`flock` command for file locking** | Not available on all macOS versions by default. `flock` is a Linux util-linux command, not POSIX. | `noclobber` pattern (`set -o noclobber; echo $$ > lockfile`) -- already implemented, POSIX-compliant. |
 
 ---
 
-## Stack Patterns by Variant
+## Subcommand Budget
 
-**If testing reactive event polling:**
-- Use **pull-based event pattern** (Worker Ants call `get_events_for_subscriber()`)
-- Because Worker Ants are prompt-based agents that execute and exit, not persistent processes
-- Implement polling in Worker Ant prompts: "Before starting task, check for events by calling get_events_for_subscriber()"
-- Event bus already supports this pattern (lines 508-593 in event-bus.sh)
+Current aether-utils.sh: 16 subcommands, ~265 lines.
+Constraint: stay under 400 lines total.
 
-**If testing E2E LLM workflows:**
-- Use **markdown test guides** with step-by-step instructions
-- Because Claude can interpret natural language test steps, execute commands, validate results
-- Structure: Test scenario → Setup → Execution steps → Validation assertions → Cleanup
-- Example test guide structure mirrors existing full-workflow.test.sh but in markdown format
+| New Subcommand | Lines (est.) | Purpose |
+|----------------|-------------|---------|
+| `learning-promote` | ~20 | Move project learning to global store |
+| `learning-global-read` | ~5 | Read global learnings for context injection |
+| `error-add-phased` | ~5 | Wrapper around error-add that includes phase number |
+| `activity-log-append` | ~3 | Fix: use >> instead of > for activity log writes |
+| `progress-bar` | ~10 | Formatted progress bar output with ANSI color |
+| **Total new** | **~43** | **Estimated total: ~308 lines** |
 
-**If adding CLI visual indicators:**
-- Use **Unicode emoji prefixes** for log output
-- Because emojis convey semantic meaning without color dependencies
-- Pattern: `🐜 [CASTE] message` for colony activity, `✓ Test passed` for validation
-- Ensure terminal compatibility (test with `echo "🐜"` first)
-
-**If running concurrent tests:**
-- Use **file locking** via existing `file-lock.sh`
-- Because tests may access shared colony state (COLONY_STATE.json, events.json)
-- Pattern: Acquire lock before reading/writing shared state, release after
-- Prevents test race conditions (known pitfall from CONCERNS.md)
+Stays well under 400-line budget.
 
 ---
 
 ## Version Compatibility
 
-| Package A | Compatible With | Notes |
-|-----------|-----------------|-------|
-| **jq 1.6+** | Bash 4.0+, macOS 10.15+, all Linux distros | jq required for all event bus operations. Aether's event-bus.sh uses jq extensively (879 lines). |
-| **Bash 4.0+** | All macOS 10.15+, Linux kernels 3.0+ | Bash arrays used in event polling. Bash 3.x (macOS default) may have issues - upgrade with Homebrew. |
-| **Unicode 15.0 emojis** | Terminal.app (macOS 10.13+), iTerm2, GNOME Terminal 3.28+ | Legacy terminals may display ? box fallback. Test emoji support before using in production. |
-| **TAP version 13** | Any TAP-compatible test harness (prove, tap-runner, CI parsers) | Existing Aether tests use TAP format (full-workflow.test.sh line 18). Maintains compatibility. |
-| **JSON RFC 8259** | Any JSON parser (jq, python3 -m json.tool) | All state files use valid JSON. Cross-platform compatible. |
-
----
-
-## Event Polling Architecture (Pull-Based)
-
-### Current Implementation (v1)
-
-Aether's event bus ([`.aether/utils/event-bus.sh`](/.aether/utils/event-bus.sh), 879 lines) implements **pull-based delivery**:
-
-```bash
-# Publisher (Worker Ant) publishes event
-publish_event "topic" "type" '{"data": "value"}' "publisher" "caste"
-# → Writes to events.json event_log
-# → Returns immediately (non-blocking)
-
-# Subscriber (Worker Ant) polls for events
-EVENTS=$(get_events_for_subscriber "subscriber_id" "caste")
-# → Returns events matching subscriptions since last poll
-# → Worker processes events when it executes
-
-# Mark events as delivered
-mark_events_delivered "subscriber_id" "caste" "$EVENTS"
-```
-
-### Why Pull-Based for Worker Ants?
-
-From research on [push vs pull patterns](https://dagster.io/blog/data-ingestion-patterns-when-to-use-push-pull-and-poll):
-
-1. **Backpressure control** - Workers pull work they can handle (no overwhelming events)
-2. **No persistent processes** - Worker Ants execute and exit (can't maintain WebSocket connections)
-3. **Fault tolerance** - Workers can retry failed pulls (network blips don't lose events)
-4. **Resource management** - Workers control their own polling frequency
-
-### Enhancement for v2
-
-**Reactive event integration**: Worker Ants proactively call `get_events_for_subscriber()` at key points:
-
-1. **On spawn** - New Worker checks for relevant events
-2. **Before task execution** - Check for FOCUS/REDIRECT signals
-3. **After task completion** - Check for FEEDBACK signals
-4. **On error** - Check for error handling events
-
-**Pattern in Worker Ant prompts:**
-```markdown
-## Event Polling
-
-Before starting any task:
-1. Call get_events_for_subscriber() with your worker_id and caste
-2. Process any FOCUS signals (adjust attention)
-3. Process any REDIRECT signals (avoid approaches)
-4. Process any FEEDBACK signals (learn preferences)
-5. Mark events as delivered after processing
-```
-
-### Avoid: Push-Based Event Delivery
-
-- **Why**: Requires persistent daemon processes (incompatible with prompt-based Worker Ants)
-- **Alternative**: Workers poll when they execute (pull-based)
-- **Hybrid option**: Publishers push to events.json (non-blocking write), Workers pull on next execution
-
----
-
-## LLM Testing Approach (Manual Test Guides)
-
-### Current Testing (v1)
-
-Aether has 9 automated tests (TAP format, bash scripts):
-- Integration tests (full-workflow, autonomous-spawn, memory-compress, voting-verify, meta-learning)
-- Stress tests (concurrent-access, spawn-limits, event-scalability)
-- Performance tests (timing-baseline)
-
-**Gap**: These tests validate infrastructure (JSON state, event bus), not LLM behavior quality.
-
-### Enhancement for v2
-
-**E2E LLM test guide**: Manual test suite for real Queen/Worker execution.
-
-Based on research from [Maxim AI's evaluation checklist](https://www.getmaxim.ai/articles/how-to-evaluate-ai-agents-a-practical-checklist-for-production/) and [multi-agent LLM eval guide](https://orq.ai/blog/multi-agent-llm-eval-system):
-
-#### Test Guide Structure
-
-```markdown
-# E2E LLM Test Guide: [Test Name]
-
-## Test Scenario
-[Description of the colony behavior being tested]
-
-## Pre-Conditions
-- Colony initialized with goal: "[goal]"
-- Worker Ants available: [list]
-- Event bus subscribed: [topics]
-
-## Test Steps
-
-### Step 1: [Action]
-1. Execute: `/ant:init "[goal]"`
-2. Verify: Colony state = INIT
-3. Check: events.json contains INIT pheromone
-
-### Step 2: [Action]
-...
-
-## Validation Assertions
-
-### Assertion 1: Colony spawned correct Worker Ants
-- Expected: Colonizer, Route-setter, Builder
-- Check: `jq '.active_workers | map(.caste)' .aether/data/worker_ants.json`
-- LLM judgment: Are these castes appropriate for the goal?
-
-### Assertion 2: Worker Ants responded to pheromones
-- Expected: Workers reacted to INIT signal
-- Check: events.json shows task_started events
-- LLM judgment: Did workers self-organize correctly?
-
-## Post-Conditions
-- Colony state = COMPLETED
-- All Worker Ants status = IDLE
-- events.json contains complete event chain
-
-## Cleanup
-```bash
-./.aether/utils/cleanup-colony.sh
-```
-```
-
-#### Key LLM Evaluation Criteria
-
-From [AI agent evaluation metrics](https://qawerk.com/blog/ai-agent-evaluation-metrics/):
-
-1. **Task completion** - Did the colony achieve the goal?
-2. **Agent coordination** - Did Worker Ants communicate effectively via events?
-3. **Emergent behavior** - Did workers spawn appropriate specialists?
-4. **Pheromone response** - Did workers respond to INIT/FOCUS/REDIRECT signals?
-5. **State consistency** - Was colony state maintained correctly?
-
-#### Test Categories
-
-1. **Happy path** - Colony achieves goal successfully
-2. **Error recovery** - Colony handles failures gracefully
-3. **Edge cases** - Unusual goals, resource constraints
-4. **Coordination** - Multiple workers collaborating
-5. **Autonomous spawning** - Workers detect capability gaps and spawn specialists
-
-### Avoid: Automated Assertion Libraries
-
-- **Why**: LLM outputs are non-deterministic. Programmatic assertions can't capture "Is this response helpful?"
-- **Alternative**: Claude executes test guide, makes judgment calls based on instructions
-- **Hybrid**: Use bash assertions for JSON validation (state transitions), Claude judgment for LLM quality (response helpfulness)
-
----
-
-## CLI Visual Indicators (Emoji Conventions)
-
-### Emoji Standard (Unicode 15.0)
-
-Based on research from [CLI emoji enhancement practices](https://github.com/josharsh/mcp-jest/issues/19) and [terminal UI libraries](https://insights.linuxfoundation.org/collection/terminal-ui-libraries):
-
-#### Colony Activity Indicators
-
-```bash
-🐜 [CASTE] message              # Colony activity (all castes)
-🐜 [QUEEN] Colony initialized with goal: "Build REST API"
-🐜 [BUILDER] Writing code: src/api/auth.js
-🐜 [WATCHER] Verifying test coverage
-```
-
-#### Status Indicators
-
-```bash
-✓ Test passed                  # Success
-✗ Test failed                  # Failure
-⚠ Warning detected             # Warning
-ℹ Information                  # Info
-```
-
-#### Progress Indicators
-
-```bash
-⟳ Processing...                # In progress
-⏳ Waiting for events          # Polling/waiting
-⚡ Fast operation               # Quick operation
-🔍 Inspecting                  # Investigating/debugging
-```
-
-#### Event Indicators
-
-```bash
-📡 Event published             # Event bus activity
-📨 Event received              # Event delivery
-📋 Event log                   # Event history
-```
-
-#### State Machine Indicators
-
-```bash
-→ State transition: IDLE → INIT  # State change
-⏭ Checkpoint created           # State checkpoint
-↩ State recovery               # State rollback
-```
-
-#### Caste-Specific Indicators
-
-```bash
-🐜 [COLONIZER] Exploring codebase...
-🐜 [ROUTE-SETTER] Planning phase...
-🐜 [BUILDER] Implementing feature...
-🐜 [WATCHER] Validating output...
-🐜 [SCOUT] Researching...
-🐜 [ARCHITECT] Compressing memory...
-```
-
-### Implementation Pattern
-
-Add emoji prefixes to Worker Ant prompt output:
-
-```markdown
-## Output Format
-
-When reporting colony activity, use emoji prefixes:
-- 🐜 [CASTE] for colony activity
-- ✓ for successful operations
-- ✗ for failures
-- ⚠ for warnings
-
-Example outputs:
-🐜 [BUILDER] ✓ Created src/api/auth.js
-🐜 [WATCHER] ✗ Test coverage below 80%
-🐜 [QUEEN] ⚠ Resource budget: 8/10 spawns used
-```
-
-### Terminal Compatibility
-
-Test emoji support before using:
-
-```bash
-# Test emoji rendering
-echo "🐜 ✓ ✗ ⚠ ⟳ 📡"
-
-# If you see ? boxes, your terminal doesn't support Unicode emojis
-# Fallback: Use ASCII prefixes
-# [COLONY] for activity
-# [OK] for success
-# [FAIL] for failure
-```
-
-### Avoid: Color-Only Indicators
-
-- **Why**: Color alone doesn't convey semantic meaning. Red/green problematic for colorblind users.
-- **Alternative**: Emojis provide semantic meaning independent of color
-- **Best practice**: Combine emoji + color for accessibility (🐜 green = colony activity success)
+| Component | Requires | macOS Default | Notes |
+|-----------|----------|---------------|-------|
+| bash | 4.0+ | 3.2 (but Homebrew provides 5.x) | Associative arrays need 4.0+. Most Aether code works on 3.2. |
+| jq | 1.6+ | Not installed (Homebrew) | `exp()` function available since jq 1.5. `fromdate` since 1.5. |
+| ANSI escapes | Any VT100-compatible terminal | Terminal.app, iTerm2 both support | Universal support since ~1978. |
+| mkdir -p | POSIX | Built-in | Used for directory creation. |
+| noclobber | POSIX | Built-in bash option | Used for atomic lock creation. |
+| `~/.aether/` directory | Filesystem | Always available | Global learning store location. |
 
 ---
 
 ## Sources
 
-### Primary (HIGH confidence)
+### Primary (HIGH confidence -- verified by testing)
 
-**Official Aether codebase:**
-- [`.aether/utils/event-bus.sh`](/.aether/utils/event-bus.sh) — 879 lines, pull-based event delivery pattern verified
-- [`.aether/utils/atomic-write.sh`](/.aether/utils/atomic-write.sh) — Corruption-safe write pattern
-- [`.aether/utils/file-lock.sh`](/.aether/utils/file-lock.sh) — Concurrent access prevention
-- [`.planning/phases/10-colony-maturity/tests/integration/full-workflow.test.sh`](/.planning/phases/10-colony-maturity**---end-to-end-testing,-pattern-extraction,-production-readiness/tests/integration/full-workflow.test.sh) — TAP format test pattern
-- [`.planning/codebase/CONCERNS.md`](/.planning/codebase/CONCERNS.md) — Known pitfalls, race condition risks
+- **Aether codebase analysis** -- Direct examination of `aether-utils.sh` (265 lines, 16 subcommands), `file-lock.sh` (123 lines), `atomic-write.sh` (214 lines), all 6 worker specs, and all 13 commands.
+- **Decay math verification** -- Tested jq `exp()` directly with known values. Formula is correct. Confirmed negative elapsed produces growth (root cause of 8.005 bug).
+- **Filmstrip test data** -- Read actual `pheromones.json` from `/Users/callumcowie/Desktop/aether test/.aether/data/` confirming pheromone format and timestamps.
+- **Claude Code Task tool limitation** -- [Sub-Agent Task Tool Not Exposed When Launching Nested Agents (Issue #4182)](https://github.com/anthropics/claude-code/issues/4182), [Parent-Child Agent Communication (Issue #1770)](https://github.com/anthropics/claude-code/issues/1770)
+- **Claude Code settings hierarchy** -- [Claude Code settings documentation](https://code.claude.com/docs/en/settings) confirms `~/.claude/` for global, `.claude/` for project scope.
 
-**Official Anthropic documentation:**
-- [Claude Code Sandboxing](https://www.anthropic.com/engineering/claude-code-sandboxing) — No persistent process support (validates pull-based approach)
-- [Effective Context Engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) — Context optimization for testing
+### Secondary (MEDIUM confidence -- verified with official sources)
 
-### Secondary (MEDIUM confidence)
+- **ANSI escape codes** -- [ANSI escape code (Wikipedia)](https://en.wikipedia.org/wiki/ANSI_escape_code), [ANSI Escape Codes reference (GitHub Gist)](https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797)
+- **File locking in bash** -- [BashFAQ/045](https://mywiki.wooledge.org/BashFAQ/045) (Greg's Wiki, canonical bash reference), [flock(2) man page](https://man7.org/linux/man-pages/man2/flock.2.html)
+- **jq math functions** -- [jq 1.7 Manual](https://jqlang.org/manual/v1.7/) (exp, fromdate, now documented), [fromdate fractional seconds issue #1117](https://github.com/jqlang/jq/issues/1117)
+- **Bash spinners** -- [How to Write Better Bash Spinners](https://willcarh.art/blog/how-to-write-better-bash-spinners), [Bash Spinner for Long Running Tasks (Baeldung)](https://www.baeldung.com/linux/bash-show-spinner-long-tasks)
+- **Multi-agent file conflict patterns** -- [Parallel Agents Are Easy. Shipping Without Chaos Isn't.](https://dev.to/rokoss21/parallel-agents-are-easy-shipping-without-chaos-isnt-1kek), [Multi-Agent Coordination Strategies (Galileo)](https://galileo.ai/blog/multi-agent-coordination-strategies)
 
-**Event polling patterns:**
-- [Data Ingestion Patterns: Push, Pull & Poll Explained (Dagster)](https://dagster.io/blog/data-ingestion-patterns-when-to-use-push-pull-and-poll) — Pull vs push use cases (validated pull-based for worker agents)
-- [Push vs Pull Architecture (Medium)](https://medium.com/@aligolestan/push-vs-pull-architecture-understanding-the-two-communication-models-ebe24a4eb4e6) — Trade-offs between push/pull
-- [Event Driven Architecture – Push vs Pull (Wellsky Engineering)](https://engineering.wellsky.com/post/event-driven-architecture---push-vs-pull) — When to use each pattern
+### Tertiary (LOW confidence -- single source or training data)
 
-**LLM testing approaches:**
-- [How to Evaluate AI Agents: A Practical Checklist for Production (Maxim AI)](https://www.getmaxim.ai/articles/how-to-evaluate-ai-agents-a-practical-checklist-for-production/) — Evaluation checklist (informed test guide structure)
-- [A Comprehensive Guide to Evaluating Multi-Agent LLM Systems (Orq.ai)](https://orq.ai/blog/multi-agent-llm-eval-system) — Multi-agent evaluation patterns
-- [AI Agent Evaluation: Key Metrics to Measure Performance (QAWerk)](https://qawerk.com/blog/ai-agent-evaluation-metrics) — Performance metrics for test validation
-- [A Practical Guide for Evaluating LLMs and LLM-Reliant Systems (arXiv)](https://arxiv.org/html/2506.13023v1) — Academic evaluation frameworks
-
-**CLI visual indicators:**
-- [Add emoji/visual indicators to CLI output for better UX (GitHub Issue)](https://github.com/josharsh/mcp-jest/issues/19) — CLI emoji enhancement discussion
-- [Terminal UI Libraries (LFX Insights)](https://insights.linuxfoundation.org/collection/terminal-ui-libraries) — Terminal UI patterns
-- [Rich Output Formatting (gookit/gcli)](https://zread.ai/gookit/gcli/15-rich-output-formatting) — Emoji subsystem in CLI tools
-
-### Tertiary (LOW confidence)
-
-**Event-driven multi-agent systems:**
-- [AI Agents Must Act, Not Wait: A Case for Event-Driven Multi-Agent Design (Medium)](https://seanfalconer.medium.com/ai-agents-must-act-not-wait-a-case-for-event-driven-multi-agent-design-d8007b50081f) — Event-driven design patterns
-- [A Distributed State of Mind: Event-Driven Multi-Agent Systems (Medium)](https://seanfalconer.medium.com/a-distributed-state-of-mind-event-driven-multi-agent-systems-226785b479e6) — Multi-agent coordination patterns
-- [Best Architectural Patterns for Event-Driven Systems (Gravitee)](https://www.gravitee.io/blog/event-driven-architecture-patterns) — Event sourcing patterns
+- **Two-tier memory patterns** -- [Practical Memory Patterns for Agent Workflows (AIS)](https://www.ais.com/practical-memory-patterns-for-reliable-longer-horizon-agent-workflows/) (describes promotion rules from personal -> team -> organization), [Memory OS of AI Agent (arXiv)](https://arxiv.org/abs/2506.06326)
+- **Claude Code Task tool internals** -- [The Task Tool: Claude Code's Agent Orchestration System (DEV Community)](https://dev.to/bhaidar/the-task-tool-claude-codes-agent-orchestration-system-4bf2), [Claude Code Swarm Orchestration (GitHub Gist)](https://gist.github.com/kieranklaassen/4f2aba89594a4aea4ad64d753984b2ea)
 
 ---
 
@@ -428,47 +485,19 @@ echo "🐜 ✓ ✗ ⚠ ⟳ 📡"
 
 | Area | Confidence | Reasoning |
 |------|------------|-----------|
-| **Pull-based event polling** | HIGH | Verified against existing Aether event-bus.sh (879 lines). Research confirms pull pattern is correct for prompt-based agents. |
-| **Markdown test guides** | HIGH | Research from multiple sources (Maxim AI, Orq.ai, QAWerk) confirms manual LLM testing approach. Fits Claude-native constraints. |
-| **Unicode emoji indicators** | MEDIUM | Research confirms emoji usage in CLI tools. Terminal compatibility verified. Low confidence only on emoji fallback strategies. |
-| **TAP format for tests** | HIGH | Existing Aether tests use TAP. Industry standard. No compatibility concerns. |
-| **File locking for concurrency** | HIGH | Existing Aether utilities (file-lock.sh) implement this. Pattern verified against CONCERNS.md race condition risks. |
-
-**Overall confidence:** HIGH
+| **Decay math fix** | HIGH | Root cause verified by testing actual data and formula. Guards are standard defensive programming. |
+| **CLI animation constraints** | HIGH | Task tool buffering is a platform fact, not an opinion. Verified via Claude Code docs and issues. |
+| **Recursive spawning limitation** | HIGH | Platform constraint confirmed by multiple GitHub issues and documentation. |
+| **File conflict prevention** | HIGH | Same-file grouping is the consensus pattern across multi-agent systems in 2025. Already proven in Aether's own field test. |
+| **Two-tier learning architecture** | MEDIUM | Directory structure maps to Claude Code conventions. Promotion mechanism is design opinion based on general patterns, not proven in Aether specifically. |
+| **Color scheme choices** | MEDIUM | ANSI codes are universal, but specific color-to-caste mapping is an aesthetic choice that may need user testing. |
+| **Subcommand budget** | HIGH | Line counts estimated from existing similar subcommands. 308 lines is well under 400-line constraint. |
 
 ---
 
 ## Open Questions (Phase-Specific Research)
 
-1. **Emoji fallback testing**: What's the best ASCII fallback pattern for legacy terminals? Test across terminal types during implementation.
-2. **LLM judgment calibration**: How to structure test guide validation instructions for consistent Claude judgment? Iterate during test guide creation.
-3. **Event polling frequency**: How often should Worker Ants poll? (Current: on key execution points). May need tuning based on real usage.
-
-**Recommendation:** These are implementation details, not stack decisions. The stack is solid. Research these during implementation phases.
-
----
-
-## Conclusion
-
-**Aether v2's enhancement stack remains minimal:**
-
-1. **Pull-based event polling** - Use existing event-bus.sh, Workers call `get_events_for_subscriber()`
-2. **Markdown test guides** - Claude executes test steps, validates with LLM judgment
-3. **Unicode emoji indicators** - Semantic, color-independent visual feedback (🐜, ✓, ✗, ⟳)
-
-**No new dependencies required.** All enhancements leverage existing Aether infrastructure.
-
-**Why this is the right stack:**
-- **Claude-native**: Pull-based polling fits prompt-based agent model (execute, poll, exit)
-- **Debuggable**: Markdown test guides are human-readable, git-tracked
-- **Accessible**: Emojis provide semantic meaning independent of color
-- **Compatible**: Builds on existing event-bus.sh (879 lines), atomic-write.sh, file-lock.sh
-- **Future-proof**: Based on standard patterns (pull events, TAP tests, Unicode emojis)
-
-**The stack enables the enhancements without introducing complexity.**
-
----
-
-*Stack research for: Aether v2 enhancements*
-*Researched: 2026-02-02*
-*Confidence: HIGH*
+1. **Deployment model for target repos** -- How does `.aether/` get into repos where Aether is used? This is the REAL fix for the decay bug. Options: bootstrap via `/ant:init`, global install, symlink. Deferred per field note 16 but affects v4.4 reliability.
+2. **Learning promotion UX** -- Should promotion be inline (during `/ant:continue`) or batch (via a new `/ant:synthesize` flow)? Depends on how often promotions happen in practice.
+3. **Auto-continue mode** -- How much user agency to preserve? Full auto (run all phases) vs semi-auto (auto-continue but pause on watcher failures)? Design question, not stack question.
+4. **Swarm mode compatibility** -- Claude Code is developing native multi-agent coordination (TeammateTool). If/when this ships, Aether's hub-and-spoke may need rearchitecting. Monitor but don't build for it yet.
