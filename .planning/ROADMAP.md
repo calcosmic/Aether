@@ -44,9 +44,11 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. build.md Step 7 reads errors.json, events.json, and task outcomes, then synthesizes actionable learnings and appends to memory.json (same logic as continue.md Step 4)
   2. build.md Step 7 auto-emits a FEEDBACK pheromone summarizing what worked/failed, validated via pheromone-validate before writing
-  3. continue.md detects whether learnings were already extracted (checks memory.json for learnings from current phase) and skips extraction if so
+  3. continue.md detects whether learnings were already extracted (checks events.json for auto_learnings_extracted event from current phase) and skips extraction if so
   4. Learning extraction in build.md respects existing memory-compress limits (20 learnings max)
-**Plans**: TBD (created during /cds:plan-phase)
+**Plans:** 1 plan
+Plans:
+- [ ] 26-01-PLAN.md — Auto-learning in build.md Step 7 + duplicate detection in continue.md
 
 ## Progress
 
@@ -55,7 +57,7 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 25. Live Visibility | v4.3 | 3/3 | ✓ Complete | 2026-02-04 |
-| 26. Auto-Learning | v4.3 | 0/? | ○ Pending | - |
+| 26. Auto-Learning | v4.3 | 0/1 | ○ Pending | - |
 
 ---
 *Roadmap created: 2026-02-04*
