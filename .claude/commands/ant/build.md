@@ -228,6 +228,29 @@ After the Phase Lead returns:
 5. After re-run, display revised plan and ask again
 6. Maximum 3 plan iterations before proceeding with the latest plan
 
+### Step 5b-post: Record Plan Decisions
+
+After the plan is approved, record strategic decisions to memory.json.
+
+Read `.aether/data/memory.json`. Synthesize 2-3 strategic decisions from the approved plan (e.g., task groupings, caste assignments, wave structure rationale, conflict prevention merges). Do NOT log every individual task assignment -- only strategic choices.
+
+Append each decision to the `decisions` array:
+
+```json
+{
+  "id": "dec_<unix_timestamp>_<4_random_hex>",
+  "type": "plan",
+  "content": "<strategic decision -- e.g. 'Grouped tasks 3.1+3.2 to single builder because both modify routes/index.ts'>",
+  "context": "Phase <id> plan -- <brief plan summary>",
+  "phase": <current_phase_number>,
+  "timestamp": "<ISO-8601 UTC>"
+}
+```
+
+If the `decisions` array exceeds 30 entries, remove the oldest entries to keep only 30.
+
+Write the updated memory.json.
+
 ### Step 5c: Execute Plan
 
 This is the core execution loop. The Queen spawns workers directly.
@@ -389,6 +412,21 @@ Focus on HIGH and CRITICAL severity issues. These will be logged as errors.
 
 Store the watcher's report (quality_score, recommendation, issues) for use in Steps 6 and 7.
 
+**Record Quality Decision:** Read `.aether/data/memory.json` (if not already in memory). Append a quality decision to the `decisions` array:
+
+```json
+{
+  "id": "dec_<unix_timestamp>_<4_random_hex>",
+  "type": "quality",
+  "content": "<watcher verdict -- e.g. 'Phase 3 approved at 7/10, deferred 2 medium issues to tech debt'>",
+  "context": "Phase <id> watcher verification",
+  "phase": <current_phase_number>,
+  "timestamp": "<ISO-8601 UTC>"
+}
+```
+
+Cap at 30 entries (remove oldest if exceeded). Write updated memory.json.
+
 ### Step 6: Record Outcome
 
 After the watcher returns, use Write tool to update:
@@ -407,17 +445,19 @@ After the watcher returns, use Write tool to update:
 
 For each failure, use the Bash tool to run:
 ```
-bash .aether/aether-utils.sh error-add "<category>" "<severity>" "<description>"
+bash .aether/aether-utils.sh error-add "<category>" "<severity>" "<description>" <phase_number>
 ```
 
-Where `category` is one of: syntax, import, runtime, type, spawning, phase, verification, api, file, logic, performance, security. And `severity` is one of: critical, high, medium, low.
+Where `category` is one of: syntax, import, runtime, type, spawning, phase, verification, api, file, logic, performance, security. And `severity` is one of: critical, high, medium, low. The `<phase_number>` is the current phase ID being built (from `$ARGUMENTS`).
 
 Each call returns `{"ok":true,"result":"<error_id>"}`. Note the returned error IDs for event logging.
 
 **Log Watcher Issues:** For each issue in the watcher report with severity `HIGH` or `CRITICAL`, use the Bash tool to run:
 ```
-bash .aether/aether-utils.sh error-add "verification" "<severity_lowercased>" "<description>"
+bash .aether/aether-utils.sh error-add "verification" "<severity_lowercased>" "<description>" <phase_number>
 ```
+
+Where `<phase_number>` is the current phase ID being built (from `$ARGUMENTS`).
 
 **Write Watcher Verification Event:** Append to events.json:
 
