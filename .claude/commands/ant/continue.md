@@ -7,6 +7,15 @@ You are the **Queen Ant Colony**. Advance to the next phase.
 
 ## Instructions
 
+### Step 0: Parse Arguments
+
+Check if `$ARGUMENTS` contains `--all` or `all`.
+
+- If `--all` or `all` is present: set `auto_mode = true`
+- Otherwise: set `auto_mode = false`
+
+Proceed to Step 1.
+
 ### Step 1: Read State
 
 Use the Read tool to read these files (in parallel):
@@ -20,6 +29,93 @@ Use the Read tool to read these files (in parallel):
 If `COLONY_STATE.json` has `goal: null`, output `No colony initialized. Run /ant:init first.` and stop.
 
 If `PROJECT_PLAN.json` has empty `phases`, output `No project plan. Run /ant:plan first.` and stop.
+
+### Step 1.5: Auto-Continue Loop (only if auto_mode is true)
+
+If `auto_mode` is false, skip this step entirely and proceed to Step 2 (normal single-phase flow).
+
+If `auto_mode` is true:
+
+Read `PROJECT_PLAN.json` to determine how many phases remain. Calculate `remaining_phases` as all phases with status NOT equal to `"completed"`.
+
+If no phases remain, output "All phases already complete." and proceed to Step 8.
+
+Display:
+```
++=====================================================+
+|  AUTO-CONTINUE                                       |
++=====================================================+
+
+Running all remaining phases automatically.
+Halt conditions: watcher score < 4, or 2 consecutive failures.
+Phases remaining: <count>
+```
+
+Initialize: `consecutive_failures = 0`, `phase_results = []`
+
+**For each remaining phase (in order):**
+
+1. Display: `"\n--- Auto-Continue: Phase <N>/<total> - <phase_name> ---\n"`
+
+2. **Build the phase** using the **Task tool** with `subagent_type="general-purpose"`:
+   ```
+   You are executing /ant:build <phase_number> as part of an auto-continue run.
+
+   Read the file .claude/commands/ant/build.md using the Read tool.
+   Follow ALL instructions from Step 1 through Step 7e exactly,
+   with $ARGUMENTS = "<phase_number>".
+
+   IMPORTANT: In auto-continue mode, auto-approve the Phase Lead's plan
+   in Step 5b WITHOUT asking the user. Skip the "Proceed with this plan?"
+   prompt and proceed directly to Step 5c.
+
+   Execute all steps. Return your result including:
+   - The watcher quality_score (number 1-10)
+   - The watcher recommendation ("approve" or "request_changes")
+   - A one-line summary of what was built
+   ```
+
+3. **Check halt conditions** after build returns:
+   - Extract `quality_score` from the Task result
+   - If `quality_score < 4`:
+     - Display: `"AUTO-CONTINUE HALTED: Phase <N> scored <score>/10. Manual review needed."`
+     - Display: `"Run /ant:status to inspect, then /ant:build <N> to retry manually."`
+     - Break out of the loop and proceed to the cumulative display
+   - If build reported failure (no quality_score returned or task errored):
+     - Increment `consecutive_failures`
+     - If `consecutive_failures >= 2`:
+       - Display: `"AUTO-CONTINUE HALTED: 2 consecutive phase failures."`
+       - Break out of the loop
+     - Otherwise: continue to next phase
+   - If `quality_score >= 4`:
+     - Reset `consecutive_failures = 0`
+
+4. **Run continue logic** for this phase: Execute Steps 3-7 of this command (phase completion summary, extract learnings, auto-emit pheromones, clean pheromones, write events, update colony state) for the just-completed phase.
+
+5. **Record phase result:**
+   - Append to `phase_results`: `{phase: <N>, name: "<name>", score: <quality_score>, status: "COMPLETE" or "FAILED"}`
+   - Display condensed summary:
+     ```
+     Phase <N>: <name> -- <COMPLETE|FAILED> (quality: <score>/10)
+     ```
+
+**After the loop completes (or halts), display cumulative results:**
+
+```
++=====================================================+
+|  AUTO-CONTINUE COMPLETE                              |
++=====================================================+
+
+Phases processed: <count>
+  {for each phase_result:}
+  {pass or fail} Phase <N>: <name> (quality: <score>/10)
+
+{if halted:}
+Halted at: Phase <N> -- <reason>
+{/if}
+```
+
+Then proceed to Step 8 to display the normal result (showing the NEXT unbuilt phase, or "all complete" if done).
 
 ### Step 2: Determine Next Phase
 
@@ -275,9 +371,23 @@ Output this header at the start of your response:
 +=====================================================+
 ```
 
-Then show step progress:
+Then show step progress.
+
+If `auto_mode` was true, show:
 
 ```
+  ✓ Step 0: Parse Arguments (--all mode)
+  ✓ Step 1: Read State
+  ✓ Step 1.5: Auto-Continue Loop (<N> phases)
+  ✓ Step 8: Display Result
+```
+
+(Steps 2-7 are executed per-phase inside the loop, not shown individually.)
+
+If `auto_mode` was false, show the normal progress:
+
+```
+  ✓ Step 0: Parse Arguments
   ✓ Step 1: Read State
   ✓ Step 2: Determine Next Phase
   ✓ Step 3: Phase Completion Summary
