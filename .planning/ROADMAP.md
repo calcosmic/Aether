@@ -20,8 +20,8 @@ Ordering is driven by three constraints: broken foundations invalidate features 
 **Plans:** 2 plans
 
 Plans:
-- [ ] 27-01-PLAN.md — Fix pheromone decay guards, activity log append, error-add phase param in aether-utils.sh
-- [ ] 27-02-PLAN.md — Wire phase to error-add calls, add decision logging, add conflict prevention rule in build.md
+- [x] 27-01-PLAN.md — Fix pheromone decay guards, activity log append, error-add phase param in aether-utils.sh
+- [x] 27-02-PLAN.md — Wire phase to error-add calls, add decision logging, add conflict prevention rule in build.md
 
 **Success Criteria:**
 1. A FOCUS pheromone emitted 30 minutes ago shows lower effective strength than when it was emitted -- decay math produces monotonically decreasing values
@@ -120,7 +120,7 @@ Plans:
 
 | Phase | Name | Plans | Status |
 |-------|------|-------|--------|
-| 27 | Bug Fixes & Safety Foundation | 2 plans | Planned |
+| 27 | Bug Fixes & Safety Foundation | 2 plans | ✓ Complete |
 | 28 | UX & Friction Reduction | TBD | Pending |
 | 29 | Colony Intelligence & Quality Signals | TBD | Pending |
 | 30 | Automation & New Capabilities | TBD | Pending |
@@ -182,4 +182,4 @@ Phases with standard patterns (skip research):
 ---
 
 _Roadmap created: 2026-02-04_
-_Last updated: 2026-02-04_
+_Last updated: 2026-02-04 — Phase 27 complete_

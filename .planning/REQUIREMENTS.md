@@ -9,10 +9,10 @@ Requirements for v4.4 Colony Hardening & Real-World Readiness. Each maps to road
 
 ### Bug Fixes
 
-- [ ] **BUG-01**: Pheromone decay math produces correct decreasing strength over time (FOCUS strength no longer grows)
-- [ ] **BUG-02**: Activity log appends across phases instead of overwriting (Phases 1-N entries preserved)
-- [ ] **BUG-03**: Errors logged to errors.json include phase attribution field
-- [ ] **BUG-04**: Decisions made during execution phases are recorded in memory.json decisions array
+- [x] **BUG-01**: Pheromone decay math produces correct decreasing strength over time (FOCUS strength no longer grows)
+- [x] **BUG-02**: Activity log appends across phases instead of overwriting (Phases 1-N entries preserved)
+- [x] **BUG-03**: Errors logged to errors.json include phase attribution field
+- [x] **BUG-04**: Decisions made during execution phases are recorded in memory.json decisions array
 
 ### Critical UX
 
@@ -22,7 +22,7 @@ Requirements for v4.4 Colony Hardening & Real-World Readiness. Each maps to road
 ### Colony Intelligence
 
 - [ ] **INT-01**: Colonize command spawns multiple ants that review codebase independently and synthesize findings
-- [ ] **INT-02**: Tasks touching the same file are assigned to the same worker by Phase Lead during planning
+- [x] **INT-02**: Tasks touching the same file are assigned to the same worker by Phase Lead during planning
 - [ ] **INT-03**: Phase Lead assigns independent tasks to parallel waves more aggressively
 - [ ] **INT-04**: Phase Lead auto-approves plans for phases below a complexity threshold
 - [ ] **INT-05**: Watcher scoring rubric produces meaningfully varied scores (not flat 8/10)
@@ -84,11 +84,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BUG-01 | Phase 27 | Pending |
-| BUG-02 | Phase 27 | Pending |
-| BUG-03 | Phase 27 | Pending |
-| BUG-04 | Phase 27 | Pending |
-| INT-02 | Phase 27 | Pending |
+| BUG-01 | Phase 27 | Complete |
+| BUG-02 | Phase 27 | Complete |
+| BUG-03 | Phase 27 | Complete |
+| BUG-04 | Phase 27 | Complete |
+| INT-02 | Phase 27 | Complete |
 | UX-01 | Phase 28 | Pending |
 | UX-02 | Phase 28 | Pending |
 | FLOW-01 | Phase 28 | Pending |
@@ -116,4 +116,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-04*
-*Last updated: 2026-02-04 after roadmap creation — all 24 requirements mapped to phases 27-32*
+*Last updated: 2026-02-04 — Phase 27 requirements (BUG-01, BUG-02, BUG-03, BUG-04, INT-02) marked Complete*
