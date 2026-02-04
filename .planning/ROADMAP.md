@@ -17,7 +17,7 @@ v4.3 addresses two gaps found during codebase analysis: (1) workers output progr
 ## Phases
 
 - [x] **Phase 25: Live Visibility** - Activity log + incremental Queen display so users see worker progress during execution (completed 2026-02-04)
-- [ ] **Phase 26: Auto-Learning** - Automatic learning extraction in build.md, skip duplicate extraction in continue.md
+- [x] **Phase 26: Auto-Learning** - Automatic learning extraction in build.md, skip duplicate extraction in continue.md (completed 2026-02-04)
 
 ## Phase Details
 
@@ -48,7 +48,7 @@ Plans:
   4. Learning extraction in build.md respects existing memory-compress limits (20 learnings max)
 **Plans:** 1 plan
 Plans:
-- [ ] 26-01-PLAN.md — Auto-learning in build.md Step 7 + duplicate detection in continue.md
+- [x] 26-01-PLAN.md — Auto-learning in build.md Step 7 + duplicate detection in continue.md
 
 ## Progress
 
@@ -57,7 +57,7 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 25. Live Visibility | v4.3 | 3/3 | ✓ Complete | 2026-02-04 |
-| 26. Auto-Learning | v4.3 | 0/1 | ○ Pending | - |
+| 26. Auto-Learning | v4.3 | 1/1 | ✓ Complete | 2026-02-04 |
 
 ---
 *Roadmap created: 2026-02-04*

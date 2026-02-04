@@ -10,12 +10,12 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 ## Current Position
 
 Milestone: v4.3 Live Visibility & Auto-Learning
-Phase: 25 (Live Visibility) -- VERIFIED ✓
-Plan: 3 of 3 in phase 25 (all complete, verified)
-Status: Phase 25 verified, ready for phase 26
-Last activity: 2026-02-04 -- Phase 25 verified (5/5 must-haves)
+Phase: 26 (Auto-Learning) -- COMPLETE
+Plan: 1 of 1 in phase 26 (all complete)
+Status: Phase 26 complete, v4.3 milestone complete
+Last activity: 2026-02-04 -- Completed 26-01-PLAN.md
 
-Progress: [██████████░░░░░░░░░░] 50% (v4.3: 1/2 phases)
+Progress: [████████████████████] 100% (v4.3: 2/2 phases)
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -28,7 +28,7 @@ Progress: [██████████░░░░░░░░░░] 50% (v4
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 77 (44 v1.0 + 6 v2.0 + 11 v3.0 + 9 v4.0 + 4 v4.1 + 3 v4.3)
+- Total plans completed: 78 (44 v1.0 + 6 v2.0 + 11 v3.0 + 9 v4.0 + 4 v4.1 + 4 v4.3)
 - Average duration: ~20 min
 - Total execution time: ~18 hours
 
@@ -44,6 +44,9 @@ See PROJECT.md Key Decisions table for full history.
 - 25-03: Phase Lead is planning-only -- explicitly forbidden from Task tool and spawning
 - 25-03: User plan checkpoint with max 3 iterations before auto-proceeding
 - 25-03: Workers spawned at depth 1 by Queen, spawn tracking is deterministic
+- 26-01: Use events.json auto_learnings_extracted event as cross-command flag
+- 26-01: Phase-specific content matching prevents stale flag detection
+- 26-01: --force override supported for manual re-extraction in continue.md
 
 ### Pending Todos
 
@@ -60,9 +63,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-04
-Stopped at: Phase 25 verified, ready for /cds:plan-phase 26
+Stopped at: Completed 26-01-PLAN.md (Phase 26 complete, v4.3 milestone complete)
 Resume file: none
 
 ---
 
-*State updated: 2026-02-04 after Phase 25 verification*
+*State updated: 2026-02-04 after Phase 26 completion*
