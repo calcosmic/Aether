@@ -10,10 +10,10 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 ## Current Position
 
 Milestone: v4.4 Colony Hardening & Real-World Readiness
-Phase: 28 of 32 (UX & Friction Reduction) ✓
-Plan: 2 of 2 complete
-Status: Phase 28 verified and complete — ready for Phase 29
-Last activity: 2026-02-04 -- Phase 28 verified (8/8 must-haves passed)
+Phase: 29 of 32 (Colony Intelligence & Quality Signals) — planned
+Plan: 0 of 3 complete (3 plans in 2 waves, verified)
+Status: Phase 29 planned and verified — ready for execution
+Last activity: 2026-02-04 -- Phase 29 planned (3 plans, checker passed all 6 dimensions)
 
 Progress: [######--------------] 33% (v4.4: 2/6 phases, 4/12 plans est.)
 
@@ -60,9 +60,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-04
-Stopped at: Phase 28 verified complete -- ready for /cds:plan-phase 29
-Resume file: none
+Stopped at: Phase 29 planned and verified -- ready for /cds:execute-phase 29
+Resume file: .planning/phases/29-colony-intelligence/.continue-here.md
 
 ---
 
-*State updated: 2026-02-04 after Phase 28 verification*
+*State updated: 2026-02-04 after Phase 29 planning*
