@@ -35,7 +35,7 @@ shift 2>/dev/null || true
 case "$cmd" in
   help)
     cat <<'EOF'
-{"ok":true,"commands":["help","version","pheromone-decay","pheromone-effective","pheromone-batch","pheromone-cleanup","pheromone-validate","validate-state","spawn-check","memory-compress","error-add","error-pattern-check","error-summary"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
+{"ok":true,"commands":["help","version","pheromone-decay","pheromone-effective","pheromone-batch","pheromone-cleanup","pheromone-validate","validate-state","spawn-check","memory-compress","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
 EOF
     ;;
   version)
@@ -222,6 +222,42 @@ EOF
         . + {reason: (if $active >= 5 then "worker_limit" elif $depth >= 3 then "depth_limit" else "unknown" end)}
       else . end
     ' "$DATA_DIR/COLONY_STATE.json")"
+    ;;
+  activity-log)
+    action="${1:-}"
+    caste="${2:-}"
+    description="${3:-}"
+    [[ -z "$action" || -z "$caste" || -z "$description" ]] && json_err "Usage: activity-log <action> <caste> <description>"
+    log_file="$DATA_DIR/activity.log"
+    ts=$(date -u +"%H:%M:%S")
+    echo "[$ts] $action $caste: $description" >> "$log_file"
+    json_ok '"logged"'
+    ;;
+  activity-log-init)
+    phase_num="${1:-}"
+    phase_name="${2:-}"
+    [[ -z "$phase_num" ]] && json_err "Usage: activity-log-init <phase_num> [phase_name]"
+    log_file="$DATA_DIR/activity.log"
+    archive_file="$DATA_DIR/activity-phase-${phase_num}.log"
+    if [ -f "$log_file" ] && [ -s "$log_file" ]; then
+      mv "$log_file" "$archive_file"
+    fi
+    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    echo "# Phase $phase_num: ${phase_name:-unnamed} -- $ts" > "$log_file"
+    archived_flag="false"
+    [ -f "$archive_file" ] && archived_flag="true"
+    json_ok "{\"archived\":$archived_flag}"
+    ;;
+  activity-log-read)
+    caste_filter="${1:-}"
+    log_file="$DATA_DIR/activity.log"
+    [[ -f "$log_file" ]] || json_err "activity.log not found"
+    if [ -n "$caste_filter" ]; then
+      content=$(grep "$caste_filter" "$log_file" | tail -20)
+    else
+      content=$(cat "$log_file")
+    fi
+    json_ok "$(echo "$content" | jq -Rs '.')"
     ;;
   *)
     json_err "Unknown command: $cmd"
