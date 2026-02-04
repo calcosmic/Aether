@@ -1,4 +1,4 @@
-# Aether v4.3: Claude-Native Queen Ant Colony
+# Aether: Claude-Native Queen Ant Colony
 
 ## What This Is
 
@@ -76,13 +76,15 @@ If this works, everything else follows. If this fails, nothing else matters. Not
 - ✓ **Worker progress output** — All 6 castes emit structured progress markers — v4.2
 - ✓ **Learning extraction flow** — continue.md prompted after each phase — v4.2
 
+*(Shipped in v4.3 — 2026-02-04)*
+
+- ✓ **Activity log file** — Workers write progress to `.aether/data/activity.log` during execution for real-time visibility — v4.3
+- ✓ **Incremental Queen updates** — Queen displays worker results between spawns instead of waiting for entire Phase Lead return — v4.3
+- ✓ **Automatic learning extraction** — build.md Step 7 extracts phase learnings automatically instead of requiring separate `/ant:continue` call — v4.3
+
 ### Active
 
-*(v4.3 Live Visibility & Auto-Learning — 2026-02-04)*
-
-- [ ] **Activity log file** — Workers write progress to `.aether/data/activity.log` during execution for real-time visibility
-- [ ] **Incremental Queen updates** — Queen displays worker results between spawns instead of waiting for entire Phase Lead return
-- [ ] **Automatic learning extraction** — build.md Step 7 extracts phase learnings automatically instead of requiring separate `/ant:continue` call
+(None — next milestone requirements TBD)
 
 ### Out of Scope
 
@@ -102,22 +104,23 @@ If this works, everything else follows. If this fails, nothing else matters. Not
 
 ## Context
 
-### Current State (post v4.2 — 2026-02-03)
+### Current State (post v4.3 — 2026-02-04)
 
 **What exists (working):**
 - 12 commands as Claude Code skill prompts (init, plan, build, status, phase, continue, focus, redirect, feedback, pause-colony, resume-colony, colonize, ant)
-- 6 worker ant specs (~200 lines each) with pheromone math, spawning scenarios, event awareness, progress output
+- 6 worker ant specs (~200 lines each) with pheromone math, spawning scenarios, event awareness, progress output, mandatory activity logging
 - 6 state files: COLONY_STATE.json, pheromones.json, PROJECT_PLAN.json, errors.json, memory.json, events.json
-- `aether-utils.sh` utility wrapper with subcommands (pheromone math, state validation, spawn enforcement, memory ops, error tracking)
+- `aether-utils.sh` utility wrapper with 16 subcommands (pheromone math, state validation, spawn enforcement, memory ops, error tracking, activity logging)
 - 2 infrastructure scripts: atomic-write.sh, file-lock.sh
 - Full visual identity: box-drawing headers, step progress, pheromone decay bars, caste emoji
-- Delegation protocol: Phase Lead reports what workers did via delegation log
+- Queen-driven execution: Phase Lead plans tasks, Queen spawns workers sequentially with activity log display between each
+- Auto-learning extraction: build.md Step 7 captures learnings and emits FEEDBACK pheromone automatically
 - Spawn enforcement gates in all 6 worker specs
 - Pheromone validation in continue.md
 
-**Known issues (being addressed in v4.3):**
-- Workers output progress markers but they're invisible until Phase Lead returns (Task tool subagents don't stream)
-- Learning extraction requires manual `/ant:continue` — easy to forget, loses learnings if context clears first
+**Known issues:**
+- continue.md Step 6 writes learnings_extracted event unconditionally even when Step 4 was skipped (cosmetic)
+- continue.md Step 8 display template lacks skip-case guidance (LLM handles contextually)
 
 ### Background
 
@@ -157,9 +160,11 @@ Aether is based on **383,000+ words of research** across 25 documents by Ralph (
 | Pattern flagging stays LLM responsibility | error-add records, LLM analyzes patterns in context | ✓ Good — v4.0, clear boundary |
 | validate-state after init | Catch schema errors immediately after state creation | ✓ Good — v4.0, prevents silent corruption |
 
-| Activity log for live visibility | Workers write to file during execution; Queen reads between spawns | — Pending |
-| Auto-learning in build Step 7 | Prevent learning loss from forgotten /ant:continue calls | — Pending |
+| Activity log for live visibility | Workers write to file during execution; Queen reads between spawns | ✓ Good — v4.3, 3 subcommands + all worker specs |
+| Auto-learning in build Step 7 | Prevent learning loss from forgotten /ant:continue calls | ✓ Good — v4.3, auto-extraction + duplicate detection |
+| Phase Lead as planner only | Separate planning from execution for visibility | ✓ Good — v4.3, Queen drives worker spawns |
+| Event-based flag coordination | events.json auto_learnings_extracted for cross-command state | ✓ Good — v4.3, phase-specific matching |
 
 ---
 
-*Last updated: 2026-02-04 after v4.3 milestone start*
+*Last updated: 2026-02-04 after v4.3 milestone*

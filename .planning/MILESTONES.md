@@ -1,5 +1,32 @@
 # Project Milestones: Aether
 
+## v4.3 Live Visibility & Auto-Learning (Shipped: 2026-02-04)
+
+**Delivered:** Activity log system for live worker visibility during builds, and automatic learning extraction that eliminates the need for manual `/ant:continue` calls after each phase.
+
+**Phases completed:** 25-26 (4 plans total)
+
+**Key accomplishments:**
+
+- **Activity Log System** — 3 new aether-utils.sh subcommands for structured worker progress logging with phase-based archival
+- **Worker Instrumentation** — All 6 worker specs updated with mandatory activity log instructions
+- **Queen-Driven Execution** — build.md restructured: Phase Lead plans only, Queen spawns workers sequentially with incremental visibility
+- **Auto-Learning Extraction** — build.md Step 7 auto-extracts learnings to memory.json and emits FEEDBACK pheromone
+- **Duplicate Detection** — continue.md skips learning extraction when build already captured it
+
+**Stats:**
+
+- 29 files changed, 3,653 insertions, 145 deletions
+- 2 phases, 4 plans, 7 tasks
+- 20 commits
+- 1 day (2026-02-04)
+
+**Git range:** `dbc6edd` → `008ed0e`
+
+**What's next:** TBD
+
+---
+
 ## v4.0 Hybrid Foundation (Shipped: 2026-02-03)
 
 **Delivered:** A thin shell utility layer (`aether-utils.sh`, 241 lines, 18 subcommands) that handles deterministic operations — pheromone math, state validation, memory management, error tracking — making the system hybrid: prompts reason and decide, shell scripts compute and validate. All 11 audit-identified issues fixed.
