@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-02-04)
 
 **Core value:** Stigmergic Emergence -- Worker Ants detect capability gaps and spawn specialists through pheromone-guided coordination
-**Current focus:** Planning next milestone
+**Current focus:** v4.4 Colony Hardening & Real-World Readiness
 
 ## Current Position
 
-Milestone: v4.3 Live Visibility & Auto-Learning -- SHIPPED
-Phase: 26 of 26 (all complete)
-Plan: All complete
-Status: Milestone shipped, ready for next milestone
-Last activity: 2026-02-04 -- v4.3 milestone complete
+Milestone: v4.4 Colony Hardening & Real-World Readiness
+Phase: 27 of 32 (Bug Fixes & Safety Foundation)
+Plan: Not yet planned
+Status: Roadmap created, awaiting phase planning
+Last activity: 2026-02-04 -- Roadmap created for v4.4
 
-Progress: [████████████████████] 100% (v4.3: 2/2 phases)
+Progress: [--------------------] 0% (v4.4: 0/6 phases)
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -49,14 +49,14 @@ None.
 
 ### Blockers/Concerns
 
-None.
+- CP-1: Recursive spawning may be blocked by Claude Code platform constraint (Task tool unavailable to subagents). Must validate in Phase 31 before implementing spawn tree engine.
 
 ## Session Continuity
 
 Last session: 2026-02-04
-Stopped at: v4.3 milestone complete -- ready for /cds:new-milestone
+Stopped at: v4.4 roadmap created -- ready for /cds:plan-phase 27
 Resume file: none
 
 ---
 
-*State updated: 2026-02-04 after v4.3 milestone completion*
+*State updated: 2026-02-04 after v4.4 roadmap creation*
