@@ -55,9 +55,12 @@ Plans:
 **Goal**: Colony produces calibrated quality assessments, adapts its overhead to project size, and leverages multiple perspectives during colonization
 **Depends on**: Phase 28
 **Requirements**: INT-01, INT-03, INT-04, INT-05, INT-07, ARCH-03
+**Plans:** 3 plans
 
 Plans:
-- [ ] TBD
+- [ ] 29-01-PLAN.md — Multi-colonizer synthesis + complexity detection + adaptive mode in colonize.md
+- [ ] 29-02-PLAN.md — Watcher scoring rubric with weighted dimensions in watcher-ant.md
+- [ ] 29-03-PLAN.md — Aggressive wave parallelism + auto-approval + mode-aware build in build.md
 
 **Success Criteria:**
 1. Watcher ants produce scores that vary meaningfully across code of different quality -- a clean implementation and a messy one do not both receive 8/10
@@ -124,7 +127,7 @@ Plans:
 |-------|------|-------|--------|
 | 27 | Bug Fixes & Safety Foundation | 2 plans | ✓ Complete |
 | 28 | UX & Friction Reduction | 2 plans | ✓ Complete |
-| 29 | Colony Intelligence & Quality Signals | TBD | Pending |
+| 29 | Colony Intelligence & Quality Signals | 3 plans | Planned |
 | 30 | Automation & New Capabilities | TBD | Pending |
 | 31 | Architecture Evolution | TBD | Pending |
 | 32 | Polish & Safety Rails | TBD | Pending |
@@ -184,4 +187,4 @@ Phases with standard patterns (skip research):
 ---
 
 _Roadmap created: 2026-02-04_
-_Last updated: 2026-02-04 — Phase 28 complete_
+_Last updated: 2026-02-04 — Phase 29 planned_
