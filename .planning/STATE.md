@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 
 Milestone: v4.4 Colony Hardening & Real-World Readiness
 Phase: 28 of 32 (UX & Friction Reduction)
-Plan: 1 of 2 complete
-Status: In progress -- plan 28-01 complete, ready for 28-02
-Last activity: 2026-02-04 -- Completed 28-01-PLAN.md (safe-to-clear + pheromone suggestions)
+Plan: 2 of 2 complete
+Status: Phase complete -- ready for Phase 29
+Last activity: 2026-02-04 -- Completed 28-02-PLAN.md (auto-continue --all mode)
 
-Progress: [#####---------------] 25% (v4.4: 1.5/6 phases, 3/12 plans est.)
+Progress: [######--------------] 33% (v4.4: 2/6 phases, 4/12 plans est.)
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -29,7 +29,7 @@ Progress: [#####---------------] 25% (v4.4: 1.5/6 phases, 3/12 plans est.)
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 85 (44 v1.0 + 6 v2.0 + 11 v3.0 + 9 v4.0 + 4 v4.1 + 4 v4.2 + 4 v4.3 + 3 v4.4)
+- Total plans completed: 86 (44 v1.0 + 6 v2.0 + 11 v3.0 + 9 v4.0 + 4 v4.1 + 4 v4.2 + 4 v4.3 + 4 v4.4)
 - Average duration: ~19 min
 - Total execution time: ~19 hours
 
@@ -43,6 +43,7 @@ See PROJECT.md Key Decisions table for full history.
 - 27-01: Used jq max/min for decay clamping, cp instead of mv for log archiving, regex validation for phase arg
 - 27-02: CONFLICT PREVENTION RULE after caste sensitivity table, sub-step 2b for Queen backup, two-point decision logging (strategic + quality), 30-entry cap
 - 28-01: Conditional validate-state for build.md, unconditional for continue.md; pheromone suggestions inside Step 6 template with CRITICAL derivation constraint
+- 28-02: Build delegation via Task tool prompt that reads build.md (not inlined); auto-approve skips Step 5b; quality-gated halt at score < 4 or 2 consecutive failures
 
 ### Pending Todos
 
@@ -59,9 +60,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-04
-Stopped at: Completed 28-01-PLAN.md -- ready for 28-02
+Stopped at: Completed 28-02-PLAN.md -- Phase 28 complete, ready for Phase 29
 Resume file: none
 
 ---
 
-*State updated: 2026-02-04 after 28-01 execution*
+*State updated: 2026-02-04 after 28-02 execution*
