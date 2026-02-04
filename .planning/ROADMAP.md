@@ -31,7 +31,11 @@ v4.3 addresses two gaps found during codebase analysis: (1) workers output progr
   3. After each worker returns, the Queen displays that worker's activity log entries and result summary to the user
   4. The Phase Lead role changes from "spawn and manage all workers" to "plan task assignments" — execution moves to Queen level
   5. Activity log is cleared at phase start to prevent stale data
-**Plans**: TBD (created during /cds:plan-phase)
+**Plans:** 3 plans
+Plans:
+- [ ] 25-01-PLAN.md — Activity log subcommands in aether-utils.sh
+- [ ] 25-02-PLAN.md — Activity log instructions in all 6 worker specs
+- [ ] 25-03-PLAN.md — Restructure build.md: Phase Lead as planner, Queen as executor
 
 ### Phase 26: Auto-Learning
 **Goal**: Phase learnings are automatically captured at the end of build execution — no manual `/ant:continue` required for learning extraction
@@ -50,7 +54,7 @@ v4.3 addresses two gaps found during codebase analysis: (1) workers output progr
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 25. Live Visibility | v4.3 | 0/? | ○ Pending | - |
+| 25. Live Visibility | v4.3 | 0/3 | ○ Pending | - |
 | 26. Auto-Learning | v4.3 | 0/? | ○ Pending | - |
 
 ---
