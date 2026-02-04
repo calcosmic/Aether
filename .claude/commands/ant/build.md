@@ -124,18 +124,29 @@ Use Bash to run: `git rev-parse --git-dir 2>/dev/null`
 - **If the command fails** (not a git repo):
   Skip silently. Set checkpoint hash to `"(not a git repo)"`.
 
-### Step 5: Spawn Phase Lead
+Output this header before spawning the Phase Lead:
 
-Spawn **one Phase Lead ant** whose job is to COORDINATE the phase by delegating to specialist ants.
+```
++=====================================================+
+|  👑 AETHER COLONY :: BUILD                           |
++=====================================================+
+
+Phase {id}: {name}
+```
+
+### Step 5a: Spawn Phase Lead as Planner
+
+Spawn **one Phase Lead ant** whose job is to produce a task assignment plan. It does NOT spawn workers.
 
 Use the **Task tool** with `subagent_type="general-purpose"`:
 
 ```
 You are the Phase Lead 🐜 in the Aether Queen Ant Colony.
 
-You are at depth 1. When spawning sub-ants, tell them: "You are at depth 2."
+You MUST NOT use the Task tool. You MUST NOT spawn any workers.
+Your ONLY job is to produce a task assignment plan.
 
-The Queen has signalled: execute Phase {id}.
+The Queen has signalled: plan Phase {id}.
 
 --- COLONY CONTEXT ---
 
@@ -159,9 +170,6 @@ Respond to REDIRECT pheromones as hard constraints (things to avoid).
 Respond to FOCUS pheromones by prioritizing those areas.
 
 --- CASTE SENSITIVITY TABLE ---
-When spawning an ant, compute its effective signal for each active pheromone:
-  effective_signal = sensitivity × current_strength
-
                 INIT  FOCUS  REDIRECT  FEEDBACK
   colonizer     1.0   0.7    0.3       0.5
   route-setter  1.0   0.5    0.8       0.7
@@ -170,120 +178,174 @@ When spawning an ant, compute its effective signal for each active pheromone:
   scout         0.7   0.9    0.4       0.5
   architect     0.2   0.4    0.3       0.6
 
-Include computed effective signals in each spawned ant's ACTIVE PHEROMONES block:
-  {TYPE} [{bar}] {current_strength:.2f}  (effective for this caste: {effective:.2f})
-
---- DELEGATION PROTOCOL (MANDATORY) ---
-
-You are the Phase Lead. Your role is COORDINATION, not implementation.
-
-RULES:
-1. You MUST NOT write code, create files, or edit files yourself
-2. You MUST delegate implementation to 🔨🐜 builder-ants
-3. You MAY read files to understand context before delegating
-4. You MAY spawn 🔍🐜 scout-ants for research before building
-5. You MAY spawn 🗺️🐜 colonizer-ants to map unfamiliar code
-6. Do NOT spawn watchers — the Queen handles verification after you
-7. Before EACH spawn, run the spawn gate:
-     bash .aether/aether-utils.sh spawn-check 1
-   Only spawn if "pass" is true. If false, do the task yourself as fallback.
-
-WORKFLOW:
-1. Read the task list and identify dependencies
-2. If tasks need research or codebase context, spawn a scout or colonizer first
-3. Group related tasks together (aim for 2-4 builder spawns, not one per task)
-4. For each group, spawn a 🔨🐜 builder-ant with:
-   - The specific task(s) to implement
-   - Context from previous builders' results (if dependent)
-   - The active pheromones block with effective signals for builder caste
-5. Wait for each builder to return before spawning the next (for dependent tasks)
-   For independent tasks, you may spawn builders in parallel using run_in_background
-6. Compile all results into your Phase Lead report
-
---- HOW TO SPAWN ---
-
-Caste specs (read the one you need before spawning):
-  .aether/workers/colonizer-ant.md  — 🗺️🐜 Explore/index codebase
-  .aether/workers/route-setter-ant.md — 📋🐜 Plan and break down work
-  .aether/workers/builder-ant.md — 🔨🐜 Implement code, run commands
-  .aether/workers/scout-ant.md — 🔍🐜 Research, find information
-  .aether/workers/architect-ant.md — 🏛️🐜 Synthesize knowledge, extract patterns
-
-To spawn:
-1. Run: bash .aether/aether-utils.sh spawn-check 1
-2. If pass is true, read the caste's spec file with the Read tool
-3. Use the Task tool (subagent_type="general-purpose") with prompt:
-   --- WORKER SPEC ---
-   {full contents of the spec file}
-   --- ACTIVE PHEROMONES ---
-   {pheromone block with effective signals computed for this caste}
-   --- TASK ---
-   {what you need them to do}
-   You are at depth 2.
-
-Max 5 sub-ants total. Spawned ants can spawn further ants (max depth 3).
+Available worker castes:
+  🗺️🐜 colonizer-ant — Explore/index codebase
+  📋🐜 route-setter-ant — Plan and break down work (rarely needed as worker)
+  🔨🐜 builder-ant — Implement code, run commands
+  🔍🐜 scout-ant — Research, find information
+  🏛️🐜 architect-ant — Synthesize knowledge, extract patterns
 
 --- VISUAL IDENTITY ---
 You are the Phase Lead 🐜. Use emoji in all output.
 
-Caste emoji reference:
-  🗺️🐜 Colonizer  📋🐜 Route-setter  🔨🐜 Builder
-  👁️🐜 Watcher    🔍🐜 Scout         🏛️🐜 Architect
-
-Show delegation visually:
-  🐜 Phase Lead — coordinating Phase {id}
-  🐜 → 🔍🐜 Spawning scout-ant for: {reason}
-  🔍🐜 returned: {brief summary}
-  🐜 → 🔨🐜 Spawning builder-ant for: {tasks}
-  🔨🐜 returned: ✅ {summary}
-  🐜 → 🔨🐜 Spawning builder-ant for: {tasks}
-  🔨🐜 returned: ✅ {summary}
-
 --- YOUR MISSION ---
 
-Coordinate this phase by delegating to specialist ants. You succeed when all
-tasks are completed by spawned ants, not when you do everything yourself.
+Produce a task assignment plan. Group related tasks into waves. Independent
+tasks go in the same wave. Tasks with dependencies go in later waves.
+Assign each group to a worker caste.
 
-Report format:
+Output format:
 
-  🐜 Phase Lead Report
-  ═══════════════════
+  Phase Lead Task Assignment Plan
+  ================================
 
-  Delegation Log:
-    🐜 → 🔍🐜 scout-ant: {what was researched}
-         Result: {summary}
-    🐜 → 🔨🐜 builder-ant: {tasks assigned}
-         Result: ✅ {files created/modified}
-    🐜 → 🔨🐜 builder-ant: {tasks assigned}
-         Result: ✅ {files created/modified}
+  Colony is planning...
 
-  Task Results:
-    ✅ {task_id}: {what was done, by which ant}
-    ✅ {task_id}: {what was done, by which ant}
-    ❌ {task_id}: {what failed and why}
+  Wave 1 (independent):
+    1. {caste_emoji} {caste}-ant: {task description} (tasks {ids})
+    2. {caste_emoji} {caste}-ant: {task description} (tasks {ids})
 
-  Files Modified:
-    Created: {list}
-    Modified: {list}
+  Wave 2 (depends on Wave 1):
+    3. {caste_emoji} {caste}-ant: {task description} (tasks {ids})
+       Needs: {what from Wave 1}
 
-  Spawn Summary: {N} ants spawned at depth 2
-  Issues: {any problems encountered}
+  Worker count: {N}
+  Wave count: {N}
+
+{if user_feedback is present:}
+The user reviewed your previous plan and requested these changes: {user_feedback}
+Produce a revised plan incorporating their feedback.
 ```
 
-Output this header before the colony works:
+### Step 5b: Plan Checkpoint
 
+After the Phase Lead returns:
+
+1. Display the Phase Lead's task assignment plan to the user verbatim
+2. Ask: **"Proceed with this plan? (yes / describe changes)"**
+3. If user says "yes" or equivalent: proceed to Step 5c
+4. If user describes changes: Re-run Step 5a with the user's feedback appended to the prompt
+5. After re-run, display revised plan and ask again
+6. Maximum 3 plan iterations before proceeding with the latest plan
+
+### Step 5c: Execute Plan
+
+This is the core execution loop. The Queen spawns workers directly.
+
+**1. Initialize activity log:**
 ```
-+=====================================================+
-|  👑 AETHER COLONY :: BUILD                           |
-+=====================================================+
+bash .aether/aether-utils.sh activity-log-init {phase_number} "{phase_name}"
 ```
 
-Then display while the colony works:
+**2. Parse the plan:** Extract waves and worker assignments from the Phase Lead's plan output. Track: wave number, caste, task description, task IDs, dependencies.
 
+**3. Initialize counters:** `completed_workers = 0`, `total_workers = {from plan}`, `worker_results = []`
+
+**4. For each wave in the plan:**
+
+Display wave header:
 ```
-Phase {id}: {name}
+--- Wave {N}/{total_waves} ---
+```
 
-Colony is self-organizing...
+For each worker assignment in this wave:
+
+a. **Announce spawn:**
+   ```
+   Spawning {caste_emoji} {caste}-ant for: {task_description}...
+   ```
+
+b. **Log START:**
+   ```
+   bash .aether/aether-utils.sh activity-log "START" "{caste}-ant" "{task_description}"
+   ```
+
+c. **Read worker spec:** Use Read tool to read `.aether/workers/{caste}-ant.md`
+
+d. **Spawn worker via Task tool** with `subagent_type="general-purpose"`:
+   ```
+   --- WORKER SPEC ---
+   {full contents of the caste's spec file}
+
+   --- ACTIVE PHEROMONES ---
+   {pheromone block from Step 3 with effective signals computed for this caste}
+
+   --- TASK ---
+   {task_description}
+
+   Colony goal: "{goal}"
+   Phase {id}: {phase_name}
+
+   Task details:
+   {for each task ID assigned to this worker, include the full task description and depends_on from PROJECT_PLAN.json}
+
+   {if this worker has dependencies on previous workers:}
+   Context from previous workers:
+   {relevant results from prior workers in this phase}
+
+   You are at depth 1.
+   ```
+
+e. **After worker returns:**
+   - Log COMPLETE (or ERROR if worker reported failure):
+     ```
+     bash .aether/aether-utils.sh activity-log "COMPLETE" "{caste}-ant" "{task_description}"
+     ```
+     or:
+     ```
+     bash .aether/aether-utils.sh activity-log "ERROR" "{caste}-ant" "{error_summary}"
+     ```
+   - Read activity log entries for this worker:
+     ```
+     bash .aether/aether-utils.sh activity-log-read "{caste}-ant"
+     ```
+   - Increment `completed_workers`
+   - Display condensed summary:
+     ```
+     {caste_emoji} {caste}-ant: {task_description}
+       Result: {COMPLETE or ERROR}
+       Files: {count of created/modified from worker report}
+       {if error: brief error description}
+
+       {progress_bar} {completed_workers}/{total_workers} workers complete
+     ```
+     Progress bar: `filled = round(completed / total * 20)` filled characters, rest empty, total width 20.
+
+   - Store worker result (report content, success/failure, task IDs) in `worker_results` for use by subsequent workers and Step 5.5.
+
+f. **If worker failed and retry count < 2:**
+   - Log retry:
+     ```
+     bash .aether/aether-utils.sh activity-log "ERROR" "{caste}-ant" "retry {N}: {error_summary}"
+     ```
+   - Spawn a NEW worker (same caste, same task) with failure context appended:
+     ```
+     Previous attempt failed because: {error_description}. Try a different approach.
+     ```
+   - Increment retry counter for this task
+
+g. **If worker failed and retry count >= 2:**
+   - Display: `"Task failed after 2 retries. Continuing with remaining tasks."`
+   - Mark task as failed in tracking
+   - Continue to next worker
+
+**5. Compile Phase Build Report** from all `worker_results`:
+```
+Phase Build Report
+==================
+
+Workers spawned: {total}
+Completed: {success_count}
+Failed: {fail_count}
+
+Per-worker results:
+{for each worker: caste, task, result, files created/modified}
+
+Files Modified:
+  Created: {combined list}
+  Modified: {combined list}
+
+Issues: {any failures or errors}
 ```
 
 ### Step 5.5: Watcher Verification (Mandatory)
