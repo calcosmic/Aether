@@ -187,6 +187,8 @@ Execution Verification:
   ⚠️ Tests: no test suite found
 ```
 
+After completing Execution Verification, proceed to the Scoring Rubric. Your Execution Verification results directly feed the Correctness dimension.
+
 ## Specialist Modes
 
 ### Mode: Security
@@ -305,6 +307,54 @@ Execution Verification:
 - [ ] Bug fixes include regression test proving the fix
 - [ ] Tests are independent (no shared mutable state)
 
+## Scoring Rubric (Mandatory)
+
+Before assigning a quality score, you MUST evaluate each dimension independently. Show your reasoning for each dimension. Then compute the weighted overall score.
+
+### Dimensions
+
+| Dimension | Weight | Evaluate |
+|-----------|--------|----------|
+| Correctness | 0.30 | Does code run? Syntax valid? Imports resolve? Tests pass? |
+| Completeness | 0.25 | All task requirements addressed? Success criteria met? |
+| Quality | 0.20 | Readable? Good naming? Error handling? Single responsibility? |
+| Safety | 0.15 | No secrets in code? No destructive ops? Input validated? |
+| Integration | 0.10 | Fits existing patterns? Conventions followed? Backwards compatible? |
+
+### Score Anchors
+
+Score each dimension 0-10 using these anchors:
+
+| Score | Meaning | Anchor |
+|-------|---------|--------|
+| 1-2 | Critical failure | Code doesn't parse, missing files, fundamentally broken |
+| 3-4 | Major issues | Code runs but has critical bugs, missing major requirements |
+| 5-6 | Functional with issues | Code works but has notable quality problems, incomplete features |
+| 7-8 | Good | Code works well, minor issues, most requirements met |
+| 9-10 | Excellent | Clean, complete, well-tested, follows all conventions |
+
+### Execution Verification Cap
+
+If ANY execution verification check fails, your Correctness score CANNOT exceed 6/10. This caps the overall score since Correctness has the highest weight.
+
+### Chain-of-Thought Requirement
+
+**IMPORTANT: You MUST evaluate each dimension SEPARATELY and show your reasoning BEFORE computing the overall score. Do NOT decide the overall score first and reverse-engineer dimension scores to match. The per-dimension evaluation IS the process -- the overall score is just the weighted average of your individual assessments.**
+
+### Rubric Output Format
+
+```
+Scoring Rubric:
+  Correctness:  {score}/10 - {1-line reason}
+  Completeness: {score}/10 - {1-line reason}
+  Quality:      {score}/10 - {1-line reason}
+  Safety:       {score}/10 - {1-line reason}
+  Integration:  {score}/10 - {1-line reason}
+
+  Overall: {weighted_score}/10
+  = round(C*0.30 + Co*0.25 + Q*0.20 + S*0.15 + I*0.10)
+```
+
 ## Output Format
 
 ```
@@ -318,6 +368,15 @@ Validation Results:
 ❌ FAIL: {criteria_failed}
 ⚠️ WARN: {concerns_found}
 
+Scoring Rubric:
+  Correctness:  {score}/10 - {reason}
+  Completeness: {score}/10 - {reason}
+  Quality:      {score}/10 - {reason}
+  Safety:       {score}/10 - {reason}
+  Integration:  {score}/10 - {reason}
+
+  Overall: {weighted_score}/10
+
 Issues Found:
 {severity}: {issue_description}
   Location: {file}:{line}
@@ -328,7 +387,7 @@ Tests:
 - Passed: {passed}
 - Failed: {failed}
 
-Quality Score: {"⭐" repeated for round(score/2)} ({score}/10)
+Quality Score: {"⭐" repeated for round(weighted_score/2)} ({weighted_score}/10)
 Recommendation: {approve|request_changes}
 ```
 
