@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 
 Milestone: v4.4 Colony Hardening & Real-World Readiness
 Phase: 30 of 32 (Automation & New Capabilities) — in progress
-Plan: 1 of 3 complete (30-01 done)
-Status: In progress — 30-01 reviewer + debugger integrated into build.md
-Last activity: 2026-02-05 -- Completed 30-01-PLAN.md (advisory reviewer + debugger spawn)
+Plan: 2 of 3 complete (30-01, 30-02 done)
+Status: In progress — 30-02 pheromone recommendations + tech debt report
+Last activity: 2026-02-05 -- Completed 30-02-PLAN.md (pheromone recommendations + tech debt report)
 
-Progress: [##########----------] 50% (v4.4: 3/6 phases, 8/10 plans done)
+Progress: [###########---------] 55% (v4.4: 3/6 phases, 9/10 plans done)
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -29,7 +29,7 @@ Progress: [##########----------] 50% (v4.4: 3/6 phases, 8/10 plans done)
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 90 (44 v1.0 + 6 v2.0 + 11 v3.0 + 9 v4.0 + 4 v4.1 + 4 v4.2 + 4 v4.3 + 8 v4.4)
+- Total plans completed: 91 (44 v1.0 + 6 v2.0 + 11 v3.0 + 9 v4.0 + 4 v4.1 + 4 v4.2 + 4 v4.3 + 9 v4.4)
 - Average duration: ~19 min
 - Total execution time: ~19 hours
 
@@ -48,6 +48,7 @@ See PROJECT.md Key Decisions table for full history.
 - 29-02: Scoring Rubric placed after Specialist Modes before Output Format; execution verification cap restated as Correctness dimension cap inside rubric
 - 29-03: DEFAULT-PARALLEL after CONFLICT PREVENTION; LIGHTWEIGHT unconditional auto-approve; STANDARD auto-approve <=4 tasks/<=2 workers/<=2 waves/no shared files; FULL always requires approval; post-wave conflict detection best-effort; LIGHTWEIGHT skips watcher
 - 30-01: Reviewer reuses watcher-ant.md (no new caste); debugger reuses builder-ant.md with PATCH constraints; retry threshold < 1 (one retry before debugger); LIGHTWEIGHT + single-worker skip reviewer; CRITICAL-only rebuild (max 2); criticality inference for unfixable tasks
+- 30-02: Between-wave urgent recs separate from end-of-build max-3; recommendations must be senior-engineer-style observations not commands; tech debt report persisted to .aether/data/tech-debt-report.md AND displayed; Step 2.5 strictly conditional on no-next-phase
 
 ### Pending Todos
 
@@ -64,9 +65,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-05
-Stopped at: Completed 30-01-PLAN.md — ready for 30-02
+Stopped at: Completed 30-02-PLAN.md — ready for 30-03
 Resume file: None
 
 ---
 
-*State updated: 2026-02-05 after 30-01 plan execution*
+*State updated: 2026-02-05 after 30-02 plan execution*
