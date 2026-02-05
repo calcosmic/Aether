@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 
 Milestone: v4.4 Colony Hardening & Real-World Readiness
 Phase: 31 of 32 (Architecture Evolution) — in progress
-Plan: 1 of 3 complete (31-01 done)
+Plan: 2 of 3 complete (31-01 + 31-03 done, 31-02 pending)
 Status: In progress
-Last activity: 2026-02-05 -- Completed 31-01-PLAN.md (global learnings infrastructure)
+Last activity: 2026-02-05 -- Completed 31-03-PLAN.md (Queen-mediated spawn tree engine)
 
-Progress: [##############------] 70% (v4.4: 4/6 phases, 11/13 plans done)
+Progress: [################----] 80% (v4.4: 4/6 phases, 12/13 plans done)
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -29,7 +29,7 @@ Progress: [##############------] 70% (v4.4: 4/6 phases, 11/13 plans done)
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 93 (44 v1.0 + 6 v2.0 + 11 v3.0 + 9 v4.0 + 4 v4.1 + 4 v4.2 + 4 v4.3 + 11 v4.4)
+- Total plans completed: 94 (44 v1.0 + 6 v2.0 + 11 v3.0 + 9 v4.0 + 4 v4.1 + 4 v4.2 + 4 v4.3 + 12 v4.4)
 - Average duration: ~19 min
 - Total execution time: ~19 hours
 
@@ -51,6 +51,7 @@ See PROJECT.md Key Decisions table for full history.
 - 30-02: Between-wave urgent recs separate from end-of-build max-3; recommendations must be senior-engineer-style observations not commands; tech debt report persisted to .aether/data/tech-debt-report.md AND displayed; Step 2.5 strictly conditional on no-next-phase
 - 30-03: Color reference as HTML comment block; all ANSI codes strictly in bash -c printf; basic 8-color only (30-37, 1;3X); Queen bold yellow for headers; errors always red regardless of caste
 - 31-01: Forced curation overflow strategy at 50-cap (display all, user removes one); auto-continue skips promotion with message; tags inferred from colonization decision at promotion time
+- 31-03: Queen-mediated delegation via SPAWN REQUEST blocks (not direct Task tool); max 2 sub-spawns per wave; depth limit 3->2 across all specs and spawn-check; spawn_tree in COLONY_STATE.json
 
 ### Pending Todos
 
@@ -62,14 +63,14 @@ None.
 
 ### Blockers/Concerns
 
-- CP-1: Recursive spawning may be blocked by Claude Code platform constraint (Task tool unavailable to subagents). Must validate in Phase 31 before implementing spawn tree engine.
+- CP-1: RESOLVED -- Queen-mediated delegation pattern implemented in 31-03. Workers signal via SPAWN REQUEST output, Queen fulfills between waves. No direct subagent spawning needed.
 
 ## Session Continuity
 
 Last session: 2026-02-05
-Stopped at: Completed 31-01-PLAN.md (global learnings infrastructure)
+Stopped at: Completed 31-03-PLAN.md (Queen-mediated spawn tree engine)
 Resume file: None
 
 ---
 
-*State updated: 2026-02-05 after 31-01 plan execution*
+*State updated: 2026-02-05 after 31-03 plan execution*
