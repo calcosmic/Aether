@@ -21,13 +21,13 @@ Requirements for v4.4 Colony Hardening & Real-World Readiness. Each maps to road
 
 ### Colony Intelligence
 
-- [ ] **INT-01**: Colonize command spawns multiple ants that review codebase independently and synthesize findings
+- [x] **INT-01**: Colonize command spawns multiple ants that review codebase independently and synthesize findings
 - [x] **INT-02**: Tasks touching the same file are assigned to the same worker by Phase Lead during planning
-- [ ] **INT-03**: Phase Lead assigns independent tasks to parallel waves more aggressively
-- [ ] **INT-04**: Phase Lead auto-approves plans for phases below a complexity threshold
-- [ ] **INT-05**: Watcher scoring rubric produces meaningfully varied scores (not flat 8/10)
+- [x] **INT-03**: Phase Lead assigns independent tasks to parallel waves more aggressively
+- [x] **INT-04**: Phase Lead auto-approves plans for phases below a complexity threshold
+- [x] **INT-05**: Watcher scoring rubric produces meaningfully varied scores (not flat 8/10)
 - [ ] **INT-06**: Tech debt report generated at project completion aggregating cross-phase persistent issues
-- [ ] **INT-07**: Colony adapts overhead to project complexity (LIGHTWEIGHT/STANDARD/FULL mode)
+- [x] **INT-07**: Colony adapts overhead to project complexity (LIGHTWEIGHT/STANDARD/FULL mode)
 
 ### Automation
 
@@ -41,7 +41,7 @@ Requirements for v4.4 Colony Hardening & Real-World Readiness. Each maps to road
 
 - [ ] **ARCH-01**: Two-tier learning system — project-local (memory.json) + global (~/.aether/learnings.json) with manual promotion
 - [ ] **ARCH-02**: Spawn tree engine — workers signal sub-spawn needs, Queen fulfills (Queen-mediated recursive delegation with depth limit 2)
-- [ ] **ARCH-03**: Adaptive complexity mode set at colonization time via mode field in COLONY_STATE.json
+- [x] **ARCH-03**: Adaptive complexity mode set at colonization time via mode field in COLONY_STATE.json
 
 ### Flow & Documentation
 
@@ -92,12 +92,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | UX-01 | Phase 28 | Complete |
 | UX-02 | Phase 28 | Complete |
 | FLOW-01 | Phase 28 | Complete |
-| INT-01 | Phase 29 | Pending |
-| INT-03 | Phase 29 | Pending |
-| INT-04 | Phase 29 | Pending |
-| INT-05 | Phase 29 | Pending |
-| INT-07 | Phase 29 | Pending |
-| ARCH-03 | Phase 29 | Pending |
+| INT-01 | Phase 29 | Complete |
+| INT-03 | Phase 29 | Complete |
+| INT-04 | Phase 29 | Complete |
+| INT-05 | Phase 29 | Complete |
+| INT-07 | Phase 29 | Complete |
+| ARCH-03 | Phase 29 | Complete |
 | AUTO-01 | Phase 30 | Pending |
 | AUTO-02 | Phase 30 | Pending |
 | AUTO-03 | Phase 30 | Pending |
@@ -116,4 +116,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-04*
-*Last updated: 2026-02-04 — Phase 28 requirements (UX-01, UX-02, FLOW-01) marked Complete*
+*Last updated: 2026-02-05 — Phase 29 requirements (INT-01, INT-03, INT-04, INT-05, INT-07, ARCH-03) marked Complete*

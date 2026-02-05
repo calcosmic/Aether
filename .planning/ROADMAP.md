@@ -58,9 +58,9 @@ Plans:
 **Plans:** 3 plans
 
 Plans:
-- [ ] 29-01-PLAN.md — Multi-colonizer synthesis + complexity detection + adaptive mode in colonize.md
-- [ ] 29-02-PLAN.md — Watcher scoring rubric with weighted dimensions in watcher-ant.md
-- [ ] 29-03-PLAN.md — Aggressive wave parallelism + auto-approval + mode-aware build in build.md
+- [x] 29-01-PLAN.md — Multi-colonizer synthesis + complexity detection + adaptive mode in colonize.md
+- [x] 29-02-PLAN.md — Watcher scoring rubric with weighted dimensions in watcher-ant.md
+- [x] 29-03-PLAN.md — Aggressive wave parallelism + auto-approval + mode-aware build in build.md
 
 **Success Criteria:**
 1. Watcher ants produce scores that vary meaningfully across code of different quality -- a clean implementation and a messy one do not both receive 8/10

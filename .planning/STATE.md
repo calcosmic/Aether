@@ -12,8 +12,8 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 Milestone: v4.4 Colony Hardening & Real-World Readiness
 Phase: 29 of 32 (Colony Intelligence & Quality Signals) — complete
 Plan: 3 of 3 complete (29-01 + 29-02 + 29-03 done, all waves complete)
-Status: Phase complete — colony intelligence & quality signals fully shipped
-Last activity: 2026-02-05 -- Completed 29-03-PLAN.md (wave parallelism & auto-approval)
+Status: Phase complete — verified 5/5 must-haves, requirements marked Complete
+Last activity: 2026-02-05 -- Phase 29 executed (3 plans, 2 waves), verified, requirements updated
 
 Progress: [#########-----------] 47% (v4.4: 3/6 phases, 9/12 plans est.)
 
@@ -63,9 +63,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-05
-Stopped at: Completed 29-03-PLAN.md (wave parallelism & auto-approval) -- Phase 29 complete
+Stopped at: Phase 29 complete and verified — ready for Phase 30 planning
 Resume file: None
 
 ---
 
-*State updated: 2026-02-05 after completing 29-03-PLAN.md*
+*State updated: 2026-02-05 after Phase 29 verification passed*
