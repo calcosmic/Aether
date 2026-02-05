@@ -557,6 +557,11 @@ i. **Post-Wave Advisory Review:**
 
    - If `critical_count > 0` AND `wave_rebuild_count < 2`:
      - Display: "CRITICAL issue detected. Rebuilding wave {N}..."
+     - Display urgent between-wave recommendation:
+       ```
+       Recommendation: The colony detected critical issues in {area from reviewer findings}. Consider pausing after this build to investigate.
+       ```
+       This is a single inline recommendation that appears immediately when urgent patterns emerge. It does NOT count toward the max-3 end-of-build recommendations in Step 7e.
      - Increment `wave_rebuild_count`
      - Re-run this wave's workers with findings appended to their prompts:
        ```
@@ -565,6 +570,10 @@ i. **Post-Wave Advisory Review:**
 
    - If `critical_count > 0` AND `wave_rebuild_count >= 2`:
      - Display: "CRITICAL issues persist after 2 rebuilds. Continuing to next wave."
+     - Display urgent between-wave recommendation:
+       ```
+       Recommendation: The colony detected critical issues in {area from reviewer findings} that persist after rebuilds. Strongly consider investigating before continuing.
+       ```
 
    - If `critical_count == 0`:
      - Display summary and continue to next wave.
@@ -919,6 +928,49 @@ Phase {id}: {name}
   FEEDBACK (0.5, 6h): "<first 80 chars>"
   {if REDIRECT emitted:}
   REDIRECT (0.9, 24h): "<first 80 chars>"
+
+Pheromone Recommendations:
+  Based on this build's outcomes, analyze the following sources and generate max 3 natural language recommendations:
+
+  Sources:
+  - worker_results from Step 5c (which tasks succeeded/failed, error summaries)
+  - watcher_report from Step 5.5 (quality score, issues found)
+  - errors.json flagged_patterns (recurring cross-phase issues)
+  - Per-wave reviewer findings from Step 5c.i (if reviewer ran)
+
+  Trigger patterns (recommend when these signals are detected):
+  - Repeated test failures in same module -> suggest focusing colony on stabilizing that module
+  - Quality score < 6 -> suggest redirect signal to avoid specific anti-pattern found
+  - Multiple workers touching related files -> suggest focus on consistency in that layer
+  - Clean build, high quality -> note strong patterns worth continuing
+  - Flagged error patterns from errors.json -> suggest redirect to avoid recurring pattern
+
+  Format constraints:
+  - Natural language descriptive guidance, NOT copy-paste commands
+  - Must reference SPECIFIC observations from THIS build
+  - Must suggest a DIRECTION, not a specific action
+  - Maximum 3 suggestions, force prioritization
+  - Must sound like a senior engineer's observations, NOT automated alerts
+  - Must NOT start with "Run:" or "/ant:" or be formatted as commands
+
+  Display format:
+  ```
+  Pheromone Recommendations:
+    Based on this build's outcomes:
+
+    1. {natural language recommendation}
+       Signal: {specific observation that triggered this}
+
+    2. {natural language recommendation}
+       Signal: {specific observation}
+
+    These are suggestions, not commands. Use /ant:focus or /ant:redirect to act on them.
+  ```
+
+  If no meaningful patterns emerge from the build data:
+  ```
+    No specific recommendations -- build was clean.
+  ```
 
 Next:
   /ant:continue            Advance to next phase
