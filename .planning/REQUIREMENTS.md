@@ -26,16 +26,16 @@ Requirements for v4.4 Colony Hardening & Real-World Readiness. Each maps to road
 - [x] **INT-03**: Phase Lead assigns independent tasks to parallel waves more aggressively
 - [x] **INT-04**: Phase Lead auto-approves plans for phases below a complexity threshold
 - [x] **INT-05**: Watcher scoring rubric produces meaningfully varied scores (not flat 8/10)
-- [ ] **INT-06**: Tech debt report generated at project completion aggregating cross-phase persistent issues
+- [x] **INT-06**: Tech debt report generated at project completion aggregating cross-phase persistent issues
 - [x] **INT-07**: Colony adapts overhead to project complexity (LIGHTWEIGHT/STANDARD/FULL mode)
 
 ### Automation
 
-- [ ] **AUTO-01**: Reviewer ant auto-spawns after builder waves (advisory only, severity-gated, max 2 iterations)
-- [ ] **AUTO-02**: Debugger ant auto-spawns on test failure
-- [ ] **AUTO-03**: Pheromone recommendations surfaced to user after builds (e.g. "Recommended: /ant:focus ...")
-- [ ] **AUTO-04**: Animated build indicators with ANSI progress bars and caste-colored output
-- [ ] **AUTO-05**: Colonizer command has visual output with emojis and progress markers
+- [x] **AUTO-01**: Reviewer ant auto-spawns after builder waves (advisory only, severity-gated, max 2 iterations)
+- [x] **AUTO-02**: Debugger ant auto-spawns on test failure
+- [x] **AUTO-03**: Pheromone recommendations surfaced to user after builds (e.g. "Recommended: /ant:focus ...")
+- [x] **AUTO-04**: Animated build indicators with ANSI progress bars and caste-colored output
+- [x] **AUTO-05**: Colonizer command has visual output with emojis and progress markers
 
 ### Architecture
 
@@ -98,12 +98,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INT-05 | Phase 29 | Complete |
 | INT-07 | Phase 29 | Complete |
 | ARCH-03 | Phase 29 | Complete |
-| AUTO-01 | Phase 30 | Pending |
-| AUTO-02 | Phase 30 | Pending |
-| AUTO-03 | Phase 30 | Pending |
-| AUTO-04 | Phase 30 | Pending |
-| AUTO-05 | Phase 30 | Pending |
-| INT-06 | Phase 30 | Pending |
+| AUTO-01 | Phase 30 | Complete |
+| AUTO-02 | Phase 30 | Complete |
+| AUTO-03 | Phase 30 | Complete |
+| AUTO-04 | Phase 30 | Complete |
+| AUTO-05 | Phase 30 | Complete |
+| INT-06 | Phase 30 | Complete |
 | ARCH-01 | Phase 31 | Pending |
 | ARCH-02 | Phase 31 | Pending |
 | FLOW-02 | Phase 32 | Pending |
@@ -116,4 +116,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-04*
-*Last updated: 2026-02-05 — Phase 29 requirements (INT-01, INT-03, INT-04, INT-05, INT-07, ARCH-03) marked Complete*
+*Last updated: 2026-02-05 — Phase 30 requirements (AUTO-01, AUTO-02, AUTO-03, AUTO-04, AUTO-05, INT-06) marked Complete*
