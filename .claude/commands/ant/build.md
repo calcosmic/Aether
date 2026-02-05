@@ -358,6 +358,8 @@ This is a backup check. If the Phase Lead followed the CONFLICT PREVENTION RULE 
 
 **3. Initialize counters:** `completed_workers = 0`, `total_workers = {from plan}`, `worker_results = []`
 
+Initialize spawn tracking: `spawn_tree = {}`, `queued_sub_spawns = []` (reset queued_sub_spawns per wave).
+
 **4. For each wave in the plan:**
 
 Display wave header using Bash tool (bold yellow -- Queen color):
@@ -405,6 +407,8 @@ d. **Spawn worker via Task tool** with `subagent_type="general-purpose"`:
    You are at depth 1.
    ```
 
+   After spawning, record in spawn_tree: `spawn_tree[worker_id] = {id: "<phase>_wave<N>_<caste><index>", caste, task, depth: 1, parent: "queen", children: [], status: "pending", phase, wave}`
+
 e. **After worker returns:**
    - Log COMPLETE (or ERROR if worker reported failure):
      ```
@@ -436,7 +440,16 @@ e. **After worker returns:**
      ```
      Where `filled` = `round(completed / total * 20)` `#` characters, `empty` = remaining `.` characters, total width 20.
 
+   - Update spawn_tree entry: status -> "completed" or "failed" based on worker result.
    - Store worker result (report content, success/failure, task IDs) in `worker_results` for use by subsequent workers and Step 5.5.
+
+e2. **Parse SPAWN requests from worker output:**
+    If the worker's result text contains one or more `SPAWN REQUEST:` blocks:
+    For each SPAWN REQUEST block, extract: caste, reason, task, context, files.
+    Validate depth: current worker is depth 1, sub-spawn would be depth 2 -- ALLOWED (max depth 2).
+    Queue each valid request: `queued_sub_spawns.append({parent_id: "<wave>_<caste>_<index>", caste: <requested_caste>, task: <requested_task>, context, files, parent_pheromone_context})`
+    Cap: Maximum 2 sub-spawns per wave. If more requested, take first 2 and log:
+    `bash .aether/aether-utils.sh activity-log "SKIP" "queen" "Excess SPAWN REQUEST ignored (cap 2/wave)"`
 
 f. **If worker failed and retry count < 1:**
    - Log retry:
@@ -626,6 +639,37 @@ i. **Post-Wave Advisory Review:**
    - If `critical_count == 0`:
      - Display summary and continue to next wave.
 
+j. **Fulfill SPAWN requests from this wave:**
+
+   If `queued_sub_spawns` is empty for this wave: skip to next wave.
+
+   For each queued sub-spawn:
+
+   1. Record in spawn_tree: `spawn_tree[sub_id] = {id: "<phase>_sub_<caste>_<index>", caste, task, depth: 2, parent: parent_id, children: [], status: "pending", phase, wave}`. Add sub_id to parent's `children` array.
+   2. Log: `bash .aether/aether-utils.sh activity-log "SPAWN" "queen" "sub-{caste}-ant for: {task} (requested by {parent_id})"`
+   3. Display: `bash -c 'printf "  \e[{caste_color}m%-14s\e[0m %s (sub-spawn for %s)\n" "[SUB-{CASTE}]" "{task}" "{parent_id}"'`
+   4. Read the caste's spec file. Spawn via Task tool with `subagent_type="general-purpose"`:
+      ```
+      --- WORKER SPEC ---
+      {full contents of the caste's spec file}
+
+      --- ACTIVE PHEROMONES ---
+      {pheromone block from Step 3}
+
+      --- PARENT CONTEXT ---
+      Parent worker: {parent caste} - {parent task}
+      Parent pheromone context (FOCUS/REDIRECT): {inherited from parent}
+
+      --- TASK ---
+      {sub-task from SPAWN REQUEST}
+
+      You are at depth 2. You CANNOT request further sub-spawns.
+      If you need additional work done, handle it inline.
+      ```
+   5. After sub-worker returns: update spawn_tree status -> "completed" or "failed". Log and display completion.
+
+   Reset `queued_sub_spawns = []` for next wave.
+
 **5. Compile Phase Build Report** from all `worker_results`:
 ```
 Phase Build Report
@@ -721,6 +765,7 @@ After the watcher returns, use Write tool to update:
 - Advance `current_phase` if phase completed
 - Set `workers.builder` to `"idle"`
 - Set `workers.watcher` to `"idle"`
+- Write `spawn_tree` to COLONY_STATE.json (write `"spawn_tree": {}` if empty)
 
 **Log Errors:** If the ant reported any failures or issues in its report:
 
@@ -935,6 +980,7 @@ Show step progress:
   ✓ Step 5a: Phase Lead Planning
   ✓ Step 5b: Plan Checkpoint
   ✓ Step 5c: Execute Workers
+  ✓ Step 5c.j: Fulfill Sub-Spawns
   ✓ Step 5c.i: Post-Wave Review
   ✓ Step 5.5: Watcher Verification
   ✓ Step 6: Record Outcome
@@ -957,7 +1003,20 @@ Phase {id}: {name}
 🐜 Colony Activity:
   {Per-worker results from Step 5c -- for each worker: caste, task, result}
   Activity Log: .aether/data/activity.log ({line_count} entries)
+```
 
+Display the Delegation Tree using Bash tool (bold yellow):
+```
+bash -c 'printf "\n\e[1;33mDelegation Tree:\e[0m\n"'
+bash -c 'printf "  \e[1;33mQueen\e[0m\n"'
+```
+For each spawn_tree entry where depth == 1:
+`bash -c 'printf "  ├── \e[{caste_color}m%s\e[0m: %s [\e[32m%s\e[0m]\n" "{caste}" "{task}" "{status}"'`
+For each child of that entry (depth == 2):
+`bash -c 'printf "  │   └── \e[{caste_color}m%s\e[0m (sub): %s [\e[32m%s\e[0m]\n" "{caste}" "{task}" "{status}"'`
+If spawn_tree is empty: `bash -c 'printf "  (no delegation -- all tasks handled directly)\n"'`
+
+```
 📋 Task Results:
   {for each task: "✅ {task_id}: {what was done}" or "❌ {task_id}: {what failed}"}
 
