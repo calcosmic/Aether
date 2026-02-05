@@ -100,9 +100,9 @@ Plans:
 **Plans:** 3 plans
 
 Plans:
-- [ ] 31-01-PLAN.md — Global learnings utility subcommands + promotion UX in continue.md
-- [ ] 31-02-PLAN.md — Global learning injection in colonize.md
-- [ ] 31-03-PLAN.md — Queen-mediated spawn tree engine in build.md + worker spec updates
+- [x] 31-01-PLAN.md — Global learnings utility subcommands + promotion UX in continue.md
+- [x] 31-02-PLAN.md — Global learning injection in colonize.md
+- [x] 31-03-PLAN.md — Queen-mediated spawn tree engine in build.md + worker spec updates
 
 **Success Criteria:**
 1. memory.json stores project-local learnings and ~/.aether/learnings.json stores promoted global learnings -- the two tiers are distinct files with independent lifecycles
@@ -135,7 +135,7 @@ Plans:
 | 28 | UX & Friction Reduction | 2 plans | ✓ Complete |
 | 29 | Colony Intelligence & Quality Signals | 3 plans | ✓ Complete |
 | 30 | Automation & New Capabilities | 3 plans | ✓ Complete |
-| 31 | Architecture Evolution | 3 plans | Pending |
+| 31 | Architecture Evolution | 3 plans | ✓ Complete |
 | 32 | Polish & Safety Rails | TBD | Pending |
 
 ## Coverage
@@ -193,4 +193,4 @@ Phases with standard patterns (skip research):
 ---
 
 _Roadmap created: 2026-02-04_
-_Last updated: 2026-02-05 -- Phase 31 planned (3 plans, 2 waves)_
+_Last updated: 2026-02-05 -- Phase 31 complete (3 plans, 2 waves, verified 4/4 must-haves)_

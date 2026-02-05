@@ -39,8 +39,8 @@ Requirements for v4.4 Colony Hardening & Real-World Readiness. Each maps to road
 
 ### Architecture
 
-- [ ] **ARCH-01**: Two-tier learning system — project-local (memory.json) + global (~/.aether/learnings.json) with manual promotion
-- [ ] **ARCH-02**: Spawn tree engine — workers signal sub-spawn needs, Queen fulfills (Queen-mediated recursive delegation with depth limit 2)
+- [x] **ARCH-01**: Two-tier learning system — project-local (memory.json) + global (~/.aether/learnings.json) with manual promotion
+- [x] **ARCH-02**: Spawn tree engine — workers signal sub-spawn needs, Queen fulfills (Queen-mediated recursive delegation with depth limit 2)
 - [x] **ARCH-03**: Adaptive complexity mode set at colonization time via mode field in COLONY_STATE.json
 
 ### Flow & Documentation
