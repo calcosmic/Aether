@@ -46,8 +46,8 @@ Requirements for v4.4 Colony Hardening & Real-World Readiness. Each maps to road
 ### Flow & Documentation
 
 - [x] **FLOW-01**: Pheromone-first flow — colonize suggests pheromone injection before planning
-- [ ] **FLOW-02**: Organizer/archivist ant reports stale files, dead code, orphaned configs (report-only, conservative)
-- [ ] **FLOW-03**: Pheromone user documentation — when/why to use FOCUS, REDIRECT, FEEDBACK with practical scenarios
+- [x] **FLOW-02**: Organizer/archivist ant reports stale files, dead code, orphaned configs (report-only, conservative)
+- [x] **FLOW-03**: Pheromone user documentation — when/why to use FOCUS, REDIRECT, FEEDBACK with practical scenarios
 
 ## v2 Requirements
 
@@ -104,10 +104,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AUTO-04 | Phase 30 | Complete |
 | AUTO-05 | Phase 30 | Complete |
 | INT-06 | Phase 30 | Complete |
-| ARCH-01 | Phase 31 | Pending |
-| ARCH-02 | Phase 31 | Pending |
-| FLOW-02 | Phase 32 | Pending |
-| FLOW-03 | Phase 32 | Pending |
+| ARCH-01 | Phase 31 | Complete |
+| ARCH-02 | Phase 31 | Complete |
+| FLOW-02 | Phase 32 | Complete |
+| FLOW-03 | Phase 32 | Complete |
 
 **Coverage:**
 - v1 requirements: 24 total
@@ -116,4 +116,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-04*
-*Last updated: 2026-02-05 — Phase 30 requirements (AUTO-01, AUTO-02, AUTO-03, AUTO-04, AUTO-05, INT-06) marked Complete*
+*Last updated: 2026-02-05 — Phase 32 requirements (FLOW-02, FLOW-03) + Phase 31 (ARCH-01, ARCH-02) marked Complete — all 24/24 requirements complete*

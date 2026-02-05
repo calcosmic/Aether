@@ -1,6 +1,6 @@
 # Milestone v4.4: Colony Hardening & Real-World Readiness
 
-**Status:** In Progress
+**Status:** Complete
 **Phases:** 27-32
 **Total Plans:** 15
 
@@ -138,7 +138,7 @@ Plans:
 | 29 | Colony Intelligence & Quality Signals | 3 plans | ✓ Complete |
 | 30 | Automation & New Capabilities | 3 plans | ✓ Complete |
 | 31 | Architecture Evolution | 3 plans | ✓ Complete |
-| 32 | Polish & Safety Rails | 2 plans | Complete |
+| 32 | Polish & Safety Rails | 2 plans | ✓ Complete |
 
 ## Coverage
 
@@ -195,4 +195,4 @@ Phases with standard patterns (skip research):
 ---
 
 _Roadmap created: 2026-02-04_
-_Last updated: 2026-02-05 -- Phase 32 planned (2 plans, 1 wave, both parallel)_
+_Last updated: 2026-02-05 -- Phase 32 complete, v4.4 milestone complete (6/6 phases, 15/15 plans)_
