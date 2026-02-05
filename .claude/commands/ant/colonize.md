@@ -42,15 +42,194 @@ ACTIVE PHEROMONES:
 - {TYPE} (strength {current_strength:.2f}): "{content}"
 ```
 
+### Step 2.5: Detect Project Complexity
+
+Use the Bash tool to measure project complexity:
+
+1. **Source file count** (exclude node_modules, .git, dist, build, test, tests, __tests__, spec):
+   ```
+   find . -type f \( -name "*.ts" -o -name "*.js" -o -name "*.py" -o -name "*.go" -o -name "*.rs" -o -name "*.java" -o -name "*.rb" -o -name "*.php" -o -name "*.swift" -o -name "*.kt" -o -name "*.c" -o -name "*.cpp" -o -name "*.cs" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/build/*" -not -path "*/test/*" -not -path "*/tests/*" -not -path "*/__tests__/*" -not -path "*/spec/*" | wc -l
+   ```
+
+2. **Max directory depth** (exclude node_modules, .git):
+   ```
+   find . -type d -not -path "*/node_modules/*" -not -path "*/.git/*" | awk -F/ '{print NF}' | sort -n | tail -1
+   ```
+
+3. **Language count**:
+   ```
+   find . -type f -not -path "*/node_modules/*" -not -path "*/.git/*" | grep -oE '\.[^./]+$' | sort -u | grep -cE '\.(ts|js|py|go|rs|java|rb|php|swift|kt|c|cpp|cs)'
+   ```
+
+**Classify mode based on results:**
+
+- **LIGHTWEIGHT:** <20 source files AND <3 directories deep AND 1 language
+- **FULL:** >200 source files OR >6 directories deep OR >3 languages OR monorepo detected (multiple package.json/Cargo.toml/go.mod in different directories)
+- **STANDARD:** everything else
+
+Store the mode classification and indicators for use in Step 4 and Step 7.
+
 ### Step 3: Update State
 
 Use Write tool to update `COLONY_STATE.json`:
 - Set `state` to `"EXECUTING"`
 - Set `workers.colonizer` to `"active"`
 
-### Step 4: Spawn One Ant
+### Step 4: Spawn Colonizer Ants
 
-Do NOT hardcode which castes to spawn. Let the colony self-organize.
+**Mode check:** If mode from Step 2.5 is **LIGHTWEIGHT**, skip to **Step 4-LITE** below. Otherwise (STANDARD or FULL), use the multi-colonizer pattern in this step.
+
+**Step 4 (STANDARD/FULL mode): Spawn Three Colonizer Ants**
+
+Spawn 3 colonizer ants SEQUENTIALLY via Task tool (`subagent_type="general-purpose"`). Each gets the same prompt header but with a distinct specialization lens. Do NOT hardcode which castes to spawn beyond these 3. Let the colony self-organize within each lens.
+
+Each colonizer receives this common prompt header, followed by its specific mission:
+
+```
+You are an ant in the Aether Queen Ant Colony.
+
+The Queen has signalled: colonize the codebase.
+
+--- COLONY CONTEXT ---
+
+Goal: "{goal}"
+
+--- ACTIVE PHEROMONES ---
+{pheromone block from Step 2}
+
+Respond to REDIRECT pheromones as hard constraints (things to avoid).
+Respond to FOCUS pheromones by prioritizing those areas.
+
+--- HOW THE COLONY WORKS ---
+
+You are autonomous. There is no orchestrator. You decide how to explore this codebase.
+
+If you need help, spawn specialists. Read their spec before spawning:
+  .aether/workers/colonizer-ant.md  — Explore/index codebase
+  .aether/workers/route-setter-ant.md — Plan and break down work
+  .aether/workers/builder-ant.md — Implement code, run commands
+  .aether/workers/watcher-ant.md — Validate, test, quality check
+  .aether/workers/scout-ant.md — Research, find information
+  .aether/workers/architect-ant.md — Synthesize knowledge, extract patterns
+
+To spawn another ant:
+1. Read their spec file with the Read tool
+2. Use the Task tool (subagent_type="general-purpose") with prompt containing:
+   --- WORKER SPEC ---
+   {full contents of the spec file}
+   --- ACTIVE PHEROMONES ---
+   {copy the pheromone block above}
+   --- TASK ---
+   {what you need them to do}
+
+Spawned ants can spawn further ants. Max depth 3, max 5 sub-ants per ant.
+```
+
+**Colonizer 1 (Structure):** Append this mission to the common header:
+
+```
+--- YOUR MISSION ---
+
+You are Colonizer 1 of 3 (Structure Lens).
+
+Focus ONLY on architecture and organization:
+1. Directory structure and module boundaries
+2. Main entry points and how they connect
+3. Build system and scripts
+4. Dependency graph between modules
+5. File organization conventions
+
+Do NOT analyze code quality or tech stack details — other colonizers handle those.
+
+Use Glob, Grep, and Read tools to explore. Report your findings as:
+
+COLONIZER 1 (STRUCTURE) REPORT
+Findings:
+  - category: "structure"
+    finding: "<specific observation>"
+    confidence: <HIGH|MEDIUM|LOW>
+    evidence: "<file path or pattern>"
+```
+
+**Colonizer 2 (Patterns):** Append this mission to the common header:
+
+```
+--- YOUR MISSION ---
+
+You are Colonizer 2 of 3 (Patterns Lens).
+
+Focus ONLY on code quality and conventions:
+1. Naming conventions (files, variables, functions, classes)
+2. Design patterns in use (and anti-patterns)
+3. Error handling approach
+4. Code style and formatting
+5. Documentation patterns
+
+Sample 5-10 representative files across the codebase.
+Do NOT map the full directory structure — Colonizer 1 handles that.
+
+Use Glob, Grep, and Read tools to explore. Report your findings as:
+
+COLONIZER 2 (PATTERNS) REPORT
+Findings:
+  - category: "patterns"
+    finding: "<specific observation>"
+    confidence: <HIGH|MEDIUM|LOW>
+    evidence: "<file path or pattern>"
+```
+
+**Colonizer 3 (Stack):** Append this mission to the common header:
+
+```
+--- YOUR MISSION ---
+
+You are Colonizer 3 of 3 (Stack Lens).
+
+Focus ONLY on technology and dependencies:
+1. Languages and frameworks in use (with versions)
+2. Dependency health (outdated? vulnerable?)
+3. Configuration approach (env vars, config files, hardcoded)
+4. Build/deploy pipeline
+5. External service integrations
+
+Check package manifests (package.json, requirements.txt, Cargo.toml, etc.).
+Do NOT review individual source files — other colonizers handle that.
+
+Use Glob, Grep, and Read tools to explore. Report your findings as:
+
+COLONIZER 3 (STACK) REPORT
+Findings:
+  - category: "stack"
+    finding: "<specific observation>"
+    confidence: <HIGH|MEDIUM|LOW>
+    evidence: "<file path or pattern>"
+```
+
+Save individual colonizer reports to `.aether/temp/colonizer-{1,2,3}-report.txt`.
+
+### Step 4.5: Synthesize Colonizer Reports
+
+**This step is performed by the Queen (main agent), NOT a separate Task tool spawn.**
+
+Only runs for STANDARD/FULL mode. If LIGHTWEIGHT, skip this step (Step 4-LITE output is used directly).
+
+1. Collect all 3 colonizer reports from Step 4
+2. Group findings by topic (architecture, tech stack, conventions, concerns)
+3. Where 2+ colonizers agree on a finding: include as HIGH confidence
+4. Where colonizers disagree: flag explicitly:
+
+```
+DISAGREEMENT: {topic}
+  Colonizer {N} ({Lens}): {view}
+  Colonizer {M} ({Lens}): {opposing view}
+  Resolution: User decision needed
+```
+
+5. Produce a unified synthesis report for display in Step 6
+
+### Step 4-LITE: Single Colonizer (LIGHTWEIGHT mode)
+
+Only runs when mode from Step 2.5 is LIGHTWEIGHT. Spawns a single colonizer ant covering all lenses.
 
 Use the **Task tool** with `subagent_type="general-purpose"`:
 
@@ -110,7 +289,7 @@ Use Glob, Grep, and Read tools to explore. Report your findings.
 
 ### Step 5: Persist Findings
 
-After the ant returns, save its findings so they survive the session.
+After colonization completes (either synthesis report from Step 4.5 or single colonizer report from Step 4-LITE), save findings so they survive the session.
 
 Read `.aether/data/memory.json`. Append a decision record to the `decisions` array:
 
@@ -118,7 +297,7 @@ Read `.aether/data/memory.json`. Append a decision record to the `decisions` arr
 {
   "id": "dec_<unix_timestamp>_<4_random_hex>",
   "type": "colonization",
-  "content": "<summarize the ant's key findings: project type, tech stack, architecture patterns, conventions, and recommendations — keep under 500 chars>",
+  "content": "<summarize the unified synthesis report (STANDARD/FULL) or single colonizer findings (LIGHTWEIGHT): project type, tech stack, architecture patterns, conventions, and recommendations — keep under 500 chars>",
   "context": "Codebase colonized for goal: <goal>",
   "phase": 0,
   "timestamp": "<ISO-8601 UTC>"
@@ -145,14 +324,17 @@ If the `events` array exceeds 100 entries, remove the oldest entries to keep onl
 
 ### Step 6: Display Results
 
-Display the ant's findings, then analyze the findings to suggest specific pheromones:
+Display the colonization results. For STANDARD/FULL mode, display the unified synthesis report from Step 4.5 (NOT individual colonizer reports — those are stored in `.aether/temp/` for reference). For LIGHTWEIGHT mode, display the single colonizer's report from Step 4-LITE.
+
+Analyze the findings to suggest specific pheromones:
 
 ```
 👑 CODEBASE COLONIZED
 
   Goal: "{goal}"
+  Mode: {LIGHTWEIGHT|STANDARD|FULL}
 
-{ant's report — structure, tech stack, architecture, conventions, recommendations}
+{synthesis report (STANDARD/FULL) or single colonizer report (LIGHTWEIGHT)}
 
   Findings saved to memory.json
 
@@ -188,6 +370,18 @@ If the ant's report contains no clear focus areas or problematic patterns, displ
 Use Write tool to update `COLONY_STATE.json`:
 - Set `state` to `"READY"`
 - Set `workers.colonizer` to `"idle"`
+- Set `mode` to the classified mode from Step 2.5 (`"LIGHTWEIGHT"`, `"STANDARD"`, or `"FULL"`)
+- Set `mode_set_at` to the current ISO-8601 UTC timestamp
+- Set `mode_indicators` to the complexity detection results:
+  ```json
+  "mode_indicators": {
+    "source_files": <count from Step 2.5>,
+    "max_depth": <count from Step 2.5>,
+    "languages": <count from Step 2.5>
+  }
+  ```
+
+Add these fields to the existing Write — do NOT create a separate write operation.
 
 ### Step 8: Persistence Confirmation
 

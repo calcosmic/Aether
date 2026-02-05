@@ -2,6 +2,9 @@
   "goal": null,
   "state": "IDLE",
   "current_phase": 0,
+  "mode": null,
+  "mode_set_at": null,
+  "mode_indicators": null,
   "session_id": null,
   "initialized_at": null,
   "workers": {
