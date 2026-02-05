@@ -2,7 +2,7 @@
 
 **Status:** In Progress
 **Phases:** 27-32
-**Total Plans:** TBD
+**Total Plans:** 15
 
 ## Overview
 
@@ -117,9 +117,11 @@ Plans:
 **Goal**: Colony maintains codebase hygiene through safe reporting and users understand when and why to use each pheromone signal
 **Depends on**: Phase 31
 **Requirements**: FLOW-02, FLOW-03
+**Plans:** 2 plans
 
 Plans:
-- [ ] TBD
+- [x] 32-01-PLAN.md — Organizer/archivist command (/ant:organize) spawning architect-ant for codebase hygiene report
+- [ ] 32-02-PLAN.md — Pheromone user documentation with practical scenarios for FOCUS, REDIRECT, FEEDBACK
 
 **Success Criteria:**
 1. An organizer/archivist ant can be spawned that reports stale files, dead code, and orphaned configs -- output is report-only with no deletions or modifications
@@ -136,7 +138,7 @@ Plans:
 | 29 | Colony Intelligence & Quality Signals | 3 plans | ✓ Complete |
 | 30 | Automation & New Capabilities | 3 plans | ✓ Complete |
 | 31 | Architecture Evolution | 3 plans | ✓ Complete |
-| 32 | Polish & Safety Rails | TBD | Pending |
+| 32 | Polish & Safety Rails | 2 plans | Pending |
 
 ## Coverage
 
@@ -193,4 +195,4 @@ Phases with standard patterns (skip research):
 ---
 
 _Roadmap created: 2026-02-04_
-_Last updated: 2026-02-05 -- Phase 31 complete (3 plans, 2 waves, verified 4/4 must-haves)_
+_Last updated: 2026-02-05 -- Phase 32 planned (2 plans, 1 wave, both parallel)_

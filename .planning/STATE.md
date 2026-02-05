@@ -10,12 +10,12 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 ## Current Position
 
 Milestone: v4.4 Colony Hardening & Real-World Readiness
-Phase: 31 of 32 (Architecture Evolution) — complete, verified
-Plan: 3 of 3 complete (31-01 + 31-02 + 31-03 done, all waves complete)
-Status: Phase complete — verified 4/4 must-haves, requirements marked Complete
-Last activity: 2026-02-05 -- Phase 31 executed (3 plans, 2 waves), verified, requirements updated
+Phase: 32 of 32 (Polish & Safety Rails)
+Plan: 1 of 2 in current phase
+Status: In progress
+Last activity: 2026-02-05 -- Completed 32-01-PLAN.md
 
-Progress: [#################---] 83% (v4.4: 5/6 phases, 13/13 plans done)
+Progress: [##################--] 93% (v4.4: 5.5/6 phases, 14/15 plans done)
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -29,7 +29,7 @@ Progress: [#################---] 83% (v4.4: 5/6 phases, 13/13 plans done)
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 95 (44 v1.0 + 6 v2.0 + 11 v3.0 + 9 v4.0 + 4 v4.1 + 4 v4.2 + 4 v4.3 + 13 v4.4)
+- Total plans completed: 96 (44 v1.0 + 6 v2.0 + 11 v3.0 + 9 v4.0 + 4 v4.1 + 4 v4.2 + 4 v4.3 + 14 v4.4)
 - Average duration: ~19 min
 - Total execution time: ~19 hours
 
@@ -52,6 +52,7 @@ See PROJECT.md Key Decisions table for full history.
 - 30-03: Color reference as HTML comment block; all ANSI codes strictly in bash -c printf; basic 8-color only (30-37, 1;3X); Queen bold yellow for headers; errors always red regardless of caste
 - 31-01: Forced curation overflow strategy at 50-cap (display all, user removes one); auto-continue skips promotion with message; tags inferred from colonization decision at promotion time
 - 31-03: Queen-mediated delegation via SPAWN REQUEST blocks (not direct Task tool); max 2 sub-spawns per wave; depth limit 3->2 across all specs and spawn-check; spawn_tree in COLONY_STATE.json
+- 32-01: Architect-ant reused as archivist (caste reuse pattern from Phase 30); .planning/ added to exclusion list; conservative confidence default (LOW when uncertain)
 
 ### Pending Todos
 
@@ -68,9 +69,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-05
-Stopped at: Phase 31 complete and verified — ready for Phase 32 planning
+Stopped at: Completed 32-01-PLAN.md
 Resume file: None
 
 ---
 
-*State updated: 2026-02-05 after Phase 31 verification passed*
+*State updated: 2026-02-05 after 32-01-PLAN.md execution*
