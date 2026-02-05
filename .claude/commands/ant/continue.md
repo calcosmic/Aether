@@ -121,10 +121,72 @@ Then proceed to Step 8 to display the normal result (showing the NEXT unbuilt ph
 
 Look at `current_phase` in `COLONY_STATE.json`. The next phase is `current_phase + 1`.
 
-If there is no next phase (current is the last phase), output:
+If there is no next phase (current is the last phase), proceed to Step 2.5 to generate a tech debt report, then output the completion message. Do NOT stop yet.
+
+If there IS a next phase, skip Step 2.5 entirely and proceed to Step 3.
+
+### Step 2.5: Generate Tech Debt Report (Project Completion)
+
+This step runs ONLY when Step 2 detects all phases are complete (no next phase). It MUST NOT run on normal mid-project continue calls.
+
+**1. Gather data** (all reads can be parallel):
+- Read `.aether/data/errors.json` (if not already in memory from Step 1)
+- Run: `bash .aether/aether-utils.sh error-summary`
+- Run: `bash .aether/aether-utils.sh error-pattern-check`
+- Read `.aether/data/memory.json` (for phase_learnings)
+- Read `.aether/data/activity.log` (for cross-phase activity patterns)
+
+**2. Synthesize the report:**
+
+Display:
+```
+TECH DEBT REPORT
+================
+
+Project: {goal from COLONY_STATE.json}
+Phases Completed: {count of completed phases}
+Total Build Time: {estimate from activity log timestamps -- first to last entry}
+
+Persistent Issues:
+{for each entry in errors.json flagged_patterns:}
+  {category} ({count} occurrences, phases {first_seen} - {last_seen}):
+    {description}
+
+{if no flagged_patterns:}
+  None -- no recurring error patterns detected.
+
+Error Summary:
+  Total: {total from error-summary}
+  By Severity: Critical: {n}, High: {n}, Medium: {n}, Low: {n}
+  By Category: {category}: {n}, ...
+
+{if total == 0:}
+  No errors recorded during project execution.
+
+Unresolved High-Severity Items:
+  {errors from errors.json with severity "critical" or "high" that were never followed by a corresponding fix or resolution}
+
+{if none:}
+  None -- all high-severity items were addressed.
+
+Phase Quality Trend:
+  {for each phase_learning in memory.json:}
+  Phase {phase}: {phase_name} -- {errors_encountered} errors
+  {extract watcher quality scores from events.json if available}
+
+Recommendations:
+  {1-3 actionable items synthesized from the patterns above}
+  {e.g., "The {category} error pattern persisted across {N} phases -- consider adding automated {category} checks to your CI pipeline."}
+```
+
+**3. Persist the report:**
+Write the full report to `.aether/data/tech-debt-report.md` (both display AND file persistence).
+
+**4. Display completion message and stop:**
 
 ```
 All phases complete. Colony has finished the project plan.
+  Tech debt report: .aether/data/tech-debt-report.md
 
   /ant:status   View final colony status
   /ant:plan     Generate a new plan (will replace current)
