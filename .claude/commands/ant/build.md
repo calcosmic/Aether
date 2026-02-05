@@ -196,6 +196,26 @@ Example:
   Task 3.3: Create middleware at src/middleware/auth.ts
   -> Different file -> can go to a different builder-ant
 
+--- DEFAULT-PARALLEL RULE ---
+CRITICAL: Tasks are PARALLEL by default. Only serialize when you have a specific reason.
+
+For EACH task, list the files it will likely create or modify.
+Two tasks are INDEPENDENT if they have zero file overlap AND no explicit dependency.
+Independent tasks go in the SAME wave with different workers.
+Tasks are DEPENDENT if they share files or one needs the other's output.
+Dependent tasks go in SEQUENTIAL waves or the SAME worker.
+
+DEFAULT: Assume tasks are parallel unless you can identify a specific dependency.
+Do NOT default to sequential ordering just because tasks are numbered sequentially.
+
+--- MODE-AWARE PARALLELISM ---
+Read COLONY_STATE.json mode field.
+- LIGHTWEIGHT: max 1 worker per wave (serialized execution)
+- STANDARD: normal parallelism (default behavior)
+- FULL: aggressive parallelism, up to 4 concurrent workers per wave
+
+If mode field is null or missing, use STANDARD behavior.
+
 Available worker castes:
   🗺️🐜 colonizer-ant — Explore/index codebase
   📋🐜 route-setter-ant — Plan and break down work (rarely needed as worker)
@@ -219,14 +239,15 @@ Output format:
 
   Colony is planning...
 
-  Wave 1 (independent):
-    1. {caste_emoji} {caste}-ant: {task description} (tasks {ids})
-    2. {caste_emoji} {caste}-ant: {task description} (tasks {ids})
+  Wave 1 ({N} parallel workers):
+    1. {caste_emoji} {caste}-ant: {task description} (tasks {ids}) -> {file paths}
+    2. {caste_emoji} {caste}-ant: {task description} (tasks {ids}) -> {file paths}
 
   Wave 2 (depends on Wave 1):
-    3. {caste_emoji} {caste}-ant: {task description} (tasks {ids})
+    3. {caste_emoji} {caste}-ant: {task description} (tasks {ids}) -> {file paths}
        Needs: {what from Wave 1}
 
+  Parallelism: {parallel_count}/{total_count} tasks in Wave 1 ({percentage}%)
   Worker count: {N}
   Wave count: {N}
 
