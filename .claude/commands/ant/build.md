@@ -260,12 +260,31 @@ Produce a revised plan incorporating their feedback.
 
 After the Phase Lead returns:
 
-1. Display the Phase Lead's task assignment plan to the user verbatim
-2. Ask: **"Proceed with this plan? (yes / describe changes)"**
-3. If user says "yes" or equivalent: proceed to Step 5c
-4. If user describes changes: Re-run Step 5a with the user's feedback appended to the prompt
-5. After re-run, display revised plan and ask again
-6. Maximum 3 plan iterations before proceeding with the latest plan
+**Auto-Approval Check:**
+Read COLONY_STATE.json. Check the `mode` field.
+
+If mode is "LIGHTWEIGHT": auto-approve the plan. Skip user confirmation.
+Display: "Plan auto-approved (LIGHTWEIGHT mode). Proceeding to execution..."
+Go to Step 5b-post.
+
+If mode is "STANDARD" or "FULL" (or mode is null/missing):
+  Count from the Phase Lead's plan:
+  - task_count: total tasks assigned
+  - worker_count: total workers assigned
+  - wave_count: total waves
+  - shared_files: whether any two workers in the same wave list the same file path
+
+  If mode is "STANDARD" AND task_count <= 4 AND worker_count <= 2 AND wave_count <= 2 AND shared_files == false:
+    Auto-approve. Display: "Plan auto-approved (simple phase: {tasks} tasks, {workers} workers, {waves} waves). Proceeding to execution..."
+    Go to Step 5b-post.
+
+  Otherwise (FULL mode, or STANDARD mode above threshold):
+    1. Display the Phase Lead's task assignment plan to the user verbatim
+    2. Ask: "Proceed with this plan? (yes / describe changes)"
+    3. If user says "yes" or equivalent: proceed to Step 5b-post
+    4. If user describes changes: Re-run Step 5a with the user's feedback appended
+    5. After re-run, display revised plan and ask again
+    6. Maximum 3 plan iterations before proceeding with the latest plan
 
 ### Step 5b-post: Record Plan Decisions
 
@@ -400,6 +419,26 @@ g. **If worker failed and retry count >= 2:**
    - Mark task as failed in tracking
    - Continue to next worker
 
+h. **Post-Wave Conflict Check (best-effort):**
+   After all workers in this wave return, read the activity log entries for this wave's workers:
+     `bash .aether/aether-utils.sh activity-log-read "{caste}-ant"`
+
+   For each pair of workers in this wave, compare their CREATED and MODIFIED log entries for file path overlap.
+
+   If two workers in the same wave show MODIFIED or CREATED entries for the SAME file path:
+     HALT execution. Display:
+     ```
+     CONFLICT DETECTED: Workers {A} and {B} both modified {file_path}
+
+     This wave's changes may have overwritten each other.
+     Options:
+       1. Review the file and continue
+       2. Rollback to git checkpoint: git reset --hard {checkpoint_hash}
+     ```
+     Wait for user input before continuing to the next wave.
+
+   If no conflicts detected, proceed to the next wave silently.
+
 **5. Compile Phase Build Report** from all `worker_results`:
 ```
 Phase Build Report
@@ -422,6 +461,13 @@ Issues: {any failures or errors}
 ### Step 5.5: Watcher Verification (Mandatory)
 
 After all workers complete (Step 5c), spawn a **mandatory watcher verification**.
+
+**Mode Check:** Read COLONY_STATE.json mode field.
+If mode is "LIGHTWEIGHT": Skip watcher verification entirely. Display:
+  "Watcher verification skipped (LIGHTWEIGHT mode)."
+Proceed directly to Step 6.
+
+Otherwise: Continue with mandatory watcher verification as-is.
 
 1. Use the Read tool to read `.aether/workers/watcher-ant.md`
 2. Use the **Task tool** with `subagent_type="general-purpose"`:
