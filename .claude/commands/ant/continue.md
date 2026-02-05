@@ -182,11 +182,69 @@ Recommendations:
 **3. Persist the report:**
 Write the full report to `.aether/data/tech-debt-report.md` (both display AND file persistence).
 
-**4. Display completion message and stop:**
+### Step 2.5b: Promote Learnings to Global Tier
+
+After generating the tech debt report, offer learning promotion.
+
+**Auto-continue guard:** If `auto_mode` is true (set in Step 0), skip this entire step. Display:
+  "Global learning promotion available. Run /ant:continue (without --all) to promote learnings."
+Proceed to Step 2.5c.
+
+**If auto_mode is false:**
+
+1. Read `.aether/data/memory.json` phase_learnings array (already in memory from Step 1)
+2. If phase_learnings is empty: display "No project learnings to promote." and skip to Step 2.5c
+
+3. Analyze each learning and categorize:
+   - **Promotion candidates:** Learnings that reference specific tech, patterns, or practices applicable across projects
+     - Example good candidate: "bcrypt with 12 rounds causes 800ms delay -- use 10 rounds"
+     - Example good candidate: "Integration tests caught missing error handlers that unit tests missed"
+   - **Project-specific:** Learnings too tied to this project's details
+     - Example: "Phase 3 had 2 errors"
+     - Example: "Auth routes needed 3 retries"
+
+4. Display learnings with promotion suggestions:
+   ```
+   PROJECT LEARNINGS:
+
+   Candidates for global promotion (applicable across projects):
+     [1] "<learning text>" (Phase <N>)
+     [2] "<learning text>" (Phase <N>)
+
+   Project-specific (not recommended for promotion):
+     [-] "<learning text>" (Phase <N>)
+
+   Which learnings would you like to promote? (numbers, "all candidates", or "none")
+   ```
+
+5. Wait for user selection.
+
+6. For each selected learning:
+   - Read `COLONY_STATE.json` for the `goal` field (source_project)
+   - Infer tags from the colonization decision in memory.json (look for the `type: "colonization"` decision entry -- extract tech stack keywords like language names, framework names, domain keywords)
+   - Run:
+     ```
+     bash .aether/aether-utils.sh learning-promote "<learning_content>" "<goal>" <phase_number> "<comma_separated_tags>"
+     ```
+   - If result contains `"promoted":true`: note success
+   - If result contains `"reason":"cap_reached"`:
+     - Display: "Global learnings at capacity (50/50). Remove an existing learning to make room."
+     - Read `~/.aether/learnings.json` and display existing learnings with indices
+     - Ask user which to remove (by index)
+     - Remove the selected entry from the file using jq, then retry the promotion
+
+7. Display promotion result:
+   ```
+   Promoted {N} learnings to global tier.
+     ~/.aether/learnings.json ({count}/50 entries)
+   ```
+
+### Step 2.5c: Display completion message and stop
 
 ```
 All phases complete. Colony has finished the project plan.
   Tech debt report: .aether/data/tech-debt-report.md
+  Global learnings: ~/.aether/learnings.json ({count}/50 entries, or "none promoted" if skipped)
 
   /ant:status   View final colony status
   /ant:plan     Generate a new plan (will replace current)
