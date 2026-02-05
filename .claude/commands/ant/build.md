@@ -439,6 +439,79 @@ h. **Post-Wave Conflict Check (best-effort):**
 
    If no conflicts detected, proceed to the next wave silently.
 
+i. **Post-Wave Advisory Review:**
+
+   **Mode + wave-size check:** Read COLONY_STATE.json mode field.
+   - If mode is "LIGHTWEIGHT": Skip reviewer entirely. Display: "Reviewer skipped (LIGHTWEIGHT mode)." and continue to next wave.
+   - If this wave had only 1 worker (single-worker waves have no cross-worker interaction to review): Skip reviewer entirely. Display: "Reviewer skipped (single-worker wave)." and continue to next wave.
+
+   **Reviewer spawn:** Read `.aether/workers/watcher-ant.md`. Spawn reviewer via Task tool with `subagent_type="general-purpose"`:
+
+   ```
+   --- WORKER SPEC ---
+   {full contents of .aether/workers/watcher-ant.md}
+
+   --- ACTIVE PHEROMONES ---
+   {pheromone block from Step 3}
+
+   --- TASK ---
+   You are being spawned as a post-wave ADVISORY REVIEWER.
+
+   Phase {id}: {phase_name}
+   Wave {N} of {total_waves} just completed.
+
+   Workers in this wave:
+   {for each worker: caste, task, and result summary}
+
+   Your mission:
+   1. Read the files modified by workers in this wave
+   2. Run Execution Verification (syntax, import, launch checks)
+   3. Run Quality mode checks at minimum
+   4. Produce findings with severity levels (CRITICAL, HIGH, MEDIUM, LOW)
+
+   IMPORTANT: You are in ADVISORY mode. Your findings will be DISPLAYED to the user but will NOT block progress. Only CRITICAL severity findings will trigger a rebuild. Be concise -- this runs after every wave.
+
+   Severity boundary definitions:
+   - CRITICAL: Code does not run (syntax errors, import failures, launch crashes), security vulnerabilities, data corruption risk
+   - HIGH: Tests fail, missing major requirements, breaking existing functionality
+   - MEDIUM: Code quality issues, missing edge cases, convention violations
+   - LOW: Style issues, minor improvements, documentation gaps
+
+   Produce a structured report with:
+   - findings: array of {severity, description, location, recommendation}
+   - critical_count: number of CRITICAL findings
+   - summary: one-line summary of wave quality
+   ```
+
+   **Post-reviewer logic (Queen handles):**
+
+   - Log reviewer spawn:
+     ```
+     bash .aether/aether-utils.sh activity-log "SPAWN" "queen" "reviewer for wave {N}"
+     ```
+   - After reviewer returns, log result:
+     ```
+     bash .aether/aether-utils.sh activity-log "COMPLETE" "reviewer" "{summary}"
+     ```
+
+   - Parse `critical_count` from the reviewer's findings.
+
+   - Display reviewer summary inline (plain text).
+
+   - If `critical_count > 0` AND `wave_rebuild_count < 2`:
+     - Display: "CRITICAL issue detected. Rebuilding wave {N}..."
+     - Increment `wave_rebuild_count`
+     - Re-run this wave's workers with findings appended to their prompts:
+       ```
+       Previous attempt had CRITICAL issues: {findings}. Fix these.
+       ```
+
+   - If `critical_count > 0` AND `wave_rebuild_count >= 2`:
+     - Display: "CRITICAL issues persist after 2 rebuilds. Continuing to next wave."
+
+   - If `critical_count == 0`:
+     - Display summary and continue to next wave.
+
 **5. Compile Phase Build Report** from all `worker_results`:
 ```
 Phase Build Report
@@ -741,6 +814,7 @@ Show step progress:
   ✓ Step 5a: Phase Lead Planning
   ✓ Step 5b: Plan Checkpoint
   ✓ Step 5c: Execute Workers
+  ✓ Step 5c.i: Post-Wave Review
   ✓ Step 5.5: Watcher Verification
   ✓ Step 6: Record Outcome
   ✓ Step 7a: Extract Phase Learnings
