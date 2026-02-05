@@ -4,7 +4,7 @@
 
 Aether is a **standalone multi-agent system** that applies ant colony intelligence to autonomous agent orchestration, built natively for Claude Code. Worker Ants spawn other Worker Ants through bio-inspired pheromone signaling. The Queen (user) provides high-level intention via pheromone signals (INIT, FOCUS, REDIRECT, FEEDBACK), and the colony self-organizes to complete tasks through emergent intelligence.
 
-This is a **hybrid prompt+code system** — commands like `/ant:init "Build a REST API"` work directly in Claude Code as skill prompts. Prompts handle reasoning and orchestration; a thin shell utility layer (`aether-utils.sh`, 229 lines, 13 subcommands) handles deterministic operations (pheromone math, state validation, spawn enforcement, memory management, error tracking) that LLMs get wrong.
+This is a **hybrid prompt+code system** — commands like `/ant:init "Build a REST API"` work directly in Claude Code as skill prompts. Prompts handle reasoning and orchestration; a thin shell utility layer (`aether-utils.sh`, 369 lines, 18 subcommands) handles deterministic operations (pheromone math, state validation, spawn enforcement, memory management, error tracking, learning promotion) that LLMs get wrong.
 
 **What makes it different:**
 
@@ -22,7 +22,7 @@ Autonomous agent spawning is not unique to Aether — systems like AutoGen (ADAS
 
 **Stigmergic Emergence**: Worker Ants detect capability gaps and spawn specialists through pheromone-guided coordination; pure emergence within structured phases; Queen provides signals not commands.
 
-If this works, everything else follows. If this fails, nothing else matters. The system has been run end-to-end on a real project (filmstrip packaging, 2026-02-04) — colony self-organization works but revealed 32 field notes of improvements needed.
+If this works, everything else follows. If this fails, nothing else matters. The system has been run end-to-end on a real project (filmstrip packaging, 2026-02-04) — colony self-organization works. All 32 field notes have been addressed in v4.4.
 
 ## Requirements
 
@@ -82,46 +82,33 @@ If this works, everything else follows. If this fails, nothing else matters. The
 - ✓ **Incremental Queen updates** — Queen displays worker results between spawns instead of waiting for entire Phase Lead return — v4.3
 - ✓ **Automatic learning extraction** — build.md Step 7 extracts phase learnings automatically instead of requiring separate `/ant:continue` call — v4.3
 
+*(Shipped in v4.4 — 2026-02-05)*
+
+- ✓ **Pheromone decay fix** — Three-guard defensive decay (clamp, cutoff, cap) across all pheromone subcommands — v4.4
+- ✓ **Activity log append** — cp + >> pattern preserves cross-phase history — v4.4
+- ✓ **Error phase attribution** — Optional 4th arg to error-add with regex validation — v4.4
+- ✓ **Decision logging** — Two logging points in build.md (strategic + quality) with phase field — v4.4
+- ✓ **Same-file conflict prevention** — Two-layer defense: prompt rule + Queen backup validation — v4.4
+- ✓ **Safe-to-clear prompting** — build.md, continue.md, colonize.md all end with persistence confirmation — v4.4
+- ✓ **Auto-continue mode** — `/ant:continue --all` with Task tool delegation and quality-gated halt — v4.4
+- ✓ **Pheromone-first flow** — colonize.md suggests pheromone injections after analysis — v4.4
+- ✓ **Multi-ant colonization** — 3 colonizers (Structure/Patterns/Stack) with synthesis and disagreement flagging — v4.4
+- ✓ **Adaptive complexity modes** — LIGHTWEIGHT/STANDARD/FULL set at colonization, consumed by build — v4.4
+- ✓ **Calibrated watcher scoring** — 5-dimension weighted rubric with anchors and chain-of-thought — v4.4
+- ✓ **Aggressive wave parallelism** — DEFAULT-PARALLEL rule with mode-aware limits and auto-approval — v4.4
+- ✓ **Advisory reviewer** — Auto-spawns after waves, CRITICAL-only rebuild, reuses watcher-ant.md — v4.4
+- ✓ **Auto debugger** — Spawns on retry failure, reuses builder-ant.md with PATCH constraints — v4.4
+- ✓ **Pheromone recommendations** — Natural language recs after builds based on outcomes — v4.4
+- ✓ **ANSI-colored output** — Caste-specific colors in build and colonize commands — v4.4
+- ✓ **Tech debt report** — Generated at project completion from activity log + errors.json — v4.4
+- ✓ **Two-tier learning** — Project-local (memory.json) + global (~/.aether/learnings.json) with manual promotion — v4.4
+- ✓ **Spawn tree engine** — Queen-mediated delegation with depth-2 limit, all 6 worker specs updated — v4.4
+- ✓ **Codebase hygiene** — /ant:organize spawns architect-ant for report-only analysis — v4.4
+- ✓ **Pheromone user guide** — When/why to use each signal with 9 scenarios and sensitivity matrix — v4.4
+
 ### Active
 
-**Current Milestone: v4.4 Colony Hardening & Real-World Readiness**
-
-**Goal:** Address all 23 actionable findings from the first real-world test, fixing bugs, improving colony intelligence, adding new capabilities, and resolving open design questions.
-
-**Target features:**
-
-*Bug fixes:*
-- [ ] Fix pheromone decay math (FOCUS strength growing instead of decaying)
-- [ ] Add phase attribution to error tracking (errors.json missing phase field)
-- [ ] Fix activity log append vs overwrite (history lost between phases)
-- [ ] Wire decision logging during execution phases (only Phase 0 entries recorded)
-
-*Critical UX:*
-- [ ] Context clear prompting after every command that completes meaningful work
-- [ ] Auto-continue mode to reduce /ant:continue friction between phases
-
-*Colony intelligence:*
-- [ ] Multi-ant colonization (multiple ants review codebase independently, compare notes)
-- [ ] Adaptive caste usage based on project complexity (lean mode for simple tasks)
-- [ ] Phase Lead auto-approval for simple/predetermined phases
-- [ ] Aggressive wave parallelism for independent tasks
-- [ ] Same-file conflict prevention (tasks touching same file go to same worker)
-- [ ] Watcher scoring rubric with meaningful granularity (not flat 8/10)
-- [ ] Tech debt report generation at project completion
-- [ ] Colony overhead scaling (lightweight mode for small projects)
-
-*New capabilities:*
-- [ ] Animated build indicators (spinners, moving dots, color per caste)
-- [ ] Pheromone recommendations to user at appropriate moments
-- [ ] Colonizer visual output (emojis/progress markers missing in colonize)
-- [ ] Pheromone-first flow (colonize → pheromone injection → plan)
-
-*Design decisions → implement:*
-- [ ] Auto-spawned reviewer/debugger ants at appropriate lifecycle stages
-- [ ] Per-project vs global learning tiers with promotion mechanism
-- [ ] Organizer/archivist ant for stale files, dead code, orphaned configs
-- [ ] Recursive ant spawning (ants can delegate to sub-ants with depth limits)
-- [ ] Pheromone user documentation (when/why to use each signal type)
+No active milestone. Run `/cds:new-milestone` to start next version.
 
 ### Out of Scope
 
@@ -143,34 +130,38 @@ If this works, everything else follows. If this fails, nothing else matters. The
 
 ## Context
 
-### Current State (post v4.3, pre v4.4 — 2026-02-04)
+### Current State (post v4.4 — 2026-02-05)
 
 **What exists (working):**
-- 12 commands as Claude Code skill prompts (init, plan, build, status, phase, continue, focus, redirect, feedback, pause-colony, resume-colony, colonize, ant)
-- 6 worker ant specs (~200 lines each) with pheromone math, spawning scenarios, event awareness, progress output, mandatory activity logging
-- 6 state files: COLONY_STATE.json, pheromones.json, PROJECT_PLAN.json, errors.json, memory.json, events.json
-- `aether-utils.sh` utility wrapper with 16 subcommands (pheromone math, state validation, spawn enforcement, memory ops, error tracking, activity logging)
+- 14 commands as Claude Code skill prompts (init, plan, build, status, phase, continue, focus, redirect, feedback, pause-colony, resume-colony, colonize, organize, ant)
+- 6 worker ant specs (~250-560 lines each) with pheromone math, spawning scenarios, event awareness, progress output, mandatory activity logging, SPAWN REQUEST format, scoring rubric (watcher)
+- 6 state files: COLONY_STATE.json (with mode + spawn_tree), pheromones.json, PROJECT_PLAN.json, errors.json (with phase attribution), memory.json (with phase-attributed decisions), events.json
+- 1 global state file: ~/.aether/learnings.json (cross-project learning promotion)
+- `aether-utils.sh` utility wrapper with 18 subcommands (pheromone math, state validation, spawn enforcement, memory ops, error tracking, activity logging, learning promote/inject)
 - 2 infrastructure scripts: atomic-write.sh, file-lock.sh
-- Full visual identity: box-drawing headers, step progress, pheromone decay bars, caste emoji
-- Queen-driven execution: Phase Lead plans tasks, Queen spawns workers sequentially with activity log display between each
-- Auto-learning extraction: build.md Step 7 captures learnings and emits FEEDBACK pheromone automatically
-- Spawn enforcement gates in all 6 worker specs
-- Pheromone validation in continue.md
+- 1 documentation file: .aether/docs/pheromones.md (user guide with 9 scenarios)
+- ANSI-colored build output with caste-specific colors
+- Queen-driven execution with advisory reviewer + auto-debugger post-wave
+- Auto-continue mode (/ant:continue --all) with quality-gated halt
+- Adaptive complexity (LIGHTWEIGHT/STANDARD/FULL) set at colonization
+- Multi-colonizer synthesis (3 lenses: Structure/Patterns/Stack)
+- Two-tier learning (project-local + global with manual promotion)
+- Queen-mediated spawn tree engine (depth-2 limit)
+- Tech debt report at project completion
+- Codebase hygiene scanning (/ant:organize, report-only)
 
-**Known issues (from v4.3 + field test):**
+**Known issues:**
 - continue.md Step 6 writes learnings_extracted event unconditionally even when Step 4 was skipped (cosmetic)
 - continue.md Step 8 display template lacks skip-case guidance (LLM handles contextually)
-- Pheromone decay math broken — FOCUS strength grows instead of decaying (field note 17)
-- Error tracking missing phase attribution (field note 18)
-- Activity log overwrites instead of appending across phases (field note 19)
-- Decision log unused during execution phases (field note 20)
+- pheromones.md documents global learning FEEDBACK source as 'auto:colonize' but implementation uses 'global:inject' (documentation mismatch)
+- validate-state does not check mode/mode_set_at/mode_indicators fields (optional with fallback)
+- aether-utils.sh at 369/370 line capacity
 
-**First real-world test results (2026-02-04):**
+**Real-world test results (2026-02-04):**
 - Tested on filmstrip packaging project — 5 phases, 21 tasks, 100% completion rate
-- Found real symlink bug via E2E testing phase
+- All 32 field notes addressed in v4.4 milestone (23 actionable + 9 informational)
 - Learning propagation worked cross-phase
 - REDIRECT pheromone respected across all phases
-- 32 field notes captured in `.planning/v5-FIELD-NOTES.md`
 
 ### Background
 
@@ -188,8 +179,8 @@ Aether is based on **383,000+ words of research** across 25 documents by Ralph (
 - **Task Tool for Spawning** — Autonomous spawning uses Claude's Task tool with full spec injection
 - **Standalone Architecture** — Aether is its own system, not dependent on CDS or any framework
 - **No External Dependencies** — No vector DBs, no embedding services, no Node.js, no Python
-- **Shell Utilities Only** — Utility layer uses bash+jq only, stays thin (<300 lines total)
-- **No New Commands** — Functionality enriched in existing 12 commands, not new ones
+- **Shell Utilities Only** — Utility layer uses bash+jq only, stays thin (<400 lines total)
+- **Command Enrichment Over Proliferation** — Functionality enriched in existing commands; new commands only when requirements demand (14 commands as of v4.4)
 - **Novel Coordination** — Stigmergic pheromone model is Aether's differentiator (spawning concept exists elsewhere; coordination approach is novel)
 
 ## Key Decisions
@@ -214,7 +205,14 @@ Aether is based on **383,000+ words of research** across 25 documents by Ralph (
 | Auto-learning in build Step 7 | Prevent learning loss from forgotten /ant:continue calls | ✓ Good — v4.3, auto-extraction + duplicate detection |
 | Phase Lead as planner only | Separate planning from execution for visibility | ✓ Good — v4.3, Queen drives worker spawns |
 | Event-based flag coordination | events.json auto_learnings_extracted for cross-command state | ✓ Good — v4.3, phase-specific matching |
+| Three-guard pheromone decay | clamp elapsed>=0, skip >10 half-lives, cap at initial strength | ✓ Good — v4.4, consistent across 3 subcommands |
+| Queen-mediated spawn delegation | Workers signal via SPAWN REQUEST blocks, Queen fulfills between waves | ✓ Good — v4.4, avoids platform limitations on subagent Task tool access |
+| Caste reuse pattern | Reviewer=watcher, debugger=builder, archivist=architect — no new castes | ✓ Good — v4.4, keeps 6-caste architecture clean |
+| Two-tier learning with manual promotion | Project-local + global (~/.aether/learnings.json), 50-entry cap | ✓ Good — v4.4, prevents stale cross-project knowledge |
+| Adaptive complexity modes | LIGHTWEIGHT/STANDARD/FULL set at colonization, consumed at 5 build points | ✓ Good — v4.4, scales overhead to project size |
+| Auto-continue via Task delegation | Build delegated via Task tool prompt reading build.md, not inlined | ✓ Good — v4.4, avoids prompt duplication |
+| ANSI codes only in bash printf | Colors never in LLM text, always in `bash -c 'printf ...'` | ✓ Good — v4.4, reliable terminal rendering |
 
 ---
 
-*Last updated: 2026-02-04 after v4.4 milestone initialization*
+*Last updated: 2026-02-05 after v4.4 milestone completion*

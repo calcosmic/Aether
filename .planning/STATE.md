@@ -2,20 +2,20 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-04)
+See: .planning/PROJECT.md (updated 2026-02-05)
 
 **Core value:** Stigmergic Emergence -- Worker Ants detect capability gaps and spawn specialists through pheromone-guided coordination
-**Current focus:** v4.4 Colony Hardening & Real-World Readiness
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Milestone: v4.4 Colony Hardening & Real-World Readiness
-Phase: 32 of 32 (Polish & Safety Rails) -- complete
-Plan: 2 of 2 complete (32-01 + 32-02 done)
-Status: Milestone complete -- all 15 plans across 6 phases executed
-Last activity: 2026-02-05 -- Completed 32-02-PLAN.md (pheromone user documentation)
+Milestone: None active (v4.4 shipped)
+Phase: Not started
+Plan: Not started
+Status: Ready to plan next milestone
+Last activity: 2026-02-05 -- v4.4 milestone completed and archived
 
-Progress: [####################] 100% (v4.4: 6/6 phases, 15/15 plans done)
+Progress: [                    ] 0% (next milestone not yet defined)
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -25,6 +25,7 @@ Progress: [####################] 100% (v4.4: 6/6 phases, 15/15 plans done)
 - v4.1 Shipped (2026-02-03): 2 phases, 4 plans, cleanup + enforcement gates
 - v4.2 Shipped (2026-02-03): 1 phase, 5 issues, colony hardening from test session
 - v4.3 Shipped (2026-02-04): 2 phases, 4 plans, live visibility + auto-learning
+- v4.4 Shipped (2026-02-05): 6 phases, 15 plans, colony hardening + real-world readiness
 
 ## Performance Metrics
 
@@ -39,22 +40,6 @@ Progress: [####################] 100% (v4.4: 6/6 phases, 15/15 plans done)
 
 See PROJECT.md Key Decisions table for full history.
 
-**v4.4 decisions:**
-- 27-01: Used jq max/min for decay clamping, cp instead of mv for log archiving, regex validation for phase arg
-- 27-02: CONFLICT PREVENTION RULE after caste sensitivity table, sub-step 2b for Queen backup, two-point decision logging (strategic + quality), 30-entry cap
-- 28-01: Conditional validate-state for build.md, unconditional for continue.md; pheromone suggestions inside Step 6 template with CRITICAL derivation constraint
-- 28-02: Build delegation via Task tool prompt that reads build.md (not inlined); auto-approve skips Step 5b; quality-gated halt at score < 4 or 2 consecutive failures
-- 29-01: Colonizer lenses Structure/Patterns/Stack; LIGHTWEIGHT <20 AND <3 AND 1; FULL >200 OR >6 OR >3 OR monorepo; sequential spawning; Queen-level synthesis (not 4th agent)
-- 29-02: Scoring Rubric placed after Specialist Modes before Output Format; execution verification cap restated as Correctness dimension cap inside rubric
-- 29-03: DEFAULT-PARALLEL after CONFLICT PREVENTION; LIGHTWEIGHT unconditional auto-approve; STANDARD auto-approve <=4 tasks/<=2 workers/<=2 waves/no shared files; FULL always requires approval; post-wave conflict detection best-effort; LIGHTWEIGHT skips watcher
-- 30-01: Reviewer reuses watcher-ant.md (no new caste); debugger reuses builder-ant.md with PATCH constraints; retry threshold < 1 (one retry before debugger); LIGHTWEIGHT + single-worker skip reviewer; CRITICAL-only rebuild (max 2); criticality inference for unfixable tasks
-- 30-02: Between-wave urgent recs separate from end-of-build max-3; recommendations must be senior-engineer-style observations not commands; tech debt report persisted to .aether/data/tech-debt-report.md AND displayed; Step 2.5 strictly conditional on no-next-phase
-- 30-03: Color reference as HTML comment block; all ANSI codes strictly in bash -c printf; basic 8-color only (30-37, 1;3X); Queen bold yellow for headers; errors always red regardless of caste
-- 31-01: Forced curation overflow strategy at 50-cap (display all, user removes one); auto-continue skips promotion with message; tags inferred from colonization decision at promotion time
-- 31-03: Queen-mediated delegation via SPAWN REQUEST blocks (not direct Task tool); max 2 sub-spawns per wave; depth limit 3->2 across all specs and spawn-check; spawn_tree in COLONY_STATE.json
-- 32-01: Architect-ant reused as archivist (caste reuse pattern from Phase 30); .planning/ added to exclusion list; conservative confidence default (LOW when uncertain)
-- 32-02: No decisions needed -- documentation plan executed exactly as specified
-
 ### Pending Todos
 
 None.
@@ -65,14 +50,14 @@ None.
 
 ### Blockers/Concerns
 
-- CP-1: RESOLVED -- Queen-mediated delegation pattern implemented in 31-03. Workers signal via SPAWN REQUEST output, Queen fulfills between waves. No direct subagent spawning needed.
+None.
 
 ## Session Continuity
 
 Last session: 2026-02-05
-Stopped at: v4.4 milestone complete -- all 15 plans executed
+Stopped at: v4.4 milestone archived -- ready for next milestone
 Resume file: None
 
 ---
 
-*State updated: 2026-02-05 after 32-02-PLAN.md execution -- v4.4 milestone complete*
+*State updated: 2026-02-05 after v4.4 milestone completion and archival*

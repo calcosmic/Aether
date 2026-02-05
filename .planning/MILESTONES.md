@@ -1,5 +1,33 @@
 # Project Milestones: Aether
 
+## v4.4 Colony Hardening & Real-World Readiness (Shipped: 2026-02-05)
+
+**Delivered:** Addressed all 23 actionable findings from the first real-world field test — fixed critical bugs (pheromone decay, activity log, error attribution), reduced UX friction (auto-continue, safe-to-clear), added colony intelligence (adaptive complexity modes, calibrated watcher scoring, multi-colonizer synthesis), automated quality gates (reviewer, debugger, tech debt reports), evolved architecture (two-tier learning, spawn tree engine), and added polish (codebase hygiene command, pheromone documentation).
+
+**Phases completed:** 27-32 (15 plans total)
+
+**Key accomplishments:**
+
+- **Bug Fixes & Safety** — Three-guard pheromone decay, append-mode activity logging, phase-attributed errors, decision logging, same-file conflict prevention
+- **Colony Intelligence** — Adaptive LIGHTWEIGHT/STANDARD/FULL modes, 3-colonizer synthesis with disagreement flagging, 5-dimension calibrated watcher scoring rubric, aggressive wave parallelism with auto-approval
+- **Automation** — Advisory reviewer auto-spawns after builder waves, debugger auto-spawns on test failure, pheromone recommendations, ANSI-colored build output, tech debt reports at project completion
+- **Architecture Evolution** — Two-tier learning system (project-local + global with manual promotion), Queen-mediated spawn tree engine with depth-2 limit
+- **Polish & Safety Rails** — /ant:organize codebase hygiene command (report-only), pheromone signals user guide with 9 scenarios and sensitivity matrix
+
+**Stats:**
+
+- 58 files changed, 10,265 insertions, 787 deletions
+- 6,259 lines across core system (markdown prompts + bash utilities)
+- 6 phases, 15 plans, 54 commits
+- 24/24 requirements satisfied
+- 5 days (2026-02-01 → 2026-02-05)
+
+**Git range:** `7ff8fc8` → `c4af6cb`
+
+**What's next:** TBD
+
+---
+
 ## v4.3 Live Visibility & Auto-Learning (Shipped: 2026-02-04)
 
 **Delivered:** Activity log system for live worker visibility during builds, and automatic learning extraction that eliminates the need for manual `/ant:continue` calls after each phase.
