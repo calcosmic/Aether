@@ -10,12 +10,12 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 ## Current Position
 
 Milestone: v4.4 Colony Hardening & Real-World Readiness
-Phase: 32 of 32 (Polish & Safety Rails)
-Plan: 1 of 2 in current phase
-Status: In progress
-Last activity: 2026-02-05 -- Completed 32-01-PLAN.md
+Phase: 32 of 32 (Polish & Safety Rails) -- complete
+Plan: 2 of 2 complete (32-01 + 32-02 done)
+Status: Milestone complete -- all 15 plans across 6 phases executed
+Last activity: 2026-02-05 -- Completed 32-02-PLAN.md (pheromone user documentation)
 
-Progress: [##################--] 93% (v4.4: 5.5/6 phases, 14/15 plans done)
+Progress: [####################] 100% (v4.4: 6/6 phases, 15/15 plans done)
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -29,7 +29,7 @@ Progress: [##################--] 93% (v4.4: 5.5/6 phases, 14/15 plans done)
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 96 (44 v1.0 + 6 v2.0 + 11 v3.0 + 9 v4.0 + 4 v4.1 + 4 v4.2 + 4 v4.3 + 14 v4.4)
+- Total plans completed: 97 (44 v1.0 + 6 v2.0 + 11 v3.0 + 9 v4.0 + 4 v4.1 + 4 v4.2 + 4 v4.3 + 15 v4.4)
 - Average duration: ~19 min
 - Total execution time: ~19 hours
 
@@ -53,6 +53,7 @@ See PROJECT.md Key Decisions table for full history.
 - 31-01: Forced curation overflow strategy at 50-cap (display all, user removes one); auto-continue skips promotion with message; tags inferred from colonization decision at promotion time
 - 31-03: Queen-mediated delegation via SPAWN REQUEST blocks (not direct Task tool); max 2 sub-spawns per wave; depth limit 3->2 across all specs and spawn-check; spawn_tree in COLONY_STATE.json
 - 32-01: Architect-ant reused as archivist (caste reuse pattern from Phase 30); .planning/ added to exclusion list; conservative confidence default (LOW when uncertain)
+- 32-02: No decisions needed -- documentation plan executed exactly as specified
 
 ### Pending Todos
 
@@ -69,9 +70,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-05
-Stopped at: Completed 32-01-PLAN.md
+Stopped at: v4.4 milestone complete -- all 15 plans executed
 Resume file: None
 
 ---
 
-*State updated: 2026-02-05 after 32-01-PLAN.md execution*
+*State updated: 2026-02-05 after 32-02-PLAN.md execution -- v4.4 milestone complete*

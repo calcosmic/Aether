@@ -121,7 +121,7 @@ Plans:
 
 Plans:
 - [x] 32-01-PLAN.md — Organizer/archivist command (/ant:organize) spawning architect-ant for codebase hygiene report
-- [ ] 32-02-PLAN.md — Pheromone user documentation with practical scenarios for FOCUS, REDIRECT, FEEDBACK
+- [x] 32-02-PLAN.md — Pheromone user documentation with practical scenarios for FOCUS, REDIRECT, FEEDBACK
 
 **Success Criteria:**
 1. An organizer/archivist ant can be spawned that reports stale files, dead code, and orphaned configs -- output is report-only with no deletions or modifications
@@ -138,7 +138,7 @@ Plans:
 | 29 | Colony Intelligence & Quality Signals | 3 plans | ✓ Complete |
 | 30 | Automation & New Capabilities | 3 plans | ✓ Complete |
 | 31 | Architecture Evolution | 3 plans | ✓ Complete |
-| 32 | Polish & Safety Rails | 2 plans | Pending |
+| 32 | Polish & Safety Rails | 2 plans | Complete |
 
 ## Coverage
 
