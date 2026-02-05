@@ -10,12 +10,12 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 ## Current Position
 
 Milestone: v4.4 Colony Hardening & Real-World Readiness
-Phase: 30 of 32 (Automation & New Capabilities) — complete, verified
-Plan: 3 of 3 complete (30-01 + 30-02 + 30-03 done, all waves complete)
-Status: Phase complete — verified 5/5 must-haves, requirements marked Complete
-Last activity: 2026-02-05 -- Phase 30 executed (3 plans, 3 waves), verified, requirements updated
+Phase: 31 of 32 (Architecture Evolution) — in progress
+Plan: 1 of 3 complete (31-01 done)
+Status: In progress
+Last activity: 2026-02-05 -- Completed 31-01-PLAN.md (global learnings infrastructure)
 
-Progress: [#############-------] 67% (v4.4: 4/6 phases, 10/10 plans done)
+Progress: [##############------] 70% (v4.4: 4/6 phases, 11/13 plans done)
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -29,7 +29,7 @@ Progress: [#############-------] 67% (v4.4: 4/6 phases, 10/10 plans done)
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 92 (44 v1.0 + 6 v2.0 + 11 v3.0 + 9 v4.0 + 4 v4.1 + 4 v4.2 + 4 v4.3 + 10 v4.4)
+- Total plans completed: 93 (44 v1.0 + 6 v2.0 + 11 v3.0 + 9 v4.0 + 4 v4.1 + 4 v4.2 + 4 v4.3 + 11 v4.4)
 - Average duration: ~19 min
 - Total execution time: ~19 hours
 
@@ -50,6 +50,7 @@ See PROJECT.md Key Decisions table for full history.
 - 30-01: Reviewer reuses watcher-ant.md (no new caste); debugger reuses builder-ant.md with PATCH constraints; retry threshold < 1 (one retry before debugger); LIGHTWEIGHT + single-worker skip reviewer; CRITICAL-only rebuild (max 2); criticality inference for unfixable tasks
 - 30-02: Between-wave urgent recs separate from end-of-build max-3; recommendations must be senior-engineer-style observations not commands; tech debt report persisted to .aether/data/tech-debt-report.md AND displayed; Step 2.5 strictly conditional on no-next-phase
 - 30-03: Color reference as HTML comment block; all ANSI codes strictly in bash -c printf; basic 8-color only (30-37, 1;3X); Queen bold yellow for headers; errors always red regardless of caste
+- 31-01: Forced curation overflow strategy at 50-cap (display all, user removes one); auto-continue skips promotion with message; tags inferred from colonization decision at promotion time
 
 ### Pending Todos
 
@@ -66,9 +67,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-05
-Stopped at: Phase 30 complete and verified — ready for Phase 31 planning
+Stopped at: Completed 31-01-PLAN.md (global learnings infrastructure)
 Resume file: None
 
 ---
 
-*State updated: 2026-02-05 after Phase 30 verification passed*
+*State updated: 2026-02-05 after 31-01 plan execution*
