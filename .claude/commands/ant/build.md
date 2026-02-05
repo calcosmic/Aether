@@ -403,7 +403,7 @@ e. **After worker returns:**
 
    - Store worker result (report content, success/failure, task IDs) in `worker_results` for use by subsequent workers and Step 5.5.
 
-f. **If worker failed and retry count < 2:**
+f. **If worker failed and retry count < 1:**
    - Log retry:
      ```
      bash .aether/aether-utils.sh activity-log "ERROR" "{caste}-ant" "retry {N}: {error_summary}"
@@ -414,10 +414,67 @@ f. **If worker failed and retry count < 2:**
      ```
    - Increment retry counter for this task
 
-g. **If worker failed and retry count >= 2:**
-   - Display: `"Task failed after 2 retries. Continuing with remaining tasks."`
-   - Mark task as failed in tracking
-   - Continue to next worker
+f2. **If worker retry also failed (retry count >= 1) -- Spawn Debugger Ant:**
+
+   Log debugger spawn:
+   ```
+   bash .aether/aether-utils.sh activity-log "SPAWN" "queen" "debugger-ant for: {task_description}"
+   ```
+
+   Read `.aether/workers/builder-ant.md`. Spawn debugger via Task tool with `subagent_type="general-purpose"`:
+
+   ```
+   --- WORKER SPEC ---
+   {full contents of .aether/workers/builder-ant.md}
+
+   --- ACTIVE PHEROMONES ---
+   {pheromone block from Step 3}
+
+   --- TASK ---
+   You are being spawned as a DEBUGGER ANT.
+
+   A worker failed its task twice. Your job: diagnose the failure and fix it.
+
+   Failed task: {task_description}
+   Failed caste: {caste}
+   First attempt error: {error_from_attempt_1}
+   Second attempt error: {error_from_attempt_2}
+   Files involved: {files_from_worker_report}
+
+   Your mission:
+   1. Read the files involved in the failure
+   2. DIAGNOSE the root cause -- understand WHY it failed, not just WHAT failed
+   3. Identify the MINIMAL patch to fix the issue
+   4. Apply the fix using Write/Edit tools
+   5. Run verification (syntax check, import check, tests if available)
+   6. Report what you found and what you changed
+
+   CONSTRAINTS:
+   - PATCH the existing code. Do NOT rewrite from scratch.
+   - Preserve the original worker's approach and intent.
+   - If the failure is in a test, fix the code to pass the test (not the other way around).
+   - If you cannot diagnose the issue, report UNDIAGNOSABLE with your analysis.
+
+   Produce a structured report with:
+   - diagnosis: root cause description
+   - fix_applied: boolean
+   - files_modified: array of paths
+   - verification: pass/fail with details
+   ```
+
+g. **Post-debugger logic (Queen handles):**
+
+   - If debugger reports `fix_applied == true`:
+     - Mark task as completed
+     - Log: `bash .aether/aether-utils.sh activity-log "COMPLETE" "debugger-ant" "Fixed: {diagnosis}"`
+     - Display: "Debugger fixed: {diagnosis}"
+
+   - If debugger reports `fix_applied == false` or "UNDIAGNOSABLE":
+     - Infer task criticality: if the failed task directly maps to a phase success criterion, treat as critical (display warning to user); if supporting task, skip and continue
+     - Log: `bash .aether/aether-utils.sh activity-log "ERROR" "debugger-ant" "Could not fix: {diagnosis}"`
+     - Display: "Debugger could not fix: {diagnosis}. Task {skipped|flagged for review}."
+     - Mark task as failed
+     - Continue to next worker
 
 h. **Post-Wave Conflict Check (best-effort):**
    After all workers in this wave return, read the activity log entries for this wave's workers:
