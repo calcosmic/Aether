@@ -76,9 +76,12 @@ Plans:
 **Goal**: Colony automates post-build quality gates, surfaces actionable recommendations, and provides visual feedback during execution
 **Depends on**: Phase 29 (calibrated scoring prerequisite for meaningful auto-review)
 **Requirements**: AUTO-01, AUTO-02, AUTO-03, AUTO-04, AUTO-05, INT-06
+**Plans:** 3 plans
 
 Plans:
-- [ ] TBD
+- [ ] 30-01-PLAN.md — Auto-spawned reviewer after each wave + debugger on retry failure in build.md
+- [ ] 30-02-PLAN.md — Pheromone recommendations in build output + tech debt report at project completion
+- [ ] 30-03-PLAN.md — ANSI-colored visual output for build and colonize commands
 
 **Success Criteria:**
 1. After builder waves complete, a reviewer ant auto-spawns in advisory mode -- findings are displayed to user but do not block progress, only CRITICAL severity triggers a rebuild (max 2 iterations)
@@ -127,8 +130,8 @@ Plans:
 |-------|------|-------|--------|
 | 27 | Bug Fixes & Safety Foundation | 2 plans | ✓ Complete |
 | 28 | UX & Friction Reduction | 2 plans | ✓ Complete |
-| 29 | Colony Intelligence & Quality Signals | 3 plans | Planned |
-| 30 | Automation & New Capabilities | TBD | Pending |
+| 29 | Colony Intelligence & Quality Signals | 3 plans | ✓ Complete |
+| 30 | Automation & New Capabilities | 3 plans | Planned |
 | 31 | Architecture Evolution | TBD | Pending |
 | 32 | Polish & Safety Rails | TBD | Pending |
 
@@ -187,4 +190,4 @@ Phases with standard patterns (skip research):
 ---
 
 _Roadmap created: 2026-02-04_
-_Last updated: 2026-02-04 — Phase 29 planned_
+_Last updated: 2026-02-05 — Phase 30 planned_
