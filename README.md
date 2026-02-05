@@ -1,4 +1,4 @@
-# 🐜 AETHER v4.3
+# 🐜 AETHER v5.0
 
 <div align="center">
   <img src="aether-logo.png" alt="Aether Logo" width="600">
@@ -35,6 +35,59 @@ Worker Ants spawn other Worker Ants through bio-inspired pheromone signaling, ca
 ```
 
 When a Worker Ant encounters a capability gap, it spawns a specialist. The colony adapts to the problem.
+
+---
+
+## 📦 Installation
+
+### Via npm (recommended)
+
+```bash
+npm install -g aether-colony
+```
+
+This installs the `aether` CLI and automatically sets up:
+- **Commands** → `~/.claude/commands/ant/` (14 Claude Code skill prompts)
+- **Runtime** → `~/.aether/` (worker specs, utility scripts, docs)
+
+### Manual install
+
+```bash
+git clone https://github.com/callumcowie/Aether.git
+cd Aether
+node bin/cli.js install
+```
+
+### Verify installation
+
+```bash
+aether version          # Shows installed version
+ls ~/.claude/commands/ant/  # 14 command files
+ls ~/.aether/workers/       # 6 worker specs
+```
+
+### Uninstall
+
+```bash
+aether uninstall        # Removes global files, preserves learnings
+npm uninstall -g aether-colony
+```
+
+Per-project `.aether/data/` directories are never touched by uninstall.
+
+---
+
+## 🚀 Quick Start
+
+Open Claude Code in any repo and run:
+
+```bash
+/ant:init "Build a REST API with authentication"
+/ant:plan
+/ant:build 1
+```
+
+The colony will self-organize: a Route-setter plans the work, Builders implement it, Watchers validate it, and the Queen orchestrates with live visibility.
 
 ---
 
@@ -107,7 +160,7 @@ Phase Boundary ─────────────────── Phase B
 
 ### 5. 🔧 Hybrid Architecture
 
-Prompts handle reasoning and orchestration. A thin shell utility layer (`aether-utils.sh`, ~250 lines, 16 subcommands) handles deterministic operations that LLMs get wrong: pheromone decay math, state validation, spawn limit enforcement, memory compression, error tracking, activity logging.
+Prompts handle reasoning and orchestration. A thin shell utility layer (`aether-utils.sh`, ~370 lines, 18 subcommands) handles deterministic operations that LLMs get wrong: pheromone decay math, state validation, spawn limit enforcement, memory compression, error tracking, activity logging.
 
 ### 6. 👁️ Live Visibility
 
@@ -119,42 +172,7 @@ After every build, the colony automatically extracts phase learnings from comple
 
 ---
 
-## 📈 Current Status
-
-**v4.3** — Live Visibility & Auto-Learning (2026-02-04)
-
-**What's built:**
-- 🐜 12 commands as Claude Code skill prompts
-- 🐜 6 worker ant specs with pheromone math, spawning scenarios, enforcement gates, mandatory activity logging
-- 🔧 `aether-utils.sh` — ~250-line utility wrapper with 16 subcommands
-- 💾 6 JSON state files with atomic writes and file locking
-- 🚧 Spawn limit enforcement (max 5 workers, max depth 3) via shell validation gates
-- 🧪 Pheromone quality enforcement via shell validation before writes
-- ✅ Post-action validation checklists in all worker specs
-- 📊 Bayesian spawn confidence tracking per caste
-- 🔄 Auto-emitted pheromones at phase boundaries
-- 👁️ Live worker visibility — Queen displays activity log between spawns
-- 🧠 Auto-learning extraction — learnings captured automatically after every build
-- 🔖 Git checkpoints before phase execution
-- 📋 Event logging, error tracking with pattern flagging
-
-**What's not proven:**
-- The system has not been run end-to-end on a real project. Individual components (utility subcommands, state management, command structure) are tested and working. But no colony has actually self-organized — no `/ant:init` with a real goal, no `/ant:build` spawning live workers, no pheromone-guided emergence observed in practice.
-- LLM compliance with enforcement gates (spawn-check, pheromone-validate, post-action validation) is specified in prompt text but depends on whether Claude actually follows those instructions at runtime.
-
----
-
-## 🚀 Usage
-
-### Quick Start
-
-```bash
-/ant:init "Build a REST API with PostgreSQL"
-/ant:plan
-/ant:build 1
-```
-
-### 🐜 All Commands
+## 🐜 All Commands
 
 | Command | Purpose |
 |---------|---------|
@@ -170,6 +188,56 @@ After every build, the colony automatically extracts phase learnings from comple
 | `/ant:continue` | ▶️ Approve phase, advance to next |
 | `/ant:pause-colony` | ⏸️ Save state for session break |
 | `/ant:resume-colony` | ▶️ Restore from pause |
+| `/ant:organize` | 🧹 Codebase hygiene report |
+| `/ant` | ❓ Show help and overview |
+
+---
+
+## 🗂️ File Structure
+
+```
+~/.claude/commands/ant/        # Global commands (installed once)
+    ├── ant.md                 # Help overview
+    ├── init.md                # Initialize colony + create state files
+    ├── colonize.md            # Analyze codebase, persist findings
+    ├── plan.md                # Generate plan (environment-aware)
+    ├── build.md               # Execute phase (Queen-driven, live visibility)
+    ├── continue.md            # Advance phase (skip if auto-learned)
+    ├── focus.md               # Emit FOCUS signal
+    ├── redirect.md            # Emit REDIRECT signal
+    ├── feedback.md            # Emit FEEDBACK signal
+    ├── status.md              # Colony status dashboard
+    ├── phase.md               # Phase details
+    ├── pause-colony.md        # Save session state
+    ├── resume-colony.md       # Restore session state
+    └── organize.md            # Codebase hygiene report
+
+~/.aether/                     # Global runtime (installed once)
+├── aether-utils.sh            # ~370-line utility wrapper (18 subcommands)
+├── workers/
+│   ├── colonizer-ant.md       # 🔍 Codebase exploration spec
+│   ├── route-setter-ant.md    # 🗺️ Phase planning spec
+│   ├── builder-ant.md         # 🔨 Code implementation spec
+│   ├── watcher-ant.md         # 👁️ Validation/testing spec
+│   ├── scout-ant.md           # 🔎 Research/information spec
+│   └── architect-ant.md       # 📐 Knowledge synthesis spec
+├── utils/
+│   ├── atomic-write.sh        # Corruption-safe writes
+│   └── file-lock.sh           # File locking for concurrent access
+├── docs/
+│   └── pheromones.md          # Pheromone user guide
+├── QUEEN_ANT_ARCHITECTURE.md  # Architecture spec
+└── learnings.json             # Cross-project knowledge
+
+.aether/data/                  # Per-project state (created by /ant:init)
+├── COLONY_STATE.json          # Colony goal, state, workers, spawn outcomes
+├── pheromones.json            # Decaying pheromone signals
+├── PROJECT_PLAN.json          # Phase plan with tasks and success criteria
+├── errors.json                # Error log + flagged patterns
+├── events.json                # Event log (capped at 100)
+├── memory.json                # Phase learnings + decisions
+└── activity.log               # Live worker progress (per-phase)
+```
 
 ---
 
@@ -189,52 +257,12 @@ Aether translates this to AI agents:
 
 ---
 
-## 🗂️ File Structure
-
-```
-.aether/
-├── 🔧 aether-utils.sh            # ~250-line utility wrapper (16 subcommands)
-├── 💾 data/
-│   ├── COLONY_STATE.json          # Colony state, workers, spawn outcomes
-│   ├── pheromones.json            # Decaying pheromone signals
-│   ├── PROJECT_PLAN.json          # Phase plan with tasks and success criteria
-│   ├── errors.json                # Error log + flagged patterns
-│   ├── events.json                # Event log (capped at 100)
-│   ├── memory.json                # Phase learnings + decisions
-│   └── activity.log               # Live worker progress (per-phase)
-├── ⚙️ utils/
-│   ├── atomic-write.sh            # Corruption-safe writes
-│   └── file-lock.sh               # File locking for concurrent access
-├── 🐜 workers/
-│   ├── colonizer-ant.md           # 🔍 Codebase exploration spec
-│   ├── route-setter-ant.md        # 🗺️ Phase planning spec
-│   ├── builder-ant.md             # 🔨 Code implementation spec
-│   ├── watcher-ant.md             # 👁️ Validation/testing spec (4 specialist modes)
-│   ├── scout-ant.md               # 🔎 Research/information spec
-│   └── architect-ant.md           # 📐 Knowledge synthesis spec
-└── HANDOFF.md                     # Session handoff (for pause/resume)
-.claude/commands/ant/
-    ├── ant.md                     # Help overview
-    ├── init.md                    # Initialize colony + create state files
-    ├── colonize.md                # Analyze codebase, persist findings
-    ├── plan.md                    # Generate plan (environment-aware)
-    ├── build.md                   # Execute phase (Queen-driven, live visibility)
-    ├── continue.md                # Advance phase (skip if auto-learned)
-    ├── focus.md                   # Emit FOCUS signal
-    ├── redirect.md                # Emit REDIRECT signal
-    ├── feedback.md                # Emit FEEDBACK signal
-    ├── status.md                  # Colony status dashboard
-    ├── phase.md                   # Phase details
-    ├── pause-colony.md            # Save session state
-    └── resume-colony.md           # Restore session state
-```
-
----
-
 ## 📜 Version History
 
 | Version | Name | Date | Highlights |
 |---------|------|------|------------|
+| **v5.0** | NPM Distribution | 2026-02-05 | 📦 `npm install -g`, global/local split, CLI |
+| **v4.4** | Field-Tested & Polished | 2026-02-05 | 32 field notes addressed, adaptive complexity, spawn tree |
 | **v4.3** | Live Visibility & Auto-Learning | 2026-02-04 | 👁️ Activity log, Queen-driven execution, 🧠 auto-learning |
 | **v4.2** | Colony Hardening | 2026-02-03 | Per-caste pheromone math, watcher execution, worker progress |
 | **v4.1** | Cleanup & Enforcement | 2026-02-03 | Orphan audit, spawn limits, pheromone validation |

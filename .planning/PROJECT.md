@@ -108,7 +108,14 @@ If this works, everything else follows. If this fails, nothing else matters. The
 
 ### Active
 
-No active milestone. Run `/cds:new-milestone` to start next version.
+*(v5.0 — NPM Distribution — 2026-02-05)*
+
+- ✓ **Path Migration** — All 14 commands and 6 worker specs reference `~/.aether/` for global resources, `.aether/data/` for per-project state — v5.0
+- ✓ **DATA_DIR Fix** — `aether-utils.sh` uses `$PWD/.aether/data` instead of `$SCRIPT_DIR/data` — v5.0
+- ✓ **NPM Package** — `package.json`, `bin/cli.js` with install/version/uninstall, `.npmignore` — v5.0
+- ✓ **Postinstall** — `npm install -g` auto-copies commands to `~/.claude/commands/ant/` and runtime to `~/.aether/` — v5.0
+- ✓ **Cosmetic Fixes** — continue.md learnings_extracted guard, pheromones.md source field, validate-state mode fields — v5.0
+- ✓ **Documentation** — README.md with install/uninstall instructions, file structure updated for global/local split — v5.0
 
 ### Out of Scope
 
@@ -125,8 +132,8 @@ No active milestone. Run `/cds:new-milestone` to start next version.
 - **Code for reasoning/orchestration** — Prompts handle decisions; code handles math
 - **GUI/web dashboard** — CLI-only, Claude Code native
 - **Persistent daemon processes** — Against Claude-native architecture
-- **NPM packaging/distribution** — Deferred until core system stabilizes (field note 16)
-- **Deployment model for external repos** — Deferred until core system stabilizes (field note 6)
+- ~~**NPM packaging/distribution**~~ — Shipped in v5.0
+- ~~**Deployment model for external repos**~~ — Shipped in v5.0 (global install + per-project state)
 
 ## Context
 

@@ -1,0 +1,34 @@
+# Planning and development
+.planning/
+.claude/
+.aether/
+.ralph/
+.cache/
+.git/
+
+# Per-project state (never ship)
+*.log
+*.session
+*.session.json
+
+# Dev files
+.DS_Store
+.gitignore
+.ralphrc.example
+.ralphrc
+logo_block.txt
+logo_block_color.txt
+aether-logo.png
+.continue-here.md
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.egg-info/
+venv/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp

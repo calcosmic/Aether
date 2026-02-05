@@ -105,3 +105,7 @@ logs/
 # Session files
 *.session
 *.session.json
+
+# NPM
+node_modules/
+*.tgz
