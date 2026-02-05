@@ -385,6 +385,68 @@ Use the Write tool to write the updated memory.json.
 
 If the `events` array exceeds 100 entries, remove the oldest entries to keep only 100. Write the updated events.json.
 
+### Step 5.5: Inject Global Learnings
+
+After persisting colonization findings, inject relevant global learnings as FEEDBACK pheromones.
+
+1. **Check for global learnings file:**
+   Run:
+   ```
+   bash .aether/aether-utils.sh learning-inject "<tech_keywords>"
+   ```
+
+   Where `<tech_keywords>` is a comma-separated list of technology keywords extracted from the colonization findings just persisted in Step 5. Derive these from:
+   - Languages detected (e.g., "typescript", "python", "go")
+   - Frameworks detected (e.g., "react", "express", "django")
+   - Domain keywords (e.g., "api", "frontend", "cli")
+
+   Example: for a TypeScript React project, run:
+   ```
+   bash .aether/aether-utils.sh learning-inject "typescript,react,frontend"
+   ```
+
+   This returns JSON: `{"ok":true,"result":{"learnings":[...],"count":N}}`
+
+2. **If count is 0 or learnings array is empty:** Display "No matching global learnings found." and skip to Step 6.
+
+3. **For each relevant learning returned:**
+   Read `.aether/data/pheromones.json` (if not already in memory from Step 2).
+
+   Append a FEEDBACK pheromone to the `signals` array:
+   ```json
+   {
+     "id": "global_inject_<unix_timestamp>_<4_random_hex>",
+     "type": "FEEDBACK",
+     "content": "Global learning: <learning.content>",
+     "strength": 0.5,
+     "half_life_seconds": 86400,
+     "created_at": "<ISO-8601 UTC>",
+     "source": "global:inject",
+     "auto": true
+   }
+   ```
+
+   Before appending, validate the content:
+   ```
+   bash .aether/aether-utils.sh pheromone-validate "Global learning: <learning.content>"
+   ```
+   - If pass:false -> skip this learning (content too short)
+   - If pass:true -> append to signals array
+   - If command fails -> append anyway (fail-open)
+
+4. **Write updated pheromones.json** with the injected FEEDBACK pheromones.
+
+5. **Display injected learnings** using Bash tool (bold yellow -- Queen color):
+   ```
+   bash -c 'printf "\n\e[1;33m%-14s\e[0m Injected %d global learnings as FEEDBACK pheromones:\n" "[QUEEN]" {count}'
+   ```
+   For each injected learning:
+   ```
+   bash -c 'printf "  \e[33mFEEDBACK\e[0m (0.5, 24h): %s\n" "<first 80 chars of learning content>"'
+   ```
+
+   Note: 24-hour half-life (vs normal 6-hour FEEDBACK) ensures learnings persist through the planning phase.
+
 ### Step 6: Display Results
 
 Display the colonization results. For STANDARD/FULL mode, display the unified synthesis report from Step 4.5 (NOT individual colonizer reports — those are stored in `.aether/temp/` for reference). For LIGHTWEIGHT mode, display the single colonizer's report from Step 4-LITE.
@@ -397,6 +459,7 @@ bash -c 'printf "  \e[32m✓\e[0m Step 2.5: Detect Complexity\n"'
 bash -c 'printf "  \e[32m✓\e[0m Step 3: Update State\n"'
 bash -c 'printf "  \e[32m✓\e[0m Step 4: Colonize (%s mode)\n" "{mode}"'
 bash -c 'printf "  \e[32m✓\e[0m Step 5: Persist Findings\n"'
+bash -c 'printf "  \e[32m✓\e[0m Step 5.5: Inject Global Learnings\n"'
 bash -c 'printf "  \e[32m✓\e[0m Step 6: Display Results\n\n"'
 ```
 
