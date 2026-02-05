@@ -232,124 +232,43 @@ Include check results at the end of your report:
 ──────────────────────────
 📋🐜 Post-Action Validation
   ✅ State: {pass|fail}
-  🐜 Spawns: {N}/5 (depth {your_depth}/3)
+  🐜 Spawns: {N}/5 (depth {your_depth}/2)
   📋 Format: {pass|fail}
   📜 Activity Log: {N} entries written
 ──────────────────────────
 ```
 
-## You Can Spawn Other Ants
+## Requesting Sub-Spawns
 
-When you encounter a capability gap, spawn a specialist using the Task tool.
-
-**Available castes and their spec files:**
-- **colonizer** `.aether/workers/colonizer-ant.md` — Explore and index codebase structure
-- **route-setter** `.aether/workers/route-setter-ant.md` — Plan phases and break down goals
-- **builder** `.aether/workers/builder-ant.md` — Implement code and run commands
-- **watcher** `.aether/workers/watcher-ant.md` — Test, validate, quality check
-- **scout** `.aether/workers/scout-ant.md` — Research, find information, read docs
-- **architect** `.aether/workers/architect-ant.md` — Synthesize knowledge, extract patterns
-
-### Spawn Gate (Mandatory)
-
-Before spawning, you MUST pass the spawn-check gate. Use the Bash tool to run:
-```
-bash .aether/aether-utils.sh spawn-check <your_depth>
-```
-
-Where `<your_depth>` is your current spawn depth (1 if spawned by the build command, 2 if spawned by another ant, 3 if spawned by a sub-ant).
-
-This returns JSON: `{"ok":true,"result":{"pass":true|false,...}}`.
-
-**If `pass` is true:**
-```
-📋🐜 → {caste_emoji} Spawning {caste}-ant (depth {N}/{max}, workers {N}/{max})
-```
-Proceed to the confidence check and then spawn.
-
-**If `pass` is false: DO NOT SPAWN.** Report the blocked spawn to your parent:
-```
-📋🐜 ⛔ Spawn blocked: {reason} (active_workers: {N}, depth: {N})
-Task that needed spawning: {description}
-```
-
-If the command fails, DO NOT SPAWN. Treat failure as a blocked spawn.
-
-**To spawn:**
-1. Use the Read tool to read the caste's spec file (e.g. `.aether/workers/scout-ant.md`)
-2. Use the Task tool with `subagent_type="general-purpose"`
-3. The prompt MUST include, in this order:
-   - `--- WORKER SPEC ---` followed by the **full contents** of the spec file you just read
-   - `--- ACTIVE PHEROMONES ---` followed by the pheromone block (copy from your context)
-   - `--- TASK ---` followed by the task description, colony goal, and any constraints
-4. In the TASK section, include: `You are at depth <your_depth + 1>.`
-
-This ensures every spawned ant gets the full spec with sensitivity tables, workflow, output format, AND this spawning guide — so it can spawn further ants recursively.
-
-### Spawn Confidence Check
-
-Before spawning, read `.aether/data/COLONY_STATE.json` and check `spawn_outcomes` for the target caste:
+If you encounter a sub-task that is genuinely INDEPENDENT from your main task and would benefit from a separate specialist worker, include a SPAWN REQUEST block in your output:
 
 ```
-confidence = alpha / (alpha + beta)
+SPAWN REQUEST:
+  caste: colonizer-ant
+  reason: "Need to map codebase structure before creating phase plan"
+  task: "Map directories src/api/, src/services/, src/models/ and identify conventions"
+  context: "Parent task is phase planning. Codebase mapping is independent."
+  files: ["src/api/", "src/services/", "src/models/"]
 ```
 
-**Interpretation:**
-- confidence >= 0.5: Spawn freely -- this caste has a positive track record
-- confidence 0.3-0.5: Spawn with caution -- consider if another caste could handle the task
-- confidence < 0.3: Prefer an alternative caste -- this caste has a poor track record
+The Queen will read your SPAWN REQUEST and spawn a sub-worker on your behalf after the current wave completes.
 
-**Example:**
-```
-spawn_outcomes.scout: {alpha: 3, beta: 4}
-confidence = 3 / (3 + 4) = 0.43
+**Rules:**
+- Only use SPAWN REQUEST for truly independent sub-tasks you CANNOT handle inline
+- If you can handle the task yourself, DO handle it yourself
+- Maximum 1-2 SPAWN REQUESTs per worker -- do not fragment your work
+- You are at depth {your_depth}. If your depth is 2, you CANNOT include SPAWN REQUESTs -- handle everything inline
+- The sub-worker will inherit your pheromone context (FOCUS/REDIRECT)
 
-Scout has marginal confidence. Consider: could a colonizer handle this
-research task instead? If the task specifically needs web research (scout
-specialty), spawn anyway. If it's codebase exploration, use a colonizer.
-```
+**Available castes to request:**
+- `builder-ant` -- Implement code, run commands
+- `watcher-ant` -- Test, validate, quality check
+- `colonizer-ant` -- Explore and index codebase
+- `scout-ant` -- Research, find information
+- `architect-ant` -- Synthesize knowledge, extract patterns
+- `route-setter-ant` -- Plan and break down work
 
-This is advisory, not blocking. You always retain autonomy to spawn any caste based on task requirements.
-
-### Spawning Scenario
-
-Situation: You're planning a new feature phase and need to understand the current codebase structure before you can assign tasks to the right areas.
-
-Decision process:
-1. Run: `bash .aether/aether-utils.sh pheromone-effective 1.0 0.6` -> effective_signal: 0.60 -> PRIORITIZE
-2. New goal requires planning — but you need codebase context first
-3. Mapping the codebase is an exploration task — spawn a colonizer
-4. You have 4 spawns remaining (max 5)
-
-Spawn prompt example:
-
-Use the Task tool with `subagent_type="general-purpose"` and this prompt:
-
-```
---- WORKER SPEC ---
-{Read and paste the FULL contents of .aether/workers/colonizer-ant.md here}
-
---- ACTIVE PHEROMONES ---
-{Copy the ACTIVE PHEROMONES block from your context here}
-
---- TASK ---
-Map the current project structure relevant to the notifications feature.
-
-Colony goal: Plan the notifications feature implementation phase
-Constraints:
-- Map directories: src/api/, src/services/, src/models/
-- Identify: existing notification-related code, event system patterns
-- Document where new notification code should live based on conventions
-- Return findings as structured Colonizer Ant Report
-
-Phase context: I'm planning the notifications feature but need to
-understand the existing project structure and conventions before I can
-create a phase plan with correctly scoped tasks and caste assignments.
-```
-
-The spawned colonizer receives its full spec (with sensitivity tables, pheromone math, combination effects, feedback interpretation, event awareness, AND this spawning guide) — enabling it to spawn further ants if needed (e.g., spawning a scout to research notification design patterns).
-
-**Spawn limits (enforced by spawn-check):**
-- Max 5 active workers colony-wide
-- Max depth 3 (ant -> sub-ant -> sub-sub-ant, no deeper)
-- If spawn-check fails, don't spawn -- report the gap to parent
+**Spawn limits:**
+- Max depth 2 (Queen -> you -> sub-worker via Queen, no deeper)
+- Maximum 2 sub-spawns per wave (enforced by Queen)
+- If you are at depth 2, any SPAWN REQUEST will be ignored by the Queen

@@ -113,12 +113,14 @@ EOF
         [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "COLONY_STATE.json not found"
         json_ok "$(jq '
           def chk(f;t): if has(f) then (if (.[f]|type) as $a | t | any(. == $a) then "pass" else "fail: \(f) is \(.[f]|type), expected \(t|join("|"))" end) else "fail: missing \(f)" end;
+          def opt(f;t): if has(f) then (if (.[f]|type) as $a | t | any(. == $a) then "pass" else "fail: \(f) is \(.[f]|type), expected \(t|join("|"))" end) else "pass" end;
           {file:"COLONY_STATE.json", checks:[
             chk("goal";["null","string"]),
             chk("state";["string"]),
             chk("current_phase";["number"]),
             chk("workers";["object"]),
-            chk("spawn_outcomes";["object"])
+            chk("spawn_outcomes";["object"]),
+            opt("spawn_tree";["object"])
           ]} | . + {pass: ([.checks[] | select(. == "pass")] | length) == (.checks | length)}
         ' "$DATA_DIR/COLONY_STATE.json")"
         ;;
@@ -242,13 +244,13 @@ EOF
       (.workers | to_entries | map(select(.value != "idle")) | length) as $active |
       ($d | tonumber) as $depth |
       {
-        pass: ($active < 5 and $depth < 3),
+        pass: ($active < 5 and $depth < 2),
         active_workers: $active,
         max_workers: 5,
         current_depth: $depth,
-        max_depth: 3
+        max_depth: 2
       } | if .pass == false then
-        . + {reason: (if $active >= 5 then "worker_limit" elif $depth >= 3 then "depth_limit" else "unknown" end)}
+        . + {reason: (if $active >= 5 then "worker_limit" elif $depth >= 2 then "depth_limit" else "unknown" end)}
       else . end
     ' "$DATA_DIR/COLONY_STATE.json")"
     ;;
