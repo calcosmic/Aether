@@ -9,6 +9,33 @@ The phase to build is: `$ARGUMENTS`
 
 ## Instructions
 
+<!-- Color Reference (ANSI 8-color codes for Bash tool printf/echo)
+  COLOR_QUEEN="\e[1;33m"        # Bold yellow
+  COLOR_COLONIZER="\e[36m"      # Cyan
+  COLOR_ROUTESETTER="\e[33m"    # Yellow
+  COLOR_BUILDER="\e[32m"        # Green
+  COLOR_WATCHER="\e[35m"        # Magenta
+  COLOR_SCOUT="\e[34m"          # Blue
+  COLOR_ARCHITECT="\e[37m"      # White/bright
+  COLOR_DEBUGGER="\e[31m"       # Red
+  COLOR_REVIEWER="\e[34m"       # Blue (watcher variant)
+  COLOR_RESET="\e[0m"           # Reset
+
+  Caste-to-code mapping for printf:
+    builder     -> 32 (green)
+    watcher     -> 35 (magenta)
+    colonizer   -> 36 (cyan)
+    scout       -> 34 (blue)
+    architect   -> 37 (white)
+    route-setter -> 33 (yellow)
+    debugger    -> 31 (red)
+    reviewer    -> 34 (blue)
+
+  Usage: All colored output MUST go through Bash tool calls (printf/echo).
+  The Queen's own markdown text between bash calls remains plain.
+  Use basic 8-color codes (30-37, bold 1;3X) only -- universally supported.
+-->
+
 ### Step 1: Validate
 
 If `$ARGUMENTS` is empty or not a number:
@@ -333,17 +360,19 @@ This is a backup check. If the Phase Lead followed the CONFLICT PREVENTION RULE 
 
 **4. For each wave in the plan:**
 
-Display wave header:
+Display wave header using Bash tool (bold yellow -- Queen color):
 ```
---- Wave {N}/{total_waves} ---
+bash -c 'printf "\e[1;33m--- Wave %d/%d ---\e[0m\n" {N} {total_waves}'
 ```
 
 For each worker assignment in this wave:
 
 a. **Announce spawn:**
+   Use Bash tool with caste-specific color (see Color Reference above):
    ```
-   Spawning {caste_emoji} {caste}-ant for: {task_description}...
+   bash -c 'printf "\e[{caste_color_code}m%-14s\e[0m %s\n" "Spawning {caste}..." "{task_description}"'
    ```
+   Where `{caste_color_code}` maps from the Color Reference (e.g., builder=32, watcher=35, colonizer=36).
 
 b. **Log START:**
    ```
@@ -390,16 +419,22 @@ e. **After worker returns:**
      bash .aether/aether-utils.sh activity-log-read "{caste}-ant"
      ```
    - Increment `completed_workers`
-   - Display condensed summary:
+   - Display condensed summary using Bash tool with caste-specific color (see Color Reference):
+     For successful completion:
      ```
-     {caste_emoji} {caste}-ant: {task_description}
-       Result: {COMPLETE or ERROR}
-       Files: {count of created/modified from worker report}
-       {if error: brief error description}
+     bash -c 'printf "\e[{caste_color_code}m%-12s\e[0m %s ... \e[32mCOMPLETE\e[0m\n" "[{CASTE}]" "{task_description}"'
+     ```
+     For error (always red regardless of caste):
+     ```
+     bash -c 'printf "\e[31m%-12s\e[0m %s ... \e[31mERROR\e[0m\n" "[{CASTE}]" "{task_description}"'
+     ```
+     Where `{caste_color_code}` maps from the Color Reference (e.g., builder=32, watcher=35).
 
-       {progress_bar} {completed_workers}/{total_workers} workers complete
+     Display progress bar with caste-colored fill:
      ```
-     Progress bar: `filled = round(completed / total * 20)` filled characters, rest empty, total width 20.
+     bash -c 'printf "\e[{caste_color_code}m[%s%s]\e[0m %d/%d workers complete\n" "{filled}" "{empty}" {completed_workers} {total_workers}'
+     ```
+     Where `filled` = `round(completed / total * 20)` `#` characters, `empty` = remaining `.` characters, total width 20.
 
    - Store worker result (report content, success/failure, task IDs) in `worker_results` for use by subsequent workers and Step 5.5.
 
@@ -467,12 +502,18 @@ g. **Post-debugger logic (Queen handles):**
    - If debugger reports `fix_applied == true`:
      - Mark task as completed
      - Log: `bash .aether/aether-utils.sh activity-log "COMPLETE" "debugger-ant" "Fixed: {diagnosis}"`
-     - Display: "Debugger fixed: {diagnosis}"
+     - Display using Bash tool (red -- debugger color):
+       ```
+       bash -c 'printf "\e[31m%-12s\e[0m %s\n" "[DEBUGGER]" "Fixed: {diagnosis}"'
+       ```
 
    - If debugger reports `fix_applied == false` or "UNDIAGNOSABLE":
      - Infer task criticality: if the failed task directly maps to a phase success criterion, treat as critical (display warning to user); if supporting task, skip and continue
      - Log: `bash .aether/aether-utils.sh activity-log "ERROR" "debugger-ant" "Could not fix: {diagnosis}"`
-     - Display: "Debugger could not fix: {diagnosis}. Task {skipped|flagged for review}."
+     - Display using Bash tool (red -- debugger color):
+       ```
+       bash -c 'printf "\e[31m%-12s\e[0m %s\n" "[DEBUGGER]" "Could not fix: {diagnosis}. Task {skipped|flagged for review}."'
+       ```
      - Mark task as failed
      - Continue to next worker
 
@@ -553,7 +594,14 @@ i. **Post-Wave Advisory Review:**
 
    - Parse `critical_count` from the reviewer's findings.
 
-   - Display reviewer summary inline (plain text).
+   - Display reviewer summary inline using Bash tool (blue -- reviewer color):
+     ```
+     bash -c 'printf "\e[34m%-12s\e[0m Wave %d: %s (%d findings)\n" "[REVIEWER]" {N} "{summary}" {finding_count}'
+     ```
+     For each finding, display:
+     ```
+     bash -c 'printf "  \e[34m%-8s\e[0m %s\n" "{severity}" "{description}"'
+     ```
 
    - If `critical_count > 0` AND `wave_rebuild_count < 2`:
      - Display: "CRITICAL issue detected. Rebuilding wave {N}..."
@@ -869,6 +917,13 @@ If events array exceeds 100 entries, trim oldest to 100. Write updated events.js
 
 #### Step 7e: Display Results
 
+Display the final build summary header using Bash tool (bold yellow -- Queen color):
+```
+bash -c 'printf "\n\e[1;33m+=====================================================+\e[0m\n"'
+bash -c 'printf "\e[1;33m|  BUILD COMPLETE                                     |\e[0m\n"'
+bash -c 'printf "\e[1;33m+=====================================================+\e[0m\n\n"'
+```
+
 Show step progress:
 
 ```
@@ -929,7 +984,11 @@ Phase {id}: {name}
   {if REDIRECT emitted:}
   REDIRECT (0.9, 24h): "<first 80 chars>"
 
-Pheromone Recommendations:
+Display the Pheromone Recommendations header using Bash tool (yellow):
+  ```
+  bash -c 'printf "\e[33mPheromone Recommendations:\e[0m\n"'
+  ```
+
   Based on this build's outcomes, analyze the following sources and generate max 3 natural language recommendations:
 
   Sources:
