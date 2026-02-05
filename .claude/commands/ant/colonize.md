@@ -75,6 +75,14 @@ Use Write tool to update `COLONY_STATE.json`:
 - Set `state` to `"EXECUTING"`
 - Set `workers.colonizer` to `"active"`
 
+After updating state, display the colonize header using Bash tool (bold yellow -- Queen color):
+```
+bash -c 'printf "\e[1;33m+=====================================================+\e[0m\n"'
+bash -c 'printf "\e[1;33m|  AETHER COLONY :: COLONIZE                          |\e[0m\n"'
+bash -c 'printf "\e[1;33m+=====================================================+\e[0m\n\n"'
+bash -c 'printf "  Goal: %s\n  Mode: %s\n\n" "{goal}" "{mode}"'
+```
+
 ### Step 4: Spawn Colonizer Ants
 
 **Mode check:** If mode from Step 2.5 is **LIGHTWEIGHT**, skip to **Step 4-LITE** below. Otherwise (STANDARD or FULL), use the multi-colonizer pattern in this step.
@@ -125,7 +133,20 @@ To spawn another ant:
 Spawned ants can spawn further ants. Max depth 3, max 5 sub-ants per ant.
 ```
 
-**Colonizer 1 (Structure):** Append this mission to the common header:
+Before each colonizer spawn, display progress in cyan via Bash tool. After each colonizer returns, display completion.
+
+**Colonizer 1 (Structure):**
+
+Before spawn:
+```
+bash -c 'printf "\e[36m%-14s\e[0m %s (%d/%d)\n" "[COLONIZER]" "Analyzing Structure..." 1 3'
+```
+After return:
+```
+bash -c 'printf "\e[36m%-14s\e[0m %s ... \e[32mDONE\e[0m\n" "[COLONIZER]" "Structure analysis"'
+```
+
+Append this mission to the common header:
 
 ```
 --- YOUR MISSION ---
@@ -151,7 +172,18 @@ Findings:
     evidence: "<file path or pattern>"
 ```
 
-**Colonizer 2 (Patterns):** Append this mission to the common header:
+**Colonizer 2 (Patterns):**
+
+Before spawn:
+```
+bash -c 'printf "\e[36m%-14s\e[0m %s (%d/%d)\n" "[COLONIZER]" "Analyzing Patterns..." 2 3'
+```
+After return:
+```
+bash -c 'printf "\e[36m%-14s\e[0m %s ... \e[32mDONE\e[0m\n" "[COLONIZER]" "Patterns analysis"'
+```
+
+Append this mission to the common header:
 
 ```
 --- YOUR MISSION ---
@@ -178,7 +210,18 @@ Findings:
     evidence: "<file path or pattern>"
 ```
 
-**Colonizer 3 (Stack):** Append this mission to the common header:
+**Colonizer 3 (Stack):**
+
+Before spawn:
+```
+bash -c 'printf "\e[36m%-14s\e[0m %s (%d/%d)\n" "[COLONIZER]" "Analyzing Stack..." 3 3'
+```
+After return:
+```
+bash -c 'printf "\e[36m%-14s\e[0m %s ... \e[32mDONE\e[0m\n" "[COLONIZER]" "Stack analysis"'
+```
+
+Append this mission to the common header:
 
 ```
 --- YOUR MISSION ---
@@ -213,6 +256,11 @@ Save individual colonizer reports to `.aether/temp/colonizer-{1,2,3}-report.txt`
 
 Only runs for STANDARD/FULL mode. If LIGHTWEIGHT, skip this step (Step 4-LITE output is used directly).
 
+Display synthesis start using Bash tool (bold yellow -- Queen color):
+```
+bash -c 'printf "\n\e[1;33m%-14s\e[0m %s\n" "[QUEEN]" "Synthesizing colonizer reports..."'
+```
+
 1. Collect all 3 colonizer reports from Step 4
 2. Group findings by topic (architecture, tech stack, conventions, concerns)
 3. Where 2+ colonizers agree on a finding: include as HIGH confidence
@@ -227,9 +275,19 @@ DISAGREEMENT: {topic}
 
 5. Produce a unified synthesis report for display in Step 6
 
+After synthesis completes, display using Bash tool:
+```
+bash -c 'printf "\e[1;33m%-14s\e[0m %s ... \e[32mDONE\e[0m\n" "[QUEEN]" "Synthesis complete"'
+```
+
 ### Step 4-LITE: Single Colonizer (LIGHTWEIGHT mode)
 
 Only runs when mode from Step 2.5 is LIGHTWEIGHT. Spawns a single colonizer ant covering all lenses.
+
+Before spawn, display progress using Bash tool (cyan -- colonizer color):
+```
+bash -c 'printf "\e[36m%-14s\e[0m %s\n" "[COLONIZER]" "Analyzing codebase (lightweight)..."'
+```
 
 Use the **Task tool** with `subagent_type="general-purpose"`:
 
@@ -287,6 +345,11 @@ Focus on what's relevant to the colony goal.
 Use Glob, Grep, and Read tools to explore. Report your findings.
 ```
 
+After colonizer returns, display completion using Bash tool:
+```
+bash -c 'printf "\e[36m%-14s\e[0m %s ... \e[32mDONE\e[0m\n" "[COLONIZER]" "Analysis complete"'
+```
+
 ### Step 5: Persist Findings
 
 After colonization completes (either synthesis report from Step 4.5 or single colonizer report from Step 4-LITE), save findings so they survive the session.
@@ -326,10 +389,27 @@ If the `events` array exceeds 100 entries, remove the oldest entries to keep onl
 
 Display the colonization results. For STANDARD/FULL mode, display the unified synthesis report from Step 4.5 (NOT individual colonizer reports — those are stored in `.aether/temp/` for reference). For LIGHTWEIGHT mode, display the single colonizer's report from Step 4-LITE.
 
+Before the results display, show step progress checkmarks using Bash tool:
+```
+bash -c 'printf "\n  \e[32m✓\e[0m Step 1: Read State\n"'
+bash -c 'printf "  \e[32m✓\e[0m Step 2: Compute Pheromones\n"'
+bash -c 'printf "  \e[32m✓\e[0m Step 2.5: Detect Complexity\n"'
+bash -c 'printf "  \e[32m✓\e[0m Step 3: Update State\n"'
+bash -c 'printf "  \e[32m✓\e[0m Step 4: Colonize (%s mode)\n" "{mode}"'
+bash -c 'printf "  \e[32m✓\e[0m Step 5: Persist Findings\n"'
+bash -c 'printf "  \e[32m✓\e[0m Step 6: Display Results\n\n"'
+```
+
+Display the colored result header using Bash tool (cyan -- colonizer color):
+```
+bash -c 'printf "\e[36m+=====================================================+\e[0m\n"'
+bash -c 'printf "\e[36m|  CODEBASE COLONIZED                                 |\e[0m\n"'
+bash -c 'printf "\e[36m+=====================================================+\e[0m\n\n"'
+```
+
 Analyze the findings to suggest specific pheromones:
 
 ```
-👑 CODEBASE COLONIZED
 
   Goal: "{goal}"
   Mode: {LIGHTWEIGHT|STANDARD|FULL}
