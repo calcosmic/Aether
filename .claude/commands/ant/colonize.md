@@ -297,7 +297,7 @@ Read `.aether/data/memory.json`. Append a decision record to the `decisions` arr
 {
   "id": "dec_<unix_timestamp>_<4_random_hex>",
   "type": "colonization",
-  "content": "<summarize the unified synthesis report (STANDARD/FULL) or single colonizer findings (LIGHTWEIGHT): project type, tech stack, architecture patterns, conventions, and recommendations — keep under 500 chars>",
+  "content": "<For STANDARD/FULL: summarize the unified synthesis from all 3 colonizers — include key structure, pattern, and stack findings plus any disagreements flagged. For LIGHTWEIGHT: summarize the single colonizer's findings. Cover project type, tech stack, architecture patterns, conventions, and recommendations — keep under 500 chars>",
   "context": "Codebase colonized for goal: <goal>",
   "phase": 0,
   "timestamp": "<ISO-8601 UTC>"
@@ -315,7 +315,7 @@ Use the Write tool to write the updated memory.json.
   "id": "evt_<unix_timestamp>_<4_random_hex>",
   "type": "codebase_colonized",
   "source": "colonize",
-  "content": "Codebase colonized: <project type>, <primary language/framework>",
+  "content": "Codebase colonized ({LIGHTWEIGHT|STANDARD|FULL} mode): <project type>, <primary language/framework>",
   "timestamp": "<ISO-8601 UTC>"
 }
 ```
