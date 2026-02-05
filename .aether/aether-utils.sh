@@ -35,7 +35,7 @@ shift 2>/dev/null || true
 case "$cmd" in
   help)
     cat <<'EOF'
-{"ok":true,"commands":["help","version","pheromone-decay","pheromone-effective","pheromone-batch","pheromone-cleanup","pheromone-validate","validate-state","spawn-check","memory-compress","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
+{"ok":true,"commands":["help","version","pheromone-decay","pheromone-effective","pheromone-batch","pheromone-cleanup","pheromone-validate","validate-state","spawn-check","memory-compress","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
 EOF
     ;;
   version)
@@ -294,6 +294,72 @@ EOF
       content=$(cat "$log_file")
     fi
     json_ok "$(echo "$content" | jq -Rs '.')"
+    ;;
+  learning-promote)
+    [[ $# -ge 3 ]] || json_err "Usage: learning-promote <content> <source_project> <source_phase> [tags]"
+    content="$1"
+    source_project="$2"
+    source_phase="$3"
+    tags="${4:-}"
+
+    global_dir="$HOME/.aether"
+    global_file="$global_dir/learnings.json"
+    mkdir -p "$global_dir"
+
+    if [[ ! -f "$global_file" ]]; then
+      echo '{"learnings":[],"version":1}' > "$global_file"
+    fi
+
+    id="global_$(date -u +%s)_$(head -c 2 /dev/urandom | od -An -tx1 | tr -d ' ')"
+    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    if [[ -n "$tags" ]]; then
+      tags_json=$(echo "$tags" | jq -R 'split(",")')
+    else
+      tags_json="[]"
+    fi
+
+    current_count=$(jq '.learnings | length' "$global_file")
+    if [[ $current_count -ge 50 ]]; then
+      json_ok "{\"promoted\":false,\"reason\":\"cap_reached\",\"current_count\":$current_count,\"cap\":50}"
+      exit 0
+    fi
+
+    updated=$(jq --arg id "$id" --arg content "$content" --arg sp "$source_project" \
+      --argjson phase "$source_phase" --argjson tags "$tags_json" --arg ts "$ts" '
+      .learnings += [{
+        id: $id,
+        content: $content,
+        source_project: $sp,
+        source_phase: $phase,
+        tags: $tags,
+        promoted_at: $ts
+      }]
+    ' "$global_file") || json_err "Failed to update learnings.json"
+
+    echo "$updated" > "$global_file"
+    json_ok "{\"promoted\":true,\"id\":\"$id\",\"count\":$((current_count + 1)),\"cap\":50}"
+    ;;
+  learning-inject)
+    [[ $# -ge 1 ]] || json_err "Usage: learning-inject <tech_keywords_csv>"
+    keywords="$1"
+
+    global_file="$HOME/.aether/learnings.json"
+
+    if [[ ! -f "$global_file" ]]; then
+      json_ok '{"learnings":[],"count":0}'
+      exit 0
+    fi
+
+    json_ok "$(jq --arg kw "$keywords" '
+      ($kw | split(",") | map(ascii_downcase | ltrimstr(" ") | rtrimstr(" "))) as $keywords |
+      .learnings | map(
+        select(
+          .tags as $tags |
+          ($keywords | any(. as $k | $tags | any(ascii_downcase | contains($k))))
+        )
+      ) | {learnings: ., count: length}
+    ' "$global_file")"
     ;;
   *)
     json_err "Unknown command: $cmd"
