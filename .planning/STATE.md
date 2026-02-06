@@ -11,9 +11,9 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 Milestone: v5.1 System Simplification
 Phase: 37 of 37 (Command Trim & Utilities)
-Plan: 3 of 5 in current phase
+Plan: 3 of 5 in current phase (37-01, 37-02, 37-03 complete)
 Status: In progress
-Last activity: 2026-02-06 -- Completed 37-03-PLAN.md (colonize reduction)
+Last activity: 2026-02-06 -- Completed 37-01-PLAN.md (signal command reduction)
 
 Progress: [█████████░] 90%
 
@@ -85,6 +85,8 @@ Recent decisions affecting current work:
 - [37-02]: Status signal count filters by expires_at field (TTL-aware)
 - [37-03]: Single-pass surface scan replaces multi-colonizer spawning
 - [37-03]: Output to .planning/CODEBASE.md with 20 file read cap
+- [37-01]: Signal commands reduced to ~36 lines each with one-line confirmation
+- [37-01]: Removed sensitivity matrix displays (Phase 36 made obsolete)
 
 ### Pending Todos
 
@@ -97,9 +99,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed 37-03-PLAN.md (colonize reduction)
+Stopped at: Completed 37-01-PLAN.md (signal command reduction)
 Resume file: None
 
 ---
 
-*State updated: 2026-02-06 after 37-03-PLAN.md completion*
+*State updated: 2026-02-06 after 37-01-PLAN.md completion*
