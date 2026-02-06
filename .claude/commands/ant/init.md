@@ -110,10 +110,10 @@ INIT signals have no half-life (null) and persist forever.
 
 Use the Bash tool to run:
 ```
-bash ~/.aether/aether-utils.sh validate-state all
+bash ~/.aether/aether-utils.sh validate-state colony
 ```
 
-This validates COLONY_STATE.json and returns `{"ok":true,"result":{"pass":true|false,"files":[...]}}`.
+This validates COLONY_STATE.json structure and returns `{"ok":true,"result":{"pass":true|false}}`.
 
 If `pass` is false, output a warning identifying which validation(s) failed. This catches initialization bugs immediately.
 
