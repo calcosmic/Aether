@@ -52,17 +52,20 @@ Stop here.
 
 ### Step 2: Read State
 
-Use the Read tool to read these files (in parallel):
-- `.aether/data/COLONY_STATE.json`
-- `.aether/data/pheromones.json`
-- `.aether/data/PROJECT_PLAN.json`
-- `.aether/data/errors.json`
-- `.aether/data/events.json`
+Use the Read tool to read `.aether/data/COLONY_STATE.json`.
+
+Extract:
+- `goal`, `state`, `current_phase`, `mode` from top level
+- `plan.phases` for phase data
+- `signals` for pheromone guidance
+- `errors.records` for error context
+- `events` for recent activity
+- `memory` for decisions/learnings
 
 **Validate:**
 - If `COLONY_STATE.json` has `goal: null` -> output `No colony initialized. Run /ant:init first.` and stop.
-- If `PROJECT_PLAN.json` has empty `phases` array -> output `No project plan. Run /ant:plan first.` and stop.
-- Find the phase matching the requested ID. If not found -> output `Phase {id} not found.` and stop.
+- If `plan.phases` is empty -> output `No project plan. Run /ant:plan first.` and stop.
+- Find the phase matching the requested ID in `plan.phases`. If not found -> output `Phase {id} not found.` and stop.
 - If the phase status is `"completed"` -> output `Phase {id} already completed.` and stop.
 
 ### Step 3: Compute Active Pheromones
@@ -116,28 +119,18 @@ Store the computed table for use in Step 7 display. Format each entry as:
 
 ### Step 4: Update State
 
-Use Write tool to update `COLONY_STATE.json`:
+Use Write tool to update `.aether/data/COLONY_STATE.json`:
 - Set `state` to `"EXECUTING"`
 - Set `current_phase` to the phase number
 - Set `workers.builder` to `"active"`
+- Set the phase's `status` to `"in_progress"` in `plan.phases[N]`
 
-Set the phase's `status` to `"in_progress"` in `PROJECT_PLAN.json`.
-
-**Write Phase Started Event:** Read `.aether/data/events.json` (if not already in memory from Step 2). Append to the `events` array:
-
-```json
-{
-  "id": "evt_<unix_timestamp>_<4_random_hex>",
-  "type": "phase_started",
-  "source": "build",
-  "content": "Phase <id>: <name> started",
-  "timestamp": "<ISO-8601 UTC>"
-}
-```
+**Write Phase Started Event:** Append to the `events` array as pipe-delimited string:
+`"<timestamp>|phase_started|build|Phase <id>: <name> started"`
 
 If the `events` array exceeds 100 entries, remove the oldest entries to keep only 100.
 
-Use the Write tool to write the updated events.json.
+Write the updated COLONY_STATE.json.
 
 ### Step 4.5: Git Checkpoint
 
@@ -236,7 +229,7 @@ DEFAULT: Assume tasks are parallel unless you can identify a specific dependency
 Do NOT default to sequential ordering just because tasks are numbered sequentially.
 
 --- MODE-AWARE PARALLELISM ---
-Read COLONY_STATE.json mode field.
+Read mode field from COLONY_STATE.json (already in memory from Step 2).
 - LIGHTWEIGHT: max 1 worker per wave (serialized execution)
 - STANDARD: normal parallelism (default behavior)
 - FULL: aggressive parallelism, up to 4 concurrent workers per wave
@@ -288,7 +281,7 @@ Produce a revised plan incorporating their feedback.
 After the Phase Lead returns:
 
 **Auto-Approval Check:**
-Read COLONY_STATE.json. Check the `mode` field.
+Check the `mode` field from COLONY_STATE.json (already in memory from Step 2).
 
 If mode is "LIGHTWEIGHT": auto-approve the plan. Skip user confirmation.
 Display: "Plan auto-approved (LIGHTWEIGHT mode). Proceeding to execution..."
@@ -315,11 +308,11 @@ If mode is "STANDARD" or "FULL" (or mode is null/missing):
 
 ### Step 5b-post: Record Plan Decisions
 
-After the plan is approved, record strategic decisions to memory.json.
+After the plan is approved, record strategic decisions to COLONY_STATE.json.
 
-Read `.aether/data/memory.json`. Synthesize 2-3 strategic decisions from the approved plan (e.g., task groupings, caste assignments, wave structure rationale, conflict prevention merges). Do NOT log every individual task assignment -- only strategic choices.
+Synthesize 2-3 strategic decisions from the approved plan (e.g., task groupings, caste assignments, wave structure rationale, conflict prevention merges). Do NOT log every individual task assignment -- only strategic choices.
 
-Append each decision to the `decisions` array:
+Append each decision to the `memory.decisions` array in COLONY_STATE.json:
 
 ```json
 {
@@ -332,9 +325,9 @@ Append each decision to the `decisions` array:
 }
 ```
 
-If the `decisions` array exceeds 30 entries, remove the oldest entries to keep only 30.
+If the `memory.decisions` array exceeds 30 entries, remove the oldest entries to keep only 30.
 
-Write the updated memory.json.
+Write the updated COLONY_STATE.json.
 
 ### Step 5c: Execute Plan
 
@@ -398,7 +391,7 @@ d. **Spawn worker via Task tool** with `subagent_type="general-purpose"`:
    Phase {id}: {phase_name}
 
    Task details:
-   {for each task ID assigned to this worker, include the full task description and depends_on from PROJECT_PLAN.json}
+   {for each task ID assigned to this worker, include the full task description and depends_on from plan.phases in COLONY_STATE.json}
 
    {if this worker has dependencies on previous workers:}
    Context from previous workers:
@@ -693,7 +686,7 @@ Issues: {any failures or errors}
 
 After all workers complete (Step 5c), spawn a **mandatory watcher verification**.
 
-**Mode Check:** Read COLONY_STATE.json mode field.
+**Mode Check:** Check `mode` field from COLONY_STATE.json (already in memory from Step 2).
 If mode is "LIGHTWEIGHT": Skip watcher verification entirely. Display:
   "Watcher verification skipped (LIGHTWEIGHT mode)."
 Proceed directly to Step 6.
@@ -737,7 +730,7 @@ Focus on HIGH and CRITICAL severity issues. These will be logged as errors.
 
 Store the watcher's report (quality_score, recommendation, issues) for use in Steps 6 and 7.
 
-**Record Quality Decision:** Read `.aether/data/memory.json` (if not already in memory). Append a quality decision to the `decisions` array:
+**Record Quality Decision:** Append a quality decision to the `memory.decisions` array in COLONY_STATE.json:
 
 ```json
 {
@@ -750,17 +743,17 @@ Store the watcher's report (quality_score, recommendation, issues) for use in St
 }
 ```
 
-Cap at 30 entries (remove oldest if exceeded). Write updated memory.json.
+Cap at 30 entries (remove oldest if exceeded). Write updated COLONY_STATE.json.
 
 ### Step 6: Record Outcome
 
-After the watcher returns, use Write tool to update:
+After the watcher returns, use Write tool to update `.aether/data/COLONY_STATE.json`:
 
-**`PROJECT_PLAN.json`:**
-- Mark tasks as `"completed"` or `"failed"` based on worker results from Step 5c
-- Set the phase `status` to `"completed"` (or `"failed"` if critical tasks failed)
+**Update plan.phases:**
+- Mark tasks as `"completed"` or `"failed"` in `plan.phases[N].tasks` based on worker results from Step 5c
+- Set the phase `status` to `"completed"` (or `"failed"` if critical tasks failed) in `plan.phases[N]`
 
-**`COLONY_STATE.json`:**
+**Update top-level state:**
 - Set `state` to `"READY"`
 - Advance `current_phase` if phase completed
 - Set `workers.builder` to `"idle"`
@@ -769,33 +762,36 @@ After the watcher returns, use Write tool to update:
 
 **Log Errors:** If the ant reported any failures or issues in its report:
 
-For each failure, use the Bash tool to run:
-```
-bash ~/.aether/aether-utils.sh error-add "<category>" "<severity>" "<description>" <phase_number>
-```
-
-Where `category` is one of: syntax, import, runtime, type, spawning, phase, verification, api, file, logic, performance, security. And `severity` is one of: critical, high, medium, low. The `<phase_number>` is the current phase ID being built (from `$ARGUMENTS`).
-
-Each call returns `{"ok":true,"result":"<error_id>"}`. Note the returned error IDs for event logging.
-
-**Log Watcher Issues:** For each issue in the watcher report with severity `HIGH` or `CRITICAL`, use the Bash tool to run:
-```
-bash ~/.aether/aether-utils.sh error-add "verification" "<severity_lowercased>" "<description>" <phase_number>
-```
-
-Where `<phase_number>` is the current phase ID being built (from `$ARGUMENTS`).
-
-**Write Watcher Verification Event:** Append to events.json:
-
+For each failure, append to `errors.records` array in COLONY_STATE.json:
 ```json
 {
-  "id": "evt_<unix_timestamp>_<4_random_hex>",
-  "type": "watcher_verification",
-  "source": "build",
-  "content": "Watcher verified Phase <id>: score=<quality_score>/10, recommendation=<recommendation>, issues=<issue_count>",
+  "id": "err_<unix_timestamp>_<4_random_hex>",
+  "category": "<syntax|import|runtime|type|spawning|phase|verification|api|file|logic|performance|security>",
+  "severity": "<critical|high|medium|low>",
+  "description": "<error description>",
+  "root_cause": null,
+  "phase": <phase_number>,
+  "task_id": null,
   "timestamp": "<ISO-8601 UTC>"
 }
 ```
+
+**Log Watcher Issues:** For each issue in the watcher report with severity `HIGH` or `CRITICAL`, append to `errors.records`:
+```json
+{
+  "id": "err_<unix_timestamp>_<4_random_hex>",
+  "category": "verification",
+  "severity": "<high|critical>",
+  "description": "<issue description>",
+  "root_cause": null,
+  "phase": <phase_number>,
+  "task_id": null,
+  "timestamp": "<ISO-8601 UTC>"
+}
+```
+
+**Write Watcher Verification Event:** Append to `events` array as pipe-delimited string:
+`"<timestamp>|watcher_verification|build|Watcher verified Phase <id>: score=<quality_score>/10, recommendation=<recommendation>, issues=<issue_count>"`
 
 **Check Pattern Flagging:** Use the Bash tool to run:
 ```
@@ -804,7 +800,7 @@ bash ~/.aether/aether-utils.sh error-pattern-check
 
 This returns JSON: `{"ok":true,"result":[{"category":"...","count":N,"first_seen":"...","last_seen":"..."},...]}`
 
-For each category in the result that is not already in `flagged_patterns`, add:
+For each category in the result that is not already in `errors.flagged_patterns`, add:
 
 ```json
 {
@@ -817,11 +813,11 @@ For each category in the result that is not already in `flagged_patterns`, add:
 }
 ```
 
-If the category already exists in `flagged_patterns`, update its `count`, `last_seen`, and `description`.
+If the category already exists in `errors.flagged_patterns`, update its `count`, `last_seen`, and `description`.
 
-If the command fails, fall back to manual counting from the errors.json data already in memory.
+If the command fails, fall back to manual counting from the `errors.records` array already in memory.
 
-If the `errors` array exceeds 50 entries, remove the oldest entries to keep only 50.
+If the `errors.records` array exceeds 50 entries, remove the oldest entries to keep only 50.
 
 **Get Error Summary:** Use the Bash tool to run:
 ```
@@ -830,49 +826,20 @@ bash ~/.aether/aether-utils.sh error-summary
 
 This returns JSON: `{"ok":true,"result":{"total":N,"by_category":{...},"by_severity":{...}}}`. Use these counts for the issue summary in Step 7 display.
 
-If the command fails, derive counts manually from the errors.json data already in memory.
+If the command fails, derive counts manually from the `errors.records` array already in memory.
 
-Use the Write tool to write the updated errors.json.
+For each error logged, also append an event to `events` array as pipe-delimited string:
+`"<timestamp>|error_logged|build|<category>/<severity>: <description>"`
 
-For each error logged, also append an `error_logged` event to events.json:
+For each newly flagged pattern, append event:
+`"<timestamp>|pattern_flagged|build|Pattern flagged: <category> errors -- <count> occurrences"`
 
-```json
-{
-  "id": "evt_<unix_timestamp>_<4_random_hex>",
-  "type": "error_logged",
-  "source": "build",
-  "content": "<category>/<severity>: <description>",
-  "timestamp": "<ISO-8601 UTC>"
-}
-```
-
-For each newly flagged pattern, append a `pattern_flagged` event:
-
-```json
-{
-  "id": "evt_<unix_timestamp>_<4_random_hex>",
-  "type": "pattern_flagged",
-  "source": "build",
-  "content": "Pattern flagged: <category> errors -- <count> occurrences",
-  "timestamp": "<ISO-8601 UTC>"
-}
-```
-
-**Write Outcome Event:** Append to events.json:
-
-```json
-{
-  "id": "evt_<unix_timestamp>_<4_random_hex>",
-  "type": "<phase_completed or phase_failed>",
-  "source": "build",
-  "content": "Phase <id>: <name> <completed|failed> (<completed_count>/<total_count> tasks done)",
-  "timestamp": "<ISO-8601 UTC>"
-}
-```
+**Write Outcome Event:** Append to `events` array as pipe-delimited string:
+`"<timestamp>|<phase_completed|phase_failed>|build|Phase <id>: <name> <completed|failed> (<completed_count>/<total_count> tasks done)"`
 
 If the `events` array exceeds 100 entries, remove the oldest entries to keep only 100.
 
-Use the Write tool to write the updated events.json.
+Write the updated COLONY_STATE.json with all error and event updates.
 
 **Record Spawn Outcomes:** The Queen has explicit knowledge of which castes were spawned during Step 5c (it did the spawning). For each caste that was spawned:
 
@@ -880,19 +847,19 @@ Use the Write tool to write the updated events.json.
 - If the phase failed: increment `beta` and `failures` for that caste in `spawn_outcomes`
 - Increment `total_spawns` for that caste regardless of outcome
 
-Use the Write tool to write the updated COLONY_STATE.json (this write can be combined with the state update already in Step 6).
+Include spawn_outcomes update in the COLONY_STATE.json write already in Step 6.
 
 ### Step 7: Extract Learnings, Emit Pheromones, Display Results
 
 #### Step 7a: Extract Phase Learnings
 
-Read `.aether/data/memory.json`. The Queen already has in memory from prior steps: worker_results (Step 5c), watcher_report (Step 5.5), errors.json and events.json (Step 6), and PROJECT_PLAN.json task outcomes (Step 6). No redundant file reads needed beyond memory.json.
+The Queen already has in memory from prior steps: worker_results (Step 5c), watcher_report (Step 5.5), errors and events from COLONY_STATE.json (Step 6), and plan.phases task outcomes (Step 6). No redundant file reads needed.
 
 Synthesize actionable learnings from worker outcomes, watcher report, errors, and events. Each learning MUST be attributed to the worker/caste that produced it (e.g., "builder-ant: bcrypt 12 rounds caused 800ms delay"). Capture both successes AND failures. Even clean phases get learnings ("X approach worked well").
 
 **Quality guard:** Each learning must reference a specific event, error, or outcome. Generic learnings like "Phase completed successfully" are not acceptable.
 
-Append a learning entry to memory.json `phase_learnings` array:
+Append a learning entry to `memory.phase_learnings` array in COLONY_STATE.json:
 
 ```json
 {
@@ -905,7 +872,7 @@ Append a learning entry to memory.json `phase_learnings` array:
 }
 ```
 
-Write the updated memory.json. Then run:
+Write the updated COLONY_STATE.json. Then run:
 ```
 bash ~/.aether/aether-utils.sh memory-compress
 ```
@@ -916,7 +883,9 @@ Note: spawn_outcomes already updated in Step 6 -- do NOT update them here.
 
 #### Step 7b: Emit FEEDBACK Pheromone
 
-Read `.aether/data/pheromones.json` (if not already in memory). Always emit a FEEDBACK pheromone with balanced summary of what worked + what failed. Include the actual learnings in the pheromone body so colony can read them without checking memory.json.
+Always emit a FEEDBACK pheromone with balanced summary of what worked + what failed. Include the actual learnings in the pheromone body so colony can read them without checking memory.
+
+Append to `signals` array in COLONY_STATE.json:
 
 ```json
 {
@@ -932,13 +901,14 @@ Read `.aether/data/pheromones.json` (if not already in memory). Always emit a FE
 ```
 
 Validate via: `bash ~/.aether/aether-utils.sh pheromone-validate "<content>"`
-- If pass:false -> skip pheromone, log `pheromone_rejected` event
-- If pass:true -> append to pheromones.json
+- If pass:false -> skip pheromone, log `pheromone_rejected` event to `events` array
+- If pass:true -> append to `signals` array
 - If command fails -> append anyway (fail-open)
 
-Conditionally emit a REDIRECT pheromone if `errors.json` has `flagged_patterns` entries related to this phase (same logic as continue.md Step 4.5). Use `source: "auto:build"`.
+Conditionally emit a REDIRECT pheromone if `errors.flagged_patterns` has entries related to this phase. Use `source: "auto:build"`.
 
-Log `pheromone_auto_emitted` event for each emitted pheromone (source: "build").
+Log `pheromone_auto_emitted` event for each emitted pheromone as pipe-delimited string:
+`"<timestamp>|pheromone_auto_emitted|build|<TYPE> pheromone auto-emitted: <first 80 chars>"`
 
 #### Step 7c: Clean Expired Pheromones
 
@@ -946,19 +916,10 @@ Run: `bash ~/.aether/aether-utils.sh pheromone-cleanup`
 
 #### Step 7d: Write Auto-Learning Flag Event
 
-Append to events.json:
+Append to `events` array in COLONY_STATE.json as pipe-delimited string:
+`"<timestamp>|auto_learnings_extracted|build|Auto-extracted <N> learnings from Phase <id>: <name>"`
 
-```json
-{
-  "id": "evt_<unix_timestamp>_<4_random_hex>",
-  "type": "auto_learnings_extracted",
-  "source": "build",
-  "content": "Auto-extracted <N> learnings from Phase <id>: <name>",
-  "timestamp": "<ISO-8601 UTC>"
-}
-```
-
-If events array exceeds 100 entries, trim oldest to 100. Write updated events.json and pheromones.json.
+If events array exceeds 100 entries, trim oldest to 100. Write updated COLONY_STATE.json with all events and signals updates.
 
 #### Step 7e: Display Results
 
@@ -1053,7 +1014,7 @@ Display the Pheromone Recommendations header using Bash tool (yellow):
   Sources:
   - worker_results from Step 5c (which tasks succeeded/failed, error summaries)
   - watcher_report from Step 5.5 (quality score, issues found)
-  - errors.json flagged_patterns (recurring cross-phase issues)
+  - errors.flagged_patterns from COLONY_STATE.json (recurring cross-phase issues)
   - Per-wave reviewer findings from Step 5c.i (if reviewer ran)
 
   Trigger patterns (recommend when these signals are detected):
@@ -1061,7 +1022,7 @@ Display the Pheromone Recommendations header using Bash tool (yellow):
   - Quality score < 6 -> suggest redirect signal to avoid specific anti-pattern found
   - Multiple workers touching related files -> suggest focus on consistency in that layer
   - Clean build, high quality -> note strong patterns worth continuing
-  - Flagged error patterns from errors.json -> suggest redirect to avoid recurring pattern
+  - Flagged error patterns from errors.flagged_patterns -> suggest redirect to avoid recurring pattern
 
   Format constraints:
   - Natural language descriptive guidance, NOT copy-paste commands
