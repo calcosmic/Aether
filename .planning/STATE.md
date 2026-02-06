@@ -2,20 +2,20 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-05)
+See: .planning/PROJECT.md (updated 2026-02-06)
 
 **Core value:** Stigmergic Emergence -- Worker Ants detect capability gaps and spawn specialists through pheromone-guided coordination
-**Current focus:** Planning next milestone
+**Current focus:** v5.1 System Simplification -- reduce 7,400 lines to 1,800 lines
 
 ## Current Position
 
-Milestone: None active (v4.4 shipped)
-Phase: Not started
-Plan: Not started
-Status: Ready to plan next milestone
-Last activity: 2026-02-05 -- v4.4 milestone completed and archived
+Milestone: v5.1 System Simplification
+Phase: 33 of 37 (State Foundation)
+Plan: 0 of TBD in current phase
+Status: Ready to plan
+Last activity: 2026-02-06 -- Roadmap created for v5.1 milestone
 
-Progress: [                    ] 0% (next milestone not yet defined)
+Progress: [░░░░░░░░░░] 0%
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -26,13 +26,22 @@ Progress: [                    ] 0% (next milestone not yet defined)
 - v4.2 Shipped (2026-02-03): 1 phase, 5 issues, colony hardening from test session
 - v4.3 Shipped (2026-02-04): 2 phases, 4 plans, live visibility + auto-learning
 - v4.4 Shipped (2026-02-05): 6 phases, 15 plans, colony hardening + real-world readiness
+- v5.0 Shipped (2026-02-05): NPM distribution + global install
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 97 (44 v1.0 + 6 v2.0 + 11 v3.0 + 9 v4.0 + 4 v4.1 + 4 v4.2 + 4 v4.3 + 15 v4.4)
-- Average duration: ~19 min
-- Total execution time: ~19 hours
+- Total plans completed: 0 (v5.1 milestone)
+- Total plans all milestones: 97+
+- Average duration: ~19 min (historical)
+
+**By Phase:**
+
+| Phase | Plans | Total | Avg/Plan |
+|-------|-------|-------|----------|
+| - | - | - | - |
+
+*Updated after each plan completion*
 
 ## Accumulated Context
 
@@ -40,11 +49,11 @@ Progress: [                    ] 0% (next milestone not yet defined)
 
 See PROJECT.md Key Decisions table for full history.
 
+Recent decisions affecting current work:
+- [v5.1]: Postmortem-driven simplification -- reduce from 7,400 to 1,800 lines
+- [v5.1]: Follow postmortem implementation order (state first, then commands)
+
 ### Pending Todos
-
-None.
-
-### Open Issues
 
 None.
 
@@ -54,10 +63,10 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-05
-Stopped at: v4.4 milestone archived -- ready for next milestone
+Last session: 2026-02-06
+Stopped at: Roadmap created, ready to plan Phase 33
 Resume file: None
 
 ---
 
-*State updated: 2026-02-05 after v4.4 milestone completion and archival*
+*State updated: 2026-02-06 after v5.1 roadmap creation*

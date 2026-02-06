@@ -1,7 +1,7 @@
 # Requirements: Aether v5.1 System Simplification
 
 **Defined:** 2026-02-06
-**Core Value:** Stigmergic Emergence — Worker Ants detect capability gaps and spawn specialists through pheromone-guided coordination
+**Core Value:** Stigmergic Emergence -- Worker Ants detect capability gaps and spawn specialists through pheromone-guided coordination
 **Source:** M4L-AnalogWave postmortem (2026-02-05)
 
 ## v5.1 Requirements
@@ -67,7 +67,7 @@ Requirements derived from postmortem Section 5 (Recommended Fixes), ordered by s
 
 Per postmortem Section 7 (What to Preserve):
 
-- Parallel task decomposition (Wave 1 → Wave 2 pattern)
+- Parallel task decomposition (Wave 1 -> Wave 2 pattern)
 - Structured phase output (`.planning/phase-N/` directories)
 - Worker role concept (6 castes)
 - Signal/constraint concept (simplified implementation)
@@ -90,19 +90,20 @@ Per postmortem Section 7 (What to Preserve):
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SIMP-01 | TBD | Pending |
-| SIMP-02 | TBD | Pending |
-| SIMP-03 | TBD | Pending |
-| SIMP-04 | TBD | Pending |
-| SIMP-05 | TBD | Pending |
-| SIMP-06 | TBD | Pending |
-| SIMP-07 | TBD | Pending |
+| SIMP-01 | Phase 33 | Pending |
+| SIMP-02 | Phase 34 | Pending |
+| SIMP-03 | Phase 36 | Pending |
+| SIMP-04 | Phase 35 | Pending |
+| SIMP-05 | Phase 34 (build, continue), Phase 37 (remaining) | Pending |
+| SIMP-06 | Phase 37 | Pending |
+| SIMP-07 | Phase 34 | Pending |
 
 **Coverage:**
 - v5.1 requirements: 7 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 7 ⚠️
+- Mapped to phases: 7/7
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-06*
+*Traceability updated: 2026-02-06*
 *Source: COLONY_POSTMORTEM.md Sections 5-6*
