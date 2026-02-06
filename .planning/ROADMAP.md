@@ -82,7 +82,7 @@ Plans:
 - [x] 36-01-PLAN.md — Update signal emission commands with TTL schema
 - [x] 36-02-PLAN.md — Update signal consumption commands with TTL filtering
 - [x] 36-03-PLAN.md — Remove pheromone math from utilities and update docs
-- [ ] 36-04-PLAN.md — (gap closure) Remove decay commands from runtime/aether-utils.sh
+- [x] 36-04-PLAN.md — (gap closure) Remove decay commands from runtime/aether-utils.sh
 - [ ] 36-05-PLAN.md — (gap closure) Update plan/organize/colonize commands, delete runtime/workers/*.md
 
 ### Phase 37: Command Trim & Utilities
@@ -110,7 +110,7 @@ Plans:
 | 33. State Foundation | 4/4 | Complete | 2026-02-06 |
 | 34. Core Command Rewrite | 3/3 | Complete | 2026-02-06 |
 | 35. Worker Simplification | 2/2 | Complete | 2026-02-06 |
-| 36. Signal Simplification | 3/5 | Gap closure | - |
+| 36. Signal Simplification | 4/5 | Gap closure | - |
 | 37. Command Trim & Utilities | 0/TBD | Not started | - |
 
 ---

@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 Milestone: v5.1 System Simplification
 Phase: 36 of 37 (Signal Simplification)
-Plan: 3 of 3 in current phase
-Status: Phase complete
-Last activity: 2026-02-06 -- Completed 36-02-PLAN.md (signal consumer updates)
+Plan: 4 of 5 in current phase
+Status: In progress (gap closure)
+Last activity: 2026-02-06 -- Completed 36-04-PLAN.md (runtime utility decay removal)
 
-Progress: [█████████░] 85%
+Progress: [█████████░] 87%
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -42,7 +42,7 @@ Progress: [█████████░] 85%
 | 33-state-foundation | 4 | 10min | 2.5min |
 | 34-core-command-rewrite | 3 | 6min | 2min |
 | 35-worker-simplification | 2 | 3min | 1.5min |
-| 36-signal-simplification | 3 | 8min | 2.7min |
+| 36-signal-simplification | 4 | 10min | 2.5min |
 
 *Updated after each plan completion*
 
@@ -90,9 +90,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed 36-02-PLAN.md (all Phase 36 plans complete)
+Stopped at: Completed 36-04-PLAN.md (gap closure plan 1 of 2)
 Resume file: None
 
 ---
 
-*State updated: 2026-02-06 after 36-02 plan completion*
+*State updated: 2026-02-06 after 36-04 plan completion*
