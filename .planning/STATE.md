@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 Milestone: v5.1 System Simplification
 Phase: 40 of 40 (State & Utility Alignment)
-Plan: 1 of 2 in current phase (40-02 complete, 40-01 pending)
-Status: In progress
-Last activity: 2026-02-06 -- Completed 40-02-PLAN.md
+Plan: 2 of 2 (phase complete)
+Status: Phase complete
+Last activity: 2026-02-06 -- Completed 40-01-PLAN.md
 
-Progress: [████████░░] 95%
+Progress: [██████████] 100%
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -46,6 +46,7 @@ Progress: [████████░░] 95%
 | 36-signal-simplification | 5 | 12min | 2.4min |
 | 37-command-trim-utilities | 4 | 6min | 1.5min |
 | 38-signal-schema-unification | 1 | 4min | 4min |
+| 40-state-utility-alignment | 2 | 5min | 2.5min |
 
 *Updated after each plan completion*
 
@@ -94,6 +95,9 @@ Recent decisions affecting current work:
 - [38-01]: INIT signal written inline in COLONY_STATE.json (not separate pheromones.json)
 - [38-01]: All signal operations consolidated to single state file
 - [38-01]: Documentation updated to reflect signal terminology
+- [40-01]: TTL filtering replaces decay math in all commands
+- [40-01]: Signals read inline from COLONY_STATE.json, no utility calls
+- [40-01]: Memory compression via cap enforcement, not utility function
 
 ### Pending Todos
 
@@ -106,9 +110,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed 40-02-PLAN.md
+Stopped at: Completed Phase 40 (both plans)
 Resume file: None
 
 ---
 
-*State updated: 2026-02-06 after Phase 38 verification*
+*State updated: 2026-02-06 after 40-01 completion*
