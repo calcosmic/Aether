@@ -10,10 +10,10 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 ## Current Position
 
 Milestone: v5.1 System Simplification
-Phase: 35 of 37 (Worker Simplification)
-Plan: 2 of 2 in current phase
-Status: Phase complete
-Last activity: 2026-02-06 -- Completed 35-02-PLAN.md (command integration)
+Phase: 36 of 37 (Signal Simplification)
+Plan: 0 of TBD in current phase
+Status: Ready to plan
+Last activity: 2026-02-06 -- Phase 35 complete (worker simplification, 2 plans)
 
 Progress: [██████░░░░] 60%
 
@@ -81,9 +81,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed 35-02-PLAN.md (command integration)
+Stopped at: Phase 35 complete, ready for Phase 36 planning
 Resume file: None
 
 ---
 
-*State updated: 2026-02-06 after 35-02 completion*
+*State updated: 2026-02-06 after Phase 35 completion*

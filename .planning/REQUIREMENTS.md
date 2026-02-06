@@ -28,7 +28,7 @@ Requirements derived from postmortem Section 5 (Recommended Fixes), ordered by s
   - Filter expired signals on read, no cleanup command needed
   - Remove all sensitivity matrices from worker specs
 
-- [ ] **SIMP-04**: Collapse 6 worker specs into single workers.md (~200 lines)
+- [x] **SIMP-04**: Collapse 6 worker specs into single workers.md (~200 lines)
   - Preserve role concept (colonizer, scout, builder, watcher, architect, route-setter)
   - Remove sensitivity matrices, spawning protocols, visual identity systems
   - Include assignment guidelines
@@ -93,7 +93,7 @@ Per postmortem Section 7 (What to Preserve):
 | SIMP-01 | Phase 33 | Complete |
 | SIMP-02 | Phase 34 | Complete |
 | SIMP-03 | Phase 36 | Pending |
-| SIMP-04 | Phase 35 | Pending |
+| SIMP-04 | Phase 35 | Complete |
 | SIMP-05 | Phase 34 (build, continue), Phase 37 (remaining) | Partial (build, continue complete) |
 | SIMP-06 | Phase 37 | Pending |
 | SIMP-07 | Phase 34 | Complete |
