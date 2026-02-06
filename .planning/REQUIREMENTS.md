@@ -15,7 +15,7 @@ Requirements derived from postmortem Section 5 (Recommended Fixes), ordered by s
   - One read, one write per command
   - Event log as append-only strings within the file
 
-- [ ] **SIMP-02**: Move state updates from end-of-command to start-of-next-command
+- [x] **SIMP-02**: Move state updates from end-of-command to start-of-next-command
   - /ant:build writes "EXECUTING" state only
   - /ant:continue detects completed output files and updates state
   - Prevents state loss at context boundaries
@@ -48,7 +48,7 @@ Requirements derived from postmortem Section 5 (Recommended Fixes), ordered by s
   - Remove: memory compression, spawn check
   - Inline trivial operations (error summary, activity logging)
 
-- [ ] **SIMP-07**: Adopt output-as-state for build results
+- [x] **SIMP-07**: Adopt output-as-state for build results
   - `.planning/phase-N/SUMMARY.md` existence = phase complete
   - State file tracks only: current phase number, colony goal, active signals
   - /ant:continue reads output files to determine completion
@@ -91,12 +91,12 @@ Per postmortem Section 7 (What to Preserve):
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | SIMP-01 | Phase 33 | Complete |
-| SIMP-02 | Phase 34 | Pending |
+| SIMP-02 | Phase 34 | Complete |
 | SIMP-03 | Phase 36 | Pending |
 | SIMP-04 | Phase 35 | Pending |
-| SIMP-05 | Phase 34 (build, continue), Phase 37 (remaining) | Pending |
+| SIMP-05 | Phase 34 (build, continue), Phase 37 (remaining) | Partial (build, continue complete) |
 | SIMP-06 | Phase 37 | Pending |
-| SIMP-07 | Phase 34 | Pending |
+| SIMP-07 | Phase 34 | Complete |
 
 **Coverage:**
 - v5.1 requirements: 7 total
