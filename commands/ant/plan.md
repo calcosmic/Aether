@@ -26,23 +26,27 @@ Stop here.
 
 If `PROJECT_PLAN.json` already has phases (non-empty `phases` array), skip to **Step 5** (Display Plan).
 
-### Step 3: Compute Active Pheromones
+### Step 3: Compute Active Signals
 
-Use the Bash tool to run:
-```
-bash ~/.aether/aether-utils.sh pheromone-batch
-```
+Read `.aether/data/pheromones.json` and filter the `signals` array using TTL-based expiration:
 
-This returns JSON: `{"ok":true,"result":[...signals with current_strength...]}`. Parse the `result` array. Filter out signals where `current_strength < 0.05`.
+For each signal:
+- If `expires_at == "phase_end"`: keep (phase-scoped, cleared on phase advancement)
+- If `expires_at` is an ISO timestamp and `expires_at < current_time`: skip (expired)
+- Otherwise: keep
 
-If the command fails, treat as "no active pheromones."
+If no signals remain after filtering, treat as "no active signals."
 
 Format:
 
 ```
-ACTIVE PHEROMONES:
-- {TYPE} (strength {current_strength:.2f}): "{content}"
+ACTIVE SIGNALS:
+- {TYPE} [{priority}]: "{content}" ({expires display})
 ```
+
+Where `expires display` is:
+- `"phase"` if `expires_at == "phase_end"`
+- `"Xm left"` / `"Xh left"` for wall-clock expiration (calculate from expires_at - now)
 
 ### Step 4: Spawn One Ant
 
@@ -69,11 +73,11 @@ The Queen has signalled: plan the project.
 
 Goal: "{goal}"
 
---- ACTIVE PHEROMONES ---
-{pheromone block from Step 3}
+--- ACTIVE SIGNALS ---
+{signal block from Step 3}
 
-Respond to REDIRECT pheromones as hard constraints (things to avoid).
-Respond to FOCUS pheromones by prioritizing those areas.
+Respond to REDIRECT signals as hard constraints (things to avoid).
+Respond to FOCUS signals by prioritizing those areas.
 
 --- EXECUTION ENVIRONMENT ---
 
@@ -117,8 +121,8 @@ To spawn another ant:
 2. Use the Task tool (subagent_type="general-purpose") with prompt containing:
    --- WORKER SPEC ---
    {full contents of the spec file}
-   --- ACTIVE PHEROMONES ---
-   {copy the pheromone block above}
+   --- ACTIVE SIGNALS ---
+   {copy the signal block above}
    --- TASK ---
    {what you need them to do}
 

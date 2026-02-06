@@ -22,25 +22,28 @@ Use the Read tool to read these files (in parallel):
 
 **Validate:** If `COLONY_STATE.json` has `goal: null`, output `No colony initialized. Run /ant:init first.` and stop.
 
-### Step 2: Compute Active Pheromones
+### Step 2: Compute Active Signals
 
-Use the Bash tool to run:
+Read `.aether/data/pheromones.json` and filter the `signals` array using TTL-based expiration:
+
+For each signal:
+- If `expires_at == "phase_end"`: keep (phase-scoped, cleared on phase advancement)
+- If `expires_at` is an ISO timestamp and `expires_at < current_time`: skip (expired)
+- Otherwise: keep
+
+Format as the standard ACTIVE SIGNALS block:
 ```
-bash ~/.aether/aether-utils.sh pheromone-batch
+ACTIVE SIGNALS:
+  {TYPE} [{priority}]: "{content}" ({expires display})
 ```
 
-Parse the `result` array. Filter out signals where `current_strength < 0.05`.
-
-Format as the standard ACTIVE PHEROMONES block:
-```
-ACTIVE PHEROMONES:
-  {TYPE padded to 10 chars} [{bar of 20 chars using "█" filled, spaces empty}] {current_strength:.2f}
-    "{content}"
-```
+Where `expires display` is:
+- `"phase"` if `expires_at == "phase_end"`
+- `"Xm left"` / `"Xh left"` for wall-clock expiration (calculate from expires_at - now)
 
 If no active signals after filtering:
 ```
-  (no active pheromones)
+  (no active signals)
 ```
 
 ### Step 3: Spawn Archivist (Architect-Ant)
@@ -53,8 +56,8 @@ Spawn via **Task tool** with `subagent_type="general-purpose"`:
 --- WORKER SPEC ---
 {full contents of ~/.aether/workers/architect-ant.md}
 
---- ACTIVE PHEROMONES ---
-{pheromone block from Step 2}
+--- ACTIVE SIGNALS ---
+{signal block from Step 2}
 
 --- TASK ---
 You are being spawned as an ARCHIVIST ANT (codebase hygiene analyzer).
