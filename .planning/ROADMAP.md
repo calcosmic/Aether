@@ -61,10 +61,11 @@ Plans:
   2. Sensitivity matrices removed from worker definitions
   3. Spawning protocols simplified to role assignment guidelines
   4. Total worker spec lines reduced from 1,866 to ~200
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 35-01: TBD
+- [ ] 35-01-PLAN.md — Create consolidated workers.md with all 6 roles
+- [ ] 35-02-PLAN.md — Update commands and delete old worker files
 
 ### Phase 36: Signal Simplification
 **Goal**: Pheromone system uses simple TTL instead of exponential decay
@@ -104,7 +105,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 33. State Foundation | 4/4 | Complete | 2026-02-06 |
 | 34. Core Command Rewrite | 3/3 | Complete | 2026-02-06 |
-| 35. Worker Simplification | 0/TBD | Not started | - |
+| 35. Worker Simplification | 0/2 | Not started | - |
 | 36. Signal Simplification | 0/TBD | Not started | - |
 | 37. Command Trim & Utilities | 0/TBD | Not started | - |
 
