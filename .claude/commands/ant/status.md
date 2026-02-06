@@ -9,15 +9,19 @@ You are the **Queen Ant Colony**. Display the current colony status.
 
 ### Step 1: Read State
 
-Use the Read tool to read these files (in parallel):
-- `.aether/data/COLONY_STATE.json`
-- `.aether/data/pheromones.json`
-- `.aether/data/PROJECT_PLAN.json`
-- `.aether/data/errors.json`
-- `.aether/data/memory.json`
-- `.aether/data/events.json`
+Use the Read tool to read `.aether/data/COLONY_STATE.json`.
 
-If `COLONY_STATE.json` has `goal: null`, output:
+This consolidated file contains all colony state:
+- Top level: `goal`, `state`, `session_id`, `current_phase`, `version`
+- `workers`: worker status map
+- `spawn_outcomes`: per-caste spawn statistics
+- `plan.phases`: project phases
+- `signals`: pheromone signals
+- `memory`: phase learnings, decisions, patterns
+- `errors`: records, flagged_patterns
+- `events`: event log as pipe-delimited strings
+
+If `goal` is null, output:
 
 ```
 Colony not initialized.
@@ -27,14 +31,12 @@ Colony not initialized.
 
 Stop here.
 
-**Validation:** After reading each state file, verify the content is valid JSON. If any file contains invalid JSON (corrupted data), output an error message:
+**Validation:** Verify the content is valid JSON. If the file contains invalid JSON (corrupted data), output an error message:
 
 ```
-  WARNING: <filename> contains invalid data.
-  Recovery: Run /ant:init to reinitialize state files.
+  WARNING: COLONY_STATE.json contains invalid data.
+  Recovery: Run /ant:init to reinitialize state.
 ```
-
-Continue displaying status for the files that are valid. Skip sections for corrupted files.
 
 ### Step 2: Compute Pheromone Decay
 
@@ -54,7 +56,7 @@ If any signals from Step 2 had `current_strength < 0.05`, use the Bash tool to r
 bash ~/.aether/aether-utils.sh pheromone-cleanup
 ```
 
-This removes expired signals from `pheromones.json` and returns `{"ok":true,"result":{"removed":N,"remaining":N}}`.
+This removes expired signals from the `signals` array in `COLONY_STATE.json` and returns `{"ok":true,"result":{"removed":N,"remaining":N}}`.
 
 If no signals are expired, skip this step.
 
@@ -83,7 +85,7 @@ Output this header (filling in values from `COLONY_STATE.json`):
 +=====================================================+
 ```
 
-Then display the following sections, filling in values from the state files.
+Then display the following sections, filling in values from the state file.
 
 Between each major section (WORKERS, ACTIVE PHEROMONES, ERRORS, MEMORY, EVENTS, PHASE PROGRESS, NEXT ACTIONS), output a divider:
 
@@ -95,7 +97,7 @@ Between each major section (WORKERS, ACTIVE PHEROMONES, ERRORS, MEMORY, EVENTS, 
 WORKERS
 ```
 
-Display workers grouped by their status from `COLONY_STATE.json`:
+Display workers grouped by their status from `workers` object:
 
 If ALL workers have `"idle"` status (the common case), display a compact summary:
 ```
@@ -129,7 +131,7 @@ Only show groups that have at least one worker. End with a summary line:
 🧪 ACTIVE PHEROMONES
 ```
 
-For each non-expired signal, display with a visual strength bar:
+For each non-expired signal in `signals` array, display with a visual strength bar:
 
 ```
   {TYPE padded to 10 chars} [{bar}] {current_strength:.2f}
@@ -144,7 +146,6 @@ Where the bar has 20 characters total:
 Examples:
 ```
   INIT       [████████████████████] 1.00  (persistent)
-    "Build a REST API with authentication"
   FOCUS      [███████████████     ] 0.75
     "WebSocket security"
   REDIRECT   [██████              ] 0.30
@@ -191,7 +192,7 @@ If no caste would PRIORITIZE a signal, show `(below action threshold for all cas
 💀 ERRORS
 ```
 
-If `errors.json` was read successfully and has content:
+Read from `errors` object in COLONY_STATE.json:
 
 Display flagged patterns first (if any exist in `flagged_patterns` array):
 ```
@@ -199,7 +200,7 @@ Display flagged patterns first (if any exist in `flagged_patterns` array):
     <category>: <count> occurrences — "<description from first error of that category>"
 ```
 
-Then show recent errors (last 5 from `errors` array, newest first):
+Then show recent errors (last 5 from `records` array, newest first):
 ```
   Recent:
     🔴 [critical] <category>: <description> (phase <phase>)
@@ -210,12 +211,10 @@ Then show recent errors (last 5 from `errors` array, newest first):
 
 Use the severity emoji that matches: 🔴 critical, 🟠 high, 🟡 medium, ⚪ low.
 
-If `errors` array is empty and `flagged_patterns` is empty:
+If `records` array is empty and `flagged_patterns` is empty:
 ```
   (no errors recorded)
 ```
-
-If `errors.json` doesn't exist or couldn't be read, skip this section silently.
 
 ```
 ---------------------------------------------------
@@ -225,7 +224,7 @@ If `errors.json` doesn't exist or couldn't be read, skip this section silently.
 🧠 MEMORY
 ```
 
-If `memory.json` was read successfully and has content:
+Read from `memory` object in COLONY_STATE.json:
 
 Display recent phase learnings (last 3 from `phase_learnings` array, newest first):
 ```
@@ -245,8 +244,6 @@ If `phase_learnings` array is empty and `decisions` array is empty:
   (no memory recorded)
 ```
 
-If `memory.json` doesn't exist or couldn't be read, skip this section silently.
-
 ```
 ---------------------------------------------------
 ```
@@ -255,7 +252,15 @@ If `memory.json` doesn't exist or couldn't be read, skip this section silently.
 📡 EVENTS
 ```
 
-If `events.json` was read successfully and has content:
+Read from `events` array in COLONY_STATE.json. Events are stored as pipe-delimited strings:
+
+Format: `"<timestamp> | <type> | <source> | <content>"`
+
+Parse each event by splitting on ` | ` (space-pipe-space):
+- Index 0: timestamp (ISO-8601)
+- Index 1: type (e.g., "colony_initialized", "phase_started")
+- Index 2: source (e.g., "init", "builder")
+- Index 3: content (human-readable message)
 
 Display recent events (last 5 from `events` array, newest first):
 ```
@@ -268,8 +273,6 @@ If `events` array is empty:
   (no events recorded)
 ```
 
-If `events.json` doesn't exist or couldn't be read, skip this section silently.
-
 ```
 ---------------------------------------------------
 ```
@@ -278,13 +281,15 @@ If `events.json` doesn't exist or couldn't be read, skip this section silently.
 PHASE PROGRESS
 ```
 
-If `PROJECT_PLAN.json` has phases, display:
+Read from `plan.phases` array in COLONY_STATE.json:
+
+If phases exist, display:
 ```
   Phase <id>: <name> [<STATUS>]
 ```
 For each phase. Use `[x]` for completed, `[~]` for in_progress, `[ ]` for pending.
 
-Also show: `Current phase: <current_phase from COLONY_STATE>`
+Also show: `Current phase: <current_phase from top level>`
 
 If no phases: `  No project plan yet. Run /ant:plan`
 
