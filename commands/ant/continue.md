@@ -20,7 +20,6 @@ Proceed to Step 1.
 
 Use the Read tool to read these files (in parallel):
 - `.aether/data/COLONY_STATE.json`
-- `.aether/data/pheromones.json`
 - `.aether/data/PROJECT_PLAN.json`
 - `.aether/data/errors.json`
 - `.aether/data/memory.json`
@@ -367,7 +366,7 @@ If Step 4 was skipped due to auto-extraction detection, skip this step as well a
 
 After extracting learnings, automatically emit pheromones based on phase outcomes.
 
-Read `.aether/data/pheromones.json` (if not already in memory from Step 1).
+Use the signals array from `COLONY_STATE.json` (already in memory from Step 1).
 
 **Always emit a FEEDBACK signal** summarizing what worked and what didn't from the phase learnings:
 
@@ -419,7 +418,7 @@ This returns JSON: `{"ok":true,"result":{"pass":true|false,...}}`.
 
 If the command fails (non-zero exit), skip validation and append the pheromone anyway (fail-open for auto-emitted pheromones).
 
-Append validated pheromones to the `signals` array in `pheromones.json`. Use the Write tool to write the updated file.
+Append validated pheromones to the `signals` array in `COLONY_STATE.json`. Use the Write tool to write the updated COLONY_STATE.json.
 
 **Log Events:** For each auto-emitted pheromone, append to events.json:
 
@@ -442,7 +441,7 @@ When advancing to the next phase, filter out signals that have expired:
 ```
 current_time = current ISO-8601 UTC timestamp
 
-For each signal in pheromones.json signals array:
+For each signal in COLONY_STATE.json signals array:
   if signal.expires_at == "phase_end":
     remove (phase-scoped signals expire when phase advances)
   elif signal.expires_at < current_time:
@@ -451,7 +450,7 @@ For each signal in pheromones.json signals array:
     keep (still active)
 ```
 
-Write the filtered signals array back to `pheromones.json`.
+Write the filtered signals array back to `COLONY_STATE.json`.
 
 This ensures phase-scoped signals are cleared when advancing phases, while time-based signals persist until their TTL expires.
 
@@ -573,6 +572,6 @@ After displaying the result above, add a state persistence confirmation:
 ```
 ---
 All state persisted. Safe to /clear context if needed.
-  State: .aether/data/ (6 files validated)
+  State: .aether/data/ (5 files validated)
   Resume: /ant:resume-colony
 ```

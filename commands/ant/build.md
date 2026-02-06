@@ -54,7 +54,6 @@ Stop here.
 
 Use the Read tool to read these files (in parallel):
 - `.aether/data/COLONY_STATE.json`
-- `.aether/data/pheromones.json`
 - `.aether/data/PROJECT_PLAN.json`
 - `.aether/data/errors.json`
 - `.aether/data/events.json`
@@ -67,7 +66,7 @@ Use the Read tool to read these files (in parallel):
 
 ### Step 3: Filter Active Signals
 
-Filter signals from `pheromones.json` using TTL:
+Filter signals from `COLONY_STATE.json` signals array using TTL:
 
 ```
 current_time = current ISO-8601 UTC timestamp
@@ -899,7 +898,7 @@ Note: spawn_outcomes already updated in Step 6 -- do NOT update them here.
 
 #### Step 7b: Emit FEEDBACK Signal
 
-Read `.aether/data/pheromones.json` (if not already in memory). Always emit a FEEDBACK signal with balanced summary of what worked + what failed. Include the actual learnings in the signal body so colony can read them without checking memory.json.
+Use the signals array from `COLONY_STATE.json` (already in memory from Step 2). Always emit a FEEDBACK signal with balanced summary of what worked + what failed. Include the actual learnings in the signal body so colony can read them without checking memory.json.
 
 ```json
 {
@@ -913,7 +912,7 @@ Read `.aether/data/pheromones.json` (if not already in memory). Always emit a FE
 }
 ```
 
-Append the signal to the `signals` array in `pheromones.json`.
+Append the signal to the `signals` array in `COLONY_STATE.json`.
 
 Conditionally emit a REDIRECT signal if `errors.json` has `flagged_patterns` entries related to this phase:
 
@@ -945,7 +944,7 @@ Append to events.json:
 }
 ```
 
-If events array exceeds 100 entries, trim oldest to 100. Write updated events.json and pheromones.json.
+If events array exceeds 100 entries, trim oldest to 100. Write updated events.json. The signals were already written to COLONY_STATE.json in Step 6.
 
 #### Step 7e: Display Results
 
@@ -1092,7 +1091,7 @@ If the result contains `"pass":true`:
 ```
 ---
 All state persisted. Safe to /clear context if needed.
-  State: .aether/data/ (6 files validated)
+  State: .aether/data/ (5 files validated)
   Resume: /ant:resume-colony
 ```
 
