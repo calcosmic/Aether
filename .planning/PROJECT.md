@@ -4,15 +4,15 @@
 
 Aether is a **standalone multi-agent system** that applies ant colony intelligence to autonomous agent orchestration, built natively for Claude Code. Worker Ants spawn other Worker Ants through bio-inspired pheromone signaling. The Queen (user) provides high-level intention via pheromone signals (INIT, FOCUS, REDIRECT, FEEDBACK), and the colony self-organizes to complete tasks through emergent intelligence.
 
-This is a **hybrid prompt+code system** — commands like `/ant:init "Build a REST API"` work directly in Claude Code as skill prompts. Prompts handle reasoning and orchestration; a thin shell utility layer (`aether-utils.sh`, 369 lines, 18 subcommands) handles deterministic operations (pheromone math, state validation, spawn enforcement, memory management, error tracking, learning promotion) that LLMs get wrong.
+This is a **hybrid prompt+code system** — commands like `/ant:init "Build a REST API"` work directly in Claude Code as skill prompts. Prompts handle reasoning and orchestration; a thin shell utility layer (`aether-utils.sh`, 87 lines, 5 subcommands) handles deterministic operations (state validation, error tracking, activity logging) that LLMs get wrong.
 
 **What makes it different:**
 
 Autonomous agent spawning is not unique to Aether — systems like AutoGen (ADAS/Meta Agent Search), AutoAgents, and OpenAI's Agents SDK support dynamic agent creation. What Aether does differently is the coordination model:
 
-1. **Stigmergic Communication** — Pheromone signaling with exponential decay, caste sensitivity profiles, and combination effects (not direct commands or message passing)
-2. **Caste Architecture** — Six Worker Ant types with specialist watcher modes, each with different pheromone sensitivities
-3. **Bayesian Spawn Tracking** — Spawn outcomes tracked per caste with alpha/beta updates, so the colony learns which specialists succeed
+1. **Stigmergic Communication** — Pheromone signaling with TTL-based expiration and priority levels (not direct commands or message passing)
+2. **Caste Architecture** — Six Worker Ant types with specialist watcher modes, consolidated in single workers.md
+3. **Output-as-State** — SUMMARY.md existence signals completion; state survives context boundaries
 4. **Phased Autonomy** — Structure at boundaries, pure emergence within phases
 5. **Colony Memory** — Error tracking, phase learnings, and event awareness that persists across sessions
 6. **Hybrid Determinism** — Shell utilities for math/validation/enforcement, prompts for reasoning/orchestration
@@ -115,19 +115,19 @@ If this works, everything else follows. If this fails, nothing else matters. The
 - ✓ **Cosmetic Fixes** — continue.md learnings_extracted guard, pheromones.md source field, validate-state mode fields — v5.0
 - ✓ **Documentation** — README.md with install/uninstall instructions, file structure updated for global/local split — v5.0
 
+*(Shipped in v5.1 — 2026-02-06)*
+
+- ✓ **State Consolidation** — 6 JSON files merged into single COLONY_STATE.json (103 refs across 15 commands) — v5.1
+- ✓ **State Update Timing** — State updates at start-of-next-command; state survives context boundaries — v5.1
+- ✓ **TTL Pheromones** — Simple expires_at timestamps replace decay math; priority levels replace sensitivity matrices — v5.1
+- ✓ **Worker Spec Collapse** — 6 worker specs (1,866 lines) merged into single workers.md (171 lines, 91% reduction) — v5.1
+- ✓ **Command Shrinking** — build.md 1,080→414 lines (62%), continue.md 534→111 lines (79%) — v5.1
+- ✓ **Utility Reduction** — aether-utils.sh 372→87 lines (77% reduction) — v5.1
+- ✓ **Output-as-State** — SUMMARY.md existence = phase complete; passive detection by continue.md — v5.1
+
 ### Active
 
-*(v5.1 — System Simplification — 2026-02-06)*
-
-**Goal:** Reduce system from ~7,400 lines to ~1,800 lines based on M4L-AnalogWave postmortem findings. Framework overhead currently consumes ~70% of context; target is ~20%.
-
-- [ ] **State Consolidation** — Merge 6 JSON files (COLONY_STATE, PROJECT_PLAN, pheromones, memory, errors, events) into single COLONY_STATE.json
-- [ ] **State Update Timing** — Move state updates from end-of-command to start-of-next-command (prevents context boundary loss)
-- [ ] **TTL Pheromones** — Replace exponential decay math with simple `expires_at` timestamps; remove sensitivity matrices
-- [ ] **Worker Spec Collapse** — Merge 6 worker specs (1,866 lines) into single `workers.md` (~200 lines)
-- [ ] **Command Shrinking** — Reduce average command from ~340 lines to ~100 lines (remove verbose templates, redundant validation)
-- [ ] **Utility Reduction** — Reduce `aether-utils.sh` from 372 lines to ~80 lines (keep validate-state, error-add; remove pheromone math)
-- [ ] **Output-as-State** — Use deliverable files (`.planning/phase-N/SUMMARY.md`) as primary record instead of state file task statuses
+*(No active requirements — ready for next milestone)*
 
 ### Out of Scope
 

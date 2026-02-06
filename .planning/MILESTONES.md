@@ -1,5 +1,46 @@
 # Project Milestones: Aether
 
+## v5.1 System Simplification (Shipped: 2026-02-06)
+
+**Delivered:** Reduced Aether from 7,400 lines to 1,848 lines (75% reduction) based on M4L-AnalogWave postmortem findings. Framework overhead reduced from ~70% to ~20% of context.
+
+**Phases completed:** 33-40 (22 plans total)
+
+**Key accomplishments:**
+
+- **State consolidation** — 6 JSON files merged into single COLONY_STATE.json (103 refs across 15 commands)
+- **Start-of-next-command pattern** — State survives context boundaries; build writes EXECUTING, continue reconciles
+- **TTL signals** — Simple expires_at timestamps replace exponential decay math; priority levels replace sensitivity matrices
+- **Worker consolidation** — 1,866 lines collapsed to 171 lines (91% reduction) in single workers.md
+- **Command shrinking** — build.md 1,080→414 lines (62%), continue.md 534→111 lines (79%)
+- **Utility reduction** — aether-utils.sh 372→87 lines (77% reduction)
+
+**Stats:**
+
+- 14 command files updated
+- 1,848 lines of command markdown
+- 8 phases, 22 plans
+- 96 commits
+- 1 day (2026-02-06)
+
+**Git range:** v5.0 → v5.1
+
+**What's next:** TBD
+
+---
+
+## v5.0 NPM Distribution (Shipped: 2026-02-05)
+
+**Delivered:** Global NPM package distribution with postinstall auto-setup, path migration for global/local resource split.
+
+**Key accomplishments:**
+
+- Path migration to ~/.aether/ for global resources, .aether/data/ for per-project state
+- NPM package with postinstall auto-copying to ~/.claude/commands/ant/
+- Documentation updated for install/uninstall workflow
+
+---
+
 ## v4.4 Colony Hardening & Real-World Readiness (Shipped: 2026-02-05)
 
 **Delivered:** Addressed all 23 actionable findings from the first real-world field test — fixed critical bugs (pheromone decay, activity log, error attribution), reduced UX friction (auto-continue, safe-to-clear), added colony intelligence (adaptive complexity modes, calibrated watcher scoring, multi-colonizer synthesis), automated quality gates (reviewer, debugger, tech debt reports), evolved architecture (two-tier learning, spawn tree engine), and added polish (codebase hygiene command, pheromone documentation).
