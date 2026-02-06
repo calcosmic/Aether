@@ -13,7 +13,7 @@ Transform Aether from a 7,400-line over-engineered system to a lean 1,800-line i
 - [x] **Phase 33: State Foundation** - Consolidate 6 state files into single COLONY_STATE.json
 - [x] **Phase 34: Core Command Rewrite** - Rewrite build and continue commands with start-of-next-command state updates
 - [x] **Phase 35: Worker Simplification** - Collapse 6 worker specs into single workers.md
-- [ ] **Phase 36: Signal Simplification** - Replace pheromone exponential decay with simple TTL
+- [x] **Phase 36: Signal Simplification** - Replace pheromone exponential decay with simple TTL
 - [ ] **Phase 37: Command Trim & Utilities** - Shrink remaining commands and reduce aether-utils.sh
 
 ## Phase Details
@@ -83,7 +83,7 @@ Plans:
 - [x] 36-02-PLAN.md — Update signal consumption commands with TTL filtering
 - [x] 36-03-PLAN.md — Remove pheromone math from utilities and update docs
 - [x] 36-04-PLAN.md — (gap closure) Remove decay commands from runtime/aether-utils.sh
-- [ ] 36-05-PLAN.md — (gap closure) Update plan/organize/colonize commands, delete runtime/workers/*.md
+- [x] 36-05-PLAN.md — (gap closure) Update plan/organize/colonize commands, delete runtime/workers/*.md
 
 ### Phase 37: Command Trim & Utilities
 **Goal**: Remaining commands shrunk and aether-utils.sh reduced to ~80 lines
@@ -110,7 +110,7 @@ Plans:
 | 33. State Foundation | 4/4 | Complete | 2026-02-06 |
 | 34. Core Command Rewrite | 3/3 | Complete | 2026-02-06 |
 | 35. Worker Simplification | 2/2 | Complete | 2026-02-06 |
-| 36. Signal Simplification | 4/5 | Gap closure | - |
+| 36. Signal Simplification | 5/5 | Complete | 2026-02-06 |
 | 37. Command Trim & Utilities | 0/TBD | Not started | - |
 
 ---

@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 Milestone: v5.1 System Simplification
 Phase: 36 of 37 (Signal Simplification)
-Plan: 4 of 5 in current phase
-Status: In progress (gap closure)
-Last activity: 2026-02-06 -- Completed 36-04-PLAN.md (runtime utility decay removal)
+Plan: 5 of 5 in current phase
+Status: Phase complete
+Last activity: 2026-02-06 -- Completed 36-05-PLAN.md (gap closure)
 
-Progress: [█████████░] 87%
+Progress: [█████████░] 93%
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -42,7 +42,7 @@ Progress: [█████████░] 87%
 | 33-state-foundation | 4 | 10min | 2.5min |
 | 34-core-command-rewrite | 3 | 6min | 2min |
 | 35-worker-simplification | 2 | 3min | 1.5min |
-| 36-signal-simplification | 4 | 10min | 2.5min |
+| 36-signal-simplification | 5 | 12min | 2.4min |
 
 *Updated after each plan completion*
 
@@ -78,6 +78,8 @@ Recent decisions affecting current work:
 - [36-02]: Phase-end signals cleared when advancing phases
 - [36-03]: Keep pheromone-validate (content length validation still useful)
 - [36-03]: Priority processing: high first, then normal, then low
+- [36-05]: Inline TTL filtering replaces pheromone-batch calls in commands
+- [36-05]: Deleted 1,866 lines of obsolete runtime/workers/*.md files
 
 ### Pending Todos
 
@@ -90,9 +92,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed 36-04-PLAN.md (gap closure plan 1 of 2)
+Stopped at: Completed 36-05-PLAN.md (Phase 36 complete)
 Resume file: None
 
 ---
 
-*State updated: 2026-02-06 after 36-04 plan completion*
+*State updated: 2026-02-06 after 36-05 plan completion*
