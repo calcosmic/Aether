@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 Milestone: v5.1 System Simplification
 Phase: 37 of 37 (Command Trim & Utilities)
-Plan: 3 of 5 in current phase (37-01, 37-02, 37-03 complete)
+Plan: 4 of 5 in current phase (37-01, 37-02, 37-03, 37-04 complete)
 Status: In progress
-Last activity: 2026-02-06 -- Completed 37-01-PLAN.md (signal command reduction)
+Last activity: 2026-02-06 -- Completed 37-04-PLAN.md (utilities & verification)
 
-Progress: [█████████░] 90%
+Progress: [█████████░] 92%
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -31,7 +31,7 @@ Progress: [█████████░] 90%
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 12 (v5.1 milestone)
+- Total plans completed: 13 (v5.1 milestone)
 - Total plans all milestones: 100+
 - Average duration: ~2 min (v5.1)
 
@@ -43,7 +43,7 @@ Progress: [█████████░] 90%
 | 34-core-command-rewrite | 3 | 6min | 2min |
 | 35-worker-simplification | 2 | 3min | 1.5min |
 | 36-signal-simplification | 5 | 12min | 2.4min |
-| 37-command-trim-utilities | 3 | 4min | 1.3min |
+| 37-command-trim-utilities | 4 | 6min | 1.5min |
 
 *Updated after each plan completion*
 
@@ -87,6 +87,8 @@ Recent decisions affecting current work:
 - [37-03]: Output to .planning/CODEBASE.md with 20 file read cap
 - [37-01]: Signal commands reduced to ~36 lines each with one-line confirmation
 - [37-01]: Removed sensitivity matrix displays (Phase 36 made obsolete)
+- [37-04]: aether-utils.sh reduced from 317 to 85 lines (4 essential functions kept)
+- [37-04]: System line count: 1,848 command lines (close to 1,800 target)
 
 ### Pending Todos
 
@@ -99,9 +101,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed 37-01-PLAN.md (signal command reduction)
+Stopped at: Completed 37-04-PLAN.md (utilities & verification)
 Resume file: None
 
 ---
 
-*State updated: 2026-02-06 after 37-01-PLAN.md completion*
+*State updated: 2026-02-06 after 37-04-PLAN.md completion*
