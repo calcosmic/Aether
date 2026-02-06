@@ -70,19 +70,20 @@ HOW IT WORKS
     5. Repeat BUILD/CONTINUE until all phases complete.
 
   Pheromone System:
-    Signals decay over time (exponential half-life). Workers sense signals
+    Signals have TTL expiration (expires_at timestamp). Workers sense signals
     and adjust behavior. FOCUS attracts, REDIRECT repels, FEEDBACK calibrates.
 
   Autonomy Model:
     Workers spawn sub-workers autonomously (max depth 3, max 5 active).
-    Bayesian confidence tracks spawn success rates per caste.
+    Spawn outcomes tracked per caste (success/fail counts).
     Phase boundaries are control points -- emergence happens within phases.
 
-  State Files (.aether/data/):
-    COLONY_STATE.json  Colony goal, state, workers, spawn outcomes
-    pheromones.json    Active pheromone signals with decay
-    PROJECT_PLAN.json  Phase breakdown and task tracking
-    errors.json        Error records and flagged patterns
-    memory.json        Phase learnings and decisions
-    events.json        Colony event log
+  State File (.aether/data/):
+    COLONY_STATE.json  Unified colony state containing:
+      - goal, state, current_phase, workers, spawn_outcomes
+      - plan.phases (phase breakdown and task tracking)
+      - signals (pheromone signals with TTL expiration)
+      - memory (phase learnings, decisions, patterns)
+      - errors (records, flagged patterns)
+      - events (colony event log)
 ```

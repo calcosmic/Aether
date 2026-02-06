@@ -16,7 +16,7 @@ Transform Aether from a 7,400-line over-engineered system to a lean 1,800-line i
 - [x] **Phase 36: Signal Simplification** - Replace pheromone exponential decay with simple TTL
 - [x] **Phase 37: Command Trim & Utilities** - Shrink remaining commands and reduce aether-utils.sh
 - [x] **Phase 38: Signal Schema Unification** - Fix init.md and signal path inconsistencies (gap closure)
-- [ ] **Phase 39: Worker Reference Consolidation** - Update commands to use workers.md (gap closure)
+- [x] **Phase 39: Worker Reference Consolidation** - Update commands to use workers.md (gap closure)
 - [ ] **Phase 40: State & Utility Alignment** - Fix remaining state file references and sync utilities (gap closure)
 
 ## Phase Details
@@ -131,7 +131,7 @@ Plans:
   4. No command references ~/.aether/workers/{caste}-ant.md pattern
 
 Plans:
-- [ ] 39-01-PLAN.md — Update worker references in build.md, plan.md, organize.md
+- N/A — Work completed in Phase 35-02 (verified 2026-02-06)
 
 ### Phase 40: State & Utility Alignment
 **Goal**: Complete state consolidation and sync utility scripts
@@ -142,10 +142,11 @@ Plans:
   2. runtime/aether-utils.sh matches ~/.aether/aether-utils.sh (or runtime removed)
   3. Documentation reflects actual line counts
   4. Build/continue handoff uses single state file
+**Plans**: 2 plans
 
 Plans:
-- [ ] 40-01-PLAN.md — Audit and fix remaining separate file references
-- [ ] 40-02-PLAN.md — Sync utility scripts and update documentation
+- [ ] 40-01-PLAN.md — Remove legacy utility calls from commands, update ant.md docs
+- [ ] 40-02-PLAN.md — Sync ~/.aether/aether-utils.sh with runtime version
 
 ## Progress
 
@@ -159,7 +160,7 @@ Plans:
 | 36. Signal Simplification | 5/5 | Complete | 2026-02-06 |
 | 37. Command Trim & Utilities | 4/4 | Complete | 2026-02-06 |
 | 38. Signal Schema Unification | 1/1 | Complete | 2026-02-06 |
-| 39. Worker Reference Consolidation | 0/1 | Pending | - |
+| 39. Worker Reference Consolidation | 0/0 | Complete | 2026-02-06 |
 | 40. State & Utility Alignment | 0/2 | Pending | - |
 
 ---
