@@ -10,7 +10,7 @@ Requirements derived from postmortem Section 5 (Recommended Fixes), ordered by s
 
 ### Critical Priority
 
-- [ ] **SIMP-01**: Consolidate 6 state files into single COLONY_STATE.json
+- [x] **SIMP-01**: Consolidate 6 state files into single COLONY_STATE.json
   - Merge: COLONY_STATE, PROJECT_PLAN, pheromones, memory, errors, events
   - One read, one write per command
   - Event log as append-only strings within the file
@@ -90,7 +90,7 @@ Per postmortem Section 7 (What to Preserve):
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SIMP-01 | Phase 33 | Pending |
+| SIMP-01 | Phase 33 | Complete |
 | SIMP-02 | Phase 34 | Pending |
 | SIMP-03 | Phase 36 | Pending |
 | SIMP-04 | Phase 35 | Pending |
