@@ -63,8 +63,8 @@ Update COLONY_STATE.json with full reconciliation:
 1. **Mark tasks:** Set status based on detection from Step 1
 2. **Extract learnings:** Append to `memory.phase_learnings`: `{id, phase, phase_name, learnings: ["<specific actionable>"], errors_encountered, timestamp}`
 3. **Update spawn_outcomes:** Increment alpha/successes or beta/failures for contributing castes
-4. **Emit FEEDBACK pheromone:** `{type: "FEEDBACK", content: "<what worked/didn't>", strength: 0.5, half_life_seconds: 21600, source: "auto:continue", auto: true}`
-5. **Emit REDIRECT if flagged_patterns exist:** strength 0.9, half_life 86400
+4. **Emit FEEDBACK pheromone:** `{type: "FEEDBACK", content: "<what worked/didn't>", priority: "normal", expires_at: "<6 hours from now ISO-8601>", source: "auto:continue", auto: true}`
+5. **Emit REDIRECT if flagged_patterns exist:** `{type: "REDIRECT", content: "<pattern to avoid>", priority: "high", expires_at: "<24 hours from now ISO-8601>", source: "auto:continue", auto: true}`
 6. **Clean expired pheromones:** Expired signals are filtered on read. No explicit cleanup needed.
 7. **Advance state:** Set `current_phase` to next, `state` to "READY", workers to "idle", append phase_advanced event
 8. **Write COLONY_STATE.json**

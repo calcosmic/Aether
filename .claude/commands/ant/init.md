@@ -84,8 +84,8 @@ Use the Write tool to write `.aether/data/COLONY_STATE.json` with the complete v
       "id": "init_<unix_timestamp>",
       "type": "INIT",
       "content": "<the user's goal>",
-      "strength": 1.0,
-      "half_life_seconds": null,
+      "priority": "high",
+      "expires_at": null,
       "created_at": "<ISO-8601 timestamp>"
     }
   ],
@@ -104,7 +104,7 @@ Use the Write tool to write `.aether/data/COLONY_STATE.json` with the complete v
 }
 ```
 
-INIT signals have no half-life (null) and persist forever.
+INIT signals have no expiration (expires_at: null) and persist forever.
 
 ### Step 4: Validate State File
 
