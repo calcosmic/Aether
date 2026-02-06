@@ -16,16 +16,23 @@ Use the Read tool to read these files (in parallel):
 
 If `COLONY_STATE.json` has `goal: null`, output `No colony initialized. Nothing to pause.` and stop.
 
-### Step 2: Compute Pheromone Decay
+### Step 2: Filter Active Signals
 
-Use the Bash tool to run:
+Filter signals from `pheromones.json` using TTL:
+
 ```
-bash ~/.aether/aether-utils.sh pheromone-batch
+current_time = current ISO-8601 UTC timestamp
+
+For each signal in signals array:
+  if signal.expires_at == "phase_end":
+    keep (phase-scoped)
+  elif signal.expires_at < current_time:
+    skip (expired)
+  else:
+    keep (active)
 ```
 
-This returns JSON: `{"ok":true,"result":[...signals with current_strength...]}`. Parse the `result` array. Signals with `current_strength >= 0.05` are still active.
-
-If the command fails, treat as "no active pheromones."
+Count active signals for the display in Step 5.
 
 ### Step 3: Build Handoff Summary
 
@@ -37,7 +44,16 @@ Gather context for the handoff:
 - Phase progress from `PROJECT_PLAN.json` (how many complete, current phase tasks)
 - What was in progress or pending
 
-### Step 4: Write Handoff
+### Step 4: Write Handoff and Pause Timestamp
+
+**4a. Record paused_at timestamp:**
+
+Use the Write tool to update `COLONY_STATE.json`:
+- Set `paused_at` to the current ISO-8601 UTC timestamp
+
+This tracks when the colony was paused for TTL extension on resume.
+
+**4b. Write HANDOFF.md:**
 
 Use the Write tool to update `.aether/HANDOFF.md` with a session handoff section at the top. The format:
 
@@ -54,9 +70,9 @@ Run `/ant:resume-colony` in a new session.
 - Session: <session_id>
 - Paused: <ISO-8601 timestamp>
 
-## Active Pheromones
-- <TYPE> (strength <current>): "<content>"
-(list each non-expired signal)
+## Active Signals
+- {TYPE} [{priority}]: "{content}" ({time_remaining})
+(list each non-expired signal with priority and time remaining)
 
 ## Phase Progress
 (for each phase, show status)

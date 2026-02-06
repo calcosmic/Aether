@@ -25,16 +25,45 @@ No colony state found. Either:
 
 Stop here.
 
-### Step 2: Compute Pheromone Decay
+### Step 2: Extend Signal TTLs by Pause Duration
 
-Use the Bash tool to run:
+Check if `paused_at` exists in `COLONY_STATE.json`:
+
 ```
-bash ~/.aether/aether-utils.sh pheromone-batch
+If paused_at is set:
+  current_time = current ISO-8601 UTC timestamp
+  pause_duration = current_time - paused_at (in seconds/minutes)
+
+  For each signal in pheromones.json signals array:
+    if signal.expires_at == "phase_end":
+      keep as-is (phase-scoped, no TTL to extend)
+    elif signal.expires_at < current_time:
+      skip (already expired before pause)
+    else:
+      expires_at = expires_at + pause_duration (extend TTL)
+
+  Clear paused_at from COLONY_STATE.json
+  Write updated COLONY_STATE.json
+  Write updated pheromones.json with extended TTLs
 ```
 
-This returns JSON: `{"ok":true,"result":[...signals with current_strength...]}`. Parse the `result` array. Signals with `current_strength >= 0.05` are still active.
+This ensures signals don't expire during legitimate pauses.
 
-If the command fails, treat as "no active pheromones."
+### Step 2.5: Filter Active Signals
+
+After TTL extension, filter signals for display:
+
+```
+current_time = current ISO-8601 UTC timestamp
+
+For each signal in signals array:
+  if signal.expires_at == "phase_end":
+    keep (phase-scoped)
+  elif signal.expires_at < current_time:
+    skip (expired)
+  else:
+    keep (active, compute time remaining)
+```
 
 ### Step 3: Display Restored State
 
@@ -50,13 +79,14 @@ Read the HANDOFF.md for context about what was happening, then display:
   Session: <session_id>
   Phase: <current_phase>
 
-ACTIVE PHEROMONES
-  {TYPE padded to 10 chars} [{bar of 20 chars using "█" filled, spaces empty}] {current_strength:.2f}
-    "{content}"
+ACTIVE SIGNALS
+  {TYPE} [{priority}]: "{content}" ({time_remaining})
 
-  Where the bar uses round(current_strength * 20) filled "█" characters and spaces for the remainder.
+  Where time_remaining is:
+  - "phase" if expires_at == "phase_end"
+  - "45m left" / "2h left" for wall-clock expiration
 
-  If no active signals: (no active pheromones)
+  If no active signals: (no active signals)
 
 WORKERS
 
