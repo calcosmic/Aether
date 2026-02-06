@@ -48,13 +48,13 @@ If no active signals after filtering:
 
 ### Step 3: Spawn Archivist (Architect-Ant)
 
-Use the Read tool to read `~/.aether/workers/architect-ant.md`.
+Read `~/.aether/workers.md` and extract the `## Architect` section.
 
 Spawn via **Task tool** with `subagent_type="general-purpose"`:
 
 ```
 --- WORKER SPEC ---
-{full contents of ~/.aether/workers/architect-ant.md}
+{Architect section from ~/.aether/workers.md}
 
 --- ACTIVE PHEROMONES ---
 {pheromone block from Step 2}

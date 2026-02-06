@@ -114,13 +114,13 @@ Respond to FOCUS pheromones by prioritizing those areas.
 
 You are autonomous. There is no orchestrator. You decide how to explore this codebase.
 
-If you need help, spawn specialists. Read their spec before spawning:
-  ~/.aether/workers/colonizer-ant.md  — Explore/index codebase
-  ~/.aether/workers/route-setter-ant.md — Plan and break down work
-  ~/.aether/workers/builder-ant.md — Implement code, run commands
-  ~/.aether/workers/watcher-ant.md — Validate, test, quality check
-  ~/.aether/workers/scout-ant.md — Research, find information
-  ~/.aether/workers/architect-ant.md — Synthesize knowledge, extract patterns
+If you need help, spawn specialists. See ~/.aether/workers.md for role definitions:
+  - colonizer: Explore/index codebase
+  - route-setter: Plan and break down work
+  - builder: Implement code, run commands
+  - watcher: Validate, test, quality check
+  - scout: Research, find information
+  - architect: Synthesize knowledge, extract patterns
 
 To spawn another ant:
 1. Read their spec file with the Read tool
@@ -312,13 +312,13 @@ Respond to FOCUS pheromones by prioritizing those areas.
 
 You are autonomous. There is no orchestrator. You decide how to explore this codebase.
 
-If you need help, spawn specialists. Read their spec before spawning:
-  ~/.aether/workers/colonizer-ant.md  — Explore/index codebase
-  ~/.aether/workers/route-setter-ant.md — Plan and break down work
-  ~/.aether/workers/builder-ant.md — Implement code, run commands
-  ~/.aether/workers/watcher-ant.md — Validate, test, quality check
-  ~/.aether/workers/scout-ant.md — Research, find information
-  ~/.aether/workers/architect-ant.md — Synthesize knowledge, extract patterns
+If you need help, spawn specialists. See ~/.aether/workers.md for role definitions:
+  - colonizer: Explore/index codebase
+  - route-setter: Plan and break down work
+  - builder: Implement code, run commands
+  - watcher: Validate, test, quality check
+  - scout: Research, find information
+  - architect: Synthesize knowledge, extract patterns
 
 To spawn another ant:
 1. Read their spec file with the Read tool

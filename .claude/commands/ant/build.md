@@ -131,25 +131,13 @@ If no active signals after filtering:
   (no active pheromones)
 ```
 
-**Per-Caste Effective Signals:** Build a per-caste effectiveness table for worker prompts. For each active pheromone signal, compute:
+**Pheromone Guidance:** Active pheromones provide keyword-based guidance to workers:
+- FOCUS signals prioritize specific areas
+- REDIRECT signals constrain away from specific patterns
+- FEEDBACK signals inform based on past outcomes
+- INIT signals provide initial context
 
-```
-effective_signal = caste_sensitivity × current_strength
-```
-
-Using the sensitivity table:
-
-```
-                INIT  FOCUS  REDIRECT  FEEDBACK
-  colonizer     1.0   0.7    0.3       0.5
-  route-setter  1.0   0.5    0.8       0.7
-  builder       0.5   0.9    0.9       0.7
-  watcher       0.3   0.8    0.5       0.9
-  scout         0.7   0.9    0.4       0.5
-  architect     0.2   0.4    0.3       0.6
-```
-
-Store the computed table for worker prompts.
+Workers respond to relevant signal types based on their role (see ~/.aether/workers.md for signal mappings).
 
 ### Step 5: Execute Phase
 
@@ -299,7 +287,7 @@ For each worker assignment in this wave:
 
 a. **Announce spawn:** Display with caste-specific color
 b. **Log START:** `bash ~/.aether/aether-utils.sh activity-log "START" "{caste}-ant" "{task}"`
-c. **Read worker spec:** Read `~/.aether/workers/{caste}-ant.md`
+c. **Read worker spec:** Read `~/.aether/workers.md` and extract the `## {Caste}` section
 d. **Spawn worker via Task tool** with worker spec, pheromones, and task context
 
 e. **After worker returns:**
@@ -333,7 +321,7 @@ Display: "Watcher verification skipped (LIGHTWEIGHT mode)." and proceed to Step 
 
 Otherwise:
 
-1. Read `~/.aether/workers/watcher-ant.md`
+1. Read `~/.aether/workers.md` and extract the `## Watcher` section
 2. Spawn watcher via Task tool with Phase Build Report, success criteria
 
 Store the watcher's report (quality_score, recommendation, issues) for display.
