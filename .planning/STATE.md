@@ -43,7 +43,7 @@ Progress: [█████████░] 90%
 | 34-core-command-rewrite | 3 | 6min | 2min |
 | 35-worker-simplification | 2 | 3min | 1.5min |
 | 36-signal-simplification | 5 | 12min | 2.4min |
-| 37-command-trim-utilities | 1 | 1min | 1min |
+| 37-command-trim-utilities | 3 | 4min | 1.3min |
 
 *Updated after each plan completion*
 
@@ -83,6 +83,8 @@ Recent decisions affecting current work:
 - [36-05]: Deleted 1,866 lines of obsolete runtime/workers/*.md files
 - [37-02]: Quick-glance status output (~5 lines) replacing verbose templates
 - [37-02]: Status signal count filters by expires_at field (TTL-aware)
+- [37-03]: Single-pass surface scan replaces multi-colonizer spawning
+- [37-03]: Output to .planning/CODEBASE.md with 20 file read cap
 
 ### Pending Todos
 
@@ -95,9 +97,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed 37-02-PLAN.md (status reduction)
+Stopped at: Completed 37-03-PLAN.md (colonize reduction)
 Resume file: None
 
 ---
 
-*State updated: 2026-02-06 after 37-02-PLAN.md completion*
+*State updated: 2026-02-06 after 37-03-PLAN.md completion*
