@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 Milestone: v5.1 System Simplification
 Phase: 35 of 37 (Worker Simplification)
-Plan: 1 of TBD in current phase
-Status: In progress
-Last activity: 2026-02-06 -- Completed 35-01-PLAN.md (worker consolidation)
+Plan: 2 of 2 in current phase
+Status: Phase complete
+Last activity: 2026-02-06 -- Completed 35-02-PLAN.md (command integration)
 
-Progress: [█████░░░░░] 50%
+Progress: [██████░░░░] 60%
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -31,7 +31,7 @@ Progress: [█████░░░░░] 50%
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 8 (v5.1 milestone)
+- Total plans completed: 9 (v5.1 milestone)
 - Total plans all milestones: 100+
 - Average duration: ~2 min (v5.1)
 
@@ -41,7 +41,7 @@ Progress: [█████░░░░░] 50%
 |-------|-------|-------|----------|
 | 33-state-foundation | 4 | 10min | 2.5min |
 | 34-core-command-rewrite | 3 | 6min | 2min |
-| 35-worker-simplification | 1 | 2min | 2min |
+| 35-worker-simplification | 2 | 3min | 1.5min |
 
 *Updated after each plan completion*
 
@@ -67,6 +67,8 @@ Recent decisions affecting current work:
 - [35-01]: Signal keywords instead of sensitivity tables
 - [35-01]: Watcher includes quality gate content for phase approval
 - [35-01]: 171 lines consolidated (91% reduction from 1,866)
+- [35-02]: Keyword-based pheromone guidance replaces sensitivity matrix
+- [35-02]: Section extraction pattern for consolidated files
 
 ### Pending Todos
 
@@ -79,9 +81,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed 35-01-PLAN.md (worker consolidation)
+Stopped at: Completed 35-02-PLAN.md (command integration)
 Resume file: None
 
 ---
 
-*State updated: 2026-02-06 after 35-01 completion*
+*State updated: 2026-02-06 after 35-02 completion*
