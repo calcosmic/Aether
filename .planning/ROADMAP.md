@@ -95,11 +95,13 @@ Plans:
   3. Signal commands (focus, redirect, feedback) reduced to ~40 lines each
   4. aether-utils.sh reduced from 372 lines to ~80 lines (keeping validate-state, error-add)
   5. Total system lines at ~1,800 (from ~7,400)
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 37-01: TBD
-- [ ] 37-02: TBD
+- [ ] 37-01-PLAN.md — Reduce signal commands (focus, redirect, feedback) to ~40 lines each
+- [ ] 37-02-PLAN.md — Reduce status.md to ~80 lines with quick-glance output
+- [ ] 37-03-PLAN.md — Reduce colonize.md to ~150 lines with surface scan pattern
+- [ ] 37-04-PLAN.md — Reduce aether-utils.sh to ~80 lines and sync command directories
 
 ## Progress
 
@@ -111,7 +113,7 @@ Plans:
 | 34. Core Command Rewrite | 3/3 | Complete | 2026-02-06 |
 | 35. Worker Simplification | 2/2 | Complete | 2026-02-06 |
 | 36. Signal Simplification | 5/5 | Complete | 2026-02-06 |
-| 37. Command Trim & Utilities | 0/TBD | Not started | - |
+| 37. Command Trim & Utilities | 0/4 | Not started | - |
 
 ---
 *Roadmap created: 2026-02-06*
