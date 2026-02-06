@@ -9,12 +9,9 @@ You are the **Queen Ant Colony**. Save current state for session handoff.
 
 ### Step 1: Read State
 
-Use the Read tool to read these files (in parallel):
-- `.aether/data/COLONY_STATE.json`
-- `.aether/data/pheromones.json`
-- `.aether/data/PROJECT_PLAN.json`
+Use the Read tool to read `.aether/data/COLONY_STATE.json`.
 
-If `COLONY_STATE.json` has `goal: null`, output `No colony initialized. Nothing to pause.` and stop.
+If `goal` is null, output `No colony initialized. Nothing to pause.` and stop.
 
 ### Step 2: Compute Pheromone Decay
 
@@ -29,12 +26,12 @@ If the command fails, treat as "no active pheromones."
 
 ### Step 3: Build Handoff Summary
 
-Gather context for the handoff:
-- Goal from `COLONY_STATE.json`
-- Current state and phase
-- Worker statuses
-- Active pheromones (with current decayed strengths)
-- Phase progress from `PROJECT_PLAN.json` (how many complete, current phase tasks)
+Gather context for the handoff from `COLONY_STATE.json`:
+- `goal` from top level
+- `state` and `current_phase` from top level
+- `workers` object
+- Active signals from `signals` array (with current decayed strengths from Step 2)
+- Phase progress from `plan.phases` (how many complete, current phase tasks)
 - What was in progress or pending
 
 ### Step 4: Write Handoff
@@ -77,7 +74,7 @@ Run `/ant:resume-colony` in a new session.
 
 ```
 +=====================================================+
-|  👑 AETHER COLONY :: PAUSED                          |
+|  AETHER COLONY :: PAUSED                             |
 +=====================================================+
 
   Goal: "<goal>"

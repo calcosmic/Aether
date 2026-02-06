@@ -11,23 +11,21 @@ The argument is: `$ARGUMENTS`
 
 ### Step 1: Read State
 
-Use the Read tool to read these files (in parallel):
-- `.aether/data/COLONY_STATE.json`
-- `.aether/data/PROJECT_PLAN.json`
+Use the Read tool to read `.aether/data/COLONY_STATE.json`.
 
-If `COLONY_STATE.json` has `goal: null`, output `No colony initialized. Run /ant:init first.` and stop.
+If `goal` is null, output `No colony initialized. Run /ant:init first.` and stop.
 
-If `PROJECT_PLAN.json` has empty `phases` array, output `No project plan. Run /ant:plan first.` and stop.
+If `plan.phases` is an empty array, output `No project plan. Run /ant:plan first.` and stop.
 
 ### Step 2: Determine What to Show
 
-- If `$ARGUMENTS` is empty -> show the current phase (from `COLONY_STATE.current_phase`). If `current_phase` is 0 or beyond the last phase, show phase 1.
+- If `$ARGUMENTS` is empty -> show the current phase (from `current_phase`). If `current_phase` is 0 or beyond the last phase, show phase 1.
 - If `$ARGUMENTS` is a number -> show that specific phase
 - If `$ARGUMENTS` is "list" or "all" -> show all phases in summary
 
 ### Step 3a: Single Phase View
 
-Find the phase by ID in `PROJECT_PLAN.json`.
+Find the phase by ID in `plan.phases`.
 
 Output this header:
 
@@ -59,7 +57,7 @@ Next Steps:
   /ant:status           Colony status
 ```
 
-Status icons: `[ ]` pending, `[~]` in_progress, `[x]` completed, or use emoji: ⬜ pending, ⏳ in_progress, ✅ completed
+Status icons: `[ ]` pending, `[~]` in_progress, `[x]` completed
 
 ### Step 3b: List View
 

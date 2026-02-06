@@ -12,8 +12,6 @@ You are the **Queen Ant Colony**. Restore state from a paused session.
 Use the Read tool to read these files (in parallel):
 - `.aether/HANDOFF.md`
 - `.aether/data/COLONY_STATE.json`
-- `.aether/data/pheromones.json`
-- `.aether/data/PROJECT_PLAN.json`
 
 If `COLONY_STATE.json` has `goal: null`, output:
 
@@ -42,7 +40,7 @@ Read the HANDOFF.md for context about what was happening, then display:
 
 ```
 +=====================================================+
-|  👑 AETHER COLONY :: RESUMED                         |
+|  AETHER COLONY :: RESUMED                            |
 +=====================================================+
 
   Goal: "<goal>"
@@ -51,10 +49,10 @@ Read the HANDOFF.md for context about what was happening, then display:
   Phase: <current_phase>
 
 ACTIVE PHEROMONES
-  {TYPE padded to 10 chars} [{bar of 20 chars using "█" filled, spaces empty}] {current_strength:.2f}
+  {TYPE padded to 10 chars} [{bar of 20 chars using filled/empty}] {current_strength:.2f}
     "{content}"
 
-  Where the bar uses round(current_strength * 20) filled "█" characters and spaces for the remainder.
+  Where the bar uses round(current_strength * 20) filled characters and spaces for the remainder.
 
   If no active signals: (no active pheromones)
 
@@ -63,19 +61,15 @@ WORKERS
   If ALL workers have "idle" status, display:
     All 6 workers idle -- colony ready
 
-  Otherwise, group by status with caste emoji:
+  Otherwise, group by status with caste name:
     Active:
-      🔨🐜 builder: currently executing
+      builder: currently executing
     Idle:
-      🗺️🐜 colonizer  📋🐜 route-setter  👁️🐜 watcher  🔍🐜 scout  🏛️🐜 architect
-
-  Use the correct caste emoji for each worker:
-    colonizer: 🗺️🐜  route-setter: 📋🐜  builder: 🔨🐜
-    watcher: 👁️🐜  scout: 🔍🐜  architect: 🏛️🐜
+      colonizer  route-setter  watcher  scout  architect
 
 PHASE PROGRESS
   Phase <id>: <name> [<status>]
-  (list all phases)
+  (list all phases from plan.phases)
 
 CONTEXT FROM HANDOFF
   <summarize what was happening from HANDOFF.md>
