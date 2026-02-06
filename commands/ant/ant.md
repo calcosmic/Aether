@@ -22,15 +22,15 @@ GETTING STARTED
   /ant:plan              Generate project plan
   /ant:build <phase>     Execute a phase
 
-PHEROMONE COMMANDS
+SIGNAL COMMANDS
 
-  /ant:focus "<area>"    Guide colony attention (strength 0.7, 1hr half-life)
-  /ant:redirect "<pat>"  Warn away from pattern (strength 0.9, 24hr half-life)
-  /ant:feedback "<msg>"  Adjust behavior (strength 0.5, 6hr half-life)
+  /ant:focus "<area>"    Guide colony attention (normal priority, phase-scoped)
+  /ant:redirect "<pat>"  Warn away from pattern (high priority, phase-scoped)
+  /ant:feedback "<msg>"  Adjust behavior (low priority, phase-scoped)
 
 STATUS COMMANDS
 
-  /ant:status            Colony status, workers, pheromones, progress
+  /ant:status            Colony status, workers, signals, progress
   /ant:phase [N|list]    View phase details or list all phases
   /ant:continue          Approve phase and advance to next
 
@@ -69,8 +69,8 @@ HOW IT WORKS
     4. CONTINUE: Queen approves phase, extracts learnings. Advances to next phase.
     5. Repeat BUILD/CONTINUE until all phases complete.
 
-  Pheromone System:
-    Signals decay over time (exponential half-life). Workers sense signals
+  Signal System:
+    Signals use TTL expiration (phase-scoped or time-based). Workers sense signals
     and adjust behavior. FOCUS attracts, REDIRECT repels, FEEDBACK calibrates.
 
   Autonomy Model:
@@ -79,8 +79,7 @@ HOW IT WORKS
     Phase boundaries are control points -- emergence happens within phases.
 
   State Files (.aether/data/):
-    COLONY_STATE.json  Colony goal, state, workers, spawn outcomes
-    pheromones.json    Active pheromone signals with decay
+    COLONY_STATE.json  Colony goal, state, workers, spawn outcomes, signals
     PROJECT_PLAN.json  Phase breakdown and task tracking
     errors.json        Error records and flagged patterns
     memory.json        Phase learnings and decisions
