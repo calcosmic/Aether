@@ -43,13 +43,14 @@ Plans:
   1. ant:build writes only "EXECUTING" state, does not update task completion status
   2. ant:continue detects completed output files and updates state accordingly
   3. State survives context boundaries (no more orphaned EXECUTING status)
-  4. build.md reduced from 1,119 lines to ~300 lines
-  5. continue.md reduced from 569 lines to ~120 lines
-**Plans**: TBD
+  4. build.md reduced from 1,080 lines to ~400 lines
+  5. continue.md reduced from 534 lines to ~150 lines
+**Plans**: 3 plans
 
 Plans:
-- [ ] 34-01: TBD
-- [ ] 34-02: TBD
+- [ ] 34-01-PLAN.md — Rewrite build.md with minimal state write pattern
+- [ ] 34-02-PLAN.md — Rewrite continue.md with detection and reconciliation
+- [ ] 34-03-PLAN.md — Verify build/continue integration and polish
 
 ### Phase 35: Worker Simplification
 **Goal**: Six worker specs collapsed into single workers.md (~200 lines)
@@ -102,7 +103,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 33. State Foundation | 4/4 | Complete | 2026-02-06 |
-| 34. Core Command Rewrite | 0/TBD | Not started | - |
+| 34. Core Command Rewrite | 0/3 | Planned | - |
 | 35. Worker Simplification | 0/TBD | Not started | - |
 | 36. Signal Simplification | 0/TBD | Not started | - |
 | 37. Command Trim & Utilities | 0/TBD | Not started | - |
