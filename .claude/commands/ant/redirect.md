@@ -30,12 +30,19 @@ Use the Read tool to read `.aether/data/COLONY_STATE.json`.
 
 If `goal` is null, output `No colony initialized. Run /ant:init first.` and stop.
 
-### Step 3: Append REDIRECT Signal
+Extract:
+- `goal` from top level
+- `current_phase` from top level
 
-Use the Read tool to read `.aether/data/pheromones.json`.
+### Step 3: Update State (Single Read-Modify-Write)
 
-Add a new signal to the `signals` array and use the Write tool to write the updated file:
+Read `.aether/data/COLONY_STATE.json` (if not already in memory from Step 2).
 
+Generate a Unix timestamp and 4 random hex characters for IDs.
+
+Modify the state:
+
+**1. Append to `signals` array:**
 ```json
 {
   "id": "redirect_<unix_timestamp>",
@@ -47,61 +54,43 @@ Add a new signal to the `signals` array and use the Write tool to write the upda
 }
 ```
 
-Preserve all existing signals in the array.
-
-### Step 4: Log Decision
-
-Read `.aether/data/memory.json`. Append a decision record to the `decisions` array:
-
+**2. Append to `memory.decisions` array:**
 ```json
 {
   "id": "dec_<unix_timestamp>_<4_random_hex>",
   "type": "redirect",
   "content": "<the pattern to avoid>",
   "context": "Phase <current_phase> -- <colony state>",
-  "phase": <current_phase from COLONY_STATE.json>,
+  "phase": <current_phase>,
   "timestamp": "<ISO-8601 UTC>"
 }
 ```
+If `memory.decisions` exceeds 30 entries, remove the oldest to keep only 30.
 
-If the `decisions` array exceeds 30 entries, remove the oldest entries to keep only 30.
-
-Use the Write tool to write the updated memory.json.
-
-### Step 5: Write Event
-
-Read `.aether/data/events.json`. Append to the `events` array:
-
-```json
-{
-  "id": "evt_<unix_timestamp>_<4_random_hex>",
-  "type": "pheromone_emitted",
-  "source": "redirect",
-  "content": "REDIRECT: <content> (strength 0.9, half-life 24hr)",
-  "timestamp": "<ISO-8601 UTC>"
-}
+**3. Append to `events` array as pipe-delimited string:**
 ```
+"<ISO-8601 UTC> | pheromone_emitted | redirect | REDIRECT: <content> (strength 0.9, half-life 24hr)"
+```
+If `events` exceeds 100 entries, remove the oldest to keep only 100.
 
-If the `events` array exceeds 100 entries, remove the oldest entries to keep only 100.
+Use the Write tool to write the FULL updated state back to `.aether/data/COLONY_STATE.json`.
 
-Use the Write tool to write the updated events.json.
-
-### Step 6: Display Result
+### Step 4: Display Result
 
 ```
-🧪 REDIRECT pheromone emitted
+REDIRECT pheromone emitted
 
   Avoid: "<pattern>"
-  Strength: ▓▓▓▓▓▓▓▓▓░ 0.9
+  Strength: 0.9
   Half-life: 24 hours
 
   Colony response by sensitivity:
-    🔨🐜 builder (0.9)      — strong: will avoid this pattern in code
-    📋🐜 route-setter (0.8) — strong: will exclude from planning
-    👁️🐜 watcher (0.5)      — moderate: will validate against constraint
-    🔍🐜 scout (0.4)        — weak: will note when researching
-    🗺️🐜 colonizer (0.3)    — weak: will note in codebase analysis
-    🏛️🐜 architect (0.3)    — weak: will note for patterns
+    builder (0.9)      -- strong: will avoid this pattern in code
+    route-setter (0.8) -- strong: will exclude from planning
+    watcher (0.5)      -- moderate: will validate against constraint
+    scout (0.4)        -- weak: will note when researching
+    colonizer (0.3)    -- weak: will note in codebase analysis
+    architect (0.3)    -- weak: will note for patterns
 
   REDIRECT signals act as hard constraints during /ant:build.
   Workers with high sensitivity will refuse approaches matching this pattern.

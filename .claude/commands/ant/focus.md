@@ -30,12 +30,19 @@ Use the Read tool to read `.aether/data/COLONY_STATE.json`.
 
 If `goal` is null, output `No colony initialized. Run /ant:init first.` and stop.
 
-### Step 3: Append FOCUS Signal
+Extract:
+- `goal` from top level
+- `current_phase` from top level
 
-Use the Read tool to read `.aether/data/pheromones.json`.
+### Step 3: Update State (Single Read-Modify-Write)
 
-Add a new signal to the `signals` array and use the Write tool to write the updated file:
+Read `.aether/data/COLONY_STATE.json` (if not already in memory from Step 2).
 
+Generate a Unix timestamp and 4 random hex characters for IDs.
+
+Modify the state:
+
+**1. Append to `signals` array:**
 ```json
 {
   "id": "focus_<unix_timestamp>",
@@ -47,61 +54,43 @@ Add a new signal to the `signals` array and use the Write tool to write the upda
 }
 ```
 
-Preserve all existing signals in the array.
-
-### Step 4: Log Decision
-
-Read `.aether/data/memory.json`. Append a decision record to the `decisions` array:
-
+**2. Append to `memory.decisions` array:**
 ```json
 {
   "id": "dec_<unix_timestamp>_<4_random_hex>",
   "type": "focus",
   "content": "<the focus area>",
   "context": "Phase <current_phase> -- <colony state>",
-  "phase": <current_phase from COLONY_STATE.json>,
+  "phase": <current_phase>,
   "timestamp": "<ISO-8601 UTC>"
 }
 ```
+If `memory.decisions` exceeds 30 entries, remove the oldest to keep only 30.
 
-If the `decisions` array exceeds 30 entries, remove the oldest entries to keep only 30.
-
-Use the Write tool to write the updated memory.json.
-
-### Step 5: Write Event
-
-Read `.aether/data/events.json`. Append to the `events` array:
-
-```json
-{
-  "id": "evt_<unix_timestamp>_<4_random_hex>",
-  "type": "pheromone_emitted",
-  "source": "focus",
-  "content": "FOCUS: <content> (strength 0.7, half-life 1hr)",
-  "timestamp": "<ISO-8601 UTC>"
-}
+**3. Append to `events` array as pipe-delimited string:**
 ```
+"<ISO-8601 UTC> | pheromone_emitted | focus | FOCUS: <content> (strength 0.7, half-life 1hr)"
+```
+If `events` exceeds 100 entries, remove the oldest to keep only 100.
 
-If the `events` array exceeds 100 entries, remove the oldest entries to keep only 100.
+Use the Write tool to write the FULL updated state back to `.aether/data/COLONY_STATE.json`.
 
-Use the Write tool to write the updated events.json.
-
-### Step 6: Display Result
+### Step 4: Display Result
 
 ```
-🧪 FOCUS pheromone emitted
+FOCUS pheromone emitted
 
   Area: "<focus area>"
-  Strength: ▓▓▓▓▓▓▓░░░ 0.7
+  Strength: 0.7
   Half-life: 1 hour
 
   Colony response by sensitivity:
-    🔨🐜 builder (0.9)     — strong: will prioritize
-    🔍🐜 scout (0.9)       — strong: will research first
-    👁️🐜 watcher (0.8)     — strong: increased scrutiny
-    🗺️🐜 colonizer (0.7)   — moderate: will explore
-    📋🐜 route-setter (0.5) — moderate: factor into plan
-    🏛️🐜 architect (0.4)   — weak: noted for patterns
+    builder (0.9)     -- strong: will prioritize
+    scout (0.9)       -- strong: will research first
+    watcher (0.8)     -- strong: increased scrutiny
+    colonizer (0.7)   -- moderate: will explore
+    route-setter (0.5) -- moderate: factor into plan
+    architect (0.4)   -- weak: noted for patterns
 
 Next Steps:
   /ant:redirect "<pattern>"  Warn colony away from something
