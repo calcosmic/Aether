@@ -65,53 +65,43 @@ Use the Read tool to read these files (in parallel):
 - Find the phase matching the requested ID. If not found -> output `Phase {id} not found.` and stop.
 - If the phase status is `"completed"` -> output `Phase {id} already completed.` and stop.
 
-### Step 3: Compute Active Pheromones
+### Step 3: Filter Active Signals
 
-Use the Bash tool to run:
-```
-bash ~/.aether/aether-utils.sh pheromone-batch
-```
-
-This returns JSON: `{"ok":true,"result":[...signals with current_strength...]}`. Parse the `result` array. Filter out signals where `current_strength < 0.05`.
-
-If the command fails, treat as "no active pheromones."
-
-Format:
+Filter signals from `pheromones.json` using TTL:
 
 ```
-ACTIVE PHEROMONES:
-  {TYPE padded to 10 chars} [{bar of 20 chars using "█" filled, spaces empty}] {current_strength:.2f}
-    "{content}"
+current_time = current ISO-8601 UTC timestamp
+
+For each signal in signals array:
+  if signal.expires_at == "phase_end":
+    keep (phase-scoped)
+  elif signal.expires_at < current_time:
+    skip (expired)
+  else:
+    keep (active)
 ```
 
-Where the bar uses `round(current_strength * 20)` filled `█` characters and spaces for the remainder.
+**Display format:**
+```
+ACTIVE SIGNALS:
+  {TYPE} [{priority}]: "{content}" ({time_remaining})
+```
+
+Where time_remaining is:
+- "phase" if expires_at == "phase_end"
+- "45m left" / "2h left" for wall-clock expiration
+
+Examples:
+```
+ACTIVE SIGNALS:
+  REDIRECT [high]: "Don't use JWT" (phase)
+  FOCUS [normal]: "API layer" (45m left)
+  FEEDBACK [low]: "Good coverage" (2h left)
+```
 
 If no active signals after filtering:
 ```
-  (no active pheromones)
-```
-
-**Per-Caste Effective Signals:** After computing the active pheromones, build a per-caste effectiveness table for display in Step 7. For each active pheromone signal, compute:
-
-```
-effective_signal = caste_sensitivity × current_strength
-```
-
-Using the sensitivity table:
-
-```
-                INIT  FOCUS  REDIRECT  FEEDBACK
-  colonizer     1.0   0.7    0.3       0.5
-  route-setter  1.0   0.5    0.8       0.7
-  builder       0.5   0.9    0.9       0.7
-  watcher       0.3   0.8    0.5       0.9
-  scout         0.7   0.9    0.4       0.5
-  architect     0.2   0.4    0.3       0.6
-```
-
-Store the computed table for use in Step 7 display. Format each entry as:
-```
-  {caste_emoji} {caste}: {signal_type} {effective:.2f} ({">0.5 PRIORITIZE" | "0.3-0.5 NOTE" | "<0.3 IGNORE"})
+  (no active signals)
 ```
 
 ### Step 4: Update State
@@ -190,20 +180,13 @@ Tasks:
 Success Criteria:
 {list success_criteria}
 
---- ACTIVE PHEROMONES ---
-{pheromone block from Step 3}
+--- ACTIVE SIGNALS ---
+{signal block from Step 3}
 
-Respond to REDIRECT pheromones as hard constraints (things to avoid).
-Respond to FOCUS pheromones by prioritizing those areas.
-
---- CASTE SENSITIVITY TABLE ---
-                INIT  FOCUS  REDIRECT  FEEDBACK
-  colonizer     1.0   0.7    0.3       0.5
-  route-setter  1.0   0.5    0.8       0.7
-  builder       0.5   0.9    0.9       0.7
-  watcher       0.3   0.8    0.5       0.9
-  scout         0.7   0.9    0.4       0.5
-  architect     0.2   0.4    0.3       0.6
+Signal guidance:
+- Check HIGH priority signals first (constraints to follow)
+- Then NORMAL priority (focus areas)
+- LOW priority signals are informational
 
 --- CONFLICT PREVENTION RULE ---
 CRITICAL: Tasks that modify the SAME FILE must be assigned to the SAME WORKER.
@@ -388,8 +371,8 @@ d. **Spawn worker via Task tool** with `subagent_type="general-purpose"`:
    --- WORKER SPEC ---
    {full contents of the caste's spec file}
 
-   --- ACTIVE PHEROMONES ---
-   {pheromone block from Step 3 with effective signals computed for this caste}
+   --- ACTIVE SIGNALS ---
+   {active signals from Step 3}
 
    --- TASK ---
    {task_description}
@@ -475,8 +458,8 @@ f2. **If worker retry also failed (retry count >= 1) -- Spawn Debugger Ant:**
    --- WORKER SPEC ---
    {full contents of ~/.aether/workers/builder-ant.md}
 
-   --- ACTIVE PHEROMONES ---
-   {pheromone block from Step 3}
+   --- ACTIVE SIGNALS ---
+   {active signals from Step 3}
 
    --- TASK ---
    You are being spawned as a DEBUGGER ANT.
@@ -562,8 +545,8 @@ i. **Post-Wave Advisory Review:**
    --- WORKER SPEC ---
    {full contents of ~/.aether/workers/watcher-ant.md}
 
-   --- ACTIVE PHEROMONES ---
-   {pheromone block from Step 3}
+   --- ACTIVE SIGNALS ---
+   {active signals from Step 3}
 
    --- TASK ---
    You are being spawned as a post-wave ADVISORY REVIEWER.
@@ -653,8 +636,8 @@ j. **Fulfill SPAWN requests from this wave:**
       --- WORKER SPEC ---
       {full contents of the caste's spec file}
 
-      --- ACTIVE PHEROMONES ---
-      {pheromone block from Step 3}
+      --- ACTIVE SIGNALS ---
+      {active signals from Step 3}
 
       --- PARENT CONTEXT ---
       Parent worker: {parent caste} - {parent task}
@@ -707,8 +690,8 @@ Otherwise: Continue with mandatory watcher verification as-is.
 --- WORKER SPEC ---
 {full contents of ~/.aether/workers/watcher-ant.md}
 
---- ACTIVE PHEROMONES ---
-{pheromone block from Step 3}
+--- ACTIVE SIGNALS ---
+{active signals from Step 3}
 
 --- PHASE BUILD REPORT ---
 {the Phase Build Report compiled at the end of Step 5c, containing all worker results}
@@ -914,35 +897,39 @@ If memory-compress reports `compressed:true`, note the before/after learning cou
 
 Note: spawn_outcomes already updated in Step 6 -- do NOT update them here.
 
-#### Step 7b: Emit FEEDBACK Pheromone
+#### Step 7b: Emit FEEDBACK Signal
 
-Read `.aether/data/pheromones.json` (if not already in memory). Always emit a FEEDBACK pheromone with balanced summary of what worked + what failed. Include the actual learnings in the pheromone body so colony can read them without checking memory.json.
+Read `.aether/data/pheromones.json` (if not already in memory). Always emit a FEEDBACK signal with balanced summary of what worked + what failed. Include the actual learnings in the signal body so colony can read them without checking memory.json.
 
 ```json
 {
   "id": "auto_<unix_timestamp>_<4_random_hex>",
   "type": "FEEDBACK",
   "content": "<balanced summary>",
-  "strength": 0.5,
-  "half_life_seconds": 21600,
+  "priority": "low",
   "created_at": "<ISO-8601 UTC>",
-  "source": "auto:build",
-  "auto": true
+  "expires_at": "phase_end",
+  "source": "worker:builder"
 }
 ```
 
-Validate via: `bash ~/.aether/aether-utils.sh pheromone-validate "<content>"`
-- If pass:false -> skip pheromone, log `pheromone_rejected` event
-- If pass:true -> append to pheromones.json
-- If command fails -> append anyway (fail-open)
+Append the signal to the `signals` array in `pheromones.json`.
 
-Conditionally emit a REDIRECT pheromone if `errors.json` has `flagged_patterns` entries related to this phase (same logic as continue.md Step 4.5). Use `source: "auto:build"`.
+Conditionally emit a REDIRECT signal if `errors.json` has `flagged_patterns` entries related to this phase:
 
-Log `pheromone_auto_emitted` event for each emitted pheromone (source: "build").
+```json
+{
+  "id": "auto_<unix_timestamp>_<4_random_hex>",
+  "type": "REDIRECT",
+  "content": "Avoid: <description of flagged pattern>",
+  "priority": "high",
+  "created_at": "<ISO-8601 UTC>",
+  "expires_at": "phase_end",
+  "source": "worker:builder"
+}
+```
 
-#### Step 7c: Clean Expired Pheromones
-
-Run: `bash ~/.aether/aether-utils.sh pheromone-cleanup`
+Log `pheromone_auto_emitted` event for each emitted signal (source: "build").
 
 #### Step 7d: Write Auto-Learning Flag Event
 
@@ -974,7 +961,7 @@ Show step progress:
 ```
   ✓ Step 1: Validate
   ✓ Step 2: Read State
-  ✓ Step 3: Compute Active Pheromones
+  ✓ Step 3: Filter Active Signals
   ✓ Step 4: Update State
   ✓ Step 4.5: Git Checkpoint
   ✓ Step 5a: Phase Lead Planning
@@ -985,8 +972,7 @@ Show step progress:
   ✓ Step 5.5: Watcher Verification
   ✓ Step 6: Record Outcome
   ✓ Step 7a: Extract Phase Learnings
-  ✓ Step 7b: Emit Pheromones
-  ✓ Step 7c: Clean Expired Pheromones
+  ✓ Step 7b: Emit Signals
   ✓ Step 7d: Write Events
   ✓ Step 7e: Display Results
 ```
@@ -1020,9 +1006,8 @@ If spawn_tree is empty: `bash -c 'printf "  (no delegation -- all tasks handled 
 📋 Task Results:
   {for each task: "✅ {task_id}: {what was done}" or "❌ {task_id}: {what failed}"}
 
-🧪 Caste Pheromone Sensitivity:
-  {per-caste effective signals computed in Step 3, showing which castes
-   would PRIORITIZE/NOTE/IGNORE each active pheromone}
+🧪 Active Signals:
+  {list active signals from Step 3 with type, priority, and time remaining}
 
 👁️🐜 Watcher Report:
   Execution Verification:
@@ -1038,10 +1023,10 @@ If spawn_tree is empty: `bash -c 'printf "  (no delegation -- all tasks handled 
   - <learning 2>
   {if memory-compress trimmed: "⚠️ Memory compressed: <before> -> <after> learnings (oldest evicted)"}
 
-🧪 Auto-Emitted Pheromones:
-  FEEDBACK (0.5, 6h): "<first 80 chars>"
+🧪 Auto-Emitted Signals:
+  FEEDBACK [low]: "<first 80 chars>" (phase)
   {if REDIRECT emitted:}
-  REDIRECT (0.9, 24h): "<first 80 chars>"
+  REDIRECT [high]: "<first 80 chars>" (phase)
 
 Display the Pheromone Recommendations header using Bash tool (yellow):
   ```

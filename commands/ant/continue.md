@@ -369,33 +369,31 @@ After extracting learnings, automatically emit pheromones based on phase outcome
 
 Read `.aether/data/pheromones.json` (if not already in memory from Step 1).
 
-**Always emit a FEEDBACK pheromone** summarizing what worked and what didn't from the phase learnings:
+**Always emit a FEEDBACK signal** summarizing what worked and what didn't from the phase learnings:
 
 ```json
 {
   "id": "auto_<unix_timestamp>_<4_random_hex>",
   "type": "FEEDBACK",
-  "content": "<summary of what worked and what didn't from the phase learnings — be specific, reference actual task outcomes>",
-  "strength": 0.5,
-  "half_life_seconds": 21600,
+  "content": "<summary of what worked and what didn't from the phase learnings - be specific, reference actual task outcomes>",
+  "priority": "low",
   "created_at": "<ISO-8601 UTC>",
-  "source": "auto:continue",
-  "auto": true
+  "expires_at": "phase_end",
+  "source": "worker:continue"
 }
 ```
 
-**Conditionally emit a REDIRECT pheromone** if `errors.json` has any `flagged_patterns` entries related to this phase (check if any flagged pattern's errors occurred during this phase):
+**Conditionally emit a REDIRECT signal** if `errors.json` has any `flagged_patterns` entries related to this phase (check if any flagged pattern's errors occurred during this phase):
 
 ```json
 {
   "id": "auto_<unix_timestamp>_<4_random_hex>",
   "type": "REDIRECT",
   "content": "Avoid repeating: <description of the flagged pattern and its root causes>",
-  "strength": 0.9,
-  "half_life_seconds": 86400,
+  "priority": "high",
   "created_at": "<ISO-8601 UTC>",
-  "source": "auto:continue",
-  "auto": true
+  "expires_at": "phase_end",
+  "source": "worker:continue"
 }
 ```
 
@@ -437,14 +435,25 @@ Append validated pheromones to the `signals` array in `pheromones.json`. Use the
 
 If the `events` array exceeds 100 entries, remove the oldest entries to keep only 100. Write the updated events.json.
 
-### Step 5: Clean Expired Pheromones
+### Step 5: Filter Phase-End Signals on Phase Advance
 
-Use the Bash tool to run:
+When advancing to the next phase, filter out signals that have expired:
+
 ```
-bash ~/.aether/aether-utils.sh pheromone-cleanup
+current_time = current ISO-8601 UTC timestamp
+
+For each signal in pheromones.json signals array:
+  if signal.expires_at == "phase_end":
+    remove (phase-scoped signals expire when phase advances)
+  elif signal.expires_at < current_time:
+    remove (wall-clock expired)
+  else:
+    keep (still active)
 ```
 
-This removes signals with `current_strength` below 0.05 from `pheromones.json` and returns `{"ok":true,"result":{"removed":N,"remaining":N}}`. The cleanup result (removed count) can be mentioned in the display output.
+Write the filtered signals array back to `pheromones.json`.
+
+This ensures phase-scoped signals are cleared when advancing phases, while time-based signals persist until their TTL expires.
 
 ### Step 6: Write Events
 
@@ -519,7 +528,7 @@ If `auto_mode` was false, show the normal progress:
   ✓ Step 3: Phase Completion Summary
   ✓ Step 4: Extract Phase Learnings
   ✓ Step 4.5: Auto-Emit Pheromones
-  ✓ Step 5: Clean Expired Pheromones
+  ✓ Step 5: Filter Phase-End Signals
   ✓ Step 6: Write Events
   ✓ Step 7: Update Colony State
   ✓ Step 8: Display Result
@@ -545,10 +554,10 @@ Phase <current> approved. Advancing to Phase <next>.
     {if Step 4 was skipped:}
     (already captured during build -- see auto-extraction event)
 
-  🧪 Auto-Emitted Pheromones:
-    FEEDBACK (0.5, 6h): "<first 80 chars of content>"
+  🧪 Auto-Emitted Signals:
+    FEEDBACK [low]: "<first 80 chars of content>" (phase)
     {if REDIRECT was emitted:}
-    REDIRECT (0.9, 24h): "<first 80 chars of content>"
+    REDIRECT [high]: "<first 80 chars of content>" (phase)
 
 Next Steps:
   /ant:build <next>      Start building Phase <next>
