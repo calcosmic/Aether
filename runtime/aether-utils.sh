@@ -35,66 +35,11 @@ shift 2>/dev/null || true
 case "$cmd" in
   help)
     cat <<'EOF'
-{"ok":true,"commands":["help","version","pheromone-decay","pheromone-effective","pheromone-batch","pheromone-cleanup","pheromone-validate","validate-state","spawn-check","memory-compress","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
+{"ok":true,"commands":["help","version","pheromone-validate","validate-state","spawn-check","memory-compress","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
 EOF
     ;;
   version)
     json_ok '"0.1.0"'
-    ;;
-  pheromone-decay)
-    [[ $# -ge 3 ]] || json_err "Usage: pheromone-decay <strength> <elapsed_seconds> <half_life>"
-    json_ok "$(jq -n --arg s "$1" --arg e "$2" --arg h "$3" '
-      ($s|tonumber) as $strength |
-      ([$e|tonumber, 0] | max) as $elapsed |
-      ($h|tonumber) as $half_life |
-      if $elapsed > ($half_life * 10) then
-        {strength: 0}
-      else
-        ($strength * ((-0.693147180559945 * $elapsed / $half_life) | exp)) as $decayed |
-        {strength: ([$decayed, $strength] | min | . * 1000000 | round / 1000000)}
-      end
-    ')"
-    ;;
-  pheromone-effective)
-    [[ $# -ge 2 ]] || json_err "Usage: pheromone-effective <sensitivity> <strength>"
-    json_ok "$(jq -n --arg sens "$1" --arg str "$2" \
-      '{effective_signal: (($sens|tonumber) * ($str|tonumber) | . * 1000000 | round / 1000000)}')"
-    ;;
-  pheromone-batch)
-    [[ -f "$DATA_DIR/pheromones.json" ]] || json_err "pheromones.json not found"
-    now=$(date -u +%s)
-    json_ok "$(jq --arg now "$now" '.signals | map(. + {
-      current_strength: (
-        if .half_life_seconds == null then .strength
-        else
-          (($now|tonumber) - (.created_at | sub("\\.[0-9]+Z$";"Z") | fromdate)) as $elapsed |
-          if $elapsed < 0 then .strength
-          elif $elapsed > (.half_life_seconds * 10) then 0
-          else
-            (.strength * ((-0.693147180559945 * $elapsed / .half_life_seconds) | exp)) as $d |
-            if $d > .strength then .strength else $d end
-          end
-        end | . * 1000 | round / 1000)
-    })' "$DATA_DIR/pheromones.json")" || json_err "Failed to read pheromones.json"
-    ;;
-  pheromone-cleanup)
-    [[ -f "$DATA_DIR/pheromones.json" ]] || json_err "pheromones.json not found"
-    now=$(date -u +%s)
-    before=$(jq '.signals | length' "$DATA_DIR/pheromones.json")
-    result=$(jq --arg now "$now" '.signals |= map(select(
-      .half_life_seconds == null or
-      (
-        (($now|tonumber) - (.created_at | sub("\\.[0-9]+Z$";"Z") | fromdate)) as $elapsed |
-        if $elapsed < 0 then true
-        elif $elapsed > (.half_life_seconds * 10) then false
-        else
-          (.strength * ((-0.693147180559945 * $elapsed / .half_life_seconds) | exp)) >= 0.05
-        end
-      )
-    ))' "$DATA_DIR/pheromones.json") || json_err "Failed to process pheromones.json"
-    atomic_write "$DATA_DIR/pheromones.json" "$result"
-    after=$(echo "$result" | jq '.signals | length')
-    json_ok "{\"removed\":$((before - after)),\"remaining\":$after}"
     ;;
   pheromone-validate)
     content="${1:-}"
@@ -131,7 +76,7 @@ EOF
         [[ -f "$DATA_DIR/pheromones.json" ]] || json_err "pheromones.json not found"
         json_ok "$(jq '
           def arr(f): if has(f) and (.[f]|type) == "array" then "pass" else "fail: \(f) not array" end;
-          def sig: ["id","type","content","strength","created_at"] as $req | [. as $s | $req[] | select($s[.] == null)] |
+          def sig: ["id","type","content","priority","created_at","expires_at"] as $req | [. as $s | $req[] | select($s[.] == null)] |
             if length == 0 then "pass" else "fail: signal missing \(join(","))" end;
           {file:"pheromones.json", checks:[
             arr("signals"),
