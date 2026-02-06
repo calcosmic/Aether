@@ -9,9 +9,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DATA_DIR="$PWD/.aether/data"
 
-# Source shared infrastructure
-source "$SCRIPT_DIR/utils/file-lock.sh"
-source "$SCRIPT_DIR/utils/atomic-write.sh"
+# Inline atomic write (no external dependency)
+atomic_write() {
+  local file="$1" content="$2"
+  echo "$content" > "$file"
+}
 
 # --- JSON output helpers ---
 json_ok() { printf '{"ok":true,"result":%s}\n' "$1"; }
