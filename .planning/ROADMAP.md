@@ -27,10 +27,13 @@ Transform Aether from a 7,400-line over-engineered system to a lean 1,800-line i
   2. All commands write state to single COLONY_STATE.json file
   3. Phase data, signals, learnings, errors, and events coexist in one JSON structure
   4. Migration script converts existing 6-file state to new format
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 33-01: TBD
+- [ ] 33-01-PLAN.md — Schema design and migration script
+- [ ] 33-02-PLAN.md — Update init.md and status.md
+- [ ] 33-03-PLAN.md — Update signal and read-only commands
+- [ ] 33-04-PLAN.md — Update remaining complex commands
 
 ### Phase 34: Core Command Rewrite
 **Goal**: build.md and continue.md rewritten with state updates at start-of-next-command
@@ -98,7 +101,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 33. State Foundation | 0/TBD | Not started | - |
+| 33. State Foundation | 0/4 | Planned | - |
 | 34. Core Command Rewrite | 0/TBD | Not started | - |
 | 35. Worker Simplification | 0/TBD | Not started | - |
 | 36. Signal Simplification | 0/TBD | Not started | - |
