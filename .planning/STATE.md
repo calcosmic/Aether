@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 Milestone: v5.1 System Simplification
 Phase: 33 of 37 (State Foundation)
-Plan: 1 of TBD in current phase
+Plan: 2 of TBD in current phase
 Status: In progress
-Last activity: 2026-02-06 -- Completed 33-01-PLAN.md (state migration)
+Last activity: 2026-02-06 -- Completed 33-02-PLAN.md (init/status command updates)
 
-Progress: [█░░░░░░░░░] 10%
+Progress: [██░░░░░░░░] 20%
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -31,15 +31,15 @@ Progress: [█░░░░░░░░░] 10%
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1 (v5.1 milestone)
-- Total plans all milestones: 98+
-- Average duration: ~19 min (historical)
+- Total plans completed: 2 (v5.1 milestone)
+- Total plans all milestones: 99+
+- Average duration: ~2 min (v5.1)
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 33-state-foundation | 1 | 2min | 2min |
+| 33-state-foundation | 2 | 4min | 2min |
 
 *Updated after each plan completion*
 
@@ -54,6 +54,7 @@ Recent decisions affecting current work:
 - [v5.1]: Follow postmortem implementation order (state first, then commands)
 - [33-01]: Preserve nested structure (plan, memory, errors) for semantic clarity
 - [33-01]: Events as pipe-delimited strings per SIMP-01 requirement
+- [33-02]: Merged init.md steps 4-6 into single state write
 
 ### Pending Todos
 
@@ -66,9 +67,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed 33-01-PLAN.md (state migration schema)
+Stopped at: Completed 33-02-PLAN.md (init/status command updates)
 Resume file: None
 
 ---
 
-*State updated: 2026-02-06 after 33-01-PLAN.md completion*
+*State updated: 2026-02-06 after 33-02-PLAN.md completion*
