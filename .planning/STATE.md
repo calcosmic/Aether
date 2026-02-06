@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 Milestone: v5.1 System Simplification
 Phase: 36 of 37 (Signal Simplification)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-02-06 -- Phase 35 complete (worker simplification, 2 plans)
+Plan: 1 of TBD in current phase
+Status: In progress
+Last activity: 2026-02-06 -- Completed 36-01-PLAN.md (signal emission TTL update)
 
-Progress: [██████░░░░] 60%
+Progress: [███████░░░] 65%
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -31,7 +31,7 @@ Progress: [██████░░░░] 60%
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 9 (v5.1 milestone)
+- Total plans completed: 10 (v5.1 milestone)
 - Total plans all milestones: 100+
 - Average duration: ~2 min (v5.1)
 
@@ -42,6 +42,7 @@ Progress: [██████░░░░] 60%
 | 33-state-foundation | 4 | 10min | 2.5min |
 | 34-core-command-rewrite | 3 | 6min | 2min |
 | 35-worker-simplification | 2 | 3min | 1.5min |
+| 36-signal-simplification | 1 | 2min | 2min |
 
 *Updated after each plan completion*
 
@@ -69,6 +70,9 @@ Recent decisions affecting current work:
 - [35-01]: 171 lines consolidated (91% reduction from 1,866)
 - [35-02]: Keyword-based pheromone guidance replaces sensitivity matrix
 - [35-02]: Section extraction pattern for consolidated files
+- [36-01]: phase_end as default signal expiration (not wall-clock based)
+- [36-01]: Priority levels (high/normal/low) replace numeric strength
+- [36-01]: Duration parsing: m=minutes, h=hours, d=days for --ttl flag
 
 ### Pending Todos
 
@@ -81,9 +85,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Phase 35 complete, ready for Phase 36 planning
+Stopped at: Completed 36-01-PLAN.md
 Resume file: None
 
 ---
 
-*State updated: 2026-02-06 after Phase 35 completion*
+*State updated: 2026-02-06 after 36-01 plan completion*
