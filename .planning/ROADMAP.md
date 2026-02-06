@@ -17,7 +17,7 @@ Transform Aether from a 7,400-line over-engineered system to a lean 1,800-line i
 - [x] **Phase 37: Command Trim & Utilities** - Shrink remaining commands and reduce aether-utils.sh
 - [x] **Phase 38: Signal Schema Unification** - Fix init.md and signal path inconsistencies (gap closure)
 - [x] **Phase 39: Worker Reference Consolidation** - Update commands to use workers.md (gap closure)
-- [ ] **Phase 40: State & Utility Alignment** - Fix remaining state file references and sync utilities (gap closure)
+- [x] **Phase 40: State & Utility Alignment** - Fix remaining state file references and sync utilities (gap closure)
 
 ## Phase Details
 
@@ -142,11 +142,14 @@ Plans:
   2. runtime/aether-utils.sh matches ~/.aether/aether-utils.sh (or runtime removed)
   3. Documentation reflects actual line counts
   4. Build/continue handoff uses single state file
-**Plans**: 2 plans
+  5. No command calls non-existent utility functions
+  6. All signal emissions use TTL schema (priority, expires_at)
+**Plans**: 3 plans
 
 Plans:
-- [ ] 40-01-PLAN.md — Remove legacy utility calls from commands, update ant.md docs
-- [ ] 40-02-PLAN.md — Sync ~/.aether/aether-utils.sh with runtime version
+- [x] 40-01-PLAN.md — Remove legacy utility calls from commands, update ant.md docs
+- [x] 40-02-PLAN.md — Sync ~/.aether/aether-utils.sh with runtime version
+- [x] 40-03-PLAN.md — (gap closure) Remove non-existent function calls, unify signal schema
 
 ## Progress
 
@@ -161,7 +164,7 @@ Plans:
 | 37. Command Trim & Utilities | 4/4 | Complete | 2026-02-06 |
 | 38. Signal Schema Unification | 1/1 | Complete | 2026-02-06 |
 | 39. Worker Reference Consolidation | 0/0 | Complete | 2026-02-06 |
-| 40. State & Utility Alignment | 1/2 | In progress | - |
+| 40. State & Utility Alignment | 3/3 | Complete | 2026-02-06 |
 
 ---
 *Roadmap created: 2026-02-06*
