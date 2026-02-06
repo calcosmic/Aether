@@ -16,9 +16,8 @@ If `$ARGUMENTS` is empty or blank, output:
 ```
 Aether Colony
 
-  Initialize the colony with a goal. This creates the colony state,
-  resets all workers to idle, emits an INIT pheromone, and prepares
-  state files (errors, memory, events) for tracking.
+  Initialize the colony with a goal. This creates the consolidated colony state,
+  resets all workers to idle, emits an INIT pheromone, and logs the init event.
 
   Usage: /ant:init "<your goal here>"
 
@@ -47,15 +46,19 @@ Proceeding with new goal: "{new_goal}"
 
 Generate a session ID in the format `session_{unix_timestamp}_{random}` and an ISO-8601 UTC timestamp.
 
-Use the Write tool to write `.aether/data/COLONY_STATE.json`:
+Use the Write tool to write `.aether/data/COLONY_STATE.json` with the complete v2.0 structure:
 
 ```json
 {
+  "version": "2.0",
   "goal": "<the user's goal>",
   "state": "READY",
   "current_phase": 0,
   "session_id": "<generated session_id>",
   "initialized_at": "<ISO-8601 timestamp>",
+  "mode": null,
+  "mode_set_at": null,
+  "mode_indicators": null,
   "workers": {
     "colonizer": "idle",
     "route-setter": "idle",
@@ -71,44 +74,11 @@ Use the Write tool to write `.aether/data/COLONY_STATE.json`:
     "watcher":      {"alpha": 1, "beta": 1, "total_spawns": 0, "successes": 0, "failures": 0},
     "scout":        {"alpha": 1, "beta": 1, "total_spawns": 0, "successes": 0, "failures": 0},
     "architect":    {"alpha": 1, "beta": 1, "total_spawns": 0, "successes": 0, "failures": 0}
-  }
-}
-```
-
-### Step 4: Create State Files
-
-Use the Write tool to create these three files:
-
-**`.aether/data/errors.json`:**
-```json
-{
-  "errors": [],
-  "flagged_patterns": []
-}
-```
-
-**`.aether/data/memory.json`:**
-```json
-{
-  "phase_learnings": [],
-  "decisions": [],
-  "patterns": []
-}
-```
-
-**`.aether/data/events.json`:**
-```json
-{
-  "events": []
-}
-```
-
-### Step 5: Emit INIT Pheromone
-
-Use the Write tool to write `.aether/data/pheromones.json`:
-
-```json
-{
+  },
+  "plan": {
+    "generated_at": null,
+    "phases": []
+  },
   "signals": [
     {
       "id": "init_<unix_timestamp>",
@@ -118,40 +88,36 @@ Use the Write tool to write `.aether/data/pheromones.json`:
       "half_life_seconds": null,
       "created_at": "<ISO-8601 timestamp>"
     }
+  ],
+  "memory": {
+    "phase_learnings": [],
+    "decisions": [],
+    "patterns": []
+  },
+  "errors": {
+    "records": [],
+    "flagged_patterns": []
+  },
+  "events": [
+    "<ISO-8601 timestamp> | colony_initialized | init | Colony initialized with goal: <the user's goal>"
   ]
 }
 ```
 
-INIT signals have no half-life — they persist forever.
+INIT signals have no half-life (null) and persist forever.
 
-### Step 6: Write Init Event
-
-Read `.aether/data/events.json`. Append to the `events` array:
-
-```json
-{
-  "id": "evt_<unix_timestamp>_<4_random_hex>",
-  "type": "colony_initialized",
-  "source": "init",
-  "content": "Colony initialized with goal: <the user's goal>",
-  "timestamp": "<ISO-8601 UTC>"
-}
-```
-
-Use the Write tool to write the updated events.json.
-
-### Step 6.5: Validate State Files
+### Step 4: Validate State File
 
 Use the Bash tool to run:
 ```
 bash ~/.aether/aether-utils.sh validate-state all
 ```
 
-This validates all state files (COLONY_STATE.json, pheromones.json, errors.json, memory.json, events.json) and returns `{"ok":true,"result":{"pass":true|false,"files":[...]}}`.
+This validates COLONY_STATE.json and returns `{"ok":true,"result":{"pass":true|false,"files":[...]}}`.
 
-If `pass` is false, output a warning identifying which file(s) failed validation. This catches initialization bugs immediately.
+If `pass` is false, output a warning identifying which validation(s) failed. This catches initialization bugs immediately.
 
-### Step 7: Display Result
+### Step 5: Display Result
 
 Output this header at the start of your response:
 
@@ -167,11 +133,8 @@ Then show step progress:
   ✓ Step 1: Validate Input
   ✓ Step 2: Read Current State
   ✓ Step 3: Write Colony State
-  ✓ Step 4: Create State Files
-  ✓ Step 5: Emit INIT Pheromone
-  ✓ Step 6: Write Init Event
-  ✓ Step 6.5: Validate State Files
-  ✓ Step 7: Display Result
+  ✓ Step 4: Validate State File
+  ✓ Step 5: Display Result
 ```
 
 Then output a divider and the result:
