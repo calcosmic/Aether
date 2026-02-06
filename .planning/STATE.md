@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 Milestone: v5.1 System Simplification
 Phase: 35 of 37 (Worker Simplification)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-02-06 -- Phase 34 complete (core command rewrite, 3 plans)
+Plan: 1 of TBD in current phase
+Status: In progress
+Last activity: 2026-02-06 -- Completed 35-01-PLAN.md (worker consolidation)
 
-Progress: [████░░░░░░] 40%
+Progress: [█████░░░░░] 50%
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -31,7 +31,7 @@ Progress: [████░░░░░░] 40%
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 7 (v5.1 milestone)
+- Total plans completed: 8 (v5.1 milestone)
 - Total plans all milestones: 100+
 - Average duration: ~2 min (v5.1)
 
@@ -41,6 +41,7 @@ Progress: [████░░░░░░] 40%
 |-------|-------|-------|----------|
 | 33-state-foundation | 4 | 10min | 2.5min |
 | 34-core-command-rewrite | 3 | 6min | 2min |
+| 35-worker-simplification | 1 | 2min | 2min |
 
 *Updated after each plan completion*
 
@@ -63,6 +64,9 @@ Recent decisions affecting current work:
 - [34-02]: SUMMARY.md existence as primary completion signal (passive detection)
 - [34-02]: Orphan handling: >30 min stale = offer rollback, <30 min = wait/force
 - [34-03]: Build/continue handoff verified correct -- no code changes needed
+- [35-01]: Signal keywords instead of sensitivity tables
+- [35-01]: Watcher includes quality gate content for phase approval
+- [35-01]: 171 lines consolidated (91% reduction from 1,866)
 
 ### Pending Todos
 
@@ -75,9 +79,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Phase 34 complete, ready for Phase 35 planning
+Stopped at: Completed 35-01-PLAN.md (worker consolidation)
 Resume file: None
 
 ---
 
-*State updated: 2026-02-06 after Phase 34 completion*
+*State updated: 2026-02-06 after 35-01 completion*
