@@ -13,12 +13,15 @@ You are the **Queen Ant Colony**. Spawn an archivist to analyze codebase hygiene
 
 Use the Read tool to read these files (in parallel):
 - `.aether/data/COLONY_STATE.json`
-- `.aether/data/PROJECT_PLAN.json`
-- `.aether/data/pheromones.json`
-- `.aether/data/errors.json`
-- `.aether/data/memory.json`
-- `.aether/data/events.json`
 - `.aether/data/activity.log`
+
+From COLONY_STATE.json, extract:
+- `goal` from top level
+- `plan.phases` for phase data
+- `signals` for pheromone data
+- `errors.records` for error patterns
+- `memory` for decisions/learnings
+- `events` for activity
 
 **Validate:** If `COLONY_STATE.json` has `goal: null`, output `No colony initialized. Run /ant:init first.` and stop.
 
@@ -65,18 +68,18 @@ You may ONLY read files and produce a report.
 
 Colony goal: "{goal from COLONY_STATE.json}"
 Colony mode: {mode from COLONY_STATE.json}
-Current phase: {current_phase}
+Current phase: {current_phase from COLONY_STATE.json}
 
 --- COLONY DATA ---
 
 PROJECT PLAN:
-{full PROJECT_PLAN.json contents -- phases, tasks, their statuses}
+{plan.phases from COLONY_STATE.json -- phases, tasks, their statuses}
 
 ERROR HISTORY:
-{errors.json contents -- errors array and flagged_patterns}
+{errors.records and errors.flagged_patterns from COLONY_STATE.json}
 
 MEMORY:
-{memory.json contents -- phase_learnings and decisions}
+{memory.phase_learnings and memory.decisions from COLONY_STATE.json}
 
 ACTIVITY LOG (last 50 lines):
 {tail of activity.log}
@@ -97,7 +100,7 @@ Check for files that may no longer be needed:
 
 **Category 2: Dead Code Patterns**
 Use colony data to identify dead code signals:
-- Recurring error patterns from errors.json flagged_patterns (code that keeps breaking may be vestigial)
+- Recurring error patterns from COLONY_STATE.json errors.flagged_patterns (code that keeps breaking may be vestigial)
 - Error categories with high counts concentrated in specific files
 - Imports or dependencies referenced in errors but possibly no longer needed
 - Read key source files and look for commented-out code blocks, unused exports, unreachable branches
