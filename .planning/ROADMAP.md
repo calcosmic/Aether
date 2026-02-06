@@ -6,7 +6,7 @@ Transform Aether from a 7,400-line over-engineered system to a lean 1,800-line i
 
 ## Milestones
 
-- **v5.1 System Simplification** - Phases 33-37 (complete)
+- **v5.1 System Simplification** - Phases 33-40 (gap closure in progress)
 
 ## Phases
 
@@ -15,6 +15,9 @@ Transform Aether from a 7,400-line over-engineered system to a lean 1,800-line i
 - [x] **Phase 35: Worker Simplification** - Collapse 6 worker specs into single workers.md
 - [x] **Phase 36: Signal Simplification** - Replace pheromone exponential decay with simple TTL
 - [x] **Phase 37: Command Trim & Utilities** - Shrink remaining commands and reduce aether-utils.sh
+- [ ] **Phase 38: Signal Schema Unification** - Fix init.md and signal path inconsistencies (gap closure)
+- [ ] **Phase 39: Worker Reference Consolidation** - Update commands to use workers.md (gap closure)
+- [ ] **Phase 40: State & Utility Alignment** - Fix remaining state file references and sync utilities (gap closure)
 
 ## Phase Details
 
@@ -103,9 +106,49 @@ Plans:
 - [x] 37-03-PLAN.md — Reduce colonize.md to ~150 lines with surface scan pattern
 - [x] 37-04-PLAN.md — Reduce aether-utils.sh to ~80 lines and sync command directories
 
+### Phase 38: Signal Schema Unification
+**Goal**: Fix init.md to use TTL signal schema and ensure all signal paths are consistent
+**Depends on**: Phase 37
+**Gap Closure**: Addresses audit integration gaps #3, flow gaps #1 and #2
+**Success Criteria** (what must be TRUE):
+  1. init.md writes signals with TTL schema (priority, expires_at) not legacy schema (strength, half_life)
+  2. All signal commands write to COLONY_STATE.json signals section
+  3. build.md reads signals from COLONY_STATE.json (not pheromones.json)
+  4. Colony initialization flow works end-to-end
+
+Plans:
+- [ ] 38-01-PLAN.md — Update init.md signal schema and verify signal command consistency
+
+### Phase 39: Worker Reference Consolidation
+**Goal**: Update all commands to reference consolidated workers.md instead of individual worker files
+**Depends on**: Phase 38
+**Gap Closure**: Addresses audit integration gap #2
+**Success Criteria** (what must be TRUE):
+  1. build.md references ~/.aether/workers.md (not individual caste files)
+  2. plan.md references ~/.aether/workers.md
+  3. organize.md references ~/.aether/workers.md
+  4. No command references ~/.aether/workers/{caste}-ant.md pattern
+
+Plans:
+- [ ] 39-01-PLAN.md — Update worker references in build.md, plan.md, organize.md
+
+### Phase 40: State & Utility Alignment
+**Goal**: Complete state consolidation and sync utility scripts
+**Depends on**: Phase 39
+**Gap Closure**: Addresses audit integration gaps #1, #4, #5, flow gap #3
+**Success Criteria** (what must be TRUE):
+  1. No command reads/writes PROJECT_PLAN.json, pheromones.json, errors.json, memory.json, or events.json
+  2. runtime/aether-utils.sh matches ~/.aether/aether-utils.sh (or runtime removed)
+  3. Documentation reflects actual line counts
+  4. Build/continue handoff uses single state file
+
+Plans:
+- [ ] 40-01-PLAN.md — Audit and fix remaining separate file references
+- [ ] 40-02-PLAN.md — Sync utility scripts and update documentation
+
 ## Progress
 
-**Execution Order:** Phases 33 through 37 in sequence
+**Execution Order:** Phases 33 through 40 in sequence
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -114,6 +157,9 @@ Plans:
 | 35. Worker Simplification | 2/2 | Complete | 2026-02-06 |
 | 36. Signal Simplification | 5/5 | Complete | 2026-02-06 |
 | 37. Command Trim & Utilities | 4/4 | Complete | 2026-02-06 |
+| 38. Signal Schema Unification | 0/1 | Pending | - |
+| 39. Worker Reference Consolidation | 0/1 | Pending | - |
+| 40. State & Utility Alignment | 0/2 | Pending | - |
 
 ---
 *Roadmap created: 2026-02-06*
