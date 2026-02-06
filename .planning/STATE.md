@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 Milestone: v5.1 System Simplification
 Phase: 34 of 37 (Core Command Rewrite)
-Plan: 1 of TBD in current phase
+Plan: 2 of TBD in current phase
 Status: In progress
-Last activity: 2026-02-06 -- Completed 34-01-PLAN.md (build.md rewrite)
+Last activity: 2026-02-06 -- Completed 34-02-PLAN.md (continue.md rewrite)
 
-Progress: [███░░░░░░░] 25%
+Progress: [████░░░░░░] 30%
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -31,16 +31,16 @@ Progress: [███░░░░░░░] 25%
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5 (v5.1 milestone)
+- Total plans completed: 6 (v5.1 milestone)
 - Total plans all milestones: 100+
-- Average duration: ~2.6 min (v5.1)
+- Average duration: ~2.5 min (v5.1)
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 33-state-foundation | 4 | 10min | 2.5min |
-| 34-core-command-rewrite | 1 | 3min | 3min |
+| 34-core-command-rewrite | 2 | 5min | 2.5min |
 
 *Updated after each plan completion*
 
@@ -60,6 +60,8 @@ Recent decisions affecting current work:
 - [33-04]: Preserve command logic, only change state references (simplification deferred to Phase 34)
 - [34-01]: Build writes only EXECUTING state before workers, does not write final state
 - [34-01]: Learnings, pheromones, task status moved to continue.md
+- [34-02]: SUMMARY.md existence as primary completion signal (passive detection)
+- [34-02]: Orphan handling: >30 min stale = offer rollback, <30 min = wait/force
 
 ### Pending Todos
 
@@ -72,9 +74,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed 34-01-PLAN.md (build.md rewrite)
+Stopped at: Completed 34-02-PLAN.md (continue.md rewrite)
 Resume file: None
 
 ---
 
-*State updated: 2026-02-06 after 34-01 completion*
+*State updated: 2026-02-06 after 34-02 completion*
