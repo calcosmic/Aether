@@ -10,12 +10,12 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 ## Current Position
 
 Milestone: v5.1 System Simplification
-Phase: 38 of 40 (Signal Schema Unification)
-Plan: 1 of 1 in current phase
-Status: Phase verified
-Last activity: 2026-02-06 -- Phase 38 verified (4/4 success criteria)
+Phase: 40 of 40 (State & Utility Alignment)
+Plan: 1 of 2 in current phase (40-02 complete, 40-01 pending)
+Status: In progress
+Last activity: 2026-02-06 -- Completed 40-02-PLAN.md
 
-Progress: [████████░░] 75%
+Progress: [████████░░] 95%
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -106,7 +106,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Phase 38 verified, proceeding to Phase 39
+Stopped at: Completed 40-02-PLAN.md
 Resume file: None
 
 ---

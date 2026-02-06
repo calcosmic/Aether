@@ -161,7 +161,7 @@ Plans:
 | 37. Command Trim & Utilities | 4/4 | Complete | 2026-02-06 |
 | 38. Signal Schema Unification | 1/1 | Complete | 2026-02-06 |
 | 39. Worker Reference Consolidation | 0/0 | Complete | 2026-02-06 |
-| 40. State & Utility Alignment | 0/2 | Pending | - |
+| 40. State & Utility Alignment | 1/2 | In progress | - |
 
 ---
 *Roadmap created: 2026-02-06*
