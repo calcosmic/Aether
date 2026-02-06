@@ -11,9 +11,9 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 Milestone: v5.1 System Simplification
 Phase: 40 of 40 (State & Utility Alignment)
-Plan: 2 of 2 (phase complete)
+Plan: 3 of 3 (phase complete)
 Status: Phase complete
-Last activity: 2026-02-06 -- Completed 40-01-PLAN.md
+Last activity: 2026-02-06 -- Completed 40-03-PLAN.md
 
 Progress: [██████████] 100%
 
@@ -46,7 +46,7 @@ Progress: [██████████] 100%
 | 36-signal-simplification | 5 | 12min | 2.4min |
 | 37-command-trim-utilities | 4 | 6min | 1.5min |
 | 38-signal-schema-unification | 1 | 4min | 4min |
-| 40-state-utility-alignment | 2 | 5min | 2.5min |
+| 40-state-utility-alignment | 3 | 7min | 2.3min |
 
 *Updated after each plan completion*
 
@@ -98,6 +98,9 @@ Recent decisions affecting current work:
 - [40-01]: TTL filtering replaces decay math in all commands
 - [40-01]: Signals read inline from COLONY_STATE.json, no utility calls
 - [40-01]: Memory compression via cap enforcement, not utility function
+- [40-03]: activity-log replaces activity-log-init (single log entry vs initialization)
+- [40-03]: Manual learning display replaces learning-promote function
+- [40-03]: Signal emissions use TTL schema (priority + expires_at)
 
 ### Pending Todos
 
@@ -110,9 +113,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed Phase 40 (both plans)
+Stopped at: Completed Phase 40 (all 3 plans)
 Resume file: None
 
 ---
 
-*State updated: 2026-02-06 after 40-01 completion*
+*State updated: 2026-02-06 after 40-03 completion*
