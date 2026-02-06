@@ -6,7 +6,7 @@ Transform Aether from a 7,400-line over-engineered system to a lean 1,800-line i
 
 ## Milestones
 
-- **v5.1 System Simplification** - Phases 33-37 (in progress)
+- **v5.1 System Simplification** - Phases 33-37 (complete)
 
 ## Phases
 
@@ -14,7 +14,7 @@ Transform Aether from a 7,400-line over-engineered system to a lean 1,800-line i
 - [x] **Phase 34: Core Command Rewrite** - Rewrite build and continue commands with start-of-next-command state updates
 - [x] **Phase 35: Worker Simplification** - Collapse 6 worker specs into single workers.md
 - [x] **Phase 36: Signal Simplification** - Replace pheromone exponential decay with simple TTL
-- [ ] **Phase 37: Command Trim & Utilities** - Shrink remaining commands and reduce aether-utils.sh
+- [x] **Phase 37: Command Trim & Utilities** - Shrink remaining commands and reduce aether-utils.sh
 
 ## Phase Details
 
@@ -98,10 +98,10 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 37-01-PLAN.md — Reduce signal commands (focus, redirect, feedback) to ~40 lines each
-- [ ] 37-02-PLAN.md — Reduce status.md to ~80 lines with quick-glance output
-- [ ] 37-03-PLAN.md — Reduce colonize.md to ~150 lines with surface scan pattern
-- [ ] 37-04-PLAN.md — Reduce aether-utils.sh to ~80 lines and sync command directories
+- [x] 37-01-PLAN.md — Reduce signal commands (focus, redirect, feedback) to ~40 lines each
+- [x] 37-02-PLAN.md — Reduce status.md to ~80 lines with quick-glance output
+- [x] 37-03-PLAN.md — Reduce colonize.md to ~150 lines with surface scan pattern
+- [x] 37-04-PLAN.md — Reduce aether-utils.sh to ~80 lines and sync command directories
 
 ## Progress
 
@@ -113,7 +113,7 @@ Plans:
 | 34. Core Command Rewrite | 3/3 | Complete | 2026-02-06 |
 | 35. Worker Simplification | 2/2 | Complete | 2026-02-06 |
 | 36. Signal Simplification | 5/5 | Complete | 2026-02-06 |
-| 37. Command Trim & Utilities | 0/4 | Not started | - |
+| 37. Command Trim & Utilities | 4/4 | Complete | 2026-02-06 |
 
 ---
 *Roadmap created: 2026-02-06*

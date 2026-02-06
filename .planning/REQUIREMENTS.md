@@ -22,7 +22,7 @@ Requirements derived from postmortem Section 5 (Recommended Fixes), ordered by s
 
 ### High Priority
 
-- [ ] **SIMP-03**: Replace pheromone exponential decay with simple TTL
+- [x] **SIMP-03**: Replace pheromone exponential decay with simple TTL
   - Signals use `expires_at` timestamp instead of half-life math
   - Priority field: "high" (REDIRECT), "normal" (FOCUS), "low" (FEEDBACK)
   - Filter expired signals on read, no cleanup command needed
@@ -33,7 +33,7 @@ Requirements derived from postmortem Section 5 (Recommended Fixes), ordered by s
   - Remove sensitivity matrices, spawning protocols, visual identity systems
   - Include assignment guidelines
 
-- [ ] **SIMP-05**: Shrink command files by 60-70%
+- [x] **SIMP-05**: Shrink command files by 60-70%
   - Remove verbose display templates (let agent format naturally)
   - Remove redundant per-step state validation
   - Remove Bayesian spawn tracking
@@ -42,7 +42,7 @@ Requirements derived from postmortem Section 5 (Recommended Fixes), ordered by s
 
 ### Medium Priority
 
-- [ ] **SIMP-06**: Reduce aether-utils.sh from 372 lines to ~80 lines
+- [x] **SIMP-06**: Reduce aether-utils.sh from 372 lines to ~80 lines
   - Keep: validate-state, error-add
   - Remove: pheromone math (decay, effective, batch, cleanup, validate)
   - Remove: memory compression, spawn check
@@ -92,10 +92,10 @@ Per postmortem Section 7 (What to Preserve):
 |-------------|-------|--------|
 | SIMP-01 | Phase 33 | Complete |
 | SIMP-02 | Phase 34 | Complete |
-| SIMP-03 | Phase 36 | Pending |
+| SIMP-03 | Phase 36 | Complete |
 | SIMP-04 | Phase 35 | Complete |
-| SIMP-05 | Phase 34 (build, continue), Phase 37 (remaining) | Partial (build, continue complete) |
-| SIMP-06 | Phase 37 | Pending |
+| SIMP-05 | Phase 34 (build, continue), Phase 37 (remaining) | Complete |
+| SIMP-06 | Phase 37 | Complete |
 | SIMP-07 | Phase 34 | Complete |
 
 **Coverage:**
