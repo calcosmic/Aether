@@ -106,9 +106,7 @@ If this works, everything else follows. If this fails, nothing else matters. The
 - ✓ **Codebase hygiene** — /ant:organize spawns architect-ant for report-only analysis — v4.4
 - ✓ **Pheromone user guide** — When/why to use each signal with 9 scenarios and sensitivity matrix — v4.4
 
-### Active
-
-*(v5.0 — NPM Distribution — 2026-02-05)*
+*(Shipped in v5.0 — 2026-02-05)*
 
 - ✓ **Path Migration** — All 14 commands and 6 worker specs reference `~/.aether/` for global resources, `.aether/data/` for per-project state — v5.0
 - ✓ **DATA_DIR Fix** — `aether-utils.sh` uses `$PWD/.aether/data` instead of `$SCRIPT_DIR/data` — v5.0
@@ -116,6 +114,20 @@ If this works, everything else follows. If this fails, nothing else matters. The
 - ✓ **Postinstall** — `npm install -g` auto-copies commands to `~/.claude/commands/ant/` and runtime to `~/.aether/` — v5.0
 - ✓ **Cosmetic Fixes** — continue.md learnings_extracted guard, pheromones.md source field, validate-state mode fields — v5.0
 - ✓ **Documentation** — README.md with install/uninstall instructions, file structure updated for global/local split — v5.0
+
+### Active
+
+*(v5.1 — System Simplification — 2026-02-06)*
+
+**Goal:** Reduce system from ~7,400 lines to ~1,800 lines based on M4L-AnalogWave postmortem findings. Framework overhead currently consumes ~70% of context; target is ~20%.
+
+- [ ] **State Consolidation** — Merge 6 JSON files (COLONY_STATE, PROJECT_PLAN, pheromones, memory, errors, events) into single COLONY_STATE.json
+- [ ] **State Update Timing** — Move state updates from end-of-command to start-of-next-command (prevents context boundary loss)
+- [ ] **TTL Pheromones** — Replace exponential decay math with simple `expires_at` timestamps; remove sensitivity matrices
+- [ ] **Worker Spec Collapse** — Merge 6 worker specs (1,866 lines) into single `workers.md` (~200 lines)
+- [ ] **Command Shrinking** — Reduce average command from ~340 lines to ~100 lines (remove verbose templates, redundant validation)
+- [ ] **Utility Reduction** — Reduce `aether-utils.sh` from 372 lines to ~80 lines (keep validate-state, error-add; remove pheromone math)
+- [ ] **Output-as-State** — Use deliverable files (`.planning/phase-N/SUMMARY.md`) as primary record instead of state file task statuses
 
 ### Out of Scope
 
@@ -137,38 +149,38 @@ If this works, everything else follows. If this fails, nothing else matters. The
 
 ## Context
 
-### Current State (post v4.4 — 2026-02-05)
+### Current State (post v5.0 — 2026-02-06)
 
-**What exists (working):**
-- 14 commands as Claude Code skill prompts (init, plan, build, status, phase, continue, focus, redirect, feedback, pause-colony, resume-colony, colonize, organize, ant)
-- 6 worker ant specs (~250-560 lines each) with pheromone math, spawning scenarios, event awareness, progress output, mandatory activity logging, SPAWN REQUEST format, scoring rubric (watcher)
-- 6 state files: COLONY_STATE.json (with mode + spawn_tree), pheromones.json, PROJECT_PLAN.json, errors.json (with phase attribution), memory.json (with phase-attributed decisions), events.json
-- 1 global state file: ~/.aether/learnings.json (cross-project learning promotion)
-- `aether-utils.sh` utility wrapper with 18 subcommands (pheromone math, state validation, spawn enforcement, memory ops, error tracking, activity logging, learning promote/inject)
-- 2 infrastructure scripts: atomic-write.sh, file-lock.sh
-- 1 documentation file: .aether/docs/pheromones.md (user guide with 9 scenarios)
-- ANSI-colored build output with caste-specific colors
-- Queen-driven execution with advisory reviewer + auto-debugger post-wave
-- Auto-continue mode (/ant:continue --all) with quality-gated halt
-- Adaptive complexity (LIGHTWEIGHT/STANDARD/FULL) set at colonization
-- Multi-colonizer synthesis (3 lenses: Structure/Patterns/Stack)
-- Two-tier learning (project-local + global with manual promotion)
-- Queen-mediated spawn tree engine (depth-2 limit)
-- Tech debt report at project completion
-- Codebase hygiene scanning (/ant:organize, report-only)
+**What exists:**
+- 14 commands as Claude Code skill prompts (~7,400 lines total)
+- 6 worker ant specs (1,866 lines combined)
+- 6 state files that must stay consistent
+- `aether-utils.sh` (369 lines, 18 subcommands)
+- NPM package for global installation
 
-**Known issues:**
-- continue.md Step 6 writes learnings_extracted event unconditionally even when Step 4 was skipped (cosmetic)
-- continue.md Step 8 display template lacks skip-case guidance (LLM handles contextually)
-- pheromones.md documents global learning FEEDBACK source as 'auto:colonize' but implementation uses 'global:inject' (documentation mismatch)
-- validate-state does not check mode/mode_set_at/mode_indicators fields (optional with fallback)
-- aether-utils.sh at 369/370 line capacity
+**Real-world test results (M4L-AnalogWave, 2026-02-05):**
+- Phase 1 completed successfully — all 5 tasks produced output
+- **State fell out of sync** — PROJECT_PLAN.json still showed "pending" despite completed work
+- **~70% of context spent on framework overhead** — ceremony-to-work ratio extreme
+- **State updates at END of commands get dropped** at context boundaries
+- Postmortem verdict: "Core ideas sound, implementation over-engineered by ~4x"
 
-**Real-world test results (2026-02-04):**
-- Tested on filmstrip packaging project — 5 phases, 21 tasks, 100% completion rate
-- All 32 field notes addressed in v4.4 milestone (23 actionable + 9 informational)
-- Learning propagation worked cross-phase
-- REDIRECT pheromone respected across all phases
+**What to preserve (per postmortem):**
+- Parallel task decomposition (Wave 1 → Wave 2)
+- Structured phase output (`.planning/phase-N/`)
+- Worker role concept (6 castes)
+- Signal/constraint concept (simplified)
+- Quality gates
+- Pause/resume capability
+- Phase-based planning
+
+**Anti-patterns to eliminate:**
+- Critical state writes at end of long operations
+- Distributed state across multiple files
+- Mathematical models (Bayesian, exponential) where simple rules suffice
+- Prescribing exact output formatting in commands
+- Shell round-trips for trivial operations
+- Tracking metrics before enough data exists
 
 ### Background
 
@@ -186,7 +198,7 @@ Aether is based on **383,000+ words of research** across 25 documents by Ralph (
 - **Task Tool for Spawning** — Autonomous spawning uses Claude's Task tool with full spec injection
 - **Standalone Architecture** — Aether is its own system, not dependent on CDS or any framework
 - **No External Dependencies** — No vector DBs, no embedding services, no Node.js, no Python
-- **Shell Utilities Only** — Utility layer uses bash+jq only, stays thin (<400 lines total)
+- **Shell Utilities Only** — Utility layer uses bash+jq only, stays thin (<100 lines total after v5.1)
 - **Command Enrichment Over Proliferation** — Functionality enriched in existing commands; new commands only when requirements demand (14 commands as of v4.4)
 - **Novel Coordination** — Stigmergic pheromone model is Aether's differentiator (spawning concept exists elsewhere; coordination approach is novel)
 
@@ -222,4 +234,4 @@ Aether is based on **383,000+ words of research** across 25 documents by Ralph (
 
 ---
 
-*Last updated: 2026-02-05 after v4.4 milestone completion*
+*Last updated: 2026-02-06 after v5.1 milestone start*
