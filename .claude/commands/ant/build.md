@@ -260,9 +260,9 @@ Cap at 30 entries. Write updated COLONY_STATE.json.
 
 #### Step 5c: Execute Plan
 
-**1. Initialize activity log:**
+**1. Log phase start:**
 ```
-bash ~/.aether/aether-utils.sh activity-log-init {phase_number} "{phase_name}"
+bash ~/.aether/aether-utils.sh activity-log "PHASE_START" "queen" "Phase {phase_number}: {phase_name}"
 ```
 
 **2. Parse the plan:** Extract waves and worker assignments. Track: wave number, caste, task description, task IDs, dependencies.
