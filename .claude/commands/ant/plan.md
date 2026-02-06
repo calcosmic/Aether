@@ -9,10 +9,12 @@ You are the **Queen**. Your only job is to emit a signal and let the colony plan
 
 ### Step 1: Read State
 
-Use the Read tool to read these files (in parallel):
-- `.aether/data/COLONY_STATE.json`
-- `.aether/data/pheromones.json`
-- `.aether/data/PROJECT_PLAN.json`
+Use the Read tool to read `.aether/data/COLONY_STATE.json`.
+
+Extract:
+- `goal` from top level
+- `signals` array (pheromones)
+- `plan.phases` array (for context)
 
 **Validate:** If `COLONY_STATE.json` has `goal: null`, output:
 
@@ -24,7 +26,7 @@ Stop here.
 
 ### Step 2: Check Existing Plan
 
-If `PROJECT_PLAN.json` already has phases (non-empty `phases` array), skip to **Step 5** (Display Plan).
+If `plan.phases` from COLONY_STATE.json already has entries (non-empty array), skip to **Step 5** (Display Plan).
 
 ### Step 3: Compute Active Pheromones
 
@@ -33,7 +35,7 @@ Use the Bash tool to run:
 bash ~/.aether/aether-utils.sh pheromone-batch
 ```
 
-This returns JSON: `{"ok":true,"result":[...signals with current_strength...]}`. Parse the `result` array. Filter out signals where `current_strength < 0.05`.
+This returns JSON: `{"ok":true,"result":[...signals with current_strength...]}`. Parse the `result` array using the `signals` array from COLONY_STATE.json. Filter out signals where `current_strength < 0.05`.
 
 If the command fails, treat as "no active pheromones."
 
@@ -132,28 +134,27 @@ Break it into 3-6 phases. Each phase should have concrete tasks (3-8 per phase).
 Do NOT assign castes to tasks — just describe the work. The colony will self-organize at execution time.
 Set dependency IDs on tasks that require earlier tasks to complete first.
 
-Write the result to .aether/data/PROJECT_PLAN.json using the Write tool:
+Write the result to `.aether/data/COLONY_STATE.json` using the Write tool. Read the current state first, then update:
+- Set `plan.phases` to the phases array
+- Set `plan.generated_at` to ISO-8601 timestamp
+- Set `state` to `"READY"`
+- Append event to `events` array as pipe-delimited string: `"<timestamp>|plan_generated|plan|Generated <N> phases for goal: <goal>"`
 
+Phase structure:
 {
-  "goal": "the original goal",
-  "generated_at": "ISO-8601 timestamp",
-  "phases": [
+  "id": 1,
+  "name": "Phase name",
+  "description": "What this phase accomplishes",
+  "status": "pending",
+  "tasks": [
     {
-      "id": 1,
-      "name": "Phase name",
-      "description": "What this phase accomplishes",
+      "id": "1.1",
+      "description": "Concrete task description",
       "status": "pending",
-      "tasks": [
-        {
-          "id": "1.1",
-          "description": "Concrete task description",
-          "status": "pending",
-          "depends_on": []
-        }
-      ],
-      "success_criteria": ["Observable outcome 1", "Observable outcome 2"]
+      "depends_on": []
     }
-  ]
+  ],
+  "success_criteria": ["Observable outcome 1", "Observable outcome 2"]
 }
 
 Report what you planned and why.
@@ -165,7 +166,7 @@ After the ant finishes, update `COLONY_STATE.json`:
 
 ### Step 5: Display Plan
 
-Read `.aether/data/PROJECT_PLAN.json` and display:
+Read `plan.phases` from COLONY_STATE.json (already in memory from Step 1) and display:
 
 ```
 PROJECT PLAN

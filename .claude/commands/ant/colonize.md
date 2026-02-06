@@ -9,9 +9,11 @@ You are the **Queen**. Your only job is to emit a signal and let the colony expl
 
 ### Step 1: Read State
 
-Use the Read tool to read these files (in parallel):
-- `.aether/data/COLONY_STATE.json`
-- `.aether/data/pheromones.json`
+Use the Read tool to read `.aether/data/COLONY_STATE.json`.
+
+Extract:
+- `goal`, `state` from top level
+- `signals` array (pheromones)
 
 If `COLONY_STATE.json` has `goal: null`, output:
 
@@ -354,7 +356,7 @@ bash -c 'printf "\e[36m%-14s\e[0m %s ... \e[32mDONE\e[0m\n" "[COLONIZER]" "Analy
 
 After colonization completes (either synthesis report from Step 4.5 or single colonizer report from Step 4-LITE), save findings so they survive the session.
 
-Read `.aether/data/memory.json`. Append a decision record to the `decisions` array:
+Read `.aether/data/COLONY_STATE.json`. Append a decision record to the `memory.decisions` array:
 
 ```json
 {
@@ -367,23 +369,14 @@ Read `.aether/data/memory.json`. Append a decision record to the `decisions` arr
 }
 ```
 
-If the `decisions` array exceeds 30 entries, remove the oldest entries to keep only 30.
+If the `memory.decisions` array exceeds 30 entries, remove the oldest entries to keep only 30.
 
-Use the Write tool to write the updated memory.json.
+**Write Event:** Append to the `events` array as pipe-delimited string:
+`"<timestamp>|codebase_colonized|colonize|Codebase colonized ({LIGHTWEIGHT|STANDARD|FULL} mode): <project type>, <primary language/framework>"`
 
-**Write Event:** Read `.aether/data/events.json`. Append to the `events` array:
+If the `events` array exceeds 100 entries, remove the oldest entries to keep only 100.
 
-```json
-{
-  "id": "evt_<unix_timestamp>_<4_random_hex>",
-  "type": "codebase_colonized",
-  "source": "colonize",
-  "content": "Codebase colonized ({LIGHTWEIGHT|STANDARD|FULL} mode): <project type>, <primary language/framework>",
-  "timestamp": "<ISO-8601 UTC>"
-}
-```
-
-If the `events` array exceeds 100 entries, remove the oldest entries to keep only 100. Write the updated events.json.
+Use the Write tool to write the updated COLONY_STATE.json.
 
 ### Step 5.5: Inject Global Learnings
 
@@ -410,9 +403,7 @@ After persisting colonization findings, inject relevant global learnings as FEED
 2. **If count is 0 or learnings array is empty:** Display "No matching global learnings found." and skip to Step 6.
 
 3. **For each relevant learning returned:**
-   Read `.aether/data/pheromones.json` (if not already in memory from Step 2).
-
-   Append a FEEDBACK pheromone to the `signals` array:
+   Append a FEEDBACK pheromone to the `signals` array in COLONY_STATE.json:
    ```json
    {
      "id": "global_inject_<unix_timestamp>_<4_random_hex>",
@@ -434,7 +425,7 @@ After persisting colonization findings, inject relevant global learnings as FEED
    - If pass:true -> append to signals array
    - If command fails -> append anyway (fail-open)
 
-4. **Write updated pheromones.json** with the injected FEEDBACK pheromones.
+4. **Write updated COLONY_STATE.json** with the injected FEEDBACK pheromones in `signals` array.
 
 5. **Display injected learnings** using Bash tool (bold yellow -- Queen color):
    ```
@@ -479,7 +470,7 @@ Analyze the findings to suggest specific pheromones:
 
 {synthesis report (STANDARD/FULL) or single colonizer report (LIGHTWEIGHT)}
 
-  Findings saved to memory.json
+  Findings saved to COLONY_STATE.json
 
 Suggested Pheromone Injections:
   Based on colonization findings:
@@ -510,7 +501,7 @@ If the ant's report contains no clear focus areas or problematic patterns, displ
 
 ### Step 7: Reset State
 
-Use Write tool to update `COLONY_STATE.json`:
+Use Write tool to update `.aether/data/COLONY_STATE.json`:
 - Set `state` to `"READY"`
 - Set `workers.colonizer` to `"idle"`
 - Set `mode` to the classified mode from Step 2.5 (`"LIGHTWEIGHT"`, `"STANDARD"`, or `"FULL"`)
@@ -524,7 +515,7 @@ Use Write tool to update `COLONY_STATE.json`:
   }
   ```
 
-Add these fields to the existing Write — do NOT create a separate write operation.
+Add these fields to the existing Write -- do NOT create a separate write operation.
 
 ### Step 8: Persistence Confirmation
 
