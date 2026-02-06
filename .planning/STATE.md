@@ -10,12 +10,12 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 ## Current Position
 
 Milestone: v5.1 System Simplification
-Phase: 36 of 37 (Signal Simplification)
-Plan: 5 of 5 in current phase
-Status: Phase verified
-Last activity: 2026-02-06 -- Phase 36 verified (4/4 success criteria)
+Phase: 37 of 37 (Command Trim & Utilities)
+Plan: 3 of 5 in current phase
+Status: In progress
+Last activity: 2026-02-06 -- Completed 37-03-PLAN.md (colonize reduction)
 
-Progress: [████████░░] 80%
+Progress: [█████████░] 90%
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -43,6 +43,7 @@ Progress: [████████░░] 80%
 | 34-core-command-rewrite | 3 | 6min | 2min |
 | 35-worker-simplification | 2 | 3min | 1.5min |
 | 36-signal-simplification | 5 | 12min | 2.4min |
+| 37-command-trim-utilities | 1 | 1min | 1min |
 
 *Updated after each plan completion*
 
@@ -80,6 +81,8 @@ Recent decisions affecting current work:
 - [36-03]: Priority processing: high first, then normal, then low
 - [36-05]: Inline TTL filtering replaces pheromone-batch calls in commands
 - [36-05]: Deleted 1,866 lines of obsolete runtime/workers/*.md files
+- [37-02]: Quick-glance status output (~5 lines) replacing verbose templates
+- [37-02]: Status signal count filters by expires_at field (TTL-aware)
 
 ### Pending Todos
 
@@ -92,9 +95,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Phase 36 verified, ready for Phase 37
+Stopped at: Completed 37-02-PLAN.md (status reduction)
 Resume file: None
 
 ---
 
-*State updated: 2026-02-06 after Phase 36 verification*
+*State updated: 2026-02-06 after 37-02-PLAN.md completion*
