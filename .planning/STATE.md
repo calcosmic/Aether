@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 Milestone: v5.1 System Simplification
 Phase: 34 of 37 (Core Command Rewrite)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-02-06 -- Phase 33 complete (state consolidation, 4 plans)
+Plan: 1 of TBD in current phase
+Status: In progress
+Last activity: 2026-02-06 -- Completed 34-01-PLAN.md (build.md rewrite)
 
-Progress: [██░░░░░░░░] 20%
+Progress: [███░░░░░░░] 25%
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -31,15 +31,16 @@ Progress: [██░░░░░░░░] 20%
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4 (v5.1 milestone)
+- Total plans completed: 5 (v5.1 milestone)
 - Total plans all milestones: 100+
-- Average duration: ~2.5 min (v5.1)
+- Average duration: ~2.6 min (v5.1)
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 33-state-foundation | 4 | 10min | 2.5min |
+| 34-core-command-rewrite | 1 | 3min | 3min |
 
 *Updated after each plan completion*
 
@@ -57,6 +58,8 @@ Recent decisions affecting current work:
 - [33-02]: Merged init.md steps 4-6 into single state write
 - [33-03]: Single read-modify-write for signal commands (efficiency)
 - [33-04]: Preserve command logic, only change state references (simplification deferred to Phase 34)
+- [34-01]: Build writes only EXECUTING state before workers, does not write final state
+- [34-01]: Learnings, pheromones, task status moved to continue.md
 
 ### Pending Todos
 
@@ -69,9 +72,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Phase 33 complete, ready for Phase 34 planning
+Stopped at: Completed 34-01-PLAN.md (build.md rewrite)
 Resume file: None
 
 ---
 
-*State updated: 2026-02-06 after Phase 33 completion*
+*State updated: 2026-02-06 after 34-01 completion*
