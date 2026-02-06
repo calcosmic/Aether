@@ -115,9 +115,10 @@ Plans:
   2. All signal commands write to COLONY_STATE.json signals section
   3. build.md reads signals from COLONY_STATE.json (not pheromones.json)
   4. Colony initialization flow works end-to-end
+**Plans**: 1 plan
 
 Plans:
-- [ ] 38-01-PLAN.md — Update init.md signal schema and verify signal command consistency
+- [ ] 38-01-PLAN.md — Update init.md signal schema and unify signal paths across all commands
 
 ### Phase 39: Worker Reference Consolidation
 **Goal**: Update all commands to reference consolidated workers.md instead of individual worker files
