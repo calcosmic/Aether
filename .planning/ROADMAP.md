@@ -15,7 +15,7 @@ Transform Aether from a 7,400-line over-engineered system to a lean 1,800-line i
 - [x] **Phase 35: Worker Simplification** - Collapse 6 worker specs into single workers.md
 - [x] **Phase 36: Signal Simplification** - Replace pheromone exponential decay with simple TTL
 - [x] **Phase 37: Command Trim & Utilities** - Shrink remaining commands and reduce aether-utils.sh
-- [ ] **Phase 38: Signal Schema Unification** - Fix init.md and signal path inconsistencies (gap closure)
+- [x] **Phase 38: Signal Schema Unification** - Fix init.md and signal path inconsistencies (gap closure)
 - [ ] **Phase 39: Worker Reference Consolidation** - Update commands to use workers.md (gap closure)
 - [ ] **Phase 40: State & Utility Alignment** - Fix remaining state file references and sync utilities (gap closure)
 
@@ -118,7 +118,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 38-01-PLAN.md — Update init.md signal schema and unify signal paths across all commands
+- [x] 38-01-PLAN.md — Update init.md signal schema and unify signal paths across all commands
 
 ### Phase 39: Worker Reference Consolidation
 **Goal**: Update all commands to reference consolidated workers.md instead of individual worker files
@@ -158,7 +158,7 @@ Plans:
 | 35. Worker Simplification | 2/2 | Complete | 2026-02-06 |
 | 36. Signal Simplification | 5/5 | Complete | 2026-02-06 |
 | 37. Command Trim & Utilities | 4/4 | Complete | 2026-02-06 |
-| 38. Signal Schema Unification | 0/1 | Pending | - |
+| 38. Signal Schema Unification | 1/1 | Complete | 2026-02-06 |
 | 39. Worker Reference Consolidation | 0/1 | Pending | - |
 | 40. State & Utility Alignment | 0/2 | Pending | - |
 
