@@ -14,11 +14,14 @@ The pattern to avoid is: `$ARGUMENTS`
 If `$ARGUMENTS` is empty or blank, output:
 
 ```
-Usage: /ant:redirect "<pattern to avoid>"
+Usage: /ant:redirect "<pattern to avoid>" [--ttl <duration>]
+
+Options:
+  --ttl <duration>  Set expiration time (e.g., 30m, 2h, 1d). Default: phase_end
 
 Examples:
   /ant:redirect "Don't use JWT for sessions"
-  /ant:redirect "Avoid synchronous I/O"
+  /ant:redirect "Avoid synchronous I/O" --ttl 2h
   /ant:redirect "No global mutable state"
 ```
 
@@ -30,7 +33,17 @@ Use the Read tool to read `.aether/data/COLONY_STATE.json`.
 
 If `goal` is null, output `No colony initialized. Run /ant:init first.` and stop.
 
-### Step 3: Append REDIRECT Signal
+### Step 3: Parse TTL Flag and Append REDIRECT Signal
+
+**Parse TTL:**
+- If `$ARGUMENTS` contains `--ttl` followed by a duration:
+  - Extract the duration value (e.g., "30m", "2h", "1d")
+  - Parse duration: "m" = minutes, "h" = hours, "d" = days
+  - Calculate `expires_at` = current timestamp + duration
+  - Remove `--ttl <duration>` from the pattern content
+- Otherwise: set `expires_at` = "phase_end" (default)
+
+**Write Signal:**
 
 Use the Read tool to read `.aether/data/pheromones.json`.
 
@@ -41,9 +54,10 @@ Add a new signal to the `signals` array and use the Write tool to write the upda
   "id": "redirect_<unix_timestamp>",
   "type": "REDIRECT",
   "content": "<the pattern to avoid>",
-  "strength": 0.9,
-  "half_life_seconds": 86400,
-  "created_at": "<ISO-8601 UTC timestamp>"
+  "priority": "high",
+  "created_at": "<ISO-8601 UTC timestamp>",
+  "expires_at": "<ISO-8601 UTC timestamp or 'phase_end'>",
+  "source": "user"
 }
 ```
 
@@ -77,7 +91,7 @@ Read `.aether/data/events.json`. Append to the `events` array:
   "id": "evt_<unix_timestamp>_<4_random_hex>",
   "type": "pheromone_emitted",
   "source": "redirect",
-  "content": "REDIRECT: <content> (strength 0.9, half-life 24hr)",
+  "content": "REDIRECT: <content> (priority high, expires <time or 'phase end'>)",
   "timestamp": "<ISO-8601 UTC>"
 }
 ```
@@ -88,25 +102,21 @@ Use the Write tool to write the updated events.json.
 
 ### Step 6: Display Result
 
+Calculate time remaining:
+- If `expires_at` is "phase_end": display "end of phase"
+- Otherwise: calculate difference between `expires_at` and current time, format as "Xh Ym" or "Xm"
+
 ```
-🧪 REDIRECT pheromone emitted
+REDIRECT pheromone emitted
 
   Avoid: "<pattern>"
-  Strength: ▓▓▓▓▓▓▓▓▓░ 0.9
-  Half-life: 24 hours
-
-  Colony response by sensitivity:
-    🔨🐜 builder (0.9)      — strong: will avoid this pattern in code
-    📋🐜 route-setter (0.8) — strong: will exclude from planning
-    👁️🐜 watcher (0.5)      — moderate: will validate against constraint
-    🔍🐜 scout (0.4)        — weak: will note when researching
-    🗺️🐜 colonizer (0.3)    — weak: will note in codebase analysis
-    🏛️🐜 architect (0.3)    — weak: will note for patterns
+  Priority: high
+  Expires: <time remaining or "end of phase">
 
   REDIRECT signals act as hard constraints during /ant:build.
-  Workers with high sensitivity will refuse approaches matching this pattern.
+  Workers will refuse approaches matching this pattern.
 
 Next Steps:
   /ant:focus "<area>"   Guide attention toward something
-  /ant:status           View all active pheromones
+  /ant:status           View all active signals
 ```
