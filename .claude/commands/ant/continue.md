@@ -74,7 +74,7 @@ Update COLONY_STATE.json with full reconciliation:
 
 Runs ONLY when all phases complete (no next phase).
 
-1. Gather: `errors.records`, `errors.flagged_patterns`, run `error-summary`, read activity.log
+1. Gather: `errors.records`, `errors.flagged_patterns` from COLONY_STATE.json, read activity.log
 2. Display TECH DEBT REPORT: project, phases completed, persistent issues, recommendations
 3. Write to `.aether/data/tech-debt-report.md`
 
@@ -82,7 +82,7 @@ Runs ONLY when all phases complete (no next phase).
 
 If `auto_mode`: Display "Global learning promotion available. Run /ant:continue to promote." and skip.
 
-Otherwise: Analyze `memory.phase_learnings`, categorize as promotable vs project-specific, prompt user, run `learning-promote` for selections.
+Otherwise: Analyze `memory.phase_learnings`, categorize as promotable vs project-specific, and display them for user to manually incorporate into their global learnings.
 
 ### Step 2.5c: Completion Message
 
