@@ -12,10 +12,10 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 Milestone: v5.1 System Simplification
 Phase: 36 of 37 (Signal Simplification)
 Plan: 5 of 5 in current phase
-Status: Phase complete
-Last activity: 2026-02-06 -- Completed 36-05-PLAN.md (gap closure)
+Status: Phase verified
+Last activity: 2026-02-06 -- Phase 36 verified (4/4 success criteria)
 
-Progress: [█████████░] 93%
+Progress: [████████░░] 80%
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -92,9 +92,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed 36-05-PLAN.md (Phase 36 complete)
+Stopped at: Phase 36 verified, ready for Phase 37
 Resume file: None
 
 ---
 
-*State updated: 2026-02-06 after 36-05 plan completion*
+*State updated: 2026-02-06 after Phase 36 verification*
