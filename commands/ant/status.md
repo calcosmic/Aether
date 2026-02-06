@@ -36,37 +36,13 @@ Stop here.
 
 Continue displaying status for the files that are valid. Skip sections for corrupted files.
 
-### Step 2: Compute Pheromone Decay
-
-Use the Bash tool to run:
-```
-bash ~/.aether/aether-utils.sh pheromone-batch
-```
-
-This returns JSON: `{"ok":true,"result":[...signals with current_strength...]}`. Parse the `result` array. Each signal object includes a `current_strength` field with the decayed value. Signals with `current_strength < 0.05` are effectively expired.
-
-If the command fails (file not found, invalid JSON), treat as "no active pheromones."
-
-### Step 2.5: Clean Expired Pheromones
-
-If any signals from Step 2 had `current_strength < 0.05`, use the Bash tool to run:
-```
-bash ~/.aether/aether-utils.sh pheromone-cleanup
-```
-
-This removes expired signals from `pheromones.json` and returns `{"ok":true,"result":{"removed":N,"remaining":N}}`.
-
-If no signals are expired, skip this step.
-
-### Step 3: Display Status
+### Step 2: Display Status
 
 Show step progress at the start of output:
 
 ```
   ✓ Step 1: Read State
-  ✓ Step 2: Compute Pheromone Decay
-  ✓ Step 2.5: Clean Expired Pheromones
-  ✓ Step 3: Display Status
+  ✓ Step 2: Display Status
 ```
 
 Then output the status display below.
@@ -126,62 +102,46 @@ Only show groups that have at least one worker. End with a summary line:
 ```
 
 ```
-🧪 ACTIVE PHEROMONES
+🧪 ACTIVE SIGNALS
 ```
 
-For each non-expired signal, display with a visual strength bar:
+**Filter signals before display:**
+```
+current_time = current ISO-8601 UTC timestamp
+
+For each signal in pheromones.json signals array:
+  if signal.expires_at == "phase_end":
+    keep (phase-scoped, always active during phase)
+  elif signal.expires_at < current_time:
+    skip (expired)
+  else:
+    keep (active, compute time remaining)
+```
+
+**Display format (grouped by priority):**
+
+Show HIGH priority signals first, then NORMAL, then LOW:
 
 ```
-  {TYPE padded to 10 chars} [{bar}] {current_strength:.2f}
-    "{content}"
+  {TYPE} [{priority}]: "{content}" ({time_remaining})
 ```
 
-Where the bar has 20 characters total:
-- Filled portion: repeat `█` (full block) for `round(current_strength * 20)` times
-- Empty portion: fill remaining with spaces
-- Wrap in square brackets
+Where time_remaining is:
+- "phase" if expires_at == "phase_end"
+- "12m left" / "2h left" if wall-clock expiration (compute from expires_at - current_time)
+- For expired signals: skip entirely (already filtered above)
 
 Examples:
 ```
-  INIT       [████████████████████] 1.00  (persistent)
-    "Build a REST API with authentication"
-  FOCUS      [███████████████     ] 0.75
-    "WebSocket security"
-  REDIRECT   [██████              ] 0.30
-    "Don't use JWT for sessions"
+  REDIRECT [high]: "Don't use JWT for sessions" (phase)
+  FOCUS [normal]: "WebSocket security" (45m left)
+  FEEDBACK [low]: "Good test coverage" (2h left)
 ```
 
 If no active signals after filtering:
 ```
-  (no active pheromones)
+  (no active signals)
 ```
-
-If there ARE active signals, also display per-caste effective signals:
-
-```
-  Per-Caste Sensitivity:
-```
-
-For each active pheromone signal, compute `effective = sensitivity × current_strength` for each caste using:
-
-```
-                INIT  FOCUS  REDIRECT  FEEDBACK
-  colonizer     1.0   0.7    0.3       0.5
-  route-setter  1.0   0.5    0.8       0.7
-  builder       0.5   0.9    0.9       0.7
-  watcher       0.3   0.8    0.5       0.9
-  scout         0.7   0.9    0.4       0.5
-  architect     0.2   0.4    0.3       0.6
-```
-
-Display as a compact table showing only castes that would PRIORITIZE (effective > 0.5):
-
-```
-  Per-Caste Sensitivity:
-    {SIGNAL_TYPE}: 🔨🐜 builder {effective:.2f}  🔍🐜 scout {effective:.2f}  👁️🐜 watcher {effective:.2f}
-```
-
-If no caste would PRIORITIZE a signal, show `(below action threshold for all castes)`.
 
 ```
 ---------------------------------------------------
