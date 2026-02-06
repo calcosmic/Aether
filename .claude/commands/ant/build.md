@@ -107,24 +107,20 @@ Phase {id}: {name}
 
 ### Step 4: Compute Active Pheromones
 
-Use the Bash tool to run:
-```
-bash ~/.aether/aether-utils.sh pheromone-batch
-```
+Read active signals from COLONY_STATE.json `signals` array (already loaded in Step 1).
 
-This returns JSON: `{"ok":true,"result":[...signals with current_strength...]}`. Parse the `result` array. Filter out signals where `current_strength < 0.05`.
+Filter signals where:
+- `expires_at` is null (permanent signals like INIT), OR
+- `expires_at` > current timestamp (not expired)
 
-If the command fails, treat as "no active pheromones."
+If no active signals after filtering, treat as "no active pheromones."
 
 Format:
 
 ```
 ACTIVE PHEROMONES:
-  {TYPE padded to 10 chars} [{bar of 20 chars using "█" filled, spaces empty}] {current_strength:.2f}
-    "{content}"
+  {TYPE padded to 10 chars}: "{content}"
 ```
-
-Where the bar uses `round(current_strength * 20)` filled `█` characters and spaces for the remainder.
 
 If no active signals after filtering:
 ```

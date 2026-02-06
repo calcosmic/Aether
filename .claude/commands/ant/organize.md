@@ -27,18 +27,16 @@ From COLONY_STATE.json, extract:
 
 ### Step 2: Compute Active Pheromones
 
-Use the Bash tool to run:
-```
-bash ~/.aether/aether-utils.sh pheromone-batch
-```
+Read active signals from COLONY_STATE.json `signals` array (already loaded in Step 1).
 
-Parse the `result` array. Filter out signals where `current_strength < 0.05`.
+Filter signals where:
+- `expires_at` is null (permanent signals like INIT), OR
+- `expires_at` > current timestamp (not expired)
 
 Format as the standard ACTIVE PHEROMONES block:
 ```
 ACTIVE PHEROMONES:
-  {TYPE padded to 10 chars} [{bar of 20 chars using "█" filled, spaces empty}] {current_strength:.2f}
-    "{content}"
+  {TYPE padded to 10 chars}: "{content}"
 ```
 
 If no active signals after filtering:

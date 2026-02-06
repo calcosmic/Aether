@@ -30,20 +30,19 @@ If `plan.phases` from COLONY_STATE.json already has entries (non-empty array), s
 
 ### Step 3: Compute Active Pheromones
 
-Use the Bash tool to run:
-```
-bash ~/.aether/aether-utils.sh pheromone-batch
-```
+Read active signals from COLONY_STATE.json `signals` array.
 
-This returns JSON: `{"ok":true,"result":[...signals with current_strength...]}`. Parse the `result` array using the `signals` array from COLONY_STATE.json. Filter out signals where `current_strength < 0.05`.
+Filter signals where:
+- `expires_at` is null (permanent signals like INIT), OR
+- `expires_at` > current timestamp (not expired)
 
-If the command fails, treat as "no active pheromones."
+If `signals` array is empty or all expired, treat as "no active pheromones."
 
 Format:
 
 ```
 ACTIVE PHEROMONES:
-- {TYPE} (strength {current_strength:.2f}): "{content}"
+- {TYPE}: "{content}"
 ```
 
 ### Step 4: Spawn One Ant

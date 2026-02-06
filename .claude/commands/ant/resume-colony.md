@@ -23,16 +23,15 @@ No colony state found. Either:
 
 Stop here.
 
-### Step 2: Compute Pheromone Decay
+### Step 2: Compute Active Signals
 
-Use the Bash tool to run:
-```
-bash ~/.aether/aether-utils.sh pheromone-batch
-```
+Read active signals from COLONY_STATE.json `signals` array (already loaded in Step 1).
 
-This returns JSON: `{"ok":true,"result":[...signals with current_strength...]}`. Parse the `result` array. Signals with `current_strength >= 0.05` are still active.
+Filter signals where:
+- `expires_at` is null (permanent signals like INIT), OR
+- `expires_at` > current timestamp (not expired)
 
-If the command fails, treat as "no active pheromones."
+If `signals` array is empty or all expired, treat as "no active pheromones."
 
 ### Step 3: Display Restored State
 
