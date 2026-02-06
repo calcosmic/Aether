@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-02-06)
 
 Milestone: v5.1 System Simplification
 Phase: 36 of 37 (Signal Simplification)
-Plan: 1 of TBD in current phase
+Plan: 3 of TBD in current phase
 Status: In progress
-Last activity: 2026-02-06 -- Completed 36-01-PLAN.md (signal emission TTL update)
+Last activity: 2026-02-06 -- Completed 36-03-PLAN.md (decay code removal)
 
-Progress: [███████░░░] 65%
+Progress: [████████░░] 70%
 
 **Previous milestones:**
 - v1.0 Shipped (2026-02-02): 8 phases, 44 plans, 156 must-haves
@@ -31,7 +31,7 @@ Progress: [███████░░░] 65%
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 10 (v5.1 milestone)
+- Total plans completed: 12 (v5.1 milestone)
 - Total plans all milestones: 100+
 - Average duration: ~2 min (v5.1)
 
@@ -42,7 +42,7 @@ Progress: [███████░░░] 65%
 | 33-state-foundation | 4 | 10min | 2.5min |
 | 34-core-command-rewrite | 3 | 6min | 2min |
 | 35-worker-simplification | 2 | 3min | 1.5min |
-| 36-signal-simplification | 1 | 2min | 2min |
+| 36-signal-simplification | 3 | 6min | 2min |
 
 *Updated after each plan completion*
 
@@ -73,6 +73,9 @@ Recent decisions affecting current work:
 - [36-01]: phase_end as default signal expiration (not wall-clock based)
 - [36-01]: Priority levels (high/normal/low) replace numeric strength
 - [36-01]: Duration parsing: m=minutes, h=hours, d=days for --ttl flag
+- [36-03]: Keep pheromone-validate (content length validation still useful)
+- [36-03]: Filter expired signals on read (no cleanup command needed)
+- [36-03]: Priority processing: high first, then normal, then low
 
 ### Pending Todos
 
@@ -85,9 +88,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed 36-01-PLAN.md
+Stopped at: Completed 36-03-PLAN.md
 Resume file: None
 
 ---
 
-*State updated: 2026-02-06 after 36-01 plan completion*
+*State updated: 2026-02-06 after 36-03 plan completion*
