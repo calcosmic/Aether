@@ -76,12 +76,14 @@ Plans:
   2. Priority field (high/normal/low) replaces sensitivity matrix calculations
   3. Expired signals filtered on read (no cleanup command needed)
   4. All pheromone math removed from aether-utils.sh
-**Plans**: 3 plans
+**Plans**: 5 plans
 
 Plans:
-- [ ] 36-01-PLAN.md — Update signal emission commands with TTL schema
-- [ ] 36-02-PLAN.md — Update signal consumption commands with TTL filtering
-- [ ] 36-03-PLAN.md — Remove pheromone math from utilities and update docs
+- [x] 36-01-PLAN.md — Update signal emission commands with TTL schema
+- [x] 36-02-PLAN.md — Update signal consumption commands with TTL filtering
+- [x] 36-03-PLAN.md — Remove pheromone math from utilities and update docs
+- [ ] 36-04-PLAN.md — (gap closure) Remove decay commands from runtime/aether-utils.sh
+- [ ] 36-05-PLAN.md — (gap closure) Update plan/organize/colonize commands, delete runtime/workers/*.md
 
 ### Phase 37: Command Trim & Utilities
 **Goal**: Remaining commands shrunk and aether-utils.sh reduced to ~80 lines
@@ -108,7 +110,7 @@ Plans:
 | 33. State Foundation | 4/4 | Complete | 2026-02-06 |
 | 34. Core Command Rewrite | 3/3 | Complete | 2026-02-06 |
 | 35. Worker Simplification | 2/2 | Complete | 2026-02-06 |
-| 36. Signal Simplification | 0/3 | Planned | - |
+| 36. Signal Simplification | 3/5 | Gap closure | - |
 | 37. Command Trim & Utilities | 0/TBD | Not started | - |
 
 ---
