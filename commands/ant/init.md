@@ -71,9 +71,22 @@ Use the Write tool to write `.aether/data/COLONY_STATE.json`:
     "watcher":      {"alpha": 1, "beta": 1, "total_spawns": 0, "successes": 0, "failures": 0},
     "scout":        {"alpha": 1, "beta": 1, "total_spawns": 0, "successes": 0, "failures": 0},
     "architect":    {"alpha": 1, "beta": 1, "total_spawns": 0, "successes": 0, "failures": 0}
-  }
+  },
+  "signals": [
+    {
+      "id": "init_<unix_timestamp_ms>",
+      "type": "INIT",
+      "content": "<the user's goal>",
+      "priority": "high",
+      "created_at": "<ISO-8601 timestamp>",
+      "expires_at": "phase_end",
+      "source": "system:init"
+    }
+  ]
 }
 ```
+
+The INIT signal uses `expires_at: "phase_end"` so it persists until the phase advances.
 
 ### Step 4: Create State Files
 
@@ -103,26 +116,14 @@ Use the Write tool to create these three files:
 }
 ```
 
-### Step 5: Emit INIT Pheromone
+### Step 5: Verify INIT Signal
 
-Use the Write tool to write `.aether/data/pheromones.json`:
+The INIT signal was already written as part of COLONY_STATE.json in Step 3. Verify it was written correctly by confirming the `signals` array exists in the state file.
 
-```json
-{
-  "signals": [
-    {
-      "id": "init_<unix_timestamp>",
-      "type": "INIT",
-      "content": "<the user's goal>",
-      "strength": 1.0,
-      "half_life_seconds": null,
-      "created_at": "<ISO-8601 timestamp>"
-    }
-  ]
-}
-```
-
-INIT signals have no half-life — they persist forever.
+The INIT signal uses the TTL schema:
+- `priority: "high"` -- INIT is the highest priority signal
+- `expires_at: "phase_end"` -- persists until the phase advances
+- `source: "system:init"` -- identifies the signal origin
 
 ### Step 6: Write Init Event
 
@@ -147,7 +148,7 @@ Use the Bash tool to run:
 bash ~/.aether/aether-utils.sh validate-state all
 ```
 
-This validates all state files (COLONY_STATE.json, pheromones.json, errors.json, memory.json, events.json) and returns `{"ok":true,"result":{"pass":true|false,"files":[...]}}`.
+This validates all state files (COLONY_STATE.json, errors.json, memory.json, events.json) and returns `{"ok":true,"result":{"pass":true|false,"files":[...]}}`.
 
 If `pass` is false, output a warning identifying which file(s) failed validation. This catches initialization bugs immediately.
 
@@ -168,7 +169,7 @@ Then show step progress:
   ✓ Step 2: Read Current State
   ✓ Step 3: Write Colony State
   ✓ Step 4: Create State Files
-  ✓ Step 5: Emit INIT Pheromone
+  ✓ Step 5: Verify INIT Signal
   ✓ Step 6: Write Init Event
   ✓ Step 6.5: Validate State Files
   ✓ Step 7: Display Result
