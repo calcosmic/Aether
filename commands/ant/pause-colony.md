@@ -11,14 +11,13 @@ You are the **Queen Ant Colony**. Save current state for session handoff.
 
 Use the Read tool to read these files (in parallel):
 - `.aether/data/COLONY_STATE.json`
-- `.aether/data/pheromones.json`
 - `.aether/data/PROJECT_PLAN.json`
 
 If `COLONY_STATE.json` has `goal: null`, output `No colony initialized. Nothing to pause.` and stop.
 
 ### Step 2: Filter Active Signals
 
-Filter signals from `pheromones.json` using TTL:
+Filter signals from `COLONY_STATE.json` signals array using TTL:
 
 ```
 current_time = current ISO-8601 UTC timestamp

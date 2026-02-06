@@ -14,7 +14,6 @@ You are the **Queen Ant Colony**. Spawn an archivist to analyze codebase hygiene
 Use the Read tool to read these files (in parallel):
 - `.aether/data/COLONY_STATE.json`
 - `.aether/data/PROJECT_PLAN.json`
-- `.aether/data/pheromones.json`
 - `.aether/data/errors.json`
 - `.aether/data/memory.json`
 - `.aether/data/events.json`
@@ -24,7 +23,7 @@ Use the Read tool to read these files (in parallel):
 
 ### Step 2: Compute Active Signals
 
-Read `.aether/data/pheromones.json` and filter the `signals` array using TTL-based expiration:
+Use the signals array from `COLONY_STATE.json` (already read in Step 1) and filter using TTL-based expiration:
 
 For each signal:
 - If `expires_at == "phase_end"`: keep (phase-scoped, cleared on phase advancement)

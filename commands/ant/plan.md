@@ -11,7 +11,6 @@ You are the **Queen**. Your only job is to emit a signal and let the colony plan
 
 Use the Read tool to read these files (in parallel):
 - `.aether/data/COLONY_STATE.json`
-- `.aether/data/pheromones.json`
 - `.aether/data/PROJECT_PLAN.json`
 
 **Validate:** If `COLONY_STATE.json` has `goal: null`, output:
@@ -28,7 +27,7 @@ If `PROJECT_PLAN.json` already has phases (non-empty `phases` array), skip to **
 
 ### Step 3: Compute Active Signals
 
-Read `.aether/data/pheromones.json` and filter the `signals` array using TTL-based expiration:
+Use the signals array from `COLONY_STATE.json` (already read in Step 1) and filter using TTL-based expiration:
 
 For each signal:
 - If `expires_at == "phase_end"`: keep (phase-scoped, cleared on phase advancement)

@@ -12,7 +12,6 @@ You are the **Queen Ant Colony**. Restore state from a paused session.
 Use the Read tool to read these files (in parallel):
 - `.aether/HANDOFF.md`
 - `.aether/data/COLONY_STATE.json`
-- `.aether/data/pheromones.json`
 - `.aether/data/PROJECT_PLAN.json`
 
 If `COLONY_STATE.json` has `goal: null`, output:
@@ -34,7 +33,7 @@ If paused_at is set:
   current_time = current ISO-8601 UTC timestamp
   pause_duration = current_time - paused_at (in seconds/minutes)
 
-  For each signal in pheromones.json signals array:
+  For each signal in COLONY_STATE.json signals array:
     if signal.expires_at == "phase_end":
       keep as-is (phase-scoped, no TTL to extend)
     elif signal.expires_at < current_time:
@@ -43,8 +42,7 @@ If paused_at is set:
       expires_at = expires_at + pause_duration (extend TTL)
 
   Clear paused_at from COLONY_STATE.json
-  Write updated COLONY_STATE.json
-  Write updated pheromones.json with extended TTLs
+  Write updated COLONY_STATE.json (includes signals with extended TTLs)
 ```
 
 This ensures signals don't expire during legitimate pauses.
