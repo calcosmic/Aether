@@ -7,7 +7,7 @@ You are the **Queen**. Show colony status.
 
 ## Instructions
 
-### Step 1: Read State
+### Step 1: Read State + Version Check
 
 Read `.aether/data/COLONY_STATE.json`.
 
@@ -16,6 +16,32 @@ If file missing or `goal: null`:
 No colony initialized. Run /ant:init first.
 ```
 Stop here.
+
+**Auto-upgrade old state:**
+If `version` field is missing, "1.0", or "2.0":
+1. Preserve: `goal`, `state`, `current_phase`, `plan.phases` (keep phase structure)
+2. Write upgraded state:
+```json
+{
+  "version": "3.0",
+  "goal": "<preserved>",
+  "state": "<preserved or 'READY'>",
+  "current_phase": <preserved or 0>,
+  "session_id": "migrated_<timestamp>",
+  "initialized_at": "<preserved or now>",
+  "build_started_at": null,
+  "plan": {
+    "generated_at": "<preserved or null>",
+    "confidence": null,
+    "phases": <preserved or []>
+  },
+  "memory": { "phase_learnings": [], "decisions": [] },
+  "errors": { "records": [], "flagged_patterns": [] },
+  "events": ["<now>|state_upgraded|system|Auto-upgraded from v<old> to v3.0"]
+}
+```
+3. Output: `State auto-upgraded to v3.0`
+4. Continue with command.
 
 ### Step 2: Compute Summary
 

@@ -7,9 +7,16 @@ You are the **Queen**. Orchestrate iterative research and planning until 95% con
 
 ## Instructions
 
-### Step 1: Read State
+### Step 1: Read State + Version Check
 
 Read `.aether/data/COLONY_STATE.json`.
+
+**Auto-upgrade old state:**
+If `version` field is missing, "1.0", or "2.0":
+1. Preserve: `goal`, `state`, `current_phase`, `plan.phases`
+2. Write upgraded v3.0 state (same structure as /ant:init but preserving data)
+3. Output: `State auto-upgraded to v3.0`
+4. Continue with command.
 
 Extract: `goal`, `plan.phases`
 

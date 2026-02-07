@@ -7,9 +7,16 @@ You are the **Queen Ant Colony**. Reconcile completed work and advance to the ne
 
 ## Instructions
 
-### Step 1: Read State + Detect Completion
+### Step 1: Read State + Version Check
 
 Read `.aether/data/COLONY_STATE.json`.
+
+**Auto-upgrade old state:**
+If `version` field is missing, "1.0", or "2.0":
+1. Preserve: `goal`, `state`, `current_phase`, `plan.phases`
+2. Write upgraded v3.0 state (same structure as /ant:init but preserving data)
+3. Output: `State auto-upgraded to v3.0`
+4. Continue with command.
 
 Extract: `goal`, `state`, `current_phase`, `plan.phases`, `errors`, `memory`, `events`, `build_started_at`.
 

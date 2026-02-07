@@ -25,6 +25,13 @@ Stop here.
 
 Read `.aether/data/COLONY_STATE.json`.
 
+**Auto-upgrade old state:**
+If `version` field is missing, "1.0", or "2.0":
+1. Preserve: `goal`, `state`, `current_phase`, `plan.phases`
+2. Write upgraded v3.0 state (same structure as /ant:init but preserving data)
+3. Output: `State auto-upgraded to v3.0`
+4. Continue with command.
+
 Extract:
 - `goal`, `state`, `current_phase` from top level
 - `plan.phases` for phase data

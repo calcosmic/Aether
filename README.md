@@ -1,4 +1,4 @@
-# 🐜 AETHER v5.0
+# 🐜 AETHER v1.0
 
 <div align="center">
   <img src="aether-logo.png" alt="Aether Logo" width="600">
@@ -53,8 +53,10 @@ npm install -g aether-colony
 ```
 
 This installs the `aether` CLI and automatically sets up:
-- **Commands** → `~/.claude/commands/ant/` (14 Claude Code skill prompts)
+- **Commands** → `~/.claude/commands/ant/` (16 Claude Code skill prompts)
 - **Runtime** → `~/.aether/` (worker specs, utility scripts, docs)
+
+**Existing repos:** If you previously used Aether, delete any local `.claude/commands/ant/` directory in your projects — the global install handles everything now. State auto-upgrades when you run any command.
 
 ### From source
 
@@ -68,8 +70,8 @@ node bin/cli.js install
 
 ```bash
 aether version              # Shows installed version
-ls ~/.claude/commands/ant/   # 14 command files
-ls ~/.aether/workers/        # 6 worker specs
+ls ~/.claude/commands/ant/   # 16 command files
+cat ~/.aether/workers.md     # Worker specs (consolidated)
 ```
 
 ### Update
@@ -228,10 +230,11 @@ After each wave of workers, the Queen auto-spawns an advisory reviewer (reusing 
 | `/ant:build <N>` | 🔨 Execute phase N (Queen spawns workers with live visibility) |
 | `/ant:continue` | ▶️ Approve phase, extract learnings, advance to next |
 | `/ant:continue --all` | ▶️ Auto-run all remaining phases with quality-gated halt |
-| `/ant:focus "<area>"` | 🎯 Guide attention (0.7 strength, 1hr decay) |
-| `/ant:redirect "<pat>"` | 🚫 Warn away from pattern (0.9, 24hr decay) |
-| `/ant:feedback "<msg>"` | 💬 Adjust behavior (0.5, 6hr decay) |
-| `/ant:status` | 📊 Colony status, pheromones, errors, memory, progress |
+| `/ant:focus "<area>"` | 🎯 Guide colony attention to specific areas |
+| `/ant:redirect "<pat>"` | 🚫 Warn colony away from patterns |
+| `/ant:feedback "<msg>"` | 💬 Provide guidance to colony |
+| `/ant:status` | 📊 Colony status at a glance |
+| `/ant:watch` | 👁️ Live tmux monitoring of colony activity |
 | `/ant:phase [N\|list]` | 📋 View phase details |
 | `/ant:organize` | 🧹 Codebase hygiene report (stale files, dead code) |
 | `/ant:pause-colony` | ⏸️ Save state for session break |
@@ -260,69 +263,47 @@ After each wave of workers, the Queen auto-spawns an advisory reviewer (reusing 
     └── organize.md            # Codebase hygiene report
 
 ~/.aether/                     # Global runtime (installed once, shared across repos)
-├── aether-utils.sh            # ~370-line utility wrapper (18 subcommands)
-├── workers/
-│   ├── colonizer-ant.md       # 🔍 Codebase exploration spec
-│   ├── route-setter-ant.md    # 🗺️ Phase planning spec
-│   ├── builder-ant.md         # 🔨 Code implementation spec
-│   ├── watcher-ant.md         # 👁️ Validation/testing spec (4 specialist modes)
-│   ├── scout-ant.md           # 🔎 Research/information spec
-│   └── architect-ant.md       # 📐 Knowledge synthesis spec
+├── workers.md                 # Consolidated worker specs (all castes in one file)
+├── aether-utils.sh            # Utility layer for logging, validation
 ├── utils/
-│   ├── atomic-write.sh        # Corruption-safe writes (temp + rename)
-│   └── file-lock.sh           # File locking for concurrent access
+│   ├── atomic-write.sh        # Corruption-safe writes
+│   └── file-lock.sh           # File locking
 ├── docs/
-│   └── pheromones.md          # Pheromone user guide (9 scenarios + sensitivity matrix)
-├── QUEEN_ANT_ARCHITECTURE.md  # Architecture spec
+│   └── pheromones.md          # Constraint system guide
+├── QUEEN_ANT_ARCHITECTURE.md  # Architecture documentation
 └── learnings.json             # Cross-project knowledge (50-entry cap)
 
-<your-repo>/.aether/data/      # Per-project state (created by /ant:init, gitignored)
-├── COLONY_STATE.json          # Colony goal, state, workers, spawn outcomes, complexity mode
-├── pheromones.json            # Decaying pheromone signals
-├── PROJECT_PLAN.json          # Phase plan with tasks and success criteria
-├── errors.json                # Error log + flagged patterns (with phase attribution)
-├── events.json                # Event log (capped at 100)
-├── memory.json                # Phase learnings + decisions
-└── activity.log               # Live worker progress (per-phase, cross-phase history)
+<your-repo>/.aether/data/      # Per-project state (created by /ant:init)
+├── COLONY_STATE.json          # Consolidated state (v3.0) — goal, plan, memory, errors, events
+├── constraints.json           # Focus areas and avoid patterns
+└── activity.log               # Worker activity log
 ```
 
 ---
 
 ## 📈 Current Status
 
-**v5.0** — NPM Distribution (2026-02-05)
+**v1.0** — First Public Release (2026-02-07)
 
 **What's built:**
 - 📦 `npm install -g aether-colony` — global install, works in any repo
-- 🐜 14 commands as Claude Code skill prompts
-- 🐜 6 worker ant specs (~250-560 lines each) with pheromone math, spawning scenarios, enforcement gates, mandatory activity logging
-- 🔧 `aether-utils.sh` — ~370-line utility wrapper with 18 subcommands
-- 💾 6 JSON state files with atomic writes and file locking
-- 🚧 Spawn limit enforcement (max 5 workers, max depth 2) via shell validation gates
-- 🧪 Pheromone quality enforcement via shell validation before writes
-- ✅ Post-action validation checklists in all worker specs
-- 📊 Bayesian spawn confidence tracking per caste
-- 🔄 Auto-emitted pheromones at phase boundaries
-- 👁️ Live worker visibility — Queen displays activity log between spawns
-- 🧠 Auto-learning extraction — learnings captured automatically after every build
-- 🌐 Two-tier learning — project-local + global with manual promotion
+- 🐜 16 commands as Claude Code skill prompts
+- 🐜 True emergence — workers spawn workers directly (no Queen mediation)
+- 🔧 Consolidated worker specs in single `workers.md` (91% reduction from v0.x)
+- 💾 Single `COLONY_STATE.json` replaces 6 distributed files
+- 🚧 Depth-based spawn limits (max depth 3, max 10 workers per phase)
+- 🧪 Simple JSON constraints replace complex pheromone decay math
+- 👁️ Live worker visibility via tmux (`/ant:watch`)
+- 🧠 Cross-project learning extraction
 - 🔖 Git checkpoints before phase execution
-- 📋 Event logging, error tracking with pattern flagging and phase attribution
-- 🎨 ANSI-colored build output with caste-specific colors
-- 🔍 Multi-colonizer synthesis (3 lenses: Structure/Patterns/Stack)
-- ⚙️ Adaptive complexity modes (LIGHTWEIGHT/STANDARD/FULL)
-- 🛡️ Advisory reviewer + auto-debugger post-wave
-- ▶️ Auto-continue mode (`/ant:continue --all`) with quality-gated halt
-- 🌳 Queen-mediated spawn tree engine
-- 📄 Tech debt report at project completion
+- 📋 Iterative planning with confidence tracking (Scout + Route-Setter loop)
 - 🧹 Codebase hygiene scanning (`/ant:organize`)
 
-**Real-world test results (2026-02-04):**
-- Tested end-to-end on a real project (filmstrip packaging) — 5 phases, 21 tasks, 100% completion
-- All 32 field notes from the test addressed in v4.4
-- Learning propagation worked cross-phase
-- REDIRECT pheromone respected across all phases
-- Colony self-organization confirmed working
+**Architecture:**
+- Workers use Claude Code's Task tool to spawn sub-workers
+- Depth 1 (Prime Worker) → spawns up to 4 specialists
+- Depth 2 (Specialists) → spawn only when genuinely surprised (3x complexity)
+- Depth 3 (Deep Specialists) → complete work inline, no further spawning
 
 ---
 
@@ -346,15 +327,20 @@ Aether translates this to AI agents:
 
 | Version | Name | Date | Highlights |
 |---------|------|------|------------|
-| **v5.0** | NPM Distribution | 2026-02-05 | 📦 `npm install -g`, global/local split, CLI, path migration |
-| **v4.4** | Field-Tested & Polished | 2026-02-05 | 32 field notes, adaptive complexity, spawn tree, auto-continue, multi-colonizer |
-| **v4.3** | Live Visibility & Auto-Learning | 2026-02-04 | 👁️ Activity log, Queen-driven execution, 🧠 auto-learning |
-| **v4.2** | Colony Hardening | 2026-02-03 | Per-caste pheromone math, watcher execution, worker progress |
-| **v4.1** | Cleanup & Enforcement | 2026-02-03 | Orphan audit, spawn limits, pheromone validation |
-| **v4.0** | Hybrid Foundation | 2026-02-03 | `aether-utils.sh`, 18 subcommands, 11 audit fixes |
-| **v3.0** | Rebuild | 2026-02-03 | Claude-native rewrite, 19→12 commands, 10→6 workers |
-| **v2.0** | Event & Visual | 2026-02-02 | Event polling, visual indicators, E2E testing |
-| **v1.0** | MVP | 2026-02-02 | Full colony system, 8 phases, 44 plans |
+| **v1.0** | First Public Release | 2026-02-07 | True emergence (workers spawn workers), simplified state, npm distribution |
+
+<details>
+<summary>Development History (pre-release)</summary>
+
+| Version | Name | Date | Highlights |
+|---------|------|------|------------|
+| v0.5 | NPM Distribution | 2026-02-05 | Global install, CLI, path migration |
+| v0.4 | Field-Tested | 2026-02-04 | 32 field notes, spawn tree, auto-continue |
+| v0.3 | Rebuild | 2026-02-03 | Claude-native rewrite, utility layer |
+| v0.2 | Event & Visual | 2026-02-02 | Event polling, visual indicators |
+| v0.1 | MVP | 2026-02-02 | Initial colony system |
+
+</details>
 
 ---
 

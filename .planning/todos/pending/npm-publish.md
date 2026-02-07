@@ -1,11 +1,11 @@
 # Publish aether-colony to npm
 
 **Captured:** 2026-02-05
-**Source:** v5.0 NPM Distribution milestone complete, holding for real-world testing
+**Updated:** 2026-02-07
 
 ## Task
 
-Publish `aether-colony@5.0.0` to the public npm registry so anyone can `npm install -g aether-colony`.
+Publish `aether-colony@1.0.0` to the public npm registry so anyone can `npm install -g aether-colony`.
 
 ## Pre-publish checklist
 
@@ -14,7 +14,7 @@ Publish `aether-colony@5.0.0` to the public npm registry so anyone can `npm inst
 - [ ] Run `npm adduser` to authenticate
 - [ ] Decide if `aether-colony` is the final package name
 - [ ] `npm publish`
-- [ ] Verify: `npm install -g aether-colony` on a clean machine → `aether version` → 5.0.0
+- [ ] Verify: `npm install -g aether-colony` on a clean machine → `aether version` → 1.0.0
 
 ## Notes
 
