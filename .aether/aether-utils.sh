@@ -17,9 +17,14 @@ DATA_DIR="$PWD/.aether/data"
 LOCK_ACQUIRED=${LOCK_ACQUIRED:-false}
 CURRENT_LOCK=${CURRENT_LOCK:-""}
 
-# Source shared infrastructure
-source "$SCRIPT_DIR/utils/file-lock.sh"
-source "$SCRIPT_DIR/utils/atomic-write.sh"
+# Source shared infrastructure if available
+[[ -f "$SCRIPT_DIR/utils/file-lock.sh" ]] && source "$SCRIPT_DIR/utils/file-lock.sh"
+[[ -f "$SCRIPT_DIR/utils/atomic-write.sh" ]] && source "$SCRIPT_DIR/utils/atomic-write.sh"
+
+# Fallback atomic_write if not sourced
+if ! type atomic_write &>/dev/null; then
+  atomic_write() { echo "$2" > "$1"; }
+fi
 
 # --- JSON output helpers ---
 # Success: JSON to stdout, exit 0
@@ -35,22 +40,11 @@ shift 2>/dev/null || true
 case "$cmd" in
   help)
     cat <<'EOF'
-{"ok":true,"commands":["help","version","pheromone-validate","validate-state","spawn-check","memory-compress","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
+{"ok":true,"commands":["help","version","validate-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
 EOF
     ;;
   version)
-    json_ok '"0.1.0"'
-    ;;
-  pheromone-validate)
-    content="${1:-}"
-    len=${#content}
-    if [[ -z "$content" ]]; then
-      json_ok '{"pass":false,"reason":"empty","length":0,"min_length":20}'
-    elif [[ $len -lt 20 ]]; then
-      json_ok "{\"pass\":false,\"reason\":\"too_short\",\"length\":$len,\"min_length\":20}"
-    else
-      json_ok "{\"pass\":true,\"length\":$len,\"min_length\":20}"
-    fi
+    json_ok '"1.0.0"'
     ;;
   validate-state)
     case "${1:-}" in
@@ -63,65 +57,29 @@ EOF
             chk("goal";["null","string"]),
             chk("state";["string"]),
             chk("current_phase";["number"]),
-            chk("workers";["object"]),
-            chk("spawn_outcomes";["object"]),
-            opt("spawn_tree";["object"]),
-            opt("mode";["string","null"]),
-            opt("mode_set_at";["string","null"]),
-            opt("mode_indicators";["object","null"])
+            chk("plan";["object"]),
+            chk("memory";["object"]),
+            chk("errors";["object"]),
+            chk("events";["array"]),
+            opt("session_id";["string","null"]),
+            opt("initialized_at";["string","null"]),
+            opt("build_started_at";["string","null"])
           ]} | . + {pass: ([.checks[] | select(. == "pass")] | length) == (.checks | length)}
         ' "$DATA_DIR/COLONY_STATE.json")"
         ;;
-      pheromones)
-        [[ -f "$DATA_DIR/pheromones.json" ]] || json_err "pheromones.json not found"
+      constraints)
+        [[ -f "$DATA_DIR/constraints.json" ]] || json_err "constraints.json not found"
         json_ok "$(jq '
           def arr(f): if has(f) and (.[f]|type) == "array" then "pass" else "fail: \(f) not array" end;
-          def sig: ["id","type","content","priority","created_at","expires_at"] as $req | [. as $s | $req[] | select($s[.] == null)] |
-            if length == 0 then "pass" else "fail: signal missing \(join(","))" end;
-          {file:"pheromones.json", checks:[
-            arr("signals"),
-            (.signals | if length == 0 then "pass" else [.[] | sig] | map(select(. != "pass")) |
-              if length == 0 then "pass" else .[0] end end)
+          {file:"constraints.json", checks:[
+            arr("focus"),
+            arr("constraints")
           ]} | . + {pass: ([.checks[] | select(. == "pass")] | length) == (.checks | length)}
-        ' "$DATA_DIR/pheromones.json")"
-        ;;
-      errors)
-        [[ -f "$DATA_DIR/errors.json" ]] || json_err "errors.json not found"
-        json_ok "$(jq '
-          def arr(f): if has(f) and (.[f]|type) == "array" then "pass" else "fail: \(f) not array" end;
-          def erchk: ["id","category","severity","description","timestamp"] as $req | [. as $e | $req[] | select($e[.] == null)] |
-            if length == 0 then "pass" else "fail: error missing \(join(","))" end;
-          {file:"errors.json", checks:[
-            arr("errors"), arr("flagged_patterns"),
-            (.errors | if length == 0 then "pass" else [.[] | erchk] | map(select(. != "pass")) |
-              if length == 0 then "pass" else .[0] end end)
-          ]} | . + {pass: ([.checks[] | select(. == "pass")] | length) == (.checks | length)}
-        ' "$DATA_DIR/errors.json")"
-        ;;
-      memory)
-        [[ -f "$DATA_DIR/memory.json" ]] || json_err "memory.json not found"
-        json_ok "$(jq '
-          def arr(f): if has(f) and (.[f]|type) == "array" then "pass" else "fail: \(f) not array" end;
-          {file:"memory.json", checks:[arr("phase_learnings"), arr("decisions"), arr("patterns")]}
-          | . + {pass: ([.checks[] | select(. == "pass")] | length) == (.checks | length)}
-        ' "$DATA_DIR/memory.json")"
-        ;;
-      events)
-        [[ -f "$DATA_DIR/events.json" ]] || json_err "events.json not found"
-        json_ok "$(jq '
-          def arr(f): if has(f) and (.[f]|type) == "array" then "pass" else "fail: \(f) not array" end;
-          def evchk: ["id","type","source","content","timestamp"] as $req | [. as $e | $req[] | select($e[.] == null)] |
-            if length == 0 then "pass" else "fail: event missing \(join(","))" end;
-          {file:"events.json", checks:[
-            arr("events"),
-            (.events | if length == 0 then "pass" else [.[] | evchk] | map(select(. != "pass")) |
-              if length == 0 then "pass" else .[0] end end)
-          ]} | . + {pass: ([.checks[] | select(. == "pass")] | length) == (.checks | length)}
-        ' "$DATA_DIR/events.json")"
+        ' "$DATA_DIR/constraints.json")"
         ;;
       all)
         results=()
-        for target in colony pheromones errors memory events; do
+        for target in colony constraints; do
           results+=("$(bash "$SCRIPT_DIR/aether-utils.sh" validate-state "$target" 2>/dev/null || echo '{"ok":false}')")
         done
         combined=$(printf '%s\n' "${results[@]}" | jq -s '[.[] | .result // {file:"unknown",pass:false}]')
@@ -129,30 +87,13 @@ EOF
         json_ok "{\"pass\":$all_pass,\"files\":$combined}"
         ;;
       *)
-        json_err "Usage: validate-state colony|pheromones|errors|memory|events|all"
+        json_err "Usage: validate-state colony|constraints|all"
         ;;
     esac
     ;;
-  memory-compress)
-    [[ -f "$DATA_DIR/memory.json" ]] || json_err "memory.json not found"
-    threshold="${1:-10000}"
-    result=$(jq --arg th "$threshold" '
-      .phase_learnings |= (if length > 20 then .[-20:] else . end) |
-      .decisions |= (if length > 30 then .[-30:] else . end) |
-      . as $trimmed |
-      ([.. | strings] | join(" ") | split(" ") | length | . * 1.3 | floor) as $tokens |
-      if $tokens > ($th|tonumber) then
-        .phase_learnings |= (if length > 10 then .[-10:] else . end) |
-        .decisions |= (if length > 15 then .[-15:] else . end)
-      else . end
-    ' "$DATA_DIR/memory.json") || json_err "Failed to process memory.json"
-    atomic_write "$DATA_DIR/memory.json" "$result"
-    tokens=$(echo "$result" | jq '[.. | strings] | join(" ") | split(" ") | length | . * 1.3 | floor')
-    json_ok "{\"compressed\":true,\"tokens\":$tokens}"
-    ;;
   error-add)
     [[ $# -ge 3 ]] || json_err "Usage: error-add <category> <severity> <description> [phase]"
-    [[ -f "$DATA_DIR/errors.json" ]] || json_err "errors.json not found"
+    [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "COLONY_STATE.json not found"
     id="err_$(date -u +%s)_$(head -c 2 /dev/urandom | od -An -tx1 | tr -d ' ')"
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
     phase_val="${4:-null}"
@@ -162,45 +103,28 @@ EOF
       phase_jq="null"
     fi
     updated=$(jq --arg id "$id" --arg cat "$1" --arg sev "$2" --arg desc "$3" --argjson phase "$phase_jq" --arg ts "$ts" '
-      .errors += [{id:$id, category:$cat, severity:$sev, description:$desc, root_cause:null, phase:$phase, task_id:null, timestamp:$ts}] |
-      if (.errors|length) > 50 then .errors = .errors[-50:] else . end
-    ' "$DATA_DIR/errors.json") || json_err "Failed to update errors.json"
-    atomic_write "$DATA_DIR/errors.json" "$updated"
+      .errors.records += [{id:$id, category:$cat, severity:$sev, description:$desc, root_cause:null, phase:$phase, task_id:null, timestamp:$ts}] |
+      if (.errors.records|length) > 50 then .errors.records = .errors.records[-50:] else . end
+    ' "$DATA_DIR/COLONY_STATE.json") || json_err "Failed to update COLONY_STATE.json"
+    atomic_write "$DATA_DIR/COLONY_STATE.json" "$updated"
     json_ok "\"$id\""
     ;;
   error-pattern-check)
-    [[ -f "$DATA_DIR/errors.json" ]] || json_err "errors.json not found"
+    [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "COLONY_STATE.json not found"
     json_ok "$(jq '
-      .errors | group_by(.category) | map(select(length >= 3) |
+      .errors.records | group_by(.category) | map(select(length >= 3) |
         {category: .[0].category, count: length,
          first_seen: (sort_by(.timestamp) | first.timestamp),
          last_seen: (sort_by(.timestamp) | last.timestamp)})
-    ' "$DATA_DIR/errors.json")"
+    ' "$DATA_DIR/COLONY_STATE.json")"
     ;;
   error-summary)
-    [[ -f "$DATA_DIR/errors.json" ]] || json_err "errors.json not found"
-    json_ok "$(jq '{
-      total: (.errors | length),
-      by_category: (.errors | group_by(.category) | map({key: .[0].category, value: length}) | from_entries),
-      by_severity: (.errors | group_by(.severity) | map({key: .[0].severity, value: length}) | from_entries)
-    }' "$DATA_DIR/errors.json")"
-    ;;
-  spawn-check)
-    depth="${1:-1}"
     [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "COLONY_STATE.json not found"
-    json_ok "$(jq --arg d "$depth" '
-      (.workers | to_entries | map(select(.value != "idle")) | length) as $active |
-      ($d | tonumber) as $depth |
-      {
-        pass: ($active < 5 and $depth < 2),
-        active_workers: $active,
-        max_workers: 5,
-        current_depth: $depth,
-        max_depth: 2
-      } | if .pass == false then
-        . + {reason: (if $active >= 5 then "worker_limit" elif $depth >= 2 then "depth_limit" else "unknown" end)}
-      else . end
-    ' "$DATA_DIR/COLONY_STATE.json")"
+    json_ok "$(jq '{
+      total: (.errors.records | length),
+      by_category: (.errors.records | group_by(.category) | map({key: .[0].category, value: length}) | from_entries),
+      by_severity: (.errors.records | group_by(.severity) | map({key: .[0].severity, value: length}) | from_entries)
+    }' "$DATA_DIR/COLONY_STATE.json")"
     ;;
   activity-log)
     action="${1:-}"
@@ -208,6 +132,7 @@ EOF
     description="${3:-}"
     [[ -z "$action" || -z "$caste" || -z "$description" ]] && json_err "Usage: activity-log <action> <caste> <description>"
     log_file="$DATA_DIR/activity.log"
+    mkdir -p "$DATA_DIR"
     ts=$(date -u +"%H:%M:%S")
     echo "[$ts] $action $caste: $description" >> "$log_file"
     json_ok '"logged"'
@@ -217,6 +142,7 @@ EOF
     phase_name="${2:-}"
     [[ -z "$phase_num" ]] && json_err "Usage: activity-log-init <phase_num> [phase_name]"
     log_file="$DATA_DIR/activity.log"
+    mkdir -p "$DATA_DIR"
     archive_file="$DATA_DIR/activity-phase-${phase_num}.log"
     # Copy current log to per-phase archive (preserve combined log intact)
     if [ -f "$log_file" ] && [ -s "$log_file" ]; then

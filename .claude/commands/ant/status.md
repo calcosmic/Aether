@@ -22,44 +22,42 @@ Stop here.
 From state, extract:
 
 **Phase info:**
-- Current phase number: `plan.current_phase`
-- Total phases: `plan.total_phases`
-- Phase name: `plan.phases[current_phase - 1].name` (if phases exist)
+- Current phase number: `current_phase`
+- Total phases: `plan.phases.length`
+- Phase name: `plan.phases[current_phase - 1].name` (if exists)
 
 **Task progress:**
-- If phases exist, count tasks in current phase from `plan.phases[current_phase - 1].tasks`
-- Completed: tasks with `status: "complete"`
+- If phases exist, count tasks in current phase
+- Completed: tasks with `status: "completed"`
 - Total: all tasks in current phase
 
-**Signal count:**
-- Filter `signals` array: keep only where `expires_at` is "phase_end" OR `expires_at` timestamp > now
-- Count remaining as active signals
-
-**Worker count:**
-- Count items in `workers` array (or object keys if object)
+**Constraints:**
+Read `.aether/data/constraints.json` if exists:
+- Focus count: `focus.length`
+- Constraints count: `constraints.length`
 
 **Colony state:**
-- `state` field (IDLE, EXECUTING, PAUSED)
+- `state` field (IDLE, READY, EXECUTING, PLANNING)
 
 ### Step 3: Display
 
-Output format (~5 lines):
+Output format:
 
 ```
-Colony: <goal>
+Colony: <goal (truncated to 60 chars)>
 Phase <N>/<M>: <phase name>
 Tasks: <completed>/<total> complete
-Signals: <count> active | Workers: <count> active
+Constraints: <focus_count> focus, <constraints_count> avoid
 State: <state> | Next: /ant:<suggested command>
 ```
 
 **Suggested command logic:**
-- IDLE -> continue
-- EXECUTING -> continue
-- PAUSED -> resume-colony
+- IDLE -> init
+- READY -> build <next_phase>
+- EXECUTING -> continue (wait for build)
+- PLANNING -> plan (wait for completion)
 
 **Edge cases:**
 - No phases yet: "Phase 0/0: No plan created"
 - No tasks in phase: "Tasks: 0/0 complete"
-- No signals: "Signals: 0 active"
-- No workers: "Workers: 0 active"
+- No constraints file: "Constraints: 0 focus, 0 avoid"

@@ -16,8 +16,8 @@ If `$ARGUMENTS` is empty or blank, output:
 ```
 Aether Colony
 
-  Initialize the colony with a goal. This creates the consolidated colony state,
-  resets all workers to idle, emits an INIT pheromone, and logs the init event.
+  Initialize the colony with a goal. This creates the colony state,
+  initializes constraints, and logs the init event.
 
   Usage: /ant:init "<your goal here>"
 
@@ -46,103 +46,84 @@ Proceeding with new goal: "{new_goal}"
 
 Generate a session ID in the format `session_{unix_timestamp}_{random}` and an ISO-8601 UTC timestamp.
 
-Use the Write tool to write `.aether/data/COLONY_STATE.json` with the complete v2.0 structure:
+Use the Write tool to write `.aether/data/COLONY_STATE.json` with the v3.0 structure:
 
 ```json
 {
-  "version": "2.0",
+  "version": "3.0",
   "goal": "<the user's goal>",
   "state": "READY",
   "current_phase": 0,
   "session_id": "<generated session_id>",
   "initialized_at": "<ISO-8601 timestamp>",
-  "mode": null,
-  "mode_set_at": null,
-  "mode_indicators": null,
-  "workers": {
-    "colonizer": "idle",
-    "route-setter": "idle",
-    "builder": "idle",
-    "watcher": "idle",
-    "scout": "idle",
-    "architect": "idle"
-  },
-  "spawn_outcomes": {
-    "colonizer":    {"alpha": 1, "beta": 1, "total_spawns": 0, "successes": 0, "failures": 0},
-    "route-setter": {"alpha": 1, "beta": 1, "total_spawns": 0, "successes": 0, "failures": 0},
-    "builder":      {"alpha": 1, "beta": 1, "total_spawns": 0, "successes": 0, "failures": 0},
-    "watcher":      {"alpha": 1, "beta": 1, "total_spawns": 0, "successes": 0, "failures": 0},
-    "scout":        {"alpha": 1, "beta": 1, "total_spawns": 0, "successes": 0, "failures": 0},
-    "architect":    {"alpha": 1, "beta": 1, "total_spawns": 0, "successes": 0, "failures": 0}
-  },
+  "build_started_at": null,
   "plan": {
     "generated_at": null,
+    "confidence": null,
     "phases": []
   },
-  "signals": [
-    {
-      "id": "init_<unix_timestamp>",
-      "type": "INIT",
-      "content": "<the user's goal>",
-      "priority": "high",
-      "expires_at": null,
-      "created_at": "<ISO-8601 timestamp>"
-    }
-  ],
   "memory": {
     "phase_learnings": [],
-    "decisions": [],
-    "patterns": []
+    "decisions": []
   },
   "errors": {
     "records": [],
     "flagged_patterns": []
   },
   "events": [
-    "<ISO-8601 timestamp> | colony_initialized | init | Colony initialized with goal: <the user's goal>"
+    "<ISO-8601 timestamp>|colony_initialized|init|Colony initialized with goal: <the user's goal>"
   ]
 }
 ```
 
-INIT signals have no expiration (expires_at: null) and persist forever.
+### Step 4: Initialize Constraints
 
-### Step 4: Validate State File
+Write `.aether/data/constraints.json`:
+
+```json
+{
+  "version": "1.0",
+  "focus": [],
+  "constraints": []
+}
+```
+
+### Step 5: Validate State File
 
 Use the Bash tool to run:
 ```
 bash ~/.aether/aether-utils.sh validate-state colony
 ```
 
-This validates COLONY_STATE.json structure and returns `{"ok":true,"result":{"pass":true|false}}`.
+This validates COLONY_STATE.json structure. If validation fails, output a warning.
 
-If `pass` is false, output a warning identifying which validation(s) failed. This catches initialization bugs immediately.
+### Step 6: Display Result
 
-### Step 5: Display Result
-
-Output this header at the start of your response:
+Output this header:
 
 ```
 +=====================================================+
-|  👑 AETHER COLONY :: INIT                            |
+|  AETHER COLONY :: INIT                               |
 +=====================================================+
 ```
 
 Then show step progress:
 
 ```
-  ✓ Step 1: Validate Input
-  ✓ Step 2: Read Current State
-  ✓ Step 3: Write Colony State
-  ✓ Step 4: Validate State File
-  ✓ Step 5: Display Result
+  Step 1: Validate Input
+  Step 2: Read Current State
+  Step 3: Write Colony State
+  Step 4: Initialize Constraints
+  Step 5: Validate State File
+  Step 6: Display Result
 ```
 
-Then output a divider and the result:
+Then output the result:
 
 ```
 ---
 
-👑 Aether Colony — Ready
+Aether Colony -- Ready
 
   Session: <session_id>
 
@@ -150,12 +131,10 @@ Then output a divider and the result:
   "<goal>"
 
   Colony Status: READY
-  Workers:
-    🗺️ colonizer  📋 route-setter  🔨 builder
-    👁️ watcher    🔍 scout         🏛️ architect
 
 Next Steps:
-  /ant:plan     Generate project plan
+  /ant:plan     Generate project plan (iterative research loop)
   /ant:colonize Analyze existing codebase first (optional)
+  /ant:watch    Set up tmux for live visibility
   /ant:status   View colony status
 ```

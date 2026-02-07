@@ -3,109 +3,121 @@ name: ant:continue
 description: Detect build completion, reconcile state, and advance to next phase
 ---
 
-You are the **Queen Ant Colony**. Detect completed work and advance to the next phase.
+You are the **Queen Ant Colony**. Reconcile completed work and advance to the next phase.
 
 ## Instructions
 
-### Step 0: Parse Arguments
-
-Check if `$ARGUMENTS` contains `--all`: set `auto_mode = true`, otherwise `auto_mode = false`.
-
 ### Step 1: Read State + Detect Completion
 
-Read `.aether/data/COLONY_STATE.json`. Extract: `goal`, `state`, `current_phase`, `mode`, `plan.phases`, `signals`, `errors`, `memory`, `events`, `build_started_at`.
+Read `.aether/data/COLONY_STATE.json`.
 
-**Validation:** If `goal: null` output "No colony initialized. Run /ant:init first." and stop. If `plan.phases` empty output "No project plan. Run /ant:plan first." and stop.
+Extract: `goal`, `state`, `current_phase`, `plan.phases`, `errors`, `memory`, `events`, `build_started_at`.
 
-**Completion Detection (SIMP-07 output-as-state pattern):**
+**Validation:**
+- If `goal: null` -> output "No colony initialized. Run /ant:init first." and stop.
+- If `plan.phases` is empty -> output "No project plan. Run /ant:plan first." and stop.
 
-If `state == "EXECUTING"` -- a build ran, detect what completed:
+**Completion Detection:**
 
-1. **Primary signal:** Check if `.planning/phases/{current_phase}-*/SUMMARY.md` exists (Glob tool)
-   - SUMMARY.md exists AND non-empty: phase complete
-   - SUMMARY.md missing OR empty: phase incomplete
+If `state == "EXECUTING"`:
+1. Check if `build_started_at` exists
+2. Look for phase completion evidence:
+   - Activity log entries showing task completion
+   - Files created/modified matching phase tasks
+3. If no evidence and build started > 30 min ago:
+   - Display "Stale EXECUTING state. Build may have been interrupted."
+   - Offer: continue anyway or rollback to git checkpoint
 
-2. **Task-level detection:** For each task in `plan.phases[current_phase].tasks`, check if output file exists. If exists: mark "completed", if missing: mark "pending".
+If `state != "EXECUTING"`:
+- Normal continue flow (no build to reconcile)
 
-3. **Edge cases:** Empty SUMMARY.md = incomplete. No build_started_at = legacy state, proceed normally.
+### Step 2: Update State
 
-**Orphan State Handling:**
+Find current phase in `plan.phases`.
+Determine next phase (`current_phase + 1`).
 
-If `state == "EXECUTING"` but no completion signals:
-- Stale (>30 min): Display "Stale EXECUTING state detected. Build may have been interrupted." Offer rollback to git checkpoint or continue.
-- Recent (<30 min): Display "Build appears to still be running. Wait or force continue with --force."
+**If no next phase (all complete):** Skip to Step 2.5 (completion).
 
-If `state != "EXECUTING"`: Normal continue flow (no build to reconcile).
+Update COLONY_STATE.json:
 
-### Step 1.5: Auto-Continue Loop (only if auto_mode is true)
+1. **Mark current phase completed:**
+   - Set `plan.phases[current].status` to `"completed"`
+   - Set all tasks in phase to `"completed"`
 
-If `auto_mode` is false, skip to Step 2.
+2. **Extract learnings:**
+   Append to `memory.phase_learnings`:
+   ```json
+   {
+     "id": "learning_<unix_timestamp>",
+     "phase": <phase_number>,
+     "phase_name": "<name>",
+     "learnings": ["<specific actionable learning>"],
+     "timestamp": "<ISO-8601>"
+   }
+   ```
 
-Calculate `remaining_phases` (status != "completed"). If none remain, output "All phases already complete." and skip to Step 3.
+3. **Advance state:**
+   - Set `current_phase` to next phase number
+   - Set `state` to `"READY"`
+   - Set `build_started_at` to null
+   - Append event: `"<timestamp>|phase_advanced|continue|Completed Phase <id>, advancing to Phase <next>"`
 
-Display AUTO-CONTINUE banner with remaining count and halt conditions (score < 4, 2 consecutive failures).
+4. **Cap enforcement:**
+   - Keep max 20 phase_learnings
+   - Keep max 30 decisions
+   - Keep max 100 events
 
-**For each remaining phase:**
-1. Display phase progress
-2. Use Task tool to run build (auto-approve mode)
-3. Check halt conditions, break if triggered
-4. Run Steps 2-3 for this phase
-5. Record and display result
+Write COLONY_STATE.json.
 
-After loop, display cumulative results and proceed to Step 3.
+### Step 2.5: Project Completion
 
-### Step 2: Update State (Full Reconciliation)
+Runs ONLY when all phases complete.
 
-Determine next phase (`current_phase + 1`). If no next phase, skip to Step 2.5 (tech debt report).
+1. Read activity.log and errors.records
+2. Display tech debt report:
 
-Update COLONY_STATE.json with full reconciliation:
+```
++=====================================================+
+|  PROJECT COMPLETE                                    |
++=====================================================+
 
-1. **Mark tasks:** Set status based on detection from Step 1
-2. **Extract learnings:** Append to `memory.phase_learnings`: `{id, phase, phase_name, learnings: ["<specific actionable>"], errors_encountered, timestamp}`
-3. **Update spawn_outcomes:** Increment alpha/successes or beta/failures for contributing castes
-4. **Emit FEEDBACK pheromone:** `{type: "FEEDBACK", content: "<what worked/didn't>", priority: "normal", expires_at: "<6 hours from now ISO-8601>", source: "auto:continue", auto: true}`
-5. **Emit REDIRECT if flagged_patterns exist:** `{type: "REDIRECT", content: "<pattern to avoid>", priority: "high", expires_at: "<24 hours from now ISO-8601>", source: "auto:continue", auto: true}`
-6. **Clean expired pheromones:** Expired signals are filtered on read. No explicit cleanup needed.
-7. **Advance state:** Set `current_phase` to next, `state` to "READY", workers to "idle", append phase_advanced event
-8. **Write COLONY_STATE.json**
-9. **Compress memory:** Memory compression handled by cap enforcement when writing (30 decisions max, 50 events max).
+Goal: {goal}
+Phases Completed: {total}
 
-### Step 2.5: Tech Debt Report (Project Completion Only)
+Persistent Issues:
+{list any flagged_patterns}
 
-Runs ONLY when all phases complete (no next phase).
+Phase Learnings Summary:
+{condensed learnings from memory.phase_learnings}
+```
 
-1. Gather: `errors.records`, `errors.flagged_patterns` from COLONY_STATE.json, read activity.log
-2. Display TECH DEBT REPORT: project, phases completed, persistent issues, recommendations
-3. Write to `.aether/data/tech-debt-report.md`
-
-### Step 2.5b: Promote Learnings (Project Completion Only)
-
-If `auto_mode`: Display "Global learning promotion available. Run /ant:continue to promote." and skip.
-
-Otherwise: Analyze `memory.phase_learnings`, categorize as promotable vs project-specific, and display them for user to manually incorporate into their global learnings.
-
-### Step 2.5c: Completion Message
-
-Display completion message with tech debt report path and next commands (`/ant:status`, `/ant:plan`). Stop here.
+3. Write summary to `.aether/data/completion-report.md`
+4. Display next commands and stop.
 
 ### Step 3: Display Result
 
-Output AETHER COLONY :: CONTINUE banner.
+Output:
 
-Display phase completion summary (tasks completed, error counts).
-
-Display learnings extracted and auto-emitted pheromones.
-
-Display next phase preview:
 ```
-Phase <current> approved. Advancing to Phase <next>.
-  Phase <next>: <name>
-  <description>
-  Tasks: <count>
++=====================================================+
+|  AETHER COLONY :: CONTINUE                           |
++=====================================================+
+
+Phase {prev_id}: {prev_name} -- COMPLETED
+
+Learnings Extracted:
+{list learnings added}
+
+---
+
+Advancing to Phase {next_id}: {next_name}
+  {next_description}
+  Tasks: {task_count}
   State: READY
 
 Next Steps:
-  /ant:build <next>      Start building Phase <next>
-  /ant:phase <next>      Review phase details first
-  /ant:focus "<area>"    Guide colony attention
+  /ant:build {next_id}     Start building Phase {next_id}
+  /ant:phase {next_id}     Review phase details first
+  /ant:focus "<area>"      Guide colony attention
+  /ant:status              View colony status
 ```

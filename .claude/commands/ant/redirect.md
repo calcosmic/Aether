@@ -3,34 +3,44 @@ name: ant:redirect
 description: Emit REDIRECT signal to warn colony away from patterns
 ---
 
-You are the **Queen**. Emit a REDIRECT signal.
+You are the **Queen**. Add an AVOID constraint.
 
 ## Instructions
 
 The pattern to avoid is: `$ARGUMENTS`
 
 ### Step 1: Validate
-If `$ARGUMENTS` empty -> show usage: `/ant:redirect <pattern to avoid>`, stop.
-If content > 500 chars -> "Signal content too long (max 500 chars)", stop.
 
-### Step 2: Read + Update State
+If `$ARGUMENTS` empty -> show usage: `/ant:redirect <pattern to avoid>`, stop.
+If content > 500 chars -> "Redirect content too long (max 500 chars)", stop.
+
+### Step 2: Read + Update Constraints
+
 Read `.aether/data/COLONY_STATE.json`.
 If `goal: null` -> "No colony initialized.", stop.
 
-Generate ISO-8601 timestamp.
-Append to `signals` array:
+Read `.aether/data/constraints.json`. If file doesn't exist, create it with:
+```json
+{"version": "1.0", "focus": [], "constraints": []}
+```
+
+Generate constraint ID: `c_<unix_timestamp_ms>`
+
+Append to `constraints` array:
 ```json
 {
-  "id": "redirect_<timestamp_ms>",
-  "type": "REDIRECT",
+  "id": "<generated_id>",
+  "type": "AVOID",
   "content": "<pattern to avoid>",
-  "priority": "high",
-  "created_at": "<ISO-8601>",
-  "expires_at": "phase_end"
+  "source": "user:redirect",
+  "created_at": "<ISO-8601 timestamp>"
 }
 ```
 
-Write COLONY_STATE.json.
+If `constraints` array exceeds 10 entries, remove the oldest entries to keep only 10.
+
+Write constraints.json.
 
 ### Step 3: Confirm
-Output single line: `REDIRECT signal emitted: "<content preview>" (expires: phase_end)`
+
+Output single line: `AVOID constraint added: "{content preview}"`
