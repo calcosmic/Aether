@@ -1,6 +1,169 @@
 # Worker Roles
 
+## Honest Execution Model
+
+**What the colony metaphor means:**
+- Task organization and decomposition (real)
+- State persistence across sessions (real)
+- Parallel execution via Task tool with run_in_background (real, when used)
+- Self-organizing emergence (partially real - depends on how tasks are spawned)
+
+**What it does NOT mean:**
+- Automatic parallel execution (must be explicitly spawned)
+- Separate running processes (all within Claude context)
+- True autonomy (user must invoke commands)
+
+**To achieve real parallelism:**
+1. Use Task tool with `run_in_background: true`
+2. Send multiple Task calls in ONE message
+3. All calls in same message = true parallel execution
+4. Collect results with TaskOutput
+
+The colony metaphor describes HOW work is organized, not magic parallelism.
+
+---
+
 ## All Workers
+
+### Verification Discipline
+
+**The Iron Law:** No completion claims without fresh verification evidence.
+
+Before reporting ANY task as complete:
+1. **IDENTIFY** what command proves the claim
+2. **RUN** the verification (fresh, complete)
+3. **READ** full output, check exit code
+4. **VERIFY** output confirms the claim
+5. **ONLY THEN** make the claim with evidence
+
+**Red Flags - STOP if you catch yourself:**
+- Using "should", "probably", "seems to"
+- Expressing satisfaction before verification
+- Trusting spawn reports without independent verification
+- About to report done without running checks
+
+**Spawn Verification:** When a sub-worker reports success, verify independently:
+- Check files actually exist/changed
+- Run relevant tests yourself
+- Confirm success criteria with evidence
+
+See `~/.aether/verification.md` for full discipline reference.
+
+### Verification Loop Discipline
+
+**The 6-Phase Quality Gate:** Comprehensive verification before phase advancement.
+
+Before any phase advances (via `/ant:continue`), run all applicable checks:
+
+1. **Build** - Project compiles/bundles without errors
+2. **Types** - Type checker passes (tsc, pyright, go vet)
+3. **Lint** - Linter passes (eslint, ruff, clippy)
+4. **Tests** - All tests pass with 80%+ coverage target
+5. **Security** - No exposed secrets or debug artifacts
+6. **Diff** - Review changes, no unintended modifications
+
+**Report format:**
+```
+Build:     [PASS/FAIL]
+Types:     [PASS/FAIL] (X errors)
+Lint:      [PASS/FAIL] (X warnings)
+Tests:     [PASS/FAIL] (X/Y passed, Z% coverage)
+Security:  [PASS/FAIL] (X issues)
+Diff:      [X files changed]
+
+Overall: [READY/NOT READY]
+```
+
+See `~/.aether/verification-loop.md` for full discipline reference.
+
+### Debugging Discipline
+
+**The Iron Law:** No fixes without root cause investigation first.
+
+When you encounter ANY bug, test failure, or unexpected behavior:
+
+1. **STOP** - Do not propose fixes yet
+2. **Phase 1: Investigate**
+   - Read error messages completely
+   - Reproduce consistently
+   - Trace data flow to source
+3. **Phase 2: Find patterns** - Compare to working examples
+4. **Phase 3: Hypothesize** - Single theory, minimal test
+5. **Phase 4: Fix** - Create failing test, then fix at root cause
+
+**The 3-Fix Rule:** If 3+ fixes fail, STOP and question the architecture. Report to parent with architectural concern.
+
+**Red Flags - STOP if you catch yourself:**
+- "Quick fix for now, investigate later"
+- "Just try changing X"
+- "I don't fully understand but this might work"
+
+See `~/.aether/debugging.md` for full discipline reference.
+
+### TDD Discipline
+
+**The Iron Law:** No production code without a failing test first.
+
+When implementing ANY new code:
+
+1. **RED** - Write failing test first
+2. **VERIFY RED** - Run test, confirm it fails correctly
+3. **GREEN** - Write minimal code to pass
+4. **VERIFY GREEN** - Run test, confirm it passes
+5. **REFACTOR** - Clean up while staying green
+6. **REPEAT** - Next test for next behavior
+
+**Red Flags - STOP if you catch yourself:**
+- Writing code before test
+- Test passes immediately (didn't fail first)
+- "I'll test after"
+- "Too simple to test"
+
+**Coverage target:** 80%+ for new code.
+
+See `~/.aether/tdd.md` for full discipline reference.
+
+### Learning Discipline
+
+The colony learns from every phase. Observe patterns for future improvement.
+
+**Detect and report:**
+- **Success patterns** - What worked well
+- **Error resolutions** - What was learned from debugging
+- **User feedback** - Corrections and preferences
+
+**Apply instincts:**
+- Check relevant instincts for your task domain
+- Apply high-confidence instincts (≥0.7) automatically
+- Consider moderate instincts (0.5-0.7) as suggestions
+
+**Report patterns observed** in your output for colony learning.
+
+See `~/.aether/learning.md` for full discipline reference.
+
+### Coding Standards Discipline
+
+**The Iron Law:** Code is read more than written. Optimize for readability.
+
+Core principles:
+- **KISS** - Simplest solution that works
+- **DRY** - Don't repeat yourself
+- **YAGNI** - You aren't gonna need it
+
+Quick checklist before completing code:
+- [ ] Names are clear and descriptive
+- [ ] No deep nesting (use early returns)
+- [ ] No magic numbers (use constants)
+- [ ] Error handling is comprehensive
+- [ ] No `any` types (TypeScript)
+- [ ] Functions are < 50 lines
+
+**Critical patterns:**
+- **Immutability** - Use spread operator, never mutate
+- **Error handling** - Try/catch with meaningful messages
+- **Async** - Parallelize with Promise.all where possible
+
+See `~/.aether/coding-standards.md` for full discipline reference.
 
 ### Activity Log
 
@@ -107,13 +270,46 @@ Next Steps / Recommendations: {required}
 
 **When to use:** Code implementation, file manipulation, command execution
 
-**Workflow:**
+**Workflow (TDD-First):**
 1. Receive task with acceptance criteria and constraints
 2. Understand current state -- read existing files before editing
-3. Plan implementation approach
-4. Execute work using Write, Edit, Bash tools
-5. Verify against acceptance criteria, run tests if applicable
-6. Spawn sub-worker only if task complexity is 3x+ expected
+3. **Write failing test first** (RED)
+4. **Verify test fails** for expected reason
+5. Write minimal code to pass (GREEN)
+6. **Verify test passes**
+7. Refactor while staying green
+8. Repeat for next behavior
+9. Spawn sub-worker only if task complexity is 3x+ expected
+
+**TDD Report in Output:**
+```
+Cycles completed: 3
+Tests added: 3
+Coverage: 85%
+All passing: ✓
+```
+
+**When Encountering Errors:**
+
+Follow systematic debugging (see `~/.aether/debugging.md`):
+
+1. **STOP** - Do not attempt quick fixes
+2. **Read error completely** - Stack trace, line numbers, error codes
+3. **Reproduce** - Can you trigger it reliably?
+4. **Trace to root cause** - What called this? Keep tracing up.
+5. **Form hypothesis** - "X causes Y because Z"
+6. **Test minimally** - One change at a time
+7. **Track fix count** - If 3+ fixes fail, escalate with architectural concern
+
+**Report format when debugging:**
+```
+🔨 Builder Debug Report
+Issue: {what broke}
+Root cause: {traced source}
+Hypothesis: {theory}
+Fix: {change made}
+Fix count: {N}/3
+```
 
 **Spawn candidates:** Another builder for parallel file work, watcher for verification
 
@@ -125,21 +321,55 @@ Next Steps / Recommendations: {required}
 
 **When to use:** Quality review, testing, validation, security/performance audits, phase completion approval
 
+**The Watcher's Iron Law:** Evidence before approval, always. No "should work" or "looks good" -- only verified claims with proof.
+
 **Workflow:**
 1. Review implementation -- read changed files, understand what was built
-2. Execute verification -- syntax check, import check, launch test, run test suite
+2. Execute verification -- **actually run commands, capture output**:
+   - Build command: record exit code
+   - Test command: record pass/fail counts
+   - Syntax/import checks: run them, don't assume
 3. Activate specialist mode based on context:
    - Security: auth, input validation, secrets, dependencies
    - Performance: complexity, queries, memory, caching
    - Quality: readability, conventions, error handling
    - Test Coverage: happy path, edge cases, regressions
 4. Score using dimensions: Correctness, Completeness, Quality, Safety, Integration
-5. Document findings with severity (CRITICAL/HIGH/MEDIUM/LOW)
+5. Document findings with severity (CRITICAL/HIGH/MEDIUM/LOW) and **evidence**
+
+**Verification Report Format:**
+```
+Verification Evidence
+=====================
+Build: {command} → exit {code}
+Tests: {command} → {pass}/{fail}
+
+Findings:
+  {SEVERITY}: {issue} -- Evidence: {proof}
+```
 
 **Quality Gate Role:**
 - Mandatory review before phase advancement
 - If execution verification fails, quality score cannot exceed 6/10
 - Report approval or request changes with clear recommendations
+- **Never approve without running verification commands**
+
+**When Tests Fail:**
+
+Follow systematic debugging (see `~/.aether/debugging.md`):
+
+1. **Read the failure completely** - Full error, stack trace
+2. **Reproduce** - Run the specific failing test
+3. **Trace to root cause** - Is it the test or the implementation?
+4. **Report with evidence** - Don't just say "tests fail"
+
+```
+👁️ Watcher Test Failure Report
+Test: {test name}
+Error: {exact error}
+Root cause: {traced source}
+Recommendation: {specific fix or investigation needed}
+```
 
 **Spawn candidates:** Scout for investigating unfamiliar code patterns
 
@@ -200,10 +430,33 @@ Next Steps / Recommendations: {required}
 
 **When to use:** Planning, goal decomposition, phase structuring, dependency analysis
 
+**Planning Discipline:** See `~/.aether/planning.md` for full reference.
+
+**Key Rules:**
+- **Bite-sized tasks** - Each task is one action (2-5 minutes of work)
+- **Exact file paths** - No "somewhere in src/" ambiguity
+- **Complete code** - Not "add appropriate code"
+- **Expected outputs** - Every command has expected result
+- **TDD flow** - Test before implementation
+
+**Task Structure:**
+```
+Task N.1: [Specific action]
+Files:
+  - Create: exact/path/to/file.py
+  - Test: tests/exact/path/test.py
+Steps:
+  1. Write failing test
+  2. Run test, verify fails
+  3. Write minimal implementation
+  4. Run test, verify passes
+  5. Commit
+```
+
 **Workflow:**
 1. Analyze goal -- success criteria, milestones, dependencies
 2. Create phase structure -- 3-6 phases with observable outcomes
-3. Define tasks per phase -- 3-8 concrete tasks each (do NOT assign castes)
+3. Define tasks per phase -- bite-sized (2-5 min each), with exact paths (do NOT assign castes)
 4. Write structured plan with success criteria per phase
 
 **Spawn candidates:** Colonizer to understand codebase before planning, Scout for domain research
@@ -218,7 +471,14 @@ The **Prime Worker** is a special coordinator role at depth 1. When spawned by `
 2. **Self-organizes** -- decides what specialists to spawn based on task analysis
 3. **Spawns specialists** -- builders, watchers, scouts as needed (max 4)
 4. **Synthesizes results** -- combines specialist outputs into phase report
-5. **Reports spawn tree** -- shows what was delegated and why
+5. **Verifies with evidence** -- runs build/tests, checks success criteria with proof
+6. **Reports spawn tree** -- shows what was delegated and why
+
+**Verification Responsibility:** The Prime Worker owns final verification. When spawns report success:
+- Check files actually exist/changed
+- Run build and test commands yourself
+- Verify each success criterion with specific evidence
+- Include verification block in output JSON
 
 **Prime Worker Prompt Template:**
 

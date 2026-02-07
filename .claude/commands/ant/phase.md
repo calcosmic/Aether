@@ -30,56 +30,57 @@ Find the phase by ID in `plan.phases`.
 Output this header:
 
 ```
-+=====================================================+
-|  AETHER COLONY :: PHASE <id>                         |
-+=====================================================+
+🐜 ═══════════════════════════════════════════════════
+   P H A S E   {id}   D E T A I L S
+═══════════════════════════════════════════════════ 🐜
 ```
 
 Then display:
 
 ```
-Phase <id>: <name>
-Status: <status>
+📍 Phase <id>: <name>
+📊 Status: <status>
 
-<description>
+   <description>
 
-Tasks:
-  [<status_icon>] <task_id>: <description> (<caste>)
-    depends_on: <deps or "none">
+🐜 Tasks:
+   {status_icon} <task_id>: <description>
+      ↳ depends on: <deps or "none">
 
-Success Criteria:
-  - <criterion>
+✅ Success Criteria:
+   • <criterion>
 
----
-Next Steps:
-  /ant:build <id>       Build this phase
-  /ant:phase <next_id>  View next phase
-  /ant:status           Colony status
+─────────────────────────────────────────────────────
+🐜 Next Steps:
+   /ant:build <id>       🔨 Build this phase
+   /ant:phase <next_id>  📋 View next phase
+   /ant:status           📊 Colony status
 ```
 
-Status icons: `[ ]` pending, `[~]` in_progress, `[x]` completed
+Status icons: `[ ]` pending, `[~]` in_progress, `[✓]` completed
 
 ### Step 3b: List View
 
 Output this header:
 
 ```
-+=====================================================+
-|  AETHER COLONY :: ALL PHASES                         |
-+=====================================================+
+🐜 ═══════════════════════════════════════════════════
+   A L L   P H A S E S
+═══════════════════════════════════════════════════ 🐜
 ```
 
 Then display all phases as a summary:
 
 ```
-Goal: "<goal>"
+👑 Goal: "<goal>"
 
-  [<icon>] Phase <id>: <name>
-       <completed>/<total> tasks | <status>
+   {icon} Phase <id>: <name>
+         <completed>/<total> tasks | <status>
 
 (repeat for each phase)
 
-Legend: [x] completed  [~] in progress  [ ] pending
+─────────────────────────────────────────────────────
+Legend: [✓] completed  [~] in progress  [ ] pending
 
-/ant:phase <id> for details
+🐜 /ant:phase <id> for details
 ```

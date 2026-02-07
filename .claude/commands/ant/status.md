@@ -35,7 +35,7 @@ If `version` field is missing, "1.0", or "2.0":
     "confidence": null,
     "phases": <preserved or []>
   },
-  "memory": { "phase_learnings": [], "decisions": [] },
+  "memory": { "phase_learnings": [], "decisions": [], "instincts": [] },
   "errors": { "records": [], "flagged_patterns": [] },
   "events": ["<now>|state_upgraded|system|Auto-upgraded from v<old> to v3.0"]
 }
@@ -62,6 +62,12 @@ Read `.aether/data/constraints.json` if exists:
 - Focus count: `focus.length`
 - Constraints count: `constraints.length`
 
+**Instincts:**
+From `memory.instincts`:
+- Total count: `instincts.length`
+- High confidence (≥0.7): count where confidence >= 0.7
+- Top 3: sorted by confidence descending
+
 **Colony state:**
 - `state` field (IDLE, READY, EXECUTING, PLANNING)
 
@@ -70,11 +76,28 @@ Read `.aether/data/constraints.json` if exists:
 Output format:
 
 ```
-Colony: <goal (truncated to 60 chars)>
-Phase <N>/<M>: <phase name>
-Tasks: <completed>/<total> complete
-Constraints: <focus_count> focus, <constraints_count> avoid
-State: <state> | Next: /ant:<suggested command>
+🐜 ═══════════════════════════════════════════════════
+   A E T H E R   C O L O N Y   S T A T U S
+═══════════════════════════════════════════════════ 🐜
+
+👑 Goal: <goal (truncated to 60 chars)>
+
+📍 Phase <N>/<M>: <phase name>
+   Tasks: <completed>/<total> complete
+
+🎯 Focus: <focus_count> areas | 🚫 Avoid: <constraints_count> patterns
+🧠 Instincts: <total> learned (<high_confidence> strong)
+
+State: <state>
+Next:  /ant:<suggested command>
+```
+
+**If instincts exist, also show top 3:**
+```
+🧠 Colony Instincts:
+   [0.9] 🐜 testing: Always run tests before completion
+   [0.8] 🐜 architecture: Use composition over inheritance
+   [0.7] 🐜 debugging: Trace to root cause first
 ```
 
 **Suggested command logic:**

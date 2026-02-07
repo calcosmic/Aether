@@ -154,6 +154,30 @@ while iteration < 50 AND confidence < 95:
     Goal: "{goal}"
     Iteration: {iteration}/50
 
+    --- PLANNING DISCIPLINE ---
+    Read ~/.aether/planning.md for full reference.
+
+    Key rules:
+    - Bite-sized tasks (2-5 minutes each) - one action per task
+    - Exact file paths always - no "somewhere in src/"
+    - Complete code in plan - not "add appropriate code"
+    - Expected outputs - every command has expected result
+    - TDD flow - test before implementation
+
+    Task format:
+    ```
+    Task N.1: [Specific action]
+    Files:
+      - Create: exact/path/to/file.py
+      - Test: tests/exact/path/test.py
+    Steps:
+      1. Write failing test
+      2. Run test, verify fails
+      3. Write minimal implementation
+      4. Run test, verify passes
+      5. Commit
+    ```
+
     --- RESEARCH FINDINGS ---
     {research_results.findings formatted}
 
@@ -169,9 +193,10 @@ while iteration < 50 AND confidence < 95:
 
     --- INSTRUCTIONS ---
     1. If no plan exists, create 3-6 phases with concrete tasks
-    2. If plan exists, refine based on NEW information only
-    3. Rate confidence across 5 dimensions
-    4. Explain what changed from last iteration
+    2. Each task must have: exact file paths, steps, expected outputs
+    3. If plan exists, refine based on NEW information only
+    4. Rate confidence across 5 dimensions
+    5. Explain what changed from last iteration
 
     Do NOT assign castes to tasks - describe the work only.
 
@@ -299,38 +324,38 @@ Ready to build.
 Read `plan.phases` from COLONY_STATE.json and display:
 
 ```
-+=====================================================+
-|  AETHER COLONY :: PLAN                               |
-+=====================================================+
+🐜 ═══════════════════════════════════════════════════
+   C O L O N Y   P L A N
+═══════════════════════════════════════════════════ 🐜
 
-Goal: {goal}
+👑 Goal: {goal}
 
 {if plan was just generated:}
-Confidence: {confidence}%
-Iterations: {iteration}
+📊 Confidence: {confidence}%
+🔄 Iterations: {iteration}
 {end if}
 
----
+─────────────────────────────────────────────────────
 
-Phase {id}: {name} [{STATUS}]
-  {description}
+📍 Phase {id}: {name} [{STATUS}]
+   {description}
 
-  Tasks:
-    [{status_icon}] {id}: {description}
+   🐜 Tasks:
+      {status_icon} {id}: {description}
 
-  Success Criteria:
-    - {criterion}
+   ✅ Success Criteria:
+      • {criterion}
 
----
+─────────────────────────────────────────────────────
 (repeat for each phase)
 
-NEXT STEPS:
-  /ant:build 1           Start building Phase 1
-  /ant:focus "<area>"    Focus colony attention
-  /ant:status            View colony status
+🐜 Next Steps:
+   /ant:build 1        🔨 Start building Phase 1
+   /ant:focus "<area>" 🎯 Focus colony attention
+   /ant:status         📊 View colony status
 ```
 
-Status icons: pending = `[ ]`, in_progress = `[~]`, completed = `[x]`
+Status icons: pending = `[ ]`, in_progress = `[~]`, completed = `[✓]`
 
 ---
 

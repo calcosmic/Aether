@@ -32,4 +32,11 @@ Write constraints.json.
 
 ### Step 3: Confirm
 
-Output single line: `FOCUS added: "{content preview}"`
+Output:
+```
+🎯 FOCUS signal emitted
+
+   "{content preview}"
+
+🐜 Colony attention directed.
+```

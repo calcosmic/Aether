@@ -64,7 +64,8 @@ Use the Write tool to write `.aether/data/COLONY_STATE.json` with the v3.0 struc
   },
   "memory": {
     "phase_learnings": [],
-    "decisions": []
+    "decisions": [],
+    "instincts": []
   },
   "errors": {
     "records": [],
@@ -102,39 +103,25 @@ This validates COLONY_STATE.json structure. If validation fails, output a warnin
 Output this header:
 
 ```
-+=====================================================+
-|  AETHER COLONY :: INIT                               |
-+=====================================================+
-```
-
-Then show step progress:
-
-```
-  Step 1: Validate Input
-  Step 2: Read Current State
-  Step 3: Write Colony State
-  Step 4: Initialize Constraints
-  Step 5: Validate State File
-  Step 6: Display Result
+🐜 ═══════════════════════════════════════════════════
+   A E T H E R   C O L O N Y
+═══════════════════════════════════════════════════ 🐜
 ```
 
 Then output the result:
 
 ```
----
+👑 Queen has set the colony's intention
 
-Aether Colony -- Ready
+   "{goal}"
 
-  Session: <session_id>
+🏠 Colony Status: READY
+📋 Session: <session_id>
 
-  Queen's Intention:
-  "<goal>"
+🐜 The colony awaits your command:
 
-  Colony Status: READY
-
-Next Steps:
-  /ant:plan     Generate project plan (iterative research loop)
-  /ant:colonize Analyze existing codebase first (optional)
-  /ant:watch    Set up tmux for live visibility
-  /ant:status   View colony status
+   /ant:plan      📋 Generate project plan
+   /ant:colonize  🗺️  Analyze existing codebase first
+   /ant:watch     👁️  Set up live visibility
+   /ant:status    📊 View colony status
 ```

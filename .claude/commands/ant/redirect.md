@@ -43,4 +43,11 @@ Write constraints.json.
 
 ### Step 3: Confirm
 
-Output single line: `AVOID constraint added: "{content preview}"`
+Output:
+```
+🚫 REDIRECT signal emitted
+
+   Avoid: "{content preview}"
+
+🐜 Colony warned away from this pattern.
+```

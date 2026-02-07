@@ -18,6 +18,8 @@ Read `.aether/data/COLONY_STATE.json`.
 If `goal: null` -> "No colony initialized.", stop.
 
 Generate ISO-8601 timestamp.
+
+**Add signal:**
 Append to `signals` array:
 ```json
 {
@@ -30,7 +32,34 @@ Append to `signals` array:
 }
 ```
 
+**Create instinct from feedback:**
+User feedback is high-value learning. Append to `memory.instincts`:
+```json
+{
+  "id": "instinct_<timestamp>",
+  "trigger": "<infer from feedback context>",
+  "action": "<the feedback guidance>",
+  "confidence": 0.7,
+  "domain": "<infer: testing|architecture|code-style|debugging|workflow>",
+  "source": "user_feedback",
+  "evidence": ["User feedback: <content>"],
+  "created_at": "<ISO-8601>",
+  "last_applied": null,
+  "applications": 0,
+  "successes": 0
+}
+```
+
 Write COLONY_STATE.json.
 
 ### Step 3: Confirm
-Output single line: `FEEDBACK signal emitted: "<content preview>" (expires: phase_end)`
+Output:
+```
+💬 FEEDBACK signal emitted
+
+   "{content preview}"
+
+🧠 Instinct created: [0.7] <domain>: <action summary>
+
+🐜 The colony will remember this guidance.
+```

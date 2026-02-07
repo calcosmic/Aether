@@ -82,7 +82,19 @@ switch (command) {
       const repoRuntime = path.join(PACKAGE_DIR, '.aether');
       if (fs.existsSync(repoRuntime)) {
         // Only copy system files, not data/
-        const runtimeFiles = ['aether-utils.sh', 'QUEEN_ANT_ARCHITECTURE.md', 'workers.md'];
+        const runtimeFiles = [
+          'aether-utils.sh',
+          'QUEEN_ANT_ARCHITECTURE.md',
+          'workers.md',
+          'DISCIPLINES.md',
+          'verification.md',
+          'verification-loop.md',
+          'debugging.md',
+          'tdd.md',
+          'learning.md',
+          'coding-standards.md',
+          'planning.md'
+        ];
         const runtimeDirs = ['workers', 'utils', 'docs'];
 
         fs.mkdirSync(RUNTIME_DEST, { recursive: true });
