@@ -38,13 +38,14 @@ touch .aether/data/activity.log
 Write initial status to `.aether/data/watch-status.txt`:
 
 ```
-AETHER COLONY :: LIVE STATUS
-=============================
+       .-.
+      (o o)  AETHER COLONY
+      | O |  Live Status
+       `-`
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 State: IDLE
 Phase: -/-
-Confidence: --%
-Iteration: -/-
 
 Active Workers:
   (none)
@@ -69,37 +70,45 @@ Stop here.
 
 **If session is new:** Create the layout.
 
-### Step 5: Create tmux Layout
+### Step 5: Create tmux Layout (4-Pane)
 
-Use Bash to create the session with panes:
+Use Bash to create the session with 4 panes in a 2x2 grid:
 
 ```bash
-# Create session with first pane (Activity Log)
+# Create session with first pane
 tmux new-session -d -s aether-colony -n colony
 
-# Split horizontally: left = status, right = activity log
+# Split into 4 panes (2x2 grid)
+# First split horizontally (left|right)
 tmux split-window -h -t aether-colony:colony
 
-# Split left pane vertically: top = status, bottom = progress
+# Split left side vertically (top-left, bottom-left)
 tmux split-window -v -t aether-colony:colony.0
 
-# Set pane contents
+# Split right side vertically (top-right, bottom-right)
+tmux split-window -v -t aether-colony:colony.2
+
+# Set pane contents:
 # Pane 0 (top-left): Status display
 tmux send-keys -t aether-colony:colony.0 'watch -n 1 cat .aether/data/watch-status.txt' C-m
 
-# Pane 1 (bottom-left): Progress bar (updates via file)
+# Pane 1 (bottom-left): Progress bar
 tmux send-keys -t aether-colony:colony.1 'watch -n 1 cat .aether/data/watch-progress.txt' C-m
 
-# Pane 2 (right): Activity log stream
-tmux send-keys -t aether-colony:colony.2 'tail -f .aether/data/activity.log' C-m
+# Pane 2 (top-right): Spawn tree visualization
+tmux send-keys -t aether-colony:colony.2 'bash ~/.aether/utils/watch-spawn-tree.sh .aether/data' C-m
+
+# Pane 3 (bottom-right): Colorized activity log stream
+tmux send-keys -t aether-colony:colony.3 'bash ~/.aether/utils/colorize-log.sh .aether/data/activity.log' C-m
 
 # Set pane titles (if supported)
 tmux select-pane -t aether-colony:colony.0 -T "Status"
 tmux select-pane -t aether-colony:colony.1 -T "Progress"
-tmux select-pane -t aether-colony:colony.2 -T "Activity Log"
+tmux select-pane -t aether-colony:colony.2 -T "Spawn Tree"
+tmux select-pane -t aether-colony:colony.3 -T "Activity Log"
 
-# Resize panes: left side 40%, right side 60%
-tmux resize-pane -t aether-colony:colony.2 -x 60%
+# Balance panes for even 2x2 grid
+tmux select-layout -t aether-colony:colony tiled
 
 echo "Session created"
 ```
@@ -109,14 +118,19 @@ echo "Session created"
 Write initial progress to `.aether/data/watch-progress.txt`:
 
 ```
-Progress
-========
+       .-.
+      (o o)  AETHER COLONY
+      | O |  Progress
+       `-`
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[                    ] 0%
+Phase: -/-
+
+[░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 0%
+
+⏳ Waiting for build...
 
 Target: 95% confidence
-
-Iteration: 0/50
 ```
 
 ### Step 7: Attach and Display
@@ -128,23 +142,27 @@ tmux attach-session -t aether-colony
 Before attaching, output:
 
 ```
-+=====================================================+
-|  AETHER COLONY :: WATCH                              |
-+=====================================================+
+       .-.
+      (o o)  AETHER COLONY :: WATCH
+      | O |
+       `-`
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 tmux session 'aether-colony' created.
 
-Layout:
-  +-----------------+---------------------------+
-  | Status          | Activity Log              |
-  |                 |                           |
-  +-----------------+                           |
-  | Progress        |                           |
-  +-----------------+---------------------------+
+Layout (4-pane 2x2 grid):
+  +------------------+------------------+
+  | Status           | Spawn Tree       |
+  | Colony state     | Worker hierarchy |
+  +------------------+------------------+
+  | Progress         | Activity Log     |
+  | Phase progress   | Live stream      |
+  +------------------+------------------+
 
 Commands:
   Ctrl+B D          Detach from session
   Ctrl+B [          Scroll mode (q to exit)
+  Ctrl+B Arrow      Navigate between panes
   tmux kill-session -t aether-colony   Stop watching
 
 The session will update in real-time as colony works.
@@ -160,18 +178,35 @@ Workers and commands update watch files as they work:
 ### Activity Log
 Workers write via: `bash ~/.aether/aether-utils.sh activity-log "ACTION" "caste" "description"`
 
+For named ants (recommended):
+```bash
+# Generate a name first
+ant_name=$(bash ~/.aether/aether-utils.sh generate-ant-name "builder" | jq -r '.result')
+# Log with ant name
+bash ~/.aether/aether-utils.sh activity-log "CREATED" "$ant_name (Builder)" "Implemented auth module"
+```
+
+### Spawn Tracking
+Log spawns for tree visualization:
+```bash
+bash ~/.aether/aether-utils.sh spawn-log "Prime" "builder" "Hammer-42" "implementing auth"
+bash ~/.aether/aether-utils.sh spawn-complete "Hammer-42" "completed" "auth module done"
+```
+
 ### Status File
 Commands update `.aether/data/watch-status.txt` with current state:
 - State: PLANNING, EXECUTING, READY
 - Phase: current/total
-- Active Workers: list of working castes
+- Active Workers: list of named ants
 - Last Activity: most recent log entry
 
 ### Progress File
-Planning loop updates `.aether/data/watch-progress.txt`:
-- Progress bar based on confidence percentage
-- Current iteration count
-- Target threshold
+Update via: `bash ~/.aether/aether-utils.sh update-progress <percent> "<message>" <phase> <total>`
+
+Example:
+```bash
+bash ~/.aether/aether-utils.sh update-progress 45 "Building auth module..." 2 5
+```
 
 ---
 

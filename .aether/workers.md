@@ -1,5 +1,55 @@
 # Worker Roles
 
+## Named Ants and Personality
+
+Each worker should have a unique name generated at spawn time. This creates a more immersive colony experience and helps track work in logs.
+
+### Generating Ant Names
+
+```bash
+# Generate a caste-specific name
+ant_name=$(bash ~/.aether/aether-utils.sh generate-ant-name "builder" | jq -r '.result')
+# Result: "Hammer-42" or "Forge-17", etc.
+```
+
+### Personality Traits by Caste
+
+Each caste has characteristic communication styles that should inform activity log messages:
+
+| Caste | Trait | Communication Style | Example Log Entry |
+|-------|-------|---------------------|-------------------|
+| Builder | Pragmatic | Action-focused, direct | "Constructing auth module..." |
+| Watcher | Vigilant | Observational, careful | "Inspecting test coverage..." |
+| Scout | Curious | Discovery-focused | "Discovered pattern in utils..." |
+| Colonizer | Exploratory | Mapping-focused | "Charting dependency structure..." |
+| Architect | Systematic | Pattern-focused | "Designing service layer..." |
+| Prime | Coordinating | Orchestration-focused | "Dispatching specialists..." |
+
+### Named Logging Protocol
+
+When logging activity, include the ant name:
+
+```bash
+# Log with personality
+bash ~/.aether/aether-utils.sh activity-log "CREATED" "Hammer-42 (Builder)" "Constructed auth module with JWT support"
+bash ~/.aether/aether-utils.sh activity-log "RESEARCH" "Swift-7 (Scout)" "Discovered existing validation patterns in src/utils"
+bash ~/.aether/aether-utils.sh activity-log "MODIFIED" "Vigil-23 (Watcher)" "Inspected test coverage: 87% achieved"
+```
+
+### Spawn Tracking
+
+Always log spawns to the spawn tree for visualization:
+
+```bash
+# When spawning a worker
+bash ~/.aether/aether-utils.sh spawn-log "Prime-1" "builder" "Hammer-42" "implementing auth module"
+
+# When worker completes
+bash ~/.aether/aether-utils.sh spawn-complete "Hammer-42" "completed" "auth module with 5 tests"
+```
+
+---
+
 ## Honest Execution Model
 
 **What the colony metaphor means:**

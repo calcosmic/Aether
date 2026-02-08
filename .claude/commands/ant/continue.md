@@ -178,6 +178,263 @@ All checks completed with evidence:
 Proceeding to phase advancement.
 ```
 
+Continue to Step 1.6.
+
+### Step 1.6: Spawn Enforcement Gate (MANDATORY)
+
+**The Iron Law:** No phase advancement without worker spawning for non-trivial phases.
+
+Read `.aether/data/spawn-tree.txt` to count spawns for this phase.
+
+```bash
+grep -c "spawned" .aether/data/spawn-tree.txt 2>/dev/null || echo "0"
+```
+
+Also check for Watcher spawns specifically:
+```bash
+grep -c "watcher" .aether/data/spawn-tree.txt 2>/dev/null || echo "0"
+```
+
+**HARD REJECTION - If spawn_count == 0 and phase had 3+ tasks:**
+
+```
+⛔ SPAWN GATE FAILED - PHASE BLOCKED
+
+This phase had {task_count} tasks but spawn_count: 0
+The Prime Worker violated the spawn protocol.
+
+The colony metaphor requires actual parallelism:
+  - Prime Worker MUST spawn specialists for non-trivial work
+  - A single agent doing everything is NOT a colony
+  - "Justifications" for not spawning are not accepted
+
+Required Actions:
+  1. Run /ant:build {phase} again
+  2. Prime Worker MUST spawn at least 1 specialist
+  3. Re-run /ant:continue after spawns complete
+
+The phase will NOT advance until spawning occurs.
+```
+
+**CRITICAL:** Do NOT proceed to Step 1.7. Do NOT advance the phase.
+Log the violation:
+```bash
+bash ~/.aether/aether-utils.sh activity-log "BLOCKED" "colony" "Spawn gate failed: {task_count} tasks, 0 spawns"
+bash ~/.aether/aether-utils.sh error-flag-pattern "no-spawn-violation" "Prime Worker completed phase without spawning specialists" "critical"
+```
+
+**HARD REJECTION - If watcher_count == 0 (no testing separation):**
+
+```
+⛔ WATCHER GATE FAILED - PHASE BLOCKED
+
+No Watcher ant was spawned for testing/verification.
+Testing MUST be performed by a separate agent, not the builder.
+
+Why this matters:
+  - Builders verify their own work = confirmation bias
+  - Independent Watchers catch bugs builders miss
+  - "Build passing" ≠ "App working"
+
+Required Actions:
+  1. Run /ant:build {phase} again
+  2. Prime Worker MUST spawn at least 1 Watcher
+  3. Watcher must independently verify the work
+
+The phase will NOT advance until a Watcher validates.
+```
+
+**CRITICAL:** Do NOT proceed. Log the violation.
+
+**If spawn_count >= 1 AND watcher_count >= 1:**
+
+```
+✅ SPAWN GATE PASSED
+
+Spawns: {spawn_count} workers
+Watchers: {watcher_count} (independent verification)
+
+Proceeding to runtime verification.
+```
+
+Continue to Step 1.7.
+
+### Step 1.7: Anti-Pattern Gate
+
+Scan all modified/created files for known anti-patterns. This catches recurring bugs before they reach production.
+
+```bash
+bash ~/.aether/aether-utils.sh check-antipattern "{file_path}"
+```
+
+Run for each file in `files_created` and `files_modified` from Prime Worker output.
+
+**Anti-Pattern Report:**
+
+```
+Anti-Pattern Scan
+=================
+Files scanned: {count}
+
+{if critical issues:}
+🛑 CRITICAL ISSUES (must fix):
+{list each with file:line and description}
+
+{if warnings:}
+⚠️ WARNINGS (review recommended):
+{list each with file:line and description}
+
+{if clean:}
+✅ No anti-patterns detected
+```
+
+**CRITICAL issues block phase advancement:**
+- Swift didSet infinite recursion
+- Exposed secrets/credentials
+- SQL injection patterns
+- Known crash patterns
+
+**WARNINGS are logged but don't block:**
+- TypeScript `any` usage
+- Console.log in production code
+- TODO/FIXME comments
+
+If CRITICAL issues found, display:
+
+```
+⛔ ANTI-PATTERN GATE FAILED
+
+Critical anti-patterns detected that must be fixed:
+{list issues with file paths}
+
+Run /ant:build {phase} again after fixing.
+```
+
+Do NOT proceed to Step 2.
+
+If no CRITICAL issues, continue to Step 1.8.
+
+### Step 1.8: TDD Evidence Gate (MANDATORY)
+
+**The Iron Law:** No TDD claims without actual test files.
+
+If Prime Worker reported TDD metrics (tests_added, tests_total, coverage_percent), verify test files exist:
+
+```bash
+# Check for test files based on project type
+find . -name "*.test.*" -o -name "*_test.*" -o -name "*Tests.swift" -o -name "test_*.py" 2>/dev/null | head -10
+```
+
+**If Prime Worker claimed tests_added > 0 but no test files found:**
+
+```
+⛔ TDD GATE FAILED - FABRICATED METRICS
+
+Prime Worker claimed:
+  tests_added: {claimed_count}
+  tests_total: {claimed_total}
+  coverage_percent: {claimed_coverage}%
+
+But no test files were found in the codebase.
+
+This is a CRITICAL violation:
+  - TDD metrics were fabricated
+  - No actual tests were written
+  - "All passing: true" was a lie
+
+Required Actions:
+  1. Run /ant:build {phase} again
+  2. Actually write test files (not just claim them)
+  3. Tests must exist and be runnable
+
+The phase will NOT advance with fabricated metrics.
+```
+
+**CRITICAL:** Do NOT proceed. Log the violation:
+```bash
+bash ~/.aether/aether-utils.sh error-flag-pattern "fabricated-tdd" "Prime Worker reported TDD metrics without creating test files" "critical"
+```
+
+**If tests_added == 0 or test files exist matching claims:**
+
+Continue to Step 1.9.
+
+### Step 1.9: Runtime Verification Gate (MANDATORY)
+
+**The Iron Law:** Build passing ≠ App working.
+
+Before advancing, the user must confirm the application actually runs.
+
+Use AskUserQuestion:
+
+```
+Runtime Verification Required
+=============================
+
+Build and compile checks passed, but we need to verify the app actually works.
+
+Have you tested the application at runtime?
+```
+
+Options:
+1. **Yes, tested and working** - App runs correctly, features work
+2. **Yes, tested but has issues** - App runs but has bugs (describe)
+3. **No, haven't tested yet** - Need to test before continuing
+4. **Skip (not applicable)** - No runnable app in this phase (e.g., library code)
+
+**If "Yes, tested and working":**
+```
+✅ RUNTIME VERIFICATION PASSED
+
+User confirmed application runs correctly.
+Proceeding to phase advancement.
+```
+Continue to Step 2.
+
+**If "Yes, tested but has issues":**
+```
+⛔ RUNTIME GATE FAILED
+
+User reported runtime issues. The phase cannot advance with a broken app.
+
+Please describe the issues so they can be addressed:
+```
+
+Use AskUserQuestion to get issue details. Log to errors.records:
+```bash
+bash ~/.aether/aether-utils.sh error-add "runtime" "critical" "{user_description}" {phase}
+```
+
+Do NOT proceed to Step 2.
+
+**If "No, haven't tested yet":**
+```
+⏸️ RUNTIME VERIFICATION PENDING
+
+Please test the application and run /ant:continue again.
+
+Testing checklist:
+  - [ ] App launches without crashing
+  - [ ] Core features work as expected
+  - [ ] UI responds to user interaction
+  - [ ] No freezes or hangs
+
+Come back when you've tested.
+```
+
+Do NOT proceed to Step 2.
+
+**If "Skip (not applicable)":**
+
+Only valid for phases that don't produce runnable code (e.g., documentation, config files, library code with no entry point).
+
+```
+⏭️ RUNTIME CHECK SKIPPED
+
+User indicated no runnable app for this phase.
+Proceeding to phase advancement.
+```
+
 Continue to Step 2.
 
 ### Step 2: Update State
@@ -350,4 +607,6 @@ Output:
    /ant:phase {next_id}   📋 Review phase details
    /ant:focus "<area>"    🎯 Guide colony attention
    /ant:status            📊 View colony status
+
+💾 State persisted — safe to /clear before next phase
 ```

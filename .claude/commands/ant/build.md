@@ -3,7 +3,7 @@ name: ant:build
 description: Build a phase with pure emergence - colony self-organizes and completes tasks
 ---
 
-You are the **Queen**. Spawn a Prime Worker and let the colony self-organize.
+You are the **Queen**. You DIRECTLY spawn multiple workers — do not delegate to a single Prime Worker.
 
 The phase to build is: `$ARGUMENTS`
 
@@ -96,153 +96,184 @@ If file doesn't exist or is empty:
 CONSTRAINTS: (none)
 ```
 
-### Step 5: Spawn Prime Worker
+### Step 5: Analyze Tasks and Plan Spawns
+
+**YOU (the Queen) will spawn workers directly. Do NOT delegate to a single Prime Worker.**
 
 Log phase start:
 ```bash
-bash ~/.aether/aether-utils.sh activity-log "EXECUTING" "phase" "Phase {id}: {name} started"
+bash ~/.aether/aether-utils.sh activity-log "EXECUTING" "Queen" "Phase {id}: {name} - Queen dispatching workers"
 ```
 
-Update watch status:
+Analyze the phase tasks:
+
+1. **Group tasks by dependencies:**
+   - **Wave 1:** Tasks with `depends_on: "none"` or `depends_on: []` (can run in parallel)
+   - **Wave 2:** Tasks depending on Wave 1 tasks
+   - **Wave 3+:** Continue until all tasks assigned
+
+2. **Assign castes:**
+   - Implementation tasks → 🔨 Builder
+   - Research/docs tasks → 🔍 Scout
+   - Testing/validation → 👁️ Watcher (ALWAYS spawn at least one)
+
+3. **Generate ant names for each worker:**
+```bash
+bash ~/.aether/aether-utils.sh generate-ant-name "builder"
+bash ~/.aether/aether-utils.sh generate-ant-name "watcher"
 ```
-Write .aether/data/watch-status.txt:
 
-🐜 AETHER COLONY :: EXECUTING
-==============================
+Display spawn plan:
+```
+🐜 SPAWN PLAN
+=============
+Wave 1 (parallel):
+  🔨 {Builder-Name}: Task {id} - {description}
+  🔨 {Builder-Name}: Task {id} - {description}
 
-State: EXECUTING
-Phase: {id}/{total_phases}
+Wave 2 (after Wave 1):
+  🔨 {Builder-Name}: Task {id} - {description}
 
-Current Work:
-  Executing phase tasks...
+Verification:
+  👁️ {Watcher-Name}: Verify all work independently
 
+Total: {N} Builders + 1 Watcher = {N+1} spawns
 ```
 
-**IMPORTANT: Honest Execution Model**
-The system executes tasks via a single Task agent, not parallel workers.
-The "colony" metaphor describes task organization, not actual parallelism.
+### Step 5.1: Spawn Wave 1 Workers (Parallel)
 
-Dispatch **Prime Worker** via Task tool with `subagent_type="general-purpose"`:
+**CRITICAL: Spawn ALL Wave 1 workers in a SINGLE message using multiple Task tool calls.**
 
+For each Wave 1 task, use Task tool with `subagent_type="general-purpose"` and `run_in_background: true`:
+
+Log each spawn:
+```bash
+bash ~/.aether/aether-utils.sh spawn-log "Queen" "builder" "{ant_name}" "{task_description}"
 ```
-You are the Prime Worker for Phase {id} in the Aether Colony.
 
-You are at depth 1. You can spawn up to 4 specialists (depth 2).
-Each specialist can spawn up to 2 sub-specialists (depth 3).
-Depth 3 workers cannot spawn further.
+**Builder Worker Prompt Template:**
+```
+You are {Ant-Name}, a 🔨 Builder Ant in the Aether Colony.
 
---- PHASE CONTEXT ---
+--- YOUR TASK ---
+Task {id}: {description}
 
-Goal: "{goal}"
-
-Phase {id}: {phase_name}
-{phase_description}
-
-Tasks:
-{for each task:}
-  - {task_id}: {description}
-    Depends on: {depends_on or "none"}
-    Status: {status}
-{end for}
-
-Success Criteria:
-{list success_criteria}
+--- CONTEXT ---
+Goal: "{colony_goal}"
+Phase: {phase_name}
 
 --- CONSTRAINTS ---
-{constraints from Step 4, or "(none)"}
+{constraints from Step 4}
 
---- ERROR CONTEXT ---
-{if errors.records has entries for this phase:}
-Previous errors in this phase:
-{list relevant errors}
-{else:}
-No previous errors.
-{end if}
+--- INSTRUCTIONS ---
+1. Read ~/.aether/workers.md for Builder discipline
+2. Implement the task completely
+3. Write actual test files (not just claims)
+4. Log your work: bash ~/.aether/aether-utils.sh activity-log "CREATED" "{ant_name} (Builder)" "{file_path}"
 
---- WORKER SPECS ---
-Read ~/.aether/workers.md for role definitions and spawn protocol.
+--- OUTPUT ---
+Return JSON:
+{
+  "ant_name": "{your name}",
+  "task_id": "{task_id}",
+  "status": "completed" | "failed" | "blocked",
+  "summary": "What you accomplished",
+  "files_created": [],
+  "files_modified": [],
+  "tests_written": [],
+  "blockers": []
+}
+```
 
---- VERIFICATION DISCIPLINE ---
-Read ~/.aether/verification.md for the Iron Law.
+### Step 5.2: Collect Wave 1 Results
 
-Key rules:
-- NO completion claims without fresh verification evidence
-- Before reporting done: RUN verification, READ output, THEN claim
-- When spawns report success: verify independently (check files, run tests)
-- Red flags: "should work", "probably done", satisfaction without evidence
+Use TaskOutput to collect results from all Wave 1 workers.
 
---- DEBUGGING DISCIPLINE ---
-Read ~/.aether/debugging.md when encountering ANY error.
+For each completed worker:
+```bash
+bash ~/.aether/aether-utils.sh spawn-complete "{ant_name}" "completed" "{summary}"
+```
 
-Key rules:
-- NO fixes without root cause investigation first
-- Phase 1: Read error, reproduce, trace data flow to source
-- Phase 2: Find working examples, compare
-- Phase 3: Single hypothesis, minimal test
-- Phase 4: Create failing test, fix at root cause
-- **3-Fix Rule:** If 3+ fixes fail, STOP and report architectural concern
-- Red flags: "quick fix", "just try X", "might work"
+### Step 5.3: Spawn Wave 2+ Workers (Sequential Waves)
 
---- TDD DISCIPLINE ---
-Read ~/.aether/tdd.md for the Iron Law.
+Repeat Step 5.1-5.2 for each subsequent wave, waiting for previous wave to complete.
 
-Key rules:
-- NO production code without a failing test first
-- RED: Write failing test → VERIFY it fails correctly
-- GREEN: Write minimal code → VERIFY it passes
-- REFACTOR: Clean up while staying green
-- Coverage target: 80%+ for new code
-- Red flags: "test after", "too simple to test", test passes immediately
+### Step 5.4: Spawn Watcher for Verification
 
---- COLONY INSTINCTS ---
-{if memory.instincts has entries:}
-Learned patterns from previous phases (apply high-confidence automatically):
-{for each instinct in memory.instincts where confidence >= 0.5:}
-  [{confidence}] {domain}: {action}
-{end for}
-{else:}
-No instincts yet. Observe patterns for colony learning.
-{end if}
+**MANDATORY: Always spawn a Watcher — testing must be independent.**
 
---- LEARNING ---
-Read ~/.aether/learning.md for pattern detection.
+```bash
+bash ~/.aether/aether-utils.sh spawn-log "Queen" "watcher" "{watcher_name}" "Independent verification"
+```
 
-Observe and report:
-- Success patterns (what worked well)
-- Error resolutions (what was learned from debugging)
-- User feedback (corrections, preferences)
-
---- PARALLEL EXECUTION (Real, Not Theatrical) ---
-
-To achieve ACTUAL parallelism:
-
-1. Identify tasks with NO dependencies (depends_on: "none")
-2. For 2+ independent tasks, spawn them in a SINGLE message using Task tool
-3. Use run_in_background: true for each
-4. All Task calls in one message = true parallel execution
-5. Use TaskOutput to collect results
-
-Example: If tasks 1.1 and 1.2 are independent:
-- Call Task tool TWICE in ONE message (both with run_in_background: true)
-- Both agents run simultaneously
-- Collect results with TaskOutput when notified
-
-This is how the colony achieves real parallelism, not just logging.
+**Watcher Worker Prompt:**
+```
+You are {Watcher-Name}, a 👁️ Watcher Ant in the Aether Colony.
 
 --- YOUR MISSION ---
+Independently verify all work done by Builders in Phase {id}.
 
-1. Analyze tasks - identify which have depends_on: "none" (independent)
-2. For simple tasks (< 10 tool calls), do them yourself
-3. For 2+ independent tasks: spawn parallel agents in ONE message
-4. For dependent tasks: execute sequentially after dependencies complete
-5. Spawn specialists for complex work:
-   - 🔨 Builder: code implementation, file manipulation
-   - 👁️ Watcher: testing, validation, quality checks
-   - 🔍 Scout: research, documentation lookup
-   - 🗺️ Colonizer: codebase exploration
-6. Synthesize all results
-7. **VERIFY with evidence:** For each success criterion, run proof and record evidence
-8. Log activity: bash ~/.aether/aether-utils.sh activity-log "ACTION" "phase" "description"
+--- WHAT TO VERIFY ---
+Files created: {list from builder results}
+Files modified: {list from builder results}
+
+--- VERIFICATION CHECKLIST ---
+1. Do the files exist? (Read each one)
+2. Does the code compile/parse? (Run build command)
+3. Do tests exist AND pass? (Run test command)
+4. Are success criteria met? {list success_criteria}
+
+--- CRITICAL ---
+- You did NOT build this code — verify it objectively
+- "Build passing" is NOT enough — check runtime if possible
+- Be skeptical — Builders may have cut corners
+
+--- OUTPUT ---
+Return JSON:
+{
+  "ant_name": "{your name}",
+  "verification_passed": true | false,
+  "files_verified": [],
+  "build_result": {"command": "...", "passed": true|false},
+  "test_result": {"command": "...", "passed": N, "failed": N},
+  "success_criteria_results": [
+    {"criterion": "...", "passed": true|false, "evidence": "..."}
+  ],
+  "issues_found": [],
+  "recommendation": "proceed" | "fix_required"
+}
+```
+
+### Step 5.5: Synthesize Results
+
+Collect all worker outputs and create phase summary:
+
+```json
+{
+  "status": "completed" | "failed" | "blocked",
+  "summary": "...",
+  "tasks_completed": [...],
+  "tasks_failed": [...],
+  "files_created": [...],
+  "files_modified": [...],
+  "spawn_metrics": {
+    "spawn_count": {total workers spawned},
+    "builder_count": {N},
+    "watcher_count": 1,
+    "parallel_batches": {number of waves}
+  },
+  "spawn_tree": {
+    "{Builder-Name}": {"caste": "builder", "task": "...", "status": "completed"},
+    "{Watcher-Name}": {"caste": "watcher", "task": "verify", "status": "completed"}
+  },
+  "verification": {from Watcher output},
+  "quality_notes": "..."
+}
+```
+
+--- SPAWN TRACKING ---
+
+The spawn tree will be visible in `/ant:watch` because each spawn is logged.
 
 --- OUTPUT FORMAT ---
 
@@ -254,9 +285,16 @@ Return JSON:
   "tasks_failed": [],
   "files_created": ["path1", "path2"],
   "files_modified": ["path3"],
+  "spawn_metrics": {
+    "spawn_count": 4,
+    "watcher_count": 1,
+    "builder_count": 3,
+    "parallel_batches": 2,
+    "sequential_tasks": 1
+  },
   "spawn_tree": {
-    "builder-1": {"task": "...", "status": "completed", "children": {}},
-    "watcher-1": {"task": "...", "status": "completed", "children": {}}
+    "Hammer-42": {"caste": "builder", "task": "...", "status": "completed", "children": {}},
+    "Vigil-17": {"caste": "watcher", "task": "...", "status": "completed", "children": {}}
   },
   "verification": {
     "build": {"command": "npm run build", "exit_code": 0, "passed": true},
@@ -298,11 +336,9 @@ Return JSON:
 }
 ```
 
-Wait for Prime Worker to complete.
-
 ### Step 6: Visual Checkpoint (if UI touched)
 
-Parse Prime Worker result. If `ui_touched` is true:
+Parse synthesis result. If `ui_touched` is true:
 
 ```
 Visual Checkpoint
@@ -337,16 +373,12 @@ Display build summary:
 💾 Git Checkpoint: {commit_hash}
 
 📝 Summary:
-   {summary from Prime Worker}
+   {summary from synthesis}
 
 🐜 Colony Work Tree:
    👑 Queen
-   └── 🐜 Prime Worker
 {for each spawn in spawn_tree:}
-       ├── {emoji} {caste}: {task} [{status}]
-{for each child in spawn.children:}
-       │   └── {emoji} {caste}: {task} [{status}]
-{end for}
+   ├── {emoji} {caste} {ant_name}: {task} [{status}]
 {end for}
 
 ✅ Tasks Completed:
@@ -378,6 +410,8 @@ Display build summary:
    /ant:continue   ➡️  Advance to next phase
    /ant:feedback   💬 Give feedback first
    /ant:status     📊 View colony status
+
+💾 State persisted to .aether/data/ — safe to /clear if needed
 ```
 
 **IMPORTANT:** Build does NOT update task statuses or advance state. Run `/ant:continue` to:

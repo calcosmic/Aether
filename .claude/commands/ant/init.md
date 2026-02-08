@@ -124,4 +124,6 @@ Then output the result:
    /ant:colonize  🗺️  Analyze existing codebase first
    /ant:watch     👁️  Set up live visibility
    /ant:status    📊 View colony status
+
+💾 State persisted — safe to /clear if needed
 ```

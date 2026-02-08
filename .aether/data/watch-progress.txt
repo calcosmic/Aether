@@ -1,0 +1,14 @@
+       .-.
+      (o o)  AETHER COLONY
+      | O |  Progress
+       `-`
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Phase: 2 / 5
+
+[█████████████░░░░░░░░░░░░░░░░░] 45%
+
+⠧ Building auth module...
+
+Target: 95% confidence
+

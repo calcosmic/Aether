@@ -353,6 +353,8 @@ Read `plan.phases` from COLONY_STATE.json and display:
    /ant:build 1        🔨 Start building Phase 1
    /ant:focus "<area>" 🎯 Focus colony attention
    /ant:status         📊 View colony status
+
+💾 Plan persisted — safe to /clear before building
 ```
 
 Status icons: pending = `[ ]`, in_progress = `[~]`, completed = `[✓]`

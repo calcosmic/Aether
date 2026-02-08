@@ -76,9 +76,11 @@ From `memory.instincts`:
 Output format:
 
 ```
-🐜 ═══════════════════════════════════════════════════
-   A E T H E R   C O L O N Y   S T A T U S
-═══════════════════════════════════════════════════ 🐜
+       .-.
+      (o o)  AETHER COLONY
+      | O |  Status Report
+       `-`
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 👑 Goal: <goal (truncated to 60 chars)>
 
