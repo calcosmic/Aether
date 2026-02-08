@@ -183,6 +183,29 @@ Simple, declarative guidance replacing the complex pheromone system.
 |---------|--------|
 | `/ant:focus "area"` | Add to focus list (max 5) |
 | `/ant:redirect "pattern"` | Add AVOID constraint (max 10) |
+| `/ant:council` | Interactive multi-choice to inject multiple signals |
+
+### Council: Interactive Clarification
+
+When you need to inject multiple pheromones or clarify complex intent, use `/ant:council`:
+
+```
+📜🐜🏛️🐜📜 ANT COUNCIL
+
+Queen convenes the council to clarify intent via multi-choice questions.
+
+1. Present topic menu (Project Direction, Quality Priorities, Constraints, Custom)
+2. Drill down with specific questions based on selection
+3. Auto-translate answers to FOCUS/REDIRECT/FEEDBACK signals
+4. Inject pheromones atomically
+5. Resume prior workflow
+```
+
+**Key features:**
+- **Invocable anytime** — works in READY, EXECUTING, or PLANNING state
+- **Best-effort during build** — new signals apply to future work, not in-flight workers
+- **Source tracking** — signals tagged with `source: "council:*"` for audit
+- **Deduplication** — checks for existing signals before adding
 
 ### What Changed
 
@@ -320,6 +343,7 @@ Simplified from v2.0:
 | `/ant:continue` | Advance to next phase |
 | `/ant:focus "area"` | Add focus constraint |
 | `/ant:redirect "pattern"` | Add avoid constraint |
+| `/ant:council` | 📜🐜🏛️🐜📜 Multi-choice intent clarification |
 | `/ant:status` | Quick colony status |
 | `/ant:watch` | Set up tmux for live viewing |
 

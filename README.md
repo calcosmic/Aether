@@ -63,8 +63,8 @@ npm install -g aether-colony
 ```
 
 This installs:
-- 📁 **Claude Code Commands** → `~/.claude/commands/ant/` (18 slash commands)
-- 📁 **OpenCode Commands** → `~/.config/opencode/commands/ant/` (18 slash commands)
+- 📁 **Claude Code Commands** → `~/.claude/commands/ant/` (19 slash commands)
+- 📁 **OpenCode Commands** → `~/.config/opencode/commands/ant/` (19 slash commands)
 - 📁 **OpenCode Agents** → `~/.config/opencode/agents/` (4 specialized agents)
 - 📁 **Runtime** → `~/.aether/` (worker specs, utilities)
 
@@ -94,6 +94,7 @@ That's it. The colony takes over from there.
 | `/ant:focus "area"` | 🎯 Guide colony attention |
 | `/ant:redirect "pattern"` | 🚫 Warn away from approaches |
 | `/ant:feedback "msg"` | 💬 Teach preferences |
+| `/ant:council` | 📜🐜🏛️🐜📜 Clarify intent via multi-choice questions |
 | `/ant:flag "issue"` | 🚩 Track blockers |
 | `/ant:flags` | 📋 List all flags |
 | `/ant:status` | 📊 Colony overview |
@@ -180,10 +181,10 @@ Confidence is measured across 5 dimensions: codebase knowledge, requirement clar
 ```
 ~/.claude/commands/ant/           # Claude Code global slash commands
     ├── init.md, plan.md, build.md, continue.md...
-    └── (18 command files)
+    └── (19 command files)
 
 ~/.config/opencode/               # OpenCode global config
-    ├── commands/ant/             # OpenCode slash commands (18 files)
+    ├── commands/ant/             # OpenCode slash commands (19 files)
     └── agents/                   # Specialized agents (queen, builder, scout, watcher)
 
 ~/.aether/                        # Global runtime (shared)
