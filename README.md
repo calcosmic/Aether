@@ -9,7 +9,7 @@
 <div align="center">
   <img src="aether-logo.png" alt="Aether Logo" width="500">
 
-  **A multi-agent system for Claude Code where workers spawn other workers.**
+  **A multi-agent system for Claude Code and OpenCode where workers spawn other workers.**
 
   ➡️ Click **Use this template** (top-right) to create your own Aether repo in 30 seconds.
 
