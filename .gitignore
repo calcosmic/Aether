@@ -80,6 +80,9 @@ logs/
 .aether/data/COLONY_STATE.json
 .aether/data/pheromones.json
 .aether/data/PROJECT_PLAN.json
+.aether/data/flags.json
+.aether/data/activity.log
+.aether/data/spawn-tree.txt
 .aether/error_ledger.json
 .aether/checkpoints/
 .aether/work/
