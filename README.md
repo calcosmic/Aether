@@ -11,7 +11,7 @@
 
   **A multi-agent system for Claude Code where workers spawn other workers.**
 
-  *Inspired by [Tache's GSD system](https://github.com/tache-ai/gsd)*
+  *Inspired by [glittercowboy's GSD system](https://github.com/glittercowboy/gsd)*
 
   [![npm version](https://img.shields.io/npm/v/aether-colony.svg)](https://www.npmjs.com/package/aether-colony)
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -219,7 +219,7 @@ aether uninstall && npm uninstall -g aether-colony
 
 ## 🙏 Acknowledgments
 
-Massive shoutout to **[Tache](https://github.com/tache-ai)** and the **[GSD (Get Shit Done) system](https://github.com/tache-ai/gsd)**. GSD showed what Claude Code could become with the right orchestration. Aether takes that inspiration and adds ant colony dynamics — pheromones, castes, and nested spawning.
+Massive shoutout to **[glittercowboy](https://github.com/glittercowboy)** and the **[GSD (Get Shit Done) system](https://github.com/glittercowboy/gsd)**. GSD showed what Claude Code could become with the right orchestration. Aether takes that inspiration and adds ant colony dynamics — pheromones, castes, and nested spawning.
 
 ---
 
