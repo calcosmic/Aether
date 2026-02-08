@@ -76,18 +76,19 @@ logs/
 *.cache
 
 # Runtime generated files (should not be in public repo)
-.aether/data/backups/
-.aether/data/COLONY_STATE.json
-.aether/data/pheromones.json
-.aether/data/PROJECT_PLAN.json
-.aether/data/flags.json
-.aether/data/activity.log
-.aether/data/spawn-tree.txt
+.aether/data/
+.aether/backups/
+.aether/locks/
+.aether/temp/
+.aether/HANDOFF.md
+.aether/PAUSE_HANDOFF.md
 .aether/error_ledger.json
 .aether/checkpoints/
 .aether/work/
 .aether/examples/
 .aether/stdlib/
+.aether/learnings.json
+.aether/docs/constraints.md
 
 # Session files
 *.session
