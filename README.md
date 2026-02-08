@@ -142,6 +142,22 @@ Instead of direct commands, you emit signals that the colony interprets:
 
 Each caste has different sensitivity to signals. Builders prioritize FOCUS, Watchers prioritize REDIRECT warnings.
 
+### Iterative Planning (95% Confidence)
+
+When you run `/ant:plan`, the colony doesn't just generate a plan once. It iterates:
+
+1. **Scout** researches the codebase, identifies knowledge gaps
+2. **Route-Setter** drafts/refines the plan based on findings
+3. **Loop** continues until confidence reaches 95% (max 50 iterations)
+
+```
+Iteration 12/50 | Confidence: 78%
+├── Researching: API authentication patterns
+└── Gaps remaining: 2 (rate limiting, error handling)
+```
+
+Confidence is measured across 5 dimensions: codebase knowledge, requirement clarity, risk identification, dependencies, and effort estimation. The loop includes anti-stuck checks — if progress stalls, it pauses for user input rather than spinning.
+
 ### Spawn Depth
 
 ```
