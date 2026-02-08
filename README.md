@@ -102,7 +102,7 @@ That's it. The colony takes over from there.
 
 ---
 
-## ✨ v2.0 Features
+## ✨ Features
 
 - 🐜 **Nested Spawning** — Workers spawn sub-workers (depth 1→2→3 chains)
 - 🎨 **Colorized Output** — Each caste has its own terminal color
@@ -220,28 +220,6 @@ aether uninstall && npm uninstall -g aether-colony
 ## 🙏 Acknowledgments
 
 Massive shoutout to **[glittercowboy](https://github.com/glittercowboy)** and the **[GSD (Get Shit Done) system](https://github.com/glittercowboy/gsd)**. GSD showed what Claude Code could become with the right orchestration. Aether takes that inspiration and adds ant colony dynamics — pheromones, castes, and nested spawning.
-
----
-
-## 📜 Version History
-
-| Version | Date | Highlights |
-|---------|------|------------|
-| **v2.0** | 2026-02-08 | Nested spawning, colorized output, runtime verification, flagging |
-| **v1.0** | 2026-02-07 | First public release, npm distribution |
-
-<details>
-<summary>Earlier versions</summary>
-
-| Version | Date | Notes |
-|---------|------|-------|
-| v0.5 | 2026-02-05 | npm setup |
-| v0.4 | 2026-02-04 | Field testing |
-| v0.3 | 2026-02-03 | Claude-native rewrite |
-| v0.2 | 2026-02-02 | Event system |
-| v0.1 | 2026-02-02 | MVP |
-
-</details>
 
 ---
 
