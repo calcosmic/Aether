@@ -11,6 +11,8 @@
 
   **A multi-agent system for Claude Code where workers spawn other workers.**
 
+  ➡️ Click **Use this template** (top-right) to create your own Aether repo in 30 seconds.
+
   *Inspired by [glittercowboy's GSD system](https://github.com/glittercowboy/gsd)*
 
   [![npm version](https://img.shields.io/npm/v/aether-colony.svg)](https://www.npmjs.com/package/aether-colony)
