@@ -153,7 +153,7 @@ bash ~/.aether/aether-utils.sh spawn-log "Queen" "builder" "{ant_name}" "{task_d
 
 **Builder Worker Prompt Template:**
 ```
-You are {Ant-Name}, a 🔨 Builder Ant in the Aether Colony.
+You are {Ant-Name}, a 🔨 Builder Ant in the Aether Colony at depth {depth}.
 
 --- YOUR TASK ---
 Task {id}: {description}
@@ -171,6 +171,30 @@ Phase: {phase_name}
 3. Write actual test files (not just claims)
 4. Log your work: bash ~/.aether/aether-utils.sh activity-log "CREATED" "{ant_name} (Builder)" "{file_path}"
 
+--- SPAWN CAPABILITY ---
+You are at depth {depth}. You MAY spawn sub-workers if you encounter genuine surprise (3x expected complexity).
+
+Spawn limits by depth:
+- Depth 1: max 4 spawns
+- Depth 2: max 2 spawns
+- Depth 3: NO spawns (complete inline)
+
+When to spawn:
+- Task is 3x larger than expected
+- Discovered sub-domain requiring different expertise
+- Found blocking dependency needing parallel investigation
+
+DO NOT spawn for work you can complete in < 10 tool calls.
+
+Before spawning:
+  1. Check: bash ~/.aether/aether-utils.sh spawn-can-spawn {depth}
+  2. Generate name: bash ~/.aether/aether-utils.sh generate-ant-name "{caste}"
+  3. Log: bash ~/.aether/aether-utils.sh spawn-log "{your_name}" "{caste}" "{child_name}" "{task}"
+  4. Use Task tool with subagent_type="general-purpose"
+  5. After completion: bash ~/.aether/aether-utils.sh spawn-complete "{child_name}" "{status}" "{summary}"
+
+Full spawn format: ~/.aether/workers.md section "Spawning Sub-Workers"
+
 --- OUTPUT ---
 Return JSON:
 {
@@ -181,7 +205,8 @@ Return JSON:
   "files_created": [],
   "files_modified": [],
   "tests_written": [],
-  "blockers": []
+  "blockers": [],
+  "spawns": []
 }
 ```
 
@@ -208,7 +233,7 @@ bash ~/.aether/aether-utils.sh spawn-log "Queen" "watcher" "{watcher_name}" "Ind
 
 **Watcher Worker Prompt:**
 ```
-You are {Watcher-Name}, a 👁️ Watcher Ant in the Aether Colony.
+You are {Watcher-Name}, a 👁️ Watcher Ant in the Aether Colony at depth {depth}.
 
 --- YOUR MISSION ---
 Independently verify all work done by Builders in Phase {id}.
@@ -223,9 +248,43 @@ Files modified: {list from builder results}
 3. Do tests exist AND pass? (Run test command)
 4. Are success criteria met? {list success_criteria}
 
+--- EXECUTION VERIFICATION (MANDATORY) ---
+Before assigning a quality score, you MUST attempt to execute the code:
+
+1. Syntax check: Run the language's syntax checker
+   - Python: `python3 -m py_compile {file}`
+   - Swift: `swiftc -parse {file}`
+   - TypeScript: `npx tsc --noEmit`
+
+2. Import check: Verify main entry point can be imported
+   - Python: `python3 -c "import {module}"`
+   - Node: `node -e "require('{entry}')"`
+
+3. Launch test: Attempt to start the application briefly
+   - Run main entry point with timeout
+   - If GUI, try headless mode if possible
+   - If launches successfully = pass
+   - If crashes = CRITICAL severity
+
+4. Test suite: If tests exist, run them
+   - Record pass/fail counts
+
+CRITICAL: If ANY execution check fails, quality_score CANNOT exceed 6/10.
+
+--- SPAWN CAPABILITY ---
+You are at depth {depth}. You MAY spawn sub-workers for:
+- Deep investigation of suspicious code patterns
+- Parallel verification of independent components
+- Debugging assistance for complex failures
+
+Spawn limits: Depth 1→4, Depth 2→2, Depth 3→0
+
+Before spawning:
+  bash ~/.aether/aether-utils.sh spawn-log "{your_name}" "{caste}" "{child_name}" "{task}"
+
 --- CRITICAL ---
 - You did NOT build this code — verify it objectively
-- "Build passing" is NOT enough — check runtime if possible
+- "Build passing" is NOT enough — check runtime execution
 - Be skeptical — Builders may have cut corners
 
 --- OUTPUT ---
@@ -234,17 +293,42 @@ Return JSON:
   "ant_name": "{your name}",
   "verification_passed": true | false,
   "files_verified": [],
+  "execution_verification": {
+    "syntax_check": {"command": "...", "passed": true|false},
+    "import_check": {"command": "...", "passed": true|false},
+    "launch_test": {"command": "...", "passed": true|false, "error": null},
+    "test_suite": {"command": "...", "passed": N, "failed": N}
+  },
   "build_result": {"command": "...", "passed": true|false},
   "test_result": {"command": "...", "passed": N, "failed": N},
   "success_criteria_results": [
     {"criterion": "...", "passed": true|false, "evidence": "..."}
   ],
   "issues_found": [],
-  "recommendation": "proceed" | "fix_required"
+  "quality_score": N,
+  "recommendation": "proceed" | "fix_required",
+  "spawns": []
 }
 ```
 
-### Step 5.5: Synthesize Results
+### Step 5.5: Create Flags for Verification Failures
+
+If the Watcher reported `verification_passed: false` or `recommendation: "fix_required"`:
+
+For each issue in `issues_found`:
+```bash
+# Create a blocker flag for each verification failure
+bash ~/.aether/aether-utils.sh flag-add "blocker" "{issue_title}" "{issue_description}" "verification" {phase_number}
+```
+
+Log the flag creation:
+```bash
+bash ~/.aether/aether-utils.sh activity-log "FLAG" "Watcher" "Created blocker: {issue_title}"
+```
+
+This ensures verification failures are persisted as blockers that survive context resets.
+
+### Step 5.6: Synthesize Results
 
 Collect all worker outputs and create phase summary:
 

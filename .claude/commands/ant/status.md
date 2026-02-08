@@ -62,6 +62,13 @@ Read `.aether/data/constraints.json` if exists:
 - Focus count: `focus.length`
 - Constraints count: `constraints.length`
 
+**Flags:**
+Run: `bash ~/.aether/aether-utils.sh flag-check-blockers`
+Extract:
+- Blockers count (critical, block advancement)
+- Issues count (high, warnings)
+- Notes count (low, informational)
+
 **Instincts:**
 From `memory.instincts`:
 - Total count: `instincts.length`
@@ -89,6 +96,7 @@ Output format:
 
 🎯 Focus: <focus_count> areas | 🚫 Avoid: <constraints_count> patterns
 🧠 Instincts: <total> learned (<high_confidence> strong)
+🚩 Flags: <blockers> blockers | <issues> issues | <notes> notes
 
 State: <state>
 Next:  /ant:<suggested command>

@@ -159,24 +159,34 @@ while iteration < 50 AND confidence < 95:
 
     Key rules:
     - Bite-sized tasks (2-5 minutes each) - one action per task
-    - Exact file paths always - no "somewhere in src/"
-    - Complete code in plan - not "add appropriate code"
-    - Expected outputs - every command has expected result
-    - TDD flow - test before implementation
+    - Goal-oriented - describe WHAT to achieve, not HOW
+    - Constraints define boundaries, not implementation
+    - Hints point toward patterns, not solutions
+    - Success criteria are testable outcomes
 
-    Task format:
+    Task format (GOAL-ORIENTED):
     ```
-    Task N.1: [Specific action]
-    Files:
-      - Create: exact/path/to/file.py
-      - Test: tests/exact/path/test.py
-    Steps:
-      1. Write failing test
-      2. Run test, verify fails
-      3. Write minimal implementation
-      4. Run test, verify passes
-      5. Commit
+    Task N.1: {goal description}
+    Goal: What to achieve (not how)
+    Constraints:
+      - Boundaries and requirements
+      - Integration points
+    Hints:
+      - Pointer to existing patterns (optional)
+      - Relevant files to reference (optional)
+    Success Criteria:
+      - Testable outcome 1
+      - Testable outcome 2
     ```
+
+    DO NOT include:
+    - Exact code to write
+    - Specific function names (unless critical API)
+    - Implementation details
+    - Line-by-line instructions
+
+    Workers discover implementations by reading existing code and patterns.
+    This enables TRUE EMERGENCE - different approaches based on context.
 
     --- RESEARCH FINDINGS ---
     {research_results.findings formatted}
@@ -210,7 +220,14 @@ while iteration < 50 AND confidence < 95:
             "name": "...",
             "description": "...",
             "tasks": [
-              {"id": "1.1", "description": "...", "depends_on": []}
+              {
+                "id": "1.1",
+                "goal": "What to achieve (not how)",
+                "constraints": ["boundary 1", "boundary 2"],
+                "hints": ["optional pointer to pattern"],
+                "success_criteria": ["testable outcome 1", "testable outcome 2"],
+                "depends_on": []
+              }
             ],
             "success_criteria": ["...", "..."]
           }

@@ -233,9 +233,12 @@ Workers can spawn sub-workers directly using the **Task tool** with `subagent_ty
 
 | Depth | Role | Can Spawn? | Max Sub-Spawns | Behavior |
 |-------|------|------------|----------------|----------|
-| 1 | Prime Worker / Coordinator | Yes | 4 | Orchestrate phase, spawn specialists |
+| 0 | Queen | Yes | 4 | Dispatch initial workers |
+| 1 | Prime Worker / Builder | Yes | 4 | Orchestrate phase, spawn specialists |
 | 2 | Specialist | Yes (if surprised) | 2 | Focused work, spawn only for unexpected complexity |
 | 3 | Deep Specialist | No | 0 | Complete work inline, no further delegation |
+
+**Global Cap:** Maximum 10 workers per phase to prevent runaway spawning.
 
 **Spawn Decision Criteria (Depth 2+):**
 Only spawn if you encounter genuine surprise:
@@ -248,41 +251,86 @@ Only spawn if you encounter genuine surprise:
 - Work that's merely tedious but straightforward
 - Slight scope expansion within your expertise
 
-**Spawn Format:**
+---
 
+### Step-by-Step Spawn Protocol
+
+**Step 1: Check if you can spawn**
+```bash
+# Check spawn allowance at your depth
+result=$(bash ~/.aether/aether-utils.sh spawn-can-spawn {your_depth})
+# Returns: {"can_spawn": true/false, "depth": N, "max_spawns": N, "current_total": N}
+```
+
+If `can_spawn` is false, complete the work inline.
+
+**Step 2: Generate child name**
+```bash
+# Generate a name for the child worker
+child_name=$(bash ~/.aether/aether-utils.sh generate-ant-name "{caste}" | jq -r '.result')
+# Returns: "Hammer-42", "Vigil-17", etc.
+```
+
+**Step 3: Log the spawn**
+```bash
+bash ~/.aether/aether-utils.sh spawn-log "{your_name}" "{child_caste}" "{child_name}" "{task_summary}"
+```
+
+**Step 4: Use Task tool**
 ```
 Use the Task tool with subagent_type="general-purpose":
 
-You are a {Caste} Ant in the Aether Colony at depth {current_depth + 1}.
+You are {child_name}, a {emoji} {Caste} Ant in the Aether Colony at depth {your_depth + 1}.
 
 --- WORKER SPEC ---
-{Read and include the appropriate ## {Caste} section from this file}
+Read ~/.aether/workers.md for {Caste} discipline.
 
 --- CONSTRAINTS ---
 {constraints from constraints.json, if any}
 
 --- PARENT CONTEXT ---
-Task: {what parent is working on}
+Task: {what you are working on}
 Why spawning: {specific reason for delegation}
+Your parent: {your_name} at depth {your_depth}
 
 --- YOUR TASK ---
 {specific sub-task}
 
+--- SPAWN CAPABILITY ---
+You are at depth {your_depth + 1}.
+{if depth < 3: "You MAY spawn sub-workers if you encounter genuine surprise (3x complexity)."}
+{if depth >= 3: "You are at max depth. Complete all work inline, no spawning."}
+
+Spawn limits: Depth 1→4, Depth 2→2, Depth 3→0
+
 --- RETURN FORMAT ---
 Return a compressed summary:
 {
+  "ant_name": "{child_name}",
   "status": "completed" | "failed" | "blocked",
   "summary": "1-2 sentences of what happened",
   "files_touched": ["path1", "path2"],
   "key_findings": ["finding1", "finding2"],
-  "blockers": [] // only if blocked
+  "spawns": [],
+  "blockers": []
 }
 ```
+
+**Step 5: Log completion**
+```bash
+# After Task tool returns
+bash ~/.aether/aether-utils.sh spawn-complete "{child_name}" "{status}" "{summary}"
+```
+
+---
 
 **Compressed Handoffs:**
 - Each level returns ONLY a summary, not full context
 - Parent synthesizes child results, doesn't pass through
 - This prevents context rot across spawn depths
+
+**Spawn Tree Visualization:**
+All spawns are logged to `.aether/data/spawn-tree.txt` and visible in `/ant:watch`.
 
 ### Visual Identity
 
@@ -387,12 +435,55 @@ Fix count: {N}/3
 4. Score using dimensions: Correctness, Completeness, Quality, Safety, Integration
 5. Document findings with severity (CRITICAL/HIGH/MEDIUM/LOW) and **evidence**
 
+### Execution Verification (MANDATORY)
+
+**Before assigning a quality score, you MUST attempt to execute the code:**
+
+1. **Syntax check:** Run the language's syntax checker
+   - Python: `python3 -m py_compile {file}`
+   - Swift: `swiftc -parse {file}`
+   - TypeScript: `npx tsc --noEmit`
+   - Go: `go vet ./...`
+   - Rust: `cargo check`
+
+2. **Import check:** Verify main entry point can be imported
+   - Python: `python3 -c "import {module}"`
+   - Node: `node -e "require('{entry}')"`
+   - Swift: `swift build` (for packages)
+
+3. **Launch test:** Attempt to start the application briefly
+   - Run main entry point with timeout
+   - If GUI, try headless mode if possible
+   - If launches successfully = pass
+   - If crashes = CRITICAL severity
+
+4. **Test suite:** If tests exist, run them
+   - Record pass/fail counts
+   - Note "no test suite" if none exist
+
+**CRITICAL:** If ANY execution check fails, quality_score CANNOT exceed 6/10.
+
+**Report format:**
+```
+Execution Verification:
+  ✅ Syntax: all files pass
+  ✅ Import: main module loads
+  ❌ Launch: crashed — [error message] (CRITICAL)
+  ⚠️ Tests: no test suite found
+```
+
 **Verification Report Format:**
 ```
 Verification Evidence
 =====================
 Build: {command} → exit {code}
 Tests: {command} → {pass}/{fail}
+
+Execution:
+  Syntax: {pass/fail}
+  Import: {pass/fail}
+  Launch: {pass/fail/skipped}
+  Tests: {pass/fail/none}
 
 Findings:
   {SEVERITY}: {issue} -- Evidence: {proof}

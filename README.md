@@ -1,4 +1,4 @@
-# 🐜 AETHER v1.0
+# 🐜 AETHER v2.0
 
 <div align="center">
   <img src="aether-logo.png" alt="Aether Logo" width="600">
@@ -226,15 +226,17 @@ After each wave of workers, the Queen auto-spawns an advisory reviewer (reusing 
 |---------|---------|
 | `/ant:init "<goal>"` | 🟢 Set colony intention and initialize |
 | `/ant:colonize` | 🔍 Analyze existing codebase (3 lenses: Structure/Patterns/Stack) |
-| `/ant:plan` | 🗺️ Generate project plan (colony self-organizes) |
+| `/ant:plan` | 🗺️ Generate project plan (goal-oriented tasks) |
 | `/ant:build <N>` | 🔨 Execute phase N (Queen spawns workers with live visibility) |
 | `/ant:continue` | ▶️ Approve phase, extract learnings, advance to next |
 | `/ant:continue --all` | ▶️ Auto-run all remaining phases with quality-gated halt |
 | `/ant:focus "<area>"` | 🎯 Guide colony attention to specific areas |
 | `/ant:redirect "<pat>"` | 🚫 Warn colony away from patterns |
 | `/ant:feedback "<msg>"` | 💬 Provide guidance to colony |
-| `/ant:status` | 📊 Colony status at a glance |
-| `/ant:watch` | 👁️ Live tmux monitoring of colony activity |
+| `/ant:flag "<issue>"` | 🚩 Create project flag (blocker/issue/note) |
+| `/ant:flags` | 📋 List and manage project flags |
+| `/ant:status` | 📊 Colony status at a glance (includes flag counts) |
+| `/ant:watch` | 👁️ Live tmux monitoring with colorized caste output |
 | `/ant:phase [N\|list]` | 📋 View phase details |
 | `/ant:organize` | 🧹 Codebase hygiene report (stale files, dead code) |
 | `/ant:pause-colony` | ⏸️ Save state for session break |
@@ -250,60 +252,77 @@ After each wave of workers, the Queen auto-spawns an advisory reviewer (reusing 
     ├── ant.md                 # Help overview
     ├── init.md                # Initialize colony + create state files
     ├── colonize.md            # Analyze codebase, persist findings
-    ├── plan.md                # Generate plan (environment-aware)
-    ├── build.md               # Execute phase (Queen-driven, live visibility)
-    ├── continue.md            # Advance phase (skip if auto-learned)
+    ├── plan.md                # Generate plan (goal-oriented tasks)
+    ├── build.md               # Execute phase (Queen spawns workers)
+    ├── continue.md            # Advance phase with verification gates
     ├── focus.md               # Emit FOCUS signal
     ├── redirect.md            # Emit REDIRECT signal
     ├── feedback.md            # Emit FEEDBACK signal
+    ├── flag.md                # Create project flag (blocker/issue/note)
+    ├── flags.md               # List and manage project flags
     ├── status.md              # Colony status dashboard
+    ├── watch.md               # Live tmux monitoring
     ├── phase.md               # Phase details
     ├── pause-colony.md        # Save session state
     ├── resume-colony.md       # Restore session state
     └── organize.md            # Codebase hygiene report
 
 ~/.aether/                     # Global runtime (installed once, shared across repos)
-├── workers.md                 # Consolidated worker specs (all castes in one file)
-├── aether-utils.sh            # Utility layer for logging, validation
+├── workers.md                 # Worker specs with spawn protocol
+├── aether-utils.sh            # Utility layer (25 subcommands)
 ├── utils/
 │   ├── atomic-write.sh        # Corruption-safe writes
-│   └── file-lock.sh           # File locking
+│   ├── file-lock.sh           # File locking
+│   ├── colorize-log.sh        # Caste-colored activity streaming
+│   └── watch-spawn-tree.sh    # Live spawn tree visualization
 ├── docs/
 │   └── pheromones.md          # Constraint system guide
 ├── QUEEN_ANT_ARCHITECTURE.md  # Architecture documentation
 └── learnings.json             # Cross-project knowledge (50-entry cap)
 
 <your-repo>/.aether/data/      # Per-project state (created by /ant:init)
-├── COLONY_STATE.json          # Consolidated state (v3.0) — goal, plan, memory, errors, events
+├── COLONY_STATE.json          # Consolidated state — goal, plan, memory, errors
 ├── constraints.json           # Focus areas and avoid patterns
-└── activity.log               # Worker activity log
+├── flags.json                 # Project flags (blockers, issues, notes)
+├── activity.log               # Worker activity log
+└── spawn-tree.txt             # Spawn hierarchy tracking
 ```
 
 ---
 
 ## 📈 Current Status
 
-**v1.0** — First Public Release (2026-02-07)
+**v2.0** — Nested Spawning & True Emergence (2026-02-08)
+
+**What's new in v2.0:**
+- 🐜 **Nested spawning** — Workers spawn sub-workers (depth 1→2→3 chains)
+- 🎨 **Colorized output** — Caste-specific colors (Builder=Yellow, Watcher=Cyan, Scout=Green)
+- 👁️ **Mandatory runtime verification** — Watchers MUST execute code, not just read it
+- 🎯 **Goal-oriented tasks** — Plans specify goals/constraints, not exact code
+- 🚩 **Per-project flagging** — Track blockers/issues across context resets
+- 📊 **Spawn depth tracking** — Visual spawn tree with depth levels
 
 **What's built:**
 - 📦 `npm install -g aether-colony` — global install, works in any repo
-- 🐜 16 commands as Claude Code skill prompts
-- 🐜 True emergence — workers spawn workers directly (no Queen mediation)
-- 🔧 Consolidated worker specs in single `workers.md` (91% reduction from v0.x)
-- 💾 Single `COLONY_STATE.json` replaces 6 distributed files
+- 🐜 18 commands as Claude Code skill prompts
+- 🐜 True emergence — workers spawn workers with depth-based limits
+- 🔧 Consolidated worker specs with spawn protocol in `workers.md`
+- 💾 Single `COLONY_STATE.json` + `flags.json` for persistent state
 - 🚧 Depth-based spawn limits (max depth 3, max 10 workers per phase)
-- 🧪 Simple JSON constraints replace complex pheromone decay math
-- 👁️ Live worker visibility via tmux (`/ant:watch`)
+- 🧪 Execution verification gates (syntax, import, launch, tests)
+- 👁️ Live worker visibility via tmux (`/ant:watch`) with colors
 - 🧠 Cross-project learning extraction
 - 🔖 Git checkpoints before phase execution
-- 📋 Iterative planning with confidence tracking (Scout + Route-Setter loop)
+- 📋 Goal-oriented planning with confidence tracking
 - 🧹 Codebase hygiene scanning (`/ant:organize`)
 
 **Architecture:**
 - Workers use Claude Code's Task tool to spawn sub-workers
-- Depth 1 (Prime Worker) → spawns up to 4 specialists
+- Depth 0 (Queen) → dispatches initial workers
+- Depth 1 (Builders/Watchers) → spawn up to 4 specialists
 - Depth 2 (Specialists) → spawn only when genuinely surprised (3x complexity)
 - Depth 3 (Deep Specialists) → complete work inline, no further spawning
+- Watchers verify independently and auto-create blocker flags on failure
 
 ---
 
@@ -327,7 +346,8 @@ Aether translates this to AI agents:
 
 | Version | Name | Date | Highlights |
 |---------|------|------|------------|
-| **v1.0** | First Public Release | 2026-02-07 | True emergence (workers spawn workers), simplified state, npm distribution |
+| **v2.0** | Nested Spawning & True Emergence | 2026-02-08 | Workers spawn workers (depth chains), colorized output, runtime verification, goal-oriented tasks, per-project flagging |
+| **v1.0** | First Public Release | 2026-02-07 | True emergence, simplified state, npm distribution |
 
 <details>
 <summary>Development History (pre-release)</summary>

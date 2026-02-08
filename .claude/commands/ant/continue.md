@@ -435,6 +435,68 @@ User indicated no runnable app for this phase.
 Proceeding to phase advancement.
 ```
 
+Continue to Step 1.10.
+
+### Step 1.10: Flags Gate (MANDATORY)
+
+**The Iron Law:** No phase advancement with unresolved blockers.
+
+Check for blocking flags:
+```bash
+bash ~/.aether/aether-utils.sh flag-check-blockers {current_phase}
+```
+
+Parse result for `blockers`, `issues`, and `notes` counts.
+
+**If blockers > 0:**
+
+```
+⛔ FLAGS GATE FAILED - BLOCKERS ACTIVE
+
+{blockers} blocking flag(s) must be resolved before phase advancement.
+
+Active Blockers:
+{list each blocker flag with ID, title, and description}
+
+Required Actions:
+  1. Fix the issues described in each blocker
+  2. Resolve flags: /ant:flags --resolve {flag_id} "resolution message"
+  3. Run /ant:continue again after resolving all blockers
+
+The phase will NOT advance with active blockers.
+```
+
+**CRITICAL:** Do NOT proceed to Step 2. Do NOT advance the phase.
+
+**If blockers == 0 but issues > 0:**
+
+```
+⚠️ FLAGS GATE: ISSUES NOTED
+
+No blockers, but {issues} issue(s) are active.
+These don't block advancement but should be addressed.
+
+Active Issues:
+{list each issue flag}
+
+Use /ant:flags to review and acknowledge or resolve.
+```
+
+Continue to Step 2.
+
+**If all clear (no blockers or issues):**
+
+```
+✅ FLAGS GATE PASSED
+
+No blocking flags. Proceeding to phase advancement.
+```
+
+Also trigger auto-resolve for any flags marked with `auto_resolve_on: "build_pass"`:
+```bash
+bash ~/.aether/aether-utils.sh flag-auto-resolve "build_pass"
+```
+
 Continue to Step 2.
 
 ### Step 2: Update State
