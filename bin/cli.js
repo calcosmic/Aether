@@ -6,10 +6,18 @@ const { execSync } = require('child_process');
 
 const VERSION = require('../package.json').version;
 const PACKAGE_DIR = path.resolve(__dirname, '..');
+
+// Claude Code paths (global)
 const COMMANDS_SRC = path.join(PACKAGE_DIR, 'commands', 'ant');
 const RUNTIME_SRC = path.join(PACKAGE_DIR, 'runtime');
 const COMMANDS_DEST = path.join(process.env.HOME, '.claude', 'commands', 'ant');
 const RUNTIME_DEST = path.join(process.env.HOME, '.aether');
+
+// OpenCode paths (global — ~/.config/opencode/)
+const OPENCODE_COMMANDS_SRC = path.join(PACKAGE_DIR, 'opencode', 'commands', 'ant');
+const OPENCODE_AGENTS_SRC = path.join(PACKAGE_DIR, 'opencode', 'agents');
+const OPENCODE_GLOBAL_COMMANDS_DEST = path.join(process.env.HOME, '.config', 'opencode', 'commands', 'ant');
+const OPENCODE_GLOBAL_AGENTS_DEST = path.join(process.env.HOME, '.config', 'opencode', 'agents');
 
 const command = process.argv[2] || 'help';
 const flags = process.argv.slice(3);
@@ -129,8 +137,32 @@ switch (command) {
       log('  Created: ~/.aether/learnings.json');
     }
 
+    // Install OpenCode commands globally to ~/.config/opencode/
+    {
+      let opencodeCommandsSrc = OPENCODE_COMMANDS_SRC;
+      let opencodeAgentsSrc = OPENCODE_AGENTS_SRC;
+
+      // Running from source repo
+      if (!fs.existsSync(opencodeCommandsSrc)) {
+        opencodeCommandsSrc = path.join(PACKAGE_DIR, '.opencode', 'commands', 'ant');
+        opencodeAgentsSrc = path.join(PACKAGE_DIR, '.opencode', 'agents');
+      }
+
+      if (fs.existsSync(opencodeCommandsSrc)) {
+        const cmdCount = copyDirSync(opencodeCommandsSrc, OPENCODE_GLOBAL_COMMANDS_DEST);
+        log(`  OpenCode Commands: ${cmdCount} files -> ${OPENCODE_GLOBAL_COMMANDS_DEST}`);
+      }
+
+      if (fs.existsSync(opencodeAgentsSrc)) {
+        const agentCount = copyDirSync(opencodeAgentsSrc, OPENCODE_GLOBAL_AGENTS_DEST);
+        log(`  OpenCode Agents: ${agentCount} files -> ${OPENCODE_GLOBAL_AGENTS_DEST}`);
+      }
+    }
+
     log('');
-    log('Install complete. Open Claude Code and run /ant to get started.');
+    log('Install complete.');
+    log('  Claude Code: run /ant to get started');
+    log('  OpenCode:    run /ant to get started');
     break;
   }
 
@@ -142,12 +174,12 @@ switch (command) {
   case 'uninstall': {
     log(`aether-colony v${VERSION} — uninstalling...`);
 
-    // Remove commands
+    // Remove Claude Code commands
     if (fs.existsSync(COMMANDS_DEST)) {
       const n = removeDirSync(COMMANDS_DEST);
       log(`  Removed: ${n} command files from ${COMMANDS_DEST}`);
     } else {
-      log('  Commands already removed.');
+      log('  Claude Code commands already removed.');
     }
 
     // Remove runtime (but preserve learnings.json)
@@ -171,6 +203,28 @@ switch (command) {
       log('  Runtime already removed.');
     }
 
+    // Remove OpenCode global commands
+    let opencodeRemoved = 0;
+    if (fs.existsSync(OPENCODE_GLOBAL_COMMANDS_DEST)) {
+      opencodeRemoved += removeDirSync(OPENCODE_GLOBAL_COMMANDS_DEST);
+    }
+    // Only remove Aether-owned agent files, not the entire agents directory
+    if (fs.existsSync(OPENCODE_GLOBAL_AGENTS_DEST)) {
+      const aetherAgents = ['aether-queen.md', 'aether-builder.md', 'aether-scout.md', 'aether-watcher.md'];
+      for (const agent of aetherAgents) {
+        const agentPath = path.join(OPENCODE_GLOBAL_AGENTS_DEST, agent);
+        if (fs.existsSync(agentPath)) {
+          fs.unlinkSync(agentPath);
+          opencodeRemoved++;
+        }
+      }
+    }
+    if (opencodeRemoved > 0) {
+      log(`  Removed: ${opencodeRemoved} OpenCode files from ~/.config/opencode/`);
+    } else {
+      log('  OpenCode commands already removed.');
+    }
+
     log('');
     log('Uninstall complete. Per-project .aether/data/ directories are untouched.');
     break;
@@ -184,12 +238,18 @@ aether-colony v${VERSION}
 Usage: aether <command>
 
 Commands:
-  install      Set up global commands and runtime (~/.claude/commands/ant/, ~/.aether/)
+  install      Set up commands and runtime for both Claude Code and OpenCode
   version      Show installed version
-  uninstall    Remove global commands and runtime (preserves learnings)
+  uninstall    Remove commands and runtime (preserves learnings and project state)
   help         Show this help message
 
-After install, open Claude Code in any repo and run /ant to get started.
+Install locations:
+  Claude Code: ~/.claude/commands/ant/ (global)
+  OpenCode:    ~/.config/opencode/commands/ant/ (global)
+  Runtime:     ~/.aether/ (global utilities)
+
+After install, run /ant in either tool to get started.
+Both tools share state in .aether/data/ for seamless switching.
 `.trim());
     break;
   }

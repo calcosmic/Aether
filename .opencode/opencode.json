@@ -1,0 +1,24 @@
+{
+  "$schema": "https://opencode.ai/schema/opencode.json",
+  "version": "1.0",
+  "name": "aether-colony",
+  "description": "Aether Colony configuration for OpenCode - multi-agent system with ant colony intelligence",
+
+  "commands": {
+    "directory": ".opencode/commands"
+  },
+
+  "state": {
+    "directory": ".aether/data",
+    "files": {
+      "colony": "COLONY_STATE.json",
+      "constraints": "constraints.json",
+      "flags": "flags.json"
+    }
+  },
+
+  "utilities": {
+    "script": "~/.aether/aether-utils.sh",
+    "directory": "~/.aether/utils"
+  }
+}

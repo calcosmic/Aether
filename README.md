@@ -52,7 +52,7 @@ When a Builder hits something complex, it spawns a Scout to research. When code 
 
 ### Prerequisites
 
-- [Claude Code](https://claude.ai/code) (Anthropic's CLI)
+- [Claude Code](https://claude.ai/code) (Anthropic's CLI) and/or [OpenCode](https://github.com/sst/opencode)
 - Node.js >= 16
 - `jq` — `brew install jq` on macOS
 
@@ -63,12 +63,14 @@ npm install -g aether-colony
 ```
 
 This installs:
-- 📁 **Commands** → `~/.claude/commands/ant/` (18 slash commands)
+- 📁 **Claude Code Commands** → `~/.claude/commands/ant/` (18 slash commands)
+- 📁 **OpenCode Commands** → `~/.config/opencode/commands/ant/` (18 slash commands)
+- 📁 **OpenCode Agents** → `~/.config/opencode/agents/` (4 specialized agents)
 - 📁 **Runtime** → `~/.aether/` (worker specs, utilities)
 
 ### Your First Colony
 
-Open Claude Code in any repo:
+Open Claude Code or OpenCode in any repo:
 
 ```bash
 /ant:init "Build a REST API with authentication"
@@ -160,21 +162,34 @@ Each caste has different sensitivity to signals. Builders prioritize FOCUS, Watc
 ## 📁 File Structure
 
 ```
-~/.claude/commands/ant/        # Global slash commands
+~/.claude/commands/ant/           # Claude Code global slash commands
     ├── init.md, plan.md, build.md, continue.md...
     └── (18 command files)
 
-~/.aether/                     # Global runtime
-    ├── workers.md             # Worker specs with spawn protocol
-    ├── aether-utils.sh        # Utility layer (25 subcommands)
-    └── utils/                 # Colorization, spawn tree viz
+~/.config/opencode/               # OpenCode global config
+    ├── commands/ant/             # OpenCode slash commands (18 files)
+    └── agents/                   # Specialized agents (queen, builder, scout, watcher)
 
-<your-repo>/.aether/data/      # Per-project state
-    ├── COLONY_STATE.json      # Goal, plan, memory, errors
-    ├── flags.json             # Blockers, issues, notes
-    ├── activity.log           # Worker activity stream
-    └── spawn-tree.txt         # Spawn hierarchy
+~/.aether/                        # Global runtime (shared)
+    ├── workers.md                # Worker specs with spawn protocol
+    ├── aether-utils.sh           # Utility layer (25 subcommands)
+    └── utils/                    # Colorization, spawn tree viz
+
+<your-repo>/.aether/data/         # Per-project state (SHARED between tools)
+    ├── COLONY_STATE.json         # Goal, plan, memory, errors
+    ├── flags.json                # Blockers, issues, notes
+    ├── activity.log              # Worker activity stream
+    └── spawn-tree.txt            # Spawn hierarchy
 ```
+
+### Cross-Tool Compatibility
+
+Both Claude Code and OpenCode share the same state files in `.aether/data/`. This means you can:
+
+- Start a project in Claude Code, continue in OpenCode
+- Switch tools when hitting rate limits
+- Use Claude for orchestration, GLM-4.7 for bulk coding
+- Mix and match based on task requirements
 
 ---
 
@@ -208,7 +223,8 @@ npm install -g aether-colony
 
 # Verify
 aether version
-ls ~/.claude/commands/ant/
+ls ~/.claude/commands/ant/           # Claude Code commands
+ls ~/.config/opencode/commands/ant/  # OpenCode commands
 
 # Update
 npm update -g aether-colony
@@ -216,6 +232,27 @@ npm update -g aether-colony
 # Uninstall (preserves project state)
 aether uninstall && npm uninstall -g aether-colony
 ```
+
+### OpenCode Setup
+
+OpenCode uses whatever model you have configured as your default. The included agents work with any provider.
+
+**Optional: Model-per-agent configuration**
+
+For advanced users who want different models for different castes, add to your `opencode.json`:
+
+```json
+{
+  "agents": {
+    "aether-queen": { "model": "anthropic/claude-sonnet" },
+    "aether-builder": { "model": "your-preferred/coding-model" },
+    "aether-scout": { "model": "your-preferred/research-model" },
+    "aether-watcher": { "model": "anthropic/claude-sonnet" }
+  }
+}
+```
+
+This is entirely optional - by default, all agents use your configured default model.
 
 ---
 

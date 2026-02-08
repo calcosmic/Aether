@@ -1,0 +1,63 @@
+# Template for Aether Command Definition
+# Copy this file and modify for new commands
+
+# Command metadata
+name: ant:example
+description: Short description of what this command does
+
+# Content that is shared between both platforms
+# Tool names should use Claude Code conventions (Read, Write, etc.)
+# The generator will translate to OpenCode conventions automatically
+content: |
+  You are the **Queen**. Perform the example action.
+
+  ## Instructions
+
+  ### Step 1: Read State
+
+  Use the Read tool to read `.aether/data/COLONY_STATE.json`.
+
+  If `goal: null` -> output "No colony initialized. Run /ant:init first." and stop.
+
+  ### Step 2: Perform Action
+
+  Do the main action here.
+
+  Use the Bash tool to run:
+  ```bash
+  bash ~/.aether/aether-utils.sh some-command
+  ```
+
+  ### Step 3: Update State
+
+  Write the updated state using the Write tool.
+
+  ### Step 4: Display Result
+
+  Output confirmation:
+  ```
+  Example command complete.
+
+  Next:
+    /ant:status    View colony status
+  ```
+
+# Platform-specific overrides (optional)
+# These sections replace or augment the shared content for specific platforms
+overrides:
+  claude_code:
+    # Any Claude Code specific additions
+    additional_notes: null
+
+  opencode:
+    # Any OpenCode specific additions
+    additional_notes: null
+
+# Dependencies (other commands this depends on)
+depends_on:
+  - ant:init
+
+# Tags for organization
+tags:
+  - utility
+  - state-management

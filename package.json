@@ -1,13 +1,16 @@
 {
   "name": "aether-colony",
-  "version": "2.0.2",
-  "description": "Multi-agent system using ant colony intelligence for Claude Code — workers self-organize via pheromone signals",
+  "version": "2.2.0",
+  "description": "Multi-agent system using ant colony intelligence for Claude Code and OpenCode — workers self-organize via pheromone signals",
   "bin": {
     "aether": "./bin/cli.js"
   },
   "files": [
     "bin/",
     ".claude/commands/ant/",
+    ".opencode/commands/ant/",
+    ".opencode/agents/",
+    ".opencode/opencode.json",
     "runtime/",
     "README.md",
     "LICENSE"
@@ -17,11 +20,13 @@
   },
   "keywords": [
     "claude-code",
+    "opencode",
     "multi-agent",
     "ant-colony",
     "ai-orchestration",
     "pheromone",
-    "autonomous-agents"
+    "autonomous-agents",
+    "multi-provider"
   ],
   "author": "Callum Cowie",
   "license": "MIT",
