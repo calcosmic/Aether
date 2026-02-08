@@ -27,7 +27,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/callumcowie/Aether.git"
+    "url": "git+https://github.com/calcosmic/Aether.git"
   },
   "engines": {
     "node": ">=16.0.0"
