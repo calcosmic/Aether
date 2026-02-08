@@ -1,45 +1,8 @@
 # TO-DOS
 
-## 📜🐜🏛️🐜📜 Add ant:council Command - 2026-02-08 22:34
+## ✅ 📜🐜🏛️🐜📜 ant:council - COMPLETE
 
-- **Create ant:council command** - Emergency injection for intent clarification that auto-injects pheromones. **Problem:** User needs way to clarify intent mid-workflow via multi-choice questions, with answers translated into colony constraints. **Files:** `.claude/commands/ant/council.md` (new), `.aether/data/COLONY_STATE.json`, `.aether/data/constraints.json`.
-
-### Requirements
-- **Invocable anytime** - works in any state including mid-build (EXECUTING)
-- **Best-effort during build** - if called during EXECUTING, inject pheromones immediately; current workers continue with old rules, future work uses new constraints
-- **Auto-inject pheromones** - translate answers to FOCUS/REDIRECT/FEEDBACK signals
-- **User-driven scope** - present category menu (project type, quality priorities, domain constraints, etc.) where user picks topics OR enters custom, then drill into multi-choice questions
-- **Resume capability** - return to prior workflow after council completes
-- **Source tracking** - tag injected signals with `source: "council:*"` for audit
-
-### Safety (Multi-Agent Reviewed)
-| Concern | Status |
-|---------|--------|
-| State corruption | Safe - use existing `file-lock.sh` + `atomic-write.sh` |
-| Pheromone conflicts | Safe - add deduplication + conflict detection |
-| Iron law verification | Preserved - council decisions can become flags |
-| Worker interruption | N/A - workers can't be paused, best-effort injection instead |
-
-### Integration Pattern
-```
-Any state (including EXECUTING)
-      │
-      ▼
-/ant:council
-      ├─ Category menu (AskUserQuestion)
-      ├─ Drill-down multi-choice questions
-      ├─ Auto-inject:
-      │    • FOCUS → constraints.json (max 5, dedup)
-      │    • REDIRECT → constraints.json (max 10, dedup)
-      │    • FEEDBACK → COLONY_STATE.json signals + instincts
-      └─ Return to prior workflow
-```
-
-### Key Utilities to Reuse
-- `.aether/utils/file-lock.sh` - acquire_lock/release_lock
-- `.aether/utils/atomic-write.sh` - atomic_write with JSON validation
-- `.aether/aether-utils.sh` - activity-log, flag-add functions
-- Existing command patterns in `focus.md`, `redirect.md`, `feedback.md`
+Implemented in commit `ae57031` (v2.3.0)
 
 ---
 
@@ -92,3 +55,32 @@ Any state (including EXECUTING)
 - **Auto-apply** - execute the best fix, don't just suggest
 - **Auto-learn** - inject pheromones from findings (failed patterns → REDIRECT, working patterns → FOCUS)
 - **Source tracking** - tag signals with `source: "swarm:*"` for audit
+
+### Verification Failure Integration
+When verification fails during build, offer swarm as an option:
+```
+🚫 Verification failed. Blocker created: "Tests failing in auth module"
+
+Options:
+1. Fix manually
+2. Retry (light attempt)
+3. 🔥🐜🗡️🐜🔥 Swarm (deep investigation - uses more tokens)
+4. Something else?
+```
+
+### Safety Review (Complete)
+| Aspect | Status |
+|--------|--------|
+| Spawn system | Safe - separate swarm cap of 6 |
+| Flag integration | Safe - read-only during investigation, respects iron law |
+| Git safety | Safe - checkpoint before fix, rollback on failure |
+| Learning conflicts | Safe - dedup + conflict detection + confidence ranking |
+
+### Implementation Checklist
+- [ ] Add utility functions to aether-utils.sh (autofix-checkpoint, autofix-rollback, spawn-can-spawn-swarm)
+- [ ] Create `.claude/commands/ant/swarm.md`
+- [ ] Create `.opencode/commands/ant/swarm.md`
+- [ ] Update README.md
+- [ ] Update QUEEN_ANT_ARCHITECTURE.md
+- [ ] Update package.json version
+- [ ] Test full workflow
