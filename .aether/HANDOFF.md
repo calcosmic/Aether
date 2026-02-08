@@ -210,7 +210,7 @@ Recommendation: **Option A** is simpler and preserves the user's agency. Option 
 
 The working tree currently has:
 - **build.md** — Step 5 rewritten with delegation protocol (Issue 1 partial, from this session)
-- **Other modified files** from before this session: `.aether/HANDOFF.md`, `.aether/data/errors.json`, `.aether/data/memory.json`, `.gitignore`, `.planning/config.json`, `.ralph/IMMEDIATE_TASK.md`
+- **Other modified files** from before this session: `.aether/HANDOFF.md`, `.aether/data/errors.json`, `.aether/data/memory.json`, `.gitignore`, `.planning/config.json`
 - **Untracked files**: `.aether/data/backups/`, `.claude/skills/`, planning/research docs
 
 The build.md change should be committed together with the remaining fixes (Issues 2-5) as a single coherent commit, or in a small series.

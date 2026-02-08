@@ -118,7 +118,7 @@ Result: True emergence where structure comes from the work
 
 ## Iterative Planning
 
-### Ralph-Style Research Loop
+### Iterative Research Loop
 
 ```
 /ant:plan triggers:

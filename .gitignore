@@ -88,22 +88,6 @@ logs/
 .aether/work/
 .aether/examples/
 .aether/stdlib/
-.ralph/.call_count
-.ralph/.circuit_breaker_history
-.ralph/.circuit_breaker_state
-.ralph/.exit_signals
-.ralph/.last_reset
-.ralph/.ralph_session
-.ralph/.ralph_session_history
-.ralph/logs/
-.ralph/progress.json
-.ralph/status.json
-.ralph/ralph_status.sh
-.ralph/watch_ralph.sh
-.ralph/watch_research.sh
-
-# Keep example configs but ignore runtime state
-.ralphrc
 
 # Session files
 *.session
