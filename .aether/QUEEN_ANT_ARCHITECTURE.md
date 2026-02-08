@@ -207,6 +207,36 @@ Queen convenes the council to clarify intent via multi-choice questions.
 - **Source tracking** — signals tagged with `source: "council:*"` for audit
 - **Deduplication** — checks for existing signals before adding
 
+### Swarm: Stubborn Bug Destroyer
+
+When repeated fix attempts fail, deploy the swarm with `/ant:swarm "<problem>"`:
+
+```
+🔥🐜🗡️🐜🔥 SWARM DEPLOYED
+
+Deploys 4 parallel scouts to investigate from multiple angles:
+  🏛️ Git Archaeologist — traces history to find when it broke
+  🔍 Pattern Hunter — finds working code in codebase
+  💥 Error Analyst — parses error chain to root cause
+  🌐 Web Researcher — searches docs/issues for solutions
+
+1. Create git checkpoint
+2. Deploy 4 scouts in parallel
+3. Cross-compare findings
+4. Rank solutions by confidence
+5. Apply best fix
+6. Verify and rollback if failed
+7. Inject learnings as pheromones
+```
+
+**Key features:**
+- **Parallel investigation** — 4 scouts work simultaneously
+- **Git checkpoint** — safe rollback if fix fails
+- **Evidence-based** — shows what each scout found
+- **Auto-apply** — executes best fix, not just suggestions
+- **Learning injection** — REDIRECT for failed patterns, FOCUS for what worked
+- **3-fix limit** — escalates to architectural concern after 3 failures
+
 ### What Changed
 
 | Before (Pheromones) | After (Constraints) |
@@ -344,6 +374,7 @@ Simplified from v2.0:
 | `/ant:focus "area"` | Add focus constraint |
 | `/ant:redirect "pattern"` | Add avoid constraint |
 | `/ant:council` | 📜🐜🏛️🐜📜 Multi-choice intent clarification |
+| `/ant:swarm "problem"` | 🔥🐜🗡️🐜🔥 Stubborn bug destroyer |
 | `/ant:status` | Quick colony status |
 | `/ant:watch` | Set up tmux for live viewing |
 
