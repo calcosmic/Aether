@@ -71,6 +71,7 @@ Use the write tool to write `.aether/data/COLONY_STATE.json` with the v3.0 struc
     "records": [],
     "flagged_patterns": []
   },
+  "signals": [],
   "events": [
     "<ISO-8601 timestamp>|colony_initialized|init|Colony initialized with goal: <the user's goal>"
   ]
