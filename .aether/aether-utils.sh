@@ -33,6 +33,20 @@ json_ok() { printf '{"ok":true,"result":%s}\n' "$1"; }
 # Error: JSON to stderr, exit 1
 json_err() { printf '{"ok":false,"error":"%s"}\n' "$1" >&2; exit 1; }
 
+# --- Caste emoji helper ---
+get_caste_emoji() {
+  case "$1" in
+    *Queen*|*QUEEN*|*queen*) echo "👑" ;;
+    *Builder*|*builder*|*Bolt*|*Hammer*|*Forge*|*Mason*|*Brick*|*Anvil*|*Weld*) echo "🔨" ;;
+    *Watcher*|*watcher*|*Vigil*|*Sentinel*|*Guard*|*Keen*|*Sharp*|*Hawk*|*Alert*) echo "👁️" ;;
+    *Scout*|*scout*|*Swift*|*Dash*|*Ranger*|*Track*|*Seek*|*Path*|*Roam*|*Quest*) echo "🔍" ;;
+    *Colonizer*|*colonizer*|*Pioneer*|*Map*|*Chart*|*Venture*|*Explore*|*Compass*|*Atlas*|*Trek*) echo "🗺️" ;;
+    *Architect*|*architect*|*Blueprint*|*Draft*|*Design*|*Plan*|*Schema*|*Frame*|*Sketch*|*Model*) echo "🏛️" ;;
+    *Route*|*route*) echo "📋" ;;
+    *) echo "🐜" ;;
+  esac
+}
+
 # --- Subcommand dispatch ---
 cmd="${1:-help}"
 shift 2>/dev/null || true
@@ -136,7 +150,8 @@ EOF
     log_file="$DATA_DIR/activity.log"
     mkdir -p "$DATA_DIR"
     ts=$(date -u +"%H:%M:%S")
-    echo "[$ts] $action $caste: $description" >> "$log_file"
+    emoji=$(get_caste_emoji "$caste")
+    echo "[$ts] $emoji $action $caste: $description" >> "$log_file"
     json_ok '"logged"'
     ;;
   activity-log-init)
@@ -157,7 +172,10 @@ EOF
     # Append phase header to combined log (NOT truncate)
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
     echo "" >> "$log_file"
-    echo "# Phase $phase_num: ${phase_name:-unnamed} -- $ts" >> "$log_file"
+    echo "🐜 ═══════════════════════════════════════════════════" >> "$log_file"
+    echo "   P H A S E   $phase_num: ${phase_name:-unnamed}" >> "$log_file"
+    echo "   $ts" >> "$log_file"
+    echo "═══════════════════════════════════════════════════ 🐜" >> "$log_file"
     archived_flag="false"
     [ -f "$archive_file" ] && archived_flag="true"
     json_ok "{\"archived\":$archived_flag}"
@@ -249,8 +267,10 @@ EOF
     mkdir -p "$DATA_DIR"
     ts=$(date -u +"%H:%M:%S")
     ts_full=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-    # Log to activity log with spawn format
-    echo "[$ts] SPAWN $parent_id -> $child_name ($child_caste): $task_summary" >> "$DATA_DIR/activity.log"
+    emoji=$(get_caste_emoji "$child_caste")
+    parent_emoji=$(get_caste_emoji "$parent_id")
+    # Log to activity log with spawn format and emojis
+    echo "[$ts] ⚡ SPAWN $parent_emoji $parent_id -> $emoji $child_name ($child_caste): $task_summary" >> "$DATA_DIR/activity.log"
     # Log to spawn tree file for visualization
     echo "$ts_full|$parent_id|$child_caste|$child_name|$task_summary|spawned" >> "$DATA_DIR/spawn-tree.txt"
     json_ok '"logged"'
@@ -264,7 +284,11 @@ EOF
     mkdir -p "$DATA_DIR"
     ts=$(date -u +"%H:%M:%S")
     ts_full=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-    echo "[$ts] COMPLETE $ant_name: $status${summary:+ - $summary}" >> "$DATA_DIR/activity.log"
+    emoji=$(get_caste_emoji "$ant_name")
+    status_icon="✅"
+    [[ "$status" == "failed" ]] && status_icon="❌"
+    [[ "$status" == "blocked" ]] && status_icon="🚫"
+    echo "[$ts] $status_icon $emoji $ant_name: $status${summary:+ - $summary}" >> "$DATA_DIR/activity.log"
     # Update spawn tree
     echo "$ts_full|$ant_name|$status|$summary" >> "$DATA_DIR/spawn-tree.txt"
     json_ok '"logged"'
