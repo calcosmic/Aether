@@ -35,6 +35,14 @@ If `signals` array is empty or all expired, treat as "no active pheromones."
 
 ### Step 3: Display Restored State
 
+Output header:
+
+```
+🚦➡️🐜💨💨 ═══════════════════════════════════════════════════
+   C O L O N Y   R E S U M E D
+═══════════════════════════════════════════════════ 🚦➡️🐜💨💨
+```
+
 Read the HANDOFF.md for context about what was happening, then display:
 
 ```

@@ -106,7 +106,15 @@ Format the JSON with 2-space indentation for readability.
 
 ## Step 6: Display Summary
 
-Output a migration summary:
+Output header:
+
+```
+🚚🐜📦🐜🚚 ═══════════════════════════════════════════════════
+   S T A T E   M I G R A T I O N   C O M P L E T E
+═══════════════════════════════════════════════════ 🚚🐜📦🐜🚚
+```
+
+Then output a migration summary:
 
 ```
 State Migration Complete (v1 -> v2.0)

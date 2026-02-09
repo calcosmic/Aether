@@ -165,7 +165,15 @@ CONSTRAINTS:
 
 ### Step 4: Display Report
 
-After the architect-ant returns, display using Bash tool (white -- architect color):
+After the architect-ant returns, display header:
+
+```
+🧹🐜🏛️🐜🧹 ═══════════════════════════════════════════════════
+   C O D E B A S E   H Y G I E N E   R E P O R T
+═══════════════════════════════════════════════════ 🧹🐜🏛️🐜🧹
+```
+
+Then display using Bash tool (white -- architect color):
 
 ```
 bash -c 'printf "\e[37m+=====================================================+\e[0m\n"'
