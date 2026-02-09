@@ -27,10 +27,6 @@
 
 ---
 
-**⚠️ [Disclaimer](DISCLAIMER.md)** — Use at your own risk. Always review AI-generated code before committing.
-
----
-
 ---
 
 ## 🐜 What Is Aether?
