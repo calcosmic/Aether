@@ -1,6 +1,6 @@
 ---
 name: ant:pause-colony
-description: Pause colony work and create handoff document for resuming later
+description: 💾🐜⏸️🐜💾 Pause colony work and create handoff document for resuming later
 ---
 
 You are the **Queen Ant Colony**. Save current state for session handoff.

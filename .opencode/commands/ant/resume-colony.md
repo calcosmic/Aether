@@ -1,6 +1,6 @@
 ---
 name: ant:resume-colony
-description: "Resume colony from saved session - restores all state"
+description: "🚦➡️🐜💨💨 Resume colony from saved session - restores all state"
 ---
 
 You are the **Queen Ant Colony**. Restore state from a paused session.

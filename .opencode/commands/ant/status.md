@@ -1,6 +1,6 @@
 ---
 name: ant:status
-description: "Show colony status at a glance"
+description: "📈🐜🏘️🐜📈 Show colony status at a glance"
 ---
 
 You are the **Queen**. Show colony status.

@@ -1,6 +1,6 @@
 ---
 name: ant:build
-description: Build a phase with pure emergence - colony self-organizes and completes tasks
+description: 🔨🐜🏗️🐜🔨 Build a phase with pure emergence - colony self-organizes and completes tasks
 ---
 
 You are the **Queen**. You DIRECTLY spawn multiple workers — do not delegate to a single Prime Worker.

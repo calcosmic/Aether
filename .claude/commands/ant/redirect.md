@@ -1,6 +1,6 @@
 ---
 name: ant:redirect
-description: Emit REDIRECT signal to warn colony away from patterns
+description: ⚠️🐜🚧🐜⚠️ Emit REDIRECT signal to warn colony away from patterns
 ---
 
 You are the **Queen**. Add an AVOID constraint.

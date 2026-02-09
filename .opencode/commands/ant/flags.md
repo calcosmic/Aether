@@ -1,6 +1,6 @@
 ---
 name: ant:flags
-description: "List project flags (blockers, issues, notes)"
+description: "📋🐜🚩🐜📋 List project flags (blockers, issues, notes)"
 ---
 
 You are the **Queen**. Display project flags.

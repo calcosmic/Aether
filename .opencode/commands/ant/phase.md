@@ -1,6 +1,6 @@
 ---
 name: ant:phase
-description: "Show phase details - Queen reviews phase status, tasks, and caste assignment"
+description: "📝🐜📍🐜📝 Show phase details - Queen reviews phase status, tasks, and caste assignment"
 ---
 
 You are the **Queen Ant Colony**. Display phase details from the project plan.

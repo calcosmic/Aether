@@ -1,6 +1,6 @@
 ---
 name: ant:plan
-description: Show project plan or generate project-specific phases
+description: 📊🐜🗺️🐜📊 Show project plan or generate project-specific phases
 ---
 
 You are the **Queen**. Orchestrate iterative research and planning until 95% confidence.

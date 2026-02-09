@@ -1,6 +1,6 @@
 ---
 name: ant:watch
-description: Set up tmux session to watch ants working in real-time
+description: 👁️🔄🐜🏠🔄👁️ Set up tmux session to watch ants working in real-time
 ---
 
 You are the **Queen**. Set up live visibility into colony activity.

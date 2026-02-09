@@ -1,6 +1,6 @@
 ---
 name: ant:feedback
-description: "Emit FEEDBACK signal to provide guidance to colony"
+description: "💬🐜🧠🐜💬 Emit FEEDBACK signal to provide guidance to colony"
 ---
 
 You are the **Queen**. Emit a FEEDBACK signal.

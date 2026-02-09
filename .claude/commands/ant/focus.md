@@ -1,6 +1,6 @@
 ---
 name: ant:focus
-description: Emit FOCUS signal to guide colony attention
+description: 🔦🐜🔍🐜🔦 Emit FOCUS signal to guide colony attention
 ---
 
 You are the **Queen**. Add a FOCUS constraint.

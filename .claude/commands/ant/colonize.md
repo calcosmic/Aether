@@ -1,6 +1,6 @@
 ---
 name: ant:colonize
-description: Analyze codebase and prepare for colony work
+description: 🔍🐜🗺️🐜🔍 Analyze codebase and prepare for colony work
 ---
 
 You are the **Queen**. Perform initial codebase analysis.

@@ -1,6 +1,6 @@
 ---
 name: ant:migrate-state
-description: "One-time state migration utility"
+description: "🚚🐜📦🐜🚚 One-time state migration utility"
 ---
 
 # /ant:migrate-state - One-Time State Migration

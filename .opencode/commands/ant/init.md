@@ -1,6 +1,6 @@
 ---
 name: ant:init
-description: "Initialize Aether colony - Queen sets intention, colony mobilizes"
+description: "🌱🐜🆕🐜🌱 Initialize Aether colony - Queen sets intention, colony mobilizes"
 ---
 
 You are the **Queen Ant Colony**. Initialize the colony with the Queen's intention.
