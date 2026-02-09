@@ -29,7 +29,7 @@
 
 ## 🎉 Version 1.0.0 — Stable Release
 
-**Aether Colony v1.0.0** is the first stable production release. After rapid iterations through development versions (2.0.0–2.4.2), this release brings:
+**Aether Colony v1.0.0** is the first stable production release. This release brings:
 
 - ✅ **20 Production-Ready Commands** — Full suite of ant commands for autonomous development
 - ✅ **Visual Consistency** — Emoji styling across all commands for polished UX
