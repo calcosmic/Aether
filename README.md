@@ -85,26 +85,160 @@ That's it. The colony takes over from there.
 
 ## 🎯 Commands
 
+### Core Workflow
+
 | Command | Purpose |
 |---------|---------|
 | `/ant:init "goal"` | 🟢 Set colony mission |
 | `/ant:plan` | 🗺️ Generate phased roadmap |
 | `/ant:build N` | 🔨 Execute phase N |
 | `/ant:continue` | ▶️ Review & advance to next phase |
+
+**`/ant:init "goal"`** — Initialize the colony with your project goal. This creates the colony state, sets up constraints, and prepares the system. Run this first in any new project.
+```bash
+/ant:init "Build a REST API with JWT authentication"
+```
+
+**`/ant:plan`** — Generate a phased project plan. The colony iterates (up to 50 times) with Scout research and Route-Setter planning until confidence reaches 95%. Includes anti-stuck detection that pauses for user input if progress stalls.
+
+**`/ant:build N`** — Execute phase N of your plan. Spawns a Prime Worker who coordinates Builders, Watchers, and Scouts. Workers can spawn sub-workers up to depth 3. Each phase ends with Watcher verification.
+```bash
+/ant:build 1    # Build phase 1
+/ant:build 3    # Build phase 3
+```
+
+**`/ant:continue`** — After a build completes, this reviews the work through 6 verification gates (build, types, lint, tests, security, diff), then advances to the next phase. Use `--all` to auto-continue through all phases with quality gates.
+
+---
+
+### Pheromone Signals
+
+| Command | Purpose |
+|---------|---------|
 | `/ant:focus "area"` | 🎯 Guide colony attention |
 | `/ant:redirect "pattern"` | 🚫 Warn away from approaches |
 | `/ant:feedback "msg"` | 💬 Teach preferences |
-| `/ant:council` | 📜🐜🏛️🐜📜 Clarify intent via multi-choice questions |
-| `/ant:swarm "problem"` | 🔥🐜🗡️🐜🔥 Stubborn bug destroyer with parallel scouts |
-| `/ant:flag "issue"` | 🚩 Track blockers |
+
+**`/ant:focus "area"`** — Tell the colony to pay special attention to something. Max 5 focus areas at a time. Workers prioritize these during their work.
+```bash
+/ant:focus "error handling in the auth module"
+/ant:focus "performance optimization"
+```
+
+**`/ant:redirect "pattern"`** — Warn the colony away from specific approaches or patterns. Max 10 redirects. These act as hard constraints workers must respect.
+```bash
+/ant:redirect "don't use jsonwebtoken, use jose instead"
+/ant:redirect "avoid synchronous file operations"
+```
+
+**`/ant:feedback "msg"`** — Teach the colony your preferences. Creates an instinct (learned behavior) that persists across phases. Good for style preferences or project-specific patterns.
+```bash
+/ant:feedback "prefer composition over inheritance"
+/ant:feedback "always add JSDoc comments to public functions"
+```
+
+---
+
+### Power Commands
+
+| Command | Purpose |
+|---------|---------|
+| `/ant:council` | 📜🐜🏛️🐜📜 Clarify intent via multi-choice |
+| `/ant:swarm "problem"` | 🔥🐜🗡️🐜🔥 Stubborn bug destroyer |
+
+**`/ant:council`** 📜🐜🏛️🐜📜 — Convene the council when you need to clarify your intent through guided multi-choice questions. Works anytime, even mid-build. The council asks about project direction, quality priorities, or constraints, then auto-injects the appropriate FOCUS/REDIRECT/FEEDBACK signals based on your answers.
+```bash
+/ant:council    # Opens interactive clarification session
+```
+Use this when:
+- Starting a complex project and want to set clear direction
+- The colony seems confused about your preferences
+- You want to inject multiple constraints at once
+
+**`/ant:swarm "problem"`** 🔥🐜🗡️🐜🔥 — The nuclear option for stubborn bugs. Deploys 4 parallel scouts to investigate from different angles, then applies the best fix automatically. Use when you've tried fixing something multiple times and it keeps failing.
+```bash
+/ant:swarm "Tests keep failing in auth module with undefined error"
+/ant:swarm "API returns 500 but logs show no errors"
+```
+The 4 scouts:
+- 🏛️ **Git Archaeologist** — Traces git history to find when it broke
+- 🔍 **Pattern Hunter** — Finds similar working code in the codebase
+- 💥 **Error Analyst** — Parses error chains to identify root cause
+- 🌐 **Web Researcher** — Searches docs/issues for known solutions
+
+After investigation, swarm cross-compares findings, ranks solutions by confidence, creates a git checkpoint, applies the fix, and verifies it works. If it fails, it rolls back automatically.
+
+---
+
+### Issue Tracking
+
+| Command | Purpose |
+|---------|---------|
+| `/ant:flag "issue"` | 🚩 Create a flag |
 | `/ant:flags` | 📋 List all flags |
+
+**`/ant:flag "issue"`** — Create a flag to track blockers, issues, or notes. Flags persist across context resets and can block phase advancement.
+```bash
+/ant:flag "Database migration needs manual review" --type blocker
+/ant:flag "Consider adding rate limiting" --type issue
+/ant:flag "Good pattern for error handling" --type note
+```
+Types:
+- `blocker` — Blocks phase advancement until resolved
+- `issue` — Warning that should be addressed
+- `note` — Informational, no action required
+
+**`/ant:flags`** — List all flags, resolve them, or acknowledge issues.
+```bash
+/ant:flags                    # List all active flags
+/ant:flags --all              # Include resolved flags
+/ant:flags --resolve 3 "Fixed in commit abc123"
+```
+
+---
+
+### Visibility & Status
+
+| Command | Purpose |
+|---------|---------|
 | `/ant:status` | 📊 Colony overview |
-| `/ant:watch` | 👁️ Live tmux monitoring |
 | `/ant:phase N` | 📋 View phase details |
+| `/ant:watch` | 👁️ Live tmux monitoring |
+
+**`/ant:status`** — Quick overview of colony state: current phase, confidence, active constraints, recent activity, and any flags.
+
+**`/ant:phase N`** — View details of a specific phase including tasks, status, and which worker castes are assigned.
+```bash
+/ant:phase 2    # View phase 2 details
+```
+
+**`/ant:watch`** — Set up a tmux session with 4 panes showing real-time colony activity: status, progress bar, spawn tree visualization, and activity log stream. Requires tmux.
+
+---
+
+### Codebase Analysis
+
+| Command | Purpose |
+|---------|---------|
 | `/ant:colonize` | 🔍 Analyze existing codebase |
 | `/ant:organize` | 🧹 Codebase hygiene report |
+
+**`/ant:colonize`** — Analyze an existing codebase before planning. Scans key files (package.json, README, entry points, configs) and creates a codebase map. Run this before `/ant:plan` when working with existing projects.
+
+**`/ant:organize`** — Run a hygiene report on the codebase. An Architect ant scans for stale files, dead code, orphaned configs, and other cleanup opportunities. Report-only — doesn't modify files.
+
+---
+
+### Session Management
+
+| Command | Purpose |
+|---------|---------|
 | `/ant:pause-colony` | ⏸️ Save state for break |
 | `/ant:resume-colony` | ▶️ Restore from pause |
+
+**`/ant:pause-colony`** — Save full colony state to a handoff document when you need to take a break or switch contexts. Creates `.aether/HANDOFF.md` with everything needed to resume.
+
+**`/ant:resume-colony`** — Restore colony state from a previous pause. Reads the handoff document and gets you back to where you left off.
 
 ---
 
@@ -185,12 +319,12 @@ Confidence is measured across 5 dimensions: codebase knowledge, requirement clar
     └── (20 command files)
 
 ~/.config/opencode/               # OpenCode global config
-    ├── commands/ant/             # OpenCode slash commands (19 files)
+    ├── commands/ant/             # OpenCode slash commands (20 files)
     └── agents/                   # Specialized agents (queen, builder, scout, watcher)
 
 ~/.aether/                        # Global runtime (shared)
     ├── workers.md                # Worker specs with spawn protocol
-    ├── aether-utils.sh           # Utility layer (25 subcommands)
+    ├── aether-utils.sh           # Utility layer (34 subcommands)
     └── utils/                    # Colorization, spawn tree viz
 
 <your-repo>/.aether/data/         # Per-project state (SHARED between tools)
