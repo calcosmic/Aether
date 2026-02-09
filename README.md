@@ -27,6 +27,12 @@
 
 ---
 
+**⚠️ [Disclaimer](DISCLAIMER.md)** — Use at your own risk. Always review AI-generated code before committing.
+
+---
+
+---
+
 ## 🐜 What Is Aether?
 
 Aether brings **ant colony intelligence** to Claude Code. Instead of one agent doing everything sequentially, you get a colony of specialists that self-organize around your goal.

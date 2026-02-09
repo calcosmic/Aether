@@ -13,7 +13,9 @@
     ".opencode/opencode.json",
     "runtime/",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "DISCLAIMER.md",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "postinstall": "node bin/cli.js install --quiet"
