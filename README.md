@@ -27,23 +27,6 @@
 
 ---
 
-## 🎉 Version 1.0.0 — Stable Release
-
-**Aether Colony v1.0.0** is the first stable production release. This release brings:
-
-- ✅ **20 Production-Ready Commands** — Full suite of ant commands for autonomous development
-- ✅ **Visual Consistency** — Emoji styling across all commands for polished UX
-- ✅ **Comprehensive Testing** — Verified security, no personal data, clean publication
-- ✅ **Cross-Tool Compatibility** — Works seamlessly with Claude Code and OpenCode
-- ✅ **Production Documentation** — Complete guides, examples, and architecture docs
-
-**What's New in v1.0.0:**
-- Command output headers now match description styling (full emoji sandwich)
-- Fixed `.npmignore` configuration for clean npm publication
-- Enhanced visual consistency across the entire command interface
-
----
-
 ## 🐜 What Is Aether?
 
 Aether brings **ant colony intelligence** to Claude Code. Instead of one agent doing everything sequentially, you get a colony of specialists that self-organize around your goal.
