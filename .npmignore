@@ -1,10 +1,14 @@
 # Planning and development
 .planning/
-.claude/
 .aether/
 .ralph/
 .cache/
 .git/
+
+# Claude Code - exclude only what shouldn't be published
+.claude/settings.local.json
+.claude/.DS_Store
+*.local
 
 # Per-project state (never ship)
 *.log
