@@ -17,11 +17,30 @@
 
   [![npm version](https://img.shields.io/npm/v/aether-colony.svg)](https://www.npmjs.com/package/aether-colony)
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+  **v1.0.0** — First stable production release 🎉
 </div>
 
 ---
 
 > *"The whole is greater than the sum of its parts."* — Aristotle
+
+---
+
+## 🎉 Version 1.0.0 — Stable Release
+
+**Aether Colony v1.0.0** is the first stable production release. After rapid iterations through development versions (2.0.0–2.4.2), this release brings:
+
+- ✅ **20 Production-Ready Commands** — Full suite of ant commands for autonomous development
+- ✅ **Visual Consistency** — Emoji styling across all commands for polished UX
+- ✅ **Comprehensive Testing** — Verified security, no personal data, clean publication
+- ✅ **Cross-Tool Compatibility** — Works seamlessly with Claude Code and OpenCode
+- ✅ **Production Documentation** — Complete guides, examples, and architecture docs
+
+**What's New in v1.0.0:**
+- Command output headers now match description styling (full emoji sandwich)
+- Fixed `.npmignore` configuration for clean npm publication
+- Enhanced visual consistency across the entire command interface
 
 ---
 
