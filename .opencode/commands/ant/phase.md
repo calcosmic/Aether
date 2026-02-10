@@ -11,7 +11,7 @@ The argument is: `$ARGUMENTS`
 
 ### Step 1: Read State
 
-Use the read tool to read `.aether/data/COLONY_STATE.json`.
+Use the Read tool to read `.aether/data/COLONY_STATE.json`.
 
 If `goal` is null, output `No colony initialized. Run /ant:init first.` and stop.
 
@@ -38,26 +38,26 @@ Output this header:
 Then display:
 
 ```
-Phase <id>: <name>
-Status: <status>
+📍 Phase <id>: <name>
+📊 Status: <status>
 
    <description>
 
-Tasks:
+🐜 Tasks:
    {status_icon} <task_id>: <description>
-      -> depends on: <deps or "none">
+      ↳ depends on: <deps or "none">
 
-Success Criteria:
-   * <criterion>
+✅ Success Criteria:
+   • <criterion>
 
 ─────────────────────────────────────────────────────
-Next Steps:
-   /ant:build <id>       Build this phase
-   /ant:phase <next_id>  View next phase
-   /ant:status           Colony status
+🐜 Next Steps:
+   /ant:build <id>       🔨 Build this phase
+   /ant:phase <next_id>  📋 View next phase
+   /ant:status           📊 Colony status
 ```
 
-Status icons: `[ ]` pending, `[~]` in_progress, `[x]` completed
+Status icons: `[ ]` pending, `[~]` in_progress, `[✓]` completed
 
 ### Step 3b: List View
 
@@ -72,7 +72,7 @@ Output this header:
 Then display all phases as a summary:
 
 ```
-Goal: "<goal>"
+👑 Goal: "<goal>"
 
    {icon} Phase <id>: <name>
          <completed>/<total> tasks | <status>
@@ -80,7 +80,7 @@ Goal: "<goal>"
 (repeat for each phase)
 
 ─────────────────────────────────────────────────────
-Legend: [x] completed  [~] in progress  [ ] pending
+Legend: [✓] completed  [~] in progress  [ ] pending
 
-/ant:phase <id> for details
+🐜 /ant:phase <id> for details
 ```

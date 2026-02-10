@@ -19,11 +19,11 @@ Parse `$ARGUMENTS` for:
 - `--ack` or `-k`: Acknowledge a specific flag ID
 
 Examples:
-- `/ant:flags` -> Show active flags
-- `/ant:flags --all` -> Include resolved flags
-- `/ant:flags -t blocker` -> Show only blockers
-- `/ant:flags --resolve flag_123 "Fixed by commit abc"` -> Resolve a flag
-- `/ant:flags --ack flag_456` -> Acknowledge an issue
+- `/ant:flags` → Show active flags
+- `/ant:flags --all` → Include resolved flags
+- `/ant:flags -t blocker` → Show only blockers
+- `/ant:flags --resolve flag_123 "Fixed by commit abc"` → Resolve a flag
+- `/ant:flags --ack flag_456` → Acknowledge an issue
 
 ### Step 2: Handle Resolution/Acknowledgment
 
@@ -33,7 +33,7 @@ bash ~/.aether/aether-utils.sh flag-resolve "{flag_id}" "{resolution_message}"
 ```
 Output:
 ```
-Flag resolved: {flag_id}
+✅ Flag resolved: {flag_id}
 
    Resolution: {message}
 ```
@@ -45,7 +45,7 @@ bash ~/.aether/aether-utils.sh flag-acknowledge "{flag_id}"
 ```
 Output:
 ```
-Flag acknowledged: {flag_id}
+👁️ Flag acknowledged: {flag_id}
 
    Flag noted. Continuing with work.
 ```
@@ -78,7 +78,7 @@ If no flags:
        `-`
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-No active flags! Colony is clear.
+✨ No active flags! Colony is clear.
 
 {if --all was used: "No resolved flags either."}
 ```
@@ -93,24 +93,24 @@ If flags exist:
 
 {for each flag, grouped by type:}
 
-BLOCKERS ({count})
+🚫 BLOCKERS ({count})
    {flag_id}: {title}
    Phase: {phase or "all"} | Created: {date}
-   -> {description preview}
+   └─ {description preview}
 
-ISSUES ({count})
+⚠️  ISSUES ({count})
    {flag_id}: {title} {if acknowledged: "[ACK]"}
    Phase: {phase or "all"} | Created: {date}
-   -> {description preview}
+   └─ {description preview}
 
-NOTES ({count})
+📝 NOTES ({count})
    {flag_id}: {title}
    Phase: {phase or "all"} | Created: {date}
-   -> {description preview}
+   └─ {description preview}
 
 {if --all and resolved flags exist:}
 
-RESOLVED ({count})
+✅ RESOLVED ({count})
    {flag_id}: {title}
    Resolved: {date} | {resolution}
 
@@ -119,7 +119,7 @@ RESOLVED ({count})
 Summary: {blockers} blockers | {issues} issues | {notes} notes
 
 {if blockers > 0:}
-WARNING: Blockers must be resolved before /ant:continue
+⚠️  Blockers must be resolved before /ant:continue
 
 Commands:
   /ant:flags --resolve {id} "message"   Resolve a flag

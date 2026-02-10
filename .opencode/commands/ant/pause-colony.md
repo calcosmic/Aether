@@ -9,16 +9,16 @@ You are the **Queen Ant Colony**. Save current state for session handoff.
 
 ### Step 1: Read State
 
-Use the read tool to read `.aether/data/COLONY_STATE.json`.
+Use the Read tool to read `.aether/data/COLONY_STATE.json`.
 
 If `goal` is null, output `No colony initialized. Nothing to pause.` and stop.
 
 ### Step 2: Compute Active Signals
 
-Read active signals from COLONY_STATE.json `signals` array.
+Read active signals from COLONY_STATE.json `signals` array (already loaded in Step 1).
 
 Filter signals where:
-- `expires_at` is null (permanent signals), OR
+- `expires_at` is null (permanent signals like INIT), OR
 - `expires_at` > current timestamp (not expired)
 
 If `signals` array is empty or all expired, treat as "no active pheromones."
@@ -29,13 +29,13 @@ Gather context for the handoff from `COLONY_STATE.json`:
 - `goal` from top level
 - `state` and `current_phase` from top level
 - `workers` object
-- Active signals from `signals` array
-- Phase progress from `plan.phases`
+- Active signals from `signals` array (with current decayed strengths from Step 2)
+- Phase progress from `plan.phases` (how many complete, current phase tasks)
 - What was in progress or pending
 
 ### Step 4: Write Handoff
 
-Use the write tool to update `.aether/HANDOFF.md`:
+Use the Write tool to update `.aether/HANDOFF.md` with a session handoff section at the top. The format:
 
 ```markdown
 # Colony Session Paused
@@ -46,7 +46,7 @@ Run `/ant:resume-colony` in a new session.
 ## State at Pause
 - Goal: "<goal>"
 - State: <state>
-- Current Phase: <phase_number> - <phase_name>
+- Current Phase: <phase_number> — <phase_name>
 - Session: <session_id>
 - Paused: <ISO-8601 timestamp>
 
@@ -81,11 +81,11 @@ Output header:
 
 Then output:
 +=====================================================+
-|  AETHER COLONY :: PAUSED                            |
+|  AETHER COLONY :: PAUSED                             |
 +=====================================================+
 
   Goal: "<goal>"
-  Phase: <current_phase> - <phase_name>
+  Phase: <current_phase> — <phase_name>
   Pheromones: <active_count> active
 
   Handoff saved to .aether/HANDOFF.md

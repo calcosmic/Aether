@@ -9,7 +9,7 @@ You are the **Queen**. Set up live visibility into colony activity.
 
 ### Step 1: Check Prerequisites
 
-Use bash to check if tmux is available:
+Use Bash to check if tmux is available:
 ```bash
 command -v tmux >/dev/null 2>&1 && echo "tmux_available" || echo "tmux_missing"
 ```
@@ -72,24 +72,42 @@ Stop here.
 
 ### Step 5: Create tmux Layout (4-Pane)
 
-Use bash to create the session with 4 panes in a 2x2 grid:
+Use Bash to create the session with 4 panes in a 2x2 grid:
 
 ```bash
 # Create session with first pane
 tmux new-session -d -s aether-colony -n colony
 
 # Split into 4 panes (2x2 grid)
+# First split horizontally (left|right)
 tmux split-window -h -t aether-colony:colony
+
+# Split left side vertically (top-left, bottom-left)
 tmux split-window -v -t aether-colony:colony.0
+
+# Split right side vertically (top-right, bottom-right)
 tmux split-window -v -t aether-colony:colony.2
 
-# Set pane contents
+# Set pane contents:
+# Pane 0 (top-left): Status display
 tmux send-keys -t aether-colony:colony.0 'watch -n 1 cat .aether/data/watch-status.txt' C-m
+
+# Pane 1 (bottom-left): Progress bar
 tmux send-keys -t aether-colony:colony.1 'watch -n 1 cat .aether/data/watch-progress.txt' C-m
+
+# Pane 2 (top-right): Spawn tree visualization
 tmux send-keys -t aether-colony:colony.2 'bash ~/.aether/utils/watch-spawn-tree.sh .aether/data' C-m
+
+# Pane 3 (bottom-right): Colorized activity log stream
 tmux send-keys -t aether-colony:colony.3 'bash ~/.aether/utils/colorize-log.sh .aether/data/activity.log' C-m
 
-# Balance panes
+# Set pane titles (if supported)
+tmux select-pane -t aether-colony:colony.0 -T "Status"
+tmux select-pane -t aether-colony:colony.1 -T "Progress"
+tmux select-pane -t aether-colony:colony.2 -T "Spawn Tree"
+tmux select-pane -t aether-colony:colony.3 -T "Activity Log"
+
+# Balance panes for even 2x2 grid
 tmux select-layout -t aether-colony:colony tiled
 
 echo "Session created"
@@ -108,9 +126,9 @@ Write initial progress to `.aether/data/watch-progress.txt`:
 
 Phase: -/-
 
-[                              ] 0%
+[░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 0%
 
-Waiting for build...
+⏳ Waiting for build...
 
 Target: 95% confidence
 ```
@@ -149,6 +167,45 @@ Commands:
 
 The session will update in real-time as colony works.
 Attaching now...
+```
+
+---
+
+## Status Update Protocol
+
+Workers and commands update watch files as they work:
+
+### Activity Log
+Workers write via: `bash ~/.aether/aether-utils.sh activity-log "ACTION" "caste" "description"`
+
+For named ants (recommended):
+```bash
+# Generate a name first
+ant_name=$(bash ~/.aether/aether-utils.sh generate-ant-name "builder" | jq -r '.result')
+# Log with ant name
+bash ~/.aether/aether-utils.sh activity-log "CREATED" "$ant_name (Builder)" "Implemented auth module"
+```
+
+### Spawn Tracking
+Log spawns for tree visualization:
+```bash
+bash ~/.aether/aether-utils.sh spawn-log "Prime" "builder" "Hammer-42" "implementing auth"
+bash ~/.aether/aether-utils.sh spawn-complete "Hammer-42" "completed" "auth module done"
+```
+
+### Status File
+Commands update `.aether/data/watch-status.txt` with current state:
+- State: PLANNING, EXECUTING, READY
+- Phase: current/total
+- Active Workers: list of named ants
+- Last Activity: most recent log entry
+
+### Progress File
+Update via: `bash ~/.aether/aether-utils.sh update-progress <percent> "<message>" <phase> <total>`
+
+Example:
+```bash
+bash ~/.aether/aether-utils.sh update-progress 45 "Building auth module..." 2 5
 ```
 
 ---

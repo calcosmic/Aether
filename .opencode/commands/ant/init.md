@@ -31,7 +31,7 @@ Stop here. Do not proceed.
 
 ### Step 2: Read Current State
 
-Use the read tool to read `.aether/data/COLONY_STATE.json`.
+Use the Read tool to read `.aether/data/COLONY_STATE.json`.
 
 If the `goal` field is not null, output:
 
@@ -46,7 +46,7 @@ Proceeding with new goal: "{new_goal}"
 
 Generate a session ID in the format `session_{unix_timestamp}_{random}` and an ISO-8601 UTC timestamp.
 
-Use the write tool to write `.aether/data/COLONY_STATE.json` with the v3.0 structure:
+Use the Write tool to write `.aether/data/COLONY_STATE.json` with the v3.0 structure:
 
 ```json
 {
@@ -92,7 +92,7 @@ Write `.aether/data/constraints.json`:
 
 ### Step 5: Validate State File
 
-Use the bash tool to run:
+Use the Bash tool to run:
 ```
 bash ~/.aether/aether-utils.sh validate-state colony
 ```
@@ -112,19 +112,19 @@ Output this header:
 Then output the result:
 
 ```
-Queen has set the colony's intention
+👑 Queen has set the colony's intention
 
    "{goal}"
 
-Colony Status: READY
-Session: <session_id>
+🏠 Colony Status: READY
+📋 Session: <session_id>
 
-The colony awaits your command:
+🐜 The colony awaits your command:
 
-   /ant:plan      Generate project plan
-   /ant:colonize  Analyze existing codebase first
-   /ant:watch     Set up live visibility
-   /ant:status    View colony status
+   /ant:plan      📋 Generate project plan
+   /ant:colonize  🗺️  Analyze existing codebase first
+   /ant:watch     👁️  Set up live visibility
+   /ant:status    📊 View colony status
 
-State persisted - safe to /clear if needed
+💾 State persisted — safe to /clear if needed
 ```

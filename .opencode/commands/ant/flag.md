@@ -17,9 +17,9 @@ Parse `$ARGUMENTS` for:
 - Remaining text: the flag title/description
 
 Examples:
-- `/ant:flag "Build fails on auth module"` -> issue type
-- `/ant:flag --type blocker "API rate limit hit"` -> blocker type
-- `/ant:flag -t note -p 3 "Consider refactoring later"` -> note for phase 3
+- `/ant:flag "Build fails on auth module"` → issue type
+- `/ant:flag --type blocker "API rate limit hit"` → blocker type
+- `/ant:flag -t note -p 3 "Consider refactoring later"` → note for phase 3
 
 If `$ARGUMENTS` is empty:
 ```
@@ -57,11 +57,26 @@ Parse the result for the flag ID.
 
 ### Step 4: Confirm
 
-Output header:
+Output header based on flag type:
 
+**For blocker:**
 ```
 🚩🐜📋🐜🚩 ═══════════════════════════════════════════════════
-   F L A G   C R E A T E D
+   B L O C K E R   F L A G   C R E A T E D
+═══════════════════════════════════════════════════ 🚩🐜📋🐜🚩
+```
+
+**For issue:**
+```
+🚩🐜📋🐜🚩 ═══════════════════════════════════════════════════
+   I S S U E   F L A G   C R E A T E D
+═══════════════════════════════════════════════════ 🚩🐜📋🐜🚩
+```
+
+**For note:**
+```
+🚩🐜📋🐜🚩 ═══════════════════════════════════════════════════
+   N O T E   F L A G   C R E A T E D
 ═══════════════════════════════════════════════════ 🚩🐜📋🐜🚩
 ```
 
@@ -69,20 +84,20 @@ Then output based on flag type:
 
 **For blocker:**
 ```
-BLOCKER flag created
+🚫 BLOCKER flag created
 
    "{title}"
 
    ID: {flag_id}
    Phase: {phase or "all"}
 
-WARNING: This will BLOCK phase advancement until resolved.
+⚠️  This will BLOCK phase advancement until resolved.
    Use /ant:flags to view all flags.
 ```
 
 **For issue:**
 ```
-ISSUE flag created
+⚠️  ISSUE flag created
 
    "{title}"
 
@@ -94,7 +109,7 @@ ISSUE flag created
 
 **For note:**
 ```
-NOTE flag created
+📝 NOTE flag created
 
    "{title}"
 

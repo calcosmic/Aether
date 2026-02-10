@@ -1,6 +1,6 @@
 ---
 name: ant:swarm
-description: "Stubborn bug destroyer - parallel scouts investigate and fix persistent issues"
+description: "🔥🐜🗡️🐜🔥 Stubborn bug destroyer - parallel scouts investigate and fix persistent issues"
 ---
 
 You are the **Queen Ant Colony**. Deploy the swarm to destroy a stubborn bug.
@@ -13,7 +13,7 @@ The problem to investigate is: `$ARGUMENTS`
 
 If `$ARGUMENTS` is empty:
 ```
-SWARM
+🔥🐜🗡️🐜🔥 SWARM
 
 Deploy parallel scouts to investigate and fix stubborn bugs.
 
@@ -31,7 +31,7 @@ Stop here.
 ### Step 2: Read State & Initialize
 
 Read `.aether/data/COLONY_STATE.json`.
-If `goal` is null -> "No colony initialized. Run /ant:init first.", stop.
+If `goal` is null → "No colony initialized. Run /ant:init first.", stop.
 
 Generate swarm ID: `swarm-<unix_timestamp>`
 
@@ -42,14 +42,14 @@ bash ~/.aether/aether-utils.sh swarm-findings-init "<swarm_id>"
 
 Display header:
 ```
-===============================================
-           S W A R M   D E P L O Y E D
-===============================================
+🔥🐜🗡️🐜🔥 ═══════════════════════════════════════════════
+                S W A R M   D E P L O Y E D
+═══════════════════════════════════════════════ 🔥🐜🗡️🐜🔥
 
-Target: "{problem description}"
-Swarm ID: {swarm_id}
+🎯 Target: "{problem description}"
+📍 Swarm ID: {swarm_id}
 
-Deploying 4 parallel scouts...
+⚡ Deploying 4 parallel scouts...
 ```
 
 ### Step 3: Create Git Checkpoint
@@ -64,7 +64,7 @@ Store the result for potential rollback:
 - `checkpoint_ref` = result.ref
 
 ```
-Checkpoint: {checkpoint_type} -> {checkpoint_ref}
+💾 Checkpoint: {checkpoint_type} → {checkpoint_ref}
 ```
 
 ### Step 4: Read Context
@@ -88,7 +88,7 @@ git log --oneline -20 2>/dev/null || echo "(no git history)"
 
 Use the **Task** tool to spawn 4 scouts **in a single message** (parallel execution):
 
-**Scout 1: Git Archaeologist**
+**Scout 1: Git Archaeologist 🏛️**
 ```
 You are the Git Archaeologist scout for swarm {swarm_id}.
 
@@ -116,7 +116,7 @@ Return JSON:
 }
 ```
 
-**Scout 2: Pattern Hunter**
+**Scout 2: Pattern Hunter 🔍**
 ```
 You are the Pattern Hunter scout for swarm {swarm_id}.
 
@@ -143,7 +143,7 @@ Return JSON:
 }
 ```
 
-**Scout 3: Error Analyst**
+**Scout 3: Error Analyst 💥**
 ```
 You are the Error Analyst scout for swarm {swarm_id}.
 
@@ -171,7 +171,7 @@ Return JSON:
 }
 ```
 
-**Scout 4: Web Researcher**
+**Scout 4: Web Researcher 🌐**
 ```
 You are the Web Researcher scout for swarm {swarm_id}.
 
@@ -210,16 +210,16 @@ bash ~/.aether/aether-utils.sh swarm-findings-add "{swarm_id}" "{scout_type}" "{
 
 Display each scout's report as they complete:
 ```
-[Git Archaeologist] [{confidence}]
+🏛️ Git Archaeologist [{confidence}]
    {summary of finding}
 
-[Pattern Hunter] [{confidence}]
+🔍 Pattern Hunter [{confidence}]
    {summary of finding}
 
-[Error Analyst] [{confidence}]
+💥 Error Analyst [{confidence}]
    {summary of finding}
 
-[Web Researcher] [{confidence}]
+🌐 Web Researcher [{confidence}]
    {summary of finding}
 ```
 
@@ -233,9 +233,9 @@ Cross-compare all findings:
 
 Rank fix options:
 ```
-===============================================
-           S O L U T I O N   R A N K I N G
-===============================================
+═══════════════════════════════════════════════
+              S O L U T I O N   R A N K I N G
+═══════════════════════════════════════════════
 
 #1 [0.85 confidence] {best solution}
    Evidence: {supporting scouts}
@@ -252,7 +252,7 @@ Rank fix options:
 Select the highest-confidence solution and apply it:
 
 ```
-Applying Fix #1...
+🔧 Applying Fix #1...
 ```
 
 Make the actual code changes using Edit/Write tools.
@@ -268,12 +268,12 @@ After applying:
 
 **If verification passes:**
 ```
-FIX VERIFIED
+✅ FIX VERIFIED
 
 Build: PASS
 Tests: PASS
 
-Swarm successful!
+🔥🐜🗡️🐜🔥 Swarm successful!
 
 The fix will be confirmed when you run:
   /ant:continue
@@ -295,7 +295,7 @@ bash ~/.aether/aether-utils.sh activity-log "SWARM_SUCCESS" "Queen" "Swarm {swar
 
 **If verification fails:**
 ```
-FIX VERIFICATION FAILED
+❌ FIX VERIFICATION FAILED
 
 Build: {status}
 Tests: {status}
@@ -315,7 +315,7 @@ bash ~/.aether/aether-utils.sh activity-log "SWARM_FAILED" "Queen" "Swarm {swarm
 
 Track attempt count. If this is the 3rd failure on the same issue:
 ```
-ARCHITECTURAL CONCERN
+⚠️ ARCHITECTURAL CONCERN
 
 This problem has resisted 3 swarm attempts.
 
@@ -341,8 +341,8 @@ bash ~/.aether/aether-utils.sh swarm-cleanup "{swarm_id}" --archive
 
 Display next steps:
 ```
-Next steps:
-   /ant:continue   Verify and advance phase
-   /ant:status     View colony status
-   /ant:flags      Check remaining blockers
+🐜 Next steps:
+   /ant:continue   ⏭️  Verify and advance phase
+   /ant:status     📊 View colony status
+   /ant:flags      🚩 Check remaining blockers
 ```

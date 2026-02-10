@@ -16,7 +16,7 @@ If `plan.phases` not empty -> output "Colony already has phases. Use /ant:contin
 
 ### Step 2: Surface Scan
 
-Use glob to find key files (read up to 20 total).
+Use Glob to find key files (read up to 20 total).
 
 **Package manifests:**
 - package.json, Cargo.toml, pyproject.toml, go.mod, Gemfile, pom.xml, build.gradle

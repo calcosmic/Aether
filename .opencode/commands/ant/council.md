@@ -1,6 +1,6 @@
 ---
 name: ant:council
-description: "Convene council for intent clarification via multi-choice questions"
+description: "📜🐜🏛️🐜📜 Convene council for intent clarification via multi-choice questions"
 ---
 
 You are the **Queen Ant Colony**. Convene the council to clarify user intent and inject guidance as pheromones.
@@ -13,7 +13,7 @@ Read `.aether/data/COLONY_STATE.json`.
 
 If file doesn't exist or `goal` is null:
 ```
-ANT COUNCIL
+📜🐜🏛️🐜📜 COUNCIL
 
 No colony initialized. Run /ant:init first.
 ```
@@ -27,11 +27,11 @@ Capture the current state for context:
 ### Step 2: Display Council Header
 
 ```
-===============================================
+📜🐜🏛️🐜📜 ═══════════════════════════════════════════════
               A N T   C O U N C I L
-===============================================
+═══════════════════════════════════════════════ 📜🐜🏛️🐜📜
 
-Queen convenes the council for guidance
+👑 Queen convenes the council for guidance
 
    Colony Goal: "{goal}"
    Current State: {prior_state}
@@ -40,8 +40,8 @@ Queen convenes the council for guidance
 
 If `prior_state` is `EXECUTING`:
 ```
-Note: Build in progress. New guidance will apply to future work.
-Current workers continue with existing constraints.
+⚡ Note: Build in progress. New guidance will apply to future work.
+   Current workers continue with existing constraints.
 ```
 
 ### Step 3: Present Category Menu
@@ -134,18 +134,18 @@ Wait for user response. Based on answers, ask 1-2 more specific follow-up questi
 Based on all gathered answers, determine which pheromones to inject:
 
 **FOCUS signals** (areas to emphasize):
-- Architecture choices -> FOCUS on that pattern
-- Quality priorities -> FOCUS on that approach
-- Specific requirements -> FOCUS on those areas
+- Architecture choices → FOCUS on that pattern
+- Quality priorities → FOCUS on that approach
+- Specific requirements → FOCUS on those areas
 
 **REDIRECT signals** (patterns to avoid):
-- Patterns to avoid -> REDIRECT away
-- Incompatible approaches -> REDIRECT away
-- Security concerns -> REDIRECT away from risky patterns
+- Patterns to avoid → REDIRECT away
+- Incompatible approaches → REDIRECT away
+- Security concerns → REDIRECT away from risky patterns
 
 **FEEDBACK signals** (guidance to remember):
-- Style preferences -> FEEDBACK as instinct
-- General guidance -> FEEDBACK for colony memory
+- Style preferences → FEEDBACK as instinct
+- General guidance → FEEDBACK for colony memory
 
 ### Step 6: Inject Pheromones
 
@@ -224,25 +224,25 @@ Keep max 100 events.
 ### Step 8: Display Summary
 
 ```
-COUNCIL ADJOURNED
+📜🐜🏛️🐜📜 COUNCIL ADJOURNED
 
 Pheromones Injected:
 ```
 
 For each FOCUS added:
 ```
-  [FOCUS] "{content}"
+  🎯 FOCUS: "{content}"
 ```
 
 For each REDIRECT added:
 ```
-  [REDIRECT] "{content}"
+  🚫 REDIRECT: "{content}"
 ```
 
 For each FEEDBACK added:
 ```
-  [FEEDBACK] "{content}"
-     Instinct: [{confidence}] {domain}: {action summary}
+  💬 FEEDBACK: "{content}"
+     🧠 Instinct: [{confidence}] {domain}: {action summary}
 ```
 
 If no pheromones were injected:
@@ -252,23 +252,23 @@ If no pheromones were injected:
 
 Then:
 ```
-Colony guidance updated. Resuming {prior_state} state.
+🐜 Colony guidance updated. Resuming {prior_state} state.
 ```
 
 If `prior_state` was EXECUTING:
 ```
-Active workers will complete with prior constraints.
-New spawns will use updated guidance.
+⚡ Active workers will complete with prior constraints.
+   New spawns will use updated guidance.
 
-   /ant:status    View current progress
-   /ant:continue  Check for phase completion
+   /ant:status    📊 View current progress
+   /ant:continue  ⏭️  Check for phase completion
 ```
 
 If `prior_state` was READY:
 ```
-   /ant:plan     Generate or refine plan
-   /ant:build    Start building a phase
-   /ant:status   View colony status
+   /ant:plan     📋 Generate or refine plan
+   /ant:build    🔨 Start building a phase
+   /ant:status   📊 View colony status
 ```
 
 If `prior_state` was PLANNING:

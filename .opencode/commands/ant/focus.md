@@ -42,9 +42,9 @@ Output header:
 
 Then output:
 ```
-FOCUS signal emitted
+🎯 FOCUS signal emitted
 
    "{content preview}"
 
-Colony attention directed.
+🐜 Colony attention directed.
 ```

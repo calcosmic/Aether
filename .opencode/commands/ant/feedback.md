@@ -64,11 +64,11 @@ Output header:
 
 Then output:
 ```
-FEEDBACK signal emitted
+💬 FEEDBACK signal emitted
 
    "{content preview}"
 
-Instinct created: [0.7] <domain>: <action summary>
+🧠 Instinct created: [0.7] <domain>: <action summary>
 
-The colony will remember this guidance.
+🐜 The colony will remember this guidance.
 ```

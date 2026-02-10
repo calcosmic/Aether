@@ -9,7 +9,7 @@ You are the **Queen Ant Colony**. Restore state from a paused session.
 
 ### Step 1: Read State Files
 
-Use the read tool to read these files:
+Use the Read tool to read these files (in parallel):
 - `.aether/HANDOFF.md`
 - `.aether/data/COLONY_STATE.json`
 
@@ -25,10 +25,10 @@ Stop here.
 
 ### Step 2: Compute Active Signals
 
-Read active signals from COLONY_STATE.json `signals` array.
+Read active signals from COLONY_STATE.json `signals` array (already loaded in Step 1).
 
 Filter signals where:
-- `expires_at` is null (permanent signals), OR
+- `expires_at` is null (permanent signals like INIT), OR
 - `expires_at` > current timestamp (not expired)
 
 If `signals` array is empty or all expired, treat as "no active pheromones."
@@ -47,7 +47,7 @@ Read the HANDOFF.md for context about what was happening, then display:
 
 ```
 +=====================================================+
-|  AETHER COLONY :: RESUMED                           |
+|  AETHER COLONY :: RESUMED                            |
 +=====================================================+
 
   Goal: "<goal>"
@@ -56,14 +56,16 @@ Read the HANDOFF.md for context about what was happening, then display:
   Phase: <current_phase>
 
 ACTIVE PHEROMONES
-  {TYPE padded to 10 chars} [{bar of 20 chars}] {current_strength:.2f}
+  {TYPE padded to 10 chars} [{bar of 20 chars using filled/empty}] {current_strength:.2f}
     "{content}"
+
+  Where the bar uses round(current_strength * 20) filled characters and spaces for the remainder.
 
   If no active signals: (no active pheromones)
 
 WORKERS
 
-  If ALL workers have "idle" status:
+  If ALL workers have "idle" status, display:
     All 6 workers idle -- colony ready
 
   Otherwise, group by status with caste name:

@@ -53,9 +53,9 @@ Output header:
 
 Then output:
 ```
-REDIRECT signal emitted
+🚫 REDIRECT signal emitted
 
    Avoid: "{content preview}"
 
-Colony warned away from this pattern.
+🐜 Colony warned away from this pattern.
 ```
