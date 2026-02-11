@@ -1,6 +1,9 @@
-# 🚚🐜📦🐜🚚 /ant:migrate-state - One-Time State Migration
+---
+name: ant:migrate-state
+description: "🚚🐜📦🐜🚚 One-time state migration from v1 to v2.0 format"
+---
 
-Migrate colony state from v1 (6-file) format to v2.0 (consolidated single-file) format.
+# 🚚🐜📦🐜🚚 /ant:migrate-state - One-Time State Migration
 
 **Usage:** Run once to migrate existing state. Safe to run multiple times - skips if already migrated.
 

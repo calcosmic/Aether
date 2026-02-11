@@ -4,6 +4,14 @@ This file tracks pending work items. Each todo is self-contained with full conte
 
 ---
 
+## Priority 0: Urgent
+
+### Deprecate old 2.x npm versions - 2026-02-12
+
+- **npm registry has stale 2.x pre-release versions that could confuse users** - Versions 2.0.0 through 2.4.2 exist on npm from pre-stable development. The `latest` dist-tag correctly points to 1.0.0, so `npm install` works fine. But the 2.x versions are visible on the npm page and could confuse people into thinking they're newer. **Fix:** Run `npm deprecate aether-colony@">=2.0.0" "Pre-release versions. Install 1.0.0 for the stable release."` to mark them deprecated. **Scope:** one command. **Urgency:** high — public-facing confusion on npm.
+
+---
+
 ## Priority 1: Core UX Fixes
 
 ### ~~Investigate: Output Appears Before Agents Finish - 2026-02-10~~ FIXED
@@ -198,17 +206,17 @@ This file tracks pending work items. Each todo is self-contained with full conte
 
 ### Medium Effort
 
-### Standardize YAML quoting across command mirrors 2026-02-11
+### ~~Standardize YAML quoting across command mirrors~~ 2026-02-11 DONE
 
-- **Format drift between .claude/ and .opencode/** - .claude/ uses bare YAML values (`: value`), .opencode/ quotes them (`: "value"`). 16 files have this inconsistency. **Problem:** May cause parsing issues with some YAML parsers. **Fix:** Choose one style (recommend quoted values for compatibility), auto-format the other mirror directory. **Scope:** medium, ~30 files. **Source:** Review 2026-02-11, Regression Hunter agent finding.
+- **RESOLVED:** Colony session `session_1770811383_f1x3r` Phase 1 standardized all 26 command files to use double-quoted YAML description values across both `.claude/` and `.opencode/` mirrors. Verified by independent Watcher.
 
-### Lower instinct confidence threshold from 0.7 to 0.5 2026-02-11
+### ~~Lower instinct confidence threshold from 0.7 to 0.5~~ 2026-02-11 DONE
 
-- **Memory arrays are empty due to threshold** - Current init.md filters instincts with confidence < 0.7. Last report's max confidence was 0.50, resulting in empty `memory.instincts: []`. **Problem:** Cross-session learning is lost because nothing passes the filter. **Fix:** Change threshold in init.md Step 2.5 from >= 0.7 to >= 0.5. **Scope:** trivial, 1 line change. **Source:** Review 2026-02-11, Process Reviewer agent finding.
+- **RESOLVED:** Colony session `session_1770811383_f1x3r` Phase 1 lowered threshold from 0.7 to 0.5 in both `.claude/commands/ant/init.md` and `.opencode/commands/ant/init.md`. Verified zero residual 0.7 references.
 
-### Add lint/typecheck scripts to package.json 2026-02-11
+### ~~Add lint/typecheck scripts to package.json~~ 2026-02-11 DONE
 
-- **No automated validation before publish** - package.json has no `lint` or `typecheck` scripts. npm users receive untested code. **Fix:** Add appropriate scripts for shell validation (shellcheck), YAML validation, JSON validation. **Scope:** medium, 2-4 hours. **Source:** Review 2026-02-11, Git Distribution agent finding.
+- **RESOLVED:** Colony session `session_1770811383_f1x3r` Phase 2 added `lint:shell` (shellcheck), `lint:json` (node -e JSON.parse), `lint:sync` (generate-commands.sh check), and top-level `lint` scripts. Zero new dependencies. All pass clean.
 
 ### Strategic
 
