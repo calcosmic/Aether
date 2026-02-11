@@ -114,4 +114,5 @@ Development releases (versions 2.0.0-2.4.2) building toward stable release. Key 
 - **Error logging and pattern flagging** — Recurring issue detection
 - **Claude-native prompts** — All commands converted from scripts to prompt-based system
 
+- 2026-02-11: README.md — Major update reflecting all new features: 22 commands (was 20), dream/interpret commands, colony memory inheritance, graveyards, auto-recovery headers, git safety, lint suite, CLAUDE.md-aware command detection, Colony Memory section, restructured Features section
 - 2026-02-11: .aether/data/review-2026-02-11.md — Comprehensive daily review report covering 3 colony sessions, 10 achievements, 3 regressions, 5 concerns, 3 debunked concerns, and prioritized recommendations
