@@ -54,7 +54,7 @@ shift 2>/dev/null || true
 case "$cmd" in
   help)
     cat <<'EOF'
-{"ok":true,"commands":["help","version","validate-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","update-progress","check-antipattern","error-flag-pattern","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
+{"ok":true,"commands":["help","version","validate-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","update-progress","check-antipattern","error-flag-pattern","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","generate-commit-message"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
 EOF
     ;;
   version)
@@ -778,6 +778,67 @@ EOF
     name="${prefix}-${num}"
     json_ok "\"$name\""
     ;;
+
+  # ============================================
+  # GIT COMMIT UTILITIES
+  # ============================================
+
+  generate-commit-message)
+    # Generate an intelligent commit message from colony context
+    # Usage: generate-commit-message <type> <phase_id> <phase_name> [summary]
+    # Types: "milestone" | "pause" | "fix"
+    # Returns: {"message": "...", "body": "...", "files_changed": N}
+
+    msg_type="${1:-milestone}"
+    phase_id="${2:-0}"
+    phase_name="${3:-unknown}"
+    summary="${4:-}"
+
+    # Count changed files
+    files_changed=0
+    if git rev-parse --git-dir >/dev/null 2>&1; then
+      files_changed=$(git diff --stat --cached HEAD 2>/dev/null | tail -1 | grep -oE '[0-9]+ file' | grep -oE '[0-9]+' || echo "0")
+      if [[ "$files_changed" == "0" ]]; then
+        files_changed=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+      fi
+    fi
+
+    case "$msg_type" in
+      milestone)
+        # Format: aether-milestone: phase N complete -- <name>
+        if [[ -n "$summary" ]]; then
+          message="aether-milestone: phase ${phase_id} complete -- ${summary}"
+        else
+          message="aether-milestone: phase ${phase_id} complete -- ${phase_name}"
+        fi
+        body="All verification gates passed. User confirmed runtime behavior."
+        ;;
+      pause)
+        message="aether-checkpoint: session pause -- phase ${phase_id} in progress"
+        body="Colony paused mid-session. Handoff document saved."
+        ;;
+      fix)
+        if [[ -n "$summary" ]]; then
+          message="fix: ${summary}"
+        else
+          message="fix: resolve issue in phase ${phase_id}"
+        fi
+        body="Swarm-verified fix applied and tested."
+        ;;
+      *)
+        message="aether-checkpoint: phase ${phase_id}"
+        body=""
+        ;;
+    esac
+
+    # Enforce 72-char limit on subject line (truncate if needed)
+    if [[ ${#message} -gt 72 ]]; then
+      message="${message:0:69}..."
+    fi
+
+    json_ok "{\"message\":\"$message\",\"body\":\"$body\",\"files_changed\":$files_changed}"
+    ;;
+
   *)
     json_err "Unknown command: $cmd"
     ;;

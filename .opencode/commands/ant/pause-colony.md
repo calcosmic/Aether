@@ -69,6 +69,78 @@ Run `/ant:resume-colony` in a new session.
 <what should happen next>
 ```
 
+### Step 4.5: Commit Suggestion (Optional)
+
+**This step is non-blocking. Skipping does not affect the pause or any subsequent steps. Failure to commit has zero consequences.**
+
+Before displaying the pause confirmation, check if the user has uncommitted work worth preserving.
+
+1. **Check for uncommitted changes:**
+```bash
+git status --porcelain 2>/dev/null
+```
+If the output is empty (nothing to commit) or the command fails (not a git repo), skip this step silently and continue to Step 5.
+
+2. **Check for double-prompting:**
+Read `last_commit_suggestion_phase` from COLONY_STATE.json (already loaded in Step 1).
+If `last_commit_suggestion_phase` equals the current phase, skip this step silently — the user was already prompted at POST-ADVANCE. Continue to Step 5.
+
+3. **Generate the commit message:**
+```bash
+bash ~/.aether/aether-utils.sh generate-commit-message "pause" {current_phase} "{phase_name}"
+```
+Parse the returned JSON to extract `message` and `files_changed`.
+
+4. **Check files changed:**
+```bash
+git diff --stat HEAD 2>/dev/null | tail -5
+```
+
+5. **Display the suggestion:**
+```
+──────────────────────────────────────────────────
+Commit Suggestion
+──────────────────────────────────────────────────
+
+  Message:  {generated_message}
+  Files:    {files_changed} files changed
+  Preview:  {first 5 lines of git diff --stat}
+
+──────────────────────────────────────────────────
+```
+
+6. **Use AskUserQuestion:**
+```
+Commit your work before pausing?
+
+1. Yes, commit with this message
+2. Yes, but let me write the message
+3. No, I'll commit later
+```
+
+7. **If option 1 ("Yes, commit with this message"):**
+```bash
+git add -A && git commit -m "{generated_message}"
+```
+Display: `Committed: {generated_message} ({files_changed} files)`
+
+8. **If option 2 ("Yes, but let me write the message"):**
+Use AskUserQuestion to get the user's custom commit message, then:
+```bash
+git add -A && git commit -m "{custom_message}"
+```
+Display: `Committed: {custom_message} ({files_changed} files)`
+
+9. **If option 3 ("No, I'll commit later"):**
+Display: `Skipped. Your changes are saved on disk but not committed.`
+
+10. **Record the suggestion to prevent double-prompting:**
+Set `last_commit_suggestion_phase` to `{current_phase}` in COLONY_STATE.json (add the field at the top level if it does not exist).
+
+**Error handling:** If any git command fails (not a repo, merge conflict, pre-commit hook rejection), display the error output and continue to Step 5. The commit suggestion is advisory only — it never blocks the pause flow.
+
+Continue to Step 5.
+
 ### Step 5: Display Confirmation
 
 Output header:

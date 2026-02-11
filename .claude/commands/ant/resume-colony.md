@@ -35,6 +35,8 @@ If `signals` array is empty or all expired, treat as "no active pheromones."
 
 ### Step 3: Display Restored State
 
+**Note:** Other ant commands (`/ant:status`, `/ant:build`, `/ant:plan`, `/ant:continue`) also show brief resumption context automatically. This full resume provides complete state restoration for explicit session recovery.
+
 Output header:
 
 ```
@@ -89,3 +91,57 @@ Route to next action based on state:
 - If state is `EXECUTING` -> note that a build was interrupted, suggest restarting with `/ant:build <phase>`
 - If state is `PLANNING` -> note that planning was interrupted, suggest `/ant:plan`
 - Otherwise -> suggest `/ant:status` for full overview
+
+---
+
+## Auto-Recovery Pattern Reference
+
+The colony uses a tiered auto-recovery pattern to maintain context across session boundaries:
+
+### Format Tiers
+
+| Context | Format | When Used |
+|---------|--------|-----------|
+| Brief | `🔄 Resuming: Phase X - Name` | Action commands (build, plan, continue) |
+| Extended | Brief + last activity timestamp | Status command |
+| Full | Complete state with pheromones, workers, context | resume-colony command |
+
+### Brief Format (Action Commands)
+
+Used by `/ant:build`, `/ant:plan`, `/ant:continue`:
+
+```
+🔄 Resuming: Phase <current_phase> - <phase_name>
+```
+
+Provides minimal orientation before executing the command's primary function.
+
+### Extended Format (Status Command)
+
+Used by `/ant:status` Step 1.5:
+
+```
+🔄 Resuming: Phase <current_phase> - <phase_name>
+   Last activity: <last_event_timestamp>
+```
+
+Adds temporal context to help gauge session staleness.
+
+### Full Format (Resume-Colony)
+
+Used by `/ant:resume-colony`:
+
+- Complete header with ASCII art
+- Goal, state, session ID, phase
+- Active pheromones with strength bars
+- Worker status by caste
+- Phase progress for all phases
+- Handoff context summary
+- Next action routing
+
+### Implementation Notes
+
+1. **State Source:** All formats read from `.aether/data/COLONY_STATE.json`
+2. **Phase Name:** Extracted from `plan.phases[current_phase - 1].name`
+3. **Last Activity:** Parsed from the last entry in `events` array
+4. **Edge Cases:** Handle missing phase names, empty events, phase 0

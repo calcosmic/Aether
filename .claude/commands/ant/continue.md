@@ -24,6 +24,13 @@ Extract: `goal`, `state`, `current_phase`, `plan.phases`, `errors`, `memory`, `e
 - If `goal: null` -> output "No colony initialized. Run /ant:init first." and stop.
 - If `plan.phases` is empty -> output "No project plan. Run /ant:plan first." and stop.
 
+**Auto-Recovery Header (Session Start):**
+If `goal` exists and state is valid, output a brief context line:
+```
+🔄 Resuming: Phase {current_phase} - {phase_name}
+```
+This helps recover context after session clears. Continue immediately (non-blocking).
+
 **Completion Detection:**
 
 If `state == "EXECUTING"`:
@@ -34,6 +41,7 @@ If `state == "EXECUTING"`:
 3. If no evidence and build started > 30 min ago:
    - Display "Stale EXECUTING state. Build may have been interrupted."
    - Offer: continue anyway or rollback to git checkpoint
+   - Rollback procedure: `git stash list | grep "aether-checkpoint"` to find ref, then `git stash pop <ref>` to restore
 
 If `state != "EXECUTING"`:
 - Normal continue flow (no build to reconcile)
@@ -44,9 +52,18 @@ If `state != "EXECUTING"`:
 
 Before ANY phase can advance, execute the 6-phase verification loop. See `~/.aether/verification-loop.md` for full reference.
 
-#### 1. Detect Project Verification Commands
+#### 1. Command Resolution (Priority Chain)
 
-Check for these files in order, use first match:
+Resolve each command (build, test, types, lint) using this priority chain. Stop at the first source that provides a value for each command:
+
+**Priority 1 — CLAUDE.md (System Context):**
+Check the CLAUDE.md instructions already loaded in your system context for explicit build, test, type-check, or lint commands. These are authoritative and override all other sources.
+
+**Priority 2 — .planning/CODEBASE.md `## Commands`:**
+Read `.planning/CODEBASE.md` and look for the `## Commands` section. Use any commands listed there for slots not yet filled by Priority 1.
+
+**Priority 3 — Fallback Heuristic Table:**
+For any commands still unresolved, check for these files in order, use first match:
 
 | File | Build | Test | Types | Lint |
 |------|-------|------|-------|------|
@@ -504,7 +521,7 @@ Continue to Step 2.
 Find current phase in `plan.phases`.
 Determine next phase (`current_phase + 1`).
 
-**If no next phase (all complete):** Skip to Step 2.5 (completion).
+**If no next phase (all complete):** Skip to Step 2.6 (commit suggestion), then Step 2.5 (completion).
 
 Update COLONY_STATE.json:
 
@@ -609,6 +626,95 @@ Update COLONY_STATE.json:
 
 Write COLONY_STATE.json.
 
+### Step 2.4: Update Changelog
+
+**Append a changelog entry for the completed phase.**
+
+If `CHANGELOG.md` exists in the project root:
+
+1. Read the file
+2. Find the `## [Unreleased]` section
+3. Under the appropriate sub-heading (`### Added`, `### Changed`, or `### Fixed`), append a bullet for the completed phase:
+
+```
+- **Phase {id}: {phase_name}** — {one-line summary of what was accomplished}. ({list of key files modified})
+```
+
+**Determining the sub-heading:**
+- If the phase created new features/commands → `### Added`
+- If the phase modified existing behavior → `### Changed`
+- If the phase fixed bugs → `### Fixed`
+- If unclear, default to `### Changed`
+
+**The one-line summary** should describe the user-visible outcome, not implementation details. Derive it from the phase description and task summaries.
+
+**If no `## [Unreleased]` section exists**, create one at the top of the file (after the header).
+
+**If no `CHANGELOG.md` exists**, skip this step silently.
+
+### Step 2.6: Commit Suggestion (Optional)
+
+**This step is non-blocking. Skipping does not affect phase advancement or any subsequent steps. Failure to commit has zero consequences.**
+
+After the phase is advanced and changelog updated, suggest a commit to preserve the milestone.
+
+1. **Generate the commit message:**
+```bash
+bash ~/.aether/aether-utils.sh generate-commit-message "milestone" {phase_id} "{phase_name}" "{one_line_summary}"
+```
+Parse the returned JSON to extract `message` and `files_changed`.
+
+2. **Check files changed:**
+```bash
+git diff --stat HEAD 2>/dev/null | tail -5
+```
+If not in a git repo or no changes detected, skip this step silently.
+
+3. **Display the suggestion:**
+```
+──────────────────────────────────────────────────
+Commit Suggestion
+──────────────────────────────────────────────────
+
+  Message:  {generated_message}
+  Files:    {files_changed} files changed
+  Preview:  {first 5 lines of git diff --stat}
+
+──────────────────────────────────────────────────
+```
+
+4. **Use AskUserQuestion:**
+```
+Commit this milestone?
+
+1. Yes, commit with this message
+2. Yes, but let me write the message
+3. No, I'll commit later
+```
+
+5. **If option 1 ("Yes, commit with this message"):**
+```bash
+git add -A && git commit -m "{generated_message}"
+```
+Display: `Committed: {generated_message} ({files_changed} files)`
+
+6. **If option 2 ("Yes, but let me write the message"):**
+Use AskUserQuestion to get the user's custom commit message, then:
+```bash
+git add -A && git commit -m "{custom_message}"
+```
+Display: `Committed: {custom_message} ({files_changed} files)`
+
+7. **If option 3 ("No, I'll commit later"):**
+Display: `Skipped. Your changes are saved on disk but not committed.`
+
+8. **Record the suggestion to prevent double-prompting:**
+Set `last_commit_suggestion_phase` to `{phase_id}` in COLONY_STATE.json (add the field at the top level if it does not exist).
+
+**Error handling:** If any git command fails (not a repo, merge conflict, pre-commit hook rejection), display the error output and continue to the next step. The commit suggestion is advisory only -- it never blocks the flow.
+
+Continue to Step 2.5 (Project Completion) or Step 3 (Display Result).
+
 ### Step 2.5: Project Completion
 
 Runs ONLY when all phases complete.
@@ -665,10 +771,11 @@ Output:
    📊 State: READY
 
 🐜 Next Steps:
-   /ant:build {next_id}   🔨 Start building
-   /ant:phase {next_id}   📋 Review phase details
+   /ant:build {next_id}   🔨 Start building Phase {next_id}: {next_name}
+   /ant:phase {next_id}   📋 Review phase details first
    /ant:focus "<area>"    🎯 Guide colony attention
-   /ant:status            📊 View colony status
 
-💾 State persisted — safe to /clear before next phase
+💾 State persisted — safe to /clear, then run /ant:build {next_id}
 ```
+
+**IMPORTANT:** In the "Next Steps" section above, substitute the actual phase number for `{next_id}` (calculated in Step 2 as `current_phase + 1`). For example, if advancing to phase 4, output `/ant:build 4` not `/ant:build {next_id}`.

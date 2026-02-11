@@ -52,8 +52,8 @@ Then display:
 
 ─────────────────────────────────────────────────────
 🐜 Next Steps:
-   /ant:build <id>       🔨 Build this phase
-   /ant:phase <next_id>  📋 View next phase
+   /ant:build <id>       🔨 Phase <id>: <phase_name>
+   /ant:phase <next_id>  📋 Phase <next_id>: <next_phase_name> (only if not last phase)
    /ant:status           📊 Colony status
 ```
 

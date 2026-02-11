@@ -1,0 +1,186 @@
+# TO-DOS
+
+This file tracks pending work items. Each todo is self-contained with full context for future reference.
+
+---
+
+## Priority 1: Core UX Fixes
+
+### ~~Investigate: Output Appears Before Agents Finish - 2026-02-10~~ FIXED
+
+- **RESOLVED:** Updated `build.md` to enforce blocking behavior. Steps 5.2, 5.4.1, and 5.6 now explicitly require waiting for ALL TaskOutput calls to return before proceeding. Next Steps are now conditional based on actual verification results. If verification fails, `/ant:continue` is not suggested.
+
+### ~~Progressive Disclosure UI - 2026-02-10~~ FIXED
+
+- **RESOLVED:** Implemented compact-by-default output with `--verbose` flag for full details. Created format specification at `~/.aether/docs/progressive-disclosure.md`. Updated `status.md` (8-10 lines default) and `build.md` (12 lines default) with compact/verbose modes. Bracket counts like `[3 blockers]` indicate expandable sections.
+
+### Auto-Load Context on Colony Commands - 2026-02-10
+
+- **Colony commands should automatically load relevant context** - When running `/ant:init` or `/ant:plan` (especially after `/clear`), the system should automatically check and load: (1) TO-DOs.md for relevant pending work, (2) Colony state from previous sessions, (3) Any initialized goals/intentions. **Problem:** Natural discussions happen (brainstorming, adding to TO-DOs, research) but when colony commands run, they don't automatically pull in this context. User has to manually reference things. After context clear, commands should restore from persistent state. **Files:** `ant:init`, `ant:plan`, potentially all colony commands. **Solution:** At the start of key commands, automatically read TO-DOs.md and colony state files, surface relevant items, and incorporate into the command's context. `/ant:init` should ask "I see these pending TO-DOs - want to work on any of these?" `/ant:plan` after clear should read initialized state and continue from there.
+
+### ~~Command Suggestions Must Be Actual Commands - 2026-02-10~~ FIXED
+
+- **RESOLVED:** Updated `status.md`, `continue.md`, `plan.md`, and `phase.md` to calculate actual phase numbers before display. Each file now has explicit instructions to substitute real values (e.g., `/ant:build 3`) instead of template placeholders. `build.md` was already correct.
+
+### Question: What is the Point of /ant:status? - 2026-02-11
+
+- **Evaluate whether /ant:status is actually useful** - The colony already tells you everything as you go along. After `/ant:build`, it shows what was done. After `/ant:continue`, it shows what's next. The auto-recovery headers now show context after `/clear`. So when would a user think "I need to see the status"? **Possible answers:** (1) It's redundant and should be removed. (2) It's useful for a "dashboard" view showing flags, instincts, all phases at once. (3) It's useful when you're unsure what state the colony is in. **Current behavior:** Shows goal, phase progress, tasks, constraints, flags, instincts, suggested next command. **Question to answer:** Is there a scenario where this is actually useful that isn't already covered by the commands themselves? If not, consider deprecating. If yes, make the use case clearer in docs.
+
+### ~~Command Suggestions Need Phase Context - 2026-02-11~~ DONE
+
+- **RESOLVED:** Updated Next Steps output in `status.md`, `plan.md`, and `phase.md` (both `.claude` and `.opencode` variants) to include phase name inline with command suggestions. E.g., `/ant:build 3   Phase 3: Add Authentication`. `continue.md` already had this. Also fixed `.opencode/plan.md` which was hardcoded to Phase 1 — now dynamically calculates first incomplete phase. Synced to global `~/.claude/commands/ant/`.
+
+### Codebase Ant Pre-Flight Check - 2026-02-11 ⭐ HIGH IMPACT
+
+- **Automatic plan validation against current codebase before each phase executes** - Plans are made with imperfect knowledge; by execution time, the codebase may have changed or the planner may have missed existing patterns. A "Codebase Ant" should validate each phase's tasks against the actual codebase before workers spawn. **Problem:** Planning ant researches but can miss things. Codebase evolves between planning and execution. Tasks may reference files that don't exist, miss better patterns, or conflict with recent changes. **When:** Automatically in `/ant:build` after reading state (Step 4.5) but before spawning workers (Step 5). **What Codebase Ant does:** (1) Read phase tasks, (2) For each task: verify referenced files/paths exist, find existing patterns task should follow, check for recent changes that conflict, identify simpler approaches. (3) Output validation result with suggestions. **Output format:** `🗺️ PRE-BUILD VALIDATION` showing per-task checks with ✅/⚠️/💡 indicators. **Constraints:** Fast (<30 seconds) using only Glob/Grep/Read - no deep research. Non-blocking if validation passes. Can auto-inject discoveries into task hints. Surfaces warnings but only halts on critical issues (e.g., referenced file missing). **Implementation:** Add Step 4.5 to `build.md` that spawns a Scout with codebase validation prompt, collects result, enriches task hints, then proceeds to spawn builders. **Why P1:** Catches plan/reality mismatches before wasted work. Improves worker success rate. Makes the colony smarter about its own codebase.
+
+### ~~Pass Learnings and Instincts to Spawned Workers - 2026-02-10~~ DONE
+
+- **RESOLVED:** Added `--- COLONY KNOWLEDGE ---` section to Builder Worker Prompt Template in `build.md` (both `.claude` and `.opencode` variants). Workers now receive: (1) Top 5 instincts by confidence (>= 0.5), (2) Recent validated learnings from last 3 phases, (3) Flagged error patterns to avoid. Section is omitted entirely if no relevant knowledge exists. Synced to global `~/.claude/commands/ant/build.md`.
+
+---
+
+## Priority 2: Context Management Infrastructure
+
+### Session Continuity Marker - 2026-02-10
+
+- **Track last activity for seamless resume** - Store lightweight session state for instant context recovery. **Implementation:** `.aether/data/session.json` with: `last_command`, `last_command_at`, `context_cleared`, `suggested_next`, `active_todos`. On any command start: check session.json, if recent activity show "Continuing from {last_command}". **Token consideration:** Single small JSON file, read once at command start.
+
+### Pre-Command Context Check (All Commands) - 2026-02-10
+
+- **Universal context loading before any /ant:* command** - Every command should start with same context awareness. **Implementation:** Before execution: (1) Load COLONY_STATE.json (goal, phase, state), (2) Load constraints.json, (3) Load session.json, (4) Check TO-DOS.md for matches. Build 3-line context summary injected into command. **Token consideration:** Summary only, not full file contents. ~100 tokens max.
+
+### Background CONTEXT.md File - 2026-02-10
+
+- **Auto-generated ambient context file updated after each phase** - Single file that captures current state in human-readable format. **Implementation:** `.aether/data/CONTEXT.md` auto-updated by `/ant:continue`: Current Focus, Recent Decisions, Top Instincts, Known Issues. Commands read first 50 lines for instant orientation. **Token consideration:** Capped at 50 lines, replaces reading multiple files.
+
+### Chamber Specialization (Code Zones) - 2026-02-10
+
+- **Categorize codebase into behavioral zones during colonization** - During colonization, categorize code areas into zones that affect worker behavior: **Fungus Garden (core)**: Critical paths, high test coverage areas - workers use extra caution, more testing, slower changes. **Nursery (new)**: Recently created features - okay to iterate fast, more experimental. **Refuse Pile (deprecated)**: Legacy/dead code - workers avoid touching unless explicit, quarantine behavior. **Implementation:** Add `zones` object to colony state during colonization. Workers check zone before starting work and adjust behavior accordingly. **Biological basis:** Leafcutter ants maintain separate chambers for fungus gardens vs waste to prevent cross-contamination. **Why foundational:** Panic vs Aggressive Alarm depends on knowing which zone code is in to determine response severity.
+
+---
+
+## Priority 3: Quick Wins (Simple, High Value)
+
+### ~~Ant Graveyards Feature - 2026-02-10~~ DONE
+
+- **RESOLVED:** Implemented `grave-add` and `grave-check` commands in `aether-utils.sh`. Grave markers are stored in `graveyards` array in COLONY_STATE.json (capped at 30 entries). Builder prompts in `build.md` now check for nearby graves before modifying files (`caution_level: "high"/"low"/"none"`). Failed workers automatically get grave markers recorded in Step 5.6. Both `.claude` and `.opencode` command copies updated. Existing colonies work via `// []` fallback; new colonies get `"graveyards": []` in init template.
+
+### Panic vs Aggressive Alarm - 2026-02-10
+
+- **Different error types trigger different colony responses** - Currently all errors treated similarly. Implement tiered alarm system: **AGGRESSIVE (security vulnerability near core)**: Halt everything, swarm to fix immediately. **PANIC (test failure in peripheral code)**: Stop current work, reassess before continuing. **NOTE (type error, lint warning)**: Log and continue. Response determined by error severity + proximity to core code. **Implementation:** Categorize errors by type and location. Different categories trigger different colony responses (halt vs continue vs swarm). **Biological basis:** Ant alarm responses depend on nest proximity - flight when far from nest, aggression when near. **Depends on:** Chamber Specialization (needs to know which zone code is in).
+
+### TODO Relevance Scoring - 2026-02-10
+
+- **Smart matching of TODOs to current context** - When surfacing TODOs, score by relevance not just priority. **Implementation:** Score = weighted sum of: priority (0.2), recency (0.2), keyword match to current goal (0.3), file proximity (0.3). Only surface TODOs with score > 0.5. Show top 3 max. **Token consideration:** Scoring happens before output, only relevant items sent to context.
+
+---
+
+## Priority 3.5: New Ant Types
+
+### 🎲 Chaos Ant - 2026-02-11 ⭐ HIGH IMPACT
+
+- **Adversarial testing agent that actively tries to break code** - Builders are optimistic ("it works!"), Watchers verify happy paths, but nobody actively tries to break things. Chaos Ant does. **What it tests:** Edge cases (empty strings, nulls, unicode, huge inputs), race conditions (what if two users do X simultaneously?), auth bypasses (what if admin but also deleted?), unexpected state combinations. **Implementation:** Spawned during verification phase after builders complete, alongside or before Watcher. Fed the code + success criteria, instructed to find ways to break them. Returns list of failures found with reproduction steps. **Output format:** `🎲 CHAOS REPORT: Found 3 breaks — (1) empty email crashes signup, (2) negative quantity accepted in cart, (3) deleted user can still access API`. **Biological basis:** Some ant species have "police" ants that attack colony members behaving abnormally — maintaining colony health through adversarial pressure. **Why high impact:** Catches the bugs that reach production. Proven value in chaos engineering.
+
+### 🏺 Archaeologist Ant - 2026-02-11 ⭐ HIGH IMPACT
+
+- **Git history analyst that explains why code exists** - On mature codebases, the *why* matters as much as the *what*. "Don't remove this null check — it was added after the 2021 production crash." Without historical context, workers make confident mistakes. **What it does:** Runs `git log`, `git blame`, analyzes commit messages and PR descriptions. Reasons about *why* code is structured this way. Surfaces tribal knowledge buried in history. **When triggered:** Auto-triggered when `/ant:build` touches files with significant history (>2 years old, high churn, or many authors). Can also be invoked manually: `/ant:archaeology src/legacy/`. **Output format:** `🏺 ARCHAEOLOGY REPORT: This file has 847 commits from 12 authors. Key findings: (1) Lines 45-60 are a workaround for iOS 12 bug #4521 — iOS 12 now unsupported, safe to remove. (2) The unusual caching pattern was added after a DDoS in 2022, do not simplify. (3) Author left TODO on line 203: "temporary fix" — it's been 3 years.` **Implementation:** Spawned as Scout with git analysis prompt. Injects findings into builder prompts as context. **Why high impact:** Prevents "removed dead code, broke everything" disasters. Saves hours of investigation.
+
+### ~~💭 Dreamer Ant - 2026-02-11~~ DONE
+
+- **RESOLVED:** Implemented as `/ant:dream` command (`dream.md`). Philosophical wanderer agent that reads codebase, git history, colony state, and TO-DOs, then performs 5-8 cycles of random exploration writing observations to `.aether/dreams/`. Each dream has a category (musing/observation/concern/emergence/archaeology/prophecy/undercurrent), a deep reflection, a plain-terms "for dummies" explanation, and optional pheromone suggestions with copy-paste commands and their own plain explanations. Never modifies code or colony state. Can run in dedicated terminal or same session.
+
+### Surface Dreams in /ant:status - 2026-02-11
+
+- **Show recent dream summary in colony status output** - Add a small section to `/ant:status` that reads `.aether/dreams/` directory, finds the most recent dream file, and displays a compact summary (e.g., `💭 3 dreams (last: 2h ago) | 1 concern`). Expandable with `--verbose` to show one-liners per dream. **Files:** `status.md`. **Why:** Dreams should surface where users already look, not require a separate command.
+
+### Dreamer Build Integration - 2026-02-11
+
+- **Optionally check relevant dreams before phase execution** - During `/ant:build`, after loading state but before spawning workers, check if any recent dreams are relevant to the phase about to be built. Surface relevant dreams as context. **Files:** `build.md`. **Why:** Makes dreams actionable without requiring manual review. **Deferred:** Implement after Dreamer has been tested and proven useful.
+
+### ~~Mark Unbuilt .planning/ Designs with Status Headers - 2026-02-11~~ DONE
+
+- **RESOLVED:** Added `> STATUS: NOT IMPLEMENTED — Research artifact from Phase 2` headers to `git-staging-tier3.md` and `git-staging-tier4.md`. Files kept in place as reference material with clear status markers.
+
+~~- **Add status markers to unimplemented research artifacts**~~ - `.planning/` contains 3,522 lines across 12 files. Tier 3 (`git-staging-tier3.md`, 441 lines) and Tier 4 (`git-staging-tier4.md`, 528 lines) are fully designed but were never built. They have no markers distinguishing them from implemented work — a newcomer reading them would assume Aether supports hooks-based auto-commits and GitHub PR integration. **Fix:** Add `> STATUS: NOT IMPLEMENTED — research artifact from Phase 2` header to each unbuilt file. Keep files in place (they're valuable reference for *why* Tier 2 was chosen). Optionally add a `.planning/README.md` index. **Source:** Dream session 2026-02-11, Dream 3: The Shadow of Unbuilt Futures. **Scope:** trivial, 2-3 files.
+
+### ~~Colony Memory: Seed Instincts from Prior Sessions (Minimal Fix) - 2026-02-11~~ DONE
+
+- **RESOLVED:** Added Step 2.5 to `init.md` that reads `completion-report.md` and seeds `memory.instincts` (confidence >= 0.7) and `memory.phase_learnings` (validated) into the new colony. Non-blocking and gracefully skips if no report exists. Both `.claude` and `.opencode` mirrors updated. Full cross-session memory system remains at Priority 5.
+
+~~- **Make init.md load high-confidence instincts from previous completion reports**~~ - Each colony starts fresh with empty `memory.instincts`, `memory.phase_learnings`, and `memory.decisions`. `completion-report.md` is written by `/ant:continue` at project completion but **never read** by any command. The data exists, only the loading is missing. **Minimal fix:** Add a step to `init.md` that reads the most recent `.aether/data/completion-report.md` (if it exists) and seeds `memory.instincts` with any instinct at confidence >= 0.7. Gives the new colony a head start without importing everything blindly. **Files:** `init.md` + `.opencode` mirror. **Source:** Dream session 2026-02-11, Dream 5: The Eternal Present of a Colony Without Memory. **Scope:** modest, medium. **Note:** The full cross-session memory system (Priority 5: `~/.aether/projects/<hash>/`) remains the long-term goal — this is the 80% fix.
+
+---
+
+## Priority 4: Enhancements
+
+### Smart Command Suggestion - 2026-02-10
+
+- **Context-aware next command suggestions** - Instead of just "Next: /ant:build phase:2", analyze context for smarter suggestions. **Implementation:** If TO-DOS.md has P1 bug → suggest `/ant:swarm`. If last phase had low watcher score → suggest `/ant:focus "quality"`. If constraints empty → suggest adding focus/redirect. Decision tree based on colony state.
+
+### Immune Memory (Pathogen Recognition) - 2026-02-10
+
+- **Recognize recurring bug patterns and escalate response** - Track "pathogen signatures" (recurring error patterns, bug types). When a similar error appears, check against known signatures. If match: boost worker count, increase scrutiny, flag as "known pathogen - escalating response." Goes beyond instinct confidence - this is about recognition and escalation of known threats. **Implementation:** Add `pathogens` array to colony state with error signatures. Error handling checks for pattern matches and triggers escalated response (more workers, higher priority). **Biological basis:** Leafcutter ants remember pathogens for 30+ days and fight them more intensely on re-exposure.
+
+### Conversation-to-Colony Bridge - 2026-02-10
+
+- **Detect intent in natural discussion and suggest colony actions** - When in discussion mode, recognize patterns and offer transitions. **Implementation:** Detect "let's work on X" → suggest `/ant:init "X"`. Detect research findings → store for next `/ant:plan`. Detect decisions "let's use JWT" → offer to add constraint. **Token consideration:** Pattern matching on user input, no extra context needed.
+
+### YAML Command Generator — Eliminate Manual Duplication - 2026-02-11
+
+- **Build the YAML-based command generation system described in `src/commands/README.md`** - Currently 22 command files are manually duplicated across `.claude/commands/ant/` (~4,939 lines) and `.opencode/commands/ant/` (~4,926 lines). The infrastructure is half-built: `src/commands/_meta/tool-mapping.yaml` (54 lines) and `src/commands/_meta/template.yaml` (64 lines) exist, and the README (110 lines) describes the full system. But no individual command YAML definitions or generator script were ever created. **Implementation:** (1) Create YAML definitions for all 22 commands (canonical source of truth), (2) Build `./bin/generate-commands.sh` using tool-mapping.yaml for platform-specific translation, (3) Add CI/pre-commit check to verify generated output matches source. **Source:** Dream session 2026-02-11, Dream 4: The Architecture That Lives Only in Words. **Scope:** significant, large — probably a multi-phase colony project. **Risk:** medium — generator bugs could silently break commands. **Note:** Manual duplication works today; this is efficiency/maintenance improvement, not a fix.
+
+### Iron Law Process Logging (Lightweight) - 2026-02-11
+
+- **Add optional process logging for Iron Law compliance** - All 6 Iron Laws in `workers.md` are text-only instructions with no runtime enforcement. The Watcher validates results (code compiles, tests pass) but not process (was TDD actually followed?). A Builder that writes code first and adds tests after is indistinguishable from proper RED-GREEN-REFACTOR. **If needed:** Require builders to log each TDD step (RED: wrote failing test → GREEN: made it pass → REFACTOR: cleaned up) in their activity output. Watcher checks the log for step completeness. **Source:** Dream session 2026-02-11, Dream 6: Iron Laws and Trust. **Scope:** significant, large — process tracing across all worker types. **Risk:** high — over-engineering enforcement could slow workers. **Recommendation:** Defer until quality issues are traced to Iron Law violations. Accept text-based discipline as sufficient for LLM agents for now.
+
+---
+
+## Priority 5: Evaluate Later
+
+### Care-Kill Dichotomy - 2026-02-10
+
+- **Explicit infection scoring for refactor vs delete decisions** - Add quantified "infection score" to code areas that triggers automatic care (refactor, improve) vs kill (delete entirely) recommendations. Currently this happens implicitly during planning - making it explicit could help route-setter make clearer recommendations. **Implementation:** Heuristics for infection scoring (error frequency, test coverage, change frequency, age). Score above threshold = recommend deletion. **Biological basis:** Ant workers kill infected brood when necessary to prevent systemic disease spread - care-kill dichotomy. **Status:** Maybe - evaluate after other features are in. May add complexity for marginal gain.
+
+### Cross-Session Memory Persistence - 2026-02-10
+
+- **Project-level memory like Claude Code's Auto Memory** - Persistent memory across sessions, not just within colony lifecycle. **Implementation:** `~/.aether/projects/<project-hash>/` with: MEMORY.md (index, first 200 lines loaded), decisions/, patterns/, failures/ (graveyards). Survives colony reset. **Token consideration:** Only load index file by default, deep files on demand.
+
+### Git-Aware Context - 2026-02-10
+
+- **Colony state awareness of git operations** - On branch switch: check if different colony session exists. On commit: auto-snapshot colony state. On merge conflict: surface relevant instincts about those files. **Implementation:** Git hooks or detection in commands. **Token consideration:** Minimal - just state lookups.
+
+---
+
+## Priority 6: New Features (Non-Urgent)
+
+### Detective Command - 2026-02-09
+
+- **Create detective command** - Build a new command that leverages deep research skill for thorough codebase investigations. **Problem:** Need a specialized command for deep-dive codebase analysis and investigation work. **Files:** `commands/detective.md` (new). **Solution:** Design command that uses deep research capabilities for comprehensive codebase exploration and detective-style investigation tasks. **Why P6:** New capability, not fixing existing issues.
+
+---
+
+## Priority 7: Research
+
+### Research Claude Code Plugins - 2026-02-10
+
+- **Investigate packaging Aether as a Claude Code plugin** - Research the official plugin format and whether Aether could be distributed as a plugin. **Problem:** Currently Aether is a collection of commands/skills that must be manually set up. Plugins allow single-command installation and sharing. **Files:** Review plugin docs at code.claude.com/docs/en/plugins, anthropics/claude-code GitHub, and claude-plugins.dev registry. **Solution:** Determine if we can bundle ant colony system + CDS workflow as an installable plugin for broader distribution. **Why P7:** Research task, can happen in parallel with implementation work.
+
+---
+
+## Priority 8: Backlog (Future Exploration)
+
+### Weird Colony Ideas to Explore - 2026-02-10
+
+- **Review creative colony enhancement concepts** - Brainstormed ideas for making the colony feel more alive without adding commands: (1) Colony Mood - single emergent emoji/word indicator of colony health, (2) Dream State - idle-time speculation where colony notices things while you're away, (3) Worker Personality Variance - subtle personality modifiers (careful/bold/curious/skeptical) creating emergence from variation, (4) Memory Echoes - code-location-attached memories that surface when revisiting files, (5) Silent Watcher - passive immune system that quietly emits pheromones when it notices concerns, (6) Entropy Signal - fourth pheromone type representing chaos/tech debt that colony naturally cleans, (7) Colony Echoes Across Projects - cross-pollination of instincts between colonies on similar tech stacks. **Status:** Ideas only, needs review to select which to pursue.
+
+---
+
+## Token Efficiency Notes
+
+All implementations should follow these principles:
+- **Load summaries, not full files** - First N lines, not entire contents
+- **Score before sending** - Filter irrelevant items before adding to context
+- **Cap lists** - Max 3-5 items for any list (instincts, TODOs, learnings)
+- **Progressive disclosure** - Show counts by default, details on demand
+- **Single source of truth** - CONTEXT.md replaces reading 5 separate files

@@ -11,14 +11,24 @@ The phase to build is: `$ARGUMENTS`
 
 ### Step 1: Validate + Read State
 
-If `$ARGUMENTS` is empty or not a number:
+**Parse $ARGUMENTS:**
+1. Extract the phase number (first argument)
+2. Check remaining arguments for flags:
+   - If contains `--verbose` or `-v`: set `verbose_mode = true`
+   - Otherwise: set `verbose_mode = false`
+
+If the phase number is empty or not a number:
 
 ```
-Usage: /ant:build <phase_number>
+Usage: /ant:build <phase_number> [--verbose|-v]
 
-Example:
-  /ant:build 1    Build Phase 1
-  /ant:build 3    Build Phase 3
+Options:
+  --verbose, -v   Show full completion details (spawn tree, TDD, patterns)
+
+Examples:
+  /ant:build 1              Build Phase 1 (compact output)
+  /ant:build 1 --verbose    Build Phase 1 (full details)
+  /ant:build 3 -v           Build Phase 3 (full details)
 ```
 
 Stop here.
@@ -44,6 +54,13 @@ Extract:
 - Find the phase matching the requested ID. If not found -> output `Phase {id} not found.` and stop.
 - If the phase status is `"completed"` -> output `Phase {id} already completed.` and stop.
 
+**Auto-Recovery Header (Session Start):**
+If `goal` exists and state is valid, output a brief context line:
+```
+🔄 Resuming: Phase {current_phase} - {phase_name}
+```
+This helps recover context after session clears. Continue immediately (non-blocking).
+
 ### Step 2: Update State
 
 Read then update `.aether/data/COLONY_STATE.json`:
@@ -65,9 +82,16 @@ Create a git checkpoint for rollback capability.
 git rev-parse --git-dir 2>/dev/null
 ```
 
-- **If succeeds** (is a git repo): `git add -A && git commit --allow-empty -m "aether-checkpoint: pre-phase-$PHASE_NUMBER"`
-  Store the commit hash.
-- **If fails** (not a git repo): Set checkpoint hash to `"(not a git repo)"`.
+- **If succeeds** (is a git repo):
+  1. Check for changes: `git status --porcelain`
+  2. **If changes exist**: `git stash push --include-untracked -m "aether-checkpoint: pre-phase-$PHASE_NUMBER"`
+     - Verify: `git stash list | head -1 | grep "aether-checkpoint"` — warn if empty
+     - Store checkpoint as `{type: "stash", ref: "aether-checkpoint: pre-phase-$PHASE_NUMBER"}`
+  3. **If clean working tree**: Record `HEAD` hash via `git rev-parse HEAD`
+     - Store checkpoint as `{type: "commit", ref: "$HEAD_HASH"}`
+- **If fails** (not a git repo): Set checkpoint to `{type: "none", ref: "(not a git repo)"}`.
+
+Rollback procedure: `git stash pop` (if type is "stash") or `git reset --hard $ref` (if type is "commit").
 
 Output header:
 
@@ -77,7 +101,8 @@ Output header:
 ═══════════════════════════════════════════════════ 🔨🐜🏗️🐜🔨
 
 📍 Phase {id}: {name}
-💾 Git Checkpoint: {commit_hash}
+💾 Git Checkpoint: {checkpoint_type} → {checkpoint_ref}
+🔄 Rollback: `git stash pop` (stash) or `git reset --hard {ref}` (commit)
 ```
 
 ### Step 4: Load Constraints
@@ -128,14 +153,14 @@ Display spawn plan:
 🐜 SPAWN PLAN
 =============
 Wave 1 (parallel):
-  🔨 {Builder-Name}: Task {id} - {description}
-  🔨 {Builder-Name}: Task {id} - {description}
+  🔨{Builder-Name}: Task {id} - {description}
+  🔨{Builder-Name}: Task {id} - {description}
 
 Wave 2 (after Wave 1):
-  🔨 {Builder-Name}: Task {id} - {description}
+  🔨{Builder-Name}: Task {id} - {description}
 
 Verification:
-  👁️ {Watcher-Name}: Verify all work independently
+  👁️{Watcher-Name}: Verify all work independently
 
 Total: {N} Builders + 1 Watcher = {N+1} spawns
 ```
@@ -165,11 +190,34 @@ Phase: {phase_name}
 --- CONSTRAINTS ---
 {constraints from Step 4}
 
+--- COLONY KNOWLEDGE ---
+{Include this section ONLY if memory.instincts or memory.phase_learnings exist in COLONY_STATE.json.}
+
+Top Instincts (proven patterns — follow these):
+{For each instinct in memory.instincts where confidence >= 0.5, sorted by confidence descending, max 5:}
+  [{confidence}] {trigger} → {action}
+{If none qualify: omit this sub-section}
+
+Recent Learnings:
+{For each learning in memory.phase_learnings (last 3 phases only) where status == "validated":}
+  - {claim}
+{If none qualify: omit this sub-section}
+
+Error Patterns to Avoid:
+{For each pattern in errors.flagged_patterns:}
+  ⚠️ {description}
+{If none: omit this sub-section}
+
 --- INSTRUCTIONS ---
 1. Read ~/.aether/workers.md for Builder discipline
 2. Implement the task completely
 3. Write actual test files (not just claims)
 4. Log your work: bash ~/.aether/aether-utils.sh activity-log "CREATED" "{ant_name} (Builder)" "{file_path}"
+5. Before modifying any file, check for grave markers:
+   bash ~/.aether/aether-utils.sh grave-check "{file_path}"
+   If caution_level is "high": read the failure_summary, add extra test coverage for that area, mention the graveyard in your summary
+   If caution_level is "low": note it and proceed carefully
+   If caution_level is "none": proceed normally
 
 --- SPAWN CAPABILITY ---
 You are at depth {depth}. You MAY spawn sub-workers if you encounter genuine surprise (3x expected complexity).
@@ -210,14 +258,23 @@ Return JSON:
 }
 ```
 
-### Step 5.2: Collect Wave 1 Results
+### Step 5.2: Collect Wave 1 Results (BLOCKING)
 
-Use TaskOutput to collect results from all Wave 1 workers.
+**CRITICAL: You MUST wait for ALL Wave 1 workers to complete before proceeding.**
 
-For each completed worker:
+For each spawned worker, call TaskOutput with `block: true` to wait for completion:
+- Use the task_id from each Task tool response
+- Do NOT proceed to Step 5.3 until ALL workers have returned results
+- Parse each worker's JSON output to collect: status, files_created, files_modified, blockers
+
+Store all results for synthesis in Step 5.6.
+
+For each completed worker, log:
 ```bash
 bash ~/.aether/aether-utils.sh spawn-complete "{ant_name}" "completed" "{summary}"
 ```
+
+**Only proceed to Step 5.3 after ALL Wave 1 TaskOutput calls have returned.**
 
 ### Step 5.3: Spawn Wave 2+ Workers (Sequential Waves)
 
@@ -241,6 +298,14 @@ Independently verify all work done by Builders in Phase {id}.
 --- WHAT TO VERIFY ---
 Files created: {list from builder results}
 Files modified: {list from builder results}
+
+--- COMMAND RESOLUTION ---
+Resolve build, test, type-check, and lint commands using this priority chain (stop at first match per command):
+1. **CLAUDE.md** — Check project CLAUDE.md (in your system context) for explicit commands
+2. **CODEBASE.md** — Read `.planning/CODEBASE.md` `## Commands` section
+3. **Fallback** — Use language-specific examples below (Execution Verification section)
+
+Use resolved commands for all verification steps below.
 
 --- VERIFICATION CHECKLIST ---
 1. Do the files exist? (Read each one)
@@ -311,6 +376,17 @@ Return JSON:
 }
 ```
 
+### Step 5.4.1: Collect Watcher Results (BLOCKING)
+
+**CRITICAL: You MUST wait for the Watcher to complete before proceeding.**
+
+Call TaskOutput with `block: true` using the Watcher's task_id:
+- Wait for the Watcher's JSON response
+- Parse: verification_passed, issues_found, quality_score, recommendation
+- Store results for synthesis in Step 5.6
+
+**Only proceed to Step 5.5 after Watcher TaskOutput has returned.**
+
 ### Step 5.5: Create Flags for Verification Failures
 
 If the Watcher reported `verification_passed: false` or `recommendation: "fix_required"`:
@@ -329,6 +405,8 @@ bash ~/.aether/aether-utils.sh activity-log "FLAG" "Watcher" "Created blocker: {
 This ensures verification failures are persisted as blockers that survive context resets.
 
 ### Step 5.6: Synthesize Results
+
+**This step runs ONLY after ALL TaskOutput calls have returned (Steps 5.2, 5.3, 5.4.1).**
 
 Collect all worker outputs and create phase summary:
 
@@ -354,6 +432,19 @@ Collect all worker outputs and create phase summary:
   "quality_notes": "..."
 }
 ```
+
+**Graveyard Recording:**
+For each worker that returned `status: "failed"`:
+  For each file in that worker's `files_modified` or `files_created`:
+```bash
+bash ~/.aether/aether-utils.sh grave-add "{file}" "{ant_name}" "{task_id}" {phase} "{first blocker or summary}"
+```
+  Log the grave marker:
+```bash
+bash ~/.aether/aether-utils.sh activity-log "GRAVE" "Queen" "Grave marker placed at {file} — {ant_name} failed: {summary}"
+```
+
+Only fires when workers fail. Zero impact on successful builds.
 
 --- SPAWN TRACKING ---
 
@@ -445,7 +536,36 @@ Use AskUserQuestion to get approval. Record in events:
 
 ### Step 7: Display Results
 
-Display build summary:
+**This step runs ONLY after synthesis is complete. All values come from actual worker results.**
+
+Display build summary based on synthesis results AND `verbose_mode` from Step 1:
+
+**If verbose_mode = false (compact output, ~12 lines):**
+
+```
+🔨 PHASE {id} {status_icon}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📍 {name}
+📊 {status} | 📁 {files_created count} created, {files_modified count} modified
+🐜 {spawn_count} workers | 🧪 {tests_total} tests {if all_passing}passing{else}{passed}/{total}{end if}
+{if learning.patterns_observed.length > 0:}🧠 +{patterns_observed.length} patterns{end if}
+
+{if synthesis.status == "failed" OR verification.recommendation == "fix_required":}
+⚠️  BLOCKERS: {first 2 issues, comma-separated}
+{end if}
+
+➡️  Next: {primary_command}
+    --verbose for spawn tree, TDD details, patterns
+```
+
+**Status icon logic:** completed+proceed = checkmark, blockers = warning, failed = X
+
+**Primary command logic:**
+- completed + proceed: `/ant:continue`
+- has blockers: `/ant:flags`
+- failed: `/ant:swarm`
+
+**If verbose_mode = true (full output):**
 
 ```
 🔨🐜🏗️🐜🔨 ═══════════════════════════════════════════════════
@@ -460,9 +580,9 @@ Display build summary:
    {summary from synthesis}
 
 🐜 Colony Work Tree:
-   👑 Queen
+   👑Queen
 {for each spawn in spawn_tree:}
-   ├── {emoji} {caste} {ant_name}: {task} [{status}]
+   ├── {caste_emoji}{ant_name}: {task} [{status}]
 {end for}
 
 ✅ Tasks Completed:
@@ -491,12 +611,19 @@ Display build summary:
 {end if}
 
 🐜 Next Steps:
+{if synthesis.status == "completed" AND verification.recommendation == "proceed":}
    /ant:continue   ➡️  Advance to next phase
    /ant:feedback   💬 Give feedback first
-   /ant:status     📊 View colony status
+{else if synthesis.status == "failed" OR verification.recommendation == "fix_required":}
+   ⚠️  BLOCKERS DETECTED - Cannot proceed until resolved
+   /ant:flags      🚩 View blockers
+   /ant:swarm      🔥 Auto-fix issues
+{end if}
 
-💾 State persisted to .aether/data/ — safe to /clear if needed
+💾 State persisted — safe to /clear, then run /ant:continue
 ```
+
+**Conditional Next Steps:** The suggestions above are based on actual worker results. If verification failed or blockers exist, `/ant:continue` is NOT suggested.
 
 **IMPORTANT:** Build does NOT update task statuses or advance state. Run `/ant:continue` to:
 - Mark tasks as completed

@@ -54,7 +54,7 @@ shift 2>/dev/null || true
 case "$cmd" in
   help)
     cat <<'EOF'
-{"ok":true,"commands":["help","version","validate-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","update-progress","check-antipattern","error-flag-pattern","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
+{"ok":true,"commands":["help","version","validate-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","update-progress","check-antipattern","error-flag-pattern","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","grave-add","grave-check"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
 EOF
     ;;
   version)
@@ -976,6 +976,78 @@ EOF
     else
       json_ok "{\"not_found\":true,\"swarm_id\":\"$swarm_id\"}"
     fi
+    ;;
+
+  grave-add)
+    # Record a grave marker when a builder fails at a file
+    # Usage: grave-add <file> <ant_name> <task_id> <phase> <failure_summary> [function] [line]
+    [[ $# -ge 5 ]] || json_err "Usage: grave-add <file> <ant_name> <task_id> <phase> <failure_summary> [function] [line]"
+    [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "COLONY_STATE.json not found"
+    file="$1"
+    ant_name="$2"
+    task_id="$3"
+    phase="$4"
+    failure_summary="$5"
+    func="${6:-null}"
+    line="${7:-null}"
+    id="grave_$(date -u +%s)_$(head -c 2 /dev/urandom | od -An -tx1 | tr -d ' ')"
+    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    if [[ "$phase" =~ ^[0-9]+$ ]]; then
+      phase_jq="$phase"
+    else
+      phase_jq="null"
+    fi
+    if [[ "$func" == "null" ]]; then
+      func_jq="null"
+    else
+      func_jq="\"$func\""
+    fi
+    if [[ "$line" =~ ^[0-9]+$ ]]; then
+      line_jq="$line"
+    else
+      line_jq="null"
+    fi
+    updated=$(jq --arg id "$id" --arg file "$file" --arg ant "$ant_name" --arg tid "$task_id" \
+      --argjson phase "$phase_jq" --arg summary "$failure_summary" \
+      --argjson func "$func_jq" --argjson line "$line_jq" --arg ts "$ts" '
+      (.graveyards // []) as $graves |
+      . + {graveyards: ($graves + [{
+        id: $id,
+        file: $file,
+        ant_name: $ant,
+        task_id: $tid,
+        phase: $phase,
+        failure_summary: $summary,
+        function: $func,
+        line: $line,
+        timestamp: $ts
+      }])} |
+      if (.graveyards | length) > 30 then .graveyards = .graveyards[-30:] else . end
+    ' "$DATA_DIR/COLONY_STATE.json") || json_err "Failed to update COLONY_STATE.json"
+    atomic_write "$DATA_DIR/COLONY_STATE.json" "$updated"
+    json_ok "\"$id\""
+    ;;
+
+  grave-check)
+    # Query for grave markers near a file path
+    # Usage: grave-check <file_path>
+    # Read-only, never modifies state
+    [[ $# -ge 1 ]] || json_err "Usage: grave-check <file_path>"
+    [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "COLONY_STATE.json not found"
+    check_file="$1"
+    check_dir=$(dirname "$check_file")
+    json_ok "$(jq --arg file "$check_file" --arg dir "$check_dir" '
+      (.graveyards // []) as $graves |
+      ($graves | map(select(.file == $file))) as $exact |
+      ($graves | map(select((.file | split("/")[:-1] | join("/")) == $dir))) as $dir_matches |
+      ($exact | length) as $exact_count |
+      ($dir_matches | length) as $dir_count |
+      (if $exact_count > 0 then "high"
+       elif $dir_count >= 2 then "high"
+       elif $dir_count == 1 then "low"
+       else "none" end) as $caution |
+      {graves: $dir_matches, count: $dir_count, exact_matches: $exact_count, caution_level: $caution}
+    ' "$DATA_DIR/COLONY_STATE.json")"
     ;;
 
   *)

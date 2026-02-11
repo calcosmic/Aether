@@ -56,7 +56,7 @@ Display header:
 
 Before any investigation that might lead to fixes:
 ```bash
-bash ~/.aether/aether-utils.sh autofix-checkpoint
+bash ~/.aether/aether-utils.sh autofix-checkpoint "pre-swarm-$SWARM_ID"
 ```
 
 Store the result for potential rollback:
@@ -250,6 +250,11 @@ Rank fix options:
 ### Step 8: Apply Best Fix
 
 Select the highest-confidence solution and apply it:
+
+**Command Resolution:** Before running verification, resolve `{build_command}` and `{test_command}` using this priority chain (stop at first match per command):
+1. **CLAUDE.md** — Check project CLAUDE.md (in your system context) for explicit build/test commands
+2. **CODEBASE.md** — Read `.planning/CODEBASE.md` `## Commands` section
+3. **Fallback** — Use project manifest heuristics (e.g., `npm run build`/`npm test` for package.json)
 
 ```
 🔧 Applying Fix #1...

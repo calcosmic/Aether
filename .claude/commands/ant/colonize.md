@@ -36,6 +36,40 @@ Read found files. Extract:
 - Key directories (src/, lib/, tests/, etc.)
 - File counts per top-level directory
 
+### Step 2.5: Command Detection
+
+Detect build, test, type-check, and lint commands from two sources. Track each command with its source attribution (`claude_md` or `heuristic`).
+
+**Source 1 — CLAUDE.md (priority):**
+
+Read `CLAUDE.md` in the project root. If it does not exist, skip to Source 2.
+Scan for commands under headings matching: `Commands`, `Scripts`, `Development`, `Build`, `Testing`, `Lint`, or similar.
+Also extract inline code blocks containing patterns like `npm`, `npx`, `yarn`, `pnpm`, `cargo`, `go`, `pytest`, `make`, `gradle`, `mvn`.
+For each command found, store: `{ label, command, source: "claude_md" }`.
+
+**Source 2 — Heuristic from package manifests:**
+
+Using the manifests found in Step 2, infer commands with this table:
+
+| Manifest | Field/Pattern | Label | Command |
+|---|---|---|---|
+| package.json | `scripts.test` | test | `npm test` |
+| package.json | `scripts.build` | build | `npm run build` |
+| package.json | `scripts.lint` | lint | `npm run lint` |
+| package.json | `scripts.typecheck` or `scripts.type-check` | typecheck | `npm run typecheck` |
+| Cargo.toml | (exists) | test | `cargo test` |
+| Cargo.toml | (exists) | build | `cargo build` |
+| Cargo.toml | `clippy` in deps | lint | `cargo clippy` |
+| pyproject.toml | `[tool.pytest]` or pytest in deps | test | `pytest` |
+| pyproject.toml | `[tool.ruff]` or ruff in deps | lint | `ruff check .` |
+| pyproject.toml | `[tool.mypy]` or mypy in deps | typecheck | `mypy .` |
+| go.mod | (exists) | test | `go test ./...` |
+| go.mod | (exists) | build | `go build ./...` |
+
+For each inferred command, only store it if no command with the same label was already found from CLAUDE.md (CLAUDE.md wins per-label). Store as: `{ label, command, source: "heuristic" }`.
+
+If neither source yields any commands, set the detected commands list to empty.
+
 ### Step 3: Write CODEBASE.md
 
 Create `.planning/CODEBASE.md` (ensure `.planning/` exists first):
@@ -54,6 +88,13 @@ Create `.planning/CODEBASE.md` (ensure `.planning/` exists first):
 - <dep1>: <purpose>
 - <dep2>: <purpose>
 - ...
+
+## Commands
+<for each detected command from Step 2.5>
+- **<label>**: `<command>` (<source: claude_md | heuristic>)
+<if no commands detected>
+No build system detected.
+</if>
 
 **Test Location:** <tests/ or __tests__/ or similar>
 
@@ -100,3 +141,22 @@ Next:
   /ant:focus "<area>"    Inject focus before planning
   /ant:redirect "<pat>"  Inject constraint before planning
 ```
+
+### Step 5.5: Suggest Commands for CLAUDE.md
+
+Skip if all commands came from `claude_md` or none were detected. This is **non-blocking** -- do not edit CLAUDE.md automatically.
+
+For heuristic-sourced commands only, output:
+
+```
+💡 Detected commands not yet in CLAUDE.md. Consider adding:
+```
+
+Then a fenced code block the user can copy-paste into CLAUDE.md:
+
+```markdown
+## Commands
+- <label>: `<command>`
+```
+
+Then: `Paste the above into your project's CLAUDE.md to skip heuristic detection next time.`

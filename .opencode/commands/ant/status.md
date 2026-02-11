@@ -43,6 +43,30 @@ If `version` field is missing, "1.0", or "2.0":
 3. Output: `State auto-upgraded to v3.0`
 4. Continue with command.
 
+### Step 1.5: Show Resumption Context
+
+If `goal` exists and is not null, display a resumption header to help orient the session:
+
+1. Extract `current_phase` and phase name from `plan.phases[current_phase - 1].name`
+2. Get the last event timestamp from the `events` array (last element, parse the timestamp before the first `|`)
+3. Display:
+
+```
+🔄 Resuming: Phase <current_phase> - <phase_name>
+   Last activity: <last_event_timestamp>
+```
+
+**Examples:**
+```
+🔄 Resuming: Phase 2 - Implement Core Features
+   Last activity: 2024-01-15T14:32:00Z
+```
+
+**Edge cases:**
+- If no phase name: show "Phase <N> - (unnamed)"
+- If no events array or empty: omit "Last activity" line
+- If `current_phase` is 0: show "Phase 0 - Not started"
+
 ### Step 2: Compute Summary
 
 From state, extract:
@@ -99,8 +123,16 @@ Output format:
 🚩 Flags: <blockers> blockers | <issues> issues | <notes> notes
 
 State: <state>
-Next:  /ant:<suggested command>
+Next:  /ant:<suggested command>   <phase_context>
 ```
+
+**Phase context for Next line:** Include the phase name inline with the suggestion:
+- READY → `Next:  /ant:build 3   Phase 3: Add Authentication`
+- EXECUTING → `Next:  /ant:continue   Phase 3: Add Authentication`
+- PLANNING → `Next:  /ant:plan`
+- IDLE → `Next:  /ant:init`
+
+Look up the phase name from `plan.phases[current_phase].name` and append it.
 
 **If instincts exist, also show top 3:**
 ```

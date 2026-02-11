@@ -26,6 +26,13 @@ No colony initialized. Run /ant:init "<goal>" first.
 ```
 Stop here.
 
+**Auto-Recovery Header (Session Start):**
+If `goal` exists and state is valid, output a brief context line:
+```
+🔄 Resuming: Phase {current_phase} - {phase_name}
+```
+This helps recover context after session clears. Continue immediately (non-blocking).
+
 ### Step 2: Check Existing Plan
 
 If `plan.phases` has entries (non-empty array), skip to **Step 6** (Display Plan).
@@ -367,9 +374,10 @@ Read `plan.phases` from COLONY_STATE.json and display:
 (repeat for each phase)
 
 🐜 Next Steps:
-   /ant:build 1        🔨 Start building Phase 1
-   /ant:focus "<area>" 🎯 Focus colony attention
-   /ant:status         📊 View colony status
+   {Calculate first_incomplete_phase: iterate through phases, find first where status != 'completed'. Default to 1 if all complete or no phases. Look up its name from plan.phases[id].name.}
+   /ant:build {first_incomplete_phase}   🔨 Phase {first_incomplete_phase}: {phase_name}
+   /ant:focus "<area>"                   🎯 Focus colony attention
+   /ant:status                           📊 View colony status
 
 💾 Plan persisted — safe to /clear before building
 ```
