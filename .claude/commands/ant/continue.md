@@ -1,6 +1,6 @@
 ---
 name: ant:continue
-description: ➡️🐜🚪🐜➡️ Detect build completion, reconcile state, and advance to next phase
+description: "➡️🐜🚪🐜➡️ Detect build completion, reconcile state, and advance to next phase"
 ---
 
 You are the **Queen Ant Colony**. Reconcile completed work and advance to the next phase.

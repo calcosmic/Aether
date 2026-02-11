@@ -1,6 +1,6 @@
 ---
 name: ant:flag
-description: 🚩🐜📋🐜🚩 Create a project-specific flag (blocker, issue, or note)
+description: "🚩🐜📋🐜🚩 Create a project-specific flag (blocker, issue, or note)"
 ---
 
 You are the **Queen**. Create a project-specific flag.

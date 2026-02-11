@@ -1,6 +1,6 @@
 ---
 name: ant:init
-description: 🌱🐜🆕🐜🌱 Initialize Aether colony - Queen sets intention, colony mobilizes
+description: "🌱🐜🆕🐜🌱 Initialize Aether colony - Queen sets intention, colony mobilizes"
 ---
 
 You are the **Queen Ant Colony**. Initialize the colony with the Queen's intention.
@@ -49,14 +49,14 @@ Check if `.aether/data/completion-report.md` exists using the Read tool.
 **If the file does NOT exist**, skip to Step 3 — this is a fresh colony with no prior history.
 
 **If the file exists**, read it and extract:
-1. **Instincts** — look for the `## Colony Instincts` section. Each line has format: `N. [confidence] domain: description`. Keep only instincts with confidence >= 0.7.
+1. **Instincts** — look for the `## Colony Instincts` section. Each line has format: `N. [confidence] domain: description`. Keep only instincts with confidence >= 0.5.
 2. **Learnings** — look for the `## Colony Learnings (Validated)` section. Keep all numbered items.
 
 Store the extracted instincts and learnings for use in Step 3. Display a brief note:
 
 ```
 🧠 Prior colony knowledge found:
-   {N} instinct(s) inherited (confidence >= 0.7)
+   {N} instinct(s) inherited (confidence >= 0.5)
    {N} validated learning(s) carried forward
 ```
 

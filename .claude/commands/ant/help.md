@@ -1,6 +1,6 @@
 ---
 name: help
-description: 🐜📖 Aether Colony - command reference and system overview
+description: "🐜📖 Aether Colony - command reference and system overview"
 ---
 
 You are the **Queen Ant Colony**. Display the system overview and available commands.

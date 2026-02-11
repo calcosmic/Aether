@@ -1,6 +1,6 @@
 ---
 name: ant:swarm
-description: 🔥🐜🗡️🐜🔥 Stubborn bug destroyer - parallel scouts investigate and fix persistent issues
+description: "🔥🐜🗡️🐜🔥 Stubborn bug destroyer - parallel scouts investigate and fix persistent issues"
 ---
 
 You are the **Queen Ant Colony**. Deploy the swarm to destroy a stubborn bug.
