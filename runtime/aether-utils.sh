@@ -54,7 +54,7 @@ shift 2>/dev/null || true
 case "$cmd" in
   help)
     cat <<'EOF'
-{"ok":true,"commands":["help","version","validate-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","update-progress","check-antipattern","error-flag-pattern","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","generate-commit-message"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
+{"ok":true,"commands":["help","version","validate-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","update-progress","check-antipattern","error-flag-pattern","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","grave-add","grave-check","generate-commit-message"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
 EOF
     ;;
   version)
@@ -777,6 +777,277 @@ EOF
     num=$((RANDOM % 99 + 1))
     name="${prefix}-${num}"
     json_ok "\"$name\""
+    ;;
+
+  # ============================================
+  # SWARM UTILITIES (ant:swarm support)
+  # ============================================
+
+  autofix-checkpoint)
+    # Create checkpoint before applying auto-fix
+    # Usage: autofix-checkpoint
+    # Returns: {type: "stash"|"commit"|"none", ref: "..."}
+    if git rev-parse --git-dir >/dev/null 2>&1; then
+      # Check if there are changes to stash
+      if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
+        stash_name="aether-autofix-$(date +%s)"
+        if git stash push -m "$stash_name" >/dev/null 2>&1; then
+          json_ok "{\"type\":\"stash\",\"ref\":\"$stash_name\"}"
+        else
+          # Stash failed, record commit hash
+          hash=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
+          json_ok "{\"type\":\"commit\",\"ref\":\"$hash\"}"
+        fi
+      else
+        # Clean working directory, just record commit hash
+        hash=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
+        json_ok "{\"type\":\"commit\",\"ref\":\"$hash\"}"
+      fi
+    else
+      json_ok '{"type":"none","ref":null}'
+    fi
+    ;;
+
+  autofix-rollback)
+    # Rollback from checkpoint if fix failed
+    # Usage: autofix-rollback <type> <ref>
+    # Returns: {rolled_back: bool, method: "stash"|"reset"|"none"}
+    ref_type="${1:-none}"
+    ref="${2:-}"
+
+    case "$ref_type" in
+      stash)
+        # Find and pop the stash
+        stash_ref=$(git stash list 2>/dev/null | grep "$ref" | head -1 | cut -d: -f1 || echo "")
+        if [[ -n "$stash_ref" ]]; then
+          if git stash pop "$stash_ref" >/dev/null 2>&1; then
+            json_ok '{"rolled_back":true,"method":"stash"}'
+          else
+            json_ok '{"rolled_back":false,"method":"stash","error":"stash pop failed"}'
+          fi
+        else
+          json_ok '{"rolled_back":false,"method":"stash","error":"stash not found"}'
+        fi
+        ;;
+      commit)
+        # Reset to the commit
+        if [[ -n "$ref" && "$ref" != "unknown" ]]; then
+          if git reset --hard "$ref" >/dev/null 2>&1; then
+            json_ok '{"rolled_back":true,"method":"reset"}'
+          else
+            json_ok '{"rolled_back":false,"method":"reset","error":"reset failed"}'
+          fi
+        else
+          json_ok '{"rolled_back":false,"method":"reset","error":"invalid ref"}'
+        fi
+        ;;
+      none|*)
+        json_ok '{"rolled_back":false,"method":"none"}'
+        ;;
+    esac
+    ;;
+
+  spawn-can-spawn-swarm)
+    # Check if swarm can spawn more scouts (separate from phase workers)
+    # Usage: spawn-can-spawn-swarm <swarm_id>
+    # Swarm has its own cap of 6 (4 scouts + 2 sub-scouts max)
+    swarm_id="${1:-swarm}"
+    swarm_cap=6
+
+    current=0
+    if [[ -f "$DATA_DIR/spawn-tree.txt" ]]; then
+      current=$(grep -c "|swarm:$swarm_id$" "$DATA_DIR/spawn-tree.txt" 2>/dev/null || echo 0)
+    fi
+
+    if [[ $current -lt $swarm_cap ]]; then
+      can="true"
+      remaining=$((swarm_cap - current))
+    else
+      can="false"
+      remaining=0
+    fi
+
+    json_ok "{\"can_spawn\":$can,\"current\":$current,\"cap\":$swarm_cap,\"remaining\":$remaining,\"swarm_id\":\"$swarm_id\"}"
+    ;;
+
+  swarm-findings-init)
+    # Initialize swarm findings file
+    # Usage: swarm-findings-init <swarm_id>
+    swarm_id="${1:-swarm-$(date +%s)}"
+    findings_file="$DATA_DIR/swarm-findings-$swarm_id.json"
+
+    mkdir -p "$DATA_DIR"
+    cat > "$findings_file" <<EOF
+{
+  "swarm_id": "$swarm_id",
+  "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "status": "active",
+  "findings": [],
+  "solution": null
+}
+EOF
+    json_ok "{\"swarm_id\":\"$swarm_id\",\"file\":\"$findings_file\"}"
+    ;;
+
+  swarm-findings-add)
+    # Add a finding from a scout
+    # Usage: swarm-findings-add <swarm_id> <scout_type> <confidence> <finding_json>
+    swarm_id="${1:-}"
+    scout_type="${2:-}"
+    confidence="${3:-0.5}"
+    finding="${4:-}"
+
+    [[ -z "$swarm_id" || -z "$scout_type" || -z "$finding" ]] && json_err "Usage: swarm-findings-add <swarm_id> <scout_type> <confidence> <finding_json>"
+
+    findings_file="$DATA_DIR/swarm-findings-$swarm_id.json"
+    [[ ! -f "$findings_file" ]] && json_err "Swarm findings file not found: $swarm_id"
+
+    ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+    # Add finding to array
+    updated=$(jq --arg scout "$scout_type" --arg conf "$confidence" --arg ts "$ts" --argjson finding "$finding" '
+      .findings += [{
+        "scout": $scout,
+        "confidence": ($conf | tonumber),
+        "timestamp": $ts,
+        "finding": $finding
+      }]
+    ' "$findings_file")
+
+    echo "$updated" > "$findings_file"
+    count=$(echo "$updated" | jq '.findings | length')
+    json_ok "{\"added\":true,\"scout\":\"$scout_type\",\"total_findings\":$count}"
+    ;;
+
+  swarm-findings-read)
+    # Read all findings for a swarm
+    # Usage: swarm-findings-read <swarm_id>
+    swarm_id="${1:-}"
+    [[ -z "$swarm_id" ]] && json_err "Usage: swarm-findings-read <swarm_id>"
+
+    findings_file="$DATA_DIR/swarm-findings-$swarm_id.json"
+    [[ ! -f "$findings_file" ]] && json_err "Swarm findings file not found: $swarm_id"
+
+    json_ok "$(cat "$findings_file")"
+    ;;
+
+  swarm-solution-set)
+    # Set the chosen solution for a swarm
+    # Usage: swarm-solution-set <swarm_id> <solution_json>
+    swarm_id="${1:-}"
+    solution="${2:-}"
+
+    [[ -z "$swarm_id" || -z "$solution" ]] && json_err "Usage: swarm-solution-set <swarm_id> <solution_json>"
+
+    findings_file="$DATA_DIR/swarm-findings-$swarm_id.json"
+    [[ ! -f "$findings_file" ]] && json_err "Swarm findings file not found: $swarm_id"
+
+    ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+    updated=$(jq --argjson solution "$solution" --arg ts "$ts" '
+      .solution = $solution |
+      .status = "resolved" |
+      .resolved_at = $ts
+    ' "$findings_file")
+
+    echo "$updated" > "$findings_file"
+    json_ok "{\"solution_set\":true,\"swarm_id\":\"$swarm_id\"}"
+    ;;
+
+  swarm-cleanup)
+    # Clean up swarm files after completion
+    # Usage: swarm-cleanup <swarm_id> [--archive]
+    swarm_id="${1:-}"
+    archive="${2:-}"
+
+    [[ -z "$swarm_id" ]] && json_err "Usage: swarm-cleanup <swarm_id> [--archive]"
+
+    findings_file="$DATA_DIR/swarm-findings-$swarm_id.json"
+
+    if [[ -f "$findings_file" ]]; then
+      if [[ "$archive" == "--archive" ]]; then
+        mkdir -p "$DATA_DIR/swarm-archive"
+        mv "$findings_file" "$DATA_DIR/swarm-archive/"
+        json_ok "{\"archived\":true,\"swarm_id\":\"$swarm_id\"}"
+      else
+        rm -f "$findings_file"
+        json_ok "{\"deleted\":true,\"swarm_id\":\"$swarm_id\"}"
+      fi
+    else
+      json_ok "{\"not_found\":true,\"swarm_id\":\"$swarm_id\"}"
+    fi
+    ;;
+
+  grave-add)
+    # Record a grave marker when a builder fails at a file
+    # Usage: grave-add <file> <ant_name> <task_id> <phase> <failure_summary> [function] [line]
+    [[ $# -ge 5 ]] || json_err "Usage: grave-add <file> <ant_name> <task_id> <phase> <failure_summary> [function] [line]"
+    [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "COLONY_STATE.json not found"
+    file="$1"
+    ant_name="$2"
+    task_id="$3"
+    phase="$4"
+    failure_summary="$5"
+    func="${6:-null}"
+    line="${7:-null}"
+    id="grave_$(date -u +%s)_$(head -c 2 /dev/urandom | od -An -tx1 | tr -d ' ')"
+    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    if [[ "$phase" =~ ^[0-9]+$ ]]; then
+      phase_jq="$phase"
+    else
+      phase_jq="null"
+    fi
+    if [[ "$func" == "null" ]]; then
+      func_jq="null"
+    else
+      func_jq="\"$func\""
+    fi
+    if [[ "$line" =~ ^[0-9]+$ ]]; then
+      line_jq="$line"
+    else
+      line_jq="null"
+    fi
+    updated=$(jq --arg id "$id" --arg file "$file" --arg ant "$ant_name" --arg tid "$task_id" \
+      --argjson phase "$phase_jq" --arg summary "$failure_summary" \
+      --argjson func "$func_jq" --argjson line "$line_jq" --arg ts "$ts" '
+      (.graveyards // []) as $graves |
+      . + {graveyards: ($graves + [{
+        id: $id,
+        file: $file,
+        ant_name: $ant,
+        task_id: $tid,
+        phase: $phase,
+        failure_summary: $summary,
+        function: $func,
+        line: $line,
+        timestamp: $ts
+      }])} |
+      if (.graveyards | length) > 30 then .graveyards = .graveyards[-30:] else . end
+    ' "$DATA_DIR/COLONY_STATE.json") || json_err "Failed to update COLONY_STATE.json"
+    atomic_write "$DATA_DIR/COLONY_STATE.json" "$updated"
+    json_ok "\"$id\""
+    ;;
+
+  grave-check)
+    # Query for grave markers near a file path
+    # Usage: grave-check <file_path>
+    # Read-only, never modifies state
+    [[ $# -ge 1 ]] || json_err "Usage: grave-check <file_path>"
+    [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "COLONY_STATE.json not found"
+    check_file="$1"
+    check_dir=$(dirname "$check_file")
+    json_ok "$(jq --arg file "$check_file" --arg dir "$check_dir" '
+      (.graveyards // []) as $graves |
+      ($graves | map(select(.file == $file))) as $exact |
+      ($graves | map(select((.file | split("/")[:-1] | join("/")) == $dir))) as $dir_matches |
+      ($exact | length) as $exact_count |
+      ($dir_matches | length) as $dir_count |
+      (if $exact_count > 0 then "high"
+       elif $dir_count >= 2 then "high"
+       elif $dir_count == 1 then "low"
+       else "none" end) as $caution |
+      {graves: $dir_matches, count: $dir_count, exact_matches: $exact_count, caution_level: $caution}
+    ' "$DATA_DIR/COLONY_STATE.json")"
     ;;
 
   # ============================================

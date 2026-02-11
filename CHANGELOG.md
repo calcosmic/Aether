@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Phase 2: Verification loop priority chain** — Command detection in continue.md and verification-loop.md now uses 3-tier priority chain (CLAUDE.md > CODEBASE.md > heuristic table) instead of heuristic table alone. Heuristic table preserved as fallback. (`continue.md`, `runtime/verification-loop.md` + .opencode/.aether mirrors)
 
 ### Added
+- **CLAUDE.md-aware command detection** — Colonize now extracts build/test/lint commands from CLAUDE.md and package manifests into CODEBASE.md with user suggestions. Verification loop and worker prompts resolve commands via 3-tier priority chain (CLAUDE.md > CODEBASE.md > heuristic fallback) instead of heuristic table alone. (`colonize.md`, `continue.md`, `build.md`, `swarm.md`, `verification-loop.md`, `aether-watcher.md` + .opencode/.aether mirrors)
 - **Phase 4: Tier 2 Gate-Based Commit Suggestions** — Colony now suggests commits at verified boundaries (post-advance and session-pause) via user prompt instead of auto-committing. Added `generate-commit-message` utility to aether-utils.sh for consistent formatting across commit types. (`continue.md`, `pause-colony.md`, `aether-utils.sh` + .opencode mirrors)
 - **Phase 3: Tier 1 Safety Formalization** — Switched build.md checkpoint from `git commit` to `git stash push --include-untracked`, standardized checkpoint naming under `aether-checkpoint:` prefix, added label parameter to `autofix-checkpoint` in aether-utils.sh, added rollback verification to build.md output header, documented rollback procedure in continue.md, updated swarm.md to pass descriptive labels. (`build.md`, `swarm.md`, `continue.md`, `aether-utils.sh` + .opencode mirrors)
 - **Phase 2: Git Staging Strategy Proposal** — 4-tier strategy proposal with comparison matrix and implementation recommendation. Tier 1 (Safety-Only), Tier 2 (Gate-Based Suggestions), Tier 3 (Hooks-Based Automation), Tier 4 (Branch-Aware Colony). Recommends Tiers 1+2 for initial implementation. (`.planning/git-staging-proposal.md`, `.planning/git-staging-tier{1-4}.md`)
@@ -110,3 +111,5 @@ Development releases (versions 2.0.0-2.4.2) building toward stable release. Key 
 - **Semantic communication layer** — 10-100x bandwidth reduction
 - **Error logging and pattern flagging** — Recurring issue detection
 - **Claude-native prompts** — All commands converted from scripts to prompt-based system
+
+- 2026-02-11: .aether/data/review-2026-02-11.md — Comprehensive daily review report covering 3 colony sessions, 10 achievements, 3 regressions, 5 concerns, 3 debunked concerns, and prioritized recommendations

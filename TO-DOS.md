@@ -176,6 +176,56 @@ This file tracks pending work items. Each todo is self-contained with full conte
 
 ---
 
+## Review 2026-02-11 Action Items
+
+### Quick Wins
+
+### ~~Sync aether-utils.sh between .aether/ and runtime/~~ 2026-02-11
+
+- **Copy swarm/grave functions to runtime/** - `.aether/aether-utils.sh` has 10 functions missing from `runtime/aether-utils.sh`: autofix-checkpoint, autofix-rollback, spawn-can-spawn-swarm, swarm-findings-init, swarm-findings-add, swarm-findings-read, swarm-solution-set, swarm-cleanup, grave-add, grave-check. `runtime/` has 1 function .aether/ lacks: generate-commit-message. **Problem:** swarm.md calls these functions and will FAIL when run against runtime/. **Fix:** Copy the 10 missing functions to runtime/aether-utils.sh. **Scope:** trivial, ~80 lines. **Source:** Review 2026-02-11, Regression Hunter agent finding.
+
+### ~~Fix package.json path mismatch~~ 2026-02-11
+
+- **package.json lists non-existent file** - package.json:8-13 lists `.opencode/opencode.json` but the actual file is `.opencode/opencode.json`. npm pack may fail or produce unexpected results. **Fix:** Update files field to `.opencode/opencode.json` (with dot prefix). **Scope:** trivial, 1 line. **Source:** Review 2026-02-11, Git Distribution agent finding.
+
+### ~~Squash 13 checkpoint commits before push~~ 2026-02-11
+
+- **93% of commits are noise** - 13 of 14 unpushed commits are "aether-checkpoint: pre-phase-X" messages with no semantic meaning. Average quality score: 1.2/5. **Problem:** Pollutes git history, makes bisect/debug difficult. **Fix:** Interactive rebase to squash all checkpoints into 1-2 meaningful commits. Keep feature commit "Update spawn output format: emoji adjacent to ant name" separate. **Scope:** 10 minutes. **Source:** Review 2026-02-11, Agent 4 finding.
+
+### ~~Deprecate stale TODO entries~~ 2026-02-11
+
+- **Auto-Load Context and Background CONTEXT.md may be duplicates** - Auto-Load Context on Colony Commands (P1, 2026-02-10) and Pre-Command Context Check (P2, 2026-02-10) describe similar functionality. Background CONTEXT.md File (P2, 2026-02-10) mentioned in completion-report learnings but not implemented. **Fix:** Review these 3 entries, mark duplicates as deprecated, clarify remaining work. **Scope:** 5 minutes. **Source:** Review 2026-02-11, Process Reviewer agent finding.
+
+### Medium Effort
+
+### Standardize YAML quoting across command mirrors 2026-02-11
+
+- **Format drift between .claude/ and .opencode/** - .claude/ uses bare YAML values (`: value`), .opencode/ quotes them (`: "value"`). 16 files have this inconsistency. **Problem:** May cause parsing issues with some YAML parsers. **Fix:** Choose one style (recommend quoted values for compatibility), auto-format the other mirror directory. **Scope:** medium, ~30 files. **Source:** Review 2026-02-11, Regression Hunter agent finding.
+
+### Lower instinct confidence threshold from 0.7 to 0.5 2026-02-11
+
+- **Memory arrays are empty due to threshold** - Current init.md filters instincts with confidence < 0.7. Last report's max confidence was 0.50, resulting in empty `memory.instincts: []`. **Problem:** Cross-session learning is lost because nothing passes the filter. **Fix:** Change threshold in init.md Step 2.5 from >= 0.7 to >= 0.5. **Scope:** trivial, 1 line change. **Source:** Review 2026-02-11, Process Reviewer agent finding.
+
+### Add lint/typecheck scripts to package.json 2026-02-11
+
+- **No automated validation before publish** - package.json has no `lint` or `typecheck` scripts. npm users receive untested code. **Fix:** Add appropriate scripts for shell validation (shellcheck), YAML validation, JSON validation. **Scope:** medium, 2-4 hours. **Source:** Review 2026-02-11, Git Distribution agent finding.
+
+### Strategic
+
+### Build YAML-based command generator 2026-02-11
+
+- **Eliminate manual command duplication** - 20-21 files manually maintained across `.claude/` and `.opencode/` mirrors. Risk of drift increases with each edit. `src/commands/README.md` describes a YAML-based generation system that was never built. **Implementation:** (1) Create YAML definitions for all commands (single source of truth), (2) Build `./bin/generate-commands.sh sync` to propagate changes, (3) Add CI check to verify generated output matches source. **Scope:** significant, large — probably a multi-phase colony project. **Risk:** medium — generator bugs could silently break commands. **Source:** Review 2026-02-11, Dream 4 finding + regression analysis.
+
+### Commit or archive .planning/ directory 2026-02-11
+
+- **Research docs not committed** - `.planning/` contains 13 files (~2,800 lines) of git-staging research and tier specifications. These are uncommitted. **Options:** (a) Commit to repository as design documentation, (b) Move to separate docs repo, (c) Delete if no longer relevant. Tier 3 and Tier 4 are marked "NOT IMPLEMENTED" — are these still planned? **Scope:** medium, decision + action. **Source:** Review 2026-02-11, Agent 1 finding.
+
+### Adopt feature-branch workflow for checkpoints 2026-02-11
+
+- **13/14 commits are checkpoints** - Heavy reliance on local save-points rather than semantic commits. **Problem:** Noise in git history, difficult to debug or bisect. **Fix:** Replace "aether-checkpoint" pattern with meaningful commit messages when changes are pushed. Consider using `git stash` for local save-points (Tier 1 stash-based checkpoints already implemented). **Scope:** behavioral, ongoing. **Source:** Review 2026-02-11, Agent 4 recommendation.
+
+---
+
 ## Token Efficiency Notes
 
 All implementations should follow these principles:
