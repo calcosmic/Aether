@@ -324,13 +324,13 @@ Types:
 
 Instead of direct commands, you emit signals that the colony interprets:
 
-| Signal | Purpose | Decay |
-|--------|---------|-------|
-| 🎯 `FOCUS` | "Pay attention to this" | 1 hour |
-| 🚫 `REDIRECT` | "Avoid this approach" | 24 hours |
-| 💬 `FEEDBACK` | "Here's what I like/dislike" | 6 hours |
+| Signal | Purpose | Priority | Default Expiration |
+|--------|---------|----------|--------------------|
+| 🎯 `FOCUS` | "Pay attention to this" | normal | phase end |
+| 🚫 `REDIRECT` | "Avoid this approach" | high | phase end |
+| 💬 `FEEDBACK` | "Here's what I like/dislike" | low | phase end |
 
-Each caste has different sensitivity to signals. Builders prioritize FOCUS, Watchers prioritize REDIRECT warnings.
+Workers read all active signals and adjust behavior. Use `--ttl` flag for wall-clock expiration (e.g., `--ttl 2h`).
 
 ### Iterative Planning (95% Confidence)
 

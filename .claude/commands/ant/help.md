@@ -26,9 +26,9 @@ GETTING STARTED
 
 PHEROMONE COMMANDS
 
-  /ant:focus "<area>"    Guide colony attention (strength 0.7, 1hr half-life)
-  /ant:redirect "<pat>"  Warn away from pattern (strength 0.9, 24hr half-life)
-  /ant:feedback "<msg>"  Adjust behavior (strength 0.5, 6hr half-life)
+  /ant:focus "<area>"    Guide colony attention (priority: normal, expires: phase end)
+  /ant:redirect "<pat>"  Warn away from pattern (priority: high, expires: phase end)
+  /ant:feedback "<msg>"  Adjust behavior (priority: low, expires: phase end)
 
 STATUS & INSPECTION
 
@@ -90,7 +90,7 @@ HOW IT WORKS
   Phase boundaries are control points: emergence within, gates between.
 
   Pheromone System:
-    Signals decay over time (TTL expiration). Workers sense signals
+    Signals expire after their TTL. Workers sense active signals
     and adjust behavior. FOCUS attracts, REDIRECT repels, FEEDBACK calibrates.
 
   Colony Memory:
