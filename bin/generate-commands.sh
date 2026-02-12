@@ -91,6 +91,56 @@ check_sync() {
     return 0
 }
 
+# Check content-level sync using checksums (Pass 2)
+# Compares each matching file pair by SHA-1 hash and reports diffs
+check_content() {
+    log_info "Checking content-level sync (checksums)..."
+
+    local claude_files=$(list_commands "$CLAUDE_DIR")
+    local drift_count=0
+    local drift_files=""
+
+    for file in $claude_files; do
+        local claude_file="$CLAUDE_DIR/$file"
+        local opencode_file="$OPENCODE_DIR/$file"
+
+        # Skip if OpenCode file doesn't exist (already caught by Pass 1)
+        if [[ ! -f "$opencode_file" ]]; then
+            continue
+        fi
+
+        # Compare SHA-1 checksums (portable across macOS and Linux)
+        local claude_hash opencode_hash
+        claude_hash=$(shasum "$claude_file" | cut -d' ' -f1)
+        opencode_hash=$(shasum "$opencode_file" | cut -d' ' -f1)
+
+        if [[ "$claude_hash" != "$opencode_hash" ]]; then
+            drift_count=$((drift_count + 1))
+            drift_files="${drift_files}  ${file}\n"
+
+            log_warn "Content drift: $file"
+            echo "  Claude:  $claude_hash"
+            echo "  OpenCode: $opencode_hash"
+
+            # Show first 10 lines of diff for context (|| true to handle set -e)
+            echo "  ---"
+            diff -u "$claude_file" "$opencode_file" | head -20 || true
+            echo "  ---"
+            echo ""
+        fi
+    done
+
+    if [[ "$drift_count" -gt 0 ]]; then
+        echo ""
+        log_error "Content drift detected in $drift_count file(s):"
+        echo -e "$drift_files"
+        return 1
+    fi
+
+    log_info "All file contents match (checksums verified)"
+    return 0
+}
+
 # Show diff between command sets
 show_diff() {
     log_info "Comparing command sets..."
@@ -138,7 +188,10 @@ show_help() {
 # Main
 case "${1:-check}" in
     check)
+        # Pass 1: file count + name check
         check_sync
+        # Pass 2: content-level checksum comparison
+        check_content
         ;;
     diff)
         show_diff

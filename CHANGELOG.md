@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Phase 2: Upgrade Sync Checking to Content-Aware** — `generate-commands.sh check` now performs SHA-1 checksum comparison (Pass 2) after filename matching (Pass 1), detecting content drift between `.claude/` and `.opencode/` mirrors. Revealed 3 pre-existing drifts previously invisible to filename-only checks. (`bin/generate-commands.sh`)
+
 ### Verified
 - **Phase 5: Verify Full System Integrity** — Final verification phase confirming all global install locations match repo sources. Full lint suite passed (lint:shell, lint:json, lint:sync). All 4 global locations verified: ~/.claude/commands/ant/ (24 files), ~/.config/opencode/commands/ant/ (24 files), ~/.config/opencode/agents/ (4 files), ~/.aether/ system files. Watcher quality 9/10, Chaos resilience moderate (1 high finding: lint:sync content blind spot, 3 medium, 1 low — all pre-existing infrastructure gaps). Colony goal achieved.
 
