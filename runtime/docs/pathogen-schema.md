@@ -2,7 +2,7 @@
 
 ## Overview
 
-Pathogen signatures extend the existing error pattern format (`~/.aether/error-patterns.json`) with fields for automated detection and escalation. The schema is backward-compatible: existing jq queries on core fields (`name`, `description`, `severity`, `occurrences`, etc.) work unchanged on pathogen entries.
+Pathogen signatures extend the existing error pattern format (`.aether/error-patterns.json`) with fields for automated detection and escalation. The schema is backward-compatible: existing jq queries on core fields (`name`, `description`, `severity`, `occurrences`, etc.) work unchanged on pathogen entries.
 
 ## Storage
 

@@ -87,7 +87,7 @@ If `last_commit_suggestion_phase` equals the current phase, skip this step silen
 
 3. **Generate the commit message:**
 ```bash
-bash ~/.aether/aether-utils.sh generate-commit-message "pause" {current_phase} "{phase_name}"
+bash .aether/aether-utils.sh generate-commit-message "pause" {current_phase} "{phase_name}"
 ```
 Parse the returned JSON to extract `message` and `files_changed`.
 

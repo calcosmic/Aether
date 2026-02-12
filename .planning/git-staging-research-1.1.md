@@ -11,12 +11,12 @@
 | 5 | `.claude/commands/ant/dream.md` | 42 | `git log --oneline -30` | R | Context gathering: see recent project evolution | Part of "Codebase awareness" during dreamer awakening |
 | 6 | `.claude/commands/ant/dream.md` | 43 | `git diff --stat HEAD~10..HEAD 2>/dev/null` | R | Context gathering: see which areas are actively changing | Suppresses errors if fewer than 10 commits exist |
 | 7 | `.claude/commands/ant/dream.md` | 83 | _(reference)_ "A file you noticed in the git log" | R | Dreamer wandering direction hint | Not a command; suggests using git log output to pick exploration targets |
-| 8 | `.claude/commands/ant/swarm.md` | 59 | `bash ~/.aether/aether-utils.sh autofix-checkpoint` | **W** | Create stash-based checkpoint before swarm investigation | Delegates to aether-utils.sh; creates git stash or records HEAD hash |
+| 8 | `.claude/commands/ant/swarm.md` | 59 | `bash .aether/aether-utils.sh autofix-checkpoint` | **W** | Create stash-based checkpoint before swarm investigation | Delegates to aether-utils.sh; creates git stash or records HEAD hash |
 | 9 | `.claude/commands/ant/swarm.md` | 84 | `git log --oneline -20 2>/dev/null` | R | Context: scan recent commits before deploying scouts | Part of Step 4 context reading |
 | 10 | `.claude/commands/ant/swarm.md` | 100 | `git log --oneline -30` | R | Scout instruction: Git Archaeologist sees recent commits | Inside spawned Scout 1 task prompt |
 | 11 | `.claude/commands/ant/swarm.md` | 101 | `git log -p --since="1 week ago" -- {relevant files}` | R | Scout instruction: see recent changes to specific files | Patch-level detail for bug investigation |
 | 12 | `.claude/commands/ant/swarm.md` | 102 | `git blame {suspected file}` | R | Scout instruction: trace line-level authorship | Conditional; only if a specific file is suspected |
-| 13 | `.claude/commands/ant/swarm.md` | 308 | `bash ~/.aether/aether-utils.sh autofix-rollback "{checkpoint_type}" "{checkpoint_ref}"` | **W** | Rollback failed autofix to pre-swarm state | Delegates to aether-utils.sh; pops stash or does `git reset --hard` |
+| 13 | `.claude/commands/ant/swarm.md` | 308 | `bash .aether/aether-utils.sh autofix-rollback "{checkpoint_type}" "{checkpoint_ref}"` | **W** | Rollback failed autofix to pre-swarm state | Delegates to aether-utils.sh; pops stash or does `git reset --hard` |
 | 14 | `.aether/aether-utils.sh` | 790 | `git rev-parse --git-dir` | R | Detect git repo (autofix-checkpoint) | Gate for all checkpoint logic |
 | 15 | `.aether/aether-utils.sh` | 792 | `git status --porcelain` | R | Check for uncommitted changes (autofix-checkpoint) | Determines if stash is needed |
 | 16 | `.aether/aether-utils.sh` | 794 | `git stash push -m "$stash_name"` | **W** | Create named stash as checkpoint | Name format: `aether-autofix-{epoch}` |

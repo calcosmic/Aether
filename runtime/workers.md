@@ -8,7 +8,7 @@ Each worker should have a unique name generated at spawn time. This creates a mo
 
 ```bash
 # Generate a caste-specific name
-ant_name=$(bash ~/.aether/aether-utils.sh generate-ant-name "builder" | jq -r '.result')
+ant_name=$(bash .aether/aether-utils.sh generate-ant-name "builder" | jq -r '.result')
 # Result: "Hammer-42" or "Forge-17", etc.
 ```
 
@@ -31,9 +31,9 @@ When logging activity, include the ant name:
 
 ```bash
 # Log with personality
-bash ~/.aether/aether-utils.sh activity-log "CREATED" "Hammer-42 (Builder)" "Constructed auth module with JWT support"
-bash ~/.aether/aether-utils.sh activity-log "RESEARCH" "Swift-7 (Scout)" "Discovered existing validation patterns in src/utils"
-bash ~/.aether/aether-utils.sh activity-log "MODIFIED" "Vigil-23 (Watcher)" "Inspected test coverage: 87% achieved"
+bash .aether/aether-utils.sh activity-log "CREATED" "Hammer-42 (Builder)" "Constructed auth module with JWT support"
+bash .aether/aether-utils.sh activity-log "RESEARCH" "Swift-7 (Scout)" "Discovered existing validation patterns in src/utils"
+bash .aether/aether-utils.sh activity-log "MODIFIED" "Vigil-23 (Watcher)" "Inspected test coverage: 87% achieved"
 ```
 
 ### Spawn Tracking
@@ -42,10 +42,10 @@ Always log spawns to the spawn tree for visualization:
 
 ```bash
 # When spawning a worker
-bash ~/.aether/aether-utils.sh spawn-log "Prime-1" "builder" "Hammer-42" "implementing auth module"
+bash .aether/aether-utils.sh spawn-log "Prime-1" "builder" "Hammer-42" "implementing auth module"
 
 # When worker completes
-bash ~/.aether/aether-utils.sh spawn-complete "Hammer-42" "completed" "auth module with 5 tests"
+bash .aether/aether-utils.sh spawn-complete "Hammer-42" "completed" "auth module with 5 tests"
 ```
 
 ---
@@ -97,7 +97,7 @@ Before reporting ANY task as complete:
 - Run relevant tests yourself
 - Confirm success criteria with evidence
 
-See `~/.aether/verification.md` for full discipline reference.
+See `.aether/verification.md` for full discipline reference.
 
 ### Verification Loop Discipline
 
@@ -124,7 +124,7 @@ Diff:      [X files changed]
 Overall: [READY/NOT READY]
 ```
 
-See `~/.aether/verification-loop.md` for full discipline reference.
+See `.aether/verification-loop.md` for full discipline reference.
 
 ### Debugging Discipline
 
@@ -148,7 +148,7 @@ When you encounter ANY bug, test failure, or unexpected behavior:
 - "Just try changing X"
 - "I don't fully understand but this might work"
 
-See `~/.aether/debugging.md` for full discipline reference.
+See `.aether/debugging.md` for full discipline reference.
 
 ### TDD Discipline
 
@@ -171,7 +171,7 @@ When implementing ANY new code:
 
 **Coverage target:** 80%+ for new code.
 
-See `~/.aether/tdd.md` for full discipline reference.
+See `.aether/tdd.md` for full discipline reference.
 
 ### Learning Discipline
 
@@ -189,7 +189,7 @@ The colony learns from every phase. Observe patterns for future improvement.
 
 **Report patterns observed** in your output for colony learning.
 
-See `~/.aether/learning.md` for full discipline reference.
+See `.aether/learning.md` for full discipline reference.
 
 ### Coding Standards Discipline
 
@@ -213,14 +213,14 @@ Quick checklist before completing code:
 - **Error handling** - Try/catch with meaningful messages
 - **Async** - Parallelize with Promise.all where possible
 
-See `~/.aether/coding-standards.md` for full discipline reference.
+See `.aether/coding-standards.md` for full discipline reference.
 
 ### Activity Log
 
 Log progress as you work:
 
 ```bash
-bash ~/.aether/aether-utils.sh activity-log "ACTION" "{caste}" "description"
+bash .aether/aether-utils.sh activity-log "ACTION" "{caste}" "description"
 ```
 
 Actions: CREATED (path + lines), MODIFIED (path), RESEARCH (finding), SPAWN (caste + reason), ERROR (description)
@@ -258,7 +258,7 @@ Only spawn if you encounter genuine surprise:
 **Step 1: Check if you can spawn**
 ```bash
 # Check spawn allowance at your depth
-result=$(bash ~/.aether/aether-utils.sh spawn-can-spawn {your_depth})
+result=$(bash .aether/aether-utils.sh spawn-can-spawn {your_depth})
 # Returns: {"can_spawn": true/false, "depth": N, "max_spawns": N, "current_total": N}
 ```
 
@@ -267,13 +267,13 @@ If `can_spawn` is false, complete the work inline.
 **Step 2: Generate child name**
 ```bash
 # Generate a name for the child worker
-child_name=$(bash ~/.aether/aether-utils.sh generate-ant-name "{caste}" | jq -r '.result')
+child_name=$(bash .aether/aether-utils.sh generate-ant-name "{caste}" | jq -r '.result')
 # Returns: "Hammer-42", "Vigil-17", etc.
 ```
 
 **Step 3: Log the spawn**
 ```bash
-bash ~/.aether/aether-utils.sh spawn-log "{your_name}" "{child_caste}" "{child_name}" "{task_summary}"
+bash .aether/aether-utils.sh spawn-log "{your_name}" "{child_caste}" "{child_name}" "{task_summary}"
 ```
 
 **Step 4: Use Task tool**
@@ -283,7 +283,7 @@ Use the Task tool with subagent_type="general-purpose":
 You are {child_name}, a {emoji} {Caste} Ant in the Aether Colony at depth {your_depth + 1}.
 
 --- WORKER SPEC ---
-Read ~/.aether/workers.md for {Caste} discipline.
+Read .aether/workers.md for {Caste} discipline.
 
 --- CONSTRAINTS ---
 {constraints from constraints.json, if any}
@@ -319,7 +319,7 @@ Return a compressed summary:
 **Step 5: Log completion**
 ```bash
 # After Task tool returns
-bash ~/.aether/aether-utils.sh spawn-complete "{child_name}" "{status}" "{summary}"
+bash .aether/aether-utils.sh spawn-complete "{child_name}" "{status}" "{summary}"
 ```
 
 ---
@@ -389,7 +389,7 @@ All passing: ✓
 
 **When Encountering Errors:**
 
-Follow systematic debugging (see `~/.aether/debugging.md`):
+Follow systematic debugging (see `.aether/debugging.md`):
 
 1. **STOP** - Do not attempt quick fixes
 2. **Read error completely** - Stack trace, line numbers, error codes
@@ -497,7 +497,7 @@ Findings:
 
 **When Tests Fail:**
 
-Follow systematic debugging (see `~/.aether/debugging.md`):
+Follow systematic debugging (see `.aether/debugging.md`):
 
 1. **Read the failure completely** - Full error, stack trace
 2. **Reproduce** - Run the specific failing test
@@ -571,7 +571,7 @@ Recommendation: {specific fix or investigation needed}
 
 **When to use:** Planning, goal decomposition, phase structuring, dependency analysis
 
-**Planning Discipline:** See `~/.aether/planning.md` for full reference.
+**Planning Discipline:** See `.aether/planning.md` for full reference.
 
 **Key Rules:**
 - **Bite-sized tasks** - Each task is one action (2-5 minutes of work)
@@ -651,7 +651,7 @@ Each spawn can spawn max 2 more (depth 3)
 Total cap: 10 workers for this phase
 
 --- WORKER SPECS ---
-Read ~/.aether/workers.md for role definitions.
+Read .aether/workers.md for role definitions.
 
 --- OUTPUT FORMAT ---
 {

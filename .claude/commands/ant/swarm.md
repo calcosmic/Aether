@@ -37,7 +37,7 @@ Generate swarm ID: `swarm-<unix_timestamp>`
 
 Initialize swarm findings:
 ```bash
-bash ~/.aether/aether-utils.sh swarm-findings-init "<swarm_id>"
+bash .aether/aether-utils.sh swarm-findings-init "<swarm_id>"
 ```
 
 Display header:
@@ -56,7 +56,7 @@ Display header:
 
 Before any investigation that might lead to fixes:
 ```bash
-bash ~/.aether/aether-utils.sh autofix-checkpoint "pre-swarm-$SWARM_ID"
+bash .aether/aether-utils.sh autofix-checkpoint "pre-swarm-$SWARM_ID"
 ```
 
 Store the result for potential rollback:
@@ -71,7 +71,7 @@ Store the result for potential rollback:
 
 Read existing blockers for context:
 ```bash
-bash ~/.aether/aether-utils.sh flag-list --type blocker
+bash .aether/aether-utils.sh flag-list --type blocker
 ```
 
 Read recent activity:
@@ -205,7 +205,7 @@ Wait for all 4 scouts to complete.
 
 As each scout returns, add their findings:
 ```bash
-bash ~/.aether/aether-utils.sh swarm-findings-add "{swarm_id}" "{scout_type}" "{confidence}" '{finding_json}'
+bash .aether/aether-utils.sh swarm-findings-add "{swarm_id}" "{scout_type}" "{confidence}" '{finding_json}'
 ```
 
 Display each scout's report as they complete:
@@ -290,12 +290,12 @@ Inject learnings:
 
 Set solution in swarm findings:
 ```bash
-bash ~/.aether/aether-utils.sh swarm-solution-set "{swarm_id}" '{solution_json}'
+bash .aether/aether-utils.sh swarm-solution-set "{swarm_id}" '{solution_json}'
 ```
 
 Log success:
 ```bash
-bash ~/.aether/aether-utils.sh activity-log "SWARM_SUCCESS" "Queen" "Swarm {swarm_id} fixed: {brief description}"
+bash .aether/aether-utils.sh activity-log "SWARM_SUCCESS" "Queen" "Swarm {swarm_id} fixed: {brief description}"
 ```
 
 **If verification fails:**
@@ -310,12 +310,12 @@ Attempting rollback...
 
 Rollback:
 ```bash
-bash ~/.aether/aether-utils.sh autofix-rollback "{checkpoint_type}" "{checkpoint_ref}"
+bash .aether/aether-utils.sh autofix-rollback "{checkpoint_type}" "{checkpoint_ref}"
 ```
 
 Log failure:
 ```bash
-bash ~/.aether/aether-utils.sh activity-log "SWARM_FAILED" "Queen" "Swarm {swarm_id} fix failed verification"
+bash .aether/aether-utils.sh activity-log "SWARM_FAILED" "Queen" "Swarm {swarm_id} fix failed verification"
 ```
 
 Track attempt count. If this is the 3rd failure on the same issue:
@@ -341,7 +341,7 @@ Swarm will not attempt further fixes on this issue.
 
 Archive swarm findings:
 ```bash
-bash ~/.aether/aether-utils.sh swarm-cleanup "{swarm_id}" --archive
+bash .aether/aether-utils.sh swarm-cleanup "{swarm_id}" --archive
 ```
 
 Display next steps:

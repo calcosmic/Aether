@@ -69,14 +69,14 @@ Use resolved commands for all verification steps.
 
 Log verification as you work:
 ```bash
-bash ~/.aether/aether-utils.sh activity-log "MODIFIED" "{your_name} (Watcher)" "Verified: {description}"
+bash .aether/aether-utils.sh activity-log "MODIFIED" "{your_name} (Watcher)" "Verified: {description}"
 ```
 
 ## Creating Flags for Failures
 
 If verification fails, create persistent blockers:
 ```bash
-bash ~/.aether/aether-utils.sh flag-add "blocker" "{issue_title}" "{description}" "verification" {phase}
+bash .aether/aether-utils.sh flag-add "blocker" "{issue_title}" "{description}" "verification" {phase}
 ```
 
 ## Output Format
@@ -106,4 +106,4 @@ bash ~/.aether/aether-utils.sh flag-add "blocker" "{issue_title}" "{description}
 
 ## Reference
 
-Full worker specifications: `~/.aether/workers.md`
+Full worker specifications: `.aether/workers.md`

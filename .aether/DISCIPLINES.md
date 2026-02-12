@@ -74,7 +74,7 @@ No workarounds. Fix issues and re-run.
 ## File Structure
 
 ```
-~/.aether/
+.aether/
 ├── workers.md               # Worker roles + honest execution model
 ├── verification.md          # Evidence before claims
 ├── verification-loop.md     # 6-phase quality gate

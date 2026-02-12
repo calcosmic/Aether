@@ -96,10 +96,10 @@ tmux send-keys -t aether-colony:colony.0 'watch -n 1 cat .aether/data/watch-stat
 tmux send-keys -t aether-colony:colony.1 'watch -n 1 cat .aether/data/watch-progress.txt' C-m
 
 # Pane 2 (top-right): Spawn tree visualization
-tmux send-keys -t aether-colony:colony.2 'bash ~/.aether/utils/watch-spawn-tree.sh .aether/data' C-m
+tmux send-keys -t aether-colony:colony.2 'bash .aether/utils/watch-spawn-tree.sh .aether/data' C-m
 
 # Pane 3 (bottom-right): Colorized activity log stream
-tmux send-keys -t aether-colony:colony.3 'bash ~/.aether/utils/colorize-log.sh .aether/data/activity.log' C-m
+tmux send-keys -t aether-colony:colony.3 'bash .aether/utils/colorize-log.sh .aether/data/activity.log' C-m
 
 # Set pane titles (if supported)
 tmux select-pane -t aether-colony:colony.0 -T "Status"
@@ -176,21 +176,21 @@ Attaching now...
 Workers and commands update watch files as they work:
 
 ### Activity Log
-Workers write via: `bash ~/.aether/aether-utils.sh activity-log "ACTION" "caste" "description"`
+Workers write via: `bash .aether/aether-utils.sh activity-log "ACTION" "caste" "description"`
 
 For named ants (recommended):
 ```bash
 # Generate a name first
-ant_name=$(bash ~/.aether/aether-utils.sh generate-ant-name "builder" | jq -r '.result')
+ant_name=$(bash .aether/aether-utils.sh generate-ant-name "builder" | jq -r '.result')
 # Log with ant name
-bash ~/.aether/aether-utils.sh activity-log "CREATED" "$ant_name (Builder)" "Implemented auth module"
+bash .aether/aether-utils.sh activity-log "CREATED" "$ant_name (Builder)" "Implemented auth module"
 ```
 
 ### Spawn Tracking
 Log spawns for tree visualization:
 ```bash
-bash ~/.aether/aether-utils.sh spawn-log "Prime" "builder" "Hammer-42" "implementing auth"
-bash ~/.aether/aether-utils.sh spawn-complete "Hammer-42" "completed" "auth module done"
+bash .aether/aether-utils.sh spawn-log "Prime" "builder" "Hammer-42" "implementing auth"
+bash .aether/aether-utils.sh spawn-complete "Hammer-42" "completed" "auth module done"
 ```
 
 ### Status File
@@ -201,11 +201,11 @@ Commands update `.aether/data/watch-status.txt` with current state:
 - Last Activity: most recent log entry
 
 ### Progress File
-Update via: `bash ~/.aether/aether-utils.sh update-progress <percent> "<message>" <phase> <total>`
+Update via: `bash .aether/aether-utils.sh update-progress <percent> "<message>" <phase> <total>`
 
 Example:
 ```bash
-bash ~/.aether/aether-utils.sh update-progress 45 "Building auth module..." 2 5
+bash .aether/aether-utils.sh update-progress 45 "Building auth module..." 2 5
 ```
 
 ---

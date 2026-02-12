@@ -141,7 +141,7 @@ Write `.aether/data/constraints.json`:
 
 Use the Bash tool to run:
 ```
-bash ~/.aether/aether-utils.sh validate-state colony
+bash .aether/aether-utils.sh validate-state colony
 ```
 
 This validates COLONY_STATE.json structure. If validation fails, output a warning.

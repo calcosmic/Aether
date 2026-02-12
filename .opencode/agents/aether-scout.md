@@ -38,16 +38,16 @@ For external research:
 
 Log discoveries as you work:
 ```bash
-bash ~/.aether/aether-utils.sh activity-log "RESEARCH" "{your_name} (Scout)" "{finding}"
+bash .aether/aether-utils.sh activity-log "RESEARCH" "{your_name} (Scout)" "{finding}"
 ```
 
 ## Spawning
 
 You MAY spawn another scout for parallel research domains:
 ```bash
-bash ~/.aether/aether-utils.sh spawn-can-spawn {your_depth}
-bash ~/.aether/aether-utils.sh generate-ant-name "scout"
-bash ~/.aether/aether-utils.sh spawn-log "{your_name}" "scout" "{child_name}" "{research_task}"
+bash .aether/aether-utils.sh spawn-can-spawn {your_depth}
+bash .aether/aether-utils.sh generate-ant-name "scout"
+bash .aether/aether-utils.sh spawn-log "{your_name}" "scout" "{child_name}" "{research_task}"
 ```
 
 ## Output Format
@@ -72,4 +72,4 @@ bash ~/.aether/aether-utils.sh spawn-log "{your_name}" "scout" "{child_name}" "{
 
 ## Reference
 
-Full worker specifications: `~/.aether/workers.md`
+Full worker specifications: `.aether/workers.md`

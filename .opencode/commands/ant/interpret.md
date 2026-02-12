@@ -219,7 +219,7 @@ Wait for user response.
 ### Step 7: Log Activity
 
 ```bash
-bash ~/.aether/aether-utils.sh activity-log "INTERPRET" "Interpreter" "Dream review: {dream_file}, {confirmed} confirmed, {partial} partial, {unconfirmed} unconfirmed, {refuted} refuted, {actions_taken} actions taken"
+bash .aether/aether-utils.sh activity-log "INTERPRET" "Interpreter" "Dream review: {dream_file}, {confirmed} confirmed, {partial} partial, {unconfirmed} unconfirmed, {refuted} refuted, {actions_taken} actions taken"
 ```
 
 ### Step 8: Display Closing

@@ -275,7 +275,7 @@ Deploys 4 parallel scouts to investigate from multiple angles:
 
 Workers log as they work:
 ```bash
-bash ~/.aether/aether-utils.sh activity-log "ACTION" "caste" "description"
+bash .aether/aether-utils.sh activity-log "ACTION" "caste" "description"
 ```
 
 Actions: CREATED, MODIFIED, RESEARCH, SPAWN, ERROR, COMPLETE

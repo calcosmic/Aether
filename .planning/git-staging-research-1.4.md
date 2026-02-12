@@ -41,7 +41,7 @@ git add -A && git commit --allow-empty -m "aether-checkpoint: pre-phase-$PHASE_N
 #### B. `swarm.md` Step 3 — Autofix Checkpoint
 
 ```bash
-bash ~/.aether/aether-utils.sh autofix-checkpoint
+bash .aether/aether-utils.sh autofix-checkpoint
 ```
 
 - **Nature:** Creates either a git stash or records the current HEAD hash before the swarm applies fixes.

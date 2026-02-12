@@ -78,7 +78,7 @@ Gaps: (analyzing...)
 
 Log start:
 ```bash
-bash ~/.aether/aether-utils.sh activity-log "PLAN_START" "queen" "Iterative planning loop initiated for goal"
+bash .aether/aether-utils.sh activity-log "PLAN_START" "queen" "Iterative planning loop initiated for goal"
 ```
 
 ### Step 4: Iterative Research/Planning Loop
@@ -146,7 +146,7 @@ while iteration < 50 AND confidence < 95:
 
     Parse research results. Update gaps list.
 
-    Log: `bash ~/.aether/aether-utils.sh activity-log "RESEARCH" "scout" "Iteration {iteration}: {summary}"`
+    Log: `bash .aether/aether-utils.sh activity-log "RESEARCH" "scout" "Iteration {iteration}: {summary}"`
 
     # === PLANNING PHASE ===
 
@@ -162,7 +162,7 @@ while iteration < 50 AND confidence < 95:
     Iteration: {iteration}/50
 
     --- PLANNING DISCIPLINE ---
-    Read ~/.aether/planning.md for full reference.
+    Read .aether/planning.md for full reference.
 
     Key rules:
     - Bite-sized tasks (2-5 minutes each) - one action per task
@@ -255,7 +255,7 @@ while iteration < 50 AND confidence < 95:
 
     Parse planning results. Update plan_draft and confidence.
 
-    Log: `bash ~/.aether/aether-utils.sh activity-log "PLANNING" "route-setter" "Confidence: {confidence}% (+{delta}%)"`
+    Log: `bash .aether/aether-utils.sh activity-log "PLANNING" "route-setter" "Confidence: {confidence}% (+{delta}%)"`
 
     # === UPDATE WATCH FILES ===
 
@@ -329,7 +329,7 @@ Read current COLONY_STATE.json, then update:
 
 Write COLONY_STATE.json.
 
-Log: `bash ~/.aether/aether-utils.sh activity-log "PLAN_COMPLETE" "queen" "Plan finalized with {confidence}% confidence"`
+Log: `bash .aether/aether-utils.sh activity-log "PLAN_COMPLETE" "queen" "Plan finalized with {confidence}% confidence"`
 
 Update watch-status.txt:
 ```

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Phase 1: Localize ~/.aether/ path references** — Replaced all `~/.aether/` paths with repo-relative `.aether/` across 50 files: command prompts, agent definitions, system docs, planning docs, and template.yaml. Fixed 3 pre-existing mirror drifts (migrate-state.md, organize.md, plan.md) discovered during verification. (`.claude/commands/ant/*.md`, `.opencode/commands/ant/*.md`, `.opencode/agents/*.md`, `.aether/workers.md`, `runtime/workers.md`, `.aether/docs/*.md`, `runtime/docs/*.md`, `.planning/*.md`, `src/commands/_meta/template.yaml`)
 - **Phase 2: Upgrade Sync Checking to Content-Aware** — `generate-commands.sh check` now performs SHA-1 checksum comparison (Pass 2) after filename matching (Pass 1), detecting content drift between `.claude/` and `.opencode/` mirrors. Revealed 3 pre-existing drifts previously invisible to filename-only checks. (`bin/generate-commands.sh`)
 
 ### Verified

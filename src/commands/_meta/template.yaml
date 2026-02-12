@@ -25,7 +25,7 @@ content: |
 
   Use the Bash tool to run:
   ```bash
-  bash ~/.aether/aether-utils.sh some-command
+  bash .aether/aether-utils.sh some-command
   ```
 
   ### Step 3: Update State

@@ -139,8 +139,8 @@ CONSTRAINTS: (none)
 
    Generate archaeologist name and log:
    ```bash
-   bash ~/.aether/aether-utils.sh generate-ant-name "archaeologist"
-   bash ~/.aether/aether-utils.sh spawn-log "Queen" "scout" "{archaeologist_name}" "Pre-build archaeology scan"
+   bash .aether/aether-utils.sh generate-ant-name "archaeologist"
+   bash .aether/aether-utils.sh spawn-log "Queen" "scout" "{archaeologist_name}" "Pre-build archaeology scan"
    ```
 
    Display:
@@ -184,7 +184,7 @@ CONSTRAINTS: (none)
 
    Log completion:
    ```bash
-   bash ~/.aether/aether-utils.sh spawn-complete "{archaeologist_name}" "completed" "Pre-build archaeology scan"
+   bash .aether/aether-utils.sh spawn-complete "{archaeologist_name}" "completed" "Pre-build archaeology scan"
    ```
 
 3. **Store and display findings:**
@@ -208,7 +208,7 @@ CONSTRAINTS: (none)
 
 Log phase start:
 ```bash
-bash ~/.aether/aether-utils.sh activity-log "EXECUTING" "Queen" "Phase {id}: {name} - Queen dispatching workers"
+bash .aether/aether-utils.sh activity-log "EXECUTING" "Queen" "Phase {id}: {name} - Queen dispatching workers"
 ```
 
 Analyze the phase tasks:
@@ -226,9 +226,9 @@ Analyze the phase tasks:
 
 3. **Generate ant names for each worker:**
 ```bash
-bash ~/.aether/aether-utils.sh generate-ant-name "builder"
-bash ~/.aether/aether-utils.sh generate-ant-name "watcher"
-bash ~/.aether/aether-utils.sh generate-ant-name "chaos"
+bash .aether/aether-utils.sh generate-ant-name "builder"
+bash .aether/aether-utils.sh generate-ant-name "watcher"
+bash .aether/aether-utils.sh generate-ant-name "chaos"
 ```
 
 Display spawn plan:
@@ -257,7 +257,7 @@ For each Wave 1 task, use Task tool with `subagent_type="general-purpose"` and `
 
 Log each spawn:
 ```bash
-bash ~/.aether/aether-utils.sh spawn-log "Queen" "builder" "{ant_name}" "{task_description}"
+bash .aether/aether-utils.sh spawn-log "Queen" "builder" "{ant_name}" "{task_description}"
 ```
 
 **Builder Worker Prompt Template:**
@@ -299,12 +299,12 @@ The following historical insights were discovered about files you will modify:
 {End if — omit this entire section if Step 4.5 was skipped}
 
 --- INSTRUCTIONS ---
-1. Read ~/.aether/workers.md for Builder discipline
+1. Read .aether/workers.md for Builder discipline
 2. Implement the task completely
 3. Write actual test files (not just claims)
-4. Log your work: bash ~/.aether/aether-utils.sh activity-log "CREATED" "{ant_name} (Builder)" "{file_path}"
+4. Log your work: bash .aether/aether-utils.sh activity-log "CREATED" "{ant_name} (Builder)" "{file_path}"
 5. Before modifying any file, check for grave markers:
-   bash ~/.aether/aether-utils.sh grave-check "{file_path}"
+   bash .aether/aether-utils.sh grave-check "{file_path}"
    If caution_level is "high": read the failure_summary, add extra test coverage for that area, mention the graveyard in your summary
    If caution_level is "low": note it and proceed carefully
    If caution_level is "none": proceed normally
@@ -325,13 +325,13 @@ When to spawn:
 DO NOT spawn for work you can complete in < 10 tool calls.
 
 Before spawning:
-  1. Check: bash ~/.aether/aether-utils.sh spawn-can-spawn {depth}
-  2. Generate name: bash ~/.aether/aether-utils.sh generate-ant-name "{caste}"
-  3. Log: bash ~/.aether/aether-utils.sh spawn-log "{your_name}" "{caste}" "{child_name}" "{task}"
+  1. Check: bash .aether/aether-utils.sh spawn-can-spawn {depth}
+  2. Generate name: bash .aether/aether-utils.sh generate-ant-name "{caste}"
+  3. Log: bash .aether/aether-utils.sh spawn-log "{your_name}" "{caste}" "{child_name}" "{task}"
   4. Use Task tool with subagent_type="general-purpose"
-  5. After completion: bash ~/.aether/aether-utils.sh spawn-complete "{child_name}" "{status}" "{summary}"
+  5. After completion: bash .aether/aether-utils.sh spawn-complete "{child_name}" "{status}" "{summary}"
 
-Full spawn format: ~/.aether/workers.md section "Spawning Sub-Workers"
+Full spawn format: .aether/workers.md section "Spawning Sub-Workers"
 
 --- OUTPUT ---
 Return JSON:
@@ -361,7 +361,7 @@ Store all results for synthesis in Step 5.6.
 
 For each completed worker, log:
 ```bash
-bash ~/.aether/aether-utils.sh spawn-complete "{ant_name}" "completed" "{summary}"
+bash .aether/aether-utils.sh spawn-complete "{ant_name}" "completed" "{summary}"
 ```
 
 **Only proceed to Step 5.3 after ALL Wave 1 TaskOutput calls have returned.**
@@ -375,7 +375,7 @@ Repeat Step 5.1-5.2 for each subsequent wave, waiting for previous wave to compl
 **MANDATORY: Always spawn a Watcher — testing must be independent.**
 
 ```bash
-bash ~/.aether/aether-utils.sh spawn-log "Queen" "watcher" "{watcher_name}" "Independent verification"
+bash .aether/aether-utils.sh spawn-log "Queen" "watcher" "{watcher_name}" "Independent verification"
 ```
 
 **Watcher Worker Prompt:**
@@ -435,7 +435,7 @@ You are at depth {depth}. You MAY spawn sub-workers for:
 Spawn limits: Depth 1→4, Depth 2→2, Depth 3→0
 
 Before spawning:
-  bash ~/.aether/aether-utils.sh spawn-log "{your_name}" "{caste}" "{child_name}" "{task}"
+  bash .aether/aether-utils.sh spawn-log "{your_name}" "{caste}" "{child_name}" "{task}"
 
 --- CRITICAL ---
 - You did NOT build this code — verify it objectively
@@ -483,8 +483,8 @@ Call TaskOutput with `block: true` using the Watcher's task_id:
 
 Generate a chaos ant name and log the spawn:
 ```bash
-bash ~/.aether/aether-utils.sh generate-ant-name "chaos"
-bash ~/.aether/aether-utils.sh spawn-log "Queen" "chaos" "{chaos_name}" "Resilience testing of Phase {id} work"
+bash .aether/aether-utils.sh generate-ant-name "chaos"
+bash .aether/aether-utils.sh spawn-log "Queen" "chaos" "{chaos_name}" "Resilience testing of Phase {id} work"
 ```
 
 Spawn the Chaos Ant using Task tool with `subagent_type="general-purpose"`:
@@ -540,17 +540,17 @@ Call TaskOutput with `block: true` using the Chaos Ant's task_id:
 If any findings have severity `"critical"` or `"high"`:
 ```bash
 # Create a blocker flag for each critical/high chaos finding
-bash ~/.aether/aether-utils.sh flag-add "blocker" "{finding.title}" "{finding.description}" "chaos-testing" {phase_number}
+bash .aether/aether-utils.sh flag-add "blocker" "{finding.title}" "{finding.description}" "chaos-testing" {phase_number}
 ```
 
 Log the flag:
 ```bash
-bash ~/.aether/aether-utils.sh activity-log "FLAG" "Chaos" "Created blocker: {finding.title}"
+bash .aether/aether-utils.sh activity-log "FLAG" "Chaos" "Created blocker: {finding.title}"
 ```
 
 Log chaos ant completion:
 ```bash
-bash ~/.aether/aether-utils.sh spawn-complete "{chaos_name}" "completed" "{summary}"
+bash .aether/aether-utils.sh spawn-complete "{chaos_name}" "completed" "{summary}"
 ```
 
 **Only proceed to Step 5.5 after Chaos Ant TaskOutput has returned.**
@@ -562,23 +562,23 @@ If the Watcher reported `verification_passed: false` or `recommendation: "fix_re
 For Watcher issues — for each issue in `issues_found`:
 ```bash
 # Create a blocker flag for each verification failure
-bash ~/.aether/aether-utils.sh flag-add "blocker" "{issue_title}" "{issue_description}" "verification" {phase_number}
+bash .aether/aether-utils.sh flag-add "blocker" "{issue_title}" "{issue_description}" "verification" {phase_number}
 ```
 
 Log the flag creation:
 ```bash
-bash ~/.aether/aether-utils.sh activity-log "FLAG" "Watcher" "Created blocker: {issue_title}"
+bash .aether/aether-utils.sh activity-log "FLAG" "Watcher" "Created blocker: {issue_title}"
 ```
 
 For Chaos Ant findings — for each finding with severity `"critical"` or `"high"` (if not already flagged in Step 5.4.2):
 ```bash
 # Create a blocker flag for each critical/high resilience finding
-bash ~/.aether/aether-utils.sh flag-add "blocker" "{finding.title}" "{finding.description}" "chaos-testing" {phase_number}
+bash .aether/aether-utils.sh flag-add "blocker" "{finding.title}" "{finding.description}" "chaos-testing" {phase_number}
 ```
 
 Log the flag creation:
 ```bash
-bash ~/.aether/aether-utils.sh activity-log "FLAG" "Chaos" "Created blocker: {finding.title}"
+bash .aether/aether-utils.sh activity-log "FLAG" "Chaos" "Created blocker: {finding.title}"
 ```
 
 This ensures both verification failures and resilience findings are persisted as blockers that survive context resets.
@@ -622,11 +622,11 @@ Collect all worker outputs and create phase summary:
 For each worker that returned `status: "failed"`:
   For each file in that worker's `files_modified` or `files_created`:
 ```bash
-bash ~/.aether/aether-utils.sh grave-add "{file}" "{ant_name}" "{task_id}" {phase} "{first blocker or summary}"
+bash .aether/aether-utils.sh grave-add "{file}" "{ant_name}" "{task_id}" {phase} "{first blocker or summary}"
 ```
   Log the grave marker:
 ```bash
-bash ~/.aether/aether-utils.sh activity-log "GRAVE" "Queen" "Grave marker placed at {file} — {ant_name} failed: {summary}"
+bash .aether/aether-utils.sh activity-log "GRAVE" "Queen" "Grave marker placed at {file} — {ant_name} failed: {summary}"
 ```
 
 Only fires when workers fail. Zero impact on successful builds.

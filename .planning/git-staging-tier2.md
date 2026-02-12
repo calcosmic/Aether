@@ -220,7 +220,7 @@ After the phase is advanced and changelog updated, suggest a commit:
 
 1. Generate the commit message:
 \`\`\`bash
-bash ~/.aether/aether-utils.sh generate-commit-message "milestone" {phase_id} "{phase_name}" "{one_line_summary}"
+bash .aether/aether-utils.sh generate-commit-message "milestone" {phase_id} "{phase_name}" "{one_line_summary}"
 \`\`\`
 
 2. Check how many files changed:
@@ -299,7 +299,7 @@ If there are uncommitted changes:
 
 3. Generate the commit message:
 \`\`\`bash
-bash ~/.aether/aether-utils.sh generate-commit-message "pause" {current_phase} "{phase_name}"
+bash .aether/aether-utils.sh generate-commit-message "pause" {current_phase} "{phase_name}"
 \`\`\`
 
 4. Display and prompt (same UX as continue.md Step 2.6).

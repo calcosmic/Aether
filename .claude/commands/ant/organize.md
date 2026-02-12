@@ -46,13 +46,13 @@ If no active signals after filtering:
 
 ### Step 3: Spawn Archivist (Architect-Ant)
 
-Read `~/.aether/workers.md` and extract the `## Architect` section.
+Read `.aether/workers.md` and extract the `## Architect` section.
 
 Spawn via **Task tool** with `subagent_type="general-purpose"`:
 
 ```
 --- WORKER SPEC ---
-{Architect section from ~/.aether/workers.md}
+{Architect section from .aether/workers.md}
 
 --- ACTIVE PHEROMONES ---
 {pheromone block from Step 2}
@@ -205,7 +205,7 @@ Next:
 
 Use the Bash tool to run:
 ```
-bash ~/.aether/aether-utils.sh activity-log "COMPLETE" "queen" "Hygiene report generated"
+bash .aether/aether-utils.sh activity-log "COMPLETE" "queen" "Hygiene report generated"
 ```
 
 Display persistence confirmation:

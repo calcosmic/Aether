@@ -283,7 +283,7 @@ After the display report, output the machine-readable JSON summary:
 ### Step 7: Log Activity
 
 ```bash
-bash ~/.aether/aether-utils.sh activity-log "CHAOS" "Chaos Ant" "Resilience test on {target}: {findings_count} finding(s) ({critical} critical, {high} high, {medium} medium, {low} low), {resilient_count} resilient"
+bash .aether/aether-utils.sh activity-log "CHAOS" "Chaos Ant" "Resilience test on {target}: {findings_count} finding(s) ({critical} critical, {high} high, {medium} medium, {low} low), {resilient_count} resilient"
 ```
 
 ## Investigation Guidelines

@@ -207,7 +207,7 @@ Colony status: /ant:status
 ### Step 6: Log Activity
 
 ```bash
-bash ~/.aether/aether-utils.sh activity-log "DREAM" "Dreamer" "Dream session: {N} observations, {concerns} concerns, {pheromones} pheromone suggestions"
+bash .aether/aether-utils.sh activity-log "DREAM" "Dreamer" "Dream session: {N} observations, {concerns} concerns, {pheromones} pheromone suggestions"
 ```
 
 ## Dream Categories

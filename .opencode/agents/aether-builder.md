@@ -68,7 +68,7 @@ When you encounter ANY bug:
 
 Log progress as you work:
 ```bash
-bash ~/.aether/aether-utils.sh activity-log "CREATED" "{your_name} (Builder)" "{description}"
+bash .aether/aether-utils.sh activity-log "CREATED" "{your_name} (Builder)" "{description}"
 ```
 
 ## Spawning Sub-Workers
@@ -84,9 +84,9 @@ You MAY spawn if you encounter genuine surprise:
 
 **Before spawning:**
 ```bash
-bash ~/.aether/aether-utils.sh spawn-can-spawn {your_depth}
-bash ~/.aether/aether-utils.sh generate-ant-name "{caste}"
-bash ~/.aether/aether-utils.sh spawn-log "{your_name}" "{caste}" "{child_name}" "{task}"
+bash .aether/aether-utils.sh spawn-can-spawn {your_depth}
+bash .aether/aether-utils.sh generate-ant-name "{caste}"
+bash .aether/aether-utils.sh spawn-log "{your_name}" "{caste}" "{child_name}" "{task}"
 ```
 
 ## Output Format
@@ -113,4 +113,4 @@ bash ~/.aether/aether-utils.sh spawn-log "{your_name}" "{caste}" "{child_name}" 
 
 ## Reference
 
-Full worker specifications: `~/.aether/workers.md`
+Full worker specifications: `.aether/workers.md`

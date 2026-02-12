@@ -164,11 +164,11 @@ HACK:
 Reference this spec in command implementations:
 
 ```rust
-// See ~/.aether/docs/progressive-disclosure.md for output format
+// See .aether/docs/progressive-disclosure.md for output format
 ```
 
 ```python
-# Output format: ~/.aether/docs/progressive-disclosure.md
+# Output format: .aether/docs/progressive-disclosure.md
 ```
 
 ## Color Guidelines (Terminal)

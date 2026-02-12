@@ -79,7 +79,7 @@ jq '.git.auto_commit = "verified"' .aether/data/constraints.json > tmp && mv tmp
 **Secondary: aether-utils.sh subcommand.** Add a `git-config` subcommand for convenience:
 
 ```bash
-bash ~/.aether/aether-utils.sh git-config auto_commit verified
+bash .aether/aether-utils.sh git-config auto_commit verified
 # Output: {"ok":true,"result":{"auto_commit":"verified"}}
 ```
 

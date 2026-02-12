@@ -38,7 +38,7 @@ All state lives in `.aether/data/`:
 - `constraints.json` - Pheromone signals
 - `flags.json` - Blockers and issues
 
-Use `~/.aether/aether-utils.sh` for state operations.
+Use `.aether/aether-utils.sh` for state operations.
 
 ## Spawning Workers
 
@@ -55,13 +55,13 @@ Use the `task` tool with `subagent_type: "general"` to spawn workers.
 **Spawn Protocol:**
 ```bash
 # Generate ant name
-bash ~/.aether/aether-utils.sh generate-ant-name "builder"
+bash .aether/aether-utils.sh generate-ant-name "builder"
 
 # Log spawn
-bash ~/.aether/aether-utils.sh spawn-log "Queen" "builder" "{name}" "{task}"
+bash .aether/aether-utils.sh spawn-log "Queen" "builder" "{name}" "{task}"
 
 # After completion
-bash ~/.aether/aether-utils.sh spawn-complete "{name}" "completed" "{summary}"
+bash .aether/aether-utils.sh spawn-complete "{name}" "completed" "{summary}"
 ```
 
 **Spawn Limits:**
@@ -75,11 +75,11 @@ bash ~/.aether/aether-utils.sh spawn-complete "{name}" "completed" "{summary}"
 
 Log all significant actions:
 ```bash
-bash ~/.aether/aether-utils.sh activity-log "ACTION" "Queen" "description"
+bash .aether/aether-utils.sh activity-log "ACTION" "Queen" "description"
 ```
 
 Actions: CREATED, MODIFIED, RESEARCH, SPAWN, ERROR, EXECUTING
 
 ## Reference
 
-Full worker specifications: `~/.aether/workers.md`
+Full worker specifications: `.aether/workers.md`

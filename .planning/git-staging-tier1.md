@@ -164,8 +164,8 @@ stash_name="aether-checkpoint: $label"
 ```
 
 This allows callers to pass a descriptive label:
-- `build.md` equivalent: `bash ~/.aether/aether-utils.sh autofix-checkpoint "pre-phase-3"`
-- `swarm.md`: `bash ~/.aether/aether-utils.sh autofix-checkpoint "pre-swarm-$SWARM_ID"`
+- `build.md` equivalent: `bash .aether/aether-utils.sh autofix-checkpoint "pre-phase-3"`
+- `swarm.md`: `bash .aether/aether-utils.sh autofix-checkpoint "pre-swarm-$SWARM_ID"`
 - Default (no argument): falls back to `aether-checkpoint: autofix-1738000000` (preserving current behavior)
 
 **Lines 811-848 — No changes to `autofix-rollback`:**
@@ -178,12 +178,12 @@ The rollback function searches stash by name (`grep "$ref"`), which will work wi
 
 Current:
 ```bash
-bash ~/.aether/aether-utils.sh autofix-checkpoint
+bash .aether/aether-utils.sh autofix-checkpoint
 ```
 
 Proposed:
 ```bash
-bash ~/.aether/aether-utils.sh autofix-checkpoint "pre-swarm-$SWARM_ID"
+bash .aether/aether-utils.sh autofix-checkpoint "pre-swarm-$SWARM_ID"
 ```
 
 **Lines 306-309 — No changes to rollback call.** The rollback mechanism is unchanged.

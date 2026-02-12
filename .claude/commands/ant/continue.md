@@ -50,7 +50,7 @@ If `state != "EXECUTING"`:
 
 **The Iron Law:** No phase advancement without fresh verification evidence.
 
-Before ANY phase can advance, execute the 6-phase verification loop. See `~/.aether/verification-loop.md` for full reference.
+Before ANY phase can advance, execute the 6-phase verification loop. See `.aether/verification-loop.md` for full reference.
 
 #### 1. Command Resolution (Priority Chain)
 
@@ -236,8 +236,8 @@ The phase will NOT advance until spawning occurs.
 **CRITICAL:** Do NOT proceed to Step 1.7. Do NOT advance the phase.
 Log the violation:
 ```bash
-bash ~/.aether/aether-utils.sh activity-log "BLOCKED" "colony" "Spawn gate failed: {task_count} tasks, 0 spawns"
-bash ~/.aether/aether-utils.sh error-flag-pattern "no-spawn-violation" "Prime Worker completed phase without spawning specialists" "critical"
+bash .aether/aether-utils.sh activity-log "BLOCKED" "colony" "Spawn gate failed: {task_count} tasks, 0 spawns"
+bash .aether/aether-utils.sh error-flag-pattern "no-spawn-violation" "Prime Worker completed phase without spawning specialists" "critical"
 ```
 
 **HARD REJECTION - If watcher_count == 0 (no testing separation):**
@@ -281,7 +281,7 @@ Continue to Step 1.7.
 Scan all modified/created files for known anti-patterns. This catches recurring bugs before they reach production.
 
 ```bash
-bash ~/.aether/aether-utils.sh check-antipattern "{file_path}"
+bash .aether/aether-utils.sh check-antipattern "{file_path}"
 ```
 
 Run for each file in `files_created` and `files_modified` from Prime Worker output.
@@ -369,7 +369,7 @@ The phase will NOT advance with fabricated metrics.
 
 **CRITICAL:** Do NOT proceed. Log the violation:
 ```bash
-bash ~/.aether/aether-utils.sh error-flag-pattern "fabricated-tdd" "Prime Worker reported TDD metrics without creating test files" "critical"
+bash .aether/aether-utils.sh error-flag-pattern "fabricated-tdd" "Prime Worker reported TDD metrics without creating test files" "critical"
 ```
 
 **If tests_added == 0 or test files exist matching claims:**
@@ -419,7 +419,7 @@ Please describe the issues so they can be addressed:
 
 Use AskUserQuestion to get issue details. Log to errors.records:
 ```bash
-bash ~/.aether/aether-utils.sh error-add "runtime" "critical" "{user_description}" {phase}
+bash .aether/aether-utils.sh error-add "runtime" "critical" "{user_description}" {phase}
 ```
 
 Do NOT proceed to Step 2.
@@ -460,7 +460,7 @@ Continue to Step 1.10.
 
 Check for blocking flags:
 ```bash
-bash ~/.aether/aether-utils.sh flag-check-blockers {current_phase}
+bash .aether/aether-utils.sh flag-check-blockers {current_phase}
 ```
 
 Parse result for `blockers`, `issues`, and `notes` counts.
@@ -511,7 +511,7 @@ No blocking flags. Proceeding to phase advancement.
 
 Also trigger auto-resolve for any flags marked with `auto_resolve_on: "build_pass"`:
 ```bash
-bash ~/.aether/aether-utils.sh flag-auto-resolve "build_pass"
+bash .aether/aether-utils.sh flag-auto-resolve "build_pass"
 ```
 
 Continue to Step 2.
@@ -660,7 +660,7 @@ After the phase is advanced and changelog updated, suggest a commit to preserve 
 
 1. **Generate the commit message:**
 ```bash
-bash ~/.aether/aether-utils.sh generate-commit-message "milestone" {phase_id} "{phase_name}" "{one_line_summary}"
+bash .aether/aether-utils.sh generate-commit-message "milestone" {phase_id} "{phase_name}" "{one_line_summary}"
 ```
 Parse the returned JSON to extract `message` and `files_changed`.
 

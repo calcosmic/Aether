@@ -87,7 +87,7 @@ Read `.aether/data/constraints.json` if exists:
 - Constraints count: `constraints.length`
 
 **Flags:**
-Run: `bash ~/.aether/aether-utils.sh flag-check-blockers`
+Run: `bash .aether/aether-utils.sh flag-check-blockers`
 Extract:
 - Blockers count (critical, block advancement)
 - Issues count (high, warnings)
