@@ -56,7 +56,7 @@ shift 2>/dev/null || true
 case "$cmd" in
   help)
     cat <<'EOF'
-{"ok":true,"commands":["help","version","validate-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","update-progress","check-antipattern","error-flag-pattern","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","grave-add","grave-check","generate-commit-message"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
+{"ok":true,"commands":["help","version","validate-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","grave-add","grave-check","generate-commit-message"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
 EOF
     ;;
   version)
@@ -224,7 +224,7 @@ EOF
     fi
 
     updated=$(jq --arg id "$id" --arg content "$content" --arg sp "$source_project" \
-      --argjson phase "$source_phase" --argjson tags "$tags_json" --arg ts "$ts" '
+      --arg phase "$source_phase" --argjson tags "$tags_json" --arg ts "$ts" '
       .learnings += [{
         id: $id,
         content: $content,
@@ -566,6 +566,156 @@ EOF
 
     json_ok "{\"critical\":$crit_json,\"warnings\":$warn_json,\"clean\":$clean}"
     ;;
+  signature-scan)
+    # Scan a file for a signature pattern
+    # Usage: signature-scan <target_file> <signature_name>
+    # Returns matching signature details as JSON if found, empty result if no match
+    # Exit code 0 if no match, 1 if match found
+    target_file="${1:-}"
+    signature_name="${2:-}"
+    [[ -z "$target_file" || -z "$signature_name" ]] && json_err "Usage: signature-scan <target_file> <signature_name>"
+
+    # Handle missing target file gracefully
+    if [[ ! -f "$target_file" ]]; then
+      json_ok '{"found":false,"signature":null}'
+      exit 0
+    fi
+
+    # Read signature details from signatures.json
+    signatures_file="$HOME/.aether/data/signatures.json"
+    if [[ ! -f "$signatures_file" ]]; then
+      json_ok '{"found":false,"signature":null}'
+      exit 0
+    fi
+
+    # Extract signature details using jq
+    signature_data=$(jq --arg name "$signature_name" '.signatures[] | select(.name == $name)' "$signatures_file" 2>/dev/null)
+
+    if [[ -z "$signature_data" ]]; then
+      # Signature not found in storage
+      json_ok '{"found":false,"signature":null}'
+      exit 0
+    fi
+
+    # Extract pattern and confidence threshold
+    pattern_string=$(echo "$signature_data" | jq -r '.pattern_string // empty')
+    confidence_threshold=$(echo "$signature_data" | jq -r '.confidence_threshold // 0.8')
+
+    if [[ -z "$pattern_string" || "$pattern_string" == "null" ]]; then
+      json_ok '{"found":false,"signature":null}'
+      exit 0
+    fi
+
+    # Use grep to search for the pattern in target file
+    if grep -q -- "$pattern_string" "$target_file" 2>/dev/null; then
+      # Match found - return signature details with match info
+      match_count=$(grep -c -- "$pattern_string" "$target_file" 2>/dev/null || echo "1")
+      json_ok "{\"found\":true,\"signature\":$signature_data,\"match_count\":$match_count}"
+      exit 1
+    else
+      # No match
+      json_ok '{"found":false,"signature":null}'
+      exit 0
+    fi
+    ;;
+  signature-match)
+    # Scan a directory for files matching high-confidence signatures
+    # Usage: signature-match <directory> [file_pattern]
+    # Returns results per file showing which signatures matched
+    target_dir="${1:-}"
+    file_pattern="${2:-}"
+    # Set default pattern if not provided - avoid zsh brace expansion quirk by setting it explicitly
+    if [[ -z "$file_pattern" ]]; then
+      file_pattern="*"
+    fi
+    [[ -z "$target_dir" ]] && json_err "Usage: signature-match <directory> [file_pattern]"
+
+    # Validate directory exists
+    [[ ! -d "$target_dir" ]] && json_err "Directory not found: $target_dir"
+
+    # Path to signatures file
+    signatures_file="$HOME/.aether/data/signatures.json"
+    [[ ! -f "$signatures_file" ]] && json_err "Signatures file not found"
+
+    # Read high-confidence signatures (confidence >= 0.7) using jq -c for compact single-line output
+    high_conf_signatures=$(jq -c '.signatures[] | select(.confidence_threshold >= 0.7)' "$signatures_file" 2>/dev/null)
+
+    # Check if any high-confidence signatures exist
+    sig_count=$(echo "$high_conf_signatures" | grep -c '{' || echo 0)
+    if [[ "$sig_count" -eq 0 ]]; then
+      json_ok '{"files_scanned":0,"matches":{},"signatures_checked":0}'
+      exit 0
+    fi
+
+    # Find all files to scan
+    declare -a files=()
+    if [[ -n "$file_pattern" ]]; then
+      # User specified pattern - use it directly
+      while IFS= read -r -d '' file; do
+        files+=("$file")
+      done < <(find "$target_dir" -type f -name "$file_pattern" -print0 2>/dev/null || true)
+    else
+      # Default: match common code file types
+      while IFS= read -r -d '' file; do
+        files+=("$file")
+      done < <(find "$target_dir" -type f \( -name "*.js" -o -name "*.ts" -o -name "*.py" -o -name "*.sh" -o -name "*.txt" -o -name "*.md" \) -print0 2>/dev/null || true)
+    fi
+
+    file_count=${#files[@]}
+
+    # If no files found, return empty result
+    if [[ "$file_count" -eq 0 ]]; then
+      json_ok "{\"files_scanned\":0,\"matches\":{},\"signatures_checked\":$sig_count}"
+      exit 0
+    fi
+
+    # Collect matches per file - process each file (bash 3.2 compatible: build JSON directly)
+    matched_files="{}"
+
+    # Read signatures into array first (avoid subshell issues)
+    sig_array=""
+    while IFS= read -r sig_entry; do
+      [[ -z "$sig_entry" ]] && continue
+      sig_array="${sig_array}${sig_entry}"$'\n'
+    done <<< "$high_conf_signatures"
+
+    for file in "${files[@]}"; do
+      # For each file, check each signature - use process subst to avoid subshell
+      file_key=$(basename "$file")
+      matches_for_file="[]"
+
+      while IFS= read -r sig_entry; do
+        [[ -z "$sig_entry" ]] && continue
+        sig_name=$(echo "$sig_entry" | jq -r '.name')
+        sig_pattern=$(echo "$sig_entry" | jq -r '.pattern_string')
+        sig_conf=$(echo "$sig_entry" | jq -r '.confidence_threshold')
+        sig_desc=$(echo "$sig_entry" | jq -r '.description')
+
+        # Skip if pattern is null/empty
+        [[ -z "$sig_pattern" || "$sig_pattern" == "null" ]] && continue
+
+        # Check if pattern matches in file using grep
+        if grep -q -- "$sig_pattern" "$file" 2>/dev/null; then
+          match_count=$(grep -c -- "$sig_pattern" "$file" 2>/dev/null || echo "1")
+
+          # Add to results
+          matches_for_file=$(echo "$matches_for_file" | jq --arg n "$sig_name" --arg d "$sig_desc" --argjson c "$sig_conf" --argjson m "$match_count" \
+            '. += [{"name":$n,"description":$d,"confidence_threshold":$c,"match_count":$m}]')
+        fi
+      done < <(echo "$high_conf_signatures" | jq -c '.' 2>/dev/null || true)
+
+      # If any signatures matched, add to results
+      sig_result_count=$(echo "$matches_for_file" | jq 'length')
+      if [[ "$sig_result_count" -gt 0 ]]; then
+        temp_result=$(mktemp)
+        echo "$matched_files" | jq --arg k "$file_key" --argjson v "$matches_for_file" '. + {($k): $v}' > "$temp_result"
+        matched_files=$(cat "$temp_result")
+        rm -f "$temp_result"
+      fi
+    done
+
+    json_ok "{\"files_scanned\":$file_count,\"matches\":$matched_files,\"signatures_checked\":$sig_count}"
+    ;;
   flag-add)
     # Add a project-specific flag (blocker, issue, or note)
     # Usage: flag-add <type> <title> <description> [source] [phase]
@@ -741,7 +891,7 @@ EOF
     trigger="${1:-build_pass}"
     flags_file="$DATA_DIR/flags.json"
 
-    [[ ! -f "$flags_file" ]] && json_ok '{"resolved":0}'
+    if [[ ! -f "$flags_file" ]]; then json_ok '{"resolved":0}'; exit 0; fi
 
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
@@ -789,12 +939,13 @@ EOF
 
   autofix-checkpoint)
     # Create checkpoint before applying auto-fix
-    # Usage: autofix-checkpoint
+    # Usage: autofix-checkpoint [label]
     # Returns: {type: "stash"|"commit"|"none", ref: "..."}
     if git rev-parse --git-dir >/dev/null 2>&1; then
       # Check if there are changes to stash
       if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
-        stash_name="aether-autofix-$(date +%s)"
+        label="${1:-autofix-$(date +%s)}"
+        stash_name="aether-checkpoint: $label"
         if git stash push -m "$stash_name" >/dev/null 2>&1; then
           json_ok "{\"type\":\"stash\",\"ref\":\"$stash_name\"}"
         else

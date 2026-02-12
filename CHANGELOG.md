@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Phase 2: Sync runtime copy to .aether mirror** — Full file copy of runtime/aether-utils.sh to .aether/aether-utils.sh eliminating all drift including missing signature-scan and signature-match commands. Both copies now byte-identical. (`.aether/aether-utils.sh`)
 - **Phase 1: Fix bugs in canonical runtime/aether-utils.sh** — Fixed learning-promote jq crash on non-numeric phase strings (--argjson to --arg), fixed flag-auto-resolve missing exit after early-return when flags file absent, confirmed file-lock.sh transitive usage via atomic-write.sh is intentional. (`runtime/aether-utils.sh`)
 
 ### Changed
