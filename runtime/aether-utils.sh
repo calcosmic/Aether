@@ -42,6 +42,8 @@ get_caste_emoji() {
     *Scout*|*scout*|*Swift*|*Dash*|*Ranger*|*Track*|*Seek*|*Path*|*Roam*|*Quest*) echo "🔍" ;;
     *Colonizer*|*colonizer*|*Pioneer*|*Map*|*Chart*|*Venture*|*Explore*|*Compass*|*Atlas*|*Trek*) echo "🗺️" ;;
     *Architect*|*architect*|*Blueprint*|*Draft*|*Design*|*Plan*|*Schema*|*Frame*|*Sketch*|*Model*) echo "🏛️" ;;
+    *Chaos*|*chaos*|*Probe*|*Stress*|*Shake*|*Twist*|*Snap*|*Breach*|*Surge*|*Jolt*) echo "🎲" ;;
+    *Archaeologist*|*archaeologist*|*Relic*|*Fossil*|*Dig*|*Shard*|*Epoch*|*Strata*|*Lore*|*Glyph*) echo "🏺" ;;
     *Route*|*route*) echo "📋" ;;
     *) echo "🐜" ;;
   esac
@@ -919,6 +921,8 @@ EOF
       colonizer) prefixes=("Pioneer" "Map" "Chart" "Venture" "Explore" "Compass" "Atlas" "Trek") ;;
       architect) prefixes=("Blueprint" "Draft" "Design" "Plan" "Schema" "Frame" "Sketch" "Model") ;;
       prime)    prefixes=("Prime" "Alpha" "Lead" "Chief" "First" "Core" "Apex" "Crown") ;;
+      chaos)    prefixes=("Probe" "Stress" "Shake" "Twist" "Snap" "Breach" "Surge" "Jolt") ;;
+      archaeologist) prefixes=("Relic" "Fossil" "Dig" "Shard" "Epoch" "Strata" "Lore" "Glyph") ;;
       *)        prefixes=("Ant" "Worker" "Drone" "Toiler" "Marcher" "Runner" "Carrier" "Helper") ;;
     esac
     # Pick random prefix and add random number
