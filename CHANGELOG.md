@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Phase 4: Documentation and Validation (Chaos + Archaeologist)** — Updated help.md with /ant:chaos and /ant:archaeology in ADVANCED and WORKER CASTES sections, updated README.md command count from 22 to 24 in all 6 locations, added CHANGELOG entries for all phases, marked both TO-DOS.md entries as DONE with implementation references. Validated 24 files in each command directory, name generation, and emoji resolution. (`.claude/commands/ant/help.md`, `.opencode/commands/ant/ant:help.md`, `README.md`, `CHANGELOG.md`, `TO-DOS.md`)
+- 2026-02-12: TO-DOS.md — Marked Chaos Ant and Archaeologist Ant entries as DONE with implementation references
 - **Phase 1: Threshold and Quoting Fixes** — Lowered instinct confidence threshold from 0.7 to 0.5 in both init.md mirrors, standardized YAML description quoting across all 26 command files. (`init.md`, `build.md`, `colonize.md`, `continue.md`, `council.md`, `dream.md`, `feedback.md`, `flag.md`, `flags.md`, `focus.md`, `help.md`, `interpret.md`, `organize.md`, `pause-colony.md`, `phase.md`, `plan.md`, `redirect.md`, `resume-colony.md`, `status.md`, `swarm.md`, `watch.md` + .opencode mirrors)
 - **Phase 3: Watcher, Builder, and Swarm command resolution** — Watcher prompt in build.md, swarm.md Step 8, and aether-watcher.md now resolve build/test/lint commands via the 3-tier priority chain (CLAUDE.md > CODEBASE.md > heuristic fallback) instead of leaving commands unspecified or hardcoded. (`build.md`, `swarm.md`, `aether-watcher.md` + .opencode mirrors)
 - **Phase 2: Verification loop priority chain** — Command detection in continue.md and verification-loop.md now uses 3-tier priority chain (CLAUDE.md > CODEBASE.md > heuristic table) instead of heuristic table alone. Heuristic table preserved as fallback. (`continue.md`, `runtime/verification-loop.md` + .opencode/.aether mirrors)
@@ -121,3 +123,4 @@ Development releases (versions 2.0.0-2.4.2) building toward stable release. Key 
 
 - 2026-02-11: README.md — Major update reflecting all new features: 22 commands (was 20), dream/interpret commands, colony memory inheritance, graveyards, auto-recovery headers, git safety, lint suite, CLAUDE.md-aware command detection, Colony Memory section, restructured Features section
 - 2026-02-11: .aether/data/review-2026-02-11.md — Comprehensive daily review report covering 3 colony sessions, 10 achievements, 3 regressions, 5 concerns, 3 debunked concerns, and prioritized recommendations
+- 2026-02-12: README.md, CHANGELOG.md — Added /ant:chaos (resilience testing) and /ant:archaeology (git history analysis) commands with build pipeline integration

@@ -65,8 +65,8 @@ npm install -g aether-colony
 ```
 
 This installs:
-- 📁 **Claude Code Commands** → `~/.claude/commands/ant/` (22 slash commands)
-- 📁 **OpenCode Commands** → `~/.config/opencode/commands/ant/` (22 slash commands)
+- 📁 **Claude Code Commands** → `~/.claude/commands/ant/` (24 slash commands)
+- 📁 **OpenCode Commands** → `~/.config/opencode/commands/ant/` (24 slash commands)
 - 📁 **OpenCode Agents** → `~/.config/opencode/agents/` (4 specialized agents)
 - 📁 **Runtime** → `~/.aether/` (worker specs, utilities)
 
@@ -87,7 +87,7 @@ That's it. The colony takes over from there.
 
 ## 🎯 Commands
 
-Aether has **22 slash commands** organized into 7 categories.
+Aether has **24 slash commands** organized into 7 categories.
 
 ### Core Workflow
 
@@ -240,7 +240,7 @@ Types:
 
 **`/ant:watch`** — Set up a tmux session with 4 panes showing real-time colony activity: status, progress bar, spawn tree visualization, and activity log stream. Requires tmux.
 
-**`/ant:help`** — Full command reference covering all 22 commands, the session resume workflow, colony memory system, and state file inventory.
+**`/ant:help`** — Full command reference covering all 24 commands, the session resume workflow, colony memory system, and state file inventory.
 
 ---
 
@@ -386,10 +386,10 @@ Session 2: /ant:init → reads completion-report.md → seeds memory
 ```
 ~/.claude/commands/ant/           # Claude Code global slash commands
     ├── init.md, plan.md, build.md, continue.md...
-    └── (22 command files)
+    └── (24 command files)
 
 ~/.config/opencode/               # OpenCode global config
-    ├── commands/ant/             # OpenCode slash commands (22 files)
+    ├── commands/ant/             # OpenCode slash commands (24 files)
     └── agents/                   # Specialized agents (queen, builder, scout, watcher)
 
 ~/.aether/                        # Global runtime (shared)

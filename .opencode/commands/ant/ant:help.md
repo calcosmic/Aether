@@ -50,6 +50,8 @@ ADVANCED
   /ant:council           Convene council for intent clarification
   /ant:dream             Philosophical wanderer — observes and writes wisdom
   /ant:interpret         Review dreams — validate against codebase, discuss action
+  /ant:chaos             🎲 Resilience testing — adversarial probing of the codebase
+  /ant:archaeology       🏺 Git history analysis — excavate patterns from commit history
 
 TYPICAL WORKFLOW
 
@@ -74,6 +76,8 @@ WORKER CASTES
   👁️ watcher      — validates, tests, independent quality checks
   🔍 scout        — researches, gathers information
   🏛️ architect    — synthesizes knowledge, extracts patterns
+  🎲 chaos        — resilience tester, adversarial probing
+  🏺 archaeologist — git history analyst, excavates commit patterns
 
 HOW IT WORKS
 
