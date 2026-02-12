@@ -2,7 +2,7 @@
 # Aether Colony Utility Layer
 # Single entry point for deterministic colony operations
 #
-# Usage: bash ~/.aether/aether-utils.sh <subcommand> [args...]
+# Usage: bash .aether/aether-utils.sh <subcommand> [args...]
 #
 # All subcommands output JSON to stdout.
 # Non-zero exit on error with JSON error message to stderr.
@@ -200,9 +200,8 @@ EOF
     source_phase="$3"
     tags="${4:-}"
 
-    global_dir="$HOME/.aether"
-    global_file="$global_dir/learnings.json"
-    mkdir -p "$global_dir"
+    mkdir -p "$DATA_DIR"
+    global_file="$DATA_DIR/learnings.json"
 
     if [[ ! -f "$global_file" ]]; then
       echo '{"learnings":[],"version":1}' > "$global_file"
@@ -242,7 +241,7 @@ EOF
     [[ $# -ge 1 ]] || json_err "Usage: learning-inject <tech_keywords_csv>"
     keywords="$1"
 
-    global_file="$HOME/.aether/learnings.json"
+    global_file="$DATA_DIR/learnings.json"
 
     if [[ ! -f "$global_file" ]]; then
       json_ok '{"learnings":[],"count":0}'
@@ -434,9 +433,8 @@ EOF
     severity="${3:-warning}"
     [[ -z "$pattern_name" || -z "$description" ]] && json_err "Usage: error-flag-pattern <pattern_name> <description> [severity]"
 
-    global_dir="$HOME/.aether"
-    patterns_file="$global_dir/error-patterns.json"
-    mkdir -p "$global_dir"
+    patterns_file="$DATA_DIR/error-patterns.json"
+    mkdir -p "$DATA_DIR"
 
     if [[ ! -f "$patterns_file" ]]; then
       echo '{"patterns":[],"version":1}' > "$patterns_file"
@@ -481,7 +479,7 @@ EOF
   error-patterns-check)
     # Check for known error patterns in a file or codebase
     # Returns patterns that should be avoided
-    global_file="$HOME/.aether/error-patterns.json"
+    global_file="$DATA_DIR/error-patterns.json"
 
     if [[ ! -f "$global_file" ]]; then
       json_ok '{"patterns":[],"count":0}'
@@ -582,7 +580,7 @@ EOF
     fi
 
     # Read signature details from signatures.json
-    signatures_file="$HOME/.aether/data/signatures.json"
+    signatures_file="$DATA_DIR/signatures.json"
     if [[ ! -f "$signatures_file" ]]; then
       json_ok '{"found":false,"signature":null}'
       exit 0
@@ -634,7 +632,7 @@ EOF
     [[ ! -d "$target_dir" ]] && json_err "Directory not found: $target_dir"
 
     # Path to signatures file
-    signatures_file="$HOME/.aether/data/signatures.json"
+    signatures_file="$DATA_DIR/signatures.json"
     [[ ! -f "$signatures_file" ]] && json_err "Signatures file not found"
 
     # Read high-confidence signatures (confidence >= 0.7) using jq -c for compact single-line output

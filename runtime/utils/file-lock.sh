@@ -3,7 +3,7 @@
 # Implements file locking for concurrent colony access prevention
 #
 # Usage:
-#   source ~/.aether/utils/file-lock.sh
+#   source .aether/utils/file-lock.sh
 #   acquire_lock /path/to/file.lock
 #   # ... critical section ...
 #   release_lock /path/to/file.lock

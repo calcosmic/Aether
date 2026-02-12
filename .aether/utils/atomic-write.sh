@@ -3,16 +3,20 @@
 # Implements atomic write pattern (temp file + rename) for corruption safety
 #
 # Usage:
-#   source ~/.aether/utils/atomic-write.sh
+#   source .aether/utils/atomic-write.sh
 #   atomic_write /path/to/file.json "content"
 #   atomic_write_from_file /path/to/target.json /path/to/temp.json
 
 # Source required utilities
 # Get the directory where this script is located
 _AETHER_UTILS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# If BASH_SOURCE[0] is empty (can happen in some contexts), use relative path
+# If BASH_SOURCE[0] is empty (can happen in some contexts), use repo-local path
 if [ -z "$_AETHER_UTILS_DIR" ] || [ "$_AETHER_UTILS_DIR" = "$(pwd)" ]; then
-    _AETHER_UTILS_DIR="$HOME/.aether/utils"
+    if git rev-parse --show-toplevel >/dev/null 2>&1; then
+        _AETHER_UTILS_DIR="$(git rev-parse --show-toplevel)/.aether/utils"
+    else
+        _AETHER_UTILS_DIR="$PWD/.aether/utils"
+    fi
 fi
 # Verify the path exists and file-lock.sh is there
 if [ ! -f "$_AETHER_UTILS_DIR/file-lock.sh" ]; then
