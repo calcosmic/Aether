@@ -1,3 +1,8 @@
+---
+name: ant:migrate-state
+description: "🚚🐜📦🐜🚚 One-time state migration from v1 to v2.0 format"
+---
+
 # 🚚🐜📦🐜🚚 /ant:migrate-state - One-Time State Migration
 
 Migrate colony state from v1 (6-file) format to v2.0 (consolidated single-file) format.

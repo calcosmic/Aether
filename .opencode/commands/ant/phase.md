@@ -27,6 +27,11 @@ If `plan.phases` is an empty array, output `No project plan. Run /ant:plan first
 
 Find the phase by ID in `plan.phases`.
 
+**Calculate next phase ID:**
+- Let `total_phases` = length of `plan.phases` array
+- If current phase ID < total_phases, then `next_id` = current phase ID + 1
+- If current phase ID >= total_phases (viewing last phase), omit the "View next phase" suggestion
+
 Output this header:
 
 ```

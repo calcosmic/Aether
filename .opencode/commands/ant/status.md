@@ -123,7 +123,7 @@ Output format:
 🚩 Flags: <blockers> blockers | <issues> issues | <notes> notes
 
 State: <state>
-Next:  /ant:<suggested command>   <phase_context>
+Next:  <suggested_command>   <phase_context>
 ```
 
 **Phase context for Next line:** Include the phase name inline with the suggestion:
@@ -142,11 +142,17 @@ Look up the phase name from `plan.phases[current_phase].name` and append it.
    [0.7] 🐜 debugging: Trace to root cause first
 ```
 
-**Suggested command logic:**
-- IDLE -> init
-- READY -> build <next_phase>
-- EXECUTING -> continue (wait for build)
-- PLANNING -> plan (wait for completion)
+**Suggested command logic (use actual values, not templates):**
+
+Calculate `next_phase = current_phase + 1` from state.
+
+Generate the suggested command based on colony state:
+- IDLE -> `/ant:init`
+- READY -> `/ant:build {next_phase}` (e.g., if current_phase is 2, output `/ant:build 3`)
+- EXECUTING -> `/ant:continue`
+- PLANNING -> `/ant:plan`
+
+The output must be a copy-pasteable command with real numbers, not placeholders.
 
 **Edge cases:**
 - No phases yet: "Phase 0/0: No plan created"
