@@ -121,6 +121,87 @@ If file doesn't exist or is empty:
 CONSTRAINTS: (none)
 ```
 
+### Step 4.5: Archaeologist Pre-Build Scan
+
+**Conditional step — only fires when the phase modifies existing files.**
+
+1. **Detect existing-file modification:**
+   Examine each task in the phase. Look at task descriptions, constraints, and hints for signals:
+   - Keywords: "update", "modify", "add to", "integrate into", "extend", "change", "refactor", "fix"
+   - References to existing file paths (files that already exist in the repo)
+   - Task type: if a task is purely "create new file X" with no references to existing code, it is new-file-only
+
+   **If ALL tasks are new-file-only** (no existing files will be modified):
+   - Skip this step silently — produce no output, no spawn
+   - Proceed directly to Step 5
+
+2. **If existing code modification detected — spawn Archaeologist Scout:**
+
+   Generate archaeologist name and log:
+   ```bash
+   bash ~/.aether/aether-utils.sh generate-ant-name "archaeologist"
+   bash ~/.aether/aether-utils.sh spawn-log "Queen" "scout" "{archaeologist_name}" "Pre-build archaeology scan"
+   ```
+
+   Display:
+   ```
+   🏺 Spawning Archaeologist: {archaeologist_name}
+      Scanning history of files to be modified...
+   ```
+
+   Spawn a Scout (using Task tool with `subagent_type="general-purpose"`) with this prompt:
+
+   ```
+   You are {Archaeologist-Name}, a 🏺 Archaeologist Ant (Scout) in the Aether Colony.
+
+   --- YOUR MISSION ---
+   Perform a pre-build archaeology scan on files that are about to be modified.
+
+   --- FILES TO INVESTIGATE ---
+   {list of existing files that will be modified by this phase's tasks}
+
+   --- INSTRUCTIONS ---
+   For each file:
+   1. Read the file to understand its current state
+   2. Run: git log --oneline -15 -- "{file_path}" to see recent history
+   3. Run: git log --all --grep="fix\|bug\|workaround\|hack\|revert" --oneline -- "{file_path}" to find incident history
+   4. Run: git blame "{file_path}" | head -40 to see authorship of key sections
+   5. Note any TODO/FIXME/HACK markers in the current code
+
+   --- OUTPUT ---
+   For each file, report:
+   - WHY key code sections exist (from commit messages)
+   - Known workarounds or hacks that must not be broken
+   - Key architectural decisions visible in history
+   - Areas of caution (high churn, reverted changes, emergency fixes)
+   - Sections that are stable bedrock vs volatile sand
+
+   Keep the report concise and actionable — builders need quick context, not a thesis.
+   Format as plain text with file headers. No JSON output needed.
+   ```
+
+   **Wait for results** (blocking — use TaskOutput with `block: true`).
+
+   Log completion:
+   ```bash
+   bash ~/.aether/aether-utils.sh spawn-complete "{archaeologist_name}" "completed" "Pre-build archaeology scan"
+   ```
+
+3. **Store and display findings:**
+
+   Store the archaeologist's output as `archaeology_context`.
+
+   Display summary:
+   ```
+   🏺 ARCHAEOLOGY CONTEXT
+   =====================
+   {summary of findings from archaeologist}
+   ```
+
+4. **Injection into builder prompts:**
+   The `archaeology_context` will be injected into builder prompts in Step 5.1 (see below).
+   If this step was skipped (no existing files modified), the archaeology section is omitted from builder prompts.
+
 ### Step 5: Analyze Tasks and Plan Spawns
 
 **YOU (the Queen) will spawn workers directly. Do NOT delegate to a single Prime Worker.**
@@ -141,11 +222,13 @@ Analyze the phase tasks:
    - Implementation tasks → 🔨 Builder
    - Research/docs tasks → 🔍 Scout
    - Testing/validation → 👁️ Watcher (ALWAYS spawn at least one)
+   - Resilience testing → 🎲 Chaos (ALWAYS spawn one after Watcher)
 
 3. **Generate ant names for each worker:**
 ```bash
 bash ~/.aether/aether-utils.sh generate-ant-name "builder"
 bash ~/.aether/aether-utils.sh generate-ant-name "watcher"
+bash ~/.aether/aether-utils.sh generate-ant-name "chaos"
 ```
 
 Display spawn plan:
@@ -161,8 +244,9 @@ Wave 2 (after Wave 1):
 
 Verification:
   👁️{Watcher-Name}: Verify all work independently
+  🎲{Chaos-Name}: Resilience testing (after Watcher)
 
-Total: {N} Builders + 1 Watcher = {N+1} spawns
+Total: {N} Builders + 1 Watcher + 1 Chaos = {N+2} spawns
 ```
 
 ### Step 5.1: Spawn Wave 1 Workers (Parallel)
@@ -207,6 +291,12 @@ Error Patterns to Avoid:
 {For each pattern in errors.flagged_patterns:}
   ⚠️ {description}
 {If none: omit this sub-section}
+
+{If archaeology_context exists (Step 4.5 produced findings):}
+--- ARCHAEOLOGY CONTEXT ---
+The following historical insights were discovered about files you will modify:
+{archaeology_context findings}
+{End if — omit this entire section if Step 4.5 was skipped}
 
 --- INSTRUCTIONS ---
 1. Read ~/.aether/workers.md for Builder discipline
@@ -385,13 +475,91 @@ Call TaskOutput with `block: true` using the Watcher's task_id:
 - Parse: verification_passed, issues_found, quality_score, recommendation
 - Store results for synthesis in Step 5.6
 
-**Only proceed to Step 5.5 after Watcher TaskOutput has returned.**
+**Only proceed to Step 5.4.2 after Watcher TaskOutput has returned.**
+
+### Step 5.4.2: Spawn Chaos Ant for Resilience Testing
+
+**After the Watcher completes, spawn a Chaos Ant to probe the phase work for edge cases and boundary conditions.**
+
+Generate a chaos ant name and log the spawn:
+```bash
+bash ~/.aether/aether-utils.sh generate-ant-name "chaos"
+bash ~/.aether/aether-utils.sh spawn-log "Queen" "chaos" "{chaos_name}" "Resilience testing of Phase {id} work"
+```
+
+Spawn the Chaos Ant using Task tool with `subagent_type="general-purpose"`:
+
+**Chaos Ant Prompt:**
+```
+You are {Chaos-Name}, a 🎲 Chaos Ant (Resilience Tester) in the Aether Colony at depth {depth}.
+
+--- YOUR MISSION ---
+Probe the work done by Builders in Phase {id} for edge cases, boundary conditions, and unexpected inputs.
+
+--- SCOPE ---
+Files created: {list from builder results}
+Files modified: {list from builder results}
+
+--- RULES ---
+1. Limit to 5 edge case scenarios maximum
+2. You are a TESTER, not an attacker — use investigating/probing language
+3. Do NOT modify any code — read-only analysis
+4. Focus on: edge cases, boundary conditions, error handling gaps, state corruption risks, unexpected inputs
+
+--- OUTPUT ---
+Return JSON:
+{
+  "ant_name": "{your name}",
+  "scenarios_tested": 5,
+  "findings": [
+    {
+      "id": 1,
+      "category": "edge_case|boundary|error_handling|state|unexpected_input",
+      "severity": "critical|high|medium|low|info",
+      "title": "...",
+      "description": "...",
+      "reproduction_steps": ["..."],
+      "affected_files": ["..."],
+      "recommendation": "..."
+    }
+  ],
+  "overall_resilience": "strong|moderate|weak",
+  "summary": "..."
+}
+```
+
+**Collect Chaos Ant results (BLOCKING):**
+
+Call TaskOutput with `block: true` using the Chaos Ant's task_id:
+- Wait for the Chaos Ant's JSON response
+- Parse: findings, overall_resilience, summary
+- Store results for synthesis in Step 5.6
+
+**Flag critical/high findings:**
+
+If any findings have severity `"critical"` or `"high"`:
+```bash
+# Create a blocker flag for each critical/high chaos finding
+bash ~/.aether/aether-utils.sh flag-add "blocker" "{finding.title}" "{finding.description}" "chaos-testing" {phase_number}
+```
+
+Log the flag:
+```bash
+bash ~/.aether/aether-utils.sh activity-log "FLAG" "Chaos" "Created blocker: {finding.title}"
+```
+
+Log chaos ant completion:
+```bash
+bash ~/.aether/aether-utils.sh spawn-complete "{chaos_name}" "completed" "{summary}"
+```
+
+**Only proceed to Step 5.5 after Chaos Ant TaskOutput has returned.**
 
 ### Step 5.5: Create Flags for Verification Failures
 
-If the Watcher reported `verification_passed: false` or `recommendation: "fix_required"`:
+If the Watcher reported `verification_passed: false` or `recommendation: "fix_required"`, OR the Chaos Ant reported findings with severity `"critical"` or `"high"`:
 
-For each issue in `issues_found`:
+For Watcher issues — for each issue in `issues_found`:
 ```bash
 # Create a blocker flag for each verification failure
 bash ~/.aether/aether-utils.sh flag-add "blocker" "{issue_title}" "{issue_description}" "verification" {phase_number}
@@ -402,11 +570,22 @@ Log the flag creation:
 bash ~/.aether/aether-utils.sh activity-log "FLAG" "Watcher" "Created blocker: {issue_title}"
 ```
 
-This ensures verification failures are persisted as blockers that survive context resets.
+For Chaos Ant findings — for each finding with severity `"critical"` or `"high"` (if not already flagged in Step 5.4.2):
+```bash
+# Create a blocker flag for each critical/high resilience finding
+bash ~/.aether/aether-utils.sh flag-add "blocker" "{finding.title}" "{finding.description}" "chaos-testing" {phase_number}
+```
+
+Log the flag creation:
+```bash
+bash ~/.aether/aether-utils.sh activity-log "FLAG" "Chaos" "Created blocker: {finding.title}"
+```
+
+This ensures both verification failures and resilience findings are persisted as blockers that survive context resets.
 
 ### Step 5.6: Synthesize Results
 
-**This step runs ONLY after ALL TaskOutput calls have returned (Steps 5.2, 5.3, 5.4.1).**
+**This step runs ONLY after ALL TaskOutput calls have returned (Steps 5.2, 5.3, 5.4.1, 5.4.2).**
 
 Collect all worker outputs and create phase summary:
 
@@ -419,16 +598,22 @@ Collect all worker outputs and create phase summary:
   "files_created": [...],
   "files_modified": [...],
   "spawn_metrics": {
-    "spawn_count": {total workers spawned},
+    "spawn_count": {total workers spawned, including archaeologist if Step 4.5 fired},
     "builder_count": {N},
     "watcher_count": 1,
+    "chaos_count": 1,
+    "archaeologist_count": {0 or 1, conditional on Step 4.5},
     "parallel_batches": {number of waves}
   },
   "spawn_tree": {
+    "{Archaeologist-Name}": {"caste": "archaeologist", "task": "pre-build history scan", "status": "completed"},
     "{Builder-Name}": {"caste": "builder", "task": "...", "status": "completed"},
-    "{Watcher-Name}": {"caste": "watcher", "task": "verify", "status": "completed"}
+    "{Watcher-Name}": {"caste": "watcher", "task": "verify", "status": "completed"},
+    "{Chaos-Name}": {"caste": "chaos", "task": "resilience testing", "status": "completed"}
   },
   "verification": {from Watcher output},
+  "resilience": {from Chaos Ant output},
+  "archaeology": {from Archaeologist output, or null if Step 4.5 was skipped},
   "quality_notes": "..."
 }
 ```
@@ -461,15 +646,19 @@ Return JSON:
   "files_created": ["path1", "path2"],
   "files_modified": ["path3"],
   "spawn_metrics": {
-    "spawn_count": 4,
+    "spawn_count": 6,
     "watcher_count": 1,
+    "chaos_count": 1,
+    "archaeologist_count": 1,
     "builder_count": 3,
     "parallel_batches": 2,
     "sequential_tasks": 1
   },
   "spawn_tree": {
+    "Relic-8": {"caste": "archaeologist", "task": "pre-build history scan", "status": "completed", "children": {}},
     "Hammer-42": {"caste": "builder", "task": "...", "status": "completed", "children": {}},
-    "Vigil-17": {"caste": "watcher", "task": "...", "status": "completed", "children": {}}
+    "Vigil-17": {"caste": "watcher", "task": "...", "status": "completed", "children": {}},
+    "Entropy-9": {"caste": "chaos", "task": "resilience testing", "status": "completed", "children": {}}
   },
   "verification": {
     "build": {"command": "npm run build", "exit_code": 0, "passed": true},
