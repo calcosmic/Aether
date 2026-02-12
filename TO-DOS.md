@@ -6,6 +6,10 @@ This file tracks pending work items. Each todo is self-contained with full conte
 
 ## Priority 0: Urgent
 
+### Remove run_in_background from build.md worker spawns - 2026-02-12
+
+- **Delayed task-notification banners make build summaries look premature** - build.md spawns workers with `run_in_background: true` then collects results via `TaskOutput`. The data is correct but Claude Code fires `task-notification` banners asynchronously after the summary is already displayed, making it look like the summary was written before agents finished. **Fix:** Remove `run_in_background: true` from all Task calls in build.md Steps 5.1, 5.4, and 5.4.2. Multiple Task calls in a single message already run in parallel without the background flag — they just block and return results directly. Then remove Steps 5.2 and 5.4.1 (TaskOutput collection) since results come back from the Task calls themselves. Apply same change to OpenCode mirror. **Files:** `.claude/commands/ant/build.md`, `.opencode/commands/ant/ant:build.md`. **Scope:** modest — remove flag + delete ~20 lines of TaskOutput instructions.
+
 ### Deprecate old 2.x npm versions - 2026-02-12
 
 - **npm registry has stale 2.x pre-release versions that could confuse users** - Versions 2.0.0 through 2.4.2 exist on npm from pre-stable development. The `latest` dist-tag correctly points to 1.0.0, so `npm install` works fine. But the 2.x versions are visible on the npm page and could confuse people into thinking they're newer. **Fix:** Run `npm deprecate aether-colony@">=2.0.0" "Pre-release versions. Install 1.0.0 for the stable release."` to mark them deprecated. **Scope:** one command. **Urgency:** high — public-facing confusion on npm.
@@ -18,9 +22,13 @@ This file tracks pending work items. Each todo is self-contained with full conte
 
 - **RESOLVED:** Updated `build.md` to enforce blocking behavior. Steps 5.2, 5.4.1, and 5.6 now explicitly require waiting for ALL TaskOutput calls to return before proceeding. Next Steps are now conditional based on actual verification results. If verification fails, `/ant:continue` is not suggested.
 
+### Build summary displays before task-notification banners arrive - 2026-02-12
+
+- **Phase summary appears before all background agent notifications are shown to the user** - During `/ant:build`, workers are spawned with `run_in_background: true` and then collected via `TaskOutput` with `block: true`. The Queen synthesizes results and displays the summary based on the TaskOutput data (which IS the real completed output). However, Claude Code's `task-notification` banners for each agent arrive asynchronously AFTER the summary is already displayed, making it look like the summary was written before agents finished. This is confusing — the user sees "Phase 3 complete" and then gets 3 "Agent completed" notifications afterward. **Problem:** Even though the data is correct (TaskOutput blocks until completion), the visual ordering undermines trust in the summary. **Possible fixes:** (1) Don't use `run_in_background` — use foreground Task calls so there are no delayed notifications, (2) Add a brief "Waiting for notifications to clear..." step after TaskOutput collection, (3) Accept the UX quirk and document it. **Scope:** Investigate whether foreground Task calls can still be parallelized, or whether background is required for parallel spawning.
+
 ### ~~Progressive Disclosure UI - 2026-02-10~~ FIXED
 
-- **RESOLVED:** Implemented compact-by-default output with `--verbose` flag for full details. Created format specification at `~/.aether/docs/progressive-disclosure.md`. Updated `status.md` (8-10 lines default) and `build.md` (12 lines default) with compact/verbose modes. Bracket counts like `[3 blockers]` indicate expandable sections.
+- **RESOLVED:** Implemented compact-by-default output with `--verbose` flag for full details. Created format specification at `.aether/docs/progressive-disclosure.md`. Updated `status.md` (8-10 lines default) and `build.md` (12 lines default) with compact/verbose modes. Bracket counts like `[3 blockers]` indicate expandable sections.
 
 ### Auto-Load Context on Colony Commands - 2026-02-10
 
@@ -120,7 +128,7 @@ This file tracks pending work items. Each todo is self-contained with full conte
 
 - **RESOLVED:** Added Step 2.5 to `init.md` that reads `completion-report.md` and seeds `memory.instincts` (confidence >= 0.7) and `memory.phase_learnings` (validated) into the new colony. Non-blocking and gracefully skips if no report exists. Both `.claude` and `.opencode` mirrors updated. Full cross-session memory system remains at Priority 5.
 
-~~- **Make init.md load high-confidence instincts from previous completion reports**~~ - Each colony starts fresh with empty `memory.instincts`, `memory.phase_learnings`, and `memory.decisions`. `completion-report.md` is written by `/ant:continue` at project completion but **never read** by any command. The data exists, only the loading is missing. **Minimal fix:** Add a step to `init.md` that reads the most recent `.aether/data/completion-report.md` (if it exists) and seeds `memory.instincts` with any instinct at confidence >= 0.7. Gives the new colony a head start without importing everything blindly. **Files:** `init.md` + `.opencode` mirror. **Source:** Dream session 2026-02-11, Dream 5: The Eternal Present of a Colony Without Memory. **Scope:** modest, medium. **Note:** The full cross-session memory system (Priority 5: `~/.aether/projects/<hash>/`) remains the long-term goal — this is the 80% fix.
+~~- **Make init.md load high-confidence instincts from previous completion reports**~~ - Each colony starts fresh with empty `memory.instincts`, `memory.phase_learnings`, and `memory.decisions`. `completion-report.md` is written by `/ant:continue` at project completion but **never read** by any command. The data exists, only the loading is missing. **Minimal fix:** Add a step to `init.md` that reads the most recent `.aether/data/completion-report.md` (if it exists) and seeds `memory.instincts` with any instinct at confidence >= 0.7. Gives the new colony a head start without importing everything blindly. **Files:** `init.md` + `.opencode` mirror. **Source:** Dream session 2026-02-11, Dream 5: The Eternal Present of a Colony Without Memory. **Scope:** modest, medium. **Note:** The full cross-session memory system (Priority 5: `.aether/projects/<hash>/`) remains the long-term goal — this is the 80% fix.
 
 ---
 
@@ -156,7 +164,7 @@ This file tracks pending work items. Each todo is self-contained with full conte
 
 ### Cross-Session Memory Persistence - 2026-02-10
 
-- **Project-level memory like Claude Code's Auto Memory** - Persistent memory across sessions, not just within colony lifecycle. **Implementation:** `~/.aether/projects/<project-hash>/` with: MEMORY.md (index, first 200 lines loaded), decisions/, patterns/, failures/ (graveyards). Survives colony reset. **Token consideration:** Only load index file by default, deep files on demand.
+- **Project-level memory like Claude Code's Auto Memory** - Persistent memory across sessions, not just within colony lifecycle. **Implementation:** `.aether/projects/<project-hash>/` with: MEMORY.md (index, first 200 lines loaded), decisions/, patterns/, failures/ (graveyards). Survives colony reset. **Token consideration:** Only load index file by default, deep files on demand.
 
 ### Git-Aware Context - 2026-02-10
 

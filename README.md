@@ -64,11 +64,12 @@ When a Builder hits something complex, it spawns a Scout to research. When code 
 npm install -g aether-colony
 ```
 
-This installs:
+This installs slash commands so your editor can find them:
 - 📁 **Claude Code Commands** → `~/.claude/commands/ant/` (24 slash commands)
 - 📁 **OpenCode Commands** → `~/.config/opencode/commands/ant/` (24 slash commands)
 - 📁 **OpenCode Agents** → `~/.config/opencode/agents/` (4 specialized agents)
-- 📁 **Runtime** → `~/.aether/` (worker specs, utilities)
+
+All runtime state, utilities, and worker specs live **repo-local** in `.aether/` — nothing is read from or written to `~/.aether/` at runtime. Each project is self-contained.
 
 ### Your First Colony
 
@@ -384,32 +385,34 @@ Session 2: /ant:init → reads completion-report.md → seeds memory
 ## 📁 File Structure
 
 ```
-~/.claude/commands/ant/           # Claude Code global slash commands
-    ├── init.md, plan.md, build.md, continue.md...
-    └── (24 command files)
-
-~/.config/opencode/               # OpenCode global config
-    ├── commands/ant/             # OpenCode slash commands (24 files)
-    └── agents/                   # Specialized agents (queen, builder, scout, watcher)
-
-~/.aether/                        # Global runtime (shared)
+<your-repo>/.aether/              # Repo-local runtime (everything the colony needs)
     ├── workers.md                # Worker specs with spawn protocol
     ├── aether-utils.sh           # Utility layer (59 subcommands)
     ├── verification-loop.md      # 6-phase verification reference
-    └── utils/                    # Colorization, spawn tree viz, file locking
+    ├── utils/                    # Colorization, spawn tree viz, file locking
+    │
+    ├── data/                     # Per-project state (SHARED between tools)
+    │   ├── COLONY_STATE.json     # Goal, plan, memory, instincts, errors
+    │   ├── flags.json            # Blockers, issues, notes
+    │   ├── constraints.json      # Focus areas and avoidance patterns
+    │   ├── activity.log          # Worker activity stream
+    │   ├── spawn-tree.txt        # Spawn hierarchy
+    │   ├── completion-report.md  # End-of-project summary (inherited by next colony)
+    │   └── graveyard.json        # Failed file markers for builder caution
+    │
+    └── dreams/                   # Dream session files
+        └── YYYY-MM-DD-HHMM.md   # Timestamped observations
 
-<your-repo>/.aether/data/         # Per-project state (SHARED between tools)
-    ├── COLONY_STATE.json         # Goal, plan, memory, instincts, errors
-    ├── flags.json                # Blockers, issues, notes
-    ├── constraints.json          # Focus areas and avoidance patterns
-    ├── activity.log              # Worker activity stream
-    ├── spawn-tree.txt            # Spawn hierarchy
-    ├── completion-report.md      # End-of-project summary (inherited by next colony)
-    └── graveyard.json            # Failed file markers for builder caution
+~/.claude/commands/ant/           # Claude Code slash commands (install-only)
+    ├── init.md, plan.md, build.md, continue.md...
+    └── (24 command files)
 
-<your-repo>/.aether/dreams/       # Dream session files
-    └── YYYY-MM-DD-HHMM.md       # Timestamped observations
+~/.config/opencode/               # OpenCode config (install-only)
+    ├── commands/ant/             # OpenCode slash commands (24 files)
+    └── agents/                   # Specialized agents (queen, builder, scout, watcher)
 ```
+
+> **Architecture note:** `npm install -g` places slash commands in `~/.claude/` and `~/.config/opencode/` so your editor discovers them. At runtime, the colony reads and writes exclusively within the repo-local `.aether/` directory. No global `~/.aether/` directory is read or written at runtime.
 
 ### Cross-Tool Compatibility
 
@@ -460,10 +463,13 @@ Both Claude Code and OpenCode share the same state files in `.aether/data/`. Thi
 # Install globally
 npm install -g aether-colony
 
-# Verify
+# Verify install
 aether version
-ls ~/.claude/commands/ant/           # Claude Code commands
-ls ~/.config/opencode/commands/ant/  # OpenCode commands
+ls ~/.claude/commands/ant/           # Claude Code commands (install target)
+ls ~/.config/opencode/commands/ant/  # OpenCode commands (install target)
+
+# Verify runtime (from inside any Aether-initialized repo)
+ls .aether/                          # Repo-local runtime directory
 
 # Lint (after cloning the repo)
 npm run lint                         # Runs shell, JSON, and sync checks
