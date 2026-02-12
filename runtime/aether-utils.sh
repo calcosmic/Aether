@@ -224,7 +224,7 @@ EOF
     fi
 
     updated=$(jq --arg id "$id" --arg content "$content" --arg sp "$source_project" \
-      --argjson phase "$source_phase" --argjson tags "$tags_json" --arg ts "$ts" '
+      --arg phase "$source_phase" --argjson tags "$tags_json" --arg ts "$ts" '
       .learnings += [{
         id: $id,
         content: $content,
@@ -891,7 +891,7 @@ EOF
     trigger="${1:-build_pass}"
     flags_file="$DATA_DIR/flags.json"
 
-    [[ ! -f "$flags_file" ]] && json_ok '{"resolved":0}'
+    if [[ ! -f "$flags_file" ]]; then json_ok '{"resolved":0}'; exit 0; fi
 
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 

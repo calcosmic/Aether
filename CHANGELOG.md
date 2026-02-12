@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Phase 1: Fix bugs in canonical runtime/aether-utils.sh** — Fixed learning-promote jq crash on non-numeric phase strings (--argjson to --arg), fixed flag-auto-resolve missing exit after early-return when flags file absent, confirmed file-lock.sh transitive usage via atomic-write.sh is intentional. (`runtime/aether-utils.sh`)
+
 ### Changed
 - **Phase 4: Documentation and Validation (Chaos + Archaeologist)** — Updated help.md with /ant:chaos and /ant:archaeology in ADVANCED and WORKER CASTES sections, updated README.md command count from 22 to 24 in all 6 locations, added CHANGELOG entries for all phases, marked both TO-DOS.md entries as DONE with implementation references. Validated 24 files in each command directory, name generation, and emoji resolution. (`.claude/commands/ant/help.md`, `.opencode/commands/ant/ant:help.md`, `README.md`, `CHANGELOG.md`, `TO-DOS.md`)
 - 2026-02-12: TO-DOS.md — Marked Chaos Ant and Archaeologist Ant entries as DONE with implementation references
