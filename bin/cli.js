@@ -746,7 +746,7 @@ program.on('option:quiet', () => {
 // Install command
 program
   .command('install')
-  .description('Install slash-commands and set up distribution hub')
+  .description('Install slash-commands to ~/.claude/commands/ant/ and set up distribution hub')
   .action(wrapCommand(async () => {
     log(c.header(`aether-colony v${VERSION} — installing...`));
 
@@ -787,7 +787,7 @@ program
 // Update command
 program
   .command('update')
-  .description('Update current repo from hub')
+  .description('Update current repo from hub (use --all to update all registered repos)')
   .option('-f, --force', 'stash dirty files and force update')
   .option('-a, --all', 'update all registered repos')
   .option('-l, --list', 'show registered repos and versions')
@@ -972,7 +972,7 @@ program
 // Version command
 program
   .command('version')
-  .description('Show installed version')
+  .description('Show installed version and hub status')
   .action(() => {
     console.log(c.header(`aether-colony v${VERSION}`));
   });
@@ -980,7 +980,7 @@ program
 // Uninstall command
 program
   .command('uninstall')
-  .description('Remove slash-commands (preserves project state and hub)')
+  .description('Remove slash-commands from ~/.claude/commands/ant/ (preserves project state and hub)')
   .action(wrapCommand(async () => {
     log(c.header(`aether-colony v${VERSION} — uninstalling...`));
 
@@ -996,6 +996,35 @@ program
     log(c.success('Uninstall complete. Per-project .aether/data/ directories are untouched.'));
     log(`  ${c.colony('Hub:')} ${c.dim('~/.aether/')} preserved (remove manually if desired).`);
   }));
+
+// Custom help handler to show CLI vs Slash command distinction
+program.on('--help', () => {
+  console.log('');
+  console.log(c.bold('CLI Commands (Terminal):'));
+  console.log('  install              Install slash-commands and set up distribution hub');
+  console.log('  update               Update current repo from hub');
+  console.log('  version              Show installed version');
+  console.log('  uninstall            Remove slash-commands (preserves project state and hub)');
+  console.log('');
+  console.log(c.bold('Slash Commands (Claude Code):'));
+  console.log('  /ant:init <goal>     Initialize colony in current repo');
+  console.log('  /ant:status          Show colony status');
+  console.log('  /ant:plan            Generate project plan');
+  console.log('  /ant:build <n>       Build phase N');
+  console.log('');
+  console.log(c.dim('Run these in Claude Code after installing with "aether install"'));
+  console.log('');
+  console.log(c.bold('Examples:'));
+  console.log('  $ aether install                    # Install slash commands');
+  console.log('  $ aether update --list              # Show registered repos');
+  console.log('  $ aether update --all --force       # Force update all repos');
+  console.log('  $ aether --no-color version         # Show version without colors');
+});
+
+// Configure error output to use colors
+program.configureOutput({
+  outputError: (str, write) => write(c.error(str))
+});
 
 // Parse command line arguments
 program.parse();
