@@ -11,8 +11,15 @@ You are the **Queen**. Perform initial codebase analysis.
 
 Read `.aether/data/COLONY_STATE.json`.
 
-If `goal: null` -> output "No colony initialized. Run /ant:init first.", stop.
-If `plan.phases` not empty -> output "Colony already has phases. Use /ant:continue.", stop.
+**If the file does not exist or cannot be read:**
+1. Create `.aether/data/` directory if it does not exist.
+2. Write a minimal COLONY_STATE.json:
+   `{"version": "3.0", "goal": null, "state": "IDLE", "current_phase": 0, "session_id": null, "initialized_at": null, "build_started_at": null, "plan": {"generated_at": null, "confidence": null, "phases": []}, "memory": {"phase_learnings": [], "decisions": [], "instincts": []}, "errors": {"records": [], "flagged_patterns": []}, "signals": [], "graveyards": [], "events": []}`
+3. Output: "No colony state found. Bootstrapping minimal state for codebase analysis."
+
+**If the file exists:** continue (colonize works with or without a goal).
+
+**If `plan.phases` is not empty:** output "Colony already has phases. Use /ant:continue.", stop.
 
 ### Step 2: Surface Scan
 
@@ -102,7 +109,7 @@ No build system detected.
 - <any notable patterns or conventions observed>
 ```
 
-Keep output under 50 lines. Focus on what's relevant to the colony goal.
+Keep output under 50 lines. Focus on what's relevant to the colony goal (if set), or provide a general codebase overview.
 
 ### Step 4: Update State
 
@@ -136,6 +143,13 @@ Stack: <language> + <framework>
 Entry: <main entry point>
 Files: <total count> across <N> directories
 
+{Read the goal from COLONY_STATE.json. If goal is null:}
+Next:
+  /ant:init "<goal>"     Set colony goal (required before planning)
+  /ant:focus "<area>"    Inject focus before planning
+  /ant:redirect "<pat>"  Inject constraint before planning
+
+{If goal is not null:}
 Next:
   /ant:plan              Generate project plan
   /ant:focus "<area>"    Inject focus before planning
