@@ -9,6 +9,11 @@
 
 set -euo pipefail
 
+# Set up structured error handling for unexpected failures
+# This works alongside set -e but provides better context (line number, command)
+# The error_handler function is defined in error-handler.sh if sourced
+trap 'if type error_handler &>/dev/null; then error_handler ${LINENO} "$BASH_COMMAND" $?; fi' ERR
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AETHER_ROOT="$(cd "$SCRIPT_DIR/.." && pwd 2>/dev/null || echo "$SCRIPT_DIR")"
 DATA_DIR="$AETHER_ROOT/.aether/data"
@@ -20,6 +25,7 @@ CURRENT_LOCK=${CURRENT_LOCK:-""}
 # Source shared infrastructure if available
 [[ -f "$SCRIPT_DIR/utils/file-lock.sh" ]] && source "$SCRIPT_DIR/utils/file-lock.sh"
 [[ -f "$SCRIPT_DIR/utils/atomic-write.sh" ]] && source "$SCRIPT_DIR/utils/atomic-write.sh"
+[[ -f "$SCRIPT_DIR/utils/error-handler.sh" ]] && source "$SCRIPT_DIR/utils/error-handler.sh"
 
 # Fallback atomic_write if not sourced (uses temp file + mv for true atomicity)
 if ! type atomic_write &>/dev/null; then
@@ -38,7 +44,15 @@ fi
 json_ok() { printf '{"ok":true,"result":%s}\n' "$1"; }
 
 # Error: JSON to stderr, exit 1
-json_err() { printf '{"ok":false,"error":"%s"}\n' "$1" >&2; exit 1; }
+# Use enhanced json_err from error-handler.sh if available, otherwise fallback
+if ! type json_err &>/dev/null; then
+  # Fallback: simple error format for backward compatibility
+  json_err() {
+    local message="${2:-$1}"
+    printf '{"ok":false,"error":"%s"}\n' "$message" >&2
+    exit 1
+  }
+fi
 
 # --- Caste emoji helper ---
 get_caste_emoji() {
@@ -73,7 +87,7 @@ EOF
   validate-state)
     case "${1:-}" in
       colony)
-        [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "COLONY_STATE.json not found"
+        [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
         json_ok "$(jq '
           def chk(f;t): if has(f) then (if (.[f]|type) as $a | t | any(. == $a) then "pass" else "fail: \(f) is \(.[f]|type), expected \(t|join("|"))" end) else "fail: missing \(f)" end;
           def opt(f;t): if has(f) then (if (.[f]|type) as $a | t | any(. == $a) then "pass" else "fail: \(f) is \(.[f]|type), expected \(t|join("|"))" end) else "pass" end;
@@ -92,7 +106,7 @@ EOF
         ' "$DATA_DIR/COLONY_STATE.json")"
         ;;
       constraints)
-        [[ -f "$DATA_DIR/constraints.json" ]] || json_err "constraints.json not found"
+        [[ -f "$DATA_DIR/constraints.json" ]] || json_err "$E_FILE_NOT_FOUND" "constraints.json not found" '{"file":"constraints.json"}'
         json_ok "$(jq '
           def arr(f): if has(f) and (.[f]|type) == "array" then "pass" else "fail: \(f) not array" end;
           {file:"constraints.json", checks:[
@@ -111,13 +125,13 @@ EOF
         json_ok "{\"pass\":$all_pass,\"files\":$combined}"
         ;;
       *)
-        json_err "Usage: validate-state colony|constraints|all"
+        json_err "$E_VALIDATION_FAILED" "Usage: validate-state colony|constraints|all"
         ;;
     esac
     ;;
   error-add)
-    [[ $# -ge 3 ]] || json_err "Usage: error-add <category> <severity> <description> [phase]"
-    [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "COLONY_STATE.json not found"
+    [[ $# -ge 3 ]] || json_err "$E_VALIDATION_FAILED" "Usage: error-add <category> <severity> <description> [phase]"
+    [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
     id="err_$(date -u +%s)_$(head -c 2 /dev/urandom | od -An -tx1 | tr -d ' ')"
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
     phase_val="${4:-null}"
@@ -129,12 +143,12 @@ EOF
     updated=$(jq --arg id "$id" --arg cat "$1" --arg sev "$2" --arg desc "$3" --argjson phase "$phase_jq" --arg ts "$ts" '
       .errors.records += [{id:$id, category:$cat, severity:$sev, description:$desc, root_cause:null, phase:$phase, task_id:null, timestamp:$ts}] |
       if (.errors.records|length) > 50 then .errors.records = .errors.records[-50:] else . end
-    ' "$DATA_DIR/COLONY_STATE.json") || json_err "Failed to update COLONY_STATE.json"
+    ' "$DATA_DIR/COLONY_STATE.json") || json_err "$E_JSON_INVALID" "Failed to update COLONY_STATE.json"
     atomic_write "$DATA_DIR/COLONY_STATE.json" "$updated"
     json_ok "\"$id\""
     ;;
   error-pattern-check)
-    [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "COLONY_STATE.json not found"
+    [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
     json_ok "$(jq '
       .errors.records | group_by(.category) | map(select(length >= 3) |
         {category: .[0].category, count: length,
@@ -143,7 +157,7 @@ EOF
     ' "$DATA_DIR/COLONY_STATE.json")"
     ;;
   error-summary)
-    [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "COLONY_STATE.json not found"
+    [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
     json_ok "$(jq '{
       total: (.errors.records | length),
       by_category: (.errors.records | group_by(.category) | map({key: .[0].category, value: length}) | from_entries),
@@ -1173,7 +1187,7 @@ EOF
     # Record a grave marker when a builder fails at a file
     # Usage: grave-add <file> <ant_name> <task_id> <phase> <failure_summary> [function] [line]
     [[ $# -ge 5 ]] || json_err "Usage: grave-add <file> <ant_name> <task_id> <phase> <failure_summary> [function] [line]"
-    [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "COLONY_STATE.json not found"
+    [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
     file="$1"
     ant_name="$2"
     task_id="$3"
@@ -1214,7 +1228,7 @@ EOF
         timestamp: $ts
       }])} |
       if (.graveyards | length) > 30 then .graveyards = .graveyards[-30:] else . end
-    ' "$DATA_DIR/COLONY_STATE.json") || json_err "Failed to update COLONY_STATE.json"
+    ' "$DATA_DIR/COLONY_STATE.json") || json_err "$E_JSON_INVALID" "Failed to update COLONY_STATE.json"
     atomic_write "$DATA_DIR/COLONY_STATE.json" "$updated"
     json_ok "\"$id\""
     ;;
@@ -1224,7 +1238,7 @@ EOF
     # Usage: grave-check <file_path>
     # Read-only, never modifies state
     [[ $# -ge 1 ]] || json_err "Usage: grave-check <file_path>"
-    [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "COLONY_STATE.json not found"
+    [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
     check_file="$1"
     check_dir=$(dirname "$check_file")
     json_ok "$(jq --arg file "$check_file" --arg dir "$check_dir" '
