@@ -276,16 +276,36 @@ function syncDirWithCleanup(src, dest, opts) {
   return { copied, removed, skipped };
 }
 
+function computeFileHash(filePath) {
+  try {
+    const content = fs.readFileSync(filePath);
+    return crypto.createHash('sha256').update(content).digest('hex');
+  } catch {
+    return null;
+  }
+}
+
 function syncSystemFilesWithCleanup(srcDir, destDir, opts) {
   opts = opts || {};
   const dryRun = opts.dryRun || false;
 
   let copied = 0;
+  let skipped = 0;
   for (const file of SYSTEM_FILES) {
     const srcPath = path.join(srcDir, file);
     const destPath = path.join(destDir, file);
     if (fs.existsSync(srcPath)) {
       if (!dryRun) {
+        // Compute hashes to determine if copy is needed
+        const srcHash = computeFileHash(srcPath);
+        const destHash = fs.existsSync(destPath) ? computeFileHash(destPath) : null;
+
+        if (srcHash === destHash) {
+          // Files are identical, skip copying
+          skipped++;
+          continue;
+        }
+
         fs.mkdirSync(path.dirname(destPath), { recursive: true });
         fs.copyFileSync(srcPath, destPath);
         if (file.endsWith('.sh')) {
@@ -313,7 +333,7 @@ function syncSystemFilesWithCleanup(srcDir, destDir, opts) {
     cleanEmptyDirs(destDir);
   }
 
-  return { copied, removed };
+  return { copied, removed, skipped };
 }
 
 function isGitRepo(repoPath) {
