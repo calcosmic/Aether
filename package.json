@@ -19,7 +19,9 @@
   ],
   "scripts": {
     "postinstall": "node bin/cli.js install --quiet",
-    "test": "ava",
+    "test": "npm run test:unit && npm run test:bash",
+    "test:unit": "ava",
+    "test:bash": "bash tests/bash/test-aether-utils.sh",
     "lint:shell": "shellcheck --severity=error .aether/aether-utils.sh runtime/aether-utils.sh bin/generate-commands.sh .aether/utils/file-lock.sh .aether/utils/atomic-write.sh .aether/utils/colorize-log.sh .aether/utils/watch-spawn-tree.sh runtime/utils/file-lock.sh runtime/utils/atomic-write.sh runtime/utils/colorize-log.sh runtime/utils/watch-spawn-tree.sh",
     "lint:json": "node -e \"const fs=require('fs'); const files=['.aether/data/constraints.json','.aether/data/COLONY_STATE.json']; files.forEach(f=>{JSON.parse(fs.readFileSync(f,'utf8'))}); console.log('JSON valid')\"",
     "lint:sync": "bash bin/generate-commands.sh check",
