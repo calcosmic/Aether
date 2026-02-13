@@ -13,10 +13,10 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 
 **Milestone:** v1.0 Infrastructure
 **Phase:** 4 of 5 — CLI Improvements
-**Plan:** 1 of 3 — Dependencies and Color Palette
+**Plan:** 2 of 3 — Migrate CLI to Commander.js
 **Status:** ● Phase 4 in progress
 
-**Progress:** [█████████░] 60% (9/15 requirements complete)
+**Progress:** [██████████░] 67% (10/15 requirements complete)
 
 ---
 
@@ -45,6 +45,8 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 | 2026-02-13 | Use picocolors instead of chalk | 14x smaller, 2x faster, NO_COLOR friendly |
 | 2026-02-13 | Semantic color naming | queen (magenta), colony (cyan), worker (yellow) based on ant colony hierarchy |
 | 2026-02-13 | TTY-aware color disabling | Disable colors when stdout is not a TTY (piped output) |
+| 2026-02-13 | Commander.js flat command structure | Use .command().action() pattern for declarative CLI definition |
+| 2026-02-13 | Global option handling via events | Handle --no-color and --quiet via program.on('option:*') events |
 
 ---
 
@@ -106,6 +108,7 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 
 **Plans executed:**
 - 04-01-dependencies-color-palette: Installed commander.js and picocolors, created Aether brand color palette
+- 04-02-commander-migration: Migrated CLI to commander.js with auto-help and colored output
 
 **Requirements completed:**
 - CLI-01: commander.js installed for CLI framework ✓
@@ -113,6 +116,9 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 - CLI-03: Centralized color palette with semantic naming ✓
 - CLI-04: Colors respect --no-color flag ✓
 - CLI-05: Colors respect NO_COLOR environment variable ✓
+- CLI-06: CLI uses commander.js declarative API ✓
+- CLI-07: Auto-help generation for all commands ✓
+- CLI-08: All existing commands preserved with colored output ✓
 
 ---
 
@@ -131,7 +137,7 @@ None currently.
 ## Session Continuity
 
 **Last session:** 2026-02-13
-**Stopped at:** Completed 04-01 Dependencies and Color Palette
+**Stopped at:** Completed 04-02 Migrate CLI to Commander.js
 **Resume file:** None
 
 ---
