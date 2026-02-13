@@ -5,13 +5,31 @@ const path = require('path');
 const crypto = require('crypto');
 const { execSync } = require('child_process');
 
+// Error handling imports
+const {
+  AetherError,
+  HubError,
+  RepoError,
+  GitError,
+  ValidationError,
+  FileSystemError,
+  ConfigurationError,
+  getExitCode,
+  wrapError,
+} = require('./lib/errors');
+const { logError, logActivity } = require('./lib/logger');
+
 const VERSION = require('../package.json').version;
 const PACKAGE_DIR = path.resolve(__dirname, '..');
 const HOME = process.env.HOME || process.env.USERPROFILE;
 if (!HOME) {
-  console.error('Error: HOME environment variable is not set');
-  console.error('Please ensure HOME or USERPROFILE is defined');
-  process.exit(1);
+  const error = new ConfigurationError(
+    'HOME environment variable is not set',
+    { env: Object.keys(process.env).filter(k => k.includes('HOME') || k.includes('USER')) },
+    'Please ensure HOME or USERPROFILE is defined'
+  );
+  console.error(JSON.stringify(error.toJSON(), null, 2));
+  process.exit(getExitCode(error.code));
 }
 
 // Claude Code paths (global)
@@ -31,6 +49,138 @@ const command = process.argv[2] || 'help';
 const flags = process.argv.slice(3);
 const quiet = flags.includes('--quiet');
 const dryRunFlag = flags.includes('--dry-run');
+
+// Global error handlers
+process.on('uncaughtException', (error) => {
+  const structuredError = wrapError(error);
+  structuredError.code = 'E_UNCAUGHT_EXCEPTION';
+  structuredError.recovery = 'Please report this issue with the error details';
+
+  // Log to activity.log
+  logError(structuredError);
+
+  // Output structured JSON to stderr
+  console.error(JSON.stringify(structuredError.toJSON(), null, 2));
+
+  // Exit with appropriate code
+  process.exit(getExitCode(structuredError.code));
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  const message = reason instanceof Error ? reason.message : String(reason);
+  const details = reason instanceof Error ? { stack: reason.stack, name: reason.name } : {};
+
+  const error = new AetherError(
+    'E_UNHANDLED_REJECTION',
+    message,
+    { ...details, promise: String(promise) },
+    'Please report this issue with the error details'
+  );
+
+  // Log to activity.log
+  logError(error);
+
+  // Output structured JSON to stderr
+  console.error(JSON.stringify(error.toJSON(), null, 2));
+
+  // Exit with appropriate code
+  process.exit(getExitCode(error.code));
+});
+
+/**
+ * Feature Flags class for graceful degradation
+ * Tracks which features are available vs degraded
+ */
+class FeatureFlags {
+  constructor() {
+    this.features = {
+      activityLog: true,
+      progressDisplay: true,
+      gitIntegration: true,
+      hashComparison: true,
+      manifestTracking: true,
+    };
+    this.degradedFeatures = new Set();
+  }
+
+  /**
+   * Disable a feature with a reason
+   * @param {string} feature - Feature name
+   * @param {string} reason - Why the feature was disabled
+   */
+  disable(feature, reason) {
+    if (this.features.hasOwnProperty(feature)) {
+      this.features[feature] = false;
+      this.degradedFeatures.add({ feature, reason, timestamp: new Date().toISOString() });
+
+      // Log degradation warning
+      console.warn(JSON.stringify({
+        warning: {
+          type: 'FEATURE_DEGRADED',
+          feature,
+          reason,
+          timestamp: new Date().toISOString(),
+        },
+      }));
+    }
+  }
+
+  /**
+   * Check if a feature is enabled
+   * @param {string} feature - Feature name
+   * @returns {boolean} True if enabled
+   */
+  isEnabled(feature) {
+    return this.features[feature] || false;
+  }
+
+  /**
+   * Get list of degraded features
+   * @returns {Array} Array of degraded feature objects
+   */
+  getDegradedFeatures() {
+    return Array.from(this.degradedFeatures);
+  }
+}
+
+// Global feature flags instance
+const features = new FeatureFlags();
+
+/**
+ * Wrap a command function with error handling
+ * @param {Function} commandFn - Async command function to wrap
+ * @param {object} options - Options for error handling
+ * @param {boolean} options.logActivity - Whether to log activity (default: true)
+ * @returns {Function} Wrapped function
+ */
+function wrapCommand(commandFn, options = {}) {
+  const { logActivity: shouldLog = true } = options;
+
+  return async (...args) => {
+    try {
+      return await commandFn(...args);
+    } catch (error) {
+      let structuredError;
+
+      if (error instanceof AetherError) {
+        structuredError = error;
+      } else {
+        structuredError = wrapError(error);
+      }
+
+      // Log to activity.log
+      if (shouldLog) {
+        logError(structuredError);
+      }
+
+      // Output structured JSON to stderr
+      console.error(JSON.stringify(structuredError.toJSON(), null, 2));
+
+      // Exit with appropriate code
+      process.exit(getExitCode(structuredError.code));
+    }
+  };
+}
 
 function log(msg) {
   if (!quiet) console.log(msg);
@@ -619,9 +769,13 @@ switch (command) {
 
     // Check hub exists
     if (!fs.existsSync(HUB_VERSION)) {
-      console.error('No distribution hub found at ~/.aether/');
-      console.error('Run `aether install` first to set up the hub.');
-      process.exit(1);
+      const error = new HubError(
+        'No distribution hub found at ~/.aether/',
+        { path: HUB_DIR }
+      );
+      logError(error);
+      console.error(JSON.stringify(error.toJSON(), null, 2));
+      process.exit(getExitCode(error.code));
     }
 
     const hubVersion = readJsonSafe(HUB_VERSION);
@@ -726,9 +880,13 @@ switch (command) {
       const repoAether = path.join(repoPath, '.aether');
 
       if (!fs.existsSync(repoAether)) {
-        console.error('No .aether/ directory found in current repo.');
-        console.error('Run the Claude Code slash command /ant:init in this repo first.');
-        process.exit(1);
+        const error = new RepoError(
+          'No .aether/ directory found in current repo.',
+          { path: repoPath }
+        );
+        logError(error);
+        console.error(JSON.stringify(error.toJSON(), null, 2));
+        process.exit(getExitCode(error.code));
       }
 
       const currentVersion = readJsonSafe(path.join(repoAether, 'version.json'));
@@ -746,10 +904,14 @@ switch (command) {
       const result = updateRepo(repoPath, sourceVersion, { dryRun, force: forceFlag });
 
       if (result.status === 'dirty') {
-        console.error('Uncommitted changes in managed files:');
-        for (const f of result.files) console.error(`  ${f}`);
+        const error = new GitError(
+          'Uncommitted changes in managed files',
+          { files: result.files, repo: repoPath }
+        );
+        logError(error);
+        console.error(JSON.stringify(error.toJSON(), null, 2));
         console.error('\nUse --force to stash changes and update, or commit/stash manually first.');
-        process.exit(1);
+        process.exit(getExitCode(error.code));
       }
 
       if (result.status === 'dry-run') {
