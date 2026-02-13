@@ -7,7 +7,12 @@ const { execSync } = require('child_process');
 
 const VERSION = require('../package.json').version;
 const PACKAGE_DIR = path.resolve(__dirname, '..');
-const HOME = process.env.HOME;
+const HOME = process.env.HOME || process.env.USERPROFILE;
+if (!HOME) {
+  console.error('Error: HOME environment variable is not set');
+  console.error('Please ensure HOME or USERPROFILE is defined');
+  process.exit(1);
+}
 
 // Claude Code paths (global)
 const COMMANDS_SRC = path.join(PACKAGE_DIR, 'commands', 'ant');
@@ -205,7 +210,7 @@ function syncDirWithCleanup(src, dest, opts) {
     }
   }
 
-  // Copy phase
+  // Copy phase with hash comparison
   let copied = 0;
   let skipped = 0;
   const srcFiles = listFilesRecursive(src);
@@ -215,11 +220,25 @@ function syncDirWithCleanup(src, dest, opts) {
       const destPath = path.join(dest, relPath);
       try {
         fs.mkdirSync(path.dirname(destPath), { recursive: true });
-        fs.copyFileSync(srcPath, destPath);
-        if (relPath.endsWith('.sh')) {
-          fs.chmodSync(destPath, 0o755);
+
+        // Hash comparison: only copy if file doesn't exist or hash differs
+        let shouldCopy = true;
+        if (fs.existsSync(destPath)) {
+          const srcHash = hashFileSync(srcPath);
+          const destHash = hashFileSync(destPath);
+          if (srcHash === destHash) {
+            shouldCopy = false;
+            skipped++;
+          }
         }
-        copied++;
+
+        if (shouldCopy) {
+          fs.copyFileSync(srcPath, destPath);
+          if (relPath.endsWith('.sh')) {
+            fs.chmodSync(destPath, 0o755);
+          }
+          copied++;
+        }
       } catch (err) {
         console.error(`Warning: could not copy ${relPath}: ${err.message}`);
         skipped++;
