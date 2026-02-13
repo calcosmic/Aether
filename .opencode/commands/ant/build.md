@@ -493,6 +493,12 @@ bash .aether/aether-utils.sh generate-ant-name "chaos"
 bash .aether/aether-utils.sh spawn-log "Queen" "chaos" "{chaos_name}" "Resilience testing of Phase {id} work"
 ```
 
+**Retrieve existing flags for this phase** (to avoid duplicate findings):
+```bash
+bash .aether/aether-utils.sh flag-list --phase {phase_number}
+```
+Parse the result and extract unresolved flag titles into a list: `{existing_flag_titles}` (comma-separated titles from `.result.flags[].title`). If no flags exist, set `{existing_flag_titles}` to "None".
+
 Spawn the Chaos Ant using Task tool with `subagent_type="general-purpose"`:
 
 **Chaos Ant Prompt:**
@@ -506,11 +512,16 @@ Probe the work done by Builders in Phase {id} for edge cases, boundary condition
 Files created: {list from builder results}
 Files modified: {list from builder results}
 
+--- EXISTING FLAGS (already known — do NOT re-report) ---
+{existing_flag_titles}
+These issues have already been flagged. Do NOT report findings that duplicate or overlap with the above titles. Focus your 5 scenarios on NEW, undiscovered issues only.
+
 --- RULES ---
 1. Limit to 5 edge case scenarios maximum
 2. You are a TESTER, not an attacker — use investigating/probing language
 3. Do NOT modify any code — read-only analysis
 4. Focus on: edge cases, boundary conditions, error handling gaps, state corruption risks, unexpected inputs
+5. Do NOT re-report issues listed in EXISTING FLAGS above — skip any finding that substantially overlaps with a known flag
 
 --- OUTPUT ---
 Return JSON:
@@ -563,9 +574,9 @@ bash .aether/aether-utils.sh spawn-complete "{chaos_name}" "completed" "{summary
 
 ### Step 5.5: Create Flags for Verification Failures
 
-If the Watcher reported `verification_passed: false` or `recommendation: "fix_required"`, OR the Chaos Ant reported findings with severity `"critical"` or `"high"`:
+If the Watcher reported `verification_passed: false` or `recommendation: "fix_required"`:
 
-For Watcher issues — for each issue in `issues_found`:
+For each issue in `issues_found`:
 ```bash
 # Create a blocker flag for each verification failure
 bash .aether/aether-utils.sh flag-add "blocker" "{issue_title}" "{issue_description}" "verification" {phase_number}
@@ -576,18 +587,7 @@ Log the flag creation:
 bash .aether/aether-utils.sh activity-log "FLAG" "Watcher" "Created blocker: {issue_title}"
 ```
 
-For Chaos Ant findings — for each finding with severity `"critical"` or `"high"` (if not already flagged in Step 5.4.2):
-```bash
-# Create a blocker flag for each critical/high resilience finding
-bash .aether/aether-utils.sh flag-add "blocker" "{finding.title}" "{finding.description}" "chaos-testing" {phase_number}
-```
-
-Log the flag creation:
-```bash
-bash .aether/aether-utils.sh activity-log "FLAG" "Chaos" "Created blocker: {finding.title}"
-```
-
-This ensures both verification failures and resilience findings are persisted as blockers that survive context resets.
+This ensures verification failures are persisted as blockers that survive context resets. Chaos Ant findings are flagged in Step 5.4.2.
 
 ### Step 5.6: Synthesize Results
 

@@ -280,6 +280,24 @@ After the display report, output the machine-readable JSON summary:
 }
 ```
 
+### Step 6.5: Persist Blocker Flags for Critical/High Findings
+
+After outputting the JSON report, iterate through the chaos report scenarios. For each finding with severity `"CRITICAL"` or `"HIGH"`, persist a blocker flag so the colony tracks it:
+
+```bash
+# For each scenario where status == "finding" AND severity is "CRITICAL" or "HIGH":
+bash .aether/aether-utils.sh flag-add "blocker" "{scenario.title}" "{scenario.description}" "chaos-standalone" {current_phase_number}
+```
+
+Log each flag creation:
+```bash
+bash .aether/aether-utils.sh activity-log "FLAG" "Chaos Ant" "Created blocker: {scenario.title}"
+```
+
+The `{current_phase_number}` comes from the colony state loaded in Step 1 (`.aether/data/COLONY_STATE.json` field `current_phase`).
+
+**Skip this step if there are no critical or high findings.**
+
 ### Step 7: Log Activity
 
 ```bash

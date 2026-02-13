@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Phase 1: Fix Chaos Ant Duplicate Flagging** — Eliminated duplicate flag creation during build-rebuild cycles by removing redundant chaos flagging from build.md Step 5.5 (Step 5.4.2 already handles it), injected existing flag titles into Chaos Ant spawn prompt to prevent re-investigating known issues, and added flag persistence to standalone /ant:chaos for critical/high findings using source 'chaos-standalone'. (`.claude/commands/ant/build.md`, `.opencode/commands/ant/build.md`, `.claude/commands/ant/chaos.md`, `.opencode/commands/ant/chaos.md`)
+
 ### Added
 - **Phase 6: Final Verification and Integration Testing** — Added milestone display to /ant:status command (now shows "Milestone: <name>" in output), expanded milestone progression in /ant:archive to handle all 6 stages (First Mound, Open Chambers, Brood Stable, Ventilated Nest, Sealed Chambers, Crowned Anthill), added unrecognized milestone error handling. Full lint suite passes (shell, JSON, sync - 28 commands verified). (`.claude/commands/ant/status.md`, `.claude/commands/ant/archive.md`, `.opencode/commands/ant/status.md`, `.opencode/commands/ant/archive.md`)
 
