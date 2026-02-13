@@ -88,6 +88,13 @@
 | ERROR-02 | Error handler in aether-utils.sh |
 | ERROR-03 | Graceful degradation on optional feature failures |
 
+**Plans:**
+- [ ] 03-01-PLAN.md — Node.js error handling infrastructure (AetherError class, logger, cli.js integration)
+- [ ] 03-02-PLAN.md — Bash error handling enhancement and graceful degradation
+
+**Wave Structure:**
+- Wave 1: 03-01, 03-02 (parallel - Node.js and Bash error handling are independent)
+
 **Estimated Duration:** 1-2 sessions
 **Dependencies:** Phase 2 complete
 
@@ -147,7 +154,7 @@
 |-------|--------|-------|----------|
 | 1 | ✓ | 3/3 | 100% |
 | 2 | ✓ | 3/3 | 100% |
-| 3 | ○ | 0/1 | 0% |
+| 3 | ○ | 2/2 | Planned |
 | 4 | ○ | 0/1 | 0% |
 | 5 | ○ | 0/1 | 0% |
 
