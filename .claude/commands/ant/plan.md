@@ -32,12 +32,29 @@ No colony initialized. Run /ant:init "<goal>" first.
 ```
 Stop here.
 
-**Auto-Recovery Header (Session Start):**
-If `goal` exists and state is valid, output a brief context line:
-```
-🔄 Resuming: Phase {current_phase} - {phase_name}
-```
-This helps recover context after session clears. Continue immediately (non-blocking).
+### Step 1.5: Load State and Show Resumption Context
+
+Run using Bash tool: `bash .aether/aether-utils.sh load-state`
+
+If successful and goal is not null:
+1. Extract current_phase from state
+2. Get phase name from plan.phases[current_phase - 1].name (or "(unnamed)")
+3. Display brief resumption context:
+   ```
+   🔄 Resuming: Phase X - Name
+   ```
+
+If HANDOFF.md exists (detected in load-state output):
+- Display "Resuming from paused session"
+- Read HANDOFF.md for additional context
+- Remove HANDOFF.md after display (cleanup)
+
+Run: `bash .aether/aether-utils.sh unload-state` to release lock.
+
+**Error handling:**
+- If E_FILE_NOT_FOUND: "No colony initialized. Run /ant:init first." and stop
+- If validation error: Display error details with recovery suggestion and stop
+- For other errors: Display generic error and suggest /ant:status for diagnostics
 
 ### Step 2: Check Existing Plan
 
