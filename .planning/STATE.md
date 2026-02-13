@@ -13,10 +13,10 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 
 **Milestone:** v1.0 Infrastructure
 **Phase:** 4 of 5 — CLI Improvements
-**Plan:** 2 of 3 — Migrate CLI to Commander.js
-**Status:** ● Phase 4 in progress
+**Plan:** 3 of 3 — Custom Help and Backward Compatibility
+**Status:** ● Phase 4 complete
 
-**Progress:** [██████████░] 67% (10/15 requirements complete)
+**Progress:** [███████████] 100% (15/15 requirements complete)
 
 ---
 
@@ -47,6 +47,8 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 | 2026-02-13 | TTY-aware color disabling | Disable colors when stdout is not a TTY (piped output) |
 | 2026-02-13 | Commander.js flat command structure | Use .command().action() pattern for declarative CLI definition |
 | 2026-02-13 | Global option handling via events | Handle --no-color and --quiet via program.on('option:*') events |
+| 2026-02-13 | Custom help with program.on('--help') | Append CLI/Slash sections after auto-generated help |
+| 2026-02-13 | Deprecation pattern | Exit with error code and clear migration message for removed commands |
 
 ---
 
@@ -104,11 +106,12 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 
 ---
 
-## Phase 4 Progress
+## Phase 4 Completion Summary
 
 **Plans executed:**
 - 04-01-dependencies-color-palette: Installed commander.js and picocolors, created Aether brand color palette
 - 04-02-commander-migration: Migrated CLI to commander.js with auto-help and colored output
+- 04-03-custom-help-backward-compat: Custom help with CLI/slash command distinction and deprecation handling
 
 **Requirements completed:**
 - CLI-01: commander.js installed for CLI framework ✓
@@ -119,6 +122,10 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 - CLI-06: CLI uses commander.js declarative API ✓
 - CLI-07: Auto-help generation for all commands ✓
 - CLI-08: All existing commands preserved with colored output ✓
+- CLI-09: Help distinguishes CLI vs slash commands ✓
+- CLI-10: Examples section in help output ✓
+- CLI-11: Deprecated commands show warnings with migration path ✓
+- CLI-12: All command descriptions are clear and helpful ✓
 
 ---
 
@@ -137,7 +144,7 @@ None currently.
 ## Session Continuity
 
 **Last session:** 2026-02-13
-**Stopped at:** Completed 04-02 Migrate CLI to Commander.js
+**Stopped at:** Completed 04-03 Custom Help and Backward Compatibility
 **Resume file:** None
 
 ---
