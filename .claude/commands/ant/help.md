@@ -30,9 +30,10 @@ PHEROMONE COMMANDS
   /ant:redirect "<pat>"  Warn away from pattern (priority: high, expires: phase end)
   /ant:feedback "<msg>"  Adjust behavior (priority: low, expires: phase end)
 
-STATUS & INSPECTION
+STATUS & UPDATES
 
   /ant:status            Colony dashboard — goal, phase, instincts, flags
+  /ant:update            Update system files from global hub (~/.aether/)
   /ant:phase [N|list]    View phase details or list all phases
   /ant:flags             List active flags (blockers, issues, notes)
   /ant:flag "<title>"    Create a flag (blocker, issue, or note)

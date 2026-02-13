@@ -7,6 +7,12 @@ You are the **Queen**. Orchestrate iterative research and planning until 95% con
 
 ## Instructions
 
+### Step 0: Version Check (Non-blocking)
+
+Run using the Bash tool: `bash .aether/aether-utils.sh version-check 2>/dev/null || true`
+
+If the command succeeds and the JSON result contains a non-empty string, display it as a one-line notice. Proceed regardless of outcome.
+
 ### Step 1: Read State + Version Check
 
 Read `.aether/data/COLONY_STATE.json`.

@@ -11,7 +11,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AETHER_ROOT="$(cd "$SCRIPT_DIR/.." && pwd 2>/dev/null || echo "$SCRIPT_DIR")"
-DATA_DIR="$PWD/.aether/data"
+DATA_DIR="$AETHER_ROOT/.aether/data"
 
 # Initialize lock state before sourcing (file-lock.sh trap needs these)
 LOCK_ACQUIRED=${LOCK_ACQUIRED:-false}
@@ -56,7 +56,7 @@ shift 2>/dev/null || true
 case "$cmd" in
   help)
     cat <<'EOF'
-{"ok":true,"commands":["help","version","validate-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","grave-add","grave-check","generate-commit-message"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
+{"ok":true,"commands":["help","version","validate-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
 EOF
     ;;
   version)
@@ -1261,6 +1261,125 @@ EOF
     fi
 
     json_ok "{\"message\":\"$message\",\"body\":\"$body\",\"files_changed\":$files_changed}"
+    ;;
+
+  # ============================================
+  # REGISTRY & UPDATE UTILITIES
+  # ============================================
+
+  version-check)
+    # Compare local .aether/version.json vs ~/.aether/version.json
+    # Outputs a notice string if versions differ, empty if matched or missing
+    local_version_file="$AETHER_ROOT/.aether/version.json"
+    hub_version_file="$HOME/.aether/version.json"
+
+    # Silent exit if either file is missing
+    if [[ ! -f "$local_version_file" || ! -f "$hub_version_file" ]]; then
+      json_ok '""'
+      exit 0
+    fi
+
+    local_ver=$(jq -r '.version // "unknown"' "$local_version_file" 2>/dev/null || echo "unknown")
+    hub_ver=$(jq -r '.version // "unknown"' "$hub_version_file" 2>/dev/null || echo "unknown")
+
+    if [[ "$local_ver" == "$hub_ver" ]]; then
+      json_ok '""'
+    else
+      json_ok "\"Update available: $local_ver -> $hub_ver (run /ant:update)\""
+    fi
+    ;;
+
+  registry-add)
+    # Add or update a repo entry in ~/.aether/registry.json
+    # Usage: registry-add <repo_path> <version>
+    repo_path="${1:-}"
+    repo_version="${2:-}"
+    [[ -z "$repo_path" || -z "$repo_version" ]] && json_err "Usage: registry-add <repo_path> <version>"
+
+    registry_file="$HOME/.aether/registry.json"
+    mkdir -p "$HOME/.aether"
+
+    if [[ ! -f "$registry_file" ]]; then
+      echo '{"schema_version":1,"repos":[]}' > "$registry_file"
+    fi
+
+    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    # Check if repo already exists in registry
+    existing=$(jq --arg path "$repo_path" '.repos[] | select(.path == $path)' "$registry_file" 2>/dev/null)
+
+    if [[ -n "$existing" ]]; then
+      # Update existing entry
+      updated=$(jq --arg path "$repo_path" --arg ver "$repo_version" --arg ts "$ts" '
+        .repos = [.repos[] | if .path == $path then
+          .version = $ver |
+          .updated_at = $ts
+        else . end]
+      ' "$registry_file") || json_err "Failed to update registry"
+    else
+      # Add new entry
+      updated=$(jq --arg path "$repo_path" --arg ver "$repo_version" --arg ts "$ts" '
+        .repos += [{
+          "path": $path,
+          "version": $ver,
+          "registered_at": $ts,
+          "updated_at": $ts
+        }]
+      ' "$registry_file") || json_err "Failed to update registry"
+    fi
+
+    echo "$updated" > "$registry_file"
+    json_ok "{\"registered\":true,\"path\":\"$repo_path\",\"version\":\"$repo_version\"}"
+    ;;
+
+  bootstrap-system)
+    # Copy system files from ~/.aether/system/ into local .aether/
+    # Uses explicit allowlist — never touches colony data
+    hub_system="$HOME/.aether/system"
+    local_aether="$AETHER_ROOT/.aether"
+
+    [[ ! -d "$hub_system" ]] && json_err "Hub system directory not found: $hub_system"
+
+    # Allowlist of system files to copy (relative to system/)
+    allowlist=(
+      "aether-utils.sh"
+      "coding-standards.md"
+      "debugging.md"
+      "DISCIPLINES.md"
+      "learning.md"
+      "planning.md"
+      "QUEEN_ANT_ARCHITECTURE.md"
+      "tdd.md"
+      "verification-loop.md"
+      "verification.md"
+      "workers.md"
+      "docs/constraints.md"
+      "docs/pathogen-schema-example.json"
+      "docs/pathogen-schema.md"
+      "docs/pheromones.md"
+      "docs/progressive-disclosure.md"
+      "utils/atomic-write.sh"
+      "utils/colorize-log.sh"
+      "utils/file-lock.sh"
+      "utils/watch-spawn-tree.sh"
+    )
+
+    copied=0
+    for file in "${allowlist[@]}"; do
+      src="$hub_system/$file"
+      dest="$local_aether/$file"
+      if [[ -f "$src" ]]; then
+        mkdir -p "$(dirname "$dest")"
+        cp "$src" "$dest"
+        # Preserve executable bit for shell scripts
+        if [[ "$file" == *.sh ]]; then
+          chmod 755 "$dest"
+        fi
+        copied=$((copied + 1))
+      fi
+    done
+
+    json_ok "{\"copied\":$copied,\"total\":${#allowlist[@]}}"
     ;;
 
   *)

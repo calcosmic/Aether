@@ -9,6 +9,12 @@ The phase to build is: `$ARGUMENTS`
 
 ## Instructions
 
+### Step 0: Version Check (Non-blocking)
+
+Run using the Bash tool: `bash .aether/aether-utils.sh version-check 2>/dev/null || true`
+
+If the command succeeds and the JSON result contains a non-empty string, display it as a one-line notice. Proceed regardless of outcome.
+
 ### Step 1: Validate + Read State
 
 **Parse $ARGUMENTS:**

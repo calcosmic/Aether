@@ -9,6 +9,12 @@ You are the **Queen Ant Colony**. Initialize the colony with the Queen's intenti
 
 The user's goal is: `$ARGUMENTS`
 
+### Step 0: Version Check (Non-blocking)
+
+Run using the Bash tool: `bash .aether/aether-utils.sh version-check 2>/dev/null || true`
+
+If the command succeeds and the JSON result contains a non-empty string, display it as a one-line notice. Proceed regardless of outcome.
+
 ### Step 1: Validate Input
 
 If `$ARGUMENTS` is empty or blank, output:
@@ -28,6 +34,29 @@ Aether Colony
 ```
 
 Stop here. Do not proceed.
+
+### Step 1.5: Bootstrap System Files (Conditional)
+
+Check if `.aether/aether-utils.sh` exists using the Read tool.
+
+**If the file already exists** — skip this step entirely. System files are present.
+
+**If the file does NOT exist:**
+- Check if `~/.aether/system/` exists (expand `~` to the user's home directory)
+- **If the hub exists:** Run using the Bash tool:
+  ```
+  bash ~/.aether/system/aether-utils.sh bootstrap-system
+  ```
+  This copies system files from the global hub into `.aether/`. Display:
+  ```
+  Bootstrapped system files from global hub.
+  ```
+- **If the hub does NOT exist:** Output:
+  ```
+  No Aether system files found locally or in ~/.aether/.
+  Run `aether install` or `npx aether-colony install` to set up the global hub first.
+  ```
+  Stop here. Do not proceed.
 
 ### Step 2: Read Current State
 
@@ -145,6 +174,22 @@ bash .aether/aether-utils.sh validate-state colony
 ```
 
 This validates COLONY_STATE.json structure. If validation fails, output a warning.
+
+### Step 5.5: Register Repo (Silent)
+
+Attempt to register this repo in the global hub. Both steps are silent on failure — registry is not required for the colony to work.
+
+Run using the Bash tool (ignore errors):
+```
+bash .aether/aether-utils.sh registry-add "$(pwd)" "$(jq -r '.version // "unknown"' ~/.aether/version.json 2>/dev/null || echo 'unknown')" 2>/dev/null || true
+```
+
+Then attempt to write `.aether/version.json` with the hub version:
+```
+cp ~/.aether/version.json .aether/version.json 2>/dev/null || true
+```
+
+If either command fails, proceed silently. These are optional bookkeeping.
 
 ### Step 6: Display Result
 
