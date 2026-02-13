@@ -89,14 +89,16 @@
 | ERROR-03 | Graceful degradation on optional feature failures |
 
 **Plans:**
-- [ ] 03-01-PLAN.md — Node.js error handling infrastructure (AetherError class, logger, cli.js integration)
-- [ ] 03-02-PLAN.md — Bash error handling enhancement and graceful degradation
+- [x] 03-01-PLAN.md — Node.js error handling infrastructure (AetherError class, logger, cli.js integration)
+- [x] 03-02-PLAN.md — Bash error handling enhancement and graceful degradation
 
 **Wave Structure:**
 - Wave 1: 03-01, 03-02 (parallel - Node.js and Bash error handling are independent)
 
 **Estimated Duration:** 1-2 sessions
 **Dependencies:** Phase 2 complete
+
+**Status:** ✓ Complete (2026-02-13)
 
 ---
 
@@ -118,6 +120,16 @@
 | CLI-01 | Migrate argument parsing to commander.js |
 | CLI-02 | Add colored output using picocolors |
 | CLI-03 | Auto-help for all commands works correctly |
+
+**Plans:**
+- [ ] 04-01-PLAN.md — Install dependencies and create color palette module
+- [ ] 04-02-PLAN.md — Migrate CLI to commander.js with colored output
+- [ ] 04-03-PLAN.md — Add custom help and backward compatibility
+
+**Wave Structure:**
+- Wave 1: 04-01 (dependencies and color foundation)
+- Wave 2: 04-02 (depends on 04-01 for colors module)
+- Wave 3: 04-03 (depends on 04-02 for commander structure)
 
 **Estimated Duration:** 2 sessions
 **Dependencies:** Phase 3 complete
@@ -154,8 +166,8 @@
 |-------|--------|-------|----------|
 | 1 | ✓ | 3/3 | 100% |
 | 2 | ✓ | 3/3 | 100% |
-| 3 | ○ | 2/2 | Planned |
-| 4 | ○ | 0/1 | 0% |
+| 3 | ✓ | 2/2 | 100% |
+| 4 | ○ | 3/3 | Planned |
 | 5 | ○ | 0/1 | 0% |
 
 **Overall:** 7/16 requirements complete (INFRA-01 through INFRA-04, TEST-01 through TEST-03)
