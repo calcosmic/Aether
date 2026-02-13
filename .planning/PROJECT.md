@@ -65,5 +65,17 @@ Autonomous multi-agent orchestration that scales from single-user development to
 | Bash utilities | Works across shells, no Python dep | ✓ Good |
 | Colony metaphor | Clear role separation | ✓ Good |
 
+## Current Milestone: v1.0 Infrastructure
+
+**Goal:** Harden core infrastructure to prevent race conditions, data loss, and update failures
+
+**Target features:**
+- File locking enforced on all state operations
+- Atomic writes for all JSON state updates
+- Targeted git stashing (never user work)
+- Update command with version tracking and comparison
+- Signatures.json template for signature-scan/match commands
+- Hash comparison for syncSystemFilesWithCleanup
+
 ---
 *Last updated: 2026-02-13 after bug fixes*
