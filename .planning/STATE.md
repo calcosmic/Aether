@@ -32,6 +32,9 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 | 2026-02-13 | Test bash utilities via child_process | Integration testing ensures actual script behavior verified |
 | 2026-02-13 | Copy aether-utils.sh for test isolation | Script calculates AETHER_ROOT from its own location |
 | 2026-02-13 | Include utils/ directory in test env | Required for lock functions used by flag-add |
+| 2026-02-13 | COLONY_STATE.json already clean | Oracle was reviewing archived version; current file has no bugs |
+| 2026-02-13 | Fixed detectDuplicateKeys function | Original skipped arrays, missing nested object duplicates |
+| 2026-02-13 | Intentional failure tests | Prove detection works by testing with known-bad data |
 
 ---
 
@@ -55,6 +58,7 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 **Plans executed:**
 - 02-01-ava-setup: Configured AVA test framework with comprehensive validation tests
 - 02-02-bash-tests: Created bash integration test suite for aether-utils.sh
+- 02-03-oracle-bugs: Verified Oracle-discovered bugs are fixed, added regression tests
 
 **Requirements completed:**
 - TEST-01: AVA test framework installed and configured ✓
@@ -65,6 +69,8 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 - TEST-06: Bash integration tests for aether-utils.sh ✓
 - TEST-07: Test helpers library for reusable assertions ✓
 - TEST-08: npm test:bash script for CI integration ✓
+- TEST-09: Oracle bug fixes verified with regression tests ✓
+- TEST-10: All existing tests continue to pass ✓
 
 ---
 
@@ -83,7 +89,7 @@ None currently.
 ## Session Continuity
 
 **Last session:** 2026-02-13
-**Stopped at:** Completed 02-02 bash integration tests
+**Stopped at:** Completed 02-03 Oracle bug fixes and regression tests
 **Resume file:** None
 
 ---
