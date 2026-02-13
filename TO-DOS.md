@@ -22,9 +22,63 @@ This file tracks pending work items. Each todo is self-contained with full conte
 
 ## Priority 0.5: High Priority
 
-### Implement Anthill Milestone System - 2026-02-13
+### Implement Colony Lifecycle Management (Anthill Milestones + Archive) - 2026-02-13
 
-- **Integrate biologically-grounded milestone naming into the colony lifecycle** - Aether currently has no formal milestone/versioning concept in its biological vocabulary. A full naming taxonomy and milestone system has been researched and saved to `.aether/docs/biological-reference.md`. The milestone names map real ant biology to project stages: **First Mound** (first runnable), **Open Chambers** (feature work underway), **Brood Stable** (tests green), **Ventilated Nest** (perf acceptable), **Sealed Chambers** (interfaces frozen), **Crowned Anthill** (release), **New Nest Founded** (next major). **Implementation:** (1) Add milestone tracking to COLONY_STATE.json (current milestone name + criteria), (2) Update `/ant:continue` to detect milestone transitions and announce them, (3) Update `/ant:status` to show current milestone, (4) Consider adopting the expanded caste/command taxonomy (12 roles, 100+ commands) from the reference doc as a roadmap for future commands. **Reference:** `.aether/docs/biological-reference.md` (40+ research sources, full command taxonomy, milestone definitions). **Scope:** medium for core milestone tracking, large for full taxonomy adoption.
+- **Build the ability to close/archive a colony session at any time and re-initialize for new work.** Currently the colony model is rigid: init -> plan -> build all phases -> complete. There's no way to park a colony mid-work, archive what was done, and start something new. This is the most important missing feature.
+
+**Design decision (from 2026-02-13 session analysis):**
+Milestones should NOT be gates — they should be **status labels**. The biological names (First Mound, Brood Stable, etc.) describe where the colony IS, not where it must go. The key feature is `/ant:archive` (or `/ant:seal`):
+
+1. **`/ant:archive`** — Archives current colony regardless of phase completion. Writes completion report with whatever was accomplished. Saves state to `.aether/data/archive/`. Resets COLONY_STATE.json to allow fresh `/ant:init`.
+2. **Milestone labels** — Decorative status on the colony derived from what's been achieved (e.g., if tests pass = "Brood Stable", if interfaces frozen = "Sealed Chambers"). Shown in `/ant:status`. Auto-detected, not manually set.
+3. **Colony history** — Archived colonies should be browsable. `/ant:history` or similar to see past sessions and their outcomes.
+
+**Biological milestone names** (from `.aether/docs/biological-reference.md`):
+| Name | Meaning | Detection |
+|---|---|---|
+| **First Mound** | First runnable | Phase 1 complete |
+| **Open Chambers** | Feature work underway | 2+ phases complete |
+| **Brood Stable** | Tests green | All tests passing |
+| **Ventilated Nest** | Perf acceptable | Build + lint clean |
+| **Sealed Chambers** | Interfaces frozen | All phases complete |
+| **Crowned Anthill** | Release-ready | User confirms |
+| **New Nest Founded** | Next major started | New init after archive |
+
+**Implementation order:** (1) `/ant:archive` command — archive + reset, (2) Milestone auto-detection in state, (3) `/ant:status` shows milestone label, (4) Archive browsing.
+
+**Scope:** Medium. **Priority:** High — blocks natural workflow of moving between tasks.
+
+### TO-DO Synthesis: Game-Changers vs Quick Wins - 2026-02-13
+
+- **Triage all TO-DOS.md items into actionable categories.** Full analysis was started in a 2026-02-13 session but deferred to fix Oracle first. When ready, the colony should:
+
+**Phase 1 (Research):** Read all TO-DOs, categorize each as:
+- **Game-changer** — fundamentally changes how the colony works (high effort, high impact)
+- **Quick win** — can be done in 1 phase, immediate value (low effort, high impact)
+- **Nice-to-have** — good idea but not urgent (any effort, lower impact)
+- **Already done** — mark as resolved
+
+**Phase 2 (Plan):** Pick the best items and sequence them as a colony plan.
+
+**Preliminary analysis (from session scan):**
+
+*Game-changers:*
+- Colony Lifecycle Management (milestone/archive — see above)
+- Multi-Ant Parallel Execution (session isolation, file locking)
+- Colony Constitution (self-critique principles)
+- Self-Driving Colony Mode (autonomous overnight sessions)
+
+*Quick wins (1 phase each):*
+- Remove run_in_background from build.md worker spawns (P0, ~20 lines)
+- Deprecate old 2.x npm versions (P0, one command)
+- Surface Dreams in /ant:status (small addition)
+- Codebase Ant Pre-Flight Check (Step 4.5 in build.md)
+- Smart Command Suggestion (decision tree in continue/status)
+
+*Already done (verify and close):*
+- Chaos Ant, Archaeologist Ant, Dreamer Ant, Progressive Disclosure, YAML quoting, lint scripts, instinct seeding — all marked DONE
+
+**Scope:** Research phase is trivial. Implementation depends on what's selected. **Do this immediately after Oracle fix.**
 
 ---
 

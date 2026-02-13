@@ -3,7 +3,7 @@ name: ant:oracle
 description: "🔮🐜🧠🐜🔮 Oracle Ant - deep research agent using RALF iterative loop pattern"
 ---
 
-You are the **Oracle Ant** command handler. You manage the deep research loop lifecycle.
+You are the **Oracle Ant** command handler. You configure and launch a deep research loop that runs autonomously in a separate process.
 
 The user's input is: `$ARGUMENTS`
 
@@ -17,38 +17,9 @@ Oracle NEVER touches COLONY_STATE.json, constraints.json, activity.log, or any c
 
 Parse `$ARGUMENTS` to determine the action:
 
-1. **If `$ARGUMENTS` is empty or blank** — go to **Step 0a: Show Usage**
-2. **If `$ARGUMENTS` is exactly `stop`** — go to **Step 0b: Stop Oracle**
-3. **If `$ARGUMENTS` is exactly `status`** — go to **Step 0c: Show Status**
-4. **Otherwise** — treat the entire `$ARGUMENTS` as the research topic. Go to **Step 1**.
-
----
-
-### Step 0a: Show Usage
-
-Output:
-
-```
-Oracle Ant - Deep Research Agent
-
-  Launch an iterative research loop that accumulates knowledge
-  across multiple AI iterations using the RALF pattern.
-
-  Usage: /ant:oracle "<research topic>"
-
-  Subcommands:
-    /ant:oracle stop      Stop a running research loop
-    /ant:oracle status    Show current research progress
-
-  Examples:
-    /ant:oracle "How does the auth system work?"
-    /ant:oracle "Best practices for error handling in this codebase"
-    /ant:oracle "What testing patterns does this project use?"
-
-  The Oracle writes ONLY to .aether/oracle/ — never modifies code or colony state.
-```
-
-Stop here. Do not proceed.
+1. **If `$ARGUMENTS` is exactly `stop`** — go to **Step 0b: Stop Oracle**
+2. **If `$ARGUMENTS` is exactly `status`** — go to **Step 0c: Show Status**
+3. **Otherwise** — go to **Step 1: Research Wizard**
 
 ---
 
@@ -84,143 +55,252 @@ Check if `.aether/oracle/progress.md` exists using the Read tool.
 ```
 🔮 Oracle Status: No Research In Progress
 
-   No progress.md found. Start a research session first:
-   /ant:oracle "<topic>"
+   No progress.md found. Start a research session:
+   /ant:oracle
 ```
 
 Stop here.
 
 **If it exists**, read `.aether/oracle/progress.md` and `.aether/oracle/research.json` (if present).
 
+Count the number of `## Iteration` headings in progress.md to determine iterations completed.
+
 Output:
 
 ```
 🔮 Oracle Status
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Topic: {topic from research.json, or "unknown"}
-Target Confidence: {target_confidence from research.json, or "95"}%
+Topic:       {topic from research.json, or "unknown"}
+Confidence:  {target_confidence}%
+Iterations:  {completed} / {max_iterations}
+Started:     {started_at}
 
 Progress:
-{contents of progress.md}
+{last 50 lines of progress.md}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   /ant:oracle stop     Halt the loop
-  /ant:oracle "<new>"  Start new research
+  /ant:oracle          Start new research
 ```
 
 Stop here.
 
 ---
 
-### Step 1: Create Oracle Directory
+### Step 1: Research Wizard
 
-The research topic is: `$ARGUMENTS`
+This is the setup phase. The Oracle asks questions to configure the research before launching.
 
-Create the oracle directory structure if it does not exist:
+Output the header:
+
+```
+🔮🐜🧠🐜🔮 ═══════════════════════════════════════════════════
+   O R A C L E   A N T   —   R E S E A R C H   W I Z A R D
+═══════════════════════════════════════════════════ 🔮🐜🧠🐜🔮
+```
+
+**If `$ARGUMENTS` is not empty and not a subcommand**, use it as the initial topic suggestion. Otherwise, the topic will be asked in Question 1.
+
+Now ask questions using AskUserQuestion. Ask them one at a time so each answer can inform the next question.
+
+**Question 1: Research Topic**
+
+If `$ARGUMENTS` already contains a topic, skip this question and use that as the topic.
+
+Otherwise ask:
+
+```
+What should the Oracle research?
+```
+
+Options:
+1. **Codebase analysis** — Deep dive into how this codebase works (architecture, patterns, conventions)
+2. **External research** — Research a technology, library, or concept using web search
+3. **Both** — Combine codebase exploration with external research
+
+Then use a follow-up AskUserQuestion with a free-text prompt:
+
+```
+Describe the research topic in detail. The more specific, the better the Oracle's results.
+```
+
+(The user will type their topic via the "Other" free-text option.)
+
+**Question 2: Research Depth**
+
+```
+How deep should the Oracle go?
+```
+
+Options:
+1. **Quick scan (5 iterations)** — Surface-level overview, fast results
+2. **Standard research (15 iterations)** — Thorough investigation, good balance
+3. **Deep dive (30 iterations)** — Exhaustive research, leaves no stone unturned
+4. **Marathon (50 iterations)** — Maximum depth, may take hours
+
+**Question 3: Confidence Target**
+
+```
+When should the Oracle consider the research complete?
+```
+
+Options:
+1. **80% confidence** — Good enough for a first pass, stops early
+2. **90% confidence** — Solid understanding, most questions answered
+3. **95% confidence (recommended)** — Thorough, few gaps remaining
+4. **99% confidence** — Near-exhaustive, won't stop until almost everything is known
+
+**Question 4: Research Scope** (only if topic involves codebase)
+
+```
+Should the Oracle also search the web, or stay within the codebase?
+```
+
+Options:
+1. **Codebase only** — Only use Glob, Grep, Read to explore local files
+2. **Codebase + web** — Also use WebSearch and WebFetch for docs, best practices, prior art
+3. **Web only** — Focus on external research (libraries, concepts, techniques)
+
+After collecting all answers, proceed to Step 2.
+
+---
+
+### Step 2: Configure Research
+
+Create the oracle directory structure:
 
 ```bash
 mkdir -p .aether/oracle/archive .aether/oracle/discoveries
 ```
 
-### Step 2: Write research.json
-
 Generate an ISO-8601 UTC timestamp.
+
+**Archive previous research if it exists:**
+
+Check if `.aether/oracle/progress.md` exists. If it does:
+
+```bash
+DATE=$(date +%Y-%m-%d)
+TIMESTAMP=$(date +%H%M%S)
+mkdir -p .aether/oracle/archive
+cp .aether/oracle/progress.md ".aether/oracle/archive/${DATE}-${TIMESTAMP}-progress.md" 2>/dev/null || true
+cp .aether/oracle/research.json ".aether/oracle/archive/${DATE}-${TIMESTAMP}-research.json" 2>/dev/null || true
+```
+
+**Write research.json:**
 
 Use the Write tool to write `.aether/oracle/research.json`:
 
 ```json
 {
-  "topic": "<the research topic from $ARGUMENTS>",
-  "questions": [],
-  "target_confidence": 95,
+  "topic": "<the research topic>",
+  "scope": "<codebase|web|both>",
+  "questions": [
+    "<break the topic into 3-5 specific research questions>"
+  ],
+  "max_iterations": <number from depth choice>,
+  "target_confidence": <number from confidence choice>,
   "started_at": "<ISO-8601 UTC timestamp>"
 }
 ```
 
-### Step 3: Initialize progress.md
+The `questions` array is important — break the user's topic into 3-5 concrete, specific questions that the Oracle should answer. These guide each iteration.
+
+**Write progress.md:**
 
 Use the Write tool to write `.aether/oracle/progress.md`:
 
 ```markdown
 # Oracle Research Progress
 
-Topic: <the research topic>
-Started: <ISO-8601 UTC timestamp>
-Target Confidence: 95%
+**Topic:** <the research topic>
+**Started:** <ISO-8601 UTC timestamp>
+**Target Confidence:** <N>%
+**Max Iterations:** <N>
+**Scope:** <codebase|web|both>
+
+## Research Questions
+1. <question 1>
+2. <question 2>
+3. <question 3>
+...
 
 ---
 
 ```
 
-### Step 4: Display Header
+Proceed to Step 3.
 
-Output:
+---
+
+### Step 3: Launch
+
+Output the research configuration summary:
 
 ```
-🔮🐜🧠🐜🔮 ═══════════════════════════════════════════════════
-   O R A C L E   A N T   —   D E E P   R E S E A R C H
-═══════════════════════════════════════════════════ 🔮🐜🧠🐜🔮
+🔮 Research Configured
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-📍 Topic: "<the research topic>"
-🎯 Target Confidence: 95%
-🔄 Pattern: RALF (Recursive Agent Loop Framework)
-📂 Output: .aether/oracle/progress.md
+📍 Topic:       <topic>
+🔄 Iterations:  <max_iterations>
+🎯 Confidence:  <target_confidence>%
+🔍 Scope:       <scope>
 
-Launching research loop...
+📋 Research Questions:
+   1. <question>
+   2. <question>
+   3. <question>
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-### Step 5: Execute Research Loop
+Now launch the loop. Try tmux first, fall back to manual.
 
-Run the oracle loop script using the Bash tool:
+**Try tmux:**
 
 ```bash
-bash .aether/oracle/oracle.sh
+tmux new-session -d -s oracle "cd $(pwd) && bash .aether/oracle/oracle.sh; echo ''; echo '🔮 Oracle loop finished. Press any key to close.'; read -n1" 2>/dev/null && echo "TMUX_OK" || echo "TMUX_FAIL"
 ```
 
-**Important:** This command may take a long time. Let it run to completion. The script handles iteration, stop signals, and completion detection internally.
-
-If the script exits with code 0, research completed successfully.
-If the script exits with code 1, it hit max iterations without reaching target confidence.
-If the script fails to run (file not found, permission error), output:
+**If TMUX_OK:**
 
 ```
-Oracle loop script not found or not executable.
-Ensure .aether/oracle/oracle.sh exists and is executable:
-  chmod +x .aether/oracle/oracle.sh
+🔮 Oracle Launched
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   The Oracle is researching in a background tmux session.
+
+   👁️  Watch live:     tmux attach -t oracle
+   📊 Check status:   /ant:oracle status
+   🛑 Stop early:     /ant:oracle stop
+
+   Results will accumulate in .aether/oracle/progress.md
+   The Oracle will stop when it reaches {target_confidence}% confidence
+   or completes {max_iterations} iterations.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   You can keep working. The Oracle runs independently.
 ```
 
-Stop here if the script cannot be found.
+Stop here.
 
-### Step 6: Display Results
-
-After the loop completes, read `.aether/oracle/progress.md` using the Read tool.
-
-Also check if `.aether/oracle/discoveries/synthesized.md` exists and read it if present.
-
-Output:
+**If TMUX_FAIL** (tmux not installed or error):
 
 ```
-🔮🐜🧠🐜🔮 ═══════════════════════════════════════════════════
-   R E S E A R C H   C O M P L E T E
-═══════════════════════════════════════════════════ 🔮🐜🧠🐜🔮
+🔮 Ready to Launch
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-📍 Topic: "<the research topic>"
+   tmux not available. Run this in a separate terminal:
 
-📓 Research Log:
-{contents of progress.md}
+   cd {current_working_directory}
+   bash .aether/oracle/oracle.sh
 
-{If synthesized.md exists:}
-🧬 Synthesized Discoveries:
-{contents of synthesized.md}
-{End if}
+   Then come back here:
+   📊 Check status:   /ant:oracle status
+   🛑 Stop early:     /ant:oracle stop
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🐜 Next Steps:
-   /ant:oracle status     Review research progress
-   /ant:oracle stop       Interrupt if still running
-   /ant:oracle "<topic>"  Start a new research topic
-
-📂 Full results: .aether/oracle/progress.md
-📂 Discoveries:  .aether/oracle/discoveries/
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
+
+Stop here.

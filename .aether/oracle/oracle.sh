@@ -1,15 +1,16 @@
 #!/bin/bash
 # Oracle Ant - Deep research loop using RALF pattern
-# Usage: ./oracle.sh [max_iterations]
+# Usage: ./oracle.sh [max_iterations_override]
 # Based on: https://github.com/snarktank/ralph
+#
+# Configuration is read from research.json (written by /ant:oracle wizard).
+# Command-line arg overrides max_iterations if provided.
 
 set -e
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AETHER_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-MAX_ITERATIONS=${1:-50}
-TARGET_CONFIDENCE=95
 
 # Files
 RESEARCH_FILE="$SCRIPT_DIR/research.json"
@@ -20,15 +21,30 @@ DISCOVERIES_DIR="$SCRIPT_DIR/discoveries"
 
 # Check research.json exists
 if [ ! -f "$RESEARCH_FILE" ]; then
-  echo "Error: No research.json found. Run /ant:oracle with a topic first."
+  echo "Error: No research.json found. Run /ant:oracle to configure research first."
   exit 1
 fi
 
-# Extract topic for archiving
+# Read config from research.json (wizard writes these)
 CURRENT_TOPIC=$(jq -r '.topic // empty' "$RESEARCH_FILE" 2>/dev/null || echo "")
-LAST_TOPIC_FILE="$SCRIPT_DIR/.last-topic"
+TARGET_CONFIDENCE=$(jq -r '.target_confidence // 95' "$RESEARCH_FILE" 2>/dev/null || echo "95")
+JSON_MAX_ITER=$(jq -r '.max_iterations // 50' "$RESEARCH_FILE" 2>/dev/null || echo "50")
+
+# Command-line arg overrides research.json
+MAX_ITERATIONS=${1:-$JSON_MAX_ITER}
+
+# Detect AI CLI (claude or opencode)
+if command -v claude &>/dev/null; then
+  AI_CMD="claude --dangerously-skip-permissions --print"
+elif command -v opencode &>/dev/null; then
+  AI_CMD="opencode --dangerously-skip-permissions --print"
+else
+  echo "Error: Neither 'claude' nor 'opencode' CLI found on PATH."
+  exit 1
+fi
 
 # Archive previous run if topic changed
+LAST_TOPIC_FILE="$SCRIPT_DIR/.last-topic"
 if [ -f "$LAST_TOPIC_FILE" ] && [ -f "$PROGRESS_FILE" ]; then
   LAST_TOPIC=$(cat "$LAST_TOPIC_FILE" 2>/dev/null || echo "")
   if [ -n "$CURRENT_TOPIC" ] && [ -n "$LAST_TOPIC" ] && [ "$CURRENT_TOPIC" != "$LAST_TOPIC" ]; then
@@ -66,13 +82,14 @@ echo ""
 echo "==============================================================="
 echo "  ORACLE ANT - Deep Research Loop"
 echo "==============================================================="
-echo "Topic: $CURRENT_TOPIC"
-echo "Max iterations: $MAX_ITERATIONS"
-echo "Target confidence: $TARGET_CONFIDENCE%"
+echo "Topic:       $CURRENT_TOPIC"
+echo "Iterations:  $MAX_ITERATIONS"
+echo "Confidence:  $TARGET_CONFIDENCE%"
+echo "CLI:         $AI_CMD"
 echo ""
 
 # Main loop
-for i in $(seq 1 $MAX_ITERATIONS); do
+for i in $(seq 1 "$MAX_ITERATIONS"); do
   # Check for stop signal
   if [ -f "$STOP_FILE" ]; then
     rm -f "$STOP_FILE"
@@ -87,7 +104,7 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   echo "---------------------------------------------------------------"
 
   # Run AI with oracle.md prompt
-  OUTPUT=$(claude --dangerously-skip-permissions --print < "$SCRIPT_DIR/oracle.md" 2>&1 | tee /dev/stderr) || true
+  OUTPUT=$($AI_CMD < "$SCRIPT_DIR/oracle.md" 2>&1 | tee /dev/stderr) || true
 
   # Check for completion signal
   if echo "$OUTPUT" | grep -q "<oracle>COMPLETE</oracle>"; then
