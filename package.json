@@ -19,10 +19,20 @@
   ],
   "scripts": {
     "postinstall": "node bin/cli.js install --quiet",
+    "test": "ava",
     "lint:shell": "shellcheck --severity=error .aether/aether-utils.sh runtime/aether-utils.sh bin/generate-commands.sh .aether/utils/file-lock.sh .aether/utils/atomic-write.sh .aether/utils/colorize-log.sh .aether/utils/watch-spawn-tree.sh runtime/utils/file-lock.sh runtime/utils/atomic-write.sh runtime/utils/colorize-log.sh runtime/utils/watch-spawn-tree.sh",
     "lint:json": "node -e \"const fs=require('fs'); const files=['.aether/data/constraints.json','.aether/data/COLONY_STATE.json']; files.forEach(f=>{JSON.parse(fs.readFileSync(f,'utf8'))}); console.log('JSON valid')\"",
     "lint:sync": "bash bin/generate-commands.sh check",
     "lint": "npm run lint:shell && npm run lint:json && npm run lint:sync"
+  },
+  "devDependencies": {
+    "ava": "^6.0.0"
+  },
+  "ava": {
+    "files": [
+      "tests/unit/**/*.test.js"
+    ],
+    "timeout": "30s"
   },
   "keywords": [
     "claude-code",
