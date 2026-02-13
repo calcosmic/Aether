@@ -2,6 +2,8 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
+const { execSync } = require('child_process');
 
 const VERSION = require('../package.json').version;
 const PACKAGE_DIR = path.resolve(__dirname, '..');
@@ -23,6 +25,7 @@ const HUB_VERSION = path.join(HUB_DIR, 'version.json');
 const command = process.argv[2] || 'help';
 const flags = process.argv.slice(3);
 const quiet = flags.includes('--quiet');
+const dryRunFlag = flags.includes('--dry-run');
 
 function log(msg) {
   if (!quiet) console.log(msg);
@@ -120,39 +123,228 @@ function writeJsonSync(filePath, data) {
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n');
 }
 
+function hashFileSync(filePath) {
+  const content = fs.readFileSync(filePath);
+  return 'sha256:' + crypto.createHash('sha256').update(content).digest('hex');
+}
+
+function listFilesRecursive(dir, base) {
+  base = base || dir;
+  const results = [];
+  if (!fs.existsSync(dir)) return results;
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.name.startsWith('.')) continue;
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      results.push(...listFilesRecursive(fullPath, base));
+    } else {
+      results.push(path.relative(base, fullPath));
+    }
+  }
+  return results;
+}
+
+function cleanEmptyDirs(dir) {
+  if (!fs.existsSync(dir)) return;
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      cleanEmptyDirs(path.join(dir, entry.name));
+    }
+  }
+  // Re-read after recursive cleanup
+  const remaining = fs.readdirSync(dir);
+  if (remaining.length === 0) {
+    fs.rmdirSync(dir);
+  }
+}
+
+function generateManifest(hubDir) {
+  const files = {};
+  const allFiles = listFilesRecursive(hubDir);
+  for (const relPath of allFiles) {
+    // Skip registry, version, and manifest metadata files
+    if (relPath === 'registry.json' || relPath === 'version.json' || relPath === 'manifest.json') continue;
+    const fullPath = path.join(hubDir, relPath);
+    files[relPath] = hashFileSync(fullPath);
+  }
+  return { generated_at: new Date().toISOString(), files };
+}
+
+function syncDirWithCleanup(src, dest, opts) {
+  opts = opts || {};
+  const dryRun = opts.dryRun || false;
+  fs.mkdirSync(dest, { recursive: true });
+
+  // Copy phase
+  let copied = 0;
+  const srcFiles = listFilesRecursive(src);
+  if (!dryRun) {
+    for (const relPath of srcFiles) {
+      const srcPath = path.join(src, relPath);
+      const destPath = path.join(dest, relPath);
+      fs.mkdirSync(path.dirname(destPath), { recursive: true });
+      fs.copyFileSync(srcPath, destPath);
+      if (relPath.endsWith('.sh')) {
+        fs.chmodSync(destPath, 0o755);
+      }
+      copied++;
+    }
+  } else {
+    copied = srcFiles.length;
+  }
+
+  // Cleanup phase — remove files in dest that aren't in src
+  const destFiles = listFilesRecursive(dest);
+  const srcSet = new Set(srcFiles);
+  const removed = [];
+  for (const relPath of destFiles) {
+    if (!srcSet.has(relPath)) {
+      removed.push(relPath);
+      if (!dryRun) {
+        fs.unlinkSync(path.join(dest, relPath));
+      }
+    }
+  }
+
+  if (!dryRun && removed.length > 0) {
+    cleanEmptyDirs(dest);
+  }
+
+  return { copied, removed };
+}
+
+function syncSystemFilesWithCleanup(srcDir, destDir, opts) {
+  opts = opts || {};
+  const dryRun = opts.dryRun || false;
+
+  let copied = 0;
+  for (const file of SYSTEM_FILES) {
+    const srcPath = path.join(srcDir, file);
+    const destPath = path.join(destDir, file);
+    if (fs.existsSync(srcPath)) {
+      if (!dryRun) {
+        fs.mkdirSync(path.dirname(destPath), { recursive: true });
+        fs.copyFileSync(srcPath, destPath);
+        if (file.endsWith('.sh')) {
+          fs.chmodSync(destPath, 0o755);
+        }
+      }
+      copied++;
+    }
+  }
+
+  // Remove allowlisted files that no longer exist in src
+  const removed = [];
+  for (const file of SYSTEM_FILES) {
+    const srcPath = path.join(srcDir, file);
+    const destPath = path.join(destDir, file);
+    if (!fs.existsSync(srcPath) && fs.existsSync(destPath)) {
+      removed.push(file);
+      if (!dryRun) {
+        fs.unlinkSync(destPath);
+      }
+    }
+  }
+
+  if (!dryRun && removed.length > 0) {
+    cleanEmptyDirs(destDir);
+  }
+
+  return { copied, removed };
+}
+
+function isGitRepo(repoPath) {
+  try {
+    execSync('git rev-parse --git-dir', { cwd: repoPath, stdio: 'pipe' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getGitDirtyFiles(repoPath, targetDirs) {
+  try {
+    const args = targetDirs.filter(d => fs.existsSync(path.join(repoPath, d)));
+    if (args.length === 0) return [];
+    const result = execSync(`git status --porcelain -- ${args.map(d => `"${d}"`).join(' ')}`, {
+      cwd: repoPath,
+      stdio: 'pipe',
+      encoding: 'utf8',
+    });
+    return result.trim().split('\n').filter(Boolean).map(line => line.slice(3));
+  } catch {
+    return [];
+  }
+}
+
+function gitStashFiles(repoPath, files) {
+  try {
+    const fileArgs = files.map(f => `"${f}"`).join(' ');
+    execSync(`git stash push -m "aether-update-backup" -- ${fileArgs}`, {
+      cwd: repoPath,
+      stdio: 'pipe',
+    });
+    return true;
+  } catch (err) {
+    log(`  Warning: git stash failed (${err.message}). Proceeding without stash.`);
+    return false;
+  }
+}
+
 function setupHub() {
   // Create ~/.aether/ directory structure and populate from package
   try {
     fs.mkdirSync(HUB_DIR, { recursive: true });
 
-    // Copy runtime/ -> ~/.aether/system/
+    // Read previous manifest for delta reporting
+    const prevManifest = readJsonSafe(path.join(HUB_DIR, 'manifest.json'));
+
+    // Sync runtime/ -> ~/.aether/system/
     const runtimeSrc = path.join(PACKAGE_DIR, 'runtime');
     if (fs.existsSync(runtimeSrc)) {
-      const n = copyDirSync(runtimeSrc, HUB_SYSTEM);
-      log(`  Hub system: ${n} files -> ${HUB_SYSTEM}`);
+      const result = syncDirWithCleanup(runtimeSrc, HUB_SYSTEM);
+      log(`  Hub system: ${result.copied} files -> ${HUB_SYSTEM}`);
+      if (result.removed.length > 0) {
+        log(`  Hub system: removed ${result.removed.length} stale files`);
+        for (const f of result.removed) log(`    - ${f}`);
+      }
     }
 
-    // Copy .claude/commands/ant/ -> ~/.aether/commands/claude/
+    // Sync .claude/commands/ant/ -> ~/.aether/commands/claude/
     const claudeCmdSrc = fs.existsSync(COMMANDS_SRC)
       ? COMMANDS_SRC
       : path.join(PACKAGE_DIR, '.claude', 'commands', 'ant');
     if (fs.existsSync(claudeCmdSrc)) {
-      const n = copyDirSync(claudeCmdSrc, HUB_COMMANDS_CLAUDE);
-      log(`  Hub commands (claude): ${n} files -> ${HUB_COMMANDS_CLAUDE}`);
+      const result = syncDirWithCleanup(claudeCmdSrc, HUB_COMMANDS_CLAUDE);
+      log(`  Hub commands (claude): ${result.copied} files -> ${HUB_COMMANDS_CLAUDE}`);
+      if (result.removed.length > 0) {
+        log(`  Hub commands (claude): removed ${result.removed.length} stale files`);
+        for (const f of result.removed) log(`    - ${f}`);
+      }
     }
 
-    // Copy .opencode/commands/ant/ -> ~/.aether/commands/opencode/
+    // Sync .opencode/commands/ant/ -> ~/.aether/commands/opencode/
     const opencodeCmdSrc = path.join(PACKAGE_DIR, '.opencode', 'commands', 'ant');
     if (fs.existsSync(opencodeCmdSrc)) {
-      const n = copyDirSync(opencodeCmdSrc, HUB_COMMANDS_OPENCODE);
-      log(`  Hub commands (opencode): ${n} files -> ${HUB_COMMANDS_OPENCODE}`);
+      const result = syncDirWithCleanup(opencodeCmdSrc, HUB_COMMANDS_OPENCODE);
+      log(`  Hub commands (opencode): ${result.copied} files -> ${HUB_COMMANDS_OPENCODE}`);
+      if (result.removed.length > 0) {
+        log(`  Hub commands (opencode): removed ${result.removed.length} stale files`);
+        for (const f of result.removed) log(`    - ${f}`);
+      }
     }
 
-    // Copy .opencode/agents/ -> ~/.aether/agents/
+    // Sync .opencode/agents/ -> ~/.aether/agents/
     const agentsSrc = path.join(PACKAGE_DIR, '.opencode', 'agents');
     if (fs.existsSync(agentsSrc)) {
-      const n = copyDirSync(agentsSrc, HUB_AGENTS);
-      log(`  Hub agents: ${n} files -> ${HUB_AGENTS}`);
+      const result = syncDirWithCleanup(agentsSrc, HUB_AGENTS);
+      log(`  Hub agents: ${result.copied} files -> ${HUB_AGENTS}`);
+      if (result.removed.length > 0) {
+        log(`  Hub agents: removed ${result.removed.length} stale files`);
+        for (const f of result.removed) log(`    - ${f}`);
+      }
     }
 
     // Create/preserve registry.json
@@ -161,6 +353,25 @@ function setupHub() {
       log(`  Registry: initialized ${HUB_REGISTRY}`);
     } else {
       log(`  Registry: preserved existing ${HUB_REGISTRY}`);
+    }
+
+    // Generate and write manifest
+    const manifest = generateManifest(HUB_DIR);
+    const manifestPath = path.join(HUB_DIR, 'manifest.json');
+    writeJsonSync(manifestPath, manifest);
+    const fileCount = Object.keys(manifest.files).length;
+    log(`  Manifest: ${fileCount} files tracked`);
+
+    // Report manifest delta
+    if (prevManifest && prevManifest.files) {
+      const prevKeys = new Set(Object.keys(prevManifest.files));
+      const currKeys = new Set(Object.keys(manifest.files));
+      const added = [...currKeys].filter(k => !prevKeys.has(k));
+      const removed = [...prevKeys].filter(k => !currKeys.has(k));
+      const changed = [...currKeys].filter(k => prevKeys.has(k) && prevManifest.files[k] !== manifest.files[k]);
+      if (added.length || removed.length || changed.length) {
+        log(`  Manifest delta: +${added.length} added, -${removed.length} removed, ~${changed.length} changed`);
+      }
     }
 
     // Write version.json
@@ -172,7 +383,11 @@ function setupHub() {
   }
 }
 
-function updateRepo(repoPath, sourceVersion) {
+function updateRepo(repoPath, sourceVersion, opts) {
+  opts = opts || {};
+  const dryRun = opts.dryRun || false;
+  const force = opts.force || false;
+
   const repoAether = path.join(repoPath, '.aether');
   const repoVersionFile = path.join(repoAether, 'version.json');
 
@@ -183,26 +398,63 @@ function updateRepo(repoPath, sourceVersion) {
   const currentVersion = readJsonSafe(repoVersionFile);
   const currentVer = currentVersion ? currentVersion.version : 'unknown';
 
-  // Copy system files from hub
-  const systemCount = copySystemFiles(HUB_SYSTEM, repoAether);
+  // Target directories for git safety checks
+  const targetDirs = ['.aether', '.claude/commands/ant', '.opencode/commands/ant', '.opencode/agents'];
 
-  // Copy commands from hub
-  let commandCount = 0;
+  // Git safety: check for dirty files in target directories (skip in dry-run mode)
+  let stashCreated = false;
+  if (!dryRun && isGitRepo(repoPath)) {
+    const dirtyFiles = getGitDirtyFiles(repoPath, targetDirs);
+    if (dirtyFiles.length > 0) {
+      if (!force) {
+        return { status: 'dirty', files: dirtyFiles };
+      }
+      // --force: stash dirty files before proceeding
+      stashCreated = gitStashFiles(repoPath, dirtyFiles);
+    }
+  }
+
+  // Sync system files from hub with cleanup
+  const systemResult = syncSystemFilesWithCleanup(HUB_SYSTEM, repoAether, { dryRun });
+
+  // Sync commands from hub with cleanup
+  let commandsCopied = 0;
+  const allRemovedFiles = [...systemResult.removed];
+
   const repoClaudeCmds = path.join(repoPath, '.claude', 'commands', 'ant');
   if (fs.existsSync(HUB_COMMANDS_CLAUDE)) {
-    commandCount += copyDirSync(HUB_COMMANDS_CLAUDE, repoClaudeCmds);
+    const result = syncDirWithCleanup(HUB_COMMANDS_CLAUDE, repoClaudeCmds, { dryRun });
+    commandsCopied += result.copied;
+    allRemovedFiles.push(...result.removed.map(f => `.claude/commands/ant/${f}`));
   }
 
   const repoOpencodeCmds = path.join(repoPath, '.opencode', 'commands', 'ant');
   if (fs.existsSync(HUB_COMMANDS_OPENCODE)) {
-    commandCount += copyDirSync(HUB_COMMANDS_OPENCODE, repoOpencodeCmds);
+    const result = syncDirWithCleanup(HUB_COMMANDS_OPENCODE, repoOpencodeCmds, { dryRun });
+    commandsCopied += result.copied;
+    allRemovedFiles.push(...result.removed.map(f => `.opencode/commands/ant/${f}`));
   }
 
-  // Copy agents from hub
-  let agentCount = 0;
+  // Sync agents from hub with cleanup
+  let agentsCopied = 0;
   const repoAgents = path.join(repoPath, '.opencode', 'agents');
   if (fs.existsSync(HUB_AGENTS)) {
-    agentCount += copyDirSync(HUB_AGENTS, repoAgents);
+    const result = syncDirWithCleanup(HUB_AGENTS, repoAgents, { dryRun });
+    agentsCopied = result.copied;
+    allRemovedFiles.push(...result.removed.map(f => `.opencode/agents/${f}`));
+  }
+
+  if (dryRun) {
+    return {
+      status: 'dry-run',
+      from: currentVer,
+      to: sourceVersion,
+      system: systemResult.copied,
+      commands: commandsCopied,
+      agents: agentsCopied,
+      removed: allRemovedFiles.length,
+      removedFiles: allRemovedFiles,
+    };
   }
 
   // Write version.json
@@ -222,26 +474,44 @@ function updateRepo(repoPath, sourceVersion) {
     writeJsonSync(HUB_REGISTRY, registry);
   }
 
-  return { status: 'updated', from: currentVer, to: sourceVersion, system: systemCount, commands: commandCount, agents: agentCount };
+  return {
+    status: 'updated',
+    from: currentVer,
+    to: sourceVersion,
+    system: systemResult.copied,
+    commands: commandsCopied,
+    agents: agentsCopied,
+    removed: allRemovedFiles.length,
+    removedFiles: allRemovedFiles,
+    stashCreated,
+  };
 }
 
 switch (command) {
   case 'install': {
     log(`aether-colony v${VERSION} — installing...`);
 
-    // Copy commands to ~/.claude/commands/ant/
+    // Sync commands to ~/.claude/commands/ant/ (with orphan cleanup)
     if (!fs.existsSync(COMMANDS_SRC)) {
       // Running from source repo — commands are in .claude/commands/ant/
       const repoCommands = path.join(PACKAGE_DIR, '.claude', 'commands', 'ant');
       if (fs.existsSync(repoCommands)) {
-        const n = copyDirSync(repoCommands, COMMANDS_DEST);
-        log(`  Commands: ${n} files -> ${COMMANDS_DEST}`);
+        const result = syncDirWithCleanup(repoCommands, COMMANDS_DEST);
+        log(`  Commands: ${result.copied} files -> ${COMMANDS_DEST}`);
+        if (result.removed.length > 0) {
+          log(`  Commands: removed ${result.removed.length} stale files`);
+          for (const f of result.removed) log(`    - ${f}`);
+        }
       } else {
         console.error('  Commands source not found. Skipping.');
       }
     } else {
-      const n = copyDirSync(COMMANDS_SRC, COMMANDS_DEST);
-      log(`  Commands: ${n} files -> ${COMMANDS_DEST}`);
+      const result = syncDirWithCleanup(COMMANDS_SRC, COMMANDS_DEST);
+      log(`  Commands: ${result.copied} files -> ${COMMANDS_DEST}`);
+      if (result.removed.length > 0) {
+        log(`  Commands: removed ${result.removed.length} stale files`);
+        for (const f of result.removed) log(`    - ${f}`);
+      }
     }
 
     // Set up distribution hub at ~/.aether/
@@ -260,6 +530,7 @@ switch (command) {
     const forceFlag = flags.includes('--force');
     const allFlag = flags.includes('--all');
     const listFlag = flags.includes('--list');
+    const dryRun = dryRunFlag;
 
     // Check hub exists
     if (!fs.existsSync(HUB_VERSION)) {
@@ -301,7 +572,13 @@ switch (command) {
       let updated = 0;
       let upToDate = 0;
       let pruned = 0;
+      let dirty = 0;
+      let totalRemoved = 0;
       const survivingRepos = [];
+
+      if (dryRun) {
+        console.log('Dry run — no files will be modified.\n');
+      }
 
       for (const repo of registry.repos) {
         if (!fs.existsSync(repo.path)) {
@@ -312,15 +589,35 @@ switch (command) {
 
         survivingRepos.push(repo);
 
-        if (!forceFlag && repo.version === sourceVersion) {
+        if (!forceFlag && !dryRun && repo.version === sourceVersion) {
           log(`  Up-to-date: ${repo.path} (v${repo.version})`);
           upToDate++;
           continue;
         }
 
-        const result = updateRepo(repo.path, sourceVersion);
-        if (result.status === 'updated') {
+        const result = updateRepo(repo.path, sourceVersion, { dryRun, force: forceFlag });
+        if (result.status === 'dirty') {
+          console.error(`  Dirty: ${repo.path} — uncommitted changes in managed files:`);
+          for (const f of result.files) console.error(`    ${f}`);
+          console.error(`  Skipping. Use --force to stash and update.`);
+          dirty++;
+        } else if (result.status === 'dry-run') {
+          log(`  Would update: ${repo.path} (${result.from} -> ${result.to}) [${result.system} system, ${result.commands} commands, ${result.agents} agents]`);
+          if (result.removed > 0) {
+            log(`  Would remove ${result.removed} stale files:`);
+            for (const f of result.removedFiles) log(`    - ${f}`);
+          }
+          updated++;
+        } else if (result.status === 'updated') {
           log(`  Updated: ${repo.path} (${result.from} -> ${result.to}) [${result.system} system, ${result.commands} commands, ${result.agents} agents]`);
+          if (result.removed > 0) {
+            log(`  Removed ${result.removed} stale files:`);
+            for (const f of result.removedFiles) log(`    - ${f}`);
+            totalRemoved += result.removed;
+          }
+          if (result.stashCreated) {
+            log(`  Stash created. Recover with: cd ${repo.path} && git stash pop`);
+          }
           updated++;
         } else {
           log(`  Skipped: ${repo.path} (${result.reason})`);
@@ -328,12 +625,16 @@ switch (command) {
       }
 
       // Save pruned registry
-      if (pruned > 0) {
+      if (pruned > 0 && !dryRun) {
         registry.repos = survivingRepos;
         writeJsonSync(HUB_REGISTRY, registry);
       }
 
-      console.log(`\nSummary: ${updated} updated, ${upToDate} up-to-date, ${pruned} pruned`);
+      const label = dryRun ? 'would update' : 'updated';
+      let summary = `\nSummary: ${updated} ${label}, ${upToDate} up-to-date, ${pruned} pruned`;
+      if (dirty > 0) summary += `, ${dirty} dirty (skipped)`;
+      if (totalRemoved > 0) summary += `, ${totalRemoved} stale files removed`;
+      console.log(summary);
     } else {
       // Update current repo
       const repoPath = process.cwd();
@@ -348,14 +649,44 @@ switch (command) {
       const currentVersion = readJsonSafe(path.join(repoAether, 'version.json'));
       const currentVer = currentVersion ? currentVersion.version : 'unknown';
 
-      if (!forceFlag && currentVer === sourceVersion) {
+      if (!forceFlag && !dryRun && currentVer === sourceVersion) {
         console.log(`Already up-to-date (v${sourceVersion}).`);
         break;
       }
 
-      const result = updateRepo(repoPath, sourceVersion);
+      if (dryRun) {
+        console.log('Dry run — no files will be modified.\n');
+      }
+
+      const result = updateRepo(repoPath, sourceVersion, { dryRun, force: forceFlag });
+
+      if (result.status === 'dirty') {
+        console.error('Uncommitted changes in managed files:');
+        for (const f of result.files) console.error(`  ${f}`);
+        console.error('\nUse --force to stash changes and update, or commit/stash manually first.');
+        process.exit(1);
+      }
+
+      if (result.status === 'dry-run') {
+        console.log(`Would update: ${result.from} -> ${result.to}`);
+        console.log(`  ${result.system} system files, ${result.commands} command files, ${result.agents} agent files`);
+        if (result.removed > 0) {
+          console.log(`  Would remove ${result.removed} stale files:`);
+          for (const f of result.removedFiles) console.log(`    - ${f}`);
+        }
+        console.log('  Colony data (.aether/data/) untouched.');
+        break;
+      }
+
       console.log(`Updated: ${result.from} -> ${result.to}`);
       console.log(`  ${result.system} system files, ${result.commands} command files, ${result.agents} agent files`);
+      if (result.removed > 0) {
+        console.log(`  Removed ${result.removed} stale files:`);
+        for (const f of result.removedFiles) console.log(`    - ${f}`);
+      }
+      if (result.stashCreated) {
+        console.log('  Git stash created. Recover with: git stash pop');
+      }
       console.log('  Colony data (.aether/data/) untouched.');
     }
     break;
@@ -393,6 +724,8 @@ Usage: aether <command> [options]
 Commands:
   install              Install slash-commands and set up distribution hub
   update               Update current repo from hub
+  update --dry-run     Preview what would change without modifying files
+  update --force       Stash dirty files and force update
   update --all         Update all registered repos
   update --all --force Force update all (even if versions match)
   update --list        Show registered repos and versions

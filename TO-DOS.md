@@ -6,6 +6,10 @@ This file tracks pending work items. Each todo is self-contained with full conte
 
 ## Priority 0: Urgent
 
+### BUG: Build checkpoint stashes user data -- nearly lost Oracle spec - 2026-02-13
+
+- **The build checkpoint system uses `git stash` on ALL dirty files, including user work that has nothing to do with the phase.** During the repo-local migration (phase 5), the checkpoint stashed 1145 lines of uncommitted TO-DOS.md content (Oracle spec, 10 advanced colony ideas, multi-ant vision) and never popped it back. User nearly lost hours of work -- only recovered by manually searching git stashes. **Root cause:** `git stash` is a blunt instrument. The checkpoint system doesn't distinguish between "system files I'm about to modify" and "user's unrelated work in progress." **Fix:** The build/update system must ONLY modify files on an explicit allowlist of system files. Never stash, checkpoint, or touch anything outside that list. If system files are dirty, warn the user -- but leave their work alone. **System files (safe to modify):** `.aether/*.md`, `.aether/aether-utils.sh`, `.aether/docs/`, `.claude/commands/ant/`, `.opencode/commands/ant/`, `runtime/`, `bin/cli.js`. **User data (NEVER touch):** `.aether/data/`, `.aether/dreams/`, `.aether/oracle/`, `TO-DOS.md`, COLONY_STATE.json, flags, learnings, constraints, project files. **The boundary is simple: system files are the tool, user data is their work. Updates touch the tool, never the work.**
+
 ### Remove run_in_background from build.md worker spawns - 2026-02-12
 
 - **Delayed task-notification banners make build summaries look premature** - build.md spawns workers with `run_in_background: true` then collects results via `TaskOutput`. The data is correct but Claude Code fires `task-notification` banners asynchronously after the summary is already displayed, making it look like the summary was written before agents finished. **Fix:** Remove `run_in_background: true` from all Task calls in build.md Steps 5.1, 5.4, and 5.4.2. Multiple Task calls in a single message already run in parallel without the background flag — they just block and return results directly. Then remove Steps 5.2 and 5.4.1 (TaskOutput collection) since results come back from the Task calls themselves. Apply same change to OpenCode mirror. **Files:** `.claude/commands/ant/build.md`, `.opencode/commands/ant/ant:build.md`. **Scope:** modest — remove flag + delete ~20 lines of TaskOutput instructions.
@@ -13,6 +17,14 @@ This file tracks pending work items. Each todo is self-contained with full conte
 ### Deprecate old 2.x npm versions - 2026-02-12
 
 - **npm registry has stale 2.x pre-release versions that could confuse users** - Versions 2.0.0 through 2.4.2 exist on npm from pre-stable development. The `latest` dist-tag correctly points to 1.0.0, so `npm install` works fine. But the 2.x versions are visible on the npm page and could confuse people into thinking they're newer. **Fix:** Run `npm deprecate aether-colony@">=2.0.0" "Pre-release versions. Install 1.0.0 for the stable release."` to mark them deprecated. **Scope:** one command. **Urgency:** high — public-facing confusion on npm.
+
+---
+
+## Priority 0.5: High Priority
+
+### Implement Anthill Milestone System - 2026-02-13
+
+- **Integrate biologically-grounded milestone naming into the colony lifecycle** - Aether currently has no formal milestone/versioning concept in its biological vocabulary. A full naming taxonomy and milestone system has been researched and saved to `.aether/docs/biological-reference.md`. The milestone names map real ant biology to project stages: **First Mound** (first runnable), **Open Chambers** (feature work underway), **Brood Stable** (tests green), **Ventilated Nest** (perf acceptable), **Sealed Chambers** (interfaces frozen), **Crowned Anthill** (release), **New Nest Founded** (next major). **Implementation:** (1) Add milestone tracking to COLONY_STATE.json (current milestone name + criteria), (2) Update `/ant:continue` to detect milestone transitions and announce them, (3) Update `/ant:status` to show current milestone, (4) Consider adopting the expanded caste/command taxonomy (12 roles, 100+ commands) from the reference doc as a roadmap for future commands. **Reference:** `.aether/docs/biological-reference.md` (40+ research sources, full command taxonomy, milestone definitions). **Scope:** medium for core milestone tracking, large for full taxonomy adoption.
 
 ---
 
@@ -243,6 +255,365 @@ This file tracks pending work items. Each todo is self-contained with full conte
 ### Adopt feature-branch workflow for checkpoints 2026-02-11
 
 - **13/14 commits are checkpoints** - Heavy reliance on local save-points rather than semantic commits. **Problem:** Noise in git history, difficult to debug or bisect. **Fix:** Replace "aether-checkpoint" pattern with meaningful commit messages when changes are pushed. Consider using `git stash` for local save-points (Tier 1 stash-based checkpoints already implemented). **Scope:** behavioral, ongoing. **Source:** Review 2026-02-11, Agent 4 recommendation.
+
+---
+
+## Priority 0: Urgent - Bug Fixes
+
+### Per-repo update mechanism (`/ant:update` or `aether update`) - 2026-02-13
+
+- **Repos need a way to pull the latest Aether system files without overwriting colony data** - After the repo-local migration (Phases 1-4), each repo has its own copy of `.aether/` system files (utils, docs, workers, commands). When the source Aether repo gets updated with new features or bug fixes, there's no way to propagate those changes to other repos that use the colony system. **Requirements:** (1) A command (e.g., `/ant:update` or `node bin/cli.js update`) that updates system files in the current repo to the latest version, (2) It must NOT overwrite per-repo colony data (`.aether/data/` -- COLONY_STATE.json, activity.log, spawn-tree.txt, flags, learnings, error-patterns, signatures), (3) A version check that can notify users when an update is available (e.g., "Aether v1.1.0 available, you're on v1.0.0"), (4) Ideally runs automatically as a check at the start of common commands (`/ant:status`, `/ant:build`) with a non-blocking notice. **Design considerations:** Need to define what counts as "system files" vs "colony data" -- system files are the tools/commands/docs that ship with Aether, colony data is what each colony produces. The `.aether/data/` directory is already gitignored, which is a natural boundary. Could use `package.json` version comparison against a known source (npm registry, git tag, or a local reference repo). **Scope:** Medium. **Files:** `bin/cli.js` (update subcommand), potentially a new `/ant:update` command, and a version-check hook in status/build commands.
+
+### Fix Ant Command Parsing - 'ant [command] [text]' Doesn't Execute - 2026-02-13
+
+- **When running 'ant plan' with additional text, the command doesn't execute properly** - If the user runs "ant plan" followed by any text (e.g., "ant plan work on the authentication"), the ant plan command doesn't run. Instead, it does a "plan" without actually executing the /ant:plan command, which means the planning doesn't happen properly. This works correctly in Claude (native), but not in OpenCode. **Why it's P0:** Breaks core functionality - users cannot provide context to ant commands. **Investigation needed:** Compare OpenCode command parsing vs Claude command parsing to find why text arguments cause the command to not execute. **Files to check:** `.opencode/commands/ant/` command files, any argument parsing logic.
+
+### Multi-Ant Parallel Execution - Colony Can Run Multiple Ants Simultaneously - 2026-02-13
+
+- **Enable the colony to run multiple ant commands/tasks in parallel without conflicts** - Currently, only one ant command can run at a time. The vision is for the colony to become a massive network where many ants can work on different tasks simultaneously. The Queen ant must intelligently coordinate them so they don't conflict with each other's work.
+
+**Core Problems to Solve:**
+1. **State conflicts** - Two ants modifying COLONY_STATE.json simultaneously
+2. **File conflicts** - Two ants editing the same file
+3. **Resource conflicts** - Two ants running the same tests/builds
+4. **Coordination** - How does Queen know what's happening across all ants?
+
+**Potential Approaches:**
+
+*Approach A: Session-Based Isolation* - Each ant command spawns a unique session ID. State files include session ID for ownership. Queen tracks all active sessions and their claimed files. Before any write, ant checks if file is claimed by another session. If conflict: wait, reassign, or abort with suggestion.
+
+*Approach B: Queue + Worker Pool* - All ant commands go into a queue instead of running immediately. Queen assigns tasks to worker ants based on availability and skills. Only N ants active at once (configurable). Provides natural serialization for state, parallel for execution.
+
+*Approach C: Optimistic Locking with Conflict Resolution* - Each file/task has a version number. Ant reads current state, does work, tries to write. If version changed, conflict detected -> auto-retry or merge. Queen mediates conflicts based on priority.
+
+*Approach D: Spatial Division (Chamber-based)* - Divide codebase into zones (chambers) - see Chamber Specialization. Each ant assigned to specific zone(s). Ants in different zones can run in parallel safely. Ants in same zone coordinate via Queen.
+
+**Knowledge Hierarchy Vision:** Queen has overall overview -> Specialized Castes (scouts, workers, nurses) have domain expertise -> Information trickles down -> Ants communicate discoveries to each other. The colony becomes a "little world of workers that almost really exist."
+
+**One-Year Vision:** Create something extremely unique - a world of agents that feel like they really exist, with genuine emergent behavior from the interactions.
+
+**Status:** DO NOT IMPLEMENT - discuss approach before designing.
+
+---
+
+## Priority 3: New Research Tasks
+
+### Properly Implement Graveyard Feature - 2026-02-13
+
+- **Graveyards feature exists but not implemented properly** - The graveyard feature was marked as DONE in a previous session, but implementation is incomplete or not working as intended. Need to: (1) Verify `grave-add` and `grave-check` functions exist in `aether-utils.sh` and work correctly, (2) Verify graveyard markers are being added to COLONY_STATE.json when workers fail, (3) Verify Builder prompts check for nearby graves before modifying files with appropriate caution levels, (4) Test the full flow: worker fails -> grave marker added -> future build respects grave -> caution level applied. **Files:** `.aether/aether-utils.sh`, `.claude/commands/ant/build.md`, `.opencode/commands/ant/build.md`, COLONY_STATE.json structure.
+
+### Research and Implement Pheromone System - 2026-02-13
+
+- **Pheromone system needs research and proper implementation** - Pheromones are the colony's communication mechanism but the current implementation is incomplete. Current state: TTL-based model documented but may not be fully implemented. Need to: (1) Research biological pheromone systems (trail, alarm, brood, queen pheromones), (2) Map to colony communication needs (task delegation, error warning, success signals, coordination), (3) Implement properly in code (not just docs), (4) Integrate with existing commands. **Note:** As part of this, need to discuss creating a knowledge hub for ant research findings - a place where separate agents can do extensive research loops and store findings. Could be `.aether/research/` directory. **Depends on:** Chamber Specialization for zone-aware pheromone responses.
+
+---
+
+### Oracle Ant: RALF-Based Research System - IMPLEMENTATION SPEC - 2026-02-13
+
+**STATUS:** READY TO IMPLEMENT - Full spec below
+
+---
+
+## OVERVIEW
+
+Implement Oracle Ant command using the RALF (Recursive Agent Loop Framework) pattern from https://github.com/snarktank/ralph. Oracle Ant is a deep research agent that runs in an iterative loop, with fresh context each iteration, persisting knowledge via files.
+
+**Key Principle:** Oracle works EXACTLY like Ralph - sequential loop, one agent at a time, fresh context per iteration. NOT parallel execution initially.
+
+---
+
+## FILE STRUCTURE TO CREATE
+
+```
+.aether/oracle/
+├── oracle.sh              # Main bash loop script (~100 lines)
+├── oracle.md              # Prompt for AI agent (~80 lines)
+├── research.json          # Research topic/questions (generated by command)
+├── progress.md            # Append-only research log (generated by loop)
+├── .stop                  # Stop signal file (created by /oracle:stop)
+├── archive/               # Previous research runs (auto-created)
+└── discoveries/
+    └── synthesized.md     # Final summary (generated at end)
+
+.opencode/commands/ant/
+└── oracle.md              # Command definition (~120 lines)
+
+.claude/commands/ant/
+└── oracle.md              # Exact mirror of .opencode version
+```
+
+---
+
+## FILE 1: `.aether/oracle/oracle.sh`
+
+**Purpose:** Main loop script - spawns fresh AI instances repeatedly until research complete
+
+```bash
+#!/bin/bash
+# Oracle Ant - Deep research loop using RALF pattern
+# Usage: ./oracle.sh [max_iterations]
+# Based on: https://github.com/snarktank/ralph
+
+set -e
+
+# Configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+AETHER_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+MAX_ITERATIONS=${1:-50}
+TARGET_CONFIDENCE=95
+
+# Files
+RESEARCH_FILE="$SCRIPT_DIR/research.json"
+PROGRESS_FILE="$SCRIPT_DIR/progress.md"
+STOP_FILE="$SCRIPT_DIR/.stop"
+ARCHIVE_DIR="$SCRIPT_DIR/archive"
+DISCOVERIES_DIR="$SCRIPT_DIR/discoveries"
+
+# Check research.json exists
+if [ ! -f "$RESEARCH_FILE" ]; then
+  echo "Error: No research.json found. Run /ant:oracle with a topic first."
+  exit 1
+fi
+
+# Extract topic for archiving
+CURRENT_TOPIC=$(jq -r '.topic // empty' "$RESEARCH_FILE" 2>/dev/null || echo "")
+LAST_TOPIC_FILE="$SCRIPT_DIR/.last-topic"
+
+# Archive previous run if topic changed
+if [ -f "$LAST_TOPIC_FILE" ] && [ -f "$PROGRESS_FILE" ]; then
+  LAST_TOPIC=$(cat "$LAST_TOPIC_FILE" 2>/dev/null || echo "")
+  if [ -n "$CURRENT_TOPIC" ] && [ -n "$LAST_TOPIC" ] && [ "$CURRENT_TOPIC" != "$LAST_TOPIC" ]; then
+    DATE=$(date +%Y-%m-%d)
+    TOPIC_SLUG=$(echo "$LAST_TOPIC" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-\|-$//g')
+    ARCHIVE_FOLDER="$ARCHIVE_DIR/$DATE-$TOPIC_SLUG"
+
+    echo "Archiving previous research: $LAST_TOPIC"
+    mkdir -p "$ARCHIVE_FOLDER"
+    [ -f "$RESEARCH_FILE" ] && cp "$RESEARCH_FILE" "$ARCHIVE_FOLDER/"
+    [ -f "$PROGRESS_FILE" ] && cp "$PROGRESS_FILE" "$ARCHIVE_FOLDER/"
+    echo "   Archived to: $ARCHIVE_FOLDER"
+
+    # Reset progress file
+    echo "# Oracle Research Progress" > "$PROGRESS_FILE"
+    echo "" >> "$PROGRESS_FILE"
+  fi
+fi
+
+# Track current topic
+if [ -n "$CURRENT_TOPIC" ]; then
+  echo "$CURRENT_TOPIC" > "$LAST_TOPIC_FILE"
+fi
+
+# Initialize progress file if needed
+if [ ! -f "$PROGRESS_FILE" ]; then
+  echo "# Oracle Research Progress" > "$PROGRESS_FILE"
+  echo "" >> "$PROGRESS_FILE"
+fi
+
+# Initialize discoveries directory
+mkdir -p "$DISCOVERIES_DIR"
+
+echo ""
+echo "==============================================================="
+echo "  ORACLE ANT - Deep Research Loop"
+echo "==============================================================="
+echo "Topic: $CURRENT_TOPIC"
+echo "Max iterations: $MAX_ITERATIONS"
+echo "Target confidence: $TARGET_CONFIDENCE%"
+echo ""
+
+# Main loop
+for i in $(seq 1 $MAX_ITERATIONS); do
+  # Check for stop signal
+  if [ -f "$STOP_FILE" ]; then
+    rm -f "$STOP_FILE"
+    echo ""
+    echo "Oracle stopped by user at iteration $i"
+    break
+  fi
+
+  echo ""
+  echo "---------------------------------------------------------------"
+  echo "  Iteration $i of $MAX_ITERATIONS"
+  echo "---------------------------------------------------------------"
+
+  # Run AI with oracle.md prompt
+  OUTPUT=$(claude --dangerously-skip-permissions --print < "$SCRIPT_DIR/oracle.md" 2>&1 | tee /dev/stderr) || true
+
+  # Check for completion signal
+  if echo "$OUTPUT" | grep -q "<oracle>COMPLETE</oracle>"; then
+    echo ""
+    echo "==============================================================="
+    echo "  ORACLE RESEARCH COMPLETE!"
+    echo "==============================================================="
+    echo "Completed at iteration $i"
+    exit 0
+  fi
+
+  echo ""
+  echo "Iteration $i complete. Continuing..."
+  sleep 2
+done
+
+echo ""
+echo "==============================================================="
+echo "  ORACLE REACHED MAX ITERATIONS"
+echo "==============================================================="
+echo "Max iterations ($MAX_ITERATIONS) reached without completion."
+echo "Check $PROGRESS_FILE for current research status."
+exit 1
+```
+
+---
+
+## FILE 2: `.aether/oracle/oracle.md`
+
+**Purpose:** Prompt given to AI each iteration (fresh context)
+
+```markdown
+You are an **Oracle Ant** - a deep research agent in the Aether Colony.
+
+## Your Mission
+
+Research a topic thoroughly and accumulate knowledge across iterations.
+
+## Instructions
+
+### Step 1: Read Research Topic
+Read `.aether/oracle/research.json` to understand what you're researching.
+
+### Step 2: Read Previous Progress
+Read `.aether/oracle/progress.md` to see what previous iterations discovered.
+
+### Step 3: Research
+Research deeply using available tools (Glob, Grep, Read, WebFetch). Focus on filling knowledge gaps, answering unanswered questions, deepening understanding, finding patterns and connections.
+
+### Step 4: Append Findings
+APPEND to `.aether/oracle/progress.md` (never replace, always append).
+
+### Step 5: Update Codebase Patterns
+If you discovered a reusable pattern, add it to the `## Codebase Patterns` section at the TOP of progress.md.
+
+### Step 6: Rate Confidence
+Rate your overall confidence (0-100%) that the research is complete.
+
+### Step 7: Check Completion
+If confidence >= target_confidence OR all questions answered: Output `<oracle>COMPLETE</oracle>`. Otherwise end normally for another iteration.
+
+## Important Rules
+- Work on ONE focused area per iteration
+- Always APPEND to progress.md, never replace
+- Read previous iterations' findings before researching
+- Do NOT modify any code files or colony state
+- Only write to `.aether/oracle/` directory
+```
+
+---
+
+## FILE 3: `.opencode/commands/ant/oracle.md` and `.claude/commands/ant/oracle.md`
+
+**Purpose:** Command definition that users invoke with `/ant:oracle "topic"`
+
+Handles: input validation, directory init, research.json creation, progress.md init, header display, loop execution, results display. Subcommands: `/oracle:stop`, `/oracle:status`.
+
+**Non-Invasive Guarantee:** Oracle NEVER touches COLONY_STATE.json, constraints.json, activity.log, or any code files. Only writes to `.aether/oracle/`.
+
+---
+
+## IMPLEMENTATION ORDER
+
+| Step | Action | Verify |
+|------|--------|--------|
+| 1 | Create `.aether/oracle/` directories | `ls .aether/oracle/` |
+| 2 | Write `.aether/oracle/oracle.sh` | `cat .aether/oracle/oracle.sh` |
+| 3 | `chmod +x .aether/oracle/oracle.sh` | `ls -la .aether/oracle/oracle.sh` |
+| 4 | Write `.aether/oracle/oracle.md` | `cat .aether/oracle/oracle.md` |
+| 5 | Write `.opencode/commands/ant/oracle.md` | Verify |
+| 6 | Copy to `.claude/commands/ant/oracle.md` | `diff` both files |
+| 7 | Test with `/ant:oracle "test topic"` | Should create research.json and run loop |
+
+---
+
+## REFERENCE: Ralph Repo
+
+Source: https://github.com/snarktank/ralph
+
+Key patterns: Each iteration = fresh AI instance. Memory via files (progress.txt, prd.json). Stop signal: `<promise>COMPLETE</promise>`. Archive on branch change. jq for JSON parsing.
+
+---
+
+## Priority: Future Vision - 10 Advanced Colony Implementations
+
+*Research synthesis from multi-agent exploration of AI coding patterns, self-improving systems, memory architectures, emergent behavior, and future trends.*
+
+---
+
+### 1. COLONY CONSTITUTION - Self-Critique Principles
+
+- **A written "Colony Constitution" -- a set of principles that all ants reference for self-critique before completing work.** Constitution stored in `.aether/constitution.md` with immutable principles (e.g., "No partial implementations", "All code must pass tests"). Before marking any task complete, workers run internal critique: "Does my action violate any constitutional principle?" Principles can evolve via user feedback but require explicit amendment process. Watchers verify constitutional compliance, not just functional correctness. **Inspired by:** Constitutional AI (Anthropic). **Files:** `.aether/constitution.md`, updates to `workers.md` and `build.md`.
+
+### 2. EPISODIC MEMORY - Learning With Context
+
+- **Store the full "story" of how patterns were discovered, not just the patterns themselves.** Every instinct includes its origin episode: phase, task, files, workers involved, what went wrong, what fixed it. Instincts become queryable: "Why does this instinct exist?" -> returns the full narrative. Episodes linked together across sessions. **Inspired by:** Letta/MemGPT episodic memory, Mem0 layered memory architecture. **Files:** Updates to `learning.md`, `.aether/data/episodes/`, instinct structure in COLONY_STATE.json.
+
+### 3. PHEROMONE EVOLUTION - Signals That Strengthen/Decay
+
+- **Pheromones don't just exist - they evolve based on outcomes.** Successful pheromones strengthen; unused ones fade. Each pheromone tracks: `times_applied`, `success_rate`, `last_used`. Weak pheromones (success < 50%, unused > 10 phases) auto-archive. Strong pheromones (success > 80%) auto-promote to instincts. User can "pin" pheromones to prevent decay. **Inspired by:** AlphaZero self-play reward signals, ACO pheromone evaporation. **Files:** Updates to `pheromones.md`, `aether-utils.sh`.
+
+### 4. BOIDS COORDINATION - Three Rules for Worker Spawning
+
+- **Flocking-style coordination for spawned workers using three simple rules.** Separation: Workers avoid files already being worked on. Alignment: Workers steer toward the colony goal. Cohesion: Workers cluster related changes. These three rules cause workers to self-organize around code regions naturally. **Inspired by:** Reynolds' Boids model. **Files:** Updates to `aether-utils.sh`, `workers.md`.
+
+### 5. ADVERSARIAL CHAOS - Controlled Problem Injection
+
+- **Chaos Ant intentionally introduces subtle bugs during builds to test colony resilience.** Watcher must catch injected problems. If caught: colony resilience metric increases. If missed: revealed to user as learning. Injection rate configurable (default 20%). Never injects security vulnerabilities or data loss risks. **Inspired by:** Red teaming, chaos engineering. **Files:** Updates to `chaos.md`, `build.md`.
+
+### 6. COLONY SLEEP - Memory Consolidation During Pause
+
+- **When the colony is paused (or after N phases), run a "sleep" consolidation process.** Cluster recent learnings, identify patterns, propose new instincts, decay unused signals, archive resolved blockers. Dreamer Ant runs during sleep. **Inspired by:** Letta "sleep-time compute", memory consolidation in neuroscience. **Files:** New `.aether/oracle/sleep.md`, updates to `continue.md`.
+
+### 7. WORKER QUALITY SCORES - Reputation System
+
+- **Each spawned worker earns a quality score based on output.** High-quality workers' instincts carry more weight. Score updates: +0.05 success, -0.10 failure, +0.02 exceptional. Workers below 0.3 flagged for review. Scores persisted across sessions. **Inspired by:** RLHF, reputation systems. **Files:** New `.aether/data/worker-registry.json`, updates to `build.md`.
+
+### 8. QUORUM SENSING - Threshold-Based Commitment
+
+- **Colony doesn't commit to an approach until enough workers signal agreement.** Spawn parallel Scouts to investigate alternatives. Quorum threshold: 2/3 must agree with confidence > 0.7. If no quorum: spawn more Scouts or surface disagreement to user. **Inspired by:** Ant quorum sensing (house hunting), consensus algorithms. **Files:** Updates to `plan.md`, `build.md`.
+
+### 9. FEDERATED WISDOM - Cross-Colony Knowledge Sharing
+
+- **Export/import high-confidence instincts between colonies as JSON packages.** Federation structure: `~/.aether/federation/instincts/{domain}.json`. Imported instincts tagged with `source: "federation"` at lower initial confidence (0.5). Trust scores track reliability. Privacy: colonies can mark instincts as "local-only". **Inspired by:** Transfer learning, model distillation. **Files:** New `federation.md`, `.aether/federation/` structure.
+
+### 10. SELF-DRIVING COLONY MODE - Autonomous Building Sessions
+
+- **Extended autonomous building sessions where Queen delegates entirely.** User activates: `/ant:self-driving --duration 4h --goal "build feature X"`. Workers in isolated git worktrees. Subplanners merge when segments complete. Can run overnight. **Inspired by:** Cursor "Self-Driving Codebases" research. **Files:** New `self-driving.md`, git worktree management.
+
+---
+
+### Summary: 10 Proposals by Category
+
+| Category | Proposals |
+|----------|-----------|
+| **Self-Improvement** | Colony Constitution (#1), Worker Quality Scores (#7), Colony Sleep (#6) |
+| **Memory & Learning** | Episodic Memory (#2), Pheromone Evolution (#3), Federated Wisdom (#9) |
+| **Coordination** | Boids Coordination (#4), Quorum Sensing (#8) |
+| **Resilience** | Adversarial Chaos (#5) |
+| **Autonomy** | Self-Driving Colony Mode (#10) |
+
+### Implementation Priority (Suggested)
+
+| Priority | Proposal | Effort | Impact |
+|----------|----------|--------|--------|
+| **P1** | Colony Constitution | Low | High |
+| **P1** | Pheromone Evolution | Medium | High |
+| **P2** | Episodic Memory | Medium | High |
+| **P2** | Worker Quality Scores | Medium | Medium |
+| **P2** | Colony Sleep | Medium | High |
+| **P3** | Boids Coordination | Medium | Medium |
+| **P3** | Quorum Sensing | Medium | Medium |
+| **P3** | Adversarial Chaos | Medium | Medium |
+| **P4** | Federated Wisdom | High | High |
+| **P4** | Self-Driving Mode | High | High |
 
 ---
 

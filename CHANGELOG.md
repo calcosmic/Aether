@@ -149,3 +149,4 @@ Development releases (versions 2.0.0-2.4.2) building toward stable release. Key 
 - 2026-02-12: README.md, CHANGELOG.md — Added /ant:chaos (resilience testing) and /ant:archaeology (git history analysis) commands with build pipeline integration
 - 2026-02-12: CHANGELOG.md — added repo-local path migration entry
 - 2026-02-12: README.md — Updated to describe repo-local .aether/ architecture; removed global ~/.aether/ runtime references, restructured File Structure section with repo-local paths primary
+- 2026-02-13: bin/cli.js, update.md — Added orphan cleanup (syncDirWithCleanup), git dirty-file detection with --force stash, --dry-run preview, hub manifest generation

@@ -48,7 +48,12 @@ Stop here. Do not proceed.
 
 ### Step 3: Bootstrap System Files
 
-Run using the Bash tool:
+If `.aether/aether-utils.sh` does not exist yet (new repo that predates the hub), copy it from the hub first:
+```
+cp ~/.aether/system/aether-utils.sh .aether/aether-utils.sh && chmod +x .aether/aether-utils.sh
+```
+
+Then run using the Bash tool:
 ```
 bash .aether/aether-utils.sh bootstrap-system
 ```
@@ -57,15 +62,43 @@ This copies system files (docs, utils, aether-utils.sh) from `~/.aether/system/`
 
 Parse the JSON output to get the count of copied files.
 
-### Step 4: Update Commands
+### Step 4: Sync Commands (with orphan cleanup)
 
-Copy command files from the hub to this repo. Run using the Bash tool:
+Sync command files from the hub to this repo **and remove stale files** that no longer exist in the hub. This prevents renamed or deleted commands from accumulating as orphans.
 
+For each directory pair, run using the Bash tool:
+
+```bash
+# Sync Claude commands
+mkdir -p .claude/commands/ant
+cp -R ~/.aether/commands/claude/* .claude/commands/ant/ 2>/dev/null
+# Remove orphans: files in dest that aren't in hub
+comm -23 \
+  <(cd .claude/commands/ant && find . -type f ! -name '.*' | sort) \
+  <(cd ~/.aether/commands/claude && find . -type f ! -name '.*' | sort) \
+  | while read f; do rm ".claude/commands/ant/$f" && echo "  removed stale: .claude/commands/ant/$f"; done
+echo "claude: done"
+
+# Sync OpenCode commands
+mkdir -p .opencode/commands/ant
+cp -R ~/.aether/commands/opencode/* .opencode/commands/ant/ 2>/dev/null
+comm -23 \
+  <(cd .opencode/commands/ant && find . -type f ! -name '.*' | sort) \
+  <(cd ~/.aether/commands/opencode && find . -type f ! -name '.*' | sort) \
+  | while read f; do rm ".opencode/commands/ant/$f" && echo "  removed stale: .opencode/commands/ant/$f"; done
+echo "opencode: done"
+
+# Sync agents
+mkdir -p .opencode/agents
+cp -R ~/.aether/agents/* .opencode/agents/ 2>/dev/null
+comm -23 \
+  <(cd .opencode/agents && find . -type f ! -name '.*' | sort) \
+  <(cd ~/.aether/agents && find . -type f ! -name '.*' | sort) \
+  | while read f; do rm ".opencode/agents/$f" && echo "  removed stale: .opencode/agents/$f"; done
+echo "agents: done"
 ```
-cp -R ~/.aether/commands/claude/* .claude/commands/ant/ 2>/dev/null; echo "claude: done"
-cp -R ~/.aether/commands/opencode/* .opencode/commands/ant/ 2>/dev/null; echo "opencode: done"
-cp -R ~/.aether/agents/* .opencode/agents/ 2>/dev/null; echo "agents: done"
-```
+
+Report any removed stale files in the summary.
 
 ### Step 5: Register and Version Stamp
 
@@ -98,7 +131,18 @@ Updated: v{current_version} -> v{available_version}
   System files: {N} updated
   Commands: synced from hub
   Agents: synced from hub
+{if stale files were removed:}
+  Stale files removed: {count}
+    {list each removed file}
+{end if}
 
 Colony data (.aether/data/) untouched.
 Repo registered in ~/.aether/registry.json.
 ```
+
+### CLI Equivalents
+
+The CLI version (`aether update`) performs the same sync-with-cleanup and also supports:
+
+- `--dry-run` — Preview what would change without modifying any files
+- `--force` — Stash uncommitted changes in managed files and proceed with the update
