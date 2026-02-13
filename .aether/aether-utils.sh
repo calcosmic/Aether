@@ -94,7 +94,7 @@ shift 2>/dev/null || true
 case "$cmd" in
   help)
     cat <<'EOF'
-{"ok":true,"commands":["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
+{"ok":true,"commands":["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
 EOF
     ;;
   version)
@@ -1527,6 +1527,35 @@ EOF
     }
     unload_colony_state
     json_ok '{"unloaded":true}'
+    ;;
+
+  spawn-tree-load)
+    source "$SCRIPT_DIR/utils/spawn-tree.sh" 2>/dev/null || {
+      json_err "$E_FILE_NOT_FOUND" "spawn-tree.sh not found"
+      exit 1
+    }
+    tree_json=$(reconstruct_tree_json)
+    json_ok "$tree_json"
+    ;;
+
+  spawn-tree-active)
+    source "$SCRIPT_DIR/utils/spawn-tree.sh" 2>/dev/null || {
+      json_err "$E_FILE_NOT_FOUND" "spawn-tree.sh not found"
+      exit 1
+    }
+    active=$(get_active_spawns)
+    json_ok "$active"
+    ;;
+
+  spawn-tree-depth)
+    ant_name="${1:-}"
+    [[ -z "$ant_name" ]] && json_err "$E_VALIDATION_FAILED" "Usage: spawn-tree-depth <ant_name>"
+    source "$SCRIPT_DIR/utils/spawn-tree.sh" 2>/dev/null || {
+      json_err "$E_FILE_NOT_FOUND" "spawn-tree.sh not found"
+      exit 1
+    }
+    depth=$(get_spawn_depth "$ant_name")
+    json_ok "$depth"
     ;;
 
   *)
