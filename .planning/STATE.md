@@ -30,6 +30,8 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 | 2026-02-13 | Use AVA for testing | Lightweight, fast, good ES module support |
 | 2026-02-13 | Custom duplicate key detection | Standard JSON.parse() allows duplicates (last one wins) |
 | 2026-02-13 | Test bash utilities via child_process | Integration testing ensures actual script behavior verified |
+| 2026-02-13 | Copy aether-utils.sh for test isolation | Script calculates AETHER_ROOT from its own location |
+| 2026-02-13 | Include utils/ directory in test env | Required for lock functions used by flag-add |
 
 ---
 
@@ -52,6 +54,7 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 
 **Plans executed:**
 - 02-01-ava-setup: Configured AVA test framework with comprehensive validation tests
+- 02-02-bash-tests: Created bash integration test suite for aether-utils.sh
 
 **Requirements completed:**
 - TEST-01: AVA test framework installed and configured ✓
@@ -59,6 +62,9 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 - TEST-03: Tests detect duplicate keys in JSON objects ✓
 - TEST-04: Tests verify chronological event ordering ✓
 - TEST-05: validate-state utility tests ✓
+- TEST-06: Bash integration tests for aether-utils.sh ✓
+- TEST-07: Test helpers library for reusable assertions ✓
+- TEST-08: npm test:bash script for CI integration ✓
 
 ---
 
@@ -77,7 +83,7 @@ None currently.
 ## Session Continuity
 
 **Last session:** 2026-02-13
-**Stopped at:** Phase 2 complete - Testing Foundation established
+**Stopped at:** Completed 02-02 bash integration tests
 **Resume file:** None
 
 ---
