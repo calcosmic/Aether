@@ -611,7 +611,7 @@ switch (command) {
       // Show registered repos
       const registry = readJsonSafe(HUB_REGISTRY);
       if (!registry || registry.repos.length === 0) {
-        console.log('No repos registered. Run /ant:init in a repo to register it.');
+        console.log('No repos registered. Run the Claude Code slash command /ant:init in a repo to register it.');
         break;
       }
       console.log(`Registered repos (hub v${sourceVersion}):\n`);
@@ -630,7 +630,7 @@ switch (command) {
       // Update all registered repos
       const registry = readJsonSafe(HUB_REGISTRY);
       if (!registry || registry.repos.length === 0) {
-        console.log('No repos registered. Run /ant:init in a repo to register it.');
+        console.log('No repos registered. Run the Claude Code slash command /ant:init in a repo to register it.');
         break;
       }
 
@@ -707,7 +707,7 @@ switch (command) {
 
       if (!fs.existsSync(repoAether)) {
         console.error('No .aether/ directory found in current repo.');
-        console.error('Run /ant:init in this repo first.');
+        console.error('Run the Claude Code slash command /ant:init in this repo first.');
         process.exit(1);
       }
 
