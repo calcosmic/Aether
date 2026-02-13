@@ -124,8 +124,26 @@ function writeJsonSync(filePath, data) {
 }
 
 function hashFileSync(filePath) {
-  const content = fs.readFileSync(filePath);
-  return 'sha256:' + crypto.createHash('sha256').update(content).digest('hex');
+  try {
+    const content = fs.readFileSync(filePath);
+    return 'sha256:' + crypto.createHash('sha256').update(content).digest('hex');
+  } catch (err) {
+    console.error(`Warning: could not hash ${filePath}: ${err.message}`);
+    return null;
+  }
+}
+
+function validateManifest(manifest) {
+  if (!manifest || typeof manifest !== 'object') {
+    return { valid: false, error: 'Manifest must be an object' };
+  }
+  if (!manifest.generated_at || typeof manifest.generated_at !== 'string') {
+    return { valid: false, error: 'Manifest missing required field: generated_at' };
+  }
+  if (!manifest.files || typeof manifest.files !== 'object') {
+    return { valid: false, error: 'Manifest missing required field: files' };
+  }
+  return { valid: true };
 }
 
 function listFilesRecursive(dir, base) {
@@ -167,7 +185,11 @@ function generateManifest(hubDir) {
     // Skip registry, version, and manifest metadata files
     if (relPath === 'registry.json' || relPath === 'version.json' || relPath === 'manifest.json') continue;
     const fullPath = path.join(hubDir, relPath);
-    files[relPath] = hashFileSync(fullPath);
+    const hash = hashFileSync(fullPath);
+    // Skip files that couldn't be hashed (permission issues, etc.)
+    if (hash) {
+      files[relPath] = hash;
+    }
   }
   return { generated_at: new Date().toISOString(), files };
 }
@@ -175,21 +197,33 @@ function generateManifest(hubDir) {
 function syncDirWithCleanup(src, dest, opts) {
   opts = opts || {};
   const dryRun = opts.dryRun || false;
-  fs.mkdirSync(dest, { recursive: true });
+  try {
+    fs.mkdirSync(dest, { recursive: true });
+  } catch (err) {
+    if (err.code !== 'EEXIST') {
+      console.error(`Warning: could not create directory ${dest}: ${err.message}`);
+    }
+  }
 
   // Copy phase
   let copied = 0;
+  let skipped = 0;
   const srcFiles = listFilesRecursive(src);
   if (!dryRun) {
     for (const relPath of srcFiles) {
       const srcPath = path.join(src, relPath);
       const destPath = path.join(dest, relPath);
-      fs.mkdirSync(path.dirname(destPath), { recursive: true });
-      fs.copyFileSync(srcPath, destPath);
-      if (relPath.endsWith('.sh')) {
-        fs.chmodSync(destPath, 0o755);
+      try {
+        fs.mkdirSync(path.dirname(destPath), { recursive: true });
+        fs.copyFileSync(srcPath, destPath);
+        if (relPath.endsWith('.sh')) {
+          fs.chmodSync(destPath, 0o755);
+        }
+        copied++;
+      } catch (err) {
+        console.error(`Warning: could not copy ${relPath}: ${err.message}`);
+        skipped++;
       }
-      copied++;
     }
   } else {
     copied = srcFiles.length;
@@ -203,16 +237,24 @@ function syncDirWithCleanup(src, dest, opts) {
     if (!srcSet.has(relPath)) {
       removed.push(relPath);
       if (!dryRun) {
-        fs.unlinkSync(path.join(dest, relPath));
+        try {
+          fs.unlinkSync(path.join(dest, relPath));
+        } catch (err) {
+          console.error(`Warning: could not remove ${relPath}: ${err.message}`);
+        }
       }
     }
   }
 
   if (!dryRun && removed.length > 0) {
-    cleanEmptyDirs(dest);
+    try {
+      cleanEmptyDirs(dest);
+    } catch (err) {
+      console.error(`Warning: could not clean directories: ${err.message}`);
+    }
   }
 
-  return { copied, removed };
+  return { copied, removed, skipped };
 }
 
 function syncSystemFilesWithCleanup(srcDir, destDir, opts) {
@@ -299,7 +341,11 @@ function setupHub() {
     fs.mkdirSync(HUB_DIR, { recursive: true });
 
     // Read previous manifest for delta reporting
-    const prevManifest = readJsonSafe(path.join(HUB_DIR, 'manifest.json'));
+    const prevManifestRaw = readJsonSafe(path.join(HUB_DIR, 'manifest.json'));
+    const prevManifest = prevManifestRaw && validateManifest(prevManifestRaw).valid ? prevManifestRaw : null;
+    if (prevManifestRaw && !prevManifest) {
+      log(`  Warning: previous manifest is invalid, regenerating`);
+    }
 
     // Sync runtime/ -> ~/.aether/system/
     const runtimeSrc = path.join(PACKAGE_DIR, 'runtime');
