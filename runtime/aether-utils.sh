@@ -941,20 +941,33 @@ EOF
     # Create checkpoint before applying auto-fix
     # Usage: autofix-checkpoint [label]
     # Returns: {type: "stash"|"commit"|"none", ref: "..."}
+    # IMPORTANT: Only stash Aether-related files, never touch user work
     if git rev-parse --git-dir >/dev/null 2>&1; then
-      # Check if there are changes to stash
-      if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
+      # Check if there are changes to Aether-managed files only
+      # Target directories that Aether is allowed to modify
+      target_dirs=".aether .claude/commands/ant .claude/commands/st .opencode runtime bin"
+      has_changes=false
+
+      for dir in $target_dirs; do
+        if [[ -d "$dir" ]] && [[ -n "$(git status --porcelain "$dir" 2>/dev/null)" ]]; then
+          has_changes=true
+          break
+        fi
+      done
+
+      if [[ "$has_changes" == "true" ]]; then
         label="${1:-autofix-$(date +%s)}"
         stash_name="aether-checkpoint: $label"
-        if git stash push -m "$stash_name" >/dev/null 2>&1; then
+        # Only stash Aether-managed directories, never touch user files
+        if git stash push -m "$stash_name" -- $target_dirs >/dev/null 2>&1; then
           json_ok "{\"type\":\"stash\",\"ref\":\"$stash_name\"}"
         else
-          # Stash failed, record commit hash
+          # Stash failed (possibly due to conflicts), record commit hash
           hash=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
           json_ok "{\"type\":\"commit\",\"ref\":\"$hash\"}"
         fi
       else
-        # Clean working directory, just record commit hash
+        # No changes in Aether-managed directories, just record commit hash
         hash=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
         json_ok "{\"type\":\"commit\",\"ref\":\"$hash\"}"
       fi

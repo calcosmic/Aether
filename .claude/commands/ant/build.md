@@ -116,8 +116,9 @@ git rev-parse --git-dir 2>/dev/null
 ```
 
 - **If succeeds** (is a git repo):
-  1. Check for changes: `git status --porcelain`
-  2. **If changes exist**: `git stash push --include-untracked -m "aether-checkpoint: pre-phase-$PHASE_NUMBER"`
+  1. Check for changes in Aether-managed directories only: `.aether .claude/commands/ant .claude/commands/st .opencode runtime bin`
+  2. **If changes exist**: `git stash push -m "aether-checkpoint: pre-phase-$PHASE_NUMBER" -- .aether .claude/commands/ant .claude/commands/st .opencode runtime bin`
+     - IMPORTANT: Never use `--include-untracked` — it stashes ALL files including user work!
      - Verify: `git stash list | head -1 | grep "aether-checkpoint"` — warn if empty
      - Store checkpoint as `{type: "stash", ref: "aether-checkpoint: pre-phase-$PHASE_NUMBER"}`
   3. **If clean working tree**: Record `HEAD` hash via `git rev-parse HEAD`

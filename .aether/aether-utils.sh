@@ -21,9 +21,16 @@ CURRENT_LOCK=${CURRENT_LOCK:-""}
 [[ -f "$SCRIPT_DIR/utils/file-lock.sh" ]] && source "$SCRIPT_DIR/utils/file-lock.sh"
 [[ -f "$SCRIPT_DIR/utils/atomic-write.sh" ]] && source "$SCRIPT_DIR/utils/atomic-write.sh"
 
-# Fallback atomic_write if not sourced
+# Fallback atomic_write if not sourced (uses temp file + mv for true atomicity)
 if ! type atomic_write &>/dev/null; then
-  atomic_write() { echo "$2" > "$1"; }
+  atomic_write() {
+    local target="$1"
+    local content="$2"
+    local temp
+    temp=$(mktemp)
+    echo "$content" > "$temp"
+    mv "$temp" "$target"
+  }
 fi
 
 # --- JSON output helpers ---
@@ -736,6 +743,9 @@ EOF
     id="flag_$(date -u +%s)_$(head -c 2 /dev/urandom | od -An -tx1 | tr -d ' ')"
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
+    # Acquire lock for atomic flag update
+    acquire_lock "$flags_file" || json_err "Failed to acquire lock on flags.json"
+
     # Map type to severity
     case "$type" in
       blocker)  severity="critical" ;;
@@ -768,9 +778,10 @@ EOF
         resolution: null,
         auto_resolve_on: (if $type == "blocker" and ($source | test("chaos") | not) then "build_pass" else null end)
       }]
-    ' "$flags_file") || json_err "Failed to add flag"
+    ' "$flags_file") || { release_lock "$flags_file"; json_err "Failed to add flag"; }
 
-    echo "$updated" > "$flags_file"
+    atomic_write "$flags_file" "$updated"
+    release_lock "$flags_file"
     json_ok "{\"id\":\"$id\",\"type\":\"$type\",\"severity\":\"$severity\"}"
     ;;
   flag-check-blockers)
@@ -814,14 +825,18 @@ EOF
 
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
+    # Acquire lock for atomic flag update
+    acquire_lock "$flags_file" || json_err "Failed to acquire lock on flags.json"
+
     updated=$(jq --arg id "$flag_id" --arg res "$resolution" --arg ts "$ts" '
       .flags = [.flags[] | if .id == $id then
         .resolved_at = $ts |
         .resolution = $res
       else . end]
-    ' "$flags_file") || json_err "Failed to resolve flag"
+    ' "$flags_file") || { release_lock "$flags_file"; json_err "Failed to resolve flag"; }
 
-    echo "$updated" > "$flags_file"
+    atomic_write "$flags_file" "$updated"
+    release_lock "$flags_file"
     json_ok "{\"resolved\":\"$flag_id\"}"
     ;;
   flag-acknowledge)
@@ -835,13 +850,17 @@ EOF
 
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
+    # Acquire lock for atomic flag update
+    acquire_lock "$flags_file" || json_err "Failed to acquire lock on flags.json"
+
     updated=$(jq --arg id "$flag_id" --arg ts "$ts" '
       .flags = [.flags[] | if .id == $id then
         .acknowledged_at = $ts
       else . end]
-    ' "$flags_file") || json_err "Failed to acknowledge flag"
+    ' "$flags_file") || { release_lock "$flags_file"; json_err "Failed to acknowledge flag"; }
 
-    echo "$updated" > "$flags_file"
+    atomic_write "$flags_file" "$updated"
+    release_lock "$flags_file"
     json_ok "{\"acknowledged\":\"$flag_id\"}"
     ;;
   flag-list)
@@ -894,6 +913,9 @@ EOF
 
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
+    # Acquire lock for atomic flag update
+    acquire_lock "$flags_file" || json_err "Failed to acquire lock on flags.json"
+
     # Count how many will be resolved
     count=$(jq --arg trigger "$trigger" '
       [.flags[] | select(.auto_resolve_on == $trigger and .resolved_at == null)] | length
@@ -907,7 +929,8 @@ EOF
       else . end]
     ' "$flags_file")
 
-    echo "$updated" > "$flags_file"
+    atomic_write "$flags_file" "$updated"
+    release_lock "$flags_file"
     json_ok "{\"resolved\":$count,\"trigger\":\"$trigger\"}"
     ;;
   generate-ant-name)
@@ -941,20 +964,33 @@ EOF
     # Create checkpoint before applying auto-fix
     # Usage: autofix-checkpoint [label]
     # Returns: {type: "stash"|"commit"|"none", ref: "..."}
+    # IMPORTANT: Only stash Aether-related files, never touch user work
     if git rev-parse --git-dir >/dev/null 2>&1; then
-      # Check if there are changes to stash
-      if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
+      # Check if there are changes to Aether-managed files only
+      # Target directories that Aether is allowed to modify
+      target_dirs=".aether .claude/commands/ant .claude/commands/st .opencode runtime bin"
+      has_changes=false
+
+      for dir in $target_dirs; do
+        if [[ -d "$dir" ]] && [[ -n "$(git status --porcelain "$dir" 2>/dev/null)" ]]; then
+          has_changes=true
+          break
+        fi
+      done
+
+      if [[ "$has_changes" == "true" ]]; then
         label="${1:-autofix-$(date +%s)}"
         stash_name="aether-checkpoint: $label"
-        if git stash push -m "$stash_name" >/dev/null 2>&1; then
+        # Only stash Aether-managed directories, never touch user files
+        if git stash push -m "$stash_name" -- $target_dirs >/dev/null 2>&1; then
           json_ok "{\"type\":\"stash\",\"ref\":\"$stash_name\"}"
         else
-          # Stash failed, record commit hash
+          # Stash failed (possibly due to conflicts), record commit hash
           hash=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
           json_ok "{\"type\":\"commit\",\"ref\":\"$hash\"}"
         fi
       else
-        # Clean working directory, just record commit hash
+        # No changes in Aether-managed directories, just record commit hash
         hash=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
         json_ok "{\"type\":\"commit\",\"ref\":\"$hash\"}"
       fi
