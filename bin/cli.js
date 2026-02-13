@@ -997,6 +997,17 @@ program
     log(`  ${c.colony('Hub:')} ${c.dim('~/.aether/')} preserved (remove manually if desired).`);
   }));
 
+// Deprecated: init command
+program
+  .command('init [goal]')
+  .description('(deprecated) Use /ant:init in Claude Code instead')
+  .action((goal) => {
+    console.error(c.warning('Warning: "aether init" is deprecated.'));
+    console.error(c.warning('  Use /ant:init in Claude Code instead:'));
+    console.error(c.warning(`  /ant:init "${goal || 'your-goal-here'}"`));
+    process.exit(1);
+  });
+
 // Custom help handler to show CLI vs Slash command distinction
 program.on('--help', () => {
   console.log('');
