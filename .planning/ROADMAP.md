@@ -11,13 +11,15 @@
 **Goal:** Harden core infrastructure to prevent race conditions, data loss, and update failures
 
 **Success Criteria:**
-- [ ] All state file operations use file locking
-- [ ] All JSON state updates use atomic writes
-- [ ] Git checkpoints only stash Aether-managed directories
-- [ ] Update command compares versions before syncing
-- [ ] No data loss during concurrent state access
-- [ ] Signatures.json template exists and works
-- [ ] Hash comparison prevents unnecessary file writes
+- [x] All state file operations use file locking
+- [x] All JSON state updates use atomic writes
+- [x] Git checkpoints only stash Aether-managed directories
+- [x] Update command compares versions before syncing
+- [x] No data loss during concurrent state access
+- [x] Signatures.json template exists and works
+- [x] Hash comparison prevents unnecessary file writes
+
+**Status:** ✓ Complete (2026-02-13)
 
 **Requirements Covered:**
 | Requirement | Description |
@@ -132,13 +134,13 @@
 
 | Phase | Status | Plans | Progress |
 |-------|--------|-------|----------|
-| 1 | ○ | 0/1 | 0% |
+| 1 | ✓ | 3/3 | 100% |
 | 2 | ○ | 0/1 | 0% |
 | 3 | ○ | 0/1 | 0% |
 | 4 | ○ | 0/1 | 0% |
 | 5 | ○ | 0/1 | 0% |
 
-**Overall:** 0/16 requirements complete
+**Overall:** 4/16 requirements complete (INFRA-01 through INFRA-04)
 
 ---
 

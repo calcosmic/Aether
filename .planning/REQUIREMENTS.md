@@ -9,10 +9,10 @@ Based on research findings and existing codebase capabilities.
 
 ### Infrastructure
 
-- [ ] **INFRA-01**: File locking is enforced on all state file operations (flags.json, COLONY_STATE.json)
-- [ ] **INFRA-02**: Atomic writes use temp file + mv pattern for all JSON state updates
-- [ ] **INFRA-03**: Git checkpoints only stash Aether-managed directories, never user work
-- [ ] **INFRA-04**: Update command tracks version and compares before syncing
+- [x] **INFRA-01**: File locking is enforced on all state file operations (flags.json, COLONY_STATE.json)
+- [x] **INFRA-02**: Atomic writes use temp file + mv pattern for all JSON state updates
+- [x] **INFRA-03**: Git checkpoints only stash Aether-managed directories, never user work
+- [x] **INFRA-04**: Update command tracks version and compares before syncing
 
 ### Testing
 
@@ -66,10 +66,10 @@ Based on research findings and existing codebase capabilities.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INFRA-01 | 1 | Pending |
-| INFRA-02 | 1 | Pending |
-| INFRA-03 | 1 | Pending |
-| INFRA-04 | 1 | Pending |
+| INFRA-01 | 1 | Complete |
+| INFRA-02 | 1 | Complete |
+| INFRA-03 | 1 | Complete |
+| INFRA-04 | 1 | Complete |
 | TEST-01 | 2 | Pending |
 | TEST-02 | 2 | Pending |
 | TEST-03 | 2 | Pending |
@@ -90,4 +90,4 @@ Based on research findings and existing codebase capabilities.
 
 ---
 *Requirements defined: 2026-02-13*
-*Last updated: 2026-02-13 after research phase*
+*Last updated: 2026-02-13 after Phase 1 completion*
