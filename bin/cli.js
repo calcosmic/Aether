@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { execSync } = require('child_process');
+const { program } = require('commander');
 
 // Error handling imports
 const {
@@ -18,6 +19,9 @@ const {
   wrapError,
 } = require('./lib/errors');
 const { logError, logActivity } = require('./lib/logger');
+
+// Color palette
+const c = require('./lib/colors');
 
 const VERSION = require('../package.json').version;
 const PACKAGE_DIR = path.resolve(__dirname, '..');
@@ -45,10 +49,8 @@ const HUB_AGENTS = path.join(HUB_DIR, 'agents');
 const HUB_REGISTRY = path.join(HUB_DIR, 'registry.json');
 const HUB_VERSION = path.join(HUB_DIR, 'version.json');
 
-const command = process.argv[2] || 'help';
-const flags = process.argv.slice(3);
-const quiet = flags.includes('--quiet');
-const dryRunFlag = flags.includes('--dry-run');
+// Global quiet flag (set by --quiet option)
+let globalQuiet = false;
 
 // Global error handlers
 process.on('uncaughtException', (error) => {
@@ -183,7 +185,7 @@ function wrapCommand(commandFn, options = {}) {
 }
 
 function log(msg) {
-  if (!quiet) console.log(msg);
+  if (!globalQuiet) console.log(msg);
 }
 
 function copyDirSync(src, dest) {
@@ -722,9 +724,31 @@ function updateRepo(repoPath, sourceVersion, opts) {
   };
 }
 
-switch (command) {
-  case 'install': {
-    log(`aether-colony v${VERSION} — installing...`);
+// Commander.js program setup
+program
+  .name('aether')
+  .description('Aether Colony - Multi-agent system using ant colony intelligence')
+  .version(VERSION, '-v, --version', 'show version')
+  .option('--no-color', 'disable colored output')
+  .option('-q, --quiet', 'suppress output')
+  .helpOption('-h, --help', 'show help');
+
+// Handle --no-color globally
+program.on('option:no-color', () => {
+  process.env.NO_COLOR = '1';
+});
+
+// Handle --quiet globally
+program.on('option:quiet', () => {
+  globalQuiet = true;
+});
+
+// Install command
+program
+  .command('install')
+  .description('Install slash-commands and set up distribution hub')
+  .action(wrapCommand(async () => {
+    log(c.header(`aether-colony v${VERSION} — installing...`));
 
     // Sync commands to ~/.claude/commands/ant/ (with orphan cleanup)
     if (!fs.existsSync(COMMANDS_SRC)) {
@@ -751,21 +775,28 @@ switch (command) {
 
     // Set up distribution hub at ~/.aether/
     log('');
-    log('Setting up distribution hub...');
+    log(c.colony('Setting up distribution hub...'));
     setupHub();
 
     log('');
-    log('Install complete.');
-    log('  Claude Code: run /ant to get started');
-    log('  Hub: ~/.aether/ (for coordinated updates across repos)');
-    break;
-  }
+    log(c.success('Install complete.'));
+    log(`  ${c.queen('Claude Code:')} run /ant to get started`);
+    log(`  ${c.colony('Hub:')} ${c.dim('~/.aether/')} (for coordinated updates across repos)`);
+  }));
 
-  case 'update': {
-    const forceFlag = flags.includes('--force');
-    const allFlag = flags.includes('--all');
-    const listFlag = flags.includes('--list');
-    const dryRun = dryRunFlag;
+// Update command
+program
+  .command('update')
+  .description('Update current repo from hub')
+  .option('-f, --force', 'stash dirty files and force update')
+  .option('-a, --all', 'update all registered repos')
+  .option('-l, --list', 'show registered repos and versions')
+  .option('-d, --dry-run', 'preview what would change without modifying files')
+  .action(wrapCommand(async (options) => {
+    const forceFlag = options.force || false;
+    const allFlag = options.all || false;
+    const listFlag = options.list || false;
+    const dryRun = options.dryRun || false;
 
     // Check hub exists
     if (!fs.existsSync(HUB_VERSION)) {
@@ -785,10 +816,10 @@ switch (command) {
       // Show registered repos
       const registry = readJsonSafe(HUB_REGISTRY);
       if (!registry || registry.repos.length === 0) {
-        console.log('No repos registered. Run the Claude Code slash command /ant:init in a repo to register it.');
-        break;
+        console.log(c.info('No repos registered. Run the Claude Code slash command /ant:init in a repo to register it.'));
+        return;
       }
-      console.log(`Registered repos (hub v${sourceVersion}):\n`);
+      console.log(c.header(`Registered repos (hub v${sourceVersion}):\n`));
       for (const repo of registry.repos) {
         const exists = fs.existsSync(repo.path);
         const status = exists ? `v${repo.version}` : 'NOT FOUND';
@@ -796,16 +827,16 @@ switch (command) {
         console.log(`${marker}${repo.path}  (${status})`);
       }
       console.log('');
-      console.log('* = update available, x = path no longer exists');
-      break;
+      console.log(c.dim('* = update available, x = path no longer exists'));
+      return;
     }
 
     if (allFlag) {
       // Update all registered repos
       const registry = readJsonSafe(HUB_REGISTRY);
       if (!registry || registry.repos.length === 0) {
-        console.log('No repos registered. Run the Claude Code slash command /ant:init in a repo to register it.');
-        break;
+        console.log(c.info('No repos registered. Run the Claude Code slash command /ant:init in a repo to register it.'));
+        return;
       }
 
       let updated = 0;
@@ -816,12 +847,12 @@ switch (command) {
       const survivingRepos = [];
 
       if (dryRun) {
-        console.log('Dry run — no files will be modified.\n');
+        console.log(c.warning('Dry run — no files will be modified.\n'));
       }
 
       for (const repo of registry.repos) {
         if (!fs.existsSync(repo.path)) {
-          log(`  Pruned: ${repo.path} (no longer exists)`);
+          log(`  ${c.warning('Pruned:')} ${repo.path} (no longer exists)`);
           pruned++;
           continue;
         }
@@ -836,7 +867,7 @@ switch (command) {
 
         const result = updateRepo(repo.path, sourceVersion, { dryRun, force: forceFlag });
         if (result.status === 'dirty') {
-          console.error(`  Dirty: ${repo.path} — uncommitted changes in managed files:`);
+          console.error(`  ${c.error('Dirty:')} ${repo.path} — uncommitted changes in managed files:`);
           for (const f of result.files) console.error(`    ${f}`);
           console.error(`  Skipping. Use --force to stash and update.`);
           dirty++;
@@ -848,7 +879,7 @@ switch (command) {
           }
           updated++;
         } else if (result.status === 'updated') {
-          log(`  Updated: ${repo.path} (${result.from} -> ${result.to}) [${result.system} system, ${result.commands} commands, ${result.agents} agents]`);
+          log(`  ${c.success('Updated:')} ${repo.path} (${result.from} -> ${result.to}) [${result.system} system, ${result.commands} commands, ${result.agents} agents]`);
           if (result.removed > 0) {
             log(`  Removed ${result.removed} stale files:`);
             for (const f of result.removedFiles) log(`    - ${f}`);
@@ -893,12 +924,12 @@ switch (command) {
       const currentVer = currentVersion ? currentVersion.version : 'unknown';
 
       if (!forceFlag && !dryRun && currentVer === sourceVersion) {
-        console.log(`Already up-to-date (v${sourceVersion}).`);
-        break;
+        console.log(c.info(`Already up-to-date (v${sourceVersion}).`));
+        return;
       }
 
       if (dryRun) {
-        console.log('Dry run — no files will be modified.\n');
+        console.log(c.warning('Dry run — no files will be modified.\n'));
       }
 
       const result = updateRepo(repoPath, sourceVersion, { dryRun, force: forceFlag });
@@ -922,10 +953,10 @@ switch (command) {
           for (const f of result.removedFiles) console.log(`    - ${f}`);
         }
         console.log('  Colony data (.aether/data/) untouched.');
-        break;
+        return;
       }
 
-      console.log(`Updated: ${result.from} -> ${result.to}`);
+      console.log(c.success(`Updated: ${result.from} -> ${result.to}`));
       console.log(`  ${result.system} system files, ${result.commands} command files, ${result.agents} agent files`);
       if (result.removed > 0) {
         console.log(`  Removed ${result.removed} stale files:`);
@@ -936,16 +967,22 @@ switch (command) {
       }
       console.log('  Colony data (.aether/data/) untouched.');
     }
-    break;
-  }
+  }));
 
-  case 'version': {
-    console.log(`aether-colony v${VERSION}`);
-    break;
-  }
+// Version command
+program
+  .command('version')
+  .description('Show installed version')
+  .action(() => {
+    console.log(c.header(`aether-colony v${VERSION}`));
+  });
 
-  case 'uninstall': {
-    log(`aether-colony v${VERSION} — uninstalling...`);
+// Uninstall command
+program
+  .command('uninstall')
+  .description('Remove slash-commands (preserves project state and hub)')
+  .action(wrapCommand(async () => {
+    log(c.header(`aether-colony v${VERSION} — uninstalling...`));
 
     // Remove Claude Code commands
     if (fs.existsSync(COMMANDS_DEST)) {
@@ -956,37 +993,9 @@ switch (command) {
     }
 
     log('');
-    log('Uninstall complete. Per-project .aether/data/ directories are untouched.');
-    log('Hub at ~/.aether/ preserved (remove manually if desired).');
-    break;
-  }
+    log(c.success('Uninstall complete. Per-project .aether/data/ directories are untouched.'));
+    log(`  ${c.colony('Hub:')} ${c.dim('~/.aether/')} preserved (remove manually if desired).`);
+  }));
 
-  case 'help':
-  default: {
-    console.log(`
-aether-colony v${VERSION}
-
-Usage: aether <command> [options]
-
-Commands:
-  install              Install slash-commands and set up distribution hub
-  update               Update current repo from hub
-  update --dry-run     Preview what would change without modifying files
-  update --force       Stash dirty files and force update
-  update --all         Update all registered repos
-  update --all --force Force update all (even if versions match)
-  update --list        Show registered repos and versions
-  version              Show installed version
-  uninstall            Remove slash-commands (preserves project state and hub)
-  help                 Show this help message
-
-Locations:
-  Commands:  ~/.claude/commands/ant/
-  Hub:       ~/.aether/ (distribution hub for coordinated updates)
-
-After install, run /ant in Claude Code to get started.
-Project state lives in each repo's .aether/data/ directory.
-`.trim());
-    break;
-  }
-}
+// Parse command line arguments
+program.parse();
