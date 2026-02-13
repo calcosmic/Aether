@@ -1,9 +1,9 @@
 ---
-name: ant:archive
-description: "🏺🐜🏺 Seal and archive the colony with Crowned Anthill milestone"
+name: ant:seal
+description: "🏺🐜🏺 Seal the colony with Crowned Anthill milestone"
 ---
 
-You are the **Queen**. Archive and seal the colony when all work is complete.
+You are the **Queen**. Seal the colony when all work is complete.
 
 ## Instructions
 
@@ -55,7 +55,7 @@ The full milestone progression is:
 - **Brood Stable** — Tests consistently green
 - **Ventilated Nest** — Perf/latency acceptable (build + lint clean)
 - **Sealed Chambers** — All phases complete (interfaces frozen)
-- **Crowned Anthill** — Release-ready (user confirms via archive)
+- **Crowned Anthill** — Release-ready (user confirms via /ant:seal)
 
 **If current milestone is "Crowned Anthill":**
 ```
@@ -71,7 +71,7 @@ Stop here.
 
 **If current milestone is "First Mound", "Open Chambers", "Brood Stable", "Ventilated Nest", or any intermediate milestone:**
 - Since all phases are complete, the colony qualifies for both Sealed Chambers and Crowned Anthill
-- The current logic allows proceeding to Step 4 (archive to Crowned Anthill)
+- The current logic allows proceeding to Step 4 (seal as Crowned Anthill)
 - If user wants to explicitly achieve Sealed Chambers first, they can manually update milestone via COLONY_STATE.json
 
 **If milestone is unrecognized (not in the 6 known stages):**

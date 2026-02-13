@@ -44,6 +44,11 @@ SESSION COMMANDS
   /ant:resume-colony     Restore from pause (full state + context)
   /ant:watch             Set up tmux session for live colony visibility
 
+COLONY LIFECYCLE
+
+  /ant:seal             Seal colony with Crowned Anthill milestone
+  /ant:history          Browse colony event history
+
 ADVANCED
 
   /ant:swarm "<bug>"     Parallel scouts investigate stubborn bugs
