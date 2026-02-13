@@ -13,8 +13,8 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 
 **Milestone:** v1.0 Infrastructure
 **Phase:** 1 of 5 — Infrastructure Hardening
-**Plan:** 1 of 1 — CLI help clarity complete
-**Status:** ● Complete
+**Plan:** 2 of 2 — Hash comparison complete
+**Status:** ● Phase complete
 
 **Progress:** [██████████] 100%
 
@@ -28,13 +28,14 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 | 2026-02-13 | Include Oracle bugs in Phase 1 | Missing signatures.json, hash comparison, CLI clarity |
 | 2026-02-13 | Use "Claude Code slash command" prefix | Clear distinction between CLI and slash commands prevents user confusion |
 | 2026-02-13 | signatures.json at runtime/data/ | Standard location for pattern definitions, enables signature-scan/match commands |
+| 2026-02-13 | Use crypto.createHash('sha256') for file comparison | Consistent with existing hashFileSync, SHA-256 provides collision resistance |
 
 ---
 
 ## Pending Todos
 
 - [x] Create signatures.json template
-- [ ] Add hash comparison to syncSystemFilesWithCleanup
+- [x] Add hash comparison to syncSystemFilesWithCleanup
 - [x] Clarify /ant:init is slash command in CLI help
 
 ---
@@ -48,7 +49,7 @@ None currently.
 ## Session Continuity
 
 **Last session:** 2026-02-13
-**Stopped at:** Completed 01-infrastructure-01-PLAN.md (signatures.json template)
+**Stopped at:** Completed 01-infrastructure-02-PLAN.md (hash comparison)
 **Resume file:** None
 
 ---
