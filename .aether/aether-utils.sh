@@ -27,6 +27,22 @@ CURRENT_LOCK=${CURRENT_LOCK:-""}
 [[ -f "$SCRIPT_DIR/utils/atomic-write.sh" ]] && source "$SCRIPT_DIR/utils/atomic-write.sh"
 [[ -f "$SCRIPT_DIR/utils/error-handler.sh" ]] && source "$SCRIPT_DIR/utils/error-handler.sh"
 
+# Feature detection for graceful degradation
+# These checks run silently - failures are logged but don't block operation
+if type feature_disable &>/dev/null; then
+  # Check if DATA_DIR is writable for activity logging
+  [[ -w "$DATA_DIR" ]] 2>/dev/null || feature_disable "activity_log" "DATA_DIR not writable"
+
+  # Check if git is available for git integration
+  command -v git &>/dev/null || feature_disable "git_integration" "git not installed"
+
+  # Check if jq is available for JSON processing
+  command -v jq &>/dev/null || feature_disable "json_processing" "jq not installed"
+
+  # Check if lock utilities are available
+  [[ -f "$SCRIPT_DIR/utils/file-lock.sh" ]] || feature_disable "file_locking" "lock utilities not available"
+fi
+
 # Fallback atomic_write if not sourced (uses temp file + mv for true atomicity)
 if ! type atomic_write &>/dev/null; then
   atomic_write() {
@@ -170,7 +186,14 @@ EOF
     action="${1:-}"
     caste="${2:-}"
     description="${3:-}"
-    [[ -z "$action" || -z "$caste" || -z "$description" ]] && json_err "Usage: activity-log <action> <caste_or_name> <description>"
+    [[ -z "$action" || -z "$caste" || -z "$description" ]] && json_err "$E_VALIDATION_FAILED" "Usage: activity-log <action> <caste_or_name> <description>"
+
+    # Graceful degradation: check if activity logging is enabled
+    if type feature_enabled &>/dev/null && ! feature_enabled "activity_log"; then
+      json_warn "W_DEGRADED" "Activity logging disabled: $(type _feature_reason &>/dev/null && _feature_reason activity_log || echo 'unknown')"
+      exit 0
+    fi
+
     log_file="$DATA_DIR/activity.log"
     mkdir -p "$DATA_DIR"
     ts=$(date -u +"%H:%M:%S")
@@ -181,7 +204,13 @@ EOF
   activity-log-init)
     phase_num="${1:-}"
     phase_name="${2:-}"
-    [[ -z "$phase_num" ]] && json_err "Usage: activity-log-init <phase_num> [phase_name]"
+    [[ -z "$phase_num" ]] && json_err "$E_VALIDATION_FAILED" "Usage: activity-log-init <phase_num> [phase_name]"
+
+    # Graceful degradation: check if activity logging is enabled
+    if type feature_enabled &>/dev/null && ! feature_enabled "activity_log"; then
+      json_warn "W_DEGRADED" "Activity logging disabled: $(type _feature_reason &>/dev/null && _feature_reason activity_log || echo 'unknown')"
+      exit 0
+    fi
     log_file="$DATA_DIR/activity.log"
     mkdir -p "$DATA_DIR"
     archive_file="$DATA_DIR/activity-phase-${phase_num}.log"
@@ -206,8 +235,15 @@ EOF
     ;;
   activity-log-read)
     caste_filter="${1:-}"
+
+    # Graceful degradation: check if activity logging is enabled
+    if type feature_enabled &>/dev/null && ! feature_enabled "activity_log"; then
+      json_warn "W_DEGRADED" "Activity logging disabled: $(type _feature_reason &>/dev/null && _feature_reason activity_log || echo 'unknown')"
+      exit 0
+    fi
+
     log_file="$DATA_DIR/activity.log"
-    [[ -f "$log_file" ]] || json_err "activity.log not found"
+    [[ -f "$log_file" ]] || json_err "$E_FILE_NOT_FOUND" "activity.log not found" '{"file":"activity.log"}'
     if [ -n "$caste_filter" ]; then
       content=$(grep "$caste_filter" "$log_file" | tail -20)
     else
@@ -757,8 +793,19 @@ EOF
     id="flag_$(date -u +%s)_$(head -c 2 /dev/urandom | od -An -tx1 | tr -d ' ')"
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-    # Acquire lock for atomic flag update
-    acquire_lock "$flags_file" || json_err "Failed to acquire lock on flags.json"
+    # Acquire lock for atomic flag update (degrade gracefully if locking unavailable)
+    if type feature_enabled &>/dev/null && ! feature_enabled "file_locking"; then
+      json_warn "W_DEGRADED" "File locking disabled - proceeding without lock: $(type _feature_reason &>/dev/null && _feature_reason file_locking || echo 'unknown')"
+    else
+      acquire_lock "$flags_file" || {
+        if type json_err &>/dev/null; then
+          json_err "$E_LOCK_FAILED" "Failed to acquire lock on flags.json"
+        else
+          echo '{"ok":false,"error":"Failed to acquire lock on flags.json"}' >&2
+          exit 1
+        fi
+      }
+    fi
 
     # Map type to severity
     case "$type" in
@@ -839,15 +886,24 @@ EOF
 
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-    # Acquire lock for atomic flag update
-    acquire_lock "$flags_file" || json_err "Failed to acquire lock on flags.json"
+    # Acquire lock for atomic flag update (degrade gracefully if locking unavailable)
+    if type feature_enabled &>/dev/null && ! feature_enabled "file_locking"; then
+      json_warn "W_DEGRADED" "File locking disabled - proceeding without lock"
+    else
+      acquire_lock "$flags_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on flags.json"
+    fi
 
     updated=$(jq --arg id "$flag_id" --arg res "$resolution" --arg ts "$ts" '
       .flags = [.flags[] | if .id == $id then
         .resolved_at = $ts |
         .resolution = $res
       else . end]
-    ' "$flags_file") || { release_lock "$flags_file"; json_err "Failed to resolve flag"; }
+    ' "$flags_file") || {
+      if type feature_enabled &>/dev/null && feature_enabled "file_locking"; then
+        release_lock "$flags_file"
+      fi
+      json_err "$E_JSON_INVALID" "Failed to resolve flag"
+    }
 
     atomic_write "$flags_file" "$updated"
     release_lock "$flags_file"
@@ -864,14 +920,23 @@ EOF
 
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-    # Acquire lock for atomic flag update
-    acquire_lock "$flags_file" || json_err "Failed to acquire lock on flags.json"
+    # Acquire lock for atomic flag update (degrade gracefully if locking unavailable)
+    if type feature_enabled &>/dev/null && ! feature_enabled "file_locking"; then
+      json_warn "W_DEGRADED" "File locking disabled - proceeding without lock"
+    else
+      acquire_lock "$flags_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on flags.json"
+    fi
 
     updated=$(jq --arg id "$flag_id" --arg ts "$ts" '
       .flags = [.flags[] | if .id == $id then
         .acknowledged_at = $ts
       else . end]
-    ' "$flags_file") || { release_lock "$flags_file"; json_err "Failed to acknowledge flag"; }
+    ' "$flags_file") || {
+      if type feature_enabled &>/dev/null && feature_enabled "file_locking"; then
+        release_lock "$flags_file"
+      fi
+      json_err "$E_JSON_INVALID" "Failed to acknowledge flag"
+    }
 
     atomic_write "$flags_file" "$updated"
     release_lock "$flags_file"
@@ -927,8 +992,12 @@ EOF
 
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-    # Acquire lock for atomic flag update
-    acquire_lock "$flags_file" || json_err "Failed to acquire lock on flags.json"
+    # Acquire lock for atomic flag update (degrade gracefully if locking unavailable)
+    if type feature_enabled &>/dev/null && ! feature_enabled "file_locking"; then
+      json_warn "W_DEGRADED" "File locking disabled - proceeding without lock"
+    else
+      acquire_lock "$flags_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on flags.json"
+    fi
 
     # Count how many will be resolved
     count=$(jq --arg trigger "$trigger" '
