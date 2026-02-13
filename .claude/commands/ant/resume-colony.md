@@ -13,21 +13,17 @@ Run using the Bash tool: `bash .aether/aether-utils.sh version-check 2>/dev/null
 
 If the command succeeds and the JSON result contains a non-empty string, display it as a one-line notice. Proceed regardless of outcome.
 
-### Step 1: Read State Files
+### Step 1: Load State and Validate
 
-Use the Read tool to read these files (in parallel):
-- `.aether/HANDOFF.md`
-- `.aether/data/COLONY_STATE.json`
+Run using Bash tool: `bash .aether/aether-utils.sh load-state`
 
-If `COLONY_STATE.json` has `goal: null`, output:
+If successful:
+1. Parse state from result
+2. If goal is null: Show "No colony state found..." message and stop
+3. Check if paused flag is true - if not, note "Colony was not paused, but resuming anyway"
+4. Extract all state fields for display
 
-```
-No colony state found. Either:
-  /ant:init "<goal>"     Start a new colony
-  Check .aether/HANDOFF.md for manual recovery
-```
-
-Stop here.
+Keep state loaded (don't unload yet) - we'll need it for the full display.
 
 ### Step 2: Compute Active Signals
 
@@ -97,6 +93,18 @@ Route to next action based on state:
 - If state is `EXECUTING` -> note that a build was interrupted, suggest restarting with `/ant:build <phase>`
 - If state is `PLANNING` -> note that planning was interrupted, suggest `/ant:plan`
 - Otherwise -> suggest `/ant:status` for full overview
+
+### Step 6: Clear Paused State and Cleanup
+
+Use Write tool to update COLONY_STATE.json:
+- Remove or set to false: `"paused": false`
+- Remove: `"paused_at"` field
+- Update last_updated timestamp
+- Add event: `{timestamp, type: "colony_resumed", worker: "resume", details: "Session resumed"}`
+
+Use Bash tool to remove HANDOFF.md: `rm -f .aether/HANDOFF.md`
+
+Run: `bash .aether/aether-utils.sh unload-state` to release lock.
 
 ---
 
