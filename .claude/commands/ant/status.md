@@ -49,29 +49,27 @@ If `version` field is missing, "1.0", or "2.0":
 3. Output: `State auto-upgraded to v3.0`
 4. Continue with command.
 
-### Step 1.5: Show Resumption Context
+### Step 1.5: Load State and Show Resumption Context
 
-If `goal` exists and is not null, display a resumption header to help orient the session:
+Run using Bash tool: `bash .aether/aether-utils.sh load-state`
 
-1. Extract `current_phase` and phase name from `plan.phases[current_phase - 1].name`
-2. Get the last event timestamp from the `events` array (last element, parse the timestamp before the first `|`)
-3. Display:
+If successful and goal is not null:
+1. Extract current_phase from state
+2. Get phase name from plan.phases[current_phase - 1].name (or "(unnamed)")
+3. Get last event timestamp from events array (last element)
+4. Display extended resumption context:
+   ```
+   🔄 Resuming: Phase X - Name
+      Last activity: timestamp
+   ```
 
-```
-🔄 Resuming: Phase <current_phase> - <phase_name>
-   Last activity: <last_event_timestamp>
-```
+5. Check for HANDOFF.md existence in the load-state output or via separate check
+6. If HANDOFF.md exists:
+   - Display: "Resuming from paused session"
+   - Read HANDOFF.md content for additional context
+   - Remove HANDOFF.md after displaying (cleanup)
 
-**Examples:**
-```
-🔄 Resuming: Phase 2 - Implement Core Features
-   Last activity: 2024-01-15T14:32:00Z
-```
-
-**Edge cases:**
-- If no phase name: show "Phase <N> - (unnamed)"
-- If no events array or empty: omit "Last activity" line
-- If `current_phase` is 0: show "Phase 0 - Not started"
+Run: `bash .aether/aether-utils.sh unload-state` to release lock.
 
 ### Step 2: Compute Summary
 
