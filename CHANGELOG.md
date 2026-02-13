@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Phase 6: Final Verification and Integration Testing** — Added milestone display to /ant:status command (now shows "Milestone: <name>" in output), expanded milestone progression in /ant:archive to handle all 6 stages (First Mound, Open Chambers, Brood Stable, Ventilated Nest, Sealed Chambers, Crowned Anthill), added unrecognized milestone error handling. Full lint suite passes (shell, JSON, sync - 28 commands verified). (`.claude/commands/ant/status.md`, `.claude/commands/ant/archive.md`, `.opencode/commands/ant/status.md`, `.opencode/commands/ant/archive.md`)
+
 - **Phase 1: Create Oracle infrastructure and command** — Added Oracle Ant deep research agent with RALF-pattern bash loop, agent prompt, /ant:oracle command definition (mirrored), and oracle caste registration in aether-utils.sh. (`.aether/oracle/oracle.sh`, `.aether/oracle/oracle.md`, `.claude/commands/ant/oracle.md`, `.opencode/commands/ant/oracle.md`, `.aether/aether-utils.sh`, `runtime/aether-utils.sh`)
 
 ### Verified

@@ -108,6 +108,10 @@ From `memory.instincts`:
 **Colony state:**
 - `state` field (IDLE, READY, EXECUTING, PLANNING)
 
+**Milestone:**
+- `milestone` field (First Mound, Open Chambers, Brood Stable, Ventilated Nest, Sealed Chambers, Crowned Anthill)
+- `milestone_updated_at` field (timestamp of last milestone change)
+
 ### Step 3: Display
 
 Output format:
@@ -127,6 +131,7 @@ Output format:
 🎯 Focus: <focus_count> areas | 🚫 Avoid: <constraints_count> patterns
 🧠 Instincts: <total> learned (<high_confidence> strong)
 🚩 Flags: <blockers> blockers | <issues> issues | <notes> notes
+🏆 Milestone: <milestone>
 
 State: <state>
 Next:  <suggested_command>   <phase_context>
