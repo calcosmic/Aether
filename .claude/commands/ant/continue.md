@@ -464,7 +464,12 @@ Continue to Step 1.10.
 
 **The Iron Law:** No phase advancement with unresolved blockers.
 
-Check for blocking flags:
+First, auto-resolve any flags eligible for resolution now that verification has passed:
+```bash
+bash .aether/aether-utils.sh flag-auto-resolve "build_pass"
+```
+
+Then check for remaining blocking flags:
 ```bash
 bash .aether/aether-utils.sh flag-check-blockers {current_phase}
 ```
@@ -513,11 +518,6 @@ Continue to Step 2.
 ✅ FLAGS GATE PASSED
 
 No blocking flags. Proceeding to phase advancement.
-```
-
-Also trigger auto-resolve for any flags marked with `auto_resolve_on: "build_pass"`:
-```bash
-bash .aether/aether-utils.sh flag-auto-resolve "build_pass"
 ```
 
 Continue to Step 2.

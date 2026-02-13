@@ -67,6 +67,33 @@ If `goal` exists and state is valid, output a brief context line:
 ```
 This helps recover context after session clears. Continue immediately (non-blocking).
 
+### Step 1.5: Blocker Advisory (Non-blocking)
+
+Check for unresolved blocker flags on the requested phase:
+
+```bash
+bash .aether/aether-utils.sh flag-check-blockers {phase_number}
+```
+
+Parse the JSON result (`.result.blockers`):
+
+- **If blockers == 0:** Display nothing (or optionally a brief `No active blockers for Phase {id}.` line). Proceed to Step 2.
+- **If blockers > 0:** Retrieve blocker details:
+  ```bash
+  bash .aether/aether-utils.sh flag-list --type blocker --phase {phase_number}
+  ```
+  Parse `.result.flags` and display an advisory warning:
+  ```
+  ⚠️  BLOCKER ADVISORY: {blockers} unresolved blocker(s) for Phase {id}
+  {for each flag in result.flags:}
+     - [{flag.id}] {flag.title}
+  {end for}
+
+  Consider reviewing with /ant:flags or auto-fixing with /ant:swarm before building.
+  Proceeding anyway...
+  ```
+  **This is advisory only — do NOT stop.** Continue to Step 2 regardless.
+
 ### Step 2: Update State
 
 Read then update `.aether/data/COLONY_STATE.json`:

@@ -766,7 +766,7 @@ EOF
         acknowledged_at: null,
         resolved_at: null,
         resolution: null,
-        auto_resolve_on: (if $type == "blocker" then "build_pass" else null end)
+        auto_resolve_on: (if $type == "blocker" and ($source | test("chaos") | not) then "build_pass" else null end)
       }]
     ' "$flags_file") || json_err "Failed to add flag"
 

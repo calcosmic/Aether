@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Phase 2: Fix Blocker Severity and Auto-Resolve Logic** — Made auto_resolve_on conditional by flag source: chaos-sourced blockers require manual resolution (auto_resolve_on: null), verification blockers auto-resolve on build pass. Reordered continue.md Flags Gate to run auto-resolve before blocker count check. Added advisory blocker warning (Step 1.5) to build.md so builders see active blockers before execution. (`.aether/aether-utils.sh`, `runtime/aether-utils.sh`, `.claude/commands/ant/continue.md`, `.opencode/commands/ant/continue.md`, `.claude/commands/ant/build.md`, `.opencode/commands/ant/build.md`)
 - **Phase 1: Fix Chaos Ant Duplicate Flagging** — Eliminated duplicate flag creation during build-rebuild cycles by removing redundant chaos flagging from build.md Step 5.5 (Step 5.4.2 already handles it), injected existing flag titles into Chaos Ant spawn prompt to prevent re-investigating known issues, and added flag persistence to standalone /ant:chaos for critical/high findings using source 'chaos-standalone'. (`.claude/commands/ant/build.md`, `.opencode/commands/ant/build.md`, `.claude/commands/ant/chaos.md`, `.opencode/commands/ant/chaos.md`)
 
 ### Added
