@@ -15,6 +15,28 @@ Run using the Bash tool: `bash .aether/aether-utils.sh version-check 2>/dev/null
 
 If the command succeeds and the JSON result contains a non-empty string, display it as a one-line notice. Proceed regardless of outcome.
 
+### Step 0.5: Load Colony State
+
+Run using Bash tool: `bash .aether/aether-utils.sh load-state`
+
+If the command fails (non-zero exit or JSON has ok: false):
+1. Parse error JSON
+2. If error code is E_FILE_NOT_FOUND: "No colony initialized. Run /ant:init first." and stop
+3. If validation error: Display error details with recovery suggestion and stop
+4. For other errors: Display generic error and suggest /ant:status for diagnostics
+
+If successful:
+1. Parse the state JSON from result field
+2. Check if goal is null - if so: "No colony initialized. Run /ant:init first." and stop
+3. Extract current_phase and phase name from plan.phases[current_phase - 1].name
+4. Display brief resumption context:
+   ```
+   🔄 Resuming: Phase X - Name
+   ```
+   (If HANDOFF.md exists, this provides orientation before the build proceeds)
+
+After displaying context, run: `bash .aether/aether-utils.sh unload-state` to release the lock.
+
 ### Step 1: Validate + Read State
 
 **Parse $ARGUMENTS:**
@@ -39,8 +61,6 @@ Examples:
 
 Stop here.
 
-Read `.aether/data/COLONY_STATE.json`.
-
 **Auto-upgrade old state:**
 If `version` field is missing, "1.0", or "2.0":
 1. Preserve: `goal`, `state`, `current_phase`, `plan.phases`
@@ -55,17 +75,9 @@ Extract:
 - `memory` for decisions/learnings
 
 **Validate:**
-- If `goal: null` -> output `No colony initialized. Run /ant:init first.` and stop.
 - If `plan.phases` is empty -> output `No project plan. Run /ant:plan first.` and stop.
 - Find the phase matching the requested ID. If not found -> output `Phase {id} not found.` and stop.
 - If the phase status is `"completed"` -> output `Phase {id} already completed.` and stop.
-
-**Auto-Recovery Header (Session Start):**
-If `goal` exists and state is valid, output a brief context line:
-```
-🔄 Resuming: Phase {current_phase} - {phase_name}
-```
-This helps recover context after session clears. Continue immediately (non-blocking).
 
 ### Step 1.5: Blocker Advisory (Non-blocking)
 
