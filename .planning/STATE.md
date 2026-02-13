@@ -13,10 +13,10 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 
 **Milestone:** v1.0 Infrastructure
 **Phase:** 1 of 5 — Infrastructure Hardening
-**Plan:** 0 of 1 — Ready to plan
-**Status:** ○ Not started
+**Plan:** 1 of 1 — CLI help clarity complete
+**Status:** ● Complete
 
-**Progress:** [░░░░░░░░░░] 0%
+**Progress:** [██████████] 100%
 
 ---
 
@@ -26,6 +26,7 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 |------|----------|-----------|
 | 2026-02-13 | Start with Infrastructure phase | Oracle identified critical bugs that must be fixed first |
 | 2026-02-13 | Include Oracle bugs in Phase 1 | Missing signatures.json, hash comparison, CLI clarity |
+| 2026-02-13 | Use "Claude Code slash command" prefix | Clear distinction between CLI and slash commands prevents user confusion |
 
 ---
 
@@ -33,7 +34,7 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 
 - [ ] Create signatures.json template
 - [ ] Add hash comparison to syncSystemFilesWithCleanup
-- [ ] Clarify /ant:init is slash command in CLI help
+- [x] Clarify /ant:init is slash command in CLI help
 
 ---
 
@@ -46,7 +47,7 @@ None currently.
 ## Session Continuity
 
 **Last session:** 2026-02-13
-**Stopped at:** Milestone initialized, Phase 1 ready to plan
+**Stopped at:** Completed 01-infrastructure-03-PLAN.md (CLI help clarity)
 **Resume file:** None
 
 ---
