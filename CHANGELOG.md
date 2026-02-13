@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Phase 1: Create Oracle infrastructure and command** — Added Oracle Ant deep research agent with RALF-pattern bash loop, agent prompt, /ant:oracle command definition (mirrored), and oracle caste registration in aether-utils.sh. (`.aether/oracle/oracle.sh`, `.aether/oracle/oracle.md`, `.claude/commands/ant/oracle.md`, `.opencode/commands/ant/oracle.md`, `.aether/aether-utils.sh`, `runtime/aether-utils.sh`)
 
 ### Verified
+- **Phase 2: Verification and smoke test** — All Oracle Ant files verified: generate-commands.sh check passes (26/26 in sync, SHA-1 checksums verified), oracle.sh error handling works (exits code 1 with descriptive error when no research.json), oracle caste generates themed names (Vision-NN, Delph-NN), file structure matches spec (oracle.sh executable, oracle.md exists, command mirrors byte-identical, no stray files). Full lint suite passes (shell, JSON, sync).
+
+### Verified
 - **Phase 5: Path Localization Complete** — Full-repo audit confirmed zero actionable `~/.aether/` or `~/.config/opencode/` references in commands, scripts, or CLI. Remaining 4 `$HOME/.aether` references in aether-utils.sh are intentional hub/registry functions for multi-repo management. `generate-commands.sh check` passes (25/25 in sync, SHA-1 checksums verified). `aether-utils.sh` smoke tests pass (help, version, generate-ant-name). All three original goals met: no root access prompts, no cross-repo contamination, no out-of-project file operations.
 
 ### Changed
