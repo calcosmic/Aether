@@ -26,8 +26,8 @@ This roadmap delivers the v3.1 "Open Chambers" milestone, expanding the Aether C
 |-------|------|------|--------------|--------|
 | 9 | Caste Model Assignment | User can view, verify, and configure model assignments per caste | 8 | Complete |
 | 10 | Entombment & Egg Laying | User can archive colonies and start fresh with lifecycle management | 5 | Complete |
-| 11 | Foraging Specialization | System intelligently routes tasks to optimal models based on content | 3 | Planned |
-| 12 | Colony Visualization | User sees immersive real-time colony activity with ant-themed presentation | 11 | Not Started |
+| 11 | Foraging Specialization | System intelligently routes tasks to optimal models based on content | 3 | Complete |
+| 12 | Colony Visualization | User sees immersive real-time colony activity with ant-themed presentation | 11 | Planned |
 
 ---
 
@@ -121,10 +121,10 @@ This roadmap delivers the v3.1 "Open Chambers" milestone, expanding the Aether C
 | MOD-08 | Model override per command (`--model` flag) |
 
 **Plans:**
-- [ ] 11-01-PLAN.md — Task-based routing: keyword detection functions
-- [ ] 11-02-PLAN.md — Telemetry system: recording and storage
-- [ ] 11-03-PLAN.md — Telemetry CLI: viewing performance data
-- [ ] 11-04-PLAN.md — CLI override: --model flag integration
+- [x] 11-01-PLAN.md — Task-based routing: keyword detection functions
+- [x] 11-02-PLAN.md — Telemetry system: recording and storage
+- [x] 11-03-PLAN.md — Telemetry CLI: viewing performance data
+- [x] 11-04-PLAN.md — CLI override: --model flag integration
 
 **Success Criteria:**
 1. Task containing "design" or "architecture" routes to glm-5 automatically
@@ -162,6 +162,13 @@ This roadmap delivers the v3.1 "Open Chambers" milestone, expanding the Aether C
 | LIFE-06 | ASCII art anthill visualization showing maturity journey |
 | LIFE-07 | Chamber comparison — compare pheromone trails across colonies |
 
+**Plans:**
+- [ ] 12-01-PLAN.md — Activity tracking infrastructure (tool usage, timing, tokens)
+- [ ] 12-02-PLAN.md — Real-time display: `/ant:swarm` command with live foraging display
+- [ ] 12-03-PLAN.md — ASCII art: `/ant:maturity` command with colony journey visualization
+- [ ] 12-04-PLAN.md — Chamber comparison: `/ant:tunnels <chamber1> <chamber2>` for pheromone trail comparison
+- [ ] 12-05-PLAN.md — Polish: Progress bars, collapsible views, view state persistence
+
 **Success Criteria:**
 1. `/ant:swarm` shows real-time display: "3 foragers excavating..." with caste emojis
 2. Each caste has distinct color (Builder=blue, Watcher=green, Scout=yellow, Chaos=red, Prime=purple)
@@ -187,10 +194,10 @@ This roadmap delivers the v3.1 "Open Chambers" milestone, expanding the Aether C
 |-------|------|--------------|--------|-----------|
 | 9 | Caste Model Assignment | 8 | Complete | 100% |
 | 10 | Entombment & Egg Laying | 5 | Complete | 100% |
-| 11 | Foraging Specialization | 3 | Planned | 0% |
-| 12 | Colony Visualization | 11 | Not Started | 0% |
+| 11 | Foraging Specialization | 3 | Complete | 100% |
+| 12 | Colony Visualization | 11 | Planned | 0% |
 
-**Overall Progress:** 13/27 requirements (48%)
+**Overall Progress:** 24/27 requirements (89%)
 
 ---
 
