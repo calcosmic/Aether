@@ -10,11 +10,11 @@
 ### Model Routing & Configuration
 
 **Table stakes:**
-- [ ] **MOD-01**: User can view current model assignments per caste (`/ant:caste-models` or `aether caste-models list`)
-- [ ] **MOD-02**: User can override model for specific caste (`aether caste-models set builder=claude-sonnet`)
-- [ ] **MOD-03**: System verifies LiteLLM proxy health before spawning workers
-- [ ] **MOD-04**: Model verification shows which provider each model routes to
-- [ ] **MOD-05**: System logs actual model used per worker spawn (not just configured)
+- [x] **MOD-01**: User can view current model assignments per caste (`/ant:caste-models` or `aether caste-models list`)
+- [x] **MOD-02**: User can override model for specific caste (`aether caste-models set builder=claude-sonnet`)
+- [x] **MOD-03**: System verifies LiteLLM proxy health before spawning workers
+- [x] **MOD-04**: Model verification shows which provider each model routes to
+- [x] **MOD-05**: System logs actual model used per worker spawn (not just configured)
 
 **Differentiators:**
 - [ ] **MOD-06**: Task-based routing — keyword detection ("design", "architecture" → glm-5, "implement" → kimi)
@@ -57,9 +57,9 @@
 
 ### Quick Wins
 
-- [ ] **QUICK-01**: Surface Dreams in `/ant:status` — show recent dream count and last dream time
-- [ ] **QUICK-02**: Auto-Load Context — commands automatically recognize nestmates (read TO-DOs and colony state)
-- [ ] **QUICK-03**: `/ant:verify-castes` command — verify model routing per caste
+- [x] **QUICK-01**: Surface Dreams in `/ant:status` — show recent dream count and last dream time
+- [x] **QUICK-02**: Auto-Load Context — commands automatically recognize nestmates (read TO-DOs and colony state)
+- [x] **QUICK-03**: `/ant:verify-castes` command — verify model routing per caste
 
 ---
 
