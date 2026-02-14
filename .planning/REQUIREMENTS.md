@@ -26,11 +26,11 @@
 ### Colony Lifecycle (Ant-themed CDS)
 
 **Table stakes:**
-- [ ] **LIFE-01**: `/ant:entomb` — Entomb current colony (preserve in `.aether/chambers/`), seal with pheromone trails (metadata), reset COLONY_STATE
-- [ ] **LIFE-02**: `/ant:lay-eggs` — Lay first eggs of new colony ("First Eggs" milestone — beginning of metamorphosis), spawn fresh or from entombed chamber
-- [ ] **LIFE-03**: Milestone auto-detection — Compute maturity from state (First Mound → Open Chambers → Brood Stable → Ventilated Nest → Sealed Chambers → Crowned Anthill)
-- [ ] **LIFE-04**: `/ant:tunnels` — Explore tunnels (browse archived colonies) with summary view
-- [ ] **LIFE-05**: Entombment includes pheromone manifest (manifest.json with date, goal, phases completed, learnings preserved)
+- [x] **LIFE-01**: `/ant:entomb` — Entomb current colony (preserve in `.aether/chambers/`), seal with pheromone trails (metadata), reset COLONY_STATE
+- [x] **LIFE-02**: `/ant:lay-eggs` — Lay first eggs of new colony ("First Eggs" milestone — beginning of metamorphosis), spawn fresh or from entombed chamber
+- [x] **LIFE-03**: Milestone auto-detection — Compute maturity from state (First Mound → Open Chambers → Brood Stable → Ventilated Nest → Sealed Chambers → Crowned Anthill)
+- [x] **LIFE-04**: `/ant:tunnels` — Explore tunnels (browse archived colonies) with summary view
+- [x] **LIFE-05**: Entombment includes pheromone manifest (manifest.json with date, goal, phases completed, learnings preserved)
 
 **Differentiators:**
 - [ ] **LIFE-06**: ASCII art anthill visualization showing colony maturity journey
