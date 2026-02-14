@@ -34,7 +34,13 @@ const {
   getEffectiveModel,
   getUserOverrides,
   getModelMetadata,
+  getProxyConfig,
 } = require('./lib/model-profiles');
+const {
+  checkProxyHealth,
+  verifyModelRouting,
+  formatProxyStatus,
+} = require('./lib/proxy-health');
 
 // Color palette
 const c = require('./lib/colors');
@@ -1572,17 +1578,42 @@ const casteModelsCmd = program
 casteModelsCmd
   .command('list')
   .description('List current model assignments per caste')
-  .action(wrapCommand(async () => {
+  .option('--verify', 'Verify model availability on proxy')
+  .action(wrapCommand(async (options) => {
     const repoPath = process.cwd();
     const profiles = loadModelProfiles(repoPath);
     const overrides = getUserOverrides(profiles);
+    const proxyConfig = getProxyConfig(profiles);
+
+    // Check proxy health
+    let proxyHealth = null;
+    let proxyModels = null;
+    if (proxyConfig?.endpoint) {
+      proxyHealth = await checkProxyHealth(proxyConfig.endpoint);
+      if (proxyHealth.healthy && proxyHealth.models) {
+        proxyModels = proxyHealth.models;
+      }
+    }
 
     console.log(c.header('Caste Model Assignments\n'));
 
-    // Table header
-    const header = `${'Caste'.padEnd(14)} ${'Model'.padEnd(14)} ${'Provider'.padEnd(10)} ${'Context'.padEnd(8)} Status`;
+    // Display proxy status
+    if (proxyConfig?.endpoint) {
+      const proxyStatus = formatProxyStatus(proxyHealth, proxyConfig.endpoint);
+      console.log(`Proxy: ${proxyStatus}`);
+      if (!proxyHealth?.healthy) {
+        console.log(c.warning('Warning: Using default model (kimi-k2.5) for all castes'));
+      }
+      console.log('');
+    }
+
+    // Table header - add Verify column if --verify flag
+    const verifyFlag = options.verify;
+    const header = verifyFlag
+      ? `${'Caste'.padEnd(14)} ${'Model'.padEnd(14)} ${'Provider'.padEnd(10)} ${'Context'.padEnd(8)} Verify Status`
+      : `${'Caste'.padEnd(14)} ${'Model'.padEnd(14)} ${'Provider'.padEnd(10)} ${'Context'.padEnd(8)} Status`;
     console.log(header);
-    console.log('─'.repeat(60));
+    console.log(verifyFlag ? '─'.repeat(70) : '─'.repeat(60));
 
     // Get all assignments
     const assignments = getAllAssignments(profiles);
@@ -1602,12 +1633,26 @@ casteModelsCmd
       const provider = metadata?.provider || assignment.provider || '-';
       const contextWindow = formatContextWindow(metadata?.context_window);
 
-      // Status indicator
-      const status = '✓';
+      // Status indicator based on proxy health
+      const status = proxyHealth?.healthy ? '✓' : '⚠';
 
-      console.log(
-        `${casteDisplay.padEnd(14)} ${modelDisplay.padEnd(14)} ${provider.padEnd(10)} ${contextWindow.padEnd(8)} ${status}`
-      );
+      // Verify flag - check if model is available on proxy
+      let verifyStatus = '';
+      if (verifyFlag) {
+        if (proxyModels) {
+          const isAvailable = proxyModels.includes(effectiveModel.model);
+          verifyStatus = isAvailable ? '✓' : '✗';
+        } else {
+          verifyStatus = '?';
+        }
+        console.log(
+          `${casteDisplay.padEnd(14)} ${modelDisplay.padEnd(14)} ${provider.padEnd(10)} ${contextWindow.padEnd(8)} ${verifyStatus.padEnd(7)} ${status}`
+        );
+      } else {
+        console.log(
+          `${casteDisplay.padEnd(14)} ${modelDisplay.padEnd(14)} ${provider.padEnd(10)} ${contextWindow.padEnd(8)} ${status}`
+        );
+      }
     }
 
     // Show overrides summary if any exist
