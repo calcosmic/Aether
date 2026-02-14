@@ -1856,9 +1856,40 @@ program
 // Telemetry command - View model performance telemetry
 const telemetryCmd = program
   .command('telemetry')
-  .description('View model performance telemetry');
+  .description('View model performance telemetry')
+  .action(wrapCommand(async () => {
+    // Default action: show summary
+    const repoPath = process.cwd();
+    const summary = getTelemetrySummary(repoPath);
 
-// summary subcommand (default)
+    console.log(c.header('Model Performance Telemetry\n'));
+    console.log(`Total Spawns: ${summary.total_spawns}`);
+    console.log(`Models Used: ${summary.total_models}\n`);
+
+    if (summary.total_spawns === 0) {
+      console.log(c.info('No telemetry data yet. Run some builds to collect data.'));
+      return;
+    }
+
+    console.log('Model Performance:');
+    console.log('─'.repeat(60));
+    for (const [model, stats] of Object.entries(summary.models)) {
+      const rate = (stats.success_rate * 100).toFixed(1);
+      const rateColor = stats.success_rate >= 0.9 ? c.success :
+                       stats.success_rate >= 0.7 ? c.warning : c.error;
+      console.log(`  ${model.padEnd(15)} ${String(stats.total_spawns).padStart(4)} spawns  ${rateColor(rate + '%')} success`);
+    }
+
+    if (summary.recent_decisions.length > 0) {
+      console.log('\nRecent Routing Decisions:');
+      console.log('─'.repeat(60));
+      for (const decision of summary.recent_decisions.slice(-5)) {
+        console.log(`  ${decision.caste.padEnd(10)} → ${decision.selected_model.padEnd(12)} (${decision.source})`);
+      }
+    }
+  }));
+
+// summary subcommand (explicit)
 telemetryCmd
   .command('summary')
   .description('Show overall telemetry summary')
