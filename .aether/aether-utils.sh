@@ -95,7 +95,7 @@ shift 2>/dev/null || true
 case "$cmd" in
   help)
     cat <<'EOF'
-{"ok":true,"commands":["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-timing-start","swarm-timing-get","swarm-timing-eta","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
+{"ok":true,"commands":["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
 EOF
     ;;
   version)
@@ -2047,6 +2047,174 @@ NODESCRIPT
     fi
 
     json_ok "{\"ant\":\"$ant_name\",\"percent\":$percent,\"eta_seconds\":$eta_seconds,\"eta_formatted\":\"$eta_formatted\"}"
+    ;;
+
+  # ============================================
+  # VIEW STATE MANAGEMENT (collapsible views)
+  # ============================================
+
+  view-state-init)
+    # Initialize view state file with default structure
+    # Usage: view-state-init
+    mkdir -p "$DATA_DIR"
+    view_state_file="$DATA_DIR/view-state.json"
+
+    if [[ ! -f "$view_state_file" ]]; then
+      atomic_write "$view_state_file" '{
+  "version": "1.0",
+  "swarm_display": {
+    "expanded": [],
+    "collapsed": [],
+    "default_expand_depth": 2
+  },
+  "tunnel_view": {
+    "expanded": [],
+    "collapsed": ["__depth_3_plus__"],
+    "default_expand_depth": 2,
+    "show_completed": true
+  }
+}'
+      json_ok '{"initialized":true,"file":"view-state.json"}'
+    else
+      json_ok '{"initialized":false,"file":"view-state.json","exists":true}'
+    fi
+    ;;
+
+  view-state-get)
+    # Get view state or specific key
+    # Usage: view-state-get [view_name] [key]
+    view_name="${1:-}"
+    key="${2:-}"
+    view_state_file="$DATA_DIR/view-state.json"
+
+    if [[ ! -f "$view_state_file" ]]; then
+      # Auto-initialize if not exists
+      bash "$0" view-state-init >/dev/null 2>&1
+    fi
+
+    if [[ -z "$view_name" ]]; then
+      # Return entire state
+      json_ok "$(cat "$view_state_file")"
+    elif [[ -z "$key" ]]; then
+      # Return specific view
+      json_ok "$(jq ".${view_name} // {}" "$view_state_file")"
+    else
+      # Return specific key from view
+      json_ok "$(jq ".${view_name}.${key} // null" "$view_state_file")"
+    fi
+    ;;
+
+  view-state-set)
+    # Set a specific key in a view
+    # Usage: view-state-set <view_name> <key> <value>
+    view_name="${1:-}"
+    key="${2:-}"
+    value="${3:-}"
+    [[ -z "$view_name" || -z "$key" ]] && json_err "$E_VALIDATION_FAILED" "Usage: view-state-set <view_name> <key> <value>"
+
+    view_state_file="$DATA_DIR/view-state.json"
+
+    if [[ ! -f "$view_state_file" ]]; then
+      bash "$0" view-state-init >/dev/null 2>&1
+    fi
+
+    # Determine if value is JSON or string
+    if [[ "$value" =~ ^\[.*\]$ ]] || [[ "$value" =~ ^\{.*\}$ ]] || [[ "$value" =~ ^(true|false|null|[0-9]+)$ ]]; then
+      # Value appears to be JSON - use as-is
+      updated=$(jq --arg view "$view_name" --arg key "$key" --argjson val "$value" '
+        .[$view][$key] = $val
+      ' "$view_state_file") || json_err "$E_JSON_INVALID" "Failed to update view state"
+    else
+      # Treat as string
+      updated=$(jq --arg view "$view_name" --arg key "$key" --arg val "$value" '
+        .[$view][$key] = $val
+      ' "$view_state_file") || json_err "$E_JSON_INVALID" "Failed to update view state"
+    fi
+
+    atomic_write "$view_state_file" "$updated"
+    json_ok "$(echo "$updated" | jq ".${view_name}")"
+    ;;
+
+  view-state-toggle)
+    # Toggle item between expanded and collapsed
+    # Usage: view-state-toggle <view_name> <item>
+    view_name="${1:-}"
+    item="${2:-}"
+    [[ -z "$view_name" || -z "$item" ]] && json_err "$E_VALIDATION_FAILED" "Usage: view-state-toggle <view_name> <item>"
+
+    view_state_file="$DATA_DIR/view-state.json"
+
+    if [[ ! -f "$view_state_file" ]]; then
+      bash "$0" view-state-init >/dev/null 2>&1
+    fi
+
+    # Check current state
+    is_expanded=$(jq --arg view "$view_name" --arg item "$item" '
+      .[$view].expanded | contains([$item])
+    ' "$view_state_file")
+
+    if [[ "$is_expanded" == "true" ]]; then
+      # Move from expanded to collapsed
+      updated=$(jq --arg view "$view_name" --arg item "$item" '
+        .[$view].expanded -= [$item] |
+        .[$view].collapsed += [$item]
+      ' "$view_state_file")
+      new_state="collapsed"
+    else
+      # Move from collapsed to expanded
+      updated=$(jq --arg view "$view_name" --arg item "$item" '
+        .[$view].collapsed -= [$item] |
+        .[$view].expanded += [$item]
+      ' "$view_state_file")
+      new_state="expanded"
+    fi
+
+    atomic_write "$view_state_file" "$updated"
+    json_ok "{\"item\":\"$item\",\"state\":\"$new_state\",\"view\":\"$view_name\"}"
+    ;;
+
+  view-state-expand)
+    # Explicitly expand an item
+    # Usage: view-state-expand <view_name> <item>
+    view_name="${1:-}"
+    item="${2:-}"
+    [[ -z "$view_name" || -z "$item" ]] && json_err "$E_VALIDATION_FAILED" "Usage: view-state-expand <view_name> <item>"
+
+    view_state_file="$DATA_DIR/view-state.json"
+
+    if [[ ! -f "$view_state_file" ]]; then
+      bash "$0" view-state-init >/dev/null 2>&1
+    fi
+
+    updated=$(jq --arg view "$view_name" --arg item "$item" '
+      .[$view].collapsed -= [$item] |
+      .[$view].expanded += [$item]
+    ' "$view_state_file") || json_err "$E_JSON_INVALID" "Failed to update view state"
+
+    atomic_write "$view_state_file" "$updated"
+    json_ok "{\"item\":\"$item\",\"state\":\"expanded\",\"view\":\"$view_name\"}"
+    ;;
+
+  view-state-collapse)
+    # Explicitly collapse an item
+    # Usage: view-state-collapse <view_name> <item>
+    view_name="${1:-}"
+    item="${2:-}"
+    [[ -z "$view_name" || -z "$item" ]] && json_err "$E_VALIDATION_FAILED" "Usage: view-state-collapse <view_name> <item>"
+
+    view_state_file="$DATA_DIR/view-state.json"
+
+    if [[ ! -f "$view_state_file" ]]; then
+      bash "$0" view-state-init >/dev/null 2>&1
+    fi
+
+    updated=$(jq --arg view "$view_name" --arg item "$item" '
+      .[$view].expanded -= [$item] |
+      .[$view].collapsed += [$item]
+    ' "$view_state_file") || json_err "$E_JSON_INVALID" "Failed to update view state"
+
+    atomic_write "$view_state_file" "$updated"
+    json_ok "{\"item\":\"$item\",\"state\":\"collapsed\",\"view\":\"$view_name\"}"
     ;;
 
   *)
