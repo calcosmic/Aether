@@ -91,6 +91,50 @@ format_duration() {
   fi
 }
 
+# Render progress bar
+render_progress_bar() {
+  local percent="${1:-0}"
+  local width="${2:-20}"
+
+  # Clamp percent to 0-100
+  [[ "$percent" -lt 0 ]] && percent=0
+  [[ "$percent" -gt 100 ]] && percent=100
+
+  local filled=$((percent * width / 100))
+  local empty=$((width - filled))
+
+  local bar=""
+  for ((i=0; i<filled; i++)); do bar+="█"; done
+  for ((i=0; i<empty; i++)); do bar+="░"; done
+
+  echo "[$bar] $percent%"
+}
+
+# Get animated spinner
+get_spinner() {
+  local spinners=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
+  local idx=$(($(date +%s) % 10))
+  echo "${spinners[$idx]}"
+}
+
+# Get excavation phrase based on progress
+get_excavation_phrase() {
+  local caste="$1"
+  local progress="${2:-0}"
+
+  if [[ "$progress" -lt 25 ]]; then
+    echo "🚧 Starting excavation..."
+  elif [[ "$progress" -lt 50 ]]; then
+    echo "⛏️  Digging deeper..."
+  elif [[ "$progress" -lt 75 ]]; then
+    echo "🪨 Moving earth..."
+  elif [[ "$progress" -lt 100 ]]; then
+    echo "🏗️  Almost there..."
+  else
+    echo "✅ Excavation complete!"
+  fi
+}
+
 # Render the swarm display
 render_swarm() {
   clear
@@ -133,8 +177,8 @@ EOF
 
   # Render each active ant
   echo "$swarm_data" | jq -r '.active_ants[] |
-    "\(.name)|\(.caste)|\(.status)|\(.task // "")|\(.tools.read // 0)|\(.tools.grep // 0)|\(.tools.edit // 0)|\(.tools.bash // 0)|\(.tokens // 0)|\(.started_at // "")|\(.parent // "Queen")"' 2>/dev/null | \
-  while IFS='|' read -r name caste status task read_count grep_count edit_count bash_count tokens started_at parent; do
+    "\(.name)|\(.caste)|\(.status)|\(.task // "")|\(.tools.read // 0)|\(.tools.grep // 0)|\(.tools.edit // 0)|\(.tools.bash // 0)|\(.tokens // 0)|\(.started_at // "")|\(.parent // "Queen")|\(.progress // 0)"' 2>/dev/null | \
+  while IFS='|' read -r name caste status task read_count grep_count edit_count bash_count tokens started_at parent progress; do
     color=$(get_caste_color "$caste")
     emoji=$(get_caste_emoji "$caste")
     phrase=$(get_status_phrase "$caste")
@@ -173,6 +217,15 @@ EOF
     # Output line: "🔨 Builder: excavating... Implement auth 📖5 🔍3 (2m3s) 🍯1250"
     echo -e "${color}${emoji} ${style}${name}${RESET}${color}: ${phrase}${RESET} ${display_task}"
     echo -e "   ${tools_str} ${elapsed_str} ${token_str}"
+
+    # Show progress bar if progress > 0
+    if [[ "$progress" -gt 0 ]]; then
+      progress_bar=$(render_progress_bar "$progress" 15)
+      excavation_phrase=$(get_excavation_phrase "$caste" "$progress")
+      echo -e "   ${DIM}${progress_bar}${RESET}"
+      echo -e "   ${DIM}$(get_spinner) ${excavation_phrase}${RESET}"
+    fi
+
     echo ""
   done
 
