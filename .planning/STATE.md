@@ -11,8 +11,8 @@
 |-------|-------|
 | **Phase** | 6 (Foundation — Safe Checkpoints & Testing Infrastructure) |
 | **Plan** | 06-01 complete, 5 remaining (06-02 through 06-06) |
-| **Status** | In progress - Plan 06-01 complete |
-| **Last Action** | Completed 06-01: Testing Infrastructure Setup |
+| **Status** | In progress - Plan 06-01 executed |
+| **Last Action** | Executed 06-01: Testing Infrastructure Setup |
 
 **Progress:**
 ```
@@ -45,6 +45,7 @@ Phase 8:  ░░░░░░░░░░ 0% (Build Polish)
 | 2026-02-14 | 3-phase structure for v1.1 | Natural boundaries: Foundation → Core Fixes → Integration |
 | 2026-02-14 | Checkpoint allowlist approach | Never risk user data; explicit allowlist vs dangerous blocklist |
 | 2026-02-14 | sinon + proxyquire for testing | Industry standard, enables mocking fs module for cli.js tests |
+| 2026-02-14 | Mock-fs helper pattern | Comprehensive reusable helper promotes consistency across tests |
 
 ### Open Questions
 
@@ -62,7 +63,7 @@ None currently.
 ## Session Continuity
 
 **Last Updated:** 2026-02-14
-**Updated By:** /cds:new-project orchestrator → /cds:roadmap
+**Updated By:** /cds:execute-phase 06-01
 
 ### Recent Changes
 - Created ROADMAP.md with 3-phase structure (Phases 6-8)
@@ -72,6 +73,8 @@ None currently.
 - Created 6 PLAN.md files for Phase 6 (06-01 through 06-06)
 - Verified all 10 requirements (SAFE-01 to TEST-06) covered
 - Plans validated with checker (1 iteration, all issues resolved)
+- **Executed 06-01:** Installed sinon@19.0.5 and proxyquire@2.1.3
+- **Executed 06-01:** Created tests/unit/helpers/mock-fs.js (269 lines)
 
 ### Next Actions
 1. `/cds:execute-phase 6` - Execute Phase 6 plans (6 waves)
