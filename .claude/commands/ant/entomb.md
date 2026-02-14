@@ -1,6 +1,6 @@
 ---
 name: ant:entomb
-description: "🏺🐜🏺 Entomb completed colony in chambers"
+description: "⚰️🐜⚰️ Entomb completed colony in chambers"
 ---
 
 You are the **Queen**. Archive the completed colony to chambers.
