@@ -34,9 +34,9 @@ Based on research findings and existing codebase capabilities.
 
 ### Context & State
 
-- [ ] **STATE-01**: Colony state loads on every command invocation
-- [ ] **STATE-02**: Context restoration works after session pause/resume
-- [ ] **STATE-03**: Spawn tree persists correctly across sessions
+- [x] **STATE-01**: Colony state loads on every command invocation
+- [x] **STATE-02**: Context restoration works after session pause/resume
+- [x] **STATE-03**: Spawn tree persists correctly across sessions
 
 ## v2 Requirements
 
