@@ -522,6 +522,24 @@ function isUserData(filePath) {
 }
 
 /**
+ * Check if a file is tracked by git
+ * @param {string} repoPath - Repository root path
+ * @param {string} filePath - File path relative to repo root
+ * @returns {boolean} True if file is tracked by git
+ */
+function isGitTracked(repoPath, filePath) {
+  try {
+    execSync(`git ls-files --error-unmatch "${filePath}"`, {
+      cwd: repoPath,
+      stdio: 'pipe'
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Get files matching the checkpoint allowlist
  * @param {string} repoPath - Repository root path
  * @returns {string[]} Array of file paths relative to repo root
@@ -531,9 +549,9 @@ function getAllowlistedFiles(repoPath) {
 
   for (const pattern of CHECKPOINT_ALLOWLIST) {
     if (pattern === 'bin/cli.js') {
-      // Specific file
+      // Specific file - must be tracked by git for stash to work
       const fullPath = path.join(repoPath, pattern);
-      if (fs.existsSync(fullPath)) {
+      if (fs.existsSync(fullPath) && isGitTracked(repoPath, pattern)) {
         files.push(pattern);
       }
     } else if (pattern === '.aether/*.md') {
@@ -544,7 +562,7 @@ function getAllowlistedFiles(repoPath) {
         for (const entry of entries) {
           if (entry.isFile() && entry.name.endsWith('.md')) {
             const filePath = path.join('.aether', entry.name);
-            if (!isUserData(filePath)) {
+            if (!isUserData(filePath) && isGitTracked(repoPath, filePath)) {
               files.push(filePath);
             }
           }
@@ -558,7 +576,7 @@ function getAllowlistedFiles(repoPath) {
         const dirFiles = listFilesRecursive(fullDir);
         for (const relFile of dirFiles) {
           const filePath = path.join(dirPath, relFile);
-          if (!isUserData(filePath)) {
+          if (!isUserData(filePath) && isGitTracked(repoPath, filePath)) {
             files.push(filePath);
           }
         }
