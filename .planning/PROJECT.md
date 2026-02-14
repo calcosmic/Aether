@@ -120,7 +120,7 @@ Autonomous multi-agent orchestration that scales from single-user development to
 - **Model Configuration**: Easy CLI commands to view/set models (`aether models`, `/ant:models`)
 - **Colony Lifecycle**: `/ant:archive` (archive + reset), `/ant:foundation` (start fresh) — ant-themed equivalents to CDS milestone commands
 - **Milestone Auto-Detection**: Automatically detect colony milestone (First Mound, Open Chambers, Brood Stable, etc.) based on state
-- **Immersive Colony Visualization**: Real-time agent activity display with collapsible tree views, tool usage stats, token counts, and progress indicators — like CDS spawning indicators but with ant-themed presentation (ants working, pheromone trails, chamber activity). Semantic color coding (cyan for agents, yellow for timing, green for completion) for visual clarity
+- **Immersive Colony Visualization**: Real-time agent activity display with collapsible tree views, tool usage stats, token counts, and progress indicators — like CDS spawning indicators but with ant-themed presentation (ants working, pheromone trails, chamber activity). Color-coded by agent caste (Builder=blue, Watcher=green, Scout=yellow, Chaos=red, etc.) for instant visual recognition
 
 ---
 *Last updated: 2026-02-14 — starting v3.1 Open Chambers*
