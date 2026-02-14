@@ -10,16 +10,16 @@
 | Field | Value |
 |-------|-------|
 | **Phase** | 8 (Build Polish — Output Timing & Integration) |
-| **Plan** | 08-02 complete, 2/N plans in Phase 8 |
-| **Status** | In progress - E2E integration test created, all v1.1 fixes verified working together |
+| **Plan** | 08-02 complete, Phase 8 complete |
+| **Status** | Phase complete - All v1.1 bug fixes implemented and verified |
 | **Last Action** | Executed 08-02: Created E2E integration test for checkpoint → update → build workflow |
 
 **Progress:**
 ```
-[██████░░░░] 60% - v1.1 Bug Fixes
+[██████████] 100% - v1.1 Bug Fixes COMPLETE
 Phase 6:  ████████░░ 100% (Foundation - 6/6 plans complete)
 Phase 7:  ████████░░ 100% (Core Reliability - 6/6 plans complete)
-Phase 8:  ██░░░░░░░░ 20% (Build Polish - 2/N plans complete)
+Phase 8:  ████████░░ 100% (Build Polish - 2/2 plans complete)
 ```
 
 ---
@@ -174,6 +174,13 @@ None currently.
   - Partial update detection (E_PARTIAL_UPDATE, E_HUB_INACCESSIBLE)
   - Clear recovery commands in error messages
   - Created tests/unit/update-errors.test.js (20 tests)
+- **Executed 08-01:** Build Timing Fix
+  - Removed `run_in_background: true` from build.md worker spawns
+  - Step 5.1: Wave 1 Workers (foreground execution)
+  - Step 5.4: Watcher for Verification (foreground execution)
+  - Step 5.4.2: Chaos Ant for Resilience Testing (foreground execution)
+  - Updated documentation for foreground execution model
+  - Build output now displays in correct order: spawn → complete → summary
 - **Executed 08-02:** E2E Integration Test for v1.1 Workflow
   - Created tests/e2e/checkpoint-update-build.test.js (321 lines)
   - Test 1: Complete workflow (init → checkpoint → StateGuard → advancement)
@@ -192,16 +199,23 @@ None currently.
   - 206 total tests passing
 
 ### Next Actions
-1. Continue Phase 8 plans - additional build polish improvements
-2. `/cds:plan-phase 8` - Plan remaining Build Polish phase work
+1. `/cds:audit-milestone` — Verify all v1.1 requirements, cross-phase integration, E2E flows
+2. `/cds:complete-milestone` — Archive v1.1 milestone and prepare for v1.2
 
 ### Context for New Sessions
 
 **What we're building:** v1.1 bug fixes for Aether Colony System — critical reliability improvements including safe checkpoints (preventing data loss), phase advancement guards (preventing loops), and update system repair (automatic rollback).
 
-**Current state:** Phase 8 in progress. Build timing fixed and E2E tests created:
-- 08-01: Fixed build.md timing - foreground worker execution (3 tasks)
-- 08-02: E2E integration test verifying all v1.1 fixes work together (5 tasks)
+**Current state:** Phase 8 complete. All v1.1 bug fixes implemented and verified:
+- 08-01: Fixed build.md timing - foreground worker execution
+- 08-02: E2E integration test verifying all v1.1 fixes work together
+
+All 3 phases of v1.1 complete:
+- Phase 6: Foundation — Safe Checkpoints & Testing Infrastructure (6 plans, 10 requirements)
+- Phase 7: Core Reliability — State Guards & Update System (6 plans, 9 requirements)
+- Phase 8: Build Polish — Output Timing & Integration (2 plans, 3 requirements)
+
+Total: 209 tests passing, 22/22 requirements implemented
 
 Phase 7 complete. All 6 plans implemented:
 - 07-01: FileLock with exclusive atomic locks (17 tests)
