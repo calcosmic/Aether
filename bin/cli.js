@@ -1139,6 +1139,196 @@ program
     log(`  ${c.colony('Hub:')} ${c.dim('~/.aether/')} preserved (remove manually if desired).`);
   }));
 
+// Checkpoint command
+program
+  .command('checkpoint')
+  .description('Manage Aether checkpoints (safe snapshots of system files)')
+  .addCommand(
+    program.createCommand('create')
+      .description('Create a new checkpoint of Aether system files')
+      .argument('[message]', 'optional message describing the checkpoint')
+      .action(wrapCommand(async (message) => {
+        const repoPath = process.cwd();
+
+        // 1. Check if in git repo
+        if (!isGitRepo(repoPath)) {
+          console.error(c.error('Error: Not in a git repository'));
+          process.exit(1);
+        }
+
+        // 2. Get allowlisted files using CHECKPOINT_ALLOWLIST
+        const allowlistedFiles = getAllowlistedFiles(repoPath);
+        if (allowlistedFiles.length === 0) {
+          console.log(c.warning('No allowlisted files found to checkpoint'));
+          return;
+        }
+
+        // 3. Verify no user data in allowlist (safety check)
+        const userDataFiles = allowlistedFiles.filter(f => isUserData(f));
+        if (userDataFiles.length > 0) {
+          console.error(c.error('Safety check failed: user data detected in allowlist:'));
+          for (const f of userDataFiles) console.error(`  - ${f}`);
+          process.exit(1);
+        }
+
+        // 4. Generate checkpoint metadata with hashes
+        const metadata = generateCheckpointMetadata(repoPath, message);
+
+        // 5. Create git stash with allowlisted files
+        // Command format: git stash push -m "aether-checkpoint-{timestamp}" -- {files}
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const stashMessage = `aether-checkpoint-${timestamp}`;
+        const fileArgs = allowlistedFiles.map(f => `"${f}"`).join(' ');
+
+        try {
+          execSync(`git stash push -m "${stashMessage}" -- ${fileArgs}`, {
+            cwd: repoPath,
+            stdio: 'pipe'
+          });
+        } catch (err) {
+          console.error(c.error(`Failed to create git stash: ${err.message}`));
+          process.exit(1);
+        }
+
+        // 6. Save metadata to .aether/checkpoints/
+        saveCheckpointMetadata(repoPath, metadata);
+
+        // 7. Output success with checkpoint ID
+        console.log(c.success(`Checkpoint created: ${metadata.checkpoint_id}`));
+        console.log(`  Files: ${Object.keys(metadata.files).length}`);
+        console.log(`  Stash: ${stashMessage}`);
+        if (message) console.log(`  Message: ${message}`);
+      }))
+  )
+  .addCommand(
+    program.createCommand('list')
+      .description('List all checkpoints')
+      .action(wrapCommand(async () => {
+        const repoPath = process.cwd();
+        const checkpointsDir = path.join(repoPath, '.aether', 'checkpoints');
+
+        if (!fs.existsSync(checkpointsDir)) {
+          console.log(c.info('No checkpoints found'));
+          return;
+        }
+
+        const files = fs.readdirSync(checkpointsDir)
+          .filter(f => f.endsWith('.json'))
+          .sort();
+
+        if (files.length === 0) {
+          console.log(c.info('No checkpoints found'));
+          return;
+        }
+
+        console.log(c.header('Checkpoints:'));
+        for (const file of files) {
+          const metadata = loadCheckpointMetadata(repoPath, file.replace('.json', ''));
+          if (metadata) {
+            const fileCount = Object.keys(metadata.files).length;
+            const date = new Date(metadata.created_at).toLocaleString();
+            console.log(`  ${metadata.checkpoint_id}  ${date}  ${fileCount} files  ${metadata.message || ''}`);
+          }
+        }
+      }))
+  )
+  .addCommand(
+    program.createCommand('restore')
+      .description('Restore Aether files from a checkpoint')
+      .argument('<checkpoint-id>', 'checkpoint ID to restore from')
+      .action(wrapCommand(async (checkpointId) => {
+        const repoPath = process.cwd();
+
+        // 1. Load checkpoint metadata
+        const metadata = loadCheckpointMetadata(repoPath, checkpointId);
+        if (!metadata) {
+          console.error(c.error(`Checkpoint not found: ${checkpointId}`));
+          process.exit(1);
+        }
+
+        // 2. Verify metadata integrity (hashes match current files if they exist)
+        let integrityCheck = true;
+        for (const [filePath, storedHash] of Object.entries(metadata.files)) {
+          const fullPath = path.join(repoPath, filePath);
+          if (fs.existsSync(fullPath)) {
+            const currentHash = hashFileSync(fullPath);
+            if (currentHash !== storedHash) {
+              console.warn(c.warning(`File changed since checkpoint: ${filePath}`));
+              integrityCheck = false;
+            }
+          }
+        }
+
+        // 3. Use git stash to restore files
+        // Find stash by message pattern
+        try {
+          const stashList = execSync('git stash list', { cwd: repoPath, encoding: 'utf8' });
+          const stashMatch = stashList.match(/stash@\{([^}]+)\}.*aether-checkpoint-/);
+          if (stashMatch) {
+            execSync(`git stash pop stash@{${stashMatch[1]}}`, {
+              cwd: repoPath,
+              stdio: 'pipe'
+            });
+            console.log(c.success(`Restored from checkpoint: ${checkpointId}`));
+            console.log(`  Files restored: ${Object.keys(metadata.files).length}`);
+          } else {
+            console.error(c.error('Could not find matching git stash'));
+            process.exit(1);
+          }
+        } catch (err) {
+          console.error(c.error(`Failed to restore checkpoint: ${err.message}`));
+          process.exit(1);
+        }
+      }))
+  )
+  .addCommand(
+    program.createCommand('verify')
+      .description('Verify checkpoint integrity')
+      .argument('<checkpoint-id>', 'checkpoint ID to verify')
+      .action(wrapCommand(async (checkpointId) => {
+        const repoPath = process.cwd();
+
+        // 1. Load checkpoint metadata
+        const metadata = loadCheckpointMetadata(repoPath, checkpointId);
+        if (!metadata) {
+          console.error(c.error(`Checkpoint not found: ${checkpointId}`));
+          process.exit(1);
+        }
+
+        // 2. Re-compute hashes for all files in metadata
+        // 3. Compare with stored hashes
+        let passed = 0;
+        let failed = 0;
+        let missing = 0;
+
+        for (const [filePath, storedHash] of Object.entries(metadata.files)) {
+          const fullPath = path.join(repoPath, filePath);
+          if (!fs.existsSync(fullPath)) {
+            console.log(c.error(`  MISSING: ${filePath}`));
+            missing++;
+          } else {
+            const currentHash = hashFileSync(fullPath);
+            if (currentHash === storedHash) {
+              console.log(c.success(`  OK: ${filePath}`));
+              passed++;
+            } else {
+              console.log(c.error(`  MISMATCH: ${filePath}`));
+              failed++;
+            }
+          }
+        }
+
+        // 4. Report any mismatches
+        console.log('');
+        if (failed === 0 && missing === 0) {
+          console.log(c.success(`All ${passed} files verified successfully`));
+        } else {
+          console.log(c.warning(`Verification complete: ${passed} passed, ${failed} mismatched, ${missing} missing`));
+          process.exit(1);
+        }
+      }))
+  );
+
 // Deprecated: init command
 program
   .command('init [goal]')
