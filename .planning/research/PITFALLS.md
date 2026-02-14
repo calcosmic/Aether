@@ -1,449 +1,426 @@
-# Domain Pitfalls: Multi-Agent CLI Orchestration Systems
+# Domain Pitfalls: Model Routing & Colony Lifecycle
 
-**Domain:** AI agent orchestration, CLI-based multi-agent systems
+**Domain:** AI agent orchestration, multi-model routing, colony lifecycle management
 **Researched:** 2026-02-14
-**Confidence:** HIGH (based on Aether's real-world issues, codebase analysis, and v1.1 bug fix requirements)
+**Confidence:** HIGH (based on Aether's real-world issues, codebase analysis, and dream session findings)
 
 ## Overview
 
-Multi-agent CLI orchestration systems like Aether face unique challenges that single-agent systems do not. This document catalogs common pitfalls based on Aether's real-world bugs (race conditions, data loss, update failures) and specific pitfalls to avoid when fixing v1.1 bugs.
+Aether Colony System uses LiteLLM proxy for model routing, assigning different AI models to different worker castes based on task complexity. The system also manages colony lifecycle across sessions through pause/resume mechanisms. This document catalogs pitfalls specific to these two domains based on Aether's actual architecture and the concerns raised in dream sessions.
 
 ---
 
-## Critical Pitfalls for v1.1 Bug Fixes
+## Critical Pitfalls for Model Routing
 
-### 1. Git Stash Captures User Data (CRITICAL)
+### 1. Model Routing Configuration Without Verification (CRITICAL)
 
 **What goes wrong:**
-The build checkpoint uses `git stash push` to create rollback points. If the path specification is incorrect or if `--include-untracked` is accidentally added, user files outside Aether-managed directories get stashed. When the stash is later popped during rollback, user work is unexpectedly restored, potentially overwriting changes made after the checkpoint.
+The `model-profiles.yaml` defines sophisticated routing rules (caste-to-model mappings, task-based keyword routing), but the actual routing may not be happening. The dream session noted: "model routing isn't actually happening." Workers may all be using the default model regardless of configuration.
 
 **Why it happens:**
-- Git stash with path arguments is sensitive to working directory state
-- The `--include-untracked` flag (if added later) stashes ALL untracked files
-- Path globs in git stash can behave unexpectedly with nested directories
-- Stash operations don't fail atomically — partial stashes leave repo in inconsistent state
+- Configuration exists in YAML but execution path isn't verified
+- Environment variables (`ANTHROPIC_MODEL`) may not be set before worker spawn
+- LiteLLM proxy may be down or misconfigured, causing fallback to default
+- Task tool inherits parent environment, but parent may not have set model-specific vars
+- No runtime verification that the correct model is actually being used
 
-**Prevention:**
-1. **Explicit allowlist approach:** Only stash specific directories, never use broad patterns
-2. **Verify before stash:** Check `git status --porcelain` output to confirm only expected files are dirty
-3. **Never use `--include-untracked`:** This is the primary cause of user data being stashed
-4. **Test stash scope:** After stashing, verify with `git stash show -p` that only intended files were captured
-5. **Use atomic file operations:** Write checkpoint metadata only after successful stash
+**How to avoid:**
+1. **Verify at spawn time:** Log the actual model being used when each worker starts
+2. **Health check before spawn:** Verify LiteLLM proxy is healthy before spawning workers
+3. **Model assertion in prompts:** Include "You are running on {model}" in worker prompts for confirmation
+4. **Post-spawn verification:** Have workers report back which model they used
+5. **Fail closed:** If proxy is down, fail the spawn rather than silently falling back
 
-**Detection:**
-- Stash size is unexpectedly large (check with `git stash list --stat`)
-- User reports files "reappearing" after rollback
-- Stash contains files outside `.aether/`, `.claude/commands/`, `.opencode/`, `runtime/`, `bin/`
-- Rollback operation reports merge conflicts on user files
+**Warning signs:**
+- All workers report similar performance characteristics regardless of caste
+- No variation in response time between "fast" and "slow" models
+- Workers don't acknowledge their assigned model in responses
+- `activity.log` shows no model assignment entries
+- LiteLLM proxy logs show all requests going to same backend
 
-**Phase mapping:**
-- v1.1 Bug Fixes — Checkpoint Data Loss Fix
+**Phase to address:**
+- v3.1 Open Chambers — Model Routing Verification
 
 ---
 
-### 2. Phase Advancement Loops (CRITICAL)
+### 2. Proxy Authentication Failures Silently Defaulting (CRITICAL)
 
 **What goes wrong:**
-The `/ant:continue` command can enter an infinite loop where it repeatedly advances the phase counter without actually completing work. This happens when state transitions don't properly validate that the previous phase's success criteria were met.
+The LiteLLM proxy returns 401 "Authentication Error, No api key passed in" but the system continues as if routing is working. Workers silently fall back to direct API calls without the user's knowledge.
 
 **Why it happens:**
-- State machine lacks guard conditions between transitions
-- `current_phase` is incremented without verifying phase completion
-- Multiple concurrent `/ant:continue` calls race and each increment the counter
-- Event log shows phase transitions but no actual work completion evidence
+- Proxy health check only checks if port is listening, not if auth is working
+- `curl http://localhost:4000/health` returns healthy even with auth failures
+- Claude Code has built-in fallback to direct API when proxy fails
+- No verification that routed requests actually go through proxy
 
-**Prevention:**
-1. **Iron Law enforcement:** No phase advancement without fresh verification evidence (already documented in continue.md)
-2. **Idempotent transitions:** Check `state != "COMPLETED"` before allowing advancement
-3. **Verification gate:** Must pass all 6 verification phases (build, types, lint, test, security, diff) before advancing
-4. **Lock during transition:** Acquire state lock before reading/writing phase counter
-5. **Audit trail:** Log not just phase change but the evidence that justified it
+**How to avoid:**
+1. **Test auth explicitly:** Send a test request with auth token and verify routing
+2. **Monitor proxy logs:** Check that requests appear in LiteLLM logs with correct model
+3. **Reject on auth failure:** Don't spawn workers if proxy auth fails
+4. **User notification:** Warn user immediately if proxy routing unavailable
+5. **Fallback audit:** Log when fallback to direct API occurs
 
-**Detection:**
-- `COLONY_STATE.json` shows phase number increased but phase status still "in_progress"
-- Events log shows multiple "phase_completed" events for same phase
-- Phase counter jumps by more than 1 between state reads
-- No corresponding git commits or file changes for claimed phase completion
+**Warning signs:**
+- Proxy health check passes but requests don't appear in proxy logs
+- API usage shows direct provider calls instead of proxy routing
+- Different cost/latency patterns than expected for routed models
+- 401 errors in proxy logs with continued operation
 
-**Phase mapping:**
-- v1.1 Bug Fixes — Phase Advancement Loop Fix
+**Phase to address:**
+- v3.1 Open Chambers — Proxy Health Verification
 
 ---
 
-### 3. Update Command Stashes Without Recovery Path (HIGH)
+### 3. Caste-Model Mismatch in Worker Spawns (HIGH)
 
 **What goes wrong:**
-The `aether update --force` command stashes dirty files to proceed with update, but if the update fails or is interrupted, the stash remains. Users may not know to run `git stash pop`, or worse, may run it at the wrong time and corrupt their working directory.
+A worker is spawned with one caste (e.g., "architect") but receives a model assigned to a different caste (e.g., "kimi-k2.5" instead of "glm-5"). The task complexity doesn't match the model capabilities.
 
 **Why it happens:**
-- `updateRepo()` in cli.js creates stash but doesn't register cleanup handler
-- No verification that stash was successfully popped after update
-- Users aren't warned that their work is stashed
-- Stash message "aether-update-backup" is generic and may be confused with other stashes
+- `model-profile get` returns wrong model due to YAML parsing issues
+- Caste name normalization problems ("architect" vs "Architect")
+- Default fallback kicks in when specific caste not found
+- Race condition in reading model-profiles.yaml during parallel spawns
 
-**Prevention:**
-1. **Always pop on success:** If update succeeds, immediately pop the stash
-2. **Warn on failure:** If update fails, prominently display recovery command
-3. **Unique stash names:** Include timestamp in stash message for identification
-4. **Stash tracking:** Record stash ref in state file for recovery even if CLI crashes
-5. **Pre-update warning:** Show what will be stashed before proceeding with --force
+**How to avoid:**
+1. **Validate at spawn:** Compare requested caste vs returned model, warn on mismatch
+2. **Case-insensitive matching:** Normalize caste names before lookup
+3. **Strict mode:** Error if caste not found instead of defaulting
+4. **Profile caching:** Load model profiles once at start, not per-spawn
+5. **Audit trail:** Log both requested caste and assigned model for every spawn
 
-**Detection:**
-- `git stash list` shows old "aether-update-backup" entries
-- User reports files "disappearing" after update
-- Update completes but working directory is unexpectedly clean
-- Multiple stashes with same message accumulate
+**Warning signs:**
+- Architects (should use glm-5) completing tasks unusually fast
+- Builders (should use kimi-k2.5) struggling with complex reasoning
+- Model assignment logs don't match caste in spawn logs
+- Inconsistent model responses for same caste across different spawns
 
-**Phase mapping:**
-- v1.1 Bug Fixes — Update Command Repair
+**Phase to address:**
+- v3.1 Open Chambers — Model Assignment Validation
 
 ---
 
-### 4. run_in_background Causes Misleading Output Timing (HIGH)
+### 4. Environment Variable Inheritance Failures (HIGH)
 
 **What goes wrong:**
-When commands are run in background (e.g., spawn operations), their output may interleave with foreground output or appear after subsequent operations complete. This makes it appear that later operations finished before earlier ones, confusing users about execution order.
+The parent Claude Code process sets `ANTHROPIC_MODEL` for a specific caste, but spawned workers don't inherit it correctly. All workers end up using the parent's model or default.
 
 **Why it happens:**
-- Background processes write to stdout/stderr without synchronization
-- No buffering or sequencing of output from parallel operations
-- Output from background tasks appears after prompt returns
-- Race conditions between process completion and output flushing
+- Task tool environment inheritance is undocumented/unclear
+- Shell exports in one command don't persist to next command
+- Workers spawned via different mechanisms (direct vs script) get different environments
+- Environment cleared between command invocations
 
-**Prevention:**
-1. **Capture then emit:** Buffer all background output, emit only when task completes
-2. **Use TaskOutput with block:** Wait for completion before continuing (already in build.md)
-3. **Structured logging:** Write to activity.log instead of stdout for background tasks
-4. **Output sequencing:** Tag output with sequence numbers and reorder before display
-5. **Avoid background for user-facing ops:** Only use background for true fire-and-forget tasks
+**How to avoid:**
+1. **Explicit env passing:** Pass environment variables directly in Task tool calls
+2. **Verify inheritance:** Have workers echo back their environment on start
+3. **Single-command spawn:** Set env and spawn in same shell invocation
+4. **Avoid shell exports:** Don't rely on `export` persisting across tool calls
+5. **Document behavior:** Record exactly how env inheritance works in Claude Code
 
-**Detection:**
-- Output appears after command prompt returns
-- Timestamps in logs show out-of-order execution
-- User confusion about which task produced which output
-- Spawn completion logged before spawn start
+**Warning signs:**
+- Workers report different models than what was set before spawn
+- Environment-sensitive behavior inconsistent across workers
+- Model assignment logged but not reflected in worker responses
+- Spawns via script behave differently than direct Task spawns
 
-**Phase mapping:**
-- v1.1 Bug Fixes — Misleading Output Fix
+**Phase to address:**
+- v3.1 Open Chambers — Environment Inheritance Testing
 
 ---
 
-### 5. Missing Unit Tests for Core Sync Functions (HIGH)
+### 5. Task-Based Routing Never Triggered (MEDIUM)
 
 **What goes wrong:**
-The sync functions in `cli.js` (`syncDirWithCleanup`, `syncSystemFilesWithCleanup`) lack comprehensive unit tests. Changes to these functions risk breaking the update mechanism without detection until users report issues.
+The `model-profiles.yaml` includes sophisticated task-based routing hints (keywords like "design" → glm-5, "validate" → minimax-2.5), but this logic is never executed. All routing uses caste-based assignment only.
 
 **Why it happens:**
-- Sync functions depend on filesystem state, making them "hard" to test
-- Tests require setup/teardown of directory structures
-- Hash comparison logic has edge cases (empty files, permission issues)
-- Cleanup logic may remove files that should be preserved
+- Task routing logic not implemented in spawn path
+- Keyword detection requires parsing task descriptions, which is skipped
+- Caste assignment happens before task analysis
+- Performance optimization skips expensive keyword matching
 
-**Prevention:**
-1. **Test each function in isolation:** Mock filesystem or use temp directories
-2. **Property-based testing:** Verify idempotency — running sync twice should be no-op
-3. **Edge case coverage:** Empty directories, missing files, permission errors, symlinks
-4. **Hash verification tests:** Ensure hash comparison correctly identifies changed files
-5. **Cleanup safety tests:** Verify only orphaned files are removed, never preserve-listed files
+**How to avoid:**
+1. **Implement task routing:** Add keyword analysis before model selection
+2. **Pre-compute at planning:** Store recommended model in task metadata during planning
+3. **Override capability:** Allow explicit model override in task definition
+4. **Measure benefit:** A/B test task routing vs caste-only to verify value
+5. **Document limitation:** If not implementing, remove from config to avoid confusion
 
-**Detection:**
-- Updates delete user files or fail to update modified system files
-- Hash comparison always returns "different" (performance issue)
-- Orphaned files accumulate in `.aether/` directories
-- Tests pass but real-world updates behave incorrectly
+**Warning signs:**
+- "design" tasks assigned to kimi-k2.5 instead of glm-5
+- No code references to `task_routing` section of YAML
+- Keyword-based rules in config but never mentioned in spawn logic
+- Task complexity doesn't match model capabilities
 
-**Phase mapping:**
-- v1.1 Bug Fixes — Add Unit Tests
+**Phase to address:**
+- v3.1 Open Chambers — Task Routing Implementation (or config cleanup)
 
 ---
 
-### 6. Checkpoint Rollback Loses Work Done After Checkpoint (MEDIUM)
+## Critical Pitfalls for Colony Lifecycle
+
+### 6. Pause/Resume Loses Model Context (CRITICAL)
 
 **What goes wrong:**
-When rolling back to a checkpoint, the rollback operation (particularly `git reset --hard` for commit-type checkpoints) destroys not just the failed phase's work but also any user commits or changes made after the checkpoint was created.
+When pausing and resuming a colony session, the model assignments from the previous session are lost. Workers resume with different models than they started with, breaking task continuity.
 
 **Why it happens:**
-- `git reset --hard` moves HEAD and discards all changes after target commit
-- User may have committed work between checkpoint and rollback
-- Stash pop can cause merge conflicts that lose changes
-- No distinction between "Aether-managed changes" and "user changes"
+- `COLONY_STATE.json` tracks phase and goal but not per-worker model assignments
+- Model profile may have changed between pause and resume
+- Workers spawned on resume get current model assignments, not historical ones
+- No persistence of which model handled which task
 
-**Prevention:**
-1. **Prefer stash over reset:** Stash pop is reversible; reset --hard is destructive
-2. **Check for user commits:** Before reset, warn if user has made commits after checkpoint
-3. **Backup before rollback:** Create a backup branch before any destructive operation
-4. **Granular checkpoints:** Create checkpoints more frequently to minimize rollback scope
-5. **Interactive rollback:** Show what will be lost and require confirmation
+**How to avoid:**
+1. **Persist model assignments:** Store `model_used` in task metadata in COLONY_STATE.json
+2. **Version profiles:** Track which version of model-profiles.yaml was active
+3. **Resume with same models:** When resuming, use same models as original spawn
+4. **Migration handling:** Document when model changes are acceptable vs breaking
+5. **Handoff includes models:** Include active model assignments in HANDOFF.md
 
-**Detection:**
-- User reports commits "disappearing" after rollback
-- Git reflog shows unexpected reset operations
-- Working directory is clean but user expected changes
-- Rollback reports "HEAD is now at..." with unexpected commit hash
+**Warning signs:**
+- Resumed workers behave differently than before pause
+- Task outputs change style/quality after resume
+- Model assignment logs differ between original and resumed sessions
+- Workers reference different capabilities after resume
 
-**Phase mapping:**
-- v1.1 Bug Fixes — Checkpoint Data Loss Fix
+**Phase to address:**
+- v3.1 Open Chambers — Lifecycle State Persistence
 
 ---
 
-## General Critical Pitfalls
+### 7. Archive/Reset Destroys User Data (CRITICAL)
 
-### 7. Race Conditions in Shared State
-
-**What goes wrong:** Multiple workers or concurrent commands access COLONY_STATE.json simultaneously, causing corruption or lost updates.
+**What goes wrong:**
+Colony archive or reset operations inadvertently delete or lose user data stored in colony memory (learnings, decisions, instincts). The checkpoint allowlist protects system files but may miss user-generated colony knowledge.
 
 **Why it happens:**
-- No file locking before read-modify-write operations
-- State files are JSON that require full rewrite (not incremental updates)
-- Commands spawn parallel workers that all read state before any writes
+- `memory.phase_learnings` and `memory.decisions` treated as ephemeral
+- Archive operation only preserves system state, not user knowledge
+- Reset clears all state without distinguishing user vs system data
+- No clear boundary between "colony configuration" and "user work"
 
-**Consequences:**
-- Partial state writes (truncated JSON)
-- Duplicate keys or lost fields
-- Collisions when two workers update flags/blockers simultaneously
+**How to avoid:**
+1. **Separate user data:** Store user learnings/decisions in distinct location from system state
+2. **Archive includes memory:** Ensure memory objects are preserved in archives
+3. **Export before reset:** Offer to export learnings/instincts before reset
+4. **Versioned memory:** Keep history of memory changes for recovery
+5. **Clear documentation:** Explicitly state what is/isn't preserved
 
-**Prevention:**
-- Implement file locking using `flock` or equivalent before ANY state read/write
-- Use atomic writes: write to temp file, then `mv` to target
-- Consider read-copy-update (RCU) patterns: read entire state, modify in memory, write atomically
+**Warning signs:**
+- User-defined instincts disappear after reset
+- Validated learnings from previous sessions gone
+- Colony "forgets" user preferences and patterns
+- Memory section empty after archive restore
 
-**Detection:**
-- JSON parse failures in state files
-- Missing fields that should have been added
-- Duplicate "status" keys or other duplicated fields
-
-**Phase mapping:**
-- Phase 2-3 (Worker spawning): Most likely during parallel worker execution
-- Phase 4 (State management): When implementing state persistence
+**Phase to address:**
+- v3.1 Open Chambers — Data Preservation Boundaries
 
 ---
 
-### 8. Data Loss from Overly Broad Checkpoints
+### 8. Multiple Model Providers with Different Latencies (HIGH)
 
-**What goes wrong:** Build checkpoint system uses `git stash` on ALL dirty files, including user work unrelated to the build.
+**What goes wrong:**
+Workers using different models (Z.AI, Moonshot, MiniMax) have wildly different response times. Parallel tasks complete at different rates, causing coordination issues and timeouts.
 
 **Why it happens:**
-- Checkpoint logic stashes everything with `git stash --include-untracked` or similar
-- No allowlist of what should be checkpointed vs. left alone
-- User's TO-DOs, notes, and drafts get stashed alongside system files
+- No latency awareness in task scheduling
+- Timeout values assume fastest model (kimi-k2.5)
+- Synchronization points wait for slowest model (glm-5)
+- No prioritization of fast models for time-sensitive tasks
 
-**Consequences:**
-- Near-total data loss (1,145+ lines of user work stashed and potentially lost)
-- Loss of intellectual work: specs, plans, ideas in progress
-- Only recovered via manual `git stash list` and `git stash pop`
+**How to avoid:**
+1. **Model-aware timeouts:** Set timeouts based on assigned model's typical latency
+2. **Latency tracking:** Record and use historical latency per provider
+3. **Fast-path for critical:** Use fast models for blocking coordination tasks
+4. **Async for slow:** Use background tasks for slow models when possible
+5. **Graceful degradation:** Continue without slow model results if timeout
 
-**Prevention:**
-- NEVER use `git stash` for checkpoints. Use explicit file copies or targeted commits instead.
-- Define allowlists: What files CAN be modified (system files only)
-- Define blocklists: What files MUST NEVER be touched (user data)
-  - Blocklist: `.aether/data/`, `.aether/dreams/`, `.aether/oracle/`, `TO-DOs.md`, project files
-  - Allowlist: `.aether/aether-utils.sh`, `.aether/docs/`, `.claude/commands/ant/`, `runtime/`
+**Warning signs:**
+- Parallel tasks complete minutes apart
+- Timeouts on glm-5 tasks that succeed on retry
+- Watcher verification waiting disproportionately long
+- User frustration with "stuck" phases
 
-**Phase mapping:**
-- Phase 2 (Checkpoint system): This is where the bug was introduced
-- Phase 5+ (Updates): Any system that touches user files is dangerous
+**Phase to address:**
+- v3.1 Open Chambers — Latency-Aware Scheduling
 
 ---
 
-### 9. Update System Without Version Awareness
+### 9. Backward Compatibility Breaks Existing Colonies (HIGH)
 
-**What goes wrong:** Per-repo update mechanism lacks version checking, causing silent failures or unexpected behavior.
+**What goes wrong:**
+Changes to model routing or colony state format break existing colonies. Old COLONY_STATE.json files don't work with new code, or model profiles change incompatibly.
 
 **Why it happens:**
-- No version tracking in local `.aether/` copies
-- Sync functions copy all files without checking if update is needed
-- No way to notify users when system is outdated
+- State format changes without migration path
+- Model names change in profiles (e.g., "glm-5" → "glm-5-latest")
+- New required fields added to state without defaults
+- Old colonies expect models that no longer exist
 
-**Consequences:**
-- Users run outdated colony systems without knowing
-- Bug fixes don't propagate to existing installations
-- "Update" command has no way to determine if update is needed
+**How to avoid:**
+1. **Version state format:** Include version field, migrate on load
+2. **Graceful degradation:** Handle missing fields with sensible defaults
+3. **Model aliases:** Support old model names as aliases to new ones
+4. **Compatibility tests:** Test with old state files before release
+5. **Deprecation warnings:** Notify users of breaking changes before applying
 
-**Prevention:**
-- Store version in each repo: `.aether/data/aether-version.json` or in COLONY_STATE.json
-- Compare versions before sync: only copy if source version > local version
-- Add non-blocking version check at start of commands (`/ant:status`, `/ant:build`)
-- Implement semantic versioning comparison
+**Warning signs:**
+- State validation fails after update
+- "Model not found" errors for previously working colonies
+- Missing field errors in COLONY_STATE.json
+- Users report colonies "broken" after system update
 
-**Phase mapping:**
-- Phase 5+ (Distribution): When implementing per-repo update mechanism
+**Phase to address:**
+- v3.1 Open Chambers — State Migration System
 
 ---
 
-### 10. Background Task Results vs. Visual Ordering
+### 10. Session Boundaries Lose In-Flight Work (MEDIUM)
 
-**What goes wrong:** Build summary appears before agent notification banners, making output appear premature.
+**What goes wrong:**
+When a session ends (crash, timeout, user closes Claude), workers that were spawned but not yet completed lose their results. The colony state shows tasks "in progress" but no workers are actually running.
 
 **Why it happens:**
-- `run_in_background: true` spawns workers that complete in TaskOutput
-- Claude Code fires `task-notification` banners asynchronously AFTER the summary
-- Data is correct (TaskOutput blocks until complete), but visual ordering misleads
+- Spawned workers are ephemeral — they don't persist across sessions
+- No mechanism to resume or recover in-flight worker tasks
+- State tracks "spawned" but not "completed" accurately
+- Orphaned tasks remain in "in_progress" state forever
 
-**Consequences:**
-- User distrust: "How can it say complete before the agents finished?"
-- Confusion about whether verification actually ran
-- Undermines confidence in the orchestration system
+**How to avoid:**
+1. **Checkpoint worker state:** Workers periodically report progress to state
+2. **Timeout detection:** Mark tasks as failed if no progress for N minutes
+3. **Resume capability:** Allow re-spawning workers for orphaned tasks
+4. **Idempotent tasks:** Design tasks to be safely re-run
+5. **Clear failure marking:** Distinguish "never started" from "started but lost"
 
-**Prevention:**
-- Avoid `run_in_background: true` for critical verification steps
-- Use foreground Task calls (they still run in parallel without the flag)
-- If background is needed, add explicit "Waiting for notifications..." delay
+**Warning signs:**
+- Tasks stuck in "in_progress" for hours
+- Spawn tree shows workers that never completed
+- Colony state inconsistent with actual activity
+- Repeated work because previous attempt lost
 
-**Phase mapping:**
-- Phase 2-3 (Build verification): When implementing parallel worker execution
+**Phase to address:**
+- v3.1 Open Chambers — Worker Recovery Mechanism
 
 ---
 
 ## Moderate Pitfalls
 
-### 11. State Isolation Between System and User Data
+### 11. Model Profile Drift Between Documentation and Reality
 
-**What goes wrong:** No clear boundary between "system state" (tools, commands) and "user state" (work in progress, goals, flags).
+**What goes wrong:**
+`workers.md` documents model assignments that differ from `model-profiles.yaml`. The documentation says one thing, the config says another, and the code does something else.
 
 **Why it happens:**
-- All files in `.aether/` treated as system files
-- Updates touch files that should be user-controlled
-- Checkpoint/archive operations don't distinguish data types
+- Multiple sources of truth for model assignments
+- Documentation updated without changing config
+- Config changed without updating documentation
+- Code has hardcoded fallbacks that override config
 
-**Consequences:**
-- Update system overwrites user's flags, constraints, or colony config
-- Hard to migrate colonies between machines (what to copy?)
-- Difficult to reset system without losing user work
+**How to avoid:**
+1. **Single source of truth:** Generate documentation from config
+2. **Validation tests:** Assert workers.md matches model-profiles.yaml
+3. **Config-driven:** No hardcoded models, everything from YAML
+4. **Consistency CI:** Block PRs that change one without the other
 
-**Prevention:**
-- Explicit directories: `.aether/system/` vs `.aether/data/`
-- Define clear ownership: system owns commands, user owns data
-- Implement "safe reset" that preserves user data
+**Warning signs:**
+- Documentation says builder uses X, logs show Y
+- model-profiles.yaml has different assignments than workers.md
+- Code references models not in config
+- Inconsistency between scout and builder assignments
 
-**Phase mapping:**
-- Phase 1-2 (Colony initialization): Design this upfront
-- Phase 5 (Distribution): Critical for update mechanism
+**Phase to address:**
+- v3.1 Open Chambers — Configuration Consistency
 
 ---
 
-### 12. Command Duplication Without Sync Mechanism
+### 12. LiteLLM Proxy Single Point of Failure
 
-**What goes wrong:** Commands exist in both `.claude/commands/ant/` and `.opencode/commands/ant/` but drift out of sync.
+**What goes wrong:**
+All model routing depends on LiteLLM proxy at localhost:4000. If proxy crashes or is unreachable, entire colony stops working.
 
 **Why it happens:**
-- 25+ commands manually copied between Claude Code and OpenCode variants
-- Each edit requires two files with no verification
-- Changes to one platform don't automatically propagate
+- No fallback mechanism if proxy unavailable
+- No health check before attempting to use proxy
+- Workers can't function without proxy even if direct API available
+- No local queue for retry when proxy recovers
 
-**Consequences:**
-- Features work in one platform but not the other
-- Bug fixes in one mirror not applied to other
-- Maintenance burden increases linearly with command count
+**How to avoid:**
+1. **Health check with fallback:** If proxy down, use direct API with warning
+2. **Proxy redundancy:** Support multiple proxy endpoints
+3. **Graceful degradation:** Queue requests, retry when proxy recovers
+4. **Standalone mode:** Allow colony operation without proxy (single model)
 
-**Prevention:**
-- Single source of truth: YAML definitions in `src/commands/`
-- Generator script: `./bin/generate-commands.sh sync`
-- CI check: verify generated output matches committed files
+**Warning signs:**
+- All spawns fail when proxy down
+- No way to use colony without running proxy separately
+- Proxy crashes cause cascading colony failures
+- Users confused by proxy requirement
 
-**Phase mapping:**
-- Phase 1 (Setup): Implement sync mechanism before commands proliferate
+**Phase to address:**
+- v3.1 Open Chambers — Proxy Resilience
 
 ---
 
-### 13. Async State Updates After Context Clear
+### 13. Colony State Bloat Over Long Sessions
 
-**What goes wrong:** After `/clear`, colony state is persisted but subsequent commands don't automatically restore context.
-
-**Why it happens:**
-- State is written to disk but not reloaded on command start
-- Each command starts with empty context from Claude's perspective
-- User must manually reference what they were working on
-
-**Prevention:**
-- Every `/ant:*` command should start by loading COLONY_STATE.json
-- Surface relevant items: "Continuing from Phase 2", "3 blockers active"
-- Build context summary from state files at command start
-
-**Phase mapping:**
-- Phase 1-2 (Command design): Add context loading to all commands
-
----
-
-### 14. Magic String Allowlists for File Operations
-
-**What goes wrong:** System files list (`SYSTEM_FILES` array) is hardcoded. New files require code changes.
+**What goes wrong:**
+Over many phases and sessions, COLONY_STATE.json grows unbounded with events, learnings, and history. Performance degrades and state operations become slow.
 
 **Why it happens:**
-- Array of filenames directly in `bin/cli.js` or `aether-utils.sh`
-- No external configuration file
-- Test coverage for this behavior is missing
+- Events array grows without pruning
+- All historical learnings retained forever
+- No archiving of old phase data
+- JSON parse/load time increases with file size
 
-**Consequences:**
-- Adding new commands requires code change, not config change
-- Risk of forgetting to add new files to sync operations
-- Brittle: one missed file breaks the system
+**How to avoid:**
+1. **Event pruning:** Keep only last N events (already implemented: 100)
+2. **Learning archival:** Move old learnings to archive file
+3. **Phase compression:** Archive completed phase details
+4. **Lazy loading:** Don't load full history unless needed
+5. **Size monitoring:** Alert when state file exceeds threshold
 
-**Prevention:**
-- Move to manifest file: `.aether/manifest.json` listing all system files
-- Generate manifest from directory structure at build time
-- Add tests that verify manifest coverage
+**Warning signs:**
+- State load takes noticeable time
+- COLONY_STATE.json exceeds 1MB
+- Memory usage grows with colony age
+- Operations slow down over time
 
-**Phase mapping:**
-- Phase 3 (CLI implementation): Use config, not code, for file lists
+**Phase to address:**
+- v3.1 Open Chambers — State Optimization
 
 ---
 
 ## Minor Pitfalls
 
-### 15. No Lockfile for Dependencies
+### 14. Model Name Typos in Configuration
 
-**What goes wrong:** No `package-lock.json` means `npm install` could pull different versions over time.
+**What goes wrong:**
+Typos in model-profiles.yaml (e.g., "kimik2.5" instead of "kimi-k2.5") cause lookup failures and fallback to default.
 
-**Consequences:**
-- Non-deterministic builds
-- Breaking changes slip in silently
-- Hard to reproduce issues
+**How to avoid:**
+- Validation script that checks all model names against known list
+- YAML schema validation before accepting config changes
 
-**Prevention:**
-- Commit `package-lock.json` to repository
+### 15. Context Window Mismatch
 
----
+**What goes wrong:**
+Tasks requiring large context (200K+ tokens) assigned to models with smaller windows, causing truncation or errors.
 
-### 16. Hash Computation on Every Sync
+**How to avoid:**
+- Check task estimated tokens against model context window
+- Warn when assigning large-context task to small-context model
 
-**What goes wrong:** `syncDirWithCleanup` computes SHA256 for every file on every sync, even unchanged files.
+### 16. Cost Tracking Missing
 
-**Consequences:**
-- Slow for large repositories
-- Wasted CPU cycles
-- User frustration with slow commands
+**What goes wrong:**
+No visibility into actual API costs per model, making optimization impossible.
 
-**Prevention:**
-- Cache hash results by file path + mtime
-- Skip hash if mtime hasn't changed since last sync
-
----
-
-### 17. Event Timestamp Ordering
-
-**What goes wrong:** Events appended to activity log can appear out of chronological order.
-
-**Why it happens:**
-- Events from previous sessions appended incorrectly
-- No validation that timestamps are monotonically increasing
-
-**Prevention:**
-- Validate timestamp on append: reject if earlier than last event
-- Sort events by timestamp before reading
-
----
-
-### 18. No Input Validation on File Paths
-
-**What goes wrong:** File path operations use `process.cwd()` directly without sanitization.
-
-**Consequences:**
-- Path traversal attacks possible
-- Unexpected file access
-
-**Prevention:**
-- Validate paths stay within expected boundaries
-- Use path.resolve and check prefix
+**How to avoid:**
+- Log token usage per request
+- Aggregate costs by model/caste in activity log
 
 ---
 
@@ -451,90 +428,128 @@ When rolling back to a checkpoint, the rollback operation (particularly `git res
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Skip verification for "simple" phases | Faster development | Broken phases marked complete | Never — verification is mandatory |
-| Use `git stash` without verification | Simpler checkpoint code | User data loss, recovery confusion | Only with explicit scope checking |
-| Degrade file locking gracefully | Works on all systems | State corruption under load | Never for state writes |
-| Mock less in sync tests | Easier test writing | Miss real-world edge cases | Only for non-critical paths |
-| Background output without buffering | Simpler spawn code | Misleading user experience | Never for user-facing operations |
+| Skip proxy verification | Faster spawn | Wrong model usage undetected | Never — always verify routing |
+| Use default model on error | Spawns always work | Lost optimization, wrong capabilities | Only with explicit user notification |
+| Don't persist model in state | Smaller state files | Resume with wrong model | Never — model is critical context |
+| Hardcode model fallbacks | Simpler error handling | Config changes don't apply | Never — use config exclusively |
+| Ignore latency differences | Simpler scheduling | Poor user experience, timeouts | Only for single-model setups |
+
+---
+
+## Integration Gotchas
+
+| Integration | Common Mistake | Correct Approach |
+|-------------|----------------|------------------|
+| LiteLLM Proxy | Only checking port, not auth | Test actual request with auth token |
+| Claude Code Task tool | Assuming env inheritance | Explicitly pass environment variables |
+| Model profiles YAML | Editing without validation | Run validation script before commit |
+| COLONY_STATE.json | Adding fields without defaults | Always provide fallback for old states |
+| Pause/Resume | Forgetting model context | Include model assignments in handoff |
+
+---
+
+## Performance Traps
+
+| Trap | Symptoms | Prevention | When It Breaks |
+|------|----------|------------|----------------|
+| Synchronous proxy health check | Slow spawn when proxy laggy | Async health with timeout | > 10 workers spawning |
+| Loading model profiles per spawn | Spawn latency increases | Cache profiles at startup | > 5 parallel spawns |
+| Full state write on every event | I/O bottleneck | Batch events, periodic flush | > 100 events/session |
+| No model latency tracking | Timeouts on slow models | Track and adapt timeouts | Using glm-5 for first time |
+
+---
 
 ## Security Mistakes
 
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Stashing files outside Aether directories | User data exposure, privacy risk | Strict allowlist, verify before stash |
-| `git reset --hard` without confirmation | Destructive data loss | Interactive confirmation, backup branch |
-| Writing state without lock | State corruption, information leak | Mandatory locking for sensitive writes |
-| Including user paths in error messages | Path disclosure | Sanitize paths in error output |
+| Logging auth tokens | Token exposure in logs | Redact tokens in log output |
+| Storing API keys in state | Key exposure in COLONY_STATE.json | Keep keys in env, never persist |
+| Model proxy without auth | Unauthorized API usage | Require auth for all proxy requests |
+| Including model costs in logs | Cost information leakage | Aggregate costs, don't log per-request |
+
+---
+
+## UX Pitfalls
+
+| Pitfall | User Impact | Better Approach |
+|---------|-------------|-----------------|
+| Silent fallback to default model | User thinks routing works | Explicit notification: "Using default model, proxy unavailable" |
+| No visibility into which model used | Can't verify optimization | Include model name in worker output headers |
+| Proxy errors buried in logs | User doesn't know routing failed | Surface proxy issues in command output |
+| Resume without context | User confused about colony state | Show handoff summary on resume |
+
+---
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Checkpoint system:** Verify stash scope with `git stash show -p` — only Aether files should appear
-- [ ] **Phase advancement:** Check that verification loop actually ran — don't trust state flags alone
-- [ ] **Update command:** Confirm stash is popped after successful update — check `git stash list`
-- [ ] **Sync tests:** Run tests with real filesystem, not just mocks — verify actual file operations
-- [ ] **State locking:** Verify lock files are cleaned up after crashes — check `.aether/locks/`
-- [ ] **Output ordering:** Review logs from parallel operations — timestamps should make sense
+- [ ] **Model routing:** Verify in LiteLLM logs that requests go to different backends — check that glm-5, kimi-k2.5, and minimax-2.5 all receive traffic
+- [ ] **Proxy auth:** Confirm 401 errors don't result in silent fallback — test with invalid token
+- [ ] **Environment inheritance:** Spawn a test worker that echoes `ANTHROPIC_MODEL` — verify it matches assignment
+- [ ] **Pause/resume:** Pause colony, resume in new session, verify workers use same models
+- [ ] **State migration:** Test with v2.0 state file — verify auto-upgrade works
+- [ ] **Data preservation:** Reset colony, verify user learnings still available
+
+---
 
 ## Recovery Strategies
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| Git stash captured user data | MEDIUM | `git stash show -p` to inspect; `git stash pop` to restore; manually separate Aether vs user files |
-| Phase loop detected | LOW | Reset `current_phase` to last known good value; clear `state` to "READY"; re-run verification |
-| Update stash not popped | LOW | Run `git stash list` to find ref; `git stash pop <ref>` to restore; verify working directory |
-| State file corrupted | MEDIUM | Restore from git history: `git checkout HEAD -- .aether/data/COLONY_STATE.json`; re-initialize if needed |
-| Checkpoint rollback too destructive | HIGH | Use `git reflog` to find lost commits; `git reset --hard <commit>` to recover; may need manual merge |
+| Model routing not working | LOW | Check proxy health, restart proxy, verify env vars, re-spawn workers |
+| Wrong model assigned | LOW | Update COLONY_STATE.json with correct model, re-spawn affected workers |
+| Proxy auth failure | LOW | Check auth token, verify proxy config, restart proxy with correct keys |
+| State corruption | MEDIUM | Restore from backup, re-initialize if needed, re-apply user learnings |
+| Lost user data after reset | HIGH | Check archive, restore from git history, manual reconstruction |
 
-## Phase-Specific Warning Matrix
+---
 
-| Phase Topic | Likely Pitfall | Mitigation |
-|-------------|---------------|------------|
-| Phase 1: Init | State isolation confusion | Define system vs user data upfront |
-| Phase 2: Planning | Command duplication drift | Use YAML source + generator |
-| Phase 3: Build | Race conditions in state | Implement file locking + atomic writes |
-| Phase 4: Verification | Background task ordering | Use foreground Task calls |
-| Phase 5: Distribution | Version awareness missing | Add version tracking + checks |
-| Phase 6+: Updates | Overly broad file operations | Use allowlists, never git stash |
-| v1.1: Checkpoint Fix | Stash scope too broad | Verify allowlist before stash |
-| v1.1: Phase Loop Fix | Missing verification gate | Iron Law enforcement |
-| v1.1: Update Repair | Stash not recovered | Always pop on success, warn on failure |
-| v1.1: Output Fix | Background task timing | Capture then emit pattern |
-| v1.1: Tests | Insufficient sync coverage | Property-based idempotency tests |
-
-## Pitfall-to-v1.1-Phase Mapping
+## Pitfall-to-Phase Mapping
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|------------|
-| Git stash captures user data | v1.1 Checkpoint Fix | Stash contains only allowlisted paths; `git stash show` verification |
-| Phase advancement loops | v1.1 Phase Loop Fix | Verification loop runs before any phase change; state transition audit log |
-| Update stash not recovered | v1.1 Update Repair | Stash list empty after successful update; warning shown on failure |
-| Misleading output timing | v1.1 Output Fix | Background task output captured before prompt return; ordered log entries |
-| Missing sync tests | v1.1 Test Addition | Unit tests cover hash comparison, cleanup, edge cases; CI passes |
-| Destructive rollback | v1.1 Checkpoint Fix | Prefer stash pop; warn before reset; backup branch created |
+| Model routing without verification | v3.1 Model Routing Verification | LiteLLM logs show traffic to multiple backends; workers report model used |
+| Proxy auth silent fallback | v3.1 Proxy Health Verification | Auth failure stops spawn; user sees warning |
+| Caste-model mismatch | v3.1 Model Assignment Validation | Spawn logs match caste; workers acknowledge correct model |
+| Environment inheritance failure | v3.1 Environment Testing | Workers echo back expected environment variables |
+| Pause/resume loses model context | v3.1 Lifecycle State Persistence | Resume uses same models as original session |
+| Archive destroys user data | v3.1 Data Preservation | Reset preserves learnings/instincts; user data in separate location |
+| Latency coordination issues | v3.1 Latency-Aware Scheduling | Timeouts appropriate per model; no stuck phases |
+| Backward compatibility break | v3.1 State Migration | Old state files load successfully; auto-migration works |
+| Session boundary data loss | v3.1 Worker Recovery | Orphaned tasks detected and re-spawned |
+| Configuration drift | v3.1 Configuration Consistency | CI validates docs match config |
+| Proxy single point of failure | v3.1 Proxy Resilience | Colony works (degraded) when proxy down |
+| State bloat | v3.1 State Optimization | State file size bounded; load time constant |
+
+---
 
 ## Sources
 
-- Aether TO-DOs.md - Real bugs encountered (data loss from stash, output ordering, version awareness)
-- Aether CONCERNS.md - Technical debt and security considerations
-- Aether progress.md - Race condition fixes, idempotency issues
-- Aether ARCHITECTURE.md - State management patterns
-- Codebase analysis: `/Users/callumcowie/repos/Aether/bin/cli.js` — update and checkpoint logic
-- Codebase analysis: `/Users/callumcowie/repos/Aether/.aether/aether-utils.sh` — autofix-checkpoint and autofix-rollback
-- Codebase analysis: `/Users/callumcowie/repos/Aether/.claude/commands/ant/build.md` — checkpoint creation procedure
-- Codebase analysis: `/Users/callumcowie/repos/Aether/.claude/commands/ant/continue.md` — phase advancement logic
-- Known issues from Oracle research: `/Users/callumcowie/repos/Aether/.aether/oracle/progress.md`
+- Aether dream session: `/Users/callumcowie/repos/Aether/.aether/dreams/2026-02-14-0238.md` — "model routing isn't actually happening"
+- Model profiles: `/Users/callumcowie/repos/Aether/.aether/model-profiles.yaml`
+- Worker definitions: `/Users/callumcowie/repos/Aether/.aether/workers.md`
+- Spawn implementation: `/Users/callumcowie/repos/Aether/.aether/utils/spawn-with-model.sh`
+- Build command: `/Users/callumcowie/repos/Aether/.claude/commands/ant/build.md`
+- State structure: `/Users/callumcowie/repos/Aether/.aether/data/COLONY_STATE.json`
+- Utility layer: `/Users/callumcowie/repos/Aether/.aether/aether-utils.sh` (model-profile command)
+- Pause/resume: `/Users/callumcowie/repos/Aether/.claude/commands/ant/pause-colony.md`, `/Users/callumcowie/repos/Aether/.claude/commands/ant/resume-colony.md`
+- Colony state tests: `/Users/callumcowie/repos/Aether/tests/unit/colony-state.test.js`
+- LiteLLM proxy health check: Direct test (returned 401 auth error)
+
+---
 
 **Confidence Assessment:**
 
 | Area | Level | Reason |
 |------|-------|--------|
-| Race conditions | HIGH | Based on Aether's actual bug history |
-| Data loss bugs | HIGH | Documented in TO-DOs, nearly lost user work |
-| Update issues | HIGH | Current P0 work item in TO-DOs |
-| v1.1 specific pitfalls | HIGH | Based on direct codebase analysis |
-| Minor pitfalls | MEDIUM | Common patterns in CLI tools |
+| Model routing gaps | HIGH | Dream session explicitly identified "model routing isn't actually happening" |
+| Proxy auth issues | HIGH | Direct test showed 401 error, yet system continues |
+| Environment inheritance | MEDIUM | Documented in code but behavior not verified |
+| Lifecycle persistence | HIGH | State structure analysis shows gaps |
+| Latency coordination | MEDIUM | Inferred from architecture, not yet observed |
+| Backward compatibility | HIGH | State version field exists but migration unclear |
 
 ---
 
-*This research informs roadmap planning by flagging which phases need deeper investigation of concurrency, state management, and distribution concerns.*
-*Updated for v1.1 bug fix milestone: 2026-02-14*
+*This research informs v3.1 roadmap by flagging which model routing and lifecycle phases need deeper investigation.*
+*Researched for: v3.1 Open Chambers milestone*

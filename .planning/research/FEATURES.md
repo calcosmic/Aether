@@ -1,152 +1,265 @@
-# Feature Landscape: v1.1 Bug Fixes & Reliability Improvements
+# Feature Landscape: Model Routing & Colony Lifecycle (v3.1 Open Chambers)
 
-**Domain:** CLI-based AI agent orchestration framework (Aether Colony System)
+**Domain:** AI agent orchestration framework with worker caste system
 **Researched:** 2026-02-14
-**Confidence:** HIGH (based on documented bugs in TO-DOs.md, CONCERNS.md, and codebase analysis)
+**Confidence:** HIGH (based on existing codebase analysis, workers.md, model-profiles.yaml, and colony state structure)
 
 ## Executive Summary
 
-This research focuses on the v1.1 milestone bug fixes for the Aether Colony System. v1.0 delivered hardened infrastructure; v1.1 addresses critical bugs discovered during real-world usage: phase advancement loops, update system reliability, data loss prevention, and misleading output timing. These are not feature additions but fixes to existing functionality that is broken or dangerous.
+This research maps the feature landscape for v3.1 "Open Chambers" milestone, focusing on two core capabilities:
+1. **Intelligent Model Routing** - Assigning optimal LLM models per worker caste based on task characteristics
+2. **Colony Lifecycle Management** - Archive/foundation commands with ant-themed milestone progression
 
-## Feature Categories
+The Aether Colony System already has foundational infrastructure for both: model profiles exist in `.aether/model-profiles.yaml`, and the milestone system is partially implemented with six stages from "First Mound" to "Crowned Anthill". This research identifies what features are needed to make these systems production-ready.
 
-### Table Stakes (Must-Have Fixes)
+---
 
-Features that are broken and must be fixed for the system to be trustworthy.
+## Table Stakes (Must Have)
 
-| Feature | Why Broken | Complexity | Notes |
-|---------|------------|------------|-------|
-| **Targeted Git Checkpoints** | Current checkpoint stashes ALL dirty files including user work (1,145 lines nearly lost) | Low | Use explicit allowlist: only stash `.aether/*.md`, `.claude/commands/ant/`, `.opencode/commands/ant/`, `runtime/`, `bin/cli.js`. Never touch user data like TO-DOs.md, `.aether/data/`, `.aether/dreams/`, `.aether/oracle/` |
-| **Deterministic Dependency Builds** | No package-lock.json means `npm install` pulls different versions over time | Low | Run `npm install` to generate lockfile, commit it, update CI to use `npm ci` |
-| **Unit Tests for Core Sync** | `syncDirWithCleanup`, `hashFileSync`, `generateManifest` in cli.js have no unit tests | Medium | Add AVA tests for hash comparison, dry-run mode, empty directory cleanup, collision handling |
-| **Synchronous Worker Spawns** | `run_in_background: true` causes misleading output timing — summary appears before agent notifications | Low | Remove flag from build.md Steps 5.1, 5.4, 5.4.2. Multiple Task calls already run in parallel without it. Remove TaskOutput collection steps |
+Features users expect for model routing and lifecycle management to feel complete.
 
-### Differentiators (Better Than Before)
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| **Model Verification Command** | Users need to verify which models are assigned to which castes before spawning workers | Low | `/ant:models` command to display current model assignments from model-profiles.yaml |
+| **Model Override per Command** | Users may want to force a specific model for a specific task | Low | `--model` flag on `/ant:build`, `/ant:swarm`, etc. that overrides caste default |
+| **Archive Command** | Colony lifecycle requires archiving completed work before starting fresh | Medium | `/ant:archive` - copies COLONY_STATE.json, activity.log, spawn-tree.txt to `.aether/data/archive/{timestamp}/` |
+| **Foundation Command** | Starting a new colony after archiving | Low | `/ant:foundation` - equivalent to `/ant:init` but with ant-themed messaging, clears/renames old state |
+| **Milestone Detection** | Colony should auto-detect which milestone it's at based on state | Medium | Logic exists in status.md (lines 109-112) but needs implementation - detect based on phases completed, tests passing, etc. |
+| **Proxy Health Check** | Model routing depends on LiteLLM proxy; users need visibility | Low | Already in build.md Step 0.6 - verify proxy at `http://localhost:4000/health` |
+| **Fallback Model Behavior** | When proxy is down or model unavailable, need sensible default | Low | Already documented in workers.md (line 98-100) - default to kimi-k2.5 |
 
-Improvements that make the system more reliable than the baseline fix.
+---
+
+## Differentiators (Competitive Advantage)
+
+Features that set Aether apart from generic agent frameworks.
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| **Phase Advancement Guards** | Prevent AI from repeating same phases by adding explicit state validation | Medium | Add gate in `/ant:continue` to detect if current phase was already completed; verify `current_phase` matches phase being built |
-| **Cross-Repo Sync Reliability** | `aether update --all` needs better error handling for dirty repos, network failures, partial updates | Medium | Add retry logic, better dirty file detection, atomic per-repo updates (all-or-nothing per repo) |
-| **Version-Aware Update Notifications** | Non-blocking version check at start of `/ant:status`, `/ant:build` to notify when update available | Low | Compare hub version to repo version, show one-line notice if behind |
-| **Checkpoint Recovery Tracking** | Track stash operations in local log, verify stash pop after update | Low | Add `.aether/data/stash-log.json` to track created stashes with timestamps, auto-suggest recovery |
+| **Task-Based Model Routing** | Route to different models based on task keywords, not just caste | Medium | model-profiles.yaml has `task_routing` section (lines 71-82) with complexity indicators - implement keyword matching |
+| **Caste Personality System** | Each caste has unique communication style and emoji identity | Low | Already in workers.md (lines 15-27, 402-413) - enhances UX but not strictly required |
+| **Named Ant Generation** | Workers get unique names (e.g., "Hammer-42", "Vigil-17") for tracking | Low | Already implemented via `generate-ant-name` utility in aether-utils.sh |
+| **Model Performance Telemetry** | Track which models perform best for which castes/tasks | Medium | Extend COLONY_STATE.json `memory` section to track model success rates per caste |
+| **Intelligent Model Selection** | Auto-select model based on task complexity analysis | High | Analyze task description for complexity keywords, route to glm-5 for complex vs kimi-k2.5 for simple |
+| **Milestone Progress Visualization** | Visual representation of colony maturity progression | Low | ASCII art or progress bar showing journey from First Mound to Crowned Anthill |
+| **Colony History Timeline** | View archived colonies with goals, milestones, outcomes | Medium | Index archive directory, display summary of past colonies |
+| **Cross-Colony Learning** | Inherit instincts from previous colonies via archive | Medium | Already partially implemented in init.md Step 2.5 - reads completion-report.md for instincts |
 
-### Anti-Features (Things to Deliberately NOT Do When Fixing)
+---
 
-Common mistakes when fixing these bugs.
+## Anti-Features (Deliberately NOT Building)
+
+Features that seem good but create problems in this domain.
 
 | Anti-Feature | Why Avoid | What to Do Instead |
 |--------------|-----------|-------------------|
-| **Broad git stash with `--include-untracked`** | Stashes user work, causes data loss | Use targeted stash with explicit file list, or skip stash and warn user |
-| **Automatic stash pop after update** | Could overwrite user changes | Log stash creation, notify user, let them manually pop when ready |
-| **Adding more background Task flags** | Exacerbates output timing issues | Use foreground Task calls; they run in parallel without `run_in_background` |
-| **Complex checkpoint systems** | Over-engineering a simple problem | Simple allowlist of system files is sufficient; don't build a full backup system |
-| **Global version enforcement** | Blocking commands on version mismatch is annoying | Non-blocking notification only; user decides when to update |
-| **Removing checkpoint feature entirely** | Checkpoints are useful for system files | Keep checkpoints but scope them correctly to system files only |
+| **Per-Request Model Switching** | Too much overhead, breaks context continuity | Stick with caste-level assignment; castes exist precisely to group similar work |
+| **Automatic Model Fallback Chain** | Complex retry logic hides real problems | Simple fallback to kimi-k2.5 with warning; let user fix proxy if needed |
+| **Cloud-Based Model Routing** | Violates local-first, repo-local state principle | Keep routing local via LiteLLM proxy; user controls their proxy config |
+| **Automatic Colony Archival** | User should consciously decide when work is complete | Require explicit `/ant:seal` or `/ant:archive` command |
+| **Multiple Active Colonies** | Complexity without clear benefit | One active colony per repo; archive before starting new |
+| **Model Cost Tracking** | Adds complexity, not core value | Defer to LiteLLM proxy's built-in tracking; Aether focuses on orchestration |
+| **Real-Time Model Swapping** | Workers are spawned with a model; switching mid-task breaks context | Model is set at spawn time via environment variable |
+| **Global Colony Registry** | Privacy concerns, unnecessary complexity | Keep colony data repo-local; optional registry-add is already implemented |
+
+---
 
 ## Feature Dependencies
 
 ```
-Targeted Git Checkpoints
-    ├──requires──> System File Allowlist Definition
-    │                   └──requires──> Audit of all .aether/ subdirectories
+Model Verification (/ant:models)
+    ├──requires──> Model Profiles YAML parsing
+    │                   └──requires──> aether-utils.sh helper
     │
-    └──enhances──> Checkpoint Recovery Tracking
+    └──enhances──> Model Override (--model flag)
 
-Synchronous Worker Spawns
-    └──requires──> Remove TaskOutput collection steps
-        └──requires──> Update build.md instructions
+Archive Command (/ant:archive)
+    ├──requires──> COLONY_STATE.json exists
+    ├──requires──> Archive directory structure
+    │                   └──requires──> .aether/data/archive/ creation
+    └──enhances──> Colony History Timeline
 
-Cross-Repo Sync Reliability
-    ├──requires──> Unit Tests for Core Sync
-    │                   └──requires──> Test fixtures for hash comparison
-    └──enhances──> Version-Aware Update Notifications
+Foundation Command (/ant:foundation)
+    ├──requires──> Archive Command (optional but recommended)
+    ├──requires──> State reset capability
+    └──conflicts──> Active EXECUTING state
 
-Deterministic Dependency Builds
-    └──requires──> package-lock.json generation
-        └──requires──> CI update to use npm ci
+Milestone Detection
+    ├──requires──> Phase completion tracking
+    ├──requires──> Test status checking
+    ├──requires──> Build/lint status checking
+    └──enhances──> Milestone Progress Visualization
+
+Task-Based Routing
+    ├──requires──> Task description analysis
+    ├──requires──> Keyword matching logic
+    └──enhances──> Model Verification (show routing rules)
 ```
 
 ### Dependency Notes
 
-- **Targeted checkpoints require allowlist:** Must define exactly which files are system vs user data before implementing checkpoint fix
-- **Sync reliability requires tests:** Cannot safely improve sync without tests verifying behavior
-- **Worker spawn fix is isolated:** Can be done independently of other fixes
+- **Archive requires completed phases:** Should warn if archiving with incomplete phases (already in seal.md logic)
+- **Foundation should suggest archive:** If existing colony state detected, prompt user to archive first
+- **Milestone detection requires multiple signals:** Phase completion alone is insufficient; need test status, build status
+- **Task routing is enhancement, not replacement:** Caste-based routing remains default; task keywords are override
 
-## Bug Fix Priority Matrix
+---
 
-| Bug Fix | User Impact | Implementation Cost | Priority |
-|---------|-------------|---------------------|----------|
-| Targeted git checkpoints (data loss) | CRITICAL — could lose hours of work | Low | P0 |
-| package-lock.json (determinism) | HIGH — build reproducibility | Low | P0 |
-| Unit tests for sync functions | HIGH — prevents regression | Medium | P0 |
-| Remove run_in_background (timing) | MEDIUM — UX confusion | Low | P0 |
-| Phase advancement guards | MEDIUM — prevents wasted work | Medium | P1 |
-| Cross-repo sync reliability | MEDIUM — multi-repo workflows | Medium | P1 |
-| Version-aware notifications | LOW — nice to have | Low | P2 |
-| Checkpoint recovery tracking | LOW — safety net | Low | P2 |
+## Colony Milestone System
 
-**Priority key:**
-- P0: Must fix before v1.1 release
-- P1: Should fix, add if time permits
-- P2: Nice to have, future consideration
+The six-stage milestone progression (already defined in seal.md and status.md):
 
-## v1.1 MVP Definition
+| Milestone | Trigger | Description | Visual Indicator |
+|-----------|---------|-------------|------------------|
+| **First Mound** | Phase 1 complete | First runnable output | Single mound emoji |
+| **Open Chambers** | 2+ phases complete | Feature work underway | Multiple chambers |
+| **Brood Stable** | Tests consistently green | Quality baseline achieved | Stable structure |
+| **Ventilated Nest** | Build + lint clean | Performance acceptable | Air flow metaphor |
+| **Sealed Chambers** | All phases complete | Interfaces frozen | Sealed appearance |
+| **Crowned Anthill** | User confirms via `/ant:seal` | Release-ready | Crowned, majestic |
 
-### Launch With (v1.1.0)
+### Milestone Auto-Detection Logic
 
-Minimum fixes needed for trustworthy operation:
+```
+IF all_phases_completed:
+    IF user_confirmed_seal:
+        milestone = "Crowned Anthill"
+    ELSE:
+        milestone = "Sealed Chambers"
+ELIF build_clean AND lint_clean:
+    milestone = "Ventilated Nest"
+ELIF tests_consistently_green:
+    milestone = "Brood Stable"
+ELIF phases_completed >= 2:
+    milestone = "Open Chambers"
+ELIF phases_completed >= 1:
+    milestone = "First Mound"
+ELSE:
+    milestone = "New Colony"
+```
 
-1. **Targeted git checkpoints** — Only stash system files, never user data
-2. **package-lock.json** — Deterministic builds
-3. **Unit tests for sync** — Prevent regression in core functions
-4. **Remove run_in_background** — Fix misleading output timing
+---
 
-### Add After Validation (v1.1.x)
+## Worker Caste Model Assignments
 
-Once core fixes are stable:
+Current assignments from model-profiles.yaml:
 
-1. **Phase advancement guards** — Prevent AI loops
-2. **Cross-repo sync reliability** — Better error handling
+| Caste | Model | Purpose | Context |
+|-------|-------|---------|---------|
+| prime | glm-5 | Long-horizon coordination | 200K context, strategic planning |
+| archaeologist | glm-5 | Historical pattern analysis | Long timeframe analysis |
+| architect | glm-5 | Pattern synthesis, documentation | Complex reasoning |
+| oracle | minimax-2.5 | Research, foresight, browse/search | 76.3% BrowseComp |
+| route_setter | kimi-k2.5 | Task decomposition, planning | 256K context, structured output |
+| builder | kimi-k2.5 | Code generation, refactoring | 76.8% SWE-Bench |
+| watcher | kimi-k2.5 | Validation, testing | Multimodal capable |
+| scout | kimi-k2.5 | Research exploration | Parallel sub-agents |
+| chaos | kimi-k2.5 | Edge case probing | Resilience testing |
+| colonizer | kimi-k2.5 | Environment setup | Visual coding |
 
-### Future Consideration (v1.2+)
+---
 
-Defer until product is stable:
+## MVP Definition (v3.1 Open Chambers)
 
-1. **Version-aware notifications** — Non-blocking update nudges
-2. **Checkpoint recovery tracking** — Stash operation logging
+### Launch With (v3.1.0)
 
-## Verification Requirements
+Minimum features for "Open Chambers" milestone:
 
-Each fix must be verifiable:
+1. **Model Verification** (`/ant:models`) - Display current assignments
+2. **Model Override** (`--model` flag) - Force specific model per command
+3. **Archive Command** (`/ant:archive`) - Archive + reset colony state
+4. **Foundation Command** (`/ant:foundation`) - Start fresh colony
+5. **Milestone Auto-Detection** - Compute milestone from state
+6. **Proxy Health Integration** - Verify proxy before model-dependent commands
 
-| Fix | Verification Method |
-|-----|---------------------|
-| Targeted checkpoints | Test: Create dirty TO-DOs.md, run build, verify TO-DOs.md NOT stashed |
-| package-lock.json | Test: Fresh clone, `npm ci` installs exact same versions |
-| Unit tests | Run `npm test`, all new tests pass |
-| Remove run_in_background | Visual: Build summary appears after all worker outputs |
-| Phase advancement guards | Test: Try to continue already-completed phase, verify blocked |
-| Cross-repo sync | Test: Update with dirty repo, verify graceful handling |
+### Add After Validation (v3.1.x)
+
+Once core routing is stable:
+
+1. **Task-Based Routing** - Keyword-based model selection
+2. **Model Performance Telemetry** - Track success rates per model/caste
+3. **Milestone Visualization** - Visual progress indicator
+
+### Future Consideration (v3.2+)
+
+Defer until routing system is mature:
+
+1. **Intelligent Model Selection** - AI-driven complexity analysis
+2. **Colony History Timeline** - Browse archived colonies
+3. **Cross-Colony Analytics** - Compare model performance across colonies
+
+---
+
+## Feature Prioritization Matrix
+
+| Feature | User Value | Implementation Cost | Priority |
+|---------|------------|---------------------|----------|
+| Model verification (/ant:models) | HIGH | Low | P1 |
+| Archive command (/ant:archive) | HIGH | Medium | P1 |
+| Foundation command (/ant:foundation) | HIGH | Low | P1 |
+| Milestone auto-detection | MEDIUM | Medium | P1 |
+| Model override (--model) | MEDIUM | Low | P1 |
+| Proxy health check | MEDIUM | Low | P1 |
+| Task-based routing | MEDIUM | Medium | P2 |
+| Model performance telemetry | LOW | Medium | P2 |
+| Milestone visualization | LOW | Low | P2 |
+| Colony history timeline | LOW | Medium | P3 |
+| Intelligent model selection | MEDIUM | High | P3 |
+
+---
+
+## Implementation Notes
+
+### Model Routing Implementation
+
+The routing system is already partially implemented:
+
+1. **Configuration**: `model-profiles.yaml` defines caste-to-model mappings
+2. **Environment**: Workers receive `ANTHROPIC_MODEL` env var based on caste
+3. **Proxy**: LiteLLM at `localhost:4000` routes to actual providers
+4. **Fallback**: Default to kimi-k2.5 if profile missing
+
+What needs to be added:
+- CLI command to view current assignments
+- `--model` flag override mechanism
+- Task keyword analysis for dynamic routing
+
+### Colony Lifecycle Implementation
+
+Lifecycle commands already exist in various forms:
+
+- **Init**: `/ant:init` - Creates fresh colony state
+- **Seal**: `/ant:seal` - Archives completed colony (Crowned Anthill)
+- **Status**: `/ant:status` - Shows current milestone
+
+What needs to be added:
+- `/ant:archive` - Archive without requiring completion
+- `/ant:foundation` - Re-init with ant-themed messaging
+- Milestone auto-calculation logic
+
+---
 
 ## Sources
 
-- TO-DOs.md — Documented bugs with full context (data loss from stash, output ordering)
-- CONCERNS.md — Technical debt and security audit
-- PITFALLS.md — Domain-specific pitfalls for multi-agent systems
-- bin/cli.js — Source code analysis of sync functions
-- .claude/commands/ant/build.md — Worker spawn patterns
+- `.aether/workers.md` - Worker caste definitions, model assignments, personality system
+- `.aether/model-profiles.yaml` - Model metadata, routing configuration
+- `.claude/commands/ant/init.md` - Colony initialization logic
+- `.claude/commands/ant/seal.md` - Colony sealing/archival logic
+- `.claude/commands/ant/status.md` - Milestone display
+- `.claude/commands/ant/build.md` - Proxy health check pattern
+- `.aether/data/COLONY_STATE.json` - State structure for milestone detection
+- `.planning/PROJECT.md` - v3.1 milestone goals
 
 **Confidence Assessment:**
 
 | Area | Level | Reason |
 |------|-------|--------|
-| Data loss bug | HIGH | Documented in TO-DOs, nearly lost user work |
-| Output timing | HIGH | Documented in TO-DOs and CONCERNS |
-| Sync testing gap | HIGH | Explicitly noted in CONCERNS |
-| Phase loops | MEDIUM | Inferred from v1.1 goals, less documentation |
+| Table Stakes | HIGH | Based on existing command patterns and yaml config |
+| Differentiators | MEDIUM | Some features exist in config but not implemented |
+| Anti-Features | HIGH | Clear from project constraints (local-first, simple) |
+| Dependencies | HIGH | Clear from existing command structure |
+| Milestone System | HIGH | Already defined in seal.md and status.md |
 
 ---
-*Feature research for: v1.1 Bug Fixes*
+*Feature research for: v3.1 Open Chambers - Model Routing & Colony Lifecycle*
 *Researched: 2026-02-14*
