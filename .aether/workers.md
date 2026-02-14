@@ -50,6 +50,73 @@ bash .aether/aether-utils.sh spawn-complete "Hammer-42" "completed" "auth module
 
 ---
 
+## Model-Aware Spawning
+
+Aether colony workers are spawned with model-specific configurations based on their caste. This enables optimal task routing through the LiteLLM proxy.
+
+### How It Works
+
+1. **Model Assignment**: Each caste is mapped to an optimal model in `.aether/model-profiles.yaml`
+2. **Environment Setup**: Before spawning, the Queen sets `ANTHROPIC_MODEL` based on the worker's caste
+3. **Proxy Routing**: Claude Code connects through the LiteLLM proxy at `http://localhost:4000`
+4. **Model Selection**: The proxy routes requests to the appropriate provider based on `ANTHROPIC_MODEL`
+
+### Model Assignments by Caste
+
+| Caste | Model | Purpose |
+|-------|-------|---------|
+| prime | glm-5 | Complex coordination, strategic planning |
+| architect | glm-5 | Pattern synthesis, design decisions |
+| oracle | glm-5 | Deep analysis, foresight |
+| route_setter | glm-5 | Task decomposition, planning |
+| archaeologist | glm-5 | Historical analysis, pattern recognition |
+| builder | kimi-k2.5 | Fast code generation, refactoring |
+| watcher | minimax-2.5 | Validation, testing, verification |
+| scout | minimax-2.5 | Research, exploration, quick checks |
+| chaos | minimax-2.5 | Resilience testing, edge case probing |
+| colonizer | minimax-2.5 | Environment setup, exploration |
+
+### Environment Variables
+
+Workers inherit these environment variables from the parent Claude Code process:
+
+```bash
+ANTHROPIC_BASE_URL=http://localhost:4000    # LiteLLM proxy endpoint
+ANTHROPIC_AUTH_TOKEN=sk-litellm-local       # Proxy authentication
+ANTHROPIC_MODEL={model-alias}               # Model based on caste
+```
+
+### Available Models
+
+- **glm-5** (via Z_AI): Powerful reasoning for complex tasks, architecture, planning
+- **kimi-k2.5** (via Kimi): Fast code generation, refactoring, implementation
+- **minimax-2.5** (via MiniMax): Efficient validation, research, lightweight tasks
+
+### Fallback Behavior
+
+If the model profile is missing or a caste is not mapped:
+- Default to `kimi-k2.5` (fastest, most cost-effective)
+- Log a warning to the activity log
+- Continue with worker spawn
+
+### Sub-Worker Spawning
+
+When workers spawn sub-workers, they should:
+1. Check if the sub-worker's caste differs from their own
+2. If different, the sub-worker will automatically get their caste's model via the same mechanism
+3. If spawning with the same caste, the model remains the same
+
+### Model Context in Prompts
+
+Worker prompts include a MODEL CONTEXT section that informs the worker about:
+- Which model they are running on
+- The model's strengths and optimal use cases
+- Expected task complexity
+
+This helps workers adjust their approach based on model capabilities.
+
+---
+
 ## Honest Execution Model
 
 **What the colony metaphor means:**
@@ -366,6 +433,12 @@ Next Steps / Recommendations: {required}
 
 🔨 **Purpose:** Implement code, execute commands, and manipulate files to achieve concrete outcomes. The colony's hands -- when tasks need doing, you make them happen.
 
+**Model Context:**
+- Assigned model: kimi-k2.5
+- Strengths: Fast code generation, refactoring, testing
+- Best for: Implementation tasks, code writing, quick iteration
+- Context window: 256K tokens
+
 **When to use:** Code implementation, file manipulation, command execution
 
 **Workflow (TDD-First):**
@@ -416,6 +489,12 @@ Fix count: {N}/3
 ## Watcher
 
 👁️ **Purpose:** Validate implementation, run tests, and ensure quality. The colony's guardian -- when work is done, you verify it's correct and complete. Also handles security audits, performance analysis, and test coverage.
+
+**Model Context:**
+- Assigned model: minimax-2.5
+- Strengths: Efficient validation, thorough testing, quick checks
+- Best for: Verification, test coverage analysis, security audits
+- Context window: Standard
 
 **When to use:** Quality review, testing, validation, security/performance audits, phase completion approval
 
@@ -520,6 +599,12 @@ Recommendation: {specific fix or investigation needed}
 
 🔍 **Purpose:** Gather information, search documentation, and retrieve context. The colony's researcher -- when the colony needs to know, you venture forth to find answers.
 
+**Model Context:**
+- Assigned model: minimax-2.5
+- Strengths: Efficient research, quick information retrieval
+- Best for: Documentation lookup, pattern discovery, exploration
+- Context window: Standard
+
 **When to use:** Research questions, documentation lookup, finding information, learning new domains
 
 **Workflow:**
@@ -537,6 +622,12 @@ Recommendation: {specific fix or investigation needed}
 
 🗺️ **Purpose:** Explore and index codebase structure. Build semantic understanding, detect patterns, and map dependencies. The colony's explorer -- when new territory is encountered, you venture forth to understand the landscape.
 
+**Model Context:**
+- Assigned model: minimax-2.5
+- Strengths: Efficient exploration, pattern detection
+- Best for: Codebase mapping, dependency analysis, environment setup
+- Context window: Standard
+
 **When to use:** Codebase exploration, structure mapping, dependency analysis, pattern detection
 
 **Workflow:**
@@ -552,6 +643,12 @@ Recommendation: {specific fix or investigation needed}
 ## Architect
 
 🏛️ **Purpose:** Synthesize knowledge, extract patterns, and coordinate documentation. The colony's wisdom -- when the colony learns, you organize and preserve that knowledge.
+
+**Model Context:**
+- Assigned model: glm-5
+- Strengths: Complex reasoning, pattern synthesis, design decisions
+- Best for: Architecture planning, strategic design, pattern recognition
+- Context window: Extended
 
 **When to use:** Knowledge synthesis, pattern extraction, documentation coordination, decision organization
 
