@@ -778,6 +778,261 @@ class UpdateTransaction {
   }
 
   /**
+   * Check if hub is accessible before sync
+   * @returns {object} Accessibility result: { accessible: boolean, errors: string[] }
+   * @throws {UpdateError} If hub is not accessible
+   */
+  checkHubAccessibility() {
+    const errors = [];
+
+    // Check if HUB_DIR exists
+    if (!fs.existsSync(this.HUB_DIR)) {
+      errors.push(`Hub directory does not exist: ${this.HUB_DIR}`);
+      return {
+        accessible: false,
+        errors,
+        recoveryCommands: [
+          'aether install',
+          `mkdir -p ${this.HUB_DIR}`,
+        ],
+      };
+    }
+
+    // Check if hub directories are readable
+    const checkDir = (dir, name) => {
+      if (!fs.existsSync(dir)) {
+        // Non-critical: directories may not exist if no files to sync
+        return;
+      }
+      try {
+        fs.accessSync(dir, fs.constants.R_OK);
+      } catch (err) {
+        errors.push(`Cannot read ${name} directory: ${dir} - ${err.message}`);
+      }
+    };
+
+    checkDir(this.HUB_SYSTEM, 'system');
+    checkDir(this.HUB_COMMANDS_CLAUDE, 'commands/claude');
+    checkDir(this.HUB_COMMANDS_OPENCODE, 'commands/opencode');
+    checkDir(this.HUB_AGENTS, 'agents');
+    checkDir(this.HUB_VERSION, 'version');
+
+    // Check if source files exist
+    const checkSourceFiles = () => {
+      if (fs.existsSync(this.HUB_VERSION)) {
+        return true;
+      }
+      errors.push(`Hub version file not found: ${this.HUB_VERSION}`);
+      return false;
+    };
+
+    const hasVersion = checkSourceFiles();
+
+    if (errors.length > 0 || !hasVersion) {
+      return {
+        accessible: false,
+        errors,
+        recoveryCommands: [
+          `ls -la ${this.HUB_DIR}`,
+          'aether install',
+          'aether update',
+        ],
+      };
+    }
+
+    return { accessible: true, errors: [] };
+  }
+
+  /**
+   * Detect partial update by comparing expected vs actual files
+   * @returns {object} Detection result: { isPartial, missing, corrupted }
+   */
+  detectPartialUpdate() {
+    const missing = [];
+    const corrupted = [];
+
+    // Compare expected files (from hub) vs actual files (in repo)
+    const checkDir = (hubDir, repoDir) => {
+      if (!fs.existsSync(hubDir)) return;
+
+      const files = this.listFilesRecursive(hubDir);
+      for (const relPath of files) {
+        const hubPath = path.join(hubDir, relPath);
+        const repoPath = path.join(repoDir, relPath);
+
+        // Check if file exists
+        if (!fs.existsSync(repoPath)) {
+          missing.push({
+            path: relPath,
+            hubPath,
+            repoPath,
+          });
+          continue;
+        }
+
+        // Check file size
+        try {
+          const hubStat = fs.statSync(hubPath);
+          const repoStat = fs.statSync(repoPath);
+
+          if (hubStat.size !== repoStat.size) {
+            corrupted.push({
+              path: relPath,
+              reason: 'size_mismatch',
+              hubSize: hubStat.size,
+              repoSize: repoStat.size,
+            });
+            continue;
+          }
+
+          // Check hash
+          const hubHash = this.hashFileSync(hubPath);
+          const repoHash = this.hashFileSync(repoPath);
+
+          if (hubHash !== repoHash) {
+            corrupted.push({
+              path: relPath,
+              reason: 'hash_mismatch',
+              hubHash,
+              repoHash,
+            });
+          }
+        } catch (err) {
+          corrupted.push({
+            path: relPath,
+            reason: 'read_error',
+            error: err.message,
+          });
+        }
+      }
+    };
+
+    const repoAether = path.join(this.repoPath, '.aether');
+    checkDir(this.HUB_SYSTEM, repoAether);
+    checkDir(this.HUB_COMMANDS_CLAUDE, path.join(this.repoPath, '.claude', 'commands', 'ant'));
+    checkDir(this.HUB_COMMANDS_OPENCODE, path.join(this.repoPath, '.opencode', 'commands', 'ant'));
+    checkDir(this.HUB_AGENTS, path.join(this.repoPath, '.opencode', 'agents'));
+
+    return {
+      isPartial: missing.length > 0 || corrupted.length > 0,
+      missing,
+      corrupted,
+    };
+  }
+
+  /**
+   * Verify sync completeness after file sync
+   * @throws {UpdateError} If partial update detected
+   */
+  verifySyncCompleteness() {
+    const partial = this.detectPartialUpdate();
+
+    if (!partial.isPartial) {
+      return;
+    }
+
+    // Build detailed error message
+    const lines = [
+      `Update incomplete: ${partial.missing.length} files missing, ${partial.corrupted.length} files corrupted`,
+      '',
+    ];
+
+    if (partial.missing.length > 0) {
+      lines.push('Missing files:');
+      for (const f of partial.missing.slice(0, 10)) {
+        lines.push(`  - ${f.path}`);
+      }
+      if (partial.missing.length > 10) {
+        lines.push(`  ... and ${partial.missing.length - 10} more`);
+      }
+      lines.push('');
+    }
+
+    if (partial.corrupted.length > 0) {
+      lines.push('Corrupted files:');
+      for (const f of partial.corrupted.slice(0, 10)) {
+        lines.push(`  - ${f.path} (${f.reason})`);
+      }
+      if (partial.corrupted.length > 10) {
+        lines.push(`  ... and ${partial.corrupted.length - 10} more`);
+      }
+      lines.push('');
+    }
+
+    lines.push('The update has been rolled back. Your workspace is unchanged.');
+    lines.push('');
+    lines.push('To retry: aether update');
+
+    throw new UpdateError(
+      UpdateErrorCodes.E_PARTIAL_UPDATE,
+      'Update incomplete: files missing or corrupted',
+      {
+        missingCount: partial.missing.length,
+        corruptedCount: partial.corrupted.length,
+        missing: partial.missing.map(f => f.path),
+        corrupted: partial.corrupted.map(f => ({ path: f.path, reason: f.reason })),
+      },
+      [
+        `cd ${this.repoPath}`,
+        'aether update',
+      ]
+    );
+  }
+
+  /**
+   * Handle network-related errors with enhanced diagnostics
+   * @param {Error} error - Original error
+   * @returns {UpdateError} Enhanced error with recovery commands
+   */
+  handleNetworkError(error) {
+    const networkErrorCodes = ['ETIMEDOUT', 'ECONNREFUSED', 'ENETUNREACH', 'EACCES', 'EPERM'];
+    const isNetworkError = networkErrorCodes.includes(error.code) ||
+      error.message.includes('network') ||
+      error.message.includes('timeout') ||
+      error.message.includes('connection');
+
+    if (!isNetworkError) {
+      // Not a network error, return generic error
+      return new UpdateError(
+        UpdateErrorCodes.E_UPDATE_FAILED,
+        error.message,
+        { originalError: error.stack },
+        this.getRecoveryCommands()
+      );
+    }
+
+    // Build network-specific error message
+    const lines = [
+      `Network error during update: ${error.message}`,
+      '',
+      'Possible causes:',
+      `  - Hub directory not accessible: ${this.HUB_DIR}`,
+      '  - Network filesystem unavailable',
+      '  - Permission denied',
+      '',
+      'Recovery:',
+      '  1. Check network connectivity',
+      `  2. Verify hub exists: ls -la ${this.HUB_DIR}`,
+      '  3. Retry: aether update',
+    ];
+
+    return new UpdateError(
+      UpdateErrorCodes.E_NETWORK_ERROR,
+      `Network error: ${error.message}`,
+      {
+        hubDir: this.HUB_DIR,
+        originalError: error.stack,
+        errorCode: error.code,
+      },
+      [
+        `ls -la ${this.HUB_DIR}`,
+        'aether install',
+        'aether update',
+      ]
+    );
+  }
+
+  /**
    * Update version.json in repo
    * @param {string} sourceVersion - Version to set
    */
@@ -905,15 +1160,41 @@ class UpdateTransaction {
       // Phase 1: Prepare
       // UPDATE-01: Create checkpoint before file sync
       this.state = TransactionStates.PREPARING;
+
+      // Check hub accessibility before proceeding
+      const hubAccess = this.checkHubAccessibility();
+      if (!hubAccess.accessible) {
+        throw new UpdateError(
+          UpdateErrorCodes.E_HUB_INACCESSIBLE,
+          'Hub is not accessible',
+          { errors: hubAccess.errors },
+          hubAccess.recoveryCommands || [
+            `ls -la ${this.HUB_DIR}`,
+            'aether install',
+            'aether update',
+          ]
+        );
+      }
+
       await this.createCheckpoint();
 
-      // Phase 2: Sync
+      // Phase 2: Sync (with network error handling)
       this.state = TransactionStates.SYNCING;
-      this.syncFiles(sourceVersion, dryRun);
+      try {
+        this.syncFiles(sourceVersion, dryRun);
+      } catch (syncError) {
+        // Handle network errors specifically
+        throw this.handleNetworkError(syncError);
+      }
 
       // Phase 3: Verify (skip if dryRun)
       if (!dryRun) {
         this.state = TransactionStates.VERIFYING;
+
+        // Check for partial updates first
+        this.verifySyncCompleteness();
+
+        // Then run integrity verification
         const verification = this.verifyIntegrity();
         if (!verification.valid) {
           // UPDATE-03: Automatic rollback on sync failure
