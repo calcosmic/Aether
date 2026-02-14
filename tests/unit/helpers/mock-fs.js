@@ -26,6 +26,10 @@ function createMockFs() {
     // File writing
     writeFileSync: sinon.stub(),
 
+    // File descriptor operations
+    openSync: sinon.stub(),
+    closeSync: sinon.stub(),
+
     // Directory operations
     mkdirSync: sinon.stub(),
     readdirSync: sinon.stub(),
@@ -34,6 +38,7 @@ function createMockFs() {
     // File operations
     copyFileSync: sinon.stub(),
     unlinkSync: sinon.stub(),
+    renameSync: sinon.stub(),
 
     // File stats
     statSync: sinon.stub(),
@@ -79,8 +84,8 @@ function createMockDirent(name, isDirectory = false) {
  */
 function resetMockFs(mockFs) {
   Object.values(mockFs).forEach(stub => {
-    if (stub && typeof stub.reset === 'function') {
-      stub.reset();
+    if (stub && typeof stub.resetBehavior === 'function') {
+      stub.resetBehavior();
     }
     if (stub && typeof stub.resetHistory === 'function') {
       stub.resetHistory();
