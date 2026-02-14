@@ -41,6 +41,7 @@ const {
   verifyModelRouting,
   formatProxyStatusColored,
 } = require('./lib/proxy-health');
+const { findNestmates, formatNestmates, loadNestmateTodos } = require('./lib/nestmate-loader');
 const { logSpawn, formatSpawnTree } = require('./lib/spawn-logger');
 
 // Color palette

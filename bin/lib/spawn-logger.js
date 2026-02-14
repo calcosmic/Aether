@@ -85,14 +85,13 @@ async function logSpawn(repoPath, { parent, caste, child, task, model, status = 
 function parseSpawnLine(line) {
   const parts = line.split('|');
 
-  // Support both old format (6 parts) and new format (7 parts with model)
-  if (parts.length < 6) {
-    return null;
-  }
+  // Support multiple formats:
+  // New format (7 parts): timestamp|parent|caste|child|task|model|status
+  // Old format (6 parts): timestamp|parent|caste|child|task|status
+  // Complete format (3-4 parts): timestamp|ant_name|status|summary (optional)
 
-  // New format: timestamp|parent|caste|child|task|model|status
-  // Old format: timestamp|parent|caste|child|task|status
   if (parts.length === 7) {
+    // New format with model
     return {
       timestamp: parts[0],
       parent: parts[1],
@@ -102,7 +101,7 @@ function parseSpawnLine(line) {
       model: parts[5],
       status: parts[6],
     };
-  } else {
+  } else if (parts.length === 6) {
     // Old format without model - default to 'unknown'
     return {
       timestamp: parts[0],
@@ -113,7 +112,23 @@ function parseSpawnLine(line) {
       model: 'unknown',
       status: parts[5],
     };
+  } else if (parts.length >= 3 && parts.length <= 4) {
+    // spawn-complete format: timestamp|ant_name|status|summary
+    // This is a completion record, treat as special case
+    return {
+      timestamp: parts[0],
+      parent: null,
+      caste: 'complete',
+      child: parts[1],
+      task: parts[3] || '',
+      model: 'n/a',
+      status: parts[2],
+      isCompletion: true,
+    };
   }
+
+  // Unrecognized format
+  return null;
 }
 
 /**
@@ -140,6 +155,12 @@ function formatSpawnTree(repoPath) {
     const record = parseSpawnLine(line);
     if (!record) {
       return `  ? Invalid line: ${line.slice(0, 50)}`;
+    }
+
+    // Handle completion records differently
+    if (record.isCompletion) {
+      const statusEmoji = STATUS_EMOJIS[record.status] || STATUS_EMOJIS.spawned;
+      return `${statusEmoji} ${record.child}: ${record.status}${record.task ? ' - ' + record.task.slice(0, 40) : ''}`;
     }
 
     const casteEmoji = getCasteEmoji(record.caste);
