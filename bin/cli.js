@@ -23,6 +23,18 @@ const { UpdateTransaction, UpdateError, UpdateErrorCodes } = require('./lib/upda
 const { initializeRepo, isInitialized } = require('./lib/init');
 const { syncStateFromPlanning, reconcileStates } = require('./lib/state-sync');
 const { createVerificationReport } = require('./lib/model-verify');
+const {
+  loadModelProfiles,
+  getAllAssignments,
+  getProviderForModel,
+  validateCaste,
+  validateModel,
+  setModelOverride,
+  resetModelOverride,
+  getEffectiveModel,
+  getUserOverrides,
+  getModelMetadata,
+} = require('./lib/model-profiles');
 
 // Color palette
 const c = require('./lib/colors');
@@ -1521,6 +1533,174 @@ program
     } else {
       console.error(`Sync failed: ${result.error}`);
       process.exit(1);
+    }
+  }));
+
+// Caste emoji mapping for display
+const CASTE_EMOJIS = {
+  builder: '🔨',
+  watcher: '👁️',
+  scout: '🔍',
+  chaos: '🎲',
+  oracle: '🔮',
+  architect: '🏗️',
+  prime: '🏛️',
+  colonizer: '🌱',
+  route_setter: '🧭',
+  archaeologist: '📜',
+};
+
+/**
+ * Format context window for display
+ * @param {number} contextWindow - Context window size
+ * @returns {string} Formatted string (e.g., "256K")
+ */
+function formatContextWindow(contextWindow) {
+  if (!contextWindow) return '-';
+  if (contextWindow >= 1000) {
+    return `${Math.round(contextWindow / 1000)}K`;
+  }
+  return String(contextWindow);
+}
+
+// Caste-models command - Manage caste-to-model assignments
+const casteModelsCmd = program
+  .command('caste-models')
+  .description('Manage caste-to-model assignments');
+
+// list subcommand
+casteModelsCmd
+  .command('list')
+  .description('List current model assignments per caste')
+  .action(wrapCommand(async () => {
+    const repoPath = process.cwd();
+    const profiles = loadModelProfiles(repoPath);
+    const overrides = getUserOverrides(profiles);
+
+    console.log(c.header('Caste Model Assignments\n'));
+
+    // Table header
+    const header = `${'Caste'.padEnd(14)} ${'Model'.padEnd(14)} ${'Provider'.padEnd(10)} ${'Context'.padEnd(8)} Status`;
+    console.log(header);
+    console.log('─'.repeat(60));
+
+    // Get all assignments
+    const assignments = getAllAssignments(profiles);
+
+    for (const assignment of assignments) {
+      const emoji = CASTE_EMOJIS[assignment.caste] || '•';
+      const casteName = assignment.caste.charAt(0).toUpperCase() + assignment.caste.slice(1);
+      const casteDisplay = `${emoji} ${casteName}`;
+
+      // Check for override
+      const hasOverride = overrides[assignment.caste] !== undefined;
+      const effectiveModel = getEffectiveModel(profiles, assignment.caste);
+      const modelDisplay = effectiveModel.model + (hasOverride ? ' (override)' : '');
+
+      // Get model metadata
+      const metadata = getModelMetadata(profiles, effectiveModel.model);
+      const provider = metadata?.provider || assignment.provider || '-';
+      const contextWindow = formatContextWindow(metadata?.context_window);
+
+      // Status indicator
+      const status = '✓';
+
+      console.log(
+        `${casteDisplay.padEnd(14)} ${modelDisplay.padEnd(14)} ${provider.padEnd(10)} ${contextWindow.padEnd(8)} ${status}`
+      );
+    }
+
+    // Show overrides summary if any exist
+    const overrideCount = Object.keys(overrides).length;
+    if (overrideCount > 0) {
+      console.log('');
+      console.log(c.info(`Active overrides: ${overrideCount}`));
+      for (const [caste, model] of Object.entries(overrides)) {
+        console.log(`  ${caste}: ${model}`);
+      }
+    }
+  }));
+
+// set subcommand
+casteModelsCmd
+  .command('set')
+  .description('Set model override for a caste')
+  .argument('<assignment>', 'caste=model (e.g., builder=glm-5)')
+  .action(wrapCommand(async (assignment) => {
+    // Parse caste=model format
+    const match = assignment.match(/^([^=]+)=(.+)$/);
+    if (!match) {
+      const error = new ValidationError(
+        `Invalid assignment format: '${assignment}'`,
+        { received: assignment },
+        'Use format: caste=model (e.g., builder=glm-5)'
+      );
+      throw error;
+    }
+
+    const [, caste, model] = match;
+
+    const repoPath = process.cwd();
+
+    // Validate and set
+    try {
+      const result = setModelOverride(repoPath, caste, model);
+
+      if (result.previous) {
+        console.log(c.success(`Updated ${caste}: ${result.previous} → ${model}`));
+      } else {
+        console.log(c.success(`Set ${caste} to ${model}`));
+      }
+    } catch (error) {
+      if (error.name === 'ValidationError') {
+        // Add helpful suggestions
+        if (error.details?.validCastes) {
+          console.error(c.error(`Error: ${error.message}`));
+          console.error('\nValid castes:');
+          for (const casteName of error.details.validCastes) {
+            const emoji = CASTE_EMOJIS[casteName] || '•';
+            console.error(`  ${emoji} ${casteName}`);
+          }
+        } else if (error.details?.validModels) {
+          console.error(c.error(`Error: ${error.message}`));
+          console.error('\nValid models:');
+          for (const modelName of error.details.validModels) {
+            console.error(`  • ${modelName}`);
+          }
+        }
+        process.exit(1);
+      }
+      throw error;
+    }
+  }));
+
+// reset subcommand
+casteModelsCmd
+  .command('reset')
+  .description('Reset caste to default model (remove override)')
+  .argument('<caste>', 'caste name (e.g., builder)')
+  .action(wrapCommand(async (caste) => {
+    const repoPath = process.cwd();
+
+    try {
+      const result = resetModelOverride(repoPath, caste);
+
+      if (result.hadOverride) {
+        console.log(c.success(`Reset ${caste} to default model`));
+      } else {
+        console.log(c.info(`${caste} was already using default model`));
+      }
+    } catch (error) {
+      if (error.name === 'ValidationError' && error.details?.validCastes) {
+        console.error(c.error(`Error: ${error.message}`));
+        console.error('\nValid castes:');
+        for (const casteName of error.details.validCastes) {
+          const emoji = CASTE_EMOJIS[casteName] || '•';
+          console.error(`  ${emoji} ${casteName}`);
+        }
+        process.exit(1);
+      }
+      throw error;
     }
   }));
 
