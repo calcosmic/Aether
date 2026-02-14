@@ -10,6 +10,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { EventTypes, createEvent } = require('./event-types');
 
 /**
  * Error codes for StateGuard errors
@@ -214,6 +215,7 @@ class StateGuard {
     this.stateFile = stateFilePath;
     this.lock = options.lock || new FileLock(options.lockDir);
     this.locked = false;
+    this.worker = options.worker || process.env.WORKER_NAME || 'state-guard';
   }
 
   /**
@@ -433,6 +435,28 @@ class StateGuard {
   }
 
   /**
+   * Add an event to the state events array
+   * @param {object} state - Current state object
+   * @param {string} type - Event type from EventTypes
+   * @param {object} details - Event details
+   * @returns {object} The created event
+   */
+  addEvent(state, type, details = {}) {
+    // Ensure events array exists
+    if (!state.events) {
+      state.events = [];
+    }
+
+    // Create event using event-types helper
+    const event = createEvent(type, this.worker, details);
+
+    // Add to state events
+    state.events.push(event);
+
+    return event;
+  }
+
+  /**
    * Transition state from one phase to another
    * @param {object} state - Current state object
    * @param {number} fromPhase - Current phase
@@ -444,23 +468,69 @@ class StateGuard {
     // Update phase
     state.current_phase = toPhase;
 
-    // Add audit trail event (placeholder for STATE-04)
-    if (!state.events) {
-      state.events = [];
-    }
+    // Update last_updated timestamp
+    state.last_updated = new Date().toISOString();
 
-    state.events.push({
-      timestamp: new Date().toISOString(),
-      type: 'phase_transition',
-      worker: process.env.WORKER_NAME || 'unknown',
-      details: {
-        from: fromPhase,
-        to: toPhase,
-        evidence_id: evidence?.checkpoint_hash || 'unknown'
-      }
+    // Add phase_transition event using addEvent method
+    this.addEvent(state, EventTypes.PHASE_TRANSITION, {
+      from: fromPhase,
+      to: toPhase,
+      evidence_id: evidence?.checkpoint_hash || null,
+      checkpoint_hash: evidence?.checkpoint_hash || null
     });
 
     return state;
+  }
+
+  /**
+   * Get events from state with optional filtering
+   * @param {object} state - State object containing events array
+   * @param {object} options - Filter options
+   * @param {string} [options.type] - Filter by event type
+   * @param {string} [options.since] - Filter events after this ISO 8601 timestamp
+   * @param {number} [options.limit] - Limit number of events returned (most recent first)
+   * @returns {object[]} Array of matching events
+   */
+  static getEvents(state, options = {}) {
+    if (!state || !Array.isArray(state.events)) {
+      return [];
+    }
+
+    let events = [...state.events];
+
+    // Filter by type
+    if (options.type) {
+      events = events.filter(e => e.type === options.type);
+    }
+
+    // Filter by timestamp (events after 'since')
+    if (options.since) {
+      const sinceDate = new Date(options.since);
+      if (!isNaN(sinceDate.getTime())) {
+        events = events.filter(e => new Date(e.timestamp) > sinceDate);
+      }
+    }
+
+    // Sort by timestamp descending (most recent first)
+    events.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    // Limit results
+    if (options.limit && options.limit > 0) {
+      events = events.slice(0, options.limit);
+    }
+
+    return events;
+  }
+
+  /**
+   * Get the most recent event of a specific type
+   * @param {object} state - State object containing events array
+   * @param {string} [type] - Optional event type to filter by
+   * @returns {object|null} Most recent event or null if none found
+   */
+  static getLatestEvent(state, type = null) {
+    const events = StateGuard.getEvents(state, { type, limit: 1 });
+    return events.length > 0 ? events[0] : null;
   }
 
   /**
