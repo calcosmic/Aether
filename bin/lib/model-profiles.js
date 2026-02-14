@@ -168,6 +168,159 @@ function getProxyConfig(profiles) {
   return profiles.proxy || null;
 }
 
+/**
+ * Set user override for a caste's model
+ * @param {string} repoPath - Path to repository root
+ * @param {string} caste - Caste name to override
+ * @param {string} model - Model name to assign
+ * @returns {object} {success: true, previous: string|null}
+ * @throws {ValidationError} If caste or model is invalid
+ */
+function setModelOverride(repoPath, caste, model) {
+  const profiles = loadModelProfiles(repoPath);
+
+  // Validate caste exists
+  const casteValidation = validateCaste(profiles, caste);
+  if (!casteValidation.valid) {
+    const { ValidationError } = require('./errors');
+    throw new ValidationError(
+      `Invalid caste '${caste}'. Valid castes: ${casteValidation.castes.join(', ')}`,
+      { caste, validCastes: casteValidation.castes }
+    );
+  }
+
+  // Validate model exists
+  const modelValidation = validateModel(profiles, model);
+  if (!modelValidation.valid) {
+    const { ValidationError } = require('./errors');
+    throw new ValidationError(
+      `Invalid model '${model}'. Valid models: ${modelValidation.models.join(', ')}`,
+      { model, validModels: modelValidation.models }
+    );
+  }
+
+  // Get previous override if exists
+  const previous = profiles.user_overrides?.[caste] || null;
+
+  // Read current YAML content
+  const profilePath = path.join(repoPath, '.aether', 'model-profiles.yaml');
+  const content = fs.readFileSync(profilePath, 'utf8');
+  const data = yaml.load(content);
+
+  // Ensure user_overrides section exists
+  if (!data.user_overrides) {
+    data.user_overrides = {};
+  }
+
+  // Set the override
+  data.user_overrides[caste] = model;
+
+  // Write back with proper YAML formatting
+  const yamlContent = yaml.dump(data, {
+    indent: 2,
+    lineWidth: -1,
+    noRefs: true,
+    sortKeys: false,
+  });
+
+  fs.writeFileSync(profilePath, yamlContent, 'utf8');
+
+  return { success: true, previous };
+}
+
+/**
+ * Reset user override for a caste (remove override)
+ * @param {string} repoPath - Path to repository root
+ * @param {string} caste - Caste name to reset
+ * @returns {object} {success: true, hadOverride: boolean}
+ * @throws {ValidationError} If caste is invalid
+ */
+function resetModelOverride(repoPath, caste) {
+  const profiles = loadModelProfiles(repoPath);
+
+  // Validate caste exists
+  const casteValidation = validateCaste(profiles, caste);
+  if (!casteValidation.valid) {
+    const { ValidationError } = require('./errors');
+    throw new ValidationError(
+      `Invalid caste '${caste}'. Valid castes: ${casteValidation.castes.join(', ')}`,
+      { caste, validCastes: casteValidation.castes }
+    );
+  }
+
+  // Check if override exists
+  const hadOverride = profiles.user_overrides?.[caste] !== undefined;
+
+  if (hadOverride) {
+    // Read current YAML content
+    const profilePath = path.join(repoPath, '.aether', 'model-profiles.yaml');
+    const content = fs.readFileSync(profilePath, 'utf8');
+    const data = yaml.load(content);
+
+    // Remove the override
+    if (data.user_overrides) {
+      delete data.user_overrides[caste];
+
+      // Clean up empty user_overrides section
+      if (Object.keys(data.user_overrides).length === 0) {
+        delete data.user_overrides;
+      }
+
+      // Write back with proper YAML formatting
+      const yamlContent = yaml.dump(data, {
+        indent: 2,
+        lineWidth: -1,
+        noRefs: true,
+        sortKeys: false,
+      });
+
+      fs.writeFileSync(profilePath, yamlContent, 'utf8');
+    }
+  }
+
+  return { success: true, hadOverride };
+}
+
+/**
+ * Get effective model for a caste (respecting overrides)
+ * @param {object} profiles - Parsed model profiles
+ * @param {string} caste - Caste name
+ * @returns {object} {model: string, source: 'override'|'default'|'fallback'}
+ */
+function getEffectiveModel(profiles, caste) {
+  if (!profiles || typeof profiles !== 'object') {
+    return { model: DEFAULT_MODEL, source: 'fallback' };
+  }
+
+  // Check user overrides first
+  const override = profiles.user_overrides?.[caste];
+  if (override) {
+    return { model: override, source: 'override' };
+  }
+
+  // Fall back to worker_models default
+  const defaultModel = profiles.worker_models?.[caste];
+  if (defaultModel) {
+    return { model: defaultModel, source: 'default' };
+  }
+
+  // Final fallback
+  return { model: DEFAULT_MODEL, source: 'fallback' };
+}
+
+/**
+ * Get current user overrides
+ * @param {object} profiles - Parsed model profiles
+ * @returns {object} User overrides object (empty if none)
+ */
+function getUserOverrides(profiles) {
+  if (!profiles || typeof profiles !== 'object') {
+    return {};
+  }
+
+  return profiles.user_overrides || {};
+}
+
 module.exports = {
   loadModelProfiles,
   getModelForCaste,
@@ -177,5 +330,9 @@ module.exports = {
   getAllAssignments,
   getModelMetadata,
   getProxyConfig,
+  setModelOverride,
+  resetModelOverride,
+  getEffectiveModel,
+  getUserOverrides,
   DEFAULT_MODEL,
 };
