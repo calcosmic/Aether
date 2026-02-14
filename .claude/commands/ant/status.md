@@ -75,6 +75,23 @@ Run: `bash .aether/aether-utils.sh unload-state` to release lock.
 
 From state, extract:
 
+### Step 2.5: Gather Dream Information
+
+Run using Bash tool: `ls -1 .aether/dreams/*.md 2>/dev/null | wc -l`
+
+Capture:
+- Dream count: number of .md files in .aether/dreams/
+- Latest dream: most recent file by name (files are timestamped: YYYY-MM-DD-HHMM.md)
+
+To get latest dream timestamp:
+```bash
+ls -1 .aether/dreams/*.md 2>/dev/null | sort | tail -1 | sed 's/.*\/\([0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}\)-\([0-9]\{4\}\).*/\1 \2/'
+```
+
+Format the timestamp as: YYYY-MM-DD HH:MM
+
+From state, extract:
+
 **Phase info:**
 - Current phase number: `current_phase`
 - Total phases: `plan.phases.length`
@@ -130,6 +147,7 @@ Output format:
 🧠 Instincts: <total> learned (<high_confidence> strong)
 🚩 Flags: <blockers> blockers | <issues> issues | <notes> notes
 🏆 Milestone: <milestone>
+💭 Dreams: <dream_count> recorded (latest: <latest_dream>)
 
 State: <state>
 Next:  <suggested_command>   <phase_context>
@@ -162,6 +180,10 @@ Generate the suggested command based on colony state:
 - PLANNING -> `/ant:plan`
 
 The output must be a copy-pasteable command with real numbers, not placeholders.
+
+**Dream display:**
+- If no dreams exist: `💭 Dreams: None recorded`
+- If dreams exist: `💭 Dreams: <count> recorded (latest: YYYY-MM-DD HH:MM)`
 
 **Edge cases:**
 - No phases yet: "Phase 0/0: No plan created"
