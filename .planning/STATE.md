@@ -11,9 +11,9 @@
 | Field | Value |
 |-------|-------|
 | **Phase** | 11 — Foraging Specialization |
-| **Plan** | 03 — Telemetry CLI Commands |
+| **Plan** | 04 — CLI Override Integration |
 | **Status** | Complete |
-| **Last Action** | Completed Plan 03 - Telemetry CLI commands for viewing model performance |
+| **Last Action** | Completed Plan 04 - CLI --model flag support with task-based routing integration |
 
 ### Progress Bar
 
@@ -28,7 +28,7 @@ v3.1:    [████████░░░] 80% IN PROGRESS (4/4 plans complete
 |-------|------|--------|--------------|----------|
 | 9 | Caste Model Assignment | Complete | 8 | 100% (5/5 plans) |
 | 10 | Entombment & Egg Laying | Complete | 5 | 100% (4/4 plans) |
-| 11 | Foraging Specialization | In Progress | 3 | 66% (2/3 plans) |
+| 11 | Foraging Specialization | Complete | 3 | 100% (3/3 plans) |
 | 12 | Colony Visualization | Blocked | 11 | 0% |
 
 ---
@@ -118,6 +118,8 @@ v3.1:    [████████░░░] 80% IN PROGRESS (4/4 plans complete
 | 2026-02-14 | Task routing default_model acts as catch-all | When no keywords match but default_model exists, source is 'task-routing' not 'caste-default' |
 | 2026-02-14 | First-match wins in complexity_indicators | Iteration order determines priority; keywords in earlier categories take precedence |
 | 2026-02-14 | Atomic writes for telemetry | Temp file + rename pattern prevents data corruption during concurrent writes |
+| 2026-02-14 | CLI --model flag takes highest precedence | User intent for one-time override must be respected over all other routing |
+| 2026-02-14 | Use Node.js library via bash heredoc for model selection | Reuses existing tested logic, avoids duplication between bash and JS |
 
 ### Open Questions
 
@@ -139,19 +141,19 @@ v3.1:    [████████░░░] 80% IN PROGRESS (4/4 plans complete
 
 ### Last Session
 - **Date:** 2026-02-14
-- **Action:** Completed Plan 03 in Phase 11 - Telemetry CLI Commands
-- **Outcome:** Added `aether telemetry` command with summary, model, and performance subcommands; 15 CLI tests passing
+- **Action:** Completed Plan 04 in Phase 11 - CLI Override Integration
+- **Outcome:** Added --model flag support to /ant:build command; model-profile select/validate commands; 13 integration tests passing
 
 ### Next Actions
-1. Execute Plan 04 - Complete Phase 11 (if exists) or move to Phase 12
-2. Phase 11 is now 66% complete (2/3 plans done)
+1. Phase 11 is now 100% complete (3/3 plans done)
+2. Move to Phase 12 - Colony Visualization
 
 ### Handoff Notes
-- Phase 11 Plan 03 complete - Telemetry CLI commands ready
-- Users can run `aether telemetry` to view model performance
-- Color-coded output: green >=90%, yellow >=70%, red <70% success rate
-- Commands: telemetry (summary), telemetry model <name>, telemetry performance
-- Next: Complete Phase 11 or move to Phase 12 (Colony Visualization)
+- Phase 11 Plan 04 complete - CLI --model flag support ready
+- Users can run `/ant:build 1 --model glm-5` to override model for a build
+- model-profile select command handles full precedence chain: CLI > user > task-routing > caste-default
+- model-profile validate command validates model names against known models
+- Next: Phase 12 (Colony Visualization)
 
 ---
 
@@ -168,4 +170,4 @@ v3.1:    [████████░░░] 80% IN PROGRESS (4/4 plans complete
 
 *State file: `.planning/STATE.md`*
 *Updated: 2026-02-14*
-*Next update: After Phase 11 completion or Phase 12 start*
+*Next update: After Phase 12 start*
