@@ -26,6 +26,7 @@ CURRENT_LOCK=${CURRENT_LOCK:-""}
 [[ -f "$SCRIPT_DIR/utils/file-lock.sh" ]] && source "$SCRIPT_DIR/utils/file-lock.sh"
 [[ -f "$SCRIPT_DIR/utils/atomic-write.sh" ]] && source "$SCRIPT_DIR/utils/atomic-write.sh"
 [[ -f "$SCRIPT_DIR/utils/error-handler.sh" ]] && source "$SCRIPT_DIR/utils/error-handler.sh"
+[[ -f "$SCRIPT_DIR/utils/chamber-utils.sh" ]] && source "$SCRIPT_DIR/utils/chamber-utils.sh"
 
 # Feature detection for graceful degradation
 # These checks run silently - failures are logged but don't block operation
@@ -94,7 +95,7 @@ shift 2>/dev/null || true
 case "$cmd" in
   help)
     cat <<'EOF'
-{"ok":true,"commands":["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
+{"ok":true,"commands":["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
 EOF
     ;;
   version)
@@ -1629,6 +1630,47 @@ EOF
   model-list)
     # Shortcut: list all models
     exec bash "$0" model-profile list
+    ;;
+
+  # ============================================
+  # CHAMBER UTILITIES (colony lifecycle)
+  # ============================================
+
+  chamber-create)
+    # Create a new chamber (entomb a colony)
+    # Usage: chamber-create <chamber_dir> <state_file> <goal> <phases_completed> <total_phases> <milestone> <version> <decisions_json> <learnings_json>
+    [[ $# -ge 9 ]] || json_err "$E_VALIDATION_FAILED" "Usage: chamber-create <chamber_dir> <state_file> <goal> <phases_completed> <total_phases> <milestone> <version> <decisions_json> <learnings_json>"
+
+    # Check if chamber-utils.sh is available
+    if ! type chamber_create &>/dev/null; then
+      json_err "$E_FILE_NOT_FOUND" "chamber-utils.sh not loaded"
+    fi
+
+    chamber_create "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$8" "$9"
+    ;;
+
+  chamber-verify)
+    # Verify chamber integrity
+    # Usage: chamber-verify <chamber_dir>
+    [[ $# -ge 1 ]] || json_err "$E_VALIDATION_FAILED" "Usage: chamber-verify <chamber_dir>"
+
+    if ! type chamber_verify &>/dev/null; then
+      json_err "$E_FILE_NOT_FOUND" "chamber-utils.sh not loaded"
+    fi
+
+    chamber_verify "$1"
+    ;;
+
+  chamber-list)
+    # List all chambers
+    # Usage: chamber-list [chambers_root]
+    chambers_root="${1:-$AETHER_ROOT/.aether/chambers}"
+
+    if ! type chamber_list &>/dev/null; then
+      json_err "$E_FILE_NOT_FOUND" "chamber-utils.sh not loaded"
+    fi
+
+    chamber_list "$chambers_root"
     ;;
 
   *)
