@@ -9,17 +9,17 @@
 
 | Field | Value |
 |-------|-------|
-| **Phase** | 7 (Core Reliability — State Guards & Update System) |
-| **Plan** | 07-06 complete, 6/6 plans in Phase 7 |
-| **Status** | Phase complete - All state guards and update system implemented |
-| **Last Action** | Executed 07-06: Initialization & Integration with E2E tests |
+| **Phase** | 8 (Build Polish — Output Timing & Integration) |
+| **Plan** | 08-01 complete, 1/N plans in Phase 8 |
+| **Status** | In progress - Build timing fixed, foreground execution implemented |
+| **Last Action** | Executed 08-01: Fixed build.md timing by removing run_in_background flags |
 
 **Progress:**
 ```
 [██████░░░░] 55% - v1.1 Bug Fixes
 Phase 6:  ████████░░ 100% (Foundation - 6/6 plans complete)
 Phase 7:  ████████░░ 100% (Core Reliability - 6/6 plans complete)
-Phase 8:  ░░░░░░░░░░ 0% (Build Polish)
+Phase 8:  █░░░░░░░░░ 10% (Build Polish - 1/N plans complete)
 ```
 
 ---
@@ -32,7 +32,7 @@ Phase 8:  ░░░░░░░░░░ 0% (Build Polish)
 | Phase loop prevention | 0 false advancements | Not measured |
 | Update reliability | 99% success rate | Not measured |
 | Test coverage (core sync) | 80%+ | 206 total (40 CLI + 18 StateGuard + 17 FileLock + 22 EventAudit + 28 UpdateTransaction + 20 ErrorHandling + 12 Init + 6 Integration) |
-| Build output accuracy | 100% synchronous | Not measured |
+| Build output accuracy | 100% synchronous | Fixed - foreground execution ensures correct output order |
 | Test suite execution | Under 10 seconds | 4.4 seconds (95 tests) |
 
 ---
@@ -72,6 +72,7 @@ Phase 8:  ░░░░░░░░░░ 0% (Build Polish)
 | 2026-02-14 | Checkpoint before any file modifications | UPDATE-01: ensures rollback safety |
 | 2026-02-14 | Hash verification after sync before commit | UPDATE-02: verify before version update |
 | 2026-02-14 | Async execute() with automatic rollback | UPDATE-03: rollback on any error |
+| 2026-02-14 | Foreground Task execution for build workers | Removes misleading output timing — spawn summary now appears AFTER work completes |
 
 ### Open Questions
 
@@ -88,9 +89,13 @@ None currently.
 ## Session Continuity
 
 **Last Updated:** 2026-02-14
-**Updated By:** /cds:execute-phase 07
+**Updated By:** /cds:execute-phase 08
 
 ### Recent Changes
+- **Executed 08-01:** Fixed build.md timing - removed run_in_background from worker spawns
+  - Step 5.1: Wave 1 workers now use foreground execution
+  - Updated Step 5.2, 5.4.1, 5.4.2 documentation for foreground model
+  - Build output now displays in correct order (spawn → complete → summary)
 - Created ROADMAP.md with 3-phase structure (Phases 6-8)
 - Created STATE.md with initial project state
 - Updated REQUIREMENTS.md traceability
@@ -179,14 +184,17 @@ None currently.
   - 206 total tests passing
 
 ### Next Actions
-1. `/cds:verify-work 7` - Manual acceptance testing for Phase 7
-2. `/cds:plan-phase 8` - Plan Build Polish phase
+1. Continue Phase 8 plans - additional build polish improvements
+2. `/cds:plan-phase 8` - Plan remaining Build Polish phase work
 
 ### Context for New Sessions
 
 **What we're building:** v1.1 bug fixes for Aether Colony System — critical reliability improvements including safe checkpoints (preventing data loss), phase advancement guards (preventing loops), and update system repair (automatic rollback).
 
-**Current state:** Phase 7 complete. All 6 plans implemented:
+**Current state:** Phase 8 in progress. Build timing fixed:
+- 08-01: Fixed build.md timing - foreground worker execution (3 tasks)
+
+Phase 7 complete. All 6 plans implemented:
 - 07-01: FileLock with exclusive atomic locks (17 tests)
 - 07-02: StateGuard with Iron Law enforcement (18 tests)
 - 07-03: Audit trail system with event sourcing (22 tests)
