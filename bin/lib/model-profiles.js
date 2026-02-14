@@ -321,6 +321,80 @@ function getUserOverrides(profiles) {
   return profiles.user_overrides || {};
 }
 
+/**
+ * Get the appropriate model for a task based on keyword matching
+ * @param {object} taskRouting - Task routing configuration from profiles
+ * @param {string} taskDescription - Description of the task to route
+ * @returns {string|null} Model name for the task, or null if no match
+ */
+function getModelForTask(taskRouting, taskDescription) {
+  if (!taskRouting || !taskDescription) {
+    return null;
+  }
+
+  const normalizedTask = taskDescription.toLowerCase();
+  const complexityIndicators = taskRouting.complexity_indicators || {};
+
+  // Iterate through complexity indicators (complex, simple, validate)
+  for (const [complexity, config] of Object.entries(complexityIndicators)) {
+    if (!config || !config.keywords || !Array.isArray(config.keywords)) {
+      continue;
+    }
+
+    // Check if any keyword is a substring of the task description
+    const hasMatch = config.keywords.some(keyword =>
+      normalizedTask.includes(keyword.toLowerCase())
+    );
+
+    if (hasMatch) {
+      return config.model;
+    }
+  }
+
+  // Return default model if no keywords match
+  return taskRouting.default_model || null;
+}
+
+/**
+ * Select the appropriate model for a task with full precedence chain
+ * Precedence: CLI override > user override > task routing > caste default > fallback
+ * @param {object} profiles - Parsed model profiles
+ * @param {string} caste - Caste name (e.g., 'builder', 'watcher')
+ * @param {string} taskDescription - Description of the task
+ * @param {string|null} cliOverride - Optional CLI-provided model override
+ * @returns {object} { model: string, source: string } with source tracking
+ */
+function selectModelForTask(profiles, caste, taskDescription, cliOverride = null) {
+  // 1. CLI override (highest precedence)
+  if (cliOverride) {
+    const validation = validateModel(profiles, cliOverride);
+    if (validation.valid) {
+      return { model: cliOverride, source: 'cli-override' };
+    }
+  }
+
+  // 2. User override
+  if (profiles && profiles.user_overrides && profiles.user_overrides[caste]) {
+    return { model: profiles.user_overrides[caste], source: 'user-override' };
+  }
+
+  // 3. Task-based routing
+  if (taskDescription && profiles && profiles.task_routing) {
+    const taskModel = getModelForTask(profiles.task_routing, taskDescription);
+    if (taskModel) {
+      return { model: taskModel, source: 'task-routing' };
+    }
+  }
+
+  // 4. Caste default
+  if (profiles && profiles.worker_models && profiles.worker_models[caste]) {
+    return { model: profiles.worker_models[caste], source: 'caste-default' };
+  }
+
+  // 5. Fallback (lowest precedence)
+  return { model: DEFAULT_MODEL, source: 'fallback' };
+}
+
 module.exports = {
   loadModelProfiles,
   getModelForCaste,
@@ -334,5 +408,7 @@ module.exports = {
   resetModelOverride,
   getEffectiveModel,
   getUserOverrides,
+  getModelForTask,
+  selectModelForTask,
   DEFAULT_MODEL,
 };
