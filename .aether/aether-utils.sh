@@ -95,7 +95,7 @@ shift 2>/dev/null || true
 case "$cmd" in
   help)
     cat <<'EOF'
-{"ok":true,"commands":["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
+{"ok":true,"commands":["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-timing-start","swarm-timing-get","swarm-timing-eta","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
 EOF
     ;;
   version)
@@ -1799,6 +1799,229 @@ NODESCRIPT
     ' "$DATA_DIR/COLONY_STATE.json")
 
     echo "$result"
+    ;;
+
+  # ============================================
+  # SWARM ACTIVITY TRACKING (colony visualization)
+  # ============================================
+
+  swarm-activity-log)
+    # Log an activity entry for swarm visualization
+    # Usage: swarm-activity-log <ant_name> <action> <details>
+    ant_name="${1:-}"
+    action="${2:-}"
+    details="${3:-}"
+    [[ -z "$ant_name" || -z "$action" || -z "$details" ]] && json_err "$E_VALIDATION_FAILED" "Usage: swarm-activity-log <ant_name> <action> <details>"
+
+    mkdir -p "$DATA_DIR"
+    log_file="$DATA_DIR/swarm-activity.log"
+    ts=$(date -u +"%H:%M:%S")
+    echo "[$ts] $ant_name: $action $details" >> "$log_file"
+    json_ok '"logged"'
+    ;;
+
+  swarm-display-init)
+    # Initialize swarm display state file
+    # Usage: swarm-display-init <swarm_id>
+    swarm_id="${1:-swarm-$(date +%s)}"
+    mkdir -p "$DATA_DIR"
+
+    display_file="$DATA_DIR/swarm-display.json"
+    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    atomic_write "$display_file" "{
+  \"swarm_id\": \"$swarm_id\",
+  \"timestamp\": \"$ts\",
+  \"active_ants\": [],
+  \"summary\": { \"total_active\": 0, \"by_caste\": {}, \"by_zone\": {} },
+  \"chambers\": {
+    \"fungus_garden\": {\"activity\": 0, \"icon\": \"🍄\"},
+    \"nursery\": {\"activity\": 0, \"icon\": \"🥚\"},
+    \"refuse_pile\": {\"activity\": 0, \"icon\": \"🗑️\"},
+    \"throne_room\": {\"activity\": 0, \"icon\": \"👑\"},
+    \"foraging_trail\": {\"activity\": 0, \"icon\": \"🌿\"}
+  }
+}"
+    json_ok "{\"swarm_id\":\"$swarm_id\",\"initialized\":true}"
+    ;;
+
+  swarm-display-update)
+    # Update ant activity in swarm display
+    # Usage: swarm-display-update <ant_name> <caste> <status> <task> [parent] [tools_json] [tokens]
+    ant_name="${1:-}"
+    caste="${2:-}"
+    status="${3:-}"
+    task="${4:-}"
+    parent="${5:-}"
+    tools_json="${6:-{}}"
+    tokens="${7:-0}"
+
+    [[ -z "$ant_name" || -z "$caste" || -z "$status" ]] && json_err "$E_VALIDATION_FAILED" "Usage: swarm-display-update <ant_name> <caste> <status> <task> [parent] [tools_json] [tokens]"
+
+    display_file="$DATA_DIR/swarm-display.json"
+
+    # Initialize if doesn't exist
+    if [[ ! -f "$display_file" ]]; then
+      bash "$0" swarm-display-init "default-swarm" >/devdev/null
+    fi
+
+    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    # Read current display and update using jq
+    updated=$(jq --arg ant "$ant_name" --arg caste "$caste" --arg status "$status" \
+      --arg task "$task" --arg parent "$parent" --argjson tools "$tools_json" \
+      --argjson tokens "$tokens" --arg ts "$ts" '
+      # Find existing ant or create new entry
+      (.active_ants | map(select(.name == $ant)) | length) as $exists |
+      if $exists > 0 then
+        # Update existing ant
+        .active_ants = [.active_ants[] | if .name == $ant then
+          . + {
+            caste: $caste,
+            status: $status,
+            task: $task,
+            parent: (if $parent != "" then $parent else .parent end),
+            tools: (if $tools != {} then $tools else .tools end),
+            tokens: (.tokens + $tokens),
+            updated_at: $ts
+          }
+        else . end]
+      else
+        # Add new ant
+        .active_ants += [{
+          name: $ant,
+          caste: $caste,
+          status: $status,
+          task: $task,
+          parent: (if $parent != "" then $parent else null end),
+          tools: (if $tools != {} then $tools else {read:0,grep:0,edit:0,bash:0} end),
+          tokens: $tokens,
+          started_at: $ts,
+          updated_at: $ts
+        }]
+      end |
+      # Recalculate summary
+      .summary.total_active = (.active_ants | length) |
+      .summary.by_caste = (.active_ants | group_by(.caste) | map({key: .[0].caste, value: length}) | from_entries) |
+      .summary.by_zone = (.active_ants | group_by(.status) | map({key: .[0].status, value: length}) | from_entries)
+    ' "$display_file") || json_err "$E_JSON_INVALID" "Failed to update swarm display"
+
+    atomic_write "$display_file" "$updated"
+
+    # Get emoji for response
+    emoji=$(get_caste_emoji "$caste")
+    json_ok "{\"updated\":true,\"ant\":\"$ant_name\",\"caste\":\"$caste\",\"emoji\":\"$emoji\"}"
+    ;;
+
+  swarm-display-get)
+    # Get current swarm display state
+    # Usage: swarm-display-get
+    display_file="$DATA_DIR/swarm-display.json"
+
+    if [[ ! -f "$display_file" ]]; then
+      json_ok '{"swarm_id":null,"active_ants":[],"summary":{"total_active":0,"by_caste":{},"by_zone":{}},"chambers":{}}'
+    else
+      json_ok "$(cat "$display_file")"
+    fi
+    ;;
+
+  swarm-timing-start)
+    # Record start time for an ant
+    # Usage: swarm-timing-start <ant_name>
+    ant_name="${1:-}"
+    [[ -z "$ant_name" ]] && json_err "$E_VALIDATION_FAILED" "Usage: swarm-timing-start <ant_name>"
+
+    mkdir -p "$DATA_DIR"
+    timing_file="$DATA_DIR/timing.log"
+    ts=$(date +%s)
+    ts_iso=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    # Remove any existing entry for this ant and append new one
+    if [[ -f "$timing_file" ]]; then
+      grep -v "^$ant_name|" "$timing_file" > "${timing_file}.tmp" 2>/dev/null || true
+      mv "${timing_file}.tmp" "$timing_file"
+    fi
+    echo "$ant_name|$ts|$ts_iso" >> "$timing_file"
+
+    json_ok "{\"ant\":\"$ant_name\",\"started_at\":\"$ts_iso\",\"timestamp\":$ts}"
+    ;;
+
+  swarm-timing-get)
+    # Get elapsed time for an ant
+    # Usage: swarm-timing-get <ant_name>
+    ant_name="${1:-}"
+    [[ -z "$ant_name" ]] && json_err "$E_VALIDATION_FAILED" "Usage: swarm-timing-get <ant_name>"
+
+    timing_file="$DATA_DIR/timing.log"
+
+    if [[ ! -f "$timing_file" ]] || ! grep -q "^$ant_name|" "$timing_file" 2>/dev/null; then
+      json_ok "{\"ant\":\"$ant_name\",\"started_at\":null,\"elapsed_seconds\":0,\"elapsed_formatted\":\"00:00\"}"
+      exit 0
+    fi
+
+    # Read start time
+    start_line=$(grep "^$ant_name|" "$timing_file" | tail -1)
+    start_ts=$(echo "$start_line" | cut -d'|' -f2)
+    start_iso=$(echo "$start_line" | cut -d'|' -f3)
+
+    now=$(date +%s)
+    elapsed=$((now - start_ts))
+
+    # Format as MM:SS
+    mins=$((elapsed / 60))
+    secs=$((elapsed % 60))
+    formatted=$(printf "%02d:%02d" $mins $secs)
+
+    json_ok "{\"ant\":\"$ant_name\",\"started_at\":\"$start_iso\",\"elapsed_seconds\":$elapsed,\"elapsed_formatted\":\"$formatted\"}"
+    ;;
+
+  swarm-timing-eta)
+    # Calculate ETA based on progress percentage
+    # Usage: swarm-timing-eta <ant_name> <percent_complete>
+    ant_name="${1:-}"
+    percent="${2:-0}"
+    [[ -z "$ant_name" ]] && json_err "$E_VALIDATION_FAILED" "Usage: swarm-timing-eta <ant_name> <percent_complete>"
+
+    # Validate percent is a number
+    if ! [[ "$percent" =~ ^[0-9]+$ ]]; then
+      percent=0
+    fi
+
+    # Clamp percent to 0-100
+    if [[ $percent -lt 0 ]]; then
+      percent=0
+    elif [[ $percent -gt 100 ]]; then
+      percent=100
+    fi
+
+    timing_file="$DATA_DIR/timing.log"
+
+    if [[ ! -f "$timing_file" ]] || ! grep -q "^$ant_name|" "$timing_file" 2>/dev/null; then
+      json_ok "{\"ant\":\"$ant_name\",\"percent\":$percent,\"eta_seconds\":null,\"eta_formatted\":\"--:--\"}"
+      exit 0
+    fi
+
+    # Read start time
+    start_ts=$(grep "^$ant_name|" "$timing_file" | tail -1 | cut -d'|' -f2)
+    now=$(date +%s)
+    elapsed=$((now - start_ts))
+
+    # Calculate ETA
+    if [[ $percent -le 0 ]]; then
+      eta_seconds=null
+      eta_formatted="--:--"
+    elif [[ $percent -ge 100 ]]; then
+      eta_seconds=0
+      eta_formatted="00:00"
+    else
+      # ETA = (elapsed / percent) * (100 - percent)
+      eta_seconds=$(( (elapsed * (100 - percent)) / percent ))
+      mins=$((eta_seconds / 60))
+      secs=$((eta_seconds % 60))
+      eta_formatted=$(printf "%02d:%02d" $mins $secs)
+    fi
+
+    json_ok "{\"ant\":\"$ant_name\",\"percent\":$percent,\"eta_seconds\":$eta_seconds,\"eta_formatted\":\"$eta_formatted\"}"
     ;;
 
   *)
