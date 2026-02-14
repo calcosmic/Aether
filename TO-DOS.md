@@ -22,6 +22,25 @@ This file tracks pending work items. Each todo is self-contained with full conte
 
 ## Priority 0.5: High Priority
 
+### Interactive Caste Model Configuration in Claude - 2026-02-14
+
+- **The current `/ant:verify-castes` is informational only. Users want an interactive configuration experience inside Claude Code** — run a command, see current model assignments in a table, then be prompted with multiple-choice questions to adjust them. Instead of running `aether caste-models set` in terminal before opening Claude, the slash command should:
+
+1. **Display current configuration** — Show all 10 castes with their assigned models, providers, and proxy health status in a formatted table
+2. **Prompt for action** — "Would you like to adjust any caste assignments?" (Yes / No)
+3. **If Yes:** Present multiple choice — "Which caste would you like to configure?" (prime, builder, watcher, oracle, scout, chaos, architect, archaeologist, colonizer, route_setter)
+4. **Show available models** — "Which model should builder use?" (glm-5 [z_ai], kimi-k2.5 [kimi], minimax-2.5 [minimax])
+5. **Confirm and apply** — Show the change, ask for confirmation, then call `setModelOverride()` programmatically
+6. **Verify the change** — Re-run verification to show the new assignment is active
+
+**Why this matters:** The CLI approach requires users to leave Claude, run terminal commands, then return. An interactive slash command keeps them in the flow and makes model configuration discoverable and guided.
+
+**Implementation:** Create new slash command `.claude/commands/ant/configure-castes.md` or enhance existing `verify-castes.md` with interactive prompts using `AskUserQuestion` tool pattern. Use `node -e "require('./bin/lib/model-profiles').setModelOverride(...)`" to apply changes programmatically.
+
+**Scope:** Small — mostly wiring existing library functions into an interactive flow. **Priority:** High — improves UX significantly for model configuration.
+
+---
+
 ### Implement Colony Lifecycle Management (Anthill Milestones + Archive) - 2026-02-13
 
 - **Build the ability to close/archive a colony session at any time and re-initialize for new work.** Currently the colony model is rigid: init -> plan -> build all phases -> complete. There's no way to park a colony mid-work, archive what was done, and start something new. This is the most important missing feature.
