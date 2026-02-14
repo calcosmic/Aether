@@ -19,6 +19,7 @@ const {
   wrapError,
 } = require('./lib/errors');
 const { logError, logActivity } = require('./lib/logger');
+const { UpdateTransaction, UpdateError } = require('./lib/update-transaction');
 
 // Color palette
 const c = require('./lib/colors');
@@ -780,10 +781,11 @@ function setupHub() {
   }
 }
 
-function updateRepo(repoPath, sourceVersion, opts) {
+async function updateRepo(repoPath, sourceVersion, opts) {
   opts = opts || {};
   const dryRun = opts.dryRun || false;
   const force = opts.force || false;
+  const quiet = opts.quiet || false;
 
   const repoAether = path.join(repoPath, '.aether');
   const repoVersionFile = path.join(repoAether, 'version.json');
@@ -799,89 +801,61 @@ function updateRepo(repoPath, sourceVersion, opts) {
   const targetDirs = ['.aether', '.claude/commands/ant', '.opencode/commands/ant', '.opencode/agents'];
 
   // Git safety: check for dirty files in target directories (skip in dry-run mode)
-  let stashCreated = false;
-  if (!dryRun && isGitRepo(repoPath)) {
-    const dirtyFiles = getGitDirtyFiles(repoPath, targetDirs);
-    if (dirtyFiles.length > 0) {
-      if (!force) {
-        return { status: 'dirty', files: dirtyFiles };
-      }
-      // --force: stash dirty files before proceeding
-      stashCreated = gitStashFiles(repoPath, dirtyFiles);
+  let dirtyFiles = [];
+  if (isGitRepo(repoPath)) {
+    dirtyFiles = getGitDirtyFiles(repoPath, targetDirs);
+    if (dirtyFiles.length > 0 && !force) {
+      return { status: 'dirty', files: dirtyFiles };
     }
+    // Note: --force handling is now done via checkpoint stash in UpdateTransaction
   }
 
-  // Sync system files from hub with cleanup
-  const systemResult = syncSystemFilesWithCleanup(HUB_SYSTEM, repoAether, { dryRun });
+  // Use UpdateTransaction for two-phase commit with automatic rollback
+  const transaction = new UpdateTransaction(repoPath, { sourceVersion, quiet });
 
-  // Sync commands from hub with cleanup
-  let commandsCopied = 0;
-  const allRemovedFiles = [...systemResult.removed];
+  try {
+    const result = await transaction.execute(sourceVersion, { dryRun });
 
-  const repoClaudeCmds = path.join(repoPath, '.claude', 'commands', 'ant');
-  if (fs.existsSync(HUB_COMMANDS_CLAUDE)) {
-    const result = syncDirWithCleanup(HUB_COMMANDS_CLAUDE, repoClaudeCmds, { dryRun });
-    commandsCopied += result.copied;
-    allRemovedFiles.push(...result.removed.map(f => `.claude/commands/ant/${f}`));
-  }
+    // Calculate file counts from sync result
+    const systemCopied = result.sync_result?.system?.copied || 0;
+    const commandsCopied = (result.sync_result?.commands?.copied || 0);
+    const agentsCopied = result.sync_result?.agents?.copied || 0;
 
-  const repoOpencodeCmds = path.join(repoPath, '.opencode', 'commands', 'ant');
-  if (fs.existsSync(HUB_COMMANDS_OPENCODE)) {
-    const result = syncDirWithCleanup(HUB_COMMANDS_OPENCODE, repoOpencodeCmds, { dryRun });
-    commandsCopied += result.copied;
-    allRemovedFiles.push(...result.removed.map(f => `.opencode/commands/ant/${f}`));
-  }
+    const systemRemoved = result.sync_result?.system?.removed?.length || 0;
+    const commandsRemoved = result.sync_result?.commands?.removed?.length || 0;
+    const agentsRemoved = result.sync_result?.agents?.removed?.length || 0;
 
-  // Sync agents from hub with cleanup
-  let agentsCopied = 0;
-  const repoAgents = path.join(repoPath, '.opencode', 'agents');
-  if (fs.existsSync(HUB_AGENTS)) {
-    const result = syncDirWithCleanup(HUB_AGENTS, repoAgents, { dryRun });
-    agentsCopied = result.copied;
-    allRemovedFiles.push(...result.removed.map(f => `.opencode/agents/${f}`));
-  }
+    const allRemovedFiles = [
+      ...(result.sync_result?.system?.removed || []),
+      ...(result.sync_result?.commands?.removed || []).map(f => `.claude/commands/ant/${f}`),
+      ...(result.sync_result?.agents?.removed || []).map(f => `.opencode/agents/${f}`),
+    ];
 
-  if (dryRun) {
     return {
-      status: 'dry-run',
+      status: result.status,
       from: currentVer,
       to: sourceVersion,
-      system: systemResult.copied,
+      system: systemCopied,
       commands: commandsCopied,
       agents: agentsCopied,
-      removed: allRemovedFiles.length,
+      removed: systemRemoved + commandsRemoved + agentsRemoved,
       removedFiles: allRemovedFiles,
+      stashCreated: !!transaction.checkpoint?.stashRef,
+      checkpoint_id: result.checkpoint_id,
     };
-  }
-
-  // Write version.json
-  writeJsonSync(repoVersionFile, { version: sourceVersion, updated_at: new Date().toISOString() });
-
-  // Update registry entry
-  const registry = readJsonSafe(HUB_REGISTRY);
-  if (registry) {
-    const ts = new Date().toISOString();
-    const existing = registry.repos.find(r => r.path === repoPath);
-    if (existing) {
-      existing.version = sourceVersion;
-      existing.updated_at = ts;
-    } else {
-      registry.repos.push({ path: repoPath, version: sourceVersion, registered_at: ts, updated_at: ts });
+  } catch (error) {
+    // Handle UpdateError with recovery commands
+    if (error instanceof UpdateError) {
+      // Re-throw with additional context
+      error.details = {
+        ...error.details,
+        repoPath,
+        sourceVersion,
+        from: currentVer,
+      };
     }
-    writeJsonSync(HUB_REGISTRY, registry);
+    throw error;
   }
-
-  return {
-    status: 'updated',
-    from: currentVer,
-    to: sourceVersion,
-    system: systemResult.copied,
-    commands: commandsCopied,
-    agents: agentsCopied,
-    removed: allRemovedFiles.length,
-    removedFiles: allRemovedFiles,
-    stashCreated,
-  };
 }
 
 // Commander.js program setup
@@ -1025,32 +999,51 @@ program
           continue;
         }
 
-        const result = updateRepo(repo.path, sourceVersion, { dryRun, force: forceFlag });
-        if (result.status === 'dirty') {
-          console.error(`  ${c.error('Dirty:')} ${repo.path} — uncommitted changes in managed files:`);
-          for (const f of result.files) console.error(`    ${f}`);
-          console.error(`  Skipping. Use --force to stash and update.`);
-          dirty++;
-        } else if (result.status === 'dry-run') {
-          log(`  Would update: ${repo.path} (${result.from} -> ${result.to}) [${result.system} system, ${result.commands} commands, ${result.agents} agents]`);
-          if (result.removed > 0) {
-            log(`  Would remove ${result.removed} stale files:`);
-            for (const f of result.removedFiles) log(`    - ${f}`);
+        try {
+          const result = await updateRepo(repo.path, sourceVersion, { dryRun, force: forceFlag, quiet: true });
+          if (result.status === 'dirty') {
+            console.error(`  ${c.error('Dirty:')} ${repo.path} — uncommitted changes in managed files:`);
+            for (const f of result.files) console.error(`    ${f}`);
+            console.error(`  Skipping. Use --force to stash and update.`);
+            dirty++;
+          } else if (result.status === 'dry-run') {
+            log(`  Would update: ${repo.path} (${result.from} -> ${result.to}) [${result.system} system, ${result.commands} commands, ${result.agents} agents]`);
+            if (result.removed > 0) {
+              log(`  Would remove ${result.removed} stale files:`);
+              for (const f of result.removedFiles) log(`    - ${f}`);
+            }
+            updated++;
+          } else if (result.status === 'updated') {
+            log(`  ${c.success('Updated:')} ${repo.path} (${result.from} -> ${result.to}) [${result.system} system, ${result.commands} commands, ${result.agents} agents]`);
+            if (result.removed > 0) {
+              log(`  Removed ${result.removed} stale files:`);
+              for (const f of result.removedFiles) log(`    - ${f}`);
+              totalRemoved += result.removed;
+            }
+            if (result.stashCreated) {
+              log(`  Stash created. Recover with: cd ${repo.path} && git stash pop`);
+            }
+            updated++;
+          } else {
+            log(`  Skipped: ${repo.path} (${result.reason})`);
           }
-          updated++;
-        } else if (result.status === 'updated') {
-          log(`  ${c.success('Updated:')} ${repo.path} (${result.from} -> ${result.to}) [${result.system} system, ${result.commands} commands, ${result.agents} agents]`);
-          if (result.removed > 0) {
-            log(`  Removed ${result.removed} stale files:`);
-            for (const f of result.removedFiles) log(`    - ${f}`);
-            totalRemoved += result.removed;
+        } catch (error) {
+          // Handle UpdateError with recovery commands
+          if (error instanceof UpdateError) {
+            console.error(`\n${c.error('========================================')}`);
+            console.error(c.error('UPDATE FAILED - RECOVERY REQUIRED'));
+            console.error(c.error('========================================'));
+            console.error(`\n${c.error('Error:')} ${error.message}`);
+            if (error.details?.checkpoint_id) {
+              console.error(`\nCheckpoint ID: ${error.details.checkpoint_id}`);
+            }
+            console.error(`\n${c.warning('To recover your workspace:')}`);
+            for (const cmd of error.recoveryCommands) {
+              console.error(`  ${cmd}`);
+            }
+            console.error(c.error('========================================'));
           }
-          if (result.stashCreated) {
-            log(`  Stash created. Recover with: cd ${repo.path} && git stash pop`);
-          }
-          updated++;
-        } else {
-          log(`  Skipped: ${repo.path} (${result.reason})`);
+          throw error;
         }
       }
 
@@ -1092,40 +1085,69 @@ program
         console.log(c.warning('Dry run — no files will be modified.\n'));
       }
 
-      const result = updateRepo(repoPath, sourceVersion, { dryRun, force: forceFlag });
+      try {
+        const result = await updateRepo(repoPath, sourceVersion, { dryRun, force: forceFlag });
 
-      if (result.status === 'dirty') {
-        const error = new GitError(
-          'Uncommitted changes in managed files',
-          { files: result.files, repo: repoPath }
-        );
-        logError(error);
-        console.error(JSON.stringify(error.toJSON(), null, 2));
-        console.error('\nUse --force to stash changes and update, or commit/stash manually first.');
-        process.exit(getExitCode(error.code));
-      }
+        if (result.status === 'dirty') {
+          const error = new GitError(
+            'Uncommitted changes in managed files',
+            { files: result.files, repo: repoPath }
+          );
+          logError(error);
+          console.error(JSON.stringify(error.toJSON(), null, 2));
+          console.error('\nUse --force to stash changes and update, or commit/stash manually first.');
+          process.exit(getExitCode(error.code));
+        }
 
-      if (result.status === 'dry-run') {
-        console.log(`Would update: ${result.from} -> ${result.to}`);
+        if (result.status === 'dry-run') {
+          console.log(`Would update: ${result.from} -> ${result.to}`);
+          console.log(`  ${result.system} system files, ${result.commands} command files, ${result.agents} agent files`);
+          if (result.removed > 0) {
+            console.log(`  Would remove ${result.removed} stale files:`);
+            for (const f of result.removedFiles) console.log(`    - ${f}`);
+          }
+          console.log('  Colony data (.aether/data/) untouched.');
+          return;
+        }
+
+        console.log(c.success(`Updated: ${result.from} -> ${result.to}`));
         console.log(`  ${result.system} system files, ${result.commands} command files, ${result.agents} agent files`);
         if (result.removed > 0) {
-          console.log(`  Would remove ${result.removed} stale files:`);
+          console.log(`  Removed ${result.removed} stale files:`);
           for (const f of result.removedFiles) console.log(`    - ${f}`);
         }
+        if (result.stashCreated) {
+          console.log('  Git stash created. Recover with: git stash pop');
+        }
+        if (result.checkpoint_id) {
+          console.log(`  Checkpoint: ${result.checkpoint_id}`);
+        }
         console.log('  Colony data (.aether/data/) untouched.');
-        return;
-      }
+      } catch (error) {
+        // Handle UpdateError with prominent recovery commands (UPDATE-04)
+        if (error instanceof UpdateError) {
+          console.error(`\n${c.error('========================================')}`);
+          console.error(c.error('UPDATE FAILED - RECOVERY REQUIRED'));
+          console.error(c.error('========================================'));
+          console.error(`\n${c.error('Error:')} ${error.message}`);
+          if (error.details?.checkpoint_id) {
+            console.error(`\nCheckpoint ID: ${error.details.checkpoint_id}`);
+          }
+          console.error(`\n${c.warning('To recover your workspace:')}`);
+          for (const cmd of error.recoveryCommands) {
+            console.error(`  ${cmd}`);
+          }
+          console.error(c.error('========================================'));
 
-      console.log(c.success(`Updated: ${result.from} -> ${result.to}`));
-      console.log(`  ${result.system} system files, ${result.commands} command files, ${result.agents} agent files`);
-      if (result.removed > 0) {
-        console.log(`  Removed ${result.removed} stale files:`);
-        for (const f of result.removedFiles) console.log(`    - ${f}`);
+          // Log to activity log
+          logError(error);
+
+          // Output structured JSON to stderr
+          console.error(JSON.stringify(error.toJSON(), null, 2));
+          process.exit(getExitCode(error.code) || 1);
+        }
+        throw error;
       }
-      if (result.stashCreated) {
-        console.log('  Git stash created. Recover with: git stash pop');
-      }
-      console.log('  Colony data (.aether/data/) untouched.');
     }
   }));
 
