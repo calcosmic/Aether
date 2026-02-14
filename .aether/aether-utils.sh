@@ -94,7 +94,7 @@ shift 2>/dev/null || true
 case "$cmd" in
   help)
     cat <<'EOF'
-{"ok":true,"commands":["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
+{"ok":true,"commands":["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
 EOF
     ;;
   version)
@@ -1556,6 +1556,77 @@ EOF
     }
     depth=$(get_spawn_depth "$ant_name")
     json_ok "$depth"
+    ;;
+
+  # --- Model Profile Commands ---
+  model-profile)
+    action="${1:-get}"
+    case "$action" in
+      get)
+        caste="${2:-}"
+        [[ -z "$caste" ]] && json_err "$E_VALIDATION_FAILED" "Usage: model-profile get <caste>"
+
+        profile_file="$AETHER_ROOT/.aether/model-profiles.yaml"
+        if [[ ! -f "$profile_file" ]]; then
+          json_ok '{"model":"kimi-k2.5","source":"default","caste":"'$caste'"}'
+          exit 0
+        fi
+
+        # Extract model for caste using awk (bash-compatible YAML parsing)
+        model=$(awk '/^worker_models:/{found=1; next} found && /^[^ ]/{exit} found && /^  '$caste':/{print $2; exit}' "$profile_file" 2>/dev/null)
+
+        [[ -z "$model" ]] && model="kimi-k2.5"
+        json_ok '{"model":"'$model'","source":"profile","caste":"'$caste'"}'
+        ;;
+
+      list)
+        profile_file="$AETHER_ROOT/.aether/model-profiles.yaml"
+        if [[ ! -f "$profile_file" ]]; then
+          json_ok '{"models":{},"source":"default"}'
+          exit 0
+        fi
+
+        # Extract all caste:model pairs as JSON
+        # Lines look like: "  prime: glm-5           # Complex coordination..."
+        models=$(awk '/^worker_models:/{found=1; next} found && /^[^ ]/{exit} found && /^  [a-z_]+:/{gsub(/:/,""); printf "\"%s\":\"%s\",", $1, $2}' "$profile_file" 2>/dev/null)
+        # Remove trailing comma
+        models="${models%,}"
+
+        json_ok '{"models":{'$models'},"source":"profile"}'
+        ;;
+
+      verify)
+        profile_file="$AETHER_ROOT/.aether/model-profiles.yaml"
+        [[ ! -f "$profile_file" ]] && json_err "$E_FILE_NOT_FOUND" "Profile not found" '{"file":"model-profiles.yaml"}'
+
+        # Check proxy health
+        proxy_health=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:4000/health 2>/dev/null || echo "000")
+        proxy_status=$([[ "$proxy_health" == "200" ]] && echo "healthy" || echo "unhealthy")
+
+        # Count castes
+        caste_count=$(awk '/^worker_models:/{found=1; next} found && /^[^ ]/{exit} found && /^  [a-z_]+:/{count++} END{print count+0}' "$profile_file" 2>/dev/null)
+
+        json_ok '{"profile_exists":true,"caste_count":'$caste_count',"proxy_status":"'$proxy_status'","proxy_endpoint":"http://localhost:4000"}'
+        ;;
+
+      *)
+        json_err "$E_VALIDATION_FAILED" "Usage: model-profile get <caste>|list|verify"
+        ;;
+    esac
+    ;;
+
+  model-get)
+    # Shortcut: model-get <caste>
+    caste="${1:-}"
+    [[ -z "$caste" ]] && json_err "$E_VALIDATION_FAILED" "Usage: model-get <caste>"
+
+    # Delegate to model-profile get
+    exec bash "$0" model-profile get "$caste"
+    ;;
+
+  model-list)
+    # Shortcut: list all models
+    exec bash "$0" model-profile list
     ;;
 
   *)
