@@ -22,6 +22,7 @@ const { logError, logActivity } = require('./lib/logger');
 const { UpdateTransaction, UpdateError, UpdateErrorCodes } = require('./lib/update-transaction');
 const { initializeRepo, isInitialized } = require('./lib/init');
 const { syncStateFromPlanning, reconcileStates } = require('./lib/state-sync');
+const { createVerificationReport } = require('./lib/model-verify');
 
 // Color palette
 const c = require('./lib/colors');
@@ -1523,6 +1524,54 @@ program
     }
   }));
 
+// Verify-models command - Verify model routing configuration
+program
+  .command('verify-models')
+  .description('Verify model routing configuration is active')
+  .action(wrapCommand(async () => {
+    const repoPath = process.cwd();
+    const report = await createVerificationReport(repoPath);
+
+    console.log('=== Model Routing Verification ===\n');
+
+    // Proxy status
+    console.log(`LiteLLM Proxy: ${report.proxy.running ? '✓ Running' : '✗ Not running'}`);
+    if (report.proxy.running) {
+      console.log(`  Latency: ${report.proxy.latency}ms`);
+    }
+
+    // Environment
+    console.log(`\nEnvironment:`);
+    console.log(`  ANTHROPIC_MODEL: ${report.env.model || '(not set)'}`);
+    console.log(`  ANTHROPIC_BASE_URL: ${report.env.baseUrl || '(not set)'}`);
+
+    // Caste assignments
+    console.log(`\nCaste Model Assignments:`);
+    for (const [caste, info] of Object.entries(report.castes)) {
+      const status = info.assigned ? '✓' : '✗';
+      console.log(`  ${status} ${caste}: ${info.model || 'default'}`);
+    }
+
+    // Model profiles file
+    console.log(`\nModel Profiles File:`);
+    if (report.profilesFile.exists) {
+      console.log(`  ✓ Found: ${report.profilesFile.path}`);
+      const profileCount = Object.keys(report.profilesFile.profiles).length;
+      console.log(`  Profiles: ${profileCount} castes configured`);
+    } else {
+      console.log(`  ✗ Not found: ${report.profilesFile.path}`);
+    }
+
+    // Issues
+    if (report.issues.length > 0) {
+      console.log(`\nIssues Found:`);
+      report.issues.forEach(issue => console.log(`  ⚠ ${issue}`));
+    }
+
+    // Recommendation
+    console.log(`\n${report.recommendation}`);
+  }));
+
 // Init command - Initialize Aether in current repository
 program
   .command('init')
@@ -1552,7 +1601,7 @@ program
       console.log('Next steps:');
       console.log('  1. Define your colony goal in .aether/data/COLONY_STATE.json');
       console.log('  2. Run: aether sync-state');
-      console.log('  3. Run: aether status');
+      console.log('  3. Run: aether verify-models');
       console.log('  4. Start building: /ant:init');
     }
   }));
@@ -1564,6 +1613,8 @@ program.on('--help', () => {
   console.log('  init                 Initialize Aether in current repository');
   console.log('  install              Install slash-commands and set up distribution hub');
   console.log('  update               Update current repo from hub');
+  console.log('  sync-state           Synchronize COLONY_STATE.json with .planning/STATE.md');
+  console.log('  verify-models        Verify model routing configuration');
   console.log('  version              Show installed version');
   console.log('  uninstall            Remove slash-commands (preserves project state and hub)');
   console.log('');
