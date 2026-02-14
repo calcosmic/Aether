@@ -9,62 +9,62 @@ profile: default
 # Caste-to-model mappings
 # Models are routed through LiteLLM proxy at localhost:4000
 worker_models:
-  # High-complexity castes: planning, architecture, coordination
-  prime: glm-5           # Complex coordination, strategic planning
-  architect: glm-5       # Pattern synthesis, design decisions
-  oracle: glm-5          # Deep analysis, foresight
-  route_setter: glm-5    # Task decomposition, planning
-  archaeologist: glm-5   # Historical analysis, pattern recognition
+  # Long-horizon reasoning castes: coordination, historical analysis
+  prime: glm-5           # Long-horizon coordination, strategic planning (200K context)
+  archaeologist: glm-5   # Historical pattern recognition across long timeframes
 
-  # Implementation castes: code generation, building
-  builder: kimi-k2.5     # Fast code generation, refactoring
+  # Planning and architecture castes: system design, decomposition
+  architect: minimax-2.5 # Architectural-level planning, system design (80.2% SWE-Bench)
+  oracle: minimax-2.5    # Research, foresight, browse/search (76.3% BrowseComp)
+  route_setter: minimax-2.5 # Task decomposition, efficient planning (20% fewer search rounds)
 
-  # Validation castes: testing, research, lightweight tasks
-  watcher: minimax-2.5   # Validation, testing, verification
-  scout: minimax-2.5     # Research, exploration, quick checks
-  chaos: minimax-2.5     # Resilience testing, edge case probing
-  colonizer: minimax-2.5 # Environment setup, exploration
+  # Implementation and validation castes: coding, testing, exploration
+  builder: kimi-k2.5     # Code generation, refactoring (76.8% SWE-Bench, 256K context)
+  watcher: kimi-k2.5     # Validation, testing, verification
+  scout: kimi-k2.5       # Research exploration, can spawn parallel sub-agents
+  chaos: kimi-k2.5       # Edge case probing, resilience testing
+  colonizer: kimi-k2.5   # Environment setup, visual coding from screenshots
 
 # Model metadata for routing decisions
 model_metadata:
   glm-5:
-    description: "Powerful reasoning model for complex tasks"
+    description: "744B MoE model (40B active), long-horizon agentic engineering"
     provider: "z_ai"
-    capabilities: [planning, architecture, analysis, coordination, complex_reasoning]
-    context_window: 32000
-    speed: "slow"
+    capabilities: [planning, coordination, long_context, complex_reasoning, agentic_workflows]
+    context_window: 200000
+    speed: "medium"
     cost_tier: "high"
     best_for:
-      - "Strategic planning and coordination"
-      - "Architectural decisions and design"
-      - "Complex analysis and synthesis"
-      - "Tasks requiring deep reasoning"
+      - "Long-horizon task execution (tested: 1 year business simulation)"
+      - "Strategic coordination and planning"
+      - "Historical pattern analysis across large contexts"
+      - "Multi-step autonomous workflows"
+
+  minimax-2.5:
+    description: "Frontier model for architectural planning and agentic tool use"
+    provider: "minimax"
+    capabilities: [system_design, architecture, browse, search, task_decomposition]
+    context_window: 200000
+    speed: "fast"
+    cost_tier: "medium"
+    best_for:
+      - "Architectural-level planning and system design"
+      - "Research with browse/search (76.3% BrowseComp)"
+      - "Efficient task decomposition (20% fewer search rounds)"
+      - "Full-stack development (80.2% SWE-Bench Verified)"
 
   kimi-k2.5:
-    description: "Fast code generation model"
+    description: "1T MoE model (32B active), multimodal agent with swarm capabilities"
     provider: "kimi"
-    capabilities: [coding, refactoring, testing, documentation]
+    capabilities: [coding, multimodal, agent_swarm, visual_coding, validation]
     context_window: 256000
     speed: "fast"
     cost_tier: "low"
     best_for:
-      - "Code implementation and generation"
-      - "Refactoring and code cleanup"
-      - "Test writing and documentation"
-      - "Fast iteration tasks"
-
-  minimax-2.5:
-    description: "Efficient model for validation and research"
-    provider: "minimax"
-    capabilities: [validation, research, quick_checks, testing]
-    context_window: 8000
-    speed: "fast"
-    cost_tier: "low"
-    best_for:
-      - "Validation and verification"
-      - "Research and exploration"
-      - "Quick checks and summaries"
-      - "Lightweight tasks"
+      - "Code generation and refactoring (76.8% SWE-Bench)"
+      - "Visual coding (screenshots to code)"
+      - "Parallel exploration (up to 100 sub-agents)"
+      - "Validation and testing workflows"
 
 # Task-based routing hints
 # Override caste defaults based on task keywords

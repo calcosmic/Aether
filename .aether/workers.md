@@ -65,16 +65,16 @@ Aether colony workers are spawned with model-specific configurations based on th
 
 | Caste | Model | Purpose |
 |-------|-------|---------|
-| prime | glm-5 | Complex coordination, strategic planning |
-| architect | glm-5 | Pattern synthesis, design decisions |
-| oracle | glm-5 | Deep analysis, foresight |
-| route_setter | glm-5 | Task decomposition, planning |
-| archaeologist | glm-5 | Historical analysis, pattern recognition |
-| builder | kimi-k2.5 | Fast code generation, refactoring |
-| watcher | minimax-2.5 | Validation, testing, verification |
-| scout | minimax-2.5 | Research, exploration, quick checks |
-| chaos | minimax-2.5 | Resilience testing, edge case probing |
-| colonizer | minimax-2.5 | Environment setup, exploration |
+| prime | glm-5 | Long-horizon coordination, strategic planning (200K context) |
+| archaeologist | glm-5 | Historical pattern analysis across long timeframes |
+| architect | minimax-2.5 | Architectural-level planning, system design |
+| oracle | minimax-2.5 | Research, foresight, browse/search (76.3% BrowseComp) |
+| route_setter | minimax-2.5 | Task decomposition, efficient planning (20% fewer search rounds) |
+| builder | kimi-k2.5 | Code generation, refactoring (76.8% SWE-Bench) |
+| watcher | kimi-k2.5 | Validation, testing, verification |
+| scout | kimi-k2.5 | Research exploration, parallel sub-agent spawning |
+| chaos | kimi-k2.5 | Edge case probing, resilience testing |
+| colonizer | kimi-k2.5 | Environment setup, visual coding from screenshots |
 
 ### Environment Variables
 
@@ -435,9 +435,9 @@ Next Steps / Recommendations: {required}
 
 **Model Context:**
 - Assigned model: kimi-k2.5
-- Strengths: Fast code generation, refactoring, testing
-- Best for: Implementation tasks, code writing, quick iteration
-- Context window: 256K tokens
+- Strengths: Code generation, refactoring, multimodal capabilities
+- Best for: Implementation tasks, code writing, visual coding from screenshots
+- Benchmark: 76.8% SWE-Bench Verified, 256K context
 
 **When to use:** Code implementation, file manipulation, command execution
 
@@ -491,10 +491,10 @@ Fix count: {N}/3
 👁️ **Purpose:** Validate implementation, run tests, and ensure quality. The colony's guardian -- when work is done, you verify it's correct and complete. Also handles security audits, performance analysis, and test coverage.
 
 **Model Context:**
-- Assigned model: minimax-2.5
-- Strengths: Efficient validation, thorough testing, quick checks
-- Best for: Verification, test coverage analysis, security audits
-- Context window: Standard
+- Assigned model: kimi-k2.5
+- Strengths: Validation, testing, visual regression testing
+- Best for: Verification, test coverage analysis, multimodal checks (screenshots)
+- Context window: 256K tokens, multimodal capable
 
 **When to use:** Quality review, testing, validation, security/performance audits, phase completion approval
 
@@ -600,10 +600,10 @@ Recommendation: {specific fix or investigation needed}
 🔍 **Purpose:** Gather information, search documentation, and retrieve context. The colony's researcher -- when the colony needs to know, you venture forth to find answers.
 
 **Model Context:**
-- Assigned model: minimax-2.5
-- Strengths: Efficient research, quick information retrieval
-- Best for: Documentation lookup, pattern discovery, exploration
-- Context window: Standard
+- Assigned model: kimi-k2.5
+- Strengths: Parallel exploration via agent swarm (up to 100 sub-agents), broad research
+- Best for: Documentation lookup, pattern discovery, wide exploration
+- Benchmark: Can coordinate 1,500 simultaneous tool calls
 
 **When to use:** Research questions, documentation lookup, finding information, learning new domains
 
@@ -623,10 +623,10 @@ Recommendation: {specific fix or investigation needed}
 🗺️ **Purpose:** Explore and index codebase structure. Build semantic understanding, detect patterns, and map dependencies. The colony's explorer -- when new territory is encountered, you venture forth to understand the landscape.
 
 **Model Context:**
-- Assigned model: minimax-2.5
-- Strengths: Efficient exploration, pattern detection
-- Best for: Codebase mapping, dependency analysis, environment setup
-- Context window: Standard
+- Assigned model: kimi-k2.5
+- Strengths: Visual coding, environment setup, can turn screenshots into functional code
+- Best for: Codebase mapping, dependency analysis, UI/prototype generation
+- Multimodal: Can process visual inputs alongside text
 
 **When to use:** Codebase exploration, structure mapping, dependency analysis, pattern detection
 
@@ -645,10 +645,10 @@ Recommendation: {specific fix or investigation needed}
 🏛️ **Purpose:** Synthesize knowledge, extract patterns, and coordinate documentation. The colony's wisdom -- when the colony learns, you organize and preserve that knowledge.
 
 **Model Context:**
-- Assigned model: glm-5
-- Strengths: Complex reasoning, pattern synthesis, design decisions
-- Best for: Architecture planning, strategic design, pattern recognition
-- Context window: Extended
+- Assigned model: minimax-2.5
+- Strengths: Architectural-level planning, system design, efficient task decomposition
+- Best for: Designing service layers, pattern synthesis, structural decisions
+- Benchmark: 80.2% SWE-Bench Verified, matches Claude Opus 4.6
 
 **When to use:** Knowledge synthesis, pattern extraction, documentation coordination, decision organization
 
@@ -665,6 +665,12 @@ Recommendation: {specific fix or investigation needed}
 ## Route-Setter
 
 📋 **Purpose:** Create structured phase plans, break down goals into achievable tasks, and analyze dependencies. The colony's planner -- when goals need decomposition, you chart the path forward.
+
+**Model Context:**
+- Assigned model: minimax-2.5
+- Strengths: Task decomposition, efficient planning, 20% fewer search rounds
+- Best for: Breaking down goals, creating phase structures, dependency analysis
+- Benchmark: Strong architectural planning, matches Claude Opus 4.6
 
 **When to use:** Planning, goal decomposition, phase structuring, dependency analysis
 
@@ -703,7 +709,15 @@ Steps:
 
 ## Prime Worker
 
-The **Prime Worker** is a special coordinator role at depth 1. When spawned by `/ant:build`, the Prime Worker:
+🏛️ **Purpose:** Coordinate complex, multi-step colony operations. The colony's leader -- when a phase requires orchestration across multiple castes, you direct the work.
+
+**Model Context:**
+- Assigned model: glm-5
+- Strengths: Long-horizon planning, strategic coordination, complex reasoning
+- Best for: Multi-phase coordination, long-term task execution, complex synthesis
+- Benchmark: 744B MoE (40B active), 200K context, tested on 1-year business simulations
+
+**When spawned by `/ant:build`, the Prime Worker:**
 
 1. **Reads phase context** -- tasks, success criteria, constraints
 2. **Self-organizes** -- decides what specialists to spawn based on task analysis
