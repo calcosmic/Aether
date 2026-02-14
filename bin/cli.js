@@ -1387,5 +1387,25 @@ program.configureOutput({
   outputError: (str, write) => write(c.error(str))
 });
 
-// Parse command line arguments
-program.parse();
+// Export functions for testing
+module.exports = {
+  hashFileSync,
+  validateManifest,
+  generateManifest,
+  computeFileHash,
+  isGitTracked,
+  getAllowlistedFiles,
+  generateCheckpointMetadata,
+  loadCheckpointMetadata,
+  saveCheckpointMetadata,
+  isUserData,
+  syncDirWithCleanup,
+  syncSystemFilesWithCleanup,
+  listFilesRecursive,
+  cleanEmptyDirs
+};
+
+// Parse command line arguments only when run directly (not when required as a module)
+if (require.main === module) {
+  program.parse();
+}
