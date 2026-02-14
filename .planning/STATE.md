@@ -10,14 +10,14 @@
 | Field | Value |
 |-------|-------|
 | **Phase** | 6 (Foundation — Safe Checkpoints & Testing Infrastructure) |
-| **Plan** | 06-04 complete, 2 remaining (06-05 through 06-06) |
-| **Status** | In progress - Plan 06-04 executed |
-| **Last Action** | Executed 06-04: Manifest Function Unit Tests |
+| **Plan** | 06-05 complete, 1 remaining (06-06) |
+| **Status** | In progress - Plan 06-05 executed |
+| **Last Action** | Executed 06-05: syncDirWithCleanup Unit Tests |
 
 **Progress:**
 ```
 [█░░░░░░░░░] 3% - v1.1 Bug Fixes
-Phase 6:  ████◆░░░░░ 67% (Foundation - 4/6 plans complete)
+Phase 6:  █████◆░░░░ 83% (Foundation - 5/6 plans complete)
 Phase 7:  ░░░░░░░░░░ 0% (Core Reliability)
 Phase 8:  ░░░░░░░░░░ 0% (Build Polish)
 ```
@@ -51,6 +51,8 @@ Phase 8:  ░░░░░░░░░░ 0% (Build Polish)
 | 2026-02-14 | test.before() for CLI module loading | commander.js has global state; load once, reset stubs between tests |
 | 2026-02-14 | Mock commander module in tests | Prevents CLI registration conflicts when using proxyquire |
 | 2026-02-14 | validateManifest should reject arrays | Arrays are not valid files objects (should be filename->hash mapping) |
+| 2026-02-14 | Serial test execution for commander.js | commander.js has global state; use test.serial() to avoid module reload conflicts |
+| 2026-02-14 | Shared mock state pattern | Load module once with proxyquire, reset mock state between tests instead of reloading |
 
 ### Open Questions
 
@@ -68,7 +70,7 @@ None currently.
 ## Session Continuity
 
 **Last Updated:** 2026-02-14
-**Updated By:** /cds:execute-phase 06-04
+**Updated By:** /cds:execute-phase 06-05
 
 ### Recent Changes
 - Created ROADMAP.md with 3-phase structure (Phases 6-8)
@@ -93,17 +95,21 @@ None currently.
   - 16 comprehensive tests covering manifest generation and validation
   - Fixed bug: validateManifest now rejects arrays as invalid files field
   - Used sinon + proxyquire with mocked commander module
+- **Executed 06-05:** Created unit tests for syncDirWithCleanup
+  - 15 comprehensive tests with mocked filesystem
+  - Tests cover copy, skip, cleanup, dry-run, idempotency
+  - Used serial execution to avoid commander.js conflicts
+  - Exported syncDirWithCleanup from cli.js for testing
 
 ### Next Actions
-1. Execute 06-05: Update System Repair
-2. Execute 06-05 and 06-06 remaining plans
-3. `/cds:plan-phase 7` - Plan Core Reliability phase
+1. Execute 06-06: Update System Integration Tests
+2. `/cds:plan-phase 7` - Plan Core Reliability phase
 
 ### Context for New Sessions
 
 **What we're building:** v1.1 bug fixes for Aether Colony System — critical reliability improvements including safe checkpoints (preventing data loss), phase advancement guards (preventing loops), and update system repair (automatic rollback).
 
-**Current state:** Phase 6 in progress. 4/6 plans complete (06-01 Testing Infrastructure, 06-02 Safe Checkpoints, 06-03 hashFileSync Tests, 06-04 Manifest Tests). 2 plans remaining.
+**Current state:** Phase 6 in progress. 5/6 plans complete (06-01 Testing Infrastructure, 06-02 Safe Checkpoints, 06-03 hashFileSync Tests, 06-04 Manifest Tests, 06-05 syncDirWithCleanup Tests). 1 plan remaining.
 
 **Key constraints:** Node.js >= 16, minimal dependencies, no cloud dependencies, repo-local state only.
 
