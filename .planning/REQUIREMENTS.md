@@ -103,11 +103,11 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MOD-01 | 9 | Pending |
-| MOD-02 | 9 | Pending |
-| MOD-03 | 9 | Pending |
-| MOD-04 | 9 | Pending |
-| MOD-05 | 9 | Pending |
+| MOD-01 | 9 | Complete |
+| MOD-02 | 9 | Complete |
+| MOD-03 | 9 | Complete |
+| MOD-04 | 9 | Complete |
+| MOD-05 | 9 | Complete |
 | MOD-06 | 11 | Pending |
 | MOD-07 | 11 | Pending |
 | MOD-08 | 11 | Pending |
@@ -127,9 +127,9 @@
 | VIZ-07 | 12 | Pending |
 | VIZ-08 | 12 | Pending |
 | VIZ-09 | 12 | Pending |
-| QUICK-01 | 9 | Pending |
-| QUICK-02 | 9 | Pending |
-| QUICK-03 | 9 | Pending |
+| QUICK-01 | 9 | Complete |
+| QUICK-02 | 9 | Complete |
+| QUICK-03 | 9 | Complete |
 
 **Coverage:**
 - v3.1 requirements: 27 total
