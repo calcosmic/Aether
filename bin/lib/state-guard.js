@@ -312,6 +312,216 @@ class StateGuard {
     // Atomic rename
     fs.renameSync(tempFile, this.stateFile);
   }
+
+  /**
+   * Check if evidence has all required fields and is fresh
+   * @param {object} state - Current state object
+   * @param {number} phase - Phase number
+   * @param {object} evidence - Evidence object to validate
+   * @returns {boolean} True if evidence is fresh and valid
+   */
+  hasFreshEvidence(state, phase, evidence) {
+    // Evidence must be an object
+    if (!evidence || typeof evidence !== 'object') {
+      return false;
+    }
+
+    // Required fields
+    const requiredFields = ['checkpoint_hash', 'test_results', 'timestamp'];
+    for (const field of requiredFields) {
+      if (!(field in evidence)) {
+        return false;
+      }
+    }
+
+    // Validate timestamp is ISO 8601 format
+    const timestamp = new Date(evidence.timestamp);
+    if (isNaN(timestamp.getTime())) {
+      return false;
+    }
+
+    // Check evidence is fresh (after state initialization)
+    const stateInitTime = new Date(state.initialized_at || '1970-01-01T00:00:00Z');
+    if (timestamp <= stateInitTime) {
+      return false;
+    }
+
+    // Check evidence is from current session (not inherited)
+    // Evidence timestamp should be after state initialization
+    const evidenceAge = Date.now() - timestamp.getTime();
+    const sessionAge = Date.now() - stateInitTime.getTime();
+    if (evidenceAge > sessionAge) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Enforce Iron Law: phase advancement requires fresh verification evidence
+   * @param {object} state - Current state object
+   * @param {number} phase - Phase number
+   * @param {object} evidence - Evidence object
+   * @throws {StateGuardError} If Iron Law is violated
+   */
+  enforceIronLaw(state, phase, evidence) {
+    if (!this.hasFreshEvidence(state, phase, evidence)) {
+      const requiredFields = ['checkpoint_hash', 'test_results', 'timestamp'];
+      const providedFields = evidence && typeof evidence === 'object' ? Object.keys(evidence) : [];
+      const missing = requiredFields.filter(f => !providedFields.includes(f));
+
+      throw new StateGuardError(
+        StateGuardErrorCodes.E_IRON_LAW_VIOLATION,
+        `Phase ${phase} advancement requires fresh verification evidence`,
+        {
+          phase,
+          missing,
+          provided: providedFields,
+          evidence_timestamp: evidence?.timestamp,
+          state_initialized_at: state.initialized_at
+        },
+        `Provide verification evidence: ${missing.length > 0 ? missing.join(', ') : 'fresh timestamp after state initialization'}`
+      );
+    }
+  }
+
+  /**
+   * Check idempotency - prevent rebuilding completed phases or skipping ahead
+   * @param {object} state - Current state object
+   * @param {number} fromPhase - Phase we're trying to advance from
+   * @returns {object} Result with canProceed flag and reason
+   */
+  checkIdempotency(state, fromPhase) {
+    const currentPhase = state.current_phase;
+
+    if (currentPhase > fromPhase) {
+      return {
+        canProceed: false,
+        reason: 'already_complete',
+        currentPhase: currentPhase,
+        message: `Phase ${fromPhase} already completed (currently at phase ${currentPhase})`
+      };
+    }
+
+    if (currentPhase < fromPhase) {
+      return {
+        canProceed: false,
+        reason: 'previous_incomplete',
+        currentPhase: currentPhase,
+        message: `Cannot advance from phase ${fromPhase} - currently at phase ${currentPhase} (previous phases incomplete)`
+      };
+    }
+
+    return { canProceed: true };
+  }
+
+  /**
+   * Validate phase transition is sequential
+   * @param {number} fromPhase - Current phase
+   * @param {number} toPhase - Target phase
+   * @throws {StateGuardError} If transition is invalid
+   */
+  validateTransition(fromPhase, toPhase) {
+    if (toPhase !== fromPhase + 1) {
+      throw new StateGuardError(
+        StateGuardErrorCodes.E_INVALID_TRANSITION,
+        `Invalid phase transition: ${fromPhase} -> ${toPhase}`,
+        { from: fromPhase, to: toPhase, expected: fromPhase + 1 },
+        'Phase transitions must be sequential (n -> n+1)'
+      );
+    }
+  }
+
+  /**
+   * Transition state from one phase to another
+   * @param {object} state - Current state object
+   * @param {number} fromPhase - Current phase
+   * @param {number} toPhase - Target phase
+   * @param {object} evidence - Verification evidence
+   * @returns {object} Updated state object
+   */
+  transitionState(state, fromPhase, toPhase, evidence) {
+    // Update phase
+    state.current_phase = toPhase;
+
+    // Add audit trail event (placeholder for STATE-04)
+    if (!state.events) {
+      state.events = [];
+    }
+
+    state.events.push({
+      timestamp: new Date().toISOString(),
+      type: 'phase_transition',
+      worker: process.env.WORKER_NAME || 'unknown',
+      details: {
+        from: fromPhase,
+        to: toPhase,
+        evidence_id: evidence?.checkpoint_hash || 'unknown'
+      }
+    });
+
+    return state;
+  }
+
+  /**
+   * Advance phase with full guard enforcement
+   * @param {number} fromPhase - Current phase number
+   * @param {number} toPhase - Target phase number
+   * @param {object} evidence - Verification evidence
+   * @returns {Promise<object>} Result object with status
+   */
+  async advancePhase(fromPhase, toPhase, evidence) {
+    // Acquire lock
+    await this.acquireLock();
+
+    try {
+      // Load state
+      const state = this.loadState();
+
+      // Check idempotency (STATE-02)
+      const idempotency = this.checkIdempotency(state, fromPhase);
+      if (!idempotency.canProceed) {
+        if (idempotency.reason === 'already_complete') {
+          // Return success but indicate already complete
+          return {
+            status: 'already_complete',
+            from: fromPhase,
+            to: toPhase,
+            currentPhase: idempotency.currentPhase
+          };
+        }
+        // Previous incomplete - throw error
+        throw new StateGuardError(
+          StateGuardErrorCodes.E_IDEMPOTENCY_CHECK,
+          idempotency.message,
+          { reason: idempotency.reason, currentPhase: idempotency.currentPhase },
+          'Complete previous phases before advancing'
+        );
+      }
+
+      // Validate transition
+      this.validateTransition(fromPhase, toPhase);
+
+      // Enforce Iron Law (STATE-01)
+      this.enforceIronLaw(state, fromPhase, evidence);
+
+      // Transition state
+      const updatedState = this.transitionState(state, fromPhase, toPhase, evidence);
+
+      // Save state
+      this.saveState(updatedState);
+
+      return {
+        status: 'transitioned',
+        from: fromPhase,
+        to: toPhase
+      };
+
+    } finally {
+      // Always release lock
+      this.releaseLock();
+    }
+  }
 }
 
 module.exports = {
