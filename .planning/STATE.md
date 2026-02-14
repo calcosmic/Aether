@@ -10,14 +10,14 @@
 | Field | Value |
 |-------|-------|
 | **Phase** | 6 (Foundation — Safe Checkpoints & Testing Infrastructure) |
-| **Plan** | 06-05 complete, 1 remaining (06-06) |
-| **Status** | In progress - Plan 06-05 executed |
-| **Last Action** | Executed 06-05: syncDirWithCleanup Unit Tests |
+| **Plan** | 06-06 complete, Phase 6 complete |
+| **Status** | Phase complete - Ready for Phase 7 |
+| **Last Action** | Executed 06-06: Update System Integration Tests |
 
 **Progress:**
 ```
-[█░░░░░░░░░] 3% - v1.1 Bug Fixes
-Phase 6:  █████◆░░░░ 83% (Foundation - 5/6 plans complete)
+[██░░░░░░░░] 5% - v1.1 Bug Fixes
+Phase 6:  ████████░░ 100% (Foundation - 6/6 plans complete)
 Phase 7:  ░░░░░░░░░░ 0% (Core Reliability)
 Phase 8:  ░░░░░░░░░░ 0% (Build Polish)
 ```
@@ -28,11 +28,12 @@ Phase 8:  ░░░░░░░░░░ 0% (Build Polish)
 
 | Metric | Target | Current |
 |--------|--------|---------|
-| Checkpoint safety | 100% user data preserved | Implemented - allowlist verified |
+| Checkpoint safety | 100% user data preserved | Verified - 91 system files only, no user data |
 | Phase loop prevention | 0 false advancements | Not measured |
 | Update reliability | 99% success rate | Not measured |
-| Test coverage (core sync) | 80%+ | Not measured |
+| Test coverage (core sync) | 80%+ | 40 new CLI unit tests added |
 | Build output accuracy | 100% synchronous | Not measured |
+| Test suite execution | Under 10 seconds | 4.4 seconds (95 tests) |
 
 ---
 
@@ -53,13 +54,14 @@ Phase 8:  ░░░░░░░░░░ 0% (Build Polish)
 | 2026-02-14 | validateManifest should reject arrays | Arrays are not valid files objects (should be filename->hash mapping) |
 | 2026-02-14 | Serial test execution for commander.js | commander.js has global state; use test.serial() to avoid module reload conflicts |
 | 2026-02-14 | Shared mock state pattern | Load module once with proxyquire, reset mock state between tests instead of reloading |
+| 2026-02-14 | Test error assertions must match CLI structure | error.error.message not error.error for error object access |
+| 2026-02-14 | Checkpoint files are gitignored by design | Local state only, not versioned - metadata generated on demand |
 
 ### Open Questions
 
 | Question | Blocking | Next Step |
 |----------|----------|-----------|
-| Exact .aether/ subdirectory contents? | No | Verify during Phase 6 planning |
-| Current test file structure? | No | Inspect during Phase 6 planning |
+| None currently | - | - |
 
 ### Known Blockers
 
@@ -70,7 +72,7 @@ None currently.
 ## Session Continuity
 
 **Last Updated:** 2026-02-14
-**Updated By:** /cds:execute-phase 06-05
+**Updated By:** /cds:execute-phase 06-06
 
 ### Recent Changes
 - Created ROADMAP.md with 3-phase structure (Phases 6-8)
@@ -100,16 +102,26 @@ None currently.
   - Tests cover copy, skip, cleanup, dry-run, idempotency
   - Used serial execution to avoid commander.js conflicts
   - Exported syncDirWithCleanup from cli.js for testing
+- **Executed 06-06:** Update System Integration Tests
+  - Verified package-lock.json committed for deterministic builds
+  - Fixed 2 failing tests (error.error.message property access)
+  - All 95 unit tests passing (40 new from Phase 6)
+  - Test suite runs in 4.4 seconds (under 10s target)
+  - Verified checkpoint system works end-to-end
+  - Confirmed user data NOT captured in checkpoints
 
 ### Next Actions
-1. Execute 06-06: Update System Integration Tests
-2. `/cds:plan-phase 7` - Plan Core Reliability phase
+1. `/cds:plan-phase 7` - Plan Core Reliability phase
 
 ### Context for New Sessions
 
 **What we're building:** v1.1 bug fixes for Aether Colony System — critical reliability improvements including safe checkpoints (preventing data loss), phase advancement guards (preventing loops), and update system repair (automatic rollback).
 
-**Current state:** Phase 6 in progress. 5/6 plans complete (06-01 Testing Infrastructure, 06-02 Safe Checkpoints, 06-03 hashFileSync Tests, 06-04 Manifest Tests, 06-05 syncDirWithCleanup Tests). 1 plan remaining.
+**Current state:** Phase 6 complete. All 6 plans executed (06-01 through 06-06). Foundation phase finished with:
+- Testing infrastructure (sinon, proxyquire, mock-fs helper)
+- Safe checkpoint system (allowlist-based, user data protected)
+- 40 new unit tests for CLI functions
+- All 95 tests passing
 
 **Key constraints:** Node.js >= 16, minimal dependencies, no cloud dependencies, repo-local state only.
 
