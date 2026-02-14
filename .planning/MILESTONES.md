@@ -1,8 +1,8 @@
 # Project Milestones: Aether Colony System
 
-## v1.1 Bug Fixes & Update System Repair (Shipped: 2026-02-14)
+## v3.0.0 Core Reliability & State Management (Shipped: 2026-02-14)
 
-**Delivered:** Critical bug fixes preventing phase loops, safe checkpoints protecting user data, and reliable update system with automatic rollback.
+**Delivered:** Safe checkpoints protecting user data, State Guards preventing phase loops, reliable update system with automatic rollback, and comprehensive testing infrastructure.
 
 **Phases completed:** 6-8 (14 plans total)
 
@@ -18,15 +18,21 @@
 
 **Stats:**
 
-- 62 commits (since v1.0)
+- 127 commits (since v2.4.3)
 - 72 files modified (+17,863 / -1,195 lines)
 - ~36k lines of JavaScript
 - 3 phases, 14 plans, 25 requirements
-- 1 day from v1.0 to ship
+- 1 day from v2.4.3 to ship
 
-**Git range:** `589954c` → `0a505d1`
+**Git range:** `v2.4.3` → `HEAD`
 
-**What's next:** v1.2 feature enhancements — worker caste specializations, enhanced swarm visualization, real-time monitoring
+**What's next:** v3.1 feature enhancements — worker caste specializations, enhanced swarm visualization, real-time monitoring
+
+---
+
+## v2.4.3 Previous Stable (2026-02-13)
+
+Previous stable release before v3.0.0 rewrite.
 
 ---
 
@@ -54,7 +60,5 @@
 - 2 days from start to ship
 
 **Git range:** `feat(01-*)` → `feat(05-03)`
-
-**What's next:** v1.1 bug fixes — safe checkpoints, phase loop prevention, update system repair
 
 ---
