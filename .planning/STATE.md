@@ -9,16 +9,16 @@
 
 | Field | Value |
 |-------|-------|
-| **Phase** | 6 (Foundation — Safe Checkpoints & Testing Infrastructure) |
-| **Plan** | 06-06 complete, Phase 6 complete |
-| **Status** | Phase complete - Ready for Phase 7 |
-| **Last Action** | Executed 06-06: Update System Integration Tests |
+| **Phase** | 7 (Core Reliability — State Guards & Update System) |
+| **Plan** | 07-02 complete, 1/4 plans in Phase 7 |
+| **Status** | In progress - StateGuard implemented |
+| **Last Action** | Executed 07-02: StateGuard with Iron Law enforcement |
 
 **Progress:**
 ```
-[██░░░░░░░░] 5% - v1.1 Bug Fixes
+[███░░░░░░░] 8% - v1.1 Bug Fixes
 Phase 6:  ████████░░ 100% (Foundation - 6/6 plans complete)
-Phase 7:  ░░░░░░░░░░ 0% (Core Reliability)
+Phase 7:  ██░░░░░░░░ 25% (Core Reliability - 1/4 plans)
 Phase 8:  ░░░░░░░░░░ 0% (Build Polish)
 ```
 
@@ -31,7 +31,7 @@ Phase 8:  ░░░░░░░░░░ 0% (Build Polish)
 | Checkpoint safety | 100% user data preserved | Verified - 91 system files only, no user data |
 | Phase loop prevention | 0 false advancements | Not measured |
 | Update reliability | 99% success rate | Not measured |
-| Test coverage (core sync) | 80%+ | 40 new CLI unit tests added |
+| Test coverage (core sync) | 80%+ | 58 total (40 CLI + 18 StateGuard) |
 | Build output accuracy | 100% synchronous | Not measured |
 | Test suite execution | Under 10 seconds | 4.4 seconds (95 tests) |
 
@@ -56,6 +56,11 @@ Phase 8:  ░░░░░░░░░░ 0% (Build Polish)
 | 2026-02-14 | Shared mock state pattern | Load module once with proxyquire, reset mock state between tests instead of reloading |
 | 2026-02-14 | Test error assertions must match CLI structure | error.error.message not error.error for error object access |
 | 2026-02-14 | Checkpoint files are gitignored by design | Local state only, not versioned - metadata generated on demand |
+| 2026-02-14 | StateGuardError extends Error with structured output | Consistent error handling with toJSON(), toString(), recovery info |
+| 2026-02-14 | Iron Law requires fresh verification evidence | checkpoint_hash, test_results, timestamp all required |
+| 2026-02-14 | Idempotency prevents both rebuild AND skip | Already complete phases return status; incomplete phases throw |
+| 2026-02-14 | FileLock uses PID-based stale detection | Process.kill(pid, 0) checks if lock owner is alive |
+| 2026-02-14 | Atomic writes via temp+rename pattern | Prevents partial state corruption on crash |
 
 ### Open Questions
 
@@ -72,7 +77,7 @@ None currently.
 ## Session Continuity
 
 **Last Updated:** 2026-02-14
-**Updated By:** /cds:execute-phase 06-06
+**Updated By:** /cds:execute-phase 07-02
 
 ### Recent Changes
 - Created ROADMAP.md with 3-phase structure (Phases 6-8)
@@ -109,19 +114,33 @@ None currently.
   - Test suite runs in 4.4 seconds (under 10s target)
   - Verified checkpoint system works end-to-end
   - Confirmed user data NOT captured in checkpoints
+- **Executed 07-02:** StateGuard with Iron Law enforcement
+  - Created bin/lib/state-guard.js (532 lines)
+  - StateGuardError class with structured error output
+  - FileLock class with PID-based stale detection
+  - Iron Law enforcement (STATE-01): requires checkpoint_hash, test_results, timestamp
+  - Idempotency checks (STATE-02): prevents rebuild and skip
+  - Lock acquisition during transitions (STATE-03)
+  - 18 comprehensive unit tests
+  - Updated mock-fs helper with openSync, closeSync, renameSync stubs
 
 ### Next Actions
-1. `/cds:plan-phase 7` - Plan Core Reliability phase
+1. Continue with Phase 7 plans (07-03, 07-04)
 
 ### Context for New Sessions
 
 **What we're building:** v1.1 bug fixes for Aether Colony System — critical reliability improvements including safe checkpoints (preventing data loss), phase advancement guards (preventing loops), and update system repair (automatic rollback).
 
-**Current state:** Phase 6 complete. All 6 plans executed (06-01 through 06-06). Foundation phase finished with:
+**Current state:** Phase 7 in progress. Plan 07-02 complete (StateGuard). Phase 6 finished with:
 - Testing infrastructure (sinon, proxyquire, mock-fs helper)
 - Safe checkpoint system (allowlist-based, user data protected)
 - 40 new unit tests for CLI functions
-- All 95 tests passing
+
+Phase 7 progress:
+- StateGuard class implemented with Iron Law enforcement
+- 18 new unit tests for StateGuard
+- File locking with stale detection
+- Idempotency checks prevent phase loops
 
 **Key constraints:** Node.js >= 16, minimal dependencies, no cloud dependencies, repo-local state only.
 
