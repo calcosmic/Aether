@@ -10,16 +10,16 @@
 | Field | Value |
 |-------|-------|
 | **Phase** | 8 (Build Polish — Output Timing & Integration) |
-| **Plan** | 08-01 complete, 1/N plans in Phase 8 |
-| **Status** | In progress - Build timing fixed, foreground execution implemented |
-| **Last Action** | Executed 08-01: Fixed build.md timing by removing run_in_background flags |
+| **Plan** | 08-02 complete, 2/N plans in Phase 8 |
+| **Status** | In progress - E2E integration test created, all v1.1 fixes verified working together |
+| **Last Action** | Executed 08-02: Created E2E integration test for checkpoint → update → build workflow |
 
 **Progress:**
 ```
-[██████░░░░] 55% - v1.1 Bug Fixes
+[██████░░░░] 60% - v1.1 Bug Fixes
 Phase 6:  ████████░░ 100% (Foundation - 6/6 plans complete)
 Phase 7:  ████████░░ 100% (Core Reliability - 6/6 plans complete)
-Phase 8:  █░░░░░░░░░ 10% (Build Polish - 1/N plans complete)
+Phase 8:  ██░░░░░░░░ 20% (Build Polish - 2/N plans complete)
 ```
 
 ---
@@ -31,7 +31,7 @@ Phase 8:  █░░░░░░░░░ 10% (Build Polish - 1/N plans complete)
 | Checkpoint safety | 100% user data preserved | Verified - 91 system files only, no user data |
 | Phase loop prevention | 0 false advancements | Not measured |
 | Update reliability | 99% success rate | Not measured |
-| Test coverage (core sync) | 80%+ | 206 total (40 CLI + 18 StateGuard + 17 FileLock + 22 EventAudit + 28 UpdateTransaction + 20 ErrorHandling + 12 Init + 6 Integration) |
+| Test coverage (core sync) | 80%+ | 209 total (40 CLI + 18 StateGuard + 17 FileLock + 22 EventAudit + 28 UpdateTransaction + 20 ErrorHandling + 12 Init + 6 Integration + 3 E2E workflow) |
 | Build output accuracy | 100% synchronous | Fixed - foreground execution ensures correct output order |
 | Test suite execution | Under 10 seconds | 4.4 seconds (95 tests) |
 
@@ -73,6 +73,7 @@ Phase 8:  █░░░░░░░░░ 10% (Build Polish - 1/N plans complete)
 | 2026-02-14 | Hash verification after sync before commit | UPDATE-02: verify before version update |
 | 2026-02-14 | Async execute() with automatic rollback | UPDATE-03: rollback on any error |
 | 2026-02-14 | Foreground Task execution for build workers | Removes misleading output timing — spawn summary now appears AFTER work completes |
+| 2026-02-14 | E2E tests verify complete v1.1 workflow | Single test file covers checkpoint → update → build with all requirements |
 
 ### Open Questions
 
@@ -173,6 +174,13 @@ None currently.
   - Partial update detection (E_PARTIAL_UPDATE, E_HUB_INACCESSIBLE)
   - Clear recovery commands in error messages
   - Created tests/unit/update-errors.test.js (20 tests)
+- **Executed 08-02:** E2E Integration Test for v1.1 Workflow
+  - Created tests/e2e/checkpoint-update-build.test.js (321 lines)
+  - Test 1: Complete workflow (init → checkpoint → StateGuard → advancement)
+  - Test 2: Iron Law enforcement, idempotency, state locking, audit trail
+  - Test 3: Update rollback preserves state, recovery commands, error handling
+  - All 3 E2E tests pass, covering SAFE-01 to SAFE-04, STATE-01 to STATE-04, UPDATE-01 to UPDATE-05
+  - Total test count: 209 (206 + 3 new E2E tests)
 - **Executed 07-06:** Initialization & Integration
   - Created bin/lib/init.js - new repo initialization (226 lines)
   - Created bin/lib/state-sync.js - STATE.md ↔ COLONY_STATE.json sync (276 lines)
@@ -191,8 +199,9 @@ None currently.
 
 **What we're building:** v1.1 bug fixes for Aether Colony System — critical reliability improvements including safe checkpoints (preventing data loss), phase advancement guards (preventing loops), and update system repair (automatic rollback).
 
-**Current state:** Phase 8 in progress. Build timing fixed:
+**Current state:** Phase 8 in progress. Build timing fixed and E2E tests created:
 - 08-01: Fixed build.md timing - foreground worker execution (3 tasks)
+- 08-02: E2E integration test verifying all v1.1 fixes work together (5 tasks)
 
 Phase 7 complete. All 6 plans implemented:
 - 07-01: FileLock with exclusive atomic locks (17 tests)
