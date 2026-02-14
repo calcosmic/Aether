@@ -1847,7 +1847,7 @@ NODESCRIPT
 
   swarm-display-update)
     # Update ant activity in swarm display
-    # Usage: swarm-display-update <ant_name> <caste> <ant_status> <task> [parent] [tools_json] [tokens] [chamber]
+    # Usage: swarm-display-update <ant_name> <caste> <ant_status> <task> [parent] [tools_json] [tokens] [chamber] [progress]
     ant_name="${1:-}"
     caste="${2:-}"
     ant_status="${3:-}"
@@ -1857,8 +1857,9 @@ NODESCRIPT
     [[ -z "$tools_json" ]] && tools_json="{}"
     tokens="${7:-0}"
     chamber="${8:-}"
+    progress="${9:-0}"
 
-    [[ -z "$ant_name" || -z "$caste" || -z "$ant_status" ]] && json_err "$E_VALIDATION_FAILED" "Usage: swarm-display-update <ant_name> <caste> <ant_status> <task> [parent] [tools_json] [tokens] [chamber]"
+    [[ -z "$ant_name" || -z "$caste" || -z "$ant_status" ]] && json_err "$E_VALIDATION_FAILED" "Usage: swarm-display-update <ant_name> <caste> <ant_status> <task> [parent] [tools_json] [tokens] [chamber] [progress]"
 
     display_file="$DATA_DIR/swarm-display.json"
 
@@ -1872,7 +1873,7 @@ NODESCRIPT
     # Read current display and update using jq
     updated=$(jq --arg ant "$ant_name" --arg caste "$caste" --arg ant_status "$ant_status" \
       --arg task "$task" --arg parent "$parent" --argjson tools "$tools_json" \
-      --argjson tokens "$tokens" --arg ts "$ts" --arg chamber "$chamber" '
+      --argjson tokens "$tokens" --arg ts "$ts" --arg chamber "$chamber" --argjson progress "$progress" '
       # Find existing ant or create new entry
       (.active_ants | map(select(.name == $ant)) | length) as $exists |
       # Get old chamber if ant exists
@@ -1894,6 +1895,7 @@ NODESCRIPT
             tools: (if $tools != {} then $tools else .tools end),
             tokens: (.tokens + $tokens),
             chamber: (if $chamber != "" then $chamber else (.chamber // null) end),
+            progress: (if $progress > 0 then $progress else (.progress // 0) end),
             updated_at: $ts
           }
         else . end]
@@ -1908,6 +1910,7 @@ NODESCRIPT
           tools: (if $tools != {} then $tools else {read:0,grep:0,edit:0,bash:0} end),
           tokens: $tokens,
           chamber: (if $chamber != "" then $chamber else null end),
+          progress: $progress,
           started_at: $ts,
           updated_at: $ts
         }]
@@ -1935,7 +1938,7 @@ NODESCRIPT
 
     # Get emoji for response
     emoji=$(get_caste_emoji "$caste")
-    json_ok "{\"updated\":true,\"ant\":\"$ant_name\",\"caste\":\"$caste\",\"emoji\":\"$emoji\",\"chamber\":\"$chamber\"}"
+    json_ok "{\"updated\":true,\"ant\":\"$ant_name\",\"caste\":\"$caste\",\"emoji\":\"$emoji\",\"chamber\":\"$chamber\",\"progress\":$progress}"
     ;;
 
   swarm-display-get)
