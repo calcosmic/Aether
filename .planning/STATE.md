@@ -10,10 +10,10 @@
 
 | Field | Value |
 |-------|-------|
-| **Phase** | 10 — Entombment & Egg Laying |
-| **Plan** | Complete |
-| **Status** | Complete |
-| **Last Action** | Phase 10 execution complete - all lifecycle commands ready |
+| **Phase** | 11 — Foraging Specialization |
+| **Plan** | 02 — Telemetry System |
+| **Status** | In Progress |
+| **Last Action** | Completed Plan 02 - Telemetry system with model performance tracking |
 
 ### Progress Bar
 
@@ -28,7 +28,7 @@ v3.1:    [████████░░░] 80% IN PROGRESS (4/4 plans complete
 |-------|------|--------|--------------|----------|
 | 9 | Caste Model Assignment | Complete | 8 | 100% (5/5 plans) |
 | 10 | Entombment & Egg Laying | Complete | 5 | 100% (4/4 plans) |
-| 11 | Foraging Specialization | Blocked | 3 | 0% |
+| 11 | Foraging Specialization | In Progress | 3 | 33% (1/3 plans) |
 | 12 | Colony Visualization | Blocked | 11 | 0% |
 
 ---
@@ -111,6 +111,9 @@ v3.1:    [████████░░░] 80% IN PROGRESS (4/4 plans complete
 | 2026-02-14 | Use chamber-list utility for tunnels command | Reuses existing JSON-returning utility for consistency |
 | 2026-02-14 | Truncate goal at 50 chars in tunnels list view | Keeps display compact while showing enough context |
 | 2026-02-14 | Detail view pattern with /command <name> | Consistent UX for single-item detail views |
+| 2026-02-14 | Telemetry errors are silent | Spawn logging continues even if telemetry fails (graceful degradation) |
+| 2026-02-14 | Routing decisions rotate at 1000 entries | Prevents unbounded file growth in telemetry.json |
+| 2026-02-14 | Atomic writes for telemetry | Temp file + rename pattern prevents data corruption during concurrent writes |
 
 ### Open Questions
 
@@ -132,18 +135,19 @@ v3.1:    [████████░░░] 80% IN PROGRESS (4/4 plans complete
 
 ### Last Session
 - **Date:** 2026-02-14
-- **Action:** Completed Plan 04 in Phase 10 - Tunnels Command
-- **Outcome:** /ant:tunnels command created and verified; supports list view, detail view, and empty state
+- **Action:** Completed Plan 02 in Phase 11 - Telemetry System
+- **Outcome:** telemetry.js module created with recording, querying, and rotation; integrated with spawn-logger.js; 31 unit tests passing
 
 ### Next Actions
-1. Execute Plan 05 - Milestone auto-detection (if remaining in Phase 10)
-2. Phase 10 complete - move to Phase 11 (Foraging Specialization)
+1. Execute Plan 03 - Task-based routing (uses telemetry for data-driven decisions)
+2. Continue Phase 11 (Foraging Specialization)
 
 ### Handoff Notes
-- Phase 10 Plan 04 complete - /ant:tunnels command ready
-- All lifecycle commands now available: entomb, lay-eggs, tunnels
-- Phase 10 at 100% (5/5 plans) - check if all requirements complete
-- Next: Plan 05 or Phase 11 (Foraging Specialization)
+- Phase 11 Plan 02 complete - Telemetry system ready
+- Telemetry records every spawn with model, caste, task, source
+- Query functions available: getTelemetrySummary, getModelPerformance, getRoutingStats
+- spawn-logger.js now automatically records telemetry on every spawn
+- Next: Plan 03 - Task-based routing
 
 ---
 
@@ -151,7 +155,7 @@ v3.1:    [████████░░░] 80% IN PROGRESS (4/4 plans complete
 
 | Metric | v3.0.0 | v3.1 Target |
 |--------|--------|-------------|
-| Test Coverage | 255 tests (209 + 46 new) | Maintain + add routing tests |
+| Test Coverage | 286 tests (255 + 31 new) | Maintain + add routing tests |
 | Commands | 5 core | +3 lifecycle +2 routing +1 viz |
 | State Files | COLONY_STATE.json | + chambers/, manifests |
 | Visualization | Basic status | Real-time immersive |
@@ -160,4 +164,4 @@ v3.1:    [████████░░░] 80% IN PROGRESS (4/4 plans complete
 
 *State file: `.planning/STATE.md`*
 *Updated: 2026-02-14*
-*Next update: After Phase 10 milestone or Phase 11 start*
+*Next update: After Phase 11 Plan 03 completion*
