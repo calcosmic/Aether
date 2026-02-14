@@ -39,7 +39,7 @@ const {
 const {
   checkProxyHealth,
   verifyModelRouting,
-  formatProxyStatus,
+  formatProxyStatusColored,
 } = require('./lib/proxy-health');
 
 // Color palette
@@ -1599,7 +1599,7 @@ casteModelsCmd
 
     // Display proxy status
     if (proxyConfig?.endpoint) {
-      const proxyStatus = formatProxyStatus(proxyHealth, proxyConfig.endpoint);
+      const proxyStatus = formatProxyStatusColored(proxyHealth, c) + c.dim(` @ ${proxyConfig.endpoint}`);
       console.log(`Proxy: ${proxyStatus}`);
       if (!proxyHealth?.healthy) {
         console.log(c.warning('Warning: Using default model (kimi-k2.5) for all castes'));
