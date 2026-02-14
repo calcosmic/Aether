@@ -10,14 +10,14 @@
 | Field | Value |
 |-------|-------|
 | **Phase** | 6 (Foundation — Safe Checkpoints & Testing Infrastructure) |
-| **Plan** | 06-01 complete, 5 remaining (06-02 through 06-06) |
-| **Status** | In progress - Plan 06-01 executed |
-| **Last Action** | Executed 06-01: Testing Infrastructure Setup |
+| **Plan** | 06-02 complete, 4 remaining (06-03 through 06-06) |
+| **Status** | In progress - Plan 06-02 executed |
+| **Last Action** | Executed 06-02: Safe Checkpoint System |
 
 **Progress:**
 ```
 [█░░░░░░░░░] 3% - v1.1 Bug Fixes
-Phase 6:  █◆░░░░░░░░ 17% (Foundation - 1/6 plans complete)
+Phase 6:  ██◆░░░░░░░ 33% (Foundation - 2/6 plans complete)
 Phase 7:  ░░░░░░░░░░ 0% (Core Reliability)
 Phase 8:  ░░░░░░░░░░ 0% (Build Polish)
 ```
@@ -28,7 +28,7 @@ Phase 8:  ░░░░░░░░░░ 0% (Build Polish)
 
 | Metric | Target | Current |
 |--------|--------|---------|
-| Checkpoint safety | 100% user data preserved | Not measured |
+| Checkpoint safety | 100% user data preserved | Implemented - allowlist verified |
 | Phase loop prevention | 0 false advancements | Not measured |
 | Update reliability | 99% success rate | Not measured |
 | Test coverage (core sync) | 80%+ | Not measured |
@@ -46,6 +46,7 @@ Phase 8:  ░░░░░░░░░░ 0% (Build Polish)
 | 2026-02-14 | Checkpoint allowlist approach | Never risk user data; explicit allowlist vs dangerous blocklist |
 | 2026-02-14 | sinon + proxyquire for testing | Industry standard, enables mocking fs module for cli.js tests |
 | 2026-02-14 | Mock-fs helper pattern | Comprehensive reusable helper promotes consistency across tests |
+| 2026-02-14 | Git-tracked files only for checkpoints | Git stash requires tracked files; filter prevents stash failures |
 
 ### Open Questions
 
@@ -75,17 +76,23 @@ None currently.
 - Plans validated with checker (1 iteration, all issues resolved)
 - **Executed 06-01:** Installed sinon@19.0.5 and proxyquire@2.1.3
 - **Executed 06-01:** Created tests/unit/helpers/mock-fs.js (269 lines)
+- **Executed 06-02:** Implemented checkpoint system in bin/cli.js
+  - CHECKPOINT_ALLOWLIST with explicit safe file patterns
+  - create/list/restore/verify subcommands
+  - SHA-256 hash integrity verification
+  - isGitTracked() filter to prevent stash failures
 
 ### Next Actions
-1. `/cds:execute-phase 6` - Execute Phase 6 plans (6 waves)
-2. Verify checkpoint system works without capturing user data
-3. `/cds:plan-phase 7` - Plan Core Reliability phase
+1. Execute 06-03: Phase Advancement Guards
+2. Execute 06-04: Update System Repair
+3. Execute 06-05 and 06-06 remaining plans
+4. `/cds:plan-phase 7` - Plan Core Reliability phase
 
 ### Context for New Sessions
 
 **What we're building:** v1.1 bug fixes for Aether Colony System — critical reliability improvements including safe checkpoints (preventing data loss), phase advancement guards (preventing loops), and update system repair (automatic rollback).
 
-**Current state:** Phase 6 planning complete. 6 plans created covering all 10 requirements. Ready to execute.
+**Current state:** Phase 6 in progress. 2/6 plans complete (06-01 Testing Infrastructure, 06-02 Safe Checkpoints). 4 plans remaining.
 
 **Key constraints:** Node.js >= 16, minimal dependencies, no cloud dependencies, repo-local state only.
 
