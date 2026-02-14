@@ -10,15 +10,15 @@
 | Field | Value |
 |-------|-------|
 | **Phase** | 7 (Core Reliability — State Guards & Update System) |
-| **Plan** | 07-03 complete, 3/4 plans in Phase 7 |
-| **Status** | In progress - Audit trail system implemented |
-| **Last Action** | Executed 07-03: Event audit trail with 10 event types |
+| **Plan** | 07-04 complete, 4/4 plans in Phase 7 |
+| **Status** | Phase complete - UpdateTransaction with two-phase commit implemented |
+| **Last Action** | Executed 07-04: UpdateTransaction with automatic rollback |
 
 **Progress:**
 ```
 [███░░░░░░░] 8% - v1.1 Bug Fixes
 Phase 6:  ████████░░ 100% (Foundation - 6/6 plans complete)
-Phase 7:  ██████░░░░ 75% (Core Reliability - 3/4 plans)
+Phase 7:  ████████░░ 100% (Core Reliability - 4/4 plans complete)
 Phase 8:  ░░░░░░░░░░ 0% (Build Polish)
 ```
 
@@ -31,7 +31,7 @@ Phase 8:  ░░░░░░░░░░ 0% (Build Polish)
 | Checkpoint safety | 100% user data preserved | Verified - 91 system files only, no user data |
 | Phase loop prevention | 0 false advancements | Not measured |
 | Update reliability | 99% success rate | Not measured |
-| Test coverage (core sync) | 80%+ | 151 total (40 CLI + 18 StateGuard + 17 FileLock + 22 EventAudit) |
+| Test coverage (core sync) | 80%+ | 179 total (40 CLI + 18 StateGuard + 17 FileLock + 22 EventAudit + 28 UpdateTransaction) |
 | Build output accuracy | 100% synchronous | Not measured |
 | Test suite execution | Under 10 seconds | 4.4 seconds (95 tests) |
 
@@ -67,6 +67,11 @@ Phase 8:  ░░░░░░░░░░ 0% (Build Polish)
 | 2026-02-14 | validateEvent returns structured result | { valid, errors } format enables programmatic handling |
 | 2026-02-14 | Static event query methods for utility | getEvents/getLatestEvent don't require StateGuard instance |
 | 2026-02-14 | Worker attribution via constructor | All events from guard instance properly attributed |
+| 2026-02-14 | UpdateError extends Error with recoveryCommands | UPDATE-04 requires prominent recovery command display |
+| 2026-02-14 | Four-phase update with explicit state tracking | preparing → syncing → verifying → committing |
+| 2026-02-14 | Checkpoint before any file modifications | UPDATE-01: ensures rollback safety |
+| 2026-02-14 | Hash verification after sync before commit | UPDATE-02: verify before version update |
+| 2026-02-14 | Async execute() with automatic rollback | UPDATE-03: rollback on any error |
 
 ### Open Questions
 
@@ -83,7 +88,7 @@ None currently.
 ## Session Continuity
 
 **Last Updated:** 2026-02-14
-**Updated By:** /cds:execute-phase 07-03
+**Updated By:** /cds:execute-phase 07-04
 
 ### Recent Changes
 - Created ROADMAP.md with 3-phase structure (Phases 6-8)
@@ -147,15 +152,31 @@ None currently.
   - Worker attribution for event accountability
   - 22 comprehensive unit tests for event functionality
   - All 151 tests passing
+- **Executed 07-04:** UpdateTransaction with two-phase commit
+  - Created bin/lib/update-transaction.js (855 lines)
+  - UpdateError class with recoveryCommands for UPDATE-04
+  - Four-phase commit: preparing → syncing → verifying → committing
+  - createCheckpoint() for rollback safety (UPDATE-01)
+  - Automatic rollback on any failure (UPDATE-03)
+  - Prominent recovery command display on errors (UPDATE-04)
+  - Integrated into CLI update command
+  - 28 comprehensive unit tests
+  - 179 total tests passing
 
 ### Next Actions
-1. Continue with Phase 7 plan 07-04 (Update system integration)
+1. Phase 7 complete - ready to move to Phase 8 (Build Polish)
 
 ### Context for New Sessions
 
 **What we're building:** v1.1 bug fixes for Aether Colony System — critical reliability improvements including safe checkpoints (preventing data loss), phase advancement guards (preventing loops), and update system repair (automatic rollback).
 
-**Current state:** Phase 7 in progress. Plan 07-03 complete (Audit Trail). Phase 6 finished with:
+**Current state:** Phase 7 complete. All 4 plans implemented:
+- 07-01: FileLock with exclusive atomic locks (17 tests)
+- 07-02: StateGuard with Iron Law enforcement (18 tests)
+- 07-03: Audit trail system with event sourcing (22 tests)
+- 07-04: UpdateTransaction with two-phase commit (28 tests)
+
+Phase 6 finished with:
 - Testing infrastructure (sinon, proxyquire, mock-fs helper)
 - Safe checkpoint system (allowlist-based, user data protected)
 - 40 new unit tests for CLI functions
@@ -170,6 +191,9 @@ Phase 7 progress:
 - File locking with stale detection
 - Idempotency checks prevent phase loops
 - Event sourcing for all state changes
+- UpdateTransaction with two-phase commit
+- Automatic rollback on sync/verification failure
+- Prominent recovery command display on errors
 
 **Key constraints:** Node.js >= 16, minimal dependencies, no cloud dependencies, repo-local state only.
 
