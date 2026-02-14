@@ -33,25 +33,25 @@
 - [x] **LIFE-05**: Entombment includes pheromone manifest (manifest.json with date, goal, phases completed, learnings preserved)
 
 **Differentiators:**
-- [ ] **LIFE-06**: ASCII art anthill visualization showing colony maturity journey
-- [ ] **LIFE-07**: Chamber comparison — compare pheromone trails across entombed colonies
+- [x] **LIFE-06**: ASCII art anthill visualization showing colony maturity journey
+- [x] **LIFE-07**: Chamber comparison — compare pheromone trails across entombed colonies
 
 ---
 
 ### Immersive Visualization
 
 **Table stakes:**
-- [ ] **VIZ-01**: Real-time foraging display — show ants currently working with caste emoji
-- [ ] **VIZ-02**: Collapsible tunnel view — expand/collapse to see nested agent spawns
-- [ ] **VIZ-03**: Tool usage stats — count of Read/Grep/Edit/Bash per ant
-- [ ] **VIZ-04**: Trophallaxis metrics (token usage) — show resources consumed per ant/task
-- [ ] **VIZ-05**: Timing information — duration per ant, elapsed time, ETA
+- [x] **VIZ-01**: Real-time foraging display — show ants currently working with caste emoji
+- [x] **VIZ-02**: Collapsible tunnel view — expand/collapse to see nested agent spawns
+- [x] **VIZ-03**: Tool usage stats — count of Read/Grep/Edit/Bash per ant
+- [x] **VIZ-04**: Trophallaxis metrics (token usage) — show resources consumed per ant/task
+- [x] **VIZ-05**: Timing information — duration per ant, elapsed time, ETA
 
 **Differentiators:**
-- [ ] **VIZ-06**: Ant-themed presentation — "3 foragers excavating...", pheromone trail metaphor for activity log
-- [ ] **VIZ-07**: Chamber activity map — show which nest zones (Fungus Garden, Nursery, Refuse Pile) have active ants
-- [ ] **VIZ-08**: Live excavation progress bars for long-running operations
-- [ ] **VIZ-09**: Color + caste emoji together — distinct color per caste (Builder=blue, Watcher=green, Scout=yellow, Chaos=red, Prime=purple) AND emojis (🔨🐜, 👁️🐜, 🔍🐜, 🎲🐜)
+- [x] **VIZ-06**: Ant-themed presentation — "3 foragers excavating...", pheromone trail metaphor for activity log
+- [x] **VIZ-07**: Chamber activity map — show which nest zones (Fungus Garden, Nursery, Refuse Pile) have active ants
+- [x] **VIZ-08**: Live excavation progress bars for long-running operations
+- [x] **VIZ-09**: Color + caste emoji together — distinct color per caste (Builder=blue, Watcher=green, Scout=yellow, Chaos=red, Prime=purple) AND emojis (🔨🐜, 👁️🐜, 🔍🐜, 🎲🐜)
 
 ---
 

@@ -27,7 +27,7 @@ This roadmap delivers the v3.1 "Open Chambers" milestone, expanding the Aether C
 | 9 | Caste Model Assignment | User can view, verify, and configure model assignments per caste | 8 | Complete |
 | 10 | Entombment & Egg Laying | User can archive colonies and start fresh with lifecycle management | 5 | Complete |
 | 11 | Foraging Specialization | System intelligently routes tasks to optimal models based on content | 3 | Complete |
-| 12 | Colony Visualization | User sees immersive real-time colony activity with ant-themed presentation | 11 | Planned |
+| 12 | Colony Visualization | User sees immersive real-time colony activity with ant-themed presentation | 11 | Complete |
 
 ---
 
