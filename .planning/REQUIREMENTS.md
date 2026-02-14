@@ -67,28 +67,28 @@ Critical bug fixes and reliability improvements for the v1.0 infrastructure.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SAFE-01 | 1 | Pending |
-| SAFE-02 | 1 | Pending |
-| SAFE-03 | 1 | Pending |
-| SAFE-04 | 1 | Pending |
-| TEST-01 | 1 | Pending |
-| TEST-02 | 1 | Pending |
-| TEST-03 | 1 | Pending |
-| TEST-04 | 1 | Pending |
-| TEST-05 | 1 | Pending |
-| TEST-06 | 1 | Pending |
-| UPDATE-01 | 2 | Pending |
-| UPDATE-02 | 2 | Pending |
-| UPDATE-03 | 2 | Pending |
-| UPDATE-04 | 2 | Pending |
-| UPDATE-05 | 2 | Pending |
-| STATE-01 | 2 | Pending |
-| STATE-02 | 2 | Pending |
-| STATE-03 | 2 | Pending |
-| STATE-04 | 2 | Pending |
-| BUILD-01 | 3 | Pending |
-| BUILD-02 | 3 | Pending |
-| BUILD-03 | 3 | Pending |
+| SAFE-01 | 6 | Pending |
+| SAFE-02 | 6 | Pending |
+| SAFE-03 | 6 | Pending |
+| SAFE-04 | 6 | Pending |
+| TEST-01 | 6 | Pending |
+| TEST-02 | 6 | Pending |
+| TEST-03 | 6 | Pending |
+| TEST-04 | 6 | Pending |
+| TEST-05 | 6 | Pending |
+| TEST-06 | 6 | Pending |
+| STATE-01 | 7 | Pending |
+| STATE-02 | 7 | Pending |
+| STATE-03 | 7 | Pending |
+| STATE-04 | 7 | Pending |
+| UPDATE-01 | 7 | Pending |
+| UPDATE-02 | 7 | Pending |
+| UPDATE-03 | 7 | Pending |
+| UPDATE-04 | 7 | Pending |
+| UPDATE-05 | 7 | Pending |
+| BUILD-01 | 8 | Pending |
+| BUILD-02 | 8 | Pending |
+| BUILD-03 | 8 | Pending |
 
 **Coverage:**
 - v1.1 requirements: 19 total
@@ -97,4 +97,4 @@ Critical bug fixes and reliability improvements for the v1.0 infrastructure.
 
 ---
 *Requirements defined: 2026-02-14*
-*Last updated: 2026-02-14 after research synthesis*
+*Last updated: 2026-02-14 after roadmap creation*
