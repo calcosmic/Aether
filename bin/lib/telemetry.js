@@ -142,13 +142,16 @@ function recordSpawnTelemetry(repoPath, { task, caste, model, source, timestamp 
     // Increment caste spawns
     modelStats.by_caste[caste].spawns++;
 
-    // Create routing decision record
+    // Create routing decision record with activity tracking fields
     const decision = {
       timestamp: decisionTimestamp,
       task: task || 'unknown',
       caste: caste || 'unknown',
       selected_model: model || 'default',
-      source: source || 'unknown'
+      source: source || 'unknown',
+      tools: { read: 0, grep: 0, edit: 0, bash: 0 },
+      tokens: 0,
+      started_at: decisionTimestamp
     };
 
     // Append to routing decisions
@@ -355,9 +358,79 @@ function getRoutingStats(repoPath, options = {}) {
   };
 }
 
+/**
+ * Update tool usage counter for a spawn
+ * @param {string} repoPath - Repository root path
+ * @param {string} spawnId - Spawn identifier (timestamp from recordSpawnTelemetry)
+ * @param {string} toolType - Tool type: 'read', 'grep', 'edit', 'bash'
+ * @param {number} [count=1] - Number to increment by
+ * @returns {boolean} True if updated successfully
+ */
+function updateToolUsage(repoPath, spawnId, toolType, count = 1) {
+  try {
+    const data = loadTelemetry(repoPath);
+
+    // Find the routing decision by timestamp
+    const decision = data.routing_decisions.find(d => d.timestamp === spawnId);
+
+    if (!decision) {
+      return false;
+    }
+
+    // Initialize tools object if not exists
+    if (!decision.tools) {
+      decision.tools = { read: 0, grep: 0, edit: 0, bash: 0 };
+    }
+
+    // Validate tool type
+    const validTools = ['read', 'grep', 'edit', 'bash'];
+    if (!validTools.includes(toolType)) {
+      return false;
+    }
+
+    // Increment the specified tool counter
+    decision.tools[toolType] += count;
+
+    // Save atomically
+    return saveTelemetry(repoPath, data);
+  } catch (error) {
+    return false;
+  }
+}
+
+/**
+ * Update token usage (trophallaxis metrics) for a spawn
+ * @param {string} repoPath - Repository root path
+ * @param {string} spawnId - Spawn identifier (timestamp from recordSpawnTelemetry)
+ * @param {number} tokens - Number of tokens to add (cumulative)
+ * @returns {boolean} True if updated successfully
+ */
+function updateTokenUsage(repoPath, spawnId, tokens) {
+  try {
+    const data = loadTelemetry(repoPath);
+
+    // Find the routing decision by timestamp
+    const decision = data.routing_decisions.find(d => d.timestamp === spawnId);
+
+    if (!decision) {
+      return false;
+    }
+
+    // Add tokens to existing count (cumulative)
+    decision.tokens = (decision.tokens || 0) + tokens;
+
+    // Save atomically
+    return saveTelemetry(repoPath, data);
+  } catch (error) {
+    return false;
+  }
+}
+
 module.exports = {
   recordSpawnTelemetry,
   updateSpawnOutcome,
+  updateToolUsage,
+  updateTokenUsage,
   getTelemetrySummary,
   getModelPerformance,
   getRoutingStats,
