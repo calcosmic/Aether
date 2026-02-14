@@ -1832,6 +1832,64 @@ program
     console.log(tree);
   }));
 
+// Nestmates command - List sibling colonies
+program
+  .command('nestmates')
+  .description('List sibling colonies (nestmates)')
+  .action(wrapCommand(async () => {
+    const repoPath = process.cwd();
+    const nestmates = findNestmates(repoPath);
+
+    if (nestmates.length === 0) {
+      console.log('No nestmates found (sibling directories with .aether/).');
+      return;
+    }
+
+    console.log(`Found ${nestmates.length} nestmate(s):\n`);
+    console.log(formatNestmates(nestmates));
+  }));
+
+// Context command - Show auto-loaded context
+program
+  .command('context')
+  .description('Show auto-loaded context including nestmates')
+  .action(wrapCommand(async () => {
+    const repoPath = process.cwd();
+
+    // Load nestmates
+    const nestmates = findNestmates(repoPath);
+    console.log('=== Auto-Loaded Context ===\n');
+
+    // Nestmates
+    console.log(`Nestmates: ${nestmates.length} found`);
+    if (nestmates.length > 0) {
+      console.log(formatNestmates(nestmates));
+    }
+
+    // TO-DOs from nestmates
+    console.log('\nCross-Project TO-DOs:');
+    let hasTodos = false;
+    for (const nestmate of nestmates) {
+      const todos = loadNestmateTodos(nestmate.path);
+      if (todos.length > 0) {
+        hasTodos = true;
+        console.log(`\n${nestmate.name}:`);
+        for (const todo of todos) {
+          console.log(`  ${todo.file}:`);
+          for (const item of todo.items.slice(0, 5)) {
+            console.log(`    ${item}`);
+          }
+          if (todo.items.length > 5) {
+            console.log(`    ... and ${todo.items.length - 5} more`);
+          }
+        }
+      }
+    }
+    if (!hasTodos) {
+      console.log('  No cross-project TO-DOs found.');
+    }
+  }));
+
 // Init command - Initialize Aether in current repository
 program
   .command('init')
