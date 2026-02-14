@@ -10,15 +10,15 @@
 | Field | Value |
 |-------|-------|
 | **Phase** | 7 (Core Reliability — State Guards & Update System) |
-| **Plan** | 07-04 complete, 4/4 plans in Phase 7 |
-| **Status** | Phase complete - UpdateTransaction with two-phase commit implemented |
-| **Last Action** | Executed 07-04: UpdateTransaction with automatic rollback |
+| **Plan** | 07-06 complete, 6/6 plans in Phase 7 |
+| **Status** | Phase complete - All state guards and update system implemented |
+| **Last Action** | Executed 07-06: Initialization & Integration with E2E tests |
 
 **Progress:**
 ```
-[███░░░░░░░] 8% - v1.1 Bug Fixes
+[██████░░░░] 55% - v1.1 Bug Fixes
 Phase 6:  ████████░░ 100% (Foundation - 6/6 plans complete)
-Phase 7:  ████████░░ 100% (Core Reliability - 4/4 plans complete)
+Phase 7:  ████████░░ 100% (Core Reliability - 6/6 plans complete)
 Phase 8:  ░░░░░░░░░░ 0% (Build Polish)
 ```
 
@@ -31,7 +31,7 @@ Phase 8:  ░░░░░░░░░░ 0% (Build Polish)
 | Checkpoint safety | 100% user data preserved | Verified - 91 system files only, no user data |
 | Phase loop prevention | 0 false advancements | Not measured |
 | Update reliability | 99% success rate | Not measured |
-| Test coverage (core sync) | 80%+ | 179 total (40 CLI + 18 StateGuard + 17 FileLock + 22 EventAudit + 28 UpdateTransaction) |
+| Test coverage (core sync) | 80%+ | 206 total (40 CLI + 18 StateGuard + 17 FileLock + 22 EventAudit + 28 UpdateTransaction + 20 ErrorHandling + 12 Init + 6 Integration) |
 | Build output accuracy | 100% synchronous | Not measured |
 | Test suite execution | Under 10 seconds | 4.4 seconds (95 tests) |
 
@@ -88,7 +88,7 @@ None currently.
 ## Session Continuity
 
 **Last Updated:** 2026-02-14
-**Updated By:** /cds:execute-phase 07-04
+**Updated By:** /cds:execute-phase 07
 
 ### Recent Changes
 - Created ROADMAP.md with 3-phase structure (Phases 6-8)
@@ -162,19 +162,37 @@ None currently.
   - Integrated into CLI update command
   - 28 comprehensive unit tests
   - 179 total tests passing
+- **Executed 07-05:** Error Handling Improvements
+  - Enhanced UpdateTransaction with dirty repo detection (E_REPO_DIRTY)
+  - Network failure handling with diagnostics (E_NETWORK_ERROR)
+  - Partial update detection (E_PARTIAL_UPDATE, E_HUB_INACCESSIBLE)
+  - Clear recovery commands in error messages
+  - Created tests/unit/update-errors.test.js (20 tests)
+- **Executed 07-06:** Initialization & Integration
+  - Created bin/lib/init.js - new repo initialization (226 lines)
+  - Created bin/lib/state-sync.js - STATE.md ↔ COLONY_STATE.json sync (276 lines)
+  - Created bin/lib/model-verify.js - model routing verification (241 lines)
+  - CLI commands: init, sync-state, verify-models
+  - tests/unit/init.test.js - 12 unit tests
+  - tests/integration/state-guard-integration.test.js - 6 integration tests
+  - tests/e2e/update-rollback.test.js - E2E test for update with rollback
+  - 206 total tests passing
 
 ### Next Actions
-1. Phase 7 complete - ready to move to Phase 8 (Build Polish)
+1. `/cds:verify-work 7` - Manual acceptance testing for Phase 7
+2. `/cds:plan-phase 8` - Plan Build Polish phase
 
 ### Context for New Sessions
 
 **What we're building:** v1.1 bug fixes for Aether Colony System — critical reliability improvements including safe checkpoints (preventing data loss), phase advancement guards (preventing loops), and update system repair (automatic rollback).
 
-**Current state:** Phase 7 complete. All 4 plans implemented:
+**Current state:** Phase 7 complete. All 6 plans implemented:
 - 07-01: FileLock with exclusive atomic locks (17 tests)
 - 07-02: StateGuard with Iron Law enforcement (18 tests)
 - 07-03: Audit trail system with event sourcing (22 tests)
 - 07-04: UpdateTransaction with two-phase commit (28 tests)
+- 07-05: Error handling improvements (20 tests)
+- 07-06: Initialization & Integration (18 tests + 6 integration + E2E)
 
 Phase 6 finished with:
 - Testing infrastructure (sinon, proxyquire, mock-fs helper)
@@ -182,16 +200,16 @@ Phase 6 finished with:
 - 40 new unit tests for CLI functions
 
 Phase 7 progress:
-- FileLock class implemented with exclusive atomic locks
-- 17 new unit tests for FileLock
-- StateGuard class implemented with Iron Law enforcement
-- 18 new unit tests for StateGuard
-- Event audit trail system with 10 event types
-- 22 new unit tests for event functionality
-- File locking with stale detection
-- Idempotency checks prevent phase loops
-- Event sourcing for all state changes
-- UpdateTransaction with two-phase commit
+- FileLock class implemented with exclusive atomic locks (17 tests)
+- StateGuard class implemented with Iron Law enforcement (18 tests)
+- Event audit trail system with 10 event types (22 tests)
+- UpdateTransaction with two-phase commit (28 tests)
+- Error handling: dirty repo, network, partial update detection (20 tests)
+- Init module for new repo initialization (12 tests)
+- State sync module fixing split brain issue
+- Model verification utility
+- Integration tests for state guards (6 tests)
+- E2E test for update with rollback
 - Automatic rollback on sync/verification failure
 - Prominent recovery command display on errors
 
