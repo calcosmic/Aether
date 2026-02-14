@@ -10,10 +10,10 @@
 
 | Field | Value |
 |-------|-------|
-| **Phase** | 9 — Caste Model Assignment |
-| **Plan** | 05 — Auto-Load Context |
-| **Status** | Complete |
-| **Last Action** | Completed Phase 9 execution 2026-02-14 |
+| **Phase** | 10 — Entombment & Egg Laying |
+| **Plan** | 01 — Chamber Management Utilities |
+| **Status** | In Progress |
+| **Last Action** | Completed Plan 01 - chamber utilities created |
 
 ### Progress Bar
 
@@ -27,7 +27,7 @@ v3.1:    [███████░░░] 60% IN PROGRESS (5/5 plans complete, 8
 | Phase | Name | Status | Requirements | Complete |
 |-------|------|--------|--------------|----------|
 | 9 | Caste Model Assignment | Complete | 8 | 100% (5/5 plans) |
-| 10 | Entombment & Egg Laying | Blocked | 5 | 0% |
+| 10 | Entombment & Egg Laying | In Progress | 5 | 20% (1/5 plans) |
 | 11 | Foraging Specialization | Blocked | 3 | 0% |
 | 12 | Colony Visualization | Blocked | 11 | 0% |
 
@@ -61,27 +61,23 @@ v3.1:    [███████░░░] 60% IN PROGRESS (5/5 plans complete, 8
 
 ## Current Focus
 
-### Phase 9: Caste Model Assignment
+### Phase 10: Entombment & Egg Laying
 
-**Goal:** Users can view, verify, and configure which AI models are assigned to each worker caste.
+**Goal:** Users can archive completed colonies (entomb), start fresh colonies (lay eggs), browse history (explore tunnels), and see automatic milestone detection.
 
 **Key Requirements:**
-- MOD-01: View model assignments per caste
-- MOD-02: Override model for specific caste
-- MOD-03: Verify LiteLLM proxy health
-- MOD-04: Show provider routing info
-- MOD-05: Log actual model used per spawn
-- QUICK-01: Surface Dreams in `/ant:status`
-- QUICK-02: Auto-Load Context
-- QUICK-03: `/ant:verify-castes` command
+- LIFE-01: Entomb completed colony to chambers
+- LIFE-02: Lay eggs (start fresh colony)
+- LIFE-03: Explore tunnels (browse archived colonies)
+- LIFE-04: Milestone auto-detection
+- LIFE-05: Pheromone preservation (learnings carry forward)
 
 **Success Criteria (What Must Be True):**
-1. User runs `aether caste-models list` and sees assignments
-2. User can set override that persists
-3. `/ant:verify-castes` shows proxy health + routing
-4. Worker spawn logs include actual model used
-5. `/ant:status` shows dream count and last dream time
-6. Commands auto-load TO-DOs and colony state
+1. User runs `/ant:entomb` and colony is archived to `.aether/chambers/`
+2. User runs `/ant:lay-eggs "new goal"` and fresh colony starts with preserved learnings
+3. User runs `/ant:tunnels` and sees archived colony history
+4. Milestone updates automatically based on progress
+5. Learnings and decisions carry forward between colonies
 
 **Blockers:** None
 
@@ -108,6 +104,7 @@ v3.1:    [███████░░░] 60% IN PROGRESS (5/5 plans complete, 8
 | 2026-02-14 | Cross-project TO-DOs limited to 5 items | Prevents overwhelming output |
 | 2026-02-14 | Spawn tree format includes model as 6th field | Complete audit trail of which models are used per spawn |
 | 2026-02-14 | Model parameter defaults to 'default' for backward compatibility | Existing spawn-log calls continue to work |
+| 2026-02-14 | Use jq -Rs '.[:-1]' to strip trailing newlines | jq -Rs adds trailing newline which pollutes JSON output |
 
 ### Open Questions
 
@@ -129,19 +126,20 @@ v3.1:    [███████░░░] 60% IN PROGRESS (5/5 plans complete, 8
 
 ### Last Session
 - **Date:** 2026-02-14
-- **Action:** Executed all 5 plans in Phase 9 - Caste Model Assignment
-- **Outcome:** All plans complete - model-profiles.js with tests, caste-models CLI commands, proxy health verification, worker spawn logging, auto-load context with dreams and nestmates
+- **Action:** Executed Plan 01 in Phase 10 - Chamber Management Utilities
+- **Outcome:** chamber-utils.sh with 4 functions, integrated into aether-utils.sh, chambers directory created
 
 ### Next Actions
-1. Run phase verification to confirm all must-haves
-2. Update REQUIREMENTS.md marking Phase 9 requirements complete
-3. Begin Phase 10 — Entombment & Egg Laying
+1. Execute Plan 02 - `/ant:entomb` command
+2. Execute Plan 03 - `/ant:lay-eggs` command
+3. Execute Plan 04 - `/ant:tunnels` command
+4. Execute Plan 05 - Milestone auto-detection
 
 ### Handoff Notes
-- Starting fresh milestone (v3.1) after completing v3.0.0
-- All v3.0.0 infrastructure is hardened and tested
-- Model routing verification is critical path for v3.1
-- Colony lifecycle commands can parallelize with advanced routing
+- Phase 10 Plan 01 complete - chamber utilities ready
+- Foundation laid for entomb/lay-eggs/tunnels commands
+- All chamber operations tested and working
+- Next: Build user-facing commands on top of utilities
 
 ---
 
@@ -158,4 +156,4 @@ v3.1:    [███████░░░] 60% IN PROGRESS (5/5 plans complete, 8
 
 *State file: `.planning/STATE.md`*
 *Updated: 2026-02-14*
-*Next update: After Phase 9 completion or Plan 06*
+*Next update: After Plan 02 completion or Phase 10 milestone*
