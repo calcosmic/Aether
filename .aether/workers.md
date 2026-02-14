@@ -72,9 +72,9 @@ Aether colony workers are spawned with model-specific configurations based on th
 | route_setter | kimi-k2.5 | Task decomposition, structured planning (256K context) |
 | builder | kimi-k2.5 | Code generation, refactoring (76.8% SWE-Bench) |
 | watcher | kimi-k2.5 | Validation, testing, verification |
-| scout | kimi-k2.5 | Research exploration, parallel sub-agent spawning |
+| scout | minimax-2.5| Research exploration, parallel sub-agent spawning |
 | chaos | kimi-k2.5 | Edge case probing, resilience testing |
-| colonizer | kimi-k2.5 | Environment setup, visual coding from screenshots |
+| colonizer | minimax-2.5| Environment setup, visual coding from screenshots |
 
 ### Environment Variables
 

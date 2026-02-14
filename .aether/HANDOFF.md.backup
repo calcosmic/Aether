@@ -1,0 +1,41 @@
+# Colony Session Paused
+
+## Quick Resume
+Run `/ant:resume-colony` in a new session.
+
+## State at Pause
+- Goal: "Sync Aether commands to global Claude and OpenCode config directories and ensure we have a system for this that works and doesnt cause confusion with other agents in other repos, it must be a bulletproof system"
+- State: READY
+- Current Phase: 5 — Implement Conflict Prevention System
+- Session: session_1739452800_sync
+- Paused: 2026-02-13T20:30:00Z
+
+## Active Pheromones
+None active.
+
+## Phase Progress
+- Phase 1: Establish Command Source of Truth [completed]
+- Phase 2: Fix Claude Code Global Sync (Already Working) [completed]
+- Phase 3: Fix OpenCode Strategy (Hub-Based Distribution Only) [completed]
+- Phase 4: Implement Hash-Based Idempotency [completed]
+- Phase 5: Implement Conflict Prevention System [pending]
+- Phase 6: Document and Test the System [pending]
+
+## Current Phase Tasks
+- [ ] 5.1: Document namespace distinctiveness
+- [ ] 5.2: Add namespace isolation verification
+
+## What Was Happening
+The colony has completed Phases 1-4 successfully:
+- Phase 1: Established command source of truth (package-local)
+- Phase 2: Verified Claude Code global sync works
+- Phase 3: Accepted OpenCode requires repo-local setup (hub-based distribution)
+- Phase 4: Implemented hash-based idempotency (files only copied when content changes)
+
+Phase 5 is now starting - implementing conflict prevention to ensure 'ant' namespace is distinct from other agents' namespaces.
+
+## Next Steps on Resume
+1. Start Phase 5: Document namespace distinctiveness (ant vs cds vs mds vs st:)
+2. Then verify namespace isolation - ensure no collisions with other agents
+3. After Phase 5, advance to Phase 6: Document and Test the System
+4. Run end-to-end sync tests (install, update, update --all)
