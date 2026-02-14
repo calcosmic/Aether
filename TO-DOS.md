@@ -41,6 +41,40 @@ This file tracks pending work items. Each todo is self-contained with full conte
 
 ---
 
+### Empirically Verify Model Routing Actually Works - 2026-02-14
+
+- **Phase 9 built all the infrastructure for model routing, but we haven't proven spawned workers actually use different models.** The configuration exists (caste → model mappings in YAML), CLI commands can view/set assignments, and `spawn-with-model.sh` sets `ANTHROPIC_MODEL` before spawning. But whether child agents actually receive and use that variable is **unverified**.
+
+**The Problem:**
+- `ANTHROPIC_MODEL` is set in parent environment
+- Task tool documentation claims environment inheritance works
+- But empirical verification is blocked by exhausted Anthropic tokens (proxy returns 401)
+- If inheritance doesn't work, ALL workers use default model regardless of caste assignment
+
+**Test Protocol:**
+1. Ensure LiteLLM proxy is running with valid API keys
+2. Run `/ant:verify-castes` slash command
+3. Step 3 performs "Test Spawn Verification" — spawns a builder worker
+4. Worker reports back: `ANTHROPIC_MODEL=kimi-k2.5` (expected for builder)
+5. If model matches caste assignment → routing works
+6. If model is undefined or wrong → routing broken, need fix
+
+**What "works" means:**
+- Builder caste → `ANTHROPIC_MODEL=kimi-k2.5` in spawned worker
+- Oracle caste → `ANTHROPIC_MODEL=minimax-2.5` in spawned worker
+- Prime caste → `ANTHROPIC_MODEL=glm-5` in spawned worker
+
+**If broken, possible fixes:**
+- Task tool doesn't inherit environment (Claude Code limitation)
+- Need to pass environment explicitly in Task tool call
+- Need wrapper script that exports vars then spawns
+
+**Blocked by:** Anthropic token exhaustion (proxy auth fails). **Unblock:** Add API key to LiteLLM config, restart proxy, run verification.
+
+**Scope:** Testing only — infrastructure is built. **Priority:** High — core feature of Phase 9 is unverified.
+
+---
+
 ### Implement Colony Lifecycle Management (Anthill Milestones + Archive) - 2026-02-13
 
 - **Build the ability to close/archive a colony session at any time and re-initialize for new work.** Currently the colony model is rigid: init -> plan -> build all phases -> complete. There's no way to park a colony mid-work, archive what was done, and start something new. This is the most important missing feature.
