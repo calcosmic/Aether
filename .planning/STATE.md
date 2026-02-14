@@ -11,9 +11,9 @@
 | Field | Value |
 |-------|-------|
 | **Phase** | 10 — Entombment & Egg Laying |
-| **Plan** | 02 — Entomb Command |
+| **Plan** | 03 — Lay Eggs & Milestone Detection |
 | **Status** | In Progress |
-| **Last Action** | Completed Plan 02 - /ant:entomb command created |
+| **Last Action** | Completed Plan 03 - /ant:lay-eggs and milestone detection |
 
 ### Progress Bar
 
@@ -27,7 +27,7 @@ v3.1:    [███████░░░] 60% IN PROGRESS (5/5 plans complete, 8
 | Phase | Name | Status | Requirements | Complete |
 |-------|------|--------|--------------|----------|
 | 9 | Caste Model Assignment | Complete | 8 | 100% (5/5 plans) |
-| 10 | Entombment & Egg Laying | In Progress | 5 | 40% (2/5 plans) |
+| 10 | Entombment & Egg Laying | In Progress | 5 | 60% (3/5 plans) |
 | 11 | Foraging Specialization | Blocked | 3 | 0% |
 | 12 | Colony Visualization | Blocked | 11 | 0% |
 
@@ -106,6 +106,8 @@ v3.1:    [███████░░░] 60% IN PROGRESS (5/5 plans complete, 8
 | 2026-02-14 | Model parameter defaults to 'default' for backward compatibility | Existing spawn-log calls continue to work |
 | 2026-02-14 | Use jq -Rs '.[:-1]' to strip trailing newlines | jq -Rs adds trailing newline which pollutes JSON output |
 | 2026-02-14 | Entomb uses coffin emoji (⚰️) not urn (🏺) | Avoids visual conflict with seal command |
+| 2026-02-14 | Compute version from phase counts | Automatic semantic versioning based on progress |
+| 2026-02-14 | Preserve all learnings/decisions, filter instincts by confidence | Learnings validated; instincts need threshold |
 
 ### Open Questions
 
@@ -127,20 +129,21 @@ v3.1:    [███████░░░] 60% IN PROGRESS (5/5 plans complete, 8
 
 ### Last Session
 - **Date:** 2026-02-14
-- **Action:** Executed Plan 02 in Phase 10 - Entomb Command
-- **Outcome:** /ant:entomb command created for Claude Code and OpenCode with validation, confirmation, and chamber integration
+- **Action:** Executed Plan 03 in Phase 10 - Lay Eggs & Milestone Detection
+- **Outcome:** /ant:lay-eggs command and milestone-detect utility created; pheromone preservation working
 
 ### Next Actions
-1. Execute Plan 03 - `/ant:lay-eggs` command
-2. Execute Plan 04 - `/ant:tunnels` command
-3. Execute Plan 05 - Milestone auto-detection
+1. Execute Plan 04 - `/ant:tunnels` command
+2. Execute Plan 05 - Milestone auto-detection
+3. Phase 10 complete - move to Phase 11 (Foraging Specialization)
 
 ### Handoff Notes
-- Phase 10 Plan 02 complete - /ant:entomb command ready
-- Command validates colony completion before archiving
-- User confirmation required before destructive operation
-- Chamber creation with manifest and state reset working
-- Next: Plan 03 - /ant:lay-eggs command
+- Phase 10 Plan 03 complete - /ant:lay-eggs and milestone detection ready
+- milestone-detect utility computes milestone from state automatically
+- /ant:status displays current milestone with version
+- /ant:lay-eggs preserves pheromones (learnings/decisions/instincts)
+- Fresh colonies start at "First Mound" milestone
+- Next: Plan 04 - /ant:tunnels command
 
 ---
 
