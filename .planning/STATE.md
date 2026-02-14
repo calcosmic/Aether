@@ -13,10 +13,10 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 
 **Milestone:** v1.0 Infrastructure
 **Phase:** 5 of 5 — State & Context Restoration
-**Plan:** 2 of 3 — Spawn Tree Reconstruction
-**Status:** ✓ Plan 05-02 complete
+**Plan:** 3 of 3 — Command State Loading Integration
+**Status:** ✓ Phase 5 complete
 
-**Progress:** [█████████████] 94% (17/18 requirements complete)
+**Progress:** [██████████████] 100% (18/18 requirements complete)
 
 ---
 
@@ -54,6 +54,9 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 | 2026-02-13 | Lock released on validation failure | Prevents lock starvation from corrupted state |
 | 2026-02-14 | Temporary files for Bash 3.2 compatibility | No associative arrays, works on macOS |
 | 2026-02-14 | Safety limit on depth calculation | Prevents infinite loops, not depth capping |
+| 2026-02-14 | All ant commands load state via load-state | Consistent lock protection and error handling |
+| 2026-02-14 | HANDOFF.md cleaned up after display | Temporary like pheromone trail after delivery |
+| 2026-02-14 | Paused flag tracks pause/resume state | Enables accurate resume behavior detection |
 
 ---
 
@@ -62,6 +65,7 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 **Plans executed:**
 - 05-01-state-loading: Created state-loader.sh with lock protection, validation, and handoff detection
 - 05-02-spawn-tree-reconstruction: Spawn tree parsing and reconstruction with parent-child relationships
+- 05-03-command-state-loading: Integrated state loading into all ant commands with handoff cleanup
 
 **Requirements completed:**
 - STATE-01: State loading utility with file lock protection ✓
@@ -72,6 +76,10 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 - STATE-06: Parent-child relationships preserved ✓
 - STATE-07: Spawn depth calculation ✓
 - STATE-08: Active spawn queries ✓
+- STATE-09: Every ant command loads state before executing ✓
+- STATE-10: Resumption context displays automatically ✓
+- STATE-11: Handoff cleanup after successful resume ✓
+- STATE-12: Paused flag tracks colony pause/resume state ✓
 
 ---
 
@@ -167,7 +175,7 @@ None currently.
 ## Session Continuity
 
 **Last session:** 2026-02-14
-**Stopped at:** Completed 05-02 Spawn Tree Reconstruction
+**Stopped at:** Completed 05-03 Command State Loading Integration
 **Resume file:** None
 
 ---
