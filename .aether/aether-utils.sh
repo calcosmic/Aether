@@ -317,21 +317,23 @@ EOF
     ' "$global_file")"
     ;;
   spawn-log)
-    # Usage: spawn-log <parent_id> <child_caste> <child_name> <task_summary>
+    # Usage: spawn-log <parent_id> <child_caste> <child_name> <task_summary> [model] [status]
     parent_id="${1:-}"
     child_caste="${2:-}"
     child_name="${3:-}"
     task_summary="${4:-}"
-    [[ -z "$parent_id" || -z "$child_caste" || -z "$task_summary" ]] && json_err "Usage: spawn-log <parent_id> <child_caste> <child_name> <task_summary>"
+    model="${5:-default}"
+    status="${6:-spawned}"
+    [[ -z "$parent_id" || -z "$child_caste" || -z "$task_summary" ]] && json_err "Usage: spawn-log <parent_id> <child_caste> <child_name> <task_summary> [model] [status]"
     mkdir -p "$DATA_DIR"
     ts=$(date -u +"%H:%M:%S")
     ts_full=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
     emoji=$(get_caste_emoji "$child_caste")
     parent_emoji=$(get_caste_emoji "$parent_id")
-    # Log to activity log with spawn format and emojis
-    echo "[$ts] ⚡ SPAWN $parent_emoji $parent_id -> $emoji $child_name ($child_caste): $task_summary" >> "$DATA_DIR/activity.log"
-    # Log to spawn tree file for visualization
-    echo "$ts_full|$parent_id|$child_caste|$child_name|$task_summary|spawned" >> "$DATA_DIR/spawn-tree.txt"
+    # Log to activity log with spawn format, emojis, and model info
+    echo "[$ts] ⚡ SPAWN $parent_emoji $parent_id -> $emoji $child_name ($child_caste): $task_summary [model: $model]" >> "$DATA_DIR/activity.log"
+    # Log to spawn tree file for visualization (NEW FORMAT: includes model field)
+    echo "$ts_full|$parent_id|$child_caste|$child_name|$task_summary|$model|$status" >> "$DATA_DIR/spawn-tree.txt"
     json_ok '"logged"'
     ;;
   spawn-complete)
