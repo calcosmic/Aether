@@ -1,0 +1,100 @@
+version: '1.0'
+description: Default model assignments for Aether colony workers
+profile: default
+worker_models:
+  prime: glm-5
+  archaeologist: glm-5
+  architect: glm-5
+  oracle: minimax-2.5
+  route_setter: kimi-k2.5
+  builder: kimi-k2.5
+  watcher: kimi-k2.5
+  scout: kimi-k2.5
+  chaos: kimi-k2.5
+  colonizer: kimi-k2.5
+model_metadata:
+  glm-5:
+    description: '744B MoE model (40B active), long-horizon agentic engineering'
+    provider: z_ai
+    capabilities:
+      - planning
+      - coordination
+      - long_context
+      - complex_reasoning
+      - agentic_workflows
+    context_window: 200000
+    speed: medium
+    cost_tier: high
+    best_for:
+      - 'Long-horizon task execution (tested: 1 year business simulation)'
+      - Strategic coordination and planning
+      - Historical pattern analysis across large contexts
+      - Multi-step autonomous workflows
+  minimax-2.5:
+    description: Frontier model for architectural planning and agentic tool use
+    provider: minimax
+    capabilities:
+      - system_design
+      - architecture
+      - browse
+      - search
+      - task_decomposition
+    context_window: 200000
+    speed: fast
+    cost_tier: medium
+    best_for:
+      - Architectural-level planning and system design
+      - Research with browse/search (76.3% BrowseComp)
+      - Efficient task decomposition (20% fewer search rounds)
+      - Full-stack development (80.2% SWE-Bench Verified)
+  kimi-k2.5:
+    description: '1T MoE model (32B active), multimodal agent with swarm capabilities'
+    provider: kimi
+    capabilities:
+      - coding
+      - multimodal
+      - agent_swarm
+      - visual_coding
+      - validation
+    context_window: 256000
+    speed: fast
+    cost_tier: low
+    best_for:
+      - Code generation and refactoring (76.8% SWE-Bench)
+      - Visual coding (screenshots to code)
+      - Parallel exploration (up to 100 sub-agents)
+      - Validation and testing workflows
+task_routing:
+  default_model: kimi-k2.5
+  complexity_indicators:
+    complex:
+      keywords:
+        - design
+        - architecture
+        - plan
+        - coordinate
+        - synthesize
+        - strategize
+        - optimize
+      model: glm-5
+    simple:
+      keywords:
+        - implement
+        - code
+        - refactor
+        - write
+        - create
+      model: kimi-k2.5
+    validate:
+      keywords:
+        - test
+        - validate
+        - verify
+        - check
+        - review
+        - audit
+      model: minimax-2.5
+proxy:
+  endpoint: 'http://localhost:4000'
+  auth_token: ${LITELLM_AUTH_TOKEN:-sk-litellm-local}
+  health_check: 'http://localhost:4000/health'
