@@ -11,15 +11,15 @@
 | Field | Value |
 |-------|-------|
 | **Phase** | 11 — Foraging Specialization |
-| **Plan** | 04 — CLI Override Integration |
+| **Plan** | Complete |
 | **Status** | Complete |
-| **Last Action** | Completed Plan 04 - CLI --model flag support with task-based routing integration |
+| **Last Action** | Phase 11 execution complete - all 4 plans verified |
 
 ### Progress Bar
 
 ```
 v3.0.0:  [██████████] 100% COMPLETE (14 plans, 25 requirements)
-v3.1:    [████████░░░] 80% IN PROGRESS (4/4 plans complete, 13/27 requirements)
+v3.1:    [███████████████░░░░] 85% IN PROGRESS (16/16 plans complete, 16/27 requirements)
 ```
 
 ### Phase Status
@@ -28,8 +28,8 @@ v3.1:    [████████░░░] 80% IN PROGRESS (4/4 plans complete
 |-------|------|--------|--------------|----------|
 | 9 | Caste Model Assignment | Complete | 8 | 100% (5/5 plans) |
 | 10 | Entombment & Egg Laying | Complete | 5 | 100% (4/4 plans) |
-| 11 | Foraging Specialization | Complete | 3 | 100% (3/3 plans) |
-| 12 | Colony Visualization | Blocked | 11 | 0% |
+| 11 | Foraging Specialization | Complete | 3 | 100% (4/4 plans) |
+| 12 | Colony Visualization | Planned | 11 | 0% |
 
 ---
 
@@ -61,23 +61,33 @@ v3.1:    [████████░░░] 80% IN PROGRESS (4/4 plans complete
 
 ## Current Focus
 
-### Phase 10: Entombment & Egg Laying
+### Phase 12: Colony Visualization
 
-**Goal:** Users can archive completed colonies (entomb), start fresh colonies (lay eggs), browse history (explore tunnels), and see automatic milestone detection.
+**Goal:** Users experience immersive real-time colony activity display with ant-themed presentation, collapsible views, and comprehensive metrics.
 
 **Key Requirements:**
-- LIFE-01: Entomb completed colony to chambers
-- LIFE-02: Lay eggs (start fresh colony)
-- LIFE-03: Explore tunnels (browse archived colonies)
-- LIFE-04: Milestone auto-detection
-- LIFE-05: Pheromone preservation (learnings carry forward)
+- VIZ-01: Real-time foraging display with caste emoji
+- VIZ-02: Collapsible tunnel view for nested agent spawns
+- VIZ-03: Tool usage stats (Read/Grep/Edit/Bash counts)
+- VIZ-04: Trophallaxis metrics (token usage)
+- VIZ-05: Timing information (duration, elapsed, ETA)
+- VIZ-06: Ant-themed presentation ("3 foragers excavating...")
+- VIZ-07: Chamber activity map (nest zones with active ants)
+- VIZ-08: Live excavation progress bars
+- VIZ-09: Color + caste emoji together
+- LIFE-06: ASCII art anthill visualization showing maturity journey
+- LIFE-07: Chamber comparison — compare pheromone trails across colonies
 
 **Success Criteria (What Must Be True):**
-1. User runs `/ant:entomb` and colony is archived to `.aether/chambers/`
-2. User runs `/ant:lay-eggs "new goal"` and fresh colony starts with preserved learnings
-3. User runs `/ant:tunnels` and sees archived colony history
-4. Milestone updates automatically based on progress
-5. Learnings and decisions carry forward between colonies
+1. `/ant:swarm` shows real-time display: "3 foragers excavating..." with caste emojis
+2. Each caste has distinct color AND emoji together
+3. Tunnel view can expand/collapse to show nested agent spawns
+4. Tool usage stats show Read/Grep/Edit/Bash counts per ant
+5. Trophallaxis metrics display token consumption per task
+6. Progress bars show live excavation status for long operations
+7. Chamber activity map shows which nest zones have active ants
+8. `/ant:maturity` shows ASCII art anthill with journey from First Mound to Crowned Anthill
+9. User can compare pheromone trails across two entombed chambers
 
 **Blockers:** None
 

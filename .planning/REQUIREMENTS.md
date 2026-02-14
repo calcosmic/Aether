@@ -17,9 +17,9 @@
 - [x] **MOD-05**: System logs actual model used per worker spawn (not just configured)
 
 **Differentiators:**
-- [ ] **MOD-06**: Task-based routing — keyword detection ("design", "architecture" → glm-5, "implement" → kimi)
-- [ ] **MOD-07**: Model performance telemetry — track success rates per model/caste
-- [ ] **MOD-08**: Model override per command (`--model` flag for one-time override)
+- [x] **MOD-06**: Task-based routing — keyword detection ("design", "architecture" → glm-5, "implement" → kimi)
+- [x] **MOD-07**: Model performance telemetry — track success rates per model/caste
+- [x] **MOD-08**: Model override per command (`--model` flag for one-time override)
 
 ---
 
@@ -108,14 +108,14 @@
 | MOD-03 | 9 | Complete |
 | MOD-04 | 9 | Complete |
 | MOD-05 | 9 | Complete |
-| MOD-06 | 11 | Pending |
-| MOD-07 | 11 | Pending |
-| MOD-08 | 11 | Pending |
-| LIFE-01 | 10 | Pending |
-| LIFE-02 | 10 | Pending |
-| LIFE-03 | 10 | Pending |
-| LIFE-04 | 10 | Pending |
-| LIFE-05 | 10 | Pending |
+| MOD-06 | 11 | Complete |
+| MOD-07 | 11 | Complete |
+| MOD-08 | 11 | Complete |
+| LIFE-01 | 10 | Complete |
+| LIFE-02 | 10 | Complete |
+| LIFE-03 | 10 | Complete |
+| LIFE-04 | 10 | Complete |
+| LIFE-05 | 10 | Complete |
 | LIFE-06 | 12 | Pending |
 | LIFE-07 | 12 | Pending |
 | VIZ-01 | 12 | Pending |
