@@ -9,6 +9,11 @@
 
 set -euo pipefail
 
+# Set up structured error handling for unexpected failures
+# This works alongside set -e but provides better context (line number, command)
+# The error_handler function is defined in error-handler.sh if sourced
+trap 'if type error_handler &>/dev/null; then error_handler ${LINENO} "$BASH_COMMAND" $?; fi' ERR
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AETHER_ROOT="$(cd "$SCRIPT_DIR/.." && pwd 2>/dev/null || echo "$SCRIPT_DIR")"
 DATA_DIR="$AETHER_ROOT/.aether/data"
@@ -20,10 +25,35 @@ CURRENT_LOCK=${CURRENT_LOCK:-""}
 # Source shared infrastructure if available
 [[ -f "$SCRIPT_DIR/utils/file-lock.sh" ]] && source "$SCRIPT_DIR/utils/file-lock.sh"
 [[ -f "$SCRIPT_DIR/utils/atomic-write.sh" ]] && source "$SCRIPT_DIR/utils/atomic-write.sh"
+[[ -f "$SCRIPT_DIR/utils/error-handler.sh" ]] && source "$SCRIPT_DIR/utils/error-handler.sh"
+[[ -f "$SCRIPT_DIR/utils/chamber-utils.sh" ]] && source "$SCRIPT_DIR/utils/chamber-utils.sh"
 
-# Fallback atomic_write if not sourced
+# Feature detection for graceful degradation
+# These checks run silently - failures are logged but don't block operation
+if type feature_disable &>/dev/null; then
+  # Check if DATA_DIR is writable for activity logging
+  [[ -w "$DATA_DIR" ]] 2>/dev/null || feature_disable "activity_log" "DATA_DIR not writable"
+
+  # Check if git is available for git integration
+  command -v git &>/dev/null || feature_disable "git_integration" "git not installed"
+
+  # Check if jq is available for JSON processing
+  command -v jq &>/dev/null || feature_disable "json_processing" "jq not installed"
+
+  # Check if lock utilities are available
+  [[ -f "$SCRIPT_DIR/utils/file-lock.sh" ]] || feature_disable "file_locking" "lock utilities not available"
+fi
+
+# Fallback atomic_write if not sourced (uses temp file + mv for true atomicity)
 if ! type atomic_write &>/dev/null; then
-  atomic_write() { echo "$2" > "$1"; }
+  atomic_write() {
+    local target="$1"
+    local content="$2"
+    local temp
+    temp=$(mktemp)
+    echo "$content" > "$temp"
+    mv "$temp" "$target"
+  }
 fi
 
 # --- JSON output helpers ---
@@ -31,7 +61,15 @@ fi
 json_ok() { printf '{"ok":true,"result":%s}\n' "$1"; }
 
 # Error: JSON to stderr, exit 1
-json_err() { printf '{"ok":false,"error":"%s"}\n' "$1" >&2; exit 1; }
+# Use enhanced json_err from error-handler.sh if available, otherwise fallback
+if ! type json_err &>/dev/null; then
+  # Fallback: simple error format for backward compatibility
+  json_err() {
+    local message="${2:-$1}"
+    printf '{"ok":false,"error":"%s"}\n' "$message" >&2
+    exit 1
+  }
+fi
 
 # --- Caste emoji helper ---
 get_caste_emoji() {
@@ -57,7 +95,7 @@ shift 2>/dev/null || true
 case "$cmd" in
   help)
     cat <<'EOF'
-{"ok":true,"commands":["help","version","validate-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
+{"ok":true,"commands":["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
 EOF
     ;;
   version)
@@ -66,7 +104,7 @@ EOF
   validate-state)
     case "${1:-}" in
       colony)
-        [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "COLONY_STATE.json not found"
+        [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
         json_ok "$(jq '
           def chk(f;t): if has(f) then (if (.[f]|type) as $a | t | any(. == $a) then "pass" else "fail: \(f) is \(.[f]|type), expected \(t|join("|"))" end) else "fail: missing \(f)" end;
           def opt(f;t): if has(f) then (if (.[f]|type) as $a | t | any(. == $a) then "pass" else "fail: \(f) is \(.[f]|type), expected \(t|join("|"))" end) else "pass" end;
@@ -85,7 +123,7 @@ EOF
         ' "$DATA_DIR/COLONY_STATE.json")"
         ;;
       constraints)
-        [[ -f "$DATA_DIR/constraints.json" ]] || json_err "constraints.json not found"
+        [[ -f "$DATA_DIR/constraints.json" ]] || json_err "$E_FILE_NOT_FOUND" "constraints.json not found" '{"file":"constraints.json"}'
         json_ok "$(jq '
           def arr(f): if has(f) and (.[f]|type) == "array" then "pass" else "fail: \(f) not array" end;
           {file:"constraints.json", checks:[
@@ -104,13 +142,13 @@ EOF
         json_ok "{\"pass\":$all_pass,\"files\":$combined}"
         ;;
       *)
-        json_err "Usage: validate-state colony|constraints|all"
+        json_err "$E_VALIDATION_FAILED" "Usage: validate-state colony|constraints|all"
         ;;
     esac
     ;;
   error-add)
-    [[ $# -ge 3 ]] || json_err "Usage: error-add <category> <severity> <description> [phase]"
-    [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "COLONY_STATE.json not found"
+    [[ $# -ge 3 ]] || json_err "$E_VALIDATION_FAILED" "Usage: error-add <category> <severity> <description> [phase]"
+    [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
     id="err_$(date -u +%s)_$(head -c 2 /dev/urandom | od -An -tx1 | tr -d ' ')"
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
     phase_val="${4:-null}"
@@ -122,12 +160,12 @@ EOF
     updated=$(jq --arg id "$id" --arg cat "$1" --arg sev "$2" --arg desc "$3" --argjson phase "$phase_jq" --arg ts "$ts" '
       .errors.records += [{id:$id, category:$cat, severity:$sev, description:$desc, root_cause:null, phase:$phase, task_id:null, timestamp:$ts}] |
       if (.errors.records|length) > 50 then .errors.records = .errors.records[-50:] else . end
-    ' "$DATA_DIR/COLONY_STATE.json") || json_err "Failed to update COLONY_STATE.json"
+    ' "$DATA_DIR/COLONY_STATE.json") || json_err "$E_JSON_INVALID" "Failed to update COLONY_STATE.json"
     atomic_write "$DATA_DIR/COLONY_STATE.json" "$updated"
     json_ok "\"$id\""
     ;;
   error-pattern-check)
-    [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "COLONY_STATE.json not found"
+    [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
     json_ok "$(jq '
       .errors.records | group_by(.category) | map(select(length >= 3) |
         {category: .[0].category, count: length,
@@ -136,7 +174,7 @@ EOF
     ' "$DATA_DIR/COLONY_STATE.json")"
     ;;
   error-summary)
-    [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "COLONY_STATE.json not found"
+    [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
     json_ok "$(jq '{
       total: (.errors.records | length),
       by_category: (.errors.records | group_by(.category) | map({key: .[0].category, value: length}) | from_entries),
@@ -149,7 +187,14 @@ EOF
     action="${1:-}"
     caste="${2:-}"
     description="${3:-}"
-    [[ -z "$action" || -z "$caste" || -z "$description" ]] && json_err "Usage: activity-log <action> <caste_or_name> <description>"
+    [[ -z "$action" || -z "$caste" || -z "$description" ]] && json_err "$E_VALIDATION_FAILED" "Usage: activity-log <action> <caste_or_name> <description>"
+
+    # Graceful degradation: check if activity logging is enabled
+    if type feature_enabled &>/dev/null && ! feature_enabled "activity_log"; then
+      json_warn "W_DEGRADED" "Activity logging disabled: $(type _feature_reason &>/dev/null && _feature_reason activity_log || echo 'unknown')"
+      exit 0
+    fi
+
     log_file="$DATA_DIR/activity.log"
     mkdir -p "$DATA_DIR"
     ts=$(date -u +"%H:%M:%S")
@@ -160,7 +205,13 @@ EOF
   activity-log-init)
     phase_num="${1:-}"
     phase_name="${2:-}"
-    [[ -z "$phase_num" ]] && json_err "Usage: activity-log-init <phase_num> [phase_name]"
+    [[ -z "$phase_num" ]] && json_err "$E_VALIDATION_FAILED" "Usage: activity-log-init <phase_num> [phase_name]"
+
+    # Graceful degradation: check if activity logging is enabled
+    if type feature_enabled &>/dev/null && ! feature_enabled "activity_log"; then
+      json_warn "W_DEGRADED" "Activity logging disabled: $(type _feature_reason &>/dev/null && _feature_reason activity_log || echo 'unknown')"
+      exit 0
+    fi
     log_file="$DATA_DIR/activity.log"
     mkdir -p "$DATA_DIR"
     archive_file="$DATA_DIR/activity-phase-${phase_num}.log"
@@ -185,8 +236,15 @@ EOF
     ;;
   activity-log-read)
     caste_filter="${1:-}"
+
+    # Graceful degradation: check if activity logging is enabled
+    if type feature_enabled &>/dev/null && ! feature_enabled "activity_log"; then
+      json_warn "W_DEGRADED" "Activity logging disabled: $(type _feature_reason &>/dev/null && _feature_reason activity_log || echo 'unknown')"
+      exit 0
+    fi
+
     log_file="$DATA_DIR/activity.log"
-    [[ -f "$log_file" ]] || json_err "activity.log not found"
+    [[ -f "$log_file" ]] || json_err "$E_FILE_NOT_FOUND" "activity.log not found" '{"file":"activity.log"}'
     if [ -n "$caste_filter" ]; then
       content=$(grep "$caste_filter" "$log_file" | tail -20)
     else
@@ -260,21 +318,23 @@ EOF
     ' "$global_file")"
     ;;
   spawn-log)
-    # Usage: spawn-log <parent_id> <child_caste> <child_name> <task_summary>
+    # Usage: spawn-log <parent_id> <child_caste> <child_name> <task_summary> [model] [status]
     parent_id="${1:-}"
     child_caste="${2:-}"
     child_name="${3:-}"
     task_summary="${4:-}"
-    [[ -z "$parent_id" || -z "$child_caste" || -z "$task_summary" ]] && json_err "Usage: spawn-log <parent_id> <child_caste> <child_name> <task_summary>"
+    model="${5:-default}"
+    status="${6:-spawned}"
+    [[ -z "$parent_id" || -z "$child_caste" || -z "$task_summary" ]] && json_err "Usage: spawn-log <parent_id> <child_caste> <child_name> <task_summary> [model] [status]"
     mkdir -p "$DATA_DIR"
     ts=$(date -u +"%H:%M:%S")
     ts_full=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
     emoji=$(get_caste_emoji "$child_caste")
     parent_emoji=$(get_caste_emoji "$parent_id")
-    # Log to activity log with spawn format and emojis
-    echo "[$ts] ⚡ SPAWN $parent_emoji $parent_id -> $emoji $child_name ($child_caste): $task_summary" >> "$DATA_DIR/activity.log"
-    # Log to spawn tree file for visualization
-    echo "$ts_full|$parent_id|$child_caste|$child_name|$task_summary|spawned" >> "$DATA_DIR/spawn-tree.txt"
+    # Log to activity log with spawn format, emojis, and model info
+    echo "[$ts] ⚡ SPAWN $parent_emoji $parent_id -> $emoji $child_name ($child_caste): $task_summary [model: $model]" >> "$DATA_DIR/activity.log"
+    # Log to spawn tree file for visualization (NEW FORMAT: includes model field)
+    echo "$ts_full|$parent_id|$child_caste|$child_name|$task_summary|$model|$status" >> "$DATA_DIR/spawn-tree.txt"
     json_ok '"logged"'
     ;;
   spawn-complete)
@@ -736,6 +796,20 @@ EOF
     id="flag_$(date -u +%s)_$(head -c 2 /dev/urandom | od -An -tx1 | tr -d ' ')"
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
+    # Acquire lock for atomic flag update (degrade gracefully if locking unavailable)
+    if type feature_enabled &>/dev/null && ! feature_enabled "file_locking"; then
+      json_warn "W_DEGRADED" "File locking disabled - proceeding without lock: $(type _feature_reason &>/dev/null && _feature_reason file_locking || echo 'unknown')"
+    else
+      acquire_lock "$flags_file" || {
+        if type json_err &>/dev/null; then
+          json_err "$E_LOCK_FAILED" "Failed to acquire lock on flags.json"
+        else
+          echo '{"ok":false,"error":"Failed to acquire lock on flags.json"}' >&2
+          exit 1
+        fi
+      }
+    fi
+
     # Map type to severity
     case "$type" in
       blocker)  severity="critical" ;;
@@ -768,9 +842,10 @@ EOF
         resolution: null,
         auto_resolve_on: (if $type == "blocker" and ($source | test("chaos") | not) then "build_pass" else null end)
       }]
-    ' "$flags_file") || json_err "Failed to add flag"
+    ' "$flags_file") || { release_lock "$flags_file"; json_err "Failed to add flag"; }
 
-    echo "$updated" > "$flags_file"
+    atomic_write "$flags_file" "$updated"
+    release_lock "$flags_file"
     json_ok "{\"id\":\"$id\",\"type\":\"$type\",\"severity\":\"$severity\"}"
     ;;
   flag-check-blockers)
@@ -814,14 +889,27 @@ EOF
 
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
+    # Acquire lock for atomic flag update (degrade gracefully if locking unavailable)
+    if type feature_enabled &>/dev/null && ! feature_enabled "file_locking"; then
+      json_warn "W_DEGRADED" "File locking disabled - proceeding without lock"
+    else
+      acquire_lock "$flags_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on flags.json"
+    fi
+
     updated=$(jq --arg id "$flag_id" --arg res "$resolution" --arg ts "$ts" '
       .flags = [.flags[] | if .id == $id then
         .resolved_at = $ts |
         .resolution = $res
       else . end]
-    ' "$flags_file") || json_err "Failed to resolve flag"
+    ' "$flags_file") || {
+      if type feature_enabled &>/dev/null && feature_enabled "file_locking"; then
+        release_lock "$flags_file"
+      fi
+      json_err "$E_JSON_INVALID" "Failed to resolve flag"
+    }
 
-    echo "$updated" > "$flags_file"
+    atomic_write "$flags_file" "$updated"
+    release_lock "$flags_file"
     json_ok "{\"resolved\":\"$flag_id\"}"
     ;;
   flag-acknowledge)
@@ -835,13 +923,26 @@ EOF
 
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
+    # Acquire lock for atomic flag update (degrade gracefully if locking unavailable)
+    if type feature_enabled &>/dev/null && ! feature_enabled "file_locking"; then
+      json_warn "W_DEGRADED" "File locking disabled - proceeding without lock"
+    else
+      acquire_lock "$flags_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on flags.json"
+    fi
+
     updated=$(jq --arg id "$flag_id" --arg ts "$ts" '
       .flags = [.flags[] | if .id == $id then
         .acknowledged_at = $ts
       else . end]
-    ' "$flags_file") || json_err "Failed to acknowledge flag"
+    ' "$flags_file") || {
+      if type feature_enabled &>/dev/null && feature_enabled "file_locking"; then
+        release_lock "$flags_file"
+      fi
+      json_err "$E_JSON_INVALID" "Failed to acknowledge flag"
+    }
 
-    echo "$updated" > "$flags_file"
+    atomic_write "$flags_file" "$updated"
+    release_lock "$flags_file"
     json_ok "{\"acknowledged\":\"$flag_id\"}"
     ;;
   flag-list)
@@ -894,6 +995,13 @@ EOF
 
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
+    # Acquire lock for atomic flag update (degrade gracefully if locking unavailable)
+    if type feature_enabled &>/dev/null && ! feature_enabled "file_locking"; then
+      json_warn "W_DEGRADED" "File locking disabled - proceeding without lock"
+    else
+      acquire_lock "$flags_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on flags.json"
+    fi
+
     # Count how many will be resolved
     count=$(jq --arg trigger "$trigger" '
       [.flags[] | select(.auto_resolve_on == $trigger and .resolved_at == null)] | length
@@ -907,7 +1015,8 @@ EOF
       else . end]
     ' "$flags_file")
 
-    echo "$updated" > "$flags_file"
+    atomic_write "$flags_file" "$updated"
+    release_lock "$flags_file"
     json_ok "{\"resolved\":$count,\"trigger\":\"$trigger\"}"
     ;;
   generate-ant-name)
@@ -1150,7 +1259,7 @@ EOF
     # Record a grave marker when a builder fails at a file
     # Usage: grave-add <file> <ant_name> <task_id> <phase> <failure_summary> [function] [line]
     [[ $# -ge 5 ]] || json_err "Usage: grave-add <file> <ant_name> <task_id> <phase> <failure_summary> [function] [line]"
-    [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "COLONY_STATE.json not found"
+    [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
     file="$1"
     ant_name="$2"
     task_id="$3"
@@ -1191,7 +1300,7 @@ EOF
         timestamp: $ts
       }])} |
       if (.graveyards | length) > 30 then .graveyards = .graveyards[-30:] else . end
-    ' "$DATA_DIR/COLONY_STATE.json") || json_err "Failed to update COLONY_STATE.json"
+    ' "$DATA_DIR/COLONY_STATE.json") || json_err "$E_JSON_INVALID" "Failed to update COLONY_STATE.json"
     atomic_write "$DATA_DIR/COLONY_STATE.json" "$updated"
     json_ok "\"$id\""
     ;;
@@ -1201,7 +1310,7 @@ EOF
     # Usage: grave-check <file_path>
     # Read-only, never modifies state
     [[ $# -ge 1 ]] || json_err "Usage: grave-check <file_path>"
-    [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "COLONY_STATE.json not found"
+    [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
     check_file="$1"
     check_dir=$(dirname "$check_file")
     json_ok "$(jq --arg file "$check_file" --arg dir "$check_dir" '
@@ -1395,6 +1504,720 @@ EOF
     done
 
     json_ok "{\"copied\":$copied,\"total\":${#allowlist[@]}}"
+    ;;
+
+  load-state)
+    source "$SCRIPT_DIR/utils/state-loader.sh" 2>/dev/null || {
+      json_err "$E_FILE_NOT_FOUND" "state-loader.sh not found"
+      exit 1
+    }
+    load_colony_state
+    if [[ $? -eq 0 ]]; then
+      # Output success with handoff info if detected
+      if [[ "$HANDOFF_DETECTED" == "true" ]]; then
+        json_ok "{\"loaded\":true,\"handoff_detected\":true,\"handoff_summary\":\"$(get_handoff_summary)\"}"
+      else
+        json_ok '{"loaded":true}'
+      fi
+    fi
+    # Note: load_colony_state handles its own error output
+    ;;
+
+  unload-state)
+    source "$SCRIPT_DIR/utils/state-loader.sh" 2>/dev/null || {
+      json_err "$E_FILE_NOT_FOUND" "state-loader.sh not found"
+      exit 1
+    }
+    unload_colony_state
+    json_ok '{"unloaded":true}'
+    ;;
+
+  spawn-tree-load)
+    source "$SCRIPT_DIR/utils/spawn-tree.sh" 2>/dev/null || {
+      json_err "$E_FILE_NOT_FOUND" "spawn-tree.sh not found"
+      exit 1
+    }
+    tree_json=$(reconstruct_tree_json)
+    json_ok "$tree_json"
+    ;;
+
+  spawn-tree-active)
+    source "$SCRIPT_DIR/utils/spawn-tree.sh" 2>/dev/null || {
+      json_err "$E_FILE_NOT_FOUND" "spawn-tree.sh not found"
+      exit 1
+    }
+    active=$(get_active_spawns)
+    json_ok "$active"
+    ;;
+
+  spawn-tree-depth)
+    ant_name="${1:-}"
+    [[ -z "$ant_name" ]] && json_err "$E_VALIDATION_FAILED" "Usage: spawn-tree-depth <ant_name>"
+    source "$SCRIPT_DIR/utils/spawn-tree.sh" 2>/dev/null || {
+      json_err "$E_FILE_NOT_FOUND" "spawn-tree.sh not found"
+      exit 1
+    }
+    depth=$(get_spawn_depth "$ant_name")
+    json_ok "$depth"
+    ;;
+
+  # --- Model Profile Commands ---
+  model-profile)
+    action="${1:-get}"
+    case "$action" in
+      get)
+        caste="${2:-}"
+        [[ -z "$caste" ]] && json_err "$E_VALIDATION_FAILED" "Usage: model-profile get <caste>"
+
+        profile_file="$AETHER_ROOT/.aether/model-profiles.yaml"
+        if [[ ! -f "$profile_file" ]]; then
+          json_ok '{"model":"kimi-k2.5","source":"default","caste":"'$caste'"}'
+          exit 0
+        fi
+
+        # Extract model for caste using awk (bash-compatible YAML parsing)
+        model=$(awk '/^worker_models:/{found=1; next} found && /^[^ ]/{exit} found && /^  '$caste':/{print $2; exit}' "$profile_file" 2>/dev/null)
+
+        [[ -z "$model" ]] && model="kimi-k2.5"
+        json_ok '{"model":"'$model'","source":"profile","caste":"'$caste'"}'
+        ;;
+
+      list)
+        profile_file="$AETHER_ROOT/.aether/model-profiles.yaml"
+        if [[ ! -f "$profile_file" ]]; then
+          json_ok '{"models":{},"source":"default"}'
+          exit 0
+        fi
+
+        # Extract all caste:model pairs as JSON
+        # Lines look like: "  prime: glm-5           # Complex coordination..."
+        models=$(awk '/^worker_models:/{found=1; next} found && /^[^ ]/{exit} found && /^  [a-z_]+:/{gsub(/:/,""); printf "\"%s\":\"%s\",", $1, $2}' "$profile_file" 2>/dev/null)
+        # Remove trailing comma
+        models="${models%,}"
+
+        json_ok '{"models":{'$models'},"source":"profile"}'
+        ;;
+
+      verify)
+        profile_file="$AETHER_ROOT/.aether/model-profiles.yaml"
+        [[ ! -f "$profile_file" ]] && json_err "$E_FILE_NOT_FOUND" "Profile not found" '{"file":"model-profiles.yaml"}'
+
+        # Check proxy health
+        proxy_health=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:4000/health 2>/dev/null || echo "000")
+        proxy_status=$([[ "$proxy_health" == "200" ]] && echo "healthy" || echo "unhealthy")
+
+        # Count castes
+        caste_count=$(awk '/^worker_models:/{found=1; next} found && /^[^ ]/{exit} found && /^  [a-z_]+:/{count++} END{print count+0}' "$profile_file" 2>/dev/null)
+
+        json_ok '{"profile_exists":true,"caste_count":'$caste_count',"proxy_status":"'$proxy_status'","proxy_endpoint":"http://localhost:4000"}'
+        ;;
+
+      select)
+        # Usage: model-profile select <caste> <task_description> [cli_override]
+        # Returns: JSON with model and source
+        caste="$2"
+        task_description="$3"
+        cli_override="${4:-}"
+
+        [[ -z "$caste" ]] && json_err "$E_VALIDATION_FAILED" "Usage: model-profile select <caste> <task_description> [cli_override]"
+
+        # Create a temporary Node.js script to call the library
+        node_script=$(cat << 'NODESCRIPT'
+const { loadModelProfiles, selectModelForTask } = require('./bin/lib/model-profiles');
+const caste = process.argv[2];
+const taskDescription = process.argv[3];
+const cliOverride = process.argv[4] || null;
+
+try {
+  const profiles = loadModelProfiles('.');
+  const result = selectModelForTask(profiles, caste, taskDescription, cliOverride);
+  console.log(JSON.stringify({ ok: true, result }));
+} catch (error) {
+  console.log(JSON.stringify({ ok: false, error: error.message }));
+  process.exit(1);
+}
+NODESCRIPT
+)
+
+        result=$(echo "$node_script" | node - "$caste" "$task_description" "$cli_override")
+        echo "$result"
+        ;;
+
+      validate)
+        # Usage: model-profile validate <model_name>
+        # Returns: JSON with valid boolean
+        model_name="$2"
+
+        [[ -z "$model_name" ]] && json_err "$E_VALIDATION_FAILED" "Usage: model-profile validate <model_name>"
+
+        node_script=$(cat << 'NODESCRIPT'
+const { loadModelProfiles, validateModel } = require('./bin/lib/model-profiles');
+const modelName = process.argv[2];
+
+try {
+  const profiles = loadModelProfiles('.');
+  const validation = validateModel(profiles, modelName);
+  console.log(JSON.stringify({ ok: true, result: validation }));
+} catch (error) {
+  console.log(JSON.stringify({ ok: false, error: error.message }));
+}
+NODESCRIPT
+)
+
+        result=$(echo "$node_script" | node - "$model_name")
+        echo "$result"
+        ;;
+
+      *)
+        echo "Usage: model-profile <command> [args]"
+        echo ""
+        echo "Commands:"
+        echo "  get <caste>                    Get model for caste"
+        echo "  set <caste> <model>            Set user override"
+        echo "  reset <caste>                  Reset user override"
+        echo "  list                           List all assignments"
+        echo "  select <caste> <task> [model]  Select model with task routing"
+        echo "  validate <model>               Validate model name"
+        json_err "$E_VALIDATION_FAILED" "Usage: model-profile get <caste>|list|verify|select|validate"
+        ;;
+    esac
+    ;;
+
+  model-get)
+    # Shortcut: model-get <caste>
+    caste="${1:-}"
+    [[ -z "$caste" ]] && json_err "$E_VALIDATION_FAILED" "Usage: model-get <caste>"
+
+    # Delegate to model-profile get
+    exec bash "$0" model-profile get "$caste"
+    ;;
+
+  model-list)
+    # Shortcut: list all models
+    exec bash "$0" model-profile list
+    ;;
+
+  # ============================================
+  # CHAMBER UTILITIES (colony lifecycle)
+  # ============================================
+
+  chamber-create)
+    # Create a new chamber (entomb a colony)
+    # Usage: chamber-create <chamber_dir> <state_file> <goal> <phases_completed> <total_phases> <milestone> <version> <decisions_json> <learnings_json>
+    [[ $# -ge 9 ]] || json_err "$E_VALIDATION_FAILED" "Usage: chamber-create <chamber_dir> <state_file> <goal> <phases_completed> <total_phases> <milestone> <version> <decisions_json> <learnings_json>"
+
+    # Check if chamber-utils.sh is available
+    if ! type chamber_create &>/dev/null; then
+      json_err "$E_FILE_NOT_FOUND" "chamber-utils.sh not loaded"
+    fi
+
+    chamber_create "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$8" "$9"
+    ;;
+
+  chamber-verify)
+    # Verify chamber integrity
+    # Usage: chamber-verify <chamber_dir>
+    [[ $# -ge 1 ]] || json_err "$E_VALIDATION_FAILED" "Usage: chamber-verify <chamber_dir>"
+
+    if ! type chamber_verify &>/dev/null; then
+      json_err "$E_FILE_NOT_FOUND" "chamber-utils.sh not loaded"
+    fi
+
+    chamber_verify "$1"
+    ;;
+
+  chamber-list)
+    # List all chambers
+    # Usage: chamber-list [chambers_root]
+    chambers_root="${1:-$AETHER_ROOT/.aether/chambers}"
+
+    if ! type chamber_list &>/dev/null; then
+      json_err "$E_FILE_NOT_FOUND" "chamber-utils.sh not loaded"
+    fi
+
+    chamber_list "$chambers_root"
+    ;;
+
+  milestone-detect)
+    # Detect colony milestone from state
+    # Usage: milestone-detect
+    # Returns: {ok: true, milestone: "...", version: "...", phases_completed: N, total_phases: N, progress_percent: N}
+
+    [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
+
+    # Extract and compute milestone data using jq
+    result=$(jq '
+      # Extract key data
+      (.plan.phases // []) as $phases |
+      (.errors.records // []) as $errors |
+      (.milestone // null) as $stored_milestone |
+
+      # Count completed phases
+      ([$phases[] | select(.status == "completed")] | length) as $completed_count |
+      ($phases | length) as $total_phases |
+
+      # Check for critical errors
+      ([$errors[] | select(.severity == "critical")] | length) as $critical_count |
+
+      # Determine milestone based on state
+      if $critical_count > 0 then
+        "Failed Mound"
+      elif $total_phases > 0 and $completed_count == $total_phases then
+        if $stored_milestone == "Crowned Anthill" then
+          "Crowned Anthill"
+        else
+          "Sealed Chambers"
+        end
+      elif $completed_count >= 5 then
+        "Ventilated Nest"
+      elif $completed_count >= 3 then
+        "Brood Stable"
+      elif $completed_count >= 1 then
+        "Open Chambers"
+      else
+        "First Mound"
+      end as $milestone |
+
+      # Compute version: major = floor(total_phases / 10), minor = total_phases % 10, patch = completed_count
+      ($total_phases / 10 | floor) as $major |
+      ($total_phases % 10) as $minor |
+      $completed_count as $patch |
+      "v\($major).\($minor).\($patch)" as $version |
+
+      # Calculate progress percentage
+      (if $total_phases > 0 then ($completed_count * 100 / $total_phases | round) else 0 end) as $progress |
+
+      # Return result
+      {
+        ok: true,
+        milestone: $milestone,
+        version: $version,
+        phases_completed: $completed_count,
+        total_phases: $total_phases,
+        progress_percent: $progress
+      }
+    ' "$DATA_DIR/COLONY_STATE.json")
+
+    echo "$result"
+    ;;
+
+  # ============================================
+  # SWARM ACTIVITY TRACKING (colony visualization)
+  # ============================================
+
+  swarm-activity-log)
+    # Log an activity entry for swarm visualization
+    # Usage: swarm-activity-log <ant_name> <action> <details>
+    ant_name="${1:-}"
+    action="${2:-}"
+    details="${3:-}"
+    [[ -z "$ant_name" || -z "$action" || -z "$details" ]] && json_err "$E_VALIDATION_FAILED" "Usage: swarm-activity-log <ant_name> <action> <details>"
+
+    mkdir -p "$DATA_DIR"
+    log_file="$DATA_DIR/swarm-activity.log"
+    ts=$(date -u +"%H:%M:%S")
+    echo "[$ts] $ant_name: $action $details" >> "$log_file"
+    json_ok '"logged"'
+    ;;
+
+  swarm-display-init)
+    # Initialize swarm display state file
+    # Usage: swarm-display-init <swarm_id>
+    swarm_id="${1:-swarm-$(date +%s)}"
+    mkdir -p "$DATA_DIR"
+
+    display_file="$DATA_DIR/swarm-display.json"
+    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    atomic_write "$display_file" "{
+  \"swarm_id\": \"$swarm_id\",
+  \"timestamp\": \"$ts\",
+  \"active_ants\": [],
+  \"summary\": { \"total_active\": 0, \"by_caste\": {}, \"by_zone\": {} },
+  \"chambers\": {
+    \"fungus_garden\": {\"activity\": 0, \"icon\": \"🍄\"},
+    \"nursery\": {\"activity\": 0, \"icon\": \"🥚\"},
+    \"refuse_pile\": {\"activity\": 0, \"icon\": \"🗑️\"},
+    \"throne_room\": {\"activity\": 0, \"icon\": \"👑\"},
+    \"foraging_trail\": {\"activity\": 0, \"icon\": \"🌿\"}
+  }
+}"
+    json_ok "{\"swarm_id\":\"$swarm_id\",\"initialized\":true}"
+    ;;
+
+  swarm-display-update)
+    # Update ant activity in swarm display
+    # Usage: swarm-display-update <ant_name> <caste> <ant_status> <task> [parent] [tools_json] [tokens] [chamber] [progress]
+    ant_name="${1:-}"
+    caste="${2:-}"
+    ant_status="${3:-}"
+    task="${4:-}"
+    parent="${5:-}"
+    tools_json="${6:-}"
+    [[ -z "$tools_json" ]] && tools_json="{}"
+    tokens="${7:-0}"
+    chamber="${8:-}"
+    progress="${9:-0}"
+
+    [[ -z "$ant_name" || -z "$caste" || -z "$ant_status" ]] && json_err "$E_VALIDATION_FAILED" "Usage: swarm-display-update <ant_name> <caste> <ant_status> <task> [parent] [tools_json] [tokens] [chamber] [progress]"
+
+    display_file="$DATA_DIR/swarm-display.json"
+
+    # Initialize if doesn't exist
+    if [[ ! -f "$display_file" ]]; then
+      bash "$0" swarm-display-init "default-swarm" >/dev/null 2>&1
+    fi
+
+    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    # Read current display and update using jq
+    updated=$(jq --arg ant "$ant_name" --arg caste "$caste" --arg ant_status "$ant_status" \
+      --arg task "$task" --arg parent "$parent" --argjson tools "$tools_json" \
+      --argjson tokens "$tokens" --arg ts "$ts" --arg chamber "$chamber" --argjson progress "$progress" '
+      # Find existing ant or create new entry
+      (.active_ants | map(select(.name == $ant)) | length) as $exists |
+      # Get old chamber if ant exists
+      (if $exists > 0 then
+        (.active_ants[] | select(.name == $ant) | .chamber // "")
+      else
+        ""
+      end) as $old_chamber |
+      # Determine new chamber
+      (if $chamber != "" then $chamber else $old_chamber end) as $new_chamber |
+      if $exists > 0 then
+        # Update existing ant
+        .active_ants = [.active_ants[] | if .name == $ant then
+          . + {
+            caste: $caste,
+            status: $ant_status,
+            task: $task,
+            parent: (if $parent != "" then $parent else .parent end),
+            tools: (if $tools != {} then $tools else .tools end),
+            tokens: (.tokens + $tokens),
+            chamber: (if $chamber != "" then $chamber else (.chamber // null) end),
+            progress: (if $progress > 0 then $progress else (.progress // 0) end),
+            updated_at: $ts
+          }
+        else . end]
+      else
+        # Add new ant
+        .active_ants += [{
+          name: $ant,
+          caste: $caste,
+          status: $ant_status,
+          task: $task,
+          parent: (if $parent != "" then $parent else null end),
+          tools: (if $tools != {} then $tools else {read:0,grep:0,edit:0,bash:0} end),
+          tokens: $tokens,
+          chamber: (if $chamber != "" then $chamber else null end),
+          progress: $progress,
+          started_at: $ts,
+          updated_at: $ts
+        }]
+      end |
+      # Recalculate summary
+      .summary.total_active = (.active_ants | length) |
+      .summary.by_caste = (.active_ants | group_by(.caste) | map({key: .[0].caste, value: length}) | from_entries) |
+      .summary.by_zone = (.active_ants | group_by(.status) | map({key: .[0].status, value: length}) | from_entries) |
+      # Update chamber activity counts
+      # Decrement old chamber if changed
+      (if $old_chamber != "" and $old_chamber != $new_chamber and has("chambers") and (.chambers | has($old_chamber)) then
+        .chambers[$old_chamber].activity = [(.chambers[$old_chamber].activity // 1) - 1, 0] | max
+      else
+        .
+      end) |
+      # Increment new chamber
+      (if $new_chamber != "" and has("chambers") and (.chambers | has($new_chamber)) then
+        .chambers[$new_chamber].activity = (.chambers[$new_chamber].activity // 0) + 1
+      else
+        .
+      end)
+    ' "$display_file") || json_err "$E_JSON_INVALID" "Failed to update swarm display"
+
+    atomic_write "$display_file" "$updated"
+
+    # Get emoji for response
+    emoji=$(get_caste_emoji "$caste")
+    json_ok "{\"updated\":true,\"ant\":\"$ant_name\",\"caste\":\"$caste\",\"emoji\":\"$emoji\",\"chamber\":\"$chamber\",\"progress\":$progress}"
+    ;;
+
+  swarm-display-get)
+    # Get current swarm display state
+    # Usage: swarm-display-get
+    display_file="$DATA_DIR/swarm-display.json"
+
+    if [[ ! -f "$display_file" ]]; then
+      json_ok '{"swarm_id":null,"active_ants":[],"summary":{"total_active":0,"by_caste":{},"by_zone":{}},"chambers":{}}'
+    else
+      json_ok "$(cat "$display_file")"
+    fi
+    ;;
+
+  swarm-timing-start)
+    # Record start time for an ant
+    # Usage: swarm-timing-start <ant_name>
+    ant_name="${1:-}"
+    [[ -z "$ant_name" ]] && json_err "$E_VALIDATION_FAILED" "Usage: swarm-timing-start <ant_name>"
+
+    mkdir -p "$DATA_DIR"
+    timing_file="$DATA_DIR/timing.log"
+    ts=$(date +%s)
+    ts_iso=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    # Remove any existing entry for this ant and append new one
+    if [[ -f "$timing_file" ]]; then
+      grep -v "^$ant_name|" "$timing_file" > "${timing_file}.tmp" 2>/dev/null || true
+      mv "${timing_file}.tmp" "$timing_file"
+    fi
+    echo "$ant_name|$ts|$ts_iso" >> "$timing_file"
+
+    json_ok "{\"ant\":\"$ant_name\",\"started_at\":\"$ts_iso\",\"timestamp\":$ts}"
+    ;;
+
+  swarm-timing-get)
+    # Get elapsed time for an ant
+    # Usage: swarm-timing-get <ant_name>
+    ant_name="${1:-}"
+    [[ -z "$ant_name" ]] && json_err "$E_VALIDATION_FAILED" "Usage: swarm-timing-get <ant_name>"
+
+    timing_file="$DATA_DIR/timing.log"
+
+    if [[ ! -f "$timing_file" ]] || ! grep -q "^$ant_name|" "$timing_file" 2>/dev/null; then
+      json_ok "{\"ant\":\"$ant_name\",\"started_at\":null,\"elapsed_seconds\":0,\"elapsed_formatted\":\"00:00\"}"
+      exit 0
+    fi
+
+    # Read start time
+    start_line=$(grep "^$ant_name|" "$timing_file" | tail -1)
+    start_ts=$(echo "$start_line" | cut -d'|' -f2)
+    start_iso=$(echo "$start_line" | cut -d'|' -f3)
+
+    now=$(date +%s)
+    elapsed=$((now - start_ts))
+
+    # Format as MM:SS
+    mins=$((elapsed / 60))
+    secs=$((elapsed % 60))
+    formatted=$(printf "%02d:%02d" $mins $secs)
+
+    json_ok "{\"ant\":\"$ant_name\",\"started_at\":\"$start_iso\",\"elapsed_seconds\":$elapsed,\"elapsed_formatted\":\"$formatted\"}"
+    ;;
+
+  swarm-timing-eta)
+    # Calculate ETA based on progress percentage
+    # Usage: swarm-timing-eta <ant_name> <percent_complete>
+    ant_name="${1:-}"
+    percent="${2:-0}"
+    [[ -z "$ant_name" ]] && json_err "$E_VALIDATION_FAILED" "Usage: swarm-timing-eta <ant_name> <percent_complete>"
+
+    # Validate percent is a number
+    if ! [[ "$percent" =~ ^[0-9]+$ ]]; then
+      percent=0
+    fi
+
+    # Clamp percent to 0-100
+    if [[ $percent -lt 0 ]]; then
+      percent=0
+    elif [[ $percent -gt 100 ]]; then
+      percent=100
+    fi
+
+    timing_file="$DATA_DIR/timing.log"
+
+    if [[ ! -f "$timing_file" ]] || ! grep -q "^$ant_name|" "$timing_file" 2>/dev/null; then
+      json_ok "{\"ant\":\"$ant_name\",\"percent\":$percent,\"eta_seconds\":null,\"eta_formatted\":\"--:--\"}"
+      exit 0
+    fi
+
+    # Read start time
+    start_ts=$(grep "^$ant_name|" "$timing_file" | tail -1 | cut -d'|' -f2)
+    now=$(date +%s)
+    elapsed=$((now - start_ts))
+
+    # Calculate ETA
+    if [[ $percent -le 0 ]]; then
+      eta_seconds=null
+      eta_formatted="--:--"
+    elif [[ $percent -ge 100 ]]; then
+      eta_seconds=0
+      eta_formatted="00:00"
+    else
+      # ETA = (elapsed / percent) * (100 - percent)
+      eta_seconds=$(( (elapsed * (100 - percent)) / percent ))
+      mins=$((eta_seconds / 60))
+      secs=$((eta_seconds % 60))
+      eta_formatted=$(printf "%02d:%02d" $mins $secs)
+    fi
+
+    json_ok "{\"ant\":\"$ant_name\",\"percent\":$percent,\"eta_seconds\":$eta_seconds,\"eta_formatted\":\"$eta_formatted\"}"
+    ;;
+
+  # ============================================
+  # VIEW STATE MANAGEMENT (collapsible views)
+  # ============================================
+
+  view-state-init)
+    # Initialize view state file with default structure
+    # Usage: view-state-init
+    mkdir -p "$DATA_DIR"
+    view_state_file="$DATA_DIR/view-state.json"
+
+    if [[ ! -f "$view_state_file" ]]; then
+      atomic_write "$view_state_file" '{
+  "version": "1.0",
+  "swarm_display": {
+    "expanded": [],
+    "collapsed": [],
+    "default_expand_depth": 2
+  },
+  "tunnel_view": {
+    "expanded": [],
+    "collapsed": ["__depth_3_plus__"],
+    "default_expand_depth": 2,
+    "show_completed": true
+  }
+}'
+      json_ok '{"initialized":true,"file":"view-state.json"}'
+    else
+      json_ok '{"initialized":false,"file":"view-state.json","exists":true}'
+    fi
+    ;;
+
+  view-state-get)
+    # Get view state or specific key
+    # Usage: view-state-get [view_name] [key]
+    view_name="${1:-}"
+    key="${2:-}"
+    view_state_file="$DATA_DIR/view-state.json"
+
+    if [[ ! -f "$view_state_file" ]]; then
+      # Auto-initialize if not exists
+      bash "$0" view-state-init >/dev/null 2>&1
+    fi
+
+    if [[ -z "$view_name" ]]; then
+      # Return entire state
+      json_ok "$(cat "$view_state_file")"
+    elif [[ -z "$key" ]]; then
+      # Return specific view
+      json_ok "$(jq ".${view_name} // {}" "$view_state_file")"
+    else
+      # Return specific key from view
+      json_ok "$(jq ".${view_name}.${key} // null" "$view_state_file")"
+    fi
+    ;;
+
+  view-state-set)
+    # Set a specific key in a view
+    # Usage: view-state-set <view_name> <key> <value>
+    view_name="${1:-}"
+    key="${2:-}"
+    value="${3:-}"
+    [[ -z "$view_name" || -z "$key" ]] && json_err "$E_VALIDATION_FAILED" "Usage: view-state-set <view_name> <key> <value>"
+
+    view_state_file="$DATA_DIR/view-state.json"
+
+    if [[ ! -f "$view_state_file" ]]; then
+      bash "$0" view-state-init >/dev/null 2>&1
+    fi
+
+    # Determine if value is JSON or string
+    if [[ "$value" =~ ^\[.*\]$ ]] || [[ "$value" =~ ^\{.*\}$ ]] || [[ "$value" =~ ^(true|false|null|[0-9]+)$ ]]; then
+      # Value appears to be JSON - use as-is
+      updated=$(jq --arg view "$view_name" --arg key "$key" --argjson val "$value" '
+        .[$view][$key] = $val
+      ' "$view_state_file") || json_err "$E_JSON_INVALID" "Failed to update view state"
+    else
+      # Treat as string
+      updated=$(jq --arg view "$view_name" --arg key "$key" --arg val "$value" '
+        .[$view][$key] = $val
+      ' "$view_state_file") || json_err "$E_JSON_INVALID" "Failed to update view state"
+    fi
+
+    atomic_write "$view_state_file" "$updated"
+    json_ok "$(echo "$updated" | jq ".${view_name}")"
+    ;;
+
+  view-state-toggle)
+    # Toggle item between expanded and collapsed
+    # Usage: view-state-toggle <view_name> <item>
+    view_name="${1:-}"
+    item="${2:-}"
+    [[ -z "$view_name" || -z "$item" ]] && json_err "$E_VALIDATION_FAILED" "Usage: view-state-toggle <view_name> <item>"
+
+    view_state_file="$DATA_DIR/view-state.json"
+
+    if [[ ! -f "$view_state_file" ]]; then
+      bash "$0" view-state-init >/dev/null 2>&1
+    fi
+
+    # Check current state
+    is_expanded=$(jq --arg view "$view_name" --arg item "$item" '
+      .[$view].expanded | contains([$item])
+    ' "$view_state_file")
+
+    if [[ "$is_expanded" == "true" ]]; then
+      # Move from expanded to collapsed
+      updated=$(jq --arg view "$view_name" --arg item "$item" '
+        .[$view].expanded -= [$item] |
+        .[$view].collapsed += [$item]
+      ' "$view_state_file")
+      new_state="collapsed"
+    else
+      # Move from collapsed to expanded
+      updated=$(jq --arg view "$view_name" --arg item "$item" '
+        .[$view].collapsed -= [$item] |
+        .[$view].expanded += [$item]
+      ' "$view_state_file")
+      new_state="expanded"
+    fi
+
+    atomic_write "$view_state_file" "$updated"
+    json_ok "{\"item\":\"$item\",\"state\":\"$new_state\",\"view\":\"$view_name\"}"
+    ;;
+
+  view-state-expand)
+    # Explicitly expand an item
+    # Usage: view-state-expand <view_name> <item>
+    view_name="${1:-}"
+    item="${2:-}"
+    [[ -z "$view_name" || -z "$item" ]] && json_err "$E_VALIDATION_FAILED" "Usage: view-state-expand <view_name> <item>"
+
+    view_state_file="$DATA_DIR/view-state.json"
+
+    if [[ ! -f "$view_state_file" ]]; then
+      bash "$0" view-state-init >/dev/null 2>&1
+    fi
+
+    updated=$(jq --arg view "$view_name" --arg item "$item" '
+      .[$view].collapsed -= [$item] |
+      .[$view].expanded += [$item]
+    ' "$view_state_file") || json_err "$E_JSON_INVALID" "Failed to update view state"
+
+    atomic_write "$view_state_file" "$updated"
+    json_ok "{\"item\":\"$item\",\"state\":\"expanded\",\"view\":\"$view_name\"}"
+    ;;
+
+  view-state-collapse)
+    # Explicitly collapse an item
+    # Usage: view-state-collapse <view_name> <item>
+    view_name="${1:-}"
+    item="${2:-}"
+    [[ -z "$view_name" || -z "$item" ]] && json_err "$E_VALIDATION_FAILED" "Usage: view-state-collapse <view_name> <item>"
+
+    view_state_file="$DATA_DIR/view-state.json"
+
+    if [[ ! -f "$view_state_file" ]]; then
+      bash "$0" view-state-init >/dev/null 2>&1
+    fi
+
+    updated=$(jq --arg view "$view_name" --arg item "$item" '
+      .[$view].expanded -= [$item] |
+      .[$view].collapsed += [$item]
+    ' "$view_state_file") || json_err "$E_JSON_INVALID" "Failed to update view state"
+
+    atomic_write "$view_state_file" "$updated"
+    json_ok "{\"item\":\"$item\",\"state\":\"collapsed\",\"view\":\"$view_name\"}"
     ;;
 
   *)
