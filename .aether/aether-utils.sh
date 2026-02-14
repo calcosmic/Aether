@@ -95,7 +95,7 @@ shift 2>/dev/null || true
 case "$cmd" in
   help)
     cat <<'EOF'
-{"ok":true,"commands":["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
+{"ok":true,"commands":["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
 EOF
     ;;
   version)
@@ -1671,6 +1671,69 @@ EOF
     fi
 
     chamber_list "$chambers_root"
+    ;;
+
+  milestone-detect)
+    # Detect colony milestone from state
+    # Usage: milestone-detect
+    # Returns: {ok: true, milestone: "...", version: "...", phases_completed: N, total_phases: N, progress_percent: N}
+
+    [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
+
+    # Extract and compute milestone data using jq
+    result=$(jq '
+      # Extract key data
+      (.plan.phases // []) as $phases |
+      (.errors.records // []) as $errors |
+      (.milestone // null) as $stored_milestone |
+
+      # Count completed phases
+      ([$phases[] | select(.status == "completed")] | length) as $completed_count |
+      ($phases | length) as $total_phases |
+
+      # Check for critical errors
+      ([$errors[] | select(.severity == "critical")] | length) as $critical_count |
+
+      # Determine milestone based on state
+      if $critical_count > 0 then
+        "Failed Mound"
+      elif $total_phases > 0 and $completed_count == $total_phases then
+        if $stored_milestone == "Crowned Anthill" then
+          "Crowned Anthill"
+        else
+          "Sealed Chambers"
+        end
+      elif $completed_count >= 5 then
+        "Ventilated Nest"
+      elif $completed_count >= 3 then
+        "Brood Stable"
+      elif $completed_count >= 1 then
+        "Open Chambers"
+      else
+        "First Mound"
+      end as $milestone |
+
+      # Compute version: major = floor(total_phases / 10), minor = total_phases % 10, patch = completed_count
+      ($total_phases / 10 | floor) as $major |
+      ($total_phases % 10) as $minor |
+      $completed_count as $patch |
+      "v\($major).\($minor).\($patch)" as $version |
+
+      # Calculate progress percentage
+      (if $total_phases > 0 then ($completed_count * 100 / $total_phases | round) else 0 end) as $progress |
+
+      # Return result
+      {
+        ok: true,
+        milestone: $milestone,
+        version: $version,
+        phases_completed: $completed_count,
+        total_phases: $total_phases,
+        progress_percent: $progress
+      }
+    ' "$DATA_DIR/COLONY_STATE.json")
+
+    echo "$result"
     ;;
 
   *)
