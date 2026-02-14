@@ -20,6 +20,7 @@ const {
 } = require('./lib/errors');
 const { logError, logActivity } = require('./lib/logger');
 const { UpdateTransaction, UpdateError } = require('./lib/update-transaction');
+const { initializeRepo, isInitialized } = require('./lib/init');
 
 // Color palette
 const c = require('./lib/colors');
@@ -1369,21 +1370,44 @@ program
       }))
   );
 
-// Deprecated: init command
+// Init command - Initialize Aether in current repository
 program
-  .command('init [goal]')
-  .description('(deprecated) Use /ant:init in Claude Code instead')
-  .action((goal) => {
-    console.error(c.warning('Warning: "aether init" is deprecated.'));
-    console.error(c.warning('  Use /ant:init in Claude Code instead:'));
-    console.error(c.warning(`  /ant:init "${goal || 'your-goal-here'}"`));
-    process.exit(1);
-  });
+  .command('init')
+  .description('Initialize Aether in current repository')
+  .option('-g, --goal <goal>', 'Initial colony goal', 'Aether colony')
+  .option('-f, --force', 'Reinitialize even if already initialized')
+  .action(wrapCommand(async (options) => {
+    const repoPath = process.cwd();
+
+    // Check if already initialized
+    if (isInitialized(repoPath) && !options.force) {
+      console.log('Aether is already initialized in this repository.');
+      console.log('Use --force to reinitialize (WARNING: may overwrite state).');
+      return;
+    }
+
+    // Initialize
+    const result = await initializeRepo(repoPath, {
+      goal: options.goal,
+      skipIfExists: !options.force
+    });
+
+    if (result.success) {
+      console.log('Aether initialized successfully!');
+      console.log(`State file: ${result.stateFile}`);
+      console.log('');
+      console.log('Next steps:');
+      console.log('  1. Define your colony goal in .aether/data/COLONY_STATE.json');
+      console.log('  2. Run: aether status');
+      console.log('  3. Start building: /ant:init');
+    }
+  }));
 
 // Custom help handler to show CLI vs Slash command distinction
 program.on('--help', () => {
   console.log('');
   console.log(c.bold('CLI Commands (Terminal):'));
+  console.log('  init                 Initialize Aether in current repository');
   console.log('  install              Install slash-commands and set up distribution hub');
   console.log('  update               Update current repo from hub');
   console.log('  version              Show installed version');
@@ -1398,6 +1422,7 @@ program.on('--help', () => {
   console.log(c.dim('Run these in Claude Code after installing with "aether install"'));
   console.log('');
   console.log(c.bold('Examples:'));
+  console.log('  $ aether init --goal "My project"   # Initialize Aether in current repo');
   console.log('  $ aether install                    # Install slash commands');
   console.log('  $ aether update --list              # Show registered repos');
   console.log('  $ aether update --all --force       # Force update all repos');
