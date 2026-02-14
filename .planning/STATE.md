@@ -113,6 +113,8 @@ v3.1:    [████████░░░] 80% IN PROGRESS (4/4 plans complete
 | 2026-02-14 | Detail view pattern with /command <name> | Consistent UX for single-item detail views |
 | 2026-02-14 | Telemetry errors are silent | Spawn logging continues even if telemetry fails (graceful degradation) |
 | 2026-02-14 | Routing decisions rotate at 1000 entries | Prevents unbounded file growth in telemetry.json |
+| 2026-02-14 | Task routing default_model acts as catch-all | When no keywords match but default_model exists, source is 'task-routing' not 'caste-default' |
+| 2026-02-14 | First-match wins in complexity_indicators | Iteration order determines priority; keywords in earlier categories take precedence |
 | 2026-02-14 | Atomic writes for telemetry | Temp file + rename pattern prevents data corruption during concurrent writes |
 
 ### Open Questions
