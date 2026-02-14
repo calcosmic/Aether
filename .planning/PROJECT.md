@@ -111,16 +111,16 @@ Autonomous multi-agent orchestration that scales from single-user development to
 | Foreground build execution (v3.0.0) | Accurate output timing | ✓ Good |
 | Init auto-registration (v3.0.0) | Seamless update --all | ✓ Good |
 
-## Current Milestone: Planning v3.1
+## Current Milestone: v3.1 Open Chambers
 
-**Goal:** Enhance worker caste capabilities and improve colony observability for better developer experience
+**Goal:** Implement intelligent model routing for worker castes and establish colony lifecycle management (archive/foundation) with ant-themed terminology
 
-**Next Milestone Goals (v3.1):**
-- Worker caste specializations (Builder, Watcher, Scout refinements)
-- Enhanced visualization for swarm command
-- Real-time monitoring improvements
-- Version-aware update notifications (NOTIFY-01)
-- Checkpoint recovery tracking (RECOVER-01)
+**Target features:**
+- **Model Routing System**: Verify and document caste-to-model assignments (glm-5 for prime/architect, kimi-k2.5 for builder, etc.)
+- **Model Configuration**: Easy CLI commands to view/set models (`aether models`, `/ant:models`)
+- **Colony Lifecycle**: `/ant:archive` (archive + reset), `/ant:foundation` (start fresh) — ant-themed equivalents to CDS milestone commands
+- **Milestone Auto-Detection**: Automatically detect colony milestone (First Mound, Open Chambers, Brood Stable, etc.) based on state
+- **Quick Wins**: Surface Dreams in `/ant:status`, Auto-Load Context, Model verification
 
 ---
-*Last updated: 2026-02-14 — v3.0.0 shipped, planning v3.1*
+*Last updated: 2026-02-14 — starting v3.1 Open Chambers*
