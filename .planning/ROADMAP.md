@@ -42,6 +42,16 @@ The approach prioritizes infrastructure hardening over feature additions — fix
 5. Tests verify that sync operations are idempotent (running twice produces same result)
 6. Test suite runs in under 10 seconds with mocked filesystem
 
+**Plans:** 6 plans in 3 waves
+
+Plans:
+- [ ] 06-01-PLAN.md — Install test dependencies (sinon + proxyquire) and create mock-fs helper
+- [ ] 06-02-PLAN.md — Implement safe checkpoint command with create/list/restore/verify
+- [ ] 06-03-PLAN.md — Create unit tests for hashFileSync function
+- [ ] 06-04-PLAN.md — Create unit tests for generateManifest and validateManifest
+- [ ] 06-05-PLAN.md — Create unit tests for syncDirWithCleanup with idempotency tests
+- [ ] 06-06-PLAN.md — Commit package-lock.json and verify checkpoint system end-to-end
+
 ---
 
 ## Phase 7: Core Reliability — State Guards & Update System
@@ -100,7 +110,7 @@ The approach prioritizes infrastructure hardening over feature additions — fix
 
 | Phase | Status | Requirements | Success Criteria Met |
 |-------|--------|--------------|----------------------|
-| 6 - Foundation | Not Started | 10/10 pending | 0/6 |
+| 6 - Foundation | Planned | 10/10 pending | 0/6 |
 | 7 - Core Reliability | Not Started | 9/9 pending | 0/7 |
 | 8 - Build Polish | Not Started | 3/3 pending | 0/5 |
 
@@ -121,4 +131,4 @@ v1.1 is complete when:
 ---
 
 *Roadmap created: 2026-02-14*
-*Next: `/cds:plan-phase 6` to begin Foundation phase*
+*Next: `/cds:execute-phase 6` to begin Foundation phase execution*
