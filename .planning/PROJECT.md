@@ -92,15 +92,17 @@ Autonomous multi-agent orchestration that scales from single-user development to
 | File locking with flock | Prevent race conditions | ✓ Good |
 | Handoff pattern | Pheromone trail metaphor | ✓ Good |
 
-## Current Milestone: v1.1 Feature Enhancements
+## Current Milestone: v1.1 Bug Fixes & Update System Repair
 
-**Goal:** Build on v1.0 infrastructure to add advanced features and improvements
+**Goal:** Fix critical bugs causing phase loops and repair the update system for reliable multi-repo synchronization
 
-**Target features:**
-- Worker caste specializations (new castes beyond Builder/Watcher/Scout/Chaos/Oracle)
-- Enhanced swarm command with better visualization
-- Real-time colony monitoring improvements
-- Cross-repo collaboration features
+**Target fixes:**
+- Fix phase advancement logic to prevent AI model from repeating the same phases
+- Repair `aether update` command for reliable cross-repo synchronization
+- Fix build checkpoint stashing user data (critical data loss risk)
+- Fix misleading output timing from `run_in_background` in build commands
+- Add missing package-lock.json for deterministic builds
+- Add unit tests for core sync functions in cli.js
 
 ---
-*Last updated: 2026-02-14 after v1.0 milestone completion*
+*Last updated: 2026-02-14 — starting v1.1 milestone*
