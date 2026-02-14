@@ -24,7 +24,7 @@ This roadmap delivers the v3.1 "Open Chambers" milestone, expanding the Aether C
 
 | Phase | Name | Goal | Requirements | Status |
 |-------|------|------|--------------|--------|
-| 9 | Caste Model Assignment | User can view, verify, and configure model assignments per caste | 8 | Planned |
+| 9 | Caste Model Assignment | User can view, verify, and configure model assignments per caste | 8 | Complete |
 | 10 | Entombment & Egg Laying | User can archive colonies and start fresh with lifecycle management | 5 | Not Started |
 | 11 | Foraging Specialization | System intelligently routes tasks to optimal models based on content | 3 | Not Started |
 | 12 | Colony Visualization | User sees immersive real-time colony activity with ant-themed presentation | 11 | Not Started |
@@ -50,11 +50,11 @@ This roadmap delivers the v3.1 "Open Chambers" milestone, expanding the Aether C
 | QUICK-03 | `/ant:verify-castes` command |
 
 **Plans:**
-- [ ] 09-01-PLAN.md — Foundation: js-yaml + model-profiles.js library
-- [ ] 09-02-PLAN.md — CLI commands: list, set, reset for caste-models
-- [ ] 09-03-PLAN.md — Proxy health verification + /ant:verify-castes command
-- [ ] 09-04-PLAN.md — Spawn logging with model tracking
-- [ ] 09-05-PLAN.md — Quick wins: Dreams in status, nestmate auto-load
+- [x] 09-01-PLAN.md — Foundation: js-yaml + model-profiles.js library
+- [x] 09-02-PLAN.md — CLI commands: list, set, reset for caste-models
+- [x] 09-03-PLAN.md — Proxy health verification + /ant:verify-castes command
+- [x] 09-04-PLAN.md — Spawn logging with model tracking
+- [x] 09-05-PLAN.md — Quick wins: Dreams in status, nestmate auto-load
 
 **Success Criteria:**
 1. User runs `aether caste-models list` and sees current assignments (Builder=kimi-k2.5, etc.)

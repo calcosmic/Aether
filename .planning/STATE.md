@@ -12,21 +12,21 @@
 |-------|-------|
 | **Phase** | 9 — Caste Model Assignment |
 | **Plan** | 05 — Auto-Load Context |
-| **Status** | In Progress |
-| **Last Action** | Completed 09-05 plan 2026-02-14 |
+| **Status** | Complete |
+| **Last Action** | Completed Phase 9 execution 2026-02-14 |
 
 ### Progress Bar
 
 ```
 v3.0.0:  [██████████] 100% COMPLETE (14 plans, 25 requirements)
-v3.1:    [████░░░░░░] 20% IN PROGRESS (4/5 plans started, 0/27 requirements)
+v3.1:    [███████░░░] 60% IN PROGRESS (5/5 plans complete, 8/27 requirements)
 ```
 
 ### Phase Status
 
 | Phase | Name | Status | Requirements | Complete |
 |-------|------|--------|--------------|----------|
-| 9 | Caste Model Assignment | In Progress | 8 | 80% (4/5 plans) |
+| 9 | Caste Model Assignment | Complete | 8 | 100% (5/5 plans) |
 | 10 | Entombment & Egg Laying | Blocked | 5 | 0% |
 | 11 | Foraging Specialization | Blocked | 3 | 0% |
 | 12 | Colony Visualization | Blocked | 11 | 0% |
@@ -106,6 +106,8 @@ v3.1:    [████░░░░░░] 20% IN PROGRESS (4/5 plans started, 0/
 | 2026-02-14 | Dream timestamps extracted from filename | Consistent naming enables easy sorting and display |
 | 2026-02-14 | Nestmate detection uses .aether/ directory heuristic | Simple and reliable way to identify Aether projects |
 | 2026-02-14 | Cross-project TO-DOs limited to 5 items | Prevents overwhelming output |
+| 2026-02-14 | Spawn tree format includes model as 6th field | Complete audit trail of which models are used per spawn |
+| 2026-02-14 | Model parameter defaults to 'default' for backward compatibility | Existing spawn-log calls continue to work |
 
 ### Open Questions
 
@@ -127,12 +129,12 @@ v3.1:    [████░░░░░░] 20% IN PROGRESS (4/5 plans started, 0/
 
 ### Last Session
 - **Date:** 2026-02-14
-- **Action:** Executed Phase 9 Plan 05 - Auto-Load Context Quick Wins
-- **Outcome:** Verified all quick wins already implemented: /ant:status shows dream count and latest timestamp, nestmate detection library with 4 exports, enhanced /ant:init with nestmate awareness, aether nestmates and aether context CLI commands
+- **Action:** Executed all 5 plans in Phase 9 - Caste Model Assignment
+- **Outcome:** All plans complete - model-profiles.js with tests, caste-models CLI commands, proxy health verification, worker spawn logging, auto-load context with dreams and nestmates
 
 ### Next Actions
-1. Execute Phase 9 Plan 06 — Verify-Castes Command (if exists) or mark Phase 9 complete
-2. Update REQUIREMENTS.md to mark QUICK-01, QUICK-02 as complete
+1. Run phase verification to confirm all must-haves
+2. Update REQUIREMENTS.md marking Phase 9 requirements complete
 3. Begin Phase 10 — Entombment & Egg Laying
 
 ### Handoff Notes
