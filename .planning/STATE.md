@@ -10,16 +10,16 @@
 
 | Field | Value |
 |-------|-------|
-| **Phase** | 11 — Foraging Specialization |
-| **Plan** | Complete |
-| **Status** | Complete |
-| **Last Action** | Phase 11 execution complete - all 4 plans verified |
+| **Phase** | 12 — Colony Visualization |
+| **Plan** | 01 of 05 |
+| **Status** | In Progress |
+| **Last Action** | Completed Plan 01 - Activity Tracking Infrastructure |
 
 ### Progress Bar
 
 ```
 v3.0.0:  [██████████] 100% COMPLETE (14 plans, 25 requirements)
-v3.1:    [███████████████░░░░] 85% IN PROGRESS (16/16 plans complete, 16/27 requirements)
+v3.1:    [████████████████░░░] 88% IN PROGRESS (17/17 plans complete, 17/27 requirements)
 ```
 
 ### Phase Status
@@ -29,7 +29,7 @@ v3.1:    [███████████████░░░░] 85% IN PROG
 | 9 | Caste Model Assignment | Complete | 8 | 100% (5/5 plans) |
 | 10 | Entombment & Egg Laying | Complete | 5 | 100% (4/4 plans) |
 | 11 | Foraging Specialization | Complete | 3 | 100% (4/4 plans) |
-| 12 | Colony Visualization | Planned | 11 | 0% |
+| 12 | Colony Visualization | In Progress | 11 | 20% (1/5 plans) |
 
 ---
 
@@ -130,6 +130,10 @@ v3.1:    [███████████████░░░░] 85% IN PROG
 | 2026-02-14 | Atomic writes for telemetry | Temp file + rename pattern prevents data corruption during concurrent writes |
 | 2026-02-14 | CLI --model flag takes highest precedence | User intent for one-time override must be respected over all other routing |
 | 2026-02-14 | Use Node.js library via bash heredoc for model selection | Reuses existing tested logic, avoids duplication between bash and JS |
+| 2026-02-14 | Tool tracking in routing_decisions array | Keeps per-spawn tool usage with full context (task, caste, model) |
+| 2026-02-14 | Cumulative token counting | Trophallaxis metrics accumulate over spawn lifetime |
+| 2026-02-14 | Pipe-delimited timing.log format | More efficient than JSON for append-only operations |
+| 2026-02-14 | Pre-defined chambers with icons | Ant-themed zones (fungus_garden, nursery, etc.) ready for activity mapping |
 
 ### Open Questions
 
@@ -151,19 +155,22 @@ v3.1:    [███████████████░░░░] 85% IN PROG
 
 ### Last Session
 - **Date:** 2026-02-14
-- **Action:** Completed Plan 04 in Phase 11 - CLI Override Integration
-- **Outcome:** Added --model flag support to /ant:build command; model-profile select/validate commands; 13 integration tests passing
+- **Action:** Completed Plan 01 in Phase 12 - Activity Tracking Infrastructure
+- **Outcome:** Extended telemetry.js with tool/token tracking; added swarm activity/timing commands to aether-utils.sh; created swarm-display.json data structure
 
 ### Next Actions
-1. Phase 11 is now 100% complete (3/3 plans done)
-2. Move to Phase 12 - Colony Visualization
+1. Continue Phase 12 - Colony Visualization
+2. Plan 02: Real-time Swarm Display (`/ant:swarm` command)
+3. Plan 03: Tunnel View with collapsible nested spawns
+4. Plan 04: Chamber Activity Map
+5. Plan 05: ASCII Art Anthill Maturity Visualization
 
 ### Handoff Notes
-- Phase 11 Plan 04 complete - CLI --model flag support ready
-- Users can run `/ant:build 1 --model glm-5` to override model for a build
-- model-profile select command handles full precedence chain: CLI > user > task-routing > caste-default
-- model-profile validate command validates model names against known models
-- Next: Phase 12 (Colony Visualization)
+- Plan 12-01 complete - Activity tracking infrastructure ready
+- telemetry.js now exports updateToolUsage() and updateTokenUsage()
+- aether-utils.sh has swarm-display-init/update/get and swarm-timing-start/get/eta commands
+- swarm-display.json structure includes chambers (fungus_garden, nursery, etc.) with emoji icons
+- Data foundation ready for real-time visualization features
 
 ---
 
@@ -180,4 +187,4 @@ v3.1:    [███████████████░░░░] 85% IN PROG
 
 *State file: `.planning/STATE.md`*
 *Updated: 2026-02-14*
-*Next update: After Phase 12 start*
+*Next update: After Plan 12-02*
