@@ -53,23 +53,35 @@ After displaying context, run: `bash .aether/aether-utils.sh unload-state` to re
 1. Extract the phase number (first argument)
 2. Check remaining arguments for flags:
    - If contains `--verbose` or `-v`: set `verbose_mode = true`
-   - Otherwise: set `verbose_mode = false`
+   - If contains `--model <name>` or `-m <name>`: set `cli_model_override = <name>`
+   - Otherwise: set defaults
 
 If the phase number is empty or not a number:
 
 ```
-Usage: /ant:build <phase_number> [--verbose|-v]
+Usage: /ant:build <phase_number> [--verbose|-v] [--model <model>|-m <model>]
 
 Options:
-  --verbose, -v   Show full completion details (spawn tree, TDD, patterns)
+  --verbose, -v       Show full completion details (spawn tree, TDD, patterns)
+  --model, -m <name>  Override model for this build (one-time)
 
 Examples:
   /ant:build 1              Build Phase 1 (compact output)
   /ant:build 1 --verbose    Build Phase 1 (full details)
   /ant:build 3 -v           Build Phase 3 (full details)
+  /ant:build 1 --model glm-5    Build Phase 1 with glm-5 for all workers
 ```
 
 Stop here.
+
+**Validate CLI model override (if provided):**
+If `cli_model_override` is set:
+1. Validate the model: `bash .aether/aether-utils.sh model-profile validate "$cli_model_override"`
+2. Parse JSON result - if `.result.valid` is false:
+   - Display: `Error: Invalid model "$cli_model_override"`
+   - Display: `Valid models: {list from .result.models}`
+   - Stop here
+3. If valid: Display `Using override model: {model}`
 
 **Auto-upgrade old state:**
 If `version` field is missing, "1.0", or "2.0":
@@ -318,15 +330,16 @@ bash .aether/aether-utils.sh spawn-log "Queen" "builder" "{ant_name}" "{task_des
 
 **Model Assignment:**
 
-Before spawning each worker, get the optimal model for their caste:
+Before spawning each worker, get the optimal model for their caste with task-based routing:
 
 ```bash
-# Get model assignment for this caste
-model_info=$(bash .aether/aether-utils.sh model-profile get "{caste}")
+# Get model assignment for this caste with task-based routing
+model_info=$(bash .aether/aether-utils.sh model-profile select "{caste}" "{task_description}" "{cli_model_override}")
 model=$(echo "$model_info" | jq -r '.result.model')
+source=$(echo "$model_info" | jq -r '.result.source')
 
-# Log model assignment
-bash .aether/aether-utils.sh activity-log "MODEL" "Queen" "{ant_name} ({caste}): assigned to $model"
+# Log model assignment with source
+bash .aether/aether-utils.sh activity-log "MODEL" "Queen" "{ant_name} ({caste}): assigned to $model (source: $source)"
 ```
 
 **Environment Setup for Workers:**
