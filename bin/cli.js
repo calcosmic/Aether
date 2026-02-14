@@ -41,6 +41,7 @@ const {
   verifyModelRouting,
   formatProxyStatusColored,
 } = require('./lib/proxy-health');
+const { logSpawn, formatSpawnTree } = require('./lib/spawn-logger');
 
 // Color palette
 const c = require('./lib/colors');
@@ -1795,6 +1796,39 @@ program
 
     // Recommendation
     console.log(`\n${report.recommendation}`);
+  }));
+
+// Spawn-log command - Log a worker spawn event
+program
+  .command('spawn-log')
+  .description('Log a worker spawn event')
+  .requiredOption('-p, --parent <parent>', 'Parent ant name')
+  .requiredOption('-c, --caste <caste>', 'Worker caste')
+  .requiredOption('-n, --name <name>', 'Child ant name')
+  .requiredOption('-t, --task <task>', 'Task description')
+  .requiredOption('-m, --model <model>', 'Model used')
+  .option('-s, --status <status>', 'Spawn status', 'spawned')
+  .action(wrapCommand(async (options) => {
+    const repoPath = process.cwd();
+    await logSpawn(repoPath, {
+      parent: options.parent,
+      caste: options.caste,
+      child: options.name,
+      task: options.task,
+      model: options.model,
+      status: options.status
+    });
+    console.log(`Logged spawn: ${options.parent} → ${options.name} (${options.caste}) [${options.model}]`);
+  }));
+
+// Spawn-tree command - Display worker spawn tree
+program
+  .command('spawn-tree')
+  .description('Display worker spawn tree with model information')
+  .action(wrapCommand(async () => {
+    const repoPath = process.cwd();
+    const tree = formatSpawnTree(repoPath);
+    console.log(tree);
   }));
 
 // Init command - Initialize Aether in current repository
