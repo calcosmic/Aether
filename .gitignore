@@ -98,3 +98,6 @@ logs/
 # NPM
 node_modules/
 *.tgz
+
+# Allow bin/lib (Aether CLI libraries)
+!bin/lib/
