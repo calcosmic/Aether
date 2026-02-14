@@ -14,9 +14,9 @@ worker_models:
   archaeologist: glm-5   # Historical pattern recognition across long timeframes
 
   # Planning and architecture castes: system design, decomposition
-  architect: minimax-2.5 # Architectural-level planning, system design (80.2% SWE-Bench)
+  architect: glm-5       # Pattern synthesis, documentation coordination (200K context)
   oracle: minimax-2.5    # Research, foresight, browse/search (76.3% BrowseComp)
-  route_setter: minimax-2.5 # Task decomposition, efficient planning (20% fewer search rounds)
+  route_setter: kimi-k2.5 # Task decomposition, structured planning (256K context)
 
   # Implementation and validation castes: coding, testing, exploration
   builder: kimi-k2.5     # Code generation, refactoring (76.8% SWE-Bench, 256K context)

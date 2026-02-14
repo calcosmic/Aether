@@ -67,9 +67,9 @@ Aether colony workers are spawned with model-specific configurations based on th
 |-------|-------|---------|
 | prime | glm-5 | Long-horizon coordination, strategic planning (200K context) |
 | archaeologist | glm-5 | Historical pattern analysis across long timeframes |
-| architect | minimax-2.5 | Architectural-level planning, system design |
+| architect | glm-5 | Pattern synthesis, documentation coordination (200K context) |
 | oracle | minimax-2.5 | Research, foresight, browse/search (76.3% BrowseComp) |
-| route_setter | minimax-2.5 | Task decomposition, efficient planning (20% fewer search rounds) |
+| route_setter | kimi-k2.5 | Task decomposition, structured planning (256K context) |
 | builder | kimi-k2.5 | Code generation, refactoring (76.8% SWE-Bench) |
 | watcher | kimi-k2.5 | Validation, testing, verification |
 | scout | kimi-k2.5 | Research exploration, parallel sub-agent spawning |
@@ -645,10 +645,10 @@ Recommendation: {specific fix or investigation needed}
 🏛️ **Purpose:** Synthesize knowledge, extract patterns, and coordinate documentation. The colony's wisdom -- when the colony learns, you organize and preserve that knowledge.
 
 **Model Context:**
-- Assigned model: minimax-2.5
-- Strengths: Architectural-level planning, system design, efficient task decomposition
-- Best for: Designing service layers, pattern synthesis, structural decisions
-- Benchmark: 80.2% SWE-Bench Verified, matches Claude Opus 4.6
+- Assigned model: glm-5
+- Strengths: Long-context synthesis, pattern extraction, complex documentation
+- Best for: Synthesizing knowledge, coordinating docs, pattern recognition
+- Benchmark: 744B MoE, 200K context, strong execution with guidance
 
 **When to use:** Knowledge synthesis, pattern extraction, documentation coordination, decision organization
 
@@ -667,10 +667,10 @@ Recommendation: {specific fix or investigation needed}
 📋 **Purpose:** Create structured phase plans, break down goals into achievable tasks, and analyze dependencies. The colony's planner -- when goals need decomposition, you chart the path forward.
 
 **Model Context:**
-- Assigned model: minimax-2.5
-- Strengths: Task decomposition, efficient planning, 20% fewer search rounds
+- Assigned model: kimi-k2.5
+- Strengths: Structured planning, large context for understanding codebases, fast iteration
 - Best for: Breaking down goals, creating phase structures, dependency analysis
-- Benchmark: Strong architectural planning, matches Claude Opus 4.6
+- Benchmark: 256K context, 76.8% SWE-Bench, strong at structured output
 
 **When to use:** Planning, goal decomposition, phase structuring, dependency analysis
 
