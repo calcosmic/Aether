@@ -15,6 +15,16 @@ Run using the Bash tool: `bash .aether/aether-utils.sh version-check 2>/dev/null
 
 If the command succeeds and the JSON result contains a non-empty string, display it as a one-line notice. Proceed regardless of outcome.
 
+### Step 0.6: Verify LiteLLM Proxy
+
+Check that the LiteLLM proxy is running for model routing:
+
+```bash
+curl -s http://localhost:4000/health | grep -q "healthy" && echo "Proxy healthy" || echo "Proxy not running - workers will use default model"
+```
+
+If proxy is not healthy, log a warning but continue (workers will fall back to default routing).
+
 ### Step 0.5: Load Colony State
 
 Run using Bash tool: `bash .aether/aether-utils.sh load-state`
@@ -306,12 +316,64 @@ Log each spawn:
 bash .aether/aether-utils.sh spawn-log "Queen" "builder" "{ant_name}" "{task_description}"
 ```
 
+**Model Assignment:**
+
+Before spawning each worker, get the optimal model for their caste:
+
+```bash
+# Get model assignment for this caste
+model_info=$(bash .aether/aether-utils.sh model-profile get "{caste}")
+model=$(echo "$model_info" | jq -r '.result.model')
+
+# Log model assignment
+bash .aether/aether-utils.sh activity-log "MODEL" "Queen" "{ant_name} ({caste}): assigned to $model"
+```
+
+**Environment Setup for Workers:**
+
+When spawning workers, the following environment variables must be set for Claude Code to use the LiteLLM proxy with the correct model:
+
+```bash
+export ANTHROPIC_BASE_URL="http://localhost:4000"
+export ANTHROPIC_AUTH_TOKEN="sk-litellm-local"
+export ANTHROPIC_MODEL="$model"  # From model-profile get above
+```
+
+**IMPORTANT:** The Task tool inherits environment from the parent Claude Code process. Set these variables in the shell before spawning workers, or ensure they are already set in the parent environment.
+
+### Step 5.1.5: Export Model Environment
+
+Before spawning workers, export the environment variables for LiteLLM proxy routing:
+
+```bash
+export ANTHROPIC_BASE_URL="http://localhost:4000"
+export ANTHROPIC_AUTH_TOKEN="sk-litellm-local"
+```
+
+For each worker spawn, also export their specific model:
+
+```bash
+export ANTHROPIC_MODEL="$model"  # From model-profile get
+```
+
+**Note:** These environment variables will be inherited by spawned workers via the Task tool, enabling automatic model routing through the LiteLLM proxy.
+
 **Builder Worker Prompt Template:**
 ```
 You are {Ant-Name}, a 🔨 Builder Ant in the Aether Colony at depth {depth}.
 
 --- YOUR TASK ---
 Task {id}: {description}
+
+--- MODEL CONTEXT ---
+Optimal model for this task: {model} (from caste: {caste})
+Model characteristics: {model_description}
+Task complexity expectation: {simple|medium|complex}
+
+The model has been pre-selected based on your caste's typical work patterns.
+- glm-5: Use for complex reasoning, architecture, planning
+- kimi-k2.5: Use for fast implementation, coding, refactoring
+- minimax-2.5: Use for validation, research, quick checks
 
 --- CONTEXT ---
 Goal: "{colony_goal}"
@@ -431,6 +493,11 @@ You are {Watcher-Name}, a 👁️ Watcher Ant in the Aether Colony at depth {dep
 --- YOUR MISSION ---
 Independently verify all work done by Builders in Phase {id}.
 
+--- MODEL CONTEXT ---
+Optimal model for verification: {model} (from caste: watcher)
+Model characteristics: Efficient validation and testing model
+Verification focus: Quick, thorough checks with fast turnaround
+
 --- WHAT TO VERIFY ---
 Files created: {list from builder results}
 Files modified: {list from builder results}
@@ -547,6 +614,11 @@ You are {Chaos-Name}, a 🎲 Chaos Ant (Resilience Tester) in the Aether Colony 
 
 --- YOUR MISSION ---
 Probe the work done by Builders in Phase {id} for edge cases, boundary conditions, and unexpected inputs.
+
+--- MODEL CONTEXT ---
+Optimal model for chaos testing: {model} (from caste: chaos)
+Model characteristics: Efficient edge case exploration
+Testing focus: Rapid probing of boundaries and edge cases
 
 --- SCOPE ---
 Files created: {list from builder results}
