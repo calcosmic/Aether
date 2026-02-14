@@ -15,9 +15,12 @@ set -euo pipefail
 LOCK_ACQUIRED=${LOCK_ACQUIRED:-false}
 CURRENT_LOCK=${CURRENT_LOCK:-""}
 
-# Get script directory for sourcing
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AETHER_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd 2>/dev/null || echo "$SCRIPT_DIR/../..")"
+# Get script directory for sourcing (preserve parent SCRIPT_DIR if set)
+__chamber_utils_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+AETHER_ROOT="$(cd "$__chamber_utils_dir/../.." && pwd 2>/dev/null || echo "$__chamber_utils_dir/../..")"
+
+# Use parent SCRIPT_DIR if available, otherwise use local
+SCRIPT_DIR="${SCRIPT_DIR:-$__chamber_utils_dir}"
 
 # Source atomic-write for safe file operations
 [[ -f "$SCRIPT_DIR/atomic-write.sh" ]] && source "$SCRIPT_DIR/atomic-write.sh"

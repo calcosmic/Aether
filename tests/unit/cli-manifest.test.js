@@ -43,14 +43,18 @@ function createMockCommander() {
     description: sinon.stub().returnsThis(),
     argument: sinon.stub().returnsThis(),
     option: sinon.stub().returnsThis(),
-    action: sinon.stub().returnsThis()
+    requiredOption: sinon.stub().returnsThis(),
+    action: sinon.stub().returnsThis(),
+    command: sinon.stub().returnsThis()  // For deeply nested commands
   };
 
   const mockCommand = {
     description: sinon.stub().returnsThis(),
     option: sinon.stub().returnsThis(),
+    requiredOption: sinon.stub().returnsThis(),
     action: sinon.stub().returnsThis(),
-    addCommand: sinon.stub().returnsThis()
+    addCommand: sinon.stub().returnsThis(),
+    command: sinon.stub().returns(mockSubCommand)  // For nested subcommands
   };
 
   const mockProgram = {
