@@ -1,95 +1,115 @@
+---
+phase: 10-entombment-egg-laying
+plan: 04
+subsystem: cli
+tags: [claude-code, opencode, commands, chambers, tunnels]
+
+# Dependency graph
+requires:
+  - phase: 10-01
+    provides: Entomb command and chamber structure
+  - phase: 10-02
+    provides: Lay-eggs command for starting fresh colonies
+  - phase: 10-03
+    provides: Chamber utilities (chamber-list, chamber-verify)
+provides:
+  - /ant:tunnels command for browsing archived colonies
+  - List view showing chamber summaries (name, goal, milestone, version, phases, date)
+  - Detail view with full manifest data via /ant:tunnels <name>
+  - Empty state guidance for new users
+  - OpenCode mirror of tunnels command
+affects:
+  - Phase 11 (Foraging Specialization) - may reference chamber history
+  - Phase 12 (Colony Visualization) - tunnel data for visualizations
+
+# Tech tracking
+tech-stack:
+  added: []
+  patterns:
+    - "Command pattern: Claude Code slash commands with frontmatter"
+    - "Mirror pattern: Identical commands for Claude Code and OpenCode"
+    - "Utility delegation: Commands delegate to aether-utils.sh for data access"
+
+key-files:
+  created:
+    - .claude/commands/ant/tunnels.md
+    - .opencode/commands/ant/tunnels.md
+  modified: []
+
+key-decisions:
+  - "Use chamber-list utility for tunnels command - reuses existing JSON-returning utility for consistency"
+  - "Truncate goal at 50 chars in tunnels list view - keeps display compact while showing enough context"
+
+patterns-established:
+  - "Detail view pattern: /command <name> for single-item detail, /command for list view"
+  - "Empty state pattern: Helpful guidance when no data exists, with next step instructions"
+
+# Metrics
+duration: 15min
+completed: 2026-02-14
+---
+
 # Phase 10 Plan 04: Tunnels Command Summary
 
-**One-liner:** Implemented `/ant:tunnels` command for browsing archived colonies with list and detail views
+**Interactive `/ant:tunnels` command for browsing archived colonies with list view, detail view, and empty state guidance**
 
----
+## Performance
 
-## What Was Built
+- **Duration:** 15 min
+- **Started:** 2026-02-14 (continuation)
+- **Completed:** 2026-02-14
+- **Tasks:** 3
+- **Files modified:** 2
 
-The `/ant:tunnels` command allows users to explore colony history by viewing entombed chambers with summaries and details.
+## Accomplishments
 
-### Features
+- Created `/ant:tunnels` command for Claude Code with full browsing functionality
+- Implemented list view showing chamber name, truncated goal (50 chars), milestone, version, phases completed, and entombment date
+- Implemented detail view via `/ant:tunnels <chamber_name>` showing full manifest data with decisions/learnings counts
+- Added empty state with helpful guidance for users with no archived colonies
+- Created identical OpenCode mirror for cross-platform support
 
-1. **List View** (`/ant:tunnels`):
-   - Shows all archived colonies in chambers directory
-   - Displays chamber name, goal (truncated to 50 chars), milestone, version, phases completed, and date
-   - Sorted by entombment date (newest first)
-   - Shows chamber count at top
-   - Footer with instruction for detail view
+## Task Commits
 
-2. **Detail View** (`/ant:tunnels <chamber_name>`):
-   - Shows full goal text
-   - Displays milestone with version
-   - Shows phases completed / total
-   - Shows entombment date
-   - Shows decisions count (if any)
-   - Shows learnings count (if any)
-   - Shows file verification status
+Each task was committed atomically:
 
-3. **Empty State**:
-   - Helpful message when no chambers exist
-   - Guidance to use `/ant:entomb` to build tunnel network
+1. **Task 1: Create /ant:tunnels command for Claude Code** - `c246f18` (feat)
+2. **Task 2: Mirror tunnels command to OpenCode** - `496b727` (feat)
+3. **Task 3: Complete verification and create SUMMARY.md** - `dfe77f0` (docs)
 
-4. **Error Handling**:
-   - "Chamber not found" for invalid chamber names
-   - Handles missing chambers directory
+**Plan metadata:** `dfe77f0` (docs: complete tunnels command plan)
 
-### Files Created
+## Files Created/Modified
 
-| File | Purpose |
-|------|---------|
-| `.claude/commands/ant/tunnels.md` | Tunnels command for Claude Code |
-| `.opencode/commands/ant/tunnels.md` | Tunnels command for OpenCode |
-
----
+- `.claude/commands/ant/tunnels.md` - Tunnels command for browsing archived colonies (list view, detail view, empty state)
+- `.opencode/commands/ant/tunnels.md` - Mirror of tunnels command for OpenCode compatibility
 
 ## Decisions Made
 
-1. **Used existing chamber-list utility** - Leverages `aether-utils.sh chamber-list` subcommand which returns sorted JSON
-2. **Used chamber-verify for detail view** - Reuses existing verification logic for hash status display
-3. **Truncated goal at 50 chars** - Keeps list view compact while showing enough context
-4. **Date format YYYY-MM-DD** - Simple, readable format extracted from ISO timestamp
-
----
-
-## Verification Results
-
-- [x] tunnels.md exists for Claude Code
-- [x] tunnels.md exists for OpenCode (mirror)
-- [x] Command lists chambers with chamber-list subcommand
-- [x] List view shows name, goal, milestone, version, phases, date
-- [x] Detail view shows full manifest data
-- [x] Empty chambers directory shows helpful message
-- [x] Invalid chamber name shows error
-
----
+- Used chamber-list utility for consistent JSON data access (already established in Plan 03)
+- Truncated goal at 50 characters in list view for compact display
+- Sorted chambers by entombment date (newest first) via chamber-list utility
+- Detail view shows full goal, milestone with version, phases completed/total, and file verification status
 
 ## Deviations from Plan
 
 None - plan executed exactly as written.
 
----
+## Issues Encountered
+
+None
+
+## User Setup Required
+
+None - no external service configuration required.
 
 ## Next Phase Readiness
 
-Phase 10 Plan 04 is complete. The tunnels command is ready for end-to-end verification.
-
-**Remaining Phase 10 work:**
-- Plan 05: Milestone auto-detection (if not already complete)
-
----
-
-## Metrics
-
-| Metric | Value |
-|--------|-------|
-| Tasks Completed | 2/2 |
-| Files Created | 2 |
-| Duration | ~1 minute |
-| Commits | 2 |
+- Tunnels command complete and ready for use
+- All Phase 10 lifecycle commands now available: entomb, lay-eggs, tunnels
+- Ready for Plan 05 (Milestone auto-detection) if remaining
+- Phase 10 nearing completion - Foraging Specialization (Phase 11) is next major milestone
 
 ---
-
-*Summary generated: 2026-02-14*
 *Phase: 10-entombment-egg-laying*
-*Plan: 04*
+*Completed: 2026-02-14*
