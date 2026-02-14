@@ -27,11 +27,16 @@ test.beforeEach(() => {
 test.serial('initializeRepo creates directory structure', async (t) => {
   const repoPath = '/test/repo';
 
-  // Setup: nothing exists initially
-  mockFs.existsSync.returns(false);
+  // Setup: hub exists, repo doesn't
+  setupMockFiles(mockFs, {
+    [require('os').homedir() + '/.aether']: null,
+    [require('os').homedir() + '/.aether/system']: null,
+    [require('os').homedir() + '/.aether/version.json']: JSON.stringify({ version: '1.1.0' }),
+    [require('os').homedir() + '/.aether/registry.json']: JSON.stringify({ schema_version: 1, repos: [] })
+  });
 
   // Call initializeRepo
-  const result = await init.initializeRepo(repoPath, { goal: 'Test' });
+  const result = await init.initializeRepo(repoPath, { goal: 'Test', quiet: true });
 
   // Assert: mkdirSync called for required directories
   t.true(mockFs.mkdirSync.calledWith('/test/repo/.aether', { recursive: true }));
@@ -47,11 +52,16 @@ test.serial('initializeRepo creates directory structure', async (t) => {
 test.serial('initializeRepo creates COLONY_STATE.json with correct structure', async (t) => {
   const repoPath = '/test/repo';
 
-  // Setup: nothing exists initially
-  mockFs.existsSync.returns(false);
+  // Setup: hub exists, repo doesn't
+  setupMockFiles(mockFs, {
+    [require('os').homedir() + '/.aether']: null,
+    [require('os').homedir() + '/.aether/system']: null,
+    [require('os').homedir() + '/.aether/version.json']: JSON.stringify({ version: '1.1.0' }),
+    [require('os').homedir() + '/.aether/registry.json']: JSON.stringify({ schema_version: 1, repos: [] })
+  });
 
   // Call initializeRepo
-  await init.initializeRepo(repoPath, { goal: 'Test goal' });
+  await init.initializeRepo(repoPath, { goal: 'Test goal', quiet: true });
 
   // Assert: writeFileSync called with COLONY_STATE.json path
   const writeCall = mockFs.writeFileSync.getCalls().find(

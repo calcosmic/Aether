@@ -197,6 +197,7 @@ None currently.
   - tests/integration/state-guard-integration.test.js - 6 integration tests
   - tests/e2e/update-rollback.test.js - E2E test for update with rollback
   - 206 total tests passing
+  - **INIT-01, INIT-02, INIT-03**: Enhanced init to copy system files from hub and auto-register repo
 
 ### Next Actions
 1. `/cds:audit-milestone` — Verify all v1.1 requirements, cross-phase integration, E2E flows
@@ -215,7 +216,7 @@ All 3 phases of v1.1 complete:
 - Phase 7: Core Reliability — State Guards & Update System (6 plans, 9 requirements)
 - Phase 8: Build Polish — Output Timing & Integration (2 plans, 3 requirements)
 
-Total: 209 tests passing, 22/22 requirements implemented
+Total: 209 tests passing, 25/25 requirements implemented (including INIT-01/02/03)
 
 Phase 7 complete. All 6 plans implemented:
 - 07-01: FileLock with exclusive atomic locks (17 tests)

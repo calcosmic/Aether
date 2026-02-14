@@ -10,7 +10,7 @@ Autonomous multi-agent orchestration that scales from single-user development to
 
 ## Requirements
 
-### Validated
+### Validated (v1.0)
 
 - ✓ CLI installation and update system — v1.0 (npm published)
 - ✓ Core colony commands (init, build, continue, plan, phase) — v1.0
@@ -31,12 +31,25 @@ Autonomous multi-agent orchestration that scales from single-user development to
 - ✓ Spawn tree persistence — v1.0 (reconstruction from spawn-tree.txt)
 - ✓ Context restoration — v1.0 (HANDOFF.md lifecycle)
 
-### Active
+### Validated (v1.1)
 
-- [ ] Worker caste specializations (v1.1)
-- [ ] Enhanced swarm command visualization (v1.1)
-- [ ] Real-time colony monitoring improvements (v1.1)
-- [ ] Cross-repo collaboration features (v1.1)
+- ✓ Safe checkpoint system with explicit allowlist — v1.1 (never captures user data)
+- ✓ State Guard with Iron Law enforcement — v1.1 (prevents phase advancement loops)
+- ✓ FileLock with PID-based stale detection — v1.1 (prevents concurrent modification)
+- ✓ Audit trail system with event sourcing — v1.1 (phase transition history)
+- ✓ UpdateTransaction with two-phase commit — v1.1 (automatic rollback on failure)
+- ✓ Build output timing fixed — v1.1 (foreground execution)
+- ✓ E2E integration test suite — v1.1 (checkpoint → update → build workflow)
+- ✓ Init copies system files from hub — v1.1 (auto-registers for update --all)
+
+### Active (v1.2 Candidates)
+
+- [ ] Worker caste specializations
+- [ ] Enhanced swarm command visualization
+- [ ] Real-time colony monitoring improvements
+- [ ] Cross-repo collaboration features
+- [ ] Version-aware update notifications (NOTIFY-01)
+- [ ] Checkpoint recovery tracking (RECOVER-01)
 
 ### Out of Scope
 
@@ -47,29 +60,35 @@ Autonomous multi-agent orchestration that scales from single-user development to
 
 ## Context
 
-**Current State (post-v1.0):**
-- **Shipped:** v1.0 Infrastructure with 5 phases, 14 plans, 16 requirements
-- **LOC:** ~230k across JavaScript, Bash, JSON
-- **Test Coverage:** 52+ tests (AVA unit + bash integration)
-- **Tech Stack:** Node.js CLI, commander.js, picocolors, bash utilities
+**Current State (post-v1.1):**
+- **Shipped:** v1.1 Bug Fixes & Update System Repair with 3 phases, 14 plans, 25 requirements
+- **LOC:** ~36k JavaScript, Bash utilities, JSON configuration
+- **Test Coverage:** 209 tests (AVA unit + integration + E2E)
+- **Tech Stack:** Node.js CLI, commander.js, picocolors, sinon, proxyquire
 
 **Technical Environment:**
 - Node.js CLI with commander.js (bin/cli.js)
 - Bash utilities (aether-utils.sh with 59+ subcommands)
+- State Guard with Iron Law enforcement (bin/lib/state-guard.js)
+- Update Transaction with two-phase commit (bin/lib/update-transaction.js)
+- FileLock with PID-based stale detection (bin/lib/file-lock.js)
 - Markdown-based command definitions
 - JSON state files with locking and atomic writes
 
-**Recent Work (v1.0):**
-- Fixed Oracle-discovered bugs: missing signatures.json, hash comparison, CLI clarity
-- Established comprehensive testing foundation
-- Built centralized error handling with graceful degradation
-- Migrated to commander.js with semantic color palette
-- Implemented state loading with file locking and handoff detection
+**Recent Work (v1.1):**
+- Fixed critical data loss risk: Safe checkpoint system with explicit allowlist
+- Fixed phase advancement loops: Iron Law enforcement requires verification evidence
+- Fixed update system reliability: Two-phase commit with automatic rollback
+- Fixed build output timing: Foreground execution ensures accurate summaries
+- Fixed init gap: Now copies system files and auto-registers repos
+- Established comprehensive testing with mocked filesystem (209 tests)
 
-**Known Issues Resolved in v1.0:**
-- ✓ Update command reliability (hash comparison prevents unnecessary writes)
-- ✓ System getting stuck in loops (file locking prevents race conditions)
-- ✓ Error handling gaps (AetherError classes with recovery suggestions)
+**Known Issues Resolved in v1.1:**
+- ✓ User data protected in checkpoints (explicit allowlist, never user data)
+- ✓ Phase advancement loops prevented (Iron Law enforcement)
+- ✓ Update failures recoverable (automatic rollback + recovery commands)
+- ✓ Build output timing accurate (foreground execution)
+- ✓ New repos properly initialized (system files + registry)
 
 ## Constraints
 
@@ -86,23 +105,27 @@ Autonomous multi-agent orchestration that scales from single-user development to
 | Markdown commands | Easy to edit, version control | ✓ Good |
 | Bash utilities | Works across shells, no Python dep | ✓ Good |
 | Colony metaphor | Clear role separation | ✓ Good |
-| AVA over Jest | Lightweight, fast ES module support | ✓ Good (52+ tests) |
+| AVA over Jest | Lightweight, fast ES module support | ✓ Good (209+ tests) |
 | picocolors over chalk | 14x smaller, 2x faster | ✓ Good |
 | Semantic color naming | queen, colony, worker hierarchy | ✓ Good |
 | File locking with flock | Prevent race conditions | ✓ Good |
 | Handoff pattern | Pheromone trail metaphor | ✓ Good |
+| Checkpoint allowlist (v1.1) | Never risk user data loss | ✓ Good |
+| Iron Law enforcement (v1.1) | Prevent phase advancement loops | ✓ Good |
+| Two-phase commit updates (v1.1) | Reliable cross-repo sync | ✓ Good |
+| Foreground build execution (v1.1) | Accurate output timing | ✓ Good |
+| Init auto-registration (v1.1) | Seamless update --all | ✓ Good |
 
-## Current Milestone: v1.1 Bug Fixes & Update System Repair
+## Current Milestone: Planning v1.2
 
 **Goal:** Fix critical bugs causing phase loops and repair the update system for reliable multi-repo synchronization
 
-**Target fixes:**
-- Fix phase advancement logic to prevent AI model from repeating the same phases
-- Repair `aether update` command for reliable cross-repo synchronization
-- Fix build checkpoint stashing user data (critical data loss risk)
-- Fix misleading output timing from `run_in_background` in build commands
-- Add missing package-lock.json for deterministic builds
-- Add unit tests for core sync functions in cli.js
+**Next Milestone Goals (v1.2):**
+- Worker caste specializations (Builder, Watcher, Scout refinements)
+- Enhanced visualization for swarm command
+- Real-time monitoring improvements
+- Version-aware update notifications
+- Checkpoint recovery tracking
 
 ---
-*Last updated: 2026-02-14 — starting v1.1 milestone*
+*Last updated: 2026-02-14 — v1.1 shipped, planning v1.2*
