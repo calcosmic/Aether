@@ -1,348 +1,592 @@
-# Architecture Patterns: CLI-Based Multi-Agent Systems
+# Architecture Research: v1.1 Bug Fixes Integration
 
-**Domain:** Multi-agent CLI orchestration for AI coding assistants
-**Researched:** 2026-02-13
+**Domain:** Aether Colony System - CLI-based multi-agent orchestration framework
+**Researched:** 2026-02-14
 **Confidence:** HIGH
 
-This document analyzes the Aether Colony System architecture and identifies patterns that work well for CLI-based multi-agent systems.
+## Executive Summary
 
----
+This research addresses how four critical bug fixes integrate with the existing Aether colony architecture:
+1. Phase advancement / state tracking bugs causing loops
+2. Update system with proper version tracking and rollback
+3. Safe checkpoint system that doesn't stash user data
+4. Testing strategy for file sync operations
 
-## Recommended Architecture: Queen-Worker Hierarchy
+The fixes must work within the established four-layer architecture (Queen, Constraints, Worker, Utility) while maintaining compatibility with existing state management patterns in COLONY_STATE.json.
 
-The Aether Colony System uses a proven hierarchical pattern that balances autonomy with control:
+## Current Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        QUEEN (User)                             │
-│  Provides goal, constraints (focus/avoid), observation          │
-│  Never directly executes work — only orchestrates               │
-└────────────────────────┬────────────────────────────────────────┘
-                         │
-                    Signals (not commands)
-                         │
+┌─────────────────────────────────────────────────────────────┐
+│                        QUEEN LAYER                           │
+│  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐        │
+│  │  init   │  │  plan   │  │  build  │  │continue │        │
+│  └────┬────┘  └────┬────┘  └────┬────┘  └────┬────┘        │
+│       │            │            │            │              │
+├───────┴────────────┴────────────┴────────────┴──────────────┤
+│                      CONSTRAINTS LAYER                       │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │              focus/avoid rules (pheromones)          │    │
+│  └─────────────────────────────────────────────────────┘    │
+├─────────────────────────────────────────────────────────────┤
+│                        WORKER LAYER                          │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐    │
+│  │ Builder  │  │ Watcher  │  │  Scout   │  │  Oracle  │    │
+│  │  🔨      │  │  👁️      │  │  🔍      │  │  🔮      │    │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘    │
+├─────────────────────────────────────────────────────────────┤
+│                        UTILITY LAYER                         │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐    │
+│  │aether-   │  │  file-   │  │ atomic-  │  │  state-  │    │
+│  │utils.sh  │  │  lock.sh │  │ write.sh │  │ loader.sh│    │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘    │
+├─────────────────────────────────────────────────────────────┤
+│                        DATA LAYER                            │
+│  ┌──────────────┐ ┌──────────────┐ ┌────────────────────┐  │
+│  │COLONY_STATE  │ │ spawn-tree   │ │     flags.json     │  │
+│  │   .json      │ │   .txt       │ │                    │  │
+│  └──────────────┘ └──────────────┘ └────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Component Responsibilities
+
+| Component | Responsibility | Current Implementation |
+|-----------|----------------|------------------------|
+| Queen Layer | Orchestration, phase management, worker spawning | `.opencode/agents/aether-queen.md` |
+| Constraints Layer | Declarative focus/avoid rules | `.aether/data/constraints.json` |
+| Worker Layer | Task execution with depth limits | Spawned via `task` tool, tracked in `spawn-tree.txt` |
+| Utility Layer | Deterministic operations, state management | `.aether/aether-utils.sh` |
+| Data Layer | Persistent state, activity logs | `.aether/data/` directory |
+
+## Fix 1: Phase Advancement / State Tracking Loops
+
+### Problem Analysis
+
+Phase advancement loops occur when:
+1. State validation passes but phase transition logic is flawed
+2. Worker completion doesn't properly update COLONY_STATE.json
+3. Race conditions between concurrent workers updating state
+4. Missing idempotency checks in phase advancement
+
+### Recommended Architecture
+
+```
+Phase Advancement Flow:
+┌─────────────────┐
+│ Worker Complete │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐     ┌─────────────────┐
+│  Acquire Lock   │────▶│  Lock Timeout   │
+└────────┬────────┘     │  (fail fast)    │
+         │              └─────────────────┘
+         ▼
+┌─────────────────┐
+│ Read Current    │
+│ State (validate)│
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐     ┌─────────────────┐
+│ Check Phase     │────▶│ Already at      │
+│ Already Complete│────▶│ Target? Exit    │
+└────────┬────────┘     └─────────────────┘
+         │ No
+         ▼
+┌─────────────────┐
+│ Verify All      │
+│ Workers Done    │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐     ┌─────────────────┐
+│ Update State    │────▶│ Atomic Write    │
+│ (phase++)       │     │ (with backup)   │
+└────────┬────────┘     └─────────────────┘
+         │
+         ▼
+┌─────────────────┐
+│ Release Lock    │
+└─────────────────┘
+```
+
+### Integration Points
+
+| Integration | How | File/Component |
+|-------------|-----|----------------|
+| State validation | Reuse `validate-state colony` command | `aether-utils.sh` |
+| Lock acquisition | Use existing `file-lock.sh` | `utils/file-lock.sh` |
+| Atomic writes | Use `atomic_write` function | `utils/atomic-write.sh` |
+| Idempotency key | Add `phase_transition_id` to events | `COLONY_STATE.json` |
+
+### Data Flow Changes
+
+**Current:**
+```javascript
+// Direct state mutation (risky)
+state.current_phase++;
+fs.writeFileSync('COLONY_STATE.json', JSON.stringify(state));
+```
+
+**Recommended:**
+```javascript
+// Pattern from aether-utils.sh error-add command
+const idempotencyKey = `phase_adv_${Date.now()}_${randomBytes(2).toString('hex')}`;
+
+// Check if already advanced (idempotency)
+const existing = state.events.find(e =>
+  e.type === 'phase_advance' &&
+  e.from_phase === currentPhase &&
+  e.idempotency_key === idempotencyKey
+);
+if (existing) {
+  return { alreadyAdvanced: true };
+}
+
+// Atomic update with backup
+const updated = jqCommand(/* phase++ and add event */);
+atomicWrite('COLONY_STATE.json', updated);
+```
+
+## Fix 2: Update System with Version Tracking and Rollback
+
+### Problem Analysis
+
+Current update system issues:
+1. No proper version comparison before syncing files
+2. Registry updates happen before file sync success
+3. No rollback mechanism if sync fails mid-operation
+4. Version.json not updated atomically with file changes
+
+### Recommended Architecture
+
+```
+Update Flow with Rollback:
+┌─────────────────────────────────────────────────────────────┐
+│                     PREPARATION PHASE                        │
+├─────────────────────────────────────────────────────────────┤
+│  1. Read hub version.json                                    │
+│  2. Read local version.json                                  │
+│  3. Compare versions (semver)                                │
+│  4. If up-to-date: exit 0                                    │
+└────────────────────────┬────────────────────────────────────┘
+                         │ Update needed
                          ▼
-        ┌─────────────────────────────────────────────┐
-        │            CONSTRAINTS LAYER                 │
-        │  Focus areas + Avoid patterns (declarative)  │
-        │  Workers read at spawn time, not Queen-pushed│
-        └────────────────┬──────────────────────────────┘
-                         │
-                         ▼
-        ┌─────────────────────────────────────────────┐
-        │              PHASE PIPELINE                 │
-        │  /ant:plan → /ant:build N → /ant:continue  │
-        └────────────────┬──────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                     BACKUP PHASE                             │
+├─────────────────────────────────────────────────────────────┤
+│  1. Create backup manifest (current state)                   │
+│  2. Copy files to .aether/backup/<timestamp>/                │
+│  3. Store manifest in backup dir                             │
+└────────────────────────┬────────────────────────────────────┘
                          │
                          ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                    PRIME WORKDepth 1)ER (                   │
-│  Coordinator — spawns up to 4 specialists                   │
-│  Owns phase completion, synthesizes results                  │
+│                     SYNC PHASE                               │
+├─────────────────────────────────────────────────────────────┤
+│  1. Sync system files (allowlist-based)                      │
+│  2. Sync commands (claude/opencode)                          │
+│  3. Sync agents                                              │
+│  4. Validate each file with hash check                       │
+│  5. On failure: jump to ROLLBACK                             │
 └────────────────────────┬────────────────────────────────────┘
                          │
-        ┌────────────────┼────────────────┐
-        │                │                │
-        ▼                ▼                ▼
-┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│   BUILDER    │  │   WATCHER    │  │    SCOUT     │
-│   Depth 2    │  │   Depth 2    │  │   Depth 2   │
-│(can spawn 2)│  │(can spawn 2) │  │(can spawn 2)│
-└──────────────┘──┘   └──────────── └──────────────┘
-        │                │                │
-        ▼                ▼                ▼
-┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│Sub-Builder   │  │Sub-Watcher   │  │  Sub-Scout   │
-│   Depth 3    │  │   Depth 3    │  │   Depth 3    │
-│ (no spawn)  │  │ (no spawn)   │  │ (no spawn)   │
-└──────────────┘  └──────────────┘  └──────────────┘
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     COMMIT PHASE                             │
+├─────────────────────────────────────────────────────────────┤
+│  1. Update version.json (atomic)                             │
+│  2. Update registry.json (atomic)                            │
+│  3. Clean up backup (async, after delay)                     │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     ROLLBACK PHASE (on failure)              │
+├─────────────────────────────────────────────────────────────┤
+│  1. Read backup manifest                                     │
+│  2. Restore files from backup                                │
+│  3. Verify restoration                                       │
+│  4. Log rollback event                                       │
+└─────────────────────────────────────────────────────────────┘
 ```
 
----
+### Integration Points
+
+| Integration | How | Component |
+|-------------|-----|-----------|
+| Version comparison | Use semver library | `package.json` dependency |
+| File hashing | Use existing `hashFileSync` | `cli.js` |
+| Atomic manifest | Extend manifest format | `validateManifest()` in `cli.js` |
+| Registry updates | Use `registry-add` command | `aether-utils.sh` |
+
+### Manifest Format Extension
+
+```javascript
+// backup-manifest.json
+{
+  "backup_id": "bkp_20260214_120000",
+  "created_at": "2026-02-14T12:00:00Z",
+  "from_version": "1.0.0",
+  "to_version": "1.1.0",
+  "files": [
+    {
+      "path": ".aether/aether-utils.sh",
+      "hash_before": "sha256:abc...",
+      "hash_after": "sha256:def...",
+      "action": "modified"
+    },
+    {
+      "path": ".claude/commands/ant/new-cmd.md",
+      "hash_before": null,
+      "hash_after": "sha256:ghi...",
+      "action": "added"
+    }
+  ],
+  "rollback_point": {
+    "version_json": "sha256:...",
+    "registry_entry": { /* ... */ }
+  }
+}
+```
+
+## Fix 3: Safe Checkpoint System
+
+### Problem Analysis
+
+Current `autofix-checkpoint` command has issues:
+1. Uses `git stash` which can stash user work, not just Aether files
+2. No verification that stash contains only Aether-managed files
+3. Rollback can restore stale state if user made commits
+
+### Recommended Architecture
+
+```
+Safe Checkpoint Flow:
+┌─────────────────────────────────────────────────────────────┐
+│                     CHECKPOINT CREATION                      │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  1. Identify Aether-managed files (allowlist)               │
+│     - .aether/ directory (excluding data/)                  │
+│     - .claude/commands/ant/                                 │
+│     - .opencode/commands/ant/                               │
+│     - .opencode/agents/                                     │
+│     - bin/ (if exists)                                      │
+│                                                              │
+│  2. Check for uncommitted changes in managed files          │
+│     ├─ No changes: Record commit hash only                  │
+│     └─ Changes exist: Create checkpoint                     │
+│                                                              │
+│  3. Create checkpoint (NEVER use git stash)                 │
+│     ├─ Copy files to .aether/checkpoints/<id>/              │
+│     ├─ Store metadata (commit hash, timestamp, files)       │
+│     └─ Verify checkpoint integrity                          │
+│                                                              │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     ROLLBACK EXECUTION                       │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  1. Verify checkpoint exists and is valid                   │
+│                                                              │
+│  2. Check current state                                     │
+│     ├─ If clean: Restore from checkpoint                    │
+│     └─ If dirty: Warn user, require --force                 │
+│                                                              │
+│  3. Restore files (copy from checkpoint, not stash pop)     │
+│                                                              │
+│  4. Verify restoration                                      │
+│                                                              │
+│  5. Clean up checkpoint (or keep for audit trail)           │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Integration Points
+
+| Integration | How | Component |
+|-------------|-----|-----------|
+| File allowlist | Extend SYSTEM_FILES in cli.js | `bin/cli.js` |
+| Checkpoint storage | Use .aether/checkpoints/ | New directory |
+| Metadata format | JSON with file hashes | New format |
+| Exclusion | Never touch .aether/data/ | Hardcoded exclusion |
+
+### Checkpoint Metadata Format
+
+```json
+{
+  "checkpoint_id": "chk_1707912000_a1b2",
+  "created_at": "2026-02-14T12:00:00Z",
+  "commit_hash": "abc123def456",
+  "trigger": "autofix",
+  "files": [
+    {
+      "path": ".aether/aether-utils.sh",
+      "hash": "sha256:def...",
+      "size": 12345
+    }
+  ],
+  "excluded_files": [
+    "src/user-code.js",
+    "README.md"
+  ],
+  "integrity": {
+    "manifest_hash": "sha256:ghi...",
+    "file_count": 5
+  }
+}
+```
+
+## Fix 4: Testing Strategy for File Sync Operations
+
+### Problem Analysis
+
+Current E2E tests exist but need:
+1. Unit tests for individual sync functions
+2. Mock filesystem for isolated testing
+3. Hash comparison verification
+4. Rollback scenario testing
+
+### Recommended Architecture
+
+```
+Test Architecture:
+┌─────────────────────────────────────────────────────────────┐
+│                     TEST LAYERS                              │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Unit Tests (tests/unit/sync-*.test.js)                     │
+│  ├─ hashFileSync() - various file types                     │
+│  ├─ compareVersions() - semver edge cases                   │
+│  ├─ validateManifest() - schema validation                  │
+│  ├─ shouldSyncFile() - allowlist logic                      │
+│  └─ createCheckpoint() / restoreCheckpoint()                │
+│                                                              │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Integration Tests (tests/integration/)                     │
+│  ├─ File sync with temp directories                         │
+│  ├─ Registry updates                                        │
+│  ├─ Version comparison scenarios                            │
+│  └─ Checkpoint create/restore cycles                        │
+│                                                              │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  E2E Tests (tests/e2e/) - EXISTING                          │
+│  ├─ test-update.sh - Single repo update                     │
+│  ├─ test-update-all.sh - Multi-repo update                  │
+│  ├─ test-install.sh - Fresh install                         │
+│  └─ run-all.sh - Test suite orchestration                   │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Integration Points
+
+| Integration | How | Component |
+|-------------|-----|-----------|
+| Mock filesystem | Use `mock-fs` or `memfs` | Test dependencies |
+| Hash verification | Reuse `hashFileSync` | `bin/cli.js` |
+| Temp directories | Use `tmp` package or `mktemp` | Test setup |
+| Assertion helpers | Extend existing test-helpers | `tests/bash/test-helpers.sh` |
+
+### Test Data Patterns
+
+```javascript
+// tests/unit/sync-hash.test.js
+const { hashFileSync } = require('../../bin/cli.js');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+
+describe('hashFileSync', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aether-test-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true });
+  });
+
+  test('hashes text file correctly', () => {
+    const file = path.join(tmpDir, 'test.txt');
+    fs.writeFileSync(file, 'hello world');
+
+    const hash = hashFileSync(file);
+
+    expect(hash).toMatch(/^sha256:[a-f0-9]{64}$/);
+  });
+
+  test('returns null for non-existent file', () => {
+    const hash = hashFileSync('/does/not/exist');
+    expect(hash).toBeNull();
+  });
+
+  test('different content produces different hash', () => {
+    const file1 = path.join(tmpDir, 'a.txt');
+    const file2 = path.join(tmpDir, 'b.txt');
+    fs.writeFileSync(file1, 'content A');
+    fs.writeFileSync(file2, 'content B');
+
+    expect(hashFileSync(file1)).not.toBe(hashFileSync(file2));
+  });
+});
+```
 
 ## Component Boundaries
 
-### 1. Queen Layer (Orchestration)
-
-| Component | Responsibility | Boundaries |
-|-----------|---------------|------------|
-| `/ant:init` | Goal initialization, state creation | Creates COLONY_STATE.json only |
-| `/ant:plan` | Iterative research/planning loop | Outputs plan to COLONY_STATE.json |
-| `/ant:build` | Spawns Prime Worker | Cannot execute work directly |
-| `/ant:continue` | Verification gates, phase advance | Reads state, writes events |
-| Constraint commands | Signal injection | Modifies constraints.json only |
-
-**Key principle:** Queen never executes code. It only spawns workers and modifies state.
-
-### 2. Constraints Layer (Signaling)
-
-| Component | Responsibility | Boundaries |
-|-----------|---------------|------------|
-| `constraints.json` | Declarative focus/avoid rules | No execution logic |
-| `/ant:focus` | Add attention directive | Max 5 focus areas |
-| `/ant:redirect` | Add avoidance directive | Max 10 avoid patterns |
-| `/ant:council` | Interactive multi-signal injection | Translates to constraints |
-
-**Key principle:** Constraints are read by workers at spawn time, not pushed during execution.
-
-### 3. Worker Layer (Execution)
-
-| Caste | Depth | Spawns | Responsibility |
-|-------|-------|--------|----------------|
-| Prime Worker | 1 | 4 max | Coordinate phase, delegate, synthesize |
-| Builder | 2 | 2 max (if surprised) | Implement code, run commands |
-| Watcher | 2 | 2 max (if surprised) | Test, validate, quality gates |
-| Scout | 2 | 2 max (if surprised) | Research, gather context |
-| Sub-worker | 3 | 0 | Complete work inline |
-
-**Key principle:** Workers spawn workers directly. Queen does not mediate spawns after initial Prime Worker creation.
-
-### 4. Utility Layer (Infrastructure)
-
-| Component | Purpose | Location |
-|-----------|---------|----------|
-| `aether-utils.sh` | Single entry point for all deterministic ops | `.aether/aether-utils.sh` |
-| File locking | Prevents race conditions | `.aether/utils/file-lock.sh` |
-| Atomic writes | Prevents corruption | `.aether/utils/atomic-write.sh` |
-| Activity logging | Observable worker actions | `.aether/data/activity.log` |
-
----
-
-## Data Flow
-
-### State Mutation Flow
+### What Talks to What
 
 ```
-1. User invokes command
-       │
-       ▼
-2. Command validates prerequisites
-       │
-       ▼
-3. Command calls aether-utils.sh subcommand
-       │
-       ▼
-4. Utils reads/writes JSON state files
-       │
-       ▼
-5. Output JSON to stdout, errors to stderr
+┌─────────────────────────────────────────────────────────────┐
+│                    COMMUNICATION MATRIX                      │
+├──────────────────┬──────────────────┬───────────────────────┤
+│ Source           │ Target           │ Method                │
+├──────────────────┼──────────────────┼───────────────────────┤
+│ Queen (agents)   │ Utility Layer    │ bash aether-utils.sh  │
+│ Queen (agents)   │ State            │ validate-state cmd    │
+│ CLI (cli.js)     │ Utility Layer    │ registry-add cmd      │
+│ CLI (cli.js)     │ Hub              │ filesystem (copy)     │
+│ CLI (cli.js)     │ Registry         │ JSON read/write       │
+│ Utility Layer    │ State            │ file-lock.sh          │
+│ Utility Layer    │ State            │ atomic-write.sh       │
+│ Tests            │ CLI functions    │ require() exports     │
+│ Tests            │ Utility Layer    │ bash execution        │
+└──────────────────┴──────────────────┴───────────────────────┘
 ```
 
-### Worker Spawn Flow
+### Data Flow
 
 ```
-1. /ant:build N triggers
-       │
-       ▼
-2. Queen spawns Prime Worker (depth 1)
-       │
-       ▼
-3. Prime Worker reads constraints.json
-       │
-       ▼
-4. Prime Worker decides to spawn specialists
-       │
-       ▼
-5. Specialist spawns sub-specialist (depth 2→3)
-       │
-       ▼
-6. Depth 3 completes work inline
+State Update Flow:
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│   Worker     │────▶│  aether-     │────▶│  file-       │
+│  Completion  │     │  utils.sh    │     │  lock.sh     │
+└──────────────┘     └──────────────┘     └──────┬───────┘
+                                                 │
+                                                 ▼
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│   COLONY_    │◀────│ atomic-write │◀────│   Validate   │
+│   STATE.json │     │     .sh      │     │   State      │
+└──────────────┘     └──────────────┘     └──────────────┘
+
+Update Flow:
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│    User      │────▶│   cli.js     │────▶│  Hub Files   │
+│   Command    │     │  (update)    │     │  (~/.aether) │
+└──────────────┘     └──────┬───────┘     └──────────────┘
+                            │
+              ┌─────────────┼─────────────┐
+              ▼             ▼             ▼
+        ┌──────────┐  ┌──────────┐  ┌──────────┐
+        │  Local   │  │ Registry │  │ Version  │
+        │  .aether │  │  Update  │  │  Check   │
+        └──────────┘  └──────────┘  └──────────┘
 ```
 
-### Constraint Propagation Flow
+## Suggested Build Order
+
+Based on dependencies between fixes:
+
+### Phase 1: Foundation (Week 1)
+1. **Safe Checkpoint System** (Fix 3)
+   - No dependencies on other fixes
+   - Provides rollback capability for other fixes
+   - Changes: `aether-utils.sh` autofix-checkpoint/rollback commands
+
+2. **Testing Infrastructure** (Fix 4 - partial)
+   - Unit test framework for sync operations
+   - Mock filesystem setup
+   - Hash verification tests
+
+### Phase 2: Core Fixes (Week 2)
+3. **Update System Rollback** (Fix 2)
+   - Depends on: Safe checkpoint system
+   - Changes: `cli.js` update command, manifest format
+   - Tests: E2E tests for rollback scenarios
+
+4. **Phase Advancement Idempotency** (Fix 1)
+   - Depends on: Testing infrastructure
+   - Changes: State advancement logic, event format
+   - Tests: Unit tests for idempotency keys
+
+### Phase 3: Integration (Week 3)
+5. **Complete Testing** (Fix 4 - completion)
+   - Integration tests for all fixes
+   - Full E2E test suite
+   - Performance benchmarks
+
+### Dependency Graph
 
 ```
-1. User: /ant:focus "security"
-       │
-       ▼
-2. /ant:focus writes to constraints.json
-       │
-       ▼
-3. Next spawned worker reads constraints.json
-       │
-       ▼
-4. Worker incorporates into prompt
+                    ┌─────────────────────┐
+                    │   Testing Infra     │
+                    │     (Fix 4a)        │
+                    └──────────┬──────────┘
+                               │
+         ┌─────────────────────┼─────────────────────┐
+         │                     │                     │
+         ▼                     ▼                     ▼
+┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐
+│ Safe Checkpoint │   │ Phase Advance   │   │ Update System   │
+│   (Fix 3)       │◀──│   (Fix 1)       │   │  (Fix 2)        │
+└────────┬────────┘   └─────────────────┘   └────────┬────────┘
+         │                                           │
+         │              ┌─────────────────┐          │
+         └─────────────▶│  Complete Tests │◀─────────┘
+                        │    (Fix 4b)     │
+                        └─────────────────┘
 ```
-
----
-
-## Build Order for New Projects
-
-Based on the Aether architecture, the recommended implementation order:
-
-### Phase 1: Core Infrastructure
-- State management (COLONY_STATE.json schema)
-- Basic command dispatch (aether-utils.sh)
-- File locking and atomic writes
-
-### Phase 2: Queen Commands
-- `/ant:init` — Initialize state
-- `/ant:status` — Read state
-- `/ant:focus`, `/ant:redirect` — Constraint management
-
-### Phase 3: Worker System
-- Worker spawn protocol
-- Depth-based behavior enforcement
-- Worker prompt templates
-
-### Phase 4: Execution Pipeline
-- `/ant:plan` — Iterative planning loop
-- `/ant:build` — Phase execution
-- `/ant:continue` — Verification gates
-
-### Phase 5: Advanced Features
-- `/ant:swarm` — Parallel investigation
-- `/ant:council` — Interactive clarification
-- `/ant:watch` — tmux live monitoring
-
----
-
-## Patterns That Work
-
-### Pattern 1: Declarative Constraints Over Directives
-
-**What:** Replace command-style orchestration with declarative constraint files.
-
-**Why:** Workers can read constraints at spawn time without complex state machine logic.
-
-**Example:**
-```bash
-# Instead of: QUEEN → "do X then Y"
-# Use: constraints.json → ["focus": "security", "avoid": "eval"]
-```
-
-### Pattern 2: Workers Spawn Workers
-
-**What:** Prime Workers use Task tool to spawn specialists directly.
-
-**Why:** True emergence — structure comes from work, not orchestration.
-
-**Implementation:**
-- Depth 1: Prime Worker spawns up to 4 specialists
-- Depth 2: Specialists spawn up to 2 (only if surprised)
-- Depth 3: No spawning, complete inline
-
-### Pattern 3: State File as Source of Truth
-
-**What:** All colony state in JSON files, not in-memory.
-
-**Why:** Survives context resets, enables debugging, supports handoff.
-
-**Files:**
-- `COLONY_STATE.json` — Goal, plan, phase, memory
-- `constraints.json` — Focus/avoid rules
-- `flags.json` — Issue tracking
-- `activity.log` — Event stream
-
-### Pattern 4: Single Entry Point for Deterministic Ops
-
-**What:** All state mutations go through `aether-utils.sh`.
-
-**Why:** Testable, consistent, single source of truth.
-
-**Example:**
-```bash
-# Any command that modifies state:
-bash .aether/aether-utils.sh activity-log "ACTION" "caste" "description"
-```
-
-### Pattern 5: Depth-Based Behavior Limits
-
-**What:** Worker capabilities vary by spawn depth.
-
-**Why:** Prevents infinite spawn loops, creates natural termination.
-
-| Depth | Max Spawns | Typical Role |
-|-------|------------|--------------|
-| 1 | 4 | Coordinator |
-| 2 | 2 | Specialist |
-| 3 | 0 | Worker |
-
----
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: Queen as Worker
+### Anti-Pattern 1: Direct State Mutation
+**What people do:** Read COLONY_STATE.json, modify in memory, write directly
+**Why it's wrong:** Race conditions, partial writes, no validation
+**Do this instead:** Always use `atomic_write` with validation
 
-**What:** Queen executes code or directly manages workers.
+### Anti-Pattern 2: Git Stash for Checkpoints
+**What people do:** Use `git stash` to save Aether state
+**Why it's wrong:** Stashes user work, pollutes git history
+**Do this instead:** Copy files to `.aether/checkpoints/` directory
 
-**Why:** Violates separation of concerns, makes state management complex.
+### Anti-Pattern 3: Registry Before Files
+**What people do:** Update registry.json before confirming file sync success
+**Why it's wrong:** Registry out of sync with actual files
+**Do this instead:** Two-phase commit - files first, registry last
 
-**Instead:** Queen only spawns Prime Worker; worker manages sub-spawns.
-
-### Anti-Pattern 2: Real-Time Signal Pushing
-
-**What:** Queen pushes pheromones to in-flight workers.
-
-**Why:** Race conditions, worker context already loaded.
-
-**Instead:** Constraints read at spawn time only. New workers pick up changes.
-
-### Anti-Pattern 3: In-Memory State Only
-
-**What:** Colony state stored only in shell variables.
-
-**Why:** Lost on context reset, no debugging, no handoff.
-
-**Instead:** JSON files in `.aether/data/`, loaded at command start.
-
-### Anti-Pattern 4: Unbounded Spawning
-
-**What:** Workers can spawn unlimited sub-workers.
-
-**Why:** Resource exhaustion, infinite loops, no termination.
-
-**Instead:** Depth-based limits (1→4→2→0), total cap (10 workers/phase).
-
-### Anti-Pattern 5: Complex Pheromone Math
-
-**What:** Signal strength calculations, decay functions, sensitivity profiles.
-
-**Why:** Hard to debug, unpredictable behavior, over-engineered.
-
-**Instead:** Simple declarative constraints with no decay.
-
----
+### Anti-Pattern 4: Missing Idempotency
+**What people do:** Phase advancement without checking if already done
+**Why it's wrong:** Double-advancement, phase loops
+**Do this instead:** Generate idempotency key, check events before advancing
 
 ## Scalability Considerations
 
-| Scale | Concern | Approach |
-|-------|---------|----------|
-| 10 workers | Basic spawning | In-memory spawn tracking |
-| 100 workers | Resource limits | Hard caps per phase |
-| 1000 workers | Coordination | Separate colonies per project |
-| Cross-session | State persistence | JSON files in `.aether/data/` |
-| Parallel execution | Race conditions | File locking utilities |
-
----
-
-## Verification Protocol
-
-Each phase should pass before advancing:
-
-1. **Build gate** — Code compiles/installs
-2. **Types gate** — Type checking passes
-3. **Lint gate** — Code style compliant
-4. **Tests gate** — Tests pass
-5. **Security gate** — No vulnerabilities
-6. **Diff gate** — Human review of changes
-
----
+| Concern | At 1 repo | At 10 repos | At 100 repos |
+|---------|-----------|-------------|--------------|
+| Update --all | Sequential OK | Parallel with limit | Batch with progress |
+| Registry size | JSON file OK | JSON file OK | Consider SQLite |
+| Checkpoint storage | Keep all | Rotate after 30 days | Archive to compressed store |
+| Spawn tree | In-memory OK | In-memory OK | Paginated queries |
 
 ## Sources
 
-- Aether Colony System implementation (`/Users/callumcowie/repos/Aether/runtime/QUEEN_ANT_ARCHITECTURE.md`)
-- Aether utilities layer (`/Users/callumcowie/repos/Aether/.aether/aether-utils.sh`)
-- Aether README (`/Users/callumcowie/repos/Aether/README.md`)
+- `.aether/aether-utils.sh` - State management commands
+- `.aether/utils/state-loader.sh` - State loading patterns
+- `.aether/utils/file-lock.sh` - Lock acquisition patterns
+- `.aether/utils/atomic-write.sh` - Safe write patterns
+- `bin/cli.js` - Update system implementation
+- `tests/e2e/test-update.sh` - E2E test patterns
+- `tests/e2e/test-update-all.sh` - Multi-repo test patterns
+- `.opencode/agents/aether-queen.md` - Queen orchestration patterns
 
 ---
-
-## Confidence Assessment
-
-| Area | Level | Reason |
-|------|-------|--------|
-| Component boundaries | HIGH | Based on existing working implementation |
-| Data flow | HIGH | Verified from aether-utils.sh |
-| Build order | MEDIUM | Inferred from architecture dependencies |
-| Patterns to follow | HIGH | Proven in production |
-| Anti-patterns | HIGH | Lessons learned from v2.0 |
+*Architecture research for: Aether Colony v1.1 Bug Fixes*
+*Researched: 2026-02-14*

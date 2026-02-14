@@ -1,434 +1,375 @@
-# Technology Stack: Robust CLI Tools with AI Agent Orchestration
+# Technology Stack: v1.1 Bug Fixes
 
-**Project:** Aether Colony System
-**Researched:** 2026-02-13
-**Confidence:** HIGH
+**Project:** Aether Colony System v1.1
+**Researched:** 2026-02-14
+**Confidence:** HIGH (based on existing codebase patterns and Node.js ecosystem standards)
 
-This document provides prescriptive tooling recommendations for improving the Aether Colony System's CLI infrastructure. It addresses the question: "What are the best practices for building robust CLI tools with AI agent orchestration?"
+## Overview
 
----
+This document specifies the technology stack needed to fix four critical issues in v1.1:
+1. Phase advancement logic causing AI loops
+2. npm package update system for cross-repo sync
+3. Build checkpoint stashing user data
+4. Missing package-lock.json for deterministic builds
+5. Unit tests for core sync functions
 
-## Current Stack Assessment
-
-The Aether Colony System currently uses:
-
-| Component | Current | Recommendation |
-|-----------|---------|----------------|
-| CLI Entry | `bin/cli.js` (Node.js) | Keep - simple and effective |
-| Utilities | `aether-utils.sh` (Bash) | Keep - proven robust |
-| State | JSON files | Keep - survives context resets |
-| Linting | ShellCheck | Keep + enhance |
+The existing stack (Node.js CLI with commander.js, AVA for testing, bash utilities) is sound. These recommendations focus on additions and fixes to address specific bugs.
 
 ---
 
-## Recommended Technology Additions
+## Core Technologies (No Changes)
 
-### 1. CLI Argument Parsing
+| Technology | Version | Purpose | Status |
+|------------|---------|---------|--------|
+| Node.js | >=16.0.0 | Runtime | Keep - meets requirements |
+| commander | ^12.1.0 | CLI argument parsing | Keep - already in use |
+| picocolors | ^1.1.1 | Colored output | Keep - already in use |
+| AVA | ^6.0.0 | Unit testing | Keep - already configured |
 
-| Option | Version | Purpose | Why |
-|--------|---------|---------|-----|
-| **commander** | ^11.0.0 | CLI argument parsing | Best-in-class Node.js CLI parser; supports subcommands, auto-help, type coercion |
+---
 
-**Recommendation:** Use commander for `bin/cli.js` instead of manual argument parsing.
+## Recommended Additions for v1.1
 
-**Why commander:**
-- Automatic `--help` generation
-- Built-in subcommand support (`/ant:build`, `/ant:plan`)
-- Type coercion for options (`--depth 3` becomes number)
-- Negatable options (`--no-color`)
-- Version flag out of the box
+### 1. Deterministic Builds: package-lock.json
+
+**What:** npm's lock file for deterministic dependency installation
+
+**Why Required:**
+- Without package-lock.json, `npm install` pulls latest matching versions
+- Breaking changes in dependencies can slip in silently
+- CI builds may differ from local builds
+- Required for reproducible releases
+
+**Implementation:**
+```bash
+# Generate package-lock.json
+npm install
+
+# Commit to repository
+git add package-lock.json
+git commit -m "Add package-lock.json for deterministic builds"
+
+# In CI, use:
+npm ci  # Uses package-lock.json exactly
+```
+
+**Confidence:** HIGH - Industry standard practice
+
+---
+
+### 2. Unit Testing: sinon for Mocking
+
+**What:** Standalone test spies, stubs, and mocks for JavaScript
+
+**Why Required:**
+- Current tests (AVA) test bash utilities via execSync
+- Need to test JavaScript functions (syncDirWithCleanup, updateRepo) in isolation
+- File system operations need mocking for fast, deterministic tests
+- CLI functions depend on external state (hub, repos, git)
+
+**Version:** ^17.0.0 (latest stable)
 
 **Installation:**
 ```bash
-npm install commander
+npm install --save-dev sinon
 ```
 
-**Migration example:**
+**Usage Pattern for syncDirWithCleanup:**
 ```javascript
-// Before: manual parsing
-const command = process.argv[2];
-const args = process.argv.slice(3);
+const test = require('ava');
+const sinon = require('sinon');
+const fs = require('fs');
+const proxyquire = require('proxyquire');
 
-// After: commander
-const { program } = require('commander');
-program
-  .name('aether')
-  .description('Colony-based development framework')
-  .version('1.0.0');
-
-program
-  .command('build')
-  .description('Execute phase with worker spawning')
-  .argument('[number]', 'Phase number', '1')
-  .action(async (phase) => {
-    // Implementation
-  });
-```
-
-**Confidence:** HIGH - Commander is the de facto standard for Node.js CLI tools (used by npm, create-react-app, etc.)
-
----
-
-### 2. Bash Script Linting
-
-| Option | Purpose | Why |
-|--------|---------|-----|
-| **ShellCheck** | Static analysis for shell scripts | Catches errors before runtime |
-
-**Current state:** Aether already uses ShellCheck in `npm run lint:shell`.
-
-**Enhancement recommendations:**
-
-1. **Add to CI/CD** - Run ShellCheck on every commit
-2. **Enable strict mode** - Add to all new scripts:
-   ```bash
-   #!/bin/bash
-   set -euo pipefail
-   ```
-3. **Use SC2015** - Handle edge cases in conditionals:
-   ```bash
-   # Bad
-   [[ -f "$file" ]] && source "$file"
-
-   # Good - check exit code
-   [[ -f "$file" ]] && source "$file" || true
-   ```
-
-**ShellCheck directives for sourced files:**
-```bash
-# At top of aether-utils.sh
-# shellcheck source=.aether/utils/file-lock.sh
-```
-
-**Confidence:** HIGH - ShellCheck is the industry standard for shell script analysis.
-
----
-
-### 3. JSON State Management
-
-| Option | Purpose | Why |
-|--------|---------|-----|
-| **JSON Schema validation** | Validate state file structure | Prevents corruption from malformed writes |
-| **jq** | JSON manipulation in Bash | Lightweight JSON processing |
-
-**Recommendation:** Add JSON Schema validation to state file writes.
-
-**Schema example for COLONY_STATE.json:**
-```json
-{
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "type": "object",
-  "required": ["goal", "phase", "status"],
-  "properties": {
-    "goal": { "type": "string" },
-    "phase": { "type": "integer", "minimum": 1 },
-    "status": { "type": "string", "enum": ["planning", "building", "verifying", "complete"] }
-  }
-}
-```
-
-**Validation in aether-utils.sh:**
-```bash
-validate_state() {
-  local state_file="$1"
-  local schema_file="$2"
-  # Use node for validation (available in Node.js environment)
-  node -e "
-    const fs = require('fs');
-    const Ajv = require('ajv');
-    const state = JSON.parse(fs.readFileSync('$state_file'));
-    const schema = JSON.parse(fs.readFileSync('$schema_file'));
-    const ajv = new Ajv();
-    const valid = ajv.validate(schema, state);
-    if (!valid) {
-      console.error('State validation failed:', ajv.errors);
-      process.exit(1);
-    }
-  "
-}
-```
-
-**Confidence:** MEDIUM - Adds complexity; only implement if state corruption becomes an issue.
-
----
-
-### 4. Error Handling Patterns
-
-#### Node.js CLI (`bin/cli.js`)
-
-**Pattern: Centralized error handler**
-
-```javascript
-const handleError = (error, command) => {
-  console.error(`Error in ${command}:`);
-
-  if (error.code === 'ENOENT') {
-    console.error('  File not found. Run /ant:init first.');
-  } else if (error.message?.includes('JSON')) {
-    console.error('  State file corrupted. Check .aether/data/');
-  } else {
-    console.error(`  ${error.message}`);
-  }
-
-  process.exit(1);
+// Mock fs for isolated tests
+const mockFs = {
+  existsSync: sinon.stub(),
+  readdirSync: sinon.stub(),
+  copyFileSync: sinon.stub(),
+  mkdirSync: sinon.stub(),
+  readFileSync: sinon.stub(),
+  unlinkSync: sinon.stub(),
+  rmdirSync: sinon.stub(),
+  chmodSync: sinon.stub()
 };
 
-// Wrap commands
-try {
-  await buildCommand(args);
-} catch (error) {
-  handleError(error, 'build');
-}
-```
+// Load module with mocked dependencies
+const { syncDirWithCleanup } = proxyquire('../bin/cli.js', {
+  fs: mockFs
+});
 
-#### Bash Utilities
+test.beforeEach(() => {
+  sinon.resetHistory();
+});
 
-**Pattern: Verbose error reporting**
+test('syncDirWithCleanup skips files with matching hashes', t => {
+  mockFs.existsSync.returns(true);
+  mockFs.readdirSync.returns([{ name: 'file.txt', isDirectory: () => false }]);
+  mockFs.readFileSync.returns(Buffer.from('content'));
 
-```bash
-error() {
-  echo "[ERROR] $*" >&2
-  echo "        In: $(caller 0)" >&2
-  echo "        Command: $BASH_COMMAND" >&2
-}
+  const result = syncDirWithCleanup('/src', '/dest');
 
-# Usage
-if [[ ! -f "$state_file" ]]; then
-  error "State file not found: $state_file"
-  return 1
-fi
-```
-
-**Pattern: Exit traps for cleanup**
-
-```bash
-cleanup() {
-  local lockfile="$1"
-  # Release lock on exit
-  if [[ -f "$lockfile" ]]; then
-    flock -u "$lockfd" 2>/dev/null || true
-    rm -f "$lockfile"
-  fi
-}
-
-# Set up trap
-trap 'cleanup "$lockfile"' EXIT
-```
-
-**Confidence:** HIGH - These patterns are battle-tested in production systems.
-
----
-
-### 5. Testing Strategy
-
-| Test Type | Tool | Purpose |
-|-----------|------|---------|
-| Unit | AVA or Jest | Test JavaScript functions |
-| Integration | Bash test scripts | Test aether-utils.sh functions |
-| E2E | Manual + automation | Test full workflows |
-
-#### Recommended: AVA for Node.js
-
-```bash
-npm install --save-dev ava
-```
-
-```javascript
-// test/cli.test.js
-import test from 'ava';
-import { execSync } from 'child_process';
-
-test('build command creates state file', t => {
-  execSync('node bin/cli.js init --goal "test"', { cwd: '/tmp/test-colony' });
-  t.true(require('fs').existsSync('/tmp/test-colony/.aether/data/COLONY_STATE.json'));
+  t.is(result.skipped, 1);
+  t.is(result.copied, 0);
+  t.false(mockFs.copyFileSync.called);
 });
 ```
 
-#### Bash Integration Tests
-
-```bash
-# test/utils.sh
-#!/bin/bash
-set -euo pipefail
-
-test_file_lock() {
-  local temp_dir
-  temp_dir=$(mktemp -d)
-  cd "$temp_dir"
-
-  # Run lock test
-  bash .aether/utils/file-lock.sh test 10 &
-  local pid1=$!
-  sleep 1
-
-  # This should timeout/fail
-  ! timeout 2 bash .aether/utils/file-lock.sh test 1
-
-  kill $pid1 2>/dev/null || true
-  rm -rf "$temp_dir"
-}
-
-test_file_lock
-echo "File lock tests passed"
-```
-
-**Confidence:** HIGH - Testing is essential for robustness; these tools are industry standard.
+**Confidence:** HIGH - Sinon is the de facto standard for JS mocking
 
 ---
 
-### 6. Logging and Debugging
+### 3. Module Testing: proxyquire
 
-| Option | Purpose | Why |
-|--------|---------|-----|
-| **chalk** or **picocolors** | Colored output | Better CLI UX |
-| **debug** | Conditional debugging | Only show debug output when needed |
+**What:** Override dependencies during testing
 
-**Recommendation:** Use picocolors (faster, fewer deps than chalk):
+**Why Required:**
+- CLI functions in bin/cli.js use require('fs') directly
+- Need to inject mocks without modifying source
+- Enables testing of internal functions not exported
 
+**Version:** ^2.1.3
+
+**Installation:**
 ```bash
-npm install picocolors
+npm install --save-dev proxyquire
 ```
+
+**Confidence:** HIGH - Standard for testing modules with dependencies
+
+---
+
+### 4. Temporary File Testing: tmp
+
+**What:** Temporary file and directory creation for tests
+
+**Why Required:**
+- Integration tests need real file system operations
+- Must clean up after tests to avoid pollution
+- Handles OS-specific temp directory locations
+
+**Version:** ^0.2.1
+
+**Installation:**
+```bash
+npm install --save-dev tmp
+```
+
+**Usage:**
+```javascript
+const tmp = require('tmp');
+const fs = require('fs');
+const path = require('path');
+
+test('updateRepo syncs files correctly', t => {
+  const tempDir = tmp.dirSync({ unsafeCleanup: true });
+  const hubDir = path.join(tempDir.name, 'hub');
+  const repoDir = path.join(tempDir.name, 'repo');
+
+  // Setup test files...
+
+  t.teardown(() => tempDir.removeCallback());
+});
+```
+
+**Confidence:** HIGH - Well-maintained, widely used
+
+---
+
+## Bug-Specific Stack Recommendations
+
+### Bug 1: Phase Advancement Loops
+
+**Root Cause:** Commands check state but don't verify phase progression logic
+
+**Stack Addition:** State machine validation
 
 ```javascript
-import pc from 'picocolors';
-
-console.log(pc.green('✓'), 'Phase complete');
-console.log(pc.red('✗'), 'Build failed');
-console.log(pc.blue('ℹ'), 'Spawning worker...');
-console.log(pc.dim('(debug)'), 'State:', state);
-```
-
-**Debug mode:**
-```bash
-# In aether-utils.sh
-if [[ "${AETHER_DEBUG:-}" == "1" ]]; then
-  set -x
-fi
-```
-
-**Confidence:** MEDIUM - Nice to have; not critical for robustness.
-
----
-
-### 7. File Locking (Existing - Confirm Best Practice)
-
-Aether already has file locking via `.aether/utils/file-lock.sh`. Verify it follows best practices:
-
-**Best practice pattern:**
-```bash
-# file-lock.sh
-acquire_lock() {
-  local lockfile="$1"
-  local timeout="${2:-30}"
-
-  exec 200>"$lockfile"
-  flock -w "$timeout" 200 || {
-    echo "Failed to acquire lock: $lockfile" >&2
-    return 1
+// Add to bin/lib/validators.js
+function validatePhaseTransition(currentPhase, requestedPhase, state) {
+  // Prevent loops: cannot build same phase twice without completion
+  if (requestedPhase === currentPhase && state === 'BUILDING') {
+    return { valid: false, reason: 'Phase already in progress' };
   }
-  echo "$$" >&200
-}
 
-release_lock() {
-  exec 200>&-
-  flock -u 200 2>/dev/null || true
+  // Prevent backwards movement without explicit reset
+  if (requestedPhase < currentPhase && state !== 'COMPLETED') {
+    return { valid: false, reason: 'Cannot regress to earlier phase' };
+  }
+
+  return { valid: true };
 }
 ```
 
-**Verify:**
-- Uses `flock` (correct)
-- Has timeout (prevent infinite wait)
-- Releases on EXIT trap
-
-**Confidence:** HIGH - Locking implementation already exists and works.
+**No new dependencies needed** - use existing JSON state files
 
 ---
 
-### 8. Atomic Writes (Existing - Confirm Best Practice)
+### Bug 2: Update System Cross-Repo Sync
 
-Aether already has atomic writes via `.aether/utils/atomic-write.sh`. Verify:
+**Root Cause:** updateRepo function lacks comprehensive tests
 
-**Best practice pattern:**
+**Stack Addition:** Test fixtures for multi-repo scenarios
+
+```javascript
+// tests/fixtures/multi-repo-setup.js
+function createMultiRepoFixture(tempDir) {
+  return {
+    hubDir: createHub(tempDir),
+    repo1: createRepo(tempDir, 'repo1'),
+    repo2: createRepo(tempDir, 'repo2'),
+    registry: createRegistry(tempDir)
+  };
+}
+```
+
+**Dependencies:** tmp (already recommended above)
+
+---
+
+### Bug 3: Checkpoint Stashing User Data
+
+**Root Cause:** git stash operates on all dirty files
+
+**Stack Addition:** Git parsing utilities
+
+```javascript
+// bin/lib/git-utils.js
+const { execSync } = require('child_process');
+
+function getDirtyFilesInDirs(repoPath, targetDirs) {
+  // Already exists in cli.js - extract to module
+  const args = targetDirs.filter(d => fs.existsSync(path.join(repoPath, d)));
+  if (args.length === 0) return [];
+
+  const result = execSync(
+    `git status --porcelain -- ${args.map(d => `"${d}"`).join(' ')}`,
+    { cwd: repoPath, encoding: 'utf8', stdio: 'pipe' }
+  );
+  return result.trim().split('\n').filter(Boolean).map(line => line.slice(3));
+}
+
+function stashSpecificFiles(repoPath, files) {
+  // Use git stash push with explicit file list
+  const fileArgs = files.map(f => `"${f}"`).join(' ');
+  execSync(`git stash push -m "aether-update-backup" -- ${fileArgs}`, {
+    cwd: repoPath,
+    stdio: 'pipe'
+  });
+}
+```
+
+**No new dependencies** - use existing Node.js built-ins
+
+---
+
+### Bug 4: package-lock.json Missing
+
+**Already covered above** - generate and commit package-lock.json
+
+---
+
+### Bug 5: Unit Tests for syncDirWithCleanup
+
+**Dependencies Required:**
+- sinon (^17.0.0) - for mocking fs
+- proxyquire (^2.1.3) - for dependency injection
+- tmp (^0.2.1) - for temp directories
+
+**Test Structure:**
+```javascript
+// tests/unit/sync-dir.test.js
+const test = require('ava');
+const sinon = require('sinon');
+const proxyquire = require('proxyquire');
+const tmp = require('tmp');
+const fs = require('fs');
+const path = require('path');
+
+// Unit tests with mocked fs
+require('./sync-dir.unit.test.js');
+
+// Integration tests with real fs
+require('./sync-dir.integration.test.js');
+```
+
+---
+
+## Installation Summary
+
 ```bash
-# atomic-write.sh
-atomic_write() {
-  local target="$1"
-  local content="$2"
-  local temp
-  temp=$(mktemp)
+# Add package-lock.json (run once, commit result)
+npm install
 
-  echo "$content" > "$temp"
-  mv "$temp" "$target"  # Atomic on POSIX
+# Add testing dependencies
+npm install --save-dev sinon@^17.0.0 proxyquire@^2.1.3 tmp@^0.2.1
+
+# Verify all dependencies
+npm ls
+```
+
+---
+
+## Updated package.json Structure
+
+```json
+{
+  "name": "aether-colony",
+  "version": "1.1.0",
+  "dependencies": {
+    "commander": "^12.1.0",
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "ava": "^6.0.0",
+    "sinon": "^17.0.0",
+    "proxyquire": "^2.1.3",
+    "tmp": "^0.2.1"
+  },
+  "scripts": {
+    "test": "npm run test:unit && npm run test:bash",
+    "test:unit": "ava",
+    "test:bash": "bash tests/bash/test-aether-utils.sh",
+    "lint": "npm run lint:shell && npm run lint:json && npm run lint:sync"
+  }
 }
 ```
 
-**Verify:**
-- Writes to temp file first (not directly to target)
-- Uses `mv` for atomic replacement
-- No hardlinks across filesystems
-
-**Confidence:** HIGH - Atomic writes already implemented correctly.
-
 ---
 
-## Technology Decision Matrix
+## What NOT to Use
 
-| Category | Current | Recommended | Change Type |
-|----------|---------|-------------|-------------|
-| CLI Parsing | Manual | commander ^11.0.0 | Enhancement |
-| Shell Linting | ShellCheck | Keep + CI integration | Maintain |
-| State Validation | None | JSON Schema (optional) | Future |
-| Error Handling | try/catch | Structured handlers | Enhancement |
-| Testing | Manual | AVA + Bash tests | Enhancement |
-| Logging | echo | picocolors | Optional |
-| File Locking | flock | Keep | Maintain |
-| Atomic Writes | mv | Keep | Maintain |
-
----
-
-## Recommended Implementation Order
-
-1. **Phase 1: Error Handling Enhancement**
-   - Add centralized error handlers to `bin/cli.js`
-   - Add verbose error reporting to `aether-utils.sh`
-
-2. **Phase 2: CLI Structure**
-   - Migrate to commander for argument parsing
-   - Enable auto-help and version flags
-
-3. **Phase 3: Testing Infrastructure**
-   - Add AVA for unit tests
-   - Create Bash integration test suite
-
-4. **Phase 4: Optional Enhancements**
-   - JSON Schema validation
-   - Colored output with picocolors
-
----
-
-## Sources
-
-- [oclif Documentation](https://oclif.io/docs/introduction) - CLI framework patterns
-- [Commander.js GitHub](https://github.com/tj/commander.js) - CLI argument parsing best practices
-- [ShellCheck Wiki](https://github.com/koalaman/shellcheck/wiki) - Bash script error handling
-- [Aether Implementation](file:///Users/callumcowie/repos/Aether) - Existing robust patterns (file-lock.sh, atomic-write.sh)
+| Avoid | Why | Use Instead |
+|-------|-----|-------------|
+| Jest | Heavy, opinionated, slower than AVA | Keep AVA - already configured |
+| mock-fs | Less flexible than sinon + proxyquire | sinon + proxyquire |
+| nock | HTTP mocking not needed | None - no HTTP calls in CLI |
+| tap | Different test style than existing | Keep AVA |
 
 ---
 
 ## Confidence Assessment
 
-| Area | Level | Notes |
-|------|-------|-------|
-| CLI Framework | HIGH | Commander is industry standard |
-| Shell Linting | HIGH | ShellCheck already in use |
-| Error Handling | HIGH | Patterns well-documented |
-| Testing | MEDIUM | AVA recommendation is standard but needs adoption |
-| State Validation | LOW | Optional enhancement; may add complexity without benefit |
+| Area | Level | Reason |
+|------|-------|--------|
+| package-lock.json | HIGH | Standard npm practice |
+| AVA testing | HIGH | Already in use, proven |
+| Sinon mocking | HIGH | Industry standard |
+| proxyquire | HIGH | Standard for DI testing |
+| tmp | HIGH | Widely used, stable |
+| Phase loop fix | MEDIUM-HIGH | Logic fix, no new deps |
 
 ---
 
-## Gaps to Address
+## Sources
 
-- **E2E Testing**: No automated end-to-end tests for full workflows
-- **Cross-Platform**: File locking behavior differs on macOS vs Linux (verify flock works)
-- **Performance**: No benchmarks for large state files
+- Existing codebase: `/Users/callumcowie/repos/Aether/package.json` - Current stack validated
+- Existing codebase: `/Users/callumcowie/repos/Aether/bin/cli.js` - syncDirWithCleanup implementation
+- Existing codebase: `/Users/callumcowie/repos/Aether/test/sync-dir-hash.test.js` - Test patterns established
+- npm documentation: package-lock.json for deterministic installs
+- Sinon.js: Standard mocking library for JavaScript
+
+---
+
+*Stack research for Aether Colony v1.1 bug fixes*
+*Researched: 2026-02-14*

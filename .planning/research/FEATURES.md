@@ -1,180 +1,152 @@
-# Feature Landscape: CLI-Based AI Agent Orchestration Frameworks
+# Feature Landscape: v1.1 Bug Fixes & Reliability Improvements
 
-**Domain:** Agent orchestration for Claude Code / OpenCode
-**Researched:** 2026-02-13
-**Confidence:** MEDIUM (synthesized from Aether codebase analysis + ecosystem knowledge)
+**Domain:** CLI-based AI agent orchestration framework (Aether Colony System)
+**Researched:** 2026-02-14
+**Confidence:** HIGH (based on documented bugs in TO-DOs.md, CONCERNS.md, and codebase analysis)
 
 ## Executive Summary
 
-CLI-based AI agent orchestration frameworks coordinate multiple AI agents (workers) to accomplish complex development tasks. This research maps the feature landscape for such frameworks, categorizing features as **table stakes** (expected baseline), **differentiators** (unique value), or **anti-features** (common mistakes).
-
-Aether exemplifies a mature system with strong differentiators: colony metaphor, pheromone signals, nested spawning, and cross-session memory. Its table stakes features (phase planning, verification gates, git integration) are well-implemented.
+This research focuses on the v1.1 milestone bug fixes for the Aether Colony System. v1.0 delivered hardened infrastructure; v1.1 addresses critical bugs discovered during real-world usage: phase advancement loops, update system reliability, data loss prevention, and misleading output timing. These are not feature additions but fixes to existing functionality that is broken or dangerous.
 
 ## Feature Categories
 
-### Table Stakes
+### Table Stakes (Must-Have Fixes)
 
-Features users expect in any agent orchestration framework. Missing these = product feels incomplete or broken.
+Features that are broken and must be fixed for the system to be trustworthy.
 
-| Feature | Why Expected | Complexity | Aether Status |
-|---------|--------------|------------|----------------|
-| **Project/Goal Initialization** | Users need to define what they want to build | Low | Implemented (`/ant:init`) |
-| **Task Planning** | Break goals into executable steps | Medium | Implemented (`/ant:plan`) |
-| **Worker Spawning** | Actually execute tasks with agents | Medium | Implemented (Builder, Scout, Watcher castes) |
-| **Verification** | Confirm work is correct (tests pass, build succeeds) | Medium | Implemented (6-phase verification) |
-| **State Persistence** | Survive context resets | Medium | Implemented (JSON state files) |
-| **Git Integration** | Checkpoints, rollback capability | Low | Implemented (stashes, commits) |
-| **Progress Visibility** | Know what's happening | Low | Implemented (`/ant:status`, spawn tree) |
+| Feature | Why Broken | Complexity | Notes |
+|---------|------------|------------|-------|
+| **Targeted Git Checkpoints** | Current checkpoint stashes ALL dirty files including user work (1,145 lines nearly lost) | Low | Use explicit allowlist: only stash `.aether/*.md`, `.claude/commands/ant/`, `.opencode/commands/ant/`, `runtime/`, `bin/cli.js`. Never touch user data like TO-DOs.md, `.aether/data/`, `.aether/dreams/`, `.aether/oracle/` |
+| **Deterministic Dependency Builds** | No package-lock.json means `npm install` pulls different versions over time | Low | Run `npm install` to generate lockfile, commit it, update CI to use `npm ci` |
+| **Unit Tests for Core Sync** | `syncDirWithCleanup`, `hashFileSync`, `generateManifest` in cli.js have no unit tests | Medium | Add AVA tests for hash comparison, dry-run mode, empty directory cleanup, collision handling |
+| **Synchronous Worker Spawns** | `run_in_background: true` causes misleading output timing — summary appears before agent notifications | Low | Remove flag from build.md Steps 5.1, 5.4, 5.4.2. Multiple Task calls already run in parallel without it. Remove TaskOutput collection steps |
 
-### Differentiators
+### Differentiators (Better Than Before)
 
-Features that set products apart. Not expected, but highly valued when present.
+Improvements that make the system more reliable than the baseline fix.
 
-| Feature | Value Proposition | Complexity | Aether Status |
-|---------|-------------------|------------|----------------|
-| **Colony Metaphor** | Specialized worker castes with distinct roles | High | Implemented (8+ castes) |
-| **Pheromone Signals** | Guide behavior without micro-managing | Medium | Implemented (Focus, Redirect, Feedback) |
-| **Nested Spawning** | Workers can spawn sub-workers | High | Implemented (depth 1-3) |
-| **Cross-Session Memory** | Learn from previous projects | High | Implemented (completion-report.md) |
-| **Instincts System** | Pattern-based decision making | High | Implemented (confidence-scored) |
-| **Graveyard Tracking** | Remember what failed before | Medium | Implemented (grave markers) |
-| **Chaos/Resilience Testing** | Probe for edge cases | Medium | Implemented (Chaos ant) |
-| **Archaeologist** | Understand WHY code exists | Medium | Implemented (git history excavation) |
-| **Dream/Interpret Cycle** | Philosophical reflection on codebase | Medium | Implemented |
-| **Swarm Command** | Multi-angle attack on stubborn bugs | Medium | Implemented (4 scouts in parallel) |
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| **Phase Advancement Guards** | Prevent AI from repeating same phases by adding explicit state validation | Medium | Add gate in `/ant:continue` to detect if current phase was already completed; verify `current_phase` matches phase being built |
+| **Cross-Repo Sync Reliability** | `aether update --all` needs better error handling for dirty repos, network failures, partial updates | Medium | Add retry logic, better dirty file detection, atomic per-repo updates (all-or-nothing per repo) |
+| **Version-Aware Update Notifications** | Non-blocking version check at start of `/ant:status`, `/ant:build` to notify when update available | Low | Compare hub version to repo version, show one-line notice if behind |
+| **Checkpoint Recovery Tracking** | Track stash operations in local log, verify stash pop after update | Low | Add `.aether/data/stash-log.json` to track created stashes with timestamps, auto-suggest recovery |
 
-### Anti-Features
+### Anti-Features (Things to Deliberately NOT Do When Fixing)
 
-Features to explicitly NOT build. Common mistakes in this domain.
+Common mistakes when fixing these bugs.
 
 | Anti-Feature | Why Avoid | What to Do Instead |
 |--------------|-----------|-------------------|
-| **Single-agent execution** | Doesn't scale to complex tasks | Parallel worker spawning |
-| **No verification** | Code may not actually work | Execution-based verification (not just reading) |
-| **Ephemeral state** | Context loss on reset | Persistent JSON/state files |
-| **No git safety** | Dangerous to lose work | Checkpoints before phases |
-| **Micro-management** | User exhausted by constant decisions | Pheromone signals for guidance |
-| **Memory-less** | Repeating mistakes | Instincts + learnings system |
-| **No rollback** | Can't recover from bad decisions | Git stash/checkpoint integration |
+| **Broad git stash with `--include-untracked`** | Stashes user work, causes data loss | Use targeted stash with explicit file list, or skip stash and warn user |
+| **Automatic stash pop after update** | Could overwrite user changes | Log stash creation, notify user, let them manually pop when ready |
+| **Adding more background Task flags** | Exacerbates output timing issues | Use foreground Task calls; they run in parallel without `run_in_background` |
+| **Complex checkpoint systems** | Over-engineering a simple problem | Simple allowlist of system files is sufficient; don't build a full backup system |
+| **Global version enforcement** | Blocking commands on version mismatch is annoying | Non-blocking notification only; user decides when to update |
+| **Removing checkpoint feature entirely** | Checkpoints are useful for system files | Keep checkpoints but scope them correctly to system files only |
 
 ## Feature Dependencies
 
 ```
-Project Initialization
+Targeted Git Checkpoints
+    ├──requires──> System File Allowlist Definition
+    │                   └──requires──> Audit of all .aether/ subdirectories
     │
-    ├──► Planning ───────────────────────┐
-    │       │                             │
-    │       └──► Task Analysis            │
-    │               │                     │
-    │               └──► Worker Spawning ─┼──► Verification ──► Phase Completion
-    │                       │             │
-    │                       └──► Sub-worker Spawning (nested)
-    │
-    └──► Memory/Instincts (cross-session)
-            │
-            └──► Graveyard Tracking
-                    │
-                    └──► Chaos Testing
+    └──enhances──> Checkpoint Recovery Tracking
+
+Synchronous Worker Spawns
+    └──requires──> Remove TaskOutput collection steps
+        └──requires──> Update build.md instructions
+
+Cross-Repo Sync Reliability
+    ├──requires──> Unit Tests for Core Sync
+    │                   └──requires──> Test fixtures for hash comparison
+    └──enhances──> Version-Aware Update Notifications
+
+Deterministic Dependency Builds
+    └──requires──> package-lock.json generation
+        └──requires──> CI update to use npm ci
 ```
 
-## MVP Recommendation
+### Dependency Notes
 
-For a minimal viable orchestration framework, prioritize:
+- **Targeted checkpoints require allowlist:** Must define exactly which files are system vs user data before implementing checkpoint fix
+- **Sync reliability requires tests:** Cannot safely improve sync without tests verifying behavior
+- **Worker spawn fix is isolated:** Can be done independently of other fixes
 
-### Phase 1: Table Stakes
-1. **Goal initialization** - Set project intention
-2. **Task planning** - Break into phases
-3. **Worker execution** - Spawn agents to do work
-4. **Basic verification** - Confirm tests pass
-5. **State persistence** - Survive context resets
+## Bug Fix Priority Matrix
 
-### Phase 2: Safety
-1. **Git checkpoints** - Rollback capability
-2. **Blocker flagging** - Track issues that prevent progress
+| Bug Fix | User Impact | Implementation Cost | Priority |
+|---------|-------------|---------------------|----------|
+| Targeted git checkpoints (data loss) | CRITICAL — could lose hours of work | Low | P0 |
+| package-lock.json (determinism) | HIGH — build reproducibility | Low | P0 |
+| Unit tests for sync functions | HIGH — prevents regression | Medium | P0 |
+| Remove run_in_background (timing) | MEDIUM — UX confusion | Low | P0 |
+| Phase advancement guards | MEDIUM — prevents wasted work | Medium | P1 |
+| Cross-repo sync reliability | MEDIUM — multi-repo workflows | Medium | P1 |
+| Version-aware notifications | LOW — nice to have | Low | P2 |
+| Checkpoint recovery tracking | LOW — safety net | Low | P2 |
 
-### Phase 3: Differentiation
-1. **Specialized workers** - Different agent types for different needs
-2. **Pheromone signals** - Guide without micro-managing
-3. **Memory inheritance** - Learn from previous sessions
+**Priority key:**
+- P0: Must fix before v1.1 release
+- P1: Should fix, add if time permits
+- P2: Nice to have, future consideration
 
-## Aether Feature Inventory
+## v1.1 MVP Definition
 
-Aether currently implements the following features:
+### Launch With (v1.1.0)
 
-### Core Workflow (Table Stakes)
-- `/ant:init` - Colony initialization with goal
-- `/ant:plan` - Phase planning with confidence scoring
-- `/ant:build` - Execute phase with worker spawning
-- `/ant:continue` - Verification gates + advance phase
+Minimum fixes needed for trustworthy operation:
 
-### Pheromones (Differentiating)
-- `/ant:focus` - Direct attention to areas
-- `/ant:redirect` - Avoid specific approaches
-- `/ant:feedback` - Teach preferences
+1. **Targeted git checkpoints** — Only stash system files, never user data
+2. **package-lock.json** — Deterministic builds
+3. **Unit tests for sync** — Prevent regression in core functions
+4. **Remove run_in_background** — Fix misleading output timing
 
-### Specialized Castes (Differentiating)
-- Builder - Implements code
-- Watcher - Verifies work
-- Scout - Researches
-- Colonizer - Explores codebases
-- Architect - Extracts patterns
-- Route-Setter - Plans phases
-- Archaeologist - Excavates git history
-- Chaos - Resilience testing
-- Dreamer - Philosophical reflection
-- Interpreter - Grounds dreams in evidence
+### Add After Validation (v1.1.x)
 
-### Memory Systems (Differentiating)
-- Instincts - Confidence-scored patterns
-- Learnings - Validated knowledge
-- Graveyards - Failure markers
-- Completion reports - Cross-session inheritance
+Once core fixes are stable:
 
-### Safety & Git
-- Git checkpoints before each phase
-- Stash-based rollback
-- Gate-based commits
+1. **Phase advancement guards** — Prevent AI loops
+2. **Cross-repo sync reliability** — Better error handling
 
-### Visibility
-- `/ant:status` - Colony overview
-- `/ant:watch` - Real-time tmux monitoring
-- `/ant:phase` - Phase details
-- Spawn tree visualization
+### Future Consideration (v1.2+)
 
-### Issue Tracking
-- `/ant:flag` - Create blockers/issues/notes
-- `/ant:flags` - List and resolve
+Defer until product is stable:
 
-### Session Management
-- `/ant:pause-colony` - Save state for break
-- `/ant:resume-colony` - Restore state
-- `/ant:migrate-state` - Upgrade old formats
+1. **Version-aware notifications** — Non-blocking update nudges
+2. **Checkpoint recovery tracking** — Stash operation logging
 
-## Research Notes
+## Verification Requirements
+
+Each fix must be verifiable:
+
+| Fix | Verification Method |
+|-----|---------------------|
+| Targeted checkpoints | Test: Create dirty TO-DOs.md, run build, verify TO-DOs.md NOT stashed |
+| package-lock.json | Test: Fresh clone, `npm ci` installs exact same versions |
+| Unit tests | Run `npm test`, all new tests pass |
+| Remove run_in_background | Visual: Build summary appears after all worker outputs |
+| Phase advancement guards | Test: Try to continue already-completed phase, verify blocked |
+| Cross-repo sync | Test: Update with dirty repo, verify graceful handling |
+
+## Sources
+
+- TO-DOs.md — Documented bugs with full context (data loss from stash, output ordering)
+- CONCERNS.md — Technical debt and security audit
+- PITFALLS.md — Domain-specific pitfalls for multi-agent systems
+- bin/cli.js — Source code analysis of sync functions
+- .claude/commands/ant/build.md — Worker spawn patterns
 
 **Confidence Assessment:**
-- Table stakes features: HIGH confidence (well-established patterns)
-- Differentiators: MEDIUM confidence (Aether is unique, limited ecosystem comparison)
-- Anti-features: HIGH confidence (common failure modes documented)
 
-**Sources:**
-- Aether codebase analysis (commands, state, workers.md)
-- README.md feature documentation
-- COLONY_STATE.json for runtime patterns
+| Area | Level | Reason |
+|------|-------|--------|
+| Data loss bug | HIGH | Documented in TO-DOs, nearly lost user work |
+| Output timing | HIGH | Documented in TO-DOs and CONCERNS |
+| Sync testing gap | HIGH | Explicitly noted in CONCERNS |
+| Phase loops | MEDIUM | Inferred from v1.1 goals, less documentation |
 
-**Gaps:**
-- Limited published research on CLI agent orchestration frameworks
-- Web search unavailable during research (API errors)
-- Ecosystem comparison limited due to unique nature of colony model
-
-## Roadmap Implications
-
-When building or extending Aether:
-
-1. **Keep table stakes solid** - Any regression in verification, state persistence, or git integration would be critical
-2. **Differentiators are Aether's value** - The colony metaphor, instincts, and memory systems are what make it special
-3. **Avoid anti-features** - Single-agent execution or memory-less operation would undermine the core value
-4. **Consider adding:**
-   - More caste specializations (security reviewer, performance profiler)
-   - Enhanced swarm capabilities
-   - Better visualization/reporting
+---
+*Feature research for: v1.1 Bug Fixes*
+*Researched: 2026-02-14*
