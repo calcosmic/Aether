@@ -9,10 +9,10 @@ Critical bug fixes and reliability improvements for the v1.0 infrastructure.
 
 ### Data Safety
 
-- [ ] **SAFE-01**: Git checkpoint system only captures Aether-managed files (never user data)
-- [ ] **SAFE-02**: Explicit allowlist for checkpoint files: `.aether/*.md`, `.claude/commands/ant/`, `.opencode/commands/ant/`, `.opencode/agents/`, `runtime/`, `bin/cli.js`
-- [ ] **SAFE-03**: User data explicitly excluded: `TO-DOs.md`, `.aether/data/`, `.aether/dreams/`, `.aether/oracle/`
-- [ ] **SAFE-04**: Checkpoint metadata includes file hashes for integrity verification
+- [x] **SAFE-01**: Git checkpoint system only captures Aether-managed files (never user data)
+- [x] **SAFE-02**: Explicit allowlist for checkpoint files: `.aether/*.md`, `.claude/commands/ant/`, `.opencode/commands/ant/`, `.opencode/agents/`, `runtime/`, `bin/cli.js`
+- [x] **SAFE-03**: User data explicitly excluded: `TO-DOs.md`, `.aether/data/`, `.aether/dreams/`, `.aether/oracle/`
+- [x] **SAFE-04**: Checkpoint metadata includes file hashes for integrity verification
 
 ### Build Reliability
 
@@ -37,12 +37,12 @@ Critical bug fixes and reliability improvements for the v1.0 infrastructure.
 
 ### Testing Infrastructure
 
-- [ ] **TEST-01**: package-lock.json committed for deterministic builds
-- [ ] **TEST-02**: Unit tests for `syncDirWithCleanup` function
-- [ ] **TEST-03**: Unit tests for `hashFileSync` function
-- [ ] **TEST-04**: Unit tests for `generateManifest` function
-- [ ] **TEST-05**: Mock filesystem using sinon + proxyquire
-- [ ] **TEST-06**: Idempotency property tests for sync operations
+- [x] **TEST-01**: package-lock.json committed for deterministic builds
+- [x] **TEST-02**: Unit tests for `syncDirWithCleanup` function
+- [x] **TEST-03**: Unit tests for `hashFileSync` function
+- [x] **TEST-04**: Unit tests for `generateManifest` function
+- [x] **TEST-05**: Mock filesystem using sinon + proxyquire
+- [x] **TEST-06**: Idempotency property tests for sync operations
 
 ## v2 Requirements (Deferred)
 
@@ -67,16 +67,16 @@ Critical bug fixes and reliability improvements for the v1.0 infrastructure.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SAFE-01 | 6 | Pending |
-| SAFE-02 | 6 | Pending |
-| SAFE-03 | 6 | Pending |
-| SAFE-04 | 6 | Pending |
-| TEST-01 | 6 | Pending |
-| TEST-02 | 6 | Pending |
-| TEST-03 | 6 | Pending |
-| TEST-04 | 6 | Pending |
-| TEST-05 | 6 | Pending |
-| TEST-06 | 6 | Pending |
+| SAFE-01 | 6 | Complete |
+| SAFE-02 | 6 | Complete |
+| SAFE-03 | 6 | Complete |
+| SAFE-04 | 6 | Complete |
+| TEST-01 | 6 | Complete |
+| TEST-02 | 6 | Complete |
+| TEST-03 | 6 | Complete |
+| TEST-04 | 6 | Complete |
+| TEST-05 | 6 | Complete |
+| TEST-06 | 6 | Complete |
 | STATE-01 | 7 | Pending |
 | STATE-02 | 7 | Pending |
 | STATE-03 | 7 | Pending |

@@ -45,12 +45,16 @@ The approach prioritizes infrastructure hardening over feature additions — fix
 **Plans:** 6 plans in 3 waves
 
 Plans:
-- [ ] 06-01-PLAN.md — Install test dependencies (sinon + proxyquire) and create mock-fs helper
-- [ ] 06-02-PLAN.md — Implement safe checkpoint command with create/list/restore/verify
-- [ ] 06-03-PLAN.md — Create unit tests for hashFileSync function
-- [ ] 06-04-PLAN.md — Create unit tests for generateManifest and validateManifest
-- [ ] 06-05-PLAN.md — Create unit tests for syncDirWithCleanup with idempotency tests
-- [ ] 06-06-PLAN.md — Commit package-lock.json and verify checkpoint system end-to-end
+- [x] 06-01-PLAN.md — Install test dependencies (sinon + proxyquire) and create mock-fs helper
+- [x] 06-02-PLAN.md — Implement safe checkpoint command with create/list/restore/verify
+- [x] 06-03-PLAN.md — Create unit tests for hashFileSync function
+- [x] 06-04-PLAN.md — Create unit tests for generateManifest and validateManifest
+- [x] 06-05-PLAN.md — Create unit tests for syncDirWithCleanup with idempotency tests
+- [x] 06-06-PLAN.md — Commit package-lock.json and verify checkpoint system end-to-end
+
+**Status:** Complete ✓
+**Completed:** 2026-02-14
+**Verification:** 06-VERIFICATION.md (10/10 must-haves verified)
 
 ---
 
@@ -110,7 +114,7 @@ Plans:
 
 | Phase | Status | Requirements | Success Criteria Met |
 |-------|--------|--------------|----------------------|
-| 6 - Foundation | Planned | 10/10 pending | 0/6 |
+| 6 - Foundation | **Complete** ✓ | 10/10 complete | 6/6 |
 | 7 - Core Reliability | Not Started | 9/9 pending | 0/7 |
 | 8 - Build Polish | Not Started | 3/3 pending | 0/5 |
 
