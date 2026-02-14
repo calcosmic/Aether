@@ -488,6 +488,148 @@ function syncSystemFilesWithCleanup(srcDir, destDir, opts) {
   return { copied, removed, skipped };
 }
 
+// Checkpoint allowlist - only these files are captured in checkpoints
+// NEVER include: data/, dreams/, oracle/, TO-DOs.md (user data)
+const CHECKPOINT_ALLOWLIST = [
+  '.aether/*.md',                    // All .md files directly in .aether/
+  '.claude/commands/ant/**',         // All files in .claude/commands/ant/ recursively
+  '.opencode/commands/ant/**',       // All files in .opencode/commands/ant/ recursively
+  '.opencode/agents/**',             // All files in .opencode/agents/ recursively
+  'runtime/**',                      // All files in runtime/ recursively
+  'bin/cli.js',                      // Specific file: bin/cli.js
+];
+
+// Forbidden user data patterns - these are NEVER checkpointed
+const USER_DATA_PATTERNS = [
+  'data/',
+  'dreams/',
+  'oracle/',
+  'TO-DOs.md',
+];
+
+/**
+ * Check if a file path matches user data patterns
+ * @param {string} filePath - File path to check
+ * @returns {boolean} True if file is user data
+ */
+function isUserData(filePath) {
+  for (const pattern of USER_DATA_PATTERNS) {
+    if (filePath.includes(pattern)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Get files matching the checkpoint allowlist
+ * @param {string} repoPath - Repository root path
+ * @returns {string[]} Array of file paths relative to repo root
+ */
+function getAllowlistedFiles(repoPath) {
+  const files = [];
+
+  for (const pattern of CHECKPOINT_ALLOWLIST) {
+    if (pattern === 'bin/cli.js') {
+      // Specific file
+      const fullPath = path.join(repoPath, pattern);
+      if (fs.existsSync(fullPath)) {
+        files.push(pattern);
+      }
+    } else if (pattern === '.aether/*.md') {
+      // .md files directly in .aether/ (not subdirs)
+      const aetherDir = path.join(repoPath, '.aether');
+      if (fs.existsSync(aetherDir)) {
+        const entries = fs.readdirSync(aetherDir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isFile() && entry.name.endsWith('.md')) {
+            const filePath = path.join('.aether', entry.name);
+            if (!isUserData(filePath)) {
+              files.push(filePath);
+            }
+          }
+        }
+      }
+    } else if (pattern.endsWith('/**')) {
+      // Recursive directory pattern
+      const dirPath = pattern.slice(0, -3); // Remove '/**'
+      const fullDir = path.join(repoPath, dirPath);
+      if (fs.existsSync(fullDir)) {
+        const dirFiles = listFilesRecursive(fullDir);
+        for (const relFile of dirFiles) {
+          const filePath = path.join(dirPath, relFile);
+          if (!isUserData(filePath)) {
+            files.push(filePath);
+          }
+        }
+      }
+    }
+  }
+
+  return files;
+}
+
+/**
+ * Generate checkpoint metadata with file hashes
+ * @param {string} repoPath - Repository root path
+ * @param {string} message - Optional checkpoint message
+ * @returns {object} Checkpoint metadata object
+ */
+function generateCheckpointMetadata(repoPath, message) {
+  const now = new Date();
+  const timestamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const checkpointId = `chk_${now.toISOString().slice(0, 10).replace(/-/g, '')}_${now.toTimeString().slice(0, 8).replace(/:/g, '')}`;
+
+  const allowlistedFiles = getAllowlistedFiles(repoPath);
+  const files = {};
+  const excluded = [];
+
+  for (const filePath of allowlistedFiles) {
+    // Double-check for user data (safety)
+    if (isUserData(filePath)) {
+      excluded.push(filePath);
+      continue;
+    }
+
+    const fullPath = path.join(repoPath, filePath);
+    const hash = hashFileSync(fullPath);
+    if (hash) {
+      files[filePath] = hash;
+    }
+  }
+
+  return {
+    checkpoint_id: checkpointId,
+    created_at: now.toISOString(),
+    message: message || 'Checkpoint created',
+    files,
+    excluded: excluded.length > 0 ? excluded : undefined,
+  };
+}
+
+/**
+ * Save checkpoint metadata to .aether/checkpoints/
+ * @param {string} repoPath - Repository root path
+ * @param {object} metadata - Checkpoint metadata object
+ */
+function saveCheckpointMetadata(repoPath, metadata) {
+  const checkpointsDir = path.join(repoPath, '.aether', 'checkpoints');
+  fs.mkdirSync(checkpointsDir, { recursive: true });
+  const metadataPath = path.join(checkpointsDir, `${metadata.checkpoint_id}.json`);
+  writeJsonSync(metadataPath, metadata);
+}
+
+/**
+ * Load checkpoint metadata by ID
+ * @param {string} repoPath - Repository root path
+ * @param {string} checkpointId - Checkpoint ID
+ * @returns {object|null} Checkpoint metadata or null if not found
+ */
+function loadCheckpointMetadata(repoPath, checkpointId) {
+  const metadataPath = path.join(repoPath, '.aether', 'checkpoints', `${checkpointId}.json`);
+  return readJsonSafe(metadataPath);
+}
+
 function isGitRepo(repoPath) {
   try {
     execSync('git rev-parse --git-dir', { cwd: repoPath, stdio: 'pipe' });
