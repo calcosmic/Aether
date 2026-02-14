@@ -10,39 +10,34 @@ Autonomous multi-agent orchestration that scales from single-user development to
 
 ## Requirements
 
-### Validated (v1.0)
+### Validated (v3.0.0)
 
-- ✓ CLI installation and update system — v1.0 (npm published)
-- ✓ Core colony commands (init, build, continue, plan, phase) — v1.0
-- ✓ Worker caste system (Builder, Watcher, Scout, Chaos, Oracle) — v1.0
-- ✓ State management (COLONY_STATE.json, flags, constraints) — v1.0
-- ✓ File locking infrastructure — v1.0 (flock-based with cleanup)
-- ✓ Atomic write operations — v1.0 (temp file + mv pattern)
-- ✓ Targeted git stashing for checkpoints — v1.0 (Aether-managed only)
-- ✓ Signatures.json template — v1.0 (5 pattern definitions)
-- ✓ Hash comparison for sync operations — v1.0 (SHA-256)
-- ✓ Comprehensive test coverage — v1.0 (52+ AVA and bash tests)
-- ✓ Centralized error handling — v1.0 (AetherError classes, sysexits.h)
-- ✓ Structured logging — v1.0 (activity.log integration)
-- ✓ Graceful degradation — v1.0 (feature flags pattern)
-- ✓ commander.js CLI — v1.0 (migrated from manual parsing)
-- ✓ Colored output — v1.0 (picocolors with semantic palette)
-- ✓ State loading with locks — v1.0 (state-loader.sh)
-- ✓ Spawn tree persistence — v1.0 (reconstruction from spawn-tree.txt)
-- ✓ Context restoration — v1.0 (HANDOFF.md lifecycle)
+- ✓ CLI installation and update system — v3.0.0 (npm published)
+- ✓ Core colony commands (init, build, continue, plan, phase) — v3.0.0
+- ✓ Worker caste system (Builder, Watcher, Scout, Chaos, Oracle) — v3.0.0
+- ✓ State management (COLONY_STATE.json, flags, constraints) — v3.0.0
+- ✓ File locking infrastructure — v3.0.0 (flock-based with cleanup)
+- ✓ Atomic write operations — v3.0.0 (temp file + mv pattern)
+- ✓ Safe checkpoint system with explicit allowlist — v3.0.0 (never captures user data)
+- ✓ State Guard with Iron Law enforcement — v3.0.0 (prevents phase advancement loops)
+- ✓ FileLock with PID-based stale detection — v3.0.0 (prevents concurrent modification)
+- ✓ Audit trail system with event sourcing — v3.0.0 (phase transition history)
+- ✓ Signatures.json template — v3.0.0 (5 pattern definitions)
+- ✓ SHA-256 hash comparison for sync operations — v3.0.0
+- ✓ UpdateTransaction with two-phase commit — v3.0.0 (automatic rollback on failure)
+- ✓ Comprehensive test coverage — v3.0.0 (209+ AVA, integration, and E2E tests)
+- ✓ Centralized error handling — v3.0.0 (AetherError classes, sysexits.h)
+- ✓ Structured logging — v3.0.0 (activity.log integration)
+- ✓ Build output timing fixed — v3.0.0 (foreground execution)
+- ✓ E2E integration test suite — v3.0.0 (checkpoint → update → build workflow)
+- ✓ Init copies system files from hub — v3.0.0 (auto-registers for update --all)
+- ✓ commander.js CLI — v3.0.0 (migrated from manual parsing)
+- ✓ Colored output — v3.0.0 (picocolors with semantic palette)
+- ✓ State loading with locks — v3.0.0 (state-loader.sh)
+- ✓ Spawn tree persistence — v3.0.0 (reconstruction from spawn-tree.txt)
+- ✓ Context restoration — v3.0.0 (HANDOFF.md lifecycle)
 
-### Validated (v1.1)
-
-- ✓ Safe checkpoint system with explicit allowlist — v1.1 (never captures user data)
-- ✓ State Guard with Iron Law enforcement — v1.1 (prevents phase advancement loops)
-- ✓ FileLock with PID-based stale detection — v1.1 (prevents concurrent modification)
-- ✓ Audit trail system with event sourcing — v1.1 (phase transition history)
-- ✓ UpdateTransaction with two-phase commit — v1.1 (automatic rollback on failure)
-- ✓ Build output timing fixed — v1.1 (foreground execution)
-- ✓ E2E integration test suite — v1.1 (checkpoint → update → build workflow)
-- ✓ Init copies system files from hub — v1.1 (auto-registers for update --all)
-
-### Active (v1.2 Candidates)
+### Active (v3.1 Candidates)
 
 - [ ] Worker caste specializations
 - [ ] Enhanced swarm command visualization
@@ -60,8 +55,8 @@ Autonomous multi-agent orchestration that scales from single-user development to
 
 ## Context
 
-**Current State (post-v1.1):**
-- **Shipped:** v1.1 Bug Fixes & Update System Repair with 3 phases, 14 plans, 25 requirements
+**Current State (post-v3.0.0):**
+- **Shipped:** v3.0.0 Core Reliability & State Management with 3 phases, 14 plans, 25 requirements
 - **LOC:** ~36k JavaScript, Bash utilities, JSON configuration
 - **Test Coverage:** 209 tests (AVA unit + integration + E2E)
 - **Tech Stack:** Node.js CLI, commander.js, picocolors, sinon, proxyquire
@@ -75,7 +70,7 @@ Autonomous multi-agent orchestration that scales from single-user development to
 - Markdown-based command definitions
 - JSON state files with locking and atomic writes
 
-**Recent Work (v1.1):**
+**Recent Work (v3.0.0):**
 - Fixed critical data loss risk: Safe checkpoint system with explicit allowlist
 - Fixed phase advancement loops: Iron Law enforcement requires verification evidence
 - Fixed update system reliability: Two-phase commit with automatic rollback
@@ -83,7 +78,7 @@ Autonomous multi-agent orchestration that scales from single-user development to
 - Fixed init gap: Now copies system files and auto-registers repos
 - Established comprehensive testing with mocked filesystem (209 tests)
 
-**Known Issues Resolved in v1.1:**
+**Known Issues Resolved in v3.0.0:**
 - ✓ User data protected in checkpoints (explicit allowlist, never user data)
 - ✓ Phase advancement loops prevented (Iron Law enforcement)
 - ✓ Update failures recoverable (automatic rollback + recovery commands)
@@ -110,22 +105,22 @@ Autonomous multi-agent orchestration that scales from single-user development to
 | Semantic color naming | queen, colony, worker hierarchy | ✓ Good |
 | File locking with flock | Prevent race conditions | ✓ Good |
 | Handoff pattern | Pheromone trail metaphor | ✓ Good |
-| Checkpoint allowlist (v1.1) | Never risk user data loss | ✓ Good |
-| Iron Law enforcement (v1.1) | Prevent phase advancement loops | ✓ Good |
-| Two-phase commit updates (v1.1) | Reliable cross-repo sync | ✓ Good |
-| Foreground build execution (v1.1) | Accurate output timing | ✓ Good |
-| Init auto-registration (v1.1) | Seamless update --all | ✓ Good |
+| Checkpoint allowlist (v3.0.0) | Never risk user data loss | ✓ Good |
+| Iron Law enforcement (v3.0.0) | Prevent phase advancement loops | ✓ Good |
+| Two-phase commit updates (v3.0.0) | Reliable cross-repo sync | ✓ Good |
+| Foreground build execution (v3.0.0) | Accurate output timing | ✓ Good |
+| Init auto-registration (v3.0.0) | Seamless update --all | ✓ Good |
 
-## Current Milestone: Planning v1.2
+## Current Milestone: Planning v3.1
 
-**Goal:** Fix critical bugs causing phase loops and repair the update system for reliable multi-repo synchronization
+**Goal:** Enhance worker caste capabilities and improve colony observability for better developer experience
 
-**Next Milestone Goals (v1.2):**
+**Next Milestone Goals (v3.1):**
 - Worker caste specializations (Builder, Watcher, Scout refinements)
 - Enhanced visualization for swarm command
 - Real-time monitoring improvements
-- Version-aware update notifications
-- Checkpoint recovery tracking
+- Version-aware update notifications (NOTIFY-01)
+- Checkpoint recovery tracking (RECOVER-01)
 
 ---
-*Last updated: 2026-02-14 — v1.1 shipped, planning v1.2*
+*Last updated: 2026-02-14 — v3.0.0 shipped, planning v3.1*
