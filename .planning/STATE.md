@@ -134,6 +134,10 @@ v3.1:    [████████████████░░░] 88% IN PROG
 | 2026-02-14 | Cumulative token counting | Trophallaxis metrics accumulate over spawn lifetime |
 | 2026-02-14 | Pipe-delimited timing.log format | More efficient than JSON for append-only operations |
 | 2026-02-14 | Pre-defined chambers with icons | Ant-themed zones (fungus_garden, nursery, etc.) ready for activity mapping |
+| 2026-02-14 | Use both color AND emoji together for caste display | PROJECT.md explicitly requires both, not replacing each other |
+| 2026-02-14 | ANSI codes in bash must match picocolors in Node.js | Single source of truth via caste-colors.js exports both formats |
+| 2026-02-14 | Chamber activity tracked via optional 8th parameter in swarm-display-update | Backward compatible - existing calls work without chamber |
+| 2026-02-14 | Fix brace expansion bug in default JSON parameter | Bash interprets {} as brace expansion, causing malformed JSON |
 | 2026-02-14 | ASCII art milestone files in .aether/visualizations/ | Visual representation of colony growth journey from First Mound to Crowned Anthill |
 | 2026-02-14 | Standalone chamber-compare.sh utility | JSON API enables programmatic use and testing |
 | 2026-02-14 | Content-based pheromone diff | Compare decisions/learnings by content, not just count |
