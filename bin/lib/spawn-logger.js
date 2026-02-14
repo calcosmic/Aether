@@ -10,6 +10,7 @@
 const fs = require('fs');
 const path = require('path');
 const { logActivity } = require('./logger');
+const { recordSpawnTelemetry } = require('./telemetry');
 
 /**
  * Caste emoji mapping for display
@@ -47,9 +48,10 @@ const STATUS_EMOJIS = {
  * @param {string} spawnInfo.task - Task description
  * @param {string} spawnInfo.model - Model used (e.g., "kimi-k2.5")
  * @param {string} spawnInfo.status - Spawn status (default: "spawned")
+ * @param {string} spawnInfo.source - Routing source (default: "caste-default")
  * @returns {Promise<boolean>} True if logged successfully
  */
-async function logSpawn(repoPath, { parent, caste, child, task, model, status = 'spawned' }) {
+async function logSpawn(repoPath, { parent, caste, child, task, model, status = 'spawned', source = 'caste-default' }) {
   try {
     const timestamp = new Date().toISOString();
     const logLine = `${timestamp}|${parent}|${caste}|${child}|${task}|${model || 'default'}|${status}\n`;
@@ -69,6 +71,20 @@ async function logSpawn(repoPath, { parent, caste, child, task, model, status = 
     const casteForLog = caste || 'ant';
     const description = `${child} (${caste}): ${task} [model: ${model || 'default'}]`;
     logActivity('SPAWN', casteForLog, description);
+
+    // Record telemetry for performance tracking
+    // Handle errors gracefully - don't fail spawn logging if telemetry fails
+    try {
+      recordSpawnTelemetry(repoPath, {
+        task: task || 'unknown',
+        caste: caste || 'unknown',
+        model: model || 'default',
+        source: source || 'caste-default',
+        timestamp
+      });
+    } catch (telemetryError) {
+      // Silent fail for telemetry errors
+    }
 
     return true;
   } catch (error) {
