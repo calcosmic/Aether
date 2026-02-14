@@ -11,9 +11,9 @@
 | Field | Value |
 |-------|-------|
 | **Phase** | 10 — Entombment & Egg Laying |
-| **Plan** | 03 — Lay Eggs & Milestone Detection |
+| **Plan** | 04 — Tunnels Command |
 | **Status** | In Progress |
-| **Last Action** | Completed Plan 03 - /ant:lay-eggs and milestone detection |
+| **Last Action** | Completed Plan 04 - /ant:tunnels command for browsing chambers |
 
 ### Progress Bar
 
@@ -27,7 +27,7 @@ v3.1:    [███████░░░] 60% IN PROGRESS (5/5 plans complete, 8
 | Phase | Name | Status | Requirements | Complete |
 |-------|------|--------|--------------|----------|
 | 9 | Caste Model Assignment | Complete | 8 | 100% (5/5 plans) |
-| 10 | Entombment & Egg Laying | In Progress | 5 | 60% (3/5 plans) |
+| 10 | Entombment & Egg Laying | In Progress | 5 | 80% (4/5 plans) |
 | 11 | Foraging Specialization | Blocked | 3 | 0% |
 | 12 | Colony Visualization | Blocked | 11 | 0% |
 
@@ -108,6 +108,8 @@ v3.1:    [███████░░░] 60% IN PROGRESS (5/5 plans complete, 8
 | 2026-02-14 | Entomb uses coffin emoji (⚰️) not urn (🏺) | Avoids visual conflict with seal command |
 | 2026-02-14 | Compute version from phase counts | Automatic semantic versioning based on progress |
 | 2026-02-14 | Preserve all learnings/decisions, filter instincts by confidence | Learnings validated; instincts need threshold |
+| 2026-02-14 | Use chamber-list utility for tunnels command | Reuses existing JSON-returning utility for consistency |
+| 2026-02-14 | Truncate goal at 50 chars in tunnels list view | Keeps display compact while showing enough context |
 
 ### Open Questions
 
@@ -129,21 +131,21 @@ v3.1:    [███████░░░] 60% IN PROGRESS (5/5 plans complete, 8
 
 ### Last Session
 - **Date:** 2026-02-14
-- **Action:** Executed Plan 03 in Phase 10 - Lay Eggs & Milestone Detection
-- **Outcome:** /ant:lay-eggs command and milestone-detect utility created; pheromone preservation working
+- **Action:** Executed Plan 04 in Phase 10 - Tunnels Command
+- **Outcome:** /ant:tunnels command created for browsing archived colonies; supports list view and detail view
 
 ### Next Actions
-1. Execute Plan 04 - `/ant:tunnels` command
-2. Execute Plan 05 - Milestone auto-detection
+1. Verify /ant:tunnels command works end-to-end
+2. Execute Plan 05 - Milestone auto-detection (if remaining)
 3. Phase 10 complete - move to Phase 11 (Foraging Specialization)
 
 ### Handoff Notes
-- Phase 10 Plan 03 complete - /ant:lay-eggs and milestone detection ready
-- milestone-detect utility computes milestone from state automatically
-- /ant:status displays current milestone with version
-- /ant:lay-eggs preserves pheromones (learnings/decisions/instincts)
-- Fresh colonies start at "First Mound" milestone
-- Next: Plan 04 - /ant:tunnels command
+- Phase 10 Plan 04 complete - /ant:tunnels command ready
+- Lists archived colonies with summaries (name, goal, milestone, version, phases, date)
+- Detail view shows full manifest data with /ant:tunnels <chamber_name>
+- Empty state provides helpful guidance
+- Commands created for both Claude Code and OpenCode
+- Next: Verify tunnels command, then Plan 05
 
 ---
 
@@ -160,4 +162,4 @@ v3.1:    [███████░░░] 60% IN PROGRESS (5/5 plans complete, 8
 
 *State file: `.planning/STATE.md`*
 *Updated: 2026-02-14*
-*Next update: After Plan 02 completion or Phase 10 milestone*
+*Next update: After Plan 04 verification or Phase 10 milestone*
