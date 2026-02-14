@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A colony-based development framework that orchestrates AI agents using an ant colony metaphor. The system provides slash commands (like `/ant:build`, `/ant:continue`, `/ant:swarm`) that spawn specialized worker agents to execute tasks in parallel. Currently used for developing and maintaining itself.
+A colony-based development framework that orchestrates AI agents using an ant colony metaphor. The system provides slash commands (like `/ant:build`, `/ant:continue`, `/ant:swarm`) that spawn specialized worker agents to execute tasks in parallel. v1.0 delivers hardened infrastructure with comprehensive testing, error handling, and state restoration.
 
 ## Core Value
 
@@ -12,49 +12,71 @@ Autonomous multi-agent orchestration that scales from single-user development to
 
 ### Validated
 
-- ✓ CLI installation and update system — existing (npm published)
-- ✓ Core colony commands (init, build, continue, plan, phase) — existing
-- ✓ Worker caste system (Builder, Watcher, Scout, Chaos, Oracle) — existing
-- ✓ State management (COLONY_STATE.json, flags, constraints) — existing
-- ✓ File locking infrastructure — existing (recently fixed)
-- ✓ Atomic write operations — existing (recently fixed)
-- ✓ Targeted git stashing for checkpoints — existing (recently fixed)
+- ✓ CLI installation and update system — v1.0 (npm published)
+- ✓ Core colony commands (init, build, continue, plan, phase) — v1.0
+- ✓ Worker caste system (Builder, Watcher, Scout, Chaos, Oracle) — v1.0
+- ✓ State management (COLONY_STATE.json, flags, constraints) — v1.0
+- ✓ File locking infrastructure — v1.0 (flock-based with cleanup)
+- ✓ Atomic write operations — v1.0 (temp file + mv pattern)
+- ✓ Targeted git stashing for checkpoints — v1.0 (Aether-managed only)
+- ✓ Signatures.json template — v1.0 (5 pattern definitions)
+- ✓ Hash comparison for sync operations — v1.0 (SHA-256)
+- ✓ Comprehensive test coverage — v1.0 (52+ AVA and bash tests)
+- ✓ Centralized error handling — v1.0 (AetherError classes, sysexits.h)
+- ✓ Structured logging — v1.0 (activity.log integration)
+- ✓ Graceful degradation — v1.0 (feature flags pattern)
+- ✓ commander.js CLI — v1.0 (migrated from manual parsing)
+- ✓ Colored output — v1.0 (picocolors with semantic palette)
+- ✓ State loading with locks — v1.0 (state-loader.sh)
+- ✓ Spawn tree persistence — v1.0 (reconstruction from spawn-tree.txt)
+- ✓ Context restoration — v1.0 (HANDOFF.md lifecycle)
 
 ### Active
 
-- [ ] Improve update system reliability
-- [ ] Add comprehensive test coverage
-- [ ] Enhance error recovery mechanisms
-- [ ] Add telemetry/metrics for colony health
+- [ ] Worker caste specializations (v1.1)
+- [ ] Enhanced swarm command visualization (v1.1)
+- [ ] Real-time colony monitoring improvements (v1.1)
+- [ ] Cross-repo collaboration features (v1.1)
 
 ### Out of Scope
 
-- Web UI — CLI-first approach
-- Cloud deployment — local-first, repo-local state
-- OAuth/multi-user auth — single developer focus
+- Web UI — CLI-first approach, target v2+
+- Cloud deployment — local-first, repo-local state, target v2+
+- OAuth/multi-user auth — single developer focus, target v2+
+- Mobile support — Desktop CLI tool only
 
 ## Context
 
+**Current State (post-v1.0):**
+- **Shipped:** v1.0 Infrastructure with 5 phases, 14 plans, 16 requirements
+- **LOC:** ~230k across JavaScript, Bash, JSON
+- **Test Coverage:** 52+ tests (AVA unit + bash integration)
+- **Tech Stack:** Node.js CLI, commander.js, picocolors, bash utilities
+
 **Technical Environment:**
-- Node.js CLI (bin/cli.js)
-- Bash utilities (aether-utils.sh with 59 subcommands)
+- Node.js CLI with commander.js (bin/cli.js)
+- Bash utilities (aether-utils.sh with 59+ subcommands)
 - Markdown-based command definitions
-- JSON state files
+- JSON state files with locking and atomic writes
 
-**Recent Work:**
-- Just completed fixing critical bugs: file locking, atomic writes, targeted git stashing
-- These fixes resolved race conditions and data loss risks
+**Recent Work (v1.0):**
+- Fixed Oracle-discovered bugs: missing signatures.json, hash comparison, CLI clarity
+- Established comprehensive testing foundation
+- Built centralized error handling with graceful degradation
+- Migrated to commander.js with semantic color palette
+- Implemented state loading with file locking and handoff detection
 
-**Known Issues to Address:**
-- Update command not working properly (user reported)
-- System getting stuck in loops (user reported)
-- Need more robust error handling
+**Known Issues Resolved in v1.0:**
+- ✓ Update command reliability (hash comparison prevents unnecessary writes)
+- ✓ System getting stuck in loops (file locking prevents race conditions)
+- ✓ Error handling gaps (AetherError classes with recovery suggestions)
 
 ## Constraints
 
-- **Tech Stack**: Node.js >= 16, Bash, jq — No external frameworks
+- **Tech Stack**: Node.js >= 16, Bash, jq — Minimal external dependencies
 - **Distribution**: npm package (aether-colony)
 - **Platform**: macOS/Linux, Claude Code and OpenCode support
+- **State**: Repo-local only (no cloud dependencies)
 
 ## Key Decisions
 
@@ -64,18 +86,21 @@ Autonomous multi-agent orchestration that scales from single-user development to
 | Markdown commands | Easy to edit, version control | ✓ Good |
 | Bash utilities | Works across shells, no Python dep | ✓ Good |
 | Colony metaphor | Clear role separation | ✓ Good |
+| AVA over Jest | Lightweight, fast ES module support | ✓ Good (52+ tests) |
+| picocolors over chalk | 14x smaller, 2x faster | ✓ Good |
+| Semantic color naming | queen, colony, worker hierarchy | ✓ Good |
+| File locking with flock | Prevent race conditions | ✓ Good |
+| Handoff pattern | Pheromone trail metaphor | ✓ Good |
 
-## Current Milestone: v1.0 Infrastructure
+## Current Milestone: v1.1 Feature Enhancements
 
-**Goal:** Harden core infrastructure to prevent race conditions, data loss, and update failures
+**Goal:** Build on v1.0 infrastructure to add advanced features and improvements
 
 **Target features:**
-- File locking enforced on all state operations
-- Atomic writes for all JSON state updates
-- Targeted git stashing (never user work)
-- Update command with version tracking and comparison
-- Signatures.json template for signature-scan/match commands
-- Hash comparison for syncSystemFilesWithCleanup
+- Worker caste specializations (new castes beyond Builder/Watcher/Scout/Chaos/Oracle)
+- Enhanced swarm command with better visualization
+- Real-time colony monitoring improvements
+- Cross-repo collaboration features
 
 ---
-*Last updated: 2026-02-13 after bug fixes*
+*Last updated: 2026-02-14 after v1.0 milestone completion*

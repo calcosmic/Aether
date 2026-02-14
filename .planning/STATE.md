@@ -2,21 +2,21 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-13)
+See: .planning/PROJECT.md (updated 2026-02-14)
 
 **Core value:** Autonomous multi-agent orchestration that scales from single-user development to team collaboration
-**Current focus:** Phase 5 — State & Context Restoration
+**Current focus:** Planning v1.1 feature enhancements
 
 ---
 
 ## Current Position
 
-**Milestone:** v1.0 Infrastructure
+**Milestone:** v1.0 Infrastructure — SHIPPED 2026-02-14
 **Phase:** All 5 phases complete
-**Status:** ✓ Milestone audited, ready for completion
+**Status:** ✓ Archived to .planning/milestones/
 
-**Progress:** [██████████████] 100% (18/18 requirements complete)
-**Audit:** PASS — All cross-phase integration verified
+**Progress:** [██████████████] 100% (16/16 v1 requirements complete)
+**Next:** Ready for v1.1 planning
 
 ---
 
