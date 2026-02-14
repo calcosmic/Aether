@@ -19,8 +19,9 @@ const {
   wrapError,
 } = require('./lib/errors');
 const { logError, logActivity } = require('./lib/logger');
-const { UpdateTransaction, UpdateError } = require('./lib/update-transaction');
+const { UpdateTransaction, UpdateError, UpdateErrorCodes } = require('./lib/update-transaction');
 const { initializeRepo, isInitialized } = require('./lib/init');
+const { syncStateFromPlanning, reconcileStates } = require('./lib/state-sync');
 
 // Color palette
 const c = require('./lib/colors');
@@ -188,6 +189,127 @@ function wrapCommand(commandFn, options = {}) {
 
 function log(msg) {
   if (!globalQuiet) console.log(msg);
+}
+
+/**
+ * Format UpdateError with prominent recovery commands display
+ * @param {UpdateError} error - The update error to format
+ * @returns {string} Formatted error message with recovery box
+ */
+function formatUpdateError(error) {
+  const lines = [];
+
+  // Header box
+  const headerWidth = 62;
+  lines.push(c.error('╔' + '═'.repeat(headerWidth) + '╗'));
+  lines.push(c.error('║') + '  UPDATE FAILED'.padEnd(headerWidth) + c.error('║'));
+  lines.push(c.error('╚' + '═'.repeat(headerWidth) + '╝'));
+  lines.push('');
+
+  // Error code and message
+  lines.push(`Error: ${c.bold(error.code)} - ${error.message}`);
+  lines.push('');
+
+  // Details section
+  if (error.details && Object.keys(error.details).length > 0) {
+    lines.push('Details:');
+
+    // Handle specific error types with formatted details
+    switch (error.code) {
+    case UpdateErrorCodes.E_REPO_DIRTY:
+      if (error.details.trackedCount > 0) {
+        lines.push(`  Modified files: ${error.details.trackedCount}`);
+      }
+      if (error.details.untrackedCount > 0) {
+        lines.push(`  Untracked files: ${error.details.untrackedCount}`);
+      }
+      if (error.details.stagedCount > 0) {
+        lines.push(`  Staged files: ${error.details.stagedCount}`);
+      }
+      break;
+
+    case UpdateErrorCodes.E_HUB_INACCESSIBLE:
+      if (error.details.errors) {
+        for (const err of error.details.errors.slice(0, 3)) {
+          lines.push(`  - ${err}`);
+        }
+      }
+      break;
+
+    case UpdateErrorCodes.E_PARTIAL_UPDATE:
+      lines.push(`  Missing files: ${error.details.missingCount || 0}`);
+      lines.push(`  Corrupted files: ${error.details.corruptedCount || 0}`);
+      break;
+
+    case UpdateErrorCodes.E_NETWORK_ERROR:
+      lines.push(`  Hub directory: ${error.details.hubDir || 'unknown'}`);
+      if (error.details.errorCode) {
+        lines.push(`  Error code: ${error.details.errorCode}`);
+      }
+      break;
+
+    default:
+      // Generic details display
+      for (const [key, value] of Object.entries(error.details)) {
+        if (typeof value === 'number' || typeof value === 'string') {
+          lines.push(`  ${key}: ${value}`);
+        }
+      }
+    }
+    lines.push('');
+  }
+
+  // Recovery commands box
+  if (error.recoveryCommands && error.recoveryCommands.length > 0) {
+    const maxCmdLength = Math.max(...error.recoveryCommands.map(cmd => cmd.length));
+    const boxWidth = Math.max(maxCmdLength + 4, 40);
+
+    lines.push(c.warning('╔' + '═'.repeat(boxWidth) + '╗'));
+    lines.push(c.warning('║') + '  RECOVERY COMMANDS'.padEnd(boxWidth) + c.warning('║'));
+    lines.push(c.warning('║') + ' '.repeat(boxWidth) + c.warning('║'));
+
+    for (const cmd of error.recoveryCommands) {
+      lines.push(c.warning('║') + '  ' + c.bold(cmd).padEnd(boxWidth - 2) + c.warning('║'));
+    }
+
+    lines.push(c.warning('║') + ' '.repeat(boxWidth) + c.warning('║'));
+
+    // Add specific guidance based on error type
+    switch (error.code) {
+    case UpdateErrorCodes.E_REPO_DIRTY:
+      lines.push(c.warning('║') + '  Or to discard changes (DANGER):'.padEnd(boxWidth) + c.warning('║'));
+      lines.push(c.warning('║') + '  ' + c.bold('git checkout -- .').padEnd(boxWidth - 2) + c.warning('║'));
+      break;
+
+    case UpdateErrorCodes.E_HUB_INACCESSIBLE:
+      lines.push(c.warning('║') + '  Or to reinstall hub:'.padEnd(boxWidth) + c.warning('║'));
+      lines.push(c.warning('║') + '  ' + c.bold('aether install').padEnd(boxWidth - 2) + c.warning('║'));
+      break;
+
+    case UpdateErrorCodes.E_PARTIAL_UPDATE:
+    case UpdateErrorCodes.E_NETWORK_ERROR:
+      lines.push(c.warning('║') + '  Then retry:'.padEnd(boxWidth) + c.warning('║'));
+      lines.push(c.warning('║') + '  ' + c.bold('aether update').padEnd(boxWidth - 2) + c.warning('║'));
+      break;
+
+    case UpdateErrorCodes.E_VERIFY_FAILED:
+      lines.push(c.warning('║') + '  Or restore checkpoint:'.padEnd(boxWidth) + c.warning('║'));
+      if (error.details?.checkpoint_id) {
+        lines.push(c.warning('║') + `  ${c.bold(`aether checkpoint restore ${error.details.checkpoint_id}`)}`.padEnd(boxWidth) + c.warning('║'));
+      }
+      break;
+    }
+
+    lines.push(c.warning('╚' + '═'.repeat(boxWidth) + '╝'));
+  }
+
+  // Checkpoint ID if available
+  if (error.details?.checkpoint_id) {
+    lines.push('');
+    lines.push(`Checkpoint ID: ${c.dim(error.details.checkpoint_id)} (for manual restore if needed)`);
+  }
+
+  return lines.join('\n');
 }
 
 function copyDirSync(src, dest) {
@@ -1029,20 +1151,9 @@ program
             log(`  Skipped: ${repo.path} (${result.reason})`);
           }
         } catch (error) {
-          // Handle UpdateError with recovery commands
+          // Handle UpdateError with formatted recovery commands
           if (error instanceof UpdateError) {
-            console.error(`\n${c.error('========================================')}`);
-            console.error(c.error('UPDATE FAILED - RECOVERY REQUIRED'));
-            console.error(c.error('========================================'));
-            console.error(`\n${c.error('Error:')} ${error.message}`);
-            if (error.details?.checkpoint_id) {
-              console.error(`\nCheckpoint ID: ${error.details.checkpoint_id}`);
-            }
-            console.error(`\n${c.warning('To recover your workspace:')}`);
-            for (const cmd of error.recoveryCommands) {
-              console.error(`  ${cmd}`);
-            }
-            console.error(c.error('========================================'));
+            console.error(formatUpdateError(error));
           }
           throw error;
         }
@@ -1370,6 +1481,48 @@ program
       }))
   );
 
+// Sync-state command - Synchronize COLONY_STATE.json with .planning/STATE.md
+program
+  .command('sync-state')
+  .description('Synchronize COLONY_STATE.json with .planning/STATE.md')
+  .option('-d, --dry-run', 'Show what would change without applying')
+  .action(wrapCommand(async (options) => {
+    const repoPath = process.cwd();
+
+    if (!isInitialized(repoPath)) {
+      console.error('Aether not initialized. Run: aether init');
+      return;
+    }
+
+    // Check for mismatches
+    const reconciliation = reconcileStates(repoPath);
+    if (!reconciliation.consistent) {
+      console.log('State mismatch detected:');
+      reconciliation.mismatches.forEach(m => console.log(`  - ${m}`));
+      console.log('');
+    }
+
+    if (options.dryRun) {
+      console.log('Dry run - no changes made');
+      console.log(`Resolution: ${reconciliation.resolution}`);
+      return;
+    }
+
+    // Perform sync
+    const result = syncStateFromPlanning(repoPath);
+    if (result.synced) {
+      if (result.changed) {
+        console.log('State synchronized successfully');
+        console.log('Updates:', result.updates.join(', '));
+      } else {
+        console.log('State already synchronized - no changes needed');
+      }
+    } else {
+      console.error(`Sync failed: ${result.error}`);
+      process.exit(1);
+    }
+  }));
+
 // Init command - Initialize Aether in current repository
 program
   .command('init')
@@ -1398,8 +1551,9 @@ program
       console.log('');
       console.log('Next steps:');
       console.log('  1. Define your colony goal in .aether/data/COLONY_STATE.json');
-      console.log('  2. Run: aether status');
-      console.log('  3. Start building: /ant:init');
+      console.log('  2. Run: aether sync-state');
+      console.log('  3. Run: aether status');
+      console.log('  4. Start building: /ant:init');
     }
   }));
 
