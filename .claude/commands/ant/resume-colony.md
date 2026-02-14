@@ -47,7 +47,7 @@ Output header:
 ═══════════════════════════════════════════════════ 🚦➡️🐜💨💨
 ```
 
-Read the HANDOFF.md for context about what was happening, then display:
+Read the .aether/HANDOFF.md for context about what was happening, then display:
 
 ```
 +=====================================================+
@@ -67,23 +67,12 @@ ACTIVE PHEROMONES
 
   If no active signals: (no active pheromones)
 
-WORKERS
-
-  If ALL workers have "idle" status, display:
-    All 6 workers idle -- colony ready
-
-  Otherwise, group by status with caste name:
-    Active:
-      builder: currently executing
-    Idle:
-      colonizer  route-setter  watcher  scout  architect
-
 PHASE PROGRESS
   Phase <id>: <name> [<status>]
   (list all phases from plan.phases)
 
 CONTEXT FROM HANDOFF
-  <summarize what was happening from HANDOFF.md>
+  <summarize what was happening from .aether/HANDOFF.md>
 
 NEXT ACTIONS
 ```

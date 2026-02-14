@@ -301,6 +301,41 @@ Milestones should NOT be gates — they should be **status labels**. The biologi
 
 ## Priority 7: Research
 
+### Add Explicit Research Command (`/ant:forage`) - 2026-02-14
+
+- **Create a dedicated research command separate from Oracle for structured domain research** - CDS has explicit research with STACK.md, ARCHITECTURE.md, FEATURES.md, PITFALLS.md output. Aether only has `/ant:oracle` (meant for overnight deep research) and `/ant:council` (discussion). There's no explicit structured research command for pre-planning domain analysis.
+
+**The Gap:**
+- `/ant:oracle` = RALF loop, iterative, long-running, overnight capable
+- `/ant:council` = AskUserQuestion flow for decision gathering
+- **Missing** = Structured 4-dimension research like CDS (Stack, Architecture, Features, Pitfalls)
+
+**Proposed `/ant:forage` Command:**
+1. Takes a domain/topic as argument (e.g., `/ant:forage "WebSocket real-time updates"`)
+2. Spawns 4 parallel scouts (like CDS):
+   - Stack Scout: Libraries, versions, what to use/avoid
+   - Architecture Scout: Component boundaries, data flow, build order
+   - Features Scout: Table stakes vs differentiators vs anti-features
+   - Pitfalls Scout: Common mistakes, warning signs, prevention
+3. Synthesizes findings into `.planning/research/`:
+   - STACK.md, ARCHITECTURE.md, FEATURES.md, PITFALLS.md, SUMMARY.md
+4. Returns quickly (not overnight like Oracle) - ~2-3 minutes
+
+**Key Differences from Oracle:**
+| Aspect | Oracle | Forage |
+|--------|--------|--------|
+| Duration | Hours (overnight) | Minutes |
+| Scope | Deep codebase analysis | Domain research |
+| Output | progress.md, discoveries/ | research/*.md files |
+| Parallel | Sequential RALF loop | 4 scouts in parallel |
+| When to use | Complex investigation | Before planning a phase |
+
+**Implementation:** New command file `.claude/commands/ant/forage.md` (and OpenCode mirror). Reuses existing scout spawning patterns from build.md but for research purposes only.
+
+**Priority:** Medium - improves planning quality by adding structured research phase before `/ant:plan`
+
+---
+
 ### Research Claude Code Plugins - 2026-02-10
 
 - **Investigate packaging Aether as a Claude Code plugin** - Research the official plugin format and whether Aether could be distributed as a plugin. **Problem:** Currently Aether is a collection of commands/skills that must be manually set up. Plugins allow single-command installation and sharing. **Files:** Review plugin docs at code.claude.com/docs/en/plugins, anthropics/claude-code GitHub, and claude-plugins.dev registry. **Solution:** Determine if we can bundle ant colony system + CDS workflow as an installable plugin for broader distribution. **Why P7:** Research task, can happen in parallel with implementation work.

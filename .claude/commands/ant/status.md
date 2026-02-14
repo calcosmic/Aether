@@ -63,11 +63,11 @@ If successful and goal is not null:
       Last activity: timestamp
    ```
 
-5. Check for HANDOFF.md existence in the load-state output or via separate check
-6. If HANDOFF.md exists:
+5. Check for .aether/HANDOFF.md existence in the load-state output or via separate check
+6. If .aether/HANDOFF.md exists:
    - Display: "Resuming from paused session"
-   - Read HANDOFF.md content for additional context
-   - Remove HANDOFF.md after displaying (cleanup)
+   - Read .aether/HANDOFF.md content for additional context
+   - Remove .aether/HANDOFF.md after displaying (cleanup)
 
 Run: `bash .aether/aether-utils.sh unload-state` to release lock.
 

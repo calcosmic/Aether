@@ -294,7 +294,7 @@ Actions: CREATED (path + lines), MODIFIED (path), RESEARCH (finding), SPAWN (cas
 
 ### Spawning Sub-Workers
 
-Workers can spawn sub-workers directly using the **Task tool** with `subagent_type="general-purpose"`.
+Workers can spawn sub-workers directly using the **Task tool** with `subagent_type="general"`.
 
 **Depth-Based Behavior:**
 
@@ -345,7 +345,7 @@ bash .aether/aether-utils.sh spawn-log "{your_name}" "{child_caste}" "{child_nam
 
 **Step 4: Use Task tool**
 ```
-Use the Task tool with subagent_type="general-purpose":
+Use the Task tool with subagent_type="general":
 
 You are {child_name}, a {emoji} {Caste} Ant in the Aether Colony at depth {your_depth + 1}.
 

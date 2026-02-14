@@ -47,7 +47,7 @@ content: |
 overrides:
   claude-code:
     task_syntax: |
-      Use Task tool with subagent_type="general-purpose" and run_in_background: true
+      Use Task tool with subagent_type="general" and run_in_background: true
   opencode:
     task_syntax: |
       Use task tool with subagent_type: "general"

@@ -217,7 +217,7 @@ CONSTRAINTS: (none)
       Scanning history of files to be modified...
    ```
 
-   Spawn a Scout (using Task tool with `subagent_type="general-purpose"`) with this prompt:
+   Spawn a Scout (using Task tool with `subagent_type="general"`) with this prompt:
 
    ```
    You are {Archaeologist-Name}, a 🏺 Archaeologist Ant (Scout) in the Aether Colony.
@@ -321,7 +321,7 @@ Total: {N} Builders + 1 Watcher + 1 Chaos = {N+2} spawns
 
 **CRITICAL: Spawn ALL Wave 1 workers in a SINGLE message using multiple Task tool calls.**
 
-For each Wave 1 task, use Task tool with `subagent_type="general-purpose"` and `run_in_background: true`:
+For each Wave 1 task, use Task tool with `subagent_type="general"` and `run_in_background: true`:
 
 Log each spawn:
 ```bash
@@ -449,7 +449,7 @@ Before spawning:
   1. Check: bash .aether/aether-utils.sh spawn-can-spawn {depth}
   2. Generate name: bash .aether/aether-utils.sh generate-ant-name "{caste}"
   3. Log: bash .aether/aether-utils.sh spawn-log "{your_name}" "{caste}" "{child_name}" "{task}"
-  4. Use Task tool with subagent_type="general-purpose"
+  4. Use Task tool with subagent_type="general"
   5. After completion: bash .aether/aether-utils.sh spawn-complete "{child_name}" "{status}" "{summary}"
 
 Full spawn format: .aether/workers.md section "Spawning Sub-Workers"
@@ -619,7 +619,7 @@ bash .aether/aether-utils.sh flag-list --phase {phase_number}
 ```
 Parse the result and extract unresolved flag titles into a list: `{existing_flag_titles}` (comma-separated titles from `.result.flags[].title`). If no flags exist, set `{existing_flag_titles}` to "None".
 
-Spawn the Chaos Ant using Task tool with `subagent_type="general-purpose"`:
+Spawn the Chaos Ant using Task tool with `subagent_type="general"`:
 
 **Chaos Ant Prompt:**
 ```

@@ -69,7 +69,7 @@ Run `/ant:resume-colony` in a new session.
 <what should happen next>
 ```
 
-### Step 4.6: Set Paused Flag in State
+### Step 4.5: Set Paused Flag in State
 
 Use Read tool to get current COLONY_STATE.json.
 
@@ -80,7 +80,7 @@ Use Write tool to update COLONY_STATE.json with paused flag:
 
 This flag indicates the colony is in a paused state and will be cleared on resume.
 
-### Step 4.5: Commit Suggestion (Optional)
+### Step 4.6: Commit Suggestion (Optional)
 
 **This step is non-blocking. Skipping does not affect the pause or any subsequent steps. Failure to commit has zero consequences.**
 

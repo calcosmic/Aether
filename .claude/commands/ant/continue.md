@@ -42,10 +42,10 @@ If successful and goal is not null:
    🔄 Resuming: Phase X - Name
    ```
 
-If HANDOFF.md exists (detected in load-state output):
+If .aether/HANDOFF.md exists (detected in load-state output):
 - Display "Resuming from paused session"
-- Read HANDOFF.md for additional context
-- Remove HANDOFF.md after display (cleanup)
+- Read .aether/HANDOFF.md for additional context
+- Remove .aether/HANDOFF.md after display (cleanup)
 
 Run: `bash .aether/aether-utils.sh unload-state` to release lock.
 

@@ -43,13 +43,44 @@ function loadModelProfiles(repoPath) {
   }
 
   try {
-    return yaml.load(content);
+    const config = yaml.load(content);
+
+    // Substitute environment variables in proxy config
+    if (config.proxy) {
+      if (config.proxy.auth_token) {
+        config.proxy.auth_token = substituteEnvVars(config.proxy.auth_token);
+      }
+      if (config.proxy.endpoint) {
+        config.proxy.endpoint = substituteEnvVars(config.proxy.endpoint);
+      }
+    }
+
+    return config;
   } catch (error) {
     throw new ConfigurationError(
       `Invalid YAML in model profiles file: ${error.message}`,
       { path: profilePath, originalError: error.message }
     );
   }
+}
+
+/**
+ * Substitute environment variables in a string
+ * Supports ${VAR} and ${VAR:-default} syntax
+ * @param {string} str - String with potential env vars
+ * @returns {string} String with env vars substituted
+ */
+function substituteEnvVars(str) {
+  if (typeof str !== 'string') return str;
+
+  // Match ${VAR:-default} or ${VAR}
+  return str.replace(/\$\{([^}:]+)(?::-([^}]*))?\}/g, (match, varName, defaultValue) => {
+    const envValue = process.env[varName];
+    if (envValue !== undefined && envValue !== '') {
+      return envValue;
+    }
+    return defaultValue !== undefined ? defaultValue : '';
+  });
 }
 
 /**

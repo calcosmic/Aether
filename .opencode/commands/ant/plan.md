@@ -106,7 +106,7 @@ while iteration < 50 AND confidence < 95:
 
     # === RESEARCH PHASE ===
 
-    Spawn Research Ant (Scout) via Task tool with subagent_type="general-purpose":
+    Spawn Research Ant (Scout) via Task tool with subagent_type="general":
 
     """
     You are a Scout Ant in the Aether Colony.
@@ -156,7 +156,7 @@ while iteration < 50 AND confidence < 95:
 
     # === PLANNING PHASE ===
 
-    Spawn Planning Ant (Route-Setter) via Task tool with subagent_type="general-purpose":
+    Spawn Planning Ant (Route-Setter) via Task tool with subagent_type="general":
 
     """
     You are a Route-Setter Ant in the Aether Colony.

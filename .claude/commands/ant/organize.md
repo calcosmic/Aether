@@ -48,7 +48,7 @@ If no active signals after filtering:
 
 Read `.aether/workers.md` and extract the `## Architect` section.
 
-Spawn via **Task tool** with `subagent_type="general-purpose"`:
+Spawn via **Task tool** with `subagent_type="general"`:
 
 ```
 --- WORKER SPEC ---

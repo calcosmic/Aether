@@ -96,5 +96,5 @@ task_routing:
       model: minimax-2.5
 proxy:
   endpoint: 'http://localhost:4000'
-  auth_token: sk-litellm-local
+  auth_token: ${LITELLM_AUTH_TOKEN:-sk-litellm-local}
   health_check: 'http://localhost:4000/health'
