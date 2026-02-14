@@ -1,0 +1,88 @@
+# Aether Colony Model Profiles
+# Maps worker castes to optimal LLM models via LiteLLM proxy
+# Proxy endpoint: http://localhost:4000
+
+version: "1.0"
+description: "Default model assignments for Aether colony workers"
+profile: default
+
+# Caste-to-model mappings
+# Models are routed through LiteLLM proxy at localhost:4000
+worker_models:
+  # High-complexity castes: planning, architecture, coordination
+  prime: glm-5           # Complex coordination, strategic planning
+  architect: glm-5       # Pattern synthesis, design decisions
+  oracle: glm-5          # Deep analysis, foresight
+  route_setter: glm-5    # Task decomposition, planning
+  archaeologist: glm-5   # Historical analysis, pattern recognition
+
+  # Implementation castes: code generation, building
+  builder: kimi-k2.5     # Fast code generation, refactoring
+
+  # Validation castes: testing, research, lightweight tasks
+  watcher: minimax-2.5   # Validation, testing, verification
+  scout: minimax-2.5     # Research, exploration, quick checks
+  chaos: minimax-2.5     # Resilience testing, edge case probing
+  colonizer: minimax-2.5 # Environment setup, exploration
+
+# Model metadata for routing decisions
+model_metadata:
+  glm-5:
+    description: "Powerful reasoning model for complex tasks"
+    provider: "z_ai"
+    capabilities: [planning, architecture, analysis, coordination, complex_reasoning]
+    context_window: 32000
+    speed: "slow"
+    cost_tier: "high"
+    best_for:
+      - "Strategic planning and coordination"
+      - "Architectural decisions and design"
+      - "Complex analysis and synthesis"
+      - "Tasks requiring deep reasoning"
+
+  kimi-k2.5:
+    description: "Fast code generation model"
+    provider: "kimi"
+    capabilities: [coding, refactoring, testing, documentation]
+    context_window: 256000
+    speed: "fast"
+    cost_tier: "low"
+    best_for:
+      - "Code implementation and generation"
+      - "Refactoring and code cleanup"
+      - "Test writing and documentation"
+      - "Fast iteration tasks"
+
+  minimax-2.5:
+    description: "Efficient model for validation and research"
+    provider: "minimax"
+    capabilities: [validation, research, quick_checks, testing]
+    context_window: 8000
+    speed: "fast"
+    cost_tier: "low"
+    best_for:
+      - "Validation and verification"
+      - "Research and exploration"
+      - "Quick checks and summaries"
+      - "Lightweight tasks"
+
+# Task-based routing hints
+# Override caste defaults based on task keywords
+task_routing:
+  default_model: "kimi-k2.5"
+  complexity_indicators:
+    complex:
+      keywords: ["design", "architecture", "plan", "coordinate", "synthesize", "strategize", "optimize"]
+      model: "glm-5"
+    simple:
+      keywords: ["implement", "code", "refactor", "write", "create"]
+      model: "kimi-k2.5"
+    validate:
+      keywords: ["test", "validate", "verify", "check", "review", "audit"]
+      model: "minimax-2.5"
+
+# Proxy configuration reference
+proxy:
+  endpoint: "http://localhost:4000"
+  auth_token: "sk-litellm-local"
+  health_check: "http://localhost:4000/health"
