@@ -10,14 +10,14 @@
 | Field | Value |
 |-------|-------|
 | **Phase** | 6 (Foundation — Safe Checkpoints & Testing Infrastructure) |
-| **Plan** | 06-03 complete, 3 remaining (06-04 through 06-06) |
-| **Status** | In progress - Plan 06-03 executed |
-| **Last Action** | Executed 06-03: hashFileSync Unit Tests |
+| **Plan** | 06-04 complete, 2 remaining (06-05 through 06-06) |
+| **Status** | In progress - Plan 06-04 executed |
+| **Last Action** | Executed 06-04: Manifest Function Unit Tests |
 
 **Progress:**
 ```
 [█░░░░░░░░░] 3% - v1.1 Bug Fixes
-Phase 6:  ███◆░░░░░░ 50% (Foundation - 3/6 plans complete)
+Phase 6:  ████◆░░░░░ 67% (Foundation - 4/6 plans complete)
 Phase 7:  ░░░░░░░░░░ 0% (Core Reliability)
 Phase 8:  ░░░░░░░░░░ 0% (Build Polish)
 ```
@@ -49,6 +49,8 @@ Phase 8:  ░░░░░░░░░░ 0% (Build Polish)
 | 2026-02-14 | Git-tracked files only for checkpoints | Git stash requires tracked files; filter prevents stash failures |
 | 2026-02-14 | Module exports for CLI testability | Export functions from cli.js to enable unit testing with proxyquire |
 | 2026-02-14 | test.before() for CLI module loading | commander.js has global state; load once, reset stubs between tests |
+| 2026-02-14 | Mock commander module in tests | Prevents CLI registration conflicts when using proxyquire |
+| 2026-02-14 | validateManifest should reject arrays | Arrays are not valid files objects (should be filename->hash mapping) |
 
 ### Open Questions
 
@@ -66,7 +68,7 @@ None currently.
 ## Session Continuity
 
 **Last Updated:** 2026-02-14
-**Updated By:** /cds:execute-phase 06-03
+**Updated By:** /cds:execute-phase 06-04
 
 ### Recent Changes
 - Created ROADMAP.md with 3-phase structure (Phases 6-8)
@@ -87,9 +89,13 @@ None currently.
   - 9 comprehensive tests with mocked filesystem
   - Added module.exports to bin/cli.js for testability
   - Established CLI testing pattern with proxyquire
+- **Executed 06-04:** Created unit tests for generateManifest and validateManifest
+  - 16 comprehensive tests covering manifest generation and validation
+  - Fixed bug: validateManifest now rejects arrays as invalid files field
+  - Used sinon + proxyquire with mocked commander module
 
 ### Next Actions
-1. Execute 06-04: Update System Repair
+1. Execute 06-05: Update System Repair
 2. Execute 06-05 and 06-06 remaining plans
 3. `/cds:plan-phase 7` - Plan Core Reliability phase
 
@@ -97,7 +103,7 @@ None currently.
 
 **What we're building:** v1.1 bug fixes for Aether Colony System — critical reliability improvements including safe checkpoints (preventing data loss), phase advancement guards (preventing loops), and update system repair (automatic rollback).
 
-**Current state:** Phase 6 in progress. 3/6 plans complete (06-01 Testing Infrastructure, 06-02 Safe Checkpoints, 06-03 hashFileSync Tests). 3 plans remaining.
+**Current state:** Phase 6 in progress. 4/6 plans complete (06-01 Testing Infrastructure, 06-02 Safe Checkpoints, 06-03 hashFileSync Tests, 06-04 Manifest Tests). 2 plans remaining.
 
 **Key constraints:** Node.js >= 16, minimal dependencies, no cloud dependencies, repo-local state only.
 
