@@ -1612,8 +1612,73 @@ EOF
         json_ok '{"profile_exists":true,"caste_count":'$caste_count',"proxy_status":"'$proxy_status'","proxy_endpoint":"http://localhost:4000"}'
         ;;
 
+      select)
+        # Usage: model-profile select <caste> <task_description> [cli_override]
+        # Returns: JSON with model and source
+        caste="$2"
+        task_description="$3"
+        cli_override="${4:-}"
+
+        [[ -z "$caste" ]] && json_err "$E_VALIDATION_FAILED" "Usage: model-profile select <caste> <task_description> [cli_override]"
+
+        # Create a temporary Node.js script to call the library
+        node_script=$(cat << 'NODESCRIPT'
+const { loadModelProfiles, selectModelForTask } = require('./bin/lib/model-profiles');
+const caste = process.argv[2];
+const taskDescription = process.argv[3];
+const cliOverride = process.argv[4] || null;
+
+try {
+  const profiles = loadModelProfiles('.');
+  const result = selectModelForTask(profiles, caste, taskDescription, cliOverride);
+  console.log(JSON.stringify({ ok: true, result }));
+} catch (error) {
+  console.log(JSON.stringify({ ok: false, error: error.message }));
+  process.exit(1);
+}
+NODESCRIPT
+)
+
+        result=$(echo "$node_script" | node - "$caste" "$task_description" "$cli_override")
+        echo "$result"
+        ;;
+
+      validate)
+        # Usage: model-profile validate <model_name>
+        # Returns: JSON with valid boolean
+        model_name="$2"
+
+        [[ -z "$model_name" ]] && json_err "$E_VALIDATION_FAILED" "Usage: model-profile validate <model_name>"
+
+        node_script=$(cat << 'NODESCRIPT'
+const { loadModelProfiles, validateModel } = require('./bin/lib/model-profiles');
+const modelName = process.argv[2];
+
+try {
+  const profiles = loadModelProfiles('.');
+  const validation = validateModel(profiles, modelName);
+  console.log(JSON.stringify({ ok: true, result: validation }));
+} catch (error) {
+  console.log(JSON.stringify({ ok: false, error: error.message }));
+}
+NODESCRIPT
+)
+
+        result=$(echo "$node_script" | node - "$model_name")
+        echo "$result"
+        ;;
+
       *)
-        json_err "$E_VALIDATION_FAILED" "Usage: model-profile get <caste>|list|verify"
+        echo "Usage: model-profile <command> [args]"
+        echo ""
+        echo "Commands:"
+        echo "  get <caste>                    Get model for caste"
+        echo "  set <caste> <model>            Set user override"
+        echo "  reset <caste>                  Reset user override"
+        echo "  list                           List all assignments"
+        echo "  select <caste> <task> [model]  Select model with task routing"
+        echo "  validate <model>               Validate model name"
+        json_err "$E_VALIDATION_FAILED" "Usage: model-profile get <caste>|list|verify|select|validate"
         ;;
     esac
     ;;
