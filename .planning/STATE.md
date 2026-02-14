@@ -11,9 +11,9 @@
 | Field | Value |
 |-------|-------|
 | **Phase** | 12 — Colony Visualization |
-| **Plan** | 01 of 05 |
+| **Plan** | 04 of 05 |
 | **Status** | In Progress |
-| **Last Action** | Completed Plan 01 - Activity Tracking Infrastructure |
+| **Last Action** | Completed Plan 04 - Chamber Comparison Feature |
 
 ### Progress Bar
 
@@ -29,7 +29,7 @@ v3.1:    [████████████████░░░] 88% IN PROG
 | 9 | Caste Model Assignment | Complete | 8 | 100% (5/5 plans) |
 | 10 | Entombment & Egg Laying | Complete | 5 | 100% (4/4 plans) |
 | 11 | Foraging Specialization | Complete | 3 | 100% (4/4 plans) |
-| 12 | Colony Visualization | In Progress | 11 | 20% (1/5 plans) |
+| 12 | Colony Visualization | In Progress | 11 | 40% (2/5 plans) |
 
 ---
 
@@ -134,6 +134,10 @@ v3.1:    [████████████████░░░] 88% IN PROG
 | 2026-02-14 | Cumulative token counting | Trophallaxis metrics accumulate over spawn lifetime |
 | 2026-02-14 | Pipe-delimited timing.log format | More efficient than JSON for append-only operations |
 | 2026-02-14 | Pre-defined chambers with icons | Ant-themed zones (fungus_garden, nursery, etc.) ready for activity mapping |
+| 2026-02-14 | ASCII art milestone files in .aether/visualizations/ | Visual representation of colony growth journey from First Mound to Crowned Anthill |
+| 2026-02-14 | Standalone chamber-compare.sh utility | JSON API enables programmatic use and testing |
+| 2026-02-14 | Content-based pheromone diff | Compare decisions/learnings by content, not just count |
+| 2026-02-14 | Smart truncation in comparison display | Show all if <=5, else first 3 + "...and N more" |
 
 ### Open Questions
 
@@ -155,22 +159,20 @@ v3.1:    [████████████████░░░] 88% IN PROG
 
 ### Last Session
 - **Date:** 2026-02-14
-- **Action:** Completed Plan 01 in Phase 12 - Activity Tracking Infrastructure
-- **Outcome:** Extended telemetry.js with tool/token tracking; added swarm activity/timing commands to aether-utils.sh; created swarm-display.json data structure
+- **Action:** Completed Plan 04 in Phase 12 - Chamber Comparison Feature
+- **Outcome:** Created chamber-compare.sh utility with compare/diff/stats commands; enhanced tunnels.md with two-argument comparison mode
 
 ### Next Actions
 1. Continue Phase 12 - Colony Visualization
-2. Plan 02: Real-time Swarm Display (`/ant:swarm` command)
-3. Plan 03: Tunnel View with collapsible nested spawns
-4. Plan 04: Chamber Activity Map
-5. Plan 05: ASCII Art Anthill Maturity Visualization
+2. Plan 05: Real-time Swarm Display (`/ant:swarm` command)
 
 ### Handoff Notes
-- Plan 12-01 complete - Activity tracking infrastructure ready
-- telemetry.js now exports updateToolUsage() and updateTokenUsage()
-- aether-utils.sh has swarm-display-init/update/get and swarm-timing-start/get/eta commands
-- swarm-display.json structure includes chambers (fungus_garden, nursery, etc.) with emoji icons
-- Data foundation ready for real-time visualization features
+- Plan 12-04 complete - Chamber comparison feature (LIFE-07) implemented
+- chamber-compare.sh utility with compare/diff/stats commands
+- tunnels.md supports two-argument comparison mode with side-by-side display
+- Pheromone trail diff shows new vs preserved decisions/learnings
+- Knowledge preservation stats displayed
+- Next: Plan 12-05 - Real-time Swarm Display
 
 ---
 
@@ -187,4 +189,4 @@ v3.1:    [████████████████░░░] 88% IN PROG
 
 *State file: `.planning/STATE.md`*
 *Updated: 2026-02-14*
-*Next update: After Plan 12-02*
+*Next update: After Plan 12-05*
