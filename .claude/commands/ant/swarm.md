@@ -1,15 +1,37 @@
 ---
 name: ant:swarm
-description: "🔥🐜🗡️🐜🔥 Stubborn bug destroyer - parallel scouts investigate and fix persistent issues"
+description: "🔥🐜🗡️🐜🔥 Real-time colony swarm display + stubborn bug destroyer"
 ---
 
-You are the **Queen Ant Colony**. Deploy the swarm to destroy a stubborn bug.
+You are the **Queen Ant Colony**. Deploy the swarm to destroy a stubborn bug or view real-time colony activity.
 
 ## Instructions
 
+### Quick View Mode (No Arguments)
+
+If `$ARGUMENTS` is empty or equals "--watch":
+
+Run the real-time swarm display:
+```bash
+bash .aether/utils/swarm-display.sh
+```
+
+This shows:
+- Active ants with caste colors and emojis (🔨 Builder in blue, etc.)
+- Tool usage stats per ant (📖5 🔍3 ✏️2 ⚡1)
+- Trophallaxis metrics (🍯 token consumption)
+- Timing information (elapsed time per ant)
+- Chamber activity map (which nest zones have active ants)
+- Animated status phrases ("excavating...", "foraging...")
+
+Display updates automatically as ants start/complete work.
+Press Ctrl+C to exit.
+
+### Bug Destruction Mode (With Arguments)
+
 The problem to investigate is: `$ARGUMENTS`
 
-### Step 1: Validate Input
+#### Step 1: Validate Input
 
 If `$ARGUMENTS` is empty:
 ```
@@ -28,7 +50,7 @@ This is the nuclear option - use when repeated fix attempts fail.
 ```
 Stop here.
 
-### Step 2: Read State & Initialize
+#### Step 2: Read State & Initialize
 
 Read `.aether/data/COLONY_STATE.json`.
 If `goal` is null → "No colony initialized. Run /ant:init first.", stop.
@@ -38,6 +60,11 @@ Generate swarm ID: `swarm-<unix_timestamp>`
 Initialize swarm findings:
 ```bash
 bash .aether/aether-utils.sh swarm-findings-init "<swarm_id>"
+```
+
+Initialize swarm display for real-time tracking:
+```bash
+bash .aether/aether-utils.sh swarm-display-init "<swarm_id>"
 ```
 
 Display header:
@@ -52,7 +79,7 @@ Display header:
 ⚡ Deploying 4 parallel scouts...
 ```
 
-### Step 3: Create Git Checkpoint
+#### Step 3: Create Git Checkpoint
 
 Before any investigation that might lead to fixes:
 ```bash
@@ -67,7 +94,7 @@ Store the result for potential rollback:
 💾 Checkpoint: {checkpoint_type} → {checkpoint_ref}
 ```
 
-### Step 4: Read Context
+#### Step 4: Read Context
 
 Read existing blockers for context:
 ```bash
@@ -84,9 +111,17 @@ Scan recent git commits for context:
 git log --oneline -20 2>/dev/null || echo "(no git history)"
 ```
 
-### Step 5: Deploy 4 Parallel Scouts
+#### Step 5: Deploy 4 Parallel Scouts
 
 Use the **Task** tool to spawn 4 scouts **in a single message** (parallel execution):
+
+Log each scout to swarm display before spawning:
+```bash
+bash .aether/aether-utils.sh swarm-display-update "GitArchaeologist-{swarm_id}" "scout" "excavating" "Git history investigation" "Queen" '{"read":0,"grep":0,"edit":0,"bash":3}' 0
+bash .aether/aether-utils.sh swarm-display-update "PatternHunter-{swarm_id}" "scout" "excavating" "Pattern search for similar code" "Queen" '{"read":5,"grep":10,"edit":0,"bash":0}' 0
+bash .aether/aether-utils.sh swarm-display-update "ErrorAnalyst-{swarm_id}" "scout" "excavating" "Error chain analysis" "Queen" '{"read":3,"grep":5,"edit":0,"bash":2}' 0
+bash .aether/aether-utils.sh swarm-display-update "WebResearcher-{swarm_id}" "scout" "excavating" "External source research" "Queen" '{"read":0,"grep":0,"edit":0,"bash":0}' 0
+```
 
 **Scout 1: Git Archaeologist 🏛️**
 ```
@@ -201,11 +236,16 @@ Return JSON:
 
 Wait for all 4 scouts to complete.
 
-### Step 6: Collect and Cross-Compare Findings
+#### Step 6: Collect and Cross-Compare Findings
 
 As each scout returns, add their findings:
 ```bash
 bash .aether/aether-utils.sh swarm-findings-add "{swarm_id}" "{scout_type}" "{confidence}" '{finding_json}'
+```
+
+Update scout status in swarm display to "completed":
+```bash
+bash .aether/aether-utils.sh swarm-display-update "GitArchaeologist-{swarm_id}" "scout" "completed" "Git history investigation" "Queen" '{"read":3,"grep":0,"edit":0,"bash":5}' 150
 ```
 
 Display each scout's report as they complete:
@@ -223,7 +263,7 @@ Display each scout's report as they complete:
    {summary of finding}
 ```
 
-### Step 7: Synthesize Solution
+#### Step 7: Synthesize Solution
 
 Cross-compare all findings:
 1. Identify where scouts agree (high confidence)
@@ -247,7 +287,7 @@ Rank fix options:
    Evidence: {limited support}
 ```
 
-### Step 8: Apply Best Fix
+#### Step 8: Apply Best Fix
 
 Select the highest-confidence solution and apply it:
 
@@ -269,7 +309,7 @@ After applying:
 {test_command} 2>&1 | tail -50
 ```
 
-### Step 9: Verify and Report
+#### Step 9: Verify and Report
 
 **If verification passes:**
 ```
@@ -337,7 +377,12 @@ Recommended:
 Swarm will not attempt further fixes on this issue.
 ```
 
-### Step 10: Cleanup
+#### Step 10: Cleanup
+
+Clear swarm display:
+```bash
+bash .aether/aether-utils.sh swarm-display-init "complete-{swarm_id}"
+```
 
 Archive swarm findings:
 ```bash
