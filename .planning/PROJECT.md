@@ -113,14 +113,14 @@ Autonomous multi-agent orchestration that scales from single-user development to
 
 ## Current Milestone: v3.1 Open Chambers
 
-**Goal:** Implement intelligent model routing for worker castes and establish colony lifecycle management (archive/foundation) with ant-themed terminology
+**Goal:** Implement intelligent model routing for worker castes, establish colony lifecycle management (archive/foundation) with ant-themed terminology, and create an immersive real-time visualization experience
 
 **Target features:**
 - **Model Routing System**: Verify and document caste-to-model assignments (glm-5 for prime/architect, kimi-k2.5 for builder, etc.)
 - **Model Configuration**: Easy CLI commands to view/set models (`aether models`, `/ant:models`)
 - **Colony Lifecycle**: `/ant:archive` (archive + reset), `/ant:foundation` (start fresh) — ant-themed equivalents to CDS milestone commands
 - **Milestone Auto-Detection**: Automatically detect colony milestone (First Mound, Open Chambers, Brood Stable, etc.) based on state
-- **Quick Wins**: Surface Dreams in `/ant:status`, Auto-Load Context, Model verification
+- **Immersive Colony Visualization**: Real-time agent activity display with collapsible tree views, tool usage stats, token counts, and progress indicators — like CDS spawning indicators but with ant-themed presentation (ants working, pheromone trails, chamber activity). Semantic color coding (cyan for agents, yellow for timing, green for completion) for visual clarity
 
 ---
 *Last updated: 2026-02-14 — starting v3.1 Open Chambers*
