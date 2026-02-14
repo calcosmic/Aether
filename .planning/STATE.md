@@ -11,9 +11,9 @@
 | Field | Value |
 |-------|-------|
 | **Phase** | 10 — Entombment & Egg Laying |
-| **Plan** | 01 — Chamber Management Utilities |
+| **Plan** | 02 — Entomb Command |
 | **Status** | In Progress |
-| **Last Action** | Completed Plan 01 - chamber utilities created |
+| **Last Action** | Completed Plan 02 - /ant:entomb command created |
 
 ### Progress Bar
 
@@ -27,7 +27,7 @@ v3.1:    [███████░░░] 60% IN PROGRESS (5/5 plans complete, 8
 | Phase | Name | Status | Requirements | Complete |
 |-------|------|--------|--------------|----------|
 | 9 | Caste Model Assignment | Complete | 8 | 100% (5/5 plans) |
-| 10 | Entombment & Egg Laying | In Progress | 5 | 20% (1/5 plans) |
+| 10 | Entombment & Egg Laying | In Progress | 5 | 40% (2/5 plans) |
 | 11 | Foraging Specialization | Blocked | 3 | 0% |
 | 12 | Colony Visualization | Blocked | 11 | 0% |
 
@@ -105,6 +105,7 @@ v3.1:    [███████░░░] 60% IN PROGRESS (5/5 plans complete, 8
 | 2026-02-14 | Spawn tree format includes model as 6th field | Complete audit trail of which models are used per spawn |
 | 2026-02-14 | Model parameter defaults to 'default' for backward compatibility | Existing spawn-log calls continue to work |
 | 2026-02-14 | Use jq -Rs '.[:-1]' to strip trailing newlines | jq -Rs adds trailing newline which pollutes JSON output |
+| 2026-02-14 | Entomb uses coffin emoji (⚰️) not urn (🏺) | Avoids visual conflict with seal command |
 
 ### Open Questions
 
@@ -126,20 +127,20 @@ v3.1:    [███████░░░] 60% IN PROGRESS (5/5 plans complete, 8
 
 ### Last Session
 - **Date:** 2026-02-14
-- **Action:** Executed Plan 01 in Phase 10 - Chamber Management Utilities
-- **Outcome:** chamber-utils.sh with 4 functions, integrated into aether-utils.sh, chambers directory created
+- **Action:** Executed Plan 02 in Phase 10 - Entomb Command
+- **Outcome:** /ant:entomb command created for Claude Code and OpenCode with validation, confirmation, and chamber integration
 
 ### Next Actions
-1. Execute Plan 02 - `/ant:entomb` command
-2. Execute Plan 03 - `/ant:lay-eggs` command
-3. Execute Plan 04 - `/ant:tunnels` command
-4. Execute Plan 05 - Milestone auto-detection
+1. Execute Plan 03 - `/ant:lay-eggs` command
+2. Execute Plan 04 - `/ant:tunnels` command
+3. Execute Plan 05 - Milestone auto-detection
 
 ### Handoff Notes
-- Phase 10 Plan 01 complete - chamber utilities ready
-- Foundation laid for entomb/lay-eggs/tunnels commands
-- All chamber operations tested and working
-- Next: Build user-facing commands on top of utilities
+- Phase 10 Plan 02 complete - /ant:entomb command ready
+- Command validates colony completion before archiving
+- User confirmation required before destructive operation
+- Chamber creation with manifest and state reset working
+- Next: Plan 03 - /ant:lay-eggs command
 
 ---
 
