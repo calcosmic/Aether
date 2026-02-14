@@ -130,15 +130,16 @@ Plans:
 **Plans:** 2 plans in 2 waves
 
 Plans:
-- [ ] 08-01-PLAN.md — Fix build.md timing: Remove run_in_background from worker spawns
-- [ ] 08-02-PLAN.md — Integration testing: E2E test for checkpoint → update → build workflow
+- [x] 08-01-PLAN.md — Fix build.md timing: Remove run_in_background from worker spawns
+- [x] 08-02-PLAN.md — Integration testing: E2E test for checkpoint → update → build workflow
 
 **Wave Structure:**
 - Wave 1: 08-01 (build timing fix)
 - Wave 2: 08-02 (integration testing - depends on Wave 1)
 
-**Status:** Planned
-**Planned:** 2026-02-14
+**Status:** Complete ✓
+**Completed:** 2026-02-14
+**Verification:** 08-VERIFICATION.md pending
 
 **Wave Structure:**
 - Wave 1: 08-01 (timing fix - no dependencies)
@@ -155,7 +156,7 @@ Plans:
 |-------|--------|--------------|----------------------|
 | 6 - Foundation | **Complete** ✓ | 10/10 complete | 6/6 |
 | 7 - Core Reliability | **Complete** ✓ | 9/9 complete | 7/7 |
-| 8 - Build Polish | Planned | 3/3 pending | 0/5 |
+| 8 - Build Polish | **Complete** ✓ | 3/3 complete | 5/5 |
 
 **Coverage:** 19/19 v1.1 requirements mapped ✓
 
@@ -168,8 +169,8 @@ v1.1 is complete when:
 - [x] No user data at risk from checkpoint operations (Phase 6)
 - [x] Phase advancement loops impossible (Iron Law enforced) (Phase 7)
 - [x] Update system provides automatic rollback on failure (Phase 7)
-- [ ] Build output timing is synchronous and accurate (Phase 8)
-- [ ] E2E test suite passes with all fixes integrated (Phase 8)
+- [x] Build output timing is synchronous and accurate (Phase 8)
+- [x] E2E test suite passes with all fixes integrated (Phase 8)
 
 ---
 

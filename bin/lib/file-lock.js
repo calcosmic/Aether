@@ -400,26 +400,41 @@ class FileLock {
 
       const files = fs.readdirSync(this.options.lockDir);
 
+      // First pass: identify which locks are held by running processes
+      const runningLocks = new Set();
+      for (const file of files) {
+        if (file.endsWith('.lock')) {
+          const filePath = path.join(this.options.lockDir, file);
+          const pidFile = `${filePath}.pid`;
+
+          try {
+            if (fs.existsSync(pidFile)) {
+              const pidData = fs.readFileSync(pidFile, 'utf8').trim();
+              const pid = parseInt(pidData, 10);
+
+              if (!isNaN(pid) && this._isProcessRunning(pid)) {
+                // Process is still running, mark both files to skip
+                runningLocks.add(file);
+                runningLocks.add(`${file}.pid`);
+              }
+            }
+          } catch {
+            // Error reading PID file, treat as stale
+          }
+        }
+      }
+
+      // Second pass: clean up stale locks
       for (const file of files) {
         if (file.endsWith('.lock') || file.endsWith('.lock.pid')) {
+          // Skip if held by running process
+          if (runningLocks.has(file)) {
+            continue;
+          }
+
           const filePath = path.join(this.options.lockDir, file);
 
           try {
-            // Check if it's a stale lock
-            if (file.endsWith('.lock')) {
-              const pidFile = `${filePath}.pid`;
-              if (fs.existsSync(pidFile)) {
-                const pidData = fs.readFileSync(pidFile, 'utf8').trim();
-                const pid = parseInt(pidData, 10);
-
-                if (!isNaN(pid) && this._isProcessRunning(pid)) {
-                  // Process is still running, skip
-                  continue;
-                }
-              }
-            }
-
-            // Clean up the file
             fs.unlinkSync(filePath);
             cleaned++;
           } catch (error) {

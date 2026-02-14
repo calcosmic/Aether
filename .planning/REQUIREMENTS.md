@@ -16,9 +16,9 @@ Critical bug fixes and reliability improvements for the v1.0 infrastructure.
 
 ### Build Reliability
 
-- [ ] **BUILD-01**: Remove `run_in_background: true` from build.md worker spawns (Steps 5.1, 5.4, 5.4.2)
-- [ ] **BUILD-02**: Output timing fixed — summary displays after all agent notifications complete
-- [ ] **BUILD-03**: Foreground Task calls with blocking TaskOutput collection
+- [x] **BUILD-01**: Remove `run_in_background: true` from build.md worker spawns (Steps 5.1, 5.4, 5.4.2)
+- [x] **BUILD-02**: Output timing fixed — summary displays after all agent notifications complete
+- [x] **BUILD-03**: Foreground Task calls with blocking TaskOutput collection
 
 ### State Management
 
@@ -86,9 +86,9 @@ Critical bug fixes and reliability improvements for the v1.0 infrastructure.
 | UPDATE-03 | 7 | Pending |
 | UPDATE-04 | 7 | Pending |
 | UPDATE-05 | 7 | Pending |
-| BUILD-01 | 8 | Pending |
-| BUILD-02 | 8 | Pending |
-| BUILD-03 | 8 | Pending |
+| BUILD-01 | 8 | Complete |
+| BUILD-02 | 8 | Complete |
+| BUILD-03 | 8 | Complete |
 
 **Coverage:**
 - v1.1 requirements: 19 total
