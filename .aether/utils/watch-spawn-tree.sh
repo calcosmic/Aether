@@ -4,6 +4,7 @@
 
 DATA_DIR="${1:-.aether/data}"
 SPAWN_FILE="$DATA_DIR/spawn-tree.txt"
+VIEW_STATE_FILE="$DATA_DIR/view-state.json"
 
 # ANSI colors
 YELLOW='\033[33m'
@@ -28,6 +29,43 @@ get_emoji() {
   esac
 }
 
+# Load view state
+load_view_state() {
+  if [[ -f "$VIEW_STATE_FILE" ]]; then
+    cat "$VIEW_STATE_FILE" 2>/dev/null || echo '{}'
+  else
+    echo '{"tunnel_view":{"expanded":[],"collapsed":["__depth_3_plus__"],"default_expand_depth":2,"show_completed":true}}'
+  fi
+}
+
+# Check if item is expanded
+is_expanded() {
+  local item="$1"
+  local depth="${2:-1}"
+  local view_state=$(load_view_state)
+
+  # Check if explicitly expanded
+  if echo "$view_state" | jq -e ".tunnel_view.expanded | contains([\"$item\"])" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  # Check if depth-based auto-collapse applies
+  local default_depth=$(echo "$view_state" | jq -r '.tunnel_view.default_expand_depth // 2')
+  if [[ "$depth" -gt "$default_depth" ]]; then
+    # Check if __depth_3_plus__ is in collapsed (indicating auto-collapse enabled)
+    if echo "$view_state" | jq -e '.tunnel_view.collapsed | contains(["__depth_3_plus__"])' >/dev/null 2>&1; then
+      return 1  # Collapsed by depth
+    fi
+  fi
+
+  # Check if explicitly collapsed
+  if echo "$view_state" | jq -e ".tunnel_view.collapsed | contains([\"$item\"])" >/dev/null 2>&1; then
+    return 1
+  fi
+
+  return 0  # Default to expanded
+}
+
 # Status colors
 get_status_color() {
   case "$1" in
@@ -46,7 +84,7 @@ render_tree() {
   cat << 'EOF'
        .-.
       (o o)  AETHER COLONY
-      | O |  Spawn Tree
+      | O |  Spawn Tree (Collapsible)
        `-`
 EOF
   echo -e "${RESET}"
@@ -110,6 +148,22 @@ EOF
     color=$(get_status_color "$status")
     task="${worker_task[$name]}"
 
+    # Check if collapsed
+    local collapsed=false
+    local child_count=0
+
+    # Count children
+    for child in "${!workers[@]}"; do
+      if [[ "${workers[$child]}" == "$name" ]]; then
+        child_count=$((child_count + 1))
+      fi
+    done
+
+    # Check collapse state (only if has children)
+    if [[ $child_count -gt 0 ]] && ! is_expanded "$name" "$depth"; then
+      collapsed=true
+    fi
+
     # Truncate task for display
     [[ ${#task} -gt 30 ]] && task="${task:0:27}..."
 
@@ -120,30 +174,42 @@ EOF
       connector="├──"
     fi
 
-    echo -e "${indent}${DIM}${connector}${RESET} ${emoji} ${color}${name}${RESET}: ${task} ${DIM}[depth $depth]${RESET}"
-
-    # Find children of this worker
-    local children=()
-    for child in "${!workers[@]}"; do
-      if [[ "${workers[$child]}" == "$name" ]]; then
-        children+=("$child")
+    # Show expand/collapse indicator
+    local expand_indicator=""
+    if [[ $child_count -gt 0 ]]; then
+      if [[ "$collapsed" == "true" ]]; then
+        expand_indicator="▶ [$child_count hidden] "
+      else
+        expand_indicator="▼ "
       fi
-    done
-
-    # Render children
-    local child_indent="${indent}    "
-    if [[ "$is_last" != "true" ]]; then
-      child_indent="${indent}${DIM}│${RESET}   "
     fi
 
-    local child_count=${#children[@]}
-    local child_idx=0
-    for child in "${children[@]}"; do
-      child_idx=$((child_idx + 1))
-      local child_is_last="false"
-      [[ $child_idx -eq $child_count ]] && child_is_last="true"
-      render_worker "$child" "$child_indent" $((depth + 1)) "$child_is_last"
-    done
+    echo -e "${indent}${DIM}${connector}${RESET} ${emoji} ${color}${name}${RESET}: ${expand_indicator}${task} ${DIM}[depth $depth]${RESET}"
+
+    # Render children if not collapsed
+    if [[ "$collapsed" != "true" ]]; then
+      local children=()
+      for child in "${!workers[@]}"; do
+        if [[ "${workers[$child]}" == "$name" ]]; then
+          children+=("$child")
+        fi
+      done
+
+      local child_count=${#children[@]}
+      local child_idx=0
+      for child in "${children[@]}"; do
+        child_idx=$((child_idx + 1))
+        local child_is_last="false"
+        [[ $child_idx -eq $child_count ]] && child_is_last="true"
+
+        local child_indent="${indent}    "
+        if [[ "$is_last" != "true" ]]; then
+          child_indent="${indent}${DIM}│${RESET}   "
+        fi
+
+        render_worker "$child" "$child_indent" $((depth + 1)) "$child_is_last"
+      done
+    fi
   }
 
   # Render root workers (spawned by Queen) at depth 1
@@ -162,6 +228,8 @@ EOF
   completed=$(grep -c "completed" "$SPAWN_FILE" 2>/dev/null || echo "0")
   active=$(grep -c "spawned" "$SPAWN_FILE" 2>/dev/null || echo "0")
   echo -e "Workers: ${GREEN}$completed completed${RESET} | ${YELLOW}$active active${RESET}"
+  echo ""
+  echo -e "${DIM}Controls: e+<name> to expand, c+<name> to collapse${RESET}"
 }
 
 # Initial render
