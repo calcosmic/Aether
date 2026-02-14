@@ -24,6 +24,10 @@ const UpdateErrorCodes = {
   E_SYNC_FAILED: 'E_SYNC_FAILED',
   E_VERIFY_FAILED: 'E_VERIFY_FAILED',
   E_ROLLBACK_FAILED: 'E_ROLLBACK_FAILED',
+  E_REPO_DIRTY: 'E_REPO_DIRTY',
+  E_HUB_INACCESSIBLE: 'E_HUB_INACCESSIBLE',
+  E_PARTIAL_UPDATE: 'E_PARTIAL_UPDATE',
+  E_NETWORK_ERROR: 'E_NETWORK_ERROR',
 };
 
 /**
@@ -255,23 +259,141 @@ class UpdateTransaction {
   }
 
   /**
-   * Get dirty files in target directories
-   * @returns {string[]} Array of dirty file paths
-   * @private
+   * Detect dirty repository state with detailed categorization
+   * @returns {object} Dirty state info: { isDirty, tracked, untracked, staged }
    */
-  getGitDirtyFiles() {
+  detectDirtyRepo() {
     try {
       const args = this.targetDirs.filter(d => fs.existsSync(path.join(this.repoPath, d)));
-      if (args.length === 0) return [];
+      if (args.length === 0) return { isDirty: false, tracked: [], untracked: [], staged: [] };
+
       const result = execSync(`git status --porcelain -- ${args.map(d => `"${d}"`).join(' ')}`, {
         cwd: this.repoPath,
         stdio: 'pipe',
         encoding: 'utf8',
       });
-      return result.trim().split('\n').filter(Boolean).map(line => line.slice(3));
+
+      const lines = result.trim().split('\n').filter(Boolean);
+      const tracked = [];
+      const untracked = [];
+      const staged = [];
+
+      for (const line of lines) {
+        const status = line.slice(0, 2);
+        const filePath = line.slice(3);
+
+        // Staged changes (in index)
+        if (status[0] !== ' ' && status[0] !== '?') {
+          staged.push(filePath);
+        }
+
+        // Untracked files
+        if (status === '??') {
+          untracked.push(filePath);
+        } else {
+          // Modified/tracked files
+          tracked.push(filePath);
+        }
+      }
+
+      return {
+        isDirty: lines.length > 0,
+        tracked,
+        untracked,
+        staged,
+      };
     } catch {
-      return [];
+      return { isDirty: false, tracked: [], untracked: [], staged: [] };
     }
+  }
+
+  /**
+   * Get dirty files in target directories (legacy method for backward compatibility)
+   * @returns {string[]} Array of dirty file paths
+   * @private
+   */
+  getGitDirtyFiles() {
+    const dirty = this.detectDirtyRepo();
+    return [...dirty.tracked, ...dirty.untracked];
+  }
+
+  /**
+   * Validate repository state before update
+   * @returns {object} Validation result: { clean: boolean, dirtyState?: object }
+   * @throws {UpdateError} If repository has uncommitted changes
+   */
+  validateRepoState() {
+    const dirtyState = this.detectDirtyRepo();
+
+    if (!dirtyState.isDirty) {
+      return { clean: true };
+    }
+
+    // Build detailed error message
+    const lines = [
+      'Cannot update: repository has uncommitted changes',
+      '',
+    ];
+
+    if (dirtyState.tracked.length > 0) {
+      lines.push(`Modified files (${dirtyState.tracked.length}):`);
+      for (const f of dirtyState.tracked.slice(0, 10)) {
+        lines.push(`  - ${f}`);
+      }
+      if (dirtyState.tracked.length > 10) {
+        lines.push(`  ... and ${dirtyState.tracked.length - 10} more`);
+      }
+      lines.push('');
+    }
+
+    if (dirtyState.untracked.length > 0) {
+      lines.push(`Untracked files (${dirtyState.untracked.length}):`);
+      for (const f of dirtyState.untracked.slice(0, 10)) {
+        lines.push(`  - ${f}`);
+      }
+      if (dirtyState.untracked.length > 10) {
+        lines.push(`  ... and ${dirtyState.untracked.length - 10} more`);
+      }
+      lines.push('');
+    }
+
+    if (dirtyState.staged.length > 0) {
+      lines.push(`Staged files (${dirtyState.staged.length}):`);
+      for (const f of dirtyState.staged.slice(0, 10)) {
+        lines.push(`  - ${f}`);
+      }
+      if (dirtyState.staged.length > 10) {
+        lines.push(`  ... and ${dirtyState.staged.length - 10} more`);
+      }
+      lines.push('');
+    }
+
+    lines.push('Options:');
+    lines.push('  1. Stash changes: git stash push -m "pre-update"');
+    lines.push('  2. Commit changes: git add . && git commit -m "wip"');
+    lines.push('  3. Discard changes: git checkout -- . (DANGER: loses work)');
+    lines.push('');
+    lines.push('After resolving, run: aether update');
+
+    const message = lines.join('\n');
+
+    throw new UpdateError(
+      UpdateErrorCodes.E_REPO_DIRTY,
+      'Repository has uncommitted changes',
+      {
+        trackedCount: dirtyState.tracked.length,
+        untrackedCount: dirtyState.untracked.length,
+        stagedCount: dirtyState.staged.length,
+        tracked: dirtyState.tracked,
+        untracked: dirtyState.untracked,
+        staged: dirtyState.staged,
+      },
+      [
+        `cd ${this.repoPath} && git stash push -m "pre-update"`,
+        `cd ${this.repoPath} && git add . && git commit -m "wip"`,
+        `cd ${this.repoPath} && aether update`,
+      ]
+    );
   }
 
   /**
@@ -776,6 +898,10 @@ class UpdateTransaction {
     const dryRun = options.dryRun || false;
 
     try {
+      // Phase 0: Validate repo state (before any modifications)
+      // Check for dirty repo and provide clear recovery instructions
+      this.validateRepoState();
+
       // Phase 1: Prepare
       // UPDATE-01: Create checkpoint before file sync
       this.state = TransactionStates.PREPARING;
