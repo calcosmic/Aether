@@ -43,6 +43,10 @@ const {
 } = require('./lib/proxy-health');
 const { findNestmates, formatNestmates, loadNestmateTodos } = require('./lib/nestmate-loader');
 const { logSpawn, formatSpawnTree } = require('./lib/spawn-logger');
+const {
+  getTelemetrySummary,
+  getModelPerformance,
+} = require('./lib/telemetry');
 
 // Color palette
 const c = require('./lib/colors');
@@ -1847,6 +1851,110 @@ program
 
     console.log(`Found ${nestmates.length} nestmate(s):\n`);
     console.log(formatNestmates(nestmates));
+  }));
+
+// Telemetry command - View model performance telemetry
+const telemetryCmd = program
+  .command('telemetry')
+  .description('View model performance telemetry');
+
+// summary subcommand (default)
+telemetryCmd
+  .command('summary')
+  .description('Show overall telemetry summary')
+  .action(wrapCommand(async () => {
+    const repoPath = process.cwd();
+    const summary = getTelemetrySummary(repoPath);
+
+    console.log(c.header('Model Performance Telemetry\n'));
+    console.log(`Total Spawns: ${summary.total_spawns}`);
+    console.log(`Models Used: ${summary.total_models}\n`);
+
+    if (summary.total_spawns === 0) {
+      console.log(c.info('No telemetry data yet. Run some builds to collect data.'));
+      return;
+    }
+
+    console.log('Model Performance:');
+    console.log('─'.repeat(60));
+    for (const [model, stats] of Object.entries(summary.models)) {
+      const rate = (stats.success_rate * 100).toFixed(1);
+      const rateColor = stats.success_rate >= 0.9 ? c.success :
+                       stats.success_rate >= 0.7 ? c.warning : c.error;
+      console.log(`  ${model.padEnd(15)} ${String(stats.total_spawns).padStart(4)} spawns  ${rateColor(rate + '%')} success`);
+    }
+
+    if (summary.recent_decisions.length > 0) {
+      console.log('\nRecent Routing Decisions:');
+      console.log('─'.repeat(60));
+      for (const decision of summary.recent_decisions.slice(-5)) {
+        console.log(`  ${decision.caste.padEnd(10)} → ${decision.selected_model.padEnd(12)} (${decision.source})`);
+      }
+    }
+  }));
+
+// model subcommand
+telemetryCmd
+  .command('model <model-name>')
+  .description('Show detailed performance for a specific model')
+  .action(wrapCommand(async (modelName) => {
+    const repoPath = process.cwd();
+    const performance = getModelPerformance(repoPath, modelName);
+
+    if (!performance) {
+      console.log(c.warning(`No data for model: ${modelName}`));
+      return;
+    }
+
+    console.log(c.header(`Model Performance: ${modelName}\n`));
+    console.log(`Total Spawns: ${performance.total_spawns}`);
+    console.log(`Success Rate: ${(performance.success_rate * 100).toFixed(1)}%`);
+    console.log(`  ✓ Completed: ${performance.successful_completions}`);
+    console.log(`  ✗ Failed: ${performance.failed_completions}`);
+    console.log(`  🚫 Blocked: ${performance.blocked}`);
+
+    if (Object.keys(performance.by_caste).length > 0) {
+      console.log('\nPerformance by Caste:');
+      console.log('─'.repeat(50));
+      for (const [caste, stats] of Object.entries(performance.by_caste)) {
+        const casteRate = stats.spawns > 0 ? (stats.success / stats.spawns * 100).toFixed(1) : '0.0';
+        console.log(`  ${caste.padEnd(12)} ${String(stats.spawns).padStart(4)} spawns  ${casteRate}% success`);
+      }
+    }
+  }));
+
+// performance subcommand
+telemetryCmd
+  .command('performance')
+  .description('Show models ranked by performance')
+  .action(wrapCommand(async () => {
+    const repoPath = process.cwd();
+    const summary = getTelemetrySummary(repoPath);
+
+    console.log(c.header('Model Performance Ranking\n'));
+
+    if (summary.total_spawns === 0) {
+      console.log(c.info('No telemetry data yet. Run some builds to collect data.'));
+      return;
+    }
+
+    // Sort models by success rate
+    const ranked = Object.entries(summary.models)
+      .map(([model, stats]) => ({ model, ...stats }))
+      .sort((a, b) => b.success_rate - a.success_rate);
+
+    console.log(`${'Rank'.padEnd(6)} ${'Model'.padEnd(15)} ${'Spawns'.padStart(6)} ${'Success'.padStart(8)} ${'Rate'.padStart(6)}`);
+    console.log('─'.repeat(60));
+
+    ranked.forEach((m, i) => {
+      const rank = `${i + 1}.`.padEnd(6);
+      const rate = (m.success_rate * 100).toFixed(1);
+      const rateColor = m.success_rate >= 0.9 ? c.success :
+                       m.success_rate >= 0.7 ? c.warning : c.error;
+      console.log(`${rank} ${m.model.padEnd(15)} ${String(m.total_spawns).padStart(6)} ${String(m.successful_completions || 0).padStart(8)} ${rateColor(rate.padStart(5) + '%')}`);
+    });
+
+    console.log('\n' + c.dim('Tip: Use "aether telemetry model <name>" for detailed stats'));
   }));
 
 // Context command - Show auto-loaded context
