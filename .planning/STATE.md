@@ -10,15 +10,15 @@
 | Field | Value |
 |-------|-------|
 | **Phase** | 7 (Core Reliability — State Guards & Update System) |
-| **Plan** | 07-02 complete, 1/4 plans in Phase 7 |
-| **Status** | In progress - StateGuard implemented |
-| **Last Action** | Executed 07-02: StateGuard with Iron Law enforcement |
+| **Plan** | 07-01 complete, 2/4 plans in Phase 7 |
+| **Status** | In progress - FileLock and StateGuard implemented |
+| **Last Action** | Executed 07-01: FileLock with exclusive atomic locks |
 
 **Progress:**
 ```
 [███░░░░░░░] 8% - v1.1 Bug Fixes
 Phase 6:  ████████░░ 100% (Foundation - 6/6 plans complete)
-Phase 7:  ██░░░░░░░░ 25% (Core Reliability - 1/4 plans)
+Phase 7:  ████░░░░░░ 50% (Core Reliability - 2/4 plans)
 Phase 8:  ░░░░░░░░░░ 0% (Build Polish)
 ```
 
@@ -31,7 +31,7 @@ Phase 8:  ░░░░░░░░░░ 0% (Build Polish)
 | Checkpoint safety | 100% user data preserved | Verified - 91 system files only, no user data |
 | Phase loop prevention | 0 false advancements | Not measured |
 | Update reliability | 99% success rate | Not measured |
-| Test coverage (core sync) | 80%+ | 58 total (40 CLI + 18 StateGuard) |
+| Test coverage (core sync) | 80%+ | 75 total (40 CLI + 18 StateGuard + 17 FileLock) |
 | Build output accuracy | 100% synchronous | Not measured |
 | Test suite execution | Under 10 seconds | 4.4 seconds (95 tests) |
 
@@ -59,7 +59,9 @@ Phase 8:  ░░░░░░░░░░ 0% (Build Polish)
 | 2026-02-14 | StateGuardError extends Error with structured output | Consistent error handling with toJSON(), toString(), recovery info |
 | 2026-02-14 | Iron Law requires fresh verification evidence | checkpoint_hash, test_results, timestamp all required |
 | 2026-02-14 | Idempotency prevents both rebuild AND skip | Already complete phases return status; incomplete phases throw |
-| 2026-02-14 | FileLock uses PID-based stale detection | Process.kill(pid, 0) checks if lock owner is alive |
+| 2026-02-14 | FileLock uses PID-based stale detection | process.kill(pid, 0) checks if lock owner is alive |
+| 2026-02-14 | FileLock atomic acquisition via 'wx' flag | fs.openSync with exclusive create prevents race conditions |
+| 2026-02-14 | FileLock guaranteed cleanup via handlers | Process exit/SIGINT/SIGTERM handlers ensure lock release |
 | 2026-02-14 | Atomic writes via temp+rename pattern | Prevents partial state corruption on crash |
 
 ### Open Questions
@@ -77,7 +79,7 @@ None currently.
 ## Session Continuity
 
 **Last Updated:** 2026-02-14
-**Updated By:** /cds:execute-phase 07-02
+**Updated By:** /cds:execute-phase 07-01
 
 ### Recent Changes
 - Created ROADMAP.md with 3-phase structure (Phases 6-8)
@@ -114,6 +116,15 @@ None currently.
   - Test suite runs in 4.4 seconds (under 10s target)
   - Verified checkpoint system works end-to-end
   - Confirmed user data NOT captured in checkpoints
+- **Executed 07-01:** FileLock with exclusive atomic locks
+  - Created bin/lib/file-lock.js (445 lines)
+  - PID-based file locking with stale detection
+  - Atomic lock acquisition using fs.openSync with 'wx' flag
+  - Automatic cleanup of stale locks via process.kill(pid, 0)
+  - Guaranteed lock release via process exit handlers
+  - Timeout and retry logic with configurable options
+  - 17 comprehensive unit tests with sinon + proxyquire
+  - Fixed cleanupAll two-pass algorithm to preserve running locks
 - **Executed 07-02:** StateGuard with Iron Law enforcement
   - Created bin/lib/state-guard.js (532 lines)
   - StateGuardError class with structured error output
@@ -137,6 +148,8 @@ None currently.
 - 40 new unit tests for CLI functions
 
 Phase 7 progress:
+- FileLock class implemented with exclusive atomic locks
+- 17 new unit tests for FileLock
 - StateGuard class implemented with Iron Law enforcement
 - 18 new unit tests for StateGuard
 - File locking with stale detection
