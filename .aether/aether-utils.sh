@@ -1847,42 +1847,53 @@ NODESCRIPT
 
   swarm-display-update)
     # Update ant activity in swarm display
-    # Usage: swarm-display-update <ant_name> <caste> <status> <task> [parent] [tools_json] [tokens]
+    # Usage: swarm-display-update <ant_name> <caste> <ant_status> <task> [parent] [tools_json] [tokens] [chamber]
     ant_name="${1:-}"
     caste="${2:-}"
-    status="${3:-}"
+    ant_status="${3:-}"
     task="${4:-}"
     parent="${5:-}"
-    tools_json="${6:-{}}"
+    tools_json="${6:-}"
+    [[ -z "$tools_json" ]] && tools_json="{}"
     tokens="${7:-0}"
+    chamber="${8:-}"
 
-    [[ -z "$ant_name" || -z "$caste" || -z "$status" ]] && json_err "$E_VALIDATION_FAILED" "Usage: swarm-display-update <ant_name> <caste> <status> <task> [parent] [tools_json] [tokens]"
+    [[ -z "$ant_name" || -z "$caste" || -z "$ant_status" ]] && json_err "$E_VALIDATION_FAILED" "Usage: swarm-display-update <ant_name> <caste> <ant_status> <task> [parent] [tools_json] [tokens] [chamber]"
 
     display_file="$DATA_DIR/swarm-display.json"
 
     # Initialize if doesn't exist
     if [[ ! -f "$display_file" ]]; then
-      bash "$0" swarm-display-init "default-swarm" >/devdev/null
+      bash "$0" swarm-display-init "default-swarm" >/dev/null 2>&1
     fi
 
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
     # Read current display and update using jq
-    updated=$(jq --arg ant "$ant_name" --arg caste "$caste" --arg status "$status" \
+    updated=$(jq --arg ant "$ant_name" --arg caste "$caste" --arg ant_status "$ant_status" \
       --arg task "$task" --arg parent "$parent" --argjson tools "$tools_json" \
-      --argjson tokens "$tokens" --arg ts "$ts" '
+      --argjson tokens "$tokens" --arg ts "$ts" --arg chamber "$chamber" '
       # Find existing ant or create new entry
       (.active_ants | map(select(.name == $ant)) | length) as $exists |
+      # Get old chamber if ant exists
+      (if $exists > 0 then
+        (.active_ants[] | select(.name == $ant) | .chamber // "")
+      else
+        ""
+      end) as $old_chamber |
+      # Determine new chamber
+      (if $chamber != "" then $chamber else $old_chamber end) as $new_chamber |
       if $exists > 0 then
         # Update existing ant
         .active_ants = [.active_ants[] | if .name == $ant then
           . + {
             caste: $caste,
-            status: $status,
+            status: $ant_status,
             task: $task,
             parent: (if $parent != "" then $parent else .parent end),
             tools: (if $tools != {} then $tools else .tools end),
             tokens: (.tokens + $tokens),
+            chamber: (if $chamber != "" then $chamber else (.chamber // null) end),
             updated_at: $ts
           }
         else . end]
@@ -1891,11 +1902,12 @@ NODESCRIPT
         .active_ants += [{
           name: $ant,
           caste: $caste,
-          status: $status,
+          status: $ant_status,
           task: $task,
           parent: (if $parent != "" then $parent else null end),
           tools: (if $tools != {} then $tools else {read:0,grep:0,edit:0,bash:0} end),
           tokens: $tokens,
+          chamber: (if $chamber != "" then $chamber else null end),
           started_at: $ts,
           updated_at: $ts
         }]
@@ -1903,14 +1915,27 @@ NODESCRIPT
       # Recalculate summary
       .summary.total_active = (.active_ants | length) |
       .summary.by_caste = (.active_ants | group_by(.caste) | map({key: .[0].caste, value: length}) | from_entries) |
-      .summary.by_zone = (.active_ants | group_by(.status) | map({key: .[0].status, value: length}) | from_entries)
+      .summary.by_zone = (.active_ants | group_by(.status) | map({key: .[0].status, value: length}) | from_entries) |
+      # Update chamber activity counts
+      # Decrement old chamber if changed
+      (if $old_chamber != "" and $old_chamber != $new_chamber and has("chambers") and (.chambers | has($old_chamber)) then
+        .chambers[$old_chamber].activity = [(.chambers[$old_chamber].activity // 1) - 1, 0] | max
+      else
+        .
+      end) |
+      # Increment new chamber
+      (if $new_chamber != "" and has("chambers") and (.chambers | has($new_chamber)) then
+        .chambers[$new_chamber].activity = (.chambers[$new_chamber].activity // 0) + 1
+      else
+        .
+      end)
     ' "$display_file") || json_err "$E_JSON_INVALID" "Failed to update swarm display"
 
     atomic_write "$display_file" "$updated"
 
     # Get emoji for response
     emoji=$(get_caste_emoji "$caste")
-    json_ok "{\"updated\":true,\"ant\":\"$ant_name\",\"caste\":\"$caste\",\"emoji\":\"$emoji\"}"
+    json_ok "{\"updated\":true,\"ant\":\"$ant_name\",\"caste\":\"$caste\",\"emoji\":\"$emoji\",\"chamber\":\"$chamber\"}"
     ;;
 
   swarm-display-get)
