@@ -11,15 +11,15 @@
 | Field | Value |
 |-------|-------|
 | **Phase** | 12 — Colony Visualization |
-| **Plan** | 04 of 05 |
-| **Status** | In Progress |
-| **Last Action** | Completed Plan 04 - Chamber Comparison Feature |
+| **Plan** | 05 of 05 (COMPLETE) |
+| **Status** | Phase Complete |
+| **Last Action** | Completed Plan 05 - Real-time Swarm Display with progress bars |
 
 ### Progress Bar
 
 ```
 v3.0.0:  [██████████] 100% COMPLETE (14 plans, 25 requirements)
-v3.1:    [████████████████░░░] 88% IN PROGRESS (17/17 plans complete, 17/27 requirements)
+v3.1:    [███████████████████] 100% COMPLETE (18/18 plans complete, 27/27 requirements)
 ```
 
 ### Phase Status
@@ -29,7 +29,7 @@ v3.1:    [████████████████░░░] 88% IN PROG
 | 9 | Caste Model Assignment | Complete | 8 | 100% (5/5 plans) |
 | 10 | Entombment & Egg Laying | Complete | 5 | 100% (4/4 plans) |
 | 11 | Foraging Specialization | Complete | 3 | 100% (4/4 plans) |
-| 12 | Colony Visualization | In Progress | 11 | 40% (2/5 plans) |
+| 12 | Colony Visualization | Complete | 11 | 100% (5/5 plans) |
 
 ---
 
@@ -142,6 +142,10 @@ v3.1:    [████████████████░░░] 88% IN PROG
 | 2026-02-14 | Standalone chamber-compare.sh utility | JSON API enables programmatic use and testing |
 | 2026-02-14 | Content-based pheromone diff | Compare decisions/learnings by content, not just count |
 | 2026-02-14 | Smart truncation in comparison display | Show all if <=5, else first 3 + "...and N more" |
+| 2026-02-14 | Progress parameter as 9th argument | Backward compatibility - existing calls work without progress |
+| 2026-02-14 | Progress bars conditional on > 0 | Avoids clutter for quick operations that don't need progress |
+| 2026-02-14 | Excavation phrases at 25/50/75/100 thresholds | Meaningful feedback without detailed status tracking |
+| 2026-02-14 | __depth_3_plus__ marker for auto-collapse | Allows explicit control while preserving depth-based defaults |
 
 ### Open Questions
 
@@ -163,20 +167,26 @@ v3.1:    [████████████████░░░] 88% IN PROG
 
 ### Last Session
 - **Date:** 2026-02-14
-- **Action:** Completed Plan 04 in Phase 12 - Chamber Comparison Feature
-- **Outcome:** Created chamber-compare.sh utility with compare/diff/stats commands; enhanced tunnels.md with two-argument comparison mode
+- **Action:** Completed Plan 05 in Phase 12 - Real-time Swarm Display with progress bars
+- **Outcome:** Enhanced swarm-display.sh with progress bars and excavation animation; verified collapsible tunnel views
 
 ### Next Actions
-1. Continue Phase 12 - Colony Visualization
-2. Plan 05: Real-time Swarm Display (`/ant:swarm` command)
+1. Phase 12 COMPLETE - All visualization requirements satisfied
+2. v3.1 Open Chambers milestone achieved
+3. Consider v3.2 planning or additional enhancements
 
 ### Handoff Notes
-- Plan 12-04 complete - Chamber comparison feature (LIFE-07) implemented
-- chamber-compare.sh utility with compare/diff/stats commands
-- tunnels.md supports two-argument comparison mode with side-by-side display
-- Pheromone trail diff shows new vs preserved decisions/learnings
-- Knowledge preservation stats displayed
-- Next: Plan 12-05 - Real-time Swarm Display
+- Plan 12-05 complete - Real-time Swarm Display (VIZ-08) implemented
+- Progress bars render as [█████████░░░░░░] 65%
+- Animated spinner with excavation phrases (🪨 Moving earth...)
+- Collapsible tunnel views with depth-based auto-collapse (VIZ-02)
+- View state persistence across sessions
+- All 11 visualization requirements complete:
+  - VIZ-01 through VIZ-09: Real-time display features
+  - LIFE-06: ASCII art anthill visualization
+  - LIFE-07: Chamber comparison
+- Phase 12: 5/5 plans complete (100%)
+- v3.1: 18/18 plans complete (100%)
 
 ---
 
@@ -193,4 +203,4 @@ v3.1:    [████████████████░░░] 88% IN PROG
 
 *State file: `.planning/STATE.md`*
 *Updated: 2026-02-14*
-*Next update: After Plan 12-05*
+*Next update: v3.2 planning or as needed*
