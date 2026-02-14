@@ -127,6 +127,16 @@ From `memory.instincts`:
 - `milestone` field (First Mound, Open Chambers, Brood Stable, Ventilated Nest, Sealed Chambers, Crowned Anthill)
 - `milestone_updated_at` field (timestamp of last milestone change)
 
+### Step 2.6: Detect Milestone
+
+Run using Bash tool: `bash .aether/aether-utils.sh milestone-detect`
+
+Extract from JSON result:
+- `milestone`: Current milestone name
+- `version`: Computed version string
+- `phases_completed`: Number of completed phases
+- `total_phases`: Total phases in plan
+
 ### Step 3: Display
 
 Output format:
@@ -146,7 +156,7 @@ Output format:
 🎯 Focus: <focus_count> areas | 🚫 Avoid: <constraints_count> patterns
 🧠 Instincts: <total> learned (<high_confidence> strong)
 🚩 Flags: <blockers> blockers | <issues> issues | <notes> notes
-🏆 Milestone: <milestone>
+🏆 Milestone: <milestone> (<version>)
 💭 Dreams: <dream_count> recorded (latest: <latest_dream>)
 
 State: <state>
