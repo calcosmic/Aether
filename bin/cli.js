@@ -297,7 +297,7 @@ function validateManifest(manifest) {
   if (!manifest.generated_at || typeof manifest.generated_at !== 'string') {
     return { valid: false, error: 'Manifest missing required field: generated_at' };
   }
-  if (!manifest.files || typeof manifest.files !== 'object') {
+  if (!manifest.files || typeof manifest.files !== 'object' || Array.isArray(manifest.files)) {
     return { valid: false, error: 'Manifest missing required field: files' };
   }
   return { valid: true };
