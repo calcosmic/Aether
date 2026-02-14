@@ -10,14 +10,14 @@
 | Field | Value |
 |-------|-------|
 | **Phase** | 6 (Foundation — Safe Checkpoints & Testing Infrastructure) |
-| **Plan** | 06-02 complete, 4 remaining (06-03 through 06-06) |
-| **Status** | In progress - Plan 06-02 executed |
-| **Last Action** | Executed 06-02: Safe Checkpoint System |
+| **Plan** | 06-03 complete, 3 remaining (06-04 through 06-06) |
+| **Status** | In progress - Plan 06-03 executed |
+| **Last Action** | Executed 06-03: hashFileSync Unit Tests |
 
 **Progress:**
 ```
 [█░░░░░░░░░] 3% - v1.1 Bug Fixes
-Phase 6:  ██◆░░░░░░░ 33% (Foundation - 2/6 plans complete)
+Phase 6:  ███◆░░░░░░ 50% (Foundation - 3/6 plans complete)
 Phase 7:  ░░░░░░░░░░ 0% (Core Reliability)
 Phase 8:  ░░░░░░░░░░ 0% (Build Polish)
 ```
@@ -47,6 +47,8 @@ Phase 8:  ░░░░░░░░░░ 0% (Build Polish)
 | 2026-02-14 | sinon + proxyquire for testing | Industry standard, enables mocking fs module for cli.js tests |
 | 2026-02-14 | Mock-fs helper pattern | Comprehensive reusable helper promotes consistency across tests |
 | 2026-02-14 | Git-tracked files only for checkpoints | Git stash requires tracked files; filter prevents stash failures |
+| 2026-02-14 | Module exports for CLI testability | Export functions from cli.js to enable unit testing with proxyquire |
+| 2026-02-14 | test.before() for CLI module loading | commander.js has global state; load once, reset stubs between tests |
 
 ### Open Questions
 
@@ -64,7 +66,7 @@ None currently.
 ## Session Continuity
 
 **Last Updated:** 2026-02-14
-**Updated By:** /cds:execute-phase 06-01
+**Updated By:** /cds:execute-phase 06-03
 
 ### Recent Changes
 - Created ROADMAP.md with 3-phase structure (Phases 6-8)
@@ -81,18 +83,21 @@ None currently.
   - create/list/restore/verify subcommands
   - SHA-256 hash integrity verification
   - isGitTracked() filter to prevent stash failures
+- **Executed 06-03:** Created unit tests for hashFileSync
+  - 9 comprehensive tests with mocked filesystem
+  - Added module.exports to bin/cli.js for testability
+  - Established CLI testing pattern with proxyquire
 
 ### Next Actions
-1. Execute 06-03: Phase Advancement Guards
-2. Execute 06-04: Update System Repair
-3. Execute 06-05 and 06-06 remaining plans
-4. `/cds:plan-phase 7` - Plan Core Reliability phase
+1. Execute 06-04: Update System Repair
+2. Execute 06-05 and 06-06 remaining plans
+3. `/cds:plan-phase 7` - Plan Core Reliability phase
 
 ### Context for New Sessions
 
 **What we're building:** v1.1 bug fixes for Aether Colony System — critical reliability improvements including safe checkpoints (preventing data loss), phase advancement guards (preventing loops), and update system repair (automatic rollback).
 
-**Current state:** Phase 6 in progress. 2/6 plans complete (06-01 Testing Infrastructure, 06-02 Safe Checkpoints). 4 plans remaining.
+**Current state:** Phase 6 in progress. 3/6 plans complete (06-01 Testing Infrastructure, 06-02 Safe Checkpoints, 06-03 hashFileSync Tests). 3 plans remaining.
 
 **Key constraints:** Node.js >= 16, minimal dependencies, no cloud dependencies, repo-local state only.
 
