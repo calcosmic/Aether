@@ -25,7 +25,7 @@ This roadmap delivers the v3.1 "Open Chambers" milestone, expanding the Aether C
 | Phase | Name | Goal | Requirements | Status |
 |-------|------|------|--------------|--------|
 | 9 | Caste Model Assignment | User can view, verify, and configure model assignments per caste | 8 | Complete |
-| 10 | Entombment & Egg Laying | User can archive colonies and start fresh with lifecycle management | 5 | Not Started |
+| 10 | Entombment & Egg Laying | User can archive colonies and start fresh with lifecycle management | 5 | Planned |
 | 11 | Foraging Specialization | System intelligently routes tasks to optimal models based on content | 3 | Not Started |
 | 12 | Colony Visualization | User sees immersive real-time colony activity with ant-themed presentation | 11 | Not Started |
 
@@ -85,6 +85,12 @@ This roadmap delivers the v3.1 "Open Chambers" milestone, expanding the Aether C
 | LIFE-03 | Milestone auto-detection from state |
 | LIFE-04 | `/ant:tunnels` — browse archived colonies |
 | LIFE-05 | Entombment includes pheromone manifest (manifest.json) |
+
+**Plans:**
+- [ ] 10-01-PLAN.md — Chamber utilities: create, verify, list functions
+- [ ] 10-02-PLAN.md — `/ant:entomb` command with manifest generation
+- [ ] 10-03-PLAN.md — `/ant:lay-eggs` command + milestone auto-detection
+- [ ] 10-04-PLAN.md — `/ant:tunnels` command for browsing chambers
 
 **Success Criteria:**
 1. User runs `/ant:entomb` and colony is archived to `.aether/chambers/{timestamp}/` with manifest.json
@@ -173,12 +179,12 @@ This roadmap delivers the v3.1 "Open Chambers" milestone, expanding the Aether C
 
 | Phase | Name | Requirements | Status | Completed |
 |-------|------|--------------|--------|-----------|
-| 9 | Caste Model Assignment | 8 | Planned | 0% |
-| 10 | Entombment & Egg Laying | 5 | Not Started | 0% |
+| 9 | Caste Model Assignment | 8 | Complete | 100% |
+| 10 | Entombment & Egg Laying | 5 | Planned | 0% |
 | 11 | Foraging Specialization | 3 | Not Started | 0% |
 | 12 | Colony Visualization | 11 | Not Started | 0% |
 
-**Overall Progress:** 0/27 requirements (0%)
+**Overall Progress:** 8/27 requirements (30%)
 
 ---
 
