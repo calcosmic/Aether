@@ -26,7 +26,7 @@ This roadmap delivers the v3.1 "Open Chambers" milestone, expanding the Aether C
 |-------|------|------|--------------|--------|
 | 9 | Caste Model Assignment | User can view, verify, and configure model assignments per caste | 8 | Complete |
 | 10 | Entombment & Egg Laying | User can archive colonies and start fresh with lifecycle management | 5 | Complete |
-| 11 | Foraging Specialization | System intelligently routes tasks to optimal models based on content | 3 | Not Started |
+| 11 | Foraging Specialization | System intelligently routes tasks to optimal models based on content | 3 | Planned |
 | 12 | Colony Visualization | User sees immersive real-time colony activity with ant-themed presentation | 11 | Not Started |
 
 ---
@@ -119,6 +119,12 @@ This roadmap delivers the v3.1 "Open Chambers" milestone, expanding the Aether C
 | MOD-06 | Task-based routing — keyword detection routes to appropriate model |
 | MOD-07 | Model performance telemetry — track success rates per model/caste |
 | MOD-08 | Model override per command (`--model` flag) |
+
+**Plans:**
+- [ ] 11-01-PLAN.md — Task-based routing: keyword detection functions
+- [ ] 11-02-PLAN.md — Telemetry system: recording and storage
+- [ ] 11-03-PLAN.md — Telemetry CLI: viewing performance data
+- [ ] 11-04-PLAN.md — CLI override: --model flag integration
 
 **Success Criteria:**
 1. Task containing "design" or "architecture" routes to glm-5 automatically
