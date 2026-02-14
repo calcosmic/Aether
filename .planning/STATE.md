@@ -11,9 +11,9 @@
 | Field | Value |
 |-------|-------|
 | **Phase** | 11 — Foraging Specialization |
-| **Plan** | 02 — Telemetry System |
-| **Status** | In Progress |
-| **Last Action** | Completed Plan 02 - Telemetry system with model performance tracking |
+| **Plan** | 03 — Telemetry CLI Commands |
+| **Status** | Complete |
+| **Last Action** | Completed Plan 03 - Telemetry CLI commands for viewing model performance |
 
 ### Progress Bar
 
@@ -28,7 +28,7 @@ v3.1:    [████████░░░] 80% IN PROGRESS (4/4 plans complete
 |-------|------|--------|--------------|----------|
 | 9 | Caste Model Assignment | Complete | 8 | 100% (5/5 plans) |
 | 10 | Entombment & Egg Laying | Complete | 5 | 100% (4/4 plans) |
-| 11 | Foraging Specialization | In Progress | 3 | 33% (1/3 plans) |
+| 11 | Foraging Specialization | In Progress | 3 | 66% (2/3 plans) |
 | 12 | Colony Visualization | Blocked | 11 | 0% |
 
 ---
@@ -113,6 +113,8 @@ v3.1:    [████████░░░] 80% IN PROGRESS (4/4 plans complete
 | 2026-02-14 | Detail view pattern with /command <name> | Consistent UX for single-item detail views |
 | 2026-02-14 | Telemetry errors are silent | Spawn logging continues even if telemetry fails (graceful degradation) |
 | 2026-02-14 | Routing decisions rotate at 1000 entries | Prevents unbounded file growth in telemetry.json |
+| 2026-02-14 | Default telemetry command shows summary | Matches user expectations from tools like git status |
+| 2026-02-14 | Color thresholds: green >=90%, yellow >=70%, red <70% | Clear visual indication of model performance |
 | 2026-02-14 | Task routing default_model acts as catch-all | When no keywords match but default_model exists, source is 'task-routing' not 'caste-default' |
 | 2026-02-14 | First-match wins in complexity_indicators | Iteration order determines priority; keywords in earlier categories take precedence |
 | 2026-02-14 | Atomic writes for telemetry | Temp file + rename pattern prevents data corruption during concurrent writes |
@@ -137,19 +139,19 @@ v3.1:    [████████░░░] 80% IN PROGRESS (4/4 plans complete
 
 ### Last Session
 - **Date:** 2026-02-14
-- **Action:** Completed Plan 02 in Phase 11 - Telemetry System
-- **Outcome:** telemetry.js module created with recording, querying, and rotation; integrated with spawn-logger.js; 31 unit tests passing
+- **Action:** Completed Plan 03 in Phase 11 - Telemetry CLI Commands
+- **Outcome:** Added `aether telemetry` command with summary, model, and performance subcommands; 15 CLI tests passing
 
 ### Next Actions
-1. Execute Plan 03 - Task-based routing (uses telemetry for data-driven decisions)
-2. Continue Phase 11 (Foraging Specialization)
+1. Execute Plan 04 - Complete Phase 11 (if exists) or move to Phase 12
+2. Phase 11 is now 66% complete (2/3 plans done)
 
 ### Handoff Notes
-- Phase 11 Plan 02 complete - Telemetry system ready
-- Telemetry records every spawn with model, caste, task, source
-- Query functions available: getTelemetrySummary, getModelPerformance, getRoutingStats
-- spawn-logger.js now automatically records telemetry on every spawn
-- Next: Plan 03 - Task-based routing
+- Phase 11 Plan 03 complete - Telemetry CLI commands ready
+- Users can run `aether telemetry` to view model performance
+- Color-coded output: green >=90%, yellow >=70%, red <70% success rate
+- Commands: telemetry (summary), telemetry model <name>, telemetry performance
+- Next: Complete Phase 11 or move to Phase 12 (Colony Visualization)
 
 ---
 
@@ -166,4 +168,4 @@ v3.1:    [████████░░░] 80% IN PROGRESS (4/4 plans complete
 
 *State file: `.planning/STATE.md`*
 *Updated: 2026-02-14*
-*Next update: After Phase 11 Plan 03 completion*
+*Next update: After Phase 11 completion or Phase 12 start*
