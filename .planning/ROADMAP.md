@@ -127,6 +127,26 @@ Plans:
 4. Integration test verifies checkpoint → update → build workflow end-to-end
 5. All v1.1 fixes verified working together in E2E test suite
 
+**Plans:** 2 plans in 2 waves
+
+Plans:
+- [ ] 08-01-PLAN.md — Fix build.md timing: Remove run_in_background from worker spawns
+- [ ] 08-02-PLAN.md — Integration testing: E2E test for checkpoint → update → build workflow
+
+**Wave Structure:**
+- Wave 1: 08-01 (build timing fix)
+- Wave 2: 08-02 (integration testing - depends on Wave 1)
+
+**Status:** Planned
+**Planned:** 2026-02-14
+
+**Wave Structure:**
+- Wave 1: 08-01 (timing fix - no dependencies)
+- Wave 2: 08-02 (integration test - logically follows timing fix)
+
+**Status:** Planned
+**Defined:** 2026-02-14
+
 ---
 
 ## Progress
@@ -135,7 +155,7 @@ Plans:
 |-------|--------|--------------|----------------------|
 | 6 - Foundation | **Complete** ✓ | 10/10 complete | 6/6 |
 | 7 - Core Reliability | **Complete** ✓ | 9/9 complete | 7/7 |
-| 8 - Build Polish | Not Started | 3/3 pending | 0/5 |
+| 8 - Build Polish | Planned | 3/3 pending | 0/5 |
 
 **Coverage:** 19/19 v1.1 requirements mapped ✓
 
@@ -154,4 +174,4 @@ v1.1 is complete when:
 ---
 
 *Roadmap created: 2026-02-14*
-*Updated: 2026-02-14 - Phase 7 execution complete*
+*Updated: 2026-02-14 - Phase 8 planning complete*
