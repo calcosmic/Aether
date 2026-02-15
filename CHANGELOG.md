@@ -41,6 +41,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Architecture Cleanup: Source of Truth Flipped** — Complete review and cleanup of the flipped source-of-truth architecture. `.aether/` is now the source of truth for system files, with `runtime/` auto-populated by `bin/sync-to-runtime.sh` during npm install. Fixed 6 stale documentation files, updated 5 planning files, expanded allowlist from 20 to 36 files, handled 4 orphan files, and verified zero drift between directories. (`.aether/recover.sh`, `.aether/RECOVERY-PLAN.md`, `.planning/codebase/STRUCTURE.md`, `.planning/codebase/ARCHITECTURE.md`, `.planning/codebase/CONVENTIONS.md`, `TO-DOS.md`, `bin/sync-to-runtime.sh`, `bin/lib/update-transaction.js`)
+
 ### Changed
 - **Phase 4: UX Improvements to Lay-Eggs** — Enhanced lay-eggs.md with visual lifecycle diagrams (🟢 ACTIVE COLONY → 🏺 SEAL/ENTOMB → 🥚 LAY EGGS) in error messages to clarify workflow progression. Updated success output to explicitly distinguish between sealing vs laying eggs for new projects, preserving wisdom across colony lifecycles. (`.claude/commands/ant/lay-eggs.md`)
 
