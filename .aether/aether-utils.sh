@@ -84,6 +84,17 @@ get_caste_emoji() {
     *Archaeologist*|*archaeologist*|*Relic*|*Fossil*|*Dig*|*Shard*|*Epoch*|*Strata*|*Lore*|*Glyph*) echo "🏺" ;;
     *Oracle*|*oracle*|*Sage*|*Seer*|*Vision*|*Augur*|*Mystic*|*Sibyl*|*Delph*|*Pythia*) echo "🔮" ;;
     *Route*|*route*) echo "📋" ;;
+    *Ambassador*|*ambassador*|*Bridge*|*Connect*|*Link*|*Diplomat*|*Network*|*Protocol*) echo "🔌" ;;
+    *Auditor*|*auditor*|*Review*|*Inspect*|*Examine*|*Scrutin*|*Critical*|*Verify*) echo "👥" ;;
+    *Chronicler*|*chronicler*|*Document*|*Record*|*Write*|*Chronicle*|*Archive*|*Scribe*) echo "📝" ;;
+    *Gatekeeper*|*gatekeeper*|*Guard*|*Protect*|*Secure*|*Shield*|*Depend*|*Supply*) echo "📦" ;;
+    *Guardian*|*guardian*|*Defend*|*Patrol*|*Secure*|*Vigil*|*Watch*|*Safety*|*Security*) echo "🛡️" ;;
+    *Includer*|*includer*|*Access*|*Inclusive*|*A11y*|*WCAG*|*Barrier*|*Universal*) echo "♿" ;;
+    *Keeper*|*keeper*|*Archive*|*Store*|*Curate*|*Preserve*|*Knowledge*|*Wisdom*|*Pattern*) echo "📚" ;;
+    *Measurer*|*measurer*|*Metric*|*Benchmark*|*Profile*|*Optimize*|*Performance*|*Speed*) echo "⚡" ;;
+    *Probe*|*probe*|*Test*|*Excavat*|*Uncover*|*Edge*|*Case*|*Mutant*) echo "🧪" ;;
+    *Tracker*|*tracker*|*Debug*|*Trace*|*Follow*|*Bug*|*Hunt*|*Root*) echo "🐛" ;;
+    *Weaver*|*weaver*|*Refactor*|*Restruct*|*Transform*|*Clean*|*Pattern*|*Weave*) echo "🔄" ;;
     *) echo "🐜" ;;
   esac
 }
@@ -1032,6 +1043,17 @@ EOF
       chaos)    prefixes=("Probe" "Stress" "Shake" "Twist" "Snap" "Breach" "Surge" "Jolt") ;;
       archaeologist) prefixes=("Relic" "Fossil" "Dig" "Shard" "Epoch" "Strata" "Lore" "Glyph") ;;
       oracle)   prefixes=("Sage" "Seer" "Vision" "Augur" "Mystic" "Sibyl" "Delph" "Pythia") ;;
+      ambassador) prefixes=("Bridge" "Connect" "Link" "Diplomat" "Protocol" "Network" "Port" "Socket") ;;
+      auditor)   prefixes=("Review" "Inspect" "Exam" "Scrutin" "Verify" "Check" "Audit" "Assess") ;;
+      chronicler) prefixes=("Record" "Write" "Document" "Chronicle" "Scribe" "Archive" "Script" "Ledger") ;;
+      gatekeeper) prefixes=("Guard" "Protect" "Secure" "Shield" "Defend" "Bar" "Gate" "Checkpoint") ;;
+      guardian)  prefixes=("Defend" "Patrol" "Watch" "Vigil" "Shield" "Guard" "Armor" "Fort") ;;
+      includer)  prefixes=("Access" "Include" "Open" "Welcome" "Reach" "Universal" "Equal" "A11y") ;;
+      keeper)    prefixes=("Archive" "Store" "Curate" "Preserve" "Guard" "Keep" "Hold" "Save") ;;
+      measurer)  prefixes=("Metric" "Gauge" "Scale" "Measure" "Benchmark" "Track" "Count" "Meter") ;;
+      probe)     prefixes=("Test" "Probe" "Excavat" "Uncover" "Edge" "Mutant" "Trial" "Check") ;;
+      tracker)   prefixes=("Track" "Trace" "Debug" "Hunt" "Follow" "Trail" "Find" "Seek") ;;
+      weaver)    prefixes=("Weave" "Knit" "Spin" "Twine" "Transform" "Mend" "Weave" "Weave") ;;
       *)        prefixes=("Ant" "Worker" "Drone" "Toiler" "Marcher" "Runner" "Carrier" "Helper") ;;
     esac
     # Pick random prefix and add random number
@@ -1333,14 +1355,15 @@ EOF
 
   generate-commit-message)
     # Generate an intelligent commit message from colony context
-    # Usage: generate-commit-message <type> <phase_id> <phase_name> [summary]
-    # Types: "milestone" | "pause" | "fix"
-    # Returns: {"message": "...", "body": "...", "files_changed": N}
+    # Usage: generate-commit-message <type> <phase_id> <phase_name> [summary|ai_description] [plan_num]
+    # Types: "milestone" | "pause" | "fix" | "contextual"
+    # Returns: {"message": "...", "body": "...", "files_changed": N, ...}
 
     msg_type="${1:-milestone}"
     phase_id="${2:-0}"
     phase_name="${3:-unknown}"
-    summary="${4:-}"
+    summary="${4:-}"        # For milestone/fix types, or ai_description for contextual type
+    plan_num="${5:-01}"     # Optional: plan number for contextual type (e.g., "01")
 
     # Count changed files
     files_changed=0
@@ -1373,6 +1396,33 @@ EOF
         fi
         body="Swarm-verified fix applied and tested."
         ;;
+      contextual)
+        # NEW: Contextual commit with AI description and structured metadata
+        # Derive subsystem from phase name (e.g., "11-foraging-specialization" -> "foraging")
+        subsystem=$(echo "$phase_name" | sed -E 's/^[0-9]+-//' | sed -E 's/-[0-9]+.*$//' | tr '-' ' ')
+        [[ -z "$subsystem" ]] && subsystem="phase"
+
+        # Build message with AI description (summary parameter is reused as ai_description)
+        if [[ -n "$summary" ]]; then
+          message="aether-milestone: ${summary}"
+        else
+          # Fallback if no AI description provided
+          message="aether-milestone: phase ${phase_id}.${plan_num} complete -- ${phase_name}"
+        fi
+
+        # Build structured body with metadata
+        body="Scope: ${phase_id}.${plan_num}
+Files: ${files_changed} files changed"
+
+        # Truncate message if needed BEFORE JSON construction
+        if [[ ${#message} -gt 72 ]]; then
+          message="${message:0:69}..."
+        fi
+
+        # Return enhanced JSON with additional metadata
+        json_ok "{\"message\":\"$message\",\"body\":\"$body\",\"files_changed\":$files_changed,\"subsystem\":\"$subsystem\",\"scope\":\"${phase_id}.${plan_num}\"}"
+        exit 0
+        ;;
       *)
         message="aether-checkpoint: phase ${phase_id}"
         body=""
@@ -1385,6 +1435,401 @@ EOF
     fi
 
     json_ok "{\"message\":\"$message\",\"body\":\"$body\",\"files_changed\":$files_changed}"
+    ;;
+
+  # ============================================
+  # CONTEXT PERSISTENCE SYSTEM
+  # ============================================
+
+  context-update)
+    # Update .aether/CONTEXT.md with current colony state
+    # Usage: context-update <action> [args...]
+    #
+    # Actions:
+    #   init <goal>                              - Initialize new context
+    #   update-phase <phase_id> <name>           - Update current phase
+    #   activity <command> <result> [files]      - Log activity
+    #   constraint <type> <message> [source]     - Add constraint (redirect/focus)
+    #   decision <description> [rationale] [who] - Log decision
+    #   safe-to-clear <yes|no> <reason>          - Set safe-to-clear status
+    #   build-start <phase_id> <workers> <tasks> - Mark build starting
+    #   worker-spawn <ant_name> <caste> <task>   - Log worker spawn
+    #   worker-complete <ant_name> <status>      - Log worker completion
+    #   build-progress <completed> <total>       - Update build progress
+    #   build-complete <status> <result>         - Mark build complete
+    #
+    # Always call with explicit arguments - never rely on current directory
+    # CONTEXT_FILE must be passed or detected from AETHER_ROOT
+
+    local ctx_action="${1:-}"
+    local ctx_file="${AETHER_ROOT:-.}/.aether/CONTEXT.md"
+    local ctx_tmp="${ctx_file}.tmp"
+    local ctx_ts
+    ctx_ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    ensure_context_dir() {
+      local dir
+      dir=$(dirname "$ctx_file")
+      [[ -d "$dir" ]] || mkdir -p "$dir"
+    }
+
+    # Read current state from COLONY_STATE.json if available
+    read_colony_state() {
+      local state_file="${AETHER_ROOT:-.}/.aether/data/COLONY_STATE.json"
+      if [[ -f "$state_file" ]]; then
+        current_phase=$(jq -r '.current_phase // "unknown"' "$state_file" 2>/dev/null)
+        milestone=$(jq -r '.milestone // "unknown"' "$state_file" 2>/dev/null)
+        goal=$(jq -r '.goal // ""' "$state_file" 2>/dev/null)
+      else
+        current_phase="unknown"
+        milestone="unknown"
+        goal=""
+      fi
+    }
+
+    case "$ctx_action" in
+      init)
+        local init_goal="${2:-}"
+        ensure_context_dir
+        read_colony_state
+
+        cat > "$ctx_file" << EOF
+# Aether Colony — Current Context
+
+> **This document is the colony's memory. If context collapses, read this file first.**
+
+---
+
+## 🚦 System Status
+
+| Field | Value |
+|-------|-------|
+| **Last Updated** | $ctx_ts |
+| **Current Phase** | 1 |
+| **Phase Name** | initialization |
+| **Milestone** | First Mound |
+| **Colony Status** | initializing |
+| **Safe to Clear?** | ⚠️ NO — Colony just initialized |
+
+---
+
+## 🎯 Current Goal
+
+$init_goal
+
+---
+
+## 📍 What's In Progress
+
+Colony initialization in progress...
+
+---
+
+## ⚠️ Active Constraints (REDIRECT Signals)
+
+| Constraint | Source | Date Set |
+|------------|--------|----------|
+| In the Aether repo, \`.aether/\` IS the source of truth — \`runtime/\` is auto-populated on publish | CLAUDE.md | Permanent |
+| Never push without explicit user approval | CLAUDE.md Safety | Permanent |
+
+---
+
+## 💭 Active Pheromones (FOCUS Signals)
+
+*None active*
+
+---
+
+## 📝 Recent Decisions
+
+| Date | Decision | Rationale | Made By |
+|------|----------|-----------|---------|
+
+---
+
+## 📊 Recent Activity (Last 10 Actions)
+
+| Timestamp | Command | Result | Files Changed |
+|-----------|---------|--------|---------------|
+| $ctx_ts | init | Colony initialized | — |
+
+---
+
+## 🔄 Next Steps
+
+1. Run \`/ant:plan\` to generate phases for the goal
+2. Run \`/ant:build 1\` to start building
+
+---
+
+## 🆘 If Context Collapses
+
+**READ THIS SECTION FIRST**
+
+### Immediate Recovery
+
+1. **Read this file** — You're looking at it. Good.
+2. **Check git status** — \`git status\` and \`git log --oneline -5\`
+3. **Verify COLONY_STATE.json** — \`cat .aether/data/COLONY_STATE.json | jq .current_phase\`
+4. **Resume work** — Continue from "Next Steps" above
+
+### What We Were Doing
+
+Colony was just initialized with goal: $init_goal
+
+### Is It Safe to Continue?
+
+- ✅ Colony is initialized
+- ⚠️ No work completed yet
+- ✅ All state in COLONY_STATE.json
+
+**You can proceed safely.**
+
+---
+
+## 🐜 Colony Health
+
+\`\`\`
+Milestone:    First Mound   ░░░░░░░░░░ 0%
+Phase:        1             ░░░░░░░░░░ initializing
+Context:      Active        ░░░░░░░░░░ 0%
+Git Commits:  0
+\`\`\`
+
+---
+
+*This document updates automatically with every ant command. If you see old timestamps, run \`/ant:status\` to refresh.*
+
+**Colony Memory Active** 🧠🐜
+EOF
+        json_ok "{\"updated\":true,\"action\":\"init\",\"file\":\"$ctx_file\"}"
+        ;;
+
+      update-phase)
+        local new_phase="${2:-}"
+        local new_phase_name="${3:-}"
+        local safe_clear="${4:-NO}"
+        local safe_reason="${5:-Phase in progress}"
+
+        [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found. Run context-update init first."; }
+
+        # Update Last Updated
+        sed -i.bak "s/| \*\*Last Updated\*\* | .*/| **Last Updated** | $ctx_ts |/" "$ctx_file" && rm -f "$ctx_file.bak"
+
+        # Update Current Phase
+        sed -i.bak "s/| \*\*Current Phase\*\* | .*/| **Current Phase** | $new_phase |/" "$ctx_file" && rm -f "$ctx_file.bak"
+        sed -i.bak "s/| \*\*Phase Name\*\* | .*/| **Phase Name** | $new_phase_name |/" "$ctx_file" && rm -f "$ctx_file.bak"
+
+        # Update Safe to Clear
+        sed -i.bak "s/| \*\*Safe to Clear?\*\* | .*/| **Safe to Clear?** | $safe_clear — $safe_reason |/" "$ctx_file" && rm -f "$ctx_file.bak"
+
+        json_ok "{\"updated\":true,\"action\":\"update-phase\",\"phase\":$new_phase}"
+        ;;
+
+      activity)
+        local cmd="${2:-}"
+        local result="${3:-}"
+        local files_changed="${4:-—}"
+
+        [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
+
+        # Update Last Updated
+        sed -i.bak "s/| \*\*Last Updated\*\* | .*/| **Last Updated** | $ctx_ts |/" "$ctx_file" && rm -f "$ctx_file.bak"
+
+        # Add activity row (keep last 10 by removing older ones)
+        local activity_line="| $ctx_ts | $cmd | $result | $files_changed |"
+
+        # Find the activity table and insert new row after header
+        awk -v line="$activity_line" '
+          /\| Timestamp \| Command \| Result \| Files Changed \|/ {
+            print
+            getline
+            print
+            print line
+            next
+          }
+          /^## 🆘 If Context Collapses/ { exit }
+          { print }
+        ' "$ctx_file" > "$ctx_tmp"
+
+        mv "$ctx_tmp" "$ctx_file"
+        json_ok "{\"updated\":true,\"action\":\"activity\",\"command\":\"$cmd\"}"
+        ;;
+
+      safe-to-clear)
+        local safe="${2:-NO}"
+        local reason="${3:-Unknown state}"
+
+        [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
+
+        # Update Last Updated
+        sed -i.bak "s/| \*\*Last Updated\*\* | .*/| **Last Updated** | $ctx_ts |/" "$ctx_file" && rm -f "$ctx_file.bak"
+
+        # Update Safe to Clear
+        sed -i.bak "s/| \*\*Safe to Clear?\*\* | .*/| **Safe to Clear?** | $safe — $reason |/" "$ctx_file" && rm -f "$ctx_file.bak"
+
+        json_ok "{\"updated\":true,\"action\":\"safe-to-clear\",\"safe\":\"$safe\"}"
+        ;;
+
+      constraint)
+        local c_type="${2:-}"
+        local c_message="${3:-}"
+        local c_source="${4:-User}"
+
+        [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
+
+        # Update Last Updated
+        sed -i.bak "s/| \*\*Last Updated\*\* | .*/| **Last Updated** | $ctx_ts |/" "$ctx_file" && rm -f "$ctx_file.bak"
+
+        # Add to appropriate section based on type
+        if [[ "$c_type" == "redirect" ]]; then
+          # Add to Active Constraints
+          sed -i.bak "/^## ⚠️ Active Constraints/,/^## /{ /^| Constraint |/a\\
+| $c_message | $c_source | $ctx_ts |
+}" "$ctx_file" && rm -f "$ctx_file.bak"
+        elif [[ "$c_type" == "focus" ]]; then
+          # Add to Active Pheromones
+          sed -i.bak "/^## 💭 Active Pheromones/,/^## /{ /^| Signal |/a\\
+| FOCUS | $c_message | normal |
+}" "$ctx_file" && rm -f "$ctx_file.bak"
+        fi
+
+        json_ok "{\"updated\":true,\"action\":\"constraint\",\"type\":\"$c_type\"}"
+        ;;
+
+      decision)
+        local decision="${2:-}"
+        local rationale="${3:-}"
+        local made_by="${4:-Colony}"
+
+        [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
+
+        # Update Last Updated
+        sed -i.bak "s/| \*\*Last Updated\*\* | .*/| **Last Updated** | $ctx_ts |/" "$ctx_file" && rm -f "$ctx_file.bak"
+
+        # Add decision row
+        local decision_line="| $(echo $ctx_ts | cut -dT -f1) | $decision | $rationale | $made_by |"
+
+        awk -v line="$decision_line" '
+          /^## 📝 Recent Decisions/ { in_section=1 }
+          in_section && /^\| [0-9]{4}-[0-9]{2}-[0-9]{2} / { last_decision=NR }
+          in_section && /^## 📊 Recent Activity/ { in_section=0 }
+          { lines[NR] = $0 }
+          END {
+            for (i=1; i<=NR; i++) {
+              if (i == last_decision) {
+                print lines[i]
+                print line
+              } else {
+                print lines[i]
+              }
+            }
+          }
+        ' "$ctx_file" > "$ctx_tmp"
+
+        mv "$ctx_tmp" "$ctx_file"
+        json_ok "{\"updated\":true,\"action\":\"decision\"}"
+        ;;
+
+      build-start)
+        local phase_id="${2:-}"
+        local worker_count="${3:-0}"
+        local tasks_count="${4:-0}"
+
+        [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
+
+        # Update Last Updated
+        sed -i.bak "s/| \*\*Last Updated\*\* | .*/| **Last Updated** | $ctx_ts |/" "$ctx_file" && rm -f "$ctx_file.bak"
+
+        # Update What's In Progress
+        sed -i.bak "s/## 📍 What's In Progress/## 📍 What's In Progress\n\n**Phase $phase_id Build IN PROGRESS**\n- Workers: $worker_count | Tasks: $tasks_count\n- Started: $ctx_ts/" "$ctx_file" && rm -f "$ctx_file.bak"
+
+        # Mark not safe to clear
+        sed -i.bak "s/| \*\*Safe to Clear?\*\* | .*/| **Safe to Clear?** | ⚠️ NO — Build in progress |/" "$ctx_file" && rm -f "$ctx_file.bak"
+
+        json_ok "{\"updated\":true,\"action\":\"build-start\",\"workers\":$worker_count}"
+        ;;
+
+      worker-spawn)
+        local ant_name="${2:-}"
+        local caste="${3:-}"
+        local task="${4:-}"
+
+        [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
+
+        # Add worker spawn note to What's In Progress (brief)
+        awk -v ant="$ant_name" -v caste="$caste" -v task="$task" -v ts="$ctx_ts" '
+          /^## 📍 What's In Progress/ { in_progress=1 }
+          in_progress && /^## / && $0 !~ /What's In Progress/ { in_progress=0 }
+          in_progress && /Workers:/ {
+            print
+            print "  - " ts ": Spawned " ant " (" caste ") for: " task
+            next
+          }
+          { print }
+        ' "$ctx_file" > "$ctx_tmp" && mv "$ctx_tmp" "$ctx_file"
+
+        json_ok "{\"updated\":true,\"action\":\"worker-spawn\",\"ant\":\"$ant_name\"}"
+        ;;
+
+      worker-complete)
+        local ant_name="${2:-}"
+        local status="${3:-completed}"
+
+        [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
+
+        # Update worker line to show completion
+        sed -i.bak "s/- .*$ant_name .*$/- $ant_name: $status (updated $ctx_ts)/" "$ctx_file" && rm -f "$ctx_file.bak"
+
+        json_ok "{\"updated\":true,\"action\":\"worker-complete\",\"ant\":\"$ant_name\"}"
+        ;;
+
+      build-progress)
+        local completed="${2:-0}"
+        local total="${3:-1}"
+        local percentage=$(( completed * 100 / total ))
+
+        [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
+
+        # Update progress in What's In Progress
+        sed -i.bak "s/Build IN PROGRESS/Build IN PROGRESS ($percentage% complete)/" "$ctx_file" && rm -f "$ctx_file.bak"
+
+        json_ok "{\"updated\":true,\"action\":\"build-progress\",\"percent\":$percentage}"
+        ;;
+
+      build-complete)
+        local status="${2:-completed}"
+        local result="${3:-success}"
+
+        [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
+
+        # Update Last Updated
+        sed -i.bak "s/| \*\*Last Updated\*\* | .*/| **Last Updated** | $ctx_ts |/" "$ctx_file" && rm -f "$ctx_file.bak"
+
+        # Update What's In Progress
+        awk -v status="$status" -v result="$result" '
+          /^## 📍 What's In Progress/ { in_progress=1 }
+          in_progress && /^## / && $0 !~ /What's In Progress/ { in_progress=0 }
+          in_progress && /Build IN PROGRESS/ {
+            print "## 📍 What's In Progress"
+            print ""
+            print "**Build " status "** — " result
+            next
+          }
+          in_progress { next }
+          { print }
+        ' "$ctx_file" > "$ctx_tmp" && mv "$ctx_tmp" "$ctx_file"
+
+        # Mark safe to clear
+        sed -i.bak "s/| \*\*Safe to Clear?\*\* | .*/| **Safe to Clear?** | ✅ YES — Build $status |/" "$ctx_file" && rm -f "$ctx_file.bak"
+
+        json_ok "{\"updated\":true,\"action\":\"build-complete\",\"status\":\"$status\"}"
+        ;;
+
+      *)
+        json_err "Unknown context action: $ctx_action"
+        ;;
+    esac
     ;;
 
   # ============================================
@@ -1409,7 +1854,8 @@ EOF
     if [[ "$local_ver" == "$hub_ver" ]]; then
       json_ok '""'
     else
-      json_ok "\"Update available: $local_ver -> $hub_ver (run /ant:update)\""
+      printf -v msg 'Update available: %s to %s (run /ant:update)' "$local_ver" "$hub_ver"
+      json_ok "$msg"
     fi
     ;;
 
@@ -1418,7 +1864,7 @@ EOF
     # Usage: registry-add <repo_path> <version>
     repo_path="${1:-}"
     repo_version="${2:-}"
-    [[ -z "$repo_path" || -z "$repo_version" ]] && json_err "Usage: registry-add <repo_path> <version>"
+    [[ -z "$repo_path" || -z "$repo_version" ]] && json_err "Usage: registry-add \<repo_path\> \<version\>"
 
     registry_file="$HOME/.aether/registry.json"
     mkdir -p "$HOME/.aether"

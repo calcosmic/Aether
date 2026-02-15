@@ -10,14 +10,20 @@
 
 ### 1. Diagnosed the Destructive Update Loop
 
-**The Problem:**
+**The Problem (now fixed):**
 - User was editing `.aether/` (working copy) directly
 - npm install copied stale `runtime/` to hub
 - `aether update` copied stale hub back to `.aether/` → **destroyed work**
 
+**The Fix:** `.aether/` is now the source of truth in the Aether repo. A sync script (`bin/sync-to-runtime.sh`) auto-copies system files to `runtime/` before packaging.
+
 **The Architecture:**
 ```
-runtime/ (source of truth for npm)
+.aether/ (source of truth - edit here)
+    │
+    │  bin/sync-to-runtime.sh (auto on npm install)
+    ▼
+runtime/ (staging - auto-populated)
     │
     │  npm install -g .
     ▼
@@ -25,10 +31,10 @@ runtime/ (source of truth for npm)
     │
     │  aether update (in any repo)
     ▼
-./.aether/ (working copy - gets overwritten)
+./.aether/ (working copy - gets overwritten in OTHER repos)
 ```
 
-**Key Rule:** Always edit `runtime/` or `.claude/commands/ant/`, never `.aether/`
+**Key Rule:** In the Aether repo, edit `.aether/` system files naturally. In other repos, don't edit `.aether/` — it gets overwritten by `aether update`.
 
 ### 2. Multi-Agent Research (5 agents launched)
 
@@ -121,7 +127,7 @@ npm publish
 | File | Purpose |
 |------|---------|
 | `CLAUDE.md` (repo root) | Development rules, architecture |
-| `runtime/` | Source of truth for npm distribution |
+| `.aether/` (system files) | Source of truth — auto-syncs to `runtime/` on publish |
 | `.claude/commands/ant/` | Slash commands (Claude Code) |
 | `.opencode/commands/ant/` | Slash commands (OpenCode) |
 | `~/.aether/` | Hub - distributes to all repos |
@@ -133,7 +139,12 @@ npm publish
 
 ```
 Aether Repo (this repo)
-├── runtime/ ───────────────────────────────────┐
+├── .aether/ (SOURCE OF TRUTH for system files)
+│   ├── workers.md, aether-utils.sh, utils/, docs/
+│   │        │
+│   │        │  bin/sync-to-runtime.sh (auto on npm install)
+│   │        ▼
+├── runtime/ (STAGING — auto-populated)
 ├── .claude/commands/ant/ ──────────────────────┤──→ npm package
 ├── .opencode/ ─────────────────────────────────┤
 │                                               ▼
@@ -150,10 +161,10 @@ any-repo/.aether/ (WORKING COPY)
 └── data/                        ← LOCAL (never touched)
 ```
 
-**Correct workflow:**
-1. Edit `runtime/` (for system files) or `.claude/commands/ant/` (for commands)
+**Development workflow:**
+1. Edit `.aether/` system files or `.claude/commands/ant/` for commands
 2. Commit changes
-3. Run `npm install -g .` to update hub
+3. Run `npm install -g .` — auto-syncs `.aether/` → `runtime/`, then pushes to hub
 4. Hub distributes to all repos via `aether update`
 
 ---

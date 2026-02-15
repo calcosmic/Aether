@@ -6,20 +6,19 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │                     AETHER REPO (this repo)                      │
 │                                                                  │
-│   runtime/              ← SOURCE OF TRUTH for distribution      │
-│   ├── workers.md                                             │
-│   ├── aether-utils.sh                                        │
-│   ├── utils/                                                 │
-│   └── docs/              ← Only docs for USERS go here         │
+│   .aether/             ← SOURCE OF TRUTH for system files       │
+│   ├── workers.md       (edit here)                              │
+│   ├── aether-utils.sh                                           │
+│   ├── utils/                                                    │
+│   └── docs/                                                     │
 │                                                                  │
-│   .claude/commands/ant/ ← Slash commands (Claude Code)         │
-│   .opencode/commands/ant/ ← Slash commands (OpenCode)          │
-│   .opencode/agents/     ← Agent definitions                    │
+│   runtime/             ← STAGING (auto-populated, don't edit)   │
 │                                                                  │
-│   .aether/              ← YOUR LOCAL WORK (not distributed)    │
-│   ├── docs/             ← Your personal notes                  │
-│   ├── visualizations/   ← ASCII art (gets distributed)         │
-│   └── data/             ← Colony state (never touched)         │
+│   .claude/commands/ant/ ← Slash commands (Claude Code)          │
+│   .opencode/commands/ant/ ← Slash commands (OpenCode)           │
+│   .opencode/agents/     ← Agent definitions                     │
+│                                                                  │
+│   .aether/data/        ← LOCAL ONLY (colony state, never sync)  │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -28,11 +27,12 @@
 
 ```mermaid
 flowchart TB
-    subgraph AetherRepo["Aether Repo (npm package)"]
-        RT["runtime/"]
+    subgraph AetherRepo["Aether Repo (source)"]
+        AE[".aether/ system files"]
         CC[".claude/commands/ant/"]
         OC[".opencode/"]
         VIS[".aether/visualizations/"]
+        RT["runtime/ (staging)"]
     end
 
     subgraph Hub["~/.aether/ (THE HUB)"]
@@ -50,6 +50,7 @@ flowchart TB
         RD["data/ (local only)"]
     end
 
+    AE -->|"bin/sync-to-runtime.sh"| RT
     RT -->|"npm install -g ."| HS
     CC -->|"npm install -g ."| HC
     OC -->|"npm install -g ."| HO
@@ -58,49 +59,54 @@ flowchart TB
     HS -->|"aether update"| RS
     HC -->|"aether update"| RC
     HV -->|"aether update"| RV
-
-    style RT fill:#90EE90
-    style HS fill:#87CEEB
-    style RD fill:#FFB6C1
 ```
 
 ## What Goes Where
 
 ```mermaid
 flowchart LR
-    subgraph "DISTRIBUTED (via npm)"
-        D1["runtime/*.md"]
-        D2["runtime/*.sh"]
-        D3["runtime/utils/*"]
-        D4["runtime/docs/*"]
+    subgraph distributed ["DISTRIBUTED (via npm)"]
+        D1[".aether/ system files"]
         D5[".claude/commands/ant/*"]
         D6[".opencode/commands/ant/*"]
         D7[".opencode/agents/*"]
         D8[".aether/visualizations/*"]
     end
 
-    subgraph "LOCAL ONLY (never distributed)"
-        L1[".aether/docs/*"]
-        L2[".aether/data/*"]
-        L3[".planning/*"]
+    subgraph staging ["STAGING (auto-generated)"]
+        S1["runtime/*"]
     end
 
-    style D1 fill:#90EE90
-    style D2 fill:#90EE90
-    style D3 fill:#90EE90
-    style D4 fill:#90EE90
-    style D5 fill:#90EE90
-    style D6 fill:#90EE90
-    style D7 fill:#90EE90
-    style D8 fill:#90EE90
-    style L1 fill:#FFB6C1
-    style L2 fill:#FFB6C1
-    style L3 fill:#FFB6C1
+    subgraph local ["LOCAL ONLY (never distributed)"]
+        L1[".aether/dreams/*"]
+        L2[".aether/data/*"]
+        L3[".planning/*"]
+        L4[".aether/oracle/*"]
+    end
 ```
 
 ## The Update Commands
 
-### `/ant:update` (in any repo)
+### `npm install -g .` (in Aether repo)
+Syncs .aether/ to runtime/, then pushes to hub
+
+```mermaid
+sequenceDiagram
+    participant Dev as Developer
+    participant Aether as Aether repo
+    participant RT as runtime/ (staging)
+    participant Hub as ~/.aether/
+
+    Dev->>Aether: Edit .aether/workers.md
+    Dev->>Aether: git commit
+    Dev->>RT: npm install -g . (preinstall: sync-to-runtime.sh)
+    Note over RT: .aether/ system files copied to runtime/
+    RT->>Hub: postinstall: cli.js install
+    Note over Hub: Hub now has new version
+    Note over Dev: Other repos can now aether update
+```
+
+### `aether update` (in any repo)
 Pulls latest from hub into that repo's `.aether/`
 
 ```mermaid
@@ -109,9 +115,9 @@ sequenceDiagram
     participant Repo as any-repo/.aether/
     participant Hub as ~/.aether/
 
-    User->>Repo: /ant:update
+    User->>Repo: aether update
     Repo->>Hub: Check version.json
-    Hub-->>Repo: v3.1.6
+    Hub-->>Repo: v3.1.7
     Note over Repo: Newer version available!
     Repo->>Hub: Pull system files
     Repo->>Hub: Pull commands
@@ -119,40 +125,40 @@ sequenceDiagram
     Note over Repo: data/ is NEVER touched
 ```
 
-### `npm install -g .` (in Aether repo)
-Pushes to hub, making updates available to all repos
-
-```mermaid
-sequenceDiagram
-    participant Dev as Developer
-    participant Aether as Aether repo
-    participant Hub as ~/.aether/
-
-    Dev->>Aether: Edit runtime/workers.md
-    Dev->>Aether: git commit
-    Dev->>Hub: npm install -g .
-    Note over Hub: Hub now has new version
-    Note over Dev: Other repos can now /ant:update
-```
-
 ## Simple Rules
 
 | Rule | Explanation |
 |------|-------------|
-| **Edit `runtime/`** | Changes that go to ALL users via npm |
+| **Edit `.aether/` system files** | Source of truth in the Aether repo |
 | **Edit `.claude/commands/ant/`** | Slash commands for Claude Code |
-| **Edit `.aether/visualizations/`** | ASCII art (special case - gets distributed) |
-| **NEVER edit `.aether/` system files** | They get overwritten by updates |
+| **Edit `.opencode/agents/`** | Agent definitions |
+| **Don't edit `runtime/` directly** | It's auto-populated from `.aether/` on publish |
 | **`.aether/data/` is safe** | Colony state is never touched by updates |
-| **`.aether/docs/` is yours** | Personal notes, not distributed |
+| **In other repos, don't edit `.aether/`** | Working copies get overwritten by `aether update` |
+
+## The Sync Script
+
+`bin/sync-to-runtime.sh` copies allowlisted system files from `.aether/` to `runtime/`.
+
+- Runs automatically as npm `preinstall` hook
+- Uses the same allowlist as `update-transaction.js`
+- Only copies changed files (hash comparison)
+- Never deletes extras in `runtime/` (templates, signatures, etc.)
+
+```bash
+# Manual run (normally automatic)
+bash bin/sync-to-runtime.sh
+
+# Reverse sync (seed .aether/ from runtime/, one-time use)
+bash bin/sync-to-runtime.sh --reverse
+```
 
 ## The Visualizations Exception
 
 ```
 .aether/visualizations/ → DISTRIBUTED
-.aether/docs/          → NOT distributed
-.aether/data/          → NOT distributed (local state)
-.aether/*.md           → NOT distributed (working copies)
+.aether/dreams/         → NOT distributed
+.aether/data/           → NOT distributed (local state)
 ```
 
 Why? Visualizations are ASCII art assets needed by the `/ant:maturity` command, so they need to be distributed with the package.
@@ -160,8 +166,8 @@ Why? Visualizations are ASCII art assets needed by the `/ant:maturity` command, 
 ## Quick Reference
 
 ```bash
-# You changed something in Aether repo:
-npm install -g .          # Push to hub
+# You changed system files in .aether/:
+npm install -g .          # Auto-sync + push to hub
 
 # You want updates in another repo:
 /ant:update               # Pull from hub

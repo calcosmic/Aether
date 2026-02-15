@@ -19,6 +19,7 @@
     "CHANGELOG.md"
   ],
   "scripts": {
+    "preinstall": "bash bin/sync-to-runtime.sh 2>/dev/null || true",
     "postinstall": "node bin/cli.js install --quiet",
     "test": "npm run test:unit && npm run test:bash",
     "test:unit": "ava",

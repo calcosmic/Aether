@@ -84,6 +84,17 @@ get_caste_emoji() {
     *Archaeologist*|*archaeologist*|*Relic*|*Fossil*|*Dig*|*Shard*|*Epoch*|*Strata*|*Lore*|*Glyph*) echo "🏺" ;;
     *Oracle*|*oracle*|*Sage*|*Seer*|*Vision*|*Augur*|*Mystic*|*Sibyl*|*Delph*|*Pythia*) echo "🔮" ;;
     *Route*|*route*) echo "📋" ;;
+    *Ambassador*|*ambassador*|*Bridge*|*Connect*|*Link*|*Diplomat*|*Network*|*Protocol*) echo "🔌" ;;
+    *Auditor*|*auditor*|*Review*|*Inspect*|*Examine*|*Scrutin*|*Critical*|*Verify*) echo "👥" ;;
+    *Chronicler*|*chronicler*|*Document*|*Record*|*Write*|*Chronicle*|*Archive*|*Scribe*) echo "📝" ;;
+    *Gatekeeper*|*gatekeeper*|*Guard*|*Protect*|*Secure*|*Shield*|*Depend*|*Supply*) echo "📦" ;;
+    *Guardian*|*guardian*|*Defend*|*Patrol*|*Secure*|*Vigil*|*Watch*|*Safety*|*Security*) echo "🛡️" ;;
+    *Includer*|*includer*|*Access*|*Inclusive*|*A11y*|*WCAG*|*Barrier*|*Universal*) echo "♿" ;;
+    *Keeper*|*keeper*|*Archive*|*Store*|*Curate*|*Preserve*|*Knowledge*|*Wisdom*|*Pattern*) echo "📚" ;;
+    *Measurer*|*measurer*|*Metric*|*Benchmark*|*Profile*|*Optimize*|*Performance*|*Speed*) echo "⚡" ;;
+    *Probe*|*probe*|*Test*|*Excavat*|*Uncover*|*Edge*|*Case*|*Mutant*) echo "🧪" ;;
+    *Tracker*|*tracker*|*Debug*|*Trace*|*Follow*|*Bug*|*Hunt*|*Root*) echo "🐛" ;;
+    *Weaver*|*weaver*|*Refactor*|*Restruct*|*Transform*|*Clean*|*Pattern*|*Weave*) echo "🔄" ;;
     *) echo "🐜" ;;
   esac
 }
@@ -1032,6 +1043,17 @@ EOF
       chaos)    prefixes=("Probe" "Stress" "Shake" "Twist" "Snap" "Breach" "Surge" "Jolt") ;;
       archaeologist) prefixes=("Relic" "Fossil" "Dig" "Shard" "Epoch" "Strata" "Lore" "Glyph") ;;
       oracle)   prefixes=("Sage" "Seer" "Vision" "Augur" "Mystic" "Sibyl" "Delph" "Pythia") ;;
+      ambassador) prefixes=("Bridge" "Connect" "Link" "Diplomat" "Protocol" "Network" "Port" "Socket") ;;
+      auditor)   prefixes=("Review" "Inspect" "Exam" "Scrutin" "Verify" "Check" "Audit" "Assess") ;;
+      chronicler) prefixes=("Record" "Write" "Document" "Chronicle" "Scribe" "Archive" "Script" "Ledger") ;;
+      gatekeeper) prefixes=("Guard" "Protect" "Secure" "Shield" "Defend" "Bar" "Gate" "Checkpoint") ;;
+      guardian)  prefixes=("Defend" "Patrol" "Watch" "Vigil" "Shield" "Guard" "Armor" "Fort") ;;
+      includer)  prefixes=("Access" "Include" "Open" "Welcome" "Reach" "Universal" "Equal" "A11y") ;;
+      keeper)    prefixes=("Archive" "Store" "Curate" "Preserve" "Guard" "Keep" "Hold" "Save") ;;
+      measurer)  prefixes=("Metric" "Gauge" "Scale" "Measure" "Benchmark" "Track" "Count" "Meter") ;;
+      probe)     prefixes=("Test" "Probe" "Excavat" "Uncover" "Edge" "Mutant" "Trial" "Check") ;;
+      tracker)   prefixes=("Track" "Trace" "Debug" "Hunt" "Follow" "Trail" "Find" "Seek") ;;
+      weaver)    prefixes=("Weave" "Knit" "Spin" "Twine" "Transform" "Mend" "Weave" "Weave") ;;
       *)        prefixes=("Ant" "Worker" "Drone" "Toiler" "Marcher" "Runner" "Carrier" "Helper") ;;
     esac
     # Pick random prefix and add random number
@@ -1507,7 +1529,7 @@ Colony initialization in progress...
 
 | Constraint | Source | Date Set |
 |------------|--------|----------|
-| Never edit \`.aether/\` directly — always edit \`runtime/\` | CLAUDE.md Rule #1 | Permanent |
+| In the Aether repo, \`.aether/\` IS the source of truth — \`runtime/\` is auto-populated on publish | CLAUDE.md | Permanent |
 | Never push without explicit user approval | CLAUDE.md Safety | Permanent |
 
 ---
@@ -1738,7 +1760,7 @@ EOF
         # Add worker spawn note to What's In Progress (brief)
         awk -v ant="$ant_name" -v caste="$caste" -v task="$task" -v ts="$ctx_ts" '
           /^## 📍 What's In Progress/ { in_progress=1 }
-          in_progress && /^## / && !/What's In Progress/ { in_progress=0 }
+          in_progress && /^## / && $0 !~ /What's In Progress/ { in_progress=0 }
           in_progress && /Workers:/ {
             print
             print "  - " ts ": Spawned " ant " (" caste ") for: " task
@@ -1787,7 +1809,7 @@ EOF
         # Update What's In Progress
         awk -v status="$status" -v result="$result" '
           /^## 📍 What's In Progress/ { in_progress=1 }
-          in_progress && /^## / && !/What's In Progress/ { in_progress=0 }
+          in_progress && /^## / && $0 !~ /What's In Progress/ { in_progress=0 }
           in_progress && /Build IN PROGRESS/ {
             print "## 📍 What's In Progress"
             print ""
@@ -1832,7 +1854,8 @@ EOF
     if [[ "$local_ver" == "$hub_ver" ]]; then
       json_ok '""'
     else
-      json_ok "\"Update available: $local_ver -> $hub_ver (run /ant:update)\""
+      printf -v msg 'Update available: %s to %s (run /ant:update)' "$local_ver" "$hub_ver"
+      json_ok "$msg"
     fi
     ;;
 
@@ -1841,7 +1864,7 @@ EOF
     # Usage: registry-add <repo_path> <version>
     repo_path="${1:-}"
     repo_version="${2:-}"
-    [[ -z "$repo_path" || -z "$repo_version" ]] && json_err "Usage: registry-add <repo_path> <version>"
+    [[ -z "$repo_path" || -z "$repo_version" ]] && json_err "Usage: registry-add \<repo_path\> \<version\>"
 
     registry_file="$HOME/.aether/registry.json"
     mkdir -p "$HOME/.aether"

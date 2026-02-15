@@ -1,48 +1,59 @@
 # CLAUDE.md — Aether Repo Rules
 
-> **CRITICAL:** See `/Users/callumcowie/repos/Aether/RUNTIME UPDATE ARCHITECTURE.md` for the complete architecture diagram and distribution flow. This document explains how the runtime/ directory, hub, and .aether/ working copy interact — read it before making any changes.
+> **CRITICAL:** See `RUNTIME UPDATE ARCHITECTURE.md` for the complete architecture diagram and distribution flow.
 
-## ⚠️ RULE #1: NEVER EDIT .aether/ SYSTEM FILES
+## How Development Works
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
-│  EDIT runtime/ — NOT .aether/                                  │
+│  In the Aether repo, .aether/ IS the source of truth.          │
+│  Edit system files there naturally.                            │
 │                                                                │
-│  runtime/           → SOURCE OF TRUTH (edit this)              │
-│  .aether/           → WORKING COPY (gets overwritten)          │
+│  .aether/           → SOURCE OF TRUTH (edit this)              │
+│  runtime/           → STAGING (auto-populated on publish)      │
 │                                                                │
-│  If you edit .aether/, your work WILL BE LOST on next update.  │
+│  A sync script copies .aether/ → runtime/ before packaging.   │
 └────────────────────────────────────────────────────────────────┘
 ```
 
 | What you're changing | Where to edit | Why |
 |---------------------|---------------|-----|
-| workers.md | `runtime/workers.md` | Source of truth |
-| aether-utils.sh | `runtime/aether-utils.sh` | Source of truth |
-| utils/*.sh | `runtime/utils/` | Source of truth |
-| User docs | `runtime/docs/` | Source of truth |
-| Slash commands | `.claude/commands/ant/` | Source of truth |
-| Visualizations | `.aether/visualizations/` | Exception - distributed directly |
-| Your notes | `.aether/docs/` | Never distributed, safe |
+| workers.md | `.aether/workers.md` | Source of truth |
+| aether-utils.sh | `.aether/aether-utils.sh` | Source of truth |
+| utils/*.sh | `.aether/utils/` | Source of truth |
+| User docs | `.aether/docs/` | Source of truth (allowlisted docs get distributed) |
+| Slash commands | `.claude/commands/ant/` | Claude Code commands |
+| OpenCode commands | `.opencode/commands/ant/` | OpenCode commands |
+| Agent definitions | `.opencode/agents/` | Agent definitions |
+| Visualizations | `.aether/visualizations/` | Distributed directly |
+| Your notes | `.aether/dreams/`, `.aether/oracle/` | Never distributed, safe |
 
-**After editing runtime/:**
+> **Note:** For OpenCode-specific rules, see `.opencode/OPENCODE.md`
+
+**After editing system files:**
 ```bash
-git add runtime/
+git add .
 git commit -m "your message"
-npm install -g .   # Push to hub
+npm install -g .   # Auto-syncs .aether/ → runtime/, then pushes to hub
 ```
 
 ---
 
 ## Critical Architecture
 
-**runtime/ is the source of truth for npm distribution.** `.aether/` is the working copy in repos.
+**In the Aether repo, `.aether/` system files are the source of truth.** A sync script (`bin/sync-to-runtime.sh`) copies them to `runtime/` automatically when you run `npm install -g .`. The `runtime/` directory is a staging area for the npm package.
 
 ```
 Aether Repo (this repo)
-├── runtime/ ──────────────────────────────────────────┐
-├── .claude/commands/ant/ ─────────────────────────────┤──→ npm package
-├── .opencode/ ────────────────────────────────────────┤
+├── .aether/ (SOURCE OF TRUTH for system files)
+│   ├── workers.md, aether-utils.sh, utils/, docs/
+│   └── data/                        ← LOCAL (never touched)
+│         │
+│         │  bin/sync-to-runtime.sh (auto on npm install)
+│         ▼
+├── runtime/ (STAGING — auto-populated from .aether/)
+├── .claude/commands/ant/ ─────────────────────────────┐
+├── .opencode/ ────────────────────────────────────────┤──→ npm package
 │                                                      ▼
 │                                                ~/.aether/ (THE HUB)
 │                                                ├── system/      ← runtime/
@@ -57,16 +68,13 @@ any-repo/.aether/ (WORKING COPY - gets overwritten)
 └── data/                        ← LOCAL (never touched by updates)
 ```
 
-**The destructive loop to avoid:**
-1. Edit `.aether/` directly → features work locally
-2. Run `npm install` → copies stale `runtime/` to hub
-3. Run `aether update` → copies stale hub to `.aether/` → **destroys your work**
-
-**Correct development workflow:**
-1. Edit `runtime/` (or `.claude/commands/ant/` for slash commands)
+**Development workflow:**
+1. Edit `.aether/` system files (or `.claude/commands/ant/` for slash commands) naturally
 2. Commit changes
-3. Run `npm install -g .` to update hub
+3. Run `npm install -g .` — auto-syncs `.aether/` → `runtime/`, then pushes to hub
 4. Hub distributes to all repos via `aether update`
+
+**In other repos:** `.aether/` is a working copy that gets overwritten by `aether update`. Don't edit system files there — they come from the hub.
 
 ---
 
@@ -74,11 +82,11 @@ any-repo/.aether/ (WORKING COPY - gets overwritten)
 
 | Directory | Purpose | Syncs to Hub |
 |-----------|---------|--------------|
-| `runtime/` | System files (workers.md, aether-utils.sh, utils/) | → `~/.aether/system/` |
-| `.claude/commands/ant/` | Claude Code slash commands | → `~/.claude/commands/ant/` + `~/.aether/commands/claude/` |
-| `.opencode/commands/ant/` | OpenCode slash commands (repo-local only) | → `~/.aether/commands/opencode/` |
+| `.aether/` (system files) | Source of truth for workers.md, aether-utils.sh, utils/, docs/ | → `runtime/` → `~/.aether/system/` |
+| `.claude/commands/ant/` | Claude Code slash commands | → `~/.aether/commands/claude/` |
+| `.opencode/commands/ant/` | OpenCode slash commands | → `~/.aether/commands/opencode/` |
 | `.opencode/agents/` | Agent definitions | → `~/.aether/agents/` |
-| `.aether/` | Working copy in THIS repo | Gets overwritten by updates |
+| `runtime/` | Staging directory (auto-populated, do not edit directly) | → `~/.aether/system/` |
 | `.aether/data/` | Colony state (COLONY_STATE.json, pheromones.json) | **NEVER touched** |
 
 ---
@@ -116,6 +124,18 @@ Workers are assigned to castes based on task type:
 | colonizer | 🌱 | New project setup |
 | route_setter | 🧭 | Direction setting |
 | archaeologist | 📜 | Git history excavation |
+| ambassador | 🔌 | Third-party API integration |
+| auditor | 👥 | Code review, quality audits |
+| chronicler | 📝 | Documentation generation |
+| gatekeeper | 📦 | Dependency management |
+| guardian | 🛡️ | Security audits |
+| includer | ♿ | Accessibility audits |
+| keeper | 📚 | Knowledge curation |
+| measurer | ⚡ | Performance profiling |
+| probe | 🧪 | Test generation |
+| sage | 📜 | Analytics & insights |
+| tracker | 🐛 | Bug investigation |
+| weaver | 🔄 | Code refactoring |
 
 See `.aether/docs/biological-reference.md` for full taxonomy.
 

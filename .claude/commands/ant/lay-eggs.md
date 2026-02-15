@@ -42,13 +42,31 @@ bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "
 - Read `.aether/data/COLONY_STATE.json`
 - If goal is not null AND phases exist with status != "completed":
   ```
-  Active colony exists: {goal}
+  🚫 Cannot lay eggs — active colony has unsaved pheromones
 
-  To start a new colony, you must first:
-  1. Complete all phases, then /ant:entomb to archive
-  2. Or manually reset by deleting .aether/data/COLONY_STATE.json
-
+  Active colony: {goal}
   Current: Phase {current_phase}, {phases_count} phases in plan
+
+  ┌─────────────────────────────────────────────────────────┐
+  │  COLONY LIFECYCLE                                       │
+  ├─────────────────────────────────────────────────────────┤
+  │                                                         │
+  │   🟢 ACTIVE COLONY  →  🏺 SEAL/ENTOMB  →  🥚 LAY EGGS   │
+  │       (working)         (preserve memory)   (new goal)  │
+  │                                                         │
+  └─────────────────────────────────────────────────────────┘
+
+  Why this matters:
+  Your active colony contains preserved learnings, decisions, and
+  instincts (pheromones) from prior work. These must be sealed
+  before starting a new project, or they will be lost forever.
+
+  To start a new colony:
+  1. Complete work → run `/ant:seal` or `/ant:entomb` to archive
+  2. Then run `/ant:lay-eggs "new goal"` to begin fresh
+
+  Emergency reset (loses all pheromones):
+     rm .aether/data/COLONY_STATE.json
   ```
   Stop here.
 

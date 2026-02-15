@@ -41,7 +41,7 @@ Implement systematic git integration for the Aether colony with AI-generated com
 
 | Constraint | Source | Date Set |
 |------------|--------|----------|
-| Never edit `.aether/` directly — always edit `runtime/` | CLAUDE.md Rule #1 | Permanent |
+| In the Aether repo, `.aether/` IS the source of truth — `runtime/` is auto-populated on publish | CLAUDE.md | Permanent |
 | Never push without explicit user approval | CLAUDE.md Safety | Permanent |
 
 ---
