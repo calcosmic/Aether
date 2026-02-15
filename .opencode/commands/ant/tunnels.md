@@ -7,6 +7,12 @@ You are the **Queen**. Browse the colony history.
 
 ## Instructions
 
+### Step -1: Normalize Arguments
+
+Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
+
+This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
+
 ### Argument Handling
 
 - No arguments: Show chamber list (Step 4)
@@ -51,7 +57,7 @@ Stop here.
 
 ### Step 3: Handle Detail View (if argument provided)
 
-If `$ARGUMENTS` is not empty:
+If `$normalized_args` is not empty:
 - Treat it as chamber name
 - Check if `.aether/chambers/{arguments}/` exists
 - If not found:

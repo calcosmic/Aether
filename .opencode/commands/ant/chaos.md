@@ -29,13 +29,13 @@ Where builders create with optimism and watchers verify the happy path, you inve
 
 ## Target
 
-The user specifies what to investigate via `$ARGUMENTS`:
+The user specifies what to investigate via `$normalized_args`:
 
 - **File path:** e.g., `src/auth/login.ts` — investigate that specific file
 - **Module name:** e.g., `authentication` — investigate that module/domain
 - **Feature description:** e.g., `user signup flow` — investigate that feature area
 
-**If `$ARGUMENTS` is empty or not provided, display usage and stop:**
+**If `$normalized_args` is empty or not provided, display usage and stop:**
 
 ```
 🎲🐜🔍🐜🎲 CHAOS ANT — Resilience Tester
@@ -60,7 +60,13 @@ Categories tested:
 
 ## Instructions
 
-Parse `$ARGUMENTS`:
+### Step -1: Normalize Arguments
+
+Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
+
+This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
+
+Parse `$normalized_args`:
 - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
 - Otherwise: set `visual_mode = true`
 
@@ -85,14 +91,14 @@ Read these files in parallel to understand the colony and codebase:
 - `.aether/data/constraints.json` — active constraints and focus areas
 
 **Target identification:**
-- Parse `$ARGUMENTS` to determine the target
+- Parse `$normalized_args` to determine the target
 - If it looks like a file path, verify it exists with Read. If it does not exist, search with Glob for the closest match.
 - If it looks like a module/feature name, use Grep and Glob to locate relevant files
 - Build a list of target files to investigate (aim for 1-5 core files)
 
 **If no relevant files can be found for the target:**
 ```
-🎲 Chaos Ant cannot locate target: $ARGUMENTS
+🎲 Chaos Ant cannot locate target: $normalized_args
    Searched for matching files and modules but found nothing.
    Please provide a valid file path, module name, or feature description.
 ```

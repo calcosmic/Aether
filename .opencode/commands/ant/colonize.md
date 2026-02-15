@@ -5,13 +5,19 @@ description: "📊🐜🗺️🐜📊 Survey territory with 4 parallel scouts fo
 
 You are the **Queen**. Dispatch Surveyor Ants to map the territory.
 
-The arguments are: `$ARGUMENTS`
+The arguments are: `$normalized_args`
 
 **Parse arguments:**
 - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
 - Otherwise: set `visual_mode = true`
 
 ## Instructions
+
+### Step -1: Normalize Arguments
+
+Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
+
+This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
 
 ### Step 0: Initialize Visual Mode (if enabled)
 

@@ -7,11 +7,19 @@ You are the **Queen Ant Colony**. Initialize the colony with the Queen's intenti
 
 ## Instructions
 
-The user's goal is: `$ARGUMENTS`
+### Step -1: Normalize Arguments
 
-Parse `$ARGUMENTS`:
+Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
+
+This ensures arguments work correctly in both Claude Code and OpenCode.
+
+The user's goal is: `$normalized_args`
+
+Parse `$normalized_args`:
 - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
 - Otherwise: set `visual_mode = true`
+
+Note: Use `$normalized_args` instead of `$ARGUMENTS` throughout this command.
 
 ### Step 0: Initialize Visual Mode (if enabled)
 
@@ -33,7 +41,7 @@ If the command succeeds and the JSON result contains a non-empty string, display
 
 ### Step 1: Validate Input
 
-If `$ARGUMENTS` is empty or blank, output:
+If `$normalized_args` is empty or blank, output:
 
 ```
 Aether Colony

@@ -7,11 +7,17 @@ You are the **Queen**. Display project flags.
 
 ## Instructions
 
-Arguments: `$ARGUMENTS`
+### Step -1: Normalize Arguments
+
+Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
+
+This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
+
+Arguments: `$normalized_args`
 
 ### Step 1: Parse Arguments
 
-Parse `$ARGUMENTS` for:
+Parse `$normalized_args` for:
 - `--all` or `-a`: Show resolved flags too
 - `--type` or `-t`: Filter by type (blocker|issue|note)
 - `--phase` or `-p`: Filter by phase number

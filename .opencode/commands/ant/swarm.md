@@ -7,9 +7,15 @@ You are the **Queen Ant Colony**. Deploy the swarm to destroy a stubborn bug or 
 
 ## Instructions
 
+### Step -1: Normalize Arguments
+
+Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
+
+This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
+
 ### Quick View Mode (No Arguments)
 
-If `$ARGUMENTS` is empty or equals "--watch":
+If `$normalized_args` is empty or equals "--watch":
 
 Run the real-time swarm display:
 ```bash
@@ -29,11 +35,11 @@ Press Ctrl+C to exit.
 
 ### Bug Destruction Mode (With Arguments)
 
-The problem to investigate is: `$ARGUMENTS`
+The problem to investigate is: `$normalized_args`
 
 #### Step 1: Validate Input
 
-If `$ARGUMENTS` is empty:
+If `$normalized_args` is empty:
 ```
 🔥🐜🗡️🐜🔥 SWARM
 

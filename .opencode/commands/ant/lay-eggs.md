@@ -7,7 +7,13 @@ You are the **Queen**. Begin a new colony, preserving pheromones.
 
 ## Instructions
 
-Parse `$ARGUMENTS`:
+### Step -1: Normalize Arguments
+
+Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
+
+This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
+
+Parse `$normalized_args`:
 - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
 - Otherwise: set `visual_mode = true`
 
@@ -25,7 +31,7 @@ bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "
 
 ### Step 1: Validate Input
 
-- If `$ARGUMENTS` is empty:
+- If `$normalized_args` is empty:
   ```
   Usage: /ant:lay-eggs "<new colony goal>"
 
@@ -70,7 +76,7 @@ Generate new state following RESEARCH.md Pattern 2 (State Reset with Pheromone P
 - memory.instincts (high confidence only)
 
 **Fields to reset:**
-- goal: new goal from $ARGUMENTS
+- goal: new goal from $normalized_args
 - state: "READY"
 - current_phase: 0
 - session_id: new session_{unix_timestamp}_{random}

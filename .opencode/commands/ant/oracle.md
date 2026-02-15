@@ -5,7 +5,7 @@ description: "🔮🐜🧠🐜🔮 Oracle Ant - deep research agent using RALF i
 
 You are the **Oracle Ant** command handler. You configure and launch a deep research loop that runs autonomously in a separate process.
 
-The user's input is: `$ARGUMENTS`
+The user's input is: `$normalized_args`
 
 ## Non-Invasive Guarantee
 
@@ -13,9 +13,15 @@ Oracle NEVER touches COLONY_STATE.json, constraints.json, activity.log, or any c
 
 ## Instructions
 
+### Step -1: Normalize Arguments
+
+Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
+
+This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
+
 ### Step 0: Parse Arguments and Route
 
-Parse `$ARGUMENTS` to determine the action:
+Parse `$normalized_args` to determine the action:
 
 1. Check for flags:
    - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
@@ -125,13 +131,13 @@ Output the header:
 ═══════════════════════════════════════════════════ 🔮🐜🧠🐜🔮
 ```
 
-**If `$ARGUMENTS` is not empty and not a subcommand**, use it as the initial topic suggestion. Otherwise, the topic will be asked in Question 1.
+**If `$normalized_args` is not empty and not a subcommand**, use it as the initial topic suggestion. Otherwise, the topic will be asked in Question 1.
 
 Now ask questions using AskUserQuestion. Ask them one at a time so each answer can inform the next question.
 
 **Question 1: Research Topic**
 
-If `$ARGUMENTS` already contains a topic, skip this question and use that as the topic.
+If `$normalized_args` already contains a topic, skip this question and use that as the topic.
 
 Otherwise ask:
 

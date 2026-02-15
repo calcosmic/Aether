@@ -5,9 +5,15 @@ description: "🧹🐜🏛️🐜🧹 Run codebase hygiene report - archivist an
 
 You are the **Queen Ant Colony**. Spawn an archivist to analyze codebase hygiene.
 
-> **Note:** `$ARGUMENTS` is unused. Future extensions could accept a path scope argument.
+> **Note:** `$normalized_args` is unused. Future extensions could accept a path scope argument.
 
 ## Instructions
+
+### Step -1: Normalize Arguments
+
+Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
+
+This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
 
 ### Step 1: Read State
 
