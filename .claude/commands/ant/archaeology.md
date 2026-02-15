@@ -29,6 +29,10 @@ You sift through git history like an archaeologist brushes dirt from ancient pot
 
 ## Instructions
 
+Parse `$ARGUMENTS`:
+- If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
+- Otherwise: set `visual_mode = true`
+
 ### Step 0: Validate Target
 
 The target path is: `$ARGUMENTS`
@@ -201,6 +205,14 @@ Synthesize findings into patterns:
 5. **Dead Code Candidates** — Old workarounds for issues that may be resolved
 
 ### Step 7: Generate Archaeology Report
+
+**If visual_mode is true, render final swarm display:**
+```bash
+arch_id="archaeology-$(date +%s)"
+bash .aether/aether-utils.sh swarm-display-init "$arch_id"
+bash .aether/aether-utils.sh swarm-display-update "Archaeologist" "archaeologist" "completed" "Excavation complete" "Colony" '{"read":10,"grep":3,"edit":0,"bash":5}' 100 "fungus_garden" 100
+bash .aether/aether-utils.sh swarm-display-render "$arch_id"
+```
 
 Display the full report:
 

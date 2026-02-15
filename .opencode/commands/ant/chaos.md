@@ -60,6 +60,22 @@ Categories tested:
 
 ## Instructions
 
+Parse `$ARGUMENTS`:
+- If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
+- Otherwise: set `visual_mode = true`
+
+### Step 0: Initialize Visual Mode (if enabled)
+
+If `visual_mode` is true:
+```bash
+# Generate session ID
+chaos_id="chaos-$(date +%s)"
+
+# Initialize swarm display
+bash .aether/aether-utils.sh swarm-display-init "$chaos_id"
+bash .aether/aether-utils.sh swarm-display-update "Chaos Ant" "chaos" "excavating" "Probing for weaknesses" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0
+```
+
 ### Step 1: Awaken — Load Context
 
 Read these files in parallel to understand the colony and codebase:
@@ -205,6 +221,12 @@ For each scenario, produce a finding in this format. Display each to the termina
 - **INFO:** Observation worth noting but not a real weakness
 
 ### Step 5: Produce the Chaos Report
+
+**If visual_mode is true, render final swarm display:**
+```bash
+bash .aether/aether-utils.sh swarm-display-update "Chaos Ant" "chaos" "completed" "Resilience test complete" "Colony" '{"read":8,"grep":4,"edit":0,"bash":3}' 100 "fungus_garden" 100
+bash .aether/aether-utils.sh swarm-display-render "$chaos_id"
+```
 
 After all 5 scenarios, compile the structured report:
 

@@ -7,7 +7,23 @@ You are the **Queen Ant Colony**. Reconcile completed work and advance to the ne
 
 ## Instructions
 
-### Step 0: Version Check (Non-blocking)
+Parse `$ARGUMENTS`:
+- If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
+- Otherwise: set `visual_mode = true`
+
+### Step 0: Initialize Visual Mode (if enabled)
+
+If `visual_mode` is true:
+```bash
+# Generate session ID
+continue_id="continue-$(date +%s)"
+
+# Initialize swarm display
+bash .aether/aether-utils.sh swarm-display-init "$continue_id"
+bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "Phase continuation" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0
+```
+
+### Step 0.5: Version Check (Non-blocking)
 
 Run using the Bash tool: `bash .aether/aether-utils.sh version-check 2>/dev/null || true`
 
@@ -853,6 +869,12 @@ Runs ONLY when all phases complete.
 4. Display next commands and stop.
 
 ### Step 3: Display Result
+
+**If visual_mode is true, render final swarm display:**
+```bash
+bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Phase advanced" "Colony" '{"read":5,"grep":2,"edit":3,"bash":2}' 100 "fungus_garden" 100
+bash .aether/aether-utils.sh swarm-display-render "$continue_id"
+```
 
 Output:
 

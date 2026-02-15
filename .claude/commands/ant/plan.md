@@ -7,7 +7,23 @@ You are the **Queen**. Orchestrate iterative research and planning until 99% con
 
 ## Instructions
 
-### Step 0: Version Check (Non-blocking)
+Parse `$ARGUMENTS`:
+- If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
+- Otherwise: set `visual_mode = true`
+
+### Step 0: Initialize Visual Mode (if enabled)
+
+If `visual_mode` is true:
+```bash
+# Generate session ID
+plan_id="plan-$(date +%s)"
+
+# Initialize swarm display
+bash .aether/aether-utils.sh swarm-display-init "$plan_id"
+bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "Generating colony plan" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0
+```
+
+### Step 0.5: Version Check (Non-blocking)
 
 Run using the Bash tool: `bash .aether/aether-utils.sh version-check 2>/dev/null || true`
 
@@ -497,6 +513,12 @@ Ready to build.
 ```
 
 ### Step 6: Display Plan
+
+**If visual_mode is true, render final swarm display:**
+```bash
+bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Plan generated" "Colony" '{"read":8,"grep":4,"edit":2,"bash":1}' 100 "fungus_garden" 100
+bash .aether/aether-utils.sh swarm-display-render "$plan_id"
+```
 
 Read `plan.phases` from COLONY_STATE.json and display:
 
