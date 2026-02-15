@@ -1759,8 +1759,8 @@ EOF
 
         # Add worker spawn note to What's In Progress (brief)
         awk -v ant="$ant_name" -v caste="$caste" -v task="$task" -v ts="$ctx_ts" '
-          /^## 📍 What's In Progress/ { in_progress=1 }
-          in_progress && /^## / && $0 !~ /What's In Progress/ { in_progress=0 }
+          /^## 📍 What'\''s In Progress/ { in_progress=1 }
+          in_progress && /^## / && $0 !~ /What'\''s In Progress/ { in_progress=0 }
           in_progress && /Workers:/ {
             print
             print "  - " ts ": Spawned " ant " (" caste ") for: " task
@@ -1808,10 +1808,10 @@ EOF
 
         # Update What's In Progress
         awk -v status="$status" -v result="$result" '
-          /^## 📍 What's In Progress/ { in_progress=1 }
-          in_progress && /^## / && $0 !~ /What's In Progress/ { in_progress=0 }
+          /^## 📍 What'\''s In Progress/ { in_progress=1 }
+          in_progress && /^## / && $0 !~ /What'\''s In Progress/ { in_progress=0 }
           in_progress && /Build IN PROGRESS/ {
-            print "## 📍 What's In Progress"
+            print "## 📍 What'\''s In Progress"
             print ""
             print "**Build " status "** — " result
             next
