@@ -50,6 +50,106 @@ bash .aether/aether-utils.sh spawn-complete "Hammer-42" "completed" "auth module
 
 ---
 
+## Model-Aware Spawning
+
+Aether colony workers are spawned with model-specific configurations based on their caste. This enables optimal task routing through the LiteLLM proxy.
+
+### How It Works
+
+1. **Model Assignment**: Each caste is mapped to an optimal model in `.aether/model-profiles.yaml`
+2. **Prompt Context**: Queen includes model assignment in worker's prompt via `--- MODEL CONTEXT ---` section
+3. **Worker Self-Reporting**: Workers echo their assigned model in JSON output for verification
+4. **Proxy Routing** (Optional): With LiteLLM proxy running, set `ANTHROPIC_MODEL` in parent shell for true model routing
+
+### Model Assignments by Caste
+
+| Caste | Model | Purpose |
+|-------|-------|---------|
+| prime | glm-5 | Long-horizon coordination, strategic planning (200K context) |
+| archaeologist | glm-5 | Historical pattern analysis across long timeframes |
+| architect | glm-5 | Pattern synthesis, documentation coordination (200K context) |
+| oracle | minimax-2.5 | Research, foresight, browse/search (76.3% BrowseComp) |
+| route_setter | kimi-k2.5 | Task decomposition, structured planning (256K context) |
+| builder | kimi-k2.5 | Code generation, refactoring (76.8% SWE-Bench) |
+| watcher | kimi-k2.5 | Validation, testing, verification |
+| scout | minimax-2.5| Research exploration, parallel sub-agent spawning |
+| chaos | kimi-k2.5 | Edge case probing, resilience testing |
+| colonizer | minimax-2.5| Environment setup, visual coding from screenshots |
+
+### Worker Model Self-Reporting
+
+All workers must include model context in their JSON output:
+
+```json
+{
+  "status": "completed",
+  "summary": "...",
+  "model_context": {
+    "assigned": "kimi-k2.5",
+    "caste": "builder",
+    "source": "caste-default",
+    "reported_at": "2026-02-15T10:30:00Z"
+  }
+}
+```
+
+This enables:
+- **Visibility**: See which model each worker used
+- **Verification**: Confirm routing is working correctly
+- **Debugging**: Detect mismatches between expected and actual
+
+### LiteLLM Proxy Integration (Optional)
+
+For true model routing through LiteLLM:
+
+```bash
+# 1. Start proxy with your API keys
+litellm --config proxy.yaml
+
+# 2. In parent shell (before starting Claude Code):
+export ANTHROPIC_BASE_URL=http://localhost:4000
+export ANTHROPIC_AUTH_TOKEN=sk-litellm-local
+export ANTHROPIC_MODEL=kimi-k2.5  # Or your preferred default
+
+# 3. Start Claude Code - it will inherit these variables
+claude
+```
+
+**Note:** Claude Code's Task tool doesn't support explicit environment variable passing,
+so proxy routing relies on parent shell inheritance. The self-reporting approach works
+regardless of proxy status.
+
+### Available Models
+
+- **glm-5** (via Z_AI): Powerful reasoning for complex tasks, architecture, planning
+- **kimi-k2.5** (via Kimi): Fast code generation, refactoring, implementation
+- **minimax-2.5** (via MiniMax): Efficient validation, research, lightweight tasks
+
+### Fallback Behavior
+
+If the model profile is missing or a caste is not mapped:
+- Default to `kimi-k2.5` (fastest, most cost-effective)
+- Log a warning to the activity log
+- Continue with worker spawn
+
+### Sub-Worker Spawning
+
+When workers spawn sub-workers, they should:
+1. Check if the sub-worker's caste differs from their own
+2. If different, the sub-worker will automatically get their caste's model via the same mechanism
+3. If spawning with the same caste, the model remains the same
+
+### Model Context in Prompts
+
+Worker prompts include a MODEL CONTEXT section that informs the worker about:
+- Which model they are running on
+- The model's strengths and optimal use cases
+- Expected task complexity
+
+This helps workers adjust their approach based on model capabilities.
+
+---
+
 ## Honest Execution Model
 
 **What the colony metaphor means:**
@@ -366,6 +466,12 @@ Next Steps / Recommendations: {required}
 
 🔨 **Purpose:** Implement code, execute commands, and manipulate files to achieve concrete outcomes. The colony's hands -- when tasks need doing, you make them happen.
 
+**Model Context:**
+- Assigned model: kimi-k2.5
+- Strengths: Code generation, refactoring, multimodal capabilities
+- Best for: Implementation tasks, code writing, visual coding from screenshots
+- Benchmark: 76.8% SWE-Bench Verified, 256K context
+
 **When to use:** Code implementation, file manipulation, command execution
 
 **Workflow (TDD-First):**
@@ -416,6 +522,12 @@ Fix count: {N}/3
 ## Watcher
 
 👁️ **Purpose:** Validate implementation, run tests, and ensure quality. The colony's guardian -- when work is done, you verify it's correct and complete. Also handles security audits, performance analysis, and test coverage.
+
+**Model Context:**
+- Assigned model: kimi-k2.5
+- Strengths: Validation, testing, visual regression testing
+- Best for: Verification, test coverage analysis, multimodal checks (screenshots)
+- Context window: 256K tokens, multimodal capable
 
 **When to use:** Quality review, testing, validation, security/performance audits, phase completion approval
 
@@ -520,6 +632,12 @@ Recommendation: {specific fix or investigation needed}
 
 🔍 **Purpose:** Gather information, search documentation, and retrieve context. The colony's researcher -- when the colony needs to know, you venture forth to find answers.
 
+**Model Context:**
+- Assigned model: kimi-k2.5
+- Strengths: Parallel exploration via agent swarm (up to 100 sub-agents), broad research
+- Best for: Documentation lookup, pattern discovery, wide exploration
+- Benchmark: Can coordinate 1,500 simultaneous tool calls
+
 **When to use:** Research questions, documentation lookup, finding information, learning new domains
 
 **Workflow:**
@@ -537,6 +655,12 @@ Recommendation: {specific fix or investigation needed}
 
 🗺️ **Purpose:** Explore and index codebase structure. Build semantic understanding, detect patterns, and map dependencies. The colony's explorer -- when new territory is encountered, you venture forth to understand the landscape.
 
+**Model Context:**
+- Assigned model: kimi-k2.5
+- Strengths: Visual coding, environment setup, can turn screenshots into functional code
+- Best for: Codebase mapping, dependency analysis, UI/prototype generation
+- Multimodal: Can process visual inputs alongside text
+
 **When to use:** Codebase exploration, structure mapping, dependency analysis, pattern detection
 
 **Workflow:**
@@ -553,6 +677,12 @@ Recommendation: {specific fix or investigation needed}
 
 🏛️ **Purpose:** Synthesize knowledge, extract patterns, and coordinate documentation. The colony's wisdom -- when the colony learns, you organize and preserve that knowledge.
 
+**Model Context:**
+- Assigned model: glm-5
+- Strengths: Long-context synthesis, pattern extraction, complex documentation
+- Best for: Synthesizing knowledge, coordinating docs, pattern recognition
+- Benchmark: 744B MoE, 200K context, strong execution with guidance
+
 **When to use:** Knowledge synthesis, pattern extraction, documentation coordination, decision organization
 
 **Workflow:**
@@ -568,6 +698,12 @@ Recommendation: {specific fix or investigation needed}
 ## Route-Setter
 
 📋 **Purpose:** Create structured phase plans, break down goals into achievable tasks, and analyze dependencies. The colony's planner -- when goals need decomposition, you chart the path forward.
+
+**Model Context:**
+- Assigned model: kimi-k2.5
+- Strengths: Structured planning, large context for understanding codebases, fast iteration
+- Best for: Breaking down goals, creating phase structures, dependency analysis
+- Benchmark: 256K context, 76.8% SWE-Bench, strong at structured output
 
 **When to use:** Planning, goal decomposition, phase structuring, dependency analysis
 
@@ -606,7 +742,15 @@ Steps:
 
 ## Prime Worker
 
-The **Prime Worker** is a special coordinator role at depth 1. When spawned by `/ant:build`, the Prime Worker:
+🏛️ **Purpose:** Coordinate complex, multi-step colony operations. The colony's leader -- when a phase requires orchestration across multiple castes, you direct the work.
+
+**Model Context:**
+- Assigned model: glm-5
+- Strengths: Long-horizon planning, strategic coordination, complex reasoning
+- Best for: Multi-phase coordination, long-term task execution, complex synthesis
+- Benchmark: 744B MoE (40B active), 200K context, tested on 1-year business simulations
+
+**When spawned by `/ant:build`, the Prime Worker:**
 
 1. **Reads phase context** -- tasks, success criteria, constraints
 2. **Self-organizes** -- decides what specialists to spawn based on task analysis

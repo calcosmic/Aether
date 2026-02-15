@@ -1,95 +1,85 @@
 ---
 name: ant:verify-castes
-description: "Verify model routing is working for all castes"
+description: "Verify colony caste assignments and system status"
 ---
 
-You are the **Queen**. Verify that model routing is active and working.
+You are the **Queen**. Display the caste assignments and system status.
 
-## Step 1: Check Proxy Health
+## Step 1: Show Caste Assignments
 
-Run using the Bash tool: `node bin/cli.js caste-models list`
+Display the colony caste structure:
 
-Capture the proxy status line. If proxy is unhealthy:
-- Display warning about proxy not running
-- Show instructions to start LiteLLM proxy
-- Continue with verification anyway (will show failures)
-
-## Step 2: Verify Each Caste Assignment
-
-For each caste in [prime, builder, watcher, oracle, scout, chaos, architect, archaeologist, colonizer, route_setter]:
-
-1. Get assigned model using the Bash tool:
-   ```
-   node -e "const mp = require('./bin/lib/model-profiles'); const p = mp.loadModelProfiles('.'); console.log(mp.getEffectiveModel(p, 'CASTE').model)"
-   ```
-   Replace CASTE with the actual caste name.
-
-2. Verify model is not "default" (should be specific model from profiles)
-3. Log result with checkmark or X
-
-Display results in a table:
 ```
-Caste Verification:
-─────────────────────────────────────────
-✓ prime: glm-5 (z_ai)
-✓ builder: kimi-k2.5 (kimi)
-✓ watcher: kimi-k2.5 (kimi)
-...
+Aether Colony Caste System
+═══════════════════════════════════════════
+
+CASTE ASSIGNMENTS
+─────────────────
+👑 Prime           - Colony coordination and strategic planning
+🏺 Archaeologist   - Git history analysis and pattern excavation
+🏛️ Architect      - System design and documentation
+🔮 Oracle          - Deep research and foresight
+🗺️ Route Setter    - Task decomposition and planning
+🔨 Builder         - Implementation and coding
+👁️ Watcher         - Verification and testing
+🔍 Scout           - Research and exploration
+🎲 Chaos           - Edge case testing and resilience probing
+🧭 Colonizer       - Environment setup and exploration
+
+───────────────────────────────────────────
 ```
 
-## Step 3: Test Spawn Verification (Optional but Recommended)
+## Step 2: Check System Status
 
-If proxy is healthy, spawn a test worker to verify model routing actually works:
+Run using Bash tool: `bash .aether/aether-utils.sh version-check 2>/dev/null || echo "Utils available"`
 
-1. Create a temporary test script that:
-   - Reports which ANTHROPIC_MODEL it sees
-   - Reports ANTHROPIC_BASE_URL
-   - Exits successfully
-
-2. Use the Write tool to create a temporary test script at `/tmp/aether-test-spawn.js`:
-```javascript
-console.log('ANTHROPIC_MODEL:', process.env.ANTHROPIC_MODEL || '(not set)');
-console.log('ANTHROPIC_BASE_URL:', process.env.ANTHROPIC_BASE_URL || '(not set)');
-process.exit(0);
+Check LiteLLM proxy status:
+```bash
+curl -s http://localhost:4000/health 2>/dev/null | grep -q "healthy" && echo "✓ Proxy healthy" || echo "⚠ Proxy not running"
 ```
 
-3. Spawn test worker via Task tool with builder caste environment variables:
-   - Set ANTHROPIC_MODEL to the builder's assigned model
-   - Set ANTHROPIC_BASE_URL to the proxy endpoint
+## Step 3: Show Current Session Info
 
-4. Capture output and verify:
-   - Model environment variable is set correctly
-   - Base URL points to proxy
-
-5. Display result:
 ```
-Test Spawn (builder):
-─────────────────────────────────────────
-Model: kimi-k2.5 ✓
-Base URL: http://localhost:4000 ✓
+SESSION INFORMATION
+───────────────────
+All workers in this session use the same model configuration.
+To change models, restart Claude Code with different settings:
+
+export ANTHROPIC_BASE_URL=http://localhost:4000
+export ANTHROPIC_AUTH_TOKEN=sk-litellm-local
+export ANTHROPIC_MODEL=<model-name>
+claude
+
+Available models (via LiteLLM proxy):
+  • glm-5        - Complex reasoning, architecture, planning
+  • kimi-k2.5    - Fast coding, implementation
+  • minimax-2.5  - Validation, research, exploration
 ```
 
-## Step 4: Summary Report
+## Step 4: Summary
 
-Display final verification report:
 ```
 ═══════════════════════════════════════════
-Verification Complete
+System Status
 ═══════════════════════════════════════════
-Proxy Health: ✓ Healthy
-Caste Assignments: 10/10 verified
-Test Spawn: ✓ Working
+Utils: ✓ Operational
+Proxy: {status from Step 2}
+Castes: 10 defined
 
-Status: All systems operational
+Note: Model-per-caste routing was attempted but is not
+possible with Claude Code's Task tool (no env var support).
+See archived config: .aether/archive/model-routing/
+Tag: model-routing-v1-archived
 ```
 
-Or if issues found:
-```
-Issues Detected:
-- Proxy unhealthy (not running)
-- 3 castes using default model
+## Historical Note
 
-Recommendations:
-1. Start LiteLLM proxy: litellm --config proxy.yaml
-2. Run `aether caste-models set <caste>=<model>` for missing assignments
+A model-per-caste system was designed and implemented but cannot
+function due to Claude Code Task tool limitations. The complete
+configuration is archived in `.aether/archive/model-routing/`.
+
+To view the archived configuration:
+```bash
+git show model-routing-v1-archived
 ```

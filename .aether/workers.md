@@ -50,70 +50,42 @@ bash .aether/aether-utils.sh spawn-complete "Hammer-42" "completed" "auth module
 
 ---
 
-## Model-Aware Spawning
+## Model Selection (Session-Level)
 
-Aether colony workers are spawned with model-specific configurations based on their caste. This enables optimal task routing through the LiteLLM proxy.
+Aether can work with different AI models through a LiteLLM proxy, but **model selection happens at the session level**, not per-worker.
 
 ### How It Works
 
-1. **Model Assignment**: Each caste is mapped to an optimal model in `.aether/model-profiles.yaml`
-2. **Environment Setup**: Before spawning, the Queen sets `ANTHROPIC_MODEL` based on the worker's caste
-3. **Proxy Routing**: Claude Code connects through the LiteLLM proxy at `http://localhost:4000`
-4. **Model Selection**: The proxy routes requests to the appropriate provider based on `ANTHROPIC_MODEL`
+Claude Code's Task tool does not support passing environment variables to spawned workers. All workers inherit the parent session's model configuration.
 
-### Model Assignments by Caste
-
-| Caste | Model | Purpose |
-|-------|-------|---------|
-| prime | glm-5 | Long-horizon coordination, strategic planning (200K context) |
-| archaeologist | glm-5 | Historical pattern analysis across long timeframes |
-| architect | glm-5 | Pattern synthesis, documentation coordination (200K context) |
-| oracle | minimax-2.5 | Research, foresight, browse/search (76.3% BrowseComp) |
-| route_setter | kimi-k2.5 | Task decomposition, structured planning (256K context) |
-| builder | kimi-k2.5 | Code generation, refactoring (76.8% SWE-Bench) |
-| watcher | kimi-k2.5 | Validation, testing, verification |
-| scout | minimax-2.5| Research exploration, parallel sub-agent spawning |
-| chaos | kimi-k2.5 | Edge case probing, resilience testing |
-| colonizer | minimax-2.5| Environment setup, visual coding from screenshots |
-
-### Environment Variables
-
-Workers inherit these environment variables from the parent Claude Code process:
+### To Use a Specific Model
 
 ```bash
-ANTHROPIC_BASE_URL=http://localhost:4000    # LiteLLM proxy endpoint
-ANTHROPIC_AUTH_TOKEN=sk-litellm-local       # Proxy authentication
-ANTHROPIC_MODEL={model-alias}               # Model based on caste
+# 1. Start LiteLLM proxy (if using)
+cd ~/repos/litellm-proxy && docker-compose up -d
+
+# 2. Set environment variables before starting Claude Code:
+export ANTHROPIC_BASE_URL=http://localhost:4000
+export ANTHROPIC_AUTH_TOKEN=sk-litellm-local
+export ANTHROPIC_MODEL=kimi-k2.5  # or glm-5, minimax-2.5
+
+# 3. Start Claude Code
+claude
 ```
 
-### Available Models
+### Available Models (via LiteLLM)
 
-- **glm-5** (via Z_AI): Powerful reasoning for complex tasks, architecture, planning
-- **kimi-k2.5** (via Kimi): Fast code generation, refactoring, implementation
-- **minimax-2.5** (via MiniMax): Efficient validation, research, lightweight tasks
+| Model | Best For | Provider |
+|-------|----------|----------|
+| glm-5 | Complex reasoning, architecture, planning | Z_AI |
+| kimi-k2.5 | Fast coding, implementation | Moonshot |
+| minimax-2.5 | Validation, research, exploration | MiniMax |
 
-### Fallback Behavior
+### Historical Note
 
-If the model profile is missing or a caste is not mapped:
-- Default to `kimi-k2.5` (fastest, most cost-effective)
-- Log a warning to the activity log
-- Continue with worker spawn
+A model-per-caste routing system was designed and implemented (archived in `.aether/archive/model-routing/`) but cannot function due to Claude Code Task tool limitations. The archive is preserved for future use if the platform adds environment variable support for subagents.
 
-### Sub-Worker Spawning
-
-When workers spawn sub-workers, they should:
-1. Check if the sub-worker's caste differs from their own
-2. If different, the sub-worker will automatically get their caste's model via the same mechanism
-3. If spawning with the same caste, the model remains the same
-
-### Model Context in Prompts
-
-Worker prompts include a MODEL CONTEXT section that informs the worker about:
-- Which model they are running on
-- The model's strengths and optimal use cases
-- Expected task complexity
-
-This helps workers adjust their approach based on model capabilities.
+See: `git show model-routing-v1-archived` for the complete configuration.
 
 ---
 

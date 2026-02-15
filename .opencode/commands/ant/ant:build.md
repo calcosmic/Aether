@@ -335,12 +335,65 @@ Log each spawn:
 bash .aether/aether-utils.sh spawn-log "Queen" "builder" "{ant_name}" "{task_description}"
 ```
 
+**Model Assignment:**
+
+Before spawning each worker, get the optimal model for their caste with task-based routing:
+
+```bash
+# Get model assignment for this caste with task-based routing
+model_info=$(bash .aether/aether-utils.sh model-profile select "{caste}" "{task_description}" "{cli_model_override}")
+model=$(echo "$model_info" | jq -r '.result.model')
+source=$(echo "$model_info" | jq -r '.result.source')
+
+# Log model assignment with source
+bash .aether/aether-utils.sh activity-log "MODEL" "Queen" "{ant_name} ({caste}): assigned to $model (source: $source)"
+```
+
+**Environment Setup for Workers:**
+
+When spawning workers, the following environment variables must be set for Claude Code to use the LiteLLM proxy with the correct model:
+
+```bash
+export ANTHROPIC_BASE_URL="http://localhost:4000"
+export ANTHROPIC_AUTH_TOKEN="sk-litellm-local"
+export ANTHROPIC_MODEL="$model"  # From model-profile get above
+```
+
+**IMPORTANT:** The Task tool inherits environment from the parent Claude Code process. Set these variables in the shell before spawning workers, or ensure they are already set in the parent environment.
+
+### Step 5.1.5: Export Model Environment
+
+Before spawning workers, export the environment variables for LiteLLM proxy routing:
+
+```bash
+export ANTHROPIC_BASE_URL="http://localhost:4000"
+export ANTHROPIC_AUTH_TOKEN="sk-litellm-local"
+```
+
+For each worker spawn, also export their specific model:
+
+```bash
+export ANTHROPIC_MODEL="$model"  # From model-profile get
+```
+
+**Note:** These environment variables will be inherited by spawned workers via the Task tool, enabling automatic model routing through the LiteLLM proxy.
+
 **Builder Worker Prompt Template:**
 ```
 You are {Ant-Name}, a 🔨 Builder Ant in the Aether Colony at depth {depth}.
 
 --- YOUR TASK ---
 Task {id}: {description}
+
+--- MODEL CONTEXT ---
+Optimal model for this task: {model} (from caste: {caste})
+Model characteristics: {model_description}
+Task complexity expectation: {simple|medium|complex}
+
+The model has been pre-selected based on your caste's typical work patterns.
+- glm-5: Use for complex reasoning, architecture, planning
+- kimi-k2.5: Use for fast implementation, coding, refactoring
+- minimax-2.5: Use for validation, research, quick checks
 
 --- CONTEXT ---
 Goal: "{colony_goal}"
