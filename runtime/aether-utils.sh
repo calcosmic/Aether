@@ -106,7 +106,7 @@ shift 2>/dev/null || true
 case "$cmd" in
   help)
     cat <<'EOF'
-{"ok":true,"commands":["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
+{"ok":true,"commands":["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
 EOF
     ;;
   version)
@@ -2680,6 +2680,267 @@ NODESCRIPT
 
     atomic_write "$view_state_file" "$updated"
     json_ok "{\"item\":\"$item\",\"state\":\"collapsed\",\"view\":\"$view_name\"}"
+    ;;
+
+  queen-init)
+    # Initialize QUEEN.md from template
+    # Creates .aether/QUEEN.md from runtime/templates/QUEEN.md.template if missing
+    queen_file="$AETHER_ROOT/.aether/QUEEN.md"
+    template_file="$AETHER_ROOT/runtime/templates/QUEEN.md.template"
+
+    # Check if QUEEN.md already exists and has content
+    if [[ -f "$queen_file" ]] && [[ -s "$queen_file" ]]; then
+      json_ok '{"created":false,"path":".aether/QUEEN.md","reason":"already_exists"}'
+      exit 0
+    fi
+
+    # Check if template exists
+    if [[ ! -f "$template_file" ]]; then
+      json_err "$E_FILE_NOT_FOUND" "Template not found" '{"template":"runtime/templates/QUEEN.md.template"}'
+      exit 1
+    fi
+
+    # Create QUEEN.md from template with timestamp substitution
+    timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    sed -e "s/{TIMESTAMP}/$timestamp/g" "$template_file" > "$queen_file"
+
+    if [[ -f "$queen_file" ]]; then
+      json_ok '{"created":true,"path":".aether/QUEEN.md","source":"runtime/templates/QUEEN.md.template"}'
+    else
+      json_err "$E_FILE_NOT_FOUND" "Failed to create QUEEN.md" '{"path":".aether/QUEEN.md"}'
+      exit 1
+    fi
+    ;;
+
+  queen-read)
+    # Read QUEEN.md and return wisdom as JSON for worker priming
+    # Extracts METADATA block and sections for colony guidance
+    queen_file="$AETHER_ROOT/.aether/QUEEN.md"
+
+    # Check if QUEEN.md exists
+    if [[ ! -f "$queen_file" ]]; then
+      json_err "$E_FILE_NOT_FOUND" "QUEEN.md not found" '{"path":".aether/QUEEN.md"}'
+      exit 1
+    fi
+
+    # Extract METADATA JSON block (between <!-- METADATA and -->)
+    metadata=$(sed -n '/<!-- METADATA/,/-->/p' "$queen_file" | sed '1d;$d' | tr -d '\n' | sed 's/^[[:space:]]*//')
+
+    # If no metadata found, return empty structure
+    if [[ -z "$metadata" ]]; then
+      metadata='{"version":"unknown","last_evolved":null,"colonies_contributed":[],"promotion_thresholds":{},"stats":{}}'
+    fi
+
+    # Extract sections content for worker priming
+    # Use awk to parse markdown sections - remove header line and trailing section header
+    philosophies=$(awk '/^## 📜 Philosophies$/,/^## /' "$queen_file" | tail -n +2 | sed '$d' | sed '/^$/d' | jq -Rs '.')
+    patterns=$(awk '/^## 🧭 Patterns$/,/^## /' "$queen_file" | tail -n +2 | sed '$d' | sed '/^$/d' | jq -Rs '.')
+    redirects=$(awk '/^## ⚠️ Redirects$/,/^## /' "$queen_file" | tail -n +2 | sed '$d' | sed '/^$/d' | jq -Rs '.')
+    stack_wisdom=$(awk '/^## 🔧 Stack Wisdom$/,/^## /' "$queen_file" | tail -n +2 | sed '$d' | sed '/^$/d' | jq -Rs '.')
+    decrees=$(awk '/^## 🏛️ Decrees$/,/^## /' "$queen_file" | tail -n +2 | sed '$d' | sed '/^$/d' | jq -Rs '.')
+
+    # Build JSON output
+    result=$(jq -n \
+      --argjson meta "$metadata" \
+      --arg philosophies "$philosophies" \
+      --arg patterns "$patterns" \
+      --arg redirects "$redirects" \
+      --arg stack_wisdom "$stack_wisdom" \
+      --arg decrees "$decrees" \
+      '{
+        metadata: $meta,
+        wisdom: {
+          philosophies: $philosophies,
+          patterns: $patterns,
+          redirects: $redirects,
+          stack_wisdom: $stack_wisdom,
+          decrees: $decrees
+        },
+        priming: {
+          has_philosophies: ($philosophies | length) > 0 and $philosophies != "*No philosophies recorded yet.*\n",
+          has_patterns: ($patterns | length) > 0 and $patterns != "*No patterns recorded yet.*\n",
+          has_redirects: ($redirects | length) > 0 and $redirects != "*No redirects recorded yet.*\n",
+          has_stack_wisdom: ($stack_wisdom | length) > 0 and $stack_wisdom != "*No stack wisdom recorded yet.*\n",
+          has_decrees: ($decrees | length) > 0 and $decrees != "*No decrees recorded yet.*\n"
+        }
+      }')
+
+    json_ok "$result"
+    ;;
+
+  queen-promote)
+    # Promote a learning to QUEEN.md wisdom
+    # Usage: queen-promote <type> <content> <colony_name>
+    # Types: philosophy, pattern, redirect, stack, decree
+    wisdom_type="${1:-}"
+    content="${2:-}"
+    colony_name="${3:-}"
+
+    # Validate required arguments
+    [[ -z "$wisdom_type" ]] && json_err "$E_VALIDATION_FAILED" "Usage: queen-promote <type> <content> <colony_name>" '{"missing":"type"}'
+    [[ -z "$content" ]] && json_err "$E_VALIDATION_FAILED" "Usage: queen-promote <type> <content> <colony_name>" '{"missing":"content"}'
+    [[ -z "$colony_name" ]] && json_err "$E_VALIDATION_FAILED" "Usage: queen-promote <type> <content> <colony_name>" '{"missing":"colony_name"}'
+
+    # Validate type
+    valid_types=("philosophy" "pattern" "redirect" "stack" "decree")
+    type_valid=false
+    for vt in "${valid_types[@]}"; do
+      [[ "$wisdom_type" == "$vt" ]] && type_valid=true && break
+    done
+    [[ "$type_valid" == "false" ]] && json_err "$E_VALIDATION_FAILED" "Invalid type: $wisdom_type" '{"valid_types":["philosophy","pattern","redirect","stack","decree"]}'
+
+    queen_file="$AETHER_ROOT/.aether/QUEEN.md"
+
+    # Check if QUEEN.md exists
+    if [[ ! -f "$queen_file" ]]; then
+      json_err "$E_FILE_NOT_FOUND" "QUEEN.md not found" '{"path":".aether/QUEEN.md"}'
+      exit 1
+    fi
+
+    # Extract METADATA to get promotion thresholds
+    metadata=$(sed -n '/<!-- METADATA/,/-->/p' "$queen_file" | sed '1d;$d' | tr -d '\n' | sed 's/^[[:space:]]*//')
+
+    # Get threshold for this type (default: philosophy=5, pattern=3, redirect=2, stack=1, decree=0)
+    threshold=$(echo "$metadata" | jq -r ".promotion_thresholds.${wisdom_type} // null")
+    if [[ "$threshold" == "null" ]]; then
+      case "$wisdom_type" in
+        philosophy) threshold=5 ;;
+        pattern) threshold=3 ;;
+        redirect) threshold=2 ;;
+        stack) threshold=1 ;;
+        decree) threshold=0 ;;
+        *) threshold=1 ;;
+      esac
+    fi
+
+    # For decrees, always promote immediately (threshold 0)
+    # For other types, we assume validation count is passed or threshold is met
+    # In a real implementation, this would check a validation counter
+    # For now, we append if threshold allows (decrees always, others need external validation)
+
+    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    # Map type to section header and emoji
+    case "$wisdom_type" in
+      philosophy) section_header="## 📜 Philosophies" ;;
+      pattern) section_header="## 🧭 Patterns" ;;
+      redirect) section_header="## ⚠️ Redirects" ;;
+      stack) section_header="## 🔧 Stack Wisdom" ;;
+      decree) section_header="## 🏛️ Decrees" ;;
+    esac
+
+    # Build the new entry
+    entry="- **${colony_name}** (${ts}): ${content}"
+
+    # Create temp file for atomic write
+    tmp_file="${queen_file}.tmp.$$"
+
+    # Find line numbers for section boundaries
+    section_line=$(grep -n "^${section_header}$" "$queen_file" | head -1 | cut -d: -f1)
+    next_section_line=$(tail -n +$((section_line + 1)) "$queen_file" | grep -n "^## " | head -1 | cut -d: -f1)
+    if [[ -n "$next_section_line" ]]; then
+      section_end=$((section_line + next_section_line - 1))
+    else
+      section_end=$(wc -l < "$queen_file")
+    fi
+
+    # Check if section has placeholder (grep returns 1 when no matches, handle with || true)
+    has_placeholder=$(sed -n "${section_line},${section_end}p" "$queen_file" | grep -c "No.*recorded yet" || true)
+    has_placeholder=${has_placeholder:-0}
+
+    if [[ "$has_placeholder" -gt 0 ]]; then
+      # Replace placeholder with entry - only within the target section
+      # Find the specific line number of the placeholder within the section
+      placeholder_line=$(sed -n "${section_line},${section_end}p" "$queen_file" | grep -n "^\\*No .* recorded yet" | head -1 | cut -d: -f1)
+      if [[ -n "$placeholder_line" ]]; then
+        actual_line=$((section_line + placeholder_line - 1))
+        sed "${actual_line}c\\
+${entry}" "$queen_file" > "$tmp_file"
+      else
+        # Fallback: insert after section header
+        sed "${section_line}a\\
+${entry}" "$queen_file" > "$tmp_file"
+      fi
+    else
+      # Insert entry after the description paragraph (after the second empty line in section)
+      # The structure is: header, blank, description, blank, [entries...]
+      # We want to insert after the blank line following the description
+      empty_lines=$(sed -n "$((section_line + 1)),${section_end}p" "$queen_file" | grep -n "^$" | cut -d: -f1)
+      # Get the second empty line (after description)
+      insert_line=$(echo "$empty_lines" | sed -n '2p')
+      if [[ -n "$insert_line" ]]; then
+        insert_line=$((section_line + insert_line))
+      else
+        # Fallback: use first empty line
+        insert_line=$(echo "$empty_lines" | head -1)
+        if [[ -n "$insert_line" ]]; then
+          insert_line=$((section_line + insert_line))
+        else
+          insert_line=$((section_line + 1))
+        fi
+      fi
+      # Insert the entry after the found line
+      sed "${insert_line}a\\
+${entry}" "$queen_file" > "$tmp_file"
+    fi
+
+    # Update Evolution Log in temp file
+    ev_entry="| ${ts} | ${colony_name} | promoted_${wisdom_type} | Added: ${content:0:50}... |"
+    # Find the line after the separator in Evolution Log table
+    ev_separator=$(grep -n "^|------|" "$tmp_file" | tail -1 | cut -d: -f1)
+
+    # Use awk for cross-platform insertion
+    awk -v line="$ev_separator" -v entry="$ev_entry" 'NR==line{print; print entry; next}1' "$tmp_file" > "${tmp_file}.ev" && mv "${tmp_file}.ev" "$tmp_file"
+
+    # Update METADATA stats in temp file
+    # Map wisdom_type to stat key (irregular plurals handled)
+    case "$wisdom_type" in
+      stack) stat_key="total_stack_entries" ;;
+      philosophy) stat_key="total_philosophies" ;;
+      *) stat_key="total_${wisdom_type}s" ;;
+    esac
+    # Read current count from temp file (which has the latest state)
+    current_count=$(grep "\"${stat_key}\":" "$tmp_file" 2>/dev/null | grep -o '[0-9]*' | head -1 || true)
+    current_count=${current_count:-0}
+    new_count=$((current_count + 1))
+
+    # Update last_evolved using awk
+    awk -v ts="$ts" '/"last_evolved":/ { gsub(/"last_evolved": "[^"]*"/, "\"last_evolved\": \"" ts "\""); } {print}' "$tmp_file" > "${tmp_file}.meta" && mv "${tmp_file}.meta" "$tmp_file"
+
+    # Update stats count using awk
+    awk -v type="$stat_key" -v count="$new_count" '{
+      gsub("\"" type "\": [0-9]*", "\"" type "\": " count)
+      print
+    }' "$tmp_file" > "${tmp_file}.stats" && mv "${tmp_file}.stats" "$tmp_file"
+
+    # Add colony to colonies_contributed if not present
+    if ! grep -q "\"${colony_name}\"" "$tmp_file"; then
+      # Add to colonies_contributed array using awk - handle empty and non-empty arrays
+      awk -v colony="$colony_name" '
+        /"colonies_contributed": \[\]/ {
+          gsub(/"colonies_contributed": \[\]/, "\"colonies_contributed\": [\"" colony "\"]")
+          print
+          next
+        }
+        /"colonies_contributed": \[/ && !/\]/ {
+          # Multi-line array, add at next closing bracket
+          print
+          next
+        }
+        /"colonies_contributed": \[/ {
+          # Single-line array with elements
+          gsub(/\]$/, "\"" colony "\", ]")
+          print
+          next
+        }
+        { print }
+      ' "$tmp_file" > "${tmp_file}.col" && mv "${tmp_file}.col" "$tmp_file"
+    fi
+
+    # Atomic move
+    mv "$tmp_file" "$queen_file"
+
+    json_ok "{\"promoted\":true,\"type\":\"$wisdom_type\",\"colony\":\"$colony_name\",\"timestamp\":\"$ts\",\"threshold\":$threshold,\"new_count\":$new_count}"
     ;;
 
   *)
