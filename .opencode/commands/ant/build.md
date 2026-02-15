@@ -221,6 +221,7 @@ CONSTRAINTS: (none)
    ```
 
    Spawn a Scout (using Task tool with `subagent_type="general-purpose"`) with this prompt:
+   # NOTE: Claude Code uses aether-archaeologist; OpenCode uses general-purpose with role injection
 
    ```
    You are {Archaeologist-Name}, a 🏺 Archaeologist Ant.
@@ -510,6 +511,7 @@ bash .aether/aether-utils.sh flag-list --phase {phase_number}
 Parse the result and extract unresolved flag titles into a list: `{existing_flag_titles}` (comma-separated titles from `.result.flags[].title`). If no flags exist, set `{existing_flag_titles}` to "None".
 
 Spawn the Chaos Ant using Task tool with `subagent_type="general-purpose"`:
+# NOTE: Claude Code uses aether-chaos; OpenCode uses general-purpose with role injection
 
 **Chaos Ant Prompt (CLEAN OUTPUT):**
 ```

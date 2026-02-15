@@ -241,6 +241,7 @@ while iteration < 4 AND confidence < 80:
     # === PLANNING PHASE (always runs — 1 planner per iteration) ===
 
     Spawn Planning Ant (Route-Setter) via Task tool with subagent_type="general-purpose":
+    # NOTE: Claude Code uses aether-route-setter; OpenCode uses general-purpose with role injection
 
     """
     You are a Route-Setter Ant in the Aether Colony.
