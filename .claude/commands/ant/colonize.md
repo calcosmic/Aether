@@ -106,6 +106,25 @@ For each inferred command, only store it if no command with the same label was a
 
 If neither source yields any commands, set the detected commands list to empty.
 
+### Step 2.5: Optional Deep Exploration (use Task tool with `subagent_type="aether-colonizer"`)
+
+**OPTIONAL: For deeper codebase analysis, spawn a Colonizer Ant after the surface scan.**
+
+If you want more thorough exploration:
+```bash
+bash .aether/aether-utils.sh generate-ant-name "colonizer"
+bash .aether/aether-utils.sh spawn-log "Queen" "colonizer" "{colonizer_name}" "Deep codebase exploration"
+```
+
+Then use Task tool with `subagent_type="aether-colonizer"` to spawn the Colonizer Ant.
+
+The Colonizer will perform deeper analysis including:
+- Dependency mapping (imports, call chains, data flow)
+- Pattern detection (architecture, naming conventions, anti-patterns)
+- Structure analysis beyond surface scan
+
+Skip this step if surface scan was sufficient.
+
 ### Step 3: Write CODEBASE.md
 
 Create `.aether/data/codebase.md`:

@@ -123,9 +123,9 @@ bash .aether/aether-utils.sh swarm-display-update "{swarm_id}-ErrorAnalyst" "sco
 bash .aether/aether-utils.sh swarm-display-update "{swarm_id}-WebResearcher" "scout" "excavating" "External source research" "Queen" '{"read":0,"grep":0,"edit":0,"bash":0}' 0
 ```
 
-**Scout 1: 🏛️ Git Archaeologist**
+**Scout 1: 🏛️ Git Archaeologist** (use Task tool with `subagent_type="aether-archaeologist"`)
 ```
-You are {swarm_id}-Archaeologist, a 🏛️ Scout Ant.
+You are {swarm_id}-Archaeologist, a 🏛️ Archaeologist Ant.
 
 Investigate git history for: {problem description}
 
@@ -139,7 +139,7 @@ Return ONLY this JSON:
 {"scout": "git-archaeologist", "confidence": 0.0-1.0, "finding": {"likely_cause": "...", "relevant_commits": [], "when_it_broke": "...", "evidence": []}, "suggested_fix": "..."}
 ```
 
-**Scout 2: 🔍 Pattern Hunter**
+**Scout 2: 🔍 Pattern Hunter** (use Task tool with `subagent_type="aether-scout"`)
 ```
 You are {swarm_id}-PatternHunter, a 🔍 Scout Ant.
 
@@ -155,9 +155,9 @@ Return ONLY this JSON:
 {"scout": "pattern-hunter", "confidence": 0.0-1.0, "finding": {"working_examples": [], "applicable_patterns": [], "differences": "..."}, "suggested_fix": "..."}
 ```
 
-**Scout 3: 💥 Error Analyst**
+**Scout 3: 💥 Error Analyst** (use Task tool with `subagent_type="aether-tracker"`)
 ```
-You are {swarm_id}-ErrorAnalyst, a 🔍 Scout Ant.
+You are {swarm_id}-ErrorAnalyst, a 🔍 Tracker Ant.
 
 Analyze error: {problem description}
 
@@ -171,7 +171,7 @@ Return ONLY this JSON:
 {"scout": "error-analyst", "confidence": 0.0-1.0, "finding": {"root_cause": "...", "error_chain": [], "masked_by": "...", "category": "null-ref|async|type|logic|config|dependency"}, "suggested_fix": "..."}
 ```
 
-**Scout 4: 🌐 Web Researcher**
+**Scout 4: 🌐 Web Researcher** (use Task tool with `subagent_type="aether-scout"`)
 ```
 You are {swarm_id}-WebResearcher, a 🔍 Scout Ant.
 
