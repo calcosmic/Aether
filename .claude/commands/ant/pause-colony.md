@@ -102,69 +102,77 @@ This flag indicates the colony is in a paused state and will be cleared on resum
 
 Before displaying the pause confirmation, check if the user has uncommitted work worth preserving.
 
-1. **Check for uncommitted changes:**
+**1. Check for uncommitted changes:**
 ```bash
 git status --porcelain 2>/dev/null
 ```
 If the output is empty (nothing to commit) or the command fails (not a git repo), skip this step silently and continue to Step 5.
 
-2. **Check for double-prompting:**
+**2. Check for double-prompting:**
 Read `last_commit_suggestion_phase` from COLONY_STATE.json (already loaded in Step 1).
 If `last_commit_suggestion_phase` equals the current phase, skip this step silently — the user was already prompted at POST-ADVANCE. Continue to Step 5.
 
-3. **Generate the commit message:**
-```bash
-bash .aether/aether-utils.sh generate-commit-message "pause" {current_phase} "{phase_name}"
-```
-Parse the returned JSON to extract `message` and `files_changed`.
+**3. Capture AI Description:**
 
-4. **Check files changed:**
+**As the AI, briefly describe what was in progress when pausing.**
+
+Examples:
+- "Mid-implementation of task-based routing, tests passing"
+- "Completed model selection logic, integration tests pending"
+- "Fixed file locking, ready for verification"
+
+Store this as `ai_description`. If no clear description emerges, leave empty (will use fallback).
+
+**4. Generate Enhanced Commit Message:**
 ```bash
-git diff --stat HEAD 2>/dev/null | tail -5
+bash .aether/aether-utils.sh generate-commit-message "contextual" {current_phase} "{phase_name}" "{ai_description}" {plan_number}
 ```
 
-5. **Display the suggestion:**
+Parse the returned JSON to extract `message`, `body`, `files_changed`, `subsystem`, and `scope`.
+
+**5. Display the enhanced suggestion:**
 ```
 ──────────────────────────────────────────────────
 Commit Suggestion
 ──────────────────────────────────────────────────
 
-  Message:  {generated_message}
-  Files:    {files_changed} files changed
-  Preview:  {first 5 lines of git diff --stat}
+  AI Description: {ai_description}
+
+  Formatted Message:
+  {message}
+
+  Metadata:
+  Scope: {scope}
+  Files: {files_changed} files changed
 
 ──────────────────────────────────────────────────
 ```
 
-6. **Use AskUserQuestion:**
+**6. Use AskUserQuestion:**
 ```
 Commit your work before pausing?
 
 1. Yes, commit with this message
-2. Yes, but let me write the message
+2. Yes, but let me edit the description
 3. No, I'll commit later
 ```
 
-7. **If option 1 ("Yes, commit with this message"):**
+**7. If option 1 ("Yes, commit with this message"):**
 ```bash
-git add -A && git commit -m "{generated_message}"
+git add -A && git commit -m "{message}" -m "{body}"
 ```
-Display: `Committed: {generated_message} ({files_changed} files)`
+Display: `Committed: {message} ({files_changed} files)`
 
-8. **If option 2 ("Yes, but let me write the message"):**
-Use AskUserQuestion to get the user's custom commit message, then:
-```bash
-git add -A && git commit -m "{custom_message}"
-```
-Display: `Committed: {custom_message} ({files_changed} files)`
+**8. If option 2 ("Yes, but let me edit"):**
+Prompt for custom description, then regenerate and commit.
 
-9. **If option 3 ("No, I'll commit later"):**
+**9. If option 3 ("No, I'll commit later"):**
 Display: `Skipped. Your changes are saved on disk but not committed.`
 
-10. **Record the suggestion to prevent double-prompting:**
-Set `last_commit_suggestion_phase` to `{current_phase}` in COLONY_STATE.json (add the field at the top level if it does not exist).
+**10. Record the suggestion:**
+Set `last_commit_suggestion_phase` to `{current_phase}` in COLONY_STATE.json.
 
-**Error handling:** If any git command fails (not a repo, merge conflict, pre-commit hook rejection), display the error output and continue to Step 5. The commit suggestion is advisory only — it never blocks the pause flow.
+**Error handling:** If any git command fails, display the error and continue to Step 5.
 
 Continue to Step 5.
 

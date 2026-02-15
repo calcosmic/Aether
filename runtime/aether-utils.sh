@@ -1333,14 +1333,15 @@ EOF
 
   generate-commit-message)
     # Generate an intelligent commit message from colony context
-    # Usage: generate-commit-message <type> <phase_id> <phase_name> [summary]
-    # Types: "milestone" | "pause" | "fix"
-    # Returns: {"message": "...", "body": "...", "files_changed": N}
+    # Usage: generate-commit-message <type> <phase_id> <phase_name> [summary|ai_description] [plan_num]
+    # Types: "milestone" | "pause" | "fix" | "contextual"
+    # Returns: {"message": "...", "body": "...", "files_changed": N, ...}
 
     msg_type="${1:-milestone}"
     phase_id="${2:-0}"
     phase_name="${3:-unknown}"
-    summary="${4:-}"
+    summary="${4:-}"        # For milestone/fix types, or ai_description for contextual type
+    plan_num="${5:-01}"     # Optional: plan number for contextual type (e.g., "01")
 
     # Count changed files
     files_changed=0
@@ -1372,6 +1373,33 @@ EOF
           message="fix: resolve issue in phase ${phase_id}"
         fi
         body="Swarm-verified fix applied and tested."
+        ;;
+      contextual)
+        # NEW: Contextual commit with AI description and structured metadata
+        # Derive subsystem from phase name (e.g., "11-foraging-specialization" -> "foraging")
+        subsystem=$(echo "$phase_name" | sed -E 's/^[0-9]+-//' | sed -E 's/-[0-9]+.*$//' | tr '-' ' ')
+        [[ -z "$subsystem" ]] && subsystem="phase"
+
+        # Build message with AI description (summary parameter is reused as ai_description)
+        if [[ -n "$summary" ]]; then
+          message="aether-milestone: ${summary}"
+        else
+          # Fallback if no AI description provided
+          message="aether-milestone: phase ${phase_id}.${plan_num} complete -- ${phase_name}"
+        fi
+
+        # Build structured body with metadata
+        body="Scope: ${phase_id}.${plan_num}
+Files: ${files_changed} files changed"
+
+        # Truncate message if needed BEFORE JSON construction
+        if [[ ${#message} -gt 72 ]]; then
+          message="${message:0:69}..."
+        fi
+
+        # Return enhanced JSON with additional metadata
+        json_ok "{\"message\":\"$message\",\"body\":\"$body\",\"files_changed\":$files_changed,\"subsystem\":\"$subsystem\",\"scope\":\"${phase_id}.${plan_num}\"}"
+        exit 0
         ;;
       *)
         message="aether-checkpoint: phase ${phase_id}"

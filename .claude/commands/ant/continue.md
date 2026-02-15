@@ -740,57 +740,88 @@ If `CHANGELOG.md` exists in the project root:
 
 After the phase is advanced and changelog updated, suggest a commit to preserve the milestone.
 
-1. **Generate the commit message:**
-```bash
-bash .aether/aether-utils.sh generate-commit-message "milestone" {phase_id} "{phase_name}" "{one_line_summary}"
-```
-Parse the returned JSON to extract `message` and `files_changed`.
+#### Step 2.6.1: Capture AI Description
 
-2. **Check files changed:**
+**As the AI, briefly describe what was accomplished in this phase.**
+
+Look at:
+1. The phase PLAN.md `<objective>` section (what we set out to do)
+2. Tasks that were marked complete
+3. Files that were modified (from git diff --stat)
+4. Any patterns or decisions recorded
+
+**Provide a brief, memorable description** (10-15 words, imperative mood):
+- Good: "Implement task-based model routing with keyword detection and precedence chain"
+- Good: "Fix build timing by removing background execution from worker spawns"
+- Bad: "Phase complete" (too vague)
+- Bad: "Modified files in bin/lib" (too mechanical)
+
+Store this as `ai_description` for the commit message.
+
+#### Step 2.6.2: Generate Enhanced Commit Message
+
+```bash
+bash .aether/aether-utils.sh generate-commit-message "contextual" {phase_id} "{phase_name}" "{ai_description}" {plan_number}
+```
+
+Parse the returned JSON to extract:
+- `message` - the commit subject line
+- `body` - structured metadata (Scope, Files)
+- `files_changed` - file count
+- `subsystem` - derived subsystem name
+- `scope` - phase.plan format
+
+**Check files changed:**
 ```bash
 git diff --stat HEAD 2>/dev/null | tail -5
 ```
 If not in a git repo or no changes detected, skip this step silently.
 
-3. **Display the suggestion:**
+**Display the enhanced suggestion:**
 ```
 ──────────────────────────────────────────────────
 Commit Suggestion
 ──────────────────────────────────────────────────
 
-  Message:  {generated_message}
-  Files:    {files_changed} files changed
-  Preview:  {first 5 lines of git diff --stat}
+  AI Description: {ai_description}
+
+  Formatted Message:
+  {message}
+
+  Metadata:
+  Scope: {scope}
+  Files: {files_changed} files changed
+  Preview: {first 5 lines of git diff --stat}
 
 ──────────────────────────────────────────────────
 ```
 
-4. **Use AskUserQuestion:**
+**Use AskUserQuestion:**
 ```
 Commit this milestone?
 
 1. Yes, commit with this message
-2. Yes, but let me write the message
+2. Yes, but let me edit the description
 3. No, I'll commit later
 ```
 
-5. **If option 1 ("Yes, commit with this message"):**
+**If option 1 ("Yes, commit with this message"):**
 ```bash
-git add -A && git commit -m "{generated_message}"
+git add -A && git commit -m "{message}" -m "{body}"
 ```
-Display: `Committed: {generated_message} ({files_changed} files)`
+Display: `Committed: {message} ({files_changed} files)`
 
-6. **If option 2 ("Yes, but let me write the message"):**
-Use AskUserQuestion to get the user's custom commit message, then:
-```bash
-git add -A && git commit -m "{custom_message}"
+**If option 2 ("Yes, but let me edit"):**
+Use AskUserQuestion to get the user's custom description:
 ```
-Display: `Committed: {custom_message} ({files_changed} files)`
+Enter your description (or press Enter to keep: '{ai_description}'):
+```
+Then regenerate the commit message with the new description and commit.
 
-7. **If option 3 ("No, I'll commit later"):**
+**If option 3 ("No, I'll commit later"):**
 Display: `Skipped. Your changes are saved on disk but not committed.`
 
-8. **Record the suggestion to prevent double-prompting:**
+**Record the suggestion to prevent double-prompting:**
 Set `last_commit_suggestion_phase` to `{phase_id}` in COLONY_STATE.json (add the field at the top level if it does not exist).
 
 **Error handling:** If any git command fails (not a repo, merge conflict, pre-commit hook rejection), display the error output and continue to the next step. The commit suggestion is advisory only -- it never blocks the flow.

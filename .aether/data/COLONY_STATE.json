@@ -159,7 +159,7 @@
           "state: INITIALIZING",
           "plan.phases: 3 phases"
         ],
-        "source": ".planning/STATE.md"
+        "source": "historical-sync"
       }
     }
   ],
