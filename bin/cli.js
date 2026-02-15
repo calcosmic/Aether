@@ -1091,7 +1091,7 @@ async function updateRepo(repoPath, sourceVersion, opts) {
   }
 
   // Use UpdateTransaction for two-phase commit with automatic rollback
-  const transaction = new UpdateTransaction(repoPath, { sourceVersion, quiet });
+  const transaction = new UpdateTransaction(repoPath, { sourceVersion, quiet, force });
 
   try {
     const result = await transaction.execute(sourceVersion, { dryRun });

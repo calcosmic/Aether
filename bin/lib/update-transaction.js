@@ -144,11 +144,13 @@ class UpdateTransaction {
    * @param {object} options - Transaction options
    * @param {string} options.sourceVersion - Version to update to
    * @param {boolean} options.quiet - Suppress output
+   * @param {boolean} options.force - Force update even with dirty files
    */
   constructor(repoPath, options = {}) {
     this.repoPath = repoPath;
     this.sourceVersion = options.sourceVersion || null;
     this.quiet = options.quiet || false;
+    this.force = options.force || false;
 
     // Transaction state
     this.state = TransactionStates.PENDING;
@@ -351,6 +353,12 @@ class UpdateTransaction {
       return { clean: true };
     }
 
+    // If force flag is set, allow dirty repo (will be stashed in checkpoint)
+    if (this.force) {
+      this.log('  Force flag set: proceeding with dirty repository (will stash changes)');
+      return { clean: true, dirty: dirtyState, force: true };
+    }
+
     // Build detailed error message
     const lines = [
       'Cannot update: repository has uncommitted changes',
@@ -426,16 +434,48 @@ class UpdateTransaction {
    */
   gitStashFiles(files) {
     try {
-      const fileArgs = files.map(f => `"${f}"`).join(' ');
-      execSync(`git stash push -m "aether-update-backup" -- ${fileArgs}`, {
-        cwd: this.repoPath,
-        stdio: 'pipe',
-      });
+      // Separate tracked and untracked files
+      const trackedFiles = [];
+      const untrackedFiles = [];
 
-      // Get the stash reference
-      const stashList = execSync('git stash list', { cwd: this.repoPath, encoding: 'utf8' });
-      const match = stashList.match(/^(stash@\{[^}]+\})/m);
-      return match ? match[1] : null;
+      for (const file of files) {
+        const fullPath = path.join(this.repoPath, file);
+        try {
+          // Check if file is tracked by git
+          execSync(`git ls-files --error-unmatch "${file}"`, {
+            cwd: this.repoPath,
+            stdio: 'pipe'
+          });
+          trackedFiles.push(file);
+        } catch {
+          // File is not tracked (untracked or in .gitignore)
+          untrackedFiles.push(file);
+        }
+      }
+
+      let stashRef = null;
+
+      // Stash tracked files
+      if (trackedFiles.length > 0) {
+        const fileArgs = trackedFiles.map(f => `"${f}"`).join(' ');
+        execSync(`git stash push -m "aether-update-backup" -- ${fileArgs}`, {
+          cwd: this.repoPath,
+          stdio: 'pipe',
+        });
+
+        // Get the stash reference
+        const stashList = execSync('git stash list', { cwd: this.repoPath, encoding: 'utf8' });
+        const match = stashList.match(/^(stash@\{[^}]+\})/m);
+        stashRef = match ? match[1] : null;
+      }
+
+      // For untracked files, we can't stash them easily
+      // Just log a warning - they'll be left as-is during the update
+      if (untrackedFiles.length > 0) {
+        this.log(`  Note: ${untrackedFiles.length} untracked files won't be stashed (left in place)`);
+      }
+
+      return stashRef;
     } catch (err) {
       this.log(`  Warning: git stash failed (${err.message}). Proceeding without stash.`);
       return null;
@@ -889,6 +929,9 @@ class UpdateTransaction {
 
       const files = this.listFilesRecursive(hubDir);
       for (const relPath of files) {
+        // Skip excluded directories
+        if (this.shouldExclude(relPath)) continue;
+
         const hubPath = path.join(hubDir, relPath);
         const repoPath = path.join(repoDir, relPath);
 
@@ -1000,6 +1043,9 @@ class UpdateTransaction {
 
       const files = this.listFilesRecursive(hubDir);
       for (const relPath of files) {
+        // Skip excluded directories
+        if (this.shouldExclude(relPath)) continue;
+
         const hubPath = path.join(hubDir, relPath);
         const repoPath = path.join(repoDir, relPath);
 
