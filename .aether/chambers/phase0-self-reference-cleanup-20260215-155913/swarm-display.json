@@ -1,0 +1,55 @@
+{
+  "swarm_id": "oracle-1771165238",
+  "timestamp": "2026-02-15T14:20:38Z",
+  "active_ants": [
+    {
+      "name": "Oracle",
+      "caste": "oracle",
+      "status": "researching",
+      "task": "Deep research in progress",
+      "parent": "Colony",
+      "tools": {
+        "read": 0,
+        "grep": 0,
+        "edit": 0,
+        "bash": 0
+      },
+      "tokens": 0,
+      "chamber": "fungus_garden",
+      "progress": 0,
+      "started_at": "2026-02-15T14:24:52Z",
+      "updated_at": "2026-02-15T14:24:52Z"
+    }
+  ],
+  "summary": {
+    "total_active": 1,
+    "by_caste": {
+      "oracle": 1
+    },
+    "by_zone": {
+      "researching": 1
+    }
+  },
+  "chambers": {
+    "fungus_garden": {
+      "activity": 1,
+      "icon": "🍄"
+    },
+    "nursery": {
+      "activity": 0,
+      "icon": "🥚"
+    },
+    "refuse_pile": {
+      "activity": 0,
+      "icon": "🗑️"
+    },
+    "throne_room": {
+      "activity": 0,
+      "icon": "👑"
+    },
+    "foraging_trail": {
+      "activity": 0,
+      "icon": "🌿"
+    }
+  }
+}

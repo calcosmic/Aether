@@ -1,0 +1,62 @@
+{
+  "chamber_id": "phase0-self-reference-cleanup-20260215-155913",
+  "created_at": "2026-02-15T15:59:13Z",
+  "colony_name": "Aether Self-Reference Cleanup",
+  "goal": "Remove Aether developing Aether self-reference while preserving findings",
+  "milestone": "Open Chambers",
+  "phases_completed": [1, 2],
+  "learnings_preserved": [
+    "Claude Code global sync works by copying commands from .claude/commands/ to ~/.claude/commands/",
+    "OpenCode requires repo-local setup",
+    "Hash comparison prevents unnecessary file writes",
+    "Namespace isolation via 'ant:' prefix prevents collisions",
+    "CLI sync verification catches content drift using SHA-1 checksums"
+  ],
+  "decisions": [
+    {
+      "decision": "Keep oracle.sh and oracle.md as infrastructure",
+      "rationale": "They are research tools that work on any project"
+    },
+    {
+      "decision": "Extract all BUGs/ISSUEs/GAPs before deletion",
+      "rationale": "Preserve findings even if source files are removed"
+    },
+    {
+      "decision": "Move QUEEN.md and RECOVERY-PLAN.md to docs/",
+      "rationale": "These are valuable documentation, not state"
+    }
+  ],
+  "bugs_found": [
+    "BUG-005: Missing lock release in flag-auto-resolve (HIGH)",
+    "BUG-011: Missing error handling in flag-auto-resolve jq (HIGH)",
+    "BUG-002: Missing release_lock in flag-add error path",
+    "BUG-003: Race condition in backup creation",
+    "BUG-004: Missing error code in flag-acknowledge",
+    "BUG-006: No lock release on JSON validation failure",
+    "BUG-007: 17+ instances of missing error codes",
+    "BUG-008: Missing error code in flag-add jq failure",
+    "BUG-009: Missing error codes in file checks",
+    "BUG-010: Missing error codes in context-update",
+    "BUG-012: Missing error code in unknown command"
+  ],
+  "files_archived": [
+    "COLONY_STATE.json",
+    "activity.log",
+    "flags.json",
+    "constraints.json",
+    "spawn-tree.txt",
+    "telemetry.json",
+    "view-state.json",
+    "swarm-display.json",
+    "completion-report.md",
+    "codebase.md",
+    "survey-system-plan.md"
+  ],
+  "pheromone_trails": {
+    "focus": ["self-reference cleanup", "bug extraction", "documentation preservation"],
+    "redirect": [],
+    "feedback": ["System now works cleanly on other projects"]
+  },
+  "archive_reason": "Phase 0 cleanup complete - self-referential state archived after extraction",
+  "restored_from": ".aether/data/BACKUP-phase0/"
+}

@@ -1,0 +1,29 @@
+{
+  "version": "1.0",
+  "last_updated": "2026-02-14T18:51:36.693Z",
+  "models": {
+    "kimi-k2.5": {
+      "total_spawns": 1,
+      "successful_completions": 0,
+      "failed_completions": 0,
+      "blocked": 0,
+      "by_caste": {
+        "builder": {
+          "spawns": 1,
+          "success": 0,
+          "failures": 0,
+          "blocked": 0
+        }
+      }
+    }
+  },
+  "routing_decisions": [
+    {
+      "timestamp": "2026-02-14T18:51:36.693Z",
+      "task": "test",
+      "caste": "builder",
+      "selected_model": "kimi-k2.5",
+      "source": "test"
+    }
+  ]
+}

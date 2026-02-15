@@ -1,0 +1,288 @@
+{
+  "version": "3.0",
+  "goal": "Wire the QUEEN.md wisdom feedback loop and integrate specialized agents. (1) Add queen-init, queen-read, queen-promote subcommands to aether-utils.sh — queen-init populates QUEEN.md from template, queen-read returns wisdom as JSON for worker priming, queen-promote checks thresholds and appends to correct section. (2) Wire init.md and build.md to READ QUEEN.md — init calls queen-init after bootstrap, build injects wisdom into worker prompts. (3) Wire continue.md, seal.md, entomb.md to WRITE to QUEEN.md — promote validated learnings that meet thresholds. (4) Replace general-purpose spawns with specialized agents in build/plan/swarm/organize/colonize commands. (5) Fix apostrophe bug in aether-utils.sh awk blocks and remove run_in_background from build.md.",
+  "state": "READY",
+  "current_phase": 2,
+  "state": "EXECUTING",
+  "milestone": "First Mound",
+  "milestone_updated_at": "2026-02-15T18:47:31Z",
+  "session_id": "session_1771162051_queen-wisdom",
+  "initialized_at": "2026-02-15T18:47:31Z",
+  "build_started_at": null,
+  "plan": {
+    "generated_at": "2026-02-15T18:50:00Z",
+    "confidence": 80,
+    "phases": [
+      {
+        "number": 1,
+        "name": "Wire QUEEN.md Read Operations",
+        "description": "Integrate queen-init and queen-read into init.md and build.md commands",
+        "status": "pending",
+        "tasks": [
+          {
+            "id": "1.1",
+            "goal": "Wire init.md to call queen-init after bootstrap",
+            "constraints": ["Call queen-init after Step 1.5 bootstrap completes", "Handle case where QUEEN.md already exists", "Display brief confirmation of QUEEN.md status"],
+            "hints": ["Use bash .aether/aether-utils.sh queen-init", "Parse JSON result to show created:true/false"],
+            "success_criteria": ["init.md calls queen-init after bootstrap", "User sees QUEEN.md initialization status"],
+            "depends_on": []
+          },
+          {
+            "id": "1.2",
+            "goal": "Wire build.md to inject QUEEN.md wisdom into worker prompts",
+            "constraints": ["Call queen-read before spawning workers", "Parse JSON response for wisdom sections", "Inject relevant wisdom into builder prompts", "Handle missing QUEEN.md gracefully"],
+            "hints": ["queen-read returns JSON with wisdom.philosophies, patterns, redirects, etc.", "Add wisdom section to builder prompt template"],
+            "success_criteria": ["build.md calls queen-read before spawning", "Worker prompts include QUEEN.md wisdom when available"],
+            "depends_on": ["1.1"]
+          }
+        ],
+        "success_criteria": ["init.md initializes QUEEN.md on new colonies", "build.md reads and injects wisdom into prompts"]
+      },
+      {
+        "number": 2,
+        "name": "Wire QUEEN.md Write Operations",
+        "description": "Integrate queen-promote into continue.md, seal.md, and entomb.md commands",
+        "status": "completed",
+        "tasks": [
+          {
+            "id": "2.1",
+            "status": "completed",
+            "goal": "Wire continue.md to promote validated learnings to QUEEN.md",
+            "constraints": ["After verification loop, extract validated learnings", "Call queen-promote for learnings meeting thresholds", "Map learning types to queen-promote types"],
+            "hints": ["Verification loop produces validated findings", "Use queen-promote <type> <content> <colony_name>"],
+            "success_criteria": ["continue.md promotes high-confidence learnings", "Promotion results logged to activity log"],
+            "depends_on": ["1.1"]
+          },
+          {
+            "id": "2.2",
+            "status": "completed",
+            "goal": "Wire seal.md to promote final colony wisdom",
+            "constraints": ["Before archiving, extract colony patterns and decisions", "Promote significant patterns to QUEEN.md", "Include colony name in promotion"],
+            "hints": ["Seal is the final milestone - good time to capture wisdom", "Extract from memory.decisions and memory.phase_learnings"],
+            "success_criteria": ["seal.md promotes wisdom before archiving", "Final colony insights captured in QUEEN.md"],
+            "depends_on": ["2.1"]
+          },
+          {
+            "id": "2.3",
+            "status": "completed",
+            "goal": "Wire entomb.md to promote wisdom before chamber creation",
+            "constraints": ["Extract decisions and learnings from colony state", "Promote validated patterns to QUEEN.md", "Handle case where QUEEN.md does not exist"],
+            "hints": ["Similar to seal.md but for entombment flow", "Call queen-init first if QUEEN.md missing"],
+            "success_criteria": ["entomb.md promotes wisdom before chamber creation", "Graceful handling of missing QUEEN.md"],
+            "depends_on": ["2.2"]
+          }
+        ],
+        "success_criteria": ["continue.md promotes learnings after verification", "seal.md promotes final wisdom", "entomb.md promotes wisdom before entombment"]
+      },
+      {
+        "number": 3,
+        "name": "Replace Generic Spawns with Specialized Agents",
+        "description": "Update subagent_type values from generic aether-* to specialized caste agents",
+        "status": "pending",
+        "tasks": [
+          {
+            "id": "3.1",
+            "goal": "Replace generic spawns in build.md with specialized agents",
+            "constraints": ["Replace aether-builder with appropriate specialized builder caste", "Replace aether-chaos with appropriate chaos caste", "Review spawn contexts to choose correct specialization"],
+            "hints": ["See workers.md for full caste list", "Builder castes: builder, weaver, probe, etc.", "Chaos castes: chaos, probe for testing"],
+            "success_criteria": ["build.md uses specialized agent types", "No more aether-builder or aether-chaos references"],
+            "depends_on": []
+          },
+          {
+            "id": "3.2",
+            "goal": "Replace generic spawns in plan.md with specialized agents",
+            "constraints": ["Replace aether-scout with appropriate scout specialization", "Replace aether-route-setter with correct caste"],
+            "hints": ["Research scouts vs pattern scouts may differ", "Route-setter is the planning caste"],
+            "success_criteria": ["plan.md uses specialized agent types", "Appropriate scout specializations chosen"],
+            "depends_on": ["3.1"]
+          },
+          {
+            "id": "3.3",
+            "goal": "Replace generic spawns in swarm.md, organize.md, colonize.md",
+            "constraints": ["swarm.md: aether-archaeologist, aether-scout, aether-tracker", "organize.md: aether-architect", "colonize.md: aether-colonizer"],
+            "hints": ["Archaeologist has specialized castes", "Tracker is for bug investigation", "Colonizer has exploration specializations"],
+            "success_criteria": ["All command files use specialized agents", "Consistent caste assignments across commands"],
+            "depends_on": ["3.2"]
+          }
+        ],
+        "success_criteria": ["All commands use specialized agent types", "No generic aether-* subagent_type references remain"]
+      },
+      {
+        "number": 4,
+        "name": "Fix Bugs and Polish",
+        "description": "Fix apostrophe bug in awk blocks and remove run_in_background from build.md",
+        "status": "pending",
+        "tasks": [
+          {
+            "id": "4.1",
+            "goal": "Fix apostrophe bug in aether-utils.sh awk blocks",
+            "constraints": ["Locate awk blocks with unescaped apostrophes", "Fix quoting issues that break awk parsing", "Test affected commands still work"],
+            "hints": ["Grep for awk blocks with apostrophes in strings", "Lines around 2736-2740 have awk with emoji headers"],
+            "success_criteria": ["No unescaped apostrophes in awk blocks", "queen-read and queen-promote work correctly"],
+            "depends_on": []
+          },
+          {
+            "id": "4.2",
+            "goal": "Remove run_in_background from build.md worker spawns",
+            "constraints": ["Remove run_in_background: true from line 360", "Ensure workers still spawn correctly", "Verify spawn synchronization still works"],
+            "hints": ["Line 360 has the run_in_background reference", "Multiple Task calls in one message achieve parallelism"],
+            "success_criteria": ["run_in_background removed from build.md", "Worker spawning still functions correctly"],
+            "depends_on": []
+          },
+          {
+            "id": "4.3",
+            "goal": "Verify queen-* commands work end-to-end",
+            "constraints": ["Test queen-init creates QUEEN.md from template", "Test queen-read returns valid JSON", "Test queen-promote appends to correct section"],
+            "hints": ["Use bash .aether/aether-utils.sh queen-init", "Verify JSON output with jq"],
+            "success_criteria": ["All three queen commands function correctly", "JSON output is valid and parseable"],
+            "depends_on": ["4.1", "4.2"]
+          }
+        ],
+        "success_criteria": ["Apostrophe bug fixed in awk blocks", "run_in_background removed from build.md", "All queen commands tested and working"]
+      }
+    ]
+  },
+  "memory": {
+    "phase_learnings": [
+      {
+        "id": "learning_inherited_1",
+        "phase": "inherited",
+        "learnings": [
+          {
+            "claim": "Claude Code global sync works by copying commands from .claude/commands/ to ~/.claude/commands/",
+            "status": "validated",
+            "tested": true,
+            "evidence": "Validated in prior colony session"
+          }
+        ],
+        "source": "inherited:completion-report",
+        "timestamp": "2026-02-13T20:40:00Z"
+      },
+      {
+        "id": "learning_inherited_2",
+        "phase": "inherited",
+        "learnings": [
+          {
+            "claim": "OpenCode requires repo-local setup - each repo that wants ant commands must set them up locally",
+            "status": "validated",
+            "tested": true,
+            "evidence": "Validated in prior colony session"
+          }
+        ],
+        "source": "inherited:completion-report",
+        "timestamp": "2026-02-13T20:40:00Z"
+      },
+      {
+        "id": "learning_inherited_3",
+        "phase": "inherited",
+        "learnings": [
+          {
+            "claim": "Hash comparison prevents unnecessary file writes and preserves file timestamps",
+            "status": "validated",
+            "tested": true,
+            "evidence": "Validated in prior colony session"
+          }
+        ],
+        "source": "inherited:completion-report",
+        "timestamp": "2026-02-13T20:40:00Z"
+      },
+      {
+        "id": "learning_inherited_4",
+        "phase": "inherited",
+        "learnings": [
+          {
+            "claim": "Namespace isolation via 'ant:' prefix prevents collisions with other agents",
+            "status": "validated",
+            "tested": true,
+            "evidence": "Validated in prior colony session"
+          }
+        ],
+        "source": "inherited:completion-report",
+        "timestamp": "2026-02-13T20:40:00Z"
+      },
+      {
+        "id": "learning_inherited_5",
+        "phase": "inherited",
+        "learnings": [
+          {
+            "claim": "CLI sync verification (generate-commands.sh check) catches content drift between .claude/ and .opencode/ mirrors using SHA-1 checksums",
+            "status": "validated",
+            "tested": true,
+            "evidence": "Validated in prior colony session"
+          }
+        ],
+        "source": "inherited:completion-report",
+        "timestamp": "2026-02-13T20:40:00Z"
+      }
+    ],
+    "decisions": [],
+    "instincts": [
+      {
+        "id": "instinct_inherited_0",
+        "trigger": "When modifying command files",
+        "action": "Always check both .claude/commands/ant/ and .opencode/commands/ant/ for parity",
+        "confidence": 0.8,
+        "status": "validated",
+        "domain": "workflow",
+        "source": "inherited:completion-report",
+        "evidence": [
+          "Validated in prior colony session"
+        ],
+        "created_at": "2026-02-13T20:40:00Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      }
+    ]
+  },
+  "errors": {
+    "records": [],
+    "flagged_patterns": []
+  },
+  "signals": [],
+  "graveyards": [],
+  "events": [
+    {
+      "timestamp": "2026-02-15T18:47:31Z",
+      "type": "colony_initialized",
+      "worker": "queen",
+      "details": "Colony initialized with goal: Wire the QUEEN.md wisdom feedback loop and integrate specialized agents"
+    },
+    {
+      "timestamp": "2026-02-15T18:50:00Z",
+      "type": "plan_generated",
+      "worker": "plan",
+      "details": "Generated 4 phases with 80% confidence"
+    },
+    {
+      "timestamp": "2026-02-15T14:21:28Z",
+      "type": "phase_started",
+      "worker": "build",
+      "details": "Phase 2: Wire QUEEN.md Write Operations started"
+    },
+    {
+      "timestamp": "2026-02-15T14:30:00Z",
+      "type": "phase_completed",
+      "worker": "build",
+      "details": "Phase 2: Wire QUEEN.md Write Operations completed with blockers"
+    },
+    {
+      "timestamp": "2026-02-15T14:30:00Z",
+      "type": "colony_paused",
+      "worker": "queen",
+      "details": "Colony paused — handoff created"
+    }
+  ],
+  "created_at": "2026-02-15T18:47:31Z",
+  "last_updated": "2026-02-15T14:30:00Z",
+  "paused": true,
+  "paused_at": "2026-02-15T14:30:00Z",
+  "model_profile": {
+    "active_profile": "default",
+    "profile_file": ".aether/model-profiles.yaml",
+    "routing_enabled": true,
+    "proxy_endpoint": "http://localhost:4000",
+    "updated_at": "2026-02-14T00:23:22Z"
+  }
+}

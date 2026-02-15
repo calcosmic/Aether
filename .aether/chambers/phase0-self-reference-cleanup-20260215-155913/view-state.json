@@ -1,0 +1,18 @@
+{
+  "version": "1.0",
+  "swarm_display": {
+    "expanded": [],
+    "collapsed": [],
+    "default_expand_depth": 2
+  },
+  "tunnel_view": {
+    "expanded": [
+      "test_item"
+    ],
+    "collapsed": [
+      "__depth_3_plus__"
+    ],
+    "default_expand_depth": 2,
+    "show_completed": true
+  }
+}

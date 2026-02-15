@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "flags": [
+    {
+      "id": "flag_1771164807_a634",
+      "type": "blocker",
+      "severity": "critical",
+      "title": "Missing aether-utils.sh causes cascading failures",
+      "description": "If aether-utils.sh is missing or corrupted, error cascade with unclear recovery path. Error-handler recovery suggestions are generic rather than colony-specific.",
+      "source": "chaos-testing",
+      "phase": 1,
+      "created_at": "2026-02-15T14:13:27Z",
+      "acknowledged_at": null,
+      "resolved_at": "2026-02-15T14:17:02Z",
+      "resolution": "Acknowledged-existing: Error cascade handling is pre-existing architecture, not introduced in Phase 1. Will address in future error handling refactor.",
+      "auto_resolve_on": null
+    },
+    {
+      "id": "flag_1771164809_5230",
+      "type": "issue",
+      "severity": "high",
+      "title": "queen-read error handling could be clearer",
+      "description": "queen-read calls json_err and exits with code 1 when QUEEN.md is missing. The 2>/dev/null suppression may cause partial output to be misinterpreted as valid JSON.",
+      "source": "chaos-testing",
+      "phase": 1,
+      "created_at": "2026-02-15T14:13:29Z",
+      "acknowledged_at": null,
+      "resolved_at": null,
+      "resolution": null,
+      "auto_resolve_on": null
+    },
+    {
+      "id": "flag_1771166017_df5c",
+      "type": "blocker",
+      "severity": "critical",
+      "title": "Malformed queen-promote JSON causes silent failures",
+      "description": "In seal.md and entomb.md, queen-promote output is piped to jq without proper error handling. If queen-promote fails and outputs non-JSON, jq parse errors are silently swallowed by 2>/dev/null, masking the root cause.",
+      "source": "chaos-testing",
+      "phase": 2,
+      "created_at": "2026-02-15T14:33:37Z",
+      "acknowledged_at": null,
+      "resolved_at": null,
+      "resolution": null,
+      "auto_resolve_on": null
+    },
+    {
+      "id": "flag_1771166019_9df3",
+      "type": "blocker",
+      "severity": "critical",
+      "title": "queen-init failure silently discards wisdom",
+      "description": "In entomb.md Step 5.1, queen-init failures result in QUEEN.md not being created. Step 5.2 then skips all wisdom promotion without notifying the user. Validated learnings are silently lost.",
+      "source": "chaos-testing",
+      "phase": 2,
+      "created_at": "2026-02-15T14:33:39Z",
+      "acknowledged_at": null,
+      "resolved_at": null,
+      "resolution": null,
+      "auto_resolve_on": null
+    }
+  ]
+}

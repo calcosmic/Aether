@@ -1,0 +1,23 @@
+{
+  "version": "1.0",
+  "focus": [
+    "QUEEN.md template at runtime/templates/QUEEN.md.template has the target structure with promotion thresholds in embedded METADATA JSON — philosophy:5, pattern:3, redirect:2, stack:1, decree:0",
+    "build.md Step 4 loads constraints and Step 5.1 generates worker prompts — these are the injection points for queen-read wisdom"
+  ],
+  "constraints": [
+    {
+      "id": "c_1771162100000",
+      "type": "AVOID",
+      "content": "Do not create ~/.aether/eternal/ directory — keep wisdom in .aether/QUEEN.md in the repo, not global eternal directories",
+      "source": "user:redirect",
+      "created_at": "2026-02-15T18:48:20.000Z"
+    },
+    {
+      "id": "c_1771162105000",
+      "type": "AVOID",
+      "content": "Do not add pheromone decay math or TTL calculations — the existing constraints system works, QUEEN.md promotion is the eternal layer",
+      "source": "user:redirect",
+      "created_at": "2026-02-15T18:48:25.000Z"
+    }
+  ]
+}
