@@ -1953,6 +1953,22 @@ NODESCRIPT
     fi
     ;;
 
+  swarm-display-render)
+    # Render the swarm display to terminal
+    # Usage: swarm-display-render [swarm_id]
+    swarm_id="${1:-default-swarm}"
+
+    display_script="$SCRIPT_DIR/utils/swarm-display.sh"
+
+    if [[ -f "$display_script" ]]; then
+      # Execute the display script
+      bash "$display_script" "$swarm_id" 2>/dev/null || true
+      json_ok '{"rendered":true}'
+    else
+      json_err "$E_FILE_NOT_FOUND" "Display script not found: $display_script"
+    fi
+    ;;
+
   swarm-timing-start)
     # Record start time for an ant
     # Usage: swarm-timing-start <ant_name>

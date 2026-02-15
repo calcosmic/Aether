@@ -50,103 +50,42 @@ bash .aether/aether-utils.sh spawn-complete "Hammer-42" "completed" "auth module
 
 ---
 
-## Model-Aware Spawning
+## Model Selection (Session-Level)
 
-Aether colony workers are spawned with model-specific configurations based on their caste. This enables optimal task routing through the LiteLLM proxy.
+Aether can work with different AI models through a LiteLLM proxy, but **model selection happens at the session level**, not per-worker.
 
 ### How It Works
 
-1. **Model Assignment**: Each caste is mapped to an optimal model in `.aether/model-profiles.yaml`
-2. **Prompt Context**: Queen includes model assignment in worker's prompt via `--- MODEL CONTEXT ---` section
-3. **Worker Self-Reporting**: Workers echo their assigned model in JSON output for verification
-4. **Proxy Routing** (Optional): With LiteLLM proxy running, set `ANTHROPIC_MODEL` in parent shell for true model routing
+Claude Code's Task tool does not support passing environment variables to spawned workers. All workers inherit the parent session's model configuration.
 
-### Model Assignments by Caste
-
-| Caste | Model | Purpose |
-|-------|-------|---------|
-| prime | glm-5 | Long-horizon coordination, strategic planning (200K context) |
-| archaeologist | glm-5 | Historical pattern analysis across long timeframes |
-| architect | glm-5 | Pattern synthesis, documentation coordination (200K context) |
-| oracle | minimax-2.5 | Research, foresight, browse/search (76.3% BrowseComp) |
-| route_setter | kimi-k2.5 | Task decomposition, structured planning (256K context) |
-| builder | kimi-k2.5 | Code generation, refactoring (76.8% SWE-Bench) |
-| watcher | kimi-k2.5 | Validation, testing, verification |
-| scout | minimax-2.5| Research exploration, parallel sub-agent spawning |
-| chaos | kimi-k2.5 | Edge case probing, resilience testing |
-| colonizer | minimax-2.5| Environment setup, visual coding from screenshots |
-
-### Worker Model Self-Reporting
-
-All workers must include model context in their JSON output:
-
-```json
-{
-  "status": "completed",
-  "summary": "...",
-  "model_context": {
-    "assigned": "kimi-k2.5",
-    "caste": "builder",
-    "source": "caste-default",
-    "reported_at": "2026-02-15T10:30:00Z"
-  }
-}
-```
-
-This enables:
-- **Visibility**: See which model each worker used
-- **Verification**: Confirm routing is working correctly
-- **Debugging**: Detect mismatches between expected and actual
-
-### LiteLLM Proxy Integration (Optional)
-
-For true model routing through LiteLLM:
+### To Use a Specific Model
 
 ```bash
-# 1. Start proxy with your API keys
-litellm --config proxy.yaml
+# 1. Start LiteLLM proxy (if using)
+cd ~/repos/litellm-proxy && docker-compose up -d
 
-# 2. In parent shell (before starting Claude Code):
+# 2. Set environment variables before starting Claude Code:
 export ANTHROPIC_BASE_URL=http://localhost:4000
 export ANTHROPIC_AUTH_TOKEN=sk-litellm-local
-export ANTHROPIC_MODEL=kimi-k2.5  # Or your preferred default
+export ANTHROPIC_MODEL=kimi-k2.5  # or glm-5, minimax-2.5
 
-# 3. Start Claude Code - it will inherit these variables
+# 3. Start Claude Code
 claude
 ```
 
-**Note:** Claude Code's Task tool doesn't support explicit environment variable passing,
-so proxy routing relies on parent shell inheritance. The self-reporting approach works
-regardless of proxy status.
+### Available Models (via LiteLLM)
 
-### Available Models
+| Model | Best For | Provider |
+|-------|----------|----------|
+| glm-5 | Complex reasoning, architecture, planning | Z_AI |
+| kimi-k2.5 | Fast coding, implementation | Moonshot |
+| minimax-2.5 | Validation, research, exploration | MiniMax |
 
-- **glm-5** (via Z_AI): Powerful reasoning for complex tasks, architecture, planning
-- **kimi-k2.5** (via Kimi): Fast code generation, refactoring, implementation
-- **minimax-2.5** (via MiniMax): Efficient validation, research, lightweight tasks
+### Historical Note
 
-### Fallback Behavior
+A model-per-caste routing system was designed and implemented (archived in `.aether/archive/model-routing/`) but cannot function due to Claude Code Task tool limitations. The archive is preserved for future use if the platform adds environment variable support for subagents.
 
-If the model profile is missing or a caste is not mapped:
-- Default to `kimi-k2.5` (fastest, most cost-effective)
-- Log a warning to the activity log
-- Continue with worker spawn
-
-### Sub-Worker Spawning
-
-When workers spawn sub-workers, they should:
-1. Check if the sub-worker's caste differs from their own
-2. If different, the sub-worker will automatically get their caste's model via the same mechanism
-3. If spawning with the same caste, the model remains the same
-
-### Model Context in Prompts
-
-Worker prompts include a MODEL CONTEXT section that informs the worker about:
-- Which model they are running on
-- The model's strengths and optimal use cases
-- Expected task complexity
-
-This helps workers adjust their approach based on model capabilities.
+See: `git show model-routing-v1-archived` for the complete configuration.
 
 ---
 
@@ -327,7 +266,19 @@ Actions: CREATED (path + lines), MODIFIED (path), RESEARCH (finding), SPAWN (cas
 
 ### Spawning Sub-Workers
 
-Workers can spawn sub-workers directly using the **Task tool** with `subagent_type="general"`.
+Workers can spawn sub-workers directly using the **Task tool** with `subagent_type="general-purpose"`.
+
+**Caste Emoji Mapping:**
+
+Every spawn must display its caste emoji:
+- 🔨 Builder
+- 👁️ Watcher
+- 🎲 Chaos
+- 🔍 Scout
+- 🏺 Archaeologist
+- 🥚 Queen/Prime
+- 🧹 Colonizer
+- 🏛️ Architect
 
 **Depth-Based Behavior:**
 
@@ -371,14 +322,15 @@ child_name=$(bash .aether/aether-utils.sh generate-ant-name "{caste}" | jq -r '.
 # Returns: "Hammer-42", "Vigil-17", etc.
 ```
 
-**Step 3: Log the spawn**
+**Step 3: Log the spawn and update swarm display**
 ```bash
 bash .aether/aether-utils.sh spawn-log "{your_name}" "{child_caste}" "{child_name}" "{task_summary}"
+bash .aether/aether-utils.sh swarm-display-update "{child_name}" "{child_caste}" "excavating" "{task_summary}" "{your_name}" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 10
 ```
 
 **Step 4: Use Task tool**
 ```
-Use the Task tool with subagent_type="general":
+Use the Task tool with subagent_type="general-purpose":
 
 You are {child_name}, a {emoji} {Caste} Ant in the Aether Colony at depth {your_depth + 1}.
 
@@ -416,10 +368,11 @@ Return a compressed summary:
 }
 ```
 
-**Step 5: Log completion**
+**Step 5: Log completion and update swarm display**
 ```bash
 # After Task tool returns
 bash .aether/aether-utils.sh spawn-complete "{child_name}" "{status}" "{summary}"
+bash .aether/aether-utils.sh swarm-display-update "{child_name}" "{child_caste}" "completed" "{summary}" "{your_name}" '{"read":5,"grep":3,"edit":2,"bash":1}' 100 "fungus_garden" 100
 ```
 
 ---

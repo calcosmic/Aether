@@ -132,7 +132,7 @@ Resolve each command (build, test, types, lint) independently using the priority
 ### Command Resolution Priority
 
 1. **CLAUDE.md** — Check the project's CLAUDE.md (in LLM system context) for explicit commands under headings like `Commands`, `Scripts`, `Development`, `Build`, `Testing`, or `Lint`.
-2. **CODEBASE.md** — Read `.planning/CODEBASE.md` `## Commands` section for commands detected during `/ant:colonize`. Each entry includes source attribution (`claude_md` or `heuristic`).
+2. **CODEBASE.md** — Read `.aether/data/codebase.md` `## Commands` section for commands detected during `/ant:colonize`. Each entry includes source attribution (`claude_md` or `heuristic`).
 3. **Fallback Heuristic Table** — Use the table below if neither source provides a command for the needed label.
 
 ### Fallback Heuristic Table
