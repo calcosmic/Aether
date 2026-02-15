@@ -107,6 +107,7 @@ For each inferred command, only store it if no command with the same label was a
 If neither source yields any commands, set the detected commands list to empty.
 
 ### Step 2.5: Optional Deep Exploration (use Task tool with `subagent_type="aether-colonizer"`)
+# FALLBACK: If "Agent type not found", use general-purpose and inject role: "You are a Colonizer Ant - explores and indexes codebase structure."
 
 **OPTIONAL: For deeper codebase analysis, spawn a Colonizer Ant after the surface scan.**
 
@@ -117,6 +118,7 @@ bash .aether/aether-utils.sh spawn-log "Queen" "colonizer" "{colonizer_name}" "D
 ```
 
 Then use Task tool with `subagent_type="aether-colonizer"` to spawn the Colonizer Ant.
+# FALLBACK: If "Agent type not found", use general-purpose and inject role: "You are a Colonizer Ant - explores and indexes codebase structure."
 
 The Colonizer will perform deeper analysis including:
 - Dependency mapping (imports, call chains, data flow)

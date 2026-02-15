@@ -241,6 +241,7 @@ while iteration < 4 AND confidence < 80:
     # === PLANNING PHASE (always runs — 1 planner per iteration) ===
 
     Spawn Planning Ant (Route-Setter) via Task tool with subagent_type="aether-route-setter":
+    # FALLBACK: If "Agent type not found", use general-purpose and inject role: "You are a Route-Setter Ant - creates structured phase plans and analyzes dependencies."
 
     """
     You are a Route-Setter Ant in the Aether Colony.

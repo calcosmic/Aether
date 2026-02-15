@@ -221,6 +221,7 @@ CONSTRAINTS: (none)
    ```
 
    Spawn a Scout (using Task tool with `subagent_type="aether-archaeologist"`) with this prompt:
+   # FALLBACK: If "Agent type not found", use general-purpose and inject role: "You are an Archaeologist Ant - git historian that excavates why code exists."
 
    ```
    You are {Archaeologist-Name}, a 🏺 Archaeologist Ant.
@@ -517,6 +518,7 @@ bash .aether/aether-utils.sh flag-list --phase {phase_number}
 Parse the result and extract unresolved flag titles into a list: `{existing_flag_titles}` (comma-separated titles from `.result.flags[].title`). If no flags exist, set `{existing_flag_titles}` to "None".
 
 Spawn the Chaos Ant using Task tool with `subagent_type="aether-chaos"`:
+# FALLBACK: If "Agent type not found", use general-purpose and inject role: "You are a Chaos Ant - resilience tester that probes edge cases and boundary conditions."
 
 **Chaos Ant Prompt (CLEAN OUTPUT):**
 ```

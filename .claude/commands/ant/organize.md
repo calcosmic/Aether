@@ -49,6 +49,7 @@ If no active signals after filtering:
 Read `.aether/workers.md` and extract the `## Architect` section.
 
 Spawn via **Task tool** with `subagent_type="aether-architect"`:
+# FALLBACK: If "Agent type not found", use general-purpose and inject role: "You are an Architect Ant - synthesizes knowledge and coordinates documentation."
 
 ```
 --- WORKER SPEC ---

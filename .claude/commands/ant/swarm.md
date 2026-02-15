@@ -124,6 +124,7 @@ bash .aether/aether-utils.sh swarm-display-update "{swarm_id}-WebResearcher" "sc
 ```
 
 **Scout 1: 🏛️ Git Archaeologist** (use Task tool with `subagent_type="aether-archaeologist"`)
+# FALLBACK: If "Agent type not found", use general-purpose and inject role: "You are an Archaeologist Ant - git historian that excavates why code exists."
 ```
 You are {swarm_id}-Archaeologist, a 🏛️ Archaeologist Ant.
 
