@@ -26,7 +26,9 @@
 | OpenCode commands | `.opencode/commands/ant/` | OpenCode commands |
 | Agent definitions | `.opencode/agents/` | Agent definitions |
 | Visualizations | `.aether/visualizations/` | Distributed directly |
-| Your notes | `.aether/dreams/`, `.aether/oracle/` | Never distributed, safe |
+| Your notes | `.aether/dreams/` | Never distributed, safe |
+| Dev docs | `.aether/docs/known-issues.md`, `implementation-learnings.md` | Distributed — extracted findings |
+| Aether TODOs | `TO-DOS.md` (root) | Source of truth for Aether development |
 
 > **Note:** For OpenCode-specific rules, see `.opencode/OPENCODE.md`
 

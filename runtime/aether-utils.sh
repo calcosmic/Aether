@@ -79,6 +79,7 @@ get_caste_emoji() {
     *Watcher*|*watcher*|*Vigil*|*Sentinel*|*Guard*|*Keen*|*Sharp*|*Hawk*|*Alert*) echo "👁️" ;;
     *Scout*|*scout*|*Swift*|*Dash*|*Ranger*|*Track*|*Seek*|*Path*|*Roam*|*Quest*) echo "🔍" ;;
     *Colonizer*|*colonizer*|*Pioneer*|*Map*|*Chart*|*Venture*|*Explore*|*Compass*|*Atlas*|*Trek*) echo "🗺️" ;;
+    *Surveyor*|*surveyor*|*Chart*|*Plot*|*Survey*|*Measure*|*Assess*|*Gauge*|*Sound*|*Fathom*) echo "📊" ;;
     *Architect*|*architect*|*Blueprint*|*Draft*|*Design*|*Plan*|*Schema*|*Frame*|*Sketch*|*Model*) echo "🏛️" ;;
     *Chaos*|*chaos*|*Probe*|*Stress*|*Shake*|*Twist*|*Snap*|*Breach*|*Surge*|*Jolt*) echo "🎲" ;;
     *Archaeologist*|*archaeologist*|*Relic*|*Fossil*|*Dig*|*Shard*|*Epoch*|*Strata*|*Lore*|*Glyph*) echo "🏺" ;;
@@ -106,7 +107,7 @@ shift 2>/dev/null || true
 case "$cmd" in
   help)
     cat <<'EOF'
-{"ok":true,"commands":["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
+{"ok":true,"commands":["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","survey-load","survey-verify"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
 EOF
     ;;
   version)
@@ -264,7 +265,7 @@ EOF
     json_ok "$(echo "$content" | jq -Rs '.')"
     ;;
   learning-promote)
-    [[ $# -ge 3 ]] || json_err "Usage: learning-promote <content> <source_project> <source_phase> [tags]"
+    [[ $# -ge 3 ]] || json_err "$E_VALIDATION_FAILED" "Usage: learning-promote <content> <source_project> <source_phase> [tags]"
     content="$1"
     source_project="$2"
     source_phase="$3"
@@ -302,13 +303,13 @@ EOF
         tags: $tags,
         promoted_at: $ts
       }]
-    ' "$global_file") || json_err "Failed to update learnings.json"
+    ' "$global_file") || json_err "$E_JSON_INVALID" "Failed to update learnings.json"
 
     echo "$updated" > "$global_file"
     json_ok "{\"promoted\":true,\"id\":\"$id\",\"count\":$((current_count + 1)),\"cap\":50}"
     ;;
   learning-inject)
-    [[ $# -ge 1 ]] || json_err "Usage: learning-inject <tech_keywords_csv>"
+    [[ $# -ge 1 ]] || json_err "$E_VALIDATION_FAILED" "Usage: learning-inject <tech_keywords_csv>"
     keywords="$1"
 
     global_file="$DATA_DIR/learnings.json"
@@ -336,7 +337,7 @@ EOF
     task_summary="${4:-}"
     model="${5:-default}"
     status="${6:-spawned}"
-    [[ -z "$parent_id" || -z "$child_caste" || -z "$task_summary" ]] && json_err "Usage: spawn-log <parent_id> <child_caste> <child_name> <task_summary> [model] [status]"
+    [[ -z "$parent_id" || -z "$child_caste" || -z "$task_summary" ]] && json_err "$E_VALIDATION_FAILED" "Usage: spawn-log <parent_id> <child_caste> <child_name> <task_summary> [model] [status]"
     mkdir -p "$DATA_DIR"
     ts=$(date -u +"%H:%M:%S")
     ts_full=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -353,7 +354,7 @@ EOF
     ant_name="${1:-}"
     status="${2:-completed}"
     summary="${3:-}"
-    [[ -z "$ant_name" ]] && json_err "Usage: spawn-complete <ant_name> <status> [summary]"
+    [[ -z "$ant_name" ]] && json_err "$E_VALIDATION_FAILED" "Usage: spawn-complete <ant_name> <status> [summary]"
     mkdir -p "$DATA_DIR"
     ts=$(date -u +"%H:%M:%S")
     ts_full=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -503,7 +504,7 @@ EOF
     pattern_name="${1:-}"
     description="${2:-}"
     severity="${3:-warning}"
-    [[ -z "$pattern_name" || -z "$description" ]] && json_err "Usage: error-flag-pattern <pattern_name> <description> [severity]"
+    [[ -z "$pattern_name" || -z "$description" ]] && json_err "$E_VALIDATION_FAILED" "Usage: error-flag-pattern <pattern_name> <description> [severity]"
 
     patterns_file="$DATA_DIR/error-patterns.json"
     mkdir -p "$DATA_DIR"
@@ -526,7 +527,7 @@ EOF
           .last_seen = $ts |
           .projects = ((.projects + [$proj]) | unique)
         else . end]
-      ' "$patterns_file") || json_err "Failed to update pattern"
+      ' "$patterns_file") || json_err "$E_JSON_INVALID" "Failed to update pattern"
       echo "$updated" > "$patterns_file"
       count=$(echo "$updated" | jq --arg name "$pattern_name" '.patterns[] | select(.name == $name) | .occurrences')
       json_ok "{\"updated\":true,\"pattern\":\"$pattern_name\",\"occurrences\":$count}"
@@ -543,7 +544,7 @@ EOF
           "projects": [$proj],
           "resolved": false
         }]
-      ' "$patterns_file") || json_err "Failed to add pattern"
+      ' "$patterns_file") || json_err "$E_JSON_INVALID" "Failed to add pattern"
       echo "$updated" > "$patterns_file"
       json_ok "{\"created\":true,\"pattern\":\"$pattern_name\"}"
     fi
@@ -568,7 +569,7 @@ EOF
     # Usage: check-antipattern <file_path>
     # Returns JSON with critical issues and warnings
     file_path="${1:-}"
-    [[ -z "$file_path" ]] && json_err "Usage: check-antipattern <file_path>"
+    [[ -z "$file_path" ]] && json_err "$E_VALIDATION_FAILED" "Usage: check-antipattern <file_path>"
     [[ ! -f "$file_path" ]] && json_ok '{"critical":[],"warnings":[],"clean":true}'
 
     criticals=()
@@ -643,7 +644,7 @@ EOF
     # Exit code 0 if no match, 1 if match found
     target_file="${1:-}"
     signature_name="${2:-}"
-    [[ -z "$target_file" || -z "$signature_name" ]] && json_err "Usage: signature-scan <target_file> <signature_name>"
+    [[ -z "$target_file" || -z "$signature_name" ]] && json_err "$E_VALIDATION_FAILED" "Usage: signature-scan <target_file> <signature_name>"
 
     # Handle missing target file gracefully
     if [[ ! -f "$target_file" ]]; then
@@ -698,14 +699,14 @@ EOF
     if [[ -z "$file_pattern" ]]; then
       file_pattern="*"
     fi
-    [[ -z "$target_dir" ]] && json_err "Usage: signature-match <directory> [file_pattern]"
+    [[ -z "$target_dir" ]] && json_err "$E_VALIDATION_FAILED" "Usage: signature-match <directory> [file_pattern]"
 
     # Validate directory exists
-    [[ ! -d "$target_dir" ]] && json_err "Directory not found: $target_dir"
+    [[ ! -d "$target_dir" ]] && json_err "$E_FILE_NOT_FOUND" "Directory not found: $target_dir"
 
     # Path to signatures file
     signatures_file="$DATA_DIR/signatures.json"
-    [[ ! -f "$signatures_file" ]] && json_err "Signatures file not found"
+    [[ ! -f "$signatures_file" ]] && json_err "$E_FILE_NOT_FOUND" "Signatures file not found"
 
     # Read high-confidence signatures (confidence >= 0.7) using jq -c for compact single-line output
     high_conf_signatures=$(jq -c '.signatures[] | select(.confidence_threshold >= 0.7)' "$signatures_file" 2>/dev/null)
@@ -795,7 +796,7 @@ EOF
     desc="${3:-}"
     source="${4:-manual}"
     phase="${5:-null}"
-    [[ -z "$title" ]] && json_err "Usage: flag-add <type> <title> <description> [source] [phase]"
+    [[ -z "$title" ]] && json_err "$E_VALIDATION_FAILED" "Usage: flag-add <type> <title> <description> [source] [phase]"
 
     mkdir -p "$DATA_DIR"
     flags_file="$DATA_DIR/flags.json"
@@ -853,7 +854,7 @@ EOF
         resolution: null,
         auto_resolve_on: (if $type == "blocker" and ($source | test("chaos") | not) then "build_pass" else null end)
       }]
-    ' "$flags_file") || { release_lock "$flags_file"; json_err "Failed to add flag"; }
+    ' "$flags_file") || { release_lock "$flags_file" 2>/dev/null || true; json_err "$E_JSON_INVALID" "Failed to add flag"; }
 
     atomic_write "$flags_file" "$updated"
     release_lock "$flags_file"
@@ -893,10 +894,10 @@ EOF
     # Usage: flag-resolve <flag_id> [resolution_message]
     flag_id="${1:-}"
     resolution="${2:-Resolved}"
-    [[ -z "$flag_id" ]] && json_err "Usage: flag-resolve <flag_id> [resolution_message]"
+    [[ -z "$flag_id" ]] && json_err "$E_VALIDATION_FAILED" "Usage: flag-resolve <flag_id> [resolution_message]"
 
     flags_file="$DATA_DIR/flags.json"
-    [[ ! -f "$flags_file" ]] && json_err "No flags file found"
+    [[ ! -f "$flags_file" ]] && json_err "$E_FILE_NOT_FOUND" "No flags file found"
 
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
@@ -927,10 +928,10 @@ EOF
     # Acknowledge a flag (issue continues but noted)
     # Usage: flag-acknowledge <flag_id>
     flag_id="${1:-}"
-    [[ -z "$flag_id" ]] && json_err "Usage: flag-acknowledge <flag_id>"
+    [[ -z "$flag_id" ]] && json_err "$E_VALIDATION_FAILED" "Usage: flag-acknowledge <flag_id>"
 
     flags_file="$DATA_DIR/flags.json"
-    [[ ! -f "$flags_file" ]] && json_err "No flags file found"
+    [[ ! -f "$flags_file" ]] && json_err "$E_FILE_NOT_FOUND" "No flags file found"
 
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
@@ -1016,7 +1017,10 @@ EOF
     # Count how many will be resolved
     count=$(jq --arg trigger "$trigger" '
       [.flags[] | select(.auto_resolve_on == $trigger and .resolved_at == null)] | length
-    ' "$flags_file")
+    ' "$flags_file") || {
+      release_lock "$flags_file" 2>/dev/null || true
+      json_err "$E_JSON_INVALID" "Failed to count flags for auto-resolve"
+    }
 
     # Resolve them
     updated=$(jq --arg trigger "$trigger" --arg ts "$ts" '
@@ -1024,10 +1028,15 @@ EOF
         .resolved_at = $ts |
         .resolution = "Auto-resolved on " + $trigger
       else . end]
-    ' "$flags_file")
+    ' "$flags_file") || {
+      release_lock "$flags_file" 2>/dev/null || true
+      json_err "$E_JSON_INVALID" "Failed to auto-resolve flags"
+    }
 
     atomic_write "$flags_file" "$updated"
-    release_lock "$flags_file"
+    if type feature_enabled &>/dev/null && feature_enabled "file_locking"; then
+      release_lock "$flags_file"
+    fi
     json_ok "{\"resolved\":$count,\"trigger\":\"$trigger\"}"
     ;;
   generate-ant-name)
@@ -1196,10 +1205,10 @@ EOF
     confidence="${3:-0.5}"
     finding="${4:-}"
 
-    [[ -z "$swarm_id" || -z "$scout_type" || -z "$finding" ]] && json_err "Usage: swarm-findings-add <swarm_id> <scout_type> <confidence> <finding_json>"
+    [[ -z "$swarm_id" || -z "$scout_type" || -z "$finding" ]] && json_err "$E_VALIDATION_FAILED" "Usage: swarm-findings-add <swarm_id> <scout_type> <confidence> <finding_json>"
 
     findings_file="$DATA_DIR/swarm-findings-$swarm_id.json"
-    [[ ! -f "$findings_file" ]] && json_err "Swarm findings file not found: $swarm_id"
+    [[ ! -f "$findings_file" ]] && json_err "$E_FILE_NOT_FOUND" "Swarm findings file not found: $swarm_id"
 
     ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
@@ -1222,10 +1231,10 @@ EOF
     # Read all findings for a swarm
     # Usage: swarm-findings-read <swarm_id>
     swarm_id="${1:-}"
-    [[ -z "$swarm_id" ]] && json_err "Usage: swarm-findings-read <swarm_id>"
+    [[ -z "$swarm_id" ]] && json_err "$E_VALIDATION_FAILED" "Usage: swarm-findings-read <swarm_id>"
 
     findings_file="$DATA_DIR/swarm-findings-$swarm_id.json"
-    [[ ! -f "$findings_file" ]] && json_err "Swarm findings file not found: $swarm_id"
+    [[ ! -f "$findings_file" ]] && json_err "$E_FILE_NOT_FOUND" "Swarm findings file not found: $swarm_id"
 
     json_ok "$(cat "$findings_file")"
     ;;
@@ -1236,10 +1245,10 @@ EOF
     swarm_id="${1:-}"
     solution="${2:-}"
 
-    [[ -z "$swarm_id" || -z "$solution" ]] && json_err "Usage: swarm-solution-set <swarm_id> <solution_json>"
+    [[ -z "$swarm_id" || -z "$solution" ]] && json_err "$E_VALIDATION_FAILED" "Usage: swarm-solution-set <swarm_id> <solution_json>"
 
     findings_file="$DATA_DIR/swarm-findings-$swarm_id.json"
-    [[ ! -f "$findings_file" ]] && json_err "Swarm findings file not found: $swarm_id"
+    [[ ! -f "$findings_file" ]] && json_err "$E_FILE_NOT_FOUND" "Swarm findings file not found: $swarm_id"
 
     ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
@@ -1259,7 +1268,7 @@ EOF
     swarm_id="${1:-}"
     archive="${2:-}"
 
-    [[ -z "$swarm_id" ]] && json_err "Usage: swarm-cleanup <swarm_id> [--archive]"
+    [[ -z "$swarm_id" ]] && json_err "$E_VALIDATION_FAILED" "Usage: swarm-cleanup <swarm_id> [--archive]"
 
     findings_file="$DATA_DIR/swarm-findings-$swarm_id.json"
 
@@ -1280,7 +1289,7 @@ EOF
   grave-add)
     # Record a grave marker when a builder fails at a file
     # Usage: grave-add <file> <ant_name> <task_id> <phase> <failure_summary> [function] [line]
-    [[ $# -ge 5 ]] || json_err "Usage: grave-add <file> <ant_name> <task_id> <phase> <failure_summary> [function] [line]"
+    [[ $# -ge 5 ]] || json_err "$E_VALIDATION_FAILED" "Usage: grave-add <file> <ant_name> <task_id> <phase> <failure_summary> [function] [line]"
     [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
     file="$1"
     ant_name="$2"
@@ -1331,7 +1340,7 @@ EOF
     # Query for grave markers near a file path
     # Usage: grave-check <file_path>
     # Read-only, never modifies state
-    [[ $# -ge 1 ]] || json_err "Usage: grave-check <file_path>"
+    [[ $# -ge 1 ]] || json_err "$E_VALIDATION_FAILED" "Usage: grave-check <file_path>"
     [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
     check_file="$1"
     check_dir=$(dirname "$check_file")
@@ -1827,7 +1836,7 @@ EOF
         ;;
 
       *)
-        json_err "Unknown context action: $ctx_action"
+        json_err "$E_VALIDATION_FAILED" "Unknown context action: $ctx_action"
         ;;
     esac
     ;;
@@ -1864,7 +1873,7 @@ EOF
     # Usage: registry-add <repo_path> <version>
     repo_path="${1:-}"
     repo_version="${2:-}"
-    [[ -z "$repo_path" || -z "$repo_version" ]] && json_err "Usage: registry-add \<repo_path\> \<version\>"
+    [[ -z "$repo_path" || -z "$repo_version" ]] && json_err "$E_VALIDATION_FAILED" "Usage: registry-add <repo_path> <version>"
 
     registry_file="$HOME/.aether/registry.json"
     mkdir -p "$HOME/.aether"
@@ -1885,7 +1894,7 @@ EOF
           .version = $ver |
           .updated_at = $ts
         else . end]
-      ' "$registry_file") || json_err "Failed to update registry"
+      ' "$registry_file") || json_err "$E_JSON_INVALID" "Failed to update registry"
     else
       # Add new entry
       updated=$(jq --arg path "$repo_path" --arg ver "$repo_version" --arg ts "$ts" '
@@ -1895,7 +1904,7 @@ EOF
           "registered_at": $ts,
           "updated_at": $ts
         }]
-      ' "$registry_file") || json_err "Failed to update registry"
+      ' "$registry_file") || json_err "$E_JSON_INVALID" "Failed to update registry"
     fi
 
     echo "$updated" > "$registry_file"
@@ -1908,7 +1917,7 @@ EOF
     hub_system="$HOME/.aether/system"
     local_aether="$AETHER_ROOT/.aether"
 
-    [[ ! -d "$hub_system" ]] && json_err "Hub system directory not found: $hub_system"
+    [[ ! -d "$hub_system" ]] && json_err "$E_HUB_NOT_FOUND" "Hub system directory not found: $hub_system"
 
     # Allowlist of system files to copy (relative to system/)
     allowlist=(
@@ -2684,19 +2693,33 @@ NODESCRIPT
 
   queen-init)
     # Initialize QUEEN.md from template
-    # Creates .aether/QUEEN.md from runtime/templates/QUEEN.md.template if missing
-    queen_file="$AETHER_ROOT/.aether/QUEEN.md"
-    template_file="$AETHER_ROOT/runtime/templates/QUEEN.md.template"
+    # Creates .aether/QUEEN.md from template if missing
+    queen_file="$AETHER_ROOT/.aether/docs/QUEEN.md"
+
+    # Check multiple locations for template
+    template_file=""
+    for path in \
+      "$AETHER_ROOT/runtime/templates/QUEEN.md.template" \
+      "$AETHER_ROOT/.aether/templates/QUEEN.md.template" \
+      "$HOME/.aether/system/templates/QUEEN.md.template"; do
+      if [[ -f "$path" ]]; then
+        template_file="$path"
+        break
+      fi
+    done
+
+    # Ensure docs directory exists
+    mkdir -p "$AETHER_ROOT/.aether/docs"
 
     # Check if QUEEN.md already exists and has content
     if [[ -f "$queen_file" ]] && [[ -s "$queen_file" ]]; then
-      json_ok '{"created":false,"path":".aether/QUEEN.md","reason":"already_exists"}'
+      json_ok '{"created":false,"path":".aether/docs/QUEEN.md","reason":"already_exists"}'
       exit 0
     fi
 
-    # Check if template exists
-    if [[ ! -f "$template_file" ]]; then
-      json_err "$E_FILE_NOT_FOUND" "Template not found" '{"template":"runtime/templates/QUEEN.md.template"}'
+    # Check if template was found
+    if [[ -z "$template_file" ]]; then
+      json_err "$E_FILE_NOT_FOUND" "Template not found" '{"templates_checked":["runtime/templates/QUEEN.md.template",".aether/templates/QUEEN.md.template","~/.aether/system/templates/QUEEN.md.template"]}'
       exit 1
     fi
 
@@ -2705,9 +2728,9 @@ NODESCRIPT
     sed -e "s/{TIMESTAMP}/$timestamp/g" "$template_file" > "$queen_file"
 
     if [[ -f "$queen_file" ]]; then
-      json_ok '{"created":true,"path":".aether/QUEEN.md","source":"runtime/templates/QUEEN.md.template"}'
+      json_ok '{"created":true,"path":".aether/docs/QUEEN.md","source":"runtime/templates/QUEEN.md.template"}'
     else
-      json_err "$E_FILE_NOT_FOUND" "Failed to create QUEEN.md" '{"path":".aether/QUEEN.md"}'
+      json_err "$E_FILE_NOT_FOUND" "Failed to create QUEEN.md" '{"path":".aether/docs/QUEEN.md"}'
       exit 1
     fi
     ;;
@@ -2715,11 +2738,11 @@ NODESCRIPT
   queen-read)
     # Read QUEEN.md and return wisdom as JSON for worker priming
     # Extracts METADATA block and sections for colony guidance
-    queen_file="$AETHER_ROOT/.aether/QUEEN.md"
+    queen_file="$AETHER_ROOT/.aether/docs/QUEEN.md"
 
     # Check if QUEEN.md exists
     if [[ ! -f "$queen_file" ]]; then
-      json_err "$E_FILE_NOT_FOUND" "QUEEN.md not found" '{"path":".aether/QUEEN.md"}'
+      json_err "$E_FILE_NOT_FOUND" "QUEEN.md not found" '{"path":".aether/docs/QUEEN.md"}'
       exit 1
     fi
 
@@ -2789,11 +2812,11 @@ NODESCRIPT
     done
     [[ "$type_valid" == "false" ]] && json_err "$E_VALIDATION_FAILED" "Invalid type: $wisdom_type" '{"valid_types":["philosophy","pattern","redirect","stack","decree"]}'
 
-    queen_file="$AETHER_ROOT/.aether/QUEEN.md"
+    queen_file="$AETHER_ROOT/.aether/docs/QUEEN.md"
 
     # Check if QUEEN.md exists
     if [[ ! -f "$queen_file" ]]; then
-      json_err "$E_FILE_NOT_FOUND" "QUEEN.md not found" '{"path":".aether/QUEEN.md"}'
+      json_err "$E_FILE_NOT_FOUND" "QUEEN.md not found" '{"path":".aether/docs/QUEEN.md"}'
       exit 1
     fi
 
@@ -2943,7 +2966,68 @@ ${entry}" "$queen_file" > "$tmp_file"
     json_ok "{\"promoted\":true,\"type\":\"$wisdom_type\",\"colony\":\"$colony_name\",\"timestamp\":\"$ts\",\"threshold\":$threshold,\"new_count\":$new_count}"
     ;;
 
+  survey-load)
+    phase_type="${1:-}"
+    survey_dir=".aether/data/survey"
+
+    if [[ ! -d "$survey_dir" ]]; then
+      json_err "$E_FILE_NOT_FOUND" "No survey found"
+    fi
+
+    docs=""
+    case "$phase_type" in
+      *frontend*|*component*|*UI*|*page*|*button*)
+        docs="DISCIPLINES.md,CHAMBERS.md"
+        ;;
+      *API*|*endpoint*|*backend*|*route*)
+        docs="BLUEPRINT.md,DISCIPLINES.md"
+        ;;
+      *database*|*schema*|*model*|*migration*)
+        docs="BLUEPRINT.md,PROVISIONS.md"
+        ;;
+      *test*|*spec*|*coverage*)
+        docs="SENTINEL-PROTOCOLS.md,DISCIPLINES.md"
+        ;;
+      *integration*|*external*|*client*)
+        docs="TRAILS.md,PROVISIONS.md"
+        ;;
+      *refactor*|*cleanup*|*debt*)
+        docs="PATHOGENS.md,BLUEPRINT.md"
+        ;;
+      *setup*|*config*|*initialize*)
+        docs="PROVISIONS.md,CHAMBERS.md"
+        ;;
+      *)
+        docs="PROVISIONS.md,BLUEPRINT.md"
+        ;;
+    esac
+
+    json_ok "{\"ok\":true,\"docs\":\"$docs\",\"dir\":\"$survey_dir\"}"
+    ;;
+
+  survey-verify)
+    survey_dir=".aether/data/survey"
+    required="PROVISIONS.md TRAILS.md BLUEPRINT.md CHAMBERS.md DISCIPLINES.md SENTINEL-PROTOCOLS.md PATHOGENS.md"
+    missing=""
+    counts=""
+
+    for doc in $required; do
+      if [[ ! -f "$survey_dir/$doc" ]]; then
+        missing="$missing $doc"
+      else
+        lines=$(wc -l < "$survey_dir/$doc" | tr -d ' ')
+        counts="$counts $doc:$lines"
+      fi
+    done
+
+    if [[ -n "$missing" ]]; then
+      json_err "$E_FILE_NOT_FOUND" "Missing survey documents" "{\"missing\":\"$missing\"}"
+    fi
+
+    json_ok "{\"ok\":true,\"counts\":\"$counts\"}"
+    ;;
+
   *)
-    json_err "Unknown command: $cmd"
+    json_err "$E_VALIDATION_FAILED" "Unknown command: $cmd"
     ;;
 esac
