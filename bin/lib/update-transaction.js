@@ -159,13 +159,14 @@ class UpdateTransaction {
     // Hub paths (from cli.js)
     this.HOME = process.env.HOME || process.env.USERPROFILE;
     this.HUB_DIR = path.join(this.HOME, '.aether');
-    this.HUB_SYSTEM = path.join(this.HUB_DIR, 'system');
     this.HUB_COMMANDS_CLAUDE = path.join(this.HUB_DIR, 'commands', 'claude');
     this.HUB_COMMANDS_OPENCODE = path.join(this.HUB_DIR, 'commands', 'opencode');
     this.HUB_AGENTS = path.join(this.HUB_DIR, 'agents');
-    this.HUB_VISUALIZATIONS = path.join(this.HUB_DIR, 'visualizations');
     this.HUB_VERSION = path.join(this.HUB_DIR, 'version.json');
     this.HUB_REGISTRY = path.join(this.HUB_DIR, 'registry.json');
+
+    // Directories to exclude from sync (user data, local state)
+    this.EXCLUDE_DIRS = ['data', 'dreams', 'checkpoints', 'locks', 'temp'];
 
     // Target directories for git safety checks
     this.targetDirs = ['.aether', '.claude/commands/ant', '.opencode/commands/ant', '.opencode/agents'];
@@ -705,6 +706,127 @@ class UpdateTransaction {
   }
 
   /**
+   * Check if a path should be excluded from sync
+   * @param {string} relPath - Relative path
+   * @returns {boolean} True if should be excluded
+   * @private
+   */
+  shouldExclude(relPath) {
+    const parts = relPath.split(path.sep);
+    return parts.some(part => this.EXCLUDE_DIRS.includes(part));
+  }
+
+  /**
+   * Sync .aether/ directory from hub to repo, excluding user data directories
+   * @param {string} srcDir - Source hub directory
+   * @param {string} destDir - Destination repo .aether/ directory
+   * @param {object} opts - Options
+   * @returns {object} Sync result: { copied, removed, skipped }
+   * @private
+   */
+  syncAetherToRepo(srcDir, destDir, opts) {
+    opts = opts || {};
+    const dryRun = opts.dryRun || false;
+
+    if (!fs.existsSync(srcDir)) {
+      return { copied: 0, removed: [], skipped: 0 };
+    }
+
+    // Collect all files in source, filtering out excluded directories
+    const srcFiles = [];
+    const collectFiles = (dir, base) => {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.name.startsWith('.')) continue;
+        const fullPath = path.join(dir, entry.name);
+        const relPath = path.relative(base, fullPath);
+
+        if (this.shouldExclude(relPath)) continue;
+
+        if (entry.isDirectory()) {
+          collectFiles(fullPath, base);
+        } else {
+          srcFiles.push(relPath);
+        }
+      }
+    };
+    collectFiles(srcDir, srcDir);
+
+    // Copy files with hash comparison
+    let copied = 0;
+    let skipped = 0;
+    for (const relPath of srcFiles) {
+      const srcPath = path.join(srcDir, relPath);
+      const destPath = path.join(destDir, relPath);
+
+      if (!dryRun) {
+        fs.mkdirSync(path.dirname(destPath), { recursive: true });
+
+        // Hash comparison
+        let shouldCopy = true;
+        if (fs.existsSync(destPath)) {
+          const srcHash = this.hashFileSync(srcPath);
+          const destHash = this.hashFileSync(destPath);
+          if (srcHash === destHash) {
+            shouldCopy = false;
+            skipped++;
+          }
+        }
+
+        if (shouldCopy) {
+          fs.copyFileSync(srcPath, destPath);
+          if (relPath.endsWith('.sh')) {
+            fs.chmodSync(destPath, 0o755);
+          }
+        }
+      }
+      copied++;
+    }
+
+    // Cleanup: remove files in dest that aren't in source
+    const destFiles = [];
+    const collectDestFiles = (dir, base) => {
+      if (!fs.existsSync(dir)) return;
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.name.startsWith('.')) continue;
+        const fullPath = path.join(dir, entry.name);
+        const relPath = path.relative(base, fullPath);
+
+        if (this.shouldExclude(relPath)) continue;
+
+        if (entry.isDirectory()) {
+          collectDestFiles(fullPath, base);
+        } else {
+          destFiles.push(relPath);
+        }
+      }
+    };
+    collectDestFiles(destDir, destDir);
+
+    const srcSet = new Set(srcFiles);
+    const removed = [];
+    for (const relPath of destFiles) {
+      if (!srcSet.has(relPath)) {
+        removed.push(relPath);
+        if (!dryRun) {
+          try {
+            fs.unlinkSync(path.join(destDir, relPath));
+          } catch (err) {
+            // Ignore cleanup errors
+          }
+        }
+      }
+    }
+
+    if (!dryRun && removed.length > 0) {
+      this.cleanEmptyDirs(destDir);
+    }
+
+    return { copied, removed, skipped };
+  }
+
+  /**
    * Sync files from hub to repo
    * @param {string} sourceVersion - Version to sync from
    * @param {boolean} dryRun - If true, don't actually copy files
@@ -717,15 +839,14 @@ class UpdateTransaction {
       system: { copied: 0, removed: 0, skipped: 0 },
       commands: { copied: 0, removed: 0, skipped: 0 },
       agents: { copied: 0, removed: 0, skipped: 0 },
-      visualizations: { copied: 0, removed: 0, skipped: 0 },
       errors: [],
     };
 
     const repoAether = path.join(this.repoPath, '.aether');
 
-    // Sync system files from hub
-    if (fs.existsSync(this.HUB_SYSTEM)) {
-      results.system = this.syncSystemFilesWithCleanup(this.HUB_SYSTEM, repoAether, { dryRun });
+    // Sync .aether/ from hub to repo (excluding user data directories)
+    if (fs.existsSync(this.HUB_DIR)) {
+      results.system = this.syncAetherToRepo(this.HUB_DIR, repoAether, { dryRun });
     }
 
     // Sync commands from hub
@@ -747,12 +868,6 @@ class UpdateTransaction {
     const repoAgents = path.join(this.repoPath, '.opencode', 'agents');
     if (fs.existsSync(this.HUB_AGENTS)) {
       results.agents = this.syncDirWithCleanup(this.HUB_AGENTS, repoAgents, { dryRun });
-    }
-
-    // Sync visualizations from hub
-    const repoVisualizations = path.join(this.repoPath, '.aether', 'visualizations');
-    if (fs.existsSync(this.HUB_VISUALIZATIONS)) {
-      results.visualizations = this.syncDirWithCleanup(this.HUB_VISUALIZATIONS, repoVisualizations, { dryRun });
     }
 
     this.syncResult = results;
@@ -794,7 +909,7 @@ class UpdateTransaction {
     };
 
     const repoAether = path.join(this.repoPath, '.aether');
-    verifyDir(this.HUB_SYSTEM, repoAether);
+    verifyDir(this.HUB_DIR, repoAether);
     verifyDir(this.HUB_COMMANDS_CLAUDE, path.join(this.repoPath, '.claude', 'commands', 'ant'));
     verifyDir(this.HUB_COMMANDS_OPENCODE, path.join(this.repoPath, '.opencode', 'commands', 'ant'));
     verifyDir(this.HUB_AGENTS, path.join(this.repoPath, '.opencode', 'agents'));
@@ -839,7 +954,7 @@ class UpdateTransaction {
       }
     };
 
-    checkDir(this.HUB_SYSTEM, 'system');
+    checkDir(this.HUB_DIR, '.aether');
     checkDir(this.HUB_COMMANDS_CLAUDE, 'commands/claude');
     checkDir(this.HUB_COMMANDS_OPENCODE, 'commands/opencode');
     checkDir(this.HUB_AGENTS, 'agents');
@@ -936,7 +1051,7 @@ class UpdateTransaction {
     };
 
     const repoAether = path.join(this.repoPath, '.aether');
-    checkDir(this.HUB_SYSTEM, repoAether);
+    checkDir(this.HUB_DIR, repoAether);
     checkDir(this.HUB_COMMANDS_CLAUDE, path.join(this.repoPath, '.claude', 'commands', 'ant'));
     checkDir(this.HUB_COMMANDS_OPENCODE, path.join(this.repoPath, '.opencode', 'commands', 'ant'));
     checkDir(this.HUB_AGENTS, path.join(this.repoPath, '.opencode', 'agents'));

@@ -70,11 +70,9 @@ const COMMANDS_DEST = path.join(HOME, '.claude', 'commands', 'ant');
 
 // Hub paths
 const HUB_DIR = path.join(HOME, '.aether');
-const HUB_SYSTEM = path.join(HUB_DIR, 'system');
 const HUB_COMMANDS_CLAUDE = path.join(HUB_DIR, 'commands', 'claude');
 const HUB_COMMANDS_OPENCODE = path.join(HUB_DIR, 'commands', 'opencode');
 const HUB_AGENTS = path.join(HUB_DIR, 'agents');
-const HUB_VISUALIZATIONS = path.join(HUB_DIR, 'visualizations');
 const HUB_REGISTRY = path.join(HUB_DIR, 'registry.json');
 const HUB_VERSION = path.join(HUB_DIR, 'version.json');
 
@@ -836,6 +834,122 @@ function gitStashFiles(repoPath, files) {
   }
 }
 
+// Directories to exclude from hub sync (user data, local state)
+const HUB_EXCLUDE_DIRS = ['data', 'dreams', 'checkpoints', 'locks', 'temp'];
+
+/**
+ * Check if a path should be excluded from hub sync
+ * @param {string} relPath - Relative path from .aether/
+ * @returns {boolean} True if should be excluded
+ */
+function shouldExcludeFromHub(relPath) {
+  const parts = relPath.split(path.sep);
+  // Exclude if any part of the path is in the exclude list
+  return parts.some(part => HUB_EXCLUDE_DIRS.includes(part));
+}
+
+/**
+ * Sync .aether/ directory to hub, excluding user data directories
+ * @param {string} srcDir - Source .aether/ directory
+ * @param {string} destDir - Destination hub directory
+ * @returns {object} Sync result with copied, removed, skipped counts
+ */
+function syncAetherToHub(srcDir, destDir) {
+  if (!fs.existsSync(srcDir)) {
+    return { copied: 0, removed: 0, skipped: 0 };
+  }
+
+  fs.mkdirSync(destDir, { recursive: true });
+
+  // Get all files in source, filtering out excluded directories
+  const srcFiles = [];
+  function collectFiles(dir, base) {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue;
+      const fullPath = path.join(dir, entry.name);
+      const relPath = path.relative(base, fullPath);
+
+      if (shouldExcludeFromHub(relPath)) continue;
+
+      if (entry.isDirectory()) {
+        collectFiles(fullPath, base);
+      } else {
+        srcFiles.push(relPath);
+      }
+    }
+  }
+  collectFiles(srcDir, srcDir);
+
+  // Copy files with hash comparison
+  let copied = 0;
+  let skipped = 0;
+  for (const relPath of srcFiles) {
+    const srcPath = path.join(srcDir, relPath);
+    const destPath = path.join(destDir, relPath);
+
+    fs.mkdirSync(path.dirname(destPath), { recursive: true });
+
+    // Hash comparison
+    let shouldCopy = true;
+    if (fs.existsSync(destPath)) {
+      const srcHash = hashFileSync(srcPath);
+      const destHash = hashFileSync(destPath);
+      if (srcHash === destHash) {
+        shouldCopy = false;
+        skipped++;
+      }
+    }
+
+    if (shouldCopy) {
+      fs.copyFileSync(srcPath, destPath);
+      if (relPath.endsWith('.sh')) {
+        fs.chmodSync(destPath, 0o755);
+      }
+      copied++;
+    }
+  }
+
+  // Cleanup: remove files in dest that aren't in source (and aren't excluded)
+  const destFiles = [];
+  function collectDestFiles(dir, base) {
+    if (!fs.existsSync(dir)) return;
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.name.startsWith('.') || entry.name === 'registry.json' || entry.name === 'version.json' || entry.name === 'manifest.json') continue;
+      const fullPath = path.join(dir, entry.name);
+      const relPath = path.relative(base, fullPath);
+
+      if (shouldExcludeFromHub(relPath)) continue;
+
+      if (entry.isDirectory()) {
+        collectDestFiles(fullPath, base);
+      } else {
+        destFiles.push(relPath);
+      }
+    }
+  }
+  collectDestFiles(destDir, destDir);
+
+  const srcSet = new Set(srcFiles);
+  const removed = [];
+  for (const relPath of destFiles) {
+    if (!srcSet.has(relPath)) {
+      removed.push(relPath);
+      try {
+        fs.unlinkSync(path.join(destDir, relPath));
+      } catch (err) {
+        // Ignore cleanup errors
+      }
+    }
+  }
+
+  // Clean up empty directories
+  cleanEmptyDirs(destDir);
+
+  return { copied, removed, skipped };
+}
+
 function setupHub() {
   // Create ~/.aether/ directory structure and populate from package
   try {
@@ -848,14 +962,31 @@ function setupHub() {
       log(`  Warning: previous manifest is invalid, regenerating`);
     }
 
-    // Sync runtime/ -> ~/.aether/system/
-    const runtimeSrc = path.join(PACKAGE_DIR, 'runtime');
-    if (fs.existsSync(runtimeSrc)) {
-      const result = syncDirWithCleanup(runtimeSrc, HUB_SYSTEM);
-      log(`  Hub system: ${result.copied} files -> ${HUB_SYSTEM}`);
+    // Sync .aether/ -> ~/.aether/ (excluding user data directories)
+    const aetherSrc = path.join(PACKAGE_DIR, '.aether');
+    if (fs.existsSync(aetherSrc)) {
+      const result = syncAetherToHub(aetherSrc, HUB_DIR);
+      log(`  Hub .aether: ${result.copied} files, ${result.skipped} unchanged -> ${HUB_DIR}`);
       if (result.removed.length > 0) {
-        log(`  Hub system: removed ${result.removed.length} stale files`);
+        log(`  Hub .aether: removed ${result.removed.length} stale files`);
         for (const f of result.removed) log(`    - ${f}`);
+      }
+    }
+
+    // Clean up legacy directories from old hub structure
+    const legacyDirs = [
+      path.join(HUB_DIR, 'system'),
+      path.join(HUB_DIR, '.aether'),
+      path.join(HUB_DIR, 'visualizations'),
+    ];
+    for (const legacyDir of legacyDirs) {
+      if (fs.existsSync(legacyDir)) {
+        try {
+          removeDirSync(legacyDir);
+          log(`  Cleaned up legacy: ${path.basename(legacyDir)}/`);
+        } catch (err) {
+          // Ignore cleanup errors
+        }
       }
     }
 
@@ -890,17 +1021,6 @@ function setupHub() {
       log(`  Hub agents: ${result.copied} files -> ${HUB_AGENTS}`);
       if (result.removed.length > 0) {
         log(`  Hub agents: removed ${result.removed.length} stale files`);
-        for (const f of result.removed) log(`    - ${f}`);
-      }
-    }
-
-    // Sync .aether/visualizations/ -> ~/.aether/visualizations/
-    const visualizationsSrc = path.join(PACKAGE_DIR, '.aether', 'visualizations');
-    if (fs.existsSync(visualizationsSrc)) {
-      const result = syncDirWithCleanup(visualizationsSrc, HUB_VISUALIZATIONS);
-      log(`  Hub visualizations: ${result.copied} files -> ${HUB_VISUALIZATIONS}`);
-      if (result.removed.length > 0) {
-        log(`  Hub visualizations: removed ${result.removed.length} stale files`);
         for (const f of result.removed) log(`    - ${f}`);
       }
     }
@@ -980,18 +1100,15 @@ async function updateRepo(repoPath, sourceVersion, opts) {
     const systemCopied = result.sync_result?.system?.copied || 0;
     const commandsCopied = (result.sync_result?.commands?.copied || 0);
     const agentsCopied = result.sync_result?.agents?.copied || 0;
-    const visualizationsCopied = result.sync_result?.visualizations?.copied || 0;
 
     const systemRemoved = result.sync_result?.system?.removed?.length || 0;
     const commandsRemoved = result.sync_result?.commands?.removed?.length || 0;
     const agentsRemoved = result.sync_result?.agents?.removed?.length || 0;
-    const visualizationsRemoved = result.sync_result?.visualizations?.removed?.length || 0;
 
     const allRemovedFiles = [
       ...(result.sync_result?.system?.removed || []),
       ...(result.sync_result?.commands?.removed || []).map(f => `.claude/commands/ant/${f}`),
       ...(result.sync_result?.agents?.removed || []).map(f => `.opencode/agents/${f}`),
-      ...(result.sync_result?.visualizations?.removed || []).map(f => `.aether/visualizations/${f}`),
     ];
 
     return {
@@ -1001,8 +1118,7 @@ async function updateRepo(repoPath, sourceVersion, opts) {
       system: systemCopied,
       commands: commandsCopied,
       agents: agentsCopied,
-      visualizations: visualizationsCopied,
-      removed: systemRemoved + commandsRemoved + agentsRemoved + visualizationsRemoved,
+      removed: systemRemoved + commandsRemoved + agentsRemoved,
       removedFiles: allRemovedFiles,
       stashCreated: !!transaction.checkpoint?.stashRef,
       checkpoint_id: result.checkpoint_id,
@@ -1171,14 +1287,14 @@ program
             console.error(`  Skipping. Use --force to stash and update.`);
             dirty++;
           } else if (result.status === 'dry-run') {
-            log(`  Would update: ${repo.path} (${result.from} -> ${result.to}) [${result.system} system, ${result.commands} commands, ${result.agents} agents, ${result.visualizations} visualizations]`);
+            log(`  Would update: ${repo.path} (${result.from} -> ${result.to}) [${result.system} system, ${result.commands} commands, ${result.agents} agents]`);
             if (result.removed > 0) {
               log(`  Would remove ${result.removed} stale files:`);
               for (const f of result.removedFiles) log(`    - ${f}`);
             }
             updated++;
           } else if (result.status === 'updated') {
-            log(`  ${c.success('Updated:')} ${repo.path} (${result.from} -> ${result.to}) [${result.system} system, ${result.commands} commands, ${result.agents} agents, ${result.visualizations} visualizations]`);
+            log(`  ${c.success('Updated:')} ${repo.path} (${result.from} -> ${result.to}) [${result.system} system, ${result.commands} commands, ${result.agents} agents]`);
             if (result.removed > 0) {
               log(`  Removed ${result.removed} stale files:`);
               for (const f of result.removedFiles) log(`    - ${f}`);
@@ -1254,7 +1370,7 @@ program
 
         if (result.status === 'dry-run') {
           console.log(`Would update: ${result.from} -> ${result.to}`);
-          console.log(`  ${result.system} system files, ${result.commands} command files, ${result.agents} agent files, ${result.visualizations} visualization files`);
+          console.log(`  ${result.system} system files, ${result.commands} command files, ${result.agents} agent files`);
           if (result.removed > 0) {
             console.log(`  Would remove ${result.removed} stale files:`);
             for (const f of result.removedFiles) console.log(`    - ${f}`);
