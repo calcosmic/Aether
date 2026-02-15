@@ -101,3 +101,4 @@ node_modules/
 
 # Allow bin/lib (Aether CLI libraries)
 !bin/lib/
+.worktrees/
