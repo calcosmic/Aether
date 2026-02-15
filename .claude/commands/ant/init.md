@@ -74,6 +74,19 @@ Check if `.aether/aether-utils.sh` exists using the Read tool.
   ```
   Stop here. Do not proceed.
 
+### Step 1.6: Initialize QUEEN.md Wisdom Document
+
+After bootstrap completes (or if system files already existed), run using the Bash tool:
+```
+bash .aether/aether-utils.sh queen-init
+```
+
+Parse the JSON result:
+- If `created` is true: Display `QUEEN.md initialized`
+- If `created` is false and `reason` is "already_exists": Display `QUEEN.md already exists`
+
+This step is non-blocking — proceed regardless of outcome.
+
 ### Step 2: Read Current State
 
 Use the Read tool to read `.aether/data/COLONY_STATE.json`.
@@ -87,7 +100,7 @@ To reinitialize with a new goal, the current state will be reset.
 Proceeding with new goal: "{new_goal}"
 ```
 
-### Step 2.5: Load Prior Colony Knowledge (Optional)
+### Step 2.6: Load Prior Colony Knowledge (Optional)
 
 Check if `.aether/data/completion-report.md` exists using the Read tool.
 
@@ -97,7 +110,7 @@ Check if `.aether/data/completion-report.md` exists using the Read tool.
 1. **Instincts** — look for the `## Colony Instincts` section. Each line has format: `N. [confidence] domain: description`. Keep only instincts with confidence >= 0.5.
 2. **Learnings** — look for the `## Colony Learnings (Validated)` section. Keep all numbered items.
 
-Store the extracted instincts and learnings for use in Step 3. Display a brief note:
+Store the extracted instincts and learnings for use in Step 3 (Write Colony State). Display a brief note:
 
 ```
 🧠 Prior colony knowledge found:
@@ -118,7 +131,7 @@ Generate a session ID in the format `session_{unix_timestamp}_{random}` and an I
 
 Use the Write tool to write `.aether/data/COLONY_STATE.json` with the v3.0 structure.
 
-**If Step 2.5 found instincts to inherit**, convert each into the instinct format and seed the `memory.instincts` array. Each inherited instinct should have:
+**If Step 2.6 found instincts to inherit**, convert each into the instinct format and seed the `memory.instincts` array. Each inherited instinct should have:
 - `id`: `instinct_inherited_{index}`
 - `trigger`: inferred from the instinct description
 - `action`: the instinct description
@@ -131,13 +144,13 @@ Use the Write tool to write `.aether/data/COLONY_STATE.json` with the v3.0 struc
 - `applications`: 0
 - `successes`: 0
 
-**If Step 2.5 found validated learnings**, seed `memory.phase_learnings` with each as:
+**If Step 2.6 found validated learnings**, seed `memory.phase_learnings` with each as:
 - `phase`: `"inherited"`
 - `learning`: the learning text
 - `status`: `"validated"`
 - `source`: `"inherited:completion-report"`
 
-**If Step 2.5 was skipped or found nothing**, use empty arrays as before.
+**If Step 2.6 was skipped or found nothing**, use empty arrays as before.
 
 ```json
 {
@@ -251,7 +264,7 @@ Then output the result:
 🏠 Colony Status: READY
 📋 Session: <session_id>
 
-{If instincts or learnings were inherited from Step 2.5:}
+{If instincts or learnings were inherited from Step 2.6:}
 🧠 Inherited from prior colony:
    {N} instinct(s) | {N} learning(s)
 {End if}

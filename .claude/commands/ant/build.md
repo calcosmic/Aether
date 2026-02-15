@@ -191,7 +191,43 @@ If file doesn't exist or is empty:
 CONSTRAINTS: (none)
 ```
 
-### Step 4.5: Archaeologist Pre-Build Scan
+### Step 4.1: Load QUEEN.md Wisdom
+
+Call `queen-read` to extract eternal wisdom for worker priming:
+
+```bash
+bash .aether/aether-utils.sh queen-read 2>/dev/null
+```
+
+**Parse the JSON response:**
+- If `.ok` is false or command fails: Set `queen_wisdom = null` and skip wisdom injection
+- If successful: Extract wisdom sections from `.result.wisdom`
+
+**Store wisdom variables:**
+```
+queen_philosophies = .result.wisdom.philosophies (if .result.priming.has_philosophies)
+queen_patterns = .result.wisdom.patterns (if .result.priming.has_patterns)
+queen_redirects = .result.wisdom.redirects (if .result.priming.has_redirects)
+queen_stack_wisdom = .result.wisdom.stack_wisdom (if .result.priming.has_stack_wisdom)
+queen_decrees = .result.wisdom.decrees (if .result.priming.has_decrees)
+```
+
+**Display summary (if any wisdom exists):**
+```
+📜 QUEEN WISDOM LOADED
+=====================
+{if queen_philosophies:}  📜 Philosophies: yes{/if}
+{if queen_patterns:}  🧭 Patterns: yes{/if}
+{if queen_redirects:}  ⚠️ Redirects: yes{/if}
+{if queen_stack_wisdom:}  🔧 Stack Wisdom: yes{/if}
+{if queen_decrees:}  🏛️ Decrees: yes{/if}
+
+{if none exist:}  (no eternal wisdom recorded yet){/if}
+```
+
+**Graceful handling:** If QUEEN.md doesn't exist or `queen-read` fails, continue without wisdom injection. Workers will receive standard prompts.
+
+### Step 4.2: Archaeologist Pre-Build Scan
 
 **Conditional step — only fires when the phase modifies existing files.**
 
@@ -269,6 +305,8 @@ CONSTRAINTS: (none)
 4. **Injection into builder prompts:**
    The `archaeology_context` will be injected into builder prompts in Step 5.1 (see below).
    If this step was skipped (no existing files modified), the archaeology section is omitted from builder prompts.
+
+---
 
 ### Step 5: Initialize Swarm Display and Analyze Tasks
 
@@ -377,6 +415,8 @@ Goal: "{colony_goal}"
 
 { archaeology_context if exists }
 
+{ queen_wisdom_section if any wisdom exists }
+
 Work:
 1. Read .aether/workers.md for Builder discipline
 2. Implement task, write tests
@@ -391,6 +431,32 @@ Spawn sub-workers ONLY if 3x complexity:
 
 Return ONLY this JSON (no other text):
 {"ant_name": "{Ant-Name}", "task_id": "{id}", "status": "completed|failed|blocked", "summary": "What you did", "files_created": [], "files_modified": [], "tests_written": [], "blockers": []}
+```
+
+**Queen Wisdom Section Template (injected only if wisdom exists):**
+```
+--- QUEEN WISDOM (Eternal Guidance) ---
+{ if queen_philosophies: }
+📜 Philosophies:
+{queen_philosophies}
+{ endif }
+{ if queen_patterns: }
+🧭 Patterns:
+{queen_patterns}
+{ endif }
+{ if queen_redirects: }
+⚠️ Redirects (AVOID these):
+{queen_redirects}
+{ endif }
+{ if queen_stack_wisdom: }
+🔧 Stack Wisdom:
+{queen_stack_wisdom}
+{ endif }
+{ if queen_decrees: }
+🏛️ Decrees:
+{queen_decrees}
+{ endif }
+--- END QUEEN WISDOM ---
 ```
 
 ### Step 5.2: Collect Wave 1 Results with Visual Progress
