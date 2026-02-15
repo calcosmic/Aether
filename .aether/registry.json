@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "repos": [
+    {
+      "path": "/Users/callumcowie/Documents/Max 9/M4L-AnalogWave-System",
+      "version": "3.1.13",
+      "registered_at": "2026-02-13T02:25:18Z",
+      "updated_at": "2026-02-15T16:44:01.243Z"
+    },
+    {
+      "path": "/Users/callumcowie/repos/Aether",
+      "version": "3.1.13",
+      "registered_at": "2026-02-13T03:04:40Z",
+      "updated_at": "2026-02-15T14:22:32Z"
+    },
+    {
+      "path": "/Users/callumcowie/Local Sites/sonotherapiesuissesoundspa",
+      "version": "3.1.12",
+      "registered_at": "2026-02-13T03:09:32Z",
+      "updated_at": "2026-02-15T14:00:20Z"
+    },
+    {
+      "path": "/Users/callumcowie/Local Sites/NEW SITE",
+      "version": "3.1.1",
+      "registered_at": "2026-02-13T05:55:19Z",
+      "updated_at": "2026-02-15T00:41:12Z"
+    },
+    {
+      "path": "/Users/callumcowie/WORKSPACE/00_Dev./01_Plugin Dev./SonicDoc",
+      "version": "1.0.0",
+      "registered_at": "2026-02-13T08:10:23Z",
+      "updated_at": "2026-02-13T08:10:23Z"
+    },
+    {
+      "path": "/Users/callumcowie/WORKSPACE/Crispy",
+      "version": "1.0.0",
+      "registered_at": "2026-02-13T18:05:55Z",
+      "updated_at": "2026-02-13T18:05:55Z"
+    },
+    {
+      "path": "/Users/callumcowie/Local Sites/sonotherapiesuissesoundspa/app/public/wp-content/themes/sonotherapie-theme",
+      "version": "3.1.6",
+      "registered_at": "2026-02-15T04:15:49Z",
+      "updated_at": "2026-02-15T04:15:49Z"
+    }
+  ]
+}

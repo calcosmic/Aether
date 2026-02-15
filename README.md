@@ -18,7 +18,7 @@
   [![npm version](https://img.shields.io/npm/v/aether-colony.svg)](https://www.npmjs.com/package/aether-colony)
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-  **v1.1.0** — Production ready with model routing
+  **v3.1.13** — Production ready with model routing
 </div>
 
 ---
@@ -43,9 +43,9 @@ Aether brings **ant colony intelligence** to Claude Code. Instead of one agent d
    ├── 🔍 Scouts — research docs
    ├── 🗺️ Colonizers — explore codebases
    ├── 📋 Route-setters — plan phases
-   ├── 🏛️ Architects — extract patterns
+   ├── 🏗️ Architects — extract patterns
    ├── 🏺 Archaeologists — excavate git history
-   ├── 🔮 Oracles — deep research
+   ├── 🔮 Oracles — deep research (RALF pattern)
    └── 🎲 Chaos Ants — resilience testing
 ```
 
@@ -59,6 +59,8 @@ When a Builder hits something complex, it spawns a Scout to research. When code 
 - **6-Phase Verification** — Build, types, lint, tests, security, diff before advancing
 - **Colony Memory** — Learnings and instincts persist across sessions
 - **Pause/Resume** — Full state serialization for context breaks
+- **Oracle Deep Research** — 50+ iteration autonomous research loop (RALF pattern)
+- **Multi-Agent Surveys** — 4 parallel scouts for codebase analysis
 
 ---
 
@@ -96,74 +98,101 @@ That's it. The colony takes over from there.
 
 ---
 
-## Commands
+## Complete Command Reference (33 Commands)
 
-Aether has **33 slash commands** organized into categories.
+### 🌱 Core Lifecycle Commands
 
-### Core Lifecycle
+| Command | Emoji | Description |
+|---------|-------|-------------|
+| `/ant:init "goal"` | 🌱 | Initialize colony with mission |
+| `/ant:plan` | 📝 | Generate phased roadmap (50-iteration research loop) |
+| `/ant:build N` | 🔨 | Execute phase N with worker waves |
+| `/ant:continue` | ➡️ | 6-phase verification, then advance to next phase |
+| `/ant:pause-colony` | 💾 | Save state for context break |
+| `/ant:resume-colony` | ▶️ | Restore from pause |
+| `/ant:lay-eggs "new goal"` | 🥚 | Start fresh colony (preserves instincts) |
+| `/ant:seal` | 🏺 | Complete and archive colony |
+| `/ant:entomb` | ⚰️ | Create chamber from completed colony |
 
-| Command | Purpose |
-|---------|---------|
-| `/ant:init "goal"` | Initialize colony with mission |
-| `/ant:plan` | Generate phased roadmap (50-iteration research loop) |
-| `/ant:build N` | Execute phase N with worker waves |
-| `/ant:continue` | 6-phase verification, then advance |
-| `/ant:status` | Colony overview |
-| `/ant:pause-colony` | Save state for context break |
-| `/ant:resume-colony` | Restore from pause |
+**Core Lifecycle Flow:**
+```
+/ant:init → /ant:plan → /ant:build 1 → /ant:continue → /ant:build 2 → ... → /ant:seal → /ant:entomb
+```
 
-### Pheromone Signals
+### 📊 Research & Analysis Commands
 
-| Command | Purpose |
-|---------|---------|
-| `/ant:focus "area"` | Guide colony attention |
-| `/ant:redirect "pattern"` | Warn away from approaches |
-| `/ant:feedback "msg"` | Teach preferences |
+| Command | Emoji | Description |
+|---------|-------|-------------|
+| `/ant:colonize` | 🗺️ | **Multi-agent territory survey** — 4 parallel scouts analyze your codebase and produce: `STRUCTURE.md`, `INTEGRATIONS.md`, `CONVENTIONS.md`, `ARCHITECTURE.md`, `CONCERNS.md` |
+| `/ant:archaeology <path>` | 🏺 | Excavate git history for any file/directory — traces why code exists, surfaces tribal knowledge, identifies "don't touch" areas |
+| `/ant:oracle ["topic"]` | 🔮 | **Deep research with RALF pattern** — 50+ iteration autonomous research loop. Use `stop` or `status` as arguments |
+| `/ant:chaos <target>` | 🎲 | Resilience testing — probes edge cases, boundary conditions, finds cracks before they break |
+| `/ant:swarm ["problem"]` | 🔥 | Deploy 4 parallel scouts for stubborn bugs OR view real-time swarm display |
+| `/ant:dream` | 💭 | The Dreamer — philosophical codebase wanderer that observes and imagines |
+| `/ant:interpret` | 🔍 | Ground dreams in reality — validates observations against actual code |
+| `/ant:organize` | 🧹 | Codebase hygiene report — scans for stale files, dead code, orphaned configs |
 
-### Power Commands
+**Research Command Details:**
 
-| Command | Purpose |
-|---------|---------|
-| `/ant:swarm "problem"` | Deploy 4 parallel scouts for stubborn bugs |
-| `/ant:council` | Clarify intent via multi-choice questions |
-| `/ant:oracle` | Deep research with 50+ iterations |
+#### `/ant:colonize` — Territory Survey
+Dispatches 4 parallel Scout agents to analyze your codebase:
+- **Scout 1**: Maps directory structure, identifies entry points, dependencies
+- **Scout 2**: Maps integrations (databases, APIs, third-party services)
+- **Scout 3**: Documents conventions (naming, patterns, architecture decisions)
+- **Scout 4**: Identifies concerns (tech debt, risks, areas needing attention)
 
-### Research & Analysis
+Produces 5 documentation files in `.aether/docs/`.
 
-| Command | Purpose |
-|---------|---------|
-| `/ant:colonize` | Analyze existing codebase |
-| `/ant:archaeology <path>` | Excavate git history |
-| `/ant:chaos <target>` | Resilience testing |
-| `/ant:organize` | Codebase hygiene report |
-| `/ant:dream` | Philosophical codebase wanderer |
-| `/ant:interpret` | Ground dreams in reality |
+#### `/ant:oracle` — Deep Research (RALF Pattern)
+The Oracle runs autonomously in a separate process using the Recursive Agent Loop Framework:
+1. Configure research topic via interactive wizard
+2. Oracle iterates 50+ times, accumulating knowledge
+3. Each iteration reads previous progress, researches gaps
+4. Produces comprehensive findings in `.aether/oracle/discoveries/`
 
-### Issue Tracking
+Non-invasive: Never touches colony state, only writes to `.aether/oracle/`.
 
-| Command | Purpose |
-|---------|---------|
-| `/ant:flag "issue"` | Create blocker/issue/note |
-| `/ant:flags` | List and manage flags |
+### 🧭 Planning & Coordination Commands
 
-### Visibility
+| Command | Emoji | Description |
+|---------|-------|-------------|
+| `/ant:council` | 🏛️ | Clarify intent via multi-choice questions |
+| `/ant:focus "area"` | 🔦 | Emit FOCUS signal — guide colony attention |
+| `/ant:redirect "pattern"` | ⚠️ | Emit REDIRECT signal — warn away from approaches |
+| `/ant:feedback "msg"` | 💬 | Emit FEEDBACK signal — teach preferences |
 
-| Command | Purpose |
-|---------|---------|
-| `/ant:watch` | Live tmux monitoring |
-| `/ant:phase N` | View phase details |
-| `/ant:history` | Recent colony activity |
-| `/ant:help` | Full command reference |
+**Pheromone Signals:**
+- **FOCUS** (normal priority): "Pay attention here"
+- **REDIRECT** (high priority): "Don't do this" (hard constraint)
+- **FEEDBACK** (low priority): "Adjust based on this"
 
-### System
+### 📋 Visibility & Status Commands
 
-| Command | Purpose |
-|---------|---------|
-| `/ant:update` | Sync system files from hub |
-| `/ant:migrate-state` | Upgrade old state format |
-| `/ant:verify-castes` | Check model routing |
-| `/ant:seal` | Complete and archive colony |
-| `/ant:entomb` | Create chamber from completed colony |
+| Command | Emoji | Description |
+|---------|-------|-------------|
+| `/ant:status` | 📈 | Colony overview — current phase, progress, active workers |
+| `/ant:phase N` | 📝 | View phase details — tasks, status, assignments |
+| `/ant:history` | 📜 | Recent colony activity log |
+| `/ant:maturity` | 👑 | View colony maturity journey with ASCII art anthill |
+| `/ant:watch` | 👁️ | Set up tmux session to watch ants working in real-time |
+| `/ant:tunnels [ch1] [ch2]` | 🕳️ | Explore tunnels — browse archived colonies, compare chambers |
+| `/ant:flags` | 🚩 | List and manage flags (blockers, issues, notes) |
+| `/ant:help` | 📖 | Full command reference |
+
+### 🚩 Issue Tracking Commands
+
+| Command | Emoji | Description |
+|---------|-------|-------------|
+| `/ant:flag "issue"` | 🚩 | Create blocker/issue/note |
+| `/ant:flags` | 📋 | List and manage flags |
+
+### ⚙️ System Commands
+
+| Command | Emoji | Description |
+|---------|-------|-------------|
+| `/ant:update` | 🔄 | Sync system files from global hub |
+| `/ant:verify-castes` | ✓ | Check caste model assignments and system status |
+| `/ant:migrate-state` | 🚚 | One-time state migration from v1 to v2.0 format |
 
 ---
 
@@ -175,20 +204,36 @@ The `aether` CLI provides additional utilities:
 # View version and status
 aether version
 
+# Update all registered repos
+aether update --all
+aether update --all --force  # Force even with dirty repos
+
 # Manage model routing
 aether caste-models list
 aether caste-models set builder=kimi-k2.5
+aether caste-models reset builder
 
-# Checkpoints
+# Checkpoints (safe snapshots)
 aether checkpoint create "before refactor"
 aether checkpoint list
 aether checkpoint restore <id>
+aether checkpoint verify <id>
 
 # View telemetry
 aether telemetry
+aether telemetry model kimi-k2.5
+aether telemetry performance
 
 # Sync state with planning docs
 aether sync-state
+
+# Context
+aether context        # Show auto-loaded context including nestmates
+aether nestmates      # List sibling colonies
+aether spawn-tree     # Display worker spawn tree
+
+# Initialize in current repo
+aether init --goal "My project"
 ```
 
 ---
@@ -226,18 +271,18 @@ Set `LITELLM_AUTH_TOKEN` environment variable for custom auth.
 
 ## The Castes
 
-| Caste | Role | Model |
-|-------|------|-------|
-| 👑 **Queen** | Orchestrates, spawns workers, synthesizes | glm-5 |
-| 🔨 **Builder** | Writes code, TDD-first | kimi-k2.5 |
-| 👁️ **Watcher** | Tests, validates, quality gates | kimi-k2.5 |
-| 🔍 **Scout** | Researches docs, finds answers | minimax-2.5 |
-| 🗺️ **Colonizer** | Explores codebases, maps structure | minimax-2.5 |
-| 🏛️ **Architect** | Synthesizes patterns, coordinates docs | glm-5 |
-| 📋 **Route-Setter** | Plans phases, breaks down goals | kimi-k2.5 |
-| 🏺 **Archaeologist** | Excavates git history | glm-5 |
-| 🔮 **Oracle** | Deep research, architecture analysis | minimax-2.5 |
-| 🎲 **Chaos** | Resilience testing, adversarial probing | kimi-k2.5 |
+| Caste | Emoji | Role | Model |
+|-------|-------|------|-------|
+| 👑 **Queen** | — | Orchestrates, spawns workers, synthesizes | glm-5 |
+| 🔨 **Builder** | 🛠️ | Writes code, TDD-first | kimi-k2.5 |
+| 👁️ **Watcher** | 👀 | Tests, validates, quality gates | kimi-k2.5 |
+| 🔍 **Scout** | 🗺️ | Researches docs, finds answers | minimax-2.5 |
+| 🗺️ **Colonizer** | 📊 | Explores codebases, maps structure | minimax-2.5 |
+| 🏗️ **Architect** | 🏛️ | Synthesizes patterns, coordinates docs | glm-5 |
+| 📋 **Route-Setter** | 🧭 | Plans phases, breaks down goals | kimi-k2.5 |
+| 🏺 **Archaeologist** | 📜 | Excavates git history | glm-5 |
+| 🔮 **Oracle** | 🔮 | Deep research, architecture analysis | minimax-2.5 |
+| 🎲 **Chaos** | 🎲 | Resilience testing, adversarial probing | kimi-k2.5 |
 
 ---
 
@@ -328,8 +373,33 @@ Detected automatically via `milestone-detect` utility.
     ├── aether-utils.sh           # Utility layer (50+ subcommands)
     ├── model-profiles.yaml       # Caste-to-model routing
     ├── verification-loop.md      # 6-phase verification reference
+    ├── QUEEN_ANT_ARCHITECTURE.md # Complete system architecture
+    ├── coding-standards.md       # Coding standards reference
+    ├── debugging.md              # Debugging discipline
+    ├── tdd.md                    # TDD discipline
     │
-    ├── data/                     # Per-project state
+    ├── docs/                     # Documentation
+    │   ├── known-issues.md       # Known bugs and workarounds
+    │   ├── implementation-learnings.md  # Workflow patterns
+    │   ├── codebase-review.md    # Command inventory
+    │   ├── planning-discipline.md # Planning guidelines
+    │   └── ...
+    │
+    ├── utils/                    # Utility scripts
+    │   ├── atomic-write.sh
+    │   ├── colorize-log.sh
+    │   ├── file-lock.sh
+    │   ├── spawn-tree.sh
+    │   └── ...
+    │
+    ├── oracle/                   # Oracle research infrastructure
+    │   ├── oracle.sh             # RALF loop script
+    │   ├── oracle.md             # Oracle agent prompt
+    │   ├── research.json         # Active research config
+    │   ├── progress.md           # Research progress
+    │   └── discoveries/          # Research findings
+    │
+    ├── data/                     # Per-project state (NEVER synced)
     │   ├── COLONY_STATE.json     # Goal, plan, memory, instincts
     │   ├── flags.json            # Blockers, issues, notes
     │   ├── constraints.json      # Focus areas and redirects
@@ -338,7 +408,8 @@ Detected automatically via `milestone-detect` utility.
     │   ├── telemetry.json        # Model performance data
     │   └── completion-report.md  # End-of-project summary
     │
-    ├── dreams/                   # Dream session files
+    ├── dreams/                   # Dream session files (NEVER synced)
+    ├── checkpoints/              # Update rollback data (NEVER synced)
     └── chambers/                 # Entombed (archived) colonies
 
 bin/                              # CLI
@@ -354,7 +425,9 @@ bin/                              # CLI
 
 ---
 
-## Typical Workflow
+## Typical Workflows
+
+### Starting a New Project
 
 ```
 1. /ant:init "Build feature X"     # Set the goal
@@ -365,6 +438,26 @@ bin/                              # CLI
 6. /ant:continue                    # Review, advance
 7. /ant:build 2                     # Repeat until done
 8. /ant:seal                        # Complete and archive
+```
+
+### Deep Research Workflow
+
+```
+/ant:oracle "research topic"    # Configure and launch Oracle
+# Oracle runs autonomously for 50+ iterations
+/ant:oracle status              # Check progress
+/ant:oracle stop                # Stop if needed
+# Read findings in .aether/oracle/discoveries/
+```
+
+### Codebase Analysis Workflow
+
+```
+/ant:colonize                   # 4 scouts survey territory
+# Read generated docs in .aether/docs/
+/ant:archaeology src/legacy/    # Excavate git history
+/ant:organize                   # Hygiene report
+/ant:chaos "auth module"        # Resilience test
 ```
 
 ### Between Sessions
@@ -390,7 +483,7 @@ bin/                              # CLI
 
 ## OpenCode Agents
 
-Aether includes 4 specialized OpenCode agents:
+Aether includes specialized OpenCode agents:
 
 | Agent | Purpose | Temperature |
 |-------|---------|-------------|
@@ -424,6 +517,18 @@ Aether includes 4 specialized OpenCode agents:
 └─────────────────────────────────────────────────────────────┘
 ```
 
+### Three-Tier Distribution
+
+```
+Aether Repo (.aether/)  →  Hub (~/.aether/)  →  Target Repos (.aether/)
+         │                        │                        │
+         │   npm install -g .     │    aether update       │
+         └───────────────────────→┴───────────────────────→┘
+                              (excluding user data)
+```
+
+**User data directories are NEVER synced:** `data/`, `dreams/`, `checkpoints/`, `locks/`, `temp/`
+
 ---
 
 ## Safety Features
@@ -433,6 +538,7 @@ Aether includes 4 specialized OpenCode agents:
 - **Update Transactions** — Two-phase commit with rollback
 - **Git Checkpoints** — Automatic commits before phases
 - **Ant Graveyards** — Failed files marked for future caution
+- **Checkpoint System** — Safe snapshots before updates with `aether checkpoint`
 
 ---
 
@@ -459,11 +565,16 @@ npm install -g aether-colony
 # Verify install
 aether version
 ls ~/.claude/commands/ant/
+ls ~/.aether/  # Check hub structure
 
 # Verify runtime (from inside any repo)
 ls .aether/
 
-# Update
+# Update system files in all registered repos
+aether update --all
+aether update --all --force  # Force even with dirty repos
+
+# Update npm package
 npm update -g aether-colony
 
 # Uninstall (preserves project state)
