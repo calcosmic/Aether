@@ -118,6 +118,31 @@ Results return inline.
 
 ---
 
+## Argument Parsing (Fixed 2026-02-15)
+
+**Issue:** OpenCode doesn't pass `$ARGUMENTS` the same way as Claude Code. When users ran `/ant:init Build a REST API`, only "Build" was captured.
+
+**Fix:** All commands now use `normalize-args` helper that checks:
+1. `$ARGUMENTS` (Claude Code style)
+2. `$@` (OpenCode style)
+
+**Implementation:**
+```bash
+# At start of each command
+Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
+
+# Then use `$normalized_args` instead of `$ARGUMENTS`
+```
+
+**For Users:**
+If argument parsing issues persist, wrap multi-word arguments in quotes:
+```
+/ant:init "Build a REST API"   # Always works
+/ant:init Build a REST API      # Now works with normalize-args
+```
+
+---
+
 ## Slash Commands
 
 Slash commands live in `.opencode/commands/ant/`:
