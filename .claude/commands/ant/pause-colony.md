@@ -176,6 +176,19 @@ Set `last_commit_suggestion_phase` to `{current_phase}` in COLONY_STATE.json.
 
 Continue to Step 5.
 
+### Step 4.8: Update Context Document
+
+Log this pause activity to `.aether/CONTEXT.md`:
+
+```bash
+bash .aether/aether-utils.sh context-update activity "pause-colony" "Colony paused — handoff created" "—"
+```
+
+Update safe-to-clear status:
+```bash
+bash .aether/aether-utils.sh context-update safe-to-clear "YES" "Colony paused — safe to /clear, run /ant:resume-colony to continue"
+```
+
 ### Step 5: Display Confirmation
 
 **If visual_mode is true, render final swarm display:**
@@ -208,6 +221,8 @@ To resume in a new session:
   /ant:resume-colony
 
 💾 State persisted — safe to /clear
+
+📋 Context document updated at `.aether/CONTEXT.md`
 
 🐜 What would you like to do next?
    1. /ant:resume-colony              — Resume work in this session

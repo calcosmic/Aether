@@ -815,6 +815,18 @@ HANDOFF_EOF
 
 This ensures the handoff always reflects the latest build state, even if the session crashes before explicit pause.
 
+### Step 6.5: Update Context Document
+
+Log this build activity to `.aether/CONTEXT.md`:
+
+```bash
+bash .aether/aether-utils.sh context-update activity "build {phase_id}" "{synthesis.status}" "{files_created_count + files_modified_count}"
+```
+
+Also update safe-to-clear status:
+- If build completed successfully: `context-update safe-to-clear "YES" "Build complete, ready to continue"`
+- If build failed: `context-update safe-to-clear "NO" "Build failed — run /ant:swarm or /ant:flags"`
+
 ### Step 7: Display Results
 
 **This step runs ONLY after synthesis is complete. All values come from actual worker results.**

@@ -182,7 +182,16 @@ Write `.aether/data/constraints.json`:
 }
 ```
 
-### Step 5: Validate State File
+### Step 5: Initialize Context Document
+
+Run using Bash tool:
+```
+bash .aether/aether-utils.sh context-update init "$ARGUMENTS"
+```
+
+This creates `.aether/CONTEXT.md` — the colony's persistent memory. If context collapses, this file tells the next session what we were doing.
+
+### Step 6: Validate State File
 
 Use the Bash tool to run:
 ```
@@ -191,7 +200,7 @@ bash .aether/aether-utils.sh validate-state colony
 
 This validates COLONY_STATE.json structure. If validation fails, output a warning.
 
-### Step 5.5: Detect Nestmates
+### Step 6.5: Detect Nestmates
 
 Run using Bash tool: `node -e "const nl = require('./bin/lib/nestmate-loader'); console.log(JSON.stringify(nl.findNestmates(process.cwd())))"`
 
@@ -200,7 +209,7 @@ If nestmates are found:
 2. List each nestmate with name and truncated goal
 3. Check for shared TO-DOs or cross-project dependencies
 
-### Step 5.6: Register Repo (Silent)
+### Step 6.6: Register Repo (Silent)
 
 Attempt to register this repo in the global hub. Both steps are silent on failure — registry is not required for the colony to work.
 
@@ -216,7 +225,7 @@ cp ~/.aether/version.json .aether/version.json 2>/dev/null || true
 
 If either command fails, proceed silently. These are optional bookkeeping.
 
-### Step 6: Display Result
+### Step 7: Display Result
 
 **If visual_mode is true, render final swarm display:**
 ```bash
@@ -260,4 +269,6 @@ Then output the result:
    /ant:watch     👁️  Set up live visibility
 
 💾 State persisted — safe to /clear, then run /ant:plan
+
+📋 Context document created at `.aether/CONTEXT.md` — read this if session resets
 ```

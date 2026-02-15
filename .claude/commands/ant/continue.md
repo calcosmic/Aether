@@ -870,6 +870,26 @@ Clear context now?
 
 Continue to Step 2.5 (Project Completion) or Step 3 (Display Result).
 
+### Step 2.8: Update Context Document
+
+After phase advancement is complete, update `.aether/CONTEXT.md`:
+
+**Log the activity:**
+```bash
+bash .aether/aether-utils.sh context-update activity "continue" "Phase {prev_id} completed, advanced to {next_id}" "—"
+```
+
+**Update the phase:**
+```bash
+bash .aether/aether-utils.sh context-update update-phase {next_id} "{next_phase_name}" "YES" "Phase advanced, ready to build"
+```
+
+**Log any decisions from this session:**
+If any architectural decisions were made during verification, also run:
+```bash
+bash .aether/aether-utils.sh context-update decision "{decision_description}" "{rationale}" "Queen"
+```
+
 ### Step 2.5: Project Completion
 
 Runs ONLY when all phases complete.
@@ -937,6 +957,8 @@ Output:
    /ant:focus "<area>"    🎯 Guide colony attention
 
 💾 State persisted — context clear suggested above
+
+📋 Context document updated at `.aether/CONTEXT.md`
 ```
 
 **IMPORTANT:** In the "Next Steps" section above, substitute the actual phase number for `{next_id}` (calculated in Step 2 as `current_phase + 1`). For example, if advancing to phase 4, output `/ant:build 4` not `/ant:build {next_id}`.
