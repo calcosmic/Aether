@@ -220,7 +220,7 @@ CONSTRAINTS: (none)
        Scanning history of files to be modified...
    ```
 
-   Spawn a Scout (using Task tool with `subagent_type="general-purpose"`) with this prompt:
+   Spawn a Scout (using Task tool with `subagent_type="aether-archaeologist"`) with this prompt:
 
    ```
    You are {Archaeologist-Name}, a 🏺 Archaeologist Ant.
@@ -357,7 +357,7 @@ Total: {N} Builders + 1 Watcher + 1 Chaos = {N+2} spawns
 bash .aether/aether-utils.sh context-update build-start {phase_id} {wave_1_worker_count} {wave_1_task_count}
 ```
 
-For each Wave 1 task, use Task tool with `subagent_type="general-purpose"` and `run_in_background: true`:
+For each Wave 1 task, use Task tool with `subagent_type="aether-builder"` and `run_in_background: true`:
 
 Log each spawn and update swarm display:
 ```bash
@@ -516,7 +516,7 @@ bash .aether/aether-utils.sh flag-list --phase {phase_number}
 ```
 Parse the result and extract unresolved flag titles into a list: `{existing_flag_titles}` (comma-separated titles from `.result.flags[].title`). If no flags exist, set `{existing_flag_titles}` to "None".
 
-Spawn the Chaos Ant using Task tool with `subagent_type="general-purpose"`:
+Spawn the Chaos Ant using Task tool with `subagent_type="aether-chaos"`:
 
 **Chaos Ant Prompt (CLEAN OUTPUT):**
 ```
