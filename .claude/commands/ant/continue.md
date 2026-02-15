@@ -665,6 +665,61 @@ Update COLONY_STATE.json:
 
 Write COLONY_STATE.json.
 
+### Step 2.2: Promote Validated Learnings to QUEEN.md
+
+After extracting learnings in Step 2, promote high-confidence validated learnings to QUEEN.md wisdom.
+
+**Promotion Criteria:**
+- Only learnings with `status: "validated"` are eligible
+- Must have been tested and confirmed working
+- Should represent actionable patterns, not one-off observations
+
+**Process:**
+
+1. **Get colony name from state:**
+   ```bash
+   colony_name=$(jq -r '.session_id | split("_")[1] // "unknown"' .aether/data/COLONY_STATE.json)
+   ```
+
+2. **Extract validated learnings from current phase:**
+   Read `memory.phase_learnings` and filter for entries where:
+   - `phase` matches the completed phase number
+   - Any learning in `learnings[]` has `status: "validated"`
+
+3. **Promote to QUEEN.md using queen-promote:**
+
+   For each validated learning, determine the wisdom type and call queen-promote:
+
+   **Type Mapping:**
+   - Learning about success patterns → `pattern`
+   - Learning about what to avoid/corrections → `redirect`
+   - Learning about fundamental principles → `philosophy`
+   - Learning about technology/stack → `stack`
+
+   ```bash
+   # Example promotions
+   bash .aether/aether-utils.sh queen-promote "pattern" "<learning claim>" "$colony_name"
+   bash .aether/aether-utils.sh queen-promote "redirect" "<what to avoid>" "$colony_name"
+   ```
+
+4. **Log promotion results:**
+   ```bash
+   bash .aether/aether-utils.sh activity-log "PROMOTED" "Queen" "Promoted N validated learnings to QUEEN.md wisdom"
+   ```
+
+**Display promotion summary:**
+```
+🧠 Wisdom Promotion
+==================
+{count} validated learning(s) promoted to QUEEN.md:
+  - [{type}] {brief claim preview}
+```
+
+Skip this step if:
+- No validated learnings exist for this phase
+- QUEEN.md does not exist (run queen-init first if needed)
+- All learnings are still hypotheses or disproven
+
 ### Step 2.3: Update Handoff Document
 
 After advancing the phase, update the handoff document with the new current state:
@@ -692,6 +747,7 @@ Run `/ant:build {next_phase_id}` to start working on the current phase.
 - Phase {completed_phase_id} marked as completed
 - Learnings extracted: {learning_count}
 - Instincts updated: {instinct_count}
+- Wisdom promoted to QUEEN.md: {promoted_count}
 
 ## Current Phase Tasks
 $(jq -r '.plan.phases[] | select(.id == next_phase_id) | .tasks[] | "- [ ] \(.id): \(.description)"' .aether/data/COLONY_STATE.json)
@@ -913,6 +969,9 @@ Runs ONLY when all phases complete.
 🧠 Colony Learnings:
 {condensed learnings from memory.phase_learnings}
 
+👑 Wisdom Added to QUEEN.md:
+{count} patterns/redirects/philosophies promoted across all phases
+
 🐜 The colony rests. Well done!
 ```
 
@@ -938,6 +997,11 @@ Output:
 
 🧠 Learnings Extracted:
 {list learnings added}
+
+👑 Wisdom Promoted to QUEEN.md:
+{for each promoted learning:}
+   [{type}] {brief claim}
+{end for}
 
 🐜 Instincts Updated:
 {for each instinct created or updated:}

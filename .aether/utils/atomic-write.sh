@@ -62,6 +62,11 @@ atomic_write() {
         return 1
     fi
 
+    # Create backup if target exists (do this BEFORE validation to avoid race condition)
+    if [ -f "$target_file" ]; then
+        create_backup "$target_file"
+    fi
+
     # Validate JSON if it's a JSON file
     if [[ "$target_file" == *.json ]]; then
         if ! python3 -c "import json; json.load(open('$temp_file'))" 2>/dev/null; then
@@ -69,11 +74,6 @@ atomic_write() {
             rm -f "$temp_file"
             return 1
         fi
-    fi
-
-    # Create backup if target exists
-    if [ -f "$target_file" ]; then
-        create_backup "$target_file"
     fi
 
     # Atomic rename (overwrites target if exists)

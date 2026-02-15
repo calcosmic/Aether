@@ -115,7 +115,91 @@ Entombment cancelled. Colony remains active.
 ```
 Stop here.
 
-### Step 5: Create Chamber
+### Step 5: Promote Wisdom to QUEEN.md
+
+Before creating the chamber, promote validated learnings to QUEEN.md for future colonies.
+
+**Step 5.1: Ensure QUEEN.md exists**
+
+```bash
+queen_file=".aether/QUEEN.md"
+if [[ ! -f "$queen_file" ]]; then
+  init_result=$(bash .aether/aether-utils.sh queen-init 2>/dev/null || echo '{"ok":false}')
+  init_ok=$(echo "$init_result" | jq -r '.ok // false')
+  if [[ "$init_ok" == "true" ]]; then
+    created=$(echo "$init_result" | jq -r '.result.created // false')
+    if [[ "$created" == "true" ]]; then
+      bash .aether/aether-utils.sh activity-log "CREATED" "Queen" "Initialized QUEEN.md for wisdom promotion"
+    fi
+  fi
+fi
+```
+
+**Step 5.2: Extract and promote validated learnings**
+
+```bash
+# Extract colony name from goal (sanitized)
+colony_name=$(jq -r '.goal' .aether/data/COLONY_STATE.json | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' '-' | sed 's/^-//;s/-$//' | cut -c1-30)
+
+# Extract validated learnings from phase_learnings
+learnings=$(jq -c '.memory.phase_learnings // []' .aether/data/COLONY_STATE.json)
+
+# Extract decisions
+decisions=$(jq -c '.memory.decisions // []' .aether/data/COLONY_STATE.json)
+
+promotion_count=0
+
+# Promote patterns from validated learnings
+if [[ -f "$queen_file" ]]; then
+  # Process each phase's learnings
+  echo "$learnings" | jq -c '.[]' 2>/dev/null | while read -r learning_group; do
+    phase=$(echo "$learning_group" | jq -r '.phase // "unknown"')
+    # Extract individual learnings and promote as patterns
+    echo "$learning_group" | jq -r '.learnings[]? | select(.status == "validated") | .claim' 2>/dev/null | while read -r claim; do
+      if [[ -n "$claim" && "$claim" != "null" ]]; then
+        # Truncate if too long
+        content=$(echo "$claim" | cut -c1-200)
+        result=$(bash .aether/aether-utils.sh queen-promote "pattern" "$content" "$colony_name" 2>/dev/null || echo '{"ok":false}')
+        if [[ $(echo "$result" | jq -r '.ok // false') == "true" ]]; then
+          promotion_count=$((promotion_count + 1))
+        fi
+      fi
+    done
+  done
+
+  # Promote high-confidence instincts as patterns
+  instincts=$(jq -c '.memory.instincts // []' .aether/data/COLONY_STATE.json)
+  echo "$instincts" | jq -c '.[]' 2>/dev/null | while read -r instinct; do
+    confidence=$(echo "$instinct" | jq -r '.confidence // 0')
+    status=$(echo "$instinct" | jq -r '.status // ""')
+    action=$(echo "$instinct" | jq -r '.action // ""')
+    # Promote validated instincts with high confidence (>= 0.7)
+    if [[ "$status" == "validated" && $(echo "$confidence >= 0.7" | bc -l 2>/dev/null || echo 0) -eq 1 && -n "$action" ]]; then
+      content=$(echo "$action" | cut -c1-200)
+      result=$(bash .aether/aether-utils.sh queen-promote "pattern" "$content" "$colony_name" 2>/dev/null || echo '{"ok":false}')
+      if [[ $(echo "$result" | jq -r '.ok // false') == "true" ]]; then
+        promotion_count=$((promotion_count + 1))
+      fi
+    fi
+  done
+
+  # Log promotion results
+  bash .aether/aether-utils.sh activity-log "MODIFIED" "Queen" "Promoted $promotion_count validated learnings to QUEEN.md from entombed colony"
+fi
+```
+
+**Step 5.3: Display promotion summary**
+
+```
+---
+Wisdom Promotion Summary
+---
+Colony: {colony_name}
+Promoted: {promotion_count} validated patterns to QUEEN.md
+---
+```
+
+### Step 6: Create Chamber
 
 Generate chamber name:
 ```bash
@@ -134,7 +218,7 @@ while [[ -d ".aether/chambers/$chamber_name" ]]; do
 done
 ```
 
-### Step 6: Create Chamber Using Utilities
+### Step 7: Create Chamber Using Utilities
 
 Extract decisions and learnings as JSON arrays:
 ```bash
@@ -159,7 +243,7 @@ bash .aether/aether-utils.sh chamber-create \
   '{learnings_json}'
 ```
 
-### Step 7: Verify Chamber Integrity
+### Step 8: Verify Chamber Integrity
 
 Run verification:
 ```bash
@@ -177,7 +261,7 @@ The colony has NOT been reset. Please check the chamber directory:
 ```
 Stop here.
 
-### Step 8: Reset Colony State
+### Step 9: Reset Colony State
 
 Backup current state:
 ```bash
@@ -220,7 +304,7 @@ Remove backup after successful reset:
 rm -f .aether/data/COLONY_STATE.json.bak
 ```
 
-### Step 8.5: Write Final Handoff
+### Step 9.5: Write Final Handoff
 
 After entombing the colony, write the final handoff documenting the archived colony:
 
@@ -258,7 +342,7 @@ HANDOFF_EOF
 
 This handoff serves as the record of the entombed colony.
 
-### Step 9: Display Result
+### Step 10: Display Result
 
 ```
 🏺 ═══════════════════════════════════════════════════

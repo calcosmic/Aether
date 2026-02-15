@@ -101,7 +101,71 @@ Run /ant:status to check colony state.
 ```
 Stop here.
 
-### Step 4: Archive Colony State
+### Step 4: Promote Colony Wisdom to QUEEN.md
+
+Before archiving, extract and promote significant patterns and decisions from the colony:
+
+```bash
+# Ensure QUEEN.md exists
+if [[ ! -f ".aether/QUEEN.md" ]]; then
+  bash .aether/aether-utils.sh queen-init >/dev/null 2>&1
+fi
+
+# Extract colony name from session_id or goal
+colony_name=$(jq -r '.session_id // empty' .aether/data/COLONY_STATE.json | sed 's/^session_//' | cut -d'_' -f1-3)
+[[ -z "$colony_name" ]] && colony_name=$(jq -r '.goal' .aether/data/COLONY_STATE.json | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | cut -c1-30)
+
+# Track promotion results
+promotions_made=0
+promotion_details=""
+
+# Extract and promote phase learnings (validated learnings with high confidence)
+while IFS= read -r learning; do
+  claim=$(echo "$learning" | jq -r '.claim // empty')
+  status=$(echo "$learning" | jq -r '.status // empty')
+
+  if [[ -n "$claim" && "$status" == "validated" ]]; then
+    # Determine type based on content patterns
+    if echo "$claim" | grep -qi "never\|avoid\|don't\|do not"; then
+      type="redirect"
+    elif echo "$claim" | grep -qi "always\|should\|must\|pattern\|approach"; then
+      type="pattern"
+    elif echo "$claim" | grep -qi "use\|prefer\|technology\|tool\|library"; then
+      type="stack"
+    else
+      type="philosophy"
+    fi
+
+    result=$(bash .aether/aether-utils.sh queen-promote "$type" "$claim" "$colony_name" 2>/dev/null)
+    if echo "$result" | jq -e '.ok' >/dev/null 2>&1; then
+      promotions_made=$((promotions_made + 1))
+      promotion_details="${promotion_details}  - Promoted ${type}: ${claim:0:60}...\n"
+    fi
+  fi
+done < <(jq -c '.memory.phase_learnings[]?.learnings[]? // empty' .aether/data/COLONY_STATE.json 2>/dev/null)
+
+# Extract and promote decisions
+while IFS= read -r decision; do
+  description=$(echo "$decision" | jq -r '.description // .rationale // empty')
+  [[ -z "$description" ]] && description=$(echo "$decision" | jq -r '.decision // empty')
+
+  if [[ -n "$description" ]]; then
+    result=$(bash .aether/aether-utils.sh queen-promote "pattern" "$description" "$colony_name" 2>/dev/null)
+    if echo "$result" | jq -e '.ok' >/dev/null 2>&1; then
+      promotions_made=$((promotions_made + 1))
+      promotion_details="${promotion_details}  - Promoted pattern from decision: ${description:0:60}...\n"
+    fi
+  fi
+done < <(jq -c '.memory.decisions[]? // empty' .aether/data/COLONY_STATE.json 2>/dev/null)
+
+# Log promotion results to activity log
+bash .aether/aether-utils.sh activity-log "MODIFIED" "Queen" "Promoted ${promotions_made} learnings/decisions to QUEEN.md from colony ${colony_name}"
+
+# Store promotion summary for display
+promotion_summary="${promotions_made} wisdom entries promoted"
+```
+
+### Step 5: Archive Colony State
 
 Create archive directory:
 ```
@@ -133,16 +197,16 @@ Create archive manifest file `$archive_dir/manifest.json`:
 }
 ```
 
-### Step 5: Update Milestone to Crowned Anthill
+### Step 6: Update Milestone to Crowned Anthill
 
 Update COLONY_STATE.json:
 1. Set `milestone` to `"Crowned Anthill"`
 2. Set `milestone_updated_at` to current ISO-8601 timestamp
 3. Append event: `"<timestamp>|milestone_reached|archive|Achieved Crowned Anthill milestone - colony archived"`
 
-### Step 5.5: Write Final Handoff
+### Step 7: Write Final Handoff
 
-After archiving, write the final handoff documenting the completed colony:
+After archiving and promoting wisdom, write the final handoff documenting the completed colony:
 
 ```bash
 cat > .aether/HANDOFF.md << 'HANDOFF_EOF'
@@ -159,6 +223,7 @@ cat > .aether/HANDOFF.md << 'HANDOFF_EOF'
 - Total Phases: {total_phases}
 - Milestone: Crowned Anthill
 - Sealed At: {timestamp}
+- Wisdom Promoted: {promotion_summary}
 
 ## Files Archived
 - COLONY_STATE.json
@@ -175,7 +240,7 @@ HANDOFF_EOF
 
 This handoff serves as the final record of the completed colony.
 
-### Step 6: Display Result
+### Step 8: Display Result
 
 **If visual_mode is true, render final swarm display:**
 ```bash
@@ -194,6 +259,7 @@ Output:
 👑 Goal: {goal (truncated to 60 chars)}
 📍 Phases: {total_phases} completed
 🏆 Milestone: Crowned Anthill
+📚 Wisdom Promoted: {promotion_summary}
 
 📦 Archive Location: {archive_dir}
    - COLONY_STATE.json
