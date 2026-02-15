@@ -3,7 +3,7 @@ name: ant:plan
 description: "📊🐜🗺️🐜📊 Show project plan or generate project-specific phases"
 ---
 
-You are the **Queen**. Orchestrate iterative research and planning until 95% confidence.
+You are the **Queen**. Orchestrate iterative research and planning until 99% confidence.
 
 ## Instructions
 
@@ -32,12 +32,29 @@ No colony initialized. Run /ant:init "<goal>" first.
 ```
 Stop here.
 
-**Auto-Recovery Header (Session Start):**
-If `goal` exists and state is valid, output a brief context line:
-```
-🔄 Resuming: Phase {current_phase} - {phase_name}
-```
-This helps recover context after session clears. Continue immediately (non-blocking).
+### Step 1.5: Load State and Show Resumption Context
+
+Run using Bash tool: `bash .aether/aether-utils.sh load-state`
+
+If successful and goal is not null:
+1. Extract current_phase from state
+2. Get phase name from plan.phases[current_phase - 1].name (or "(unnamed)")
+3. Display brief resumption context:
+   ```
+   🔄 Resuming: Phase X - Name
+   ```
+
+If .aether/HANDOFF.md exists (detected in load-state output):
+- Display "Resuming from paused session"
+- Read .aether/HANDOFF.md for additional context
+- Remove .aether/HANDOFF.md after display (cleanup)
+
+Run: `bash .aether/aether-utils.sh unload-state` to release lock.
+
+**Error handling:**
+- If E_FILE_NOT_FOUND: "No colony initialized. Run /ant:init first." and stop
+- If validation error: Display error details with recovery suggestion and stop
+- For other errors: Display generic error and suggest /ant:status for diagnostics
 
 ### Step 2: Check Existing Plan
 
@@ -59,10 +76,12 @@ AETHER COLONY :: PLANNING
 State: PLANNING
 Phase: 0/0 (generating plan)
 Confidence: 0%
-Iteration: 0/50
+Iteration: 0/8
 
 Active Workers:
-  [Research] Starting...
+  [Research Alpha] Starting...
+  [Research Beta] Starting...
+  [Synthesis] Waiting...
   [Planning] Waiting...
 
 Last Activity:
@@ -76,9 +95,9 @@ Progress
 
 [                    ] 0%
 
-Target: 95% confidence
+Target: 99% confidence
 
-Iteration: 0/50
+Iteration: 0/8
 Gaps: (analyzing...)
 ```
 
@@ -98,39 +117,45 @@ Initialize tracking:
 - `last_confidence = 0`
 - `stall_count = 0` (consecutive iterations with < 5% improvement)
 
-**Loop (max 50 iterations):**
+**Loop (max 8 iterations):**
 
 ```
-while iteration < 50 AND confidence < 95:
+while iteration < 8 AND confidence < 99:
     iteration += 1
 
-    # === RESEARCH PHASE ===
+    # === DUAL RESEARCH PHASE ===
+    # Spawn two researchers in parallel for broader coverage and cross-validation
 
-    Spawn Research Ant (Scout) via Task tool with subagent_type="general":
+    Spawn Research Ant Alpha (Scout) via Task tool with subagent_type="general-purpose", run_in_background: true:
 
     """
-    You are a Scout Ant in the Aether Colony.
+    You are Scout Ant Alpha in the Aether Colony.
 
     --- MISSION ---
-    Research the codebase and domain to fill knowledge gaps for planning.
+    Research the codebase from YOUR unique angle. Cover different ground than Beta.
 
     Goal: "{goal}"
-    Iteration: {iteration}/50
+    Iteration: {iteration}/8
 
     {if gaps is not empty:}
     --- SPECIFIC GAPS TO INVESTIGATE ---
-    Focus ONLY on these gaps:
-    {for each gap in gaps:}
+    Focus on these gaps (Alpha takes odd-numbered gaps):
+    {for each gap in gaps where index % 2 == 0:}
       - {gap.id}: {gap.description}
     {end for}
     {else:}
-    --- INITIAL EXPLORATION ---
-    This is iteration 1. Explore:
-    1. Codebase structure (Glob for key files)
-    2. Existing patterns and conventions
-    3. Dependencies and tech stack
-    4. Any existing tests or docs
+    --- INITIAL EXPLORATION (Alpha Focus) ---
+    This is iteration 1. Alpha explores:
+    1. Core architecture and entry points
+    2. Main business logic and domain models
+    3. Configuration and environment setup
+    4. Critical dependencies and frameworks
     {end if}
+
+    --- YOUR ANGLE ---
+    Look for: structural patterns, architectural decisions, core abstractions
+    Check: Main modules, domain layer, service boundaries
+    Note: Integration points, external APIs, data flow
 
     --- TOOLS ---
     Use: Glob, Grep, Read, WebSearch, WebFetch
@@ -139,24 +164,139 @@ while iteration < 50 AND confidence < 95:
     --- OUTPUT FORMAT ---
     Return JSON:
     {
+      "researcher_id": "alpha",
       "findings": [
-        {"area": "...", "discovery": "...", "confidence": 0-100}
+        {"area": "...", "discovery": "...", "confidence": 0-100, "source": "file or search"}
       ],
       "gaps_remaining": [
         {"id": "gap_N", "description": "..."}
       ],
       "gaps_resolved": ["gap_1", "gap_2"],
-      "overall_knowledge_confidence": 0-100
+      "overall_knowledge_confidence": 0-100,
+      "unique_insights": ["insight not covered by typical exploration"]
     }
     """
 
-    Parse research results. Update gaps list.
+    Spawn Research Ant Beta (Scout) via Task tool with subagent_type="general-purpose", run_in_background: true:
 
-    Log: `bash .aether/aether-utils.sh activity-log "RESEARCH" "scout" "Iteration {iteration}: {summary}"`
+    """
+    You are Scout Ant Beta in the Aether Colony.
+
+    --- MISSION ---
+    Research the codebase from YOUR unique angle. Cover different ground than Alpha.
+
+    Goal: "{goal}"
+    Iteration: {iteration}/8
+
+    {if gaps is not empty:}
+    --- SPECIFIC GAPS TO INVESTIGATE ---
+    Focus on these gaps (Beta takes even-numbered gaps):
+    {for each gap in gaps where index % 2 == 1:}
+      - {gap.id}: {gap.description}
+    {end for}
+    {else:}
+    --- INITIAL EXPLORATION (Beta Focus) ---
+    This is iteration 1. Beta explores:
+    1. UI/presentation layer and user flows
+    2. Testing patterns and quality practices
+    3. Edge cases, error handling, and validation
+    4. Infrastructure, deployment, and ops concerns
+    {end if}
+
+    --- YOUR ANGLE ---
+    Look for: edge cases, test coverage, UI/UX patterns, operational concerns
+    Check: Test files, validation logic, error paths, deployment configs
+    Note: Security considerations, performance bottlenecks, monitoring
+
+    --- TOOLS ---
+    Use: Glob, Grep, Read, WebSearch, WebFetch
+    Do NOT use: Task, Write, Edit
+
+    --- OUTPUT FORMAT ---
+    Return JSON:
+    {
+      "researcher_id": "beta",
+      "findings": [
+        {"area": "...", "discovery": "...", "confidence": 0-100, "source": "file or search"}
+      ],
+      "gaps_remaining": [
+        {"id": "gap_N", "description": "..."}
+      ],
+      "gaps_resolved": ["gap_1", "gap_2"],
+      "overall_knowledge_confidence": 0-100,
+      "unique_insights": ["insight not covered by typical exploration"]
+    }
+    """
+
+    # === SYNTHESIS PHASE ===
+    # Wait for both researchers, then synthesize their findings
+
+    Wait for both Research Alpha and Research Beta to complete (TaskOutput with block: true).
+
+    Log: `bash .aether/aether-utils.sh activity-log "RESEARCH" "scout-alpha" "Iteration {iteration}: {alpha.summary}"`
+    Log: `bash .aether/aether-utils.sh activity-log "RESEARCH" "scout-beta" "Iteration {iteration}: {beta.summary}"`
+
+    Spawn Synthesis Ant (Analyst) via Task tool with subagent_type="general-purpose":
+
+    """
+    You are a Synthesis Analyst Ant in the Aether Colony.
+
+    --- MISSION ---
+    Combine findings from Alpha and Beta researchers into unified understanding.
+    Resolve conflicts, identify gaps, and extract the best insights from both.
+
+    Goal: "{goal}"
+    Iteration: {iteration}/8
+
+    --- RESEARCH FINDINGS ---
+
+    ## Alpha Findings (Architectural Focus):
+    {alpha.findings formatted}
+    Alpha Confidence: {alpha.overall_knowledge_confidence}%
+    Alpha Gaps Resolved: {alpha.gaps_resolved}
+    Alpha Gaps Remaining: {alpha.gaps_remaining}
+    Alpha Unique Insights: {alpha.unique_insights}
+
+    ## Beta Findings (Edge Cases/Operations Focus):
+    {beta.findings formatted}
+    Beta Confidence: {beta.overall_knowledge_confidence}%
+    Beta Gaps Resolved: {beta.gaps_resolved}
+    Beta Gaps Remaining: {beta.gaps_remaining}
+    Beta Unique Insights: {beta.unique_insights}
+
+    --- SYNTHESIS TASKS ---
+    1. Merge findings: Combine both perspectives without duplication
+    2. Resolve conflicts: If Alpha and Beta disagree, note the tension
+    3. Identify gaps: What did BOTH miss? What's still unknown?
+    4. Rate confidence: Combined knowledge confidence (not just average)
+
+    --- OUTPUT FORMAT ---
+    Return JSON:
+    {
+      "synthesis": {
+        "combined_findings": [
+          {"area": "...", "discovery": "...", "sources": ["alpha", "beta"], "confidence": 0-100}
+        ],
+        "conflicts": [
+          {"topic": "...", "alpha_view": "...", "beta_view": "...", "resolution": "..."}
+        ],
+        "gaps_remaining": [
+          {"id": "gap_N", "description": "...", "priority": "high|medium|low"}
+        ],
+        "gaps_resolved": ["gap_1", "gap_2"],
+        "overall_knowledge_confidence": 0-100,
+        "key_insights": ["most important discoveries from both researchers"]
+      }
+    }
+    """
+
+    Parse synthesis results. Update gaps list.
+
+    Log: `bash .aether/aether-utils.sh activity-log "SYNTHESIS" "analyst" "Iteration {iteration}: {synthesis.key_insights.length} insights, {synthesis.gaps_remaining.length} gaps remain"`
 
     # === PLANNING PHASE ===
 
-    Spawn Planning Ant (Route-Setter) via Task tool with subagent_type="general":
+    Spawn Planning Ant (Route-Setter) via Task tool with subagent_type="general-purpose":
 
     """
     You are a Route-Setter Ant in the Aether Colony.
@@ -165,7 +305,7 @@ while iteration < 50 AND confidence < 95:
     Create or refine a project plan based on research findings.
 
     Goal: "{goal}"
-    Iteration: {iteration}/50
+    Iteration: {iteration}/8
 
     --- PLANNING DISCIPLINE ---
     Read .aether/planning.md for full reference.
@@ -201,8 +341,15 @@ while iteration < 50 AND confidence < 95:
     Workers discover implementations by reading existing code and patterns.
     This enables TRUE EMERGENCE - different approaches based on context.
 
-    --- RESEARCH FINDINGS ---
-    {research_results.findings formatted}
+    --- SYNTHESIZED RESEARCH FINDINGS ---
+    Combined findings from Alpha and Beta researchers:
+    {synthesis.combined_findings formatted}
+
+    Key Insights:
+    {synthesis.key_insights formatted}
+
+    Remaining Gaps:
+    {synthesis.gaps_remaining formatted}
 
     --- CURRENT PLAN DRAFT ---
     {if plan_draft:}
@@ -212,7 +359,7 @@ while iteration < 50 AND confidence < 95:
     {end if}
 
     --- REMAINING GAPS ---
-    {gaps_remaining}
+    {synthesis.gaps_remaining}
 
     --- INSTRUCTIONS ---
     1. If no plan exists, create 3-6 phases with concrete tasks
@@ -274,7 +421,7 @@ while iteration < 50 AND confidence < 95:
     for each gap in gaps:
         if gap was in previous iteration's gaps:
             stuck_counts[gap.id] += 1
-            if stuck_counts[gap.id] >= 3:
+            if stuck_counts[gap.id] >= 2:
                 mark gap as "needs_human_input"
                 remove from active gaps
 
@@ -285,7 +432,7 @@ while iteration < 50 AND confidence < 95:
     else:
         stall_count = 0
 
-    if stall_count >= 3 AND iteration > 5:
+    if stall_count >= 2 AND iteration > 3:
         # Stalled - ask user
         Display current plan and confidence
         Ask: "Planning has stalled at {confidence}%. Options:"
@@ -299,8 +446,8 @@ while iteration < 50 AND confidence < 95:
             add guidance to gaps as FOCUS constraint
             reset stall_count
 
-    # Check 3: Diminishing returns
-    if delta < 2 AND iteration > 10:
+    # Check 3: Diminishing returns (tighter bound for 8 iterations)
+    if delta < 2 AND iteration >= 5:
         Display: "Approaching local maximum at {confidence}%."
         Ask: "Continue or accept current plan?"
         if user accepts:
@@ -311,21 +458,21 @@ while iteration < 50 AND confidence < 95:
 
 **After loop exits:**
 
-If `iteration == 50` and `confidence < 95`:
+If `iteration == 8` and `confidence < 99`:
 ```
-Planning reached maximum iterations.
+Planning reached maximum iterations (8).
 
 Current confidence: {confidence}%
 Unresolved gaps:
 {list gaps marked needs_human_input}
 
-Recommendation: {proceed if confidence > 70, else get human input}
+Recommendation: {proceed if confidence > 85, else get human input}
 ```
 Ask user to accept or provide input.
 
 ### Step 5: Finalize Plan
 
-Once plan is accepted (confidence >= 95 OR user approved):
+Once plan is accepted (confidence >= 99 OR user approved):
 
 Read current COLONY_STATE.json, then update:
 - Set `plan.phases` to the final phases array
@@ -406,18 +553,18 @@ Each dimension rated 0-100%:
 
 **Overall** = weighted average (knowledge 25%, requirements 25%, risks 20%, dependencies 15%, effort 15%)
 
-**Target: 95%** - High confidence plan ready for autonomous execution.
+**Target: 99%** - High confidence plan ready for autonomous execution.
 
 ---
 
 ## Anti-Stuck Safeguards
 
-1. **Gap Tracking**: Each gap has a `stuck_count`. After 3 iterations without progress, marked "needs human input"
+1. **Gap Tracking**: Each gap has a `stuck_count`. After 2 iterations without progress, marked "needs human input"
 
-2. **Stall Detection**: If confidence improves < 5% for 3 consecutive iterations after iteration 5, pause for user decision
+2. **Stall Detection**: If confidence improves < 5% for 2 consecutive iterations after iteration 3, pause for user decision
 
-3. **Diminishing Returns**: If confidence improves < 2% after iteration 10, offer to accept current plan
+3. **Diminishing Returns**: If confidence improves < 2% after iteration 5, offer to accept current plan
 
-4. **Focused Research**: Research Ant receives SPECIFIC gaps, not open-ended exploration (after iteration 1)
+4. **Dual Research**: Two researchers (Alpha + Beta) explore different angles, then synthesize findings
 
 5. **Escape Hatch**: `/ant:plan --accept` accepts current plan regardless of confidence

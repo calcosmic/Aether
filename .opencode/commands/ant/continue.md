@@ -30,12 +30,29 @@ Extract: `goal`, `state`, `current_phase`, `plan.phases`, `errors`, `memory`, `e
 - If `goal: null` -> output "No colony initialized. Run /ant:init first." and stop.
 - If `plan.phases` is empty -> output "No project plan. Run /ant:plan first." and stop.
 
-**Auto-Recovery Header (Session Start):**
-If `goal` exists and state is valid, output a brief context line:
-```
-🔄 Resuming: Phase {current_phase} - {phase_name}
-```
-This helps recover context after session clears. Continue immediately (non-blocking).
+### Step 1.5: Load State and Show Resumption Context
+
+Run using Bash tool: `bash .aether/aether-utils.sh load-state`
+
+If successful and goal is not null:
+1. Extract current_phase from state
+2. Get phase name from plan.phases[current_phase - 1].name (or "(unnamed)")
+3. Display brief resumption context:
+   ```
+   🔄 Resuming: Phase X - Name
+   ```
+
+If .aether/HANDOFF.md exists (detected in load-state output):
+- Display "Resuming from paused session"
+- Read .aether/HANDOFF.md for additional context
+- Remove .aether/HANDOFF.md after display (cleanup)
+
+Run: `bash .aether/aether-utils.sh unload-state` to release lock.
+
+**Error handling:**
+- If E_FILE_NOT_FOUND: "No colony initialized. Run /ant:init first." and stop
+- If validation error: Display error details with recovery suggestion and stop
+- For other errors: Display generic error and suggest /ant:status for diagnostics
 
 **Completion Detection:**
 
@@ -65,8 +82,8 @@ Resolve each command (build, test, types, lint) using this priority chain. Stop 
 **Priority 1 — CLAUDE.md (System Context):**
 Check the CLAUDE.md instructions already loaded in your system context for explicit build, test, type-check, or lint commands. These are authoritative and override all other sources.
 
-**Priority 2 — .planning/CODEBASE.md `## Commands`:**
-Read `.planning/CODEBASE.md` and look for the `## Commands` section. Use any commands listed there for slots not yet filled by Priority 1.
+**Priority 2 — .aether/data/codebase.md `## Commands`:**
+Read `.aether/data/codebase.md` and look for the `## Commands` section. Use any commands listed there for slots not yet filled by Priority 1.
 
 **Priority 3 — Fallback Heuristic Table:**
 For any commands still unresolved, check for these files in order, use first match:
@@ -632,6 +649,49 @@ Update COLONY_STATE.json:
 
 Write COLONY_STATE.json.
 
+### Step 2.3: Update Handoff Document
+
+After advancing the phase, update the handoff document with the new current state:
+
+```bash
+# Determine if there's a next phase
+next_phase_id=$((current_phase + 1))
+has_next_phase=$(jq --arg next "$next_phase_id" '.plan.phases | map(select(.id == ($next | tonumber))) | length' .aether/data/COLONY_STATE.json)
+
+# Write updated handoff
+cat > .aether/HANDOFF.md << 'HANDOFF_EOF'
+# Colony Session — Phase Advanced
+
+## Quick Resume
+Run `/ant:build {next_phase_id}` to start working on the current phase.
+
+## State at Advancement
+- Goal: "$(jq -r '.goal' .aether/data/COLONY_STATE.json)"
+- Completed Phase: {completed_phase_id} — {completed_phase_name}
+- Current Phase: {next_phase_id} — {next_phase_name}
+- State: READY
+- Updated: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+## What Was Completed
+- Phase {completed_phase_id} marked as completed
+- Learnings extracted: {learning_count}
+- Instincts updated: {instinct_count}
+
+## Current Phase Tasks
+$(jq -r '.plan.phases[] | select(.id == next_phase_id) | .tasks[] | "- [ ] \(.id): \(.description)"' .aether/data/COLONY_STATE.json)
+
+## Next Steps
+- Build current phase: `/ant:build {next_phase_id}`
+- Review phase details: `/ant:phase {next_phase_id}`
+- Pause colony: `/ant:pause-colony`
+
+## Session Note
+Phase advanced successfully. Colony is READY to build Phase {next_phase_id}.
+HANDOFF_EOF
+```
+
+This handoff reflects the post-advancement state, allowing seamless resumption even if the session is lost.
+
 ### Step 2.4: Update Changelog
 
 **Append a changelog entry for the completed phase.**
@@ -719,6 +779,48 @@ Set `last_commit_suggestion_phase` to `{phase_id}` in COLONY_STATE.json (add the
 
 **Error handling:** If any git command fails (not a repo, merge conflict, pre-commit hook rejection), display the error output and continue to the next step. The commit suggestion is advisory only -- it never blocks the flow.
 
+Continue to Step 2.7 (Context Clear Suggestion), then to Step 2.5 (Project Completion) or Step 3 (Display Result).
+
+### Step 2.7: Context Clear Suggestion (Optional)
+
+**This step is non-blocking. Skipping does not affect phase advancement.**
+
+After committing (or skipping commit), suggest clearing context to refresh before the next phase.
+
+1. **Display the suggestion:**
+```
+──────────────────────────────────────────────────
+Context Refresh
+──────────────────────────────────────────────────
+
+State is fully persisted and committed.
+Phase {next_id} is ready to build.
+
+──────────────────────────────────────────────────
+```
+
+2. **Use AskUserQuestion:**
+```
+Clear context now?
+
+1. Yes, clear context then run /ant:build {next_id}
+2. No, continue in current context
+```
+
+3. **If option 1 ("Yes, clear context"):**
+
+   **IMPORTANT:** Claude Code does not support programmatic /clear. Display instructions:
+   ```
+   Please type: /clear
+   
+   Then run: /ant:build {next_id}
+   ```
+   
+   Record the suggestion: Set `context_clear_suggested` to `true` in COLONY_STATE.json.
+
+4. **If option 2 ("No, continue in current context"):**
+   Display: `Continuing in current context. State is saved.`
+
 Continue to Step 2.5 (Project Completion) or Step 3 (Display Result).
 
 ### Step 2.5: Project Completion
@@ -781,7 +883,7 @@ Output:
    /ant:phase {next_id}   📋 Review phase details first
    /ant:focus "<area>"    🎯 Guide colony attention
 
-💾 State persisted — safe to /clear, then run /ant:build {next_id}
+💾 State persisted — context clear suggested above
 ```
 
 **IMPORTANT:** In the "Next Steps" section above, substitute the actual phase number for `{next_id}` (calculated in Step 2 as `current_phase + 1`). For example, if advancing to phase 4, output `/ant:build 4` not `/ant:build {next_id}`.

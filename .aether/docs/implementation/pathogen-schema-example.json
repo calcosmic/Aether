@@ -1,0 +1,36 @@
+{
+  "pathogens": [
+    {
+      "name": "unchecked_error_return",
+      "description": "Function return value not checked for error condition",
+      "severity": "critical",
+      "first_seen": "2026-02-11T12:00:00Z",
+      "last_seen": "2026-02-11T14:30:00Z",
+      "occurrences": 5,
+      "projects": ["Aether"],
+      "resolved": false,
+      "signature_type": "fuzzy",
+      "pattern_string": "\\|\\| true$",
+      "confidence_threshold": 0.9,
+      "escalation_level": "swarm"
+    },
+    {
+      "name": "hardcoded_path",
+      "description": "Absolute path hardcoded instead of using variable",
+      "severity": "warning",
+      "first_seen": "2026-02-11T12:00:00Z",
+      "last_seen": "2026-02-11T12:00:00Z",
+      "occurrences": 1,
+      "projects": ["Aether"],
+      "resolved": false,
+      "signature_type": "exact",
+      "pattern_string": "/Users/",
+      "confidence_threshold": 0.5,
+      "escalation_level": "log"
+    }
+  ],
+  "metadata": {
+    "version": "1.0",
+    "last_updated": "2026-02-11T14:30:00Z"
+  }
+}

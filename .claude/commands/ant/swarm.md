@@ -117,121 +117,74 @@ Use the **Task** tool to spawn 4 scouts **in a single message** (parallel execut
 
 Log each scout to swarm display before spawning:
 ```bash
-bash .aether/aether-utils.sh swarm-display-update "GitArchaeologist-{swarm_id}" "scout" "excavating" "Git history investigation" "Queen" '{"read":0,"grep":0,"edit":0,"bash":3}' 0
-bash .aether/aether-utils.sh swarm-display-update "PatternHunter-{swarm_id}" "scout" "excavating" "Pattern search for similar code" "Queen" '{"read":5,"grep":10,"edit":0,"bash":0}' 0
-bash .aether/aether-utils.sh swarm-display-update "ErrorAnalyst-{swarm_id}" "scout" "excavating" "Error chain analysis" "Queen" '{"read":3,"grep":5,"edit":0,"bash":2}' 0
-bash .aether/aether-utils.sh swarm-display-update "WebResearcher-{swarm_id}" "scout" "excavating" "External source research" "Queen" '{"read":0,"grep":0,"edit":0,"bash":0}' 0
+bash .aether/aether-utils.sh swarm-display-update "{swarm_id}-Archaeologist" "scout" "excavating" "Git history investigation" "Queen" '{"read":0,"grep":0,"edit":0,"bash":3}' 0
+bash .aether/aether-utils.sh swarm-display-update "{swarm_id}-PatternHunter" "scout" "excavating" "Pattern search for similar code" "Queen" '{"read":5,"grep":10,"edit":0,"bash":0}' 0
+bash .aether/aether-utils.sh swarm-display-update "{swarm_id}-ErrorAnalyst" "scout" "excavating" "Error chain analysis" "Queen" '{"read":3,"grep":5,"edit":0,"bash":2}' 0
+bash .aether/aether-utils.sh swarm-display-update "{swarm_id}-WebResearcher" "scout" "excavating" "External source research" "Queen" '{"read":0,"grep":0,"edit":0,"bash":0}' 0
 ```
 
-**Scout 1: Git Archaeologist 🏛️**
+**Scout 1: 🏛️ Git Archaeologist**
 ```
-You are the Git Archaeologist scout for swarm {swarm_id}.
+You are {swarm_id}-Archaeologist, a 🏛️ Scout Ant.
 
-PROBLEM: {problem description}
+Investigate git history for: {problem description}
 
-Your mission: Investigate git history to find when this worked and what changed.
+Steps:
+1. Run `git log --oneline -30`
+2. Run `git log -p --since="1 week ago" -- {relevant files}`
+3. Run `git blame {suspected file}` if mentioned
+4. Find commits that introduced the bug
 
-Investigation steps:
-1. Run `git log --oneline -30` to see recent commits
-2. Run `git log -p --since="1 week ago" -- {relevant files}` to see recent changes
-3. Run `git blame {suspected file}` if a specific file is mentioned
-4. Look for commits that might have introduced the bug
-
-Return JSON:
-{
-  "scout": "git-archaeologist",
-  "confidence": 0.0-1.0,
-  "finding": {
-    "likely_cause": "What you found",
-    "relevant_commits": ["commit hashes"],
-    "when_it_broke": "timestamp or commit",
-    "evidence": ["specific findings"]
-  },
-  "suggested_fix": "If obvious from history"
-}
+Return ONLY this JSON:
+{"scout": "git-archaeologist", "confidence": 0.0-1.0, "finding": {"likely_cause": "...", "relevant_commits": [], "when_it_broke": "...", "evidence": []}, "suggested_fix": "..."}
 ```
 
-**Scout 2: Pattern Hunter 🔍**
+**Scout 2: 🔍 Pattern Hunter**
 ```
-You are the Pattern Hunter scout for swarm {swarm_id}.
+You are {swarm_id}-PatternHunter, a 🔍 Scout Ant.
 
-PROBLEM: {problem description}
+Find working patterns for: {problem description}
 
-Your mission: Find similar working code in this codebase that solves the same problem.
+Steps:
+1. Grep/glob for related working code
+2. Find how other parts handle this
+3. Look for test files showing correct usage
+4. Identify applicable patterns
 
-Investigation steps:
-1. Search for similar patterns that work: grep/glob for related code
-2. Find how other parts of the codebase handle this
-3. Look for test files that demonstrate correct usage
-4. Identify patterns that could be applied
-
-Return JSON:
-{
-  "scout": "pattern-hunter",
-  "confidence": 0.0-1.0,
-  "finding": {
-    "working_examples": ["file:line - description"],
-    "applicable_patterns": ["pattern descriptions"],
-    "differences": "What's different in broken code"
-  },
-  "suggested_fix": "Based on working patterns"
-}
+Return ONLY this JSON:
+{"scout": "pattern-hunter", "confidence": 0.0-1.0, "finding": {"working_examples": [], "applicable_patterns": [], "differences": "..."}, "suggested_fix": "..."}
 ```
 
-**Scout 3: Error Analyst 💥**
+**Scout 3: 💥 Error Analyst**
 ```
-You are the Error Analyst scout for swarm {swarm_id}.
+You are {swarm_id}-ErrorAnalyst, a 🔍 Scout Ant.
 
-PROBLEM: {problem description}
+Analyze error: {problem description}
 
-Your mission: Parse the error deeply to identify root cause.
+Steps:
+1. Trace through stack trace frames
+2. Identify actual failing line vs surface error
+3. Check for null refs, async issues, type mismatches
+4. Look for error handling masking the issue
 
-Investigation steps:
-1. If stack trace provided, trace through each frame
-2. Identify the actual failing line vs where error surfaces
-3. Check for common causes: null refs, async issues, type mismatches
-4. Look for error handling that might mask the real issue
-
-Return JSON:
-{
-  "scout": "error-analyst",
-  "confidence": 0.0-1.0,
-  "finding": {
-    "root_cause": "The actual source of the error",
-    "error_chain": ["how error propagates"],
-    "masked_by": "any error handling hiding the real issue",
-    "category": "null-ref|async|type|logic|config|dependency"
-  },
-  "suggested_fix": "Direct fix for root cause"
-}
+Return ONLY this JSON:
+{"scout": "error-analyst", "confidence": 0.0-1.0, "finding": {"root_cause": "...", "error_chain": [], "masked_by": "...", "category": "null-ref|async|type|logic|config|dependency"}, "suggested_fix": "..."}
 ```
 
-**Scout 4: Web Researcher 🌐**
+**Scout 4: 🌐 Web Researcher**
 ```
-You are the Web Researcher scout for swarm {swarm_id}.
+You are {swarm_id}-WebResearcher, a 🔍 Scout Ant.
 
-PROBLEM: {problem description}
+Research external solutions for: {problem description}
 
-Your mission: Search external sources for solutions to this exact error.
-
-Investigation steps:
-1. Search for the exact error message
-2. Look for library/framework documentation
-3. Check GitHub issues for similar problems
+Steps:
+1. Search for exact error message
+2. Find library/framework docs
+3. Check GitHub issues
 4. Find Stack Overflow answers
 
-Return JSON:
-{
-  "scout": "web-researcher",
-  "confidence": 0.0-1.0,
-  "finding": {
-    "known_issue": true/false,
-    "documentation_link": "if relevant",
-    "similar_issues": ["descriptions of similar problems"],
-    "community_solutions": ["approaches others used"]
-  },
-  "suggested_fix": "From external sources"
-}
+Return ONLY this JSON:
+{"scout": "web-researcher", "confidence": 0.0-1.0, "finding": {"known_issue": true/false, "documentation_link": "...", "similar_issues": [], "community_solutions": []}, "suggested_fix": "..."}
 ```
 
 Wait for all 4 scouts to complete.
@@ -245,21 +198,21 @@ bash .aether/aether-utils.sh swarm-findings-add "{swarm_id}" "{scout_type}" "{co
 
 Update scout status in swarm display to "completed":
 ```bash
-bash .aether/aether-utils.sh swarm-display-update "GitArchaeologist-{swarm_id}" "scout" "completed" "Git history investigation" "Queen" '{"read":3,"grep":0,"edit":0,"bash":5}' 150
+bash .aether/aether-utils.sh swarm-display-update "{swarm_id}-Archaeologist" "scout" "completed" "Git history investigation" "Queen" '{"read":3,"grep":0,"edit":0,"bash":5}' 150
 ```
 
 Display each scout's report as they complete:
 ```
-🏛️ Git Archaeologist [{confidence}]
+🏛️ Archaeologist [{confidence}]
    {summary of finding}
 
-🔍 Pattern Hunter [{confidence}]
+🔍 PatternHunter [{confidence}]
    {summary of finding}
 
-💥 Error Analyst [{confidence}]
+💥 ErrorAnalyst [{confidence}]
    {summary of finding}
 
-🌐 Web Researcher [{confidence}]
+🌐 WebResearcher [{confidence}]
    {summary of finding}
 ```
 
@@ -293,7 +246,7 @@ Select the highest-confidence solution and apply it:
 
 **Command Resolution:** Before running verification, resolve `{build_command}` and `{test_command}` using this priority chain (stop at first match per command):
 1. **CLAUDE.md** — Check project CLAUDE.md (in your system context) for explicit build/test commands
-2. **CODEBASE.md** — Read `.planning/CODEBASE.md` `## Commands` section
+2. **CODEBASE.md** — Read `.aether/data/codebase.md` `## Commands` section
 3. **Fallback** — Use project manifest heuristics (e.g., `npm run build`/`npm test` for package.json)
 
 ```

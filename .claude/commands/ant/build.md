@@ -209,15 +209,16 @@ CONSTRAINTS: (none)
    ```bash
    bash .aether/aether-utils.sh generate-ant-name "archaeologist"
    bash .aether/aether-utils.sh spawn-log "Queen" "scout" "{archaeologist_name}" "Pre-build archaeology scan"
+   bash .aether/aether-utils.sh swarm-display-update "{archaeologist_name}" "scout" "excavating" "Pre-build archaeology scan" "Queen" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 15
    ```
 
    Display:
    ```
-   🏺 Spawning Archaeologist: {archaeologist_name}
-      Scanning history of files to be modified...
+   🏺  Archaeologist {archaeologist_name} spawning
+       Scanning history of files to be modified...
    ```
 
-   Spawn a Scout (using Task tool with `subagent_type="general"`) with this prompt:
+   Spawn a Scout (using Task tool with `subagent_type="general-purpose"`) with this prompt:
 
    ```
    You are {Archaeologist-Name}, a 🏺 Archaeologist Ant (Scout) in the Aether Colony.
@@ -257,9 +258,10 @@ CONSTRAINTS: (none)
 
    **Wait for results** (blocking — use TaskOutput with `block: true`).
 
-   Log completion:
+   Log completion and update swarm display:
    ```bash
    bash .aether/aether-utils.sh spawn-complete "{archaeologist_name}" "completed" "Pre-build archaeology scan"
+   bash .aether/aether-utils.sh swarm-display-update "{archaeologist_name}" "scout" "completed" "Pre-build archaeology scan" "Queen" '{"read":8,"grep":5,"edit":0,"bash":2}' 100 "fungus_garden" 100
    ```
 
 3. **Store and display findings:**
@@ -277,14 +279,36 @@ CONSTRAINTS: (none)
    The `archaeology_context` will be injected into builder prompts in Step 5.1 (see below).
    If this step was skipped (no existing files modified), the archaeology section is omitted from builder prompts.
 
-### Step 5: Analyze Tasks and Plan Spawns
+### Step 5: Initialize Swarm Display and Analyze Tasks
 
 **YOU (the Queen) will spawn workers directly. Do NOT delegate to a single Prime Worker.**
 
-Log phase start:
+**Initialize visual swarm tracking:**
 ```bash
+# Generate unique build ID
+build_id="build-$(date +%s)"
+
+# Initialize swarm display for this build
+bash .aether/aether-utils.sh swarm-display-init "$build_id"
+
+# Log phase start
 bash .aether/aether-utils.sh activity-log "EXECUTING" "Queen" "Phase {id}: {name} - Queen dispatching workers"
+
+# Display animated header
+bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "Phase {id}: {name}" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 10 "fungus_garden" 0
 ```
+
+**Show real-time display header:**
+```
+🔨  COLONY BUILD INITIATED
+═══════════════════════════════════════════════════
+Phase {id}: {name}
+Build ID: {build_id}
+
+Launching swarm display...
+```
+
+Analyze the phase tasks:
 
 Analyze the phase tasks:
 
@@ -306,127 +330,70 @@ bash .aether/aether-utils.sh generate-ant-name "watcher"
 bash .aether/aether-utils.sh generate-ant-name "chaos"
 ```
 
-Display spawn plan:
+Display spawn plan with caste emojis:
 ```
-🐜 SPAWN PLAN
-=============
-Wave 1 (parallel):
-  🔨{Builder-Name}: Task {id} - {description}
-  🔨{Builder-Name}: Task {id} - {description}
+🐜  SPAWN PLAN
 
-Wave 2 (after Wave 1):
-  🔨{Builder-Name}: Task {id} - {description}
+Wave 1  — Parallel
+  🔨 {Builder-Name}  Task {id}  {description}
+  🔨 {Builder-Name}  Task {id}  {description}
 
-Verification:
-  👁️{Watcher-Name}: Verify all work independently
-  🎲{Chaos-Name}: Resilience testing (after Watcher)
+Wave 2  — After Wave 1
+  🔨 {Builder-Name}  Task {id}  {description}
+
+Verification
+  👁️ {Watcher-Name}  Verify all work independently
+  🎲 {Chaos-Name}   Resilience testing (after Watcher)
 
 Total: {N} Builders + 1 Watcher + 1 Chaos = {N+2} spawns
 ```
+
+**Caste Emoji Legend:**
+- 🔨 Builder  (cyan if color enabled)
+- 👁️ Watcher  (green if color enabled)
+- 🎲 Chaos    (red if color enabled)
+- 🔍 Scout    (yellow if color enabled)
+- 🏺 Archaeologist (magenta if color enabled)
+- 🥚 Queen/Prime
+
+**Every spawn must show its caste emoji.**
 
 ### Step 5.1: Spawn Wave 1 Workers (Parallel)
 
 **CRITICAL: Spawn ALL Wave 1 workers in a SINGLE message using multiple Task tool calls.**
 
-For each Wave 1 task, use Task tool with `subagent_type="general"` and `run_in_background: true`:
+For each Wave 1 task, use Task tool with `subagent_type="general-purpose"` and `run_in_background: true`:
 
-Log each spawn:
+Log each spawn and update swarm display:
 ```bash
 bash .aether/aether-utils.sh spawn-log "Queen" "builder" "{ant_name}" "{task_description}"
+bash .aether/aether-utils.sh swarm-display-update "{ant_name}" "builder" "excavating" "{task_description}" "Queen" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 10
 ```
 
-**Builder Worker Prompt Template:**
+**Builder Worker Prompt (CLEAN OUTPUT):**
 ```
-You are {Ant-Name}, a 🔨 Builder Ant in the Aether Colony at depth {depth}.
+You are {Ant-Name}, a 🔨 Builder Ant.
 
---- YOUR TASK ---
 Task {id}: {description}
 
---- CONTEXT ---
 Goal: "{colony_goal}"
-Phase: {phase_name}
 
---- CONSTRAINTS ---
-{constraints from Step 4}
+{ archaeology_context if exists }
 
---- COLONY KNOWLEDGE ---
-{Include this section ONLY if memory.instincts or memory.phase_learnings exist in COLONY_STATE.json.}
-
-Top Instincts (proven patterns — follow these):
-{For each instinct in memory.instincts where confidence >= 0.5, sorted by confidence descending, max 5:}
-  [{confidence}] {trigger} → {action}
-{If none qualify: omit this sub-section}
-
-Recent Learnings:
-{For each learning in memory.phase_learnings (last 3 phases only) where status == "validated":}
-  - {claim}
-{If none qualify: omit this sub-section}
-
-Error Patterns to Avoid:
-{For each pattern in errors.flagged_patterns:}
-  ⚠️ {description}
-{If none: omit this sub-section}
-
-{If archaeology_context exists (Step 4.5 produced findings):}
---- ARCHAEOLOGY CONTEXT ---
-The following historical insights were discovered about files you will modify:
-{archaeology_context findings}
-{End if — omit this entire section if Step 4.5 was skipped}
-
---- INSTRUCTIONS ---
+Work:
 1. Read .aether/workers.md for Builder discipline
-2. Implement the task completely
-3. Write actual test files (not just claims)
-4. Log your work: bash .aether/aether-utils.sh activity-log "CREATED" "{ant_name} (Builder)" "{file_path}"
-5. Before modifying any file, check for grave markers:
-   bash .aether/aether-utils.sh grave-check "{file_path}"
-   If caution_level is "high": read the failure_summary, add extra test coverage for that area, mention the graveyard in your summary
-   If caution_level is "low": note it and proceed carefully
-   If caution_level is "none": proceed normally
+2. Implement task, write tests
+3. Log activity: bash .aether/aether-utils.sh activity-log "ACTION" "{Ant-Name}" "description"
+4. Update display: bash .aether/aether-utils.sh swarm-display-update "{Ant-Name}" "builder" "excavating" "current task" "Queen" '{"read":0,"grep":0,"edit":0,"bash":0}' {progress} "fungus_garden" 50
 
---- SPAWN CAPABILITY ---
-You are at depth {depth}. You MAY spawn sub-workers if you encounter genuine surprise (3x expected complexity).
+Spawn sub-workers ONLY if 3x complexity:
+- Check: bash .aether/aether-utils.sh spawn-can-spawn {depth}
+- Generate name: bash .aether/aether-utils.sh generate-ant-name "builder"
+- Announce: "🐜 Spawning {child_name} for {reason}"
+- Log: bash .aether/aether-utils.sh spawn-log "{Ant-Name}" "builder" "{child_name}" "{task}"
 
-Spawn limits by depth:
-- Depth 1: max 4 spawns
-- Depth 2: max 2 spawns
-- Depth 3: NO spawns (complete inline)
-
-When to spawn:
-- Task is 3x larger than expected
-- Discovered sub-domain requiring different expertise
-- Found blocking dependency needing parallel investigation
-
-DO NOT spawn for work you can complete in < 10 tool calls.
-
-Before spawning:
-  1. Check: bash .aether/aether-utils.sh spawn-can-spawn {depth}
-  2. Generate name: bash .aether/aether-utils.sh generate-ant-name "{caste}"
-  3. Log: bash .aether/aether-utils.sh spawn-log "{your_name}" "{caste}" "{child_name}" "{task}"
-  4. Use Task tool with subagent_type="general"
-  5. After completion: bash .aether/aether-utils.sh spawn-complete "{child_name}" "{status}" "{summary}"
-
-Full spawn format: .aether/workers.md section "Spawning Sub-Workers"
-
---- OUTPUT ---
-Return JSON:
-{
-  "ant_name": "{your name}",
-  "task_id": "{task_id}",
-  "status": "completed" | "failed" | "blocked",
-  "summary": "What you accomplished",
-  "files_created": [],
-  "files_modified": [],
-  "tests_written": [],
-  "blockers": [],
-  "spawns": [],
-  "model_context": {
-    "assigned": "{model}",
-    "caste": "builder",
-    "source": "caste-default",
-    "reported_at": "ISO-8601 timestamp"
-  }
-}
+Return ONLY this JSON (no other text):
+{"ant_name": "{Ant-Name}", "task_id": "{id}", "status": "completed|failed|blocked", "summary": "What you did", "files_created": [], "files_modified": [], "tests_written": [], "blockers": []}
 ```
 
 ### Step 5.2: Collect Wave 1 Results (BLOCKING)
@@ -440,10 +407,14 @@ For each spawned worker, call TaskOutput with `block: true` to wait for completi
 
 Store all results for synthesis in Step 5.6.
 
-For each completed worker, log:
+For each completed worker, log and update swarm display:
 ```bash
 bash .aether/aether-utils.sh spawn-complete "{ant_name}" "completed" "{summary}"
+bash .aether/aether-utils.sh swarm-display-update "{ant_name}" "builder" "completed" "{task_description}" "Queen" '{"read":5,"grep":3,"edit":2,"bash":1}' 100 "fungus_garden" 100
 ```
+
+**Update swarm display with accumulated tool usage:**
+As workers complete, accumulate their actual tool usage (Read, Grep, Edit, Bash counts from their activity logs) and update the swarm display to show live progress.
 
 **Only proceed to Step 5.3 after ALL Wave 1 TaskOutput calls have returned.**
 
@@ -457,105 +428,31 @@ Repeat Step 5.1-5.2 for each subsequent wave, waiting for previous wave to compl
 
 ```bash
 bash .aether/aether-utils.sh spawn-log "Queen" "watcher" "{watcher_name}" "Independent verification"
+bash .aether/aether-utils.sh swarm-display-update "{watcher_name}" "watcher" "observing" "Verification in progress" "Queen" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "nursery" 50
 ```
 
-**Watcher Worker Prompt:**
+**Watcher Worker Prompt (CLEAN OUTPUT):**
 ```
-You are {Watcher-Name}, a 👁️ Watcher Ant in the Aether Colony at depth {depth}.
+You are {Watcher-Name}, a 👁️ Watcher Ant.
 
---- YOUR MISSION ---
-Independently verify all work done by Builders in Phase {id}.
+Verify all work done by Builders in Phase {id}.
 
---- MODEL CONTEXT ---
-Optimal model for verification: {model} (from caste: watcher)
-Model characteristics: Efficient validation and testing model
-Verification focus: Quick, thorough checks with fast turnaround
+Files to verify:
+- Created: {list from builder results}
+- Modified: {list from builder results}
 
---- WHAT TO VERIFY ---
-Files created: {list from builder results}
-Files modified: {list from builder results}
+Verification:
+1. Check files exist (Read each)
+2. Run build/type-check
+3. Run tests if they exist
+4. Check success criteria: {list}
 
---- COMMAND RESOLUTION ---
-Resolve build, test, type-check, and lint commands using this priority chain (stop at first match per command):
-1. **CLAUDE.md** — Check project CLAUDE.md (in your system context) for explicit commands
-2. **CODEBASE.md** — Read `.planning/CODEBASE.md` `## Commands` section
-3. **Fallback** — Use language-specific examples below (Execution Verification section)
+Spawn sub-workers if needed:
+- Log: bash .aether/aether-utils.sh spawn-log "{Watcher-Name}" "watcher" "{child}" "{task}"
+- Announce: "🐜 Spawning {child} to investigate {issue}"
 
-Use resolved commands for all verification steps below.
-
---- VERIFICATION CHECKLIST ---
-1. Do the files exist? (Read each one)
-2. Does the code compile/parse? (Run build command)
-3. Do tests exist AND pass? (Run test command)
-4. Are success criteria met? {list success_criteria}
-
---- EXECUTION VERIFICATION (MANDATORY) ---
-Before assigning a quality score, you MUST attempt to execute the code:
-
-1. Syntax check: Run the language's syntax checker
-   - Python: `python3 -m py_compile {file}`
-   - Swift: `swiftc -parse {file}`
-   - TypeScript: `npx tsc --noEmit`
-
-2. Import check: Verify main entry point can be imported
-   - Python: `python3 -c "import {module}"`
-   - Node: `node -e "require('{entry}')"`
-
-3. Launch test: Attempt to start the application briefly
-   - Run main entry point with timeout
-   - If GUI, try headless mode if possible
-   - If launches successfully = pass
-   - If crashes = CRITICAL severity
-
-4. Test suite: If tests exist, run them
-   - Record pass/fail counts
-
-CRITICAL: If ANY execution check fails, quality_score CANNOT exceed 6/10.
-
---- SPAWN CAPABILITY ---
-You are at depth {depth}. You MAY spawn sub-workers for:
-- Deep investigation of suspicious code patterns
-- Parallel verification of independent components
-- Debugging assistance for complex failures
-
-Spawn limits: Depth 1→4, Depth 2→2, Depth 3→0
-
-Before spawning:
-  bash .aether/aether-utils.sh spawn-log "{your_name}" "{caste}" "{child_name}" "{task}"
-
---- CRITICAL ---
-- You did NOT build this code — verify it objectively
-- "Build passing" is NOT enough — check runtime execution
-- Be skeptical — Builders may have cut corners
-
---- OUTPUT ---
-Return JSON:
-{
-  "ant_name": "{your name}",
-  "verification_passed": true | false,
-  "files_verified": [],
-  "execution_verification": {
-    "syntax_check": {"command": "...", "passed": true|false},
-    "import_check": {"command": "...", "passed": true|false},
-    "launch_test": {"command": "...", "passed": true|false, "error": null},
-    "test_suite": {"command": "...", "passed": N, "failed": N}
-  },
-  "build_result": {"command": "...", "passed": true|false},
-  "test_result": {"command": "...", "passed": N, "failed": N},
-  "success_criteria_results": [
-    {"criterion": "...", "passed": true|false, "evidence": "..."}
-  ],
-  "issues_found": [],
-  "quality_score": N,
-  "recommendation": "proceed" | "fix_required",
-  "spawns": [],
-  "model_context": {
-    "assigned": "{model}",
-    "caste": "watcher",
-    "source": "caste-default",
-    "reported_at": "ISO-8601 timestamp"
-  }
-}
+Return ONLY this JSON:
+{"ant_name": "{Watcher-Name}", "verification_passed": true|false, "files_verified": [], "issues_found": [], "quality_score": N, "recommendation": "proceed|fix_required"}
 ```
 
 ### Step 5.4.1: Collect Watcher Results (BLOCKING)
@@ -567,6 +464,11 @@ Call TaskOutput with `block: true` using the Watcher's task_id:
 - Parse: verification_passed, issues_found, quality_score, recommendation
 - Store results for synthesis in Step 5.6
 
+**Update swarm display when Watcher completes:**
+```bash
+bash .aether/aether-utils.sh swarm-display-update "{watcher_name}" "watcher" "completed" "Verification complete" "Queen" '{"read":3,"grep":2,"edit":0,"bash":1}' 100 "nursery" 100
+```
+
 **Only proceed to Step 5.4.2 after Watcher TaskOutput has returned.**
 
 ### Step 5.4.2: Spawn Chaos Ant for Resilience Testing
@@ -577,6 +479,7 @@ Generate a chaos ant name and log the spawn:
 ```bash
 bash .aether/aether-utils.sh generate-ant-name "chaos"
 bash .aether/aether-utils.sh spawn-log "Queen" "chaos" "{chaos_name}" "Resilience testing of Phase {id} work"
+bash .aether/aether-utils.sh swarm-display-update "{chaos_name}" "chaos" "probing" "Resilience testing" "Queen" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "refuse_pile" 75
 ```
 
 **Retrieve existing flags for this phase** (to avoid duplicate findings):
@@ -585,61 +488,26 @@ bash .aether/aether-utils.sh flag-list --phase {phase_number}
 ```
 Parse the result and extract unresolved flag titles into a list: `{existing_flag_titles}` (comma-separated titles from `.result.flags[].title`). If no flags exist, set `{existing_flag_titles}` to "None".
 
-Spawn the Chaos Ant using Task tool with `subagent_type="general"`:
+Spawn the Chaos Ant using Task tool with `subagent_type="general-purpose"`:
 
-**Chaos Ant Prompt:**
+**Chaos Ant Prompt (CLEAN OUTPUT):**
 ```
-You are {Chaos-Name}, a 🎲 Chaos Ant (Resilience Tester) in the Aether Colony at depth {depth}.
+You are {Chaos-Name}, a 🎲 Chaos Ant.
 
---- YOUR MISSION ---
-Probe the work done by Builders in Phase {id} for edge cases, boundary conditions, and unexpected inputs.
+Test Phase {id} work for edge cases and boundary conditions.
 
---- MODEL CONTEXT ---
-Optimal model for chaos testing: {model} (from caste: chaos)
-Model characteristics: Efficient edge case exploration
-Testing focus: Rapid probing of boundaries and edge cases
+Files to test:
+- {list from builder results}
 
---- SCOPE ---
-Files created: {list from builder results}
-Files modified: {list from builder results}
+Skip these known issues: {existing_flag_titles}
 
---- EXISTING FLAGS (already known — do NOT re-report) ---
-{existing_flag_titles}
-These issues have already been flagged. Do NOT report findings that duplicate or overlap with the above titles. Focus your 5 scenarios on NEW, undiscovered issues only.
+Rules:
+- Max 5 scenarios
+- Read-only (don't modify code)
+- Focus: edge cases, boundaries, error handling
 
---- RULES ---
-1. Limit to 5 edge case scenarios maximum
-2. You are a TESTER, not an attacker — use investigating/probing language
-3. Do NOT modify any code — read-only analysis
-4. Focus on: edge cases, boundary conditions, error handling gaps, state corruption risks, unexpected inputs
-5. Do NOT re-report issues listed in EXISTING FLAGS above — skip any finding that substantially overlaps with a known flag
-
---- OUTPUT ---
-Return JSON:
-{
-  "ant_name": "{your name}",
-  "scenarios_tested": 5,
-  "findings": [
-    {
-      "id": 1,
-      "category": "edge_case|boundary|error_handling|state|unexpected_input",
-      "severity": "critical|high|medium|low|info",
-      "title": "...",
-      "description": "...",
-      "reproduction_steps": ["..."],
-      "affected_files": ["..."],
-      "recommendation": "..."
-    }
-  ],
-  "overall_resilience": "strong|moderate|weak",
-  "summary": "...",
-  "model_context": {
-    "assigned": "{model}",
-    "caste": "chaos",
-    "source": "caste-default",
-    "reported_at": "ISO-8601 timestamp"
-  }
-}
+Return ONLY this JSON:
+{"ant_name": "{Chaos-Name}", "scenarios_tested": 5, "findings": [{"id": 1, "category": "edge_case|boundary|error_handling", "severity": "critical|high|medium|low", "title": "...", "description": "..."}], "overall_resilience": "strong|moderate|weak", "summary": "..."}
 ```
 
 **Collect Chaos Ant results (BLOCKING):**
@@ -662,9 +530,10 @@ Log the flag:
 bash .aether/aether-utils.sh activity-log "FLAG" "Chaos" "Created blocker: {finding.title}"
 ```
 
-Log chaos ant completion:
+Log chaos ant completion and update swarm display:
 ```bash
 bash .aether/aether-utils.sh spawn-complete "{chaos_name}" "completed" "{summary}"
+bash .aether/aether-utils.sh swarm-display-update "{chaos_name}" "chaos" "completed" "Resilience testing done" "Queen" '{"read":2,"grep":1,"edit":0,"bash":0}' 100 "refuse_pile" 100
 ```
 
 **Only proceed to Step 5.5 after Chaos Ant TaskOutput has returned.**
@@ -730,6 +599,39 @@ bash .aether/aether-utils.sh grave-add "{file}" "{ant_name}" "{task_id}" {phase}
   Log the grave marker:
 ```bash
 bash .aether/aether-utils.sh activity-log "GRAVE" "Queen" "Grave marker placed at {file} — {ant_name} failed: {summary}"
+```
+
+**Error Handoff Update:**
+If workers failed, update handoff with error context for recovery:
+```bash
+cat > .aether/HANDOFF.md << 'HANDOFF_EOF'
+# Colony Session — Build Errors
+
+## ⚠️ Build Status: ISSUES DETECTED
+**Phase:** {phase_number} — {phase_name}
+**Status:** Build completed with failures
+**Updated:** $(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+## Failed Workers
+{for each failed worker:}
+- {ant_name}: {failure_summary}
+{end for}
+
+## Grave Markers Placed
+{for each grave:}
+- {file}: {caution_level} caution
+{end for}
+
+## Recovery Options
+1. Review failures: Check `.aether/data/activity.log`
+2. Fix and retry: `/ant:build {phase_number}`
+3. Swarm fix: `/ant:swarm` for auto-repair
+4. Manual fix: Address issues, then `/ant:continue`
+
+## Session Note
+Build completed but workers failed. Grave markers placed.
+Review failures before advancing.
+HANDOFF_EOF
 ```
 
 Only fires when workers fail. Zero impact on successful builds.
@@ -826,11 +728,93 @@ Use AskUserQuestion to get approval. Record in events:
 - If approved: `"<timestamp>|visual_approved|build|Phase {id} UI approved"`
 - If rejected: `"<timestamp>|visual_rejected|build|Phase {id} UI rejected: {reason}"`
 
+### Step 6.5: Update Handoff Document
+
+After synthesis is complete, update the handoff document with current state for session recovery:
+
+```bash
+# Update handoff with build results
+jq -n \
+  --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  --arg goal "$(jq -r '.goal' .aether/data/COLONY_STATE.json)" \
+  --arg phase "$(jq -r '.current_phase' .aether/data/COLONY_STATE.json)" \
+  --arg phase_name "{phase_name}" \
+  --arg status "{synthesis.status}" \
+  --arg summary "{synthesis.summary}" \
+  --argjson tasks_completed '{synthesis.tasks_completed | length}' \
+  --argjson tasks_failed '{synthesis.tasks_failed | length}' \
+  --arg next_action "{if synthesis.status == "completed" then "/ant:continue" else "/ant:flags" end}" \
+  '{
+    "last_updated": $timestamp,
+    "goal": $goal,
+    "current_phase": $phase,
+    "phase_name": $phase_name,
+    "build_status": $status,
+    "summary": $summary,
+    "tasks_completed": $tasks_completed,
+    "tasks_failed": $tasks_failed,
+    "next_recommended_action": $next_action,
+    "can_resume": true,
+    "note": "Phase build completed. Run /ant:continue to advance if verification passed."
+  }' > .aether/data/last-build-result.json
+
+# Write handoff markdown
+cat > .aether/HANDOFF.md << 'HANDOFF_EOF'
+# Colony Session — Build Complete
+
+## Quick Resume
+Run `/ant:continue` to advance phase, or `/ant:resume-colony` to restore full context.
+
+## State at Build Completion
+- Goal: "$(jq -r '.goal' .aether/data/COLONY_STATE.json)"
+- Phase: {phase_number} — {phase_name}
+- Build Status: {synthesis.status}
+- Updated: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+## Build Summary
+{summary}
+
+## Tasks
+- Completed: {synthesis.tasks_completed | length}
+- Failed: {synthesis.tasks_failed | length}
+
+## Files Changed
+- Created: {synthesis.files_created | length} files
+- Modified: {synthesis.files_modified | length} files
+
+## Next Steps
+- If verification passed: `/ant:continue` to advance to next phase
+- If issues found: `/ant:flags` to review blockers
+- To pause: `/ant:pause-colony`
+
+## Session Note
+$(if synthesis.status == "completed" then "Build succeeded — ready to advance." else "Build completed with issues — review before continuing." end)
+HANDOFF_EOF
+```
+
+This ensures the handoff always reflects the latest build state, even if the session crashes before explicit pause.
+
 ### Step 7: Display Results
 
 **This step runs ONLY after synthesis is complete. All values come from actual worker results.**
 
-Display build summary based on synthesis results AND `verbose_mode` from Step 1:
+**First, render the final swarm display showing all completed workers:**
+```bash
+# Final swarm display update - mark Queen as completed
+bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Phase {id} complete" "Colony" '{"read":10,"grep":5,"edit":5,"bash":2}' 100 "fungus_garden" 100
+
+# Render the final swarm display
+bash .aether/aether-utils.sh swarm-display-render "$build_id"
+```
+
+The swarm display will show:
+- 🐜 All workers with their caste emojis (🔨 Builder, 👁️ Watcher, 🎲 Chaos)
+- 📖 Tool usage stats (Read, Grep, Edit, Bash counts)
+- 🏠 Chamber activity map (Fungus Garden, Nursery, Refuse Pile)
+- ✅ Progress bars at 100% for completed work
+- 🌈 Color-coded by caste
+
+**Then display build summary based on synthesis results AND `verbose_mode` from Step 1:**
 
 **If verbose_mode = false (compact output, ~12 lines):**
 

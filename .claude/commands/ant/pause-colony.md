@@ -176,4 +176,17 @@ Then output:
 
 To resume in a new session:
   /ant:resume-colony
+
+💾 State persisted — safe to /clear
+
+🐜 What would you like to do next?
+   1. /ant:resume-colony              — Resume work in this session
+   2. /ant:lay-eggs "<new goal>"      — Start a new colony
+   3. /clear                          — Clear context and continue
+
+Use AskUserQuestion with these three options.
+
+If option 1 selected: proceed to run /ant:resume-colony flow
+If option 2 selected: run /ant:lay-eggs flow
+If option 3 selected: display "Run /ant:resume-colony when ready to continue, or /ant:lay-eggs to start fresh"
 ```

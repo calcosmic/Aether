@@ -163,6 +163,7 @@ class UpdateTransaction {
     this.HUB_COMMANDS_CLAUDE = path.join(this.HUB_DIR, 'commands', 'claude');
     this.HUB_COMMANDS_OPENCODE = path.join(this.HUB_DIR, 'commands', 'opencode');
     this.HUB_AGENTS = path.join(this.HUB_DIR, 'agents');
+    this.HUB_VISUALIZATIONS = path.join(this.HUB_DIR, 'visualizations');
     this.HUB_VERSION = path.join(this.HUB_DIR, 'version.json');
     this.HUB_REGISTRY = path.join(this.HUB_DIR, 'registry.json');
 
@@ -696,6 +697,7 @@ class UpdateTransaction {
       system: { copied: 0, removed: 0, skipped: 0 },
       commands: { copied: 0, removed: 0, skipped: 0 },
       agents: { copied: 0, removed: 0, skipped: 0 },
+      visualizations: { copied: 0, removed: 0, skipped: 0 },
       errors: [],
     };
 
@@ -725,6 +727,12 @@ class UpdateTransaction {
     const repoAgents = path.join(this.repoPath, '.opencode', 'agents');
     if (fs.existsSync(this.HUB_AGENTS)) {
       results.agents = this.syncDirWithCleanup(this.HUB_AGENTS, repoAgents, { dryRun });
+    }
+
+    // Sync visualizations from hub
+    const repoVisualizations = path.join(this.repoPath, '.aether', 'visualizations');
+    if (fs.existsSync(this.HUB_VISUALIZATIONS)) {
+      results.visualizations = this.syncDirWithCleanup(this.HUB_VISUALIZATIONS, repoVisualizations, { dryRun });
     }
 
     this.syncResult = results;

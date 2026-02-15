@@ -37,7 +37,7 @@ No "should work" or "looks good" - only verified claims with proof.
 Resolve build, test, type-check, and lint commands using this priority chain (stop at first match per command):
 
 1. **CLAUDE.md** — Check project CLAUDE.md (in your system context) for explicit commands
-2. **CODEBASE.md** — Read `.planning/CODEBASE.md` `## Commands` section
+2. **CODEBASE.md** — Read `.aether/data/codebase.md` `## Commands` section
 3. **Fallback** — Use language-specific examples in "Execution Verification" below
 
 Use resolved commands for all verification steps.

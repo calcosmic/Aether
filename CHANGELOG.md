@@ -5,6 +5,40 @@ All notable changes to the Aether Colony project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.5] - 2026-02-15
+
+### Fixed
+- **Agent Type Correction** — Changed all occurrences of `subagent_type="general"` to `subagent_type="general-purpose"` across all command files. The error "Agent type 'general' not found" was occurring because the correct agent type name is `general-purpose`. Fixed in: build.md, plan.md, organize.md, and workers.md (both Claude and OpenCode versions, plus runtime copy). (`.claude/commands/ant/build.md`, `.claude/commands/ant/plan.md`, `.claude/commands/ant/organize.md`, `.opencode/commands/ant/build.md`, `.opencode/commands/ant/plan.md`, `.opencode/commands/ant/organize.md`, `.aether/workers.md`, `runtime/workers.md`)
+
+## [3.1.4] - 2026-02-15
+
+### Fixed
+- **Archaeologist Visualization** — Added swarm display integration for the Archaeologist scout (Step 4.5). The archaeologist now appears in the visual display with proper emoji (🏺), progress tracking (15% → 100%), and tool usage stats when spawned during pre-build scans. (`.claude/commands/ant/build.md`, `.opencode/commands/ant/build.md`)
+
+## [3.1.3] - 2026-02-15
+
+### Fixed
+- **Nested Spawn Visualization** — When builders or watchers spawn sub-workers, the swarm display now updates to show those nested spawns with colors and emojis. Added `swarm-display-update` calls to workers.md spawn protocol (Step 3 and Step 5), builder prompts, and watcher prompts. (`.aether/workers.md`, `.claude/commands/ant/build.md`, `.opencode/commands/ant/build.md`)
+
+## [3.1.2] - 2026-02-15
+
+### Fixed
+- **Swarm Display Integration in Build Command** — The visualization system was fully implemented but never integrated into `/ant:build`. Added `swarm-display-init` at build start, `swarm-display-update` calls when spawning builders/watchers/chaos ants, progress updates when workers complete (updating to 100% completion), and final `swarm-display-render` at build completion. The build now shows real-time ant-themed visualization with caste emojis, colors, tool usage stats, and chamber activity maps. (`.claude/commands/ant/build.md`, `.opencode/commands/ant/build.md`)
+- **Missing swarm-display-render Command** — Added new `swarm-display-render` command to `aether-utils.sh` that executes the visualization script to render the current swarm state to terminal. (`.aether/aether-utils.sh`)
+
+### Changed
+- **OpenCode Build Command Parity** — Synchronized OpenCode build.md with Claude version: added `--model` flag support, proxy health check (Step 0.6), colony state loading (Step 0.5), and full swarm display integration. (`.opencode/commands/ant/build.md`)
+
+## [3.1.1] - 2026-02-15
+
+### Fixed
+- **Missing Visualization Assets** — Added `.aether/visualizations/` directory to npm package files array. The ASCII art anthill files required by `/ant:maturity` command were not being published, causing the command to fail in repos that installed/updated via npm. (`package.json`)
+- **Visualization Sync in Install** — Updated `setupHub()` function in CLI to sync visualization files from package to hub (`~/.aether/visualizations/`). (`bin/cli.js`)
+- **Visualization Sync in Update** — Updated `UpdateTransaction` to sync visualization files from hub to repos during `aether update`. Added `HUB_VISUALIZATIONS` constant and visualization sync result tracking. (`bin/lib/update-transaction.js`)
+
+### Changed
+- Version bump to 3.1.1 to trigger fresh installs with visualization assets. (`package.json`)
+
 ## [Unreleased]
 
 ### Fixed

@@ -204,6 +204,44 @@ Remove backup after successful reset:
 rm -f .aether/data/COLONY_STATE.json.bak
 ```
 
+### Step 8.5: Write Final Handoff
+
+After entombing the colony, write the final handoff documenting the archived colony:
+
+```bash
+cat > .aether/HANDOFF.md << 'HANDOFF_EOF'
+# Colony Session — ENTOMBED
+
+## ⚰️ Colony Archived
+**Status:** Entombed in Chambers — Colony work preserved
+
+## Chamber Location
+.aether/chambers/{chamber_name}/
+
+## Colony Summary
+- Goal: "{goal}"
+- Phases: {completed} completed of {total}
+- Milestone: {milestone}
+- Entombed At: {timestamp}
+
+## Chamber Contents
+- colony-state.json — Full colony state
+- manifest.json — Archive metadata
+- activity.log — Colony activity history
+- spawn-tree.txt — Worker spawn records
+- flags.json — Project flags (if existed)
+
+## Session Note
+This colony has been entombed and the active state reset.
+The colony rests. Its learnings are preserved in the chamber.
+
+To start anew: /ant:lay-eggs "<new goal>"
+To explore chambers: /ant:tunnels
+HANDOFF_EOF
+```
+
+This handoff serves as the record of the entombed colony.
+
 ### Step 9: Display Result
 
 ```
@@ -220,7 +258,19 @@ rm -f .aether/data/COLONY_STATE.json.bak
 📦 Chamber: .aether/chambers/{chamber_name}/
 
 🐜 The colony rests. Its learnings are preserved.
-   Run /ant:lay-eggs to begin anew.
+
+💾 State persisted — safe to /clear
+
+🐜 What would you like to do next?
+   1. /ant:lay-eggs "<new goal>"  — Start a new colony
+   2. /ant:tunnels                — Browse archived colonies
+   3. /clear                      — Clear context and continue
+
+Use AskUserQuestion with these three options.
+
+If option 1 selected: proceed to run /ant:lay-eggs flow
+If option 2 selected: run /ant:tunnels
+If option 3 selected: display "Run /ant:lay-eggs to begin anew after clearing"
 ```
 
 ### Edge Cases

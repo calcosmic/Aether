@@ -89,3 +89,29 @@ Legend: [✓] completed  [~] in progress  [ ] pending
 
 🐜 /ant:phase <id> for details
 ```
+
+### Step 4: Update Handoff (Optional)
+
+After displaying phase details, offer to update the handoff document with review notes:
+
+Use AskUserQuestion:
+```
+Update handoff with phase review notes?
+
+1. Yes — add notes about blockers or decisions
+2. No — continue without updating
+```
+
+If option 1 selected:
+Use AskUserQuestion to collect notes, then append to handoff:
+
+```bash
+cat >> .aether/HANDOFF.md << 'HANDOFF_EOF'
+
+## Phase {id} Review Notes
+- Reviewed: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+- Notes: {user_notes}
+HANDOFF_EOF
+```
+
+Display: `Handoff updated with review notes.`

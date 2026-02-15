@@ -48,7 +48,7 @@ If no active signals after filtering:
 
 Read `.aether/workers.md` and extract the `## Architect` section.
 
-Spawn via **Task tool** with `subagent_type="general"`:
+Spawn via **Task tool** with `subagent_type="general-purpose"`:
 
 ```
 --- WORKER SPEC ---
@@ -159,7 +159,6 @@ CONSTRAINTS:
 - Do NOT flag standard framework files (package.json, tsconfig.json, etc.) as orphaned.
 - Do NOT flag .aether/ internal data files as stale (they are managed by the colony).
 - Do NOT flag .claude/ command files as stale (they are the colony's brain).
-- Do NOT flag .planning/ files as stale (they are project management artifacts).
 - Aim for a useful report, not an exhaustive one. 5-15 findings is ideal.
 ```
 

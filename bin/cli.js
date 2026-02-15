@@ -74,6 +74,7 @@ const HUB_SYSTEM = path.join(HUB_DIR, 'system');
 const HUB_COMMANDS_CLAUDE = path.join(HUB_DIR, 'commands', 'claude');
 const HUB_COMMANDS_OPENCODE = path.join(HUB_DIR, 'commands', 'opencode');
 const HUB_AGENTS = path.join(HUB_DIR, 'agents');
+const HUB_VISUALIZATIONS = path.join(HUB_DIR, 'visualizations');
 const HUB_REGISTRY = path.join(HUB_DIR, 'registry.json');
 const HUB_VERSION = path.join(HUB_DIR, 'version.json');
 
@@ -893,6 +894,17 @@ function setupHub() {
       }
     }
 
+    // Sync .aether/visualizations/ -> ~/.aether/visualizations/
+    const visualizationsSrc = path.join(PACKAGE_DIR, '.aether', 'visualizations');
+    if (fs.existsSync(visualizationsSrc)) {
+      const result = syncDirWithCleanup(visualizationsSrc, HUB_VISUALIZATIONS);
+      log(`  Hub visualizations: ${result.copied} files -> ${HUB_VISUALIZATIONS}`);
+      if (result.removed.length > 0) {
+        log(`  Hub visualizations: removed ${result.removed.length} stale files`);
+        for (const f of result.removed) log(`    - ${f}`);
+      }
+    }
+
     // Create/preserve registry.json
     if (!fs.existsSync(HUB_REGISTRY)) {
       writeJsonSync(HUB_REGISTRY, { schema_version: 1, repos: [] });
@@ -968,15 +980,18 @@ async function updateRepo(repoPath, sourceVersion, opts) {
     const systemCopied = result.sync_result?.system?.copied || 0;
     const commandsCopied = (result.sync_result?.commands?.copied || 0);
     const agentsCopied = result.sync_result?.agents?.copied || 0;
+    const visualizationsCopied = result.sync_result?.visualizations?.copied || 0;
 
     const systemRemoved = result.sync_result?.system?.removed?.length || 0;
     const commandsRemoved = result.sync_result?.commands?.removed?.length || 0;
     const agentsRemoved = result.sync_result?.agents?.removed?.length || 0;
+    const visualizationsRemoved = result.sync_result?.visualizations?.removed?.length || 0;
 
     const allRemovedFiles = [
       ...(result.sync_result?.system?.removed || []),
       ...(result.sync_result?.commands?.removed || []).map(f => `.claude/commands/ant/${f}`),
       ...(result.sync_result?.agents?.removed || []).map(f => `.opencode/agents/${f}`),
+      ...(result.sync_result?.visualizations?.removed || []).map(f => `.aether/visualizations/${f}`),
     ];
 
     return {
@@ -986,7 +1001,8 @@ async function updateRepo(repoPath, sourceVersion, opts) {
       system: systemCopied,
       commands: commandsCopied,
       agents: agentsCopied,
-      removed: systemRemoved + commandsRemoved + agentsRemoved,
+      visualizations: visualizationsCopied,
+      removed: systemRemoved + commandsRemoved + agentsRemoved + visualizationsRemoved,
       removedFiles: allRemovedFiles,
       stashCreated: !!transaction.checkpoint?.stashRef,
       checkpoint_id: result.checkpoint_id,
@@ -1155,14 +1171,14 @@ program
             console.error(`  Skipping. Use --force to stash and update.`);
             dirty++;
           } else if (result.status === 'dry-run') {
-            log(`  Would update: ${repo.path} (${result.from} -> ${result.to}) [${result.system} system, ${result.commands} commands, ${result.agents} agents]`);
+            log(`  Would update: ${repo.path} (${result.from} -> ${result.to}) [${result.system} system, ${result.commands} commands, ${result.agents} agents, ${result.visualizations} visualizations]`);
             if (result.removed > 0) {
               log(`  Would remove ${result.removed} stale files:`);
               for (const f of result.removedFiles) log(`    - ${f}`);
             }
             updated++;
           } else if (result.status === 'updated') {
-            log(`  ${c.success('Updated:')} ${repo.path} (${result.from} -> ${result.to}) [${result.system} system, ${result.commands} commands, ${result.agents} agents]`);
+            log(`  ${c.success('Updated:')} ${repo.path} (${result.from} -> ${result.to}) [${result.system} system, ${result.commands} commands, ${result.agents} agents, ${result.visualizations} visualizations]`);
             if (result.removed > 0) {
               log(`  Removed ${result.removed} stale files:`);
               for (const f of result.removedFiles) log(`    - ${f}`);
@@ -1238,7 +1254,7 @@ program
 
         if (result.status === 'dry-run') {
           console.log(`Would update: ${result.from} -> ${result.to}`);
-          console.log(`  ${result.system} system files, ${result.commands} command files, ${result.agents} agent files`);
+          console.log(`  ${result.system} system files, ${result.commands} command files, ${result.agents} agent files, ${result.visualizations} visualization files`);
           if (result.removed > 0) {
             console.log(`  Would remove ${result.removed} stale files:`);
             for (const f of result.removedFiles) console.log(`    - ${f}`);
@@ -1248,7 +1264,7 @@ program
         }
 
         console.log(c.success(`Updated: ${result.from} -> ${result.to}`));
-        console.log(`  ${result.system} system files, ${result.commands} command files, ${result.agents} agent files`);
+        console.log(`  ${result.system} system files, ${result.commands} command files, ${result.agents} agent files, ${result.visualizations} visualization files`);
         if (result.removed > 0) {
           console.log(`  Removed ${result.removed} stale files:`);
           for (const f of result.removedFiles) console.log(`    - ${f}`);

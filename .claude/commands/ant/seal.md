@@ -124,6 +124,41 @@ Update COLONY_STATE.json:
 2. Set `milestone_updated_at` to current ISO-8601 timestamp
 3. Append event: `"<timestamp>|milestone_reached|archive|Achieved Crowned Anthill milestone - colony archived"`
 
+### Step 5.5: Write Final Handoff
+
+After archiving, write the final handoff documenting the completed colony:
+
+```bash
+cat > .aether/HANDOFF.md << 'HANDOFF_EOF'
+# Colony Session — SEALED (Crowned Anthill)
+
+## 🏆 Colony Complete
+**Status:** Crowned Anthill — All phases completed and archived
+
+## Archive Location
+{archive_dir}
+
+## Colony Summary
+- Goal: "{goal}"
+- Total Phases: {total_phases}
+- Milestone: Crowned Anthill
+- Sealed At: {timestamp}
+
+## Files Archived
+- COLONY_STATE.json
+- activity.log
+- spawn-tree.txt
+- flags.json (if existed)
+- constraints.json (if existed)
+
+## Session Note
+This colony has been sealed and archived. The anthill stands crowned.
+To start anew, run: /ant:lay-eggs "<new goal>"
+HANDOFF_EOF
+```
+
+This handoff serves as the final record of the completed colony.
+
 ### Step 6: Display Result
 
 Output:
@@ -148,6 +183,19 @@ Output:
 🐜 The colony has reached its final form.
    The anthill stands crowned and sealed.
    History is preserved. The colony rests.
+
+💾 State persisted — safe to /clear
+
+🐜 What would you like to do next?
+   1. /ant:lay-eggs "<new goal>"  — Start a new colony
+   2. /ant:tunnels                — Browse archived colonies
+   3. /clear                      — Clear context and continue
+
+Use AskUserQuestion with these three options.
+
+If option 1 selected: proceed to run /ant:lay-eggs flow
+If option 2 selected: run /ant:tunnels
+If option 3 selected: display "Run /ant:lay-eggs to begin anew after clearing"
 ```
 
 ### Edge Cases

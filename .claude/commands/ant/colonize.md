@@ -79,7 +79,7 @@ If neither source yields any commands, set the detected commands list to empty.
 
 ### Step 3: Write CODEBASE.md
 
-Create `.planning/CODEBASE.md` (ensure `.planning/` exists first):
+Create `.aether/data/codebase.md`:
 
 ```markdown
 # Codebase Overview
@@ -137,7 +137,7 @@ Then output:
 
 ```
 Codebase analysis complete.
-See: .planning/CODEBASE.md
+See: .aether/data/codebase.md
 
 Stack: <language> + <framework>
 Entry: <main entry point>
