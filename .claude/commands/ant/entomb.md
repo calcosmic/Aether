@@ -122,7 +122,7 @@ Before creating the chamber, promote validated learnings to QUEEN.md for future 
 **Step 5.1: Ensure QUEEN.md exists**
 
 ```bash
-queen_file=".aether/QUEEN.md"
+queen_file=".aether/docs/QUEEN.md"
 if [[ ! -f "$queen_file" ]]; then
   init_result=$(bash .aether/aether-utils.sh queen-init 2>/dev/null || echo '{"ok":false}')
   init_ok=$(echo "$init_result" | jq -r '.ok // false')

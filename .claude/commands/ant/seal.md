@@ -107,7 +107,7 @@ Before archiving, extract and promote significant patterns and decisions from th
 
 ```bash
 # Ensure QUEEN.md exists
-if [[ ! -f ".aether/QUEEN.md" ]]; then
+if [[ ! -f ".aether/docs/QUEEN.md" ]]; then
   bash .aether/aether-utils.sh queen-init >/dev/null 2>&1
 fi
 

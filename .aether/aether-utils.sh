@@ -2694,7 +2694,7 @@ NODESCRIPT
   queen-init)
     # Initialize QUEEN.md from template
     # Creates .aether/QUEEN.md from template if missing
-    queen_file="$AETHER_ROOT/.aether/QUEEN.md"
+    queen_file="$AETHER_ROOT/.aether/docs/QUEEN.md"
 
     # Check multiple locations for template
     template_file=""
@@ -2708,9 +2708,12 @@ NODESCRIPT
       fi
     done
 
+    # Ensure docs directory exists
+    mkdir -p "$AETHER_ROOT/.aether/docs"
+
     # Check if QUEEN.md already exists and has content
     if [[ -f "$queen_file" ]] && [[ -s "$queen_file" ]]; then
-      json_ok '{"created":false,"path":".aether/QUEEN.md","reason":"already_exists"}'
+      json_ok '{"created":false,"path":".aether/docs/QUEEN.md","reason":"already_exists"}'
       exit 0
     fi
 
@@ -2725,9 +2728,9 @@ NODESCRIPT
     sed -e "s/{TIMESTAMP}/$timestamp/g" "$template_file" > "$queen_file"
 
     if [[ -f "$queen_file" ]]; then
-      json_ok '{"created":true,"path":".aether/QUEEN.md","source":"runtime/templates/QUEEN.md.template"}'
+      json_ok '{"created":true,"path":".aether/docs/QUEEN.md","source":"runtime/templates/QUEEN.md.template"}'
     else
-      json_err "$E_FILE_NOT_FOUND" "Failed to create QUEEN.md" '{"path":".aether/QUEEN.md"}'
+      json_err "$E_FILE_NOT_FOUND" "Failed to create QUEEN.md" '{"path":".aether/docs/QUEEN.md"}'
       exit 1
     fi
     ;;
@@ -2735,11 +2738,11 @@ NODESCRIPT
   queen-read)
     # Read QUEEN.md and return wisdom as JSON for worker priming
     # Extracts METADATA block and sections for colony guidance
-    queen_file="$AETHER_ROOT/.aether/QUEEN.md"
+    queen_file="$AETHER_ROOT/.aether/docs/QUEEN.md"
 
     # Check if QUEEN.md exists
     if [[ ! -f "$queen_file" ]]; then
-      json_err "$E_FILE_NOT_FOUND" "QUEEN.md not found" '{"path":".aether/QUEEN.md"}'
+      json_err "$E_FILE_NOT_FOUND" "QUEEN.md not found" '{"path":".aether/docs/QUEEN.md"}'
       exit 1
     fi
 
@@ -2809,11 +2812,11 @@ NODESCRIPT
     done
     [[ "$type_valid" == "false" ]] && json_err "$E_VALIDATION_FAILED" "Invalid type: $wisdom_type" '{"valid_types":["philosophy","pattern","redirect","stack","decree"]}'
 
-    queen_file="$AETHER_ROOT/.aether/QUEEN.md"
+    queen_file="$AETHER_ROOT/.aether/docs/QUEEN.md"
 
     # Check if QUEEN.md exists
     if [[ ! -f "$queen_file" ]]; then
-      json_err "$E_FILE_NOT_FOUND" "QUEEN.md not found" '{"path":".aether/QUEEN.md"}'
+      json_err "$E_FILE_NOT_FOUND" "QUEEN.md not found" '{"path":".aether/docs/QUEEN.md"}'
       exit 1
     fi
 
