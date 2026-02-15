@@ -191,6 +191,53 @@ If file doesn't exist or is empty:
 CONSTRAINTS: (none)
 ```
 
+### Step 4.0: Load Territory Survey
+
+Check if territory survey exists and load relevant documents:
+
+```bash
+bash .aether/aether-utils.sh survey-load "{phase_name}" 2>/dev/null
+```
+
+**Parse the JSON response:**
+- If `.ok` is false: Set `survey_docs = null` and skip survey loading
+- If successful: Extract `.docs` (comma-separated list) and `.dir`
+
+**Determine phase type from phase name:**
+| Phase Contains | Documents to Load |
+|----------------|-------------------|
+| UI, frontend, component, button, page | DISCIPLINES.md, CHAMBERS.md |
+| API, endpoint, backend, route | BLUEPRINT.md, DISCIPLINES.md |
+| database, schema, model, migration | BLUEPRINT.md, PROVISIONS.md |
+| test, spec, coverage | SENTINEL-PROTOCOLS.md, DISCIPLINES.md |
+| integration, external, client | TRAILS.md, PROVISIONS.md |
+| refactor, cleanup, debt | PATHOGENS.md, BLUEPRINT.md |
+| setup, config, initialize | PROVISIONS.md, CHAMBERS.md |
+| *default* | PROVISIONS.md, BLUEPRINT.md |
+
+**Read the relevant survey documents** from `.aether/data/survey/`:
+- Extract key patterns to follow
+- Note file locations for new code
+- Identify known concerns to avoid
+
+**Display summary:**
+```
+🗺️ SURVEY LOADED
+================
+{for each doc loaded}
+  {emoji} {filename} — {brief description}
+{/for}
+
+{if no survey}
+  (No territory survey — run /ant:colonize for deeper context)
+{/if}
+```
+
+**Store for builder injection:**
+- `survey_patterns` — patterns to follow
+- `survey_locations` — where to place files
+- `survey_concerns` — concerns to avoid
+
 ### Step 4.1: Load QUEEN.md Wisdom
 
 Call `queen-read` to extract eternal wisdom for worker priming:

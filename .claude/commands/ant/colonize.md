@@ -1,9 +1,9 @@
 ---
 name: ant:colonize
-description: "🔍🐜🗺️🐜🔍 Analyze codebase and prepare for colony work"
+description: "📊🐜🗺️🐜📊 Survey territory with 4 parallel scouts for comprehensive colony intelligence"
 ---
 
-You are the **Queen**. Perform initial codebase analysis.
+You are the **Queen**. Dispatch Surveyor Ants to map the territory.
 
 The arguments are: `$ARGUMENTS`
 
@@ -22,19 +22,17 @@ colonize_id="colonize-$(date +%s)"
 
 # Initialize swarm display
 bash .aether/aether-utils.sh swarm-display-init "$colonize_id"
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "Codebase analysis" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0
+bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "dispatching" "Surveying territory" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0
 ```
 
 Display header:
 ```
-🔍🐜🗺️🐜🔍 ═══════════════════════════════════════════════
-         C O L O N I Z E  —  C o d e b a s e  S c a n
-═══════════════════════════════════════════════ 🔍🐜🗺️🐜🔍
+📊🐜🗺️🐜📊 ═══════════════════════════════════════════════
+         C O L O N I Z E  —  T e r r i t o r y  S u r v e y
+═══════════════════════════════════════════════ 📊🐜🗺️🐜📊
 
-Queen surveying the territory...
+Queen dispatching Surveyor Ants...
 ```
-
-## Instructions
 
 ### Step 1: Validate
 
@@ -44,15 +42,15 @@ Read `.aether/data/COLONY_STATE.json`.
 1. Create `.aether/data/` directory if it does not exist.
 2. Write a minimal COLONY_STATE.json:
    `{"version": "3.0", "goal": null, "state": "IDLE", "current_phase": 0, "session_id": null, "initialized_at": null, "build_started_at": null, "plan": {"generated_at": null, "confidence": null, "phases": []}, "memory": {"phase_learnings": [], "decisions": [], "instincts": []}, "errors": {"records": [], "flagged_patterns": []}, "signals": [], "graveyards": [], "events": []}`
-3. Output: "No colony state found. Bootstrapping minimal state for codebase analysis."
+3. Output: "No colony state found. Bootstrapping minimal state for territory survey."
 
-**If the file exists:** continue (colonize works with or without a goal).
+**If the file exists:** continue.
 
 **If `plan.phases` is not empty:** output "Colony already has phases. Use /ant:continue.", stop.
 
-### Step 2: Surface Scan
+### Step 2: Quick Surface Scan (for session context)
 
-Use Glob to find key files (read up to 20 total).
+Use Glob to find key files (read up to 20 total) to provide context for the survey.
 
 **Package manifests:**
 - package.json, Cargo.toml, pyproject.toml, go.mod, Gemfile, pom.xml, build.gradle
@@ -66,128 +64,119 @@ Use Glob to find key files (read up to 20 total).
 **Config:**
 - tsconfig.json, .eslintrc.*, jest.config.*, vite.config.*, webpack.config.*
 
-Read found files. Extract:
-- Tech stack (language, framework, key dependencies)
+Read found files. Extract basic info:
+- Tech stack (language, framework)
 - Entry points (main files)
-- Key directories (src/, lib/, tests/, etc.)
-- File counts per top-level directory
+- Key directories
 
-### Step 2.5: Command Detection
+### Step 3: Dispatch Surveyor Ants (Parallel)
 
-Detect build, test, type-check, and lint commands from two sources. Track each command with its source attribution (`claude_md` or `heuristic`).
-
-**Source 1 — CLAUDE.md (priority):**
-
-Read `CLAUDE.md` in the project root. If it does not exist, skip to Source 2.
-Scan for commands under headings matching: `Commands`, `Scripts`, `Development`, `Build`, `Testing`, `Lint`, or similar.
-Also extract inline code blocks containing patterns like `npm`, `npx`, `yarn`, `pnpm`, `cargo`, `go`, `pytest`, `make`, `gradle`, `mvn`.
-For each command found, store: `{ label, command, source: "claude_md" }`.
-
-**Source 2 — Heuristic from package manifests:**
-
-Using the manifests found in Step 2, infer commands with this table:
-
-| Manifest | Field/Pattern | Label | Command |
-|---|---|---|---|
-| package.json | `scripts.test` | test | `npm test` |
-| package.json | `scripts.build` | build | `npm run build` |
-| package.json | `scripts.lint` | lint | `npm run lint` |
-| package.json | `scripts.typecheck` or `scripts.type-check` | typecheck | `npm run typecheck` |
-| Cargo.toml | (exists) | test | `cargo test` |
-| Cargo.toml | (exists) | build | `cargo build` |
-| Cargo.toml | `clippy` in deps | lint | `cargo clippy` |
-| pyproject.toml | `[tool.pytest]` or pytest in deps | test | `pytest` |
-| pyproject.toml | `[tool.ruff]` or ruff in deps | lint | `ruff check .` |
-| pyproject.toml | `[tool.mypy]` or mypy in deps | typecheck | `mypy .` |
-| go.mod | (exists) | test | `go test ./...` |
-| go.mod | (exists) | build | `go build ./...` |
-
-For each inferred command, only store it if no command with the same label was already found from CLAUDE.md (CLAUDE.md wins per-label). Store as: `{ label, command, source: "heuristic" }`.
-
-If neither source yields any commands, set the detected commands list to empty.
-
-### Step 2.5: Optional Deep Exploration (use Task tool with `subagent_type="aether-colonizer"`)
-# FALLBACK: If "Agent type not found", use general-purpose and inject role: "You are a Colonizer Ant - explores and indexes codebase structure."
-
-**OPTIONAL: For deeper codebase analysis, spawn a Colonizer Ant after the surface scan.**
-
-If you want more thorough exploration:
+Create the survey directory:
 ```bash
-bash .aether/aether-utils.sh generate-ant-name "colonizer"
-bash .aether/aether-utils.sh spawn-log "Queen" "colonizer" "{colonizer_name}" "Deep codebase exploration"
+mkdir -p .aether/data/survey
 ```
 
-Then use Task tool with `subagent_type="aether-colonizer"` to spawn the Colonizer Ant.
-# FALLBACK: If "Agent type not found", use general-purpose and inject role: "You are a Colonizer Ant - explores and indexes codebase structure."
-
-The Colonizer will perform deeper analysis including:
-- Dependency mapping (imports, call chains, data flow)
-- Pattern detection (architecture, naming conventions, anti-patterns)
-- Structure analysis beyond surface scan
-
-Skip this step if surface scan was sufficient.
-
-### Step 3: Write CODEBASE.md
-
-Create `.aether/data/codebase.md`:
-
-```markdown
-# Codebase Overview
-
-**Stack:** <language> + <framework>
-**Entry:** <main entry points>
-
-**Structure:**
-- <dir>/ (<count> files)
-- ...
-
-**Key Dependencies:**
-- <dep1>: <purpose>
-- <dep2>: <purpose>
-- ...
-
-## Commands
-<for each detected command from Step 2.5>
-- **<label>**: `<command>` (<source: claude_md | heuristic>)
-<if no commands detected>
-No build system detected.
-</if>
-
-**Test Location:** <tests/ or __tests__/ or similar>
-
-**Notes:**
-- <any notable patterns or conventions observed>
+Generate unique names for the 4 Surveyor Ants and log their dispatch:
+```bash
+bash .aether/aether-utils.sh generate-ant-name "surveyor"
+bash .aether/aether-utils.sh generate-ant-name "surveyor"
+bash .aether/aether-utils.sh generate-ant-name "surveyor"
+bash .aether/aether-utils.sh generate-ant-name "surveyor"
 ```
 
-Keep output under 50 lines. Focus on what's relevant to the colony goal (if set), or provide a general codebase overview.
+Log the dispatch:
+```bash
+bash .aether/aether-utils.sh spawn-log "Queen" "surveyor" "{provisions_name}" "Mapping provisions and trails"
+bash .aether/aether-utils.sh spawn-log "Queen" "surveyor" "{nest_name}" "Mapping nest structure"
+bash .aether/aether-utils.sh spawn-log "Queen" "surveyor" "{disciplines_name}" "Mapping disciplines and sentinels"
+bash .aether/aether-utils.sh spawn-log "Queen" "surveyor" "{pathogens_name}" "Identifying pathogens"
+```
 
-### Step 4: Update State
+**Spawn 4 Surveyor Ants in parallel using the Task tool:**
+
+Each Task should use `subagent_type="aether-surveyor-{focus}"`:
+1. `aether-surveyor-provisions` — Maps PROVISIONS.md and TRAILS.md
+2. `aether-surveyor-nest` — Maps BLUEPRINT.md and CHAMBERS.md
+3. `aether-surveyor-disciplines` — Maps DISCIPLINES.md and SENTINEL-PROTOCOLS.md
+4. `aether-surveyor-pathogens` — Maps PATHOGENS.md
+
+**Prompt for each surveyor:**
+```
+You are Surveyor Ant {name}. Explore this codebase and write your survey documents.
+
+Focus: {provisions|nest|disciplines|pathogens}
+
+The surface scan found:
+- Language: {language}
+- Framework: {framework}
+- Key directories: {dirs}
+
+Write your documents to `.aether/data/survey/` following your agent template.
+Return only confirmation when complete — do not include document contents.
+```
+
+Collect confirmations from all 4 surveyors. Each should return:
+- Document name(s) written
+- Line count(s)
+- Brief status
+
+### Step 4: Verify Survey Completeness
+
+Check that all 7 documents were created:
+```bash
+ls .aether/data/survey/PROVISIONS.md 2>/dev/null && echo "PROVISIONS: OK" || echo "PROVISIONS: MISSING"
+ls .aether/data/survey/TRAILS.md 2>/dev/null && echo "TRAILS: OK" || echo "TRAILS: MISSING"
+ls .aether/data/survey/BLUEPRINT.md 2>/dev/null && echo "BLUEPRINT: OK" || echo "BLUEPRINT: MISSING"
+ls .aether/data/survey/CHAMBERS.md 2>/dev/null && echo "CHAMBERS: OK" || echo "CHAMBERS: MISSING"
+ls .aether/data/survey/DISCIPLINES.md 2>/dev/null && echo "DISCIPLINES: OK" || echo "DISCIPLINES: MISSING"
+ls .aether/data/survey/SENTINEL-PROTOCOLS.md 2>/dev/null && echo "SENTINEL: OK" || echo "SENTINEL: MISSING"
+ls .aether/data/survey/PATHOGENS.md 2>/dev/null && echo "PATHOGENS: OK" || echo "PATHOGENS: MISSING"
+```
+
+If any documents are missing, note which ones in the output.
+
+### Step 5: Update State
 
 Read `.aether/data/COLONY_STATE.json`. Update:
 - Set `state` to `"IDLE"` (ready for planning)
+- Set `territory_surveyed` to `"<ISO-8601 UTC>"`
 
 Write Event: Append to the `events` array as pipe-delimited string:
-`"<ISO-8601 UTC>|codebase_colonized|colonize|Codebase analyzed: <primary language/framework>"`
+`"<ISO-8601 UTC>|territory_surveyed|colonize|Territory surveyed: 7 documents"`
 
 If the `events` array exceeds 100 entries, remove the oldest entries to keep only 100.
 
 Write the updated COLONY_STATE.json.
 
-### Step 5: Confirm
+### Step 6: Confirm
 
 Output header:
 
 ```
-🔍🐜🗺️🐜🔍 ═══════════════════════════════════════════════════
-   C O D E B A S E   A N A L Y S I S
-═══════════════════════════════════════════════════ 🔍🐜🗺️🐜🔍
+📊🐜🗺️🐜📊 ═══════════════════════════════════════════════════
+   T E R R I T O R Y   S U R V E Y   C O M P L E T E
+═══════════════════════════════════════════════════ 📊🐜🗺️🐜📊
 ```
 
 Then output:
 
 ```
-Codebase analysis complete.
-See: .aether/data/codebase.md
+🗺️ Colony territory has been surveyed.
+
+Survey Reports:
+  📦 PROVISIONS.md         — Tech stack & dependencies
+  🛤️  TRAILS.md             — External integrations
+  📐 BLUEPRINT.md          — Architecture patterns
+  🏠 CHAMBERS.md           — Directory structure
+  📜 DISCIPLINES.md        — Coding conventions
+  🛡️  SENTINEL-PROTOCOLS.md — Testing patterns
+  ⚠️  PATHOGENS.md          — Tech debt & concerns
+
+Location: .aether/data/survey/
+
+{If any docs missing:}
+⚠️  Missing: {list missing documents}
+{/if}
 
 Stack: <language> + <framework>
 Entry: <main entry point>
@@ -201,26 +190,7 @@ Next:
 
 {If goal is not null:}
 Next:
-  /ant:plan              Generate project plan
+  /ant:plan              Generate project plan (will load relevant survey docs)
   /ant:focus "<area>"    Inject focus before planning
   /ant:redirect "<pat>"  Inject constraint before planning
 ```
-
-### Step 5.5: Suggest Commands for CLAUDE.md
-
-Skip if all commands came from `claude_md` or none were detected. This is **non-blocking** -- do not edit CLAUDE.md automatically.
-
-For heuristic-sourced commands only, output:
-
-```
-💡 Detected commands not yet in CLAUDE.md. Consider adding:
-```
-
-Then a fenced code block the user can copy-paste into CLAUDE.md:
-
-```markdown
-## Commands
-- <label>: `<command>`
-```
-
-Then: `Paste the above into your project's CLAUDE.md to skip heuristic detection next time.`

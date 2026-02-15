@@ -120,6 +120,40 @@ Log start:
 bash .aether/aether-utils.sh activity-log "PLAN_START" "queen" "Iterative planning loop initiated for goal"
 ```
 
+### Step 3.5: Load Territory Survey
+
+Check if territory survey exists before research:
+
+```bash
+ls .aether/data/survey/*.md 2>/dev/null
+```
+
+**If survey exists:**
+1. **Always read PATHOGENS.md first** — understand known concerns before planning
+2. Read other relevant docs based on goal keywords:
+
+| Goal Contains | Additional Documents |
+|---------------|---------------------|
+| UI, frontend, component, page | DISCIPLINES.md, CHAMBERS.md |
+| API, backend, endpoint | BLUEPRINT.md, DISCIPLINES.md |
+| database, schema, model | BLUEPRINT.md, PROVISIONS.md |
+| test, spec | SENTINEL-PROTOCOLS.md, DISCIPLINES.md |
+| integration, external | TRAILS.md, PROVISIONS.md |
+| refactor, cleanup | PATHOGENS.md, BLUEPRINT.md |
+
+**Inject survey context into scout and planner prompts:**
+- Include key patterns from DISCIPLINES.md
+- Reference architecture from BLUEPRINT.md
+- Note tech stack from PROVISIONS.md
+- Flag concerns from PATHOGENS.md
+
+**Display:**
+```
+🗺️ Territory survey loaded — incorporating context into planning
+```
+
+**If no survey:** Continue without survey context (scouts will do fresh exploration)
+
 ### Step 4: Research and Planning Loop
 
 Initialize tracking:
