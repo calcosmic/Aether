@@ -1424,12 +1424,17 @@ Files: ${files_changed} files changed"
     # Usage: context-update <action> [args...]
     #
     # Actions:
-    #   init <goal>                    - Initialize new context
-    #   update-phase <phase_id> <name> - Update current phase
-    #   activity <command> <result>    - Log activity
-    #   constraint <type> <message>    - Add constraint (redirect/focus)
-    #   decision <description>         - Log decision
-    #   safe-to-clear <yes|no> <reason>- Set safe-to-clear status
+    #   init <goal>                              - Initialize new context
+    #   update-phase <phase_id> <name>           - Update current phase
+    #   activity <command> <result> [files]      - Log activity
+    #   constraint <type> <message> [source]     - Add constraint (redirect/focus)
+    #   decision <description> [rationale] [who] - Log decision
+    #   safe-to-clear <yes|no> <reason>          - Set safe-to-clear status
+    #   build-start <phase_id> <workers> <tasks> - Mark build starting
+    #   worker-spawn <ant_name> <caste> <task>   - Log worker spawn
+    #   worker-complete <ant_name> <status>      - Log worker completion
+    #   build-progress <completed> <total>       - Update build progress
+    #   build-complete <status> <result>         - Mark build complete
     #
     # Always call with explicit arguments - never rely on current directory
     # CONTEXT_FILE must be passed or detected from AETHER_ROOT
@@ -1702,6 +1707,101 @@ EOF
 
         mv "$ctx_tmp" "$ctx_file"
         json_ok "{\"updated\":true,\"action\":\"decision\"}"
+        ;;
+
+      build-start)
+        local phase_id="${2:-}"
+        local worker_count="${3:-0}"
+        local tasks_count="${4:-0}"
+
+        [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
+
+        # Update Last Updated
+        sed -i.bak "s/| \*\*Last Updated\*\* | .*/| **Last Updated** | $ctx_ts |/" "$ctx_file" && rm -f "$ctx_file.bak"
+
+        # Update What's In Progress
+        sed -i.bak "s/## 📍 What's In Progress/## 📍 What's In Progress\n\n**Phase $phase_id Build IN PROGRESS**\n- Workers: $worker_count | Tasks: $tasks_count\n- Started: $ctx_ts/" "$ctx_file" && rm -f "$ctx_file.bak"
+
+        # Mark not safe to clear
+        sed -i.bak "s/| \*\*Safe to Clear?\*\* | .*/| **Safe to Clear?** | ⚠️ NO — Build in progress |/" "$ctx_file" && rm -f "$ctx_file.bak"
+
+        json_ok "{\"updated\":true,\"action\":\"build-start\",\"workers\":$worker_count}"
+        ;;
+
+      worker-spawn)
+        local ant_name="${2:-}"
+        local caste="${3:-}"
+        local task="${4:-}"
+
+        [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
+
+        # Add worker spawn note to What's In Progress (brief)
+        awk -v ant="$ant_name" -v caste="$caste" -v task="$task" -v ts="$ctx_ts" '
+          /^## 📍 What's In Progress/ { in_progress=1 }
+          in_progress && /^## / && !/What's In Progress/ { in_progress=0 }
+          in_progress && /Workers:/ {
+            print
+            print "  - " ts ": Spawned " ant " (" caste ") for: " task
+            next
+          }
+          { print }
+        ' "$ctx_file" > "$ctx_tmp" && mv "$ctx_tmp" "$ctx_file"
+
+        json_ok "{\"updated\":true,\"action\":\"worker-spawn\",\"ant\":\"$ant_name\"}"
+        ;;
+
+      worker-complete)
+        local ant_name="${2:-}"
+        local status="${3:-completed}"
+
+        [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
+
+        # Update worker line to show completion
+        sed -i.bak "s/- .*$ant_name .*$/- $ant_name: $status (updated $ctx_ts)/" "$ctx_file" && rm -f "$ctx_file.bak"
+
+        json_ok "{\"updated\":true,\"action\":\"worker-complete\",\"ant\":\"$ant_name\"}"
+        ;;
+
+      build-progress)
+        local completed="${2:-0}"
+        local total="${3:-1}"
+        local percentage=$(( completed * 100 / total ))
+
+        [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
+
+        # Update progress in What's In Progress
+        sed -i.bak "s/Build IN PROGRESS/Build IN PROGRESS ($percentage% complete)/" "$ctx_file" && rm -f "$ctx_file.bak"
+
+        json_ok "{\"updated\":true,\"action\":\"build-progress\",\"percent\":$percentage}"
+        ;;
+
+      build-complete)
+        local status="${2:-completed}"
+        local result="${3:-success}"
+
+        [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
+
+        # Update Last Updated
+        sed -i.bak "s/| \*\*Last Updated\*\* | .*/| **Last Updated** | $ctx_ts |/" "$ctx_file" && rm -f "$ctx_file.bak"
+
+        # Update What's In Progress
+        awk -v status="$status" -v result="$result" '
+          /^## 📍 What's In Progress/ { in_progress=1 }
+          in_progress && /^## / && !/What's In Progress/ { in_progress=0 }
+          in_progress && /Build IN PROGRESS/ {
+            print "## 📍 What's In Progress"
+            print ""
+            print "**Build " status "** — " result
+            next
+          }
+          in_progress { next }
+          { print }
+        ' "$ctx_file" > "$ctx_tmp" && mv "$ctx_tmp" "$ctx_file"
+
+        # Mark safe to clear
+        sed -i.bak "s/| \*\*Safe to Clear?\*\* | .*/| **Safe to Clear?** | ✅ YES — Build $status |/" "$ctx_file" && rm -f "$ctx_file.bak"
+
+        json_ok "{\"updated\":true,\"action\":\"build-complete\",\"status\":\"$status\"}"
         ;;
 
       *)

@@ -352,12 +352,18 @@ Total: {N} Builders + 1 Watcher + 1 Chaos = {N+2} spawns
 
 **CRITICAL: Spawn ALL Wave 1 workers in a SINGLE message using multiple Task tool calls.**
 
+**First, mark build start in context:**
+```bash
+bash .aether/aether-utils.sh context-update build-start {phase_id} {wave_1_worker_count} {wave_1_task_count}
+```
+
 For each Wave 1 task, use Task tool with `subagent_type="general-purpose"` and `run_in_background: true`:
 
 Log each spawn and update swarm display:
 ```bash
 bash .aether/aether-utils.sh spawn-log "Queen" "builder" "{ant_name}" "{task_description}"
 bash .aether/aether-utils.sh swarm-display-update "{ant_name}" "builder" "excavating" "{task_description}" "Queen" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 10
+bash .aether/aether-utils.sh context-update worker-spawn "{ant_name}" "builder" "{task_description}"
 ```
 
 **Builder Worker Prompt (CLEAN OUTPUT):**
@@ -419,6 +425,7 @@ Log and update swarm display:
 ```bash
 bash .aether/aether-utils.sh spawn-complete "{ant_name}" "completed" "{summary}"
 bash .aether/aether-utils.sh swarm-display-update "{ant_name}" "builder" "completed" "{task_description}" "Queen" '{"read":5,"grep":3,"edit":2,"bash":1}' 100 "fungus_garden" 100
+bash .aether/aether-utils.sh context-update worker-complete "{ant_name}" "completed"
 ```
 
 **Update swarm display with accumulated tool usage:**
@@ -821,6 +828,11 @@ Log this build activity to `.aether/CONTEXT.md`:
 
 ```bash
 bash .aether/aether-utils.sh context-update activity "build {phase_id}" "{synthesis.status}" "{files_created_count + files_modified_count}"
+```
+
+Mark build as complete in context:
+```bash
+bash .aether/aether-utils.sh context-update build-complete "{synthesis.status}" "{synthesis.status == 'completed' ? 'success' : 'failed'}"
 ```
 
 Also update safe-to-clear status:
