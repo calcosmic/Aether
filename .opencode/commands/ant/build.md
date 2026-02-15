@@ -145,19 +145,25 @@ Write COLONY_STATE.json.
 
 ### Step 3: Git Checkpoint
 
-Create a git checkpoint for rollback capability.
+Create a git checkpoint for rollback capability (system files only).
 
 ```bash
 git rev-parse --git-dir 2>/dev/null
 ```
 
 - **If succeeds** (is a git repo):
-  1. Check for changes in Aether-managed directories only: `.aether .claude/commands/ant .claude/commands/st .opencode runtime bin`
-  2. **If changes exist**: `git stash push -m "aether-checkpoint: pre-phase-$PHASE_NUMBER" -- .aether .claude/commands/ant .claude/commands/st .opencode runtime bin`
-     - IMPORTANT: Never use `--include-untracked` — it stashes ALL files including user work!
+  1. Run checkpoint check: `bash .aether/aether-utils.sh checkpoint-check`
+  2. Parse JSON result to get `system_files`, `user_files`, and `has_user_files`
+  3. **If `has_user_files` is true**:
+     - Display warning: `⚠️  User files detected in working tree - will NOT be stashed`
+     - List user files from `user_files` array
+     - Display: `Only system files will be checkpointed`
+  4. **If `system_files` array is non-empty**:
+     - Create stash with ONLY system files: `git stash push -m "aether-checkpoint: pre-phase-$PHASE_NUMBER" -- {system_files...}`
      - Verify: `git stash list | head -1 | grep "aether-checkpoint"` — warn if empty
-     - Store checkpoint as `{type: "stash", ref: "aether-checkpoint: pre-phase-$PHASE_NUMBER"}`
-  3. **If clean working tree**: Record `HEAD` hash via `git rev-parse HEAD`
+     - Store checkpoint as `{type: "stash", ref: "aether-checkpoint: pre-phase-$PHASE_NUMBER", files: [...]}`
+  5. **If no system files dirty**:
+     - Record `HEAD` hash via `git rev-parse HEAD`
      - Store checkpoint as `{type: "commit", ref: "$HEAD_HASH"}`
 - **If fails** (not a git repo): Set checkpoint to `{type: "none", ref: "(not a git repo)"}`.
 
@@ -172,6 +178,7 @@ Output header:
 
 📍 Phase {id}: {name}
 💾 Git Checkpoint: {checkpoint_type} → {checkpoint_ref}
+   {if user_files were skipped: "(user files preserved — not stashed)"}
 🔄 Rollback: `git stash pop` (stash) or `git reset --hard {ref}` (commit)
 ```
 
