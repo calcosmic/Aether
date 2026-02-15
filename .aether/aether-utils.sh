@@ -3098,6 +3098,40 @@ ${entry}" "$queen_file" > "$tmp_file"
     exit 0
     ;;
 
+  normalize-args)
+    # Normalize arguments from Claude Code ($ARGUMENTS) or OpenCode ($@)
+    # Usage: bash .aether/aether-utils.sh normalize-args [args...]
+    # Or: eval "$(bash .aether/aether-utils.sh normalize-args)"
+    #
+    # Claude Code passes args in $ARGUMENTS variable
+    # OpenCode passes args in $@ (positional parameters)
+    # This command outputs the normalized arguments as a single string
+
+    normalized=""
+
+    # Try Claude Code style first ($ARGUMENTS environment variable)
+    if [ -n "${ARGUMENTS:-}" ]; then
+      normalized="$ARGUMENTS"
+    # Fall back to OpenCode style ($@ positional params)
+    elif [ $# -gt 0 ]; then
+      # Preserve arguments with spaces by quoting
+      for arg in "$@"; do
+        if [[ "$arg" == *" "* ]] || [[ "$arg" == *"\t"* ]] || [[ "$arg" == *"\n"* ]]; then
+          # Quote arguments containing whitespace
+          normalized="$normalized \"$arg\""
+        else
+          normalized="$normalized $arg"
+        fi
+      done
+      # Trim leading space
+      normalized="${normalized# }"
+    fi
+
+    # Output normalized arguments
+    echo "$normalized"
+    exit 0
+    ;;
+
   *)
     json_err "$E_VALIDATION_FAILED" "Unknown command: $cmd"
     ;;
