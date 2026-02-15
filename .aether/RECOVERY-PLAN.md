@@ -26,7 +26,7 @@ runtime/ (source) ──npm install──→ ~/.aether/ (hub) ──aether updat
 3. You run `aether update` - copies stale hub to `./.aether/` (DESTROYS your work)
 4. Emojis disappear, features break
 
-**Root cause:** `runtime/` is the source of truth for npm, but you've been editing `.aether/` directly.
+**Root cause:** Previously `runtime/` was the source of truth, but now `.aether/` IS the source of truth. The sync script (bin/sync-to-runtime.sh) auto-populates runtime/ from .aether/ during npm install.
 
 ---
 
@@ -236,9 +236,9 @@ After recovery, verify:
 4. Treat `.aether/` as source of truth (it's the working copy)
 
 **DO:**
-1. Edit `runtime/` as the source of truth
-2. Commit `runtime/` changes before `npm install`
-3. Treat `.aether/` as disposable (it gets overwritten)
+1. Edit `.aether/` as the source of truth
+2. Commit `.aether/` changes before `npm install`
+3. The sync script auto-populates `runtime/` from `.aether/`
 4. Test changes with `npm install -g .` from the repo
 
 ---

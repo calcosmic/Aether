@@ -76,7 +76,7 @@
 - Purpose: Specialized agent roles for different task types
 - Examples: Builder (code), Watcher (verification), Scout (research), Colonizer (exploration)
 - Pattern: Each caste has defined discipline, spawn rules, output format
-- Location: `runtime/workers.md`, `.aether/workers.md`
+- Location: `.aether/workers.md` (source of truth), `runtime/workers.md` (staging for npm)
 
 **Pheromone Signals (Constraints):**
 - Purpose: Guide worker behavior without direct commands

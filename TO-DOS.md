@@ -356,7 +356,7 @@ Milestones should NOT be gates — they should be **status labels**. The biologi
 
 ### ~~Sync aether-utils.sh between .aether/ and runtime/~~ 2026-02-11
 
-- **Copy swarm/grave functions to runtime/** - `.aether/aether-utils.sh` has 10 functions missing from `runtime/aether-utils.sh`: autofix-checkpoint, autofix-rollback, spawn-can-spawn-swarm, swarm-findings-init, swarm-findings-add, swarm-findings-read, swarm-solution-set, swarm-cleanup, grave-add, grave-check. `runtime/` has 1 function .aether/ lacks: generate-commit-message. **Problem:** swarm.md calls these functions and will FAIL when run against runtime/. **Fix:** Copy the 10 missing functions to runtime/aether-utils.sh. **Scope:** trivial, ~80 lines. **Source:** Review 2026-02-11, Regression Hunter agent finding.
+- **DEPRECATED:** Sync direction has been reversed. `.aether/` is now the source of truth. The bin/sync-to-runtime.sh script auto-populates runtime/ from .aether/ during npm install. All development should happen in .aether/, not runtime/. **Previous issue:** swarm.md functions were missing from runtime/. **Resolution:** Add any needed functions to .aether/aether-utils.sh and they will be synced to runtime/ automatically.
 
 ### ~~Fix package.json path mismatch~~ 2026-02-11
 

@@ -6,7 +6,7 @@
 
 **Primary:**
 - **JavaScript (Node.js)** - Core CLI implementation in `bin/cli.js`
-- **Bash/Shell** - Utility layer in `runtime/aether-utils.sh` and `.aether/aether-utils.sh`
+- **Bash/Shell** - Utility layer in `.aether/aether-utils.sh` (source of truth), auto-synced to `runtime/`
 
 **Secondary:**
 - **Markdown** - Command definitions, agent specs, and documentation

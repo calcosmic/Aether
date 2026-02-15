@@ -26,8 +26,8 @@
 ## Tech Debt
 
 **Large monolithic shell script:**
-- Issue: `runtime/aether-utils.sh` is 1,390 lines of shell code with many functions. This makes it difficult to maintain, test, and understand.
-- Files: `runtime/aether-utils.sh`, `.aether/aether-utils.sh`
+- Issue: `.aether/aether-utils.sh` (source of truth) is 1,390 lines of shell code with many functions. This makes it difficult to maintain, test, and understand.
+- Files: `.aether/aether-utils.sh` (source of truth), auto-synced to `runtime/`
 - Impact: Hard to debug, high risk of unintended side effects when modifying
 - Fix approach: Consider extracting into modular scripts by function category (e.g., `utils/git.sh`, `utils/ants.sh`, `utils/phases.sh`)
 
@@ -103,8 +103,8 @@
 - Priority: High
 
 **No tests for error conditions in shell scripts:**
-- Issue: `aether-utils.sh` has no test coverage despite being critical infrastructure.
-- Files: `runtime/aether-utils.sh`, `.aether/aether-utils.sh`
+- Issue: `.aether/aether-utils.sh` has no test coverage despite being critical infrastructure.
+- Files: `.aether/aether-utils.sh` (source of truth), auto-synced to `runtime/`
 - What's not tested: All functions (pheromones, ants, phases, verification)
 - Risk: Undetected bugs in core colony logic
 - Priority: Medium

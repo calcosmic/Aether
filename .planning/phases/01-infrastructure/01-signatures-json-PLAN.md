@@ -18,7 +18,7 @@ must_haves:
       provides: "Default signatures template for pattern matching"
       contains: '[{"pattern": "...", "name": "...", "confidence": ...}]'
   key_links:
-    - from: "runtime/aether-utils.sh signature-scan"
+    - from: ".aether/aether-utils.sh signature-scan (source of truth)"
       to: "runtime/data/signatures.json"
       via: "file read at $DATA_DIR/signatures.json"
 ---
@@ -36,9 +36,9 @@ Output: A default signatures.json template with example patterns for common code
 </execution_context>
 
 <context>
-@/Users/callumcowie/repos/Aether/runtime/aether-utils.sh
+@/Users/callumcowie/repos/Aether/.aether/aether-utils.sh (source of truth, auto-synced to runtime/)
 
-The aether-utils.sh file contains two subcommands that reference signatures.json:
+The .aether/aether-utils.sh file contains two subcommands that reference signatures.json:
 1. signature-scan (line 583-587): Reads signatures to scan for code patterns
 2. signature-match (line 636-637): Reads signatures for matching against targets
 

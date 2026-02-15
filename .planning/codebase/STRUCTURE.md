@@ -103,9 +103,9 @@ Aether/
 - `.npmignore`: npm package files whitelist
 
 **Core Logic:**
-- `runtime/aether-utils.sh`: 59 subcommands for colony operations
-- `runtime/workers.md`: Worker caste definitions and spawn protocol
-- `runtime/QUEEN_ANT_ARCHITECTURE.md`: Architecture overview
+- `.aether/aether-utils.sh`: 59 subcommands for colony operations (source of truth)
+- `.aether/workers.md`: Worker caste definitions and spawn protocol (source of truth)
+- `runtime/` contains auto-populated copies for npm packaging
 
 **Testing:**
 - `tests/e2e/run-all.sh`: E2E test runner
@@ -138,14 +138,15 @@ Aether/
 - Run sync check: `npm run lint:sync` or `./bin/generate-commands.sh check`
 
 **New Worker Caste:**
-- Definition: `runtime/workers.md` (add to Worker Roles section)
-- Emoji: `runtime/aether-utils.sh` (add to `get_caste_emoji` function)
-- Name generation: `runtime/aether-utils.sh` (add to `generate-ant-name` case)
+- Definition: `.aether/workers.md` (add to Worker Roles section) - source of truth
+- Emoji: `.aether/aether-utils.sh` (add to `get_caste_emoji` function) - source of truth
+- Name generation: `.aether/aether-utils.sh` (add to `generate-ant-name` case) - source of truth
+- Note: The sync script auto-populates runtime/ from .aether/ during npm install
 
 **New Utility Subcommand:**
-- Implementation: `runtime/aether-utils.sh` (add to case statement)
-- Local copy: `.aether/aether-utils.sh` (sync after changes)
-- Help output: `runtime/aether-utils.sh` (add to help command list)
+- Implementation: `.aether/aether-utils.sh` (add to case statement) - source of truth
+- The sync script auto-populates `runtime/aether-utils.sh` during npm install
+- Help output: `.aether/aether-utils.sh` (add to help command list)
 
 **New State File:**
 - Schema: Define in appropriate command (init.md, etc.)

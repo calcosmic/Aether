@@ -55,7 +55,7 @@ The following command files were checked and contain zero git operations:
 - `.claude/commands/ant/pause-colony.md`
 - `.claude/commands/ant/resume-colony.md`
 - `.claude/commands/ant/migrate-state.md`
-- `runtime/aether-utils.sh` (no git operations; only `.aether/aether-utils.sh` has them)
+- `runtime/aether-utils.sh` (staging copy, auto-synced from `.aether/aether-utils.sh`)
 
 ### Summary of Findings
 

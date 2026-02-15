@@ -142,7 +142,7 @@ The `check-antipattern` subcommand flags TODO/FIXME comments as warnings.
 - Node.js uses CommonJS (`module.exports` implicit via function definitions)
 
 **Barrel Files:**
-- `runtime/aether-utils.sh` is the main entry point
+- `.aether/aether-utils.sh` is the main entry point (source of truth)
 - Sources utilities from `runtime/utils/*.sh`
 - Subcommand dispatch via case statement
 
@@ -155,7 +155,7 @@ The `check-antipattern` subcommand flags TODO/FIXME comments as warnings.
 ## File Organization
 
 **Key Locations:**
-- Main utilities: `runtime/aether-utils.sh` and `.aether/aether-utils.sh`
+- Main utilities: `.aether/aether-utils.sh` (source of truth), auto-synced to `runtime/`
 - Helper utilities: `runtime/utils/*.sh`
 - CLI: `bin/cli.js`
 - Tests: `test/*.js` and `tests/e2e/*.sh`
@@ -204,7 +204,7 @@ See `runtime/tdd.md` and `TESTING.md` for testing conventions.
 ## Key Files for Reference
 
 - `runtime/coding-standards.md` - Primary coding standards document
-- `runtime/aether-utils.sh` - Reference implementation for shell patterns
+- `.aether/aether-utils.sh` - Reference implementation for shell patterns (source of truth)
 - `bin/cli.js` - Reference implementation for Node.js patterns
 - `package.json` - Lint scripts and configuration
 
