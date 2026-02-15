@@ -1,0 +1,25 @@
+{
+  "version": "1.0.0",
+  "description": "Files safe for Aether to checkpoint/modify. NEVER touch files outside this list.",
+  "system_files": [
+    ".aether/aether-utils.sh",
+    ".aether/workers.md",
+    ".aether/docs/**/*.md",
+    ".claude/commands/ant/**/*.md",
+    ".claude/commands/st/**/*.md",
+    ".opencode/commands/ant/**/*.md",
+    ".opencode/agents/**/*.md",
+    "runtime/**/*",
+    "bin/**/*"
+  ],
+  "user_data_never_touch": [
+    ".aether/data/",
+    ".aether/dreams/",
+    ".aether/oracle/",
+    ".aether/COLONY_STATE.json",
+    "TO-DOs.md",
+    "*.log",
+    ".env",
+    ".env.*"
+  ]
+}
