@@ -1,11 +1,18 @@
 ---
 name: ant:tunnels
-description: "🕳️🐜🕳️ Explore tunnels (browse archived colonies)"
+description: "🕳️🐜🕳️ Explore tunnels (browse archived colonies, compare chambers)"
 ---
 
 You are the **Queen**. Browse the colony history.
 
 ## Instructions
+
+### Argument Handling
+
+- No arguments: Show chamber list (Step 4)
+- One argument: Show single chamber detail (Step 3)
+- Two arguments: Compare two chambers (Step 5)
+- More than two: "Too many arguments. Use: /ant:tunnels [chamber1] [chamber2]"
 
 ### Step 1: Check for Chambers Directory
 
@@ -92,6 +99,98 @@ To get the counts and hash status:
 - If verified: hash_status = "✅"
 - If not verified: hash_status = "⚠️ hash mismatch"
 - If error: hash_status = "⚠️ error"
+
+Stop here.
+
+### Step 5: Chamber Comparison Mode (Two Arguments)
+
+If two arguments provided (chamber names separated by space):
+- Treat as: `/ant:tunnels <chamber_a> <chamber_b>`
+- Run comparison: `bash .aether/utils/chamber-compare.sh compare <chamber_a> <chamber_b>`
+
+If either chamber not found:
+```
+Chamber not found: {chamber_name}
+
+Available chambers:
+{list from chamber-list}
+```
+Stop here.
+
+Display comparison header:
+```
+🕳️ ═══════════════════════════════════════════════════
+   C H A M B E R   C O M P A R I S O N
+══════════════════════════════════════════════════ 🕳️
+
+📦 {chamber_a}  vs  📦 {chamber_b}
+```
+
+Display side-by-side comparison:
+```
+┌─────────────────────┬─────────────────────┐
+│ {chamber_a}         │ {chamber_b}         │
+├─────────────────────┼─────────────────────┤
+│ 👑 {goal_a}         │ 👑 {goal_b}         │
+│                     │                     │
+│ 🏆 {milestone_a}    │ 🏆 {milestone_b}    │
+│    {version_a}      │    {version_b}      │
+│                     │                     │
+│ 📍 {phases_a} done  │ 📍 {phases_b} done  │
+│    of {total_a}     │    of {total_b}     │
+│                     │                     │
+│ 🧠 {decisions_a}    │ 🧠 {decisions_b}    │
+│    decisions        │    decisions        │
+│                     │                     │
+│ 💡 {learnings_a}    │ 💡 {learnings_b}    │
+│    learnings        │    learnings        │
+│                     │                     │
+│ 📅 {date_a}         │ 📅 {date_b}         │
+└─────────────────────┴─────────────────────┘
+```
+
+Display growth metrics:
+```
+📈 Growth Between Chambers:
+   Phases: +{phases_diff} ({phases_a} → {phases_b})
+   Decisions: +{decisions_diff} new
+   Learnings: +{learnings_diff} new
+   Time: {time_between} days apart
+```
+
+If phases_diff > 0: show "📈 Colony grew"
+If phases_diff < 0: show "📉 Colony reduced (unusual)"
+If same_milestone: show "🏆 Same milestone reached"
+If milestone changed: show "🏆 Milestone advanced: {milestone_a} → {milestone_b}"
+
+Display pheromone trail diff (new decisions/learnings in B):
+```bash
+bash .aether/utils/chamber-compare.sh diff <chamber_a> <chamber_b>
+```
+
+Parse result and show:
+```
+🧠 New Decisions in {chamber_b}:
+   {N} new architectural decisions
+   {if N <= 5, list them; else show first 3 + "...and {N-3} more"}
+
+💡 New Learnings in {chamber_b}:
+   {N} new validated learnings
+   {if N <= 5, list them; else show first 3 + "...and {N-3} more"}
+```
+
+Display knowledge preservation:
+```
+📚 Knowledge Preservation:
+   {preserved_decisions} decisions carried forward
+   {preserved_learnings} learnings carried forward
+```
+
+Footer:
+```
+Run /ant:tunnels to see all chambers
+Run /ant:tunnels <chamber> to view single chamber details
+```
 
 Stop here.
 

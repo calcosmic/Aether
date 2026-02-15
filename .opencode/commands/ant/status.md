@@ -49,31 +49,46 @@ If `version` field is missing, "1.0", or "2.0":
 3. Output: `State auto-upgraded to v3.0`
 4. Continue with command.
 
-### Step 1.5: Show Resumption Context
+### Step 1.5: Load State and Show Resumption Context
 
-If `goal` exists and is not null, display a resumption header to help orient the session:
+Run using Bash tool: `bash .aether/aether-utils.sh load-state`
 
-1. Extract `current_phase` and phase name from `plan.phases[current_phase - 1].name`
-2. Get the last event timestamp from the `events` array (last element, parse the timestamp before the first `|`)
-3. Display:
+If successful and goal is not null:
+1. Extract current_phase from state
+2. Get phase name from plan.phases[current_phase - 1].name (or "(unnamed)")
+3. Get last event timestamp from events array (last element)
+4. Display extended resumption context:
+   ```
+   🔄 Resuming: Phase X - Name
+      Last activity: timestamp
+   ```
 
-```
-🔄 Resuming: Phase <current_phase> - <phase_name>
-   Last activity: <last_event_timestamp>
-```
+5. Check for .aether/HANDOFF.md existence in the load-state output or via separate check
+6. If .aether/HANDOFF.md exists:
+   - Display: "Resuming from paused session"
+   - Read .aether/HANDOFF.md content for additional context
+   - Remove .aether/HANDOFF.md after displaying (cleanup)
 
-**Examples:**
-```
-🔄 Resuming: Phase 2 - Implement Core Features
-   Last activity: 2024-01-15T14:32:00Z
-```
-
-**Edge cases:**
-- If no phase name: show "Phase <N> - (unnamed)"
-- If no events array or empty: omit "Last activity" line
-- If `current_phase` is 0: show "Phase 0 - Not started"
+Run: `bash .aether/aether-utils.sh unload-state` to release lock.
 
 ### Step 2: Compute Summary
+
+From state, extract:
+
+### Step 2.5: Gather Dream Information
+
+Run using Bash tool: `ls -1 .aether/dreams/*.md 2>/dev/null | wc -l`
+
+Capture:
+- Dream count: number of .md files in .aether/dreams/
+- Latest dream: most recent file by name (files are timestamped: YYYY-MM-DD-HHMM.md)
+
+To get latest dream timestamp:
+```bash
+ls -1 .aether/dreams/*.md 2>/dev/null | sort | tail -1 | sed 's/.*\/\([0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}\)-\([0-9]\{4\}\).*/\1 \2/'
+```
+
+Format the timestamp as: YYYY-MM-DD HH:MM
 
 From state, extract:
 
@@ -112,6 +127,16 @@ From `memory.instincts`:
 - `milestone` field (First Mound, Open Chambers, Brood Stable, Ventilated Nest, Sealed Chambers, Crowned Anthill)
 - `milestone_updated_at` field (timestamp of last milestone change)
 
+### Step 2.6: Detect Milestone
+
+Run using Bash tool: `bash .aether/aether-utils.sh milestone-detect`
+
+Extract from JSON result:
+- `milestone`: Current milestone name
+- `version`: Computed version string
+- `phases_completed`: Number of completed phases
+- `total_phases`: Total phases in plan
+
 ### Step 3: Display
 
 Output format:
@@ -131,7 +156,8 @@ Output format:
 🎯 Focus: <focus_count> areas | 🚫 Avoid: <constraints_count> patterns
 🧠 Instincts: <total> learned (<high_confidence> strong)
 🚩 Flags: <blockers> blockers | <issues> issues | <notes> notes
-🏆 Milestone: <milestone>
+🏆 Milestone: <milestone> (<version>)
+💭 Dreams: <dream_count> recorded (latest: <latest_dream>)
 
 State: <state>
 Next:  <suggested_command>   <phase_context>
@@ -164,6 +190,10 @@ Generate the suggested command based on colony state:
 - PLANNING -> `/ant:plan`
 
 The output must be a copy-pasteable command with real numbers, not placeholders.
+
+**Dream display:**
+- If no dreams exist: `💭 Dreams: None recorded`
+- If dreams exist: `💭 Dreams: <count> recorded (latest: YYYY-MM-DD HH:MM)`
 
 **Edge cases:**
 - No phases yet: "Phase 0/0: No plan created"

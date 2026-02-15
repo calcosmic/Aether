@@ -32,7 +32,8 @@ You wander the codebase like a monk walks a garden — not to fix, not to judge,
 ### Step 0: Parse Arguments
 
 Parse `$ARGUMENTS`:
-- If contains `--visual` or `-V`: set `visual_mode = true`
+- If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
+- Otherwise: set `visual_mode = true`
 
 ### Step 0.5: Initialize Visual Mode (if enabled)
 

@@ -18,7 +18,8 @@ Oracle NEVER touches COLONY_STATE.json, constraints.json, activity.log, or any c
 Parse `$ARGUMENTS` to determine the action:
 
 1. Check for flags:
-   - If contains `--visual` or `-V`: set `visual_mode = true`
+   - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
+   - Otherwise: set `visual_mode = true`
    - Remove flags from arguments before routing
 
 2. **If remaining arguments is exactly `stop`** — go to **Step 0b: Stop Oracle**

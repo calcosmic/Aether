@@ -8,7 +8,8 @@ You are the **Queen**. Perform initial codebase analysis.
 The arguments are: `$ARGUMENTS`
 
 **Parse arguments:**
-- If contains `--visual` or `-V`: set `visual_mode = true`
+- If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
+- Otherwise: set `visual_mode = true`
 
 ## Instructions
 

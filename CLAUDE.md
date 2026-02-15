@@ -1,5 +1,7 @@
 # CLAUDE.md — Aether Repo Rules
 
+> **CRITICAL:** See `/Users/callumcowie/repos/Aether/RUNTIME UPDATE ARCHITECTURE.md` for the complete architecture diagram and distribution flow. This document explains how the runtime/ directory, hub, and .aether/ working copy interact — read it before making any changes.
+
 ## ⚠️ RULE #1: NEVER EDIT .aether/ SYSTEM FILES
 
 ```

@@ -17,9 +17,35 @@ Oracle NEVER touches COLONY_STATE.json, constraints.json, activity.log, or any c
 
 Parse `$ARGUMENTS` to determine the action:
 
-1. **If `$ARGUMENTS` is exactly `stop`** — go to **Step 0b: Stop Oracle**
-2. **If `$ARGUMENTS` is exactly `status`** — go to **Step 0c: Show Status**
-3. **Otherwise** — go to **Step 1: Research Wizard**
+1. Check for flags:
+   - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
+   - Otherwise: set `visual_mode = true`
+   - Remove flags from arguments before routing
+
+2. **If remaining arguments is exactly `stop`** — go to **Step 0b: Stop Oracle**
+3. **If remaining arguments is exactly `status`** — go to **Step 0c: Show Status**
+4. **Otherwise** — go to **Step 0.5: Initialize Visual Mode** then **Step 1: Research Wizard**
+
+### Step 0.5: Initialize Visual Mode (if enabled)
+
+If `visual_mode` is true:
+```bash
+# Generate session ID
+oracle_id="oracle-$(date +%s)"
+
+# Initialize swarm display
+bash .aether/aether-utils.sh swarm-display-init "$oracle_id"
+bash .aether/aether-utils.sh swarm-display-update "Oracle" "oracle" "researching" "Deep research in progress" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0
+```
+
+Display visual header:
+```
+🔮🐜🧠🐜🔮 ═══════════════════════════════════════════════
+          O R A C L E  —  R e s e a r c h  M o d e
+═══════════════════════════════════════════════ 🔮🐜🧠🐜🔮
+
+Oracle peering into the depths...
+```
 
 ---
 

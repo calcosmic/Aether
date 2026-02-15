@@ -5,6 +5,35 @@ description: "🔍🐜🗺️🐜🔍 Analyze codebase and prepare for colony wo
 
 You are the **Queen**. Perform initial codebase analysis.
 
+The arguments are: `$ARGUMENTS`
+
+**Parse arguments:**
+- If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
+- Otherwise: set `visual_mode = true`
+
+## Instructions
+
+### Step 0: Initialize Visual Mode (if enabled)
+
+If `visual_mode` is true:
+```bash
+# Generate session ID
+colonize_id="colonize-$(date +%s)"
+
+# Initialize swarm display
+bash .aether/aether-utils.sh swarm-display-init "$colonize_id"
+bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "Codebase analysis" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0
+```
+
+Display header:
+```
+🔍🐜🗺️🐜🔍 ═══════════════════════════════════════════════
+         C O L O N I Z E  —  C o d e b a s e  S c a n
+═══════════════════════════════════════════════ 🔍🐜🗺️🐜🔍
+
+Queen surveying the territory...
+```
+
 ## Instructions
 
 ### Step 1: Validate

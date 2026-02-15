@@ -82,7 +82,7 @@ Resolve each command (build, test, types, lint) using this priority chain. Stop 
 **Priority 1 — CLAUDE.md (System Context):**
 Check the CLAUDE.md instructions already loaded in your system context for explicit build, test, type-check, or lint commands. These are authoritative and override all other sources.
 
-**Priority 2 — .aether/data/codebase.md `## Commands`:**
+**Priority 2 — codebase.md `## Commands`:**
 Read `.aether/data/codebase.md` and look for the `## Commands` section. Use any commands listed there for slots not yet filled by Priority 1.
 
 **Priority 3 — Fallback Heuristic Table:**

@@ -53,22 +53,24 @@ After displaying context, run: `bash .aether/aether-utils.sh unload-state` to re
 1. Extract the phase number (first argument)
 2. Check remaining arguments for flags:
    - If contains `--verbose` or `-v`: set `verbose_mode = true`
+   - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
    - If contains `--model <name>` or `-m <name>`: set `cli_model_override = <name>`
-   - Otherwise: set defaults
+   - Otherwise: set `visual_mode = true` (visual is default)
 
 If the phase number is empty or not a number:
 
 ```
-Usage: /ant:build <phase_number> [--verbose|-v] [--model <model>|-m <model>]
+Usage: /ant:build <phase_number> [--verbose|-v] [--no-visual] [--model <model>|-m <model>]
 
 Options:
   --verbose, -v       Show full completion details (spawn tree, TDD, patterns)
+  --no-visual         Disable real-time visual display (visual is on by default)
   --model, -m <name>  Override model for this build (one-time)
 
 Examples:
-  /ant:build 1              Build Phase 1 (compact output)
-  /ant:build 1 --verbose    Build Phase 1 (full details)
-  /ant:build 3 -v           Build Phase 3 (full details)
+  /ant:build 1              Build Phase 1 (with visual display)
+  /ant:build 1 --verbose    Build Phase 1 (full details + visual)
+  /ant:build 1 --no-visual  Build Phase 1 without visual display
   /ant:build 1 --model glm-5    Build Phase 1 with glm-5 for all workers
 ```
 
@@ -221,39 +223,27 @@ CONSTRAINTS: (none)
    Spawn a Scout (using Task tool with `subagent_type="general-purpose"`) with this prompt:
 
    ```
-   You are {Archaeologist-Name}, a 🏺 Archaeologist Ant (Scout) in the Aether Colony.
+   You are {Archaeologist-Name}, a 🏺 Archaeologist Ant.
 
-   --- YOUR MISSION ---
-   Perform a pre-build archaeology scan on files that are about to be modified.
+   Mission: Pre-build archaeology scan
 
-   --- FILES TO INVESTIGATE ---
-   {list of existing files that will be modified by this phase's tasks}
+   Files: {list of existing files that will be modified}
 
-   --- INSTRUCTIONS ---
-   For each file:
-   1. Read the file to understand its current state
-   2. Run: git log --oneline -15 -- "{file_path}" to see recent history
-   3. Run: git log --all --grep="fix\|bug\|workaround\|hack\|revert" --oneline -- "{file_path}" to find incident history
-   4. Run: git blame "{file_path}" | head -40 to see authorship of key sections
-   5. Note any TODO/FIXME/HACK markers in the current code
+   Work:
+   1. Read each file to understand current state
+   2. Run: git log --oneline -15 -- "{file_path}" for history
+   3. Run: git log --all --grep="fix\|bug\|workaround\|hack\|revert" --oneline -- "{file_path}" for incident history
+   4. Run: git blame "{file_path}" | head -40 for authorship
+   5. Note TODO/FIXME/HACK markers
 
-   --- MODEL CONTEXT ---
-   Assigned model: {model} (from caste: archaeologist)
-   This ant is running as: {Ant-Name} (archaeologist caste)
+   Log activity: bash .aether/aether-utils.sh activity-log "READ" "{Ant-Name}" "description"
 
-   --- OUTPUT ---
-   For each file, report:
-   - WHY key code sections exist (from commit messages)
-   - Known workarounds or hacks that must not be broken
-   - Key architectural decisions visible in history
-   - Areas of caution (high churn, reverted changes, emergency fixes)
-   - Sections that are stable bedrock vs volatile sand
-
-   Include in your header:
-   Model: {model} | Caste: archaeologist | Ant: {Ant-Name}
-
-   Keep the report concise and actionable — builders need quick context, not a thesis.
-   Format as plain text with file headers. No JSON output needed.
+   Report (plain text):
+   - WHY key code sections exist (from commits)
+   - Known workarounds/hacks to preserve
+   - Key architectural decisions
+   - Areas of caution (high churn, reverts, emergencies)
+   - Stable bedrock vs volatile sand sections
    ```
 
    **Wait for results** (blocking — use TaskOutput with `block: true`).
@@ -396,18 +386,36 @@ Return ONLY this JSON (no other text):
 {"ant_name": "{Ant-Name}", "task_id": "{id}", "status": "completed|failed|blocked", "summary": "What you did", "files_created": [], "files_modified": [], "tests_written": [], "blockers": []}
 ```
 
-### Step 5.2: Collect Wave 1 Results (BLOCKING)
+### Step 5.2: Collect Wave 1 Results with Visual Progress
 
 **CRITICAL: You MUST wait for ALL Wave 1 workers to complete before proceeding.**
+
+**Visual Progress During Execution:**
+
+After spawning workers, immediately show:
+```
+🔨 COLONY BUILD — Phase {id}: {name}
+═══════════════════════════════════════
+
+👑 Queen dispatching {N} foragers...
+
+🐜 Active Workers:
+  🔨 {Builder-Name}  Task {id}  excavating...
+  🔨 {Builder-Name}  Task {id}  excavating...
+```
 
 For each spawned worker, call TaskOutput with `block: true` to wait for completion:
 - Use the task_id from each Task tool response
 - Do NOT proceed to Step 5.3 until ALL workers have returned results
 - Parse each worker's JSON output to collect: status, files_created, files_modified, blockers
 
-Store all results for synthesis in Step 5.6.
+**As each worker completes, immediately display:**
+```
+✅ 🔨 {Builder-Name} completed Task {id}
+   📖{read_count} 🔍{grep_count} ✏️{edit_count} ⚡{bash_count}  {elapsed_time}
+```
 
-For each completed worker, log and update swarm display:
+Log and update swarm display:
 ```bash
 bash .aether/aether-utils.sh spawn-complete "{ant_name}" "completed" "{summary}"
 bash .aether/aether-utils.sh swarm-display-update "{ant_name}" "builder" "completed" "{task_description}" "Queen" '{"read":5,"grep":3,"edit":2,"bash":1}' 100 "fungus_garden" 100
@@ -415,6 +423,19 @@ bash .aether/aether-utils.sh swarm-display-update "{ant_name}" "builder" "comple
 
 **Update swarm display with accumulated tool usage:**
 As workers complete, accumulate their actual tool usage (Read, Grep, Edit, Bash counts from their activity logs) and update the swarm display to show live progress.
+
+**Show running progress after each completion:**
+```
+Progress: [{filled_bar}] {percent}%
+Completed: {completed_count}/{total_count} workers
+```
+
+**Visual Mode: Render live display (if enabled):**
+If `visual_mode` is true, render the swarm display after each worker completes:
+```bash
+bash .aether/aether-utils.sh swarm-display-render "$build_id"
+```
+This shows the current colony activity with emojis, colors, and progress.
 
 **Only proceed to Step 5.3 after ALL Wave 1 TaskOutput calls have returned.**
 

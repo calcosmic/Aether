@@ -53,25 +53,24 @@ After displaying context, run: `bash .aether/aether-utils.sh unload-state` to re
 1. Extract the phase number (first argument)
 2. Check remaining arguments for flags:
    - If contains `--verbose` or `-v`: set `verbose_mode = true`
-   - If contains `--visual` or `-V`: set `visual_mode = true`
+   - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
    - If contains `--model <name>` or `-m <name>`: set `cli_model_override = <name>`
-   - Otherwise: set defaults
+   - Otherwise: set `visual_mode = true` (visual is default)
 
 If the phase number is empty or not a number:
 
 ```
-Usage: /ant:build <phase_number> [--verbose|-v] [--visual|-V] [--model <model>|-m <model>]
+Usage: /ant:build <phase_number> [--verbose|-v] [--no-visual] [--model <model>|-m <model>]
 
 Options:
   --verbose, -v       Show full completion details (spawn tree, TDD, patterns)
-  --visual, -V        Enable real-time visual display of colony activity
+  --no-visual         Disable real-time visual display (visual is on by default)
   --model, -m <name>  Override model for this build (one-time)
 
 Examples:
-  /ant:build 1              Build Phase 1 (compact output)
-  /ant:build 1 --verbose    Build Phase 1 (full details)
-  /ant:build 1 --visual     Build Phase 1 with live visual display
-  /ant:build 3 -v -V        Build Phase 3 (full details + visual)
+  /ant:build 1              Build Phase 1 (with visual display)
+  /ant:build 1 --verbose    Build Phase 1 (full details + visual)
+  /ant:build 1 --no-visual  Build Phase 1 without visual display
   /ant:build 1 --model glm-5    Build Phase 1 with glm-5 for all workers
 ```
 

@@ -175,7 +175,16 @@ bash .aether/aether-utils.sh validate-state colony
 
 This validates COLONY_STATE.json structure. If validation fails, output a warning.
 
-### Step 5.5: Register Repo (Silent)
+### Step 5.5: Detect Nestmates
+
+Run using Bash tool: `node -e "const nl = require('./bin/lib/nestmate-loader'); console.log(JSON.stringify(nl.findNestmates(process.cwd())))"`
+
+If nestmates are found:
+1. Display: `Nestmates found: N related colonies`
+2. List each nestmate with name and truncated goal
+3. Check for shared TO-DOs or cross-project dependencies
+
+### Step 5.6: Register Repo (Silent)
 
 Attempt to register this repo in the global hub. Both steps are silent on failure — registry is not required for the colony to work.
 
@@ -214,6 +223,12 @@ Then output the result:
 {If instincts or learnings were inherited from Step 2.5:}
 🧠 Inherited from prior colony:
    {N} instinct(s) | {N} learning(s)
+{End if}
+
+{If nestmates found in Step 5.5:}
+🏘️ Nest Context: {N} sibling colonies detected
+   Context from related projects will be automatically considered
+   during planning and execution.
 {End if}
 
 🐜 The colony awaits your command:
