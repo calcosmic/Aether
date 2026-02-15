@@ -1,5 +1,37 @@
 # CLAUDE.md — Aether Repo Rules
 
+## ⚠️ RULE #1: NEVER EDIT .aether/ SYSTEM FILES
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│  EDIT runtime/ — NOT .aether/                                  │
+│                                                                │
+│  runtime/           → SOURCE OF TRUTH (edit this)              │
+│  .aether/           → WORKING COPY (gets overwritten)          │
+│                                                                │
+│  If you edit .aether/, your work WILL BE LOST on next update.  │
+└────────────────────────────────────────────────────────────────┘
+```
+
+| What you're changing | Where to edit | Why |
+|---------------------|---------------|-----|
+| workers.md | `runtime/workers.md` | Source of truth |
+| aether-utils.sh | `runtime/aether-utils.sh` | Source of truth |
+| utils/*.sh | `runtime/utils/` | Source of truth |
+| User docs | `runtime/docs/` | Source of truth |
+| Slash commands | `.claude/commands/ant/` | Source of truth |
+| Visualizations | `.aether/visualizations/` | Exception - distributed directly |
+| Your notes | `.aether/docs/` | Never distributed, safe |
+
+**After editing runtime/:**
+```bash
+git add runtime/
+git commit -m "your message"
+npm install -g .   # Push to hub
+```
+
+---
+
 ## Critical Architecture
 
 **runtime/ is the source of truth for npm distribution.** `.aether/` is the working copy in repos.
