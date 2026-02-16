@@ -3436,11 +3436,9 @@ EOF
     fi
 
     # Read current session
-    local current_session
     current_session=$(cat "$session_file" 2>/dev/null || echo '{}')
 
     # Extract current values for preservation
-    local current_goal current_phase current_milestone
     current_goal=$(echo "$current_session" | jq -r '.colony_goal // empty')
     current_phase=$(echo "$current_session" | jq -r '.current_phase // 0')
     current_milestone=$(echo "$current_session" | jq -r '.current_milestone // "First Mound"')
@@ -3517,7 +3515,6 @@ EOF
       exit 0
     fi
 
-    local last_cmd_ts
     last_cmd_ts=$(jq -r '.last_command_at // .started_at // empty' "$session_file" 2>/dev/null)
 
     if [[ -z "$last_cmd_ts" ]]; then
@@ -3525,7 +3522,6 @@ EOF
       exit 0
     fi
 
-    local last_epoch now_epoch age_hours
     last_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$last_cmd_ts" +%s 2>/dev/null || echo 0)
     now_epoch=$(date +%s)
     age_hours=$(( (now_epoch - last_epoch) / 3600 ))
@@ -3575,7 +3571,6 @@ EOF
       exit 0
     fi
 
-    local goal phase milestone last_cmd last_at suggested todos cleared
     goal=$(jq -r '.colony_goal // "No goal set"' "$session_file")
     phase=$(jq -r '.current_phase // 0' "$session_file")
     milestone=$(jq -r '.current_milestone // "First Mound"' "$session_file")
