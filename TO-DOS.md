@@ -22,6 +22,29 @@ This file tracks pending work items. Each todo is self-contained with full conte
 
 ## Priority 0.5: High Priority
 
+### Deeply Integrate XML System Into Core Commands - 2026-02-16
+
+- **The XML system exists but is not integrated - it's an optional extra step instead of being core to the workflow.** The modular XML utilities (xml-utils.sh, xml-core.sh, xml-compose.sh, exchange/, schemas/) are now properly set up, but users must manually source files and run separate commands. This defeats the purpose of having an eternal storage and colony-sharing system.
+
+- **Goal:** XML should be the default storage format, not an export option. Pheromones, queen wisdom, and registry should auto-sync to XML in the background. Cross-colony sharing should happen via standard commands.
+
+**Specific Integration Points:**
+- `/ant:seal` and `/ant:entomb` should auto-export to XML (pheromone-export, wisdom-export)
+- Add `/ant:sniff` command to read from eternal XML storage, not just current session JSON
+- Add `/ant:share` command for colony-to-colony pheromone transfer
+- Add `--xml` flag to all export commands to make it the default
+- Auto-import eternal XML on colony init if it exists
+
+**Current state (3.1.16):**
+- ✅ xml-utils.sh modularized
+- ✅ exchange/ scripts exist (pheromone-xml.sh, wisdom-xml.sh, registry-xml.sh)
+- ✅ 5 XSD schemas for validation
+- ⚠️ Commands require manual sourcing and running
+- ⚠️ No auto-sync to eternal storage
+- ⚠️ No cross-colony sharing commands
+
+---
+
 ### Apply Timestamp Verification Pattern to `/ant:oracle` Command - 2026-02-16
 
 - **The oracle command spawns a long-running research agent that can leave stale progress files if interrupted.** The colonize command was just fixed with timestamp verification that auto-detects and clears stale survey files. The same pattern should be applied to oracle to prevent users from accidentally continuing stale research sessions.
