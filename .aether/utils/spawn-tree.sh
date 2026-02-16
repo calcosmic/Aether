@@ -44,15 +44,16 @@ parse_spawn_tree() {
     local pipe_count
     pipe_count=$(echo "$line" | tr -cd '|' | wc -c | tr -d ' ')
 
-    if [[ $pipe_count -eq 5 ]]; then
-      # Spawn event: timestamp|parent|caste|child_name|task|spawned
-      local timestamp parent caste child_name task spawn_status
+    if [[ $pipe_count -eq 6 ]]; then
+      # Spawn event: timestamp|parent|caste|child_name|task|model|status
+      local timestamp parent caste child_name task model spawn_status
       timestamp=$(echo "$line" | cut -d'|' -f1)
       parent=$(echo "$line" | cut -d'|' -f2)
       caste=$(echo "$line" | cut -d'|' -f3)
       child_name=$(echo "$line" | cut -d'|' -f4)
       task=$(echo "$line" | cut -d'|' -f5)
-      spawn_status=$(echo "$line" | cut -d'|' -f6)
+      model=$(echo "$line" | cut -d'|' -f6)
+      spawn_status=$(echo "$line" | cut -d'|' -f7)
 
       # Add to files
       echo "$child_name" >> "$names_file"
@@ -283,14 +284,15 @@ get_active_spawns() {
     local pipe_count
     pipe_count=$(echo "$line" | tr -cd '|' | wc -c | tr -d ' ')
 
-    if [[ $pipe_count -eq 5 ]]; then
-      # Spawn event: timestamp|parent|caste|child_name|task|spawned
-      local timestamp parent caste child_name task spawn_status
+    if [[ $pipe_count -eq 6 ]]; then
+      # Spawn event: timestamp|parent|caste|child_name|task|model|status
+      local timestamp parent caste child_name task model spawn_status
       timestamp=$(echo "$line" | cut -d'|' -f1)
       parent=$(echo "$line" | cut -d'|' -f2)
       caste=$(echo "$line" | cut -d'|' -f3)
       child_name=$(echo "$line" | cut -d'|' -f4)
       task=$(echo "$line" | cut -d'|' -f5)
+      model=$(echo "$line" | cut -d'|' -f6)
 
       # Check if this ant has a completion event
       local is_completed=false
@@ -345,7 +347,7 @@ get_spawn_children() {
     local pipe_count
     pipe_count=$(echo "$line" | tr -cd '|' | wc -c | tr -d ' ')
 
-    if [[ $pipe_count -eq 5 ]]; then
+    if [[ $pipe_count -eq 6 ]]; then
       local parent child_name
       parent=$(echo "$line" | cut -d'|' -f2)
       child_name=$(echo "$line" | cut -d'|' -f4)
