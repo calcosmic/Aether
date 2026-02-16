@@ -18,7 +18,7 @@
   [![npm version](https://img.shields.io/npm/v/aether-colony.svg)](https://www.npmjs.com/package/aether-colony)
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-  **v3.1.13** — Production ready with model routing
+  **v3.1.14** — Production ready with model routing
 </div>
 
 ---
@@ -533,9 +533,11 @@ Aether Repo (.aether/)  →  Hub (~/.aether/)  →  Target Repos (.aether/)
 
 ## Safety Features
 
-- **File Locking** — Prevents concurrent modification of state
+- **File Locking** — Prevents concurrent modification of state with configurable stale lock detection
 - **Atomic Writes** — Temp file + rename pattern
 - **Update Transactions** — Two-phase commit with rollback
+- **State Validation** — Schema validation before any state modifications
+- **Event Pruning** — Automatic cleanup prevents unbounded event history
 - **Git Checkpoints** — Automatic commits before phases
 - **Ant Graveyards** — Failed files marked for future caution
 - **Checkpoint System** — Safe snapshots before updates with `aether checkpoint`
