@@ -1,0 +1,325 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Queen-Wisdom XML Schema (XSD)
+
+  Purpose: Define the eternal memory structure for Aether colony wisdom.
+           This schema enables structured storage of learned patterns,
+           philosophical principles, and evolution tracking across sessions.
+
+  Architecture: Hybrid JSON/XML - JSON for runtime efficiency, XML for
+                eternal memory with full validation and versioning support.
+
+  Version: 1.0.0
+  Namespace: http://aether.colony/schemas/queen-wisdom/1.0
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:qw="http://aether.colony/schemas/queen-wisdom/1.0"
+           elementFormDefault="unqualified"
+           attributeFormDefault="unqualified">
+
+  <!-- ============================================================ -->
+  <!-- Simple Types                                                 -->
+  <!-- ============================================================ -->
+
+  <!-- Confidence score: 0.0 to 1.0 -->
+  <xs:simpleType name="confidenceType">
+    <xs:restriction base="xs:decimal">
+      <xs:minInclusive value="0.0"/>
+      <xs:maxInclusive value="1.0"/>
+      <xs:fractionDigits value="2"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- ISO 8601 timestamp -->
+  <xs:simpleType name="timestampType">
+    <xs:restriction base="xs:dateTime">
+      <xs:pattern value="\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Version string (semver format) -->
+  <xs:simpleType name="versionType">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="\d+\.\d+\.\d+(-[a-zA-Z0-9]+)?"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Domain classification -->
+  <xs:simpleType name="domainType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="architecture"/>
+      <xs:enumeration value="testing"/>
+      <xs:enumeration value="security"/>
+      <xs:enumeration value="performance"/>
+      <xs:enumeration value="ux"/>
+      <xs:enumeration value="process"/>
+      <xs:enumeration value="communication"/>
+      <xs:enumeration value="debugging"/>
+      <xs:enumeration value="general"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Source type -->
+  <xs:simpleType name="sourceType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="queen"/>
+      <xs:enumeration value="user"/>
+      <xs:enumeration value="colony"/>
+      <xs:enumeration value="oracle"/>
+      <xs:enumeration value="observation"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Priority level -->
+  <xs:simpleType name="priorityType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="critical"/>
+      <xs:enumeration value="high"/>
+      <xs:enumeration value="normal"/>
+      <xs:enumeration value="low"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Wisdom ID: kebab-case identifier -->
+  <xs:simpleType name="wisdomIdType">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[a-z][a-z0-9-]*"/>
+      <xs:minLength value="3"/>
+      <xs:maxLength value="64"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- ============================================================ -->
+  <!-- Complex Types                                                -->
+  <!-- ============================================================ -->
+
+  <!-- Base wisdom entry type -->
+  <xs:complexType name="wisdomEntryType">
+    <xs:sequence>
+      <xs:element name="content" type="xs:string">
+        <xs:annotation>
+          <xs:documentation>The actual wisdom content - plain text or markdown</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="context" type="xs:string" minOccurs="0">
+        <xs:annotation>
+          <xs:documentation>Optional context about when/where this wisdom applies</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="examples" type="examplesType" minOccurs="0"/>
+      <xs:element name="related" type="relatedType" minOccurs="0"/>
+      <xs:element name="evolution" type="evolutionType" minOccurs="0"/>
+    </xs:sequence>
+    <xs:attribute name="id" type="wisdomIdType" use="required"/>
+    <xs:attribute name="confidence" type="confidenceType" use="required"/>
+    <xs:attribute name="domain" type="domainType" use="required"/>
+    <xs:attribute name="source" type="sourceType" use="required"/>
+    <xs:attribute name="created_at" type="timestampType" use="required"/>
+    <xs:attribute name="applied_count" type="xs:nonNegativeInteger" use="optional" default="0"/>
+    <xs:attribute name="last_applied" type="timestampType" use="optional"/>
+    <xs:attribute name="priority" type="priorityType" use="optional" default="normal"/>
+  </xs:complexType>
+
+  <!-- Examples container -->
+  <xs:complexType name="examplesType">
+    <xs:sequence>
+      <xs:element name="example" maxOccurs="unbounded">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="scenario" type="xs:string"/>
+            <xs:element name="application" type="xs:string"/>
+            <xs:element name="outcome" type="xs:string" minOccurs="0"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Related wisdom references -->
+  <xs:complexType name="relatedType">
+    <xs:sequence>
+      <xs:element name="ref" maxOccurs="unbounded">
+        <xs:complexType>
+          <xs:attribute name="id" type="wisdomIdType" use="required"/>
+          <xs:attribute name="relationship" use="required">
+            <xs:simpleType>
+              <xs:restriction base="xs:string">
+                <xs:enumeration value="supersedes"/>
+                <xs:enumeration value="extends"/>
+                <xs:enumeration value="contradicts"/>
+                <xs:enumeration value="complements"/>
+                <xs:enumeration value="depends-on"/>
+              </xs:restriction>
+            </xs:simpleType>
+          </xs:attribute>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Evolution tracking -->
+  <xs:complexType name="evolutionType">
+    <xs:sequence>
+      <xs:element name="version" type="versionType"/>
+      <xs:element name="supersedes" type="wisdomIdType" minOccurs="0"/>
+      <xs:element name="changelog" type="xs:string" minOccurs="0"/>
+      <xs:element name="deprecated" type="xs:boolean" minOccurs="0" default="false"/>
+      <xs:element name="deprecated_reason" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Philosophy entry (extends base) -->
+  <xs:complexType name="philosophyType">
+    <xs:complexContent>
+      <xs:extension base="wisdomEntryType">
+        <xs:sequence>
+          <xs:element name="principles" minOccurs="0">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="principle" type="xs:string" maxOccurs="unbounded"/>
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:sequence>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <!-- Pattern entry (extends base) -->
+  <xs:complexType name="patternType">
+    <xs:complexContent>
+      <xs:extension base="wisdomEntryType">
+        <xs:sequence>
+          <xs:element name="pattern_type" minOccurs="0">
+            <xs:simpleType>
+              <xs:restriction base="xs:string">
+                <xs:enumeration value="success"/>
+                <xs:enumeration value="failure"/>
+                <xs:enumeration value="anti-pattern"/>
+                <xs:enumeration value="emerging"/>
+              </xs:restriction>
+            </xs:simpleType>
+          </xs:element>
+          <xs:element name="detection_criteria" type="xs:string" minOccurs="0"/>
+        </xs:sequence>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <!-- Redirect entry (hard constraints) -->
+  <xs:complexType name="redirectType">
+    <xs:complexContent>
+      <xs:extension base="wisdomEntryType">
+        <xs:sequence>
+          <xs:element name="constraint_type" minOccurs="0">
+            <xs:simpleType>
+              <xs:restriction base="xs:string">
+                <xs:enumeration value="must"/>
+                <xs:enumeration value="must-not"/>
+                <xs:enumeration value="avoid"/>
+                <xs:enumeration value="prefer"/>
+              </xs:restriction>
+            </xs:simpleType>
+          </xs:element>
+          <xs:element name="enforcement" type="xs:string" minOccurs="0"/>
+        </xs:sequence>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <!-- Stack wisdom (technical learnings) -->
+  <xs:complexType name="stackWisdomType">
+    <xs:complexContent>
+      <xs:extension base="wisdomEntryType">
+        <xs:sequence>
+          <xs:element name="technology" type="xs:string" minOccurs="0"/>
+          <xs:element name="version_range" type="xs:string" minOccurs="0"/>
+          <xs:element name="workaround" type="xs:string" minOccurs="0"/>
+        </xs:sequence>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <!-- Decree (authoritative directive) -->
+  <xs:complexType name="decreeType">
+    <xs:complexContent>
+      <xs:extension base="wisdomEntryType">
+        <xs:sequence>
+          <xs:element name="authority" type="xs:string" minOccurs="0"/>
+          <xs:element name="expiration" type="timestampType" minOccurs="0"/>
+          <xs:element name="scope" minOccurs="0">
+            <xs:simpleType>
+              <xs:restriction base="xs:string">
+                <xs:enumeration value="global"/>
+                <xs:enumeration value="project"/>
+                <xs:enumeration value="phase"/>
+                <xs:enumeration value="task"/>
+              </xs:restriction>
+            </xs:simpleType>
+          </xs:element>
+        </xs:sequence>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+  <!-- Container types for each wisdom category -->
+  <xs:complexType name="philosophiesType">
+    <xs:sequence>
+      <xs:element name="philosophy" type="philosophyType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="patternsType">
+    <xs:sequence>
+      <xs:element name="pattern" type="patternType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="redirectsType">
+    <xs:sequence>
+      <xs:element name="redirect" type="redirectType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="stackWisdomsType">
+    <xs:sequence>
+      <xs:element name="wisdom" type="stackWisdomType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="decreesType">
+    <xs:sequence>
+      <xs:element name="decree" type="decreeType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Metadata type -->
+  <xs:complexType name="metadataType">
+    <xs:sequence>
+      <xs:element name="version" type="versionType"/>
+      <xs:element name="created" type="timestampType"/>
+      <xs:element name="modified" type="timestampType"/>
+      <xs:element name="colony_id" type="xs:string"/>
+      <xs:element name="queen_signature" type="xs:string" minOccurs="0"/>
+      <xs:element name="checksum" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- ============================================================ -->
+  <!-- Root Element                                                 -->
+  <!-- ============================================================ -->
+
+  <xs:element name="queen-wisdom">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="metadata" type="metadataType"/>
+        <xs:element name="philosophies" type="philosophiesType"/>
+        <xs:element name="patterns" type="patternsType"/>
+        <xs:element name="redirects" type="redirectsType"/>
+        <xs:element name="stack-wisdom" type="stackWisdomsType"/>
+        <xs:element name="decrees" type="decreesType"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>

@@ -1,0 +1,309 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Aether Colony Registry Schema
+
+  Defines the structure for multi-colony registry XML documents.
+  Used for tracking colony lineage, ancestry, and cross-colony relationships.
+
+  Version: 1.0.0
+  Purpose: Eternal memory - colony registry with pheromone inheritance tracking
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           elementFormDefault="qualified">
+
+  <!-- ============================================ -->
+  <!-- Simple Types                                 -->
+  <!-- ============================================ -->
+
+  <!-- Colony ID: alphanumeric with hyphens, 3-64 chars -->
+  <xs:simpleType name="colonyIdType">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[a-zA-Z0-9][a-zA-Z0-9-]{2,63}"/>
+      <xs:minLength value="3"/>
+      <xs:maxLength value="64"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Colony Status: active, paused, or archived -->
+  <xs:simpleType name="colonyStatusType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="active"/>
+      <xs:enumeration value="paused"/>
+      <xs:enumeration value="archived"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- ISO 8601 timestamp -->
+  <xs:simpleType name="timestampType">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Semantic version string -->
+  <xs:simpleType name="versionType">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="\d+\.\d+\.\d+(-[a-zA-Z0-9.-]+)?(\+[a-zA-Z0-9.-]+)?"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Pheromone strength: 0.0 to 1.0 -->
+  <xs:simpleType name="pheromoneStrengthType">
+    <xs:restriction base="xs:decimal">
+      <xs:minInclusive value="0.0"/>
+      <xs:maxInclusive value="1.0"/>
+      <xs:fractionDigits value="3"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Relationship type between colonies -->
+  <xs:simpleType name="relationshipType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="parent"/>
+      <xs:enumeration value="child"/>
+      <xs:enumeration value="sibling"/>
+      <xs:enumeration value="fork"/>
+      <xs:enumeration value="merge"/>
+      <xs:enumeration value="reference"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Pheromone type classification -->
+  <xs:simpleType name="pheromoneTypeEnum">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="focus"/>
+      <xs:enumeration value="redirect"/>
+      <xs:enumeration value="feedback"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- ============================================ -->
+  <!-- Complex Types                                -->
+  <!-- ============================================ -->
+
+  <!-- Pheromone entry: inherited wisdom from parent colony -->
+  <xs:complexType name="pheromoneType">
+    <xs:sequence>
+      <xs:element name="key" type="xs:string"/>
+      <xs:element name="value" type="xs:string"/>
+      <xs:element name="strength" type="pheromoneStrengthType"/>
+      <xs:element name="inherited-at" type="timestampType"/>
+      <xs:element name="source-colony" type="colonyIdType"/>
+    </xs:sequence>
+    <xs:attribute name="type" type="pheromoneTypeEnum" use="optional" default="feedback"/>
+  </xs:complexType>
+
+  <!-- Ancestor entry for ancestry chain -->
+  <xs:complexType name="ancestorType">
+    <xs:simpleContent>
+      <xs:extension base="colonyIdType">
+        <xs:attribute name="generation" type="xs:nonNegativeInteger" use="required"/>
+        <xs:attribute name="relationship" type="relationshipType" use="optional" default="parent"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+
+  <!-- Lineage entry: ancestry tracking -->
+  <xs:complexType name="lineageType">
+    <xs:sequence>
+      <xs:element name="parent-colony" type="colonyIdType" minOccurs="0" maxOccurs="unbounded"/>
+      <xs:element name="forked-from" type="colonyIdType" minOccurs="0"/>
+      <xs:element name="generation" type="xs:positiveInteger" minOccurs="0"/>
+      <xs:element name="ancestry-chain" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="ancestor" type="ancestorType" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Metadata entry key-value pair -->
+  <xs:complexType name="metadataEntryType">
+    <xs:sequence>
+      <xs:element name="key" type="xs:string"/>
+      <xs:element name="value" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Relationship entry: connections to other colonies -->
+  <xs:complexType name="relationshipEntryType">
+    <xs:sequence>
+      <xs:element name="target-colony" type="colonyIdType"/>
+      <xs:element name="relationship" type="relationshipType"/>
+      <xs:element name="established-at" type="timestampType"/>
+      <xs:element name="metadata" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="entry" type="metadataEntryType" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Pheromones container -->
+  <xs:complexType name="pheromonesContainerType">
+    <xs:sequence>
+      <xs:element name="pheromone" type="pheromoneType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="count" type="xs:nonNegativeInteger" use="optional"/>
+  </xs:complexType>
+
+  <!-- Relationships container -->
+  <xs:complexType name="relationshipsContainerType">
+    <xs:sequence>
+      <xs:element name="relationship" type="relationshipEntryType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Tags container -->
+  <xs:complexType name="tagsContainerType">
+    <xs:sequence>
+      <xs:element name="tag" type="xs:string" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Attributes container -->
+  <xs:complexType name="attributesContainerType">
+    <xs:sequence>
+      <xs:element name="attribute" type="metadataEntryType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Colony metadata -->
+  <xs:complexType name="colonyMetadataType">
+    <xs:sequence>
+      <xs:element name="schema-version" type="versionType"/>
+      <xs:element name="tags" type="tagsContainerType" minOccurs="0"/>
+      <xs:element name="attributes" type="attributesContainerType" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Colony entry: single colony definition -->
+  <xs:complexType name="colonyType">
+    <xs:sequence>
+      <!-- Identity -->
+      <xs:element name="id" type="colonyIdType"/>
+      <xs:element name="name" type="xs:string"/>
+      <xs:element name="description" type="xs:string" minOccurs="0"/>
+
+      <!-- Location -->
+      <xs:element name="path" type="xs:string"/>
+      <xs:element name="repository-url" type="xs:anyURI" minOccurs="0"/>
+
+      <!-- Status -->
+      <xs:element name="status" type="colonyStatusType"/>
+      <xs:element name="created-at" type="timestampType"/>
+      <xs:element name="last-active" type="timestampType"/>
+
+      <!-- Lineage -->
+      <xs:element name="lineage" type="lineageType" minOccurs="0"/>
+
+      <!-- Inherited pheromones -->
+      <xs:element name="pheromones-inherited" type="pheromonesContainerType" minOccurs="0"/>
+
+      <!-- Relationships to other colonies -->
+      <xs:element name="relationships" type="relationshipsContainerType" minOccurs="0"/>
+
+      <!-- Metadata -->
+      <xs:element name="metadata" type="colonyMetadataType" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Registry info -->
+  <xs:complexType name="registryInfoType">
+    <xs:sequence>
+      <xs:element name="name" type="xs:string"/>
+      <xs:element name="description" type="xs:string" minOccurs="0"/>
+      <xs:element name="version" type="versionType"/>
+      <xs:element name="created-at" type="timestampType"/>
+      <xs:element name="updated-at" type="timestampType"/>
+      <xs:element name="total-colonies" type="xs:nonNegativeInteger"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Colonies container -->
+  <xs:complexType name="coloniesContainerType">
+    <xs:sequence>
+      <xs:element name="colony" type="colonyType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Global relationship entry -->
+  <xs:complexType name="globalRelationshipType">
+    <xs:sequence>
+      <xs:element name="from-colony" type="colonyIdType"/>
+      <xs:element name="to-colony" type="colonyIdType"/>
+      <xs:element name="type" type="relationshipType"/>
+      <xs:element name="description" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Global relationships container -->
+  <xs:complexType name="globalRelationshipsContainerType">
+    <xs:sequence>
+      <xs:element name="relationship" type="globalRelationshipType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- ============================================ -->
+  <!-- Root Element                                 -->
+  <!-- ============================================ -->
+
+  <xs:element name="colony-registry">
+    <xs:complexType>
+      <xs:sequence>
+        <!-- Registry metadata -->
+        <xs:element name="registry-info" type="registryInfoType"/>
+
+        <!-- Colony entries -->
+        <xs:element name="colonies" type="coloniesContainerType"/>
+
+        <!-- Global relationships (optional) -->
+        <xs:element name="global-relationships" type="globalRelationshipsContainerType" minOccurs="0"/>
+      </xs:sequence>
+      <xs:attribute name="version" type="versionType" use="required"/>
+    </xs:complexType>
+
+    <!-- Key constraints - colony IDs must be unique -->
+    <xs:key name="colonyIdKey">
+      <xs:selector xpath="colonies/colony"/>
+      <xs:field xpath="id"/>
+    </xs:key>
+
+    <!-- Reference constraints for lineage - parent colonies must exist -->
+    <xs:keyref name="parentColonyRef" refer="colonyIdKey">
+      <xs:selector xpath="colonies/colony/lineage/parent-colony"/>
+      <xs:field xpath="."/>
+    </xs:keyref>
+
+    <xs:keyref name="forkedFromRef" refer="colonyIdKey">
+      <xs:selector xpath="colonies/colony/lineage/forked-from"/>
+      <xs:field xpath="."/>
+    </xs:keyref>
+
+    <xs:keyref name="ancestorRef" refer="colonyIdKey">
+      <xs:selector xpath="colonies/colony/lineage/ancestry-chain/ancestor"/>
+      <xs:field xpath="."/>
+    </xs:keyref>
+
+    <!-- Reference constraints for relationships -->
+    <xs:keyref name="relationshipTargetRef" refer="colonyIdKey">
+      <xs:selector xpath="colonies/colony/relationships/relationship/target-colony"/>
+      <xs:field xpath="."/>
+    </xs:keyref>
+
+    <xs:keyref name="globalFromRef" refer="colonyIdKey">
+      <xs:selector xpath="global-relationships/relationship/from-colony"/>
+      <xs:field xpath="."/>
+    </xs:keyref>
+
+    <xs:keyref name="globalToRef" refer="colonyIdKey">
+      <xs:selector xpath="global-relationships/relationship/to-colony"/>
+      <xs:field xpath="."/>
+    </xs:keyref>
+  </xs:element>
+
+</xs:schema>

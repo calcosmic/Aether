@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:ph="http://aether.colony/schemas/pheromones"
+           xmlns:types="http://aether.colony/schemas/types/1.0"
+           targetNamespace="http://aether.colony/schemas/pheromones"
+           elementFormDefault="qualified"
+           attributeFormDefault="unqualified">
+
+  <!-- Import shared types from aether-types.xsd -->
+  <xs:import namespace="http://aether.colony/schemas/types/1.0"
+             schemaLocation="aether-types.xsd"/>
+
+  <xs:annotation>
+    <xs:documentation>
+      Aether Colony Pheromone Exchange Format Schema
+
+      Defines the XML structure for pheromone signals used in colony
+      communication. Pheromones are directional signals that guide
+      worker behavior without direct command chains.
+
+      Signal Types:
+      - FOCUS: Direct attention to specific area (normal priority)
+      - REDIRECT: Hard constraint, avoid this path (high priority)
+      - FEEDBACK: Gentle adjustment based on observation (low priority)
+
+      Version: 1.0.0
+    </xs:documentation>
+  </xs:annotation>
+
+  <!-- Root element: container for all pheromone signals -->
+  <xs:element name="pheromones" type="ph:PheromonesType">
+    <xs:annotation>
+      <xs:documentation>
+        Root element containing a collection of pheromone signals.
+        Signals are processed in priority order (high to low) then
+        by creation time (newest first).
+      </xs:documentation>
+    </xs:annotation>
+  </xs:element>
+
+  <!-- Complex type for the root pheromones container -->
+  <xs:complexType name="PheromonesType">
+    <xs:sequence>
+      <xs:element name="metadata" type="ph:MetadataType" minOccurs="0" maxOccurs="1"/>
+      <xs:element name="signal" type="ph:SignalType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="version" type="types:VersionType" use="required"/>
+    <xs:attribute name="generated_at" type="xs:dateTime" use="required"/>
+    <xs:attribute name="colony_id" type="types:IdentifierType" use="optional"/>
+    <xs:anyAttribute namespace="##any" processContents="lax"/>
+  </xs:complexType>
+
+  <!-- Metadata for the pheromone collection -->
+  <xs:complexType name="MetadataType">
+    <xs:sequence>
+      <xs:element name="source" type="ph:SourceType" minOccurs="0" maxOccurs="1"/>
+      <xs:element name="context" type="xs:string" minOccurs="0" maxOccurs="1"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Source information for traceability -->
+  <xs:complexType name="SourceType">
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute name="type" type="types:SourceTypeEnum" use="required"/>
+        <xs:attribute name="version" type="types:VersionType" use="optional"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+
+  <!-- Individual pheromone signal -->
+  <xs:complexType name="SignalType">
+    <xs:sequence>
+      <xs:element name="content" type="ph:ContentType"/>
+      <xs:element name="tags" type="ph:TagsType" minOccurs="0" maxOccurs="1"/>
+      <xs:element name="scope" type="ph:ScopeType" minOccurs="0" maxOccurs="1"/>
+    </xs:sequence>
+    <xs:attribute name="id" type="types:IdentifierType" use="required"/>
+    <xs:attribute name="type" type="ph:SignalTypeEnum" use="required"/>
+    <xs:attribute name="priority" type="types:PriorityType" use="required"/>
+    <xs:attribute name="source" type="types:IdentifierType" use="required"/>
+    <xs:attribute name="created_at" type="xs:dateTime" use="required"/>
+    <xs:attribute name="expires_at" type="xs:dateTime" use="optional"/>
+    <xs:attribute name="active" type="xs:boolean" use="optional" default="true"/>
+  </xs:complexType>
+
+  <!-- Signal content with optional structured data -->
+  <xs:complexType name="ContentType" mixed="true">
+    <xs:sequence>
+      <xs:element name="text" type="xs:string" minOccurs="0" maxOccurs="1"/>
+      <xs:element name="data" type="ph:DataType" minOccurs="0" maxOccurs="1"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Structured data attachment -->
+  <xs:complexType name="DataType">
+    <xs:sequence>
+      <xs:any namespace="##any" processContents="lax" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="format" type="types:DataFormatEnum" use="optional" default="json"/>
+  </xs:complexType>
+
+  <!-- Tags for categorization and filtering -->
+  <xs:complexType name="TagsType">
+    <xs:sequence>
+      <xs:element name="tag" type="ph:TagType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Individual tag with optional weight -->
+  <xs:complexType name="TagType">
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute name="weight" type="types:WeightType" use="optional" default="1.0"/>
+        <xs:attribute name="category" type="xs:string" use="optional"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+
+  <!-- Scope definition for signal applicability -->
+  <xs:complexType name="ScopeType">
+    <xs:sequence>
+      <xs:element name="castes" type="ph:CastesType" minOccurs="0" maxOccurs="1"/>
+      <xs:element name="paths" type="ph:PathsType" minOccurs="0" maxOccurs="1"/>
+      <xs:element name="phases" type="ph:PhasesType" minOccurs="0" maxOccurs="1"/>
+    </xs:sequence>
+    <xs:attribute name="global" type="xs:boolean" use="optional" default="false"/>
+  </xs:complexType>
+
+  <!-- Target castes -->
+  <xs:complexType name="CastesType">
+    <xs:sequence>
+      <xs:element name="caste" type="types:CasteEnum" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="match" type="types:MatchEnum" use="optional" default="any"/>
+  </xs:complexType>
+
+  <!-- Target file paths (glob patterns supported) -->
+  <xs:complexType name="PathsType">
+    <xs:sequence>
+      <xs:element name="path" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="match" type="types:MatchEnum" use="optional" default="any"/>
+  </xs:complexType>
+
+  <!-- Target phases -->
+  <xs:complexType name="PhasesType">
+    <xs:sequence>
+      <xs:element name="phase" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="match" type="types:MatchEnum" use="optional" default="any"/>
+  </xs:complexType>
+
+  <!-- Signal type enumeration (pheromone-specific, not in shared types) -->
+  <xs:simpleType name="SignalTypeEnum">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="FOCUS"/>
+      <xs:enumeration value="REDIRECT"/>
+      <xs:enumeration value="FEEDBACK"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+</xs:schema>
