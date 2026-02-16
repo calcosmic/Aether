@@ -281,25 +281,26 @@ class FileLock {
    *
    * This method is idempotent - safe to call multiple times.
    *
-   * @returns {boolean} True if a lock was released, false if no lock was held
+   * @returns {boolean} True if lock was fully released, false if no lock was held
+   *                    or if deletion failed (check console.warn for details)
    */
   release() {
     if (!this.currentLock) {
       return false;
     }
 
-    let released = false;
+    let success = true;
 
     // Delete lock file
     try {
       if (fs.existsSync(this.currentLock)) {
         fs.unlinkSync(this.currentLock);
-        released = true;
       }
     } catch (error) {
       if (error.code !== 'ENOENT') {
         // Log but don't throw - we're cleaning up
         console.warn(`Warning: Failed to remove lock file: ${error.message}`);
+        success = false;
       }
     }
 
@@ -312,6 +313,7 @@ class FileLock {
       } catch (error) {
         if (error.code !== 'ENOENT') {
           console.warn(`Warning: Failed to remove PID file: ${error.message}`);
+          success = false;
         }
       }
     }
@@ -320,7 +322,7 @@ class FileLock {
     this.currentLock = null;
     this.currentPidFile = null;
 
-    return released;
+    return success;
   }
 
   /**

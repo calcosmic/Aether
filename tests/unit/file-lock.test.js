@@ -441,3 +441,83 @@ test.serial('acquire handles malformed PID files as stale', (t) => {
   t.true(result);
   t.true(mockFs.unlinkSync.calledWith('.aether/locks/state.json.lock'));
 });
+
+// Test 16: release returns false when lock file deletion fails (PLAN-001)
+test.serial('release returns false when lock file deletion fails', (t) => {
+  const { mockFs, fileLock } = t.context;
+
+  // Setup: first acquire a lock
+  mockFs.existsSync.withArgs('.aether/locks/state.json.lock').returns(false);
+  mockFs.openSync.withArgs('.aether/locks/state.json.lock', 'wx').returns(1);
+  fileLock.acquire('/test/state.json');
+
+  // Setup: lock files exist for cleanup
+  mockFs.existsSync.withArgs('.aether/locks/state.json.lock').returns(true);
+  mockFs.existsSync.withArgs('.aether/locks/state.json.lock.pid').returns(true);
+
+  // unlinkSync for lock file throws EACCES (permission denied)
+  const error = new Error('EACCES: permission denied');
+  error.code = 'EACCES';
+  mockFs.unlinkSync.withArgs('.aether/locks/state.json.lock').throws(error);
+
+  // Execute
+  const result = fileLock.release();
+
+  // Assert: should return false indicating failure
+  t.false(result, 'release should return false when lock file deletion fails');
+  // PID file cleanup should still be attempted
+  t.true(mockFs.unlinkSync.calledWith('.aether/locks/state.json.lock.pid'));
+});
+
+// Test 17: release returns false when PID file deletion fails (PLAN-001)
+test.serial('release returns false when PID file deletion fails', (t) => {
+  const { mockFs, fileLock } = t.context;
+
+  // Setup: first acquire a lock
+  mockFs.existsSync.withArgs('.aether/locks/state.json.lock').returns(false);
+  mockFs.openSync.withArgs('.aether/locks/state.json.lock', 'wx').returns(1);
+  fileLock.acquire('/test/state.json');
+
+  // Setup: lock files exist for cleanup
+  mockFs.existsSync.withArgs('.aether/locks/state.json.lock').returns(true);
+  mockFs.existsSync.withArgs('.aether/locks/state.json.lock.pid').returns(true);
+
+  // Lock file deletion succeeds
+  mockFs.unlinkSync.withArgs('.aether/locks/state.json.lock').returns();
+
+  // unlinkSync for PID file throws EACCES
+  const error = new Error('EACCES: permission denied');
+  error.code = 'EACCES';
+  mockFs.unlinkSync.withArgs('.aether/locks/state.json.lock.pid').throws(error);
+
+  // Execute
+  const result = fileLock.release();
+
+  // Assert: should return false indicating failure
+  t.false(result, 'release should return false when PID file deletion fails');
+});
+
+// Test 18: release returns true when files already deleted (ENOENT) (PLAN-001)
+test.serial('release returns true when files already deleted (ENOENT)', (t) => {
+  const { mockFs, fileLock } = t.context;
+
+  // Setup: first acquire a lock
+  mockFs.existsSync.withArgs('.aether/locks/state.json.lock').returns(false);
+  mockFs.openSync.withArgs('.aether/locks/state.json.lock', 'wx').returns(1);
+  fileLock.acquire('/test/state.json');
+
+  // Setup: lock files reported as existing but unlink throws ENOENT
+  mockFs.existsSync.withArgs('.aether/locks/state.json.lock').returns(true);
+  mockFs.existsSync.withArgs('.aether/locks/state.json.lock.pid').returns(true);
+
+  // unlinkSync throws ENOENT (file already gone)
+  const enoentError = new Error('ENOENT: no such file');
+  enoentError.code = 'ENOENT';
+  mockFs.unlinkSync.throws(enoentError);
+
+  // Execute
+  const result = fileLock.release();
+
+  // Assert: should return true - ENOENT is treated as success
+  t.true(result, 'release should return true when files already deleted (ENOENT)');
+});
