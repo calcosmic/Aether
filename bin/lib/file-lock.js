@@ -10,7 +10,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { FileSystemError } = require('./errors');
+const { FileSystemError, ConfigurationError } = require('./errors');
 
 /**
  * Default configuration for lock behavior
@@ -21,6 +21,12 @@ const DEFAULT_OPTIONS = {
   retryInterval: 50,    // 50ms between retries
   maxRetries: 100,      // Total 5 seconds max wait
 };
+
+/**
+ * Module-level set of registered cleanup functions (PLAN-006 fix #4)
+ * Prevents duplicate cleanup handler registration across multiple FileLock instances
+ */
+const registeredCleanups = new Set();
 
 /**
  * FileLock class for exclusive file locking with stale detection
@@ -40,6 +46,39 @@ class FileLock {
    */
   constructor(options = {}) {
     this.options = { ...DEFAULT_OPTIONS, ...options };
+
+    // Validate lockDir (PLAN-006 fix #2)
+    if (!this.options.lockDir || typeof this.options.lockDir !== 'string') {
+      throw new ConfigurationError(
+        'lockDir must be a non-empty string',
+        { lockDir: this.options.lockDir }
+      );
+    }
+
+    // Validate timeout (PLAN-006 fix #5)
+    if (typeof this.options.timeout !== 'number' || this.options.timeout < 0) {
+      throw new ConfigurationError(
+        'timeout must be a non-negative number',
+        { timeout: this.options.timeout }
+      );
+    }
+
+    // Validate retryInterval
+    if (typeof this.options.retryInterval !== 'number' || this.options.retryInterval < 0) {
+      throw new ConfigurationError(
+        'retryInterval must be a non-negative number',
+        { retryInterval: this.options.retryInterval }
+      );
+    }
+
+    // Validate maxRetries
+    if (typeof this.options.maxRetries !== 'number' || this.options.maxRetries < 0) {
+      throw new ConfigurationError(
+        'maxRetries must be a non-negative number',
+        { maxRetries: this.options.maxRetries }
+      );
+    }
+
     this.currentLock = null;
     this.currentPidFile = null;
 
@@ -69,9 +108,20 @@ class FileLock {
 
   /**
    * Register process cleanup handlers to ensure locks are released on exit
+   * Uses module-level tracking to prevent duplicate registrations (PLAN-006 fix #4)
    * @private
    */
   _registerCleanupHandlers() {
+    // Create unique identifier for this cleanup based on lock directory
+    const cleanupId = `filelock-${this.options.lockDir}`;
+
+    // Only register if not already registered
+    if (registeredCleanups.has(cleanupId)) {
+      return;
+    }
+
+    registeredCleanups.add(cleanupId);
+
     const cleanup = () => {
       this.release();
     };
@@ -132,49 +182,110 @@ class FileLock {
   }
 
   /**
+   * Safely unlink a file, ignoring ENOENT errors
+   *
+   * @param {string} filePath - Path to file to unlink
+   * @private
+   */
+  _safeUnlink(filePath) {
+    try {
+      fs.unlinkSync(filePath);
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        // Log but don't throw - we're cleaning up
+        console.warn(`Warning: Failed to clean up ${filePath}: ${error.message}`);
+      }
+    }
+  }
+
+  /**
    * Clean up stale lock files
+   *
+   * Checks both PID file and lock file for PID (handles crash scenarios
+   * where only one file was created). Also checks lock age to handle
+   * PID reuse race condition.
    *
    * @param {string} lockFile - Path to lock file
    * @param {string} pidFile - Path to PID file
+   * @returns {boolean} True if lock was cleaned up, false if still held
    * @private
    */
   _cleanupStaleLock(lockFile, pidFile) {
-    try {
-      // Try to read the PID from the pid file
-      if (fs.existsSync(pidFile)) {
-        const pidData = fs.readFileSync(pidFile, 'utf8').trim();
-        const pid = parseInt(pidData, 10);
+    // Maximum lock age before considering stale (5 minutes)
+    // This handles PID reuse race condition
+    const MAX_LOCK_AGE_MS = 5 * 60 * 1000;
 
-        if (!isNaN(pid)) {
-          // Check if the process is still running
-          if (this._isProcessRunning(pid)) {
-            // Process is running, lock is not stale
-            return false;
+    try {
+      // Check lock file age first (handles PID reuse)
+      if (fs.existsSync(lockFile)) {
+        try {
+          const stat = fs.statSync(lockFile);
+          const lockAge = Date.now() - stat.mtimeMs;
+
+          if (lockAge > MAX_LOCK_AGE_MS) {
+            // Lock is old enough to be considered stale regardless of PID
+            this._safeUnlink(lockFile);
+            this._safeUnlink(pidFile);
+            return true;
           }
+        } catch {
+          // Cannot stat, proceed with PID check
         }
+      }
+
+      let pid = null;
+
+      // Try to read PID from PID file first
+      if (fs.existsSync(pidFile)) {
+        try {
+          const pidData = fs.readFileSync(pidFile, 'utf8').trim();
+
+          // Validate PID is a positive integer (PLAN-006 fix #3)
+          if (!/^\d+$/.test(pidData)) {
+            // PID file contains invalid data - clean it up
+            this._safeUnlink(lockFile);
+            this._safeUnlink(pidFile);
+            return true;
+          }
+
+          pid = parseInt(pidData, 10);
+        } catch (readError) {
+          // PID file unreadable - will clean up
+        }
+      }
+
+      // If no valid PID from PID file, try lock file itself
+      if ((pid === null || isNaN(pid)) && fs.existsSync(lockFile)) {
+        try {
+          const lockData = fs.readFileSync(lockFile, 'utf8').trim();
+
+          // Validate PID is a positive integer
+          if (!/^\d+$/.test(lockData)) {
+            // Lock file contains invalid data - clean it up
+            this._safeUnlink(lockFile);
+            this._safeUnlink(pidFile);
+            return true;
+          }
+
+          pid = parseInt(lockData, 10);
+        } catch (readError) {
+          // Lock file unreadable - will clean up
+        }
+      }
+
+      // Check if process is running
+      if (!isNaN(pid) && this._isProcessRunning(pid)) {
+        // Process is running, lock is valid
+        return false;
       }
 
       // Either no valid PID or process not running - clean up stale lock
-      try {
-        fs.unlinkSync(lockFile);
-      } catch (error) {
-        if (error.code !== 'ENOENT') {
-          throw error;
-        }
-      }
-
-      try {
-        fs.unlinkSync(pidFile);
-      } catch (error) {
-        if (error.code !== 'ENOENT') {
-          throw error;
-        }
-      }
+      this._safeUnlink(lockFile);
+      this._safeUnlink(pidFile);
 
       return true;
     } catch (error) {
       if (error.code === 'ENOENT') {
-        // Lock file doesn't exist, consider it cleaned
         return true;
       }
       throw new FileSystemError(
@@ -187,39 +298,73 @@ class FileLock {
   /**
    * Attempt to acquire a lock atomically
    *
+   * Uses PID-file-first ordering for crash recovery:
+   * 1. Write PID file first (if this fails, no lock file created)
+   * 2. Create lock file atomically
+   * 3. On failure, clean up both files
+   *
    * @param {string} lockFile - Path to lock file
    * @param {string} pidFile - Path to PID file
    * @returns {boolean} True if lock acquired, false otherwise
+   * @throws {FileSystemError} On unexpected filesystem errors
    * @private
    */
   _tryAcquire(lockFile, pidFile) {
-    try {
-      // Attempt atomic creation using 'wx' flag (fails if file exists)
-      const fd = fs.openSync(lockFile, 'wx');
+    let pidFileCreated = false;
+    let lockFileCreated = false;
 
+    try {
+      // Step 1: Write PID file first (easier to clean up if lock fails)
       try {
-        // Write current PID to lock file
-        const pid = process.pid;
-        fs.writeFileSync(fd, pid.toString(), 'utf8');
-      } finally {
-        fs.closeSync(fd);
+        fs.writeFileSync(pidFile, process.pid.toString(), 'utf8');
+        pidFileCreated = true;
+      } catch (pidError) {
+        // Cannot write PID file - cannot proceed
+        throw new FileSystemError(
+          `Failed to write PID file: ${pidFile}`,
+          { error: pidError.message, code: pidError.code }
+        );
       }
 
-      // Also write to separate PID file for easy reading
-      fs.writeFileSync(pidFile, process.pid.toString(), 'utf8');
+      // Step 2: Create lock file atomically
+      try {
+        const fd = fs.openSync(lockFile, 'wx');
+        lockFileCreated = true;
 
-      // Track current lock
+        try {
+          // Write PID to lock file as well (for redundancy)
+          fs.writeFileSync(fd, process.pid.toString(), 'utf8');
+        } finally {
+          fs.closeSync(fd);
+        }
+      } catch (lockError) {
+        if (lockError.code === 'EEXIST') {
+          // Lock file exists - clean up our PID file
+          this._safeUnlink(pidFile);
+          return false;
+        }
+        throw lockError;
+      }
+
+      // Step 3: Track current lock (only after both files created)
       this.currentLock = lockFile;
       this.currentPidFile = pidFile;
 
       return true;
+
     } catch (error) {
-      if (error.code === 'EEXIST') {
-        // Lock file already exists
-        return false;
+      // Clean up on any failure
+      if (lockFileCreated) {
+        this._safeUnlink(lockFile);
+      }
+      if (pidFileCreated) {
+        this._safeUnlink(pidFile);
       }
 
-      // Unexpected error
+      if (error instanceof FileSystemError) {
+        throw error;
+      }
+
       throw new FileSystemError(
         `Failed to acquire lock: ${lockFile}`,
         { error: error.message, code: error.code }
@@ -228,7 +373,10 @@ class FileLock {
   }
 
   /**
-   * Acquire an exclusive lock on a file
+   * Acquire an exclusive lock on a file (SYNCHRONOUS - may block event loop)
+   *
+   * WARNING: This method uses a busy-wait loop that blocks the Node.js event loop
+   * during retry intervals. For non-blocking operation, use acquireAsync() instead.
    *
    * @param {string} filePath - Path to the file to lock
    * @returns {boolean} True if lock acquired, false on timeout
@@ -360,7 +508,10 @@ class FileLock {
   }
 
   /**
-   * Wait for a lock to be released
+   * Wait for a lock to be released (SYNCHRONOUS - may block event loop)
+   *
+   * WARNING: This method uses a busy-wait loop that blocks the Node.js event loop.
+   * For non-blocking operation, use waitForLockAsync() instead.
    *
    * @param {string} filePath - Path to wait for
    * @param {number} maxWait - Maximum milliseconds to wait (default: timeout option)
@@ -380,6 +531,78 @@ class FileLock {
       while (Date.now() - delayStart < 10) {
         // 10ms busy-wait
       }
+    }
+
+    return true;
+  }
+
+  /**
+   * Acquire an exclusive lock asynchronously (yields to event loop)
+   *
+   * This is the non-blocking version of acquire(). It uses setTimeout for
+   * delays, allowing other async operations to run during wait periods.
+   *
+   * @param {string} filePath - Path to the file to lock
+   * @returns {Promise<boolean>} True if lock acquired, false on timeout
+   * @throws {FileSystemError} On unexpected filesystem errors
+   */
+  async acquireAsync(filePath) {
+    const { lockFile, pidFile } = this._getLockPaths(filePath);
+
+    // Check for existing lock and handle stale locks
+    if (fs.existsSync(lockFile)) {
+      this._cleanupStaleLock(lockFile, pidFile);
+      // Lock is held by running process if not cleaned
+    }
+
+    // Try to acquire lock with retries
+    let retryCount = 0;
+    const startTime = Date.now();
+
+    while (retryCount < this.options.maxRetries) {
+      // Try to acquire the lock
+      if (this._tryAcquire(lockFile, pidFile)) {
+        return true;
+      }
+
+      // Check timeout
+      if (Date.now() - startTime >= this.options.timeout) {
+        return false;
+      }
+
+      // Wait before retry (ASYNC - yields to event loop)
+      retryCount++;
+      if (retryCount < this.options.maxRetries) {
+        await new Promise(resolve =>
+          setTimeout(resolve, this.options.retryInterval)
+        );
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Wait for a lock to be released asynchronously (yields to event loop)
+   *
+   * This is the non-blocking version of waitForLock(). It uses setTimeout
+   * for delays, allowing other async operations to run during wait periods.
+   *
+   * @param {string} filePath - Path to wait for
+   * @param {number} maxWait - Maximum milliseconds to wait (default: timeout option)
+   * @returns {Promise<boolean>} True if lock was released, false on timeout
+   */
+  async waitForLockAsync(filePath, maxWait = null) {
+    const waitTime = maxWait || this.options.timeout;
+    const startTime = Date.now();
+
+    while (this.isLocked(filePath)) {
+      if (Date.now() - startTime >= waitTime) {
+        return false;
+      }
+
+      // Small async delay (yields to event loop)
+      await new Promise(resolve => setTimeout(resolve, 10));
     }
 
     return true;

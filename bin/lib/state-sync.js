@@ -76,6 +76,11 @@ function parseRoadmapMd(content) {
     const phaseNum = parseInt(match[1], 10);
     const phaseName = match[2].trim();
 
+    // Warn on unreasonable phase numbers (PLAN-006 fix #8)
+    if (phaseNum > 100 || phaseNum < 0) {
+      console.warn(`Warning: Unusual phase number ${phaseNum} in ROADMAP.md`);
+    }
+
     // Look for status indicators near this phase
     const sectionStart = match.index;
     const nextPhaseMatch = phaseRegex.exec(content);
@@ -111,8 +116,13 @@ function parseRoadmapMd(content) {
  * @returns {string} Colony state: INITIALIZING|PLANNING|BUILDING|COMPLETED
  */
 function determineColonyState(status, phase) {
+  // No status - determine by phase (PLAN-006 fix #7)
   if (!status) {
-    return 'INITIALIZING';
+    if (phase === null || phase === undefined) {
+      return 'INITIALIZING';
+    }
+    // Phase 0 can be valid - don't force INITIALIZING
+    return phase === 0 ? 'PLANNING' : 'BUILDING';
   }
 
   const statusLower = status.toLowerCase();
@@ -129,12 +139,8 @@ function determineColonyState(status, phase) {
     return 'BUILDING';
   }
 
-  // Default based on phase
-  if (phase === 0) {
-    return 'INITIALIZING';
-  }
-
-  return 'BUILDING';
+  // Default based on phase - Phase 0 is PLANNING, not INITIALIZING
+  return phase === 0 ? 'PLANNING' : 'BUILDING';
 }
 
 /**
@@ -164,26 +170,53 @@ function syncStateFromPlanning(repoPath) {
   }
 
   try {
-    // Read STATE.md
+    // Read STATE.md with improved error handling (PLAN-006 fix #9)
     const stateMdPath = path.join(repoPath, '.planning', 'STATE.md');
-    if (!fs.existsSync(stateMdPath)) {
-      return { synced: false, updates: [], error: 'STATE.md not found' };
+    try {
+      if (!fs.existsSync(stateMdPath)) {
+        return { synced: false, updates: [], error: '.planning/STATE.md not found' };
+      }
+    } catch (accessError) {
+      if (accessError.code === 'EACCES') {
+        return { synced: false, updates: [], error: '.planning/STATE.md not accessible (permission denied)' };
+      }
+      return { synced: false, updates: [], error: `Failed to check STATE.md: ${accessError.message}` };
     }
 
-    const stateMdContent = fs.readFileSync(stateMdPath, 'utf8');
+    let stateMdContent;
+    try {
+      stateMdContent = fs.readFileSync(stateMdPath, 'utf8');
+    } catch (readError) {
+      if (readError.code === 'EACCES') {
+        return { synced: false, updates: [], error: '.planning/STATE.md not readable (permission denied)' };
+      }
+      return { synced: false, updates: [], error: `Failed to read STATE.md: ${readError.message}` };
+    }
     const planningState = parseStateMd(stateMdContent);
 
     // Read ROADMAP.md for phases
     const roadmapPath = path.join(repoPath, '.planning', 'ROADMAP.md');
     let phases = [];
     if (fs.existsSync(roadmapPath)) {
-      const roadmapContent = fs.readFileSync(roadmapPath, 'utf8');
-      phases = parseRoadmapMd(roadmapContent);
+      try {
+        const roadmapContent = fs.readFileSync(roadmapPath, 'utf8');
+        phases = parseRoadmapMd(roadmapContent);
+      } catch (roadmapError) {
+        // Non-fatal - phases are optional
+        console.warn(`Warning: Could not read ROADMAP.md: ${roadmapError.message}`);
+      }
     }
 
-    // Read current COLONY_STATE.json
-    if (!fs.existsSync(colonyStatePath)) {
-      return { synced: false, updates: [], error: 'COLONY_STATE.json not found' };
+    // Read current COLONY_STATE.json with improved error handling
+    try {
+      if (!fs.existsSync(colonyStatePath)) {
+        return { synced: false, updates: [], error: '.aether/data/COLONY_STATE.json not found' };
+      }
+    } catch (accessError) {
+      if (accessError.code === 'EACCES') {
+        return { synced: false, updates: [], error: 'COLONY_STATE.json not accessible (permission denied)' };
+      }
+      return { synced: false, updates: [], error: `Failed to check COLONY_STATE.json: ${accessError.message}` };
     }
 
     // Parse JSON with error handling (PLAN-002)

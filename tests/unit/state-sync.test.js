@@ -240,3 +240,61 @@ test.serial('determineColonyState returns correct states', (t) => {
   t.is(stateSync.determineColonyState('COMPLETE', 1), 'COMPLETED');
   t.is(stateSync.determineColonyState(null, null), 'INITIALIZING');
 });
+
+// ============================================================================
+// PLAN-006: Additional Resilience Tests
+// ============================================================================
+
+// Test 11: Phase 0 returns PLANNING not INITIALIZING (PLAN-006 fix #7)
+test.serial('determineColonyState returns PLANNING for Phase 0', (t) => {
+  const { stateSync } = t.context;
+
+  // Phase 0 with no status should return PLANNING (not INITIALIZING)
+  t.is(stateSync.determineColonyState(null, 0), 'PLANNING',
+    'Phase 0 should return PLANNING, not INITIALIZING');
+
+  // Phase 0 with status should still work
+  t.is(stateSync.determineColonyState('READY', 0), 'PLANNING');
+  t.is(stateSync.determineColonyState('BUILDING', 0), 'BUILDING');
+});
+
+// Test 12: syncStateFromPlanning distinguishes EACCES from ENOENT (PLAN-006 fix #9)
+test.serial('syncStateFromPlanning reports permission denied for STATE.md', (t) => {
+  const { mockFs, mockFileLock, stateSync, repoPath } = t.context;
+
+  // Setup: STATE.md exists but is not readable
+  const accessError = new Error('Permission denied');
+  accessError.code = 'EACCES';
+  mockFs.readFileSync.withArgs(path.join(repoPath, '.planning', 'STATE.md'), 'utf8')
+    .throws(accessError);
+
+  // Execute
+  const result = stateSync.syncStateFromPlanning(repoPath);
+
+  // Assert: Should return permission error, not generic error
+  t.false(result.synced);
+  t.true(result.error.includes('permission') || result.error.includes('denied'),
+    `Error should mention permission: ${result.error}`);
+
+  // Lock should have been released
+  t.true(mockFileLock.release.calledOnce);
+});
+
+// Test 13: syncStateFromPlanning distinguishes EACCES for COLONY_STATE.json (PLAN-006 fix #9)
+test.serial('syncStateFromPlanning reports permission denied for COLONY_STATE.json', (t) => {
+  const { mockFs, mockFileLock, stateSync, repoPath } = t.context;
+
+  // Setup: COLONY_STATE.json not accessible
+  const accessError = new Error('Permission denied');
+  accessError.code = 'EACCES';
+  mockFs.existsSync.withArgs(path.join(repoPath, '.aether', 'data', 'COLONY_STATE.json'))
+    .throws(accessError);
+
+  // Execute
+  const result = stateSync.syncStateFromPlanning(repoPath);
+
+  // Assert: Should return permission error
+  t.false(result.synced);
+  t.true(result.error.includes('permission') || result.error.includes('accessible'),
+    `Error should mention permission: ${result.error}`);
+});
