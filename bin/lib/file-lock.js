@@ -20,6 +20,7 @@ const DEFAULT_OPTIONS = {
   timeout: 5000,        // 5 seconds total timeout
   retryInterval: 50,    // 50ms between retries
   maxRetries: 100,      // Total 5 seconds max wait
+  maxLockAge: 5 * 60 * 1000,  // 5 minutes - configurable stale lock threshold
 };
 
 /**
@@ -43,6 +44,7 @@ class FileLock {
    * @param {number} options.timeout - Total timeout in milliseconds (default: 5000)
    * @param {number} options.retryInterval - Milliseconds between retries (default: 50)
    * @param {number} options.maxRetries - Maximum retry attempts (default: 100)
+   * @param {number} options.maxLockAge - Maximum lock age in ms before considered stale (default: 300000)
    */
   constructor(options = {}) {
     this.options = { ...DEFAULT_OPTIONS, ...options };
@@ -76,6 +78,14 @@ class FileLock {
       throw new ConfigurationError(
         'maxRetries must be a non-negative number',
         { maxRetries: this.options.maxRetries }
+      );
+    }
+
+    // Validate maxLockAge (PLAN-007 Fix 1)
+    if (typeof this.options.maxLockAge !== 'number' || this.options.maxLockAge < 0) {
+      throw new ConfigurationError(
+        'maxLockAge must be a non-negative number',
+        { maxLockAge: this.options.maxLockAge }
       );
     }
 
@@ -211,9 +221,9 @@ class FileLock {
    * @private
    */
   _cleanupStaleLock(lockFile, pidFile) {
-    // Maximum lock age before considering stale (5 minutes)
+    // Maximum lock age before considering stale (configurable, default 5 minutes)
     // This handles PID reuse race condition
-    const MAX_LOCK_AGE_MS = 5 * 60 * 1000;
+    const maxLockAgeMs = this.options.maxLockAge;
 
     try {
       // Check lock file age first (handles PID reuse)
@@ -222,7 +232,7 @@ class FileLock {
           const stat = fs.statSync(lockFile);
           const lockAge = Date.now() - stat.mtimeMs;
 
-          if (lockAge > MAX_LOCK_AGE_MS) {
+          if (lockAge > maxLockAgeMs) {
             // Lock is old enough to be considered stale regardless of PID
             this._safeUnlink(lockFile);
             this._safeUnlink(pidFile);

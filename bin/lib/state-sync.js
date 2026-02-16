@@ -13,6 +13,95 @@ const path = require('path');
 const { FileLock } = require('./file-lock');
 
 /**
+ * Default maximum number of events to keep (PLAN-007 Fix 2)
+ */
+const DEFAULT_MAX_EVENTS = 100;
+
+/**
+ * Prune events array to prevent unbounded growth (PLAN-007 Fix 2)
+ * @param {Array} events - Events array to prune
+ * @param {number} maxEvents - Maximum number of events to keep
+ * @returns {Array} Pruned events array (most recent by timestamp)
+ */
+function pruneEvents(events, maxEvents = DEFAULT_MAX_EVENTS) {
+  if (!Array.isArray(events)) return events;
+  if (events.length <= maxEvents) return events;
+
+  // Keep most recent events by timestamp
+  const sorted = [...events].sort((a, b) => {
+    const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+    const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+    return timeB - timeA; // Descending (most recent first)
+  });
+
+  return sorted.slice(0, maxEvents);
+}
+
+/**
+ * State schema definition for validation (PLAN-007 Fix 3)
+ */
+const STATE_SCHEMA = {
+  version: { required: true, type: 'string' },
+  current_phase: { required: true, type: 'number' },
+  events: { required: true, type: 'array' },
+  goal: { required: false, type: 'string' },
+  state: { required: false, type: 'string' },
+};
+
+/**
+ * Validate state object against schema (PLAN-007 Fix 3)
+ * @param {object} state - State object to validate
+ * @returns {object} Validation result: { valid: boolean, errors: string[] }
+ */
+function validateStateSchema(state) {
+  const errors = [];
+
+  // Check state is a non-null object
+  if (!state || typeof state !== 'object' || Array.isArray(state)) {
+    return { valid: false, errors: ['State must be a non-null object'] };
+  }
+
+  // Validate each field against schema
+  for (const [field, config] of Object.entries(STATE_SCHEMA)) {
+    // Check required fields
+    if (config.required && !(field in state)) {
+      errors.push(`Missing required field: ${field}`);
+      continue;
+    }
+
+    // Check types for present non-null fields
+    if ((field in state) && state[field] !== null && state[field] !== undefined) {
+      const actualType = Array.isArray(state[field]) ? 'array' : typeof state[field];
+      if (actualType !== config.type) {
+        errors.push(`Field "${field}" must be ${config.type}, got ${actualType}`);
+      }
+    }
+  }
+
+  // Validate events array elements
+  if (Array.isArray(state.events)) {
+    for (let i = 0; i < state.events.length; i++) {
+      const event = state.events[i];
+      if (!event || typeof event !== 'object') {
+        errors.push(`events[${i}] must be an object`);
+        continue;
+      }
+      if (!event.timestamp) {
+        errors.push(`events[${i}] missing required field: timestamp`);
+      }
+      if (!event.type) {
+        errors.push(`events[${i}] missing required field: type`);
+      }
+      if (!event.worker) {
+        errors.push(`events[${i}] missing required field: worker`);
+      }
+    }
+  }
+
+  return { valid: errors.length === 0, errors };
+}
+
+/**
  * Parse STATE.md markdown content to extract current state
  * @param {string} content - STATE.md file content
  * @returns {object} Parsed state: { phase, milestone, status, lastAction }
@@ -232,6 +321,17 @@ function syncStateFromPlanning(repoPath) {
       };
     }
 
+    // Validate state schema before any modifications (PLAN-007 Fix 3)
+    const validation = validateStateSchema(colonyState);
+    if (!validation.valid) {
+      return {
+        synced: false,
+        updates: [],
+        error: `State schema validation failed: ${validation.errors.join('; ')}`,
+        recovery: 'Fix state schema errors or restore from backup'
+      };
+    }
+
     // Track if any changes were made
     let changed = false;
 
@@ -285,6 +385,9 @@ function syncStateFromPlanning(repoPath) {
           source: '.planning/STATE.md'
         }
       });
+
+      // Prune events to prevent unbounded growth (PLAN-007 Fix 2)
+      colonyState.events = pruneEvents(colonyState.events);
 
       // Update last_updated
       colonyState.last_updated = new Date().toISOString();
@@ -406,5 +509,8 @@ module.exports = {
   determineColonyState,
   syncStateFromPlanning,
   reconcileStates,
-  updateColonyStateFromPlanning
+  updateColonyStateFromPlanning,
+  validateStateSchema,
+  pruneEvents,
+  DEFAULT_MAX_EVENTS,
 };

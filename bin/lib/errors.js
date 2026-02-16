@@ -180,6 +180,21 @@ class ConfigurationError extends AetherError {
 }
 
 /**
+ * StateSchemaError - State file schema validation errors (PLAN-007 Fix 3)
+ */
+class StateSchemaError extends AetherError {
+  constructor(message, details = {}) {
+    super(
+      ErrorCodes.E_INVALID_STATE,
+      message,
+      details,
+      'Check state file structure and fix schema errors, or restore from backup'
+    );
+    this.name = 'StateSchemaError';
+  }
+}
+
+/**
  * Map error codes to sysexits.h exit codes
  * @param {string} code - Error code
  * @returns {number} Exit code (0-255)
@@ -233,6 +248,7 @@ module.exports = {
   ValidationError,
   FileSystemError,
   ConfigurationError,
+  StateSchemaError,
   ErrorCodes,
   getExitCode,
   wrapError,

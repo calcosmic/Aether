@@ -945,3 +945,81 @@ test.serial('multiple FileLock instances do not duplicate cleanup handlers', (t)
   t.is(exitListenersAfter, exitListenersBefore + 2,
     'should add one listener per unique lockDir, not one per instance');
 });
+
+// ============================================================================
+// PLAN-007: Resilience Improvements Tests
+// ============================================================================
+
+// Test 36: Constructor accepts custom maxLockAge (PLAN-007 Fix 1)
+test.serial('constructor accepts custom maxLockAge', (t) => {
+  const { mockFs, FileLock } = t.context;
+
+  // Execute: Create with custom maxLockAge
+  const fileLock = new FileLock({
+    lockDir: '.aether/locks',
+    maxLockAge: 60000, // 1 minute
+  });
+
+  // Assert: Should not throw and option should be set
+  t.is(fileLock.options.maxLockAge, 60000);
+});
+
+// Test 37: Constructor validates maxLockAge is non-negative (PLAN-007 Fix 1)
+test.serial('constructor throws ConfigurationError for negative maxLockAge', (t) => {
+  const { FileLock } = t.context;
+
+  // Execute & Assert
+  const err = t.throws(() => new FileLock({ lockDir: '.aether/locks', maxLockAge: -1000 }));
+  t.is(err.code, 'E_CONFIG');
+  t.true(err.message.includes('maxLockAge'));
+});
+
+// Test 38: Custom maxLockAge is used for stale detection (PLAN-007 Fix 1)
+test.serial('custom maxLockAge is used for stale detection', (t) => {
+  const { mockFs, FileLock } = t.context;
+
+  // Create instance with short maxLockAge (1 second)
+  const fileLock = new FileLock({
+    lockDir: '.aether/locks',
+    timeout: 100,
+    retryInterval: 10,
+    maxRetries: 5,
+    maxLockAge: 1000, // 1 second
+  });
+
+  // Setup: lock file exists with timestamp 2 seconds old (older than maxLockAge)
+  mockFs.existsSync.withArgs('.aether/locks/state.json.lock').returns(true);
+  mockFs.existsSync.withArgs('.aether/locks/state.json.lock.pid').returns(true);
+
+  const oldTime = Date.now() - 2000; // 2 seconds old
+  mockFs.statSync = sandbox.stub().returns({ mtimeMs: oldTime });
+
+  // Setup: PID is still running
+  mockFs.readFileSync.withArgs('.aether/locks/state.json.lock.pid', 'utf8').returns('99999');
+  process.kill.callsFake((pid, signal) => {
+    if (signal === 0) return true;
+    throw new Error('ESRCH');
+  });
+
+  // Setup: new lock acquisition succeeds
+  mockFs.openSync.withArgs('.aether/locks/state.json.lock', 'wx').returns(1);
+
+  // Execute
+  const result = fileLock.acquire('/test/state.json');
+
+  // Assert: should succeed because lock is older than 1 second maxLockAge
+  t.true(result, 'acquire should succeed when lock is older than custom maxLockAge');
+  t.true(mockFs.unlinkSync.calledWith('.aether/locks/state.json.lock'),
+    'old lock file should be cleaned up');
+});
+
+// Test 39: Default maxLockAge is 5 minutes for backward compatibility (PLAN-007 Fix 1)
+test.serial('default maxLockAge is 5 minutes', (t) => {
+  const { mockFs, FileLock } = t.context;
+
+  // Execute: Create with default options
+  const fileLock = new FileLock({ lockDir: '.aether/locks' });
+
+  // Assert: Default should be 5 minutes
+  t.is(fileLock.options.maxLockAge, 5 * 60 * 1000);
+});

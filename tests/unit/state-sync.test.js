@@ -298,3 +298,256 @@ test.serial('syncStateFromPlanning reports permission denied for COLONY_STATE.js
   t.true(result.error.includes('permission') || result.error.includes('accessible'),
     `Error should mention permission: ${result.error}`);
 });
+
+// ============================================================================
+// PLAN-007: State Schema Validation Tests
+// ============================================================================
+
+// Test 14: validateStateSchema accepts valid state (PLAN-007 Fix 3)
+test.serial('validateStateSchema accepts valid state', (t) => {
+  const { stateSync } = t.context;
+
+  const validState = {
+    version: '3.0',
+    current_phase: 1,
+    events: [
+      { timestamp: '2026-01-01T00:00:00Z', type: 'test', worker: 'test-worker' }
+    ],
+    goal: 'Test Goal',
+    state: 'BUILDING'
+  };
+
+  const result = stateSync.validateStateSchema(validState);
+
+  t.true(result.valid);
+  t.is(result.errors.length, 0);
+});
+
+// Test 15: validateStateSchema rejects missing required fields (PLAN-007 Fix 3)
+test.serial('validateStateSchema rejects missing required fields', (t) => {
+  const { stateSync } = t.context;
+
+  const invalidState = {
+    goal: 'Test Goal'
+    // Missing version, current_phase, events
+  };
+
+  const result = stateSync.validateStateSchema(invalidState);
+
+  t.false(result.valid);
+  t.true(result.errors.some(e => e.includes('version')));
+  t.true(result.errors.some(e => e.includes('current_phase')));
+  t.true(result.errors.some(e => e.includes('events')));
+});
+
+// Test 16: validateStateSchema rejects wrong types (PLAN-007 Fix 3)
+test.serial('validateStateSchema rejects wrong types', (t) => {
+  const { stateSync } = t.context;
+
+  const invalidState = {
+    version: 3,  // Should be string
+    current_phase: '1',  // Should be number
+    events: {}  // Should be array
+  };
+
+  const result = stateSync.validateStateSchema(invalidState);
+
+  t.false(result.valid);
+  t.true(result.errors.some(e => e.includes('version') && e.includes('string')));
+  t.true(result.errors.some(e => e.includes('current_phase') && e.includes('number')));
+  t.true(result.errors.some(e => e.includes('events') && e.includes('array')));
+});
+
+// Test 17: validateStateSchema validates event structure (PLAN-007 Fix 3)
+test.serial('validateStateSchema validates event structure', (t) => {
+  const { stateSync } = t.context;
+
+  const invalidState = {
+    version: '3.0',
+    current_phase: 1,
+    events: [
+      { timestamp: '2026-01-01T00:00:00Z' }, // Missing type and worker
+      { type: 'test', worker: 'test' }, // Missing timestamp
+      { timestamp: '2026-01-01T00:00:00Z', type: 'test' } // Missing worker
+    ]
+  };
+
+  const result = stateSync.validateStateSchema(invalidState);
+
+  t.false(result.valid);
+  t.true(result.errors.some(e => e.includes('events[0]') && e.includes('type')));
+  t.true(result.errors.some(e => e.includes('events[0]') && e.includes('worker')));
+  t.true(result.errors.some(e => e.includes('events[1]') && e.includes('timestamp')));
+  t.true(result.errors.some(e => e.includes('events[2]') && e.includes('worker')));
+});
+
+// Test 18: validateStateSchema handles null/undefined (PLAN-007 Fix 3)
+test.serial('validateStateSchema handles null/undefined', (t) => {
+  const { stateSync } = t.context;
+
+  t.false(stateSync.validateStateSchema(null).valid);
+  t.false(stateSync.validateStateSchema(undefined).valid);
+  t.false(stateSync.validateStateSchema('string').valid);
+  t.false(stateSync.validateStateSchema(123).valid);
+  t.false(stateSync.validateStateSchema([]).valid);
+});
+
+// Test 19: syncStateFromPlanning rejects invalid state before write (PLAN-007 Fix 3)
+test.serial('syncStateFromPlanning rejects invalid state before write', (t) => {
+  const { mockFs, mockFileLock, stateSync, repoPath } = t.context;
+
+  // Setup: COLONY_STATE.json has invalid schema (events as object instead of array)
+  mockFs.readFileSync.withArgs(path.join(repoPath, '.aether', 'data', 'COLONY_STATE.json'), 'utf8')
+    .returns(JSON.stringify({
+      version: '3.0',
+      goal: 'Test Milestone',
+      state: 'BUILDING',
+      current_phase: 1,
+      plan: { phases: [] },
+      events: {} // Invalid - should be array
+    }));
+
+  // Make state change to trigger write
+  mockFs.readFileSync.withArgs(path.join(repoPath, '.planning', 'STATE.md'), 'utf8')
+    .returns('Phase 2\nMilestone: Different Milestone\nStatus: BUILDING');
+
+  // Execute
+  const result = stateSync.syncStateFromPlanning(repoPath);
+
+  // Assert: Should return schema validation error
+  t.false(result.synced);
+  t.true(result.error.includes('schema validation') || result.error.includes('events'),
+    `Error should mention schema validation: ${result.error}`);
+
+  // Check recovery field exists
+  t.truthy(result.recovery, `Recovery should exist: ${result.recovery}`);
+
+  // Should not have written to temp file (validation happens before write)
+  const writeCalls = mockFs.writeFileSync.getCalls();
+  const wroteTmp = writeCalls.some(call => call.args[0] && call.args[0].includes('.tmp'));
+  t.false(wroteTmp, 'Should not write .tmp file when validation fails');
+
+  // Lock should have been released
+  t.true(mockFileLock.release.calledOnce);
+});
+
+// ============================================================================
+// PLAN-007: Events Pruning Tests
+// ============================================================================
+
+// Test 20: pruneEvents returns array unchanged if under limit (PLAN-007 Fix 2)
+test.serial('pruneEvents returns array unchanged if under limit', (t) => {
+  const { stateSync } = t.context;
+
+  const events = [
+    { timestamp: '2026-01-01T00:00:00Z', type: 'test', worker: 'test' }
+  ];
+
+  const result = stateSync.pruneEvents(events);
+
+  t.is(result.length, 1);
+  t.is(result[0].timestamp, '2026-01-01T00:00:00Z');
+});
+
+// Test 21: pruneEvents keeps most recent events (PLAN-007 Fix 2)
+test.serial('pruneEvents keeps most recent events', (t) => {
+  const { stateSync } = t.context;
+
+  const events = [];
+  // Create 150 events with incrementing timestamps in 2024
+  for (let i = 0; i < 150; i++) {
+    // Use months to avoid day overflow - spread across the year
+    const month = Math.floor(i / 31);
+    const day = (i % 31) + 1;
+    events.push({
+      timestamp: new Date(2024, month, day).toISOString(),
+      type: 'test',
+      worker: 'test'
+    });
+  }
+
+  const result = stateSync.pruneEvents(events, 100);
+
+  t.is(result.length, 100);
+  // Most recent should be first (sorted descending)
+  // The last event added has the highest timestamp (month 4, day 27)
+  const lastMonth = Math.floor(149 / 31);
+  const lastDay = (149 % 31) + 1;
+  t.is(result[0].timestamp, new Date(2024, lastMonth, lastDay).toISOString());
+  // Oldest kept should be event 50 (month 1, day 20)
+  const oldestMonth = Math.floor(50 / 31);
+  const oldestDay = (50 % 31) + 1;
+  t.is(result[99].timestamp, new Date(2024, oldestMonth, oldestDay).toISOString());
+});
+
+// Test 22: pruneEvents handles non-array input (PLAN-007 Fix 2)
+test.serial('pruneEvents handles non-array input', (t) => {
+  const { stateSync } = t.context;
+
+  t.is(stateSync.pruneEvents(null), null);
+  t.is(stateSync.pruneEvents(undefined), undefined);
+  t.is(stateSync.pruneEvents('string'), 'string');
+  t.deepEqual(stateSync.pruneEvents({}), {});
+});
+
+// Test 23: pruneEvents handles empty array (PLAN-007 Fix 2)
+test.serial('pruneEvents handles empty array', (t) => {
+  const { stateSync } = t.context;
+
+  const result = stateSync.pruneEvents([]);
+
+  t.deepEqual(result, []);
+});
+
+// Test 24: syncStateFromPlanning prunes events after adding (PLAN-007 Fix 2)
+test.serial('syncStateFromPlanning prunes events after adding', (t) => {
+  const { mockFs, mockFileLock, stateSync, repoPath } = t.context;
+
+  // Setup: Create state with 150 events to trigger actual pruning
+  const existingEvents = [];
+  for (let i = 0; i < 150; i++) {
+    // Use months to avoid day overflow - spread across multiple years
+    const month = Math.floor(i / 31);
+    const day = (i % 31) + 1;
+    existingEvents.push({
+      timestamp: new Date(2024, month, day).toISOString(),
+      type: 'old_event',
+      worker: 'test'
+    });
+  }
+
+  mockFs.readFileSync.withArgs(path.join(repoPath, '.aether', 'data', 'COLONY_STATE.json'), 'utf8')
+    .returns(JSON.stringify({
+      version: '3.0',
+      goal: 'Test Milestone',
+      state: 'BUILDING',
+      current_phase: 1,
+      plan: { phases: [] },
+      events: existingEvents
+    }));
+
+  // Make state change to trigger sync event
+  mockFs.readFileSync.withArgs(path.join(repoPath, '.planning', 'STATE.md'), 'utf8')
+    .returns('Phase 2\nMilestone: Different Milestone\nStatus: BUILDING');
+
+  // Execute
+  const result = stateSync.syncStateFromPlanning(repoPath);
+
+  // Assert
+  t.true(result.synced);
+
+  // Check that writeFileSync was called
+  t.true(mockFs.writeFileSync.called);
+
+  // Get the written state
+  const writeCall = mockFs.writeFileSync.getCalls().find(c => c.args[0].includes('.tmp'));
+  const writtenState = JSON.parse(writeCall.args[1]);
+
+  // Should have exactly 100 events after pruning (150 + 1 sync, pruned to 100)
+  t.is(writtenState.events.length, 100, 'Events should be pruned to 100');
+
+  // Most recent event should be the sync event (has current timestamp in 2026)
+  // All old events are from 2024, so the sync event (2026) should be first
+  t.is(writtenState.events[0].type, 'state_synced_from_planning',
+    'First event should be the sync event (most recent)');
+});
