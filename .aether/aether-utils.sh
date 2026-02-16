@@ -3271,11 +3271,11 @@ ${entry}" "$queen_file" > "$tmp_file"
     done
 
     # Determine pass/fail
+    # pass = true if: no stale files (fresh files can coexist with missing files)
+    # missing files are ok - they will be created during the session
     pass=false
-    if [[ -z "$missing_docs" ]]; then
-      if [[ "$force_mode" == "--force" ]] || [[ -z "$stale_docs" ]]; then
-        pass=true
-      fi
+    if [[ "$force_mode" == "--force" ]] || [[ -z "$stale_docs" ]]; then
+      pass=true
     fi
 
     # Build JSON response

@@ -33,6 +33,31 @@ No colony initialized. Run /ant:init first.
 ```
 Stop here.
 
+#### Step 1.5: Check for Concurrent Seal Operations
+
+Capture session start time:
+```bash
+SEAL_START=$(date +%s)
+```
+
+Check for existing seal operations (in-progress archives):
+```bash
+# Check for incomplete archive directories (no manifest.json)
+incomplete_archives=$(find .aether/data/archive -type d -name "session_*_archive" 2>/dev/null | while read dir; do
+  if [[ ! -f "$dir/manifest.json" ]]; then
+    echo "$dir"
+  fi
+done)
+
+if [[ -n "$incomplete_archives" ]]; then
+  echo "Warning: Incomplete archive operations detected:"
+  echo "$incomplete_archives"
+  echo ""
+  echo "These may be from interrupted seal operations."
+  echo "Proceeding will create a new archive."
+fi
+```
+
 ### Step 2: Validate Colony Is Complete
 
 Extract: `goal`, `current_phase`, `plan.phases`, `milestone`, `state`.
@@ -195,6 +220,19 @@ Create archive manifest file `$archive_dir/manifest.json`:
     "constraints.json"
   ]
 }
+```
+
+#### Step 5.5: Verify Archive Integrity
+
+Verify the archive was created successfully:
+```bash
+if [[ -f "$archive_dir/manifest.json" ]]; then
+  echo "Archive verified: $archive_dir"
+else
+  echo "Error: Archive creation incomplete"
+  # Don't proceed with milestone update
+  exit 1
+fi
 ```
 
 ### Step 6: Update Milestone to Crowned Anthill

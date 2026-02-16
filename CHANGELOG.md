@@ -41,6 +41,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Session Freshness Detection System** — Global system to prevent stale session files from silently breaking Aether workflows. Implements `session-verify-fresh` and `session-clear` commands with support for 7 commands (survey, oracle, watch, swarm, init, seal, entomb). Features cross-platform timestamp detection (macOS/Linux), environment variable overrides for testing, and protected operations (init/seal/entomb never auto-clear). Backward compatibility maintained with `survey-verify-fresh` and `survey-clear` wrappers. Added comprehensive test suite (`tests/bash/test-session-freshness.sh`) and API documentation (`docs/session-freshness-api.md`). (`.aether/aether-utils.sh`, `tests/bash/test-session-freshness.sh`, `docs/session-freshness-api.md`)
+  - `/ant:colonize` — Added `--force-resurvey` flag, stale survey detection, and verification
+  - `/ant:oracle` — Added `--force` flag, stale session detection with user options
+  - `/ant:watch` — Added session timestamp capture and stale file handling
+  - `/ant:swarm` — Added auto-clear for stale findings with verification
+  - `/ant:init` — Added freshness check with protected state (no auto-clear)
+  - `/ant:seal` — Added incomplete archive detection and integrity verification
+  - `/ant:entomb` — Added incomplete chamber detection and integrity verification
+
 ### Fixed
 - **Architecture Cleanup: Source of Truth Flipped** — Complete review and cleanup of the flipped source-of-truth architecture. `.aether/` is now the source of truth for system files, with `runtime/` auto-populated by `bin/sync-to-runtime.sh` during npm install. Fixed 6 stale documentation files, updated 5 planning files, expanded allowlist from 20 to 36 files, handled 4 orphan files, and verified zero drift between directories. (`.aether/recover.sh`, `.aether/RECOVERY-PLAN.md`, `.planning/codebase/STRUCTURE.md`, `.planning/codebase/ARCHITECTURE.md`, `.planning/codebase/CONVENTIONS.md`, `TO-DOS.md`, `bin/sync-to-runtime.sh`, `bin/lib/update-transaction.js`)
 

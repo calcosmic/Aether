@@ -33,6 +33,22 @@ mkdir -p .aether/data
 touch .aether/data/activity.log
 ```
 
+### Step 2.5: Check for Stale Watch Session
+
+Capture session start time:
+```bash
+WATCH_START=$(date +%s)
+```
+
+Check for stale watch files:
+```bash
+stale_check=$(bash .aether/aether-utils.sh session-verify-fresh --command watch "" "$WATCH_START")
+has_stale=$(echo "$stale_check" | jq -r '.stale | length')
+```
+
+If stale files exist, they will be overwritten by the new watch session.
+The tmux session check in Step 4 handles concurrent sessions.
+
 ### Step 3: Create Status File
 
 Write initial status to `.aether/data/watch-status.txt`:
@@ -44,6 +60,7 @@ Write initial status to `.aether/data/watch-status.txt`:
        `-`
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+Session Started: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
 State: IDLE
 Phase: -/-
 

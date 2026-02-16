@@ -67,6 +67,33 @@ Initialize swarm display for real-time tracking:
 bash .aether/aether-utils.sh swarm-display-init "<swarm_id>"
 ```
 
+#### Step 2.5: Check for Stale Swarm Session
+
+Capture session start time:
+```bash
+SWARM_START=$(date +%s)
+```
+
+Check for stale swarm files:
+```bash
+stale_check=$(bash .aether/aether-utils.sh session-verify-fresh --command swarm "" "$SWARM_START")
+has_stale=$(echo "$stale_check" | jq -r '.stale | length')
+
+if [[ "$has_stale" -gt 0 ]]; then
+  # Auto-clear stale swarm findings (safe - findings are temporary)
+  bash .aether/aether-utils.sh session-clear --command swarm
+  echo "Cleared stale swarm findings for fresh investigation"
+fi
+```
+
+After initializing findings, verify swarm files are fresh:
+```bash
+verify_result=$(bash .aether/aether-utils.sh session-verify-fresh --command swarm "" "$SWARM_START")
+if [[ $(echo "$verify_result" | jq -r '.missing | length') -gt 0 ]]; then
+  echo "Warning: Swarm files not properly initialized"
+fi
+```
+
 Display header:
 ```
 🔥🐜🗡️🐜🔥 ═══════════════════════════════════════════════

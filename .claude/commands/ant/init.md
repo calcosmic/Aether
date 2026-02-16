@@ -87,18 +87,38 @@ Parse the JSON result:
 
 This step is non-blocking — proceed regardless of outcome.
 
-### Step 2: Read Current State
+### Step 2: Read Current State with Freshness Check
+
+Capture session start time:
+```bash
+INIT_START=$(date +%s)
+```
 
 Use the Read tool to read `.aether/data/COLONY_STATE.json`.
 
-If the `goal` field is not null, output:
+Check freshness of existing state:
+```bash
+fresh_check=$(bash .aether/aether-utils.sh session-verify-fresh --command init "" "$INIT_START")
+is_stale=$(echo "$fresh_check" | jq -r '.stale | length')
+freshness_status=$([[ "$is_stale" -gt 0 ]] && echo "stale" || echo "fresh")
+```
+
+If the `goal` field is not null:
+- If state is stale (old session): Warn user but proceed
+- If state is fresh (active session): Strongly recommend continuation
 
 ```
 Colony already initialized with goal: "{existing_goal}"
 
+State freshness: {freshness_status}
+Session: {session_id}
+Initialized: {initialized_at}
+
 To reinitialize with a new goal, the current state will be reset.
 Proceeding with new goal: "{new_goal}"
 ```
+
+**Note:** Init never auto-clears COLONY_STATE.json. Reinitialization is an explicit user choice.
 
 ### Step 2.6: Load Prior Colony Knowledge (Optional)
 

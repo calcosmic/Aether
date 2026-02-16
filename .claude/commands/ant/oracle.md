@@ -19,7 +19,8 @@ Parse `$ARGUMENTS` to determine the action:
 
 1. Check for flags:
    - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
-   - Otherwise: set `visual_mode = true`
+   - If contains `--force` or `--force-research`: set `force_research = true`
+   - Otherwise: set `visual_mode = true`, `force_research = false`
    - Remove flags from arguments before routing
 
 2. **If remaining arguments is exactly `stop`** — go to **Step 0b: Stop Oracle**
@@ -191,6 +192,40 @@ After collecting all answers, proceed to Step 2.
 
 ---
 
+### Step 1.5: Check for Stale Oracle Session
+
+Before starting new research, check for existing oracle session files.
+
+Capture session start time:
+```bash
+ORACLE_START=$(date +%s)
+```
+
+Check for stale files:
+```bash
+stale_check=$(bash .aether/aether-utils.sh session-verify-fresh --command oracle "" "$ORACLE_START")
+has_stale=$(echo "$stale_check" | jq -r '.stale | length')
+has_progress=$(echo "$stale_check" | jq -r '.fresh | length')
+
+if [[ "$has_stale" -gt 0 ]] || [[ "$has_progress" -gt 0 ]]; then
+  # Found existing oracle session
+  if [[ "$force_research" == "true" ]]; then
+    bash .aether/aether-utils.sh session-clear --command oracle
+    echo "Cleared stale oracle session for fresh research"
+  else
+    # Existing session found - prompt user
+    echo "Found existing oracle session. Options:"
+    echo "  /ant:oracle status     - View current session"
+    echo "  /ant:oracle --force    - Restart with fresh session"
+    echo "  /ant:oracle stop       - Stop current session"
+    # Don't proceed - let user decide
+    exit 0
+  fi
+fi
+```
+
+---
+
 ### Step 2: Configure Research
 
 Create the oracle directory structure:
@@ -253,6 +288,18 @@ Use the Write tool to write `.aether/oracle/progress.md`:
 
 ---
 
+```
+
+#### Step 2.5: Verify Oracle Files Are Fresh
+
+Verify that progress.md and research.json were created successfully:
+```bash
+verify_result=$(bash .aether/aether-utils.sh session-verify-fresh --command oracle "" "$ORACLE_START")
+fresh_count=$(echo "$verify_result" | jq -r '.fresh | length')
+
+if [[ "$fresh_count" -lt 2 ]]; then
+  echo "Warning: Oracle files not properly initialized"
+fi
 ```
 
 Proceed to Step 3.

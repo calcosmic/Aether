@@ -172,3 +172,33 @@ aether caste-models list
 # Run all tests
 npm test
 ```
+
+# Communication style
+
+  - Explain things twice: once technically, once in plain English ("for
+  dummies").
+  - Keep technical details accurate; keep plain-English explanations simple.
+  - Example format: "I'm using X because Y. In other words: ..."
+
+---
+
+## Active Development
+
+### Session Freshness Detection System (In Progress)
+
+All stateful commands now use timestamp verification to detect stale sessions. This prevents old session files from silently breaking workflows.
+
+**Pattern:**
+1. Capture `SESSION_START=$(date +%s)` before spawning agents
+2. Check file freshness with `session-verify-fresh --command <name>`
+3. Auto-clear stale files or prompt user based on command type
+4. Verify files are fresh after spawning
+
+**Current Phase:** See `docs/aether_dev_handoff.md` for implementation status
+
+**Full Plan:** `docs/session-freshness-implementation-plan.md`
+
+**Protected Commands** (never auto-clear):
+- `init` - COLONY_STATE.json is precious
+- `seal` - Archives are precious
+- `entomb` - Chambers are precious

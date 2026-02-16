@@ -33,6 +33,28 @@ No colony to entomb. Run /ant:init first.
 ```
 Stop here.
 
+#### Step 1.5: Check for Concurrent Entomb Operations
+
+Capture session start time:
+```bash
+ENTOMB_START=$(date +%s)
+```
+
+Check for incomplete chamber operations:
+```bash
+# Check for incomplete chambers (no colony-state.json)
+incomplete_chambers=$(find .aether/chambers -type d -mindepth 1 -maxdepth 1 2>/dev/null | while read dir; do
+  if [[ ! -f "$dir/colony-state.json" ]]; then
+    echo "$dir"
+  fi
+done)
+
+if [[ -n "$incomplete_chambers" ]]; then
+  echo "Warning: Incomplete chamber operations detected:"
+  echo "$incomplete_chambers"
+fi
+```
+
 ### Step 2: Validate Colony Can Be Entombed
 
 Extract: `goal`, `state`, `current_phase`, `plan.phases`, `memory.decisions`, `memory.phase_learnings`.
