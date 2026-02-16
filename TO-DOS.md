@@ -10,9 +10,9 @@ This file tracks pending work items. Each todo is self-contained with full conte
 
 - **The build checkpoint system uses `git stash` on ALL dirty files, including user work that has nothing to do with the phase.** During the repo-local migration (phase 5), the checkpoint stashed 1145 lines of uncommitted TO-DOS.md content (Oracle spec, 10 advanced colony ideas, multi-ant vision) and never popped it back. User nearly lost hours of work -- only recovered by manually searching git stashes. **Root cause:** `git stash` is a blunt instrument. The checkpoint system doesn't distinguish between "system files I'm about to modify" and "user's unrelated work in progress." **Fix:** The build/update system must ONLY modify files on an explicit allowlist of system files. Never stash, checkpoint, or touch anything outside that list. If system files are dirty, warn the user -- but leave their work alone. **System files (safe to modify):** `.aether/*.md`, `.aether/aether-utils.sh`, `.aether/docs/`, `.claude/commands/ant/`, `.opencode/commands/ant/`, `runtime/`, `bin/cli.js`. **User data (NEVER touch):** `.aether/data/`, `.aether/dreams/`, `.aether/oracle/`, `TO-DOS.md`, COLONY_STATE.json, flags, learnings, constraints, project files. **The boundary is simple: system files are the tool, user data is their work. Updates touch the tool, never the work.**
 
-### Remove run_in_background from build.md worker spawns - 2026-02-12
+### ~~Remove run_in_background from build.md worker spawns - 2026-02-12~~ FIXED
 
-- **Delayed task-notification banners make build summaries look premature** - build.md spawns workers with `run_in_background: true` then collects results via `TaskOutput`. The data is correct but Claude Code fires `task-notification` banners asynchronously after the summary is already displayed, making it look like the summary was written before agents finished. **Fix:** Remove `run_in_background: true` from all Task calls in build.md Steps 5.1, 5.4, and 5.4.2. Multiple Task calls in a single message already run in parallel without the background flag — they just block and return results directly. Then remove Steps 5.2 and 5.4.1 (TaskOutput collection) since results come back from the Task calls themselves. Apply same change to OpenCode mirror. **Files:** `.claude/commands/ant/build.md`, `.opencode/commands/ant/ant:build.md`. **Scope:** modest — remove flag + delete ~20 lines of TaskOutput instructions.
+- **RESOLVED:** Removed `run_in_background: true` from Task calls in build.md Steps 5.1, 5.4, 5.6. Deleted TaskOutput collection steps (5.2, 5.4.1) since results come back directly from Task calls. Multiple Task calls in a single message already run in parallel without the background flag — they just block and return results directly. Renumbered remaining steps appropriately. Applied to both Claude and OpenCode mirrors. Commit: 5c12fcf.
 
 ### Deprecate old 2.x npm versions - 2026-02-12
 
@@ -21,6 +21,47 @@ This file tracks pending work items. Each todo is self-contained with full conte
 ---
 
 ## Priority 0.5: High Priority
+
+### Apply Timestamp Verification Pattern to `/ant:oracle` Command - 2026-02-16
+
+- **The oracle command spawns a long-running research agent that can leave stale progress files if interrupted.** The colonize command was just fixed with timestamp verification that auto-detects and clears stale survey files. The same pattern should be applied to oracle to prevent users from accidentally continuing stale research sessions.
+
+**Implementation Details:**
+- Add `oracle-verify-fresh` and `oracle-clear` subcommands to `.aether/aether-utils.sh`
+- Capture `ORACLE_START=$(date +%s)` before spawning oracle agent
+- Check if `.aether/oracle/progress.md` has mtime >= ORACLE_START
+- Auto-clear stale files before spawning new oracle session
+- Add `--force-research` flag for explicit restart
+- Update `.claude/commands/ant/oracle.md` Steps 0-2
+
+**Reference:** See `docs/colonize-fix-handoff.md` for complete pattern documentation and implementation guide.
+
+**Files to Modify:**
+- `.aether/aether-utils.sh` - Add oracle utility subcommands
+- `.claude/commands/ant/oracle.md` - Add timestamp verification logic
+
+**Scope:** Medium - ~80 lines following established pattern from colonize fix.
+
+---
+
+### Convert Colony Prompts to XML Format - 2026-02-15
+
+- **XML-structured prompts are more reliable, parseable, and self-documenting than free-form text** - The `create-prompt` skill demonstrates that XML tags (`<objective>`, `<context>`, `<requirements>`, `<output>`, `<success_criteria>`) create clear semantic boundaries that Claude parses more reliably. Aether's worker prompts and command definitions are currently in markdown with ad-hoc formatting. Converting them to XML would improve consistency and reduce misinterpretation.
+
+**Scope of Conversion:**
+1. **Worker definitions** (`.aether/workers.md`) - Builder, Watcher, Scout, Chaos, Oracle prompts
+2. **Command prompts** (`.claude/commands/ant/*.md`, `.opencode/commands/ant/*.md`) - Build, plan, init, continue, etc.
+3. **Agent definitions** (`.opencode/agents/*.md`) - Agent role definitions
+
+**Implementation:**
+- Define XML schema for Aether prompts (objective, context, requirements, constraints, output, verification, success_criteria)
+- Convert existing prompts while preserving all functionality
+- Update documentation to reflect XML as the standard
+- Add validation/linting for prompt structure
+
+**Why P0.5:** This is foundational work that improves reliability of all agent interactions. The sooner it's done, the less debt accumulates as more prompts are added.
+
+---
 
 ### Interactive Caste Model Configuration in Claude - 2026-02-14
 
@@ -122,14 +163,14 @@ Milestones should NOT be gates — they should be **status labels**. The biologi
 - Self-Driving Colony Mode (autonomous overnight sessions)
 
 *Quick wins (1 phase each):*
-- Remove run_in_background from build.md worker spawns (P0, ~20 lines)
+- ~~Remove run_in_background from build.md worker spawns (P0, ~20 lines)~~ DONE
 - Deprecate old 2.x npm versions (P0, one command)
 - Surface Dreams in /ant:status (small addition)
 - Codebase Ant Pre-Flight Check (Step 4.5 in build.md)
 - Smart Command Suggestion (decision tree in continue/status)
 
 *Already done (verify and close):*
-- Chaos Ant, Archaeologist Ant, Dreamer Ant, Progressive Disclosure, YAML quoting, lint scripts, instinct seeding — all marked DONE
+- Chaos Ant, Archaeologist Ant, Dreamer Ant, Progressive Disclosure, YAML quoting, lint scripts, instinct seeding, run_in_background fix — all marked DONE
 
 **Scope:** Research phase is trivial. Implementation depends on what's selected. **Do this immediately after Oracle fix.**
 
