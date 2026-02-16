@@ -25,14 +25,14 @@ function createMockModelProfiles(tempDir) {
   fs.mkdirSync(aetherDir, { recursive: true });
 
   // Copy aether-utils.sh from the actual repo
-  const repoUtilsPath = path.join(__dirname, '..', '.aether', 'aether-utils.sh');
+  const repoUtilsPath = path.join(__dirname, '..', '..', '.aether', 'aether-utils.sh');
   const tempUtilsPath = path.join(aetherDir, 'aether-utils.sh');
   if (fs.existsSync(repoUtilsPath)) {
     fs.copyFileSync(repoUtilsPath, tempUtilsPath);
   }
 
   // Copy bin/lib for Node.js dependencies
-  const repoBinPath = path.join(__dirname, '..', 'bin');
+  const repoBinPath = path.join(__dirname, '..', '..', 'bin');
   const tempBinPath = path.join(tempDir, 'bin');
   if (fs.existsSync(repoBinPath)) {
     fs.mkdirSync(tempBinPath, { recursive: true });
@@ -48,7 +48,7 @@ function createMockModelProfiles(tempDir) {
   }
 
   // Copy node_modules for dependencies
-  const repoNodeModules = path.join(__dirname, '..', 'node_modules');
+  const repoNodeModules = path.join(__dirname, '..', '..', 'node_modules');
   const tempNodeModules = path.join(tempDir, 'node_modules');
   if (fs.existsSync(repoNodeModules)) {
     // Create symlink for js-yaml and other deps
