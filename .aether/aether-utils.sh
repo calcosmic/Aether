@@ -1159,7 +1159,7 @@ EOF
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
     # Acquire lock for atomic flag update (degrade gracefully if locking unavailable)
-    local lock_acquired=false
+    lock_acquired=false
     if type feature_enabled &>/dev/null && ! feature_enabled "file_locking"; then
       json_warn "W_DEGRADED" "File locking disabled - proceeding without lock: $(type _feature_reason &>/dev/null && _feature_reason file_locking || echo 'unknown')"
     else
@@ -1363,7 +1363,7 @@ EOF
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
     # Acquire lock for atomic flag update (degrade gracefully if locking unavailable)
-    local lock_acquired=false
+    lock_acquired=false
     if type feature_enabled &>/dev/null && ! feature_enabled "file_locking"; then
       json_warn "W_DEGRADED" "File locking disabled - proceeding without lock"
     else
