@@ -3027,6 +3027,111 @@ ${entry}" "$queen_file" > "$tmp_file"
     json_ok "{\"ok\":true,\"counts\":\"$counts\"}"
     ;;
 
+  checkpoint-check)
+    allowlist_file="$DATA_DIR/checkpoint-allowlist.json"
+
+    if [[ ! -f "$allowlist_file" ]]; then
+      json_err "$E_FILE_NOT_FOUND" "Allowlist not found" "{\"path\":\"$allowlist_file\"}"
+    fi
+
+    # Get dirty files from git (staged or unstaged)
+    dirty_files=$(git status --porcelain 2>/dev/null | awk '{print $2}' || true)
+
+    if [[ -z "$dirty_files" ]]; then
+      json_ok '{"ok":true,"system_files":[],"user_files":[],"has_user_files":false}'
+      exit 0
+    fi
+
+    # Temporary files for building JSON
+    system_files_tmp=$(mktemp)
+    user_files_tmp=$(mktemp)
+
+    # Check each file against allowlist patterns
+    for file in $dirty_files; do
+      is_system=false
+
+      # Check against system file patterns
+      if [[ "$file" == ".aether/aether-utils.sh" ]]; then
+        is_system=true
+      elif [[ "$file" == ".aether/workers.md" ]]; then
+        is_system=true
+      elif [[ "$file" == .aether/docs/*.md ]]; then
+        is_system=true
+      elif [[ "$file" == .claude/commands/ant/*.md ]] || [[ "$file" == .claude/commands/ant/**/*.md ]]; then
+        is_system=true
+      elif [[ "$file" == .claude/commands/st/*.md ]] || [[ "$file" == .claude/commands/st/**/*.md ]]; then
+        is_system=true
+      elif [[ "$file" == .opencode/commands/ant/*.md ]] || [[ "$file" == .opencode/commands/ant/**/*.md ]]; then
+        is_system=true
+      elif [[ "$file" == .opencode/agents/*.md ]] || [[ "$file" == .opencode/agents/**/*.md ]]; then
+        is_system=true
+      elif [[ "$file" == runtime/* ]]; then
+        is_system=true
+      elif [[ "$file" == bin/* ]]; then
+        is_system=true
+      fi
+
+      if [[ "$is_system" == "true" ]]; then
+        echo "$file" >> "$system_files_tmp"
+      else
+        echo "$file" >> "$user_files_tmp"
+      fi
+    done
+
+    # Build JSON using jq if available, otherwise use simple format
+    if command -v jq >/dev/null 2>&1; then
+      result=$(jq -n \
+        --argjson system "$(jq -R . < "$system_files_tmp" 2>/dev/null | jq -s .)" \
+        --argjson user "$(jq -R . < "$user_files_tmp" 2>/dev/null | jq -s .)" \
+        '{ok: true, system_files: $system, user_files: $user, has_user_files: ($user | length > 0)}')
+    else
+      # Fallback without jq - simple output
+      system_count=$(wc -l < "$system_files_tmp" 2>/dev/null | tr -d ' ' || echo "0")
+      user_count=$(wc -l < "$user_files_tmp" 2>/dev/null | tr -d ' ' || echo "0")
+      has_user=false
+      [[ "$user_count" -gt 0 ]] && has_user=true
+      result="{\"ok\":true,\"system_files\":[],\"user_files\":[],\"has_user_files\":$has_user}"
+    fi
+
+    rm -f "$system_files_tmp" "$user_files_tmp"
+    echo "$result"
+    exit 0
+    ;;
+
+  normalize-args)
+    # Normalize arguments from Claude Code ($ARGUMENTS) or OpenCode ($@)
+    # Usage: bash .aether/aether-utils.sh normalize-args [args...]
+    # Or: eval "$(bash .aether/aether-utils.sh normalize-args)"
+    #
+    # Claude Code passes args in $ARGUMENTS variable
+    # OpenCode passes args in $@ (positional parameters)
+    # This command outputs the normalized arguments as a single string
+
+    normalized=""
+
+    # Try Claude Code style first ($ARGUMENTS environment variable)
+    if [ -n "${ARGUMENTS:-}" ]; then
+      normalized="$ARGUMENTS"
+    # Fall back to OpenCode style ($@ positional params)
+    elif [ $# -gt 0 ]; then
+      # Preserve arguments with spaces by quoting
+      for arg in "$@"; do
+        if [[ "$arg" == *" "* ]] || [[ "$arg" == *"\t"* ]] || [[ "$arg" == *"\n"* ]]; then
+          # Quote arguments containing whitespace
+          normalized="$normalized \"$arg\""
+        else
+          normalized="$normalized $arg"
+        fi
+      done
+      # Trim leading space
+      normalized="${normalized# }"
+    fi
+
+    # Output normalized arguments
+    echo "$normalized"
+    exit 0
+    ;;
+
   *)
     json_err "$E_VALIDATION_FAILED" "Unknown command: $cmd"
     ;;

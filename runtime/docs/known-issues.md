@@ -4,6 +4,33 @@ Documented issues from Oracle research findings. These are known limitations and
 
 ---
 
+## Fixed Issues
+
+### Checkpoint Allowlist System (Fixed 2026-02-15)
+
+**Issue:** Build checkpoint could stash user work (TO-DOs.md, dreams, Oracle specs)
+
+**Root Cause:** `git stash` touched files outside system allowlist, stashing 1,145 lines of user work
+
+**Fix:** Explicit allowlist system implemented
+- Created `.aether/data/checkpoint-allowlist.json` defining safe system files
+- Added `checkpoint-check` helper to `.aether/aether-utils.sh`
+- Updated `build.md` (Claude and OpenCode) to use allowlist
+- User data (`.aether/data/`, `.aether/dreams/`, `TO-DOs.md`) is never touched
+- Warning displayed if user files are present during checkpoint
+
+**System Files (Safe):**
+- `.aether/aether-utils.sh`, `.aether/workers.md`, `.aether/docs/**/*.md`
+- `.claude/commands/ant/**/*.md`, `.claude/commands/st/**/*.md`
+- `.opencode/commands/ant/**/*.md`, `.opencode/agents/**/*.md`
+- `runtime/**/*`, `bin/**/*`
+
+**User Data (Never Touch):**
+- `.aether/data/`, `.aether/dreams/`, `.aether/oracle/`
+- `TO-DOs.md`, `COLONY_STATE.json`, `.env`, `*.log`
+
+---
+
 ## Critical Issues (Fix Immediately)
 
 ### BUG-005: Missing lock release in flag-auto-resolve
