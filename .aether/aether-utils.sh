@@ -29,6 +29,19 @@ CURRENT_LOCK=${CURRENT_LOCK:-""}
 [[ -f "$SCRIPT_DIR/utils/chamber-utils.sh" ]] && source "$SCRIPT_DIR/utils/chamber-utils.sh"
 [[ -f "$SCRIPT_DIR/utils/xml-utils.sh" ]] && source "$SCRIPT_DIR/utils/xml-utils.sh"
 
+# Fallback error constants if error-handler.sh wasn't sourced
+# This prevents "unbound variable" errors in older installations
+: "${E_UNKNOWN:=E_UNKNOWN}"
+: "${E_HUB_NOT_FOUND:=E_HUB_NOT_FOUND}"
+: "${E_REPO_NOT_INITIALIZED:=E_REPO_NOT_INITIALIZED}"
+: "${E_FILE_NOT_FOUND:=E_FILE_NOT_FOUND}"
+: "${E_JSON_INVALID:=E_JSON_INVALID}"
+: "${E_LOCK_FAILED:=E_LOCK_FAILED}"
+: "${E_GIT_ERROR:=E_GIT_ERROR}"
+: "${E_VALIDATION_FAILED:=E_VALIDATION_FAILED}"
+: "${E_FEATURE_UNAVAILABLE:=E_FEATURE_UNAVAILABLE}"
+: "${E_BASH_ERROR:=E_BASH_ERROR}"
+
 # Feature detection for graceful degradation
 # These checks run silently - failures are logged but don't block operation
 if type feature_disable &>/dev/null; then

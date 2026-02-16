@@ -33,6 +33,9 @@ SYSTEM_FILES=(
   "verification.md"
   "workers.md"
   "workers-new-castes.md"
+  "CONTEXT.md"
+  "model-profiles.yaml"
+  "recover.sh"
   "docs/biological-reference.md"
   "docs/command-sync.md"
   "docs/constraints.md"
@@ -61,6 +64,10 @@ SYSTEM_FILES=(
   "utils/state-loader.sh"
   "utils/swarm-display.sh"
   "utils/watch-spawn-tree.sh"
+  "utils/xml-utils.sh"
+  "utils/xml-core.sh"
+  "utils/xml-compose.sh"
+  "utils/queen-to-md.xsl"
   "templates/QUEEN.md.template"
 )
 

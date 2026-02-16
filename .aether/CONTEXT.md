@@ -8,16 +8,30 @@
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2026-02-16T20:25:00Z |
-| **Current Phase** | 4 (Complete - Pending Integration) |
-| **Phase Name** | XML Exchange System |
+| **Last Updated** | 2026-02-16T20:49:16Z |
+| **Current Phase** | - |
+| **Phase Name** | Shellcheck Fixes |
 | **Milestone** | Open Chambers |
-| **Colony Status** | PAUSED |
-| **Safe to Clear?** | ✅ YES |
+| **Colony Status** | IDLE (No active colony) |
+| **Safe to Clear?** | YES — No active colony - test fixes complete, hooks simplified |
 
 ---
 
-## 🎯 Current Goal
+## 📝 Session Notes (2026-02-21)
+
+### Completed This Session
+- Fixed shellcheck SC2168 warnings in `.aether/aether-utils.sh`
+- Removed duplicate context-update code (~388 lines)
+- Fixed 8 remaining `local` keyword errors in case handlers
+- All 383 tests pass, 0 SC2168 errors
+
+### Pending Work
+- Commit the shellcheck fixes
+- Resume XML integration work (see prior session handoff)
+
+---
+
+## 🎯 Prior Goal (2026-02-16)
 
 Implement XML exchange system integration into existing colony lifecycle (pause/resume/seal/init) rather than as separate commands.
 
@@ -111,6 +125,7 @@ Implement XML exchange system integration into existing colony lifecycle (pause/
 
 | Timestamp | Command | Result | Files Changed |
 |-----------|---------|--------|---------------|
+| 2026-02-16T20:49:04Z | pause-colony | Colony paused — test fixes and hook debugging completed | tests fixed: 18→0, hooks simplified |
 | 2026-02-16T20:20:00Z | export/import removed | Commands deleted as requested | -2 files |
 | 2026-02-16T20:18:00Z | registry-xml.sh | Created registry exchange module | +1 file |
 | 2026-02-16T20:15:00Z | wisdom-xml.sh | Created wisdom exchange module | +1 file |
@@ -143,62 +158,3 @@ How should XML exchange integrate into existing commands?
 
 ---
 
-## 🆘 If Context Collapses
-
-**READ THIS SECTION FIRST**
-
-### Immediate Recovery
-
-1. **Read this file** — You're looking at it. Good.
-2. **Review HANDOFF.md** — Detailed technical summary at `.aether/HANDOFF.md`
-3. **Check XML modules** — `ls .aether/exchange/`
-4. **Run tests** — `bash tests/bash/test-xml-roundtrip.sh`
-
-### What We Were Doing
-
-Phase 4 XML exchange system is complete but needs integration into existing colony lifecycle commands. User decided against separate /ant:export and /ant:import commands.
-
-**Pending decision:** How to integrate (Option A, B, or C above).
-
-### Is It Safe to Continue?
-
-- ✅ All exchange modules built and tested
-- ✅ 19/19 round-trip tests passing
-- ✅ Schemas validated
-- ✅ No blockers
-
-**You can proceed safely once integration approach is decided.**
-
----
-
-## 🐜 Colony Health
-
-```
-Milestone:    Open Chambers    ████░░░░░░ 40%
-Phase:        4 (Complete)     ██████████ 100%
-Integration:  Pending          ░░░░░░░░░░ 0%
-Tests:        19 passing       ██████████ 100%
-```
-
----
-
-## 📋 File Inventory
-
-**New files created this session:**
-```
-.aether/exchange/pheromone-xml.sh    (22KB)
-.aether/exchange/wisdom-xml.sh       (12KB)
-.aether/exchange/registry-xml.sh     (10KB)
-.aether/utils/xml-core.sh            (6KB)
-.aether/schemas/pheromone.xsd        (Updated)
-.aether/schemas/queen-wisdom.xsd     (NEW)
-.aether/schemas/colony-registry.xsd  (NEW)
-.aether/schemas/aether-types.xsd     (NEW)
-tests/bash/test-xml-roundtrip.sh     (NEW)
-```
-
----
-
-*This document updates automatically with every ant command.*
-
-**Colony Memory Active** 🧠🐜
