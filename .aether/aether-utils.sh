@@ -27,6 +27,7 @@ CURRENT_LOCK=${CURRENT_LOCK:-""}
 [[ -f "$SCRIPT_DIR/utils/atomic-write.sh" ]] && source "$SCRIPT_DIR/utils/atomic-write.sh"
 [[ -f "$SCRIPT_DIR/utils/error-handler.sh" ]] && source "$SCRIPT_DIR/utils/error-handler.sh"
 [[ -f "$SCRIPT_DIR/utils/chamber-utils.sh" ]] && source "$SCRIPT_DIR/utils/chamber-utils.sh"
+[[ -f "$SCRIPT_DIR/utils/xml-utils.sh" ]] && source "$SCRIPT_DIR/utils/xml-utils.sh"
 
 # Feature detection for graceful degradation
 # These checks run silently - failures are logged but don't block operation
@@ -100,6 +101,353 @@ get_caste_emoji() {
   esac
 }
 
+# ============================================
+# CONTEXT UPDATE HELPER FUNCTION
+# (Defined outside case block to fix SC2168: local outside function)
+# ============================================
+_cmd_context_update() {
+  local ctx_action="${1:-}"
+  local ctx_file="${AETHER_ROOT:-.}/.aether/CONTEXT.md"
+  local ctx_tmp="${ctx_file}.tmp"
+  local ctx_ts
+  ctx_ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+  ensure_context_dir() {
+    local dir
+    dir=$(dirname "$ctx_file")
+    [[ -d "$dir" ]] || mkdir -p "$dir"
+  }
+
+  read_colony_state() {
+    local state_file="${AETHER_ROOT:-.}/.aether/data/COLONY_STATE.json"
+    if [[ -f "$state_file" ]]; then
+      current_phase=$(jq -r '.current_phase // "unknown"' "$state_file" 2>/dev/null)
+      milestone=$(jq -r '.milestone // "unknown"' "$state_file" 2>/dev/null)
+      goal=$(jq -r '.goal // ""' "$state_file" 2>/dev/null)
+    else
+      current_phase="unknown"
+      milestone="unknown"
+      goal=""
+    fi
+  }
+
+  case "$ctx_action" in
+    init)
+      local init_goal="${2:-}"
+      ensure_context_dir
+      read_colony_state
+
+      cat > "$ctx_file" << EOF
+# Aether Colony — Current Context
+
+> **This document is the colony's memory. If context collapses, read this file first.**
+
+---
+
+## 🚦 System Status
+
+| Field | Value |
+|-------|-------|
+| **Last Updated** | $ctx_ts |
+| **Current Phase** | 1 |
+| **Phase Name** | initialization |
+| **Milestone** | First Mound |
+| **Colony Status** | initializing |
+| **Safe to Clear?** | ⚠️ NO — Colony just initialized |
+
+---
+
+## 🎯 Current Goal
+
+$init_goal
+
+---
+
+## 📍 What's In Progress
+
+Colony initialization in progress...
+
+---
+
+## ⚠️ Active Constraints (REDIRECT Signals)
+
+| Constraint | Source | Date Set |
+|------------|--------|----------|
+| In the Aether repo, \`.aether/\` IS the source of truth — \`runtime/\` is auto-populated on publish | CLAUDE.md | Permanent |
+| Never push without explicit user approval | CLAUDE.md Safety | Permanent |
+
+---
+
+## 💭 Active Pheromones (FOCUS Signals)
+
+*None active*
+
+---
+
+## 📝 Recent Decisions
+
+| Date | Decision | Rationale | Made By |
+|------|----------|-----------|---------|
+
+---
+
+## 📊 Recent Activity (Last 10 Actions)
+
+| Timestamp | Command | Result | Files Changed |
+|-----------|---------|--------|---------------|
+| $ctx_ts | init | Colony initialized | — |
+
+---
+
+## 🔄 Next Steps
+
+1. Run \`/ant:plan\` to generate phases for the goal
+2. Run \`/ant:build 1\` to start building
+
+---
+
+## 🆘 If Context Collapses
+
+**READ THIS SECTION FIRST**
+
+### Immediate Recovery
+
+1. **Read this file** — You're looking at it. Good.
+2. **Check git status** — \`git status\` and \`git log --oneline -5\`
+3. **Verify COLONY_STATE.json** — \`cat .aether/data/COLONY_STATE.json | jq .current_phase\`
+4. **Resume work** — Continue from "Next Steps" above
+
+### What We Were Doing
+
+Colony was just initialized with goal: $init_goal
+
+### Is It Safe to Continue?
+
+- ✅ Colony is initialized
+- ⚠️ No work completed yet
+- ✅ All state in COLONY_STATE.json
+
+**You can proceed safely.**
+
+---
+
+## 🐜 Colony Health
+
+\`\`\`
+Milestone:    First Mound   ░░░░░░░░░░ 0%
+Phase:        1             ░░░░░░░░░░ initializing
+Context:      Active        ░░░░░░░░░░ 0%
+Git Commits:  0
+\`\`\`
+
+---
+
+*This document updates automatically with every ant command. If you see old timestamps, run \`/ant:status\` to refresh.*
+
+**Colony Memory Active** 🧠🐜
+EOF
+      json_ok "{\"updated\":true,\"action\":\"init\",\"file\":\"$ctx_file\"}"
+      ;;
+
+    update-phase)
+      local new_phase="${2:-}"
+      local new_phase_name="${3:-}"
+      local safe_clear="${4:-NO}"
+      local safe_reason="${5:-Phase in progress}"
+
+      [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found. Run context-update init first."; }
+
+      sed -i.bak "s/| \*\*Last Updated\*\* | .*/| **Last Updated** | $ctx_ts |/" "$ctx_file" && rm -f "$ctx_file.bak"
+      sed -i.bak "s/| \*\*Current Phase\*\* | .*/| **Current Phase** | $new_phase |/" "$ctx_file" && rm -f "$ctx_file.bak"
+      sed -i.bak "s/| \*\*Phase Name\*\* | .*/| **Phase Name** | $new_phase_name |/" "$ctx_file" && rm -f "$ctx_file.bak"
+      sed -i.bak "s/| \*\*Safe to Clear?\*\* | .*/| **Safe to Clear?** | $safe_clear — $safe_reason |/" "$ctx_file" && rm -f "$ctx_file.bak"
+
+      json_ok "{\"updated\":true,\"action\":\"update-phase\",\"phase\":$new_phase}"
+      ;;
+
+    activity)
+      local cmd="${2:-}"
+      local result="${3:-}"
+      local files_changed="${4:-—}"
+
+      [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
+
+      sed -i.bak "s/| \*\*Last Updated\*\* | .*/| **Last Updated** | $ctx_ts |/" "$ctx_file" && rm -f "$ctx_file.bak"
+
+      local activity_line="| $ctx_ts | $cmd | $result | $files_changed |"
+
+      awk -v line="$activity_line" '
+        /\| Timestamp \| Command \| Result \| Files Changed \|/ {
+          print
+          getline
+          print
+          print line
+          next
+        }
+        /^## 🆘 If Context Collapses/ { exit }
+        { print }
+      ' "$ctx_file" > "$ctx_tmp"
+
+      mv "$ctx_tmp" "$ctx_file"
+      json_ok "{\"updated\":true,\"action\":\"activity\",\"command\":\"$cmd\"}"
+      ;;
+
+    safe-to-clear)
+      local safe="${2:-NO}"
+      local reason="${3:-Unknown state}"
+
+      [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
+
+      sed -i.bak "s/| \*\*Last Updated\*\* | .*/| **Last Updated** | $ctx_ts |/" "$ctx_file" && rm -f "$ctx_file.bak"
+      sed -i.bak "s/| \*\*Safe to Clear?\*\* | .*/| **Safe to Clear?** | $safe — $reason |/" "$ctx_file" && rm -f "$ctx_file.bak"
+
+      json_ok "{\"updated\":true,\"action\":\"safe-to-clear\",\"safe\":\"$safe\"}"
+      ;;
+
+    constraint)
+      local c_type="${2:-}"
+      local c_message="${3:-}"
+      local c_source="${4:-User}"
+
+      [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
+
+      sed -i.bak "s/| \*\*Last Updated\*\* | .*/| **Last Updated** | $ctx_ts |/" "$ctx_file" && rm -f "$ctx_file.bak"
+
+      if [[ "$c_type" == "redirect" ]]; then
+        sed -i.bak "/^## ⚠️ Active Constraints/,/^## /{ /^| Constraint |/a\\
+| $c_message | $c_source | $ctx_ts |
+}" "$ctx_file" && rm -f "$ctx_file.bak"
+      elif [[ "$c_type" == "focus" ]]; then
+        sed -i.bak "/^## 💭 Active Pheromones/,/^## /{ /^| Signal |/a\\
+| FOCUS | $c_message | normal |
+}" "$ctx_file" && rm -f "$ctx_file.bak"
+      fi
+
+      json_ok "{\"updated\":true,\"action\":\"constraint\",\"type\":\"$c_type\"}"
+      ;;
+
+    decision)
+      local decision="${2:-}"
+      local rationale="${3:-}"
+      local made_by="${4:-Colony}"
+
+      [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
+
+      sed -i.bak "s/| \*\*Last Updated\*\* | .*/| **Last Updated** | $ctx_ts |/" "$ctx_file" && rm -f "$ctx_file.bak"
+
+      local decision_line="| $(echo $ctx_ts | cut -dT -f1) | $decision | $rationale | $made_by |"
+
+      awk -v line="$decision_line" '
+        /^## 📝 Recent Decisions/ { in_section=1 }
+        in_section && /^\| [0-9]{4}-[0-9]{2}-[0-9]{2} / { last_decision=NR }
+        in_section && /^## 📊 Recent Activity/ { in_section=0 }
+        { lines[NR] = $0 }
+        END {
+          for (i=1; i<=NR; i++) {
+            if (i == last_decision) {
+              print lines[i]
+              print line
+            } else {
+              print lines[i]
+            }
+          }
+        }
+      ' "$ctx_file" > "$ctx_tmp"
+
+      mv "$ctx_tmp" "$ctx_file"
+      json_ok "{\"updated\":true,\"action\":\"decision\"}"
+      ;;
+
+    build-start)
+      local phase_id="${2:-}"
+      local worker_count="${3:-0}"
+      local tasks_count="${4:-0}"
+
+      [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
+
+      sed -i.bak "s/| \*\*Last Updated\*\* | .*/| **Last Updated** | $ctx_ts |/" "$ctx_file" && rm -f "$ctx_file.bak"
+      sed -i.bak "s/## 📍 What's In Progress/## 📍 What's In Progress\n\n**Phase $phase_id Build IN PROGRESS**\n- Workers: $worker_count | Tasks: $tasks_count\n- Started: $ctx_ts/" "$ctx_file" && rm -f "$ctx_file.bak"
+      sed -i.bak "s/| \*\*Safe to Clear?\*\* | .*/| **Safe to Clear?** | ⚠️ NO — Build in progress |/" "$ctx_file" && rm -f "$ctx_file.bak"
+
+      json_ok "{\"updated\":true,\"action\":\"build-start\",\"workers\":$worker_count}"
+      ;;
+
+    worker-spawn)
+      local ant_name="${2:-}"
+      local caste="${3:-}"
+      local task="${4:-}"
+
+      [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
+
+      awk -v ant="$ant_name" -v caste="$caste" -v task="$task" -v ts="$ctx_ts" '
+        /^## 📍 What'\''s In Progress/ { in_progress=1 }
+        in_progress && /^## / && $0 !~ /What'\''s In Progress/ { in_progress=0 }
+        in_progress && /Workers:/ {
+          print
+          print "  - " ts ": Spawned " ant " (" caste ") for: " task
+          next
+        }
+        { print }
+      ' "$ctx_file" > "$ctx_tmp" && mv "$ctx_tmp" "$ctx_file"
+
+      json_ok "{\"updated\":true,\"action\":\"worker-spawn\",\"ant\":\"$ant_name\"}"
+      ;;
+
+    worker-complete)
+      local ant_name="${2:-}"
+      local status="${3:-completed}"
+
+      [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
+
+      sed -i.bak "s/- .*$ant_name .*$/- $ant_name: $status (updated $ctx_ts)/" "$ctx_file" && rm -f "$ctx_file.bak"
+
+      json_ok "{\"updated\":true,\"action\":\"worker-complete\",\"ant\":\"$ant_name\"}"
+      ;;
+
+    build-progress)
+      local completed="${2:-0}"
+      local total="${3:-1}"
+      local percentage=$(( completed * 100 / total ))
+
+      [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
+
+      sed -i.bak "s/Build IN PROGRESS/Build IN PROGRESS ($percentage% complete)/" "$ctx_file" && rm -f "$ctx_file.bak"
+
+      json_ok "{\"updated\":true,\"action\":\"build-progress\",\"percent\":$percentage}"
+      ;;
+
+    build-complete)
+      local status="${2:-completed}"
+      local result="${3:-success}"
+
+      [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
+
+      sed -i.bak "s/| \*\*Last Updated\*\* | .*/| **Last Updated** | $ctx_ts |/" "$ctx_file" && rm -f "$ctx_file.bak"
+
+      awk -v status="$status" -v result="$result" '
+        /^## 📍 What'\''s In Progress/ { in_progress=1 }
+        in_progress && /^## / && $0 !~ /What'\''s In Progress/ { in_progress=0 }
+        in_progress && /Build IN PROGRESS/ {
+          print "## 📍 What'\''s In Progress"
+          print ""
+          print "**Build " status "** — " result
+          next
+        }
+        in_progress { next }
+        { print }
+      ' "$ctx_file" > "$ctx_tmp" && mv "$ctx_tmp" "$ctx_file"
+
+      sed -i.bak "s/| \*\*Safe to Clear?\*\* | .*/| **Safe to Clear?** | ✅ YES — Build $status |/" "$ctx_file" && rm -f "$ctx_file.bak"
+
+      json_ok "{\"updated\":true,\"action\":\"build-complete\",\"status\":\"$status\"}"
+      ;;
+
+    *)
+      json_err "$E_VALIDATION_FAILED" "Unknown context action: $ctx_action"
+      ;;
+  esac
+}
+
 # --- Subcommand dispatch ---
 cmd="${1:-help}"
 shift 2>/dev/null || true
@@ -107,7 +455,7 @@ shift 2>/dev/null || true
 case "$cmd" in
   help)
     cat <<'EOF'
-{"ok":true,"commands":["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","survey-load","survey-verify"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
+{"ok":true,"commands":["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","survey-load","survey-verify","pheromone-export"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
 EOF
     ;;
   version)
@@ -347,7 +695,8 @@ EOF
     echo "[$ts] ⚡ SPAWN $parent_emoji $parent_id -> $emoji $child_name ($child_caste): $task_summary [model: $model]" >> "$DATA_DIR/activity.log"
     # Log to spawn tree file for visualization (NEW FORMAT: includes model field)
     echo "$ts_full|$parent_id|$child_caste|$child_name|$task_summary|$model|$status" >> "$DATA_DIR/spawn-tree.txt"
-    json_ok '"logged"'
+    # Return emoji-formatted result for display
+    json_ok "\"⚡ $emoji $child_name spawned\""
     ;;
   spawn-complete)
     # Usage: spawn-complete <ant_name> <status> [summary]
@@ -365,7 +714,8 @@ EOF
     echo "[$ts] $status_icon $emoji $ant_name: $status${summary:+ - $summary}" >> "$DATA_DIR/activity.log"
     # Update spawn tree
     echo "$ts_full|$ant_name|$status|$summary" >> "$DATA_DIR/spawn-tree.txt"
-    json_ok '"logged"'
+    # Return emoji-formatted result for display
+    json_ok "\"$status_icon $emoji $ant_name: ${summary:-$status}\""
     ;;
   spawn-can-spawn)
     # Check if spawning is allowed at given depth
@@ -809,6 +1159,7 @@ EOF
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
     # Acquire lock for atomic flag update (degrade gracefully if locking unavailable)
+    local lock_acquired=false
     if type feature_enabled &>/dev/null && ! feature_enabled "file_locking"; then
       json_warn "W_DEGRADED" "File locking disabled - proceeding without lock: $(type _feature_reason &>/dev/null && _feature_reason file_locking || echo 'unknown')"
     else
@@ -820,6 +1171,9 @@ EOF
           exit 1
         fi
       }
+      lock_acquired=true
+      # Ensure lock is always released on exit (BUG-002 fix)
+      trap 'release_lock "$flags_file" 2>/dev/null || true' EXIT
     fi
 
     # Map type to severity
@@ -854,10 +1208,11 @@ EOF
         resolution: null,
         auto_resolve_on: (if $type == "blocker" and ($source | test("chaos") | not) then "build_pass" else null end)
       }]
-    ' "$flags_file") || { release_lock "$flags_file" 2>/dev/null || true; json_err "$E_JSON_INVALID" "Failed to add flag"; }
+    ' "$flags_file") || { json_err "$E_JSON_INVALID" "Failed to add flag"; }
 
     atomic_write "$flags_file" "$updated"
-    release_lock "$flags_file"
+    # Lock released by trap on exit (BUG-002 fix)
+    trap - EXIT
     json_ok "{\"id\":\"$id\",\"type\":\"$type\",\"severity\":\"$severity\"}"
     ;;
   flag-check-blockers)
@@ -1008,17 +1363,20 @@ EOF
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
     # Acquire lock for atomic flag update (degrade gracefully if locking unavailable)
+    local lock_acquired=false
     if type feature_enabled &>/dev/null && ! feature_enabled "file_locking"; then
       json_warn "W_DEGRADED" "File locking disabled - proceeding without lock"
     else
       acquire_lock "$flags_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on flags.json"
+      lock_acquired=true
+      # Ensure lock is always released on exit (BUG-005/BUG-011 fix)
+      trap 'release_lock "$flags_file" 2>/dev/null || true' EXIT
     fi
 
     # Count how many will be resolved
     count=$(jq --arg trigger "$trigger" '
       [.flags[] | select(.auto_resolve_on == $trigger and .resolved_at == null)] | length
     ' "$flags_file") || {
-      release_lock "$flags_file" 2>/dev/null || true
       json_err "$E_JSON_INVALID" "Failed to count flags for auto-resolve"
     }
 
@@ -1029,13 +1387,13 @@ EOF
         .resolution = "Auto-resolved on " + $trigger
       else . end]
     ' "$flags_file") || {
-      release_lock "$flags_file" 2>/dev/null || true
       json_err "$E_JSON_INVALID" "Failed to auto-resolve flags"
     }
 
     atomic_write "$flags_file" "$updated"
-    if type feature_enabled &>/dev/null && feature_enabled "file_locking"; then
-      release_lock "$flags_file"
+    # Lock released by trap on exit (BUG-005/BUG-011 fix)
+    if [[ "$lock_acquired" == "true" ]]; then
+      trap - EXIT
     fi
     json_ok "{\"resolved\":$count,\"trigger\":\"$trigger\"}"
     ;;
@@ -1469,376 +1827,7 @@ Files: ${files_changed} files changed"
     #
     # Always call with explicit arguments - never rely on current directory
     # CONTEXT_FILE must be passed or detected from AETHER_ROOT
-
-    local ctx_action="${1:-}"
-    local ctx_file="${AETHER_ROOT:-.}/.aether/CONTEXT.md"
-    local ctx_tmp="${ctx_file}.tmp"
-    local ctx_ts
-    ctx_ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-
-    ensure_context_dir() {
-      local dir
-      dir=$(dirname "$ctx_file")
-      [[ -d "$dir" ]] || mkdir -p "$dir"
-    }
-
-    # Read current state from COLONY_STATE.json if available
-    read_colony_state() {
-      local state_file="${AETHER_ROOT:-.}/.aether/data/COLONY_STATE.json"
-      if [[ -f "$state_file" ]]; then
-        current_phase=$(jq -r '.current_phase // "unknown"' "$state_file" 2>/dev/null)
-        milestone=$(jq -r '.milestone // "unknown"' "$state_file" 2>/dev/null)
-        goal=$(jq -r '.goal // ""' "$state_file" 2>/dev/null)
-      else
-        current_phase="unknown"
-        milestone="unknown"
-        goal=""
-      fi
-    }
-
-    case "$ctx_action" in
-      init)
-        local init_goal="${2:-}"
-        ensure_context_dir
-        read_colony_state
-
-        cat > "$ctx_file" << EOF
-# Aether Colony — Current Context
-
-> **This document is the colony's memory. If context collapses, read this file first.**
-
----
-
-## 🚦 System Status
-
-| Field | Value |
-|-------|-------|
-| **Last Updated** | $ctx_ts |
-| **Current Phase** | 1 |
-| **Phase Name** | initialization |
-| **Milestone** | First Mound |
-| **Colony Status** | initializing |
-| **Safe to Clear?** | ⚠️ NO — Colony just initialized |
-
----
-
-## 🎯 Current Goal
-
-$init_goal
-
----
-
-## 📍 What's In Progress
-
-Colony initialization in progress...
-
----
-
-## ⚠️ Active Constraints (REDIRECT Signals)
-
-| Constraint | Source | Date Set |
-|------------|--------|----------|
-| In the Aether repo, \`.aether/\` IS the source of truth — \`runtime/\` is auto-populated on publish | CLAUDE.md | Permanent |
-| Never push without explicit user approval | CLAUDE.md Safety | Permanent |
-
----
-
-## 💭 Active Pheromones (FOCUS Signals)
-
-*None active*
-
----
-
-## 📝 Recent Decisions
-
-| Date | Decision | Rationale | Made By |
-|------|----------|-----------|---------|
-
----
-
-## 📊 Recent Activity (Last 10 Actions)
-
-| Timestamp | Command | Result | Files Changed |
-|-----------|---------|--------|---------------|
-| $ctx_ts | init | Colony initialized | — |
-
----
-
-## 🔄 Next Steps
-
-1. Run \`/ant:plan\` to generate phases for the goal
-2. Run \`/ant:build 1\` to start building
-
----
-
-## 🆘 If Context Collapses
-
-**READ THIS SECTION FIRST**
-
-### Immediate Recovery
-
-1. **Read this file** — You're looking at it. Good.
-2. **Check git status** — \`git status\` and \`git log --oneline -5\`
-3. **Verify COLONY_STATE.json** — \`cat .aether/data/COLONY_STATE.json | jq .current_phase\`
-4. **Resume work** — Continue from "Next Steps" above
-
-### What We Were Doing
-
-Colony was just initialized with goal: $init_goal
-
-### Is It Safe to Continue?
-
-- ✅ Colony is initialized
-- ⚠️ No work completed yet
-- ✅ All state in COLONY_STATE.json
-
-**You can proceed safely.**
-
----
-
-## 🐜 Colony Health
-
-\`\`\`
-Milestone:    First Mound   ░░░░░░░░░░ 0%
-Phase:        1             ░░░░░░░░░░ initializing
-Context:      Active        ░░░░░░░░░░ 0%
-Git Commits:  0
-\`\`\`
-
----
-
-*This document updates automatically with every ant command. If you see old timestamps, run \`/ant:status\` to refresh.*
-
-**Colony Memory Active** 🧠🐜
-EOF
-        json_ok "{\"updated\":true,\"action\":\"init\",\"file\":\"$ctx_file\"}"
-        ;;
-
-      update-phase)
-        local new_phase="${2:-}"
-        local new_phase_name="${3:-}"
-        local safe_clear="${4:-NO}"
-        local safe_reason="${5:-Phase in progress}"
-
-        [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found. Run context-update init first."; }
-
-        # Update Last Updated
-        sed -i.bak "s/| \*\*Last Updated\*\* | .*/| **Last Updated** | $ctx_ts |/" "$ctx_file" && rm -f "$ctx_file.bak"
-
-        # Update Current Phase
-        sed -i.bak "s/| \*\*Current Phase\*\* | .*/| **Current Phase** | $new_phase |/" "$ctx_file" && rm -f "$ctx_file.bak"
-        sed -i.bak "s/| \*\*Phase Name\*\* | .*/| **Phase Name** | $new_phase_name |/" "$ctx_file" && rm -f "$ctx_file.bak"
-
-        # Update Safe to Clear
-        sed -i.bak "s/| \*\*Safe to Clear?\*\* | .*/| **Safe to Clear?** | $safe_clear — $safe_reason |/" "$ctx_file" && rm -f "$ctx_file.bak"
-
-        json_ok "{\"updated\":true,\"action\":\"update-phase\",\"phase\":$new_phase}"
-        ;;
-
-      activity)
-        local cmd="${2:-}"
-        local result="${3:-}"
-        local files_changed="${4:-—}"
-
-        [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
-
-        # Update Last Updated
-        sed -i.bak "s/| \*\*Last Updated\*\* | .*/| **Last Updated** | $ctx_ts |/" "$ctx_file" && rm -f "$ctx_file.bak"
-
-        # Add activity row (keep last 10 by removing older ones)
-        local activity_line="| $ctx_ts | $cmd | $result | $files_changed |"
-
-        # Find the activity table and insert new row after header
-        awk -v line="$activity_line" '
-          /\| Timestamp \| Command \| Result \| Files Changed \|/ {
-            print
-            getline
-            print
-            print line
-            next
-          }
-          /^## 🆘 If Context Collapses/ { exit }
-          { print }
-        ' "$ctx_file" > "$ctx_tmp"
-
-        mv "$ctx_tmp" "$ctx_file"
-        json_ok "{\"updated\":true,\"action\":\"activity\",\"command\":\"$cmd\"}"
-        ;;
-
-      safe-to-clear)
-        local safe="${2:-NO}"
-        local reason="${3:-Unknown state}"
-
-        [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
-
-        # Update Last Updated
-        sed -i.bak "s/| \*\*Last Updated\*\* | .*/| **Last Updated** | $ctx_ts |/" "$ctx_file" && rm -f "$ctx_file.bak"
-
-        # Update Safe to Clear
-        sed -i.bak "s/| \*\*Safe to Clear?\*\* | .*/| **Safe to Clear?** | $safe — $reason |/" "$ctx_file" && rm -f "$ctx_file.bak"
-
-        json_ok "{\"updated\":true,\"action\":\"safe-to-clear\",\"safe\":\"$safe\"}"
-        ;;
-
-      constraint)
-        local c_type="${2:-}"
-        local c_message="${3:-}"
-        local c_source="${4:-User}"
-
-        [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
-
-        # Update Last Updated
-        sed -i.bak "s/| \*\*Last Updated\*\* | .*/| **Last Updated** | $ctx_ts |/" "$ctx_file" && rm -f "$ctx_file.bak"
-
-        # Add to appropriate section based on type
-        if [[ "$c_type" == "redirect" ]]; then
-          # Add to Active Constraints
-          sed -i.bak "/^## ⚠️ Active Constraints/,/^## /{ /^| Constraint |/a\\
-| $c_message | $c_source | $ctx_ts |
-}" "$ctx_file" && rm -f "$ctx_file.bak"
-        elif [[ "$c_type" == "focus" ]]; then
-          # Add to Active Pheromones
-          sed -i.bak "/^## 💭 Active Pheromones/,/^## /{ /^| Signal |/a\\
-| FOCUS | $c_message | normal |
-}" "$ctx_file" && rm -f "$ctx_file.bak"
-        fi
-
-        json_ok "{\"updated\":true,\"action\":\"constraint\",\"type\":\"$c_type\"}"
-        ;;
-
-      decision)
-        local decision="${2:-}"
-        local rationale="${3:-}"
-        local made_by="${4:-Colony}"
-
-        [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
-
-        # Update Last Updated
-        sed -i.bak "s/| \*\*Last Updated\*\* | .*/| **Last Updated** | $ctx_ts |/" "$ctx_file" && rm -f "$ctx_file.bak"
-
-        # Add decision row
-        local decision_line="| $(echo $ctx_ts | cut -dT -f1) | $decision | $rationale | $made_by |"
-
-        awk -v line="$decision_line" '
-          /^## 📝 Recent Decisions/ { in_section=1 }
-          in_section && /^\| [0-9]{4}-[0-9]{2}-[0-9]{2} / { last_decision=NR }
-          in_section && /^## 📊 Recent Activity/ { in_section=0 }
-          { lines[NR] = $0 }
-          END {
-            for (i=1; i<=NR; i++) {
-              if (i == last_decision) {
-                print lines[i]
-                print line
-              } else {
-                print lines[i]
-              }
-            }
-          }
-        ' "$ctx_file" > "$ctx_tmp"
-
-        mv "$ctx_tmp" "$ctx_file"
-        json_ok "{\"updated\":true,\"action\":\"decision\"}"
-        ;;
-
-      build-start)
-        local phase_id="${2:-}"
-        local worker_count="${3:-0}"
-        local tasks_count="${4:-0}"
-
-        [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
-
-        # Update Last Updated
-        sed -i.bak "s/| \*\*Last Updated\*\* | .*/| **Last Updated** | $ctx_ts |/" "$ctx_file" && rm -f "$ctx_file.bak"
-
-        # Update What's In Progress
-        sed -i.bak "s/## 📍 What's In Progress/## 📍 What's In Progress\n\n**Phase $phase_id Build IN PROGRESS**\n- Workers: $worker_count | Tasks: $tasks_count\n- Started: $ctx_ts/" "$ctx_file" && rm -f "$ctx_file.bak"
-
-        # Mark not safe to clear
-        sed -i.bak "s/| \*\*Safe to Clear?\*\* | .*/| **Safe to Clear?** | ⚠️ NO — Build in progress |/" "$ctx_file" && rm -f "$ctx_file.bak"
-
-        json_ok "{\"updated\":true,\"action\":\"build-start\",\"workers\":$worker_count}"
-        ;;
-
-      worker-spawn)
-        local ant_name="${2:-}"
-        local caste="${3:-}"
-        local task="${4:-}"
-
-        [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
-
-        # Add worker spawn note to What's In Progress (brief)
-        awk -v ant="$ant_name" -v caste="$caste" -v task="$task" -v ts="$ctx_ts" '
-          /^## 📍 What'\''s In Progress/ { in_progress=1 }
-          in_progress && /^## / && $0 !~ /What'\''s In Progress/ { in_progress=0 }
-          in_progress && /Workers:/ {
-            print
-            print "  - " ts ": Spawned " ant " (" caste ") for: " task
-            next
-          }
-          { print }
-        ' "$ctx_file" > "$ctx_tmp" && mv "$ctx_tmp" "$ctx_file"
-
-        json_ok "{\"updated\":true,\"action\":\"worker-spawn\",\"ant\":\"$ant_name\"}"
-        ;;
-
-      worker-complete)
-        local ant_name="${2:-}"
-        local status="${3:-completed}"
-
-        [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
-
-        # Update worker line to show completion
-        sed -i.bak "s/- .*$ant_name .*$/- $ant_name: $status (updated $ctx_ts)/" "$ctx_file" && rm -f "$ctx_file.bak"
-
-        json_ok "{\"updated\":true,\"action\":\"worker-complete\",\"ant\":\"$ant_name\"}"
-        ;;
-
-      build-progress)
-        local completed="${2:-0}"
-        local total="${3:-1}"
-        local percentage=$(( completed * 100 / total ))
-
-        [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
-
-        # Update progress in What's In Progress
-        sed -i.bak "s/Build IN PROGRESS/Build IN PROGRESS ($percentage% complete)/" "$ctx_file" && rm -f "$ctx_file.bak"
-
-        json_ok "{\"updated\":true,\"action\":\"build-progress\",\"percent\":$percentage}"
-        ;;
-
-      build-complete)
-        local status="${2:-completed}"
-        local result="${3:-success}"
-
-        [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
-
-        # Update Last Updated
-        sed -i.bak "s/| \*\*Last Updated\*\* | .*/| **Last Updated** | $ctx_ts |/" "$ctx_file" && rm -f "$ctx_file.bak"
-
-        # Update What's In Progress
-        awk -v status="$status" -v result="$result" '
-          /^## 📍 What'\''s In Progress/ { in_progress=1 }
-          in_progress && /^## / && $0 !~ /What'\''s In Progress/ { in_progress=0 }
-          in_progress && /Build IN PROGRESS/ {
-            print "## 📍 What'\''s In Progress"
-            print ""
-            print "**Build " status "** — " result
-            next
-          }
-          in_progress { next }
-          { print }
-        ' "$ctx_file" > "$ctx_tmp" && mv "$ctx_tmp" "$ctx_file"
-
-        # Mark safe to clear
-        sed -i.bak "s/| \*\*Safe to Clear?\*\* | .*/| **Safe to Clear?** | ✅ YES — Build $status |/" "$ctx_file" && rm -f "$ctx_file.bak"
-
-        json_ok "{\"updated\":true,\"action\":\"build-complete\",\"status\":\"$status\"}"
-        ;;
-
-      *)
-        json_err "$E_VALIDATION_FAILED" "Unknown context action: $ctx_action"
-        ;;
-    esac
+    _cmd_context_update "$@"
     ;;
 
   # ============================================
@@ -3376,6 +3365,233 @@ ${entry}" "$queen_file" > "$tmp_file"
     fi
 
     json_ok "{\"command\":\"$command_name\",\"cleared\":\"${cleared// /}\",\"errors\":\"${errors// /}\",\"dry_run\":$([[ "$dry_run" == "--dry-run" ]] && echo "true" || echo "false")}"
+    ;;
+
+  pheromone-export)
+    # Export pheromones to eternal XML format
+    # Usage: pheromone-export [input_json] [output_xml]
+    #   input_json: Path to pheromones.json (default: .aether/data/pheromones.json)
+    #   output_xml: Path to output XML (default: ~/.aether/eternal/pheromones.xml)
+
+    input_json="${1:-.aether/data/pheromones.json}"
+    output_xml="${2:-$HOME/.aether/eternal/pheromones.xml}"
+    schema_file="${3:-$SCRIPT_DIR/schemas/pheromone.xsd}"
+
+    # Ensure xml-utils.sh is sourced
+    if ! type pheromone-export &>/dev/null; then
+      [[ -f "$SCRIPT_DIR/utils/xml-utils.sh" ]] && source "$SCRIPT_DIR/utils/xml-utils.sh"
+    fi
+
+    if type pheromone-export &>/dev/null; then
+      pheromone-export "$input_json" "$output_xml" "$schema_file"
+    else
+      json_err "$E_DEPENDENCY_MISSING" "xml-utils.sh not available for pheromone export"
+    fi
+    ;;
+
+  # ============================================================================
+  # Session Continuity Commands
+  # ============================================================================
+
+  session-init)
+    # Initialize a new session tracking file
+    # Usage: session-init [session_id] [goal]
+    session_id="${2:-$(date +%s)_$(openssl rand -hex 4 2>/dev/null || echo $$)}"
+    goal="${3:-}"
+
+    session_file="$DATA_DIR/session.json"
+
+    cat > "$session_file" << EOF
+{
+  "session_id": "$session_id",
+  "started_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+  "last_command": null,
+  "last_command_at": null,
+  "colony_goal": "$goal",
+  "current_phase": 0,
+  "current_milestone": "First Mound",
+  "suggested_next": "/ant:plan",
+  "context_cleared": false,
+  "resumed_at": null,
+  "active_todos": [],
+  "summary": "Session initialized"
+}
+EOF
+    json_ok "{\"session_id\":\"$session_id\",\"goal\":\"$goal\",\"file\":\"$session_file\"}"
+    ;;
+
+  session-update)
+    # Update session with latest activity
+    # Usage: session-update <command> [suggested_next] [summary]
+    cmd_run="${2:-}"
+    suggested="${3:-}"
+    summary="${4:-}"
+
+    session_file="$DATA_DIR/session.json"
+
+    if [[ ! -f "$session_file" ]]; then
+      # Auto-initialize if doesn't exist
+      bash "$0" session-init "auto_$(date +%s)" ""
+    fi
+
+    # Read current session
+    local current_session
+    current_session=$(cat "$session_file" 2>/dev/null || echo '{}')
+
+    # Extract current values for preservation
+    local current_goal current_phase current_milestone
+    current_goal=$(echo "$current_session" | jq -r '.colony_goal // empty')
+    current_phase=$(echo "$current_session" | jq -r '.current_phase // 0')
+    current_milestone=$(echo "$current_session" | jq -r '.current_milestone // "First Mound"')
+
+    # Get top 3 TODOs if TO-DOs.md exists
+    local todos="[]"
+    if [[ -f "TO-DOs.md" ]]; then
+      todos=$(grep "^### " TO-DOs.md 2>/dev/null | head -3 | sed 's/^### //' | jq -R . | jq -s .)
+    fi
+
+    # Get colony state if exists
+    if [[ -f "$DATA_DIR/COLONY_STATE.json" ]]; then
+      current_goal=$(jq -r '.goal // empty' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "$current_goal")
+      current_phase=$(jq -r '.current_phase // 0' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "$current_phase")
+      current_milestone=$(jq -r '.milestone // "First Mound"' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "$current_milestone")
+    fi
+
+    # Build updated session
+    echo "$current_session" | jq --arg cmd "$cmd_run" \
+      --arg ts "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+      --arg suggested "$suggested" \
+      --arg summary "$summary" \
+      --arg goal "$current_goal" \
+      --argjson phase "$current_phase" \
+      --arg milestone "$current_milestone" \
+      --argjson todos "$todos" \
+      '.last_command = $cmd |
+       .last_command_at = $ts |
+       .suggested_next = $suggested |
+       .summary = $summary |
+       .colony_goal = $goal |
+       .current_phase = $phase |
+       .current_milestone = $milestone |
+       .active_todos = $todos' > "$session_file"
+
+    json_ok "{\"updated\":true,\"command\":\"$cmd_run\"}"
+    ;;
+
+  session-read)
+    # Read and return current session state
+    session_file="$DATA_DIR/session.json"
+
+    if [[ ! -f "$session_file" ]]; then
+      json_ok "{\"exists\":false,\"session\":null}"
+      exit 0
+    fi
+
+    local session_data
+    session_data=$(cat "$session_file" 2>/dev/null || echo '{}')
+
+    # Check if stale (> 24 hours)
+    local last_cmd_ts is_stale age_hours
+    last_cmd_ts=$(echo "$session_data" | jq -r '.last_command_at // .started_at // empty')
+    if [[ -n "$last_cmd_ts" ]]; then
+      local last_epoch now_epoch
+      last_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$last_cmd_ts" +%s 2>/dev/null || echo 0)
+      now_epoch=$(date +%s)
+      age_hours=$(( (now_epoch - last_epoch) / 3600 ))
+      [[ $age_hours -gt 24 ]] && is_stale=true || is_stale=false
+    else
+      is_stale="false"
+      age_hours="unknown"
+    fi
+
+    json_ok "{\"exists\":true,\"is_stale\":$is_stale,\"age_hours\":$age_hours,\"session\":$session_data}"
+    ;;
+
+  session-is-stale)
+    # Check if session is stale (returns true/false)
+    session_file="$DATA_DIR/session.json"
+
+    if [[ ! -f "$session_file" ]]; then
+      echo "true"
+      exit 0
+    fi
+
+    local last_cmd_ts
+    last_cmd_ts=$(jq -r '.last_command_at // .started_at // empty' "$session_file" 2>/dev/null)
+
+    if [[ -z "$last_cmd_ts" ]]; then
+      echo "true"
+      exit 0
+    fi
+
+    local last_epoch now_epoch age_hours
+    last_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$last_cmd_ts" +%s 2>/dev/null || echo 0)
+    now_epoch=$(date +%s)
+    age_hours=$(( (now_epoch - last_epoch) / 3600 ))
+
+    [[ $age_hours -gt 24 ]] && echo "true" || echo "false"
+    ;;
+
+  session-clear)
+    # Mark session as cleared (preserves file but marks context_cleared)
+    preserve="${2:-false}"
+    session_file="$DATA_DIR/session.json"
+
+    if [[ -f "$session_file" ]]; then
+      if [[ "$preserve" == "true" ]]; then
+        # Just mark as cleared
+        jq '.context_cleared = true' "$session_file" > "$session_file.tmp" && mv "$session_file.tmp" "$session_file"
+        json_ok "{\"cleared\":true,\"preserved\":true}"
+      else
+        # Remove file entirely
+        rm -f "$session_file"
+        json_ok "{\"cleared\":true,\"preserved\":false}"
+      fi
+    else
+      json_ok "{\"cleared\":false,\"reason\":\"no_session_exists\"}"
+    fi
+    ;;
+
+  session-mark-resumed)
+    # Mark session as resumed
+    session_file="$DATA_DIR/session.json"
+
+    if [[ -f "$session_file" ]]; then
+      jq --arg ts "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+         '.resumed_at = $ts | .context_cleared = false' "$session_file" > "$session_file.tmp" && mv "$session_file.tmp" "$session_file"
+      json_ok "{\"resumed\":true,\"timestamp\":\"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"}"
+    else
+      json_err "$E_RESOURCE_NOT_FOUND" "No session to mark as resumed"
+    fi
+    ;;
+
+  session-summary)
+    # Get human-readable session summary
+    session_file="$DATA_DIR/session.json"
+
+    if [[ ! -f "$session_file" ]]; then
+      echo "No active session found."
+      exit 0
+    fi
+
+    local goal phase milestone last_cmd last_at suggested todos cleared
+    goal=$(jq -r '.colony_goal // "No goal set"' "$session_file")
+    phase=$(jq -r '.current_phase // 0' "$session_file")
+    milestone=$(jq -r '.current_milestone // "First Mound"' "$session_file")
+    last_cmd=$(jq -r '.last_command // "None"' "$session_file")
+    last_at=$(jq -r '.last_command_at // "Unknown"' "$session_file")
+    suggested=$(jq -r '.suggested_next // "None"' "$session_file")
+    cleared=$(jq -r '.context_cleared // false' "$session_file")
+
+    echo "📋 Session Summary"
+    echo "=================="
+    echo "Goal: $goal"
+    [[ "$phase" != "0" ]] && echo "Phase: $phase"
+    echo "Milestone: $milestone"
+    echo "Last Command: $last_cmd"
+    echo "Last Active: $last_at"
+    [[ "$suggested" != "None" ]] && echo "Suggested Next: $suggested"
+    [[ "$cleared" == "true" ]] && echo "Status: Context was cleared"
     ;;
 
   *)
