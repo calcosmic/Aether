@@ -1,0 +1,255 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Aether Shared Types Schema
+
+  Purpose: Define common types used across all Aether Colony schemas.
+           Eliminates duplication of caste enumerations, version patterns,
+           and other shared type definitions.
+
+  Usage: Import into other schemas:
+    <xs:import namespace="http://aether.colony/schemas/types/1.0"
+               schemaLocation="aether-types.xsd"/>
+
+  Version: 1.0.0
+  Namespace: http://aether.colony/schemas/types/1.0
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="http://aether.colony/schemas/types/1.0"
+           xmlns:types="http://aether.colony/schemas/types/1.0"
+           elementFormDefault="qualified">
+
+  <xs:annotation>
+    <xs:documentation>
+      Shared type definitions for the Aether Colony XML schema ecosystem.
+      Import this schema to use standardized types for castes, versions,
+      timestamps, priorities, and pheromone signal types.
+    </xs:documentation>
+  </xs:annotation>
+
+  <!-- ============================================================ -->
+  <!-- Caste Enumeration (Source of Truth)                          -->
+  <!-- ============================================================ -->
+
+  <xs:simpleType name="CasteEnum">
+    <xs:annotation>
+      <xs:documentation>
+        Complete enumeration of all worker castes in the Aether Colony system.
+        This is the single source of truth for caste definitions across all schemas.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="builder"/>
+      <xs:enumeration value="watcher"/>
+      <xs:enumeration value="scout"/>
+      <xs:enumeration value="chaos"/>
+      <xs:enumeration value="oracle"/>
+      <xs:enumeration value="architect"/>
+      <xs:enumeration value="prime"/>
+      <xs:enumeration value="colonizer"/>
+      <xs:enumeration value="route_setter"/>
+      <xs:enumeration value="archaeologist"/>
+      <xs:enumeration value="ambassador"/>
+      <xs:enumeration value="auditor"/>
+      <xs:enumeration value="chronicler"/>
+      <xs:enumeration value="gatekeeper"/>
+      <xs:enumeration value="guardian"/>
+      <xs:enumeration value="includer"/>
+      <xs:enumeration value="keeper"/>
+      <xs:enumeration value="measurer"/>
+      <xs:enumeration value="probe"/>
+      <xs:enumeration value="sage"/>
+      <xs:enumeration value="tracker"/>
+      <xs:enumeration value="weaver"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- ============================================================ -->
+  <!-- Version and Timestamp Types                                  -->
+  <!-- ============================================================ -->
+
+  <xs:simpleType name="VersionType">
+    <xs:annotation>
+      <xs:documentation>
+        Semantic version string format (e.g., 1.0.0, 2.1.3-alpha)
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="TimestampType">
+    <xs:annotation>
+      <xs:documentation>
+        ISO 8601 timestamp format with optional milliseconds and timezone
+        Examples: 2026-02-16T14:30:00Z, 2026-02-16T14:30:00.123+01:00
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- ============================================================ -->
+  <!-- Priority and Signal Types                                    -->
+  <!-- ============================================================ -->
+
+  <xs:simpleType name="PriorityType">
+    <xs:annotation>
+      <xs:documentation>
+        Priority levels for signals, tasks, and various colony operations.
+        Ordered from highest to lowest urgency.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="critical"/>
+      <xs:enumeration value="high"/>
+      <xs:enumeration value="normal"/>
+      <xs:enumeration value="low"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="PheromoneTypeEnum">
+    <xs:annotation>
+      <xs:documentation>
+        Types of pheromone signals used in colony communication.
+        These directional signals guide worker behavior without direct commands.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="FOCUS"/>
+      <xs:enumeration value="REDIRECT"/>
+      <xs:enumeration value="FEEDBACK"/>
+      <xs:enumeration value="PHILOSOPHY"/>
+      <xs:enumeration value="STACK"/>
+      <xs:enumeration value="PATTERN"/>
+      <xs:enumeration value="DECREE"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- ============================================================ -->
+  <!-- Identifier Types                                             -->
+  <!-- ============================================================ -->
+
+  <xs:simpleType name="IdentifierType">
+    <xs:annotation>
+      <xs:documentation>
+        Standard identifier format: alphanumeric with hyphens and underscores.
+        Must start with a letter. Used for IDs, keys, and references.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[a-zA-Z][a-zA-Z0-9_-]*"/>
+      <xs:minLength value="1"/>
+      <xs:maxLength value="64"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="WorkerIdType">
+    <xs:annotation>
+      <xs:documentation>
+        Worker-specific identifier in kebab-case format.
+        Must be at least 3 characters for readability.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[a-z][a-z0-9-]*"/>
+      <xs:minLength value="3"/>
+      <xs:maxLength value="64"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="WisdomIdType">
+    <xs:annotation>
+      <xs:documentation>
+        Wisdom entry identifier in kebab-case format.
+        Used for queen-wisdom entries and patterns.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[a-z][a-z0-9-]*"/>
+      <xs:minLength value="3"/>
+      <xs:maxLength value="64"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- ============================================================ -->
+  <!-- Weight and Confidence Types                                  -->
+  <!-- ============================================================ -->
+
+  <xs:simpleType name="WeightType">
+    <xs:annotation>
+      <xs:documentation>
+        Weight value for tags and priorities, range 0.0 to 1.0.
+        Stored with 2 decimal places of precision.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:decimal">
+      <xs:minInclusive value="0.0"/>
+      <xs:maxInclusive value="1.0"/>
+      <xs:fractionDigits value="2"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="ConfidenceType">
+    <xs:annotation>
+      <xs:documentation>
+        Confidence score for wisdom entries and patterns, range 0.0 to 1.0.
+        Stored with 2 decimal places of precision.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:decimal">
+      <xs:minInclusive value="0.0"/>
+      <xs:maxInclusive value="1.0"/>
+      <xs:fractionDigits value="2"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- ============================================================ -->
+  <!-- Match and Source Types                                       -->
+  <!-- ============================================================ -->
+
+  <xs:simpleType name="MatchEnum">
+    <xs:annotation>
+      <xs:documentation>
+        Match mode for scope filtering: any (at least one), all (all required),
+        or none (exclude matching).
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="any"/>
+      <xs:enumeration value="all"/>
+      <xs:enumeration value="none"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="SourceTypeEnum">
+    <xs:annotation>
+      <xs:documentation>
+        Source of a signal or entry: user-created, worker-generated,
+        system-originated, or from external integration.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="user"/>
+      <xs:enumeration value="worker"/>
+      <xs:enumeration value="system"/>
+      <xs:enumeration value="external"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="DataFormatEnum">
+    <xs:annotation>
+      <xs:documentation>
+        Format of structured data attachments.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="json"/>
+      <xs:enumeration value="xml"/>
+      <xs:enumeration value="yaml"/>
+      <xs:enumeration value="plain"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+</xs:schema>

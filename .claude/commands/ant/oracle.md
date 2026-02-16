@@ -1,6 +1,6 @@
 ---
 name: ant:oracle
-description: "🔮🐜🧠🐜🔮 Oracle Ant - deep research agent using RALF iterative loop pattern"
+description: "🔮🐜🧠🐜🔮🐜 Oracle Ant - deep research agent using RALF iterative loop pattern"
 ---
 
 You are the **Oracle Ant** command handler. You configure and launch a deep research loop that runs autonomously in a separate process.
@@ -61,7 +61,7 @@ mkdir -p .aether/oracle && touch .aether/oracle/.stop
 Output:
 
 ```
-🔮 Oracle Stop Signal Sent
+🔮🐜 Oracle Stop Signal Sent
 
    Created .aether/oracle/.stop
    The research loop will halt at the end of the current iteration.
@@ -80,7 +80,7 @@ Check if `.aether/oracle/progress.md` exists using the Read tool.
 **If it does NOT exist**, output:
 
 ```
-🔮 Oracle Status: No Research In Progress
+🔮🐜 Oracle Status: No Research In Progress
 
    No progress.md found. Start a research session:
    /ant:oracle
@@ -95,7 +95,7 @@ Count the number of `## Iteration` headings in progress.md to determine iteratio
 Output:
 
 ```
-🔮 Oracle Status
+🔮🐜 Oracle Status
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Topic:       {topic from research.json, or "unknown"}
 Confidence:  {target_confidence}%
@@ -332,13 +332,13 @@ Now launch the loop. Try tmux first, fall back to manual.
 **Try tmux:**
 
 ```bash
-tmux new-session -d -s oracle "cd $(pwd) && bash .aether/oracle/oracle.sh; echo ''; echo '🔮 Oracle loop finished. Press any key to close.'; read -n1" 2>/dev/null && echo "TMUX_OK" || echo "TMUX_FAIL"
+tmux new-session -d -s oracle "cd $(pwd) && bash .aether/oracle/oracle.sh; echo ''; echo '🔮🐜 Oracle loop finished. Press any key to close.'; read -n1" 2>/dev/null && echo "TMUX_OK" || echo "TMUX_FAIL"
 ```
 
 **If TMUX_OK:**
 
 ```
-🔮 Oracle Launched
+🔮🐜 Oracle Launched
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
    The Oracle is researching in a background tmux session.

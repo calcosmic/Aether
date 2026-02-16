@@ -305,3 +305,11 @@ Then output the result:
 
 📋 Context document created at `.aether/CONTEXT.md` — read this if session resets
 ```
+
+### Step 8: Initialize Session
+
+Initialize session tracking to enable `/ant:resume` after context clear:
+
+```bash
+bash .aether/aether-utils.sh session-init "$(jq -r '.session_id' .aether/data/COLONY_STATE.json)" "$ARGUMENTS"
+```

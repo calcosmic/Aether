@@ -1,0 +1,416 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Aether Prompt XML Schema (XSD)
+
+  Purpose: Define structured prompts for colony workers and commands.
+           XML-structured prompts are more reliable, parseable, and
+           self-documenting than free-form text.
+
+  Architecture: Replaces ad-hoc markdown prompts with semantic XML tags
+                that Claude parses more reliably.
+
+  Version: 1.0.0
+  Namespace: http://aether.colony/schemas/prompt/1.0
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:ap="http://aether.colony/schemas/prompt/1.0"
+           elementFormDefault="unqualified"
+           attributeFormDefault="unqualified">
+
+  <!-- ============================================================ -->
+  <!-- Simple Types                                                 -->
+  <!-- ============================================================ -->
+
+  <!-- Prompt type classification -->
+  <xs:simpleType name="promptType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="worker"/>
+      <xs:enumeration value="command"/>
+      <xs:enumeration value="agent"/>
+      <xs:enumeration value="system"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Caste assignment for worker prompts -->
+  <xs:simpleType name="casteType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="builder"/>
+      <xs:enumeration value="watcher"/>
+      <xs:enumeration value="scout"/>
+      <xs:enumeration value="chaos"/>
+      <xs:enumeration value="oracle"/>
+      <xs:enumeration value="architect"/>
+      <xs:enumeration value="prime"/>
+      <xs:enumeration value="colonizer"/>
+      <xs:enumeration value="route_setter"/>
+      <xs:enumeration value="archaeologist"/>
+      <xs:enumeration value="chronicler"/>
+      <xs:enumeration value="guardian"/>
+      <xs:enumeration value="gatekeeper"/>
+      <xs:enumeration value="weaver"/>
+      <xs:enumeration value="probe"/>
+      <xs:enumeration value="sage"/>
+      <xs:enumeration value="measurer"/>
+      <xs:enumeration value="keeper"/>
+      <xs:enumeration value="tracker"/>
+      <xs:enumeration value="includer"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Priority levels -->
+  <xs:simpleType name="priorityType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="critical"/>
+      <xs:enumeration value="high"/>
+      <xs:enumeration value="normal"/>
+      <xs:enumeration value="low"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Constraint strength -->
+  <xs:simpleType name="constraintStrengthType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="must"/>
+      <xs:enumeration value="should"/>
+      <xs:enumeration value="may"/>
+      <xs:enumeration value="must-not"/>
+      <xs:enumeration value="should-not"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Version string -->
+  <xs:simpleType name="versionType">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="\d+\.\d+\.\d+(-[a-zA-Z0-9]+)?"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- ============================================================ -->
+  <!-- Complex Types                                                -->
+  <!-- ============================================================ -->
+
+  <!-- Individual requirement item -->
+  <xs:complexType name="requirementType">
+    <xs:sequence>
+      <xs:element name="description" type="xs:string"/>
+      <xs:element name="rationale" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+    <xs:attribute name="id" type="xs:ID" use="optional"/>
+    <xs:attribute name="priority" type="priorityType" use="optional" default="normal"/>
+  </xs:complexType>
+
+  <!-- Requirements container -->
+  <xs:complexType name="requirementsType">
+    <xs:sequence>
+      <xs:element name="requirement" type="requirementType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Constraint item -->
+  <xs:complexType name="constraintType">
+    <xs:sequence>
+      <xs:element name="rule" type="xs:string"/>
+      <xs:element name="exception" type="xs:string" minOccurs="0"/>
+      <xs:element name="enforcement" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+    <xs:attribute name="id" type="xs:ID" use="optional"/>
+    <xs:attribute name="strength" type="constraintStrengthType" use="optional" default="should"/>
+  </xs:complexType>
+
+  <!-- Constraints container -->
+  <xs:complexType name="constraintsType">
+    <xs:sequence>
+      <xs:element name="constraint" type="constraintType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Expected output specification -->
+  <xs:complexType name="outputType">
+    <xs:sequence>
+      <xs:element name="format" type="xs:string">
+        <xs:annotation>
+          <xs:documentation>Expected output format (e.g., "JSON", "Markdown", "XML")</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="structure" type="xs:string" minOccurs="0">
+        <xs:annotation>
+          <xs:documentation>Description of expected structure or schema</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="example" type="xs:string" minOccurs="0">
+        <xs:annotation>
+          <xs:documentation>Example of expected output</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Verification method -->
+  <xs:complexType name="verificationType">
+    <xs:sequence>
+      <xs:element name="method" type="xs:string">
+        <xs:annotation>
+          <xs:documentation>How to verify the output (e.g., "Run tests", "Validate against schema")</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="steps" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="step" type="xs:string" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="tools" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="tool" type="xs:string" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Success criteria -->
+  <xs:complexType name="successCriteriaType">
+    <xs:sequence>
+      <xs:element name="criterion" maxOccurs="unbounded">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="description" type="xs:string"/>
+            <xs:element name="measure" type="xs:string" minOccurs="0">
+              <xs:annotation>
+                <xs:documentation>How to measure this criterion (e.g., "Code coverage > 80%")</xs:documentation>
+              </xs:annotation>
+            </xs:element>
+          </xs:sequence>
+          <xs:attribute name="id" type="xs:ID" use="optional"/>
+          <xs:attribute name="required" type="xs:boolean" use="optional" default="true"/>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Context information -->
+  <xs:complexType name="contextType">
+    <xs:sequence>
+      <xs:element name="background" type="xs:string" minOccurs="0">
+        <xs:annotation>
+          <xs:documentation>Background information the prompt executor should know</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="assumptions" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="assumption" type="xs:string" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="dependencies" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="dependency" maxOccurs="unbounded">
+              <xs:complexType>
+                <xs:simpleContent>
+                  <xs:extension base="xs:string">
+                    <xs:attribute name="type" use="optional">
+                      <xs:simpleType>
+                        <xs:restriction base="xs:string">
+                          <xs:enumeration value="file"/>
+                          <xs:enumeration value="command"/>
+                          <xs:enumeration value="data"/>
+                          <xs:enumeration value="service"/>
+                        </xs:restriction>
+                      </xs:simpleType>
+                    </xs:attribute>
+                  </xs:extension>
+                </xs:simpleContent>
+              </xs:complexType>
+            </xs:element>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Tool specification -->
+  <xs:complexType name="toolsType">
+    <xs:sequence>
+      <xs:element name="tool" maxOccurs="unbounded">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="name" type="xs:string"/>
+            <xs:element name="purpose" type="xs:string"/>
+            <xs:element name="when_to_use" type="xs:string" minOccurs="0"/>
+          </xs:sequence>
+          <xs:attribute name="required" type="xs:boolean" use="optional" default="true"/>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Thought process guidance -->
+  <xs:complexType name="thinkingType">
+    <xs:sequence>
+      <xs:element name="approach" type="xs:string">
+        <xs:annotation>
+          <xs:documentation>How to approach the task (e.g., "Research first, then implement")</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="steps" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="step" maxOccurs="unbounded">
+              <xs:complexType>
+                <xs:sequence>
+                  <xs:element name="description" type="xs:string"/>
+                  <xs:element name="checkpoint" type="xs:string" minOccurs="0">
+                    <xs:annotation>
+                      <xs:documentation>What to verify before proceeding</xs:documentation>
+                    </xs:annotation>
+                  </xs:element>
+                </xs:sequence>
+                <xs:attribute name="order" type="xs:positiveInteger" use="required"/>
+                <xs:attribute name="optional" type="xs:boolean" use="optional" default="false"/>
+              </xs:complexType>
+            </xs:element>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="pitfalls" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="pitfall" type="xs:string" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Error handling guidance -->
+  <xs:complexType name="errorHandlingType">
+    <xs:sequence>
+      <xs:element name="on_failure" type="xs:string">
+        <xs:annotation>
+          <xs:documentation>What to do when things go wrong</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="escalation" type="xs:string" minOccurs="0">
+        <xs:annotation>
+          <xs:documentation>When and how to escalate to user or Queen</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="recovery_steps" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="step" type="xs:string" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Metadata -->
+  <xs:complexType name="metadataType">
+    <xs:sequence>
+      <xs:element name="version" type="versionType"/>
+      <xs:element name="author" type="xs:string" minOccurs="0"/>
+      <xs:element name="created" type="xs:dateTime" minOccurs="0"/>
+      <xs:element name="modified" type="xs:dateTime" minOccurs="0"/>
+      <xs:element name="tags" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="tag" type="xs:string" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- ============================================================ -->
+  <!-- Root Element: Aether Prompt                                  -->
+  <!-- ============================================================ -->
+
+  <xs:element name="aether-prompt">
+    <xs:complexType>
+      <xs:sequence>
+        <!-- Metadata -->
+        <xs:element name="metadata" type="metadataType" minOccurs="0"/>
+
+        <!-- Identification -->
+        <xs:element name="name" type="xs:string">
+          <xs:annotation>
+            <xs:documentation>Unique name for this prompt</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+
+        <xs:element name="type" type="promptType"/>
+
+        <xs:element name="caste" type="casteType" minOccurs="0">
+          <xs:annotation>
+            <xs:documentation>Required for worker-type prompts</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+
+        <!-- Core Content -->
+        <xs:element name="objective" type="xs:string">
+          <xs:annotation>
+            <xs:documentation>What this prompt should accomplish</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+
+        <xs:element name="context" type="contextType" minOccurs="0"/>
+
+        <xs:element name="requirements" type="requirementsType">
+          <xs:annotation>
+            <xs:documentation>What must be done to complete this prompt successfully</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+
+        <xs:element name="constraints" type="constraintsType" minOccurs="0">
+          <xs:annotation>
+            <xs:documentation>Hard and soft constraints on execution</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+
+        <xs:element name="thinking" type="thinkingType" minOccurs="0">
+          <xs:annotation>
+            <xs:documentation>Guidance on how to think about and approach the task</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+
+        <xs:element name="tools" type="toolsType" minOccurs="0">
+          <xs:annotation>
+            <xs:documentation>Tools available and when to use them</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+
+        <xs:element name="output" type="outputType">
+          <xs:annotation>
+            <xs:documentation>Expected output format and structure</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+
+        <xs:element name="verification" type="verificationType">
+          <xs:annotation>
+            <xs:documentation>How to verify the output is correct</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+
+        <xs:element name="success_criteria" type="successCriteriaType">
+          <xs:annotation>
+            <xs:documentation>What constitutes successful completion</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+
+        <xs:element name="error_handling" type="errorHandlingType" minOccurs="0">
+          <xs:annotation>
+            <xs:documentation>How to handle errors and edge cases</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+      </xs:sequence>
+
+      <xs:attribute name="version" type="versionType" use="optional" default="1.0.0"/>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>

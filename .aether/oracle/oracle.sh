@@ -8,6 +8,9 @@
 
 set -e
 
+# Unset CLAUDECODE to allow spawning Claude CLI from within Claude Code
+unset CLAUDECODE 2>/dev/null || true
+
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AETHER_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"

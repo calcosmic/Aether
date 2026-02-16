@@ -441,7 +441,15 @@ Confidence: {confidence}%
 Ready to build.
 ```
 
-### Step 6: Display Plan
+### Step 6: Update Session
+
+Update the session tracking file to enable `/ant:resume` after context clear:
+
+```bash
+bash .aether/aether-utils.sh session-update "/ant:plan" "/ant:build 1" "Plan generated with {confidence}% confidence, {N} phases"
+```
+
+### Step 7: Display Plan
 
 **If visual_mode is true, render final swarm display:**
 ```bash

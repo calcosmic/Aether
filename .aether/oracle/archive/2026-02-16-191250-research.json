@@ -1,0 +1,14 @@
+{
+  "topic": "Evaluate Aether system for exact fixes needed so user can use it for their own developments",
+  "scope": "both",
+  "questions": [
+    "What blocking bugs or errors currently prevent normal Aether usage?",
+    "Which CLI commands or slash commands are broken, incomplete, or untested?",
+    "What state management issues exist (COLONY_STATE.json, session handling, file locking)?",
+    "What test failures indicate broken functionality that needs immediate fixing?",
+    "What quick wins exist that would unblock the user fastest?"
+  ],
+  "max_iterations": 50,
+  "target_confidence": 99,
+  "started_at": "2026-02-16T16:48:01Z"
+}

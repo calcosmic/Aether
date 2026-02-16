@@ -215,6 +215,7 @@ class UpdateTransaction {
       'utils/state-loader.sh',
       'utils/swarm-display.sh',
       'utils/watch-spawn-tree.sh',
+      'templates/QUEEN.md.template',
     ];
   }
 

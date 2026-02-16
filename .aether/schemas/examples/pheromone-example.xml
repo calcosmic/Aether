@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ph:pheromones xmlns:ph="http://aether.colony/schemas/pheromones"
+               version="1.0.0"
+               generated_at="2026-02-16T15:30:00Z"
+               colony_id="aether-main">
+
+  <ph:metadata>
+    <ph:source type="user" version="1.0.0">Colony initialization</ph:source>
+    <ph:context>Initial pheromone setup for new colony</ph:context>
+  </ph:metadata>
+
+  <!-- FOCUS signal: Directs attention to authentication module -->
+  <ph:signal id="focus-001"
+             type="FOCUS"
+             priority="normal"
+             source="user"
+             created_at="2026-02-16T15:30:00Z"
+             expires_at="2026-02-17T15:30:00Z"
+             active="true">
+    <ph:content>
+      <ph:text>Focus implementation efforts on the authentication module. This is the highest priority feature for the current sprint.</ph:text>
+      <ph:data format="json">
+        <sprint>42</sprint>
+        <priority_score>8.5</priority_score>
+        <estimated_hours>16</estimated_hours>
+      </ph:data>
+    </ph:content>
+    <ph:tags>
+      <ph:tag weight="0.9" category="feature">authentication</ph:tag>
+      <ph:tag weight="0.7" category="sprint">sprint-42</ph:tag>
+    </ph:tags>
+    <ph:scope global="false">
+      <ph:castes match="any">
+        <ph:caste>builder</ph:caste>
+        <ph:caste>architect</ph:caste>
+      </ph:castes>
+      <ph:paths match="any">
+        <ph:path>src/auth/**</ph:path>
+        <ph:path>src/middleware/auth*</ph:path>
+      </ph:paths>
+    </ph:scope>
+  </ph:signal>
+
+  <!-- REDIRECT signal: Hard constraint to avoid deprecated API -->
+  <ph:signal id="redirect-001"
+             type="REDIRECT"
+             priority="high"
+             source="system"
+             created_at="2026-02-16T14:00:00Z"
+             active="true">
+    <ph:content>
+      <ph:text>AVOID using the legacy v1 API endpoints. These are deprecated and will be removed in version 2.0. Use v2 endpoints instead.</ph:text>
+      <ph:data format="json">
+        <deprecated_endpoints>
+          <endpoint>/api/v1/users</endpoint>
+          <endpoint>/api/v1/auth</endpoint>
+        </deprecated_endpoints>
+        <replacement>/api/v2/</replacement>
+        <removal_version>2.0.0</removal_version>
+      </ph:data>
+    </ph:content>
+    <ph:tags>
+      <ph:tag weight="1.0" category="constraint">deprecated</ph:tag>
+      <ph:tag weight="0.8" category="api">v1</ph:tag>
+    </ph:tags>
+    <ph:scope global="true"/>
+  </ph:signal>
+
+  <!-- FEEDBACK signal: Gentle adjustment based on code review -->
+  <ph:signal id="feedback-001"
+             type="FEEDBACK"
+             priority="low"
+             source="watcher-A7"
+             created_at="2026-02-16T10:15:00Z"
+             expires_at="2026-02-23T10:15:00Z"
+             active="true">
+    <ph:content>
+      <ph:text>Consider adding more inline comments to complex regex patterns. Recent code review showed these can be difficult for new team members to understand.</ph:text>
+    </ph:content>
+    <ph:tags>
+      <ph:tag weight="0.5" category="style">documentation</ph:tag>
+      <ph:tag weight="0.6" category="readability">regex</ph:tag>
+    </ph:tags>
+    <ph:scope global="false">
+      <ph:castes match="any">
+        <ph:caste>builder</ph:caste>
+      </ph:castes>
+      <ph:paths match="any">
+        <ph:path>src/**/*.js</ph:path>
+        <ph:path>src/**/*.ts</ph:path>
+      </ph:paths>
+    </ph:scope>
+  </ph:signal>
+
+  <!-- Critical REDIRECT: Security constraint -->
+  <ph:signal id="redirect-002"
+             type="REDIRECT"
+             priority="critical"
+             source="guardian-K9"
+             created_at="2026-02-16T09:00:00Z"
+             active="true">
+    <ph:content>
+      <ph:text>NEVER commit API keys or secrets to the repository. All credentials must use environment variables or the configured secrets manager.</ph:text>
+      <ph:data format="json">
+        <severity>critical</severity>
+        <violation_pattern>(api[_-]?key|secret|password|token)\s*=\s*["'][^"']+["']</violation_pattern>
+        <remediation>Use process.env.VAR_NAME or secrets manager</remediation>
+      </ph:data>
+    </ph:content>
+    <ph:tags>
+      <ph:tag weight="1.0" category="security">secrets</ph:tag>
+      <ph:tag weight="1.0" category="compliance">required</ph:tag>
+    </ph:tags>
+    <ph:scope global="true"/>
+  </ph:signal>
+
+</ph:pheromones>

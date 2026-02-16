@@ -1,0 +1,302 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Aether Colony Registry Example
+  ==============================
+  Demonstrates the multi-colony registry XML format with:
+  - Colony lineage and ancestry tracking
+  - Pheromone inheritance between colonies
+  - Cross-colony relationships
+  - Full compliance with colony-registry.xsd schema
+
+  This example shows a "main" colony that spawned two child colonies,
+  each inheriting pheromones and establishing their own relationships.
+-->
+<colony-registry version="1.0.0">
+
+  <!-- ============================================ -->
+  <!-- Registry Metadata                            -->
+  <!-- ============================================ -->
+  <registry-info>
+    <name>Aether Multi-Colony Registry</name>
+    <description>Central registry for tracking all Aether colonies, their lineage, and inherited pheromones</description>
+    <version>1.0.0</version>
+    <created-at>2026-02-16T10:00:00Z</created-at>
+    <updated-at>2026-02-16T15:30:00Z</updated-at>
+    <total-colonies>3</total-colonies>
+  </registry-info>
+
+  <!-- ============================================ -->
+  <!-- Colony Entries                               -->
+  <!-- ============================================ -->
+  <colonies>
+
+    <!-- ========================================== -->
+    <!-- Colony 1: Main Colony (Root)               -->
+    <!-- ========================================== -->
+    <colony>
+      <id>main-aether-001</id>
+      <name>Main Aether Colony</name>
+      <description>The primary Aether development colony for the core platform</description>
+
+      <path>/Users/callumcowie/repos/Aether</path>
+      <repository-url>https://github.com/callumcowie/Aether</repository-url>
+
+      <status>active</status>
+      <created-at>2026-01-15T08:00:00Z</created-at>
+      <last-active>2026-02-16T15:30:00Z</last-active>
+
+      <!-- Root colony has no parent, generation 1 -->
+      <lineage>
+        <generation>1</generation>
+        <ancestry-chain>
+          <!-- Root colony references itself as generation 0 anchor -->
+          <ancestor generation="0" relationship="parent">main-aether-001</ancestor>
+        </ancestry-chain>
+      </lineage>
+
+      <!-- Root colony defines original pheromones, doesn't inherit -->
+      <pheromones-inherited count="0">
+        <!-- Empty for root colony -->
+      </pheromones-inherited>
+
+      <!-- Relationships to child colonies -->
+      <relationships>
+        <relationship>
+          <target-colony>feature-auth-002</target-colony>
+          <relationship>child</relationship>
+          <established-at>2026-02-01T09:00:00Z</established-at>
+          <metadata>
+            <entry>
+              <key>spawn-reason</key>
+              <value>authentication feature development</value>
+            </entry>
+            <entry>
+              <key>phase</key>
+              <value>implementation</value>
+            </entry>
+          </metadata>
+        </relationship>
+        <relationship>
+          <target-colony>feature-ui-003</target-colony>
+          <relationship>child</relationship>
+          <established-at>2026-02-10T14:00:00Z</established-at>
+          <metadata>
+            <entry>
+              <key>spawn-reason</key>
+              <value>UI component library development</value>
+            </entry>
+            <entry>
+              <key>phase</key>
+              <value>design</value>
+            </entry>
+          </metadata>
+        </relationship>
+      </relationships>
+
+      <metadata>
+        <schema-version>1.0.0</schema-version>
+        <tags>
+          <tag>core</tag>
+          <tag>platform</tag>
+          <tag>main</tag>
+        </tags>
+        <attributes>
+          <attribute>
+            <key>milestone</key>
+            <value>Open Chambers</value>
+          </attribute>
+          <attribute>
+            <key>priority</key>
+            <value>critical</value>
+          </attribute>
+        </attributes>
+      </metadata>
+    </colony>
+
+    <!-- ========================================== -->
+    <!-- Colony 2: Feature Auth (Child)               -->
+    <!-- ========================================== -->
+    <colony>
+      <id>feature-auth-002</id>
+      <name>Authentication Feature Colony</name>
+      <description>Child colony spawned for implementing authentication and authorization features</description>
+
+      <path>/Users/callumcowie/repos/Aether-auth</path>
+      <repository-url>https://github.com/callumcowie/Aether-auth</repository-url>
+
+      <status>active</status>
+      <created-at>2026-02-01T09:00:00Z</created-at>
+      <last-active>2026-02-16T12:00:00Z</last-active>
+
+      <!-- Child colony inherits from main -->
+      <lineage>
+        <parent-colony>main-aether-001</parent-colony>
+        <generation>2</generation>
+        <ancestry-chain>
+          <ancestor generation="1" relationship="parent">main-aether-001</ancestor>
+        </ancestry-chain>
+      </lineage>
+
+      <!-- Inherited pheromones from parent -->
+      <pheromones-inherited count="3">
+        <pheromone type="focus">
+          <key>architecture-pattern</key>
+          <value>modular-service-layer</value>
+          <strength>0.850</strength>
+          <inherited-at>2026-02-01T09:00:00Z</inherited-at>
+          <source-colony>main-aether-001</source-colony>
+        </pheromone>
+        <pheromone type="redirect">
+          <key>avoid-global-state</key>
+          <value>use-dependency-injection-instead</value>
+          <strength>0.920</strength>
+          <inherited-at>2026-02-01T09:00:00Z</inherited-at>
+          <source-colony>main-aether-001</source-colony>
+        </pheromone>
+        <pheromone type="feedback">
+          <key>test-coverage-target</key>
+          <value>maintain-80-percent-minimum</value>
+          <strength>0.750</strength>
+          <inherited-at>2026-02-01T09:00:00Z</inherited-at>
+          <source-colony>main-aether-001</source-colony>
+        </pheromone>
+      </pheromones-inherited>
+
+      <!-- Relationships -->
+      <relationships>
+        <relationship>
+          <target-colony>main-aether-001</target-colony>
+          <relationship>parent</relationship>
+          <established-at>2026-02-01T09:00:00Z</established-at>
+        </relationship>
+      </relationships>
+
+      <metadata>
+        <schema-version>1.0.0</schema-version>
+        <tags>
+          <tag>feature</tag>
+          <tag>auth</tag>
+          <tag>security</tag>
+        </tags>
+        <attributes>
+          <attribute>
+            <key>milestone</key>
+            <value>First Mound</value>
+          </attribute>
+          <attribute>
+            <key>parent-colony</key>
+            <value>main-aether-001</value>
+          </attribute>
+        </attributes>
+      </metadata>
+    </colony>
+
+    <!-- ========================================== -->
+    <!-- Colony 3: Feature UI (Child)                 -->
+    <!-- ========================================== -->
+    <colony>
+      <id>feature-ui-003</id>
+      <name>UI Component Colony</name>
+      <description>Child colony for developing reusable UI component library</description>
+
+      <path>/Users/callumcowie/repos/Aether-ui</path>
+      <repository-url>https://github.com/callumcowie/Aether-ui</repository-url>
+
+      <status>paused</status>
+      <created-at>2026-02-10T14:00:00Z</created-at>
+      <last-active>2026-02-14T16:00:00Z</last-active>
+
+      <!-- Child colony inherits from main -->
+      <lineage>
+        <parent-colony>main-aether-001</parent-colony>
+        <generation>2</generation>
+        <ancestry-chain>
+          <ancestor generation="1" relationship="parent">main-aether-001</ancestor>
+        </ancestry-chain>
+      </lineage>
+
+      <!-- Inherited pheromones from parent -->
+      <pheromones-inherited count="2">
+        <pheromone type="focus">
+          <key>component-architecture</key>
+          <value>atomic-design-methodology</value>
+          <strength>0.800</strength>
+          <inherited-at>2026-02-10T14:00:00Z</inherited-at>
+          <source-colony>main-aether-001</source-colony>
+        </pheromone>
+        <pheromone type="feedback">
+          <key>accessibility-first</key>
+          <value>wcag-2.1-aa-compliance-required</value>
+          <strength>0.900</strength>
+          <inherited-at>2026-02-10T14:00:00Z</inherited-at>
+          <source-colony>main-aether-001</source-colony>
+        </pheromone>
+      </pheromones-inherited>
+
+      <!-- Relationships -->
+      <relationships>
+        <relationship>
+          <target-colony>main-aether-001</target-colony>
+          <relationship>parent</relationship>
+          <established-at>2026-02-10T14:00:00Z</established-at>
+        </relationship>
+        <relationship>
+          <target-colony>feature-auth-002</target-colony>
+          <relationship>sibling</relationship>
+          <established-at>2026-02-10T14:00:00Z</established-at>
+          <metadata>
+            <entry>
+              <key>shared-patterns</key>
+              <value>component-testing-strategies</value>
+            </entry>
+          </metadata>
+        </relationship>
+      </relationships>
+
+      <metadata>
+        <schema-version>1.0.0</schema-version>
+        <tags>
+          <tag>feature</tag>
+          <tag>ui</tag>
+          <tag>components</tag>
+        </tags>
+        <attributes>
+          <attribute>
+            <key>milestone</key>
+            <value>Open Chambers</value>
+          </attribute>
+          <attribute>
+            <key>status-reason</key>
+            <value>awaiting-design-system-finalization</value>
+          </attribute>
+        </attributes>
+      </metadata>
+    </colony>
+
+  </colonies>
+
+  <!-- ============================================ -->
+  <!-- Global Relationships                         -->
+  <!-- ============================================ -->
+  <global-relationships>
+    <relationship>
+      <from-colony>main-aether-001</from-colony>
+      <to-colony>feature-auth-002</to-colony>
+      <type>parent</type>
+      <description>Main colony spawned auth feature colony for parallel development</description>
+    </relationship>
+    <relationship>
+      <from-colony>main-aether-001</from-colony>
+      <to-colony>feature-ui-003</to-colony>
+      <type>parent</type>
+      <description>Main colony spawned UI feature colony for component library work</description>
+    </relationship>
+    <relationship>
+      <from-colony>feature-auth-002</from-colony>
+      <to-colony>feature-ui-003</to-colony>
+      <type>sibling</type>
+      <description>Both feature colonies share the same parent and may share patterns</description>
+    </relationship>
+  </global-relationships>
+
+</colony-registry>

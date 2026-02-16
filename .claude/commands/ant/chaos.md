@@ -92,7 +92,7 @@ Read these files in parallel to understand the colony and codebase:
 
 **If no relevant files can be found for the target:**
 ```
-🎲 Chaos Ant cannot locate target: $ARGUMENTS
+🎲🐜 Chaos Ant cannot locate target: $ARGUMENTS
    Searched for matching files and modules but found nothing.
    Please provide a valid file path, module name, or feature description.
 ```

@@ -61,6 +61,7 @@ SYSTEM_FILES=(
   "utils/state-loader.sh"
   "utils/swarm-display.sh"
   "utils/watch-spawn-tree.sh"
+  "templates/QUEEN.md.template"
 )
 
 # Determine direction

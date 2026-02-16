@@ -2717,7 +2717,7 @@ NODESCRIPT
     sed -e "s/{TIMESTAMP}/$timestamp/g" "$template_file" > "$queen_file"
 
     if [[ -f "$queen_file" ]]; then
-      json_ok '{"created":true,"path":".aether/docs/QUEEN.md","source":"runtime/templates/QUEEN.md.template"}'
+      json_ok "{\"created\":true,\"path\":\".aether/docs/QUEEN.md\",\"source\":\"$template_file\"}"
     else
       json_err "$E_FILE_NOT_FOUND" "Failed to create QUEEN.md" '{"path":".aether/docs/QUEEN.md"}'
       exit 1

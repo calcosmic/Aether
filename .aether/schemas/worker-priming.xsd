@@ -1,0 +1,276 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Worker Priming XML Schema (XSD)
+
+  Purpose: Define modular configuration composition for worker initialization
+           using XInclude to compose queen-wisdom, active-trails, and stack-profiles.
+
+  Architecture: Declarative composition - workers are primed by including
+                multiple configuration sources into a unified document.
+
+  Version: 1.0.0
+  Namespace: http://aether.colony/schemas/worker-priming/1.0
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:wp="http://aether.colony/schemas/worker-priming/1.0"
+           xmlns:xi="http://www.w3.org/2001/XInclude"
+           targetNamespace="http://aether.colony/schemas/worker-priming/1.0"
+           elementFormDefault="qualified"
+           attributeFormDefault="unqualified">
+
+  <!-- Import XInclude namespace for composition support -->
+  <xs:import namespace="http://www.w3.org/2001/XInclude"
+             schemaLocation="http://www.w3.org/2001/XInclude.xsd"/>
+
+  <!-- ============================================================ -->
+  <!-- Simple Types                                                 -->
+  <!-- ============================================================ -->
+
+  <!-- Worker ID: kebab-case identifier -->
+  <xs:simpleType name="workerIdType">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[a-z][a-z0-9-]*"/>
+      <xs:minLength value="3"/>
+      <xs:maxLength value="64"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Caste enumeration (matches pheromone.xsd) -->
+  <xs:simpleType name="casteType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="builder"/>
+      <xs:enumeration value="watcher"/>
+      <xs:enumeration value="scout"/>
+      <xs:enumeration value="chaos"/>
+      <xs:enumeration value="oracle"/>
+      <xs:enumeration value="architect"/>
+      <xs:enumeration value="prime"/>
+      <xs:enumeration value="colonizer"/>
+      <xs:enumeration value="route_setter"/>
+      <xs:enumeration value="archaeologist"/>
+      <xs:enumeration value="ambassador"/>
+      <xs:enumeration value="auditor"/>
+      <xs:enumeration value="chronicler"/>
+      <xs:enumeration value="gatekeeper"/>
+      <xs:enumeration value="guardian"/>
+      <xs:enumeration value="includer"/>
+      <xs:enumeration value="keeper"/>
+      <xs:enumeration value="measurer"/>
+      <xs:enumeration value="probe"/>
+      <xs:enumeration value="sage"/>
+      <xs:enumeration value="tracker"/>
+      <xs:enumeration value="weaver"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Priming mode: how the worker should be initialized -->
+  <xs:simpleType name="primingModeType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="full"/>
+      <xs:enumeration value="minimal"/>
+      <xs:enumeration value="inherit"/>
+      <xs:enumeration value="override"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Priority for configuration sources -->
+  <xs:simpleType name="sourcePriorityType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="highest"/>
+      <xs:enumeration value="high"/>
+      <xs:enumeration value="normal"/>
+      <xs:enumeration value="low"/>
+      <xs:enumeration value="lowest"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- ISO 8601 timestamp -->
+  <xs:simpleType name="timestampType">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Version string (semver format) -->
+  <xs:simpleType name="versionType">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="\d+\.\d+\.\d+(-[a-zA-Z0-9]+)?"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- ============================================================ -->
+  <!-- Complex Types                                                -->
+  <!-- ============================================================ -->
+
+  <!-- Worker identity -->
+  <xs:complexType name="workerIdentityType">
+    <xs:sequence>
+      <xs:element name="name" type="xs:string"/>
+      <xs:element name="caste" type="wp:casteType"/>
+      <xs:element name="generation" type="xs:positiveInteger" minOccurs="0"/>
+      <xs:element name="parent-colony" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+    <xs:attribute name="id" type="wp:workerIdType" use="required"/>
+  </xs:complexType>
+
+  <!-- Configuration source with XInclude support -->
+  <xs:complexType name="configSourceType">
+    <xs:sequence>
+      <!-- XInclude directive for external content -->
+      <xs:element ref="xi:include" minOccurs="0" maxOccurs="1"/>
+      <!-- Inline content (alternative to XInclude) -->
+      <xs:element name="inline" type="xs:string" minOccurs="0" maxOccurs="1"/>
+      <!-- Source metadata -->
+      <xs:element name="source-info" type="wp:sourceInfoType" minOccurs="0"/>
+    </xs:sequence>
+    <xs:attribute name="name" type="xs:string" use="required"/>
+    <xs:attribute name="priority" type="wp:sourcePriorityType" use="optional" default="normal"/>
+    <xs:attribute name="required" type="xs:boolean" use="optional" default="true"/>
+  </xs:complexType>
+
+  <!-- Source metadata for traceability -->
+  <xs:complexType name="sourceInfoType">
+    <xs:sequence>
+      <xs:element name="origin" type="xs:string"/>
+      <xs:element name="version" type="wp:versionType" minOccurs="0"/>
+      <xs:element name="checksum" type="xs:string" minOccurs="0"/>
+      <xs:element name="loaded-at" type="wp:timestampType" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Queen wisdom section -->
+  <xs:complexType name="queenWisdomSectionType">
+    <xs:sequence>
+      <xs:element name="description" type="xs:string" minOccurs="0"/>
+      <xs:element name="wisdom-source" type="wp:configSourceType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="enabled" type="xs:boolean" use="optional" default="true"/>
+  </xs:complexType>
+
+  <!-- Active trails section (pheromones) -->
+  <xs:complexType name="activeTrailsSectionType">
+    <xs:sequence>
+      <xs:element name="description" type="xs:string" minOccurs="0"/>
+      <xs:element name="trail-source" type="wp:configSourceType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="enabled" type="xs:boolean" use="optional" default="true"/>
+    <xs:attribute name="inherit-from-parent" type="xs:boolean" use="optional" default="true"/>
+  </xs:complexType>
+
+  <!-- Stack profiles section -->
+  <xs:complexType name="stackProfilesSectionType">
+    <xs:sequence>
+      <xs:element name="description" type="xs:string" minOccurs="0"/>
+      <xs:element name="profile-source" type="wp:configSourceType" minOccurs="0" maxOccurs="unbounded"/>
+      <xs:element name="technology-filter" type="wp:technologyFilterType" minOccurs="0"/>
+    </xs:sequence>
+    <xs:attribute name="enabled" type="xs:boolean" use="optional" default="true"/>
+  </xs:complexType>
+
+  <!-- Technology filter for stack profiles -->
+  <xs:complexType name="technologyFilterType">
+    <xs:sequence>
+      <xs:element name="include" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
+      <xs:element name="exclude" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="match-mode" type="xs:string" use="optional" default="any"/>
+  </xs:complexType>
+
+  <!-- Override rules for configuration merging -->
+  <xs:complexType name="overrideRulesType">
+    <xs:sequence>
+      <xs:element name="rule" type="wp:overrideRuleType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Individual override rule -->
+  <xs:complexType name="overrideRuleType">
+    <xs:sequence>
+      <xs:element name="target-path" type="xs:string"/>
+      <xs:element name="action" type="wp:overrideActionType"/>
+      <xs:element name="value" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+    <xs:attribute name="id" type="xs:string" use="required"/>
+    <xs:attribute name="priority" type="wp:sourcePriorityType" use="optional" default="normal"/>
+  </xs:complexType>
+
+  <!-- Override action enumeration -->
+  <xs:simpleType name="overrideActionType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="replace"/>
+      <xs:enumeration value="merge"/>
+      <xs:enumeration value="append"/>
+      <xs:enumeration value="prepend"/>
+      <xs:enumeration value="remove"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Priming metadata -->
+  <xs:complexType name="primingMetadataType">
+    <xs:sequence>
+      <xs:element name="version" type="wp:versionType"/>
+      <xs:element name="created" type="wp:timestampType"/>
+      <xs:element name="modified" type="wp:timestampType"/>
+      <xs:element name="colony-id" type="xs:string"/>
+      <xs:element name="template" type="xs:string" minOccurs="0"/>
+      <xs:element name="composition-checksum" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Composition result (post-processing) -->
+  <xs:complexType name="compositionResultType">
+    <xs:sequence>
+      <xs:element name="resolved-at" type="wp:timestampType"/>
+      <xs:element name="sources-resolved" type="xs:nonNegativeInteger"/>
+      <xs:element name="sources-failed" type="xs:nonNegativeInteger"/>
+      <xs:element name="composition-size" type="xs:nonNegativeInteger"/>
+      <xs:element name="validation-status" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- ============================================================ -->
+  <!-- Root Element                                                 -->
+  <!-- ============================================================ -->
+
+  <xs:element name="worker-priming">
+    <xs:complexType>
+      <xs:sequence>
+        <!-- Metadata about this priming document -->
+        <xs:element name="metadata" type="wp:primingMetadataType"/>
+
+        <!-- Worker identity -->
+        <xs:element name="worker-identity" type="wp:workerIdentityType"/>
+
+        <!-- Priming mode configuration -->
+        <xs:element name="priming-config" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="mode" type="wp:primingModeType"/>
+              <xs:element name="inherit-from-parent" type="xs:boolean" minOccurs="0" default="true"/>
+              <xs:element name="apply-redirects" type="xs:boolean" minOccurs="0" default="true"/>
+              <xs:element name="load-pheromones" type="xs:boolean" minOccurs="0" default="true"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!--
+          Configuration Composition Sections
+          Each section can use XInclude to pull in external documents
+        -->
+        <xs:element name="queen-wisdom" type="wp:queenWisdomSectionType" minOccurs="0"/>
+        <xs:element name="active-trails" type="wp:activeTrailsSectionType" minOccurs="0"/>
+        <xs:element name="stack-profiles" type="wp:stackProfilesSectionType" minOccurs="0"/>
+
+        <!-- Override rules for merging -->
+        <xs:element name="override-rules" type="wp:overrideRulesType" minOccurs="0"/>
+
+        <!-- Composition result (populated after resolution) -->
+        <xs:element name="composition-result" type="wp:compositionResultType" minOccurs="0"/>
+      </xs:sequence>
+
+      <!-- Document version -->
+      <xs:attribute name="version" type="wp:versionType" use="required"/>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>

@@ -1,0 +1,381 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Queen-Wisdom Example Instance
+
+  This is a sample XML document demonstrating the queen-wisdom schema.
+  It shows all wisdom categories with realistic Aether colony content.
+
+  To validate: xmllint using schema at ../queen-wisdom.xsd
+-->
+<qw:queen-wisdom xmlns:qw="http://aether.colony/schemas/queen-wisdom/1.0"
+                 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                 xsi:schemaLocation="http://aether.colony/schemas/queen-wisdom/1.0 ../queen-wisdom.xsd">
+
+  <metadata>
+    <version>1.0.0</version>
+    <created>2026-02-16T10:00:00Z</created>
+    <modified>2026-02-16T15:30:00Z</modified>
+    <colony_id>aether-core-001</colony_id>
+    <queen_signature>Anvil-71-Builder</queen_signature>
+    <checksum>sha256:a1b2c3d4e5f6...</checksum>
+  </metadata>
+
+  <philosophies>
+    <philosophy id="eternal-memory-principle"
+                confidence="0.95"
+                domain="architecture"
+                source="queen"
+                created_at="2026-02-16T10:00:00Z"
+                applied_count="42"
+                last_applied="2026-02-16T14:00:00Z"
+                priority="high">
+      <content>
+        Knowledge that persists across sessions is the foundation of colony intelligence.
+        Every interaction should contribute to eternal memory, not just ephemeral context.
+      </content>
+      <context>
+        Apply when designing data structures, choosing storage formats, or deciding
+        what information to preserve between colony sessions.
+      </context>
+      <examples>
+        <example>
+          <scenario>Designing a new configuration system</scenario>
+          <application>Use XML schema with versioning instead of ad-hoc JSON</application>
+          <outcome>Enabled seamless migration from v1 to v2 without data loss</outcome>
+        </example>
+      </examples>
+      <related>
+        <ref id="hybrid-format-approach" relationship="complements"/>
+        <ref id="schema-versioning-pattern" relationship="depends-on"/>
+      </related>
+      <principles>
+        <principle>Prefer structured formats (XML, JSON) over unstructured text</principle>
+        <principle>Version all schemas to enable evolution</principle>
+        <principle>Include metadata for provenance and traceability</principle>
+        <principle>Design for migration, not just initial implementation</principle>
+      </principles>
+    </philosophy>
+
+    <philosophy id="pheromone-communication"
+                confidence="0.88"
+                domain="communication"
+                source="colony"
+                created_at="2026-02-16T10:30:00Z"
+                applied_count="27"
+                last_applied="2026-02-16T13:00:00Z"
+                priority="normal">
+      <content>
+        Communication between user and colony should follow biological patterns:
+        FOCUS signals direct attention, REDIRECT establishes hard constraints,
+        FEEDBACK provides gentle course correction.
+      </content>
+      <context>
+        Use when interpreting user commands or designing command interfaces.
+      </context>
+      <examples>
+        <example>
+          <scenario>User says "Focus on security" then "Never commit without asking"</scenario>
+          <application>First is FOCUS (attention), second is REDIRECT (constraint)</application>
+          <outcome>Security gets attention, but commit rule is strictly enforced</outcome>
+        </example>
+      </examples>
+      <principles>
+        <principle>FOCUS is a suggestion, not an order</principle>
+        <principle>REDIRECT is a hard constraint that must be respected</principle>
+        <principle>FEEDBACK is for preferences and observations</principle>
+        <principle>Never ignore a REDIRECT signal</principle>
+      </principles>
+    </philosophy>
+  </philosophies>
+
+  <patterns>
+    <pattern id="tdd-red-green-refactor"
+            confidence="0.92"
+            domain="testing"
+            source="colony"
+            created_at="2026-02-16T11:00:00Z"
+            applied_count="156"
+            last_applied="2026-02-16T15:00:00Z"
+            priority="critical">
+      <content>
+        The Iron Law: No production code without a failing test first.
+        RED: Write failing test. GREEN: Write minimal code to pass.
+        REFACTOR: Clean up while staying green.
+      </content>
+      <context>
+        Apply to all code implementation tasks. Never write code before its test.
+      </context>
+      <examples>
+        <example>
+          <scenario>Implementing a new utility function</scenario>
+          <application>Write test first, watch it fail, then implement function</application>
+          <outcome>Caught edge case in test that would have caused production bug</outcome>
+        </example>
+        <example>
+          <scenario>Fixing a reported bug</scenario>
+          <application>Write test reproducing bug, verify it fails, then fix</application>
+          <outcome>Bug fixed and regression test in place</outcome>
+        </example>
+      </examples>
+      <related>
+        <ref id="debugging-root-cause-first" relationship="complements"/>
+      </related>
+      <pattern_type>success</pattern_type>
+      <detection_criteria>
+        - Code exists without corresponding test
+        - Test passes immediately without seeing it fail first
+        - "I'll test later" statements
+      </detection_criteria>
+    </pattern>
+
+    <pattern id="debugging-root-cause-first"
+            confidence="0.90"
+            domain="debugging"
+            source="colony"
+            created_at="2026-02-16T11:30:00Z"
+            applied_count="89"
+            last_applied="2026-02-16T14:30:00Z"
+            priority="high">
+      <content>
+        The Iron Law: No fixes without root cause investigation first.
+        STOP, investigate, trace to source, form hypothesis, test minimally.
+      </content>
+      <context>
+        When encountering ANY bug, test failure, or unexpected behavior.
+      </context>
+      <examples>
+        <example>
+          <scenario>Test fails intermittently</scenario>
+          <application>Don't add retry logic. Trace timing dependency to async race condition.</application>
+          <outcome>Fixed actual bug instead of masking symptoms</outcome>
+        </example>
+      </examples>
+      <pattern_type>success</pattern_type>
+      <detection_criteria>
+        - "Quick fix for now, investigate later"
+        - "Just try changing X"
+        - "I don't fully understand but this might work"
+      </detection_criteria>
+    </pattern>
+
+    <pattern id="spawn-without-budget-check"
+            confidence="0.85"
+            domain="process"
+            source="observation"
+            created_at="2026-02-16T12:00:00Z"
+            applied_count="12"
+            last_applied="2026-02-16T13:30:00Z"
+            priority="high">
+      <content>
+        Spawning workers without checking spawn budget leads to runaway recursion
+        and violates colony depth limits.
+      </content>
+      <context>
+        Anti-pattern to avoid. Always check spawn-can-spawn before spawning.
+      </context>
+      <examples>
+        <example>
+          <scenario>Builder spawns sub-worker for simple task</scenario>
+          <application>Task was completable in 5 tool calls, should not spawn</application>
+          <outcome>Wasted spawn budget, unnecessary overhead</outcome>
+        </example>
+      </examples>
+      <related>
+        <ref id="tdd-red-green-refactor" relationship="contradicts"/>
+      </related>
+      <pattern_type>anti-pattern</pattern_type>
+      <detection_criteria>
+        - Task.spawn() without prior budget check
+        - Spawns at depth 3 (should never happen)
+        - More than 10 workers in a phase
+      </detection_criteria>
+    </pattern>
+  </patterns>
+
+  <redirects>
+    <redirect id="never-auto-clear-precious-data"
+              confidence="1.0"
+              domain="security"
+              source="queen"
+              created_at="2026-02-16T12:30:00Z"
+              applied_count="999"
+              last_applied="2026-02-16T15:00:00Z"
+              priority="critical">
+      <content>
+        init, seal, and entomb commands NEVER auto-clear stale session files.
+        These contain precious colony state that must be preserved.
+      </content>
+      <context>
+        Hard constraint for session freshness detection system.
+      </context>
+      <examples>
+        <example>
+          <scenario>Session file is 24 hours old, user runs /ant:init</scenario>
+          <application>Detect stale file but DO NOT auto-clear. Prompt user.</application>
+          <outcome>User's colony state preserved</outcome>
+        </example>
+      </examples>
+      <constraint_type>must-not</constraint_type>
+      <enforcement>
+        Check command name against protected list before any auto-clear operation.
+        If protected, prompt user for explicit confirmation.
+      </enforcement>
+    </redirect>
+
+    <redirect id="no-commit-without-approval"
+              confidence="1.0"
+              domain="process"
+              source="user"
+              created_at="2026-02-16T13:00:00Z"
+              applied_count="999"
+              last_applied="2026-02-16T15:00:00Z"
+              priority="critical">
+      <content>
+        Do not commit unless explicitly asked. Do not push unless explicitly asked.
+      </content>
+      <context>
+        Git workflow constraint from CLAUDE.md rules.
+      </context>
+      <constraint_type>must-not</constraint_type>
+      <enforcement>
+        Before any git commit or push command, verify explicit user request in context.
+        When in doubt, ask. Never assume implied permission.
+      </enforcement>
+    </redirect>
+
+    <redirect id="edit-aether-not-runtime"
+              confidence="0.98"
+              domain="architecture"
+              source="queen"
+              created_at="2026-02-16T13:30:00Z"
+              applied_count="73"
+              last_applied="2026-02-16T14:45:00Z"
+              priority="high">
+      <content>
+        Edit .aether/ files, NOT runtime/. The runtime/ directory is auto-generated
+        staging and changes will be overwritten on sync.
+      </content>
+      <context>
+        Critical for Aether development. Source of truth is in .aether/.
+      </context>
+      <constraint_type>must</constraint_type>
+      <enforcement>
+        Before editing any file in runtime/, redirect to corresponding .aether/ path.
+        Pre-commit hooks block runtime/ edits.
+      </enforcement>
+    </redirect>
+  </redirects>
+
+  <stack-wisdom>
+    <wisdom id="bash-jq-apostrophe-escape"
+            confidence="0.87"
+            domain="debugging"
+            source="colony"
+            created_at="2026-02-16T14:00:00Z"
+            applied_count="15"
+            last_applied="2026-02-16T14:30:00Z"
+            priority="normal">
+      <content>
+        In bash awk scripts with single quotes, use '\'' to escape apostrophes.
+        The pattern is: end quote, escaped quote, start quote.
+      </content>
+      <context>
+        When writing shell scripts that use awk with text containing apostrophes.
+      </context>
+      <examples>
+        <example>
+          <scenario>Processing user names with apostrophes in shell script</scenario>
+          <application>Use '\'' escape sequence in awk pattern</application>
+          <outcome>Script handles O'Connor, D'Angelo correctly</outcome>
+        </example>
+      </examples>
+      <technology>bash</technology>
+      <version_range>all</version_range>
+      <workaround>
+        Instead of: awk '{print "It's working"}'
+        Use: awk '{print "It'\''s working"}'
+      </workaround>
+    </wisdom>
+
+    <wisdom id="stat-platform-differences"
+            confidence="0.91"
+            domain="debugging"
+            source="observation"
+            created_at="2026-02-16T14:15:00Z"
+            applied_count="8"
+            last_applied="2026-02-16T14:45:00Z"
+            priority="normal">
+      <content>
+        The stat command has different flags on macOS vs Linux.
+        macOS: stat -f %m (format), Linux: stat -c %Y (command).
+      </content>
+      <context>
+        When writing cross-platform shell scripts that need file timestamps.
+      </context>
+      <technology>bash</technology>
+      <version_range>all</version_range>
+      <workaround>
+        Detect platform and use appropriate flag:
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            stat -f %m "$file"
+        else
+            stat -c %Y "$file"
+        fi
+      </workaround>
+    </wisdom>
+  </stack-wisdom>
+
+  <decrees>
+    <decree id="xml-eternal-memory-mandate"
+            confidence="0.95"
+            domain="architecture"
+            source="queen"
+            created_at="2026-02-16T14:30:00Z"
+            applied_count="3"
+            last_applied="2026-02-16T15:00:00Z"
+            priority="critical">
+      <content>
+        All eternal memory shall use XML with XSD validation.
+        JSON remains for runtime efficiency, but wisdom persists in XML.
+        Hybrid architecture: JSON for speed, XML for permanence.
+      </content>
+      <context>
+        Governs all Aether memory system design decisions.
+      </context>
+      <examples>
+        <example>
+          <scenario>Designing new colony memory feature</scenario>
+          <application>Define XSD schema first, then implement JSON runtime support</application>
+          <outcome>Validatable eternal memory with efficient runtime access</outcome>
+        </example>
+      </examples>
+      <related>
+        <ref id="eternal-memory-principle" relationship="extends"/>
+      </related>
+      <authority>Anvil-71 (Builder)</authority>
+      <scope>global</scope>
+    </decree>
+
+    <decree id="dual-format-support-requirement"
+            confidence="0.90"
+            domain="architecture"
+            source="queen"
+            created_at="2026-02-16T14:45:00Z"
+            applied_count="2"
+            last_applied="2026-02-16T15:00:00Z"
+            priority="high">
+      <content>
+        All new memory implementations must support both JSON and XML formats.
+        Breaking changes to existing JSON files are prohibited.
+        Migration paths must be provided for format evolution.
+      </content>
+      <context>
+        Ensures backward compatibility during XML adoption.
+      </context>
+      <authority>Anvil-71 (Builder)</authority>
+      <expiration>2026-12-31T23:59:59Z</expiration>
+      <scope>project</scope>
+    </decree>
+  </decrees>
+
+</qw:queen-wisdom>
