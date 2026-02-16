@@ -3444,7 +3444,7 @@ EOF
     current_milestone=$(echo "$current_session" | jq -r '.current_milestone // "First Mound"')
 
     # Get top 3 TODOs if TO-DOs.md exists
-    local todos="[]"
+    todos="[]"
     if [[ -f "TO-DOs.md" ]]; then
       todos=$(grep "^### " TO-DOs.md 2>/dev/null | head -3 | sed 's/^### //' | jq -R . | jq -s .)
     fi
@@ -3486,14 +3486,13 @@ EOF
       exit 0
     fi
 
-    local session_data
     session_data=$(cat "$session_file" 2>/dev/null || echo '{}')
 
     # Check if stale (> 24 hours)
-    local last_cmd_ts is_stale age_hours
+    last_cmd_ts="" is_stale="" age_hours=""
     last_cmd_ts=$(echo "$session_data" | jq -r '.last_command_at // .started_at // empty')
     if [[ -n "$last_cmd_ts" ]]; then
-      local last_epoch now_epoch
+      last_epoch=0 now_epoch=0
       last_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$last_cmd_ts" +%s 2>/dev/null || echo 0)
       now_epoch=$(date +%s)
       age_hours=$(( (now_epoch - last_epoch) / 3600 ))
