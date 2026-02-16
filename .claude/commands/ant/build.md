@@ -145,25 +145,19 @@ Write COLONY_STATE.json.
 
 ### Step 3: Git Checkpoint
 
-Create a git checkpoint for rollback capability (system files only).
+Create a git checkpoint for rollback capability.
 
 ```bash
 git rev-parse --git-dir 2>/dev/null
 ```
 
 - **If succeeds** (is a git repo):
-  1. Run checkpoint check: `bash .aether/aether-utils.sh checkpoint-check`
-  2. Parse JSON result to get `system_files`, `user_files`, and `has_user_files`
-  3. **If `has_user_files` is true**:
-     - Display warning: `⚠️  User files detected in working tree - will NOT be stashed`
-     - List user files from `user_files` array
-     - Display: `Only system files will be checkpointed`
-  4. **If `system_files` array is non-empty**:
-     - Create stash with ONLY system files: `git stash push -m "aether-checkpoint: pre-phase-$PHASE_NUMBER" -- {system_files...}`
+  1. Check for changes in Aether-managed directories only: `.aether .claude/commands/ant .claude/commands/st .opencode runtime bin`
+  2. **If changes exist**: `git stash push -m "aether-checkpoint: pre-phase-$PHASE_NUMBER" -- .aether .claude/commands/ant .claude/commands/st .opencode runtime bin`
+     - IMPORTANT: Never use `--include-untracked` — it stashes ALL files including user work!
      - Verify: `git stash list | head -1 | grep "aether-checkpoint"` — warn if empty
-     - Store checkpoint as `{type: "stash", ref: "aether-checkpoint: pre-phase-$PHASE_NUMBER", files: [...]}`
-  5. **If no system files dirty**:
-     - Record `HEAD` hash via `git rev-parse HEAD`
+     - Store checkpoint as `{type: "stash", ref: "aether-checkpoint: pre-phase-$PHASE_NUMBER"}`
+  3. **If clean working tree**: Record `HEAD` hash via `git rev-parse HEAD`
      - Store checkpoint as `{type: "commit", ref: "$HEAD_HASH"}`
 - **If fails** (not a git repo): Set checkpoint to `{type: "none", ref: "(not a git repo)"}`.
 
@@ -178,7 +172,6 @@ Output header:
 
 📍 Phase {id}: {name}
 💾 Git Checkpoint: {checkpoint_type} → {checkpoint_ref}
-   {if user_files were skipped: "(user files preserved — not stashed)"}
 🔄 Rollback: `git stash pop` (stash) or `git reset --hard {ref}` (commit)
 ```
 
@@ -450,7 +443,7 @@ Total: {N} Builders + 1 Watcher + 1 Chaos = {N+2} spawns
 bash .aether/aether-utils.sh context-update build-start {phase_id} {wave_1_worker_count} {wave_1_task_count}
 ```
 
-For each Wave 1 task, use Task tool with `subagent_type="aether-builder"` and `run_in_background: true`:
+For each Wave 1 task, use Task tool with `subagent_type="aether-builder"` (DO NOT use run_in_background - multiple Task calls in a single message run in parallel and block until complete):
 
 Log each spawn and update swarm display:
 ```bash
@@ -513,30 +506,11 @@ Return ONLY this JSON (no other text):
 --- END QUEEN WISDOM ---
 ```
 
-### Step 5.2: Collect Wave 1 Results with Visual Progress
+### Step 5.2: Process Wave 1 Results
 
-**CRITICAL: You MUST wait for ALL Wave 1 workers to complete before proceeding.**
+**Task calls return results directly (no TaskOutput needed).**
 
-**Visual Progress During Execution:**
-
-After spawning workers, immediately show:
-```
-🔨 COLONY BUILD — Phase {id}: {name}
-═══════════════════════════════════════
-
-👑 Queen dispatching {N} foragers...
-
-🐜 Active Workers:
-  🔨 {Builder-Name}  Task {id}  excavating...
-  🔨 {Builder-Name}  Task {id}  excavating...
-```
-
-For each spawned worker, call TaskOutput with `block: true` to wait for completion:
-- Use the task_id from each Task tool response
-- Do NOT proceed to Step 5.3 until ALL workers have returned results
-- Parse each worker's JSON output to collect: status, files_created, files_modified, blockers
-
-**As each worker completes, immediately display:**
+**As each worker result arrives, immediately display:**
 ```
 ✅ 🔨 {Builder-Name} completed Task {id}
    📖{read_count} 🔍{grep_count} ✏️{edit_count} ⚡{bash_count}  {elapsed_time}
@@ -549,23 +523,13 @@ bash .aether/aether-utils.sh swarm-display-update "{ant_name}" "builder" "comple
 bash .aether/aether-utils.sh context-update worker-complete "{ant_name}" "completed"
 ```
 
-**Update swarm display with accumulated tool usage:**
-As workers complete, accumulate their actual tool usage (Read, Grep, Edit, Bash counts from their activity logs) and update the swarm display to show live progress.
-
-**Show running progress after each completion:**
-```
-Progress: [{filled_bar}] {percent}%
-Completed: {completed_count}/{total_count} workers
-```
+**Parse each worker's JSON output to collect:** status, files_created, files_modified, blockers
 
 **Visual Mode: Render live display (if enabled):**
-If `visual_mode` is true, render the swarm display after each worker completes:
+If `visual_mode` is true, render the swarm display after all workers complete:
 ```bash
 bash .aether/aether-utils.sh swarm-display-render "$build_id"
 ```
-This shows the current colony activity with emojis, colors, and progress.
-
-**Only proceed to Step 5.3 after ALL Wave 1 TaskOutput calls have returned.**
 
 ### Step 5.3: Spawn Wave 2+ Workers (Sequential Waves)
 
@@ -574,6 +538,8 @@ Repeat Step 5.1-5.2 for each subsequent wave, waiting for previous wave to compl
 ### Step 5.4: Spawn Watcher for Verification
 
 **MANDATORY: Always spawn a Watcher — testing must be independent.**
+
+Spawn the Watcher using Task tool with `subagent_type="aether-watcher"` (DO NOT use run_in_background - task blocks until complete):
 
 ```bash
 bash .aether/aether-utils.sh spawn-log "Queen" "watcher" "{watcher_name}" "Independent verification"
@@ -604,23 +570,20 @@ Return ONLY this JSON:
 {"ant_name": "{Watcher-Name}", "verification_passed": true|false, "files_verified": [], "issues_found": [], "quality_score": N, "recommendation": "proceed|fix_required"}
 ```
 
-### Step 5.4.1: Collect Watcher Results (BLOCKING)
+### Step 5.5: Process Watcher Results
 
-**CRITICAL: You MUST wait for the Watcher to complete before proceeding.**
+**Task call returns results directly (no TaskOutput needed).**
 
-Call TaskOutput with `block: true` using the Watcher's task_id:
-- Wait for the Watcher's JSON response
-- Parse: verification_passed, issues_found, quality_score, recommendation
-- Store results for synthesis in Step 5.6
+**Parse the Watcher's JSON response:** verification_passed, issues_found, quality_score, recommendation
+
+**Store results for synthesis in Step 5.7**
 
 **Update swarm display when Watcher completes:**
 ```bash
 bash .aether/aether-utils.sh swarm-display-update "{watcher_name}" "watcher" "completed" "Verification complete" "Queen" '{"read":3,"grep":2,"edit":0,"bash":1}' 100 "nursery" 100
 ```
 
-**Only proceed to Step 5.4.2 after Watcher TaskOutput has returned.**
-
-### Step 5.4.2: Spawn Chaos Ant for Resilience Testing
+### Step 5.6: Spawn Chaos Ant for Resilience Testing
 
 **After the Watcher completes, spawn a Chaos Ant to probe the phase work for edge cases and boundary conditions.**
 
@@ -637,7 +600,7 @@ bash .aether/aether-utils.sh flag-list --phase {phase_number}
 ```
 Parse the result and extract unresolved flag titles into a list: `{existing_flag_titles}` (comma-separated titles from `.result.flags[].title`). If no flags exist, set `{existing_flag_titles}` to "None".
 
-Spawn the Chaos Ant using Task tool with `subagent_type="aether-chaos"`:
+Spawn the Chaos Ant using Task tool with `subagent_type="aether-chaos"` (DO NOT use run_in_background - task blocks until complete):
 # FALLBACK: If "Agent type not found", use general-purpose and inject role: "You are a Chaos Ant - resilience tester that probes edge cases and boundary conditions."
 
 **Chaos Ant Prompt (CLEAN OUTPUT):**
@@ -660,12 +623,13 @@ Return ONLY this JSON:
 {"ant_name": "{Chaos-Name}", "scenarios_tested": 5, "findings": [{"id": 1, "category": "edge_case|boundary|error_handling", "severity": "critical|high|medium|low", "title": "...", "description": "..."}], "overall_resilience": "strong|moderate|weak", "summary": "..."}
 ```
 
-**Collect Chaos Ant results (BLOCKING):**
+### Step 5.7: Process Chaos Ant Results
 
-Call TaskOutput with `block: true` using the Chaos Ant's task_id:
-- Wait for the Chaos Ant's JSON response
-- Parse: findings, overall_resilience, summary
-- Store results for synthesis in Step 5.6
+**Task call returns results directly (no TaskOutput needed).**
+
+**Parse the Chaos Ant's JSON response:** findings, overall_resilience, summary
+
+**Store results for synthesis in Step 5.9**
 
 **Flag critical/high findings:**
 
@@ -686,9 +650,7 @@ bash .aether/aether-utils.sh spawn-complete "{chaos_name}" "completed" "{summary
 bash .aether/aether-utils.sh swarm-display-update "{chaos_name}" "chaos" "completed" "Resilience testing done" "Queen" '{"read":2,"grep":1,"edit":0,"bash":0}' 100 "refuse_pile" 100
 ```
 
-**Only proceed to Step 5.5 after Chaos Ant TaskOutput has returned.**
-
-### Step 5.5: Create Flags for Verification Failures
+### Step 5.8: Create Flags for Verification Failures
 
 If the Watcher reported `verification_passed: false` or `recommendation: "fix_required"`:
 
@@ -703,11 +665,11 @@ Log the flag creation:
 bash .aether/aether-utils.sh activity-log "FLAG" "Watcher" "Created blocker: {issue_title}"
 ```
 
-This ensures verification failures are persisted as blockers that survive context resets. Chaos Ant findings are flagged in Step 5.4.2.
+This ensures verification failures are persisted as blockers that survive context resets. Chaos Ant findings are flagged in Step 5.7.
 
-### Step 5.6: Synthesize Results
+### Step 5.9: Synthesize Results
 
-**This step runs ONLY after ALL TaskOutput calls have returned (Steps 5.2, 5.3, 5.4.1, 5.4.2).**
+**This step runs after all worker tasks have completed (Builders, Watcher, Chaos).**
 
 Collect all worker outputs and create phase summary:
 
