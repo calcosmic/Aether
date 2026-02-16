@@ -2,6 +2,18 @@
 
 > **CRITICAL:** See `RUNTIME UPDATE ARCHITECTURE.md` for the complete architecture diagram and distribution flow.
 
+## Rule Modules
+
+Detailed guidelines are in `.claude/rules/`:
+- @rules/coding-standards.md — Code style, naming, organization
+- @rules/testing.md — Test framework, structure, coverage
+- @rules/spawn-discipline.md — Worker limits, spawn rules
+- @rules/security.md — Protected paths, high-risk ops
+- @rules/git-workflow.md — Commits, branches, sync
+- @rules/aether-specific.md — Source of truth, pheromones
+
+---
+
 ## How Development Works
 
 ```
@@ -172,13 +184,6 @@ aether caste-models list
 # Run all tests
 npm test
 ```
-
-# Communication style
-
-  - Explain things twice: once technically, once in plain English ("for
-  dummies").
-  - Keep technical details accurate; keep plain-English explanations simple.
-  - Example format: "I'm using X because Y. In other words: ..."
 
 ---
 
