@@ -10,6 +10,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { FileLock } = require('./file-lock');
 
 /**
  * Parse STATE.md markdown content to extract current state
@@ -139,10 +140,28 @@ function determineColonyState(status, phase) {
 /**
  * Synchronize COLONY_STATE.json with .planning/STATE.md
  * @param {string} repoPath - Path to repository root
- * @returns {object} Sync result: { synced: boolean, updates: string[], error?: string }
+ * @returns {object} Sync result: { synced: boolean, updates: string[], error?: string, recovery?: string }
  */
 function syncStateFromPlanning(repoPath) {
   const updates = [];
+  const lockDir = path.join(repoPath, '.aether', 'locks');
+  const colonyStatePath = path.join(repoPath, '.aether', 'data', 'COLONY_STATE.json');
+
+  // Create lock instance
+  const lock = new FileLock({
+    lockDir,
+    timeout: 5000,
+    maxRetries: 50
+  });
+
+  // Attempt to acquire lock
+  if (!lock.acquire(colonyStatePath)) {
+    return {
+      synced: false,
+      updates: [],
+      error: 'Could not acquire state lock - another sync in progress'
+    };
+  }
 
   try {
     // Read STATE.md
@@ -163,12 +182,22 @@ function syncStateFromPlanning(repoPath) {
     }
 
     // Read current COLONY_STATE.json
-    const colonyStatePath = path.join(repoPath, '.aether', 'data', 'COLONY_STATE.json');
     if (!fs.existsSync(colonyStatePath)) {
       return { synced: false, updates: [], error: 'COLONY_STATE.json not found' };
     }
 
-    const colonyState = JSON.parse(fs.readFileSync(colonyStatePath, 'utf8'));
+    // Parse JSON with error handling (PLAN-002)
+    let colonyState;
+    try {
+      colonyState = JSON.parse(fs.readFileSync(colonyStatePath, 'utf8'));
+    } catch (parseError) {
+      return {
+        synced: false,
+        updates: [],
+        error: `COLONY_STATE.json contains invalid JSON: ${parseError.message}`,
+        recovery: 'Manually fix or delete .aether/data/COLONY_STATE.json and reinitialize'
+      };
+    }
 
     // Track if any changes were made
     let changed = false;
@@ -227,8 +256,10 @@ function syncStateFromPlanning(repoPath) {
       // Update last_updated
       colonyState.last_updated = new Date().toISOString();
 
-      // Write updated state
-      fs.writeFileSync(colonyStatePath, JSON.stringify(colonyState, null, 2) + '\n');
+      // Atomic write: write to temp file, then rename (PLAN-002)
+      const tempPath = `${colonyStatePath}.tmp`;
+      fs.writeFileSync(tempPath, JSON.stringify(colonyState, null, 2) + '\n');
+      fs.renameSync(tempPath, colonyStatePath);
     }
 
     return {
@@ -243,6 +274,9 @@ function syncStateFromPlanning(repoPath) {
       updates: [],
       error: error.message
     };
+  } finally {
+    // Always release lock
+    lock.release();
   }
 }
 
@@ -278,7 +312,17 @@ function reconcileStates(repoPath) {
       };
     }
 
-    const colonyState = JSON.parse(fs.readFileSync(colonyStatePath, 'utf8'));
+    // Parse JSON with error handling
+    let colonyState;
+    try {
+      colonyState = JSON.parse(fs.readFileSync(colonyStatePath, 'utf8'));
+    } catch (parseError) {
+      return {
+        consistent: false,
+        mismatches: [`COLONY_STATE.json contains invalid JSON: ${parseError.message}`],
+        resolution: 'Manually fix or delete .aether/data/COLONY_STATE.json and reinitialize'
+      };
+    }
 
     // Check phase mismatch
     if (planningState.phase !== null && planningState.phase !== colonyState.current_phase) {
