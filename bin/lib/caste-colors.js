@@ -17,11 +17,11 @@ const pc = require('picocolors');
 
 // Caste definitions with colors and emojis (per CONTEXT.md decisions)
 const CASTE_STYLES = {
-  builder:  { color: 'blue',   emoji: '🔨', ansi: '\033[34m', pc: pc.blue },
-  watcher:  { color: 'green',  emoji: '👁️',  ansi: '\033[32m', pc: pc.green },
-  scout:    { color: 'yellow', emoji: '🔍', ansi: '\033[33m', pc: pc.yellow },
-  chaos:    { color: 'red',    emoji: '🎲', ansi: '\033[31m', pc: pc.red },
-  prime:    { color: 'magenta',emoji: '👑', ansi: '\033[35m', pc: pc.magenta }
+  builder:  { color: 'blue',   emoji: '🔨🐜', ansi: '\033[34m', pc: pc.blue },
+  watcher:  { color: 'green',  emoji: '👁️🐜',  ansi: '\033[32m', pc: pc.green },
+  scout:    { color: 'yellow', emoji: '🔍🐜', ansi: '\033[33m', pc: pc.yellow },
+  chaos:    { color: 'red',    emoji: '🎲🐜', ansi: '\033[31m', pc: pc.red },
+  prime:    { color: 'magenta',emoji: '👑🐜', ansi: '\033[35m', pc: pc.magenta }
 };
 
 // Get style for a caste (case-insensitive)

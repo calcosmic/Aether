@@ -74,28 +74,28 @@ fi
 # --- Caste emoji helper ---
 get_caste_emoji() {
   case "$1" in
-    *Queen*|*QUEEN*|*queen*) echo "👑" ;;
-    *Builder*|*builder*|*Bolt*|*Hammer*|*Forge*|*Mason*|*Brick*|*Anvil*|*Weld*) echo "🔨" ;;
-    *Watcher*|*watcher*|*Vigil*|*Sentinel*|*Guard*|*Keen*|*Sharp*|*Hawk*|*Alert*) echo "👁️" ;;
-    *Scout*|*scout*|*Swift*|*Dash*|*Ranger*|*Track*|*Seek*|*Path*|*Roam*|*Quest*) echo "🔍" ;;
-    *Colonizer*|*colonizer*|*Pioneer*|*Map*|*Chart*|*Venture*|*Explore*|*Compass*|*Atlas*|*Trek*) echo "🗺️" ;;
-    *Surveyor*|*surveyor*|*Chart*|*Plot*|*Survey*|*Measure*|*Assess*|*Gauge*|*Sound*|*Fathom*) echo "📊" ;;
-    *Architect*|*architect*|*Blueprint*|*Draft*|*Design*|*Plan*|*Schema*|*Frame*|*Sketch*|*Model*) echo "🏛️" ;;
-    *Chaos*|*chaos*|*Probe*|*Stress*|*Shake*|*Twist*|*Snap*|*Breach*|*Surge*|*Jolt*) echo "🎲" ;;
-    *Archaeologist*|*archaeologist*|*Relic*|*Fossil*|*Dig*|*Shard*|*Epoch*|*Strata*|*Lore*|*Glyph*) echo "🏺" ;;
-    *Oracle*|*oracle*|*Sage*|*Seer*|*Vision*|*Augur*|*Mystic*|*Sibyl*|*Delph*|*Pythia*) echo "🔮" ;;
-    *Route*|*route*) echo "📋" ;;
-    *Ambassador*|*ambassador*|*Bridge*|*Connect*|*Link*|*Diplomat*|*Network*|*Protocol*) echo "🔌" ;;
-    *Auditor*|*auditor*|*Review*|*Inspect*|*Examine*|*Scrutin*|*Critical*|*Verify*) echo "👥" ;;
-    *Chronicler*|*chronicler*|*Document*|*Record*|*Write*|*Chronicle*|*Archive*|*Scribe*) echo "📝" ;;
-    *Gatekeeper*|*gatekeeper*|*Guard*|*Protect*|*Secure*|*Shield*|*Depend*|*Supply*) echo "📦" ;;
-    *Guardian*|*guardian*|*Defend*|*Patrol*|*Secure*|*Vigil*|*Watch*|*Safety*|*Security*) echo "🛡️" ;;
-    *Includer*|*includer*|*Access*|*Inclusive*|*A11y*|*WCAG*|*Barrier*|*Universal*) echo "♿" ;;
-    *Keeper*|*keeper*|*Archive*|*Store*|*Curate*|*Preserve*|*Knowledge*|*Wisdom*|*Pattern*) echo "📚" ;;
-    *Measurer*|*measurer*|*Metric*|*Benchmark*|*Profile*|*Optimize*|*Performance*|*Speed*) echo "⚡" ;;
-    *Probe*|*probe*|*Test*|*Excavat*|*Uncover*|*Edge*|*Case*|*Mutant*) echo "🧪" ;;
-    *Tracker*|*tracker*|*Debug*|*Trace*|*Follow*|*Bug*|*Hunt*|*Root*) echo "🐛" ;;
-    *Weaver*|*weaver*|*Refactor*|*Restruct*|*Transform*|*Clean*|*Pattern*|*Weave*) echo "🔄" ;;
+    *Queen*|*QUEEN*|*queen*) echo "👑🐜" ;;
+    *Builder*|*builder*|*Bolt*|*Hammer*|*Forge*|*Mason*|*Brick*|*Anvil*|*Weld*) echo "🔨🐜" ;;
+    *Watcher*|*watcher*|*Vigil*|*Sentinel*|*Guard*|*Keen*|*Sharp*|*Hawk*|*Alert*) echo "👁️🐜" ;;
+    *Scout*|*scout*|*Swift*|*Dash*|*Ranger*|*Track*|*Seek*|*Path*|*Roam*|*Quest*) echo "🔍🐜" ;;
+    *Colonizer*|*colonizer*|*Pioneer*|*Map*|*Chart*|*Venture*|*Explore*|*Compass*|*Atlas*|*Trek*) echo "🗺️🐜" ;;
+    *Surveyor*|*surveyor*|*Chart*|*Plot*|*Survey*|*Measure*|*Assess*|*Gauge*|*Sound*|*Fathom*) echo "📊🐜" ;;
+    *Architect*|*architect*|*Blueprint*|*Draft*|*Design*|*Plan*|*Schema*|*Frame*|*Sketch*|*Model*) echo "🏛️🐜" ;;
+    *Chaos*|*chaos*|*Probe*|*Stress*|*Shake*|*Twist*|*Snap*|*Breach*|*Surge*|*Jolt*) echo "🎲🐜" ;;
+    *Archaeologist*|*archaeologist*|*Relic*|*Fossil*|*Dig*|*Shard*|*Epoch*|*Strata*|*Lore*|*Glyph*) echo "🏺🐜" ;;
+    *Oracle*|*oracle*|*Sage*|*Seer*|*Vision*|*Augur*|*Mystic*|*Sibyl*|*Delph*|*Pythia*) echo "🔮🐜" ;;
+    *Route*|*route*) echo "📋🐜" ;;
+    *Ambassador*|*ambassador*|*Bridge*|*Connect*|*Link*|*Diplomat*|*Network*|*Protocol*) echo "🔌🐜" ;;
+    *Auditor*|*auditor*|*Review*|*Inspect*|*Examine*|*Scrutin*|*Critical*|*Verify*) echo "👥🐜" ;;
+    *Chronicler*|*chronicler*|*Document*|*Record*|*Write*|*Chronicle*|*Archive*|*Scribe*) echo "📝🐜" ;;
+    *Gatekeeper*|*gatekeeper*|*Guard*|*Protect*|*Secure*|*Shield*|*Depend*|*Supply*) echo "📦🐜" ;;
+    *Guardian*|*guardian*|*Defend*|*Patrol*|*Secure*|*Vigil*|*Watch*|*Safety*|*Security*) echo "🛡️🐜" ;;
+    *Includer*|*includer*|*Access*|*Inclusive*|*A11y*|*WCAG*|*Barrier*|*Universal*) echo "♿🐜" ;;
+    *Keeper*|*keeper*|*Archive*|*Store*|*Curate*|*Preserve*|*Knowledge*|*Wisdom*|*Pattern*) echo "📚🐜" ;;
+    *Measurer*|*measurer*|*Metric*|*Benchmark*|*Profile*|*Optimize*|*Performance*|*Speed*) echo "⚡🐜" ;;
+    *Probe*|*probe*|*Test*|*Excavat*|*Uncover*|*Edge*|*Case*|*Mutant*) echo "🧪🐜" ;;
+    *Tracker*|*tracker*|*Debug*|*Trace*|*Follow*|*Bug*|*Hunt*|*Root*) echo "🐛🐜" ;;
+    *Weaver*|*weaver*|*Refactor*|*Restruct*|*Transform*|*Clean*|*Pattern*|*Weave*) echo "🔄🐜" ;;
     *) echo "🐜" ;;
   esac
 }
@@ -3130,6 +3130,252 @@ ${entry}" "$queen_file" > "$tmp_file"
     # Output normalized arguments
     echo "$normalized"
     exit 0
+    ;;
+
+  # Backward compatibility wrappers for session commands
+  survey-verify-fresh)
+    # Backward compatibility: delegate to session-verify-fresh --command survey
+    # Usage: bash .aether/aether-utils.sh survey-verify-fresh [--force] <survey_start_unixtime>
+
+    force_mode=""
+    survey_start_time=""
+
+    # Parse arguments
+    for arg in "$@"; do
+      if [[ "$arg" == "--force" ]]; then
+        force_mode="--force"
+      elif [[ "$arg" =~ ^[0-9]+$ ]]; then
+        survey_start_time="$arg"
+      fi
+    done
+
+    # Delegate to generic command
+    if [[ -n "$force_mode" ]]; then
+      $0 session-verify-fresh --command survey --force "$survey_start_time"
+    else
+      $0 session-verify-fresh --command survey "$survey_start_time"
+    fi
+    ;;
+
+  survey-clear)
+    # Backward compatibility: delegate to session-clear --command survey
+    # Usage: bash .aether/aether-utils.sh survey-clear [--dry-run]
+
+    dry_run=""
+
+    # Parse arguments
+    for arg in "$@"; do
+      if [[ "$arg" == "--dry-run" ]]; then
+        dry_run="--dry-run"
+      fi
+    done
+
+    # Delegate to generic command
+    if [[ "$dry_run" == "--dry-run" ]]; then
+      $0 session-clear --command survey --dry-run
+    else
+      $0 session-clear --command survey
+    fi
+    ;;
+
+  session-verify-fresh)
+    # Generic session freshness verification
+    # Usage: bash .aether/aether-utils.sh session-verify-fresh --command <name> [--force] <session_start_unixtime>
+    # Returns: JSON with pass/fail status and file details
+
+    # Parse arguments
+    command_name=""
+    force_mode=""
+    session_start_time=""
+
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --command) command_name="$2"; shift 2 ;;
+        --force) force_mode="--force"; shift ;;
+        *) session_start_time="$1"; shift ;;
+      esac
+    done
+
+    # Validate command name
+    [[ -z "$command_name" ]] && json_err "$E_VALIDATION_FAILED" "Usage: session-verify-fresh --command <name> [--force] <session_start>"
+
+    # Map command to directory and files (using env var override pattern)
+    case "$command_name" in
+      survey)
+        session_dir="${SURVEY_DIR:-.aether/data/survey}"
+        required_docs="PROVISIONS.md TRAILS.md BLUEPRINT.md CHAMBERS.md DISCIPLINES.md SENTINEL-PROTOCOLS.md PATHOGENS.md"
+        ;;
+      oracle)
+        session_dir="${ORACLE_DIR:-.aether/oracle}"
+        required_docs="progress.md research.json"
+        ;;
+      watch)
+        session_dir="${WATCH_DIR:-.aether/data}"
+        required_docs="watch-status.txt watch-progress.txt"
+        ;;
+      swarm)
+        session_dir="${SWARM_DIR:-.aether/data/swarm}"
+        required_docs="findings.json"
+        ;;
+      init)
+        session_dir="${INIT_DIR:-.aether/data}"
+        required_docs="COLONY_STATE.json constraints.json"
+        ;;
+      seal|entomb)
+        session_dir="${ARCHIVE_DIR:-.aether/data/archive}"
+        required_docs="manifest.json"
+        ;;
+      *)
+        json_err "$E_VALIDATION_FAILED" "Unknown command: $command_name" '{"commands":["survey","oracle","watch","swarm","init","seal","entomb"]}'
+        ;;
+    esac
+
+    # Initialize result arrays
+    fresh_docs=""
+    stale_docs=""
+    missing_docs=""
+    total_lines=0
+
+    for doc in $required_docs; do
+      doc_path="$session_dir/$doc"
+
+      if [[ ! -f "$doc_path" ]]; then
+        missing_docs="${missing_docs:+$missing_docs }$doc"
+        continue
+      fi
+
+      # Get line count
+      lines=$(wc -l < "$doc_path" 2>/dev/null | tr -d ' ' || echo "0")
+      total_lines=$((total_lines + lines))
+
+      # In force mode, accept any existing file
+      if [[ "$force_mode" == "--force" ]]; then
+        fresh_docs="${fresh_docs:+$fresh_docs }$doc"
+        continue
+      fi
+
+      # Check timestamp if session_start_time provided
+      if [[ -n "$session_start_time" ]]; then
+        # Cross-platform stat: macOS uses -f %m, Linux uses -c %Y
+        file_mtime=$(stat -f %m "$doc_path" 2>/dev/null || stat -c %Y "$doc_path" 2>/dev/null || echo "0")
+
+        if [[ "$file_mtime" -ge "$session_start_time" ]]; then
+          fresh_docs="${fresh_docs:+$fresh_docs }$doc"
+        else
+          stale_docs="${stale_docs:+$stale_docs }$doc"
+        fi
+      else
+        # No start time provided - accept existing file (backward compatible)
+        fresh_docs="${fresh_docs:+$fresh_docs }$doc"
+      fi
+    done
+
+    # Determine pass/fail
+    pass=false
+    if [[ -z "$missing_docs" ]]; then
+      if [[ "$force_mode" == "--force" ]] || [[ -z "$stale_docs" ]]; then
+        pass=true
+      fi
+    fi
+
+    # Build JSON response
+    fresh_json=""
+    for item in $fresh_docs; do fresh_json="$fresh_json\"$item\","; done
+    fresh_json="[${fresh_json%,}]"
+
+    stale_json=""
+    for item in $stale_docs; do stale_json="$stale_json\"$item\","; done
+    stale_json="[${stale_json%,}]"
+
+    missing_json=""
+    for item in $missing_docs; do missing_json="$missing_json\"$item\","; done
+    missing_json="[${missing_json%,}]"
+
+    echo "{\"ok\":$pass,\"command\":\"$command_name\",\"fresh\":$fresh_json,\"stale\":$stale_json,\"missing\":$missing_json,\"total_lines\":$total_lines}"
+    exit 0
+    ;;
+
+  session-clear)
+    # Generic session file clearing
+    # Usage: bash .aether/aether-utils.sh session-clear --command <name> [--dry-run]
+
+    # Parse arguments
+    command_name=""
+    dry_run=""
+
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --command) command_name="$2"; shift 2 ;;
+        --dry-run) dry_run="--dry-run"; shift ;;
+        *) shift ;;
+      esac
+    done
+
+    [[ -z "$command_name" ]] && json_err "$E_VALIDATION_FAILED" "Usage: session-clear --command <name> [--dry-run]"
+
+    # Map command to directory and files
+    case "$command_name" in
+      survey)
+        session_dir="${SURVEY_DIR:-.aether/data/survey}"
+        files="PROVISIONS.md TRAILS.md BLUEPRINT.md CHAMBERS.md DISCIPLINES.md SENTINEL-PROTOCOLS.md PATHOGENS.md"
+        ;;
+      oracle)
+        session_dir="${ORACLE_DIR:-.aether/oracle}"
+        files="progress.md research.json .stop"
+        # Also clear discoveries subdirectory
+        subdir_files="discoveries/*"
+        ;;
+      watch)
+        session_dir="${WATCH_DIR:-.aether/data}"
+        files="watch-status.txt watch-progress.txt"
+        ;;
+      swarm)
+        session_dir="${SWARM_DIR:-.aether/data/swarm}"
+        files="findings.json display.json timing.json"
+        ;;
+      init)
+        # Init clear is destructive - blocked for auto-clear
+        json_err "$E_VALIDATION_FAILED" "Command 'init' is protected and cannot be auto-cleared. Use manual removal of COLONY_STATE.json if absolutely necessary."
+        ;;
+      seal|entomb)
+        # Archive operations should never be auto-cleared
+        json_err "$E_VALIDATION_FAILED" "Command '$command_name' is protected and cannot be auto-cleared. Archives and chambers must be managed manually."
+        ;;
+      *)
+        json_err "$E_VALIDATION_FAILED" "Unknown command: $command_name"
+        ;;
+    esac
+
+    cleared=""
+    errors=""
+
+    if [[ -d "$session_dir" && -n "$files" ]]; then
+      for doc in $files; do
+        doc_path="$session_dir/$doc"
+        if [[ -f "$doc_path" ]]; then
+          if [[ "$dry_run" == "--dry-run" ]]; then
+            cleared="$cleared $doc"
+          else
+            if rm -f "$doc_path" 2>/dev/null; then
+              cleared="$cleared $doc"
+            else
+              errors="$errors $doc"
+            fi
+          fi
+        fi
+      done
+
+      # Handle oracle discoveries subdirectory
+      if [[ "$command_name" == "oracle" && -d "$session_dir/discoveries" ]]; then
+        if [[ "$dry_run" == "--dry-run" ]]; then
+          cleared="$cleared discoveries/"
+        else
+          rm -rf "$session_dir/discoveries" 2>/dev/null && cleared="$cleared discoveries/" || errors="$errors discoveries/"
+        fi
+      fi
+    fi
+
+    json_ok "{\"command\":\"$command_name\",\"cleared\":\"${cleared// /}\",\"errors\":\"${errors// /}\",\"dry_run\":$([[ "$dry_run" == "--dry-run" ]] && echo "true" || echo "false")}"
     ;;
 
   *)

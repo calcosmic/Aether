@@ -32,11 +32,11 @@ get_caste_color() {
 # Caste emojis (must match aether-utils.sh)
 get_caste_emoji() {
   case "$1" in
-    builder)  echo "🔨" ;;
-    watcher)  echo "👁️" ;;
-    scout)    echo "🔍" ;;
-    chaos)    echo "🎲" ;;
-    prime)    echo "👑" ;;
+    builder)  echo "🔨🐜" ;;
+    watcher)  echo "👁️🐜" ;;
+    scout)    echo "🔍🐜" ;;
+    chaos)    echo "🎲🐜" ;;
+    prime)    echo "👑🐜" ;;
     *)        echo "🐜" ;;
   esac
 }

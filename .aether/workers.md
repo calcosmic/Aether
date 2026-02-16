@@ -271,14 +271,14 @@ Workers can spawn sub-workers directly using the **Task tool** with `subagent_ty
 **Caste Emoji Mapping:**
 
 Every spawn must display its caste emoji:
-- 🔨 Builder
-- 👁️ Watcher
-- 🎲 Chaos
-- 🔍 Scout
-- 🏺 Archaeologist
-- 🥚 Queen/Prime
-- 🧹 Colonizer
-- 🏛️ Architect
+- 🔨🐜 Builder
+- 👁️🐜 Watcher
+- 🎲🐜 Chaos
+- 🔍🐜 Scout
+- 🏺🐜 Archaeologist
+- 👑🐜 Queen/Prime
+- 🗺️🐜 Colonizer
+- 🏛️🐜 Architect
 
 **Depth-Based Behavior:**
 
@@ -389,12 +389,12 @@ All spawns are logged to `.aether/data/spawn-tree.txt` and visible in `/ant:watc
 
 | Role | Emoji |
 |------|-------|
-| Builder | 🔨 |
-| Watcher | 👁️ |
-| Scout | 🔍 |
-| Colonizer | 🗺️ |
-| Architect | 🏛️ |
-| Route-Setter | 📋 |
+| Builder | 🔨🐜 |
+| Watcher | 👁️🐜 |
+| Scout | 🔍🐜 |
+| Colonizer | 🗺️🐜 |
+| Architect | 🏛️🐜 |
+| Route-Setter | 📋🐜 |
 
 Use your emoji in output headers: `{emoji} {Role} Ant -- {status}`
 
