@@ -68,6 +68,15 @@ SYSTEM_FILES=(
   "utils/xml-core.sh"
   "utils/xml-compose.sh"
   "utils/queen-to-md.xsl"
+  "exchange/pheromone-xml.sh"
+  "exchange/wisdom-xml.sh"
+  "exchange/registry-xml.sh"
+  "schemas/aether-types.xsd"
+  "schemas/pheromone.xsd"
+  "schemas/queen-wisdom.xsd"
+  "schemas/colony-registry.xsd"
+  "schemas/worker-priming.xsd"
+  "schemas/prompt.xsd"
   "templates/QUEEN.md.template"
 )
 

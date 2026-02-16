@@ -1,6 +1,6 @@
 #!/bin/bash
-# XML Utilities for Aether Colony
-# Hybrid JSON/XML architecture with pheromone exchange format support
+# XML Utilities Loader for Aether Colony
+# Modular architecture - sources xml-core.sh and xml-compose.sh
 #
 # Usage: source .aether/utils/xml-utils.sh
 #        xml-validate <xml_file> <xsd_file>
@@ -10,18 +10,41 @@
 #        xml-merge <output_file> <input_files...>
 #
 # All functions return JSON status like other aether-utils
+#
+# Note: This file loads xml-core.sh and xml-compose.sh for modularity.
+# The actual implementations are in those modules; this file provides
+# backward compatibility and loads additional domain functions below.
 
 set -euo pipefail
 
+# Determine script directory for sourcing modules
+# Handle case when sourced interactively (BASH_SOURCE[0] may be empty)
+if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+    _XML_UTILS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+else
+    # Fallback: derive from the sourced script's location
+    _XML_UTILS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+fi
+
 # ============================================================================
-# Feature Detection
+# Load Modular Components
+# ============================================================================
+
+# Core utilities (validation, formatting, escaping)
+[[ -f "$_XML_UTILS_DIR/xml-core.sh" ]] && source "$_XML_UTILS_DIR/xml-core.sh"
+
+# XInclude composition
+[[ -f "$_XML_UTILS_DIR/xml-compose.sh" ]] && source "$_XML_UTILS_DIR/xml-compose.sh"
+
+# ============================================================================
+# Feature Detection (supplement xml-core.sh if not already set)
 # ============================================================================
 
 # Check for required XML tools
-XMLLINT_AVAILABLE=false
-XMLSTARLET_AVAILABLE=false
-XSLTPROC_AVAILABLE=false
-XML2JSON_AVAILABLE=false
+: "${XMLLINT_AVAILABLE:=false}"
+: "${XMLSTARLET_AVAILABLE:=false}"
+: "${XSLTPROC_AVAILABLE:=false}"
+: "${XML2JSON_AVAILABLE:=false}"
 
 if command -v xmllint >/dev/null 2>&1; then
     XMLLINT_AVAILABLE=true
@@ -40,15 +63,27 @@ if command -v xml2json >/dev/null 2>&1; then
 fi
 
 # ============================================================================
-# JSON Output Helpers
+# Additional JSON Output Helpers (supplement xml-core.sh)
 # ============================================================================
 
-xml_json_ok() { printf '{"ok":true,"result":%s}\n' "$1"; }
-xml_json_err() {
-    local message="${2:-$1}"
-    printf '{"ok":false,"error":"%s"}\n' "$message" >&2
-    return 1
-}
+# Use xml-core.sh versions if available, otherwise define here
+if ! type xml_json_ok &>/dev/null; then
+    xml_json_ok() { printf '{"ok":true,"result":%s}\n' "$1"; }
+fi
+
+if ! type xml_json_err &>/dev/null; then
+    xml_json_err() {
+        local message="${2:-$1}"
+        printf '{"ok":false,"error":"%s"}\n' "$message" >&2
+        return 1
+    }
+fi
+
+# ============================================================================
+# Domain Functions: Pheromones, Wisdom, Registry, Prompts
+# ============================================================================
+
+# These functions remain in xml-utils.sh (not yet modularized)
 
 # ============================================================================
 # Core XML Functions
