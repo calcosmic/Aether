@@ -962,13 +962,14 @@ function setupHub() {
       log(`  Warning: previous manifest is invalid, regenerating`);
     }
 
-    // Sync .aether/ -> ~/.aether/ (excluding user data directories)
-    const aetherSrc = path.join(PACKAGE_DIR, '.aether');
-    if (fs.existsSync(aetherSrc)) {
-      const result = syncAetherToHub(aetherSrc, HUB_DIR);
-      log(`  Hub .aether: ${result.copied} files, ${result.skipped} unchanged -> ${HUB_DIR}`);
+    // Sync runtime/ -> ~/.aether/ (clean production files)
+    // runtime/ is the staging area - explicit allowlist via sync-to-runtime.sh
+    const runtimeSrc = path.join(PACKAGE_DIR, 'runtime');
+    if (fs.existsSync(runtimeSrc)) {
+      const result = syncAetherToHub(runtimeSrc, HUB_DIR);
+      log(`  Hub system: ${result.copied} files, ${result.skipped} unchanged -> ${HUB_DIR}`);
       if (result.removed.length > 0) {
-        log(`  Hub .aether: removed ${result.removed.length} stale files`);
+        log(`  Hub system: removed ${result.removed.length} stale files`);
         for (const f of result.removed) log(`    - ${f}`);
       }
     }
