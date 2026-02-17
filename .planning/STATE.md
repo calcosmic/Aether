@@ -6,8 +6,8 @@
 ## Current Status
 
 - **State:** Phase 4 IN PROGRESS
-- **Phase:** 04 (Context Persistence) — 1/3 plans complete
-- **Plan:** 04-01 COMPLETE
+- **Phase:** 04 (Context Persistence) — 2/3 plans complete
+- **Plan:** 04-02 COMPLETE
 - **Total Plans in Phase:** 03
 - **Mode:** YOLO (auto-approve)
 
@@ -17,14 +17,14 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 
 **Core value:** Prevent context rot across Claude Code sessions with self-managing colony that learns and guides users
 
-**Current focus:** Phase 4: Context Persistence — Plan 04-02 (/ant:resume rewrite)
+**Current focus:** Phase 4: Context Persistence — Plan 04-03 (next plan)
 
 ## Progress
 
 - [x] Phase 1: Diagnostic — COMPLETE (120 tests, 66% pass, 9 critical failures identified)
 - [x] Phase 2: Core Infrastructure — COMPLETE (5/5 plans)
 - [x] Phase 3: Visual Experience — COMPLETE (2/2 plans)
-- [ ] Phase 4: Context Persistence — 1/3 plans complete
+- [ ] Phase 4: Context Persistence — 2/3 plans complete
 - [ ] Phase 5: Pheromone System
 - [ ] Phase 6: Colony Lifecycle
 - [ ] Phase 7: Advanced Workers
@@ -48,7 +48,11 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 - **04-01:** session-update refreshes baseline_commit on every call (not just init) so stored hash is always last-known HEAD
 - **04-01:** Task 2 audit found all four commands already had correct session tracking calls — no changes needed
 - **04-01:** validate-state added to plan.md, build.md, continue.md after COLONY_STATE.json writes; init.md already had it
+- **04-02:** Dashboard ordering is straight-to-action — Next recommendation renders before Goal and phase context
+- **04-02:** Blocking is early-return not guidance — BLOCKED conditions output redirect and stop, no dashboard rendered
+- **04-02:** Time-agnostic restore — no 24h staleness, no age warnings, identical restore regardless of gap duration
+- **04-02:** Session Recovery in CLAUDE.md for new conversations (not /clear) with mandatory explicit /ant:resume
 
 ## Last Updated
 
-2026-02-17 — Phase 4 Plan 01 COMPLETE (baseline_commit drift detection infrastructure + validate-state consistency)
+2026-02-17 — Phase 4 Plan 02 COMPLETE (/ant:resume rewrite with rich dashboard, drift detection, workflow blocking, new-conversation detection)
