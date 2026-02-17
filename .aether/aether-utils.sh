@@ -125,6 +125,11 @@ _cmd_context_update() {
   local ctx_ts
   ctx_ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
+  # Check for empty action first - show usage message
+  if [[ -z "$ctx_action" ]]; then
+    json_err "$E_VALIDATION_FAILED" "No action specified. Suggestion: Use one of: init, update-phase, activity, constraint, decision, safe-to-clear, build-start, worker-spawn, worker-complete, build-progress, build-complete"
+  fi
+
   ensure_context_dir() {
     local dir
     dir=$(dirname "$ctx_file")
@@ -456,7 +461,7 @@ EOF
       ;;
 
     *)
-      json_err "$E_VALIDATION_FAILED" "Unknown context action: $ctx_action"
+      json_err "$E_VALIDATION_FAILED" "Unknown context action: '$ctx_action'. Suggestion: Use one of: init, update-phase, activity, constraint, decision, safe-to-clear, build-start, worker-spawn, worker-complete, build-progress, build-complete"
       ;;
   esac
 }
@@ -3850,11 +3855,29 @@ EOF
     ;;
 
   session-summary)
-    # Get human-readable session summary
+    # Get session summary (human-readable or JSON)
     session_file="$DATA_DIR/session.json"
+    json_mode="false"
+
+    # Parse --json flag
+    while [[ $# -gt 1 ]]; do
+      case "$2" in
+        --json)
+          json_mode="true"
+          shift
+          ;;
+        *)
+          shift
+          ;;
+      esac
+    done
 
     if [[ ! -f "$session_file" ]]; then
-      echo "No active session found."
+      if [[ "$json_mode" == "true" ]]; then
+        json_ok '{"exists":false,"goal":null,"phase":0}'
+      else
+        echo "No active session found."
+      fi
       exit 0
     fi
 
@@ -3866,15 +3889,25 @@ EOF
     suggested=$(jq -r '.suggested_next // "None"' "$session_file")
     cleared=$(jq -r '.context_cleared // false' "$session_file")
 
-    echo "📋 Session Summary"
-    echo "=================="
-    echo "Goal: $goal"
-    [[ "$phase" != "0" ]] && echo "Phase: $phase"
-    echo "Milestone: $milestone"
-    echo "Last Command: $last_cmd"
-    echo "Last Active: $last_at"
-    [[ "$suggested" != "None" ]] && echo "Suggested Next: $suggested"
-    [[ "$cleared" == "true" ]] && echo "Status: Context was cleared"
+    if [[ "$json_mode" == "true" ]]; then
+      # Escape goal for JSON
+      goal_escaped=$(echo "$goal" | jq -Rs . | tr -d '\n')
+      milestone_escaped=$(echo "$milestone" | jq -Rs . | tr -d '\n')
+      last_cmd_escaped=$(echo "$last_cmd" | jq -Rs . | tr -d '\n')
+      last_at_escaped=$(echo "$last_at" | jq -Rs . | tr -d '\n')
+      suggested_escaped=$(echo "$suggested" | jq -Rs . | tr -d '\n')
+      json_ok "{\"exists\":true,\"goal\":$goal_escaped,\"phase\":$phase,\"milestone\":$milestone_escaped,\"last_command\":$last_cmd_escaped,\"last_active\":$last_at_escaped,\"suggested_next\":$suggested_escaped,\"context_cleared\":$cleared}"
+    else
+      echo "Session Summary"
+      echo "=================="
+      echo "Goal: $goal"
+      [[ "$phase" != "0" ]] && echo "Phase: $phase"
+      echo "Milestone: $milestone"
+      echo "Last Command: $last_cmd"
+      echo "Last Active: $last_at"
+      [[ "$suggested" != "None" ]] && echo "Suggested Next: $suggested"
+      [[ "$cleared" == "true" ]] && echo "Status: Context was cleared"
+    fi
     ;;
 
   *)
