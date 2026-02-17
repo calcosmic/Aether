@@ -17,7 +17,10 @@ If everything else fell away, Aether's essential value is:
 
 ### Validated
 
-(None yet — repair to validate)
+- [x] **Colony Lifecycle** — Seal/Entomb/Chambers (Phase 6)
+  - [x] /ant:seal — Crowned Anthill ceremony milestone
+  - [x] /ant:entomb — Archive colony to chambers with seal-first enforcement
+  - [x] /ant:tunnels — Timeline browser with seal document display
 
 ### Active
 
@@ -54,11 +57,6 @@ If everything else fell away, Aether's essential value is:
   - [ ] FOCUS/REDIRECT/FEEDBACK work
   - [ ] Auto-injection of learned patterns
   - [ ] Instincts applied to new work
-
-- [ ] **Colony Lifecycle** — Seal/Entomb/Chambers
-  - [ ] /ant:seal — Crowned Anthill milestone
-  - [ ] /ant:entomb — Archive colony to chambers
-  - [ ] /ant:tunnels — Browse archived colonies
 
 - [ ] **Advanced Workers** — Specialized agents
   - [ ] /ant:oracle — Deep research (RALF loop)
@@ -110,6 +108,7 @@ If everything else fell away, Aether's essential value is:
 - **Visual simplicity** — no loads of terminal text
 - **Reliability first** — working > feature-rich
 - **Self-contained** — minimal external dependencies
+- **UI Style** — GSD-style stage banners with ant-themed names (e.g., "AETHER ► DIGESTING", "AETHER ► EXCAVATING")
 
 ## Key Decisions
 
