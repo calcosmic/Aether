@@ -12,7 +12,7 @@ This is a REPAIR project — phases are organized to fix foundations first, then
 | 1 | Diagnostic | Understand what's actually broken vs working | All | Run each major command, document failures |
 | 2 | Core Infrastructure | Fix command foundations | CMD-01 to CMD-08, ERR-01 to ERR-03 | Basic commands work without errors |
 | 3 | Visual Experience | Make display work nicely | VIS-01 to VIS-04 | Ants visible, no bash text flood |
-| 4 | Context Persistence | Fix session state | CTX-01 to CTX-03, STA-01 to STA-03 | Survives /clear |
+| 4 | Context Persistence | Complete    | 2026-02-17 | Survives /clear |
 | 5 | Pheromone System | Fix self-learning | PHER-01 to PHER-05 | Signals work, instincts apply |
 | 6 | Colony Lifecycle | Fix seal/entomb/chambers | LIF-01 to LIF-03 | Archive and browse works |
 | 7 | Advanced Workers | Fix oracle/chaos/archaeology | ADV-01 to ADV-05 | Specialized agents work |
@@ -93,6 +93,12 @@ Plans:
 **Requirements:**
 - VIS-01 through VIS-04
 
+**Plans:** 2 plans
+
+Plans:
+- [ ] 03-01-PLAN.md — Add swarm-display-text function to aether-utils.sh
+- [ ] 03-02-PLAN.md — Wire swarm-display-text into /ant:swarm and /ant:colonize
+
 **Success Criteria:**
 1. `/ant:init` shows ant emoji output
 2. Build phases show ants working
@@ -114,6 +120,12 @@ Plans:
 - CTX-01 through CTX-03
 - STA-01 through STA-03
 
+**Plans:** 2/2 plans complete
+
+Plans:
+- [ ] 04-01-PLAN.md — Add drift detection infrastructure and harden session-update consistency
+- [ ] 04-02-PLAN.md — Rewrite /ant:resume with rich dashboard, drift detection, and workflow guidance
+
 **Success Criteria:**
 1. After `/clear`, state is restored
 2. COLONY_STATE.json persists correctly
@@ -121,10 +133,10 @@ Plans:
 4. No file path hallucinations
 
 **Approach:**
-- Verify session-verify-fresh works
-- Fix state read/write functions
-- Add proper file locking
-- Test /clear and resume
+- Add baseline_commit to session tracking for drift detection
+- Verify session-update calls across all key commands
+- Rewrite /ant:resume with rich dashboard and adaptive next-step guidance
+- Add new-conversation detection to CLAUDE.md
 
 ---
 
@@ -133,6 +145,13 @@ Plans:
 
 **Requirements:**
 - PHER-01 through PHER-05
+
+**Plans:** 3 plans
+
+Plans:
+- [ ] 05-01-PLAN.md — Unify signal storage: pheromone-write subcommand and update emitter commands
+- [ ] 05-02-PLAN.md — Inject signals and instincts into builder/watcher prompts
+- [ ] 05-03-PLAN.md — Auto-emission on phase advance, midden archival, eternal memory setup
 
 **Success Criteria:**
 1. FOCUS/REDIRECT/FEEDBACK work
@@ -213,7 +232,7 @@ Plans:
 **Requirements:** All
 
 **Success Criteria:**
-1. Full workflow test: init → plan → build → continue → seal
+1. Full workflow test: init -> plan -> build -> continue -> seal
 2. Visual display works end-to-end
 3. Context survives /clear
 4. No errors in normal operation
