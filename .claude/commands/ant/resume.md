@@ -1,3 +1,9 @@
+---
+name: resume
+description: "Resume Previous Session"
+symbol: refresh
+---
+
 # /ant:resume — Resume Previous Session
 
 Resume work from where you left off after a context clear or new session start.
