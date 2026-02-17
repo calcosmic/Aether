@@ -1,9 +1,9 @@
 ---
 name: ant:focus
-description: "🔦🐜🔍🐜🔦 Emit FOCUS signal to guide colony attention"
+description: "Emit FOCUS signal to guide colony attention"
 ---
 
-You are the **Queen**. Add a FOCUS constraint.
+You are the **Queen**. Emit a FOCUS pheromone signal.
 
 ## Instructions
 
@@ -14,37 +14,35 @@ The focus area is: `$ARGUMENTS`
 If `$ARGUMENTS` empty -> show usage: `/ant:focus <area>`, stop.
 If content > 500 chars -> "Focus content too long (max 500 chars)", stop.
 
-### Step 2: Read + Update Constraints
+Parse optional flags from `$ARGUMENTS`:
+- `--ttl <value>`: signal lifetime (e.g., `2h`, `1d`, `7d`). Default: `phase_end`.
+- Strip flags from content before using it as the focus area.
+
+### Step 2: Write Signal
 
 Read `.aether/data/COLONY_STATE.json`.
 If `goal: null` -> "No colony initialized.", stop.
 
-Read `.aether/data/constraints.json`. If file doesn't exist, create it with:
-```json
-{"version": "1.0", "focus": [], "constraints": []}
+Run:
+```bash
+bash .aether/aether-utils.sh pheromone-write FOCUS "<content>" --strength 0.8 --reason "User directed colony attention" --ttl <ttl>
 ```
 
-Append the focus area to the `focus` array.
+Parse the returned JSON for the signal ID.
 
-If `focus` array exceeds 5 entries, remove the oldest entries to keep only 5.
+### Step 3: Get Active Counts
 
-Write constraints.json.
-
-### Step 3: Confirm
-
-Output header:
-
-```
-🔦🐜🔍🐜🔦 ═══════════════════════════════════════════════════
-   F O C U S   S I G N A L
-═══════════════════════════════════════════════════ 🔦🐜🔍🐜🔦
+Run:
+```bash
+bash .aether/aether-utils.sh pheromone-count
 ```
 
-Then output:
+### Step 4: Confirm
+
+Output (3-4 lines, no banners):
 ```
-🎯 FOCUS signal emitted
-
-   "{content preview}"
-
-🐜 Colony attention directed.
+FOCUS signal emitted
+  Area: "<content truncated to 60 chars>"
+  Strength: 0.8 | Expires: <phase end or ttl value>
+  Active signals: <focus_count> FOCUS, <redirect_count> REDIRECT, <feedback_count> FEEDBACK
 ```

@@ -1,9 +1,9 @@
 ---
 name: ant:redirect
-description: "⚠️🐜🚧🐜⚠️ Emit REDIRECT signal to warn colony away from patterns"
+description: "Emit REDIRECT signal to warn colony away from patterns"
 ---
 
-You are the **Queen**. Add an AVOID constraint.
+You are the **Queen**. Emit a REDIRECT pheromone signal.
 
 ## Instructions
 
@@ -14,48 +14,35 @@ The pattern to avoid is: `$ARGUMENTS`
 If `$ARGUMENTS` empty -> show usage: `/ant:redirect <pattern to avoid>`, stop.
 If content > 500 chars -> "Redirect content too long (max 500 chars)", stop.
 
-### Step 2: Read + Update Constraints
+Parse optional flags from `$ARGUMENTS`:
+- `--ttl <value>`: signal lifetime (e.g., `2h`, `1d`, `7d`). Default: `phase_end`.
+- Strip flags from content before using it as the pattern.
+
+### Step 2: Write Signal
 
 Read `.aether/data/COLONY_STATE.json`.
 If `goal: null` -> "No colony initialized.", stop.
 
-Read `.aether/data/constraints.json`. If file doesn't exist, create it with:
-```json
-{"version": "1.0", "focus": [], "constraints": []}
+Run:
+```bash
+bash .aether/aether-utils.sh pheromone-write REDIRECT "<content>" --strength 0.9 --reason "User warned colony away from pattern" --ttl <ttl>
 ```
 
-Generate constraint ID: `c_<unix_timestamp_ms>`
+Parse the returned JSON for the signal ID.
 
-Append to `constraints` array:
-```json
-{
-  "id": "<generated_id>",
-  "type": "AVOID",
-  "content": "<pattern to avoid>",
-  "source": "user:redirect",
-  "created_at": "<ISO-8601 timestamp>"
-}
+### Step 3: Get Active Counts
+
+Run:
+```bash
+bash .aether/aether-utils.sh pheromone-count
 ```
 
-If `constraints` array exceeds 10 entries, remove the oldest entries to keep only 10.
+### Step 4: Confirm
 
-Write constraints.json.
-
-### Step 3: Confirm
-
-Output header:
-
+Output (3-4 lines, no banners):
 ```
-⚠️🐜🚧🐜⚠️ ═══════════════════════════════════════════════════
-   R E D I R E C T   S I G N A L
-═══════════════════════════════════════════════════ ⚠️🐜🚧🐜⚠️
-```
-
-Then output:
-```
-🚫 REDIRECT signal emitted
-
-   Avoid: "{content preview}"
-
-🐜 Colony warned away from this pattern.
+REDIRECT signal emitted
+  Avoid: "<content truncated to 60 chars>"
+  Strength: 0.9 | Expires: <phase end or ttl value>
+  Active signals: <focus_count> FOCUS, <redirect_count> REDIRECT, <feedback_count> FEEDBACK
 ```
