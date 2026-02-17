@@ -159,6 +159,24 @@ Commands:
 **Total Subcommands:** 72
 **Tested:** 72
 
+### Executive Summary
+
+| Category | Count | Notes |
+|----------|-------|-------|
+| Total Tested | 72 | All subcommands tested |
+| Passed | 35 | Commands work correctly |
+| Requires Arguments | 25 | Expected behavior - not bugs |
+| Bugs Found | 6 | Actual issues in utility layer |
+
+### Actual Issues Found
+
+1. **spawn-can-spawn-swarm** - Syntax error at line 1579
+2. **session-is-stale** - Returns raw boolean instead of JSON wrapper
+3. **session-clear** - Missing --command argument handling
+4. **session-summary** - Returns formatted text instead of JSON
+5. **pheromone-read** - Command doesn't exist (only pheromone-export)
+6. **context-update** - Empty argument causes error
+
 ### Foundation Commands
 
 | Subcommand | Status | Notes |
