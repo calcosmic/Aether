@@ -143,6 +143,11 @@ If `events` exceeds 100 entries, keep only the last 100.
 
 Write COLONY_STATE.json.
 
+Validate the state file:
+```bash
+bash .aether/aether-utils.sh validate-state colony
+```
+
 ### Step 3: Git Checkpoint
 
 Create a git checkpoint for rollback capability.
@@ -528,7 +533,7 @@ bash .aether/aether-utils.sh context-update worker-complete "{ant_name}" "comple
 **Visual Mode: Render live display (if enabled):**
 If `visual_mode` is true, render the swarm display after all workers complete:
 ```bash
-bash .aether/aether-utils.sh swarm-display-render "$build_id"
+bash .aether/aether-utils.sh swarm-display-text "$build_id"
 ```
 
 ### Step 5.3: Spawn Wave 2+ Workers (Sequential Waves)
@@ -933,7 +938,7 @@ Also update safe-to-clear status:
 bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Phase {id} complete" "Colony" '{"read":10,"grep":5,"edit":5,"bash":2}' 100 "fungus_garden" 100
 
 # Render the final swarm display
-bash .aether/aether-utils.sh swarm-display-render "$build_id"
+bash .aether/aether-utils.sh swarm-display-text "$build_id"
 ```
 
 The swarm display will show:

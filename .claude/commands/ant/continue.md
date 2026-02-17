@@ -665,6 +665,11 @@ Update COLONY_STATE.json:
 
 Write COLONY_STATE.json.
 
+Validate the state file:
+```bash
+bash .aether/aether-utils.sh validate-state colony
+```
+
 ### Step 2.2: Promote Validated Learnings to QUEEN.md
 
 After extracting learnings in Step 2, promote high-confidence validated learnings to QUEEN.md wisdom.
@@ -983,7 +988,7 @@ Runs ONLY when all phases complete.
 **If visual_mode is true, render final swarm display:**
 ```bash
 bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Phase advanced" "Colony" '{"read":5,"grep":2,"edit":3,"bash":2}' 100 "fungus_garden" 100
-bash .aether/aether-utils.sh swarm-display-render "$continue_id"
+bash .aether/aether-utils.sh swarm-display-text "$continue_id"
 ```
 
 Output:
