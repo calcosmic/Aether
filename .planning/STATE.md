@@ -6,8 +6,8 @@
 ## Current Status
 
 - **State:** Phase 5 IN PROGRESS
-- **Phase:** 05 (Pheromone System) — 1/3 plans complete
-- **Plan:** 05-01 COMPLETE
+- **Phase:** 05 (Pheromone System) — 2/3 plans complete
+- **Plan:** 05-02 COMPLETE
 - **Total Plans in Phase:** 03
 - **Mode:** YOLO (auto-approve)
 
@@ -17,7 +17,7 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 
 **Core value:** Prevent context rot across Claude Code sessions with self-managing colony that learns and guides users
 
-**Current focus:** Phase 5: Pheromone System — Plan 05-02 (next plan)
+**Current focus:** Phase 5: Pheromone System — Plan 05-03 (next plan)
 
 ## Progress
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 - [x] Phase 2: Core Infrastructure — COMPLETE (5/5 plans)
 - [x] Phase 3: Visual Experience — COMPLETE (2/2 plans)
 - [x] Phase 4: Context Persistence — COMPLETE (3/3 plans)
-- [ ] Phase 5: Pheromone System — 1/3 plans complete
+- [ ] Phase 5: Pheromone System — 2/3 plans complete
 - [ ] Phase 6: Colony Lifecycle
 - [ ] Phase 7: Advanced Workers
 - [ ] Phase 8: XML Integration
@@ -56,7 +56,10 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 - **05-01:** Rough epoch approximation in jq via string parsing (years*365d + months*30d) — sufficient for decay math
 - **05-01:** Dual-write backward compat: FOCUS->constraints.json focus[], REDIRECT->constraints.json constraints[]
 - **05-01:** Medium confirmation format — 3-4 lines, no banners (type, content preview, strength/expiry, active counts)
+- **05-02:** Watcher prompts receive pheromone_section between file list and verification sections (same injection pattern as builders)
+- **05-02:** Checkpoint polling is lightweight polling (check at natural breakpoints) not a formal queue — practical and zero-infrastructure
+- **05-02:** Graceful degradation: pheromone-prime failure never blocks a build — pheromone_section defaults to empty string
 
 ## Last Updated
 
-2026-02-17 — Phase 5 Plan 01 COMPLETE (pheromone-write/count subcommands, pheromone-read decay, focus/redirect/feedback unified to pheromones.json)
+2026-02-17 — Phase 5 Plan 02 COMPLETE (instinct-read, pheromone-prime subcommands; signal+instinct injection into builder and watcher prompts in build.md)
