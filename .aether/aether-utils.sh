@@ -473,7 +473,7 @@ shift 2>/dev/null || true
 case "$cmd" in
   help)
     cat <<'EOF'
-{"ok":true,"commands":["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-display-text","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","survey-load","survey-verify","pheromone-export","pheromone-write","pheromone-count","pheromone-read"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
+{"ok":true,"commands":["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-display-text","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","survey-load","survey-verify","pheromone-export","pheromone-write","pheromone-count","pheromone-read","instinct-read","pheromone-prime"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
 EOF
     ;;
   version)
@@ -4043,6 +4043,203 @@ ${entry}" "$queen_file" > "$tmp_file"
       pher_colony=$(jq -r '.colony_id // "unknown"' "$pher_file" 2>/dev/null || echo "unknown")
       json_ok "{\"version\":\"$pher_version\",\"colony_id\":\"$pher_colony\",\"signals\":$pher_result}"
     fi
+    ;;
+
+  instinct-read)
+    # Read learned instincts from COLONY_STATE.json memory
+    # Usage: instinct-read [--min-confidence N] [--max N] [--domain DOMAIN]
+    # Returns: JSON with filtered, confidence-sorted instincts
+
+    ir_min_confidence="0.5"
+    ir_max="5"
+    ir_domain=""
+
+    # Parse flags from positional args
+    ir_shift=1
+    while [[ $ir_shift -le $# ]]; do
+      eval "ir_arg=\${$ir_shift}"
+      ir_shift=$((ir_shift + 1))
+      case "$ir_arg" in
+        --min-confidence)
+          eval "ir_min_confidence=\${$ir_shift}"
+          ir_shift=$((ir_shift + 1))
+          ;;
+        --max)
+          eval "ir_max=\${$ir_shift}"
+          ir_shift=$((ir_shift + 1))
+          ;;
+        --domain)
+          eval "ir_domain=\${$ir_shift}"
+          ir_shift=$((ir_shift + 1))
+          ;;
+      esac
+    done
+
+    ir_state_file="$DATA_DIR/COLONY_STATE.json"
+
+    if [[ ! -f "$ir_state_file" ]]; then
+      json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found. Run /ant:init first."
+    fi
+
+    # Check if memory.instincts exists
+    ir_has_instincts=$(jq 'if .memory.instincts then "yes" else "no" end' "$ir_state_file" 2>/dev/null || echo "no")
+    if [[ "$ir_has_instincts" != '"yes"' ]]; then
+      json_ok '{"instincts":[],"total":0,"filtered":0}'
+    fi
+
+    ir_result=$(jq -c \
+      --argjson min_conf "$ir_min_confidence" \
+      --argjson max_count "$ir_max" \
+      --arg domain_filter "$ir_domain" \
+      '
+      (.memory.instincts // []) as $all |
+      ($all | length) as $total |
+      $all
+      | map(select(
+          (.confidence // 0) >= $min_conf
+          and (.status // "hypothesis") != "disproven"
+          and (if $domain_filter != "" then (.domain // "") == $domain_filter else true end)
+        ))
+      | sort_by(-.confidence)
+      | .[:$max_count]
+      | {
+          instincts: .,
+          total: $total,
+          filtered: (. | length)
+        }
+      ' "$ir_state_file" 2>/dev/null)
+
+    if [[ -z "$ir_result" || "$ir_result" == "null" ]]; then
+      json_ok '{"instincts":[],"total":0,"filtered":0}'
+    else
+      json_ok "$ir_result"
+    fi
+    ;;
+
+  pheromone-prime)
+    # Combine active pheromone signals and learned instincts into a prompt-ready block
+    # Usage: pheromone-prime
+    # Returns: JSON with signal_count, instinct_count, prompt_section, log_line
+
+    pp_pher_file="$DATA_DIR/pheromones.json"
+    pp_state_file="$DATA_DIR/COLONY_STATE.json"
+    pp_now=$(date +%s)
+
+    # Read active signals (same decay logic as pheromone-read)
+    pp_signals="[]"
+    if [[ -f "$pp_pher_file" ]]; then
+      pp_signals=$(jq -c \
+        --argjson now "$pp_now" \
+        '
+        def to_epoch(ts):
+          if ts == null or ts == "" or ts == "phase_end" then null
+          else
+            (ts | split("T")) as $parts |
+            ($parts[0] | split("-")) as $d |
+            ($parts[1] | rtrimstr("Z") | split(":")) as $t |
+            (($d[0] | tonumber) - 1970) * 365 * 86400 +
+            (($d[1] | tonumber) - 1) * 30 * 86400 +
+            (($d[2] | tonumber) - 1) * 86400 +
+            ($t[0] | tonumber) * 3600 +
+            ($t[1] | tonumber) * 60 +
+            ($t[2] | rtrimstr("Z") | tonumber)
+          end;
+
+        def decay_days(t):
+          if t == "FOCUS"    then 30
+          elif t == "REDIRECT" then 60
+          else 90
+          end;
+
+        .signals | map(
+          (to_epoch(.created_at)) as $created_epoch |
+          (if $created_epoch != null then ($now - $created_epoch) / 86400 else 0 end) as $elapsed_days |
+          (decay_days(.type)) as $dd |
+          ((.strength // 0.8) * (1 - ($elapsed_days / $dd))) as $eff_raw |
+          (if $eff_raw < 0 then 0 else $eff_raw end) as $eff |
+          (to_epoch(.expires_at)) as $exp_epoch |
+          ($exp_epoch != null and $exp_epoch <= $now) as $expired |
+          ($eff < 0.1 or $expired) as $deactivate |
+          . + {
+            effective_strength: (($eff * 100 | round) / 100),
+            active: (if $deactivate then false else (.active // true) end)
+          }
+        ) |
+        map(select(.active == true))
+        ' "$pp_pher_file" 2>/dev/null || echo "[]")
+    fi
+
+    if [[ -z "$pp_signals" || "$pp_signals" == "null" ]]; then
+      pp_signals="[]"
+    fi
+
+    # Read instincts (confidence >= 0.5, not disproven, max 5)
+    pp_instincts="[]"
+    if [[ -f "$pp_state_file" ]]; then
+      pp_instincts=$(jq -c \
+        '
+        (.memory.instincts // [])
+        | map(select(
+            (.confidence // 0) >= 0.5
+            and (.status // "hypothesis") != "disproven"
+          ))
+        | sort_by(-.confidence)
+        | .[:5]
+        ' "$pp_state_file" 2>/dev/null || echo "[]")
+    fi
+
+    if [[ -z "$pp_instincts" || "$pp_instincts" == "null" ]]; then
+      pp_instincts="[]"
+    fi
+
+    pp_signal_count=$(echo "$pp_signals" | jq 'length' 2>/dev/null || echo "0")
+    pp_instinct_count=$(echo "$pp_instincts" | jq 'length' 2>/dev/null || echo "0")
+
+    # Build prompt section
+    if [[ "$pp_signal_count" -eq 0 && "$pp_instinct_count" -eq 0 ]]; then
+      pp_section=""
+      pp_log_line="Primed: 0 signals, 0 instincts"
+    else
+      pp_section="--- ACTIVE SIGNALS (Colony Guidance) ---"$'\n'
+
+      # FOCUS signals
+      pp_focus=$(echo "$pp_signals" | jq -r 'map(select(.type == "FOCUS")) | .[] | "[" + ((.effective_strength * 10 | round) / 10 | tostring) + "] " + (.content.text // (if (.content | type) == "string" then .content else "" end))' 2>/dev/null || echo "")
+      if [[ -n "$pp_focus" ]]; then
+        pp_section+=$'\n'"FOCUS (Pay attention to):"$'\n'"$pp_focus"$'\n'
+      fi
+
+      # REDIRECT signals
+      pp_redirect=$(echo "$pp_signals" | jq -r 'map(select(.type == "REDIRECT")) | .[] | "[" + ((.effective_strength * 10 | round) / 10 | tostring) + "] " + (.content.text // (if (.content | type) == "string" then .content else "" end))' 2>/dev/null || echo "")
+      if [[ -n "$pp_redirect" ]]; then
+        pp_section+=$'\n'"REDIRECT (HARD CONSTRAINTS - MUST follow):"$'\n'"$pp_redirect"$'\n'
+      fi
+
+      # FEEDBACK signals
+      pp_feedback=$(echo "$pp_signals" | jq -r 'map(select(.type == "FEEDBACK")) | .[] | "[" + ((.effective_strength * 10 | round) / 10 | tostring) + "] " + (.content.text // (if (.content | type) == "string" then .content else "" end))' 2>/dev/null || echo "")
+      if [[ -n "$pp_feedback" ]]; then
+        pp_section+=$'\n'"FEEDBACK (Flexible guidance):"$'\n'"$pp_feedback"$'\n'
+      fi
+
+      # Instincts section
+      if [[ "$pp_instinct_count" -gt 0 ]]; then
+        pp_section+=$'\n'"--- INSTINCTS (Learned Behaviors) ---"$'\n'
+        pp_section+="Weight by confidence - higher = stronger guidance:"$'\n'
+        pp_instinct_lines=$(echo "$pp_instincts" | jq -r '.[] | "[" + ((.confidence * 10 | round) / 10 | tostring) + "] When " + .trigger + " -> " + .action + " (" + (.domain // "general") + ")"' 2>/dev/null || echo "")
+        if [[ -n "$pp_instinct_lines" ]]; then
+          pp_section+=$'\n'"$pp_instinct_lines"$'\n'
+        fi
+      fi
+
+      pp_section+=$'\n'"--- END COLONY CONTEXT ---"
+
+      pp_log_line="Primed: ${pp_signal_count} signals, ${pp_instinct_count} instincts"
+    fi
+
+    # Escape section for JSON embedding (use printf to avoid appending extra newline)
+    pp_section_json=$(printf '%s' "$pp_section" | jq -Rs '.' 2>/dev/null || echo '""')
+    pp_log_json=$(printf '%s' "$pp_log_line" | jq -Rs '.' 2>/dev/null || echo '"Primed: 0 signals, 0 instincts"')
+
+    json_ok "{\"signal_count\":$pp_signal_count,\"instinct_count\":$pp_instinct_count,\"prompt_section\":$pp_section_json,\"log_line\":$pp_log_json}"
     ;;
 
   # ============================================================================
