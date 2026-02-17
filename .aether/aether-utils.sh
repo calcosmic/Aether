@@ -473,7 +473,7 @@ shift 2>/dev/null || true
 case "$cmd" in
   help)
     cat <<'EOF'
-{"ok":true,"commands":["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-display-text","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","survey-load","survey-verify","pheromone-export"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
+{"ok":true,"commands":["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-display-text","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","survey-load","survey-verify","pheromone-export","pheromone-write","pheromone-count","pheromone-read"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
 EOF
     ;;
   version)
@@ -3779,11 +3779,197 @@ ${entry}" "$queen_file" > "$tmp_file"
     fi
     ;;
 
+  pheromone-write)
+    # Write a pheromone signal to pheromones.json
+    # Usage: pheromone-write <type> <content> [--strength N] [--ttl TTL] [--source SOURCE] [--reason REASON]
+    #   type:       FOCUS, REDIRECT, or FEEDBACK
+    #   content:    signal text (required, max 500 chars)
+    #   --strength: 0.0-1.0 (defaults: REDIRECT=0.9, FOCUS=0.8, FEEDBACK=0.7)
+    #   --ttl:      phase_end (default), 2h, 1d, 7d, 30d, etc.
+    #   --source:   user (default), worker:builder, system
+    #   --reason:   human-readable explanation
+
+    pw_type="${1:-}"
+    pw_content="${2:-}"
+
+    # Validate type
+    if [[ -z "$pw_type" ]]; then
+      json_err "$E_VALIDATION_FAILED" "pheromone-write requires <type> argument (FOCUS, REDIRECT, or FEEDBACK)"
+    fi
+
+    pw_type=$(echo "$pw_type" | tr '[:lower:]' '[:upper:]')
+    case "$pw_type" in
+      FOCUS|REDIRECT|FEEDBACK) ;;
+      *) json_err "$E_VALIDATION_FAILED" "Invalid pheromone type: $pw_type. Must be FOCUS, REDIRECT, or FEEDBACK" ;;
+    esac
+
+    if [[ -z "$pw_content" ]]; then
+      json_err "$E_VALIDATION_FAILED" "pheromone-write requires <content> argument"
+    fi
+
+    # Parse optional flags from remaining args (after type and content)
+    pw_strength=""
+    pw_ttl="phase_end"
+    pw_source="user"
+    pw_reason=""
+
+    shift 2  # shift past type and content
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --strength) pw_strength="$2"; shift 2 ;;
+        --ttl)      pw_ttl="$2"; shift 2 ;;
+        --source)   pw_source="$2"; shift 2 ;;
+        --reason)   pw_reason="$2"; shift 2 ;;
+        *) shift ;;
+      esac
+    done
+
+    # Apply default strength by type
+    if [[ -z "$pw_strength" ]]; then
+      case "$pw_type" in
+        REDIRECT) pw_strength="0.9" ;;
+        FOCUS)    pw_strength="0.8" ;;
+        FEEDBACK) pw_strength="0.7" ;;
+      esac
+    fi
+
+    # Apply default reason by type
+    if [[ -z "$pw_reason" ]]; then
+      pw_type_lower_r=$(echo "$pw_type" | tr '[:upper:]' '[:lower:]')
+      pw_reason="User emitted via /ant:${pw_type_lower_r}"
+    fi
+
+    # Set priority by type
+    case "$pw_type" in
+      REDIRECT) pw_priority="high" ;;
+      FOCUS)    pw_priority="normal" ;;
+      FEEDBACK) pw_priority="low" ;;
+    esac
+
+    # Generate ID and timestamps
+    pw_epoch=$(date +%s)
+    pw_epoch_ms="${pw_epoch}000"
+    pw_type_lower=$(echo "$pw_type" | tr '[:upper:]' '[:lower:]')
+    pw_id="sig_${pw_type_lower}_${pw_epoch_ms}"
+    pw_created=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    # Compute expires_at from TTL
+    if [[ "$pw_ttl" == "phase_end" ]]; then
+      pw_expires="phase_end"
+    else
+      pw_ttl_secs=0
+      if [[ "$pw_ttl" =~ ^([0-9]+)m$ ]]; then
+        pw_ttl_secs=$(( ${BASH_REMATCH[1]} * 60 ))
+      elif [[ "$pw_ttl" =~ ^([0-9]+)h$ ]]; then
+        pw_ttl_secs=$(( ${BASH_REMATCH[1]} * 3600 ))
+      elif [[ "$pw_ttl" =~ ^([0-9]+)d$ ]]; then
+        pw_ttl_secs=$(( ${BASH_REMATCH[1]} * 86400 ))
+      fi
+      if [[ $pw_ttl_secs -gt 0 ]]; then
+        pw_expires_epoch=$(( pw_epoch + pw_ttl_secs ))
+        pw_expires=$(date -u -r "$pw_expires_epoch" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || \
+                     date -u -d "@$pw_expires_epoch" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || \
+                     echo "phase_end")
+      else
+        pw_expires="phase_end"
+      fi
+    fi
+
+    pw_file="$DATA_DIR/pheromones.json"
+
+    # Initialize pheromones.json if missing
+    if [[ ! -f "$pw_file" ]]; then
+      pw_colony_id="aether-dev"
+      if [[ -f "$DATA_DIR/COLONY_STATE.json" ]]; then
+        pw_colony_id=$(jq -r '.session_id // "aether-dev"' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "aether-dev")
+      fi
+      printf '{\n  "version": "1.0.0",\n  "colony_id": "%s",\n  "generated_at": "%s",\n  "signals": []\n}\n' \
+        "$pw_colony_id" "$pw_created" > "$pw_file"
+    fi
+
+    # Build signal object and append to pheromones.json
+    pw_signal=$(jq -n \
+      --arg id "$pw_id" \
+      --arg type "$pw_type" \
+      --arg priority "$pw_priority" \
+      --arg source "$pw_source" \
+      --arg created_at "$pw_created" \
+      --arg expires_at "$pw_expires" \
+      --argjson active true \
+      --argjson strength "$pw_strength" \
+      --arg reason "$pw_reason" \
+      --arg content "$pw_content" \
+      '{id: $id, type: $type, priority: $priority, source: $source, created_at: $created_at, expires_at: $expires_at, active: $active, strength: ($strength | tonumber), reason: $reason, content: {text: $content}}')
+
+    pw_updated=$(jq --argjson sig "$pw_signal" '.signals += [$sig]' "$pw_file" 2>/dev/null)
+    if [[ -z "$pw_updated" ]]; then
+      json_err "${E_JSON_INVALID:-E_JSON_INVALID}" "Failed to update pheromones.json — jq parse error"
+    fi
+    echo "$pw_updated" > "$pw_file"
+
+    # Backward compatibility: also write to constraints.json
+    pw_cfile="$DATA_DIR/constraints.json"
+    if [[ "$pw_type" == "FOCUS" ]]; then
+      if [[ ! -f "$pw_cfile" ]]; then
+        echo '{"version":"1.0","focus":[],"constraints":[]}' > "$pw_cfile"
+      fi
+      pw_cfile_updated=$(jq --arg txt "$pw_content" '
+        .focus += [$txt] |
+        if (.focus | length) > 5 then .focus = .focus[-5:] else . end
+      ' "$pw_cfile" 2>/dev/null)
+      [[ -n "$pw_cfile_updated" ]] && echo "$pw_cfile_updated" > "$pw_cfile"
+    elif [[ "$pw_type" == "REDIRECT" ]]; then
+      if [[ ! -f "$pw_cfile" ]]; then
+        echo '{"version":"1.0","focus":[],"constraints":[]}' > "$pw_cfile"
+      fi
+      pw_constraint=$(jq -n \
+        --arg id "c_${pw_epoch}" \
+        --arg content "$pw_content" \
+        --arg source "user:redirect" \
+        --arg created_at "$pw_created" \
+        '{id: $id, type: "AVOID", content: $content, source: $source, created_at: $created_at}')
+      pw_cfile_updated=$(jq --argjson c "$pw_constraint" '
+        .constraints += [$c] |
+        if (.constraints | length) > 10 then .constraints = .constraints[-10:] else . end
+      ' "$pw_cfile" 2>/dev/null)
+      [[ -n "$pw_cfile_updated" ]] && echo "$pw_cfile_updated" > "$pw_cfile"
+    fi
+
+    # Get active signal count
+    pw_active_count=$(jq '[.signals[] | select(.active == true)] | length' "$pw_file" 2>/dev/null || echo "0")
+
+    json_ok "{\"signal_id\":\"$pw_id\",\"type\":\"$pw_type\",\"active_count\":$pw_active_count}"
+    ;;
+
+  pheromone-count)
+    # Count active pheromone signals by type
+    # Usage: pheromone-count
+    # Returns: JSON with per-type counts
+
+    pc_file="$DATA_DIR/pheromones.json"
+
+    if [[ ! -f "$pc_file" ]]; then
+      json_ok '{"focus":0,"redirect":0,"feedback":0,"total":0}'
+    else
+      pc_result=$(jq -c '{
+        focus:    ([.signals[] | select(.active == true and .type == "FOCUS")]    | length),
+        redirect: ([.signals[] | select(.active == true and .type == "REDIRECT")] | length),
+        feedback: ([.signals[] | select(.active == true and .type == "FEEDBACK")] | length),
+        total:    ([.signals[] | select(.active == true)]                          | length)
+      }' "$pc_file" 2>/dev/null)
+      if [[ -z "$pc_result" ]]; then
+        json_ok '{"focus":0,"redirect":0,"feedback":0,"total":0}'
+      else
+        json_ok "$pc_result"
+      fi
+    fi
+    ;;
+
   pheromone-read)
-    # Read pheromones from colony data
+    # Read pheromones from colony data with decay calculation
     # Usage: pheromone-read [type]
     #   type: Filter by pheromone type (focus, redirect, feedback) or 'all' (default: all)
-    # Returns: JSON object with pheromones array
+    # Returns: JSON object with pheromones array including effective_strength
 
     pher_type="${1:-all}"
     pher_file="$DATA_DIR/pheromones.json"
@@ -3793,20 +3979,69 @@ ${entry}" "$queen_file" > "$tmp_file"
       json_err "$E_FILE_NOT_FOUND" "Pheromones file not found. Run /ant:colonize first to initialize the colony."
     fi
 
-    # Read and filter pheromones based on type
-    if [[ "$pher_type" == "all" ]]; then
-      # Return all signals from the file
-      result=$(jq -c '{version, colony_id, generated_at, signals}' "$pher_file" 2>/dev/null)
-    else
-      # Filter by type (case-insensitive match)
-      type_upper=$(echo "$pher_type" | tr '[:lower:]' '[:upper:]')
-      result=$(jq -c --arg type "$type_upper" '{version, colony_id, generated_at, signals: [.signals[] | select(.type == $type)]}' "$pher_file" 2>/dev/null)
-    fi
+    # Get current epoch for decay calculation
+    pher_now=$(date +%s)
 
-    if [[ -z "$result" || "$result" == "null" ]]; then
-      json_ok "{\"version\":\"1.0.0\",\"signals\":[]}"
+    # Apply decay and expiry at read time
+    # Decay rates: FOCUS=30d, REDIRECT=60d, FEEDBACK/PATTERN=90d
+    # effective_strength = original_strength * (1 - elapsed_days / decay_days)
+    # If effective_strength < 0.1, mark inactive
+    # Also check expires_at: if not "phase_end" and past expiry, mark inactive
+    pher_type_upper=$(echo "$pher_type" | tr '[:lower:]' '[:upper:]')
+
+    pher_result=$(jq -c \
+      --argjson now "$pher_now" \
+      --arg type_filter "$pher_type_upper" \
+      '
+      # Rough ISO-8601 to epoch: accumulate years*365d + month*30d + days + time
+      def to_epoch(ts):
+        if ts == null or ts == "" or ts == "phase_end" then null
+        else
+          (ts | split("T")) as $parts |
+          ($parts[0] | split("-")) as $d |
+          ($parts[1] | rtrimstr("Z") | split(":")) as $t |
+          (($d[0] | tonumber) - 1970) * 365 * 86400 +
+          (($d[1] | tonumber) - 1) * 30 * 86400 +
+          (($d[2] | tonumber) - 1) * 86400 +
+          ($t[0] | tonumber) * 3600 +
+          ($t[1] | tonumber) * 60 +
+          ($t[2] | rtrimstr("Z") | tonumber)
+        end;
+
+      def decay_days(t):
+        if t == "FOCUS"    then 30
+        elif t == "REDIRECT" then 60
+        else 90
+        end;
+
+      .signals | map(
+        (to_epoch(.created_at)) as $created_epoch |
+        (if $created_epoch != null then ($now - $created_epoch) / 86400 else 0 end) as $elapsed_days |
+        (decay_days(.type)) as $dd |
+        ((.strength // 0.8) * (1 - ($elapsed_days / $dd))) as $eff_raw |
+        (if $eff_raw < 0 then 0 else $eff_raw end) as $eff |
+        (to_epoch(.expires_at)) as $exp_epoch |
+        ($exp_epoch != null and $exp_epoch <= $now) as $expired |
+        ($eff < 0.1 or $expired) as $deactivate |
+        . + {
+          effective_strength: (($eff * 100 | round) / 100),
+          active: (if $deactivate then false else (.active // true) end)
+        }
+      ) |
+      map(select(.active == true)) |
+      if $type_filter != "ALL" then
+        map(select(.type == $type_filter))
+      else
+        .
+      end
+      ' "$pher_file" 2>/dev/null)
+
+    if [[ -z "$pher_result" || "$pher_result" == "null" ]]; then
+      json_ok '{"version":"1.0.0","signals":[]}'
     else
-      json_ok "$result"
+      pher_version=$(jq -r '.version // "1.0.0"' "$pher_file" 2>/dev/null || echo "1.0.0")
+      pher_colony=$(jq -r '.colony_id // "unknown"' "$pher_file" 2>/dev/null || echo "unknown")
+      json_ok "{\"version\":\"$pher_version\",\"colony_id\":\"$pher_colony\",\"signals\":$pher_result}"
     fi
     ;;
 
