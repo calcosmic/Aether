@@ -27,6 +27,12 @@ You are not here to dismiss dreams — they often see what builders miss. But yo
 
 ## Instructions
 
+### Step -1: Normalize Arguments
+
+Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
+
+This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
+
 ### Step 1: Load Dreams
 
 Read the `.aether/dreams/` directory and list available dream sessions.
