@@ -670,6 +670,74 @@ Validate the state file:
 bash .aether/aether-utils.sh validate-state colony
 ```
 
+### Step 2.1: Auto-Emit Phase Pheromones (SILENT)
+
+**This entire step produces NO user-visible output.** All pheromone operations run silently — learnings are deposited in the background. If any pheromone call fails, log the error and continue. Phase advancement must never fail due to pheromone errors.
+
+#### 2.1a: Auto-emit FEEDBACK pheromone for phase outcome
+
+After learning extraction completes in Step 2, auto-emit a FEEDBACK signal summarizing the phase:
+
+```bash
+# phase_id and phase_name come from Step 2 state update
+# Take the top 1-3 learnings by evidence strength from memory.phase_learnings
+# Compress into a single summary sentence
+
+# If learnings were extracted, build a brief summary from them (first 1-3 claims)
+# Otherwise use the minimal fallback
+phase_feedback="Phase $phase_id ($phase_name) completed. Key patterns: {brief summary of 1-3 learnings from Step 2}"
+# Fallback if no learnings: "Phase $phase_id ($phase_name) completed without notable patterns."
+
+bash .aether/aether-utils.sh pheromone-write FEEDBACK "$phase_feedback" \
+  --strength 0.6 \
+  --source "worker:continue" \
+  --reason "Auto-emitted on phase advance: captures what worked and what was learned" \
+  --ttl "phase_end" 2>/dev/null || true
+```
+
+The strength is 0.6 (auto-emitted = lower than user-emitted 0.7). Source is "worker:continue" to distinguish from user-emitted feedback. TTL is "phase_end" so the signal survives through the NEXT phase and expires when THAT phase advances.
+
+#### 2.1b: Auto-emit REDIRECT for recurring error patterns
+
+Check `errors.flagged_patterns[]` in COLONY_STATE.json for patterns that have appeared in 2+ phases:
+
+```bash
+# Read flagged patterns with count >= 2
+flagged_patterns=$(jq -r '.errors.flagged_patterns[]? | select(.count >= 2) | .pattern' .aether/data/COLONY_STATE.json 2>/dev/null || true)
+
+# For each recurring pattern, emit one REDIRECT
+# Iterate through flagged_patterns and call pheromone-write once per pattern:
+# bash .aether/aether-utils.sh pheromone-write REDIRECT "$pattern_text" \
+#   --strength 0.7 \
+#   --source "system" \
+#   --reason "Auto-emitted: error pattern recurred across 2+ phases" \
+#   --ttl "30d" 2>/dev/null || true
+```
+
+REDIRECT strength is 0.7 (higher than auto FEEDBACK 0.6 — anti-patterns produce stronger signals than successes). TTL is 30d (not phase_end) because recurring errors should persist across multiple phases.
+
+If `errors.flagged_patterns` doesn't exist or is empty, skip silently.
+
+#### 2.1c: Expire phase_end signals and archive to midden
+
+After auto-emission, expire all signals with `expires_at == "phase_end"`. The newly-emitted FEEDBACK from 2.1a will survive this call (it was just written and is active) — it will expire when the NEXT phase advances.
+
+**IMPORTANT: This expiration ONLY happens here in continue.md, NEVER in build.md.** Signals emitted before a build must survive through the build.
+
+```bash
+bash .aether/aether-utils.sh pheromone-expire --phase-end-only 2>/dev/null || true
+```
+
+#### 2.1d: Initialize eternal memory (idempotent)
+
+Ensure the eternal memory structure exists:
+
+```bash
+bash .aether/aether-utils.sh eternal-init 2>/dev/null || true
+```
+
+This is idempotent — runs every time continue fires but only creates the directory/file once.
+
 ### Step 2.2: Promote Validated Learnings to QUEEN.md
 
 After extracting learnings in Step 2, promote high-confidence validated learnings to QUEEN.md wisdom.
