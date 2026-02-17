@@ -244,6 +244,11 @@ Display each scout's report as they complete:
    {summary of finding}
 ```
 
+Display colony activity summary:
+```bash
+bash .aether/aether-utils.sh swarm-display-text "$SWARM_ID"
+```
+
 #### Step 7: Synthesize Solution
 
 Cross-compare all findings:

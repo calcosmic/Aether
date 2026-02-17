@@ -175,6 +175,11 @@ if [[ "$fresh_count" -lt 7 ]]; then
 fi
 ```
 
+Display colony activity summary:
+```bash
+bash .aether/aether-utils.sh swarm-display-text "$colonize_id"
+```
+
 ### Step 5: Update State
 
 Read `.aether/data/COLONY_STATE.json`. Update:
