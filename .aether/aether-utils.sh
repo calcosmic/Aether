@@ -3821,6 +3821,7 @@ ${entry}" "$queen_file" > "$tmp_file"
     goal="${3:-}"
 
     session_file="$DATA_DIR/session.json"
+    baseline=$(git rev-parse HEAD 2>/dev/null || echo "")
 
     cat > "$session_file" << EOF
 {
@@ -3833,6 +3834,7 @@ ${entry}" "$queen_file" > "$tmp_file"
   "current_milestone": "First Mound",
   "suggested_next": "/ant:plan",
   "context_cleared": false,
+  "baseline_commit": "$baseline",
   "resumed_at": null,
   "active_todos": [],
   "summary": "Session initialized"
@@ -3876,6 +3878,9 @@ EOF
       current_milestone=$(jq -r '.milestone // "First Mound"' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "$current_milestone")
     fi
 
+    # Capture current git HEAD for drift detection
+    baseline=$(git rev-parse HEAD 2>/dev/null || echo "")
+
     # Build updated session
     echo "$current_session" | jq --arg cmd "$cmd_run" \
       --arg ts "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
@@ -3885,6 +3890,7 @@ EOF
       --argjson phase "$current_phase" \
       --arg milestone "$current_milestone" \
       --argjson todos "$todos" \
+      --arg baseline "$baseline" \
       '.last_command = $cmd |
        .last_command_at = $ts |
        .suggested_next = $suggested |
@@ -3892,7 +3898,8 @@ EOF
        .colony_goal = $goal |
        .current_phase = $phase |
        .current_milestone = $milestone |
-       .active_todos = $todos' > "$session_file"
+       .active_todos = $todos |
+       .baseline_commit = $baseline' > "$session_file"
 
     json_ok "{\"updated\":true,\"command\":\"$cmd_run\"}"
     ;;

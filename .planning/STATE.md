@@ -5,9 +5,9 @@
 
 ## Current Status
 
-- **State:** Phase 3 in progress
-- **Phase:** 03 (Visual Experience) — 1/2 plans complete
-- **Plan:** 03-01 COMPLETE, next: 03-02
+- **State:** Phase 3 COMPLETE
+- **Phase:** 03 (Visual Experience) — 2/2 plans complete
+- **Plan:** 03-02 COMPLETE, Phase 3 done
 - **Total Plans in Phase:** 02
 - **Mode:** YOLO (auto-approve)
 
@@ -17,13 +17,13 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 
 **Core value:** Prevent context rot across Claude Code sessions with self-managing colony that learns and guides users
 
-**Current focus:** Phase 3 (Visual Experience) — adding in-conversation colony display
+**Current focus:** Phase 4: Context Persistence (next phase)
 
 ## Progress
 
 - [x] Phase 1: Diagnostic — COMPLETE (120 tests, 66% pass, 9 critical failures identified)
 - [x] Phase 2: Core Infrastructure — COMPLETE (5/5 plans)
-- [ ] Phase 3: Visual Experience — 1/2 plans done
+- [x] Phase 3: Visual Experience — COMPLETE (2/2 plans)
 - [ ] Phase 4: Context Persistence
 - [ ] Phase 5: Pheromone System
 - [ ] Phase 6: Colony Lifecycle
@@ -44,7 +44,8 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 - **03-01:** swarm-display-text is additive alongside swarm-display-inline — both coexist, commands opt-in to text variant
 - **03-01:** Local helper renamed format_tools_text to avoid bash name collision with swarm-display-inline's format_tools function
 - **03-01:** jq total_active expression handles both flat and nested JSON structures for flexibility
+- **03-02:** Variable casing matched existing conventions per-command ($SWARM_ID in swarm.md, $colonize_id in colonize.md)
 
 ## Last Updated
 
-2026-02-17 — Phase 3 plan 01 COMPLETE (swarm-display-text added to aether-utils.sh)
+2026-02-17 — Phase 3 COMPLETE (swarm-display-text wired into all 6 spawning commands)
