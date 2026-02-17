@@ -195,18 +195,20 @@ Plans:
 
 ---
 
-### Phase 7: Advanced Workers
+### Phase 7: Advanced Workers COMPLETE
 **Goal:** Fix specialized agents
+
+**Status:** Complete (2026-02-18) — 3/3 plans, oracle verified, chaos/archaeology sync fixed, interpret OpenCode adapted
 
 **Requirements:**
 - ADV-01 through ADV-05
 
-**Plans:** 3 plans
+**Plans:** 3/3 plans complete
 
 Plans:
-- [ ] 07-01-PLAN.md — Verify and fix Oracle command and oracle.sh across all 3 locations
-- [ ] 07-02-PLAN.md — Fix Chaos and Archaeology sync drift, verify function references
-- [ ] 07-03-PLAN.md — Verify Dream and fix Interpret OpenCode adaptation
+- [x] 07-01-PLAN.md — Verify and fix Oracle command and oracle.sh across all 3 locations
+- [x] 07-02-PLAN.md — Fix Chaos and Archaeology sync drift, verify function references
+- [x] 07-03-PLAN.md — Verify Dream and fix Interpret OpenCode adaptation
 
 **Success Criteria:**
 1. `/ant:oracle` runs research

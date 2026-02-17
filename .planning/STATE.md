@@ -5,10 +5,10 @@
 
 ## Current Status
 
-- **State:** Phase 7 CONTEXT GATHERED
-- **Phase:** 07 (Advanced Workers) — context gathered, ready for planning
-- **Plan:** —
-- **Total Plans in Phase:** TBD
+- **State:** Phase 7 COMPLETE
+- **Phase:** 07 (Advanced Workers) — all 3 plans complete
+- **Plan:** 3/3
+- **Total Plans in Phase:** 3
 - **Mode:** YOLO (auto-approve)
 
 ## Project Reference
@@ -17,7 +17,7 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Core value:** Prevent context rot across Claude Code sessions with self-managing colony that learns and guides users
 
-**Current focus:** Phase 7: Advanced Workers — plan next
+**Current focus:** Phase 8: XML Integration — next
 
 ## Progress
 
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 - [x] Phase 4: Context Persistence — COMPLETE (3/3 plans)
 - [x] Phase 5: Pheromone System — COMPLETE (3/3 plans)
 - [x] Phase 6: Colony Lifecycle — COMPLETE (3/3 plans)
-- [ ] Phase 7: Advanced Workers
+- [x] Phase 7: Advanced Workers — COMPLETE (3/3 plans)
 - [ ] Phase 8: XML Integration
 - [ ] Phase 9: Polish & Verify
 
@@ -75,6 +75,12 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 - **06-03:** Timeline uses date-first entries with milestone emoji indicators (crown/lock/circle)
 - **06-03:** Detail view prioritizes CROWNED-ANTHILL.md display over manifest data; graceful fallback for older chambers
 
+## Decisions
+
+- **07-01:** Oracle requires no changes — all 3 copies in expected states; OpenCode missing session freshness is acceptable platform difference
+- **07-02:** Claude Code copies must match SoT exactly (swarm-display-inline); OpenCode correctly uses swarm-display-render (distinct function)
+- **07-03:** Interpret OpenCode adds Step -1 normalize-args only (no $ARGUMENTS variable exists to replace); dream defensive mkdir is instruction text (acceptable)
+
 ## Last Updated
 
-2026-02-18 — Phase 6 COMPLETE (seal ceremony-only rewrite, entomb seal-first with full archive, tunnels timeline with seal doc display)
+2026-02-18 — Phase 7 COMPLETE (oracle verified, chaos/archaeology sync drift fixed, interpret OpenCode adapted)

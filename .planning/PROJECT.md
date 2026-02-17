@@ -22,6 +22,13 @@ If everything else fell away, Aether's essential value is:
   - [x] /ant:entomb — Archive colony to chambers with seal-first enforcement
   - [x] /ant:tunnels — Timeline browser with seal document display
 
+- [x] **Advanced Workers** — Specialized agents (Phase 7)
+  - [x] /ant:oracle — Deep research (RALF loop) — verified, all 3 copies correct
+  - [x] /ant:chaos — Resilience testing — sync drift fixed
+  - [x] /ant:archaeology — Git history analysis — sync drift fixed
+  - [x] /ant:dream — Philosophical wanderer — verified, all 3 copies correct
+  - [x] /ant:interpret — Validate dreams — OpenCode adaptation added
+
 ### Active
 
 - [ ] **Command Infrastructure** — Core commands work reliably
@@ -57,13 +64,6 @@ If everything else fell away, Aether's essential value is:
   - [ ] FOCUS/REDIRECT/FEEDBACK work
   - [ ] Auto-injection of learned patterns
   - [ ] Instincts applied to new work
-
-- [ ] **Advanced Workers** — Specialized agents
-  - [ ] /ant:oracle — Deep research (RALF loop)
-  - [ ] /ant:chaos — Resilience testing
-  - [ ] /ant:archaeology — Git history analysis
-  - [ ] /ant:dream — Philosophical wanderer
-  - [ ] /ant:interpret — Validate dreams against reality
 
 ### Out of Scope
 
