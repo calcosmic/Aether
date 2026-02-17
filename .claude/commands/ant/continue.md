@@ -702,16 +702,17 @@ The strength is 0.6 (auto-emitted = lower than user-emitted 0.7). Source is "wor
 Check `errors.flagged_patterns[]` in COLONY_STATE.json for patterns that have appeared in 2+ phases:
 
 ```bash
-# Read flagged patterns with count >= 2
 flagged_patterns=$(jq -r '.errors.flagged_patterns[]? | select(.count >= 2) | .pattern' .aether/data/COLONY_STATE.json 2>/dev/null || true)
+```
 
-# For each recurring pattern, emit one REDIRECT
-# Iterate through flagged_patterns and call pheromone-write once per pattern:
-# bash .aether/aether-utils.sh pheromone-write REDIRECT "$pattern_text" \
-#   --strength 0.7 \
-#   --source "system" \
-#   --reason "Auto-emitted: error pattern recurred across 2+ phases" \
-#   --ttl "30d" 2>/dev/null || true
+For each pattern returned by the above query, emit a REDIRECT signal:
+
+```bash
+bash .aether/aether-utils.sh pheromone-write REDIRECT "$pattern_text" \
+  --strength 0.7 \
+  --source "system" \
+  --reason "Auto-emitted: error pattern recurred across 2+ phases" \
+  --ttl "30d" 2>/dev/null || true
 ```
 
 REDIRECT strength is 0.7 (higher than auto FEEDBACK 0.6 — anti-patterns produce stronger signals than successes). TTL is 30d (not phase_end) because recurring errors should persist across multiple phases.
