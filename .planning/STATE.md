@@ -5,9 +5,9 @@
 
 ## Current Status
 
-- **State:** Phase 5 COMPLETE
-- **Phase:** 05 (Pheromone System) — 3/3 plans complete
-- **Plan:** 05-03 COMPLETE
+- **State:** Executing Phase 6
+- **Phase:** 06 (Colony Lifecycle) — 1/3 plans complete
+- **Plan:** 06-01 COMPLETE
 - **Total Plans in Phase:** 03
 - **Mode:** YOLO (auto-approve)
 
@@ -17,7 +17,7 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 
 **Core value:** Prevent context rot across Claude Code sessions with self-managing colony that learns and guides users
 
-**Current focus:** Phase 6: Colony Lifecycle — Plan 06-01 (next phase)
+**Current focus:** Phase 6: Colony Lifecycle — Plan 06-02/06-03 (Wave 2)
 
 ## Progress
 
@@ -67,4 +67,4 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 
 ## Last Updated
 
-2026-02-17 — Phase 5 COMPLETE (Plan 05-03: pheromone-expire, eternal-init subcommands; continue.md auto-emits FEEDBACK/REDIRECT on phase advance, archives phase_end signals to midden)
+2026-02-18 — Plan 06-01 COMPLETE (seal.md rewritten as ceremony-only across all three locations; OpenCode version synced from old archive-based to new ceremony pattern)

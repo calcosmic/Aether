@@ -173,6 +173,13 @@ Plans:
 **Requirements:**
 - LIF-01 through LIF-03
 
+**Plans:** 3 plans
+
+Plans:
+- [x] 06-01-PLAN.md — Rewrite /ant:seal as ceremony-only (maturity gate, confirmation, ASCII art, CROWNED-ANTHILL.md)
+- [ ] 06-02-PLAN.md — Rewrite /ant:entomb with seal-first enforcement, full archive, date-first naming
+- [ ] 06-03-PLAN.md — Rewrite /ant:tunnels with timeline view, seal document display, comparison
+
 **Success Criteria:**
 1. `/ant:seal` creates milestone
 2. `/ant:entomb` archives to chambers
