@@ -6,22 +6,7 @@ symbol: refresh
 
 # /ant:resume — Resume Previous Session
 
-Resume work from where you left off after a context clear or new session start.
-
-## When to Use
-
-- After running `/clear` and wanting to continue previous work
-- When opening a new Claude Code session with existing colony state
-- To check what you were working on and pick up where you left off
-
-## What It Does
-
-1. Reads `.aether/data/session.json` to understand previous activity
-2. Reads `COLONY_STATE.json` to verify colony status
-3. Checks `TO-DOs.md` for relevant pending work
-4. Presents a summary and asks if you want to resume
-5. If yes: Restores context and suggests next step
-6. If no: Offers to start fresh with `/ant:init`
+Resume work after `/clear` or in a new session. Reads colony state, detects codebase drift, and gives you a clear "do this next" recommendation.
 
 ## Usage
 
@@ -29,137 +14,309 @@ Resume work from where you left off after a context clear or new session start.
 /ant:resume
 ```
 
-## Session Recovery Flow
+---
 
-### Step 1: Check for Existing Session
+## Implementation
+
+Execute the following steps in order when the user runs `/ant:resume`.
+
+---
+
+### Step 1: Read Session State
 
 ```bash
 bash .aether/aether-utils.sh session-read
 ```
 
-Check if session exists and whether it's stale (> 24 hours old).
+Parse the JSON result.
 
-### Step 2: If No Session Found
+- If `exists` is `false`: display the following and **stop**:
 
-Display:
 ```
-📋 SESSION RESUME
+RESUME SESSION
+==============
 
 No previous session found.
 
-Would you like to:
-1. Start a new colony with /ant:init
-2. Check status with /ant:status
-3. View existing colonies with /ant:history
+Start fresh: /ant:init "your goal"
+Or check: /ant:status
 ```
 
-Offer to run `/ant:init` to start fresh.
+- If `exists` is `true`: extract from the session data:
+  - `colony_goal`
+  - `current_phase`
+  - `last_command`
+  - `suggested_next`
+  - `baseline_commit`
+  - `session_id`
 
-### Step 3: If Session Exists
+---
 
-Read session data and colony state, then present summary:
+### Step 2: Read COLONY_STATE.json (Authoritative Source)
+
+Use the Read tool to read `.aether/data/COLONY_STATE.json`.
+
+COLONY_STATE.json is the authoritative source for goal and state (session.json may be stale). Extract:
+- `goal` (use this as authoritative, overriding session.json colony_goal)
+- `state` (READY, PLANNING, EXECUTING, PAUSED)
+- `current_phase`
+- `plan.phases` (array with id, name, status for each phase)
+- `plan.generated_at`
+- `memory.decisions` (flat list — do NOT distinguish user vs Claude origin)
+- `events` (last 5 for recent activity context)
+
+If the file is missing or the JSON cannot be parsed, **stop immediately** and display:
 
 ```
-📋 SESSION RESUME
+State file missing or corrupted.
 
-You were working on: {colony_goal}
-Current Phase: {current_phase} ({current_milestone})
-Last Command: {last_command}
-Last Active: {hours_ago} hours ago
-Suggested Next: {suggested_next}
+Options:
+1. Start fresh with /ant:init "goal"
+2. Try to recover (I'll look for backup files)
 
-Active TODOs:
-- {todo1}
-- {todo2}
-
-Would you like to resume this work?
+What would you like to do?
 ```
 
-Use `AskUserQuestion` to present options:
-- **Yes, resume** — Continue where you left off
-- **Show details** — See full colony state first
-- **No, start fresh** — Clear session and start new
+Do NOT proceed with stale or fabricated data.
 
-### Step 4: If User Chooses "Yes, resume"
+---
 
-1. Mark session as resumed:
-   ```bash
-   bash .aether/aether-utils.sh session-mark-resumed
-   ```
+### Step 3: Read Pheromone Signals
 
-2. Present context summary:
-   ```
-   🔄 Resuming Session
+Use the Read tool to read `.aether/data/constraints.json`.
 
-   Colony: {goal}
-   Phase: {phase} - {milestone}
-   Context restored.
+Extract the following top-level keys:
+- `focus` array — active focus signals (if key missing, treat as empty array)
+- `constraints` array — active redirect/constraint signals (if key missing, treat as empty array)
 
-   Next suggested step: {suggested_next}
-   ```
+If the file is missing: skip silently (no pheromones active).
 
-3. Run the suggested command or present further options based on state.
+Pheromones persist until explicitly cleared — no decay.
 
-### Step 5: If User Chooses "Show details"
+---
 
-Display:
+### Step 4: Read CONTEXT.md
+
+Use the Read tool to read `.aether/CONTEXT.md` if it exists.
+
+If missing: fall back to COLONY_STATE.json for narrative context. Note: "Context document not found — reconstructing from state."
+
+---
+
+### Step 5: Drift Detection
+
+Extract `baseline_commit` from the session.json data read in Step 1.
+
+```bash
+current_commit=$(git rev-parse HEAD 2>/dev/null || echo "")
 ```
-📊 Colony Details
+
+If `baseline_commit` is non-empty and differs from `current_commit`:
+
+```bash
+commit_count=$(git rev-list --count "$baseline_commit..HEAD" 2>/dev/null || echo "0")
+changed_count=$(git diff --stat "$baseline_commit" HEAD 2>/dev/null | tail -1 | grep -oE '[0-9]+ file' | grep -oE '[0-9]+' || echo "0")
+```
+
+Store `drift_detected=true`, `commit_count`, `changed_count` for dashboard rendering.
+
+If `baseline_commit` is empty or matches `current_commit`: set `drift_detected=false`.
+
+Restore identically regardless of time elapsed — no warnings about session age.
+
+---
+
+### Step 6: Compute Workflow Position and Next-Step Guidance
+
+Compute `suggested_next` dynamically from COLONY_STATE.json data. Do not use the static value from session.json.
+
+Use this decision tree:
+
+```
+Case 1 — No plan created yet:
+  Check: plan.phases is empty AND plan.generated_at is null
+  recommended = "/ant:plan"
+  reason = "No plan created yet"
+  alternatives = ["/ant:colonize — analyze codebase first"]
+
+Case 2 — Plan ready, first phase not started:
+  Check: plan.phases is not empty AND state == "READY" AND current_phase == 0
+  recommended = "/ant:build 1"
+  reason = "Plan ready, first phase not started"
+  alternatives = ["/ant:plan — review or regenerate plan"]
+
+Case 3 — Build in progress:
+  Check: state == "EXECUTING"
+  recommended = "/ant:continue"
+  reason = "Build in progress"
+  alternatives = ["/ant:build {current_phase} — rebuild current phase", "/ant:flags — check for blockers"]
+
+Case 4 — Phase complete, next phase available:
+  Check: state == "READY" AND current_phase > 0 AND current_phase < plan.phases.length
+  next = current_phase + 1
+  recommended = "/ant:build {next}"
+  reason = "Phase {current_phase} complete, ready for next"
+  alternatives = ["/ant:plan — regenerate plan", "/ant:phase {next} — preview next phase"]
+
+Case 5 — All phases complete:
+  Check: state == "READY" AND current_phase > 0 AND current_phase >= plan.phases.length
+  recommended = "/ant:seal"
+  reason = "All phases complete"
+  alternatives = ["/ant:status — view final state"]
+
+Case 6 — Colony paused:
+  Check: state == "PAUSED"
+  recommended = "/ant:resume-colony"
+  reason = "Colony is paused"
+  alternatives = ["/ant:status — check state first"]
+
+Default:
+  recommended = "/ant:status"
+  reason = "Check colony status"
+  alternatives = []
+```
+
+---
+
+### Step 7: Workflow-Step Blocking (Early-Return Guards)
+
+Run these guards BEFORE rendering the dashboard. If a blocking condition is detected, output the block message and STOP. Do not render the dashboard. Do not offer alternative commands.
+
+**BLOCK CONDITION 1: No plan exists**
+
+Check: plan.phases is empty AND plan.generated_at is null
+
+Output and STOP:
+
+```
+BLOCKED: No plan exists yet.
+Required: Run /ant:plan to create a build plan.
+Goal: {goal}
+```
+
+Stop here — do not continue to Step 8 or render the dashboard.
+
+---
+
+**BLOCK CONDITION 2: Plan attempted but failed**
+
+Check: plan.phases is empty AND plan.generated_at is not null
+
+Output and STOP:
+
+```
+BLOCKED: Plan was attempted but has no phases.
+Required: Run /ant:plan to regenerate the plan.
+Goal: {goal}
+```
+
+Stop here — do not continue to Step 8 or render the dashboard.
+
+---
+
+**BLOCK CONDITION 3: Build interrupted**
+
+Check: state == "EXECUTING" AND the last 3 events show no recent build activity
+
+Output and STOP:
+
+```
+BLOCKED: Build may have been interrupted.
+Required: Run /ant:continue to check and advance.
+Goal: {goal}
+```
+
+Stop here — do not continue to Step 8 or render the dashboard.
+
+---
+
+### Step 8: Render Dashboard
+
+Lead with the next-step recommendation. Context follows underneath ("straight to action" ordering).
+
+```
+RESUME SESSION
+==============
+
+Next: {recommended}
+      {reason}
+{if alternatives exist:}
+Also: {alternatives, comma-separated}
+{end}
+
+{if drift_detected:}
+Note: Codebase changed since last session ({commit_count} commit(s), {changed_count} file(s) modified)
+{end}
 
 Goal: {goal}
 State: {state}
-Phase: {phase}
-Milestone: {milestone}
+Phase: {current_phase}/{total_phases}
 
-Recent Activity (from activity.log):
-{last 5 entries}
-
-Pending TODOs:
-{todos}
-
-[Present Yes/No choice to resume]
+Phase Progress:
+{for each phase in plan.phases:}
+  [{status_icon}] Phase {id}: {name}
+{end}
 ```
 
-### Step 6: If User Chooses "No, start fresh"
+Status icons:
+- completed: `v` (checkmark)
+- in_progress: `~` (tilde)
+- pending: ` ` (space)
 
-1. Clear the session:
-   ```bash
-   bash .aether/aether-utils.sh session-clear
-   ```
+```
+{if memory.decisions is not empty:}
+Recent Decisions:
+{for each of the last 5 decisions:}
+  - {decision text}
+{end}
+{end}
 
-2. Offer:
-   ```
-   Session cleared.
+{if focus array or constraints array is not empty:}
+Active Signals:
+{for each focus signal:}
+  FOCUS: {focus text}
+{end}
+{for each constraint signal:}
+  REDIRECT: {constraint text}
+{end}
+{end}
 
-   Start fresh with:
-   - /ant:init "your new goal"
-   - /ant:status (to check other colonies)
-   ```
+Last Command: {last_command}
+Session: {session_id}
+```
 
-## Integration with Colony Commands
+---
 
-All `/ant:*` commands should update the session after execution:
+### Step 9: Mark Session Resumed
 
 ```bash
-# Example: After /ant:build completes
-bash .aether/aether-utils.sh session-update "/ant:build $phase" "/ant:continue" "Completed phase $phase"
+bash .aether/aether-utils.sh session-mark-resumed
 ```
 
-This ensures session.json is always current for resume functionality.
+---
 
-## Session File Location
+## Error Handling Reference
 
-`.aether/data/session.json`
+| Condition | Response |
+|-----------|----------|
+| session.json missing (exists=false) | "No previous session found" — offer /ant:init and /ant:status |
+| COLONY_STATE.json missing or corrupted | Pause, ask user: start fresh or recover |
+| constraints.json missing | Skip silently (no pheromones) |
+| CONTEXT.md missing | Fall back to COLONY_STATE.json narrative |
+| No plan phases, no generated_at | BLOCK — redirect to /ant:plan |
+| Plan attempted but no phases | BLOCK — redirect to /ant:plan |
+| State EXECUTING, events show no activity | BLOCK — redirect to /ant:continue |
+| baseline_commit matches current HEAD | No drift warning shown |
+| baseline_commit differs from current HEAD | Show informational drift note |
 
-This file persists across context clears and Claude Code sessions.
+---
 
-## Stale Session Detection
+## Key Constraints
 
-Sessions older than 24 hours are marked "stale":
-- User is warned: "This session is X days old"
-- Given option to resume anyway or start fresh
-- Helps prevent accidentally resuming ancient work
-
-## Implementation
-
-Execute this flow when user runs `/ant:resume`.
+- Use Read tool for COLONY_STATE.json and constraints.json (not bash cat/jq)
+- Use Bash tool only for aether-utils.sh commands and git commands
+- Handle ALL missing/corrupted file cases gracefully
+- Time-agnostic: restore identically regardless of how long ago the session was
+- Decisions shown as flat list — no user vs Claude distinction
+- Blocking guards run BEFORE dashboard rendering (early-return pattern)
+- Drift detection is informational only — not alarming, not a blocker
