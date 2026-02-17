@@ -714,7 +714,7 @@ EOF
   spawn-complete)
     # Usage: spawn-complete <ant_name> <status> [summary]
     ant_name="${1:-}"
-    ant_status="${2:-completed}"
+    status="${2:-completed}"
     summary="${3:-}"
     [[ -z "$ant_name" ]] && json_err "$E_VALIDATION_FAILED" "Usage: spawn-complete <ant_name> <status> [summary]"
     mkdir -p "$DATA_DIR"
@@ -722,51 +722,13 @@ EOF
     ts_full=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
     emoji=$(get_caste_emoji "$ant_name")
     status_icon="✅"
-    [[ "$ant_status" == "failed" ]] && status_icon="❌"
-    [[ "$ant_status" == "blocked" ]] && status_icon="🚫"
-    echo "[$ts] $status_icon $emoji $ant_name: $ant_status${summary:+ - $summary}" >> "$DATA_DIR/activity.log"
+    [[ "$status" == "failed" ]] && status_icon="❌"
+    [[ "$status" == "blocked" ]] && status_icon="🚫"
+    echo "[$ts] $status_icon $emoji $ant_name: $status${summary:+ - $summary}" >> "$DATA_DIR/activity.log"
     # Update spawn tree
-    echo "$ts_full|$ant_name|$ant_status|$summary" >> "$DATA_DIR/spawn-tree.txt"
-
-    # Auto-capture learning if summary contains learning indicators
-    if [[ -n "$summary" ]]; then
-      learning=""
-
-      # Extract learning using grep (more reliable than bash regex)
-      if echo "$summary" | grep -qiE 'learned:'; then
-        learning=$(echo "$summary" | sed -n 's/.*[Ll]earned:[[:space:]]*//p' | head -1)
-      elif echo "$summary" | grep -qiE 'insight:'; then
-        learning=$(echo "$summary" | sed -n 's/.*[Ii]nsight:[[:space:]]*//p' | head -1)
-      elif echo "$summary" | grep -qiE 'pattern:'; then
-        learning=$(echo "$summary" | sed -n 's/.*[Pp]attern:[[:space:]]*//p' | head -1)
-      fi
-
-      # Capture failed/blocked as learnings about what didn't work
-      if [[ "$ant_status" == "failed" || "$ant_status" == "blocked" ]]; then
-        learning="${learning:+$learning; }$ant_status: $summary"
-      fi
-
-      # Store learning in COLONY_STATE.json memory
-      if [[ -n "$learning" && -f "$DATA_DIR/COLONY_STATE.json" ]]; then
-        learning_entry=$(jq -n \
-          --arg ts "$ts_full" \
-          --arg ant "$ant_name" \
-          --arg learning "$learning" \
-          --arg ctx "$ant_status" \
-          '{timestamp: $ts, ant: $ant, learning: $learning, context: $ctx}')
-
-        updated=$(jq --argjson entry "$learning_entry" \
-          'if .memory.phase_learnings then .memory.phase_learnings += [$entry] else .memory.phase_learnings = [$entry] end' \
-          "$DATA_DIR/COLONY_STATE.json")
-
-        # Keep only last 20 learnings to prevent bloat
-        updated=$(jq '.memory.phase_learnings = (.memory.phase_learnings | .[-20:])' <<< "$updated")
-        echo "$updated" > "$DATA_DIR/COLONY_STATE.json"
-      fi
-    fi
-
+    echo "$ts_full|$ant_name|$status|$summary" >> "$DATA_DIR/spawn-tree.txt"
     # Return emoji-formatted result for display
-    json_ok "\"$status_icon $emoji $ant_name: ${summary:-$ant_status}\""
+    json_ok "\"$status_icon $emoji $ant_name: ${summary:-$status}\""
     ;;
   spawn-can-spawn)
     # Check if spawning is allowed at given depth
@@ -2735,109 +2697,6 @@ ANTLOGO
     json_ok "{\"displayed\":true,\"ants\":$total_active}"
     ;;
 
-  swarm-display-text)
-    # Plain-text swarm display for Claude conversation (no ANSI codes)
-    # Usage: swarm-display-text [swarm_id]
-    swarm_id="${1:-default-swarm}"
-    display_file="$DATA_DIR/swarm-display.json"
-
-    # Check for display file
-    if [[ ! -f "$display_file" ]]; then
-      echo "🐜 Colony idle"
-      json_ok '{"displayed":false,"reason":"no_data"}'
-      exit 0
-    fi
-
-    # Check for jq
-    if ! command -v jq >/dev/null 2>&1; then
-      echo "🐜 Swarm active (details unavailable)"
-      json_ok '{"displayed":true,"warning":"jq_missing"}'
-      exit 0
-    fi
-
-    # Read swarm data
-    total_active=$(jq -r '.summary.total_active // 0' "$display_file" 2>/dev/null || echo "0")
-
-    if [[ "$total_active" -eq 0 ]]; then
-      echo "🐜 Colony idle"
-      json_ok '{"displayed":true,"ants":0}'
-      exit 0
-    fi
-
-    # Compact header
-    echo ""
-    echo "🐜 COLONY ACTIVITY"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-    # Caste emoji lookup
-    get_emoji() {
-      case "$1" in
-        builder)      echo "🔨🐜" ;;
-        watcher)      echo "👁️🐜" ;;
-        scout)        echo "🔍🐜" ;;
-        chaos)        echo "🎲🐜" ;;
-        prime)        echo "👑🐜" ;;
-        oracle)       echo "🔮🐜" ;;
-        route_setter) echo "🧭🐜" ;;
-        archaeologist) echo "🏺🐜" ;;
-        surveyor)     echo "📊🐜" ;;
-        *)            echo "🐜" ;;
-      esac
-    }
-
-    # Format tools
-    format_tools() {
-      local r="${1:-0}" g="${2:-0}" e="${3:-0}" b="${4:-0}"
-      local result=""
-      [[ "$r" -gt 0 ]] && result="${result}📖${r} "
-      [[ "$g" -gt 0 ]] && result="${result}🔍${g} "
-      [[ "$e" -gt 0 ]] && result="${result}✏️${e} "
-      [[ "$b" -gt 0 ]] && result="${result}⚡${b}"
-      echo "$result"
-    }
-
-    # Progress bar
-    render_bar() {
-      local pct="${1:-0}" w="${2:-10}"
-      [[ "$pct" -lt 0 ]] && pct=0
-      [[ "$pct" -gt 100 ]] && pct=100
-      local filled=$((pct * w / 100))
-      local empty=$((w - filled))
-      local bar=""
-      for ((i=0; i<filled; i++)); do bar+="█"; done
-      for ((i=0; i<empty; i++)); do bar+="░"; done
-      echo "[$bar] ${pct}%"
-    }
-
-    # Render each ant (max 5)
-    jq -r '.active_ants[0:5][] | "\(.name)|\(.caste)|\(.task // "")|\(.tools.read // 0)|\(.tools.grep // 0)|\(.tools.edit // 0)|\(.tools.bash // 0)|\(.progress // 0)"' "$display_file" 2>/dev/null | while IFS='|' read -r name caste task r g e b progress; do
-      emoji=$(get_emoji "$caste")
-      tools=$(format_tools "$r" "$g" "$e" "$b")
-      bar=$(render_bar "${progress:-0}" 10)
-
-      # Truncate task
-      display_task="$task"
-      [[ ${#display_task} -gt 25 ]] && display_task="${display_task:0:22}..."
-
-      echo "${emoji} ${name} ${bar} ${display_task}"
-      [[ -n "$tools" ]] && echo "   ${tools}"
-      echo ""
-    done
-
-    # Check for overflow
-    if [[ "$total_active" -gt 5 ]]; then
-      echo "   +$((total_active - 5)) more ants..."
-      echo ""
-    fi
-
-    # Footer
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "${total_active} ants active"
-    echo ""
-
-    json_ok "{\"displayed\":true,\"ants\":$total_active}"
-    ;;
-
   swarm-timing-start)
     # Record start time for an ant
     # Usage: swarm-timing-start <ant_name>
@@ -3201,36 +3060,6 @@ ANTLOGO
           has_stack_wisdom: ($stack_wisdom | length) > 0 and $stack_wisdom != "*No stack wisdom recorded yet.*\n",
           has_decrees: ($decrees | length) > 0 and $decrees != "*No decrees recorded yet.*\n"
         }
-      }')
-
-    json_ok "$result"
-    ;;
-
-  pheromone-read)
-    # Read active pheromones (FOCUS/REDIRECT) from constraints.json
-    # Used to inject active signals into worker prompts
-    constraints_file="$AETHER_ROOT/.aether/data/constraints.json"
-
-    # Initialize defaults (no local - script-level)
-    priorities='[]'
-    avoid='[]'
-
-    # Check if constraints file exists
-    if [[ -f "$constraints_file" ]]; then
-      # Read focus array as priorities
-      priorities=$(jq -c '.focus // []' "$constraints_file" 2>/dev/null || echo '[]')
-
-      # Read constraints array, extract content and source
-      avoid=$(jq -c '[.constraints[]? | {content: .content, source: .source}] // []' "$constraints_file" 2>/dev/null || echo '[]')
-    fi
-
-    # Build JSON output
-    result=$(jq -n \
-      --argjson priorities "$priorities" \
-      --argjson avoid "$avoid" \
-      '{
-        priorities: $priorities,
-        avoid: $avoid
       }')
 
     json_ok "$result"
@@ -3961,18 +3790,18 @@ EOF
     ;;
 
   session-is-stale)
-    # Check if session is stale (returns true/false)
+    # Check if session is stale (returns JSON with is_stale boolean)
     session_file="$DATA_DIR/session.json"
 
     if [[ ! -f "$session_file" ]]; then
-      echo "true"
+      json_ok '{"is_stale":true}'
       exit 0
     fi
 
     last_cmd_ts=$(jq -r '.last_command_at // .started_at // empty' "$session_file" 2>/dev/null)
 
     if [[ -z "$last_cmd_ts" ]]; then
-      echo "true"
+      json_ok '{"is_stale":true}'
       exit 0
     fi
 
@@ -3980,7 +3809,11 @@ EOF
     now_epoch=$(date +%s)
     age_hours=$(( (now_epoch - last_epoch) / 3600 ))
 
-    [[ $age_hours -gt 24 ]] && echo "true" || echo "false"
+    if [[ $age_hours -gt 24 ]]; then
+      json_ok '{"is_stale":true}'
+    else
+      json_ok '{"is_stale":false}'
+    fi
     ;;
 
   session-clear)
