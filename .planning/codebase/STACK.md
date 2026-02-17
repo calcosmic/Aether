@@ -5,91 +5,91 @@
 ## Languages
 
 **Primary:**
-- JavaScript (Node.js) - CLI tool implementation, package management
-- Bash - Shell scripts for worker orchestration, colony management
+- JavaScript (Node.js) - CLI implementation, npm package
+- Bash - Core utilities, colony orchestration
 
 **Secondary:**
-- XML - Data exchange format (pheromones, registry, worker definitions)
-- YAML - Configuration files (model-profiles.yaml, COLONY_STATE.json)
+- YAML - Configuration files (`model-profiles.yaml`)
+- JSON - Data storage (pheromones, colony state)
 
 ## Runtime
 
 **Environment:**
-- Node.js >= 16.0.0 (from `package.json` engines field)
-- Bash 4.0+ (modern bash features used)
+- Node.js >=16.0.0
+- Bash (POSIX-compatible, macOS/Linux)
 
 **Package Manager:**
-- npm (Node.js)
-- Lockfile: `package-lock.json` (present)
+- npm
+- Lockfile: `package-lock.json` (present in node_modules)
 
 ## Frameworks
 
 **Core:**
 - Commander.js ^12.1.0 - CLI argument parsing
-- js-yaml ^4.1.0 - YAML parsing
-- picocolors ^1.1.1 - Terminal color output
+- js-yaml ^4.1.0 - YAML configuration parsing
+- picocolors ^1.1.1 - Terminal colors
 
 **Testing:**
-- AVA ^6.0.0 - Unit test runner
-- Sinon ^19.0.5 - Mocking/stubbing
-- Proxyquire ^2.1.3 - Module mocking
+- AVA ^6.0.0 - JavaScript unit tests
+- Sinon ^19.0.5 - Test mocking
+- proxyquire ^2.1.3 - Module mocking for tests
+- shellcheck - Bash linting
 
 **Build/Dev:**
 - npm scripts - Build and test automation
-- shellcheck - Shell script linting
+- Git hooks - Pre-commit validation
 
 ## Key Dependencies
 
 **Critical:**
-- `commander` ^12.1.0 - CLI framework for `bin/cli.js`
-- `js-yaml` ^4.1.0 - Parse model-profiles.yaml and COLONY_STATE.json
-- `picocolors` ^1.1.1 - Colored terminal output in logger
+- `commander` - CLI framework for `aether` command
+- `js-yaml` - Parse `model-profiles.yaml` for caste-model routing
+- `picocolors` - Colored terminal output for logs
 
 **Development:**
-- `ava` ^6.0.0 - Test runner for `tests/unit/`
-- `sinon` ^19.0.5 - Test spies and stubs
-- `proxyquire` ^2.1.3 - Dependency injection for testing
+- `ava` - Test runner for `npm test`
+- `sinon` - Mocking framework
+- `proxyquire` - Dependency injection for testing
 
-## Shell Script Dependencies
+## Required External Tools
 
-**Required:**
-- `git` - Version control integration (checked at runtime in `.aether/aether-utils.sh:52`)
-- `jq` - JSON processing (checked at runtime in `.aether/aether-utils.sh:55`)
+**Must be installed:**
+- `git` - Version control integration
+- `jq` - JSON processing (required for pheromone/state handling)
+- `claude` or `opencode` - AI agent CLI (spawned as workers)
 
-**Optional (gracefully disabled if missing):**
-- `xmllint` / `xmlstarlet` - XML validation (`.aether/utils/xml-utils.sh:49-53`)
-- `xsltproc` - XSLT processing (`.aether/utils/xml-utils.sh:57`)
-- `xml2json` - XML to JSON conversion (`.aether/utils/xml-utils.sh:61`)
-- `md5sum` / `md5` - Checksums (`.aether/utils/xml-utils.sh:1440-1477`)
-- `fswatch` / `inotifywait` - File system monitoring (`.aether/utils/watch-spawn-tree.sh:239-243`)
-- `sync` - File synchronization (`.aether/utils/atomic-write)
+**Optional (gracefully degraded):**
+- `xmlstarlet` - XML pheromone processing
+- `xmllint` - XML validation
+- `xsltproc` - XSL transformations
+- `fswatch` or `inotifywait` - File watching (swarm display)
+- `curl` - HTTP health checks
 
 ## Configuration
 
 **Environment:**
-- Environment variables: `.sh:87`HOME`, `USERPROFILE`, `NO_COLOR`, `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `ANTHROPIC_BASE_URL`, `WORKER_NAME`, `CASTE`
-- Config files:
-  - `.aether/model-profiles.yaml` - Model routing configuration
-  - `.aether/data/COLONY_STATE.json` - Colony state
-  - `.aether/data/constraints.json` - Constraint definitions
+- No `.env` file required
+- Configuration via YAML files:
+  - `.aether/model-profiles.yaml` - Model routing
+  - `.aether/data/pheromones.json` - Colony signals
+  - `.aether/data/COLONY_STATE.json` - Session state
 
 **Build:**
-- `package.json` - npm configuration with preinstall/postinstall hooks
-- `bin/sync-to-runtime.sh` - Syncs `.aether/` to `runtime/` on npm install
+- `bin/sync-to-runtime.sh` - Syncs `.aether/` to `runtime/`
+- `bin/cli.js` - Main CLI entry point
 
 ## Platform Requirements
 
 **Development:**
-- Node.js >= 16.0.0
+- Node.js >=16.0.0
 - npm
 - git
-- jq (for JSON processing)
-- Bash-compatible shell
+- jq
+- Claude Code or OpenCode CLI in PATH
 
 **Production:**
-- Node.js >= 16.0.0 (runtime only)
-- npm for installation (or direct binary distribution)
-- Target machines: macOS, Linux (bash required)
+- npm package distribution via `npm install -g aether-colony`
+- Runtime requires same tools as development
 
 ---
 

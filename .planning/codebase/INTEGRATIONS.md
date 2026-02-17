@@ -4,108 +4,109 @@
 
 ## APIs & External Services
 
-**AI Provider (Anthropic):**
-- Anthropic API - Primary AI model provider
-  - SDK/Client: Native fetch (Node 18+) via `bin/lib/model-verify.js` and `bin/lib/proxy-health.js`
-  - Auth: `ANTHROPIC_API_KEY` environment variable
-  - Configuration: `ANTHROPIC_MODEL` (default model), `ANTHROPIC_BASE_URL` (proxy endpoint, defaults to Anthropic)
-  - Used by: Worker spawning, oracle research, colony intelligence
+**LLM Providers (via LiteLLM proxy):**
+- **LiteLLM Proxy** - Model routing gateway
+  - Endpoint: `http://localhost:4000`
+  - Auth: Token-based (`ANTHROPIC_AUTH_TOKEN` or `LITELLM_AUTH_TOKEN`)
+  - Health check: `http://localhost:4000/health`
+  - Used by: `.aether/utils/spawn-with-model.sh`, `aether-utils.sh` model verification
 
-**Proxy Health Check:**
-- Local proxy endpoint - Optional middleware for model routing
-  - Endpoint: `http://localhost:4000/health` (checked in `bin/lib/proxy-health.js:36`)
-  - Endpoint: `http://localhost:4000/models` (checked in `bin/lib/proxy-health.js:152`)
-  - Used for: Verifying model routing configuration
+**Model Providers:**
+- **Z.AI** (glm-5) - Planning, coordination, long-horizon tasks
+- **Minimax** (minimax-2.5) - Architectural planning, research
+- **Kimi** (kimi-k2.5) - Coding, validation, swarm work
+
+**AI Agent Clients:**
+- **Claude Code** (`claude` CLI) - Primary worker agent
+  - Spawned as colony workers
+  - Configured via `ANTHROPIC_MODEL`, `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`
+  - Location: `bin/cli.js`, `.aether/aether-utils.sh` spawn functions
+
+- **OpenCode** (`opencode` CLI) - Alternative worker agent
+  - Fallback when Claude Code unavailable
+  - Used by: `.aether/oracle/oracle.sh`
 
 ## Data Storage
 
-**Local State:**
-- Filesystem-based JSON storage
-  - Location: `.aether/data/COLONY_STATE.json`
-  - Location: `.aether/data/constraints.json`
-  - Location: `.aether/data/checkpoint-allowlist.json`
-  - Client: Native fs module (Node.js)
+**File-based (local):**
+- Colony state: `.aether/data/COLONY_STATE.json`
+- Pheromones: `.aether/data/pheromones.json`
+- Session: `.aether/data/session.json`
+- Spawn tree: `.aether/data/spawn-tree.txt`
 
-**Session/Checkpoint Storage:**
-- Filesystem-based
-  - Location: `.aether/checkpoints/` - Session snapshots
-  - Location: `.aether/locks/` - File-based locking
-  - Location: `.aether/chambers/` - Archived colonies
-
-**No external database** - All data stored locally in the repo
-
-## Version Control & Distribution
-
-**Git:**
-- Repository hosting: GitHub
-  - URL: `git+https://github.com/calcosmic/Aether.git`
-  - Used for: Version control, branching strategy
-  - Integration: Full git integration in `.aether/aether-utils.sh`
-
-**npm Registry:**
-- Package distribution
-  - Package name: `aether-colony`
-  - Published from: Aether repo `runtime/` directory
-  - Distribution flow: `.aether/` (source) -> `runtime/` (staging) -> `~/.aether/` (hub) -> target repos
+**No external database required.**
 
 ## Authentication & Identity
 
 **Auth Provider:**
-- Not applicable - This is a CLI tool, not a service requiring auth
+- LiteLLM proxy token authentication
+  - Environment: `ANTHROPIC_AUTH_TOKEN` or `LITELLM_AUTH_TOKEN`
+  - Default: `sk-litellm-local` (local dev)
 
-**Environment-based Configuration:**
-- `HOME` / `USERPROFILE` - User home directory for path resolution
-- `NO_COLOR` - Disable colored output
-
-## CI/CD & Deployment
-
-**Hosting:**
-- npm Registry - Package distribution
-- GitHub - Source code hosting
-
-**CI Pipeline:**
-- GitHub Actions - CI/CD automation
-  - Config: `.github/workflows/ci.yml`
-  - Runs: Tests, linting, shellcheck
+**No user authentication system.**
 
 ## Monitoring & Observability
 
 **Error Tracking:**
-- Custom structured error system in `bin/lib/errors.js`
-  - Error codes: E_* constants
-  - JSON-formatted error output
+- None (local-only operation)
 
 **Logs:**
 - Activity log: `.aether/data/activity.log`
-- Implementation: `bin/lib/logger.js`
+- Spawn logging: `.aether/data/spawn-tree.txt`
+- Telemetry: `.aether/data/telemetry.json` (if enabled)
+
+## CI/CD & Deployment
+
+**Hosting:**
+- npm registry - Package distribution
+- GitHub - Source repository
+
+**CI Pipeline:**
+- Not detected (no `.github/workflows/`)
 
 ## Environment Configuration
 
 **Required env vars:**
-- `HOME` or `USERPROFILE` - User home directory (required for CLI initialization)
-- `ANTHROPIC_API_KEY` - AI API key (required for worker spawning)
-- `ANTHROPIC_MODEL` - Model name (optional, for model routing)
-- `ANTHROPIC_BASE_URL` - Custom API endpoint (optional, for proxy support)
+- None strictly required (defaults provided)
 
 **Optional env vars:**
-- `NO_COLOR` - Disable colored output
-- `WORKER_NAME` - Override worker name (testing)
-- `CASTE` - Override caste assignment (testing)
+- `ANTHROPIC_BASE_URL` - LLM proxy endpoint (default: `http://localhost:4000`)
+- `ANTHROPIC_AUTH_TOKEN` - Proxy auth token
+- `ANTHROPIC_MODEL` - Default model for workers
+- `LITELLM_AUTH_TOKEN` - Alternative proxy auth token
+
+**Secrets location:**
+- No secrets stored in codebase
+- LiteLLM proxy token is local/dev only
 
 ## Webhooks & Callbacks
 
 **Incoming:**
-- Not applicable - No HTTP server, purely CLI-based
+- None
 
 **Outgoing:**
-- Not applicable - No external webhook calls made
+- None
 
-## Cross-Repo Integration
+## Key Integration Patterns
 
-**Hub Distribution Model:**
-- Aether acts as a "hub" distributing to target repos
-- Flow: Aether repo -> `npm install -g .` -> `~/.aether/` hub -> target repo `aether update`
-- Files synced: `.aether/workers.md`, `.aether/aether-utils.sh`, `.aether/utils/`, `.aether/docs/`
+**Model Routing Flow:**
+```
+1. Queen determines caste for task
+2. Look up model in .aether/model-profiles.yaml
+3. Export ANTHROPIC_MODEL, ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN
+4. Spawn Claude Code with environment variables
+5. LiteLLM proxy routes to correct provider
+```
+
+**Spawn Integration:**
+```
+aether-utils.sh spawn → spawn-with-model.sh → Claude Code CLI
+```
+
+**XML Pheromone Exchange:**
+```
+pheromone-xml.sh → xmlstarlet/xmllint → JSON state
+```
 
 ---
 

@@ -4,139 +4,147 @@
 
 ## Pattern Overview
 
-**Overall:** Multi-agent colony system with distributed worker spawning and pheromone-based coordination
+**Overall:** Multi-agent orchestration system using ant colony metaphor with centralized state management and distributed worker execution.
 
 **Key Characteristics:**
-- Self-organizing emergence through worker spawning workers (no central orchestration)
-- Depth-based behavior control (max depth 3, with spawn limits at each level)
-- Dual-layer system: JavaScript CLI layer + Bash utility layer
-- Hub-based distribution model (npm package + hub directory)
-- Pheromone-based constraint system (FOCUS, REDIRECT, FEEDBACK signals)
+- Queen-Worker hierarchy: Central coordinator (CLI) spawns specialized worker agents
+- Pheromone-based communication: Workers leave signals (FOCUS, REDIRECT, FEEDBACK) that influence colony behavior
+- State persistence: Colony state survives across sessions via JSON files in `.aether/data/`
+- Model routing: Workers assigned to "castes" with different AI model affinities (architectural aspiration, currently limited by platform)
+- Session freshness detection: Timestamp-based verification prevents stale session files from breaking workflows
 
 ## Layers
 
-**CLI Layer (JavaScript):**
-- Location: `bin/cli.js`
-- Purpose: Command dispatch, package installation, hub synchronization, state management
-- Contains: Commander-based CLI, error handling, update transactions, model profiles
-- Depends on: Node.js standard library, commander, js-yaml, picocolors
-- Used by: Users invoking `aether` commands directly
+**CLI Layer:**
+- Purpose: Entry point for all user commands
+- Location: `/Users/callumcowie/repos/Aether/bin/cli.js`
+- Contains: Command routing, error handling, hub sync
+- Depends on: Node.js, commander, js-yaml, picocolors
+- Used by: End users invoking `aether <command>`
 
-**Utility Layer (Bash):**
-- Location: `.aether/aether-utils.sh` (source), `runtime/aether-utils.sh` (distributed)
-- Purpose: Colony operations, context management, activity logging, spawn management
-- Contains: 50+ subcommands for colony lifecycle, JSON output helpers, lock management
-- Depends on: bash, jq (optional), git (optional)
-- Used by: Slash commands, worker scripts, colony operations
+**Utility Layer:**
+- Purpose: Core shell functions for colony operations
+- Location: `/Users/callumcowie/repos/Aether/.aether/aether-utils.sh`
+- Contains: ~3,700 lines of bash functions for state management, spawn tracking, verification
+- Depends on: bash, jq (optional), git
+- Used by: CLI commands, slash commands, spawned workers
 
-**Command Layer (Markdown prompts):**
-- Location: `.claude/commands/ant/*.md`, `.opencode/commands/ant/*.md`
-- Purpose: User-facing slash commands for colony interaction
-- Contains: 31 slash commands (init, build, plan, continue, watch, etc.)
-- Used by: Claude Code and OpenCode users directly
+**Command Layer:**
+- Purpose: User-facing commands (slash commands)
+- Location: `/Users/callumcowie/repos/Aether/.claude/commands/ant/` and `/Users/callumcowie/repos/Aether/.opencode/commands/ant/`
+- Contains: Markdown command definitions invoked by Claude Code/OpenCode
+- Depends on: aether-utils.sh, CLI
+- Used by: Claude Code and OpenCode when user invokes `/ant:<command>`
 
-**Agent Layer:**
-- Location: `.opencode/agents/*.md`
-- Purpose: OpenCode-specific agent definitions
-- Used by: OpenCode platform
+**State Layer:**
+- Purpose: Persistent colony data
+- Location: `/Users/callumcowie/repos/Aether/.aether/data/`
+- Contains: COLONY_STATE.json, pheromones.json, checkpoints/, locks/
+- Depends on: aether-utils.sh for reads/writes
+- Used by: All layers for persistence
+
+**Exchange Layer (XML):**
+- Purpose: Structured data exchange between colony and external systems
+- Location: `/Users/callumcowie/repos/Aether/.aether/exchange/`
+- Contains: pheromone-xml.sh, wisdom-xml.sh, registry-xml.sh
+- Depends on: XML utilities in utils/
+- Used by: Integration points with external systems
 
 ## Data Flow
 
-**Initialization Flow:**
-1. User runs `/ant:init <goal>` or `aether init <goal>`
-2. CLI creates `COLONY_STATE.json` in `.aether/data/`
-3. Context.md updated with initial state
-4. Colony enters Phase 1 (initialization)
+**Command Execution Flow:**
 
-**Build Flow:**
-1. User runs `/ant:build`
-2. CLI spawns Prime Worker via Task tool
-3. Prime Worker spawns specialists (Builder, Watcher, Scout)
-4. Workers log activity to `activity.log`
-5. Spawn tree tracked in `spawn-tree.txt`
+1. User invokes `/ant:<command>` in Claude Code/OpenCode
+2. Slash command definition (`.claude/commands/ant/<command>.md`) loads
+3. Command invokes `bash .aether/aether-utils.sh <subcommand>` or `aether <command>`
+4. Utility layer performs operation, updates state files
+5. Response returned to user via Claude Code
 
-**Update Distribution Flow:**
-1. Developer edits `.aether/` files (source of truth)
-2. Runs `npm install -g .` (preinstall: sync-to-runtime.sh)
-3. Files copied to `runtime/` directory
-4. CLI pushes to hub (`~/.aether/`)
-5. Users in other repos run `aether update` to receive
+**Worker Spawn Flow:**
 
-**State Persistence:**
-- Colony state: `.aether/data/COLONY_STATE.json`
-- Pheromones: `.aether/data/pheromones.json`
-- Constraints: `.aether/data/constraints.json`
-- Flags: `.aether/data/flags.json`
-- Activity: `.aether/data/activity.log`
-- Spawn tree: `.aether/data/spawn-tree.txt`
+1. Prime caste worker coordinates task
+2. Spawns child worker via Claude Code Task tool
+3. Child worker inherits parent session model
+4. Worker logs activity to spawn-tree
+5. On completion, worker reports results to parent
+
+**State Persistence Flow:**
+
+1. Command calls `read_colony_state` function in aether-utils.sh
+2. Function reads `.aether/data/COLONY_STATE.json`
+3. Command modifies state in memory
+4. Command calls state update function
+5. Atomic write to temp file, then rename (prevents corruption)
+6. State persisted across sessions
 
 ## Key Abstractions
 
 **Colony State:**
-- Purpose: Represents current colony status, goal, phase, milestone
-- Examples: `.aether/data/COLONY_STATE.json`
-- Pattern: JSON file with current_phase, goal, milestone, created_at fields
+- Purpose: Represents current colony status
+- Examples: `/Users/callumcowie/repos/Aether/.aether/data/COLONY_STATE.json`
+- Pattern: JSON file with phases, goals, milestones, caste assignments
 
 **Pheromones:**
-- Purpose: Constraint signals that guide worker behavior
-- Examples: FOCUS (normal priority), REDIRECT (high priority), FEEDBACK (low priority)
-- Pattern: JSON file with signal type, content, priority, created_at
+- Purpose: Signals between user and colony
+- Examples: `/Users/callumcowie/repos/Aether/.aether/data/pheromones.json`
+- Pattern: Priority-based signal queue (FOCUS=normal, REDIRECT=high, FEEDBACK=low)
 
-**Workers:**
-- Purpose: Autonomous agents that perform tasks
-- Examples: Builder, Watcher, Scout, Prime, Architect, Oracle
-- Pattern: Defined in `workers.md`, spawned via Task tool with depth tracking
+**Workers (Caste System):**
+- Purpose: Role definitions for different task types
+- Examples: `/Users/callumcowie/repos/Aether/.aether/workers.md`
+- Pattern: 21 castes (builder, watcher, scout, chaos, oracle, architect, prime, colonizer, route_setter, archaeologist, ambassador, auditor, chronicler, guardian, includer, keeper, measurer, probe, sage, tracker, weaver)
 
-**Spawn Tree:**
-- Purpose: Visual representation of worker hierarchy
-- Examples: `.aether/data/spawn-tree.txt`
-- Pattern: Indented tree showing parent-child relationships
+**Checkpoints:**
+- Purpose: Session recovery points
+- Location: `/Users/callumcowie/repos/Aether/.aether/checkpoints/`
+- Pattern: git stash with allowlist of files to preserve
 
 **Chambers:**
-- Purpose: Archived colony states for later review
-- Location: `.aether/chambers/`
-- Pattern: Timestamped directories with COLONY_STATE snapshot
+- Purpose: Archived completed colonies
+- Location: `/Users/callumcowie/repos/Aether/.aether/chambers/`
+- Pattern: Named directories with frozen COLONY_STATE.json
 
 ## Entry Points
 
 **CLI Entry:**
-- Location: `bin/cli.js`
-- Triggers: `aether <command>` or npm bin wrapper
-- Responsibilities: Command parsing, error handling, hub sync, update transactions
+- Location: `/Users/callumcowie/repos/Aether/bin/cli.js`
+- Triggers: `aether <command>` from terminal
+- Responsibilities: Command parsing, hub sync, state management, error handling
 
-**Slash Commands:**
-- Location: `.claude/commands/ant/*.md`
+**Slash Commands (Claude Code):**
+- Location: `/Users/callumcowie/repos/Aether/.claude/commands/ant/*.md`
 - Triggers: `/ant:<command>` in Claude Code
-- Responsibilities: User intent interpretation, worker spawning, context updates
+- Responsibilities: User-facing operations (colonize, build, test, etc.)
+
+**Slash Commands (OpenCode):**
+- Location: `/Users/callumcowie/repos/Aether/.opencode/commands/ant/*.md`
+- Triggers: `/ant:<command>` in OpenCode
+- Responsibilities: Same as Claude Code commands, OpenCode-specific syntax
 
 **Utility Entry:**
-- Location: `.aether/aether-utils.sh`
-- Triggers: `bash .aether/aether-utils.sh <subcommand> [args]`
-- Responsibilities: JSON I/O operations, lock management, file operations
-
-**Install Hook:**
-- Location: `bin/sync-to-runtime.sh`
-- Triggers: `npm install -g .`
-- Responsibilities: Copy allowlisted files from `.aether/` to `runtime/`
+- Location: `/Users/callumcowie/repos/Aether/.aether/aether-utils.sh`
+- Triggers: `bash .aether/aether-utils.sh <command> [args...]`
+- Responsibilities: Core operations (state management, spawn tracking, verification)
 
 ## Error Handling
 
-**Strategy:** Structured error classes with recovery suggestions
+**Strategy:** Structured error classes with JSON output and recovery hints.
 
 **Patterns:**
-- JavaScript: Custom error classes in `bin/lib/errors.js` (AetherError, HubError, RepoError, etc.)
-- Bash: JSON error output via `json_err()` function, error constants (E_*)
-- Global handlers: Process-level uncaughtException and unhandledRejection handlers
+- Error codes: `E_FILE_NOT_FOUND`, `E_VALIDATION_FAILED`, `E_GIT_ERROR`, etc. (defined in `/Users/callumcowie/repos/Aether/bin/lib/errors.js`)
+- JSON errors: `json_err` function returns `{"ok":false,"error":{...}}`
+- Recovery hints: Each error includes `"recovery"` field with suggested action
+- File locks: `file-lock.sh` prevents concurrent state modifications
 
 ## Cross-Cutting Concerns
 
-**Logging:** Activity log in `.aether/data/activity.log` with timestamps and emoji indicators
+**Logging:** Activity log via `activity-log` function in aether-utils.sh, writes to `.aether/data/activity.log`
 
-**Validation:** COLONY_STATE.json validated before operations, constraint allowlists for checkpoints
+**Validation:** State validation via `validate-state` command, checks COLONY_STATE.json schema
 
-**Authentication:** N/A (not an authentication system)
+**Authentication:** Not applicable - uses AI provider API keys via environment (ANTHROPIC_API_KEY)
 
-**Lock Management:** File-based locking in `.aether/locks/` with timeout support
+**Session Freshness:** Timestamp-based verification in `session-verify-fresh` function, prevents stale session files
 
 ---
 

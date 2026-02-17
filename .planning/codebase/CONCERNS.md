@@ -4,214 +4,413 @@
 
 ---
 
-## Critical Issues (Fix Immediately)
+## Tech Debt
 
-### BUG-005/BUG-011: Lock Deadlock in Flag-Auto-Resolve
-- **Issue:** If `jq` command fails during flag resolution, lock is never released
-- **Files:** `.aether/aether-utils.sh:1022`, `.aether/aether-utils.sh:1385-1407`
-- **Impact:** Deadlock on `flags.json` if jq fails (malformed JSON, disk full, etc.)
-- **Fix approach:** Add error handling with lock release before `json_err`. Use trap-based cleanup to ensure locks are released in all exit paths.
+### Lock Handling Deadlock Risk
 
-### BUG-002: Missing Lock Release in Flag-Add
-- **Issue:** If `acquire_lock` succeeds but `jq` fails, lock is never released
-- **Files:** `.aether/aether-utils.sh:814`, `.aether/aether-utils.sh:1188`, `.aether/aether-utils.sh:1227`
-- **Impact:** Potential deadlock on file operations
-- **Fix approach:** Use trap-based cleanup or ensure `release_lock` in all exit paths
+**Issue:** Missing lock release on error paths in flag operations
+
+**Files:** `.aether/aether-utils.sh:814`, `.aether/aether-utils.sh:1022`
+
+**Impact:** If jq command fails during flag resolution, lock is never released causing deadlock on `flags.json`
+
+**Fix approach:** Add trap-based cleanup or ensure `release_lock` in all exit paths. Add error handling with lock release before `json_err` calls
+
+---
+
+### Error Code Inconsistency
+
+**Issue:** 17+ locations use hardcoded strings instead of `$E_*` constants
+
+**Files:** `.aether/aether-utils.sh` various lines (lines 856, 899, 930, 933, 1758+, 2947)
+
+**Impact:** Inconsistent error handling, harder programmatic processing
+
+**Fix approach:** Standardize all to use `json_err "$E_*" "message"` pattern
+
+---
+
+### Template Path Hardcoded
+
+**Issue:** `queen-init` uses `runtime/` directory which may not exist in npm installs
+
+**Files:** `.aether/aether-utils.sh:2689`
+
+**Impact:** `queen-init` fails when Aether is installed as npm package
+
+**Fix approach:** Use `$HOME/.aether/` or detect installation method
+
+---
+
+### Large Monolithic Files
+
+**Issue:** Two files exceed 2000 lines each
+
+**Files:**
+- `.aether/aether-utils.sh` - 4050 lines
+- `bin/cli.js` - 2295 lines
+
+**Impact:** Hard to navigate, understand, and test. High risk of introducing bugs during modifications
+
+**Fix approach:** Modularize into smaller focused modules. Extract command handlers into separate files
+
+---
+
+### Spawn-Tree Growth
+
+**Issue:** `spawn-tree.txt` grows indefinitely with no cleanup
+
+**Files:** `.aether/aether-utils.sh:402-448`
+
+**Impact:** File could grow very large over many sessions
+
+**Fix approach:** Add periodic cleanup or age-based pruning
 
 ---
 
 ## Known Bugs
 
-### BUG-003: Race Condition in Backup Creation
-- **Symptom:** Backup created AFTER temp file validation but BEFORE atomic move
-- **Files:** `.aether/utils/atomic-write.sh:75`
-- **Trigger:** Process crashes between validation and backup
-- **Fix approach:** Create backup BEFORE validation, or use transactional approach
+### BUG-005/BUG-011: Lock Deadlock in Flag-Auto-Resolve
 
-### BUG-004: Missing Error Code in Flag-Acknowledge
-- **Issue:** Uses hardcoded string instead of `$E_VALIDATION_FAILED`
-- **Files:** `.aether/aether-utils.sh:930`
-- **Fix approach:** Change to `json_err "$E_VALIDATION_FAILED" "Usage: ..."`
+**Location:** `.aether/aether-utils.sh:1022`
 
-### BUG-006: No Lock Release on JSON Validation Failure
-- **Issue:** If JSON validation fails, temp file cleaned but lock not released
-- **Files:** `.aether/utils/atomic-write.sh:66`
-- **Fix approach:** Document lock ownership contract clearly
+**Severity:** HIGH
 
-### BUG-007: 17+ Instances of Missing Error Codes
-- **Issue:** Commands use hardcoded strings instead of error constants
-- **Files:** `.aether/aether-utils.sh` various lines
-- **Impact:** Inconsistent error handling, harder programmatic processing
-- **Fix approach:** Standardize all to use `json_err "$E_*" "message"` pattern
+**Symptom:** If jq command fails during flag resolution, lock is never released
 
-### BUG-008: Missing Error Code in Flag-Add jq Failure
-- **Issue:** Lock released but error code missing on jq failure
-- **Files:** `.aether/aether-utils.sh:856`
-- **Fix approach:** Change to `json_err "$E_JSON_INVALID" "Failed to add flag"`
+**Trigger:** Malformed JSON in flags.json, disk full, or any jq failure
 
-### BUG-009: Missing Error Codes in File Checks
-- **Issue:** File not found errors use hardcoded strings
-- **Files:** `.aether/aether-utils.sh:899`, `.aether/aether-utils.sh:933`
-- **Fix approach:** Use `json_err "$E_FILE_NOT_FOUND" "..."`
-
-### BUG-010: Missing Error Codes in Context-Update
-- **Issue:** Various error paths lack error code constants
-- **Files:** `.aether/aether-utils.sh:1758+`
-
-### BUG-012: Missing Error Code in Unknown Command
-- **Issue:** Unknown command handler uses bare string
-- **Files:** `.aether/aether-utils.sh:2947`
+**Workaround:** Restart colony session if commands hang on flag operations
 
 ---
 
-## Architecture Issues
+### BUG-002: Missing Release_Lock in Flag-Add Error Path
 
-### ISSUE-001: Inconsistent Error Code Usage
-- **Description:** Some `json_err` calls use hardcoded strings instead of constants
-- **Pattern:** Commands added early use strings; later commands use constants
-- **Files:** Multiple locations
+**Location:** `.aether/aether-utils.sh:814`
 
-### ISSUE-004: Template Path Hardcoded to Runtime/
-- **Issue:** `queen-init` uses `runtime/` directory which may not exist in npm installs
-- **Files:** `.aether/aether-utils.sh:2689`
-- **Impact:** `queen-init` will fail when Aether is installed as npm package
-- **Workaround:** Use git clone instead of npm install
+**Severity:** MEDIUM
+
+**Symptom:** If acquire_lock succeeds but jq fails, lock is never released
+
+**Trigger:** jq command fails after acquiring lock
+
+---
+
+### BUG-003: Race Condition in Backup Creation
+
+**Location:** `.aether/utils/atomic-write.sh:75`
+
+**Severity:** MEDIUM
+
+**Symptom:** Backup created AFTER temp file validation but BEFORE atomic move
+
+**Trigger:** Process crashes between validation and backup
+
+---
+
+### BUG-007: Error Code Standardization
+
+**Location:** `.aether/aether-utils.sh` multiple locations
+
+**Severity:** MEDIUM
+
+**Symptom:** Commands use hardcoded strings instead of error constants
+
+**Impact:** Inconsistent error handling across commands
+
+---
+
+### ISSUE-004: Queen-Init Fails via NPM
+
+**Location:** `.aether/aether-utils.sh:2689`
+
+**Severity:** MEDIUM
+
+**Symptom:** Template path hardcoded to `runtime/` which doesn't exist in npm installs
+
+**Workaround:** Use git clone instead of npm install
 
 ---
 
 ## Security Considerations
 
-### Hardcoded Secret Detection
-- **Current:** `aether-utils.sh:976-979` has exposed secrets check
-- **Pattern:** Scans for `api_key`, `apikey`, `secret`, `password`, `token` patterns
-- **Concern:** Detection is basic - could miss encoded/obfuscated secrets
-- **Recommendation:** Consider adding entropy detection for harder-to-spot secrets
+### Dangerous Command Execution
 
-### Dangerous Permission Flag in Oracle
-- **Location:** `.aether/oracle/oracle.sh:41`
-- **Pattern:** `claude --dangerously-skip-permissions --print`
-- **Concern:** Oracle uses dangerous permission skip flag
-- **Risk:** Could execute actions beyond intended scope
+**Risk:** Scripts execute `rm -rf` and other destructive operations
+
+**Files:** `.aether/aether-utils.sh:3818`, `.aether/utils/xml-utils.sh:414`, `.aether/utils/spawn-tree.sh:217`
+
+**Current mitigation:** Block destructive operations hook exists in `.aether/docs/` but not actively enforced
+
+**Recommendations:**
+- Add explicit user confirmation for all destructive operations
+- Implement dry-run modes for dangerous commands
+- Add audit logging for file deletions
+
+---
+
+### Shell Injection Risk
+
+**Risk:** Variable interpolation without proper quoting
+
+**Files:** `.aether/aether-utils.sh` (variable quoting patterns)
+
+**Current mitigation:** Uses `set -u` and quotes most variables
+
+**Recommendations:**
+- Audit all variable interpolations for edge cases
+- Add shellcheck to CI pipeline
+
+---
+
+### Git Stash Data Loss Risk
+
+**Risk:** Build checkpoint could stash user work (historical issue)
+
+**Files:** Commands that use `git stash`
+
+**Current mitigation:** Checkpoint allowlist system implemented - only allowlisted system files are stashed
+
+**Recommendations:**
+- Add pre-stash validation to warn about any modified user files
+- Consider using `git stash push --staged` instead of full stash
 
 ---
 
 ## Performance Bottlenecks
 
-### Large Single File
-- **File:** `.aether/aether-utils.sh` (3,847 lines)
-- **Problem:** Monolithic utility file is hard to navigate and maintain
-- **Impact:** Slower shell sourcing, harder debugging
-- **Improvement path:** Consider modularization by command category
+### JSON Parsing Overhead
 
-### Spawn-Tree Growth
-- **Issue:** `spawn-tree.txt` grows indefinitely
-- **Files:** `.aether/aether-utils.sh:402-448`, `.aether/utils/spawn-tree.sh:222-263`
-- **Impact:** File could grow very large over many sessions
-- **Improvement path:** Add cleanup for stale spawn-tree entries
+**Problem:** Multiple full-file reads and parses for state operations
 
-### No Retry Logic for Failed Spawns
-- **Issue:** Task tool calls don't have retry logic
-- **Impact:** Transient failures cause build failures
-- **Improvement path:** Add retry logic with exponential backoff
+**Files:** `.aether/aether-utils.sh` - state management functions
+
+**Cause:** No caching, each operation reads and parses entire JSON file
+
+**Improvement path:** Implement in-memory caching with write-through strategy
+
+---
+
+### Command Generation Duplication
+
+**Problem:** 13,573 lines duplicated between `.claude/commands/` and `.opencode/commands/`
+
+**Files:** Both command directories
+
+**Cause:** Manual duplication instead of single-source generation
+
+**Improvement path:** Build YAML-based command generator (noted in TO-DOs)
 
 ---
 
 ## Fragile Areas
 
-### Error Handling Without Fallback
-- **Files:** `.aether/aether-utils.sh:2132-2144`
-- **Why fragile:** `model-get` and `model-list` use `exec` without fallback
-- **Safe modification:** Add try-catch pattern or validate exec success
+### Error Handling in json_err Fallback
+
+**Location:** `.aether/aether-utils.sh:65-72`
+
+**Why fragile:** Fallback `json_err` doesn't accept error code parameter - if error-handler.sh fails to load, error codes are lost
+
+**Safe modification:** Always test error paths when modifying command handlers
+
+---
 
 ### Feature Detection Race Condition
-- **Files:** `.aether/aether-utils.sh:33-45`
-- **Why fragile:** Feature detection runs before error handler fully sourced
-- **Safe modification:** Source error handler before feature detection
 
-### Incomplete Help Command
-- **Files:** `.aether/aether-utils.sh:106-111`
-- **Why fragile:** Help command missing newer commands like `queen-*`, `view-state-*`, `swarm-timing-*`
-- **Safe modification:** Update help text when adding new commands
+**Location:** `.aether/aether-utils.sh:33-45`
+
+**Why fragile:** Feature detection runs before error handler fully sourced - timing dependencies
+
+**Safe modification:** Move feature detection after error handler initialization
+
+---
+
+### Queen-Read JSON Validation
+
+**Location:** `.aether/aether-utils.sh` - queen-read command
+
+**Why fragile:** Builds JSON but doesn't validate before returning - could return malformed response
+
+**Safe modification:** Add JSON validation before returning response
+
+---
+
+### Context-Update No Locking
+
+**Location:** `.aether/aether-utils.sh:1758+`
+
+**Why fragile:** No file locking on context-update - race condition possible during concurrent updates
+
+**Safe modification:** Add file locking before write operations
 
 ---
 
 ## Scaling Limits
 
-### Session Freshness Detection
-- **Current:** Implemented for 9 commands (colonize, oracle, watch, swarm, init, seal, entomb)
-- **Limit:** Not all commands have timestamp verification
-- **Improvement path:** Apply pattern to remaining commands
+### File Lock Contention
 
-### Model Routing Unverified
-- **Status:** Configuration exists (`model-profiles.yaml` maps castes to models)
-- **Limit:** Execution unproven - `ANTHROPIC_MODEL` may not be inherited by spawned workers
-- **Test:** `/ant:verify-castes` Step 3 spawns test worker
-- **Blocked by:** Anthropic token exhaustion (proxy auth fails)
+**Resource:** `.aether/locks/` directory
+
+**Current capacity:** Single lock per operation
+
+**Limit:** Multiple concurrent operations will block
+
+**Scaling path:** Implement lock timeout and retry mechanism
+
+---
+
+### Session State File Size
+
+**Resource:** `COLONY_STATE.json`
+
+**Current capacity:** Unbounded JSON growth
+
+**Limit:** Performance degradation with large state files
+
+**Scaling path:** Implement state archiving and pagination
+
+---
+
+### Worker Spawn Limits
+
+**Resource:** Claude Code/OpenCode worker processes
+
+**Current capacity:** Max depth 3, max 4 at depth 1, max 2 at depth 2
+
+**Limit:** Cannot spawn beyond depth 3
+
+**Scaling path:** Worker pool system for horizontal scaling
 
 ---
 
 ## Dependencies at Risk
 
-### Error Handler Dependency
-- **Files:** `.aether/aether-utils.sh:65-72`
-- **Risk:** Fallback `json_err` doesn't accept error code parameter
-- **Impact:** If `error-handler.sh` fails to load, error codes are lost
+### Minimal Production Dependencies
 
-### jq Dependency (Implicit)
-- **Risk:** Several commands fail without explicit handling if jq unavailable
-- **Impact:** Silent failures in lock/error operations
+**Packages:** `commander`, `js-yaml`, `picocolors`
+
+**Risk:** LOW - these are stable, well-maintained packages
+
+**Migration plan:** None needed
+
+---
+
+### Dev Dependencies
+
+**Packages:** `ava`, `proxyquire`, `sinon`
+
+**Risk:** LOW - standard testing tools
+
+**Note:** These are only used in development, not shipped with package
 
 ---
 
 ## Missing Critical Features
 
-### GAP-001: No Schema Version Validation
-- **Problem:** Commands assume state structure without validating version
-- **Impact:** Silent failures when state structure changes
+### Model Routing Verification
 
-### GAP-004: Missing Queen-* Documentation
-- **Problem:** No docs for `queen-init`, `queen-read`, `queen-promote`
-- **Impact:** Users cannot discover wisdom feedback loop
+**Feature gap:** Model-per-caste routing exists in configuration but unproven in execution
 
-### GAP-005: No Validation of Queen-Read JSON Output
-- **Problem:** `queen-read` builds JSON but doesn't validate before returning
-- **Impact:** Could return malformed response
+**Problem:** Workers may not inherit `ANTHROPIC_MODEL` environment variable
 
-### GAP-007: No Error Code Standards Documentation
-- **Problem:** Error codes exist but aren't documented
-- **Impact:** Developers don't know which codes to use
+**Blocks:** Proper worker specialization by capability
 
-### GAP-009: Context-Update Has No File Locking
-- **Problem:** Race condition possible during concurrent context updates
-- **Impact:** Potential data corruption
+**Priority:** HIGH
+
+---
+
+### XML Deep Integration
+
+**Feature gap:** XML utilities exist but not integrated into workflow
+
+**Problem:** Pheromones, queen wisdom, and cross-colony sharing not using XML
+
+**Blocks:** Eternal storage and colony-to-colony transfer
+
+**Priority:** HIGH
+
+---
+
+### Oracle Timestamp Verification
+
+**Feature gap:** Oracle spawns long-running agents without session freshness checks
+
+**Problem:** Stale progress files from interrupted Oracle sessions
+
+**Blocks:** Reliable deep research workflow
+
+**Priority:** MEDIUM
 
 ---
 
 ## Test Coverage Gaps
 
-### Untested Error Paths
-- **What's not tested:** Error handling paths (17+ error code inconsistencies)
-- **Files:** `.aether/aether-utils.sh` various locations
-- **Risk:** Bugs in error handling go undetected
-- **Priority:** High
+### Error Path Coverage
 
-### Lock Release Verification
-- **What's not tested:** Lock release in all error paths
-- **Risk:** Deadlocks only appear under failure conditions
-- **Priority:** Critical
+**What's not tested:** Error handling paths in commands
+
+**Files:** Most command handlers
+
+**Risk:** Bugs in error handling go undetected until production
+
+**Priority:** HIGH
 
 ---
 
-## Tech Debt Summary
+### Concurrent Operation Testing
 
-| Category | Count | Priority |
-|----------|-------|----------|
-| Lock-related bugs | 4 | Critical |
-| Missing error codes | 7 | Medium |
-| Architecture issues | 4 | Low |
-| Security concerns | 2 | Medium |
-| Performance issues | 3 | Medium |
-| Test coverage gaps | 2 | High |
+**What's not tested:** Multiple ants modifying state simultaneously
+
+**Files:** State management functions
+
+**Risk:** Race conditions not caught before production
+
+**Priority:** HIGH
+
+---
+
+### Integration Tests for Flag System
+
+**What's not tested:** Flag auto-resolve with various failure scenarios
+
+**Files:** Flag operations in `.aether/aether-utils.sh`
+
+**Risk:** Lock deadlocks only discovered when they happen
+
+**Priority:** HIGH
+
+---
+
+### Shell Script Tests
+
+**What's not tested:** Full coverage of `aether-utils.sh` functions
+
+**Location:** `tests/bash/`
+
+**Risk:** Edge cases in shell scripts may fail in production
+
+**Priority:** MEDIUM
+
+---
+
+## Deferred Technical Debt
+
+| Debt | Why Deferred | Impact |
+|------|--------------|--------|
+| YAML command generator | Works manually, not broken | 13,573 lines duplicated |
+| Test coverage audit | Tests pass, purpose unclear | May have false confidence |
+| Pheromone evolution | Feature exists but unused | Telemetry collected but not consumed |
+
+---
+
+## Workarounds Summary
+
+| Issue | Workaround |
+|-------|------------|
+| Lock deadlock (BUG-005) | Restart colony session |
+| Template path (ISSUE-004) | Use git clone instead of npm |
+| Missing command docs | Read source code directly |
+| Model routing unverified | Use default model for all workers |
 
 ---
 

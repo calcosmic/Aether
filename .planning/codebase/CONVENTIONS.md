@@ -2,202 +2,262 @@
 
 **Analysis Date:** 2026-02-17
 
-## Naming Patterns
+## Language Overview
 
-**Files:**
-- Shell scripts: `kebab-case.sh` (e.g., `aether-utils.sh`, `file-lock.sh`)
-- JavaScript modules: `camelCase.js` (e.g., `state-guard.js`, `model-profiles.js`)
-- Markdown docs: `kebab-case.md` (e.g., `coding-standards.md`)
-- Test files: `{module-name}.test.js` (e.g., `cli-hash.test.js`)
+This codebase uses two primary languages:
+- **JavaScript** (Node.js) - CLI logic, state management, testing infrastructure
+- **Bash** - Shell utilities, colony operations, build automation
 
-**Functions:**
-- JavaScript: `camelCase` (e.g., `hashFileSync`, `validateManifest`)
-- Shell: `snake_case` (e.g., `get_caste_emoji`, `json_ok`)
-- Private methods: prefix with underscore `_privateMethod()`
+## JavaScript Conventions
+
+### File Organization
+
+**Location:** `bin/lib/` for CLI modules, `tests/unit/` for unit tests
+
+**Naming:**
+- Modules: `camelCase.js` (e.g., `state-guard.js`, `errors.js`)
+- Test files: `*.test.js` (e.g., `state-guard.test.js`)
+- Helpers: `camelCase.js` (e.g., `mock-fs.js`)
+
+### Code Style
 
 **Variables:**
-- JavaScript: `camelCase` (e.g., `currentVersion`, `globalQuiet`)
-- Shell: `snake_case` (e.g., `aether_root`, `lock_acquired`)
-- Constants: `UPPER_SNAKE_CASE` for compile-time constants (e.g., `ErrorCodes`)
-- Private variables: prefix with underscore `_privateVar`
+- Use `const` by default, `let` only when reassignment is required
+- Never use `var`
 
-**Types:**
-- Classes: `PascalCase` (e.g., `AetherError`, `StateGuard`, `FeatureFlags`)
-- Error classes: suffix with `Error` (e.g., `HubError`, `ValidationError`)
-- Interfaces: Not explicitly used; objects serve as implicit contracts
+```javascript
+// Good
+const CONFIG_PATH = '/path/to/config';
+let currentPhase = 5;
 
-## Code Style
+// Bad
+var config = 'value';
+```
 
-**Formatting:**
-- No explicit formatter configured (no Prettier, ESLint found)
-- Manual formatting; consistent 2-space indentation
-- JavaScript: no semicolons at statement ends (modern style)
-- Shell: `set -euo pipefail` at script top
+**Functions:**
+- Prefer `async/await` over raw Promises or callback patterns
+- Use named function declarations for clarity
+- Document public APIs with JSDoc-style comments
 
-**Linting:**
-- Shell scripts: `shellcheck` with `--severity=error`
-- JSON: validated via `node -e "JSON.parse(...)"`
-- Sync: `bash bin/generate-commands.sh check`
-- Run lint: `npm run lint`
+```javascript
+/**
+ * Load and parse state file
+ * @returns {object} Parsed state object
+ * @throws {StateGuardError} If file missing or invalid
+ */
+async function loadState(filePath) {
+  // Implementation
+}
+```
 
-**Key shellcheck rules enforced:**
-- `set -euo pipefail` required
-- Variables must be quoted: `"$var"` not `$var`
-- Use `[[ ]]` for tests, not `[ ]`
-- Check for required tools before using: `command -v foo >/dev/null || exit 1`
+**String Interpolation:**
+- Use template literals for string interpolation
 
-## Import Organization
+```javascript
+// Good
+const message = `Phase ${current} transitioned to ${next}`;
 
-**Order in JavaScript files:**
-1. External dependencies (e.g., `require('commander')`)
-2. Internal lib imports (e.g., `require('./lib/errors')`)
-3. Module exports (at end of file)
+// Bad
+const message = 'Phase ' + current + ' transitioned to ' + next;
+```
 
-**Path aliases:**
-- None configured; relative paths used throughout
-- Example: `const { logError } = require('./lib/logger');`
+**Error Handling:**
+- Use structured error classes from `bin/lib/errors.js`
+- All errors extend `AetherError` base class
+- Include recovery suggestions in error messages
 
-**Example from `/Users/callumcowie/repos/Aether/bin/cli.js`:**
+```javascript
+const { AetherError, ValidationError, ErrorCodes } = require('./errors');
+
+throw new ValidationError(
+  'Invalid state file structure',
+  { path: stateFile, missingFields: ['version', 'current_phase'] },
+  'Restore from backup or reinitialize'
+);
+```
+
+### Import Organization
+
+**Order:**
+1. Node.js built-ins (`fs`, `path`, `crypto`)
+2. External packages (`commander`, `sinon`, `proxyquire`)
+3. Local modules (`./errors`, `../lib/state-guard`)
+
 ```javascript
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
-const { execSync } = require('child_process');
 const { program } = require('commander');
-
-// Error handling imports
-const {
-  AetherError,
-  HubError,
-  // ...
-} = require('./lib/errors');
-const { logError, logActivity } = require('./lib/logger');
-// ... more imports
+const sinon = require('sinon');
+const proxyquire = require('proxyquire');
+const { AetherError } = require('./errors');
+const { StateGuard } = require('./state-guard');
 ```
 
-## Error Handling
+### Class Patterns
 
-**JavaScript Error Pattern:**
-- Hierarchical error classes extending `AetherError` (defined in `/Users/callumcowie/repos/Aether/bin/lib/errors.js`)
-- Each error has: `code`, `message`, `details`, `recovery`, `timestamp`
-- Use `wrapError()` to convert plain errors to structured format
-- Exit codes mapped via `getExitCode()` (uses sysexits.h conventions)
+**Structure:**
+- JSDoc comment with class purpose
+- Constructor with explicit parameter documentation
+- Methods with JSDoc including @returns and @throws
+- Use `Error.captureStackTrace` for proper stack traces
 
-**Error Class Hierarchy:**
 ```javascript
-AetherError (base)
-├── HubError
-├── RepoError
-├── GitError
-├── ValidationError
-├── FileSystemError
-├── ConfigurationError
-└── StateSchemaError
-```
+/**
+ * StateGuard - Enforces Iron Law and manages phase transitions
+ */
+class StateGuard {
+  /**
+   * @param {string} stateFilePath - Path to COLONY_STATE.json
+   * @param {object} options - Configuration options
+   */
+  constructor(stateFilePath, options = {}) {
+    this.stateFile = stateFilePath;
+    this.locked = false;
 
-**Shell Error Pattern:**
-- Use `json_err()` for JSON error output (exits 1)
-- Use `json_ok()` for success output
-- Constants defined in error-handler.sh: `$E_UNKNOWN`, `$E_HUB_NOT_FOUND`, etc.
-- Trap ERR for structured error context: `trap 'error_handler ...' ERR`
-
-**Example from `/Users/callumcowie/repos/Aether/bin/lib/errors.js`:**
-```javascript
-class ValidationError extends AetherError {
-  constructor(message, details = {}) {
-    super(
-      ErrorCodes.E_INVALID_STATE,
-      message,
-      details,
-      'Check the state file and fix validation errors'
-    );
-    this.name = 'ValidationError';
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, StateGuard);
+    }
   }
 }
 ```
 
-## Logging
+## Shell Script Conventions
 
-**Framework:** Custom logger in `/Users/callumcowie/repos/Aether/bin/lib/logger.js`
+### File Organization
 
-**Log Functions:**
-- `logError(structuredError)` - Logs to activity.log
-- `logActivity(message)` - Logs activity events
+**Location:** `.aether/` for utilities, `.aether/utils/` for helper scripts
 
-**Shell Logging:**
-- Use `echo` with color codes from `colors.js`
-- Prefix with `log_` for logging functions: `log_error()`, `log_info()`
+**Naming:**
+- Scripts: `kebab-case.sh` (e.g., `aether-utils.sh`, `file-lock.sh`)
+- Functions: `snake_case` (e.g., `get_caste_emoji`, `json_ok`)
 
-**Patterns:**
-- JSON structured logging for errors (machine-parseable)
-- Human-readable for CLI output (with color codes)
+### Code Style
 
-## Comments
-
-**When to Comment:**
-- Document public API functions with JSDoc-style comments
-- Explain non-obvious logic or workarounds
-- Note WHY something is done, not just WHAT
-- TODO comments for incomplete work
-
-**JSDoc/TSDoc:**
-- Used for public functions and classes
-- Example from `/Users/callumcowie/repos/Aether/bin/lib/errors.js`:
-```javascript
-/**
- * Base AetherError class
- * All application errors extend this class for consistent handling
- * @param {string} code - Error code from ErrorCodes
- * @param {string} message - Human-readable error message
- * @param {object} details - Additional error context
- * @param {string|null} recovery - Recovery suggestion for user
- */
+**Shebang and Strict Mode:**
+```bash
+#!/bin/bash
+set -euo pipefail
 ```
 
-**Shell Comments:**
-- Header comment with purpose at script top
-- Inline comments for complex logic: `# Explanation of what follows`
+**Variable Handling:**
+- Always quote variables: `"$var"` not `$var`
+- Use `${var}` for clarity in complex expressions
+- Declare local variables with `local`
 
-## Function Design
+```bash
+# Good
+local target_file="$1"
+if [[ -f "$target_file" ]]; then
+  echo "File exists: $target_file"
+fi
 
-**Size:**
-- Keep functions under 50 lines
-- Extract helpers for repeated patterns
-- One function per logical unit
+# Bad
+if [ -f $1 ]; then
+  echo File exists: $1
+fi
+```
 
-**Parameters:**
-- JavaScript: Destructure objects for clarity: `function({ foo, bar })`
-- Shell: Use local variables: `local var_name="$1"`
+**Conditionals:**
+- Use `[[ ]]` for tests, never `[ ]`
+- Prefer `[[ -z "$var" ]]` over `[[ "$var" == "" ]]`
 
-**Return Values:**
-- JavaScript: Return structured objects for complex results
-- Shell: JSON via stdout for structured data, exit codes for status
+```bash
+# Good
+if [[ -z "$input" ]]; then
+  echo "No input provided"
+fi
 
-## Module Design
+# Bad
+if [ "$input" == "" ]; then
+  echo "No input provided"
+fi
+```
 
-**Exports:**
-- Use CommonJS: `module.exports = { ... }` or `module.exports = ClassName`
-- Named exports for utilities: `module.exports = { func1, func2, ClassName }`
+**Tool Checking:**
+- Check for required tools before using
+- Use `command -v` for portability
 
-**Barrel Files:**
-- Not used; imports directly from modules
+```bash
+command -v jq >/dev/null || exit 1
+command -v git >/dev/null || echo "Warning: git not available"
+```
 
-**JavaScript Module Structure:**
+**Error Handling:**
+- Use trap for error context
+- Define error constants
+
+```bash
+trap 'if type error_handler &>/dev/null; then error_handler ${LINENO} "$BASH_COMMAND" $?; fi' ERR
+
+: "${E_UNKNOWN:=E_UNKNOWN}"
+: "${E_FILE_NOT_FOUND:=E_FILE_NOT_FOUND}"
+```
+
+### Function Design
+
+**Patterns:**
+- Use `local` for all variables within functions
+- Return JSON via `printf` for structured output
+- Use `json_err` for error output
+
+```bash
+json_ok() { printf '{"ok":true,"result":%s}\n' "$1"; }
+
+json_err() {
+  local message="${2:-$1}"
+  printf '{"ok":false,"error":"%s"}\n' "$message" >&2
+  exit 1
+}
+```
+
+## Naming Conventions Summary
+
+| Type | Pattern | Example |
+|------|---------|---------|
+| JavaScript modules | camelCase.js | `state-guard.js` |
+| Shell scripts | kebab-case.sh | `file-lock.sh` |
+| Test files | *.test.js | `state-guard.test.js` |
+| Markdown docs | kebab-case.md | `coding-standards.md` |
+| JavaScript classes | PascalCase | `StateGuard` |
+| JavaScript functions | camelCase | `loadState()` |
+| Shell functions | snake_case | `get_caste_emoji()` |
+| Constants | UPPER_SNAKE_CASE | `MAX_RETRIES` |
+| Variables | camelCase (JS), snake_case (Shell) | `currentPhase`, `target_file` |
+
+## Error Handling Strategy
+
+**JavaScript:**
+- All errors use structured `AetherError` hierarchy
+- Each error includes: code, message, details, recovery
+- Errors export `toJSON()` for structured logging
+- Exit codes mapped to sysexits.h standards
+
+**Shell:**
+- Use `set -euo pipefail` for strict error propagation
+- Define error constants (`E_*`)
+- Output JSON errors to stderr
+- Return success/failure via JSON `ok` field
+
+## Documentation Patterns
+
+**JSDoc Requirements:**
+- All exported functions require JSDoc
+- Include @param with type and description
+- Include @returns with type
+- Include @throws for documented exceptions
+
 ```javascript
-// Constants at top
-const VERSION = require('../package.json').version;
-
-// Error class definitions
-class MyClass { ... }
-
-// Helper functions
-function helper() { ... }
-
-// Main export
-module.exports = {
-  MyClass,
-  helper,
-};
+/**
+ * Advance phase with full guard enforcement
+ * @param {number} fromPhase - Current phase number
+ * @param {number} toPhase - Target phase number
+ * @param {object} evidence - Verification evidence
+ * @returns {Promise<object>} Result object with status
+ * @throws {StateGuardError} If Iron Law is violated
+ */
+async function advancePhase(fromPhase, toPhase, evidence) {
+  // Implementation
+}
 ```
 
 ---

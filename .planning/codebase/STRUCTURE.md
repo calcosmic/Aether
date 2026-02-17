@@ -6,187 +6,157 @@
 
 ```
 /Users/callumcowie/repos/Aether/
-├── .aether/                    # SOURCE OF TRUTH for system files
-│   ├── aether-utils.sh         # Main utility shell script
-│   ├── workers.md              # Worker definitions and disciplines
-│   ├── CONTEXT.md              # Colony memory (generated)
-│   ├── utils/                  # Helper shell scripts
-│   │   ├── file-lock.sh
-│   │   ├── atomic-write.sh
-│   │   ├── error-handler.sh
-│   │   ├── xml-utils.sh
-│   │   └── ...
-│   ├── data/                   # LOCAL colony state (never synced)
-│   │   ├── COLONY_STATE.json
-│   │   ├── pheromones.json
-│   │   ├── constraints.json
-│   │   ├── flags.json
-│   │   ├── activity.log
-│   │   └── spawn-tree.txt
+├── .aether/                    # SOURCE OF TRUTH - system files
+│   ├── aether-utils.sh         # Core utility functions (~3,700 lines)
+│   ├── workers.md              # Worker/caste definitions
+│   ├── data/                   # LOCAL - colony state
+│   ├── utils/                  # Helper scripts
+│   ├── exchange/               # XML exchange utilities
+│   ├── commands/               # Command definitions
 │   ├── docs/                   # Distributed documentation
-│   ├── commands/               # Distributed command definitions
-│   ├── chambers/                # Archived colony states
-│   ├── checkpoints/             # Session checkpoints
-│   └── dreams/                  # LOCAL dream journal
-│
-├── runtime/                    # STAGING (auto-populated, DO NOT EDIT)
-│   ├── aether-utils.sh         # Copied from .aether/
-│   ├── utils/                  # Copied from .aether/
-│   └── ...
-│
+│   ├── chambers/               # Archived colonies
+│   ├── checkpoints/            # Session recovery points
+│   └── dreams/                 # LOCAL - session notes
 ├── bin/                        # CLI entry point
-│   ├── cli.js                  # Main CLI (JavaScript)
-│   ├── lib/                    # CLI libraries
-│   │   ├── errors.js
-│   │   ├── logger.js
-│   │   ├── init.js
-│   │   ├── state-sync.js
-│   │   ├── model-profiles.js
-│   │   └── ...
+│   ├── cli.js                  # Main CLI (~79KB)
+│   ├── lib/                    # JavaScript modules
 │   └── sync-to-runtime.sh      # Sync script
-│
 ├── .claude/                    # Claude Code integration
-│   └── commands/ant/           # Slash command definitions (31 commands)
-│       ├── init.md
-│       ├── build.md
-│       ├── plan.md
-│       └── ...
-│
-├── .opencode/                  # OpenCode integration
-│   ├── commands/ant/           # Slash commands (mirrored)
+│   ├── commands/ant/            # Slash commands
+│   ├── hooks/                  # Claude hooks
 │   └── agents/                 # Agent definitions
-│
-├── tests/                      # Test suite
-│   ├── unit/                   # AVA unit tests
-│   ├── bash/                   # Shell script tests
-│   ├── integration/            # Integration tests
-│   └── e2e/                    # End-to-end tests
-│
-└── package.json                # npm package definition
+├── .opencode/                  # OpenCode integration
+│   ├── commands/ant/            # Slash commands
+│   └── agents/                 # Agent definitions
+├── runtime/                    # STAGING - auto-generated (DO NOT EDIT)
+├── src/                        # Minimal source
+├── tests/                      # Test suites
+└── docs/                       # Development documentation
 ```
 
 ## Directory Purposes
 
-**`.aether/`:**
-- Purpose: Source of truth for all distributed system files
-- Contains: workers.md, aether-utils.sh, utils/, docs/, commands/
-- Key files: `workers.md`, `aether-utils.sh`, `CONTEXT.md`, `coding-standards.md`
+**`.aether/` (Source of Truth):**
+- Purpose: Primary location for all system files
+- Contains: workers.md, aether-utils.sh, utils/, docs/
+- Key files: `workers.md`, `aether-utils.sh`, `data/COLONY_STATE.json`, `data/pheromones.json`
+- **NEVER edit runtime/ directly - edit .aether/ and run sync**
 
-**`runtime/`:**
-- Purpose: Staging directory for npm package
-- Contains: Auto-populated copy of .aether/ files
-- Key files: Same as .aether/ but auto-generated
+**`bin/` (CLI):**
+- Purpose: Node.js CLI entry point
+- Contains: cli.js (main), lib/ (modules)
+- Key files: `cli.js`, `lib/errors.js`, `lib/update-transaction.js`, `lib/state-sync.js`
 
-**`.aether/data/`:**
-- Purpose: Local colony state (never synced to hub)
-- Contains: COLONY_STATE.json, pheromones.json, activity.log, spawn-tree.txt
-- Key files: All JSON state files
+**`.claude/commands/ant/` (Claude Commands):**
+- Purpose: Slash command definitions for Claude Code
+- Contains: Markdown files for each command
+- Key files: `build.md`, `colonize.md`, `swarm.md`, `oracle.md`
 
-**`bin/`:**
-- Purpose: JavaScript CLI entry point
-- Contains: cli.js, lib/, sync-to-runtime.sh
-- Key files: `cli.js` (77KB main CLI)
+**`.opencode/commands/ant/` (OpenCode Commands):**
+- Purpose: Slash command definitions for OpenCode
+- Contains: Markdown files for each command (duplicated from .claude/)
+- Key files: `build.md`, `colonize.md`, `swarm.md`, `oracle.md`
 
-**`.claude/commands/ant/`:**
-- Purpose: Claude Code slash commands
-- Contains: 31 markdown prompt files
-- Key files: `init.md`, `build.md`, `plan.md`, `continue.md`
+**`.aether/utils/` (Shell Utilities):**
+- Purpose: Modular helper scripts
+- Contains: atomic-write.sh, chamber-utils.sh, file-lock.sh, xml-utils.sh, spawn-tree.sh
+- Key files: `xml-utils.sh` (87KB, largest), `chamber-utils.sh`, `spawn-tree.sh`
 
-**`.opencode/commands/ant/`:**
-- Purpose: OpenCode slash commands (mirrored from Claude)
-- Contains: Same 31 commands
+**`.aether/data/` (LOCAL - Never Sync):**
+- Purpose: Persistent colony state
+- Contains: COLONY_STATE.json, pheromones.json, activity.log, locks/
+- **This directory is LOCAL - never synced to hub**
 
-**`tests/`:**
-- Purpose: Test suite
-- Contains: unit/, bash/, integration/, e2e/
-- Key files: test-*.sh scripts, *.test.js files
+**`.aether/exchange/` (XML Exchange):**
+- Purpose: Structured data import/export
+- Contains: pheromone-xml.sh, wisdom-xml.sh, registry-xml.sh
+- Used for: External system integration
 
 ## Key File Locations
 
 **Entry Points:**
-- `bin/cli.js`: Main CLI (aether command)
-- `.claude/commands/ant/init.md`: Colonize new project
-- `.claude/commands/ant/build.md`: Execute work
-- `.claude/commands/ant/plan.md`: Plan work
+- `/Users/callumcowie/repos/Aether/bin/cli.js` - Main CLI entry
+- `/Users/callumcowie/repos/Aether/.aether/aether-utils.sh` - Shell utility entry
 
 **Configuration:**
-- `package.json`: npm package definition
-- `.aether/model-profiles.yaml`: Model routing configuration
-- `.aether/registry.json`: Worker registry
+- `/Users/callumcowie/repos/Aether/package.json` - npm package config
+- `/Users/callumcowie/repos/Aether/.aether/model-profiles.yaml` - Model routing config
 
 **Core Logic:**
-- `.aether/aether-utils.sh`: 143KB utility layer
-- `bin/cli.js`: 77KB CLI layer
-- `bin/lib/*.js`: 15 library modules
+- `/Users/callumcowie/repos/Aether/.aether/aether-utils.sh` - ~3,700 lines of bash
+- `/Users/callumcowie/repos/Aether/bin/cli.js` - ~79KB of JavaScript
+- `/Users/callumcowie/repos/Aether/.aether/workers.md` - Worker definitions
+
+**State:**
+- `/Users/callumcowie/repos/Aether/.aether/data/COLONY_STATE.json` - Current colony state
+- `/Users/callumcowie/repos/Aether/.aether/data/pheromones.json` - Pheromone signals
+- `/Users/callumcowie/repos/Aether/.aether/data/checkpoint-allowlist.json` - Safe files for git stash
 
 **Testing:**
-- `tests/unit/`: AVA tests
-- `tests/bash/test-aether-utils.sh`: Shell tests
+- `/Users/callumcowie/repos/Aether/tests/bash/` - Shell script tests
+- `/Users/callumcowie/repos/Aether/tests/unit/` - JavaScript unit tests
 
 ## Naming Conventions
 
 **Files:**
-- Shell scripts: `kebab-case.sh` (e.g., `file-lock.sh`, `sync-to-runtime.sh`)
-- JavaScript modules: `camelCase.js` (e.g., `errors.js`, `logger.js`)
-- Markdown docs: `kebab-case.md` (e.g., `workers.md`, `context.md`)
-- Slash commands: `kebab-case.md` (e.g., `init.md`, `build.md`)
+- Shell scripts: `kebab-case.sh` (e.g., `file-lock.sh`, `spawn-tree.sh`)
+- JavaScript modules: `camelCase.js` (e.g., `errors.js`, `update-transaction.js`)
+- Markdown docs: `kebab-case.md` (e.g., `workers.md`, `pheromones.md`)
+- Slash commands: `kebab-case.md` (e.g., `build.md`, `swarm.md`)
 
 **Directories:**
-- General: `kebab-case/` (e.g., `bin/`, `tests/`, `utils/`)
-- Data categories: `snake_case` (e.g., `chambers/`, `checkpoints/`)
+- General: `kebab-case/` (e.g., `utils/`, `commands/`)
+- Data: `snake_case/` (e.g., `checkpoints/`, `chambers/`)
+- Configuration: `lowercase/` (e.g., `data/`, `docs/`)
 
-**Functions (Bash):**
-- Subcommands: `verb_noun` (e.g., `activity_log`, `spawn_log`)
-- Helpers: `_internal_helper` (e.g., `_cmd_context_update`)
-
-**Functions (JavaScript):**
-- camelCase (e.g., `loadModelProfiles`, `getEffectiveModel`)
+**Functions (aether-utils.sh):**
+- Pattern: `verb_noun` (e.g., `read_colony_state`, `spawn_log`, `activity_log`)
+- Case: lowercase with underscores
 
 ## Where to Add New Code
 
 **New Feature:**
-- Primary code: `.aether/aether-utils.sh` (for shell features)
-- CLI commands: `bin/cli.js` (for JS features)
-- Tests: `tests/unit/` or `tests/bash/`
+- Primary code: `/Users/callumcowie/repos/Aether/.aether/aether-utils.sh` (if shell) or `/Users/callumcowie/repos/Aether/bin/cli.js` (if Node.js)
+- Tests: `/Users/callumcowie/repos/Aether/tests/bash/` or `/Users/callumcowie/repos/Aether/tests/unit/`
 
-**New Worker Type:**
-- Definition: `.aether/workers.md`
-- Caste info: Add to caste table in workers.md
+**New Command:**
+- Implementation: `/Users/callumcowie/repos/Aether/.claude/commands/ant/<name>.md` AND `/Users/callumcowie/repos/Aether/.opencode/commands/ant/<name>.md`
+- Must keep both in sync (use `npm run lint:sync` to verify)
 
-**New Slash Command:**
-- Claude Code: `.claude/commands/ant/<name>.md`
-- OpenCode: `.opencode/commands/ant/<name>.md` (auto-generated)
+**New Utility:**
+- Shell: `/Users/callumcowie/repos/Aether/.aether/utils/<name>.sh`
+- JavaScript: `/Users/callumcowie/repos/Aether/bin/lib/<name>.js`
 
-**New Utility Function:**
-- Shell: `.aether/utils/<category>.sh`
-- JavaScript: `bin/lib/<category>.js`
+**Documentation:**
+- System docs (distributed): `/Users/callumcowie/repos/Aether/.aether/docs/<name>.md`
+- Dev docs (local only): `/Users/callumcowie/repos/Aether/docs/<name>.md`
 
 ## Special Directories
 
 **`.aether/data/`:**
-- Purpose: Colony state storage
-- Generated: Yes (by CLI operations)
-- Committed: No (never synced to hub)
+- Purpose: Colony state and pheromones
+- Generated: Yes (at runtime)
+- Committed: No (in .gitignore)
 
-**`.aether/dreams/`:**
-- Purpose: Dream journal for session notes
-- Generated: Yes (user-created)
-- Committed: No (never synced)
+**`.aether/checkpoints/`:**
+- Purpose: Session recovery via git stash
+- Generated: Yes (on checkpoint commands)
+- Committed: No
 
 **`.aether/chambers/`:**
-- Purpose: Archived colony states
-- Generated: Yes (on seal command)
-- Committed: Optional (user choice)
+- Purpose: Archived colonies
+- Generated: On seal/entomb commands
+- Committed: Optional
 
 **`runtime/`:**
-- Purpose: Staging for npm distribution
-- Generated: Yes (sync script)
-- Committed: Yes (part of package)
+- Purpose: Staging for npm package
+- Generated: Yes (via sync-to-runtime.sh)
+- Committed: No (auto-generated from .aether/)
 
-**`.planning/`:**
-- Purpose: Planning documents
-- Generated: Yes (by CDS mapper)
-- Committed: No (local planning)
+**`.planning/codebase/`:**
+- Purpose: Architecture documentation
+- Generated: By GSD mapping commands
+- Committed: Yes (documentation)
 
 ---
 

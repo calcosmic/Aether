@@ -2,190 +2,134 @@
 
 **Analysis Date:** 2026-02-17
 
-## Test Framework
+## Test Framework Overview
 
-**JavaScript Runner:**
-- AVA (`ava`) v6.0.0
-- Config: `package.json` ava section
-- Timeout: 30 seconds per test
+| Type | Framework | Location | Run Command |
+|------|-----------|----------|-------------|
+| Unit Tests | AVA | `tests/unit/` | `npm run test:unit` or `npm test` |
+| Shell Tests | Custom bash runner | `tests/bash/` | `npm run test:bash` |
+| Integration | AVA | `tests/integration/` | `npm test` |
+| E2E Tests | AVA | `tests/e2e/` | Manual execution |
 
-**Shell Runner:**
-- shellcheck for linting
-- Custom bash test framework in `tests/bash/test-helpers.sh`
+## Unit Testing (AVA)
 
-**Run Commands:**
+### Framework Details
+
+**Version:** AVA 6.x
+**Config:** `package.json` ava section
+**Timeout:** 30 seconds per test
+**Assertion Library:** AVA built-in
+
+### Run Commands
+
 ```bash
 npm test              # Run all tests (unit + bash)
-npm run test:unit     # Run AVA unit tests only
-npm run test:bash     # Run shell tests only
-npm run lint          # Run all linters (shell, json, sync)
-npm run lint:shell    # Run shellcheck only
+npm run test:unit    # Run only AVA unit tests
+npm run test:bash    # Run shell script tests
 ```
 
-## Test File Organization
+### Test File Organization
 
-**Location:**
-- Unit tests: `tests/unit/*.test.js`
-- Integration tests: `tests/integration/*.test.js`
-- E2E tests: `tests/e2e/*.test.js`
-- Shell tests: `tests/bash/*.sh`
+**Location Pattern:** Tests are co-located with their module conceptually:
+- `bin/lib/state-guard.js` → `tests/unit/state-guard.test.js`
+- `bin/lib/errors.js` → tested inline in `tests/unit/update-errors.test.js`
 
-**Naming:**
-- JavaScript: `{feature-name}.test.js` (e.g., `cli-hash.test.js`, `state-guard.test.js`)
-- Shell: `test-{feature}.sh` (e.g., `test-aether-utils.sh`)
+**Naming:** `*.test.js`
 
-**Structure:**
-```
-tests/
-├── unit/
-│   ├── cli-hash.test.js
-│   ├── state-guard.test.js
-│   ├── helpers/
-│   │   └── mock-fs.js
-│   └── ...
-├── integration/
-│   ├── state-guard-integration.test.js
-│   └── file-lock-integration.test.js
-├── e2e/
-│   ├── update-rollback.test.js
-│   └── checkpoint-update-build.test.js
-└── bash/
-    ├── test-helpers.sh
-    ├── test-aether-utils.sh
-    └── test-session-freshness.sh
-```
+### Test Structure
 
-## Test Structure
-
-**AVA Test Pattern:**
 ```javascript
 const test = require('ava');
 const sinon = require('sinon');
 const proxyquire = require('proxyquire');
 
 test.before(() => {
-  // Setup mocks once before all tests
-});
-
-test.afterEach(() => {
-  // Reset state between tests
+  // Setup shared mocks or state
 });
 
 test.after(() => {
-  sinon.restore();
+  // Cleanup after all tests
 });
 
-// Test with serial execution when order matters
-test.serial('test name', async t => {
+test.afterEach(() => {
+  // Reset mocks between tests
+});
+
+test.serial('test description', async t => {
   // Arrange
-  const input = 'test';
+  const input = 'test value';
 
   // Act
-  const result = functionUnderTest(input);
+  const result = await functionUnderTest(input);
 
   // Assert
-  t.is(result, expected);
+  t.is(result.expected, actual);
 });
 ```
 
-**Shell Test Pattern:**
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
+### Mocking Strategy
 
-source "$SCRIPT_DIR/test-helpers.sh"
+**Primary Tools:**
+- `sinon` - Stubs, spies, and mocks
+- `proxyquire` - Module dependency injection
+- Custom `mock-fs` helper - Filesystem mocking
 
-test_help() {
-    local output
-    output=$(bash "$SCRIPT" help 2>&1)
-    local exit_code=$?
+**Example: Using proxyquire for Module Mocking**
 
-    if ! assert_exit_code $exit_code 0; then
-        test_fail "exit code 0" "exit code $exit_code"
-        return 1
-    fi
-
-    if ! assert_json_valid "$output"; then
-        test_fail "valid JSON" "invalid JSON"
-        return 1
-    fi
-
-    return 0
-}
-```
-
-## Mocking
-
-**Framework:** sinon + proxyquire
-
-**What to Mock:**
-- File system (`fs`): Use `proxyquire` to inject mock `fs`
-- Child processes: Use `sinon.stub` on `execSync`
-- Time/Date: Use `sinon.useFakeTimers()` for deterministic dates
-
-**Mocking Example from `/Users/callumcowie/repos/Aether/tests/unit/cli-hash.test.js`:**
 ```javascript
-const sinon = require('sinon');
+// tests/unit/state-guard.test.js
 const proxyquire = require('proxyquire');
+const sinon = require('sinon');
 
 let mockFs;
-let cli;
+let StateGuard;
 
 test.before(() => {
   // Create mock fs with sinon stubs
   mockFs = {
-    readFileSync: sinon.stub()
+    existsSync: sinon.stub(),
+    readFileSync: sinon.stub(),
+    writeFileSync: sinon.stub(),
+    // ... other fs methods
   };
 
-  // Load cli.js with mocked fs
-  cli = proxyquire('../../bin/cli.js', {
+  // Load module with mocked fs
+  const module = proxyquire('../../bin/lib/state-guard.js', {
     fs: mockFs
+  });
+
+  StateGuard = module.StateGuard;
+});
+```
+
+**Custom Mock FS Helper**
+
+The project provides `tests/unit/helpers/mock-fs.js` for common filesystem operations:
+
+```javascript
+const { createMockFs, setupMockFiles, resetMockFs } = require('./helpers/mock-fs');
+
+test.before(() => {
+  mockFs = createMockFs();
+
+  // Setup test files
+  setupMockFiles(mockFs, {
+    '/test/COLONY_STATE.json': JSON.stringify(validState),
+    '/test/locks': null  // directory
   });
 });
 
-test('hashFileSync returns correct SHA-256 hash', t => {
-  const content = 'hello world';
-  mockFs.readFileSync.withArgs('/test/file.txt').returns(Buffer.from(content));
-
-  const result = cli.hashFileSync('/test/file.txt');
-
-  t.is(result, 'sha256:b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9');
+test.afterEach(() => {
+  resetMockFs(mockFs);
 });
 ```
 
-**Test Helper: Mock FS from `/Users/callumcowie/repos/Aether/tests/unit/helpers/mock-fs.js`:**
-```javascript
-function createMockFs() {
-  return {
-    readFileSync: sinon.stub(),
-    writeFileSync: sinon.stub(),
-    existsSync: sinon.stub(),
-    mkdirSync: sinon.stub(),
-    // ... more stubs
-  };
-}
+### Test Fixtures
 
-function setupMockFiles(mockFs, files) {
-  // Set up mock files with content
-  for (const [path, content] of Object.entries(files)) {
-    mockFs.readFileSync.withArgs(path).returns(content);
-    mockFs.existsSync.withArgs(path).returns(true);
-  }
-}
-```
+**Helper Functions:**
 
-**What NOT to Mock:**
-- Core business logic being tested
-- Error handling paths (unless specifically testing error cases)
-- Simple pure functions
+Tests use helper functions to create valid test data:
 
-## Fixtures and Factories
-
-**Test Data:**
-- Inline factory functions within test files
-- Helper functions for creating valid state objects
-
-**Example from `/Users/callumcowie/repos/Aether/tests/unit/state-guard.test.js`:**
 ```javascript
 function createValidState(overrides = {}) {
   return {
@@ -195,7 +139,11 @@ function createValidState(overrides = {}) {
     last_updated: '2026-02-14T10:00:00Z',
     goal: 'Test goal',
     state: 'ACTIVE',
-    memory: { phase_learnings: [], decisions: [], instincts: [] },
+    memory: {
+      phase_learnings: [],
+      decisions: [],
+      instincts: []
+    },
     errors: { records: [], flagged_patterns: [] },
     signals: [],
     graveyards: [],
@@ -203,91 +151,176 @@ function createValidState(overrides = {}) {
     ...overrides
   };
 }
+```
 
-function createValidEvidence(overrides = {}) {
-  return {
-    checkpoint_hash: 'sha256:abc123def456',
-    test_results: { passed: true, count: 10 },
-    timestamp: overrides.timestamp ?? '2026-02-14T12:00:00Z',
-    ...overrides
-  };
+### Assertions Reference
+
+AVA provides these assertion methods:
+
+| Method | Use For |
+|--------|---------|
+| `t.is(a, b)` | Strict equality |
+| `t.deepEqual(a, b)` | Deep equality (objects/arrays) |
+| `t.truthy(value)` | Truthy check |
+| `t.falsy(value)` | Falsy check |
+| `t.true(value)` | Strict true |
+| `t.false(value)` | Strict false |
+| `t.throws(fn)` | Exception thrown |
+| `t.throwsAsync(fn)` | Async exception thrown |
+| `t.notThrows(fn)` | No exception |
+| `t.notThrowsAsync(fn)` | No async exception |
+| `t.regex(str, regex)` | Regex match |
+| `t.snapshot(actual)` | Snapshot comparison |
+
+### Serial vs Parallel Tests
+
+Use `test.serial()` when tests modify shared state (files, globals):
+
+```javascript
+test.serial('advancePhase succeeds with valid evidence', async t => {
+  // Test that modifies COLONY_STATE.json
+});
+```
+
+Use regular `test()` for truly independent tests.
+
+## Shell Testing
+
+### Test Runner
+
+Custom bash test runner in `tests/bash/`:
+
+```bash
+#!/bin/bash
+# Test counters
+TESTS_RUN=0
+TESTS_PASSED=0
+TESTS_FAILED=0
+
+# Helper: Run test and track result
+run_test() {
+  local name="$1"
+  local expected="$2"
+  local actual="$3"
+
+  TESTS_RUN=$((TESTS_RUN + 1))
+
+  if [[ "$actual" == *"$expected"* ]]; then
+    echo "PASS: $name"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+    return 0
+  else
+    echo "FAIL: $name"
+    echo "  Expected: $expected"
+    echo "  Actual: $actual"
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+    return 1
+  fi
 }
 ```
 
-**Location:**
-- Co-located with tests in `tests/unit/helpers/`
-- Inline factory functions for specific test files
+### Shell Test Location
+
+| Test File | Tests |
+|-----------|-------|
+| `tests/bash/test-session-freshness.sh` | Session freshness detection |
+| `tests/bash/test-aether-utils.sh` | Main utilities |
+| `tests/bash/test-xml-utils.sh` | XML utilities |
+| `tests/bash/test-pheromone-xml.sh` | Pheromone XML parsing |
+
+### Shell Test Patterns
+
+**Setup/Temp Directory:**
+
+```bash
+setup_tmpdir() {
+  mktemp -d
+}
+
+cleanup_tmpdir() {
+  local dir="$1"
+  rm -rf "$dir"
+}
+```
+
+**Environment Variables for Test Context:**
+
+```bash
+test_verify_fresh_stale() {
+  local tmpdir=$(setup_tmpdir)
+
+  # Create test files
+  touch -t 202501010000 "$tmpdir/test-file.md"
+
+  # Run test with environment variable
+  local result
+  result=$(SURVEY_DIR="$tmpdir" bash "$UTILS_SCRIPT" session-verify-fresh --command survey "" "$(date +%s)")
+
+  # Assert
+  run_test "verify_fresh_stale_ok_false" '"ok":false' "$result"
+
+  cleanup_tmpdir "$tmpdir"
+}
+```
+
+## Integration Testing
+
+**Location:** `tests/integration/`
+
+Integration tests verify interactions between modules:
+
+```javascript
+// tests/integration/state-guard-integration.test.js
+test('StateGuard integrates with FileLock correctly', async t => {
+  // Full integration scenario
+});
+```
+
+## E2E Testing
+
+**Location:** `tests/e2e/`
+
+End-to-end tests verify complete workflows:
+
+```javascript
+// tests/e2e/checkpoint-update-build.test.js
+test('complete checkpoint update build flow', async t => {
+  // Full workflow from start to finish
+});
+```
+
+## Linting
+
+**Shell Linting:**
+```bash
+npm run lint:shell    # shellcheck on .aether scripts
+```
+
+**JSON Validation:**
+```bash
+npm run lint:json     # Validate JSON files
+```
+
+**Sync Verification:**
+```bash
+npm run lint:sync     # Verify command sync between Claude Code and OpenCode
+```
 
 ## Coverage
 
-**Requirements:** None explicitly enforced
+**Current Approach:** No enforced coverage target, but tests expected for:
+- New code features
+- Bug fixes (regression tests)
+- CLI commands
 
-**View Coverage:** No coverage tool configured (no nyc/istanbul)
+## Best Practices
 
-**Note:** Tests focus on behavior verification rather than coverage metrics
-
-## Test Types
-
-**Unit Tests:**
-- Scope: Individual functions, classes, modules
-- Location: `tests/unit/`
-- Use mocks to isolate from dependencies
-- Example: `cli-hash.test.js` tests `hashFileSync` in isolation
-
-**Integration Tests:**
-- Scope: Multiple modules working together
-- Location: `tests/integration/`
-- Real file system operations in temp directories
-- Example: `state-guard-integration.test.js` tests StateGuard with real locks
-
-**E2E Tests:**
-- Scope: Full CLI commands end-to-end
-- Location: `tests/e2e/`
-- Tests actual command execution
-- Example: `checkpoint-update-build.test.js` tests full update flow
-
-**Shell Tests:**
-- Scope: Shell script functionality
-- Location: `tests/bash/`
-- Validates JSON output, exit codes
-- Example: `test-aether-utils.sh` tests all aether-utils.sh subcommands
-
-## Common Patterns
-
-**Async Testing:**
-```javascript
-test.serial('advancePhase succeeds', async t => {
-  const result = await guard.advancePhase(5, 6, evidence);
-  t.is(result.status, 'transitioned');
-});
-```
-
-**Error Testing:**
-```javascript
-test.serial('advancePhase throws without evidence', async t => {
-  const error = await t.throwsAsync(
-    async () => await guard.advancePhase(5, 6, null),
-    { instanceOf: StateGuardError }
-  );
-
-  t.is(error.code, StateGuardErrorCodes.E_IRON_LAW_VIOLATION);
-});
-```
-
-**Serial Tests (when order matters):**
-```javascript
-test.serial('test that must run after previous', t => {
-  // Sequential execution
-});
-```
-
-**Shell JSON Validation:**
-```bash
-assert_json_valid() {
-    local output="$1"
-    echo "$output" | jq -e . >/dev/null 2>&1
-}
-```
+1. **Test Independence:** Each test should run independently
+2. **Cleanup:** Use `teardown` or `afterEach` for resource cleanup
+3. **Mock External Dependencies:** Don't rely on actual filesystem or network
+4. **Clear Assertions:** Use descriptive assertion messages
+5. **Arrange-Act-Assert:** Structure tests clearly
+6. **Fixture Reuse:** Create helper functions for common test data
 
 ---
 
