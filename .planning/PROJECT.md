@@ -45,44 +45,64 @@ If everything else fell away, Aether's essential value is:
   - [ ] No file path hallucinations
   - [ ] Commands find the right files
 
+- [ ] **XML Integration** — Deep data structure
+  - [ ] Pheromones stored/retrieved via XML
+  - [ ] Wisdom exchange uses XML
+  - [ ] Registry uses XML
+
+- [ ] **Pheromone System** — Self-learning signals
+  - [ ] FOCUS/REDIRECT/FEEDBACK work
+  - [ ] Auto-injection of learned patterns
+  - [ ] Instincts applied to new work
+
+- [ ] **Colony Lifecycle** — Seal/Entomb/Chambers
+  - [ ] /ant:seal — Crowned Anthill milestone
+  - [ ] /ant:entomb — Archive colony to chambers
+  - [ ] /ant:tunnels — Browse archived colonies
+
+- [ ] **Advanced Workers** — Specialized agents
+  - [ ] /ant:oracle — Deep research (RALF loop)
+  - [ ] /ant:chaos — Resilience testing
+  - [ ] /ant:archaeology — Git history analysis
+  - [ ] /ant:dream — Philosophical wanderer
+  - [ ] /ant:interpret — Validate dreams against reality
+
 ### Out of Scope
 
-- **Advanced features** (defer until foundation solid):
-  - XML deep integration
-  - Cross-colony communication
-  - Oracle deep research
-  - Chambers/Seal/Entomb lifecycle
-  - Pheromone auto-injection
-  - Self-learning queen markdown
-
-- **Nice-to-have** (defer):
-  - Visual progress bars (unless easy)
-  - Multiple color schemes
-  - Advanced analytics
+(None — all features stay in scope, we repair what's broken)
 
 ## Context
 
-**What was built (extensive):**
-- 21 worker castes with detailed disciplines (TDD, verification, debugging, etc.)
+**What's implemented (extensive):**
+- 21 worker castes with detailed disciplines (TDD, verification, debugging, learning)
 - Pheromone signaling system (FOCUS, REDIRECT, FEEDBACK)
 - Session freshness detection
 - Spawn tracking and swarm visualization
 - Comprehensive workers.md (769+ lines)
 - Detailed command definitions for each ant role
+- XML deep integration (pheromone-xml.sh, wisdom-xml.sh, registry-xml.sh)
+- Cross-colony communication via pheromones
+- Oracle deep research system
+- Chaos resilience testing
+- Archaeologist git history analysis
+- Seal/Entomb/Chambers lifecycle management
+- Self-learning via QUEEN.md and instincts
+- Visual display system (swarm-display)
 
 **What broke:**
-- Commands produce wrong results
-- Continuous errors (401s, etc.)
+- Visual display doesn't work — just bash text, not rotating ants
+- Continuous errors (401s, agent problems)
 - Agents spawn forever without stopping
-- Visual display doesn't work — just bash text
-- Hallucinations — looks for wrong files
+- Hallucinations — looks for wrong files, makes things up
 - Files created in wrong repos
+- Commands don't connect properly
+- Context still collapses
 
 **Why it broke:**
-- Implementation didn't follow the design
-- Too many changes made too quickly
-- No proper testing of changes
-- Context collapsed during development
+- Too many changes made too quickly without proper testing
+- Implementation didn't match the design
+- Pieces not connected — XML exists but not wired in, visual exists but doesn't display, etc.
+- Context collapsed during development, losing continuity
 
 ## Constraints
 
