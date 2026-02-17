@@ -1540,7 +1540,7 @@ EOF
 
     current=0
     if [[ -f "$DATA_DIR/spawn-tree.txt" ]]; then
-      current=$(grep -c "|swarm:$swarm_id$" "$DATA_DIR/spawn-tree.txt" 2>/dev/null || echo 0)
+      current=$(grep -c "|swarm:$swarm_id$" "$DATA_DIR/spawn-tree.txt" 2>/dev/null) || current=0
     fi
 
     if [[ $current -lt $swarm_cap ]]; then
