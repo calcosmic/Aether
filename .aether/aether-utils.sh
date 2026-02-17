@@ -473,7 +473,7 @@ shift 2>/dev/null || true
 case "$cmd" in
   help)
     cat <<'EOF'
-{"ok":true,"commands":["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-display-text","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","survey-load","survey-verify","pheromone-export","pheromone-write","pheromone-count","pheromone-read","instinct-read","pheromone-prime"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
+{"ok":true,"commands":["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-display-text","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","survey-load","survey-verify","pheromone-export","pheromone-write","pheromone-count","pheromone-read","instinct-read","pheromone-prime","pheromone-expire","eternal-init"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
 EOF
     ;;
   version)
@@ -4240,6 +4240,166 @@ ${entry}" "$queen_file" > "$tmp_file"
     pp_log_json=$(printf '%s' "$pp_log_line" | jq -Rs '.' 2>/dev/null || echo '"Primed: 0 signals, 0 instincts"')
 
     json_ok "{\"signal_count\":$pp_signal_count,\"instinct_count\":$pp_instinct_count,\"prompt_section\":$pp_section_json,\"log_line\":$pp_log_json}"
+    ;;
+
+  pheromone-expire)
+    # Archive expired pheromone signals to midden
+    # Usage: pheromone-expire [--phase-end-only]
+    #
+    # Two modes:
+    #   --phase-end-only  Only expire signals where expires_at == "phase_end"
+    #   (no flag)         Expire signals where expires_at is an ISO-8601 timestamp
+    #                     <= now, AND signals where effective_strength < 0.1
+
+    phe_phase_end_only="false"
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --phase-end-only) phe_phase_end_only="true"; shift ;;
+        *) shift ;;
+      esac
+    done
+
+    phe_pheromones_file="$DATA_DIR/pheromones.json"
+    phe_midden_dir="$DATA_DIR/midden"
+    phe_midden_file="$phe_midden_dir/midden.json"
+
+    # Handle missing pheromones.json gracefully
+    if [[ ! -f "$phe_pheromones_file" ]]; then
+      json_ok '{"expired_count":0,"remaining_active":0,"midden_total":0}'
+      exit 0
+    fi
+
+    # Ensure midden directory and file exist
+    mkdir -p "$phe_midden_dir"
+    if [[ ! -f "$phe_midden_file" ]]; then
+      printf '%s\n' '{"version":"1.0.0","archived_at_count":0,"signals":[]}' > "$phe_midden_file"
+    fi
+
+    phe_now_epoch=$(date +%s)
+    phe_archived_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    # Compute pause_duration from COLONY_STATE.json (pause-aware TTL)
+    phe_pause_duration=0
+    if [[ -f "$DATA_DIR/COLONY_STATE.json" ]]; then
+      phe_paused_at=$(jq -r '.paused_at // empty' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || true)
+      phe_resumed_at=$(jq -r '.resumed_at // empty' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || true)
+      if [[ -n "$phe_paused_at" && -n "$phe_resumed_at" ]]; then
+        phe_paused_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$phe_paused_at" +%s 2>/dev/null || date -d "$phe_paused_at" +%s 2>/dev/null || echo 0)
+        phe_resumed_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$phe_resumed_at" +%s 2>/dev/null || date -d "$phe_resumed_at" +%s 2>/dev/null || echo 0)
+        if [[ "$phe_resumed_epoch" -gt "$phe_paused_epoch" ]]; then
+          phe_pause_duration=$(( phe_resumed_epoch - phe_paused_epoch ))
+        fi
+      fi
+    fi
+
+    # Identify expired signal IDs
+    # We'll use jq to find signals to expire, then update in bash
+    if [[ "$phe_phase_end_only" == "true" ]]; then
+      # Only expire signals where expires_at == "phase_end"
+      phe_expired_ids=$(jq -r '.signals[] | select(.active == true and .expires_at == "phase_end") | .id' "$phe_pheromones_file" 2>/dev/null || true)
+    else
+      # Expire time-based expired signals (pause-aware) AND decay-expired signals
+      phe_expired_ids=$(jq -r --argjson now "$phe_now_epoch" --argjson pause_secs "$phe_pause_duration" '
+        .signals[] |
+        select(.active == true) |
+        select(
+          (.expires_at != "phase_end" and .expires_at != null and .expires_at != "") and
+          (
+            # ISO-8601 timestamp expiry (pause-aware: add pause_duration to expires_at before comparing)
+            (
+              .expires_at |
+              # Convert ISO-8601 to approximate epoch via string parsing
+              (
+                (split("T")[0] | split("-")) as $d |
+                (split("T")[1] | split(":")) as $t |
+                ($d[0] | tonumber) as $y |
+                ($d[1] | tonumber) as $mo |
+                ($d[2] | tonumber) as $day |
+                ($t[0] | tonumber) as $h |
+                ($t[1] | tonumber) as $m |
+                (($t[2] // "0") | gsub("[^0-9]";"") | if . == "" then 0 else tonumber end) as $s |
+                # Rough epoch: years*365.25*86400 + months*30.44*86400 + day*86400 + time
+                (($y - 1970) * 31557600) + (($mo - 1) * 2629800) + (($day - 1) * 86400) + ($h * 3600) + ($m * 60) + $s
+              )
+            ) + $pause_secs <= $now
+          )
+        ) |
+        .id
+      ' "$phe_pheromones_file" 2>/dev/null || true)
+    fi
+
+    # Count expired signals
+    phe_expired_count=0
+    if [[ -n "$phe_expired_ids" ]]; then
+      phe_expired_count=$(echo "$phe_expired_ids" | grep -c . 2>/dev/null || echo 0)
+    fi
+
+    # If nothing to expire, return counts
+    if [[ "$phe_expired_count" -eq 0 ]]; then
+      phe_remaining=$(jq '[.signals[] | select(.active == true)] | length' "$phe_pheromones_file" 2>/dev/null || echo 0)
+      phe_midden_total=$(jq '.signals | length' "$phe_midden_file" 2>/dev/null || echo 0)
+      json_ok "{\"expired_count\":0,\"remaining_active\":$phe_remaining,\"midden_total\":$phe_midden_total}"
+      exit 0
+    fi
+
+    # Build jq args for IDs to expire
+    phe_id_array=$(echo "$phe_expired_ids" | jq -R . | jq -s . 2>/dev/null || echo '[]')
+
+    # Extract expired signal objects (with archived_at added)
+    phe_expired_objects=$(jq --argjson ids "$phe_id_array" --arg archived_at "$phe_archived_at" '
+      [.signals[] | select(.id as $id | $ids | any(. == $id)) | . + {"archived_at": $archived_at, "active": false}]
+    ' "$phe_pheromones_file" 2>/dev/null || echo '[]')
+
+    # Update pheromones.json: set active=false for expired signals (do NOT remove them)
+    phe_updated_pheromones=$(jq --argjson ids "$phe_id_array" '
+      .signals = [.signals[] | if (.id as $id | $ids | any(. == $id)) then .active = false else . end]
+    ' "$phe_pheromones_file" 2>/dev/null)
+
+    if [[ -n "$phe_updated_pheromones" ]]; then
+      printf '%s\n' "$phe_updated_pheromones" > "$phe_pheromones_file"
+    fi
+
+    # Append expired signals to midden.json
+    phe_midden_updated=$(jq --argjson new_signals "$phe_expired_objects" '
+      .signals += $new_signals |
+      .archived_at_count = (.signals | length)
+    ' "$phe_midden_file" 2>/dev/null)
+
+    if [[ -n "$phe_midden_updated" ]]; then
+      printf '%s\n' "$phe_midden_updated" > "$phe_midden_file"
+    fi
+
+    phe_remaining_active=$(jq '[.signals[] | select(.active == true)] | length' "$phe_pheromones_file" 2>/dev/null || echo 0)
+    phe_midden_total=$(jq '.signals | length' "$phe_midden_file" 2>/dev/null || echo 0)
+
+    json_ok "{\"expired_count\":$phe_expired_count,\"remaining_active\":$phe_remaining_active,\"midden_total\":$phe_midden_total}"
+    ;;
+
+  eternal-init)
+    # Initialize the ~/.aether/eternal/ directory and memory.json schema
+    # Usage: eternal-init
+    # Idempotent: safe to call multiple times
+
+    ei_eternal_dir="$HOME/.aether/eternal"
+    ei_memory_file="$ei_eternal_dir/memory.json"
+    ei_already_existed="false"
+
+    mkdir -p "$ei_eternal_dir"
+
+    if [[ -f "$ei_memory_file" ]]; then
+      ei_already_existed="true"
+    else
+      ei_created_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+      printf '%s\n' "{
+  \"version\": \"1.0.0\",
+  \"created_at\": \"$ei_created_at\",
+  \"colonies\": [],
+  \"high_value_signals\": [],
+  \"cross_session_patterns\": []
+}" > "$ei_memory_file"
+    fi
+
+    json_ok "{\"dir\":\"$ei_eternal_dir\",\"initialized\":true,\"already_existed\":$ei_already_existed}"
     ;;
 
   # ============================================================================
