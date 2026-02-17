@@ -14,7 +14,7 @@ This is a REPAIR project — phases are organized to fix foundations first, then
 | 3 | Visual Experience | Make display work nicely | VIS-01 to VIS-04 | Ants visible, no bash text flood |
 | 4 | Context Persistence | Complete    | 2026-02-17 | Survives /clear |
 | 5 | Pheromone System | Fix self-learning | PHER-01 to PHER-05 | Signals work, instincts apply |
-| 6 | Colony Lifecycle | Fix seal/entomb/chambers | LIF-01 to LIF-03 | Archive and browse works |
+| 6 | Colony Lifecycle | Complete    | 2026-02-18 | Archive and browse works |
 | 7 | Advanced Workers | Fix oracle/chaos/archaeology | ADV-01 to ADV-05 | Specialized agents work |
 | 8 | XML Integration | Wire XML into system | XML-01 to XML-03 | XML used throughout |
 | 9 | Polish & Verify | Test end-to-end | All | Complete repair validated |
@@ -167,18 +167,20 @@ Plans:
 
 ---
 
-### Phase 6: Colony Lifecycle
+### Phase 6: Colony Lifecycle COMPLETE
 **Goal:** Fix seal/entomb/chambers
+
+**Status:** Complete (2026-02-18) — 3/3 plans, seal ceremony-only, entomb seal-first with full archive, tunnels timeline
 
 **Requirements:**
 - LIF-01 through LIF-03
 
-**Plans:** 3 plans
+**Plans:** 3/3 plans complete
 
 Plans:
 - [x] 06-01-PLAN.md — Rewrite /ant:seal as ceremony-only (maturity gate, confirmation, ASCII art, CROWNED-ANTHILL.md)
-- [ ] 06-02-PLAN.md — Rewrite /ant:entomb with seal-first enforcement, full archive, date-first naming
-- [ ] 06-03-PLAN.md — Rewrite /ant:tunnels with timeline view, seal document display, comparison
+- [x] 06-02-PLAN.md — Rewrite /ant:entomb with seal-first enforcement, full archive, date-first naming
+- [x] 06-03-PLAN.md — Rewrite /ant:tunnels with timeline view, seal document display, comparison
 
 **Success Criteria:**
 1. `/ant:seal` creates milestone

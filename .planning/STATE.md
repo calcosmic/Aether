@@ -5,9 +5,9 @@
 
 ## Current Status
 
-- **State:** Executing Phase 6
-- **Phase:** 06 (Colony Lifecycle) — 1/3 plans complete
-- **Plan:** 06-01 COMPLETE
+- **State:** Phase 6 COMPLETE
+- **Phase:** 06 (Colony Lifecycle) — 3/3 plans complete
+- **Plan:** 06-03 COMPLETE
 - **Total Plans in Phase:** 03
 - **Mode:** YOLO (auto-approve)
 
@@ -17,7 +17,7 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 
 **Core value:** Prevent context rot across Claude Code sessions with self-managing colony that learns and guides users
 
-**Current focus:** Phase 6: Colony Lifecycle — Plan 06-02/06-03 (Wave 2)
+**Current focus:** Phase 7: Advanced Workers — Plan 07-01 (next phase)
 
 ## Progress
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 - [x] Phase 3: Visual Experience — COMPLETE (2/2 plans)
 - [x] Phase 4: Context Persistence — COMPLETE (3/3 plans)
 - [x] Phase 5: Pheromone System — COMPLETE (3/3 plans)
-- [ ] Phase 6: Colony Lifecycle
+- [x] Phase 6: Colony Lifecycle — COMPLETE (3/3 plans)
 - [ ] Phase 7: Advanced Workers
 - [ ] Phase 8: XML Integration
 - [ ] Phase 9: Polish & Verify
@@ -65,6 +65,16 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 - **05-03:** Pause-aware TTL adds pause_duration to expires_at before comparison (macOS-safe epoch math)
 - **05-03:** eternal-init is idempotent — safe to call on every /ant:continue invocation
 
+## Decisions
+
+- **06-01:** Source of truth seal.md already matched plan — only OpenCode copy needed rewriting
+- **06-02:** Seal-first enforcement replaces old 3-precondition gate; belt-and-suspenders checks both milestone field and CROWNED-ANTHILL.md file
+- **06-02:** Date-first naming (YYYY-MM-DD-goal) replaces old goal-timestamp format
+- **06-02:** Full archive copies all data files including pheromones, dreams, CROWNED-ANTHILL.md; excludes backups/locks/midden/survey
+- **06-02:** State reset now clears memory.instincts, memory.phase_learnings, memory.decisions (promoted to QUEEN.md first)
+- **06-03:** Timeline uses date-first entries with milestone emoji indicators (crown/lock/circle)
+- **06-03:** Detail view prioritizes CROWNED-ANTHILL.md display over manifest data; graceful fallback for older chambers
+
 ## Last Updated
 
-2026-02-18 — Plan 06-01 COMPLETE (seal.md rewritten as ceremony-only across all three locations; OpenCode version synced from old archive-based to new ceremony pattern)
+2026-02-18 — Phase 6 COMPLETE (seal ceremony-only rewrite, entomb seal-first with full archive, tunnels timeline with seal doc display)
