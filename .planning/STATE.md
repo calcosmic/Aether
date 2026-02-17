@@ -5,9 +5,9 @@
 
 ## Current Status
 
-- **State:** Phase 5 IN PROGRESS
-- **Phase:** 05 (Pheromone System) — 2/3 plans complete
-- **Plan:** 05-02 COMPLETE
+- **State:** Phase 5 COMPLETE
+- **Phase:** 05 (Pheromone System) — 3/3 plans complete
+- **Plan:** 05-03 COMPLETE
 - **Total Plans in Phase:** 03
 - **Mode:** YOLO (auto-approve)
 
@@ -17,7 +17,7 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 
 **Core value:** Prevent context rot across Claude Code sessions with self-managing colony that learns and guides users
 
-**Current focus:** Phase 5: Pheromone System — Plan 05-03 (next plan)
+**Current focus:** Phase 6: Colony Lifecycle — Plan 06-01 (next phase)
 
 ## Progress
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 - [x] Phase 2: Core Infrastructure — COMPLETE (5/5 plans)
 - [x] Phase 3: Visual Experience — COMPLETE (2/2 plans)
 - [x] Phase 4: Context Persistence — COMPLETE (3/3 plans)
-- [ ] Phase 5: Pheromone System — 2/3 plans complete
+- [x] Phase 5: Pheromone System — COMPLETE (3/3 plans)
 - [ ] Phase 6: Colony Lifecycle
 - [ ] Phase 7: Advanced Workers
 - [ ] Phase 8: XML Integration
@@ -59,7 +59,12 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 - **05-02:** Watcher prompts receive pheromone_section between file list and verification sections (same injection pattern as builders)
 - **05-02:** Checkpoint polling is lightweight polling (check at natural breakpoints) not a formal queue — practical and zero-infrastructure
 - **05-02:** Graceful degradation: pheromone-prime failure never blocks a build — pheromone_section defaults to empty string
+- **05-03:** pheromone-expire sets active=false only — signals archived to midden, never deleted
+- **05-03:** Phase_end expiry only in continue.md, never build.md — signals must survive builds
+- **05-03:** Auto FEEDBACK strength 0.6 vs auto REDIRECT strength 0.7 — failures produce stronger signals
+- **05-03:** Pause-aware TTL adds pause_duration to expires_at before comparison (macOS-safe epoch math)
+- **05-03:** eternal-init is idempotent — safe to call on every /ant:continue invocation
 
 ## Last Updated
 
-2026-02-17 — Phase 5 Plan 02 COMPLETE (instinct-read, pheromone-prime subcommands; signal+instinct injection into builder and watcher prompts in build.md)
+2026-02-17 — Phase 5 COMPLETE (Plan 05-03: pheromone-expire, eternal-init subcommands; continue.md auto-emits FEEDBACK/REDIRECT on phase advance, archives phase_end signals to midden)
