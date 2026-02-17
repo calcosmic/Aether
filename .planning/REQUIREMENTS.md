@@ -47,9 +47,9 @@
 
 ### Colony Lifecycle
 
-- [ ] **LIF-01**: /ant:seal creates Crowned Anthill milestone
-- [ ] **LIF-02**: /ant:entomb archives colony to chambers
-- [ ] **LIF-03**: /ant:tunnels browses archived colonies
+- [x] **LIF-01**: /ant:seal creates Crowned Anthill milestone
+- [x] **LIF-02**: /ant:entomb archives colony to chambers
+- [x] **LIF-03**: /ant:tunnels browses archived colonies
 
 ### Advanced Workers
 
@@ -101,7 +101,7 @@
 | CTX-01 through CTX-03 | TBD | Pending |
 | STA-01 through STA-03 | TBD | Pending |
 | PHER-01 through PHER-05 | TBD | Pending |
-| LIF-01 through LIF-03 | TBD | Pending |
+| LIF-01 through LIF-03 | Phase 6 | Complete |
 | ADV-01 through ADV-05 | TBD | Pending |
 | XML-01 through XML-03 | TBD | Pending |
 | SES-01 through SES-03 | TBD | Pending |
