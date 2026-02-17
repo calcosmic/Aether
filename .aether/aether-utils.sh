@@ -2426,6 +2426,277 @@ NODESCRIPT
     fi
     ;;
 
+  swarm-display-inline)
+    # Inline swarm display for Claude Code (no loop, no clear)
+    # Usage: swarm-display-inline [swarm_id]
+    swarm_id="${1:-default-swarm}"
+    display_file="$DATA_DIR/swarm-display.json"
+
+    # ANSI colors
+    BLUE='\033[34m'
+    GREEN='\033[32m'
+    YELLOW='\033[33m'
+    RED='\033[31m'
+    MAGENTA='\033[35m'
+    BOLD='\033[1m'
+    DIM='\033[2m'
+    RESET='\033[0m'
+
+    # Caste colors
+    get_caste_color() {
+      case "$1" in
+        builder) echo "$BLUE" ;;
+        watcher) echo "$GREEN" ;;
+        scout) echo "$YELLOW" ;;
+        chaos) echo "$RED" ;;
+        prime) echo "$MAGENTA" ;;
+        oracle) echo "$MAGENTA" ;;
+        route_setter) echo "$MAGENTA" ;;
+        *) echo "$RESET" ;;
+      esac
+    }
+
+    # Caste emojis with ant
+    get_caste_emoji() {
+      case "$1" in
+        builder) echo "🔨🐜" ;;
+        watcher) echo "👁️🐜" ;;
+        scout) echo "🔍🐜" ;;
+        chaos) echo "🎲🐜" ;;
+        prime) echo "👑🐜" ;;
+        oracle) echo "🔮🐜" ;;
+        route_setter) echo "🧭🐜" ;;
+        archaeologist) echo "🏺🐜" ;;
+        chronicler) echo "📝🐜" ;;
+        gatekeeper) echo "📦🐜" ;;
+        guardian) echo "🛡️🐜" ;;
+        includer) echo "♿🐜" ;;
+        keeper) echo "📚🐜" ;;
+        measurer) echo "⚡🐜" ;;
+        probe) echo "🧪🐜" ;;
+        sage) echo "📜🐜" ;;
+        tracker) echo "🐛🐜" ;;
+        weaver) echo "🔄🐜" ;;
+        colonizer) echo "🌱🐜" ;;
+        dreamer) echo "💭🐜" ;;
+        *) echo "🐜" ;;
+      esac
+    }
+
+    # Status phrases
+    get_status_phrase() {
+      case "$1" in
+        builder) echo "excavating..." ;;
+        watcher) echo "observing..." ;;
+        scout) echo "exploring..." ;;
+        chaos) echo "testing..." ;;
+        prime) echo "coordinating..." ;;
+        oracle) echo "researching..." ;;
+        route_setter) echo "planning..." ;;
+        *) echo "working..." ;;
+      esac
+    }
+
+    # Excavation phrase based on progress
+    get_excavation_phrase() {
+      local progress="${1:-0}"
+      if [[ "$progress" -lt 25 ]]; then
+        echo "🚧 Starting excavation..."
+      elif [[ "$progress" -lt 50 ]]; then
+        echo "⛏️  Digging deeper..."
+      elif [[ "$progress" -lt 75 ]]; then
+        echo "🪨 Moving earth..."
+      elif [[ "$progress" -lt 100 ]]; then
+        echo "🏗️  Almost there..."
+      else
+        echo "✅ Excavation complete!"
+      fi
+    }
+
+    # Format tools: "📖5 🔍3 ✏️2 ⚡1"
+    format_tools() {
+      local read="${1:-0}"
+      local grep="${2:-0}"
+      local edit="${3:-0}"
+      local bash="${4:-0}"
+      local result=""
+      [[ "$read" -gt 0 ]] && result="${result}📖${read} "
+      [[ "$grep" -gt 0 ]] && result="${result}🔍${grep} "
+      [[ "$edit" -gt 0 ]] && result="${result}✏️${edit} "
+      [[ "$bash" -gt 0 ]] && result="${result}⚡${bash}"
+      echo "$result"
+    }
+
+    # Render progress bar (green when working)
+    render_progress_bar() {
+      local percent="${1:-0}"
+      local width="${2:-20}"
+      [[ "$percent" -lt 0 ]] && percent=0
+      [[ "$percent" -gt 100 ]] && percent=100
+      local filled=$((percent * width / 100))
+      local empty=$((width - filled))
+      local bar=""
+      for ((i=0; i<filled; i++)); do bar+="█"; done
+      for ((i=0; i<empty; i++)); do bar+="░"; done
+      echo -e "${GREEN}[$bar]${RESET} ${percent}%"
+    }
+
+    # Format duration
+    format_duration() {
+      local seconds="${1:-0}"
+      if [[ "$seconds" -lt 60 ]]; then
+        echo "${seconds}s"
+      else
+        local mins=$((seconds / 60))
+        local secs=$((seconds % 60))
+        echo "${mins}m${secs}s"
+      fi
+    }
+
+    # Check for display file
+    if [[ ! -f "$display_file" ]]; then
+      echo -e "${DIM}🐜 No active swarm data${RESET}"
+      json_ok '{"displayed":false,"reason":"no_data"}'
+      exit 0
+    fi
+
+    # Check for jq
+    if ! command -v jq >/dev/null 2>&1; then
+      echo -e "${DIM}🐜 Swarm active (jq not available for details)${RESET}"
+      json_ok '{"displayed":true,"warning":"jq_missing"}'
+      exit 0
+    fi
+
+    # Read swarm data
+    total_active=$(jq -r '.summary.total_active // 0' "$display_file" 2>/dev/null || echo "0")
+
+    if [[ "$total_active" -eq 0 ]]; then
+      echo -e "${DIM}🐜 Colony idle${RESET}"
+      json_ok '{"displayed":true,"ants":0}'
+      exit 0
+    fi
+
+    # Render header with ant logo
+    echo ""
+    cat << 'ANTLOGO'
+
+
+                                      ▁▐▖      ▁
+                            ▗▇▇███▆▇▃▅████▆▇▆▅▟██▛▇
+                             ▝▜▅▛██████████████▜▅██
+                          ▁▂▀▇▆██▙▜██████████▛▟███▛▁▃▁
+                         ▕▂▁▉▅████▙▞██████▜█▚▟████▅▊ ▐
+                        ▗▁▐█▀▜████▛▃▝▁████▍▘▟▜████▛▀█▂ ▖
+                    ▁▎▝█▁▝▍▆▜████▊▐▀▏▀▍▂▂▝▀▕▀▌█████▀▅▐▚ █▏▁▁
+                      ▂▚▃▇▙█▟████▛▏ ▝▜▐▛▀▍▛▘ ▕█████▆▊▐▂▃▞▂▔
+                       ▚▔█▛██████▙▟▍▜▍▜▃▃▖▟▛▐██████▛▛▜▔▔▞
+                        ▋▖▍▊▖██████▇▃▁▝██▘▝▃████▜█▜ ▋▐▐▗
+                        ▍▌▇█▅▂▜██████████████████▉▃▄▋▖  ▝
+                      ▁▎▍▁▜▟███▀▀▜████████████▛▀▀███▆▂  ▁▁
+                     ██ ▆▇▌▁▕▚▅▆███▛████████▜███▆▄▞▁▁▐▅▎ █▉
+                     ▆█████▛▃▟█▀████████████████▛█▙▙▜▉▟▛▜█▌▗
+                     ▅▆▋ ▁▁▁▔▕▁▁▁▇█████▛▀▀▀▁▜▇▇▁▁▁▁▁▁▁▁ ▐▊▗
+                   ▗▆▃▃▃▔███▖▔██▀▀▝▀██▀▍█▛▁▐█▏█▛▀▀▏█▛▀▜█▆▃▃▆▖
+                   ▝▗▖  ▟█▟█▙ █▛▀▘  █▊ ▕█▛▀▜█▏█▛▀▘ █▋▆█▛  ▗▖
+                   ▘ ▘ ▟▛  ▝▀▘▀▀▀▀▘ ▀▀▂▂█▙▂▐▀▏▀▀▀▀▘▀▘ ▝▀▅▂▝ ▕▏
+                    ▕▕  ▃▗▄▔▗▄▄▗▗▗▔▄▄▄▄▗▄▄▗▔▃▃▃▗▄▂▄▃▗▄▂▖▖ ▏▁
+                    ▝▘▏ ▔▔   ▁▔▁▔▔▁▔▔▔▔▔▔▔▁▁ ▔▔   ▔▔▔▔
+                             ▀ ▀▝▘▀▀▔▘▘▀▝▕▀▀▝▝▀▔▀ ▀▔▘
+                            ▘ ▗▅▁▝▚▃▀▆▟██▙▆▝▃ ▘ ▁▗▌
+                               ▔▀▔▝ ▔▀▟▜▛▛▀▔    ▀
+
+
+ANTLOGO
+    echo -e "${BOLD}AETHER COLONY :: Colony Activity${RESET}"
+    echo -e "${DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo ""
+
+    # Render each active ant (limit to 5)
+    jq -r '.active_ants[0:5][] | "\(.name)|\(.caste)|\(.status // "")|\(.task // "")|\(.tools.read // 0)|\(.tools.grep // 0)|\(.tools.edit // 0)|\(.tools.bash // 0)|\(.tokens // 0)|\(.started_at // "")|\(.parent // "Queen")|\(.progress // 0)"' "$display_file" 2>/dev/null | while IFS='|' read -r ant_name ant_caste ant_status ant_task read_ct grep_ct edit_ct bash_ct tokens started_at parent progress; do
+      color=$(get_caste_color "$ant_caste")
+      emoji=$(get_caste_emoji "$ant_caste")
+      phrase=$(get_status_phrase "$ant_caste")
+
+      # Format tools
+      tools_str=$(format_tools "$read_ct" "$grep_ct" "$edit_ct" "$bash_ct")
+
+      # Truncate task if too long
+      display_task="$ant_task"
+      [[ ${#display_task} -gt 35 ]] && display_task="${display_task:0:32}..."
+
+      # Calculate elapsed time
+      elapsed_str=""
+      started_ts="${started_at:-}"
+      if [[ -n "$started_ts" ]] && [[ "$started_ts" != "null" ]]; then
+        started_ts=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$started_ts" +%s 2>/dev/null)
+        if [[ -z "$started_ts" ]] || [[ "$started_ts" == "null" ]]; then
+          started_ts=$(date -d "$started_ts" +%s 2>/dev/null) || started_ts=0
+        fi
+        now_ts=$(date +%s)
+        elapsed=0
+        if [[ -n "$started_ts" ]] && [[ "$started_ts" -gt 0 ]] 2>/dev/null; then
+          elapsed=$((now_ts - started_ts))
+        fi
+        if [[ ${elapsed:-0} -gt 0 ]]; then
+          elapsed_str="($(format_duration $elapsed))"
+        fi
+      fi
+
+      # Token indicator
+      token_str=""
+      if [[ -n "$tokens" ]] && [[ "$tokens" -gt 0 ]]; then
+        token_str="🍯${tokens}"
+      fi
+
+      # Output ant line: "🐜 Builder: excavating... Implement auth 📖5 🔍3 (2m3s) 🍯1250"
+      echo -e "${color}${emoji} ${BOLD}${ant_name}${RESET}${color}: ${phrase}${RESET} ${display_task}"
+      echo -e "   ${tools_str} ${DIM}${elapsed_str}${RESET} ${token_str}"
+
+      # Show progress bar if progress > 0
+      if [[ -n "$progress" ]] && [[ "$progress" -gt 0 ]]; then
+        progress_bar=$(render_progress_bar "$progress" 15)
+        excavation_phrase=$(get_excavation_phrase "$progress")
+        echo -e "   ${DIM}${progress_bar}${RESET}"
+        echo -e "   ${DIM}${excavation_phrase}${RESET}"
+      fi
+
+      echo ""
+    done
+
+    # Chamber activity map
+    echo -e "${DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo ""
+    echo -e "${BOLD}Chamber Activity:${RESET}"
+
+    # Show active chambers with fire intensity
+    has_chamber_activity=0
+    jq -r '.chambers | to_entries[] | "\(.key)|\(.value.activity)|\(.value.icon)"' "$display_file" 2>/dev/null | \
+    while IFS='|' read -r chamber activity icon; do
+      if [[ -n "$activity" ]] && [[ "$activity" -gt 0 ]]; then
+        has_chamber_activity=1
+        if [[ "$activity" -ge 5 ]]; then
+          fires="🔥🔥🔥"
+        elif [[ "$activity" -ge 3 ]]; then
+          fires="🔥🔥"
+        else
+          fires="🔥"
+        fi
+        chamber_name="${chamber//_/ }"
+        echo -e "  ${icon} ${chamber_name} ${fires} (${activity} ants)"
+      fi
+    done
+
+    if [[ "$has_chamber_activity" -eq 0 ]]; then
+      echo -e "${DIM}  (no chamber activity)${RESET}"
+    fi
+
+    # Summary
+    echo ""
+    echo -e "${DIM}${total_active} forager$([[ "$total_active" -eq 1 ]] || echo "s") excavating...${RESET}"
+
+    json_ok "{\"displayed\":true,\"ants\":$total_active}"
+    ;;
+
   swarm-timing-start)
     # Record start time for an ant
     # Usage: swarm-timing-start <ant_name>
@@ -2789,6 +3060,36 @@ NODESCRIPT
           has_stack_wisdom: ($stack_wisdom | length) > 0 and $stack_wisdom != "*No stack wisdom recorded yet.*\n",
           has_decrees: ($decrees | length) > 0 and $decrees != "*No decrees recorded yet.*\n"
         }
+      }')
+
+    json_ok "$result"
+    ;;
+
+  pheromone-read)
+    # Read active pheromones (FOCUS/REDIRECT) from constraints.json
+    # Used to inject active signals into worker prompts
+    constraints_file="$AETHER_ROOT/.aether/data/constraints.json"
+
+    # Initialize defaults (no local - script-level)
+    priorities='[]'
+    avoid='[]'
+
+    # Check if constraints file exists
+    if [[ -f "$constraints_file" ]]; then
+      # Read focus array as priorities
+      priorities=$(jq -c '.focus // []' "$constraints_file" 2>/dev/null || echo '[]')
+
+      # Read constraints array, extract content and source
+      avoid=$(jq -c '[.constraints[]? | {content: .content, source: .source}] // []' "$constraints_file" 2>/dev/null || echo '[]')
+    fi
+
+    # Build JSON output
+    result=$(jq -n \
+      --argjson priorities "$priorities" \
+      --argjson avoid "$avoid" \
+      '{
+        priorities: $priorities,
+        avoid: $avoid
       }')
 
     json_ok "$result"
