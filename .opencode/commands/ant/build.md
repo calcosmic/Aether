@@ -274,6 +274,30 @@ queen_decrees = .result.wisdom.decrees (if .result.priming.has_decrees)
 
 **Graceful handling:** If QUEEN.md doesn't exist or `queen-read` fails, continue without wisdom injection. Workers will receive standard prompts.
 
+### Step 4.1.6: Load Active Pheromones (Signal Consumption)
+
+**This injects current FOCUS and REDIRECT signals into worker context.**
+
+Call `pheromone-read` to get active signals:
+
+```bash
+bash .aether/aether-utils.sh pheromone-read 2>/dev/null
+```
+
+**Parse the JSON response:**
+- If `.ok` is false or command fails: Set `pheromone_section = null` and skip
+- If successful: Extract `.result.priorities` and `.result.avoid`
+
+**Display summary:**
+```
+🎯 ACTIVE SIGNALS
+=================
+Priorities (FOCUS): {N}
+Constraints (REDIRECT): {M}
+```
+
+**Store for worker injection:** The `pheromone_section` markdown will be included in builder prompts (see Step 5.1 Active Signals Section).
+
 ### Step 4.2: Archaeologist Pre-Build Scan
 
 **Conditional step — only fires when the phase modifies existing files.**
@@ -299,15 +323,15 @@ queen_decrees = .result.wisdom.decrees (if .result.priming.has_decrees)
 
    Display:
    ```
-   🏺  Archaeologist {archaeologist_name} spawning
+   🏺🐜 Archaeologist {archaeologist_name} spawning
        Scanning history of files to be modified...
    ```
 
-   Spawn a Scout (using Task tool with `subagent_type="general-purpose"`) with this prompt:
-   # NOTE: Claude Code uses aether-archaeologist; OpenCode uses general-purpose with role injection
+   Spawn a Scout (using Task tool with `subagent_type="aether-archaeologist"`) with this prompt:
+   # FALLBACK: If "Agent type not found", use general-purpose and inject role: "You are an Archaeologist Ant - git historian that excavates why code exists."
 
    ```
-   You are {Archaeologist-Name}, a 🏺 Archaeologist Ant.
+   You are {Archaeologist-Name}, a 🏺🐜 Archaeologist Ant.
 
    Mission: Pre-build archaeology scan
 
@@ -353,6 +377,8 @@ queen_decrees = .result.wisdom.decrees (if .result.priming.has_decrees)
    The `archaeology_context` will be injected into builder prompts in Step 5.1 (see below).
    If this step was skipped (no existing files modified), the archaeology section is omitted from builder prompts.
 
+---
+
 ### Step 5: Initialize Swarm Display and Analyze Tasks
 
 **YOU (the Queen) will spawn workers directly. Do NOT delegate to a single Prime Worker.**
@@ -392,10 +418,10 @@ Analyze the phase tasks:
    - **Wave 3+:** Continue until all tasks assigned
 
 2. **Assign castes:**
-   - Implementation tasks → 🔨 Builder
-   - Research/docs tasks → 🔍 Scout
-   - Testing/validation → 👁️ Watcher (ALWAYS spawn at least one)
-   - Resilience testing → 🎲 Chaos (ALWAYS spawn one after Watcher)
+   - Implementation tasks → 🔨🐜 Builder
+   - Research/docs tasks → 🔍🐜 Scout
+   - Testing/validation → 👁️🐜 Watcher (ALWAYS spawn at least one)
+   - Resilience testing → 🎲🐜 Chaos (ALWAYS spawn one after Watcher)
 
 3. **Generate ant names for each worker:**
 ```bash
@@ -409,25 +435,25 @@ Display spawn plan with caste emojis:
 🐜  SPAWN PLAN
 
 Wave 1  — Parallel
-  🔨 {Builder-Name}  Task {id}  {description}
-  🔨 {Builder-Name}  Task {id}  {description}
+  🔨🐜 {Builder-Name}  Task {id}  {description}
+  🔨🐜 {Builder-Name}  Task {id}  {description}
 
 Wave 2  — After Wave 1
-  🔨 {Builder-Name}  Task {id}  {description}
+  🔨🐜 {Builder-Name}  Task {id}  {description}
 
 Verification
-  👁️ {Watcher-Name}  Verify all work independently
-  🎲 {Chaos-Name}   Resilience testing (after Watcher)
+  👁️🐜 {Watcher-Name}  Verify all work independently
+  🎲🐜 {Chaos-Name}   Resilience testing (after Watcher)
 
 Total: {N} Builders + 1 Watcher + 1 Chaos = {N+2} spawns
 ```
 
 **Caste Emoji Legend:**
-- 🔨 Builder  (cyan if color enabled)
-- 👁️ Watcher  (green if color enabled)
-- 🎲 Chaos    (red if color enabled)
-- 🔍 Scout    (yellow if color enabled)
-- 🏺 Archaeologist (magenta if color enabled)
+- 🔨🐜 Builder  (cyan if color enabled)
+- 👁️🐜 Watcher  (green if color enabled)
+- 🎲🐜 Chaos    (red if color enabled)
+- 🔍🐜 Scout    (yellow if color enabled)
+- 🏺🐜 Archaeologist (magenta if color enabled)
 - 🥚 Queen/Prime
 
 **Every spawn must show its caste emoji.**
@@ -436,23 +462,33 @@ Total: {N} Builders + 1 Watcher + 1 Chaos = {N+2} spawns
 
 **CRITICAL: Spawn ALL Wave 1 workers in a SINGLE message using multiple Task tool calls.**
 
-For each Wave 1 task, use Task tool with `subagent_type="general-purpose"` (DO NOT use run_in_background - multiple Task calls in a single message run in parallel and block until complete):
+**First, mark build start in context:**
+```bash
+bash .aether/aether-utils.sh context-update build-start {phase_id} {wave_1_worker_count} {wave_1_task_count}
+```
+
+For each Wave 1 task, use Task tool with `subagent_type="aether-builder"` (DO NOT use run_in_background - multiple Task calls in a single message run in parallel and block until complete):
 
 Log each spawn and update swarm display:
 ```bash
 bash .aether/aether-utils.sh spawn-log "Queen" "builder" "{ant_name}" "{task_description}"
 bash .aether/aether-utils.sh swarm-display-update "{ant_name}" "builder" "excavating" "{task_description}" "Queen" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 10
+bash .aether/aether-utils.sh context-update worker-spawn "{ant_name}" "builder" "{task_description}"
 ```
 
 **Builder Worker Prompt (CLEAN OUTPUT):**
 ```
-You are {Ant-Name}, a 🔨 Builder Ant.
+You are {Ant-Name}, a 🔨🐜 Builder Ant.
 
 Task {id}: {description}
 
 Goal: "{colony_goal}"
 
 { archaeology_context if exists }
+
+{ queen_wisdom_section if any wisdom exists }
+
+{ pheromone_section if pheromone_section exists }
 
 Work:
 1. Read .aether/workers.md for Builder discipline
@@ -470,13 +506,56 @@ Return ONLY this JSON (no other text):
 {"ant_name": "{Ant-Name}", "task_id": "{id}", "status": "completed|failed|blocked", "summary": "What you did", "files_created": [], "files_modified": [], "tests_written": [], "blockers": []}
 ```
 
+**Queen Wisdom Section Template (injected only if wisdom exists):**
+```
+--- QUEEN WISDOM (Eternal Guidance) ---
+{ if queen_philosophies: }
+📜 Philosophies:
+{queen_philosophies}
+{ endif }
+{ if queen_patterns: }
+🧭 Patterns:
+{queen_patterns}
+{ endif }
+{ if queen_redirects: }
+⚠️ Redirects (AVOID these):
+{queen_redirects}
+{ endif }
+{ if queen_stack_wisdom: }
+🔧 Stack Wisdom:
+{queen_stack_wisdom}
+{ endif }
+{ if queen_decrees: }
+🏛️ Decrees:
+{queen_decrees}
+{ endif }
+--- END QUEEN WISDOM ---
+```
+
+**Active Signals Section (injected if pheromones exist):**
+```
+--- ACTIVE SIGNALS (From User) ---
+
+🎯 PRIORITIES (FOCUS):
+{for each priority}
+- {priority}
+{endfor}
+
+⚠️ CONSTRAINTS (REDIRECT - AVOID):
+{for each constraint}
+- {constraint.content}
+{endfor}
+
+--- END ACTIVE SIGNALS ---
+```
+
 ### Step 5.2: Process Wave 1 Results
 
 **Task calls return results directly (no TaskOutput needed).**
 
 **As each worker result arrives, immediately display:**
 ```
-✅ 🔨 {Builder-Name} completed Task {id}
+✅ 🔨🐜 {Builder-Name} completed Task {id}
    📖{read_count} 🔍{grep_count} ✏️{edit_count} ⚡{bash_count}  {elapsed_time}
 ```
 
@@ -484,6 +563,7 @@ Log and update swarm display:
 ```bash
 bash .aether/aether-utils.sh spawn-complete "{ant_name}" "completed" "{summary}"
 bash .aether/aether-utils.sh swarm-display-update "{ant_name}" "builder" "completed" "{task_description}" "Queen" '{"read":5,"grep":3,"edit":2,"bash":1}' 100 "fungus_garden" 100
+bash .aether/aether-utils.sh context-update worker-complete "{ant_name}" "completed"
 ```
 
 **Parse each worker's JSON output to collect:** status, files_created, files_modified, blockers
@@ -502,7 +582,7 @@ Repeat Step 5.1-5.2 for each subsequent wave, waiting for previous wave to compl
 
 **MANDATORY: Always spawn a Watcher — testing must be independent.**
 
-Spawn the Watcher using Task tool with `subagent_type="general-purpose"` (DO NOT use run_in_background - task blocks until complete):
+Spawn the Watcher using Task tool with `subagent_type="aether-watcher"` (DO NOT use run_in_background - task blocks until complete):
 
 ```bash
 bash .aether/aether-utils.sh spawn-log "Queen" "watcher" "{watcher_name}" "Independent verification"
@@ -511,7 +591,7 @@ bash .aether/aether-utils.sh swarm-display-update "{watcher_name}" "watcher" "ob
 
 **Watcher Worker Prompt (CLEAN OUTPUT):**
 ```
-You are {Watcher-Name}, a 👁️ Watcher Ant.
+You are {Watcher-Name}, a 👁️🐜 Watcher Ant.
 
 Verify all work done by Builders in Phase {id}.
 
@@ -563,12 +643,12 @@ bash .aether/aether-utils.sh flag-list --phase {phase_number}
 ```
 Parse the result and extract unresolved flag titles into a list: `{existing_flag_titles}` (comma-separated titles from `.result.flags[].title`). If no flags exist, set `{existing_flag_titles}` to "None".
 
-Spawn the Chaos Ant using Task tool with `subagent_type="general-purpose"` (DO NOT use run_in_background - task blocks until complete):
-# NOTE: Claude Code uses aether-chaos; OpenCode uses general-purpose with role injection
+Spawn the Chaos Ant using Task tool with `subagent_type="aether-chaos"` (DO NOT use run_in_background - task blocks until complete):
+# FALLBACK: If "Agent type not found", use general-purpose and inject role: "You are a Chaos Ant - resilience tester that probes edge cases and boundary conditions."
 
 **Chaos Ant Prompt (CLEAN OUTPUT):**
 ```
-You are {Chaos-Name}, a 🎲 Chaos Ant.
+You are {Chaos-Name}, a 🎲🐜 Chaos Ant.
 
 Test Phase {id} work for edge cases and boundary conditions.
 
@@ -869,6 +949,23 @@ HANDOFF_EOF
 
 This ensures the handoff always reflects the latest build state, even if the session crashes before explicit pause.
 
+### Step 6.5: Update Context Document
+
+Log this build activity to `.aether/CONTEXT.md`:
+
+```bash
+bash .aether/aether-utils.sh context-update activity "build {phase_id}" "{synthesis.status}" "{files_created_count + files_modified_count}"
+```
+
+Mark build as complete in context:
+```bash
+bash .aether/aether-utils.sh context-update build-complete "{synthesis.status}" "{synthesis.status == 'completed' ? 'success' : 'failed'}"
+```
+
+Also update safe-to-clear status:
+- If build completed successfully: `context-update safe-to-clear "YES" "Build complete, ready to continue"`
+- If build failed: `context-update safe-to-clear "NO" "Build failed — run /ant:swarm or /ant:flags"`
+
 ### Step 7: Display Results
 
 **This step runs ONLY after synthesis is complete. All values come from actual worker results.**
@@ -883,7 +980,7 @@ bash .aether/aether-utils.sh swarm-display-render "$build_id"
 ```
 
 The swarm display will show:
-- 🐜 All workers with their caste emojis (🔨 Builder, 👁️ Watcher, 🎲 Chaos)
+- 🐜 All workers with their caste emojis (🔨🐜 Builder, 👁️🐜 Watcher, 🎲🐜 Chaos)
 - 📖 Tool usage stats (Read, Grep, Edit, Bash counts)
 - 🏠 Chamber activity map (Fungus Garden, Nursery, Refuse Pile)
 - ✅ Progress bars at 100% for completed work
@@ -986,3 +1083,11 @@ The swarm display will show:
 - Mark tasks as completed
 - Extract learnings
 - Advance to next phase
+
+### Step 8: Update Session
+
+Update the session tracking file to enable `/ant:resume` after context clear:
+
+```bash
+bash .aether/aether-utils.sh session-update "/ant:build {phase_id}" "/ant:continue" "Phase {phase_id} build completed: {synthesis.status}"
+```
