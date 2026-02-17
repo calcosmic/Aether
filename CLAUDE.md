@@ -207,3 +207,19 @@ All stateful commands now use timestamp verification to detect stale sessions. T
 - `init` - COLONY_STATE.json is precious
 - `seal` - Archives are precious
 - `entomb` - Chambers are precious
+
+---
+
+## Session Recovery
+
+On the first message of a new conversation, check if `.aether/data/session.json` exists. If it does:
+
+1. Read the file briefly to check for `colony_goal`
+2. If a goal exists, display:
+   ```
+   Previous colony session detected: "{goal}"
+   Run /ant:resume to restore context, or continue with a new topic.
+   ```
+3. Do NOT auto-restore — wait for the user to explicitly run /ant:resume
+
+This only applies to genuinely new conversations, not after /clear (where the user knows they cleared and will resume explicitly if needed).
