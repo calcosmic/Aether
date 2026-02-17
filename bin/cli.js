@@ -70,9 +70,10 @@ const COMMANDS_DEST = path.join(HOME, '.claude', 'commands', 'ant');
 
 // Hub paths
 const HUB_DIR = path.join(HOME, '.aether');
-const HUB_COMMANDS_CLAUDE = path.join(HUB_DIR, 'commands', 'claude');
-const HUB_COMMANDS_OPENCODE = path.join(HUB_DIR, 'commands', 'opencode');
-const HUB_AGENTS = path.join(HUB_DIR, 'agents');
+const HUB_SYSTEM_DIR = path.join(HUB_DIR, 'system');
+const HUB_COMMANDS_CLAUDE = path.join(HUB_SYSTEM_DIR, 'commands', 'claude');
+const HUB_COMMANDS_OPENCODE = path.join(HUB_SYSTEM_DIR, 'commands', 'opencode');
+const HUB_AGENTS = path.join(HUB_SYSTEM_DIR, 'agents');
 const HUB_REGISTRY = path.join(HUB_DIR, 'registry.json');
 const HUB_VERSION = path.join(HUB_DIR, 'version.json');
 
@@ -638,12 +639,12 @@ function syncSystemFilesWithCleanup(srcDir, destDir, opts) {
 
 // Checkpoint allowlist - only these files are captured in checkpoints
 // NEVER include: data/, dreams/, oracle/, TO-DOs.md (user data)
+// Note: runtime/ is generated during publish only, not checkpointed
 const CHECKPOINT_ALLOWLIST = [
   '.aether/*.md',                    // All .md files directly in .aether/
   '.claude/commands/ant/**',         // All files in .claude/commands/ant/ recursively
   '.opencode/commands/ant/**',       // All files in .opencode/commands/ant/ recursively
   '.opencode/agents/**',             // All files in .opencode/agents/ recursively
-  'runtime/**',                      // All files in runtime/ recursively
   'bin/cli.js',                      // Specific file: bin/cli.js
 ];
 
@@ -955,6 +956,48 @@ function setupHub() {
   try {
     fs.mkdirSync(HUB_DIR, { recursive: true });
 
+    // MIGRATION: Check for old structure and migrate to system/
+    const oldStructureFiles = [
+      path.join(HUB_DIR, 'aether-utils.sh'),
+      path.join(HUB_DIR, 'workers.md'),
+    ];
+    const hasOldStructure = oldStructureFiles.some(f => fs.existsSync(f));
+    const hasNewStructure = fs.existsSync(HUB_SYSTEM_DIR);
+
+    if (hasOldStructure && !hasNewStructure) {
+      log('  Migrating hub to new structure...');
+      fs.mkdirSync(HUB_SYSTEM_DIR, { recursive: true });
+
+      // Move system files to system/
+      const systemFiles = ['aether-utils.sh', 'workers.md', 'CONTEXT.md', 'model-profiles.yaml',
+                          'coding-standards.md', 'debugging.md', 'learning.md', 'planning.md',
+                          'tdd.md', 'verification.md', 'verification-loop.md', 'DISCIPLINES.md',
+                          'QUEEN_ANT_ARCHITECTURE.md', 'workers-new-castes.md', 'recover.sh'];
+      const systemDirs = ['docs', 'utils', 'commands', 'agents', 'schemas', 'exchange', 'templates', 'lib'];
+
+      for (const file of systemFiles) {
+        const oldPath = path.join(HUB_DIR, file);
+        if (fs.existsSync(oldPath)) {
+          fs.renameSync(oldPath, path.join(HUB_SYSTEM_DIR, file));
+        }
+      }
+
+      for (const dir of systemDirs) {
+        const oldPath = path.join(HUB_DIR, dir);
+        if (fs.existsSync(oldPath)) {
+          fs.renameSync(oldPath, path.join(HUB_SYSTEM_DIR, dir));
+        }
+      }
+
+      log('  Migration complete: system files moved to ~/.aether/system/');
+    }
+
+    // Create system/ directory structure
+    fs.mkdirSync(HUB_SYSTEM_DIR, { recursive: true });
+    fs.mkdirSync(path.join(HUB_SYSTEM_DIR, 'commands', 'claude'), { recursive: true });
+    fs.mkdirSync(path.join(HUB_SYSTEM_DIR, 'commands', 'opencode'), { recursive: true });
+    fs.mkdirSync(path.join(HUB_SYSTEM_DIR, 'agents'), { recursive: true });
+
     // Read previous manifest for delta reporting
     const prevManifestRaw = readJsonSafe(path.join(HUB_DIR, 'manifest.json'));
     const prevManifest = prevManifestRaw && validateManifest(prevManifestRaw).valid ? prevManifestRaw : null;
@@ -962,21 +1005,20 @@ function setupHub() {
       log(`  Warning: previous manifest is invalid, regenerating`);
     }
 
-    // Sync runtime/ -> ~/.aether/ (clean production files)
-    // runtime/ is the staging area - explicit allowlist via sync-to-runtime.sh
+    // Sync runtime/ -> ~/.aether/system/ (clean production files)
+    // runtime/ is generated during publish - explicit allowlist via sync-to-runtime.sh
     const runtimeSrc = path.join(PACKAGE_DIR, 'runtime');
     if (fs.existsSync(runtimeSrc)) {
-      const result = syncAetherToHub(runtimeSrc, HUB_DIR);
-      log(`  Hub system: ${result.copied} files, ${result.skipped} unchanged -> ${HUB_DIR}`);
+      const result = syncAetherToHub(runtimeSrc, HUB_SYSTEM_DIR);
+      log(`  Hub system: ${result.copied} files, ${result.skipped} unchanged -> ${HUB_SYSTEM_DIR}`);
       if (result.removed.length > 0) {
         log(`  Hub system: removed ${result.removed.length} stale files`);
         for (const f of result.removed) log(`    - ${f}`);
       }
     }
 
-    // Clean up legacy directories from old hub structure
+    // Clean up legacy directories from very old hub structure (pre-system/)
     const legacyDirs = [
-      path.join(HUB_DIR, 'system'),
       path.join(HUB_DIR, '.aether'),
       path.join(HUB_DIR, 'visualizations'),
     ];
@@ -991,7 +1033,7 @@ function setupHub() {
       }
     }
 
-    // Sync .claude/commands/ant/ -> ~/.aether/commands/claude/
+    // Sync .claude/commands/ant/ -> ~/.aether/system/commands/claude/
     const claudeCmdSrc = fs.existsSync(COMMANDS_SRC)
       ? COMMANDS_SRC
       : path.join(PACKAGE_DIR, '.claude', 'commands', 'ant');
@@ -1004,7 +1046,7 @@ function setupHub() {
       }
     }
 
-    // Sync .opencode/commands/ant/ -> ~/.aether/commands/opencode/
+    // Sync .opencode/commands/ant/ -> ~/.aether/system/commands/opencode/
     const opencodeCmdSrc = path.join(PACKAGE_DIR, '.opencode', 'commands', 'ant');
     if (fs.existsSync(opencodeCmdSrc)) {
       const result = syncDirWithCleanup(opencodeCmdSrc, HUB_COMMANDS_OPENCODE);
@@ -1015,7 +1057,7 @@ function setupHub() {
       }
     }
 
-    // Sync .opencode/agents/ -> ~/.aether/agents/
+    // Sync .opencode/agents/ -> ~/.aether/system/agents/
     const agentsSrc = path.join(PACKAGE_DIR, '.opencode', 'agents');
     if (fs.existsSync(agentsSrc)) {
       const result = syncDirWithCleanup(agentsSrc, HUB_AGENTS);
@@ -1026,7 +1068,7 @@ function setupHub() {
       }
     }
 
-    // Create/preserve registry.json
+    // Create/preserve registry.json (at root, not in system/)
     if (!fs.existsSync(HUB_REGISTRY)) {
       writeJsonSync(HUB_REGISTRY, { schema_version: 1, repos: [] });
       log(`  Registry: initialized ${HUB_REGISTRY}`);
@@ -1034,7 +1076,7 @@ function setupHub() {
       log(`  Registry: preserved existing ${HUB_REGISTRY}`);
     }
 
-    // Generate and write manifest
+    // Generate and write manifest (at root, tracks everything)
     const manifest = generateManifest(HUB_DIR);
     const manifestPath = path.join(HUB_DIR, 'manifest.json');
     writeJsonSync(manifestPath, manifest);
@@ -1053,7 +1095,7 @@ function setupHub() {
       }
     }
 
-    // Write version.json
+    // Write version.json (at root)
     writeJsonSync(HUB_VERSION, { version: VERSION, updated_at: new Date().toISOString() });
     log(`  Hub version: ${VERSION}`);
   } catch (err) {
@@ -1967,6 +2009,85 @@ program
     const repoPath = process.cwd();
     const tree = formatSpawnTree(repoPath);
     console.log(tree);
+  }));
+
+// Status command - Show colony status
+program
+  .command('status')
+  .description('Show colony status')
+  .option('-j, --json', 'Output as JSON')
+  .action(wrapCommand(async (options) => {
+    const repoPath = process.cwd();
+    const colonyStatePath = path.join(repoPath, '.aether', 'data', 'COLONY_STATE.json');
+
+    // Check if colony exists
+    if (!fs.existsSync(colonyStatePath)) {
+      console.log(c.warning('No colony found in current directory.'));
+      console.log(c.dim('Run /ant:init to create a new colony, or cd to a project with an existing colony.'));
+      return;
+    }
+
+    // Load colony state
+    let state;
+    try {
+      state = JSON.parse(fs.readFileSync(colonyStatePath, 'utf8'));
+    } catch (err) {
+      console.log(c.error('Could not read colony state.'));
+      console.log(c.dim(`Error: ${err.message}`));
+      console.log(c.dim('The colony state file may be corrupted. Consider running /ant:init to reinitialize.'));
+      return;
+    }
+
+    // JSON output
+    if (options.json) {
+      console.log(JSON.stringify(state, null, 2));
+      return;
+    }
+
+    // Dashboard output
+    console.log(c.header('Colony Status\n'));
+
+    // Goal
+    if (state.goal) {
+      console.log(`${c.queen('Goal:')} ${state.goal}`);
+    }
+
+    // State
+    if (state.state) {
+      const stateDisplay = state.state === 'BUILDING' ? c.success(state.state) :
+                          state.state === 'PLANNING' ? c.warning(state.state) :
+                          state.state === 'COMPLETED' ? c.success(state.state) :
+                          state.state;
+      console.log(`${c.colony('State:')} ${stateDisplay}`);
+    }
+
+    // Phase
+    if (state.current_phase !== undefined) {
+      console.log(`${c.info('Phase:')} ${state.current_phase}`);
+    }
+
+    // Version
+    if (state.version) {
+      console.log(`${c.dim('Version:')} ${state.version}`);
+    }
+
+    // Last updated
+    if (state.last_updated) {
+      const lastUpdated = new Date(state.last_updated);
+      const now = new Date();
+      const hoursAgo = Math.round((now - lastUpdated) / (1000 * 60 * 60));
+      const timeDisplay = hoursAgo < 1 ? 'just now' :
+                         hoursAgo < 24 ? `${hoursAgo} hours ago` :
+                         `${Math.round(hoursAgo / 24)} days ago`;
+      console.log(`${c.dim('Last updated:')} ${timeDisplay}`);
+    }
+
+    // Event count
+    if (state.events && state.events.length > 0) {
+      console.log(`${c.dim('Events:')} ${state.events.length}`);
+    }
+
+    console.log('');
   }));
 
 // Nestmates command - List sibling colonies
