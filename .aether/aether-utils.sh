@@ -3679,6 +3679,37 @@ ${entry}" "$queen_file" > "$tmp_file"
     fi
     ;;
 
+  pheromone-read)
+    # Read pheromones from colony data
+    # Usage: pheromone-read [type]
+    #   type: Filter by pheromone type (focus, redirect, feedback) or 'all' (default: all)
+    # Returns: JSON object with pheromones array
+
+    pher_type="${1:-all}"
+    pher_file="$DATA_DIR/pheromones.json"
+
+    # Check if file exists
+    if [[ ! -f "$pher_file" ]]; then
+      json_err "$E_FILE_NOT_FOUND" "Pheromones file not found. Run /ant:colonize first to initialize the colony."
+    fi
+
+    # Read and filter pheromones based on type
+    if [[ "$pher_type" == "all" ]]; then
+      # Return all signals from the file
+      result=$(jq -c '{version, colony_id, generated_at, signals}' "$pher_file" 2>/dev/null)
+    else
+      # Filter by type (case-insensitive match)
+      type_upper=$(echo "$pher_type" | tr '[:lower:]' '[:upper:]')
+      result=$(jq -c --arg type "$type_upper" '{version, colony_id, generated_at, signals: [.signals[] | select(.type == $type)]}' "$pher_file" 2>/dev/null)
+    fi
+
+    if [[ -z "$result" || "$result" == "null" ]]; then
+      json_ok "{\"version\":\"1.0.0\",\"signals\":[]}"
+    else
+      json_ok "$result"
+    fi
+    ;;
+
   # ============================================================================
   # Session Continuity Commands
   # ============================================================================
