@@ -3890,9 +3890,9 @@ EOF
     session_file="$DATA_DIR/session.json"
     json_mode="false"
 
-    # Parse --json flag
-    while [[ $# -gt 1 ]]; do
-      case "$2" in
+    # Parse --json flag (command name already shifted by main dispatch)
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
         --json)
           json_mode="true"
           shift
