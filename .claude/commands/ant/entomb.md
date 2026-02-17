@@ -3,7 +3,7 @@ name: ant:entomb
 description: "⚰️🐜⚰️ Entomb completed colony in chambers"
 ---
 
-You are the **Queen**. Archive the completed colony to chambers.
+You are the **Queen**. Archive the sealed colony to chambers.
 
 ## Instructions
 
@@ -33,115 +33,64 @@ No colony to entomb. Run /ant:init first.
 ```
 Stop here.
 
-#### Step 1.5: Check for Concurrent Entomb Operations
+Extract: `goal`, `state`, `current_phase`, `plan.phases`, `milestone`, `version`, `initialized_at`, `memory.decisions`, `memory.phase_learnings`, `memory.instincts`.
 
-Capture session start time:
-```bash
-ENTOMB_START=$(date +%s)
+### Step 2: Seal-First Enforcement
+
+Check `milestone` in COLONY_STATE.json.
+
+**If milestone != "Crowned Anthill":**
 ```
+Colony has not been sealed.
 
-Check for incomplete chamber operations:
-```bash
-# Check for incomplete chambers (no colony-state.json)
-incomplete_chambers=$(find .aether/chambers -type d -mindepth 1 -maxdepth 1 2>/dev/null | while read dir; do
-  if [[ ! -f "$dir/colony-state.json" ]]; then
-    echo "$dir"
-  fi
-done)
+Current milestone: {milestone}
+Required: Crowned Anthill
 
-if [[ -n "$incomplete_chambers" ]]; then
-  echo "Warning: Incomplete chamber operations detected:"
-  echo "$incomplete_chambers"
-fi
-```
-
-### Step 2: Validate Colony Can Be Entombed
-
-Extract: `goal`, `state`, `current_phase`, `plan.phases`, `memory.decisions`, `memory.phase_learnings`.
-
-**Precondition 1: All phases must be completed**
-
-Check if all phases in `plan.phases` have `status: "completed"`:
-```
-all_completed = all(phase.status == "completed" for phase in plan.phases)
-```
-
-If NOT all completed:
-```
-Cannot entomb incomplete colony.
-
-Completed phases: X of Y
-Remaining: {list of incomplete phase names}
-
-Run /ant:continue to complete remaining phases first.
+Run /ant:seal first to complete the sealing ceremony.
 ```
 Stop here.
 
-**Precondition 2: State must not be EXECUTING**
-
-If `state == "EXECUTING"`:
+**Belt-and-suspenders:** Also check `.aether/CROWNED-ANTHILL.md` exists. If milestone is Crowned Anthill but file is missing:
 ```
-Colony is still executing. Run /ant:continue to reconcile first.
+CROWNED-ANTHILL.md not found — seal may have been interrupted. Run /ant:seal again.
 ```
 Stop here.
 
-**Precondition 3: No critical errors**
+### Step 3: User Confirmation
 
-Check `errors.records` for any entries with `severity: "critical"`.
-
-If critical errors exist:
+Show what will be archived:
 ```
-Cannot entomb colony with critical errors.
-
-Critical errors: {count}
-Run /ant:continue to resolve errors first.
-```
-Stop here.
-
-### Step 3: Compute Milestone
-
-Determine milestone based on phases completed:
-- 0 phases: "Fresh Start"
-- 1 phase: "First Mound"
-- 2-4 phases: "Open Chambers"
-- 5+ phases: "Sealed Chambers"
-
-If all phases completed AND user explicitly sealing: "Crowned Anthill"
-
-For entombment, use the computed milestone or extract from state if already set.
-
-### Step 4: User Confirmation
-
-Display:
-```
-🏺 ═══════════════════════════════════════════════════
-   E N T O M B   C O L O N Y
-══════════════════════════════════════════════════ 🏺
+ENTOMB COLONY
 
 Goal: {goal}
-Phases: {completed}/{total} completed
-Milestone: {milestone}
+Milestone: Crowned Anthill
+Phases: {phases_completed} of {total_phases}
 
-Archive will include:
-  - COLONY_STATE.json
-  - manifest.json (pheromone trails)
+This will:
+  - Archive ALL colony data to .aether/chambers/
+  - Copy CROWNED-ANTHILL.md, pheromones, dreams, session data
+  - Promote colony wisdom to QUEEN.md (cross-generational learning)
+  - Reset COLONY_STATE.json for a fresh start
+  - Clear session data
 
-This will reset the active colony. Continue? (yes/no)
+This action is permanent. The archived colony can be browsed via /ant:tunnels.
+
+Entomb this colony? (yes/no)
 ```
 
-Wait for explicit "yes" response before proceeding.
+Use `AskUserQuestion with yes/no options`.
 
-If user responds with anything other than "yes", display:
+If not "yes":
 ```
 Entombment cancelled. Colony remains active.
 ```
 Stop here.
 
-### Step 5: Promote Wisdom to QUEEN.md
+### Step 4: Promote Wisdom to QUEEN.md
 
 Before creating the chamber, promote validated learnings to QUEEN.md for future colonies.
 
-**Step 5.1: Ensure QUEEN.md exists**
+**Step 4.1: Ensure QUEEN.md exists**
 
 ```bash
 queen_file=".aether/docs/QUEEN.md"
@@ -157,7 +106,7 @@ if [[ ! -f "$queen_file" ]]; then
 fi
 ```
 
-**Step 5.2: Extract and promote validated learnings**
+**Step 4.2: Extract and promote validated learnings**
 
 ```bash
 # Extract colony name from goal (sanitized)
@@ -210,7 +159,7 @@ if [[ -f "$queen_file" ]]; then
 fi
 ```
 
-**Step 5.3: Display promotion summary**
+**Step 4.3: Display promotion summary**
 
 ```
 ---
@@ -221,16 +170,16 @@ Promoted: {promotion_count} validated patterns to QUEEN.md
 ---
 ```
 
-### Step 6: Create Chamber
+### Step 5: Generate Chamber Name
 
-Generate chamber name:
+Date-first naming:
 ```bash
-sanitized_goal=$(echo "{goal}" | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' '-' | sed 's/^-//;s/-$//' | cut -c1-50)
-timestamp=$(date -u +%Y%m%d-%H%M%S)
-chamber_name="${sanitized_goal}-${timestamp}"
+date_prefix=$(date -u +%Y-%m-%d)
+sanitized_goal=$(echo "$goal" | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' '-' | sed 's/^-//;s/-$//' | cut -c1-40)
+chamber_name="${date_prefix}-${sanitized_goal}"
 ```
 
-Handle name collision: if directory exists, append counter:
+Collision handling:
 ```bash
 counter=1
 original_name="$chamber_name"
@@ -240,7 +189,7 @@ while [[ -d ".aether/chambers/$chamber_name" ]]; do
 done
 ```
 
-### Step 7: Create Chamber Using Utilities
+### Step 6: Create Chamber
 
 Extract decisions and learnings as JSON arrays:
 ```bash
@@ -254,27 +203,50 @@ version=$(jq -r '.version // "3.0"' .aether/data/COLONY_STATE.json)
 Create the chamber:
 ```bash
 bash .aether/aether-utils.sh chamber-create \
-  ".aether/chambers/{chamber_name}" \
+  ".aether/chambers/$chamber_name" \
   ".aether/data/COLONY_STATE.json" \
-  "{goal}" \
-  {phases_completed} \
-  {total_phases} \
-  "{milestone}" \
-  "{version}" \
-  '{decisions_json}' \
-  '{learnings_json}'
+  "$goal" \
+  "$phases_completed" \
+  "$total_phases" \
+  "$milestone" \
+  "$version" \
+  "$decisions_json" \
+  "$learnings_json"
 ```
+
+### Step 7: Archive Additional Files
+
+AFTER chamber-create succeeds, copy additional data files:
+```bash
+chamber_dir=".aether/chambers/$chamber_name"
+
+# Archive data files (if they exist)
+for f in pheromones.json session.json activity.log flags.json constraints.json spawn-tree.txt timing.log view-state.json; do
+  [[ -f ".aether/data/$f" ]] && cp ".aether/data/$f" "$chamber_dir/" 2>/dev/null || true
+done
+
+# Archive seal document (critical — this is the ceremony record)
+[[ -f ".aether/CROWNED-ANTHILL.md" ]] && cp ".aether/CROWNED-ANTHILL.md" "$chamber_dir/"
+
+# Archive HANDOFF.md if it exists
+[[ -f ".aether/HANDOFF.md" ]] && cp ".aether/HANDOFF.md" "$chamber_dir/"
+
+# Archive dreams directory (optional — may not exist)
+[[ -d ".aether/dreams" ]] && cp -r ".aether/dreams" "$chamber_dir/dreams" 2>/dev/null || true
+```
+
+Do NOT copy: `.aether/data/backups/`, `.aether/data/locks/`, `.aether/data/midden/`, `.aether/data/survey/`.
 
 ### Step 8: Verify Chamber Integrity
 
 Run verification:
 ```bash
-bash .aether/aether-utils.sh chamber-verify ".aether/chambers/{chamber_name}"
+bash .aether/aether-utils.sh chamber-verify ".aether/chambers/$chamber_name"
 ```
 
 If verification fails, display error and stop:
 ```
-❌ Chamber verification failed.
+Chamber verification failed.
 
 Error: {verification_error}
 
@@ -283,14 +255,32 @@ The colony has NOT been reset. Please check the chamber directory:
 ```
 Stop here.
 
-### Step 9: Reset Colony State
+### Step 9: Record in Eternal Memory
+
+Write colony summary to eternal memory:
+```bash
+bash .aether/aether-utils.sh eternal-init  # idempotent
+eternal_file="$HOME/.aether/eternal/memory.json"
+if [[ -f "$eternal_file" ]]; then
+  colony_entry=$(jq -n \
+    --arg goal "$goal" \
+    --arg milestone "$milestone" \
+    --arg sealed_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --arg chamber ".aether/chambers/$chamber_name" \
+    '{goal: $goal, milestone: $milestone, sealed_at: $sealed_at, chamber: $chamber}')
+  jq --argjson entry "$colony_entry" '.colonies += [$entry]' "$eternal_file" > /tmp/eternal-tmp.json \
+    && mv /tmp/eternal-tmp.json "$eternal_file"
+fi
+```
+
+### Step 10: Reset Colony State
 
 Backup current state:
 ```bash
 cp .aether/data/COLONY_STATE.json .aether/data/COLONY_STATE.json.bak
 ```
 
-Reset state while preserving memory (pheromones):
+Reset state, clearing everything including promoted wisdom (already in QUEEN.md):
 ```bash
 jq '
   .goal = null |
@@ -302,11 +292,15 @@ jq '
   .build_started_at = null |
   .session_id = null |
   .initialized_at = null |
+  .milestone = null |
   .events = [] |
   .errors.records = [] |
   .errors.flagged_patterns = [] |
   .signals = [] |
-  .graveyards = []
+  .graveyards = [] |
+  .memory.instincts = [] |
+  .memory.phase_learnings = [] |
+  .memory.decisions = []
 ' .aether/data/COLONY_STATE.json.bak > .aether/data/COLONY_STATE.json
 ```
 
@@ -326,15 +320,25 @@ Remove backup after successful reset:
 rm -f .aether/data/COLONY_STATE.json.bak
 ```
 
-### Step 9.5: Write Final Handoff
+Clear session data:
+```bash
+rm -f .aether/data/session.json
+```
 
-After entombing the colony, write the final handoff documenting the archived colony:
+Clean up seal document (it's now in the chamber):
+```bash
+rm -f .aether/CROWNED-ANTHILL.md
+```
+
+### Step 11: Write HANDOFF.md
+
+Write handoff documenting the entombed colony:
 
 ```bash
 cat > .aether/HANDOFF.md << 'HANDOFF_EOF'
 # Colony Session — ENTOMBED
 
-## ⚰️ Colony Archived
+## Colony Archived
 **Status:** Entombed in Chambers — Colony work preserved
 
 ## Chamber Location
@@ -349,44 +353,47 @@ cat > .aether/HANDOFF.md << 'HANDOFF_EOF'
 ## Chamber Contents
 - colony-state.json — Full colony state
 - manifest.json — Archive metadata
+- CROWNED-ANTHILL.md — Seal ceremony record
+- pheromones.json — Pheromone signals
 - activity.log — Colony activity history
 - spawn-tree.txt — Worker spawn records
-- flags.json — Project flags (if existed)
+- dreams/ — Dream journal (if existed)
 
 ## Session Note
 This colony has been entombed and the active state reset.
-The colony rests. Its learnings are preserved in the chamber.
+The colony rests. Its learnings are preserved in the chamber and QUEEN.md.
 
 To start anew: /ant:lay-eggs "<new goal>"
 To explore chambers: /ant:tunnels
 HANDOFF_EOF
 ```
 
-This handoff serves as the record of the entombed colony.
+### Step 12: Display Result
 
-### Step 10: Display Result
-
+**If visual_mode is true, render swarm display:**
+```bash
+bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Colony entombed" "Colony" '{"read":3,"grep":0,"edit":2,"bash":5}' 100 "fungus_garden" 100
+bash .aether/aether-utils.sh swarm-display-inline "$entomb_id"
 ```
-🏺 ═══════════════════════════════════════════════════
-   C O L O N Y   E N T O M B E D
-══════════════════════════════════════════════════ 🏺
 
-✅ Colony archived successfully
+Display:
+```
+C O L O N Y   E N T O M B E D
 
-👑 Goal: {goal}
-📍 Phases: {completed} completed
-🏆 Milestone: {milestone}
+Colony archived successfully
 
-📦 Chamber: .aether/chambers/{chamber_name}/
+Goal: {goal}
+Phases: {completed} completed
+Milestone: {milestone}
 
-🐜 The colony rests. Its learnings are preserved.
+Chamber: .aether/chambers/{chamber_name}/
 
-💾 State persisted — safe to /clear
+The colony rests. Its learnings live on in QUEEN.md.
 
-🐜 What would you like to do next?
-   1. /ant:lay-eggs "<new goal>"  — Start a new colony
-   2. /ant:tunnels                — Browse archived colonies
-   3. /clear                      — Clear context and continue
+What would you like to do next?
+  1. /ant:lay-eggs "<new goal>"  — Start a new colony
+  2. /ant:tunnels                — Browse archived colonies
+  3. /clear                      — Clear context and continue
 
 Use AskUserQuestion with these three options.
 
@@ -397,10 +404,20 @@ If option 3 selected: display "Run /ant:lay-eggs to begin anew after clearing"
 
 ### Edge Cases
 
-**Chamber name collision:** Automatically append counter to make unique.
+**Colony not sealed:**
+- Refuse with guidance to run /ant:seal first. This is the primary gate.
 
-**Missing files during archive:** Note in output but continue with available files.
+**Chamber name collision:**
+- Automatically append counter to make unique.
 
-**State reset failure:** Restore from backup, display error, do not claim success.
+**Missing files during archive:**
+- Note in output but continue with available files. The `|| true` in the copy loop handles this.
 
-**Empty phases array:** Can entomb a colony that was initialized but had no phases planned (treat as 0 of 0 completed).
+**State reset failure:**
+- Restore from backup, display error, do not claim success.
+
+**Empty phases array:**
+- Can entomb a colony that was initialized but had no phases planned (treat as 0 of 0 completed).
+
+**Missing CROWNED-ANTHILL.md:**
+- Refuse with guidance to run /ant:seal again.
