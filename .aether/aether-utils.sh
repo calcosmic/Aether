@@ -473,7 +473,7 @@ shift 2>/dev/null || true
 case "$cmd" in
   help)
     cat <<'EOF'
-{"ok":true,"commands":["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","survey-load","survey-verify","pheromone-export"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
+{"ok":true,"commands":["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-display-text","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","survey-load","survey-verify","pheromone-export"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
 EOF
     ;;
   version)
@@ -2698,6 +2698,106 @@ ANTLOGO
     # Summary
     echo ""
     echo -e "${DIM}${total_active} forager$([[ "$total_active" -eq 1 ]] || echo "s") excavating...${RESET}"
+
+    json_ok "{\"displayed\":true,\"ants\":$total_active}"
+    ;;
+
+  swarm-display-text)
+    # Plain-text swarm display for Claude conversation (no ANSI codes)
+    # Usage: swarm-display-text [swarm_id]
+    swarm_id="${1:-default-swarm}"
+    display_file="$DATA_DIR/swarm-display.json"
+
+    # Check for display file
+    if [[ ! -f "$display_file" ]]; then
+      echo "🐜 Colony idle"
+      json_ok '{"displayed":false,"reason":"no_data"}'
+      exit 0
+    fi
+
+    # Check for jq
+    if ! command -v jq >/dev/null 2>&1; then
+      echo "🐜 Swarm active (details unavailable)"
+      json_ok '{"displayed":true,"warning":"jq_missing"}'
+      exit 0
+    fi
+
+    # Read swarm data — handle both flat total_active and nested .summary.total_active
+    total_active=$(jq -r '(.total_active // .summary.total_active // 0)' "$display_file" 2>/dev/null || echo "0")
+
+    if [[ "$total_active" -eq 0 ]]; then
+      echo "🐜 Colony idle"
+      json_ok '{"displayed":true,"ants":0}'
+      exit 0
+    fi
+
+    # Compact header
+    echo "🐜 COLONY ACTIVITY"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    # Caste emoji lookup
+    get_emoji() {
+      case "$1" in
+        builder)       echo "🔨🐜" ;;
+        watcher)       echo "👁️🐜" ;;
+        scout)         echo "🔍🐜" ;;
+        chaos)         echo "🎲🐜" ;;
+        prime)         echo "👑🐜" ;;
+        oracle)        echo "🔮🐜" ;;
+        route_setter)  echo "🧭🐜" ;;
+        archaeologist) echo "🏺🐜" ;;
+        surveyor)      echo "📊🐜" ;;
+        *)             echo "🐜" ;;
+      esac
+    }
+
+    # Format tool counts (only non-zero)
+    format_tools_text() {
+      local r="${1:-0}" g="${2:-0}" e="${3:-0}" b="${4:-0}"
+      local result=""
+      [[ "$r" -gt 0 ]] && result="${result}📖${r} "
+      [[ "$g" -gt 0 ]] && result="${result}🔍${g} "
+      [[ "$e" -gt 0 ]] && result="${result}✏️${e} "
+      [[ "$b" -gt 0 ]] && result="${result}⚡${b}"
+      echo "$result"
+    }
+
+    # Progress bar using block characters (no ANSI)
+    render_bar_text() {
+      local pct="${1:-0}" w="${2:-10}"
+      [[ "$pct" -lt 0 ]] && pct=0
+      [[ "$pct" -gt 100 ]] && pct=100
+      local filled=$((pct * w / 100))
+      local empty=$((w - filled))
+      local bar=""
+      for ((i=0; i<filled; i++)); do bar+="█"; done
+      for ((i=0; i<empty; i++)); do bar+="░"; done
+      echo "[$bar] ${pct}%"
+    }
+
+    # Render each ant (max 5)
+    jq -r '.active_ants[0:5][] | "\(.name)|\(.caste)|\(.task // "")|\(.tools.read // 0)|\(.tools.grep // 0)|\(.tools.edit // 0)|\(.tools.bash // 0)|\(.progress // 0)"' "$display_file" 2>/dev/null | while IFS='|' read -r name caste task r g e b progress; do
+      emoji=$(get_emoji "$caste")
+      tools=$(format_tools_text "$r" "$g" "$e" "$b")
+      bar=$(render_bar_text "${progress:-0}" 10)
+
+      # Truncate task to 25 chars
+      [[ ${#task} -gt 25 ]] && task="${task:0:22}..."
+
+      echo "${emoji} ${name} ${bar} ${task}"
+      [[ -n "$tools" ]] && echo "   ${tools}"
+      echo ""
+    done
+
+    # Overflow indicator
+    if [[ "$total_active" -gt 5 ]]; then
+      echo "   +$((total_active - 5)) more ants..."
+      echo ""
+    fi
+
+    # Footer
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "${total_active} ants active"
 
     json_ok "{\"displayed\":true,\"ants\":$total_active}"
     ;;
