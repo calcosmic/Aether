@@ -196,6 +196,25 @@ If file doesn't exist or is empty:
 CONSTRAINTS: (none)
 ```
 
+**Load pheromone context for worker injection:**
+
+```bash
+prime_result=$(bash .aether/aether-utils.sh pheromone-prime 2>/dev/null)
+```
+
+Parse the JSON result from `.result`:
+- Extract `signal_count` (number of active signals)
+- Extract `instinct_count` (number of filtered instincts)
+- Extract `prompt_section` as `pheromone_section` variable — the formatted markdown to inject into worker prompts
+- Extract `log_line` for display
+
+Display after constraints:
+```
+{log_line from pheromone-prime}
+```
+
+If `pheromone-prime` fails, returns an error, or is unavailable: set `pheromone_section` to empty string and continue. **Builds MUST NEVER fail because pheromones are unavailable.**
+
 ### Step 4.0: Load Territory Survey
 
 Check if territory survey exists and load relevant documents:
@@ -469,11 +488,20 @@ Goal: "{colony_goal}"
 
 { queen_wisdom_section if any wisdom exists }
 
+{ pheromone_section if pheromone_section is not empty }
+
+{ if pheromone_section is not empty: }
+IMPORTANT: REDIRECT signals above are HARD CONSTRAINTS. You MUST follow them. FOCUS and FEEDBACK are flexible guidance — use your judgment on relevance.
+{ end if }
+
 Work:
 1. Read .aether/workers.md for Builder discipline
 2. Implement task, write tests
 3. Log activity: bash .aether/aether-utils.sh activity-log "ACTION" "{Ant-Name}" "description"
 4. Update display: bash .aether/aether-utils.sh swarm-display-update "{Ant-Name}" "builder" "excavating" "current task" "Queen" '{"read":0,"grep":0,"edit":0,"bash":0}' {progress} "fungus_garden" 50
+5. At natural breakpoints (between tasks, after errors): Check for new signals:
+   bash .aether/aether-utils.sh pheromone-read all | jq '.result.signals | length'
+   If new signals appeared since spawn, note them and adjust approach.
 
 Spawn sub-workers ONLY if 3x complexity:
 - Check: bash .aether/aether-utils.sh spawn-can-spawn {depth}
@@ -560,6 +588,8 @@ Verify all work done by Builders in Phase {id}.
 Files to verify:
 - Created: {list from builder results}
 - Modified: {list from builder results}
+
+{ pheromone_section if pheromone_section is not empty }
 
 Verification:
 1. Check files exist (Read each)
