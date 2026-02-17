@@ -231,16 +231,23 @@ Plans:
 **Requirements:**
 - XML-01 through XML-03
 
+**Plans:** 3 plans
+
+Plans:
+- [ ] 08-01-PLAN.md — Add pheromone XML export/import/validate subcommands to aether-utils.sh
+- [ ] 08-02-PLAN.md — Add wisdom and registry XML export/import subcommands to aether-utils.sh
+- [ ] 08-03-PLAN.md — Wire XML export into /ant:entomb for archive integration
+
 **Success Criteria:**
 1. Pheromones use XML format
 2. Wisdom exchange uses XML
 3. Registry uses XML
 
 **Approach:**
-- Integrate existing XML utils
-- Convert pheromone storage
-- Wire wisdom XML
-- Test XML round-trip
+- XML as exchange format (JSON stays as primary storage)
+- Wire exchange scripts into aether-utils.sh as subcommands
+- Integrate XML export into entomb for automatic archive generation
+- Graceful degradation when xmllint/xmlstarlet not available
 
 ---
 
