@@ -62,6 +62,15 @@ Plans:
 - CMD-01 through CMD-08
 - ERR-01 through ERR-03
 
+**Plans:** 5 plans
+
+Plans:
+- [ ] 02-01-PLAN.md — Fix session-is-stale and session-summary JSON output
+- [ ] 02-02-PLAN.md — Fix session-clear and context-update argument parsing
+- [ ] 02-03-PLAN.md — Implement pheromone-read subcommand
+- [ ] 02-04-PLAN.md — Fix spawn-can-spawn-swarm syntax error
+- [ ] 02-05-PLAN.md — Add aether status CLI and resume.md frontmatter
+
 **Success Criteria:**
 1. `/ant:help` shows all commands
 2. `/ant:init "test"` creates valid state
