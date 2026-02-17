@@ -201,6 +201,13 @@ Plans:
 **Requirements:**
 - ADV-01 through ADV-05
 
+**Plans:** 3 plans
+
+Plans:
+- [ ] 07-01-PLAN.md — Verify and fix Oracle command and oracle.sh across all 3 locations
+- [ ] 07-02-PLAN.md — Fix Chaos and Archaeology sync drift, verify function references
+- [ ] 07-03-PLAN.md — Verify Dream and fix Interpret OpenCode adaptation
+
 **Success Criteria:**
 1. `/ant:oracle` runs research
 2. `/ant:chaos` runs resilience tests
@@ -209,10 +216,10 @@ Plans:
 5. `/ant:interpret` validates dreams
 
 **Approach:**
-- Fix each command definition
-- Test worker spawning
-- Verify worker outputs
-- Fix any broken prompts
+- Fix sync drift between copies (chaos/archaeology Claude Code uses wrong display function)
+- Add missing OpenCode adaptation for interpret
+- Verify all aether-utils.sh function references are correct
+- Test each command against the Aether codebase itself
 
 ---
 
