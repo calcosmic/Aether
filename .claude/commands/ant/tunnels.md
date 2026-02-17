@@ -9,9 +9,9 @@ You are the **Queen**. Browse the colony history.
 
 ### Argument Handling
 
-- No arguments: Show chamber list (Step 4)
-- One argument: Show single chamber detail (Step 3)
-- Two arguments: Compare two chambers (Step 5)
+- No arguments: Show timeline view (Step 4)
+- One argument: Show single chamber detail with seal document (Step 3)
+- Two arguments: Compare two chambers side-by-side (Step 5)
 - More than two: "Too many arguments. Use: /ant:tunnels [chamber1] [chamber2]"
 
 ### Step 1: Check for Chambers Directory
@@ -20,9 +20,7 @@ Check if `.aether/chambers/` exists.
 
 If not:
 ```
-🕳️ ═══════════════════════════════════════════════════
-   T U N N E L S   (Colony History)
-══════════════════════════════════════════════════ 🕳️
+TUNNELS — Colony Timeline
 
 No chambers found.
 
@@ -38,20 +36,18 @@ Parse JSON result into array of chambers.
 
 If no chambers (empty array):
 ```
-🕳️ ═══════════════════════════════════════════════════
-   T U N N E L S   (Colony History)
-══════════════════════════════════════════════════ 🕳️
+TUNNELS — Colony Timeline
 
-Chambers: 0 colonies archived
+0 colonies archived
 
 The tunnel network is empty.
 Archive colonies with /ant:entomb to preserve history.
 ```
 Stop here.
 
-### Step 3: Handle Detail View (if argument provided)
+### Step 3: Detail View — Show Seal Document (if one argument provided)
 
-If `$ARGUMENTS` is not empty:
+If `$ARGUMENTS` is not empty and contains exactly one argument:
 - Treat it as chamber name
 - Check if `.aether/chambers/{arguments}/` exists
 - If not found:
@@ -62,43 +58,84 @@ If `$ARGUMENTS` is not empty:
   ```
   Stop here.
 
-- If found, read manifest.json and display detailed view:
-```
-🕳️ ═══════════════════════════════════════════════════
-   C H A M B E R   D E T A I L S
-══════════════════════════════════════════════════ 🕳️
+**If CROWNED-ANTHILL.md exists in the chamber:**
 
-📦 {chamber_name}
-
-👑 Goal:
-   {goal}
-
-🏆 Milestone: {milestone} ({version})
-📍 Progress: {phases_completed} of {total_phases} phases
-📅 Entombed: {entombed_at}
-
-{If decisions exist:}
-🧠 Decisions Preserved:
-   {N} architectural decisions recorded
-{End if}
-
-{If learnings exist:}
-💡 Learnings Preserved:
-   {N} validated learnings recorded
-{End if}
-
-📁 Files:
-   - COLONY_STATE.json (verified: {hash_status})
-   - manifest.json
-
-Run /ant:tunnels to return to chamber list.
+```bash
+seal_doc=".aether/chambers/{arguments}/CROWNED-ANTHILL.md"
 ```
 
-To get the counts and hash status:
+Display the header:
+```
+CHAMBER DETAILS — {chamber_name}
+```
+
+Then display the FULL content of `CROWNED-ANTHILL.md` (read and output the file contents — this IS the seal ceremony record).
+
+After the seal document, show:
+```
+Chamber integrity: {hash_status from chamber-verify}
+Chamber location: .aether/chambers/{chamber_name}/
+
+Run /ant:tunnels to return to timeline
+Run /ant:tunnels {chamber_a} {chamber_b} to compare chambers
+```
+
+**If CROWNED-ANTHILL.md does NOT exist (older chamber):**
+
+Display the header:
+```
+CHAMBER DETAILS — {chamber_name}
+
+(No seal document — this chamber was created before the sealing ceremony was introduced)
+```
+
+Fall back to manifest data display:
+- Read `manifest.json` and show: goal, milestone, version, phases_completed, total_phases, entombed_at
+- Show decisions count and learnings count from manifest
+- Show hash status from `chamber-verify`
+
+Footer with navigation guidance:
+```
+Run /ant:tunnels to return to timeline
+Run /ant:tunnels {chamber_a} {chamber_b} to compare chambers
+```
+
+To get the hash status:
 - Run `bash .aether/aether-utils.sh chamber-verify .aether/chambers/{chamber_name}`
-- If verified: hash_status = "✅"
-- If not verified: hash_status = "⚠️ hash mismatch"
-- If error: hash_status = "⚠️ error"
+- If verified: hash_status = "verified"
+- If not verified: hash_status = "hash mismatch"
+- If error: hash_status = "error"
+
+Stop here.
+
+### Step 4: Timeline View (default, no arguments)
+
+Display header:
+```
+TUNNELS — Colony Timeline
+
+{count} colonies archived
+```
+
+For each chamber in sorted list (already sorted by `chamber-list` — newest first), display as a timeline entry:
+```
+[{date}] {milestone_emoji} {chamber_name}
+           {goal (truncated to 60 chars)}
+           {phases_completed} phases | {milestone}
+```
+
+Where `milestone_emoji` is:
+- Crowned Anthill: crown emoji
+- Sealed Chambers: lock emoji
+- Other: circle emoji
+
+After the timeline entries, show:
+```
+Run /ant:tunnels <chamber_name> to view seal document
+Run /ant:tunnels <chamber_a> <chamber_b> to compare two colonies
+```
+
+Use the entombed_at field from the chamber-list JSON to extract the date (first 10 chars of ISO timestamp).
 
 Stop here.
 
@@ -106,9 +143,8 @@ Stop here.
 
 If two arguments provided (chamber names separated by space):
 - Treat as: `/ant:tunnels <chamber_a> <chamber_b>`
-- Run comparison: `bash .aether/utils/chamber-compare.sh compare <chamber_a> <chamber_b>`
 
-If either chamber not found:
+Check both chambers exist. If either missing:
 ```
 Chamber not found: {chamber_name}
 
@@ -117,51 +153,55 @@ Available chambers:
 ```
 Stop here.
 
+Run comparison:
+```bash
+bash .aether/utils/chamber-compare.sh compare <chamber_a> <chamber_b>
+bash .aether/utils/chamber-compare.sh stats <chamber_a> <chamber_b>
+```
+
 Display comparison header:
 ```
-🕳️ ═══════════════════════════════════════════════════
-   C H A M B E R   C O M P A R I S O N
-══════════════════════════════════════════════════ 🕳️
+CHAMBER COMPARISON
 
-📦 {chamber_a}  vs  📦 {chamber_b}
+{chamber_a}  vs  {chamber_b}
 ```
 
 Display side-by-side comparison:
 ```
-┌─────────────────────┬─────────────────────┐
-│ {chamber_a}         │ {chamber_b}         │
-├─────────────────────┼─────────────────────┤
-│ 👑 {goal_a}         │ 👑 {goal_b}         │
-│                     │                     │
-│ 🏆 {milestone_a}    │ 🏆 {milestone_b}    │
-│    {version_a}      │    {version_b}      │
-│                     │                     │
-│ 📍 {phases_a} done  │ 📍 {phases_b} done  │
-│    of {total_a}     │    of {total_b}     │
-│                     │                     │
-│ 🧠 {decisions_a}    │ 🧠 {decisions_b}    │
-│    decisions        │    decisions        │
-│                     │                     │
-│ 💡 {learnings_a}    │ 💡 {learnings_b}    │
-│    learnings        │    learnings        │
-│                     │                     │
-│ 📅 {date_a}         │ 📅 {date_b}         │
-└─────────────────────┴─────────────────────┘
++---------------------+---------------------+
+| {chamber_a}         | {chamber_b}         |
++---------------------+---------------------+
+| Goal: {goal_a}      | Goal: {goal_b}      |
+|                     |                     |
+| {milestone_a}       | {milestone_b}       |
+| {version_a}         | {version_b}         |
+|                     |                     |
+| {phases_a} done     | {phases_b} done     |
+| of {total_a}        | of {total_b}        |
+|                     |                     |
+| {decisions_a}       | {decisions_b}       |
+| decisions           | decisions           |
+|                     |                     |
+| {learnings_a}       | {learnings_b}       |
+| learnings           | learnings           |
+|                     |                     |
+| {date_a}            | {date_b}            |
++---------------------+---------------------+
 ```
 
 Display growth metrics:
 ```
-📈 Growth Between Chambers:
-   Phases: +{phases_diff} ({phases_a} → {phases_b})
-   Decisions: +{decisions_diff} new
-   Learnings: +{learnings_diff} new
-   Time: {time_between} days apart
+Growth Between Chambers:
+  Phases: +{phases_diff} ({phases_a} -> {phases_b})
+  Decisions: +{decisions_diff} new
+  Learnings: +{learnings_diff} new
+  Time: {time_between} days apart
 ```
 
-If phases_diff > 0: show "📈 Colony grew"
-If phases_diff < 0: show "📉 Colony reduced (unusual)"
-If same_milestone: show "🏆 Same milestone reached"
-If milestone changed: show "🏆 Milestone advanced: {milestone_a} → {milestone_b}"
+If phases_diff > 0: show "Colony grew"
+If phases_diff < 0: show "Colony reduced (unusual)"
+If same_milestone: show "Same milestone reached"
+If milestone changed: show "Milestone advanced: {milestone_a} -> {milestone_b}"
 
 Display pheromone trail diff (new decisions/learnings in B):
 ```bash
@@ -170,20 +210,18 @@ bash .aether/utils/chamber-compare.sh diff <chamber_a> <chamber_b>
 
 Parse result and show:
 ```
-🧠 New Decisions in {chamber_b}:
-   {N} new architectural decisions
-   {if N <= 5, list them; else show first 3 + "...and {N-3} more"}
+New Decisions in {chamber_b}:
+  {N} new architectural decisions
+  {if N <= 5, list them; else show first 3 + "...and {N-3} more"}
 
-💡 New Learnings in {chamber_b}:
-   {N} new validated learnings
-   {if N <= 5, list them; else show first 3 + "...and {N-3} more"}
+New Learnings in {chamber_b}:
+  {N} new validated learnings
+  {if N <= 5, list them; else show first 3 + "...and {N-3} more"}
 ```
 
-Display knowledge preservation:
+If both chambers have `CROWNED-ANTHILL.md`, note:
 ```
-📚 Knowledge Preservation:
-   {preserved_decisions} decisions carried forward
-   {preserved_learnings} learnings carried forward
+Both colonies have seal documents. Run /ant:tunnels <name> to view individually.
 ```
 
 Footer:
@@ -194,36 +232,15 @@ Run /ant:tunnels <chamber> to view single chamber details
 
 Stop here.
 
-### Step 4: Display Chamber List (default view)
+### Edge Cases
 
-```
-🕳️ ═══════════════════════════════════════════════════
-   T U N N E L S   (Colony History)
-══════════════════════════════════════════════════ 🕳️
+**Malformed manifest:** show "Invalid manifest" for that chamber and skip it.
 
-Chambers: {count} colonies archived
+**Missing COLONY_STATE.json:** show "Incomplete chamber" for that chamber.
 
-{For each chamber in sorted list:}
-📦 {chamber_name}
-   👑 {goal (truncated to 50 chars)}
-   🏆 {milestone} ({version})
-   📍 {phases_completed} phases | 📅 {date}
+**Very long chamber list:** display all (no pagination for now).
 
-{End for}
-
-Run /ant:tunnels <chamber_name> to view details
-```
-
-**Formatting details:**
-- Sort by entombed_at descending (newest first) - already sorted by chamber-list
-- Truncate goal to 50 characters with "..." if longer
-- Format date as YYYY-MM-DD from ISO timestamp (extract first 10 chars of entombed_at)
-- Show chamber count at top
-
-**Edge cases:**
-- Malformed manifest: show "⚠️  Invalid manifest" for that chamber and skip it
-- Missing COLONY_STATE.json: show "⚠️  Incomplete chamber" for that chamber
-- Very long chamber list: display all (no pagination for now)
+**Older chambers without CROWNED-ANTHILL.md:** Fall back to manifest data in detail view.
 
 ## Implementation Notes
 
