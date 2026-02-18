@@ -573,6 +573,279 @@ test_bootstrap_system() {
 }
 
 # ============================================================================
+# Helper: Create isolated env WITHOUT utils/ directory (forces fallback json_err)
+# ============================================================================
+setup_isolated_env_no_utils() {
+    local tmp_dir
+    tmp_dir=$(mktemp -d)
+    mkdir -p "$tmp_dir/.aether/data"
+
+    # Copy aether-utils.sh only — deliberately omit utils/ so error-handler.sh won't load
+    cp "$AETHER_UTILS_SOURCE" "$tmp_dir/.aether/aether-utils.sh"
+    chmod +x "$tmp_dir/.aether/aether-utils.sh"
+
+    echo "$tmp_dir"
+}
+
+# ============================================================================
+# Test: fallback json_err emits both code and message fields (ERR-01)
+# ============================================================================
+test_fallback_json_err() {
+    local stderr_output
+    local exit_code
+    local tmp_dir
+    tmp_dir=$(setup_isolated_env_no_utils)
+
+    # Run queen-init without any template — will trigger json_err "$E_FILE_NOT_FOUND" "Template not found..."
+    # Override HOME to a temp dir with no hub templates so no template is found
+    local tmp_home
+    tmp_home=$(mktemp -d)
+
+    set +e
+    stderr_output=$(HOME="$tmp_home" bash "$tmp_dir/.aether/aether-utils.sh" queen-init 2>&1 >/dev/null)
+    exit_code=$?
+    set -e
+
+    rm -rf "$tmp_dir" "$tmp_home"
+
+    # Should exit non-zero
+    if [[ "$exit_code" -eq 0 ]]; then
+        test_fail "non-zero exit code" "exit code 0"
+        return 1
+    fi
+
+    # stderr should contain the diagnostic warning
+    if ! assert_contains "$stderr_output" "error-handler.sh not loaded"; then
+        test_fail "stderr contains 'error-handler.sh not loaded'" "$stderr_output"
+        return 1
+    fi
+
+    # Extract the JSON line from stderr (skip the warning line)
+    local json_line
+    json_line=$(echo "$stderr_output" | grep -v '^\[aether\]' | tail -1)
+
+    # JSON must be valid
+    if ! assert_json_valid "$json_line"; then
+        test_fail "valid JSON on stderr" "invalid JSON: $json_line"
+        return 1
+    fi
+
+    # Must have ok:false
+    if ! assert_ok_false "$json_line"; then
+        test_fail '{"ok":false}' "$json_line"
+        return 1
+    fi
+
+    # .error.code must be a non-empty string
+    local code
+    code=$(echo "$json_line" | jq -r '.error.code' 2>/dev/null || echo "")
+    if [[ -z "$code" ]] || [[ "$code" == "null" ]]; then
+        test_fail "non-empty .error.code" "$code"
+        return 1
+    fi
+
+    # .error.message must be a non-empty string
+    local message
+    message=$(echo "$json_line" | jq -r '.error.message' 2>/dev/null || echo "")
+    if [[ -z "$message" ]] || [[ "$message" == "null" ]]; then
+        test_fail "non-empty .error.message" "$message"
+        return 1
+    fi
+
+    return 0
+}
+
+# ============================================================================
+# Test: fallback json_err with single argument defaults correctly (ERR-01)
+# ============================================================================
+test_fallback_json_err_single_arg() {
+    local stderr_output
+    local tmp_dir
+    tmp_dir=$(setup_isolated_env_no_utils)
+
+    # Create a tiny caller script in the isolated env that invokes the fallback
+    # directly by loading only the fallback definition block from aether-utils.sh.
+    # We use a subshell script that does NOT source the full aether-utils.sh
+    # (to avoid set -euo pipefail complications) but replicates the fallback block.
+    local caller_script
+    caller_script="$tmp_dir/invoke_fallback.sh"
+    cat > "$caller_script" << 'CALLER'
+#!/bin/bash
+# This script replicates the fallback json_err block in isolation and calls it
+# with a single argument to test default handling.
+if ! type json_err &>/dev/null; then
+  json_err() {
+    local code="${1:-E_UNKNOWN}"
+    local message="${2:-An unknown error occurred}"
+    printf '[aether] Warning: error-handler.sh not loaded — using minimal fallback\n' >&2
+    printf '{"ok":false,"error":{"code":"%s","message":"%s"}}\n' "$code" "$message" >&2
+    exit 1
+  }
+fi
+json_err "MY_ERROR_CODE"
+CALLER
+    chmod +x "$caller_script"
+
+    set +e
+    stderr_output=$(bash "$caller_script" 2>&1 >/dev/null)
+    set -e
+
+    rm -rf "$tmp_dir"
+
+    # The warning must appear
+    if ! assert_contains "$stderr_output" "error-handler.sh not loaded"; then
+        test_fail "stderr contains 'error-handler.sh not loaded'" "$stderr_output"
+        return 1
+    fi
+
+    # Extract JSON line
+    local json_line
+    json_line=$(echo "$stderr_output" | grep -v '^\[aether\]' | tail -1)
+
+    if ! assert_json_valid "$json_line"; then
+        test_fail "valid JSON" "invalid JSON: $json_line"
+        return 1
+    fi
+
+    # .error.code should be the single arg passed
+    local code
+    code=$(echo "$json_line" | jq -r '.error.code' 2>/dev/null || echo "")
+    if [[ "$code" != "MY_ERROR_CODE" ]]; then
+        test_fail ".error.code = MY_ERROR_CODE" "$code"
+        return 1
+    fi
+
+    # .error.message should be the default
+    local message
+    message=$(echo "$json_line" | jq -r '.error.message' 2>/dev/null || echo "")
+    if [[ -z "$message" ]] || [[ "$message" == "null" ]]; then
+        test_fail "non-empty default .error.message" "$message"
+        return 1
+    fi
+
+    return 0
+}
+
+# ============================================================================
+# Test: queen-init finds template via hub path first (ARCH-01)
+# ============================================================================
+test_queen_init_template_hub_path() {
+    local output
+    local exit_code
+    local tmp_dir
+    tmp_dir=$(setup_isolated_env)
+
+    # Simulate npm-installed user: remove runtime/templates/ if it exists
+    rm -rf "$tmp_dir/runtime"
+
+    # Create a fake hub at a temp HOME
+    local tmp_home
+    tmp_home=$(mktemp -d)
+    mkdir -p "$tmp_home/.aether/system/templates"
+
+    # Copy the real QUEEN.md.template to the fake hub
+    local real_template="$PROJECT_ROOT/runtime/templates/QUEEN.md.template"
+    if [[ -f "$real_template" ]]; then
+        cp "$real_template" "$tmp_home/.aether/system/templates/QUEEN.md.template"
+    else
+        # Create a minimal template if real one not available
+        cat > "$tmp_home/.aether/system/templates/QUEEN.md.template" << 'TMPL'
+# QUEEN.md — Colony Context
+Generated: {TIMESTAMP}
+TMPL
+    fi
+
+    set +e
+    output=$(HOME="$tmp_home" bash "$tmp_dir/.aether/aether-utils.sh" queen-init 2>&1)
+    exit_code=$?
+    set -e
+
+    rm -rf "$tmp_dir" "$tmp_home"
+
+    # Should succeed
+    if [[ "$exit_code" -ne 0 ]]; then
+        test_fail "exit code 0" "exit code $exit_code: $output"
+        return 1
+    fi
+
+    # Output should be valid JSON
+    if ! assert_json_valid "$output"; then
+        test_fail "valid JSON" "invalid JSON: $output"
+        return 1
+    fi
+
+    # Should have ok:true
+    if ! assert_ok_true "$output"; then
+        test_fail '{"ok":true}' "$output"
+        return 1
+    fi
+
+    # Should report created:true (first time, no existing QUEEN.md)
+    local created
+    created=$(echo "$output" | jq -r '.result.created' 2>/dev/null || echo "false")
+    if [[ "$created" != "true" ]]; then
+        test_fail '"created":true' "created: $created"
+        return 1
+    fi
+
+    return 0
+}
+
+# ============================================================================
+# Test: queen-init error message is actionable when no template found (ARCH-01)
+# ============================================================================
+test_queen_init_template_not_found_message() {
+    local stderr_output
+    local exit_code
+    local tmp_dir
+    tmp_dir=$(setup_isolated_env)
+
+    # Remove runtime/ from the isolated env
+    rm -rf "$tmp_dir/runtime"
+
+    # Override HOME to a temp dir with no hub templates
+    local tmp_home
+    tmp_home=$(mktemp -d)
+
+    set +e
+    stderr_output=$(HOME="$tmp_home" bash "$tmp_dir/.aether/aether-utils.sh" queen-init 2>&1 >/dev/null)
+    exit_code=$?
+    set -e
+
+    rm -rf "$tmp_dir" "$tmp_home"
+
+    # Should exit non-zero
+    if [[ "$exit_code" -eq 0 ]]; then
+        test_fail "non-zero exit code" "exit code 0"
+        return 1
+    fi
+
+    # Extract JSON line (skip any warning lines)
+    local json_line
+    json_line=$(echo "$stderr_output" | grep -v '^\[aether\]' | tail -1)
+
+    if ! assert_json_valid "$json_line"; then
+        test_fail "valid JSON error" "invalid JSON: $stderr_output"
+        return 1
+    fi
+
+    if ! assert_ok_false "$json_line"; then
+        test_fail '{"ok":false}' "$json_line"
+        return 1
+    fi
+
+    # Error message must contain actionable instructions
+    local err_message
+    err_message=$(echo "$json_line" | jq -r '.error.message // .error // ""' 2>/dev/null || echo "")
+    if ! assert_contains "$err_message" "aether install" && ! assert_contains "$err_message" "restore"; then
+        test_fail "error message contains 'aether install' or 'restore'" "$err_message"
+        return 1
+    fi
+
+    return 0
+}
+
+# ============================================================================
 # Main Test Runner
 # ============================================================================
 
@@ -596,6 +869,10 @@ main() {
     run_test "test_invalid_subcommand" "invalid subcommand returns error"
     run_test "test_check_antipattern" "check-antipattern analyzes files"
     run_test "test_bootstrap_system" "bootstrap-system handles missing hub gracefully"
+
+    # ERR-01: fallback json_err tests
+    run_test "test_fallback_json_err" "fallback json_err emits code and message fields without error-handler.sh"
+    run_test "test_fallback_json_err_single_arg" "fallback json_err single-arg uses provided code and default message"
 
     # Print summary
     test_summary

@@ -77,10 +77,13 @@ json_ok() { printf '{"ok":true,"result":%s}\n' "$1"; }
 # Error: JSON to stderr, exit 1
 # Use enhanced json_err from error-handler.sh if available, otherwise fallback
 if ! type json_err &>/dev/null; then
-  # Fallback: simple error format for backward compatibility
+  # Fallback: error-handler.sh failed to load. Emits minimal but parseable JSON.
+  # Diagnostic note tells the user their installation may be incomplete.
   json_err() {
-    local message="${2:-$1}"
-    printf '{"ok":false,"error":"%s"}\n' "$message" >&2
+    local code="${1:-E_UNKNOWN}"
+    local message="${2:-An unknown error occurred}"
+    printf '[aether] Warning: error-handler.sh not loaded — using minimal fallback\n' >&2
+    printf '{"ok":false,"error":{"code":"%s","message":"%s"}}\n' "$code" "$message" >&2
     exit 1
   }
 fi
