@@ -1277,7 +1277,6 @@ EOF
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
     # Acquire lock for atomic flag update (degrade gracefully if locking unavailable)
-    lock_acquired=false
     if type feature_enabled &>/dev/null && ! feature_enabled "file_locking"; then
       json_warn "W_DEGRADED" "File locking disabled - proceeding without lock: $(type _feature_reason &>/dev/null && _feature_reason file_locking || echo 'unknown')"
     else
@@ -1289,9 +1288,8 @@ EOF
           exit 1
         fi
       }
-      lock_acquired=true
       # Ensure lock is always released on exit (BUG-002 fix)
-      trap 'release_lock "$flags_file" 2>/dev/null || true' EXIT
+      trap 'release_lock 2>/dev/null || true' EXIT
     fi
 
     # Map type to severity
@@ -1329,8 +1327,8 @@ EOF
     ' "$flags_file") || { json_err "$E_JSON_INVALID" "Failed to add flag"; }
 
     atomic_write "$flags_file" "$updated"
-    # Lock released by trap on exit (BUG-002 fix)
     trap - EXIT
+    release_lock 2>/dev/null || true
     json_ok "{\"id\":\"$id\",\"type\":\"$type\",\"severity\":\"$severity\"}"
     ;;
   flag-check-blockers)
@@ -1379,6 +1377,7 @@ EOF
       json_warn "W_DEGRADED" "File locking disabled - proceeding without lock"
     else
       acquire_lock "$flags_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on flags.json"
+      trap 'release_lock 2>/dev/null || true' EXIT
     fi
 
     updated=$(jq --arg id "$flag_id" --arg res "$resolution" --arg ts "$ts" '
@@ -1387,14 +1386,12 @@ EOF
         .resolution = $res
       else . end]
     ' "$flags_file") || {
-      if type feature_enabled &>/dev/null && feature_enabled "file_locking"; then
-        release_lock "$flags_file"
-      fi
       json_err "$E_JSON_INVALID" "Failed to resolve flag"
     }
 
     atomic_write "$flags_file" "$updated"
-    release_lock "$flags_file"
+    trap - EXIT
+    release_lock 2>/dev/null || true
     json_ok "{\"resolved\":\"$flag_id\"}"
     ;;
   flag-acknowledge)
@@ -1413,6 +1410,7 @@ EOF
       json_warn "W_DEGRADED" "File locking disabled - proceeding without lock"
     else
       acquire_lock "$flags_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on flags.json"
+      trap 'release_lock 2>/dev/null || true' EXIT
     fi
 
     updated=$(jq --arg id "$flag_id" --arg ts "$ts" '
@@ -1420,14 +1418,12 @@ EOF
         .acknowledged_at = $ts
       else . end]
     ' "$flags_file") || {
-      if type feature_enabled &>/dev/null && feature_enabled "file_locking"; then
-        release_lock "$flags_file"
-      fi
       json_err "$E_JSON_INVALID" "Failed to acknowledge flag"
     }
 
     atomic_write "$flags_file" "$updated"
-    release_lock "$flags_file"
+    trap - EXIT
+    release_lock 2>/dev/null || true
     json_ok "{\"acknowledged\":\"$flag_id\"}"
     ;;
   flag-list)
@@ -1481,14 +1477,12 @@ EOF
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
     # Acquire lock for atomic flag update (degrade gracefully if locking unavailable)
-    lock_acquired=false
     if type feature_enabled &>/dev/null && ! feature_enabled "file_locking"; then
       json_warn "W_DEGRADED" "File locking disabled - proceeding without lock"
     else
       acquire_lock "$flags_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on flags.json"
-      lock_acquired=true
       # Ensure lock is always released on exit (BUG-005/BUG-011 fix)
-      trap 'release_lock "$flags_file" 2>/dev/null || true' EXIT
+      trap 'release_lock 2>/dev/null || true' EXIT
     fi
 
     # Count how many will be resolved
@@ -1509,10 +1503,8 @@ EOF
     }
 
     atomic_write "$flags_file" "$updated"
-    # Lock released by trap on exit (BUG-005/BUG-011 fix)
-    if [[ "$lock_acquired" == "true" ]]; then
-      trap - EXIT
-    fi
+    trap - EXIT
+    release_lock 2>/dev/null || true
     json_ok "{\"resolved\":$count,\"trigger\":\"$trigger\"}"
     ;;
   generate-ant-name)
@@ -5175,6 +5167,58 @@ EOF
     ;;
   print-next-up)
     print-next-up "$@"
+    ;;
+
+  # ============================================
+  # LOCK MANAGEMENT
+  # ============================================
+
+  force-unlock)
+    # Emergency lock cleanup — removes all lock files
+    # Usage: force-unlock [--yes]
+    # Without --yes, lists locks and asks for confirmation in interactive mode
+    lock_dir="${AETHER_ROOT:-.}/.aether/locks"
+    auto_yes=false
+    [[ "${1:-}" == "--yes" ]] && auto_yes=true
+
+    if [[ ! -d "$lock_dir" ]]; then
+      json_ok '{"removed":0,"message":"No locks directory found"}'
+      exit 0
+    fi
+
+    lock_files=$(find "$lock_dir" -name "*.lock" -o -name "*.lock.pid" 2>/dev/null)
+
+    if [[ -z "$lock_files" ]]; then
+      json_ok '{"removed":0,"message":"No lock files found"}'
+      exit 0
+    fi
+
+    lock_count=$(echo "$lock_files" | grep -c '\.lock$' || echo "0")
+
+    if [[ "$auto_yes" != "true" ]]; then
+      if [[ -t 2 ]]; then
+        echo "" >&2
+        echo "Lock files found in $lock_dir:" >&2
+        echo "$lock_files" | while read -r f; do
+          [[ "$f" == *.pid ]] && continue
+          pid_content=$(cat "${f}.pid" 2>/dev/null || echo "unknown")
+          echo "  $f (PID: $pid_content)" >&2
+        done
+        printf "Remove all %d lock(s)? [y/N] " "$lock_count" >&2
+        read -r response < /dev/tty
+        if [[ ! "$response" =~ ^[Yy]$ ]]; then
+          json_ok '{"removed":0,"message":"Cancelled by user"}'
+          exit 0
+        fi
+      else
+        json_err "$E_VALIDATION_FAILED" "force-unlock requires --yes flag in non-interactive mode"
+      fi
+    fi
+
+    rm -f "$lock_dir"/*.lock "$lock_dir"/*.lock.pid 2>/dev/null || true
+    export LOCK_ACQUIRED=false
+    export CURRENT_LOCK=""
+    json_ok "{\"removed\":$lock_count,\"message\":\"All locks cleared\"}"
     ;;
 
   *)
