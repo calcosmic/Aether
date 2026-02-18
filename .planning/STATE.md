@@ -5,19 +5,19 @@
 
 ## Current Position
 
-Phase: Phase 12 — Build Progress
-Plan: 02 — COMPLETE
-Status: Phase 12 Plan 02 complete (completion lines with tool_count, tmux-gated swarm display, all-wave-failed halt, BUILD SUMMARY block added to both build.md files)
-Last activity: 2026-02-18 — Plan 12-02 complete (worker completion lines, tmux gating on swarm display, wave failure halt, BUILD SUMMARY replacing compact/verbose split)
+Phase: Phase 13 — Distribution Reliability
+Plan: 01 — COMPLETE
+Status: Phase 13 Plan 01 complete (atomic update recovery via .update-pending sentinel, CLI and slash command pending detection, 5 new unit tests)
+Last activity: 2026-02-18 — Plan 13-01 complete (pending file pattern in UpdateTransaction + CLI + slash commands + unit tests)
 
-Progress: ████░░░░░░░░░░░░░░░░ ~20% (1 of ~4 plans complete)
+Progress: ████░░░░░░░░░░░░░░░░ ~20% (milestone progress)
 
 ## Current Status
 
 - **State:** Phase in progress
 - **Milestone:** v1.1 Colony Polish & Identity
 - **Mode:** YOLO (auto-approve)
-- **Next action:** `/gsd:execute-phase 12` Plan 03 (next build progress plan)
+- **Next action:** Phase 13 complete (1 of 1 plans done)
 
 ## Project Reference
 
@@ -66,6 +66,9 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 - [Phase 12-build-progress]: BUILD SUMMARY always shown (not split by verbose_mode) — verbose mode appends detail sections after the summary block
 - [Phase 12-build-progress]: swarm-display-text gated behind $TMUX in both Step 5.2 and Step 7 — chat users never see swarm display calls fire
 - [Phase 12-build-progress]: Wave failure halts build only when ALL workers in a wave fail — partial failure continues to verification normally
+- [Phase 13-distribution-reliability]: .update-pending sentinel written before validateRepoState() — any crash at any point in execute() leaves a detectable sentinel for recovery
+- [Phase 13-distribution-reliability]: 'Already up to date (v{ver}).' — no hyphens, includes version — standardized across CLI, Claude Code, and OpenCode slash commands
+- [Phase 13-distribution-reliability]: CLI clears pending sentinel immediately on detection (before re-sync) to prevent double-detection within same session
 
 ### Key Findings from Research
 - Typical /ant:build generates 22-42 visible bash tool call headers — root cause of "bash stuff" feeling
@@ -90,3 +93,4 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 2026-02-18 — Phase 11 Plan 06 complete (gap closure: build.md hardcoded '🐜 Next Steps:' replaced with print-next-up helper, compact banner 32→50 chars, organize.md === and --- dividers replaced with ━━━━, oracle.md 32-char banners fixed, status.md 53-char banner fixed — SC2 and SC4 now fully satisfied)
 2026-02-18 — Phase 12 Plan 01 complete (spawn announcements before every wave type, wave separators ━━ Wave X of N ━━, build banner with wave/task counts, Task description field on all 4 spawn sites, tool_count in Builder/Watcher/Chaos schemas, build_started_at_epoch capture — mirrored to both Claude Code and OpenCode build.md)
 2026-02-18 — Phase 12 Plan 02 complete (worker completion lines with tool_count in format '🔨 Name: task (N tools) ✓', failed worker format with failure_reason, Watcher and Chaos completion lines, tmux gating on all swarm-display-text calls, all-wave-failed halt with WAVE FAILURE alert, BUILD SUMMARY block replacing compact/verbose split — mirrored to both Claude Code and OpenCode build.md)
+2026-02-18 — Phase 13 Plan 01 complete (.update-pending sentinel file added to UpdateTransaction execute/rollback, CLI pending detection with re-sync on recovery, slash command Step 2 rewritten with pending check, message standardized to 'Already up to date (v{ver})' without hyphens, 5 unit tests for pending lifecycle, OpenCode update.md mirrored)
