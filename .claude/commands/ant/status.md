@@ -178,7 +178,7 @@ Output format:
       (o o)  AETHER COLONY
       | O |  Status Report
        `-`
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 👑 Goal: <goal (truncated to 60 chars)>
 

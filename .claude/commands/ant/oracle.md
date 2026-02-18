@@ -96,7 +96,7 @@ Output:
 
 ```
 🔮🐜 Oracle Status
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Topic:       {topic from research.json, or "unknown"}
 Confidence:  {target_confidence}%
 Iterations:  {completed} / {max_iterations}
@@ -104,7 +104,7 @@ Started:     {started_at}
 
 Progress:
 {last 50 lines of progress.md}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   /ant:oracle stop     Halt the loop
   /ant:oracle          Start new research
