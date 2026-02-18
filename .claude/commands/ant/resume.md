@@ -34,13 +34,14 @@ Parse the JSON result.
 - If `exists` is `false`: display the following and **stop**:
 
 ```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 RESUME SESSION
-==============
 
 No previous session found.
 
 Start fresh: /ant:init "your goal"
 Or check: /ant:status
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
 - If `exists` is `true`: extract from the session data:
@@ -236,8 +237,8 @@ Stop here — do not continue to Step 8 or render the dashboard.
 Lead with the next-step recommendation. Context follows underneath ("straight to action" ordering).
 
 ```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 RESUME SESSION
-==============
 
 Next: {recommended}
       {reason}
@@ -293,6 +294,16 @@ Session: {session_id}
 Run using the Bash tool with description "Marking session as resumed...":
 ```bash
 bash .aether/aether-utils.sh session-mark-resumed
+```
+
+### Step 10: Next Up
+
+Generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":
+```bash
+state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
+current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
+total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
+bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
 ```
 
 ---

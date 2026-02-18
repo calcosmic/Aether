@@ -127,9 +127,9 @@ bash .aether/aether-utils.sh swarm-display-text "$layeggs_id"
 ```
 
 ```
-🥚 ═══════════════════════════════════════════════════
+🥚 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    F I R S T   E G G S   L A I D
-══════════════════════════════════════════════════ 🥚
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 🥚
 
 👑 New colony goal:
    "{goal}"
@@ -150,3 +150,13 @@ bash .aether/aether-utils.sh swarm-display-text "$layeggs_id"
 Include edge case handling:
 - If no prior knowledge: omit the inheritance section
 - If prior colony had no phases: allow laying eggs without entombment
+
+### Step 7: Next Up
+
+Generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":
+```bash
+state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
+current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
+total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
+bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
+```

@@ -200,9 +200,9 @@ bash .aether/aether-utils.sh swarm-display-text "$pause_id"
 Output header:
 
 ```
-💾🐜⏸️🐜💾 ═══════════════════════════════════════════════════
+💾🐜⏸️🐜💾 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    C O L O N Y   P A U S E D
-═══════════════════════════════════════════════════ 💾🐜⏸️🐜💾
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 💾🐜⏸️🐜💾
 ```
 
 Then output:
@@ -234,4 +234,14 @@ Use AskUserQuestion with these three options.
 If option 1 selected: proceed to run /ant:resume-colony flow
 If option 2 selected: run /ant:lay-eggs flow
 If option 3 selected: display "Run /ant:resume-colony when ready to continue, or /ant:lay-eggs to start fresh"
+```
+
+### Step 6: Next Up
+
+Generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":
+```bash
+state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
+current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
+total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
+bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
 ```

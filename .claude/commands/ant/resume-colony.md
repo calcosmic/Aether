@@ -58,9 +58,9 @@ If `signals` array is empty or all expired, treat as "no active pheromones."
 Output header:
 
 ```
-🚦➡️🐜💨💨 ═══════════════════════════════════════════════════
+🚦➡️🐜💨💨 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    C O L O N Y   R E S U M E D
-═══════════════════════════════════════════════════ 🚦➡️🐜💨💨
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 🚦➡️🐜💨💨
 ```
 
 Read the .aether/HANDOFF.md for context about what was happening, then display:
@@ -116,6 +116,16 @@ Use Write tool to update COLONY_STATE.json:
 Use Bash tool with description "Cleaning up handoff file..." to remove HANDOFF.md: `rm -f .aether/HANDOFF.md`
 
 Run using the Bash tool with description "Releasing colony lock...": `bash .aether/aether-utils.sh unload-state` to release lock.
+
+### Step 7: Next Up
+
+Generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":
+```bash
+state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
+current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
+total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
+bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
+```
 
 ---
 

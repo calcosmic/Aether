@@ -150,9 +150,9 @@ rm -f .aether/data/.version-check-cache
 Output:
 
 ```
-🔄🐜📦🐜🔄 ═══════════════════════════════════════════════════
+🔄🐜📦🐜🔄 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    A E T H E R   U P D A T E
-═══════════════════════════════════════════════════ 🔄🐜📦🐜🔄
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 🔄🐜📦🐜🔄
 
 Updated: v{current_version} -> v{available_version}
 
@@ -174,3 +174,13 @@ The CLI version (`aether update`) performs the same sync-with-cleanup and also s
 
 - `--dry-run` — Preview what would change without modifying any files
 - `--force` — Stash uncommitted changes in managed files and proceed with the update
+
+### Next Up
+
+Generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":
+```bash
+state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
+current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
+total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
+bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
+```
