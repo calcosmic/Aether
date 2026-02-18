@@ -23,7 +23,7 @@ Parse optional flags from `$ARGUMENTS`:
 Read `.aether/data/COLONY_STATE.json`.
 If `goal: null` -> "No colony initialized.", stop.
 
-Run:
+Run using the Bash tool with description "Recording colony feedback...":
 ```bash
 bash .aether/aether-utils.sh pheromone-write FEEDBACK "<content>" --strength 0.7 --reason "User feedback guidance" --ttl <ttl>
 ```
@@ -50,7 +50,7 @@ Write COLONY_STATE.json.
 
 ### Step 3: Get Active Counts
 
-Run:
+Run using the Bash tool with description "Counting active signals...":
 ```bash
 bash .aether/aether-utils.sh pheromone-count
 ```

@@ -218,6 +218,7 @@ Wait for user response.
 
 ### Step 7: Log Activity
 
+Run using the Bash tool with description "Logging interpretation activity...":
 ```bash
 bash .aether/aether-utils.sh activity-log "INTERPRET" "Interpreter" "Dream review: {dream_file}, {confirmed} confirmed, {partial} partial, {unconfirmed} unconfirmed, {refuted} refuted, {actions_taken} actions taken"
 ```

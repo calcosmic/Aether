@@ -48,7 +48,7 @@ Stop here.
 
 ### Step 3: Create Flag
 
-Run:
+Run using the Bash tool with description "Raising colony flag...":
 ```bash
 bash .aether/aether-utils.sh flag-add "{type}" "{title}" "{description}" "manual" {phase_or_null}
 ```

@@ -24,6 +24,7 @@ Execute the following steps in order when the user runs `/ant:resume`.
 
 ### Step 1: Read Session State
 
+Run using the Bash tool with description "Restoring colony session...":
 ```bash
 bash .aether/aether-utils.sh session-read
 ```
@@ -289,6 +290,7 @@ Session: {session_id}
 
 ### Step 9: Mark Session Resumed
 
+Run using the Bash tool with description "Marking session as resumed...":
 ```bash
 bash .aether/aether-utils.sh session-mark-resumed
 ```

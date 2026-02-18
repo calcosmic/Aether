@@ -1,4 +1,4 @@
-# Aether Repair & Stabilization
+# Aether
 
 ## What This Is
 
@@ -87,7 +87,15 @@ If everything else fell away, Aether's essential value is:
 
 ### Active
 
-(None — next milestone will define new requirements)
+## Current Milestone: v1.1 Colony Polish & Identity
+
+**Goal:** Make the colony look, feel, and behave like a living ant colony — not a CLI tool with bash scripts underneath.
+
+**Target features:**
+- Ant personality in every command output (caste emojis, colony metaphors, ant-themed language)
+- Clean output (hide bash calls, JSON blobs, implementation noise — users see status and results)
+- Live build progress (real-time progress with ant emojis and status bars during worker execution)
+- Smooth distribution (fix version-matching bug, reliable updates, clean update flow)
 
 ### Out of Scope
 
@@ -123,4 +131,4 @@ Full e2e test suite at tests/e2e/ with 12 test scripts and automated requirement
 
 ---
 
-*Last updated: 2026-02-18 after v1.0 milestone*
+*Last updated: 2026-02-18 after v1.1 milestone start*

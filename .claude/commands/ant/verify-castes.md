@@ -31,7 +31,7 @@ CASTE ASSIGNMENTS
 
 ## Step 2: Check System Status
 
-Run using Bash tool: `bash .aether/aether-utils.sh version-check 2>/dev/null || echo "Utils available"`
+Run using the Bash tool with description "Checking colony version...": `bash .aether/aether-utils.sh version-check-cached 2>/dev/null || echo "Utils available"`
 
 Check LiteLLM proxy status:
 ```bash

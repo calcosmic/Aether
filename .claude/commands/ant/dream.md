@@ -37,7 +37,7 @@ Parse `$ARGUMENTS`:
 
 ### Step 0.5: Initialize Visual Mode (if enabled)
 
-If `visual_mode` is true:
+If `visual_mode` is true, run using the Bash tool with description "Initializing dream display...":
 ```bash
 # Generate session ID
 dream_id="dream-$(date +%s)"
@@ -224,6 +224,7 @@ Colony status: /ant:status
 
 ### Step 6: Log Activity
 
+Run using the Bash tool with description "Logging dream activity...":
 ```bash
 bash .aether/aether-utils.sh activity-log "DREAM" "Dreamer" "Dream session: {N} observations, {concerns} concerns, {pheromones} pheromone suggestions"
 ```

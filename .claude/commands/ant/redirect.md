@@ -23,7 +23,7 @@ Parse optional flags from `$ARGUMENTS`:
 Read `.aether/data/COLONY_STATE.json`.
 If `goal: null` -> "No colony initialized.", stop.
 
-Run:
+Run using the Bash tool with description "Setting colony redirect...":
 ```bash
 bash .aether/aether-utils.sh pheromone-write REDIRECT "<content>" --strength 0.9 --reason "User warned colony away from pattern" --ttl <ttl>
 ```
@@ -32,7 +32,7 @@ Parse the returned JSON for the signal ID.
 
 ### Step 3: Get Active Counts
 
-Run:
+Run using the Bash tool with description "Counting active signals...":
 ```bash
 bash .aether/aether-utils.sh pheromone-count
 ```

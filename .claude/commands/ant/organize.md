@@ -173,9 +173,8 @@ After the architect-ant returns, display header:
 ═══════════════════════════════════════════════════ 🧹🐜🏛️🐜🧹
 ```
 
-Then display using Bash tool (white -- architect color):
-
-```
+Then display using Bash tool with description "Displaying hygiene report header...":
+```bash
 bash -c 'printf "\e[37m+=====================================================+\e[0m\n"'
 bash -c 'printf "\e[37m|  CODEBASE HYGIENE REPORT                            |\e[0m\n"'
 bash -c 'printf "\e[37m+=====================================================+\e[0m\n\n"'
@@ -203,7 +202,7 @@ Next:
 
 ### Step 6: Log Activity
 
-Use the Bash tool to run:
+Use the Bash tool with description "Logging hygiene activity..." to run:
 ```
 bash .aether/aether-utils.sh activity-log "COMPLETE" "queen" "Hygiene report generated"
 ```

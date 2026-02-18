@@ -50,7 +50,7 @@ Stop here. Do not proceed.
 
 The hub stores all system files at `~/.aether/system/`.
 
-Run ONE bash command that syncs everything:
+Run ONE bash command with description "Syncing colony system files...":
 
 ```bash
 mkdir -p .aether/docs .aether/utils .aether/templates .aether/schemas .aether/exchange && \
@@ -71,7 +71,7 @@ Colony data (`.aether/data/`) is never touched.
 
 ### Step 3.5: Sync Rules to .claude/rules/
 
-Rules files teach Claude Code about the colony system. Sync them from the hub:
+Rules files teach Claude Code about the colony system. Sync them from the hub with description "Syncing colony rules...":
 
 ```bash
 # Sync rules if hub has them
@@ -86,7 +86,7 @@ fi
 
 Sync command files from the hub to this repo **and remove stale files** that no longer exist in the hub. This prevents renamed or deleted commands from accumulating as orphans.
 
-For each directory pair, run using the Bash tool:
+For each directory pair, run using the Bash tool with description "Syncing colony commands and agents...":
 
 ```bash
 # Sync Claude commands
@@ -122,7 +122,7 @@ Report any removed stale files in the summary.
 
 ### Step 5: Register and Version Stamp
 
-Run using the Bash tool:
+Run using the Bash tool with description "Registering colony in hub...":
 ```
 bash .aether/aether-utils.sh registry-add "$(pwd)" "{available_version}"
 ```
