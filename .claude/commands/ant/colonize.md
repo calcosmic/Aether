@@ -21,9 +21,8 @@ If `visual_mode` is true:
 # Generate session ID
 colonize_id="colonize-$(date +%s)"
 
-# Initialize swarm display
-bash .aether/aether-utils.sh swarm-display-init "$colonize_id"
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "dispatching" "Surveying territory" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0
+# Initialize swarm display (consolidated)
+bash .aether/aether-utils.sh swarm-display-init "$colonize_id" && bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "dispatching" "Surveying territory" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0 with description "Initializing colony display..."
 ```
 
 Display header:
@@ -85,14 +84,14 @@ Before dispatching surveyors, check for existing survey files and capture sessio
 SURVEY_START=$(date +%s)
 
 # Check for stale survey files
-stale_check=$(bash .aether/aether-utils.sh session-verify-fresh --command survey "" "$SURVEY_START")
+stale_check=$(bash .aether/aether-utils.sh session-verify-fresh --command survey "" "$SURVEY_START" with description "Checking survey freshness...")
 has_stale=$(echo "$stale_check" | jq -r '.stale | length')
 has_fresh=$(echo "$stale_check" | jq -r '.fresh | length')
 
 if [[ "$has_stale" -gt 0 ]] || [[ "$has_fresh" -gt 0 ]]; then
   # Found existing survey files
   if [[ "$force_resurvey" == "true" ]]; then
-    bash .aether/aether-utils.sh session-clear --command survey
+    bash .aether/aether-utils.sh session-clear --command survey with description "Clearing stale survey data..."
     echo "Cleared existing survey files for fresh territory mapping"
   else
     echo "Found existing territory survey. Use --force-resurvey to remap."
@@ -101,20 +100,17 @@ if [[ "$has_stale" -gt 0 ]] || [[ "$has_fresh" -gt 0 ]]; then
 fi
 ```
 
-Generate unique names for the 4 Surveyor Ants and log their dispatch:
+Generate unique names for the 4 Surveyor Ants (each name must be captured separately):
 ```bash
-bash .aether/aether-utils.sh generate-ant-name "surveyor"
-bash .aether/aether-utils.sh generate-ant-name "surveyor"
-bash .aether/aether-utils.sh generate-ant-name "surveyor"
-bash .aether/aether-utils.sh generate-ant-name "surveyor"
+bash .aether/aether-utils.sh generate-ant-name "surveyor" with description "Naming surveyor ant..."
+bash .aether/aether-utils.sh generate-ant-name "surveyor" with description "Naming surveyor ant..."
+bash .aether/aether-utils.sh generate-ant-name "surveyor" with description "Naming surveyor ant..."
+bash .aether/aether-utils.sh generate-ant-name "surveyor" with description "Naming surveyor ant..."
 ```
 
-Log the dispatch:
+Log the dispatches (consolidated - fire-and-forget logging):
 ```bash
-bash .aether/aether-utils.sh spawn-log "Queen" "surveyor" "{provisions_name}" "Mapping provisions and trails"
-bash .aether/aether-utils.sh spawn-log "Queen" "surveyor" "{nest_name}" "Mapping nest structure"
-bash .aether/aether-utils.sh spawn-log "Queen" "surveyor" "{disciplines_name}" "Mapping disciplines and sentinels"
-bash .aether/aether-utils.sh spawn-log "Queen" "surveyor" "{pathogens_name}" "Identifying pathogens"
+bash .aether/aether-utils.sh spawn-log "Queen" "surveyor" "{provisions_name}" "Mapping provisions and trails" && bash .aether/aether-utils.sh spawn-log "Queen" "surveyor" "{nest_name}" "Mapping nest structure" && bash .aether/aether-utils.sh spawn-log "Queen" "surveyor" "{disciplines_name}" "Mapping disciplines and sentinels" && bash .aether/aether-utils.sh spawn-log "Queen" "surveyor" "{pathogens_name}" "Identifying pathogens" with description "Logging surveyor dispatches..."
 ```
 
 **Spawn 4 Surveyor Ants in parallel using the Task tool:**
@@ -147,15 +143,9 @@ Collect confirmations from all 4 surveyors. Each should return:
 
 ### Step 4: Verify Survey Completeness
 
-Check that all 7 documents were created:
+Check that all 7 documents were created (consolidated):
 ```bash
-ls .aether/data/survey/PROVISIONS.md 2>/dev/null && echo "PROVISIONS: OK" || echo "PROVISIONS: MISSING"
-ls .aether/data/survey/TRAILS.md 2>/dev/null && echo "TRAILS: OK" || echo "TRAILS: MISSING"
-ls .aether/data/survey/BLUEPRINT.md 2>/dev/null && echo "BLUEPRINT: OK" || echo "BLUEPRINT: MISSING"
-ls .aether/data/survey/CHAMBERS.md 2>/dev/null && echo "CHAMBERS: OK" || echo "CHAMBERS: MISSING"
-ls .aether/data/survey/DISCIPLINES.md 2>/dev/null && echo "DISCIPLINES: OK" || echo "DISCIPLINES: MISSING"
-ls .aether/data/survey/SENTINEL-PROTOCOLS.md 2>/dev/null && echo "SENTINEL: OK" || echo "SENTINEL: MISSING"
-ls .aether/data/survey/PATHOGENS.md 2>/dev/null && echo "PATHOGENS: OK" || echo "PATHOGENS: MISSING"
+ls .aether/data/survey/PROVISIONS.md .aether/data/survey/TRAILS.md .aether/data/survey/BLUEPRINT.md .aether/data/survey/CHAMBERS.md .aether/data/survey/DISCIPLINES.md .aether/data/survey/SENTINEL-PROTOCOLS.md .aether/data/survey/PATHOGENS.md 2>&1 | grep -q "No such file" && echo "Some documents missing" || echo "All survey documents present" with description "Verifying survey documents..."
 ```
 
 If any documents are missing, note which ones in the output.
@@ -164,7 +154,7 @@ If any documents are missing, note which ones in the output.
 
 Verify that all survey files were created after the session start:
 ```bash
-verify_result=$(bash .aether/aether-utils.sh session-verify-fresh --command survey "" "$SURVEY_START")
+verify_result=$(bash .aether/aether-utils.sh session-verify-fresh --command survey "" "$SURVEY_START" with description "Confirming survey files...")
 fresh_count=$(echo "$verify_result" | jq -r '.fresh | length')
 
 if [[ "$fresh_count" -lt 7 ]]; then
@@ -177,7 +167,7 @@ fi
 
 Display colony activity summary:
 ```bash
-bash .aether/aether-utils.sh swarm-display-text "$colonize_id"
+bash .aether/aether-utils.sh swarm-display-text "$colonize_id" with description "Rendering colony activity..."
 ```
 
 ### Step 5: Update State
