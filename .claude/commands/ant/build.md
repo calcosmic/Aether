@@ -943,7 +943,7 @@ The swarm display will show:
 
 ```
 🔨 PHASE {id} {status_icon}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📍 {name}
 📊 {status} | 📁 {files_created count} created, {files_modified count} modified
 🐜 {spawn_count} workers | 🧪 {tests_total} tests {if all_passing}passing{else}{passed}/{total}{end if}
@@ -953,16 +953,18 @@ The swarm display will show:
 ⚠️  BLOCKERS: {first 2 issues, comma-separated}
 {end if}
 
-➡️  Next: {primary_command}
     --verbose for spawn tree, TDD details, patterns
 ```
 
-**Status icon logic:** completed+proceed = checkmark, blockers = warning, failed = X
+After displaying the compact output, call the Next Up helper by running using the Bash tool with description "Displaying next steps...":
+```bash
+state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json 2>/dev/null || echo "IDLE")
+current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json 2>/dev/null || echo "0")
+total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json 2>/dev/null || echo "0")
+bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
+```
 
-**Primary command logic:**
-- completed + proceed: `/ant:continue`
-- has blockers: `/ant:flags`
-- failed: `/ant:swarm`
+**Status icon logic:** completed+proceed = checkmark, blockers = warning, failed = X
 
 **If verbose_mode = true (full output):**
 
@@ -1015,20 +1017,18 @@ The swarm display will show:
 {end for}
    Proxy: {if proxy_healthy:}✓ Healthy @ http://localhost:4000{else}✗ Not running (using default model){end if}
 
-🐜 Next Steps:
-{if synthesis.status == "completed" AND verification.recommendation == "proceed":}
-   /ant:continue   ➡️  Advance to next phase
-   /ant:feedback   💬 Give feedback first
-{else if synthesis.status == "failed" OR verification.recommendation == "fix_required":}
-   ⚠️  BLOCKERS DETECTED - Cannot proceed until resolved
-   /ant:flags      🚩 View blockers
-   /ant:swarm      🔥 Auto-fix issues
-{end if}
-
 💾 State persisted — safe to /clear, then run /ant:continue
 ```
 
-**Conditional Next Steps:** The suggestions above are based on actual worker results. If verification failed or blockers exist, `/ant:continue` is NOT suggested.
+After displaying the verbose output, call the Next Up helper by running using the Bash tool with description "Displaying next steps...":
+```bash
+state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json 2>/dev/null || echo "IDLE")
+current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json 2>/dev/null || echo "0")
+total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json 2>/dev/null || echo "0")
+bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
+```
+
+**Routing Note:** The state-based Next Up block above routes based on colony state. If verification failed or blockers exist, review `/ant:flags` before continuing.
 
 **IMPORTANT:** Build does NOT update task statuses or advance state. Run `/ant:continue` to:
 - Mark tasks as completed

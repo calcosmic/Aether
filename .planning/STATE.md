@@ -6,11 +6,11 @@
 ## Current Position
 
 Phase: Phase 11 — Visual Identity
-Plan: 04 — COMPLETE
-Status: Phase 11 complete (all 4 plans done)
-Last activity: 2026-02-18 — Plan 11-04 complete (━━━━ banners and Next Up blocks standardized across 10 medium-complexity and special worker commands)
+Plan: 05 — COMPLETE
+Status: Phase 11 complete (all 5 plans done)
+Last activity: 2026-02-18 — Plan 11-05 complete (━━━━ banners and Next Up blocks applied to final 18 commands: pheromone, informational, and lifecycle commands — all 34 commands now standardized)
 
-Progress: ████████████████████ 100% (4 of 4 plans complete)
+Progress: ████████████████████ 100% (5 of 5 plans complete)
 
 ## Current Status
 
@@ -55,6 +55,8 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 - [Phase 11-visual-identity]: ━━━━ banners replace all ═══ formats; Next Up blocks added to every command completion (init/seal/entomb/continue); caste format was already correct
 - [Phase 11-visual-identity]: flag.md has three banner variants (blocker/issue/note) — each replaced individually; print-next-up placed once after all three output blocks
 - [Phase 11-visual-identity]: flags.md and flag.md lack log-activity steps — print-next-up placed at end of Step 4 display before Quick Actions / Flag Lifecycle sections
+- [Phase 11-visual-identity]: tunnels.md never had a banner header — only needed Next Up block added
+- [Phase 11-visual-identity]: resume.md used == (equals-sign) banners (not ═══ box-drawing chars) — both non-standard, both replaced with ━━━━
 
 ### Key Findings from Research
 - Typical /ant:build generates 22-42 visible bash tool call headers — root cause of "bash stuff" feeling
@@ -75,3 +77,4 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 2026-02-18 — Phase 11 Plan 02 complete (generate-progress-bar/print-standard-banner/print-next-up helpers added to aether-utils.sh, /ant:status updated with visual progress bars and state-routed Next Up block)
 2026-02-18 — Phase 11 Plan 03 complete (━━━━ banners standardized across build/continue/init/seal/entomb; Next Up blocks added to 4 command completions; caste emoji format verified already correct)
 2026-02-18 — Phase 11 Plan 04 complete (━━━━ banners and Next Up blocks standardized across 10 medium-complexity/special worker commands: phase/oracle/watch/swarm/colonize/chaos/archaeology/dream/flags/flag)
+2026-02-18 — Phase 11 Plan 05 complete (━━━━ banners and Next Up blocks applied to final 18 commands: focus/redirect/feedback/help/history/migrate-state/verify-castes/maturity/organize/interpret/resume/plan/update/council/pause-colony/resume-colony/lay-eggs/tunnels — all 34 commands now carry unified visual language)
