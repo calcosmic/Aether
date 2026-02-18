@@ -387,14 +387,9 @@ All spawns are logged to `.aether/data/spawn-tree.txt` and visible in `/ant:watc
 
 ### Visual Identity
 
-| Role | Emoji |
-|------|-------|
-| Builder | 🔨🐜 |
-| Watcher | 👁️🐜 |
-| Scout | 🔍🐜 |
-| Colonizer | 🗺️🐜 |
-| Architect | 🏛️🐜 |
-| Route-Setter | 📋🐜 |
+Workers display as `{caste_emoji} {worker_name}` (e.g., `🔨🐜 Hammer-42`).
+
+For complete caste emoji reference, see `.aether/docs/caste-system.md`.
 
 Use your emoji in output headers: `{emoji} {Role} Ant -- {status}`
 
