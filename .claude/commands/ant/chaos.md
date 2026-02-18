@@ -100,9 +100,9 @@ Stop here.
 
 Display awakening:
 ```
-🎲🐜🔍🐜🎲 ═══════════════════════════════════════════════
-        R E S I L I E N C E   T E S T E R   A C T I V E
-═══════════════════════════════════════════════ 🎲🐜🔍🐜🎲
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎲🐜🔍🐜🎲  R E S I L I E N C E   T E S T E R   A C T I V E
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Target: {target description}
 Files:  {list of files being investigated}
@@ -231,9 +231,9 @@ bash .aether/aether-utils.sh swarm-display-inline "$chaos_id"
 After all 5 scenarios, compile the structured report:
 
 ```
-🎲🐜🔍🐜🎲 ═══════════════════════════════════════════════
-             C H A O S   R E P O R T
-═══════════════════════════════════════════════ 🎲🐜🔍🐜🎲
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎲🐜🔍🐜🎲  C H A O S   R E P O R T
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Target: {target description}
 Files investigated: {count}
@@ -325,6 +325,14 @@ The `{current_phase_number}` comes from the colony state loaded in Step 1 (`.aet
 Run using the Bash tool with description "Logging chaos activity...":
 ```bash
 bash .aether/aether-utils.sh activity-log "CHAOS" "Chaos Ant" "Resilience test on {target}: {findings_count} finding(s) ({critical} critical, {high} high, {medium} medium, {low} low), {resilient_count} resilient"
+```
+
+Generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":
+```bash
+state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
+current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
+total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
+bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
 ```
 
 ## Investigation Guidelines

@@ -65,9 +65,9 @@ Parse result for flags array.
 Output header:
 
 ```
-📋🐜🚩🐜📋 ═══════════════════════════════════════════════════
-   P R O J E C T   F L A G S
-═══════════════════════════════════════════════════ 📋🐜🚩🐜📋
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋🐜🚩🐜📋  P R O J E C T   F L A G S
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
 If no flags:
@@ -125,6 +125,14 @@ Commands:
   /ant:flags --resolve {id} "message"   Resolve a flag
   /ant:flags --ack {id}                 Acknowledge an issue
   /ant:flag "description"               Create new flag
+```
+
+Generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":
+```bash
+state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
+current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
+total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
+bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
 ```
 
 ---
