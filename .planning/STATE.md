@@ -5,10 +5,10 @@
 
 ## Current Status
 
-- **State:** Phase 9 IN PROGRESS
-- **Phase:** 09 (Polish & Verify) — Plans 01, 02, and 03 complete
-- **Plan:** 02 complete (e2e tests: PHER/VIS/CTX 14/14 PASS)
-- **Total Plans in Phase:** 4 (plans 01-04) — 3 done, 1 remaining (04)
+- **State:** COMPLETE — All 9 phases done, 46/46 requirements PASS
+- **Phase:** 09 (Polish & Verify) — ALL 4 PLANS COMPLETE
+- **Plan:** 04 complete (master runner + requirements matrix: 46/46 PASS)
+- **Total Plans in Phase:** 4 (plans 01-04) — 4 done, 0 remaining
 - **Mode:** YOLO (auto-approve)
 
 ## Project Reference
@@ -17,7 +17,7 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Core value:** Prevent context rot across Claude Code sessions with self-managing colony that learns and guides users
 
-**Current focus:** Phase 9: Polish & Verify — Plans 01+02+03 complete. 25/25 requirements verified PASS. Next: Plan 04.
+**Current focus:** COMPLETE — Phase 9: Polish & Verify — All 4 plans complete. 46/46 requirements verified PASS. Aether Repair & Stabilization project DONE.
 
 ## Progress
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 - [x] Phase 6: Colony Lifecycle — COMPLETE (3/3 plans)
 - [x] Phase 7: Advanced Workers — COMPLETE (3/3 plans)
 - [x] Phase 8: XML Integration — COMPLETE (4/4 plans)
-- [ ] Phase 9: Polish & Verify (1/4 plans complete)
+- [x] Phase 9: Polish & Verify (4/4 plans complete) — COMPLETE
 
 ## Decisions
 
@@ -106,6 +106,12 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 - **09-02:** VIS-05 milestone check: milestone names live in maturity.md (canonical), not continue.md — test checks correct file
 - **09-02:** CTX session-update assertion: verify ok:true + file written + field exists; do not assert specific values due to arg-shift layout
 
+## Decisions
+
+- **09-04:** pheromone-xml.sh content field: type-aware jq expression handles plain string .content vs object .content.text
+- **09-04:** xmlstarlet pipefail fix: use set +e in subshell pattern for xmlstarlet sel calls that may return exit 1 on no-match
+- **09-04:** lifecycle test isolation: separate LIFECYCLE_TMP with real git init, not setup_e2e_env, for genuine connected workflow test
+
 ## Last Updated
 
-2026-02-18 — Phase 9 plan 02 COMPLETE (e2e PHER/VIS/CTX tests: 14/14 requirements PASS)
+2026-02-18 — Phase 9 COMPLETE — plan 04 done (master runner + 46/46 requirements PASS — Aether repair project DONE)
