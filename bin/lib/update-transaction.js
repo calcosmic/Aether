@@ -170,7 +170,7 @@ class UpdateTransaction {
     this.HUB_REGISTRY = path.join(this.HUB_DIR, 'registry.json');
 
     // Directories to exclude from sync (user data, local state)
-    this.EXCLUDE_DIRS = ['data', 'dreams', 'checkpoints', 'locks', 'temp'];
+    this.EXCLUDE_DIRS = ['data', 'dreams', 'checkpoints', 'locks', 'temp', 'agents', 'commands', 'rules'];
 
     // Target directories for git safety checks
     this.targetDirs = ['.aether', '.claude/commands/ant', '.claude/rules', '.opencode/commands/ant', '.opencode/agents'];
@@ -906,8 +906,8 @@ class UpdateTransaction {
     const repoAether = path.join(this.repoPath, '.aether');
 
     // Sync .aether/ from hub to repo (excluding user data directories)
-    if (fs.existsSync(this.HUB_DIR)) {
-      results.system = this.syncAetherToRepo(this.HUB_DIR, repoAether, { dryRun });
+    if (fs.existsSync(this.HUB_SYSTEM_DIR)) {
+      results.system = this.syncAetherToRepo(this.HUB_SYSTEM_DIR, repoAether, { dryRun });
     }
 
     // Sync commands from hub
@@ -979,7 +979,7 @@ class UpdateTransaction {
     };
 
     const repoAether = path.join(this.repoPath, '.aether');
-    verifyDir(this.HUB_DIR, repoAether);
+    verifyDir(this.HUB_SYSTEM_DIR, repoAether);
     verifyDir(this.HUB_COMMANDS_CLAUDE, path.join(this.repoPath, '.claude', 'commands', 'ant'));
     verifyDir(this.HUB_COMMANDS_OPENCODE, path.join(this.repoPath, '.opencode', 'commands', 'ant'));
     verifyDir(this.HUB_AGENTS, path.join(this.repoPath, '.opencode', 'agents'));
@@ -1126,7 +1126,7 @@ class UpdateTransaction {
     };
 
     const repoAether = path.join(this.repoPath, '.aether');
-    checkDir(this.HUB_DIR, repoAether);
+    checkDir(this.HUB_SYSTEM_DIR, repoAether);
     checkDir(this.HUB_COMMANDS_CLAUDE, path.join(this.repoPath, '.claude', 'commands', 'ant'));
     checkDir(this.HUB_COMMANDS_OPENCODE, path.join(this.repoPath, '.opencode', 'commands', 'ant'));
     checkDir(this.HUB_AGENTS, path.join(this.repoPath, '.opencode', 'agents'));
