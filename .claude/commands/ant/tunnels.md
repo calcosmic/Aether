@@ -71,7 +71,34 @@ CHAMBER DETAILS — {chamber_name}
 
 Then display the FULL content of `CROWNED-ANTHILL.md` (read and output the file contents — this IS the seal ceremony record).
 
-After the seal document, show:
+After the seal document, check if `colony-archive.xml` exists in the chamber:
+
+```bash
+chamber_has_xml=false
+[[ -f ".aether/chambers/{chamber_name}/colony-archive.xml" ]] && chamber_has_xml=true
+```
+
+**If `colony-archive.xml` exists in the chamber**, show footer with import option:
+```
+Chamber integrity: {hash_status from chamber-verify}
+Chamber location: .aether/chambers/{chamber_name}/
+XML Archive: colony-archive.xml found
+
+Actions:
+  1. Import signals from this colony into current colony
+  2. Return to timeline
+  3. Compare with another chamber
+
+Select an action (1/2/3)
+```
+
+Use AskUserQuestion with three options.
+
+If option 1 selected: proceed to Step 6 (Import Signals from Chamber).
+If option 2 selected: return to timeline (run /ant:tunnels).
+If option 3 selected: prompt for second chamber name then run /ant:tunnels {chamber_a} {chamber_b}.
+
+**If `colony-archive.xml` does NOT exist in the chamber**, show the existing footer unchanged:
 ```
 Chamber integrity: {hash_status from chamber-verify}
 Chamber location: .aether/chambers/{chamber_name}/
@@ -231,6 +258,124 @@ Run /ant:tunnels <chamber> to view single chamber details
 ```
 
 Stop here.
+
+### Step 6: Import Signals from Chamber
+
+When user selects "Import signals" from Step 3:
+
+**Step 6.1: Check XML tools**
+```bash
+if command -v xmllint >/dev/null 2>&1; then
+  xmllint_available=true
+else
+  xmllint_available=false
+fi
+```
+
+If xmllint not available:
+```
+Import requires xmllint. Install it first:
+  macOS: xcode-select --install
+  Linux: apt-get install libxml2-utils
+```
+Stop here (return to timeline).
+
+**Step 6.2: Extract source colony name**
+```bash
+chamber_xml=".aether/chambers/{chamber_name}/colony-archive.xml"
+# Extract colony_id from the archive root element
+source_colony=$(xmllint --xpath "string(/*/@colony_id)" "$chamber_xml" 2>/dev/null)
+[[ -z "$source_colony" ]] && source_colony="{chamber_name}"
+```
+
+**Step 6.3: Extract pheromone section and show import preview**
+
+The combined `colony-archive.xml` contains pheromones, wisdom, and registry sections. Extract the pheromone section to a temp file before counting or importing. This prevents over-counting signals from wisdom/registry sections and ensures `pheromone-import-xml` receives the format it expects (`<pheromones>` as root element).
+
+```bash
+# Extract the <pheromones> section from the combined archive into a standalone temp file
+import_tmp_dir=$(mktemp -d)
+import_tmp_pheromones="$import_tmp_dir/pheromones-extracted.xml"
+
+# Use xmllint to extract the pheromones element (with its namespace)
+xmllint --xpath "//*[local-name()='pheromones']" "$chamber_xml" > "$import_tmp_pheromones" 2>/dev/null
+
+# Add XML declaration to make it a standalone well-formed document
+if [[ -s "$import_tmp_pheromones" ]]; then
+  # Portable approach: prepend declaration via temp file (avoids macOS/Linux sed -i differences)
+  { echo '<?xml version="1.0" encoding="UTF-8"?>'; cat "$import_tmp_pheromones"; } > "$import_tmp_dir/tmp_decl.xml"
+  mv "$import_tmp_dir/tmp_decl.xml" "$import_tmp_pheromones"
+fi
+
+# Count pheromone signals in extracted pheromone-only XML
+# Scoped to pheromone section only — no over-counting from wisdom/registry sections
+pheromone_count=$(xmllint --xpath "count(//*[local-name()='signal'])" "$import_tmp_pheromones" 2>/dev/null || echo "unknown")
+```
+
+Display:
+```
+IMPORT FROM COLONY: {source_colony}
+
+Source: .aether/chambers/{chamber_name}/colony-archive.xml
+Signals available: ~{pheromone_count} pheromone signals
+
+Import behavior:
+  - Signals tagged with prefix "{source_colony}:" to identify origin
+  - Additive merge — your current signals are never overwritten
+  - On conflict, your current colony wins
+
+Import these signals? (yes/no)
+```
+
+Use AskUserQuestion with yes/no options.
+
+If no: "Import cancelled." Clean up: `rm -rf "$import_tmp_dir"`. Return to timeline.
+
+**Step 6.4: Perform import**
+
+Pass the extracted pheromone-only temp file (NOT the combined `colony-archive.xml`) to `pheromone-import-xml`, along with `$source_colony` as the second argument. This ensures:
+1. `pheromone-import-xml` receives XML with `<pheromones>` as root element (the format it expects)
+2. The prefix-tagging logic prepends `${source_colony}:` to each imported signal's ID before the merge
+
+```bash
+# Import the EXTRACTED pheromone-only XML (NOT the combined colony-archive.xml)
+# $import_tmp_pheromones has <pheromones> as root — the format pheromone-import-xml expects
+# Second argument triggers prefix-tagging — imported signal IDs become "{source_colony}:original_id"
+import_result=$(bash .aether/aether-utils.sh pheromone-import-xml "$import_tmp_pheromones" "$source_colony" 2>&1)
+import_ok=$(echo "$import_result" | jq -r '.ok // false' 2>/dev/null)
+
+if [[ "$import_ok" == "true" ]]; then
+  imported_count=$(echo "$import_result" | jq -r '.result.signal_count // 0' 2>/dev/null)
+else
+  imported_count=0
+  import_error=$(echo "$import_result" | jq -r '.error // "Unknown error"' 2>/dev/null)
+fi
+
+# Clean up temp files
+rm -rf "$import_tmp_dir"
+```
+
+**Step 6.5: Display result**
+
+If import succeeded:
+```
+SIGNALS IMPORTED
+
+Source: {source_colony}
+Imported: {imported_count} pheromone signals
+Tagged with: "{source_colony}:" prefix
+
+Your colony now carries wisdom from {source_colony}.
+Run /ant:status to see current colony state.
+```
+
+If import failed:
+```
+Import failed: {import_error}
+
+The archive may be malformed. Check:
+  .aether/chambers/{chamber_name}/colony-archive.xml
+```
 
 ### Edge Cases
 
