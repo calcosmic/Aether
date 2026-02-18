@@ -6,18 +6,18 @@
 ## Current Position
 
 Phase: Phase 11 — Visual Identity
-Plan: 02 (Named Worker Display) — READY
+Plan: 03 — READY
 Status: Executing phase 11
-Last activity: 2026-02-18 — Plan 11-01 complete (caste single source of truth)
+Last activity: 2026-02-18 — Plan 11-02 complete (progress bars and Next Up block added to /ant:status)
 
-Progress: ████░░░░░░░░░░░░░░░░ 25% (1 of 4 plans complete)
+Progress: ████████░░░░░░░░░░░░ 40% (2 of 5 plans complete)
 
 ## Current Status
 
 - **State:** Executing
 - **Milestone:** v1.1 Colony Polish & Identity
 - **Mode:** YOLO (auto-approve)
-- **Next action:** `/gsd:execute-phase 11` (continue Plan 11-02)
+- **Next action:** `/gsd:execute-phase 11` (continue Plan 11-03)
 
 ## Project Reference
 
@@ -50,6 +50,8 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 - [Phase 10-noise-reduction]: High-complexity commands (build.md: 57 calls, continue.md: 27 calls) now have human-readable descriptions on all bash calls
 - [Phase 11-visual-identity]: Canonical caste-system.md as single source of truth; other files reference, never duplicate
 - [Phase 11-visual-identity]: colonizer canonical emoji is 🗺️🐜 (not 🌱🐜); route_setter canonical emoji is 📋🐜 (not 🧭🐜)
+- [Phase 11-visual-identity]: Progress bars use Unicode block chars (█/░) — consistent with no-ANSI-color rule; three helpers centralized in aether-utils.sh for composability
+- [Phase 11-visual-identity]: Next Up block is state-routed (IDLE/READY/EXECUTING/PLANNING) not hardcoded — adapts dynamically to colony state
 
 ### Key Findings from Research
 - Typical /ant:build generates 22-42 visible bash tool call headers — root cause of "bash stuff" feeling
@@ -67,3 +69,4 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 
 2026-02-18 — Phase 10 complete (4 plans, bash descriptions on 112 total commands across 34 colony commands, ~40% header reduction in high-complexity commands through spawn-tracking consolidation)
 2026-02-18 — Phase 11 Plan 01 complete (caste-system.md canonical file created, CLAUDE.md and workers.md tables replaced with references, duplicate get_caste_emoji() removed from aether-utils.sh, dreamer case added to global function)
+2026-02-18 — Phase 11 Plan 02 complete (generate-progress-bar/print-standard-banner/print-next-up helpers added to aether-utils.sh, /ant:status updated with visual progress bars and state-routed Next Up block)
