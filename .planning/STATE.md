@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 ## Current Position
 
 Phase: 15 of 18 (Distribution Chain)
-Plan: 01 complete (15-01-SUMMARY.md), 02 complete (15-02-SUMMARY.md)
-Status: In progress — 15-01 and 15-02 done, continuing phase 15
-Last activity: 2026-02-18 — 15-01 complete: source dir fixed (HUB_SYSTEM_DIR), EXCLUDE_DIRS expanded, allowlists synced
+Plan: 01 complete (15-01-SUMMARY.md), 02 complete (15-02-SUMMARY.md), 03 complete (15-03-SUMMARY.md)
+Status: In progress — 15-01, 15-02, and 15-03 done, continuing phase 15
+Last activity: 2026-02-18 — 15-03 complete: cleanupStaleAetherDirs added, unit tests for DIST-01/DIST-02/cleanup, pre-3.0.0 npm versions removed from registry
 
 Progress: ██░░░░░░░░░░░░░░░░░░ 22% (v1.2 — Phase 15 in progress)
 
@@ -30,7 +30,7 @@ Progress: ██░░░░░░░░░░░░░░░░░░ 22% (v1.2
 | 1-9 (v1.0) | 27/27 | Complete |
 | 10-13 (v1.1) | 13/13 | Complete |
 | 14 (v1.2) | 1/1 | Complete |
-| 15-18 (v1.2) | 2/TBD | In progress (15-01 complete, 15-02 complete) |
+| 15-18 (v1.2) | 3/TBD | In progress (15-01, 15-02, 15-03 complete) |
 
 *Updated after each plan completion*
 
@@ -41,6 +41,7 @@ Progress: ██░░░░░░░░░░░░░░░░░░ 22% (v1.2
 - All 5 v1.2 phases publish together in one `npm install -g .` cycle — no intermediate states
 - Phase 14 is prerequisite gate: fallback json_err fix must land before Phase 17; ARCH-01 must land before any npm-install user testing
 - Phase 15-01: source-dir fix (HUB_SYSTEM_DIR) applied in three methods; EXCLUDE_DIRS expanded with agents/commands/rules; caste-system.md added and planning.md removed from both SYSTEM_FILES allowlists (58 entries each)
+- Phase 15-03: cleanupStaleAetherDirs() runs before syncFiles in execute(); reports cleanup with colony symbols; clean repos see "Distribution chain: checkmark clean"; 6 new unit tests added; all pre-3.0.0 npm versions removed from registry (unpublish succeeded)
 - Phase 16 requires full lock audit before any code changes (local vs. global variable discrepancy)
 - ERR-01 (14-01): fallback json_err emits `{code, message}` object — separate commits per fix strategy confirmed
 - ARCH-01 (14-01): hub path first in template search loop; error message includes exact install command
@@ -61,5 +62,5 @@ Progress: ██░░░░░░░░░░░░░░░░░░ 22% (v1.2
 ## Session Continuity
 
 Last session: 2026-02-18
-Stopped at: Completed 15-01-PLAN.md (source dir fix + allowlist sync)
-Resume file: .planning/phases/15-distribution-chain/15-01-SUMMARY.md
+Stopped at: Completed 15-03-PLAN.md (stale-dir cleanup + tests + npm deprecation)
+Resume file: .planning/phases/15-distribution-chain/15-03-SUMMARY.md
