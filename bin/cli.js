@@ -74,6 +74,7 @@ const HUB_SYSTEM_DIR = path.join(HUB_DIR, 'system');
 const HUB_COMMANDS_CLAUDE = path.join(HUB_SYSTEM_DIR, 'commands', 'claude');
 const HUB_COMMANDS_OPENCODE = path.join(HUB_SYSTEM_DIR, 'commands', 'opencode');
 const HUB_AGENTS = path.join(HUB_SYSTEM_DIR, 'agents');
+const HUB_RULES = path.join(HUB_SYSTEM_DIR, 'rules');
 const HUB_REGISTRY = path.join(HUB_DIR, 'registry.json');
 const HUB_VERSION = path.join(HUB_DIR, 'version.json');
 
@@ -434,6 +435,7 @@ const SYSTEM_FILES = [
   'schemas/worker-priming.xsd',
   'schemas/prompt.xsd',
   'templates/QUEEN.md.template',
+  'rules/aether-colony.md',
 ];
 
 function copySystemFiles(srcDir, destDir) {
@@ -1034,6 +1036,7 @@ function setupHub() {
     fs.mkdirSync(path.join(HUB_SYSTEM_DIR, 'commands', 'claude'), { recursive: true });
     fs.mkdirSync(path.join(HUB_SYSTEM_DIR, 'commands', 'opencode'), { recursive: true });
     fs.mkdirSync(path.join(HUB_SYSTEM_DIR, 'agents'), { recursive: true });
+    fs.mkdirSync(path.join(HUB_SYSTEM_DIR, 'rules'), { recursive: true });
 
     // Read previous manifest for delta reporting
     const prevManifestRaw = readJsonSafe(path.join(HUB_DIR, 'manifest.json'));
@@ -1105,6 +1108,17 @@ function setupHub() {
       }
     }
 
+    // Sync rules/ from runtime -> ~/.aether/system/rules/
+    const rulesSrc = path.join(PACKAGE_DIR, 'runtime', 'rules');
+    if (fs.existsSync(rulesSrc)) {
+      const result = syncDirWithCleanup(rulesSrc, HUB_RULES);
+      log(`  Hub rules: ${result.copied} files -> ${HUB_RULES}`);
+      if (result.removed.length > 0) {
+        log(`  Hub rules: removed ${result.removed.length} stale files`);
+        for (const f of result.removed) log(`    - ${f}`);
+      }
+    }
+
     // Create/preserve registry.json (at root, not in system/)
     if (!fs.existsSync(HUB_REGISTRY)) {
       writeJsonSync(HUB_REGISTRY, { schema_version: 1, repos: [] });
@@ -1158,7 +1172,7 @@ async function updateRepo(repoPath, sourceVersion, opts) {
   const currentVer = currentVersion ? currentVersion.version : 'unknown';
 
   // Target directories for git safety checks
-  const targetDirs = ['.aether', '.claude/commands/ant', '.opencode/commands/ant', '.opencode/agents'];
+  const targetDirs = ['.aether', '.claude/commands/ant', '.claude/rules', '.opencode/commands/ant', '.opencode/agents'];
 
   // Git safety: check for dirty files in target directories (skip in dry-run mode)
   let dirtyFiles = [];
@@ -1180,15 +1194,18 @@ async function updateRepo(repoPath, sourceVersion, opts) {
     const systemCopied = result.sync_result?.system?.copied || 0;
     const commandsCopied = (result.sync_result?.commands?.copied || 0);
     const agentsCopied = result.sync_result?.agents?.copied || 0;
+    const rulesCopied = result.sync_result?.rules?.copied || 0;
 
     const systemRemoved = result.sync_result?.system?.removed?.length || 0;
     const commandsRemoved = result.sync_result?.commands?.removed?.length || 0;
     const agentsRemoved = result.sync_result?.agents?.removed?.length || 0;
+    const rulesRemoved = result.sync_result?.rules?.removed?.length || 0;
 
     const allRemovedFiles = [
       ...(result.sync_result?.system?.removed || []),
       ...(result.sync_result?.commands?.removed || []).map(f => `.claude/commands/ant/${f}`),
       ...(result.sync_result?.agents?.removed || []).map(f => `.opencode/agents/${f}`),
+      ...(result.sync_result?.rules?.removed || []).map(f => `.claude/rules/${f}`),
     ];
 
     return {
@@ -1198,7 +1215,8 @@ async function updateRepo(repoPath, sourceVersion, opts) {
       system: systemCopied,
       commands: commandsCopied,
       agents: agentsCopied,
-      removed: systemRemoved + commandsRemoved + agentsRemoved,
+      rules: rulesCopied,
+      removed: systemRemoved + commandsRemoved + agentsRemoved + rulesRemoved,
       removedFiles: allRemovedFiles,
       stashCreated: !!transaction.checkpoint?.stashRef,
       checkpoint_id: result.checkpoint_id,

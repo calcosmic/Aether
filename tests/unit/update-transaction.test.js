@@ -13,6 +13,8 @@ const createMockFs = () => ({
   unlinkSync: sinon.stub(),
   rmdirSync: sinon.stub(),
   chmodSync: sinon.stub(),
+  accessSync: sinon.stub(),
+  constants: { R_OK: 4 },
 });
 
 const createMockCp = () => ({

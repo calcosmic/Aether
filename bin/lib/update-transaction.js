@@ -165,6 +165,7 @@ class UpdateTransaction {
     this.HUB_COMMANDS_CLAUDE = path.join(this.HUB_SYSTEM_DIR, 'commands', 'claude');
     this.HUB_COMMANDS_OPENCODE = path.join(this.HUB_SYSTEM_DIR, 'commands', 'opencode');
     this.HUB_AGENTS = path.join(this.HUB_SYSTEM_DIR, 'agents');
+    this.HUB_RULES = path.join(this.HUB_SYSTEM_DIR, 'rules');
     this.HUB_VERSION = path.join(this.HUB_DIR, 'version.json');
     this.HUB_REGISTRY = path.join(this.HUB_DIR, 'registry.json');
 
@@ -172,7 +173,7 @@ class UpdateTransaction {
     this.EXCLUDE_DIRS = ['data', 'dreams', 'checkpoints', 'locks', 'temp'];
 
     // Target directories for git safety checks
-    this.targetDirs = ['.aether', '.claude/commands/ant', '.opencode/commands/ant', '.opencode/agents'];
+    this.targetDirs = ['.aether', '.claude/commands/ant', '.claude/rules', '.opencode/commands/ant', '.opencode/agents'];
 
     // System files allowlist — must match bin/sync-to-runtime.sh SYSTEM_FILES exactly
     this.SYSTEM_FILES = [
@@ -233,6 +234,7 @@ class UpdateTransaction {
       'schemas/worker-priming.xsd',
       'schemas/prompt.xsd',
       'templates/QUEEN.md.template',
+      'rules/aether-colony.md',
     ];
   }
 
@@ -897,6 +899,7 @@ class UpdateTransaction {
       system: { copied: 0, removed: 0, skipped: 0 },
       commands: { copied: 0, removed: 0, skipped: 0 },
       agents: { copied: 0, removed: 0, skipped: 0 },
+      rules: { copied: 0, removed: 0, skipped: 0 },
       errors: [],
     };
 
@@ -926,6 +929,12 @@ class UpdateTransaction {
     const repoAgents = path.join(this.repoPath, '.opencode', 'agents');
     if (fs.existsSync(this.HUB_AGENTS)) {
       results.agents = this.syncDirWithCleanup(this.HUB_AGENTS, repoAgents, { dryRun });
+    }
+
+    // Sync rules from hub to .claude/rules/
+    const repoRules = path.join(this.repoPath, '.claude', 'rules');
+    if (fs.existsSync(this.HUB_RULES)) {
+      results.rules = this.syncDirWithCleanup(this.HUB_RULES, repoRules, { dryRun });
     }
 
     this.syncResult = results;
@@ -974,6 +983,7 @@ class UpdateTransaction {
     verifyDir(this.HUB_COMMANDS_CLAUDE, path.join(this.repoPath, '.claude', 'commands', 'ant'));
     verifyDir(this.HUB_COMMANDS_OPENCODE, path.join(this.repoPath, '.opencode', 'commands', 'ant'));
     verifyDir(this.HUB_AGENTS, path.join(this.repoPath, '.opencode', 'agents'));
+    verifyDir(this.HUB_RULES, path.join(this.repoPath, '.claude', 'rules'));
 
     return {
       valid: errors.length === 0,
@@ -1019,6 +1029,7 @@ class UpdateTransaction {
     checkDir(this.HUB_COMMANDS_CLAUDE, 'commands/claude');
     checkDir(this.HUB_COMMANDS_OPENCODE, 'commands/opencode');
     checkDir(this.HUB_AGENTS, 'agents');
+    checkDir(this.HUB_RULES, 'rules');
     checkDir(this.HUB_VERSION, 'version');
 
     // Check if source files exist
@@ -1119,6 +1130,7 @@ class UpdateTransaction {
     checkDir(this.HUB_COMMANDS_CLAUDE, path.join(this.repoPath, '.claude', 'commands', 'ant'));
     checkDir(this.HUB_COMMANDS_OPENCODE, path.join(this.repoPath, '.opencode', 'commands', 'ant'));
     checkDir(this.HUB_AGENTS, path.join(this.repoPath, '.opencode', 'agents'));
+    checkDir(this.HUB_RULES, path.join(this.repoPath, '.claude', 'rules'));
 
     return {
       isPartial: missing.length > 0 || corrupted.length > 0,
@@ -1425,10 +1437,12 @@ class UpdateTransaction {
       // Calculate totals
       const filesSynced = (this.syncResult?.system?.copied || 0) +
                          (this.syncResult?.commands?.copied || 0) +
-                         (this.syncResult?.agents?.copied || 0);
+                         (this.syncResult?.agents?.copied || 0) +
+                         (this.syncResult?.rules?.copied || 0);
       const filesRemoved = (this.syncResult?.system?.removed?.length || 0) +
                           (this.syncResult?.commands?.removed?.length || 0) +
-                          (this.syncResult?.agents?.removed?.length || 0);
+                          (this.syncResult?.agents?.removed?.length || 0) +
+                          (this.syncResult?.rules?.removed?.length || 0);
 
       return {
         success: true,

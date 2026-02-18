@@ -69,16 +69,20 @@ Check if `.aether/aether-utils.sh` exists using the Read tool.
 - Check if `~/.aether/system/aether-utils.sh` exists (expand `~` to the user's home directory)
 - **If the hub exists:** Run using the Bash tool:
   ```bash
-  mkdir -p .aether/docs .aether/utils && \
+  mkdir -p .aether/docs .aether/utils .aether/templates .aether/schemas .aether/exchange .claude/rules && \
   cp -f ~/.aether/system/aether-utils.sh .aether/ && \
   cp -f ~/.aether/system/workers.md .aether/ 2>/dev/null || true && \
   cp -f ~/.aether/system/CONTEXT.md .aether/ 2>/dev/null || true && \
   cp -f ~/.aether/system/model-profiles.yaml .aether/ 2>/dev/null || true && \
   cp -Rf ~/.aether/system/docs/* .aether/docs/ 2>/dev/null || true && \
   cp -Rf ~/.aether/system/utils/* .aether/utils/ 2>/dev/null || true && \
+  cp -Rf ~/.aether/system/templates/* .aether/templates/ 2>/dev/null || true && \
+  cp -Rf ~/.aether/system/schemas/* .aether/schemas/ 2>/dev/null || true && \
+  cp -Rf ~/.aether/system/exchange/* .aether/exchange/ 2>/dev/null || true && \
+  cp -Rf ~/.aether/system/rules/* .claude/rules/ 2>/dev/null || true && \
   chmod +x .aether/aether-utils.sh
   ```
-  This copies system files from the global hub into `.aether/`. Display:
+  This copies system files from the global hub into `.aether/` and rules into `.claude/rules/`. Display:
   ```
   Bootstrapped system files from global hub.
   ```

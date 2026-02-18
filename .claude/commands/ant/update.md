@@ -53,18 +53,34 @@ The hub stores all system files at `~/.aether/system/`.
 Run ONE bash command that syncs everything:
 
 ```bash
-mkdir -p .aether/docs .aether/utils && \
+mkdir -p .aether/docs .aether/utils .aether/templates .aether/schemas .aether/exchange && \
 cp -f ~/.aether/system/aether-utils.sh .aether/ && \
 cp -f ~/.aether/system/workers.md .aether/ 2>/dev/null || true && \
 cp -f ~/.aether/system/CONTEXT.md .aether/ 2>/dev/null || true && \
 cp -f ~/.aether/system/model-profiles.yaml .aether/ 2>/dev/null || true && \
 cp -Rf ~/.aether/system/docs/* .aether/docs/ 2>/dev/null || true && \
 cp -Rf ~/.aether/system/utils/* .aether/utils/ 2>/dev/null || true && \
+cp -Rf ~/.aether/system/templates/* .aether/templates/ 2>/dev/null || true && \
+cp -Rf ~/.aether/system/schemas/* .aether/schemas/ 2>/dev/null || true && \
+cp -Rf ~/.aether/system/exchange/* .aether/exchange/ 2>/dev/null || true && \
 chmod +x .aether/aether-utils.sh && \
 echo "System files synced"
 ```
 
 Colony data (`.aether/data/`) is never touched.
+
+### Step 3.5: Sync Rules to .claude/rules/
+
+Rules files teach Claude Code about the colony system. Sync them from the hub:
+
+```bash
+# Sync rules if hub has them
+if [ -d ~/.aether/system/rules ]; then
+  mkdir -p .claude/rules
+  cp -Rf ~/.aether/system/rules/* .claude/rules/ 2>/dev/null || true
+  echo "Rules synced"
+fi
+```
 
 ### Step 4: Sync Commands (with orphan cleanup)
 

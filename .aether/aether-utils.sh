@@ -3075,12 +3075,13 @@ ANTLOGO
     queen_file="$AETHER_ROOT/.aether/docs/QUEEN.md"
 
     # Check multiple locations for template
-    # Order: dev (runtime/) -> npm install (hub) -> legacy
+    # Order: dev (runtime/) -> hub (system/) -> repo local -> legacy
     template_file=""
     for path in \
       "$AETHER_ROOT/runtime/templates/QUEEN.md.template" \
-      "$HOME/.aether/templates/QUEEN.md.template" \
-      "$AETHER_ROOT/.aether/templates/QUEEN.md.template"; do
+      "$HOME/.aether/system/templates/QUEEN.md.template" \
+      "$AETHER_ROOT/.aether/templates/QUEEN.md.template" \
+      "$HOME/.aether/templates/QUEEN.md.template"; do
       if [[ -f "$path" ]]; then
         template_file="$path"
         break
@@ -3098,7 +3099,7 @@ ANTLOGO
 
     # Check if template was found
     if [[ -z "$template_file" ]]; then
-      json_err "$E_FILE_NOT_FOUND" "Template not found" '{"templates_checked":["runtime/templates/QUEEN.md.template","~/.aether/templates/QUEEN.md.template",".aether/templates/QUEEN.md.template"]}'
+      json_err "$E_FILE_NOT_FOUND" "Template not found" '{"templates_checked":["runtime/templates/QUEEN.md.template","~/.aether/system/templates/QUEEN.md.template",".aether/templates/QUEEN.md.template","~/.aether/templates/QUEEN.md.template"]}'
       exit 1
     fi
 

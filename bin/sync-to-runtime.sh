@@ -78,6 +78,7 @@ SYSTEM_FILES=(
   "schemas/worker-priming.xsd"
   "schemas/prompt.xsd"
   "templates/QUEEN.md.template"
+  "rules/aether-colony.md"
 )
 
 # Determine direction
