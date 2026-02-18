@@ -231,43 +231,58 @@ Plans:
 **Requirements:**
 - XML-01 through XML-03
 
-**Plans:** 3 plans
+**Plans:** 2 plans (plans 01-02 already done — subcommands exist in codebase)
 
 Plans:
-- [ ] 08-01-PLAN.md — Add pheromone XML export/import/validate subcommands to aether-utils.sh
-- [ ] 08-02-PLAN.md — Add wisdom and registry XML export/import subcommands to aether-utils.sh
-- [ ] 08-03-PLAN.md — Wire XML export into /ant:entomb for archive integration
+- [x] 08-01-PLAN.md — Add pheromone XML export/import/validate subcommands to aether-utils.sh (DONE)
+- [x] 08-02-PLAN.md — Add wisdom and registry XML export/import subcommands to aether-utils.sh (DONE)
+- [ ] 08-03-PLAN.md — Build colony-archive-xml combined export and wire into /ant:seal
+- [ ] 08-04-PLAN.md — Wire XML hard-stop into /ant:entomb and import flow into /ant:tunnels
 
 **Success Criteria:**
 1. Pheromones use XML format
 2. Wisdom exchange uses XML
 3. Registry uses XML
+4. Seal automatically exports combined XML archive (best-effort)
+5. Entomb requires XML archive (hard-stop on failure)
+6. Tunnels allows importing signals from old colony archives
 
 **Approach:**
 - XML as exchange format (JSON stays as primary storage)
-- Wire exchange scripts into aether-utils.sh as subcommands
-- Integrate XML export into entomb for automatic archive generation
-- Graceful degradation when xmllint/xmlstarlet not available
+- Single combined colony-archive.xml (not separate files per type)
+- Seal: best-effort XML export to .aether/exchange/
+- Entomb: hard-stop XML export to chamber (tool check with install offer)
+- Tunnels: import flow with additive merge (current colony wins on conflict)
 
 ---
 
 ### Phase 9: Polish & Verify
 **Goal:** Complete repair validated
 
-**Requirements:** All
+**Requirements:** All (46 requirements across 11 areas)
+
+**Plans:** 4 plans
+
+Plans:
+- [ ] 09-01-PLAN.md — Test infrastructure + ERR/STA/CMD foundation verification (14 requirements)
+- [ ] 09-02-PLAN.md — PHER/VIS/CTX verification and fixes (14 requirements)
+- [ ] 09-03-PLAN.md — SES/LIF/ADV verification and fixes (11 requirements)
+- [ ] 09-04-PLAN.md — XML/DOC verification, lifecycle integration test, requirements matrix (7 requirements + full matrix)
 
 **Success Criteria:**
-1. Full workflow test: init -> plan -> build -> continue -> seal
+1. Full workflow test: init -> plan -> build -> continue -> seal -> entomb
 2. Visual display works end-to-end
 3. Context survives /clear
 4. No errors in normal operation
-5. All 40 requirements verified
+5. All 46 requirements verified with PASS/FAIL
+6. Requirements matrix and executive summary produced
+7. REQUIREMENTS.md updated with actual verification status
 
 **Approach:**
-- End-to-end testing
-- User acceptance testing
-- Fix any remaining issues
-- Document what works
+- Exhaustive per-requirement scripted verification
+- Test-fix-test per requirement area
+- Full lifecycle integration test in isolated project
+- Requirements matrix with executive summary
 
 ---
 
