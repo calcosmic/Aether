@@ -170,9 +170,13 @@ xml-registry-import() {
     # Extract colonies using xmlstarlet if available
     if [[ "$XMLSTARLET_AVAILABLE" == "true" ]]; then
         local colony_array
-        colony_array=$(xmlstarlet sel -t -m "//colony" \
+        # Note: xmlstarlet sel returns exit 1 when no nodes match.
+        # With pipefail, the pipeline exit code reflects xmlstarlet failure even if jq succeeds.
+        # Use a subshell with set +e to safely capture the output regardless of xmlstarlet exit code.
+        colony_array=$(set +e; xmlstarlet sel -t -m "//colony" \
             -o '{"id":"' -v "@id" -o '","name":"' -v "name" -o '","status":"' -v "@status" -o '","created_at":"' -v "@created_at" -o '"}' \
-            -n "$xml_file" 2>/dev/null | jq -s '.')
+            -n "$xml_file" 2>/dev/null | jq -s '.' 2>/dev/null; true) || colony_array='[]'
+        [[ -z "$colony_array" || "$colony_array" == "null" ]] && colony_array='[]'
 
         colony_count=$(echo "$colony_array" | jq 'length')
         if [[ $colony_count -gt 0 ]]; then

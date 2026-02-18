@@ -195,9 +195,13 @@ xml-wisdom-import() {
     # Extract philosophies using xmlstarlet if available
     if [[ "$XMLSTARLET_AVAILABLE" == "true" ]]; then
         local phil_array
-        phil_array=$(xmlstarlet sel -t -m "//philosophy" \
+        # Note: xmlstarlet sel returns exit 1 when no nodes match.
+        # With pipefail, the pipeline exit code reflects xmlstarlet failure even if jq succeeds.
+        # Use set +e in subshell to safely capture output regardless of xmlstarlet exit code.
+        phil_array=$(set +e; xmlstarlet sel -t -m "//philosophy" \
             -o '{"id":"' -v "@id" -o '","confidence":' -v "@confidence" -o ',"domain":"' -v "@domain" -o '","source":"' -v "@source" -o '","content":"' -v "content" -o '"}' \
-            -n "$xml_file" 2>/dev/null | jq -s '.')
+            -n "$xml_file" 2>/dev/null | jq -s '.' 2>/dev/null; true) || phil_array='[]'
+        [[ -z "$phil_array" || "$phil_array" == "null" ]] && phil_array='[]'
 
         local phil_count
         phil_count=$(echo "$phil_array" | jq 'length')
@@ -208,9 +212,12 @@ xml-wisdom-import() {
 
         # Extract patterns
         local pattern_array
-        pattern_array=$(xmlstarlet sel -t -m "//pattern" \
+        # Note: xmlstarlet sel returns exit 1 when no nodes match.
+        # Use set +e in subshell to safely capture output regardless of xmlstarlet exit code.
+        pattern_array=$(set +e; xmlstarlet sel -t -m "//pattern" \
             -o '{"id":"' -v "@id" -o '","confidence":' -v "@confidence" -o ',"domain":"' -v "@domain" -o '"}' \
-            -n "$xml_file" 2>/dev/null | jq -s '.')
+            -n "$xml_file" 2>/dev/null | jq -s '.' 2>/dev/null; true) || pattern_array='[]'
+        [[ -z "$pattern_array" || "$pattern_array" == "null" ]] && pattern_array='[]'
 
         local pattern_count
         pattern_count=$(echo "$pattern_array" | jq 'length')

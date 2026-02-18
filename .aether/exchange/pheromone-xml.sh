@@ -126,8 +126,9 @@ xml-pheromone-export() {
           active=\"$active\">"
 
         # Content section
+        # Handle both string content (.content = "text") and object content (.content.text = "text")
         local content_text
-        content_text=$(echo "$signal" | jq -r '.content.text // .message // ""')
+        content_text=$(echo "$signal" | jq -r 'if (.content | type) == "string" then .content elif .content.text then .content.text else .message // "" end')
         if [[ -n "$content_text" ]]; then
             xml_output="$xml_output
     <content>

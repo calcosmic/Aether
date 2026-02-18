@@ -14,6 +14,15 @@ set -euo pipefail
 E2E_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$E2E_SCRIPT_DIR/../.." && pwd)"
 
+# Parse --results-file flag (for master runner integration)
+EXTERNAL_RESULTS_FILE=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --results-file) EXTERNAL_RESULTS_FILE="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+
 # Source shared e2e infrastructure
 # shellcheck source=./e2e-helpers.sh
 source "$E2E_SCRIPT_DIR/e2e-helpers.sh"
@@ -221,5 +230,12 @@ echo ""
 run_ctx01
 run_ctx02
 run_ctx03
+
+# Write external results file if requested (for master runner)
+if [[ -n "$EXTERNAL_RESULTS_FILE" && -n "$RESULTS_FILE" && -f "$RESULTS_FILE" ]]; then
+  while IFS='|' read -r req_id status notes; do
+    echo "${req_id}=${status}" >> "$EXTERNAL_RESULTS_FILE"
+  done < "$RESULTS_FILE"
+fi
 
 print_area_results "$AREA"
