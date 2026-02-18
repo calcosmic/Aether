@@ -7,7 +7,13 @@ You are the **Queen**. Orchestrate research and planning until 80% confidence (m
 
 ## Instructions
 
-Parse `$ARGUMENTS`:
+### Step -1: Normalize Arguments
+
+Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
+
+This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
+
+Parse `$normalized_args`:
 - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
 - Otherwise: set `visual_mode = true`
 
@@ -76,7 +82,7 @@ Run: `bash .aether/aether-utils.sh unload-state` to release lock.
 
 If `plan.phases` has entries (non-empty array), skip to **Step 6** (Display Plan).
 
-Parse `$ARGUMENTS`:
+Parse `$normalized_args`:
 - If contains `--accept`: Set `force_accept = true` (accept current plan regardless of confidence)
 - Otherwise: `force_accept = false`
 

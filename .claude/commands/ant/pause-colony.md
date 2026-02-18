@@ -194,7 +194,7 @@ bash .aether/aether-utils.sh context-update safe-to-clear "YES" "Colony paused â
 **If visual_mode is true, render final swarm display:**
 ```bash
 bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Colony paused" "Colony" '{"read":3,"grep":0,"edit":2,"bash":1}' 100 "fungus_garden" 100
-bash .aether/aether-utils.sh swarm-display-render "$pause_id"
+bash .aether/aether-utils.sh swarm-display-text "$pause_id"
 ```
 
 Output header:

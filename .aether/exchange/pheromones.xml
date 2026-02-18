@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<pheromones xmlns="http://aether.colony/schemas/pheromones"
+            xmlns:ph="http://aether.colony/schemas/pheromones"
+            version="1.0.0"
+            generated_at="2026-02-17T23:51:44Z"
+            colony_id="aether-dev">
+  <metadata>
+    <source type="system">aether-pheromone-converter</source>
+    <context>Colony pheromone signals</context>
+  </metadata>
+  <signal id="sig_focus_001"
+          type="FOCUS"
+          priority="normal"
+          source="user"
+          created_at="2026-02-16T10:00:00Z"
+          expires_at="2026-02-17T10:00:00Z"
+          active="true">
+    <content>
+      <text>XML migration and pheromone system implementation</text>
+    </content>
+  </signal>
+  <signal id="sig_redirect_001"
+          type="REDIRECT"
+          priority="high"
+          source="system"
+          created_at="2026-02-16T08:00:00Z"
+          expires_at="2026-03-16T08:00:00Z"
+          active="true">
+    <content>
+      <text>Avoid editing runtime/ directly - edit .aether/ instead</text>
+    </content>
+  </signal>
+  <signal id="sig_feedback_001"
+          type="FEEDBACK"
+          priority="low"
+          source="worker_builder"
+          created_at="2026-02-16T12:00:00Z"
+          active="true">
+    <content>
+      <text>Test coverage is good, continue maintaining 80%+ coverage</text>
+    </content>
+  </signal>
+  <signal id="sig_focus_1771366307000"
+          type="FOCUS"
+          priority="normal"
+          source="user"
+          created_at="2026-02-17T22:11:47Z"
+          expires_at="phase_end"
+          active="true">
+    <content>
+      <text>test area for pheromone unification</text>
+    </content>
+  </signal>
+  <signal id="sig_focus_1771366386000"
+          type="FOCUS"
+          priority="normal"
+          source="user"
+          created_at="2026-02-17T22:13:06Z"
+          expires_at="phase_end"
+          active="true">
+    <content>
+      <text>test area</text>
+    </content>
+  </signal>
+  <signal id="sig_redirect_1771366398000"
+          type="REDIRECT"
+          priority="high"
+          source="user"
+          created_at="2026-02-17T22:13:18Z"
+          expires_at="phase_end"
+          active="true">
+    <content>
+      <text>avoid direct runtime edits</text>
+    </content>
+  </signal>
+  <signal id="sig_feedback_1771366398000"
+          type="FEEDBACK"
+          priority="low"
+          source="user"
+          created_at="2026-02-17T22:13:18Z"
+          expires_at="phase_end"
+          active="true">
+    <content>
+      <text>keep commits small</text>
+    </content>
+  </signal>
+</pheromones>

@@ -46,21 +46,25 @@ Colony data (.aether/data/) is always untouched by updates.
 
 Stop here. Do not proceed.
 
-### Step 3: Bootstrap System Files
+### Step 3: Sync System Files from Hub
 
-If `.aether/aether-utils.sh` does not exist yet (new repo that predates the hub), copy it from the hub first:
-```
-cp ~/.aether/system/aether-utils.sh .aether/aether-utils.sh && chmod +x .aether/aether-utils.sh
+The hub stores all system files at `~/.aether/system/`.
+
+Run ONE bash command that syncs everything:
+
+```bash
+mkdir -p .aether/docs .aether/utils && \
+cp -f ~/.aether/system/aether-utils.sh .aether/ && \
+cp -f ~/.aether/system/workers.md .aether/ 2>/dev/null || true && \
+cp -f ~/.aether/system/CONTEXT.md .aether/ 2>/dev/null || true && \
+cp -f ~/.aether/system/model-profiles.yaml .aether/ 2>/dev/null || true && \
+cp -Rf ~/.aether/system/docs/* .aether/docs/ 2>/dev/null || true && \
+cp -Rf ~/.aether/system/utils/* .aether/utils/ 2>/dev/null || true && \
+chmod +x .aether/aether-utils.sh && \
+echo "System files synced"
 ```
 
-Then run using the Bash tool:
-```
-bash .aether/aether-utils.sh bootstrap-system
-```
-
-This copies system files (docs, utils, aether-utils.sh) from `~/.aether/system/` into `.aether/` using an explicit allowlist. Colony data is never touched.
-
-Parse the JSON output to get the count of copied files.
+Colony data (`.aether/data/`) is never touched.
 
 ### Step 4: Sync Commands (with orphan cleanup)
 
@@ -71,29 +75,29 @@ For each directory pair, run using the Bash tool:
 ```bash
 # Sync Claude commands
 mkdir -p .claude/commands/ant
-cp -R ~/.aether/commands/claude/* .claude/commands/ant/ 2>/dev/null
+cp -R ~/.aether/system/commands/claude/* .claude/commands/ant/ 2>/dev/null
 # Remove orphans: files in dest that aren't in hub
 comm -23 \
   <(cd .claude/commands/ant && find . -type f ! -name '.*' | sort) \
-  <(cd ~/.aether/commands/claude && find . -type f ! -name '.*' | sort) \
+  <(cd ~/.aether/system/commands/claude && find . -type f ! -name '.*' | sort) \
   | while read f; do rm ".claude/commands/ant/$f" && echo "  removed stale: .claude/commands/ant/$f"; done
 echo "claude: done"
 
 # Sync OpenCode commands
 mkdir -p .opencode/commands/ant
-cp -R ~/.aether/commands/opencode/* .opencode/commands/ant/ 2>/dev/null
+cp -R ~/.aether/system/commands/opencode/* .opencode/commands/ant/ 2>/dev/null
 comm -23 \
   <(cd .opencode/commands/ant && find . -type f ! -name '.*' | sort) \
-  <(cd ~/.aether/commands/opencode && find . -type f ! -name '.*' | sort) \
+  <(cd ~/.aether/system/commands/opencode && find . -type f ! -name '.*' | sort) \
   | while read f; do rm ".opencode/commands/ant/$f" && echo "  removed stale: .opencode/commands/ant/$f"; done
 echo "opencode: done"
 
 # Sync agents
 mkdir -p .opencode/agents
-cp -R ~/.aether/agents/* .opencode/agents/ 2>/dev/null
+cp -R ~/.aether/system/agents/* .opencode/agents/ 2>/dev/null
 comm -23 \
   <(cd .opencode/agents && find . -type f ! -name '.*' | sort) \
-  <(cd ~/.aether/agents && find . -type f ! -name '.*' | sort) \
+  <(cd ~/.aether/system/agents && find . -type f ! -name '.*' | sort) \
   | while read f; do rm ".opencode/agents/$f" && echo "  removed stale: .opencode/agents/$f"; done
 echo "agents: done"
 ```

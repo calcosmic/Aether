@@ -7,11 +7,17 @@ You are the **Queen**. Add an AVOID constraint.
 
 ## Instructions
 
-The pattern to avoid is: `$ARGUMENTS`
+### Step -1: Normalize Arguments
+
+Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
+
+This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
+
+The pattern to avoid is: `$normalized_args`
 
 ### Step 1: Validate
 
-If `$ARGUMENTS` empty -> show usage: `/ant:redirect <pattern to avoid>`, stop.
+If `$normalized_args` empty -> show usage: `/ant:redirect <pattern to avoid>`, stop.
 If content > 500 chars -> "Redirect content too long (max 500 chars)", stop.
 
 ### Step 2: Read + Update Constraints

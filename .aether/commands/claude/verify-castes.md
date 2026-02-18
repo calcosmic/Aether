@@ -16,14 +16,14 @@ Aether Colony Caste System
 CASTE ASSIGNMENTS
 ─────────────────
 👑 Prime           - Colony coordination and strategic planning
-🏺 Archaeologist   - Git history analysis and pattern excavation
-🏛️ Architect      - System design and documentation
-🔮 Oracle          - Deep research and foresight
+🏺🐜 Archaeologist   - Git history analysis and pattern excavation
+🏛️🐜 Architect      - System design and documentation
+🔮🐜 Oracle          - Deep research and foresight
 🗺️ Route Setter    - Task decomposition and planning
-🔨 Builder         - Implementation and coding
-👁️ Watcher         - Verification and testing
-🔍 Scout           - Research and exploration
-🎲 Chaos           - Edge case testing and resilience probing
+🔨🐜 Builder         - Implementation and coding
+👁️🐜 Watcher         - Verification and testing
+🔍🐜 Scout           - Research and exploration
+🎲🐜 Chaos           - Edge case testing and resilience probing
 🧭 Colonizer       - Environment setup and exploration
 
 ───────────────────────────────────────────

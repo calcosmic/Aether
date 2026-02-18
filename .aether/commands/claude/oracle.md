@@ -1,6 +1,6 @@
 ---
 name: ant:oracle
-description: "🔮🐜🧠🐜🔮 Oracle Ant - deep research agent using RALF iterative loop pattern"
+description: "🔮🐜🧠🐜🔮🐜 Oracle Ant - deep research agent using RALF iterative loop pattern"
 ---
 
 You are the **Oracle Ant** command handler. You configure and launch a deep research loop that runs autonomously in a separate process.
@@ -19,7 +19,8 @@ Parse `$ARGUMENTS` to determine the action:
 
 1. Check for flags:
    - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
-   - Otherwise: set `visual_mode = true`
+   - If contains `--force` or `--force-research`: set `force_research = true`
+   - Otherwise: set `visual_mode = true`, `force_research = false`
    - Remove flags from arguments before routing
 
 2. **If remaining arguments is exactly `stop`** — go to **Step 0b: Stop Oracle**
@@ -60,7 +61,7 @@ mkdir -p .aether/oracle && touch .aether/oracle/.stop
 Output:
 
 ```
-🔮 Oracle Stop Signal Sent
+🔮🐜 Oracle Stop Signal Sent
 
    Created .aether/oracle/.stop
    The research loop will halt at the end of the current iteration.
@@ -79,7 +80,7 @@ Check if `.aether/oracle/progress.md` exists using the Read tool.
 **If it does NOT exist**, output:
 
 ```
-🔮 Oracle Status: No Research In Progress
+🔮🐜 Oracle Status: No Research In Progress
 
    No progress.md found. Start a research session:
    /ant:oracle
@@ -94,7 +95,7 @@ Count the number of `## Iteration` headings in progress.md to determine iteratio
 Output:
 
 ```
-🔮 Oracle Status
+🔮🐜 Oracle Status
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Topic:       {topic from research.json, or "unknown"}
 Confidence:  {target_confidence}%
@@ -191,6 +192,40 @@ After collecting all answers, proceed to Step 2.
 
 ---
 
+### Step 1.5: Check for Stale Oracle Session
+
+Before starting new research, check for existing oracle session files.
+
+Capture session start time:
+```bash
+ORACLE_START=$(date +%s)
+```
+
+Check for stale files:
+```bash
+stale_check=$(bash .aether/aether-utils.sh session-verify-fresh --command oracle "" "$ORACLE_START")
+has_stale=$(echo "$stale_check" | jq -r '.stale | length')
+has_progress=$(echo "$stale_check" | jq -r '.fresh | length')
+
+if [[ "$has_stale" -gt 0 ]] || [[ "$has_progress" -gt 0 ]]; then
+  # Found existing oracle session
+  if [[ "$force_research" == "true" ]]; then
+    bash .aether/aether-utils.sh session-clear --command oracle
+    echo "Cleared stale oracle session for fresh research"
+  else
+    # Existing session found - prompt user
+    echo "Found existing oracle session. Options:"
+    echo "  /ant:oracle status     - View current session"
+    echo "  /ant:oracle --force    - Restart with fresh session"
+    echo "  /ant:oracle stop       - Stop current session"
+    # Don't proceed - let user decide
+    exit 0
+  fi
+fi
+```
+
+---
+
 ### Step 2: Configure Research
 
 Create the oracle directory structure:
@@ -255,6 +290,18 @@ Use the Write tool to write `.aether/oracle/progress.md`:
 
 ```
 
+#### Step 2.5: Verify Oracle Files Are Fresh
+
+Verify that progress.md and research.json were created successfully:
+```bash
+verify_result=$(bash .aether/aether-utils.sh session-verify-fresh --command oracle "" "$ORACLE_START")
+fresh_count=$(echo "$verify_result" | jq -r '.fresh | length')
+
+if [[ "$fresh_count" -lt 2 ]]; then
+  echo "Warning: Oracle files not properly initialized"
+fi
+```
+
 Proceed to Step 3.
 
 ---
@@ -285,13 +332,13 @@ Now launch the loop. Try tmux first, fall back to manual.
 **Try tmux:**
 
 ```bash
-tmux new-session -d -s oracle "cd $(pwd) && bash .aether/oracle/oracle.sh; echo ''; echo '🔮 Oracle loop finished. Press any key to close.'; read -n1" 2>/dev/null && echo "TMUX_OK" || echo "TMUX_FAIL"
+tmux new-session -d -s oracle "cd $(pwd) && bash .aether/oracle/oracle.sh; echo ''; echo '🔮🐜 Oracle loop finished. Press any key to close.'; read -n1" 2>/dev/null && echo "TMUX_OK" || echo "TMUX_FAIL"
 ```
 
 **If TMUX_OK:**
 
 ```
-🔮 Oracle Launched
+🔮🐜 Oracle Launched
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
    The Oracle is researching in a background tmux session.

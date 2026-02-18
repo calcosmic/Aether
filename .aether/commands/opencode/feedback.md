@@ -7,10 +7,16 @@ You are the **Queen**. Emit a FEEDBACK signal.
 
 ## Instructions
 
-The feedback message is: `$ARGUMENTS`
+### Step -1: Normalize Arguments
+
+Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
+
+This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
+
+The feedback message is: `$normalized_args`
 
 ### Step 1: Validate
-If `$ARGUMENTS` empty -> show usage: `/ant:feedback <message>`, stop.
+If `$normalized_args` empty -> show usage: `/ant:feedback <message>`, stop.
 If content > 500 chars -> "Signal content too long (max 500 chars)", stop.
 
 ### Step 2: Read + Update State

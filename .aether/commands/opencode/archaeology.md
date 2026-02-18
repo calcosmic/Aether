@@ -29,15 +29,21 @@ You sift through git history like an archaeologist brushes dirt from ancient pot
 
 ## Instructions
 
-Parse `$ARGUMENTS`:
+### Step -1: Normalize Arguments
+
+Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
+
+This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
+
+Parse `$normalized_args`:
 - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
 - Otherwise: set `visual_mode = true`
 
 ### Step 0: Validate Target
 
-The target path is: `$ARGUMENTS`
+The target path is: `$normalized_args`
 
-**If `$ARGUMENTS` is empty or not provided:**
+**If `$normalized_args` is empty or not provided:**
 ```
 🏺🐜🔍🐜🏺 ARCHAEOLOGIST
 
@@ -58,7 +64,7 @@ Stop here.
 
 **If the target path does not exist:**
 ```
-🏺 Target not found: $ARGUMENTS
+🏺 Target not found: $normalized_args
    Verify the path exists and try again.
 ```
 Stop here.
@@ -72,7 +78,7 @@ Read in parallel to understand the archaeological site:
 - `.aether/data/constraints.json` — current focus and constraints
 
 **Target awareness:**
-- Determine if `$ARGUMENTS` is a file or a directory
+- Determine if `$normalized_args` is a file or a directory
 - If a directory, list its contents to understand scope
 
 Display awakening:
@@ -81,7 +87,7 @@ Display awakening:
           T H E   A R C H A E O L O G I S T   A W A K E N S
 ═══════════════════════════════════════════════ 🏺🐜🔍🐜🏺
 
-Target: {$ARGUMENTS}
+Target: {$normalized_args}
 Type:   {file | directory}
 Colony: {goal or "standalone excavation"}
 
@@ -95,38 +101,38 @@ Run the following git commands to establish the broad strokes of history:
 **For a file:**
 ```bash
 # Total commit count and date range
-git log --oneline -- "$ARGUMENTS" | wc -l
-git log --format="%ai" --reverse -- "$ARGUMENTS" | head -1   # first commit
-git log --format="%ai" -- "$ARGUMENTS" | head -1              # last commit
+git log --oneline -- "$normalized_args" | wc -l
+git log --format="%ai" --reverse -- "$normalized_args" | head -1   # first commit
+git log --format="%ai" -- "$normalized_args" | head -1              # last commit
 
 # Author analysis
-git log --format="%aN" -- "$ARGUMENTS" | sort | uniq -c | sort -rn
+git log --format="%aN" -- "$normalized_args" | sort | uniq -c | sort -rn
 
 # Commit frequency over time (churn analysis)
-git log --format="%ad" --date=format:"%Y-%m" -- "$ARGUMENTS" | sort | uniq -c | sort -k2
+git log --format="%ad" --date=format:"%Y-%m" -- "$normalized_args" | sort | uniq -c | sort -k2
 
 # Follow renames to get full history
-git log --follow --oneline -- "$ARGUMENTS" | wc -l
-git log --follow --diff-filter=R --summary -- "$ARGUMENTS"
+git log --follow --oneline -- "$normalized_args" | wc -l
+git log --follow --diff-filter=R --summary -- "$normalized_args"
 
 # Recent activity (last 20 commits)
-git log --oneline -20 -- "$ARGUMENTS"
+git log --oneline -20 -- "$normalized_args"
 ```
 
 **For a directory:**
 ```bash
 # Total commit count touching this directory
-git log --oneline -- "$ARGUMENTS" | wc -l
+git log --oneline -- "$normalized_args" | wc -l
 
 # Files sorted by number of commits (churn ranking)
-git log --name-only --pretty=format: -- "$ARGUMENTS" | sort | uniq -c | sort -rn | head -20
+git log --name-only --pretty=format: -- "$normalized_args" | sort | uniq -c | sort -rn | head -20
 
 # Author analysis for the directory
-git log --format="%aN" -- "$ARGUMENTS" | sort | uniq -c | sort -rn
+git log --format="%aN" -- "$normalized_args" | sort | uniq -c | sort -rn
 
 # Age analysis: oldest and newest files
-git log --diff-filter=A --format="%ai %s" -- "$ARGUMENTS" | tail -10   # oldest additions
-git log --diff-filter=A --format="%ai %s" -- "$ARGUMENTS" | head -10   # newest additions
+git log --diff-filter=A --format="%ai %s" -- "$normalized_args" | tail -10   # oldest additions
+git log --diff-filter=A --format="%ai %s" -- "$normalized_args" | head -10   # newest additions
 ```
 
 Record all findings for the report.
@@ -136,7 +142,7 @@ Record all findings for the report.
 **For a file (primary analysis):**
 ```bash
 # Line-level authorship and age
-git blame --line-porcelain "$ARGUMENTS"
+git blame --line-porcelain "$normalized_args"
 ```
 
 From the blame output, identify:
@@ -155,16 +161,16 @@ Identify the most significant commits by looking for:
 
 ```bash
 # Large changes (potential refactors or rewrites)
-git log --stat -- "$ARGUMENTS" | grep -B5 "files changed" | head -40
+git log --stat -- "$normalized_args" | grep -B5 "files changed" | head -40
 
 # Commits mentioning bugs, fixes, workarounds, incidents
-git log --all --grep="fix" --grep="bug" --grep="workaround" --grep="hack" --grep="incident" --grep="hotfix" --grep="revert" --oneline -- "$ARGUMENTS" | head -20
+git log --all --grep="fix" --grep="bug" --grep="workaround" --grep="hack" --grep="incident" --grep="hotfix" --grep="revert" --oneline -- "$normalized_args" | head -20
 
 # Commits mentioning TODO, FIXME, temporary
-git log --all --grep="TODO" --grep="FIXME" --grep="temporary" --grep="temp fix" --oneline -- "$ARGUMENTS" | head -15
+git log --all --grep="TODO" --grep="FIXME" --grep="temporary" --grep="temp fix" --oneline -- "$normalized_args" | head -15
 
 # Reverts (something went wrong)
-git log --all --grep="revert" --oneline -- "$ARGUMENTS"
+git log --all --grep="revert" --oneline -- "$normalized_args"
 ```
 
 For the most significant commits (up to 5), run `git show <hash>` to read the full commit message and diff. Look for:
@@ -179,13 +185,13 @@ Search the current code for archaeological markers:
 
 ```bash
 # Search for tech debt markers in current file(s)
-grep -n "TODO\|FIXME\|XXX\|HACK\|WORKAROUND\|TEMPORARY\|temp fix\|technical debt" "$ARGUMENTS" 2>/dev/null || true
+grep -n "TODO\|FIXME\|XXX\|HACK\|WORKAROUND\|TEMPORARY\|temp fix\|technical debt" "$normalized_args" 2>/dev/null || true
 
 # Search for commented-out code (dead code candidates)
-grep -n "^[[:space:]]*//\|^[[:space:]]*#\|^[[:space:]]*\*" "$ARGUMENTS" 2>/dev/null | head -20
+grep -n "^[[:space:]]*//\|^[[:space:]]*#\|^[[:space:]]*\*" "$normalized_args" 2>/dev/null | head -20
 
 # Search for version-specific workarounds
-grep -n "version\|compat\|legacy\|deprecated\|polyfill\|shim\|fallback" "$ARGUMENTS" 2>/dev/null || true
+grep -n "version\|compat\|legacy\|deprecated\|polyfill\|shim\|fallback" "$normalized_args" 2>/dev/null || true
 ```
 
 For each TODO/FIXME found, use `git blame` on that specific line to determine:

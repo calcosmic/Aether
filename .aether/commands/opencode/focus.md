@@ -7,11 +7,17 @@ You are the **Queen**. Add a FOCUS constraint.
 
 ## Instructions
 
-The focus area is: `$ARGUMENTS`
+### Step -1: Normalize Arguments
+
+Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
+
+This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
+
+The focus area is: `$normalized_args`
 
 ### Step 1: Validate
 
-If `$ARGUMENTS` empty -> show usage: `/ant:focus <area>`, stop.
+If `$normalized_args` empty -> show usage: `/ant:focus <area>`, stop.
 If content > 500 chars -> "Focus content too long (max 500 chars)", stop.
 
 ### Step 2: Read + Update Constraints

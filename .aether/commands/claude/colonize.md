@@ -9,7 +9,8 @@ The arguments are: `$ARGUMENTS`
 
 **Parse arguments:**
 - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
-- Otherwise: set `visual_mode = true`
+- If contains `--force` or `--force-resurvey`: set `force_resurvey = true`
+- Otherwise: set `visual_mode = true`, `force_resurvey = false`
 
 ## Instructions
 
@@ -76,6 +77,30 @@ Create the survey directory:
 mkdir -p .aether/data/survey
 ```
 
+#### Step 3.1: Check for Stale Survey Session
+
+Before dispatching surveyors, check for existing survey files and capture session start time:
+
+```bash
+SURVEY_START=$(date +%s)
+
+# Check for stale survey files
+stale_check=$(bash .aether/aether-utils.sh session-verify-fresh --command survey "" "$SURVEY_START")
+has_stale=$(echo "$stale_check" | jq -r '.stale | length')
+has_fresh=$(echo "$stale_check" | jq -r '.fresh | length')
+
+if [[ "$has_stale" -gt 0 ]] || [[ "$has_fresh" -gt 0 ]]; then
+  # Found existing survey files
+  if [[ "$force_resurvey" == "true" ]]; then
+    bash .aether/aether-utils.sh session-clear --command survey
+    echo "Cleared existing survey files for fresh territory mapping"
+  else
+    echo "Found existing territory survey. Use --force-resurvey to remap."
+    # Continue - will use existing survey files
+  fi
+fi
+```
+
 Generate unique names for the 4 Surveyor Ants and log their dispatch:
 ```bash
 bash .aether/aether-utils.sh generate-ant-name "surveyor"
@@ -134,6 +159,21 @@ ls .aether/data/survey/PATHOGENS.md 2>/dev/null && echo "PATHOGENS: OK" || echo 
 ```
 
 If any documents are missing, note which ones in the output.
+
+#### Step 4.5: Verify Survey Files Are Fresh
+
+Verify that all survey files were created after the session start:
+```bash
+verify_result=$(bash .aether/aether-utils.sh session-verify-fresh --command survey "" "$SURVEY_START")
+fresh_count=$(echo "$verify_result" | jq -r '.fresh | length')
+
+if [[ "$fresh_count" -lt 7 ]]; then
+  echo "Warning: Some survey files may be stale or missing"
+  echo "$verify_result" | jq -r '.stale[], .missing[]' | while read doc; do
+    echo "  - $doc"
+  done
+fi
+```
 
 ### Step 5: Update State
 

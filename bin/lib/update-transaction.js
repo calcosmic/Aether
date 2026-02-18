@@ -161,9 +161,10 @@ class UpdateTransaction {
     // Hub paths (from cli.js)
     this.HOME = process.env.HOME || process.env.USERPROFILE;
     this.HUB_DIR = path.join(this.HOME, '.aether');
-    this.HUB_COMMANDS_CLAUDE = path.join(this.HUB_DIR, 'commands', 'claude');
-    this.HUB_COMMANDS_OPENCODE = path.join(this.HUB_DIR, 'commands', 'opencode');
-    this.HUB_AGENTS = path.join(this.HUB_DIR, 'agents');
+    this.HUB_SYSTEM_DIR = path.join(this.HUB_DIR, 'system');
+    this.HUB_COMMANDS_CLAUDE = path.join(this.HUB_SYSTEM_DIR, 'commands', 'claude');
+    this.HUB_COMMANDS_OPENCODE = path.join(this.HUB_SYSTEM_DIR, 'commands', 'opencode');
+    this.HUB_AGENTS = path.join(this.HUB_SYSTEM_DIR, 'agents');
     this.HUB_VERSION = path.join(this.HUB_DIR, 'version.json');
     this.HUB_REGISTRY = path.join(this.HUB_DIR, 'registry.json');
 

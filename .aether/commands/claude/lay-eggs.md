@@ -123,7 +123,7 @@ Write `.aether/data/constraints.json`:
 **If visual_mode is true, render final swarm display:**
 ```bash
 bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "First eggs laid" "Colony" '{"read":3,"grep":0,"edit":2,"bash":1}' 100 "nursery" 100
-bash .aether/aether-utils.sh swarm-display-render "$layeggs_id"
+bash .aether/aether-utils.sh swarm-display-inline "$layeggs_id"
 ```
 
 ```

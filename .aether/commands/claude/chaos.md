@@ -92,7 +92,7 @@ Read these files in parallel to understand the colony and codebase:
 
 **If no relevant files can be found for the target:**
 ```
-🎲 Chaos Ant cannot locate target: $ARGUMENTS
+🎲🐜 Chaos Ant cannot locate target: $ARGUMENTS
    Searched for matching files and modules but found nothing.
    Please provide a valid file path, module name, or feature description.
 ```
@@ -225,7 +225,7 @@ For each scenario, produce a finding in this format. Display each to the termina
 **If visual_mode is true, render final swarm display:**
 ```bash
 bash .aether/aether-utils.sh swarm-display-update "Chaos Ant" "chaos" "completed" "Resilience test complete" "Colony" '{"read":8,"grep":4,"edit":0,"bash":3}' 100 "fungus_garden" 100
-bash .aether/aether-utils.sh swarm-display-render "$chaos_id"
+bash .aether/aether-utils.sh swarm-display-inline "$chaos_id"
 ```
 
 After all 5 scenarios, compile the structured report:

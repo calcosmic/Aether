@@ -106,3 +106,6 @@ node_modules/
 # Generated from .aether/ by npm preinstall hook
 # runtime/ is a build artifact - edit .aether/ instead
 runtime/
+
+# GSD planning files (local only)
+.planning/

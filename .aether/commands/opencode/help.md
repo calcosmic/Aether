@@ -109,4 +109,16 @@ HOW IT WORKS
     activity.log        Timestamped worker activity
     spawn-tree.txt      Worker spawn hierarchy
     constraints.json    Focus/redirect pheromone data
+
+OPENCODE USERS
+
+  Argument syntax: OpenCode handles multi-word arguments differently than Claude.
+  Wrap text arguments in quotes for reliable parsing:
+
+    ✅ /ant:init "Build a REST API"
+    ✅ /ant:plan "authentication system"
+    ✅ /ant:focus "database layer"
+
+  Without quotes, only the first word may be captured. This is now handled
+  automatically by the normalize-args utility, but quoting is recommended.
 ```

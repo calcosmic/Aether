@@ -983,7 +983,7 @@ Runs ONLY when all phases complete.
 **If visual_mode is true, render final swarm display:**
 ```bash
 bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Phase advanced" "Colony" '{"read":5,"grep":2,"edit":3,"bash":2}' 100 "fungus_garden" 100
-bash .aether/aether-utils.sh swarm-display-render "$continue_id"
+bash .aether/aether-utils.sh swarm-display-inline "$continue_id"
 ```
 
 Output:
@@ -1026,3 +1026,11 @@ Output:
 ```
 
 **IMPORTANT:** In the "Next Steps" section above, substitute the actual phase number for `{next_id}` (calculated in Step 2 as `current_phase + 1`). For example, if advancing to phase 4, output `/ant:build 4` not `/ant:build {next_id}`.
+
+### Step 4: Update Session
+
+Update the session tracking file to enable `/ant:resume` after context clear:
+
+```bash
+bash .aether/aether-utils.sh session-update "/ant:continue" "/ant:build {next_id}" "Phase {prev_id} completed, advanced to Phase {next_id}"
+```

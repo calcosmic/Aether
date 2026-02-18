@@ -58,10 +58,17 @@ Check if `.aether/aether-utils.sh` exists using the Read tool.
 **If the file already exists** — skip this step entirely. System files are present.
 
 **If the file does NOT exist:**
-- Check if `~/.aether/system/` exists (expand `~` to the user's home directory)
+- Check if `~/.aether/system/aether-utils.sh` exists (expand `~` to the user's home directory)
 - **If the hub exists:** Run using the Bash tool:
-  ```
-  bash ~/.aether/system/aether-utils.sh bootstrap-system
+  ```bash
+  mkdir -p .aether/docs .aether/utils && \
+  cp -f ~/.aether/system/aether-utils.sh .aether/ && \
+  cp -f ~/.aether/system/workers.md .aether/ 2>/dev/null || true && \
+  cp -f ~/.aether/system/CONTEXT.md .aether/ 2>/dev/null || true && \
+  cp -f ~/.aether/system/model-profiles.yaml .aether/ 2>/dev/null || true && \
+  cp -Rf ~/.aether/system/docs/* .aether/docs/ 2>/dev/null || true && \
+  cp -Rf ~/.aether/system/utils/* .aether/utils/ 2>/dev/null || true && \
+  chmod +x .aether/aether-utils.sh
   ```
   This copies system files from the global hub into `.aether/`. Display:
   ```
@@ -69,7 +76,7 @@ Check if `.aether/aether-utils.sh` exists using the Read tool.
   ```
 - **If the hub does NOT exist:** Output:
   ```
-  No Aether system files found locally or in ~/.aether/.
+  No Aether system files found locally or in ~/.aether/system/.
   Run `aether install` or `npx aether-colony install` to set up the global hub first.
   ```
   Stop here. Do not proceed.
@@ -87,18 +94,38 @@ Parse the JSON result:
 
 This step is non-blocking — proceed regardless of outcome.
 
-### Step 2: Read Current State
+### Step 2: Read Current State with Freshness Check
+
+Capture session start time:
+```bash
+INIT_START=$(date +%s)
+```
 
 Use the Read tool to read `.aether/data/COLONY_STATE.json`.
 
-If the `goal` field is not null, output:
+Check freshness of existing state:
+```bash
+fresh_check=$(bash .aether/aether-utils.sh session-verify-fresh --command init "" "$INIT_START")
+is_stale=$(echo "$fresh_check" | jq -r '.stale | length')
+freshness_status=$([[ "$is_stale" -gt 0 ]] && echo "stale" || echo "fresh")
+```
+
+If the `goal` field is not null:
+- If state is stale (old session): Warn user but proceed
+- If state is fresh (active session): Strongly recommend continuation
 
 ```
 Colony already initialized with goal: "{existing_goal}"
 
+State freshness: {freshness_status}
+Session: {session_id}
+Initialized: {initialized_at}
+
 To reinitialize with a new goal, the current state will be reset.
 Proceeding with new goal: "{new_goal}"
 ```
+
+**Note:** Init never auto-clears COLONY_STATE.json. Reinitialization is an explicit user choice.
 
 ### Step 2.6: Load Prior Colony Knowledge (Optional)
 
@@ -243,7 +270,7 @@ If either command fails, proceed silently. These are optional bookkeeping.
 **If visual_mode is true, render final swarm display:**
 ```bash
 bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Colony initialized" "Colony" '{"read":5,"grep":2,"edit":3,"bash":2}' 100 "fungus_garden" 100
-bash .aether/aether-utils.sh swarm-display-render "$init_id"
+bash .aether/aether-utils.sh swarm-display-inline "$init_id"
 ```
 
 Output this header:
@@ -284,4 +311,12 @@ Then output the result:
 💾 State persisted — safe to /clear, then run /ant:plan
 
 📋 Context document created at `.aether/CONTEXT.md` — read this if session resets
+```
+
+### Step 8: Initialize Session
+
+Initialize session tracking to enable `/ant:resume` after context clear:
+
+```bash
+bash .aether/aether-utils.sh session-init "$(jq -r '.session_id' .aether/data/COLONY_STATE.json)" "$ARGUMENTS"
 ```

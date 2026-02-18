@@ -274,6 +274,48 @@ queen_decrees = .result.wisdom.decrees (if .result.priming.has_decrees)
 
 **Graceful handling:** If QUEEN.md doesn't exist or `queen-read` fails, continue without wisdom injection. Workers will receive standard prompts.
 
+### Step 4.1.6: Load Active Pheromones (Signal Consumption)
+
+Call `pheromone-read` to extract active colony signals for worker priming:
+
+```bash
+bash .aether/aether-utils.sh pheromone-read 2>/dev/null
+```
+
+**Parse the JSON response:**
+- If `.ok` is false or command fails: Set `pheromone_section = null` and skip pheromone injection
+- If successful: Extract signals from `.result.signals`
+
+**Active Signals Section Template (injected into builder prompts):**
+```
+--- ACTIVE SIGNALS (Pheromone Consumption) ---
+{focus_section if .result.signals.focus exists:}
+  🎯 FOCUS: {focus_description}
+{redirect_section if .result.signals.redirect exists:}
+  ⚠️ AVOID: {redirect_description}
+{feedback_section if .result.signals.feedback exists:}
+  💬 FEEDBACK: {feedback_description}
+--- END SIGNALS ---
+```
+
+**Store for builder injection:**
+- `pheromone_section` — formatted signal section for builder prompts
+
+**Display summary (if any signals exist):**
+```
+🦠 PHEROMONES DETECTED
+======================
+{focus_present:}  🎯 Focus signal: yes{/if}
+{redirect_present:}  ⚠️ Redirect signal: yes{/if}
+{feedback_present:}  💬 Feedback signal: yes{/if}
+
+{if none exist:}  (no active signals){/if}
+```
+
+**Graceful handling:** If pheromone-read fails or no signals exist, continue without pheromone injection.
+
+---
+
 ### Step 4.2: Archaeologist Pre-Build Scan
 
 **Conditional step — only fires when the phase modifies existing files.**
@@ -352,6 +394,8 @@ queen_decrees = .result.wisdom.decrees (if .result.priming.has_decrees)
 4. **Injection into builder prompts:**
    The `archaeology_context` will be injected into builder prompts in Step 5.1 (see below).
    If this step was skipped (no existing files modified), the archaeology section is omitted from builder prompts.
+
+---
 
 ### Step 5: Initialize Swarm Display and Analyze Tasks
 
@@ -436,12 +480,20 @@ Total: {N} Builders + 1 Watcher + 1 Chaos = {N+2} spawns
 
 **CRITICAL: Spawn ALL Wave 1 workers in a SINGLE message using multiple Task tool calls.**
 
+**CRITICAL: Spawn ALL Wave 1 workers in a SINGLE message using multiple Task tool calls.**
+
+**First, mark build start in context:**
+```bash
+bash .aether/aether-utils.sh context-update build-start {phase_id} {wave_1_worker_count} {wave_1_task_count}
+```
+
 For each Wave 1 task, use Task tool with `subagent_type="general-purpose"` (DO NOT use run_in_background - multiple Task calls in a single message run in parallel and block until complete):
 
 Log each spawn and update swarm display:
 ```bash
 bash .aether/aether-utils.sh spawn-log "Queen" "builder" "{ant_name}" "{task_description}"
 bash .aether/aether-utils.sh swarm-display-update "{ant_name}" "builder" "excavating" "{task_description}" "Queen" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 10
+bash .aether/aether-utils.sh context-update worker-spawn "{ant_name}" "builder" "{task_description}"
 ```
 
 **Builder Worker Prompt (CLEAN OUTPUT):**
@@ -453,6 +505,10 @@ Task {id}: {description}
 Goal: "{colony_goal}"
 
 { archaeology_context if exists }
+
+{ queen_wisdom_section if any wisdom exists }
+
+{ pheromone_section if pheromone_section exists }
 
 Work:
 1. Read .aether/workers.md for Builder discipline
@@ -468,6 +524,32 @@ Spawn sub-workers ONLY if 3x complexity:
 
 Return ONLY this JSON (no other text):
 {"ant_name": "{Ant-Name}", "task_id": "{id}", "status": "completed|failed|blocked", "summary": "What you did", "files_created": [], "files_modified": [], "tests_written": [], "blockers": []}
+```
+
+**Queen Wisdom Section Template (injected only if wisdom exists):**
+```
+--- QUEEN WISDOM (Eternal Guidance) ---
+{ if queen_philosophies: }
+📜 Philosophies:
+{queen_philosophies}
+{ endif }
+{ if queen_patterns: }
+🧭 Patterns:
+{queen_patterns}
+{ endif }
+{ if queen_redirects: }
+⚠️ Redirects (AVOID these):
+{queen_redirects}
+{ endif }
+{ if queen_stack_wisdom: }
+🔧 Stack Wisdom:
+{queen_stack_wisdom}
+{ endif }
+{ if queen_decrees: }
+🏛️ Decrees:
+{queen_decrees}
+{ endif }
+--- END QUEEN WISDOM ---
 ```
 
 ### Step 5.2: Process Wave 1 Results

@@ -441,12 +441,20 @@ Confidence: {confidence}%
 Ready to build.
 ```
 
-### Step 6: Display Plan
+### Step 6: Update Session
+
+Update the session tracking file to enable `/ant:resume` after context clear:
+
+```bash
+bash .aether/aether-utils.sh session-update "/ant:plan" "/ant:build 1" "Plan generated with {confidence}% confidence, {N} phases"
+```
+
+### Step 7: Display Plan
 
 **If visual_mode is true, render final swarm display:**
 ```bash
 bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Plan generated" "Colony" '{"read":8,"grep":4,"edit":2,"bash":1}' 100 "fungus_garden" 100
-bash .aether/aether-utils.sh swarm-display-render "$plan_id"
+bash .aether/aether-utils.sh swarm-display-inline "$plan_id"
 ```
 
 Read `plan.phases` from COLONY_STATE.json and display:

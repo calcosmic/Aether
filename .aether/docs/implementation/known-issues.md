@@ -4,21 +4,25 @@ This document tracks known issues and their workarounds in the Aether system.
 
 ## teammateMode Must Be "off" with LiteLLM Proxy
 
-**Severity:** High (causes all agent completions to crash)
+**Severity:** Medium (causes false "failed" messages - work completes successfully)
 
 **Symptoms:** When spawning agents via the Task tool, the agent completes successfully but throws:
 ```
 Agent "Builder: Task X" failed: classifyHandoffIfNeeded is not defined
 ```
 
-**Root Cause:** The `teammateMode` setting in Claude Code's settings.json attempts to use the `classifyHandoffIfNeeded` function to route completed subagent results to other "teammates." This function is not available when routing through LiteLLM proxy to non-Anthropic models (kimi-k2.5, glm-5, minimax-2.5).
+**Root Cause:** Claude Code's internal completion handler calls `classifyHandoffIfNeeded` to route completed subagent results. This function is not available when routing through LiteLLM proxy to non-Anthropic models (kimi-k2.5, glm-5, minimax-2.5).
 
-**Fix:** Set `"teammateMode": "off"` in `~/.claude/settings.json`:
-```json
-"teammateMode": "off"
-```
+**Status:** This is a Claude Code runtime bug - not fixable via configuration. The `teammateMode: "off"` setting is already correctly applied but does not fully prevent the error.
 
-**Prevention:** Do not enable `teammateMode` when using LiteLLM proxy with non-Anthropic models.
+**Workaround:**
+1. Verify the agent actually completed successfully by checking:
+   - SUMMARY.md file exists
+   - Git commits were created
+   - Expected output files are present
+2. If work completed, ignore the error message - it's a false failure
+
+**GSD Integration:** GSD workflows (execute-phase.md, execute-plan.md, quick.md) already handle this by running spot-checks and treating it as successful if the work completed.
 
 ---
 

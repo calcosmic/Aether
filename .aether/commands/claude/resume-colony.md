@@ -96,7 +96,7 @@ NEXT ACTIONS
 **If visual_mode is true, render final swarm display:**
 ```bash
 bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Colony resumed" "Colony" '{"read":3,"grep":0,"edit":2,"bash":1}' 100 "fungus_garden" 100
-bash .aether/aether-utils.sh swarm-display-render "$resume_id"
+bash .aether/aether-utils.sh swarm-display-inline "$resume_id"
 ```
 
 Route to next action based on state:

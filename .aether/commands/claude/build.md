@@ -299,7 +299,7 @@ queen_decrees = .result.wisdom.decrees (if .result.priming.has_decrees)
 
    Display:
    ```
-   🏺  Archaeologist {archaeologist_name} spawning
+   🏺🐜 Archaeologist {archaeologist_name} spawning
        Scanning history of files to be modified...
    ```
 
@@ -307,7 +307,7 @@ queen_decrees = .result.wisdom.decrees (if .result.priming.has_decrees)
    # FALLBACK: If "Agent type not found", use general-purpose and inject role: "You are an Archaeologist Ant - git historian that excavates why code exists."
 
    ```
-   You are {Archaeologist-Name}, a 🏺 Archaeologist Ant.
+   You are {Archaeologist-Name}, a 🏺🐜 Archaeologist Ant.
 
    Mission: Pre-build archaeology scan
 
@@ -394,10 +394,10 @@ Analyze the phase tasks:
    - **Wave 3+:** Continue until all tasks assigned
 
 2. **Assign castes:**
-   - Implementation tasks → 🔨 Builder
-   - Research/docs tasks → 🔍 Scout
-   - Testing/validation → 👁️ Watcher (ALWAYS spawn at least one)
-   - Resilience testing → 🎲 Chaos (ALWAYS spawn one after Watcher)
+   - Implementation tasks → 🔨🐜 Builder
+   - Research/docs tasks → 🔍🐜 Scout
+   - Testing/validation → 👁️🐜 Watcher (ALWAYS spawn at least one)
+   - Resilience testing → 🎲🐜 Chaos (ALWAYS spawn one after Watcher)
 
 3. **Generate ant names for each worker:**
 ```bash
@@ -411,25 +411,25 @@ Display spawn plan with caste emojis:
 🐜  SPAWN PLAN
 
 Wave 1  — Parallel
-  🔨 {Builder-Name}  Task {id}  {description}
-  🔨 {Builder-Name}  Task {id}  {description}
+  🔨🐜 {Builder-Name}  Task {id}  {description}
+  🔨🐜 {Builder-Name}  Task {id}  {description}
 
 Wave 2  — After Wave 1
-  🔨 {Builder-Name}  Task {id}  {description}
+  🔨🐜 {Builder-Name}  Task {id}  {description}
 
 Verification
-  👁️ {Watcher-Name}  Verify all work independently
-  🎲 {Chaos-Name}   Resilience testing (after Watcher)
+  👁️🐜 {Watcher-Name}  Verify all work independently
+  🎲🐜 {Chaos-Name}   Resilience testing (after Watcher)
 
 Total: {N} Builders + 1 Watcher + 1 Chaos = {N+2} spawns
 ```
 
 **Caste Emoji Legend:**
-- 🔨 Builder  (cyan if color enabled)
-- 👁️ Watcher  (green if color enabled)
-- 🎲 Chaos    (red if color enabled)
-- 🔍 Scout    (yellow if color enabled)
-- 🏺 Archaeologist (magenta if color enabled)
+- 🔨🐜 Builder  (cyan if color enabled)
+- 👁️🐜 Watcher  (green if color enabled)
+- 🎲🐜 Chaos    (red if color enabled)
+- 🔍🐜 Scout    (yellow if color enabled)
+- 🏺🐜 Archaeologist (magenta if color enabled)
 - 🥚 Queen/Prime
 
 **Every spawn must show its caste emoji.**
@@ -454,7 +454,7 @@ bash .aether/aether-utils.sh context-update worker-spawn "{ant_name}" "builder" 
 
 **Builder Worker Prompt (CLEAN OUTPUT):**
 ```
-You are {Ant-Name}, a 🔨 Builder Ant.
+You are {Ant-Name}, a 🔨🐜 Builder Ant.
 
 Task {id}: {description}
 
@@ -512,7 +512,7 @@ Return ONLY this JSON (no other text):
 
 **As each worker result arrives, immediately display:**
 ```
-✅ 🔨 {Builder-Name} completed Task {id}
+✅ 🔨🐜 {Builder-Name} completed Task {id}
    📖{read_count} 🔍{grep_count} ✏️{edit_count} ⚡{bash_count}  {elapsed_time}
 ```
 
@@ -528,7 +528,7 @@ bash .aether/aether-utils.sh context-update worker-complete "{ant_name}" "comple
 **Visual Mode: Render live display (if enabled):**
 If `visual_mode` is true, render the swarm display after all workers complete:
 ```bash
-bash .aether/aether-utils.sh swarm-display-render "$build_id"
+bash .aether/aether-utils.sh swarm-display-inline "$build_id"
 ```
 
 ### Step 5.3: Spawn Wave 2+ Workers (Sequential Waves)
@@ -548,7 +548,7 @@ bash .aether/aether-utils.sh swarm-display-update "{watcher_name}" "watcher" "ob
 
 **Watcher Worker Prompt (CLEAN OUTPUT):**
 ```
-You are {Watcher-Name}, a 👁️ Watcher Ant.
+You are {Watcher-Name}, a 👁️🐜 Watcher Ant.
 
 Verify all work done by Builders in Phase {id}.
 
@@ -605,7 +605,7 @@ Spawn the Chaos Ant using Task tool with `subagent_type="aether-chaos"` (DO NOT 
 
 **Chaos Ant Prompt (CLEAN OUTPUT):**
 ```
-You are {Chaos-Name}, a 🎲 Chaos Ant.
+You are {Chaos-Name}, a 🎲🐜 Chaos Ant.
 
 Test Phase {id} work for edge cases and boundary conditions.
 
@@ -933,11 +933,11 @@ Also update safe-to-clear status:
 bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Phase {id} complete" "Colony" '{"read":10,"grep":5,"edit":5,"bash":2}' 100 "fungus_garden" 100
 
 # Render the final swarm display
-bash .aether/aether-utils.sh swarm-display-render "$build_id"
+bash .aether/aether-utils.sh swarm-display-inline "$build_id"
 ```
 
 The swarm display will show:
-- 🐜 All workers with their caste emojis (🔨 Builder, 👁️ Watcher, 🎲 Chaos)
+- 🐜 All workers with their caste emojis (🔨🐜 Builder, 👁️🐜 Watcher, 🎲🐜 Chaos)
 - 📖 Tool usage stats (Read, Grep, Edit, Bash counts)
 - 🏠 Chamber activity map (Fungus Garden, Nursery, Refuse Pile)
 - ✅ Progress bars at 100% for completed work
@@ -1040,3 +1040,11 @@ The swarm display will show:
 - Mark tasks as completed
 - Extract learnings
 - Advance to next phase
+
+### Step 8: Update Session
+
+Update the session tracking file to enable `/ant:resume` after context clear:
+
+```bash
+bash .aether/aether-utils.sh session-update "/ant:build {phase_id}" "/ant:continue" "Phase {phase_id} build completed: {synthesis.status}"
+```

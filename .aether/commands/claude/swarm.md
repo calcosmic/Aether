@@ -17,7 +17,7 @@ bash .aether/utils/swarm-display.sh
 ```
 
 This shows:
-- Active ants with caste colors and emojis (🔨 Builder in blue, etc.)
+- Active ants with caste colors and emojis (🔨🐜 Builder in blue, etc.)
 - Tool usage stats per ant (📖5 🔍3 ✏️2 ⚡1)
 - Trophallaxis metrics (🍯 token consumption)
 - Timing information (elapsed time per ant)
@@ -65,6 +65,33 @@ bash .aether/aether-utils.sh swarm-findings-init "<swarm_id>"
 Initialize swarm display for real-time tracking:
 ```bash
 bash .aether/aether-utils.sh swarm-display-init "<swarm_id>"
+```
+
+#### Step 2.5: Check for Stale Swarm Session
+
+Capture session start time:
+```bash
+SWARM_START=$(date +%s)
+```
+
+Check for stale swarm files:
+```bash
+stale_check=$(bash .aether/aether-utils.sh session-verify-fresh --command swarm "" "$SWARM_START")
+has_stale=$(echo "$stale_check" | jq -r '.stale | length')
+
+if [[ "$has_stale" -gt 0 ]]; then
+  # Auto-clear stale swarm findings (safe - findings are temporary)
+  bash .aether/aether-utils.sh session-clear --command swarm
+  echo "Cleared stale swarm findings for fresh investigation"
+fi
+```
+
+After initializing findings, verify swarm files are fresh:
+```bash
+verify_result=$(bash .aether/aether-utils.sh session-verify-fresh --command swarm "" "$SWARM_START")
+if [[ $(echo "$verify_result" | jq -r '.missing | length') -gt 0 ]]; then
+  echo "Warning: Swarm files not properly initialized"
+fi
 ```
 
 Display header:
@@ -126,7 +153,7 @@ bash .aether/aether-utils.sh swarm-display-update "{swarm_id}-WebResearcher" "sc
 **Scout 1: 🏛️ Git Archaeologist** (use Task tool with `subagent_type="aether-archaeologist"`)
 # FALLBACK: If "Agent type not found", use general-purpose and inject role: "You are an Archaeologist Ant - git historian that excavates why code exists."
 ```
-You are {swarm_id}-Archaeologist, a 🏛️ Archaeologist Ant.
+You are {swarm_id}-Archaeologist, a 🏛️🐜 Archaeologist Ant.
 
 Investigate git history for: {problem description}
 
@@ -142,7 +169,7 @@ Return ONLY this JSON:
 
 **Scout 2: 🔍 Pattern Hunter** (use Task tool with `subagent_type="aether-scout"`)
 ```
-You are {swarm_id}-PatternHunter, a 🔍 Scout Ant.
+You are {swarm_id}-PatternHunter, a 🔍🐜 Scout Ant.
 
 Find working patterns for: {problem description}
 
@@ -158,7 +185,7 @@ Return ONLY this JSON:
 
 **Scout 3: 💥 Error Analyst** (use Task tool with `subagent_type="aether-tracker"`)
 ```
-You are {swarm_id}-ErrorAnalyst, a 🔍 Tracker Ant.
+You are {swarm_id}-ErrorAnalyst, a 🔍🐜 Tracker Ant.
 
 Analyze error: {problem description}
 
@@ -174,7 +201,7 @@ Return ONLY this JSON:
 
 **Scout 4: 🌐 Web Researcher** (use Task tool with `subagent_type="aether-scout"`)
 ```
-You are {swarm_id}-WebResearcher, a 🔍 Scout Ant.
+You are {swarm_id}-WebResearcher, a 🔍🐜 Scout Ant.
 
 Research external solutions for: {problem description}
 
