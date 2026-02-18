@@ -211,6 +211,14 @@ _cmd_context_update() {
     json_err "$E_VALIDATION_FAILED" "No action specified. Suggestion: Use one of: init, update-phase, activity, constraint, decision, safe-to-clear, build-start, worker-spawn, worker-complete, build-progress, build-complete"
   fi
 
+  # Acquire lock for context-update operations (LOCK-04: prevent concurrent corruption)
+  local _ctx_lock_held=false
+  if type acquire_lock &>/dev/null && type feature_enabled &>/dev/null && feature_enabled "file_locking"; then
+    acquire_lock "$ctx_file" || json_err "$E_LOCK_FAILED" "Failed to acquire CONTEXT.md lock for context-update"
+    _ctx_lock_held=true
+    trap 'release_lock 2>/dev/null || true' EXIT
+  fi
+
   ensure_context_dir() {
     local dir
     dir=$(dirname "$ctx_file")
@@ -545,6 +553,17 @@ EOF
       json_err "$E_VALIDATION_FAILED" "Unknown context action: '$ctx_action'. Suggestion: Use one of: init, update-phase, activity, constraint, decision, safe-to-clear, build-start, worker-spawn, worker-complete, build-progress, build-complete"
       ;;
   esac
+
+  # Release lock on success (LOCK-04)
+  # NOTE: Do NOT clear the EXIT trap here. This function RETURNS (it does not
+  # call exit), so clearing the trap would remove the safety net without benefit.
+  # The EXIT trap remains active as a true safety net for unexpected exit calls
+  # elsewhere in the process. The _ctx_lock_held variable is the primary gate
+  # for this function's own cleanup.
+  if [[ "$_ctx_lock_held" == "true" ]]; then
+    release_lock 2>/dev/null || true
+    _ctx_lock_held=false
+  fi
 }
 
 # --- Subcommand dispatch ---
