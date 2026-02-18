@@ -53,9 +53,9 @@ Also read in parallel:
 ### Step 2: Display Header
 
 ```
-🔍🐜💭🐜🔍 ═══════════════════════════════════════════════
+🔍🐜💭🐜🔍 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
          D R E A M   I N T E R P R E T E R
-═══════════════════════════════════════════════ 🔍🐜💭🐜🔍
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 🔍🐜💭🐜🔍
 
 📓 Reviewing: {dream_filename}
    {N} dreams | {concerns} concerns | {pheromones} suggested pheromones
@@ -147,9 +147,9 @@ Verdict emoji mapping:
 After all dreams are interpreted, display:
 
 ```
-🔍🐜💭🐜🔍 ═══════════════════════════════════════════════
+🔍🐜💭🐜🔍 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
          I N T E R P R E T A T I O N   C O M P L E T E
-═══════════════════════════════════════════════ 🔍🐜💭🐜🔍
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 🔍🐜💭🐜🔍
 
 📊 Results:
    {confirmed_count} confirmed | {partial_count} partially confirmed | {unconfirmed_count} unconfirmed | {refuted_count} refuted
@@ -242,6 +242,16 @@ bash .aether/aether-utils.sh activity-log "INTERPRET" "Interpreter" "Dream revie
 /ant:dream    💭 Run another dream session
 /ant:status   📊 Colony status
 /ant:build    🔨 Start building
+```
+
+### Step 9: Next Up
+
+Generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":
+```bash
+state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
+current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
+total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
+bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
 ```
 
 ## Investigation Guidelines

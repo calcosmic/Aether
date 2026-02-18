@@ -168,9 +168,9 @@ CONSTRAINTS:
 After the architect-ant returns, display header:
 
 ```
-🧹🐜🏛️🐜🧹 ═══════════════════════════════════════════════════
+🧹🐜🏛️🐜🧹 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    C O D E B A S E   H Y G I E N E   R E P O R T
-═══════════════════════════════════════════════════ 🧹🐜🏛️🐜🧹
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 🧹🐜🏛️🐜🧹
 ```
 
 Then display using Bash tool with description "Displaying hygiene report header...":
@@ -214,4 +214,14 @@ Display persistence confirmation:
 All state persisted. Safe to /clear context if needed.
   Report: .aether/data/hygiene-report.md
   Resume: /ant:resume-colony
+```
+
+### Step 7: Next Up
+
+Generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":
+```bash
+state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
+current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
+total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
+bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
 ```

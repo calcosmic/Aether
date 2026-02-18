@@ -90,3 +90,13 @@ Colony Statistics:
 - If milestone file doesn't exist: Show error "Milestone visualization not found"
 - If COLONY_STATE.json missing: "No colony initialized. Run /ant:init first."
 - If phases_completed is 0: All milestones show as upcoming except First Mound
+
+### Step 7: Next Up
+
+Generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":
+```bash
+state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
+current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
+total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
+bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
+```

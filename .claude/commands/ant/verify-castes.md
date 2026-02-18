@@ -11,7 +11,7 @@ Display the colony caste structure:
 
 ```
 Aether Colony Caste System
-═══════════════════════════════════════════
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 CASTE ASSIGNMENTS
 ─────────────────
@@ -60,9 +60,9 @@ Available models (via LiteLLM proxy):
 ## Step 4: Summary
 
 ```
-═══════════════════════════════════════════
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 System Status
-═══════════════════════════════════════════
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Utils: ✓ Operational
 Proxy: {status from Step 2}
 Castes: 10 defined
@@ -71,6 +71,16 @@ Note: Model-per-caste routing was attempted but is not
 possible with Claude Code's Task tool (no env var support).
 See archived config: .aether/archive/model-routing/
 Tag: model-routing-v1-archived
+```
+
+## Step 5: Next Up
+
+Generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":
+```bash
+state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
+current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
+total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
+bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
 ```
 
 ## Historical Note
