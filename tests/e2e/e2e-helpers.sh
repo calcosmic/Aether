@@ -202,6 +202,8 @@ extract_json() {
     local raw="$1"
     local line
     while IFS= read -r line; do
+        # Skip empty/blank lines — jq empty exits 0 on empty input (false positive)
+        [[ -z "${line// }" ]] && continue
         if echo "$line" | jq empty 2>/dev/null; then
             echo "$line"
             return 0
