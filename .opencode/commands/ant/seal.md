@@ -181,6 +181,26 @@ HANDOFF_EOF
 
 This handoff serves as the final record of the completed colony.
 
+### Step 5.75: Export XML Archive (best-effort)
+
+Export colony data as a combined XML archive. This is best-effort — seal proceeds even if XML export fails.
+
+```bash
+# Check if xmllint is available
+if command -v xmllint >/dev/null 2>&1; then
+  xml_result=$(bash .aether/aether-utils.sh colony-archive-xml ".aether/exchange/colony-archive.xml" 2>&1)
+  xml_ok=$(echo "$xml_result" | jq -r '.ok // false' 2>/dev/null)
+  if [[ "$xml_ok" == "true" ]]; then
+    xml_pheromone_count=$(echo "$xml_result" | jq -r '.result.pheromone_count // 0' 2>/dev/null)
+    xml_export_line="XML Archive: colony-archive.xml (${xml_pheromone_count} active signals)"
+  else
+    xml_export_line="XML Archive: export failed (non-blocking)"
+  fi
+else
+  xml_export_line="XML Archive: skipped (xmllint not available)"
+fi
+```
+
 ### Step 6: Display Result
 
 **If visual_mode is true, render final swarm display:**
@@ -207,6 +227,7 @@ Output:
    - spawn-tree.txt
    - flags.json (if existed)
    - constraints.json (if existed)
+{xml_export_line}
 
 🐜 The colony has reached its final form.
    The anthill stands crowned and sealed.

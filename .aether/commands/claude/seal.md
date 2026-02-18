@@ -3,7 +3,7 @@ name: ant:seal
 description: "🏺🐜🏺 Seal the colony with Crowned Anthill milestone"
 ---
 
-You are the **Queen**. Seal the colony when all work is complete.
+You are the **Queen**. Seal the colony with a ceremony — no archiving.
 
 ## Instructions
 
@@ -33,77 +33,64 @@ No colony initialized. Run /ant:init first.
 ```
 Stop here.
 
-### Step 2: Validate Colony Is Complete
+Extract: `goal`, `state`, `current_phase`, `plan.phases`, `milestone`, `version`, `initialized_at`.
 
-Extract: `goal`, `current_phase`, `plan.phases`, `milestone`, `state`.
+### Step 2: Maturity Gate
 
-**Precondition 1: All phases must be completed**
+Run `bash .aether/aether-utils.sh milestone-detect` to get `milestone`, `phases_completed`, `total_phases`.
 
-Check if all phases in `plan.phases` have `status: "completed"`:
+**If milestone is already "Crowned Anthill":**
 ```
-all_completed = all(phase.status == "completed" for phase in plan.phases)
-```
-
-If NOT all completed:
-```
-Cannot archive colony with incomplete phases.
-
-Completed phases: X of Y
-Remaining: {list of incomplete phase names}
-
-Run /ant:continue to complete remaining phases first.
+Colony already sealed at Crowned Anthill.
+Run /ant:entomb to archive this colony to chambers.
 ```
 Stop here.
 
-**Precondition 2: State must not be EXECUTING**
-
-If `state == "EXECUTING"`:
+**If state is "EXECUTING":**
 ```
-Colony is still executing. Run /ant:continue to reconcile first.
+Colony is still executing. Run /ant:continue first.
 ```
 Stop here.
 
-### Step 3: Check Milestone Eligibility
+**If all phases complete** (phases_completed == total_phases, or milestone is "Sealed Chambers"):
+- Set `incomplete_warning = ""` (no warning needed)
+- Proceed to Step 3.
 
-The full milestone progression is:
-- **First Mound** — Phase 1 complete (first runnable)
-- **Open Chambers** — Feature work underway (2+ phases complete)
-- **Brood Stable** — Tests consistently green
-- **Ventilated Nest** — Perf/latency acceptable (build + lint clean)
-- **Sealed Chambers** — All phases complete (interfaces frozen)
-- **Crowned Anthill** — Release-ready (user confirms via /ant:seal)
+**If phases are incomplete** (any other milestone — First Mound, Open Chambers, Brood Stable, Ventilated Nest, etc.):
+- Set `incomplete_warning = "WARNING: {phases_completed} of {total_phases} phases complete. Sealing now will mark incomplete work as the final state."`
+- Proceed to Step 3 (warn but DO NOT block).
 
-**If current milestone is "Crowned Anthill":**
+### Step 3: Confirmation
+
+Display what will be sealed:
 ```
-Colony is already at Crowned Anthill milestone.
-No further archiving needed.
+SEAL COLONY
 
-Use /ant:status to view colony state.
+Goal: {goal}
+Phases: {phases_completed} of {total_phases} completed
+Current Milestone: {milestone}
+
+{If incomplete_warning is not empty, display it here}
+
+This will:
+  - Award the Crowned Anthill milestone
+  - Write CROWNED-ANTHILL.md ceremony record
+  - Promote colony wisdom to QUEEN.md
+
+Seal this colony? (yes/no)
 ```
-Stop here.
 
-**If current milestone is "Sealed Chambers":**
-- Proceed to Step 4 (will upgrade to Crowned Anthill)
+Use `AskUserQuestion with yes/no options`.
 
-**If current milestone is "First Mound", "Open Chambers", "Brood Stable", "Ventilated Nest", or any intermediate milestone:**
-- Since all phases are complete, the colony qualifies for both Sealed Chambers and Crowned Anthill
-- The current logic allows proceeding to Step 4 (seal as Crowned Anthill)
-- If user wants to explicitly achieve Sealed Chambers first, they can manually update milestone via COLONY_STATE.json
-
-**If milestone is unrecognized (not in the 6 known stages):**
+If not "yes":
 ```
-Unknown milestone: {milestone}
-
-The milestone "{milestone}" is not recognized.
-Known milestones: First Mound, Open Chambers, Brood Stable, Ventilated Nest, Sealed Chambers, Crowned Anthill
-
-Run /ant:status to check colony state.
+Sealing cancelled. Colony remains active.
 ```
 Stop here.
 
 ### Step 4: Promote Colony Wisdom to QUEEN.md
 
-Before archiving, extract and promote significant patterns and decisions from the colony:
+Extract and promote significant patterns, decisions, and instincts from the colony:
 
 ```bash
 # Ensure QUEEN.md exists
@@ -119,7 +106,7 @@ colony_name=$(jq -r '.session_id // empty' .aether/data/COLONY_STATE.json | sed 
 promotions_made=0
 promotion_details=""
 
-# Extract and promote phase learnings (validated learnings with high confidence)
+# Extract and promote phase learnings (validated learnings)
 while IFS= read -r learning; do
   claim=$(echo "$learning" | jq -r '.claim // empty')
   status=$(echo "$learning" | jq -r '.status // empty')
@@ -158,141 +145,171 @@ while IFS= read -r decision; do
   fi
 done < <(jq -c '.memory.decisions[]? // empty' .aether/data/COLONY_STATE.json 2>/dev/null)
 
+# Promote high-confidence instincts
+instinct_result=$(bash .aether/aether-utils.sh instinct-read --min-confidence 0.7 2>/dev/null || echo '{"ok":false}')
+if echo "$instinct_result" | jq -e '.ok' >/dev/null 2>&1; then
+  while IFS= read -r instinct_action; do
+    if [[ -n "$instinct_action" && "$instinct_action" != "null" ]]; then
+      result=$(bash .aether/aether-utils.sh queen-promote "pattern" "$instinct_action" "$colony_name" 2>/dev/null)
+      if echo "$result" | jq -e '.ok' >/dev/null 2>&1; then
+        promotions_made=$((promotions_made + 1))
+      fi
+    fi
+  done < <(echo "$instinct_result" | jq -r '.result[]?.action // empty' 2>/dev/null)
+fi
+
 # Log promotion results to activity log
-bash .aether/aether-utils.sh activity-log "MODIFIED" "Queen" "Promoted ${promotions_made} learnings/decisions to QUEEN.md from colony ${colony_name}"
+bash .aether/aether-utils.sh activity-log "MODIFIED" "Queen" "Promoted ${promotions_made} learnings/decisions/instincts to QUEEN.md from colony ${colony_name}"
 
 # Store promotion summary for display
 promotion_summary="${promotions_made} wisdom entries promoted"
 ```
 
-### Step 5: Archive Colony State
-
-Create archive directory:
-```
-archive_dir=".aether/data/archive/session_$(date -u +%s)_archive"
-mkdir -p "$archive_dir"
-```
-
-Copy the following files to the archive directory:
-1. `.aether/data/COLONY_STATE.json` → `$archive_dir/COLONY_STATE.json`
-2. `.aether/data/activity.log` → `$archive_dir/activity.log`
-3. `.aether/data/spawn-tree.txt` → `$archive_dir/spawn-tree.txt`
-4. `.aether/data/flags.json` → `$archive_dir/flags.json` (if exists)
-5. `.aether/data/constraints.json` → `$archive_dir/constraints.json` (if exists)
-
-Create archive manifest file `$archive_dir/manifest.json`:
-```json
-{
-  "archived_at": "<ISO-8601 timestamp>",
-  "goal": "<colony goal>",
-  "total_phases": <number>,
-  "milestone": "Crowned Anthill",
-  "files": [
-    "COLONY_STATE.json",
-    "activity.log",
-    "spawn-tree.txt",
-    "flags.json",
-    "constraints.json"
-  ]
-}
-```
-
-### Step 6: Update Milestone to Crowned Anthill
+### Step 5: Update Milestone to Crowned Anthill
 
 Update COLONY_STATE.json:
 1. Set `milestone` to `"Crowned Anthill"`
 2. Set `milestone_updated_at` to current ISO-8601 timestamp
-3. Append event: `"<timestamp>|milestone_reached|archive|Achieved Crowned Anthill milestone - colony archived"`
+3. Append event: `"<timestamp>|milestone_reached|seal|Achieved Crowned Anthill milestone"`
 
-### Step 7: Write Final Handoff
+Run `bash .aether/aether-utils.sh validate-state colony` after write.
 
-After archiving and promoting wisdom, write the final handoff documenting the completed colony:
+### Step 6: Write CROWNED-ANTHILL.md
 
+Calculate colony age:
 ```bash
-cat > .aether/HANDOFF.md << 'HANDOFF_EOF'
-# Colony Session — SEALED (Crowned Anthill)
-
-## 🏆 Colony Complete
-**Status:** Crowned Anthill — All phases completed and archived
-
-## Archive Location
-{archive_dir}
-
-## Colony Summary
-- Goal: "{goal}"
-- Total Phases: {total_phases}
-- Milestone: Crowned Anthill
-- Sealed At: {timestamp}
-- Wisdom Promoted: {promotion_summary}
-
-## Files Archived
-- COLONY_STATE.json
-- activity.log
-- spawn-tree.txt
-- flags.json (if existed)
-- constraints.json (if existed)
-
-## Session Note
-This colony has been sealed and archived. The anthill stands crowned.
-To start anew, run: /ant:lay-eggs "<new goal>"
-HANDOFF_EOF
+initialized_at=$(jq -r '.initialized_at // empty' .aether/data/COLONY_STATE.json)
+if [[ -n "$initialized_at" ]]; then
+  init_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$initialized_at" +%s 2>/dev/null || echo 0)
+  now_epoch=$(date +%s)
+  if [[ "$init_epoch" -gt 0 ]]; then
+    colony_age_days=$(( (now_epoch - init_epoch) / 86400 ))
+  else
+    colony_age_days=0
+  fi
+else
+  colony_age_days=0
+fi
 ```
 
-This handoff serves as the final record of the completed colony.
+Extract phase recap:
+```bash
+phase_recap=""
+while IFS= read -r phase_line; do
+  phase_name=$(echo "$phase_line" | jq -r '.name')
+  phase_status=$(echo "$phase_line" | jq -r '.status')
+  phase_recap="${phase_recap}  - ${phase_name}: ${phase_status}\n"
+done < <(jq -c '.plan.phases[]' .aether/data/COLONY_STATE.json 2>/dev/null)
+```
 
-### Step 8: Display Result
+Write the seal document:
+```bash
+version=$(jq -r '.version // "3.0"' .aether/data/COLONY_STATE.json)
+seal_date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-**If visual_mode is true, render final swarm display:**
+cat > .aether/CROWNED-ANTHILL.md << SEAL_EOF
+# Crowned Anthill — ${goal}
+
+**Sealed:** ${seal_date}
+**Milestone:** Crowned Anthill
+**Version:** ${version}
+
+## Colony Stats
+- Total Phases: ${total_phases}
+- Phases Completed: ${phases_completed} of ${total_phases}
+- Colony Age: ${colony_age_days} days
+- Wisdom Promoted: ${promotions_made} entries
+
+## Phase Recap
+$(echo -e "$phase_recap")
+
+## Pheromone Legacy
+- Instincts and validated learnings promoted to QUEEN.md
+- ${promotions_made} total entries promoted
+
+## The Work
+${goal}
+SEAL_EOF
+```
+
+### Step 6.5: Export XML Archive (best-effort)
+
+Export colony data as a combined XML archive. This is best-effort — seal proceeds even if XML export fails.
+
+```bash
+# Check if xmllint is available
+if command -v xmllint >/dev/null 2>&1; then
+  xml_result=$(bash .aether/aether-utils.sh colony-archive-xml ".aether/exchange/colony-archive.xml" 2>&1)
+  xml_ok=$(echo "$xml_result" | jq -r '.ok // false' 2>/dev/null)
+  if [[ "$xml_ok" == "true" ]]; then
+    xml_pheromone_count=$(echo "$xml_result" | jq -r '.result.pheromone_count // 0' 2>/dev/null)
+    xml_export_line="XML Archive: colony-archive.xml (${xml_pheromone_count} active signals)"
+  else
+    xml_export_line="XML Archive: export failed (non-blocking)"
+  fi
+else
+  xml_export_line="XML Archive: skipped (xmllint not available)"
+fi
+```
+
+### Step 7: Display Ceremony
+
+**If visual_mode is true, render swarm display BEFORE the ASCII art:**
 ```bash
 bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Colony sealed" "Colony" '{"read":3,"grep":0,"edit":2,"bash":3}' 100 "fungus_garden" 100
-bash .aether/aether-utils.sh swarm-display-render "$seal_id"
+bash .aether/aether-utils.sh swarm-display-inline "$seal_id"
 ```
 
-Output:
+Display the ASCII art ceremony:
 ```
-🏺 ════════════════════════════════════════════════════
-   C R O W N E D   A N T H I L L
-══════════════════════════════════════════════════ 🏺
+        .     .
+       /|\   /|\
+      / | \ / | \
+     /  |  X  |  \
+    /   | / \ |   \
+   /    |/   \|    \
+  /     /     \     \
+ /____ /  ___  \ ____\
+      / /   \ \
+     / /     \ \
+    /_/       \_\
+     |  CROWNED |
+     | ANTHILL  |
+     |__________|
+```
 
-✅ Colony archived successfully!
+Below the ASCII art, display:
+```
+C R O W N E D   A N T H I L L
 
-👑 Goal: {goal (truncated to 60 chars)}
-📍 Phases: {total_phases} completed
-🏆 Milestone: Crowned Anthill
-📚 Wisdom Promoted: {promotion_summary}
+Goal: {goal}
+Phases: {phases_completed} of {total_phases} completed
+{If incomplete_warning is not empty: display it}
+Wisdom Promoted: {promotion_summary}
 
-📦 Archive Location: {archive_dir}
-   - COLONY_STATE.json
-   - activity.log
-   - spawn-tree.txt
-   - flags.json (if existed)
-   - constraints.json (if existed)
+Seal Document: .aether/CROWNED-ANTHILL.md
+{xml_export_line}
 
-🐜 The colony has reached its final form.
-   The anthill stands crowned and sealed.
-   History is preserved. The colony rests.
+The colony stands crowned and sealed.
+Its wisdom lives on in QUEEN.md.
+The anthill has reached its final form.
 
-💾 State persisted — safe to /clear
-
-🐜 What would you like to do next?
-   1. /ant:lay-eggs "<new goal>"  — Start a new colony
-   2. /ant:tunnels                — Browse archived colonies
-   3. /clear                      — Clear context and continue
-
-Use AskUserQuestion with these three options.
-
-If option 1 selected: proceed to run /ant:lay-eggs flow
-If option 2 selected: run /ant:tunnels
-If option 3 selected: display "Run /ant:lay-eggs to begin anew after clearing"
+Run /ant:entomb to archive this colony to chambers.
 ```
 
 ### Edge Cases
 
-**If milestone is already "Sealed Chambers" but phases are complete:**
-- Proceed with archiving and upgrade to Crowned Anthill
+**Colony already at Crowned Anthill:**
+- Display message and guide to /ant:entomb. Do NOT re-seal.
 
-**If any archive files are missing:**
-- Archive what exists, note in manifest which files were missing
+**Phases incomplete:**
+- Warn but allow. The seal proceeds after confirmation.
 
-**If archive directory already exists:**
-- Append timestamp to make unique: `session_<ts>_archive_<random>`
+**Missing QUEEN.md:**
+- queen-init creates it. If that fails, skip promotion (non-fatal).
+
+**Missing initialized_at:**
+- Colony age defaults to 0 days.
+
+**Empty phases array:**
+- Can seal a colony with 0 phases (rare but valid). phases_completed = 0, total_phases = 0.
