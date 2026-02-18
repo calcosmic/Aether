@@ -5,10 +5,10 @@
 
 ## Current Status
 
-- **State:** Phase 8 CONTEXT GATHERED
-- **Phase:** 08 (XML Integration) — context gathered, ready for planning
-- **Plan:** —
-- **Total Plans in Phase:** TBD
+- **State:** Phase 8 IN PROGRESS
+- **Phase:** 08 (XML Integration)
+- **Plan:** 03 complete (colony-archive-xml + seal wiring)
+- **Total Plans in Phase:** 4 (plans 01-04)
 - **Mode:** YOLO (auto-approve)
 
 ## Project Reference
@@ -17,7 +17,7 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Core value:** Prevent context rot across Claude Code sessions with self-managing colony that learns and guides users
 
-**Current focus:** Phase 8: XML Integration — plan next
+**Current focus:** Phase 8: XML Integration — plan 03 complete, plan 04 (entomb) next
 
 ## Progress
 
@@ -81,6 +81,12 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 - **07-02:** Claude Code copies must match SoT exactly (swarm-display-inline); OpenCode correctly uses swarm-display-render (distinct function)
 - **07-03:** Interpret OpenCode adds Step -1 normalize-args only (no $ARGUMENTS variable exists to replace); dream defensive mkdir is instruction text (acceptable)
 
+## Decisions
+
+- **08-03:** colony-archive-xml always filters active-only pheromones — active=false signals excluded from archive snapshots
+- **08-03:** Well-formedness validation only on combined archive; no XSD validation of wrapper element (child sections validated by their exchange scripts)
+- **08-03:** Step numbering differs between Claude Code (6.5) and OpenCode (5.75) due to different seal ceremony structures — semantics identical
+
 ## Last Updated
 
-2026-02-18 — Phase 7 COMPLETE (oracle verified, chaos/archaeology sync drift fixed, interpret OpenCode adapted)
+2026-02-18 — Phase 8 plan 03 COMPLETE (colony-archive-xml combined export + seal wiring)
