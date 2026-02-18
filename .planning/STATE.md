@@ -6,9 +6,9 @@
 ## Current Position
 
 Phase: Phase 12 — Build Progress
-Plan: 01 — COMPLETE
-Status: Phase 12 Plan 01 complete (spawn announcements, wave separators, build banner, Task descriptions, tool_count added to both build.md files)
-Last activity: 2026-02-18 — Plan 12-01 complete (per-wave spawn narration layer added to build.md: announcements, wave separators, caste-labeled Task descriptions, tool_count in worker schemas)
+Plan: 02 — COMPLETE
+Status: Phase 12 Plan 02 complete (completion lines with tool_count, tmux-gated swarm display, all-wave-failed halt, BUILD SUMMARY block added to both build.md files)
+Last activity: 2026-02-18 — Plan 12-02 complete (worker completion lines, tmux gating on swarm display, wave failure halt, BUILD SUMMARY replacing compact/verbose split)
 
 Progress: ████░░░░░░░░░░░░░░░░ ~20% (1 of ~4 plans complete)
 
@@ -17,7 +17,7 @@ Progress: ████░░░░░░░░░░░░░░░░ ~20% (1 o
 - **State:** Phase in progress
 - **Milestone:** v1.1 Colony Polish & Identity
 - **Mode:** YOLO (auto-approve)
-- **Next action:** `/gsd:execute-phase 12` Plan 02 (completion lines using tool_count)
+- **Next action:** `/gsd:execute-phase 12` Plan 03 (next build progress plan)
 
 ## Project Reference
 
@@ -63,6 +63,9 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 - [Phase 12-build-progress]: build_started_at_epoch captured at Step 5 start (not Step 2) to measure actual worker execution time, not setup overhead
 - [Phase 12-build-progress]: Wave separator uses ━━ Wave X of N ━━ — Wave 1 gets no separator (covered by banner), verification wave gets ━━ Verification ━━, chaos gets single-line announcement
 - [Phase 12-build-progress]: tool_count added to Builder/Watcher/Chaos return schemas as prerequisite for Plan 02 completion lines
+- [Phase 12-build-progress]: BUILD SUMMARY always shown (not split by verbose_mode) — verbose mode appends detail sections after the summary block
+- [Phase 12-build-progress]: swarm-display-text gated behind $TMUX in both Step 5.2 and Step 7 — chat users never see swarm display calls fire
+- [Phase 12-build-progress]: Wave failure halts build only when ALL workers in a wave fail — partial failure continues to verification normally
 
 ### Key Findings from Research
 - Typical /ant:build generates 22-42 visible bash tool call headers — root cause of "bash stuff" feeling
@@ -86,3 +89,4 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 2026-02-18 — Phase 11 Plan 05 complete (━━━━ banners and Next Up blocks applied to final 18 commands: focus/redirect/feedback/help/history/migrate-state/verify-castes/maturity/organize/interpret/resume/plan/update/council/pause-colony/resume-colony/lay-eggs/tunnels — all 34 commands now carry unified visual language)
 2026-02-18 — Phase 11 Plan 06 complete (gap closure: build.md hardcoded '🐜 Next Steps:' replaced with print-next-up helper, compact banner 32→50 chars, organize.md === and --- dividers replaced with ━━━━, oracle.md 32-char banners fixed, status.md 53-char banner fixed — SC2 and SC4 now fully satisfied)
 2026-02-18 — Phase 12 Plan 01 complete (spawn announcements before every wave type, wave separators ━━ Wave X of N ━━, build banner with wave/task counts, Task description field on all 4 spawn sites, tool_count in Builder/Watcher/Chaos schemas, build_started_at_epoch capture — mirrored to both Claude Code and OpenCode build.md)
+2026-02-18 — Phase 12 Plan 02 complete (worker completion lines with tool_count in format '🔨 Name: task (N tools) ✓', failed worker format with failure_reason, Watcher and Chaos completion lines, tmux gating on all swarm-display-text calls, all-wave-failed halt with WAVE FAILURE alert, BUILD SUMMARY block replacing compact/verbose split — mirrored to both Claude Code and OpenCode build.md)
