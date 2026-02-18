@@ -28,7 +28,20 @@ Stop here. Do not proceed.
 
 Read the `version` field — this is the **available version**.
 
-### Step 2: Check Current Version
+### Step 2: Check Pending State and Current Version
+
+First, check for a pending sentinel using the Bash tool with description "Checking update state...":
+
+```bash
+test -f .aether/.update-pending && echo "PENDING" || echo "CLEAN"
+```
+
+If output is "PENDING":
+- Output: `Detected incomplete update, re-syncing...`
+- Run using the Bash tool with description "Clearing incomplete update sentinel...": `rm -f .aether/.update-pending`
+- Skip the version comparison entirely — proceed directly to Step 3.
+
+If output is "CLEAN":
 
 Use the Read tool to read `.aether/version.json`.
 
@@ -38,7 +51,7 @@ Otherwise, read the `version` field — this is the **current version**.
 If current version equals available version, output:
 
 ```
-Already up-to-date (v{version}).
+Already up to date (v{version}).
 
 System files and commands match the global hub.
 Colony data (.aether/data/) is always untouched by updates.
@@ -68,6 +81,11 @@ echo "System files synced"
 ```
 
 Colony data (`.aether/data/`) is never touched.
+
+If any sync step fails, output:
+```
+Update couldn't finish — some files didn't copy. Run /ant:update again to retry.
+```
 
 ### Step 3.5: Sync Rules to .claude/rules/
 
@@ -135,6 +153,11 @@ Then use the Write tool to write `.aether/version.json`:
   "version": "{available_version}",
   "updated_at": "{ISO-8601 timestamp}"
 }
+```
+
+Then delete any leftover pending sentinel (update is now complete) using the Bash tool with description "Clearing update sentinel...":
+```bash
+rm -f .aether/.update-pending
 ```
 
 ### Step 5.5: Clear Version Cache
