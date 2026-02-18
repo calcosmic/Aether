@@ -115,6 +115,83 @@ get_caste_emoji() {
   esac
 }
 
+# --- Progress bar helper ---
+# Usage: generate-progress-bar <current> <total> [width]
+# Returns: "[████████░░░░░░░░] 8/20" format string
+generate-progress-bar() {
+  local current="${1:-0}"
+  local total="${2:-1}"
+  local width="${3:-20}"
+
+  # Prevent division by zero
+  [[ "$total" -lt 1 ]] && total=1
+  [[ "$current" -lt 0 ]] && current=0
+  [[ "$current" -gt "$total" ]] && current="$total"
+
+  # Calculate filled/empty segments
+  local filled=$(( (current * width) / total ))
+  local empty=$(( width - filled ))
+
+  # Build bar with Unicode block characters
+  local bar=""
+  for ((i=0; i<filled; i++)); do bar+="█"; done
+  for ((i=0; i<empty; i++)); do bar+="░"; done
+
+  echo "[$bar] $current/$total"
+}
+
+# --- Standard banner helper ---
+# Usage: print-standard-banner <title>
+# Outputs a standardized banner with heavy horizontal lines (U+2501)
+print-standard-banner() {
+  local title="$1"
+
+  # Convert title to spaced uppercase
+  local spaced_title
+  spaced_title=$(echo "$title" | tr '[:lower:]' '[:upper:]' | sed 's/./& /g' | sed 's/ $//')
+
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "   $spaced_title"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+}
+
+# --- Next Up block helper ---
+# Usage: print-next-up <state> [current_phase] [total_phases]
+# Outputs a Next Up block with state-based suggestions
+print-next-up() {
+  local state="${1:-IDLE}"
+  local current_phase="${2:-0}"
+  local total_phases="${3:-0}"
+  local next_phase=$((current_phase + 1))
+
+  echo "──────────────────────────────────────────────────"
+  echo "🐜 Next Up"
+  echo "──────────────────────────────────────────────────"
+
+  case "$state" in
+    IDLE)
+      echo "   /ant:init               🌱 Start a new colony"
+      echo "   /ant:status             📊 Check current state"
+      ;;
+    READY)
+      echo "   /ant:build $next_phase            🔨 Build phase $next_phase"
+      echo "   /ant:phase $next_phase            📋 Review phase details"
+      echo "   /ant:focus              🎯 Guide colony attention"
+      ;;
+    EXECUTING)
+      echo "   /ant:continue           ➡️  Continue current build"
+      echo "   /ant:status             📊 Check build progress"
+      ;;
+    PLANNING)
+      echo "   /ant:plan               📝 Create execution plan"
+      echo "   /ant:status             📊 Check current state"
+      ;;
+    *)
+      echo "   /ant:status             📊 Check colony state"
+      ;;
+  esac
+}
+
 # ============================================
 # CONTEXT UPDATE HELPER FUNCTION
 # (Defined outside case block to fix SC2168: local outside function)
@@ -5064,6 +5141,16 @@ EOF
       [[ "$suggested" != "None" ]] && echo "Suggested Next: $suggested"
       [[ "$cleared" == "true" ]] && echo "Status: Context was cleared"
     fi
+    ;;
+
+  generate-progress-bar)
+    generate-progress-bar "$@"
+    ;;
+  print-standard-banner)
+    print-standard-banner "$@"
+    ;;
+  print-next-up)
+    print-next-up "$@"
     ;;
 
   *)

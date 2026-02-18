@@ -6,18 +6,18 @@
 ## Current Position
 
 Phase: Phase 11 — Visual Identity
-Plan: 01 (Caste System Single Source) — READY
-Status: Planning complete, ready to execute
-Last activity: 2026-02-18 — Phase 11 plans created (4 plans in 4 waves)
+Plan: 02 (Named Worker Display) — READY
+Status: Executing phase 11
+Last activity: 2026-02-18 — Plan 11-01 complete (caste single source of truth)
 
-Progress: ░░░░░░░░░░░░░░░░░░░░ 0% (0 of 4 plans complete)
+Progress: ████░░░░░░░░░░░░░░░░ 25% (1 of 4 plans complete)
 
 ## Current Status
 
-- **State:** Planning complete
+- **State:** Executing
 - **Milestone:** v1.1 Colony Polish & Identity
 - **Mode:** YOLO (auto-approve)
-- **Next action:** `/gsd:execute-phase 11` (start Plan 11-01)
+- **Next action:** `/gsd:execute-phase 11` (continue Plan 11-02)
 
 ## Project Reference
 
@@ -48,6 +48,8 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 - [Phase 10-noise-reduction]: Bash description format: "Run using the Bash tool with description \"action...\": - colony-flavored language, 4-8 words, trailing ellipsis
 - [Phase 10-noise-reduction]: Spawn-tracking consolidation (spawn-log + display-update + context-update) reduces visible headers by ~40%
 - [Phase 10-noise-reduction]: High-complexity commands (build.md: 57 calls, continue.md: 27 calls) now have human-readable descriptions on all bash calls
+- [Phase 11-visual-identity]: Canonical caste-system.md as single source of truth; other files reference, never duplicate
+- [Phase 11-visual-identity]: colonizer canonical emoji is 🗺️🐜 (not 🌱🐜); route_setter canonical emoji is 📋🐜 (not 🧭🐜)
 
 ### Key Findings from Research
 - Typical /ant:build generates 22-42 visible bash tool call headers — root cause of "bash stuff" feeling
@@ -64,3 +66,4 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 ## Last Updated
 
 2026-02-18 — Phase 10 complete (4 plans, bash descriptions on 112 total commands across 34 colony commands, ~40% header reduction in high-complexity commands through spawn-tracking consolidation)
+2026-02-18 — Phase 11 Plan 01 complete (caste-system.md canonical file created, CLAUDE.md and workers.md tables replaced with references, duplicate get_caste_emoji() removed from aether-utils.sh, dreamer case added to global function)
