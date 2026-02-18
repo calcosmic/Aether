@@ -6,18 +6,18 @@
 ## Current Position
 
 Phase: Phase 10 — Noise Reduction
-Plan: 01 (Session-Scoped Caching & Output Cleanup) — COMPLETE
-Status: Plan 01 complete, ready for Plan 02
-Last activity: 2026-02-18 — Plan 01 complete (version-check-caching, technical ID removal)
+Plan: 03 (Medium-Complexity Command Descriptions) — COMPLETE
+Status: Plan 03 complete, ready for Plan 04
+Last activity: 2026-02-18 — Plan 02 and 03 complete (bash descriptions on 22 low-complexity + 6 medium-complexity commands)
 
-Progress: ░░░░░░░░░░░░░░░░░░░░ 25% (1 of 4 plans complete)
+Progress: ░░░░░░░░░░░░░░░░░░░░ 75% (3 of 4 plans complete)
 
 ## Current Status
 
-- **State:** Plan 01 complete
+- **State:** Plan 03 complete
 - **Milestone:** v1.1 Colony Polish & Identity
 - **Mode:** YOLO (auto-approve)
-- **Next action:** `/gsd:execute-phase 10` (continue with Plan 02)
+- **Next action:** `/gsd:execute-phase 10` (continue with Plan 04)
 
 ## Project Reference
 
@@ -43,6 +43,9 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 - Only combine truly atomic bash operations — error isolation is more important than header count
 - Technical identifiers (session_id, build_id) hidden from normal output but preserved internally for logging/debugging
 - Verbose mode retains detailed output (git checkpoint hash) since user opted into detailed view
+- [Phase 10-noise-reduction]: generate-ant-name calls preserved as separate - each returns unique name needed independently
+- [Phase 10-noise-reduction]: Archive operations kept separate for error visibility on precious data
+- [Phase 10-noise-reduction]: Bash description format: "Run using the Bash tool with description \"action...\": - colony-flavored language, 4-8 words, trailing ellipsis
 
 ### Key Findings from Research
 - Typical /ant:build generates 22-42 visible bash tool call headers — root cause of "bash stuff" feeling
@@ -58,4 +61,4 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 
 ## Last Updated
 
-2026-02-18 — Plan 01 complete (version-check caching verified, technical IDs hidden, cache clear added to update)
+2026-02-18 — Plans 02 and 03 complete (bash descriptions on 28 total commands: 22 low-complexity in plan 02, 6 medium-complexity in plan 03)
