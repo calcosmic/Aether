@@ -3,7 +3,8 @@
 ## Milestones
 
 - ✅ **v1.0 Repair & Stabilization** — Phases 1-9 (shipped 2026-02-18)
-- [ ] **v1.1 Colony Polish & Identity** — Phases 10-13
+- ✅ **v1.1 Colony Polish & Identity** — Phases 10-13 (shipped 2026-02-18)
+- 🚧 **v1.2 Hardening & Reliability** — Phases 14-18 (in progress)
 
 ## Phases
 
@@ -24,85 +25,119 @@
 
 </details>
 
+<details>
+<summary>✅ v1.1 Colony Polish & Identity (Phases 10-13) — SHIPPED 2026-02-18</summary>
+
+- [x] Phase 10: Noise Reduction (4 plans) — bash descriptions on 34 commands, ~40% header reduction, version cache
+- [x] Phase 11: Visual Identity (6 plans) — ━━━━ banners, progress bars, Next Up blocks, canonical caste-system.md
+- [x] Phase 12: Build Progress (2 plans) — spawn announcements, completion lines, BUILD SUMMARY, tmux gating
+- [x] Phase 13: Distribution Reliability (1 plan) — .update-pending sentinel, atomic recovery, version detection fix
+
+**14/15 requirements satisfied. Full details: `.planning/milestones/v1.1-ROADMAP.md`**
+
+</details>
+
 ---
 
-### v1.1 Colony Polish & Identity
+### 🚧 v1.2 Hardening & Reliability (In Progress)
 
-- [ ] **Phase 10: Noise Reduction** — Human-readable bash descriptions and call consolidation across all commands
-- [ ] **Phase 11: Visual Identity** — Consistent banners, dividers, Next Up blocks, progress bars, unified caste emojis
-- [ ] **Phase 12: Build Progress** — Spawning indicators, worker completion lines, and tmux-only swarm display
-- [ ] **Phase 13: Distribution Reliability** — Fix update version detection and add atomic version stamp
+**Milestone Goal:** Fix every documented bug, clean up the distribution chain, and leave a bulletproof foundation for new features. All five phases publish together in one `npm install -g .` cycle.
 
----
+- [x] **Phase 14: Foundation Safety** - Fix fallback json_err signature and template path resolution to unblock all subsequent work (completed 2026-02-18)
+- [ ] **Phase 15: Distribution Chain** - Correct update-transaction.js source directory, update EXCLUDE_DIRS atomically, remove dead duplicates, sync allowlist
+- [ ] **Phase 16: Lock Lifecycle Hardening** - Audit all acquire/release pairs, eliminate deadlocks on jq failure, add trap-based cleanup on all exit paths
+- [ ] **Phase 17: Error Code Standardization** - Replace all hardcoded strings with E_* constants in json_err calls, document error codes
+- [ ] **Phase 18: Reliability & Architecture Gaps** - Wire temp file cleanup, rotate spawn-tree, add exec error handling, document queen commands, validate JSON output
 
 ## Phase Details
 
-### Phase 10: Noise Reduction
-**Goal**: Every bash tool call shows a human-readable header and the total call count is reduced by 30-40%
-**Depends on**: Nothing (first phase of v1.1)
-**Requirements**: NOISE-01, NOISE-02, NOISE-03, NOISE-04
+### Phase 14: Foundation Safety
+**Goal**: Establish a safe base where error code work cannot silently break callers and npm-installed users are not blocked by a template path bug
+**Depends on**: Phase 13 (v1.1 shipped)
+**Requirements**: ERR-01, ARCH-01
 **Success Criteria** (what must be TRUE):
-  1. Every visible bash tool call header reads as a plain English status ("Checking colony state..." not raw bash syntax) across all 34 commands
-  2. Sequential non-dependent bash calls are consolidated so a typical /ant:build shows at least 30% fewer tool call headers than before
-  3. Running any command twice in a session shows the version check only once — the second run skips it silently
-  4. No session IDs, internal identifiers, or technical tokens appear in any user-facing command output
-**Plans**: 4 plans
+  1. Running `json_err "$E_FILE_NOT_FOUND" "message"` from a bash session where error-handler.sh failed to load still produces output with both a code field and the human-readable message
+  2. A user running `queen-init` from an npm-installed copy of Aether (not a git clone) reaches the template without hitting a missing-directory error
+  3. Neither fix changes any success-path behavior — commands that work today still work identically
+**Plans:** 1/1 plans complete
 Plans:
-- [ ] 10-01-PLAN.md — Version check caching (NOISE-03) and identifier cleanup (NOISE-04)
-- [ ] 10-02-PLAN.md — Descriptions for 22 low-complexity commands (NOISE-01, NOISE-02)
-- [ ] 10-03-PLAN.md — Descriptions for 6 medium-complexity commands (NOISE-01, NOISE-02)
-- [ ] 10-04-PLAN.md — Descriptions for build.md and continue.md (NOISE-01, NOISE-02)
+- [ ] 14-01-PLAN.md — Fix fallback json_err signature (ERR-01) and template path resolution (ARCH-01)
 
-### Phase 11: Visual Identity
-**Goal**: All commands share one coherent visual language — same banners, dividers, status icons, and a "Next Up" block on every completion
-**Depends on**: Phase 10
-**Requirements**: VIS-01, VIS-02, VIS-03, VIS-04, VIS-05
+### Phase 15: Distribution Chain
+**Goal**: Every `aether update` call copies exactly the right files — system files land in `.aether/`, hub metadata never syncs to target repos, no dead duplicates pollute the source tree
+**Depends on**: Phase 14
+**Requirements**: DIST-01, DIST-02, DIST-03, DIST-04, DIST-05, DIST-06
 **Success Criteria** (what must be TRUE):
-  1. Every command that shows worker activity displays the worker's caste emoji next to their name (e.g., "🔨 Hammer-42")
-  2. Every command completion output ends with a "Next Up" block containing at least one copy-paste-ready command
-  3. /ant:status shows a visual progress bar reflecting current phase and task completion percentage
-  4. All commands use identical banner and divider styles — no mix of ===, ----, ━━━, or other variants
-  5. Caste emoji definitions exist in exactly one shared location; all commands reference that single source
-**Plans**: 4 plans
-Plans:
-- [ ] 11-01-PLAN.md — Create canonical caste-system.md and update references (VIS-05)
-- [ ] 11-02-PLAN.md — Add progress bars to /ant:status and Next Up block (VIS-03, VIS-02)
-- [ ] 11-03-PLAN.md — Standardize banners in high-visibility commands (VIS-04, VIS-02, VIS-01)
-- [ ] 11-04-PLAN.md — Apply visual identity to remaining 28 commands (VIS-04, VIS-02)
-
-### Phase 12: Build Progress
-**Goal**: Users see what the colony is doing during parallel execution — no silent gaps, no black boxes
-**Depends on**: Phase 11
-**Requirements**: PROG-01, PROG-02, PROG-03, PROG-04
-**Success Criteria** (what must be TRUE):
-  1. Before any parallel worker wave begins, the user sees "Spawning N [caste] workers in parallel..." with the count and caste
-  2. When each worker completes, a consistent single-line summary appears showing caste emoji, ant name, task, and tool counts
-  3. Swarm display update calls only render live output inside an active tmux session; in Claude Code chat, only the final summary appears
-  4. Every spawned sub-agent Task call includes the caste emoji and ant name in its description (e.g. "🔨 Builder Hammer-42: Implement login")
+  1. After `aether update` on a clean test repo, `.aether/` contains system files only — no `version.json`, `registry.json`, `manifest.json`, or `chambers/` entries from the hub root
+  2. After `aether update`, `commands/`, `agents/`, and `rules/` subdirectories from `~/.aether/system/` are not duplicated into `.aether/`
+  3. `caste-system.md` is present in a target repo after `aether update` (was missing from allowlist)
+  4. `planning.md` phantom file is absent from all sync allowlists and does not appear in target repos
+  5. The `.aether/agents/` and `.aether/commands/` dead duplicate directories are gone from the source repo
+  6. Old 2.x npm versions are deprecated on the registry — `npm install -g aether` installs the current version
 **Plans**: TBD
 
-### Phase 13: Distribution Reliability
-**Goal**: /ant:update gives accurate status and leaves the installation in a clean, consistent state regardless of what happened before
-**Depends on**: Nothing (independent of Phases 10-12, run after Phase 12 to keep visual changes batched)
-**Requirements**: DIST-01, DIST-02
+### Phase 16: Lock Lifecycle Hardening
+**Goal**: Lock deadlocks are impossible when jq fails — every lock acquired is released on every exit path, including error branches
+**Depends on**: Phase 14
+**Requirements**: LOCK-01, LOCK-02, LOCK-03, LOCK-04
 **Success Criteria** (what must be TRUE):
-  1. Running /ant:update when already on the current version shows "Already up to date" and performs no sync work
-  2. If an update fails partway through, re-running /ant:update detects the incomplete state and re-syncs cleanly without manual intervention
+  1. Feeding invalid JSON as `flags.json` to flag-add, flag-auto-resolve, or flag-acknowledge leaves `.aether/locks/` empty after the command exits — no stale lock files
+  2. Sending SIGTERM or SIGINT to a command holding a lock releases the lock before the process exits
+  3. A simulated race on atomic-write backup creation does not corrupt the target file
+  4. Concurrent `context-update` calls from two processes produce a valid merged result, not a half-written file
+**Plans**: TBD
+
+### Phase 17: Error Code Standardization
+**Goal**: Every json_err call in aether-utils.sh produces machine-readable output with a structured code field — zero hardcoded strings remaining
+**Depends on**: Phase 14
+**Requirements**: ERR-02, ERR-03, ERR-04
+**Success Criteria** (what must be TRUE):
+  1. Triggering any documented error condition (file not found, permission denied, tool not installed) produces JSON with a `"code":"E_..."` field — no bare string codes in output
+  2. An automated grep of aether-utils.sh for `json_err "` (bare string as first arg, not a variable) returns zero matches
+  3. A contributor can look up any error constant in `.aether/docs/error-codes.md` and find its meaning and when to use it
+  4. Error path tests for lock and flag operations execute without false positives and catch a deliberately introduced hardcoded-string call
+**Plans**: TBD
+
+### Phase 18: Reliability & Architecture Gaps
+**Goal**: Stale resources stop accumulating, exec errors are caught, queen commands are discoverable, and JSON output is validated before leaving the read layer
+**Depends on**: Phase 16, Phase 17
+**Requirements**: ARCH-02, ARCH-03, ARCH-04, ARCH-05, ARCH-06, ARCH-07, ARCH-08, ARCH-09, ARCH-10
+**Success Criteria** (what must be TRUE):
+  1. After a session ends, `.aether/temp/` contains no orphaned `.tmp` files and `spawn-tree.txt` does not grow unboundedly across sessions
+  2. `model-get` and `model-list` return a clear error message (not a silent hang or exit 0 with no output) when the underlying exec call fails
+  3. Running `aether help` (or the equivalent help command) lists queen-* commands alongside all other available commands
+  4. `queen-read` returns an error rather than invalid JSON when the state file contains malformed content
+  5. Feature detection in aether-utils.sh completes without a race against error-handler.sh loading — no "function not found" errors on startup
 **Plans**: TBD
 
 ---
 
 ## Progress
 
-| Phase | Plans Complete | Status | Completed |
-|-------|----------------|--------|-----------|
-| 10. Noise Reduction | 0/4 | Planned | - |
-| 11. Visual Identity | 0/4 | Planned | - |
-| 12. Build Progress | 0/? | Not started | - |
-| 13. Distribution Reliability | 0/? | Not started | - |
+| Phase | Milestone | Plans Complete | Status | Completed |
+|-------|-----------|----------------|--------|-----------|
+| 1. Diagnostic | v1.0 | 3/3 | Complete | 2026-02-18 |
+| 2. Core Infrastructure | v1.0 | 5/5 | Complete | 2026-02-18 |
+| 3. Visual Experience | v1.0 | 2/2 | Complete | 2026-02-18 |
+| 4. Context Persistence | v1.0 | 2/2 | Complete | 2026-02-18 |
+| 5. Pheromone System | v1.0 | 3/3 | Complete | 2026-02-18 |
+| 6. Colony Lifecycle | v1.0 | 3/3 | Complete | 2026-02-18 |
+| 7. Advanced Workers | v1.0 | 3/3 | Complete | 2026-02-18 |
+| 8. XML Integration | v1.0 | 4/4 | Complete | 2026-02-18 |
+| 9. Polish & Verify | v1.0 | 4/4 | Complete | 2026-02-18 |
+| 10. Noise Reduction | v1.1 | 4/4 | Complete | 2026-02-18 |
+| 11. Visual Identity | v1.1 | 6/6 | Complete | 2026-02-18 |
+| 12. Build Progress | v1.1 | 2/2 | Complete | 2026-02-18 |
+| 13. Distribution Reliability | v1.1 | 1/1 | Complete | 2026-02-18 |
+| 14. Foundation Safety | v1.2 | Complete    | 2026-02-18 | - |
+| 15. Distribution Chain | v1.2 | 0/TBD | Not started | - |
+| 16. Lock Lifecycle Hardening | v1.2 | 0/TBD | Not started | - |
+| 17. Error Code Standardization | v1.2 | 0/TBD | Not started | - |
+| 18. Reliability & Architecture Gaps | v1.2 | 0/TBD | Not started | - |
 
 ---
 
 *Roadmap created: 2026-02-17*
 *v1.0 shipped: 2026-02-18*
-*v1.1 roadmap added: 2026-02-18*
+*v1.1 shipped: 2026-02-18*
+*v1.2 roadmap added: 2026-02-18*
