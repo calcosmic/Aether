@@ -6,18 +6,18 @@
 ## Current Position
 
 Phase: Phase 11 — Visual Identity
-Plan: 03 — READY
+Plan: 04 — READY
 Status: Executing phase 11
-Last activity: 2026-02-18 — Plan 11-02 complete (progress bars and Next Up block added to /ant:status)
+Last activity: 2026-02-18 — Plan 11-03 complete (━━━━ banners and Next Up blocks standardized across 5 high-visibility commands)
 
-Progress: ████████░░░░░░░░░░░░ 40% (2 of 5 plans complete)
+Progress: ████████████░░░░░░░░ 60% (3 of 5 plans complete)
 
 ## Current Status
 
 - **State:** Executing
 - **Milestone:** v1.1 Colony Polish & Identity
 - **Mode:** YOLO (auto-approve)
-- **Next action:** `/gsd:execute-phase 11` (continue Plan 11-03)
+- **Next action:** `/gsd:execute-phase 11` (continue Plan 11-04)
 
 ## Project Reference
 
@@ -52,6 +52,7 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 - [Phase 11-visual-identity]: colonizer canonical emoji is 🗺️🐜 (not 🌱🐜); route_setter canonical emoji is 📋🐜 (not 🧭🐜)
 - [Phase 11-visual-identity]: Progress bars use Unicode block chars (█/░) — consistent with no-ANSI-color rule; three helpers centralized in aether-utils.sh for composability
 - [Phase 11-visual-identity]: Next Up block is state-routed (IDLE/READY/EXECUTING/PLANNING) not hardcoded — adapts dynamically to colony state
+- [Phase 11-visual-identity]: ━━━━ banners replace all ═══ formats; Next Up blocks added to every command completion (init/seal/entomb/continue); caste format was already correct
 
 ### Key Findings from Research
 - Typical /ant:build generates 22-42 visible bash tool call headers — root cause of "bash stuff" feeling
@@ -70,3 +71,4 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 2026-02-18 — Phase 10 complete (4 plans, bash descriptions on 112 total commands across 34 colony commands, ~40% header reduction in high-complexity commands through spawn-tracking consolidation)
 2026-02-18 — Phase 11 Plan 01 complete (caste-system.md canonical file created, CLAUDE.md and workers.md tables replaced with references, duplicate get_caste_emoji() removed from aether-utils.sh, dreamer case added to global function)
 2026-02-18 — Phase 11 Plan 02 complete (generate-progress-bar/print-standard-banner/print-next-up helpers added to aether-utils.sh, /ant:status updated with visual progress bars and state-routed Next Up block)
+2026-02-18 — Phase 11 Plan 03 complete (━━━━ banners standardized across build/continue/init/seal/entomb; Next Up blocks added to 4 command completions; caste emoji format verified already correct)

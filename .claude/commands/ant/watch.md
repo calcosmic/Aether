@@ -160,11 +160,9 @@ tmux attach-session -t aether-colony
 Before attaching, output:
 
 ```
-       .-.
-      (o o)  AETHER COLONY :: WATCH
-      | O |
-       `-`
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+👁️🔄🐜🏠🔄👁️  A E T H E R   C O L O N Y   W A T C H
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 tmux session 'aether-colony' created.
 
@@ -185,6 +183,14 @@ Commands:
 
 The session will update in real-time as colony works.
 Attaching now...
+```
+
+Generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":
+```bash
+state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
+current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
+total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
+bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
 ```
 
 ---

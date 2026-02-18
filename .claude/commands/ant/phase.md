@@ -35,9 +35,9 @@ Find the phase by ID in `plan.phases`.
 Output this header:
 
 ```
-📝🐜📍🐜📝 ═══════════════════════════════════════════════════
-   P H A S E   {id}   D E T A I L S
-═══════════════════════════════════════════════════ 📝🐜📍🐜📝
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📝🐜📍🐜📝  P H A S E   {id}   D E T A I L S
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
 Then display:
@@ -55,11 +55,20 @@ Then display:
 ✅ Success Criteria:
    • <criterion>
 
-─────────────────────────────────────────────────────
-🐜 Next Steps:
+──────────────────────────────────────────────────
+🐜 Next Up
+──────────────────────────────────────────────────
    /ant:build <id>       🔨 Phase <id>: <phase_name>
    /ant:phase <next_id>  📋 Phase <next_id>: <next_phase_name> (only if not last phase)
    /ant:status           📊 Colony status
+```
+
+After displaying phase details, generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":
+```bash
+state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
+current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
+total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
+bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
 ```
 
 Status icons: `[ ]` pending, `[~]` in_progress, `[✓]` completed
@@ -69,9 +78,9 @@ Status icons: `[ ]` pending, `[~]` in_progress, `[✓]` completed
 Output this header:
 
 ```
-📝🐜📍🐜📝 ═══════════════════════════════════════════════════
-   A L L   P H A S E S
-═══════════════════════════════════════════════════ 📝🐜📍🐜📝
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📝🐜📍🐜📝  A L L   P H A S E S
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
 Then display all phases as a summary:

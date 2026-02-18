@@ -96,9 +96,9 @@ fi
 
 Display header:
 ```
-🔥🐜🗡️🐜🔥 ═══════════════════════════════════════════════
-                S W A R M   D E P L O Y E D
-═══════════════════════════════════════════════ 🔥🐜🗡️🐜🔥
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔥🐜🗡️🐜🔥  S W A R M   D E P L O Y E D
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 🎯 Target: "{problem description}"
 📍 Swarm ID: {swarm_id}
@@ -251,9 +251,9 @@ Cross-compare all findings:
 
 Rank fix options:
 ```
-═══════════════════════════════════════════════
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
               S O L U T I O N   R A N K I N G
-═══════════════════════════════════════════════
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 #1 [0.85 confidence] {best solution}
    Evidence: {supporting scouts}
@@ -352,10 +352,10 @@ Clear swarm display and archive findings (consolidated):
 bash .aether/aether-utils.sh swarm-display-init "complete-{swarm_id}" && bash .aether/aether-utils.sh swarm-cleanup "{swarm_id}" --archive with description "Cleaning up swarm session..."
 ```
 
-Display next steps:
-```
-🐜 Next steps:
-   /ant:continue   ⏭️  Verify and advance phase
-   /ant:status     📊 View colony status
-   /ant:flags      🚩 Check remaining blockers
+Generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":
+```bash
+state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
+current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
+total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
+bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
 ```

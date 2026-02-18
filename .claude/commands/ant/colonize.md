@@ -27,9 +27,9 @@ bash .aether/aether-utils.sh swarm-display-init "$colonize_id" && bash .aether/a
 
 Display header:
 ```
-📊🐜🗺️🐜📊 ═══════════════════════════════════════════════
-         C O L O N I Z E  —  T e r r i t o r y  S u r v e y
-═══════════════════════════════════════════════ 📊🐜🗺️🐜📊
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊🐜🗺️🐜📊  C O L O N I Z E  —  T e r r i t o r y  S u r v e y
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Queen dispatching Surveyor Ants...
 ```
@@ -188,9 +188,9 @@ Write the updated COLONY_STATE.json.
 Output header:
 
 ```
-📊🐜🗺️🐜📊 ═══════════════════════════════════════════════════
-   T E R R I T O R Y   S U R V E Y   C O M P L E T E
-═══════════════════════════════════════════════════ 📊🐜🗺️🐜📊
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊🐜🗺️🐜📊  T E R R I T O R Y   S U R V E Y   C O M P L E T E
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
 Then output:
@@ -228,4 +228,12 @@ Next:
   /ant:plan              Generate project plan (will load relevant survey docs)
   /ant:focus "<area>"    Inject focus before planning
   /ant:redirect "<pat>"  Inject constraint before planning
+```
+
+Generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":
+```bash
+state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
+current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
+total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
+bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
 ```

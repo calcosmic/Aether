@@ -41,9 +41,9 @@ bash .aether/aether-utils.sh swarm-display-update "Oracle" "oracle" "researching
 
 Display visual header:
 ```
-🔮🐜🧠🐜🔮 ═══════════════════════════════════════════════
-          O R A C L E  —  R e s e a r c h  M o d e
-═══════════════════════════════════════════════ 🔮🐜🧠🐜🔮
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔮🐜🧠🐜🔮  O R A C L E  —  R e s e a r c h  M o d e
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Oracle peering into the depths...
 ```
@@ -121,9 +121,9 @@ This is the setup phase. The Oracle asks questions to configure the research bef
 Output the header:
 
 ```
-🔮🐜🧠🐜🔮 ═══════════════════════════════════════════════════
-   O R A C L E   A N T   —   R E S E A R C H   W I Z A R D
-═══════════════════════════════════════════════════ 🔮🐜🧠🐜🔮
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔮🐜🧠🐜🔮  O R A C L E   A N T  —  R E S E A R C H   W I Z A R D
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
 **If `$ARGUMENTS` is not empty and not a subcommand**, use it as the initial topic suggestion. Otherwise, the topic will be asked in Question 1.
@@ -374,6 +374,14 @@ Stop here.
    🛑 Stop early:     /ant:oracle stop
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+Generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":
+```bash
+state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
+current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
+total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
+bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
 ```
 
 Stop here.
