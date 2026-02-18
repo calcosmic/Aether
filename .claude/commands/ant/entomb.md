@@ -18,9 +18,8 @@ If `visual_mode` is true:
 # Generate session ID
 entomb_id="entomb-$(date +%s)"
 
-# Initialize swarm display
-bash .aether/aether-utils.sh swarm-display-init "$entomb_id"
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "Entombing colony" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0
+# Initialize swarm display (consolidated)
+bash .aether/aether-utils.sh swarm-display-init "$entomb_id" && bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "Entombing colony" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0 with description "Initializing entombment..."
 ```
 
 ### Step 1: Read State
@@ -140,12 +139,12 @@ Before creating the chamber, promote validated learnings to QUEEN.md for future 
 ```bash
 queen_file=".aether/docs/QUEEN.md"
 if [[ ! -f "$queen_file" ]]; then
-  init_result=$(bash .aether/aether-utils.sh queen-init 2>/dev/null || echo '{"ok":false}')
+  init_result=$(bash .aether/aether-utils.sh queen-init 2>/dev/null || echo '{"ok":false}' with description "Initializing QUEEN.md...")
   init_ok=$(echo "$init_result" | jq -r '.ok // false')
   if [[ "$init_ok" == "true" ]]; then
     created=$(echo "$init_result" | jq -r '.result.created // false')
     if [[ "$created" == "true" ]]; then
-      bash .aether/aether-utils.sh activity-log "CREATED" "Queen" "Initialized QUEEN.md for wisdom promotion"
+      bash .aether/aether-utils.sh activity-log "CREATED" "Queen" "Initialized QUEEN.md for wisdom promotion" with description "Logging QUEEN.md creation..."
     fi
   fi
 fi
@@ -175,7 +174,7 @@ if [[ -f "$queen_file" ]]; then
       if [[ -n "$claim" && "$claim" != "null" ]]; then
         # Truncate if too long
         content=$(echo "$claim" | cut -c1-200)
-        result=$(bash .aether/aether-utils.sh queen-promote "pattern" "$content" "$colony_name" 2>/dev/null || echo '{"ok":false}')
+        result=$(bash .aether/aether-utils.sh queen-promote "pattern" "$content" "$colony_name" 2>/dev/null || echo '{"ok":false}' with description "Promoting validated learning...")
         if [[ $(echo "$result" | jq -r '.ok // false') == "true" ]]; then
           promotion_count=$((promotion_count + 1))
         fi
@@ -192,7 +191,7 @@ if [[ -f "$queen_file" ]]; then
     # Promote validated instincts with high confidence (>= 0.7)
     if [[ "$status" == "validated" && $(echo "$confidence >= 0.7" | bc -l 2>/dev/null || echo 0) -eq 1 && -n "$action" ]]; then
       content=$(echo "$action" | cut -c1-200)
-      result=$(bash .aether/aether-utils.sh queen-promote "pattern" "$content" "$colony_name" 2>/dev/null || echo '{"ok":false}')
+      result=$(bash .aether/aether-utils.sh queen-promote "pattern" "$content" "$colony_name" 2>/dev/null || echo '{"ok":false}' with description "Promoting instinct pattern...")
       if [[ $(echo "$result" | jq -r '.ok // false') == "true" ]]; then
         promotion_count=$((promotion_count + 1))
       fi
@@ -200,7 +199,7 @@ if [[ -f "$queen_file" ]]; then
   done
 
   # Log promotion results
-  bash .aether/aether-utils.sh activity-log "MODIFIED" "Queen" "Promoted $promotion_count validated learnings to QUEEN.md from entombed colony"
+  bash .aether/aether-utils.sh activity-log "MODIFIED" "Queen" "Promoted $promotion_count validated learnings to QUEEN.md from entombed colony" with description "Logging wisdom promotion..."
 fi
 ```
 
@@ -256,7 +255,7 @@ bash .aether/aether-utils.sh chamber-create \
   "$milestone" \
   "$version" \
   "$decisions_json" \
-  "$learnings_json"
+  "$learnings_json" with description "Creating colony chamber..."
 ```
 
 ### Step 7: Archive Additional Files
@@ -288,7 +287,7 @@ Export combined XML archive to the chamber. This is a HARD REQUIREMENT — entom
 
 ```bash
 chamber_dir=".aether/chambers/$chamber_name"
-xml_result=$(bash .aether/aether-utils.sh colony-archive-xml "$chamber_dir/colony-archive.xml" 2>&1)
+xml_result=$(bash .aether/aether-utils.sh colony-archive-xml "$chamber_dir/colony-archive.xml" 2>&1 with description "Exporting XML archive...")
 xml_ok=$(echo "$xml_result" | jq -r '.ok // false' 2>/dev/null)
 
 if [[ "$xml_ok" != "true" ]]; then
@@ -315,7 +314,7 @@ xml_archive_line="XML Archive: colony-archive.xml (${xml_pheromone_count} active
 
 Run verification:
 ```bash
-bash .aether/aether-utils.sh chamber-verify ".aether/chambers/$chamber_name"
+bash .aether/aether-utils.sh chamber-verify ".aether/chambers/$chamber_name" with description "Verifying chamber integrity..."
 ```
 
 If verification fails, display error and stop:
@@ -333,7 +332,7 @@ Stop here.
 
 Write colony summary to eternal memory:
 ```bash
-bash .aether/aether-utils.sh eternal-init  # idempotent
+bash .aether/aether-utils.sh eternal-init with description "Initializing eternal memory..."  # idempotent
 eternal_file="$HOME/.aether/eternal/memory.json"
 if [[ -f "$eternal_file" ]]; then
   colony_entry=$(jq -n \
@@ -444,10 +443,9 @@ HANDOFF_EOF
 
 ### Step 12: Display Result
 
-**If visual_mode is true, render swarm display:**
+**If visual_mode is true, render swarm display (consolidated):**
 ```bash
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Colony entombed" "Colony" '{"read":3,"grep":0,"edit":2,"bash":5}' 100 "fungus_garden" 100
-bash .aether/aether-utils.sh swarm-display-inline "$entomb_id"
+bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Colony entombed" "Colony" '{"read":3,"grep":0,"edit":2,"bash":5}' 100 "fungus_garden" 100 && bash .aether/aether-utils.sh swarm-display-inline "$entomb_id" with description "Rendering entombment display..."
 ```
 
 Display:

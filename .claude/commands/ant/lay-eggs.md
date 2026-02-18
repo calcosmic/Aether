@@ -13,7 +13,7 @@ Parse `$ARGUMENTS`:
 
 ### Step 0: Initialize Visual Mode (if enabled)
 
-If `visual_mode` is true:
+If `visual_mode` is true, run using the Bash tool with description "Initializing colony display...":
 ```bash
 # Generate session ID
 layeggs_id="layeggs-$(date +%s)"
@@ -120,7 +120,7 @@ Write `.aether/data/constraints.json`:
 
 ### Step 6: Display Result
 
-**If visual_mode is true, render final swarm display:**
+**If visual_mode is true, render final swarm display** by running using the Bash tool with description "Updating colony display...":
 ```bash
 bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "First eggs laid" "Colony" '{"read":3,"grep":0,"edit":2,"bash":1}' 100 "nursery" 100
 bash .aether/aether-utils.sh swarm-display-text "$layeggs_id"

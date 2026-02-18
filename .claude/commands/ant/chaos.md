@@ -66,7 +66,7 @@ Parse `$ARGUMENTS`:
 
 ### Step 0: Initialize Visual Mode (if enabled)
 
-If `visual_mode` is true:
+If `visual_mode` is true, run using the Bash tool with description "Initializing chaos display...":
 ```bash
 # Generate session ID
 chaos_id="chaos-$(date +%s)"
@@ -222,7 +222,7 @@ For each scenario, produce a finding in this format. Display each to the termina
 
 ### Step 5: Produce the Chaos Report
 
-**If visual_mode is true, render final swarm display:**
+**If visual_mode is true, render final swarm display** by running using the Bash tool with description "Updating chaos display...":
 ```bash
 bash .aether/aether-utils.sh swarm-display-update "Chaos Ant" "chaos" "completed" "Resilience test complete" "Colony" '{"read":8,"grep":4,"edit":0,"bash":3}' 100 "fungus_garden" 100
 bash .aether/aether-utils.sh swarm-display-inline "$chaos_id"
@@ -304,14 +304,14 @@ After the display report, output the machine-readable JSON summary:
 
 ### Step 6.5: Persist Blocker Flags for Critical/High Findings
 
-After outputting the JSON report, iterate through the chaos report scenarios. For each finding with severity `"CRITICAL"` or `"HIGH"`, persist a blocker flag so the colony tracks it:
+After outputting the JSON report, iterate through the chaos report scenarios. For each finding with severity `"CRITICAL"` or `"HIGH"`, persist a blocker flag so the colony tracks it by running using the Bash tool with description "Raising colony flag...":
 
 ```bash
 # For each scenario where status == "finding" AND severity is "CRITICAL" or "HIGH":
 bash .aether/aether-utils.sh flag-add "blocker" "{scenario.title}" "{scenario.description}" "chaos-standalone" {current_phase_number}
 ```
 
-Log each flag creation:
+Log each flag creation by running using the Bash tool with description "Logging chaos flag...":
 ```bash
 bash .aether/aether-utils.sh activity-log "FLAG" "Chaos Ant" "Created blocker: {scenario.title}"
 ```
@@ -322,6 +322,7 @@ The `{current_phase_number}` comes from the colony state loaded in Step 1 (`.aet
 
 ### Step 7: Log Activity
 
+Run using the Bash tool with description "Logging chaos activity...":
 ```bash
 bash .aether/aether-utils.sh activity-log "CHAOS" "Chaos Ant" "Resilience test on {target}: {findings_count} finding(s) ({critical} critical, {high} high, {medium} medium, {low} low), {resilient_count} resilient"
 ```

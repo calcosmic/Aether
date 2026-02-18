@@ -13,7 +13,7 @@ Parse `$ARGUMENTS`:
 
 ### Step 0: Initialize Visual Mode (if enabled)
 
-If `visual_mode` is true:
+If `visual_mode` is true, run using the Bash tool with description "Initializing resume display...":
 ```bash
 # Generate session ID
 resume_id="resume-$(date +%s)"
@@ -25,13 +25,13 @@ bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "
 
 ### Step 0.5: Version Check (Non-blocking)
 
-Run using the Bash tool: `bash .aether/aether-utils.sh version-check 2>/dev/null || true`
+Run using the Bash tool with description "Checking colony version...": `bash .aether/aether-utils.sh version-check-cached 2>/dev/null || true`
 
 If the command succeeds and the JSON result contains a non-empty string, display it as a one-line notice. Proceed regardless of outcome.
 
 ### Step 1: Load State and Validate
 
-Run using Bash tool: `bash .aether/aether-utils.sh load-state`
+Run using the Bash tool with description "Restoring colony session...": `bash .aether/aether-utils.sh load-state`
 
 If successful:
 1. Parse state from result
@@ -93,7 +93,7 @@ CONTEXT FROM HANDOFF
 NEXT ACTIONS
 ```
 
-**If visual_mode is true, render final swarm display:**
+**If visual_mode is true, render final swarm display** by running using the Bash tool with description "Updating resume display...":
 ```bash
 bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Colony resumed" "Colony" '{"read":3,"grep":0,"edit":2,"bash":1}' 100 "fungus_garden" 100
 bash .aether/aether-utils.sh swarm-display-text "$resume_id"
@@ -113,9 +113,9 @@ Use Write tool to update COLONY_STATE.json:
 - Update last_updated timestamp
 - Add event: `{timestamp, type: "colony_resumed", worker: "resume", details: "Session resumed"}`
 
-Use Bash tool to remove HANDOFF.md: `rm -f .aether/HANDOFF.md`
+Use Bash tool with description "Cleaning up handoff file..." to remove HANDOFF.md: `rm -f .aether/HANDOFF.md`
 
-Run: `bash .aether/aether-utils.sh unload-state` to release lock.
+Run using the Bash tool with description "Releasing colony lock...": `bash .aether/aether-utils.sh unload-state` to release lock.
 
 ---
 

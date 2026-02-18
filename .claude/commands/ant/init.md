@@ -20,9 +20,8 @@ If `visual_mode` is true:
 # Generate session ID
 init_id="init-$(date +%s)"
 
-# Initialize swarm display
-bash .aether/aether-utils.sh swarm-display-init "$init_id"
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "Colony initialization" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0
+# Initialize swarm display (consolidated)
+bash .aether/aether-utils.sh swarm-display-init "$init_id" && bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "Colony initialization" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0 with description "Initializing colony display..."
 ```
 
 ### Step 0.5: Version Check (Non-blocking)
@@ -89,7 +88,7 @@ Check if `.aether/aether-utils.sh` exists using the Read tool.
 
 After bootstrap completes (or if system files already existed), run using the Bash tool:
 ```
-bash .aether/aether-utils.sh queen-init
+bash .aether/aether-utils.sh queen-init with description "Initializing QUEEN.md..."
 ```
 
 Parse the JSON result:
@@ -109,7 +108,7 @@ Use the Read tool to read `.aether/data/COLONY_STATE.json`.
 
 Check freshness of existing state:
 ```bash
-fresh_check=$(bash .aether/aether-utils.sh session-verify-fresh --command init "" "$INIT_START")
+fresh_check=$(bash .aether/aether-utils.sh session-verify-fresh --command init "" "$INIT_START" with description "Checking session freshness...")
 is_stale=$(echo "$fresh_check" | jq -r '.stale | length')
 freshness_status=$([[ "$is_stale" -gt 0 ]] && echo "stale" || echo "fresh")
 ```
@@ -229,7 +228,7 @@ Write `.aether/data/constraints.json`:
 
 Run using Bash tool:
 ```
-bash .aether/aether-utils.sh context-update init "$ARGUMENTS"
+bash .aether/aether-utils.sh context-update init "$ARGUMENTS" with description "Initializing context document..."
 ```
 
 This creates `.aether/CONTEXT.md` — the colony's persistent memory. If context collapses, this file tells the next session what we were doing.
@@ -238,7 +237,7 @@ This creates `.aether/CONTEXT.md` — the colony's persistent memory. If context
 
 Use the Bash tool to run:
 ```
-bash .aether/aether-utils.sh validate-state colony
+bash .aether/aether-utils.sh validate-state colony with description "Validating colony state..."
 ```
 
 This validates COLONY_STATE.json structure. If validation fails, output a warning.
@@ -270,10 +269,9 @@ If either command fails, proceed silently. These are optional bookkeeping.
 
 ### Step 7: Display Result
 
-**If visual_mode is true, render final swarm display:**
+**If visual_mode is true, render final swarm display (consolidated):**
 ```bash
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Colony initialized" "Colony" '{"read":5,"grep":2,"edit":3,"bash":2}' 100 "fungus_garden" 100
-bash .aether/aether-utils.sh swarm-display-text "$init_id"
+bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Colony initialized" "Colony" '{"read":5,"grep":2,"edit":3,"bash":2}' 100 "fungus_garden" 100 && bash .aether/aether-utils.sh swarm-display-text "$init_id" with description "Rendering colony display..."
 ```
 
 Output this header:
@@ -320,5 +318,5 @@ Then output the result:
 Initialize session tracking to enable `/ant:resume` after context clear:
 
 ```bash
-bash .aether/aether-utils.sh session-init "$(jq -r '.session_id' .aether/data/COLONY_STATE.json)" "$ARGUMENTS"
+bash .aether/aether-utils.sh session-init "$(jq -r '.session_id' .aether/data/COLONY_STATE.json)" "$ARGUMENTS" with description "Initializing session tracking..."
 ```

@@ -29,7 +29,7 @@ Parse `$ARGUMENTS` to determine the action:
 
 ### Step 0.5: Initialize Visual Mode (if enabled)
 
-If `visual_mode` is true:
+If `visual_mode` is true, run using the Bash tool with description "Initializing oracle display...":
 ```bash
 # Generate session ID
 oracle_id="oracle-$(date +%s)"
@@ -52,7 +52,7 @@ Oracle peering into the depths...
 
 ### Step 0b: Stop Oracle
 
-Create the stop signal file:
+Create the stop signal file by running using the Bash tool with description "Stopping oracle research...":
 
 ```bash
 mkdir -p .aether/oracle && touch .aether/oracle/.stop
@@ -201,7 +201,7 @@ Capture session start time:
 ORACLE_START=$(date +%s)
 ```
 
-Check for stale files:
+Check for stale files by running using the Bash tool with description "Checking for stale oracle session...":
 ```bash
 stale_check=$(bash .aether/aether-utils.sh session-verify-fresh --command oracle "" "$ORACLE_START")
 has_stale=$(echo "$stale_check" | jq -r '.stale | length')
@@ -228,7 +228,7 @@ fi
 
 ### Step 2: Configure Research
 
-Create the oracle directory structure:
+Create the oracle directory structure by running using the Bash tool with description "Setting up oracle research...":
 
 ```bash
 mkdir -p .aether/oracle/archive .aether/oracle/discoveries
@@ -238,7 +238,7 @@ Generate an ISO-8601 UTC timestamp.
 
 **Archive previous research if it exists:**
 
-Check if `.aether/oracle/progress.md` exists. If it does:
+Check if `.aether/oracle/progress.md` exists. If it does, run using the Bash tool with description "Archiving previous research...":
 
 ```bash
 DATE=$(date +%Y-%m-%d)
@@ -292,7 +292,7 @@ Use the Write tool to write `.aether/oracle/progress.md`:
 
 #### Step 2.5: Verify Oracle Files Are Fresh
 
-Verify that progress.md and research.json were created successfully:
+Verify that progress.md and research.json were created successfully by running using the Bash tool with description "Verifying oracle files...":
 ```bash
 verify_result=$(bash .aether/aether-utils.sh session-verify-fresh --command oracle "" "$ORACLE_START")
 fresh_count=$(echo "$verify_result" | jq -r '.fresh | length')
@@ -329,7 +329,7 @@ Output the research configuration summary:
 
 Now launch the loop. Try tmux first, fall back to manual.
 
-**Try tmux:**
+**Try tmux** by running using the Bash tool with description "Launching oracle in tmux...":
 
 ```bash
 tmux new-session -d -s oracle "cd $(pwd) && bash .aether/oracle/oracle.sh; echo ''; echo '🔮🐜 Oracle loop finished. Press any key to close.'; read -n1" 2>/dev/null && echo "TMUX_OK" || echo "TMUX_FAIL"

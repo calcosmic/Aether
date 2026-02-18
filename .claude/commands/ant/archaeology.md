@@ -206,7 +206,7 @@ Synthesize findings into patterns:
 
 ### Step 7: Generate Archaeology Report
 
-**If visual_mode is true, render final swarm display:**
+**If visual_mode is true, render final swarm display** by running using the Bash tool with description "Updating archaeology display...":
 ```bash
 arch_id="archaeology-$(date +%s)"
 bash .aether/aether-utils.sh swarm-display-init "$arch_id"
@@ -314,6 +314,7 @@ Excavation date: {YYYY-MM-DD}
 
 ### Step 8: Log Activity
 
+Run using the Bash tool with description "Logging excavation activity...":
 ```bash
 bash .aether/aether-utils.sh activity-log "ARCHAEOLOGY" "Archaeologist" "Excavated {target}: {total_commits} commits, {author_count} authors, {findings_count} findings, {tech_debt_count} debt markers"
 ```

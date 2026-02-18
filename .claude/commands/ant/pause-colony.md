@@ -13,7 +13,7 @@ Parse `$ARGUMENTS`:
 
 ### Step 0: Initialize Visual Mode (if enabled)
 
-If `visual_mode` is true:
+If `visual_mode` is true, run using the Bash tool with description "Initializing pause display...":
 ```bash
 # Generate session ID
 pause_id="pause-$(date +%s)"
@@ -178,20 +178,20 @@ Continue to Step 5.
 
 ### Step 4.8: Update Context Document
 
-Log this pause activity to `.aether/CONTEXT.md`:
+Log this pause activity to `.aether/CONTEXT.md` by running using the Bash tool with description "Updating context document...":
 
 ```bash
 bash .aether/aether-utils.sh context-update activity "pause-colony" "Colony paused — handoff created" "—"
 ```
 
-Update safe-to-clear status:
+Update safe-to-clear status by running using the Bash tool with description "Marking safe to clear...":
 ```bash
 bash .aether/aether-utils.sh context-update safe-to-clear "YES" "Colony paused — safe to /clear, run /ant:resume-colony to continue"
 ```
 
 ### Step 5: Display Confirmation
 
-**If visual_mode is true, render final swarm display:**
+**If visual_mode is true, render final swarm display** by running using the Bash tool with description "Updating pause display...":
 ```bash
 bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Colony paused" "Colony" '{"read":3,"grep":0,"edit":2,"bash":1}' 100 "fungus_garden" 100
 bash .aether/aether-utils.sh swarm-display-text "$pause_id"

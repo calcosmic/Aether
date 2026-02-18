@@ -13,7 +13,7 @@ Parse `$ARGUMENTS`:
 
 ### Step 0: Initialize Visual Mode (if enabled)
 
-If `visual_mode` is true:
+If `visual_mode` is true, run using the Bash tool with description "Initializing council display...":
 ```bash
 # Generate session ID
 council_id="council-$(date +%s)"
@@ -239,7 +239,7 @@ Keep max 100 events.
 
 ### Step 8: Display Summary
 
-**If visual_mode is true, render final swarm display:**
+**If visual_mode is true, render final swarm display** by running using the Bash tool with description "Updating council display...":
 ```bash
 bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Council adjourned" "Colony" '{"read":3,"grep":0,"edit":2,"bash":1}' 100 "fungus_garden" 100
 bash .aether/aether-utils.sh swarm-display-text "$council_id"

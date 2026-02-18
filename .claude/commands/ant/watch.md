@@ -9,7 +9,7 @@ You are the **Queen**. Set up live visibility into colony activity.
 
 ### Step 1: Check Prerequisites
 
-Use Bash to check if tmux is available:
+Use Bash with description "Checking for tmux..." to check if tmux is available:
 ```bash
 command -v tmux >/dev/null 2>&1 && echo "tmux_available" || echo "tmux_missing"
 ```
@@ -27,7 +27,7 @@ Stop here.
 
 ### Step 2: Initialize Activity Log
 
-Ensure activity log exists:
+Ensure activity log exists by running using the Bash tool with description "Initializing watch files...":
 ```bash
 mkdir -p .aether/data
 touch .aether/data/activity.log
@@ -40,7 +40,7 @@ Capture session start time:
 WATCH_START=$(date +%s)
 ```
 
-Check for stale watch files:
+Check for stale watch files by running using the Bash tool with description "Checking for stale watch session...":
 ```bash
 stale_check=$(bash .aether/aether-utils.sh session-verify-fresh --command watch "" "$WATCH_START")
 has_stale=$(echo "$stale_check" | jq -r '.stale | length')
@@ -73,12 +73,12 @@ Last Activity:
 
 ### Step 4: Create or Attach to tmux Session
 
-Check if session exists:
+Check if session exists by running using the Bash tool with description "Checking tmux session...":
 ```bash
 tmux has-session -t aether-colony 2>/dev/null && echo "exists" || echo "new"
 ```
 
-**If session exists:** Attach to it
+**If session exists:** Attach to it by running using the Bash tool with description "Attaching to watch session...":
 ```bash
 tmux attach-session -t aether-colony
 ```
@@ -89,7 +89,7 @@ Stop here.
 
 ### Step 5: Create tmux Layout (4-Pane)
 
-Use Bash to create the session with 4 panes in a 2x2 grid:
+Use Bash with description "Creating watch session layout..." to create the session with 4 panes in a 2x2 grid:
 
 ```bash
 # Create session with first pane
@@ -152,6 +152,7 @@ Target: 95% confidence
 
 ### Step 7: Attach and Display
 
+Run using the Bash tool with description "Attaching to watch display...":
 ```bash
 tmux attach-session -t aether-colony
 ```

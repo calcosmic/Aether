@@ -9,7 +9,7 @@ You are the **Queen**. Show colony status.
 
 ### Step 0: Version Check (Non-blocking)
 
-Run using the Bash tool: `bash .aether/aether-utils.sh version-check 2>/dev/null || true`
+Run using the Bash tool with description "Checking colony version...": `bash .aether/aether-utils.sh version-check-cached 2>/dev/null || true`
 
 If the command succeeds and the JSON result contains a non-empty string, display it as a one-line notice. Proceed regardless of outcome.
 
@@ -51,7 +51,7 @@ If `version` field is missing, "1.0", or "2.0":
 
 ### Step 1.5: Load State and Show Resumption Context
 
-Run using Bash tool: `bash .aether/aether-utils.sh load-state`
+Run using the Bash tool with description "Loading colony state...": `bash .aether/aether-utils.sh load-state`
 
 If successful and goal is not null:
 1. Extract current_phase from state
@@ -69,7 +69,7 @@ If successful and goal is not null:
    - Read .aether/HANDOFF.md content for additional context
    - Remove .aether/HANDOFF.md after displaying (cleanup)
 
-Run: `bash .aether/aether-utils.sh unload-state` to release lock.
+Run using the Bash tool with description "Releasing colony lock...": `bash .aether/aether-utils.sh unload-state` to release lock.
 
 ### Step 2: Compute Summary
 
@@ -77,13 +77,13 @@ From state, extract:
 
 ### Step 2.5: Gather Dream Information
 
-Run using Bash tool: `ls -1 .aether/dreams/*.md 2>/dev/null | wc -l`
+Run using the Bash tool with description "Counting dream entries...": `ls -1 .aether/dreams/*.md 2>/dev/null | wc -l`
 
 Capture:
 - Dream count: number of .md files in .aether/dreams/
 - Latest dream: most recent file by name (files are timestamped: YYYY-MM-DD-HHMM.md)
 
-To get latest dream timestamp:
+To get latest dream timestamp, run using the Bash tool with description "Finding latest dream...":
 ```bash
 ls -1 .aether/dreams/*.md 2>/dev/null | sort | tail -1 | sed 's/.*\/\([0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}\)-\([0-9]\{4\}\).*/\1 \2/'
 ```
@@ -108,7 +108,7 @@ Read `.aether/data/constraints.json` if exists:
 - Constraints count: `constraints.length`
 
 **Flags:**
-Run: `bash .aether/aether-utils.sh flag-check-blockers`
+Run using the Bash tool with description "Checking for blockers...": `bash .aether/aether-utils.sh flag-check-blockers`
 Extract:
 - Blockers count (critical, block advancement)
 - Issues count (high, warnings)
@@ -129,7 +129,7 @@ From `memory.instincts`:
 
 ### Step 2.6: Detect Milestone
 
-Run using Bash tool: `bash .aether/aether-utils.sh milestone-detect`
+Run using the Bash tool with description "Detecting colony milestone...": `bash .aether/aether-utils.sh milestone-detect`
 
 Extract from JSON result:
 - `milestone`: Current milestone name

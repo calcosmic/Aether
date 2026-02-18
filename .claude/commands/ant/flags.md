@@ -27,7 +27,7 @@ Examples:
 
 ### Step 2: Handle Resolution/Acknowledgment
 
-If `--resolve` was provided:
+If `--resolve` was provided, run using the Bash tool with description "Resolving colony flag...":
 ```bash
 bash .aether/aether-utils.sh flag-resolve "{flag_id}" "{resolution_message}"
 ```
@@ -39,7 +39,7 @@ Output:
 ```
 Stop here.
 
-If `--ack` was provided:
+If `--ack` was provided, run using the Bash tool with description "Acknowledging colony flag...":
 ```bash
 bash .aether/aether-utils.sh flag-acknowledge "{flag_id}"
 ```
@@ -53,7 +53,7 @@ Stop here.
 
 ### Step 3: List Flags
 
-Run:
+Run using the Bash tool with description "Loading colony flags...":
 ```bash
 bash .aether/aether-utils.sh flag-list {options}
 ```

@@ -30,7 +30,7 @@ Stop here.
 
 ### Step 2: List All Chambers
 
-Run: `bash .aether/aether-utils.sh chamber-list`
+Run using the Bash tool with description "Loading chamber list...": `bash .aether/aether-utils.sh chamber-list`
 
 Parse JSON result into array of chambers.
 
@@ -127,7 +127,7 @@ Run /ant:tunnels to return to timeline
 Run /ant:tunnels {chamber_a} {chamber_b} to compare chambers
 ```
 
-To get the hash status:
+To get the hash status, run using the Bash tool with description "Verifying chamber integrity...":
 - Run `bash .aether/aether-utils.sh chamber-verify .aether/chambers/{chamber_name}`
 - If verified: hash_status = "verified"
 - If not verified: hash_status = "hash mismatch"
@@ -180,7 +180,7 @@ Available chambers:
 ```
 Stop here.
 
-Run comparison:
+Run comparison using the Bash tool with description "Comparing chambers...":
 ```bash
 bash .aether/utils/chamber-compare.sh compare <chamber_a> <chamber_b>
 bash .aether/utils/chamber-compare.sh stats <chamber_a> <chamber_b>
@@ -230,7 +230,7 @@ If phases_diff < 0: show "Colony reduced (unusual)"
 If same_milestone: show "Same milestone reached"
 If milestone changed: show "Milestone advanced: {milestone_a} -> {milestone_b}"
 
-Display pheromone trail diff (new decisions/learnings in B):
+Display pheromone trail diff (new decisions/learnings in B) by running using the Bash tool with description "Analyzing pheromone differences...":
 ```bash
 bash .aether/utils/chamber-compare.sh diff <chamber_a> <chamber_b>
 ```
@@ -263,7 +263,7 @@ Stop here.
 
 When user selects "Import signals" from Step 3:
 
-**Step 6.1: Check XML tools**
+**Step 6.1: Check XML tools** by running using the Bash tool with description "Checking XML tools...":
 ```bash
 if command -v xmllint >/dev/null 2>&1; then
   xmllint_available=true
@@ -280,7 +280,7 @@ Import requires xmllint. Install it first:
 ```
 Stop here (return to timeline).
 
-**Step 6.2: Extract source colony name**
+**Step 6.2: Extract source colony name** by running using the Bash tool with description "Extracting colony info...":
 ```bash
 chamber_xml=".aether/chambers/{chamber_name}/colony-archive.xml"
 # Extract colony_id from the archive root element
@@ -292,6 +292,7 @@ source_colony=$(xmllint --xpath "string(/*/@colony_id)" "$chamber_xml" 2>/dev/nu
 
 The combined `colony-archive.xml` contains pheromones, wisdom, and registry sections. Extract the pheromone section to a temp file before counting or importing. This prevents over-counting signals from wisdom/registry sections and ensures `pheromone-import-xml` receives the format it expects (`<pheromones>` as root element).
 
+Run using the Bash tool with description "Extracting pheromone signals...":
 ```bash
 # Extract the <pheromones> section from the combined archive into a standalone temp file
 import_tmp_dir=$(mktemp -d)
@@ -337,6 +338,7 @@ Pass the extracted pheromone-only temp file (NOT the combined `colony-archive.xm
 1. `pheromone-import-xml` receives XML with `<pheromones>` as root element (the format it expects)
 2. The prefix-tagging logic prepends `${source_colony}:` to each imported signal's ID before the merge
 
+Run using the Bash tool with description "Importing pheromone signals...":
 ```bash
 # Import the EXTRACTED pheromone-only XML (NOT the combined colony-archive.xml)
 # $import_tmp_pheromones has <pheromones> as root — the format pheromone-import-xml expects

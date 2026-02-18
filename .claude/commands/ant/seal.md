@@ -18,9 +18,8 @@ If `visual_mode` is true:
 # Generate session ID
 seal_id="seal-$(date +%s)"
 
-# Initialize swarm display
-bash .aether/aether-utils.sh swarm-display-init "$seal_id"
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "Sealing colony" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0
+# Initialize swarm display (consolidated)
+bash .aether/aether-utils.sh swarm-display-init "$seal_id" && bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "Sealing colony" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0 with description "Initializing seal ceremony..."
 ```
 
 ### Step 1: Read State
@@ -37,7 +36,7 @@ Extract: `goal`, `state`, `current_phase`, `plan.phases`, `milestone`, `version`
 
 ### Step 2: Maturity Gate
 
-Run `bash .aether/aether-utils.sh milestone-detect` to get `milestone`, `phases_completed`, `total_phases`.
+Run `bash .aether/aether-utils.sh milestone-detect with description "Detecting colony milestone..."` to get `milestone`, `phases_completed`, `total_phases`.
 
 **If milestone is already "Crowned Anthill":**
 ```
@@ -95,7 +94,7 @@ Extract and promote significant patterns, decisions, and instincts from the colo
 ```bash
 # Ensure QUEEN.md exists
 if [[ ! -f ".aether/docs/QUEEN.md" ]]; then
-  bash .aether/aether-utils.sh queen-init >/dev/null 2>&1
+  bash .aether/aether-utils.sh queen-init >/dev/null 2>&1 with description "Initializing QUEEN.md..."
 fi
 
 # Extract colony name from session_id or goal
@@ -123,7 +122,7 @@ while IFS= read -r learning; do
       type="philosophy"
     fi
 
-    result=$(bash .aether/aether-utils.sh queen-promote "$type" "$claim" "$colony_name" 2>/dev/null)
+    result=$(bash .aether/aether-utils.sh queen-promote "$type" "$claim" "$colony_name" 2>/dev/null with description "Promoting colony wisdom...")
     if echo "$result" | jq -e '.ok' >/dev/null 2>&1; then
       promotions_made=$((promotions_made + 1))
       promotion_details="${promotion_details}  - Promoted ${type}: ${claim:0:60}...\n"
@@ -137,7 +136,7 @@ while IFS= read -r decision; do
   [[ -z "$description" ]] && description=$(echo "$decision" | jq -r '.decision // empty')
 
   if [[ -n "$description" ]]; then
-    result=$(bash .aether/aether-utils.sh queen-promote "pattern" "$description" "$colony_name" 2>/dev/null)
+    result=$(bash .aether/aether-utils.sh queen-promote "pattern" "$description" "$colony_name" 2>/dev/null with description "Promoting pattern from decision...")
     if echo "$result" | jq -e '.ok' >/dev/null 2>&1; then
       promotions_made=$((promotions_made + 1))
       promotion_details="${promotion_details}  - Promoted pattern from decision: ${description:0:60}...\n"
@@ -150,7 +149,7 @@ instinct_result=$(bash .aether/aether-utils.sh instinct-read --min-confidence 0.
 if echo "$instinct_result" | jq -e '.ok' >/dev/null 2>&1; then
   while IFS= read -r instinct_action; do
     if [[ -n "$instinct_action" && "$instinct_action" != "null" ]]; then
-      result=$(bash .aether/aether-utils.sh queen-promote "pattern" "$instinct_action" "$colony_name" 2>/dev/null)
+      result=$(bash .aether/aether-utils.sh queen-promote "pattern" "$instinct_action" "$colony_name" 2>/dev/null with description "Promoting instinct pattern...")
       if echo "$result" | jq -e '.ok' >/dev/null 2>&1; then
         promotions_made=$((promotions_made + 1))
       fi
@@ -159,7 +158,7 @@ if echo "$instinct_result" | jq -e '.ok' >/dev/null 2>&1; then
 fi
 
 # Log promotion results to activity log
-bash .aether/aether-utils.sh activity-log "MODIFIED" "Queen" "Promoted ${promotions_made} learnings/decisions/instincts to QUEEN.md from colony ${colony_name}"
+bash .aether/aether-utils.sh activity-log "MODIFIED" "Queen" "Promoted ${promotions_made} learnings/decisions/instincts to QUEEN.md from colony ${colony_name}" with description "Logging wisdom promotion..."
 
 # Store promotion summary for display
 promotion_summary="${promotions_made} wisdom entries promoted"
@@ -172,7 +171,7 @@ Update COLONY_STATE.json:
 2. Set `milestone_updated_at` to current ISO-8601 timestamp
 3. Append event: `"<timestamp>|milestone_reached|seal|Achieved Crowned Anthill milestone"`
 
-Run `bash .aether/aether-utils.sh validate-state colony` after write.
+Run `bash .aether/aether-utils.sh validate-state colony with description "Validating colony state..."` after write.
 
 ### Step 6: Write CROWNED-ANTHILL.md
 
@@ -239,7 +238,7 @@ Export colony data as a combined XML archive. This is best-effort — seal proce
 ```bash
 # Check if xmllint is available
 if command -v xmllint >/dev/null 2>&1; then
-  xml_result=$(bash .aether/aether-utils.sh colony-archive-xml ".aether/exchange/colony-archive.xml" 2>&1)
+  xml_result=$(bash .aether/aether-utils.sh colony-archive-xml ".aether/exchange/colony-archive.xml" 2>&1 with description "Exporting XML archive...")
   xml_ok=$(echo "$xml_result" | jq -r '.ok // false' 2>/dev/null)
   if [[ "$xml_ok" == "true" ]]; then
     xml_pheromone_count=$(echo "$xml_result" | jq -r '.result.pheromone_count // 0' 2>/dev/null)
@@ -254,10 +253,9 @@ fi
 
 ### Step 7: Display Ceremony
 
-**If visual_mode is true, render swarm display BEFORE the ASCII art:**
+**If visual_mode is true, render swarm display BEFORE the ASCII art (consolidated):**
 ```bash
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Colony sealed" "Colony" '{"read":3,"grep":0,"edit":2,"bash":3}' 100 "fungus_garden" 100
-bash .aether/aether-utils.sh swarm-display-inline "$seal_id"
+bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Colony sealed" "Colony" '{"read":3,"grep":0,"edit":2,"bash":3}' 100 "fungus_garden" 100 && bash .aether/aether-utils.sh swarm-display-inline "$seal_id" with description "Rendering seal ceremony..."
 ```
 
 Display the ASCII art ceremony:
