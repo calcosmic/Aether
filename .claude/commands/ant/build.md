@@ -567,18 +567,54 @@ Return ONLY this JSON (no other text):
 
 **Task calls return results directly (no TaskOutput needed).**
 
-**As each worker result arrives, immediately display:**
+**As each worker result arrives, IMMEDIATELY display a single completion line — do not wait for other workers:**
+
+For successful workers:
 ```
-✅ 🔨🐜 {Builder-Name} completed Task {id}
-   📖{read_count} 🔍{grep_count} ✏️{edit_count} ⚡{bash_count}  {elapsed_time}
+🔨 {Ant-Name}: {task_description} ({tool_count} tools) ✓
 ```
+
+For failed workers:
+```
+🔨 {Ant-Name}: {task_description} ✗ ({failure_reason} after {tool_count} tools)
+```
+
+Where `tool_count` comes from the worker's returned JSON `tool_count` field, and `failure_reason` is extracted from the first item in the worker's `blockers` array or "unknown error" if empty.
 
 **PER WORKER:** Run using the Bash tool with description "Recording {name} completion...": `bash .aether/aether-utils.sh spawn-complete "{ant_name}" "completed" "{summary}" && bash .aether/aether-utils.sh swarm-display-update "{ant_name}" "builder" "completed" "{task_description}" "Queen" '{"read":5,"grep":3,"edit":2,"bash":1}' 100 "fungus_garden" 100 && bash .aether/aether-utils.sh context-update worker-complete "{ant_name}" "completed"`
 
+**Check for total wave failure:**
+
+After processing all worker results in this wave, check if EVERY worker returned `status: "failed"`. If ALL workers in the wave failed:
+
+Display a prominent halt alert:
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ⚠ WAVE FAILURE — BUILD HALTED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+All {N} workers in Wave {X} failed. Something is fundamentally wrong.
+
+Failed workers:
+  {for each failed worker in this wave:}
+  {caste_emoji} {Ant-Name}: {task_description} ✗ ({failure_reason} after {tool_count} tools)
+  {end for}
+
+Next steps:
+  /ant:flags      Review blockers
+  /ant:swarm      Auto-repair mode
+```
+
+Then STOP — do not proceed to subsequent waves, Watcher, or Chaos. Skip directly to Step 5.9 synthesis with `status: "failed"`.
+
+If at least one worker succeeded, continue normally to the next wave.
+
 **Parse each worker's JSON output to collect:** status, files_created, files_modified, blockers
 
-**Visual Mode: Render live display (if enabled):**
-If `visual_mode` is true, run using the Bash tool with description "Rendering build progress...": `bash .aether/aether-utils.sh swarm-display-text "$build_id"`
+**Visual Mode: Render live display (tmux only):**
+If `visual_mode` is true AND the build is running inside a tmux session (`$TMUX` environment variable is set), run using the Bash tool with description "Rendering build progress...": `bash .aether/aether-utils.sh swarm-display-text "$build_id"`
+
+If `$TMUX` is not set, skip this call entirely — do not attempt it. Chat users see the structured completion lines above instead.
 
 ### Step 5.3: Spawn Wave 2+ Workers (Sequential Waves)
 
@@ -646,6 +682,18 @@ Return ONLY this JSON:
 
 **Parse the Watcher's JSON response:** verification_passed, issues_found, quality_score, recommendation
 
+**Display Watcher completion line:**
+
+For successful verification:
+```
+👁️ {Watcher-Name}: Independent verification ({tool_count} tools) ✓
+```
+
+For failed verification:
+```
+👁️ {Watcher-Name}: Independent verification ✗ ({issues_found count} issues after {tool_count} tools)
+```
+
 **Store results for synthesis in Step 5.7**
 
 **Update swarm display when Watcher completes:**
@@ -703,6 +751,11 @@ Return ONLY this JSON:
 **Task call returns results directly (no TaskOutput needed).**
 
 **Parse the Chaos Ant's JSON response:** findings, overall_resilience, summary
+
+**Display Chaos completion line:**
+```
+🎲 {Chaos-Name}: Resilience testing ({tool_count} tools) ✓
+```
 
 **Store results for synthesis in Step 5.9**
 
@@ -970,100 +1023,42 @@ Also update safe-to-clear status:
 
 **This step runs ONLY after synthesis is complete. All values come from actual worker results.**
 
-**First, render the final swarm display showing all completed workers:**
-Run using the Bash tool with description "Rendering build summary...": `bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Phase {id} complete" "Colony" '{"read":10,"grep":5,"edit":5,"bash":2}' 100 "fungus_garden" 100 && bash .aether/aether-utils.sh swarm-display-text "$build_id"`
+**Update swarm display state (always) and render (tmux only):**
+Run using the Bash tool with description "Recording build completion...": `bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Phase {id} complete" "Colony" '{"read":10,"grep":5,"edit":5,"bash":2}' 100 "fungus_garden" 100`
 
-The swarm display will show:
-- 🐜 All workers with their caste emojis (🔨🐜 Builder, 👁️🐜 Watcher, 🎲🐜 Chaos)
-- 📖 Tool usage stats (Read, Grep, Edit, Bash counts)
-- 🏠 Chamber activity map (Fungus Garden, Nursery, Refuse Pile)
-- ✅ Progress bars at 100% for completed work
-- 🌈 Color-coded by caste
+If `$TMUX` is set, also run using the Bash tool with description "Rendering final swarm display...": `bash .aether/aether-utils.sh swarm-display-text "$build_id"`
 
-**Then display build summary based on synthesis results AND `verbose_mode` from Step 1:**
+**Display BUILD SUMMARY (always shown, replaces compact/verbose split):**
 
-**If verbose_mode = false (compact output, ~12 lines):**
-
-```
-🔨 PHASE {id} {status_icon}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📍 {name}
-📊 {status} | 📁 {files_created count} created, {files_modified count} modified
-🐜 {spawn_count} workers | 🧪 {tests_total} tests {if all_passing}passing{else}{passed}/{total}{end if}
-{if learning.patterns_observed.length > 0:}🧠 +{patterns_observed.length} patterns{end if}
-
-{if synthesis.status == "failed" OR verification.recommendation == "fix_required":}
-⚠️  BLOCKERS: {first 2 issues, comma-separated}
-{end if}
-
-    --verbose for spawn tree, TDD details, patterns
-```
-
-After displaying the compact output, call the Next Up helper by running using the Bash tool with description "Displaying next steps...":
-```bash
-state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json 2>/dev/null || echo "IDLE")
-current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json 2>/dev/null || echo "0")
-total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json 2>/dev/null || echo "0")
-bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
-```
-
-**Status icon logic:** completed+proceed = checkmark, blockers = warning, failed = X
-
-**If verbose_mode = true (full output):**
+Calculate `total_tools` by summing `tool_count` from all worker return JSONs (builders + watcher + chaos).
+Calculate `elapsed` using `build_started_at_epoch` (epoch integer captured at Step 5 start by Plan 01): `$(( $(date +%s) - build_started_at_epoch ))` formatted as Xm Ys.
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   P H A S E   {id}   C O M P L E T E
+   B U I L D   S U M M A R Y
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Phase {id}: {name}
 
-📍 Phase {id}: {name}
-📊 Status: {status}
-💾 Git Checkpoint: {commit_hash}
+Workers:  {pass_count} passed  {fail_count} failed  ({total} total)
+Tools:    {total_tools} calls across all workers
+Duration: {elapsed}
 
-📝 Summary:
-   {summary from synthesis}
+{if fail_count > 0:}
+Failed:
+  {for each failed worker:}
+  {caste_emoji} {Ant-Name}: {task_description} ✗ ({failure_reason} after {tool_count} tools)
+  {end for}
 
-🐜 Colony Work Tree:
-   👑Queen
-{for each spawn in spawn_tree:}
-   ├── {caste_emoji}{ant_name}: {task} [{status}]
-{end for}
-
-✅ Tasks Completed:
-{for each task in tasks_completed:}
-   🐜 {task_id}: done
-{end for}
-{for each task in tasks_failed:}
-   ❌ {task_id}: failed
-{end for}
-
-📁 Files: {files_created count} created, {files_modified count} modified
-
-{if tdd.tests_added > 0:}
-🧪 TDD: {tdd.cycles_completed} cycles | {tdd.tests_added} tests | {tdd.coverage_percent}% coverage
+Retry: /ant:swarm to auto-repair failed tasks, or /ant:flags to review blockers
 {end if}
-
-{if learning.patterns_observed not empty:}
-🧠 Patterns Learned:
-{for each pattern in learning.patterns_observed:}
-   🐜 {pattern.trigger} → {pattern.action}
-{end for}
-{end if}
-
-{if debugging.issues_encountered > 0:}
-🔧 Debugging: {debugging.issues_resolved}/{debugging.issues_encountered} resolved
-{end if}
-
-🤖 Model Routing:
-{for each spawn in spawn_tree where model_context exists:}
-   {caste_emoji}{ant_name}: {model_context.assigned} {if model_context.assigned matches caste expectation:}✓{else}⚠️{end if}
-{end for}
-   Proxy: {if proxy_healthy:}✓ Healthy @ http://localhost:4000{else}✗ Not running (using default model){end if}
-
-💾 State persisted — safe to /clear, then run /ant:continue
 ```
 
-After displaying the verbose output, call the Next Up helper by running using the Bash tool with description "Displaying next steps...":
+**If verbose_mode is true**, additionally show the spawn tree and TDD details after the BUILD SUMMARY block (keep the existing verbose-only sections: Colony Work Tree, Tasks Completed, TDD, Patterns Learned, Debugging, Model Routing). Prepend with:
+```
+━━ Details (--verbose) ━━
+```
+
+After displaying the BUILD SUMMARY (and optional verbose details), call the Next Up helper by running using the Bash tool with description "Displaying next steps...":
 ```bash
 state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json 2>/dev/null || echo "IDLE")
 current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json 2>/dev/null || echo "0")

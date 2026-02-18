@@ -5,19 +5,19 @@
 
 ## Current Position
 
-Phase: Phase 11 — Visual Identity
-Plan: 06 — COMPLETE
-Status: Phase 11 fully verified and closed (all 6 plans done — 5 implementation + 1 gap closure)
-Last activity: 2026-02-18 — Plan 11-06 complete (SC2 and SC4 gaps closed: build.md uses print-next-up, all ━━━━ banners standardized to 50 chars across 4 files)
+Phase: Phase 12 — Build Progress
+Plan: 01 — COMPLETE
+Status: Phase 12 Plan 01 complete (spawn announcements, wave separators, build banner, Task descriptions, tool_count added to both build.md files)
+Last activity: 2026-02-18 — Plan 12-01 complete (per-wave spawn narration layer added to build.md: announcements, wave separators, caste-labeled Task descriptions, tool_count in worker schemas)
 
-Progress: ████████████████████ 100% (6 of 6 plans complete)
+Progress: ████░░░░░░░░░░░░░░░░ ~20% (1 of ~4 plans complete)
 
 ## Current Status
 
-- **State:** Phase complete
+- **State:** Phase in progress
 - **Milestone:** v1.1 Colony Polish & Identity
 - **Mode:** YOLO (auto-approve)
-- **Next action:** `/gsd:execute-phase 12` (Phase 12 — next milestone phase)
+- **Next action:** `/gsd:execute-phase 12` Plan 02 (completion lines using tool_count)
 
 ## Project Reference
 
@@ -59,6 +59,10 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 - [Phase 11-visual-identity]: resume.md used == (equals-sign) banners (not ═══ box-drawing chars) — both non-standard, both replaced with ━━━━
 - [Phase 11-visual-identity]: build.md Next Steps block was removed entirely and replaced with print-next-up bash call after output display — state-based routing is superior to hardcoded conditional suggestions
 - [Phase 11-visual-identity]: organize.md ANSI printf banner replaced with plain ━━━━ printf — consistent with no-ANSI-color rule
+- [Phase 12-build-progress]: Build banner replaces 'COLONY BUILD INITIATED' header with Phase info + wave/task counts — more informative, less decorative
+- [Phase 12-build-progress]: build_started_at_epoch captured at Step 5 start (not Step 2) to measure actual worker execution time, not setup overhead
+- [Phase 12-build-progress]: Wave separator uses ━━ Wave X of N ━━ — Wave 1 gets no separator (covered by banner), verification wave gets ━━ Verification ━━, chaos gets single-line announcement
+- [Phase 12-build-progress]: tool_count added to Builder/Watcher/Chaos return schemas as prerequisite for Plan 02 completion lines
 
 ### Key Findings from Research
 - Typical /ant:build generates 22-42 visible bash tool call headers — root cause of "bash stuff" feeling
@@ -81,3 +85,4 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 2026-02-18 — Phase 11 Plan 04 complete (━━━━ banners and Next Up blocks standardized across 10 medium-complexity/special worker commands: phase/oracle/watch/swarm/colonize/chaos/archaeology/dream/flags/flag)
 2026-02-18 — Phase 11 Plan 05 complete (━━━━ banners and Next Up blocks applied to final 18 commands: focus/redirect/feedback/help/history/migrate-state/verify-castes/maturity/organize/interpret/resume/plan/update/council/pause-colony/resume-colony/lay-eggs/tunnels — all 34 commands now carry unified visual language)
 2026-02-18 — Phase 11 Plan 06 complete (gap closure: build.md hardcoded '🐜 Next Steps:' replaced with print-next-up helper, compact banner 32→50 chars, organize.md === and --- dividers replaced with ━━━━, oracle.md 32-char banners fixed, status.md 53-char banner fixed — SC2 and SC4 now fully satisfied)
+2026-02-18 — Phase 12 Plan 01 complete (spawn announcements before every wave type, wave separators ━━ Wave X of N ━━, build banner with wave/task counts, Task description field on all 4 spawn sites, tool_count in Builder/Watcher/Chaos schemas, build_started_at_epoch capture — mirrored to both Claude Code and OpenCode build.md)
