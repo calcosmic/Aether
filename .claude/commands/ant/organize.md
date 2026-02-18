@@ -116,14 +116,14 @@ Check for configuration that may not be connected:
 Produce your report in this exact structure:
 
 CODEBASE HYGIENE REPORT
-========================
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Project: {goal}
 Scanned: {timestamp}
 Confidence threshold: HIGH findings are actionable, MEDIUM/LOW are informational
 
 HIGH CONFIDENCE FINDINGS
--------------------------
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {For each HIGH confidence finding:}
   [{category}] {description}
     Evidence: {what data/observation supports this}
@@ -132,7 +132,7 @@ HIGH CONFIDENCE FINDINGS
 {If no HIGH findings: "No high-confidence hygiene issues detected."}
 
 MEDIUM CONFIDENCE OBSERVATIONS
--------------------------------
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {For each MEDIUM confidence finding:}
   [{category}] {description}
     Evidence: {what data/observation supports this}
@@ -141,14 +141,14 @@ MEDIUM CONFIDENCE OBSERVATIONS
 {If no MEDIUM findings: "No medium-confidence observations."}
 
 LOW CONFIDENCE NOTES
----------------------
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {For each LOW confidence finding:}
   [{category}] {description}
 
 {If no LOW findings: "No low-confidence notes."}
 
 SUMMARY
---------
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   High: {count} actionable findings
   Medium: {count} observations
   Low: {count} notes
@@ -175,9 +175,9 @@ After the architect-ant returns, display header:
 
 Then display using Bash tool with description "Displaying hygiene report header...":
 ```bash
-bash -c 'printf "\e[37m+=====================================================+\e[0m\n"'
-bash -c 'printf "\e[37m|  CODEBASE HYGIENE REPORT                            |\e[0m\n"'
-bash -c 'printf "\e[37m+=====================================================+\e[0m\n\n"'
+bash -c 'printf "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"'
+bash -c 'printf "   C O D E B A S E   H Y G I E N E   R E P O R T\n"'
+bash -c 'printf "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"'
 ```
 
 Then display the architect-ant's full report verbatim.
