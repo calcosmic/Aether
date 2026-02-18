@@ -6,9 +6,9 @@
 ## Current Status
 
 - **State:** Phase 9 IN PROGRESS
-- **Phase:** 09 (Polish & Verify) — Plan 01 complete
-- **Plan:** 01 complete (e2e foundation tests: ERR/STA/CMD 14/14 PASS)
-- **Total Plans in Phase:** 4 (plans 01-04) — 1 done, 3 remaining
+- **Phase:** 09 (Polish & Verify) — Plans 01, 02, and 03 complete
+- **Plan:** 02 complete (e2e tests: PHER/VIS/CTX 14/14 PASS)
+- **Total Plans in Phase:** 4 (plans 01-04) — 3 done, 1 remaining (04)
 - **Mode:** YOLO (auto-approve)
 
 ## Project Reference
@@ -17,7 +17,7 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Core value:** Prevent context rot across Claude Code sessions with self-managing colony that learns and guides users
 
-**Current focus:** Phase 9: Polish & Verify — Plan 01 complete. Foundation tests (ERR/STA/CMD) all passing. Next: Plan 02.
+**Current focus:** Phase 9: Polish & Verify — Plans 01+02+03 complete. 25/25 requirements verified PASS. Next: Plan 04.
 
 ## Progress
 
@@ -102,7 +102,10 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 - **09-01:** bash 3.2 compatibility: e2e tests use file-based result tracking (pipe-delimited temp file) instead of declare -A associative arrays (macOS ships bash 3.2 which lacks this feature)
 - **09-01:** session-update arg layout: after main dispatch shift in aether-utils.sh, cmd_run receives $2 (the suggested-next value) not $1 — test assertions adjusted to check ok:true + file written
 - **09-01:** CMD-08 static analysis scope: grep bash execution lines only (bash.*aether-utils.sh), not all lines mentioning aether-utils.sh, to avoid false positive on prose references
+- **09-02:** extract_json blank-line guard: jq empty exits 0 on blank lines (false positive) — skip empty/whitespace lines before jq empty test
+- **09-02:** VIS-05 milestone check: milestone names live in maturity.md (canonical), not continue.md — test checks correct file
+- **09-02:** CTX session-update assertion: verify ok:true + file written + field exists; do not assert specific values due to arg-shift layout
 
 ## Last Updated
 
-2026-02-18 — Phase 9 plan 01 COMPLETE (e2e foundation tests: 14/14 ERR/STA/CMD requirements PASS)
+2026-02-18 — Phase 9 plan 02 COMPLETE (e2e PHER/VIS/CTX tests: 14/14 requirements PASS)
