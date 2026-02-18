@@ -33,38 +33,42 @@ Documented issues from Oracle research findings. These are known limitations and
 
 ## Critical Issues (Fix Immediately)
 
-### BUG-005: Missing lock release in flag-auto-resolve
+### BUG-005: Missing lock release in flag-auto-resolve — FIXED (Phase 16)
 **Location:** `.aether/aether-utils.sh:1022`
 **Severity:** HIGH
+**Status:** FIXED — Fixed in Phase 16: unified trap pattern (`trap 'release_lock 2>/dev/null || true' EXIT`) applied across all flag commands ensures lock release on all exit paths including jq failure.
 **Symptom:** If jq command fails during flag resolution, lock is never released
 **Impact:** Deadlock on flags.json if jq fails (malformed JSON, disk full, etc.)
-**Workaround:** Restart the colony session if commands hang on flag operations
-**Fix:** Add error handling with lock release before json_err
+**Workaround:** ~~Restart the colony session if commands hang on flag operations~~ — no longer needed
+**Regression test:** `tests/bash/test-lock-lifecycle.sh` — test_flag_auto_resolve_jq_failure_releases_lock
 
-### BUG-011: Missing error handling in flag-auto-resolve jq
+### BUG-011: Missing error handling in flag-auto-resolve jq — FIXED (Phase 16)
 **Location:** `.aether/aether-utils.sh:1022`
 **Severity:** HIGH
+**Status:** FIXED — Fixed in Phase 16: unified trap pattern across all flag commands. See BUG-005.
 **Symptom:** jq failure during auto-resolve not handled
 **Impact:** Combined with BUG-005, causes deadlock
-**Fix:** Add `|| { release_lock; json_err ... }` pattern
+**Fix:** ~~Add `|| { release_lock; json_err ... }` pattern~~ — implemented via EXIT trap
 
 ---
 
 ## Medium Priority Issues
 
-### BUG-002: Missing release_lock in flag-add error path
+### BUG-002: Missing release_lock in flag-add error path — FIXED (Phase 16)
 **Location:** `.aether/aether-utils.sh:814`
 **Severity:** MEDIUM
+**Status:** FIXED — Fixed in Phase 16: trap-based EXIT cleanup (`trap 'release_lock 2>/dev/null || true' EXIT`) ensures lock release on all exit paths including jq failure. Trap is cleared on the success path.
 **Symptom:** If acquire_lock succeeds but jq fails, lock is never released
 **Impact:** Potential deadlock on file operations
-**Fix:** Use trap-based cleanup or ensure release_lock in all exit paths
+**Regression test:** `tests/bash/test-lock-lifecycle.sh` — test_flag_add_jq_failure_releases_lock
 
-### BUG-003: Race condition in backup creation
+### BUG-003: Race condition in backup creation — FIXED (Phase 16)
 **Location:** `.aether/utils/atomic-write.sh:75`
 **Severity:** MEDIUM
+**Status:** FIXED — Backup is now created BEFORE JSON validation in both `atomic_write` and `atomic_write_from_file`. Verified in Phase 16 with regression tests confirming backup contains pre-write content.
 **Symptom:** Backup created AFTER temp file validation but BEFORE atomic move
 **Impact:** If process crashes between validation and backup, inconsistent state
-**Fix:** Create backup BEFORE validation, or use transactional approach
+**Regression test:** `tests/bash/test-lock-lifecycle.sh` — test_atomic_write_backup_before_validate, test_atomic_write_from_file_backup_before_validate
 
 ### BUG-004: Missing error code in flag-acknowledge
 **Location:** `.aether/aether-utils.sh:930`
@@ -195,9 +199,11 @@ Documented issues from Oracle research findings. These are known limitations and
 **Description:** Error handling paths not tested
 **Impact:** Bugs in error handling go undetected
 
-### GAP-009: context-update has no file locking
+### GAP-009: context-update has no file locking — FIXED (Phase 16)
 **Description:** Race condition possible during concurrent context updates
+**Status:** FIXED — Fixed in Phase 16: context-update wraps all 11 action handlers in a single acquire_lock/release_lock pair. Lock is held for the duration of the update and released on both success and error paths via EXIT trap. force-unlock subcommand added for emergency recovery.
 **Impact:** Potential data corruption
+**Regression test:** `tests/bash/test-lock-lifecycle.sh` — test_context_update_acquires_lock, test_force_unlock_clears_locks
 
 ### GAP-010: Missing error code standards documentation
 **Description:** Duplicate of GAP-007
@@ -208,7 +214,7 @@ Documented issues from Oracle research findings. These are known limitations and
 
 | Issue | Workaround |
 |-------|------------|
-| Lock-related deadlocks (BUG-005, BUG-002) | Restart colony session |
+| ~~Lock-related deadlocks (BUG-005, BUG-002)~~ | ~~Restart colony session~~ — FIXED in Phase 16 |
 | Template path issue (ISSUE-004) | Use git clone instead of npm |
 | Missing command docs (GAP-004) | Read source code directly |
 
