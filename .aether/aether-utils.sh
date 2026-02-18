@@ -110,6 +110,7 @@ get_caste_emoji() {
     *Probe*|*probe*|*Test*|*Excavat*|*Uncover*|*Edge*|*Case*|*Mutant*) echo "🧪🐜" ;;
     *Tracker*|*tracker*|*Debug*|*Trace*|*Follow*|*Bug*|*Hunt*|*Root*) echo "🐛🐜" ;;
     *Weaver*|*weaver*|*Refactor*|*Restruct*|*Transform*|*Clean*|*Pattern*|*Weave*) echo "🔄🐜" ;;
+    *Dreamer*|*dreamer*|*Dream*|*Muse*|*Imagine*|*Wonder*|*Ponder*|*Reverie*) echo "💭🐜" ;;
     *) echo "🐜" ;;
   esac
 }
@@ -1875,6 +1876,33 @@ Files: ${files_changed} files changed"
     fi
     ;;
 
+  version-check-cached)
+    # Cached version of version-check — skips if checked within TTL (3600s = 1 hour)
+    # Usage: version-check-cached
+    cache_file="$AETHER_ROOT/.aether/data/.version-check-cache"
+    now=$(date +%s)
+
+    if [[ -f "$cache_file" ]]; then
+      cached_at=$(cat "$cache_file" 2>/dev/null || echo "0")
+      age=$((now - cached_at))
+      if [[ $age -lt 3600 ]]; then
+        # Within TTL — skip silently
+        json_ok '""'
+        exit 0
+      fi
+    fi
+
+    # Cache miss or stale — run actual check
+    mkdir -p "$(dirname "$cache_file")" 2>/dev/null || true
+    result=$("$0" version-check 2>/dev/null) || true
+    echo "$now" > "$cache_file" 2>/dev/null || true
+    if [[ -n "$result" ]]; then
+      echo "$result"
+    else
+      json_ok '""'
+    fi
+    ;;
+
   registry-add)
     # Add or update a repo entry in ~/.aether/registry.json
     # Usage: registry-add <repo_path> <version>
@@ -2458,33 +2486,6 @@ NODESCRIPT
         oracle) echo "$MAGENTA" ;;
         route_setter) echo "$MAGENTA" ;;
         *) echo "$RESET" ;;
-      esac
-    }
-
-    # Caste emojis with ant
-    get_caste_emoji() {
-      case "$1" in
-        builder) echo "🔨🐜" ;;
-        watcher) echo "👁️🐜" ;;
-        scout) echo "🔍🐜" ;;
-        chaos) echo "🎲🐜" ;;
-        prime) echo "👑🐜" ;;
-        oracle) echo "🔮🐜" ;;
-        route_setter) echo "🧭🐜" ;;
-        archaeologist) echo "🏺🐜" ;;
-        chronicler) echo "📝🐜" ;;
-        gatekeeper) echo "📦🐜" ;;
-        guardian) echo "🛡️🐜" ;;
-        includer) echo "♿🐜" ;;
-        keeper) echo "📚🐜" ;;
-        measurer) echo "⚡🐜" ;;
-        probe) echo "🧪🐜" ;;
-        sage) echo "📜🐜" ;;
-        tracker) echo "🐛🐜" ;;
-        weaver) echo "🔄🐜" ;;
-        colonizer) echo "🌱🐜" ;;
-        dreamer) echo "💭🐜" ;;
-        *) echo "🐜" ;;
       esac
     }
 
