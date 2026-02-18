@@ -14,18 +14,11 @@ Parse `$ARGUMENTS`:
 ### Step 0: Initialize Visual Mode (if enabled)
 
 If `visual_mode` is true:
-```bash
-# Generate session ID
-continue_id="continue-$(date +%s)"
-
-# Initialize swarm display
-bash .aether/aether-utils.sh swarm-display-init "$continue_id"
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "Phase continuation" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0
-```
+Run using the Bash tool with description "Initializing continue display...": `continue_id="continue-$(date +%s)" && bash .aether/aether-utils.sh swarm-display-init "$continue_id" && bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "Phase continuation" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0`
 
 ### Step 0.5: Version Check (Non-blocking)
 
-Run using the Bash tool: `bash .aether/aether-utils.sh version-check 2>/dev/null || true`
+Run using the Bash tool with description "Checking colony version...": `bash .aether/aether-utils.sh version-check-cached 2>/dev/null || true`
 
 If the command succeeds and the JSON result contains a non-empty string, display it as a one-line notice. Proceed regardless of outcome.
 
@@ -48,7 +41,7 @@ Extract: `goal`, `state`, `current_phase`, `plan.phases`, `errors`, `memory`, `e
 
 ### Step 1.5: Load State and Show Resumption Context
 
-Run using Bash tool: `bash .aether/aether-utils.sh load-state`
+Run using the Bash tool with description "Loading colony state...": `bash .aether/aether-utils.sh load-state`
 
 If successful and goal is not null:
 1. Extract current_phase from state
@@ -63,7 +56,7 @@ If .aether/HANDOFF.md exists (detected in load-state output):
 - Read .aether/HANDOFF.md for additional context
 - Remove .aether/HANDOFF.md after display (cleanup)
 
-Run: `bash .aether/aether-utils.sh unload-state` to release lock.
+Run using the Bash tool with description "Releasing colony lock...": `bash .aether/aether-utils.sh unload-state` to release lock.
 
 **Error handling:**
 - If E_FILE_NOT_FOUND: "No colony initialized. Run /ant:init first." and stop
@@ -124,49 +117,32 @@ Phase {id} Verification Loop
 ```
 
 **Phase 1: Build Check** (if command exists):
-```bash
-{build_command} 2>&1 | tail -30
-```
+Run using the Bash tool with description "Running build check...": `{build_command} 2>&1 | tail -30`
 Record: exit code, any errors. **STOP if fails.**
 
 **Phase 2: Type Check** (if command exists):
-```bash
-{type_command} 2>&1 | head -30
-```
+Run using the Bash tool with description "Running type check...": `{type_command} 2>&1 | head -30`
 Record: error count. Report all type errors.
 
 **Phase 3: Lint Check** (if command exists):
-```bash
-{lint_command} 2>&1 | head -30
-```
+Run using the Bash tool with description "Running lint check...": `{lint_command} 2>&1 | head -30`
 Record: warning count, error count.
 
 **Phase 4: Test Check** (if command exists):
-```bash
-{test_command} 2>&1 | tail -50
-```
+Run using the Bash tool with description "Running test suite...": `{test_command} 2>&1 | tail -50`
 Record: pass count, fail count, exit code. **STOP if fails.**
 
 **Coverage Check** (if coverage command exists):
-```bash
-{coverage_command}  # e.g., npm run test:coverage
-```
+Run using the Bash tool with description "Checking test coverage...": `{coverage_command}  # e.g., npm run test:coverage`
 Record: coverage percentage (target: 80%+ for new code)
 
 **Phase 5: Security Scan**:
-```bash
-# Check for exposed secrets
-grep -rn "sk-\|api_key\|password\s*=" --include="*.ts" --include="*.js" --include="*.py" src/ 2>/dev/null | head -10
-
-# Check for debug artifacts
-grep -rn "console\.log\|debugger" --include="*.ts" --include="*.tsx" --include="*.js" src/ 2>/dev/null | head -10
-```
+Run using the Bash tool with description "Scanning for exposed secrets...": `grep -rn "sk-\|api_key\|password\s*=" --include="*.ts" --include="*.js" --include="*.py" src/ 2>/dev/null | head -10`
+Run using the Bash tool with description "Scanning for debug artifacts...": `grep -rn "console\.log\|debugger" --include="*.ts" --include="*.tsx" --include="*.js" src/ 2>/dev/null | head -10`
 Record: potential secrets (critical), debug artifacts (warning).
 
 **Phase 6: Diff Review**:
-```bash
-git diff --stat
-```
+Run using the Bash tool with description "Reviewing file changes...": `git diff --stat`
 Review changed files for unintended modifications.
 
 **Success Criteria Check:**
@@ -242,14 +218,7 @@ Continue to Step 1.6.
 
 Read `.aether/data/spawn-tree.txt` to count spawns for this phase.
 
-```bash
-grep -c "spawned" .aether/data/spawn-tree.txt 2>/dev/null || echo "0"
-```
-
-Also check for Watcher spawns specifically:
-```bash
-grep -c "watcher" .aether/data/spawn-tree.txt 2>/dev/null || echo "0"
-```
+Run using the Bash tool with description "Verifying spawn requirements...": `spawn_count=$(grep -c "spawned" .aether/data/spawn-tree.txt 2>/dev/null || echo "0") && watcher_count=$(grep -c "watcher" .aether/data/spawn-tree.txt 2>/dev/null || echo "0") && echo "{\"spawn_count\": $spawn_count, \"watcher_count\": $watcher_count}"`
 
 **HARD REJECTION - If spawn_count == 0 and phase had 3+ tasks:**
 
@@ -319,9 +288,7 @@ Continue to Step 1.7.
 
 Scan all modified/created files for known anti-patterns. This catches recurring bugs before they reach production.
 
-```bash
-bash .aether/aether-utils.sh check-antipattern "{file_path}"
-```
+For each file, run using the Bash tool with description "Scanning for anti-patterns...": `bash .aether/aether-utils.sh check-antipattern "{file_path}"`
 
 Run for each file in `files_created` and `files_modified` from Prime Worker output.
 
@@ -376,10 +343,7 @@ If no CRITICAL issues, continue to Step 1.8.
 
 If Prime Worker reported TDD metrics (tests_added, tests_total, coverage_percent), verify test files exist:
 
-```bash
-# Check for test files based on project type
-find . -name "*.test.*" -o -name "*_test.*" -o -name "*Tests.swift" -o -name "test_*.py" 2>/dev/null | head -10
-```
+Run using the Bash tool with description "Locating test files...": `find . -name "*.test.*" -o -name "*_test.*" -o -name "*Tests.swift" -o -name "test_*.py" 2>/dev/null | head -10`
 
 **If Prime Worker claimed tests_added > 0 but no test files found:**
 
@@ -498,14 +462,10 @@ Continue to Step 1.10.
 **The Iron Law:** No phase advancement with unresolved blockers.
 
 First, auto-resolve any flags eligible for resolution now that verification has passed:
-```bash
-bash .aether/aether-utils.sh flag-auto-resolve "build_pass"
-```
+Run using the Bash tool with description "Auto-resolving flags...": `bash .aether/aether-utils.sh flag-auto-resolve "build_pass"`
 
 Then check for remaining blocking flags:
-```bash
-bash .aether/aether-utils.sh flag-check-blockers {current_phase}
-```
+Run using the Bash tool with description "Checking for blockers...": `bash .aether/aether-utils.sh flag-check-blockers {current_phase}`
 
 Parse result for `blockers`, `issues`, and `notes` counts.
 
@@ -666,9 +626,7 @@ Update COLONY_STATE.json:
 Write COLONY_STATE.json.
 
 Validate the state file:
-```bash
-bash .aether/aether-utils.sh validate-state colony
-```
+Run using the Bash tool with description "Validating colony state...": `bash .aether/aether-utils.sh validate-state colony`
 
 ### Step 2.1: Auto-Emit Phase Pheromones (SILENT)
 
@@ -723,19 +681,7 @@ If `errors.flagged_patterns` doesn't exist or is empty, skip silently.
 
 After auto-emission, expire all signals with `expires_at == "phase_end"`. The newly-emitted FEEDBACK from 2.1a will survive this call (it was just written and is active) — it will expire when the NEXT phase advances.
 
-**IMPORTANT: This expiration ONLY happens here in continue.md, NEVER in build.md.** Signals emitted before a build must survive through the build.
-
-```bash
-bash .aether/aether-utils.sh pheromone-expire --phase-end-only 2>/dev/null || true
-```
-
-#### 2.1d: Initialize eternal memory (idempotent)
-
-Ensure the eternal memory structure exists:
-
-```bash
-bash .aether/aether-utils.sh eternal-init 2>/dev/null || true
-```
+Run using the Bash tool with description "Maintaining pheromone memory...": `bash .aether/aether-utils.sh pheromone-expire --phase-end-only 2>/dev/null && bash .aether/aether-utils.sh eternal-init 2>/dev/null`
 
 This is idempotent — runs every time continue fires but only creates the directory/file once.
 
@@ -1055,10 +1001,7 @@ Runs ONLY when all phases complete.
 ### Step 3: Display Result
 
 **If visual_mode is true, render final swarm display:**
-```bash
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Phase advanced" "Colony" '{"read":5,"grep":2,"edit":3,"bash":2}' 100 "fungus_garden" 100
-bash .aether/aether-utils.sh swarm-display-text "$continue_id"
-```
+Run using the Bash tool with description "Rendering advancement summary...": `bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Phase advanced" "Colony" '{"read":5,"grep":2,"edit":3,"bash":2}' 100 "fungus_garden" 100 && bash .aether/aether-utils.sh swarm-display-text "$continue_id"`
 
 Output:
 
@@ -1108,3 +1051,5 @@ Update the session tracking file to enable `/ant:resume` after context clear:
 ```bash
 bash .aether/aether-utils.sh session-update "/ant:continue" "/ant:build {next_id}" "Phase {prev_id} completed, advanced to Phase {next_id}"
 ```
+
+Run using the Bash tool with description "Saving session state...": `bash .aether/aether-utils.sh session-update "/ant:continue" "/ant:build {next_id}" "Phase {prev_id} completed, advanced to Phase {next_id}"`
