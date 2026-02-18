@@ -5,10 +5,10 @@
 
 ## Current Status
 
-- **State:** Phase 8 IN PROGRESS
-- **Phase:** 08 (XML Integration)
-- **Plan:** 03 complete (colony-archive-xml + seal wiring)
-- **Total Plans in Phase:** 4 (plans 01-04)
+- **State:** Phase 8 COMPLETE
+- **Phase:** 08 (XML Integration) — ALL PLANS COMPLETE
+- **Plan:** 04 complete (entomb hard-stop + tunnels import flow)
+- **Total Plans in Phase:** 4 (plans 01-04) — ALL DONE
 - **Mode:** YOLO (auto-approve)
 
 ## Project Reference
@@ -17,7 +17,7 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Core value:** Prevent context rot across Claude Code sessions with self-managing colony that learns and guides users
 
-**Current focus:** Phase 8: XML Integration — plan 03 complete, plan 04 (entomb) next
+**Current focus:** Phase 8: XML Integration COMPLETE — all 4 plans done. Next: Phase 9 (Polish & Verify)
 
 ## Progress
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 - [x] Phase 5: Pheromone System — COMPLETE (3/3 plans)
 - [x] Phase 6: Colony Lifecycle — COMPLETE (3/3 plans)
 - [x] Phase 7: Advanced Workers — COMPLETE (3/3 plans)
-- [ ] Phase 8: XML Integration
+- [x] Phase 8: XML Integration — COMPLETE (4/4 plans)
 - [ ] Phase 9: Polish & Verify
 
 ## Decisions
@@ -87,6 +87,14 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 - **08-03:** Well-formedness validation only on combined archive; no XSD validation of wrapper element (child sections validated by their exchange scripts)
 - **08-03:** Step numbering differs between Claude Code (6.5) and OpenCode (5.75) due to different seal ceremony structures — semantics identical
 
+## Decisions
+
+- **08-04:** entomb tool check uses command -v xmllint (not xml-detect-tools) — consistent with seal.md pattern
+- **08-04:** Hard-stop: XML export failure removes chamber directory and aborts; colony state reset is never reached on failure
+- **08-04:** pheromone-import-xml signal extraction reads result.json field (serialized JSON string) then pipes through .signals — not the integer result.signals
+- **08-04:** Merge order fixed: imported signals first, existing last — map(last) now correctly keeps current colony on ID collision
+- **08-04:** tunnels passes extracted pheromone-only XML to pheromone-import-xml (not combined colony-archive.xml) — prevents over-counting from wisdom/registry sections
+
 ## Last Updated
 
-2026-02-18 — Phase 8 plan 03 COMPLETE (colony-archive-xml combined export + seal wiring)
+2026-02-18 — Phase 8 plan 04 COMPLETE (entomb hard-stop export + tunnels import flow) — Phase 8 ALL DONE
