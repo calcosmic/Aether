@@ -27,7 +27,7 @@ bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "
 
 ### Step 0.5: Version Check (Non-blocking)
 
-Run using the Bash tool: `bash .aether/aether-utils.sh version-check 2>/dev/null || true`
+Run using the Bash tool with description "Checking colony version...": `bash .aether/aether-utils.sh version-check-cached 2>/dev/null || true`
 
 If the command succeeds and the JSON result contains a non-empty string, display it as a one-line notice. Proceed regardless of outcome.
 
@@ -122,7 +122,6 @@ If the `goal` field is not null:
 Colony already initialized with goal: "{existing_goal}"
 
 State freshness: {freshness_status}
-Session: {session_id}
 Initialized: {initialized_at}
 
 To reinitialize with a new goal, the current state will be reset.
@@ -293,7 +292,6 @@ Then output the result:
    "{goal}"
 
 🏠 Colony Status: READY
-📋 Session: <session_id>
 
 {If instincts or learnings were inherited from Step 2.6:}
 🧠 Inherited from prior colony:

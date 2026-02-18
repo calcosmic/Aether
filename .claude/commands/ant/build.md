@@ -11,7 +11,7 @@ The phase to build is: `$ARGUMENTS`
 
 ### Step 0: Version Check (Non-blocking)
 
-Run using the Bash tool: `bash .aether/aether-utils.sh version-check 2>/dev/null || true`
+Run using the Bash tool with description "Checking colony version...": `bash .aether/aether-utils.sh version-check-cached 2>/dev/null || true`
 
 If the command succeeds and the JSON result contains a non-empty string, display it as a one-line notice. Proceed regardless of outcome.
 
@@ -176,8 +176,7 @@ Output header:
 ═══════════════════════════════════════════════════ 🔨🐜🏗️🐜🔨
 
 📍 Phase {id}: {name}
-💾 Git Checkpoint: {checkpoint_type} → {checkpoint_ref}
-🔄 Rollback: `git stash pop` (stash) or `git reset --hard {ref}` (commit)
+💾 Git checkpoint saved
 ```
 
 ### Step 4: Load Constraints
@@ -403,7 +402,6 @@ bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "
 🔨  COLONY BUILD INITIATED
 ═══════════════════════════════════════════════════
 Phase {id}: {name}
-Build ID: {build_id}
 
 Launching swarm display...
 ```

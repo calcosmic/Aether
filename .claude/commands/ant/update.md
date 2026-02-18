@@ -137,6 +137,14 @@ Then use the Write tool to write `.aether/version.json`:
 }
 ```
 
+### Step 5.5: Clear Version Cache
+
+Clear the version check cache so the next command sees the fresh version:
+
+```bash
+rm -f .aether/data/.version-check-cache
+```
+
 ### Step 6: Display Summary
 
 Output:

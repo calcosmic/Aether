@@ -134,7 +134,6 @@ bash .aether/aether-utils.sh swarm-display-text "$layeggs_id"
 👑 New colony goal:
    "{goal}"
 
-📋 Session: {session_id}
 🏆 Milestone: First Mound (v0.1.0)
 
 {If inherited knowledge:}
