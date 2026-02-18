@@ -1208,6 +1208,8 @@ async function updateRepo(repoPath, sourceVersion, opts) {
       ...(result.sync_result?.rules?.removed || []).map(f => `.claude/rules/${f}`),
     ];
 
+    const cleanupResult = result.cleanup_result || { cleaned: [], failed: [] };
+
     return {
       status: result.status,
       from: currentVer,
@@ -1220,6 +1222,7 @@ async function updateRepo(repoPath, sourceVersion, opts) {
       removedFiles: allRemovedFiles,
       stashCreated: !!transaction.checkpoint?.stashRef,
       checkpoint_id: result.checkpoint_id,
+      cleanup: cleanupResult,
     };
   } catch (error) {
     // Handle UpdateError with recovery commands
@@ -1398,6 +1401,18 @@ program
               for (const f of result.removedFiles) log(`    - ${f}`);
               totalRemoved += result.removed;
             }
+            // Distribution chain cleanup reporting
+            if (result.cleanup && result.cleanup.cleaned.length > 0) {
+              for (const label of result.cleanup.cleaned) {
+                log(`    ${c.success('\u2713')} Removed ${label}`);
+              }
+            }
+            for (const failure of (result.cleanup?.failed || [])) {
+              log(`    ${c.error('\u2717')} Failed to remove ${failure.label}: ${failure.error}`);
+            }
+            if (result.cleanup && result.cleanup.cleaned.length === 0 && result.cleanup.failed.length === 0) {
+              log(`    Distribution chain: ${c.success('\u2713')} clean`);
+            }
             if (result.stashCreated) {
               log(`  Stash created. Recover with: cd ${repo.path} && git stash pop`);
             }
@@ -1490,6 +1505,18 @@ program
         if (result.removed > 0) {
           console.log(`  Removed ${result.removed} stale files:`);
           for (const f of result.removedFiles) console.log(`    - ${f}`);
+        }
+        // Distribution chain cleanup reporting
+        if (result.cleanup && result.cleanup.cleaned.length > 0) {
+          for (const label of result.cleanup.cleaned) {
+            console.log(`  ${c.success('\u2713')} Removed ${label}`);
+          }
+        }
+        for (const failure of (result.cleanup?.failed || [])) {
+          console.log(`  ${c.error('\u2717')} Failed to remove ${failure.label}: ${failure.error}`);
+        }
+        if (result.cleanup && result.cleanup.cleaned.length === 0 && result.cleanup.failed.length === 0) {
+          console.log(`  Distribution chain: ${c.success('\u2713')} clean`);
         }
         if (result.stashCreated) {
           console.log('  Git stash created. Recover with: git stash pop');

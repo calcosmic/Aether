@@ -887,6 +887,60 @@ class UpdateTransaction {
   }
 
   /**
+   * Remove known stale directories and files left behind by pre-3.0.0 versions.
+   * These paths were incorrectly distributed in earlier releases and must be
+   * explicitly removed — EXCLUDE_DIRS prevents NEW pollution but does not clean
+   * items that already exist on disk.
+   *
+   * Idempotent: safe to call when items do not exist.
+   *
+   * @param {string} repoPath - Absolute path to the target repository root
+   * @returns {{ cleaned: string[], failed: Array<{label: string, error: string}> }}
+   */
+  cleanupStaleAetherDirs(repoPath) {
+    const staleItems = [
+      {
+        path: path.join(repoPath, '.aether', 'agents'),
+        label: '.aether/agents/ (stale duplicate)',
+        type: 'dir',
+      },
+      {
+        path: path.join(repoPath, '.aether', 'commands'),
+        label: '.aether/commands/ (stale duplicate)',
+        type: 'dir',
+      },
+      {
+        path: path.join(repoPath, '.aether', 'planning.md'),
+        label: '.aether/planning.md (phantom file)',
+        type: 'file',
+      },
+    ];
+
+    const cleaned = [];
+    const failed = [];
+
+    for (const item of staleItems) {
+      if (!fs.existsSync(item.path)) {
+        // Already clean — idempotent skip
+        continue;
+      }
+
+      try {
+        if (item.type === 'dir') {
+          fs.rmSync(item.path, { recursive: true, force: true });
+        } else {
+          fs.unlinkSync(item.path);
+        }
+        cleaned.push(item.label);
+      } catch (err) {
+        failed.push({ label: item.label, error: err.message });
+      }
+    }
+
+    return { cleaned, failed };
+  }
+
+  /**
    * Sync files from hub to repo
    * @param {string} sourceVersion - Version to sync from
    * @param {boolean} dryRun - If true, don't actually copy files
@@ -1412,6 +1466,9 @@ class UpdateTransaction {
 
       await this.createCheckpoint();
 
+      // Clean up known stale directories/files from previous versions
+      this.cleanupResult = this.cleanupStaleAetherDirs(this.repoPath);
+
       // Phase 2: Sync (with network error handling)
       this.state = TransactionStates.SYNCING;
       try {
@@ -1475,6 +1532,7 @@ class UpdateTransaction {
         files_synced: filesSynced,
         files_removed: filesRemoved,
         sync_result: this.syncResult,
+        cleanup_result: this.cleanupResult || { cleaned: [], failed: [] },
       };
 
     } catch (error) {

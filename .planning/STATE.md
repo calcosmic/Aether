@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 ## Current Position
 
 Phase: 15 of 18 (Distribution Chain)
-Plan: 02 complete (15-02-SUMMARY.md)
-Status: In progress — 15-02 done, continuing phase 15
-Last activity: 2026-02-18 — 15-02 complete: deleted .aether/agents/ and .aether/commands/ (92 dead duplicate files)
+Plan: 01 complete (15-01-SUMMARY.md), 02 complete (15-02-SUMMARY.md)
+Status: In progress — 15-01 and 15-02 done, continuing phase 15
+Last activity: 2026-02-18 — 15-01 complete: source dir fixed (HUB_SYSTEM_DIR), EXCLUDE_DIRS expanded, allowlists synced
 
-Progress: ██░░░░░░░░░░░░░░░░░░ 21% (v1.2 — Phase 15 in progress)
+Progress: ██░░░░░░░░░░░░░░░░░░ 22% (v1.2 — Phase 15 in progress)
 
 ## Performance Metrics
 
@@ -30,7 +30,7 @@ Progress: ██░░░░░░░░░░░░░░░░░░ 21% (v1.2
 | 1-9 (v1.0) | 27/27 | Complete |
 | 10-13 (v1.1) | 13/13 | Complete |
 | 14 (v1.2) | 1/1 | Complete |
-| 15-18 (v1.2) | 2/TBD | In progress (15-01 skipped/research, 15-02 complete) |
+| 15-18 (v1.2) | 2/TBD | In progress (15-01 complete, 15-02 complete) |
 
 *Updated after each plan completion*
 
@@ -40,7 +40,7 @@ Progress: ██░░░░░░░░░░░░░░░░░░ 21% (v1.2
 - Full cleanup scope: fix ALL documented bugs, issues, and gaps (not just critical)
 - All 5 v1.2 phases publish together in one `npm install -g .` cycle — no intermediate states
 - Phase 14 is prerequisite gate: fallback json_err fix must land before Phase 17; ARCH-01 must land before any npm-install user testing
-- Phase 15 is one atomic change: EXCLUDE_DIRS and source-dir fix cannot be split across commits
+- Phase 15-01: source-dir fix (HUB_SYSTEM_DIR) applied in three methods; EXCLUDE_DIRS expanded with agents/commands/rules; caste-system.md added and planning.md removed from both SYSTEM_FILES allowlists (58 entries each)
 - Phase 16 requires full lock audit before any code changes (local vs. global variable discrepancy)
 - ERR-01 (14-01): fallback json_err emits `{code, message}` object — separate commits per fix strategy confirmed
 - ARCH-01 (14-01): hub path first in template search loop; error message includes exact install command
@@ -61,5 +61,5 @@ Progress: ██░░░░░░░░░░░░░░░░░░ 21% (v1.2
 ## Session Continuity
 
 Last session: 2026-02-18
-Stopped at: Completed 15-02-PLAN.md (dead duplicate directories removed)
-Resume file: .planning/phases/15-distribution-chain/15-02-SUMMARY.md
+Stopped at: Completed 15-01-PLAN.md (source dir fix + allowlist sync)
+Resume file: .planning/phases/15-distribution-chain/15-01-SUMMARY.md
