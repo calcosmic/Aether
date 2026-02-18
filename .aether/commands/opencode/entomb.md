@@ -92,6 +92,51 @@ Entombment cancelled. Colony remains active.
 ```
 Stop here.
 
+### Step 3.5: Check XML Tools
+
+XML archiving is required for entombment. Check tool availability before proceeding.
+Uses `command -v xmllint` directly — consistent with seal.md's tool check.
+
+```bash
+if command -v xmllint >/dev/null 2>&1; then
+  xmllint_available=true
+else
+  xmllint_available=false
+fi
+```
+
+**If xmllint is NOT available:**
+
+Ask the user:
+```
+xmllint is not installed — XML archiving requires it.
+
+Install now?
+  - macOS: xcode-select --install (or brew install libxml2)
+  - Linux: apt-get install libxml2-utils
+
+Install xmllint? (yes/no)
+```
+
+Use AskUserQuestion with yes/no options.
+
+If yes:
+- On macOS: Run `xcode-select --install` or `brew install libxml2`
+- On Linux: Run `sudo apt-get install -y libxml2-utils`
+- After install attempt, re-check: `command -v xmllint >/dev/null 2>&1`
+- If still not available after install:
+  ```
+  xmllint installation failed. Cannot entomb without XML archiving.
+  Install xmllint manually and try again.
+  ```
+  Stop here.
+
+If no:
+```
+Entombment requires XML archiving. Install xmllint and try again.
+```
+Stop here.
+
 ### Step 4: Promote Wisdom to QUEEN.md
 
 Before creating the chamber, promote validated learnings to QUEEN.md for future colonies.
@@ -243,6 +288,35 @@ done
 
 Do NOT copy: `.aether/data/backups/`, `.aether/data/locks/`, `.aether/data/midden/`, `.aether/data/survey/`.
 
+### Step 7.5: Export XML Archive (hard-stop)
+
+Export combined XML archive to the chamber. This is a HARD REQUIREMENT — entomb fails if XML export fails.
+
+```bash
+chamber_dir=".aether/chambers/$chamber_name"
+xml_result=$(bash .aether/aether-utils.sh colony-archive-xml "$chamber_dir/colony-archive.xml" 2>&1)
+xml_ok=$(echo "$xml_result" | jq -r '.ok // false' 2>/dev/null)
+
+if [[ "$xml_ok" != "true" ]]; then
+  # HARD STOP — remove the chamber and abort
+  rm -rf "$chamber_dir"
+  echo "XML archive export failed. Colony NOT entombed."
+  echo ""
+  echo "Error: $(echo "$xml_result" | jq -r '.error // "Unknown error"' 2>/dev/null)"
+  echo ""
+  echo "The chamber has been cleaned up. Fix the XML issue and try again."
+  # Do NOT proceed to state reset or any further steps
+fi
+```
+
+If xml_ok is true, store for display:
+```bash
+xml_pheromone_count=$(echo "$xml_result" | jq -r '.result.pheromone_count // 0' 2>/dev/null)
+xml_archive_line="XML Archive: colony-archive.xml (${xml_pheromone_count} active signals)"
+```
+
+**Critical behavior:** If XML export fails, entomb STOPS. The chamber directory is removed (cleanup). The colony state is NOT reset. The user sees a clear error and can retry after fixing the issue.
+
 ### Step 8: Verify Chamber Integrity
 
 Run verification:
@@ -393,6 +467,7 @@ Phases: {completed} completed
 Milestone: {milestone}
 
 Chamber: .aether/chambers/{chamber_name}/
+{xml_archive_line}
 
 The colony rests. Its learnings live on in QUEEN.md.
 
