@@ -4436,13 +4436,15 @@ ${entry}" "$queen_file" > "$tmp_file"
 
   pheromone-import-xml)
     # Import pheromone signals from XML into pheromones.json
-    # Usage: pheromone-import-xml <xml_file>
+    # Usage: pheromone-import-xml <xml_file> [colony_prefix]
+    # When colony_prefix is provided, imported signal IDs are tagged with "${prefix}:" before merge
 
     pix_xml="${1:-}"
+    pix_colony_prefix="${2:-}"
     pix_pheromones="$DATA_DIR/pheromones.json"
 
     if [[ -z "$pix_xml" ]]; then
-      json_err "Missing XML file argument. Usage: pheromone-import-xml <xml_file>"
+      json_err "Missing XML file argument. Usage: pheromone-import-xml <xml_file> [colony_prefix]"
     fi
 
     if [[ ! -f "$pix_xml" ]]; then
@@ -4460,24 +4462,37 @@ ${entry}" "$queen_file" > "$tmp_file"
     # Import XML to get JSON signals
     pix_imported=$(xml-pheromone-import "$pix_xml")
 
+    # Extract actual signal array from result.json | fromjson | .signals
+    # (result.signals is an integer count — must unpack result.json to get the array)
+    pix_raw_signals=$(echo "$pix_imported" | jq -r '.result.json // "{}"' | jq -c '.signals // []' 2>/dev/null || echo '[]')
+
+    # Apply colony prefix to imported signal IDs (when provided)
+    # This prevents ID collisions and tags signals with their source colony
+    if [[ -n "$pix_colony_prefix" ]]; then
+      pix_prefixed_signals=$(echo "$pix_raw_signals" | jq --arg prefix "$pix_colony_prefix" '[.[] | .id = ($prefix + ":" + .id)]' 2>/dev/null || echo '[]')
+    else
+      pix_prefixed_signals="$pix_raw_signals"
+    fi
+
     # If pheromones.json exists, merge; otherwise create
     if [[ -f "$pix_pheromones" ]]; then
-      # Extract imported signals and merge into existing, deduplicate by id
-      pix_merged=$(jq -s '
-        .[0] as $existing | .[1] as $imported |
-        ($imported.result.signals // []) as $new_signals |
-        $existing | .signals = (
-          [.signals[], $new_signals[]] |
-          group_by(.id) | map(last)
-        )
-      ' "$pix_pheromones" <(echo "$pix_imported") 2>/dev/null)
+      # Merge: imported signals first, existing signals last
+      # map(last) keeps current colony's version on ID collision — current colony always wins
+      pix_merged=$(jq -s --argjson new_signals "$pix_prefixed_signals" '
+        .[0] as $existing |
+        {
+          signals: ([$new_signals[], $existing.signals[]] | group_by(.id) | map(last)),
+          version: $existing.version,
+          colony_id: $existing.colony_id
+        }
+      ' "$pix_pheromones" 2>/dev/null)
 
       if [[ -n "$pix_merged" ]]; then
         printf '%s\n' "$pix_merged" > "$pix_pheromones"
       fi
     fi
 
-    pix_count=$(echo "$pix_imported" | jq '.result.signals | length' 2>/dev/null || echo 0)
+    pix_count=$(echo "$pix_raw_signals" | jq 'length' 2>/dev/null || echo 0)
     json_ok "{\"imported\":true,\"signal_count\":$pix_count,\"source\":\"$pix_xml\"}"
     ;;
 
