@@ -696,3 +696,203 @@ test('TransactionStates contains all expected states', (t) => {
   t.is(TransactionStates.ROLLING_BACK, 'rolling_back');
   t.is(TransactionStates.ROLLED_BACK, 'rolled_back');
 });
+
+// Test 19: execute() writes .update-pending before sync starts
+test.serial('execute writes .update-pending sentinel before sync starts', async (t) => {
+  const { UpdateTransaction } = t.context;
+  const { mockFs, mockCp } = t.context;
+
+  // Setup git operations to succeed
+  mockCp.execSync.callsFake((cmd) => {
+    if (cmd === 'git rev-parse --git-dir') return '.git';
+    if (cmd.includes('git status')) return '';
+    if (cmd === 'git stash list') return '';
+    return '';
+  });
+
+  mockFs.existsSync.returns(true);
+  mockFs.readdirSync.returns([]);
+
+  const tx = new UpdateTransaction('/test/repo');
+  tx.HOME = '/home/test';
+
+  const writeOrder = [];
+
+  // Capture write calls to track order
+  mockFs.writeFileSync.callsFake((filePath) => {
+    writeOrder.push(filePath);
+  });
+
+  // Mock syncFiles to record that it was called after pending write
+  let pendingWrittenBeforeSync = false;
+  tx.syncFiles = function() {
+    // Check if .update-pending was written before sync was called
+    pendingWrittenBeforeSync = writeOrder.some(p => p.includes('.update-pending'));
+    this.syncResult = {
+      system: { copied: 1, removed: [], skipped: 0 },
+      commands: { copied: 1, removed: [], skipped: 0 },
+      agents: { copied: 0, removed: [], skipped: 0 },
+      rules: { copied: 0, removed: [], skipped: 0 },
+    };
+    return this.syncResult;
+  };
+
+  tx.verifyIntegrity = () => ({ valid: true, errors: [] });
+  tx.updateVersion = () => {};
+
+  await tx.execute('2.0.0', { dryRun: false });
+
+  // .update-pending must have been written before sync
+  t.true(pendingWrittenBeforeSync, '.update-pending should be written before sync starts');
+  // Confirm the path ends in .update-pending
+  t.true(writeOrder.some(p => p.includes('.update-pending')));
+});
+
+// Test 20: execute() writes .update-pending with correct target_version
+test.serial('execute writes .update-pending with correct target_version', async (t) => {
+  const { UpdateTransaction } = t.context;
+  const { mockFs, mockCp } = t.context;
+
+  mockCp.execSync.callsFake((cmd) => {
+    if (cmd === 'git rev-parse --git-dir') return '.git';
+    if (cmd.includes('git status')) return '';
+    return '';
+  });
+
+  mockFs.existsSync.returns(true);
+  mockFs.readdirSync.returns([]);
+
+  const tx = new UpdateTransaction('/test/repo');
+  tx.HOME = '/home/test';
+
+  let capturedContent = null;
+  mockFs.writeFileSync.callsFake((filePath, content) => {
+    if (filePath.includes('.update-pending')) {
+      capturedContent = content;
+    }
+  });
+
+  tx.syncFiles = function() {
+    this.syncResult = { system: { copied: 0, removed: [], skipped: 0 }, commands: { copied: 0, removed: [], skipped: 0 }, agents: { copied: 0, removed: [], skipped: 0 }, rules: { copied: 0, removed: [], skipped: 0 } };
+    return this.syncResult;
+  };
+  tx.verifyIntegrity = () => ({ valid: true, errors: [] });
+  tx.updateVersion = () => {};
+
+  await tx.execute('2.0.0', { dryRun: false });
+
+  t.truthy(capturedContent, '.update-pending content should have been written');
+  const parsed = JSON.parse(capturedContent);
+  t.is(parsed.target_version, '2.0.0');
+  t.truthy(parsed.started_at);
+});
+
+// Test 21: execute() deletes .update-pending after successful version stamp
+test.serial('execute deletes .update-pending after successful version stamp', async (t) => {
+  const { UpdateTransaction } = t.context;
+  const { mockFs, mockCp } = t.context;
+
+  mockCp.execSync.callsFake((cmd) => {
+    if (cmd === 'git rev-parse --git-dir') return '.git';
+    if (cmd.includes('git status')) return '';
+    return '';
+  });
+
+  mockFs.existsSync.returns(true);
+  mockFs.readdirSync.returns([]);
+
+  const tx = new UpdateTransaction('/test/repo');
+  tx.HOME = '/home/test';
+
+  const versionUpdatedAt = [];
+  const unlinkedAfterVersion = [];
+  let versionUpdateDone = false;
+
+  tx.syncFiles = function() {
+    this.syncResult = { system: { copied: 0, removed: [], skipped: 0 }, commands: { copied: 0, removed: [], skipped: 0 }, agents: { copied: 0, removed: [], skipped: 0 }, rules: { copied: 0, removed: [], skipped: 0 } };
+    return this.syncResult;
+  };
+  tx.verifyIntegrity = () => ({ valid: true, errors: [] });
+  tx.updateVersion = () => {
+    versionUpdateDone = true;
+    versionUpdatedAt.push(Date.now());
+  };
+
+  mockFs.unlinkSync.callsFake((filePath) => {
+    if (versionUpdateDone && filePath.includes('.update-pending')) {
+      unlinkedAfterVersion.push(filePath);
+    }
+  });
+
+  await tx.execute('1.1.0', { dryRun: false });
+
+  // unlinkSync was called on .update-pending after updateVersion
+  t.true(unlinkedAfterVersion.length > 0, '.update-pending should be deleted after version stamp');
+  t.true(unlinkedAfterVersion[0].includes('.update-pending'));
+});
+
+// Test 22: rollback() deletes .update-pending
+test.serial('rollback deletes .update-pending', async (t) => {
+  const { UpdateTransaction, TransactionStates } = t.context;
+  const { mockFs, mockCp } = t.context;
+
+  const tx = new UpdateTransaction('/test/repo');
+  tx.HOME = '/home/test';
+  tx.checkpoint = {
+    id: 'chk_20260218_120000',
+    stashRef: null,
+    timestamp: new Date().toISOString(),
+  };
+
+  mockCp.execSync.returns('');
+  mockFs.existsSync.returns(true);
+
+  const unlinkedPaths = [];
+  mockFs.unlinkSync.callsFake((filePath) => {
+    unlinkedPaths.push(filePath);
+  });
+
+  await tx.rollback();
+
+  t.is(tx.state, TransactionStates.ROLLED_BACK);
+  t.true(unlinkedPaths.some(p => p.includes('.update-pending')), 'rollback should delete .update-pending');
+});
+
+// Test 23: execute() continues successfully if pending file delete fails
+test.serial('execute succeeds even if pending sentinel delete fails', async (t) => {
+  const { UpdateTransaction, UpdateError } = t.context;
+  const { mockFs, mockCp } = t.context;
+
+  mockCp.execSync.callsFake((cmd) => {
+    if (cmd === 'git rev-parse --git-dir') return '.git';
+    if (cmd.includes('git status')) return '';
+    return '';
+  });
+
+  // existsSync returns true for pending path
+  mockFs.existsSync.callsFake(() => true);
+  mockFs.readdirSync.returns([]);
+
+  // Make unlinkSync throw when called on the pending path
+  mockFs.unlinkSync.callsFake((filePath) => {
+    if (filePath.includes('.update-pending')) {
+      throw new Error('Permission denied');
+    }
+  });
+
+  const tx = new UpdateTransaction('/test/repo');
+  tx.HOME = '/home/test';
+
+  tx.syncFiles = function() {
+    this.syncResult = { system: { copied: 0, removed: [], skipped: 0 }, commands: { copied: 0, removed: [], skipped: 0 }, agents: { copied: 0, removed: [], skipped: 0 }, rules: { copied: 0, removed: [], skipped: 0 } };
+    return this.syncResult;
+  };
+  tx.verifyIntegrity = () => ({ valid: true, errors: [] });
+  tx.updateVersion = () => {};
+
+  // Should not throw even though unlinkSync fails on pending path
+  const result = await tx.execute('1.1.0', { dryRun: false });
+
+  t.true(result.success, 'execute should succeed even if sentinel delete fails');
+  t.false(result instanceof UpdateError);
+});
