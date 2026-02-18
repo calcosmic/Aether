@@ -473,7 +473,7 @@ shift 2>/dev/null || true
 case "$cmd" in
   help)
     cat <<'EOF'
-{"ok":true,"commands":["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-display-text","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","survey-load","survey-verify","pheromone-export","pheromone-write","pheromone-count","pheromone-read","instinct-read","pheromone-prime","pheromone-expire","eternal-init"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
+{"ok":true,"commands":["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-display-text","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","survey-load","survey-verify","pheromone-export","pheromone-write","pheromone-count","pheromone-read","instinct-read","pheromone-prime","pheromone-expire","eternal-init","pheromone-export-xml","pheromone-import-xml","pheromone-validate-xml","wisdom-export-xml","wisdom-import-xml","registry-export-xml","registry-import-xml"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
 EOF
     ;;
   version)
@@ -4400,6 +4400,415 @@ ${entry}" "$queen_file" > "$tmp_file"
     fi
 
     json_ok "{\"dir\":\"$ei_eternal_dir\",\"initialized\":true,\"already_existed\":$ei_already_existed}"
+    ;;
+
+  # ============================================================================
+  # XML Exchange Commands
+  # ============================================================================
+
+  pheromone-export-xml)
+    # Export pheromones.json to XML format
+    # Usage: pheromone-export-xml [output_file]
+    # Default output: .aether/exchange/pheromones.xml
+
+    pex_output="${1:-$SCRIPT_DIR/exchange/pheromones.xml}"
+    pex_pheromones="$DATA_DIR/pheromones.json"
+
+    # Graceful degradation: check for xmllint
+    if ! command -v xmllint >/dev/null 2>&1; then
+      json_err "xmllint not available — XML features require libxml2 (install: xcode-select --install on macOS)"
+    fi
+
+    # Check pheromones.json exists
+    if [[ ! -f "$pex_pheromones" ]]; then
+      json_err "pheromones.json not found at $pex_pheromones"
+    fi
+
+    # Ensure output directory exists
+    mkdir -p "$(dirname "$pex_output")"
+
+    # Source the exchange script
+    source "$SCRIPT_DIR/exchange/pheromone-xml.sh"
+
+    # Call the export function
+    xml-pheromone-export "$pex_pheromones" "$pex_output"
+    ;;
+
+  pheromone-import-xml)
+    # Import pheromone signals from XML into pheromones.json
+    # Usage: pheromone-import-xml <xml_file>
+
+    pix_xml="${1:-}"
+    pix_pheromones="$DATA_DIR/pheromones.json"
+
+    if [[ -z "$pix_xml" ]]; then
+      json_err "Missing XML file argument. Usage: pheromone-import-xml <xml_file>"
+    fi
+
+    if [[ ! -f "$pix_xml" ]]; then
+      json_err "XML file not found: $pix_xml"
+    fi
+
+    # Graceful degradation: check for xmllint
+    if ! command -v xmllint >/dev/null 2>&1; then
+      json_err "xmllint not available — XML features require libxml2 (install: xcode-select --install on macOS)"
+    fi
+
+    # Source the exchange script
+    source "$SCRIPT_DIR/exchange/pheromone-xml.sh"
+
+    # Import XML to get JSON signals
+    pix_imported=$(xml-pheromone-import "$pix_xml")
+
+    # If pheromones.json exists, merge; otherwise create
+    if [[ -f "$pix_pheromones" ]]; then
+      # Extract imported signals and merge into existing, deduplicate by id
+      pix_merged=$(jq -s '
+        .[0] as $existing | .[1] as $imported |
+        ($imported.result.signals // []) as $new_signals |
+        $existing | .signals = (
+          [.signals[], $new_signals[]] |
+          group_by(.id) | map(last)
+        )
+      ' "$pix_pheromones" <(echo "$pix_imported") 2>/dev/null)
+
+      if [[ -n "$pix_merged" ]]; then
+        printf '%s\n' "$pix_merged" > "$pix_pheromones"
+      fi
+    fi
+
+    pix_count=$(echo "$pix_imported" | jq '.result.signals | length' 2>/dev/null || echo 0)
+    json_ok "{\"imported\":true,\"signal_count\":$pix_count,\"source\":\"$pix_xml\"}"
+    ;;
+
+  pheromone-validate-xml)
+    # Validate pheromone XML against XSD schema
+    # Usage: pheromone-validate-xml <xml_file>
+
+    pvx_xml="${1:-}"
+    pvx_xsd="$SCRIPT_DIR/schemas/pheromone.xsd"
+
+    if [[ -z "$pvx_xml" ]]; then
+      json_err "Missing XML file argument. Usage: pheromone-validate-xml <xml_file>"
+    fi
+
+    if [[ ! -f "$pvx_xml" ]]; then
+      json_err "XML file not found: $pvx_xml"
+    fi
+
+    # Graceful degradation: check for xmllint
+    if ! command -v xmllint >/dev/null 2>&1; then
+      json_err "xmllint not available — XML features require libxml2 (install: xcode-select --install on macOS)"
+    fi
+
+    # Source the exchange script
+    source "$SCRIPT_DIR/exchange/pheromone-xml.sh"
+
+    # Call validate function
+    xml-pheromone-validate "$pvx_xml" "$pvx_xsd"
+    ;;
+
+  wisdom-export-xml)
+    # Export queen wisdom to XML format
+    # Usage: wisdom-export-xml [input_json] [output_xml]
+    # Default input: .aether/data/queen-wisdom.json
+    # Default output: .aether/exchange/queen-wisdom.xml
+
+    wex_input="${1:-$DATA_DIR/queen-wisdom.json}"
+    wex_output="${2:-$SCRIPT_DIR/exchange/queen-wisdom.xml}"
+
+    # Graceful degradation: check for xmllint
+    if ! command -v xmllint >/dev/null 2>&1; then
+      json_err "xmllint not available — XML features require libxml2 (install: xcode-select --install on macOS)"
+    fi
+
+    # Look for wisdom data: check specified file, then COLONY_STATE memory
+    if [[ ! -f "$wex_input" ]]; then
+      # Try to extract from COLONY_STATE.json memory field
+      if [[ -f "$DATA_DIR/COLONY_STATE.json" ]]; then
+        wex_memory=$(jq '.memory // {}' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo '{}')
+        if [[ "$wex_memory" != "{}" && "$wex_memory" != "null" ]]; then
+          # Create minimal wisdom JSON from colony memory
+          wex_created_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          printf '%s\n' "{
+  \"version\": \"1.0.0\",
+  \"metadata\": {\"created\": \"$wex_created_at\", \"colony_id\": \"$(jq -r '.goal // \"unknown\"' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null)\"},
+  \"philosophies\": [],
+  \"patterns\": $(echo "$wex_memory" | jq '[.instincts // [] | .[] | {\"id\": (. | @base64), \"content\": ., \"confidence\": 0.7, \"domain\": \"general\", \"source\": \"colony_memory\"}]' 2>/dev/null || echo '[]')
+}" > "$wex_input"
+        fi
+      fi
+    fi
+
+    # If still no wisdom data, create minimal skeleton
+    if [[ ! -f "$wex_input" ]]; then
+      wex_created_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+      mkdir -p "$(dirname "$wex_input")"
+      printf '%s\n' "{
+  \"version\": \"1.0.0\",
+  \"metadata\": {\"created\": \"$wex_created_at\", \"colony_id\": \"unknown\"},
+  \"philosophies\": [],
+  \"patterns\": []
+}" > "$wex_input"
+    fi
+
+    # Ensure output directory exists
+    mkdir -p "$(dirname "$wex_output")"
+
+    # Source the exchange script
+    source "$SCRIPT_DIR/exchange/wisdom-xml.sh"
+
+    # Call the export function
+    xml-wisdom-export "$wex_input" "$wex_output"
+    ;;
+
+  wisdom-import-xml)
+    # Import wisdom from XML into JSON format
+    # Usage: wisdom-import-xml <xml_file> [output_json]
+
+    wix_xml="${1:-}"
+    wix_output="${2:-$DATA_DIR/queen-wisdom.json}"
+
+    if [[ -z "$wix_xml" ]]; then
+      json_err "Missing XML file argument. Usage: wisdom-import-xml <xml_file> [output_json]"
+    fi
+
+    if [[ ! -f "$wix_xml" ]]; then
+      json_err "XML file not found: $wix_xml"
+    fi
+
+    # Graceful degradation: check for xmllint
+    if ! command -v xmllint >/dev/null 2>&1; then
+      json_err "xmllint not available — XML features require libxml2 (install: xcode-select --install on macOS)"
+    fi
+
+    # Ensure output directory exists
+    mkdir -p "$(dirname "$wix_output")"
+
+    # Source the exchange script
+    source "$SCRIPT_DIR/exchange/wisdom-xml.sh"
+
+    # Call the import function
+    xml-wisdom-import "$wix_xml" "$wix_output"
+    ;;
+
+  registry-export-xml)
+    # Export colony registry to XML format
+    # Usage: registry-export-xml [input_json] [output_xml]
+    # Default input: .aether/data/colony-registry.json
+    # Default output: .aether/exchange/colony-registry.xml
+
+    rex_input="${1:-$DATA_DIR/colony-registry.json}"
+    rex_output="${2:-$SCRIPT_DIR/exchange/colony-registry.xml}"
+
+    # Graceful degradation: check for xmllint
+    if ! command -v xmllint >/dev/null 2>&1; then
+      json_err "xmllint not available — XML features require libxml2 (install: xcode-select --install on macOS)"
+    fi
+
+    # If no registry file exists, generate from chambers
+    if [[ ! -f "$rex_input" ]]; then
+      rex_chambers_dir="$AETHER_ROOT/.aether/chambers"
+      rex_generated_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+      rex_colonies="[]"
+
+      if [[ -d "$rex_chambers_dir" ]]; then
+        # Scan chambers for manifest.json files
+        rex_colonies=$(
+          for manifest in "$rex_chambers_dir"/*/manifest.json; do
+            [[ -f "$manifest" ]] || continue
+            jq -c '{
+              id: (.colony_id // .goal // "unknown"),
+              name: (.goal // "Unnamed Colony"),
+              created_at: (.created_at // "unknown"),
+              sealed_at: (.sealed_at // null),
+              status: (if .sealed_at then "sealed" else "active" end),
+              chamber: input_filename
+            }' "$manifest" 2>/dev/null || true
+          done | jq -s '.' 2>/dev/null || echo '[]'
+        )
+      fi
+
+      mkdir -p "$(dirname "$rex_input")"
+      printf '%s\n' "{
+  \"version\": \"1.0.0\",
+  \"generated_at\": \"$rex_generated_at\",
+  \"colonies\": $rex_colonies
+}" > "$rex_input"
+    fi
+
+    # Ensure output directory exists
+    mkdir -p "$(dirname "$rex_output")"
+
+    # Source the exchange script
+    source "$SCRIPT_DIR/exchange/registry-xml.sh"
+
+    # Call the export function
+    xml-registry-export "$rex_input" "$rex_output"
+    ;;
+
+  registry-import-xml)
+    # Import colony registry from XML into JSON format
+    # Usage: registry-import-xml <xml_file> [output_json]
+
+    rix_xml="${1:-}"
+    rix_output="${2:-$DATA_DIR/colony-registry.json}"
+
+    if [[ -z "$rix_xml" ]]; then
+      json_err "Missing XML file argument. Usage: registry-import-xml <xml_file> [output_json]"
+    fi
+
+    if [[ ! -f "$rix_xml" ]]; then
+      json_err "XML file not found: $rix_xml"
+    fi
+
+    # Graceful degradation: check for xmllint
+    if ! command -v xmllint >/dev/null 2>&1; then
+      json_err "xmllint not available — XML features require libxml2 (install: xcode-select --install on macOS)"
+    fi
+
+    # Ensure output directory exists
+    mkdir -p "$(dirname "$rix_output")"
+
+    # Source the exchange script
+    source "$SCRIPT_DIR/exchange/registry-xml.sh"
+
+    # Call the import function
+    xml-registry-import "$rix_xml" "$rix_output"
+    ;;
+
+  colony-archive-xml)
+    # Export combined colony archive XML containing pheromones, wisdom, and registry
+    # Usage: colony-archive-xml [output_file]
+    # Default output: .aether/exchange/colony-archive.xml
+    # Always filters to active-only pheromone signals
+
+    # Graceful degradation: check for xmllint
+    if ! command -v xmllint >/dev/null 2>&1; then
+      json_err "xmllint not available — XML features require libxml2 (install: xcode-select --install on macOS)"
+    fi
+
+    cax_output="${1:-$SCRIPT_DIR/exchange/colony-archive.xml}"
+    mkdir -p "$(dirname "$cax_output")"
+
+    # Step 1: Filter active-only pheromone signals to a temp file
+    cax_tmp_pheromones=$(mktemp)
+    if [[ -f "$DATA_DIR/pheromones.json" ]]; then
+      jq '{
+        version: .version,
+        colony_id: .colony_id,
+        generated_at: .generated_at,
+        signals: [.signals[] | select(.active == true)]
+      }' "$DATA_DIR/pheromones.json" > "$cax_tmp_pheromones" 2>/dev/null
+    else
+      printf '%s\n' '{"version":"1.0","colony_id":"unknown","generated_at":"","signals":[]}' > "$cax_tmp_pheromones"
+    fi
+
+    # Step 2: Export each section to temp XML files
+    cax_tmp_dir=$(mktemp -d)
+
+    # Pheromone section (using filtered active-only)
+    source "$SCRIPT_DIR/exchange/pheromone-xml.sh"
+    xml-pheromone-export "$cax_tmp_pheromones" "$cax_tmp_dir/pheromones.xml" 2>/dev/null || true
+
+    # Wisdom section — reuse wisdom-export-xml fallback logic
+    source "$SCRIPT_DIR/exchange/wisdom-xml.sh"
+    cax_wisdom_input="$DATA_DIR/queen-wisdom.json"
+    if [[ ! -f "$cax_wisdom_input" ]]; then
+      # Try extracting from COLONY_STATE.json memory field
+      if [[ -f "$DATA_DIR/COLONY_STATE.json" ]]; then
+        cax_wex_memory=$(jq '.memory // {}' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo '{}')
+        if [[ "$cax_wex_memory" != "{}" && "$cax_wex_memory" != "null" ]]; then
+          cax_wex_created_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          cax_wisdom_input="$cax_tmp_dir/wisdom-input.json"
+          printf '%s\n' "{
+  \"version\": \"1.0.0\",
+  \"metadata\": {\"created\": \"$cax_wex_created_at\", \"colony_id\": \"$(jq -r '.goal // \"unknown\"' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null)\"},
+  \"philosophies\": [],
+  \"patterns\": $(echo "$cax_wex_memory" | jq '[.instincts // [] | .[] | {"id": (. | @base64), "content": ., "confidence": 0.7, "domain": "general", "source": "colony_memory"}]' 2>/dev/null || echo '[]')
+}" > "$cax_wisdom_input"
+        fi
+      fi
+    fi
+    if [[ -f "$cax_wisdom_input" ]]; then
+      xml-wisdom-export "$cax_wisdom_input" "$cax_tmp_dir/wisdom.xml" 2>/dev/null || true
+    fi
+
+    # Registry section — reuse registry-export-xml on-demand generation logic
+    source "$SCRIPT_DIR/exchange/registry-xml.sh"
+    cax_registry_input="$DATA_DIR/colony-registry.json"
+    if [[ ! -f "$cax_registry_input" ]]; then
+      cax_rex_chambers_dir="$AETHER_ROOT/.aether/chambers"
+      cax_rex_generated_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+      cax_rex_colonies="[]"
+      if [[ -d "$cax_rex_chambers_dir" ]]; then
+        cax_rex_colonies=$(
+          for manifest in "$cax_rex_chambers_dir"/*/manifest.json; do
+            [[ -f "$manifest" ]] || continue
+            jq -c '{
+              id: (.colony_id // .goal // "unknown"),
+              name: (.goal // "Unnamed Colony"),
+              created_at: (.created_at // "unknown"),
+              sealed_at: (.sealed_at // null),
+              status: (if .sealed_at then "sealed" else "active" end),
+              chamber: input_filename
+            }' "$manifest" 2>/dev/null || true
+          done | jq -s '.' 2>/dev/null || echo '[]'
+        )
+      fi
+      cax_registry_input="$cax_tmp_dir/registry-input.json"
+      printf '%s\n' "{
+  \"version\": \"1.0.0\",
+  \"generated_at\": \"$cax_rex_generated_at\",
+  \"colonies\": $cax_rex_colonies
+}" > "$cax_registry_input"
+    fi
+    xml-registry-export "$cax_registry_input" "$cax_tmp_dir/registry.xml" 2>/dev/null || true
+
+    # Step 3: Build combined XML
+    cax_colony_id=$(jq -r '.goal // "unknown"' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' '-' | sed 's/^-//;s/-$//')
+    [[ -z "$cax_colony_id" || "$cax_colony_id" == "unknown" ]] && cax_colony_id="unknown"
+    cax_sealed_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    cax_pheromone_count=$(jq '.signals | length' "$cax_tmp_pheromones" 2>/dev/null || echo 0)
+
+    {
+      printf '<?xml version="1.0" encoding="UTF-8"?>\n'
+      printf '<colony-archive\n'
+      printf '    xmlns="http://aether.colony/schemas/archive/1.0"\n'
+      printf '    colony_id="%s"\n' "$cax_colony_id"
+      printf '    sealed_at="%s"\n' "$cax_sealed_at"
+      printf '    version="1.0.0"\n'
+      printf '    pheromone_count="%s">\n' "$cax_pheromone_count"
+
+      # Append pheromone section (strip XML declaration)
+      if [[ -f "$cax_tmp_dir/pheromones.xml" ]]; then
+        sed '1{/^<?xml/d;}' "$cax_tmp_dir/pheromones.xml"
+      fi
+
+      # Append wisdom section (strip XML declaration)
+      if [[ -f "$cax_tmp_dir/wisdom.xml" ]]; then
+        sed '1{/^<?xml/d;}' "$cax_tmp_dir/wisdom.xml"
+      fi
+
+      # Append registry section (strip XML declaration)
+      if [[ -f "$cax_tmp_dir/registry.xml" ]]; then
+        sed '1{/^<?xml/d;}' "$cax_tmp_dir/registry.xml"
+      fi
+
+      printf '</colony-archive>\n'
+    } > "$cax_output"
+
+    # Step 4: Validate well-formedness
+    if xmllint --noout "$cax_output" 2>/dev/null; then
+      cax_valid=true
+    else
+      cax_valid=false
+    fi
+
+    # Step 5: Cleanup temp files
+    rm -rf "$cax_tmp_dir" "$cax_tmp_pheromones"
+
+    json_ok "{\"path\":\"$cax_output\",\"valid\":$cax_valid,\"colony_id\":\"$cax_colony_id\",\"pheromone_count\":$cax_pheromone_count}"
     ;;
 
   # ============================================================================

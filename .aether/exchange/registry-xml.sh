@@ -66,7 +66,7 @@ xml-registry-export() {
         colony=$(jq -c ".colonies[$idx]" "$json_file")
 
         local id name created_at status parent_id
-        id=$(echo "$colony" | jq -r '.id')
+        id=$(echo "$colony" | jq -r '.id' | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/"/\&quot;/g')
         name=$(echo "$colony" | jq -r '.name // "Unnamed Colony"')
         created_at=$(echo "$colony" | jq -r '.created_at // "'"$generated_at"'"')
         status=$(echo "$colony" | jq -r '.status // "active"')
