@@ -124,34 +124,11 @@ See `.aether/docs/pheromones.md` for full guide.
 
 ## Caste System
 
-Workers are assigned to castes based on task type:
+Workers are assigned to castes based on task type.
 
-| Caste | Emoji | Role |
-|-------|-------|------|
-| builder | 🔨 | Implementation work |
-| watcher | 👁️ | Monitoring, observation |
-| scout | 🔍 | Research, discovery |
-| chaos | 🎲 | Edge case testing |
-| oracle | 🔮 | Deep research (RALF loop) |
-| architect | 🏗️ | Planning, design |
-| prime | 🏛️ | High-level coordination |
-| colonizer | 🌱 | New project setup |
-| route_setter | 🧭 | Direction setting |
-| archaeologist | 📜 | Git history excavation |
-| ambassador | 🔌 | Third-party API integration |
-| auditor | 👥 | Code review, quality audits |
-| chronicler | 📝 | Documentation generation |
-| gatekeeper | 📦 | Dependency management |
-| guardian | 🛡️ | Security audits |
-| includer | ♿ | Accessibility audits |
-| keeper | 📚 | Knowledge curation |
-| measurer | ⚡ | Performance profiling |
-| probe | 🧪 | Test generation |
-| sage | 📜 | Analytics & insights |
-| tracker | 🐛 | Bug investigation |
-| weaver | 🔄 | Code refactoring |
+**Display format:** `{caste_emoji} {worker_name}` (e.g., `🔨🐜 Hammer-42`)
 
-See `.aether/docs/biological-reference.md` for full taxonomy.
+For the complete caste reference with emojis and role descriptions, see `.aether/docs/caste-system.md`.
 
 ---
 
