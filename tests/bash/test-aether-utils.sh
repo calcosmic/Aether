@@ -835,8 +835,9 @@ test_queen_init_template_not_found_message() {
     fi
 
     # Error message must contain actionable instructions
+    # Note: .error may be a string (simple fallback) or object (full handler)
     local err_message
-    err_message=$(echo "$json_line" | jq -r '.error.message // .error // ""' 2>/dev/null || echo "")
+    err_message=$(echo "$json_line" | jq -r 'if (.error | type) == "object" then .error.message else .error end // ""' 2>/dev/null || echo "")
     if ! assert_contains "$err_message" "aether install" && ! assert_contains "$err_message" "restore"; then
         test_fail "error message contains 'aether install' or 'restore'" "$err_message"
         return 1
@@ -873,6 +874,10 @@ main() {
     # ERR-01: fallback json_err tests
     run_test "test_fallback_json_err" "fallback json_err emits code and message fields without error-handler.sh"
     run_test "test_fallback_json_err_single_arg" "fallback json_err single-arg uses provided code and default message"
+
+    # ARCH-01: queen-init template resolution tests
+    run_test "test_queen_init_template_hub_path" "queen-init finds template via hub path (npm-install scenario)"
+    run_test "test_queen_init_template_not_found_message" "queen-init error message is actionable when no template found"
 
     # Print summary
     test_summary
