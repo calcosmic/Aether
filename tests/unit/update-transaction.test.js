@@ -12,6 +12,7 @@ const createMockFs = () => ({
   copyFileSync: sinon.stub(),
   unlinkSync: sinon.stub(),
   rmdirSync: sinon.stub(),
+  rmSync: sinon.stub(),
   chmodSync: sinon.stub(),
   accessSync: sinon.stub(),
   constants: { R_OK: 4 },
@@ -895,4 +896,146 @@ test.serial('execute succeeds even if pending sentinel delete fails', async (t) 
 
   t.true(result.success, 'execute should succeed even if sentinel delete fails');
   t.false(result instanceof UpdateError);
+});
+
+// ---------------------------------------------------------------------------
+// Test group: Source directory fix (DIST-01)
+// ---------------------------------------------------------------------------
+
+test('syncFiles uses HUB_SYSTEM_DIR not HUB_DIR for system sync', (t) => {
+  const { UpdateTransaction } = t.context;
+  const { mockFs } = t.context;
+
+  // Only return true for paths containing 'system' (HUB_SYSTEM_DIR)
+  mockFs.existsSync.callsFake((p) => {
+    return p.includes('/system');
+  });
+  mockFs.readdirSync.returns([]);
+
+  const tx = new UpdateTransaction('/test/repo');
+  tx.HOME = '/home/test';
+  tx.listFilesRecursive = () => [];
+
+  tx.syncFiles('3.1.19', false);
+
+  // existsSync should have been called with the HUB_SYSTEM_DIR path (ends in /system)
+  const systemDirChecked = mockFs.existsSync.args.some(([p]) => p.endsWith('/system'));
+  t.true(systemDirChecked, 'existsSync should be called with HUB_SYSTEM_DIR path ending in /system');
+
+  // existsSync should NOT have been called with the bare hub dir as first arg for system sync
+  // (HUB_DIR = ~/.aether/, HUB_SYSTEM_DIR = ~/.aether/system/)
+  // The HUB_DIR itself would end in /.aether/ but the system sync path ends in /system
+  const hubDirWithoutSystem = mockFs.existsSync.args.filter(([p]) =>
+    p.endsWith('/home/test/.aether') || p.endsWith('/home/test/.aether/')
+  );
+  t.is(hubDirWithoutSystem.length, 0, 'system sync should not use bare HUB_DIR');
+});
+
+// ---------------------------------------------------------------------------
+// Test group: EXCLUDE_DIRS (DIST-02)
+// ---------------------------------------------------------------------------
+
+test('EXCLUDE_DIRS includes agents, commands, and rules', (t) => {
+  const { UpdateTransaction } = t.context;
+
+  const tx = new UpdateTransaction('/test/repo');
+
+  t.true(tx.EXCLUDE_DIRS.includes('agents'), 'EXCLUDE_DIRS should include agents');
+  t.true(tx.EXCLUDE_DIRS.includes('commands'), 'EXCLUDE_DIRS should include commands');
+  t.true(tx.EXCLUDE_DIRS.includes('rules'), 'EXCLUDE_DIRS should include rules');
+
+  // Original 5 entries still present
+  t.true(tx.EXCLUDE_DIRS.includes('data'), 'EXCLUDE_DIRS should include data');
+  t.true(tx.EXCLUDE_DIRS.includes('dreams'), 'EXCLUDE_DIRS should include dreams');
+  t.true(tx.EXCLUDE_DIRS.includes('checkpoints'), 'EXCLUDE_DIRS should include checkpoints');
+  t.true(tx.EXCLUDE_DIRS.includes('locks'), 'EXCLUDE_DIRS should include locks');
+  t.true(tx.EXCLUDE_DIRS.includes('temp'), 'EXCLUDE_DIRS should include temp');
+});
+
+test('shouldExclude returns true for agents, commands, and rules paths', (t) => {
+  const { UpdateTransaction } = t.context;
+
+  const tx = new UpdateTransaction('/test/repo');
+
+  t.true(tx.shouldExclude('agents/foo.md'), 'agents/foo.md should be excluded');
+  t.true(tx.shouldExclude('commands/bar.md'), 'commands/bar.md should be excluded');
+  t.true(tx.shouldExclude('rules/baz.md'), 'rules/baz.md should be excluded');
+  t.false(tx.shouldExclude('docs/caste-system.md'), 'docs/caste-system.md should not be excluded');
+  t.false(tx.shouldExclude('workers.md'), 'workers.md should not be excluded');
+});
+
+// ---------------------------------------------------------------------------
+// Test group: Stale-dir cleanup (DIST-06)
+// ---------------------------------------------------------------------------
+
+test('cleanupStaleAetherDirs removes existing stale directories and files', (t) => {
+  const { UpdateTransaction } = t.context;
+  const { mockFs } = t.context;
+
+  // All three stale items exist
+  mockFs.existsSync.callsFake((p) => {
+    return (
+      p.endsWith('.aether/agents') ||
+      p.endsWith('.aether/commands') ||
+      p.endsWith('.aether/planning.md')
+    );
+  });
+  mockFs.rmSync.returns(undefined);
+  mockFs.unlinkSync.returns(undefined);
+
+  const tx = new UpdateTransaction('/test/repo');
+  const result = tx.cleanupStaleAetherDirs('/test/repo');
+
+  // rmSync called for both directories
+  t.true(mockFs.rmSync.calledWith(
+    sinon.match((p) => p.endsWith('.aether/agents')),
+    { recursive: true, force: true }
+  ), 'rmSync should be called for .aether/agents');
+
+  t.true(mockFs.rmSync.calledWith(
+    sinon.match((p) => p.endsWith('.aether/commands')),
+    { recursive: true, force: true }
+  ), 'rmSync should be called for .aether/commands');
+
+  // unlinkSync called for the file
+  t.true(mockFs.unlinkSync.calledWith(
+    sinon.match((p) => p.endsWith('.aether/planning.md'))
+  ), 'unlinkSync should be called for .aether/planning.md');
+
+  // All three should appear in cleaned
+  t.is(result.cleaned.length, 3, 'cleaned should have 3 entries');
+  t.is(result.failed.length, 0, 'failed should be empty');
+});
+
+test('cleanupStaleAetherDirs is idempotent — returns empty when nothing to clean', (t) => {
+  const { UpdateTransaction } = t.context;
+  const { mockFs } = t.context;
+
+  // No stale items exist
+  mockFs.existsSync.returns(false);
+
+  const tx = new UpdateTransaction('/test/repo');
+  const result = tx.cleanupStaleAetherDirs('/test/repo');
+
+  t.is(result.cleaned.length, 0, 'cleaned should be empty');
+  t.is(result.failed.length, 0, 'failed should be empty');
+  t.false(mockFs.rmSync.called, 'rmSync should not be called');
+  t.false(mockFs.unlinkSync.called, 'unlinkSync should not be called');
+});
+
+test('cleanupStaleAetherDirs handles removal errors gracefully', (t) => {
+  const { UpdateTransaction } = t.context;
+  const { mockFs } = t.context;
+
+  // Only .aether/agents exists and throws on removal
+  mockFs.existsSync.callsFake((p) => p.endsWith('.aether/agents'));
+  mockFs.rmSync.throws(new Error('Permission denied'));
+
+  const tx = new UpdateTransaction('/test/repo');
+  const result = tx.cleanupStaleAetherDirs('/test/repo');
+
+  t.is(result.cleaned.length, 0, 'cleaned should be empty when removal fails');
+  t.is(result.failed.length, 1, 'failed should have 1 entry');
+  t.true(result.failed[0].error.includes('Permission denied'), 'error message should be included');
+  t.true(result.failed[0].label.includes('agents'), 'label should reference agents');
 });
