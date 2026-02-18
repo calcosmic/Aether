@@ -137,6 +137,38 @@ Extract from JSON result:
 - `phases_completed`: Number of completed phases
 - `total_phases`: Total phases in plan
 
+### Step 2.7: Generate Progress Bars
+
+Calculate progress metrics and generate visual bars.
+
+Run using the Bash tool with description "Computing phase progress...":
+```bash
+current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
+total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
+
+# Calculate task progress in current phase
+if [[ "$current_phase" -gt 0 && "$current_phase" -le "$total_phases" ]]; then
+  phase_idx=$((current_phase - 1))
+  tasks_completed=$(jq -r ".plan.phases[$phase_idx].tasks // [] | map(select(.status == \"completed\")) | length" .aether/data/COLONY_STATE.json)
+  tasks_total=$(jq -r ".plan.phases[$phase_idx].tasks // [] | length" .aether/data/COLONY_STATE.json)
+  phase_name=$(jq -r ".plan.phases[$phase_idx].name // \"Unnamed\"" .aether/data/COLONY_STATE.json)
+else
+  tasks_completed=0
+  tasks_total=0
+  phase_name="No plan created"
+fi
+
+# Generate progress bars
+phase_bar=$(bash .aether/aether-utils.sh generate-progress-bar "$current_phase" "$total_phases" 20)
+task_bar=$(bash .aether/aether-utils.sh generate-progress-bar "$tasks_completed" "$tasks_total" 20)
+
+echo "phase_bar=$phase_bar"
+echo "task_bar=$task_bar"
+echo "phase_name=$phase_name"
+```
+
+Store `phase_bar`, `task_bar`, and `phase_name` values for display in Step 3.
+
 ### Step 3: Display
 
 Output format:
@@ -150,8 +182,9 @@ Output format:
 
 👑 Goal: <goal (truncated to 60 chars)>
 
-📍 Phase <N>/<M>: <phase name>
-   Tasks: <completed>/<total> complete
+📍 Progress
+   Phase: [████████░░░░░░░░░░░░] <N>/<M> phases
+   Tasks: [████████████████░░░░] <completed>/<total> tasks in Phase <N>
 
 🎯 Focus: <focus_count> areas | 🚫 Avoid: <constraints_count> patterns
 🧠 Instincts: <total> learned (<high_confidence> strong)
@@ -160,16 +193,9 @@ Output format:
 💭 Dreams: <dream_count> recorded (latest: <latest_dream>)
 
 State: <state>
-Next:  <suggested_command>   <phase_context>
 ```
 
-**Phase context for Next line:** Include the phase name inline with the suggestion:
-- READY → `Next:  /ant:build 3   Phase 3: Add Authentication`
-- EXECUTING → `Next:  /ant:continue   Phase 3: Add Authentication`
-- PLANNING → `Next:  /ant:plan`
-- IDLE → `Next:  /ant:init`
-
-Look up the phase name from `plan.phases[current_phase].name` and append it.
+Use the `phase_bar` and `task_bar` values computed in Step 2.7 for the actual bar characters and counts.
 
 **If instincts exist, also show top 3:**
 ```
@@ -179,23 +205,24 @@ Look up the phase name from `plan.phases[current_phase].name` and append it.
    [0.7] 🐜 debugging: Trace to root cause first
 ```
 
-**Suggested command logic (use actual values, not templates):**
-
-Calculate `next_phase = current_phase + 1` from state.
-
-Generate the suggested command based on colony state:
-- IDLE -> `/ant:init`
-- READY -> `/ant:build {next_phase}` (e.g., if current_phase is 2, output `/ant:build 3`)
-- EXECUTING -> `/ant:continue`
-- PLANNING -> `/ant:plan`
-
-The output must be a copy-pasteable command with real numbers, not placeholders.
-
 **Dream display:**
 - If no dreams exist: `💭 Dreams: None recorded`
 - If dreams exist: `💭 Dreams: <count> recorded (latest: YYYY-MM-DD HH:MM)`
 
 **Edge cases:**
-- No phases yet: "Phase 0/0: No plan created"
-- No tasks in phase: "Tasks: 0/0 complete"
+- No phases yet: show `[░░░░░░░░░░░░░░░░░░░░] 0/0 phases`
+- No tasks in phase: show `[░░░░░░░░░░░░░░░░░░░░] 0/0 tasks in Phase 0`
 - No constraints file: "Constraints: 0 focus, 0 avoid"
+
+**At the end of the output, generate the Next Up block:**
+
+Run using the Bash tool with description "Generating next steps...":
+```bash
+state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
+current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
+total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
+
+bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
+```
+
+This auto-generates state-based recommendations (IDLE → init, READY → build, EXECUTING → continue, PLANNING → plan).
