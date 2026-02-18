@@ -174,7 +174,7 @@ class UpdateTransaction {
     // Target directories for git safety checks
     this.targetDirs = ['.aether', '.claude/commands/ant', '.opencode/commands/ant', '.opencode/agents'];
 
-    // System files allowlist (from cli.js)
+    // System files allowlist — must match bin/sync-to-runtime.sh SYSTEM_FILES exactly
     this.SYSTEM_FILES = [
       'aether-utils.sh',
       'coding-standards.md',
@@ -188,6 +188,9 @@ class UpdateTransaction {
       'verification.md',
       'workers.md',
       'workers-new-castes.md',
+      'CONTEXT.md',
+      'model-profiles.yaml',
+      'recover.sh',
       'docs/biological-reference.md',
       'docs/command-sync.md',
       'docs/constraints.md',
@@ -216,6 +219,19 @@ class UpdateTransaction {
       'utils/state-loader.sh',
       'utils/swarm-display.sh',
       'utils/watch-spawn-tree.sh',
+      'utils/xml-utils.sh',
+      'utils/xml-core.sh',
+      'utils/xml-compose.sh',
+      'utils/queen-to-md.xsl',
+      'exchange/pheromone-xml.sh',
+      'exchange/wisdom-xml.sh',
+      'exchange/registry-xml.sh',
+      'schemas/aether-types.xsd',
+      'schemas/pheromone.xsd',
+      'schemas/queen-wisdom.xsd',
+      'schemas/colony-registry.xsd',
+      'schemas/worker-priming.xsd',
+      'schemas/prompt.xsd',
       'templates/QUEEN.md.template',
     ];
   }
