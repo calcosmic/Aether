@@ -44,7 +44,7 @@
 **Milestone Goal:** Fix every documented bug, clean up the distribution chain, and leave a bulletproof foundation for new features. All five phases publish together in one `npm install -g .` cycle.
 
 - [x] **Phase 14: Foundation Safety** - Fix fallback json_err signature and template path resolution to unblock all subsequent work (completed 2026-02-18)
-- [ ] **Phase 15: Distribution Chain** - Correct update-transaction.js source directory, update EXCLUDE_DIRS atomically, remove dead duplicates, sync allowlist
+- [x] **Phase 15: Distribution Chain** - Correct update-transaction.js source directory, update EXCLUDE_DIRS atomically, remove dead duplicates, sync allowlist (completed 2026-02-18)
 - [ ] **Phase 16: Lock Lifecycle Hardening** - Audit all acquire/release pairs, eliminate deadlocks on jq failure, add trap-based cleanup on all exit paths
 - [ ] **Phase 17: Error Code Standardization** - Replace all hardcoded strings with E_* constants in json_err calls, document error codes
 - [ ] **Phase 18: Reliability & Architecture Gaps** - Wire temp file cleanup, rotate spawn-tree, add exec error handling, document queen commands, validate JSON output
@@ -74,7 +74,11 @@ Plans:
   4. `planning.md` phantom file is absent from all sync allowlists and does not appear in target repos
   5. The `.aether/agents/` and `.aether/commands/` dead duplicate directories are gone from the source repo
   6. Old 2.x npm versions are deprecated on the registry — `npm install -g aether` installs the current version
-**Plans**: TBD
+**Plans:** 3/3 plans complete
+Plans:
+- [ ] 15-01-PLAN.md — Fix source directory, EXCLUDE_DIRS, and allowlists (DIST-01, DIST-02, DIST-04, DIST-05)
+- [ ] 15-02-PLAN.md — Remove dead duplicate directories from source repo (DIST-03)
+- [ ] 15-03-PLAN.md — Stale-dir cleanup, user feedback, tests, and npm deprecation (DIST-06)
 
 ### Phase 16: Lock Lifecycle Hardening
 **Goal**: Lock deadlocks are impossible when jq fails — every lock acquired is released on every exit path, including error branches
@@ -85,7 +89,11 @@ Plans:
   2. Sending SIGTERM or SIGINT to a command holding a lock releases the lock before the process exits
   3. A simulated race on atomic-write backup creation does not corrupt the target file
   4. Concurrent `context-update` calls from two processes produce a valid merged result, not a half-written file
-**Plans**: TBD
+**Plans:** 3 plans
+Plans:
+- [ ] 16-01-PLAN.md — Unify trap pattern in flag commands + stale lock user prompt (LOCK-01, LOCK-02)
+- [ ] 16-02-PLAN.md — Add locking to context-update + force-unlock subcommand (LOCK-04)
+- [ ] 16-03-PLAN.md — Lock lifecycle tests + known-issues.md updates (LOCK-01, LOCK-02, LOCK-03, LOCK-04)
 
 ### Phase 17: Error Code Standardization
 **Goal**: Every json_err call in aether-utils.sh produces machine-readable output with a structured code field — zero hardcoded strings remaining
@@ -130,8 +138,8 @@ Plans:
 | 12. Build Progress | v1.1 | 2/2 | Complete | 2026-02-18 |
 | 13. Distribution Reliability | v1.1 | 1/1 | Complete | 2026-02-18 |
 | 14. Foundation Safety | v1.2 | Complete    | 2026-02-18 | - |
-| 15. Distribution Chain | v1.2 | 0/TBD | Not started | - |
-| 16. Lock Lifecycle Hardening | v1.2 | 0/TBD | Not started | - |
+| 15. Distribution Chain | v1.2 | Complete    | 2026-02-18 | - |
+| 16. Lock Lifecycle Hardening | v1.2 | 0/3 | Planned | - |
 | 17. Error Code Standardization | v1.2 | 0/TBD | Not started | - |
 | 18. Reliability & Architecture Gaps | v1.2 | 0/TBD | Not started | - |
 
