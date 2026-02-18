@@ -559,10 +559,14 @@ test_bootstrap_system() {
 
     unset HOME
 
+    # Filter out fallback json_err diagnostic warning (stderr line from ERR-01 fix)
+    local json_output
+    json_output=$(echo "$output" | grep -v '^\[aether\] Warning:')
+
     # This may fail if hub doesn't exist, that's OK - just verify JSON output
-    if [[ -n "$output" ]]; then
-        if ! assert_json_valid "$output"; then
-            test_fail "valid JSON" "invalid JSON: $output"
+    if [[ -n "$json_output" ]]; then
+        if ! assert_json_valid "$json_output"; then
+            test_fail "valid JSON" "invalid JSON: $json_output"
             rm -rf "$tmp_dir"
             return 1
         fi
