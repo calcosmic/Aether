@@ -117,6 +117,11 @@ atomic_write_from_file() {
         return 1
     fi
 
+    # Create backup BEFORE validation (mirrors atomic_write ordering — LOCK-03)
+    if [ -f "$target_file" ]; then
+        create_backup "$target_file"
+    fi
+
     # Validate JSON if it's a JSON file
     if [[ "$target_file" == *.json ]]; then
         if ! python3 -c "import json; json.load(open('$temp_file'))" 2>/dev/null; then
@@ -124,11 +129,6 @@ atomic_write_from_file() {
             rm -f "$temp_file"
             return 1
         fi
-    fi
-
-    # Create backup if target exists
-    if [ -f "$target_file" ]; then
-        create_backup "$target_file"
     fi
 
     # Atomic rename
