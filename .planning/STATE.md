@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 ## Current Position
 
 Phase: 15 of 18 (Distribution Chain)
-Plan: — (not yet planned)
-Status: Ready to plan
-Last activity: 2026-02-18 — Phase 14 verified and complete (ERR-01 + ARCH-01 fixed)
+Plan: 02 complete (15-02-SUMMARY.md)
+Status: In progress — 15-02 done, continuing phase 15
+Last activity: 2026-02-18 — 15-02 complete: deleted .aether/agents/ and .aether/commands/ (92 dead duplicate files)
 
-Progress: ██░░░░░░░░░░░░░░░░░░ 20% (v1.2 — Phase 14 complete)
+Progress: ██░░░░░░░░░░░░░░░░░░ 21% (v1.2 — Phase 15 in progress)
 
 ## Performance Metrics
 
@@ -30,7 +30,7 @@ Progress: ██░░░░░░░░░░░░░░░░░░ 20% (v1.2
 | 1-9 (v1.0) | 27/27 | Complete |
 | 10-13 (v1.1) | 13/13 | Complete |
 | 14 (v1.2) | 1/1 | Complete |
-| 15-18 (v1.2) | 0/TBD | Not started |
+| 15-18 (v1.2) | 2/TBD | In progress (15-01 skipped/research, 15-02 complete) |
 
 *Updated after each plan completion*
 
@@ -49,7 +49,7 @@ Progress: ██░░░░░░░░░░░░░░░░░░ 20% (v1.2
 - update-transaction.js:909 reads from hub root instead of hub/system/ — affects all three methods (syncFiles, verifyIntegrity, detectPartialUpdate)
 - Fallback json_err (lines 81-86 of aether-utils.sh) ignores code parameter — FIXED in 14-01 (commit 56039bf)
 - Two parallel lock tracking systems (global LOCK_ACQUIRED from file-lock.sh, local lock_acquired in aether-utils.sh) can disagree
-- .aether/agents/ and .aether/commands/ are dead duplicates — not in any distribution chain
+- .aether/agents/ and .aether/commands/ REMOVED (15-02, commit 0ebda62) — were dead duplicates not in any distribution chain
 - caste-system.md missing from sync allowlist — not reaching target repos
 - `flock` not available on macOS without Homebrew — use mkdir-based locking
 - chamber-utils.sh and chamber-compare.sh define their own bare-string `json_err` that overwrites error-handler.sh's enhanced version — pre-existing bug, deferred to Phase 17
@@ -61,5 +61,5 @@ Progress: ██░░░░░░░░░░░░░░░░░░ 20% (v1.2
 ## Session Continuity
 
 Last session: 2026-02-18
-Stopped at: Phase 14 complete and verified. Phase 15 ready to plan.
-Resume file: .planning/phases/14-foundation-safety/14-VERIFICATION.md
+Stopped at: Completed 15-02-PLAN.md (dead duplicate directories removed)
+Resume file: .planning/phases/15-distribution-chain/15-02-SUMMARY.md
