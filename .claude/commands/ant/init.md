@@ -277,9 +277,9 @@ bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "C
 Output this header:
 
 ```
-🌱🐜🆕🐜🌱 ═══════════════════════════════════════════════════
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    A E T H E R   C O L O N Y
-═══════════════════════════════════════════════════ 🌱🐜🆕🐜🌱
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
 Then output the result:
@@ -302,15 +302,16 @@ Then output the result:
    during planning and execution.
 {End if}
 
-🐜 The colony awaits your command:
-
-   /ant:plan      📋 Generate project plan
-   /ant:colonize  🗺️  Analyze existing codebase first
-   /ant:watch     👁️  Set up live visibility
-
 💾 State persisted — safe to /clear, then run /ant:plan
 
 📋 Context document created at `.aether/CONTEXT.md` — read this if session resets
+
+──────────────────────────────────────────────────
+🐜 Next Up
+──────────────────────────────────────────────────
+   /ant:plan                 📋 Create execution plan
+   /ant:status               📊 Check colony state
+   /ant:focus                🎯 Set initial focus
 ```
 
 ### Step 8: Initialize Session

@@ -278,7 +278,9 @@ Display the ASCII art ceremony:
 
 Below the ASCII art, display:
 ```
-C R O W N E D   A N T H I L L
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   C R O W N E D   A N T H I L L
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Goal: {goal}
 Phases: {phases_completed} of {total_phases} completed
@@ -292,7 +294,12 @@ The colony stands crowned and sealed.
 Its wisdom lives on in QUEEN.md.
 The anthill has reached its final form.
 
-Run /ant:entomb to archive this colony to chambers.
+──────────────────────────────────────────────────
+🐜 Next Up
+──────────────────────────────────────────────────
+   /ant:entomb              🏺 Archive colony to chambers
+   /ant:lay-eggs            🥚 Start a new colony
+   /ant:tunnels             🗄️  Browse archived chambers
 ```
 
 ### Edge Cases

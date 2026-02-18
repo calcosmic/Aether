@@ -450,7 +450,9 @@ bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "C
 
 Display:
 ```
-C O L O N Y   E N T O M B E D
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   C O L O N Y   E N T O M B E D
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Colony archived successfully
 
@@ -462,6 +464,13 @@ Chamber: .aether/chambers/{chamber_name}/
 {xml_archive_line}
 
 The colony rests. Its learnings live on in QUEEN.md.
+
+──────────────────────────────────────────────────
+🐜 Next Up
+──────────────────────────────────────────────────
+   /ant:lay-eggs            🥚 Start a new colony
+   /ant:tunnels             🗄️  Browse archived chambers
+```
 
 What would you like to do next?
   1. /ant:lay-eggs "<new goal>"  — Start a new colony
