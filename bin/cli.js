@@ -1421,7 +1421,7 @@ program
       }
 
       const label = dryRun ? 'would update' : 'updated';
-      let summary = `\nSummary: ${updated} ${label}, ${upToDate} up-to-date, ${pruned} pruned`;
+      let summary = `\nSummary: ${updated} ${label}, ${upToDate} up to date, ${pruned} pruned`;
       if (dirty > 0) summary += `, ${dirty} dirty (skipped)`;
       if (totalRemoved > 0) summary += `, ${totalRemoved} stale files removed`;
       console.log(summary);
@@ -1440,11 +1440,19 @@ program
         process.exit(getExitCode(error.code));
       }
 
+      const pendingPath = path.join(repoAether, '.update-pending');
+      const hasPending = fs.existsSync(pendingPath);
+
+      if (hasPending) {
+        console.log('Detected incomplete update, re-syncing...');
+        try { fs.unlinkSync(pendingPath); } catch { /* ignore */ }
+      }
+
       const currentVersion = readJsonSafe(path.join(repoAether, 'version.json'));
       const currentVer = currentVersion ? currentVersion.version : 'unknown';
 
-      if (!forceFlag && !dryRun && currentVer === sourceVersion) {
-        console.log(c.info(`Already up-to-date (v${sourceVersion}).`));
+      if (!hasPending && !forceFlag && !dryRun && currentVer === sourceVersion) {
+        console.log(c.info(`Already up to date (v${sourceVersion}).`));
         return;
       }
 

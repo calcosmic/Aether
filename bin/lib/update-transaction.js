@@ -1289,6 +1289,14 @@ class UpdateTransaction {
    * @returns {Promise<boolean>} True if rollback succeeded
    */
   async rollback() {
+    // Clear pending sentinel on rollback — we've cleanly returned to prior state
+    const pendingPath = path.join(this.repoPath, '.aether', '.update-pending');
+    try {
+      if (fs.existsSync(pendingPath)) {
+        fs.unlinkSync(pendingPath);
+      }
+    } catch { /* ignore — rollback cleanup is best-effort */ }
+
     this.state = TransactionStates.ROLLING_BACK;
     this.log('  Rolling back to checkpoint...');
 
@@ -1371,6 +1379,13 @@ class UpdateTransaction {
   async execute(sourceVersion, options = {}) {
     const dryRun = options.dryRun || false;
 
+    // Write pending sentinel BEFORE any work — marks update as in-flight
+    const pendingPath = path.join(this.repoPath, '.aether', '.update-pending');
+    this.writeJsonSync(pendingPath, {
+      target_version: sourceVersion,
+      started_at: new Date().toISOString(),
+    });
+
     try {
       // Phase 0: Validate repo state (before any modifications)
       // Check for dirty repo and provide clear recovery instructions
@@ -1432,6 +1447,15 @@ class UpdateTransaction {
         this.state = TransactionStates.COMMITTING;
         this.updateVersion(sourceVersion);
         this.state = TransactionStates.COMMITTED;
+
+        // Delete pending sentinel — update is now complete
+        try {
+          if (fs.existsSync(pendingPath)) {
+            fs.unlinkSync(pendingPath);
+          }
+        } catch (err) {
+          this.log(`  Warning: could not clear update sentinel: ${err.message}`);
+        }
       }
 
       // Calculate totals
