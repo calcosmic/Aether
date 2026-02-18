@@ -345,7 +345,7 @@ bash .aether/aether-utils.sh pheromone-read 2>/dev/null
        Scanning history of files to be modified...
    ```
 
-   Spawn a Scout (using Task tool with `subagent_type="general-purpose"`) with this prompt:
+   Spawn a Scout (using Task tool with `subagent_type="general-purpose"`, include `description: "🏺 Archaeologist {archaeologist_name}: Pre-build history scan"`) with this prompt:
    # NOTE: Claude Code uses aether-archaeologist; OpenCode uses general-purpose with role injection
 
    ```
@@ -418,13 +418,14 @@ bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "
 
 **Show real-time display header:**
 ```
-🔨  COLONY BUILD INITIATED
-═══════════════════════════════════════════════════
-Phase {id}: {name}
-Build ID: {build_id}
-
-Launching swarm display...
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Phase {id}: {name} — {N} waves, {M} tasks
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
+
+Where N = number of builder waves (excluding watcher/chaos) and M = total builder tasks.
+
+Record `build_started_at_epoch=$(date +%s)` — this epoch integer is used by the BUILD SUMMARY block in Step 7 to calculate elapsed time.
 
 Analyze the phase tasks:
 
@@ -482,12 +483,31 @@ Total: {N} Builders + 1 Watcher + 1 Chaos = {N+2} spawns
 
 **CRITICAL: Spawn ALL Wave 1 workers in a SINGLE message using multiple Task tool calls.**
 
+**Announce the wave before spawning:**
+
+Display the spawn announcement immediately before firing Task calls:
+
+For single-caste waves (typical — all builders):
+```
+Spawning {N} 🔨 Builder workers in parallel...
+```
+
+For mixed-caste waves (uncommon):
+```
+Spawning {N} workers ({X} 🔨 Builder, {Y} 🔍 Scout) in parallel...
+```
+
+For a single worker:
+```
+Spawning 🔨 Builder {ant_name} for {task_summary}...
+```
+
 **First, mark build start in context:**
 ```bash
 bash .aether/aether-utils.sh context-update build-start {phase_id} {wave_1_worker_count} {wave_1_task_count}
 ```
 
-For each Wave 1 task, use Task tool with `subagent_type="general-purpose"` (DO NOT use run_in_background - multiple Task calls in a single message run in parallel and block until complete):
+For each Wave 1 task, use Task tool with `subagent_type="general-purpose"`, include `description: "🔨 Builder {Ant-Name}: {task_description}"` (DO NOT use run_in_background - multiple Task calls in a single message run in parallel and block until complete):
 
 Log each spawn and update swarm display:
 ```bash
@@ -522,8 +542,10 @@ Spawn sub-workers ONLY if 3x complexity:
 - Announce: "🐜 Spawning {child_name} for {reason}"
 - Log: bash .aether/aether-utils.sh spawn-log "{Ant-Name}" "builder" "{child_name}" "{task}"
 
+Count your total tool calls (Read + Grep + Edit + Bash + Write) and report as tool_count.
+
 Return ONLY this JSON (no other text):
-{"ant_name": "{Ant-Name}", "task_id": "{id}", "status": "completed|failed|blocked", "summary": "What you did", "files_created": [], "files_modified": [], "tests_written": [], "blockers": []}
+{"ant_name": "{Ant-Name}", "task_id": "{id}", "status": "completed|failed|blocked", "summary": "What you did", "tool_count": 0, "files_created": [], "files_modified": [], "tests_written": [], "blockers": []}
 ```
 
 **Queen Wisdom Section Template (injected only if wisdom exists):**
@@ -578,13 +600,25 @@ bash .aether/aether-utils.sh swarm-display-render "$build_id"
 
 ### Step 5.3: Spawn Wave 2+ Workers (Sequential Waves)
 
+**Before each subsequent wave, display a wave separator:**
+```
+━━ Wave {X} of {N} ━━
+```
+Then display the spawn announcement (same format as Step 5.1).
+
 Repeat Step 5.1-5.2 for each subsequent wave, waiting for previous wave to complete.
 
 ### Step 5.4: Spawn Watcher for Verification
 
 **MANDATORY: Always spawn a Watcher — testing must be independent.**
 
-Spawn the Watcher using Task tool with `subagent_type="general-purpose"` (DO NOT use run_in_background - task blocks until complete):
+**Announce the verification wave:**
+```
+━━ Verification ━━
+Spawning 👁️ Watcher {watcher_name} for verification...
+```
+
+Spawn the Watcher using Task tool with `subagent_type="general-purpose"`, include `description: "👁️ Watcher {Watcher-Name}: Independent verification"` (DO NOT use run_in_background - task blocks until complete):
 
 ```bash
 bash .aether/aether-utils.sh spawn-log "Queen" "watcher" "{watcher_name}" "Independent verification"
@@ -611,8 +645,10 @@ Spawn sub-workers if needed:
 - Log: bash .aether/aether-utils.sh spawn-log "{Watcher-Name}" "watcher" "{child}" "{task}"
 - Announce: "🐜 Spawning {child} to investigate {issue}"
 
+Count your total tool calls (Read + Grep + Edit + Bash + Write) and report as tool_count.
+
 Return ONLY this JSON:
-{"ant_name": "{Watcher-Name}", "verification_passed": true|false, "files_verified": [], "issues_found": [], "quality_score": N, "recommendation": "proceed|fix_required"}
+{"ant_name": "{Watcher-Name}", "verification_passed": true|false, "files_verified": [], "issues_found": [], "quality_score": N, "tool_count": 0, "recommendation": "proceed|fix_required"}
 ```
 
 ### Step 5.5: Process Watcher Results
@@ -645,7 +681,12 @@ bash .aether/aether-utils.sh flag-list --phase {phase_number}
 ```
 Parse the result and extract unresolved flag titles into a list: `{existing_flag_titles}` (comma-separated titles from `.result.flags[].title`). If no flags exist, set `{existing_flag_titles}` to "None".
 
-Spawn the Chaos Ant using Task tool with `subagent_type="general-purpose"` (DO NOT use run_in_background - task blocks until complete):
+**Announce the resilience testing wave:**
+```
+Spawning 🎲 Chaos {chaos_name} for resilience testing...
+```
+
+Spawn the Chaos Ant using Task tool with `subagent_type="general-purpose"`, include `description: "🎲 Chaos {Chaos-Name}: Resilience testing"` (DO NOT use run_in_background - task blocks until complete):
 # NOTE: Claude Code uses aether-chaos; OpenCode uses general-purpose with role injection
 
 **Chaos Ant Prompt (CLEAN OUTPUT):**
@@ -664,8 +705,10 @@ Rules:
 - Read-only (don't modify code)
 - Focus: edge cases, boundaries, error handling
 
+Count your total tool calls (Read + Grep + Edit + Bash + Write) and report as tool_count.
+
 Return ONLY this JSON:
-{"ant_name": "{Chaos-Name}", "scenarios_tested": 5, "findings": [{"id": 1, "category": "edge_case|boundary|error_handling", "severity": "critical|high|medium|low", "title": "...", "description": "..."}], "overall_resilience": "strong|moderate|weak", "summary": "..."}
+{"ant_name": "{Chaos-Name}", "scenarios_tested": 5, "findings": [{"id": 1, "category": "edge_case|boundary|error_handling", "severity": "critical|high|medium|low", "title": "...", "description": "..."}], "overall_resilience": "strong|moderate|weak", "tool_count": 0, "summary": "..."}
 ```
 
 ### Step 5.7: Process Chaos Ant Results
