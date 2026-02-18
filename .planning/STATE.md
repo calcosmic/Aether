@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 ## Current Position
 
 Phase: 16 of 18 (Lock Lifecycle Hardening)
-Plan: 01 complete (16-01-SUMMARY.md)
-Status: In progress — 16-01 done, continuing phase 16
-Last activity: 2026-02-18 — 16-01 complete: stale-lock user prompt, uniform trap pattern in all 4 flag commands, atomic_write_from_file backup ordering fixed
+Plan: 01 complete (16-01-SUMMARY.md), 02 complete (16-02-SUMMARY.md)
+Status: In progress — 16-01 and 16-02 done, continuing phase 16
+Last activity: 2026-02-18 — 16-02 complete: lock-wrapped context-update (all 11 actions via single acquire/release pair), force-unlock subcommand added
 
-Progress: ██░░░░░░░░░░░░░░░░░░ 22% (v1.2 — Phase 15 in progress)
+Progress: ██░░░░░░░░░░░░░░░░░░ 22% (v1.2 — Phase 16 in progress)
 
 ## Performance Metrics
 
@@ -30,7 +30,7 @@ Progress: ██░░░░░░░░░░░░░░░░░░ 22% (v1.2
 | 1-9 (v1.0) | 27/27 | Complete |
 | 10-13 (v1.1) | 13/13 | Complete |
 | 14 (v1.2) | 1/1 | Complete |
-| 15-18 (v1.2) | 4/TBD | In progress (15-01, 15-02, 15-03, 16-01 complete) |
+| 15-18 (v1.2) | 5/TBD | In progress (15-01, 15-02, 15-03, 16-01, 16-02 complete) |
 
 *Updated after each plan completion*
 
@@ -46,6 +46,8 @@ Progress: ██░░░░░░░░░░░░░░░░░░ 22% (v1.2
 - Phase 16-01: stale-lock prompt replaces silent auto-removal; [y/N] TTY prompt in interactive mode, JSON error in non-interactive; lock age checked before PID to handle PID reuse; SIGHUP added to trap
 - Phase 16-01: uniform trap pattern (acquire -> trap EXIT -> work -> trap - EXIT -> release -> json_ok) across all 4 flag commands; local lock_acquired variables removed; release_lock takes no args
 - Phase 16-01: atomic_write_from_file backup ordering fixed to match atomic_write (backup before validation, LOCK-03)
+- Phase 16-02: _ctx_lock_held local variable is primary release gate; EXIT trap stays permanently active as safety net (not cleared on success path) because _cmd_context_update returns not exits
+- Phase 16-02: force-unlock requires --yes in non-interactive mode; prompts [y/N] in interactive mode
 - ERR-01 (14-01): fallback json_err emits `{code, message}` object — separate commits per fix strategy confirmed
 - ARCH-01 (14-01): hub path first in template search loop; error message includes exact install command
 
@@ -65,5 +67,5 @@ Progress: ██░░░░░░░░░░░░░░░░░░ 22% (v1.2
 ## Session Continuity
 
 Last session: 2026-02-18
-Stopped at: Completed 16-01-PLAN.md (lock lifecycle hardening — stale-lock prompt, uniform trap pattern, LOCK-03 fix)
-Resume file: .planning/phases/16-lock-lifecycle-hardening/16-01-SUMMARY.md
+Stopped at: Completed 16-02-PLAN.md (context-update locking + force-unlock subcommand)
+Resume file: .planning/phases/16-lock-lifecycle-hardening/16-02-SUMMARY.md
