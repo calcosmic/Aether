@@ -45,9 +45,9 @@
 
 - [x] **Phase 14: Foundation Safety** - Fix fallback json_err signature and template path resolution to unblock all subsequent work (completed 2026-02-18)
 - [x] **Phase 15: Distribution Chain** - Correct update-transaction.js source directory, update EXCLUDE_DIRS atomically, remove dead duplicates, sync allowlist (completed 2026-02-18)
-- [ ] **Phase 16: Lock Lifecycle Hardening** - Audit all acquire/release pairs, eliminate deadlocks on jq failure, add trap-based cleanup on all exit paths
-- [ ] **Phase 17: Error Code Standardization** - Replace all hardcoded strings with E_* constants in json_err calls, document error codes
-- [ ] **Phase 18: Reliability & Architecture Gaps** - Wire temp file cleanup, rotate spawn-tree, add exec error handling, document queen commands, validate JSON output
+- [x] **Phase 16: Lock Lifecycle Hardening** - Audit all acquire/release pairs, eliminate deadlocks on jq failure, add trap-based cleanup on all exit paths (completed 2026-02-19)
+- [x] **Phase 17: Error Code Standardization** - Replace all hardcoded strings with E_* constants in json_err calls, document error codes (completed 2026-02-19)
+- [x] **Phase 18: Reliability & Architecture Gaps** - Wire temp file cleanup, rotate spawn-tree, add exec error handling, document queen commands, validate JSON output (completed 2026-02-19)
 
 ## Phase Details
 
@@ -89,7 +89,7 @@ Plans:
   2. Sending SIGTERM or SIGINT to a command holding a lock releases the lock before the process exits
   3. A simulated race on atomic-write backup creation does not corrupt the target file
   4. Concurrent `context-update` calls from two processes produce a valid merged result, not a half-written file
-**Plans:** 3 plans
+**Plans:** 3/3 plans complete
 Plans:
 - [ ] 16-01-PLAN.md — Unify trap pattern in flag commands + stale lock user prompt (LOCK-01, LOCK-02)
 - [ ] 16-02-PLAN.md — Add locking to context-update + force-unlock subcommand (LOCK-04)
@@ -104,7 +104,11 @@ Plans:
   2. An automated grep of aether-utils.sh for `json_err "` (bare string as first arg, not a variable) returns zero matches
   3. A contributor can look up any error constant in `.aether/docs/error-codes.md` and find its meaning and when to use it
   4. Error path tests for lock and flag operations execute without false positives and catch a deliberately introduced hardcoded-string call
-**Plans**: TBD
+**Plans:** 3/3 plans complete
+Plans:
+- [ ] 17-01-PLAN.md — Add new E_* constants and fix all 29 bare-string json_err calls in aether-utils.sh (ERR-02)
+- [ ] 17-02-PLAN.md — Fix chamber script json_err override bug and convert 20 bare-string calls (ERR-02)
+- [ ] 17-03-PLAN.md — Create error-codes.md, add to sync allowlists, add regression and runtime tests (ERR-03, ERR-04)
 
 ### Phase 18: Reliability & Architecture Gaps
 **Goal**: Stale resources stop accumulating, exec errors are caught, queen commands are discoverable, and JSON output is validated before leaving the read layer
@@ -116,7 +120,12 @@ Plans:
   3. Running `aether help` (or the equivalent help command) lists queen-* commands alongside all other available commands
   4. `queen-read` returns an error rather than invalid JSON when the state file contains malformed content
   5. Feature detection in aether-utils.sh completes without a race against error-handler.sh loading — no "function not found" errors on startup
-**Plans**: TBD
+**Plans:** 4/4 plans complete
+Plans:
+- [ ] 18-01-PLAN.md — Startup ordering fix, temp cleanup wiring, spawn-tree rotation (ARCH-09, ARCH-10, ARCH-03)
+- [ ] 18-02-PLAN.md — Model command error handling and spawn fail-fast messaging (ARCH-07, ARCH-04)
+- [ ] 18-03-PLAN.md — Help command sections and queen-commands.md documentation (ARCH-08, ARCH-05)
+- [ ] 18-04-PLAN.md — queen-read JSON validation and state schema migration (ARCH-06, ARCH-02)
 
 ---
 
@@ -139,9 +148,9 @@ Plans:
 | 13. Distribution Reliability | v1.1 | 1/1 | Complete | 2026-02-18 |
 | 14. Foundation Safety | v1.2 | Complete    | 2026-02-18 | - |
 | 15. Distribution Chain | v1.2 | Complete    | 2026-02-18 | - |
-| 16. Lock Lifecycle Hardening | v1.2 | 0/3 | Planned | - |
-| 17. Error Code Standardization | v1.2 | 0/TBD | Not started | - |
-| 18. Reliability & Architecture Gaps | v1.2 | 0/TBD | Not started | - |
+| 16. Lock Lifecycle Hardening | v1.2 | Complete    | 2026-02-19 | - |
+| 17. Error Code Standardization | v1.2 | Complete    | 2026-02-19 | - |
+| 18. Reliability & Architecture Gaps | v1.2 | Complete    | 2026-02-19 | - |
 
 ---
 
