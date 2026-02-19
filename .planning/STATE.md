@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 ## Current Position
 
 Phase: 17 of 18 (Error Code Standardization)
-Plan: 2 of TBD — 17-01 and 17-02 complete
-Status: Phase 17 in progress (17-01 and 17-02 done)
-Last activity: 2026-02-19 — 17-02 complete: chamber-utils.sh and chamber-compare.sh override bug fixed; all 20 bare-string json_err calls converted to E_* constants
+Plan: 3 of TBD — 17-01, 17-02, and 17-03 complete
+Status: Phase 17 in progress (17-01, 17-02, and 17-03 done)
+Last activity: 2026-02-19 — 17-03 complete: error-codes.md reference created, both sync allowlists updated, 5 regression and runtime error code tests added (23 total, 0 failures)
 
-Progress: █████████████░░░░░░░ 65% (v1.2 — Phases 14-17 partial, 17-02+ and 18 remaining)
+Progress: █████████████░░░░░░░ 65% (v1.2 — Phases 14-17 partial, 17-04+ and 18 remaining)
 
 ## Performance Metrics
 
@@ -31,11 +31,14 @@ Progress: █████████████░░░░░░░ 65% (v1.2
 | 10-13 (v1.1) | 13/13 | Complete |
 | 14 (v1.2) | 1/1 | Complete |
 | 14-16 (v1.2) | 7/7 | Complete (14-01, 15-01 thru 15-03, 16-01 thru 16-03) |
-| 17 (v1.2) | 2/TBD | In progress (17-01 and 17-02 done) |
+| 17 (v1.2) | 3/TBD | In progress (17-01, 17-02, and 17-03 done) |
 | 18 (v1.2) | 0/TBD | Not started |
 
 *Updated after each plan completion*
+
+| Phase 17 P01 | 2 | 2 tasks | 2 files |
 | Phase 17 P02 | 2 | 2 tasks | 2 files |
+| Phase 17 P03 | 5 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -57,6 +60,7 @@ Progress: █████████████░░░░░░░ 65% (v1.2
 - ERR-02 (17-01): error message format locked: friendly tone ("Couldn't find...") + mandatory "Try:" suggestion; E_DEPENDENCY_MISSING for missing utility scripts/binaries; E_RESOURCE_NOT_FOUND for missing runtime state; xmllint uses E_FEATURE_UNAVAILABLE (optional feature, not hard dep)
 - [Phase 17]: Guard pattern chosen for chamber json_err: if ! type json_err preserves standalone fallback while yielding to error-handler.sh when loaded
 - [Phase 17]: chamber-compare.sh sources error-handler.sh directly since it always runs standalone
+- ERR-03/04 (17-03): grep -c exit code handling uses set +e/set -e to avoid double-output on zero matches; lock failure test uses nonexistent PID to trigger stale-lock path in non-interactive mode, then parses last JSON line for E_LOCK_FAILED
 
 ### Key Findings from Research
 - update-transaction.js:909 reads from hub root instead of hub/system/ — affects all three methods (syncFiles, verifyIntegrity, detectPartialUpdate)
@@ -65,13 +69,13 @@ Progress: █████████████░░░░░░░ 65% (v1.2
 - .aether/agents/ and .aether/commands/ REMOVED (15-02, commit 0ebda62) — were dead duplicates not in any distribution chain
 - caste-system.md missing from sync allowlist — not reaching target repos
 - `flock` not available on macOS without Homebrew — use mkdir-based locking
-- chamber-utils.sh and chamber-compare.sh define their own bare-string `json_err` that overwrites error-handler.sh's enhanced version — pre-existing bug, deferred to Phase 17
+- chamber-utils.sh and chamber-compare.sh define their own bare-string `json_err` that overwrites error-handler.sh's enhanced version — FIXED in 17-02
 
 ### Blockers / Concerns
-- None — chamber override bug resolved in 17-02; ERR-02 complete; Phase 17-03 (error-codes.md documentation) is next
+- None — ERR-02, ERR-03, ERR-04 complete; Phase 17 core work done; any remaining 17 plans are optional
 
 ## Session Continuity
 
 Last session: 2026-02-19
-Stopped at: Completed 17-02-PLAN.md — 17-02 done, ready for 17-03
-Resume file: .planning/phases/17-error-code-standardization/17-02-SUMMARY.md
+Stopped at: Completed 17-03-PLAN.md — 17-03 done, ERR-03 and ERR-04 satisfied
+Resume file: .planning/phases/17-error-code-standardization/17-03-SUMMARY.md
