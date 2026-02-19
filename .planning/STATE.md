@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 ## Current Position
 
 Phase: 17 of 18 (Error Code Standardization)
-Plan: 1 of TBD — 17-01 complete
-Status: Phase 17 in progress (17-01 done)
-Last activity: 2026-02-19 — 17-01 complete: all 27 bare-string json_err calls converted to E_* constants; 2 new constants added to error-handler.sh
+Plan: 2 of TBD — 17-01 and 17-02 complete
+Status: Phase 17 in progress (17-01 and 17-02 done)
+Last activity: 2026-02-19 — 17-02 complete: chamber-utils.sh and chamber-compare.sh override bug fixed; all 20 bare-string json_err calls converted to E_* constants
 
 Progress: █████████████░░░░░░░ 65% (v1.2 — Phases 14-17 partial, 17-02+ and 18 remaining)
 
@@ -31,10 +31,11 @@ Progress: █████████████░░░░░░░ 65% (v1.2
 | 10-13 (v1.1) | 13/13 | Complete |
 | 14 (v1.2) | 1/1 | Complete |
 | 14-16 (v1.2) | 7/7 | Complete (14-01, 15-01 thru 15-03, 16-01 thru 16-03) |
-| 17 (v1.2) | 1/TBD | In progress (17-01 done) |
+| 17 (v1.2) | 2/TBD | In progress (17-01 and 17-02 done) |
 | 18 (v1.2) | 0/TBD | Not started |
 
 *Updated after each plan completion*
+| Phase 17 P02 | 2 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -54,6 +55,8 @@ Progress: █████████████░░░░░░░ 65% (v1.2
 - ERR-01 (14-01): fallback json_err emits `{code, message}` object — separate commits per fix strategy confirmed
 - ARCH-01 (14-01): hub path first in template search loop; error message includes exact install command
 - ERR-02 (17-01): error message format locked: friendly tone ("Couldn't find...") + mandatory "Try:" suggestion; E_DEPENDENCY_MISSING for missing utility scripts/binaries; E_RESOURCE_NOT_FOUND for missing runtime state; xmllint uses E_FEATURE_UNAVAILABLE (optional feature, not hard dep)
+- [Phase 17]: Guard pattern chosen for chamber json_err: if ! type json_err preserves standalone fallback while yielding to error-handler.sh when loaded
+- [Phase 17]: chamber-compare.sh sources error-handler.sh directly since it always runs standalone
 
 ### Key Findings from Research
 - update-transaction.js:909 reads from hub root instead of hub/system/ — affects all three methods (syncFiles, verifyIntegrity, detectPartialUpdate)
@@ -65,10 +68,10 @@ Progress: █████████████░░░░░░░ 65% (v1.2
 - chamber-utils.sh and chamber-compare.sh define their own bare-string `json_err` that overwrites error-handler.sh's enhanced version — pre-existing bug, deferred to Phase 17
 
 ### Blockers / Concerns
-- chamber-utils.sh and chamber-compare.sh define their own bare-string `json_err` that overwrites error-handler.sh's enhanced version — Phase 17-01 resolved aether-utils.sh; chamber files are next (Phase 17-02+)
+- None — chamber override bug resolved in 17-02; ERR-02 complete; Phase 17-03 (error-codes.md documentation) is next
 
 ## Session Continuity
 
 Last session: 2026-02-19
-Stopped at: Completed 17-01-PLAN.md — 17-01 done, ready for 17-02
-Resume file: .planning/phases/17-error-code-standardization/17-01-SUMMARY.md
+Stopped at: Completed 17-02-PLAN.md — 17-02 done, ready for 17-03
+Resume file: .planning/phases/17-error-code-standardization/17-02-SUMMARY.md
