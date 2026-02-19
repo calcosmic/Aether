@@ -603,9 +603,93 @@ shift 2>/dev/null || true
 
 case "$cmd" in
   help)
-    cat <<'EOF'
-{"ok":true,"commands":["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-display-text","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","survey-load","survey-verify","pheromone-export","pheromone-write","pheromone-count","pheromone-read","instinct-read","pheromone-prime","pheromone-expire","eternal-init","pheromone-export-xml","pheromone-import-xml","pheromone-validate-xml","wisdom-export-xml","wisdom-import-xml","registry-export-xml","registry-import-xml","force-unlock"],"description":"Aether Colony Utility Layer — deterministic ops for the ant colony"}
-EOF
+    # Build help JSON with sections for discoverability.
+    # The flat 'commands' array is kept for backward compatibility
+    # (callers use: jq '.commands[]')
+    cat <<'HELP_EOF'
+{
+  "ok": true,
+  "commands": ["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-display-text","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","survey-load","survey-verify","pheromone-export","pheromone-write","pheromone-count","pheromone-read","instinct-read","pheromone-prime","pheromone-expire","eternal-init","pheromone-export-xml","pheromone-import-xml","pheromone-validate-xml","wisdom-export-xml","wisdom-import-xml","registry-export-xml","registry-import-xml","force-unlock"],
+  "sections": {
+    "Core": [
+      {"name": "help", "description": "List all available commands with sections"},
+      {"name": "version", "description": "Show installed version"}
+    ],
+    "Colony State": [
+      {"name": "validate-state", "description": "Validate COLONY_STATE.json or constraints.json"},
+      {"name": "load-state", "description": "Load and lock COLONY_STATE.json"},
+      {"name": "unload-state", "description": "Release COLONY_STATE.json lock"}
+    ],
+    "Queen Commands": [
+      {"name": "queen-init", "description": "Initialize a new colony QUEEN.md from template"},
+      {"name": "queen-read", "description": "Read QUEEN.md wisdom as JSON for worker priming"},
+      {"name": "queen-promote", "description": "Promote a validated learning to QUEEN.md wisdom"}
+    ],
+    "Model Routing": [
+      {"name": "model-profile", "description": "Manage caste-to-model assignments"},
+      {"name": "model-get", "description": "Get model assignment for a caste"},
+      {"name": "model-list", "description": "List all model assignments"}
+    ],
+    "Spawn Management": [
+      {"name": "spawn-log", "description": "Log a spawn event to spawn-tree.txt"},
+      {"name": "spawn-complete", "description": "Record spawn completion in spawn-tree.txt"},
+      {"name": "spawn-can-spawn", "description": "Check if spawn budget allows another worker"},
+      {"name": "spawn-get-depth", "description": "Get spawn depth for an ant name"},
+      {"name": "spawn-tree-load", "description": "Load spawn-tree.txt as JSON"},
+      {"name": "spawn-tree-active", "description": "List currently active spawns"},
+      {"name": "spawn-tree-depth", "description": "Get depth for a named ant"}
+    ],
+    "Flag Management": [
+      {"name": "flag-add", "description": "Add a flag to flags.json"},
+      {"name": "flag-check-blockers", "description": "Check for flags blocking a task"},
+      {"name": "flag-resolve", "description": "Mark a flag as resolved"},
+      {"name": "flag-acknowledge", "description": "Acknowledge a flag without resolving"},
+      {"name": "flag-list", "description": "List all flags"},
+      {"name": "flag-auto-resolve", "description": "Auto-resolve flags matching criteria"}
+    ],
+    "Chamber Management": [
+      {"name": "chamber-create", "description": "Entomb a colony into a named chamber"},
+      {"name": "chamber-verify", "description": "Verify chamber integrity"},
+      {"name": "chamber-list", "description": "List all available chambers"}
+    ],
+    "Swarm Operations": [
+      {"name": "swarm-findings-init", "description": "Initialize swarm findings file"},
+      {"name": "swarm-findings-add", "description": "Add a finding to swarm results"},
+      {"name": "swarm-findings-read", "description": "Read all swarm findings"},
+      {"name": "swarm-solution-set", "description": "Set the chosen swarm solution"},
+      {"name": "swarm-cleanup", "description": "Clean up swarm state files"},
+      {"name": "swarm-display-init", "description": "Initialize swarm progress display"},
+      {"name": "swarm-display-update", "description": "Update swarm display for an ant"},
+      {"name": "swarm-timing-start", "description": "Start timing for a swarm operation"},
+      {"name": "swarm-timing-get", "description": "Get elapsed time for a swarm"},
+      {"name": "swarm-timing-eta", "description": "Estimate remaining time for a swarm"}
+    ],
+    "Pheromone System": [
+      {"name": "pheromone-write", "description": "Write a pheromone signal"},
+      {"name": "pheromone-read", "description": "Read pheromone signals"},
+      {"name": "pheromone-count", "description": "Count active pheromone signals"},
+      {"name": "pheromone-prime", "description": "Prime the pheromone system"},
+      {"name": "pheromone-expire", "description": "Expire old pheromone signals"},
+      {"name": "pheromone-export", "description": "Export pheromone data to JSON"},
+      {"name": "pheromone-export-xml", "description": "Export pheromone data to XML"},
+      {"name": "pheromone-import-xml", "description": "Import pheromone data from XML"},
+      {"name": "pheromone-validate-xml", "description": "Validate pheromone XML against schema"}
+    ],
+    "Utilities": [
+      {"name": "generate-ant-name", "description": "Generate a unique ant name with caste prefix"},
+      {"name": "activity-log", "description": "Append an entry to the activity log"},
+      {"name": "activity-log-init", "description": "Initialize the activity log file"},
+      {"name": "activity-log-read", "description": "Read recent activity log entries"},
+      {"name": "generate-commit-message", "description": "Generate a commit message from git diff"},
+      {"name": "version-check", "description": "Check if Aether version meets requirement"},
+      {"name": "registry-add", "description": "Register a repo with Aether"},
+      {"name": "bootstrap-system", "description": "Bootstrap minimal system files if missing"},
+      {"name": "force-unlock", "description": "Emergency unlock — remove stale lock files"}
+    ]
+  },
+  "description": "Aether Colony Utility Layer — deterministic ops for the ant colony"
+}
+HELP_EOF
     ;;
   version)
     json_ok '"1.0.0"'
