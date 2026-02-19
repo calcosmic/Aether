@@ -313,7 +313,7 @@ Colony initialization in progress...
 
 | Constraint | Source | Date Set |
 |------------|--------|----------|
-| In the Aether repo, \`.aether/\` IS the source of truth — \`runtime/\` is auto-populated on publish | CLAUDE.md | Permanent |
+| In the Aether repo, \`.aether/\` IS the source of truth — published directly via npm (private dirs excluded by .npmignore) | CLAUDE.md | Permanent |
 | Never push without explicit user approval | CLAUDE.md Safety | Permanent |
 
 ---
@@ -1721,7 +1721,7 @@ EOF
     if git rev-parse --git-dir >/dev/null 2>&1; then
       # Check if there are changes to Aether-managed files only
       # Target directories that Aether is allowed to modify
-      target_dirs=".aether .claude/commands/ant .claude/commands/st .opencode runtime bin"
+      target_dirs=".aether .claude/commands/ant .claude/commands/st .opencode bin"
       has_changes=false
 
       for dir in $target_dirs; do
@@ -3376,11 +3376,10 @@ ANTLOGO
     queen_file="$AETHER_ROOT/.aether/docs/QUEEN.md"
 
     # Check multiple locations for template
-    # Order: hub (system/) -> dev (runtime/) -> repo local -> legacy
+    # Order: hub (system/) -> dev (.aether/) -> repo local -> legacy
     template_file=""
     for path in \
       "$HOME/.aether/system/templates/QUEEN.md.template" \
-      "$AETHER_ROOT/runtime/templates/QUEEN.md.template" \
       "$AETHER_ROOT/.aether/templates/QUEEN.md.template" \
       "$HOME/.aether/templates/QUEEN.md.template"; do
       if [[ -f "$path" ]]; then
@@ -3402,7 +3401,7 @@ ANTLOGO
     if [[ -z "$template_file" ]]; then
       json_err "$E_FILE_NOT_FOUND" \
         "Template not found. Run: npm install -g aether && aether install to restore it." \
-        '{"templates_checked":["~/.aether/system/templates/QUEEN.md.template","runtime/templates/QUEEN.md.template",".aether/templates/QUEEN.md.template","~/.aether/templates/QUEEN.md.template"]}'
+        '{"templates_checked":["~/.aether/system/templates/QUEEN.md.template",".aether/templates/QUEEN.md.template","~/.aether/templates/QUEEN.md.template"]}'
       exit 1
     fi
 
@@ -3788,8 +3787,6 @@ ${entry}" "$queen_file" > "$tmp_file"
       elif [[ "$file" == .opencode/commands/ant/*.md ]] || [[ "$file" == .opencode/commands/ant/**/*.md ]]; then
         is_system=true
       elif [[ "$file" == .opencode/agents/*.md ]] || [[ "$file" == .opencode/agents/**/*.md ]]; then
-        is_system=true
-      elif [[ "$file" == runtime/* ]]; then
         is_system=true
       elif [[ "$file" == bin/* ]]; then
         is_system=true

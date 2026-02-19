@@ -23,7 +23,7 @@ Documented issues from Oracle research findings. These are known limitations and
 - `.aether/aether-utils.sh`, `.aether/workers.md`, `.aether/docs/**/*.md`
 - `.claude/commands/ant/**/*.md`, `.claude/commands/st/**/*.md`
 - `.opencode/commands/ant/**/*.md`, `.opencode/agents/**/*.md`
-- `runtime/**/*`, `bin/**/*`
+- `bin/**/*`
 
 **User Data (Never Touch):**
 - `.aether/data/`, `.aether/dreams/`, `.aether/oracle/`
@@ -141,12 +141,13 @@ Documented issues from Oracle research findings. These are known limitations and
 **Impact:** Users cannot discover all available commands
 **Status:** FIXED — Phase 18-03: help command sections key added with all command groups including Queen Commands, Model Routing, Swarm Operations, and all newer commands.
 
-### ISSUE-004: Template path hardcoded to runtime/
+### ISSUE-004: Template path hardcoded to runtime/ — FIXED (Phase 20)
 **Location:** `.aether/aether-utils.sh:2689`
 **Severity:** MEDIUM
-**Description:** queen-init uses runtime/ directory which may not exist in npm installs
-**Impact:** queen-init will fail when Aether is installed as npm package
-**Workaround:** Use git clone instead of npm install
+**Status:** FIXED — Phase 20: runtime/ template path removed from queen-init lookup array. Template is now found via hub path (`~/.aether/system/templates/`) or dev repo path (`.aether/templates/`) or legacy hub fallback.
+**Description:** queen-init used runtime/ directory which did not exist in npm installs
+**Impact:** ~~queen-init will fail when Aether is installed as npm package~~
+**~~Workaround:~~** ~~Use git clone instead of npm install~~ — no longer needed
 
 ### ISSUE-005: Potential infinite loop in spawn-tree
 **Location:** `.aether/aether-utils.sh:402-448`, `spawn-tree.sh:222-263`
@@ -224,7 +225,7 @@ Documented issues from Oracle research findings. These are known limitations and
 | Issue | Workaround |
 |-------|------------|
 | ~~Lock-related deadlocks (BUG-005, BUG-002)~~ | ~~Restart colony session~~ — FIXED in Phase 16 |
-| Template path issue (ISSUE-004) | Use git clone instead of npm |
+| ~~Template path issue (ISSUE-004)~~ | ~~Use git clone instead of npm~~ — FIXED in Phase 20 |
 | Missing command docs (GAP-004) | Read source code directly |
 
 ---

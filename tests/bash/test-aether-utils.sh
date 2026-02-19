@@ -754,8 +754,7 @@ test_queen_init_template_hub_path() {
     local tmp_dir
     tmp_dir=$(setup_isolated_env)
 
-    # Simulate npm-installed user: remove runtime/templates/ if it exists
-    rm -rf "$tmp_dir/runtime"
+    # Simulate hub-installed user: verify hub path is tried first (runtime/ no longer exists in v4.0)
 
     # Create a fake hub at a temp HOME
     local tmp_home
@@ -763,7 +762,7 @@ test_queen_init_template_hub_path() {
     mkdir -p "$tmp_home/.aether/system/templates"
 
     # Copy the real QUEEN.md.template to the fake hub
-    local real_template="$PROJECT_ROOT/runtime/templates/QUEEN.md.template"
+    local real_template="$PROJECT_ROOT/.aether/templates/QUEEN.md.template"
     if [[ -f "$real_template" ]]; then
         cp "$real_template" "$tmp_home/.aether/system/templates/QUEEN.md.template"
     else
@@ -819,10 +818,7 @@ test_queen_init_template_not_found_message() {
     local tmp_dir
     tmp_dir=$(setup_isolated_env)
 
-    # Remove runtime/ from the isolated env
-    rm -rf "$tmp_dir/runtime"
-
-    # Override HOME to a temp dir with no hub templates
+    # Override HOME to a temp dir with no hub templates (runtime/ no longer exists in v4.0)
     local tmp_home
     tmp_home=$(mktemp -d)
 
