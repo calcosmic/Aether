@@ -127,17 +127,19 @@ Documented issues from Oracle research findings. These are known limitations and
 **Description:** Some `json_err` calls use hardcoded strings instead of constants
 **Pattern:** Commands added early use strings; later commands use constants
 
-### ISSUE-002: Missing exec error handling
+### ISSUE-002: Missing exec error handling — FIXED (Phase 18-02)
 **Location:** `.aether/aether-utils.sh:2132-2144`
 **Severity:** LOW
 **Description:** `model-get` and `model-list` use `exec` without fallback
 **Impact:** If exec fails, script continues to unknown command handler
+**Status:** FIXED — Phase 18-02: subprocess error handling added to model-get and model-list with structured E_* error codes on failure.
 
-### ISSUE-003: Incomplete help command
+### ISSUE-003: Incomplete help command — FIXED (Phase 18-03)
 **Location:** `.aether/aether-utils.sh:106-111`
 **Severity:** LOW
 **Description:** Help command missing newer commands like queen-*, view-state-*, swarm-timing-*
 **Impact:** Users cannot discover all available commands
+**Status:** FIXED — Phase 18-03: help command sections key added with all command groups including Queen Commands, Model Routing, Swarm Operations, and all newer commands.
 
 ### ISSUE-004: Template path hardcoded to runtime/
 **Location:** `.aether/aether-utils.sh:2689`
@@ -158,38 +160,45 @@ Documented issues from Oracle research findings. These are known limitations and
 **Description:** Fallback json_err doesn't accept error code parameter
 **Impact:** If error-handler.sh fails to load, error codes are lost
 
-### ISSUE-007: Feature detection race condition
+### ISSUE-007: Feature detection race condition — FIXED (Phase 18-01)
 **Location:** `.aether/aether-utils.sh:33-45`
 **Severity:** LOW
 **Description:** Feature detection runs before error handler fully sourced
+**Status:** FIXED — Phase 18-01 (ARCH-09): feature detection block moved after fallback json_err definition (line 68 -> 81) so all fallback infrastructure available when feature detection runs.
 
 ---
 
 ## Architecture Gaps
 
-### GAP-001: No schema version validation
+### GAP-001: No schema version validation — FIXED (Phase 18-04)
 **Description:** Commands assume state structure without validating version
 **Impact:** Silent failures when state structure changes
+**Status:** FIXED — Phase 18-04: `_migrate_colony_state` added to validate-state colony; auto-migrates pre-3.0 state files to v3.0 (additive only), notifies via W_MIGRATED warning; corrupt state files backed up before error.
 
-### GAP-002: No cleanup for stale spawn-tree entries
+### GAP-002: No cleanup for stale spawn-tree entries — FIXED (Phase 18-01)
 **Description:** spawn-tree.txt grows indefinitely
 **Impact:** File could grow very large over many sessions
+**Status:** FIXED — Phase 18-01: `_rotate_spawn_tree` added to session-init; rotates spawn-tree.txt on each session start with timestamped archives; 5-archive cap; in-place truncation preserves tail -f file handles.
 
-### GAP-003: No retry logic for failed spawns
+### GAP-003: No retry logic for failed spawns — RESOLVED (Phase 18-02)
 **Description:** Task tool calls don't have retry logic
 **Impact:** Transient failures cause build failures
+**Status:** RESOLVED — User decision: fail-fast with rich error context (Phase 18-02). Retry logic adds complexity without clear benefit; subprocess errors now emit structured E_* codes with actionable Try: suggestions, allowing callers to decide on retry strategy.
 
-### GAP-004: Missing queen-* documentation
+### GAP-004: Missing queen-* documentation — FIXED (Phase 18-03)
 **Description:** No docs for queen-init, queen-read, queen-promote
 **Impact:** Users cannot discover wisdom feedback loop
+**Status:** FIXED — Phase 18-03: queen-commands.md created in .aether/docs/; help command sections key added with Queen Commands section listing all three commands with descriptions.
 
-### GAP-005: No validation of queen-read JSON output
+### GAP-005: No validation of queen-read JSON output — FIXED (Phase 18-04)
 **Description:** queen-read builds JSON but doesn't validate before returning
 **Impact:** Could return malformed response
+**Status:** FIXED — Phase 18-04: Two validation gates added to queen-read: Gate 1 validates METADATA JSON before --argjson use; Gate 2 validates assembled result before json_ok. Both emit E_JSON_INVALID with actionable Try: suggestion.
 
-### GAP-006: Missing queen-* command documentation
+### GAP-006: Missing queen-* command documentation — FIXED (Phase 18-03)
 **Description:** Duplicate of GAP-004 - no documentation exists
 **Impact:** Commands are undiscoverable
+**Status:** FIXED — Phase 18-03: See GAP-004.
 
 ### GAP-007: No error code standards documentation
 **Description:** Error codes exist but aren't documented
