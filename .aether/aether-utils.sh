@@ -699,6 +699,7 @@ HELP_EOF
     # Additive only (never removes fields) — idempotent and safe for concurrent access
     _migrate_colony_state() {
       local state_file="$1"
+      [[ -f "$state_file" ]] || return 0
 
       # First: verify file is parseable JSON at all
       if ! jq -e . "$state_file" >/dev/null 2>&1; then
