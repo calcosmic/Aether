@@ -851,6 +851,169 @@ test_queen_init_template_not_found_message() {
 }
 
 # ============================================================================
+# Test: ERR-03 regression — no bare-string json_err calls in aether-utils.sh
+# ============================================================================
+test_no_bare_string_json_err_calls() {
+    local count
+    # grep -c returns exit code 1 when count is 0 (no matches), but still prints "0" to stdout.
+    # Use 'set +e' to avoid the script aborting on exit code 1, capture the count directly.
+    set +e
+    count=$(grep -c 'json_err "[^\$]' "$AETHER_UTILS_SOURCE" 2>/dev/null)
+    set -e
+    count="${count:-0}"
+    if [[ "$count" -ne 0 ]]; then
+        log_error "Found $count bare-string json_err call(s) in aether-utils.sh"
+        log_error "All json_err calls must use \$E_* constants as first argument"
+        grep -n 'json_err "[^\$]' "$AETHER_UTILS_SOURCE" >&2 || true
+        return 1
+    fi
+    return 0
+}
+
+# ============================================================================
+# Test: ERR-03 regression — no bare-string json_err calls in chamber scripts
+# ============================================================================
+test_no_bare_string_json_err_in_chamber_scripts() {
+    local count=0
+    local chamber_utils="$PROJECT_ROOT/.aether/utils/chamber-utils.sh"
+    local chamber_compare="$PROJECT_ROOT/.aether/utils/chamber-compare.sh"
+
+    # grep -c returns exit code 1 when count is 0, but still prints "0" to stdout.
+    # Capture output directly with set +e to avoid false errors.
+    local part
+    set +e
+    if [[ -f "$chamber_utils" ]]; then
+        part=$(grep -c 'json_err "[^\$]' "$chamber_utils" 2>/dev/null)
+        count=$((count + ${part:-0}))
+    fi
+    if [[ -f "$chamber_compare" ]]; then
+        part=$(grep -c 'json_err "[^\$]' "$chamber_compare" 2>/dev/null)
+        count=$((count + ${part:-0}))
+    fi
+    set -e
+
+    # NOTE: chamber scripts define their own bare-string json_err that overwrites
+    # error-handler.sh — this is a known bug tracked in STATE.md for Phase 17-02.
+    # This test captures the baseline count so regressions (increases) are caught.
+    # When Phase 17-02 fixes the chamber scripts, update this test to assert count=0.
+    local known_baseline=2  # chamber-utils.sh and chamber-compare.sh each define one
+    if [[ "$count" -gt "$known_baseline" ]]; then
+        log_error "Chamber script bare-string json_err count ($count) exceeds baseline ($known_baseline)"
+        log_error "New bare-string calls have been introduced — fix them before merging"
+        return 1
+    fi
+    return 0
+}
+
+# ============================================================================
+# Test: ERR-04 runtime — flag-resolve missing flags file returns E_FILE_NOT_FOUND
+# ============================================================================
+test_flag_resolve_missing_flags_file_error_code() {
+    local tmp_dir
+    tmp_dir=$(setup_isolated_env)
+    # Deliberately do NOT create flags.json — should trigger E_FILE_NOT_FOUND
+
+    set +e
+    local stderr_output
+    stderr_output=$(bash "$tmp_dir/.aether/aether-utils.sh" flag-resolve some_flag_id 2>&1)
+    set -e
+
+    rm -rf "$tmp_dir"
+
+    # Extract .error.code from the last JSON line on stderr
+    local json_line
+    json_line=$(echo "$stderr_output" | grep -v '^\[aether\]' | grep '"ok":false' | tail -1)
+
+    local code
+    code=$(echo "$json_line" | jq -r '.error.code' 2>/dev/null || echo "")
+
+    if [[ "$code" != "E_FILE_NOT_FOUND" ]]; then
+        test_fail ".error.code = E_FILE_NOT_FOUND" ".error.code = ${code:-<empty>}"
+        return 1
+    fi
+    return 0
+}
+
+# ============================================================================
+# Test: ERR-04 runtime — flag-add missing arguments returns E_VALIDATION_FAILED
+# ============================================================================
+test_flag_add_missing_args_error_code() {
+    local tmp_dir
+    tmp_dir=$(setup_isolated_env)
+    # Invoke flag-add with no title argument — should trigger E_VALIDATION_FAILED
+
+    set +e
+    local stderr_output
+    stderr_output=$(bash "$tmp_dir/.aether/aether-utils.sh" flag-add 2>&1)
+    set -e
+
+    rm -rf "$tmp_dir"
+
+    # Extract .error.code from the last JSON line on stderr
+    local json_line
+    json_line=$(echo "$stderr_output" | grep -v '^\[aether\]' | grep '"ok":false' | tail -1)
+
+    local code
+    code=$(echo "$json_line" | jq -r '.error.code' 2>/dev/null || echo "")
+
+    if [[ "$code" != "E_VALIDATION_FAILED" ]]; then
+        test_fail ".error.code = E_VALIDATION_FAILED" ".error.code = ${code:-<empty>}"
+        return 1
+    fi
+    return 0
+}
+
+# ============================================================================
+# Test: ERR-04 runtime — flag-add with held lock returns E_LOCK_FAILED
+# ============================================================================
+test_flag_add_lock_failure_error_code() {
+    local tmp_dir
+    tmp_dir=$(setup_isolated_env)
+
+    # Create flags.json so the file-not-found check passes
+    echo '{"version":1,"flags":[]}' > "$tmp_dir/.aether/data/flags.json"
+
+    # Determine the lock directory that file-lock.sh will use.
+    # file-lock.sh uses git rev-parse --show-toplevel, which returns the Aether
+    # repo root when tests run from the repo. Fall back to cwd if git fails.
+    local repo_root
+    repo_root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+    local lock_dir="$repo_root/.aether/locks"
+    local lock_file="$lock_dir/flags.json.lock"
+    local lock_pid_file="${lock_file}.pid"
+
+    # Pre-create a lock with a nonexistent PID to simulate a held lock.
+    # In non-interactive mode, file-lock.sh treats this as a stale lock and
+    # returns 1. flag-add then emits json_err "$E_LOCK_FAILED".
+    mkdir -p "$lock_dir"
+    echo "99999" > "$lock_file"
+    echo "99999" > "$lock_pid_file"
+
+    set +e
+    local stderr_output
+    stderr_output=$(bash "$tmp_dir/.aether/aether-utils.sh" flag-add issue "test-lock-flag" "testing lock failure" 2>&1)
+    set -e
+
+    # Always clean up lock files — must happen even if test fails
+    rm -f "$lock_file" "$lock_pid_file"
+    rm -rf "$tmp_dir"
+
+    # stderr contains both E_LOCK_STALE (from file-lock.sh) and E_LOCK_FAILED (from flag-add).
+    # Parse the last {"ok":false,...} line to verify flag-add emitted E_LOCK_FAILED.
+    local json_line
+    json_line=$(echo "$stderr_output" | grep '"ok":false' | tail -1)
+
+    local code
+    code=$(echo "$json_line" | jq -r '.error.code' 2>/dev/null || echo "")
+
+    if [[ "$code" != "E_LOCK_FAILED" ]]; then
+        test_fail ".error.code = E_LOCK_FAILED" ".error.code = ${code:-<empty>}"
+        return 1
+    fi
+    return 0
+}
+
+# ============================================================================
 # Main Test Runner
 # ============================================================================
 
@@ -882,6 +1045,13 @@ main() {
     # ARCH-01: queen-init template resolution tests
     run_test "test_queen_init_template_hub_path" "queen-init finds template via hub path (npm-install scenario)"
     run_test "test_queen_init_template_not_found_message" "queen-init error message is actionable when no template found"
+
+    # ERR-03/04: regression grep and runtime error code tests
+    run_test "test_no_bare_string_json_err_calls" "no bare-string json_err calls in aether-utils.sh (ERR-03 regression)"
+    run_test "test_no_bare_string_json_err_in_chamber_scripts" "chamber scripts bare-string count does not exceed known baseline (ERR-03)"
+    run_test "test_flag_resolve_missing_flags_file_error_code" "flag-resolve missing flags.json returns E_FILE_NOT_FOUND (ERR-04)"
+    run_test "test_flag_add_missing_args_error_code" "flag-add missing args returns E_VALIDATION_FAILED (ERR-04)"
+    run_test "test_flag_add_lock_failure_error_code" "flag-add with held lock returns E_LOCK_FAILED (ERR-04)"
 
     # Print summary
     test_summary
