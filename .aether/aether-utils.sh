@@ -2298,15 +2298,29 @@ NODESCRIPT
   model-get)
     # Shortcut: model-get <caste>
     caste="${1:-}"
-    [[ -z "$caste" ]] && json_err "$E_VALIDATION_FAILED" "Usage: model-get <caste>"
+    [[ -z "$caste" ]] && json_err "$E_VALIDATION_FAILED" "Usage: model-get <caste>. Try: provide a caste name (e.g., builder, scout, surveyor)."
 
-    # Delegate to model-profile get
-    exec bash "$0" model-profile get "$caste"
+    # Delegate to model-profile get via subprocess (not exec) so errors can be captured
+    set +e
+    result=$(bash "$0" model-profile get "$caste" 2>&1)
+    exit_code=$?
+    set -e
+    if [[ $exit_code -ne 0 ]]; then
+      json_err "$E_BASH_ERROR" "Couldn't get model assignment for caste '$caste'. Try: check that .aether/model-profiles.yaml exists and is valid YAML."
+    fi
+    echo "$result"
     ;;
 
   model-list)
-    # Shortcut: list all models
-    exec bash "$0" model-profile list
+    # Shortcut: list all models via subprocess (not exec) so errors can be captured
+    set +e
+    result=$(bash "$0" model-profile list 2>&1)
+    exit_code=$?
+    set -e
+    if [[ $exit_code -ne 0 ]]; then
+      json_err "$E_BASH_ERROR" "Couldn't list model assignments. Try: run 'aether verify-models' to check model configuration."
+    fi
+    echo "$result"
     ;;
 
   # ============================================
@@ -3259,6 +3273,12 @@ ANTLOGO
       metadata='{"version":"unknown","last_evolved":null,"colonies_contributed":[],"promotion_thresholds":{},"stats":{}}'
     fi
 
+    # Gate 1: Validate metadata is parseable JSON BEFORE using as --argjson
+    if ! echo "$metadata" | jq -e . >/dev/null 2>&1; then
+      json_err "$E_JSON_INVALID" \
+        "QUEEN.md has a malformed METADATA block — the JSON between <!-- METADATA and --> is invalid. Try: fix the JSON in .aether/docs/QUEEN.md or run queen-init to reset."
+    fi
+
     # Extract sections content for worker priming
     # Use awk to parse markdown sections - remove header line and trailing section header
     philosophies=$(awk '/^## 📜 Philosophies$/,/^## /' "$queen_file" | tail -n +2 | sed '$d' | sed '/^$/d' | jq -Rs '.')
@@ -3293,6 +3313,11 @@ ANTLOGO
         }
       }')
 
+    # Gate 2: Validate assembled result before returning
+    if [[ -z "$result" ]] || ! echo "$result" | jq -e . >/dev/null 2>&1; then
+      json_err "$E_JSON_INVALID" \
+        "Couldn't assemble queen-read output. QUEEN.md may have formatting issues. Try: run queen-init to reset."
+    fi
     json_ok "$result"
     ;;
 
