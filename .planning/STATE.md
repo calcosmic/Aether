@@ -45,6 +45,7 @@ Progress: ██████████████░░░░░░ 72% (v1.2
 | Phase 18 P04 | 7 | 2 tasks | 3 files |
 | Phase 19-milestone-polish P01 | 3 | 2 tasks | 4 files |
 | Phase 19 P03 | 3 | 2 tasks | 3 files |
+| Phase 19-milestone-polish P02 | 15 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -79,6 +80,8 @@ Progress: ██████████████░░░░░░ 72% (v1.2
 - [Phase 19-01]: E_LOCK_STALE placed adjacent to E_LOCK_FAILED throughout (constant, recovery, case, export) for locality
 - [Phase 19-01]: E_LOCK_STALE Meaning section distinguishes abandoned lock from E_LOCK_FAILED live lock for clearer diagnosis
 - [Phase 19]: t.pass('skipped: reason') used for namespace-isolation conditional directory checks — keeps suite green on any machine
+- [Phase 19-milestone-polish]: validate-state: module-level snapshot isolation pattern for concurrent AVA test safety — snapshot created at require() before any tests run
+- [Phase 19-milestone-polish]: DATA_DIR conditional assignment ${DATA_DIR:-default} in aether-utils.sh line 19 enables test isolation without changing runtime behavior
 
 ### Key Findings from Research
 - update-transaction.js:909 reads from hub root instead of hub/system/ — affects all three methods (syncFiles, verifyIntegrity, detectPartialUpdate)
@@ -95,5 +98,5 @@ Progress: ██████████████░░░░░░ 72% (v1.2
 ## Session Continuity
 
 Last session: 2026-02-19
-Stopped at: Completed 19-03-PLAN.md
-Resume file: .planning/phases/19-milestone-polish/19-03-SUMMARY.md
+Stopped at: Completed 19-02-PLAN.md (validate-state test fixes: error.error.message assertions, DATA_DIR isolation)
+Resume file: .planning/phases/19-milestone-polish/19-02-SUMMARY.md
