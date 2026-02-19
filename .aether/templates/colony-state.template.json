@@ -1,0 +1,33 @@
+{
+  "_template": "colony-state",
+  "_version": "3.0",
+  "_instructions": "Write this file to .aether/data/COLONY_STATE.json. Replace all __PLACEHOLDER__ values with real data. Remove all keys starting with underscore (_template, _version, _instructions, and any _comment_*) before writing the file.",
+  "_comment_goal": "The user's goal as provided to /ant:init or /ant:lay-eggs",
+  "_comment_memory": "Seed from completion-report.md if prior colony found. Otherwise use empty arrays [].",
+  "version": "3.0",
+  "goal": "__GOAL__",
+  "state": "READY",
+  "current_phase": 0,
+  "session_id": "__SESSION_ID__",
+  "initialized_at": "__ISO8601_TIMESTAMP__",
+  "build_started_at": null,
+  "plan": {
+    "generated_at": null,
+    "confidence": null,
+    "phases": []
+  },
+  "memory": {
+    "phase_learnings": "__PHASE_LEARNINGS__",
+    "decisions": [],
+    "instincts": "__INSTINCTS__"
+  },
+  "errors": {
+    "records": [],
+    "flagged_patterns": []
+  },
+  "signals": [],
+  "graveyards": [],
+  "events": [
+    "__ISO8601_TIMESTAMP__|colony_initialized|init|Colony initialized with goal: __GOAL__"
+  ]
+}
