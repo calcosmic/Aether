@@ -141,11 +141,11 @@ Documented issues from Oracle research findings. These are known limitations and
 **Impact:** Users cannot discover all available commands
 **Status:** FIXED — Phase 18-03: help command sections key added with all command groups including Queen Commands, Model Routing, Swarm Operations, and all newer commands.
 
-### ISSUE-004: Template path hardcoded to runtime/ — FIXED (Phase 20)
+### ISSUE-004: Template path hardcoded to staging directory — FIXED (Phase 20)
 **Location:** `.aether/aether-utils.sh:2689`
 **Severity:** MEDIUM
-**Status:** FIXED — Phase 20: runtime/ template path removed from queen-init lookup array. Template is now found via hub path (`~/.aether/system/templates/`) or dev repo path (`.aether/templates/`) or legacy hub fallback.
-**Description:** queen-init used runtime/ directory which did not exist in npm installs
+**Status:** FIXED — Phase 20: stale staging template path removed from queen-init lookup array. Template is now found via hub path (`~/.aether/system/templates/`) or dev repo path (`.aether/templates/`) or legacy hub fallback.
+**Description:** queen-init used a staging directory path that did not exist in npm installs
 **Impact:** ~~queen-init will fail when Aether is installed as npm package~~
 **~~Workaround:~~** ~~Use git clone instead of npm install~~ — no longer needed
 
