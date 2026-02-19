@@ -4,7 +4,7 @@
 
 - ✅ **v1.0 Repair & Stabilization** — Phases 1-9 (shipped 2026-02-18)
 - ✅ **v1.1 Colony Polish & Identity** — Phases 10-13 (shipped 2026-02-18)
-- 🚧 **v1.2 Hardening & Reliability** — Phases 14-18 (in progress)
+- 🚧 **v1.2 Hardening & Reliability** — Phases 14-19 (in progress)
 
 ## Phases
 
@@ -41,13 +41,14 @@
 
 ### 🚧 v1.2 Hardening & Reliability (In Progress)
 
-**Milestone Goal:** Fix every documented bug, clean up the distribution chain, and leave a bulletproof foundation for new features. All five phases publish together in one `npm install -g .` cycle.
+**Milestone Goal:** Fix every documented bug, clean up the distribution chain, and leave a bulletproof foundation for new features. All phases publish together in one `npm install -g .` cycle.
 
 - [x] **Phase 14: Foundation Safety** - Fix fallback json_err signature and template path resolution to unblock all subsequent work (completed 2026-02-18)
 - [x] **Phase 15: Distribution Chain** - Correct update-transaction.js source directory, update EXCLUDE_DIRS atomically, remove dead duplicates, sync allowlist (completed 2026-02-18)
 - [x] **Phase 16: Lock Lifecycle Hardening** - Audit all acquire/release pairs, eliminate deadlocks on jq failure, add trap-based cleanup on all exit paths (completed 2026-02-19)
 - [x] **Phase 17: Error Code Standardization** - Replace all hardcoded strings with E_* constants in json_err calls, document error codes (completed 2026-02-19)
 - [x] **Phase 18: Reliability & Architecture Gaps** - Wire temp file cleanup, rotate spawn-tree, add exec error handling, document queen commands, validate JSON output (completed 2026-02-19)
+- [ ] **Phase 19: Milestone Polish** - Close audit integration gaps, update traceability, fix pre-existing test failures, resolve AVA race condition
 
 ## Phase Details
 
@@ -127,6 +128,19 @@ Plans:
 - [ ] 18-03-PLAN.md — Help command sections and queen-commands.md documentation (ARCH-08, ARCH-05)
 - [ ] 18-04-PLAN.md — queen-read JSON validation and state schema migration (ARCH-06, ARCH-02)
 
+### Phase 19: Milestone Polish
+**Goal**: Close all audit-identified gaps so the milestone can be archived clean — no partial requirements, no stale traceability, no pre-existing test failures
+**Depends on**: Phase 18
+**Requirements**: ERR-02 (partial), ERR-03 (partial)
+**Gap Closure:** Closes integration gaps from v1.2 audit
+**Success Criteria** (what must be TRUE):
+  1. `file-lock.sh` emits `E_LOCK_STALE` via an `$E_LOCK_STALE` constant (not a bare string) and the constant is documented in `error-codes.md`
+  2. All 24 requirement checkboxes in REQUIREMENTS.md are `[x]` with status "Satisfied"
+  3. `validate-state.test.js` passes all tests (error.error assertion updated to match object format)
+  4. `namespace-isolation.test.js`, `sync-dir-hash.test.js`, and `user-modification-detection.test.js` each contain at least one runnable test
+  5. `_migrate_colony_state` does not fail when COLONY_STATE.json is temporarily absent during AVA parallel execution
+Plans: TBD
+
 ---
 
 ## Progress
@@ -151,6 +165,7 @@ Plans:
 | 16. Lock Lifecycle Hardening | v1.2 | Complete    | 2026-02-19 | - |
 | 17. Error Code Standardization | v1.2 | Complete    | 2026-02-19 | - |
 | 18. Reliability & Architecture Gaps | v1.2 | Complete    | 2026-02-19 | - |
+| 19. Milestone Polish | v1.2 | Pending | - | - |
 
 ---
 
