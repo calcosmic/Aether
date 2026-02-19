@@ -27,11 +27,23 @@ SCRIPT_DIR="${SCRIPT_DIR:-$__chamber_utils_dir}"
 
 # --- JSON output helpers ---
 json_ok() { printf '{"ok":true,"result":%s}\n' "$1"; }
-json_err() {
-  local message="${2:-$1}"
-  printf '{"ok":false,"error":"%s"}\n' "$message" >&2
-  exit 1
-}
+
+# Guard: yield to error-handler.sh's enhanced json_err when already loaded
+if ! type json_err &>/dev/null; then
+  json_err() {
+    local code="${1:-E_UNKNOWN}"
+    local message="${2:-An unknown error occurred}"
+    printf '{"ok":false,"error":{"code":"%s","message":"%s"}}\n' "$code" "$message" >&2
+    exit 1
+  }
+fi
+
+# Fallback E_* constants (no-ops when error-handler.sh is already loaded)
+: "${E_UNKNOWN:=E_UNKNOWN}"
+: "${E_VALIDATION_FAILED:=E_VALIDATION_FAILED}"
+: "${E_FILE_NOT_FOUND:=E_FILE_NOT_FOUND}"
+: "${E_BASH_ERROR:=E_BASH_ERROR}"
+: "${E_JSON_INVALID:=E_JSON_INVALID}"
 
 # --- Chamber Functions ---
 
@@ -93,20 +105,20 @@ chamber_create() {
   local learnings_json="$9"
 
   # Validate inputs
-  [[ -z "$chamber_dir" ]] && json_err "chamber_dir is required"
-  [[ -z "$state_file" ]] && json_err "state_file is required"
-  [[ ! -f "$state_file" ]] && json_err "State file not found: $state_file"
+  [[ -z "$chamber_dir" ]] && json_err "$E_VALIDATION_FAILED" "chamber_dir argument is required. Try: pass the chamber directory path."
+  [[ -z "$state_file" ]] && json_err "$E_VALIDATION_FAILED" "state_file argument is required. Try: pass the state file path."
+  [[ ! -f "$state_file" ]] && json_err "$E_FILE_NOT_FOUND" "State file not found: $state_file. Try: check the file path."
 
   # Create chamber directory
-  mkdir -p "$chamber_dir" || json_err "Failed to create chamber directory: $chamber_dir"
+  mkdir -p "$chamber_dir" || json_err "$E_BASH_ERROR" "Couldn't create chamber directory: $chamber_dir. Try: check disk space and permissions."
 
   # Copy state file to chamber
   local target_state="$chamber_dir/COLONY_STATE.json"
-  cp "$state_file" "$target_state" || json_err "Failed to copy state file"
+  cp "$state_file" "$target_state" || json_err "$E_BASH_ERROR" "Couldn't copy the state file. Try: check disk space and permissions."
 
   # Compute hash of the copied state file
   local state_hash=$(chamber_compute_hash "$target_state")
-  [[ -z "$state_hash" ]] && json_err "Failed to compute hash of state file"
+  [[ -z "$state_hash" ]] && json_err "$E_BASH_ERROR" "Couldn't compute state file hash. Try: check that shasum is available."
 
   # Generate timestamp
   local entombed_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -132,14 +144,14 @@ EOF
 
   # Write manifest atomically if atomic_write is available, otherwise direct
   if type atomic_write &>/dev/null; then
-    atomic_write "$manifest_file" "$manifest_content" || json_err "Failed to write manifest"
+    atomic_write "$manifest_file" "$manifest_content" || json_err "$E_BASH_ERROR" "Couldn't write chamber manifest. Try: check disk space."
   else
-    echo "$manifest_content" > "$manifest_file" || json_err "Failed to write manifest"
+    echo "$manifest_content" > "$manifest_file" || json_err "$E_BASH_ERROR" "Couldn't write chamber manifest. Try: check disk space."
   fi
 
   # Verify the manifest was written correctly
   if [[ ! -f "$manifest_file" ]]; then
-    json_err "Manifest file not created"
+    json_err "$E_FILE_NOT_FOUND" "Chamber manifest wasn't created. Try: check disk space and permissions."
   fi
 
   # Return success with chamber info
@@ -168,23 +180,23 @@ chamber_verify() {
   local chamber_dir="$1"
 
   # Validate inputs
-  [[ -z "$chamber_dir" ]] && json_err "chamber_dir is required"
-  [[ ! -d "$chamber_dir" ]] && json_err "Chamber directory not found: $chamber_dir"
+  [[ -z "$chamber_dir" ]] && json_err "$E_VALIDATION_FAILED" "chamber_dir argument is required. Try: pass the chamber directory path."
+  [[ ! -d "$chamber_dir" ]] && json_err "$E_FILE_NOT_FOUND" "Chamber directory not found: $chamber_dir. Try: check the path."
 
   local manifest_file="$chamber_dir/manifest.json"
   local state_file="$chamber_dir/COLONY_STATE.json"
 
   # Check required files exist
-  [[ ! -f "$manifest_file" ]] && json_err "Manifest not found in chamber"
-  [[ ! -f "$state_file" ]] && json_err "COLONY_STATE.json not found in chamber"
+  [[ ! -f "$manifest_file" ]] && json_err "$E_FILE_NOT_FOUND" "Manifest not found in chamber. Try: verify the chamber was created correctly."
+  [[ ! -f "$state_file" ]] && json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found in chamber. Try: re-entomb the colony."
 
   # Read stored hash from manifest
   local stored_hash=$(jq -r '.files["COLONY_STATE.json"] // empty' "$manifest_file" 2>/dev/null)
-  [[ -z "$stored_hash" ]] && json_err "No hash found in manifest for COLONY_STATE.json"
+  [[ -z "$stored_hash" ]] && json_err "$E_JSON_INVALID" "No hash found in manifest. Try: re-entomb the colony."
 
   # Compute current hash
   local current_hash=$(chamber_compute_hash "$state_file")
-  [[ -z "$current_hash" ]] && json_err "Failed to compute hash of state file"
+  [[ -z "$current_hash" ]] && json_err "$E_BASH_ERROR" "Couldn't compute state file hash. Try: check that shasum is available."
 
   # Compare hashes
   if [[ "$stored_hash" != "$current_hash" ]]; then
