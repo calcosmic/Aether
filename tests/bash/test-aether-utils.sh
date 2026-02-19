@@ -892,11 +892,9 @@ test_no_bare_string_json_err_in_chamber_scripts() {
     fi
     set -e
 
-    # NOTE: chamber scripts define their own bare-string json_err that overwrites
-    # error-handler.sh — this is a known bug tracked in STATE.md for Phase 17-02.
-    # This test captures the baseline count so regressions (increases) are caught.
-    # When Phase 17-02 fixes the chamber scripts, update this test to assert count=0.
-    local known_baseline=2  # chamber-utils.sh and chamber-compare.sh each define one
+    # Phase 17-02 fixed the chamber script json_err override bug.
+    # Baseline is now 0 — any bare-string calls are regressions.
+    local known_baseline=0
     if [[ "$count" -gt "$known_baseline" ]]; then
         log_error "Chamber script bare-string json_err count ($count) exceeds baseline ($known_baseline)"
         log_error "New bare-string calls have been introduced — fix them before merging"
