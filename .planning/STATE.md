@@ -9,15 +9,15 @@ See: .planning/PROJECT.md (updated 2026-02-19)
 
 ## Current Position
 
-Phase: 21 of 25 — Template Foundation
-Plan: 02 of 03 (COMPLETE)
-Status: Executing Phase 21
-Last activity: 2026-02-19 — Completed 21-02: crowned-anthill and handoff markdown templates created
+Phase: 22 of 25 — Agent Boilerplate Cleanup
+Plan: 02 of 03
+Status: In Progress
+Last activity: 2026-02-19 — Completed 22-02: verified Knowledge 4 + Quality 4 agents clean (8 agents, pre-completed in 22-01)
 
 ## Performance Metrics
 
 **Cumulative:**
-- Total plans completed: 61 (v1.0: 27, v1.1: 13, v1.2: 18, v1.3: 3+)
+- Total plans completed: 62 (v1.0: 27, v1.1: 13, v1.2: 18, v1.3: 4)
 - Total requirements: 84 validated (v1.0: 46, v1.1: 14, v1.2: 24)
 - v1.3 target: 24 requirements across 6 phases
 - Total tests: 446 passing (415 AVA + 31 bash), 0 failures
@@ -38,6 +38,9 @@ Last activity: 2026-02-19 — Completed 21-02: crowned-anthill and handoff markd
 - [Phase 21-02]: Source heredoc casing preserved exactly in templates — fidelity over normalization
 - [Phase 21-02]: Static content (Chamber Contents, Session Note) kept verbatim with no placeholders
 - [Phase 21-01]: Used exact plan-specified template content for all three data-structure templates
+- [Phase 21-03]: All templates grouped together in REQUIRED_FILES array for readability
+- [Phase 22-01]: Queen and builder were already clean before this plan ran — only 7 of 9 agents needed edits; route-setter had no Depth-Based Behavior section
+- [Phase 22-02]: 22-01 commit cleaned more agents than message indicated — Quality 4 (guardian, measurer, includer, gatekeeper) already cleaned
 
 ### Key Findings from Research
 - 7 research docs analyzed (agent architecture, template system, team coordination, distribution chain)
@@ -51,6 +54,6 @@ Last activity: 2026-02-19 — Completed 21-02: crowned-anthill and handoff markd
 
 ## Session Continuity
 
-Last session: 2026-02-19T21:06:52Z
-Stopped at: Completed 21-02-PLAN.md
-Next step: Execute 21-03-PLAN.md (wire templates into commands)
+Last session: 2026-02-19T21:50:35Z
+Stopped at: Completed 22-02-PLAN.md
+Next step: Execute 22-03 (Specialist 4 + Coordination 2 agents, Batches 5 and 6)
