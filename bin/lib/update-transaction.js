@@ -206,6 +206,7 @@ class UpdateTransaction {
       'docs/VISUAL-OUTPUT-SPEC.md',
       'docs/known-issues.md',
       'docs/implementation-learnings.md',
+      'docs/error-codes.md',
       'docs/codebase-review.md',
       'docs/planning-discipline.md',
       'docs/caste-system.md',
