@@ -9,15 +9,15 @@ See: .planning/PROJECT.md (updated 2026-02-19)
 
 ## Current Position
 
-Phase: 20 of 25 — Distribution Simplification
-Plan: 03 of 03 (COMPLETE)
-Status: Phase 20 complete
-Last activity: 2026-02-19 — Completed 20-03: updated all 11 documentation files for v4.0 direct packaging pipeline
+Phase: 21 of 25 — Template Foundation
+Plan: 02 of 03 (COMPLETE)
+Status: Executing Phase 21
+Last activity: 2026-02-19 — Completed 21-02: crowned-anthill and handoff markdown templates created
 
 ## Performance Metrics
 
 **Cumulative:**
-- Total plans completed: 59 (v1.0: 27, v1.1: 13, v1.2: 18, v1.3: 1+)
+- Total plans completed: 61 (v1.0: 27, v1.1: 13, v1.2: 18, v1.3: 3+)
 - Total requirements: 84 validated (v1.0: 46, v1.1: 14, v1.2: 24)
 - v1.3 target: 24 requirements across 6 phases
 - Total tests: 446 passing (415 AVA + 31 bash), 0 failures
@@ -35,6 +35,8 @@ Last activity: 2026-02-19 — Completed 20-03: updated all 11 documentation file
 - [Phase 20-02]: queen-init template lookup chain: hub (system/) -> dev (.aether/) -> legacy hub (no staging path)
 - [Phase 20-02]: ISSUE-004 fully resolved — template path hardcoded to staging dir no longer an issue
 - [Phase 20-03]: Historical runtime/ references preserved with RESOLVED markers rather than deleted — audit value maintained
+- [Phase 21-02]: Source heredoc casing preserved exactly in templates — fidelity over normalization
+- [Phase 21-02]: Static content (Chamber Contents, Session Note) kept verbatim with no placeholders
 
 ### Key Findings from Research
 - 7 research docs analyzed (agent architecture, template system, team coordination, distribution chain)
@@ -48,6 +50,6 @@ Last activity: 2026-02-19 — Completed 20-03: updated all 11 documentation file
 
 ## Session Continuity
 
-Last session: 2026-02-19T20:26:33Z
-Stopped at: Completed 20-03-PLAN.md (Phase 20 complete)
-Next step: Execute Phase 21 (next phase in roadmap)
+Last session: 2026-02-19T21:06:52Z
+Stopped at: Completed 21-02-PLAN.md
+Next step: Execute 21-03-PLAN.md (wire templates into commands)
