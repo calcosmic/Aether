@@ -37,6 +37,7 @@ Last activity: 2026-02-19 — Completed 21-02: crowned-anthill and handoff markd
 - [Phase 20-03]: Historical runtime/ references preserved with RESOLVED markers rather than deleted — audit value maintained
 - [Phase 21-02]: Source heredoc casing preserved exactly in templates — fidelity over normalization
 - [Phase 21-02]: Static content (Chamber Contents, Session Note) kept verbatim with no placeholders
+- [Phase 21-01]: Used exact plan-specified template content for all three data-structure templates
 
 ### Key Findings from Research
 - 7 research docs analyzed (agent architecture, template system, team coordination, distribution chain)
