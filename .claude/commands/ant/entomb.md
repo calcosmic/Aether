@@ -11,6 +11,44 @@ Parse `$ARGUMENTS`:
 - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
 - Otherwise: set `visual_mode = true`
 
+<failure_modes>
+### Archive Write Failure
+If writing to chambers/ archive fails partway:
+- Do NOT delete source data (the active colony) until archive is verified
+- Report what was archived vs. what failed
+- Recovery: the original colony data is intact -- user can retry
+
+### Seal Verification Failure
+If the colony was not properly sealed before entomb:
+- STOP -- do not archive an incomplete colony
+- Direct user to run /ant:seal first
+- This is a hard gate, not a suggestion
+
+### Chamber Naming Conflict
+If the target chamber directory already exists:
+- STOP -- do not overwrite an existing archive
+- Report the conflict
+- Options: (1) Use a different name, (2) Merge with existing, (3) Cancel
+</failure_modes>
+
+<success_criteria>
+Command is complete when:
+- Colony data is fully copied to chambers/ archive directory
+- Archive integrity is verified (all expected files present)
+- Active colony state is cleared only after archive verification
+- User sees confirmation with archive location
+</success_criteria>
+
+<read_only>
+Do not touch during entomb:
+- .aether/dreams/ (user notes -- not archived)
+- Source code files
+- .env* files
+- .claude/settings.json
+- .github/workflows/
+- Other chamber directories (only write to the new chamber)
+</read_only>
+
 ### Step 0: Initialize Visual Mode (if enabled)
 
 If `visual_mode` is true:

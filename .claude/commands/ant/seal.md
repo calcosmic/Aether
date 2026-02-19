@@ -11,6 +11,37 @@ Parse `$ARGUMENTS`:
 - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
 - Otherwise: set `visual_mode = true`
 
+<failure_modes>
+### Crowned Anthill Write Failure
+If writing the Crowned Anthill milestone document fails:
+- Do not mark the colony as sealed in state
+- Report the error -- sealing is incomplete
+- Recovery: user can re-run /ant:seal after fixing the issue
+
+### State Update Failure After Seal
+If COLONY_STATE.json update fails after seal document is written:
+- The seal document exists but state doesn't reflect it
+- Report the inconsistency
+- Options: (1) Retry state update only, (2) Manual state fix, (3) Re-run /ant:seal
+</failure_modes>
+
+<success_criteria>
+Command is complete when:
+- Crowned Anthill milestone document is written
+- COLONY_STATE.json reflects sealed status
+- All phase evidence is summarized in the seal document
+- User sees confirmation of successful seal
+</success_criteria>
+
+<read_only>
+Do not touch during seal:
+- .aether/dreams/ (user notes)
+- .aether/chambers/ (archived colonies -- seal does NOT archive)
+- Source code files
+- .env* files
+- .claude/settings.json
+</read_only>
+
 ### Step 0: Initialize Visual Mode (if enabled)
 
 If `visual_mode` is true:

@@ -12,6 +12,37 @@ The arguments are: `$ARGUMENTS`
 - If contains `--force` or `--force-resurvey`: set `force_resurvey = true`
 - Otherwise: set `visual_mode = true`, `force_resurvey = false`
 
+<failure_modes>
+### Existing Survey Overwrite
+If .aether/data/survey/ already contains survey documents:
+- Warn before overwriting: "Existing survey found from [date]. Re-surveying will replace it."
+- Options: (1) Continue and overwrite, (2) Keep existing survey, (3) Merge (re-survey only outdated sections)
+
+### Surveyor Spawn Failure
+If a surveyor agent fails during codebase exploration:
+- Report which survey document was not produced
+- Partial surveys are acceptable -- note which documents are complete vs. missing
+- Recovery: user can re-run /ant:colonize to regenerate missing surveys
+</failure_modes>
+
+<success_criteria>
+Command is complete when:
+- All surveyor agents have completed their exploration
+- Survey documents exist in .aether/data/survey/
+- COLONY_STATE.json reflects colonized status
+- User sees summary of survey findings
+</success_criteria>
+
+<read_only>
+Do not touch during colonize:
+- .aether/dreams/ (user notes)
+- .aether/chambers/ (archived colonies)
+- Source code files (survey is read-only exploration)
+- .env* files
+- .claude/settings.json
+- COLONY_STATE.json structure beyond colonize-specific fields
+</read_only>
+
 ## Instructions
 
 ### Step 0: Initialize Visual Mode (if enabled)
@@ -102,10 +133,10 @@ fi
 
 Generate unique names for the 4 Surveyor Ants (each name must be captured separately):
 ```bash
-bash .aether/aether-utils.sh generate-ant-name "surveyor" with description "Naming surveyor ant..."
-bash .aether/aether-utils.sh generate-ant-name "surveyor" with description "Naming surveyor ant..."
-bash .aether/aether-utils.sh generate-ant-name "surveyor" with description "Naming surveyor ant..."
-bash .aether/aether-utils.sh generate-ant-name "surveyor" with description "Naming surveyor ant..."
+ bash .aether/aether-utils.sh generate-ant-name "surveyor" with description "Naming surveyor ant - provisions"
+bash .aether/aether-utils.sh generate-ant-name "surveyor" with description "Naming surveyor ant - nest"
+bash .aether/aether-utils.sh generate-ant-name "surveyor" with description "Naming surveyor ant - disciplines"
+bash .aether/aether-utils.sh generate-ant-name "surveyor" with description "Naming surveyor ant - pathogens"
 ```
 
 Log the dispatches (consolidated - fire-and-forget logging):
@@ -230,7 +261,7 @@ Next:
   /ant:redirect "<pat>"  Inject constraint before planning
 ```
 
-Generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":
+Generate the state-based Next Up block by running the Bash tool with the description "Generating Next Up suggestions...":
 ```bash
 state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
 current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
