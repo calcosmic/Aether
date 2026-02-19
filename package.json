@@ -1,6 +1,6 @@
 {
   "name": "aether-colony",
-  "version": "3.1.19",
+  "version": "4.0.0",
   "description": "Multi-agent system using ant colony intelligence for Claude Code and OpenCode — workers self-organize via pheromone signals",
   "bin": {
     "aether": "bin/cli.js"
@@ -11,17 +11,16 @@
     ".opencode/commands/ant/",
     ".opencode/agents/",
     ".opencode/opencode.json",
-    "runtime/",
+    ".aether/",
     "README.md",
     "LICENSE",
     "DISCLAIMER.md",
     "CHANGELOG.md"
   ],
   "scripts": {
-    "preinstall": "bash bin/sync-to-runtime.sh 2>/dev/null || true",
+    "preinstall": "bash bin/validate-package.sh 2>/dev/null || true",
     "postinstall": "node bin/cli.js install --quiet",
-    "prepublishOnly": "bash bin/sync-to-runtime.sh",
-    "postpublish": "rm -rf runtime/",
+    "prepublishOnly": "bash bin/validate-package.sh",
     "test": "npm run test:unit && npm run test:bash",
     "test:unit": "ava",
     "test:bash": "bash tests/bash/test-aether-utils.sh",

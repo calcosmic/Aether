@@ -9,7 +9,6 @@
     ".claude/commands/st/**/*.md",
     ".opencode/commands/ant/**/*.md",
     ".opencode/agents/**/*.md",
-    "runtime/**/*",
     "bin/**/*"
   ],
   "user_data_never_touch": [

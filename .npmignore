@@ -1,9 +1,34 @@
 # Planning and development
 .planning/
-.aether/
 .ralph/
 .cache/
 .git/
+
+# Aether private directories (never publish)
+.aether/data/
+.aether/dreams/
+.aether/oracle/
+.aether/checkpoints/
+.aether/locks/
+.aether/temp/
+.aether/archive/
+.aether/chambers/
+.aether/examples/
+.aether/__pycache__/
+
+# Aether private files (never publish)
+.aether/ledger.jsonl
+.aether/manifest.json
+.aether/registry.json
+.aether/version.json
+.aether/HANDOFF.md
+.aether/HANDOFF_AETHER_DEV_2026-02-15.md
+.aether/PHASE-0-ANALYSIS.md
+.aether/DIAGNOSIS_PROMPT.md
+.aether/RESEARCH-SHARED-DATA.md
+.aether/diagnose-self-reference.md
+.aether/pheromone_system.py
+.aether/semantic_layer.py
 
 # Claude Code - exclude only what shouldn't be published
 .claude/settings.local.json

@@ -1,0 +1,25 @@
+# Private directories (never publish)
+data/
+dreams/
+oracle/
+checkpoints/
+locks/
+temp/
+archive/
+chambers/
+examples/
+__pycache__/
+
+# Private files (never publish)
+ledger.jsonl
+manifest.json
+registry.json
+version.json
+HANDOFF.md
+HANDOFF_AETHER_DEV_2026-02-15.md
+PHASE-0-ANALYSIS.md
+DIAGNOSIS_PROMPT.md
+RESEARCH-SHARED-DATA.md
+diagnose-self-reference.md
+pheromone_system.py
+semantic_layer.py
