@@ -2,8 +2,10 @@
 // Test file for user modification detection feature
 // Tests Task 4.2: Handle user modification detection
 
+const test = require('ava');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const crypto = require('crypto');
 
 // Mock hashFileSync (same as in cli.js)
@@ -126,303 +128,225 @@ function syncDirWithCleanup(src, dest, opts) {
   }
 }
 
-// Test utilities
-function setupTestDirs() {
-  const testDir = path.join(__dirname, 'test-user-mod-temp');
+// Test 1: Detect user modification - dest differs from both source and manifest
+test('detect user modification (dest differs from source AND manifest)', t => {
+  const testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aether-umod-'));
+  const srcDir = path.join(testDir, 'src');
+  const destDir = path.join(testDir, 'dest');
+  fs.mkdirSync(srcDir, { recursive: true });
+  fs.mkdirSync(destDir, { recursive: true });
+  t.teardown(() => fs.rmSync(testDir, { recursive: true, force: true }));
+
+  // Source file with content "v1"
+  fs.writeFileSync(path.join(srcDir, 'config.txt'), 'v1');
+
+  // Dest file with user modification "user-changes"
+  fs.writeFileSync(path.join(destDir, 'config.txt'), 'user-changes');
+
+  // Manifest expects v1
+  const manifest = {
+    generated_at: '2026-01-01T00:00:00Z',
+    files: {
+      'config.txt': hashFileSync(path.join(srcDir, 'config.txt'))
+    }
+  };
+
+  const result = syncDirWithCleanup(srcDir, destDir, { manifest });
+
+  // Should detect user modification
+  t.true(result.userModifications !== undefined && result.userModifications.length === 1);
+  t.is(result.userModifications[0], 'config.txt');
+});
+
+// Test 2: No false positive - source changed, user didn't modify
+test('no false positive when source changed (user kept original)', t => {
+  const testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aether-umod-'));
+  const srcDir = path.join(testDir, 'src');
+  const destDir = path.join(testDir, 'dest');
+  fs.mkdirSync(srcDir, { recursive: true });
+  fs.mkdirSync(destDir, { recursive: true });
+  t.teardown(() => fs.rmSync(testDir, { recursive: true, force: true }));
+
+  // Source has "v1" originally
+  fs.writeFileSync(path.join(srcDir, 'config.txt'), 'v1');
+
+  // Compute manifest hash for v1 BEFORE updating source
+  const v1Hash = hashFileSync(path.join(srcDir, 'config.txt'));
+
+  // Now update source to v2
+  fs.writeFileSync(path.join(srcDir, 'config.txt'), 'v2');
+
+  // Dest still has "v1" (original from manifest)
+  fs.writeFileSync(path.join(destDir, 'config.txt'), 'v1');
+
+  // Manifest expects v1 (the original hash)
+  const manifest = {
+    generated_at: '2026-01-01T00:00:00Z',
+    files: {
+      'config.txt': v1Hash
+    }
+  };
+
+  const result = syncDirWithCleanup(srcDir, destDir, { manifest });
+
+  // Should NOT detect user modification (dest matches manifest, not source)
+  // This is a source update, not a user modification
+  t.true(!result.userModifications || result.userModifications.length === 0);
+});
+
+// Test 3: Backup user-modified files
+test('backup user-modified files when --backup specified', t => {
+  const testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aether-umod-'));
   const srcDir = path.join(testDir, 'src');
   const destDir = path.join(testDir, 'dest');
   const backupDir = path.join(testDir, 'backup');
-
-  // Clean up any existing test dirs
-  if (fs.existsSync(testDir)) {
-    fs.rmSync(testDir, { recursive: true });
-  }
-
   fs.mkdirSync(srcDir, { recursive: true });
   fs.mkdirSync(destDir, { recursive: true });
   fs.mkdirSync(backupDir, { recursive: true });
+  t.teardown(() => fs.rmSync(testDir, { recursive: true, force: true }));
 
-  return { testDir, srcDir, destDir, backupDir };
-}
+  // Source file with content "v1"
+  fs.writeFileSync(path.join(srcDir, 'config.txt'), 'v1');
 
-function cleanupTestDirs(testDir) {
-  if (fs.existsSync(testDir)) {
-    fs.rmSync(testDir, { recursive: true });
-  }
-}
+  // Dest file with user modification "user-changes"
+  fs.writeFileSync(path.join(destDir, 'config.txt'), 'user-changes');
 
-// Test cases
-function runTests() {
-  let passed = 0;
-  let failed = 0;
-
-  console.log('=== Testing User Modification Detection ===\n');
-
-  // Test 1: Detect user modification - dest differs from both source and manifest
-  console.log('Test 1: Detect user modification (dest differs from source AND manifest)');
-  {
-    const { testDir, srcDir, destDir } = setupTestDirs();
-    try {
-      // Source file with content "v1"
-      fs.writeFileSync(path.join(srcDir, 'config.txt'), 'v1');
-
-      // Dest file with user modification "user-changes"
-      fs.writeFileSync(path.join(destDir, 'config.txt'), 'user-changes');
-
-      // Manifest expects v1
-      const manifest = {
-        generated_at: '2026-01-01T00:00:00Z',
-        files: {
-          'config.txt': hashFileSync(path.join(srcDir, 'config.txt'))
-        }
-      };
-
-      const result = syncDirWithCleanup(srcDir, destDir, { manifest });
-
-      // Should detect user modification
-      if (result.userModifications && result.userModifications.length === 1 && result.userModifications[0] === 'config.txt') {
-        console.log('  PASS: User modification detected correctly\n');
-        passed++;
-      } else {
-        console.log(`  FAIL: Expected userModifications=['config.txt'], got [${result.userModifications}]\n`);
-        failed++;
-      }
-    } finally {
-      cleanupTestDirs(testDir);
+  // Manifest expects v1
+  const manifest = {
+    generated_at: '2026-01-01T00:00:00Z',
+    files: {
+      'config.txt': hashFileSync(path.join(srcDir, 'config.txt'))
     }
-  }
+  };
 
-  // Test 2: No false positive - source changed, user didn't modify
-  console.log('Test 2: No false positive when source changed (user kept original)');
-  {
-    const testDir = path.join(__dirname, 'test-user-mod-temp');
-    const srcDir = path.join(testDir, 'src');
-    const destDir = path.join(testDir, 'dest');
+  const result = syncDirWithCleanup(srcDir, destDir, { manifest, backupDir });
 
-    if (fs.existsSync(testDir)) {
-      fs.rmSync(testDir, { recursive: true });
+  // Should backup the user-modified file
+  const backedUpFile = path.join(backupDir, 'config.txt');
+  t.true(result.backedUp !== undefined && result.backedUp.length === 1);
+  t.true(fs.existsSync(backedUpFile));
+  const backedContent = fs.readFileSync(backedUpFile, 'utf8');
+  t.is(backedContent, 'user-changes');
+});
+
+// Test 4: No backup when not requested
+test('no backup when --backup not specified', t => {
+  const testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aether-umod-'));
+  const srcDir = path.join(testDir, 'src');
+  const destDir = path.join(testDir, 'dest');
+  fs.mkdirSync(srcDir, { recursive: true });
+  fs.mkdirSync(destDir, { recursive: true });
+  t.teardown(() => fs.rmSync(testDir, { recursive: true, force: true }));
+
+  // Source file with content "v1"
+  fs.writeFileSync(path.join(srcDir, 'config.txt'), 'v1');
+
+  // Dest file with user modification "user-changes"
+  fs.writeFileSync(path.join(destDir, 'config.txt'), 'user-changes');
+
+  // Manifest expects v1
+  const manifest = {
+    generated_at: '2026-01-01T00:00:00Z',
+    files: {
+      'config.txt': hashFileSync(path.join(srcDir, 'config.txt'))
     }
-    fs.mkdirSync(srcDir, { recursive: true });
-    fs.mkdirSync(destDir, { recursive: true });
+  };
 
-    try {
-      // Source has "v1" originally
-      fs.writeFileSync(path.join(srcDir, 'config.txt'), 'v1');
+  const result = syncDirWithCleanup(srcDir, destDir, { manifest });
 
-      // Compute manifest hash for v1 BEFORE updating source
-      const v1Hash = hashFileSync(path.join(srcDir, 'config.txt'));
+  // Should NOT backup (no backupDir)
+  t.true(!result.backedUp || result.backedUp.length === 0);
+});
 
-      // Now update source to v2
-      fs.writeFileSync(path.join(srcDir, 'config.txt'), 'v2');
+// Test 5: Multiple user-modified files
+test('detect multiple user-modified files', t => {
+  const testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aether-umod-'));
+  const srcDir = path.join(testDir, 'src');
+  const destDir = path.join(testDir, 'dest');
+  fs.mkdirSync(srcDir, { recursive: true });
+  fs.mkdirSync(destDir, { recursive: true });
+  t.teardown(() => fs.rmSync(testDir, { recursive: true, force: true }));
 
-      // Dest still has "v1" (original from manifest)
-      fs.writeFileSync(path.join(destDir, 'config.txt'), 'v1');
+  // Source files
+  fs.writeFileSync(path.join(srcDir, 'file1.txt'), 'v1');
+  fs.writeFileSync(path.join(srcDir, 'file2.txt'), 'v2');
+  fs.writeFileSync(path.join(srcDir, 'file3.txt'), 'v3');
 
-      // Manifest expects v1 (the original hash)
-      const manifest = {
-        generated_at: '2026-01-01T00:00:00Z',
-        files: {
-          'config.txt': v1Hash
-        }
-      };
+  // User-modified dest files
+  fs.writeFileSync(path.join(destDir, 'file1.txt'), 'user1');
+  fs.writeFileSync(path.join(destDir, 'file2.txt'), 'v2'); // same as source - not modified
+  fs.writeFileSync(path.join(destDir, 'file3.txt'), 'user3');
 
-      const result = syncDirWithCleanup(srcDir, destDir, { manifest });
-
-      // Should NOT detect user modification (dest matches manifest, not source)
-      // This is a source update, not a user modification
-      if (!result.userModifications || result.userModifications.length === 0) {
-        console.log('  PASS: No false positive for source update\n');
-        passed++;
-      } else {
-        console.log(`  FAIL: Expected no userModifications, got [${result.userModifications}]\n`);
-        failed++;
-      }
-    } finally {
-      cleanupTestDirs(testDir);
+  // Manifest with original hashes
+  const manifest = {
+    generated_at: '2026-01-01T00:00:00Z',
+    files: {
+      'file1.txt': hashFileSync(path.join(srcDir, 'file1.txt')),
+      'file2.txt': hashFileSync(path.join(srcDir, 'file2.txt')),
+      'file3.txt': hashFileSync(path.join(srcDir, 'file3.txt'))
     }
-  }
+  };
 
-  // Test 3: Backup user-modified files
-  console.log('Test 3: Backup user-modified files when --backup specified');
-  {
-    const { testDir, srcDir, destDir, backupDir } = setupTestDirs();
-    try {
-      // Source file with content "v1"
-      fs.writeFileSync(path.join(srcDir, 'config.txt'), 'v1');
+  const result = syncDirWithCleanup(srcDir, destDir, { manifest });
 
-      // Dest file with user modification "user-changes"
-      fs.writeFileSync(path.join(destDir, 'config.txt'), 'user-changes');
+  // Should detect 2 user modifications (file1 and file3)
+  t.true(result.userModifications !== undefined && result.userModifications.length === 2);
+  t.true(result.userModifications.includes('file1.txt'));
+  t.true(result.userModifications.includes('file3.txt'));
+});
 
-      // Manifest expects v1
-      const manifest = {
-        generated_at: '2026-01-01T00:00:00Z',
-        files: {
-          'config.txt': hashFileSync(path.join(srcDir, 'config.txt'))
-        }
-      };
+// Test 6: Dry-run mode - no actual backup
+test('dry-run mode - detect but do not backup', t => {
+  const testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aether-umod-'));
+  const srcDir = path.join(testDir, 'src');
+  const destDir = path.join(testDir, 'dest');
+  const backupDir = path.join(testDir, 'backup');
+  fs.mkdirSync(srcDir, { recursive: true });
+  fs.mkdirSync(destDir, { recursive: true });
+  fs.mkdirSync(backupDir, { recursive: true });
+  t.teardown(() => fs.rmSync(testDir, { recursive: true, force: true }));
 
-      const result = syncDirWithCleanup(srcDir, destDir, { manifest, backupDir });
+  // Source file with content "v1"
+  fs.writeFileSync(path.join(srcDir, 'config.txt'), 'v1');
 
-      // Should backup the user-modified file
-      const backedUpFile = path.join(backupDir, 'config.txt');
-      if (result.backedUp && result.backedUp.length === 1 && fs.existsSync(backedUpFile)) {
-        const backedContent = fs.readFileSync(backedUpFile, 'utf8');
-        if (backedContent === 'user-changes') {
-          console.log('  PASS: User-modified file backed up correctly\n');
-          passed++;
-        } else {
-          console.log(`  FAIL: Backup content mismatch, got "${backedContent}"\n`);
-          failed++;
-        }
-      } else {
-        console.log(`  FAIL: Expected backedUp=['config.txt'] and file exists\n`);
-        failed++;
-      }
-    } finally {
-      cleanupTestDirs(testDir);
+  // Dest file with user modification "user-changes"
+  fs.writeFileSync(path.join(destDir, 'config.txt'), 'user-changes');
+
+  // Manifest expects v1
+  const manifest = {
+    generated_at: '2026-01-01T00:00:00Z',
+    files: {
+      'config.txt': hashFileSync(path.join(srcDir, 'config.txt'))
     }
-  }
+  };
 
-  // Test 4: No backup when not requested
-  console.log('Test 4: No backup when --backup not specified');
-  {
-    const { testDir, srcDir, destDir, backupDir } = setupTestDirs();
-    try {
-      // Source file with content "v1"
-      fs.writeFileSync(path.join(srcDir, 'config.txt'), 'v1');
+  const result = syncDirWithCleanup(srcDir, destDir, { manifest, backupDir, dryRun: true });
 
-      // Dest file with user modification "user-changes"
-      fs.writeFileSync(path.join(destDir, 'config.txt'), 'user-changes');
+  // Should detect user modification but NOT backup in dry-run
+  const backedUpFile = path.join(backupDir, 'config.txt');
+  t.true(result.userModifications !== undefined && result.userModifications.length === 1);
+  t.true(!result.backedUp || result.backedUp.length === 0);
+  t.false(fs.existsSync(backedUpFile));
+});
 
-      // Manifest expects v1
-      const manifest = {
-        generated_at: '2026-01-01T00:00:00Z',
-        files: {
-          'config.txt': hashFileSync(path.join(srcDir, 'config.txt'))
-        }
-      };
+// Test 7: Without manifest - no detection (backward compatible)
+test('without manifest - backward compatible behavior', t => {
+  const testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aether-umod-'));
+  const srcDir = path.join(testDir, 'src');
+  const destDir = path.join(testDir, 'dest');
+  fs.mkdirSync(srcDir, { recursive: true });
+  fs.mkdirSync(destDir, { recursive: true });
+  t.teardown(() => fs.rmSync(testDir, { recursive: true, force: true }));
 
-      const result = syncDirWithCleanup(srcDir, destDir, { manifest });
+  // Source file with content "v1"
+  fs.writeFileSync(path.join(srcDir, 'config.txt'), 'v1');
 
-      // Should NOT backup (no backupDir)
-      if (!result.backedUp || result.backedUp.length === 0) {
-        console.log('  PASS: No backup when not requested\n');
-        passed++;
-      } else {
-        console.log(`  FAIL: Expected no backedUp, got [${result.backedUp}]\n`);
-        failed++;
-      }
-    } finally {
-      cleanupTestDirs(testDir);
-    }
-  }
+  // Dest file with different content
+  fs.writeFileSync(path.join(destDir, 'config.txt'), 'different');
 
-  // Test 5: Multiple user-modified files
-  console.log('Test 5: Detect multiple user-modified files');
-  {
-    const { testDir, srcDir, destDir } = setupTestDirs();
-    try {
-      // Source files
-      fs.writeFileSync(path.join(srcDir, 'file1.txt'), 'v1');
-      fs.writeFileSync(path.join(srcDir, 'file2.txt'), 'v2');
-      fs.writeFileSync(path.join(srcDir, 'file3.txt'), 'v3');
+  // No manifest - result should not have userModifications key at all
+  const result = syncDirWithCleanup(srcDir, destDir);
 
-      // User-modified dest files
-      fs.writeFileSync(path.join(destDir, 'file1.txt'), 'user1');
-      fs.writeFileSync(path.join(destDir, 'file2.txt'), 'v2'); // same as source - not modified
-      fs.writeFileSync(path.join(destDir, 'file3.txt'), 'user3');
-
-      // Manifest with original hashes
-      const manifest = {
-        generated_at: '2026-01-01T00:00:00Z',
-        files: {
-          'file1.txt': hashFileSync(path.join(srcDir, 'file1.txt')),
-          'file2.txt': hashFileSync(path.join(srcDir, 'file2.txt')),
-          'file3.txt': hashFileSync(path.join(srcDir, 'file3.txt'))
-        }
-      };
-
-      const result = syncDirWithCleanup(srcDir, destDir, { manifest });
-
-      // Should detect 2 user modifications (file1 and file3)
-      if (result.userModifications && result.userModifications.length === 2 &&
-          result.userModifications.includes('file1.txt') && result.userModifications.includes('file3.txt')) {
-        console.log('  PASS: Multiple user modifications detected\n');
-        passed++;
-      } else {
-        console.log(`  FAIL: Expected userModifications=['file1.txt','file3.txt'], got [${result.userModifications}]\n`);
-        failed++;
-      }
-    } finally {
-      cleanupTestDirs(testDir);
-    }
-  }
-
-  // Test 6: Dry-run mode - no actual backup
-  console.log('Test 6: Dry-run mode - detect but do not backup');
-  {
-    const { testDir, srcDir, destDir, backupDir } = setupTestDirs();
-    try {
-      // Source file with content "v1"
-      fs.writeFileSync(path.join(srcDir, 'config.txt'), 'v1');
-
-      // Dest file with user modification "user-changes"
-      fs.writeFileSync(path.join(destDir, 'config.txt'), 'user-changes');
-
-      // Manifest expects v1
-      const manifest = {
-        generated_at: '2026-01-01T00:00:00Z',
-        files: {
-          'config.txt': hashFileSync(path.join(srcDir, 'config.txt'))
-        }
-      };
-
-      const result = syncDirWithCleanup(srcDir, destDir, { manifest, backupDir, dryRun: true });
-
-      // Should detect user modification but NOT backup in dry-run
-      const backedUpFile = path.join(backupDir, 'config.txt');
-      if (result.userModifications && result.userModifications.length === 1 &&
-          !result.backedUp || result.backedUp.length === 0 && !fs.existsSync(backedUpFile)) {
-        console.log('  PASS: Dry-run detects but does not backup\n');
-        passed++;
-      } else {
-        console.log(`  FAIL: Expected userModifications=['config.txt'] and no backup\n`);
-        failed++;
-      }
-    } finally {
-      cleanupTestDirs(testDir);
-    }
-  }
-
-  // Test 7: Without manifest - no detection (backward compatible)
-  console.log('Test 7: Without manifest - backward compatible behavior');
-  {
-    const { testDir, srcDir, destDir } = setupTestDirs();
-    try {
-      // Source file with content "v1"
-      fs.writeFileSync(path.join(srcDir, 'config.txt'), 'v1');
-
-      // Dest file with different content
-      fs.writeFileSync(path.join(destDir, 'config.txt'), 'different');
-
-      // No manifest - result should not have userModifications key at all
-      const result = syncDirWithCleanup(srcDir, destDir);
-
-      // Should NOT have userModifications key (backward compatible - undefined check)
-      if (result.userModifications === undefined) {
-        console.log('  PASS: Backward compatible without manifest\n');
-        passed++;
-      } else {
-        console.log(`  FAIL: Expected userModifications to be undefined, got [${result.userModifications}]\n`);
-        failed++;
-      }
-    } finally {
-      cleanupTestDirs(testDir);
-    }
-  }
-
-  console.log(`\n=== Results: ${passed} passed, ${failed} failed ===`);
-  process.exit(failed > 0 ? 1 : 0);
-}
-
-runTests();
+  // Should NOT have userModifications key (backward compatible - undefined check)
+  t.is(result.userModifications, undefined);
+});

@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 // Test file for syncDirWithCleanup hash comparison feature
 
+const test = require('ava');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const crypto = require('crypto');
 
 // Mock hashFileSync (same as in cli.js)
@@ -124,180 +126,120 @@ function syncDirWithCleanupNew(src, dest, opts) {
   return { copied, removed, skipped };
 }
 
-// Test utilities
-function setupTestDirs() {
-  const testDir = path.join(__dirname, 'test-sync-temp');
+// Test 1: Same content - should NOT copy (skipped)
+test('same content in src and dest - should skip copy', t => {
+  const testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aether-sync-'));
   const srcDir = path.join(testDir, 'src');
   const destDir = path.join(testDir, 'dest');
-
-  // Clean up any existing test dirs
-  if (fs.existsSync(testDir)) {
-    fs.rmSync(testDir, { recursive: true });
-  }
-
   fs.mkdirSync(srcDir, { recursive: true });
   fs.mkdirSync(destDir, { recursive: true });
+  t.teardown(() => fs.rmSync(testDir, { recursive: true, force: true }));
 
-  return { testDir, srcDir, destDir };
-}
+  // Create same file in both
+  fs.writeFileSync(path.join(srcDir, 'file.txt'), 'hello world');
+  fs.writeFileSync(path.join(destDir, 'file.txt'), 'hello world');
 
-function cleanupTestDirs(testDir) {
-  if (fs.existsSync(testDir)) {
-    fs.rmSync(testDir, { recursive: true });
-  }
-}
+  const result = syncDirWithCleanupNew(srcDir, destDir);
 
-// Test cases
-function runTests() {
-  let passed = 0;
-  let failed = 0;
+  // Should skip (not copy) because hashes match
+  t.is(result.copied, 0);
+  t.is(result.skipped, 1);
+});
 
-  console.log('=== Testing syncDirWithCleanup hash comparison ===\n');
+// Test 2: Different content - should copy
+test('different content in src and dest - should copy', t => {
+  const testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aether-sync-'));
+  const srcDir = path.join(testDir, 'src');
+  const destDir = path.join(testDir, 'dest');
+  fs.mkdirSync(srcDir, { recursive: true });
+  fs.mkdirSync(destDir, { recursive: true });
+  t.teardown(() => fs.rmSync(testDir, { recursive: true, force: true }));
 
-  // Test 1: Same content - should NOT copy (skipped)
-  console.log('Test 1: Same content in src and dest - should skip copy');
-  {
-    const { testDir, srcDir, destDir } = setupTestDirs();
-    try {
-      // Create same file in both
-      fs.writeFileSync(path.join(srcDir, 'file.txt'), 'hello world');
-      fs.writeFileSync(path.join(destDir, 'file.txt'), 'hello world');
+  fs.writeFileSync(path.join(srcDir, 'file.txt'), 'hello world');
+  fs.writeFileSync(path.join(destDir, 'file.txt'), 'hello different');
 
-      const result = syncDirWithCleanupNew(srcDir, destDir);
+  const result = syncDirWithCleanupNew(srcDir, destDir);
 
-      // Should skip (not copy) because hashes match
-      if (result.copied === 0 && result.skipped === 1) {
-        console.log('  PASS: No copy when hashes match\n');
-        passed++;
-      } else {
-        console.log(`  FAIL: Expected copied=0, skipped=1, got copied=${result.copied}, skipped=${result.skipped}\n`);
-        failed++;
-      }
-    } finally {
-      cleanupTestDirs(testDir);
-    }
-  }
+  t.is(result.copied, 1);
+  t.is(result.skipped, 0);
+});
 
-  // Test 2: Different content - should copy
-  console.log('Test 2: Different content in src and dest - should copy');
-  {
-    const { testDir, srcDir, destDir } = setupTestDirs();
-    try {
-      fs.writeFileSync(path.join(srcDir, 'file.txt'), 'hello world');
-      fs.writeFileSync(path.join(destDir, 'file.txt'), 'hello different');
+// Test 3: File only in dest (cleanup should work)
+test('file only in dest - should be cleaned up', t => {
+  const testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aether-sync-'));
+  const srcDir = path.join(testDir, 'src');
+  const destDir = path.join(testDir, 'dest');
+  fs.mkdirSync(srcDir, { recursive: true });
+  fs.mkdirSync(destDir, { recursive: true });
+  t.teardown(() => fs.rmSync(testDir, { recursive: true, force: true }));
 
-      const result = syncDirWithCleanupNew(srcDir, destDir);
+  // Only in dest
+  fs.writeFileSync(path.join(destDir, 'orphan.txt'), 'orphan');
 
-      if (result.copied === 1 && result.skipped === 0) {
-        console.log('  PASS: Copied when content differs\n');
-        passed++;
-      } else {
-        console.log(`  FAIL: Expected copied=1, skipped=0, got copied=${result.copied}, skipped=${result.skipped}\n`);
-        failed++;
-      }
-    } finally {
-      cleanupTestDirs(testDir);
-    }
-  }
+  const result = syncDirWithCleanupNew(srcDir, destDir);
 
-  // Test 3: File only in dest (cleanup should work)
-  console.log('Test 3: File only in dest - should be cleaned up');
-  {
-    const { testDir, srcDir, destDir } = setupTestDirs();
-    try {
-      // Only in dest
-      fs.writeFileSync(path.join(destDir, 'orphan.txt'), 'orphan');
+  t.is(result.removed.length, 1);
+  t.is(result.removed[0], 'orphan.txt');
+});
 
-      const result = syncDirWithCleanupNew(srcDir, destDir);
+// Test 4: New file in src - should copy
+test('new file in src (not in dest) - should copy', t => {
+  const testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aether-sync-'));
+  const srcDir = path.join(testDir, 'src');
+  const destDir = path.join(testDir, 'dest');
+  fs.mkdirSync(srcDir, { recursive: true });
+  fs.mkdirSync(destDir, { recursive: true });
+  t.teardown(() => fs.rmSync(testDir, { recursive: true, force: true }));
 
-      if (result.removed.length === 1 && result.removed[0] === 'orphan.txt') {
-        console.log('  PASS: Orphan file removed\n');
-        passed++;
-      } else {
-        console.log(`  FAIL: Expected removed=['orphan.txt'], got removed=[${result.removed}]\n`);
-        failed++;
-      }
-    } finally {
-      cleanupTestDirs(testDir);
-    }
-  }
+  fs.writeFileSync(path.join(srcDir, 'new.txt'), 'new content');
+  // dest is empty
 
-  // Test 4: New file in src - should copy
-  console.log('Test 4: New file in src (not in dest) - should copy');
-  {
-    const { testDir, srcDir, destDir } = setupTestDirs();
-    try {
-      fs.writeFileSync(path.join(srcDir, 'new.txt'), 'new content');
-      // dest is empty
+  const result = syncDirWithCleanupNew(srcDir, destDir);
 
-      const result = syncDirWithCleanupNew(srcDir, destDir);
+  t.is(result.copied, 1);
+  t.true(fs.existsSync(path.join(destDir, 'new.txt')));
+});
 
-      if (result.copied === 1 && fs.existsSync(path.join(destDir, 'new.txt'))) {
-        console.log('  PASS: New file copied\n');
-        passed++;
-      } else {
-        console.log(`  FAIL: Expected copied=1, got copied=${result.copied}\n`);
-        failed++;
-      }
-    } finally {
-      cleanupTestDirs(testDir);
-    }
-  }
+// Test 5: Multiple files - mix of same and different
+test('multiple files - mix of same, different, new', t => {
+  const testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aether-sync-'));
+  const srcDir = path.join(testDir, 'src');
+  const destDir = path.join(testDir, 'dest');
+  fs.mkdirSync(srcDir, { recursive: true });
+  fs.mkdirSync(destDir, { recursive: true });
+  t.teardown(() => fs.rmSync(testDir, { recursive: true, force: true }));
 
-  // Test 5: Multiple files - mix of same and different
-  console.log('Test 5: Multiple files - mix of same, different, new');
-  {
-    const { testDir, srcDir, destDir } = setupTestDirs();
-    try {
-      // src files
-      fs.writeFileSync(path.join(srcDir, 'same.txt'), 'same content');
-      fs.writeFileSync(path.join(srcDir, 'different.txt'), 'new content');
-      fs.writeFileSync(path.join(srcDir, 'new.txt'), 'brand new');
+  // src files
+  fs.writeFileSync(path.join(srcDir, 'same.txt'), 'same content');
+  fs.writeFileSync(path.join(srcDir, 'different.txt'), 'new content');
+  fs.writeFileSync(path.join(srcDir, 'new.txt'), 'brand new');
 
-      // dest files (different.txt has old content, same.txt has same)
-      fs.writeFileSync(path.join(destDir, 'same.txt'), 'same content');
-      fs.writeFileSync(path.join(destDir, 'different.txt'), 'old content');
+  // dest files (different.txt has old content, same.txt has same)
+  fs.writeFileSync(path.join(destDir, 'same.txt'), 'same content');
+  fs.writeFileSync(path.join(destDir, 'different.txt'), 'old content');
 
-      const result = syncDirWithCleanupNew(srcDir, destDir);
+  const result = syncDirWithCleanupNew(srcDir, destDir);
 
-      // same.txt: skipped, different.txt: copied, new.txt: copied
-      if (result.copied === 2 && result.skipped === 1) {
-        console.log(`  PASS: Copied=2 (different+new), Skipped=1 (same)\n`);
-        passed++;
-      } else {
-        console.log(`  FAIL: Expected copied=2, skipped=1, got copied=${result.copied}, skipped=${result.skipped}\n`);
-        failed++;
-      }
-    } finally {
-      cleanupTestDirs(testDir);
-    }
-  }
+  // same.txt: skipped, different.txt: copied, new.txt: copied
+  t.is(result.copied, 2);
+  t.is(result.skipped, 1);
+});
 
-  // Test 6: Dry run mode
-  console.log('Test 6: Dry run mode - should report files but not copy');
-  {
-    const { testDir, srcDir, destDir } = setupTestDirs();
-    try {
-      fs.writeFileSync(path.join(srcDir, 'file.txt'), 'content');
-      // dest is empty
+// Test 6: Dry run mode
+test('dry run mode - should report files but not copy', t => {
+  const testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aether-sync-'));
+  const srcDir = path.join(testDir, 'src');
+  const destDir = path.join(testDir, 'dest');
+  fs.mkdirSync(srcDir, { recursive: true });
+  fs.mkdirSync(destDir, { recursive: true });
+  t.teardown(() => fs.rmSync(testDir, { recursive: true, force: true }));
 
-      const result = syncDirWithCleanupNew(srcDir, destDir, { dryRun: true });
+  fs.writeFileSync(path.join(srcDir, 'file.txt'), 'content');
+  // dest is empty
 
-      // In dry run, should report all files as "copied" but not actually copy
-      if (result.copied === 1 && !fs.existsSync(path.join(destDir, 'file.txt'))) {
-        console.log('  PASS: Dry run reports but does not copy\n');
-        passed++;
-      } else {
-        console.log(`  FAIL: Expected copied=1, got copied=${result.copied}\n`);
-        failed++;
-      }
-    } finally {
-      cleanupTestDirs(testDir);
-    }
-  }
+  const result = syncDirWithCleanupNew(srcDir, destDir, { dryRun: true });
 
-  console.log(`\n=== Results: ${passed} passed, ${failed} failed ===`);
-  process.exit(failed > 0 ? 1 : 0);
-}
-
-runTests();
+  // In dry run, should report all files as "copied" but not actually copy
+  t.is(result.copied, 1);
+  t.false(fs.existsSync(path.join(destDir, 'file.txt')));
+});
