@@ -19,12 +19,13 @@ Detailed guidelines are in `.claude/rules/`:
 ```
 ┌────────────────────────────────────────────────────────────────┐
 │  In the Aether repo, .aether/ IS the source of truth.          │
-│  Edit system files there naturally.                            │
+│  Edit system files there and publish directly.                 │
 │                                                                │
-│  .aether/           → SOURCE OF TRUTH (edit this)              │
-│  runtime/           → STAGING (auto-populated on publish)      │
+│  .aether/           → SOURCE OF TRUTH (edit this, published)  │
+│  .aether/data/      → LOCAL ONLY (excluded by .npmignore)      │
+│  .aether/dreams/    → LOCAL ONLY (excluded by .npmignore)      │
 │                                                                │
-│  A sync script copies .aether/ → runtime/ before packaging.   │
+│  npm install -g . validates .aether/ and pushes to hub.        │
 └────────────────────────────────────────────────────────────────┘
 ```
 
@@ -33,7 +34,7 @@ Detailed guidelines are in `.claude/rules/`:
 | workers.md | `.aether/workers.md` | Source of truth |
 | aether-utils.sh | `.aether/aether-utils.sh` | Source of truth |
 | utils/*.sh | `.aether/utils/` | Source of truth |
-| User docs | `.aether/docs/` | Source of truth (allowlisted docs get distributed) |
+| User docs | `.aether/docs/` | Source of truth (docs distributed directly) |
 | Slash commands | `.claude/commands/ant/` | Claude Code commands |
 | OpenCode commands | `.opencode/commands/ant/` | OpenCode commands |
 | Agent definitions | `.opencode/agents/` | Agent definitions |
@@ -48,29 +49,27 @@ Detailed guidelines are in `.claude/rules/`:
 ```bash
 git add .
 git commit -m "your message"
-npm install -g .   # Auto-syncs .aether/ → runtime/, then pushes to hub
+npm install -g .   # Validates .aether/, then pushes to hub
 ```
 
 ---
 
 ## Critical Architecture
 
-**In the Aether repo, `.aether/` system files are the source of truth.** A sync script (`bin/sync-to-runtime.sh`) copies them to `runtime/` automatically when you run `npm install -g .`. The `runtime/` directory is a staging area for the npm package.
+**In the Aether repo, `.aether/` system files are the source of truth and are packaged directly into the npm package.** Private directories (data/, dreams/, oracle/, etc.) are excluded by `.aether/.npmignore`. Running `npm install -g .` validates `.aether/` via `bin/validate-package.sh`, then calls `setupHub()` which syncs to the hub.
 
 ```
 Aether Repo (this repo)
-├── .aether/ (SOURCE OF TRUTH for system files)
+├── .aether/ (SOURCE OF TRUTH — packaged directly into npm)
 │   ├── workers.md, aether-utils.sh, utils/, docs/
-│   └── data/                        ← LOCAL (never touched)
-│         │
-│         │  bin/sync-to-runtime.sh (auto on npm install)
-│         ▼
-├── runtime/ (STAGING — auto-populated from .aether/)
+│   ├── data/          ← LOCAL ONLY (excluded by .aether/.npmignore)
+│   └── dreams/        ← LOCAL ONLY (excluded by .aether/.npmignore)
+│
 ├── .claude/commands/ant/ ─────────────────────────────┐
 ├── .opencode/ ────────────────────────────────────────┤──→ npm package
 │                                                      ▼
 │                                                ~/.aether/ (THE HUB)
-│                                                ├── system/      ← runtime/
+│                                                ├── system/      ← .aether/
 │                                                ├── commands/    ← slash commands
 │                                                └── agents/
 │                                                      │
@@ -85,7 +84,7 @@ any-repo/.aether/ (WORKING COPY - gets overwritten)
 **Development workflow:**
 1. Edit `.aether/` system files (or `.claude/commands/ant/` for slash commands) naturally
 2. Commit changes
-3. Run `npm install -g .` — auto-syncs `.aether/` → `runtime/`, then pushes to hub
+3. Run `npm install -g .` — validates `.aether/`, then pushes to hub
 4. Hub distributes to all repos via `aether update`
 
 **In other repos:** `.aether/` is a working copy that gets overwritten by `aether update`. Don't edit system files there — they come from the hub.
@@ -96,11 +95,10 @@ any-repo/.aether/ (WORKING COPY - gets overwritten)
 
 | Directory | Purpose | Syncs to Hub |
 |-----------|---------|--------------|
-| `.aether/` (system files) | Source of truth for workers.md, aether-utils.sh, utils/, docs/ | → `runtime/` → `~/.aether/system/` |
+| `.aether/` (system files) | Source of truth for workers.md, aether-utils.sh, utils/, docs/ | → `~/.aether/system/` |
 | `.claude/commands/ant/` | Claude Code slash commands | → `~/.aether/commands/claude/` |
 | `.opencode/commands/ant/` | OpenCode slash commands | → `~/.aether/commands/opencode/` |
 | `.opencode/agents/` | Agent definitions | → `~/.aether/agents/` |
-| `runtime/` | Staging directory (auto-populated, do not edit directly) | → `~/.aether/system/` |
 | `.aether/data/` | Colony state (COLONY_STATE.json, pheromones.json) | **NEVER touched** |
 
 ---

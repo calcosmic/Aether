@@ -9,12 +9,13 @@
 ```
 ┌────────────────────────────────────────────────────────────────┐
 │  In the Aether repo, .aether/ IS the source of truth.          │
-│  Edit system files there naturally.                            │
+│  Edit system files there and publish directly.                 │
 │                                                                │
-│  .aether/           → SOURCE OF TRUTH (edit this)              │
-│  runtime/           → STAGING (auto-populated on publish)      │
+│  .aether/           → SOURCE OF TRUTH (edit this, published)  │
+│  .aether/data/      → LOCAL ONLY (excluded by .npmignore)      │
+│  .aether/dreams/    → LOCAL ONLY (excluded by .npmignore)      │
 │                                                                │
-│  A sync script copies .aether/ → runtime/ before packaging.   │
+│  npm install -g . validates .aether/ and pushes to hub.        │
 └────────────────────────────────────────────────────────────────┘
 ```
 
@@ -29,29 +30,28 @@
 ```bash
 git add .
 git commit -m "your message"
-npm install -g .   # Auto-syncs .aether/ → runtime/, then pushes to hub
+npm install -g .   # Validates .aether/, then pushes to hub
 ```
 
 ---
 
 ## Critical Architecture
 
-**`.aether/` + `.opencode/` are the source of truth.** `runtime/` is a staging directory auto-populated from `.aether/` on publish.
+**`.aether/` + `.opencode/` are the source of truth.** `.aether/` is packaged directly into the npm package; private directories are excluded by `.aether/.npmignore`.
 
 ```
 Aether Repo (this repo)
-├── .aether/ (SOURCE OF TRUTH for system files)
+├── .aether/ (SOURCE OF TRUTH — packaged directly into npm)
 │   ├── workers.md, aether-utils.sh, utils/, docs/
-│   │        │
-│   │        │  bin/sync-to-runtime.sh (auto on npm install)
-│   │        ▼
-├── runtime/ (STAGING — auto-populated)
+│   ├── data/          ← LOCAL ONLY (excluded by .aether/.npmignore)
+│   └── dreams/        ← LOCAL ONLY (excluded by .aether/.npmignore)
+│
 ├── .opencode/ ────────────────────────────────────────┤──→ npm package
 │   ├── agents/                                        │
 │   └── commands/ant/                                  │
 │                                                      ▼
 │                                                ~/.aether/ (THE HUB)
-│                                                ├── system/      ← runtime/
+│                                                ├── system/      ← .aether/
 │                                                ├── commands/    ← slash commands
 │                                                └── agents/      ← .opencode/agents/
 │                                                      │
@@ -73,8 +73,7 @@ any-repo/.aether/ (WORKING COPY - gets overwritten)
 |-----------|---------|--------------|
 | `.opencode/agents/` | Agent definitions | → `~/.aether/agents/` |
 | `.opencode/commands/ant/` | OpenCode slash commands | → `~/.aether/commands/opencode/` |
-| `.aether/` (system files) | Source of truth for workers.md, utils, docs | → `runtime/` → `~/.aether/system/` |
-| `runtime/` | Staging (auto-populated, do not edit) | → `~/.aether/system/` |
+| `.aether/` (system files) | Source of truth for workers.md, utils, docs | → `~/.aether/system/` |
 | `.aether/data/` | Colony state | **NEVER touched** |
 
 ---

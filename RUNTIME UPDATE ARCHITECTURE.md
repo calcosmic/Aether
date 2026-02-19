@@ -1,4 +1,6 @@
-# Aether Architecture - How It Works
+# Aether Architecture - How It Works (v4.0)
+
+> **Historical note:** Prior to v4.0, a `runtime/` staging directory was used as an intermediary between `.aether/` and the npm package. This was removed in v4.0 to eliminate maintenance burden and the destructive update loop risk. `.aether/` is now packaged directly.
 
 ## The Core Concept
 
@@ -6,19 +8,18 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │                     AETHER REPO (this repo)                      │
 │                                                                  │
-│   .aether/             ← SOURCE OF TRUTH for system files       │
+│   .aether/             ← SOURCE OF TRUTH (packaged directly)    │
 │   ├── workers.md       (edit here)                              │
 │   ├── aether-utils.sh                                           │
 │   ├── utils/                                                    │
 │   └── docs/                                                     │
 │                                                                  │
-│   runtime/             ← STAGING (auto-populated, don't edit)   │
+│   .aether/data/        ← LOCAL ONLY (excluded by .npmignore)    │
+│   .aether/dreams/      ← LOCAL ONLY (excluded by .npmignore)    │
 │                                                                  │
 │   .claude/commands/ant/ ← Slash commands (Claude Code)          │
 │   .opencode/commands/ant/ ← Slash commands (OpenCode)           │
 │   .opencode/agents/     ← Agent definitions                     │
-│                                                                  │
-│   .aether/data/        ← LOCAL ONLY (colony state, never sync)  │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -32,7 +33,6 @@ flowchart TB
         CC[".claude/commands/ant/"]
         OC[".opencode/"]
         VIS[".aether/visualizations/"]
-        RT["runtime/ (staging)"]
     end
 
     subgraph Hub["~/.aether/ (THE HUB)"]
@@ -50,8 +50,7 @@ flowchart TB
         RD["data/ (local only)"]
     end
 
-    AE -->|"bin/sync-to-runtime.sh"| RT
-    RT -->|"npm install -g ."| HS
+    AE -->|"npm install -g . (direct)"| HS
     CC -->|"npm install -g ."| HC
     OC -->|"npm install -g ."| HO
     VIS -->|"npm install -g ."| HV
@@ -73,10 +72,6 @@ flowchart LR
         D8[".aether/visualizations/*"]
     end
 
-    subgraph staging ["STAGING (auto-generated)"]
-        S1["runtime/*"]
-    end
-
     subgraph local ["LOCAL ONLY (never distributed)"]
         L1[".aether/dreams/*"]
         L2[".aether/data/*"]
@@ -88,20 +83,19 @@ flowchart LR
 ## The Update Commands
 
 ### `npm install -g .` (in Aether repo)
-Syncs .aether/ to runtime/, then pushes to hub
+Validates `.aether/` via `bin/validate-package.sh`, then pushes directly to hub
 
 ```mermaid
 sequenceDiagram
     participant Dev as Developer
     participant Aether as Aether repo
-    participant RT as runtime/ (staging)
     participant Hub as ~/.aether/
 
     Dev->>Aether: Edit .aether/workers.md
     Dev->>Aether: git commit
-    Dev->>RT: npm install -g . (preinstall: sync-to-runtime.sh)
-    Note over RT: .aether/ system files copied to runtime/
-    RT->>Hub: postinstall: cli.js install
+    Dev->>Aether: npm install -g . (prepublishOnly: validate-package.sh)
+    Note over Aether: Validates required files exist, private dirs guarded
+    Aether->>Hub: postinstall: cli.js setupHub() reads .aether/ directly
     Note over Hub: Hub now has new version
     Note over Dev: Other repos can now aether update
 ```
@@ -117,9 +111,9 @@ sequenceDiagram
 
     User->>Repo: aether update
     Repo->>Hub: Check version.json
-    Hub-->>Repo: v3.1.7
+    Hub-->>Repo: v4.0.0
     Note over Repo: Newer version available!
-    Repo->>Hub: Pull system files
+    Repo->>Hub: Pull system files (syncAetherToRepo — exclude-based)
     Repo->>Hub: Pull commands
     Repo->>Hub: Pull visualizations
     Note over Repo: data/ is NEVER touched
@@ -132,33 +126,52 @@ sequenceDiagram
 | **Edit `.aether/` system files** | Source of truth in the Aether repo |
 | **Edit `.claude/commands/ant/`** | Slash commands for Claude Code |
 | **Edit `.opencode/agents/`** | Agent definitions |
-| **Don't edit `runtime/` directly** | It's auto-populated from `.aether/` on publish |
 | **`.aether/data/` is safe** | Colony state is never touched by updates |
 | **In other repos, don't edit `.aether/`** | Working copies get overwritten by `aether update` |
 
-## The Sync Script
+## The Validation Script
 
-`bin/sync-to-runtime.sh` copies allowlisted system files from `.aether/` to `runtime/`.
+`bin/validate-package.sh` runs before packaging to verify the `.aether/` directory is ready.
 
-- Runs automatically as npm `preinstall` hook
-- Uses the same allowlist as `update-transaction.js`
-- Only copies changed files (hash comparison)
-- Never deletes extras in `runtime/` (templates, signatures, etc.)
+- Runs automatically as npm `prepublishOnly` hook
+- Checks required files exist (workers.md, aether-utils.sh, etc.)
+- Guards against private data exposure (verifies .aether/.npmignore covers data/, dreams/, oracle/, etc.)
+- Supports `--dry-run` mode for pre-commit checks
 
 ```bash
-# Manual run (normally automatic)
-bash bin/sync-to-runtime.sh
+# Manual run (normally automatic via npm install -g .)
+bash bin/validate-package.sh
 
-# Reverse sync (seed .aether/ from runtime/, one-time use)
-bash bin/sync-to-runtime.sh --reverse
+# Dry-run mode
+bash bin/validate-package.sh --dry-run
+
+# Verify what npm would actually package
+npm pack --dry-run
 ```
 
-## The Visualizations Exception
+## The Hub Sync (setupHub)
+
+`bin/cli.js setupHub()` distributes content from the installed package to the hub (`~/.aether/`):
+
+- **System files:** Walks `.aether/` directly using exclude-based approach (`HUB_EXCLUDE_DIRS`) — no allowlist
+- **Claude commands:** Copies `.claude/commands/ant/` → `~/.aether/commands/claude/`
+- **OpenCode commands + agents:** Copies from `.opencode/` directories
+- **Rules:** Dedicated step copies `.claude/rules/` → `~/.aether/commands/rules/`
+
+## The Target Repo Sync (syncAetherToRepo)
+
+`bin/lib/update-transaction.js syncAetherToRepo()` distributes from hub to target repos:
+
+- Exclude-based approach (`EXCLUDE_DIRS`) — no allowlist
+- Excludes: data/, dreams/, oracle/, archive/, chambers/, locks/
+- Only system files are distributed; local data is never touched
+
+## The Visualizations
 
 ```
 .aether/visualizations/ → DISTRIBUTED
-.aether/dreams/         → NOT distributed
-.aether/data/           → NOT distributed (local state)
+.aether/dreams/         → NOT distributed (excluded by .npmignore)
+.aether/data/           → NOT distributed (excluded by .npmignore)
 ```
 
 Why? Visualizations are ASCII art assets needed by the `/ant:maturity` command, so they need to be distributed with the package.
@@ -167,7 +180,7 @@ Why? Visualizations are ASCII art assets needed by the `/ant:maturity` command, 
 
 ```bash
 # You changed system files in .aether/:
-npm install -g .          # Auto-sync + push to hub
+npm install -g .          # Validate + push to hub
 
 # You want updates in another repo:
 /ant:update               # Pull from hub
