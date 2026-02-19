@@ -1,0 +1,8 @@
+{
+  "_template": "constraints",
+  "_version": "1.0",
+  "_instructions": "Write this file to .aether/data/constraints.json. No placeholder substitution needed — write the data keys as-is. Remove all underscore-prefixed keys before writing.",
+  "version": "1.0",
+  "focus": [],
+  "constraints": []
+}

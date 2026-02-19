@@ -1,0 +1,22 @@
+# colony-state-reset.jq.template — Reset colony state fields for entomb
+# Usage: jq -f .aether/templates/colony-state-reset.jq.template STATE.json.bak > STATE.json
+# Version: 1.0
+
+.goal = null |
+.state = "IDLE" |
+.current_phase = 0 |
+.plan.phases = [] |
+.plan.generated_at = null |
+.plan.confidence = null |
+.build_started_at = null |
+.session_id = null |
+.initialized_at = null |
+.milestone = null |
+.events = [] |
+.errors.records = [] |
+.errors.flagged_patterns = [] |
+.signals = [] |
+.graveyards = [] |
+.memory.instincts = [] |
+.memory.phase_learnings = [] |
+.memory.decisions = []
