@@ -150,7 +150,8 @@ test('validate-state with invalid target returns error', t => {
 
   t.false(error.ok, 'ok should be false for error');
   t.true('error' in error, 'Error should have error field');
-  t.true(error.error.includes('Usage:'), 'Error should include usage information');
+  t.true(error.error.message.includes('Usage:'), 'Error should include usage information');
+  t.is(error.error.code, 'E_VALIDATION_FAILED', 'Error code should be E_VALIDATION_FAILED');
 });
 
 // Test: validate-state without argument returns error
@@ -159,7 +160,8 @@ test('validate-state without argument returns error', t => {
 
   t.false(error.ok, 'ok should be false for error');
   t.true('error' in error, 'Error should have error field');
-  t.true(error.error.includes('Usage:'), 'Error should include usage information');
+  t.true(error.error.message.includes('Usage:'), 'Error should include usage information');
+  t.is(error.error.code, 'E_VALIDATION_FAILED', 'Error code should be E_VALIDATION_FAILED');
 });
 
 // Test: All validate-state subcommands return consistent JSON format
