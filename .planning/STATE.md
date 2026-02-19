@@ -10,14 +10,14 @@ See: .planning/PROJECT.md (updated 2026-02-19)
 ## Current Position
 
 Phase: 22 of 25 — Agent Boilerplate Cleanup
-Plan: 02 of 03
-Status: In Progress
-Last activity: 2026-02-19 — Completed 22-02: verified Knowledge 4 + Quality 4 agents clean (8 agents, pre-completed in 22-01)
+Plan: 03 of 03 (COMPLETE)
+Status: Phase 22 Complete
+Last activity: 2026-02-19 — Completed 22-03: verified Special 3 + updated Surveyor 4 descriptions; phase 22 done
 
 ## Performance Metrics
 
 **Cumulative:**
-- Total plans completed: 62 (v1.0: 27, v1.1: 13, v1.2: 18, v1.3: 4)
+- Total plans completed: 65 (v1.0: 27, v1.1: 13, v1.2: 18, v1.3: 7)
 - Total requirements: 84 validated (v1.0: 46, v1.1: 14, v1.2: 24)
 - v1.3 target: 24 requirements across 6 phases
 - Total tests: 446 passing (415 AVA + 31 bash), 0 failures
@@ -41,6 +41,9 @@ Last activity: 2026-02-19 — Completed 22-02: verified Knowledge 4 + Quality 4 
 - [Phase 21-03]: All templates grouped together in REQUIRED_FILES array for readability
 - [Phase 22-01]: Queen and builder were already clean before this plan ran — only 7 of 9 agents needed edits; route-setter had no Depth-Based Behavior section
 - [Phase 22-02]: 22-01 commit cleaned more agents than message indicated — Quality 4 (guardian, measurer, includer, gatekeeper) already cleaned
+- [Phase 22-03]: Special 3 agents pre-completed in 22-01 — same pre-completion pattern across all phase 22 plans
+- [Phase 22-03]: Missing OpenCode resume.md (pre-existing 34 vs 33 command mismatch) fixed as Rule 3 deviation
+- [Phase 22-03]: Content-level command drift (10+ files) and 2 validate-state test failures are pre-existing known debt
 
 ### Key Findings from Research
 - 7 research docs analyzed (agent architecture, template system, team coordination, distribution chain)
@@ -50,10 +53,11 @@ Last activity: 2026-02-19 — Completed 22-02: verified Knowledge 4 + Quality 4 
 - Escalation chain is the biggest coordination gap (no receiving protocol defined)
 
 ### Blockers / Concerns
-- None
+- Pre-existing: Content-level command drift between Claude Code and OpenCode directories (10+ files differ)
+- Pre-existing: 2 test failures in validate-state.test.js
 
 ## Session Continuity
 
-Last session: 2026-02-19T21:50:35Z
-Stopped at: Completed 22-02-PLAN.md
-Next step: Execute 22-03 (Specialist 4 + Coordination 2 agents, Batches 5 and 6)
+Last session: 2026-02-19T21:52:38Z
+Stopped at: Completed 22-03-PLAN.md (Phase 22 complete)
+Next step: Execute Phase 23
