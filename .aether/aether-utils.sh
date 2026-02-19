@@ -44,22 +44,6 @@ CURRENT_LOCK=${CURRENT_LOCK:-""}
 : "${E_DEPENDENCY_MISSING:=E_DEPENDENCY_MISSING}"
 : "${E_RESOURCE_NOT_FOUND:=E_RESOURCE_NOT_FOUND}"
 
-# Feature detection for graceful degradation
-# These checks run silently - failures are logged but don't block operation
-if type feature_disable &>/dev/null; then
-  # Check if DATA_DIR is writable for activity logging
-  [[ -w "$DATA_DIR" ]] 2>/dev/null || feature_disable "activity_log" "DATA_DIR not writable"
-
-  # Check if git is available for git integration
-  command -v git &>/dev/null || feature_disable "git_integration" "git not installed"
-
-  # Check if jq is available for JSON processing
-  command -v jq &>/dev/null || feature_disable "json_processing" "jq not installed"
-
-  # Check if lock utilities are available
-  [[ -f "$SCRIPT_DIR/utils/file-lock.sh" ]] || feature_disable "file_locking" "lock utilities not available"
-fi
-
 # Fallback atomic_write if not sourced (uses temp file + mv for true atomicity)
 if ! type atomic_write &>/dev/null; then
   atomic_write() {
@@ -89,6 +73,51 @@ if ! type json_err &>/dev/null; then
     exit 1
   }
 fi
+
+# Feature detection for graceful degradation
+# ARCH-09: runs AFTER all fallback definitions (atomic_write, json_ok, json_err)
+# so feature_disable is never called before those functions exist.
+# These checks run silently - failures are logged but don't block operation
+if type feature_disable &>/dev/null; then
+  # Check if DATA_DIR is writable for activity logging
+  [[ -w "$DATA_DIR" ]] 2>/dev/null || feature_disable "activity_log" "DATA_DIR not writable"
+
+  # Check if git is available for git integration
+  command -v git &>/dev/null || feature_disable "git_integration" "git not installed"
+
+  # Check if jq is available for JSON processing
+  command -v jq &>/dev/null || feature_disable "json_processing" "jq not installed"
+
+  # Check if lock utilities are available
+  [[ -f "$SCRIPT_DIR/utils/file-lock.sh" ]] || feature_disable "file_locking" "lock utilities not available"
+fi
+
+# Composed exit cleanup — replaces individual traps from file-lock.sh and atomic-write.sh
+# ARCH-10: bash traps are single-valued per signal — last trap set wins.
+# This function ensures both lock and temp cleanup run on every exit path.
+# Must be set AFTER file-lock.sh is sourced so it overrides the individual
+# 'trap cleanup_locks EXIT TERM INT HUP' set by file-lock.sh.
+_aether_exit_cleanup() {
+    cleanup_locks 2>/dev/null || true
+    cleanup_temp_files 2>/dev/null || true
+}
+trap '_aether_exit_cleanup' EXIT TERM INT HUP
+
+# Startup cleanup — remove temp files from dead sessions (PID-based orphan detection)
+# ARCH-10: runs once at startup, silent (matches lock cleanup behavior)
+_cleanup_orphaned_temp_files() {
+    local temp_dir="${TEMP_DIR:-$AETHER_ROOT/.aether/temp}"
+    [[ -d "$temp_dir" ]] || return 0
+    while IFS= read -r -d '' tmp_file; do
+        local file_pid
+        file_pid=$(basename "$tmp_file" | awk -F'.' '{print $(NF-2)}')
+        if [[ "$file_pid" =~ ^[0-9]+$ ]] && ! kill -0 "$file_pid" 2>/dev/null; then
+            rm -f "$tmp_file" 2>/dev/null || true
+        fi
+    done < <(find "$temp_dir" -maxdepth 1 -name "*.tmp" -print0 2>/dev/null)
+}
+# Run orphan cleanup on startup (silent — matches cleanup_locks behavior)
+type cleanup_temp_files &>/dev/null && _cleanup_orphaned_temp_files
 
 # --- Caste emoji helper ---
 get_caste_emoji() {
