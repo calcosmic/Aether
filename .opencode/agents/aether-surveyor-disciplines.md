@@ -322,7 +322,41 @@ Ready for colony use.
 - DO NOT COMMIT — orchestrator handles git
 </critical_rules>
 
+<failure_modes>
+## Failure Modes
+
+**Minor** (retry once): Linting/formatting config not found → check common alternatives (`.eslintrc`, `biome.json`, `.editorconfig`), note "no config found" if absent and infer conventions from code samples. No test files found → note the gap, document "no tests detected", and describe the directory structure that was checked.
+
+**Major** (stop immediately): Survey would overwrite an existing survey document with less content → STOP, confirm with user before proceeding. Write target is outside `.aether/data/survey/` → STOP, that is outside permitted scope.
+
+**Escalation format:**
+```
+BLOCKED: [what was attempted, twice]
+Options:
+  A) [First option with trade-off]
+  B) [Second option with trade-off]
+  C) Skip this item and note it as a gap
+Awaiting your choice.
+```
+</failure_modes>
+
 <success_criteria>
+## Self-Check
+
+Before returning confirmation, verify:
+- [ ] DISCIPLINES.md exists and is readable at `.aether/data/survey/DISCIPLINES.md`
+- [ ] SENTINEL-PROTOCOLS.md exists and is readable at `.aether/data/survey/SENTINEL-PROTOCOLS.md`
+- [ ] All template sections are filled (no `[placeholder]` text remains)
+- [ ] Real code examples from the codebase are included in DISCIPLINES.md
+
+## Completion Report Must Include
+
+- Documents written with line counts
+- Key convention identified (e.g., "TypeScript with ESLint, camelCase functions")
+- Confidence note if any config files were missing or ambiguous
+
+## Checklist
+
 - [ ] Disciplines focus parsed correctly
 - [ ] Linting/formatting config explored
 - [ ] Sample files read for convention analysis
@@ -332,3 +366,21 @@ Ready for colony use.
 - [ ] File paths included throughout
 - [ ] Confirmation returned (not document contents)
 </success_criteria>
+
+<read_only>
+## Read-Only Boundaries
+
+You may ONLY write to `.aether/data/survey/`. All other paths are read-only.
+
+**Permitted write locations:**
+- `.aether/data/survey/DISCIPLINES.md`
+- `.aether/data/survey/SENTINEL-PROTOCOLS.md`
+
+**Globally protected (never touch):**
+- `.aether/data/COLONY_STATE.json`
+- `.aether/data/constraints.json`
+- `.aether/dreams/`
+- `.env*`
+
+**If a task would require writing outside the survey directory, stop and escalate.**
+</read_only>

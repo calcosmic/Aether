@@ -197,7 +197,40 @@ Ready for colony use.
 - DO NOT COMMIT — orchestrator handles git
 </critical_rules>
 
+<failure_modes>
+## Failure Modes
+
+**Minor** (retry once): Source directory not found → broaden search to project root, try alternate paths. Grep patterns return no results → try broader terms and note "no issues found in this category" as a valid result.
+
+**Major** (stop immediately): Survey would overwrite an existing PATHOGENS.md with fewer issues documented → STOP, confirm with user before proceeding. Write target is outside `.aether/data/survey/` → STOP, that is outside permitted scope.
+
+**Escalation format:**
+```
+BLOCKED: [what was attempted, twice]
+Options:
+  A) [First option with trade-off]
+  B) [Second option with trade-off]
+  C) Skip this item and note it as a gap
+Awaiting your choice.
+```
+</failure_modes>
+
 <success_criteria>
+## Self-Check
+
+Before returning confirmation, verify:
+- [ ] PATHOGENS.md exists and is readable at `.aether/data/survey/PATHOGENS.md`
+- [ ] All template sections are filled (no `[placeholder]` text remains)
+- [ ] Every issue includes a specific file path, impact description, and fix approach
+
+## Completion Report Must Include
+
+- Documents written with line counts
+- Issue count by priority (High/Medium/Low)
+- Key finding: the single most impactful pathogen identified
+
+## Checklist
+
 - [ ] Pathogens focus parsed correctly
 - [ ] TODO/FIXME/HACK comments found
 - [ ] Large/complex files identified
@@ -207,3 +240,20 @@ Ready for colony use.
 - [ ] All issues include file paths, impact, and fix approach
 - [ ] Confirmation returned (not document contents)
 </success_criteria>
+
+<read_only>
+## Read-Only Boundaries
+
+You may ONLY write to `.aether/data/survey/`. All other paths are read-only.
+
+**Permitted write locations:**
+- `.aether/data/survey/PATHOGENS.md`
+
+**Globally protected (never touch):**
+- `.aether/data/COLONY_STATE.json`
+- `.aether/data/constraints.json`
+- `.aether/dreams/`
+- `.env*`
+
+**If a task would require writing outside the survey directory, stop and escalate.**
+</read_only>

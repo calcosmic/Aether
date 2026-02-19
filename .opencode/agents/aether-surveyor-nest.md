@@ -261,7 +261,41 @@ Ready for colony use.
 - DO NOT COMMIT — orchestrator handles git
 </critical_rules>
 
+<failure_modes>
+## Failure Modes
+
+**Minor** (retry once): Codebase directory not found at expected path → broaden search, try alternate paths (`src/`, `lib/`, project root). No files match the expected pattern → note what was found instead and document the actual structure.
+
+**Major** (stop immediately): Survey would overwrite an existing survey document with less content → STOP, confirm with user before proceeding. Write target is outside `.aether/data/survey/` → STOP, that is outside permitted scope.
+
+**Escalation format:**
+```
+BLOCKED: [what was attempted, twice]
+Options:
+  A) [First option with trade-off]
+  B) [Second option with trade-off]
+  C) Skip this item and note it as a gap
+Awaiting your choice.
+```
+</failure_modes>
+
 <success_criteria>
+## Self-Check
+
+Before returning confirmation, verify:
+- [ ] BLUEPRINT.md exists and is readable at `.aether/data/survey/BLUEPRINT.md`
+- [ ] CHAMBERS.md exists and is readable at `.aether/data/survey/CHAMBERS.md`
+- [ ] All template sections are filled (no `[placeholder]` text remains)
+- [ ] Every architectural component references actual file paths from the codebase
+
+## Completion Report Must Include
+
+- Documents written with line counts
+- Key architectural pattern identified
+- Confidence note if any areas were unclear or inaccessible
+
+## Checklist
+
 - [ ] Nest focus parsed correctly
 - [ ] Architecture patterns explored
 - [ ] Directory structure mapped
@@ -270,3 +304,21 @@ Ready for colony use.
 - [ ] File paths included throughout
 - [ ] Confirmation returned (not document contents)
 </success_criteria>
+
+<read_only>
+## Read-Only Boundaries
+
+You may ONLY write to `.aether/data/survey/`. All other paths are read-only.
+
+**Permitted write locations:**
+- `.aether/data/survey/BLUEPRINT.md`
+- `.aether/data/survey/CHAMBERS.md`
+
+**Globally protected (never touch):**
+- `.aether/data/COLONY_STATE.json`
+- `.aether/data/constraints.json`
+- `.aether/dreams/`
+- `.env*`
+
+**If a task would require writing outside the survey directory, stop and escalate.**
+</read_only>

@@ -265,7 +265,41 @@ Ready for colony use.
 - DO NOT COMMIT — orchestrator handles git
 </critical_rules>
 
+<failure_modes>
+## Failure Modes
+
+**Minor** (retry once): No package manifest found at expected path → check for alternate manifest types (`requirements.txt`, `Cargo.toml`, `go.mod`) and document what was found. No external integration patterns detected → note "no external integrations found" and document what was checked.
+
+**Major** (stop immediately): Survey would overwrite an existing survey document with less content → STOP, confirm with user before proceeding. Write target is outside `.aether/data/survey/` → STOP, that is outside permitted scope.
+
+**Escalation format:**
+```
+BLOCKED: [what was attempted, twice]
+Options:
+  A) [First option with trade-off]
+  B) [Second option with trade-off]
+  C) Skip this item and note it as a gap
+Awaiting your choice.
+```
+</failure_modes>
+
 <success_criteria>
+## Self-Check
+
+Before returning confirmation, verify:
+- [ ] PROVISIONS.md exists and is readable at `.aether/data/survey/PROVISIONS.md`
+- [ ] TRAILS.md exists and is readable at `.aether/data/survey/TRAILS.md`
+- [ ] All template sections are filled (no `[placeholder]` text remains)
+- [ ] Every dependency includes its version and purpose
+
+## Completion Report Must Include
+
+- Documents written with line counts
+- Primary language and framework identified
+- Key integrations found (or "none detected")
+
+## Checklist
+
 - [ ] Provisions focus parsed correctly
 - [ ] Package manifests explored
 - [ ] Dependencies analyzed
@@ -275,3 +309,21 @@ Ready for colony use.
 - [ ] File paths included throughout
 - [ ] Confirmation returned (not document contents)
 </success_criteria>
+
+<read_only>
+## Read-Only Boundaries
+
+You may ONLY write to `.aether/data/survey/`. All other paths are read-only.
+
+**Permitted write locations:**
+- `.aether/data/survey/PROVISIONS.md`
+- `.aether/data/survey/TRAILS.md`
+
+**Globally protected (never touch):**
+- `.aether/data/COLONY_STATE.json`
+- `.aether/data/constraints.json`
+- `.aether/dreams/`
+- `.env*`
+
+**If a task would require writing outside the survey directory, stop and escalate.**
+</read_only>
