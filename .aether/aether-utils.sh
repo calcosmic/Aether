@@ -695,9 +695,47 @@ HELP_EOF
     json_ok '"1.0.0"'
     ;;
   validate-state)
+    # Schema migration helper: auto-upgrades pre-3.0 state files to v3.0
+    # Additive only (never removes fields) — idempotent and safe for concurrent access
+    _migrate_colony_state() {
+      local state_file="$1"
+
+      # First: verify file is parseable JSON at all
+      if ! jq -e . "$state_file" >/dev/null 2>&1; then
+        # Corrupt state file — backup and error
+        if type create_backup &>/dev/null; then
+          create_backup "$state_file" 2>/dev/null || true
+        fi
+        json_err "$E_JSON_INVALID" \
+          "COLONY_STATE.json is corrupted (invalid JSON). A backup was saved in .aether/data/backups/. Try: run /ant:init to reset colony state."
+      fi
+
+      local current_version
+      current_version=$(jq -r '.version // "1.0"' "$state_file" 2>/dev/null)
+
+      if [[ "$current_version" != "3.0" ]]; then
+        # Add missing v3.0 fields (additive only — idempotent and safe for concurrent access)
+        local updated
+        updated=$(jq '
+            .version = "3.0" |
+            if .signals == null then .signals = [] else . end |
+            if .graveyards == null then .graveyards = [] else . end |
+            if .events == null then .events = [] else . end
+        ' "$state_file" 2>/dev/null)
+
+        if [[ -n "$updated" ]]; then
+          atomic_write "$state_file" "$updated"
+          # Notify user of migration (auto-migrate + notify pattern)
+          printf '{"ok":true,"warning":"W_MIGRATED","message":"Migrated colony state from v%s to v3.0"}\n' "$current_version" >&2
+        fi
+      fi
+    }
+
     case "${1:-}" in
       colony)
         [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
+        # Run schema migration before field validation (ensures v3.0 fields always present)
+        _migrate_colony_state "$DATA_DIR/COLONY_STATE.json"
         json_ok "$(jq '
           def chk(f;t): if has(f) then (if (.[f]|type) as $a | t | any(. == $a) then "pass" else "fail: \(f) is \(.[f]|type), expected \(t|join("|"))" end) else "fail: missing \(f)" end;
           def opt(f;t): if has(f) then (if (.[f]|type) as $a | t | any(. == $a) then "pass" else "fail: \(f) is \(.[f]|type), expected \(t|join("|"))" end) else "pass" end;
@@ -947,6 +985,19 @@ HELP_EOF
     echo "[$ts] $status_icon $emoji $ant_name: $status${summary:+ - $summary}" >> "$DATA_DIR/activity.log"
     # Update spawn tree
     echo "$ts_full|$ant_name|$status|$summary" >> "$DATA_DIR/spawn-tree.txt"
+    # Log failed spawns to COLONY_STATE.json events array for audit trail (ARCH-04)
+    if [[ "$status" == "failed" ]] || [[ "$status" == "error" ]]; then
+      local state_file="$DATA_DIR/COLONY_STATE.json"
+      if [[ -f "$state_file" ]]; then
+        local updated
+        updated=$(jq --arg ts "$ts_full" --arg name "$ant_name" --arg st "$status" --arg sum "${summary:-unknown}" \
+          '.events += [{"type":"spawn_failed","ant":$name,"status":$st,"summary":$sum,"timestamp":$ts}]' \
+          "$state_file" 2>/dev/null)
+        if [[ -n "$updated" ]]; then
+          atomic_write "$state_file" "$updated"
+        fi
+      fi
+    fi
     # Return emoji-formatted result for display
     json_ok "\"$status_icon $emoji $ant_name: ${summary:-$status}\""
     ;;
