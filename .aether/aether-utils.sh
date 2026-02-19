@@ -2761,6 +2761,33 @@ NODESCRIPT
       esac
     }
 
+    # Caste emojis with ant
+    get_caste_emoji() {
+      case "$1" in
+        builder) echo "🔨🐜" ;;
+        watcher) echo "👁️🐜" ;;
+        scout) echo "🔍🐜" ;;
+        chaos) echo "🎲🐜" ;;
+        prime) echo "👑🐜" ;;
+        oracle) echo "🔮🐜" ;;
+        route_setter) echo "🧭🐜" ;;
+        archaeologist) echo "🏺🐜" ;;
+        chronicler) echo "📝🐜" ;;
+        gatekeeper) echo "📦🐜" ;;
+        guardian) echo "🛡️🐜" ;;
+        includer) echo "♿🐜" ;;
+        keeper) echo "📚🐜" ;;
+        measurer) echo "⚡🐜" ;;
+        probe) echo "🧪🐜" ;;
+        sage) echo "📜🐜" ;;
+        tracker) echo "🐛🐜" ;;
+        weaver) echo "🔄🐜" ;;
+        colonizer) echo "🌱🐜" ;;
+        dreamer) echo "💭🐜" ;;
+        *) echo "🐜" ;;
+      esac
+    }
+
     # Status phrases
     get_status_phrase() {
       case "$1" in
@@ -3454,6 +3481,36 @@ ANTLOGO
       json_err "$E_JSON_INVALID" \
         "Couldn't assemble queen-read output. QUEEN.md may have formatting issues. Try: run queen-init to reset."
     fi
+    json_ok "$result"
+    ;;
+
+  pheromone-read)
+    # Read active pheromones (FOCUS/REDIRECT) from constraints.json
+    # Used to inject active signals into worker prompts
+    constraints_file="$AETHER_ROOT/.aether/data/constraints.json"
+
+    # Initialize defaults (no local - script-level)
+    priorities='[]'
+    avoid='[]'
+
+    # Check if constraints file exists
+    if [[ -f "$constraints_file" ]]; then
+      # Read focus array as priorities
+      priorities=$(jq -c '.focus // []' "$constraints_file" 2>/dev/null || echo '[]')
+
+      # Read constraints array, extract content and source
+      avoid=$(jq -c '[.constraints[]? | {content: .content, source: .source}] // []' "$constraints_file" 2>/dev/null || echo '[]')
+    fi
+
+    # Build JSON output
+    result=$(jq -n \
+      --argjson priorities "$priorities" \
+      --argjson avoid "$avoid" \
+      '{
+        priorities: $priorities,
+        avoid: $avoid
+      }')
+
     json_ok "$result"
     ;;
 

@@ -305,6 +305,30 @@ queen_decrees = .result.wisdom.decrees (if .result.priming.has_decrees)
 
 **Graceful handling:** If QUEEN.md doesn't exist or `queen-read` fails, continue without wisdom injection. Workers will receive standard prompts.
 
+### Step 4.1.6: Load Active Pheromones (Signal Consumption)
+
+**This injects current FOCUS and REDIRECT signals into worker context.**
+
+Call `pheromone-read` to get active signals:
+
+```bash
+bash .aether/aether-utils.sh pheromone-read 2>/dev/null
+```
+
+**Parse the JSON response:**
+- If `.ok` is false or command fails: Set `pheromone_section = null` and skip
+- If successful: Extract `.result.priorities` and `.result.avoid`
+
+**Display summary:**
+```
+🎯 ACTIVE SIGNALS
+=================
+Priorities (FOCUS): {N}
+Constraints (REDIRECT): {M}
+```
+
+**Store for worker injection:** The `pheromone_section` markdown will be included in builder prompts (see Step 5.1 Active Signals Section).
+
 ### Step 4.2: Archaeologist Pre-Build Scan
 
 **Conditional step — only fires when the phase modifies existing files.**
@@ -561,6 +585,23 @@ Return ONLY this JSON (no other text):
 {queen_decrees}
 { endif }
 --- END QUEEN WISDOM ---
+```
+
+**Active Signals Section (injected if pheromones exist):**
+```
+--- ACTIVE SIGNALS (From User) ---
+
+🎯 PRIORITIES (FOCUS):
+{for each priority}
+- {priority}
+{endfor}
+
+⚠️ CONSTRAINTS (REDIRECT - AVOID):
+{for each constraint}
+- {constraint.content}
+{endfor}
+
+--- END ACTIVE SIGNALS ---
 ```
 
 ### Step 5.2: Process Wave 1 Results
