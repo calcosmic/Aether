@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-19)
 ## Current Position
 
 Phase: 20 of 25 — Distribution Simplification
-Plan: 02 of 03
+Plan: 03 of 03
 Status: In progress
-Last activity: 2026-02-19 — Completed 20-01: direct .aether/ packaging pipeline (v4.0.0)
+Last activity: 2026-02-19 — Completed 20-02: removed all runtime/ references from shell code, hooks, build commands, docs
 
 ## Performance Metrics
 
@@ -31,6 +31,9 @@ Last activity: 2026-02-19 — Completed 20-01: direct .aether/ packaging pipelin
 - Additive migration for templates: create first, wire commands later
 - [Phase 20]: npm 11.x bypasses root .npmignore when files field present — use subdirectory .aether/.npmignore instead
 - [Phase 20]: Distribution pipeline: direct .aether/ packaging replaces runtime/ staging (v4.0.0)
+- [Phase 20-02]: Pre-commit hook is validation-only (advisory, exits 0 always) — no blocking on commit
+- [Phase 20-02]: queen-init template lookup chain: hub (system/) -> dev (.aether/) -> legacy hub (no staging path)
+- [Phase 20-02]: ISSUE-004 fully resolved — template path hardcoded to staging dir no longer an issue
 
 ### Key Findings from Research
 - 7 research docs analyzed (agent architecture, template system, team coordination, distribution chain)
@@ -44,6 +47,6 @@ Last activity: 2026-02-19 — Completed 20-01: direct .aether/ packaging pipelin
 
 ## Session Continuity
 
-Last session: 2026-02-19T20:17:37Z
-Stopped at: Completed 20-01-PLAN.md
-Next step: Execute 20-02-PLAN.md (bash test updates)
+Last session: 2026-02-19T20:25:18Z
+Stopped at: Completed 20-02-PLAN.md
+Next step: Execute 20-03-PLAN.md (documentation update for v4.0)
