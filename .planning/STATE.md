@@ -9,16 +9,16 @@ See: .planning/PROJECT.md (updated 2026-02-19)
 
 ## Current Position
 
-Phase: 22 of 25 — Agent Boilerplate Cleanup
+Phase: 23 of 25 — Agent Resilience
 Plan: 03 of 03 (COMPLETE)
-Status: Phase 22 Complete
-Last activity: 2026-02-19 — Completed 22-03: verified Special 3 + updated Surveyor 4 descriptions; phase 22 done
+Status: Phase 23 Plan 03 Complete
+Last activity: 2026-02-19 — Completed 23-03: added resilience sections to all 6 high-risk slash commands
 
 ## Performance Metrics
 
 **Cumulative:**
-- Total plans completed: 65 (v1.0: 27, v1.1: 13, v1.2: 18, v1.3: 7)
-- Total requirements: 84 validated (v1.0: 46, v1.1: 14, v1.2: 24)
+- Total plans completed: 66 (v1.0: 27, v1.1: 13, v1.2: 18, v1.3: 8)
+- Total requirements: 87 validated (v1.0: 46, v1.1: 14, v1.2: 24, v1.3: 3)
 - v1.3 target: 24 requirements across 6 phases
 - Total tests: 446 passing (415 AVA + 31 bash), 0 failures
 
@@ -44,6 +44,9 @@ Last activity: 2026-02-19 — Completed 22-03: verified Special 3 + updated Surv
 - [Phase 22-03]: Special 3 agents pre-completed in 22-01 — same pre-completion pattern across all phase 22 plans
 - [Phase 22-03]: Missing OpenCode resume.md (pre-existing 34 vs 33 command mismatch) fixed as Rule 3 deviation
 - [Phase 22-03]: Content-level command drift (10+ files) and 2 validate-state test failures are pre-existing known debt
+- [Phase 23-03]: Resilience sections placed before first Step (not appended) so LLM reads them before executing any steps
+- [Phase 23-03]: Three separate XML tags per command (failure_modes, success_criteria, read_only) per locked user decision
+- [Phase 23-03]: Entomb failure_modes includes hard seal-first gate with "STOP -- do not archive" language matching existing Step 2
 
 ### Key Findings from Research
 - 7 research docs analyzed (agent architecture, template system, team coordination, distribution chain)
@@ -58,6 +61,6 @@ Last activity: 2026-02-19 — Completed 22-03: verified Special 3 + updated Surv
 
 ## Session Continuity
 
-Last session: 2026-02-19T21:52:38Z
-Stopped at: Completed 22-03-PLAN.md (Phase 22 complete)
-Next step: Execute Phase 23
+Last session: 2026-02-19T23:12:08Z
+Stopped at: Completed 23-03-PLAN.md
+Next step: Execute Phase 23 plans 01 and 02 (agent prompt hardening, escalation chain)
