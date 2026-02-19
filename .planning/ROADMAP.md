@@ -62,7 +62,7 @@
   3. Neither fix changes any success-path behavior — commands that work today still work identically
 **Plans:** 1/1 plans complete
 Plans:
-- [ ] 14-01-PLAN.md — Fix fallback json_err signature (ERR-01) and template path resolution (ARCH-01)
+- [x] 14-01-PLAN.md — Fix fallback json_err signature (ERR-01) and template path resolution (ARCH-01)
 
 ### Phase 15: Distribution Chain
 **Goal**: Every `aether update` call copies exactly the right files — system files land in `.aether/`, hub metadata never syncs to target repos, no dead duplicates pollute the source tree
@@ -77,9 +77,9 @@ Plans:
   6. Old 2.x npm versions are deprecated on the registry — `npm install -g aether` installs the current version
 **Plans:** 3/3 plans complete
 Plans:
-- [ ] 15-01-PLAN.md — Fix source directory, EXCLUDE_DIRS, and allowlists (DIST-01, DIST-02, DIST-04, DIST-05)
-- [ ] 15-02-PLAN.md — Remove dead duplicate directories from source repo (DIST-03)
-- [ ] 15-03-PLAN.md — Stale-dir cleanup, user feedback, tests, and npm deprecation (DIST-06)
+- [x] 15-01-PLAN.md — Fix source directory, EXCLUDE_DIRS, and allowlists (DIST-01, DIST-02, DIST-04, DIST-05)
+- [x] 15-02-PLAN.md — Remove dead duplicate directories from source repo (DIST-03)
+- [x] 15-03-PLAN.md — Stale-dir cleanup, user feedback, tests, and npm deprecation (DIST-06)
 
 ### Phase 16: Lock Lifecycle Hardening
 **Goal**: Lock deadlocks are impossible when jq fails — every lock acquired is released on every exit path, including error branches
@@ -92,9 +92,9 @@ Plans:
   4. Concurrent `context-update` calls from two processes produce a valid merged result, not a half-written file
 **Plans:** 3/3 plans complete
 Plans:
-- [ ] 16-01-PLAN.md — Unify trap pattern in flag commands + stale lock user prompt (LOCK-01, LOCK-02)
-- [ ] 16-02-PLAN.md — Add locking to context-update + force-unlock subcommand (LOCK-04)
-- [ ] 16-03-PLAN.md — Lock lifecycle tests + known-issues.md updates (LOCK-01, LOCK-02, LOCK-03, LOCK-04)
+- [x] 16-01-PLAN.md — Unify trap pattern in flag commands + stale lock user prompt (LOCK-01, LOCK-02)
+- [x] 16-02-PLAN.md — Add locking to context-update + force-unlock subcommand (LOCK-04)
+- [x] 16-03-PLAN.md — Lock lifecycle tests + known-issues.md updates (LOCK-01, LOCK-02, LOCK-03, LOCK-04)
 
 ### Phase 17: Error Code Standardization
 **Goal**: Every json_err call in aether-utils.sh produces machine-readable output with a structured code field — zero hardcoded strings remaining
@@ -107,9 +107,9 @@ Plans:
   4. Error path tests for lock and flag operations execute without false positives and catch a deliberately introduced hardcoded-string call
 **Plans:** 3/3 plans complete
 Plans:
-- [ ] 17-01-PLAN.md — Add new E_* constants and fix all 29 bare-string json_err calls in aether-utils.sh (ERR-02)
-- [ ] 17-02-PLAN.md — Fix chamber script json_err override bug and convert 20 bare-string calls (ERR-02)
-- [ ] 17-03-PLAN.md — Create error-codes.md, add to sync allowlists, add regression and runtime tests (ERR-03, ERR-04)
+- [x] 17-01-PLAN.md — Add new E_* constants and fix all 29 bare-string json_err calls in aether-utils.sh (ERR-02)
+- [x] 17-02-PLAN.md — Fix chamber script json_err override bug and convert 20 bare-string calls (ERR-02)
+- [x] 17-03-PLAN.md — Create error-codes.md, add to sync allowlists, add regression and runtime tests (ERR-03, ERR-04)
 
 ### Phase 18: Reliability & Architecture Gaps
 **Goal**: Stale resources stop accumulating, exec errors are caught, queen commands are discoverable, and JSON output is validated before leaving the read layer
@@ -123,10 +123,10 @@ Plans:
   5. Feature detection in aether-utils.sh completes without a race against error-handler.sh loading — no "function not found" errors on startup
 **Plans:** 4/4 plans complete
 Plans:
-- [ ] 18-01-PLAN.md — Startup ordering fix, temp cleanup wiring, spawn-tree rotation (ARCH-09, ARCH-10, ARCH-03)
-- [ ] 18-02-PLAN.md — Model command error handling and spawn fail-fast messaging (ARCH-07, ARCH-04)
-- [ ] 18-03-PLAN.md — Help command sections and queen-commands.md documentation (ARCH-08, ARCH-05)
-- [ ] 18-04-PLAN.md — queen-read JSON validation and state schema migration (ARCH-06, ARCH-02)
+- [x] 18-01-PLAN.md — Startup ordering fix, temp cleanup wiring, spawn-tree rotation (ARCH-09, ARCH-10, ARCH-03)
+- [x] 18-02-PLAN.md — Model command error handling and spawn fail-fast messaging (ARCH-07, ARCH-04)
+- [x] 18-03-PLAN.md — Help command sections and queen-commands.md documentation (ARCH-08, ARCH-05)
+- [x] 18-04-PLAN.md — queen-read JSON validation and state schema migration (ARCH-06, ARCH-02)
 
 ### Phase 19: Milestone Polish
 **Goal**: Close all audit-identified gaps so the milestone can be archived clean — no partial requirements, no stale traceability, no pre-existing test failures
@@ -139,7 +139,12 @@ Plans:
   3. `validate-state.test.js` passes all tests (error.error assertion updated to match object format)
   4. `namespace-isolation.test.js`, `sync-dir-hash.test.js`, and `user-modification-detection.test.js` each contain at least one runnable test
   5. `_migrate_colony_state` does not fail when COLONY_STATE.json is temporarily absent during AVA parallel execution
-Plans: TBD
+**Plans:** 4 plans
+Plans:
+- [x] 19-01-PLAN.md — Wire E_LOCK_STALE constant and document in error-codes.md (ERR-02, ERR-03)
+- [x] 19-02-PLAN.md — Fix validate-state.test.js assertions and DATA_DIR isolation (ERR-02)
+- [x] 19-03-PLAN.md — Convert 3 test files from process.exit() runners to AVA (ERR-02)
+- [ ] 19-04-PLAN.md — REQUIREMENTS.md sign-off, ROADMAP.md and STATE.md cleanup (ERR-02, ERR-03)
 
 ---
 
@@ -160,12 +165,12 @@ Plans: TBD
 | 11. Visual Identity | v1.1 | 6/6 | Complete | 2026-02-18 |
 | 12. Build Progress | v1.1 | 2/2 | Complete | 2026-02-18 |
 | 13. Distribution Reliability | v1.1 | 1/1 | Complete | 2026-02-18 |
-| 14. Foundation Safety | v1.2 | Complete    | 2026-02-18 | - |
-| 15. Distribution Chain | v1.2 | Complete    | 2026-02-18 | - |
-| 16. Lock Lifecycle Hardening | v1.2 | Complete    | 2026-02-19 | - |
-| 17. Error Code Standardization | v1.2 | Complete    | 2026-02-19 | - |
-| 18. Reliability & Architecture Gaps | v1.2 | Complete    | 2026-02-19 | - |
-| 19. Milestone Polish | v1.2 | Pending | - | - |
+| 14. Foundation Safety | v1.2 | 1/1 | Complete | 2026-02-18 |
+| 15. Distribution Chain | v1.2 | 3/3 | Complete | 2026-02-18 |
+| 16. Lock Lifecycle Hardening | v1.2 | 3/3 | Complete | 2026-02-19 |
+| 17. Error Code Standardization | v1.2 | 3/3 | Complete | 2026-02-19 |
+| 18. Reliability & Architecture Gaps | v1.2 | 4/4 | Complete | 2026-02-19 |
+| 19. Milestone Polish | v1.2 | 0/4 | In Progress | - |
 
 ---
 
