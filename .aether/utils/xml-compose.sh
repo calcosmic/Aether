@@ -5,14 +5,20 @@
 # Usage: source .aether/utils/xml-compose.sh
 #        xml-compose <input_xml> [output_xml]
 #        xml-compose-worker-priming <priming_xml> [output_xml]
+#        xml-list-includes <xml_file>
 #
 # These functions enable declarative composition of worker configurations
 # using XInclude directives to merge queen-wisdom, active-trails, and stack-profiles.
 
 set -euo pipefail
 
-# Note: This file should be sourced AFTER xml-utils.sh
+# Note: This file should be sourced AFTER xml-utils.sh or xml-core.sh
 # It relies on xml_json_ok, xml_json_err, and XMLLINT_AVAILABLE variables
+# Source xml-core.sh for JSON helpers and tool detection if not already loaded
+if ! type xml_json_ok &>/dev/null; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    source "$SCRIPT_DIR/xml-core.sh"
+fi
 
 # ============================================================================
 # Path Validation (Security)

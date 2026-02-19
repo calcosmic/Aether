@@ -39,6 +39,18 @@ setup_isolated_env() {
         cp -r "$utils_source" "$tmp_dir/.aether/"
     fi
 
+    # Copy exchange directory if it exists (needed for XML functions)
+    local exchange_source="$(dirname "$AETHER_UTILS_SOURCE")/exchange"
+    if [[ -d "$exchange_source" ]]; then
+        cp -r "$exchange_source" "$tmp_dir/.aether/"
+    fi
+
+    # Copy schemas directory if it exists (needed for XML validation)
+    local schemas_source="$(dirname "$AETHER_UTILS_SOURCE")/schemas"
+    if [[ -d "$schemas_source" ]]; then
+        cp -r "$schemas_source" "$tmp_dir/.aether/"
+    fi
+
     echo "$tmp_dir"
 }
 
