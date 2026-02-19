@@ -169,75 +169,12 @@ class UpdateTransaction {
     this.HUB_VERSION = path.join(this.HUB_DIR, 'version.json');
     this.HUB_REGISTRY = path.join(this.HUB_DIR, 'registry.json');
 
-    // Directories to exclude from sync (user data, local state)
-    this.EXCLUDE_DIRS = ['data', 'dreams', 'checkpoints', 'locks', 'temp', 'agents', 'commands', 'rules'];
+    // Directories to exclude from sync (user data, local state, and separately-synced dirs)
+    // v4.0: archive and chambers added — these are private and must not sync to target repos
+    this.EXCLUDE_DIRS = ['data', 'dreams', 'checkpoints', 'locks', 'temp', 'agents', 'commands', 'rules', 'archive', 'chambers'];
 
     // Target directories for git safety checks
     this.targetDirs = ['.aether', '.claude/commands/ant', '.claude/rules', '.opencode/commands/ant', '.opencode/agents'];
-
-    // System files allowlist — must match bin/sync-to-runtime.sh SYSTEM_FILES exactly
-    this.SYSTEM_FILES = [
-      'aether-utils.sh',
-      'coding-standards.md',
-      'debugging.md',
-      'DISCIPLINES.md',
-      'learning.md',
-      'QUEEN_ANT_ARCHITECTURE.md',
-      'tdd.md',
-      'verification-loop.md',
-      'verification.md',
-      'workers.md',
-      'workers-new-castes.md',
-      'CONTEXT.md',
-      'model-profiles.yaml',
-      'recover.sh',
-      'docs/biological-reference.md',
-      'docs/command-sync.md',
-      'docs/constraints.md',
-      'docs/namespace.md',
-      'docs/pathogen-schema-example.json',
-      'docs/pathogen-schema.md',
-      'docs/PHEROMONE-INJECTION.md',
-      'docs/PHEROMONE-INTEGRATION.md',
-      'docs/PHEROMONE-SYSTEM-DESIGN.md',
-      'docs/pheromones.md',
-      'docs/progressive-disclosure.md',
-      'docs/README.md',
-      'docs/VISUAL-OUTPUT-SPEC.md',
-      'docs/known-issues.md',
-      'docs/implementation-learnings.md',
-      'docs/error-codes.md',
-      'docs/queen-commands.md',
-      'docs/codebase-review.md',
-      'docs/planning-discipline.md',
-      'docs/caste-system.md',
-      'utils/atomic-write.sh',
-      'utils/chamber-compare.sh',
-      'utils/chamber-utils.sh',
-      'utils/colorize-log.sh',
-      'utils/error-handler.sh',
-      'utils/file-lock.sh',
-      'utils/spawn-tree.sh',
-      'utils/spawn-with-model.sh',
-      'utils/state-loader.sh',
-      'utils/swarm-display.sh',
-      'utils/watch-spawn-tree.sh',
-      'utils/xml-utils.sh',
-      'utils/xml-core.sh',
-      'utils/xml-compose.sh',
-      'utils/queen-to-md.xsl',
-      'exchange/pheromone-xml.sh',
-      'exchange/wisdom-xml.sh',
-      'exchange/registry-xml.sh',
-      'schemas/aether-types.xsd',
-      'schemas/pheromone.xsd',
-      'schemas/queen-wisdom.xsd',
-      'schemas/colony-registry.xsd',
-      'schemas/worker-priming.xsd',
-      'schemas/prompt.xsd',
-      'templates/QUEEN.md.template',
-      'rules/aether-colony.md',
-    ];
   }
 
   /**
@@ -705,66 +642,6 @@ class UpdateTransaction {
     if (remaining.length === 0) {
       fs.rmdirSync(dir);
     }
-  }
-
-  /**
-   * Sync system files from hub
-   * @param {string} srcDir - Source directory
-   * @param {string} destDir - Destination directory
-   * @param {object} opts - Options
-   * @returns {object} Sync result: { copied, removed, skipped }
-   * @private
-   */
-  syncSystemFilesWithCleanup(srcDir, destDir, opts) {
-    opts = opts || {};
-    const dryRun = opts.dryRun || false;
-
-    let copied = 0;
-    let skipped = 0;
-
-    for (const file of this.SYSTEM_FILES) {
-      const srcPath = path.join(srcDir, file);
-      const destPath = path.join(destDir, file);
-      if (fs.existsSync(srcPath)) {
-        if (!dryRun) {
-          // Compute hashes to determine if copy is needed
-          const srcHash = this.hashFileSync(srcPath);
-          const destHash = fs.existsSync(destPath) ? this.hashFileSync(destPath) : null;
-
-          if (srcHash === destHash) {
-            // Files are identical, skip copying
-            skipped++;
-            continue;
-          }
-
-          fs.mkdirSync(path.dirname(destPath), { recursive: true });
-          fs.copyFileSync(srcPath, destPath);
-          if (file.endsWith('.sh')) {
-            fs.chmodSync(destPath, 0o755);
-          }
-        }
-        copied++;
-      }
-    }
-
-    // Remove allowlisted files that no longer exist in src
-    const removed = [];
-    for (const file of this.SYSTEM_FILES) {
-      const srcPath = path.join(srcDir, file);
-      const destPath = path.join(destDir, file);
-      if (!fs.existsSync(srcPath) && fs.existsSync(destPath)) {
-        removed.push(file);
-        if (!dryRun) {
-          fs.unlinkSync(destPath);
-        }
-      }
-    }
-
-    if (!dryRun && removed.length > 0) {
-      this.cleanEmptyDirs(destDir);
-    }
-
-    return { copied, removed, skipped };
   }
 
   /**

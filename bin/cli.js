@@ -376,85 +376,6 @@ function removeDirSync(dir) {
   return count;
 }
 
-// System files allowlist — must match bin/sync-to-runtime.sh SYSTEM_FILES exactly
-const SYSTEM_FILES = [
-  'aether-utils.sh',
-  'coding-standards.md',
-  'debugging.md',
-  'DISCIPLINES.md',
-  'learning.md',
-  'planning.md',
-  'QUEEN_ANT_ARCHITECTURE.md',
-  'tdd.md',
-  'verification-loop.md',
-  'verification.md',
-  'workers.md',
-  'workers-new-castes.md',
-  'CONTEXT.md',
-  'model-profiles.yaml',
-  'recover.sh',
-  'docs/biological-reference.md',
-  'docs/command-sync.md',
-  'docs/constraints.md',
-  'docs/namespace.md',
-  'docs/pathogen-schema-example.json',
-  'docs/pathogen-schema.md',
-  'docs/PHEROMONE-INJECTION.md',
-  'docs/PHEROMONE-INTEGRATION.md',
-  'docs/PHEROMONE-SYSTEM-DESIGN.md',
-  'docs/pheromones.md',
-  'docs/progressive-disclosure.md',
-  'docs/README.md',
-  'docs/VISUAL-OUTPUT-SPEC.md',
-  'docs/known-issues.md',
-  'docs/implementation-learnings.md',
-  'docs/codebase-review.md',
-  'docs/planning-discipline.md',
-  'utils/atomic-write.sh',
-  'utils/chamber-compare.sh',
-  'utils/chamber-utils.sh',
-  'utils/colorize-log.sh',
-  'utils/error-handler.sh',
-  'utils/file-lock.sh',
-  'utils/spawn-tree.sh',
-  'utils/spawn-with-model.sh',
-  'utils/state-loader.sh',
-  'utils/swarm-display.sh',
-  'utils/watch-spawn-tree.sh',
-  'utils/xml-utils.sh',
-  'utils/xml-core.sh',
-  'utils/xml-compose.sh',
-  'utils/queen-to-md.xsl',
-  'exchange/pheromone-xml.sh',
-  'exchange/wisdom-xml.sh',
-  'exchange/registry-xml.sh',
-  'schemas/aether-types.xsd',
-  'schemas/pheromone.xsd',
-  'schemas/queen-wisdom.xsd',
-  'schemas/colony-registry.xsd',
-  'schemas/worker-priming.xsd',
-  'schemas/prompt.xsd',
-  'templates/QUEEN.md.template',
-  'rules/aether-colony.md',
-];
-
-function copySystemFiles(srcDir, destDir) {
-  let count = 0;
-  for (const file of SYSTEM_FILES) {
-    const srcPath = path.join(srcDir, file);
-    const destPath = path.join(destDir, file);
-    if (fs.existsSync(srcPath)) {
-      fs.mkdirSync(path.dirname(destPath), { recursive: true });
-      fs.copyFileSync(srcPath, destPath);
-      if (file.endsWith('.sh')) {
-        fs.chmodSync(destPath, 0o755);
-      }
-      count++;
-    }
-  }
-  return count;
-}
-
 function readJsonSafe(filePath) {
   try {
     return JSON.parse(fs.readFileSync(filePath, 'utf8'));
@@ -625,60 +546,9 @@ function computeFileHash(filePath) {
   }
 }
 
-function syncSystemFilesWithCleanup(srcDir, destDir, opts) {
-  opts = opts || {};
-  const dryRun = opts.dryRun || false;
-
-  let copied = 0;
-  let skipped = 0;
-  for (const file of SYSTEM_FILES) {
-    const srcPath = path.join(srcDir, file);
-    const destPath = path.join(destDir, file);
-    if (fs.existsSync(srcPath)) {
-      if (!dryRun) {
-        // Compute hashes to determine if copy is needed
-        const srcHash = computeFileHash(srcPath);
-        const destHash = fs.existsSync(destPath) ? computeFileHash(destPath) : null;
-
-        if (srcHash === destHash) {
-          // Files are identical, skip copying
-          skipped++;
-          continue;
-        }
-
-        fs.mkdirSync(path.dirname(destPath), { recursive: true });
-        fs.copyFileSync(srcPath, destPath);
-        if (file.endsWith('.sh')) {
-          fs.chmodSync(destPath, 0o755);
-        }
-      }
-      copied++;
-    }
-  }
-
-  // Remove allowlisted files that no longer exist in src
-  const removed = [];
-  for (const file of SYSTEM_FILES) {
-    const srcPath = path.join(srcDir, file);
-    const destPath = path.join(destDir, file);
-    if (!fs.existsSync(srcPath) && fs.existsSync(destPath)) {
-      removed.push(file);
-      if (!dryRun) {
-        fs.unlinkSync(destPath);
-      }
-    }
-  }
-
-  if (!dryRun && removed.length > 0) {
-    cleanEmptyDirs(destDir);
-  }
-
-  return { copied, removed, skipped };
-}
-
 // Checkpoint allowlist - only these files are captured in checkpoints
 // NEVER include: data/, dreams/, oracle/, TO-DOs.md (user data)
-// Note: runtime/ is generated during publish only, not checkpointed
+// Note: runtime/ was removed in v4.0 — .aether/ is published directly
 const CHECKPOINT_ALLOWLIST = [
   '.aether/*.md',                    // All .md files directly in .aether/
   '.claude/commands/ant/**',         // All files in .claude/commands/ant/ recursively
@@ -875,7 +745,8 @@ function gitStashFiles(repoPath, files) {
 }
 
 // Directories to exclude from hub sync (user data, local state)
-const HUB_EXCLUDE_DIRS = ['data', 'dreams', 'checkpoints', 'locks', 'temp'];
+// 'rules' is excluded here because it is synced via a dedicated step (rulesSrc below)
+const HUB_EXCLUDE_DIRS = ['data', 'dreams', 'checkpoints', 'locks', 'temp', 'rules'];
 
 /**
  * Check if a path should be excluded from hub sync
@@ -1045,16 +916,28 @@ function setupHub() {
       log(`  Warning: previous manifest is invalid, regenerating`);
     }
 
-    // Sync runtime/ -> ~/.aether/system/ (clean production files)
-    // runtime/ is generated during publish - explicit allowlist via sync-to-runtime.sh
-    const runtimeSrc = path.join(PACKAGE_DIR, 'runtime');
-    if (fs.existsSync(runtimeSrc)) {
-      const result = syncAetherToHub(runtimeSrc, HUB_SYSTEM_DIR);
+    // Sync .aether/ -> ~/.aether/system/ (direct packaging, no staging)
+    // v4.0: .aether/ is published directly — runtime/ staging removed
+    const aetherSrc = path.join(PACKAGE_DIR, '.aether');
+    if (fs.existsSync(aetherSrc)) {
+      const result = syncAetherToHub(aetherSrc, HUB_SYSTEM_DIR);
       log(`  Hub system: ${result.copied} files, ${result.skipped} unchanged -> ${HUB_SYSTEM_DIR}`);
       if (result.removed.length > 0) {
         log(`  Hub system: removed ${result.removed.length} stale files`);
         for (const f of result.removed) log(`    - ${f}`);
       }
+    }
+
+    // Migration message for users upgrading from pre-4.0 (runtime/ era)
+    const prevManifestForMigration = readJsonSafe(path.join(HUB_DIR, 'manifest.json'));
+    if (prevManifestForMigration && prevManifestForMigration.version && prevManifestForMigration.version.startsWith('3.')) {
+      log('');
+      log('  Distribution pipeline simplified (v4.0 change):');
+      log('  - runtime/ staging directory has been removed');
+      log('  - .aether/ is now published directly (private dirs excluded)');
+      log('  - Your colony state and data are unaffected');
+      log('  - See CHANGELOG.md for details');
+      log('');
     }
 
     // Clean up legacy directories from very old hub structure (pre-system/)
@@ -1108,8 +991,9 @@ function setupHub() {
       }
     }
 
-    // Sync rules/ from runtime -> ~/.aether/system/rules/
-    const rulesSrc = path.join(PACKAGE_DIR, 'runtime', 'rules');
+    // Sync rules/ from .aether/ -> ~/.aether/system/rules/
+    // v4.0: source is .aether/rules/ directly (no runtime/ staging)
+    const rulesSrc = path.join(PACKAGE_DIR, '.aether', 'rules');
     if (fs.existsSync(rulesSrc)) {
       const result = syncDirWithCleanup(rulesSrc, HUB_RULES);
       log(`  Hub rules: ${result.copied} files -> ${HUB_RULES}`);
@@ -2453,7 +2337,6 @@ module.exports = {
   saveCheckpointMetadata,
   isUserData,
   syncDirWithCleanup,
-  syncSystemFilesWithCleanup,
   listFilesRecursive,
   cleanEmptyDirs
 };
