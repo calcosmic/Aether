@@ -28,6 +28,7 @@ CURRENT_LOCK=${CURRENT_LOCK:-""}
 [[ -f "$SCRIPT_DIR/utils/error-handler.sh" ]] && source "$SCRIPT_DIR/utils/error-handler.sh"
 [[ -f "$SCRIPT_DIR/utils/chamber-utils.sh" ]] && source "$SCRIPT_DIR/utils/chamber-utils.sh"
 [[ -f "$SCRIPT_DIR/utils/xml-utils.sh" ]] && source "$SCRIPT_DIR/utils/xml-utils.sh"
+[[ -f "$SCRIPT_DIR/utils/semantic-cli.sh" ]] && source "$SCRIPT_DIR/utils/semantic-cli.sh"
 
 # Fallback error constants if error-handler.sh wasn't sourced
 # This prevents "unbound variable" errors in older installations
@@ -5484,6 +5485,70 @@ EOF
     export LOCK_ACQUIRED=false
     export CURRENT_LOCK=""
     json_ok "{\"removed\":$lock_count,\"message\":\"All locks cleared\"}"
+    ;;
+
+  #=============================================================================
+  # SEMANTIC COMMANDS
+  #=============================================================================
+
+  semantic-init)
+    # Initialize semantic store
+    semantic-init
+    ;;
+
+  semantic-index)
+    # Index text for semantic search
+    # Usage: semantic-index <text> <source> [entry_id]
+    text="${2:-}"
+    source="${3:-unknown}"
+    entry_id="${4:-}"
+
+    if [[ -z "$text" ]]; then
+      json_err "$E_VALIDATION_FAILED" "semantic-index requires text argument"
+      exit 1
+    fi
+
+    semantic-index "$text" "$source" "$entry_id"
+    ;;
+
+  semantic-search)
+    # Search for similar entries
+    # Usage: semantic-search <query> [top_k] [threshold] [source_filter]
+    query="${2:-}"
+    top_k="${3:-5}"
+    threshold="${4:-0.5}"
+    source_filter="${5:-}"
+
+    if [[ -z "$query" ]]; then
+      json_err "$E_VALIDATION_FAILED" "semantic-search requires query argument"
+      exit 1
+    fi
+
+    semantic-search "$query" "$top_k" "$threshold" "$source_filter"
+    ;;
+
+  semantic-rebuild)
+    # Rebuild semantic index from all data sources
+    semantic-rebuild
+    ;;
+
+  semantic-status)
+    # Get semantic layer status
+    semantic-status
+    ;;
+
+  semantic-context)
+    # Get context for task (for worker injection)
+    # Usage: semantic-context <task_description> [max_results]
+    task="${2:-}"
+    max_results="${3:-3}"
+
+    if [[ -z "$task" ]]; then
+      json_ok "[]" "No task provided"
+      exit 0
+    fi
+
+    semantic-get-context "$task" "$max_results"
     ;;
 
   *)
