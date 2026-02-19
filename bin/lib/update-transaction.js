@@ -207,6 +207,7 @@ class UpdateTransaction {
       'docs/known-issues.md',
       'docs/implementation-learnings.md',
       'docs/error-codes.md',
+      'docs/queen-commands.md',
       'docs/codebase-review.md',
       'docs/planning-discipline.md',
       'docs/caste-system.md',

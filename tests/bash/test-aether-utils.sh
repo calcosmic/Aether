@@ -120,9 +120,10 @@ test_validate_state_colony() {
     local tmp_dir
     tmp_dir=$(setup_isolated_env)
 
-    # Create valid COLONY_STATE.json
+    # Create valid COLONY_STATE.json (v3.0 format to avoid migration during test)
     cat > "$tmp_dir/.aether/data/COLONY_STATE.json" << 'EOF'
 {
+  "version": "3.0",
   "goal": "test",
   "state": "active",
   "current_phase": 1,
@@ -130,6 +131,8 @@ test_validate_state_colony() {
   "memory": {},
   "errors": {"records": []},
   "events": [],
+  "signals": [],
+  "graveyards": [],
   "session_id": "test",
   "initialized_at": "2026-02-13T16:00:00Z"
 }
@@ -1066,6 +1069,109 @@ test_spawn_tree_rotation_exists() {
 }
 
 # ============================================================================
+# Test: queen-read has JSON validation gates (ARCH-06)
+# ============================================================================
+test_queen_read_validates_metadata() {
+    # Verify Gate 1: metadata validation before --argjson
+    if ! grep -q 'malformed METADATA' "$AETHER_UTILS_SOURCE"; then
+        test_fail "queen-read has metadata validation gate (Gate 1)" "not found"
+        return 1
+    fi
+    # Verify Gate 2: result validation before json_ok
+    if ! grep -q 'assemble queen-read' "$AETHER_UTILS_SOURCE"; then
+        test_fail "queen-read has result validation gate (Gate 2)" "not found"
+        return 1
+    fi
+    return 0
+}
+
+# ============================================================================
+# Test: validate-state has schema migration logic (ARCH-02)
+# ============================================================================
+test_validate_state_has_schema_migration() {
+    # Verify migration function exists
+    if ! grep -q '_migrate_colony_state' "$AETHER_UTILS_SOURCE"; then
+        test_fail "validate-state has _migrate_colony_state function" "not found"
+        return 1
+    fi
+    # Verify migration emits W_MIGRATED warning on version change
+    if ! grep -q 'W_MIGRATED' "$AETHER_UTILS_SOURCE"; then
+        test_fail "migration emits W_MIGRATED warning" "not found"
+        return 1
+    fi
+    return 0
+}
+
+# ============================================================================
+# Test: ARCH-07 — model-get/model-list do not use exec bash model-profile
+# ============================================================================
+test_model_get_no_exec_pattern() {
+    set +e
+    local count
+    count=$(grep -c 'exec bash.*model-profile' "$AETHER_UTILS_SOURCE" 2>/dev/null)
+    set -e
+    count="${count:-0}"
+    if [[ "$count" -gt 0 ]]; then
+        test_fail "zero exec bash model-profile calls (ARCH-07)" "$count found"
+        return 1
+    fi
+    return 0
+}
+
+# ============================================================================
+# Test: ARCH-07 — model-get error message includes Try: suggestion
+# ============================================================================
+test_model_get_error_has_try_suggestion() {
+    # model-get with empty caste should emit friendly error with Try: suggestion
+    set +e
+    local output
+    output=$(bash "$AETHER_UTILS_SOURCE" model-get "" 2>&1)
+    set -e
+    if ! echo "$output" | grep -q 'Try:'; then
+        test_fail "model-get error includes 'Try:' suggestion (ARCH-07)" "not found in output: $output"
+        return 1
+    fi
+    return 0
+}
+
+# ============================================================================
+# Test: help has Queen Commands section with backward compat (ARCH-08)
+# ============================================================================
+
+test_help_queen_commands_section() {
+    local output
+    output=$(bash "$AETHER_UTILS_SOURCE" help 2>&1)
+
+    # Verify sections field exists
+    if ! echo "$output" | jq -e '.sections' >/dev/null 2>&1; then
+        test_fail "help has 'sections' field" "field missing"
+        return 1
+    fi
+
+    # Verify Queen Commands section exists
+    if ! echo "$output" | jq -e '.sections."Queen Commands"' >/dev/null 2>&1; then
+        test_fail "help has 'Queen Commands' section" "section missing"
+        return 1
+    fi
+
+    # Verify queen-init is in Queen Commands section with a description
+    local has_queen_init
+    has_queen_init=$(echo "$output" | jq '[.sections."Queen Commands"[] | select(.name == "queen-init")] | length')
+    if [[ "$has_queen_init" != "1" ]]; then
+        test_fail "queen-init in Queen Commands section" "not found"
+        return 1
+    fi
+
+    # Verify backward compat: flat commands array still has queen-init
+    if ! echo "$output" | jq -e '.commands | index("queen-init")' >/dev/null 2>&1; then
+        test_fail "queen-init in flat commands array (backward compat)" "not found"
+        return 1
+    fi
+
+    return 0
+}
+
+# ============================================================================
 # Main Test Runner
 # ============================================================================
 
@@ -1109,6 +1215,17 @@ main() {
     run_test "test_feature_detection_after_fallbacks" "feature detection block is after fallback json_err (ARCH-09)"
     run_test "test_composed_exit_trap_exists" "_aether_exit_cleanup calls both cleanup_locks and cleanup_temp_files (ARCH-10)"
     run_test "test_spawn_tree_rotation_exists" "_rotate_spawn_tree function exists with archive reference (ARCH-03)"
+
+    # ARCH-06/02: queen-read validation gates and validate-state schema migration (Phase 18-04)
+    run_test "test_queen_read_validates_metadata" "queen-read has JSON validation gates for metadata and assembled result (ARCH-06)"
+    run_test "test_validate_state_has_schema_migration" "validate-state has _migrate_colony_state with W_MIGRATED notification (ARCH-02)"
+
+    # ARCH-07/04: model-get subprocess pattern and spawn failure event logging (Phase 18-02)
+    run_test "test_model_get_no_exec_pattern" "model-get and model-list do not use exec bash model-profile (ARCH-07)"
+    run_test "test_model_get_error_has_try_suggestion" "model-get error message includes Try: suggestion (ARCH-07)"
+
+    # ARCH-08: help sections with Queen Commands group and backward compat (Phase 18-03)
+    run_test "test_help_queen_commands_section" "help has Queen Commands section with backward-compat flat commands array (ARCH-08)"
 
     # Print summary
     test_summary

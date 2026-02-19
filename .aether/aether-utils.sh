@@ -987,14 +987,13 @@ HELP_EOF
     echo "$ts_full|$ant_name|$status|$summary" >> "$DATA_DIR/spawn-tree.txt"
     # Log failed spawns to COLONY_STATE.json events array for audit trail (ARCH-04)
     if [[ "$status" == "failed" ]] || [[ "$status" == "error" ]]; then
-      local state_file="$DATA_DIR/COLONY_STATE.json"
-      if [[ -f "$state_file" ]]; then
-        local updated
-        updated=$(jq --arg ts "$ts_full" --arg name "$ant_name" --arg st "$status" --arg sum "${summary:-unknown}" \
+      spawn_complete_state_file="$DATA_DIR/COLONY_STATE.json"
+      if [[ -f "$spawn_complete_state_file" ]]; then
+        spawn_complete_updated=$(jq --arg ts "$ts_full" --arg name "$ant_name" --arg st "$status" --arg sum "${summary:-unknown}" \
           '.events += [{"type":"spawn_failed","ant":$name,"status":$st,"summary":$sum,"timestamp":$ts}]' \
-          "$state_file" 2>/dev/null)
-        if [[ -n "$updated" ]]; then
-          atomic_write "$state_file" "$updated"
+          "$spawn_complete_state_file" 2>/dev/null)
+        if [[ -n "$spawn_complete_updated" ]]; then
+          atomic_write "$spawn_complete_state_file" "$spawn_complete_updated"
         fi
       fi
     fi
