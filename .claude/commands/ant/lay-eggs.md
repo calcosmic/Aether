@@ -11,12 +11,43 @@ Parse `$ARGUMENTS`:
 - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
 - Otherwise: set `visual_mode = true`
 
+<failure_modes>
+### Plan File Write Failure
+If writing phase plans to COLONY_STATE.json fails:
+- Do not leave partial plan data in state
+- Report what was successfully written vs. what failed
+- Recovery: user can re-run /ant:lay-eggs to regenerate plans
+
+### Goal Parsing Failure
+If the user's goal cannot be parsed into actionable phases:
+- Do not generate placeholder phases
+- Ask user to clarify or simplify the goal
+- Offer examples of well-formed goals
+</failure_modes>
+
+<success_criteria>
+Command is complete when:
+- Phase plan is written to COLONY_STATE.json with tasks and success criteria
+- Plan structure is valid (phases have tasks, tasks have descriptions)
+- User sees the plan and can approve or request changes
+</success_criteria>
+
+<read_only>
+Do not touch during lay-eggs:
+- .aether/dreams/ (user notes)
+- .aether/chambers/ (archived colonies)
+- Source code files (planning only, no implementation)
+- .env* files
+- .claude/settings.json
+</read_only>
+
 ### Step 0: Initialize Visual Mode (if enabled)
 
 If `visual_mode` is true, run using the Bash tool with description "Initializing colony display...":
 ```bash
-# Generate session ID
+# Generate session ID and persist it for later steps
 layeggs_id="layeggs-$(date +%s)"
+echo "$layeggs_id" > .aether/data/.layeggs_session
 
 # Initialize swarm display
 bash .aether/aether-utils.sh swarm-display-init "$layeggs_id"
@@ -122,6 +153,9 @@ Write `.aether/data/constraints.json`:
 
 **If visual_mode is true, render final swarm display** by running using the Bash tool with description "Updating colony display...":
 ```bash
+# Read persisted session ID from Step 0
+layeggs_id=$(cat .aether/data/.layeggs_session 2>/dev/null || echo "layeggs-$(date +%s)")
+
 bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "First eggs laid" "Colony" '{"read":3,"grep":0,"edit":2,"bash":1}' 100 "nursery" 100
 bash .aether/aether-utils.sh swarm-display-text "$layeggs_id"
 ```
@@ -155,8 +189,13 @@ Include edge case handling:
 
 Generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":
 ```bash
-state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
-current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
-total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
+if [ -f .aether/data/COLONY_STATE.json ]; then
+  state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json 2>/dev/null || echo "IDLE")
+  current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json 2>/dev/null || echo "0")
+  total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json 2>/dev/null || echo "0")
+else
+  state="IDLE"
+  current_phase="0"
+  total_phases="0"
+fi
 bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
-```

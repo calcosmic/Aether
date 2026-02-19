@@ -9,6 +9,43 @@ The phase to build is: `$ARGUMENTS`
 
 ## Instructions
 
+<failure_modes>
+### Wave Failure Mid-Build
+If a worker fails during a build wave:
+- Do NOT continue to next wave (failed dependencies will cascade)
+- Report which worker failed, what task it was on, and what was attempted
+- Options: (1) Retry the failed task, (2) Skip and continue with remaining tasks, (3) Abort build
+
+### Partial File Writes
+If a builder crashes mid-write:
+- Check git status for uncommitted partial changes
+- If partial changes exist, offer: (1) Review and keep, (2) Revert with git checkout, (3) Stash for later
+
+### State Corruption
+If COLONY_STATE.json becomes invalid during build:
+- STOP all workers immediately
+- Do not attempt to fix state automatically
+- Report the issue and offer to restore from last known good state
+</failure_modes>
+
+<success_criteria>
+Command is complete when:
+- All waves executed in order with no skipped dependencies
+- Each worker's task output is verified (files exist, tests pass)
+- COLONY_STATE.json reflects completed phase progress
+- Build summary reports all workers' outcomes
+</success_criteria>
+
+<read_only>
+Do not touch during build:
+- .aether/dreams/ (user notes)
+- .aether/chambers/ (archived colonies)
+- .env* files
+- .claude/settings.json
+- .github/workflows/
+- Other agents' config files (only modify files assigned to the current build task)
+</read_only>
+
 ### Step 0: Version Check (Non-blocking)
 
 Run using the Bash tool with description "Checking colony version...": `bash .aether/aether-utils.sh version-check-cached 2>/dev/null || true`

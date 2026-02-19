@@ -13,6 +13,37 @@ Parse `$ARGUMENTS`:
 - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
 - Otherwise: set `visual_mode = true`
 
+<failure_modes>
+### Colony State Overwrite
+If COLONY_STATE.json already exists with an active colony:
+- STOP before overwriting
+- Warn: "Active colony detected with goal: [goal]. Overwriting will lose this data."
+- Options: (1) Archive first with /ant:seal, (2) Continue and overwrite, (3) Cancel
+
+### Write Failure Mid-Init
+If writing COLONY_STATE.json fails partway:
+- Remove the incomplete file (partial state is worse than no state)
+- Report the error
+- Recovery: user can run /ant:init again safely
+</failure_modes>
+
+<success_criteria>
+Command is complete when:
+- COLONY_STATE.json exists and is valid JSON
+- Colony goal, milestone, and timestamp are set
+- Session file is written
+- User sees confirmation of colony creation
+</success_criteria>
+
+<read_only>
+Do not touch during init:
+- .aether/dreams/ (user notes)
+- .aether/chambers/ (archived colonies)
+- .env* files
+- .claude/settings.json
+- .github/workflows/
+</read_only>
+
 ### Step 0: Initialize Visual Mode (if enabled)
 
 If `visual_mode` is true:
