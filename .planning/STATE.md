@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Core value:** Prevent context rot across Claude Code sessions with self-managing colony that learns and guides users
-**Current focus:** Phase 18 — Reliability & Architecture Gaps
+**Current focus:** Phase 19 — Milestone Polish
 
 ## Current Position
 
-Phase: 18 of 18 (Reliability & Architecture Gaps)
-Plan: 4 of TBD — 18-01, 18-02, 18-03, 18-04 complete
-Status: Phase 18 in progress (18-01 thru 18-04 done)
-Last activity: 2026-02-19 — 18-04 complete: queen-read JSON validation gates added (ARCH-06), validate-state schema migration added (ARCH-02), known-issues.md updated for all Phase 18 fixes, 31 bash tests, 0 failures
+Phase: 19 of 19 (Milestone Polish)
+Plan: 1 of TBD — 19-01 complete
+Status: Phase 19 in progress (19-01 done)
+Last activity: 2026-02-19 — 19-01 complete: E_LOCK_STALE constant wired across error-handler.sh, file-lock.sh, aether-utils.sh; bare string replaced with variable; documented in error-codes.md; ERR-02 and ERR-03 gaps closed
 
-Progress: ██████████████░░░░░░ 70% (v1.2 — Phases 14-18 partial, 18-02+ remaining)
+Progress: ██████████████░░░░░░ 72% (v1.2 — Phase 19 in progress)
 
 ## Performance Metrics
 
@@ -32,7 +32,8 @@ Progress: ██████████████░░░░░░ 70% (v1.2
 | 14 (v1.2) | 1/1 | Complete |
 | 14-16 (v1.2) | 7/7 | Complete (14-01, 15-01 thru 15-03, 16-01 thru 16-03) |
 | 17 (v1.2) | 3/TBD | In progress (17-01, 17-02, and 17-03 done) |
-| 18 (v1.2) | 4/TBD | In progress (18-01, 18-02, 18-03, 18-04 done) |
+| 18 (v1.2) | 4/4 | Complete (18-01, 18-02, 18-03, 18-04 done) |
+| 19 (v1.2) | 1/TBD | In progress (19-01 done) |
 
 *Updated after each plan completion*
 
@@ -42,6 +43,8 @@ Progress: ██████████████░░░░░░ 70% (v1.2
 | Phase 18 P01 | 4 | 2 tasks | 2 files |
 | Phase 18 P03 | 6 | 2 tasks | 5 files |
 | Phase 18 P04 | 7 | 2 tasks | 3 files |
+| Phase 19-milestone-polish P01 | 3 | 2 tasks | 4 files |
+| Phase 19 P03 | 3 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -73,6 +76,9 @@ Progress: ██████████████░░░░░░ 70% (v1.2
 - ARCH-05 (18-03): queen-commands.md added to both allowlists adjacent to error-codes.md (same distribution pattern established in 17-03)
 - [Phase 18]: queen-read: do not auto-reset QUEEN.md on malformed metadata — emit actionable E_JSON_INVALID with Try: suggestion; user decides
 - [Phase 18]: validate-state migration additive only — never removes fields, adds missing v3.0 fields with empty defaults; W_MIGRATED to stderr
+- [Phase 19-01]: E_LOCK_STALE placed adjacent to E_LOCK_FAILED throughout (constant, recovery, case, export) for locality
+- [Phase 19-01]: E_LOCK_STALE Meaning section distinguishes abandoned lock from E_LOCK_FAILED live lock for clearer diagnosis
+- [Phase 19]: t.pass('skipped: reason') used for namespace-isolation conditional directory checks — keeps suite green on any machine
 
 ### Key Findings from Research
 - update-transaction.js:909 reads from hub root instead of hub/system/ — affects all three methods (syncFiles, verifyIntegrity, detectPartialUpdate)
@@ -84,10 +90,10 @@ Progress: ██████████████░░░░░░ 70% (v1.2
 - chamber-utils.sh and chamber-compare.sh define their own bare-string `json_err` that overwrites error-handler.sh's enhanced version — FIXED in 17-02
 
 ### Blockers / Concerns
-- None — ERR-02, ERR-03, ERR-04 complete; Phase 17 core work done; any remaining 17 plans are optional
+- None — ERR-02 and ERR-03 fully closed; Phase 19 in progress
 
 ## Session Continuity
 
 Last session: 2026-02-19
-Stopped at: Completed 18-02-PLAN.md (exec, all prior plans 18-01 through 18-04 also complete)
-Resume file: .planning/phases/18-reliability-architecture-gaps/18-02-SUMMARY.md
+Stopped at: Completed 19-01-PLAN.md
+Resume file: .planning/phases/19-milestone-polish/19-01-SUMMARY.md
