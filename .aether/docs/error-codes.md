@@ -36,6 +36,19 @@ This document is the complete reference for all `E_*` error constants used in Ae
   {"ok":false,"error":{"code":"E_LOCK_FAILED","message":"Failed to acquire lock on flags.json","details":null,"recovery":"Wait for other operations to complete","timestamp":"2026-02-19T13:00:00Z"}}
   ```
 
+### E_LOCK_STALE
+
+- **Meaning:** A lock file exists but belongs to a process that is no longer running, or has exceeded the maximum lock timeout (5 minutes). This differs from `E_LOCK_FAILED` (which means another process holds a live lock) — `E_LOCK_STALE` means the lock is abandoned.
+- **When it happens:**
+  - A previous command crashed without releasing its lock.
+  - The locking process was killed by the OS (e.g., OOM) or terminated by the user (Ctrl+C) before the trap handler could fire.
+  - The lock is older than the configured timeout (300 seconds).
+- **Suggested fix:** Run `aether force-unlock` to clear stale locks, or manually remove the lock file shown in the error message.
+- **Example output:**
+  ```json
+  {"ok":false,"error":{"code":"E_LOCK_STALE","message":"Stale lock found. Remove manually: .aether/locks/flags.json.lock"}}
+  ```
+
 ---
 
 ## Tool / Dependency Errors
