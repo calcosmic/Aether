@@ -7,13 +7,26 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CHAMBERS_DIR="${CHAMBERS_DIR:-.aether/chambers}"
 
+# Source error-handler.sh for E_* constants and enhanced json_err
+[[ -f "$SCRIPT_DIR/error-handler.sh" ]] && source "$SCRIPT_DIR/error-handler.sh"
+
+# Fallback E_* constants (no-ops when error-handler.sh is already loaded)
+: "${E_UNKNOWN:=E_UNKNOWN}"
+: "${E_FILE_NOT_FOUND:=E_FILE_NOT_FOUND}"
+: "${E_VALIDATION_FAILED:=E_VALIDATION_FAILED}"
+
 # JSON output helpers
 json_ok() { printf '{"ok":true,"result":%s}\n' "$1"; }
-json_err() {
-  local message="${2:-$1}"
-  printf '{"ok":false,"error":"%s"}\n' "$message" >&2
-  exit 1
-}
+
+# Guard: yield to error-handler.sh's enhanced json_err when already loaded
+if ! type json_err &>/dev/null; then
+  json_err() {
+    local code="${1:-E_UNKNOWN}"
+    local message="${2:-An unknown error occurred}"
+    printf '{"ok":false,"error":{"code":"%s","message":"%s"}}\n' "$code" "$message" >&2
+    exit 1
+  }
+fi
 
 # Load chamber manifest
 load_chamber() {
@@ -21,7 +34,7 @@ load_chamber() {
   local manifest_file="$CHAMBERS_DIR/$chamber_name/manifest.json"
 
   if [[ ! -f "$manifest_file" ]]; then
-    json_err "Chamber not found: $chamber_name"
+    json_err "$E_FILE_NOT_FOUND" "Chamber not found: $chamber_name. Try: check the chamber name with /ant:tunnels."
   fi
 
   cat "$manifest_file"
@@ -41,7 +54,7 @@ EOF
   compare)
     chamber_a="${1:-}"
     chamber_b="${2:-}"
-    [[ -z "$chamber_a" || -z "$chamber_b" ]] && json_err "Usage: compare <chamber_a> <chamber_b>"
+    [[ -z "$chamber_a" || -z "$chamber_b" ]] && json_err "$E_VALIDATION_FAILED" "Missing arguments. Try: compare <chamber_a> <chamber_b>."
 
     # Load both manifests
     manifest_a=$(load_chamber "$chamber_a")
@@ -93,7 +106,7 @@ EOF
   diff)
     chamber_a="${1:-}"
     chamber_b="${2:-}"
-    [[ -z "$chamber_a" || -z "$chamber_b" ]] && json_err "Usage: diff <chamber_a> <chamber_b>"
+    [[ -z "$chamber_a" || -z "$chamber_b" ]] && json_err "$E_VALIDATION_FAILED" "Missing arguments. Try: diff <chamber_a> <chamber_b>."
 
     manifest_a=$(load_chamber "$chamber_a")
     manifest_b=$(load_chamber "$chamber_b")
@@ -138,7 +151,7 @@ EOF
   stats)
     chamber_a="${1:-}"
     chamber_b="${2:-}"
-    [[ -z "$chamber_a" || -z "$chamber_b" ]] && json_err "Usage: stats <chamber_a> <chamber_b>"
+    [[ -z "$chamber_a" || -z "$chamber_b" ]] && json_err "$E_VALIDATION_FAILED" "Missing arguments. Try: stats <chamber_a> <chamber_b>."
 
     manifest_a=$(load_chamber "$chamber_a")
     manifest_b=$(load_chamber "$chamber_b")
@@ -175,6 +188,6 @@ EOF
     ;;
 
   *)
-    json_err "Unknown command: $cmd. Use: compare, diff, stats"
+    json_err "$E_VALIDATION_FAILED" "Unknown command: $cmd. Try: compare, diff, or stats."
     ;;
 esac
