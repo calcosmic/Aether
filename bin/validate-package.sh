@@ -35,6 +35,11 @@ REQUIRED_FILES=(
   "utils/error-handler.sh"
   "utils/file-lock.sh"
   "templates/QUEEN.md.template"
+  "templates/colony-state.template.json"
+  "templates/constraints.template.json"
+  "templates/colony-state-reset.jq.template"
+  "templates/crowned-anthill.template.md"
+  "templates/handoff.template.md"
   "rules/aether-colony.md"
 )
 
