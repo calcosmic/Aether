@@ -5,6 +5,40 @@ All notable changes to the Aether Colony project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v4.0.0 -- Distribution Simplification
+
+**Breaking change:** The `runtime/` staging directory has been removed. The npm package now reads directly from `.aether/`, with private directories (data/, dreams/, oracle/, etc.) excluded by `.aether/.npmignore`.
+
+### Changed
+- `.aether/` is now directly included in the npm package (private dirs excluded by `.aether/.npmignore`)
+- `bin/validate-package.sh` replaces `bin/sync-to-runtime.sh` — validates required files, no copying
+- Hub sync uses exclude-based approach instead of triplicate 59-62 file allowlists
+- Pre-commit hook repurposed for validation (no more runtime/ sync)
+- `aether update` uses `syncAetherToRepo` (exclude-based) for all system file distribution
+- All three distribution paths (system files, commands, agents) unified in `setupHub()`
+
+### Removed
+- `runtime/` staging directory — eliminated entirely
+- `bin/sync-to-runtime.sh` — replaced by validation-only script
+- `SYSTEM_FILES` allowlist arrays in cli.js and update-transaction.js
+- `copySystemFiles()` and `syncSystemFilesWithCleanup()` functions
+
+### Added
+- `bin/validate-package.sh` — pre-packaging validation with `--dry-run` mode
+- Private data exposure guard — blocks packaging if .npmignore doesn't cover private dirs
+- Migration message for users upgrading from v3.x
+- `npm pack --dry-run` recommended for verifying package contents
+
+### Fixed
+- ISSUE-004: Template path hardcoded to runtime/ — resolved by eliminating runtime/ entirely
+
+### Migration
+- Run `npm install -g aether-colony` to get v4.0
+- Your colony state and data are unaffected
+- The only change is how the package is built — distributed content is identical
+
+---
+
 ## [3.1.5] - 2026-02-15
 
 ### Fixed

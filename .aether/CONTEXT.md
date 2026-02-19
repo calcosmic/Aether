@@ -99,7 +99,7 @@ Implement XML exchange system integration into existing colony lifecycle (pause/
 
 | Constraint | Source | Date Set |
 |------------|--------|----------|
-| In the Aether repo, `.aether/` IS the source of truth — `runtime/` is auto-populated on publish | CLAUDE.md | Permanent |
+| In the Aether repo, `.aether/` IS the source of truth — published directly to npm (private dirs excluded by .npmignore) | CLAUDE.md | Permanent |
 | Never push without explicit user approval | CLAUDE.md Safety | Permanent |
 | XML exchange should be automatic, not separate commands | User | 2026-02-16 |
 

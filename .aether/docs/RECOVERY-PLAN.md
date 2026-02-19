@@ -2,13 +2,15 @@
 
 **Created:** 2026-02-15
 **Context:** Post-diagnosis of destructive update loop
-**Status:** CRITICAL - Read before any npm install or aether update
+**Status:** **RESOLVED (v4.0)** — The `runtime/` staging directory was eliminated in v4.0. The destructive update loop described below is no longer possible. This document is retained for historical context.
 
 ---
 
 ## ⚠️ THE PROBLEM: Destructive Update Loop
 
-**You have been working in a broken development cycle:**
+> **As of v4.0, this problem is resolved.** The flow below describes the pre-v4.0 architecture. The `runtime/` staging directory has been eliminated. `.aether/` is now packaged directly with private dirs excluded by `.aether/.npmignore`.
+
+**You have been working in a broken development cycle (pre-v4.0):**
 
 ```
 runtime/ (source) ──npm install──→ ~/.aether/ (hub) ──aether update──→ ./.aether/ (working)
@@ -20,13 +22,15 @@ runtime/ (source) ──npm install──→ ~/.aether/ (hub) ──aether updat
   (stale)                                                          (your work)
 ```
 
-**What happens:**
+**What happened (pre-v4.0):**
 1. You edit `./.aether/` (working copy) - emojis work, features work
 2. You run `npm install` - copies stale `runtime/` to `~/.aether/` (hub)
 3. You run `aether update` - copies stale hub to `./.aether/` (DESTROYS your work)
 4. Emojis disappear, features break
 
-**Root cause:** Previously `runtime/` was the source of truth, but now `.aether/` IS the source of truth. The sync script (bin/sync-to-runtime.sh) auto-populates runtime/ from .aether/ during npm install.
+**Root cause:** Previously `runtime/` was the source of truth, but then `.aether/` became the source of truth. The sync script (bin/sync-to-runtime.sh) auto-populated runtime/ from .aether/ during npm install, but if runtime/ was stale, it overwrote good work.
+
+**Resolution (v4.0):** `runtime/` eliminated entirely. `.aether/` is now packaged directly. The destructive loop cannot occur.
 
 ---
 
@@ -91,7 +95,9 @@ bin/lib/telemetry.js (enhanced)
 
 ---
 
-## 🔍 CURRENT STATE (Pre-Recovery)
+## 🔍 CURRENT STATE (Pre-Recovery, 2026-02-15)
+
+> **Historical record.** This described the state at the time of the recovery incident. The recovery steps below no longer apply.
 
 ### What's in Git (Committed)
 - All planning documents (`.planning/phases/09-12/`)
@@ -117,6 +123,8 @@ bin/lib/telemetry.js (enhanced)
 ---
 
 ## 🛠️ RECOVERY STEPS
+
+> **These recovery steps applied to the pre-v4.0 pipeline and are no longer needed.** The `runtime/` directory has been removed. For reference only.
 
 ### Step 1: Commit Current Work
 ```bash
@@ -214,7 +222,9 @@ git init
 
 ## 📋 VERIFICATION CHECKLIST
 
-After recovery, verify:
+> **As of v4.0, these checks are replaced by `npm pack --dry-run` and `bash bin/validate-package.sh`.**
+
+After recovery (pre-v4.0), verify:
 
 - [ ] `runtime/workers.md` has emoji mapping section (12 lines)
 - [ ] `runtime/aether-utils.sh` has `get_caste_emoji()` function
@@ -228,6 +238,10 @@ After recovery, verify:
 ---
 
 ## 🚨 ANTI-PATTERNS TO AVOID
+
+> **As of v4.0, `.aether/` is published directly. There is no `runtime/` to sync, so the anti-patterns below no longer apply.**
+
+**Pre-v4.0 anti-patterns (historical):**
 
 **DO NOT:**
 1. Edit `.aether/` directly without syncing to `runtime/`
@@ -264,11 +278,13 @@ All work is documented in the CDS (Cosmic Dev System) format:
 
 ## 🎯 NEXT STEPS AFTER RECOVERY
 
+> **As of v4.0, step 5 is complete.** The `runtime/` staging directory has been removed and `.aether/` is now the direct package source.
+
 1. **Publish v3.1** - npm version patch && npm publish
 2. **Update CHANGELOG** - Add v3.1.6 entry with emoji fix
 3. **Update README** - Fix version number (currently says v1.1.0)
 4. **Archive model routing** - Already done (tag: model-routing-v1-archived)
-5. **Consider future architecture** - Remove runtime/ and use .aether/ directly?
+5. ~~**Consider future architecture** - Remove runtime/ and use .aether/ directly?~~ **DONE in v4.0**
 
 ---
 
@@ -290,6 +306,6 @@ ant:swarm          # Should show real-time display
 
 ---
 
-**Document Status:** Recovery in progress
-**Last Updated:** 2026-02-15
-**Author:** Claude (post-diagnosis)
+**Document Status:** Resolved (v4.0 — runtime/ eliminated)
+**Last Updated:** 2026-02-19
+**Author:** Claude (post-diagnosis → v4.0 resolution)

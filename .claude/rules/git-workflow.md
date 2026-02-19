@@ -29,15 +29,14 @@
 ## Pre-commit Hooks
 
 The repository uses pre-commit hooks to:
-1. Block direct edits to `runtime/` (edit `.aether/` instead)
-2. Run sync script before commit
-3. Stage synced changes automatically
+1. Run package validation on `.aether/` changes (non-blocking)
+2. Verify required files exist in `.aether/`
 
-## Sync Workflow
+## Development Workflow
 
 ```bash
 # After editing .aether/ files:
 git add .
 git commit -m "docs: update workers.md"
-npm install -g .   # Auto-syncs .aether/ → runtime/, pushes to hub
+npm install -g .   # Validates .aether/ and pushes to hub
 ```

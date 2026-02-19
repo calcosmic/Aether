@@ -85,7 +85,7 @@ bash .aether/aether-utils.sh queen-init
 
 **Returns:**
 ```json
-{"created": true, "path": ".aether/docs/QUEEN.md", "source": "runtime/templates/QUEEN.md.template"}
+{"created": true, "path": ".aether/docs/QUEEN.md", "source": "~/.aether/system/templates/QUEEN.md.template"}
 ```
 
 ### queen-read

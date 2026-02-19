@@ -8,13 +8,13 @@
 
 | Decision | Why | Files |
 |----------|-----|-------|
-| `.aether/` is source of truth | runtime/ is auto-generated staging | `.aether/*.md`, `.aether/*.sh` |
-| Sync script, not manual copy | Prevents drift, enforces allowlist | `bin/sync-to-runtime.sh` |
+| `.aether/` is source of truth | Published directly; private dirs excluded by .aether/.npmignore | `.aether/*.md`, `.aether/*.sh` |
+| Validation script, not copy script | Validates required files exist — no copying | `bin/validate-package.sh` |
 | Hub model for distribution | `npm install -g .` pushes to `~/.aether/` | `bin/cli.js` |
 | Checkpoint allowlist | Bug fix: git stash nearly lost 1,145 lines of user work | `.aether/data/checkpoint-allowlist.json` |
 | Session freshness detection | Stale session files silently broke workflows | `.aether/aether-utils.sh:3181-3381` |
 
-**Edit .aether/, NOT runtime/**. Changes to runtime/ will be overwritten on sync.
+**Edit .aether/ directly.** There is no staging directory.
 
 ---
 
@@ -28,9 +28,7 @@
    - Workaround: Restart colony session if commands hang on flags
 
 2. **ISSUE-004: Template path hardcoded to runtime/**
-   - Location: `.aether/aether-utils.sh:2689`
-   - queen-init fails when Aether installed via npm
-   - Workaround: Use git clone instead of npm install
+   - **Status:** FIXED -- Phase 20: runtime/ eliminated, template resolved via hub or .aether/ paths
 
 ### Medium Priority
 
@@ -52,6 +50,13 @@
 - **Session Freshness Detection** - All 9 phases done, 21/21 tests passing
   - Commands: colonize, oracle, watch, swarm, init, seal, entomb
   - Protected: init/seal/entomb never auto-clear (precious data)
+
+### Recently Completed (2026-02-19)
+
+- **Distribution Simplification (v4.0)** - runtime/ staging eliminated
+  - Direct .aether/ packaging with exclude-based private dir guarding
+  - bin/validate-package.sh replaces bin/sync-to-runtime.sh
+  - Hub sync uses exclude-based approach (HUB_EXCLUDE_DIRS)
 
 ### Design Plans Pending Approval
 
@@ -93,6 +98,10 @@
 2. **Dreams are not actions** - Dream journal has great insights but they're rarely enacted
 3. **Tests pass != tests meaningful** - cli-telemetry.test.js and cli-override.test.js purpose unclear
 
+### npm Packaging
+
+4. **npm 11.x root .npmignore bypass** - When `files` field is present in package.json, npm-packlist ignores root `.npmignore`. Fix: put `.npmignore` inside the subdirectory (`.aether/.npmignore`) — subdirectory walkers read it.
+
 ### File Boundaries
 
 ```
@@ -125,6 +134,9 @@ npm test
 
 # Test session freshness
 bash tests/bash/test-session-freshness.sh
+
+# Verify package contents (what npm would publish)
+npm pack --dry-run
 ```
 
 ---
@@ -146,4 +158,4 @@ bash tests/bash/test-session-freshness.sh
 
 ---
 
-*Generated: 2026-02-16 | Update when architecture changes or bugs are fixed*
+*Generated: 2026-02-19 | Update when architecture changes or bugs are fixed*

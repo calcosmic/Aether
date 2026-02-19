@@ -3,8 +3,8 @@
 ## Source of Truth
 
 ```
-.aether/           → SOURCE OF TRUTH (edit this)
-runtime/           → STAGING (auto-populated, DO NOT EDIT)
+.aether/           → SOURCE OF TRUTH (edit this, published directly to npm)
+                     Private dirs (data/, dreams/, oracle/) excluded by .aether/.npmignore
 ```
 
 ## Directory Purpose
@@ -26,7 +26,7 @@ Aether Repo → Hub (~/.aether/) → Target Repos
 ```
 
 1. Edit `.aether/` in this repo
-2. Run `npm install -g .` to sync to `runtime/` and push to hub
+2. Run `npm install -g .` to validate and push to hub
 3. Run `aether update` in target repos to receive updates
 
 ## Pheromone Signals

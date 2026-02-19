@@ -24,7 +24,7 @@ bash .aether/aether-utils.sh queen-init
 
 **Behavior:**
 - If QUEEN.md already exists, returns `{"created":false}` without overwriting
-- Searches for template in: hub system path, then local runtime/
+- Searches for template in: hub system path, then local .aether/templates/
 - Creates `.aether/docs/` directory if it doesn't exist
 
 ---
