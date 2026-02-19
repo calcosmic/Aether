@@ -13,6 +13,7 @@ E_REPO_NOT_INITIALIZED="E_REPO_NOT_INITIALIZED"
 E_FILE_NOT_FOUND="E_FILE_NOT_FOUND"
 E_JSON_INVALID="E_JSON_INVALID"
 E_LOCK_FAILED="E_LOCK_FAILED"
+E_LOCK_STALE="E_LOCK_STALE"
 E_GIT_ERROR="E_GIT_ERROR"
 E_VALIDATION_FAILED="E_VALIDATION_FAILED"
 E_FEATURE_UNAVAILABLE="E_FEATURE_UNAVAILABLE"
@@ -26,6 +27,7 @@ _recovery_repo_not_init() { echo '"Run /ant:init in this repo first"'; }
 _recovery_file_not_found() { echo '"Check file path and permissions"'; }
 _recovery_json_invalid() { echo '"Validate JSON syntax"'; }
 _recovery_lock_failed() { echo '"Wait for other operations to complete"'; }
+_recovery_lock_stale() { echo '"Remove the stale lock file manually or run: aether force-unlock"'; }
 _recovery_git_error() { echo '"Check git status and resolve conflicts"'; }
 _recovery_default() { echo 'null'; }
 _recovery_dependency_missing() { echo '"Install the required dependency"'; }
@@ -40,6 +42,7 @@ _get_recovery() {
     "$E_FILE_NOT_FOUND") _recovery_file_not_found ;;
     "$E_JSON_INVALID") _recovery_json_invalid ;;
     "$E_LOCK_FAILED") _recovery_lock_failed ;;
+    "$E_LOCK_STALE") _recovery_lock_stale ;;
     "$E_GIT_ERROR") _recovery_git_error ;;
     "$E_DEPENDENCY_MISSING") _recovery_dependency_missing ;;
     "$E_RESOURCE_NOT_FOUND") _recovery_resource_not_found ;;
@@ -199,10 +202,11 @@ export -f json_err json_warn error_handler
 export -f feature_enable feature_disable feature_enabled feature_log_degradation
 export -f _get_recovery _recovery_hub_not_found _recovery_repo_not_init
 export -f _recovery_file_not_found _recovery_json_invalid _recovery_lock_failed
+export -f _recovery_lock_stale
 export -f _recovery_git_error _recovery_default _feature_reason
 export -f _recovery_dependency_missing _recovery_resource_not_found
 export E_UNKNOWN E_HUB_NOT_FOUND E_REPO_NOT_INITIALIZED E_FILE_NOT_FOUND
-export E_JSON_INVALID E_LOCK_FAILED E_GIT_ERROR E_VALIDATION_FAILED
+export E_JSON_INVALID E_LOCK_FAILED E_LOCK_STALE E_GIT_ERROR E_VALIDATION_FAILED
 export E_FEATURE_UNAVAILABLE E_BASH_ERROR
 export E_DEPENDENCY_MISSING E_RESOURCE_NOT_FOUND
 export _FEATURES_DISABLED

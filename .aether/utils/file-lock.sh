@@ -20,6 +20,9 @@ LOCK_TIMEOUT=300  # 5 minutes max lock time
 LOCK_RETRY_INTERVAL=0.5  # Wait 500ms between retries
 LOCK_MAX_RETRIES=100  # Total 50 seconds max wait
 
+# Fallback constant — ensures E_LOCK_STALE is defined whether or not error-handler.sh was loaded
+: "${E_LOCK_STALE:=E_LOCK_STALE}"
+
 # Create lock directory if it doesn't exist
 mkdir -p "$LOCK_DIR"
 
@@ -71,7 +74,7 @@ acquire_lock() {
                 fi
             else
                 # Non-interactive: fail with structured JSON error — do NOT auto-remove
-                printf '{"ok":false,"error":{"code":"E_LOCK_STALE","message":"Stale lock found. Remove manually: %s"}}\n' "$lock_file" >&2
+                printf '{"ok":false,"error":{"code":"%s","message":"Stale lock found. Remove manually: %s"}}\n' "$E_LOCK_STALE" "$lock_file" >&2
                 return 1
             fi
         fi
