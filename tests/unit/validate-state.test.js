@@ -1,8 +1,31 @@
 const test = require('ava');
 const { execSync } = require('child_process');
 const path = require('path');
+const fs = require('fs');
+const os = require('os');
 
 const AETHER_UTILS_PATH = path.join(__dirname, '../../.aether/aether-utils.sh');
+const REAL_DATA_DIR = path.join(__dirname, '../../.aether/data');
+
+/**
+ * Module-level snapshot of colony data files.
+ *
+ * Created at require() time (before AVA runs any tests) so concurrent test
+ * files (e.g. state-loader.test.js) cannot corrupt the snapshot by temporarily
+ * writing invalid JSON to .aether/data/COLONY_STATE.json during their own tests.
+ *
+ * Each test that needs data files creates its own tmpDir and COPIES from this
+ * snapshot — isolating it completely from any parallel file mutations.
+ */
+const SNAPSHOT_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'aether-vs-snapshot-'));
+fs.copyFileSync(
+  path.join(REAL_DATA_DIR, 'COLONY_STATE.json'),
+  path.join(SNAPSHOT_DIR, 'COLONY_STATE.json')
+);
+fs.copyFileSync(
+  path.join(REAL_DATA_DIR, 'constraints.json'),
+  path.join(SNAPSHOT_DIR, 'constraints.json')
+);
 
 /**
  * Helper to execute aether-utils.sh subcommand and parse JSON output
@@ -12,6 +35,23 @@ const AETHER_UTILS_PATH = path.join(__dirname, '../../.aether/aether-utils.sh');
 function runUtilsCommand(args) {
   const cmd = `bash "${AETHER_UTILS_PATH}" ${args}`;
   const output = execSync(cmd, { encoding: 'utf8', cwd: path.join(__dirname, '../..') });
+  return JSON.parse(output);
+}
+
+/**
+ * Helper to execute aether-utils.sh subcommand with an isolated DATA_DIR.
+ * Prevents AVA parallel-execution races where other tests delete/corrupt COLONY_STATE.json.
+ * @param {string} args - Arguments to pass to the script
+ * @param {string} dataDir - Path to the isolated temp directory to use as DATA_DIR
+ * @returns {object} - Parsed JSON result
+ */
+function runUtilsCommandIsolated(args, dataDir) {
+  const cmd = `bash "${AETHER_UTILS_PATH}" ${args}`;
+  const output = execSync(cmd, {
+    encoding: 'utf8',
+    cwd: path.join(__dirname, '../..'),
+    env: { ...process.env, DATA_DIR: dataDir }
+  });
   return JSON.parse(output);
 }
 
@@ -27,16 +67,36 @@ function runUtilsCommandExpectError(args) {
     throw new Error('Expected command to fail');
   } catch (error) {
     if (error.status !== 0) {
-      // Command failed as expected, parse stderr
-      return JSON.parse(error.stderr);
+      // Command failed as expected — parse last JSON line from stderr
+      const lines = (error.stderr || '').trim().split('\n');
+      for (let i = lines.length - 1; i >= 0; i--) {
+        try { return JSON.parse(lines[i]); } catch (e) { continue; }
+      }
+      return { ok: false, error: { message: error.stderr || error.message } };
     }
     throw error;
   }
 }
 
+/**
+ * Create a per-test isolated temp directory pre-populated from the module-level snapshot.
+ * @param {string[]} files - File names to copy (e.g. ['COLONY_STATE.json', 'constraints.json'])
+ * @returns {string} - Path to the temp directory
+ */
+function createIsolatedDataDir(files) {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aether-vs-'));
+  for (const file of files) {
+    fs.copyFileSync(path.join(SNAPSHOT_DIR, file), path.join(tmpDir, file));
+  }
+  return tmpDir;
+}
+
 // Test: validate-state colony returns valid JSON
 test('validate-state colony returns valid JSON with correct structure', t => {
-  const result = runUtilsCommand('validate-state colony');
+  const tmpDir = createIsolatedDataDir(['COLONY_STATE.json']);
+  t.teardown(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
+
+  const result = runUtilsCommandIsolated('validate-state colony', tmpDir);
 
   t.true('ok' in result, 'Result should have ok field');
   t.true('result' in result, 'Result should have result field');
@@ -53,7 +113,10 @@ test('validate-state colony returns valid JSON with correct structure', t => {
 
 // Test: validate-state colony checks include pass/fail status
 test('validate-state colony checks have pass/fail status', t => {
-  const result = runUtilsCommand('validate-state colony');
+  const tmpDir = createIsolatedDataDir(['COLONY_STATE.json']);
+  t.teardown(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
+
+  const result = runUtilsCommandIsolated('validate-state colony', tmpDir);
   const validation = result.result;
 
   t.true(validation.checks.length > 0, 'Should have at least one check');
@@ -68,7 +131,10 @@ test('validate-state colony checks have pass/fail status', t => {
 
 // Test: validate-state colony checks specific fields
 test('validate-state colony validates required fields', t => {
-  const result = runUtilsCommand('validate-state colony');
+  const tmpDir = createIsolatedDataDir(['COLONY_STATE.json']);
+  t.teardown(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
+
+  const result = runUtilsCommandIsolated('validate-state colony', tmpDir);
   const validation = result.result;
 
   // Count passes and fails
@@ -81,7 +147,10 @@ test('validate-state colony validates required fields', t => {
 
 // Test: validate-state constraints returns valid JSON
 test('validate-state constraints returns valid JSON with correct structure', t => {
-  const result = runUtilsCommand('validate-state constraints');
+  const tmpDir = createIsolatedDataDir(['constraints.json']);
+  t.teardown(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
+
+  const result = runUtilsCommandIsolated('validate-state constraints', tmpDir);
 
   t.true('ok' in result, 'Result should have ok field');
   t.true('result' in result, 'Result should have result field');
@@ -98,7 +167,10 @@ test('validate-state constraints returns valid JSON with correct structure', t =
 
 // Test: validate-state constraints validates array fields
 test('validate-state constraints validates array fields', t => {
-  const result = runUtilsCommand('validate-state constraints');
+  const tmpDir = createIsolatedDataDir(['constraints.json']);
+  t.teardown(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
+
+  const result = runUtilsCommandIsolated('validate-state constraints', tmpDir);
   const validation = result.result;
 
   t.true(validation.checks.length >= 2, 'Should check at least focus and constraints arrays');
@@ -113,7 +185,10 @@ test('validate-state constraints validates array fields', t => {
 
 // Test: validate-state all returns combined results
 test('validate-state all returns combined validation results', t => {
-  const result = runUtilsCommand('validate-state all');
+  const tmpDir = createIsolatedDataDir(['COLONY_STATE.json', 'constraints.json']);
+  t.teardown(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
+
+  const result = runUtilsCommandIsolated('validate-state all', tmpDir);
 
   t.true('ok' in result, 'Result should have ok field');
   t.true('result' in result, 'Result should have result field');
@@ -129,7 +204,10 @@ test('validate-state all returns combined validation results', t => {
 
 // Test: validate-state all files have required structure
 test('validate-state all files have required structure', t => {
-  const result = runUtilsCommand('validate-state all');
+  const tmpDir = createIsolatedDataDir(['COLONY_STATE.json', 'constraints.json']);
+  t.teardown(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
+
+  const result = runUtilsCommandIsolated('validate-state all', tmpDir);
   const validation = result.result;
 
   for (const file of validation.files) {
@@ -145,6 +223,7 @@ test('validate-state all files have required structure', t => {
 });
 
 // Test: validate-state with invalid target returns error
+// No colony files needed — error fires before any file access
 test('validate-state with invalid target returns error', t => {
   const error = runUtilsCommandExpectError('validate-state invalid-target');
 
@@ -155,6 +234,7 @@ test('validate-state with invalid target returns error', t => {
 });
 
 // Test: validate-state without argument returns error
+// No colony files needed — error fires before any file access
 test('validate-state without argument returns error', t => {
   const error = runUtilsCommandExpectError('validate-state');
 
@@ -166,9 +246,12 @@ test('validate-state without argument returns error', t => {
 
 // Test: All validate-state subcommands return consistent JSON format
 test('all validate-state subcommands return consistent JSON format', t => {
-  const colonyResult = runUtilsCommand('validate-state colony');
-  const constraintsResult = runUtilsCommand('validate-state constraints');
-  const allResult = runUtilsCommand('validate-state all');
+  const tmpDir = createIsolatedDataDir(['COLONY_STATE.json', 'constraints.json']);
+  t.teardown(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
+
+  const colonyResult = runUtilsCommandIsolated('validate-state colony', tmpDir);
+  const constraintsResult = runUtilsCommandIsolated('validate-state constraints', tmpDir);
+  const allResult = runUtilsCommandIsolated('validate-state all', tmpDir);
 
   // All should have ok and result fields
   t.true('ok' in colonyResult);
@@ -186,7 +269,10 @@ test('all validate-state subcommands return consistent JSON format', t => {
 
 // Test: validate-state colony handles optional fields correctly
 test('validate-state colony handles optional fields', t => {
-  const result = runUtilsCommand('validate-state colony');
+  const tmpDir = createIsolatedDataDir(['COLONY_STATE.json']);
+  t.teardown(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
+
+  const result = runUtilsCommandIsolated('validate-state colony', tmpDir);
   const validation = result.result;
 
   // Check that optional fields are validated (they should be 'pass' if present or not required)

@@ -16,7 +16,7 @@ trap 'if type error_handler &>/dev/null; then error_handler ${LINENO} "$BASH_COM
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AETHER_ROOT="$(cd "$SCRIPT_DIR/.." && pwd 2>/dev/null || echo "$SCRIPT_DIR")"
-DATA_DIR="$AETHER_ROOT/.aether/data"
+DATA_DIR="${DATA_DIR:-$AETHER_ROOT/.aether/data}"
 
 # Initialize lock state before sourcing (file-lock.sh trap needs these)
 LOCK_ACQUIRED=${LOCK_ACQUIRED:-false}
