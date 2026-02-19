@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 ## Current Position
 
 Phase: 18 of 18 (Reliability & Architecture Gaps)
-Plan: 1 of TBD — 18-01 complete
-Status: Phase 18 in progress (18-01 done)
-Last activity: 2026-02-19 — 18-01 complete: startup ordering fixed (ARCH-09), composed EXIT trap added (ARCH-10), startup orphan cleanup added, spawn-tree rotation with 5-archive cap added at session-init (ARCH-03); 26 bash tests, 0 failures
+Plan: 3 of TBD — 18-01, 18-02, 18-03 complete
+Status: Phase 18 in progress (18-01, 18-02, 18-03 done)
+Last activity: 2026-02-19 — 18-03 complete: help command sections added (ARCH-08), queen-commands.md created (ARCH-05), both sync allowlists updated, help sections test added; 31 bash tests, 0 new failures
 
 Progress: ██████████████░░░░░░ 70% (v1.2 — Phases 14-18 partial, 18-02+ remaining)
 
@@ -32,7 +32,7 @@ Progress: ██████████████░░░░░░ 70% (v1.2
 | 14 (v1.2) | 1/1 | Complete |
 | 14-16 (v1.2) | 7/7 | Complete (14-01, 15-01 thru 15-03, 16-01 thru 16-03) |
 | 17 (v1.2) | 3/TBD | In progress (17-01, 17-02, and 17-03 done) |
-| 18 (v1.2) | 1/TBD | In progress (18-01 done) |
+| 18 (v1.2) | 3/TBD | In progress (18-01, 18-02, 18-03 done) |
 
 *Updated after each plan completion*
 
@@ -40,6 +40,7 @@ Progress: ██████████████░░░░░░ 70% (v1.2
 | Phase 17 P02 | 2 | 2 tasks | 2 files |
 | Phase 17 P03 | 5 | 2 tasks | 4 files |
 | Phase 18 P01 | 4 | 2 tasks | 2 files |
+| Phase 18 P03 | 6 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -65,6 +66,8 @@ Progress: ██████████████░░░░░░ 70% (v1.2
 - ARCH-09 (18-01): feature detection block moved after fallback json_err (line 68 -> 81) so all fallback infrastructure available when feature detection runs; correctness over ordering speed
 - ARCH-10 (18-01): composed _aether_exit_cleanup trap overrides file-lock.sh individual trap; startup orphan cleanup uses kill -0 (macOS-compatible PID liveness check)
 - ARCH-03 (18-01): spawn-tree rotation uses archive-not-wipe strategy with timestamped files; in-place truncation (> file) preserves tail -f file handles; 5-archive cap
+- ARCH-08 (18-03): flat commands array preserved exactly for backward compat; HELP_EOF delimiter used to avoid EOF collision; sections key added alongside existing structure
+- ARCH-05 (18-03): queen-commands.md added to both allowlists adjacent to error-codes.md (same distribution pattern established in 17-03)
 
 ### Key Findings from Research
 - update-transaction.js:909 reads from hub root instead of hub/system/ — affects all three methods (syncFiles, verifyIntegrity, detectPartialUpdate)
@@ -81,5 +84,5 @@ Progress: ██████████████░░░░░░ 70% (v1.2
 ## Session Continuity
 
 Last session: 2026-02-19
-Stopped at: Completed 18-01-PLAN.md
-Resume file: .planning/phases/18-reliability-architecture-gaps/18-01-SUMMARY.md
+Stopped at: Completed 18-03-PLAN.md
+Resume file: .planning/phases/18-reliability-architecture-gaps/18-03-SUMMARY.md
