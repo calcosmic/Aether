@@ -4,7 +4,7 @@
 
 - ✅ **v1.0 Repair & Stabilization** — Phases 1-9 (shipped 2026-02-18)
 - ✅ **v1.1 Colony Polish & Identity** — Phases 10-13 (shipped 2026-02-18)
-- 🚧 **v1.2 Hardening & Reliability** — Phases 14-19 (in progress)
+- ✅ **v1.2 Hardening & Reliability** — Phases 14-19 (shipped 2026-02-19)
 
 ## Phases
 
@@ -37,116 +37,36 @@
 
 </details>
 
----
+<details>
+<summary>✅ v1.2 Hardening & Reliability (Phases 14-19) — SHIPPED 2026-02-19</summary>
 
-### 🚧 v1.2 Hardening & Reliability (In Progress)
+- [x] Phase 14: Foundation Safety (1 plan) — json_err fallback fix, template path resolution
+- [x] Phase 15: Distribution Chain (3 plans) — hub source dir fix, dead duplicates removed, npm deprecation
+- [x] Phase 16: Lock Lifecycle Hardening (3 plans) — uniform trap pattern, stale lock prompts, atomic-write fix
+- [x] Phase 17: Error Code Standardization (3 plans) — 49 bare-string calls converted to E_* constants, error-codes.md
+- [x] Phase 18: Reliability & Architecture Gaps (4 plans) — startup ordering, EXIT trap, spawn-tree rotation, queen-read validation
+- [x] Phase 19: Milestone Polish (4 plans) — audit gap closure, 21 new AVA tests, 446 tests passing
 
-**Milestone Goal:** Fix every documented bug, clean up the distribution chain, and leave a bulletproof foundation for new features. All phases publish together in one `npm install -g .` cycle.
+**24/24 requirements satisfied. Full details: `.planning/milestones/v1.2-ROADMAP.md`**
 
-- [x] **Phase 14: Foundation Safety** - Fix fallback json_err signature and template path resolution to unblock all subsequent work (completed 2026-02-18)
-- [x] **Phase 15: Distribution Chain** - Correct update-transaction.js source directory, update EXCLUDE_DIRS atomically, remove dead duplicates, sync allowlist (completed 2026-02-18)
-- [x] **Phase 16: Lock Lifecycle Hardening** - Audit all acquire/release pairs, eliminate deadlocks on jq failure, add trap-based cleanup on all exit paths (completed 2026-02-19)
-- [x] **Phase 17: Error Code Standardization** - Replace all hardcoded strings with E_* constants in json_err calls, document error codes (completed 2026-02-19)
-- [x] **Phase 18: Reliability & Architecture Gaps** - Wire temp file cleanup, rotate spawn-tree, add exec error handling, document queen commands, validate JSON output (completed 2026-02-19)
-- [ ] **Phase 19: Milestone Polish** - Close audit integration gaps, update traceability, fix pre-existing test failures, resolve AVA race condition
+</details>
 
-## Phase Details
+## v1.3 The Great Restructuring (Phases 20-25)
 
-### Phase 14: Foundation Safety
-**Goal**: Establish a safe base where error code work cannot silently break callers and npm-installed users are not blocked by a template path bug
-**Depends on**: Phase 13 (v1.1 shipped)
-**Requirements**: ERR-01, ARCH-01
-**Success Criteria** (what must be TRUE):
-  1. Running `json_err "$E_FILE_NOT_FOUND" "message"` from a bash session where error-handler.sh failed to load still produces output with both a code field and the human-readable message
-  2. A user running `queen-init` from an npm-installed copy of Aether (not a git clone) reaches the template without hitting a missing-directory error
-  3. Neither fix changes any success-path behavior — commands that work today still work identically
-**Plans:** 1/1 plans complete
-Plans:
-- [x] 14-01-PLAN.md — Fix fallback json_err signature (ERR-01) and template path resolution (ARCH-01)
+**Goal:** Make Aether more reliable — extract templates, clean agents, simplify pipeline, define failure handling.
 
-### Phase 15: Distribution Chain
-**Goal**: Every `aether update` call copies exactly the right files — system files land in `.aether/`, hub metadata never syncs to target repos, no dead duplicates pollute the source tree
-**Depends on**: Phase 14
-**Requirements**: DIST-01, DIST-02, DIST-03, DIST-04, DIST-05, DIST-06
-**Success Criteria** (what must be TRUE):
-  1. After `aether update` on a clean test repo, `.aether/` contains system files only — no `version.json`, `registry.json`, `manifest.json`, or `chambers/` entries from the hub root
-  2. After `aether update`, `commands/`, `agents/`, and `rules/` subdirectories from `~/.aether/system/` are not duplicated into `.aether/`
-  3. `caste-system.md` is present in a target repo after `aether update` (was missing from allowlist)
-  4. `planning.md` phantom file is absent from all sync allowlists and does not appear in target repos
-  5. The `.aether/agents/` and `.aether/commands/` dead duplicate directories are gone from the source repo
-  6. Old 2.x npm versions are deprecated on the registry — `npm install -g aether` installs the current version
-**Plans:** 3/3 plans complete
-Plans:
-- [x] 15-01-PLAN.md — Fix source directory, EXCLUDE_DIRS, and allowlists (DIST-01, DIST-02, DIST-04, DIST-05)
-- [x] 15-02-PLAN.md — Remove dead duplicate directories from source repo (DIST-03)
-- [x] 15-03-PLAN.md — Stale-dir cleanup, user feedback, tests, and npm deprecation (DIST-06)
+**24 requirements across 6 phases:**
 
-### Phase 16: Lock Lifecycle Hardening
-**Goal**: Lock deadlocks are impossible when jq fails — every lock acquired is released on every exit path, including error branches
-**Depends on**: Phase 14
-**Requirements**: LOCK-01, LOCK-02, LOCK-03, LOCK-04
-**Success Criteria** (what must be TRUE):
-  1. Feeding invalid JSON as `flags.json` to flag-add, flag-auto-resolve, or flag-acknowledge leaves `.aether/locks/` empty after the command exits — no stale lock files
-  2. Sending SIGTERM or SIGINT to a command holding a lock releases the lock before the process exits
-  3. A simulated race on atomic-write backup creation does not corrupt the target file
-  4. Concurrent `context-update` calls from two processes produce a valid merged result, not a half-written file
-**Plans:** 3/3 plans complete
-Plans:
-- [x] 16-01-PLAN.md — Unify trap pattern in flag commands + stale lock user prompt (LOCK-01, LOCK-02)
-- [x] 16-02-PLAN.md — Add locking to context-update + force-unlock subcommand (LOCK-04)
-- [x] 16-03-PLAN.md — Lock lifecycle tests + known-issues.md updates (LOCK-01, LOCK-02, LOCK-03, LOCK-04)
-
-### Phase 17: Error Code Standardization
-**Goal**: Every json_err call in aether-utils.sh produces machine-readable output with a structured code field — zero hardcoded strings remaining
-**Depends on**: Phase 14
-**Requirements**: ERR-02, ERR-03, ERR-04
-**Success Criteria** (what must be TRUE):
-  1. Triggering any documented error condition (file not found, permission denied, tool not installed) produces JSON with a `"code":"E_..."` field — no bare string codes in output
-  2. An automated grep of aether-utils.sh for `json_err "` (bare string as first arg, not a variable) returns zero matches
-  3. A contributor can look up any error constant in `.aether/docs/error-codes.md` and find its meaning and when to use it
-  4. Error path tests for lock and flag operations execute without false positives and catch a deliberately introduced hardcoded-string call
-**Plans:** 3/3 plans complete
-Plans:
-- [x] 17-01-PLAN.md — Add new E_* constants and fix all 29 bare-string json_err calls in aether-utils.sh (ERR-02)
-- [x] 17-02-PLAN.md — Fix chamber script json_err override bug and convert 20 bare-string calls (ERR-02)
-- [x] 17-03-PLAN.md — Create error-codes.md, add to sync allowlists, add regression and runtime tests (ERR-03, ERR-04)
-
-### Phase 18: Reliability & Architecture Gaps
-**Goal**: Stale resources stop accumulating, exec errors are caught, queen commands are discoverable, and JSON output is validated before leaving the read layer
-**Depends on**: Phase 16, Phase 17
-**Requirements**: ARCH-02, ARCH-03, ARCH-04, ARCH-05, ARCH-06, ARCH-07, ARCH-08, ARCH-09, ARCH-10
-**Success Criteria** (what must be TRUE):
-  1. After a session ends, `.aether/temp/` contains no orphaned `.tmp` files and `spawn-tree.txt` does not grow unboundedly across sessions
-  2. `model-get` and `model-list` return a clear error message (not a silent hang or exit 0 with no output) when the underlying exec call fails
-  3. Running `aether help` (or the equivalent help command) lists queen-* commands alongside all other available commands
-  4. `queen-read` returns an error rather than invalid JSON when the state file contains malformed content
-  5. Feature detection in aether-utils.sh completes without a race against error-handler.sh loading — no "function not found" errors on startup
-**Plans:** 4/4 plans complete
-Plans:
-- [x] 18-01-PLAN.md — Startup ordering fix, temp cleanup wiring, spawn-tree rotation (ARCH-09, ARCH-10, ARCH-03)
-- [x] 18-02-PLAN.md — Model command error handling and spawn fail-fast messaging (ARCH-07, ARCH-04)
-- [x] 18-03-PLAN.md — Help command sections and queen-commands.md documentation (ARCH-08, ARCH-05)
-- [x] 18-04-PLAN.md — queen-read JSON validation and state schema migration (ARCH-06, ARCH-02)
-
-### Phase 19: Milestone Polish
-**Goal**: Close all audit-identified gaps so the milestone can be archived clean — no partial requirements, no stale traceability, no pre-existing test failures
-**Depends on**: Phase 18
-**Requirements**: ERR-02 (partial), ERR-03 (partial)
-**Gap Closure:** Closes integration gaps from v1.2 audit
-**Success Criteria** (what must be TRUE):
-  1. `file-lock.sh` emits `E_LOCK_STALE` via an `$E_LOCK_STALE` constant (not a bare string) and the constant is documented in `error-codes.md`
-  2. All 24 requirement checkboxes in REQUIREMENTS.md are `[x]` with status "Satisfied"
-  3. `validate-state.test.js` passes all tests (error.error assertion updated to match object format)
-  4. `namespace-isolation.test.js`, `sync-dir-hash.test.js`, and `user-modification-detection.test.js` each contain at least one runnable test
-  5. `_migrate_colony_state` does not fail when COLONY_STATE.json is temporarily absent during AVA parallel execution
-**Plans:** 4 plans
-Plans:
-- [x] 19-01-PLAN.md — Wire E_LOCK_STALE constant and document in error-codes.md (ERR-02, ERR-03)
-- [x] 19-02-PLAN.md — Fix validate-state.test.js assertions and DATA_DIR isolation (ERR-02)
-- [x] 19-03-PLAN.md — Convert 3 test files from process.exit() runners to AVA (ERR-02)
-- [ ] 19-04-PLAN.md — REQUIREMENTS.md sign-off, ROADMAP.md and STATE.md cleanup (ERR-02, ERR-03)
-
----
+- [ ] Phase 20: Distribution Simplification (PIPE-01 through PIPE-03) — eliminate runtime/ staging, simplify build pipeline
+  Plans:
+  - [ ] 20-01-PLAN.md — Core pipeline restructure (packaging, cli.js, update-transaction.js, delete runtime/)
+  - [ ] 20-02-PLAN.md — Pre-commit hook, aether-utils.sh cleanup, bash test updates
+  - [ ] 20-03-PLAN.md — Documentation cleanup (CLAUDE.md, OPENCODE.md, rules, CHANGELOG)
+- [ ] Phase 21: Template Foundation (TMPL-01 through TMPL-06) — extract 5 critical templates, add to distribution
+- [ ] Phase 22: Agent Boilerplate Cleanup (AGENT-01 through AGENT-04) — strip redundant sections from all 25 agents
+- [ ] Phase 23: Agent Resilience (RESIL-01 through RESIL-03) — add failure modes, success criteria, read-only declarations
+- [ ] Phase 24: Template Integration (WIRE-01 through WIRE-05) — wire commands to read templates instead of inline structures
+- [ ] Phase 25: Queen Coordination (COORD-01 through COORD-04) — escalation chain, workflow patterns, agent merges
 
 ## Progress
 
@@ -170,11 +90,18 @@ Plans:
 | 16. Lock Lifecycle Hardening | v1.2 | 3/3 | Complete | 2026-02-19 |
 | 17. Error Code Standardization | v1.2 | 3/3 | Complete | 2026-02-19 |
 | 18. Reliability & Architecture Gaps | v1.2 | 4/4 | Complete | 2026-02-19 |
-| 19. Milestone Polish | v1.2 | 0/4 | In Progress | - |
+| 19. Milestone Polish | v1.2 | 4/4 | Complete | 2026-02-19 |
+| 20. Distribution Simplification | v1.3 | 0/3 | Planned | — |
+| 21. Template Foundation | v1.3 | 0/? | Pending | — |
+| 22. Agent Boilerplate Cleanup | v1.3 | 0/? | Pending | — |
+| 23. Agent Resilience | v1.3 | 0/? | Pending | — |
+| 24. Template Integration | v1.3 | 0/? | Pending | — |
+| 25. Queen Coordination | v1.3 | 0/? | Pending | — |
 
 ---
 
 *Roadmap created: 2026-02-17*
 *v1.0 shipped: 2026-02-18*
 *v1.1 shipped: 2026-02-18*
-*v1.2 roadmap added: 2026-02-18*
+*v1.2 shipped: 2026-02-19*
+*v1.3 roadmap created: 2026-02-19*
