@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Core value:** Prevent context rot across Claude Code sessions with self-managing colony that learns and guides users
-**Current focus:** Phase 17 — Error Code Standardization
+**Current focus:** Phase 18 — Reliability & Architecture Gaps
 
 ## Current Position
 
-Phase: 17 of 18 (Error Code Standardization)
-Plan: 3 of TBD — 17-01, 17-02, and 17-03 complete
-Status: Phase 17 in progress (17-01, 17-02, and 17-03 done)
-Last activity: 2026-02-19 — 17-03 complete: error-codes.md reference created, both sync allowlists updated, 5 regression and runtime error code tests added (23 total, 0 failures)
+Phase: 18 of 18 (Reliability & Architecture Gaps)
+Plan: 1 of TBD — 18-01 complete
+Status: Phase 18 in progress (18-01 done)
+Last activity: 2026-02-19 — 18-01 complete: startup ordering fixed (ARCH-09), composed EXIT trap added (ARCH-10), startup orphan cleanup added, spawn-tree rotation with 5-archive cap added at session-init (ARCH-03); 26 bash tests, 0 failures
 
-Progress: █████████████░░░░░░░ 65% (v1.2 — Phases 14-17 partial, 17-04+ and 18 remaining)
+Progress: ██████████████░░░░░░ 70% (v1.2 — Phases 14-18 partial, 18-02+ remaining)
 
 ## Performance Metrics
 
@@ -32,13 +32,14 @@ Progress: █████████████░░░░░░░ 65% (v1.2
 | 14 (v1.2) | 1/1 | Complete |
 | 14-16 (v1.2) | 7/7 | Complete (14-01, 15-01 thru 15-03, 16-01 thru 16-03) |
 | 17 (v1.2) | 3/TBD | In progress (17-01, 17-02, and 17-03 done) |
-| 18 (v1.2) | 0/TBD | Not started |
+| 18 (v1.2) | 1/TBD | In progress (18-01 done) |
 
 *Updated after each plan completion*
 
 | Phase 17 P01 | 2 | 2 tasks | 2 files |
 | Phase 17 P02 | 2 | 2 tasks | 2 files |
 | Phase 17 P03 | 5 | 2 tasks | 4 files |
+| Phase 18 P01 | 4 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -61,6 +62,9 @@ Progress: █████████████░░░░░░░ 65% (v1.2
 - [Phase 17]: Guard pattern chosen for chamber json_err: if ! type json_err preserves standalone fallback while yielding to error-handler.sh when loaded
 - [Phase 17]: chamber-compare.sh sources error-handler.sh directly since it always runs standalone
 - ERR-03/04 (17-03): grep -c exit code handling uses set +e/set -e to avoid double-output on zero matches; lock failure test uses nonexistent PID to trigger stale-lock path in non-interactive mode, then parses last JSON line for E_LOCK_FAILED
+- ARCH-09 (18-01): feature detection block moved after fallback json_err (line 68 -> 81) so all fallback infrastructure available when feature detection runs; correctness over ordering speed
+- ARCH-10 (18-01): composed _aether_exit_cleanup trap overrides file-lock.sh individual trap; startup orphan cleanup uses kill -0 (macOS-compatible PID liveness check)
+- ARCH-03 (18-01): spawn-tree rotation uses archive-not-wipe strategy with timestamped files; in-place truncation (> file) preserves tail -f file handles; 5-archive cap
 
 ### Key Findings from Research
 - update-transaction.js:909 reads from hub root instead of hub/system/ — affects all three methods (syncFiles, verifyIntegrity, detectPartialUpdate)
@@ -77,5 +81,5 @@ Progress: █████████████░░░░░░░ 65% (v1.2
 ## Session Continuity
 
 Last session: 2026-02-19
-Stopped at: Completed 17-03-PLAN.md — 17-03 done, ERR-03 and ERR-04 satisfied
-Resume file: .planning/phases/17-error-code-standardization/17-03-SUMMARY.md
+Stopped at: Completed 18-01-PLAN.md
+Resume file: .planning/phases/18-reliability-architecture-gaps/18-01-SUMMARY.md
