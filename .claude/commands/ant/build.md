@@ -162,8 +162,8 @@ git rev-parse --git-dir 2>/dev/null
 ```
 
 - **If succeeds** (is a git repo):
-  1. Check for changes in Aether-managed directories only: `.aether .claude/commands/ant .claude/commands/st .opencode runtime bin`
-  2. **If changes exist**: Run using the Bash tool with description "Creating git checkpoint...": `git stash push -m "aether-checkpoint: pre-phase-$PHASE_NUMBER" -- .aether .claude/commands/ant .claude/commands/st .opencode runtime bin`
+  1. Check for changes in Aether-managed directories only: `.aether .claude/commands/ant .claude/commands/st .opencode bin`
+  2. **If changes exist**: Run using the Bash tool with description "Creating git checkpoint...": `git stash push -m "aether-checkpoint: pre-phase-$PHASE_NUMBER" -- .aether .claude/commands/ant .claude/commands/st .opencode bin`
      - IMPORTANT: Never use `--include-untracked` — it stashes ALL files including user work!
      - Run using the Bash tool with description "Verifying checkpoint...": `git stash list | head -1 | grep "aether-checkpoint"` — warn if empty
      - Store checkpoint as `{type: "stash", ref: "aether-checkpoint: pre-phase-$PHASE_NUMBER"}`
