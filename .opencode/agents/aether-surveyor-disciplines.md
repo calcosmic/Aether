@@ -1,6 +1,6 @@
 ---
 name: aether-surveyor-disciplines
-description: "Surveyor ant - maps coding conventions and testing patterns for colony intelligence"
+description: "Use this agent for mapping coding conventions, testing patterns, and development practices. The disciplines surveyor documents how the team builds software."
 tools: Read, Bash, Grep, Glob, Write
 ---
 

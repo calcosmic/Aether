@@ -1,6 +1,6 @@
 ---
 name: aether-surveyor-nest
-description: "Surveyor ant - maps architecture and directory structure for colony intelligence"
+description: "Use this agent for mapping architecture, directory structure, and codebase topology. The nest surveyor creates a structural map of the entire project."
 tools: Read, Bash, Grep, Glob, Write
 ---
 

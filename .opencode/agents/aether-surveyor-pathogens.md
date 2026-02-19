@@ -1,6 +1,6 @@
 ---
 name: aether-surveyor-pathogens
-description: "Surveyor ant - identifies technical debt, bugs, and concerns for colony health"
+description: "Use this agent for identifying technical debt, bugs, and codebase health concerns. The pathogens surveyor detects what needs fixing."
 tools: Read, Bash, Grep, Glob, Write
 ---
 

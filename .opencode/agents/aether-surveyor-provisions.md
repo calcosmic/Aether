@@ -1,6 +1,6 @@
 ---
 name: aether-surveyor-provisions
-description: "Surveyor ant - maps technology stack and external integrations for colony intelligence"
+description: "Use this agent for mapping technology stack, dependencies, and external integrations. The provisions surveyor inventories what the project relies on."
 tools: Read, Bash, Grep, Glob, Write
 ---
 
