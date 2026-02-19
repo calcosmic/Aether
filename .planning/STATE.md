@@ -10,15 +10,15 @@ See: .planning/PROJECT.md (updated 2026-02-19)
 ## Current Position
 
 Phase: 23 of 25 — Agent Resilience
-Plan: 01 of 03 (COMPLETE)
-Status: Phase 23 Plan 01 Complete
-Last activity: 2026-02-19 — Completed 23-01: added resilience sections to all 7 HIGH-risk OpenCode agents
+Plan: 02 of 03 (COMPLETE)
+Status: Phase 23 Plan 02 Complete
+Last activity: 2026-02-19 — Completed 23-02: added resilience sections to 4 MEDIUM-risk, 9 LOW-risk, and 4 surveyor agents (17 total, 51 sections)
 
 ## Performance Metrics
 
 **Cumulative:**
-- Total plans completed: 66 (v1.0: 27, v1.1: 13, v1.2: 18, v1.3: 8)
-- Total requirements: 90 validated (v1.0: 46, v1.1: 14, v1.2: 24, v1.3: 6)
+- Total plans completed: 67 (v1.0: 27, v1.1: 13, v1.2: 18, v1.3: 9)
+- Total requirements: 93 validated (v1.0: 46, v1.1: 14, v1.2: 24, v1.3: 9)
 - v1.3 target: 24 requirements across 6 phases
 - Total tests: 446 passing (415 AVA + 31 bash), 0 failures
 
@@ -50,6 +50,9 @@ Last activity: 2026-02-19 — Completed 23-01: added resilience sections to all 
 - [Phase 23-01]: Existing rules (3-Fix Rule, Iron Laws, Verification Discipline) referenced by new sections — additive pattern, no redefinition
 - [Phase 23-01]: Builder and Queen include Watcher peer review triggers; Watcher self-verifies (it IS the verifier)
 - [Phase 23-01]: 2-attempt retry limit and 3-Fix Rule explicitly distinguished in Builder and Tracker — distinct scopes
+- [Phase 23-02]: LOW-risk sections kept concise (5-10 lines) — role is investigation-only, key rule is no-writes
+- [Phase 23-02]: Surveyor success_criteria extended in-place with Self-Check + Completion Report headings, not replaced
+- [Phase 23-02]: Archaeologist/chaos existing laws reinforced with back-reference in new read_only section
 
 ### Key Findings from Research
 - 7 research docs analyzed (agent architecture, template system, team coordination, distribution chain)
@@ -64,6 +67,6 @@ Last activity: 2026-02-19 — Completed 23-01: added resilience sections to all 
 
 ## Session Continuity
 
-Last session: 2026-02-19T23:13:37Z
-Stopped at: Completed 23-01-PLAN.md
-Next step: Execute Phase 23 plan 02
+Last session: 2026-02-19T23:16:16Z
+Stopped at: Completed 23-02-PLAN.md
+Next step: Execute Phase 23 plan 03
