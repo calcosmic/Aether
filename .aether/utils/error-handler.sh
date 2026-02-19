@@ -17,6 +17,8 @@ E_GIT_ERROR="E_GIT_ERROR"
 E_VALIDATION_FAILED="E_VALIDATION_FAILED"
 E_FEATURE_UNAVAILABLE="E_FEATURE_UNAVAILABLE"
 E_BASH_ERROR="E_BASH_ERROR"
+E_DEPENDENCY_MISSING="E_DEPENDENCY_MISSING"
+E_RESOURCE_NOT_FOUND="E_RESOURCE_NOT_FOUND"
 
 # --- Recovery Suggestion Functions (internal, prefixed with _) ---
 _recovery_hub_not_found() { echo '"Run: aether install"'; }
@@ -26,6 +28,8 @@ _recovery_json_invalid() { echo '"Validate JSON syntax"'; }
 _recovery_lock_failed() { echo '"Wait for other operations to complete"'; }
 _recovery_git_error() { echo '"Check git status and resolve conflicts"'; }
 _recovery_default() { echo 'null'; }
+_recovery_dependency_missing() { echo '"Install the required dependency"'; }
+_recovery_resource_not_found() { echo '"Check that the resource exists and try again"'; }
 
 # Get recovery suggestion based on error code
 _get_recovery() {
@@ -37,6 +41,8 @@ _get_recovery() {
     "$E_JSON_INVALID") _recovery_json_invalid ;;
     "$E_LOCK_FAILED") _recovery_lock_failed ;;
     "$E_GIT_ERROR") _recovery_git_error ;;
+    "$E_DEPENDENCY_MISSING") _recovery_dependency_missing ;;
+    "$E_RESOURCE_NOT_FOUND") _recovery_resource_not_found ;;
     *) _recovery_default ;;
   esac
 }
@@ -194,7 +200,9 @@ export -f feature_enable feature_disable feature_enabled feature_log_degradation
 export -f _get_recovery _recovery_hub_not_found _recovery_repo_not_init
 export -f _recovery_file_not_found _recovery_json_invalid _recovery_lock_failed
 export -f _recovery_git_error _recovery_default _feature_reason
+export -f _recovery_dependency_missing _recovery_resource_not_found
 export E_UNKNOWN E_HUB_NOT_FOUND E_REPO_NOT_INITIALIZED E_FILE_NOT_FOUND
 export E_JSON_INVALID E_LOCK_FAILED E_GIT_ERROR E_VALIDATION_FAILED
 export E_FEATURE_UNAVAILABLE E_BASH_ERROR
+export E_DEPENDENCY_MISSING E_RESOURCE_NOT_FOUND
 export _FEATURES_DISABLED

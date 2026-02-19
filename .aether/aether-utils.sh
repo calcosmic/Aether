@@ -41,6 +41,8 @@ CURRENT_LOCK=${CURRENT_LOCK:-""}
 : "${E_VALIDATION_FAILED:=E_VALIDATION_FAILED}"
 : "${E_FEATURE_UNAVAILABLE:=E_FEATURE_UNAVAILABLE}"
 : "${E_BASH_ERROR:=E_BASH_ERROR}"
+: "${E_DEPENDENCY_MISSING:=E_DEPENDENCY_MISSING}"
+: "${E_RESOURCE_NOT_FOUND:=E_RESOURCE_NOT_FOUND}"
 
 # Feature detection for graceful degradation
 # These checks run silently - failures are logged but don't block operation
