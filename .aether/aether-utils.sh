@@ -4962,6 +4962,22 @@ ${entry}" "$queen_file" > "$tmp_file"
     session_id="${2:-$(date +%s)_$(openssl rand -hex 4 2>/dev/null || echo $$)}"
     goal="${3:-}"
 
+    # ARCH-03: Rotate spawn-tree.txt at session start to prevent unbounded growth.
+    # Archives previous session's tree to a timestamped file; caps archive count at 5.
+    _rotate_spawn_tree() {
+        local tree_file="$DATA_DIR/spawn-tree.txt"
+        [[ -f "$tree_file" ]] && [[ -s "$tree_file" ]] || return 0
+        mkdir -p "$DATA_DIR/spawn-tree-archive"
+        local archive_ts
+        archive_ts=$(date +%Y%m%d_%H%M%S)
+        cp "$tree_file" "$DATA_DIR/spawn-tree-archive/spawn-tree.${archive_ts}.txt" 2>/dev/null || true
+        > "$tree_file"  # Truncate in-place — preserves file handle for tail -f watchers
+        # Keep only 5 archives
+        ls -t "$DATA_DIR/spawn-tree-archive"/spawn-tree.*.txt 2>/dev/null \
+            | tail -n +6 | xargs rm -f 2>/dev/null || true
+    }
+    _rotate_spawn_tree
+
     session_file="$DATA_DIR/session.json"
     baseline=$(git rev-parse HEAD 2>/dev/null || echo "")
 

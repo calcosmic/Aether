@@ -1012,6 +1012,60 @@ test_flag_add_lock_failure_error_code() {
 }
 
 # ============================================================================
+# Test: ARCH-09 regression — feature detection block appears after fallback json_err
+# ============================================================================
+test_feature_detection_after_fallbacks() {
+    local fallback_line feature_line
+    fallback_line=$(grep -n 'json_err()' "$AETHER_UTILS_SOURCE" | grep 'Fallback\|fallback\|json_err()' | head -1 | cut -d: -f1)
+    # json_err() definition line (inside the fallback block)
+    fallback_line=$(grep -n 'json_err()' "$AETHER_UTILS_SOURCE" | head -1 | cut -d: -f1)
+    feature_line=$(grep -n 'feature_disable "activity_log"' "$AETHER_UTILS_SOURCE" | head -1 | cut -d: -f1)
+    if [[ -z "$fallback_line" ]] || [[ -z "$feature_line" ]]; then
+        test_fail "both fallback json_err and feature detection lines found" "fallback=$fallback_line feature=$feature_line"
+        return 1
+    fi
+    if [[ "$feature_line" -le "$fallback_line" ]]; then
+        test_fail "feature detection (line $feature_line) after fallback json_err (line $fallback_line)" "feature before fallback"
+        return 1
+    fi
+    return 0
+}
+
+# ============================================================================
+# Test: ARCH-10 regression — _aether_exit_cleanup calls both cleanup functions
+# ============================================================================
+test_composed_exit_trap_exists() {
+    if ! grep -q '_aether_exit_cleanup' "$AETHER_UTILS_SOURCE"; then
+        test_fail "_aether_exit_cleanup function exists" "not found"
+        return 1
+    fi
+    if ! grep -A5 '_aether_exit_cleanup()' "$AETHER_UTILS_SOURCE" | grep -q 'cleanup_locks'; then
+        test_fail "_aether_exit_cleanup calls cleanup_locks" "not found"
+        return 1
+    fi
+    if ! grep -A5 '_aether_exit_cleanup()' "$AETHER_UTILS_SOURCE" | grep -q 'cleanup_temp_files'; then
+        test_fail "_aether_exit_cleanup calls cleanup_temp_files" "not found"
+        return 1
+    fi
+    return 0
+}
+
+# ============================================================================
+# Test: ARCH-03 regression — _rotate_spawn_tree function exists in session-init
+# ============================================================================
+test_spawn_tree_rotation_exists() {
+    if ! grep -q '_rotate_spawn_tree' "$AETHER_UTILS_SOURCE"; then
+        test_fail "_rotate_spawn_tree function exists" "not found"
+        return 1
+    fi
+    if ! grep -q 'spawn-tree-archive' "$AETHER_UTILS_SOURCE"; then
+        test_fail "spawn-tree-archive directory reference" "not found"
+        return 1
+    fi
+    return 0
+}
+
+# ============================================================================
 # Main Test Runner
 # ============================================================================
 
@@ -1050,6 +1104,11 @@ main() {
     run_test "test_flag_resolve_missing_flags_file_error_code" "flag-resolve missing flags.json returns E_FILE_NOT_FOUND (ERR-04)"
     run_test "test_flag_add_missing_args_error_code" "flag-add missing args returns E_VALIDATION_FAILED (ERR-04)"
     run_test "test_flag_add_lock_failure_error_code" "flag-add with held lock returns E_LOCK_FAILED (ERR-04)"
+
+    # ARCH-09/10/03: startup ordering, composed trap, spawn-tree rotation regression tests
+    run_test "test_feature_detection_after_fallbacks" "feature detection block is after fallback json_err (ARCH-09)"
+    run_test "test_composed_exit_trap_exists" "_aether_exit_cleanup calls both cleanup_locks and cleanup_temp_files (ARCH-10)"
+    run_test "test_spawn_tree_rotation_exists" "_rotate_spawn_tree function exists with archive reference (ARCH-03)"
 
     # Print summary
     test_summary
