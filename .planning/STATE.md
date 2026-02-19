@@ -10,14 +10,14 @@ See: .planning/PROJECT.md (updated 2026-02-19)
 ## Current Position
 
 Phase: 20 of 25 — Distribution Simplification
-Plan: 03 of 03
-Status: In progress
-Last activity: 2026-02-19 — Completed 20-02: removed all runtime/ references from shell code, hooks, build commands, docs
+Plan: 03 of 03 (COMPLETE)
+Status: Phase 20 complete
+Last activity: 2026-02-19 — Completed 20-03: updated all 11 documentation files for v4.0 direct packaging pipeline
 
 ## Performance Metrics
 
 **Cumulative:**
-- Total plans completed: 58 (v1.0: 27, v1.1: 13, v1.2: 18)
+- Total plans completed: 59 (v1.0: 27, v1.1: 13, v1.2: 18, v1.3: 1+)
 - Total requirements: 84 validated (v1.0: 46, v1.1: 14, v1.2: 24)
 - v1.3 target: 24 requirements across 6 phases
 - Total tests: 446 passing (415 AVA + 31 bash), 0 failures
@@ -34,6 +34,7 @@ Last activity: 2026-02-19 — Completed 20-02: removed all runtime/ references f
 - [Phase 20-02]: Pre-commit hook is validation-only (advisory, exits 0 always) — no blocking on commit
 - [Phase 20-02]: queen-init template lookup chain: hub (system/) -> dev (.aether/) -> legacy hub (no staging path)
 - [Phase 20-02]: ISSUE-004 fully resolved — template path hardcoded to staging dir no longer an issue
+- [Phase 20-03]: Historical runtime/ references preserved with RESOLVED markers rather than deleted — audit value maintained
 
 ### Key Findings from Research
 - 7 research docs analyzed (agent architecture, template system, team coordination, distribution chain)
@@ -47,6 +48,6 @@ Last activity: 2026-02-19 — Completed 20-02: removed all runtime/ references f
 
 ## Session Continuity
 
-Last session: 2026-02-19T20:25:18Z
-Stopped at: Completed 20-02-PLAN.md
-Next step: Execute 20-03-PLAN.md (documentation update for v4.0)
+Last session: 2026-02-19T20:26:33Z
+Stopped at: Completed 20-03-PLAN.md (Phase 20 complete)
+Next step: Execute Phase 21 (next phase in roadmap)
