@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Core value:** Prevent context rot across Claude Code sessions with self-managing colony that learns and guides users
-**Current focus:** Phase 16 — Lock Lifecycle Hardening
+**Current focus:** Phase 17 — Error Code Standardization
 
 ## Current Position
 
-Phase: 16 of 18 (Lock Lifecycle Hardening)
-Plan: 01 complete (16-01-SUMMARY.md), 02 complete (16-02-SUMMARY.md), 03 complete (16-03-SUMMARY.md)
-Status: Phase 16 complete — all three plans done
-Last activity: 2026-02-18 — 16-03 complete: 12 lock lifecycle regression tests, known-issues.md updated with BUG-002/003/005/011 and GAP-009 fixed status
+Phase: 17 of 18 (Error Code Standardization)
+Plan: 1 of TBD — 17-01 complete
+Status: Phase 17 in progress (17-01 done)
+Last activity: 2026-02-19 — 17-01 complete: all 27 bare-string json_err calls converted to E_* constants; 2 new constants added to error-handler.sh
 
-Progress: ██░░░░░░░░░░░░░░░░░░ 22% (v1.2 — Phase 16 in progress)
+Progress: █████████████░░░░░░░ 65% (v1.2 — Phases 14-17 partial, 17-02+ and 18 remaining)
 
 ## Performance Metrics
 
@@ -30,7 +30,9 @@ Progress: ██░░░░░░░░░░░░░░░░░░ 22% (v1.2
 | 1-9 (v1.0) | 27/27 | Complete |
 | 10-13 (v1.1) | 13/13 | Complete |
 | 14 (v1.2) | 1/1 | Complete |
-| 15-18 (v1.2) | 6/TBD | In progress (15-01, 15-02, 15-03, 16-01, 16-02, 16-03 complete) |
+| 14-16 (v1.2) | 7/7 | Complete (14-01, 15-01 thru 15-03, 16-01 thru 16-03) |
+| 17 (v1.2) | 1/TBD | In progress (17-01 done) |
+| 18 (v1.2) | 0/TBD | Not started |
 
 *Updated after each plan completion*
 
@@ -51,6 +53,7 @@ Progress: ██░░░░░░░░░░░░░░░░░░ 22% (v1.2
 - Phase 16-03: AETHER_ROOT isolation in atomic-write tests via fake git binary — cleanest approach for testing scripts that detect project root via git
 - ERR-01 (14-01): fallback json_err emits `{code, message}` object — separate commits per fix strategy confirmed
 - ARCH-01 (14-01): hub path first in template search loop; error message includes exact install command
+- ERR-02 (17-01): error message format locked: friendly tone ("Couldn't find...") + mandatory "Try:" suggestion; E_DEPENDENCY_MISSING for missing utility scripts/binaries; E_RESOURCE_NOT_FOUND for missing runtime state; xmllint uses E_FEATURE_UNAVAILABLE (optional feature, not hard dep)
 
 ### Key Findings from Research
 - update-transaction.js:909 reads from hub root instead of hub/system/ — affects all three methods (syncFiles, verifyIntegrity, detectPartialUpdate)
@@ -62,11 +65,10 @@ Progress: ██░░░░░░░░░░░░░░░░░░ 22% (v1.2
 - chamber-utils.sh and chamber-compare.sh define their own bare-string `json_err` that overwrites error-handler.sh's enhanced version — pre-existing bug, deferred to Phase 17
 
 ### Blockers / Concerns
-- Phase 16 (lock audit): full surface of acquire/release pairs not yet enumerated — budget discovery time
-- Phase 15 (EXCLUDE_DIRS): verify current hub directory structure at implementation time, not just research snapshot
+- chamber-utils.sh and chamber-compare.sh define their own bare-string `json_err` that overwrites error-handler.sh's enhanced version — Phase 17-01 resolved aether-utils.sh; chamber files are next (Phase 17-02+)
 
 ## Session Continuity
 
-Last session: 2026-02-18
-Stopped at: Completed 16-03-PLAN.md (lock lifecycle tests + known-issues.md fix status)
-Resume file: .planning/phases/16-lock-lifecycle-hardening/16-03-SUMMARY.md
+Last session: 2026-02-19
+Stopped at: Completed 17-01-PLAN.md — 17-01 done, ready for 17-02
+Resume file: .planning/phases/17-error-code-standardization/17-01-SUMMARY.md
