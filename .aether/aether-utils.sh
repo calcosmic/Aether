@@ -364,7 +364,7 @@ EOF
       local safe_clear="${4:-NO}"
       local safe_reason="${5:-Phase in progress}"
 
-      [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found. Run context-update init first."; }
+      [[ -f "$ctx_file" ]] || { json_err "$E_FILE_NOT_FOUND" "Couldn't find CONTEXT.md. Try: run context-update init first."; }
 
       sed -i.bak "s/| \*\*Last Updated\*\* | .*/| **Last Updated** | $ctx_ts |/" "$ctx_file" && rm -f "$ctx_file.bak"
       sed -i.bak "s/| \*\*Current Phase\*\* | .*/| **Current Phase** | $new_phase |/" "$ctx_file" && rm -f "$ctx_file.bak"
@@ -379,7 +379,7 @@ EOF
       local result="${3:-}"
       local files_changed="${4:-—}"
 
-      [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
+      [[ -f "$ctx_file" ]] || { json_err "$E_FILE_NOT_FOUND" "Couldn't find CONTEXT.md. Try: run context-update init first."; }
 
       sed -i.bak "s/| \*\*Last Updated\*\* | .*/| **Last Updated** | $ctx_ts |/" "$ctx_file" && rm -f "$ctx_file.bak"
 
@@ -405,7 +405,7 @@ EOF
       local safe="${2:-NO}"
       local reason="${3:-Unknown state}"
 
-      [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
+      [[ -f "$ctx_file" ]] || { json_err "$E_FILE_NOT_FOUND" "Couldn't find CONTEXT.md. Try: run context-update init first."; }
 
       sed -i.bak "s/| \*\*Last Updated\*\* | .*/| **Last Updated** | $ctx_ts |/" "$ctx_file" && rm -f "$ctx_file.bak"
       sed -i.bak "s/| \*\*Safe to Clear?\*\* | .*/| **Safe to Clear?** | $safe — $reason |/" "$ctx_file" && rm -f "$ctx_file.bak"
@@ -418,7 +418,7 @@ EOF
       local c_message="${3:-}"
       local c_source="${4:-User}"
 
-      [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
+      [[ -f "$ctx_file" ]] || { json_err "$E_FILE_NOT_FOUND" "Couldn't find CONTEXT.md. Try: run context-update init first."; }
 
       sed -i.bak "s/| \*\*Last Updated\*\* | .*/| **Last Updated** | $ctx_ts |/" "$ctx_file" && rm -f "$ctx_file.bak"
 
@@ -440,7 +440,7 @@ EOF
       local rationale="${3:-}"
       local made_by="${4:-Colony}"
 
-      [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
+      [[ -f "$ctx_file" ]] || { json_err "$E_FILE_NOT_FOUND" "Couldn't find CONTEXT.md. Try: run context-update init first."; }
 
       sed -i.bak "s/| \*\*Last Updated\*\* | .*/| **Last Updated** | $ctx_ts |/" "$ctx_file" && rm -f "$ctx_file.bak"
 
@@ -472,7 +472,7 @@ EOF
       local worker_count="${3:-0}"
       local tasks_count="${4:-0}"
 
-      [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
+      [[ -f "$ctx_file" ]] || { json_err "$E_FILE_NOT_FOUND" "Couldn't find CONTEXT.md. Try: run context-update init first."; }
 
       sed -i.bak "s/| \*\*Last Updated\*\* | .*/| **Last Updated** | $ctx_ts |/" "$ctx_file" && rm -f "$ctx_file.bak"
       sed -i.bak "s/## 📍 What's In Progress/## 📍 What's In Progress\n\n**Phase $phase_id Build IN PROGRESS**\n- Workers: $worker_count | Tasks: $tasks_count\n- Started: $ctx_ts/" "$ctx_file" && rm -f "$ctx_file.bak"
@@ -486,7 +486,7 @@ EOF
       local caste="${3:-}"
       local task="${4:-}"
 
-      [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
+      [[ -f "$ctx_file" ]] || { json_err "$E_FILE_NOT_FOUND" "Couldn't find CONTEXT.md. Try: run context-update init first."; }
 
       awk -v ant="$ant_name" -v caste="$caste" -v task="$task" -v ts="$ctx_ts" '
         /^## 📍 What'\''s In Progress/ { in_progress=1 }
@@ -506,7 +506,7 @@ EOF
       local ant_name="${2:-}"
       local status="${3:-completed}"
 
-      [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
+      [[ -f "$ctx_file" ]] || { json_err "$E_FILE_NOT_FOUND" "Couldn't find CONTEXT.md. Try: run context-update init first."; }
 
       sed -i.bak "s/- .*$ant_name .*$/- $ant_name: $status (updated $ctx_ts)/" "$ctx_file" && rm -f "$ctx_file.bak"
 
@@ -518,7 +518,7 @@ EOF
       local total="${3:-1}"
       local percentage=$(( completed * 100 / total ))
 
-      [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
+      [[ -f "$ctx_file" ]] || { json_err "$E_FILE_NOT_FOUND" "Couldn't find CONTEXT.md. Try: run context-update init first."; }
 
       sed -i.bak "s/Build IN PROGRESS/Build IN PROGRESS ($percentage% complete)/" "$ctx_file" && rm -f "$ctx_file.bak"
 
@@ -529,7 +529,7 @@ EOF
       local status="${2:-completed}"
       local result="${3:-success}"
 
-      [[ -f "$ctx_file" ]] || { json_err "CONTEXT.md not found"; }
+      [[ -f "$ctx_file" ]] || { json_err "$E_FILE_NOT_FOUND" "Couldn't find CONTEXT.md. Try: run context-update init first."; }
 
       sed -i.bak "s/| \*\*Last Updated\*\* | .*/| **Last Updated** | $ctx_ts |/" "$ctx_file" && rm -f "$ctx_file.bak"
 
@@ -3872,7 +3872,7 @@ ${entry}" "$queen_file" > "$tmp_file"
     if type pheromone-export &>/dev/null; then
       pheromone-export "$input_json" "$output_xml" "$schema_file"
     else
-      json_err "$E_DEPENDENCY_MISSING" "xml-utils.sh not available for pheromone export"
+      json_err "$E_DEPENDENCY_MISSING" "xml-utils.sh not available. Try: run aether update to restore utility scripts."
     fi
     ;;
 
@@ -4513,12 +4513,12 @@ ${entry}" "$queen_file" > "$tmp_file"
 
     # Graceful degradation: check for xmllint
     if ! command -v xmllint >/dev/null 2>&1; then
-      json_err "xmllint not available — XML features require libxml2 (install: xcode-select --install on macOS)"
+      json_err "$E_FEATURE_UNAVAILABLE" "xmllint is not installed. Try: xcode-select --install on macOS."
     fi
 
     # Check pheromones.json exists
     if [[ ! -f "$pex_pheromones" ]]; then
-      json_err "pheromones.json not found at $pex_pheromones"
+      json_err "$E_FILE_NOT_FOUND" "Couldn't find pheromones.json. Try: run /ant:init first."
     fi
 
     # Ensure output directory exists
@@ -4541,16 +4541,16 @@ ${entry}" "$queen_file" > "$tmp_file"
     pix_pheromones="$DATA_DIR/pheromones.json"
 
     if [[ -z "$pix_xml" ]]; then
-      json_err "Missing XML file argument. Usage: pheromone-import-xml <xml_file> [colony_prefix]"
+      json_err "$E_VALIDATION_FAILED" "Missing XML file argument. Try: pheromone-import-xml <xml_file> [colony_prefix]."
     fi
 
     if [[ ! -f "$pix_xml" ]]; then
-      json_err "XML file not found: $pix_xml"
+      json_err "$E_FILE_NOT_FOUND" "XML file not found: $pix_xml. Try: check the file path."
     fi
 
     # Graceful degradation: check for xmllint
     if ! command -v xmllint >/dev/null 2>&1; then
-      json_err "xmllint not available — XML features require libxml2 (install: xcode-select --install on macOS)"
+      json_err "$E_FEATURE_UNAVAILABLE" "xmllint is not installed. Try: xcode-select --install on macOS."
     fi
 
     # Source the exchange script
@@ -4601,16 +4601,16 @@ ${entry}" "$queen_file" > "$tmp_file"
     pvx_xsd="$SCRIPT_DIR/schemas/pheromone.xsd"
 
     if [[ -z "$pvx_xml" ]]; then
-      json_err "Missing XML file argument. Usage: pheromone-validate-xml <xml_file>"
+      json_err "$E_VALIDATION_FAILED" "Missing XML file argument. Try: pheromone-validate-xml <xml_file>."
     fi
 
     if [[ ! -f "$pvx_xml" ]]; then
-      json_err "XML file not found: $pvx_xml"
+      json_err "$E_FILE_NOT_FOUND" "XML file not found: $pvx_xml. Try: check the file path."
     fi
 
     # Graceful degradation: check for xmllint
     if ! command -v xmllint >/dev/null 2>&1; then
-      json_err "xmllint not available — XML features require libxml2 (install: xcode-select --install on macOS)"
+      json_err "$E_FEATURE_UNAVAILABLE" "xmllint is not installed. Try: xcode-select --install on macOS."
     fi
 
     # Source the exchange script
@@ -4631,7 +4631,7 @@ ${entry}" "$queen_file" > "$tmp_file"
 
     # Graceful degradation: check for xmllint
     if ! command -v xmllint >/dev/null 2>&1; then
-      json_err "xmllint not available — XML features require libxml2 (install: xcode-select --install on macOS)"
+      json_err "$E_FEATURE_UNAVAILABLE" "xmllint is not installed. Try: xcode-select --install on macOS."
     fi
 
     # Look for wisdom data: check specified file, then COLONY_STATE memory
@@ -4682,16 +4682,16 @@ ${entry}" "$queen_file" > "$tmp_file"
     wix_output="${2:-$DATA_DIR/queen-wisdom.json}"
 
     if [[ -z "$wix_xml" ]]; then
-      json_err "Missing XML file argument. Usage: wisdom-import-xml <xml_file> [output_json]"
+      json_err "$E_VALIDATION_FAILED" "Missing XML file argument. Try: wisdom-import-xml <xml_file> [output_json]."
     fi
 
     if [[ ! -f "$wix_xml" ]]; then
-      json_err "XML file not found: $wix_xml"
+      json_err "$E_FILE_NOT_FOUND" "XML file not found: $wix_xml. Try: check the file path."
     fi
 
     # Graceful degradation: check for xmllint
     if ! command -v xmllint >/dev/null 2>&1; then
-      json_err "xmllint not available — XML features require libxml2 (install: xcode-select --install on macOS)"
+      json_err "$E_FEATURE_UNAVAILABLE" "xmllint is not installed. Try: xcode-select --install on macOS."
     fi
 
     # Ensure output directory exists
@@ -4715,7 +4715,7 @@ ${entry}" "$queen_file" > "$tmp_file"
 
     # Graceful degradation: check for xmllint
     if ! command -v xmllint >/dev/null 2>&1; then
-      json_err "xmllint not available — XML features require libxml2 (install: xcode-select --install on macOS)"
+      json_err "$E_FEATURE_UNAVAILABLE" "xmllint is not installed. Try: xcode-select --install on macOS."
     fi
 
     # If no registry file exists, generate from chambers
@@ -4767,16 +4767,16 @@ ${entry}" "$queen_file" > "$tmp_file"
     rix_output="${2:-$DATA_DIR/colony-registry.json}"
 
     if [[ -z "$rix_xml" ]]; then
-      json_err "Missing XML file argument. Usage: registry-import-xml <xml_file> [output_json]"
+      json_err "$E_VALIDATION_FAILED" "Missing XML file argument. Try: registry-import-xml <xml_file> [output_json]."
     fi
 
     if [[ ! -f "$rix_xml" ]]; then
-      json_err "XML file not found: $rix_xml"
+      json_err "$E_FILE_NOT_FOUND" "XML file not found: $rix_xml. Try: check the file path."
     fi
 
     # Graceful degradation: check for xmllint
     if ! command -v xmllint >/dev/null 2>&1; then
-      json_err "xmllint not available — XML features require libxml2 (install: xcode-select --install on macOS)"
+      json_err "$E_FEATURE_UNAVAILABLE" "xmllint is not installed. Try: xcode-select --install on macOS."
     fi
 
     # Ensure output directory exists
@@ -4797,7 +4797,7 @@ ${entry}" "$queen_file" > "$tmp_file"
 
     # Graceful degradation: check for xmllint
     if ! command -v xmllint >/dev/null 2>&1; then
-      json_err "xmllint not available — XML features require libxml2 (install: xcode-select --install on macOS)"
+      json_err "$E_FEATURE_UNAVAILABLE" "xmllint is not installed. Try: xcode-select --install on macOS."
     fi
 
     cax_output="${1:-$SCRIPT_DIR/exchange/colony-archive.xml}"
@@ -5101,7 +5101,7 @@ EOF
          '.resumed_at = $ts | .context_cleared = false' "$session_file" > "$session_file.tmp" && mv "$session_file.tmp" "$session_file"
       json_ok "{\"resumed\":true,\"timestamp\":\"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"}"
     else
-      json_err "$E_RESOURCE_NOT_FOUND" "No session to mark as resumed"
+      json_err "$E_RESOURCE_NOT_FOUND" "No active session to mark as resumed. Try: run /ant:init to start a new session."
     fi
     ;;
 
