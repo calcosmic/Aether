@@ -59,12 +59,12 @@ Generate swarm ID: `swarm-<unix_timestamp>`
 
 Initialize swarm findings:
 ```bash
-bash .aether/aether-utils.sh swarm-findings-init "<swarm_id>" with description "Initializing swarm findings..."
+bash .aether/aether-utils.sh swarm-findings-init "<swarm_id>"
 ```
 
 Initialize swarm display for real-time tracking:
 ```bash
-bash .aether/aether-utils.sh swarm-display-init "<swarm_id>" with description "Initializing swarm display..."
+bash .aether/aether-utils.sh swarm-display-init "<swarm_id>"
 ```
 
 #### Step 2.5: Check for Stale Swarm Session
@@ -76,19 +76,19 @@ SWARM_START=$(date +%s)
 
 Check for stale swarm files:
 ```bash
-stale_check=$(bash .aether/aether-utils.sh session-verify-fresh --command swarm "" "$SWARM_START" with description "Checking swarm session freshness...")
+stale_check=$(bash .aether/aether-utils.sh session-verify-fresh --command swarm "" "$SWARM_START")
 has_stale=$(echo "$stale_check" | jq -r '.stale | length')
 
 if [[ "$has_stale" -gt 0 ]]; then
   # Auto-clear stale swarm findings (safe - findings are temporary)
-  bash .aether/aether-utils.sh session-clear --command swarm with description "Clearing stale swarm data..."
+  bash .aether/aether-utils.sh session-clear --command swarm
   echo "Cleared stale swarm findings for fresh investigation"
 fi
 ```
 
 After initializing findings, verify swarm files are fresh:
 ```bash
-verify_result=$(bash .aether/aether-utils.sh session-verify-fresh --command swarm "" "$SWARM_START" with description "Confirming swarm files...")
+verify_result=$(bash .aether/aether-utils.sh session-verify-fresh --command swarm "" "$SWARM_START")
 if [[ $(echo "$verify_result" | jq -r '.missing | length') -gt 0 ]]; then
   echo "Warning: Swarm files not properly initialized"
 fi
@@ -108,9 +108,9 @@ Display header:
 
 #### Step 3: Create Git Checkpoint
 
-Before any investigation that might lead to fixes:
+Before any investigation that might lead to fixes, run using the Bash tool:
 ```bash
-bash .aether/aether-utils.sh autofix-checkpoint "pre-swarm-$SWARM_ID" with description "Creating safety checkpoint..."
+bash .aether/aether-utils.sh autofix-checkpoint "pre-swarm-$SWARM_ID"
 ```
 
 Store the result for potential rollback:
@@ -125,7 +125,7 @@ Store the result for potential rollback:
 
 Read existing blockers for context:
 ```bash
-bash .aether/aether-utils.sh flag-list --type blocker with description "Loading colony flags..."
+bash .aether/aether-utils.sh flag-list --type blocker
 ```
 
 Read recent activity:
@@ -144,7 +144,7 @@ Use the **Task** tool to spawn 4 scouts **in a single message** (parallel execut
 
 Log each scout to swarm display before spawning (consolidated):
 ```bash
-bash .aether/aether-utils.sh swarm-display-update "{swarm_id}-Archaeologist" "scout" "excavating" "Git history investigation" "Queen" '{"read":0,"grep":0,"edit":0,"bash":3}' 0 && bash .aether/aether-utils.sh swarm-display-update "{swarm_id}-PatternHunter" "scout" "excavating" "Pattern search for similar code" "Queen" '{"read":5,"grep":10,"edit":0,"bash":0}' 0 && bash .aether/aether-utils.sh swarm-display-update "{swarm_id}-ErrorAnalyst" "scout" "excavating" "Error chain analysis" "Queen" '{"read":3,"grep":5,"edit":0,"bash":2}' 0 && bash .aether/aether-utils.sh swarm-display-update "{swarm_id}-WebResearcher" "scout" "excavating" "External source research" "Queen" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 with description "Preparing scout agents..."
+bash .aether/aether-utils.sh swarm-display-update "{swarm_id}-Archaeologist" "scout" "excavating" "Git history investigation" "Queen" '{"read":0,"grep":0,"edit":0,"bash":3}' 0 && bash .aether/aether-utils.sh swarm-display-update "{swarm_id}-PatternHunter" "scout" "excavating" "Pattern search for similar code" "Queen" '{"read":5,"grep":10,"edit":0,"bash":0}' 0 && bash .aether/aether-utils.sh swarm-display-update "{swarm_id}-ErrorAnalyst" "scout" "excavating" "Error chain analysis" "Queen" '{"read":3,"grep":5,"edit":0,"bash":2}' 0 && bash .aether/aether-utils.sh swarm-display-update "{swarm_id}-WebResearcher" "scout" "excavating" "External source research" "Queen" '{"read":0,"grep":0,"edit":0,"bash":0}' 0
 ```
 
 **Scout 1: 🏛️ Git Archaeologist** (use Task tool with `subagent_type="aether-archaeologist"`)
@@ -218,7 +218,7 @@ Wait for all 4 scouts to complete.
 
 As each scout returns, add their findings and update display (consolidated):
 ```bash
-bash .aether/aether-utils.sh swarm-findings-add "{swarm_id}" "{scout_type}" "{confidence}" '{finding_json}' && bash .aether/aether-utils.sh swarm-display-update "{swarm_id}-Archaeologist" "scout" "completed" "Git history investigation" "Queen" '{"read":3,"grep":0,"edit":0,"bash":5}' 150 with description "Recording scout findings..."
+bash .aether/aether-utils.sh swarm-findings-add "{swarm_id}" "{scout_type}" "{confidence}" '{finding_json}' && bash .aether/aether-utils.sh swarm-display-update "{swarm_id}-Archaeologist" "scout" "completed" "Git history investigation" "Queen" '{"read":3,"grep":0,"edit":0,"bash":5}' 150
 ```
 
 Display each scout's report as they complete:
@@ -238,7 +238,7 @@ Display each scout's report as they complete:
 
 Display colony activity summary:
 ```bash
-bash .aether/aether-utils.sh swarm-display-text "$SWARM_ID" with description "Rendering swarm activity..."
+bash .aether/aether-utils.sh swarm-display-text "$SWARM_ID"
 ```
 
 #### Step 7: Synthesize Solution
@@ -308,7 +308,7 @@ Inject learnings:
 
 Set solution in swarm findings and log success (consolidated):
 ```bash
-bash .aether/aether-utils.sh swarm-solution-set "{swarm_id}" '{solution_json}' && bash .aether/aether-utils.sh activity-log "SWARM_SUCCESS" "Queen" "Swarm {swarm_id} fixed: {brief description}" with description "Recording solution..."
+bash .aether/aether-utils.sh swarm-solution-set "{swarm_id}" '{solution_json}' && bash .aether/aether-utils.sh activity-log "SWARM_SUCCESS" "Queen" "Swarm {swarm_id} fixed: {brief description}"
 ```
 
 **If verification fails:**
@@ -323,7 +323,8 @@ Attempting rollback...
 
 Rollback and log failure (consolidated):
 ```bash
-bash .aether/aether-utils.sh autofix-rollback "{checkpoint_type}" "{checkpoint_ref}" ; bash .aether/aether-utils.sh activity-log "SWARM_FAILED" "Queen" "Swarm {swarm_id} fix failed verification" with description "Rolling back failed fix..."
+bash .aether/aether-utils.sh autofix-rollback "{checkpoint_type}" "{checkpoint_ref}" ; bash .aether/aether-utils.sh activity-log "SWARM_FAILED" "Queen" "Swarm {swarm_id} fix failed verification"
+```
 
 Track attempt count. If this is the 3rd failure on the same issue:
 ```
@@ -348,10 +349,10 @@ Swarm will not attempt further fixes on this issue.
 
 Clear swarm display and archive findings (consolidated):
 ```bash
-bash .aether/aether-utils.sh swarm-display-init "complete-{swarm_id}" && bash .aether/aether-utils.sh swarm-cleanup "{swarm_id}" --archive with description "Cleaning up swarm session..."
+bash .aether/aether-utils.sh swarm-display-init "complete-{swarm_id}" && bash .aether/aether-utils.sh swarm-cleanup "{swarm_id}" --archive
 ```
 
-Generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":
+Generate the state-based Next Up block:
 ```bash
 state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
 current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)

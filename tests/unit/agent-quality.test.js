@@ -272,3 +272,87 @@ test('body quality: all agents have 8 XML sections with adequate content', t => 
     );
   }
 });
+
+// ---------------------------------------------------------------------------
+// CLEAN-03: No bash wrapping bug in command files
+// ---------------------------------------------------------------------------
+
+/**
+ * Scans command files for the bash wrapping bug pattern where
+ * `with description "..."` appears INSIDE bash code blocks instead of
+ * in the instruction prose above them.
+ *
+ * The bug causes "with: command not found" errors when Claude Code
+ * executes the bash blocks literally.
+ *
+ * Correct pattern:
+ *   Run using the Bash tool with description "Doing something...":
+ *   ```bash
+ *   bash .aether/aether-utils.sh some-command "args"
+ *   ```
+ *
+ * Bug pattern (FAILS):
+ *   ```bash
+ *   bash .aether/aether-utils.sh some-command "args" with description "Doing something..."
+ *   ```
+ */
+function findBashWrappingBug(commandDirs) {
+  const errors = [];
+
+  for (const dir of commandDirs) {
+    if (!fs.existsSync(dir)) continue;
+
+    const files = fs.readdirSync(dir)
+      .filter(f => f.endsWith('.md'))
+      .map(f => path.join(dir, f));
+
+    for (const filePath of files) {
+      const content = fs.readFileSync(filePath, 'utf8');
+      const lines = content.split('\n');
+      let inBashBlock = false;
+      let blockStartLine = 0;
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+
+        // Track bash code block boundaries
+        if (line.startsWith('```bash')) {
+          inBashBlock = true;
+          blockStartLine = i + 1;
+          continue;
+        }
+        if (line.startsWith('```') && inBashBlock) {
+          inBashBlock = false;
+          continue;
+        }
+
+        // Check for the bug pattern inside bash blocks
+        if (inBashBlock && / with description /.test(line)) {
+          const relPath = path.relative(process.cwd(), filePath);
+          errors.push(
+            `${relPath}:${i + 1}: bash wrapping bug — 'with description' inside code block ` +
+            `(block starts at line ${blockStartLine})`
+          );
+        }
+      }
+    }
+  }
+
+  return errors;
+}
+
+test('CLEAN-03: no bash commands contain "with description" suffix inside code blocks', t => {
+  const commandDirs = [
+    path.join(__dirname, '../../.claude/commands/ant'),
+    path.join(__dirname, '../../.opencode/commands/ant'),
+  ];
+
+  const errors = findBashWrappingBug(commandDirs);
+
+  t.deepEqual(
+    errors,
+    [],
+    `Found bash wrapping bug pattern in command files:\n  - ${errors.join('\n  - ')}\n\n` +
+    'The description should be in instruction prose ABOVE the bash block, not inside it.'
+  );
+});

@@ -9,18 +9,18 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ## Current Position
 
-Phase: 30 of 31 (Niche Agents) — COMPLETE
-Plan: 3 of 3 complete (30-01, 30-02, 30-03 done)
-Status: Phase 30 complete; Phase 31 is next
-Last activity: 2026-02-20 — 30-03 complete: READ_ONLY_CONSTRAINTS expanded to 8 read-only agents; all 22 agents quality-validated across all 6 tests; Phase 30 done
+Phase: 31 of 31 (Integration Verification Cleanup) — IN PROGRESS
+Plan: 2 of 3 complete (31-01, 31-02 done)
+Status: 31-02 complete; 31-03 is next
+Last activity: 2026-02-20 — 31-02 complete: docs curated to 8 files, repo-structure.md created, README.md updated for v2.0
 
 Progress: [████████░░] 77% (26/31 phases complete through v1.4)
 
 ## Performance Metrics
 
 **Cumulative:**
-- Total plans completed: 79 (v1.0: 27, v1.1: 13, v1.2: 18, v1.3: 12, v1.4: 2, v2.0: 7)
-- Total requirements validated: 130 (v1.0: 46, v1.1: 14, v1.2: 24, v1.3: 24, v1.4: 1 partial, v2.0: 21 requirements)
+- Total plans completed: 80 (v1.0: 27, v1.1: 13, v1.2: 18, v1.3: 12, v1.4: 2, v2.0: 8)
+- Total requirements validated: 133 (v1.0: 46, v1.1: 14, v1.2: 24, v1.3: 24, v1.4: 1 partial, v2.0: 24 requirements)
 - Total tests: ~421 passing (421 AVA + 9 bash skipped); all 22 agents fully quality-validated
 
 ## Accumulated Context
@@ -59,6 +59,8 @@ Progress: [████████░░] 77% (26/31 phases complete through v1
 - [Phase 30]: 30-01: Includer always includes analysis_method: 'manual static analysis' and documents runtime testing gaps explicitly
 - [Phase 30]: 30-01: Archaeologist primary deliverable is regression_risks array — regression prevention framing leads execution_flow
 - [Phase 30]: 30-03: READ_ONLY_CONSTRAINTS expanded to 8 agents — Gatekeeper and Includer confirmed in most restrictive tier (no Bash)
+- [Phase 31]: 31-02: Archive pattern for historical docs — move to archive/ subdirectory, not delete
+- [Phase 31]: 31-02: Castes organized by tier (Core, Orchestration, Specialists, Niche) for README clarity
 
 ### Key Findings from Research
 - Subagents cannot spawn other subagents — strip all spawn calls from every converted agent
@@ -74,5 +76,5 @@ Progress: [████████░░] 77% (26/31 phases complete through v1
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: Completed 30-03-PLAN.md (Phase 30 done — all 22 agents quality-validated, READ_ONLY_CONSTRAINTS covers all 8 read-only agents)
-Next step: Proceed to Phase 31 (v2.0 cleanup)
+Stopped at: Completed 31-02-PLAN.md (docs curated, repo-structure.md created, README.md updated for v2.0)
+Next step: Proceed to 31-03 (final cleanup tasks)

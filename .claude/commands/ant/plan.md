@@ -19,7 +19,7 @@ If `visual_mode` is true:
 plan_id="plan-$(date +%s)"
 
 # Initialize swarm display (consolidated)
-bash .aether/aether-utils.sh swarm-display-init "$plan_id" && bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "Generating colony plan" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0 with description "Initializing planning display..."
+bash .aether/aether-utils.sh swarm-display-init "$plan_id" && bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "Generating colony plan" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0
 ```
 
 ### Step 0.5: Version Check (Non-blocking)
@@ -116,7 +116,7 @@ Gaps: (analyzing...)
 
 Log start:
 ```bash
-bash .aether/aether-utils.sh activity-log "PLAN_START" "queen" "Iterative planning loop initiated for goal" with description "Logging planning start..."
+bash .aether/aether-utils.sh activity-log "PLAN_START" "queen" "Iterative planning loop initiated for goal"
 ```
 
 ### Step 3.5: Load Territory Survey
@@ -269,7 +269,7 @@ while iteration < 4 AND confidence < 80:
     # Wait for scout to complete.
     # Update gaps list from scout results.
 
-    Log: `bash .aether/aether-utils.sh activity-log "RESEARCH" "scout" "Iteration {iteration}: {scout.findings.length} findings, {scout.gaps_remaining.length} gaps" with description "Logging research findings..."`
+    Log: `bash .aether/aether-utils.sh activity-log "RESEARCH" "scout" "Iteration {iteration}: {scout.findings.length} findings, {scout.gaps_remaining.length} gaps"`
 
     # === PLANNING PHASE (always runs — 1 planner per iteration) ===
 
@@ -383,7 +383,7 @@ while iteration < 4 AND confidence < 80:
 
     Parse planning results. Update plan_draft and confidence.
 
-    Log: `bash .aether/aether-utils.sh activity-log "PLANNING" "route-setter" "Confidence: {confidence}% (+{delta}%)" with description "Logging planning progress..."`
+    Log: `bash .aether/aether-utils.sh activity-log "PLANNING" "route-setter" "Confidence: {confidence}% (+{delta}%)"`
 
     # === UPDATE WATCH FILES ===
 
@@ -428,10 +428,10 @@ Write COLONY_STATE.json.
 
 Validate the state file:
 ```bash
-bash .aether/aether-utils.sh validate-state colony with description "Validating colony state..."
+bash .aether/aether-utils.sh validate-state colony
 ```
 
-Log: `bash .aether/aether-utils.sh activity-log "PLAN_COMPLETE" "queen" "Plan finalized with {confidence}% confidence" with description "Logging plan completion..."`
+Log: `bash .aether/aether-utils.sh activity-log "PLAN_COMPLETE" "queen" "Plan finalized with {confidence}% confidence"`
 
 Update watch-status.txt:
 ```
@@ -450,14 +450,14 @@ Ready to build.
 Update the session tracking file to enable `/ant:resume` after context clear:
 
 ```bash
-bash .aether/aether-utils.sh session-update "/ant:plan" "/ant:build 1" "Plan generated with {confidence}% confidence, {N} phases" with description "Saving planning session..."
+bash .aether/aether-utils.sh session-update "/ant:plan" "/ant:build 1" "Plan generated with {confidence}% confidence, {N} phases"
 ```
 
 ### Step 7: Display Plan
 
 **If visual_mode is true, render final swarm display (consolidated):**
 ```bash
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Plan generated" "Colony" '{"read":8,"grep":4,"edit":2,"bash":1}' 100 "fungus_garden" 100 && bash .aether/aether-utils.sh swarm-display-text "$plan_id" with description "Rendering plan display..."
+bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Plan generated" "Colony" '{"read":8,"grep":4,"edit":2,"bash":1}' 100 "fungus_garden" 100 && bash .aether/aether-utils.sh swarm-display-text "$plan_id"
 ```
 
 Read `plan.phases` from COLONY_STATE.json and display:
@@ -499,7 +499,7 @@ Read `plan.phases` from COLONY_STATE.json and display:
 
 Status icons: pending = `[ ]`, in_progress = `[~]`, completed = `[✓]`
 
-After displaying the plan, generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":
+After displaying the plan, generate the state-based Next Up block:
 ```bash
 state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
 current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
