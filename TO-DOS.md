@@ -6,18 +6,6 @@ Pending work items for Aether development.
 
 ## Urgent
 
-### BUG: Build checkpoint stashes user data - 2026-02-13
-
-The build checkpoint system uses `git stash` on ALL dirty files, including user work. During a previous session, this nearly lost 1145 lines of uncommitted content.
-
-**Fix:** The checkpoint system must ONLY touch files on an explicit allowlist. Never stash anything outside that list.
-
-**Safe to modify:** `.aether/*.md`, `.aether/aether-utils.sh`, `.aether/docs/`, `.claude/commands/ant/`, `.opencode/`, `bin/cli.js`
-
-**Never touch:** `.aether/data/`, `.aether/dreams/`, `.aether/oracle/`, `TO-DOS.md`, `COLONY_STATE.json`, flags, learnings, constraints
-
----
-
 ### Deprecate old 2.x npm versions - 2026-02-12
 
 npm registry has stale 2.x pre-release versions visible on the npm page.
