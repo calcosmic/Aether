@@ -9,16 +9,16 @@ See: .planning/PROJECT.md (updated 2026-02-19)
 
 ## Current Position
 
-Phase: 23 of 25 — Agent Resilience
+Phase: 24 of 25 — Template Integration
 Plan: 02 of 03 (COMPLETE)
-Status: Phase 23 Plan 02 Complete
-Last activity: 2026-02-19 — Completed 23-02: added resilience sections to 4 MEDIUM-risk, 9 LOW-risk, and 4 surveyor agents (17 total, 51 sections)
+Status: Phase 24 Plan 02 Complete
+Last activity: 2026-02-20 — Completed 24-02: wired seal.md and entomb.md (both platforms) to templates, refreshed ceremony templates with triumphant/reflective voices
 
 ## Performance Metrics
 
 **Cumulative:**
-- Total plans completed: 67 (v1.0: 27, v1.1: 13, v1.2: 18, v1.3: 9)
-- Total requirements: 93 validated (v1.0: 46, v1.1: 14, v1.2: 24, v1.3: 9)
+- Total plans completed: 68 (v1.0: 27, v1.1: 13, v1.2: 18, v1.3: 10)
+- Total requirements: 96 validated (v1.0: 46, v1.1: 14, v1.2: 24, v1.3: 12)
 - v1.3 target: 24 requirements across 6 phases
 - Total tests: 446 passing (415 AVA + 31 bash), 0 failures
 
@@ -53,6 +53,9 @@ Last activity: 2026-02-19 — Completed 23-02: added resilience sections to 4 ME
 - [Phase 23-02]: LOW-risk sections kept concise (5-10 lines) — role is investigation-only, key rule is no-writes
 - [Phase 23-02]: Surveyor success_criteria extended in-place with Self-Check + Completion Report headings, not replaced
 - [Phase 23-02]: Archaeologist/chaos existing laws reinforced with back-reference in new read_only section
+- [Phase 24-template-integration]: OpenCode entomb normalized to reset memory fields via jq template — matches Claude Code, wisdom already promoted to QUEEN.md before reset
+- [Phase 24-template-integration]: Ceremony templates have distinct voices: crowned-anthill = triumphant, handoff = reflective
+- [Phase 24-template-integration]: OpenCode seal.md had no CROWNED-ANTHILL.md write step — only HANDOFF heredoc wired to template
 
 ### Key Findings from Research
 - 7 research docs analyzed (agent architecture, template system, team coordination, distribution chain)
@@ -67,6 +70,6 @@ Last activity: 2026-02-19 — Completed 23-02: added resilience sections to 4 ME
 
 ## Session Continuity
 
-Last session: 2026-02-19T23:16:16Z
-Stopped at: Completed 23-02-PLAN.md
-Next step: Execute Phase 23 plan 03
+Last session: 2026-02-20T00:05:08Z
+Stopped at: Completed 24-02-PLAN.md
+Next step: Execute Phase 24 plan 03
