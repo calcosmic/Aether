@@ -611,7 +611,7 @@ case "$cmd" in
     cat <<'HELP_EOF'
 {
   "ok": true,
-  "commands": ["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","learning-observe","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-display-text","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","survey-load","survey-verify","pheromone-export","pheromone-write","pheromone-count","pheromone-read","instinct-read","pheromone-prime","pheromone-expire","eternal-init","pheromone-export-xml","pheromone-import-xml","pheromone-validate-xml","wisdom-export-xml","wisdom-import-xml","registry-export-xml","registry-import-xml","force-unlock"],
+  "commands": ["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","learning-observe","learning-check-promotion","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-display-text","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","survey-load","survey-verify","pheromone-export","pheromone-write","pheromone-count","pheromone-read","instinct-read","pheromone-prime","pheromone-expire","eternal-init","pheromone-export-xml","pheromone-import-xml","pheromone-validate-xml","wisdom-export-xml","wisdom-import-xml","registry-export-xml","registry-import-xml","force-unlock"],
   "sections": {
     "Core": [
       {"name": "help", "description": "List all available commands with sections"},
@@ -626,7 +626,8 @@ case "$cmd" in
       {"name": "queen-init", "description": "Initialize a new colony QUEEN.md from template"},
       {"name": "queen-read", "description": "Read QUEEN.md wisdom as JSON for worker priming"},
       {"name": "queen-promote", "description": "Promote a validated learning to QUEEN.md wisdom"},
-      {"name": "learning-observe", "description": "Record observation of a learning across colonies"}
+      {"name": "learning-observe", "description": "Record observation of a learning across colonies"},
+      {"name": "learning-check-promotion", "description": "Check which learnings meet promotion thresholds"}
     ],
     "Model Routing": [
       {"name": "model-profile", "description": "Manage caste-to-model assignments"},
@@ -3928,6 +3929,60 @@ ${entry}" "$queen_file" > "$tmp_file"
         colonies: $colonies,
         is_new: $is_new
       }')
+
+    json_ok "$result"
+    ;;
+
+  learning-check-promotion)
+    # Check which learnings meet promotion thresholds
+    # Usage: learning-check-promotion [path_to_observations_file]
+    # Returns: JSON array of proposals meeting thresholds
+    observations_file="${1:-$DATA_DIR/learning-observations.json}"
+
+    # Default to empty file path if not provided and data dir doesn't exist
+    if [[ -z "${1:-}" ]] && [[ ! -d "$DATA_DIR" ]]; then
+      observations_file=""
+    fi
+
+    # If file doesn't exist or is empty, return empty proposals
+    if [[ -z "$observations_file" ]] || [[ ! -f "$observations_file" ]]; then
+      json_ok '{"proposals":[]}'
+      exit 0
+    fi
+
+    # Validate JSON structure
+    if ! jq -e . "$observations_file" >/dev/null 2>&1; then
+      json_err "$E_JSON_INVALID" "learning-observations.json has invalid JSON"
+    fi
+
+    # Build proposals array using jq
+    # Define thresholds per wisdom type (META-01):
+    # philosophy: 5, pattern: 3, redirect: 2, stack: 1, decree: 0
+    result=$(jq '
+      def get_threshold(type):
+        if type == "philosophy" then 5
+        elif type == "pattern" then 3
+        elif type == "redirect" then 2
+        elif type == "stack" then 1
+        elif type == "decree" then 0
+        else 1
+        end;
+
+      {
+        proposals: [
+          .observations[] |
+          select(.observation_count >= get_threshold(.wisdom_type)) |
+          {
+            content: .content,
+            wisdom_type: .wisdom_type,
+            observation_count: .observation_count,
+            threshold: get_threshold(.wisdom_type),
+            colonies: .colonies,
+            ready: true
+          }
+        ]
+      }
+    ' "$observations_file" 2>/dev/null || echo '{"proposals":[]}')
 
     json_ok "$result"
     ;;
