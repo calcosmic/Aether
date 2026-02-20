@@ -50,12 +50,12 @@ If no active signals after filtering:
   (no active pheromones)
 ```
 
-### Step 3: Spawn Archivist (Architect-Ant)
+### Step 3: Spawn Archivist (Keeper-Ant)
 
-Read `.aether/workers.md` and extract the `## Architect` section.
+Read `.aether/workers.md` and extract the `## Keeper` section.
 
 Spawn via **Task tool** with `subagent_type="general-purpose"`:
-# NOTE: Claude Code uses aether-architect; OpenCode uses general-purpose with role injection
+# NOTE: Claude Code uses aether-keeper; OpenCode uses general-purpose with role injection
 
 ```
 --- WORKER SPEC ---
@@ -171,7 +171,7 @@ CONSTRAINTS:
 
 ### Step 4: Display Report
 
-After the architect-ant returns, display header:
+After the keeper-ant returns, display header:
 
 ```
 🧹🐜🏛️🐜🧹 ═══════════════════════════════════════════════════
@@ -187,7 +187,7 @@ bash -c 'printf "\e[37m|  CODEBASE HYGIENE REPORT                            |\e
 bash -c 'printf "\e[37m+=====================================================+\e[0m\n\n"'
 ```
 
-Then display the architect-ant's full report verbatim.
+Then display the keeper-ant's full report verbatim.
 
 ### Step 5: Persist Report
 

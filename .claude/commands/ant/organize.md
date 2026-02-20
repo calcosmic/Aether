@@ -44,12 +44,12 @@ If no active signals after filtering:
   (no active pheromones)
 ```
 
-### Step 3: Spawn Archivist (Architect-Ant)
+### Step 3: Spawn Archivist (Keeper-Ant)
 
-Read `.aether/workers.md` and extract the `## Architect` section.
+Read `.aether/workers.md` and extract the `## Keeper` section.
 
-Spawn via **Task tool** with `subagent_type="aether-architect"`:
-# FALLBACK: If "Agent type not found", use general-purpose and inject role: "You are an Architect Ant - synthesizes knowledge and coordinates documentation."
+Spawn via **Task tool** with `subagent_type="aether-keeper"`:
+# FALLBACK: If "Agent type not found", use general-purpose and inject role: "You are a Keeper Ant - curates knowledge and synthesizes patterns."
 
 ```
 --- WORKER SPEC ---
@@ -165,7 +165,7 @@ CONSTRAINTS:
 
 ### Step 4: Display Report
 
-After the architect-ant returns, display header:
+After the keeper-ant returns, display header:
 
 ```
 🧹🐜🏛️🐜🧹 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -180,7 +180,7 @@ bash -c 'printf "   C O D E B A S E   H Y G I E N E   R E P O R T\n"'
 bash -c 'printf "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"'
 ```
 
-Then display the architect-ant's full report verbatim.
+Then display the keeper-ant's full report verbatim.
 
 ### Step 5: Persist Report
 
