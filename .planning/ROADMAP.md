@@ -57,16 +57,40 @@
 
 **24 requirements across 6 phases:**
 
-- [ ] Phase 20: Distribution Simplification (PIPE-01 through PIPE-03) — eliminate runtime/ staging, simplify build pipeline
+- [x] Phase 20: Distribution Simplification (PIPE-01 through PIPE-03) — eliminate runtime/ staging, simplify build pipeline (completed 2026-02-19)
   Plans:
   - [ ] 20-01-PLAN.md — Core pipeline restructure (packaging, cli.js, update-transaction.js, delete runtime/)
   - [ ] 20-02-PLAN.md — Pre-commit hook, aether-utils.sh cleanup, bash test updates
   - [ ] 20-03-PLAN.md — Documentation cleanup (CLAUDE.md, OPENCODE.md, rules, CHANGELOG)
-- [ ] Phase 21: Template Foundation (TMPL-01 through TMPL-06) — extract 5 critical templates, add to distribution
-- [ ] Phase 22: Agent Boilerplate Cleanup (AGENT-01 through AGENT-04) — strip redundant sections from all 25 agents
-- [ ] Phase 23: Agent Resilience (RESIL-01 through RESIL-03) — add failure modes, success criteria, read-only declarations
-- [ ] Phase 24: Template Integration (WIRE-01 through WIRE-05) — wire commands to read templates instead of inline structures
+- [x] Phase 21: Template Foundation (TMPL-01 through TMPL-06) — extract 5 critical templates, add to distribution (completed 2026-02-19)
+  Plans:
+  - [ ] 21-01-PLAN.md — Create JSON templates (colony-state, constraints) and jq reset filter
+  - [ ] 21-02-PLAN.md — Create markdown templates (crowned-anthill, handoff)
+  - [ ] 21-03-PLAN.md — Register templates in validate-package.sh, verify distribution
+- [x] Phase 22: Agent Boilerplate Cleanup (AGENT-01 through AGENT-04) — strip redundant sections from all 25 agents (completed 2026-02-19)
+  **Plans:** 3 plans
+  Plans:
+  - [ ] 22-01-PLAN.md — Strip boilerplate from Core 5 and Development 4 agents (9 agents)
+  - [ ] 22-02-PLAN.md — Strip boilerplate from Knowledge 4 and Quality 4 agents (8 agents)
+  - [ ] 22-03-PLAN.md — Strip boilerplate from Special 3 agents and update Surveyor 4 descriptions (7 agents)
+- [x] Phase 23: Agent Resilience (RESIL-01 through RESIL-03) — add failure modes, success criteria, read-only declarations (completed 2026-02-19)
+  **Plans:** 3 plans
+  Plans:
+  - [ ] 23-01-PLAN.md — Add resilience sections to 7 HIGH-risk agents (queen, builder, watcher, weaver, route-setter, ambassador, tracker)
+  - [ ] 23-02-PLAN.md — Add resilience sections to 17 MEDIUM + LOW-risk agents and surveyors
+  - [ ] 23-03-PLAN.md — Add resilience blocks to 6 high-risk slash commands (init, build, lay-eggs, seal, entomb, colonize)
+- [x] Phase 24: Template Integration (WIRE-01 through WIRE-05) — wire commands to read templates instead of inline structures (completed 2026-02-20)
+  **Plans:** 3 plans
+  Plans:
+  - [ ] 24-01-PLAN.md — Wire init.md (both platforms) to colony-state and constraints templates
+  - [ ] 24-02-PLAN.md — Wire seal.md and entomb.md (both platforms) to ceremony and handoff templates
+  - [ ] 24-03-PLAN.md — Create build HANDOFF templates and wire build.md (both platforms)
 - [ ] Phase 25: Queen Coordination (COORD-01 through COORD-04) — escalation chain, workflow patterns, agent merges
+  **Plans:** 3 plans
+  Plans:
+  - [ ] 25-01-PLAN.md — Queen rewrite: 4-tier escalation chain + 6 named workflow patterns + build/status wiring
+  - [ ] 25-02-PLAN.md — Agent merges: Architect→Keeper, Guardian→Auditor, delete old files, update spawn refs
+  - [ ] 25-03-PLAN.md — Count cleanup: update all "25 agents" refs to "23", annotate caste-system.md and workers.md
 
 ## Progress
 
@@ -91,12 +115,12 @@
 | 17. Error Code Standardization | v1.2 | 3/3 | Complete | 2026-02-19 |
 | 18. Reliability & Architecture Gaps | v1.2 | 4/4 | Complete | 2026-02-19 |
 | 19. Milestone Polish | v1.2 | 4/4 | Complete | 2026-02-19 |
-| 20. Distribution Simplification | v1.3 | 0/3 | Planned | — |
-| 21. Template Foundation | v1.3 | 0/? | Pending | — |
-| 22. Agent Boilerplate Cleanup | v1.3 | 0/? | Pending | — |
-| 23. Agent Resilience | v1.3 | 0/? | Pending | — |
-| 24. Template Integration | v1.3 | 0/? | Pending | — |
-| 25. Queen Coordination | v1.3 | 0/? | Pending | — |
+| 20. Distribution Simplification | v1.3 | Complete    | 2026-02-19 | — |
+| 21. Template Foundation | v1.3 | Complete    | 2026-02-19 | — |
+| 22. Agent Boilerplate Cleanup | v1.3 | Complete    | 2026-02-19 | — |
+| 23. Agent Resilience | v1.3 | Complete    | 2026-02-19 | — |
+| 24. Template Integration | v1.3 | Complete    | 2026-02-20 | — |
+| 25. Queen Coordination | v1.3 | 0/3 | Pending | — |
 
 ---
 
