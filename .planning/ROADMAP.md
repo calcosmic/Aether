@@ -8,6 +8,7 @@
 - ✅ **v1.3 The Great Restructuring** — Phases 20-25 (shipped 2026-02-20)
 - ✅ **v1.4 Deep Cleanup (partial)** — Phase 26 (shipped 2026-02-20)
 - ✅ **v2.0 Worker Emergence** — Phases 27-31 (shipped 2026-02-20)
+- 🔄 **v3.0 Wisdom & Pheromone Evolution** — Phases 32-35 (in progress)
 
 ## Phases
 
@@ -90,6 +91,21 @@
 
 </details>
 
+<details>
+<summary>🔄 v3.0 Wisdom & Pheromone Evolution (Phases 32-35) — IN PROGRESS</summary>
+
+- [ ] Phase 32: Wire QUEEN.md into Commands (3 plans)
+  - [ ] 32-01-PLAN.md — Create colony-prime() function, implement two-level loading
+  - [ ] 32-02-PLAN.md — Update build.md to use colony-prime() instead of 3 calls
+  - [ ] 32-03-PLAN.md — Verify init.md creates QUEEN.md, verify template structure
+- [ ] Phase 33: Add Promotion Proposals — observation tracking, learning-observe function, continue.md displays proposals
+- [ ] Phase 34: Add User Approval UX — tick-to-approve, threshold enforcement, queen-promote on approval
+- [ ] Phase 35: Lifecycle Integration — seal.md final check, entomb.md wisdom extraction
+
+**25 requirements defined. Research complete. Ready for execution.**
+
+</details>
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -116,15 +132,19 @@
 | 20. Distribution Simplification | v1.3 | Complete | 2026-02-19 | — |
 | 21. Template Foundation | v1.3 | Complete | 2026-02-19 | — |
 | 22. Agent Boilerplate Cleanup | v1.3 | Complete | 2026-02-19 | — |
-| 23. Agent Resilience | v1.3 | Complete | 2026-02-19 | — |
+| 23. Agent Resilience | v1.3 | Complete | 2026-02-20 | — |
 | 24. Template Integration | v1.3 | Complete | 2026-02-20 | — |
 | 25. Queen Coordination | v1.3 | Complete | 2026-02-20 | — |
 | 26. Audit & Delete Dead Files | v1.4 | Complete | 2026-02-20 | — |
 | 27. Distribution Infrastructure + First Core Agents | v2.0 | 4/4 | Complete | 2026-02-20 |
-| 28. Orchestration Layer + Surveyor Variants | v2.0 | Complete    | 2026-02-20 | - |
-| 29. Specialist Agents + Agent Tests | v2.0 | Complete    | 2026-02-20 | - |
-| 30. Niche Agents | v2.0 | Complete    | 2026-02-20 | - |
+| 28. Orchestration Layer + Surveyor Variants | v2.0 | Complete | 2026-02-20 | - |
+| 29. Specialist Agents + Agent Tests | v2.0 | Complete | 2026-02-20 | - |
+| 30. Niche Agents | v2.0 | Complete | 2026-02-20 | - |
 | 31. Integration Verification + Cleanup | v2.0 | 3/3 | Complete | 2026-02-20 |
+| 32. Wire QUEEN.md into Commands | v3.0 | 0/3 | Pending | — |
+| 33. Add Promotion Proposals | v3.0 | 0/4 | Pending | — |
+| 34. Add User Approval UX | v3.0 | 0/3 | Pending | — |
+| 35. Lifecycle Integration | v3.0 | 0/2 | Pending | — |
 
 ---
 

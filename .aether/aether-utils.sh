@@ -3418,21 +3418,116 @@ ANTLOGO
 
   queen-read)
     # Read QUEEN.md and return wisdom as JSON for worker priming
-    # Extracts METADATA block and sections for colony guidance
-    queen_file="$AETHER_ROOT/.aether/docs/QUEEN.md"
+    # Supports two-level loading: global (~/.aether/QUEEN.md) first, then local (.aether/docs/QUEEN.md)
+    # Local wisdom extends/global - entries are combined per category
 
-    # Check if QUEEN.md exists
-    if [[ ! -f "$queen_file" ]]; then
-      json_err "$E_FILE_NOT_FOUND" "QUEEN.md not found" '{"path":".aether/docs/QUEEN.md"}'
+    queen_global="$HOME/.aether/QUEEN.md"
+    queen_local="$AETHER_ROOT/.aether/docs/QUEEN.md"
+
+    # Track which files exist
+    has_global=false
+    has_local=false
+
+    # Check for global QUEEN.md
+    if [[ -f "$queen_global" ]]; then
+      has_global=true
+    fi
+
+    # Check for local QUEEN.md
+    if [[ -f "$queen_local" ]]; then
+      has_local=true
+    fi
+
+    # FAIL HARD if no QUEEN.md found at all
+    if [[ "$has_global" == "false" && "$has_local" == "false" ]]; then
+      json_err "$E_FILE_NOT_FOUND" "QUEEN.md not found" '{"global_path":"~/.aether/QUEEN.md","local_path":".aether/docs/QUEEN.md"}'
       exit 1
     fi
 
-    # Extract METADATA JSON block (between <!-- METADATA and -->)
-    metadata=$(sed -n '/<!-- METADATA/,/-->/p' "$queen_file" | sed '1d;$d' | tr -d '\n' | sed 's/^[[:space:]]*//')
+    # Helper function to extract wisdom sections from a file
+    # Uses line number approach to avoid macOS awk range issues
+    _extract_wisdom_sections() {
+      local file="$1"
+
+      # Find line numbers for each section
+      local p_line=$(awk '/^## 📜 Philosophies$/ {print NR; exit}' "$file")
+      local pat_line=$(awk '/^## 🧭 Patterns$/ {print NR; exit}' "$file")
+      local red_line=$(awk '/^## ⚠️ Redirects$/ {print NR; exit}' "$file")
+      local stack_line=$(awk '/^## 🔧 Stack Wisdom$/ {print NR; exit}' "$file")
+      local dec_line=$(awk '/^## 🏛️ Decrees$/ {print NR; exit}' "$file")
+      local evo_line=$(awk '/^## 📊 Evolution Log$/ {print NR; exit}' "$file")
+
+      # Extract each section: lines between section header and next header
+      local philosophies patterns redirects stack_wisdom decrees
+
+      # Philosophies: between p_line+1 and pat_line-1
+      philosophies=$(awk -v s="$p_line" -v e="$pat_line" 'NR > s && NR < e {print}' "$file" | sed '/^$/d' | jq -Rs '.' 2>/dev/null || echo '""')
+
+      # Patterns: between pat_line+1 and red_line-1
+      patterns=$(awk -v s="$pat_line" -v e="$red_line" 'NR > s && NR < e {print}' "$file" | sed '/^$/d' | jq -Rs '.' 2>/dev/null || echo '""')
+
+      # Redirects: between red_line+1 and stack_line-1
+      redirects=$(awk -v s="$red_line" -v e="$stack_line" 'NR > s && NR < e {print}' "$file" | sed '/^$/d' | jq -Rs '.' 2>/dev/null || echo '""')
+
+      # Stack Wisdom: between stack_line+1 and dec_line-1
+      stack_wisdom=$(awk -v s="$stack_line" -v e="$dec_line" 'NR > s && NR < e {print}' "$file" | sed '/^$/d' | jq -Rs '.' 2>/dev/null || echo '""')
+
+      # Decrees: between dec_line+1 and (evo_line-1 or end)
+      decrees=$(awk -v s="$dec_line" -v e="${evo_line:-999999}" 'NR > s && NR < e {print}' "$file" | sed '/^$/d' | jq -Rs '.' 2>/dev/null || echo '""')
+
+      # Output as JSON
+      jq -n \
+        --arg philosophies "$philosophies" \
+        --arg patterns "$patterns" \
+        --arg redirects "$redirects" \
+        --arg stack_wisdom "$stack_wisdom" \
+        --arg decrees "$decrees" \
+        '{philosophies: $philosophies, patterns: $patterns, redirects: $redirects, stack_wisdom: $stack_wisdom, decrees: $decrees}'
+    }
+
+    # Extract wisdom from global (if exists)
+    global_wisdom='{"philosophies":"","patterns":"","redirects":"","stack_wisdom":"","decrees":""}'
+    if [[ "$has_global" == "true" ]]; then
+      global_wisdom=$(_extract_wisdom_sections "$queen_global")
+    fi
+
+    # Extract wisdom from local (if exists)
+    local_wisdom='{"philosophies":"","patterns":"","redirects":"","stack_wisdom":"","decrees":""}'
+    if [[ "$has_local" == "true" ]]; then
+      local_wisdom=$(_extract_wisdom_sections "$queen_local")
+    fi
+
+    # Combine wisdom: local extends global - content appended
+    combined=$(jq -n \
+      --argjson global "$global_wisdom" \
+      --argjson local "$local_wisdom" \
+      '
+      def combine(a; b):
+        if a == "" or a == null then b
+        elif b == "" or b == null then a
+        else a + "\n" + b
+        end;
+
+      {
+        philosophies: combine($global.philosophies; $local.philosophies),
+        patterns: combine($global.patterns; $local.patterns),
+        redirects: combine($global.redirects; $local.redirects),
+        stack_wisdom: combine($global.stack_wisdom; $local.stack_wisdom),
+        decrees: combine($global.decrees; $local.decrees)
+      }
+      ')
+
+    # Get metadata from local (preferred) or global
+    metadata='{"version":"unknown","last_evolved":null,"source":"none"}'
+    if [[ "$has_local" == "true" ]]; then
+      metadata=$(sed -n '/<!-- METADATA/,/-->/p' "$queen_local" | sed '1d;$d' | tr -d '\n' | sed 's/^[[:space:]]*//')
+    elif [[ "$has_global" == "true" ]]; then
+      metadata=$(sed -n '/<!-- METADATA/,/-->/p' "$queen_global" | sed '1d;$d' | tr -d '\n' | sed 's/^[[:space:]]*//')
+    fi
 
     # If no metadata found, return empty structure
     if [[ -z "$metadata" ]]; then
-      metadata='{"version":"unknown","last_evolved":null,"colonies_contributed":[],"promotion_thresholds":{},"stats":{}}'
+      metadata='{"version":"unknown","last_evolved":null,"source":"none","stats":{}}'
     fi
 
     # Gate 1: Validate metadata is parseable JSON BEFORE using as --argjson
@@ -3441,13 +3536,12 @@ ANTLOGO
         "QUEEN.md has a malformed METADATA block — the JSON between <!-- METADATA and --> is invalid. Try: fix the JSON in .aether/docs/QUEEN.md or run queen-init to reset."
     fi
 
-    # Extract sections content for worker priming
-    # Use awk to parse markdown sections - remove header line and trailing section header
-    philosophies=$(awk '/^## 📜 Philosophies$/,/^## /' "$queen_file" | tail -n +2 | sed '$d' | sed '/^$/d' | jq -Rs '.')
-    patterns=$(awk '/^## 🧭 Patterns$/,/^## /' "$queen_file" | tail -n +2 | sed '$d' | sed '/^$/d' | jq -Rs '.')
-    redirects=$(awk '/^## ⚠️ Redirects$/,/^## /' "$queen_file" | tail -n +2 | sed '$d' | sed '/^$/d' | jq -Rs '.')
-    stack_wisdom=$(awk '/^## 🔧 Stack Wisdom$/,/^## /' "$queen_file" | tail -n +2 | sed '$d' | sed '/^$/d' | jq -Rs '.')
-    decrees=$(awk '/^## 🏛️ Decrees$/,/^## /' "$queen_file" | tail -n +2 | sed '$d' | sed '/^$/d' | jq -Rs '.')
+    # Extract individual combined wisdom values
+    philosophies=$(echo "$combined" | jq -r '.philosophies')
+    patterns=$(echo "$combined" | jq -r '.patterns')
+    redirects=$(echo "$combined" | jq -r '.redirects')
+    stack_wisdom=$(echo "$combined" | jq -r '.stack_wisdom')
+    decrees=$(echo "$combined" | jq -r '.decrees')
 
     # Build JSON output
     result=$(jq -n \
@@ -3472,6 +3566,10 @@ ANTLOGO
           has_redirects: ($redirects | length) > 0 and $redirects != "*No redirects recorded yet.*\n",
           has_stack_wisdom: ($stack_wisdom | length) > 0 and $stack_wisdom != "*No stack wisdom recorded yet.*\n",
           has_decrees: ($decrees | length) > 0 and $decrees != "*No decrees recorded yet.*\n"
+        },
+        sources: {
+          has_global: ($meta.source == "global" or $meta.source == "local"),
+          has_local: ($meta.source == "local")
         }
       }')
 
@@ -4581,6 +4679,210 @@ ${entry}" "$queen_file" > "$tmp_file"
     pp_log_json=$(printf '%s' "$pp_log_line" | jq -Rs '.' 2>/dev/null || echo '"Primed: 0 signals, 0 instincts"')
 
     json_ok "{\"signal_count\":$pp_signal_count,\"instinct_count\":$pp_instinct_count,\"prompt_section\":$pp_section_json,\"log_line\":$pp_log_json}"
+    ;;
+
+  colony-prime)
+    # Unified colony priming: combines wisdom (QUEEN.md) + signals + instincts into single output
+    # Usage: colony-prime
+    # Returns: JSON with wisdom, signals, prompt_section
+    # Error handling: QUEEN.md missing = FAIL HARD; pheromones.json missing = warn but continue
+
+    cp_global_queen="$HOME/.aether/QUEEN.md"
+    cp_local_queen="$AETHER_ROOT/.aether/docs/QUEEN.md"
+
+    # Track if we have any QUEEN.md
+    cp_has_global=false
+    cp_has_local=false
+    cp_wisdom_json='{}'
+
+    # Initialize empty wisdom objects (used if file doesn't exist)
+    cp_global_wisdom='{" philosophies":"","patterns":"","redirects":"","stack_wisdom":"","decrees":""}'
+    cp_local_wisdom='{" philosophies":"","patterns":"","redirects":"","stack_wisdom":"","decrees":""}'
+
+    # Helper to extract wisdom sections from a QUEEN.md file
+    # Uses line number approach to avoid macOS awk range issues
+    _extract_wisdom() {
+      local queen_file="$1"
+
+      # Find line numbers for each section
+      local p_line=$(awk '/^## 📜 Philosophies$/ {print NR; exit}' "$queen_file")
+      local pat_line=$(awk '/^## 🧭 Patterns$/ {print NR; exit}' "$queen_file")
+      local red_line=$(awk '/^## ⚠️ Redirects$/ {print NR; exit}' "$queen_file")
+      local stack_line=$(awk '/^## 🔧 Stack Wisdom$/ {print NR; exit}' "$queen_file")
+      local dec_line=$(awk '/^## 🏛️ Decrees$/ {print NR; exit}' "$queen_file")
+      local evo_line=$(awk '/^## 📊 Evolution Log$/ {print NR; exit}' "$queen_file")
+
+      # Extract sections
+      local philosophies patterns redirects stack_wisdom decrees
+
+      philosophies=$(awk -v s="$p_line" -v e="$pat_line" 'NR > s && NR < e {print}' "$queen_file" | sed '/^$/d' | jq -Rs '.' 2>/dev/null || echo '""')
+      patterns=$(awk -v s="$pat_line" -v e="$red_line" 'NR > s && NR < e {print}' "$queen_file" | sed '/^$/d' | jq -Rs '.' 2>/dev/null || echo '""')
+      redirects=$(awk -v s="$red_line" -v e="$stack_line" 'NR > s && NR < e {print}' "$queen_file" | sed '/^$/d' | jq -Rs '.' 2>/dev/null || echo '""')
+      stack_wisdom=$(awk -v s="$stack_line" -v e="$dec_line" 'NR > s && NR < e {print}' "$queen_file" | sed '/^$/d' | jq -Rs '.' 2>/dev/null || echo '""')
+      decrees=$(awk -v s="$dec_line" -v e="${evo_line:-999999}" 'NR > s && NR < e {print}' "$queen_file" | sed '/^$/d' | jq -Rs '.' 2>/dev/null || echo '""')
+
+      # Return empty strings if any extraction failed
+      philosophies=${philosophies:-'""'}
+      patterns=${patterns:-'""'}
+      redirects=${redirects:-'""'}
+      stack_wisdom=${stack_wisdom:-'""'}
+      decrees=${decrees:-'""'}
+
+      # Build JSON directly with already-quoted strings
+      echo "{\"philosophies\":$philosophies,\"patterns\":$patterns,\"redirects\":$redirects,\"stack_wisdom\":$stack_wisdom,\"decrees\":$decrees}"
+    }
+
+    # Load global QUEEN.md first (~/.aether/QUEEN.md)
+    if [[ -f "$cp_global_queen" ]]; then
+      cp_has_global=true
+      cp_global_wisdom=$(_extract_wisdom "$cp_global_queen" "g")
+    fi
+
+    # Load local QUEEN.md second (.aether/docs/QUEEN.md)
+    if [[ -f "$cp_local_queen" ]]; then
+      cp_has_local=true
+      cp_local_wisdom=$(_extract_wisdom "$cp_local_queen" "l")
+    fi
+
+    # FAIL HARD if no QUEEN.md found at all
+    if [[ "$cp_has_global" == "false" && "$cp_has_local" == "false" ]]; then
+      json_err "$E_FILE_NOT_FOUND" \
+        "QUEEN.md not found in either ~/.aether/QUEEN.md or .aether/docs/QUEEN.md. Run /ant:init to create a colony." \
+        '{"global_path":"~/.aether/QUEEN.md","local_path":".aether/docs/QUEEN.md"}'
+      exit 1
+    fi
+
+    # Combine wisdom from both levels - local extends global
+    # Each section: global content first, then local content (if exists)
+    cp_combined=$(jq -n \
+      --argjson global "$cp_global_wisdom" \
+      --argjson local "$cp_local_wisdom" \
+      '
+      def combine(a; b):
+        if a == "" or a == null then b
+        elif b == "" or b == null then a
+        else a + "\n" + b
+        end;
+
+      {
+        philosophies: combine($global.philosophies; $local.philosophies),
+        patterns: combine($global.patterns; $local.patterns),
+        redirects: combine($global.redirects; $local.redirects),
+        stack_wisdom: combine($global.stack_wisdom; $local.stack_wisdom),
+        decrees: combine($global.decrees; $local.decrees)
+      }
+      ')
+
+    # Get metadata from local QUEEN.md if exists, otherwise global
+    cp_metadata='{"version":"unknown","last_evolved":null,"source":"none"}'
+    if [[ "$cp_has_local" == "true" ]]; then
+      cp_metadata=$(sed -n '/<!-- METADATA/,/-->/p' "$cp_local_queen" | sed '1d;$d' | tr -d '\n' | sed 's/^[[:space:]]*//')
+      if [[ -n "$cp_metadata" ]] && echo "$cp_metadata" | jq -e . >/dev/null 2>&1; then
+        cp_metadata=$(echo "$cp_metadata" | jq '. + {"source":"local"}' 2>/dev/null || echo "$cp_metadata")
+      else
+        cp_metadata='{"version":"unknown","last_evolved":null,"source":"local","note":"malformed"}'
+      fi
+    elif [[ "$cp_has_global" == "true" ]]; then
+      cp_metadata=$(sed -n '/<!-- METADATA/,/-->/p' "$cp_global_queen" | sed '1d;$d' | tr -d '\n' | sed 's/^[[:space:]]*//')
+      if [[ -n "$cp_metadata" ]] && echo "$cp_metadata" | jq -e . >/dev/null 2>&1; then
+        cp_metadata=$(echo "$cp_metadata" | jq '. + {"source":"global"}' 2>/dev/null || echo "$cp_metadata")
+      else
+        cp_metadata='{"version":"unknown","last_evolved":null,"source":"global","note":"malformed"}'
+      fi
+    fi
+
+    # Now get signals + instincts via pheromone-prime
+    # Trap error: if pheromones.json missing, warn but continue
+    # Call pheromone-prime by re-invoking the script (it's a case branch, not a function)
+    cp_signals_json='{"signal_count":0,"instinct_count":0,"prompt_section":"","log_line":"Primed: no pheromones (file missing)"}'
+    cp_pher_warn=""
+    if [[ -f "$DATA_DIR/pheromones.json" ]]; then
+      cp_signals_json=$("$SCRIPT_DIR/aether-utils.sh" pheromone-prime 2>&1) || true
+    else
+      cp_pher_warn="WARNING: pheromones.json not found - continuing without signals"
+    fi
+
+    # Extract components from pheromone-prime output
+    cp_signal_count=$(echo "$cp_signals_json" | jq -r '.signal_count // 0' 2>/dev/null || echo "0")
+    cp_instinct_count=$(echo "$cp_signals_json" | jq -r '.instinct_count // 0' 2>/dev/null || echo "0")
+    cp_prompt_section=$(echo "$cp_signals_json" | jq -r '.prompt_section // ""' 2>/dev/null || echo "")
+    cp_log_line=$(echo "$cp_signals_json" | jq -r '.log_line: 0 signals, 0 instincts // "Primed"' 2>/dev/null || echo "Primed: 0 signals, 0 instincts")
+
+    # Append warning if pheromones missing
+    if [[ -n "$cp_pher_warn" ]]; then
+      cp_log_line="$cp_log_line; $cp_pher_warn"
+    fi
+
+    # Build prompt_section that combines wisdom + signals
+    cp_final_prompt=""
+
+    # Add wisdom section to prompt if any exists
+    cp_philosophies=$(echo "$cp_combined" | jq -r '.philosophies // ""' 2>/dev/null)
+    cp_patterns=$(echo "$cp_combined" | jq -r '.patterns // ""' 2>/dev/null)
+    cp_redirects=$(echo "$cp_combined" | jq -r '.redirects // ""' 2>/dev/null)
+    cp_stack=$(echo "$cp_combined" | jq -r '.stack_wisdom // ""' 2>/dev/null)
+    cp_decrees=$(echo "$cp_combined" | jq -r '.decrees // ""' 2>/dev/null)
+
+    if [[ -n "$cp_philosophies" || -n "$cp_patterns" || -n "$cp_redirects" || -n "$cp_stack" || -n "$cp_decrees" ]]; then
+      cp_final_prompt+="--- QUEEN WISDOM (Eternal Guidance) ---"$'\n'
+
+      if [[ -n "$cp_philosophies" && "$cp_philosophies" != "null" ]]; then
+        cp_final_prompt+=$'\n'"📜 Philosophies:"$'\n'"$cp_philosophies"$'\n'
+      fi
+      if [[ -n "$cp_patterns" && "$cp_patterns" != "null" ]]; then
+        cp_final_prompt+=$'\n'"🧭 Patterns:"$'\n'"$cp_patterns"$'\n'
+      fi
+      if [[ -n "$cp_redirects" && "$cp_redirects" != "null" ]]; then
+        cp_final_prompt+=$'\n'"⚠️ Redirects (AVOID these):"$'\n'"$cp_redirects"$'\n'
+      fi
+      if [[ -n "$cp_stack" && "$cp_stack" != "null" ]]; then
+        cp_final_prompt+=$'\n'"🔧 Stack Wisdom:"$'\n'"$cp_stack"$'\n'
+      fi
+      if [[ -n "$cp_decrees" && "$cp_decrees" != "null" ]]; then
+        cp_final_prompt+=$'\n'"🏛️ Decrees:"$'\n'"$cp_decrees"$'\n'
+      fi
+
+      cp_final_prompt+=$'\n'"--- END QUEEN WISDOM ---"$'\n'
+    fi
+
+    # Add pheromone signals section
+    if [[ -n "$cp_prompt_section" && "$cp_prompt_section" != "null" ]]; then
+      cp_final_prompt+=$'\n'"$cp_prompt_section"
+    fi
+
+    # Escape for JSON
+    cp_prompt_json=$(printf '%s' "$cp_final_prompt" | jq -Rs '.' 2>/dev/null || echo '""')
+    cp_log_json=$(printf '%s' "$cp_log_line" | jq -Rs '.' 2>/dev/null || echo '"Primed: 0 signals, 0 instincts"')
+
+    # Build final unified output
+    cp_result=$(jq -n \
+      --argjson meta "$cp_metadata" \
+      --argjson wisdom "$cp_combined" \
+      --argjson signals "$cp_signals_json" \
+      --arg prompt "$cp_final_prompt" \
+      --arg prompt_json "$cp_prompt_json" \
+      --arg log "$cp_log_line" \
+      --arg log_json "$cp_log_json" \
+      '{
+        metadata: $meta,
+        wisdom: $wisdom,
+        signals: {
+          signal_count: ($signals.signal_count // 0),
+          instinct_count: ($signals.instinct_count // 0),
+          active_signals: ($signals.prompt_section // "")
+        },
+        prompt_section: $prompt,
+        log_line: $log
+      }')
+
+    # Validate result
+    if [[ -z "$cp_result" ]] || ! echo "$cp_result" | jq -e . >/dev/null 2>&1; then
+      json_err "$E_JSON_INVALID" \
+        "Couldn't assemble colony-prime output" \
+        '{"error":"assembly_failed"}'
+    fi
+
+    json_ok "$cp_result"
     ;;
 
   pheromone-expire)
