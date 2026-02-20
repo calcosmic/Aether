@@ -114,6 +114,14 @@ Extract:
 - Issues count (high, warnings)
 - Notes count (low, informational)
 
+**Escalation state:**
+Count escalated flags by checking for blocker flags with source "escalation":
+
+```bash
+escalated_count=$(bash .aether/aether-utils.sh flag-list --type blocker 2>/dev/null | jq '[.result.flags[] | select(.source == "escalation")] | length' 2>/dev/null || echo "0")
+echo "escalated_count=$escalated_count"
+```
+
 **Instincts:**
 From `memory.instincts`:
 - Total count: `instincts.length`
@@ -156,6 +164,9 @@ Output format:
 🎯 Focus: <focus_count> areas | 🚫 Avoid: <constraints_count> patterns
 🧠 Instincts: <total> learned (<high_confidence> strong)
 🚩 Flags: <blockers> blockers | <issues> issues | <notes> notes
+{if escalated_count > 0:}
+⚠️  Escalated: {escalated_count} task(s) awaiting your decision
+{end if}
 🏆 Milestone: <milestone> (<version>)
 💭 Dreams: <dream_count> recorded (latest: <latest_dream>)
 
