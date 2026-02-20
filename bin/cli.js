@@ -882,7 +882,7 @@ function setupHub() {
       const systemFiles = ['aether-utils.sh', 'workers.md', 'CONTEXT.md', 'model-profiles.yaml',
                           'coding-standards.md', 'debugging.md', 'learning.md', 'planning.md',
                           'tdd.md', 'verification.md', 'verification-loop.md', 'DISCIPLINES.md',
-                          'QUEEN_ANT_ARCHITECTURE.md', 'workers-new-castes.md', 'recover.sh'];
+                          'QUEEN_ANT_ARCHITECTURE.md'];
       const systemDirs = ['docs', 'utils', 'commands', 'agents', 'schemas', 'exchange', 'templates', 'lib'];
 
       for (const file of systemFiles) {
