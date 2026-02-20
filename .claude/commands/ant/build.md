@@ -221,41 +221,29 @@ Output header:
 💾 Git checkpoint saved
 ```
 
-### Step 4: Load Constraints
+### Step 4: Load Colony Context (colony-prime)
 
-Read `.aether/data/constraints.json` if it exists.
+Call `colony-prime` to get unified worker context (wisdom + signals + instincts):
 
-Format for display:
-```
-CONSTRAINTS:
-  FOCUS: {focus areas, comma-separated}
-  AVOID: {patterns to avoid from constraints}
-```
-
-If file doesn't exist or is empty:
-```
-CONSTRAINTS: (none)
-```
-
-**Load pheromone context for worker injection:**
-
-Run using the Bash tool with description "Loading pheromone signals...":
+Run using the Bash tool with description "Loading colony context...":
 ```bash
-prime_result=$(bash .aether/aether-utils.sh pheromone-prime 2>/dev/null)
+prime_result=$(bash .aether/aether-utils.sh colony-prime 2>/dev/null)
 ```
 
-Parse the JSON result from `.result`:
-- Extract `signal_count` (number of active signals)
-- Extract `instinct_count` (number of filtered instincts)
-- Extract `prompt_section` as `pheromone_section` variable — the formatted markdown to inject into worker prompts
-- Extract `log_line` for display
+**Parse the JSON response:**
+- If `.ok` is false: This is a FAIL HARD error - display the error message and stop the build
+- If successful: Extract from `.result`:
+  - `signal_count` - number of active pheromone signals
+  - `instinct_count` - number of filtered instincts
+  - `prompt_section` - the formatted markdown to inject into worker prompts
+  - `log_line` - status message for display
 
 Display after constraints:
 ```
-{log_line from pheromone-prime}
+{log_line from colony-prime}
 ```
 
-If `pheromone-prime` fails, returns an error, or is unavailable: set `pheromone_section` to empty string and continue. **Builds MUST NEVER fail because pheromones are unavailable.**
+**Store for worker injection:** The `prompt_section` variable contains the complete formatted context (QUEEN wisdom + pheromone signals) ready for injection.
 
 ### Step 4.0: Load Territory Survey
 
@@ -304,66 +292,7 @@ bash .aether/aether-utils.sh survey-load "{phase_name}" 2>/dev/null
 - `survey_locations` — where to place files
 - `survey_concerns` — concerns to avoid
 
-### Step 4.1: Load QUEEN.md Wisdom
-
-Call `queen-read` to extract eternal wisdom for worker priming:
-
-Run using the Bash tool with description "Loading queen wisdom...":
-```bash
-bash .aether/aether-utils.sh queen-read 2>/dev/null
-```
-
-**Parse the JSON response:**
-- If `.ok` is false or command fails: Set `queen_wisdom = null` and skip wisdom injection
-- If successful: Extract wisdom sections from `.result.wisdom`
-
-**Store wisdom variables:**
-```
-queen_philosophies = .result.wisdom.philosophies (if .result.priming.has_philosophies)
-queen_patterns = .result.wisdom.patterns (if .result.priming.has_patterns)
-queen_redirects = .result.wisdom.redirects (if .result.priming.has_redirects)
-queen_stack_wisdom = .result.wisdom.stack_wisdom (if .result.priming.has_stack_wisdom)
-queen_decrees = .result.wisdom.decrees (if .result.priming.has_decrees)
-```
-
-**Display summary (if any wisdom exists):**
-```
-━━━ 📜🐜 Q U E E N   W I S D O M ━━━
-{if queen_philosophies:}  📜 Philosophies: yes{/if}
-{if queen_patterns:}  🧭 Patterns: yes{/if}
-{if queen_redirects:}  ⚠️ Redirects: yes{/if}
-{if queen_stack_wisdom:}  🔧 Stack Wisdom: yes{/if}
-{if queen_decrees:}  🏛️ Decrees: yes{/if}
-
-{if none exist:}  (no eternal wisdom recorded yet){/if}
-```
-
-**Graceful handling:** If QUEEN.md doesn't exist or `queen-read` fails, continue without wisdom injection. Workers will receive standard prompts.
-
-### Step 4.1.6: Load Active Pheromones (Signal Consumption)
-
-**This injects current FOCUS and REDIRECT signals into worker context.**
-
-Call `pheromone-read` to get active signals:
-
-```bash
-bash .aether/aether-utils.sh pheromone-read 2>/dev/null
-```
-
-**Parse the JSON response:**
-- If `.ok` is false or command fails: Set `pheromone_section = null` and skip
-- If successful: Extract `.result.priorities` and `.result.avoid`
-
-**Display summary:**
-```
-━━━ 🎯🐜 A C T I V E   S I G N A L S ━━━
-Priorities (FOCUS): {N}
-Constraints (REDIRECT): {M}
-```
-
-**Store for worker injection:** The `pheromone_section` markdown will be included in builder prompts (see Step 5.1 Active Signals Section).
-
-### Step 4.2: Archaeologist Pre-Build Scan
+### Step 4.1: Archaeologist Pre-Build Scan
 
 **Conditional step — only fires when the phase modifies existing files.**
 
@@ -578,13 +507,7 @@ Goal: "{colony_goal}"
 
 { archaeology_context if exists }
 
-{ queen_wisdom_section if any wisdom exists }
-
-{ pheromone_section if pheromone_section is not empty }
-
-{ if pheromone_section is not empty: }
-IMPORTANT: REDIRECT signals above are HARD CONSTRAINTS. You MUST follow them. FOCUS and FEEDBACK are flexible guidance — use your judgment on relevance.
-{ end if }
+{ prompt_section }
 
 **IMPORTANT:** When using the Bash tool for activity calls, always include a description parameter:
 - activity-log calls → "Logging {action}..."
@@ -613,49 +536,6 @@ Count your total tool calls (Read + Grep + Edit + Bash + Write) and report as to
 
 Return ONLY this JSON (no other text):
 {"ant_name": "{Ant-Name}", "task_id": "{id}", "status": "completed|failed|blocked", "summary": "What you did", "tool_count": 0, "files_created": [], "files_modified": [], "tests_written": [], "blockers": []}
-```
-
-**Queen Wisdom Section Template (injected only if wisdom exists):**
-```
---- QUEEN WISDOM (Eternal Guidance) ---
-{ if queen_philosophies: }
-📜 Philosophies:
-{queen_philosophies}
-{ endif }
-{ if queen_patterns: }
-🧭 Patterns:
-{queen_patterns}
-{ endif }
-{ if queen_redirects: }
-⚠️ Redirects (AVOID these):
-{queen_redirects}
-{ endif }
-{ if queen_stack_wisdom: }
-🔧 Stack Wisdom:
-{queen_stack_wisdom}
-{ endif }
-{ if queen_decrees: }
-🏛️ Decrees:
-{queen_decrees}
-{ endif }
---- END QUEEN WISDOM ---
-```
-
-**Active Signals Section (injected if pheromones exist):**
-```
---- ACTIVE SIGNALS (From User) ---
-
-🎯 PRIORITIES (FOCUS):
-{for each priority}
-- {priority}
-{endfor}
-
-⚠️ CONSTRAINTS (REDIRECT - AVOID):
-{for each constraint}
-- {constraint.content}
-{endfor}
-
---- END ACTIVE SIGNALS ---
 ```
 
 ### Step 5.2: Process Wave 1 Results
@@ -776,7 +656,7 @@ Files to verify:
 - Created: {list from builder results}
 - Modified: {list from builder results}
 
-{ pheromone_section if pheromone_section is not empty }
+{ prompt_section }
 
 **IMPORTANT:** When using the Bash tool for activity calls, always include a description parameter:
 - activity-log calls → "Logging {action}..."
