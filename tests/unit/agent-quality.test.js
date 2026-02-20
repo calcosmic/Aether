@@ -6,8 +6,7 @@
  * restrictions, forbidden body patterns, agent count tracking, and body
  * quality (XML sections present, no empty sections, minimum content length).
  *
- * TEST-05 intentionally fails until Phase 30 completes — this is a
- * tracking mechanism, not a defect. Expected: 22. Current after Phase 29: 14.
+ * TEST-05 now passes — Phase 30 completed the full 22-agent roster.
  */
 
 'use strict';
@@ -58,8 +57,16 @@ function parseTools(toolsString) {
 // Forbidden tools per read-only agent type (forbidden-only approach — flexible
 // against future tool additions while enforcing the constraint that matters)
 const READ_ONLY_CONSTRAINTS = {
-  'aether-tracker': { forbidden: ['Write', 'Edit'] },
-  'aether-auditor': { forbidden: ['Write', 'Edit', 'Bash'] },
+  // Phase 29 — specialists
+  'aether-tracker':       { forbidden: ['Write', 'Edit'] },
+  'aether-auditor':       { forbidden: ['Write', 'Edit', 'Bash'] },
+  // Phase 30 — niche agents (read-only set)
+  'aether-chaos':         { forbidden: ['Write', 'Edit'] },
+  'aether-archaeologist': { forbidden: ['Write', 'Edit'] },
+  'aether-gatekeeper':    { forbidden: ['Write', 'Edit', 'Bash'] },
+  'aether-includer':      { forbidden: ['Write', 'Edit', 'Bash'] },
+  'aether-measurer':      { forbidden: ['Write', 'Edit'] },
+  'aether-sage':          { forbidden: ['Write', 'Edit'] },
 };
 
 // ---------------------------------------------------------------------------
@@ -228,15 +235,13 @@ test('TEST-04: no agent body contains OpenCode-specific invocations', t => {
 });
 
 // ---------------------------------------------------------------------------
-// TEST-05: Agent count (intentionally failing until Phase 30 completes)
+// TEST-05: Agent count
 // ---------------------------------------------------------------------------
 
-// NOTE: This test INTENTIONALLY FAILS until Phase 30 completes.
-// After Phase 29: 14 agents (9 existing + 5 new specialists).
-// After Phase 30: 22 agents (14 + 8 remaining: ambassador, archaeologist, chaos,
-//                             chronicler, gatekeeper, includer, measurer, sage).
-// This is a tracking mechanism, not a defect. Do not change EXPECTED_AGENT_COUNT
-// until Phase 30 ships the remaining agents.
+// Phase 30 complete — all 22 agents shipped:
+// Phase 27-28: queen, builder, watcher, probe, weaver, keeper, scout, route-setter, surveyor (9)
+// Phase 29: tracker, auditor, (+ probe/weaver/keeper/watcher adjustments) → 14 total
+// Phase 30: ambassador, archaeologist, chaos, chronicler, gatekeeper, includer, measurer, sage (8)
 const EXPECTED_AGENT_COUNT = 22;
 
 test('TEST-05: agent count matches expected 22', t => {
