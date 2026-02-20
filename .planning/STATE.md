@@ -53,6 +53,9 @@ Last activity: 2026-02-20 — Completed 24-02: wired seal.md and entomb.md (both
 - [Phase 23-02]: LOW-risk sections kept concise (5-10 lines) — role is investigation-only, key rule is no-writes
 - [Phase 23-02]: Surveyor success_criteria extended in-place with Self-Check + Completion Report headings, not replaced
 - [Phase 23-02]: Archaeologist/chaos existing laws reinforced with back-reference in new read_only section
+- [Phase 24-01]: Hub-first lookup pattern used for template resolution in init.md (hub checked before .aether/ local path)
+- [Phase 24-01]: Template missing error message: "Template missing: {name}. Run aether update to fix." — matches locked decision exactly
+- [Phase 24-01]: __PHASE_LEARNINGS__ and __INSTINCTS__ documented as JSON arrays not strings in template and command files
 - [Phase 24-template-integration]: OpenCode entomb normalized to reset memory fields via jq template — matches Claude Code, wisdom already promoted to QUEEN.md before reset
 - [Phase 24-template-integration]: Ceremony templates have distinct voices: crowned-anthill = triumphant, handoff = reflective
 - [Phase 24-template-integration]: OpenCode seal.md had no CROWNED-ANTHILL.md write step — only HANDOFF heredoc wired to template
