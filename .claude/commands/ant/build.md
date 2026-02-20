@@ -289,8 +289,7 @@ bash .aether/aether-utils.sh survey-load "{phase_name}" 2>/dev/null
 
 **Display summary:**
 ```
-🗺️ SURVEY LOADED
-================
+━━━ 🗺️🐜 S U R V E Y   L O A D E D ━━━
 {for each doc loaded}
   {emoji} {filename} — {brief description}
 {/for}
@@ -329,8 +328,7 @@ queen_decrees = .result.wisdom.decrees (if .result.priming.has_decrees)
 
 **Display summary (if any wisdom exists):**
 ```
-📜 QUEEN WISDOM LOADED
-=====================
+━━━ 📜🐜 Q U E E N   W I S D O M ━━━
 {if queen_philosophies:}  📜 Philosophies: yes{/if}
 {if queen_patterns:}  🧭 Patterns: yes{/if}
 {if queen_redirects:}  ⚠️ Redirects: yes{/if}
@@ -358,8 +356,7 @@ bash .aether/aether-utils.sh pheromone-read 2>/dev/null
 
 **Display summary:**
 ```
-🎯 ACTIVE SIGNALS
-=================
+━━━ 🎯🐜 A C T I V E   S I G N A L S ━━━
 Priorities (FOCUS): {N}
 Constraints (REDIRECT): {M}
 ```
@@ -430,8 +427,7 @@ Constraints (REDIRECT): {M}
 
    Display summary:
    ```
-   🏺 ARCHAEOLOGY CONTEXT
-   =====================
+   ━━━ 🏺🐜 A R C H A E O L O G Y ━━━
    {summary of findings from archaeologist}
    ```
 
@@ -495,7 +491,7 @@ Run using the Bash tool with description "Naming chaos ant...": `bash .aether/ae
 
 Display spawn plan with caste emojis:
 ```
-🐜  SPAWN PLAN
+━━━ 🐜 S P A W N   P L A N ━━━
 
 Wave 1  — Parallel
   🔨🐜 {Builder-Name}  Task {id}  {description}
@@ -552,17 +548,17 @@ Display the spawn announcement immediately before firing Task calls:
 
 For single-caste waves (typical — all builders):
 ```
-Spawning {N} 🔨 Builder workers in parallel...
+──── 🔨🐜 Spawning {N} Builders in parallel ────
 ```
 
 For mixed-caste waves (uncommon):
 ```
-Spawning {N} workers ({X} 🔨 Builder, {Y} 🔍 Scout) in parallel...
+──── 🐜 Spawning {N} workers ({X} 🔨 Builder, {Y} 🔍 Scout) ────
 ```
 
 For a single worker:
 ```
-Spawning 🔨 Builder {ant_name} for {task_summary}...
+──── 🔨🐜 Spawning {ant_name} — {task_summary} ────
 ```
 
 **First, mark build start in context:**
@@ -750,7 +746,7 @@ If `$TMUX` is not set, skip this call entirely — do not attempt it. Chat users
 
 **Before each subsequent wave, display a wave separator:**
 ```
-━━ Wave {X} of {N} ━━
+━━━ 🐜 Wave {X} of {N} ━━━
 ```
 Then display the spawn announcement (same format as Step 5.1).
 
@@ -762,8 +758,8 @@ Repeat Step 5.1-5.2 for each subsequent wave, waiting for previous wave to compl
 
 **Announce the verification wave:**
 ```
-━━ Verification ━━
-Spawning 👁️ Watcher {watcher_name} for verification...
+━━━ 👁️🐜 V E R I F I C A T I O N ━━━
+──── 👁️🐜 Spawning {watcher_name} ────
 ```
 
 Spawn the Watcher using Task tool with `subagent_type="aether-watcher"`, include `description: "👁️ Watcher {Watcher-Name}: Independent verification"` (DO NOT use run_in_background - task blocks until complete):
@@ -841,7 +837,7 @@ Run using the Bash tool with description "Dispatching chaos ant...": `bash .aeth
 
 **Announce the resilience testing wave:**
 ```
-Spawning 🎲 Chaos {chaos_name} for resilience testing...
+──── 🎲🐜 Spawning {chaos_name} — resilience testing ────
 ```
 
 Spawn the Chaos Ant using Task tool with `subagent_type="aether-chaos"`, include `description: "🎲 Chaos {Chaos-Name}: Resilience testing"` (DO NOT use run_in_background - task blocks until complete):
@@ -1041,8 +1037,7 @@ Return JSON:
 Parse synthesis result. If `ui_touched` is true:
 
 ```
-Visual Checkpoint
-=================
+━━━ 🖼️🐜 V I S U A L   C H E C K P O I N T ━━━
 
 UI changes detected. Verify appearance before continuing.
 
