@@ -17,7 +17,7 @@
   [![npm version](https://img.shields.io/npm/v/aether-colony.svg)](https://www.npmjs.com/package/aether-colony)
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-  **v2.0.0** — Worker Emergence (22 real Claude Code agents)
+  **v5.0.0** — Worker Emergence (22 real Claude Code agents)
 </div>
 
 ---

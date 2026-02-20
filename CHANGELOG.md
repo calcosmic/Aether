@@ -8,11 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-- README updated to v2.0.0
+- README updated to v5.0.0
 
 ---
 
-## v2.0.0 — Worker Emergence (2026-02-20)
+## v5.0.0 — Worker Emergence (2026-02-20)
 
 **Major milestone:** Every ant caste is now a real Claude Code subagent. 22 agents ship through the hub, ready for resolution via the Task tool.
 
@@ -32,8 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **.aether/docs/ curated**: 8 keepers at root, 6 archived for reference
-- **README.md updated**: Action-oriented tone, v2.0 agent capabilities featured, caste table by tier
-- **ROADMAP.md and STATE.md**: v2.0 marked shipped, all 31 phases complete at 100%
+- **README.md updated**: Action-oriented tone, v5.0 agent capabilities featured, caste table by tier
+- **ROADMAP.md and STATE.md**: v5.0 marked shipped, all 31 phases complete at 100%
 
 ### Phases Shipped
 - **Phase 27**: Distribution Infrastructure + First Core Agents (4 plans)
