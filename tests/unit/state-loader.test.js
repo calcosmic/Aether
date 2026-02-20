@@ -9,6 +9,18 @@ const DATA_DIR = path.join(AETHER_ROOT, '.aether/data');
 const COLONY_STATE_PATH = path.join(DATA_DIR, 'COLONY_STATE.json');
 const HANDOFF_PATH = path.join(AETHER_ROOT, '.aether/HANDOFF.md');
 
+// Minimal valid state for CI environments where no colony is active
+const MINIMAL_VALID_STATE = JSON.stringify({
+  version: "3.0",
+  goal: "CI test colony",
+  state: "READY",
+  current_phase: 1,
+  plan: { phases: [{ id: 1, name: "Test Phase", status: "pending" }] },
+  events: [],
+  errors: { records: [] },
+  memory: { decisions: [], learnings: [] }
+}, null, 2);
+
 /**
  * Helper to execute bash commands with state-loader.sh sourced
  * @param {string} command - Bash command to execute
@@ -37,16 +49,28 @@ function execWithLoader(command) {
  */
 function backupState() {
   const backupPath = `${COLONY_STATE_PATH}.backup`;
-  if (fs.existsSync(COLONY_STATE_PATH)) {
+  const hadState = fs.existsSync(COLONY_STATE_PATH);
+  if (hadState) {
     fs.copyFileSync(COLONY_STATE_PATH, backupPath);
   }
-  return backupPath;
+  return { backupPath, hadState };
 }
 
-function restoreState(backupPath) {
-  if (fs.existsSync(backupPath)) {
+function ensureState() {
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+  if (!fs.existsSync(COLONY_STATE_PATH)) {
+    fs.writeFileSync(COLONY_STATE_PATH, MINIMAL_VALID_STATE, 'utf8');
+  }
+}
+
+function restoreState({ backupPath, hadState }) {
+  if (hadState && fs.existsSync(backupPath)) {
     fs.copyFileSync(backupPath, COLONY_STATE_PATH);
     fs.unlinkSync(backupPath);
+  } else if (!hadState && fs.existsSync(COLONY_STATE_PATH)) {
+    fs.unlinkSync(COLONY_STATE_PATH);
   }
 }
 
@@ -108,7 +132,9 @@ test('display_resumption_context function is defined', t => {
 
 // Test: State loading succeeds with valid COLONY_STATE.json
 test('load_colony_state succeeds with valid COLONY_STATE.json', t => {
+  const stateBackup = backupState();
   const backupHandoffPath = backupHandoff();
+  ensureState();
 
   try {
     // Remove any existing handoff to test clean load
@@ -125,13 +151,16 @@ test('load_colony_state succeeds with valid COLONY_STATE.json', t => {
     // Cleanup
     execWithLoader('unload_colony_state');
   } finally {
+    restoreState(stateBackup);
     restoreHandoff(backupHandoffPath);
   }
 });
 
 // Test: unload_colony_state releases lock properly
 test('unload_colony_state releases lock properly', t => {
+  const stateBackup = backupState();
   const backupHandoffPath = backupHandoff();
+  ensureState();
 
   try {
     if (fs.existsSync(HANDOFF_PATH)) {
@@ -148,6 +177,7 @@ test('unload_colony_state releases lock properly', t => {
     t.true(result.stdout.includes('STATE_LOCK_ACQUIRED after unload: false') ||
             result.stdout.includes('STATE_LOCK_ACQUIRED after unload:'));
   } finally {
+    restoreState(stateBackup);
     restoreHandoff(backupHandoffPath);
   }
 });
@@ -156,6 +186,7 @@ test('unload_colony_state releases lock properly', t => {
 test('load_colony_state fails when COLONY_STATE.json is missing', t => {
   const stateBackup = backupState();
   const backupHandoffPath = backupHandoff();
+  ensureState();
 
   try {
     // Remove handoff if exists
@@ -163,8 +194,10 @@ test('load_colony_state fails when COLONY_STATE.json is missing', t => {
       fs.unlinkSync(HANDOFF_PATH);
     }
 
-    // Temporarily rename state file
-    fs.unlinkSync(COLONY_STATE_PATH);
+    // Temporarily remove state file
+    if (fs.existsSync(COLONY_STATE_PATH)) {
+      fs.unlinkSync(COLONY_STATE_PATH);
+    }
 
     const result = execWithLoader('load_colony_state 2>&1 || echo "EXIT_CODE: $?"');
 
@@ -180,7 +213,9 @@ test('load_colony_state fails when COLONY_STATE.json is missing', t => {
 
 // Test: State loading detects handoff
 test('load_colony_state detects handoff when HANDOFF.md exists', t => {
+  const stateBackup = backupState();
   const backupHandoffPath = backupHandoff();
+  ensureState();
 
   try {
     // Create a test handoff file
@@ -210,13 +245,16 @@ Testing handoff detection.
     // Cleanup
     execWithLoader('unload_colony_state');
   } finally {
+    restoreState(stateBackup);
     restoreHandoff(backupHandoffPath);
   }
 });
 
 // Test: get_handoff_summary extracts phase info
 test('get_handoff_summary extracts phase information', t => {
+  const stateBackup = backupState();
   const backupHandoffPath = backupHandoff();
+  ensureState();
 
   try {
     // Create a test handoff file with phase info
@@ -234,13 +272,16 @@ Some content here.
     // Cleanup
     execWithLoader('unload_colony_state');
   } finally {
+    restoreState(stateBackup);
     restoreHandoff(backupHandoffPath);
   }
 });
 
 // Test: display_resumption_context shows resume message and removes handoff
 test('display_resumption_context shows resume message and removes handoff', t => {
+  const stateBackup = backupState();
   const backupHandoffPath = backupHandoff();
+  ensureState();
 
   try {
     // Create a test handoff file
@@ -262,6 +303,7 @@ Test content.
     // Cleanup
     execWithLoader('unload_colony_state');
   } finally {
+    restoreState(stateBackup);
     restoreHandoff(backupHandoffPath);
   }
 });
@@ -270,6 +312,7 @@ Test content.
 test('load_colony_state releases lock on validation failure', t => {
   const stateBackup = backupState();
   const backupHandoffPath = backupHandoff();
+  ensureState();
 
   try {
     // Remove handoff if exists
@@ -294,7 +337,9 @@ test('load_colony_state releases lock on validation failure', t => {
 
 // Test: CLI load-state command works
 test('CLI load-state command returns JSON with loaded status', t => {
+  const stateBackup = backupState();
   const backupHandoffPath = backupHandoff();
+  ensureState();
 
   try {
     // Remove handoff for clean test
@@ -311,6 +356,7 @@ test('CLI load-state command returns JSON with loaded status', t => {
     t.true(json.ok);
     t.true(json.result.loaded);
   } finally {
+    restoreState(stateBackup);
     restoreHandoff(backupHandoffPath);
   }
 });
@@ -329,7 +375,9 @@ test('CLI unload-state command returns JSON with unloaded status', t => {
 
 // Test: CLI load-state detects handoff
 test('CLI load-state detects handoff and returns summary', t => {
+  const stateBackup = backupState();
   const backupHandoffPath = backupHandoff();
+  ensureState();
 
   try {
     // Create a test handoff file
@@ -350,6 +398,7 @@ Test content for CLI.
     t.true(json.result.handoff_detected);
     t.truthy(json.result.handoff_summary);
   } finally {
+    restoreState(stateBackup);
     restoreHandoff(backupHandoffPath);
   }
 });

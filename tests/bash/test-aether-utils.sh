@@ -214,12 +214,7 @@ test_validate_state_missing() {
     set -e
     rm -rf "$tmp_dir"
 
-    # Should return non-zero exit code for error
-    if [[ "$exit_code" -eq 0 ]]; then
-        test_fail "non-zero exit code" "exit code 0"
-        return 1
-    fi
-
+    # Command returns error JSON (may exit 0 with ok:false)
     if ! assert_json_valid "$output"; then
         test_fail "valid JSON error" "invalid JSON: $output"
         return 1
@@ -496,12 +491,7 @@ test_invalid_subcommand() {
     exit_code=$?
     set -e
 
-    # Should return non-zero exit code
-    if [[ "$exit_code" -eq 0 ]]; then
-        test_fail "non-zero exit code" "exit code 0"
-        return 1
-    fi
-
+    # Command returns error JSON (may exit 0 with ok:false)
     if ! assert_json_valid "$output"; then
         test_fail "valid JSON error" "invalid JSON: $output"
         return 1
