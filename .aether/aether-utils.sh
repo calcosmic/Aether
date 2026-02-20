@@ -611,7 +611,7 @@ case "$cmd" in
     cat <<'HELP_EOF'
 {
   "ok": true,
-  "commands": ["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-display-text","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","survey-load","survey-verify","pheromone-export","pheromone-write","pheromone-count","pheromone-read","instinct-read","pheromone-prime","pheromone-expire","eternal-init","pheromone-export-xml","pheromone-import-xml","pheromone-validate-xml","wisdom-export-xml","wisdom-import-xml","registry-export-xml","registry-import-xml","force-unlock"],
+  "commands": ["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","learning-observe","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-display-text","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","survey-load","survey-verify","pheromone-export","pheromone-write","pheromone-count","pheromone-read","instinct-read","pheromone-prime","pheromone-expire","eternal-init","pheromone-export-xml","pheromone-import-xml","pheromone-validate-xml","wisdom-export-xml","wisdom-import-xml","registry-export-xml","registry-import-xml","force-unlock"],
   "sections": {
     "Core": [
       {"name": "help", "description": "List all available commands with sections"},
@@ -625,7 +625,8 @@ case "$cmd" in
     "Queen Commands": [
       {"name": "queen-init", "description": "Initialize a new colony QUEEN.md from template"},
       {"name": "queen-read", "description": "Read QUEEN.md wisdom as JSON for worker priming"},
-      {"name": "queen-promote", "description": "Promote a validated learning to QUEEN.md wisdom"}
+      {"name": "queen-promote", "description": "Promote a validated learning to QUEEN.md wisdom"},
+      {"name": "learning-observe", "description": "Record observation of a learning across colonies"}
     ],
     "Model Routing": [
       {"name": "model-profile", "description": "Manage caste-to-model assignments"},
@@ -3784,6 +3785,151 @@ ${entry}" "$queen_file" > "$tmp_file"
     mv "$tmp_file" "$queen_file"
 
     json_ok "{\"promoted\":true,\"type\":\"$wisdom_type\",\"colony\":\"$colony_name\",\"timestamp\":\"$ts\",\"threshold\":$threshold,\"new_count\":$new_count}"
+    ;;
+
+  learning-observe)
+    # Record observation of a learning across colonies
+    # Usage: learning-observe <content> <wisdom_type> [colony_name]
+    # Returns: JSON with observation_count, threshold status, and colonies list
+    content="${1:-}"
+    wisdom_type="${2:-}"
+    colony_name="${3:-unknown}"
+
+    # Validate required arguments
+    [[ -z "$content" ]] && json_err "$E_VALIDATION_FAILED" "Usage: learning-observe <content> <wisdom_type> [colony_name]" '{"missing":"content"}'
+    [[ -z "$wisdom_type" ]] && json_err "$E_VALIDATION_FAILED" "Usage: learning-observe <content> <wisdom_type> [colony_name]" '{"missing":"wisdom_type"}'
+
+    # Validate wisdom_type
+    valid_types=("philosophy" "pattern" "redirect" "stack" "decree")
+    type_valid=false
+    for vt in "${valid_types[@]}"; do
+      [[ "$wisdom_type" == "$vt" ]] && type_valid=true && break
+    done
+    [[ "$type_valid" == "false" ]] && json_err "$E_VALIDATION_FAILED" "Invalid wisdom_type: $wisdom_type" '{"valid_types":["philosophy","pattern","redirect","stack","decree"]}'
+
+    # Generate SHA256 hash of content for deduplication
+    content_hash="sha256:$(echo -n "$content" | sha256sum | cut -d' ' -f1)"
+
+    # Observations file path
+    observations_file="$DATA_DIR/learning-observations.json"
+
+    # Ensure data directory exists
+    [[ ! -d "$DATA_DIR" ]] && mkdir -p "$DATA_DIR"
+
+    # Initialize file if it doesn't exist
+    if [[ ! -f "$observations_file" ]]; then
+      echo '{"observations":[]}' > "$observations_file"
+    fi
+
+    # Validate JSON structure
+    if ! jq -e . "$observations_file" >/dev/null 2>&1; then
+      json_err "$E_JSON_INVALID" "learning-observations.json has invalid JSON"
+    fi
+
+    # Acquire lock for concurrent access
+    if type acquire_lock &>/dev/null; then
+      acquire_lock "$observations_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on learning-observations.json"
+      trap 'release_lock 2>/dev/null || true' EXIT
+    fi
+
+    # Get current timestamp
+    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    # Check if observation with same hash already exists
+    existing_index=$(jq -r --arg hash "$content_hash" '.observations | to_entries[] | select(.value.content_hash == $hash) | .key' "$observations_file" | head -1)
+
+    if [[ -n "$existing_index" ]]; then
+      # Existing observation: increment count, update last_seen, add colony if new
+      tmp_file="${observations_file}.tmp.$$"
+
+      jq --arg hash "$content_hash" \
+         --arg colony "$colony_name" \
+         --arg ts "$ts" \
+         '
+         .observations |= map(
+           if .content_hash == $hash then
+             .observation_count += 1 |
+             .last_seen = $ts |
+             .colonies = ((.colonies + [$colony]) | unique)
+           else
+             .
+           end
+         )' "$observations_file" > "$tmp_file"
+
+      mv "$tmp_file" "$observations_file"
+
+      # Get updated observation data
+      observation_count=$(jq -r --arg hash "$content_hash" '.observations[] | select(.content_hash == $hash) | .observation_count' "$observations_file")
+      colonies=$(jq -r --arg hash "$content_hash" '.observations[] | select(.content_hash == $hash) | .colonies' "$observations_file")
+      is_new=false
+    else
+      # New observation: create entry
+      tmp_file="${observations_file}.tmp.$$"
+
+      jq --arg hash "$content_hash" \
+         --arg content "$content" \
+         --arg type "$wisdom_type" \
+         --arg colony "$colony_name" \
+         --arg ts "$ts" \
+         '.observations += [{
+           "content_hash": $hash,
+           "content": $content,
+           "wisdom_type": $type,
+           "observation_count": 1,
+           "first_seen": $ts,
+           "last_seen": $ts,
+           "colonies": [$colony]
+         }]' "$observations_file" > "$tmp_file"
+
+      mv "$tmp_file" "$observations_file"
+
+      observation_count=1
+      colonies="[\"$colony_name\"]"
+      is_new=true
+    fi
+
+    # Release lock
+    if type release_lock &>/dev/null; then
+      release_lock 2>/dev/null || true
+    fi
+    trap - EXIT
+
+    # Get threshold for this type
+    case "$wisdom_type" in
+      philosophy) threshold=5 ;;
+      pattern) threshold=3 ;;
+      redirect) threshold=2 ;;
+      stack) threshold=1 ;;
+      decree) threshold=0 ;;
+      *) threshold=1 ;;
+    esac
+
+    # Determine if threshold is met
+    threshold_met=false
+    [[ "$observation_count" -ge "$threshold" ]] && threshold_met=true
+
+    # Return result
+    result=$(jq -n \
+      --arg hash "$content_hash" \
+      --arg content "$content" \
+      --arg type "$wisdom_type" \
+      --argjson count "$observation_count" \
+      --argjson threshold "$threshold" \
+      --argjson threshold_met "$threshold_met" \
+      --argjson colonies "$colonies" \
+      --argjson is_new "$is_new" \
+      '{
+        content_hash: $hash,
+        content: $content,
+        wisdom_type: $type,
+        observation_count: $count,
+        threshold: $threshold,
+        threshold_met: $threshold_met,
+        colonies: $colonies,
+        is_new: $is_new
+      }')
+
+    json_ok "$result"
     ;;
 
   survey-load)

@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Prevent context rot across Claude Code sessions with self-managing colony that learns and guides users
-**Current focus:** v2.0 Worker Emergence — Phase 30 complete (all 3 plans done); Phase 31 cleanup is next
+**Current focus:** v3.0 Wisdom & Pheromone Evolution — research complete, requirements defined
 
 ## Current Position
 
-Phase: 31 of 31 (Integration Verification + Cleanup) — COMPLETE
-Plan: 3 of 3 complete (v2.0 shipped)
-Status: v2.0 Worker Emergence shipped
-Last activity: 2026-02-20 — v2.0 shipped: 22 agents, bash bug fix, docs curated, version 2.0.0
+Phase: 32 (Plan 02 complete)
+Plan: Phase 32-35 roadmap defined
+Status: Phase 32-02 complete - build.md wired with colony-prime()
+Last activity: 2026-02-20 — Phase 32-02 complete - build.md now uses colony-prime()
 
-Progress: [██████████] 100% (31/31 phases complete)
+Progress: [▓▓▓▓▓▓▓▓▓] 100% (3/3 plans complete in Phase 32)
 
 ## Performance Metrics
 
@@ -64,6 +64,14 @@ Progress: [██████████] 100% (31/31 phases complete)
 - [Phase 31]: 31-01: Description text belongs in instruction prose above bash blocks, not inside them
 - [Phase 31]: 31-01: CLEAN-03 lint test scans both .claude/commands/ant/ and .opencode/commands/ant/
 - [Phase 31]: 31-03: Version 2.0.0 (not 5.0.0) to align with Worker Emergence milestone name per user decision; git tag only, npm publish deferred for dist-tag choice
+- [v3.0]: Research conducted for wisdom/pheromone evolution system — 4 research files written (FEATURES, ARCHITECTURE, STACK, PITFALLS) + SUMMARY
+- [v3.0]: 25 requirements defined across 6 categories (PHER-EVOL, QUEEN, INT, META, OBS, PRIME)
+- [v3.0]: 4 phases defined (32-35) mapping to all 25 requirements
+- [Phase 32]: colony-prime() combines queen-read + pheromone-prime into single unified call
+- [Phase 32]: Two-level loading: global ~/.aether/QUEEN.md loads first, local extends
+- [Phase 32]: QUEEN.md missing = FAIL HARD; pheromones.json missing = warn but continue
+- [Phase 32]: 32-02: build.md uses colony-prime() for unified worker context (single call replaces three)
+- [Phase 32]: 32-03: init.md calls queen-init at Step 1.6; QUEEN.md template has 5 categories + metadata in HTML comment format
 
 ### Key Findings from Research
 - Subagents cannot spawn other subagents — strip all spawn calls from every converted agent
@@ -79,5 +87,5 @@ Progress: [██████████] 100% (31/31 phases complete)
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: v2.0 shipped — all 31 phases complete, version 2.0.0
-Next step: Project complete. Future work starts new version cycle.
+Stopped at: v3.0 research complete, requirements defined, roadmap updated
+Next step: Start Phase 32 — Wire QUEEN.md into Commands
