@@ -879,10 +879,7 @@ function setupHub() {
       fs.mkdirSync(HUB_SYSTEM_DIR, { recursive: true });
 
       // Move system files to system/
-      const systemFiles = ['aether-utils.sh', 'workers.md', 'CONTEXT.md', 'model-profiles.yaml',
-                          'coding-standards.md', 'debugging.md', 'learning.md', 'planning.md',
-                          'tdd.md', 'verification.md', 'verification-loop.md', 'DISCIPLINES.md',
-                          'QUEEN_ANT_ARCHITECTURE.md'];
+      const systemFiles = ['aether-utils.sh', 'workers.md', 'CONTEXT.md', 'model-profiles.yaml'];
       const systemDirs = ['docs', 'utils', 'commands', 'agents', 'schemas', 'exchange', 'templates', 'lib'];
 
       for (const file of systemFiles) {

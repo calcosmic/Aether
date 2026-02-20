@@ -32,6 +32,30 @@ Packaged in npm, available to all Aether installations:
 
 ---
 
+## Worker Disciplines
+
+Training protocols that govern worker behavior (in `disciplines/` subdirectory):
+
+| File | Purpose |
+|------|---------|
+| `disciplines/DISCIPLINES.md` | Discipline index and overview |
+| `disciplines/verification.md` | No completion claims without evidence |
+| `disciplines/verification-loop.md` | 6-phase quality gate before advancement |
+| `disciplines/debugging.md` | Systematic root cause investigation |
+| `disciplines/tdd.md` | Test-first development |
+| `disciplines/learning.md` | Pattern detection with validation |
+| `disciplines/coding-standards.md` | Universal code quality rules |
+
+---
+
+## Architecture
+
+| File | Purpose |
+|------|---------|
+| `QUEEN_ANT_ARCHITECTURE.md` | Queen escalation chain and coordination patterns |
+
+---
+
 ## Development Docs
 
 Packaged in npm, documents active issues and learnings:
@@ -40,7 +64,3 @@ Packaged in npm, documents active issues and learnings:
 |------|---------|
 | `known-issues.md` | Active known issues and workarounds |
 | `implementation-learnings.md` | Extracted implementation findings |
-
----
-
-*The colony remembers. The colony learns. The colony evolves.*

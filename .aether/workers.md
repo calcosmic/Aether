@@ -136,7 +136,7 @@ Before reporting ANY task as complete:
 - Run relevant tests yourself
 - Confirm success criteria with evidence
 
-See `.aether/verification.md` for full discipline reference.
+See `.aether/docs/disciplines/verification.md` for full discipline reference.
 
 ### Verification Loop Discipline
 
@@ -163,7 +163,7 @@ Diff:      [X files changed]
 Overall: [READY/NOT READY]
 ```
 
-See `.aether/verification-loop.md` for full discipline reference.
+See `.aether/docs/disciplines/verification-loop.md` for full discipline reference.
 
 ### Debugging Discipline
 
@@ -187,7 +187,7 @@ When you encounter ANY bug, test failure, or unexpected behavior:
 - "Just try changing X"
 - "I don't fully understand but this might work"
 
-See `.aether/debugging.md` for full discipline reference.
+See `.aether/docs/disciplines/debugging.md` for full discipline reference.
 
 ### TDD Discipline
 
@@ -210,7 +210,7 @@ When implementing ANY new code:
 
 **Coverage target:** 80%+ for new code.
 
-See `.aether/tdd.md` for full discipline reference.
+See `.aether/docs/disciplines/tdd.md` for full discipline reference.
 
 ### Learning Discipline
 
@@ -228,7 +228,7 @@ The colony learns from every phase. Observe patterns for future improvement.
 
 **Report patterns observed** in your output for colony learning.
 
-See `.aether/learning.md` for full discipline reference.
+See `.aether/docs/disciplines/learning.md` for full discipline reference.
 
 ### Coding Standards Discipline
 
@@ -252,7 +252,7 @@ Quick checklist before completing code:
 - **Error handling** - Try/catch with meaningful messages
 - **Async** - Parallelize with Promise.all where possible
 
-See `.aether/coding-standards.md` for full discipline reference.
+See `.aether/docs/disciplines/coding-standards.md` for full discipline reference.
 
 ### Activity Log
 
@@ -443,7 +443,7 @@ All passing: ✓
 
 **When Encountering Errors:**
 
-Follow systematic debugging (see `.aether/debugging.md`):
+Follow systematic debugging (see `.aether/docs/disciplines/debugging.md`):
 
 1. **STOP** - Do not attempt quick fixes
 2. **Read error completely** - Stack trace, line numbers, error codes
@@ -557,7 +557,7 @@ Findings:
 
 **When Tests Fail:**
 
-Follow systematic debugging (see `.aether/debugging.md`):
+Follow systematic debugging (see `.aether/docs/disciplines/debugging.md`):
 
 1. **Read the failure completely** - Full error, stack trace
 2. **Reproduce** - Run the specific failing test

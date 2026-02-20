@@ -76,14 +76,14 @@ No workarounds. Fix issues and re-run.
 ```
 .aether/
 ├── workers.md               # Worker roles + honest execution model
-├── verification.md          # Evidence before claims
-├── verification-loop.md     # 6-phase quality gate
-├── debugging.md             # Systematic debugging
-├── tdd.md                   # Test-driven development
-├── learning.md              # Colony learning system
-├── coding-standards.md      # Code quality rules
-├── planning.md              # Bite-sized task planning
-├── DISCIPLINES.md           # This file
+├── docs/disciplines/
+│   ├── verification.md      # Evidence before claims
+│   ├── verification-loop.md # 6-phase quality gate
+│   ├── debugging.md         # Systematic debugging
+│   ├── tdd.md               # Test-driven development
+│   ├── learning.md          # Colony learning system
+│   ├── coding-standards.md  # Code quality rules
+│   └── DISCIPLINES.md       # This file
 ```
 
 ## Reinstall After Updates

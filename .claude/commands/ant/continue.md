@@ -82,7 +82,7 @@ If `state != "EXECUTING"`:
 
 **The Iron Law:** No phase advancement without fresh verification evidence.
 
-Before ANY phase can advance, execute the 6-phase verification loop. See `.aether/verification-loop.md` for full reference.
+Before ANY phase can advance, execute the 6-phase verification loop. See `.aether/docs/disciplines/verification-loop.md` for full reference.
 
 #### 1. Command Resolution (Priority Chain)
 
