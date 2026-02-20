@@ -8,6 +8,7 @@
   "files": [
     "bin/",
     ".claude/commands/ant/",
+    ".claude/agents/ant/",
     ".opencode/commands/ant/",
     ".opencode/agents/",
     ".opencode/opencode.json",

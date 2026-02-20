@@ -74,6 +74,7 @@ const HUB_SYSTEM_DIR = path.join(HUB_DIR, 'system');
 const HUB_COMMANDS_CLAUDE = path.join(HUB_SYSTEM_DIR, 'commands', 'claude');
 const HUB_COMMANDS_OPENCODE = path.join(HUB_SYSTEM_DIR, 'commands', 'opencode');
 const HUB_AGENTS = path.join(HUB_SYSTEM_DIR, 'agents');
+const HUB_AGENTS_CLAUDE = path.join(HUB_SYSTEM_DIR, 'agents-claude');
 const HUB_RULES = path.join(HUB_SYSTEM_DIR, 'rules');
 const HUB_REGISTRY = path.join(HUB_DIR, 'registry.json');
 const HUB_VERSION = path.join(HUB_DIR, 'version.json');
@@ -552,6 +553,7 @@ function computeFileHash(filePath) {
 const CHECKPOINT_ALLOWLIST = [
   '.aether/*.md',                    // All .md files directly in .aether/
   '.claude/commands/ant/**',         // All files in .claude/commands/ant/ recursively
+  '.claude/agents/ant/**',           // All files in .claude/agents/ant/ recursively
   '.opencode/commands/ant/**',       // All files in .opencode/commands/ant/ recursively
   '.opencode/agents/**',             // All files in .opencode/agents/ recursively
   'bin/cli.js',                      // Specific file: bin/cli.js
@@ -904,6 +906,7 @@ function setupHub() {
     fs.mkdirSync(path.join(HUB_SYSTEM_DIR, 'commands', 'claude'), { recursive: true });
     fs.mkdirSync(path.join(HUB_SYSTEM_DIR, 'commands', 'opencode'), { recursive: true });
     fs.mkdirSync(path.join(HUB_SYSTEM_DIR, 'agents'), { recursive: true });
+    fs.mkdirSync(path.join(HUB_SYSTEM_DIR, 'agents-claude'), { recursive: true });
     fs.mkdirSync(path.join(HUB_SYSTEM_DIR, 'rules'), { recursive: true });
 
     // Read previous manifest for delta reporting
@@ -988,6 +991,17 @@ function setupHub() {
       }
     }
 
+    // Sync .claude/agents/ant/ -> ~/.aether/system/agents-claude/
+    const claudeAgentsSrc = path.join(PACKAGE_DIR, '.claude', 'agents', 'ant');
+    if (fs.existsSync(claudeAgentsSrc)) {
+      const result = syncDirWithCleanup(claudeAgentsSrc, HUB_AGENTS_CLAUDE);
+      log(`  Hub agents (claude): ${result.copied} files, ${result.skipped} unchanged -> ${HUB_AGENTS_CLAUDE}`);
+      if (result.removed.length > 0) {
+        log(`  Hub agents (claude): removed ${result.removed.length} stale files`);
+        for (const f of result.removed) log(`    - ${f}`);
+      }
+    }
+
     // Sync rules/ from .aether/ -> ~/.aether/system/rules/
     // v4.0: source is .aether/rules/ directly (no runtime/ staging)
     const rulesSrc = path.join(PACKAGE_DIR, '.aether', 'rules');
@@ -1053,7 +1067,7 @@ async function updateRepo(repoPath, sourceVersion, opts) {
   const currentVer = currentVersion ? currentVersion.version : 'unknown';
 
   // Target directories for git safety checks
-  const targetDirs = ['.aether', '.claude/commands/ant', '.claude/rules', '.opencode/commands/ant', '.opencode/agents'];
+  const targetDirs = ['.aether', '.claude/commands/ant', '.claude/agents/ant', '.claude/rules', '.opencode/commands/ant', '.opencode/agents'];
 
   // Git safety: check for dirty files in target directories (skip in dry-run mode)
   let dirtyFiles = [];
@@ -1076,17 +1090,20 @@ async function updateRepo(repoPath, sourceVersion, opts) {
     const commandsCopied = (result.sync_result?.commands?.copied || 0);
     const agentsCopied = result.sync_result?.agents?.copied || 0;
     const rulesCopied = result.sync_result?.rules?.copied || 0;
+    const agentsClaudeCopied = result.sync_result?.agents_claude?.copied || 0;
 
     const systemRemoved = result.sync_result?.system?.removed?.length || 0;
     const commandsRemoved = result.sync_result?.commands?.removed?.length || 0;
     const agentsRemoved = result.sync_result?.agents?.removed?.length || 0;
     const rulesRemoved = result.sync_result?.rules?.removed?.length || 0;
+    const agentsClaudeRemoved = result.sync_result?.agents_claude?.removed?.length || 0;
 
     const allRemovedFiles = [
       ...(result.sync_result?.system?.removed || []),
       ...(result.sync_result?.commands?.removed || []).map(f => `.claude/commands/ant/${f}`),
       ...(result.sync_result?.agents?.removed || []).map(f => `.opencode/agents/${f}`),
       ...(result.sync_result?.rules?.removed || []).map(f => `.claude/rules/${f}`),
+      ...(result.sync_result?.agents_claude?.removed || []).map(f => `.claude/agents/ant/${f}`),
     ];
 
     const cleanupResult = result.cleanup_result || { cleaned: [], failed: [] };
@@ -1099,7 +1116,8 @@ async function updateRepo(repoPath, sourceVersion, opts) {
       commands: commandsCopied,
       agents: agentsCopied,
       rules: rulesCopied,
-      removed: systemRemoved + commandsRemoved + agentsRemoved + rulesRemoved,
+      agentsClaude: agentsClaudeCopied,
+      removed: systemRemoved + commandsRemoved + agentsRemoved + rulesRemoved + agentsClaudeRemoved,
       removedFiles: allRemovedFiles,
       stashCreated: !!transaction.checkpoint?.stashRef,
       checkpoint_id: result.checkpoint_id,
@@ -1269,14 +1287,14 @@ program
             console.error(`  Skipping. Use --force to stash and update.`);
             dirty++;
           } else if (result.status === 'dry-run') {
-            log(`  Would update: ${repo.path} (${result.from} -> ${result.to}) [${result.system} system, ${result.commands} commands, ${result.agents} agents]`);
+            log(`  Would update: ${repo.path} (${result.from} -> ${result.to}) [${result.system} system, ${result.commands} commands, ${result.agents} agents, ${result.agentsClaude} claude agents]`);
             if (result.removed > 0) {
               log(`  Would remove ${result.removed} stale files:`);
               for (const f of result.removedFiles) log(`    - ${f}`);
             }
             updated++;
           } else if (result.status === 'updated') {
-            log(`  ${c.success('Updated:')} ${repo.path} (${result.from} -> ${result.to}) [${result.system} system, ${result.commands} commands, ${result.agents} agents]`);
+            log(`  ${c.success('Updated:')} ${repo.path} (${result.from} -> ${result.to}) [${result.system} system, ${result.commands} commands, ${result.agents} agents, ${result.agentsClaude} claude agents]`);
             if (result.removed > 0) {
               log(`  Removed ${result.removed} stale files:`);
               for (const f of result.removedFiles) log(`    - ${f}`);
@@ -1372,7 +1390,7 @@ program
 
         if (result.status === 'dry-run') {
           console.log(`Would update: ${result.from} -> ${result.to}`);
-          console.log(`  ${result.system} system files, ${result.commands} command files, ${result.agents} agent files`);
+          console.log(`  ${result.system} system files, ${result.commands} command files, ${result.agents} agent files, ${result.agentsClaude} claude agent files`);
           if (result.removed > 0) {
             console.log(`  Would remove ${result.removed} stale files:`);
             for (const f of result.removedFiles) console.log(`    - ${f}`);
@@ -1382,7 +1400,7 @@ program
         }
 
         console.log(c.success(`Updated: ${result.from} -> ${result.to}`));
-        console.log(`  ${result.system} system files, ${result.commands} command files, ${result.agents} agent files, ${result.visualizations} visualization files`);
+        console.log(`  ${result.system} system files, ${result.commands} command files, ${result.agents} agent files, ${result.agentsClaude} claude agent files`);
         if (result.removed > 0) {
           console.log(`  Removed ${result.removed} stale files:`);
           for (const f of result.removedFiles) console.log(`    - ${f}`);
