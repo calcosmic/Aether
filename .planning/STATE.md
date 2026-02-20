@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Prevent context rot across Claude Code sessions with self-managing colony that learns and guides users
-**Current focus:** v2.0 Worker Emergence — Phase 30 in progress (plan 02 of 03 complete)
+**Current focus:** v2.0 Worker Emergence — Phase 30 in progress (plans 01 and 02 of 03 complete)
 
 ## Current Position
 
 Phase: 30 of 31 (Niche Agents)
 Plan: 2 of 3 complete (30-01, 30-02 done)
 Status: In progress
-Last activity: 2026-02-20 — 30-02 complete: Ambassador (API integration, Credentials Iron Law) and Chronicler (documentation, Edit restricted to JSDoc/TSDoc) agents created; 18 total agents in .claude/agents/ant/
+Last activity: 2026-02-20 — 30-01 complete: 6 niche read-only agents created (chaos, archaeologist, gatekeeper, includer, measurer, sage); 22 total agents in .claude/agents/ant/; TEST-05 now passes
 
 Progress: [████████░░] 77% (26/31 phases complete through v1.4)
 
 ## Performance Metrics
 
 **Cumulative:**
-- Total plans completed: 77 (v1.0: 27, v1.1: 13, v1.2: 18, v1.3: 12, v1.4: 2, v2.0: 5)
-- Total requirements validated: 116 (v1.0: 46, v1.1: 14, v1.2: 24, v1.3: 24, v1.4: 1 partial, v2.0: 7 requirements)
-- Total tests: ~451 passing (420+ AVA + 31 bash), 1 intentional failure (TEST-05 tracks Phase 30 — now fails at 18 vs 22)
+- Total plans completed: 78 (v1.0: 27, v1.1: 13, v1.2: 18, v1.3: 12, v1.4: 2, v2.0: 6)
+- Total requirements validated: 122 (v1.0: 46, v1.1: 14, v1.2: 24, v1.3: 24, v1.4: 1 partial, v2.0: 13 requirements)
+- Total tests: ~451 passing (420+ AVA + 31 bash); TEST-05 now passes (22 agents confirmed)
 
 ## Accumulated Context
 
@@ -55,6 +55,9 @@ Progress: [████████░░] 77% (26/31 phases complete through v1
 - [Phase 29]: 29-03: TEST-05 is a Phase 30 tracker — hardcoded to 22, intentionally fails at 14 agents until Phase 30 ships remaining 8 agents
 - [Phase 30]: 30-02: Credentials Iron Law named as a titled rule in critical_rules — named constraint pattern for security-critical absolute rules
 - [Phase 30]: 30-02: Chronicler has no Bash tool — read-code-not-run-code posture enforced via explicit tools field; Edit restricted to JSDoc/TSDoc comments declared in four locations in agent body
+- [Phase 30]: 30-01: Gatekeeper and Includer have no Bash — static analysis only; Builder executes runtime tools (npm audit, axe-core)
+- [Phase 30]: 30-01: Includer always includes analysis_method: 'manual static analysis' and documents runtime testing gaps explicitly
+- [Phase 30]: 30-01: Archaeologist primary deliverable is regression_risks array — regression prevention framing leads execution_flow
 
 ### Key Findings from Research
 - Subagents cannot spawn other subagents — strip all spawn calls from every converted agent
@@ -70,5 +73,5 @@ Progress: [████████░░] 77% (26/31 phases complete through v1
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: Completed 30-02-PLAN.md (Ambassador and Chronicler write-capable niche agents)
-Next step: Proceed to Phase 30 plan 03 — 4 remaining agent ports (gatekeeper, includer, measurer, sage)
+Stopped at: Completed 30-01-PLAN.md (6 niche read-only agents: chaos, archaeologist, gatekeeper, includer, measurer, sage)
+Next step: Proceed to Phase 30 plan 03 — agent quality tests for the 8 new agents from Phase 30
