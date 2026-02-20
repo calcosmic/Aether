@@ -4448,6 +4448,97 @@ $updated_meta
     echo ""
     ;;
 
+  learning-select-proposals)
+    # Interactive selection of proposals for promotion
+    # Usage: learning-select-proposals [--verbose] [--dry-run] [--yes]
+    # Returns: JSON with selected/deferred arrays and action taken
+    #
+    # Flow: display proposals -> capture input -> parse selection -> output JSON
+
+    verbose=false
+    dry_run=false
+    skip_confirm=false
+
+    # Parse arguments
+    for arg in "$@"; do
+      case "$arg" in
+        --verbose) verbose=true ;;
+        --dry-run) dry_run=true ;;
+        --yes) skip_confirm=true ;;
+      esac
+    done
+
+    # Get proposals from learning-check-promotion (gets ALL observations)
+    proposals_json=$(bash "$0" learning-check-promotion 2>/dev/null | jq -r '.result // {}')
+
+    # Check if we have any proposals
+    proposal_count=$(echo "$proposals_json" | jq '.proposals | length')
+    if [[ "$proposal_count" -eq 0 ]]; then
+      json_ok '{"selected":[],"deferred":[],"count":0,"action":"none","reason":"no_proposals"}'
+      exit 0
+    fi
+
+    # Display proposals
+    if [[ "$dry_run" == "false" ]]; then
+      if [[ "$verbose" == "true" ]]; then
+        bash "$0" learning-display-proposals --verbose
+      else
+        bash "$0" learning-display-proposals
+      fi
+    fi
+
+    # Capture user input (unless dry-run)
+    selection=""
+    if [[ "$dry_run" == "true" ]]; then
+      # In dry-run mode, select all proposals
+      selection=$(seq 1 $proposal_count | tr '\n' ' ')
+      echo "Dry run: would select all $proposal_count proposals"
+    else
+      echo -n "Enter numbers to select (e.g., '1 3 5'), or press Enter to defer all: "
+      read -r selection
+    fi
+
+    # Parse the selection
+    parse_result=$(bash "$0" parse-selection "$selection" "$proposal_count")
+
+    # Check for parse errors
+    if ! echo "$parse_result" | jq -e '.ok' >/dev/null 2>&1; then
+      # Return the error
+      echo "$parse_result"
+      exit 1
+    fi
+
+    # Extract selected and deferred arrays
+    selected_indices=$(echo "$parse_result" | jq -r '.result.selected // []')
+    deferred_indices=$(echo "$parse_result" | jq -r '.result.deferred // []')
+    action=$(echo "$parse_result" | jq -r '.result.action // "select"')
+    selected_count=$(echo "$selected_indices" | jq 'length')
+    deferred_count=$(echo "$deferred_indices" | jq 'length')
+
+    # Show summary
+    if [[ "$dry_run" == "false" ]]; then
+      echo ""
+      echo "$selected_count proposal(s) selected, $deferred_count deferred"
+    fi
+
+    # Build result JSON
+    result=$(jq -n \
+      --argjson selected "$selected_indices" \
+      --argjson deferred "$deferred_indices" \
+      --argjson proposals "$proposals_json" \
+      --arg action "$action" \
+      --argjson count "$proposal_count" \
+      '{
+        selected: $selected,
+        deferred: $deferred,
+        count: $count,
+        action: $action,
+        proposals: $proposals.proposals
+      }')
+
+    json_ok "$result"
+    ;;
+
   survey-load)
     phase_type="${1:-}"
     survey_dir=".aether/data/survey"
