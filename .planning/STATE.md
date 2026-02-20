@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-19)
 ## Current Position
 
 Phase: 25 of 25 — Queen Coordination
-Plan: 02 of 03 (COMPLETE)
-Status: Phase 25 In Progress
-Last activity: 2026-02-20 — Completed 25-02: merged Architect into Keeper (Architecture Mode) and Guardian into Auditor (Security Lens Mode), deleted both old agents, updated organize.md spawn targets
+Plan: 03 of 03 (COMPLETE)
+Status: Phase 25 COMPLETE
+Last activity: 2026-02-20 — Completed 25-03: updated all agent count references from 25 to 23 across Queen Worker Castes, caste-system.md, workers.md, README.md, OPENCODE.md
 
 ## Performance Metrics
 
@@ -68,6 +68,8 @@ Last activity: 2026-02-20 — Completed 25-02: merged Architect into Keeper (Arc
 - [Phase 25-01]: selected_pattern stored as local variable in build.md — ephemeral per build, captured in BUILD SUMMARY
 - [Phase 25]: Absorbed Architect Synthesis Workflow into Keeper as Architecture Mode, Guardian security domains into Auditor as Security Lens Mode
 - [Phase 25]: Deleted aether-architect.md and aether-guardian.md outright (no stubs/redirects) — agent count reduced from 25 to 23
+- [Phase 25-03]: Preserve architect/guardian emoji rows in caste-system.md — get_caste_emoji() still maps those name patterns; deleting would break emoji for Blueprint-*, Patrol-* workers
+- [Phase 25-03]: workers.md Architect section annotated (not deleted) — historical model/workflow context preserved with merge note at heading
 
 ### Key Findings from Research
 - 7 research docs analyzed (agent architecture, template system, team coordination, distribution chain)
@@ -82,6 +84,6 @@ Last activity: 2026-02-20 — Completed 25-02: merged Architect into Keeper (Arc
 
 ## Session Continuity
 
-Last session: 2026-02-20T00:56:26Z
-Stopped at: Completed 25-01-PLAN.md (backfilled — executed after 25-02)
-Next step: Execute Phase 25 Plan 03
+Last session: 2026-02-20T01:03:45Z
+Stopped at: Completed 25-03-PLAN.md — Phase 25 COMPLETE
+Next step: Phase 25 complete — all COORD-01 through COORD-04 requirements satisfied. v1.3 milestone done.
