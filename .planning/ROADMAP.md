@@ -5,6 +5,9 @@
 - ✅ **v1.0 Repair & Stabilization** — Phases 1-9 (shipped 2026-02-18)
 - ✅ **v1.1 Colony Polish & Identity** — Phases 10-13 (shipped 2026-02-18)
 - ✅ **v1.2 Hardening & Reliability** — Phases 14-19 (shipped 2026-02-19)
+- ✅ **v1.3 The Great Restructuring** — Phases 20-25 (shipped 2026-02-20)
+- ✅ **v1.4 Deep Cleanup (partial)** — Phase 26 (shipped 2026-02-20)
+- 🚧 **v2.0 Worker Emergence** — Phases 27-31 (in progress)
 
 ## Phases
 
@@ -51,82 +54,102 @@
 
 </details>
 
-## v1.3 The Great Restructuring (Phases 20-25)
+<details>
+<summary>✅ v1.3 The Great Restructuring (Phases 20-25) — SHIPPED 2026-02-20</summary>
 
-**Goal:** Make Aether more reliable — extract templates, clean agents, simplify pipeline, define failure handling.
+- [x] Phase 20: Distribution Simplification — eliminate runtime/ staging, simplify build pipeline
+- [x] Phase 21: Template Foundation — extract 5 critical templates, add to distribution
+- [x] Phase 22: Agent Boilerplate Cleanup — strip redundant sections from all 25 agents
+- [x] Phase 23: Agent Resilience — add failure modes, success criteria, read-only declarations
+- [x] Phase 24: Template Integration — wire commands to read templates instead of inline structures
+- [x] Phase 25: Queen Coordination — escalation chain, workflow patterns, agent merges
 
-**24 requirements across 6 phases:**
+**24/24 requirements satisfied.**
 
-- [x] Phase 20: Distribution Simplification (PIPE-01 through PIPE-03) — eliminate runtime/ staging, simplify build pipeline (completed 2026-02-19)
-  Plans:
-  - [ ] 20-01-PLAN.md — Core pipeline restructure (packaging, cli.js, update-transaction.js, delete runtime/)
-  - [ ] 20-02-PLAN.md — Pre-commit hook, aether-utils.sh cleanup, bash test updates
-  - [ ] 20-03-PLAN.md — Documentation cleanup (CLAUDE.md, OPENCODE.md, rules, CHANGELOG)
-- [x] Phase 21: Template Foundation (TMPL-01 through TMPL-06) — extract 5 critical templates, add to distribution (completed 2026-02-19)
-  Plans:
-  - [ ] 21-01-PLAN.md — Create JSON templates (colony-state, constraints) and jq reset filter
-  - [ ] 21-02-PLAN.md — Create markdown templates (crowned-anthill, handoff)
-  - [ ] 21-03-PLAN.md — Register templates in validate-package.sh, verify distribution
-- [x] Phase 22: Agent Boilerplate Cleanup (AGENT-01 through AGENT-04) — strip redundant sections from all 25 agents (completed 2026-02-19)
-  **Plans:** 3 plans
-  Plans:
-  - [ ] 22-01-PLAN.md — Strip boilerplate from Core 5 and Development 4 agents (9 agents)
-  - [ ] 22-02-PLAN.md — Strip boilerplate from Knowledge 4 and Quality 4 agents (8 agents)
-  - [ ] 22-03-PLAN.md — Strip boilerplate from Special 3 agents and update Surveyor 4 descriptions (7 agents)
-- [x] Phase 23: Agent Resilience (RESIL-01 through RESIL-03) — add failure modes, success criteria, read-only declarations (completed 2026-02-19)
-  **Plans:** 3 plans
-  Plans:
-  - [ ] 23-01-PLAN.md — Add resilience sections to 7 HIGH-risk agents (queen, builder, watcher, weaver, route-setter, ambassador, tracker)
-  - [ ] 23-02-PLAN.md — Add resilience sections to 17 MEDIUM + LOW-risk agents and surveyors
-  - [ ] 23-03-PLAN.md — Add resilience blocks to 6 high-risk slash commands (init, build, lay-eggs, seal, entomb, colonize)
-- [x] Phase 24: Template Integration (WIRE-01 through WIRE-05) — wire commands to read templates instead of inline structures (completed 2026-02-20)
-  **Plans:** 3 plans
-  Plans:
-  - [ ] 24-01-PLAN.md — Wire init.md (both platforms) to colony-state and constraints templates
-  - [ ] 24-02-PLAN.md — Wire seal.md and entomb.md (both platforms) to ceremony and handoff templates
-  - [ ] 24-03-PLAN.md — Create build HANDOFF templates and wire build.md (both platforms)
-- [x] Phase 25: Queen Coordination (COORD-01 through COORD-04) — escalation chain, workflow patterns, agent merges (completed 2026-02-20)
-  **Plans:** 3 plans
-  Plans:
-  - [ ] 25-01-PLAN.md — Queen rewrite: 4-tier escalation chain + 6 named workflow patterns + build/status wiring
-  - [ ] 25-02-PLAN.md — Agent merges: Architect→Keeper, Guardian→Auditor, delete old files, update spawn refs
-  - [ ] 25-03-PLAN.md — Count cleanup: update all "25 agents" refs to "23", annotate caste-system.md and workers.md
+</details>
 
-## v1.4 Deep Cleanup & Simplification (Phases 26-30)
+<details>
+<summary>✅ v1.4 Deep Cleanup (Phase 26) — SHIPPED 2026-02-20</summary>
 
-**Goal:** Remove dead weight, consolidate duplicates, simplify structure, make the repo understandable at a glance.
+- [x] Phase 26: Audit & Delete Dead Files — full repo audit, dead duplicates removed, README updated
 
-**Why now:** The repo has accumulated files across 25 phases of work. Many are duplicates, placeholders, or no longer relevant. We need a lean, clean base before adding new features.
+**10/10 requirements satisfied (phases 27-30 absorbed into v2.0).**
 
-**Key cleanup targets:**
-- `.aether/agents/` (dead — duplicate of `.opencode/agents/`)
-- `.aether/commands/` (dead — duplicate of `.claude/commands/ant/`)
-- `.aether/docs/` duplicates
-- `.planning/phases/` completed phases (archive to docs/plans/)
-- docs/plans/ planning docs (these docs themselves can be cleaned up)
-- Orphaned templates, configs, worktree-salvage
-- Any file not needed for the colony to function
+</details>
 
-**Requirements:**
+## v2.0 Worker Emergence (Phases 27-31)
 
-- [ ] CLEAN-01: Audit every file in the repo root and `.aether/` root — mark each as KEEP, ARCHIVE, or DELETE
-- [ ] CLEAN-02: Remove `.aether/agents/` (dead duplicate)
-- [ ] CLEAN-03: Remove `.aether/commands/` (dead duplicate)
-- [ ] CLEAN-04: Remove `.aether/docs/` subdirectory duplicates
-- [ ] CLEAN-05: Archive remaining `.planning/phases/` completed phases to docs/plans/
-- [ ] CLEAN-06: Clean up docs/plans/ — consolidate or remove redundant planning docs
-- [ ] CLEAN-07: Audit `.opencode/` and `.claude/` — remove any dead duplicates
-- [ ] CLEAN-08: Verify all slash commands still work after cleanup
-- [ ] CLEAN-09: Verify `npm install -g .` still packages correctly
-- [ ] CLEAN-10: Update README to reflect new simplified structure
+**Milestone Goal:** Create real Claude Code subagents from the 22 OpenCode agent definitions. Every ant worker type becomes a first-class Claude Code subagent that resolves from the Task tool instead of the fallback path. Agents distribute through the hub to all target repos. Remaining v1.4 cleanup absorbed.
 
-**Planned phases:**
+**49 requirements across 5 phases.**
 
-- [ ] Phase 26: File Audit & Classification — audit all files, create KEEP/ARCHIVE/delete list
-- [ ] Phase 27: Remove Dead Duplicates — delete .aether/agents/, .aether/commands/, etc.
-- [ ] Phase 28: Consolidate Planning — archive remaining .planning/phases/, clean docs/plans/
-- [ ] Phase 29: Root Cleanup — clean up repo root, remove orphaned files
-- [ ] Phase 30: Verify & Document — test everything, update README, create cleanup summary
+- [ ] **Phase 27: Distribution Infrastructure + First Core Agents** - Prove the end-to-end chain works: packaging, hub sync, target delivery, with Builder and Watcher as the first two shipped agents
+- [ ] **Phase 28: Orchestration Layer + Surveyor Variants** - Queen, Scout, Route-Setter, and all 4 Surveyors — the full orchestration and codebase-context capability
+- [ ] **Phase 29: Specialist Agents + Agent Tests** - Keeper, Tracker, Probe, Weaver, Auditor plus the full AVA test suite for agent quality
+- [ ] **Phase 30: Niche Agents** - All 8 niche castes completing the full 22-agent roster
+- [ ] **Phase 31: Integration Verification + Cleanup** - End-to-end verification, docs cleanup, bash bug fix
+
+## Phase Details
+
+### Phase 27: Distribution Infrastructure + First Core Agents
+**Goal**: Users of any repo running `aether update` receive Claude Code agents that resolve correctly when the Task tool spawns them. Builder and Watcher are the first two agents shipped through this proven chain.
+**Depends on**: Phase 26
+**Requirements**: DIST-01, DIST-02, DIST-03, DIST-04, DIST-05, DIST-06, DIST-07, DIST-08, CORE-02, CORE-03, PWR-01, PWR-02, PWR-03, PWR-04, PWR-05, PWR-06, PWR-07, PWR-08
+**Success Criteria** (what must be TRUE):
+  1. `npm pack --dry-run` lists agent files from `.claude/agents/ant/` — no GSD agents included, no Aether agents excluded
+  2. `npm install -g .` followed by listing `~/.aether/system/agents-claude/` shows the ant agents present
+  3. `aether update` in a target repo creates `.claude/agents/ant/` containing the ant agent files
+  4. Running `aether update` a second time with unchanged agents reports no files changed (idempotent)
+  5. Removing an agent from source, running `npm install -g .` and `aether update`, removes it from the target repo
+**Plans**: 4 plans in 2 waves
+Plans:
+- [ ] 27-01-PLAN.md — Wire distribution pipeline (package.json, cli.js, update-transaction.js, init.js)
+- [ ] 27-02-PLAN.md — Create Builder agent (Claude Code subagent with PWR compliance)
+- [ ] 27-03-PLAN.md — Create Watcher agent (read-only Claude Code subagent with PWR compliance)
+- [ ] 27-04-PLAN.md — End-to-end verification (npm pack, hub sync, agent loading checkpoint)
+
+### Phase 28: Orchestration Layer + Surveyor Variants
+**Goal**: The full orchestration and codebase-context capability is available in Claude Code — Queen can coordinate workers, Route-Setter can plan phases, Scout can research, and all 4 Surveyors can characterize a repo.
+**Depends on**: Phase 27
+**Requirements**: CORE-01, CORE-04, CORE-05, CORE-06, CORE-07, CORE-08, CORE-09
+**Success Criteria** (what must be TRUE):
+  1. `/agents` in Claude Code shows `aether-queen`, `aether-scout`, `aether-route-setter`, and all 4 surveyor variants loaded without errors
+  2. Queen's description routes correctly — it is not invoked for tasks that belong to Builder or Watcher
+  3. All 4 surveyor agents have no Write or Edit in their tools field (read-only verified)
+  4. Scout agent description explicitly names research and discovery as its trigger cases
+**Plans**: TBD
+
+### Phase 29: Specialist Agents + Agent Tests
+**Goal**: All P2 specialist agents are shipped and a comprehensive AVA test suite enforces quality standards on every agent file — frontmatter, tool restrictions, naming, and body content.
+**Depends on**: Phase 28
+**Requirements**: SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, TEST-01, TEST-02, TEST-03, TEST-04, TEST-05
+**Success Criteria** (what must be TRUE):
+  1. `npm test` passes with tests verifying frontmatter completeness on all 22 agent files
+  2. `npm test` catches a missing tools field or incorrect agent name format as a test failure
+  3. Auditor and Tracker have no Write, Edit, or Bash in their tools field (read-only restriction enforced by tests)
+  4. No agent file body contains spawn calls or activity-log requirements (test enforced)
+**Plans**: TBD
+
+### Phase 30: Niche Agents
+**Goal**: All 8 niche agents exist as Claude Code subagents in `.claude/agents/ant/`, completing the full 22-agent roster. The fallback comment in `build.md` is unreachable for all 22 castes.
+**Depends on**: Phase 29
+**Requirements**: NICHE-01, NICHE-02, NICHE-03, NICHE-04, NICHE-05, NICHE-06, NICHE-07, NICHE-08
+**Success Criteria** (what must be TRUE):
+  1. `/agents` in Claude Code shows all 22 aether-* agents loaded (count test passes: TEST-05)
+  2. Read-only niche agents (Gatekeeper, Includer, Measurer, Chaos, Archaeologist, Sage) have no Write or Edit in tools field
+  3. Each niche agent description names a specific trigger case — not a generic role label
+**Plans**: TBD
+
+### Phase 31: Integration Verification + Cleanup
+**Goal**: The full colony workflow is verified end-to-end with real agent invocations updating colony state correctly. The repo is clean: docs trimmed, bash bug fixed, repo-structure documented.
+**Depends on**: Phase 30
+**Requirements**: INT-01, INT-02, INT-03, CLEAN-01, CLEAN-02, CLEAN-03, CLEAN-04
+**Success Criteria** (what must be TRUE):
+  1. `/ant:build` resolves `subagent_type="aether-builder"` to `.claude/agents/ant/aether-builder.md` (not the fallback path)
+  2. After an agent run, COLONY_STATE.json reflects updated state — the agent's output was consumed correctly
+  3. `.aether/docs/` contains only 8-10 actively-maintained documents
+  4. Bash line wrapping bug is fixed and verified with a test case
+**Plans**: TBD
 
 ## Progress
 
@@ -151,12 +174,18 @@
 | 17. Error Code Standardization | v1.2 | 3/3 | Complete | 2026-02-19 |
 | 18. Reliability & Architecture Gaps | v1.2 | 4/4 | Complete | 2026-02-19 |
 | 19. Milestone Polish | v1.2 | 4/4 | Complete | 2026-02-19 |
-| 20. Distribution Simplification | v1.3 | Complete    | 2026-02-19 | — |
-| 21. Template Foundation | v1.3 | Complete    | 2026-02-19 | — |
-| 22. Agent Boilerplate Cleanup | v1.3 | Complete    | 2026-02-19 | — |
-| 23. Agent Resilience | v1.3 | Complete    | 2026-02-19 | — |
-| 24. Template Integration | v1.3 | Complete    | 2026-02-20 | — |
-| 25. Queen Coordination | v1.3 | Complete    | 2026-02-20 | — |
+| 20. Distribution Simplification | v1.3 | Complete | 2026-02-19 | — |
+| 21. Template Foundation | v1.3 | Complete | 2026-02-19 | — |
+| 22. Agent Boilerplate Cleanup | v1.3 | Complete | 2026-02-19 | — |
+| 23. Agent Resilience | v1.3 | Complete | 2026-02-19 | — |
+| 24. Template Integration | v1.3 | Complete | 2026-02-20 | — |
+| 25. Queen Coordination | v1.3 | Complete | 2026-02-20 | — |
+| 26. Audit & Delete Dead Files | v1.4 | Complete | 2026-02-20 | — |
+| 27. Distribution Infrastructure + First Core Agents | v2.0 | 0/4 | Planned | - |
+| 28. Orchestration Layer + Surveyor Variants | v2.0 | 0/TBD | Not started | - |
+| 29. Specialist Agents + Agent Tests | v2.0 | 0/TBD | Not started | - |
+| 30. Niche Agents | v2.0 | 0/TBD | Not started | - |
+| 31. Integration Verification + Cleanup | v2.0 | 0/TBD | Not started | - |
 
 ---
 
@@ -164,4 +193,6 @@
 *v1.0 shipped: 2026-02-18*
 *v1.1 shipped: 2026-02-18*
 *v1.2 shipped: 2026-02-19*
-*v1.3 roadmap created: 2026-02-19*
+*v1.3 shipped: 2026-02-20*
+*v1.4 (partial) shipped: 2026-02-20*
+*v2.0 roadmap created: 2026-02-20*

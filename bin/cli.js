@@ -67,6 +67,7 @@ if (!HOME) {
 // Claude Code paths (global)
 const COMMANDS_SRC = path.join(PACKAGE_DIR, 'commands', 'ant');
 const COMMANDS_DEST = path.join(HOME, '.claude', 'commands', 'ant');
+const AGENTS_DEST = path.join(HOME, '.claude', 'agents', 'ant');
 
 // Hub paths
 const HUB_DIR = path.join(HOME, '.aether');
@@ -1160,7 +1161,7 @@ program.on('option:quiet', () => {
 // Install command
 program
   .command('install')
-  .description('Install slash-commands to ~/.claude/commands/ant/ and set up distribution hub')
+  .description('Install commands and agents to ~/.claude/ and set up distribution hub')
   .action(wrapCommand(async () => {
     log(c.header(`aether-colony v${VERSION} — installing...`));
 
@@ -1183,6 +1184,17 @@ program
       log(`  Commands: ${result.copied} files -> ${COMMANDS_DEST}`);
       if (result.removed.length > 0) {
         log(`  Commands: removed ${result.removed.length} stale files`);
+        for (const f of result.removed) log(`    - ${f}`);
+      }
+    }
+
+    // Sync agents to ~/.claude/agents/ant/ (with orphan cleanup)
+    const repoAgents = path.join(PACKAGE_DIR, '.claude', 'agents', 'ant');
+    if (fs.existsSync(repoAgents)) {
+      const result = syncDirWithCleanup(repoAgents, AGENTS_DEST);
+      log(`  Agents (claude): ${result.copied} files -> ${AGENTS_DEST}`);
+      if (result.removed.length > 0) {
+        log(`  Agents (claude): removed ${result.removed.length} stale files`);
         for (const f of result.removed) log(`    - ${f}`);
       }
     }

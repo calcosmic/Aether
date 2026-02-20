@@ -4,7 +4,7 @@
 
 A self-managing development assistant using ant colony metaphor that prevents context rot. Users install it, it guides them through work with clear commands, tells them when to clear context, and maintains state across sessions. The colony learns from each phase and improves over time. As of v1.2, the foundation is hardened — all documented bugs fixed, distribution chain cleaned up, error codes standardized, and lock safety guaranteed with 446 tests passing.
 
-**Current State:** v1.3 in progress. The Great Restructuring — comprehensive architecture simplification across agent definitions, template system, team coordination, distribution pipeline, queen architecture, and wisdom inheritance.
+**Current State:** v2.0 in progress. Worker Emergence — creating real Claude Code subagents from the 22 OpenCode agent definitions, plus absorbing remaining v1.4 cleanup phases.
 
 ## Core Value
 
@@ -142,46 +142,29 @@ If everything else fell away, Aether's essential value is:
 
 ### Active
 
-## Current Milestone: v1.3 The Great Restructuring
+## Current Milestone: v2.0 Worker Emergence
 
-**Goal:** Make Aether more reliable by extracting embedded structures into templates, cleaning up agent definitions, simplifying the distribution pipeline, and defining how agents handle failure. Focused on changes that improve real-world reliability, not theoretical architecture.
+**Goal:** Create real Claude Code subagents from the 22 existing OpenCode agent definitions, making Aether's ant workers functional in Claude Code via the Task tool. Absorb remaining v1.4 cleanup phases.
 
-**Distribution Simplification:**
-- PIPE-01: runtime/ staging directory eliminated — npm package reads directly from .aether/
-- PIPE-02: sync-to-runtime.sh replaced with direct packaging approach
-- PIPE-03: Pre-commit hook updated for simplified pipeline
+**Target features:**
+- Claude Code subagent definitions in `.claude/agents/` for all ant worker types
+- Proper YAML frontmatter (name, description, tools, model) for auto-routing
+- XML-structured agent bodies following CDS/GSD patterns (role, execution_flow, critical_rules)
+- Agent descriptions optimized for Task tool routing
+- Remaining repo cleanup from v1.4 (docs, bash bug fix, verify)
 
-**Template Foundation:**
-- TMPL-01: colony-state.json.template created with self-documenting annotations
-- TMPL-02: constraints.json.template created
-- TMPL-03: crowned-anthill.md.template created
-- TMPL-04: handoff.md.template created
-- TMPL-05: worker-result.json.template created
-- TMPL-06: Templates added to distribution pipeline and sync allowlist
+### Shipped
 
-**Agent Cleanup:**
-- AGENT-01: "Aether Integration" boilerplate removed from all agents
-- AGENT-02: Depth-Based Behavior section removed entirely from all agents
-- AGENT-03: workers.md reference footer removed from all agents
-- AGENT-04: Dead model references deferred — outdated content cleanup is a separate task from boilerplate stripping
+**v1.3 The Great Restructuring** (phases 20-25):
+- PIPE-01 through PIPE-03: Distribution simplified — runtime/ eliminated
+- TMPL-01 through TMPL-06: Template foundation — 5 templates extracted and wired
+- AGENT-01 through AGENT-04: Agent boilerplate cleaned
+- RESIL-01 through RESIL-03: Failure modes and success criteria on all agents
+- WIRE-01 through WIRE-05: Commands wired to templates
+- COORD-01 through COORD-04: Queen escalation chain, workflow patterns, agent merges
 
-**Agent Resilience:**
-- RESIL-01: Failure modes defined for all agents (cannot_complete, unexpected_complexity, 3-fix escalation)
-- RESIL-02: Success criteria checklist added to all agents
-- RESIL-03: Read-only vs read-write explicitly declared per agent
-
-**Template Integration:**
-- WIRE-01: init.md reads colony-state template instead of inline JSON
-- WIRE-02: init.md reads constraints template instead of inline JSON
-- WIRE-03: seal.md reads crowned-anthill template instead of heredoc
-- WIRE-04: entomb.md reads handoff template instead of heredoc
-- WIRE-05: build.md references worker-result template for agent output
-
-**Queen Coordination:**
-- COORD-01: Escalation chain defined (depth 3 → 2 → 1 → Queen → user)
-- COORD-02: 6 named workflow patterns added to Queen definition
-- COORD-03: Architect agent merged into Keeper
-- COORD-04: Guardian agent folded into Auditor as named security lens
+**v1.4 Deep Cleanup (partial)** (phase 26):
+- CLEAN-01 through CLEAN-10: File audit — dead files removed, repo cleaned
 
 ### Out of Scope
 
@@ -190,7 +173,6 @@ If everything else fell away, Aether's essential value is:
 - Offline/mobile support — CLI-only tool
 - ANSI color codes in chat — renders as garbage in Claude Code
 - Animated spinners — not supported in Claude Code chat
-- Additional ASCII art — diminishing returns, adds noise
 - Full XML migration of all 25 agents — do gradually as agents are touched, not as dedicated project
 - JSON Schema validation system — templates themselves are the improvement
 - File lock protocol for parallel builders — solve when builders actually collide
@@ -198,18 +180,19 @@ If everything else fell away, Aether's essential value is:
 - Queen architecture split (hub + project) — solve when cross-repo coordination is needed
 - Caste metrics tracking — nice for analytics, not urgent
 - Template Registry and versioning — premature optimization
-- A/B testing framework for agent formats — interesting but expensive to build
 
 ## Context
 
-Shipped v1.2 with ~5,435 lines of shell (aether-utils.sh), 34 Claude Code commands, 33 OpenCode commands. 446 tests passing (415 AVA + 31 bash), 0 failures. All documented bugs (BUG-002 through BUG-012) fixed. Distribution chain correct end-to-end. Error codes fully standardized with contributor documentation.
+Shipped through v1.4 with ~5,435 lines of shell (aether-utils.sh), 34 Claude Code commands, 33 OpenCode commands. 446 tests passing (415 AVA + 31 bash), 0 failures. All documented bugs fixed. Distribution chain correct end-to-end. Error codes fully standardized. Templates extracted and wired. Agent definitions cleaned and hardened.
 
 Tech stack: Bash, jq, xmllint/xmlstarlet, Node.js CLI wrapper.
 
-Three milestones shipped:
+Five milestones shipped:
 - v1.0: 46/46 requirements — full repair and stabilization
 - v1.1: 14/15 requirements — visual polish and identity
 - v1.2: 24/24 requirements — hardening and reliability
+- v1.3: 24/24 requirements — templates, agent cleanup, pipeline, Queen coordination
+- v1.4: 10/10 requirements (partial) — file audit and dead file removal
 
 ## Key Decisions
 
@@ -249,4 +232,4 @@ Three milestones shipped:
 
 ---
 
-*Last updated: 2026-02-19 after v1.3 milestone start*
+*Last updated: 2026-02-20 after v2.0 milestone start*
