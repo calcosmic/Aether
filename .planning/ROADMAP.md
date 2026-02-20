@@ -132,7 +132,11 @@ Plans:
   2. `npm test` catches a missing tools field or incorrect agent name format as a test failure
   3. Auditor and Tracker have no Write, Edit, or Bash in their tools field (read-only restriction enforced by tests)
   4. No agent file body contains spawn calls or activity-log requirements (test enforced)
-**Plans**: TBD
+**Plans**: 3 plans in 2 waves
+Plans:
+- [ ] 29-01-PLAN.md — Create Keeper, Tracker, and Auditor agents (read-only specialists)
+- [ ] 29-02-PLAN.md — Create Probe and Weaver agents (behavior guarantee specialists)
+- [ ] 29-03-PLAN.md — AVA test suite for agent quality enforcement (TEST-01 through TEST-05)
 
 ### Phase 30: Niche Agents
 **Goal**: All 8 niche agents exist as Claude Code subagents in `.claude/agents/ant/`, completing the full 22-agent roster. The fallback comment in `build.md` is unreachable for all 22 castes.
@@ -187,7 +191,7 @@ Plans:
 | 26. Audit & Delete Dead Files | v1.4 | Complete | 2026-02-20 | — |
 | 27. Distribution Infrastructure + First Core Agents | v2.0 | 0/4 | Planned | - |
 | 28. Orchestration Layer + Surveyor Variants | v2.0 | Complete    | 2026-02-20 | - |
-| 29. Specialist Agents + Agent Tests | v2.0 | 0/TBD | Not started | - |
+| 29. Specialist Agents + Agent Tests | v2.0 | 0/3 | Planned | - |
 | 30. Niche Agents | v2.0 | 0/TBD | Not started | - |
 | 31. Integration Verification + Cleanup | v2.0 | 0/TBD | Not started | - |
 
