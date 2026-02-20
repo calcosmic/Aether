@@ -677,50 +677,51 @@ This is idempotent — runs every time continue fires but only creates the direc
 
 ### Step 2.1.5: Check for Promotion Proposals (PHER-EVOL-02)
 
-After extracting learnings, check for observations that have met promotion thresholds.
+After extracting learnings, check for observations that have met promotion thresholds and present the tick-to-approve UX.
 
-**Process:**
+**Check for --deferred flag:**
 
-1. **Call learning-check-promotion to get proposals:**
+If `$ARGUMENTS` contains `--deferred`:
+```bash
+if [[ "$ARGUMENTS" == *"--deferred"* ]] && [[ -f .aether/data/learning-deferred.json ]]; then
+  echo "📦 Reviewing deferred proposals..."
+  bash .aether/aether-utils.sh learning-approve-proposals --deferred ${verbose:+--verbose}
+fi
+```
+
+**Normal proposal flow:**
+
+1. **Check for proposals:**
    ```bash
    proposals=$(bash .aether/aether-utils.sh learning-check-promotion 2>/dev/null || echo "[]")
    ```
 
-2. **If proposals exist, display them for user approval:**
+2. **If proposals exist, invoke the approval workflow:**
 
-   Parse the proposals and display in this format:
-   ```
-   🧠 Promotion Proposals
-   ====================
-   The following learnings have met promotion thresholds:
-
-   [{type}] {content_preview}...
-   ─────────────────────────
-   Observations: {count}/{threshold}
-   Contributed by: {colony1}, {colony2}
-   ```
-
-3. **Use AskUserQuestion to get user approval:**
-   ```
-   Approve promotion?
-   1. Yes, promote all
-   2. Yes, promote selected (then show selection)
-   3. No, skip promotion
-   ```
-
-4. **If user approves (option 1 or 2):**
-   - For each approved proposal, call queen-promote
-   - Get colony name from state: `colony_name=$(jq -r '.session_id | split("_")[1] // "unknown"' .aether/data/COLONY_STATE.json)`
-   - Call: `bash .aether/aether-utils.sh queen-promote "{type}" "{content}" "$colony_name"`
-
-5. **Log promotion results:**
+   Run using the Bash tool with description "Processing promotion proposals...":
    ```bash
-   bash .aether/aether-utils.sh activity-log "PROMOTED" "Queen" "Promoted N observations to QUEEN.md wisdom"
+   bash .aether/aether-utils.sh learning-approve-proposals ${verbose:+--verbose}
    ```
 
-Skip this step if:
+   The learning-approve-proposals function handles:
+   - Displaying proposals with checkbox UI
+   - Capturing user selection
+   - Executing batch promotions via queen-promote
+   - Deferring unselected proposals
+   - Offering undo after successful promotions
+   - Logging PROMOTED activity
+
+3. **Pass through --verbose flag:**
+   If `$ARGUMENTS` contains `--verbose`, pass it to learning-approve-proposals:
+   ```bash
+   verbose_flag=""
+   [[ "$ARGUMENTS" == *"--verbose"* ]] && verbose_flag="--verbose"
+   bash .aether/aether-utils.sh learning-approve-proposals $verbose_flag
+   ```
+
+**Skip conditions:**
 - learning-check-promotion returns empty or fails
-- User selects "No, skip promotion"
+- No proposals to review
 - QUEEN.md does not exist
 
 ### Step 2.2: Promote Validated Learnings to QUEEN.md (INT-03)
