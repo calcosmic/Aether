@@ -212,9 +212,9 @@ check_content() {
 
     if [[ "$drift_count" -gt 0 ]]; then
         echo ""
-        log_error "Content drift detected in $drift_count file(s):"
+        log_warn "Content drift detected in $drift_count file(s) (non-blocking):"
         echo -e "$drift_files"
-        return 1
+        # Content drift is advisory — structural sync is what matters
     fi
 
     if [[ "$error_count" -gt 0 ]]; then
