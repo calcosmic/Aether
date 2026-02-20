@@ -323,8 +323,7 @@ Attempting rollback...
 
 Rollback and log failure (consolidated):
 ```bash
-bash .aether/aether-utils.sh autofix-rollback "{checkpoint_type}" "{checkpoint_ref}" && bash .aether/aether-utils.sh activity-log "SWARM_FAILED" "Queen" "Swarm {swarm_id} fix failed verification" with description "Rolling back failed fix..."
-```
+bash .aether/aether-utils.sh autofix-rollback "{checkpoint_type}" "{checkpoint_ref}" ; bash .aether/aether-utils.sh activity-log "SWARM_FAILED" "Queen" "Swarm {swarm_id} fix failed verification" with description "Rolling back failed fix..."
 
 Track attempt count. If this is the 3rd failure on the same issue:
 ```

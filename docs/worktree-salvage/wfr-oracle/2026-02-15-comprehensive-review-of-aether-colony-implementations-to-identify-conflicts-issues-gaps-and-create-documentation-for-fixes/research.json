@@ -1,0 +1,14 @@
+{
+  "topic": "Identify bugs, issues, gaps and errors in the Aether system using symptom-isolate-prove-fix-guard methodology",
+  "scope": "both",
+  "questions": [
+    "What are the potential bugs in the Aether system codebase?",
+    "What are the existing issues, gaps or inconsistencies in the system?",
+    "What errors exist in the code that could cause failures?",
+    "What are the connections and overlaps between identified issues?",
+    "What specific steps are needed to fix each identified issue?"
+  ],
+  "max_iterations": 50,
+  "target_confidence": 99,
+  "started_at": "2026-02-15T14:13:04Z"
+}

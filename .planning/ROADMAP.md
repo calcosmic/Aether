@@ -85,7 +85,7 @@
   - [ ] 24-01-PLAN.md — Wire init.md (both platforms) to colony-state and constraints templates
   - [ ] 24-02-PLAN.md — Wire seal.md and entomb.md (both platforms) to ceremony and handoff templates
   - [ ] 24-03-PLAN.md — Create build HANDOFF templates and wire build.md (both platforms)
-- [ ] Phase 25: Queen Coordination (COORD-01 through COORD-04) — escalation chain, workflow patterns, agent merges
+- [x] Phase 25: Queen Coordination (COORD-01 through COORD-04) — escalation chain, workflow patterns, agent merges (completed 2026-02-20)
   **Plans:** 3 plans
   Plans:
   - [ ] 25-01-PLAN.md — Queen rewrite: 4-tier escalation chain + 6 named workflow patterns + build/status wiring
@@ -120,7 +120,7 @@
 | 22. Agent Boilerplate Cleanup | v1.3 | Complete    | 2026-02-19 | — |
 | 23. Agent Resilience | v1.3 | Complete    | 2026-02-19 | — |
 | 24. Template Integration | v1.3 | Complete    | 2026-02-20 | — |
-| 25. Queen Coordination | v1.3 | 0/3 | Pending | — |
+| 25. Queen Coordination | v1.3 | Complete    | 2026-02-20 | — |
 
 ---
 

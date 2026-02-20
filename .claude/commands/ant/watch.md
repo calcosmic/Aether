@@ -43,7 +43,7 @@ WATCH_START=$(date +%s)
 Check for stale watch files by running using the Bash tool with description "Checking for stale watch session...":
 ```bash
 stale_check=$(bash .aether/aether-utils.sh session-verify-fresh --command watch "" "$WATCH_START")
-has_stale=$(echo "$stale_check" | jq -r '.stale | length')
+has_stale=$(echo "$stale_check" | jq -r '.stale | length' 2>/dev/null || echo "0")
 ```
 
 If stale files exist, they will be overwritten by the new watch session.
@@ -186,12 +186,6 @@ Attaching now...
 ```
 
 Generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":
-```bash
-state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
-current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
-total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
-bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
-```
 
 ---
 

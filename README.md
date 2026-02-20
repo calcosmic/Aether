@@ -18,7 +18,7 @@
   [![npm version](https://img.shields.io/npm/v/aether-colony.svg)](https://www.npmjs.com/package/aether-colony)
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-  **v3.1.18** — Production ready with colony intelligence
+  **v4.0.0** — Distribution Simplification (runtime/ eliminated)
 </div>
 
 ---

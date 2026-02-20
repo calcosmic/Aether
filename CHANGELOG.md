@@ -5,6 +5,17 @@ All notable changes to the Aether Colony project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- README updated to v4.0.0
+
+### Removed
+- Old planning phases 10-19 archived to docs/plans/ (completed phases)
+- Orphaned worktree salvage files moved to docs/worktree-salvage/
+
+---
+
 ## v4.0.0 -- Distribution Simplification
 
 **Breaking change:** The `runtime/` staging directory has been removed. The npm package now reads directly from `.aether/`, with private directories (data/, dreams/, oracle/, etc.) excluded by `.aether/.npmignore`.
