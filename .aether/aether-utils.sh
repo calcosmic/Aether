@@ -3658,10 +3658,28 @@ ANTLOGO
       esac
     fi
 
+    # QUEEN-04: Check threshold against learning-observations.json
     # For decrees, always promote immediately (threshold 0)
-    # For other types, we assume validation count is passed or threshold is met
-    # In a real implementation, this would check a validation counter
-    # For now, we append if threshold allows (decrees always, others need external validation)
+    # For other types, verify observation count meets threshold
+    observations_file="$DATA_DIR/learning-observations.json"
+    content_hash="sha256:$(echo -n "$content" | sha256sum | cut -d' ' -f1)"
+
+    if [[ "$wisdom_type" != "decree" ]] && [[ -f "$observations_file" ]]; then
+      # Check if this content has been observed enough times
+      observation_data=$(jq -r --arg hash "$content_hash" '.observations[] | select(.content_hash == $hash) | {count: .observation_count, colonies: .colonies}' "$observations_file" 2>/dev/null || echo '{}')
+
+      if [[ -n "$observation_data" ]] && [[ "$observation_data" != '{}' ]]; then
+        obs_count=$(echo "$observation_data" | jq -r '.count // 0')
+        obs_colonies=$(echo "$observation_data" | jq -r '.colonies // []')
+
+        if [[ "$obs_count" -lt "$threshold" ]]; then
+          json_err "$E_VALIDATION_FAILED" "Threshold not met: $obs_count/$threshold observations" "{\"observation_count\":$obs_count,\"threshold\":$threshold,\"content_hash\":\"$content_hash\"}"
+        fi
+      else
+        # No observations found for this content
+        json_err "$E_VALIDATION_FAILED" "No observations found for this content" "{\"threshold\":$threshold,\"content_hash\":\"$content_hash\"}"
+      fi
+    fi
 
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
@@ -3758,7 +3776,119 @@ ${entry}" "$queen_file" > "$tmp_file"
       print
     }' "$tmp_file" > "${tmp_file}.stats" && mv "${tmp_file}.stats" "$tmp_file"
 
-    # Add colony to colonies_contributed if not present
+    # META-02: Update evolution_log in METADATA JSON
+    # Add entry with timestamp, action, wisdom_type, content_hash
+    ev_log_entry="{\"timestamp\": \"$ts\", \"action\": \"promote\", \"wisdom_type\": \"$wisdom_type\", \"content_hash\": \"$content_hash\", \"colony\": \"$colony_name\"}"
+
+    # Check if evolution_log exists in metadata, add if not
+    if ! grep -q '"evolution_log"' "$tmp_file"; then
+      # Add evolution_log array after stats
+      awk -v entry="$ev_log_entry" '
+        /"stats": \{/ {
+          print
+          # Read until closing brace of stats
+          while (getline > 0) {
+            print
+            if (/\}/) break
+          }
+          # Add comma and evolution_log
+          print ","
+          print "  \"evolution_log\": [" entry "]"
+          next
+        }
+        { print }
+      ' "$tmp_file" > "${tmp_file}.evlog" && mv "${tmp_file}.evlog" "$tmp_file"
+    else
+      # Append to existing evolution_log array
+      awk -v entry="$ev_log_entry" '
+        /"evolution_log": \[/ {
+          # Check if array is empty or has items
+          if (/\]/) {
+            # Empty array - replace with entry
+            gsub(/"evolution_log": \[\]/, "\"evolution_log\": [" entry "]")
+          } else {
+            # Has items - need to add before closing bracket
+            # For now, just print and handle in next iteration
+          }
+          print
+          next
+        }
+        # Handle multi-line evolution_log arrays
+        /"evolution_log": \[/ && !/\]/ {
+          print
+          getline
+          if (/\]/) {
+            # Was empty, now add entry
+            print entry
+            print "]"
+          } else {
+            # Has items, add comma and entry before closing
+            print
+            while (getline > 0) {
+              if (/^\s*\]/) {
+                print ","
+                print entry
+                print "]"
+                break
+              }
+              print
+            }
+          }
+          next
+        }
+        { print }
+      ' "$tmp_file" > "${tmp_file}.evlog" && mv "${tmp_file}.evlog" "$tmp_file"
+    fi
+
+    # META-04: Update colonies_contributed mapping in METADATA JSON
+    # This maps content_hash to array of colonies that contributed
+    # Get colonies from observations file if available
+    colonies_json="[]"
+    if [[ -f "$observations_file" ]]; then
+      colonies_from_obs=$(jq -r --arg hash "$content_hash" '.observations[] | select(.content_hash == $hash) | .colonies // [] | @json' "$observations_file" 2>/dev/null || echo '[]')
+      if [[ -n "$colonies_from_obs" ]] && [[ "$colonies_from_obs" != "null" ]]; then
+        colonies_json="$colonies_from_obs"
+      fi
+    fi
+
+    # Add colonies_contributed object if not present
+    if ! grep -q '"colonies_contributed"' "$tmp_file"; then
+      # Add after evolution_log or stats
+      awk -v hash="$content_hash" -v colonies="$colonies_json" '
+        /"evolution_log": / {
+          print
+          # Skip to end of evolution_log array
+          brace_count = 1
+          while (getline > 0) {
+            print
+            if (/\[/) brace_count++
+            if (/\]/) brace_count--
+            if (brace_count == 0) break
+          }
+          print ","
+          print "  \"colonies_contributed\": {"
+          print "    \"" hash "\": " colonies
+          print "  }"
+          next
+        }
+        { print }
+      ' "$tmp_file" > "${tmp_file}.colmap" && mv "${tmp_file}.colmap" "$tmp_file"
+    else
+      # Update existing colonies_contributed - add/update entry for this hash
+      # Use jq for reliable JSON manipulation
+      meta_section=$(sed -n '/<!-- METADATA/,/-->/p' "$tmp_file" | sed '1d;$d' | tr -d '\n' | sed 's/^[[:space:]]*//')
+      if [[ -n "$meta_section" ]]; then
+        updated_meta=$(echo "$meta_section" | jq --arg hash "$content_hash" --argjson cols "$colonies_json" '.colonies_contributed[$hash] = $cols' 2>/dev/null || echo "$meta_section")
+        # Replace metadata section
+        new_comment="<!-- METADATA"
+        new_comment="$new_comment
+$updated_meta
+-->"
+        awk -v new="$new_comment" '/<!-- METADATA/,/-->/{ if (/<!-- METADATA/) print new; next }1' "$tmp_file" > "${tmp_file}.metaupd" && mv "${tmp_file}.metaupd" "$tmp_file"
+      fi
+    fi
+
+    # Add colony to colonies_contributed array (legacy) if not present
     if ! grep -q "\"${colony_name}\"" "$tmp_file"; then
       # Add to colonies_contributed array using awk - handle empty and non-empty arrays
       awk -v colony="$colony_name" '
@@ -3785,7 +3915,7 @@ ${entry}" "$queen_file" > "$tmp_file"
     # Atomic move
     mv "$tmp_file" "$queen_file"
 
-    json_ok "{\"promoted\":true,\"type\":\"$wisdom_type\",\"colony\":\"$colony_name\",\"timestamp\":\"$ts\",\"threshold\":$threshold,\"new_count\":$new_count}"
+    json_ok "{\"promoted\":true,\"type\":\"$wisdom_type\",\"colony\":\"$colony_name\",\"timestamp\":\"$ts\",\"threshold\":$threshold,\"new_count\":$new_count,\"content_hash\":\"$content_hash\"}"
     ;;
 
   learning-observe)
