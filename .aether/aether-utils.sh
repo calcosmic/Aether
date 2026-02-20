@@ -3613,6 +3613,69 @@ ANTLOGO
     json_ok "$result"
     ;;
 
+  generate-threshold-bar)
+    # Generate visual threshold progress bar
+    # Usage: generate-threshold-bar <observation_count> <threshold>
+    # Returns: Visual bar like "●●●○○ (3/5)" or "[=--] (1/3)" for ASCII
+    obs_count="${1:-0}"
+    threshold="${2:-1}"
+
+    # Validate inputs are numbers
+    if ! [[ "$obs_count" =~ ^[0-9]+$ ]]; then
+      json_err "$E_VALIDATION_FAILED" "observation_count must be a number" "{\"provided\":\"$obs_count\"}"
+    fi
+    if ! [[ "$threshold" =~ ^[0-9]+$ ]]; then
+      json_err "$E_VALIDATION_FAILED" "threshold must be a number" "{\"provided\":\"$threshold\"}"
+    fi
+
+    # Handle threshold = 0 (immediate promotion)
+    if [[ "$threshold" -eq 0 ]]; then
+      json_ok "{\"bar\":\"immediate\",\"count\":$obs_count,\"threshold\":0}"
+      exit 0
+    fi
+
+    # Detect UTF-8 support
+    use_utf8=false
+    if [[ "${LANG:-}" =~ UTF-8 ]] || [[ "${LC_ALL:-}" =~ UTF-8 ]]; then
+      use_utf8=true
+    fi
+
+    # Build the bar
+    bar=""
+    filled_char=""
+    empty_char=""
+
+    if [[ "$use_utf8" == "true" ]]; then
+      filled_char="●"
+      empty_char="○"
+    else
+      filled_char="="
+      empty_char="-"
+    fi
+
+    # Cap count at threshold for display (don't show overfill)
+    display_count=$obs_count
+    if [[ "$display_count" -gt "$threshold" ]]; then
+      display_count=$threshold
+    fi
+
+    # Build bar characters
+    for ((i=0; i<threshold; i++)); do
+      if [[ $i -lt $display_count ]]; then
+        bar+="$filled_char"
+      else
+        bar+="$empty_char"
+      fi
+    done
+
+    # For ASCII mode, wrap in brackets
+    if [[ "$use_utf8" == "false" ]]; then
+      bar="[$bar]"
+    fi
+
+    json_ok "{\"bar\":\"$bar\",\"count\":$obs_count,\"threshold\":$threshold}"
+    ;;
+
   queen-promote)
     # Promote a learning to QUEEN.md wisdom
     # Usage: queen-promote <type> <content> <colony_name>

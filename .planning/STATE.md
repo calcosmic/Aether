@@ -9,18 +9,18 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ## Current Position
 
-Phase: 33 (Plan 01 complete)
-Plan: Phase 33-01 - learning-observe function added
-Status: Phase 33-01 complete - learning-observe tracks observations across colonies
-Last activity: 2026-02-20 — Phase 33-01 complete - learning-observe with content hashing and cross-colony accumulation
+Phase: 33 (Plan 03 complete)
+Plan: Phase 33-03 - promotion proposals integrated
+Status: Phase 33 complete - promotion pipeline: observe -> check -> display -> approve -> promote
+Last activity: 2026-02-20 — Phase 33-03 complete - continue.md displays proposals, queen-promote enforces thresholds
 
-Progress: [▓▓▓▓▓░░░░░] 33% (1/3 plans complete in Phase 33)
+Progress: [▓▓▓▓▓▓▓▓▓▓] 100% (3/3 plans complete in Phase 33)
 
 ## Performance Metrics
 
 **Cumulative:**
-- Total plans completed: 91 (v1.0: 27, v1.1: 13, v1.2: 18, v1.3: 12, v1.4: 2, v2.0: 18, v3.0: 1)
-- Total requirements validated: 160 (v1.0: 46, v1.1: 14, v1.2: 24, v1.3: 24, v1.4: 1 partial, v2.0: 48, v3.0: 3 requirements)
+- Total plans completed: 93 (v1.0: 27, v1.1: 13, v1.2: 18, v1.3: 12, v1.4: 2, v2.0: 18, v3.0: 3)
+- Total requirements validated: 165 (v1.0: 46, v1.1: 14, v1.2: 24, v1.3: 24, v1.4: 1 partial, v2.0: 48, v3.0: 8 requirements)
 - Total tests: ~427 passing (427 AVA + 9 bash skipped); all 22 agents fully quality-validated
 
 ## Accumulated Context
@@ -75,6 +75,12 @@ Progress: [▓▓▓▓▓░░░░░] 33% (1/3 plans complete in Phase 33)
 - [Phase 33]: 33-01: learning-observe function records observations with SHA256 content hashing for deduplication
 - [Phase 33]: 33-01: Cross-colony accumulation - different colonies contribute to same observation count
 - [Phase 33]: 33-01: Threshold detection per wisdom type (philosophy=5, pattern=3, redirect=2, stack=1, decree=0)
+- [Phase 33]: 33-02: learning-check-promotion function identifies learnings meeting promotion thresholds
+- [Phase 33]: 33-02: Proposals include observation count, threshold, and contributing colonies
+- [Phase 33]: 33-03: continue.md displays promotion proposals at phase end (PHER-EVOL-02)
+- [Phase 33]: 33-03: User approval required before all promotions (INT-03)
+- [Phase 33]: 33-03: queen-promote enforces type validation and thresholds (QUEEN-04)
+- [Phase 33]: 33-03: QUEEN.md metadata tracks evolution_log (META-02) and colonies_contributed (META-04)
 
 ### Key Findings from Research
 - Subagents cannot spawn other subagents — strip all spawn calls from every converted agent
@@ -90,5 +96,5 @@ Progress: [▓▓▓▓▓░░░░░] 33% (1/3 plans complete in Phase 33)
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: Phase 33-01 complete - learning-observe function added
-Next step: Phase 33-02 — Add learning-check-promotion for threshold checking
+Stopped at: Phase 33 complete - promotion proposals fully integrated
+Next step: Phase 34 — Add colony lifecycle management (archive/seal commands)
