@@ -393,26 +393,23 @@ cp .aether/data/COLONY_STATE.json .aether/data/COLONY_STATE.json.bak
 
 Reset state, clearing everything including promoted wisdom (already in QUEEN.md):
 ```bash
-jq '
-  .goal = null |
-  .state = "IDLE" |
-  .current_phase = 0 |
-  .plan.phases = [] |
-  .plan.generated_at = null |
-  .plan.confidence = null |
-  .build_started_at = null |
-  .session_id = null |
-  .initialized_at = null |
-  .milestone = null |
-  .events = [] |
-  .errors.records = [] |
-  .errors.flagged_patterns = [] |
-  .signals = [] |
-  .graveyards = [] |
-  .memory.instincts = [] |
-  .memory.phase_learnings = [] |
-  .memory.decisions = []
-' .aether/data/COLONY_STATE.json.bak > .aether/data/COLONY_STATE.json
+# Resolve jq template path (hub-first)
+jq_template=""
+for path in \
+  "$HOME/.aether/system/templates/colony-state-reset.jq.template" \
+  ".aether/templates/colony-state-reset.jq.template"; do
+  if [[ -f "$path" ]]; then
+    jq_template="$path"
+    break
+  fi
+done
+
+if [[ -z "$jq_template" ]]; then
+  echo "Template missing: colony-state-reset.jq.template. Run aether update to fix."
+  exit 1
+fi
+
+jq -f "$jq_template" .aether/data/COLONY_STATE.json.bak > .aether/data/COLONY_STATE.json
 ```
 
 Verify reset succeeded:
@@ -445,39 +442,22 @@ rm -f .aether/CROWNED-ANTHILL.md
 
 Write handoff documenting the entombed colony:
 
-```bash
-cat > .aether/HANDOFF.md << 'HANDOFF_EOF'
-# Colony Session — ENTOMBED
+Resolve the handoff template path:
+  Check ~/.aether/system/templates/handoff.template.md first,
+  then .aether/templates/handoff.template.md.
 
-## Colony Archived
-**Status:** Entombed in Chambers — Colony work preserved
+If no template found: output "Template missing: handoff.template.md. Run aether update to fix." and stop.
 
-## Chamber Location
-.aether/chambers/{chamber_name}/
+Read the template file. Fill all {{PLACEHOLDER}} values:
+  - {{CHAMBER_NAME}} → chamber_name
+  - {{GOAL}} → goal
+  - {{PHASES_COMPLETED}} → phases completed count
+  - {{TOTAL_PHASES}} → total phases count
+  - {{MILESTONE}} → milestone
+  - {{ENTOMB_TIMESTAMP}} → current ISO-8601 UTC timestamp
 
-## Colony Summary
-- Goal: "{goal}"
-- Phases: {completed} completed of {total}
-- Milestone: {milestone}
-- Entombed At: {timestamp}
-
-## Chamber Contents
-- colony-state.json — Full colony state
-- manifest.json — Archive metadata
-- CROWNED-ANTHILL.md — Seal ceremony record
-- pheromones.json — Pheromone signals
-- activity.log — Colony activity history
-- spawn-tree.txt — Worker spawn records
-- dreams/ — Dream journal (if existed)
-
-## Session Note
-This colony has been entombed and the active state reset.
-The colony rests. Its learnings are preserved in the chamber and QUEEN.md.
-
-To start anew: /ant:lay-eggs "<new goal>"
-To explore chambers: /ant:tunnels
-HANDOFF_EOF
-```
+Remove the HTML comment lines at the top of the template.
+Write the result to .aether/HANDOFF.md using the Write tool.
 
 ### Step 12: Display Result
 
