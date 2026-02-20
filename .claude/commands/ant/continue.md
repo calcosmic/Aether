@@ -112,8 +112,10 @@ If no build system detected, skip build/test/type/lint checks but still verify s
 Execute all applicable phases and capture output:
 
 ```
-Phase {id} Verification Loop
-============================
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+👁️🐜 V E R I F I C A T I O N   L O O P
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Phase {id} — Checking colony work...
 ```
 
 **Phase 1: Build Check** (if command exists):
@@ -154,23 +156,28 @@ For EACH criterion:
 
 Display:
 ```
-VERIFICATION LOOP REPORT
-========================
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+👁️🐜 V E R I F I C A T I O N   R E P O R T
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Phase 1: Build      [PASS/FAIL]
-Phase 2: Types      [PASS/FAIL] (X errors)
-Phase 3: Lint       [PASS/FAIL] (X warnings)
-Phase 4: Tests      [PASS/FAIL] (X/Y passed)
-         Coverage   {percent}% (target: 80%)
-Phase 5: Security   [PASS/FAIL] (X issues)
-Phase 6: Diff       [X files changed]
+🔨 Build        [PASS/FAIL/SKIP]
+🔍 Types        [PASS/FAIL/SKIP] (X errors)
+🧹 Lint         [PASS/FAIL/SKIP] (X warnings)
+🧪 Tests        [PASS/FAIL/SKIP] (X/Y passed)
+   Coverage     {percent}% (target: 80%)
+🔒 Security     [PASS/FAIL] (X issues)
+📋 Diff         [X files changed]
 
-Success Criteria:
+──────────────────────────────────────────────────
+🐜 Success Criteria
+──────────────────────────────────────────────────
   ✅ {criterion 1}: {specific evidence}
   ✅ {criterion 2}: {specific evidence}
   ❌ {criterion 3}: {what's missing}
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Overall: READY / NOT READY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
 #### 3. Gate Decision
@@ -178,14 +185,16 @@ Overall: READY / NOT READY
 **If NOT READY (any of: build fails, tests fail, critical security issues, success criteria unmet):**
 
 ```
-⛔ VERIFICATION FAILED - PHASE BLOCKED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⛔🐜 V E R I F I C A T I O N   F A I L E D
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Phase {id} cannot advance until issues are resolved.
 
-Issues Found:
+🚨 Issues Found:
 {list each failure with specific evidence}
 
-Required Actions:
+🔧 Required Actions:
   1. Fix the issues listed above
   2. Run /ant:continue again to re-verify
 
@@ -202,12 +211,12 @@ Use AskUserQuestion to confirm they understand what needs to be fixed:
 **If READY (all checks pass with evidence):**
 
 ```
-✅ VERIFICATION PASSED
+✅🐜 VERIFICATION PASSED
 
 All checks completed with evidence:
 {list each check and its evidence}
 
-Proceeding to phase advancement.
+Proceeding to gate checks...
 ```
 
 Continue to Step 1.6.
@@ -223,17 +232,19 @@ Run using the Bash tool with description "Verifying spawn requirements...": `spa
 **HARD REJECTION - If spawn_count == 0 and phase had 3+ tasks:**
 
 ```
-⛔ SPAWN GATE FAILED - PHASE BLOCKED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⛔🐜 S P A W N   G A T E   F A I L E D
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 This phase had {task_count} tasks but spawn_count: 0
 The Prime Worker violated the spawn protocol.
 
-The colony metaphor requires actual parallelism:
+🐜 The colony requires actual parallelism:
   - Prime Worker MUST spawn specialists for non-trivial work
   - A single agent doing everything is NOT a colony
   - "Justifications" for not spawning are not accepted
 
-Required Actions:
+🔧 Required Actions:
   1. Run /ant:build {phase} again
   2. Prime Worker MUST spawn at least 1 specialist
   3. Re-run /ant:continue after spawns complete
@@ -251,17 +262,19 @@ bash .aether/aether-utils.sh error-flag-pattern "no-spawn-violation" "Prime Work
 **HARD REJECTION - If watcher_count == 0 (no testing separation):**
 
 ```
-⛔ WATCHER GATE FAILED - PHASE BLOCKED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⛔👁️🐜 W A T C H E R   G A T E   F A I L E D
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 No Watcher ant was spawned for testing/verification.
 Testing MUST be performed by a separate agent, not the builder.
 
-Why this matters:
+🐜 Why this matters:
   - Builders verify their own work = confirmation bias
   - Independent Watchers catch bugs builders miss
   - "Build passing" ≠ "App working"
 
-Required Actions:
+🔧 Required Actions:
   1. Run /ant:build {phase} again
   2. Prime Worker MUST spawn at least 1 Watcher
   3. Watcher must independently verify the work
@@ -274,12 +287,7 @@ The phase will NOT advance until a Watcher validates.
 **If spawn_count >= 1 AND watcher_count >= 1:**
 
 ```
-✅ SPAWN GATE PASSED
-
-Spawns: {spawn_count} workers
-Watchers: {watcher_count} (independent verification)
-
-Proceeding to runtime verification.
+✅🐜 SPAWN GATE PASSED — {spawn_count} workers | {watcher_count} watchers
 ```
 
 Continue to Step 1.7.
@@ -295,20 +303,18 @@ Run for each file in `files_created` and `files_modified` from Prime Worker outp
 **Anti-Pattern Report:**
 
 ```
-Anti-Pattern Scan
-=================
-Files scanned: {count}
+🔍🐜 Anti-Pattern Scan — {count} files scanned
 
 {if critical issues:}
-🛑 CRITICAL ISSUES (must fix):
+🛑 CRITICAL (must fix):
 {list each with file:line and description}
 
 {if warnings:}
-⚠️ WARNINGS (review recommended):
+⚠️ WARNINGS:
 {list each with file:line and description}
 
 {if clean:}
-✅ No anti-patterns detected
+✅🐜 No anti-patterns detected
 ```
 
 **CRITICAL issues block phase advancement:**
@@ -325,9 +331,9 @@ Files scanned: {count}
 If CRITICAL issues found, display:
 
 ```
-⛔ ANTI-PATTERN GATE FAILED
+⛔🐜 ANTI-PATTERN GATE FAILED
 
-Critical anti-patterns detected that must be fixed:
+Critical anti-patterns detected:
 {list issues with file paths}
 
 Run /ant:build {phase} again after fixing.
@@ -348,21 +354,20 @@ Run using the Bash tool with description "Locating test files...": `find . -name
 **If Prime Worker claimed tests_added > 0 but no test files found:**
 
 ```
-⛔ TDD GATE FAILED - FABRICATED METRICS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⛔🧪🐜 T D D   G A T E   F A I L E D
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Prime Worker claimed:
   tests_added: {claimed_count}
   tests_total: {claimed_total}
-  coverage_percent: {claimed_coverage}%
+  coverage: {claimed_coverage}%
 
 But no test files were found in the codebase.
 
-This is a CRITICAL violation:
-  - TDD metrics were fabricated
-  - No actual tests were written
-  - "All passing: true" was a lie
+🚨 CRITICAL violation — fabricated TDD metrics.
 
-Required Actions:
+🔧 Required Actions:
   1. Run /ant:build {phase} again
   2. Actually write test files (not just claim them)
   3. Tests must exist and be runnable
@@ -388,10 +393,11 @@ Before advancing, the user must confirm the application actually runs.
 Use AskUserQuestion:
 
 ```
-Runtime Verification Required
-=============================
+──────────────────────────────────────────────────
+🐜 Runtime Verification Required
+──────────────────────────────────────────────────
 
-Build and compile checks passed, but we need to verify the app actually works.
+Build checks passed — but does the app actually work?
 
 Have you tested the application at runtime?
 ```
@@ -404,18 +410,13 @@ Options:
 
 **If "Yes, tested and working":**
 ```
-✅ RUNTIME VERIFICATION PASSED
-
-User confirmed application runs correctly.
-Proceeding to phase advancement.
+✅🐜 RUNTIME VERIFIED — User confirmed app works.
 ```
 Continue to Step 2.
 
 **If "Yes, tested but has issues":**
 ```
-⛔ RUNTIME GATE FAILED
-
-User reported runtime issues. The phase cannot advance with a broken app.
+⛔🐜 RUNTIME GATE FAILED — User reported issues.
 
 Please describe the issues so they can be addressed:
 ```
@@ -429,17 +430,12 @@ Do NOT proceed to Step 2.
 
 **If "No, haven't tested yet":**
 ```
-⏸️ RUNTIME VERIFICATION PENDING
+⏸️🐜 RUNTIME PENDING — Test the app, then run /ant:continue again.
 
-Please test the application and run /ant:continue again.
-
-Testing checklist:
   - [ ] App launches without crashing
   - [ ] Core features work as expected
   - [ ] UI responds to user interaction
   - [ ] No freezes or hangs
-
-Come back when you've tested.
 ```
 
 Do NOT proceed to Step 2.
@@ -472,19 +468,19 @@ Parse result for `blockers`, `issues`, and `notes` counts.
 **If blockers > 0:**
 
 ```
-⛔ FLAGS GATE FAILED - BLOCKERS ACTIVE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⛔🚩🐜 F L A G S   G A T E   F A I L E D
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-{blockers} blocking flag(s) must be resolved before phase advancement.
+{blockers} blocker(s) must be resolved first.
 
-Active Blockers:
+🚩 Active Blockers:
 {list each blocker flag with ID, title, and description}
 
-Required Actions:
+🔧 Required Actions:
   1. Fix the issues described in each blocker
   2. Resolve flags: /ant:flags --resolve {flag_id} "resolution message"
   3. Run /ant:continue again after resolving all blockers
-
-The phase will NOT advance with active blockers.
 ```
 
 **CRITICAL:** Do NOT proceed to Step 2. Do NOT advance the phase.
@@ -492,15 +488,11 @@ The phase will NOT advance with active blockers.
 **If blockers == 0 but issues > 0:**
 
 ```
-⚠️ FLAGS GATE: ISSUES NOTED
+⚠️🐜 FLAGS: {issues} issue(s) noted (non-blocking)
 
-No blockers, but {issues} issue(s) are active.
-These don't block advancement but should be addressed.
-
-Active Issues:
 {list each issue flag}
 
-Use /ant:flags to review and acknowledge or resolve.
+Use /ant:flags to review.
 ```
 
 Continue to Step 2.
@@ -508,9 +500,7 @@ Continue to Step 2.
 **If all clear (no blockers or issues):**
 
 ```
-✅ FLAGS GATE PASSED
-
-No blocking flags. Proceeding to phase advancement.
+✅🐜 FLAGS GATE PASSED — No blockers.
 ```
 
 Continue to Step 2.
