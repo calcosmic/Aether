@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 ## Current Position
 
 Phase: 28 of 31 (Orchestration Layer + Surveyor Variants)
-Plan: 2 of 4 in current phase (28-01, 28-02 complete)
+Plan: 3 of 4 in current phase (28-01, 28-02, 28-03 complete)
 Status: In progress
-Last activity: 2026-02-20 — 28-02 complete: Scout (WebSearch/WebFetch, read-only) and Route-Setter (Task tool, planning discipline) agents created
+Last activity: 2026-02-20 — 28-03 complete: all 4 surveyor agents created (nest, disciplines, pathogens, provisions) with Write tool restricted to .aether/data/survey/
 
 Progress: [████████░░] 77% (26/31 phases complete through v1.4)
 
@@ -43,6 +43,8 @@ Progress: [████████░░] 77% (26/31 phases complete through v1
 - 28-01: Caste emoji protocol established — 🔨🐜 Builder, 🔭🐜 Scout, 👁🐜 Watcher, 🗺🐜 Route-Setter/Surveyor
 - 28-02: Scout gets WebSearch/WebFetch but no Bash — read-only posture enforced via explicit tools field
 - 28-02: Route-Setter Task tool documented with graceful degradation for subagent context where Task may be ineffective
+- 28-03: Surveyors get Write tool (not read-only) with scope restricted to .aether/data/survey/ only — locked decision from 28-CONTEXT.md overriding roadmap
+- 28-03: OpenCode read_only section maps to boundaries section; consumption section embedded in execution_flow
 
 ### Key Findings from Research
 - Subagents cannot spawn other subagents — strip all spawn calls from every converted agent
@@ -58,5 +60,5 @@ Progress: [████████░░] 77% (26/31 phases complete through v1
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: Completed 28-02-PLAN.md (Scout and Route-Setter agents created)
-Next step: Continue Phase 28 — proceed to 28-03
+Stopped at: Completed 28-03-PLAN.md (all 4 surveyor agents created)
+Next step: Continue Phase 28 — proceed to 28-04
