@@ -9,10 +9,10 @@ See: .planning/PROJECT.md (updated 2026-02-19)
 
 ## Current Position
 
-Phase: 24 of 25 — Template Integration
-Plan: 03 of 03 (COMPLETE)
-Status: Phase 24 Complete
-Last activity: 2026-02-20 — Completed 24-03: created build HANDOFF templates and wired build.md (both platforms) to templates, eliminating all inline heredocs from build command
+Phase: 25 of 25 — Queen Coordination
+Plan: 02 of 03 (COMPLETE)
+Status: Phase 25 In Progress
+Last activity: 2026-02-20 — Completed 25-02: merged Architect into Keeper (Architecture Mode) and Guardian into Auditor (Security Lens Mode), deleted both old agents, updated organize.md spawn targets
 
 ## Performance Metrics
 
@@ -61,6 +61,8 @@ Last activity: 2026-02-20 — Completed 24-03: created build HANDOFF templates a
 - [Phase 24-template-integration]: OpenCode seal.md had no CROWNED-ANTHILL.md write step — only HANDOFF heredoc wired to template
 - [Phase 24-03]: Bash code block closing fence needed after jq block when heredoc replaced with prose — original had one large bash block containing both jq write and heredoc
 - [Phase 24-03]: Both build.md platforms wired simultaneously with identical template read instructions — no platform-specific differences in HANDOFF logic
+- [Phase 25]: Absorbed Architect Synthesis Workflow into Keeper as Architecture Mode, Guardian security domains into Auditor as Security Lens Mode
+- [Phase 25]: Deleted aether-architect.md and aether-guardian.md outright (no stubs/redirects) — agent count reduced from 25 to 23
 
 ### Key Findings from Research
 - 7 research docs analyzed (agent architecture, template system, team coordination, distribution chain)
@@ -75,6 +77,6 @@ Last activity: 2026-02-20 — Completed 24-03: created build HANDOFF templates a
 
 ## Session Continuity
 
-Last session: 2026-02-20T00:06:52Z
-Stopped at: Completed 24-03-PLAN.md
-Next step: Execute Phase 25
+Last session: 2026-02-20T00:54:30Z
+Stopped at: Completed 25-02-PLAN.md
+Next step: Execute Phase 25 Plan 03
