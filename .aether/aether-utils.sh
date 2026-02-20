@@ -4468,8 +4468,38 @@ $updated_meta
       esac
     done
 
-    # Get proposals from learning-check-promotion (gets ALL observations)
-    proposals_json=$(bash "$0" learning-check-promotion 2>/dev/null | jq -r '.result // {}')
+    # Get all observations (not just threshold-meeting ones) for display consistency
+    # This matches learning-display-proposals behavior
+    observations_file="$DATA_DIR/learning-observations.json"
+    if [[ ! -f "$observations_file" ]]; then
+      json_ok '{"selected":[],"deferred":[],"count":0,"action":"none","reason":"no_observations_file"}'
+      exit 0
+    fi
+
+    # Build proposals array using same logic as learning-display-proposals
+    proposals_json=$(jq '
+      def get_threshold(type):
+        if type == "philosophy" then 5
+        elif type == "pattern" then 3
+        elif type == "redirect" then 2
+        elif type == "stack" then 1
+        elif type == "decree" then 0
+        else 1
+        end;
+
+      {
+        proposals: [
+          .observations[] |
+          {
+            content: .content,
+            wisdom_type: .wisdom_type,
+            observation_count: .observation_count,
+            threshold: get_threshold(.wisdom_type),
+            colonies: .colonies
+          }
+        ]
+      }
+    ' "$observations_file" 2>/dev/null || echo '{"proposals":[]}')
 
     # Check if we have any proposals
     proposal_count=$(echo "$proposals_json" | jq '.proposals | length')
@@ -4521,6 +4551,61 @@ $updated_meta
       echo "$selected_count proposal(s) selected, $deferred_count deferred"
     fi
 
+    # Preview and confirmation (if selections made and not skipping)
+    confirmed=true
+    if [[ "$selected_count" -gt 0 && "$dry_run" == "false" && "$skip_confirm" == "false" ]]; then
+      echo ""
+      echo "───────────────────────────────────────────────────"
+      echo "📋 Selected for Promotion:"
+      echo ""
+
+      # Track below-threshold count for warning
+      below_threshold_count=0
+
+      # Display each selected proposal with full details
+      echo "$selected_indices" | jq -r '.[]' | while read -r idx; do
+        proposal=$(echo "$proposals_json" | jq -r ".proposals[$idx]")
+        content=$(echo "$proposal" | jq -r '.content')
+        ptype=$(echo "$proposal" | jq -r '.wisdom_type')
+        count=$(echo "$proposal" | jq -r '.observation_count')
+        threshold=$(echo "$proposal" | jq -r '.threshold')
+
+        # Capitalize type for display
+        type_display=$(echo "$ptype" | awk '{print toupper(substr($0,1,1)) tolower(substr($0,2))}')
+
+        # Check if below threshold
+        status=""
+        if [[ "$count" -lt "$threshold" ]]; then
+          status=" [⚠️ Early promotion - below threshold]"
+          below_threshold_count=$((below_threshold_count + 1))
+        fi
+
+        echo "  • $type_display: \"$content\"$status"
+      done
+
+      # Show warning if any below threshold
+      if [[ "$below_threshold_count" -gt 0 ]]; then
+        echo ""
+        echo "⚠️  $below_threshold_count item(s) below threshold will be early promoted"
+      fi
+
+      # Confirmation prompt
+      echo ""
+      echo -n "Proceed with promotion? (y/n): "
+      read -r confirm_response
+
+      if [[ ! "$confirm_response" =~ ^[Yy]$ ]]; then
+        confirmed=false
+        echo "Selection cancelled. Treating as defer-all."
+        # Move all to deferred
+        action="defer_all"
+        deferred_indices=$(jq -n --argjson s "$selected_indices" --argjson d "$deferred_indices" '($s + $d)')
+        selected_indices="[]"
+        selected_count=0
+        deferred_count=$(echo "$deferred_indices" | jq 'length')
+      fi
+    fi
+
     # Build result JSON
     result=$(jq -n \
       --argjson selected "$selected_indices" \
@@ -4528,11 +4613,13 @@ $updated_meta
       --argjson proposals "$proposals_json" \
       --arg action "$action" \
       --argjson count "$proposal_count" \
+      --arg confirmed "$confirmed" \
       '{
         selected: $selected,
         deferred: $deferred,
         count: $count,
         action: $action,
+        confirmed: ($confirmed == "true"),
         proposals: $proposals.proposals
       }')
 
