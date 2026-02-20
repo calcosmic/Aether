@@ -675,7 +675,55 @@ Run using the Bash tool with description "Maintaining pheromone memory...": `bas
 
 This is idempotent — runs every time continue fires but only creates the directory/file once.
 
-### Step 2.2: Promote Validated Learnings to QUEEN.md
+### Step 2.1.5: Check for Promotion Proposals (PHER-EVOL-02)
+
+After extracting learnings, check for observations that have met promotion thresholds.
+
+**Process:**
+
+1. **Call learning-check-promotion to get proposals:**
+   ```bash
+   proposals=$(bash .aether/aether-utils.sh learning-check-promotion 2>/dev/null || echo "[]")
+   ```
+
+2. **If proposals exist, display them for user approval:**
+
+   Parse the proposals and display in this format:
+   ```
+   🧠 Promotion Proposals
+   ====================
+   The following learnings have met promotion thresholds:
+
+   [{type}] {content_preview}...
+   ─────────────────────────
+   Observations: {count}/{threshold}
+   Contributed by: {colony1}, {colony2}
+   ```
+
+3. **Use AskUserQuestion to get user approval:**
+   ```
+   Approve promotion?
+   1. Yes, promote all
+   2. Yes, promote selected (then show selection)
+   3. No, skip promotion
+   ```
+
+4. **If user approves (option 1 or 2):**
+   - For each approved proposal, call queen-promote
+   - Get colony name from state: `colony_name=$(jq -r '.session_id | split("_")[1] // "unknown"' .aether/data/COLONY_STATE.json)`
+   - Call: `bash .aether/aether-utils.sh queen-promote "{type}" "{content}" "$colony_name"`
+
+5. **Log promotion results:**
+   ```bash
+   bash .aether/aether-utils.sh activity-log "PROMOTED" "Queen" "Promoted N observations to QUEEN.md wisdom"
+   ```
+
+Skip this step if:
+- learning-check-promotion returns empty or fails
+- User selects "No, skip promotion"
+- QUEEN.md does not exist
+
+### Step 2.2: Promote Validated Learnings to QUEEN.md (INT-03)
 
 After extracting learnings in Step 2, promote high-confidence validated learnings to QUEEN.md wisdom.
 
@@ -696,9 +744,27 @@ After extracting learnings in Step 2, promote high-confidence validated learning
    - `phase` matches the completed phase number
    - Any learning in `learnings[]` has `status: "validated"`
 
-3. **Promote to QUEEN.md using queen-promote:**
+3. **Display validated learnings for user approval:**
 
-   For each validated learning, determine the wisdom type and call queen-promote:
+   Use AskUserQuestion:
+   ```
+   🧠 Validated Learnings Promotion
+   ================================
+   The following validated learnings are ready for promotion:
+
+   {for each validated learning:}
+   - [{type}] {claim preview}
+   {end for}
+
+   Promote these to QUEEN.md?
+   1. Yes, promote all
+   2. Yes, promote selected
+   3. No, skip
+   ```
+
+4. **Only if user approves, promote to QUEEN.md using queen-promote:**
+
+   For each approved learning, determine the wisdom type and call queen-promote:
 
    **Type Mapping:**
    - Learning about success patterns → `pattern`
@@ -712,7 +778,7 @@ After extracting learnings in Step 2, promote high-confidence validated learning
    bash .aether/aether-utils.sh queen-promote "redirect" "<what to avoid>" "$colony_name"
    ```
 
-4. **Log promotion results:**
+5. **Log promotion results:**
    ```bash
    bash .aether/aether-utils.sh activity-log "PROMOTED" "Queen" "Promoted N validated learnings to QUEEN.md wisdom"
    ```
@@ -727,6 +793,7 @@ After extracting learnings in Step 2, promote high-confidence validated learning
 
 Skip this step if:
 - No validated learnings exist for this phase
+- User does not approve promotion
 - QUEEN.md does not exist (run queen-init first if needed)
 - All learnings are still hypotheses or disproven
 
