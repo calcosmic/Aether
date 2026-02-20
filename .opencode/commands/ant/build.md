@@ -477,6 +477,27 @@ Total: {N} Builders + 1 Watcher + 1 Chaos = {N+2} spawns
 
 **Every spawn must show its caste emoji.**
 
+### Step 5.0.5: Select and Announce Workflow Pattern
+
+Examine the phase name and task descriptions. Select the first matching pattern:
+
+| Phase contains | Pattern |
+|----------------|---------|
+| "bug", "fix", "error", "broken", "failing" | Investigate-Fix |
+| "research", "oracle", "explore", "investigate" | Deep Research |
+| "refactor", "restructure", "clean", "reorganize" | Refactor |
+| "security", "audit", "compliance", "accessibility", "license" | Compliance |
+| "docs", "documentation", "readme", "guide" | Documentation Sprint |
+| (default) | SPBV |
+
+Display the selected pattern:
+```
+━━ Pattern: {pattern_name} ━━
+{announce_line from Queen's Workflow Patterns definition}
+```
+
+Store `selected_pattern` for inclusion in the BUILD SUMMARY (Step 7).
+
 ### Step 5.1: Spawn Wave 1 Workers (Parallel)
 
 **CRITICAL: Spawn ALL Wave 1 workers in a SINGLE message using multiple Task tool calls.**
@@ -665,6 +686,39 @@ Next steps:
 ```
 
 Then STOP — do not proceed to subsequent waves, Watcher, or Chaos. Skip directly to Step 5.9 synthesis with `status: "failed"`.
+
+**Partial wave failure — escalation path:**
+
+If SOME (but not all) workers in the wave failed:
+1. For each failed worker, attempt Tier 3 escalation: Queen spawns a different caste for the same task
+2. If Tier 3 succeeds: continue to next wave
+3. If Tier 3 fails: display the Tier 4 ESCALATION banner (from Queen agent definition):
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ⚠ ESCALATION — QUEEN NEEDS YOU
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Task: {failed task description}
+Phase: {phase number} — {phase name}
+
+Tried:
+  • Worker retry (2 attempts) — {what failed}
+  • Parent tried alternate approach — {what failed}
+  • Queen reassigned to {other caste} — {what failed}
+
+Options:
+  A) {recommended option} — RECOMMENDED
+  B) {alternate option}
+  C) Skip and continue — this task will be marked blocked
+
+Awaiting your choice.
+```
+
+Log escalation as flag:
+```bash
+bash .aether/aether-utils.sh flag-add "blocker" "{task title}" "{failure summary}" "escalation" {phase_number}
+```
 
 If at least one worker succeeded, continue normally to the next wave.
 
@@ -1108,6 +1162,7 @@ Calculate `elapsed` using `build_started_at_epoch` (epoch integer captured at St
    B U I L D   S U M M A R Y
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Phase {id}: {name}
+Pattern:  {selected_pattern}
 
 Workers:  {pass_count} passed  {fail_count} failed  ({total} total)
 Tools:    {total_tools} calls across all workers
