@@ -40,6 +40,8 @@ REQUIRED_FILES=(
   "templates/colony-state-reset.jq.template"
   "templates/crowned-anthill.template.md"
   "templates/handoff.template.md"
+  "templates/handoff-build-error.template.md"
+  "templates/handoff-build-success.template.md"
   "rules/aether-colony.md"
 )
 
