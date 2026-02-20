@@ -1,7 +1,8 @@
 {
   "_template": "constraints",
   "_version": "1.0",
-  "_instructions": "Write this file to .aether/data/constraints.json. No placeholder substitution needed — write the data keys as-is. Remove all underscore-prefixed keys before writing.",
+  "_instructions": "Write this file to .aether/data/constraints.json. No placeholder substitution needed — copy the data keys as-is. Remove all keys whose names start with underscore (_template, _version, _instructions, _comment_*) before writing the final file.",
+  "_comment_purpose": "constraints.json stores user pheromone signals. 'focus' holds FOCUS signals (areas of attention set via /ant:focus). 'constraints' holds REDIRECT signals (hard constraints set via /ant:redirect). Both start as empty arrays and accumulate signals over the colony's lifetime.",
   "version": "1.0",
   "focus": [],
   "constraints": []
