@@ -3676,6 +3676,109 @@ ANTLOGO
     json_ok "{\"bar\":\"$bar\",\"count\":$obs_count,\"threshold\":$threshold}"
     ;;
 
+  parse-selection)
+    # Parse user selection string into validated 0-indexed indices
+    # Usage: parse-selection <input_string> <max_index>
+    # Returns: JSON with selected indices, deferred count, and validation warnings
+    #
+    # Examples:
+    #   parse-selection "1 3 5" 10  -> {"selected":[0,2,4],"deferred":[],"valid":true}
+    #   parse-selection "" 5        -> {"selected":[],"deferred":[0,1,2,3,4],"action":"defer_all"}
+    #   parse-selection "1 2 99" 5  -> {"selected":[0,1],"warnings":["99 out of range"]}
+    input_string="${1:-}"
+    max_index="${2:-0}"
+
+    # Validate max_index is a number
+    if ! [[ "$max_index" =~ ^[0-9]+$ ]]; then
+      json_err "$E_VALIDATION_FAILED" "max_index must be a number" "{\"provided\":\"$max_index\"}"
+    fi
+
+    # Empty input signals defer-all
+    if [[ -z "$input_string" ]]; then
+      # Build deferred array with all indices
+      deferred_array=""
+      for ((i=0; i<max_index; i++)); do
+        [[ -n "$deferred_array" ]] && deferred_array+=","
+        deferred_array+="$i"
+      done
+      json_ok "{\"selected\":[],\"deferred\":[$deferred_array],\"count\":$max_index,\"action\":\"defer_all\"}"
+      exit 0
+    fi
+
+    # Normalize input: remove extra spaces, keep only digits and spaces
+    normalized=$(echo "$input_string" | tr -s ' ' | tr -cd '0-9 ')
+
+    # Parse and validate each number
+    declare -a selected_indices
+    declare -a warnings
+    seen_list=""  # Space-separated list for deduplication (bash 3.x compatible)
+
+    for num in $normalized; do
+      # Skip empty
+      [[ -z "$num" ]] && continue
+
+      # Validate range (1-indexed input)
+      if [[ "$num" -lt 1 || "$num" -gt "$max_index" ]]; then
+        warnings+=("\"$num out of range (1-$max_index)\"")
+        continue
+      fi
+
+      # Deduplicate using string pattern matching (bash 3.x compatible)
+      if [[ "$seen_list" == *" $num "* ]]; then
+        continue
+      fi
+      seen_list="$seen_list $num "
+
+      # Convert to 0-indexed and add to result
+      idx=$((num - 1))
+      selected_indices+=("$idx")
+    done
+
+    # Build selected array JSON
+    selected_json=""
+    for idx in "${selected_indices[@]}"; do
+      [[ -n "$selected_json" ]] && selected_json+=","
+      selected_json+="$idx"
+    done
+
+    # Build deferred array (all indices not selected)
+    deferred_json=""
+    for ((i=0; i<max_index; i++)); do
+      # Check if i is in selected_indices
+      is_selected=false
+      for sel in "${selected_indices[@]}"; do
+        if [[ "$sel" -eq "$i" ]]; then
+          is_selected=true
+          break
+        fi
+      done
+
+      if [[ "$is_selected" == "false" ]]; then
+        [[ -n "$deferred_json" ]] && deferred_json+=","
+        deferred_json+="$i"
+      fi
+    done
+
+    # Build warnings array JSON
+    warnings_json=""
+    if [[ ${#warnings[@]} -gt 0 ]]; then
+      for w in "${warnings[@]}"; do
+        [[ -n "$warnings_json" ]] && warnings_json+=","
+        warnings_json+="$w"
+      done
+    fi
+
+    # Construct result
+    result="{\"selected\":[$selected_json],\"deferred\":[$deferred_json],\"count\":$max_index,\"valid\":true}"
+
+    # Add warnings if any
+    if [[ -n "$warnings_json" ]]; then
+      result=$(echo "$result" | jq --argjson w "[$warnings_json]" '. + {warnings: $w}')
+    fi
+
+    json_ok "$result"
+    ;;
+
   queen-promote)
     # Promote a learning to QUEEN.md wisdom
     # Usage: queen-promote <type> <content> <colony_name>
