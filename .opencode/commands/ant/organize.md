@@ -54,8 +54,8 @@ If no active signals after filtering:
 
 Read `.aether/workers.md` and extract the `## Keeper` section.
 
-Spawn via **Task tool** with `subagent_type="general-purpose"`:
-# NOTE: Claude Code uses aether-keeper; OpenCode uses general-purpose with role injection
+Spawn via **Task tool** with `subagent_type="aether-keeper"`:
+# NOTE: Claude Code uses aether-keeper; OpenCode now uses same specialist agent
 
 ```
 --- WORKER SPEC ---

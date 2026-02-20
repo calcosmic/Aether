@@ -342,8 +342,7 @@ bash .aether/aether-utils.sh pheromone-read 2>/dev/null
        Scanning history of files to be modified...
    ```
 
-   Spawn a Scout (using Task tool with `subagent_type="general-purpose"`, include `description: "🏺 Archaeologist {archaeologist_name}: Pre-build history scan"`) with this prompt:
-   # NOTE: Claude Code uses aether-archaeologist; OpenCode uses general-purpose with role injection
+   Spawn using Task tool with `subagent_type="aether-archaeologist"`, include `description: "🏺 Archaeologist {archaeologist_name}: Pre-build history scan"`:
 
    ```
    You are {Archaeologist-Name}, a 🏺🐜 Archaeologist Ant.
@@ -524,7 +523,7 @@ For a single worker:
 bash .aether/aether-utils.sh context-update build-start {phase_id} {wave_1_worker_count} {wave_1_task_count}
 ```
 
-For each Wave 1 task, use Task tool with `subagent_type="general-purpose"`, include `description: "🔨 Builder {Ant-Name}: {task_description}"` (DO NOT use run_in_background - multiple Task calls in a single message run in parallel and block until complete):
+For each Wave 1 task, use Task tool with `subagent_type="aether-builder"`, include `description: "🔨 Builder {Ant-Name}: {task_description}"` (DO NOT use run_in_background - multiple Task calls in a single message run in parallel and block until complete):
 
 Log each spawn and update swarm display:
 ```bash
@@ -748,7 +747,7 @@ Repeat Step 5.1-5.2 for each subsequent wave, waiting for previous wave to compl
 ──── 👁️🐜 Spawning {watcher_name} ────
 ```
 
-Spawn the Watcher using Task tool with `subagent_type="general-purpose"`, include `description: "👁️ Watcher {Watcher-Name}: Independent verification"` (DO NOT use run_in_background - task blocks until complete):
+Spawn the Watcher using Task tool with `subagent_type="aether-watcher"`, include `description: "👁️ Watcher {Watcher-Name}: Independent verification"` (DO NOT use run_in_background - task blocks until complete):
 
 ```bash
 bash .aether/aether-utils.sh spawn-log "Queen" "watcher" "{watcher_name}" "Independent verification"
@@ -828,8 +827,7 @@ Parse the result and extract unresolved flag titles into a list: `{existing_flag
 ──── 🎲🐜 Spawning {chaos_name} — resilience testing ────
 ```
 
-Spawn the Chaos Ant using Task tool with `subagent_type="general-purpose"`, include `description: "🎲 Chaos {Chaos-Name}: Resilience testing"` (DO NOT use run_in_background - task blocks until complete):
-# NOTE: Claude Code uses aether-chaos; OpenCode uses general-purpose with role injection
+Spawn the Chaos Ant using Task tool with `subagent_type="aether-chaos"`, include `description: "🎲 Chaos {Chaos-Name}: Resilience testing"` (DO NOT use run_in_background - task blocks until complete):
 
 **Chaos Ant Prompt (CLEAN OUTPUT):**
 ```

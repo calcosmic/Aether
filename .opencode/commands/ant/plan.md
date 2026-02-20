@@ -190,7 +190,7 @@ while iteration < 4 AND confidence < 80:
     if iteration == 1:
 
         # Broad exploration on first pass
-        Spawn Research Scout via Task tool with subagent_type="general-purpose":
+        Spawn Research Scout via Task tool with subagent_type="aether-scout":
 
         """
         You are a Scout Ant in the Aether Colony.
@@ -234,7 +234,7 @@ while iteration < 4 AND confidence < 80:
     else:
 
         # Gap-focused research on subsequent passes
-        Spawn Gap-Focused Scout via Task tool with subagent_type="general-purpose":
+        Spawn Gap-Focused Scout via Task tool with subagent_type="aether-scout":
 
         """
         You are a Scout Ant in the Aether Colony (gap-focused research).
@@ -280,8 +280,8 @@ while iteration < 4 AND confidence < 80:
 
     # === PLANNING PHASE (always runs — 1 planner per iteration) ===
 
-    Spawn Planning Ant (Route-Setter) via Task tool with subagent_type="general-purpose":
-    # NOTE: Claude Code uses aether-route-setter; OpenCode uses general-purpose with role injection
+    Spawn Planning Ant (Route-Setter) via Task tool with subagent_type="aether-route-setter":
+    # NOTE: Claude Code uses aether-route-setter; OpenCode now uses same specialist agent
 
     """
     You are a Route-Setter Ant in the Aether Colony.

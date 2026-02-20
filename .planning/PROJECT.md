@@ -4,7 +4,7 @@
 
 A self-managing development assistant using ant colony metaphor that prevents context rot. Users install it, it guides them through work with clear commands, tells them when to clear context, and maintains state across sessions. The colony learns from each phase and improves over time. As of v1.2, the foundation is hardened — all documented bugs fixed, distribution chain cleaned up, error codes standardized, and lock safety guaranteed with 446 tests passing.
 
-**Current State:** v2.0 in progress. Worker Emergence — creating real Claude Code subagents from the 22 OpenCode agent definitions, plus absorbing remaining v1.4 cleanup phases.
+**Current State:** v5.0.0 shipped. Worker Emergence complete — 22 real Claude Code subagents shipped to npm, all phases verified. Planning next milestone.
 
 ## Core Value
 
@@ -142,16 +142,20 @@ If everything else fell away, Aether's essential value is:
 
 ### Active
 
-## Current Milestone: v2.0 Worker Emergence
+### Validated (continued)
 
-**Goal:** Create real Claude Code subagents from the 22 existing OpenCode agent definitions, making Aether's ant workers functional in Claude Code via the Task tool. Absorb remaining v1.4 cleanup phases.
+- ✓ **Worker Emergence** — v2.0
+  - ✓ 22 Claude Code subagents shipped (Builder, Watcher, Queen, Scout, Route-Setter, 4 Surveyors, Keeper, Tracker, Probe, Weaver, Auditor, Chaos, Archaeologist, Gatekeeper, Includer, Measurer, Sage, Ambassador, Chronicler)
+  - ✓ Agent distribution pipeline (npm install → hub sync → aether update)
+  - ✓ 6 AVA tests for agent quality (frontmatter, tools, naming, content)
+  - ✓ Bash line wrapping bug fixed (58 instances across 7 files)
+  - ✓ Docs curated (.aether/docs/ from 14 to 8 files)
+  - ✓ repo-structure.md added
+  - ✓ README updated for v5.0
 
-**Target features:**
-- Claude Code subagent definitions in `.claude/agents/` for all ant worker types
-- Proper YAML frontmatter (name, description, tools, model) for auto-routing
-- XML-structured agent bodies following CDS/GSD patterns (role, execution_flow, critical_rules)
-- Agent descriptions optimized for Task tool routing
-- Remaining repo cleanup from v1.4 (docs, bash bug fix, verify)
+### Active
+
+(Planning next milestone)
 
 ### Shipped
 
@@ -183,16 +187,17 @@ If everything else fell away, Aether's essential value is:
 
 ## Context
 
-Shipped through v1.4 with ~5,435 lines of shell (aether-utils.sh), 34 Claude Code commands, 33 OpenCode commands. 446 tests passing (415 AVA + 31 bash), 0 failures. All documented bugs fixed. Distribution chain correct end-to-end. Error codes fully standardized. Templates extracted and wired. Agent definitions cleaned and hardened.
+Shipped through v2.0 with ~5,435 lines of shell (aether-utils.sh), 34 Claude Code commands, 22 Claude Code subagents. 422 tests passing (422 AVA + 9 bash), 0 failures. All documented bugs fixed. Distribution chain correct end-to-end. Error codes fully standardized. Templates extracted and wired. Agent definitions cleaned and hardened.
 
 Tech stack: Bash, jq, xmllint/xmlstarlet, Node.js CLI wrapper.
 
-Five milestones shipped:
+Six milestones shipped:
 - v1.0: 46/46 requirements — full repair and stabilization
 - v1.1: 14/15 requirements — visual polish and identity
 - v1.2: 24/24 requirements — hardening and reliability
 - v1.3: 24/24 requirements — templates, agent cleanup, pipeline, Queen coordination
 - v1.4: 10/10 requirements (partial) — file audit and dead file removal
+- v2.0: 49 requirements — 22 Claude Code subagents shipped
 
 ## Key Decisions
 
@@ -232,4 +237,4 @@ Five milestones shipped:
 
 ---
 
-*Last updated: 2026-02-20 after v2.0 milestone start*
+*Last updated: 2026-02-20 after v2.0 Worker Emergence milestone shipped*

@@ -77,95 +77,18 @@
 
 </details>
 
-## v2.0 Worker Emergence (Phases 27-31)
+<details>
+<summary>✅ v2.0 Worker Emergence (Phases 27-31) — SHIPPED 2026-02-20</summary>
 
-**Milestone Goal:** Create real Claude Code subagents from the 22 OpenCode agent definitions. Every ant worker type becomes a first-class Claude Code subagent that resolves from the Task tool instead of the fallback path. Agents distribute through the hub to all target repos. Remaining v1.4 cleanup absorbed.
+- [x] Phase 27: Distribution Infrastructure + First Core Agents (4 plans) — Builder, Watcher, hub sync proven
+- [x] Phase 28: Orchestration Layer + Surveyor Variants (3 plans) — Queen, Scout, Route-Setter, 4 Surveyors
+- [x] Phase 29: Specialist Agents + Agent Tests (3 plans) — Keeper, Tracker, Probe, Weaver, Auditor + 6 AVA tests
+- [x] Phase 30: Niche Agents (3 plans) — Chaos, Archaeologist, Gatekeeper, Includer, Measurer, Sage, Ambassador, Chronicler
+- [x] Phase 31: Integration Verification + Cleanup (3 plans) — 22 agents verified, bash bug fixed, docs curated
 
-**49 requirements across 5 phases.**
+**49 requirements verified. Full details: `.planning/milestones/v2.0-ROADMAP.md`**
 
-- [x] **Phase 27: Distribution Infrastructure + First Core Agents** - Prove the end-to-end chain works: packaging, hub sync, target delivery, with Builder and Watcher as the first two shipped agents
-- [x] **Phase 28: Orchestration Layer + Surveyor Variants** - Queen, Scout, Route-Setter, and all 4 Surveyors — the full orchestration and codebase-context capability (completed 2026-02-20)
-- [x] **Phase 29: Specialist Agents + Agent Tests** - Keeper, Tracker, Probe, Weaver, Auditor plus the full AVA test suite for agent quality (completed 2026-02-20)
-- [x] **Phase 30: Niche Agents** - All 8 niche castes completing the full 22-agent roster (completed 2026-02-20)
-- [x] **Phase 31: Integration Verification + Cleanup** - End-to-end verification, docs cleanup, bash bug fix
-
-## Phase Details
-
-### Phase 27: Distribution Infrastructure + First Core Agents
-**Goal**: Users of any repo running `aether update` receive Claude Code agents that resolve correctly when the Task tool spawns them. Builder and Watcher are the first two agents shipped through this proven chain.
-**Depends on**: Phase 26
-**Requirements**: DIST-01, DIST-02, DIST-03, DIST-04, DIST-05, DIST-06, DIST-07, DIST-08, CORE-02, CORE-03, PWR-01, PWR-02, PWR-03, PWR-04, PWR-05, PWR-06, PWR-07, PWR-08
-**Success Criteria** (what must be TRUE):
-  1. `npm pack --dry-run` lists agent files from `.claude/agents/ant/` — no GSD agents included, no Aether agents excluded
-  2. `npm install -g .` followed by listing `~/.aether/system/agents-claude/` shows the ant agents present
-  3. `aether update` in a target repo creates `.claude/agents/ant/` containing the ant agent files
-  4. Running `aether update` a second time with unchanged agents reports no files changed (idempotent)
-  5. Removing an agent from source, running `npm install -g .` and `aether update`, removes it from the target repo
-**Plans**: 4 plans in 2 waves
-Plans:
-- [x] 27-01-PLAN.md — Wire distribution pipeline (package.json, cli.js, update-transaction.js, init.js)
-- [x] 27-02-PLAN.md — Create Builder agent (Claude Code subagent with PWR compliance)
-- [x] 27-03-PLAN.md — Create Watcher agent (read-only Claude Code subagent with PWR compliance)
-- [x] 27-04-PLAN.md — End-to-end verification (npm pack, hub sync, agent loading checkpoint)
-
-### Phase 28: Orchestration Layer + Surveyor Variants
-**Goal**: The full orchestration and codebase-context capability is available in Claude Code — Queen can coordinate workers, Route-Setter can plan phases, Scout can research, and all 4 Surveyors can characterize a repo.
-**Depends on**: Phase 27
-**Requirements**: CORE-01, CORE-04, CORE-05, CORE-06, CORE-07, CORE-08, CORE-09
-**Success Criteria** (what must be TRUE):
-  1. `/agents` in Claude Code shows `aether-queen`, `aether-scout`, `aether-route-setter`, and all 4 surveyor variants loaded without errors
-  2. Queen's description routes correctly — it is not invoked for tasks that belong to Builder or Watcher
-  3. All 4 surveyor agents restrict writes to `.aether/data/survey/` only (no Edit tool, no writes to source files)
-  4. Scout agent description explicitly names research and discovery as its trigger cases
-**Plans**: 3 plans in 1 wave
-Plans:
-- [x] 28-01-PLAN.md — Create Queen agent with Task tool, 6 workflow patterns, and 4-tier escalation
-- [x] 28-02-PLAN.md — Create Scout (web search, read-only) and Route-Setter (Task tool, planning) agents
-- [x] 28-03-PLAN.md — Create all 4 surveyor agents (nest, disciplines, pathogens, provisions)
-
-### Phase 29: Specialist Agents + Agent Tests
-**Goal**: All P2 specialist agents are shipped and a comprehensive AVA test suite enforces quality standards on every agent file — frontmatter, tool restrictions, naming, and body content.
-**Depends on**: Phase 28
-**Requirements**: SPEC-01, SPEC-02, SPEC-03, SPEC-04, SPEC-05, TEST-01, TEST-02, TEST-03, TEST-04, TEST-05
-**Success Criteria** (what must be TRUE):
-  1. `npm test` passes with tests verifying frontmatter completeness on all 22 agent files
-  2. `npm test` catches a missing tools field or incorrect agent name format as a test failure
-  3. Auditor and Tracker have no Write, Edit, or Bash in their tools field (read-only restriction enforced by tests)
-  4. No agent file body contains spawn calls or activity-log requirements (test enforced)
-**Plans**: 3 plans in 2 waves
-Plans:
-- [x] 29-01-PLAN.md — Create Keeper, Tracker, and Auditor agents (read-only specialists)
-- [x] 29-02-PLAN.md — Create Probe and Weaver agents (behavior guarantee specialists)
-- [x] 29-03-PLAN.md — AVA test suite for agent quality enforcement (TEST-01 through TEST-05)
-
-### Phase 30: Niche Agents
-**Goal**: All 8 niche agents exist as Claude Code subagents in `.claude/agents/ant/`, completing the full 22-agent roster. The fallback comment in `build.md` is unreachable for all 22 castes.
-**Depends on**: Phase 29
-**Requirements**: NICHE-01, NICHE-02, NICHE-03, NICHE-04, NICHE-05, NICHE-06, NICHE-07, NICHE-08
-**Success Criteria** (what must be TRUE):
-  1. `/agents` in Claude Code shows all 22 aether-* agents loaded (count test passes: TEST-05)
-  2. Read-only niche agents (Gatekeeper, Includer, Measurer, Chaos, Archaeologist, Sage) have no Write or Edit in tools field
-  3. Each niche agent description names a specific trigger case — not a generic role label
-**Plans**: 3 plans in 2 waves
-Plans:
-- [x] 30-01-PLAN.md — Create 6 read-only niche agents (Chaos, Archaeologist, Gatekeeper, Includer, Measurer, Sage)
-- [x] 30-02-PLAN.md — Create 2 writer niche agents (Ambassador, Chronicler)
-- [x] 30-03-PLAN.md — Expand READ_ONLY_CONSTRAINTS in test suite and verify full 22-agent roster
-
-### Phase 31: Integration Verification + Cleanup
-**Goal**: The full colony workflow is verified end-to-end with real agent invocations updating colony state correctly. The repo is clean: docs trimmed, bash bug fixed, repo-structure documented.
-**Depends on**: Phase 30
-**Requirements**: INT-01, INT-02, INT-03, CLEAN-01, CLEAN-02, CLEAN-03, CLEAN-04
-**Success Criteria** (what must be TRUE):
-  1. `/ant:build` resolves `subagent_type="aether-builder"` to `.claude/agents/ant/aether-builder.md` (not the fallback path)
-  2. After an agent run, COLONY_STATE.json reflects updated state — the agent's output was consumed correctly
-  3. `.aether/docs/` contains only 8-10 actively-maintained documents
-  4. Bash line wrapping bug is fixed and verified with a test case
-**Plans**: 3 plans in 2 waves
-Plans:
-- [x] 31-01-PLAN.md — Integration verification + bash bug fix
-- [x] 31-02-PLAN.md — Docs curation + repo documentation
-- [x] 31-03-PLAN.md — Ship v2.0 (version bump, release)
+</details>
 
 ## Progress
 

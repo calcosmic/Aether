@@ -63,6 +63,7 @@ Progress: [██████████] 100% (31/31 phases complete)
 - [Phase 31]: 31-02: Castes organized by tier (Core, Orchestration, Specialists, Niche) for README clarity
 - [Phase 31]: 31-01: Description text belongs in instruction prose above bash blocks, not inside them
 - [Phase 31]: 31-01: CLEAN-03 lint test scans both .claude/commands/ant/ and .opencode/commands/ant/
+- [Phase 31]: 31-03: Version 2.0.0 (not 5.0.0) to align with Worker Emergence milestone name per user decision; git tag only, npm publish deferred for dist-tag choice
 
 ### Key Findings from Research
 - Subagents cannot spawn other subagents — strip all spawn calls from every converted agent
