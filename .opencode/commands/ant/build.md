@@ -900,36 +900,22 @@ bash .aether/aether-utils.sh activity-log "GRAVE" "Queen" "Grave marker placed a
 
 **Error Handoff Update:**
 If workers failed, update handoff with error context for recovery:
-```bash
-cat > .aether/HANDOFF.md << 'HANDOFF_EOF'
-# Colony Session — Build Errors
 
-## ⚠️ Build Status: ISSUES DETECTED
-**Phase:** {phase_number} — {phase_name}
-**Status:** Build completed with failures
-**Updated:** $(date -u +%Y-%m-%dT%H:%M:%SZ)
+Resolve the build error handoff template path:
+  Check ~/.aether/system/templates/handoff-build-error.template.md first,
+  then .aether/templates/handoff-build-error.template.md.
 
-## Failed Workers
-{for each failed worker:}
-- {ant_name}: {failure_summary}
-{end for}
+If no template found: output "Template missing: handoff-build-error.template.md. Run aether update to fix." and stop.
 
-## Grave Markers Placed
-{for each grave:}
-- {file}: {caution_level} caution
-{end for}
+Read the template file. Fill all {{PLACEHOLDER}} values:
+  - {{PHASE_NUMBER}} → current phase number
+  - {{PHASE_NAME}} → current phase name
+  - {{BUILD_TIMESTAMP}} → current ISO-8601 UTC timestamp
+  - {{FAILED_WORKERS}} → formatted list of failed workers (one "- {ant_name}: {failure_summary}" per line)
+  - {{GRAVE_MARKERS}} → formatted list of grave markers (one "- {file}: {caution_level} caution" per line)
 
-## Recovery Options
-1. Review failures: Check `.aether/data/activity.log`
-2. Fix and retry: `/ant:build {phase_number}`
-3. Swarm fix: `/ant:swarm` for auto-repair
-4. Manual fix: Address issues, then `/ant:continue`
-
-## Session Note
-Build completed but workers failed. Grave markers placed.
-Review failures before advancing.
-HANDOFF_EOF
-```
+Remove the HTML comment lines at the top of the template.
+Write the result to .aether/HANDOFF.md using the Write tool.
 
 Only fires when workers fail. Zero impact on successful builds.
 
@@ -1054,40 +1040,29 @@ jq -n \
     "can_resume": true,
     "note": "Phase build completed. Run /ant:continue to advance if verification passed."
   }' > .aether/data/last-build-result.json
-
-# Write handoff markdown
-cat > .aether/HANDOFF.md << 'HANDOFF_EOF'
-# Colony Session — Build Complete
-
-## Quick Resume
-Run `/ant:continue` to advance phase, or `/ant:resume-colony` to restore full context.
-
-## State at Build Completion
-- Goal: "$(jq -r '.goal' .aether/data/COLONY_STATE.json)"
-- Phase: {phase_number} — {phase_name}
-- Build Status: {synthesis.status}
-- Updated: $(date -u +%Y-%m-%dT%H:%M:%SZ)
-
-## Build Summary
-{summary}
-
-## Tasks
-- Completed: {synthesis.tasks_completed | length}
-- Failed: {synthesis.tasks_failed | length}
-
-## Files Changed
-- Created: {synthesis.files_created | length} files
-- Modified: {synthesis.files_modified | length} files
-
-## Next Steps
-- If verification passed: `/ant:continue` to advance to next phase
-- If issues found: `/ant:flags` to review blockers
-- To pause: `/ant:pause-colony`
-
-## Session Note
-$(if synthesis.status == "completed" then "Build succeeded — ready to advance." else "Build completed with issues — review before continuing." end)
-HANDOFF_EOF
 ```
+
+Resolve the build success handoff template path:
+  Check ~/.aether/system/templates/handoff-build-success.template.md first,
+  then .aether/templates/handoff-build-success.template.md.
+
+If no template found: output "Template missing: handoff-build-success.template.md. Run aether update to fix." and stop.
+
+Read the template file. Fill all {{PLACEHOLDER}} values:
+  - {{GOAL}} → colony goal (from COLONY_STATE.json)
+  - {{PHASE_NUMBER}} → current phase number
+  - {{PHASE_NAME}} → current phase name
+  - {{BUILD_STATUS}} → synthesis.status
+  - {{BUILD_TIMESTAMP}} → current ISO-8601 UTC timestamp
+  - {{BUILD_SUMMARY}} → synthesis summary
+  - {{TASKS_COMPLETED}} → count of completed tasks
+  - {{TASKS_FAILED}} → count of failed tasks
+  - {{FILES_CREATED}} → count of created files
+  - {{FILES_MODIFIED}} → count of modified files
+  - {{SESSION_NOTE}} → "Build succeeded — ready to advance." if status is completed, else "Build completed with issues — review before continuing."
+
+Remove the HTML comment lines at the top of the template.
+Write the result to .aether/HANDOFF.md using the Write tool.
 
 This ensures the handoff always reflects the latest build state, even if the session crashes before explicit pause.
 
