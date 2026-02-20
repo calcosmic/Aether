@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 ## Current Position
 
 Phase: 29 of 31 (Specialist Agents + Agent Tests)
-Plan: 2 of 3 in current phase (29-01 partial, 29-02 complete)
+Plan: 3 of 3 in current phase (29-01, 29-02, 29-03 — 29-01 and 29-02 now complete)
 Status: In progress
-Last activity: 2026-02-20 — 29-02 complete: Probe agent (test generation, write+run, test-files-only boundaries) and Weaver agent (refactoring with explicit revert-on-test-failure protocol) created
+Last activity: 2026-02-20 — 29-01 complete: Keeper (knowledge management), Tracker (diagnose-only, no Write/Edit), and Auditor (strict read-only, no Write/Edit/Bash) specialist agents created
 
 Progress: [████████░░] 77% (26/31 phases complete through v1.4)
 
@@ -48,6 +48,9 @@ Progress: [████████░░] 77% (26/31 phases complete through v1
 - 29-02: Probe writes AND runs tests — untested tests are incomplete work; Bash available specifically for this purpose
 - 29-02: Weaver revert protocol uses explicit git commands in failure_modes — behavior preservation enforced not merely documented
 - 29-02: Changing test expectations to make tests pass is a behavior change, not a refactor — prohibited in Weaver critical_rules
+- 29-01: Tracker boundary enforced at schema level — field is named suggested_fix (not fix_applied) to reinforce that Builder applies the fix
+- 29-01: Auditor has no Bash — even for running linters; when Bash is needed for an audit dimension, Auditor returns blocked and routes to Builder or Tracker
+- 29-01: Cross-reference escalation pattern established — specialists name the agent they route to (Tracker → Builder/Weaver, Auditor → Queen/Probe), not generic "escalate to orchestrator"
 
 ### Key Findings from Research
 - Subagents cannot spawn other subagents — strip all spawn calls from every converted agent
@@ -63,5 +66,5 @@ Progress: [████████░░] 77% (26/31 phases complete through v1
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: Completed 29-02-PLAN.md (Probe and Weaver specialist agents created)
-Next step: Continue Phase 29 — proceed to 29-03 (agent quality tests)
+Stopped at: Completed 29-01-PLAN.md (Keeper, Tracker, Auditor specialist agents created)
+Next step: Continue Phase 29 — proceed to 29-03 (agent quality tests AVA suite)
