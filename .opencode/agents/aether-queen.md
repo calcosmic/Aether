@@ -57,7 +57,6 @@ Use the `task` tool to spawn workers by their specialized `subagent_type`.
 - Watcher (`aether-watcher`) - Verification, testing, quality gates
 - Scout (`aether-scout`) - Research, documentation, exploration
 - Colonizer - Codebase exploration and mapping
-- Architect - Knowledge synthesis and design
 - Route-Setter - Planning, decomposition
 
 ### Development Cluster (Weaver Ants)
@@ -68,12 +67,11 @@ Use the `task` tool to spawn workers by their specialized `subagent_type`.
 
 ### Knowledge Cluster (Leafcutter Ants)
 - Chronicler (`aether-chronicler`) - Documentation generation
-- Keeper (`aether-keeper`) - Knowledge curation and pattern archiving
-- Auditor (`aether-auditor`) - Code review with specialized lenses
+- Keeper (`aether-keeper`) - Knowledge curation, pattern archiving, and architectural synthesis (includes Architect capabilities)
+- Auditor (`aether-auditor`) - Code review with specialized lenses, including security audits (includes Guardian capabilities)
 - Sage (`aether-sage`) - Analytics and trend analysis
 
 ### Quality Cluster (Soldier Ants)
-- Guardian (`aether-guardian`) - Security audits and vulnerability scanning
 - Measurer (`aether-measurer`) - Performance profiling and optimization
 - Includer (`aether-includer`) - Accessibility audits and WCAG compliance
 - Gatekeeper (`aether-gatekeeper`) - Dependency management and supply chain security
