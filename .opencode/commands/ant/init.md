@@ -135,9 +135,23 @@ If no instincts meet the threshold, display:
 
 Generate a session ID in the format `session_{unix_timestamp}_{random}` and an ISO-8601 UTC timestamp.
 
-Use the Write tool to write `.aether/data/COLONY_STATE.json` with the v3.0 structure.
+Resolve the colony-state template path:
+  Check `~/.aether/system/templates/colony-state.template.json` first,
+  then `.aether/templates/colony-state.template.json`.
 
-**If Step 2.5 found instincts to inherit**, convert each into the instinct format and seed the `memory.instincts` array. Each inherited instinct should have:
+If no template found: output "Template missing: colony-state.template.json. Run aether update to fix." and stop.
+
+Read the template file. Follow its `_instructions` field.
+Replace all `__PLACEHOLDER__` values:
+  - `__GOAL__` → the user's goal from $normalized_args
+  - `__SESSION_ID__` → the generated session ID (format: `session_{unix_timestamp}_{random}`)
+  - `__ISO8601_TIMESTAMP__` → the current ISO-8601 UTC timestamp (used in both `initialized_at` and the events entry)
+  - `__PHASE_LEARNINGS__` → JSON array from Step 2.5, or `[]` if none
+  - `__INSTINCTS__` → JSON array from Step 2.5, or `[]` if none
+
+IMPORTANT: `__PHASE_LEARNINGS__` and `__INSTINCTS__` must be JSON array values (e.g., `[]` not `"[]"`).
+
+**If Step 2.5 found instincts to inherit**, convert each into the instinct format for the `__INSTINCTS__` array. Each inherited instinct should have:
 - `id`: `instinct_inherited_{index}`
 - `trigger`: inferred from the instinct description
 - `action`: the instinct description
@@ -150,56 +164,29 @@ Use the Write tool to write `.aether/data/COLONY_STATE.json` with the v3.0 struc
 - `applications`: 0
 - `successes`: 0
 
-**If Step 2.5 found validated learnings**, seed `memory.phase_learnings` with each as:
+**If Step 2.5 found validated learnings**, seed the `__PHASE_LEARNINGS__` array with each as:
 - `phase`: `"inherited"`
 - `learning`: the learning text
 - `status`: `"validated"`
 - `source`: `"inherited:completion-report"`
 
-**If Step 2.5 was skipped or found nothing**, use empty arrays as before.
+**If Step 2.5 was skipped or found nothing**, use empty arrays `[]` for both `__PHASE_LEARNINGS__` and `__INSTINCTS__`.
 
-```json
-{
-  "version": "3.0",
-  "goal": "<the user's goal>",
-  "state": "READY",
-  "current_phase": 0,
-  "session_id": "<generated session_id>",
-  "initialized_at": "<ISO-8601 timestamp>",
-  "build_started_at": null,
-  "plan": {
-    "generated_at": null,
-    "confidence": null,
-    "phases": []
-  },
-  "memory": {
-    "phase_learnings": "<inherited learnings or []>",
-    "decisions": [],
-    "instincts": "<inherited instincts or []>"
-  },
-  "errors": {
-    "records": [],
-    "flagged_patterns": []
-  },
-  "signals": [],
-  "graveyards": [],
-  "events": [
-    "<ISO-8601 timestamp>|colony_initialized|init|Colony initialized with goal: <the user's goal>"
-  ]
-}
-```
+Remove ALL keys starting with underscore (`_template`, `_version`, `_instructions`, `_comment_*`).
+Write the resulting JSON to `.aether/data/COLONY_STATE.json` using the Write tool.
 
 ### Step 4: Initialize Constraints
 
-Write `.aether/data/constraints.json`:
+Resolve the constraints template path:
+  Check `~/.aether/system/templates/constraints.template.json` first,
+  then `.aether/templates/constraints.template.json`.
 
-```json
-{
-  "version": "1.0",
-  "focus": [],
-  "constraints": []
-}
-```
+If no template found: output "Template missing: constraints.template.json. Run aether update to fix." and stop.
+
+Read the template file. Follow its `_instructions` field.
+No placeholder substitution needed — the data keys are written as-is.
+Remove ALL keys starting with underscore (`_template`, `_version`, `_instructions`, `_comment_*`).
+Write the resulting JSON to `.aether/data/constraints.json` using the Write tool.
 
 ### Step 5: Validate State File
 
