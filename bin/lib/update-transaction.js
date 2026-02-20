@@ -165,6 +165,7 @@ class UpdateTransaction {
     this.HUB_COMMANDS_CLAUDE = path.join(this.HUB_SYSTEM_DIR, 'commands', 'claude');
     this.HUB_COMMANDS_OPENCODE = path.join(this.HUB_SYSTEM_DIR, 'commands', 'opencode');
     this.HUB_AGENTS = path.join(this.HUB_SYSTEM_DIR, 'agents');
+    this.HUB_AGENTS_CLAUDE = path.join(this.HUB_SYSTEM_DIR, 'agents-claude');
     this.HUB_RULES = path.join(this.HUB_SYSTEM_DIR, 'rules');
     this.HUB_VERSION = path.join(this.HUB_DIR, 'version.json');
     this.HUB_REGISTRY = path.join(this.HUB_DIR, 'registry.json');
@@ -174,7 +175,7 @@ class UpdateTransaction {
     this.EXCLUDE_DIRS = ['data', 'dreams', 'checkpoints', 'locks', 'temp', 'agents', 'commands', 'rules', 'archive', 'chambers'];
 
     // Target directories for git safety checks
-    this.targetDirs = ['.aether', '.claude/commands/ant', '.claude/rules', '.opencode/commands/ant', '.opencode/agents'];
+    this.targetDirs = ['.aether', '.claude/commands/ant', '.claude/agents/ant', '.claude/rules', '.opencode/commands/ant', '.opencode/agents'];
   }
 
   /**
@@ -832,6 +833,7 @@ class UpdateTransaction {
       system: { copied: 0, removed: 0, skipped: 0 },
       commands: { copied: 0, removed: 0, skipped: 0 },
       agents: { copied: 0, removed: 0, skipped: 0 },
+      agents_claude: { copied: 0, removed: [], skipped: 0 },
       rules: { copied: 0, removed: 0, skipped: 0 },
       errors: [],
     };
@@ -862,6 +864,12 @@ class UpdateTransaction {
     const repoAgents = path.join(this.repoPath, '.opencode', 'agents');
     if (fs.existsSync(this.HUB_AGENTS)) {
       results.agents = this.syncDirWithCleanup(this.HUB_AGENTS, repoAgents, { dryRun });
+    }
+
+    // Sync claude agents from hub to .claude/agents/ant/
+    const repoClaudeAgents = path.join(this.repoPath, '.claude', 'agents', 'ant');
+    if (fs.existsSync(this.HUB_AGENTS_CLAUDE)) {
+      results.agents_claude = this.syncDirWithCleanup(this.HUB_AGENTS_CLAUDE, repoClaudeAgents, { dryRun });
     }
 
     // Sync rules from hub to .claude/rules/
@@ -916,6 +924,7 @@ class UpdateTransaction {
     verifyDir(this.HUB_COMMANDS_CLAUDE, path.join(this.repoPath, '.claude', 'commands', 'ant'));
     verifyDir(this.HUB_COMMANDS_OPENCODE, path.join(this.repoPath, '.opencode', 'commands', 'ant'));
     verifyDir(this.HUB_AGENTS, path.join(this.repoPath, '.opencode', 'agents'));
+    verifyDir(this.HUB_AGENTS_CLAUDE, path.join(this.repoPath, '.claude', 'agents', 'ant'));
     verifyDir(this.HUB_RULES, path.join(this.repoPath, '.claude', 'rules'));
 
     return {
@@ -962,6 +971,7 @@ class UpdateTransaction {
     checkDir(this.HUB_COMMANDS_CLAUDE, 'commands/claude');
     checkDir(this.HUB_COMMANDS_OPENCODE, 'commands/opencode');
     checkDir(this.HUB_AGENTS, 'agents');
+    checkDir(this.HUB_AGENTS_CLAUDE, 'agents-claude');
     checkDir(this.HUB_RULES, 'rules');
     checkDir(this.HUB_VERSION, 'version');
 

@@ -15,9 +15,10 @@ const path = require('path');
 const HOME = process.env.HOME || process.env.USERPROFILE;
 const HUB_DIR = HOME ? path.join(HOME, '.aether') : null;
 const HUB_SYSTEM = HUB_DIR ? path.join(HUB_DIR, 'system') : null;
-const HUB_COMMANDS_CLAUDE = HUB_DIR ? path.join(HUB_DIR, 'commands', 'claude') : null;
-const HUB_COMMANDS_OPENCODE = HUB_DIR ? path.join(HUB_DIR, 'commands', 'opencode') : null;
-const HUB_AGENTS = HUB_DIR ? path.join(HUB_DIR, 'agents') : null;
+const HUB_COMMANDS_CLAUDE = HUB_SYSTEM ? path.join(HUB_SYSTEM, 'commands', 'claude') : null;
+const HUB_COMMANDS_OPENCODE = HUB_SYSTEM ? path.join(HUB_SYSTEM, 'commands', 'opencode') : null;
+const HUB_AGENTS = HUB_SYSTEM ? path.join(HUB_SYSTEM, 'agents') : null;
+const HUB_AGENTS_CLAUDE = HUB_SYSTEM ? path.join(HUB_SYSTEM, 'agents-claude') : null;
 const HUB_REGISTRY = HUB_DIR ? path.join(HUB_DIR, 'registry.json') : null;
 const HUB_VERSION = HUB_DIR ? path.join(HUB_DIR, 'version.json') : null;
 
@@ -378,6 +379,15 @@ async function initializeRepo(repoPath, options = {}) {
     results.agents = syncFiles(HUB_AGENTS, destAgents);
     if (!quiet && results.agents.copied > 0) {
       console.log(`  Agents: ${results.agents.copied} copied, ${results.agents.skipped} skipped`);
+    }
+  }
+
+  // Sync claude agents
+  if (HUB_AGENTS_CLAUDE && fs.existsSync(HUB_AGENTS_CLAUDE)) {
+    const destClaudeAgents = path.join(repoPath, '.claude', 'agents', 'ant');
+    const claudeAgentsResult = syncFiles(HUB_AGENTS_CLAUDE, destClaudeAgents);
+    if (!quiet && claudeAgentsResult.copied > 0) {
+      console.log(`  Agents (claude): ${claudeAgentsResult.copied} copied, ${claudeAgentsResult.skipped} skipped`);
     }
   }
 
