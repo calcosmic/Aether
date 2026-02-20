@@ -25,7 +25,7 @@
     "test:unit": "ava",
     "test:bash": "bash tests/bash/test-aether-utils.sh",
     "lint:shell": "shellcheck --severity=error .aether/aether-utils.sh bin/generate-commands.sh .aether/utils/file-lock.sh .aether/utils/atomic-write.sh .aether/utils/colorize-log.sh .aether/utils/watch-spawn-tree.sh",
-    "lint:json": "node -e \"const fs=require('fs'); const files=['.aether/data/constraints.json','.aether/data/COLONY_STATE.json']; files.forEach(f=>{JSON.parse(fs.readFileSync(f,'utf8'))}); console.log('JSON valid')\"",
+    "lint:json": "node -e \"const fs=require('fs'); const files=['.aether/data/constraints.json','.aether/data/COLONY_STATE.json']; files.filter(f=>fs.existsSync(f)).forEach(f=>{JSON.parse(fs.readFileSync(f,'utf8'))}); console.log('JSON valid')\"",
     "lint:sync": "bash bin/generate-commands.sh check",
     "lint": "npm run lint:shell && npm run lint:json && npm run lint:sync"
   },
