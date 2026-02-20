@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Prevent context rot across Claude Code sessions with self-managing colony that learns and guides users
-**Current focus:** v2.0 Worker Emergence — Phase 29 complete, moving to Phase 30
+**Current focus:** v2.0 Worker Emergence — Phase 30 in progress (plan 02 of 03 complete)
 
 ## Current Position
 
-Phase: 29 of 31 (Specialist Agents + Agent Tests) — COMPLETE
-Plan: 3 of 3 complete (29-01, 29-02, 29-03 all done)
-Status: Phase complete
-Last activity: 2026-02-20 — 29-03 complete: agent quality AVA test suite created; TEST-01 through TEST-04 and body quality pass for all 14 agents; TEST-05 intentionally fails (14 vs 22 — Phase 30 tracker)
+Phase: 30 of 31 (Niche Agents)
+Plan: 2 of 3 complete (30-01, 30-02 done)
+Status: In progress
+Last activity: 2026-02-20 — 30-02 complete: Ambassador (API integration, Credentials Iron Law) and Chronicler (documentation, Edit restricted to JSDoc/TSDoc) agents created; 18 total agents in .claude/agents/ant/
 
 Progress: [████████░░] 77% (26/31 phases complete through v1.4)
 
 ## Performance Metrics
 
 **Cumulative:**
-- Total plans completed: 75 (v1.0: 27, v1.1: 13, v1.2: 18, v1.3: 12, v1.4: 2, v2.0: 3)
-- Total requirements validated: 114 (v1.0: 46, v1.1: 14, v1.2: 24, v1.3: 24, v1.4: 1 partial, v2.0: 5 TEST requirements)
-- Total tests: ~451 passing (420+ AVA + 31 bash), 1 intentional failure (TEST-05 tracks Phase 30)
+- Total plans completed: 77 (v1.0: 27, v1.1: 13, v1.2: 18, v1.3: 12, v1.4: 2, v2.0: 5)
+- Total requirements validated: 116 (v1.0: 46, v1.1: 14, v1.2: 24, v1.3: 24, v1.4: 1 partial, v2.0: 7 requirements)
+- Total tests: ~451 passing (420+ AVA + 31 bash), 1 intentional failure (TEST-05 tracks Phase 30 — now fails at 18 vs 22)
 
 ## Accumulated Context
 
@@ -53,6 +53,8 @@ Progress: [████████░░] 77% (26/31 phases complete through v1
 - 29-01: Cross-reference escalation pattern established — specialists name the agent they route to (Tracker → Builder/Weaver, Auditor → Queen/Probe), not generic "escalate to orchestrator"
 - [Phase 29]: 29-03: Forbidden pattern matching uses aether-utils.sh invocation form to avoid false positives from Queen documentation
 - [Phase 29]: 29-03: TEST-05 is a Phase 30 tracker — hardcoded to 22, intentionally fails at 14 agents until Phase 30 ships remaining 8 agents
+- [Phase 30]: 30-02: Credentials Iron Law named as a titled rule in critical_rules — named constraint pattern for security-critical absolute rules
+- [Phase 30]: 30-02: Chronicler has no Bash tool — read-code-not-run-code posture enforced via explicit tools field; Edit restricted to JSDoc/TSDoc comments declared in four locations in agent body
 
 ### Key Findings from Research
 - Subagents cannot spawn other subagents — strip all spawn calls from every converted agent
@@ -68,5 +70,5 @@ Progress: [████████░░] 77% (26/31 phases complete through v1
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: Completed 29-03-PLAN.md (agent quality AVA test suite)
-Next step: Proceed to Phase 30 — 8 remaining agent ports (ambassador, archaeologist, chaos, chronicler, gatekeeper, includer, measurer, sage)
+Stopped at: Completed 30-02-PLAN.md (Ambassador and Chronicler write-capable niche agents)
+Next step: Proceed to Phase 30 plan 03 — 4 remaining agent ports (gatekeeper, includer, measurer, sage)
