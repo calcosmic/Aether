@@ -61,6 +61,11 @@ Last activity: 2026-02-20 — Completed 25-02: merged Architect into Keeper (Arc
 - [Phase 24-template-integration]: OpenCode seal.md had no CROWNED-ANTHILL.md write step — only HANDOFF heredoc wired to template
 - [Phase 24-03]: Bash code block closing fence needed after jq block when heredoc replaced with prose — original had one large bash block containing both jq write and heredoc
 - [Phase 24-03]: Both build.md platforms wired simultaneously with identical template read instructions — no platform-specific differences in HANDOFF logic
+- [Phase 25-01]: Critical Failures (STOP immediately) separated from Escalation Chain (tiered retry) in Queen failure_modes — two distinct failure classes
+- [Phase 25-01]: Tiers 1-3 fully silent — user only hears about failures that survive 3 retry/reassign attempts
+- [Phase 25-01]: Escalation state derived from flag source='escalation' filter — no new aether-utils.sh commands needed
+- [Phase 25-01]: Add Tests documented as SPBV variant, not a 7th pattern — selection overhead not worth it
+- [Phase 25-01]: selected_pattern stored as local variable in build.md — ephemeral per build, captured in BUILD SUMMARY
 - [Phase 25]: Absorbed Architect Synthesis Workflow into Keeper as Architecture Mode, Guardian security domains into Auditor as Security Lens Mode
 - [Phase 25]: Deleted aether-architect.md and aether-guardian.md outright (no stubs/redirects) — agent count reduced from 25 to 23
 
@@ -77,6 +82,6 @@ Last activity: 2026-02-20 — Completed 25-02: merged Architect into Keeper (Arc
 
 ## Session Continuity
 
-Last session: 2026-02-20T00:54:30Z
-Stopped at: Completed 25-02-PLAN.md
+Last session: 2026-02-20T00:56:26Z
+Stopped at: Completed 25-01-PLAN.md (backfilled — executed after 25-02)
 Next step: Execute Phase 25 Plan 03
