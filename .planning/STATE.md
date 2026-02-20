@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ## Current Position
 
-Phase: 31 of 31 (Integration Verification Cleanup) — IN PROGRESS
-Plan: 2 of 3 complete (31-01, 31-02 done)
-Status: 31-02 complete; 31-03 is next
-Last activity: 2026-02-20 — 31-02 complete: docs curated to 8 files, repo-structure.md created, README.md updated for v2.0
+Phase: 31 of 31 (Integration Verification + Cleanup) — COMPLETE
+Plan: 3 of 3 complete (v2.0 shipped)
+Status: v2.0 Worker Emergence shipped
+Last activity: 2026-02-20 — v2.0 shipped: 22 agents, bash bug fix, docs curated, version 2.0.0
 
-Progress: [████████░░] 77% (26/31 phases complete through v1.4)
+Progress: [██████████] 100% (31/31 phases complete)
 
 ## Performance Metrics
 
 **Cumulative:**
-- Total plans completed: 80 (v1.0: 27, v1.1: 13, v1.2: 18, v1.3: 12, v1.4: 2, v2.0: 8)
-- Total requirements validated: 133 (v1.0: 46, v1.1: 14, v1.2: 24, v1.3: 24, v1.4: 1 partial, v2.0: 24 requirements)
-- Total tests: ~421 passing (421 AVA + 9 bash skipped); all 22 agents fully quality-validated
+- Total plans completed: 90 (v1.0: 27, v1.1: 13, v1.2: 18, v1.3: 12, v1.4: 2, v2.0: 18)
+- Total requirements validated: 157 (v1.0: 46, v1.1: 14, v1.2: 24, v1.3: 24, v1.4: 1 partial, v2.0: 48 requirements)
+- Total tests: ~427 passing (427 AVA + 9 bash skipped); all 22 agents fully quality-validated
 
 ## Accumulated Context
 
@@ -61,6 +61,8 @@ Progress: [████████░░] 77% (26/31 phases complete through v1
 - [Phase 30]: 30-03: READ_ONLY_CONSTRAINTS expanded to 8 agents — Gatekeeper and Includer confirmed in most restrictive tier (no Bash)
 - [Phase 31]: 31-02: Archive pattern for historical docs — move to archive/ subdirectory, not delete
 - [Phase 31]: 31-02: Castes organized by tier (Core, Orchestration, Specialists, Niche) for README clarity
+- [Phase 31]: 31-01: Description text belongs in instruction prose above bash blocks, not inside them
+- [Phase 31]: 31-01: CLEAN-03 lint test scans both .claude/commands/ant/ and .opencode/commands/ant/
 
 ### Key Findings from Research
 - Subagents cannot spawn other subagents — strip all spawn calls from every converted agent
@@ -76,5 +78,5 @@ Progress: [████████░░] 77% (26/31 phases complete through v1
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: Completed 31-02-PLAN.md (docs curated, repo-structure.md created, README.md updated for v2.0)
-Next step: Proceed to 31-03 (final cleanup tasks)
+Stopped at: v2.0 shipped — all 31 phases complete, version 2.0.0
+Next step: Project complete. Future work starts new version cycle.

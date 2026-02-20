@@ -8,7 +8,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-- README updated to v4.0.0
+- README updated to v2.0.0
+
+---
+
+## v2.0.0 — Worker Emergence (2026-02-20)
+
+**Major milestone:** Every ant caste is now a real Claude Code subagent. 22 agents ship through the hub, ready for resolution via the Task tool.
+
+### Added
+- **22 Claude Code subagents**: Every ant caste is now a first-class subagent resolvable via the Task tool
+  - Core: Builder, Watcher
+  - Orchestration: Queen, Scout, Route-Setter, 4 Surveyors (nest, disciplines, pathogens, provisions)
+  - Specialists: Keeper, Tracker, Probe, Weaver, Auditor
+  - Niche: Chaos, Archaeologist, Gatekeeper, Includer, Measurer, Sage, Ambassador, Chronicler
+- **Agent distribution pipeline**: `npm install -g .` syncs agents to hub at `~/.aether/system/agents-claude/`, `aether update` delivers to target repos
+- **6 AVA tests for agent quality**: Frontmatter validation, tool restrictions, naming conventions, content standards
+- **repo-structure.md**: Quick re-orientation guide for the codebase
+
+### Fixed
+- **Bash line wrapping bug**: Fixed 58 instances across 7 command files where description text was inside code blocks causing "with: command not found" errors
+- **Lint regression test**: CLEAN-03 test scans both Claude and OpenCode command directories
+
+### Changed
+- **.aether/docs/ curated**: 8 keepers at root, 6 archived for reference
+- **README.md updated**: Action-oriented tone, v2.0 agent capabilities featured, caste table by tier
+- **ROADMAP.md and STATE.md**: v2.0 marked shipped, all 31 phases complete at 100%
+
+### Phases Shipped
+- **Phase 27**: Distribution Infrastructure + First Core Agents (4 plans)
+- **Phase 28**: Orchestration Layer + Surveyor Variants (3 plans)
+- **Phase 29**: Specialist Agents + Agent Tests (3 plans)
+- **Phase 30**: Niche Agents (3 plans)
+- **Phase 31**: Integration Verification + Cleanup (3 plans)
+
+---
 
 ### Removed
 - Old planning phases 10-19 archived to docs/plans/ (completed phases)

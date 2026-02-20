@@ -7,7 +7,7 @@
 - ✅ **v1.2 Hardening & Reliability** — Phases 14-19 (shipped 2026-02-19)
 - ✅ **v1.3 The Great Restructuring** — Phases 20-25 (shipped 2026-02-20)
 - ✅ **v1.4 Deep Cleanup (partial)** — Phase 26 (shipped 2026-02-20)
-- 🚧 **v2.0 Worker Emergence** — Phases 27-31 (in progress)
+- ✅ **v2.0 Worker Emergence** — Phases 27-31 (shipped 2026-02-20)
 
 ## Phases
 
@@ -83,11 +83,11 @@
 
 **49 requirements across 5 phases.**
 
-- [ ] **Phase 27: Distribution Infrastructure + First Core Agents** - Prove the end-to-end chain works: packaging, hub sync, target delivery, with Builder and Watcher as the first two shipped agents
+- [x] **Phase 27: Distribution Infrastructure + First Core Agents** - Prove the end-to-end chain works: packaging, hub sync, target delivery, with Builder and Watcher as the first two shipped agents
 - [x] **Phase 28: Orchestration Layer + Surveyor Variants** - Queen, Scout, Route-Setter, and all 4 Surveyors — the full orchestration and codebase-context capability (completed 2026-02-20)
-- [ ] **Phase 29: Specialist Agents + Agent Tests** - Keeper, Tracker, Probe, Weaver, Auditor plus the full AVA test suite for agent quality
-- [ ] **Phase 30: Niche Agents** - All 8 niche castes completing the full 22-agent roster
-- [ ] **Phase 31: Integration Verification + Cleanup** - End-to-end verification, docs cleanup, bash bug fix
+- [x] **Phase 29: Specialist Agents + Agent Tests** - Keeper, Tracker, Probe, Weaver, Auditor plus the full AVA test suite for agent quality (completed 2026-02-20)
+- [x] **Phase 30: Niche Agents** - All 8 niche castes completing the full 22-agent roster (completed 2026-02-20)
+- [x] **Phase 31: Integration Verification + Cleanup** - End-to-end verification, docs cleanup, bash bug fix
 
 ## Phase Details
 
@@ -103,10 +103,10 @@
   5. Removing an agent from source, running `npm install -g .` and `aether update`, removes it from the target repo
 **Plans**: 4 plans in 2 waves
 Plans:
-- [ ] 27-01-PLAN.md — Wire distribution pipeline (package.json, cli.js, update-transaction.js, init.js)
-- [ ] 27-02-PLAN.md — Create Builder agent (Claude Code subagent with PWR compliance)
-- [ ] 27-03-PLAN.md — Create Watcher agent (read-only Claude Code subagent with PWR compliance)
-- [ ] 27-04-PLAN.md — End-to-end verification (npm pack, hub sync, agent loading checkpoint)
+- [x] 27-01-PLAN.md — Wire distribution pipeline (package.json, cli.js, update-transaction.js, init.js)
+- [x] 27-02-PLAN.md — Create Builder agent (Claude Code subagent with PWR compliance)
+- [x] 27-03-PLAN.md — Create Watcher agent (read-only Claude Code subagent with PWR compliance)
+- [x] 27-04-PLAN.md — End-to-end verification (npm pack, hub sync, agent loading checkpoint)
 
 ### Phase 28: Orchestration Layer + Surveyor Variants
 **Goal**: The full orchestration and codebase-context capability is available in Claude Code — Queen can coordinate workers, Route-Setter can plan phases, Scout can research, and all 4 Surveyors can characterize a repo.
@@ -119,9 +119,9 @@ Plans:
   4. Scout agent description explicitly names research and discovery as its trigger cases
 **Plans**: 3 plans in 1 wave
 Plans:
-- [ ] 28-01-PLAN.md — Create Queen agent with Task tool, 6 workflow patterns, and 4-tier escalation
-- [ ] 28-02-PLAN.md — Create Scout (web search, read-only) and Route-Setter (Task tool, planning) agents
-- [ ] 28-03-PLAN.md — Create all 4 surveyor agents (nest, disciplines, pathogens, provisions)
+- [x] 28-01-PLAN.md — Create Queen agent with Task tool, 6 workflow patterns, and 4-tier escalation
+- [x] 28-02-PLAN.md — Create Scout (web search, read-only) and Route-Setter (Task tool, planning) agents
+- [x] 28-03-PLAN.md — Create all 4 surveyor agents (nest, disciplines, pathogens, provisions)
 
 ### Phase 29: Specialist Agents + Agent Tests
 **Goal**: All P2 specialist agents are shipped and a comprehensive AVA test suite enforces quality standards on every agent file — frontmatter, tool restrictions, naming, and body content.
@@ -134,9 +134,9 @@ Plans:
   4. No agent file body contains spawn calls or activity-log requirements (test enforced)
 **Plans**: 3 plans in 2 waves
 Plans:
-- [ ] 29-01-PLAN.md — Create Keeper, Tracker, and Auditor agents (read-only specialists)
-- [ ] 29-02-PLAN.md — Create Probe and Weaver agents (behavior guarantee specialists)
-- [ ] 29-03-PLAN.md — AVA test suite for agent quality enforcement (TEST-01 through TEST-05)
+- [x] 29-01-PLAN.md — Create Keeper, Tracker, and Auditor agents (read-only specialists)
+- [x] 29-02-PLAN.md — Create Probe and Weaver agents (behavior guarantee specialists)
+- [x] 29-03-PLAN.md — AVA test suite for agent quality enforcement (TEST-01 through TEST-05)
 
 ### Phase 30: Niche Agents
 **Goal**: All 8 niche agents exist as Claude Code subagents in `.claude/agents/ant/`, completing the full 22-agent roster. The fallback comment in `build.md` is unreachable for all 22 castes.
@@ -146,7 +146,11 @@ Plans:
   1. `/agents` in Claude Code shows all 22 aether-* agents loaded (count test passes: TEST-05)
   2. Read-only niche agents (Gatekeeper, Includer, Measurer, Chaos, Archaeologist, Sage) have no Write or Edit in tools field
   3. Each niche agent description names a specific trigger case — not a generic role label
-**Plans**: TBD
+**Plans**: 3 plans in 2 waves
+Plans:
+- [x] 30-01-PLAN.md — Create 6 read-only niche agents (Chaos, Archaeologist, Gatekeeper, Includer, Measurer, Sage)
+- [x] 30-02-PLAN.md — Create 2 writer niche agents (Ambassador, Chronicler)
+- [x] 30-03-PLAN.md — Expand READ_ONLY_CONSTRAINTS in test suite and verify full 22-agent roster
 
 ### Phase 31: Integration Verification + Cleanup
 **Goal**: The full colony workflow is verified end-to-end with real agent invocations updating colony state correctly. The repo is clean: docs trimmed, bash bug fixed, repo-structure documented.
@@ -157,7 +161,11 @@ Plans:
   2. After an agent run, COLONY_STATE.json reflects updated state — the agent's output was consumed correctly
   3. `.aether/docs/` contains only 8-10 actively-maintained documents
   4. Bash line wrapping bug is fixed and verified with a test case
-**Plans**: TBD
+**Plans**: 3 plans in 2 waves
+Plans:
+- [x] 31-01-PLAN.md — Integration verification + bash bug fix
+- [x] 31-02-PLAN.md — Docs curation + repo documentation
+- [x] 31-03-PLAN.md — Ship v2.0 (version bump, release)
 
 ## Progress
 
@@ -189,11 +197,11 @@ Plans:
 | 24. Template Integration | v1.3 | Complete | 2026-02-20 | — |
 | 25. Queen Coordination | v1.3 | Complete | 2026-02-20 | — |
 | 26. Audit & Delete Dead Files | v1.4 | Complete | 2026-02-20 | — |
-| 27. Distribution Infrastructure + First Core Agents | v2.0 | 0/4 | Planned | - |
+| 27. Distribution Infrastructure + First Core Agents | v2.0 | 4/4 | Complete | 2026-02-20 |
 | 28. Orchestration Layer + Surveyor Variants | v2.0 | Complete    | 2026-02-20 | - |
-| 29. Specialist Agents + Agent Tests | v2.0 | 0/3 | Planned | - |
-| 30. Niche Agents | v2.0 | 0/TBD | Not started | - |
-| 31. Integration Verification + Cleanup | v2.0 | 0/TBD | Not started | - |
+| 29. Specialist Agents + Agent Tests | v2.0 | Complete    | 2026-02-20 | - |
+| 30. Niche Agents | v2.0 | Complete    | 2026-02-20 | - |
+| 31. Integration Verification + Cleanup | v2.0 | 3/3 | Complete | 2026-02-20 |
 
 ---
 
@@ -203,4 +211,4 @@ Plans:
 *v1.2 shipped: 2026-02-19*
 *v1.3 shipped: 2026-02-20*
 *v1.4 (partial) shipped: 2026-02-20*
-*v2.0 roadmap created: 2026-02-20*
+*v2.0 shipped: 2026-02-20*
