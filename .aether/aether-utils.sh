@@ -4626,6 +4626,100 @@ $updated_meta
     json_ok "$result"
     ;;
 
+  learning-defer-proposals)
+    # Store unselected proposals in learning-deferred.json for later review
+    # Usage: echo '[{proposal1}, {proposal2}]' | bash aether-utils.sh learning-defer-proposals
+    # Returns: JSON with count of newly deferred items
+
+    # Read proposals from stdin
+    proposals_json=$(cat)
+
+    # Validate input
+    if [[ -z "$proposals_json" ]] || [[ "$proposals_json" == "[]" ]]; then
+      json_ok '{"deferred":0,"new":0,"expired":0}'
+      exit 0
+    fi
+
+    deferred_file="$DATA_DIR/learning-deferred.json"
+
+    # Ensure data directory exists
+    [[ ! -d "$DATA_DIR" ]] && mkdir -p "$DATA_DIR"
+
+    # Acquire lock
+    acquire_lock "$deferred_file" 5 || {
+      json_err "$E_LOCK_TIMEOUT" "Could not acquire lock on deferred file"
+      exit 1
+    }
+
+    # Read existing deferred file or create empty structure
+    if [[ -f "$deferred_file" ]]; then
+      existing_deferred=$(jq '.deferred // []' "$deferred_file" 2>/dev/null || echo '[]')
+    else
+      existing_deferred='[]'
+    fi
+
+    # Current timestamp for new entries
+    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    current_epoch=$(date +%s)
+
+    # Add deferred_at timestamp to each new proposal
+    new_proposals=$(echo "$proposals_json" | jq --arg ts "$ts" '
+      map(. + {deferred_at: $ts})
+    ')
+
+    # Calculate TTL cutoff (30 days ago)
+    ttl_cutoff=$((current_epoch - 30 * 24 * 60 * 60))
+
+    # Filter existing deferred: remove expired entries
+    filtered_existing=$(echo "$existing_deferred" | jq --argjson cutoff "$ttl_cutoff" '
+      map(select(
+        (.deferred_at | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601) > $cutoff
+      ))
+    ' 2>/dev/null || echo '[]')
+
+    # Count expired items
+    expired_count=$(echo "$existing_deferred" | jq --argjson cutoff "$ttl_cutoff" '
+      map(select(
+        (.deferred_at | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601) <= $cutoff
+      )) | length
+    ' 2>/dev/null || echo '0')
+
+    # Merge new proposals with existing, avoiding duplicates by content_hash
+    merged=$(jq -s --argjson new "$new_proposals" '
+      def unique_by_hash:
+        group_by(.content_hash) | map(first);
+
+      (.[0] // []) + $new | unique_by_hash
+    ' <<< "$filtered_existing")
+
+    # Count new items (those that weren't in existing)
+    existing_hashes=$(echo "$filtered_existing" | jq -r 'map(.content_hash) | join(" ")')
+    new_count=0
+    if [[ -n "$existing_hashes" ]]; then
+      new_count=$(echo "$new_proposals" | jq --arg existing "$existing_hashes" '
+        [$existing | split(" ")[]] as $hashes |
+        map(select(.content_hash as $h | $hashes | index($h) | not)) |
+        length
+      ')
+    else
+      new_count=$(echo "$new_proposals" | jq 'length')
+    fi
+
+    # Write atomically
+    tmp_file="${deferred_file}.tmp.$$"
+    jq -n --argjson deferred "$merged" '{deferred: $deferred}' > "$tmp_file"
+    mv "$tmp_file" "$deferred_file"
+
+    # Release lock
+    release_lock
+
+    # Log activity
+    total_count=$(echo "$merged" | jq 'length')
+    bash "$0" activity-log "DEFERRED" "Queen" "Stored $new_count new deferred proposal(s), $expired_count expired removed, $total_count total"
+
+    json_ok "{\"deferred\":$total_count,\"new\":$new_count,\"expired\":$expired_count}"
+    ;;
+
   survey-load)
     phase_type="${1:-}"
     survey_dir=".aether/data/survey"

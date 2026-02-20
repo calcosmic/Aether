@@ -9,17 +9,17 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ## Current Position
 
-Phase: 33 (Plan 03 complete)
-Plan: Phase 33-03 - promotion proposals integrated
-Status: Phase 33 complete - promotion pipeline: observe -> check -> display -> approve -> promote
-Last activity: 2026-02-20 — Phase 33-03 complete - continue.md displays proposals, queen-promote enforces thresholds
+Phase: 34 (Plan 02 complete)
+Plan: Phase 34-02 - selection parsing and capture functions
+Status: Phase 34 in progress - selection UX complete, promotion execution pending
+Last activity: 2026-02-20 — Phase 34-02 complete - parse-selection and learning-select-proposals with preview/confirmation
 
-Progress: [▓▓▓▓▓▓▓▓▓▓] 100% (3/3 plans complete in Phase 33)
+Progress: [▓▓▓▓▓▓▓▓░░] 67% (2/3 plans complete in Phase 34)
 
 ## Performance Metrics
 
 **Cumulative:**
-- Total plans completed: 93 (v1.0: 27, v1.1: 13, v1.2: 18, v1.3: 12, v1.4: 2, v2.0: 18, v3.0: 3)
+- Total plans completed: 95 (v1.0: 27, v1.1: 13, v1.2: 18, v1.3: 12, v1.4: 2, v2.0: 18, v3.0: 5)
 - Total requirements validated: 165 (v1.0: 46, v1.1: 14, v1.2: 24, v1.3: 24, v1.4: 1 partial, v2.0: 48, v3.0: 8 requirements)
 - Total tests: ~427 passing (427 AVA + 9 bash skipped); all 22 agents fully quality-validated
 
@@ -81,6 +81,12 @@ Progress: [▓▓▓▓▓▓▓▓▓▓] 100% (3/3 plans complete in Phase 33)
 - [Phase 33]: 33-03: User approval required before all promotions (INT-03)
 - [Phase 33]: 33-03: queen-promote enforces type validation and thresholds (QUEEN-04)
 - [Phase 33]: 33-03: QUEEN.md metadata tracks evolution_log (META-02) and colonies_contributed (META-04)
+- [Phase 34]: 34-01: learning-display-proposals shows grouped proposals with checkbox UI, threshold bars, and below-threshold warnings
+- [Phase 34]: 34-01: generate-threshold-bar helper with Unicode circles and ASCII fallback
+- [Phase 34]: 34-01: All proposals displayed (not just threshold-meeting) to support user override of thresholds
+- [Phase 34]: 34-02: parse-selection helper converts 1-indexed user input to 0-indexed array indices with validation
+- [Phase 34]: 34-02: learning-select-proposals captures user input, shows preview with below-threshold warnings
+- [Phase 34]: 34-02: Confirmation prompt with --yes flag for scripting, --dry-run for testing
 
 ### Key Findings from Research
 - Subagents cannot spawn other subagents — strip all spawn calls from every converted agent
@@ -96,5 +102,5 @@ Progress: [▓▓▓▓▓▓▓▓▓▓] 100% (3/3 plans complete in Phase 33)
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: Phase 33 complete - promotion proposals fully integrated
-Next step: Phase 34 — Add colony lifecycle management (archive/seal commands)
+Stopped at: Phase 34-02 complete - selection parsing and capture functions ready
+Next step: Phase 34-03 — Add batch promotion execution and deferred proposal storage
