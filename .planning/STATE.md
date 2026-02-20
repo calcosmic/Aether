@@ -39,6 +39,8 @@ Progress: [████████░░] 77% (26/31 phases complete through v1
 - 8 XML sections (role, execution_flow, critical_rules, return_format, success_criteria, failure_modes, escalation, boundaries) define the conversion template for all remaining agents
 - 27-03: Watcher has read-only tools (Read, Bash, Grep, Glob — no Write/Edit); explicit tools field enforces this; spawns field removed from return format
 - 27-04: Distribution pipeline proven — npm pack includes ant agents only (not GSD agents), hub populated at ~/.aether/system/agents-claude/, second install idempotent
+- 28-01: Queen gets Task tool unrestricted — true orchestrator; spawn_tree field removed from return (requires aether-utils.sh); flag-add replaced with structured text note
+- 28-01: Caste emoji protocol established — 🔨🐜 Builder, 🔭🐜 Scout, 👁🐜 Watcher, 🗺🐜 Route-Setter/Surveyor
 - 28-02: Scout gets WebSearch/WebFetch but no Bash — read-only posture enforced via explicit tools field
 - 28-02: Route-Setter Task tool documented with graceful degradation for subagent context where Task may be ineffective
 
