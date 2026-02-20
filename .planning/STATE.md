@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Prevent context rot across Claude Code sessions with self-managing colony that learns and guides users
-**Current focus:** v2.0 Worker Emergence — Phase 27 (Distribution Infrastructure + First Core Agents)
+**Current focus:** v2.0 Worker Emergence — Phase 28 (Orchestration Layer + Surveyor Variants)
 
 ## Current Position
 
-Phase: 27 of 31 (Distribution Infrastructure + First Core Agents)
-Plan: 4 of 4 in current phase (27-01, 27-02, 27-03, 27-04 complete)
-Status: Phase 27 complete
-Last activity: 2026-02-20 — 27-04 complete: distribution chain verified end-to-end (npm pack, hub population, idempotency, 415 tests passing)
+Phase: 28 of 31 (Orchestration Layer + Surveyor Variants)
+Plan: 2 of 4 in current phase (28-01, 28-02 complete)
+Status: In progress
+Last activity: 2026-02-20 — 28-02 complete: Scout (WebSearch/WebFetch, read-only) and Route-Setter (Task tool, planning discipline) agents created
 
 Progress: [████████░░] 77% (26/31 phases complete through v1.4)
 
@@ -39,6 +39,8 @@ Progress: [████████░░] 77% (26/31 phases complete through v1
 - 8 XML sections (role, execution_flow, critical_rules, return_format, success_criteria, failure_modes, escalation, boundaries) define the conversion template for all remaining agents
 - 27-03: Watcher has read-only tools (Read, Bash, Grep, Glob — no Write/Edit); explicit tools field enforces this; spawns field removed from return format
 - 27-04: Distribution pipeline proven — npm pack includes ant agents only (not GSD agents), hub populated at ~/.aether/system/agents-claude/, second install idempotent
+- 28-02: Scout gets WebSearch/WebFetch but no Bash — read-only posture enforced via explicit tools field
+- 28-02: Route-Setter Task tool documented with graceful degradation for subagent context where Task may be ineffective
 
 ### Key Findings from Research
 - Subagents cannot spawn other subagents — strip all spawn calls from every converted agent
@@ -54,5 +56,5 @@ Progress: [████████░░] 77% (26/31 phases complete through v1
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: Completed 27-04-PLAN.md (distribution chain verified end-to-end)
-Next step: Phase 27 complete — proceed to next phase
+Stopped at: Completed 28-02-PLAN.md (Scout and Route-Setter agents created)
+Next step: Continue Phase 28 — proceed to 28-03
