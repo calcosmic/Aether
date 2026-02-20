@@ -1,6 +1,6 @@
 # Aether Documentation
 
-This directory contains actively maintained documentation for the Aether colony system. 13 files total — no subdirectories.
+This directory contains actively maintained documentation for the Aether colony system. 8 files total plus `disciplines/` subdirectory.
 
 ---
 
@@ -11,10 +11,6 @@ Distributed to target repos via `aether update` (update allowlist):
 | File | Purpose |
 |------|---------|
 | `pheromones.md` | Pheromone system guide (FOCUS/REDIRECT/FEEDBACK signals) |
-| `constraints.md` | Colony constraint definitions |
-| `pathogen-schema.md` | Pathogen detection schema |
-| `pathogen-schema-example.json` | Pathogen schema example |
-| `progressive-disclosure.md` | Progressive disclosure guide |
 
 ---
 
@@ -29,6 +25,16 @@ Packaged in npm, available to all Aether installations:
 | `queen-commands.md` | Queen command documentation |
 | `QUEEN.md` | Generated Queen wisdom file (repo-specific, auto-updated) |
 | `error-codes.md` | Error code reference (E_* constants) |
+
+---
+
+## Development Docs
+
+Packaged in npm, documents active issues:
+
+| File | Purpose |
+|------|---------|
+| `known-issues.md` | Active known issues and workarounds |
 
 ---
 
@@ -48,19 +54,15 @@ Training protocols that govern worker behavior (in `disciplines/` subdirectory):
 
 ---
 
-## Architecture
+## Archived Docs
 
-| File | Purpose |
-|------|---------|
-| `QUEEN_ANT_ARCHITECTURE.md` | Queen escalation chain and coordination patterns |
+Historical documentation moved to `archive/` subdirectory:
 
----
+- `QUEEN_ANT_ARCHITECTURE.md` - superseded by agent files
+- `implementation-learnings.md` - historical findings
+- `constraints.md` - content now in agent definitions
+- `pathogen-schema.md` - specialized use case
+- `pathogen-schema-example.json` - example for schema
+- `progressive-disclosure.md` - design philosophy
 
-## Development Docs
-
-Packaged in npm, documents active issues and learnings:
-
-| File | Purpose |
-|------|---------|
-| `known-issues.md` | Active known issues and workarounds |
-| `implementation-learnings.md` | Extracted implementation findings |
+Archived docs remain available for reference but are not actively maintained.
