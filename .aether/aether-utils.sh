@@ -753,7 +753,7 @@ HELP_EOF
             opt("session_id";["string","null"]),
             opt("initialized_at";["string","null"]),
             opt("build_started_at";["string","null"])
-          ]} | . + {pass: ([.checks[] | select(. == "pass")] | length) == (.checks | length)}
+          ]} | . + {pass: (([.checks[] | select(. == "pass")] | length) == (.checks | length))}
         ' "$DATA_DIR/COLONY_STATE.json")"
         ;;
       constraints)
@@ -763,7 +763,7 @@ HELP_EOF
           {file:"constraints.json", checks:[
             arr("focus"),
             arr("constraints")
-          ]} | . + {pass: ([.checks[] | select(. == "pass")] | length) == (.checks | length)}
+          ]} | . + {pass: (([.checks[] | select(. == "pass")] | length) == (.checks | length))}
         ' "$DATA_DIR/constraints.json")"
         ;;
       all)
