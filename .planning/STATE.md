@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Prevent context rot across Claude Code sessions with self-managing colony that learns and guides users
-**Current focus:** v2.0 Worker Emergence — Phase 30 in progress (plans 01 and 02 of 03 complete)
+**Current focus:** v2.0 Worker Emergence — Phase 30 complete (all 3 plans done); Phase 31 cleanup is next
 
 ## Current Position
 
-Phase: 30 of 31 (Niche Agents)
-Plan: 2 of 3 complete (30-01, 30-02 done)
-Status: In progress
-Last activity: 2026-02-20 — 30-01 complete: 6 niche read-only agents created (chaos, archaeologist, gatekeeper, includer, measurer, sage); 22 total agents in .claude/agents/ant/; TEST-05 now passes
+Phase: 30 of 31 (Niche Agents) — COMPLETE
+Plan: 3 of 3 complete (30-01, 30-02, 30-03 done)
+Status: Phase 30 complete; Phase 31 is next
+Last activity: 2026-02-20 — 30-03 complete: READ_ONLY_CONSTRAINTS expanded to 8 read-only agents; all 22 agents quality-validated across all 6 tests; Phase 30 done
 
 Progress: [████████░░] 77% (26/31 phases complete through v1.4)
 
 ## Performance Metrics
 
 **Cumulative:**
-- Total plans completed: 78 (v1.0: 27, v1.1: 13, v1.2: 18, v1.3: 12, v1.4: 2, v2.0: 6)
-- Total requirements validated: 122 (v1.0: 46, v1.1: 14, v1.2: 24, v1.3: 24, v1.4: 1 partial, v2.0: 13 requirements)
-- Total tests: ~451 passing (420+ AVA + 31 bash); TEST-05 now passes (22 agents confirmed)
+- Total plans completed: 79 (v1.0: 27, v1.1: 13, v1.2: 18, v1.3: 12, v1.4: 2, v2.0: 7)
+- Total requirements validated: 130 (v1.0: 46, v1.1: 14, v1.2: 24, v1.3: 24, v1.4: 1 partial, v2.0: 21 requirements)
+- Total tests: ~421 passing (421 AVA + 9 bash skipped); all 22 agents fully quality-validated
 
 ## Accumulated Context
 
@@ -58,6 +58,7 @@ Progress: [████████░░] 77% (26/31 phases complete through v1
 - [Phase 30]: 30-01: Gatekeeper and Includer have no Bash — static analysis only; Builder executes runtime tools (npm audit, axe-core)
 - [Phase 30]: 30-01: Includer always includes analysis_method: 'manual static analysis' and documents runtime testing gaps explicitly
 - [Phase 30]: 30-01: Archaeologist primary deliverable is regression_risks array — regression prevention framing leads execution_flow
+- [Phase 30]: 30-03: READ_ONLY_CONSTRAINTS expanded to 8 agents — Gatekeeper and Includer confirmed in most restrictive tier (no Bash)
 
 ### Key Findings from Research
 - Subagents cannot spawn other subagents — strip all spawn calls from every converted agent
@@ -73,5 +74,5 @@ Progress: [████████░░] 77% (26/31 phases complete through v1
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: Completed 30-01-PLAN.md (6 niche read-only agents: chaos, archaeologist, gatekeeper, includer, measurer, sage)
-Next step: Proceed to Phase 30 plan 03 — agent quality tests for the 8 new agents from Phase 30
+Stopped at: Completed 30-03-PLAN.md (Phase 30 done — all 22 agents quality-validated, READ_ONLY_CONSTRAINTS covers all 8 read-only agents)
+Next step: Proceed to Phase 31 (v2.0 cleanup)
