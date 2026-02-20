@@ -99,6 +99,67 @@ bash .aether/aether-utils.sh spawn-complete "{name}" "completed" "{summary}"
 - Depth 3: no spawning (complete inline)
 - Global: 10 workers per phase max
 
+## Workflow Patterns
+
+The Queen selects a named pattern at build start based on the phase description. Announce the pattern before spawning workers.
+
+### Pattern: SPBV (Scout-Plan-Build-Verify)
+**Use when:** New features, first implementation, unknown territory
+**Phases:** Scout → Plan → Build → Verify → Rollback (if Verify fails)
+**Rollback:** `git stash pop` or `git checkout -- .` on failed verification
+**Announce:** `Using pattern: SPBV (Scout → Plan → Build → Verify)`
+
+### Pattern: Investigate-Fix
+**Use when:** Known bug, reproducible failure, error message in hand
+**Phases:** Symptom → Isolate → Prove → Fix → Guard (add regression test)
+**Rollback:** Revert fix commit if Guard test exposes regression
+**Announce:** `Using pattern: Investigate-Fix (Symptom → Isolate → Prove → Fix → Guard)`
+
+### Pattern: Deep Research
+**Use when:** User requests oracle-level research, domain is unknown, no code changes expected
+**Phases:** Scope → Research (Oracle) → Synthesize → Document → Review
+**Rollback:** N/A (read-only — no writes to reverse)
+**Announce:** `Using pattern: Deep Research (Oracle-led)`
+
+### Pattern: Refactor
+**Use when:** Code restructuring without behavior change, technical debt reduction
+**Phases:** Snapshot → Analyze → Restructure → Verify Equivalence → Validate
+**Rollback:** `git stash pop` to restore pre-refactor state
+**Announce:** `Using pattern: Refactor (Snapshot → Restructure → Verify Equivalence)`
+
+### Pattern: Compliance
+**Use when:** Security audit, accessibility review, license scan, supply chain check
+**Phases:** Scope → Audit (Auditor-led) → Report → Remediate → Re-audit
+**Rollback:** N/A (audit is read-only; remediation is a separate build)
+**Announce:** `Using pattern: Compliance (Auditor-led audit)`
+
+### Pattern: Documentation Sprint
+**Use when:** Doc-only changes, README updates, API documentation, guides
+**Phases:** Gather → Draft (Chronicler-led) → Review → Publish → Verify links
+**Rollback:** Revert doc files if review fails
+**Announce:** `Using pattern: Documentation Sprint (Chronicler-led)`
+
+**Note:** "Add Tests" is a variant of SPBV (scout coverage gaps, plan which tests to add, build the tests, verify they catch regressions) — not a separate 7th pattern.
+
+### Pattern Selection
+
+At build Step 3, examine the phase name and task descriptions. Select the first matching pattern:
+
+| Phase contains | Pattern |
+|----------------|---------|
+| "bug", "fix", "error", "broken", "failing" | Investigate-Fix |
+| "research", "oracle", "explore", "investigate" | Deep Research |
+| "refactor", "restructure", "clean", "reorganize" | Refactor |
+| "security", "audit", "compliance", "accessibility", "license" | Compliance |
+| "docs", "documentation", "readme", "guide" | Documentation Sprint |
+| (default) | SPBV |
+
+Display after pattern selection:
+```
+━━ Pattern: {pattern_name} ━━
+{announce_line}
+```
+
 ## Output Format
 
 ```json
@@ -120,19 +181,56 @@ bash .aether/aether-utils.sh spawn-complete "{name}" "completed" "{summary}"
 
 **Tiered severity — never fail silently.**
 
-### Minor Failures (retry silently, max 2 attempts)
-- **File not found**: Retry with alternate path; check `.aether/` subdirectories before giving up
-- **Command exits non-zero**: Read the full error output, diagnose cause, retry once with corrected invocation
-- **Spawn returns unexpected status**: Re-read spawn-tree log, confirm worker actually started before retrying
-
-### Major Failures (STOP immediately — do not proceed)
+### Critical Failures (STOP immediately — do not proceed)
 - **COLONY_STATE.json corruption detected**: STOP. Do not write. Do not guess at repair. Escalate with current state snapshot.
 - **Spawn failure leaves orphaned worker**: STOP. Log incomplete spawn-tree entry. Clean up: run `spawn-complete {name} "failed" "orphaned"` before escalating.
 - **Destructive git operation attempted**: STOP. No `reset --hard`, `push --force`, or `clean -f` under any circumstances. Escalate as architectural concern.
-- **2 retries exhausted on any minor failure**: Promote to major. STOP and escalate.
+
+### Escalation Chain
+
+Failures escalate through four tiers. Tiers 1-3 are fully silent — the user never sees them. Only Tier 4 surfaces to the user.
+
+**Tier 1: Worker retry** (silent, max 2 attempts)
+The failing worker retries the operation with a corrected approach. Covers: file not found (alternate path), command error (fixed invocation), spawn status unexpected (re-read spawn tree).
+
+**Tier 2: Parent reassignment** (silent)
+If Tier 1 exhausted, the parent worker tries a different approach. Covers: different file path strategy, alternate command, different search pattern.
+
+**Tier 3: Queen reassigns** (silent)
+If Tier 2 exhausted, the Queen retires the failed worker and spawns a different caste for the same task. Example: Builder fails → Queen spawns Tracker to investigate root cause → Queen spawns fresh Builder with Tracker's findings.
+
+**Tier 4: User escalation** (visible — only fires when Tier 3 fails)
+Display the ESCALATION banner. Never skip the failed task silently — acknowledge it and present options.
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ⚠ ESCALATION — QUEEN NEEDS YOU
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Task: {task description}
+Phase: {phase number} — {phase name}
+
+Tried:
+  • Worker retry (2 attempts) — {what failed}
+  • Parent tried alternate approach — {what failed}
+  • Queen reassigned to {other caste} — {what failed}
+
+Options:
+  A) {option} — RECOMMENDED
+  B) {option}
+  C) Skip and continue — this task will be marked blocked
+
+Awaiting your choice.
+```
+
+Log escalation as a flag:
+```bash
+bash .aether/aether-utils.sh flag-add "blocker" "{task title}" "{failure summary}" "escalation" {phase_number}
+```
+This persists escalation state across context resets and appears in /ant:status.
 
 ### Escalation Format
-When escalating, always provide:
+When escalating at Tier 4, always provide:
 1. **What failed**: Specific command, file, or operation — include exact error text
 2. **Options** (2-3 with trade-offs): e.g., "Skip phase and mark blocked / Retry with different worker caste / Revert state to last known good"
 3. **Recommendation**: Which option and why
