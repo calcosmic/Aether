@@ -4729,6 +4729,7 @@ $updated_meta
     dry_run=false
     skip_confirm=false
     deferred_mode=false
+    undo_mode=false
 
     # Parse arguments
     for arg in "$@"; do
@@ -4737,8 +4738,16 @@ $updated_meta
         --dry-run) dry_run=true ;;
         --yes) skip_confirm=true ;;
         --deferred) deferred_mode=true ;;
+        --undo) undo_mode=true ;;
       esac
     done
+
+    # Handle --undo mode
+    if [[ "$undo_mode" == "true" ]]; then
+      undo_result=$(bash "$0" learning-undo-promotions 2>&1)
+      echo "$undo_result"
+      exit 0
+    fi
 
     # Get colony name from COLONY_STATE.json
     colony_name="unknown"
@@ -4970,6 +4979,141 @@ $updated_meta
       --arg failed "${failed_item:-null}" \
       --argjson undo "$undo_offered" \
       '{promoted: $promoted, deferred: $deferred, failed: $failed, undo_offered: $undo}')
+
+    json_ok "$result"
+    ;;
+
+  learning-undo-promotions)
+    # Revert promotions from QUEEN.md using undo file
+    # Usage: learning-undo-promotions
+    # Returns: JSON with count of undone items
+
+    undo_file="$DATA_DIR/.promotion-undo.json"
+
+    # Check if undo file exists
+    if [[ ! -f "$undo_file" ]]; then
+      json_err "$E_FILE_NOT_FOUND" "No undo file found. Cannot undo promotions."
+      exit 1
+    fi
+
+    # Read undo data
+    undo_data=$(cat "$undo_file")
+    undo_timestamp=$(echo "$undo_data" | jq -r '.timestamp // 0')
+    current_time=$(date +%s)
+
+    # Check 24h TTL
+    ttl_seconds=$((24 * 60 * 60))
+    time_diff=$((current_time - undo_timestamp))
+
+    if [[ $time_diff -gt $ttl_seconds ]]; then
+      # Remove expired undo file
+      rm -f "$undo_file"
+      json_err "$E_VALIDATION_FAILED" "Undo window expired (24h limit)"
+      exit 1
+    fi
+
+    queen_file="$AETHER_ROOT/.aether/docs/QUEEN.md"
+
+    # Check if QUEEN.md exists
+    if [[ ! -f "$queen_file" ]]; then
+      json_err "$E_FILE_NOT_FOUND" "QUEEN.md not found"
+      exit 1
+    fi
+
+    # Process each promoted item
+    undone_count=0
+    failed_items=()
+
+    # Read promoted items from undo file
+    promoted_items=$(echo "$undo_data" | jq -c '.promoted[]?')
+
+    if [[ -z "$promoted_items" ]]; then
+      rm -f "$undo_file"
+      json_err "$E_VALIDATION_FAILED" "No promoted items in undo file"
+      exit 1
+    fi
+
+    # Create temp file for atomic write
+    tmp_file="${queen_file}.tmp.$$"
+
+    # Copy current QUEEN.md to temp
+    cp "$queen_file" "$tmp_file"
+
+    # Process each item
+    while IFS= read -r item; do
+      [[ -z "$item" ]] && continue
+
+      ptype=$(echo "$item" | jq -r '.wisdom_type')
+      content=$(echo "$item" | jq -r '.content')
+
+      # Map type to section header
+      case "$ptype" in
+        philosophy) section_header="## 📜 Philosophies" ;;
+        pattern) section_header="## 🧭 Patterns" ;;
+        redirect) section_header="## ⚠️ Redirects" ;;
+        stack) section_header="## 🔧 Stack Wisdom" ;;
+        decree) section_header="## 🏛️ Decrees" ;;
+        *) continue ;;
+      esac
+
+      # Escape content for sed (basic escaping)
+      escaped_content=$(echo "$content" | sed 's/[\\/&]/\\&/g')
+
+      # Find and remove the entry from the section
+      # Pattern: - **colony_name** (timestamp): content
+      # We match based on content since that's the unique part
+      if grep -q "${escaped_content}" "$tmp_file" 2>/dev/null; then
+        # Remove line containing this content within the section
+        # Use awk to handle section-aware removal
+        awk -v section="$section_header" -v content="$content" '
+          BEGIN { in_section = 0 }
+          $0 == section { in_section = 1 }
+          in_section && $0 ~ /^## / && $0 != section { in_section = 0 }
+          in_section && $0 ~ content { skip = 1; next }
+          { if (!skip) print; skip = 0 }
+        ' "$tmp_file" > "${tmp_file}.new" && mv "${tmp_file}.new" "$tmp_file"
+
+        ((undone_count++))
+      else
+        # Entry already removed or not found
+        failed_items+=("$content")
+      fi
+    done <<< "$promoted_items"
+
+    # Update METADATA stats in temp file - decrement counts
+    case "$ptype" in
+      stack) stat_key="total_stack_entries" ;;
+      philosophy) stat_key="total_philosophies" ;;
+      *) stat_key="total_${ptype}s" ;;
+    esac
+
+    # Decrement stats (but not below 0)
+    current_count=$(grep "\"${stat_key}\":" "$tmp_file" 2>/dev/null | grep -o '[0-9]*' | head -1 || echo "0")
+    current_count=${current_count:-0}
+    if [[ $current_count -gt 0 ]]; then
+      new_count=$((current_count - 1))
+      awk -v type="$stat_key" -v count="$new_count" '{
+        gsub("\"" type "\": [0-9]*", "\"" type "\": " count)
+        print
+      }' "$tmp_file" > "${tmp_file}.stats" && mv "${tmp_file}.stats" "$tmp_file"
+    fi
+
+    # Atomic move
+    mv "$tmp_file" "$queen_file"
+
+    # Remove undo file after successful revert
+    rm -f "$undo_file"
+
+    # Log activity
+    bash "$0" activity-log "UNDONE" "Queen" "Reverted $undone_count promotion(s) from QUEEN.md"
+
+    # Build result
+    if [[ ${#failed_items[@]} -gt 0 ]]; then
+      failed_json=$(printf '%s\n' "${failed_items[@]}" | jq -R . | jq -s '.')
+      result=$(jq -n --argjson undone "$undone_count" --argjson failed "$failed_json" '{undone: $undone, not_found: $failed}')
+    else
+      result=$(jq -n --argjson undone "$undone_count" '{undone: $undone, not_found: []}')
+    fi
 
     json_ok "$result"
     ;;
