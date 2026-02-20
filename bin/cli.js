@@ -69,6 +69,10 @@ const COMMANDS_SRC = path.join(PACKAGE_DIR, 'commands', 'ant');
 const COMMANDS_DEST = path.join(HOME, '.claude', 'commands', 'ant');
 const AGENTS_DEST = path.join(HOME, '.claude', 'agents', 'ant');
 
+// OpenCode paths (global)
+const OPENCODE_COMMANDS_DEST = path.join(HOME, '.opencode', 'command');
+const OPENCODE_AGENTS_DEST = path.join(HOME, '.opencode', 'agent');
+
 // Hub paths
 const HUB_DIR = path.join(HOME, '.aether');
 const HUB_SYSTEM_DIR = path.join(HUB_DIR, 'system');
@@ -375,6 +379,21 @@ function removeDirSync(dir) {
     }
   }
   fs.rmdirSync(dir);
+  return count;
+}
+
+// Remove only files from dest that exist in source (safe for shared directories)
+function removeFilesFromSource(sourceDir, destDir) {
+  if (!fs.existsSync(sourceDir) || !fs.existsSync(destDir)) return 0;
+  let count = 0;
+  const sourceFiles = fs.readdirSync(sourceDir).filter(f => f.endsWith('.md'));
+  for (const file of sourceFiles) {
+    const destPath = path.join(destDir, file);
+    if (fs.existsSync(destPath)) {
+      fs.unlinkSync(destPath);
+      count++;
+    }
+  }
   return count;
 }
 
@@ -1199,6 +1218,28 @@ program
       }
     }
 
+    // Sync OpenCode commands to ~/.opencode/command/ (with orphan cleanup)
+    const opencodeCmdsSrc = path.join(PACKAGE_DIR, '.opencode', 'commands', 'ant');
+    if (fs.existsSync(opencodeCmdsSrc)) {
+      const result = syncDirWithCleanup(opencodeCmdsSrc, OPENCODE_COMMANDS_DEST);
+      log(`  Commands (opencode): ${result.copied} files -> ${OPENCODE_COMMANDS_DEST}`);
+      if (result.removed.length > 0) {
+        log(`  Commands (opencode): removed ${result.removed.length} stale files`);
+        for (const f of result.removed) log(`    - ${f}`);
+      }
+    }
+
+    // Sync OpenCode agents to ~/.opencode/agent/ (with orphan cleanup)
+    const opencodeAgentsSrc = path.join(PACKAGE_DIR, '.opencode', 'agents');
+    if (fs.existsSync(opencodeAgentsSrc)) {
+      const result = syncDirWithCleanup(opencodeAgentsSrc, OPENCODE_AGENTS_DEST);
+      log(`  Agents (opencode): ${result.copied} files -> ${OPENCODE_AGENTS_DEST}`);
+      if (result.removed.length > 0) {
+        log(`  Agents (opencode): removed ${result.removed.length} stale files`);
+        for (const f of result.removed) log(`    - ${f}`);
+      }
+    }
+
     // Set up distribution hub at ~/.aether/
     log('');
     log(c.colony('Setting up distribution hub...'));
@@ -1207,6 +1248,7 @@ program
     log('');
     log(c.success('Install complete.'));
     log(`  ${c.queen('Claude Code:')} run /ant to get started`);
+    log(`  ${c.colony('OpenCode:')} run /ant to get started`);
     log(`  ${c.colony('Hub:')} ${c.dim('~/.aether/')} (for coordinated updates across repos)`);
   }));
 
@@ -1475,7 +1517,7 @@ program
 // Uninstall command
 program
   .command('uninstall')
-  .description('Remove slash-commands from ~/.claude/commands/ant/ (preserves project state and hub)')
+  .description('Remove slash-commands from ~/.claude/commands/ant/ and ~/.opencode/ (preserves project state and hub)')
   .action(wrapCommand(async () => {
     log(c.header(`aether-colony v${VERSION} — uninstalling...`));
 
@@ -1485,6 +1527,26 @@ program
       log(`  Removed: ${n} command files from ${COMMANDS_DEST}`);
     } else {
       log('  Claude Code commands already removed.');
+    }
+
+    // Remove Claude Code agents
+    if (fs.existsSync(AGENTS_DEST)) {
+      const n = removeDirSync(AGENTS_DEST);
+      log(`  Removed: ${n} agent files from ${AGENTS_DEST}`);
+    }
+
+    // Remove OpenCode commands (only our files, preserve others)
+    const opencodeCmdsSrc = path.join(PACKAGE_DIR, '.opencode', 'commands', 'ant');
+    if (fs.existsSync(OPENCODE_COMMANDS_DEST) && fs.existsSync(opencodeCmdsSrc)) {
+      const n = removeFilesFromSource(opencodeCmdsSrc, OPENCODE_COMMANDS_DEST);
+      log(`  Removed: ${n} command files from ${OPENCODE_COMMANDS_DEST}`);
+    }
+
+    // Remove OpenCode agents (only our files, preserve others)
+    const opencodeAgentsSrc = path.join(PACKAGE_DIR, '.opencode', 'agents');
+    if (fs.existsSync(OPENCODE_AGENTS_DEST) && fs.existsSync(opencodeAgentsSrc)) {
+      const n = removeFilesFromSource(opencodeAgentsSrc, OPENCODE_AGENTS_DEST);
+      log(`  Removed: ${n} agent files from ${OPENCODE_AGENTS_DEST}`);
     }
 
     log('');
