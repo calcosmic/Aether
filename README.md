@@ -8,7 +8,7 @@
 
 <div align="center">
 
-  **A multi-agent orchestration system for Claude Code where workers spawn workers.**
+  **22 specialized agents that spawn, coordinate, and self-organize.**
 
   ➡️ Click **Use this template** (top-right) to create your own Aether repo in 30 seconds.
 
@@ -17,7 +17,7 @@
   [![npm version](https://img.shields.io/npm/v/aether-colony.svg)](https://www.npmjs.com/package/aether-colony)
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-  **v4.0.0** — Distribution Simplification (runtime/ eliminated)
+  **v2.0.0** — Worker Emergence (22 real Claude Code agents)
 </div>
 
 ---
@@ -52,9 +52,9 @@ When a Builder hits something complex, it spawns a Scout to research. When code 
 
 ### Key Features
 
-- **Workers Spawn Workers** — Nested spawning up to depth 3, with global caps
+- **22 Claude Code Agents** — Real subagents, not definitions — `/ant:build` spawns a genuine `aether-builder`
 - **34 Slash Commands** — Lifecycle, research, coordination, and utility
-- **23 Specialized Agents** — Builders, Watchers, Scouts, and more
+- **Real Agent Spawning** — Run `/ant:build 1` and a real builder spawns to write your code
 - **6-Phase Verification** — Build, types, lint, tests, security, diff
 - **Colony Memory** — Learnings and instincts persist across sessions
 - **Pheromone Signals** — Focus, Redirect, Feedback to steer the colony
@@ -77,9 +77,7 @@ When a Builder hits something complex, it spawns a Scout to research. When code 
 npm install -g aether-colony
 ```
 
-This installs slash commands so Claude Code can find them:
-- 📁 **Claude Code Commands** → `~/.claude/commands/ant/` (34 slash commands)
-- 📁 **OpenCode Agents** → `~/.aether/agents/` (23 specialized agents)
+This installs 22 Claude Code agents to `~/.claude/agents/ant/` plus 34 slash commands.
 
 All runtime state, utilities, and worker specs live **repo-local** in `.aether/` — each project is self-contained.
 
@@ -178,7 +176,9 @@ aether spawn-tree     # Display worker spawn tree
 
 ## The Castes
 
-Workers have distinct personalities and roles:
+Workers have distinct personalities and roles, organized by tier:
+
+### Core Workers
 
 | Caste | Role | Personality |
 |-------|------|-------------|
@@ -186,14 +186,39 @@ Workers have distinct personalities and roles:
 | 🔨 **Builder** | Writes code, TDD-first | Pragmatic, direct |
 | 👁️ **Watcher** | Tests, validates | Vigilant, careful |
 | 🔍 **Scout** | Researches, discovers | Curious |
-| 🗺️ **Colonizer** | Explores codebases | Exploratory |
-| 🏗️ **Architect** | Extracts patterns | Systematic |
-| 📋 **Route-Setter** | Plans phases | Structured |
-| 🏺 **Archaeologist** | Excavates git history | Investigative |
-| 🔮 **Oracle** | Deep research | Analytical |
-| 🎲 **Chaos** | Resilience testing | Adversarial |
 
-Each caste logs with their personality — Builders say "Constructing...", Watchers say "Inspecting...", Scouts say "Discovered...".
+### Orchestration
+
+| Caste | Role | Personality |
+|-------|------|-------------|
+| 📋 **Route-Setter** | Plans phases | Structured |
+| 🗺️ **Colonizer** | Explores codebases, maps structure | Exploratory |
+| 📊 **Surveyor** | Measures codebase metrics | Systematic |
+
+### Specialists
+
+| Caste | Role | Personality |
+|-------|------|-------------|
+| 📚 **Keeper** | Curates knowledge, patterns | Preserving |
+| 🐛 **Tracker** | Investigates bugs, root cause | Methodical |
+| 🧪 **Probe** | Generates tests | Thorough |
+| 🔄 **Weaver** | Refactors code | Transformative |
+| 👥 **Auditor** | Reviews code quality | Critical |
+
+### Niche
+
+| Caste | Role | Personality |
+|-------|------|-------------|
+| 📦 **Gatekeeper** | Dependency audits | Protective |
+| ♿ **Includer** | Accessibility audits | Inclusive |
+| ⚡ **Measurer** | Performance profiling | Precise |
+| 🎲 **Chaos** | Resilience testing | Adversarial |
+| 🏺 **Archaeologist** | Excavates git history | Investigative |
+| 🔌 **Ambassador** | Third-party APIs | Diplomatic |
+| 📝 **Chronicler** | Documentation | Recording |
+| 🔮 **Sage** | Deep research (RALF loop) | Analytical |
+
+Run `/ant:colonize` and 4 surveyor agents map your entire codebase. Run `/ant:build 1` and a real builder spawns.
 
 ---
 
@@ -230,6 +255,8 @@ Before any phase advances:
 ---
 
 ## File Structure
+
+See [repo-structure.md](repo-structure.md) for a quick overview of all directories.
 
 ```
 <your-repo>/.aether/              # Repo-local runtime
