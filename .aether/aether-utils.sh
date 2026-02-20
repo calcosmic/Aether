@@ -4180,6 +4180,171 @@ $updated_meta
     json_ok "$result"
     ;;
 
+  learning-display-proposals)
+    # Display promotion proposals with checkbox-style UI
+    # Usage: learning-display-proposals [observations_file] [--verbose] [--no-color]
+    # Returns: Formatted display output (not JSON - for human consumption)
+
+    verbose=false
+    no_color=false
+    observations_file=""
+
+    # Parse arguments
+    for arg in "$@"; do
+      case "$arg" in
+        --verbose) verbose=true ;;
+        --no-color) no_color=true ;;
+        *)
+          # If argument doesn't start with --, treat as file path
+          if [[ "$arg" != --* ]] && [[ -z "$observations_file" ]]; then
+            observations_file="$arg"
+          fi
+          ;;
+      esac
+    done
+
+    # Detect color support
+    use_color=false
+    if [[ "$no_color" == "false" ]] && [[ -t 1 ]]; then
+      use_color=true
+    fi
+
+    # Color codes
+    reset=""
+    yellow=""
+    red=""
+    cyan=""
+    if [[ "$use_color" == "true" ]]; then
+      reset="\033[0m"
+      yellow="\033[33m"
+      red="\033[31m"
+      cyan="\033[36m"
+    fi
+
+    # Determine observations file path
+    if [[ -z "$observations_file" ]]; then
+      observations_file="$DATA_DIR/learning-observations.json"
+    fi
+
+    # Check if file exists and has content
+    if [[ ! -f "$observations_file" ]] || [[ ! -s "$observations_file" ]]; then
+      echo "No observations found."
+      echo ""
+      echo "Observations accumulate as colonies report learnings."
+      echo "Run this command again after more activity."
+      exit 0
+    fi
+
+    # Get all observations with their thresholds
+    # Define thresholds per wisdom type (META-01):
+    # philosophy: 5, pattern: 3, redirect: 2, stack: 1, decree: 0
+    proposals_json=$(jq '
+      def get_threshold(type):
+        if type == "philosophy" then 5
+        elif type == "pattern" then 3
+        elif type == "redirect" then 2
+        elif type == "stack" then 1
+        elif type == "decree" then 0
+        else 1
+        end;
+
+      {
+        proposals: [
+          .observations[] |
+          {
+            content: .content,
+            wisdom_type: .wisdom_type,
+            observation_count: .observation_count,
+            threshold: get_threshold(.wisdom_type),
+            colonies: .colonies
+          }
+        ]
+      }
+    ' "$observations_file" 2>/dev/null || echo '{"proposals":[]}')
+
+    # Check if there are any proposals
+    proposal_count=$(echo "$proposals_json" | jq '.proposals | length')
+    if [[ "$proposal_count" -eq 0 ]]; then
+      echo "No proposals ready for promotion."
+      echo ""
+      echo "Observations accumulate as colonies report learnings."
+      echo "Run this command again after more activity."
+      exit 0
+    fi
+
+    # Define wisdom types and their display properties
+    types=("philosophy" "pattern" "redirect" "stack" "decree")
+    type_emojis=("📜" "🧭" "⚠️" "🔧" "🏛️")
+    type_names=("Philosophies" "Patterns" "Redirects" "Stack Wisdom" "Decrees")
+    type_thresholds=(5 3 2 1 0)
+
+    echo ""
+    echo "🧠 Promotion Proposals"
+    echo "====================="
+    echo ""
+    echo "Select proposals to promote to QUEEN.md wisdom:"
+    echo "(Enter numbers like '1 3 5', or press Enter to defer all)"
+    echo ""
+
+    # Build flat list of all proposals with global numbering
+    global_idx=1
+    declare -a all_proposals
+
+    for i in "${!types[@]}"; do
+      type="${types[$i]}"
+      threshold="${type_thresholds[$i]}"
+
+      # Get proposals of this type
+      type_proposals=$(echo "$proposals_json" | jq --arg t "$type" '.proposals | map(select(.wisdom_type == $t))')
+      type_count=$(echo "$type_proposals" | jq 'length')
+
+      [[ "$type_count" -eq 0 ]] && continue
+
+      # Print group header
+      echo "${type_emojis[$i]} ${type_names[$i]} (threshold: $threshold)"
+
+      # Process each proposal using index to avoid subshell issues
+      for ((j=0; j<type_count; j++)); do
+        proposal=$(echo "$type_proposals" | jq -c ".[$j]")
+        content=$(echo "$proposal" | jq -r '.content')
+        count=$(echo "$proposal" | jq -r '.observation_count')
+        prop_threshold=$(echo "$proposal" | jq -r '.threshold')
+
+        # Truncate content if not verbose
+        display_content="$content"
+        if [[ "$verbose" != "true" && ${#content} -gt 40 ]]; then
+          display_content="${content:0:37}..."
+        fi
+
+        # Get threshold bar
+        bar_result=$(bash "$0" generate-threshold-bar "$count" "$prop_threshold" 2>/dev/null | jq -r '.result.bar')
+
+        # Build warning for below-threshold
+        warning=""
+        if [[ "$count" -lt "$prop_threshold" ]]; then
+          if [[ "$use_color" == "true" ]]; then
+            warning=" ${yellow}⚠️ below threshold${reset}"
+          else
+            warning=" ⚠️ below threshold"
+          fi
+        fi
+
+        # Print formatted line
+        printf "  [ ] %d. \"%s\" %s (%d/%d)%s\n" "$global_idx" "$display_content" "$bar_result" "$count" "$prop_threshold" "$warning"
+
+        # Store for later reference
+        all_proposals+=("$proposal")
+
+        global_idx=$((global_idx + 1))
+      done
+
+      echo ""
+    done
+
+    echo "───────────────────────────────────────────────────"
+    echo ""
+    ;;
+
   survey-load)
     phase_type="${1:-}"
     survey_dir=".aether/data/survey"
