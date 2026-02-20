@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Prevent context rot across Claude Code sessions with self-managing colony that learns and guides users
-**Current focus:** v2.0 Worker Emergence — Phase 28 (Orchestration Layer + Surveyor Variants)
+**Current focus:** v2.0 Worker Emergence — Phase 29 (Specialist Agents + Agent Tests)
 
 ## Current Position
 
-Phase: 28 of 31 (Orchestration Layer + Surveyor Variants)
-Plan: 3 of 4 in current phase (28-01, 28-02, 28-03 complete)
+Phase: 29 of 31 (Specialist Agents + Agent Tests)
+Plan: 2 of 3 in current phase (29-01 partial, 29-02 complete)
 Status: In progress
-Last activity: 2026-02-20 — 28-03 complete: all 4 surveyor agents created (nest, disciplines, pathogens, provisions) with Write tool restricted to .aether/data/survey/
+Last activity: 2026-02-20 — 29-02 complete: Probe agent (test generation, write+run, test-files-only boundaries) and Weaver agent (refactoring with explicit revert-on-test-failure protocol) created
 
 Progress: [████████░░] 77% (26/31 phases complete through v1.4)
 
@@ -45,6 +45,9 @@ Progress: [████████░░] 77% (26/31 phases complete through v1
 - 28-02: Route-Setter Task tool documented with graceful degradation for subagent context where Task may be ineffective
 - 28-03: Surveyors get Write tool (not read-only) with scope restricted to .aether/data/survey/ only — locked decision from 28-CONTEXT.md overriding roadmap
 - 28-03: OpenCode read_only section maps to boundaries section; consumption section embedded in execution_flow
+- 29-02: Probe writes AND runs tests — untested tests are incomplete work; Bash available specifically for this purpose
+- 29-02: Weaver revert protocol uses explicit git commands in failure_modes — behavior preservation enforced not merely documented
+- 29-02: Changing test expectations to make tests pass is a behavior change, not a refactor — prohibited in Weaver critical_rules
 
 ### Key Findings from Research
 - Subagents cannot spawn other subagents — strip all spawn calls from every converted agent
@@ -60,5 +63,5 @@ Progress: [████████░░] 77% (26/31 phases complete through v1
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: Completed 28-03-PLAN.md (all 4 surveyor agents created)
-Next step: Continue Phase 28 — proceed to 28-04
+Stopped at: Completed 29-02-PLAN.md (Probe and Weaver specialist agents created)
+Next step: Continue Phase 29 — proceed to 29-03 (agent quality tests)
