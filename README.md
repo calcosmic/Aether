@@ -7,7 +7,6 @@
 ```
 
 <div align="center">
-  <img src="aether-logo.png" alt="Aether Logo" width="500">
 
   **A multi-agent orchestration system for Claude Code where workers spawn workers.**
 

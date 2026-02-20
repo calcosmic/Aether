@@ -38,7 +38,6 @@ Detailed guidelines are in `.claude/rules/`:
 | Slash commands | `.claude/commands/ant/` | Claude Code commands |
 | OpenCode commands | `.opencode/commands/ant/` | OpenCode commands |
 | Agent definitions | `.opencode/agents/` | Agent definitions |
-| Visualizations | `.aether/visualizations/` | Distributed directly |
 | Your notes | `.aether/dreams/` | Never distributed, safe |
 | Dev docs | `.aether/docs/known-issues.md`, `implementation-learnings.md` | Distributed — extracted findings |
 | Aether TODOs | `TO-DOS.md` (root) | Source of truth for Aether development |
@@ -174,9 +173,9 @@ All stateful commands now use timestamp verification to detect stale sessions. T
 3. Auto-clear stale files or prompt user based on command type
 4. Verify files are fresh after spawning
 
-**Current Phase:** See `docs/aether_dev_handoff.md` for implementation status
+**Current Phase:** Complete — all 9 phases done, 21/21 tests passing
 
-**Full Plan:** `docs/session-freshness-implementation-plan.md`
+**Full Plan:** Shipped (docs/ directory removed in Phase 26 file audit)
 
 **Protected Commands** (never auto-clear):
 - `init` - COLONY_STATE.json is precious
