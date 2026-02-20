@@ -621,7 +621,9 @@ Recommendation: {specific fix or investigation needed}
 
 ---
 
-## Architect
+## Architect (Merged into Keeper)
+
+> **Note:** As of Phase 25, Architect capabilities are absorbed by the Keeper agent as "Architecture Mode". Workers named with Architect patterns still resolve to the 🏛️🐜 caste emoji. See `.opencode/agents/aether-keeper.md` for the merged definition.
 
 🏛️ **Purpose:** Synthesize knowledge, extract patterns, and coordinate documentation. The colony's wisdom -- when the colony learns, you organize and preserve that knowledge.
 

@@ -92,7 +92,6 @@ Agent definitions live in `.opencode/agents/`:
 ├── aether-auditor.md   # Code review
 ├── aether-chronicler.md # Documentation
 ├── aether-gatekeeper.md # Dependencies
-├── aether-guardian.md   # Security
 ├── aether-includer.md  # Accessibility
 ├── aether-keeper.md    # Knowledge
 ├── aether-measurer.md  # Performance
