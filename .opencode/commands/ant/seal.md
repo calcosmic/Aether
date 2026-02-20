@@ -150,34 +150,22 @@ Update COLONY_STATE.json:
 
 After archiving, write the final handoff documenting the completed colony:
 
-```bash
-cat > .aether/HANDOFF.md << 'HANDOFF_EOF'
-# Colony Session — SEALED (Crowned Anthill)
+Resolve the handoff template path:
+  Check ~/.aether/system/templates/handoff.template.md first,
+  then .aether/templates/handoff.template.md.
 
-## 🏆 Colony Complete
-**Status:** Crowned Anthill — All phases completed and archived
+If no template found: output "Template missing: handoff.template.md. Run aether update to fix." and stop.
 
-## Archive Location
-{archive_dir}
+Read the template file. Fill all {{PLACEHOLDER}} values:
+  - {{CHAMBER_NAME}} → archive directory name
+  - {{GOAL}} → goal
+  - {{PHASES_COMPLETED}} → total_phases (OpenCode seal archives completed colonies)
+  - {{TOTAL_PHASES}} → total_phases
+  - {{MILESTONE}} → "Crowned Anthill"
+  - {{ENTOMB_TIMESTAMP}} → seal timestamp
 
-## Colony Summary
-- Goal: "{goal}"
-- Total Phases: {total_phases}
-- Milestone: Crowned Anthill
-- Sealed At: {timestamp}
-
-## Files Archived
-- COLONY_STATE.json
-- activity.log
-- spawn-tree.txt
-- flags.json (if existed)
-- constraints.json (if existed)
-
-## Session Note
-This colony has been sealed and archived. The anthill stands crowned.
-To start anew, run: /ant:lay-eggs "<new goal>"
-HANDOFF_EOF
-```
+Remove the HTML comment lines at the top of the template.
+Write the result to .aether/HANDOFF.md using the Write tool.
 
 This handoff serves as the final record of the completed colony.
 

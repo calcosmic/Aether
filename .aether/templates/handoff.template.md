@@ -1,21 +1,26 @@
-<!-- Template: handoff | Version: 1.0 -->
+<!-- Template: handoff | Version: 2.0 -->
 <!-- Instructions: Fill all {{PLACEHOLDER}} values with real colony data. Remove this comment block before writing to .aether/HANDOFF.md -->
 
-# Colony Session — ENTOMBED
+# Colony Session — {{CHAMBER_NAME}}
 
-## Colony Archived
-**Status:** Entombed in Chambers — Colony work preserved
+## A Colony's Rest
 
-## Chamber Location
-.aether/chambers/{{CHAMBER_NAME}}/
+This colony has been entombed. Its work is complete, its story told.
+What began with a goal has ended with a chamber — a place of quiet preservation.
+
+**Chamber:** .aether/chambers/{{CHAMBER_NAME}}/
 
 ## Colony Summary
+
 - Goal: "{{GOAL}}"
 - Phases: {{PHASES_COMPLETED}} completed of {{TOTAL_PHASES}}
-- Milestone: {{MILESTONE}}
-- Entombed At: {{ENTOMB_TIMESTAMP}}
+- Milestone reached: {{MILESTONE}}
+- Entombed at: {{ENTOMB_TIMESTAMP}}
 
 ## Chamber Contents
+
+Everything the colony built and learned rests here now:
+
 - colony-state.json — Full colony state
 - manifest.json — Archive metadata
 - CROWNED-ANTHILL.md — Seal ceremony record
@@ -25,8 +30,11 @@
 - dreams/ — Dream journal (if existed)
 
 ## Session Note
-This colony has been entombed and the active state reset.
-The colony rests. Its learnings are preserved in the chamber and QUEEN.md.
+
+The active colony has been reset. The chambers hold what was.
+The learnings have been carried forward to QUEEN.md — the next colony won't start from nothing.
+
+When you are ready to begin again:
 
 To start anew: /ant:lay-eggs "<new goal>"
-To explore chambers: /ant:tunnels
+To revisit what came before: /ant:tunnels

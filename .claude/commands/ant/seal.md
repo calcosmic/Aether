@@ -236,31 +236,26 @@ Write the seal document:
 ```bash
 version=$(jq -r '.version // "3.0"' .aether/data/COLONY_STATE.json)
 seal_date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-
-cat > .aether/CROWNED-ANTHILL.md << SEAL_EOF
-# Crowned Anthill — ${goal}
-
-**Sealed:** ${seal_date}
-**Milestone:** Crowned Anthill
-**Version:** ${version}
-
-## Colony Stats
-- Total Phases: ${total_phases}
-- Phases Completed: ${phases_completed} of ${total_phases}
-- Colony Age: ${colony_age_days} days
-- Wisdom Promoted: ${promotions_made} entries
-
-## Phase Recap
-$(echo -e "$phase_recap")
-
-## Pheromone Legacy
-- Instincts and validated learnings promoted to QUEEN.md
-- ${promotions_made} total entries promoted
-
-## The Work
-${goal}
-SEAL_EOF
 ```
+
+Resolve the crowned-anthill template path:
+  Check ~/.aether/system/templates/crowned-anthill.template.md first,
+  then .aether/templates/crowned-anthill.template.md.
+
+If no template found: output "Template missing: crowned-anthill.template.md. Run aether update to fix." and stop.
+
+Read the template file. Fill all {{PLACEHOLDER}} values:
+  - {{GOAL}} → goal (from colony state)
+  - {{SEAL_DATE}} → seal_date (ISO-8601 UTC timestamp)
+  - {{VERSION}} → version (from colony state)
+  - {{TOTAL_PHASES}} → total_phases
+  - {{PHASES_COMPLETED}} → phases_completed
+  - {{COLONY_AGE_DAYS}} → colony_age_days
+  - {{PROMOTIONS_MADE}} → promotions_made
+  - {{PHASE_RECAP}} → phase recap list (one entry per line, formatted from the bash loop above)
+
+Remove the HTML comment lines at the top of the template (lines starting with <!--).
+Write the result to .aether/CROWNED-ANTHILL.md using the Write tool.
 
 ### Step 6.5: Export XML Archive (best-effort)
 
