@@ -84,7 +84,7 @@
 **49 requirements across 5 phases.**
 
 - [ ] **Phase 27: Distribution Infrastructure + First Core Agents** - Prove the end-to-end chain works: packaging, hub sync, target delivery, with Builder and Watcher as the first two shipped agents
-- [ ] **Phase 28: Orchestration Layer + Surveyor Variants** - Queen, Scout, Route-Setter, and all 4 Surveyors — the full orchestration and codebase-context capability
+- [x] **Phase 28: Orchestration Layer + Surveyor Variants** - Queen, Scout, Route-Setter, and all 4 Surveyors — the full orchestration and codebase-context capability (completed 2026-02-20)
 - [ ] **Phase 29: Specialist Agents + Agent Tests** - Keeper, Tracker, Probe, Weaver, Auditor plus the full AVA test suite for agent quality
 - [ ] **Phase 30: Niche Agents** - All 8 niche castes completing the full 22-agent roster
 - [ ] **Phase 31: Integration Verification + Cleanup** - End-to-end verification, docs cleanup, bash bug fix
@@ -115,9 +115,13 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. `/agents` in Claude Code shows `aether-queen`, `aether-scout`, `aether-route-setter`, and all 4 surveyor variants loaded without errors
   2. Queen's description routes correctly — it is not invoked for tasks that belong to Builder or Watcher
-  3. All 4 surveyor agents have no Write or Edit in their tools field (read-only verified)
+  3. All 4 surveyor agents restrict writes to `.aether/data/survey/` only (no Edit tool, no writes to source files)
   4. Scout agent description explicitly names research and discovery as its trigger cases
-**Plans**: TBD
+**Plans**: 3 plans in 1 wave
+Plans:
+- [ ] 28-01-PLAN.md — Create Queen agent with Task tool, 6 workflow patterns, and 4-tier escalation
+- [ ] 28-02-PLAN.md — Create Scout (web search, read-only) and Route-Setter (Task tool, planning) agents
+- [ ] 28-03-PLAN.md — Create all 4 surveyor agents (nest, disciplines, pathogens, provisions)
 
 ### Phase 29: Specialist Agents + Agent Tests
 **Goal**: All P2 specialist agents are shipped and a comprehensive AVA test suite enforces quality standards on every agent file — frontmatter, tool restrictions, naming, and body content.
@@ -182,7 +186,7 @@ Plans:
 | 25. Queen Coordination | v1.3 | Complete | 2026-02-20 | — |
 | 26. Audit & Delete Dead Files | v1.4 | Complete | 2026-02-20 | — |
 | 27. Distribution Infrastructure + First Core Agents | v2.0 | 0/4 | Planned | - |
-| 28. Orchestration Layer + Surveyor Variants | v2.0 | 0/TBD | Not started | - |
+| 28. Orchestration Layer + Surveyor Variants | v2.0 | Complete    | 2026-02-20 | - |
 | 29. Specialist Agents + Agent Tests | v2.0 | 0/TBD | Not started | - |
 | 30. Niche Agents | v2.0 | 0/TBD | Not started | - |
 | 31. Integration Verification + Cleanup | v2.0 | 0/TBD | Not started | - |
