@@ -92,6 +92,42 @@
   - [ ] 25-02-PLAN.md — Agent merges: Architect→Keeper, Guardian→Auditor, delete old files, update spawn refs
   - [ ] 25-03-PLAN.md — Count cleanup: update all "25 agents" refs to "23", annotate caste-system.md and workers.md
 
+## v1.4 Deep Cleanup & Simplification (Phases 26-30)
+
+**Goal:** Remove dead weight, consolidate duplicates, simplify structure, make the repo understandable at a glance.
+
+**Why now:** The repo has accumulated files across 25 phases of work. Many are duplicates, placeholders, or no longer relevant. We need a lean, clean base before adding new features.
+
+**Key cleanup targets:**
+- `.aether/agents/` (dead — duplicate of `.opencode/agents/`)
+- `.aether/commands/` (dead — duplicate of `.claude/commands/ant/`)
+- `.aether/docs/` duplicates
+- `.planning/phases/` completed phases (archive to docs/plans/)
+- docs/plans/ planning docs (these docs themselves can be cleaned up)
+- Orphaned templates, configs, worktree-salvage
+- Any file not needed for the colony to function
+
+**Requirements:**
+
+- [ ] CLEAN-01: Audit every file in the repo root and `.aether/` root — mark each as KEEP, ARCHIVE, or DELETE
+- [ ] CLEAN-02: Remove `.aether/agents/` (dead duplicate)
+- [ ] CLEAN-03: Remove `.aether/commands/` (dead duplicate)
+- [ ] CLEAN-04: Remove `.aether/docs/` subdirectory duplicates
+- [ ] CLEAN-05: Archive remaining `.planning/phases/` completed phases to docs/plans/
+- [ ] CLEAN-06: Clean up docs/plans/ — consolidate or remove redundant planning docs
+- [ ] CLEAN-07: Audit `.opencode/` and `.claude/` — remove any dead duplicates
+- [ ] CLEAN-08: Verify all slash commands still work after cleanup
+- [ ] CLEAN-09: Verify `npm install -g .` still packages correctly
+- [ ] CLEAN-10: Update README to reflect new simplified structure
+
+**Planned phases:**
+
+- [ ] Phase 26: File Audit & Classification — audit all files, create KEEP/ARCHIVE/delete list
+- [ ] Phase 27: Remove Dead Duplicates — delete .aether/agents/, .aether/commands/, etc.
+- [ ] Phase 28: Consolidate Planning — archive remaining .planning/phases/, clean docs/plans/
+- [ ] Phase 29: Root Cleanup — clean up repo root, remove orphaned files
+- [ ] Phase 30: Verify & Document — test everything, update README, create cleanup summary
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
