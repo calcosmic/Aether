@@ -2,9 +2,22 @@
 
 ## What This Is
 
-A self-managing development assistant using ant colony metaphor that prevents context rot. Users install it, it guides them through work with clear commands, tells them when to clear context, and maintains state across sessions. The colony learns from each phase and improves over time. As of v1.2, the foundation is hardened — all documented bugs fixed, distribution chain cleaned up, error codes standardized, and lock safety guaranteed with 446 tests passing.
+A self-managing development assistant using ant colony metaphor that prevents context rot. Users install it, it guides them through work with clear commands, tells them when to clear context, and maintains state across sessions. The colony learns from each phase and improves over time. As of v3.0, the wisdom system is complete — pheromones evolve automatically, learnings accumulate, and user approval gates promotion to QUEEN.md.
 
-**Current State:** v5.0.0 shipped. Worker Emergence complete — 22 real Claude Code subagents shipped to npm, all phases verified. Planning next milestone.
+**Current State:** v3.0 Wisdom & Pheromone Evolution shipped and archived — ready for v4.0 planning
+
+## Current Milestone: v4.0 Memory Pipeline
+
+**Goal:** Make the colony's memory actually work — short-term (where was I?) and long-term (what did we learn?)
+
+**Target features:**
+- Learning capture on phase completion → writes to QUEEN.md
+- Failure logging during builds → midden/ + learning-observe
+- Continuous changelog updates by workers
+- Lower promotion threshold (1 + approval, not 5)
+- Visible memory health in /ant:resume and /ant:status
+
+## Core Value
 
 ## Core Value
 
@@ -142,6 +155,8 @@ If everything else fell away, Aether's essential value is:
 
 ### Active
 
+Researching v4.0 Colony Context Enhancement — investigating existing architecture and patterns
+
 ### Validated (continued)
 
 - ✓ **Worker Emergence** — v2.0
@@ -153,9 +168,42 @@ If everything else fell away, Aether's essential value is:
   - ✓ repo-structure.md added
   - ✓ README updated for v5.0
 
-### Active
+- ✓ **Pheromone Evolution** — v3.0
+  - ✓ PHER-EVOL-01: Pheromones automatically injected at key workflow points
+  - ✓ PHER-EVOL-02: End-of-phase pheromone proposals displayed for user approval
+  - ✓ PHER-EVOL-03: Tick-to-approve UX for proposed pheromones
+  - ✓ PHER-EVOL-04: Pheromone history tracking in colony state
 
-(Planning next milestone)
+- ✓ **QUEEN.md System** — v3.0
+  - ✓ QUEEN-01: QUEEN.md file structure with 5 wisdom categories
+  - ✓ QUEEN-02: queen-init command creates QUEEN.md from template
+  - ✓ QUEEN-03: queen-read command returns wisdom as JSON for worker priming
+  - ✓ QUEEN-04: queen-promote command with type validation
+  - ✓ QUEEN-05: Metadata block with version, stats, thresholds
+
+- ✓ **Command Integration** — v3.0
+  - ✓ INT-01: init.md calls queen-init after bootstrap
+  - ✓ INT-02: build.md calls queen-read before spawning workers
+  - ✓ INT-03: continue.md promotes validated learnings to QUEEN.md
+  - ✓ INT-04: seal.md promotes final colony wisdom
+  - ✓ INT-05: entomb.md promotes wisdom before archiving
+
+- ✓ **Metadata & Tracking** — v3.0
+  - ✓ META-01: Promotion thresholds enforced per wisdom type
+  - ✓ META-02: Evolution log tracks wisdom changes over time
+  - ✓ META-03: Stats block tracks counts per category
+  - ✓ META-04: colonies_contributed tracks wisdom origins
+
+- ✓ **Observation Tracking** — v3.0
+  - ✓ OBS-01: learning-observe function records observations to learning-observations.json
+  - ✓ OBS-02: learning-check-promotion function returns proposals meeting thresholds
+  - ✓ OBS-03: Observation counts accumulate across colonies
+  - ✓ OBS-04: Content hashing prevents duplicate observation entries
+
+- ✓ **Unified Priming** — v3.0
+  - ✓ PRIME-01: colony-prime function combines wisdom + signals + instincts
+  - ✓ PRIME-02: build.md uses colony-prime for unified worker context
+  - ✓ PRIME-03: Workers receive structured colony context
 
 ### Shipped
 
@@ -187,17 +235,18 @@ If everything else fell away, Aether's essential value is:
 
 ## Context
 
-Shipped through v2.0 with ~5,435 lines of shell (aether-utils.sh), 34 Claude Code commands, 22 Claude Code subagents. 422 tests passing (422 AVA + 9 bash), 0 failures. All documented bugs fixed. Distribution chain correct end-to-end. Error codes fully standardized. Templates extracted and wired. Agent definitions cleaned and hardened.
+Shipped through v3.0 with ~12,352 lines of shell (aether-utils.sh), 34 Claude Code commands, 22 Claude Code subagents. 427 tests passing (427 AVA + 9 bash), 0 failures. All documented bugs fixed. Distribution chain correct end-to-end. Error codes fully standardized. Templates extracted and wired. Agent definitions cleaned and hardened. Wisdom system complete with observation tracking and user approval gates.
 
 Tech stack: Bash, jq, xmllint/xmlstarlet, Node.js CLI wrapper.
 
-Six milestones shipped:
+Seven milestones shipped:
 - v1.0: 46/46 requirements — full repair and stabilization
 - v1.1: 14/15 requirements — visual polish and identity
 - v1.2: 24/24 requirements — hardening and reliability
 - v1.3: 24/24 requirements — templates, agent cleanup, pipeline, Queen coordination
 - v1.4: 10/10 requirements (partial) — file audit and dead file removal
 - v2.0: 49 requirements — 22 Claude Code subagents shipped
+- v3.0: 25/25 requirements — wisdom and pheromone evolution
 
 ## Key Decisions
 
@@ -237,4 +286,4 @@ Six milestones shipped:
 
 ---
 
-*Last updated: 2026-02-20 after v2.0 Worker Emergence milestone shipped*
+*Last updated: 2026-02-21 after v3.0 archived, v4.0 milestone started*

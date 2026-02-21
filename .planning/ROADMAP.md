@@ -153,7 +153,10 @@
 3. `/ant:status` shows memory health — wisdom count, recent learnings, what's being remembered
 4. Human can see colony memory at a glance
 
-**Plans:** TBD
+**Plans:** 3/3 plans created
+- [ ] 37-01-PLAN.md — Memory metrics utilities (memory-metrics, midden-recent-failures, resume-dashboard) (VIS-02)
+- [ ] 37-02-PLAN.md — Changelog system (changelog-append, changelog-collect-plan-data) (LOG-01)
+- [ ] 37-03-PLAN.md — Resume/status integration with drill-down command (VIS-01, VIS-02)
 
 **Why this matters:** Two weeks later, you can see what was tried and what didn't work.
 
@@ -239,8 +242,8 @@
 | 33. Add Promotion Proposals | v3.0 | Complete    | 2026-02-20 | — |
 | 34. Add User Approval UX | v3.0 | Complete    | 2026-02-20 | — |
 | 35. Lifecycle Integration | v3.0 | Complete    | 2026-02-21 | — |
-| 36. Memory Capture | v4.0 | 0/3 | Not started | — |
-| 37. Changelog + Visibility | v4.0 | 0/3 | Not started | — |
+| 36. Memory Capture | v4.0 | 3/3 | Complete | 2026-02-21 |
+| 37. Changelog + Visibility | v4.0 | 0/3 | Planned | — |
 
 ---
 

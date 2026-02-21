@@ -114,6 +114,19 @@ None — no external service configuration required.
 - Plan 29-03 (agent quality test suite) can now validate all 5 new specialist agents plus the 9 existing agents using AVA — the TEST-03 read-only constraint tests will verify Tracker and Auditor tool restrictions
 - No blockers — all 3 agents have clean YAML frontmatter, 8-section XML bodies, and zero forbidden patterns
 
+## Self-Check: PASSED
+
+All files verified present:
+- FOUND: `.claude/agents/ant/aether-keeper.md`
+- FOUND: `.claude/agents/ant/aether-tracker.md`
+- FOUND: `.claude/agents/ant/aether-auditor.md`
+- FOUND: `.planning/phases/29-specialist-agents-agent-tests/29-01-SUMMARY.md`
+
+All commits verified:
+- FOUND: `6066797` — feat(29-01): add aether-keeper agent
+- FOUND: `bbeb7b8` — feat(29-01): add aether-tracker and aether-auditor agents
+- FOUND: `d39f460` — docs(29-01): complete plan summary and state update
+
 ---
 *Phase: 29-specialist-agents-agent-tests*
 *Completed: 2026-02-20*

@@ -1,376 +1,298 @@
-# Feature Research: Claude Code Subagents for Aether Colony
+# Feature Research: Colony Context Enhancement
 
-**Domain:** Claude Code subagent system — creating Claude Code `.claude/agents/` definitions for all 22 Aether ant worker types
-**Researched:** 2026-02-20
-**Confidence:** HIGH (drawn from direct inspection of 22 existing OpenCode agent definitions, 11 existing GSD Claude Code agents, 12 community agents from everything-claude-code, 11 CDS agents, and Claude Code subagent documentation patterns)
-
----
-
-## Research Scope
-
-Aether already has 22 agent definitions in `.opencode/agents/`. Each needs a Claude Code equivalent in `.claude/agents/`. This milestone is a TRANSLATION task, not a design task. The agent roles, boundaries, output formats, and disciplines already exist — the question is how to express them in the Claude Code subagent format effectively.
-
-Key questions answered in this document:
-1. Which agents should exist as standalone subagents vs being handled by slash commands?
-2. What tool sets should different agent types have?
-3. How should agent descriptions be written for effective Task tool routing?
-4. What patterns from GSD/CDS/community agents work well, and which fail?
-
----
-
-## Claude Code Subagent Format — What Works
-
-From inspecting 11 GSD agents, 11 CDS agents, and 12 community agents, the effective patterns are:
-
-### Frontmatter Fields
-
-```yaml
----
-name: agent-name
-description: Routing trigger phrase. Use this agent when X. Spawned by Y.
-tools: Read, Write, Edit, Bash, Grep, Glob   # explicit list, not array brackets
-color: yellow                                  # optional, visual only
----
-```
-
-**Description is the routing key.** The Task tool uses the description to select agents. Effective descriptions follow the pattern:
-- `"Use this agent for X. Spawned by Y."` — GSD pattern, HIGH confidence
-- `"Use PROACTIVELY when planning X, refactoring Y."` — community pattern, MEDIUM confidence
-- Specificity matters: `"for code implementation, file creation, command execution"` beats `"for coding tasks"`
-
-**Tools list is real and enforced.** Agents only have access to tools in their frontmatter. The GSD executor has `Read, Write, Edit, Bash, Grep, Glob`. The GSD verifier has `Read, Write, Bash, Grep, Glob`. Read-only agents should list `Read, Grep, Glob, Bash` (Bash for `git log` etc.) but NOT Write, Edit.
-
-**Name must match filename.** `name: aether-builder` lives in `aether-builder.md`. The name appears in UI and is referenced programmatically.
-
-### Body: What to Include
-
-From comparing effective (GSD/CDS) vs less effective (community) agents:
-
-**Effective bodies have:**
-- A role statement that is concrete, not aspirational ("You execute PLAN.md files atomically" vs "You are a senior developer")
-- Explicit workflow steps with numbered actions, not prose paragraphs
-- Specific output formats with worked examples — JSON schema with example values, not just field names
-- Failure modes: what to do when things go wrong, with severity tiers
-- Success criteria: a checklist the agent can self-verify against
-- Read-only boundary declarations: explicit list of paths and operations the agent must not perform
-
-**Less effective bodies have:**
-- Long prose explanations of philosophy without procedural content
-- Output formats described in abstract ("return a report") without structure
-- No failure modes — agent is implicitly expected to always succeed
-- Assumed tool availability without checking what tools are actually in frontmatter
-
-### Key Structural Insight: XML vs Flat Markdown
-
-The GSD executor and planner use XML `<section>` structure within the body. The surveyor agents (the two highest-performing Aether agents) also use XML. The community agents and the flat-markdown Aether agents use prose.
-
-XML structure outperforms flat markdown for complex agents because:
-- Named sections let the LLM jump to relevant content under context pressure
-- Step names create addressable milestones (`<step name="verify_artifacts">`)
-- Nested elements make parent/child relationships unambiguous
-- Section boundaries prevent content from the output format bleeding into the workflow
-
-**Recommendation:** Use XML structure for orchestrator-class agents (Queen, Route-Setter, Prime Worker) and complex output agents (Builder, Watcher, Surveyor variants). Use flat markdown with clear headers for simpler read-only agents (Scout, Archaeologist, Chaos, Auditor, etc.).
+**Domain:** AI-assisted development with session continuity
+**Researched:** 2026-02-21
+**Confidence:** HIGH (based on existing system analysis + domain expertise)
 
 ---
 
 ## Feature Landscape
 
-### Table Stakes (Agent Definitions That Must Exist)
+### Table Stakes (Users Expect These)
 
-Every ant worker type that the Queen can spawn needs a Claude Code definition. Without these, the Task tool cannot route to the correct agent type. The OpenCode definitions exist for all 22 — the question is which ones need full definitions vs minimal stubs.
+Features users assume exist. Missing these = product feels incomplete.
 
-| Agent | Why Essential | Complexity | Notes |
-|-------|--------------|------------|-------|
-| `aether-builder` | Core implementation worker; all code-writing tasks route here | HIGH | Full XML structure; TDD discipline; deviation rules; failure modes |
-| `aether-watcher` | Quality gate; no phase advances without watcher approval | HIGH | Full XML; evidence-based verification protocol; 6-phase quality gate |
-| `aether-scout` | Research; used in SPBV and Deep Research patterns | MEDIUM | Flat markdown; read-only; web search enabled |
-| `aether-queen` | Orchestrator; spawns all other workers | HIGH | Full XML; 6 workflow patterns; escalation chain |
-| `aether-keeper` | Knowledge curation + Architect mode | MEDIUM | Flat markdown; architect mode activation trigger |
-| `aether-chronicler` | Documentation writing | LOW | Flat markdown; write-enabled for docs only |
-| `aether-probe` | Test generation and coverage | MEDIUM | Flat markdown; write-enabled for test files only |
-| `aether-weaver` | Code refactoring | MEDIUM | Flat markdown; write-enabled; strict no-behavior-change constraint |
-| `aether-chaos` | Resilience testing | LOW | Flat markdown; read-only; 5-scenario structure |
-| `aether-archaeologist` | Git history analysis | LOW | Flat markdown; read-only; git commands via Bash |
-| `aether-ambassador` | Third-party API integration | MEDIUM | Flat markdown; web fetch enabled |
-| `aether-auditor` | Code review with specialized lenses | MEDIUM | Flat markdown; read-only; Guardian mode activation |
-| `aether-gatekeeper` | Dependency and supply chain security | LOW | Flat markdown; read-only; Bash for npm audit etc. |
-| `aether-measurer` | Performance profiling | MEDIUM | Flat markdown; Bash for profiling commands |
-| `aether-includer` | Accessibility auditing | LOW | Flat markdown; read-only |
-| `aether-sage` | Analytics and trend analysis | LOW | Flat markdown; read-only; colony state reader |
-| `aether-tracker` | Bug investigation and root cause | MEDIUM | Flat markdown; read-only; systematic debugging |
-| `aether-route-setter` | Planning and decomposition | MEDIUM | Flat markdown or XML; write-enabled for plan files |
-| `aether-surveyor-nest` | Architecture + directory mapping | MEDIUM | Full XML (already has it); write to survey/ only |
-| `aether-surveyor-disciplines` | Conventions + testing patterns | MEDIUM | Full XML; write to survey/ only |
-| `aether-surveyor-pathogens` | Tech debt + code health | MEDIUM | Full XML; write to survey/ only |
-| `aether-surveyor-provisions` | Dependencies + environment | MEDIUM | Full XML; write to survey/ only |
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| **Goal Preservation** | Core of why colony exists | LOW | Already in COLONY_STATE.json, session.json |
+| **Current Phase/Position** | "Where am I?" is fundamental | LOW | session.json has current_phase, current_milestone |
+| **Recent Activity Log** | What just happened | LOW | activity.log exists, needs summarization |
+| **Active Constraints** | What to avoid (REDIRECTs) | LOW | pheromones.json already captures these |
+| **Next Action Clarity** | What to do now | MEDIUM | session.json has suggested_next, needs enhancement |
 
-### Differentiators (What Makes Claude Code Agents Effective vs OpenCode Agents)
+**Assessment:** Aether already has 4/5 table stakes. The gap is "Next Action Clarity" — session.json has `suggested_next: "verify"` but lacks context about *why* verify, *what* to verify, and *how*.
 
-These features are not in the existing OpenCode agents but should be added in the Claude Code versions based on evidence from GSD/CDS agent patterns.
+---
+
+### Differentiators (Competitive Advantage)
+
+Features that set Aether apart. Not required, but valuable.
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Structured description with routing trigger phrase | Claude Code routes agents via description text; explicit "Use this agent when..." phrasing dramatically improves auto-routing accuracy | LOW | Every description should start with "Use this agent for..." or "Spawned by..." |
-| Explicit tool lists in frontmatter | OpenCode agents don't have tool restrictions; Claude Code does; explicit lists prevent agents from using tools they shouldn't | LOW | Read-only agents: no Write/Edit. Builder needs all six. Scout needs WebSearch/WebFetch. |
-| Activity logging calls removed or made optional | OpenCode agents log to `.aether/aether-utils.sh activity-log`; Claude Code agents running standalone don't need this infrastructure dependency | LOW | Either make logging optional ("if aether-utils.sh is available, log") or remove from Claude Code versions |
-| Self-contained operation | OpenCode agents rely on colony state, spawn protocols, and aether-utils.sh; Claude Code agents should function even outside an initialized colony | MEDIUM | Claude Code agents are used via Task tool from any context; must not hard-fail if COLONY_STATE.json doesn't exist |
-| `<success_criteria>` as self-verification checklist | GSD agents all have explicit success checklists the agent runs before returning; OpenCode agents have these in some cases but not consistently | LOW | Copy GSD pattern: checklist of verifiable conditions before reporting complete |
-| Failure modes with explicit retry and escalation | GSD agents define minor vs major failures with specific retry limits and escalation format; OpenCode agents have this in some files inconsistently | MEDIUM | Standardize across all 22 agents: minor=retry once, major=stop+escalate |
-| `<read_only>` boundary declaration as first constraint | Explicitly listing what an agent MUST NOT touch prevents accidental writes to colony state, dreams, or protected paths | LOW | Pattern already in some OpenCode agents; apply consistently to all read-only agents |
+| **Decision Archaeology** | Show not just *what* was decided but *why* — the rationale chain | MEDIUM | QUEEN.md has evolution log pattern, extend to all decisions |
+| **Pheromone Persistence** | User signals survive session breaks with TTL awareness | LOW | Already implemented — signals have expires_at |
+| **Wisdom Inheritance** | Cross-colony learning via QUEEN.md promotion pipeline | MEDIUM | learning-observe exists, promotion thresholds configured |
+| **Ant-Themed Naming** | NEST.md, TRAILS/, BROOD/ vs generic "context", "history" | LOW | Brand differentiation, memorable mental model |
+| **Phase-Aware Resumption** | Resume knows if you're mid-phase, between phases, or ad-hoc | MEDIUM | Requires tracking phase boundaries in session.json |
+| **Colony Priming (colony-prime)** | Unified context injection for workers | LOW | Already implemented — combines QUEEN.md + pheromones + instincts |
 
-### Anti-Features (Commonly Attempted, Creates Problems)
+**Assessment:** Aether already has significant differentiators implemented. The opportunity is in "Decision Archaeology" — surfacing the *why* behind decisions, not just the *what*.
+
+---
+
+### Anti-Features (Commonly Requested, Often Problematic)
+
+Features that seem good but create problems.
 
 | Feature | Why Requested | Why Problematic | Alternative |
 |---------|---------------|-----------------|-------------|
-| One "ant worker" agent that handles all castes | Simpler to maintain | The Task tool routing depends on agent descriptions; a single generic agent can't describe itself specifically enough to be routed correctly; it also loses caste-specific constraints | One agent file per caste; routing is the point |
-| Copy OpenCode agents verbatim with name change | Fast migration | OpenCode agents reference OpenCode-specific infrastructure (activity-log commands, spawn protocols with bash scripts); Claude Code agents use Task tool differently | Translate, don't copy; remove infrastructure dependencies, adapt spawn protocol |
-| Include full workers.md content in every agent | Complete context | workers.md is 764 lines; injecting it into every agent definition consumes enormous tokens on every spawn and duplicates content; this is the known "4,200 token problem" | Agents should be self-contained; workers.md becomes developer reference only |
-| Model field in frontmatter (`model: opus`) | Per-agent model selection | Claude Code does NOT support per-agent model routing via frontmatter; the field is ignored or may confuse the agent | Remove model references; routing happens at session level via environment variables |
-| Require initialized colony for all agents | Consistency with OpenCode behavior | Claude Code users will invoke agents outside of formal colony sessions; hard failure on missing COLONY_STATE.json breaks standard use cases | Degrade gracefully: "if colony initialized, log activity; if not, continue without logging" |
-| Generate ant names on every spawn | Immersive experience | Name generation requires `bash .aether/aether-utils.sh generate-ant-name`; adds a tool call dependency; Claude Code agents don't have consistent access to this script in all contexts | Names optional in Claude Code; Queen assigns name if colony initialized, otherwise agent self-identifies by caste |
-| Emoji in agent identity lines (in body text) | Visual identity | Emoji in instruction text causes inconsistent behavior across models; formatting should be injected at spawn time, not embedded | Caste emoji stored in Queen's spawn protocol; not in agent definition body text |
+| **Full Session Replay** | "I want to see everything that happened" | Overwhelming, low signal-to-noise | Summarized activity with drill-down to activity.log |
+| **Auto-Resume on Session Start** | "Just continue where I left off" | Violates user autonomy, may be unwanted | Detect stale session, offer `/ant:resume` explicitly |
+| **Infinite Decision History** | "Keep every decision forever" | Performance degradation, context window bloat | Keep last N decisions + promoted wisdom in QUEEN.md |
+| **Real-Time Sync Across Sessions** | "Multiple Claude windows" | Complexity, conflict resolution nightmares | Single colony per repo, explicit handoff between sessions |
+| **Full File Content Snapshots** | "Restore exact file state" | Git already does this, duplication | Reference git commits, track modified files list |
+| **Nested Colony Sessions** | "Colony within a colony" | Cognitive overhead, state management hell | One active colony per repo, archive to chambers |
+
+**Assessment:** Aether's current design avoids these anti-features well. The session freshness detection (already implemented) prevents auto-resume. The chamber system (archive) prevents infinite history growth.
 
 ---
 
 ## Feature Dependencies
 
 ```
-aether-queen (orchestrator)
-    └──spawns──> all other agents
-    └──requires──> all other agent definitions exist (cannot route to undefined agents)
+NEST.md (Session Restoration Document)
+    └──requires──> session.json (session tracking)
+    └──requires──> COLONY_STATE.json (colony goal)
+    └──requires──> QUEEN.md (wisdom context)
+    └──enhances──> CONTEXT.md (current context summary)
 
-aether-builder
-    └──pairs with──> aether-watcher (builder builds, watcher verifies)
-    └──may spawn──> aether-watcher, aether-scout
+TRAILS/ (Decision History)
+    └──requires──> learning-observations.json (observation tracking)
+    └──requires──> pheromones.json (signal history)
+    └──requires──> activity.log (action log)
+    └──enhances──> QUEEN.md (wisdom promotion)
 
-aether-watcher
-    └──reviews output of──> aether-builder
-    └──creates flags for──> aether-queen to handle
+BROOD/ (Phase Documentation)
+    └──requires──> COLONY_STATE.json (phase tracking)
+    └──requires──> session.json (position tracking)
+    └──enhances──> .planning/phases/ (existing phase docs)
 
-aether-route-setter
-    └──precedes──> aether-builder (plan before build)
-    └──may spawn──> aether-scout (research before planning)
+ROYAL-CHAMBER/ (Decision Archive)
+    └──requires──> chambers/ (existing archive system)
+    └──requires──> TRAILS/ (decision history)
+    └──enhances──> QUEEN.md (promoted wisdom)
 
-Surveyor variants (4 agents)
-    └──all write to──> .aether/data/survey/ (shared output, separate files per variant)
-    └──consumed by──> aether-route-setter, aether-builder, aether-queen
-
-Read-only agents (chaos, archaeologist, auditor, gatekeeper, scout, sage, includer, tracker)
-    └──NO dependency on each other
-    └──report to──> parent who spawned them (queen or prime worker)
-
-aether-keeper (Architect mode)
-    └──synthesizes output from──> all agents
-    └──documents into──> patterns/ and learnings/ directories
-
-aether-chronicler
-    └──reads from──> all agents' outputs, colony state, git history
-    └──writes to──> docs/ only
-
-aether-probe
-    └──reads from──> aether-builder output (what code was written)
-    └──writes to──> test files matching source structure
-
-aether-weaver
-    └──reads from──> aether-builder (code to refactor)
-    └──requires no behavior change (verified by aether-watcher)
+/ant:resume Command
+    └──requires──> NEST.md (restoration doc)
+    └──requires──> Session Freshness Detection (already implemented)
+    └──conflicts──> Auto-resume (explicit is better)
 ```
 
 ### Dependency Notes
 
-- **aether-queen must be defined first** or in parallel — the queen's description tells Claude Code the orchestration role; all other agents are meaningless without an orchestrator
-- **Builder and Watcher are paired** — they appear in the same workflow; their output formats must be compatible (watcher reads builder's JSON output)
-- **Surveyor variants are independent of each other** — each writes a different document to `.aether/data/survey/`; they can be spawned in parallel and have no file conflicts
-- **Read-only agents can be defined in any order** — they have no dependencies on each other; each is independent
+- **NEST.md requires session.json:** Session freshness detection already implemented, provides baseline for restoration
+- **TRAILS/ requires learning-observations.json:** learning-observe command exists, observation tracking functional
+- **BROOD/ requires COLONY_STATE.json:** Phase tracking exists but sparse — needs enhancement for position awareness
+- **ROYAL-CHAMBER/ enhances QUEEN.md:** Wisdom promotion pipeline exists (0.8 threshold), needs decision archaeology integration
 
 ---
 
-## Standalone Subagent vs Slash Command
+## Categorized by Context Type
 
-This is the critical architectural decision for this milestone.
+### 1. Project Context (What are we building?)
 
-### Recommendation: Subagent Definition for All 22 + No New Slash Commands
+| Feature | Status | Location | Enhancement Needed |
+|---------|--------|----------|-------------------|
+| Colony Goal | EXISTS | COLONY_STATE.json `goal` | Add to NEST.md header |
+| Milestone | EXISTS | session.json `current_milestone` | Add milestone description |
+| Phase Overview | EXISTS | .planning/phases/ | Link from NEST.md |
+| Success Criteria | PARTIAL | Phase docs | Summarize in NEST.md |
 
-**Rationale:** Slash commands trigger agent definitions; they do not replace them. The 34 existing slash commands in `.claude/commands/ant/` orchestrate agents using the Task tool. Creating Claude Code agent definitions enables slash commands to route work to specialized agents rather than running everything inline.
+### 2. Current Position (Where am I?)
 
-The dividing line:
-- **Subagent:** Things the Queen spawns with the Task tool during colony work
-- **Slash command:** Things the user explicitly triggers (build, plan, init, seal, etc.)
+| Feature | Status | Location | Enhancement Needed |
+|---------|--------|----------|-------------------|
+| Current Phase | EXISTS | session.json `current_phase` | Add phase name + description |
+| Current Task | MISSING | — | Track active task in session.json |
+| Files Modified | PARTIAL | git status | List in NEST.md |
+| Blockers | MISSING | — | Add blockers section to session.json |
 
-All 22 ant worker types are things the Queen spawns. None of them are user-facing entry points. They should all be subagents, not slash commands.
+### 3. Decision Logging (Why did we choose X?)
 
-**Exception:** The Queen herself exists both as a subagent (spawned by `/ant:build` and `/ant:init`) AND as the orchestrator. The Queen subagent definition enables the Task tool to spawn a Queen-level coordinator when deep orchestration is needed within a phase.
+| Feature | Status | Location | Enhancement Needed |
+|---------|--------|----------|-------------------|
+| Recent Decisions | PARTIAL | CONTEXT.md | Formalize in TRAILS/decisions.json |
+| Decision Rationale | MISSING | — | Add rationale field to decision records |
+| Alternative Considered | MISSING | — | Add alternatives field |
+| Decision Maker | EXISTS | CONTEXT.md `Made By` | Preserve in structured format |
+
+### 4. Phase Documentation (What happened in each phase?)
+
+| Feature | Status | Location | Enhancement Needed |
+|---------|--------|----------|-------------------|
+| Phase Summaries | EXISTS | .planning/phases/*/NN-XX-SUMMARY.md | Link from BROOD/ |
+| Phase Learnings | EXISTS | learning-observations.json | Promote to QUEEN.md |
+| Phase Errors | EXISTS | COLONY_STATE.json `errors` | Summarize in BROOD/ |
+| Phase Completion | EXISTS | Phase SUMMARY.md | Track in BROOD/completed.json |
+
+### 5. Session Continuity (How do I resume?)
+
+| Feature | Status | Location | Enhancement Needed |
+|---------|--------|----------|-------------------|
+| Session Detection | EXISTS | session freshness check | Already implemented |
+| Resume Command | EXISTS | `/ant:resume` | Enhance to read NEST.md |
+| Session Timestamp | EXISTS | session.json `started_at` | Calculate "away time" |
+| Next Action | PARTIAL | session.json `suggested_next` | Add context + rationale |
 
 ---
 
 ## MVP Definition
 
-### Launch With (22 Subagent Definitions)
+### Launch With (v1)
 
-Minimum viable: one Claude Code agent file per ant worker type. The v1 bar is functional routing and correct tool access.
+Minimum viable product — what's needed to validate the concept.
 
-- [ ] `aether-queen.md` — Orchestrator; full XML; 6 workflow patterns; HIGH priority
-- [ ] `aether-builder.md` — Implementation; full XML; TDD discipline; HIGH priority
-- [ ] `aether-watcher.md` — Verification; full XML; 6-phase quality gate; HIGH priority
-- [ ] `aether-scout.md` — Research; flat markdown; WebSearch/WebFetch enabled; MEDIUM
-- [ ] `aether-route-setter.md` — Planning; flat markdown; write-enabled for plan files; MEDIUM
-- [ ] `aether-surveyor-nest.md` — Architecture mapping; full XML; already exists, port; MEDIUM
-- [ ] `aether-surveyor-disciplines.md` — Conventions; full XML; port from OpenCode; MEDIUM
-- [ ] `aether-surveyor-pathogens.md` — Tech debt; full XML; port from OpenCode; MEDIUM
-- [ ] `aether-surveyor-provisions.md` — Dependencies; full XML; port from OpenCode; MEDIUM
-- [ ] `aether-keeper.md` — Knowledge; flat markdown; Architect mode; MEDIUM
-- [ ] `aether-chronicler.md` — Documentation; flat markdown; LOW
-- [ ] `aether-probe.md` — Test generation; flat markdown; LOW
-- [ ] `aether-weaver.md` — Refactoring; flat markdown; LOW
-- [ ] `aether-chaos.md` — Resilience testing; flat markdown; read-only; LOW
-- [ ] `aether-archaeologist.md` — Git history; flat markdown; read-only; LOW
-- [ ] `aether-ambassador.md` — API integration; flat markdown; LOW
-- [ ] `aether-auditor.md` — Code review; flat markdown; read-only; LOW
-- [ ] `aether-gatekeeper.md` — Dependencies; flat markdown; read-only; LOW
-- [ ] `aether-measurer.md` — Performance; flat markdown; LOW
-- [ ] `aether-includer.md` — Accessibility; flat markdown; read-only; LOW
-- [ ] `aether-sage.md` — Analytics; flat markdown; read-only; LOW
-- [ ] `aether-tracker.md` — Bug investigation; flat markdown; read-only; LOW
+- [ ] **NEST.md** — Single file containing: goal, position, last 5 decisions, next action with context
+- [ ] **Enhanced `/ant:resume`** — Reads NEST.md, presents restoration summary, confirms with user
+- [ ] **Decision Logging** — Extend existing CONTEXT.md pattern with structured rationale field
+- [ ] **Session Position Awareness** — Track "mid-phase" vs "between-phases" in session.json
+
+**Why these are essential:**
+- NEST.md = the 2-3 file promise — one file gives full context
+- Enhanced resume = the activation mechanism
+- Decision logging = the "why" that differentiates from generic session restore
+- Position awareness = prevents "what was I in the middle of?" confusion
 
 ### Add After Validation (v1.x)
 
-- [ ] **Behavioral smoke tests** — spawn each agent via Task tool with a simple representative prompt; verify output format matches expected schema
-- [ ] **Sync validation** — extend `npm run lint:sync` to verify Claude Code agents exist for every OpenCode agent (and vice versa)
-- [ ] **Description quality review** — test each agent's description triggers correct routing when given to a Queen with all 22 agent descriptions; adjust ambiguous descriptions
+Features to add once core is working.
+
+- [ ] **TRAILS/decisions.json** — Structured decision history (last 20 with full rationale)
+- [ ] **BROOD/phase-index.json** — Quick-reference phase completion status
+- [ ] **Auto-NEST-update** — Update NEST.md on significant events (phase complete, decision made)
+- [ ] **Away-time calculation** — "You've been gone 3 days, here's what changed"
+
+**Trigger for adding:**
+- TRAILS/ when users ask "why did we decide that?"
+- BROOD/ when users lose track of phase progress
+- Auto-update when NEST.md becomes stale
+- Away-time when users return after long breaks
 
 ### Future Consideration (v2+)
 
-- [ ] **Per-agent context injection** — Queen injects colony-specific context (goal, constraints, pheromones) into agent prompts at spawn time rather than relying on agents to self-load
-- [ ] **Caste-specific tool access profiles** — formalize which tools each caste class should have (orchestrators, implementors, researchers, auditors) and validate against a profile matrix
-- [ ] **Cross-agent shared memory via phase scratch pad** — Claude Code agents reading/writing `.aether/data/phase-scratch.json` during parallel execution
+Features to defer until product-market fit is established.
+
+- [ ] **ROYAL-CHAMBER/ cross-colony search** — Search decisions across all archived colonies
+- [ ] **Decision confidence scoring** — Track which decisions were "tentative" vs "firm"
+- [ ] **Visual timeline** — ASCII or markdown timeline of colony lifecycle
+- [ ] **Integration with external docs** — Link to Notion, Confluence, etc.
+
+**Why defer:**
+- Cross-colony search requires multiple archived colonies to be valuable
+- Confidence scoring adds UI complexity without clear user demand
+- Visual timeline is nice-to-have, not need-to-have
+- External integration requires auth, APIs, maintenance burden
 
 ---
 
 ## Feature Prioritization Matrix
 
-| Agent | User Value | Implementation Cost | Priority |
-|-------|------------|---------------------|----------|
-| aether-queen | HIGH — orchestration without this means no routing | MEDIUM — XML needed; complex patterns | P1 |
-| aether-builder | HIGH — most spawned agent in any build | HIGH — XML; full TDD + deviation rules | P1 |
-| aether-watcher | HIGH — quality gate; every build needs it | HIGH — XML; execution verification protocol | P1 |
-| aether-scout | HIGH — research is frequent in SPBV pattern | LOW — flat markdown; straightforward port | P1 |
-| aether-route-setter | HIGH — planning before every implementation | MEDIUM — flat markdown; write access needed | P1 |
-| Surveyor variants (4) | HIGH — colony relies on them for codebase context | MEDIUM — XML; already written in OpenCode | P1 |
-| aether-keeper | MEDIUM — architect mode needed for synthesis | LOW — flat markdown; port with mode trigger | P2 |
-| aether-tracker | MEDIUM — bug investigation pattern | LOW — flat markdown; read-only port | P2 |
-| aether-probe | MEDIUM — test coverage analysis | LOW — flat markdown; write to tests/ only | P2 |
-| aether-weaver | MEDIUM — refactor pattern | LOW — flat markdown; write-enabled port | P2 |
-| aether-auditor | MEDIUM — compliance and security patterns | LOW — flat markdown; read-only; Guardian mode | P2 |
-| aether-chaos | LOW — resilience testing, less frequent | LOW — flat markdown; read-only; simple | P3 |
-| aether-archaeologist | LOW — git archaeology, niche use | LOW — flat markdown; read-only; simple | P3 |
-| aether-ambassador | LOW — API integration, project-specific | LOW — flat markdown; web fetch enabled | P3 |
-| aether-chronicler | LOW — docs sprint pattern | LOW — flat markdown; write to docs/ | P3 |
-| aether-gatekeeper | LOW — dependency scans, infrequent | LOW — flat markdown; read-only; Bash for audit | P3 |
-| aether-measurer | LOW — performance, specialized | LOW — flat markdown; Bash for profiling | P3 |
-| aether-includer | LOW — accessibility, specialized | LOW — flat markdown; read-only | P3 |
-| aether-sage | LOW — analytics, rarely needed | LOW — flat markdown; read-only | P3 |
+| Feature | User Value | Implementation Cost | Priority |
+|---------|------------|---------------------|----------|
+| NEST.md | HIGH | LOW | P1 |
+| Enhanced `/ant:resume` | HIGH | LOW | P1 |
+| Decision rationale field | HIGH | LOW | P1 |
+| Session position awareness | MEDIUM | LOW | P1 |
+| TRAILS/decisions.json | MEDIUM | MEDIUM | P2 |
+| BROOD/phase-index.json | MEDIUM | LOW | P2 |
+| Auto-NEST-update | MEDIUM | MEDIUM | P2 |
+| Away-time calculation | LOW | LOW | P3 |
+| ROYAL-CHAMBER/ search | LOW | HIGH | P3 |
+| Decision confidence | LOW | MEDIUM | P3 |
 
 **Priority key:**
-- P1: Must have for the milestone to function (Queen + core workflow agents)
-- P2: Should have, needed for all 6 workflow patterns to operate
-- P3: Nice to have, needed for specialized compliance/research patterns
+- P1: Must have for launch — core promise of instant session restoration
+- P2: Should have, add when possible — enhance the core experience
+- P3: Nice to have, future consideration — polish and advanced features
 
 ---
 
-## Tool Access Matrix
+## Ant-Themed Naming Suggestions
 
-This determines what each agent can do, and must be set correctly in frontmatter.
+| Concept | Generic Name | Ant-Themed Name | Rationale |
+|---------|--------------|-----------------|-----------|
+| Session restoration doc | CONTEXT.md | **NEST.md** | The colony's home, contains everything needed to resume |
+| Decision history | decisions/ | **TRAILS/** | Pheromone trails left by decisions |
+| Phase documentation | phases/ | **BROOD/** | Where colony's work is nurtured |
+| Decision archive | archive/ | **ROYAL-CHAMBER/** | Where queen's wisdom is preserved |
+| Session snapshot | checkpoint | **CHAMBER/** | Already implemented, chamber system |
+| Resume command | resume | **/ant:resume** | Already implemented |
+| Context injection | prime | **colony-prime** | Already implemented |
+| Observation tracking | telemetry | **learning-observe** | Already implemented |
 
-| Agent Class | Read | Grep | Glob | Bash | Write | Edit | WebSearch | WebFetch |
-|-------------|------|------|------|------|-------|------|-----------|----------|
-| Orchestrators (Queen, Route-Setter) | YES | YES | YES | YES | YES | YES | NO | NO |
-| Implementors (Builder, Weaver, Probe) | YES | YES | YES | YES | YES | YES | NO | NO |
-| Verifiers (Watcher, Chaos, Auditor) | YES | YES | YES | YES | NO | NO | NO | NO |
-| Researchers (Scout, Ambassador) | YES | YES | YES | YES | NO | NO | YES | YES |
-| Historians (Archaeologist, Sage, Tracker) | YES | YES | YES | YES | NO | NO | NO | NO |
-| Knowledge writers (Keeper, Chronicler) | YES | YES | YES | YES | YES | YES | NO | NO |
-| Surveyors | YES | YES | YES | YES | YES | NO | NO | NO |
-| Dependency agents (Gatekeeper) | YES | YES | YES | YES | NO | NO | NO | NO |
-| Performance agents (Measurer) | YES | YES | YES | YES | YES | NO | NO | NO |
-| Accessibility agents (Includer) | YES | YES | YES | YES | NO | NO | NO | NO |
-
-**Notes:**
-- Chaos and Auditor have Bash (for running tests/analysis commands) but not Write/Edit — they investigate, not modify
-- Ambassador needs WebSearch and WebFetch for third-party API documentation
-- Measurer has Write for writing profiling reports (not source code)
-- All Bash access is limited by read_only boundary declarations in agent body text
-
----
-
-## Description Writing Guide (for Routing Effectiveness)
-
-The description field determines how well the Task tool routes to this agent. Based on patterns from GSD/CDS agents:
-
-### What Works
-
-**Pattern 1 — Role + trigger + spawner (GSD pattern):**
-```
-"Use this agent for code implementation, file creation, command execution, and build tasks. The builder turns plans into working code."
-```
-
-**Pattern 2 — Role + explicit use case (community pattern):**
-```
-"Software architecture specialist for system design, scalability, and technical decision-making. Use PROACTIVELY when planning new features, refactoring large systems, or making architectural decisions."
-```
-
-**Pattern 3 — Role + spawner + output (Aether-specific):**
-```
-"Use this agent for validation, testing, quality assurance, and monitoring. The watcher ensures quality and guards the colony against regressions."
-```
-
-### What Fails
-
-- Generic descriptions: `"An AI assistant for code tasks"` — no routing signal
-- Overlapping descriptions: If Builder says "code and testing" and Watcher says "testing and code", the Task tool may route incorrectly
-- Missing use trigger: `"Expert in Python"` — doesn't tell the orchestrator WHEN to use this agent
-- Long descriptions with multiple responsibilities: If an agent does "X, Y, Z, A, B, and C", the Task tool may not match it to any specific request
-
-### Aether-Specific Routing Requirement
-
-Queen's spawn protocol references agents by their caste name. The agent description must include the caste name OR be matched by the phrasing the Queen uses when spawning. Current Queen spawn phrasing from `.opencode/agents/aether-queen.md`:
-
-- `"aether-builder"` → `Builder` description should include "implementation", "code", "build"
-- `"aether-watcher"` → `Watcher` description should include "validation", "testing", "quality"
-- `"aether-scout"` → `Scout` description should include "research", "information gathering", "documentation"
-- `"aether-chaos"` → `Chaos` description should include "resilience testing", "edge cases", "boundary conditions"
+**Naming principles:**
+1. Use ant colony metaphors consistently
+2. Prefer concrete nouns (NEST, TRAIL, BROOD) over abstract (CONTEXT, HISTORY)
+3. Align with existing pheromone metaphor (signals = chemical trails)
+4. Keep it pronounceable — "check the NEST" not "check the .aether/data/session-restoration-document"
 
 ---
 
 ## Competitor Feature Analysis
 
-| Feature | GSD Agents (Aether's GSD system) | everything-claude-code | CDS Agents | Our Approach |
-|---------|----------------------------------|------------------------|------------|--------------|
-| XML structure | Yes (executor, planner, verifier) | No (flat markdown) | Yes (same as GSD) | XML for complex agents, flat for simple |
-| Explicit tool lists | Yes, all agents | Yes, architect uses `["Read", "Grep", "Glob"]` | Yes, same as GSD | Yes for all 22 agents |
-| Failure modes | Yes, tiered severity | Minimal (some have error sections) | Yes, same as GSD | Yes for all 22 agents |
-| Success criteria | Yes, explicit checklist | No | Yes | Yes for all 22 agents |
-| Read-only declarations | Yes (verifier) | Partial (not all agents) | Yes | Yes, as first constraint for read-only agents |
-| Spawn trigger description | Yes ("Spawned by execute-phase") | No | Yes | Yes, all descriptions include spawn context |
-| Few-shot output examples | Yes (executor) | No | Yes | For agents with complex output (Builder, Watcher) |
-| Activity logging | No (GSD is workflow-focused) | No | No | Optional; degrade gracefully if colony not initialized |
-| Model field | No | Yes (`model: opus`) but likely ignored | No | No; remove from all definitions |
+| Feature | Claude Projects | Cursor | Aether Approach |
+|---------|-----------------|--------|-----------------|
+| Session continuity | Manual (user re-describes) | Limited (file-based) | **Structured NEST.md with auto-detection** |
+| Decision history | None | None | **TRAILS/ with rationale** |
+| Cross-session learning | None | None | **QUEEN.md wisdom promotion** |
+| Position awareness | None | None | **Phase-aware with mid-phase detection** |
+| User signals | None | Rules files | **Pheromone system (FOCUS/REDIRECT/FEEDBACK)** |
+| Resume mechanism | Manual | Manual | **Explicit `/ant:resume` with freshness check** |
+
+**Key differentiators:**
+1. **Structured restoration** — Not just "here are the files" but "here's what we were doing and why"
+2. **Decision archaeology** — The *why* behind choices, not just the *what*
+3. **Cross-colony learning** — Wisdom persists across projects via QUEEN.md
+4. **Explicit resume** — User controls when to restore, not auto-resume surprises
+
+---
+
+## Backwards Compatibility Assessment
+
+| Existing Feature | Compatibility Risk | Mitigation |
+|------------------|-------------------|------------|
+| COLONY_STATE.json | NONE | Read-only, NEST.md supplements |
+| session.json | LOW | Add new fields, don't remove old |
+| CONTEXT.md | MEDIUM | NEST.md replaces, keep CONTEXT.md as human-readable |
+| QUEEN.md | NONE | NEST.md references, doesn't replace |
+| pheromones.json | NONE | NEST.md summarizes, doesn't replace |
+| learning-observations.json | NONE | TRAILS/ will reference, not replace |
+| `/ant:resume` | LOW | Enhance existing, don't break |
+
+**Compatibility strategy:**
+- NEST.md is additive — doesn't replace existing files
+- New fields in session.json are optional — old code ignores them
+- CONTEXT.md becomes "human-readable summary" — NEST.md is "machine-readable restoration"
+- All existing commands continue working — new features are opt-in
 
 ---
 
 ## Sources
 
-- `/Users/callumcowie/repos/Aether/.opencode/agents/*.md` — all 22 existing OpenCode agent definitions (direct inspection)
-- `/Users/callumcowie/repos/Aether/.claude/agents/gsd-executor.md` — GSD executor pattern (full XML, deviation rules, checkpoint protocol)
-- `/Users/callumcowie/repos/Aether/.claude/agents/gsd-planner.md` — GSD planner pattern (full XML, task breakdown, dependency graph)
-- `/Users/callumcowie/repos/Aether/.claude/agents/gsd-verifier.md` — GSD verifier pattern (goal-backward verification, artifact checks)
-- `/Users/callumcowie/repos/Aether/.claude/agents/gsd-*.md` — 8 additional GSD agent files (codebase mapper, debugger, integration checker, plan checker, project researcher, phase researcher, research synthesizer, roadmapper)
-- `/Users/callumcowie/repos/everything-claude-code/agents/*.md` — 12 community agents (architect, build-error-resolver, code-reviewer, database-reviewer, doc-updater, e2e-runner, go-build-resolver, go-reviewer, planner, refactor-cleaner, security-reviewer, tdd-guide)
-- `/Users/callumcowie/repos/cosmic-dev-system/agents/*.md` — 11 CDS agents (near-identical to GSD; confirms patterns)
-- `/Users/callumcowie/repos/Aether/.aether/workers.md` — worker discipline reference; caste definitions; spawn protocol
-- `/Users/callumcowie/repos/Aether/CLAUDE.md` — Aether architecture; protected paths; caste system reference
+- Existing Aether codebase analysis:
+  - `/Users/callumcowie/repos/Aether/.aether/data/COLONY_STATE.json` — colony state structure
+  - `/Users/callumcowie/repos/Aether/.aether/data/session.json` — session tracking
+  - `/Users/callumcowie/repos/Aether/.aether/CONTEXT.md` — current context document
+  - `/Users/callumcowie/repos/Aether/.aether/docs/QUEEN.md` — wisdom system
+  - `/Users/callumcowie/repos/Aether/.aether/docs/pheromones.md` — signal system
+  - `/Users/callumcowie/repos/Aether/.aether/aether-utils.sh` — colony-prime, learning-observe implementations
+  - `/Users/callumcowie/repos/Aether/.aether/templates/handoff.template.md` — existing archive pattern
+
+- Domain expertise in session management and context restoration patterns
+- Analysis of existing Aether milestone/chamber system
 
 ---
 
-*Feature research for: Claude Code subagents for Aether ant worker types*
-*Researched: 2026-02-20*
+*Feature research for: Colony Context Enhancement*
+*Researched: 2026-02-21*

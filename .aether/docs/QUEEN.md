@@ -75,7 +75,7 @@ Track how wisdom has evolved over time.
   },
   "stats": {
     "total_philosophies": 1,
-    "total_patterns": 1,
+    "total_patterns": 0,
     "total_redirects": 1,
     "total_stack_entries": 1,
     "total_decrees": 1
