@@ -510,7 +510,7 @@ Continue to Step 2.
 Find current phase in `plan.phases`.
 Determine next phase (`current_phase + 1`).
 
-**If no next phase (all complete):** Skip to Step 2.6 (commit suggestion), then Step 2.5 (completion).
+**If no next phase (all complete):** Skip to Step 2.4 (commit suggestion), then Step 2.7 (completion).
 
 Update COLONY_STATE.json:
 
@@ -798,7 +798,7 @@ HANDOFF_EOF
 
 This handoff reflects the post-advancement state, allowing seamless resumption even if the session is lost.
 
-### Step 2.4: Update Changelog
+### Step 2.3: Update Changelog
 
 **Append a changelog entry for the completed phase.**
 
@@ -824,13 +824,13 @@ If `CHANGELOG.md` exists in the project root:
 
 **If no `CHANGELOG.md` exists**, skip this step silently.
 
-### Step 2.6: Commit Suggestion (Optional)
+### Step 2.4: Commit Suggestion (Optional)
 
 **This step is non-blocking. Skipping does not affect phase advancement or any subsequent steps. Failure to commit has zero consequences.**
 
 After the phase is advanced and changelog updated, suggest a commit to preserve the milestone.
 
-#### Step 2.6.1: Capture AI Description
+#### Step 2.4.1: Capture AI Description
 
 **As the AI, briefly describe what was accomplished in this phase.**
 
@@ -848,7 +848,7 @@ Look at:
 
 Store this as `ai_description` for the commit message.
 
-#### Step 2.6.2: Generate Enhanced Commit Message
+#### Step 2.4.2: Generate Enhanced Commit Message
 
 ```bash
 bash .aether/aether-utils.sh generate-commit-message "contextual" {phase_id} "{phase_name}" "{ai_description}" {plan_number}
@@ -916,9 +916,9 @@ Set `last_commit_suggestion_phase` to `{phase_id}` in COLONY_STATE.json (add the
 
 **Error handling:** If any git command fails (not a repo, merge conflict, pre-commit hook rejection), display the error output and continue to the next step. The commit suggestion is advisory only -- it never blocks the flow.
 
-Continue to Step 2.7 (Context Clear Suggestion), then to Step 2.5 (Project Completion) or Step 3 (Display Result).
+Continue to Step 2.5 (Context Clear Suggestion), then to Step 2.7 (Project Completion) or Step 3 (Display Result).
 
-### Step 2.7: Context Clear Suggestion (Optional)
+### Step 2.5: Context Clear Suggestion (Optional)
 
 **This step is non-blocking. Skipping does not affect phase advancement.**
 
@@ -958,9 +958,9 @@ Clear context now?
 4. **If option 2 ("No, continue in current context"):**
    Display: `Continuing in current context. State is saved.`
 
-Continue to Step 2.5 (Project Completion) or Step 3 (Display Result).
+Continue to Step 2.7 (Project Completion) or Step 3 (Display Result).
 
-### Step 2.8: Update Context Document
+### Step 2.6: Update Context Document
 
 After phase advancement is complete, update `.aether/CONTEXT.md`:
 
@@ -980,7 +980,7 @@ If any architectural decisions were made during verification, also run:
 bash .aether/aether-utils.sh context-update decision "{decision_description}" "{rationale}" "Queen"
 ```
 
-### Step 2.5: Project Completion
+### Step 2.7: Project Completion
 
 Runs ONLY when all phases complete.
 

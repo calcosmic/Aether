@@ -2,19 +2,19 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-20)
+See: .planning/PROJECT.md (updated 2026-02-21)
 
 **Core value:** Prevent context rot across Claude Code sessions with self-managing colony that learns and guides users
-**Current focus:** v3.0 Wisdom & Pheromone Evolution shipped — ready for v4.0 planning
+**Current focus:** v4.0 Colony Context Enhancement — instant session restoration
 
 ## Current Position
 
-Phase: 35
-Plan: Complete
-Status: Milestone Complete - v3.0 shipped
-Last activity: 2026-02-21 — v3.0 Wisdom & Pheromone Evolution milestone complete — all 4 phases shipped
+Phase: 36
+Plan: 01
+Status: In Progress — executing Phase 36 plans
+Last activity: 2026-02-21 — Completed 36-01: Lowered promotion thresholds
 
-Progress: [▓▓▓▓▓▓▓▓▓▓] 100% (v3.0 milestone complete)
+Progress: [░░░░░░░░░░] 10% (Phase 36 in progress)
 
 ## Performance Metrics
 
@@ -93,6 +93,12 @@ Progress: [▓▓▓▓▓▓▓▓▓▓] 100% (v3.0 milestone complete)
 - [Phase 34]: 34-03: continue.md integrated with new approval flow and --deferred flag support
 - [Phase 35]: 35-01: seal.md integrated with wisdom approval workflow at Step 3.5 (INT-04)
 - [Phase 35]: 35-02: entomb.md integrated with wisdom approval workflow at Step 3.25 (INT-05)
+- [v4.0]: Research completed for Colony Context Enhancement — instant session restoration
+- [v4.0]: 6 requirements defined across 2 phases (MEM, LOG/VIS)
+- [v4.0]: Focus: Make the memory pipeline actually work — capture learnings, log failures, continuous changelog
+- [v4.0]: Architecture principle: wire existing systems together, lower promotion threshold, continuous updates
+- [v4.0]: Key insight: QUEEN.md stays empty because nothing writes to it — fix the pipeline
+- [Phase 36-memory-capture]: 36-01: Lowered promotion thresholds to 1 for all wisdom types (was 5/3/2/1/0)
 
 ### Key Findings from Research
 - Subagents cannot spawn other subagents — strip all spawn calls from every converted agent
@@ -100,13 +106,20 @@ Progress: [▓▓▓▓▓▓▓▓▓▓] 100% (v3.0 milestone complete)
 - YAML malformation silently drops agents — run `/agents` after every file creation to confirm load
 - Vague descriptions kill auto-routing — write as routing triggers, not role labels
 - Surveyor XML format is the most mature agent format in Aether — port directly
+- v4.0: Aether already has 80% of what's needed — COLONY_STATE.json, session.json, CONTEXT.md, QUEEN.md provide foundation
+- v4.0: Gap is rich context assembly — single NEST.md snapshot for instant restoration
+- v4.0: Schema migration must be additive-only — never remove fields, only add with defaults
+- v4.0: memory.decisions[] currently always empty — must populate before restoration is useful
 
 ### Blockers / Concerns
-- GSD agent distribution concern resolved: `.claude/agents/ant/` subdirectory keeps Aether agents separate
-- Model field behavior in frontmatter unverified — test during Phase 27 implementation
+- None for v4.0 — roadmap finalized, ready to plan Phase 36
+
+### Bugs to Fix (tracked separately)
+- Path with spaces issue in swarm-display (rm treats spaces as separate args)
+- Missing caste emoji in worker output display
 
 ## Session Continuity
 
 Last session: 2026-02-21
-Stopped at: v3.0 Wisdom & Pheromone Evolution complete — milestone shipped
-Next step: Run `/gsd:complete-milestone v3.0` to archive and prepare for v4.0 planning
+Stopped at: Completed 36-01-PLAN.md
+Next step: Continue with 36-02 plan or next task in Phase 36
