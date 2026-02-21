@@ -4097,12 +4097,12 @@ $updated_meta
     [[ -z "$wisdom_type" ]] && json_err "$E_VALIDATION_FAILED" "Usage: learning-observe <content> <wisdom_type> [colony_name]" '{"missing":"wisdom_type"}'
 
     # Validate wisdom_type
-    valid_types=("philosophy" "pattern" "redirect" "stack" "decree")
+    valid_types=("philosophy" "pattern" "redirect" "stack" "decree" "failure")
     type_valid=false
     for vt in "${valid_types[@]}"; do
       [[ "$wisdom_type" == "$vt" ]] && type_valid=true && break
     done
-    [[ "$type_valid" == "false" ]] && json_err "$E_VALIDATION_FAILED" "Invalid wisdom_type: $wisdom_type" '{"valid_types":["philosophy","pattern","redirect","stack","decree"]}'
+    [[ "$type_valid" == "false" ]] && json_err "$E_VALIDATION_FAILED" "Invalid wisdom_type: $wisdom_type" '{"valid_types":["philosophy","pattern","redirect","stack","decree","failure"]}'
 
     # Generate SHA256 hash of content for deduplication
     content_hash="sha256:$(echo -n "$content" | sha256sum | cut -d' ' -f1)"
@@ -4198,6 +4198,7 @@ $updated_meta
       redirect) threshold=1 ;;     # Was 2
       stack) threshold=1 ;;        # Unchanged
       decree) threshold=0 ;;       # Unchanged
+      failure) threshold=1 ;;      # NEW: Failures promote after 1 observation
       *) threshold=1 ;;
     esac
 
