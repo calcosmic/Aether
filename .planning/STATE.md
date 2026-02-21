@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 ## Current Position
 
 Phase: 37
-Plan: 01
+Plan: 02
 Status: In Progress — executing Phase 37 plans
-Last activity: 2026-02-21 — Completed 37-01: Created memory health metrics utility functions (memory-metrics, midden-recent-failures, resume-dashboard)
+Last activity: 2026-02-21 — Completed 37-02: Created changelog-append and changelog-collect-plan-data functions for automatic changelog updates
 
 Progress: [████████░░] 80% (Phase 37 in progress)
 
@@ -107,6 +107,9 @@ Progress: [████████░░] 80% (Phase 37 in progress)
 - [Phase 37-changelog-visibility]: 37-01: memory-metrics function aggregates wisdom, pending, failures, and activity metrics
 - [Phase 37-changelog-visibility]: 37-01: midden-recent-failures function extracts recent failures with configurable limit
 - [Phase 37-changelog-visibility]: 37-01: resume-dashboard function generates dashboard data for /ant:resume command
+- [Phase 37-changelog-visibility]: 37-02: changelog-append function appends entries to CHANGELOG.md with date-phase hierarchy
+- [Phase 37-changelog-visibility]: 37-02: changelog-collect-plan-data helper gathers plan metadata from frontmatter and state files
+- [Phase 37-changelog-visibility]: 37-02: Keep a Changelog format compatibility with automatic separator insertion
 
 ### Key Findings from Research
 - Subagents cannot spawn other subagents — strip all spawn calls from every converted agent
@@ -129,5 +132,5 @@ Progress: [████████░░] 80% (Phase 37 in progress)
 ## Session Continuity
 
 Last session: 2026-02-21
-Stopped at: Completed 37-01-PLAN.md — Created memory health metrics utility functions
+Stopped at: Completed 37-02-PLAN.md — Created changelog-append and changelog-collect-plan-data functions
 Next step: Continue with next plan in Phase 37
