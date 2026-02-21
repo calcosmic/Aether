@@ -9,18 +9,18 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ## Current Position
 
-Phase: 34 (Plan 02 complete)
-Plan: Phase 34-02 - selection parsing and capture functions
-Status: Phase 34 in progress - selection UX complete, promotion execution pending
-Last activity: 2026-02-20 — Phase 34-02 complete - parse-selection and learning-select-proposals with preview/confirmation
+Phase: 35
+Plan: Phase 35 - Wisdom extraction at seal/entomb
+Status: Ready to start - Phase 34 complete
+Last activity: 2026-02-20 — Phase 34-03 complete - batch promotion execution, deferred storage, and undo functionality
 
-Progress: [▓▓▓▓▓▓▓▓░░] 67% (2/3 plans complete in Phase 34)
+Progress: [▓▓▓▓▓▓▓▓▓▓] 100% (3/3 plans complete in Phase 34)
 
 ## Performance Metrics
 
 **Cumulative:**
-- Total plans completed: 95 (v1.0: 27, v1.1: 13, v1.2: 18, v1.3: 12, v1.4: 2, v2.0: 18, v3.0: 5)
-- Total requirements validated: 165 (v1.0: 46, v1.1: 14, v1.2: 24, v1.3: 24, v1.4: 1 partial, v2.0: 48, v3.0: 8 requirements)
+- Total plans completed: 96 (v1.0: 27, v1.1: 13, v1.2: 18, v1.3: 12, v1.4: 2, v2.0: 18, v3.0: 6)
+- Total requirements validated: 166 (v1.0: 46, v1.1: 14, v1.2: 24, v1.3: 24, v1.4: 1 partial, v2.0: 48, v3.0: 9 requirements)
 - Total tests: ~427 passing (427 AVA + 9 bash skipped); all 22 agents fully quality-validated
 
 ## Accumulated Context
@@ -87,6 +87,10 @@ Progress: [▓▓▓▓▓▓▓▓░░] 67% (2/3 plans complete in Phase 34)
 - [Phase 34]: 34-02: parse-selection helper converts 1-indexed user input to 0-indexed array indices with validation
 - [Phase 34]: 34-02: learning-select-proposals captures user input, shows preview with below-threshold warnings
 - [Phase 34]: 34-02: Confirmation prompt with --yes flag for scripting, --dry-run for testing
+- [Phase 34]: 34-03: learning-defer-proposals stores unselected items with deferred_at timestamp and 30-day TTL
+- [Phase 34]: 34-03: learning-approve-proposals orchestrates full workflow with batch promotion and undo
+- [Phase 34]: 34-03: learning-undo-promotions reverts promotions from QUEEN.md with 24h undo window
+- [Phase 34]: 34-03: continue.md integrated with new approval flow and --deferred flag support
 
 ### Key Findings from Research
 - Subagents cannot spawn other subagents — strip all spawn calls from every converted agent
@@ -102,5 +106,5 @@ Progress: [▓▓▓▓▓▓▓▓░░] 67% (2/3 plans complete in Phase 34)
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: Phase 34-02 complete - selection parsing and capture functions ready
-Next step: Phase 34-03 — Add batch promotion execution and deferred proposal storage
+Stopped at: Phase 34 complete - tick-to-approve UX fully implemented
+Next step: Phase 35 — Wisdom extraction at seal/entomb

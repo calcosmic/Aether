@@ -123,6 +123,36 @@ Entombment cancelled. Colony remains active.
 ```
 Stop here.
 
+### Step 3.25: Wisdom Approval
+
+Before archiving, review wisdom proposals accumulated during this colony's lifecycle.
+
+```bash
+# Check for pending proposals
+proposals=$(bash .aether/aether-utils.sh learning-check-promotion 2>/dev/null || echo '{"proposals":[]}')
+proposal_count=$(echo "$proposals" | jq '.proposals | length')
+
+if [[ "$proposal_count" -gt 0 ]]; then
+  echo ""
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "   🧠 FINAL WISDOM REVIEW"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
+  echo "Review wisdom proposals before archiving this colony."
+  echo "Approved proposals will be promoted to QUEEN.md."
+  echo ""
+
+  # Run approval workflow (blocking)
+  bash .aether/aether-utils.sh learning-approve-proposals
+
+  echo ""
+  echo "Wisdom review complete. Proceeding with entombment..."
+  echo ""
+else
+  echo "No wisdom proposals to review."
+fi
+```
+
 ### Step 3.5: Check XML Tools
 
 XML archiving is required for entombment. Check tool availability before proceeding.
