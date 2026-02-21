@@ -6057,6 +6057,121 @@ $updated_meta
     fi
     ;;
 
+  pheromone-display)
+    # Display active pheromones in formatted table
+    # Usage: pheromone-display [type]
+    #   type: Optional filter (focus/redirect/feedback) or 'all' (default: all)
+    # Returns: Formatted table string (human-readable)
+
+    pd_file="$DATA_DIR/pheromones.json"
+    pd_type="${1:-all}"
+    pd_now=$(date +%s)
+
+    if [[ ! -f "$pd_file" ]]; then
+      echo "No pheromones active. Colony has no signals."
+      echo ""
+      echo "Inject signals with:"
+      echo "  /ant:focus \"area\"    - Guide attention"
+      echo "  /ant:redirect \"avoid\" - Set hard constraint"
+      echo "  /ant:feedback \"note\"  - Provide guidance"
+      exit 0
+    fi
+
+    # Get signals with decay calculation (same as pheromone-read)
+    pd_signals=$(jq -c \
+      --argjson now "$pd_now" \
+      --arg type_filter "$pd_type" \
+      '
+      def to_epoch(ts):
+        if ts == null or ts == "" or ts == "phase_end" then null
+        else
+          (ts | split("T")) as $parts |
+          ($parts[0] | split("-")) as $d |
+          ($parts[1] | rtrimstr("Z") | split(":")) as $t |
+          (($d[0] | tonumber) - 1970) * 365 * 86400 +
+          (($d[1] | tonumber) - 1) * 30 * 86400 +
+          (($d[2] | tonumber) - 1) * 86400 +
+          ($t[0] | tonumber) * 3600 +
+          ($t[1] | tonumber) * 60 +
+          ($t[2] | rtrimstr("Z") | tonumber)
+        end;
+
+      def decay_days(t):
+        if t == "FOCUS"    then 30
+        elif t == "REDIRECT" then 60
+        else 90
+        end;
+
+      .signals | map(
+        (to_epoch(.created_at)) as $created_epoch |
+        (if $created_epoch != null then ($now - $created_epoch) / 86400 else 0 end) as $elapsed_days |
+        (decay_days(.type)) as $dd |
+        ((.strength // 0.8) * (1 - ($elapsed_days / $dd))) as $eff_raw |
+        (if $eff_raw < 0 then 0 else $eff_raw end) as $eff |
+        {
+          id: .id,
+          type: .type,
+          content: .content,
+          strength: (.strength // 0.8),
+          effective_strength: $eff,
+          elapsed_days: $elapsed_days,
+          remaining_days: ($dd - $elapsed_days),
+          created_at: .created_at,
+          active: (.active != false and $eff >= 0.1)
+        }
+      )
+      | map(select(.active == true))
+      | map(select(if $type_filter == "all" or $type_filter == "" then true else (.type | ascii_downcase) == ($type_filter | ascii_downcase) end))
+      | sort_by(-.effective_strength)
+      ' "$pd_file" 2>/dev/null)
+
+    if [[ -z "$pd_signals" || "$pd_signals" == "[]" ]]; then
+      echo "No active pheromones found."
+      if [[ "$pd_type" != "all" ]]; then
+        echo "Filter: $pd_type"
+      fi
+      exit 0
+    fi
+
+    # Count by type
+    pd_focus=$(echo "$pd_signals" | jq '[.[] | select(.type == "FOCUS")] | length')
+    pd_redirect=$(echo "$pd_signals" | jq '[.[] | select(.type == "REDIRECT")] | length')
+    pd_feedback=$(echo "$pd_signals" | jq '[.[] | select(.type == "FEEDBACK")] | length')
+    pd_total=$(echo "$pd_signals" | jq 'length')
+
+    # Display header
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "   A C T I V E   P H E R O M O N E S"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+
+    # Display FOCUS signals
+    if [[ "$pd_focus" -gt 0 && ("$pd_type" == "all" || "$pd_type" == "focus") ]]; then
+      echo "🎯 FOCUS (Pay attention here)"
+      echo "$pd_signals" | jq -r '.[] | select(.type == "FOCUS") | "   \n   [\(.effective_strength * 100 | floor)%] \"\(.content.text // .content // "no content")\"\n      └── \(.elapsed_days | floor)d ago, \(.remaining_days | floor)d remaining"' | head -20
+      echo ""
+    fi
+
+    # Display REDIRECT signals
+    if [[ "$pd_redirect" -gt 0 && ("$pd_type" == "all" || "$pd_type" == "redirect") ]]; then
+      echo "🚫 REDIRECT (Hard constraints - DO NOT do this)"
+      echo "$pd_signals" | jq -r '.[] | select(.type == "REDIRECT") | "   \n   [\(.effective_strength * 100 | floor)%] \"\(.content.text // .content // "no content")\"\n      └── \(.elapsed_days | floor)d ago, \(.remaining_days | floor)d remaining"' | head -20
+      echo ""
+    fi
+
+    # Display FEEDBACK signals
+    if [[ "$pd_feedback" -gt 0 && ("$pd_type" == "all" || "$pd_type" == "feedback") ]]; then
+      echo "💬 FEEDBACK (Guidance to consider)"
+      echo "$pd_signals" | jq -r '.[] | select(.type == "FEEDBACK") | "   \n   [\(.effective_strength * 100 | floor)%] \"\(.content.text // .content // "no content")\"\n      └── \(.elapsed_days | floor)d ago, \(.remaining_days | floor)d remaining"' | head -20
+      echo ""
+    fi
+
+    # Display footer
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "$pd_total signal(s) active | Decay: FOCUS 30d, REDIRECT 60d, FEEDBACK 90d"
+    ;;
+
   pheromone-read)
     # Read pheromones from colony data with decay calculation
     # Usage: pheromone-read [type]
@@ -6696,6 +6811,60 @@ $updated_meta
     fi
 
     json_ok "{\"dir\":\"$ei_eternal_dir\",\"initialized\":true,\"already_existed\":$ei_already_existed}"
+    ;;
+
+  midden-write)
+    # Write a warning/observation to the midden for later review
+    # Usage: midden-write <category> <message> <source>
+    # Example: midden-write "security" "High CVEs found: 3" "gatekeeper"
+    # Returns: JSON with success status and entry details
+
+    mw_category="${1:-general}"
+    mw_message="${2:-}"
+    mw_source="${3:-unknown}"
+
+    # Graceful degradation: if no message, return success but note it
+    if [[ -z "$mw_message" ]]; then
+      json_ok "{\"success\":true,\"warning\":\"no_message_provided\",\"entry_id\":null}"
+      exit 0
+    fi
+
+    mw_midden_dir="$DATA_DIR/midden"
+    mw_midden_file="$mw_midden_dir/midden.json"
+    mw_timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    mw_entry_id="midden_$(date +%s)_$$"
+
+    # Create midden directory if it doesn't exist
+    mkdir -p "$mw_midden_dir"
+
+    # Initialize midden.json if it doesn't exist
+    if [[ ! -f "$mw_midden_file" ]]; then
+      printf '%s\n' '{"version":"1.0.0","entries":[]}' > "$mw_midden_file"
+    fi
+
+    # Create the new entry
+    mw_new_entry=$(printf '{
+      "id": "%s",
+      "timestamp": "%s",
+      "category": "%s",
+      "source": "%s",
+      "message": "%s",
+      "reviewed": false
+    }' "$mw_entry_id" "$mw_timestamp" "$mw_category" "$mw_source" "$mw_message")
+
+    # Append to midden.json using jq
+    mw_updated_midden=$(jq --argjson entry "$mw_new_entry" '
+      .entries += [$entry] |
+      .entry_count = (.entries | length)
+    ' "$mw_midden_file" 2>/dev/null)
+
+    if [[ -n "$mw_updated_midden" ]]; then
+      printf '%s\n' "$mw_updated_midden" > "$mw_midden_file"
+      json_ok "{\"success\":true,\"entry_id\":\"$mw_entry_id\",\"category\":\"$mw_category\",\"midden_total\":$(jq '.entries | length' "$mw_midden_file" 2>/dev/null || echo 0)}"
+    else
+      # jq failed, but we still return success (graceful degradation)
+      json_ok "{\"success\":true,\"warning\":\"jq_processing_failed\",\"entry_id\":null}"
+    fi
     ;;
 
   # ============================================================================
