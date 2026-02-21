@@ -9,19 +9,13 @@
      ╚═╝  ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
 ```
 
-**22 specialized agents that spawn, coordinate, and self-organize.**
-
-*Inspired by [glittercowboy's GSD system](https://github.com/glittercowboy/gsd)*
+**Multi-agent system using ant colony intelligence for Claude Code and OpenCode**
 
 [![npm version](https://img.shields.io/npm/v/aether-colony.svg)](https://www.npmjs.com/package/aether-colony)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**v1.0.0** — First Stable Release
+**v1.0.0**
 </div>
-
----
-
-> *"The whole is greater than the sum of its parts."* — Aristotle
 
 ---
 
@@ -39,26 +33,25 @@ Aether brings **ant colony intelligence** to Claude Code and OpenCode. Instead o
    ├── 🔨🐜 Builders — implement code
    ├── 👁️🐜 Watchers — verify & test
    ├── 🔍🐜 Scouts — research docs
-   ├── 🗺️🐜 Colonizers — explore codebases
+   ├── 🐛🐜 Trackers — investigate bugs
+   ├── 🗺️🐜 Colonizers — explore codebases (4 parallel scouts)
    ├── 📋🐜 Route-setters — plan phases
-   ├── 🏗️🐜 Architects — extract patterns
    ├── 🏺🐜 Archaeologists — excavate git history
-   ├── 🔮🐜 Oracles — deep research (RALF pattern)
-   └── 🎲🐜 Chaos Ants — resilience testing
+   ├── 🎲🐜 Chaos Ants — resilience testing
+   └── 📚🐜 Keepers — preserve knowledge
 ```
 
 When a Builder hits something complex, it spawns a Scout to research. When code is written, a Watcher spawns to verify. **The colony adapts to the problem.**
 
 ### Key Features
 
-- **22 Claude Code Agents** — Real subagents, not definitions — `/ant:build` spawns a genuine `aether-builder`
+- **9 Active Agent Types** — Real subagents spawned by commands
 - **35 Slash Commands** — Lifecycle, research, coordination, and utility
-- **Real Agent Spawning** — Run `/ant:build 1` and a real builder spawns to write your code
+- **Real Agent Spawning** — Run `/ant:build 1` and real builders spawn
 - **6-Phase Verification** — Build, types, lint, tests, security, diff
 - **Colony Memory** — Learnings and instincts persist across sessions
 - **Pheromone Signals** — Focus, Redirect, Feedback to steer the colony
 - **Pause/Resume** — Full state serialization for context breaks
-- **Oracle Deep Research** — 50+ iteration autonomous research loop
 
 ---
 
@@ -73,14 +66,12 @@ When a Builder hits something complex, it spawns a Scout to research. When code 
 ### Installation
 
 ```bash
-# Option 1: NPX installer (recommended)
+# NPX installer (recommended)
 npx aether-colony install
 
-# Option 2: npm global install
+# Or npm global install
 npm install -g aether-colony
 ```
-
-This installs 22 agents to `~/.claude/agents/ant/` plus 35 slash commands to `~/.claude/commands/ant/`.
 
 ### Your First Colony
 
@@ -92,8 +83,6 @@ Open Claude Code in any repo:
 /ant:build 1
 /ant:continue
 ```
-
-That's it. The colony takes over from there.
 
 ---
 
@@ -110,7 +99,6 @@ That's it. The colony takes over from there.
 | `/ant:pause-colony` | Save state for context break |
 | `/ant:resume-colony` | Restore from pause |
 | `/ant:seal` | Complete and archive colony |
-| `/ant:entomb` | Create chamber from completed colony |
 
 **Core Flow:**
 ```
@@ -123,7 +111,6 @@ That's it. The colony takes over from there.
 |---------|-------------|
 | `/ant:colonize` | 4 parallel scouts analyze your codebase |
 | `/ant:archaeology <path>` | Excavate git history for any file |
-| `/ant:oracle ["topic"]` | Deep research (50+ iteration loop) |
 | `/ant:chaos <target>` | Resilience testing, edge case probing |
 | `/ant:swarm ["problem"]` | 4 parallel scouts for stubborn bugs |
 | `/ant:dream` | Philosophical codebase wanderer |
@@ -151,77 +138,22 @@ That's it. The colony takes over from there.
 
 ---
 
-## CLI Commands
+## The Active Castes
 
-```bash
-# View version and status
-aether version
+These agents are spawned by commands:
 
-# Update system files from hub
-aether update
-
-# Update all registered repos
-aether update --all
-
-# Checkpoints (safe snapshots)
-aether checkpoint create "before refactor"
-aether checkpoint list
-aether checkpoint restore <id>
-
-# View telemetry
-aether telemetry
-
-# Context
-aether context        # Show context including nestmates
-aether nestmates      # List sibling colonies
-aether spawn-tree     # Display worker spawn tree
-```
-
----
-
-## The Castes
-
-Workers have distinct personalities and roles, organized by tier:
-
-### Core Workers
-
-| Caste | Role | Personality |
-|-------|------|-------------|
-| 👑 **Queen** | Orchestrates, spawns workers | Coordinating |
-| 🔨 **Builder** | Writes code, TDD-first | Pragmatic, direct |
-| 👁️ **Watcher** | Tests, validates | Vigilant, careful |
-| 🔍 **Scout** | Researches, discovers | Curious |
-
-### Orchestration
-
-| Caste | Role | Personality |
-|-------|------|-------------|
-| 📋 **Route-Setter** | Plans phases | Structured |
-| 🗺️ **Colonizer** | Explores codebases, maps structure | Exploratory |
-| 📊 **Surveyor** | Measures codebase metrics | Systematic |
-
-### Specialists
-
-| Caste | Role | Personality |
-|-------|------|-------------|
-| 📚 **Keeper** | Curates knowledge, patterns | Preserving |
-| 🐛 **Tracker** | Investigates bugs, root cause | Methodical |
-| 🧪 **Probe** | Generates tests | Thorough |
-| 🔄 **Weaver** | Refactors code | Transformative |
-| 👥 **Auditor** | Reviews code quality | Critical |
-
-### Niche
-
-| Caste | Role | Personality |
-|-------|------|-------------|
-| 📦 **Gatekeeper** | Dependency audits | Protective |
-| ♿ **Includer** | Accessibility audits | Inclusive |
-| ⚡ **Measurer** | Performance profiling | Precise |
-| 🎲 **Chaos** | Resilience testing | Adversarial |
-| 🏺 **Archaeologist** | Excavates git history | Investigative |
-| 🔌 **Ambassador** | Third-party APIs | Diplomatic |
-| 📝 **Chronicler** | Documentation | Recording |
-| 🔮 **Sage** | Deep research (RALF loop) | Analytical |
+| Caste | Role | Spawned By |
+|-------|------|------------|
+| 👑 **Queen** | Orchestrates, spawns workers | You (the user) |
+| 🔨 **Builder** | Writes code, TDD-first | `/ant:build` |
+| 👁️ **Watcher** | Tests, validates | `/ant:build` |
+| 🔍 **Scout** | Researches, discovers | `/ant:build`, `/ant:oracle`, `/ant:swarm` |
+| 🐛 **Tracker** | Investigates bugs | `/ant:swarm` |
+| 🗺️ **Surveyor** | Explores codebases | `/ant:colonize` (4 parallel) |
+| 📋 **Route-Setter** | Plans phases | `/ant:plan` |
+| 🏺 **Archaeologist** | Excavates git history | `/ant:archaeology`, `/ant:build` |
+| 🎲 **Chaos** | Resilience testing | `/ant:chaos`, `/ant:build` |
+| 📚 **Keeper** | Preserves knowledge | `/ant:continue` |
 
 ---
 
@@ -235,11 +167,6 @@ Workers have distinct personalities and roles, organized by tier:
     └── 👁️🐜 Watcher-3 (depth 2)
 ```
 
-- **Depth 1**: Up to 4 spawns
-- **Depth 2**: Up to 2 spawns (only if genuinely surprised)
-- **Depth 3**: Complete inline, no further spawning
-- **Global cap**: 10 workers per phase
-
 ---
 
 ## 6-Phase Verification
@@ -251,9 +178,9 @@ Before any phase advances:
 | Build | Project compiles/bundles |
 | Types | Type checker passes |
 | Lint | Linter passes |
-| Tests | All tests pass (80%+ coverage target) |
-| Security | No exposed secrets or debug artifacts |
-| Diff | Review changes, no unintended modifications |
+| Tests | All tests pass |
+| Security | No exposed secrets |
+| Diff | Review changes |
 
 ---
 
@@ -261,24 +188,21 @@ Before any phase advances:
 
 ```
 <your-repo>/.aether/              # Repo-local runtime
-    ├── QUEEN.md                  # Colony wisdom (philosophies, patterns, redirects)
-    ├── workers.md                # Worker specs and spawn protocol
+    ├── QUEEN.md                  # Colony wisdom
+    ├── workers.md                # Worker specs
     ├── aether-utils.sh           # Utility layer (80+ subcommands)
-    ├── model-profiles.yaml       # Model routing config
     │
     ├── docs/                     # Documentation
     ├── utils/                    # Utility scripts
     ├── templates/                # File templates
-    ├── schemas/                  # JSON schemas
     │
     ├── data/                     # State (NEVER synced)
     │   ├── COLONY_STATE.json     # Goal, plan, memory
     │   ├── constraints.json      # Focus and redirects
     │   ├── pheromones.json       # Signal tracking
-    │   ├── learning-observations.json  # Pattern observations
-    │   └── midden/               # Failure signal tracking
+    │   └── midden/               # Failure tracking
     │
-    ├── dreams/                   # Session notes (NEVER synced)
+    ├── dreams/                   # Session notes
     └── chambers/                 # Archived colonies
 ```
 
@@ -289,47 +213,21 @@ Before any phase advances:
 | Signal | Command | Use When |
 |--------|---------|----------|
 | FOCUS | `/ant:focus "area"` | "Pay attention here" |
-| REDIRECT | `/ant:redirect "avoid"` | "Don't do this" (hard constraint) |
+| REDIRECT | `/ant:redirect "avoid"` | "Don't do this" |
 | FEEDBACK | `/ant:feedback "note"` | "Adjust based on this" |
-
-- **Before builds**: FOCUS + REDIRECT to steer
-- **After builds**: FEEDBACK to adjust
-- **Hard constraints**: REDIRECT (will break)
-- **Gentle nudges**: FEEDBACK (preferences)
 
 ---
 
-## Typical Workflows
-
-### Starting a New Project
+## Typical Workflow
 
 ```
 1. /ant:init "Build feature X"     # Set the goal
-2. /ant:colonize                    # Analyze existing code (optional)
+2. /ant:colonize                    # Analyze codebase (optional)
 3. /ant:plan                        # Generate phases
-4. /ant:focus "security"            # Guide attention (optional)
-5. /ant:build 1                     # Execute phase 1
-6. /ant:continue                    # Verify, advance
-7. Repeat until done
-8. /ant:seal                        # Complete and archive
-```
-
-### Deep Research
-
-```
-/ant:oracle "research topic"    # Launch Oracle
-/ant:oracle status              # Check progress
-/ant:oracle stop                # Stop if needed
-# Read findings in .aether/oracle/discoveries/
-```
-
-### When Stuck
-
-```
-/ant:dream                      # Let the Dreamer observe
-/ant:swarm "bug description"    # 4 parallel scouts investigate
-/ant:archaeology src/module/    # Excavate why code exists
-/ant:chaos "auth flow"          # Test resilience
+4. /ant:build 1                     # Execute phase 1
+5. /ant:continue                    # Verify, advance
+6. Repeat until done
+7. /ant:seal                        # Complete and archive
 ```
 
 ---
@@ -338,53 +236,23 @@ Before any phase advances:
 
 - **File Locking** — Prevents concurrent modification
 - **Atomic Writes** — Temp file + rename pattern
-- **Update Transactions** — Two-phase commit with rollback
-- **State Validation** — Schema validation before modifications
-- **Git Checkpoints** — Automatic commits before phases
-- **Checkpoint System** — Safe snapshots with `aether checkpoint`
-- **Session Freshness Detection** — Stale session files are detected and handled
+- **State Validation** — Schema validation
+- **Session Freshness Detection** — Stale sessions handled
 
 ---
 
-## Installation & Updates
+## CLI Commands
 
 ```bash
-# Fresh install
-npx aether-colony install
-
-# Or via npm
-npm install -g aether-colony
-
-# Verify install
-aether version
-ls ~/.claude/commands/ant/
-
-# Update system files in current repo
-/ant:update
-
-# Update all registered repos via CLI
-aether update --all
-
-# Update npm package
-npm update -g aether-colony
+aether version              # View version
+aether update               # Update system files from hub
+aether update --all         # Update all registered repos
+aether telemetry            # View usage stats
+aether spawn-tree           # Display worker spawn tree
 ```
-
----
-
-## Acknowledgments
-
-Inspired by **[glittercowboy](https://github.com/glittercowboy)** and the **[GSD system](https://github.com/glittercowboy/gsd)**. GSD showed what Claude Code could become with the right orchestration. Aether adds ant colony dynamics — pheromones, castes, nested spawning, and self-organizing workers.
 
 ---
 
 ## License
 
-MIT — do whatever you want with it.
-
----
-
-<div align="center">
-
-*🐜 The colony is greater than the sum of its ants. 🐜*
-
-</div>
+MIT
