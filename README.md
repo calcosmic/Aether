@@ -26,7 +26,7 @@ Aether brings **ant colony intelligence** to Claude Code and OpenCode. Instead o
 ```
 👑 Queen (you)
    │
-   ▼ pheromone signals
+   ▼ pheromone signals guide the colony
    │
 🐜 Workers spawn Workers (max depth 3)
    │
@@ -43,27 +43,21 @@ Aether brings **ant colony intelligence** to Claude Code and OpenCode. Instead o
 
 When a Builder hits something complex, it spawns a Scout to research. When code is written, a Watcher spawns to verify. **The colony adapts to the problem.**
 
-### Key Features
+---
 
-- **9 Active Agent Types** — Real subagents spawned by commands
-- **35 Slash Commands** — Lifecycle, research, coordination, and utility
-- **Real Agent Spawning** — Run `/ant:build 1` and real builders spawn
+## Key Features
+
+- **9 Active Agent Types** — Real subagents spawned via Task tool
+- **35 Slash Commands** — Full lifecycle management
+- **Pheromone System** — Guide the colony with FOCUS, REDIRECT, FEEDBACK signals
+- **Oracle Deep Research** — 50+ iteration autonomous research loop
 - **6-Phase Verification** — Build, types, lint, tests, security, diff
-- **Colony Memory** — Learnings and instincts persist across sessions
-- **Pheromone Signals** — Focus, Redirect, Feedback to steer the colony
+- **Colony Memory** — Learnings persist across sessions via QUEEN.md
 - **Pause/Resume** — Full state serialization for context breaks
 
 ---
 
-## Quick Start
-
-### Prerequisites
-
-- [Claude Code](https://claude.ai/code) or [OpenCode](https://opencode.ai)
-- Node.js >= 16
-- `jq` — `brew install jq` on macOS
-
-### Installation
+## Installation
 
 ```bash
 # NPX installer (recommended)
@@ -73,9 +67,11 @@ npx aether-colony install
 npm install -g aether-colony
 ```
 
-### Your First Colony
+This installs 22 agents to `~/.claude/agents/ant/` plus 35 slash commands to `~/.claude/commands/ant/`.
 
-Open Claude Code in any repo:
+---
+
+## Quick Start
 
 ```bash
 /ant:init "Build a REST API with authentication"
@@ -92,68 +88,85 @@ Open Claude Code in any repo:
 
 | Command | Description |
 |---------|-------------|
-| `/ant:init "goal"` | Initialize colony with mission |
-| `/ant:plan` | Generate phased roadmap |
-| `/ant:build N` | Execute phase N with worker waves |
-| `/ant:continue` | 6-phase verification, advance to next phase |
-| `/ant:pause-colony` | Save state for context break |
-| `/ant:resume-colony` | Restore from pause |
-| `/ant:seal` | Complete and archive colony |
+| `/ant:init "goal"` | 🌱 Initialize colony with mission |
+| `/ant:plan` | 📋 Generate phased roadmap |
+| `/ant:build N` | 🔨 Execute phase N with worker waves |
+| `/ant:continue` | ➡️ 6-phase verification, advance to next phase |
+| `/ant:pause-colony` | 💾 Save state for context break |
+| `/ant:resume-colony` | 🚦 Restore from pause |
+| `/ant:seal` | 🏺 Complete and archive colony |
+| `/ant:entomb` | ⚰️ Create chamber from completed colony |
 
 **Core Flow:**
 ```
 /ant:init → /ant:plan → /ant:build 1 → /ant:continue → /ant:build 2 → ... → /ant:seal
 ```
 
+### Pheromone Signals
+
+| Command | Emoji | Description |
+|---------|-------|-------------|
+| `/ant:focus "area"` | 🎯 | FOCUS signal — "Pay attention here" |
+| `/ant:redirect "pattern"` | 🚫 | REDIRECT signal — "Don't do this" (hard constraint) |
+| `/ant:feedback "note"` | 💬 | FEEDBACK signal — "Adjust based on this observation" |
+
+**How pheromones work:**
+- Before builds: Use FOCUS + REDIRECT to steer the colony
+- After builds: Use FEEDBACK to teach preferences
+- Signals persist in `.aether/data/pheromones.json`
+- Auto-injected into worker prompts via `colony-prime`
+- **Displayed in `/ant:build`** before workers spawn
+- View active signals with `/ant:pheromones`
+- Decay over time: FOCUS 30d, REDIRECT 60d, FEEDBACK 90d
+
 ### Research & Analysis
 
 | Command | Description |
 |---------|-------------|
-| `/ant:colonize` | 4 parallel scouts analyze your codebase |
-| `/ant:archaeology <path>` | Excavate git history for any file |
-| `/ant:chaos <target>` | Resilience testing, edge case probing |
-| `/ant:swarm ["problem"]` | 4 parallel scouts for stubborn bugs |
-| `/ant:dream` | Philosophical codebase wanderer |
-| `/ant:organize` | Codebase hygiene report |
-
-### Coordination
-
-| Command | Description |
-|---------|-------------|
-| `/ant:council` | Clarify intent via multi-choice questions |
-| `/ant:focus "area"` | FOCUS signal — guide attention |
-| `/ant:redirect "pattern"` | REDIRECT signal — hard constraint |
-| `/ant:feedback "msg"` | FEEDBACK signal — teach preferences |
+| `/ant:colonize` | 📊🐜🗺️ 4 parallel scouts analyze your codebase |
+| `/ant:oracle ["topic"]` | 🔮 Deep research with 50+ iteration loop |
+| `/ant:archaeology <path>` | 🏺 Excavate git history for any file |
+| `/ant:chaos <target>` | 🎲 Resilience testing, edge case probing |
+| `/ant:swarm ["problem"]` | 🔥 4 parallel scouts for stubborn bugs |
+| `/ant:dream` | 💭 Philosophical codebase wanderer |
+| `/ant:interpret` | 🔍 Grounds dreams in reality, discusses implementation |
+| `/ant:organize` | 🧹 Codebase hygiene report |
 
 ### Visibility
 
 | Command | Description |
 |---------|-------------|
-| `/ant:status` | Colony overview |
-| `/ant:watch` | Real-time swarm display |
-| `/ant:history` | Recent activity log |
-| `/ant:flags` | List blockers and issues |
-| `/ant:memory-details` | Wisdom, pending promotions, failures |
-| `/ant:help` | Full command reference |
+| `/ant:status` | 📈 Colony overview with memory health |
+| `/ant:pheromones` | 🎯 View active signals (FOCUS/REDIRECT/FEEDBACK) |
+| `/ant:memory-details` | 🧠 Wisdom, pending promotions, recent failures |
+| `/ant:watch` | 👁️ Real-time swarm display |
+| `/ant:history` | 📜 Recent activity log |
+| `/ant:flags` | 🚩 List blockers and issues |
+| `/ant:help` | 🐜 Full command reference |
+
+### Coordination
+
+| Command | Description |
+|---------|-------------|
+| `/ant:council` | 🏛️ Clarify intent via multi-choice questions |
+| `/ant:flag` | 🚩 Create project-specific flag (blocker/issue/note) |
 
 ---
 
 ## The Active Castes
 
-These agents are spawned by commands:
-
-| Caste | Role | Spawned By |
-|-------|------|------------|
-| 👑 **Queen** | Orchestrates, spawns workers | You (the user) |
-| 🔨 **Builder** | Writes code, TDD-first | `/ant:build` |
-| 👁️ **Watcher** | Tests, validates | `/ant:build` |
-| 🔍 **Scout** | Researches, discovers | `/ant:build`, `/ant:oracle`, `/ant:swarm` |
-| 🐛 **Tracker** | Investigates bugs | `/ant:swarm` |
-| 🗺️ **Surveyor** | Explores codebases | `/ant:colonize` (4 parallel) |
-| 📋 **Route-Setter** | Plans phases | `/ant:plan` |
-| 🏺 **Archaeologist** | Excavates git history | `/ant:archaeology`, `/ant:build` |
-| 🎲 **Chaos** | Resilience testing | `/ant:chaos`, `/ant:build` |
-| 📚 **Keeper** | Preserves knowledge | `/ant:continue` |
+| Caste | Emoji | Role | Spawned By |
+|-------|-------|------|------------|
+| Queen | 👑 | Orchestrates, spawns workers | You |
+| Builder | 🔨 | Writes code, TDD-first | `/ant:build` |
+| Watcher | 👁️ | Tests, validates | `/ant:build` |
+| Scout | 🔍 | Researches, discovers | `/ant:build`, `/ant:oracle`, `/ant:swarm` |
+| Tracker | 🐛 | Investigates bugs | `/ant:swarm` |
+| Surveyor | 🗺️ | Explores codebases | `/ant:colonize` (4 parallel) |
+| Route-Setter | 📋 | Plans phases | `/ant:plan` |
+| Archaeologist | 🏺 | Excavates git history | `/ant:archaeology`, `/ant:build` |
+| Chaos | 🎲 | Resilience testing | `/ant:chaos`, `/ant:build` |
+| Keeper | 📚 | Preserves knowledge | `/ant:continue` |
 
 ---
 
@@ -166,6 +179,11 @@ These agents are spawned by commands:
     │   └── 🔍🐜 Scout-12 (depth 3) — no more spawning
     └── 👁️🐜 Watcher-3 (depth 2)
 ```
+
+- **Depth 1**: Up to 4 spawns
+- **Depth 2**: Up to 2 spawns (only if genuinely surprised)
+- **Depth 3**: Complete inline, no further spawning
+- **Global cap**: 10 workers per phase
 
 ---
 
@@ -184,23 +202,40 @@ Before any phase advances:
 
 ---
 
+## Colony Memory (QUEEN.md)
+
+The colony learns and persists wisdom across sessions:
+
+- **📜 Philosophies** — Core beliefs about how to build
+- **🧭 Patterns** — Reusable solutions that worked
+- **⚠️ Redirects** — Things to avoid (hard constraints)
+- **🔧 Stack Wisdom** — Technology-specific learnings
+- **🏛️ Decrees** — Immediate rules from user feedback
+
+View memory: `/ant:memory-details`
+
+---
+
 ## File Structure
 
 ```
 <your-repo>/.aether/              # Repo-local runtime
-    ├── QUEEN.md                  # Colony wisdom
-    ├── workers.md                # Worker specs
+    ├── QUEEN.md                  # Colony wisdom (persists across sessions)
+    ├── workers.md                # Worker specs and spawn protocol
     ├── aether-utils.sh           # Utility layer (80+ subcommands)
+    ├── model-profiles.yaml       # Model routing config
     │
     ├── docs/                     # Documentation
     ├── utils/                    # Utility scripts
     ├── templates/                # File templates
+    ├── schemas/                  # JSON schemas
     │
-    ├── data/                     # State (NEVER synced)
+    ├── data/                     # State (NEVER synced by updates)
     │   ├── COLONY_STATE.json     # Goal, plan, memory
-    │   ├── constraints.json      # Focus and redirects
+    │   ├── constraints.json      # Active constraints
     │   ├── pheromones.json       # Signal tracking
-    │   └── midden/               # Failure tracking
+    │   ├── learning-observations.json  # Pattern observations
+    │   └── midden/               # Failure signal tracking
     │
     ├── dreams/                   # Session notes
     └── chambers/                 # Archived colonies
@@ -208,36 +243,46 @@ Before any phase advances:
 
 ---
 
-## Pheromone Signals
+## Typical Workflows
 
-| Signal | Command | Use When |
-|--------|---------|----------|
-| FOCUS | `/ant:focus "area"` | "Pay attention here" |
-| REDIRECT | `/ant:redirect "avoid"` | "Don't do this" |
-| FEEDBACK | `/ant:feedback "note"` | "Adjust based on this" |
-
----
-
-## Typical Workflow
+### Starting a New Project
 
 ```
 1. /ant:init "Build feature X"     # Set the goal
-2. /ant:colonize                    # Analyze codebase (optional)
+2. /ant:colonize                    # Analyze codebase (4 parallel scouts)
 3. /ant:plan                        # Generate phases
-4. /ant:build 1                     # Execute phase 1
-5. /ant:continue                    # Verify, advance
-6. Repeat until done
-7. /ant:seal                        # Complete and archive
+4. /ant:focus "security"            # Guide attention (optional)
+5. /ant:redirect "use ORM"          # Set hard constraint (optional)
+6. /ant:build 1                     # Execute phase 1
+7. /ant:continue                    # Verify, advance
+8. Repeat until done
+9. /ant:seal                        # Complete and archive
 ```
 
----
+### Deep Research with Oracle
 
-## Safety Features
+```
+/ant:oracle "research topic"    # Launch Oracle (50+ iteration loop)
+/ant:oracle status              # Check progress
+/ant:oracle stop                # Stop if needed
+# Read findings in .aether/oracle/discoveries/
+```
 
-- **File Locking** — Prevents concurrent modification
-- **Atomic Writes** — Temp file + rename pattern
-- **State Validation** — Schema validation
-- **Session Freshness Detection** — Stale sessions handled
+### When Stuck on a Bug
+
+```
+/ant:swarm "bug description"    # 4 parallel scouts investigate
+/ant:archaeology src/module/    # Excavate why code exists
+/ant:chaos "auth flow"          # Test edge cases
+```
+
+### Providing Feedback
+
+```
+/ant:focus "performance"        # "Pay attention to performance"
+/ant:redirect "jQuery"          # "Don't use jQuery"
+/ant:feedback "prefer composition over inheritance"
+```
 
 ---
 
@@ -249,7 +294,18 @@ aether update               # Update system files from hub
 aether update --all         # Update all registered repos
 aether telemetry            # View usage stats
 aether spawn-tree           # Display worker spawn tree
+aether context              # Show context including nestmates
 ```
+
+---
+
+## Safety Features
+
+- **File Locking** — Prevents concurrent modification
+- **Atomic Writes** — Temp file + rename pattern
+- **State Validation** — Schema validation before modifications
+- **Session Freshness Detection** — Stale sessions detected and handled
+- **Git Checkpoints** — Automatic commits before phases
 
 ---
 
