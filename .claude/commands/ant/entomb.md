@@ -198,11 +198,9 @@ Entombment requires XML archiving. Install xmllint and try again.
 ```
 Stop here.
 
-### Step 4: Promote Wisdom to QUEEN.md
+### Step 4: Ensure QUEEN.md Exists
 
-Before creating the chamber, promote validated learnings to QUEEN.md for future colonies.
-
-**Step 4.1: Ensure QUEEN.md exists**
+Verify QUEEN.md is initialized for wisdom storage:
 
 ```bash
 queen_file=".aether/docs/QUEEN.md"
@@ -212,74 +210,10 @@ if [[ ! -f "$queen_file" ]]; then
   if [[ "$init_ok" == "true" ]]; then
     created=$(echo "$init_result" | jq -r '.result.created // false')
     if [[ "$created" == "true" ]]; then
-      bash .aether/aether-utils.sh activity-log "CREATED" "Queen" "Initialized QUEEN.md for wisdom promotion"
+      bash .aether/aether-utils.sh activity-log "CREATED" "Queen" "Initialized QUEEN.md for wisdom storage"
     fi
   fi
 fi
-```
-
-**Step 4.2: Extract and promote validated learnings**
-
-```bash
-# Extract colony name from goal (sanitized)
-colony_name=$(jq -r '.goal' .aether/data/COLONY_STATE.json | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' '-' | sed 's/^-//;s/-$//' | cut -c1-30)
-
-# Extract validated learnings from phase_learnings
-learnings=$(jq -c '.memory.phase_learnings // []' .aether/data/COLONY_STATE.json)
-
-# Extract decisions
-decisions=$(jq -c '.memory.decisions // []' .aether/data/COLONY_STATE.json)
-
-promotion_count=0
-
-# Promote patterns from validated learnings
-if [[ -f "$queen_file" ]]; then
-  # Process each phase's learnings
-  echo "$learnings" | jq -c '.[]' 2>/dev/null | while read -r learning_group; do
-    phase=$(echo "$learning_group" | jq -r '.phase // "unknown"')
-    # Extract individual learnings and promote as patterns
-    echo "$learning_group" | jq -r '.learnings[]? | select(.status == "validated") | .claim' 2>/dev/null | while read -r claim; do
-      if [[ -n "$claim" && "$claim" != "null" ]]; then
-        # Truncate if too long
-        content=$(echo "$claim" | cut -c1-200)
-        result=$(bash .aether/aether-utils.sh queen-promote "pattern" "$content" "$colony_name" 2>/dev/null || echo '{"ok":false}')
-        if [[ $(echo "$result" | jq -r '.ok // false') == "true" ]]; then
-          promotion_count=$((promotion_count + 1))
-        fi
-      fi
-    done
-  done
-
-  # Promote high-confidence instincts as patterns
-  instincts=$(jq -c '.memory.instincts // []' .aether/data/COLONY_STATE.json)
-  echo "$instincts" | jq -c '.[]' 2>/dev/null | while read -r instinct; do
-    confidence=$(echo "$instinct" | jq -r '.confidence // 0')
-    status=$(echo "$instinct" | jq -r '.status // ""')
-    action=$(echo "$instinct" | jq -r '.action // ""')
-    # Promote validated instincts with high confidence (>= 0.7)
-    if [[ "$status" == "validated" && $(echo "$confidence >= 0.7" | bc -l 2>/dev/null || echo 0) -eq 1 && -n "$action" ]]; then
-      content=$(echo "$action" | cut -c1-200)
-      result=$(bash .aether/aether-utils.sh queen-promote "pattern" "$content" "$colony_name" 2>/dev/null || echo '{"ok":false}')
-      if [[ $(echo "$result" | jq -r '.ok // false') == "true" ]]; then
-        promotion_count=$((promotion_count + 1))
-      fi
-    fi
-  done
-
-  # Log promotion results
-  bash .aether/aether-utils.sh activity-log "MODIFIED" "Queen" "Promoted $promotion_count validated learnings to QUEEN.md from entombed colony"
-fi
-```
-
-**Step 4.3: Display promotion summary**
-
-```
----
-Wisdom Promotion Summary
----
-Colony: {colony_name}
-Promoted: {promotion_count} validated patterns to QUEEN.md
----
 ```
 
 ### Step 5: Generate Chamber Name
