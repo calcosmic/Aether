@@ -138,10 +138,12 @@ Record: pass count, fail count, exit code. **STOP if fails.**
 Run using the Bash tool with description "Checking test coverage...": `{coverage_command}  # e.g., npm run test:coverage`
 Record: coverage percentage (target: 80%+ for new code)
 
-**Phase 5: Security Scan**:
+**Phase 5: Secrets Scan** (basic grep-based secret detection):
 Run using the Bash tool with description "Scanning for exposed secrets...": `grep -rn "sk-\|api_key\|password\s*=" --include="*.ts" --include="*.js" --include="*.py" src/ 2>/dev/null | head -10`
 Run using the Bash tool with description "Scanning for debug artifacts...": `grep -rn "console\.log\|debugger" --include="*.ts" --include="*.tsx" --include="*.js" src/ 2>/dev/null | head -10`
 Record: potential secrets (critical), debug artifacts (warning).
+
+Note: Professional security scanning happens in Step 1.8 (Gatekeeper for CVEs, Auditor for code quality).
 
 **Phase 6: Diff Review**:
 Run using the Bash tool with description "Reviewing file changes...": `git diff --stat`
@@ -165,7 +167,9 @@ Display:
 🧹 Lint         [PASS/FAIL/SKIP] (X warnings)
 🧪 Tests        [PASS/FAIL/SKIP] (X/Y passed)
    Coverage     {percent}% (target: 80%)
-🔒 Security     [PASS/FAIL] (X issues)
+🔒 Secrets      [PASS/FAIL] (X issues)
+📦 Gatekeeper   [PASS/WARN/SKIP] (X critical, X high)
+👥 Auditor      [PASS/FAIL] (score: X/100)
 📋 Diff         [X files changed]
 
 ──────────────────────────────────────────────────
@@ -443,6 +447,138 @@ Continue to Step 1.9.
 - **If clean (no critical or high):**
 ```
 ✅📦🐜 Gatekeeper: No critical security issues found
+```
+Continue to Step 1.8.2.
+
+### Step 1.8.2: Auditor Quality Gate (MANDATORY)
+
+**Code quality audit — runs on every `/ant:continue` for consistent coverage.**
+
+1. Generate Auditor name and log spawn:
+Run using the Bash tool with description "Generating Auditor name...": `auditor_name=$(bash .aether/aether-utils.sh generate-ant-name "auditor") && bash .aether/aether-utils.sh spawn-log "Queen" "auditor" "$auditor_name" "Code quality audit" && echo "{\"name\":\"$auditor_name\"}"`
+
+2. Update swarm display (if visual_mode is true):
+Run using the Bash tool with description "Updating swarm display...": `bash .aether/aether-utils.sh swarm-display-update "$auditor_name" "auditor" "reviewing" "Multi-lens code analysis" "Quality" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0`
+
+3. Display: `👥🐜 Auditor {name} spawning — Reviewing code with multi-lens analysis...`
+
+4. Get modified files for audit context:
+Run using the Bash tool with description "Getting modified files...": `modified_files=$(git diff --name-only HEAD~1 2>/dev/null || git diff --name-only) && echo "$modified_files"`
+
+5. Spawn Auditor agent:
+
+Use the Task tool with subagent_type="aether-auditor" (if available; otherwise use general-purpose and inject the Auditor role from `.opencode/agents/aether-auditor.md`):
+
+```xml
+<mission>
+Perform comprehensive code quality audit on this codebase.
+</mission>
+
+<work>
+1. Review all modified files from the recent commit(s)
+2. Apply all 4 audit lenses: security, performance, quality, maintainability
+3. Score each finding by severity (CRITICAL/HIGH/MEDIUM/LOW/INFO)
+4. Calculate overall quality score (0-100)
+5. Document specific issues with file:line references and fix suggestions
+</work>
+
+<context>
+Phase: {current_phase}
+Modified files: {modified_files}
+</context>
+
+<output>
+Provide JSON output matching this schema:
+{
+  "ant_name": "your auditor name",
+  "caste": "auditor",
+  "status": "completed" | "failed" | "blocked",
+  "summary": "Brief summary of findings",
+  "dimensions_audited": ["security", "performance", "quality", "maintainability"],
+  "findings": {
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "low": 0,
+    "info": 0
+  },
+  "issues": [
+    {"severity": "HIGH", "location": "file:line", "issue": "description", "fix": "suggestion"}
+  ],
+  "overall_score": 75,
+  "recommendation": "Top priority fix",
+  "blockers": []
+}
+</output>
+```
+
+6. Parse Auditor JSON output and log completion:
+Extract: `findings.critical`, `findings.high`, `findings.medium`, `findings.low`, `findings.info`, `overall_score`, `dimensions_audited`
+
+Run using the Bash tool with description "Logging Auditor completion...": `bash .aether/aether-utils.sh spawn-complete "$auditor_name" "completed" "{\"findings\":{\"critical\":$critical_count,\"high\":$high_count,\"medium\":$medium_count,\"low\":$low_count,\"info\":$info_count},\"score\":$overall_score}"`
+
+**Gate Decision Logic:**
+
+- **If `findings.critical > 0`:**
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⛔👥🐜 A U D I T O R   G A T E   F A I L E D
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Critical code quality issues detected: {critical_count}
+
+🚨 CRITICAL findings must be fixed before phase advancement.
+
+🔧 Required Actions:
+  1. Review the critical issues listed below
+  2. Fix each critical finding
+  3. Run /ant:continue again after resolving
+
+Critical Findings:
+{list each critical finding with file:line and description}
+
+The phase will NOT advance with critical quality issues.
+```
+Run using the Bash tool with description "Logging critical quality block...": `bash .aether/aether-utils.sh error-flag-pattern "auditor-critical-findings" "$critical_count critical quality issues found" "critical"`
+**CRITICAL:** Do NOT proceed to Step 1.9. Stop here.
+
+- **Else if `overall_score < 60`:**
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⛔👥🐜 A U D I T O R   G A T E   F A I L E D
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Code quality score below threshold: {overall_score}/100 (threshold: 60)
+
+🚨 Quality score must reach 60+ before phase advancement.
+
+🔧 Required Actions:
+  1. Address the top issues preventing score improvement:
+{list top 3-5 issues with severity and location}
+  2. Focus on HIGH severity items first
+  3. Run /ant:continue again after improving quality
+
+The phase will NOT advance with quality score below 60.
+```
+Run using the Bash tool with description "Logging quality score block...": `bash .aether/aether-utils.sh error-flag-pattern "auditor-quality-score" "Score $overall_score below threshold 60" "critical"`
+**CRITICAL:** Do NOT proceed to Step 1.9. Stop here.
+
+- **Else if `findings.high > 0`:**
+```
+⚠️👥🐜 Auditor: Quality score {overall_score}/100 — PASSED with warnings
+
+{high_count} high-severity quality issues found:
+{list high findings}
+
+Quality warnings logged to midden for later review.
+Proceeding with caution...
+```
+Run using the Bash tool with description "Logging high-quality warnings...": `bash .aether/aether-utils.sh midden-write "quality" "High severity issues: $high_count (score: $overall_score)" "auditor"`
+Continue to Step 1.9.
+
+- **If clean (score >= 60, no critical):**
+```
+✅👥🐜 Auditor: Quality score {overall_score}/100 — PASSED
 ```
 Continue to Step 1.9.
 
