@@ -283,6 +283,34 @@ Active Signals:
 {end}
 {end}
 
+---
+
+### Step 8.5: Display Memory Health (Secondary)
+
+Run using the Bash tool with description "Loading memory health...":
+```bash
+bash .aether/aether-utils.sh resume-dashboard
+```
+
+Extract memory_health from the JSON result:
+- wisdom_count
+- pending_promotions
+- recent_failures
+
+Display after the main dashboard:
+```
+📊 Memory Health
+   Wisdom: {wisdom_count} entries | Pending: {pending_promotions} promotions | Failures: {recent_failures} recent
+
+   Run /ant:memory-details for full breakdown
+```
+
+If all counts are 0, show:
+```
+📊 Memory Health
+   No accumulated wisdom yet. Complete phases to build colony memory.
+```
+
 Last Command: {last_command}
 Session: {session_id}
 ```
