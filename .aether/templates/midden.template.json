@@ -1,0 +1,7 @@
+{
+  "_template": "midden",
+  "_version": "1.0",
+  "_instructions": "Write to .aether/data/midden/midden.json. No substitution needed. Remove underscore-prefixed keys.",
+  "version": "1.0.0",
+  "signals": []
+}

@@ -108,7 +108,7 @@
 <summary>🔄 v4.0 Memory Pipeline (Phases 36-37) — IN PROGRESS</summary>
 
 - [x] Phase 36: Memory Capture — Learnings on continue, failures on build, lower promotion threshold (completed 2026-02-21)
-- [ ] Phase 37: Changelog + Visibility — Continuous updates, rich resume/status
+- [x] Phase 37: Changelog + Visibility — Continuous updates, rich resume/status (completed 2026-02-21)
 
 **6 requirements mapped. Goal: Make the memory pipeline actually work.**
 
@@ -153,7 +153,7 @@
 3. `/ant:status` shows memory health — wisdom count, recent learnings, what's being remembered
 4. Human can see colony memory at a glance
 
-**Plans:** 3/3 plans created
+**Plans:** 3/3 plans complete
 - [ ] 37-01-PLAN.md — Memory metrics utilities (memory-metrics, midden-recent-failures, resume-dashboard) (VIS-02)
 - [ ] 37-02-PLAN.md — Changelog system (changelog-append, changelog-collect-plan-data) (LOG-01)
 - [ ] 37-03-PLAN.md — Resume/status integration with drill-down command (VIS-01, VIS-02)
@@ -168,8 +168,7 @@
 |-------------|-------|-------------|
 | MEM-01 | 36 | /ant:continue asks for learnings → writes to QUEEN.md | Complete    | 2026-02-21 | 36 | /ant:build logs failures to midden + learning-observe |
 | MEM-03 | 36 | Lower promotion threshold to 1 + user approval |
-| LOG-01 | 37 | Workers update CHANGELOG.md during work |
-| VIS-01 | 37 | /ant:resume shows learnings, failures, wisdom |
+| LOG-01 | 37 | Workers update CHANGELOG.md during work | Complete    | 2026-02-21 | 37 | /ant:resume shows learnings, failures, wisdom |
 | VIS-02 | 37 | /ant:status shows memory health |
 
 **Coverage:** 6/6 requirements mapped ✓

@@ -1,0 +1,6 @@
+{
+  "_template": "pheromones",
+  "_version": "1.0",
+  "_instructions": "Write to .aether/data/pheromones.json. No substitution needed. Remove underscore-prefixed keys.",
+  "signals": []
+}

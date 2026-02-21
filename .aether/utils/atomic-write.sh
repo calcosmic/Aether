@@ -169,7 +169,9 @@ rotate_backups() {
     local backups=$(ls -t "${BACKUP_DIR}/${base_name}".*.backup 2>/dev/null | wc -l)
 
     if [ "$backups" -gt "$MAX_BACKUPS" ]; then
-        ls -t "${BACKUP_DIR}/${base_name}".*.backup | tail -n +$((MAX_BACKUPS + 1)) | xargs rm -f
+        ls -t "${BACKUP_DIR}/${base_name}".*.backup 2>/dev/null \
+            | tail -n +$((MAX_BACKUPS + 1)) \
+            | while IFS= read -r file; do rm -f "$file"; done
     fi
 }
 

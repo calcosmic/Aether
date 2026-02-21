@@ -25,7 +25,7 @@ bash .aether/aether-utils.sh memory-metrics
 
 ### Step 2: Display Wisdom (from QUEEN.md)
 
-Read .aether/docs/QUEEN.md and display entries by category:
+Read .aether/QUEEN.md and display entries by category:
 - Philosophies
 - Patterns
 - Redirects

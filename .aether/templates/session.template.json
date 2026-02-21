@@ -1,0 +1,9 @@
+{
+  "_template": "session",
+  "_version": "1.0",
+  "_instructions": "Write to .aether/data/session.json. Replace __SESSION_ID__, __GOAL__, __TIMESTAMP__. Remove underscore-prefixed keys.",
+  "session_id": "__SESSION_ID__",
+  "colony_goal": "__GOAL__",
+  "started_at": "__TIMESTAMP__",
+  "last_activity": "__TIMESTAMP__"
+}

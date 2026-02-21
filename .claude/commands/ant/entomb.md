@@ -203,7 +203,7 @@ Stop here.
 Verify QUEEN.md is initialized for wisdom storage:
 
 ```bash
-queen_file=".aether/docs/QUEEN.md"
+queen_file=".aether/QUEEN.md"
 if [[ ! -f "$queen_file" ]]; then
   init_result=$(bash .aether/aether-utils.sh queen-init 2>/dev/null || echo '{"ok":false}')
   init_ok=$(echo "$init_result" | jq -r '.ok // false')

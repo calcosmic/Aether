@@ -1,23 +1,22 @@
-```
-     _    _____ _____ _   _ _____ ____
-    / \  | ____|_   _| | | | ____|  _ \
-   / _ \ |  _|   | | | |_| |  _| | |_) |
-  / ___ \| |___  | | |  _  | |___|  _ <
- /_/   \_\_____| |_| |_| |_|_____|_| \_\
-```
-
 <div align="center">
 
-  **22 specialized agents that spawn, coordinate, and self-organize.**
+```
+      █████╗ ███████╗████████╗██╗  ██╗███████╗██████╗
+     ██╔══██╗██╔════╝╚══██╔══╝██║  ██║██╔════╝██╔══██╗
+     ███████║█████╗     ██║   ███████║█████╗  ██████╔╝
+     ██╔══██║██╔══╝     ██║   ██╔══██║██╔══╝  ██╔══██╗
+     ██║  ██║███████╗   ██║   ██║  ██║███████╗██║  ██║
+     ╚═╝  ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
+```
 
-  ➡️ Click **Use this template** (top-right) to create your own Aether repo in 30 seconds.
+**22 specialized agents that spawn, coordinate, and self-organize.**
 
-  *Inspired by [glittercowboy's GSD system](https://github.com/glittercowboy/gsd)*
+*Inspired by [glittercowboy's GSD system](https://github.com/glittercowboy/gsd)*
 
-  [![npm version](https://img.shields.io/npm/v/aether-colony.svg)](https://www.npmjs.com/package/aether-colony)
-  [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![npm version](https://img.shields.io/npm/v/aether-colony.svg)](https://www.npmjs.com/package/aether-colony)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-  **v5.0.0** — Worker Emergence (22 real Claude Code agents)
+**v1.0.0** — First Stable Release
 </div>
 
 ---
@@ -28,7 +27,7 @@
 
 ## What Is Aether?
 
-Aether brings **ant colony intelligence** to Claude Code. Instead of one agent doing everything sequentially, you get a colony of specialists that self-organize around your goal.
+Aether brings **ant colony intelligence** to Claude Code and OpenCode. Instead of one agent doing everything sequentially, you get a colony of specialists that self-organize around your goal.
 
 ```
 👑 Queen (you)
@@ -37,15 +36,15 @@ Aether brings **ant colony intelligence** to Claude Code. Instead of one agent d
    │
 🐜 Workers spawn Workers (max depth 3)
    │
-   ├── 🔨 Builders — implement code
-   ├── 👁️ Watchers — verify & test
-   ├── 🔍 Scouts — research docs
-   ├── 🗺️ Colonizers — explore codebases
-   ├── 📋 Route-setters — plan phases
-   ├── 🏗️ Architects — extract patterns
-   ├── 🏺 Archaeologists — excavate git history
-   ├── 🔮 Oracles — deep research (RALF pattern)
-   └── 🎲 Chaos Ants — resilience testing
+   ├── 🔨🐜 Builders — implement code
+   ├── 👁️🐜 Watchers — verify & test
+   ├── 🔍🐜 Scouts — research docs
+   ├── 🗺️🐜 Colonizers — explore codebases
+   ├── 📋🐜 Route-setters — plan phases
+   ├── 🏗️🐜 Architects — extract patterns
+   ├── 🏺🐜 Archaeologists — excavate git history
+   ├── 🔮🐜 Oracles — deep research (RALF pattern)
+   └── 🎲🐜 Chaos Ants — resilience testing
 ```
 
 When a Builder hits something complex, it spawns a Scout to research. When code is written, a Watcher spawns to verify. **The colony adapts to the problem.**
@@ -53,7 +52,7 @@ When a Builder hits something complex, it spawns a Scout to research. When code 
 ### Key Features
 
 - **22 Claude Code Agents** — Real subagents, not definitions — `/ant:build` spawns a genuine `aether-builder`
-- **34 Slash Commands** — Lifecycle, research, coordination, and utility
+- **35 Slash Commands** — Lifecycle, research, coordination, and utility
 - **Real Agent Spawning** — Run `/ant:build 1` and a real builder spawns to write your code
 - **6-Phase Verification** — Build, types, lint, tests, security, diff
 - **Colony Memory** — Learnings and instincts persist across sessions
@@ -67,19 +66,21 @@ When a Builder hits something complex, it spawns a Scout to research. When code 
 
 ### Prerequisites
 
-- [Claude Code](https://claude.ai/code) (Anthropic's CLI)
+- [Claude Code](https://claude.ai/code) or [OpenCode](https://opencode.ai)
 - Node.js >= 16
 - `jq` — `brew install jq` on macOS
 
 ### Installation
 
 ```bash
+# Option 1: NPX installer (recommended)
+npx aether-colony install
+
+# Option 2: npm global install
 npm install -g aether-colony
 ```
 
-This installs 22 Claude Code agents to `~/.claude/agents/ant/` plus 34 slash commands.
-
-All runtime state, utilities, and worker specs live **repo-local** in `.aether/` — each project is self-contained.
+This installs 22 agents to `~/.claude/agents/ant/` plus 35 slash commands to `~/.claude/commands/ant/`.
 
 ### Your First Colony
 
@@ -145,6 +146,7 @@ That's it. The colony takes over from there.
 | `/ant:watch` | Real-time swarm display |
 | `/ant:history` | Recent activity log |
 | `/ant:flags` | List blockers and issues |
+| `/ant:memory-details` | Wisdom, pending promotions, failures |
 | `/ant:help` | Full command reference |
 
 ---
@@ -154,6 +156,9 @@ That's it. The colony takes over from there.
 ```bash
 # View version and status
 aether version
+
+# Update system files from hub
+aether update
 
 # Update all registered repos
 aether update --all
@@ -218,18 +223,16 @@ Workers have distinct personalities and roles, organized by tier:
 | 📝 **Chronicler** | Documentation | Recording |
 | 🔮 **Sage** | Deep research (RALF loop) | Analytical |
 
-Run `/ant:colonize` and 4 surveyor agents map your entire codebase. Run `/ant:build 1` and a real builder spawns.
-
 ---
 
 ## Spawn Depth
 
 ```
 👑 Queen (depth 0)
-└── 🔨 Builder-1 (depth 1) — can spawn 4 more
-    ├── 🔍 Scout-7 (depth 2) — can spawn 2 more
-    │   └── 🔍 Scout-12 (depth 3) — no more spawning
-    └── 👁️ Watcher-3 (depth 2)
+└── 🔨🐜 Builder-1 (depth 1) — can spawn 4 more
+    ├── 🔍🐜 Scout-7 (depth 2) — can spawn 2 more
+    │   └── 🔍🐜 Scout-12 (depth 3) — no more spawning
+    └── 👁️🐜 Watcher-3 (depth 2)
 ```
 
 - **Depth 1**: Up to 4 spawns
@@ -256,22 +259,24 @@ Before any phase advances:
 
 ## File Structure
 
-See [repo-structure.md](repo-structure.md) for a quick overview of all directories.
-
 ```
 <your-repo>/.aether/              # Repo-local runtime
+    ├── QUEEN.md                  # Colony wisdom (philosophies, patterns, redirects)
     ├── workers.md                # Worker specs and spawn protocol
     ├── aether-utils.sh           # Utility layer (80+ subcommands)
     ├── model-profiles.yaml       # Model routing config
     │
     ├── docs/                     # Documentation
     ├── utils/                    # Utility scripts
-    ├── oracle/                   # Oracle research
+    ├── templates/                # File templates
+    ├── schemas/                  # JSON schemas
     │
     ├── data/                     # State (NEVER synced)
     │   ├── COLONY_STATE.json     # Goal, plan, memory
     │   ├── constraints.json      # Focus and redirects
-    │   └── spawn-tree.txt        # Worker hierarchy
+    │   ├── pheromones.json       # Signal tracking
+    │   ├── learning-observations.json  # Pattern observations
+    │   └── midden/               # Failure signal tracking
     │
     ├── dreams/                   # Session notes (NEVER synced)
     └── chambers/                 # Archived colonies
@@ -337,28 +342,27 @@ See [repo-structure.md](repo-structure.md) for a quick overview of all directori
 - **State Validation** — Schema validation before modifications
 - **Git Checkpoints** — Automatic commits before phases
 - **Checkpoint System** — Safe snapshots with `aether checkpoint`
-
----
-
-## Known Issues
-
-1. **Init may fail if `.aether/data/` doesn't exist** — Run `mkdir -p .aether/data` before `/ant:init` if you see "Error writing file".
-
-2. **Long commands can cause Claude to lose context** — Commands like `build.md` (1,000+ lines) may cause Claude to skip steps. Use `/ant:status` and `/ant:continue` to recover.
+- **Session Freshness Detection** — Stale session files are detected and handled
 
 ---
 
 ## Installation & Updates
 
 ```bash
-# Install globally
+# Fresh install
+npx aether-colony install
+
+# Or via npm
 npm install -g aether-colony
 
 # Verify install
 aether version
 ls ~/.claude/commands/ant/
 
-# Update all registered repos
+# Update system files in current repo
+/ant:update
+
+# Update all registered repos via CLI
 aether update --all
 
 # Update npm package

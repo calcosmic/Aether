@@ -42,6 +42,10 @@ REQUIRED_FILES=(
   "templates/handoff.template.md"
   "templates/handoff-build-error.template.md"
   "templates/handoff-build-success.template.md"
+  "templates/session.template.json"
+  "templates/pheromones.template.json"
+  "templates/midden.template.json"
+  "templates/learning-observations.template.json"
   "rules/aether-colony.md"
 )
 

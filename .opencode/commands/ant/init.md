@@ -69,7 +69,22 @@ Check if `.aether/aether-utils.sh` exists using the Read tool.
 - Check if `~/.aether/system/aether-utils.sh` exists (expand `~` to the user's home directory)
 - **If the hub exists:** Run using the Bash tool:
   ```bash
-  mkdir -p .aether/docs .aether/utils .aether/templates .aether/schemas .aether/exchange .claude/rules && \
+  mkdir -p \
+    .aether/data \
+    .aether/data/midden \
+    .aether/data/backups \
+    .aether/data/survey \
+    .aether/dreams \
+    .aether/chambers \
+    .aether/locks \
+    .aether/temp \
+    .aether/docs \
+    .aether/utils \
+    .aether/templates \
+    .aether/schemas \
+    .aether/exchange \
+    .aether/rules \
+    .claude/rules && \
   cp -f ~/.aether/system/aether-utils.sh .aether/ && \
   cp -f ~/.aether/system/workers.md .aether/ 2>/dev/null || true && \
   cp -f ~/.aether/system/CONTEXT.md .aether/ 2>/dev/null || true && \
@@ -80,9 +95,12 @@ Check if `.aether/aether-utils.sh` exists using the Read tool.
   cp -Rf ~/.aether/system/schemas/* .aether/schemas/ 2>/dev/null || true && \
   cp -Rf ~/.aether/system/exchange/* .aether/exchange/ 2>/dev/null || true && \
   cp -Rf ~/.aether/system/rules/* .claude/rules/ 2>/dev/null || true && \
+  touch .aether/dreams/.gitkeep && \
+  touch .aether/chambers/.gitkeep && \
+  touch .aether/data/midden/.gitkeep && \
   chmod +x .aether/aether-utils.sh
   ```
-  This copies system files from the global hub into `.aether/` and rules into `.claude/rules/`. Display:
+  This copies system files from the global hub into `.aether/` and creates all required directories upfront. Display:
   ```
   Bootstrapped system files from global hub.
   ```
@@ -187,6 +205,56 @@ Read the template file. Follow its `_instructions` field.
 No placeholder substitution needed — the data keys are written as-is.
 Remove ALL keys starting with underscore (`_template`, `_version`, `_instructions`, `_comment_*`).
 Write the resulting JSON to `.aether/data/constraints.json` using the Write tool.
+
+### Step 4.5: Initialize Runtime Files from Templates
+
+Initialize runtime files that support colony operations. Each file is created from its template if it doesn't already exist.
+
+**For each template, check both hub and local paths:**
+- `~/.aether/system/templates/{template}` first
+- `.aether/templates/{template}` second
+
+**Files to initialize:**
+
+1. **pheromones.json** - Signal tracking for colony guidance
+   - Template: `pheromones.template.json`
+   - Target: `.aether/data/pheromones.json`
+   - If missing: copy template, remove `_` prefixed keys
+
+2. **midden.json** - Failure signal tracking
+   - Template: `midden.template.json`
+   - Target: `.aether/data/midden/midden.json`
+   - If missing: copy template, remove `_` prefixed keys
+
+3. **learning-observations.json** - Pattern observation tracking
+   - Template: `learning-observations.template.json`
+   - Target: `.aether/data/learning-observations.json`
+   - If missing: copy template, remove `_` prefixed keys
+
+Run using Bash tool:
+```bash
+for template in pheromones midden learning-observations; do
+  if [[ "$template" == "midden" ]]; then
+    target=".aether/data/midden/midden.json"
+  else
+    target=".aether/data/${template}.json"
+  fi
+  if [[ ! -f "$target" ]]; then
+    template_file=""
+    for path in ~/.aether/system/templates/${template}.template.json .aether/templates/${template}.template.json; do
+      if [[ -f "$path" ]]; then
+        template_file="$path"
+        break
+      fi
+    done
+    if [[ -n "$template_file" ]]; then
+      jq 'with_entries(select(.key | startswith("_") | not))' "$template_file" > "$target" 2>/dev/null || true
+    fi
+  fi
+done
+```
+
+This step is non-blocking — proceed regardless of outcome.
 
 ### Step 5: Validate State File
 

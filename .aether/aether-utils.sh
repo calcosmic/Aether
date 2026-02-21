@@ -3694,7 +3694,7 @@ ANTLOGO
   queen-init)
     # Initialize QUEEN.md from template
     # Creates .aether/QUEEN.md from template if missing
-    queen_file="$AETHER_ROOT/.aether/docs/QUEEN.md"
+    queen_file="$AETHER_ROOT/.aether/QUEEN.md"
 
     # Check multiple locations for template
     # Order: hub (system/) -> dev (.aether/) -> repo local -> legacy
@@ -3709,12 +3709,12 @@ ANTLOGO
       fi
     done
 
-    # Ensure docs directory exists
-    mkdir -p "$AETHER_ROOT/.aether/docs"
+    # Ensure .aether directory exists
+    mkdir -p "$AETHER_ROOT/.aether"
 
     # Check if QUEEN.md already exists and has content
     if [[ -f "$queen_file" ]] && [[ -s "$queen_file" ]]; then
-      json_ok '{"created":false,"path":".aether/docs/QUEEN.md","reason":"already_exists"}'
+      json_ok '{"created":false,"path":".aether/QUEEN.md","reason":"already_exists"}'
       exit 0
     fi
 
@@ -3731,20 +3731,20 @@ ANTLOGO
     sed -e "s/{TIMESTAMP}/$timestamp/g" "$template_file" > "$queen_file"
 
     if [[ -f "$queen_file" ]]; then
-      json_ok "{\"created\":true,\"path\":\".aether/docs/QUEEN.md\",\"source\":\"$template_file\"}"
+      json_ok "{\"created\":true,\"path\":\".aether/QUEEN.md\",\"source\":\"$template_file\"}"
     else
-      json_err "$E_FILE_NOT_FOUND" "Failed to create QUEEN.md" '{"path":".aether/docs/QUEEN.md"}'
+      json_err "$E_FILE_NOT_FOUND" "Failed to create QUEEN.md" '{"path":".aether/QUEEN.md"}'
       exit 1
     fi
     ;;
 
   queen-read)
     # Read QUEEN.md and return wisdom as JSON for worker priming
-    # Supports two-level loading: global (~/.aether/QUEEN.md) first, then local (.aether/docs/QUEEN.md)
+    # Supports two-level loading: global (~/.aether/QUEEN.md) first, then local (.aether/QUEEN.md)
     # Local wisdom extends/global - entries are combined per category
 
     queen_global="$HOME/.aether/QUEEN.md"
-    queen_local="$AETHER_ROOT/.aether/docs/QUEEN.md"
+    queen_local="$AETHER_ROOT/.aether/QUEEN.md"
 
     # Track which files exist
     has_global=false
@@ -3762,7 +3762,7 @@ ANTLOGO
 
     # FAIL HARD if no QUEEN.md found at all
     if [[ "$has_global" == "false" && "$has_local" == "false" ]]; then
-      json_err "$E_FILE_NOT_FOUND" "QUEEN.md not found" '{"global_path":"~/.aether/QUEEN.md","local_path":".aether/docs/QUEEN.md"}'
+      json_err "$E_FILE_NOT_FOUND" "QUEEN.md not found" '{"global_path":"~/.aether/QUEEN.md","local_path":".aether/QUEEN.md"}'
       exit 1
     fi
 
@@ -3855,7 +3855,7 @@ ANTLOGO
     # Gate 1: Validate metadata is parseable JSON BEFORE using as --argjson
     if ! echo "$metadata" | jq -e . >/dev/null 2>&1; then
       json_err "$E_JSON_INVALID" \
-        "QUEEN.md has a malformed METADATA block — the JSON between <!-- METADATA and --> is invalid. Try: fix the JSON in .aether/docs/QUEEN.md or run queen-init to reset."
+        "QUEEN.md has a malformed METADATA block — the JSON between <!-- METADATA and --> is invalid. Try: fix the JSON in .aether/QUEEN.md or run queen-init to reset."
     fi
 
     # Extract individual combined wisdom values
@@ -4120,11 +4120,11 @@ ANTLOGO
     done
     [[ "$type_valid" == "false" ]] && json_err "$E_VALIDATION_FAILED" "Invalid type: $wisdom_type" '{"valid_types":["philosophy","pattern","redirect","stack","decree"]}'
 
-    queen_file="$AETHER_ROOT/.aether/docs/QUEEN.md"
+    queen_file="$AETHER_ROOT/.aether/QUEEN.md"
 
     # Check if QUEEN.md exists
     if [[ ! -f "$queen_file" ]]; then
-      json_err "$E_FILE_NOT_FOUND" "QUEEN.md not found" '{"path":".aether/docs/QUEEN.md"}'
+      json_err "$E_FILE_NOT_FOUND" "QUEEN.md not found" '{"path":".aether/QUEEN.md"}'
       exit 1
     fi
 
@@ -5333,7 +5333,7 @@ $updated_meta
       exit 1
     fi
 
-    queen_file="$AETHER_ROOT/.aether/docs/QUEEN.md"
+    queen_file="$AETHER_ROOT/.aether/QUEEN.md"
 
     # Check if QUEEN.md exists
     if [[ ! -f "$queen_file" ]]; then
@@ -6341,7 +6341,7 @@ $updated_meta
     # Error handling: QUEEN.md missing = FAIL HARD; pheromones.json missing = warn but continue
 
     cp_global_queen="$HOME/.aether/QUEEN.md"
-    cp_local_queen="$AETHER_ROOT/.aether/docs/QUEEN.md"
+    cp_local_queen="$AETHER_ROOT/.aether/QUEEN.md"
 
     # Track if we have any QUEEN.md
     cp_has_global=false
@@ -6391,7 +6391,7 @@ $updated_meta
       cp_global_wisdom=$(_extract_wisdom "$cp_global_queen" "g")
     fi
 
-    # Load local QUEEN.md second (.aether/docs/QUEEN.md)
+    # Load local QUEEN.md second (.aether/QUEEN.md)
     if [[ -f "$cp_local_queen" ]]; then
       cp_has_local=true
       cp_local_wisdom=$(_extract_wisdom "$cp_local_queen" "l")
@@ -6400,8 +6400,8 @@ $updated_meta
     # FAIL HARD if no QUEEN.md found at all
     if [[ "$cp_has_global" == "false" && "$cp_has_local" == "false" ]]; then
       json_err "$E_FILE_NOT_FOUND" \
-        "QUEEN.md not found in either ~/.aether/QUEEN.md or .aether/docs/QUEEN.md. Run /ant:init to create a colony." \
-        '{"global_path":"~/.aether/QUEEN.md","local_path":".aether/docs/QUEEN.md"}'
+        "QUEEN.md not found in either ~/.aether/QUEEN.md or .aether/QUEEN.md. Run /ant:init to create a colony." \
+        '{"global_path":"~/.aether/QUEEN.md","local_path":".aether/QUEEN.md"}'
       exit 1
     fi
 
@@ -7144,7 +7144,7 @@ $updated_meta
         > "$tree_file"  # Truncate in-place — preserves file handle for tail -f watchers
         # Keep only 5 archives
         ls -t "$DATA_DIR/spawn-tree-archive"/spawn-tree.*.txt 2>/dev/null \
-            | tail -n +6 | xargs rm -f 2>/dev/null || true
+            | tail -n +6 | while IFS= read -r file; do rm -f "$file"; done 2>/dev/null || true
     }
     _rotate_spawn_tree
 
@@ -7523,7 +7523,7 @@ EOF
     # Usage: memory-metrics
     # Returns: JSON with wisdom, pending, recent_failures, and last_activity
 
-    queen_file="$AETHER_ROOT/.aether/docs/QUEEN.md"
+    queen_file="$AETHER_ROOT/.aether/QUEEN.md"
     observations_file="$DATA_DIR/learning-observations.json"
     deferred_file="$DATA_DIR/learning-deferred.json"
     midden_file="$DATA_DIR/midden/midden.json"
