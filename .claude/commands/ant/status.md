@@ -146,6 +146,22 @@ Extract from JSON result:
 - `phases_completed`: Number of completed phases
 - `total_phases`: Total phases in plan
 
+### Step 2.8: Load Memory Health Metrics
+
+Run using the Bash tool with description "Loading memory health metrics...":
+```bash
+bash .aether/aether-utils.sh memory-metrics
+```
+
+Extract from JSON result:
+- wisdom.total
+- pending.total
+- recent_failures.count
+- last_activity.queen_md_updated
+- last_activity.learning_captured
+
+Format timestamps for display (YYYY-MM-DD HH:MM).
+
 ### Step 2.7: Generate Progress Bars
 
 Calculate progress metrics and generate visual bars.
@@ -204,6 +220,15 @@ Output format:
 🏆 Milestone: <milestone> (<version>)
 💭 Dreams: <dream_count> recorded (latest: <latest_dream>)
 
+📚 Memory Health
+┌─────────────────┬────────┬─────────────────────────────┐
+│ Metric          │ Count  │ Last Updated                │
+├─────────────────┼────────┼─────────────────────────────┤
+│ Wisdom Entries  │ {wisdom_total:>6} │ {queen_updated}             │
+│ Pending Promos  │ {pending_total:>6} │ {learning_updated}          │
+│ Recent Failures │ {failures_count:>6} │ {last_failure}              │
+└─────────────────┴────────┴─────────────────────────────┘
+
 State: <state>
 ```
 
@@ -220,6 +245,13 @@ Use the `phase_bar` and `task_bar` values computed in Step 2.7 for the actual ba
 **Dream display:**
 - If no dreams exist: `💭 Dreams: None recorded`
 - If dreams exist: `💭 Dreams: <count> recorded (latest: YYYY-MM-DD HH:MM)`
+
+**Memory Health display:**
+- If memory-metrics returns empty/null values, show:
+```
+📚 Memory Health
+   No memory data available. Colony wisdom will accumulate as you complete phases.
+```
 
 **Edge cases:**
 - No phases yet: show `[░░░░░░░░░░░░░░░░░░░░] 0/0 phases`
