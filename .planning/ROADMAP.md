@@ -9,7 +9,8 @@
 - ✅ **v1.4 Deep Cleanup (partial)** — Phase 26 (shipped 2026-02-20)
 - ✅ **v2.0 Worker Emergence** — Phases 27-31 (shipped 2026-02-20)
 - ✅ **v3.0 Wisdom & Pheromone Evolution** — Phases 32-35 (shipped 2026-02-21)
-- 🔄 **v4.0 Colony Context Enhancement** — Phases 36-39 (in progress)
+- ✅ **v4.0 Memory Pipeline** — Phases 36-37 (shipped 2026-02-21)
+- 🔄 **v5.0 Agent Integration** — Phases 38-41 (in progress)
 
 ## Phases
 
@@ -105,60 +106,104 @@
 </details>
 
 <details>
-<summary>🔄 v4.0 Memory Pipeline (Phases 36-37) — IN PROGRESS</summary>
+<summary>✅ v4.0 Memory Pipeline (Phases 36-37) — SHIPPED 2026-02-21</summary>
 
-- [x] Phase 36: Memory Capture — Learnings on continue, failures on build, lower promotion threshold (completed 2026-02-21)
-- [x] Phase 37: Changelog + Visibility — Continuous updates, rich resume/status (completed 2026-02-21)
+- [x] Phase 36: Memory Capture — Learnings on continue, failures on build, lower promotion threshold
+- [x] Phase 37: Changelog + Visibility — Continuous updates, rich resume/status
 
-**6 requirements mapped. Goal: Make the memory pipeline actually work.**
+**6 requirements verified. Full details: `.planning/milestones/v4.0-ROADMAP.md`**
+
+</details>
+
+<details>
+<summary>🔄 v5.0 Agent Integration (Phases 38-41) — IN PROGRESS</summary>
+
+- [ ] Phase 38: Security Gates — Gatekeeper + Auditor integration in `/ant:continue`
+  - [ ] 38-01-PLAN.md — Integrate Gatekeeper agent for supply chain security (SEC-01, SEC-02, SEC-03)
+  - [ ] 38-02-PLAN.md — Integrate Auditor agent for code quality review (SEC-04, SEC-05, SEC-06)
+- [ ] Phase 39: Quality Coverage — Probe + Measurer for tests and performance
+- [ ] Phase 40: Lifecycle Enhancement — Chronicler + Ambassador in seal/build
+- [ ] Phase 41: Analytics & Improvement — Sage + Weaver for insights and refactoring
+
+**24 requirements mapped. Goal: Integrate 8 specialist agents into existing commands.**
 
 </details>
 
 ## Phase Details
 
-### Phase 36: Memory Capture
+### Phase 38: Security Gates
 
-**Goal:** Wire the existing memory systems so they actually capture and store learnings
+**Goal:** Add professional security and quality gates to verification phase
 
-**Depends on:** Phase 35 (v3.0 complete)
+**Depends on:** Phase 37 (v4.0 complete)
 
-**Requirements:** MEM-01, MEM-02, MEM-03
+**Requirements:** SEC-01 through SEC-06
 
 **Success Criteria** (what must be TRUE):
-1. `/ant:continue` asks "What did you learn this phase?" — approved answers write to QUEEN.md
-2. `/ant:build` logs failed approaches to midden/ AND calls learning-observe with type=failure
-3. Promotion threshold lowered to 1 observation + user approval (not 5)
-4. QUEEN.md accumulates real wisdom after each phase
+1. Gatekeeper spawns when package manifest exists — CVE scan, license compliance
+2. Gatekeeper blocks on critical CVEs, warns on high
+3. Auditor spawns when UI/API changes detected — multi-lens review
+4. Auditor gate fails if quality score < 60 or critical findings exist
+5. Both agents are read-only (no code modification)
 
-**Plans:** 3/3 plans complete
-- [ ] 36-01-PLAN.md — Lower promotion threshold to 1 observation (MEM-03)
-- [ ] 36-02-PLAN.md — Integrate learning approval into continue.md (MEM-01)
-- [ ] 36-03-PLAN.md — Add failure logging to build.md with midden storage (MEM-02)
-
-**Why this matters:** Right now QUEEN.md stays empty. After this phase, it grows with every completed phase.
+**Why this matters:** Current security scan is just a grep. This adds professional supply chain security.
 
 ---
 
-### Phase 37: Changelog + Visibility
+### Phase 39: Quality Coverage
 
-**Goal:** Continuous changelog updates and visible memory health
+**Goal:** Improve test coverage and establish performance baselines
 
-**Depends on:** Phase 36 (memory capture working)
+**Depends on:** Phase 38
 
-**Requirements:** LOG-01, VIS-01, VIS-02
+**Requirements:** COV-01 through COV-07
 
 **Success Criteria** (what must be TRUE):
-1. Workers update CHANGELOG.md during work — decisions, files changed, what worked/didn't
-2. `/ant:resume` shows recent learnings, failed approaches, and accumulated wisdom
-3. `/ant:status` shows memory health — wisdom count, recent learnings, what's being remembered
-4. Human can see colony memory at a glance
+1. Probe spawns when coverage < 80% after tests pass
+2. Probe generates tests, discovers edge cases, non-blocking
+3. Measurer spawns for performance-sensitive phases
+4. Measurer establishes baselines, identifies bottlenecks
+5. Performance findings logged to midden for future reference
 
-**Plans:** 3/3 plans complete
-- [ ] 37-01-PLAN.md — Memory metrics utilities (memory-metrics, midden-recent-failures, resume-dashboard) (VIS-02)
-- [ ] 37-02-PLAN.md — Changelog system (changelog-append, changelog-collect-plan-data) (LOG-01)
-- [ ] 37-03-PLAN.md — Resume/status integration with drill-down command (VIS-01, VIS-02)
+**Why this matters:** Coverage gaps compound silently. Performance issues are harder to fix later.
 
-**Why this matters:** Two weeks later, you can see what was tried and what didn't work.
+---
+
+### Phase 40: Lifecycle Enhancement
+
+**Goal:** Ensure documentation coverage and better API integrations
+
+**Depends on:** Phase 39
+
+**Requirements:** LIF-01 through LIF-06
+
+**Success Criteria** (what must be TRUE):
+1. Chronicler spawns before seal ceremony — documentation coverage audit
+2. Chronicler reports gaps but doesn't block (non-blocking)
+3. Ambassador replaces Builder for external API/SDK tasks
+4. Ambassador handles OAuth, rate limiting, circuit breakers
+5. Ambassador returns integration plan for Builder to execute
+
+**Why this matters:** External integrations are failure-prone. Documentation debt compounds silently.
+
+---
+
+### Phase 41: Analytics & Improvement
+
+**Goal:** Add colony analytics and proactive refactoring
+
+**Depends on:** Phase 40
+
+**Requirements:** ANA-01 through ANA-06
+
+**Success Criteria** (what must be TRUE):
+1. Sage spawns when colony has 3+ completed phases
+2. Sage provides velocity trends, bug density, review turnaround
+3. Weaver spawns when complexity exceeds thresholds
+4. Weaver refactors and runs tests — reverts if break
+5. Both agents provide insights without blocking
+
+**Why this matters:** Data-driven insights improve colony wisdom. Proactive refactoring prevents tech debt.
 
 ---
 
@@ -254,4 +299,5 @@
 *v1.4 (partial) shipped: 2026-02-20*
 *v2.0 shipped: 2026-02-20*
 *v3.0 shipped: 2026-02-21*
-*v4.0 defined: 2026-02-21 (memory pipeline)*
+*v4.0 shipped: 2026-02-21*
+*v5.0 defined: 2026-02-21 (agent integration)*

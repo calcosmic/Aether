@@ -341,9 +341,112 @@ Run /ant:build {phase} again after fixing.
 
 Do NOT proceed to Step 2.
 
-If no CRITICAL issues, continue to Step 1.8.
+If no CRITICAL issues, continue to Step 1.8.1.
 
-### Step 1.8: TDD Evidence Gate (MANDATORY)
+### Step 1.8.1: Gatekeeper Security Gate (Conditional)
+
+**Supply chain security audit — runs only when package.json exists.**
+
+First, check for package.json:
+Run using the Bash tool with description "Checking for package.json...": `test -f package.json && echo "exists" || echo "missing"`
+
+**If package.json is missing:**
+```
+📦🐜 Gatekeeper: No package.json found — skipping supply chain audit
+```
+Continue to Step 1.9.
+
+**If package.json exists:**
+
+1. Generate Gatekeeper name and log spawn:
+Run using the Bash tool with description "Generating Gatekeeper name...": `gatekeeper_name=$(bash .aether/aether-utils.sh generate-ant-name "gatekeeper") && bash .aether/aether-utils.sh spawn-log "Queen" "gatekeeper" "$gatekeeper_name" "Supply chain security audit" && echo "{\"name\":\"$gatekeeper_name\"}"`
+
+2. Update swarm display (if visual_mode is true):
+Run using the Bash tool with description "Updating swarm display...": `bash .aether/aether-utils.sh swarm-display-update "$gatekeeper_name" "gatekeeper" "scanning" "CVE and license audit" "Security" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0`
+
+3. Display: `📦🐜 Gatekeeper {name} spawning — Scanning dependencies for CVEs and license compliance...`
+
+4. Spawn Gatekeeper agent:
+
+Use the Task tool with subagent_type="aether-gatekeeper" (if available; otherwise use general-purpose and inject the Gatekeeper role from `.opencode/agents/aether-gatekeeper.md`):
+
+```xml
+<mission>
+Perform supply chain security audit on this codebase.
+</mission>
+
+<work>
+1. Inventory all dependencies from package.json
+2. Scan for known CVEs using npm audit or equivalent
+3. Check license compliance for all packages
+4. Assess dependency health (outdated, deprecated, maintenance status)
+5. Report findings with severity levels
+</work>
+
+<output>
+Provide JSON output matching this schema:
+{
+  "ant_name": "your gatekeeper name",
+  "caste": "gatekeeper",
+  "status": "completed" | "failed" | "blocked",
+  "summary": "Brief summary of findings",
+  "security": {
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "low": 0
+  },
+  "licenses": {},
+  "outdated_packages": [],
+  "recommendations": [],
+  "blockers": []
+}
+</output>
+```
+
+5. Parse Gatekeeper JSON output and log completion:
+Extract: `security.critical`, `security.high`, `status`
+
+Run using the Bash tool with description "Logging Gatekeeper completion...": `bash .aether/aether-utils.sh spawn-complete "$gatekeeper_name" "completed" "{\"security\":{\"critical\":$critical_count,\"high\":$high_count}}"`
+
+**Gate Decision Logic:**
+
+- **If `security.critical > 0`:**
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⛔📦🐜 G A T E K E E P E R   G A T E   F A I L E D
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Critical security vulnerabilities detected: {critical_count}
+
+🚨 CRITICAL CVEs must be fixed before phase advancement.
+
+🔧 Required Actions:
+  1. Run `npm audit` to see full details
+  2. Fix or update vulnerable dependencies
+  3. Run /ant:continue again after resolving
+
+The phase will NOT advance with critical CVEs.
+```
+**CRITICAL:** Do NOT proceed to Step 1.9. Stop here.
+
+- **If `security.high > 0`:**
+```
+⚠️📦🐜 Gatekeeper: {high_count} high-severity issues found
+
+Security warnings logged to midden for later review.
+Proceeding with caution...
+```
+Run using the Bash tool with description "Logging high-severity warnings...": `bash .aether/aether-utils.sh midden-write "security" "High CVEs found: $high_count" "gatekeeper"`
+Continue to Step 1.9.
+
+- **If clean (no critical or high):**
+```
+✅📦🐜 Gatekeeper: No critical security issues found
+```
+Continue to Step 1.9.
+
+### Step 1.9: TDD Evidence Gate (MANDATORY)
 
 **The Iron Law:** No TDD claims without actual test files.
 
@@ -382,9 +485,9 @@ bash .aether/aether-utils.sh error-flag-pattern "fabricated-tdd" "Prime Worker r
 
 **If tests_added == 0 or test files exist matching claims:**
 
-Continue to Step 1.9.
+Continue to Step 1.10.
 
-### Step 1.9: Runtime Verification Gate (MANDATORY)
+### Step 1.10: Runtime Verification Gate (MANDATORY)
 
 **The Iron Law:** Build passing ≠ App working.
 
@@ -412,7 +515,7 @@ Options:
 ```
 ✅🐜 RUNTIME VERIFIED — User confirmed app works.
 ```
-Continue to Step 2.
+Continue to Step 1.11.
 
 **If "Yes, tested but has issues":**
 ```
@@ -451,9 +554,9 @@ User indicated no runnable app for this phase.
 Proceeding to phase advancement.
 ```
 
-Continue to Step 1.10.
+Continue to Step 1.11.
 
-### Step 1.10: Flags Gate (MANDATORY)
+### Step 1.11: Flags Gate (MANDATORY)
 
 **The Iron Law:** No phase advancement with unresolved blockers.
 
