@@ -556,6 +556,37 @@ Update COLONY_STATE.json:
    - It's stating the obvious
    - There's no evidence it works
 
+2.5. **Record learning observations for threshold tracking:**
+
+   For each learning extracted, record an observation to enable threshold-based wisdom promotion.
+
+   Run using the Bash tool with description "Recording learning observations...":
+   ```bash
+   colony_name=$(jq -r '.session_id | split("_")[1] // "unknown"' .aether/data/COLONY_STATE.json 2>/dev/null || echo "unknown")
+
+   # Get learnings from the current phase
+   current_phase_learnings=$(jq -r --argjson phase "$current_phase" '.memory.phase_learnings[] | select(.phase == $phase)' .aether/data/COLONY_STATE.json 2>/dev/null || echo "")
+
+   if [[ -n "$current_phase_learnings" ]]; then
+     echo "$current_phase_learnings" | jq -r '.learnings[]?.claim // empty' 2>/dev/null | while read -r claim; do
+       if [[ -n "$claim" ]]; then
+         # Default wisdom_type to "pattern" (threshold: 3 observations)
+         bash .aether/aether-utils.sh learning-observe "$claim" "pattern" "$colony_name" 2>/dev/null || true
+       fi
+     done
+     echo "Recorded observations for threshold tracking"
+   else
+     echo "No learnings to record"
+   fi
+   ```
+
+   This records each learning in `learning-observations.json` with:
+   - Content hash for deduplication (same claim across phases increments count)
+   - Observation count (increments if seen before)
+   - Colony name for cross-colony tracking
+
+   When observations reach threshold (default: 3 for "pattern" type), they become eligible for promotion in Step 2.1.5.
+
 3. **Extract instincts from patterns:**
 
    Read activity.log for patterns from this phase's build.

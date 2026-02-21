@@ -8,7 +8,7 @@
 - ✅ **v1.3 The Great Restructuring** — Phases 20-25 (shipped 2026-02-20)
 - ✅ **v1.4 Deep Cleanup (partial)** — Phase 26 (shipped 2026-02-20)
 - ✅ **v2.0 Worker Emergence** — Phases 27-31 (shipped 2026-02-20)
-- 🔄 **v3.0 Wisdom & Pheromone Evolution** — Phases 32-35 (in progress)
+- ✅ **v3.0 Wisdom & Pheromone Evolution** — Phases 32-35 (shipped 2026-02-21)
 
 ## Phases
 
@@ -92,17 +92,14 @@
 </details>
 
 <details>
-<summary>🔄 v3.0 Wisdom & Pheromone Evolution (Phases 32-35) — IN PROGRESS</summary>
+<summary>✅ v3.0 Wisdom & Pheromone Evolution (Phases 32-35) — SHIPPED 2026-02-21</summary>
 
-- [ ] Phase 32: Wire QUEEN.md into Commands (3 plans)
-  - [ ] 32-01-PLAN.md — Create colony-prime() function, implement two-level loading
-  - [ ] 32-02-PLAN.md — Update build.md to use colony-prime() instead of 3 calls
-  - [ ] 32-03-PLAN.md — Verify init.md creates QUEEN.md, verify template structure
-- [ ] Phase 33: Add Promotion Proposals — observation tracking, learning-observe function, continue.md displays proposals
-- [ ] Phase 34: Add User Approval UX — tick-to-approve, threshold enforcement, queen-promote on approval
-- [ ] Phase 35: Lifecycle Integration — seal.md final check, entomb.md wisdom extraction
+- [x] Phase 32: Wire QUEEN.md into Commands (3 plans) — colony-prime(), two-level loading, init.md integration
+- [x] Phase 33: Add Promotion Proposals (3 plans) — learning-observe, learning-check-promotion, continue.md display
+- [x] Phase 34: Add User Approval UX (3 plans) — tick-to-approve, threshold enforcement, undo support
+- [x] Phase 35: Lifecycle Integration (2 plans) — seal.md wisdom review, entomb.md final wisdom check
 
-**25 requirements defined. Research complete. Ready for execution.**
+**25 requirements verified.**
 
 </details>
 
@@ -124,7 +121,7 @@
 | 12. Build Progress | v1.1 | 2/2 | Complete | 2026-02-18 |
 | 13. Distribution Reliability | v1.1 | 1/1 | Complete | 2026-02-18 |
 | 14. Foundation Safety | v1.2 | 1/1 | Complete | 2026-02-18 |
-| 15. Distribution Chain | v1.2 | 3/3 | Complete | 2026-02-18 |
+| 15. Distribution Chain | v1.2 | 3/3 | Complete | 2026-02-19 |
 | 16. Lock Lifecycle Hardening | v1.2 | 3/3 | Complete | 2026-02-19 |
 | 17. Error Code Standardization | v1.2 | 3/3 | Complete | 2026-02-19 |
 | 18. Reliability & Architecture Gaps | v1.2 | 4/4 | Complete | 2026-02-19 |
@@ -141,10 +138,10 @@
 | 29. Specialist Agents + Agent Tests | v2.0 | Complete | 2026-02-20 | - |
 | 30. Niche Agents | v2.0 | Complete | 2026-02-20 | - |
 | 31. Integration Verification + Cleanup | v2.0 | 3/3 | Complete | 2026-02-20 |
-| 32. Wire QUEEN.md into Commands | v3.0 | 0/3 | Pending | — |
-| 33. Add Promotion Proposals | v3.0 | 0/4 | Pending | — |
-| 34. Add User Approval UX | v3.0 | 0/3 | Pending | — |
-| 35. Lifecycle Integration | v3.0 | 0/2 | Pending | — |
+| 32. Wire QUEEN.md into Commands | v3.0 | Complete    | 2026-02-20 | — |
+| 33. Add Promotion Proposals | v3.0 | Complete    | 2026-02-20 | — |
+| 34. Add User Approval UX | v3.0 | Complete    | 2026-02-20 | — |
+| 35. Lifecycle Integration | v3.0 | Complete    | 2026-02-21 | — |
 
 ---
 
@@ -155,3 +152,4 @@
 *v1.3 shipped: 2026-02-20*
 *v1.4 (partial) shipped: 2026-02-20*
 *v2.0 shipped: 2026-02-20*
+*v3.0 shipped: 2026-02-21*
