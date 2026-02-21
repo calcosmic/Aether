@@ -9,6 +9,7 @@
 - ✅ **v1.4 Deep Cleanup (partial)** — Phase 26 (shipped 2026-02-20)
 - ✅ **v2.0 Worker Emergence** — Phases 27-31 (shipped 2026-02-20)
 - ✅ **v3.0 Wisdom & Pheromone Evolution** — Phases 32-35 (shipped 2026-02-21)
+- 🔄 **v4.0 Colony Context Enhancement** — Phases 36-39 (in progress)
 
 ## Phases
 
@@ -103,6 +104,102 @@
 
 </details>
 
+<details>
+<summary>🔄 v4.0 Memory Pipeline (Phases 36-37) — IN PROGRESS</summary>
+
+- [x] Phase 36: Memory Capture — Learnings on continue, failures on build, lower promotion threshold (completed 2026-02-21)
+- [ ] Phase 37: Changelog + Visibility — Continuous updates, rich resume/status
+
+**6 requirements mapped. Goal: Make the memory pipeline actually work.**
+
+</details>
+
+## Phase Details
+
+### Phase 36: Memory Capture
+
+**Goal:** Wire the existing memory systems so they actually capture and store learnings
+
+**Depends on:** Phase 35 (v3.0 complete)
+
+**Requirements:** MEM-01, MEM-02, MEM-03
+
+**Success Criteria** (what must be TRUE):
+1. `/ant:continue` asks "What did you learn this phase?" — approved answers write to QUEEN.md
+2. `/ant:build` logs failed approaches to midden/ AND calls learning-observe with type=failure
+3. Promotion threshold lowered to 1 observation + user approval (not 5)
+4. QUEEN.md accumulates real wisdom after each phase
+
+**Plans:** 3/3 plans complete
+- [ ] 36-01-PLAN.md — Lower promotion threshold to 1 observation (MEM-03)
+- [ ] 36-02-PLAN.md — Integrate learning approval into continue.md (MEM-01)
+- [ ] 36-03-PLAN.md — Add failure logging to build.md with midden storage (MEM-02)
+
+**Why this matters:** Right now QUEEN.md stays empty. After this phase, it grows with every completed phase.
+
+---
+
+### Phase 37: Changelog + Visibility
+
+**Goal:** Continuous changelog updates and visible memory health
+
+**Depends on:** Phase 36 (memory capture working)
+
+**Requirements:** LOG-01, VIS-01, VIS-02
+
+**Success Criteria** (what must be TRUE):
+1. Workers update CHANGELOG.md during work — decisions, files changed, what worked/didn't
+2. `/ant:resume` shows recent learnings, failed approaches, and accumulated wisdom
+3. `/ant:status` shows memory health — wisdom count, recent learnings, what's being remembered
+4. Human can see colony memory at a glance
+
+**Plans:** TBD
+
+**Why this matters:** Two weeks later, you can see what was tried and what didn't work.
+
+---
+
+## Requirement Coverage
+
+| Requirement | Phase | Description |
+|-------------|-------|-------------|
+| MEM-01 | 36 | /ant:continue asks for learnings → writes to QUEEN.md | Complete    | 2026-02-21 | 36 | /ant:build logs failures to midden + learning-observe |
+| MEM-03 | 36 | Lower promotion threshold to 1 + user approval |
+| LOG-01 | 37 | Workers update CHANGELOG.md during work |
+| VIS-01 | 37 | /ant:resume shows learnings, failures, wisdom |
+| VIS-02 | 37 | /ant:status shows memory health |
+
+**Coverage:** 6/6 requirements mapped ✓
+- v1 requirements (P1 Core): 4/4
+- v2 requirements (P2 Enhancements): 2/2
+
+---
+
+## Architecture Alignment
+
+**Principle:** Wire the existing memory systems together. No new infrastructure.
+
+| Component | v4.0 Enhancement |
+|-----------|------------------|
+| `/ant:continue` | Asks "What did you learn?" → writes to QUEEN.md |
+| `/ant/build` | Logs failures to midden/ + learning-observe |
+| `learning-observe` | Called automatically on failure (not just manually) |
+| `queen-promote` | Threshold 1 + approval (not 5) |
+| `QUEEN.md` | Actually gets populated now |
+| `colony-prime` | Reads populated QUEEN.md (already works) |
+| `CHANGELOG.md` | New — continuously updated by workers |
+
+---
+
+## Out of Scope
+
+| Feature | Reason |
+|---------|--------|
+| New pheromone types | Existing signals work |
+| Decay mechanisms | Explicit logging is simpler |
+| NEST.md, TRAILS/, BROOD/ | Over-engineering |
+| Complex documentation | QUEEN.md + CHANGELOG.md is enough |
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -142,6 +239,8 @@
 | 33. Add Promotion Proposals | v3.0 | Complete    | 2026-02-20 | — |
 | 34. Add User Approval UX | v3.0 | Complete    | 2026-02-20 | — |
 | 35. Lifecycle Integration | v3.0 | Complete    | 2026-02-21 | — |
+| 36. Memory Capture | v4.0 | 0/3 | Not started | — |
+| 37. Changelog + Visibility | v4.0 | 0/3 | Not started | — |
 
 ---
 
@@ -153,3 +252,4 @@
 *v1.4 (partial) shipped: 2026-02-20*
 *v2.0 shipped: 2026-02-20*
 *v3.0 shipped: 2026-02-21*
+*v4.0 defined: 2026-02-21 (memory pipeline)*

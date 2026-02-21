@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 ## Current Position
 
 Phase: 36
-Plan: 02
+Plan: 03
 Status: In Progress — executing Phase 36 plans
-Last activity: 2026-02-21 — Completed 36-02: Integrated learning capture into /ant:continue
+Last activity: 2026-02-21 — Completed 36-03: Integrated failure logging into /ant:build with midden capture
 
-Progress: [░░░░░░░░░░] 20% (Phase 36 in progress)
+Progress: [████████░░] 80% (Phase 36 in progress)
 
 ## Performance Metrics
 
@@ -101,6 +101,9 @@ Progress: [░░░░░░░░░░] 20% (Phase 36 in progress)
 - [Phase 36-memory-capture]: 36-01: Lowered promotion thresholds to 1 for all wisdom types (was 5/3/2/1/0)
 - [Phase 36-memory-capture]: 36-02: Silent skip pattern for learning approval — no output when no proposals exist (MEM-01)
 - [Phase 36-memory-capture]: 36-02: learning-approve-proposals is the canonical approval workflow — removed redundant Step 2.2 from continue.md
+- [Phase 36-memory-capture]: 36-03: Midden directory at .aether/midden/ (outside data/ for protection) — structured failure logging
+- [Phase 36-memory-capture]: 36-03: "failure" wisdom type added with threshold=1 — failures promote after 1 observation
+- [Phase 36-memory-capture]: 36-03: Workers can self-report approach changes via convention in build.md prompts
 
 ### Key Findings from Research
 - Subagents cannot spawn other subagents — strip all spawn calls from every converted agent
@@ -123,5 +126,5 @@ Progress: [░░░░░░░░░░] 20% (Phase 36 in progress)
 ## Session Continuity
 
 Last session: 2026-02-21
-Stopped at: Completed 36-02-PLAN.md — Integrated learning approval into /ant:continue
-Next step: Continue with 36-03 plan or next task in Phase 36
+Stopped at: Completed 36-03-PLAN.md — Integrated failure logging into /ant:build with midden capture
+Next step: Continue with next plan in Phase 36 or move to Phase 37
