@@ -9,7 +9,7 @@ You are the **Queen**. Show colony status.
 
 ### Step 0: Version Check (Non-blocking)
 
-Run using the Bash tool: `bash .aether/aether-utils.sh version-check 2>/dev/null || true`
+Run using the Bash tool with description "Checking colony version...": `bash .aether/aether-utils.sh version-check-cached 2>/dev/null || true`
 
 If the command succeeds and the JSON result contains a non-empty string, display it as a one-line notice. Proceed regardless of outcome.
 
@@ -51,7 +51,7 @@ If `version` field is missing, "1.0", or "2.0":
 
 ### Step 1.5: Load State and Show Resumption Context
 
-Run using Bash tool: `bash .aether/aether-utils.sh load-state`
+Run using the Bash tool with description "Loading colony state...": `bash .aether/aether-utils.sh load-state`
 
 If successful and goal is not null:
 1. Extract current_phase from state
@@ -69,7 +69,7 @@ If successful and goal is not null:
    - Read .aether/HANDOFF.md content for additional context
    - Remove .aether/HANDOFF.md after displaying (cleanup)
 
-Run: `bash .aether/aether-utils.sh unload-state` to release lock.
+Run using the Bash tool with description "Releasing colony lock...": `bash .aether/aether-utils.sh unload-state` to release lock.
 
 ### Step 2: Compute Summary
 
@@ -77,13 +77,13 @@ From state, extract:
 
 ### Step 2.5: Gather Dream Information
 
-Run using Bash tool: `ls -1 .aether/dreams/*.md 2>/dev/null | wc -l`
+Run using the Bash tool with description "Counting dream entries...": `ls -1 .aether/dreams/*.md 2>/dev/null | wc -l`
 
 Capture:
 - Dream count: number of .md files in .aether/dreams/
 - Latest dream: most recent file by name (files are timestamped: YYYY-MM-DD-HHMM.md)
 
-To get latest dream timestamp:
+To get latest dream timestamp, run using the Bash tool with description "Finding latest dream...":
 ```bash
 ls -1 .aether/dreams/*.md 2>/dev/null | sort | tail -1 | sed 's/.*\/\([0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}\)-\([0-9]\{4\}\).*/\1 \2/'
 ```
@@ -108,7 +108,7 @@ Read `.aether/data/constraints.json` if exists:
 - Constraints count: `constraints.length`
 
 **Flags:**
-Run: `bash .aether/aether-utils.sh flag-check-blockers`
+Run using the Bash tool with description "Checking for blockers...": `bash .aether/aether-utils.sh flag-check-blockers`
 Extract:
 - Blockers count (critical, block advancement)
 - Issues count (high, warnings)
@@ -117,6 +117,7 @@ Extract:
 **Escalation state:**
 Count escalated flags by checking for blocker flags with source "escalation":
 
+Run using the Bash tool with description "Checking escalation state...":
 ```bash
 escalated_count=$(bash .aether/aether-utils.sh flag-list --type blocker 2>/dev/null | jq '[.result.flags[] | select(.source == "escalation")] | length' 2>/dev/null || echo "0")
 echo "escalated_count=$escalated_count"
@@ -137,13 +138,61 @@ From `memory.instincts`:
 
 ### Step 2.6: Detect Milestone
 
-Run using Bash tool: `bash .aether/aether-utils.sh milestone-detect`
+Run using the Bash tool with description "Detecting colony milestone...": `bash .aether/aether-utils.sh milestone-detect`
 
 Extract from JSON result:
 - `milestone`: Current milestone name
 - `version`: Computed version string
 - `phases_completed`: Number of completed phases
 - `total_phases`: Total phases in plan
+
+### Step 2.8: Load Memory Health Metrics
+
+Run using the Bash tool with description "Loading memory health metrics...":
+```bash
+bash .aether/aether-utils.sh memory-metrics
+```
+
+Extract from JSON result:
+- wisdom.total
+- pending.total
+- recent_failures.count
+- last_activity.queen_md_updated
+- last_activity.learning_captured
+
+Format timestamps for display (YYYY-MM-DD HH:MM).
+
+### Step 2.7: Generate Progress Bars
+
+Calculate progress metrics and generate visual bars.
+
+Run using the Bash tool with description "Computing phase progress...":
+```bash
+current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
+total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
+
+# Calculate task progress in current phase
+if [[ "$current_phase" -gt 0 && "$current_phase" -le "$total_phases" ]]; then
+  phase_idx=$((current_phase - 1))
+  tasks_completed=$(jq -r ".plan.phases[$phase_idx].tasks // [] | map(select(.status == \"completed\")) | length" .aether/data/COLONY_STATE.json)
+  tasks_total=$(jq -r ".plan.phases[$phase_idx].tasks // [] | length" .aether/data/COLONY_STATE.json)
+  phase_name=$(jq -r ".plan.phases[$phase_idx].name // \"Unnamed\"" .aether/data/COLONY_STATE.json)
+else
+  tasks_completed=0
+  tasks_total=0
+  phase_name="No plan created"
+fi
+
+# Generate progress bars
+phase_bar=$(bash .aether/aether-utils.sh generate-progress-bar "$current_phase" "$total_phases" 20)
+task_bar=$(bash .aether/aether-utils.sh generate-progress-bar "$tasks_completed" "$tasks_total" 20)
+
+echo "phase_bar=$phase_bar"
+echo "task_bar=$task_bar"
+echo "phase_name=$phase_name"
+```
+
+Store `phase_bar`, `task_bar`, and `phase_name` values for display in Step 3.
 
 ### Step 3: Display
 
@@ -154,12 +203,13 @@ Output format:
       (o o)  AETHER COLONY
       | O |  Status Report
        `-`
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 👑 Goal: <goal (truncated to 60 chars)>
 
-📍 Phase <N>/<M>: <phase name>
-   Tasks: <completed>/<total> complete
+📍 Progress
+   Phase: [████████░░░░░░░░░░░░] <N>/<M> phases
+   Tasks: [████████████████░░░░] <completed>/<total> tasks in Phase <N>
 
 🎯 Focus: <focus_count> areas | 🚫 Avoid: <constraints_count> patterns
 🧠 Instincts: <total> learned (<high_confidence> strong)
@@ -170,17 +220,19 @@ Output format:
 🏆 Milestone: <milestone> (<version>)
 💭 Dreams: <dream_count> recorded (latest: <latest_dream>)
 
+📚 Memory Health
+┌─────────────────┬────────┬─────────────────────────────┐
+│ Metric          │ Count  │ Last Updated                │
+├─────────────────┼────────┼─────────────────────────────┤
+│ Wisdom Entries  │ {wisdom_total:>6} │ {queen_updated}             │
+│ Pending Promos  │ {pending_total:>6} │ {learning_updated}          │
+│ Recent Failures │ {failures_count:>6} │ {last_failure}              │
+└─────────────────┴────────┴─────────────────────────────┘
+
 State: <state>
-Next:  <suggested_command>   <phase_context>
 ```
 
-**Phase context for Next line:** Include the phase name inline with the suggestion:
-- READY → `Next:  /ant:build 3   Phase 3: Add Authentication`
-- EXECUTING → `Next:  /ant:continue   Phase 3: Add Authentication`
-- PLANNING → `Next:  /ant:plan`
-- IDLE → `Next:  /ant:init`
-
-Look up the phase name from `plan.phases[current_phase].name` and append it.
+Use the `phase_bar` and `task_bar` values computed in Step 2.7 for the actual bar characters and counts.
 
 **If instincts exist, also show top 3:**
 ```
@@ -190,23 +242,31 @@ Look up the phase name from `plan.phases[current_phase].name` and append it.
    [0.7] 🐜 debugging: Trace to root cause first
 ```
 
-**Suggested command logic (use actual values, not templates):**
-
-Calculate `next_phase = current_phase + 1` from state.
-
-Generate the suggested command based on colony state:
-- IDLE -> `/ant:init`
-- READY -> `/ant:build {next_phase}` (e.g., if current_phase is 2, output `/ant:build 3`)
-- EXECUTING -> `/ant:continue`
-- PLANNING -> `/ant:plan`
-
-The output must be a copy-pasteable command with real numbers, not placeholders.
-
 **Dream display:**
 - If no dreams exist: `💭 Dreams: None recorded`
 - If dreams exist: `💭 Dreams: <count> recorded (latest: YYYY-MM-DD HH:MM)`
 
+**Memory Health display:**
+- If memory-metrics returns empty/null values, show:
+```
+📚 Memory Health
+   No memory data available. Colony wisdom will accumulate as you complete phases.
+```
+
 **Edge cases:**
-- No phases yet: "Phase 0/0: No plan created"
-- No tasks in phase: "Tasks: 0/0 complete"
+- No phases yet: show `[░░░░░░░░░░░░░░░░░░░░] 0/0 phases`
+- No tasks in phase: show `[░░░░░░░░░░░░░░░░░░░░] 0/0 tasks in Phase 0`
 - No constraints file: "Constraints: 0 focus, 0 avoid"
+
+**At the end of the output, generate the Next Up block:**
+
+Run using the Bash tool with description "Generating next steps...":
+```bash
+state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
+current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
+total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
+
+bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
+```
+
+This auto-generates state-based recommendations (IDLE → init, READY → build, EXECUTING → continue, PLANNING → plan).
