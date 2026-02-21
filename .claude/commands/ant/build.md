@@ -526,6 +526,24 @@ Work:
 4. Update display using Bash tool with description
 5. At natural breakpoints (between tasks, after errors): Check for new signals using Bash tool with description
 
+**Approach Change Logging:**
+If you try an approach that doesn't work and switch to a different approach, log it:
+```bash
+colony_name=$(jq -r '.session_id | split("_")[1] // "unknown"' .aether/data/COLONY_STATE.json 2>/dev/null || echo "unknown")
+phase_num=$(jq -r '.phase.number // "unknown"' .aether/data/COLONY_STATE.json 2>/dev/null || echo "unknown")
+
+cat >> .aether/midden/approach-changes.md << EOF
+- timestamp: "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  phase: ${phase_num}
+  colony: "${colony_name}"
+  worker: "{Ant-Name}"
+  task: "{task_id}"
+  tried: "initial approach that failed"
+  why_it_failed: "reason it didn't work"
+  switched_to: "new approach that worked"
+EOF
+```
+
 Spawn sub-workers ONLY if 3x complexity:
 - Check spawn budget using Bash tool with description
 - Generate name using Bash tool with description
