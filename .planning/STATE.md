@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 
 ## Current Position
 
-Phase: 36
-Plan: 03
-Status: In Progress — executing Phase 36 plans
-Last activity: 2026-02-21 — Completed 36-03: Integrated failure logging into /ant:build with midden capture
+Phase: 37
+Plan: 01
+Status: In Progress — executing Phase 37 plans
+Last activity: 2026-02-21 — Completed 37-01: Created memory health metrics utility functions (memory-metrics, midden-recent-failures, resume-dashboard)
 
-Progress: [████████░░] 80% (Phase 36 in progress)
+Progress: [████████░░] 80% (Phase 37 in progress)
 
 ## Performance Metrics
 
@@ -104,6 +104,9 @@ Progress: [████████░░] 80% (Phase 36 in progress)
 - [Phase 36-memory-capture]: 36-03: Midden directory at .aether/midden/ (outside data/ for protection) — structured failure logging
 - [Phase 36-memory-capture]: 36-03: "failure" wisdom type added with threshold=1 — failures promote after 1 observation
 - [Phase 36-memory-capture]: 36-03: Workers can self-report approach changes via convention in build.md prompts
+- [Phase 37-changelog-visibility]: 37-01: memory-metrics function aggregates wisdom, pending, failures, and activity metrics
+- [Phase 37-changelog-visibility]: 37-01: midden-recent-failures function extracts recent failures with configurable limit
+- [Phase 37-changelog-visibility]: 37-01: resume-dashboard function generates dashboard data for /ant:resume command
 
 ### Key Findings from Research
 - Subagents cannot spawn other subagents — strip all spawn calls from every converted agent
@@ -126,5 +129,5 @@ Progress: [████████░░] 80% (Phase 36 in progress)
 ## Session Continuity
 
 Last session: 2026-02-21
-Stopped at: Completed 36-03-PLAN.md — Integrated failure logging into /ant:build with midden capture
-Next step: Continue with next plan in Phase 36 or move to Phase 37
+Stopped at: Completed 37-01-PLAN.md — Created memory health metrics utility functions
+Next step: Continue with next plan in Phase 37

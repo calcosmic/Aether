@@ -839,7 +839,7 @@ changelog-collect-plan-data() {
     if [[ -n "$recent_decisions" ]]; then
       decisions="["
       local first=true
-      while IFS= read -r d; do
+      while IFS= read -r d || [[ -n "$d" ]]; do
         if [[ -n "$d" && "$d" != "null" ]]; then
           if [[ "$first" == "true" ]]; then
             first=false
@@ -859,11 +859,11 @@ changelog-collect-plan-data() {
     # Check approach-changes.md for what worked
     if [[ -f "$midden_dir/approach-changes.md" ]]; then
       local approach_entries
-      approach_entries=$(grep "^- " "$midden_dir/approach-changes.md" 2>/dev/null | tail -3)
+      approach_entries=$(grep "^- " "$midden_dir/approach-changes.md" 2>/dev/null | tail -3) || true
       if [[ -n "$approach_entries" ]]; then
         worked="["
         local first=true
-        while IFS= read -r entry; do
+        while IFS= read -r entry || [[ -n "$entry" ]]; do
           entry=$(echo "$entry" | sed 's/^- //' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
           if [[ -n "$entry" ]]; then
             if [[ "$first" == "true" ]]; then
@@ -881,11 +881,11 @@ changelog-collect-plan-data() {
     # Check build-failures.md for what didn't work
     if [[ -f "$midden_dir/build-failures.md" ]]; then
       local failure_entries
-      failure_entries=$(grep "^- " "$midden_dir/build-failures.md" 2>/dev/null | tail -3)
+      failure_entries=$(grep "^- " "$midden_dir/build-failures.md" 2>/dev/null | tail -3) || true
       if [[ -n "$failure_entries" ]]; then
         didnt_work="["
         local first=true
-        while IFS= read -r entry; do
+        while IFS= read -r entry || [[ -n "$entry" ]]; do
           entry=$(echo "$entry" | sed 's/^- //' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
           if [[ -n "$entry" ]]; then
             if [[ "$first" == "true" ]]; then
