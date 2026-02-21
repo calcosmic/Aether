@@ -720,18 +720,25 @@ if [[ "$ARGUMENTS" == *"--deferred"* ]] && [[ -f .aether/data/learning-deferred.
 fi
 ```
 
-**Normal proposal flow:**
+**Normal proposal flow (MEM-01: Silent skip if empty):**
 
 1. **Check for proposals:**
    ```bash
-   proposals=$(bash .aether/aether-utils.sh learning-check-promotion 2>/dev/null || echo "[]")
+   proposals=$(bash .aether/aether-utils.sh learning-check-promotion 2>/dev/null || echo '{"proposals":[]}')
+   proposal_count=$(echo "$proposals" | jq '.proposals | length')
    ```
 
 2. **If proposals exist, invoke the approval workflow:**
 
-   Run using the Bash tool with description "Processing promotion proposals...":
+   Only show the approval UI when there are actual proposals to review:
+
    ```bash
-   bash .aether/aether-utils.sh learning-approve-proposals ${verbose:+--verbose}
+   if [[ "$proposal_count" -gt 0 ]]; then
+     verbose_flag=""
+     [[ "$ARGUMENTS" == *"--verbose"* ]] && verbose_flag="--verbose"
+     bash .aether/aether-utils.sh learning-approve-proposals $verbose_flag
+   fi
+   # If no proposals, silently skip without notice (per user decision)
    ```
 
    The learning-approve-proposals function handles:
@@ -742,17 +749,9 @@ fi
    - Offering undo after successful promotions
    - Logging PROMOTED activity
 
-3. **Pass through --verbose flag:**
-   If `$ARGUMENTS` contains `--verbose`, pass it to learning-approve-proposals:
-   ```bash
-   verbose_flag=""
-   [[ "$ARGUMENTS" == *"--verbose"* ]] && verbose_flag="--verbose"
-   bash .aether/aether-utils.sh learning-approve-proposals $verbose_flag
-   ```
-
 **Skip conditions:**
 - learning-check-promotion returns empty or fails
-- No proposals to review
+- No proposals to review (silent skip - no output)
 - QUEEN.md does not exist
 
 ### Step 2.2: Promote Validated Learnings to QUEEN.md (INT-03)
