@@ -3811,15 +3811,15 @@ ANTLOGO
     # Extract METADATA to get promotion thresholds
     metadata=$(sed -n '/<!-- METADATA/,/-->/p' "$queen_file" | sed '1d;$d' | tr -d '\n' | sed 's/^[[:space:]]*//')
 
-    # Get threshold for this type (default: philosophy=5, pattern=3, redirect=2, stack=1, decree=0)
+    # Get threshold for this type (default: all types=1, decree=0)
     threshold=$(echo "$metadata" | jq -r ".promotion_thresholds.${wisdom_type} // null")
     if [[ "$threshold" == "null" ]]; then
       case "$wisdom_type" in
-        philosophy) threshold=5 ;;
-        pattern) threshold=3 ;;
-        redirect) threshold=2 ;;
-        stack) threshold=1 ;;
-        decree) threshold=0 ;;
+        philosophy) threshold=1 ;;  # Was 5
+        pattern) threshold=1 ;;      # Was 3
+        redirect) threshold=1 ;;     # Was 2
+        stack) threshold=1 ;;        # Unchanged
+        decree) threshold=0 ;;       # Unchanged
         *) threshold=1 ;;
       esac
     fi

@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 ## Current Position
 
 Phase: 36
-Plan: 01
+Plan: 02
 Status: In Progress — executing Phase 36 plans
-Last activity: 2026-02-21 — Completed 36-01: Lowered promotion thresholds
+Last activity: 2026-02-21 — Completed 36-02: Integrated learning capture into /ant:continue
 
-Progress: [░░░░░░░░░░] 10% (Phase 36 in progress)
+Progress: [░░░░░░░░░░] 20% (Phase 36 in progress)
 
 ## Performance Metrics
 
@@ -99,6 +99,8 @@ Progress: [░░░░░░░░░░] 10% (Phase 36 in progress)
 - [v4.0]: Architecture principle: wire existing systems together, lower promotion threshold, continuous updates
 - [v4.0]: Key insight: QUEEN.md stays empty because nothing writes to it — fix the pipeline
 - [Phase 36-memory-capture]: 36-01: Lowered promotion thresholds to 1 for all wisdom types (was 5/3/2/1/0)
+- [Phase 36-memory-capture]: 36-02: Silent skip pattern for learning approval — no output when no proposals exist (MEM-01)
+- [Phase 36-memory-capture]: 36-02: learning-approve-proposals is the canonical approval workflow — removed redundant Step 2.2 from continue.md
 
 ### Key Findings from Research
 - Subagents cannot spawn other subagents — strip all spawn calls from every converted agent
@@ -121,5 +123,5 @@ Progress: [░░░░░░░░░░] 10% (Phase 36 in progress)
 ## Session Continuity
 
 Last session: 2026-02-21
-Stopped at: Completed 36-01-PLAN.md
-Next step: Continue with 36-02 plan or next task in Phase 36
+Stopped at: Completed 36-02-PLAN.md — Integrated learning approval into /ant:continue
+Next step: Continue with 36-03 plan or next task in Phase 36
