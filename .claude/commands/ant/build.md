@@ -556,6 +556,33 @@ For failed workers:
 
 Where `tool_count` comes from the worker's returned JSON `tool_count` field, and `failure_reason` is extracted from the first item in the worker's `blockers` array or "unknown error" if empty.
 
+**Log failure to midden and record observation (MEM-02):**
+
+After displaying a failed worker, run using the Bash tool with description "Logging failure to midden...":
+```bash
+colony_name=$(jq -r '.session_id | split("_")[1] // "unknown"' .aether/data/COLONY_STATE.json 2>/dev/null || echo "unknown")
+phase_num=$(jq -r '.phase.number // "unknown"' .aether/data/COLONY_STATE.json 2>/dev/null || echo "unknown")
+
+# Append to build-failures.md
+cat >> .aether/midden/build-failures.md << EOF
+- timestamp: "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  phase: ${phase_num}
+  colony: "${colony_name}"
+  worker: "${ant_name}"
+  task: "${task_id}"
+  what_failed: "${blockers[0]:-$failure_reason}"
+  why: "worker returned failed status"
+  what_worked: null
+  error_type: "worker_failure"
+EOF
+
+# Record observation for potential promotion
+bash .aether/aether-utils.sh learning-observe \
+  "Builder ${ant_name} failed on task ${task_id}: ${blockers[0]:-$failure_reason}" \
+  "failure" \
+  "${colony_name}" 2>/dev/null || true
+```
+
 **PER WORKER:** Run using the Bash tool with description "Recording {name} completion...": `bash .aether/aether-utils.sh spawn-complete "{ant_name}" "completed" "{summary}" && bash .aether/aether-utils.sh swarm-display-update "{ant_name}" "builder" "completed" "{task_description}" "Queen" '{"read":5,"grep":3,"edit":2,"bash":1}' 100 "fungus_garden" 100 && bash .aether/aether-utils.sh context-update worker-complete "{ant_name}" "completed"`
 
 **Check for total wave failure:**
@@ -770,6 +797,33 @@ Return ONLY this JSON:
 If any findings have severity `"critical"` or `"high"`:
 Run using the Bash tool with description "Flagging {finding.title}...": `bash .aether/aether-utils.sh flag-add "blocker" "{finding.title}" "{finding.description}" "chaos-testing" {phase_number} && bash .aether/aether-utils.sh activity-log "FLAG" "Chaos" "Created blocker: {finding.title}"`
 
+**Log resilience finding to midden (MEM-02):**
+
+For each critical/high finding, run using the Bash tool with description "Logging resilience finding...":
+```bash
+colony_name=$(jq -r '.session_id | split("_")[1] // "unknown"' .aether/data/COLONY_STATE.json 2>/dev/null || echo "unknown")
+phase_num=$(jq -r '.phase.number // "unknown"' .aether/data/COLONY_STATE.json 2>/dev/null || echo "unknown")
+
+# Append to build-failures.md
+cat >> .aether/midden/build-failures.md << EOF
+- timestamp: "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  phase: ${phase_num}
+  colony: "${colony_name}"
+  worker: "${chaos_name}"
+  test_context: "resilience"
+  what_failed: "${finding.title}"
+  why: "${finding.description}"
+  what_worked: null
+  severity: "${finding.severity}"
+EOF
+
+# Record as observation
+bash .aether/aether-utils.sh learning-observe \
+  "Resilience issue found: ${finding.title} (${finding.severity})" \
+  "failure" \
+  "${colony_name}" 2>/dev/null || true
+```
+
 Log chaos ant completion and update swarm display:
 Run using the Bash tool with description "Recording chaos completion...": `bash .aether/aether-utils.sh spawn-complete "{chaos_name}" "completed" "{summary}" && bash .aether/aether-utils.sh swarm-display-update "{chaos_name}" "chaos" "completed" "Resilience testing done" "Queen" '{"read":2,"grep":1,"edit":0,"bash":0}' 100 "refuse_pile" 100`
 
@@ -779,6 +833,33 @@ If the Watcher reported `verification_passed: false` or `recommendation: "fix_re
 
 For each issue in `issues_found`:
 Run using the Bash tool with description "Flagging {issue_title}...": `bash .aether/aether-utils.sh flag-add "blocker" "{issue_title}" "{issue_description}" "verification" {phase_number} && bash .aether/aether-utils.sh activity-log "FLAG" "Watcher" "Created blocker: {issue_title}"`
+
+**Log verification failure to midden (MEM-02):**
+
+After flagging each issue, run using the Bash tool with description "Logging verification failure...":
+```bash
+colony_name=$(jq -r '.session_id | split("_")[1] // "unknown"' .aether/data/COLONY_STATE.json 2>/dev/null || echo "unknown")
+phase_num=$(jq -r '.phase.number // "unknown"' .aether/data/COLONY_STATE.json 2>/dev/null || echo "unknown")
+
+# Append to test-failures.md
+cat >> .aether/midden/test-failures.md << EOF
+- timestamp: "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  phase: ${phase_num}
+  colony: "${colony_name}"
+  worker: "${watcher_name}"
+  test_context: "verification"
+  what_failed: "${issue_title}"
+  why: "${issue_description}"
+  what_worked: null
+  severity: "high"
+EOF
+
+# Record as observation
+bash .aether/aether-utils.sh learning-observe \
+  "Verification failed: ${issue_title} - ${issue_description}" \
+  "failure" \
+  "${colony_name}" 2>/dev/null || true
+```
 
 This ensures verification failures are persisted as blockers that survive context resets. Chaos Ant findings are flagged in Step 5.7.
 
