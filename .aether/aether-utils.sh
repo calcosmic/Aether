@@ -4193,11 +4193,11 @@ $updated_meta
 
     # Get threshold for this type
     case "$wisdom_type" in
-      philosophy) threshold=5 ;;
-      pattern) threshold=3 ;;
-      redirect) threshold=2 ;;
-      stack) threshold=1 ;;
-      decree) threshold=0 ;;
+      philosophy) threshold=1 ;;  # Was 5
+      pattern) threshold=1 ;;      # Was 3
+      redirect) threshold=1 ;;     # Was 2
+      stack) threshold=1 ;;        # Unchanged
+      decree) threshold=0 ;;       # Unchanged
       *) threshold=1 ;;
     esac
 
@@ -4253,12 +4253,12 @@ $updated_meta
 
     # Build proposals array using jq
     # Define thresholds per wisdom type (META-01):
-    # philosophy: 5, pattern: 3, redirect: 2, stack: 1, decree: 0
+    # philosophy: 1, pattern: 1, redirect: 1, stack: 1, decree: 0
     result=$(jq '
       def get_threshold(type):
-        if type == "philosophy" then 5
-        elif type == "pattern" then 3
-        elif type == "redirect" then 2
+        if type == "philosophy" then 1
+        elif type == "pattern" then 1
+        elif type == "redirect" then 1
         elif type == "stack" then 1
         elif type == "decree" then 0
         else 1
