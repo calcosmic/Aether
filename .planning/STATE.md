@@ -17,13 +17,13 @@
 ## Current Position
 
 **Phase**: 43-make-learning-flow
-**Plan**: 01 (complete)
-**Status**: Plan 43-01 complete — FLOW-01 verified
+**Plan**: 02 (complete)
+**Status**: Plan 43-02 complete — FLOW-02 verified
 
-**Progress**: 1/3 phases complete, 1/3 plans in Phase 43
+**Progress**: 2/3 phases complete, 2/3 plans in Phase 43
 
 ```
-[██████░░░░░░░░░░░░] 33% — v6.0 System Integration
+[████████████░░░░░░] 67% — v6.0 System Integration
 ```
 
 ---
@@ -33,7 +33,7 @@
 | Phase | Status | Plans | Completed |
 |-------|--------|-------|-----------|
 | 42. Fix Update Bugs | ✓ Complete | 2/2 | 2026-02-22 |
-| 43. Make Learning Flow | In Progress | 1/3 | 2026-02-22 |
+| 43. Make Learning Flow | In Progress | 2/3 | 2026-02-22 |
 | 44. Suggest Pheromones | Not planned | TBD | - |
 
 ---
@@ -49,12 +49,22 @@
 5. **Counter accuracy** — Only increment counters when files are actually copied (not in dry-run)
 6. **Trash safety** — Move removed files to `.aether/.trash/` instead of deleting
 7. **Protected paths** — Never touch data/, dreams/, oracle/, midden/, or QUEEN.md
+8. **One-at-a-time UI** — Present proposals individually with Approve/Reject/Skip actions
+9. **Aligned thresholds** — All learning functions use consistent threshold values
+10. **Failure type support** — Failure observations map to Patterns section in QUEEN.md
 
 ### Open Questions
 
 1. Should pheromone suggestions run before or after colony-prime?
 2. How many suggestions to show at once?
 3. Should failed observations auto-promote or require approval?
+
+### Decisions Made During Execution
+
+- **Proposal UI**: One-at-a-time presentation with [A]pprove/[R]eject/[S]kip actions
+- **Threshold values**: Uniform threshold=1 for all types except decree (threshold=0)
+- **Failure handling**: Retry prompt on QUEEN.md write failure, keep pending if declined
+- **Post-promotion**: Skipped proposals go to deferred, rejected are logged but not deferred
 
 ### Known Risks
 
@@ -66,14 +76,14 @@
 
 ## Blockers
 
-None. Plan 43-01 complete. FLOW-02 and FLOW-03 plans needed for Phase 43.
+None. Plan 43-02 complete. FLOW-03 plan needed for Phase 43.
 
 ---
 
 ## Session Continuity
 
-**Last Action**: Completed Plan 43-01 — verified learning-observations.json auto-creation during init
-**Next Action**: Run `/gsd:plan-phase 43` to create remaining plans for FLOW-02 and FLOW-03
+**Last Action**: Completed Plan 43-02 — wired learning pipeline with end-of-build promotion checking
+**Next Action**: Run `/gsd:plan-phase 43` to create FLOW-03 plan for end-to-end testing
 **Context Freshness**: Current
 
 ---
