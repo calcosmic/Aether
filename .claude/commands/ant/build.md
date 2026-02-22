@@ -456,6 +456,9 @@ Total: {N} Builders + 1 Watcher + 1 Chaos = {N+2} spawns
 
 **Every spawn must show its caste emoji.**
 
+**Add to Caste Emoji Legend:**
+- 🔌🐜 Ambassador (blue if color enabled) — external integration specialist
+
 ### Step 5.0.5: Select and Announce Workflow Pattern
 
 Examine the phase name and task descriptions. Select the first matching pattern:
@@ -500,6 +503,150 @@ For a single worker:
 ──── 🔨🐜 Spawning {ant_name} — {task_summary} ────
 ```
 
+### Step 5.1.1: Ambassador External Integration (Conditional Caste Replacement)
+
+**Check if any Wave 1 tasks involve external integration:**
+
+For each task in Wave 1, examine the task description and constraints for external integration keywords (case-insensitive):
+- "API", "SDK", "OAuth", "external service", "integration", "webhook", "third-party", "stripe", "sendgrid", "twilio", "openai", "aws", "azure", "gcp"
+
+Run using the Bash tool with description "Checking for external integration tasks...":
+```bash
+# Check phase name and task descriptions for external integration keywords
+phase_name="{phase_name_from_state}"
+task_descriptions="{concatenated task descriptions from Wave 1}"
+
+integration_keywords="api sdk oauth external integration webhook third-party stripe sendgrid twilio openai aws azure gcp"
+is_integration_phase="false"
+
+for keyword in $integration_keywords; do
+  if [[ "${phase_name,,}" == *"$keyword"* ]] || [[ "${task_descriptions,,}" == *"$keyword"* ]]; then
+    is_integration_phase="true"
+    matched_keyword="$keyword"
+    break
+  fi
+done
+
+echo "{\"is_integration_phase\": \"$is_integration_phase\", \"matched_keyword\": \"$matched_keyword\"}"
+```
+
+Parse the JSON result. If `is_integration_phase` is `"false"`:
+- Skip to standard Builder spawning (continue with existing Step 5.1 logic)
+
+If `is_integration_phase` is `"true"`:
+
+1. **Generate Ambassador name and dispatch:**
+   Run using the Bash tool with description "Naming ambassador...": `bash .aether/aether-utils.sh generate-ant-name "ambassador"` (store as `{ambassador_name}`)
+   Run using the Bash tool with description "Dispatching ambassador...": `bash .aether/aether-utils.sh spawn-log "Queen" "ambassador" "{ambassador_name}" "External integration design" && bash .aether/aether-utils.sh swarm-display-update "{ambassador_name}" "ambassador" "negotiating" "External integration design" "Queen" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 30`
+
+   Display:
+   ```
+   ━━━ 🔌🐜 A M B A S S A D O R ━━━
+   ──── 🔌🐜 Spawning {ambassador_name} — external integration design ────
+   🔌 Ambassador {ambassador_name} spawning — Designing integration for {matched_keyword}...
+   ```
+
+2. **Spawn Ambassador using Task tool:**
+   Spawn the Ambassador using Task tool with `subagent_type="aether-ambassador"`, include `description: "🔌 Ambassador {Ambassador-Name}: External integration design"` (DO NOT use run_in_background - task blocks until complete):
+
+   # FALLBACK: If "Agent type not found", use general-purpose and inject role: "You are an Ambassador Ant - integration specialist that designs external API connections."
+
+   **Ambassador Worker Prompt (CLEAN OUTPUT):**
+   ```
+   You are {Ambassador-Name}, a 🔌 Ambassador Ant.
+
+   Mission: Design external integration for Phase {id}
+
+   Phase: {phase_name}
+   Trigger keyword: {matched_keyword}
+
+   Task context:
+   - Task descriptions: {Wave 1 task descriptions}
+   - Files to be created/modified: {from task files}
+
+   Work:
+   1. Research the external service/API requirements
+   2. Design integration pattern (Client Wrapper, Circuit Breaker, Retry with Backoff)
+   3. Plan authentication method (OAuth, API keys, tokens)
+   4. Design rate limiting handling
+   5. Plan error scenarios (timeout, auth failure, rate limit)
+   6. Document required environment variables
+   7. Create integration plan for Builder execution
+
+   **Integration Patterns to Consider:**
+   - Client Wrapper: Abstract API complexity
+   - Circuit Breaker: Handle service failures
+   - Retry with Backoff: Handle transient errors
+   - Caching: Reduce API calls
+   - Queue Integration: Async processing
+
+   **Security Requirements:**
+   - API keys must use environment variables
+   - No secrets in tracked files
+   - HTTPS only
+   - Validate SSL certificates
+
+   Log activity: bash .aether/aether-utils.sh activity-log "RESEARCH" "{Ambassador-Name}" "description"
+
+   Return ONLY this JSON (no other text):
+   {
+     "ant_name": "{Ambassador-Name}",
+     "caste": "ambassador",
+     "status": "completed" | "failed" | "blocked",
+     "summary": "Integration design summary",
+     "integration_plan": {
+       "service_name": "...",
+       "authentication_method": "OAuth|API Key|Token",
+       "env_vars_required": ["API_KEY", "..."],
+       "integration_pattern": "Client Wrapper|Circuit Breaker|...",
+       "rate_limit_handling": "...",
+       "error_scenarios_covered": ["timeout", "auth_failure", "rate_limit"],
+       "files_to_create": ["..."],
+       "implementation_steps": ["..."]
+     },
+     "endpoints_integrated": [],
+     "rate_limits_handled": true,
+     "documentation_pages": 0,
+     "blockers": []
+   }
+   ```
+
+3. **Parse Ambassador JSON output:**
+   Extract from response: `integration_plan`, `env_vars_required`, `error_scenarios_covered`, `blockers`
+
+   Log completion and update swarm display:
+   Run using the Bash tool with description "Recording ambassador completion...": `bash .aether/aether-utils.sh spawn-complete "{ambassador_name}" "completed" "Integration design complete" && bash .aether/aether-utils.sh swarm-display-update "{ambassador_name}" "ambassador" "completed" "Integration design complete" "Queen" '{"read":5,"grep":3,"edit":0,"bash":2}' 100 "fungus_garden" 100`
+
+   **Display Ambassador completion line:**
+   ```
+   🔌 {Ambassador-Name}: Integration design ({integration_plan.service_name}) ✓
+   ```
+
+4. **Log integration plan to midden:**
+   Run using the Bash tool with description "Logging integration plan...":
+   ```bash
+   bash .aether/aether-utils.sh midden-write "integration" "Plan for {integration_plan.service_name}: {integration_plan.integration_pattern} pattern, auth via {integration_plan.authentication_method}" "ambassador"
+   ```
+
+   For each env var required:
+   ```bash
+   bash .aether/aether-utils.sh midden-write "integration" "Required env var: {env_var}" "ambassador"
+   ```
+
+5. **Display integration summary:**
+   ```
+   🔌 Ambassador complete — Integration plan ready for {integration_plan.service_name}
+
+   Authentication: {integration_plan.authentication_method}
+   Pattern: {integration_plan.integration_pattern}
+   Env vars: {integration_plan.env_vars_required | join: ", "}
+
+   Builder will execute this plan in Wave 1.
+   ```
+
+6. **Store integration plan for Builder injection:**
+   Store the `integration_plan` object to be injected into Builder prompts in the standard Wave 1 spawn.
+
 **First, mark build start in context:**
 Run using the Bash tool with description "Marking build start...": `bash .aether/aether-utils.sh context-update build-start {phase_id} {wave_1_worker_count} {wave_1_task_count}`
 
@@ -516,6 +663,16 @@ Task {id}: {description}
 Goal: "{colony_goal}"
 
 { archaeology_context if exists }
+
+{ integration_plan if exists }
+
+**External Integration Context (if provided by Ambassador):**
+If integration_plan is provided above, you MUST:
+1. Follow the implementation_steps in order
+2. Use the specified authentication_method
+3. Implement the integration_pattern as designed
+4. Handle all error_scenarios_covered
+5. Reference required env_vars_required (do NOT hardcode values)
 
 { prompt_section }
 
@@ -1057,16 +1214,18 @@ Collect all worker outputs and create phase summary:
   "files_created": [...],
   "files_modified": [...],
   "spawn_metrics": {
-    "spawn_count": {total workers spawned, including archaeologist if Step 4.5 fired, measurer if Step 5.5.1 fired},
+    "spawn_count": {total workers spawned, including archaeologist if Step 4.5 fired, measurer if Step 5.5.1 fired, ambassador if Step 5.1.1 fired},
     "builder_count": {N},
     "watcher_count": 1,
     "chaos_count": 1,
     "archaeologist_count": {0 or 1, conditional on Step 4.5},
     "measurer_count": {0 or 1, conditional on Step 5.5.1},
+    "ambassador_count": {0 or 1, conditional on Step 5.1.1},
     "parallel_batches": {number of waves}
   },
   "spawn_tree": {
     "{Archaeologist-Name}": {"caste": "archaeologist", "task": "pre-build history scan", "status": "completed"},
+    "{Ambassador-Name}": {"caste": "ambassador", "task": "external integration design", "status": "completed"},
     "{Builder-Name}": {"caste": "builder", "task": "...", "status": "completed"},
     "{Watcher-Name}": {"caste": "watcher", "task": "verify", "status": "completed"},
     "{Measurer-Name}": {"caste": "measurer", "task": "performance baseline", "status": "completed"},
@@ -1126,12 +1285,14 @@ Return JSON:
     "chaos_count": 1,
     "archaeologist_count": 1,
     "measurer_count": 1,
+    "ambassador_count": 1,
     "builder_count": 3,
     "parallel_batches": 2,
     "sequential_tasks": 1
   },
   "spawn_tree": {
     "Relic-8": {"caste": "archaeologist", "task": "pre-build history scan", "status": "completed", "children": {}},
+    "Diplomat-7": {"caste": "ambassador", "task": "external integration design", "status": "completed", "children": {}},
     "Hammer-42": {"caste": "builder", "task": "...", "status": "completed", "children": {}},
     "Vigil-17": {"caste": "watcher", "task": "...", "status": "completed", "children": {}},
     "Benchmark-3": {"caste": "measurer", "task": "performance baseline", "status": "completed", "children": {}},
@@ -1291,6 +1452,10 @@ Duration: {elapsed}
 
 {if measurer_ran:}
 📊 Measurer: {baseline_count} baselines established, {bottleneck_count} bottlenecks identified
+{end if}
+
+{if ambassador_ran:}
+🔌 Ambassador: Integration plan for {integration_plan.service_name} ready
 {end if}
 
 {if fail_count > 0:}
