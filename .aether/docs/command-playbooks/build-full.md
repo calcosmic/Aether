@@ -713,6 +713,16 @@ Run using the Bash tool with description "Marking build start...": `bash .aether
 
 For each Wave 1 task, use Task tool with `subagent_type="aether-builder"`, include `description: "🔨 Builder {Ant-Name}: {task_description}"` (DO NOT use run_in_background - multiple Task calls in a single message run in parallel and block until complete):
 
+**PER WORKER:** Build graveyard caution context automatically:
+- Identify explicit repo file paths from the task metadata (`files`, `hints`, `constraints`, and description when a concrete path is present).
+- For each identified file path, run using the Bash tool with description "Checking graveyard cautions for {file}...":
+  `bash .aether/aether-utils.sh grave-check "{file}"`
+- Parse each JSON result and keep only entries where `caution_level` is `high` or `low`.
+- Merge these into a single `grave_context` block for that worker.
+- If no file paths are identified, or all checks return `none`, set `grave_context` to empty.
+- If `grave_context` is non-empty, display a visible line before spawning that worker:
+  `⚰️ Graveyard caution for {ant_name}: {file_1} ({level_1}), {file_2} ({level_2})`
+
 **PER WORKER:** Run using the Bash tool with description "Preparing worker {name}...": `bash .aether/aether-utils.sh spawn-log "Queen" "builder" "{ant_name}" "{task_description}" && bash .aether/aether-utils.sh swarm-display-update "{ant_name}" "builder" "excavating" "{task_description}" "Queen" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 10 && bash .aether/aether-utils.sh context-update worker-spawn "{ant_name}" "builder" "{task_description}"`
 
 **Builder Worker Prompt (CLEAN OUTPUT):**
@@ -727,6 +737,8 @@ Goal: "{colony_goal}"
 
 { integration_plan if exists }
 
+{ grave_context if exists }
+
 **External Integration Context (if provided by Ambassador):**
 If integration_plan is provided above, you MUST:
 1. Follow the implementation_steps in order
@@ -736,6 +748,11 @@ If integration_plan is provided above, you MUST:
 5. Reference required env_vars_required (do NOT hardcode values)
 
 { prompt_section }
+
+**Graveyard Caution Context (if provided):**
+- Treat `high` caution files as unstable terrain.
+- Preserve proven behavior first, then make minimal safe edits.
+- Add tests around any high-caution file before broader refactors.
 
 **IMPORTANT:** When using the Bash tool for activity calls, always include a description parameter:
 - activity-log calls → "Logging {action}..."
@@ -1307,6 +1324,8 @@ Collect all worker outputs and create phase summary:
 For each worker that returned `status: "failed"`:
   For each file in that worker's `files_modified` or `files_created`:
 Run using the Bash tool with description "Recording failure grave...": `bash .aether/aether-utils.sh grave-add "{file}" "{ant_name}" "{task_id}" {phase} "{first blocker or summary}" && bash .aether/aether-utils.sh activity-log "GRAVE" "Queen" "Grave marker placed at {file} — {ant_name} failed: {summary}"`
+  Then display a user-visible confirmation line:
+  `⚰️ Grave recorded: {file} — {ant_name} failed ({summary})`
 
 **Error Handoff Update:**
 If workers failed, update handoff with error context for recovery:

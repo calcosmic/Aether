@@ -42,6 +42,8 @@ Collect all worker outputs and create phase summary:
 For each worker that returned `status: "failed"`:
   For each file in that worker's `files_modified` or `files_created`:
 Run using the Bash tool with description "Recording failure grave...": `bash .aether/aether-utils.sh grave-add "{file}" "{ant_name}" "{task_id}" {phase} "{first blocker or summary}" && bash .aether/aether-utils.sh activity-log "GRAVE" "Queen" "Grave marker placed at {file} — {ant_name} failed: {summary}"`
+  Then display a user-visible confirmation line:
+  `⚰️ Grave recorded: {file} — {ant_name} failed ({summary})`
 
 **Error Handoff Update:**
 If workers failed, update handoff with error context for recovery:
