@@ -15,6 +15,9 @@ const createMockFs = () => ({
   rmSync: sinon.stub(),
   chmodSync: sinon.stub(),
   accessSync: sinon.stub(),
+  renameSync: sinon.stub(),
+  statSync: sinon.stub(),
+  cpSync: sinon.stub(),
   constants: { R_OK: 4 },
 });
 
@@ -968,7 +971,7 @@ test('shouldExclude returns true for agents, commands, and rules paths', (t) => 
 // Test group: Stale-dir cleanup (DIST-06)
 // ---------------------------------------------------------------------------
 
-test('cleanupStaleAetherDirs removes existing stale directories and files', (t) => {
+test('cleanupStaleAetherDirs moves existing stale directories and files to trash', (t) => {
   const { UpdateTransaction } = t.context;
   const { mockFs } = t.context;
 
@@ -977,34 +980,42 @@ test('cleanupStaleAetherDirs removes existing stale directories and files', (t) 
     return (
       p.endsWith('.aether/agents') ||
       p.endsWith('.aether/commands') ||
-      p.endsWith('.aether/planning.md')
+      p.endsWith('.aether/planning.md') ||
+      p.includes('.trash')  // trash directory creation
     );
   });
-  mockFs.rmSync.returns(undefined);
-  mockFs.unlinkSync.returns(undefined);
+  mockFs.renameSync.returns(undefined);
+  mockFs.statSync.returns({ isDirectory: () => true });
 
   const tx = new UpdateTransaction('/test/repo');
   const result = tx.cleanupStaleAetherDirs('/test/repo');
 
-  // rmSync called for both directories
-  t.true(mockFs.rmSync.calledWith(
+  // mkdirSync called for trash directory
+  t.true(mockFs.mkdirSync.calledWith(
+    sinon.match((p) => p.includes('.trash')),
+    { recursive: true }
+  ), 'mkdirSync should be called for trash directory');
+
+  // renameSync called for all items (move to trash)
+  t.true(mockFs.renameSync.calledWith(
     sinon.match((p) => p.endsWith('.aether/agents')),
-    { recursive: true, force: true }
-  ), 'rmSync should be called for .aether/agents');
+    sinon.match((p) => p.includes('.trash') && p.includes('agents'))
+  ), 'renameSync should be called for .aether/agents');
 
-  t.true(mockFs.rmSync.calledWith(
+  t.true(mockFs.renameSync.calledWith(
     sinon.match((p) => p.endsWith('.aether/commands')),
-    { recursive: true, force: true }
-  ), 'rmSync should be called for .aether/commands');
+    sinon.match((p) => p.includes('.trash') && p.includes('commands'))
+  ), 'renameSync should be called for .aether/commands');
 
-  // unlinkSync called for the file
-  t.true(mockFs.unlinkSync.calledWith(
-    sinon.match((p) => p.endsWith('.aether/planning.md'))
-  ), 'unlinkSync should be called for .aether/planning.md');
+  t.true(mockFs.renameSync.calledWith(
+    sinon.match((p) => p.endsWith('.aether/planning.md')),
+    sinon.match((p) => p.includes('.trash') && p.includes('planning.md'))
+  ), 'renameSync should be called for .aether/planning.md');
 
   // All three should appear in cleaned
   t.is(result.cleaned.length, 3, 'cleaned should have 3 entries');
   t.is(result.failed.length, 0, 'failed should be empty');
+  t.true(result.trashDir.includes('.trash'), 'trashDir should be returned');
 });
 
 test('cleanupStaleAetherDirs is idempotent — returns empty when nothing to clean', (t) => {
@@ -1019,23 +1030,25 @@ test('cleanupStaleAetherDirs is idempotent — returns empty when nothing to cle
 
   t.is(result.cleaned.length, 0, 'cleaned should be empty');
   t.is(result.failed.length, 0, 'failed should be empty');
-  t.false(mockFs.rmSync.called, 'rmSync should not be called');
-  t.false(mockFs.unlinkSync.called, 'unlinkSync should not be called');
+  t.false(mockFs.renameSync.called, 'renameSync should not be called');
+  t.false(mockFs.mkdirSync.calledWith(sinon.match((p) => p.includes('.trash'))), 'trash mkdir should not be called');
 });
 
-test('cleanupStaleAetherDirs handles removal errors gracefully', (t) => {
+test('cleanupStaleAetherDirs handles trash move errors gracefully', (t) => {
   const { UpdateTransaction } = t.context;
   const { mockFs } = t.context;
 
-  // Only .aether/agents exists and throws on removal
+  // Only .aether/agents exists and rename fails (both attempts)
   mockFs.existsSync.callsFake((p) => p.endsWith('.aether/agents'));
-  mockFs.rmSync.throws(new Error('Permission denied'));
+  mockFs.renameSync.throws(new Error('Permission denied'));
+  mockFs.statSync.returns({ isDirectory: () => true });
+  mockFs.cpSync.throws(new Error('Copy failed'));
 
   const tx = new UpdateTransaction('/test/repo');
   const result = tx.cleanupStaleAetherDirs('/test/repo');
 
-  t.is(result.cleaned.length, 0, 'cleaned should be empty when removal fails');
+  t.is(result.cleaned.length, 0, 'cleaned should be empty when trash move fails');
   t.is(result.failed.length, 1, 'failed should have 1 entry');
-  t.true(result.failed[0].error.includes('Permission denied'), 'error message should be included');
+  t.is(result.failed[0].error, 'Failed to move to trash', 'error message should indicate trash failure');
   t.true(result.failed[0].label.includes('agents'), 'label should reference agents');
 });
