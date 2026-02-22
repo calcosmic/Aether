@@ -5042,7 +5042,7 @@ $updated_meta
     ;;
 
   learning-approve-proposals)
-    # Orchestrate full approval workflow: display, select, promote, defer, undo
+    # Orchestrate full approval workflow: one-at-a-time display with Approve/Reject/Skip
     # Usage: learning-approve-proposals [--verbose] [--dry-run] [--yes] [--deferred]
     # Returns: JSON summary {promoted, deferred, failed, undo_offered}
 
@@ -5088,181 +5088,191 @@ $updated_meta
       echo "📦 Reviewing deferred proposals..."
       echo ""
     else
-      # Get proposals from learning-select-proposals
-      # Extract JSON output (from first { to closing })
-      selection_result=$(bash "$0" learning-select-proposals ${verbose:+--verbose} ${dry_run:+--dry-run} ${skip_confirm:+--yes} 2>/dev/null | awk '/^\{/ {p=1} p {print} /^\}\}$/ {exit}')
+      # Get proposals directly from learning-check-promotion
+      proposals_result=$(bash "$0" learning-check-promotion 2>/dev/null || echo '{"proposals":[]}')
+      proposals_json=$(echo "$proposals_result" | jq '{proposals: .result.proposals // []}')
 
       # Check if there were any proposals
-      if echo "$selection_result" | jq -e '.result.action == "none"' > /dev/null 2>&1; then
-        reason=$(echo "$selection_result" | jq -r '.result.reason // "unknown"')
-        if [[ "$reason" == "no_observations_file" ]]; then
-          echo "No observations file found."
-        elif [[ "$reason" == "no_proposals" ]]; then
-          echo "No proposals to review."
-        fi
-        json_ok '{"promoted":0,"deferred":0,"failed":null,"undo_offered":false}'
-        exit 0
-      fi
-
-      # Extract data from selection result
-      selected_indices=$(echo "$selection_result" | jq -r '.result.selected // []')
-      deferred_indices=$(echo "$selection_result" | jq -r '.result.deferred // []')
-      action=$(echo "$selection_result" | jq -r '.result.action // "select"')
-      proposals_json=$(echo "$selection_result" | jq -r '.result.proposals // [] | {proposals: .}')
-      confirmed=$(echo "$selection_result" | jq -r '.result.confirmed // "true"')
-
-      # Handle defer_all action
-      if [[ "$action" == "defer_all" ]]; then
-        # All proposals go to deferred
-        all_proposals=$(echo "$proposals_json" | jq '.proposals')
-        if [[ "$dry_run" == "false" ]]; then
-          defer_result=$(echo "$all_proposals" | bash "$0" learning-defer-proposals)
-          deferred_count=$(echo "$defer_result" | jq -r '.result.new // 0')
-          echo "All $deferred_count proposal(s) deferred for later review."
-        else
-          echo "Dry run: would defer all proposals"
-        fi
-        json_ok '{"promoted":0,"deferred":'$(echo "$all_proposals" | jq 'length')',"failed":null,"undo_offered":false}'
-        exit 0
-      fi
-
-      # Check if user cancelled or made no selection
-      selected_count=$(echo "$selected_indices" | jq 'length')
-      if [[ "$selected_count" -eq 0 ]]; then
-        echo "No proposals selected. All deferred for later review."
-        # Move all to deferred
-        all_proposals=$(echo "$proposals_json" | jq '.proposals')
-        if [[ "$dry_run" == "false" ]]; then
-          echo "$all_proposals" | bash "$0" learning-defer-proposals >/dev/null 2>&1
-        fi
-        json_ok '{"promoted":0,"deferred":'$(echo "$all_proposals" | jq 'length')',"failed":null,"undo_offered":false}'
-        exit 0
-      fi
-    fi
-
-    # For deferred mode, we need to display and get selection
-    if [[ "$deferred_mode" == "true" ]]; then
-      # Display deferred proposals
-      if [[ "$verbose" == "true" ]]; then
-        bash "$0" learning-display-proposals --verbose
-      else
-        bash "$0" learning-display-proposals
-      fi
-
-      # Get proposal count
       proposal_count=$(echo "$proposals_json" | jq '.proposals | length')
       if [[ "$proposal_count" -eq 0 ]]; then
-        echo "No deferred proposals available."
         json_ok '{"promoted":0,"deferred":0,"failed":null,"undo_offered":false}'
         exit 0
       fi
-
-      # Capture selection
-      if [[ "$dry_run" == "true" ]]; then
-        selection=$(seq 1 $proposal_count | tr '\n' ' ')
-        echo "Dry run: would select all $proposal_count proposals"
-      else
-        echo -n "Enter numbers to select (e.g., '1 3 5'), or press Enter to keep deferred: "
-        read -r selection
-      fi
-
-      # Parse selection
-      if [[ -z "$selection" ]]; then
-        echo "No selection made. Proposals remain deferred."
-        json_ok '{"promoted":0,"deferred":'"$proposal_count"',"failed":null,"undo_offered":false}'
-        exit 0
-      fi
-
-      parse_result=$(bash "$0" parse-selection "$selection" "$proposal_count")
-      if ! echo "$parse_result" | jq -e '.ok' >/dev/null 2>&1; then
-        echo "Invalid selection. Proposals remain deferred."
-        json_ok '{"promoted":0,"deferred":'"$proposal_count"',"failed":null,"undo_offered":false}'
-        exit 0
-      fi
-
-      selected_indices=$(echo "$parse_result" | jq -r '.result.selected // []')
-      selected_count=$(echo "$selected_indices" | jq 'length')
-
-      if [[ "$selected_count" -eq 0 ]]; then
-        echo "No valid selection. Proposals remain deferred."
-        json_ok '{"promoted":0,"deferred":'"$proposal_count"',"failed":null,"undo_offered":false}'
-        exit 0
-      fi
-
-      # The unselected in deferred mode stay in deferred
-      all_indices=$(seq 0 $((proposal_count - 1)) | jq -R . | jq -s .)
-      deferred_indices=$(echo "$all_indices" | jq --argjson selected "$selected_indices" '[.[] | select(. as $i | $selected | index($i) | not)]')
     fi
 
-    # Execute promotions
+    # Get proposal count
+    proposal_count=$(echo "$proposals_json" | jq '.proposals | length')
+    if [[ "$proposal_count" -eq 0 ]]; then
+      echo "No proposals available."
+      json_ok '{"promoted":0,"deferred":0,"failed":null,"undo_offered":false}'
+      exit 0
+    fi
+
+    # Define wisdom type emojis and names for display
+    declare -A type_emojis
+    declare -A type_names
+    type_emojis=(
+      ["philosophy"]="📜"
+      ["pattern"]="🧭"
+      ["redirect"]="⚠️"
+      ["stack"]="🔧"
+      ["decree"]="🏛️"
+      ["failure"]="❌"
+    )
+    type_names=(
+      ["philosophy"]="Philosophy"
+      ["pattern"]="Pattern"
+      ["redirect"]="Redirect"
+      ["stack"]="Stack Wisdom"
+      ["decree"]="Decree"
+      ["failure"]="Failure"
+    )
+
+    # Arrays to track results
+    approved_proposals=()
+    rejected_proposals=()
+    skipped_proposals=()
+
+    # Process proposals one at a time
+    echo ""
+    echo "🧠 Wisdom Promotion Review"
+    echo "══════════════════════════"
+    echo ""
+    echo "$proposal_count proposal(s) ready for review"
+    echo ""
+
+    for ((i=0; i<proposal_count; i++)); do
+      proposal=$(echo "$proposals_json" | jq ".proposals[$i]")
+      ptype=$(echo "$proposal" | jq -r '.wisdom_type')
+      content=$(echo "$proposal" | jq -r '.content')
+      count=$(echo "$proposal" | jq -r '.observation_count // 1')
+      threshold=$(echo "$proposal" | jq -r '.threshold // 1')
+
+      emoji="${type_emojis[$ptype]:-📝}"
+      name="${type_names[$ptype]:-$ptype}"
+
+      # Display proposal
+      echo "───────────────────────────────────────────────────"
+      echo "Proposal $((i+1)) of $proposal_count"
+      echo "───────────────────────────────────────────────────"
+      echo ""
+      echo "$emoji $name (observed $count time(s), threshold: $threshold)"
+      echo ""
+      echo "$content"
+      echo ""
+      echo "───────────────────────────────────────────────────"
+
+      # Handle dry-run mode
+      if [[ "$dry_run" == "true" ]]; then
+        echo "Dry run: would approve"
+        approved_proposals+=("$proposal")
+        echo ""
+        continue
+      fi
+
+      # Handle --yes mode (auto-approve all)
+      if [[ "$skip_confirm" == "true" ]]; then
+        approved_proposals+=("$proposal")
+        echo "✓ Auto-approved (--yes mode)"
+        echo ""
+        continue
+      fi
+
+      # Prompt for action
+      echo -n "[A]pprove  [R]eject  [S]kip  Your choice: "
+      read -r choice
+
+      case "$choice" in
+        [Aa]|"approve"|"Approve")
+          approved_proposals+=("$proposal")
+          echo "✓ Approved"
+          ;;
+        [Rr]|"reject"|"Reject")
+          rejected_proposals+=("$proposal")
+          echo "✗ Rejected"
+          ;;
+        [Ss]|""|"skip"|"Skip")
+          skipped_proposals+=("$proposal")
+          echo "→ Skipped"
+          ;;
+        *)
+          # Invalid input - default to skip
+          skipped_proposals+=("$proposal")
+          echo "→ Skipped (invalid input)"
+          ;;
+      esac
+      echo ""
+    done
+
+    # Execute promotions for approved proposals
     promoted_count=0
     failed_item=""
     promoted_items=()
 
-    if [[ "$dry_run" == "false" ]]; then
+    if [[ ${#approved_proposals[@]} -gt 0 ]]; then
       echo ""
-      echo "Promoting $selected_count observation(s)..."
+      echo "Promoting ${#approved_proposals[@]} observation(s)..."
       echo ""
-    fi
 
-    # Build array of selected proposals
-    selected_proposals=()
-    while IFS= read -r idx; do
-      [[ -z "$idx" ]] && continue
-      proposal=$(echo "$proposals_json" | jq -r ".proposals[$idx]")
-      selected_proposals+=("$proposal")
-    done < <(echo "$selected_indices" | jq -r '.[]')
+      for proposal in "${approved_proposals[@]}"; do
+        ptype=$(echo "$proposal" | jq -r '.wisdom_type')
+        content=$(echo "$proposal" | jq -r '.content')
 
-    # Promote each selected proposal
-    for proposal in "${selected_proposals[@]}"; do
-      ptype=$(echo "$proposal" | jq -r '.wisdom_type')
-      content=$(echo "$proposal" | jq -r '.content')
+        if [[ "$dry_run" == "true" ]]; then
+          echo "Dry run: would promote $ptype: \"$content\""
+          ((promoted_count++))
+          promoted_items+=("$proposal")
+          continue
+        fi
 
-      if [[ "$dry_run" == "true" ]]; then
-        echo "Dry run: would promote $ptype: \"$content\""
+        # Call queen-promote
+        promote_result=$(bash "$0" queen-promote "$ptype" "$content" "$colony_name" 2>&1) || {
+          echo "✗ Failed to promote: $content"
+          echo "  Error: $promote_result"
+          failed_item="$content"
+          # Prompt for retry on failure
+          echo ""
+          echo -n "Write to QUEEN.md failed. Retry? (y/n): "
+          read -r retry_response
+          if [[ "$retry_response" =~ ^[Yy]$ ]]; then
+            # Retry once
+            promote_result=$(bash "$0" queen-promote "$ptype" "$content" "$colony_name" 2>&1) || {
+              echo "✗ Retry failed. Keeping proposal pending."
+              skipped_proposals+=("$proposal")
+              continue
+            }
+          else
+            echo "Skipping this proposal. It will remain pending."
+            skipped_proposals+=("$proposal")
+            continue
+          fi
+        }
+
+        echo "✓ Promoted ${ptype^}: \"$content\""
         ((promoted_count++))
         promoted_items+=("$proposal")
-        continue
-      fi
+      done
+    fi
 
-      # Call queen-promote
-      promote_result=$(bash "$0" queen-promote "$ptype" "$content" "$colony_name" 2>&1) || {
-        echo "✗ Failed to promote: $content"
-        echo "  Error: $promote_result"
-        failed_item="$content"
-        break
-      }
-
-      echo "✓ Promoted ${ptype^}: \"$content\""
-      ((promoted_count++))
-      promoted_items+=("$proposal")
-    done
-
-    # Handle unselected proposals (defer them)
-    deferred_count=0
-    if [[ "$dry_run" == "false" ]] && [[ -n "$deferred_indices" ]]; then
-      deferred_count=$(echo "$deferred_indices" | jq 'length')
-      if [[ "$deferred_count" -gt 0 ]]; then
-        # Build array of deferred proposals
-        deferred_proposals=()
-        while IFS= read -r idx; do
-          [[ -z "$idx" ]] && continue
-          proposal=$(echo "$proposals_json" | jq -r ".proposals[$idx]")
-          deferred_proposals+=("$proposal")
-        done < <(echo "$deferred_indices" | jq -r '.[]')
-
-        if [[ ${#deferred_proposals[@]} -gt 0 ]]; then
-          # Convert to JSON array and defer
-          deferred_json=$(printf '%s\n' "${deferred_proposals[@]}" | jq -s '.')
-          echo "$deferred_json" | bash "$0" learning-defer-proposals >/dev/null 2>&1
-        fi
-      fi
+    # Handle deferred proposals (skipped ones go to deferred)
+    deferred_count=${#skipped_proposals[@]}
+    if [[ "$dry_run" == "false" ]] && [[ $deferred_count -gt 0 ]]; then
+      # Convert skipped proposals to JSON array and defer
+      skipped_json=$(printf '%s\n' "${skipped_proposals[@]}" | jq -s '.')
+      echo "$skipped_json" | bash "$0" learning-defer-proposals >/dev/null 2>&1
     fi
 
     # Log activity
     if [[ "$dry_run" == "false" ]]; then
-      bash "$0" activity-log "PROMOTED" "Queen" "Promoted $promoted_count observation(s), deferred $deferred_count"
+      bash "$0" activity-log "PROMOTED" "Queen" "Promoted $promoted_count observation(s), deferred $deferred_count, rejected ${#rejected_proposals[@]}"
     fi
+
+    # Display summary
+    echo ""
+    echo "═══════════════════════════════════════════════════"
+    echo "Summary: $promoted_count approved, ${#rejected_proposals[@]} rejected, $deferred_count skipped"
+    echo "═══════════════════════════════════════════════════"
+    echo ""
 
     # Offer undo if promotions succeeded
     undo_offered=false
@@ -5274,7 +5284,6 @@ $updated_meta
       promoted_json=$(printf '%s\n' "${promoted_items[@]}" | jq -s '.')
       jq -n --argjson items "$promoted_json" --arg ts "$(date +%s)" '{promoted: $items, timestamp: ($ts | tonumber)}' > "$undo_file"
 
-      echo ""
       echo -n "Undo these promotions? (y/n): "
       read -r undo_response
 
@@ -5297,9 +5306,10 @@ $updated_meta
     result=$(jq -n \
       --argjson promoted "$promoted_count" \
       --argjson deferred "$deferred_count" \
+      --argjson rejected "${#rejected_proposals[@]}" \
       --arg failed "${failed_item:-null}" \
       --argjson undo "$undo_offered" \
-      '{promoted: $promoted, deferred: $deferred, failed: $failed, undo_offered: $undo}')
+      '{promoted: $promoted, deferred: $deferred, rejected: $rejected, failed: $failed, undo_offered: $undo}')
 
     json_ok "$result"
     ;;
