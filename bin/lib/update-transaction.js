@@ -743,28 +743,30 @@ class UpdateTransaction {
       const srcPath = path.join(srcDir, relPath);
       const destPath = path.join(destDir, relPath);
 
+      // Hash comparison: determine if copy is needed (runs for both dry-run and actual)
+      let shouldCopy = true;
+      if (fs.existsSync(destPath)) {
+        const srcHash = this.hashFileSync(srcPath);
+        const destHash = this.hashFileSync(destPath);
+        if (srcHash === destHash) {
+          shouldCopy = false;
+          skipped++;
+        }
+      }
+
       if (!dryRun) {
         fs.mkdirSync(path.dirname(destPath), { recursive: true });
 
-        // Hash comparison
-        let shouldCopy = true;
-        if (fs.existsSync(destPath)) {
-          const srcHash = this.hashFileSync(srcPath);
-          const destHash = this.hashFileSync(destPath);
-          if (srcHash === destHash) {
-            shouldCopy = false;
-            skipped++;
-          }
-        }
-
         if (shouldCopy) {
-          fs.copyFileSync(srcPath, destPath);
-          if (relPath.endsWith('.sh')) {
-            fs.chmodSync(destPath, 0o755);
-          }
+          this.copyFileAtomic(srcPath, destPath);
+          copied++;  // FIX: Only increment when actually copied
+        }
+      } else {
+        // dry-run: count files that WOULD be copied
+        if (shouldCopy) {
+          copied++;  // Count only files that would actually be copied
         }
       }
-      copied++;
     }
 
     // Cleanup: remove files in dest that aren't in source
