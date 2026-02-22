@@ -618,10 +618,7 @@ class UpdateTransaction {
           }
 
           if (shouldCopy) {
-            fs.copyFileSync(srcPath, destPath);
-            if (relPath.endsWith('.sh')) {
-              fs.chmodSync(destPath, 0o755);
-            }
+            this.copyFileAtomic(srcPath, destPath);
             copied++;
           }
         } catch (err) {
