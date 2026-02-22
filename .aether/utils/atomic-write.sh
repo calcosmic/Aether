@@ -168,12 +168,17 @@ create_backup() {
 # Arguments: base_name
 rotate_backups() {
     local base_name="$1"
-    local backups=$(ls -t "${BACKUP_DIR}/${base_name}".*.backup 2>/dev/null | wc -l)
 
-    if [ "$backups" -gt "$MAX_BACKUPS" ]; then
-        ls -t "${BACKUP_DIR}/${base_name}".*.backup 2>/dev/null \
+    # Use find with -print0 for safe handling of paths with spaces
+    local backup_count
+    backup_count=$(find "$BACKUP_DIR" -maxdepth 1 -name "${base_name}.*.backup" -type f 2>/dev/null | wc -l | tr -d ' ')
+
+    if [ "$backup_count" -gt "$MAX_BACKUPS" ]; then
+        # Delete oldest backups beyond MAX_BACKUPS using find for space-safe handling
+        find "$BACKUP_DIR" -maxdepth 1 -name "${base_name}.*.backup" -type f -print0 2>/dev/null \
+            | xargs -0 ls -t 2>/dev/null \
             | tail -n +$((MAX_BACKUPS + 1)) \
-            | while IFS= read -r file; do rm -f "$file"; done
+            | while IFS= read -r file; do rm -f "$file" 2>/dev/null || true; done
     fi
 }
 

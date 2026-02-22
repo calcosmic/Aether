@@ -47,12 +47,14 @@ CURRENT_LOCK=${CURRENT_LOCK:-""}
 : "${E_RESOURCE_NOT_FOUND:=E_RESOURCE_NOT_FOUND}"
 
 # Fallback atomic_write if not sourced (uses temp file + mv for true atomicity)
+# Uses TEMP_DIR to avoid issues with paths containing spaces in $TMPDIR
 if ! type atomic_write &>/dev/null; then
   atomic_write() {
     local target="$1"
     local content="$2"
-    local temp
-    temp=$(mktemp)
+    local temp_dir="${TEMP_DIR:-${AETHER_ROOT:-$PWD}/.aether/temp}"
+    mkdir -p "$temp_dir" 2>/dev/null || true
+    local temp="${temp_dir}/atomic-write.$$.$(date +%s%N).tmp"
     echo "$content" > "$temp"
     mv "$temp" "$target"
   }
