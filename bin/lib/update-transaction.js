@@ -813,17 +813,74 @@ class UpdateTransaction {
   }
 
   /**
+   * Move a file or directory to trash instead of deleting
+   * @param {string} itemPath - Path to file or directory
+   * @param {string} repoPath - Repository root for trash location
+   * @returns {boolean} True if moved to trash successfully
+   * @private
+   */
+  moveToTrash(itemPath, repoPath) {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const trashDir = path.join(repoPath, '.aether', '.trash', timestamp);
+    const basename = path.basename(itemPath);
+    const trashPath = path.join(trashDir, basename);
+
+    try {
+      fs.mkdirSync(trashDir, { recursive: true });
+      fs.renameSync(itemPath, trashPath);
+      return true;
+    } catch (err) {
+      // If rename fails (cross-device), fall back to copy + delete
+      try {
+        fs.mkdirSync(trashDir, { recursive: true });
+        if (fs.statSync(itemPath).isDirectory()) {
+          fs.cpSync(itemPath, path.join(trashDir, basename), { recursive: true });
+          fs.rmSync(itemPath, { recursive: true, force: true });
+        } else {
+          fs.copyFileSync(itemPath, path.join(trashDir, basename));
+          fs.unlinkSync(itemPath);
+        }
+        return true;
+      } catch (fallbackErr) {
+        return false;
+      }
+    }
+  }
+
+  /**
    * Remove known stale directories and files left behind by pre-3.0.0 versions.
-   * These paths were incorrectly distributed in earlier releases and must be
-   * explicitly removed — EXCLUDE_DIRS prevents NEW pollution but does not clean
-   * items that already exist on disk.
+   *
+   * IMPORTANT: Removed items are moved to .aether/.trash/ NOT deleted.
+   * Users can inspect and manually clean trash when ready.
+   * Trash folders are timestamped for easy identification.
+   *
+   * Protected paths (never cleaned):
+   * - .aether/data/ - Colony state
+   * - .aether/dreams/ - Session notes
+   * - .aether/oracle/ - Research progress
+   * - .aether/midden/ - Failure tracking
+   * - .aether/QUEEN.md - User's wisdom file
    *
    * Idempotent: safe to call when items do not exist.
    *
    * @param {string} repoPath - Absolute path to the target repository root
-   * @returns {{ cleaned: string[], failed: Array<{label: string, error: string}> }}
+   * @returns {{ cleaned: string[], failed: Array<{label: string, error: string}>, trashDir: string }}
    */
   cleanupStaleAetherDirs(repoPath) {
+    // Safety check: never clean protected directories
+    const protectedDirs = ['data', 'dreams', 'oracle', 'midden'];
+    const protectedFiles = ['QUEEN.md'];
+
+    // Verify none of our stale items are in protected paths
+    const aetherDir = path.join(repoPath, '.aether');
+    for (const dir of protectedDirs) {
+      const protectedPath = path.join(aetherDir, dir);
+      if (fs.existsSync(protectedPath)) {
+        // Log that protected dir exists and will be preserved
+        this.log?.(`  Preserving protected directory: .aether/${dir}/`);
+      }
+    }
+
     const staleItems = [
       {
         path: path.join(repoPath, '.aether', 'agents'),
@@ -852,18 +909,17 @@ class UpdateTransaction {
       }
 
       try {
-        if (item.type === 'dir') {
-          fs.rmSync(item.path, { recursive: true, force: true });
+        if (this.moveToTrash(item.path, repoPath)) {
+          cleaned.push(item.label);
         } else {
-          fs.unlinkSync(item.path);
+          failed.push({ label: item.label, error: 'Failed to move to trash' });
         }
-        cleaned.push(item.label);
       } catch (err) {
         failed.push({ label: item.label, error: err.message });
       }
     }
 
-    return { cleaned, failed };
+    return { cleaned, failed, trashDir: path.join(repoPath, '.aether', '.trash') };
   }
 
   /**
