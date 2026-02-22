@@ -7992,8 +7992,8 @@ EOF
     analyzed_count=0
     patterns_found=0
 
-    # Define exclusions
-    exclude_pattern="node_modules|.aether|dist|build|\\.git|coverage|\\.min\\.js"
+    # Define exclusions (use word boundaries to avoid matching partial paths)
+    exclude_pattern="node_modules/|/.aether/|/dist/|/build/|/\\.git/|/coverage/|\\.min\\.js"
 
     # Find files to analyze (respecting exclusions)
     while IFS= read -r file || [[ -n "$file" ]]; do
@@ -8263,13 +8263,15 @@ EOF
       exit 0
     fi
 
-    # Define type emojis
-    declare -A type_emojis
-    type_emojis=(
-      ["FOCUS"]="🎯"
-      ["REDIRECT"]="🚫"
-      ["FEEDBACK"]="💬"
-    )
+    # Define type emojis (using function for bash 3.2 compatibility)
+    get_type_emoji() {
+      case "$1" in
+        FOCUS) echo "🎯" ;;
+        REDIRECT) echo "🚫" ;;
+        FEEDBACK) echo "💬" ;;
+        *) echo "📝" ;;
+      esac
+    }
 
     # Arrays to track results
     approved_suggestions=()
@@ -8277,14 +8279,14 @@ EOF
     skipped_suggestions=()
     signals_created=()
 
-    # Display header
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "   S U G G E S T E D   P H E R O M O N E S"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
-    echo "Based on code analysis, the colony suggests these signals:"
-    echo ""
+    # Display header (to stderr so stdout is valid JSON)
+    echo "" >&2
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
+    echo "   S U G G E S T E D   P H E R O M O N E S" >&2
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
+    echo "" >&2
+    echo "Based on code analysis, the colony suggests these signals:" >&2
+    echo "" >&2
 
     # Process suggestions one at a time
     for ((i=0; i<suggestion_count; i++)); do
@@ -8296,52 +8298,52 @@ EOF
       priority=$(echo "$suggestion" | jq -r '.priority // 5')
       hash=$(echo "$suggestion" | jq -r '.hash')
 
-      emoji="${type_emojis[$stype]:-📝}"
+      emoji=$(get_type_emoji "$stype")
 
-      # Display suggestion
-      echo "───────────────────────────────────────────────────"
-      echo "Suggestion $((i+1)) of $suggestion_count"
-      echo "───────────────────────────────────────────────────"
-      echo ""
-      echo "$emoji $stype (priority: $priority/10)"
-      echo ""
-      echo "$content"
-      echo ""
-      echo "Detected in: $file"
-      echo "Reason: $reason"
-      echo ""
-      echo "───────────────────────────────────────────────────"
+      # Display suggestion (to stderr so stdout is valid JSON)
+      echo "───────────────────────────────────────────────────" >&2
+      echo "Suggestion $((i+1)) of $suggestion_count" >&2
+      echo "───────────────────────────────────────────────────" >&2
+      echo "" >&2
+      echo "$emoji $stype (priority: $priority/10)" >&2
+      echo "" >&2
+      echo "$content" >&2
+      echo "" >&2
+      echo "Detected in: $file" >&2
+      echo "Reason: $reason" >&2
+      echo "" >&2
+      echo "───────────────────────────────────────────────────" >&2
 
       # Handle dry-run mode
       if [[ "$dry_run" == "true" ]]; then
-        echo "Dry run: would approve"
+        echo "Dry run: would approve" >&2
         approved_suggestions+=("$suggestion")
-        echo ""
+        echo "" >&2
         continue
       fi
 
       # Handle --yes mode (auto-approve all)
       if [[ "$skip_confirm" == "true" ]]; then
         approved_suggestions+=("$suggestion")
-        echo "✓ Auto-approved (--yes mode)"
-        echo ""
+        echo "✓ Auto-approved (--yes mode)" >&2
+        echo "" >&2
         continue
       fi
 
-      # Prompt for action
-      echo -n "[A]pprove  [R]eject  [S]kip  [D]ismiss All  Your choice: "
+      # Prompt for action (to stderr so stdout is valid JSON)
+      echo -n "[A]pprove  [R]eject  [S]kip  [D]ismiss All  Your choice: " >&2
       read -r choice
 
       case "$choice" in
         [Aa]|"approve"|"Approve")
           approved_suggestions+=("$suggestion")
-          echo "✓ Approved"
+          echo "✓ Approved" >&2
           ;;
         [Rr]|"reject"|"Reject")
           rejected_suggestions+=("$suggestion")
           # Record hash to prevent re-suggestion
           bash "$0" suggest-record "$hash" "$stype" >/dev/null 2>&1
-          echo "✗ Rejected"
+          echo "✗ Rejected" >&2
           ;;
         [Dd]|"dismiss"|"Dismiss"|"dismiss all"|"Dismiss All")
           # Dismiss all remaining suggestions
@@ -8349,28 +8351,28 @@ EOF
             remaining=$(echo "$suggestions_json" | jq ".[$j]")
             skipped_suggestions+=("$remaining")
           done
-          echo "→ Dismissed all remaining suggestions"
+          echo "→ Dismissed all remaining suggestions" >&2
           break
           ;;
         [Ss]|""|"skip"|"Skip")
           skipped_suggestions+=("$suggestion")
-          echo "→ Skipped"
+          echo "→ Skipped" >&2
           ;;
         *)
           # Invalid input - default to skip
           skipped_suggestions+=("$suggestion")
-          echo "→ Skipped (invalid input)"
+          echo "→ Skipped (invalid input)" >&2
           ;;
       esac
-      echo ""
+      echo "" >&2
     done
 
     # Execute approvals for approved suggestions
     approved_count=0
     if [[ ${#approved_suggestions[@]} -gt 0 ]]; then
-      echo ""
-      echo "Creating pheromone signals for ${#approved_suggestions[@]} approved suggestion(s)..."
-      echo ""
+      echo "" >&2
+      echo "Creating pheromone signals for ${#approved_suggestions[@]} approved suggestion(s)..." >&2
+      echo "" >&2
 
       for suggestion in "${approved_suggestions[@]}"; do
         stype=$(echo "$suggestion" | jq -r '.type')
@@ -8379,7 +8381,7 @@ EOF
         hash=$(echo "$suggestion" | jq -r '.hash')
 
         if [[ "$dry_run" == "true" ]]; then
-          echo "Dry run: would create $stype signal: \"$content\""
+          echo "Dry run: would create $stype signal: \"$content\"" >&2
           ((approved_count++))
           signals_created+=("dry_run_sig_$approved_count")
           continue
@@ -8391,14 +8393,14 @@ EOF
         if echo "$signal_result" | jq -e '.ok' >/dev/null 2>&1; then
           signal_id=$(echo "$signal_result" | jq -r '.result.signal_id // "unknown"')
           signals_created+=("$signal_id")
-          echo "✓ Added $stype signal"
+          echo "✓ Added $stype signal" >&2
 
           # Record hash to prevent duplicates
           bash "$0" suggest-record "$hash" "$stype" >/dev/null 2>&1
           ((approved_count++))
         else
-          echo "✗ Failed to create signal: $content"
-          echo "  Error: $(echo "$signal_result" | jq -r '.error.message // "Unknown error"')"
+          echo "✗ Failed to create signal: $content" >&2
+          echo "  Error: $(echo "$signal_result" | jq -r '.error.message // "Unknown error"')" >&2
         fi
       done
     fi
@@ -8409,12 +8411,12 @@ EOF
     # Skipped suggestions (not recorded, may suggest again)
     skipped_count=${#skipped_suggestions[@]}
 
-    # Display summary
-    echo ""
-    echo "═══════════════════════════════════════════════════"
-    echo "Summary: $approved_count approved, $rejected_count rejected, $skipped_count skipped"
-    echo "═══════════════════════════════════════════════════"
-    echo ""
+    # Display summary (to stderr so stdout is valid JSON)
+    echo "" >&2
+    echo "═══════════════════════════════════════════════════" >&2
+    echo "Summary: $approved_count approved, $rejected_count rejected, $skipped_count skipped" >&2
+    echo "═══════════════════════════════════════════════════" >&2
+    echo "" >&2
 
     # Build result with signals_created as JSON array (handle empty array case)
     if [[ ${#signals_created[@]} -gt 0 ]]; then
@@ -8459,7 +8461,8 @@ EOF
       done
     fi
 
-    echo "Suggestions dismissed. Run with --yes to auto-approve in future."
+    # Output message to stderr so stdout is valid JSON only
+    echo "Suggestions dismissed. Run with --yes to auto-approve in future." >&2
 
     # Build result with hashes as JSON array (handle empty array case)
     if [[ ${#hashes_recorded[@]} -gt 0 ]]; then
