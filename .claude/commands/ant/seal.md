@@ -164,6 +164,108 @@ Update COLONY_STATE.json:
 
 Run `bash .aether/aether-utils.sh validate-state colony` after write.
 
+### Step 5.5: Documentation Coverage Audit
+
+Before writing the seal document, spawn a Chronicler to survey documentation coverage.
+
+**Generate Chronicler name and dispatch:**
+```bash
+# Generate unique chronicler name
+chronicler_name=$(bash .aether/aether-utils.sh generate-ant-name "chronicler")
+
+# Log spawn and update swarm display
+bash .aether/aether-utils.sh spawn-log "Queen" "chronicler" "$chronicler_name" "Documentation coverage audit"
+bash .aether/aether-utils.sh swarm-display-update "$chronicler_name" "chronicler" "surveying" "Documentation coverage audit" "Queen" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 25
+```
+
+**Display:**
+```
+━━━ 📝🐜 C H R O N I C L E R ━━━
+──── 📝🐜 Spawning {chronicler_name} — documentation coverage audit ────
+📝 Chronicler {chronicler_name} spawning — Surveying documentation coverage...
+```
+
+**Spawn Chronicler using Task tool:**
+Spawn the Chronicler using Task tool with `subagent_type="aether-chronicler"`:
+
+```xml
+<task>
+  <description>📝 Chronicler {chronicler_name}: Documentation coverage audit</description>
+  <prompt>
+You are {chronicler_name}, a 📝 Chronicler Ant.
+
+Mission: Documentation coverage audit before seal ceremony
+
+Survey the following documentation types:
+- README.md (project overview, quick start)
+- API documentation (endpoints, parameters, responses)
+- Guides (tutorials, how-tos, best practices)
+- Changelogs (version history, release notes)
+- Code comments (JSDoc, TSDoc inline documentation)
+- Architecture docs (system design, decisions)
+
+Work:
+1. Check if README.md exists and covers: installation, usage, examples
+2. Look for docs/ directory and survey guide coverage
+3. Check for API documentation (OpenAPI, README sections, etc.)
+4. Verify CHANGELOG.md exists and has recent entries
+5. Sample source files for inline documentation coverage
+6. Identify documentation gaps (missing, outdated, incomplete)
+
+**IMPORTANT:** You are strictly read-only. Do not modify any files.
+
+Log activity: bash .aether/aether-utils.sh activity-log "SURVEYING" "{chronicler_name}" "description"
+
+Return ONLY this JSON (no other text):
+{
+  "ant_name": "{chronicler_name}",
+  "caste": "chronicler",
+  "status": "completed" | "failed" | "blocked",
+  "summary": "What you surveyed and found",
+  "documentation_created": [],
+  "documentation_updated": [],
+  "pages_documented": 0,
+  "code_examples_verified": [],
+  "coverage_percent": 0,
+  "gaps_identified": [
+    {"type": "README|API|Guide|Changelog|Comments|Architecture", "severity": "high|medium|low", "description": "...", "location": "..."}
+  ],
+  "blockers": []
+}
+  </prompt>
+</task>
+```
+
+**FALLBACK:** If "Agent type not found", use general-purpose agent and inject role: "You are a Chronicler Ant - documentation specialist that surveys and identifies documentation gaps."
+
+**Parse Chronicler JSON output:**
+Extract from response: `coverage_percent`, `gaps_identified`, `pages_documented`
+
+Log completion and update swarm display:
+```bash
+bash .aether/aether-utils.sh spawn-complete "$chronicler_name" "completed" "Documentation audit complete"
+bash .aether/aether-utils.sh swarm-display-update "$chronicler_name" "chronicler" "completed" "Documentation audit complete" "Queen" '{"read":5,"grep":3,"edit":0,"bash":1}' 100 "fungus_garden" 100
+```
+
+**Display Chronicler completion line:**
+```
+📝 {chronicler_name}: Documentation coverage audit ({pages_documented} pages, {coverage_percent}% coverage) ✓
+```
+
+**Log gaps to midden (non-blocking):**
+For each gap in `gaps_identified` with severity "high" or "medium":
+```bash
+bash .aether/aether-utils.sh midden-write "documentation" "Gap ({severity}): {description} at {location}" "chronicler"
+```
+
+**Display summary:**
+```
+📝 Chronicler complete — {coverage_percent}% coverage, {gap_count} gaps logged to midden
+```
+
+**Continue to Step 6 (non-blocking):**
+Proceed to Step 6 regardless of Chronicler findings — Chronicler is strictly non-blocking.
+
 ### Step 6: Write CROWNED-ANTHILL.md
 
 Calculate colony age:

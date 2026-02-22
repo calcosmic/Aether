@@ -121,7 +121,9 @@
 - [x] Phase 38: Security Gates — Gatekeeper + Auditor integration in `/ant:continue` (completed 2026-02-21)
   - [ ] 38-01-PLAN.md — Integrate Gatekeeper agent for supply chain security (SEC-01, SEC-02, SEC-03)
   - [ ] 38-02-PLAN.md — Integrate Auditor agent for code quality review (SEC-04, SEC-05, SEC-06)
-- [ ] Phase 39: Quality Coverage — Probe + Measurer for tests and performance
+- [x] Phase 39: Quality Coverage — Probe + Measurer for tests and performance (completed 2026-02-22)
+  - [ ] 39-01-PLAN.md — Integrate Probe agent for test coverage improvement (COV-01, COV-02, COV-03, COV-04)
+  - [ ] 39-02-PLAN.md — Integrate Measurer agent for performance baselines (COV-05, COV-06, COV-07)
 - [ ] Phase 40: Lifecycle Enhancement — Chronicler + Ambassador in seal/build
 - [ ] Phase 41: Analytics & Improvement — Sage + Weaver for insights and refactoring
 
