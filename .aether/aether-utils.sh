@@ -8218,6 +8218,263 @@ EOF
     json_ok "{\"cleared\":$cleared_count}"
     ;;
 
+  suggest-approve)
+    # Orchestrate pheromone suggestion approval workflow: one-at-a-time display with Approve/Reject/Skip/Dismiss All
+    # Usage: suggest-approve [--verbose] [--dry-run] [--yes] [--no-suggest]
+    # Returns: JSON summary {approved, rejected, skipped, signals_created}
+
+    verbose=false
+    dry_run=false
+    skip_confirm=false
+    no_suggest=false
+
+    # Parse arguments
+    for arg in "$@"; do
+      case "$arg" in
+        --verbose) verbose=true ;;
+        --dry-run) dry_run=true ;;
+        --yes) skip_confirm=true ;;
+        --no-suggest) no_suggest=true ;;
+      esac
+    done
+
+    # Handle --no-suggest flag - exit immediately
+    if [[ "$no_suggest" == "true" ]]; then
+      json_ok '{"approved":0,"rejected":0,"skipped":0,"signals_created":[],"reason":"--no-suggest flag"}'
+      exit 0
+    fi
+
+    # Check for non-interactive mode (no tty)
+    if [[ ! -t 0 ]] && [[ "$skip_confirm" != "true" ]]; then
+      echo "Non-interactive mode: skipping suggestions (use --yes to auto-approve)" >&2
+      json_ok '{"approved":0,"rejected":0,"skipped":0,"signals_created":[],"reason":"non-interactive mode"}'
+      exit 0
+    fi
+
+    # Get suggestions from suggest-analyze
+    suggestions_result=$(bash "$0" suggest-analyze 2>/dev/null || echo '{"suggestions":[]}')
+    suggestions_json=$(echo "$suggestions_result" | jq '.result.suggestions // []')
+
+    # Check if there are any suggestions
+    suggestion_count=$(echo "$suggestions_json" | jq 'length')
+    if [[ "$suggestion_count" -eq 0 ]]; then
+      # Exit silently when no suggestions
+      json_ok '{"approved":0,"rejected":0,"skipped":0,"signals_created":[]}'
+      exit 0
+    fi
+
+    # Define type emojis
+    declare -A type_emojis
+    type_emojis=(
+      ["FOCUS"]="🎯"
+      ["REDIRECT"]="🚫"
+      ["FEEDBACK"]="💬"
+    )
+
+    # Arrays to track results
+    approved_suggestions=()
+    rejected_suggestions=()
+    skipped_suggestions=()
+    signals_created=()
+
+    # Display header
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "   S U G G E S T E D   P H E R O M O N E S"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "Based on code analysis, the colony suggests these signals:"
+    echo ""
+
+    # Process suggestions one at a time
+    for ((i=0; i<suggestion_count; i++)); do
+      suggestion=$(echo "$suggestions_json" | jq ".[$i]")
+      stype=$(echo "$suggestion" | jq -r '.type')
+      content=$(echo "$suggestion" | jq -r '.content')
+      file=$(echo "$suggestion" | jq -r '.file')
+      reason=$(echo "$suggestion" | jq -r '.reason')
+      priority=$(echo "$suggestion" | jq -r '.priority // 5')
+      hash=$(echo "$suggestion" | jq -r '.hash')
+
+      emoji="${type_emojis[$stype]:-📝}"
+
+      # Display suggestion
+      echo "───────────────────────────────────────────────────"
+      echo "Suggestion $((i+1)) of $suggestion_count"
+      echo "───────────────────────────────────────────────────"
+      echo ""
+      echo "$emoji $stype (priority: $priority/10)"
+      echo ""
+      echo "$content"
+      echo ""
+      echo "Detected in: $file"
+      echo "Reason: $reason"
+      echo ""
+      echo "───────────────────────────────────────────────────"
+
+      # Handle dry-run mode
+      if [[ "$dry_run" == "true" ]]; then
+        echo "Dry run: would approve"
+        approved_suggestions+=("$suggestion")
+        echo ""
+        continue
+      fi
+
+      # Handle --yes mode (auto-approve all)
+      if [[ "$skip_confirm" == "true" ]]; then
+        approved_suggestions+=("$suggestion")
+        echo "✓ Auto-approved (--yes mode)"
+        echo ""
+        continue
+      fi
+
+      # Prompt for action
+      echo -n "[A]pprove  [R]eject  [S]kip  [D]ismiss All  Your choice: "
+      read -r choice
+
+      case "$choice" in
+        [Aa]|"approve"|"Approve")
+          approved_suggestions+=("$suggestion")
+          echo "✓ Approved"
+          ;;
+        [Rr]|"reject"|"Reject")
+          rejected_suggestions+=("$suggestion")
+          # Record hash to prevent re-suggestion
+          bash "$0" suggest-record "$hash" "$stype" >/dev/null 2>&1
+          echo "✗ Rejected"
+          ;;
+        [Dd]|"dismiss"|"Dismiss"|"dismiss all"|"Dismiss All")
+          # Dismiss all remaining suggestions
+          for ((j=i; j<suggestion_count; j++)); do
+            remaining=$(echo "$suggestions_json" | jq ".[$j]")
+            skipped_suggestions+=("$remaining")
+          done
+          echo "→ Dismissed all remaining suggestions"
+          break
+          ;;
+        [Ss]|""|"skip"|"Skip")
+          skipped_suggestions+=("$suggestion")
+          echo "→ Skipped"
+          ;;
+        *)
+          # Invalid input - default to skip
+          skipped_suggestions+=("$suggestion")
+          echo "→ Skipped (invalid input)"
+          ;;
+      esac
+      echo ""
+    done
+
+    # Execute approvals for approved suggestions
+    approved_count=0
+    if [[ ${#approved_suggestions[@]} -gt 0 ]]; then
+      echo ""
+      echo "Creating pheromone signals for ${#approved_suggestions[@]} approved suggestion(s)..."
+      echo ""
+
+      for suggestion in "${approved_suggestions[@]}"; do
+        stype=$(echo "$suggestion" | jq -r '.type')
+        content=$(echo "$suggestion" | jq -r '.content')
+        reason=$(echo "$suggestion" | jq -r '.reason')
+        hash=$(echo "$suggestion" | jq -r '.hash')
+
+        if [[ "$dry_run" == "true" ]]; then
+          echo "Dry run: would create $stype signal: \"$content\""
+          ((approved_count++))
+          signals_created+=("dry_run_sig_$approved_count")
+          continue
+        fi
+
+        # Call pheromone-write to create the signal
+        signal_result=$(bash "$0" pheromone-write "$stype" "$content" --source "system:suggestion" --reason "$reason" --ttl "phase_end" 2>&1)
+
+        if echo "$signal_result" | jq -e '.ok' >/dev/null 2>&1; then
+          signal_id=$(echo "$signal_result" | jq -r '.result.signal_id // "unknown"')
+          signals_created+=("$signal_id")
+          echo "✓ Added $stype signal"
+
+          # Record hash to prevent duplicates
+          bash "$0" suggest-record "$hash" "$stype" >/dev/null 2>&1
+          ((approved_count++))
+        else
+          echo "✗ Failed to create signal: $content"
+          echo "  Error: $(echo "$signal_result" | jq -r '.error.message // "Unknown error"')"
+        fi
+      done
+    fi
+
+    # Record rejected suggestions (already recorded during loop, but ensure consistency)
+    rejected_count=${#rejected_suggestions[@]}
+
+    # Skipped suggestions (not recorded, may suggest again)
+    skipped_count=${#skipped_suggestions[@]}
+
+    # Display summary
+    echo ""
+    echo "═══════════════════════════════════════════════════"
+    echo "Summary: $approved_count approved, $rejected_count rejected, $skipped_count skipped"
+    echo "═══════════════════════════════════════════════════"
+    echo ""
+
+    # Build result with signals_created as JSON array (handle empty array case)
+    if [[ ${#signals_created[@]} -gt 0 ]]; then
+      signals_json=$(printf '%s\n' "${signals_created[@]}" | jq -R . | jq -s .)
+    else
+      signals_json="[]"
+    fi
+    result=$(jq -n \
+      --argjson approved "$approved_count" \
+      --argjson rejected "$rejected_count" \
+      --argjson skipped "$skipped_count" \
+      --argjson signals "$signals_json" \
+      '{approved: $approved, rejected: $rejected, skipped: $skipped, signals_created: $signals}')
+
+    json_ok "$result"
+    ;;
+
+  suggest-quick-dismiss)
+    # Quick dismiss all current suggestions - records hashes to prevent re-suggestion
+    # Usage: suggest-quick-dismiss
+    # Returns: JSON {dismissed, hashes_recorded}
+
+    # Get current suggestions
+    suggestions_result=$(bash "$0" suggest-analyze 2>/dev/null || echo '{"suggestions":[]}')
+    suggestions_json=$(echo "$suggestions_result" | jq '.result.suggestions // []')
+
+    dismissed_count=0
+    hashes_recorded=()
+
+    suggestion_count=$(echo "$suggestions_json" | jq 'length')
+
+    if [[ "$suggestion_count" -gt 0 ]]; then
+      for ((i=0; i<suggestion_count; i++)); do
+        suggestion=$(echo "$suggestions_json" | jq ".[$i]")
+        hash=$(echo "$suggestion" | jq -r '.hash')
+        stype=$(echo "$suggestion" | jq -r '.type')
+
+        # Record hash to prevent re-suggestion
+        bash "$0" suggest-record "$hash" "$stype" >/dev/null 2>&1
+        hashes_recorded+=("$hash")
+        ((dismissed_count++))
+      done
+    fi
+
+    echo "Suggestions dismissed. Run with --yes to auto-approve in future."
+
+    # Build result with hashes as JSON array (handle empty array case)
+    if [[ ${#hashes_recorded[@]} -gt 0 ]]; then
+      hashes_json=$(printf '%s\n' "${hashes_recorded[@]}" | jq -R . | jq -s .)
+    else
+      hashes_json="[]"
+    fi
+    result=$(jq -n \
+      --argjson dismissed "$dismissed_count" \
+      --argjson hashes "$hashes_json" \
+      '{dismissed: $dismissed, hashes_recorded: $hashes}')
+
+    json_ok "$result"
+    ;;
+
   *)
     json_err "$E_VALIDATION_FAILED" "Unknown command: $cmd"
     ;;
