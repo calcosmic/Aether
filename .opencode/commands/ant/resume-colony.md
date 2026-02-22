@@ -57,6 +57,28 @@ bash .aether/aether-utils.sh pheromone-read
 Use `.result.signals` as the active signal list (already decay-filtered by runtime logic).
 If empty, treat as "no active pheromones."
 
+### Step 2.5: Load Survey Context (Advisory)
+
+Run:
+```bash
+survey_docs=$(ls -1 .aether/data/survey/*.md 2>/dev/null | wc -l | tr -d ' ')
+survey_latest=$(ls -t .aether/data/survey/*.md 2>/dev/null | head -1)
+if [[ -n "$survey_latest" ]]; then
+  now_epoch=$(date +%s)
+  modified_epoch=$(stat -f %m "$survey_latest" 2>/dev/null || stat -c %Y "$survey_latest" 2>/dev/null || echo 0)
+  survey_age_days=$(( (now_epoch - modified_epoch) / 86400 ))
+else
+  survey_age_days=-1
+fi
+echo "survey_docs=$survey_docs"
+echo "survey_age_days=$survey_age_days"
+```
+
+Interpretation:
+- `survey_docs == 0` => survey missing
+- `survey_age_days > 14` => survey stale
+- otherwise survey fresh
+
 ### Step 3: Display Restored State
 
 **Note:** Other ant commands (`/ant:status`, `/ant:build`, `/ant:plan`, `/ant:continue`) also show brief resumption context automatically. This full resume provides complete state restoration for explicit session recovery.
@@ -92,6 +114,12 @@ ACTIVE PHEROMONES
 PHASE PROGRESS
   Phase <id>: <name> [<status>]
   (list all phases from plan.phases)
+
+SURVEY CONTEXT
+  Docs: <survey_docs>
+  Age: <survey_age_days> days
+  Status: <fresh|stale|missing>
+  Recommendation: <if missing or stale, suggest /ant:colonize --force-resurvey>
 
 CONTEXT FROM HANDOFF
   <summarize what was happening from .aether/HANDOFF.md>

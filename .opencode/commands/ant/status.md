@@ -75,6 +75,28 @@ Run using the Bash tool with description "Releasing colony lock...": `bash .aeth
 
 From state, extract:
 
+### Step 2.4: Survey Freshness (Advisory)
+
+Run:
+```bash
+survey_docs=$(ls -1 .aether/data/survey/*.md 2>/dev/null | wc -l | tr -d ' ')
+survey_latest=$(ls -t .aether/data/survey/*.md 2>/dev/null | head -1)
+if [[ -n "$survey_latest" ]]; then
+  now_epoch=$(date +%s)
+  modified_epoch=$(stat -f %m "$survey_latest" 2>/dev/null || stat -c %Y "$survey_latest" 2>/dev/null || echo 0)
+  survey_age_days=$(( (now_epoch - modified_epoch) / 86400 ))
+else
+  survey_age_days=-1
+fi
+echo "survey_docs=$survey_docs"
+echo "survey_age_days=$survey_age_days"
+```
+
+Interpretation:
+- If `survey_docs == 0`: `survey_status = "missing"`
+- If `survey_age_days > 14`: `survey_status = "stale"`
+- Otherwise: `survey_status = "fresh"`
+
 ### Step 2.5: Gather Dream Information
 
 Run using the Bash tool with description "Counting dream entries...": `ls -1 .aether/dreams/*.md 2>/dev/null | wc -l`
@@ -219,6 +241,7 @@ Output format:
 {end if}
 🏆 Milestone: <milestone> (<version>)
 💭 Dreams: <dream_count> recorded (latest: <latest_dream>)
+🗺️ Survey: <survey_docs> docs (<survey_age_days>d old, <fresh|stale|missing>)
 
 📚 Memory Health
 ┌─────────────────┬────────┬─────────────────────────────┐

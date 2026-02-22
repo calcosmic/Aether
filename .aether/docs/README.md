@@ -8,6 +8,9 @@ Runtime/behavior authority remains in:
 
 Docs in this directory are explanatory references and should not override runtime behavior.
 
+Distribution note:
+- `aether update` does not sync repo-local session files like `.aether/CONTEXT.md` and `.aether/HANDOFF.md`.
+
 ---
 
 ## User-Facing Docs

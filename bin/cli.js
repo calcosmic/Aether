@@ -769,6 +769,8 @@ function gitStashFiles(repoPath, files) {
 // Directories to exclude from hub sync (user data, local state)
 // 'rules' is excluded here because it is synced via a dedicated step (rulesSrc below)
 const HUB_EXCLUDE_DIRS = ['data', 'dreams', 'checkpoints', 'locks', 'temp', 'rules'];
+// Files to exclude from hub sync (repo-local state, not distributable)
+const HUB_EXCLUDE_FILES = ['CONTEXT.md', 'HANDOFF.md'];
 
 /**
  * Check if a path should be excluded from hub sync
@@ -777,8 +779,11 @@ const HUB_EXCLUDE_DIRS = ['data', 'dreams', 'checkpoints', 'locks', 'temp', 'rul
  */
 function shouldExcludeFromHub(relPath) {
   const parts = relPath.split(path.sep);
+  const basename = path.basename(relPath);
   // Exclude if any part of the path is in the exclude list
-  return parts.some(part => HUB_EXCLUDE_DIRS.includes(part));
+  if (parts.some(part => HUB_EXCLUDE_DIRS.includes(part))) return true;
+  if (HUB_EXCLUDE_FILES.includes(basename)) return true;
+  return false;
 }
 
 /**
@@ -803,6 +808,7 @@ function syncAetherToHub(srcDir, destDir) {
       const fullPath = path.join(dir, entry.name);
       const relPath = path.relative(base, fullPath);
 
+      // Exclude non-distributable paths from source collection.
       if (shouldExcludeFromHub(relPath)) continue;
 
       if (entry.isDirectory()) {
@@ -853,7 +859,10 @@ function syncAetherToHub(srcDir, destDir) {
       const fullPath = path.join(dir, entry.name);
       const relPath = path.relative(base, fullPath);
 
-      if (shouldExcludeFromHub(relPath)) continue;
+      // Skip protected directories during cleanup, but allow excluded files
+      // (e.g. CONTEXT.md/HANDOFF.md) to be removed from the hub if stale.
+      const parts = relPath.split(path.sep);
+      if (parts.some(part => HUB_EXCLUDE_DIRS.includes(part))) continue;
 
       if (entry.isDirectory()) {
         collectDestFiles(fullPath, base);
@@ -901,7 +910,7 @@ function setupHub() {
       fs.mkdirSync(HUB_SYSTEM_DIR, { recursive: true });
 
       // Move system files to system/
-      const systemFiles = ['aether-utils.sh', 'workers.md', 'CONTEXT.md', 'model-profiles.yaml'];
+      const systemFiles = ['aether-utils.sh', 'workers.md', 'model-profiles.yaml'];
       const systemDirs = ['docs', 'utils', 'commands', 'agents', 'schemas', 'exchange', 'templates', 'lib'];
 
       for (const file of systemFiles) {

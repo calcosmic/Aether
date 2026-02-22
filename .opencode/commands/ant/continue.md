@@ -91,6 +91,30 @@ If `state == "EXECUTING"`:
 If `state != "EXECUTING"`:
 - Normal continue flow (no build to reconcile)
 
+### Step 1.5.2: Load Survey Context (Non-blocking)
+
+Run:
+```bash
+survey_check=$(bash .aether/aether-utils.sh survey-verify 2>/dev/null || true)
+survey_docs=$(ls -1 .aether/data/survey/*.md 2>/dev/null | wc -l | tr -d ' ')
+survey_latest=$(ls -t .aether/data/survey/*.md 2>/dev/null | head -1)
+if [[ -n "$survey_latest" ]]; then
+  now_epoch=$(date +%s)
+  modified_epoch=$(stat -f %m "$survey_latest" 2>/dev/null || stat -c %Y "$survey_latest" 2>/dev/null || echo 0)
+  survey_age_days=$(( (now_epoch - modified_epoch) / 86400 ))
+else
+  survey_age_days=-1
+fi
+echo "{\"docs\":$survey_docs,\"age_days\":$survey_age_days,\"verify\":$survey_check}"
+```
+
+Interpretation:
+- If `docs == 0`: display `🗺️ Survey: not found (run /ant:colonize for stronger context)` and continue.
+- If `age_days > 14`: display `🗺️ Survey: {docs} docs loaded ({age_days}d old, consider /ant:colonize --force-resurvey)` and continue.
+- Otherwise: display `🗺️ Survey: {docs} docs loaded ({age_days}d old)` and continue.
+
+Survey context is advisory only and must not block advancement by itself.
+
 ### Step 1.5: Verification Loop Gate (MANDATORY)
 
 **The Iron Law:** No phase advancement without fresh verification evidence.
