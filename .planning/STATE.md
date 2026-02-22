@@ -16,14 +16,14 @@
 
 ## Current Position
 
-**Phase**: 43-make-learning-flow
-**Plan**: 03 (complete)
-**Status**: Plan 43-03 complete — FLOW-03 verified, all tests pass
+**Phase**: 44-suggest-pheromones
+**Plan**: 01 (complete)
+**Status**: Plan 44-01 complete — suggest-analyze command implemented with 6 heuristics
 
-**Progress**: 3/3 phases complete, 3/3 plans in Phase 43
+**Progress**: 2/3 phases complete, Phase 44 in progress
 
 ```
-[██████████████░░░░] 80% — v6.0 System Integration
+[████████████░░░░░░] 70% — v6.0 System Integration
 ```
 
 ---
@@ -34,7 +34,7 @@
 |-------|--------|-------|-----------|
 | 42. Fix Update Bugs | ✓ Complete | 2/2 | 2026-02-22 |
 | 43. Make Learning Flow | ✓ Complete | 3/3 | 2026-02-22 |
-| 44. Suggest Pheromones | Not planned | TBD | - |
+| 44. Suggest Pheromones | In Progress | 1/TBD | 2026-02-22 |
 
 ---
 
@@ -43,6 +43,8 @@
 ### Decisions Made
 
 1. **Wire, don't build** — Use existing functions rather than creating new ones
+2. **ERR trap handling** — Disable ERR trap during grep operations to handle "no matches" exit code 1
+3. **jq for deduplication** — Use jq for JSON manipulation since bash 3.2 lacks associative arrays
 2. **Phase 42 starts at 42** — Continuing from v5.0 which ended at Phase 41
 3. **Three phases only** — Deep integration over broad coverage
 4. **Atomic write pattern** — Use temp file + rename for all file copies to prevent corruption
@@ -78,19 +80,19 @@
 
 ## Blockers
 
-None. Phase 43 complete. All FLOW requirements verified:
-- FLOW-01: learning-observations.json auto-creation verified
-- FLOW-02: observations → proposals → promotions pipeline verified
-- FLOW-03: end-to-end integration test passes
+None. Plan 44-01 complete. suggest-analyze command implemented:
+- 6 heuristics detecting code patterns (large files, TODOs, debug artifacts, type gaps, complexity, test gaps)
+- Session tracking with suggest-record/check/clear commands
+- Deduplication against existing pheromones and session history
 
-Ready for Phase 44: Suggest Pheromones.
+Ready for Plan 44-02: Integration with build flow.
 
 ---
 
 ## Session Continuity
 
-**Last Action**: Completed Plan 43-03 — created integration tests for learning pipeline, fixed AETHER_ROOT env handling
-**Next Action**: Run `/gsd:plan-phase 44` to create plan for pheromone suggestions
+**Last Action**: Completed Plan 44-01 — created suggest-analyze command with 6 heuristics for code pattern detection
+**Next Action**: Run `/gsd:plan 44-02` to create integration plan for pheromone suggestions in build flow
 **Context Freshness**: Current
 
 ---
