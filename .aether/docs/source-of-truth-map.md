@@ -73,8 +73,8 @@ Define which files are authoritative for system behavior, which files are derive
 | Core utility entrypoint | `.aether/aether-utils.sh` | 1 | Active |
 | Sourced shell utilities | `.aether/utils/*.sh` | 17 | Active |
 | XML utility scripts | `.aether/utils/xml-*.sh` | 5 | Active (see drift note) |
-| Slash commands (Claude) | `.claude/commands/ant/*.md` | 36 | Active |
-| Slash commands (OpenCode) | `.opencode/commands/ant/*.md` | 36 | Active (content differs from Claude variants) |
+| Slash commands (Claude) | `.claude/commands/ant/*.md` | 37 | Active |
+| Slash commands (OpenCode) | `.opencode/commands/ant/*.md` | 37 | Active (content differs from Claude variants) |
 | Agent definitions (Claude) | `.claude/agents/ant/*.md` | 22 | Active |
 | Agent mirror (packaging) | `.aether/agents-claude/*.md` | 22 | Active mirror (must match Claude agent files exactly) |
 | Agent definitions (OpenCode) | `.opencode/agents/*.md` | 22 | Active (content differs from Claude variants) |
@@ -111,7 +111,7 @@ When determining "how Aether works now", read in this order:
 
 1. [x] Fix QUEEN path references in `.aether/docs/QUEEN-SYSTEM.md` and `.aether/docs/queen-commands.md`.
 2. [x] Update threshold descriptions in `.aether/docs/QUEEN-SYSTEM.md` to match runtime defaults.
-3. [x] Update root `README.md` command count (35 -> 36).
+3. [x] Update root `README.md` command count (35 -> 36; later 36 -> 37 after insert-phase).
 4. [x] Update `.aether/docs/README.md` to include `command-playbooks/` and clarify docs-vs-runtime authority.
 5. [x] Review `bootstrap-system` allowlist in `.aether/aether-utils.sh` for stale doc entries.
 6. [x] Add agent definitions to Ownership Map and authority hierarchy.

@@ -67,7 +67,7 @@ npx aether-colony install
 npm install -g aether-colony
 ```
 
-This installs 22 agents to `~/.claude/agents/ant/` plus 36 slash commands to `~/.claude/commands/ant/`.
+This installs 22 agents to `~/.claude/agents/ant/` plus 37 slash commands to `~/.claude/commands/ant/`.
 
 ---
 

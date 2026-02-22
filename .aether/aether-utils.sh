@@ -214,10 +214,12 @@ print-next-up() {
     READY)
       echo "   /ant:build $next_phase            🔨 Build phase $next_phase"
       echo "   /ant:phase $next_phase            📋 Review phase details"
+      echo "   /ant:insert-phase       ➕ Insert a corrective phase"
       echo "   /ant:focus              🎯 Guide colony attention"
       ;;
     EXECUTING)
       echo "   /ant:continue           ➡️  Continue current build"
+      echo "   /ant:insert-phase       ➕ Insert a corrective phase"
       echo "   /ant:status             📊 Check build progress"
       ;;
     PLANNING)
@@ -929,7 +931,7 @@ case "$cmd" in
     cat <<'HELP_EOF'
 {
   "ok": true,
-  "commands": ["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","learning-observe","learning-check-promotion","learning-promote-auto","memory-capture","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-display-text","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","survey-load","survey-verify","pheromone-export","pheromone-write","pheromone-count","pheromone-read","instinct-read","pheromone-prime","pheromone-expire","eternal-init","pheromone-export-xml","pheromone-import-xml","pheromone-validate-xml","wisdom-export-xml","wisdom-import-xml","registry-export-xml","registry-import-xml","force-unlock","changelog-append","changelog-collect-plan-data","suggest-approve","suggest-quick-dismiss"],
+  "commands": ["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","learning-observe","learning-check-promotion","learning-promote-auto","memory-capture","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-display-text","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","phase-insert","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","survey-load","survey-verify","pheromone-export","pheromone-write","pheromone-count","pheromone-read","instinct-read","pheromone-prime","pheromone-expire","eternal-init","pheromone-export-xml","pheromone-import-xml","pheromone-validate-xml","wisdom-export-xml","wisdom-import-xml","registry-export-xml","registry-import-xml","force-unlock","changelog-append","changelog-collect-plan-data","suggest-approve","suggest-quick-dismiss"],
   "sections": {
     "Core": [
       {"name": "help", "description": "List all available commands with sections"},
@@ -938,7 +940,8 @@ case "$cmd" in
     "Colony State": [
       {"name": "validate-state", "description": "Validate COLONY_STATE.json or constraints.json"},
       {"name": "load-state", "description": "Load and lock COLONY_STATE.json"},
-      {"name": "unload-state", "description": "Release COLONY_STATE.json lock"}
+      {"name": "unload-state", "description": "Release COLONY_STATE.json lock"},
+      {"name": "phase-insert", "description": "Insert a new phase after current phase and renumber safely"}
     ],
     "Queen Commands": [
       {"name": "queen-init", "description": "Initialize a new colony QUEEN.md from template"},
@@ -2946,6 +2949,166 @@ NODESCRIPT
     ' "$DATA_DIR/COLONY_STATE.json")
 
     echo "$result"
+    ;;
+
+  phase-insert)
+    # Insert a new phase immediately after current_phase and renumber downstream phases safely.
+    # Usage: phase-insert <phase_name> <goal> [constraints]
+    phase_name="${1:-}"
+    phase_goal="${2:-}"
+    phase_constraints="${3:-}"
+
+    [[ -n "$phase_name" ]] || json_err "$E_VALIDATION_FAILED" "Usage: phase-insert <phase_name> <goal> [constraints]" '{"missing":"phase_name"}'
+    [[ -n "$phase_goal" ]] || json_err "$E_VALIDATION_FAILED" "Usage: phase-insert <phase_name> <goal> [constraints]" '{"missing":"goal"}'
+
+    state_file="$DATA_DIR/COLONY_STATE.json"
+    [[ -f "$state_file" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
+
+    if ! jq -e . "$state_file" >/dev/null 2>&1; then
+      json_err "$E_JSON_INVALID" "COLONY_STATE.json has invalid JSON"
+    fi
+
+    phase_count=$(jq -r '(.plan.phases // []) | length' "$state_file" 2>/dev/null || echo "0")
+    [[ "$phase_count" -gt 0 ]] || json_err "$E_VALIDATION_FAILED" "No project plan found. Run /ant:plan first."
+
+    current_phase=$(jq -r '.current_phase // 0' "$state_file" 2>/dev/null || echo "0")
+    [[ "$current_phase" =~ ^[0-9]+$ ]] || current_phase=0
+    if [[ "$current_phase" -gt "$phase_count" ]]; then
+      current_phase="$phase_count"
+    fi
+    if [[ "$current_phase" -lt 0 ]]; then
+      current_phase=0
+    fi
+
+    insert_id=$((current_phase + 1))
+    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    # Acquire lock for safe state mutation
+    _phase_lock_held=false
+    if type acquire_lock &>/dev/null && type feature_enabled &>/dev/null && feature_enabled "file_locking"; then
+      acquire_lock "$state_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on COLONY_STATE.json"
+      _phase_lock_held=true
+      trap 'release_lock 2>/dev/null || true' EXIT
+    fi
+
+    if type create_backup &>/dev/null; then
+      create_backup "$state_file" 2>/dev/null || true
+    fi
+
+    updated=$(jq \
+      --argjson insert_id "$insert_id" \
+      --arg name "$phase_name" \
+      --arg goal "$phase_goal" \
+      --arg constraints "$phase_constraints" \
+      --arg ts "$ts" \
+      '
+      def tail_id:
+        if (type == "string") and test("^[0-9]+\\.") then
+          capture("^[0-9]+\\.(?<tail>.+)$").tail
+        else
+          tostring
+        end;
+      def remap_dep(new_phase):
+        if (type == "string") and test("^[0-9]+\\.") then
+          ((new_phase|tostring) + "." + (capture("^[0-9]+\\.(?<tail>.+)$").tail))
+        else
+          .
+        end;
+      def remap_task(new_phase):
+        . as $task
+        | (if ($task.id // null) != null then
+            .id = (
+              if ($task.id|type) == "string" and ($task.id|test("^[0-9]+\\.")) then
+                ((new_phase|tostring) + "." + ($task.id|capture("^[0-9]+\\.(?<tail>.+)$").tail))
+              else
+                $task.id
+              end
+            )
+          else . end)
+        | (if (.dependencies|type) == "array" then .dependencies |= map(remap_dep(new_phase)) else . end)
+        | (if (.depends_on|type) == "array" then .depends_on |= map(remap_dep(new_phase)) else . end);
+      def normalize_phase:
+        if .status == null then .status = "pending" else . end
+        | if .tasks == null then .tasks = [] else . end
+        | if .success_criteria == null then .success_criteria = [] else . end;
+      def shift_phase(insert_id):
+        if (.id // 0) >= insert_id then
+          (.id + 1) as $new_phase
+          | .id = $new_phase
+          | .tasks = ((.tasks // []) | map(remap_task($new_phase)))
+        else
+          .
+        end;
+
+      . as $root
+      | ($root.plan.phases // []) as $phases
+      | ($phases | map(normalize_phase | shift_phase($insert_id))) as $shifted
+      | ($insert_id|tostring) as $pid
+      | {
+          id: $insert_id,
+          name: $name,
+          description: $goal,
+          status: "pending",
+          tasks: [
+            {
+              id: ($pid + ".1"),
+              description: ("Diagnose and correct: " + $goal),
+              success_criteria: [
+                "Root cause identified with evidence",
+                "Fix implemented in targeted area"
+              ],
+              status: "pending"
+            },
+            {
+              id: ($pid + ".2"),
+              description: "Validate the correction end-to-end",
+              success_criteria: [
+                "Previously failing behavior now works",
+                "No regressions introduced in adjacent flows"
+              ],
+              status: "pending"
+            }
+          ],
+          success_criteria: [
+            "Inserted-phase objective is resolved in real usage",
+            "User confirms expected behavior after changes"
+          ]
+        } as $new_phase
+      | .plan.phases = (($shifted + [$new_phase]) | sort_by(.id))
+      | .events = ((.events // []) + [($ts + "|phase_inserted|insert-phase|Inserted Phase " + ($insert_id|tostring) + ": " + $name)])
+      ' "$state_file" 2>/dev/null) || {
+      [[ "$_phase_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+      trap - EXIT
+      json_err "$E_JSON_INVALID" "Failed to insert phase into COLONY_STATE.json"
+    }
+
+    atomic_write "$state_file" "$updated"
+
+    [[ "$_phase_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+    trap - EXIT
+
+    # Emit guidance signals non-blocking to reinforce inserted phase intent.
+    bash "$0" pheromone-write FOCUS "Inserted Phase $insert_id: $phase_goal" --strength 0.8 --source "user:insert-phase" --reason "Phase inserted to correct execution path" --ttl "30d" >/dev/null 2>&1 || true
+    if [[ -n "$phase_constraints" ]]; then
+      bash "$0" pheromone-write REDIRECT "$phase_constraints" --strength 0.9 --source "user:insert-phase" --reason "Constraint captured during phase insertion" --ttl "30d" >/dev/null 2>&1 || true
+    fi
+    bash "$0" memory-capture "learning" "Inserted phase $insert_id ($phase_name): $phase_goal" "pattern" "system:phase-insert" >/dev/null 2>&1 || true
+
+    result=$(jq -n \
+      --argjson inserted_phase_id "$insert_id" \
+      --arg phase_name "$phase_name" \
+      --arg phase_goal "$phase_goal" \
+      --arg constraints "$phase_constraints" \
+      --argjson after_phase "$current_phase" \
+      '{
+        inserted: true,
+        inserted_phase_id: $inserted_phase_id,
+        after_phase: $after_phase,
+        phase_name: $phase_name,
+        phase_goal: $phase_goal,
+        constraints: $constraints
+      }')
+    json_ok "$result"
     ;;
 
   # ============================================

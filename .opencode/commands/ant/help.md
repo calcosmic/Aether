@@ -35,6 +35,7 @@ STATUS & UPDATES
   /ant:status            Colony dashboard — goal, phase, instincts, flags
   /ant:update            Update system files from global hub (~/.aether/)
   /ant:phase [N|list]    View phase details or list all phases
+  /ant:insert-phase      Insert a corrective phase after current phase
   /ant:flags             List active flags (blockers, issues, notes)
   /ant:flag "<title>"    Create a flag (blocker, issue, or note)
 
