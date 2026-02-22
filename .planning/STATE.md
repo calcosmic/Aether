@@ -17,13 +17,13 @@
 ## Current Position
 
 **Phase**: 42-fix-update-bugs
-**Plan**: 42-01
-**Status**: Plan 42-01 complete
+**Plan**: 42-02
+**Status**: Plan 42-02 complete
 
-**Progress**: 1/3 plans in Phase 42 complete
+**Progress**: 2/3 plans in Phase 42 complete
 
 ```
-[██░░░░░░░░░░░░░░░░] 11% — v6.0 System Integration (1/9 plans)
+[████░░░░░░░░░░░░░░] 22% — v6.0 System Integration (2/9 plans)
 ```
 
 ---
@@ -32,7 +32,7 @@
 
 | Phase | Status | Plans | Completed |
 |-------|--------|-------|-----------|
-| 42. Fix Update Bugs | In progress | 1/3 | 42-01 |
+| 42. Fix Update Bugs | In progress | 2/3 | 42-01, 42-02 |
 | 43. Make Learning Flow | Not started | 0/3 | - |
 | 44. Suggest Pheromones | Not started | 0/2 | - |
 
@@ -47,6 +47,8 @@
 3. **Three phases only** — Deep integration over broad coverage
 4. **Atomic write pattern** — Use temp file + rename for all file copies to prevent corruption
 5. **Counter accuracy** — Only increment counters when files are actually copied (not in dry-run)
+6. **Trash safety** — Move removed files to `.aether/.trash/` instead of deleting
+7. **Protected paths** — Never touch data/, dreams/, oracle/, midden/, or QUEEN.md
 
 ### Open Questions
 
@@ -70,8 +72,8 @@ None. Ready to begin Phase 42.
 
 ## Session Continuity
 
-**Last Action**: Completed plan 42-01 - Fixed atomic writes and counter accuracy in update system
-**Next Action**: Execute plan 42-02 or 42-03 for remaining update bug fixes
+**Last Action**: Completed plan 42-02 - Extended stale directory cleanup with trash safety and protected paths
+**Next Action**: Execute plan 42-03 for remaining update bug fixes
 **Context Freshness**: Current
 
 ---
