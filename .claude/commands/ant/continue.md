@@ -246,7 +246,7 @@ Run using the Bash tool with description "Scanning for exposed secrets...": `gre
 Run using the Bash tool with description "Scanning for debug artifacts...": `grep -rn "console\.log\|debugger" --include="*.ts" --include="*.tsx" --include="*.js" src/ 2>/dev/null | head -10`
 Record: potential secrets (critical), debug artifacts (warning).
 
-Note: Professional security scanning happens in Step 1.8 (Gatekeeper for CVEs, Auditor for code quality).
+Note: Professional security scanning happens in Step 1.8 (Gatekeeper for CVEs) and Step 1.9 (Auditor for code quality).
 
 **Phase 6: Diff Review**:
 Run using the Bash tool with description "Reviewing file changes...": `git diff --stat`
@@ -449,9 +449,176 @@ Run /ant:build {phase} again after fixing.
 
 Do NOT proceed to Step 2.
 
-If no CRITICAL issues, continue to Step 1.8.1.
+If no CRITICAL issues, continue to Step 1.7.1.
 
-### Step 1.8.1: Gatekeeper Security Gate (Conditional)
+### Step 1.7.1: Proactive Refactoring Gate (Conditional)
+
+**Complexity-based refactoring — runs when code exceeds maintainability thresholds.**
+
+1. **Get modified/created files from recent work:**
+   Run using the Bash tool with description "Getting modified files for complexity check...": `modified_files=$(git diff --name-only HEAD~1 2>/dev/null || git diff --name-only) && echo "$modified_files"`
+
+2. **Check complexity thresholds for each file:**
+
+   For each file, check:
+   - Line count > 300 lines
+   - Long functions > 50 lines (simplified heuristic)
+   - Directory density > 10 new files
+
+   Run using the Bash tool with description "Checking complexity thresholds...":
+   ```bash
+   modified_files=$(git diff --name-only HEAD~1 2>/dev/null || git diff --name-only)
+
+   complexity_trigger=false
+   files_needing_refactor=""
+
+   for file in $modified_files; do
+     if [[ -f "$file" ]]; then
+       # Check line count
+       line_count=$(wc -l < "$file" 2>/dev/null || echo "0")
+       if [[ "$line_count" -gt 300 ]]; then
+         complexity_trigger=true
+         files_needing_refactor="$files_needing_refactor $file"
+         continue
+       fi
+
+       # Check for long functions (simplified heuristic)
+       long_funcs=$(grep -c "^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_]*[[:space:]]*(" "$file" 2>/dev/null || echo "0")
+       if [[ "$long_funcs" -gt 50 ]]; then
+         complexity_trigger=true
+         files_needing_refactor="$files_needing_refactor $file"
+       fi
+     fi
+   done
+
+   # Check directory density
+   if [[ -n "$modified_files" ]]; then
+     dir_counts=$(echo "$modified_files" | xargs -I {} dirname {} 2>/dev/null | sort | uniq -c | sort -rn)
+     high_density_dir=$(echo "$dir_counts" | awk '$1 > 10 {print $2}' | head -1)
+     if [[ -n "$high_density_dir" ]]; then
+       complexity_trigger=true
+     fi
+   fi
+
+   echo "{\"complexity_trigger\": \"$complexity_trigger\", \"files_needing_refactor\": \"$files_needing_refactor\"}"
+   ```
+
+3. **If complexity thresholds NOT exceeded:**
+   ```
+   🔄🐜 Weaver: Complexity thresholds not exceeded — skipping proactive refactoring
+   ```
+   Continue to Step 1.8.
+
+4. **If complexity thresholds exceeded:**
+
+   a. **Establish test baseline before refactoring:**
+   Run using the Bash tool with description "Establishing test baseline...": `test_output_before=$(npm test 2>&1 || echo "TEST_FAILED") && tests_passing_before=$(echo "$test_output_before" | grep -oE '[0-9]+ passing' | grep -oE '[0-9]+' || echo "0") && echo "Baseline: $tests_passing_before tests passing"`
+
+   b. **Generate Weaver name and dispatch:**
+   Run using the Bash tool with description "Generating Weaver name...": `weaver_name=$(bash .aether/aether-utils.sh generate-ant-name "weaver") && bash .aether/aether-utils.sh spawn-log "Queen" "weaver" "$weaver_name" "Proactive refactoring" && echo "{\"name\":\"$weaver_name\"}"`
+
+   c. **Update swarm display (if visual_mode is true):**
+   Run using the Bash tool with description "Updating swarm display...": `bash .aether/aether-utils.sh swarm-display-update "$weaver_name" "weaver" "refactoring" "Proactive refactoring" "Quality" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0`
+
+   d. **Display:** `🔄🐜 Weaver {weaver_name} spawning — Refactoring complex code...`
+
+   e. **Spawn Weaver agent:**
+
+   Use the Task tool with subagent_type="aether-weaver" (if available; otherwise use general-purpose and inject the Weaver role from `.opencode/agents/aether-weaver.md`):
+
+   ```xml
+   <mission>
+   Refactor complex code to improve maintainability while preserving behavior.
+   </mission>
+
+   <work>
+   1. Analyze target files for complexity issues
+   2. Plan incremental refactoring steps
+   3. Execute one step at a time
+   4. Run tests after each step
+   5. If tests pass, continue; if fail, revert and try smaller step
+   6. Report all changes made
+   </work>
+
+   <context>
+   Target Files: {files_needing_refactor}
+   Test Baseline: {tests_passing_before} tests passing (MUST maintain after refactor)
+
+   Refactoring Guidelines:
+   - Extract methods/functions over 50 lines
+   - Split files over 300 lines
+   - Remove duplication (DRY)
+   - Improve naming for clarity
+   - Apply Single Responsibility Principle
+   </context>
+
+   <constraints>
+   - NEVER change behavior — only structure
+   - Run tests after each refactoring step
+   - If tests fail, revert immediately
+   - Do NOT modify test expectations to make tests pass
+   - Do NOT modify .aether/ system files
+   </constraints>
+
+   <output>
+   Provide JSON output matching this schema:
+   {
+     "ant_name": "your weaver name",
+     "caste": "weaver",
+     "status": "completed" | "failed" | "blocked",
+     "summary": "Brief summary of refactoring",
+     "files_refactored": [],
+     "complexity_before": 0,
+     "complexity_after": 0,
+     "duplication_eliminated": 0,
+     "methods_extracted": [],
+     "patterns_applied": [],
+     "tests_all_passing": true,
+     "next_recommendations": [],
+     "blockers": []
+   }
+   </output>
+   ```
+
+   f. **Parse Weaver JSON output and verify tests:**
+   Extract: `files_refactored`, `tests_all_passing`, `complexity_before`, `complexity_after`
+
+   Run using the Bash tool with description "Verifying tests after refactoring...":
+   ```bash
+   test_output_after=$(npm test 2>&1 || echo "TEST_FAILED")
+   tests_passing_after=$(echo "$test_output_after" | grep -oE '[0-9]+ passing' | grep -oE '[0-9]+' || echo "0")
+
+   if [[ "$tests_passing_after" -lt "$tests_passing_before" ]]; then
+     echo "REVERT_NEEDED: Tests failed after refactoring"
+     git checkout -- $files_needing_refactor
+     weaver_status="reverted"
+   else
+     echo "PASSING: Tests passing after refactoring ($tests_passing_after)"
+     weaver_status="completed"
+   fi
+   ```
+
+   g. **Log completion:**
+   Run using the Bash tool with description "Logging Weaver completion...": `bash .aether/aether-utils.sh spawn-complete "$weaver_name" "$weaver_status" "Refactoring $weaver_status"`
+
+   h. **Update swarm display:**
+   Run using the Bash tool with description "Updating swarm display completion...": `bash .aether/aether-utils.sh swarm-display-update "$weaver_name" "weaver" "$weaver_status" "Refactoring $weaver_status" "Quality" '{"read":3,"grep":2,"edit":5,"bash":2}' 100 "fungus_garden" 100`
+
+   i. **Log to midden:**
+   Run using the Bash tool with description "Logging refactoring activity to midden...": `bash .aether/aether-utils.sh midden-write "refactoring" "Weaver refactored files, complexity before/after: ${complexity_before}/${complexity_after}" "weaver"`
+
+5. **Display completion:**
+   ```
+   🔄🐜 Weaver: Proactive refactoring {weaver_status}
+      Files refactored: {count} | Complexity: {before} → {after}
+   ```
+
+6. **NON-BLOCKING continuation:**
+   The Weaver step is NON-BLOCKING — continue to Step 1.8 regardless of refactoring results.
+
+Continue to Step 1.8.
+
+### Step 1.8: Gatekeeper Security Gate (Conditional)
 
 **Supply chain security audit — runs only when package.json exists.**
 
@@ -552,9 +719,9 @@ Continue to Step 1.9.
 ```
 ✅📦🐜 Gatekeeper: No critical security issues found
 ```
-Continue to Step 1.8.2.
+Continue to Step 1.9.
 
-### Step 1.8.2: Auditor Quality Gate (MANDATORY)
+### Step 1.9: Auditor Quality Gate (MANDATORY)
 
 **Code quality audit — runs on every `/ant:continue` for consistent coverage.**
 
@@ -644,7 +811,7 @@ Critical Findings:
 The phase will NOT advance with critical quality issues.
 ```
 Run using the Bash tool with description "Logging critical quality block...": `bash .aether/aether-utils.sh error-flag-pattern "auditor-critical-findings" "$critical_count critical quality issues found" "critical"`
-**CRITICAL:** Do NOT proceed to Step 1.9. Stop here.
+**CRITICAL:** Do NOT proceed to Step 1.10. Stop here.
 
 - **Else if `overall_score < 60`:**
 ```
@@ -665,7 +832,7 @@ Code quality score below threshold: {overall_score}/100 (threshold: 60)
 The phase will NOT advance with quality score below 60.
 ```
 Run using the Bash tool with description "Logging quality score block...": `bash .aether/aether-utils.sh error-flag-pattern "auditor-quality-score" "Score $overall_score below threshold 60" "critical"`
-**CRITICAL:** Do NOT proceed to Step 1.9. Stop here.
+**CRITICAL:** Do NOT proceed to Step 1.10. Stop here.
 
 - **Else if `findings.high > 0`:**
 ```
@@ -678,15 +845,15 @@ Quality warnings logged to midden for later review.
 Proceeding with caution...
 ```
 Run using the Bash tool with description "Logging high-quality warnings...": `bash .aether/aether-utils.sh midden-write "quality" "High severity issues: $high_count (score: $overall_score)" "auditor"`
-Continue to Step 1.9.
+Continue to Step 1.10.
 
 - **If clean (score >= 60, no critical):**
 ```
 ✅👥🐜 Auditor: Quality score {overall_score}/100 — PASSED
 ```
-Continue to Step 1.9.
+Continue to Step 1.10.
 
-### Step 1.9: TDD Evidence Gate (MANDATORY)
+### Step 1.10: TDD Evidence Gate (MANDATORY)
 
 **The Iron Law:** No TDD claims without actual test files.
 
@@ -725,9 +892,9 @@ bash .aether/aether-utils.sh error-flag-pattern "fabricated-tdd" "Prime Worker r
 
 **If tests_added == 0 or test files exist matching claims:**
 
-Continue to Step 1.10.
+Continue to Step 1.11.
 
-### Step 1.10: Runtime Verification Gate (MANDATORY)
+### Step 1.11: Runtime Verification Gate (MANDATORY)
 
 **The Iron Law:** Build passing ≠ App working.
 
@@ -755,7 +922,7 @@ Options:
 ```
 ✅🐜 RUNTIME VERIFIED — User confirmed app works.
 ```
-Continue to Step 1.11.
+Continue to Step 1.12.
 
 **If "Yes, tested but has issues":**
 ```
@@ -794,9 +961,9 @@ User indicated no runnable app for this phase.
 Proceeding to phase advancement.
 ```
 
-Continue to Step 1.11.
+Continue to Step 1.12.
 
-### Step 1.11: Flags Gate (MANDATORY)
+### Step 1.12: Flags Gate (MANDATORY)
 
 **The Iron Law:** No phase advancement with unresolved blockers.
 
