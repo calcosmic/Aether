@@ -17,8 +17,8 @@
 ## Current Position
 
 **Phase**: 44-suggest-pheromones
-**Plan**: 02 (complete)
-**Status**: Plan 44-02 complete — tick-to-approve UI implemented with suggest-approve command
+**Plan**: 03 (complete)
+**Status**: Plan 44-03 complete — pheromone suggestions integrated into build command flow
 
 **Progress**: 2/3 phases complete, Phase 44 in progress
 
@@ -34,7 +34,7 @@
 |-------|--------|-------|-----------|
 | 42. Fix Update Bugs | ✓ Complete | 2/2 | 2026-02-22 |
 | 43. Make Learning Flow | ✓ Complete | 3/3 | 2026-02-22 |
-| 44. Suggest Pheromones | In Progress | 2/TBD | 2026-02-22 |
+| 44. Suggest Pheromones | In Progress | 3/TBD | 2026-02-22 |
 
 ---
 
@@ -45,23 +45,24 @@
 1. **Wire, don't build** — Use existing functions rather than creating new ones
 2. **ERR trap handling** — Disable ERR trap during grep operations to handle "no matches" exit code 1
 3. **jq for deduplication** — Use jq for JSON manipulation since bash 3.2 lacks associative arrays
-2. **Phase 42 starts at 42** — Continuing from v5.0 which ended at Phase 41
-3. **Three phases only** — Deep integration over broad coverage
-4. **Atomic write pattern** — Use temp file + rename for all file copies to prevent corruption
-5. **Counter accuracy** — Only increment counters when files are actually copied (not in dry-run)
-6. **Trash safety** — Move removed files to `.aether/.trash/` instead of deleting
-7. **Protected paths** — Never touch data/, dreams/, oracle/, midden/, or QUEEN.md
-8. **One-at-a-time UI** — Present proposals individually with Approve/Reject/Skip actions
-9. **Aligned thresholds** — All learning functions use consistent threshold values
-10. **Failure type support** — Failure observations map to Patterns section in QUEEN.md
-11. **Environment variable override** — AETHER_ROOT respects existing env var for testability
-12. **Single-line METADATA** — QUEEN.md supports both single-line and multi-line METADATA formats
-13. **Pheromone suggestion UI** — Tick-to-approve pattern with Approve/Reject/Skip/Dismiss All actions
-14. **Non-interactive safety** — Auto-skip suggestions in CI/CD to prevent blocking
+4. **Phase 42 starts at 42** — Continuing from v5.0 which ended at Phase 41
+5. **Three phases only** — Deep integration over broad coverage
+6. **Atomic write pattern** — Use temp file + rename for all file copies to prevent corruption
+7. **Counter accuracy** — Only increment counters when files are actually copied (not in dry-run)
+8. **Trash safety** — Move removed files to `.aether/.trash/` instead of deleting
+9. **Protected paths** — Never touch data/, dreams/, oracle/, midden/, or QUEEN.md
+10. **One-at-a-time UI** — Present proposals individually with Approve/Reject/Skip actions
+11. **Aligned thresholds** — All learning functions use consistent threshold values
+12. **Failure type support** — Failure observations map to Patterns section in QUEEN.md
+13. **Environment variable override** — AETHER_ROOT respects existing env var for testability
+14. **Single-line METADATA** — QUEEN.md supports both single-line and multi-line METADATA formats
+15. **Pheromone suggestion UI** — Tick-to-approve pattern with Approve/Reject/Skip/Dismiss All actions
+16. **Non-interactive safety** — Auto-skip suggestions in CI/CD to prevent blocking
+17. **Build flow timing** — Suggestions run after colony-prime (user sees current signals) but before swarm init (no worker delay)
 
 ### Open Questions
 
-1. Should pheromone suggestions run before or after colony-prime?
+1. ~~Should pheromone suggestions run before or after colony-prime?~~ **RESOLVED**: After colony-prime (Step 4.2), so users see current signals before suggestions
 2. How many suggestions to show at once?
 3. Should failed observations auto-promote or require approval?
 
@@ -95,8 +96,8 @@ Ready for Plan 44-03: Build flow integration.
 
 ## Session Continuity
 
-**Last Action**: Completed Plan 44-02 — created suggest-approve command with tick-to-approve UI for pheromone suggestions
-**Next Action**: Run `/gsd:plan 44-03` to create build flow integration plan
+**Last Action**: Completed Plan 44-03 — integrated pheromone suggestions into build command as Step 4.2
+**Next Action**: Phase 44 complete — all three plans finished (analyzer, UI, integration)
 **Context Freshness**: Current
 
 ---
