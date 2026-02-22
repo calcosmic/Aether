@@ -2,7 +2,7 @@
 
 > **Current Version:** v1.1.0
 > **Architecture:** v4.0 (runtime/ eliminated, direct packaging)
-> **Last Updated:** 2026-02-22
+> **Last Updated:** 2026-02-22 (pheromone-display merged, rules consolidated)
 
 ---
 
@@ -13,7 +13,7 @@
 | Version | v1.1.0 |
 | Slash commands | 36 (Claude + OpenCode) |
 | Agent definitions | 22 |
-| aether-utils.sh | 7,918 lines, 134 subcommands |
+| aether-utils.sh | ~8,033 lines, 136 subcommands |
 | Tests | 490+ passing |
 | Architecture doc | `RUNTIME UPDATE ARCHITECTURE.md` |
 
@@ -98,6 +98,7 @@ aether update      # or /ant:update
 ├── templates/           # 12 templates (colony-state, pheromones, etc.)
 ├── docs/                # Distributed documentation
 ├── exchange/            # XML exchange modules (pheromone-xml, wisdom-xml)
+├── agents-claude/       # 22 Claude agent definitions (NEW)
 ├── data/                # LOCAL ONLY (never distributed)
 │   ├── COLONY_STATE.json
 │   ├── pheromones.json
@@ -133,13 +134,10 @@ aether update      # or /ant:update
 
 ## Rule Modules
 
-Detailed guidelines are in `.claude/rules/`:
-- `@rules/coding-standards.md` — Code style, naming, organization
-- `@rules/testing.md` — Test framework, structure, coverage
-- `@rules/spawn-discipline.md` — Worker limits, spawn rules
-- `@rules/security.md` — Protected paths, high-risk ops
-- `@rules/git-workflow.md` — Commits, branches, sync
-- `@rules/aether-specific.md` — Source of truth, pheromones
+Consolidated guidelines in `.claude/rules/`:
+- `@rules/aether-colony.md` — Complete colony system guide (single source)
+
+*(Previous separate rule files have been consolidated into aether-colony.md)*
 
 ---
 
@@ -186,6 +184,15 @@ User-colony communication via signals:
 **After builds:** FEEDBACK to adjust
 **Hard constraints:** REDIRECT (will break)
 **Gentle nudges:** FEEDBACK (preferences)
+
+**Viewing Signals:**
+- `/ant:pheromones` — Full table of all active signals
+- `pheromone-display` subcommand — Formatted output with strength % and decay
+
+**Automatic Suggestions:**
+- `suggest-analyze` — Analyzes codebase for patterns worth capturing as pheromones
+- `suggest-approve` — Tick-to-approve UI for reviewing suggestions
+- Runs during build (Step 4.2) to propose contextually relevant signals
 
 **Files:**
 - `.aether/data/pheromones.json` — Active signals
@@ -354,4 +361,4 @@ For OpenCode-specific rules and agents, see `.opencode/OPENCODE.md`
 
 ---
 
-*Updated for Aether v1.1.0 — 2026-02-22*
+*Updated for Aether v1.1.0 — 2026-02-22 (worktrees merged, docs updated)*

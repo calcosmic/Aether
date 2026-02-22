@@ -188,6 +188,70 @@ This ensures signals don't expire while you're away from the project.
 
 ---
 
+## Viewing Active Pheromones
+
+**Command:** `/ant:pheromones [filter]`
+
+Displays all active signals in a formatted table with:
+- Signal type (FOCUS/REDIRECT/FEEDBACK)
+- Current strength percentage (accounting for decay)
+- Elapsed time since creation
+- Remaining time before expiration
+
+**Filters:**
+- `/ant:pheromones` — Show all active signals
+- `/ant:pheromones focus` — Show only FOCUS signals
+- `/ant:pheromones redirect` — Show only REDIRECT signals
+- `/ant:pheromones feedback` — Show only FEEDBACK signals
+- `/ant:pheromones clear` — Clear expired/inactive signals
+
+---
+
+## Automatic Suggestions (v6.0)
+
+The colony can analyze your codebase and suggest pheromones worth capturing.
+
+**During builds:** At Step 4.2, the colony automatically analyzes the codebase and proposes relevant signals:
+- Detects hardcoded values that should be configurable
+- Finds error-prone patterns from the midden
+- Identifies architectural constraints from directory structure
+- Suggests FOCUS areas based on file modification patterns
+- Proposes REDIRECT signals for anti-patterns
+
+**Tick-to-approve UI:** When suggestions are found, the build pauses to show:
+
+```
+🎯 Proposed Pheromone 1 of 3
+
+Type: FOCUS
+Content: "Audio processing — maintain thread safety"
+Confidence: High (3 similar patterns found)
+
+[A]pprove  [R]eject  [S]kip  [D]ismiss All
+```
+
+**Actions:**
+- **A**pprove — Creates the pheromone signal
+- **R**eject — Discards this suggestion (logs reason)
+- **S**kip — Defer decision (shown again next build)
+- **D**ismiss All — Skip all remaining suggestions
+
+---
+
+## Signal Decay
+
+Pheromones lose strength over time (natural decay):
+
+| Signal Type | Half-life | Full decay |
+|-------------|-----------|------------|
+| FOCUS | 15 days | 30 days |
+| REDIRECT | 30 days | 60 days |
+| FEEDBACK | 45 days | 90 days |
+
+Signals below 10% strength are considered inactive but remain in history.
+
+---
+
 ## Quick Reference
 
 | Signal | Command | Priority | Default Expiration | Use for |
@@ -203,3 +267,5 @@ This ensures signals don't expire while you're away from the project.
 - For gentle nudges: FEEDBACK (low priority)
 - For attention: FOCUS (normal priority)
 - For short-lived signals: use `--ttl` flag
+- To see current signals: `/ant:pheromones`
+- To clear expired: `/ant:pheromones clear`
