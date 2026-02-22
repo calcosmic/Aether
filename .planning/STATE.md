@@ -17,8 +17,8 @@
 ## Current Position
 
 **Phase**: 44-suggest-pheromones
-**Plan**: 01 (complete)
-**Status**: Plan 44-01 complete — suggest-analyze command implemented with 6 heuristics
+**Plan**: 02 (complete)
+**Status**: Plan 44-02 complete — tick-to-approve UI implemented with suggest-approve command
 
 **Progress**: 2/3 phases complete, Phase 44 in progress
 
@@ -34,7 +34,7 @@
 |-------|--------|-------|-----------|
 | 42. Fix Update Bugs | ✓ Complete | 2/2 | 2026-02-22 |
 | 43. Make Learning Flow | ✓ Complete | 3/3 | 2026-02-22 |
-| 44. Suggest Pheromones | In Progress | 1/TBD | 2026-02-22 |
+| 44. Suggest Pheromones | In Progress | 2/TBD | 2026-02-22 |
 
 ---
 
@@ -56,6 +56,8 @@
 10. **Failure type support** — Failure observations map to Patterns section in QUEEN.md
 11. **Environment variable override** — AETHER_ROOT respects existing env var for testability
 12. **Single-line METADATA** — QUEEN.md supports both single-line and multi-line METADATA formats
+13. **Pheromone suggestion UI** — Tick-to-approve pattern with Approve/Reject/Skip/Dismiss All actions
+14. **Non-interactive safety** — Auto-skip suggestions in CI/CD to prevent blocking
 
 ### Open Questions
 
@@ -80,19 +82,21 @@
 
 ## Blockers
 
-None. Plan 44-01 complete. suggest-analyze command implemented:
-- 6 heuristics detecting code patterns (large files, TODOs, debug artifacts, type gaps, complexity, test gaps)
-- Session tracking with suggest-record/check/clear commands
-- Deduplication against existing pheromones and session history
+None. Plan 44-02 complete. suggest-approve command implemented:
+- Tick-to-approve UI with one-at-a-time display
+- Approve/Reject/Skip/Dismiss All actions
+- Flags: --yes, --dry-run, --no-suggest, --verbose
+- Non-interactive mode detection (prevents blocking CI/CD)
+- suggest-quick-dismiss helper for bulk dismissal
 
-Ready for Plan 44-02: Integration with build flow.
+Ready for Plan 44-03: Build flow integration.
 
 ---
 
 ## Session Continuity
 
-**Last Action**: Completed Plan 44-01 — created suggest-analyze command with 6 heuristics for code pattern detection
-**Next Action**: Run `/gsd:plan 44-02` to create integration plan for pheromone suggestions in build flow
+**Last Action**: Completed Plan 44-02 — created suggest-approve command with tick-to-approve UI for pheromone suggestions
+**Next Action**: Run `/gsd:plan 44-03` to create build flow integration plan
 **Context Freshness**: Current
 
 ---
