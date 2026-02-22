@@ -7951,8 +7951,8 @@ EOF
     max_suggestions=5
     dry_run=false
 
-    # Parse arguments
-    shift || true  # shift past command name
+    # Parse arguments - note: $1 is already shifted by the main dispatch
+    # So $1 here is the first argument after 'suggest-analyze'
     while [[ $# -gt 0 ]]; do
       case "$1" in
         --source-dir) source_dir="$2"; shift 2 ;;
@@ -7994,7 +7994,7 @@ EOF
     exclude_pattern="node_modules|.aether|dist|build|\\.git|coverage|\\.min\\.js"
 
     # Find files to analyze (respecting exclusions)
-    while IFS= read -r file; do
+    while IFS= read -r file || [[ -n "$file" ]]; do
       analyzed_count=$((analyzed_count + 1))
 
       # Skip excluded paths
@@ -8062,7 +8062,7 @@ EOF
 
       # Check for high complexity (function count)
       if [[ "$ext" =~ ^(ts|tsx|js|jsx|py|sh)$ ]]; then
-        func_count=$(grep -cE "^function|^def |^const.*=.*function|^const.*=.*=>" "$file" 2>/dev/null || echo "0")
+        func_count=$(grep -cE "^function|^def |^const.*=.*function|^const.*=.*=>" "$file" 2>/dev/null | tr -d ' \n' || echo "0")
         if [[ $func_count -gt 20 ]]; then
           patterns_found=$((patterns_found + 1))
           content="Complex module: test carefully ($func_count functions)"
