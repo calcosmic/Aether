@@ -1070,31 +1070,36 @@ Update COLONY_STATE.json:
 
    For each learning extracted, run the memory pipeline (observation + auto-pheromone + auto-promotion check).
 
-   Run using the Bash tool with description "Recording learning observations...":
-   ```bash
-   colony_name=$(jq -r '.session_id | split("_")[1] // "unknown"' .aether/data/COLONY_STATE.json 2>/dev/null || echo "unknown")
+  Run using the Bash tool with description "Recording learning observations...":
+  ```bash
+  # Get learnings from the current phase
+  current_phase_learnings=$(jq -r --argjson phase "$current_phase" '.memory.phase_learnings[] | select(.phase == $phase)' .aether/data/COLONY_STATE.json 2>/dev/null || echo "")
 
-   # Get learnings from the current phase
-   current_phase_learnings=$(jq -r --argjson phase "$current_phase" '.memory.phase_learnings[] | select(.phase == $phase)' .aether/data/COLONY_STATE.json 2>/dev/null || echo "")
-
-   if [[ -n "$current_phase_learnings" ]]; then
-     echo "$current_phase_learnings" | jq -r '.learnings[]?.claim // empty' 2>/dev/null | while read -r claim; do
-       if [[ -n "$claim" ]]; then
-         bash .aether/aether-utils.sh memory-capture "learning" "$claim" "pattern" "worker:continue" 2>/dev/null || true
-       fi
-     done
-     echo "Recorded observations for threshold tracking"
-   else
-     echo "No learnings to record"
-   fi
-   ```
+  if [[ -n "$current_phase_learnings" ]]; then
+    echo "$current_phase_learnings" | jq -r '.learnings[]?.claim // empty' 2>/dev/null | while read -r claim; do
+      if [[ -n "$claim" ]]; then
+        bash .aether/aether-utils.sh memory-capture "learning" "$claim" "pattern" "worker:continue"
+      fi
+    done
+    echo "Recorded observations for threshold tracking"
+  else
+    echo "No learnings to record"
+  fi
+  ```
 
    This records each learning in `learning-observations.json` with:
    - Content hash for deduplication (same claim across phases increments count)
    - Observation count (increments if seen before)
    - Colony name for cross-colony tracking
 
-   Memory capture also auto-emits a FEEDBACK pheromone and attempts auto-promotion when recurrence policy is met.
+   **memory-capture behavior (per learning):**
+   - **Pheromone:** Emits ONE FEEDBACK pheromone per captured learning (emitted here, not again in Step 2.1a)
+   - **Auto-promotion:** Attempts promotion via `learning-promote-auto` using **higher thresholds** (philosophy: 3, pattern/stack/redirect/failure: 2, decree: 0) — only promotes if high-confidence recurrence detected
+   - **Does NOT perform final promotion** — high-threshold auto-promotion is opportunistic; final promotion happens in Step 2.1.5
+
+   **Step 2.1a vs this step:** Step 2.1a emits ONE summary FEEDBACK for the entire phase outcome (different purpose); this step emits per-learning FEEDBACK for each captured observation (captures the individual learning).
+
+   **Step 2.1.5 relationship:** Step 2.1.5 uses **lower thresholds** (all types: 1, decree: 0) to generate promotion proposals and presents them via tick-to-approve UX (`learning-check-promotion` + `learning-approve-proposals`). The higher thresholds here mean auto-promotion only fires for well-established patterns; most promotions go through Step 2.1.5's review flow.
 
 3. **Extract instincts from patterns:**
 
@@ -1204,6 +1209,16 @@ bash .aether/aether-utils.sh pheromone-write REDIRECT "$pattern_text" \
 ```
 
 REDIRECT strength is 0.7 (higher than auto FEEDBACK 0.6 — anti-patterns produce stronger signals than successes). TTL is 30d (not phase_end) because recurring errors should persist across multiple phases.
+
+Also capture each recurring pattern as a resolution candidate so the colony can promote "finally fixed" lessons over time:
+
+```bash
+bash .aether/aether-utils.sh memory-capture \
+  "resolution" \
+  "$pattern_text" \
+  "pattern" \
+  "worker:continue" 2>/dev/null || true
+```
 
 If `errors.flagged_patterns` doesn't exist or is empty, skip silently.
 
