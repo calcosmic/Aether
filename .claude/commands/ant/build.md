@@ -5,6 +5,14 @@ description: "🔨🐜🏗️🐜🔨 Build a phase with pure emergence - colony
 
 You are the **Queen**. You DIRECTLY spawn multiple workers — do not delegate to a single Prime Worker.
 
+## Pheromone Suggestions
+
+At build start, the colony analyzes the codebase for patterns that might benefit
+from pheromone signals (complex files, TODOs, debug artifacts, etc.). Suggested
+signals are presented for approval and written as FOCUS pheromones if approved.
+
+Use `--no-suggest` to skip this analysis.
+
 The phase to build is: `$ARGUMENTS`
 
 ## Instructions
@@ -93,22 +101,25 @@ After displaying context, run using the Bash tool with description "Releasing co
    - If contains `--verbose` or `-v`: set `verbose_mode = true`
    - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
    - If contains `--model <name>` or `-m <name>`: set `cli_model_override = <name>`
-   - Otherwise: set `visual_mode = true` (visual is default)
+   - If contains `--no-suggest`: set `suggest_enabled = false` (suggestions are ON by default)
+   - Otherwise: set `visual_mode = true`, `suggest_enabled = true` (defaults)
 
 If the phase number is empty or not a number:
 
 ```
-Usage: /ant:build <phase_number> [--verbose|-v] [--no-visual] [--model <model>|-m <model>]
+Usage: /ant:build <phase_number> [--verbose|-v] [--no-visual] [--no-suggest] [--model <model>|-m <model>]
 
 Options:
   --verbose, -v       Show full completion details (spawn tree, TDD, patterns)
   --no-visual         Disable real-time visual display (visual is on by default)
+  --no-suggest        Skip pheromone suggestion analysis
   --model, -m <name>  Override model for this build (one-time)
 
 Examples:
   /ant:build 1              Build Phase 1 (with visual display)
   /ant:build 1 --verbose    Build Phase 1 (full details + visual)
   /ant:build 1 --no-visual  Build Phase 1 without visual display
+  /ant:build 1 --no-suggest Build Phase 1 without pheromone suggestions
   /ant:build 1 --model glm-5    Build Phase 1 with glm-5 for all workers
 ```
 
@@ -314,7 +325,37 @@ bash .aether/aether-utils.sh survey-load "{phase_name}" 2>/dev/null
 
    **If ALL tasks are new-file-only** (no existing files will be modified):
    - Skip this step silently — produce no output, no spawn
-   - Proceed directly to Step 5
+   - Proceed directly to Step 4.2
+
+### Step 4.2: Suggest Pheromones
+
+**Conditional step — skipped if `--no-suggest` flag is passed.**
+
+Analyze codebase and suggest pheromone signals based on detected patterns.
+
+Run using the Bash tool with description "Analyzing codebase for suggestions...":
+```bash
+bash .aether/aether-utils.sh suggest-approve --dry-run 2>/dev/null
+```
+
+Parse the JSON result to get `suggestion_count`.
+
+If `suggestion_count` > 0:
+- Display: "💡 {count} pheromone suggestion(s) detected from code analysis"
+- Run: `bash .aether/aether-utils.sh suggest-approve`
+- Parse result for approved/rejected/skipped counts
+- If approved > 0: Display "✓ {approved} FOCUS signal(s) added"
+
+If `suggestion_count` == 0:
+- Skip silently (no output)
+
+**Non-blocking**: This step never stops the build. Even if suggest-approve fails,
+log a warning and continue to Step 5.
+
+**Error handling**:
+- If suggest-analyze returns error: Log warning, continue
+- If suggest-approve returns error: Log warning, continue
+- Never let suggestion failures block the build
 
 2. **If existing code modification detected — spawn Archaeologist Scout:**
 
