@@ -307,11 +307,12 @@ cat >> .aether/midden/build-failures.md << EOF
   severity: "${finding.severity}"
 EOF
 
-# Record as observation
-bash .aether/aether-utils.sh learning-observe \
+# Capture resilience failure in memory pipeline (observe + pheromone + auto-promotion)
+bash .aether/aether-utils.sh memory-capture \
+  "failure" \
   "Resilience issue found: ${finding.title} (${finding.severity})" \
   "failure" \
-  "${colony_name}" 2>/dev/null || true
+  "worker:chaos" 2>/dev/null || true
 ```
 
 Log chaos ant completion and update swarm display:
@@ -344,12 +345,12 @@ cat >> .aether/midden/test-failures.md << EOF
   severity: "high"
 EOF
 
-# Record as observation
-bash .aether/aether-utils.sh learning-observe \
+# Capture verification failure in memory pipeline (observe + pheromone + auto-promotion)
+bash .aether/aether-utils.sh memory-capture \
+  "failure" \
   "Verification failed: ${issue_title} - ${issue_description}" \
   "failure" \
-  "${colony_name}" 2>/dev/null || true
+  "worker:watcher" 2>/dev/null || true
 ```
 
 This ensures verification failures are persisted as blockers that survive context resets. Chaos Ant findings are flagged in Step 5.7.
-

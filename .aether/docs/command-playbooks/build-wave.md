@@ -383,11 +383,12 @@ cat >> .aether/midden/build-failures.md << EOF
   error_type: "worker_failure"
 EOF
 
-# Record observation for potential promotion
-bash .aether/aether-utils.sh learning-observe \
+# Capture failure in memory pipeline (observe + pheromone + auto-promotion)
+bash .aether/aether-utils.sh memory-capture \
+  "failure" \
   "Builder ${ant_name} failed on task ${task_id}: ${blockers[0]:-$failure_reason}" \
   "failure" \
-  "${colony_name}" 2>/dev/null || true
+  "worker:builder" 2>/dev/null || true
 ```
 
 **PER WORKER:** Run using the Bash tool with description "Recording {name} completion...": `bash .aether/aether-utils.sh spawn-complete "{ant_name}" "completed" "{summary}" && bash .aether/aether-utils.sh swarm-display-update "{ant_name}" "builder" "completed" "{task_description}" "Queen" '{"read":5,"grep":3,"edit":2,"bash":1}' 100 "fungus_garden" 100 && bash .aether/aether-utils.sh context-update worker-complete "{ant_name}" "completed"`

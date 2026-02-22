@@ -822,11 +822,12 @@ cat >> .aether/midden/build-failures.md << EOF
   error_type: "worker_failure"
 EOF
 
-# Record observation for potential promotion
-bash .aether/aether-utils.sh learning-observe \
+# Capture failure in memory pipeline (observe + pheromone + auto-promotion)
+bash .aether/aether-utils.sh memory-capture \
+  "failure" \
   "Builder ${ant_name} failed on task ${task_id}: ${blockers[0]:-$failure_reason}" \
   "failure" \
-  "${colony_name}" 2>/dev/null || true
+  "worker:builder" 2>/dev/null || true
 ```
 
 **PER WORKER:** Run using the Bash tool with description "Recording {name} completion...": `bash .aether/aether-utils.sh spawn-complete "{ant_name}" "completed" "{summary}" && bash .aether/aether-utils.sh swarm-display-update "{ant_name}" "builder" "completed" "{task_description}" "Queen" '{"read":5,"grep":3,"edit":2,"bash":1}' 100 "fungus_garden" 100 && bash .aether/aether-utils.sh context-update worker-complete "{ant_name}" "completed"`
@@ -1214,11 +1215,12 @@ cat >> .aether/midden/build-failures.md << EOF
   severity: "${finding.severity}"
 EOF
 
-# Record as observation
-bash .aether/aether-utils.sh learning-observe \
+# Capture resilience failure in memory pipeline (observe + pheromone + auto-promotion)
+bash .aether/aether-utils.sh memory-capture \
+  "failure" \
   "Resilience issue found: ${finding.title} (${finding.severity})" \
   "failure" \
-  "${colony_name}" 2>/dev/null || true
+  "worker:chaos" 2>/dev/null || true
 ```
 
 Log chaos ant completion and update swarm display:
@@ -1251,11 +1253,12 @@ cat >> .aether/midden/test-failures.md << EOF
   severity: "high"
 EOF
 
-# Record as observation
-bash .aether/aether-utils.sh learning-observe \
+# Capture verification failure in memory pipeline (observe + pheromone + auto-promotion)
+bash .aether/aether-utils.sh memory-capture \
+  "failure" \
   "Verification failed: ${issue_title} - ${issue_description}" \
   "failure" \
-  "${colony_name}" 2>/dev/null || true
+  "worker:watcher" 2>/dev/null || true
 ```
 
 This ensures verification failures are persisted as blockers that survive context resets. Chaos Ant findings are flagged in Step 5.7.

@@ -1066,9 +1066,9 @@ Update COLONY_STATE.json:
    - It's stating the obvious
    - There's no evidence it works
 
-2.5. **Record learning observations for threshold tracking:**
+2.5. **Capture learnings through memory pipeline:**
 
-   For each learning extracted, record an observation to enable threshold-based wisdom promotion.
+   For each learning extracted, run the memory pipeline (observation + auto-pheromone + auto-promotion check).
 
    Run using the Bash tool with description "Recording learning observations...":
    ```bash
@@ -1080,8 +1080,7 @@ Update COLONY_STATE.json:
    if [[ -n "$current_phase_learnings" ]]; then
      echo "$current_phase_learnings" | jq -r '.learnings[]?.claim // empty' 2>/dev/null | while read -r claim; do
        if [[ -n "$claim" ]]; then
-         # Default wisdom_type to "pattern" (threshold: 3 observations)
-         bash .aether/aether-utils.sh learning-observe "$claim" "pattern" "$colony_name" 2>/dev/null || true
+         bash .aether/aether-utils.sh memory-capture "learning" "$claim" "pattern" "worker:continue" 2>/dev/null || true
        fi
      done
      echo "Recorded observations for threshold tracking"
@@ -1095,7 +1094,7 @@ Update COLONY_STATE.json:
    - Observation count (increments if seen before)
    - Colony name for cross-colony tracking
 
-   When observations reach threshold (default: 3 for "pattern" type), they become eligible for promotion in Step 2.1.5.
+   Memory capture also auto-emits a FEEDBACK pheromone and attempts auto-promotion when recurrence policy is met.
 
 3. **Extract instincts from patterns:**
 

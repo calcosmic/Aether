@@ -929,7 +929,7 @@ case "$cmd" in
     cat <<'HELP_EOF'
 {
   "ok": true,
-  "commands": ["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","learning-observe","learning-check-promotion","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-display-text","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","survey-load","survey-verify","pheromone-export","pheromone-write","pheromone-count","pheromone-read","instinct-read","pheromone-prime","pheromone-expire","eternal-init","pheromone-export-xml","pheromone-import-xml","pheromone-validate-xml","wisdom-export-xml","wisdom-import-xml","registry-export-xml","registry-import-xml","force-unlock","changelog-append","changelog-collect-plan-data","suggest-approve","suggest-quick-dismiss"],
+  "commands": ["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","learning-observe","learning-check-promotion","learning-promote-auto","memory-capture","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-display-text","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","survey-load","survey-verify","pheromone-export","pheromone-write","pheromone-count","pheromone-read","instinct-read","pheromone-prime","pheromone-expire","eternal-init","pheromone-export-xml","pheromone-import-xml","pheromone-validate-xml","wisdom-export-xml","wisdom-import-xml","registry-export-xml","registry-import-xml","force-unlock","changelog-append","changelog-collect-plan-data","suggest-approve","suggest-quick-dismiss"],
   "sections": {
     "Core": [
       {"name": "help", "description": "List all available commands with sections"},
@@ -945,7 +945,9 @@ case "$cmd" in
       {"name": "queen-read", "description": "Read QUEEN.md wisdom as JSON for worker priming"},
       {"name": "queen-promote", "description": "Promote a validated learning to QUEEN.md wisdom"},
       {"name": "learning-observe", "description": "Record observation of a learning across colonies"},
-      {"name": "learning-check-promotion", "description": "Check which learnings meet promotion thresholds"}
+      {"name": "learning-check-promotion", "description": "Check which learnings meet promotion thresholds"},
+      {"name": "learning-promote-auto", "description": "Auto-promote high-confidence learnings based on recurrence policy"},
+      {"name": "memory-capture", "description": "Capture learning/failure events with auto-pheromone and auto-promotion"}
     ],
     "Model Routing": [
       {"name": "model-profile", "description": "Manage caste-to-model assignments"},
@@ -4711,6 +4713,166 @@ $updated_meta
     ' "$observations_file" 2>/dev/null || echo '{"proposals":[]}')
 
     json_ok "$result"
+    ;;
+
+  learning-promote-auto)
+    # Auto-promote high-confidence learnings using recurrence policy.
+    # Usage: learning-promote-auto <wisdom_type> <content> [colony_name] [event_type]
+    wisdom_type="${1:-}"
+    content="${2:-}"
+    colony_name="${3:-}"
+    event_type="${4:-learning}"
+
+    [[ -z "$wisdom_type" ]] && json_err "$E_VALIDATION_FAILED" "Usage: learning-promote-auto <wisdom_type> <content> [colony_name] [event_type]" '{"missing":"wisdom_type"}'
+    [[ -z "$content" ]] && json_err "$E_VALIDATION_FAILED" "Usage: learning-promote-auto <wisdom_type> <content> [colony_name] [event_type]" '{"missing":"content"}'
+
+    if [[ -z "$colony_name" ]]; then
+      colony_name=$(jq -r '.session_id | split("_")[1] // "unknown"' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "unknown")
+    fi
+
+    case "$wisdom_type" in
+      decree) policy_threshold=0 ;;
+      philosophy) policy_threshold=3 ;;
+      pattern|stack|redirect|failure) policy_threshold=2 ;;
+      *) policy_threshold=2 ;;
+    esac
+
+    observations_file="$DATA_DIR/learning-observations.json"
+    content_hash="sha256:$(echo -n "$content" | sha256sum | cut -d' ' -f1)"
+    observation_count=0
+    colony_count=0
+
+    if [[ -f "$observations_file" ]]; then
+      observation_count=$(jq -r --arg hash "$content_hash" '.observations[]? | select(.content_hash == $hash) | .observation_count // 0' "$observations_file" 2>/dev/null | head -1)
+      colony_count=$(jq -r --arg hash "$content_hash" '.observations[]? | select(.content_hash == $hash) | (.colonies // [] | length)' "$observations_file" 2>/dev/null | head -1)
+      [[ -z "$observation_count" ]] && observation_count=0
+      [[ -z "$colony_count" ]] && colony_count=0
+    fi
+
+    if [[ "$policy_threshold" -gt 0 && "$observation_count" -lt "$policy_threshold" ]]; then
+      json_ok "{\"promoted\":false,\"reason\":\"threshold_not_met\",\"policy_threshold\":$policy_threshold,\"observation_count\":$observation_count,\"colony_count\":$colony_count,\"event_type\":\"$event_type\"}"
+      exit 0
+    fi
+
+    queen_file="$AETHER_ROOT/.aether/QUEEN.md"
+    if [[ ! -f "$queen_file" ]]; then
+      json_ok "{\"promoted\":false,\"reason\":\"queen_missing\",\"policy_threshold\":$policy_threshold,\"observation_count\":$observation_count,\"colony_count\":$colony_count}"
+      exit 0
+    fi
+
+    if grep -Fq -- "$content" "$queen_file" 2>/dev/null; then
+      json_ok "{\"promoted\":false,\"reason\":\"already_promoted\",\"policy_threshold\":$policy_threshold,\"observation_count\":$observation_count,\"colony_count\":$colony_count}"
+      exit 0
+    fi
+
+    promote_result=$(bash "$0" queen-promote "$wisdom_type" "$content" "$colony_name" 2>/dev/null || echo '{}')
+    if echo "$promote_result" | jq -e '.ok == true' >/dev/null 2>&1; then
+      json_ok "{\"promoted\":true,\"mode\":\"auto\",\"policy_threshold\":$policy_threshold,\"observation_count\":$observation_count,\"colony_count\":$colony_count,\"event_type\":\"$event_type\"}"
+    else
+      promote_msg=$(echo "$promote_result" | jq -r '.error.message // "promotion_failed"' 2>/dev/null || echo "promotion_failed")
+      result=$(jq -n \
+        --arg reason "promotion_failed" \
+        --arg message "$promote_msg" \
+        --argjson policy_threshold "$policy_threshold" \
+        --argjson observation_count "$observation_count" \
+        --argjson colony_count "$colony_count" \
+        '{promoted:false, reason:$reason, message:$message, policy_threshold:$policy_threshold, observation_count:$observation_count, colony_count:$colony_count}')
+      json_ok "$result"
+    fi
+    ;;
+
+  memory-capture)
+    # Capture learning/failure events with deterministic memory actions.
+    # Usage: memory-capture <event_type> <content> [wisdom_type] [source]
+    # event_type: learning|failure|redirect|feedback|success
+    mc_event="${1:-}"
+    mc_content="${2:-}"
+    mc_wisdom_type="${3:-}"
+    mc_source="${4:-system:memory-capture}"
+
+    [[ -z "$mc_event" ]] && json_err "$E_VALIDATION_FAILED" "Usage: memory-capture <event_type> <content> [wisdom_type] [source]" '{"missing":"event_type"}'
+    [[ -z "$mc_content" ]] && json_err "$E_VALIDATION_FAILED" "Usage: memory-capture <event_type> <content> [wisdom_type] [source]" '{"missing":"content"}'
+
+    case "$mc_event" in
+      learning|failure|redirect|feedback|success) ;;
+      *) json_err "$E_VALIDATION_FAILED" "Invalid event_type: $mc_event" '{"valid_event_types":["learning","failure","redirect","feedback","success"]}' ;;
+    esac
+
+    if [[ -z "$mc_wisdom_type" ]]; then
+      case "$mc_event" in
+        failure) mc_wisdom_type="failure" ;;
+        redirect) mc_wisdom_type="redirect" ;;
+        feedback) mc_wisdom_type="pattern" ;;
+        learning|success) mc_wisdom_type="pattern" ;;
+      esac
+    fi
+
+    colony_name=$(jq -r '.session_id | split("_")[1] // "unknown"' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "unknown")
+
+    observe_result=$(bash "$0" learning-observe "$mc_content" "$mc_wisdom_type" "$colony_name" 2>/dev/null || echo '{}')
+    if ! echo "$observe_result" | jq -e '.ok == true' >/dev/null 2>&1; then
+      obs_msg=$(echo "$observe_result" | jq -r '.error.message // "learning_observe_failed"' 2>/dev/null || echo "learning_observe_failed")
+      json_err "$E_VALIDATION_FAILED" "memory-capture failed at learning-observe: $obs_msg"
+    fi
+
+    obs_count=$(echo "$observe_result" | jq -r '.result.observation_count // 0' 2>/dev/null || echo "0")
+    obs_threshold=$(echo "$observe_result" | jq -r '.result.threshold // 1' 2>/dev/null || echo "1")
+    obs_threshold_met=$(echo "$observe_result" | jq -r '.result.threshold_met // false' 2>/dev/null || echo "false")
+
+    pheromone_type=""
+    pheromone_content=""
+    pheromone_strength="0.6"
+    pheromone_reason=""
+    pheromone_ttl="30d"
+
+    case "$mc_event" in
+      failure)
+        pheromone_type="REDIRECT"
+        pheromone_content="Avoid repeating failure: $mc_content"
+        pheromone_strength="0.7"
+        pheromone_reason="Auto-emitted from failure event"
+        ;;
+      redirect)
+        pheromone_type="REDIRECT"
+        pheromone_content="$mc_content"
+        pheromone_strength="0.7"
+        pheromone_reason="Auto-emitted redirect guidance"
+        ;;
+      feedback)
+        pheromone_type="FEEDBACK"
+        pheromone_content="$mc_content"
+        pheromone_strength="0.6"
+        pheromone_reason="Auto-emitted feedback guidance"
+        ;;
+      learning|success)
+        pheromone_type="FEEDBACK"
+        pheromone_content="Learning captured: $mc_content"
+        pheromone_strength="0.6"
+        pheromone_reason="Auto-emitted from validated learning"
+        ;;
+    esac
+
+    pheromone_created=false
+    pheromone_signal_id=""
+    if [[ -n "$pheromone_type" && -n "$pheromone_content" ]]; then
+      pheromone_result=$(bash "$0" pheromone-write "$pheromone_type" "$pheromone_content" --strength "$pheromone_strength" --source "$mc_source" --reason "$pheromone_reason" --ttl "$pheromone_ttl" 2>/dev/null || echo '{}')
+      if echo "$pheromone_result" | jq -e '.ok == true' >/dev/null 2>&1; then
+        pheromone_created=true
+        pheromone_signal_id=$(echo "$pheromone_result" | jq -r '.result.signal_id // ""' 2>/dev/null || echo "")
+      fi
+    fi
+
+    auto_result=$(bash "$0" learning-promote-auto "$mc_wisdom_type" "$mc_content" "$colony_name" "$mc_event" 2>/dev/null || echo '{}')
+    auto_promoted=false
+    auto_reason="promotion_skipped"
+    if echo "$auto_result" | jq -e '.ok == true' >/dev/null 2>&1; then
+      auto_promoted=$(echo "$auto_result" | jq -r '.result.promoted // false' 2>/dev/null || echo "false")
+      auto_reason=$(echo "$auto_result" | jq -r '.result.reason // "promoted"' 2>/dev/null || echo "unknown")
+    fi
+
+    bash "$0" activity-log "MEMORY" "system" "Captured $mc_event ($mc_wisdom_type): count=$obs_count auto_promoted=$auto_promoted" >/dev/null 2>&1 || true
+
+    json_ok "{\"event_type\":\"$mc_event\",\"wisdom_type\":\"$mc_wisdom_type\",\"observation_count\":$obs_count,\"threshold\":$obs_threshold,\"threshold_met\":$obs_threshold_met,\"pheromone_created\":$pheromone_created,\"signal_id\":\"$pheromone_signal_id\",\"auto_promoted\":$auto_promoted,\"promotion_reason\":\"$auto_reason\"}"
     ;;
 
   learning-display-proposals)

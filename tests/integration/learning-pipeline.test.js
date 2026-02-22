@@ -381,3 +381,83 @@ test.serial('failure type maps to patterns section when promoted', async (t) => 
     await cleanupTempDir(tmpDir);
   }
 });
+
+test.serial('learning-promote-auto requires recurrence before promoting', async (t) => {
+  const tmpDir = await createTempDir();
+
+  try {
+    await setupTestColony(tmpDir);
+
+    const content = 'Auto-promote pattern after recurrence';
+
+    // First observation: should not auto-promote yet (policy threshold is 2)
+    runAetherUtil(tmpDir, 'learning-observe', [content, 'pattern', 'colony-a']);
+    const firstAttempt = JSON.parse(runAetherUtil(tmpDir, 'learning-promote-auto', [
+      'pattern',
+      content,
+      'colony-a',
+      'learning'
+    ]));
+
+    t.true(firstAttempt.ok, 'first auto-promotion call should succeed');
+    t.false(firstAttempt.result.promoted, 'should not promote on first observation');
+    t.is(firstAttempt.result.reason, 'threshold_not_met', 'should report threshold_not_met');
+
+    // Second observation: now eligible
+    runAetherUtil(tmpDir, 'learning-observe', [content, 'pattern', 'colony-a']);
+    const secondAttempt = JSON.parse(runAetherUtil(tmpDir, 'learning-promote-auto', [
+      'pattern',
+      content,
+      'colony-a',
+      'learning'
+    ]));
+
+    t.true(secondAttempt.ok, 'second auto-promotion call should succeed');
+    t.true(secondAttempt.result.promoted, 'should promote after recurrence');
+
+    const queenContent = fs.readFileSync(path.join(tmpDir, '.aether', 'QUEEN.md'), 'utf8');
+    t.true(queenContent.includes(content), 'QUEEN.md should contain auto-promoted content');
+  } finally {
+    await cleanupTempDir(tmpDir);
+  }
+});
+
+test.serial('memory-capture failure emits redirect pheromone and auto-promotes on recurrence', async (t) => {
+  const tmpDir = await createTempDir();
+
+  try {
+    await setupTestColony(tmpDir);
+
+    const failureContent = 'Repeated null dereference in parser';
+
+    // First capture: records observation + pheromone, but not promoted yet.
+    const firstCapture = JSON.parse(runAetherUtil(tmpDir, 'memory-capture', [
+      'failure',
+      failureContent,
+      'failure',
+      'worker:test'
+    ]));
+    t.true(firstCapture.ok, 'first memory-capture should succeed');
+    t.true(firstCapture.result.pheromone_created, 'first memory-capture should create pheromone');
+    t.false(firstCapture.result.auto_promoted, 'first capture should not auto-promote yet');
+
+    // Second capture: should auto-promote.
+    const secondCapture = JSON.parse(runAetherUtil(tmpDir, 'memory-capture', [
+      'failure',
+      failureContent,
+      'failure',
+      'worker:test'
+    ]));
+    t.true(secondCapture.ok, 'second memory-capture should succeed');
+    t.true(secondCapture.result.auto_promoted, 'second capture should auto-promote');
+
+    const pheromones = JSON.parse(fs.readFileSync(path.join(tmpDir, '.aether', 'data', 'pheromones.json'), 'utf8'));
+    const redirectSignals = pheromones.signals.filter((s) => s.type === 'REDIRECT');
+    t.true(redirectSignals.length >= 1, 'should emit REDIRECT pheromone');
+
+    const queenContent = fs.readFileSync(path.join(tmpDir, '.aether', 'QUEEN.md'), 'utf8');
+    t.true(queenContent.includes(failureContent), 'QUEEN.md should contain promoted failure lesson');
+  } finally {
+    await cleanupTempDir(tmpDir);
+  }
+});
