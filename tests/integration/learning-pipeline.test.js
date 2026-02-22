@@ -36,7 +36,7 @@ function runAetherUtil(tmpDir, command, args = []) {
     AETHER_ROOT: tmpDir,
     DATA_DIR: path.join(tmpDir, '.aether', 'data')
   };
-  const cmd = `bash "${scriptPath}" ${command} ${args.map(a => `"${a}"`).join(' ')}`;
+  const cmd = `bash "${scriptPath}" ${command} ${args.map(a => `"${a}"`).join(' ')} 2>/dev/null`;
   return execSync(cmd, { encoding: 'utf8', env, cwd: tmpDir });
 }
 
@@ -48,10 +48,11 @@ async function setupTestColony(tmpDir) {
   // Create directories
   await fs.promises.mkdir(dataDir, { recursive: true });
 
-  // Create QUEEN.md from template
+  // Create QUEEN.md from template (METADATA on single line to avoid awk issues)
+  const isoDate = new Date().toISOString();
   const queenTemplate = `# QUEEN.md — Colony Wisdom
 
-> Last evolved: ${new Date().toISOString()}
+> Last evolved: ${isoDate}
 > Colonies contributed: 0
 > Wisdom version: 1.0.0
 
@@ -104,27 +105,7 @@ User-mandated rules.
 
 ---
 
-<!-- METADATA
-{
-  "version": "1.0.0",
-  "last_evolved": "${new Date().toISOString()}",
-  "colonies_contributed": [],
-  "promotion_thresholds": {
-    "philosophy": 1,
-    "pattern": 1,
-    "redirect": 1,
-    "stack": 1,
-    "decree": 0
-  },
-  "stats": {
-    "total_philosophies": 0,
-    "total_patterns": 0,
-    "total_redirects": 0,
-    "total_stack_entries": 0,
-    "total_decrees": 0
-  }
-}
--->`;
+<!-- METADATA {"version":"1.0.0","last_evolved":"${isoDate}","colonies_contributed":[],"promotion_thresholds":{"philosophy":1,"pattern":1,"redirect":1,"stack":1,"decree":0},"stats":{"total_philosophies":0,"total_patterns":0,"total_redirects":0,"total_stack_entries":0,"total_decrees":0}} -->`;
 
   await fs.promises.writeFile(path.join(aetherDir, 'QUEEN.md'), queenTemplate);
 
@@ -150,13 +131,13 @@ test.serial('learning-observe records a new observation', async (t) => {
       'test-colony'
     ]);
 
-    // Parse result
+    // Parse result - aether-utils uses 'ok' and 'result' not 'success' and 'data'
     const resultJson = JSON.parse(result);
-    t.true(resultJson.success, 'Should return success');
-    t.is(resultJson.data.observation_count, 1, 'Should have count of 1');
-    t.is(resultJson.data.wisdom_type, 'pattern', 'Should be pattern type');
-    t.true(resultJson.data.threshold_met, 'Should meet threshold (threshold=1)');
-    t.true(resultJson.data.is_new, 'Should be a new observation');
+    t.true(resultJson.ok, 'Should return ok=true');
+    t.is(resultJson.result.observation_count, 1, 'Should have count of 1');
+    t.is(resultJson.result.wisdom_type, 'pattern', 'Should be pattern type');
+    t.true(resultJson.result.threshold_met, 'Should meet threshold (threshold=1)');
+    t.true(resultJson.result.is_new, 'Should be a new observation');
 
     // Verify file was created
     const obsFile = path.join(tmpDir, '.aether', 'data', 'learning-observations.json');
@@ -193,9 +174,9 @@ test.serial('learning-observe increments count for duplicate content', async (t)
     ]);
 
     const resultJson = JSON.parse(result2);
-    t.is(resultJson.data.observation_count, 2, 'Should have count of 2');
-    t.false(resultJson.data.is_new, 'Should not be new (existing)');
-    t.deepEqual(resultJson.data.colonies.sort(), ['colony-a', 'colony-b'], 'Should have both colonies');
+    t.is(resultJson.result.observation_count, 2, 'Should have count of 2');
+    t.false(resultJson.result.is_new, 'Should not be new (existing)');
+    t.deepEqual(resultJson.result.colonies.sort(), ['colony-a', 'colony-b'], 'Should have both colonies');
   } finally {
     await cleanupTempDir(tmpDir);
   }
@@ -215,11 +196,11 @@ test.serial('learning-check-promotion finds threshold-meeting observations', asy
     const result = runAetherUtil(tmpDir, 'learning-check-promotion');
     const resultJson = JSON.parse(result);
 
-    t.true(resultJson.success, 'Should return success');
-    t.is(resultJson.data.proposals.length, 2, 'Should have 2 proposals');
+    t.true(resultJson.ok, 'Should return ok=true');
+    t.is(resultJson.result.proposals.length, 2, 'Should have 2 proposals');
 
     // Verify proposal structure
-    const proposal = resultJson.data.proposals[0];
+    const proposal = resultJson.result.proposals[0];
     t.truthy(proposal.content, 'Proposal should have content');
     t.truthy(proposal.wisdom_type, 'Proposal should have wisdom_type');
     t.truthy(proposal.observation_count, 'Proposal should have observation_count');
@@ -247,7 +228,7 @@ test.serial('queen-promote writes wisdom to QUEEN.md', async (t) => {
     ]);
 
     const resultJson = JSON.parse(result);
-    t.true(resultJson.success, 'Should return success');
+    t.true(resultJson.ok, 'Should return ok=true');
 
     // Verify QUEEN.md was updated
     const queenFile = path.join(tmpDir, '.aether', 'QUEEN.md');
@@ -286,12 +267,12 @@ test.serial('colony-prime reads promoted wisdom', async (t) => {
     const result = runAetherUtil(tmpDir, 'colony-prime');
     const resultJson = JSON.parse(result);
 
-    t.true(resultJson.success, 'Should return success');
-    t.truthy(resultJson.data.wisdom, 'Should have wisdom');
-    t.truthy(resultJson.data.wisdom.patterns, 'Should have patterns section');
-    t.true(resultJson.data.wisdom.patterns.includes('Wisdom to be primed'), 'Patterns should include promoted wisdom');
-    t.truthy(resultJson.data.prompt_section, 'Should have prompt_section');
-    t.true(resultJson.data.prompt_section.includes('Wisdom to be primed'), 'Prompt section should include wisdom');
+    t.true(resultJson.ok, 'Should return ok=true');
+    t.truthy(resultJson.result.wisdom, 'Should have wisdom');
+    t.truthy(resultJson.result.wisdom.patterns, 'Should have patterns section');
+    t.true(resultJson.result.wisdom.patterns.includes('Wisdom to be primed'), 'Patterns should include promoted wisdom');
+    t.truthy(resultJson.result.prompt_section, 'Should have prompt_section');
+    t.true(resultJson.result.prompt_section.includes('Wisdom to be primed'), 'Prompt section should include wisdom');
   } finally {
     await cleanupTempDir(tmpDir);
   }
@@ -311,17 +292,17 @@ test.serial('complete pipeline: observe -> check -> promote -> prime', async (t)
     // Step 2: Check for proposals
     const checkResult = runAetherUtil(tmpDir, 'learning-check-promotion');
     const checkJson = JSON.parse(checkResult);
-    t.is(checkJson.data.proposals.length, 2, 'Should find 2 proposals');
+    t.is(checkJson.result.proposals.length, 2, 'Should find 2 proposals');
 
     // Step 3: Promote each proposal
-    for (const proposal of checkJson.data.proposals) {
+    for (const proposal of checkJson.result.proposals) {
       const promoteResult = runAetherUtil(tmpDir, 'queen-promote', [
         proposal.wisdom_type,
         proposal.content,
         proposal.colonies[0]
       ]);
       const promoteJson = JSON.parse(promoteResult);
-      t.true(promoteJson.success, `Should promote ${proposal.wisdom_type}`);
+      t.true(promoteJson.ok, `Should promote ${proposal.wisdom_type}`);
     }
 
     // Step 4: Create pheromones and prime
@@ -334,9 +315,9 @@ test.serial('complete pipeline: observe -> check -> promote -> prime', async (t)
     const primeResult = runAetherUtil(tmpDir, 'colony-prime');
     const primeJson = JSON.parse(primeResult);
 
-    t.true(primeJson.success, 'colony-prime should succeed');
-    t.true(primeJson.data.wisdom.patterns.includes('End-to-end test observation 1'), 'Should have pattern');
-    t.true(primeJson.data.wisdom.philosophies.includes('End-to-end test observation 2'), 'Should have philosophy');
+    t.true(primeJson.ok, 'colony-prime should succeed');
+    t.true(primeJson.result.wisdom.patterns.includes('End-to-end test observation 1'), 'Should have pattern');
+    t.true(primeJson.result.wisdom.philosophies.includes('End-to-end test observation 2'), 'Should have philosophy');
 
     // Step 5: Verify QUEEN.md has both entries
     const queenFile = path.join(tmpDir, '.aether', 'QUEEN.md');
@@ -362,7 +343,7 @@ test.serial('decree type promotes immediately with threshold 0', async (t) => {
     ]);
     const observeJson = JSON.parse(observeResult);
 
-    t.true(observeJson.data.threshold_met, 'Decree should meet threshold immediately');
+    t.true(observeJson.result.threshold_met, 'Decree should meet threshold immediately');
 
     // Promote it
     runAetherUtil(tmpDir, 'queen-promote', ['decree', 'Immediate decree test', 'test-colony']);
