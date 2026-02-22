@@ -1,0 +1,451 @@
++ set -euo pipefail
++ trap 'if type error_handler &>/dev/null; then error_handler ${LINENO} "$BASH_COMMAND" $?; fi' ERR
++++ dirname .aether/aether-utils.sh
+++ cd .aether
+++ pwd
++ SCRIPT_DIR=/Users/callumcowie/repos/Aether/.aether
++ AETHER_ROOT=/var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU
++ DATA_DIR=/var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/.aether/data
++ LOCK_ACQUIRED=false
++ CURRENT_LOCK=
++ [[ -f /Users/callumcowie/repos/Aether/.aether/utils/file-lock.sh ]]
++ source /Users/callumcowie/repos/Aether/.aether/utils/file-lock.sh
+++ [[ -z /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU ]]
+++ LOCK_DIR=/var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/.aether/locks
+++ LOCK_TIMEOUT=300
+++ LOCK_RETRY_INTERVAL=0.5
+++ LOCK_MAX_RETRIES=100
+++ : E_LOCK_STALE
+++ mkdir -p /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/.aether/locks
+++ trap cleanup_locks EXIT TERM INT HUP
+++ export -f acquire_lock release_lock is_locked get_lock_holder wait_for_lock cleanup_locks
++ [[ -f /Users/callumcowie/repos/Aether/.aether/utils/atomic-write.sh ]]
++ source /Users/callumcowie/repos/Aether/.aether/utils/atomic-write.sh
+++++ dirname /Users/callumcowie/repos/Aether/.aether/utils/atomic-write.sh
++++ cd /Users/callumcowie/repos/Aether/.aether/utils
++++ pwd
+++ _AETHER_UTILS_DIR=/Users/callumcowie/repos/Aether/.aether/utils
+++ '[' -z /Users/callumcowie/repos/Aether/.aether/utils ']'
++++ pwd
+++ '[' /Users/callumcowie/repos/Aether/.aether/utils = /Users/callumcowie/repos/Aether ']'
+++ '[' '!' -f /Users/callumcowie/repos/Aether/.aether/utils/file-lock.sh ']'
+++ source /Users/callumcowie/repos/Aether/.aether/utils/file-lock.sh
++++ [[ -z /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU ]]
++++ LOCK_DIR=/var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/.aether/locks
++++ LOCK_TIMEOUT=300
++++ LOCK_RETRY_INTERVAL=0.5
++++ LOCK_MAX_RETRIES=100
++++ : E_LOCK_STALE
++++ mkdir -p /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/.aether/locks
++++ trap cleanup_locks EXIT TERM INT HUP
++++ export -f acquire_lock release_lock is_locked get_lock_holder wait_for_lock cleanup_locks
+++ [[ -z /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU ]]
+++ TEMP_DIR=/var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/.aether/temp
+++ BACKUP_DIR=/var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/.aether/data/backups
+++ mkdir -p /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/.aether/temp /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/.aether/data/backups
+++ MAX_BACKUPS=3
+++ export -f atomic_write atomic_write_from_file create_backup rotate_backups
+++ export -f restore_backup list_backups cleanup_temp_files
++ [[ -f /Users/callumcowie/repos/Aether/.aether/utils/error-handler.sh ]]
++ source /Users/callumcowie/repos/Aether/.aether/utils/error-handler.sh
+++ E_UNKNOWN=E_UNKNOWN
+++ E_HUB_NOT_FOUND=E_HUB_NOT_FOUND
+++ E_REPO_NOT_INITIALIZED=E_REPO_NOT_INITIALIZED
+++ E_FILE_NOT_FOUND=E_FILE_NOT_FOUND
+++ E_JSON_INVALID=E_JSON_INVALID
+++ E_LOCK_FAILED=E_LOCK_FAILED
+++ E_LOCK_STALE=E_LOCK_STALE
+++ E_GIT_ERROR=E_GIT_ERROR
+++ E_VALIDATION_FAILED=E_VALIDATION_FAILED
+++ E_FEATURE_UNAVAILABLE=E_FEATURE_UNAVAILABLE
+++ E_BASH_ERROR=E_BASH_ERROR
+++ E_DEPENDENCY_MISSING=E_DEPENDENCY_MISSING
+++ E_RESOURCE_NOT_FOUND=E_RESOURCE_NOT_FOUND
+++ _FEATURES_DISABLED=
+++ export -f json_err json_warn error_handler
+++ export -f feature_enable feature_disable feature_enabled feature_log_degradation
+++ export -f _get_recovery _recovery_hub_not_found _recovery_repo_not_init
+++ export -f _recovery_file_not_found _recovery_json_invalid _recovery_lock_failed
+++ export -f _recovery_lock_stale
+++ export -f _recovery_git_error _recovery_default _feature_reason
+++ export -f _recovery_dependency_missing _recovery_resource_not_found
+++ export E_UNKNOWN E_HUB_NOT_FOUND E_REPO_NOT_INITIALIZED E_FILE_NOT_FOUND
+++ export E_JSON_INVALID E_LOCK_FAILED E_LOCK_STALE E_GIT_ERROR E_VALIDATION_FAILED
+++ export E_FEATURE_UNAVAILABLE E_BASH_ERROR
+++ export E_DEPENDENCY_MISSING E_RESOURCE_NOT_FOUND
+++ export _FEATURES_DISABLED
++ [[ -f /Users/callumcowie/repos/Aether/.aether/utils/chamber-utils.sh ]]
++ source /Users/callumcowie/repos/Aether/.aether/utils/chamber-utils.sh
+++ set -euo pipefail
+++ LOCK_ACQUIRED=false
+++ CURRENT_LOCK=
+++++ dirname /Users/callumcowie/repos/Aether/.aether/utils/chamber-utils.sh
++++ cd /Users/callumcowie/repos/Aether/.aether/utils
++++ pwd
+++ __chamber_utils_dir=/Users/callumcowie/repos/Aether/.aether/utils
+++ [[ -z /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU ]]
+++ SCRIPT_DIR=/Users/callumcowie/repos/Aether/.aether
+++ [[ -f /Users/callumcowie/repos/Aether/.aether/atomic-write.sh ]]
+++ type json_err
+++ : E_UNKNOWN
+++ : E_VALIDATION_FAILED
+++ : E_FILE_NOT_FOUND
+++ : E_BASH_ERROR
+++ : E_JSON_INVALID
+++ export -f chamber_sanitize_goal chamber_compute_hash chamber_create chamber_verify chamber_list
++ [[ -f /Users/callumcowie/repos/Aether/.aether/utils/xml-utils.sh ]]
++ source /Users/callumcowie/repos/Aether/.aether/utils/xml-utils.sh
+++ set -euo pipefail
+++ [[ -n /Users/callumcowie/repos/Aether/.aether/utils/xml-utils.sh ]]
+++++ dirname /Users/callumcowie/repos/Aether/.aether/utils/xml-utils.sh
++++ cd /Users/callumcowie/repos/Aether/.aether/utils
++++ pwd
+++ SCRIPT_DIR=/Users/callumcowie/repos/Aether/.aether/utils
++++ cd /Users/callumcowie/repos/Aether/.aether/utils/../exchange
++++ pwd
+++ EXCHANGE_DIR=/Users/callumcowie/repos/Aether/.aether/exchange
+++ source /Users/callumcowie/repos/Aether/.aether/utils/xml-core.sh
++++ [[ -z '' ]]
++++ XMLLINT_AVAILABLE=false
++++ command -v xmllint
++++ XMLLINT_AVAILABLE=true
++++ [[ -z '' ]]
++++ XMLSTARLET_AVAILABLE=false
++++ command -v xmlstarlet
++++ XMLSTARLET_AVAILABLE=true
++++ [[ -z '' ]]
++++ XSLTPROC_AVAILABLE=false
++++ command -v xsltproc
++++ XSLTPROC_AVAILABLE=true
++++ export -f xml_json_ok xml_json_err
++++ export -f xml-detect-tools xml-validate xml-well-formed xml-format
++++ export -f xml-escape xml-unescape _xml_escape_content
++++ export XMLLINT_AVAILABLE XMLSTARLET_AVAILABLE XSLTPROC_AVAILABLE
+++ source /Users/callumcowie/repos/Aether/.aether/utils/xml-query.sh
++++ set -euo pipefail
++++++ dirname /Users/callumcowie/repos/Aether/.aether/utils/xml-query.sh
+++++ cd /Users/callumcowie/repos/Aether/.aether/utils
+++++ pwd
++++ SCRIPT_DIR=/Users/callumcowie/repos/Aether/.aether/utils
++++ source /Users/callumcowie/repos/Aether/.aether/utils/xml-core.sh
+++++ [[ -z true ]]
+++++ [[ -z true ]]
+++++ [[ -z true ]]
+++++ export -f xml_json_ok xml_json_err
+++++ export -f xml-detect-tools xml-validate xml-well-formed xml-format
+++++ export -f xml-escape xml-unescape _xml_escape_content
+++++ export XMLLINT_AVAILABLE XMLSTARLET_AVAILABLE XSLTPROC_AVAILABLE
++++ export -f xml-query xml-query-attr xml-query-text xml-query-count
+++ source /Users/callumcowie/repos/Aether/.aether/utils/xml-convert.sh
++++ set -euo pipefail
++++++ dirname /Users/callumcowie/repos/Aether/.aether/utils/xml-convert.sh
+++++ cd /Users/callumcowie/repos/Aether/.aether/utils
+++++ pwd
++++ SCRIPT_DIR=/Users/callumcowie/repos/Aether/.aether/utils
++++ source /Users/callumcowie/repos/Aether/.aether/utils/xml-core.sh
+++++ [[ -z true ]]
+++++ [[ -z true ]]
+++++ [[ -z true ]]
+++++ export -f xml_json_ok xml_json_err
+++++ export -f xml-detect-tools xml-validate xml-well-formed xml-format
+++++ export -f xml-escape xml-unescape _xml_escape_content
+++++ export XMLLINT_AVAILABLE XMLSTARLET_AVAILABLE XSLTPROC_AVAILABLE
++++ XML2JSON_AVAILABLE=false
++++ command -v xml2json
++++ export -f xml-convert-detect-format xml-to-json json-to-xml xml-merge
++++ export XML2JSON_AVAILABLE
+++ source /Users/callumcowie/repos/Aether/.aether/utils/xml-compose.sh
++++ set -euo pipefail
++++ type xml_json_ok
++++ export -f xml-compose xml-list-includes xml-compose-worker-priming
++++ export -f xml-validate-include-path
+++ source /Users/callumcowie/repos/Aether/.aether/exchange/pheromone-xml.sh
++++ [[ -n /Users/callumcowie/repos/Aether/.aether/exchange/pheromone-xml.sh ]]
++++++ dirname /Users/callumcowie/repos/Aether/.aether/exchange/pheromone-xml.sh
+++++ cd /Users/callumcowie/repos/Aether/.aether/exchange/..
+++++ pwd
++++ SCRIPT_DIR=/Users/callumcowie/repos/Aether/.aether
++++ source /Users/callumcowie/repos/Aether/.aether/utils/xml-core.sh
+++++ [[ -z true ]]
+++++ [[ -z true ]]
+++++ [[ -z true ]]
+++++ export -f xml_json_ok xml_json_err
+++++ export -f xml-detect-tools xml-validate xml-well-formed xml-format
+++++ export -f xml-escape xml-unescape _xml_escape_content
+++++ export XMLLINT_AVAILABLE XMLSTARLET_AVAILABLE XSLTPROC_AVAILABLE
++++ [[ -z true ]]
++++ [[ -z true ]]
++++ export -f xml-pheromone-export xml-pheromone-import xml-pheromone-validate xml-pheromone-merge
++++ export -f xml-pheromone-prefix-id xml-pheromone-deprefix-id
+++ source /Users/callumcowie/repos/Aether/.aether/exchange/wisdom-xml.sh
++++ [[ -n /Users/callumcowie/repos/Aether/.aether/exchange/wisdom-xml.sh ]]
++++++ dirname /Users/callumcowie/repos/Aether/.aether/exchange/wisdom-xml.sh
+++++ cd /Users/callumcowie/repos/Aether/.aether/exchange/..
+++++ pwd
++++ SCRIPT_DIR=/Users/callumcowie/repos/Aether/.aether
++++ source /Users/callumcowie/repos/Aether/.aether/utils/xml-core.sh
+++++ [[ -z true ]]
+++++ [[ -z true ]]
+++++ [[ -z true ]]
+++++ export -f xml_json_ok xml_json_err
+++++ export -f xml-detect-tools xml-validate xml-well-formed xml-format
+++++ export -f xml-escape xml-unescape _xml_escape_content
+++++ export XMLLINT_AVAILABLE XMLSTARLET_AVAILABLE XSLTPROC_AVAILABLE
++++ [[ -z true ]]
++++ [[ -z true ]]
++++ PROMOTION_THRESHOLD=0.8
++++ export -f xml-wisdom-export xml-wisdom-import xml-wisdom-validate xml-wisdom-promote
++++ export PROMOTION_THRESHOLD
+++ source /Users/callumcowie/repos/Aether/.aether/exchange/registry-xml.sh
++++ [[ -n /Users/callumcowie/repos/Aether/.aether/exchange/registry-xml.sh ]]
++++++ dirname /Users/callumcowie/repos/Aether/.aether/exchange/registry-xml.sh
+++++ cd /Users/callumcowie/repos/Aether/.aether/exchange/..
+++++ pwd
++++ SCRIPT_DIR=/Users/callumcowie/repos/Aether/.aether
++++ source /Users/callumcowie/repos/Aether/.aether/utils/xml-core.sh
+++++ [[ -z true ]]
+++++ [[ -z true ]]
+++++ [[ -z true ]]
+++++ export -f xml_json_ok xml_json_err
+++++ export -f xml-detect-tools xml-validate xml-well-formed xml-format
+++++ export -f xml-escape xml-unescape _xml_escape_content
+++++ export XMLLINT_AVAILABLE XMLSTARLET_AVAILABLE XSLTPROC_AVAILABLE
++++ [[ -z true ]]
++++ [[ -z true ]]
++++ export -f xml-registry-export xml-registry-import xml-registry-validate xml-registry-lineage
+++ export -f pheromone-to-xml pheromone-from-xml
+++ export -f queen-wisdom-to-xml queen-wisdom-from-xml
+++ export -f registry-to-xml registry-from-xml
+++ export -f xml-utils-info
++ [[ -f /Users/callumcowie/repos/Aether/.aether/utils/semantic-cli.sh ]]
++ source /Users/callumcowie/repos/Aether/.aether/utils/semantic-cli.sh
+++ [[ /Users/callumcowie/repos/Aether/.aether/utils/semantic-cli.sh == \.\a\e\t\h\e\r\/\a\e\t\h\e\r\-\u\t\i\l\s\.\s\h ]]
+++ [[ -n /Users/callumcowie/repos/Aether/.aether/utils/semantic-cli.sh ]]
+++++ dirname /Users/callumcowie/repos/Aether/.aether/utils/semantic-cli.sh
++++ cd /Users/callumcowie/repos/Aether/.aether/utils
++++ pwd
+++ SEMANTIC_CLI_DIR=/Users/callumcowie/repos/Aether/.aether/utils
++++ dirname /Users/callumcowie/repos/Aether/.aether/utils
+++ AETHER_DIR=/Users/callumcowie/repos/Aether/.aether
++++ dirname /Users/callumcowie/repos/Aether/.aether
+++ PROJECT_ROOT=/Users/callumcowie/repos/Aether
+++ SEMANTIC_DATA_DIR=/Users/callumcowie/repos/Aether/.aether/data/semantic
+++ SEMANTIC_EMBEDDINGS_FILE=/Users/callumcowie/repos/Aether/.aether/data/semantic/embeddings.json
+++ export -f semantic-init
+++ export -f semantic-index
+++ export -f semantic-search
+++ export -f semantic-find-duplicate
+++ export -f semantic-rebuild
+++ export -f semantic-get-context
+++ export -f semantic-status
+++ export -f semantic-check-deps
++ : E_UNKNOWN
++ : E_HUB_NOT_FOUND
++ : E_REPO_NOT_INITIALIZED
++ : E_FILE_NOT_FOUND
++ : E_JSON_INVALID
++ : E_LOCK_FAILED
++ : E_LOCK_STALE
++ : E_GIT_ERROR
++ : E_VALIDATION_FAILED
++ : E_FEATURE_UNAVAILABLE
++ : E_BASH_ERROR
++ : E_DEPENDENCY_MISSING
++ : E_RESOURCE_NOT_FOUND
++ type atomic_write
++ type json_err
++ type feature_disable
++ command -v git
++ command -v jq
++ [[ -f /Users/callumcowie/repos/Aether/.aether/utils/file-lock.sh ]]
++ trap _aether_exit_cleanup EXIT TERM INT HUP
++ type cleanup_temp_files
++ _cleanup_orphaned_temp_files
++ local temp_dir=/var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/.aether/temp
++ [[ -d /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/.aether/temp ]]
++ IFS=
++ read -r -d '' tmp_file
+++ find /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/.aether/temp -maxdepth 1 -name '*.tmp' -print0
++ cmd=suggest-analyze
++ shift
++ case "$cmd" in
++ trap '' ERR
++ source_dir=
++ max_suggestions=5
++ dry_run=false
++ [[ 2 -gt 0 ]]
++ case "$1" in
++ source_dir=/var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/src
++ shift 2
++ [[ 0 -gt 0 ]]
++ [[ -z /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/src ]]
++ [[ ! -d /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/src ]]
++ pheromones_file=/var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/.aether/data/pheromones.json
++ session_file=/var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/.aether/data/session.json
+++ mktemp
++ raw_suggestions=/var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.xRUrLKpcdu
++ echo '[]'
++ analyzed_count=0
++ patterns_found=0
++ exclude_pattern='node_modules|.aether|dist|build|\.git|coverage|\.min\.js'
++ IFS=
++ read -r file
+++ find /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/src -type f '(' -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' -o -name '*.py' -o -name '*.sh' -o -name '*.md' ')'
+++ head -100
++ analyzed_count=1
++ echo /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/src/large.ts
++ grep -qE 'node_modules|.aether|dist|build|\.git|coverage|\.min\.js'
++ ext=ts
+++ wc -l
++ line_count='     350'
++ [[      350 -gt 300 ]]
++ patterns_found=1
++ content='Large file: consider refactoring (     350 lines)'
++ reason='File exceeds 300 lines, consider breaking into smaller modules'
+++ echo -n '/var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/src/large.ts:FOCUS:Large file: consider refactoring (     350 lines)'
+++ shasum -a 256
+++ cut '-d ' -f1
++ hash=2f2865aa615afa4ff6e572ae75617039beec54fee90de1e75042af298731aba2
+++ jq -n --arg type FOCUS --arg content 'Large file: consider refactoring (     350 lines)' --arg file /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/src/large.ts --arg reason 'File exceeds 300 lines, consider breaking into smaller modules' --arg hash 2f2865aa615afa4ff6e572ae75617039beec54fee90de1e75042af298731aba2 --arg priority 7 '{type: $type, content: $content, file: $file, reason: $reason, hash: $hash, priority: ($priority | tonumber)}'
++ new_suggestion='{
+  "type": "FOCUS",
+  "content": "Large file: consider refactoring (     350 lines)",
+  "file": "/var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/src/large.ts",
+  "reason": "File exceeds 300 lines, consider breaking into smaller modules",
+  "hash": "2f2865aa615afa4ff6e572ae75617039beec54fee90de1e75042af298731aba2",
+  "priority": 7
+}'
++ jq --argjson suggestion '{
+  "type": "FOCUS",
+  "content": "Large file: consider refactoring (     350 lines)",
+  "file": "/var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/src/large.ts",
+  "reason": "File exceeds 300 lines, consider breaking into smaller modules",
+  "hash": "2f2865aa615afa4ff6e572ae75617039beec54fee90de1e75042af298731aba2",
+  "priority": 7
+}' '. += [$suggestion]' /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.xRUrLKpcdu
++ mv /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.xRUrLKpcdu.tmp /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.xRUrLKpcdu
++ [[ ts =~ ^(ts|tsx|js|jsx|py|sh|md)$ ]]
+++ grep -n 'TODO\|FIXME\|XXX' /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/src/large.ts
+++ wc -l
+++ tr -d ' \n'
+++ true
++ todo_matches=0
++ [[ 0 -gt 0 ]]
++ [[ ts =~ ^(ts|tsx|js|jsx)$ ]]
+++ grep -n 'console\.log\|debugger' /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/src/large.ts
+++ wc -l
+++ tr -d ' \n'
+++ true
++ debug_matches=0
++ [[ 0 -gt 0 ]]
++ [[ ts =~ ^(ts|tsx)$ ]]
+++ grep -n ': any\|: unknown' /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/src/large.ts
+++ wc -l
+++ tr -d ' \n'
+++ true
++ type_gaps=0
++ [[ 0 -gt 0 ]]
++ [[ ts =~ ^(ts|tsx|js|jsx|py|sh)$ ]]
+++ grep -cE '^function|^def |^const.*=.*function|^const.*=.*=>' /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/src/large.ts
+++ tr -d ' \n'
+++ echo 0
++ func_count=00
++ [[ 00 -gt 20 ]]
++ [[ ts =~ ^(ts|tsx|js|jsx|py)$ ]]
++ [[ ! /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/src/large.ts =~ \\.test\\. ]]
++ [[ ! /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/src/large.ts =~ \\.spec\\. ]]
+++ basename /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/src/large.ts .ts
++ base_name=large
+++ dirname /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/src/large.ts
++ dir_name=/var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/src
++ [[ -f /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/src/large.test.ts ]]
++ [[ -f /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/src/large.spec.ts ]]
++ [[ -f /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/src/__tests__/large.test.ts ]]
++ [[ -f /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/src/../tests/large.test.ts ]]
++ grep -qE '^function|^def |^const.*=.*function|^const.*=.*=>|^export.*function|^class ' /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/src/large.ts
++ false
++ IFS=
++ read -r file
++ [[ -n '' ]]
++ existing_hashes='[]'
++ [[ -f /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/.aether/data/pheromones.json ]]
+++ jq -r '[.signals[] | select(.active == true) | .content.text] | @json' /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/.aether/data/pheromones.json
++ existing_hashes='[]'
++ session_hashes='[]'
++ [[ -f /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/.aether/data/session.json ]]
+++ jq --argjson existing '[]' --argjson session '[]' --argjson max 5 '
+      # Remove suggestions whose content matches existing signals
+      map(select(.content as $c | $existing | index($c) | not)) |
+      # Remove suggestions whose hash is in session
+      map(select(.hash as $h | $session | index($h) | not)) |
+      # Sort by priority descending and limit
+      sort_by(.priority) | reverse | .[:$max]
+    ' /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.xRUrLKpcdu
++ suggestions_json='[
+  {
+    "type": "FOCUS",
+    "content": "Large file: consider refactoring (     350 lines)",
+    "file": "/var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/src/large.ts",
+    "reason": "File exceeds 300 lines, consider breaking into smaller modules",
+    "hash": "2f2865aa615afa4ff6e572ae75617039beec54fee90de1e75042af298731aba2",
+    "priority": 7
+  }
+]'
++ rm -f /var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.xRUrLKpcdu
+++ jq -n --argjson suggestions '[
+  {
+    "type": "FOCUS",
+    "content": "Large file: consider refactoring (     350 lines)",
+    "file": "/var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/src/large.ts",
+    "reason": "File exceeds 300 lines, consider breaking into smaller modules",
+    "hash": "2f2865aa615afa4ff6e572ae75617039beec54fee90de1e75042af298731aba2",
+    "priority": 7
+  }
+]' --argjson analyzed 1 --argjson patterns 1 '{suggestions: $suggestions, analyzed_files: $analyzed, patterns_found: $patterns}'
++ result='{
+  "suggestions": [
+    {
+      "type": "FOCUS",
+      "content": "Large file: consider refactoring (     350 lines)",
+      "file": "/var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/src/large.ts",
+      "reason": "File exceeds 300 lines, consider breaking into smaller modules",
+      "hash": "2f2865aa615afa4ff6e572ae75617039beec54fee90de1e75042af298731aba2",
+      "priority": 7
+    }
+  ],
+  "analyzed_files": 1,
+  "patterns_found": 1
+}'
++ [[ false == \t\r\u\e ]]
++ trap 'if type error_handler &>/dev/null; then error_handler ${LINENO} "$BASH_COMMAND" $?; fi' ERR
++ json_ok '{
+  "suggestions": [
+    {
+      "type": "FOCUS",
+      "content": "Large file: consider refactoring (     350 lines)",
+      "file": "/var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/src/large.ts",
+      "reason": "File exceeds 300 lines, consider breaking into smaller modules",
+      "hash": "2f2865aa615afa4ff6e572ae75617039beec54fee90de1e75042af298731aba2",
+      "priority": 7
+    }
+  ],
+  "analyzed_files": 1,
+  "patterns_found": 1
+}'
++ printf '{"ok":true,"result":%s}\n' '{
+  "suggestions": [
+    {
+      "type": "FOCUS",
+      "content": "Large file: consider refactoring (     350 lines)",
+      "file": "/var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/tmp.v5bU2PiJcU/src/large.ts",
+      "reason": "File exceeds 300 lines, consider breaking into smaller modules",
+      "hash": "2f2865aa615afa4ff6e572ae75617039beec54fee90de1e75042af298731aba2",
+      "priority": 7
+    }
+  ],
+  "analyzed_files": 1,
+  "patterns_found": 1
+}'
++ _aether_exit_cleanup
++ cleanup_locks
++ cleanup_temp_files

@@ -1,108 +1,180 @@
-# CLAUDE.md — Aether Repo Rules
+# CLAUDE.md — Aether Development Guide
 
-> **CRITICAL:** See `RUNTIME UPDATE ARCHITECTURE.md` for the complete architecture diagram and distribution flow.
-
-## Rule Modules
-
-Detailed guidelines are in `.claude/rules/`:
-- @rules/coding-standards.md — Code style, naming, organization
-- @rules/testing.md — Test framework, structure, coverage
-- @rules/spawn-discipline.md — Worker limits, spawn rules
-- @rules/security.md — Protected paths, high-risk ops
-- @rules/git-workflow.md — Commits, branches, sync
-- @rules/aether-specific.md — Source of truth, pheromones
+> **Current Version:** v1.1.0
+> **Architecture:** v4.0 (runtime/ eliminated, direct packaging)
+> **Last Updated:** 2026-02-22
 
 ---
 
-## How Development Works
+## Quick Reference
+
+| What | Count/Status |
+|------|--------------|
+| Version | v1.1.0 |
+| Slash commands | 36 (Claude + OpenCode) |
+| Agent definitions | 22 |
+| aether-utils.sh | 7,918 lines, 134 subcommands |
+| Tests | 490+ passing |
+| Architecture doc | `RUNTIME UPDATE ARCHITECTURE.md` |
+
+---
+
+## Architecture Overview
 
 ```
-┌────────────────────────────────────────────────────────────────┐
-│  In the Aether repo, .aether/ IS the source of truth.          │
-│  Edit system files there and publish directly.                 │
-│                                                                │
-│  .aether/           → SOURCE OF TRUTH (edit this, published)  │
-│  .aether/data/      → LOCAL ONLY (excluded by .npmignore)      │
-│  .aether/dreams/    → LOCAL ONLY (excluded by .npmignore)      │
-│                                                                │
-│  npm install -g . validates .aether/ and pushes to hub.        │
-└────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                     AETHER REPO (this repo)                      │
+│                                                                  │
+│   .aether/             ← SOURCE OF TRUTH (packaged directly)    │
+│   ├── workers.md       (edit here)                              │
+│   ├── aether-utils.sh  (7,918 lines, 134 subcommands)           │
+│   ├── utils/           (18 utility scripts)                     │
+│   ├── docs/            (distributed documentation)              │
+│   └── templates/       (12 templates)                           │
+│                                                                  │
+│   .aether/data/        ← LOCAL ONLY (excluded by .npmignore)    │
+│   .aether/dreams/      ← LOCAL ONLY (excluded by .npmignore)    │
+│                                                                  │
+│   .claude/commands/ant/ ← 36 slash commands (Claude Code)       │
+│   .claude/agents/ant/   ← 22 agent definitions                  │
+│   .opencode/commands/ant/ ← 36 slash commands (OpenCode)        │
+│   .opencode/agents/     ← Agent definitions (OpenCode)          │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
 ```
+
+**See `RUNTIME UPDATE ARCHITECTURE.md` for complete distribution flow.**
+
+---
+
+## Development Workflow
+
+### Editing System Files
 
 | What you're changing | Where to edit | Why |
 |---------------------|---------------|-----|
 | workers.md | `.aether/workers.md` | Source of truth |
 | aether-utils.sh | `.aether/aether-utils.sh` | Source of truth |
 | utils/*.sh | `.aether/utils/` | Source of truth |
-| User docs | `.aether/docs/` | Source of truth (docs distributed directly) |
+| User docs | `.aether/docs/` | Distributed directly |
 | Slash commands | `.claude/commands/ant/` | Claude Code commands |
 | OpenCode commands | `.opencode/commands/ant/` | OpenCode commands |
-| Agent definitions | `.opencode/agents/` | Agent definitions |
-| Your notes | `.aether/dreams/` | Never distributed, safe |
-| Dev docs | `.aether/docs/known-issues.md`, `implementation-learnings.md` | Distributed — extracted findings |
-| Aether TODOs | `TO-DOS.md` (root) | Source of truth for Aether development |
+| Agent definitions | `.claude/agents/ant/` | Claude Code agents |
+| Your notes | `.aether/dreams/` | Never distributed |
+| Dev docs | `.aether/docs/known-issues.md` | Distributed |
 
-> **Note:** For OpenCode-specific rules, see `.opencode/OPENCODE.md`
+### Publishing Changes
 
-**After editing system files:**
 ```bash
+# 1. Edit files in .aether/ or .claude/commands/ant/
+vim .aether/workers.md
+
+# 2. Commit changes
 git add .
 git commit -m "your message"
-npm install -g .   # Validates .aether/, then pushes to hub
+
+# 3. Validate and push to hub
+npm install -g .   # Runs validate-package.sh, then setupHub()
+
+# 4. In other repos, pull updates
+aether update      # or /ant:update
 ```
-
----
-
-## Critical Architecture
-
-**In the Aether repo, `.aether/` system files are the source of truth and are packaged directly into the npm package.** Private directories (data/, dreams/, oracle/, etc.) are excluded by `.aether/.npmignore`. Running `npm install -g .` validates `.aether/` via `bin/validate-package.sh`, then calls `setupHub()` which syncs to the hub.
-
-```
-Aether Repo (this repo)
-├── .aether/ (SOURCE OF TRUTH — packaged directly into npm)
-│   ├── workers.md, aether-utils.sh, utils/, docs/
-│   ├── data/          ← LOCAL ONLY (excluded by .aether/.npmignore)
-│   └── dreams/        ← LOCAL ONLY (excluded by .aether/.npmignore)
-│
-├── .claude/commands/ant/ ─────────────────────────────┐
-├── .opencode/ ────────────────────────────────────────┤──→ npm package
-│                                                      ▼
-│                                                ~/.aether/ (THE HUB)
-│                                                ├── system/      ← .aether/
-│                                                ├── commands/    ← slash commands
-│                                                └── agents/
-│                                                      │
-│  aether update (in ANY repo)  ◄──────────────────────┘
-│
-▼
-any-repo/.aether/ (WORKING COPY - gets overwritten)
-├── workers.md, aether-utils.sh  ← from hub (system files)
-└── data/                        ← LOCAL (never touched by updates)
-```
-
-**Development workflow:**
-1. Edit `.aether/` system files (or `.claude/commands/ant/` for slash commands) naturally
-2. Commit changes
-3. Run `npm install -g .` — validates `.aether/`, then pushes to hub
-4. Hub distributes to all repos via `aether update`
-
-**In other repos:** `.aether/` is a working copy that gets overwritten by `aether update`. Don't edit system files there — they come from the hub.
 
 ---
 
 ## Key Directories
 
-| Directory | Purpose | Syncs to Hub |
-|-----------|---------|--------------|
-| `.aether/` (system files) | Source of truth for workers.md, aether-utils.sh, utils/, docs/ | → `~/.aether/system/` |
-| `.claude/commands/ant/` | Claude Code slash commands | → `~/.aether/commands/claude/` |
-| `.opencode/commands/ant/` | OpenCode slash commands | → `~/.aether/commands/opencode/` |
-| `.opencode/agents/` | Agent definitions | → `~/.aether/agents/` |
-| `.aether/data/` | Colony state (COLONY_STATE.json, pheromones.json) | **NEVER touched** |
+### .aether/ (Source of Truth)
+
+```
+.aether/
+├── workers.md           # Worker definitions, spawn protocol
+├── aether-utils.sh      # 134 subcommands for state management
+├── utils/               # 18 utility scripts
+│   ├── file-lock.sh     # Locking primitives
+│   ├── atomic-write.sh  # Safe file writes
+│   ├── swarm-display.sh # Visualization
+│   └── xml-*.sh         # XML processing
+├── templates/           # 12 templates (colony-state, pheromones, etc.)
+├── docs/                # Distributed documentation
+├── exchange/            # XML exchange modules (pheromone-xml, wisdom-xml)
+├── data/                # LOCAL ONLY (never distributed)
+│   ├── COLONY_STATE.json
+│   ├── pheromones.json
+│   ├── constraints.json
+│   ├── midden/          # Failure tracking
+│   └── survey/          # Territory survey results
+├── dreams/              # LOCAL ONLY (session notes)
+└── oracle/              # LOCAL ONLY (deep research)
+```
+
+### .claude/ (Claude Code)
+
+```
+.claude/
+├── commands/ant/        # 36 slash commands
+│   ├── init.md          # Colony initialization
+│   ├── plan.md          # Phase planning
+│   ├── build.md         # Phase execution
+│   ├── continue.md      # 6-phase verification
+│   └── ...
+├── agents/ant/          # 22 agent definitions
+│   ├── aether-builder.md
+│   ├── aether-watcher.md
+│   ├── aether-scout.md
+│   └── ...
+└── rules/               # Development rules
+    ├── coding-standards.md
+    ├── testing.md
+    └── ...
+```
 
 ---
 
-## Pheromone System (User-Colony Communication)
+## Rule Modules
+
+Detailed guidelines are in `.claude/rules/`:
+- `@rules/coding-standards.md` — Code style, naming, organization
+- `@rules/testing.md` — Test framework, structure, coverage
+- `@rules/spawn-discipline.md` — Worker limits, spawn rules
+- `@rules/security.md` — Protected paths, high-risk ops
+- `@rules/git-workflow.md` — Commits, branches, sync
+- `@rules/aether-specific.md` — Source of truth, pheromones
+
+---
+
+## The 22 Agents
+
+| Tier | Agent | Role |
+|------|-------|------|
+| Core | Builder | Implements code, TDD-first |
+| Core | Watcher | Tests, validates, quality gates |
+| Orchestration | Queen | Orchestrates phases, spawns workers |
+| Orchestration | Scout | Researches, gathers information |
+| Orchestration | Route-Setter | Plans phases, breaks down goals |
+| Surveyor | surveyor-nest | Maps directory structure |
+| Surveyor | surveyor-disciplines | Documents conventions |
+| Surveyor | surveyor-pathogens | Identifies tech debt |
+| Surveyor | surveyor-provisions | Maps dependencies |
+| Specialist | Keeper | Preserves knowledge |
+| Specialist | Tracker | Investigates bugs |
+| Specialist | Probe | Coverage analysis (NEW) |
+| Specialist | Weaver | Refactoring specialist |
+| Specialist | Auditor | Quality gate (NEW) |
+| Niche | Chaos | Resilience testing |
+| Niche | Archaeologist | Excavates git history |
+| Niche | Gatekeeper | Security gate (NEW) |
+| Niche | Includer | Dependency analysis |
+| Niche | Measurer | Performance analysis (NEW) |
+| Niche | Sage | Wisdom synthesis |
+| Niche | Ambassador | External integrations |
+| Niche | Chronicler | Documentation |
+
+---
+
+## Pheromone System
+
+User-colony communication via signals:
 
 | Signal | Command | Priority | Use For |
 |--------|---------|----------|---------|
@@ -115,21 +187,80 @@ any-repo/.aether/ (WORKING COPY - gets overwritten)
 **Hard constraints:** REDIRECT (will break)
 **Gentle nudges:** FEEDBACK (preferences)
 
-See `.aether/docs/pheromones.md` for full guide.
+**Files:**
+- `.aether/data/pheromones.json` — Active signals
+- `.aether/data/constraints.json` — Focus areas and constraints
+- `.aether/docs/pheromones.md` — Full guide
 
 ---
 
-## Caste System
+## Quality Gates (v1.1.0)
 
-Workers are assigned to castes based on task type.
+New agents integrated into continue.md:
 
-**Display format:** `{caste_emoji} {worker_name}` (e.g., `🔨🐜 Hammer-42`)
+### Gatekeeper (Security)
+- Runs after verification passes
+- Scans for exposed secrets, debug artifacts
+- Creates blockers if security issues found
 
-For the complete caste reference with emojis and role descriptions, see `.aether/docs/caste-system.md`.
+### Auditor (Quality)
+- Runs after Gatekeeper passes
+- Analyzes code quality metrics
+- Reports quality gate status
+
+### Probe (Coverage)
+- Analyzes test coverage gaps
+- Reports coverage percentage
+- Suggests additional tests
+
+### Measurer (Performance)
+- Performance analysis
+- Identifies slow operations
+- Reports performance metrics
 
 ---
 
-## Milestone Names (Biological Metaphors)
+## Midden System (Failure Tracking)
+
+The midden tracks failures for colony learning:
+
+- `.aether/data/midden/midden.json` — Failure records
+- `midden-write` — Log a failure
+- `midden-recent-failures` — Query recent failures
+
+Failures are logged during:
+- Build failures (build.md)
+- Approach changes (tracked for wisdom)
+
+---
+
+## Memory Health System
+
+Colony memory is tracked and displayed:
+
+- `/ant:status` — Shows memory health table
+- `/ant:memory-details` — Drill-down view
+- `/ant:resume` — Shows memory health section
+
+Metrics tracked:
+- Events count
+- Learnings count
+- Instincts count
+- Pheromones count
+- Memory age
+
+---
+
+## Changelog System
+
+Automated changelog collection:
+
+- `changelog-append` — Append entry to CHANGELOG.md
+- `changelog-collect-plan-data` — Collect plan data for changelog
+
+---
+
+## Milestone Names
 
 | Milestone | Meaning |
 |-----------|---------|
@@ -149,23 +280,24 @@ For the complete caste reference with emojis and role descriptions, see `.aether
 # Verify commands in sync between Claude Code and OpenCode
 npm run lint:sync
 
-# Verify model routing configuration
-aether verify-models
-
-# Check caste model assignments
-aether caste-models list
+# Run all linters
+npm run lint
 
 # Run all tests
 npm test
+
+# Verify package before publishing
+bash bin/validate-package.sh
+
+# See what npm would package
+npm pack --dry-run
 ```
 
 ---
 
-## Active Development
+## Session Freshness Detection
 
-### Session Freshness Detection System (In Progress)
-
-All stateful commands now use timestamp verification to detect stale sessions. This prevents old session files from silently breaking workflows.
+All stateful commands use timestamp verification to detect stale sessions:
 
 **Pattern:**
 1. Capture `SESSION_START=$(date +%s)` before spawning agents
@@ -173,14 +305,10 @@ All stateful commands now use timestamp verification to detect stale sessions. T
 3. Auto-clear stale files or prompt user based on command type
 4. Verify files are fresh after spawning
 
-**Current Phase:** Complete — all 9 phases done, 21/21 tests passing
-
-**Full Plan:** Shipped (docs/ directory removed in Phase 26 file audit)
-
 **Protected Commands** (never auto-clear):
-- `init` - COLONY_STATE.json is precious
-- `seal` - Archives are precious
-- `entomb` - Chambers are precious
+- `init` — COLONY_STATE.json is precious
+- `seal` — Archives are precious
+- `entomb` — Chambers are precious
 
 ---
 
@@ -194,6 +322,36 @@ On the first message of a new conversation, check if `.aether/data/session.json`
    Previous colony session detected: "{goal}"
    Run /ant:resume to restore context, or continue with a new topic.
    ```
-3. Do NOT auto-restore — wait for the user to explicitly run /ant:resume
+3. Do NOT auto-restore — wait for the user to explicitly run `/ant:resume`
 
-This only applies to genuinely new conversations, not after /clear (where the user knows they cleared and will resume explicitly if needed).
+---
+
+## The Core Insight
+
+The system has **all the pieces**:
+- Pheromones ✅
+- State management ✅
+- Worker spawning ✅
+- Reliability (file locking, transactions) ✅
+- Agents ✅
+- Context ✅
+- Quality gates ✅
+- Failure tracking ✅
+
+**The challenge is integration** — features exist but need to be wired together:
+- Pheromones don't update context
+- Decisions don't become pheromones
+- Learnings don't become instincts
+- Midden doesn't affect behavior
+
+**The fix isn't more features — it's connecting what exists.**
+
+---
+
+## For OpenCode
+
+For OpenCode-specific rules and agents, see `.opencode/OPENCODE.md`
+
+---
+
+*Updated for Aether v1.1.0 — 2026-02-22*

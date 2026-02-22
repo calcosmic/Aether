@@ -133,7 +133,7 @@
 
 - [x] Phase 42: Fix Update Bugs (2 plans) — atomic writes, counter fix, stale directory cleanup (completed 2026-02-22)
 - [x] Phase 43: Make Learning Flow — auto-create observations file, verify pipeline (completed 2026-02-22)
-- [ ] Phase 44: Suggest Pheromones — tick-to-approve suggestions at build start
+- [x] Phase 44: Suggest Pheromones — tick-to-approve suggestions at build start (completed 2026-02-22)
 
 **8 requirements mapped. Wire existing systems, don't add new ones.**
 
@@ -200,7 +200,7 @@ Plans:
 4. Suggestions are based on actual code analysis (not random)
 5. User can dismiss suggestions without approving
 
-**Plans:** 4 plans
+**Plans:** 4/4 plans complete
 
 Plans:
 - [ ] 44-01-PLAN.md — Create suggest-analyze command for codebase analysis (SUGG-02)
@@ -373,7 +373,7 @@ The functions exist — they just need to be connected:
 | 41. Analytics & Improvement | v5.0 | Complete | 2026-02-22 | — |
 | 42. Fix Update Bugs | v6.0 | Complete    | 2026-02-22 | — |
 | 43. Make Learning Flow | v6.0 | Complete    | 2026-02-22 | — |
-| 44. Suggest Pheromones | v6.0 | 4/4 | Planned | — |
+| 44. Suggest Pheromones | v6.0 | Complete    | 2026-02-22 | — |
 
 ---
 

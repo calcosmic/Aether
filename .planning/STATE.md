@@ -17,13 +17,13 @@
 ## Current Position
 
 **Phase**: 44-suggest-pheromones
-**Plan**: 03 (complete)
-**Status**: Plan 44-03 complete — pheromone suggestions integrated into build command flow
+**Plan**: 04 (complete)
+**Status**: Phase 44 complete — all 4 plans finished (analyzer, UI, integration, tests)
 
-**Progress**: 2/3 phases complete, Phase 44 in progress
+**Progress**: 3/3 phases complete, v6.0 System Integration milestone complete
 
 ```
-[████████████░░░░░░] 70% — v6.0 System Integration
+[██████████████████] 100% — v6.0 System Integration Complete
 ```
 
 ---
@@ -34,7 +34,7 @@
 |-------|--------|-------|-----------|
 | 42. Fix Update Bugs | ✓ Complete | 2/2 | 2026-02-22 |
 | 43. Make Learning Flow | ✓ Complete | 3/3 | 2026-02-22 |
-| 44. Suggest Pheromones | In Progress | 3/TBD | 2026-02-22 |
+| 44. Suggest Pheromones | ✓ Complete | 4/4 | 2026-02-22 |
 
 ---
 
@@ -59,6 +59,9 @@
 15. **Pheromone suggestion UI** — Tick-to-approve pattern with Approve/Reject/Skip/Dismiss All actions
 16. **Non-interactive safety** — Auto-skip suggestions in CI/CD to prevent blocking
 17. **Build flow timing** — Suggestions run after colony-prime (user sees current signals) but before swarm init (no worker delay)
+18. **Exclusion pattern boundaries** — Use path boundaries like `/.aether/` instead of `.aether` to avoid matching partial paths
+19. **Bash 3.2 compatibility** — Use functions with case statements instead of associative arrays
+20. **JSON output hygiene** — Redirect all UI text to stderr so stdout contains only valid JSON
 
 ### Open Questions
 
@@ -83,22 +86,37 @@
 
 ## Blockers
 
-None. Plan 44-02 complete. suggest-approve command implemented:
-- Tick-to-approve UI with one-at-a-time display
-- Approve/Reject/Skip/Dismiss All actions
-- Flags: --yes, --dry-run, --no-suggest, --verbose
-- Non-interactive mode detection (prevents blocking CI/CD)
-- suggest-quick-dismiss helper for bulk dismissal
+None. Phase 44 complete. All 4 plans finished:
+- Plan 01: suggest-analyze command with 6 pattern heuristics
+- Plan 02: suggest-approve command with tick-to-approve UI
+- Plan 03: Build flow integration at Step 4.2
+- Plan 04: Integration tests (26 tests, all passing)
 
-Ready for Plan 44-03: Build flow integration.
+v6.0 System Integration milestone is complete.
 
 ---
 
 ## Session Continuity
 
-**Last Action**: Completed Plan 44-03 — integrated pheromone suggestions into build command as Step 4.2
-**Next Action**: Phase 44 complete — all three plans finished (analyzer, UI, integration)
+**Last Action**: Completed Plan 44-04 — created comprehensive integration tests for pheromone suggestion system (26 tests, all passing)
+**Next Action**: v6.0 System Integration milestone complete — all 3 phases finished
 **Context Freshness**: Current
+**Last Session**: 2026-02-22
+**Stopped at**: Session resumed, project status reviewed
+**Resume file**: N/A — milestone complete
+
+## Completed Work Summary
+
+### Phase 44: Suggest Pheromones (Complete)
+- **Plan 01**: suggest-analyze command — analyzes codebase and suggests pheromones based on 6 heuristics
+- **Plan 02**: suggest-approve command — tick-to-approve UI for reviewing suggestions
+- **Plan 03**: Build flow integration — suggestions run at Step 4.2 of build command
+- **Plan 04**: Integration tests — 26 comprehensive tests covering all functionality
+
+### Bug Fixes During Plan 04
+- Fixed exclusion pattern to use path boundaries (was matching temp dirs)
+- Fixed bash 3.2 compatibility (replaced associative array with function)
+- Fixed JSON output pollution (redirected UI to stderr)
 
 ---
 
