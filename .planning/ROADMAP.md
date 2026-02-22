@@ -124,7 +124,9 @@
 - [x] Phase 39: Quality Coverage — Probe + Measurer for tests and performance (completed 2026-02-22)
   - [ ] 39-01-PLAN.md — Integrate Probe agent for test coverage improvement (COV-01, COV-02, COV-03, COV-04)
   - [ ] 39-02-PLAN.md — Integrate Measurer agent for performance baselines (COV-05, COV-06, COV-07)
-- [ ] Phase 40: Lifecycle Enhancement — Chronicler + Ambassador in seal/build
+- [x] Phase 40: Lifecycle Enhancement — Chronicler + Ambassador in seal/build (completed 2026-02-22)
+  - [ ] 40-01-PLAN.md — Integrate Chronicler agent for documentation coverage audit (LIF-01, LIF-02, LIF-03)
+  - [ ] 40-02-PLAN.md — Integrate Ambassador agent for external API/SDK integration (LIF-04, LIF-05, LIF-06)
 - [ ] Phase 41: Analytics & Improvement — Sage + Weaver for insights and refactoring
 
 **24 requirements mapped. Goal: Integrate 8 specialist agents into existing commands.**
