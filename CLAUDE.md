@@ -13,7 +13,7 @@
 | Version | v1.1.0 |
 | Slash commands | 36 (Claude + OpenCode) |
 | Agent definitions | 22 |
-| aether-utils.sh | ~8,033 lines, 136 subcommands |
+| aether-utils.sh | ~8,599 lines, 94 subcommands |
 | Tests | 490+ passing |
 | Architecture doc | `RUNTIME UPDATE ARCHITECTURE.md` |
 
