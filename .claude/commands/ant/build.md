@@ -243,6 +243,16 @@ Display after constraints:
 {log_line from colony-prime}
 ```
 
+Then display the active pheromones table by running:
+```bash
+bash .aether/aether-utils.sh pheromone-display
+```
+
+This shows the user exactly what signals are guiding the colony:
+- 🎯 FOCUS signals (what to pay attention to)
+- 🚫 REDIRECT signals (what to avoid - hard constraints)
+- 💬 FEEDBACK signals (guidance to consider)
+
 **Store for worker injection:** The `prompt_section` variable contains the complete formatted context (QUEEN wisdom + pheromone signals) ready for injection.
 
 ### Step 4.0: Load Territory Survey
@@ -750,6 +760,157 @@ For failed verification:
 **Update swarm display when Watcher completes:**
 Run using the Bash tool with description "Recording watcher completion...": `bash .aether/aether-utils.sh swarm-display-update "{watcher_name}" "watcher" "completed" "Verification complete" "Queen" '{"read":3,"grep":2,"edit":0,"bash":1}' 100 "nursery" 100`
 
+### Step 5.5.1: Measurer Performance Agent (Conditional)
+
+**Conditional step — only runs for performance-sensitive phases.**
+
+1. **Check if phase is performance-sensitive:**
+
+   Extract phase name from COLONY_STATE.json (already loaded in Step 1). Check for performance keywords (case-insensitive):
+   - "performance", "optimize", "latency", "throughput", "benchmark", "speed", "memory", "cpu", "efficiency"
+
+   Run using the Bash tool with description "Checking phase for performance sensitivity...":
+   ```bash
+   phase_name="{phase_name_from_state}"
+   performance_keywords="performance optimize latency throughput benchmark speed memory cpu efficiency"
+   is_performance_sensitive="false"
+   for keyword in $performance_keywords; do
+     if [[ "${phase_name,,}" == *"$keyword"* ]]; then
+       is_performance_sensitive="true"
+       break
+     fi
+   done
+   echo "{\"is_performance_sensitive\": \"$is_performance_sensitive\", \"phase_name\": \"$phase_name\"}"
+   ```
+
+   Parse the JSON result. If `is_performance_sensitive` is `"false"`:
+   - Display: `📊 Measurer: Phase not performance-sensitive — skipping baseline measurement`
+   - Skip to Step 5.6 (Chaos Ant)
+
+2. **Check Watcher verification status:**
+
+   Only spawn Measurer if Watcher verification passed (`verification_passed: true`). If Watcher failed:
+   - Display: `📊 Measurer: Watcher verification failed — skipping performance measurement`
+   - Skip to Step 5.6 (Chaos Ant)
+
+3. **Generate Measurer name and dispatch:**
+
+   Run using the Bash tool with description "Naming measurer...": `bash .aether/aether-utils.sh generate-ant-name "measurer"` (store as `{measurer_name}`)
+   Run using the Bash tool with description "Dispatching measurer...": `bash .aether/aether-utils.sh spawn-log "Queen" "measurer" "{measurer_name}" "Performance baseline measurement" && bash .aether/aether-utils.sh swarm-display-update "{measurer_name}" "measurer" "benchmarking" "Performance baseline measurement" "Queen" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 20`
+
+   Display:
+   ```
+   ━━━ 📊🐜 M E A S U R E R ━━━
+   ──── 📊🐜 Spawning {measurer_name} — establishing performance baselines ────
+   📊 Measurer {measurer_name} spawning — Establishing performance baselines for {phase_name}...
+   ```
+
+4. **Get files to measure:**
+
+   Use `files_created` and `files_modified` from builder results (already collected in synthesis preparation). Filter for source files only:
+   - Include: `.js`, `.ts`, `.sh`, `.py` files
+   - Exclude: `.test.js`, `.test.ts`, `.spec.js`, `.spec.ts`, `__tests__/`, config files
+
+   Store filtered list as `{source_files_to_measure}`.
+
+5. **Spawn Measurer using Task tool:**
+
+   Spawn the Measurer using Task tool with `subagent_type="aether-measurer"`, include `description: "📊 Measurer {Measurer-Name}: Performance baseline measurement"` (DO NOT use run_in_background - task blocks until complete):
+
+   # FALLBACK: If "Agent type not found", use general-purpose and inject role: "You are a Measurer Ant - performance profiler that benchmarks and identifies bottlenecks."
+
+   **Measurer Worker Prompt (CLEAN OUTPUT):**
+   ```
+   You are {Measurer-Name}, a 📊 Measurer Ant.
+
+   Mission: Performance baseline measurement for Phase {id}
+
+   Phase: {phase_name}
+   Keywords that triggered spawn: {matched_keywords}
+
+   Files to measure:
+   - {list from source_files_to_measure}
+
+   Work:
+   1. Read each source file to understand operation patterns
+   2. Analyze algorithmic complexity (Big O) for key functions
+   3. Identify potential bottlenecks (loops, recursion, I/O)
+   4. Document current baseline metrics for comparison
+   5. Recommend optimizations with estimated impact
+
+   **IMPORTANT:** You are strictly read-only. Do not modify any files.
+
+   Log activity: bash .aether/aether-utils.sh activity-log "BENCHMARKING" "{Measurer-Name}" "description"
+
+   Return ONLY this JSON (no other text):
+   {
+     "ant_name": "{Measurer-Name}",
+     "caste": "measurer",
+     "status": "completed" | "failed" | "blocked",
+     "summary": "What you measured and found",
+     "metrics": {
+       "response_time_ms": 0,
+       "throughput_rps": 0,
+       "cpu_percent": 0,
+       "memory_mb": 0
+     },
+     "baselines_established": [
+       {"operation": "name", "complexity": "O(n)", "file": "path", "line": 0}
+     ],
+     "bottlenecks_identified": [
+       {"description": "...", "severity": "high|medium|low", "location": "file:line"}
+     ],
+     "recommendations": [
+       {"priority": 1, "change": "...", "estimated_improvement": "..."}
+     ],
+     "tool_count": 0
+   }
+   ```
+
+6. **Parse Measurer JSON output:**
+
+   Extract from response: `baselines_established`, `bottlenecks_identified`, `recommendations`, `tool_count`
+
+   Log completion and update swarm display:
+   Run using the Bash tool with description "Recording measurer completion...": `bash .aether/aether-utils.sh spawn-complete "{measurer_name}" "completed" "Baselines established, bottlenecks identified" && bash .aether/aether-utils.sh swarm-display-update "{measurer_name}" "measurer" "completed" "Performance measurement complete" "Queen" '{"read":5,"grep":3,"edit":0,"bash":0}' 100 "fungus_garden" 100`
+
+   **Display Measurer completion line:**
+   ```
+   📊 {Measurer-Name}: Performance baseline measurement ({tool_count} tools) ✓
+   ```
+
+7. **Log findings to midden:**
+
+   For each baseline established, run using the Bash tool with description "Logging baseline...":
+   ```bash
+   bash .aether/aether-utils.sh midden-write "performance" "Baseline: {baseline.operation} ({baseline.complexity}) at {baseline.file}:{baseline.line}" "measurer"
+   ```
+
+   For each bottleneck identified, run using the Bash tool with description "Logging bottleneck...":
+   ```bash
+   bash .aether/aether-utils.sh midden-write "performance" "Bottleneck: {bottleneck.description} ({bottleneck.severity}) at {bottleneck.location}" "measurer"
+   ```
+
+   For each recommendation, run using the Bash tool with description "Logging recommendation...":
+   ```bash
+   bash .aether/aether-utils.sh midden-write "performance" "Recommendation (P{rec.priority}): {rec.change} - {rec.estimated_improvement}" "measurer"
+   ```
+
+8. **Display summary and store for synthesis:**
+
+   Display:
+   ```
+   📊 Measurer complete — {baseline_count} baselines, {bottleneck_count} bottlenecks logged to midden
+   ```
+
+   Store Measurer results in synthesis data structure:
+   - Add `performance` object to synthesis JSON with: `baselines_established`, `bottlenecks_identified`, `recommendations`
+   - Include in BUILD SUMMARY display: `📊 Measurer: {baseline_count} baselines established, {bottleneck_count} bottlenecks identified`
+
+9. **Continue to Chaos Ant:**
+
+   Proceed to Step 5.6 (Chaos Ant) regardless of Measurer results — Measurer is strictly non-blocking.
+
 ### Step 5.6: Spawn Chaos Ant for Resilience Testing
 
 **After the Watcher completes, spawn a Chaos Ant to probe the phase work for edge cases and boundary conditions.**
@@ -896,20 +1057,23 @@ Collect all worker outputs and create phase summary:
   "files_created": [...],
   "files_modified": [...],
   "spawn_metrics": {
-    "spawn_count": {total workers spawned, including archaeologist if Step 4.5 fired},
+    "spawn_count": {total workers spawned, including archaeologist if Step 4.5 fired, measurer if Step 5.5.1 fired},
     "builder_count": {N},
     "watcher_count": 1,
     "chaos_count": 1,
     "archaeologist_count": {0 or 1, conditional on Step 4.5},
+    "measurer_count": {0 or 1, conditional on Step 5.5.1},
     "parallel_batches": {number of waves}
   },
   "spawn_tree": {
     "{Archaeologist-Name}": {"caste": "archaeologist", "task": "pre-build history scan", "status": "completed"},
     "{Builder-Name}": {"caste": "builder", "task": "...", "status": "completed"},
     "{Watcher-Name}": {"caste": "watcher", "task": "verify", "status": "completed"},
+    "{Measurer-Name}": {"caste": "measurer", "task": "performance baseline", "status": "completed"},
     "{Chaos-Name}": {"caste": "chaos", "task": "resilience testing", "status": "completed"}
   },
   "verification": {from Watcher output},
+  "performance": {from Measurer output, or null if Step 5.5.1 was skipped},
   "resilience": {from Chaos Ant output},
   "archaeology": {from Archaeologist output, or null if Step 4.5 was skipped},
   "quality_notes": "..."
@@ -957,10 +1121,11 @@ Return JSON:
   "files_created": ["path1", "path2"],
   "files_modified": ["path3"],
   "spawn_metrics": {
-    "spawn_count": 6,
+    "spawn_count": 7,
     "watcher_count": 1,
     "chaos_count": 1,
     "archaeologist_count": 1,
+    "measurer_count": 1,
     "builder_count": 3,
     "parallel_batches": 2,
     "sequential_tasks": 1
@@ -969,6 +1134,7 @@ Return JSON:
     "Relic-8": {"caste": "archaeologist", "task": "pre-build history scan", "status": "completed", "children": {}},
     "Hammer-42": {"caste": "builder", "task": "...", "status": "completed", "children": {}},
     "Vigil-17": {"caste": "watcher", "task": "...", "status": "completed", "children": {}},
+    "Benchmark-3": {"caste": "measurer", "task": "performance baseline", "status": "completed", "children": {}},
     "Entropy-9": {"caste": "chaos", "task": "resilience testing", "status": "completed", "children": {}}
   },
   "verification": {
@@ -1122,6 +1288,10 @@ Pattern:  {selected_pattern}
 Workers:  {pass_count} passed  {fail_count} failed  ({total} total)
 Tools:    {total_tools} calls across all workers
 Duration: {elapsed}
+
+{if measurer_ran:}
+📊 Measurer: {baseline_count} baselines established, {bottleneck_count} bottlenecks identified
+{end if}
 
 {if fail_count > 0:}
 Failed:
