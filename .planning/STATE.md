@@ -17,13 +17,13 @@
 ## Current Position
 
 **Phase**: 43-make-learning-flow
-**Plan**: 02 (complete)
-**Status**: Plan 43-02 complete — FLOW-02 verified
+**Plan**: 03 (complete)
+**Status**: Plan 43-03 complete — FLOW-03 verified, all tests pass
 
-**Progress**: 2/3 phases complete, 2/3 plans in Phase 43
+**Progress**: 3/3 phases complete, 3/3 plans in Phase 43
 
 ```
-[████████████░░░░░░] 67% — v6.0 System Integration
+[██████████████░░░░] 80% — v6.0 System Integration
 ```
 
 ---
@@ -33,7 +33,7 @@
 | Phase | Status | Plans | Completed |
 |-------|--------|-------|-----------|
 | 42. Fix Update Bugs | ✓ Complete | 2/2 | 2026-02-22 |
-| 43. Make Learning Flow | In Progress | 2/3 | 2026-02-22 |
+| 43. Make Learning Flow | ✓ Complete | 3/3 | 2026-02-22 |
 | 44. Suggest Pheromones | Not planned | TBD | - |
 
 ---
@@ -52,6 +52,8 @@
 8. **One-at-a-time UI** — Present proposals individually with Approve/Reject/Skip actions
 9. **Aligned thresholds** — All learning functions use consistent threshold values
 10. **Failure type support** — Failure observations map to Patterns section in QUEEN.md
+11. **Environment variable override** — AETHER_ROOT respects existing env var for testability
+12. **Single-line METADATA** — QUEEN.md supports both single-line and multi-line METADATA formats
 
 ### Open Questions
 
@@ -76,14 +78,19 @@
 
 ## Blockers
 
-None. Plan 43-02 complete. FLOW-03 plan needed for Phase 43.
+None. Phase 43 complete. All FLOW requirements verified:
+- FLOW-01: learning-observations.json auto-creation verified
+- FLOW-02: observations → proposals → promotions pipeline verified
+- FLOW-03: end-to-end integration test passes
+
+Ready for Phase 44: Suggest Pheromones.
 
 ---
 
 ## Session Continuity
 
-**Last Action**: Completed Plan 43-02 — wired learning pipeline with end-of-build promotion checking
-**Next Action**: Run `/gsd:plan-phase 43` to create FLOW-03 plan for end-to-end testing
+**Last Action**: Completed Plan 43-03 — created integration tests for learning pipeline, fixed AETHER_ROOT env handling
+**Next Action**: Run `/gsd:plan-phase 44` to create plan for pheromone suggestions
 **Context Freshness**: Current
 
 ---

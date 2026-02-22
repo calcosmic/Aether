@@ -132,7 +132,7 @@
 <summary>🔄 v6.0 System Integration (Phases 42-44) — IN PROGRESS</summary>
 
 - [x] Phase 42: Fix Update Bugs (2 plans) — atomic writes, counter fix, stale directory cleanup (completed 2026-02-22)
-- [ ] Phase 43: Make Learning Flow — auto-create observations file, verify pipeline
+- [x] Phase 43: Make Learning Flow — auto-create observations file, verify pipeline (completed 2026-02-22)
 - [ ] Phase 44: Suggest Pheromones — tick-to-approve suggestions at build start
 
 **8 requirements mapped. Wire existing systems, don't add new ones.**
@@ -181,7 +181,7 @@ Plans:
 5. Approved proposals appear in QUEEN.md with correct formatting
 6. colony-prime includes promoted wisdom in worker context
 
-**Plans:** TBD
+**Plans:** 3/3 plans complete
 
 ---
 
@@ -200,7 +200,13 @@ Plans:
 4. Suggestions are based on actual code analysis (not random)
 5. User can dismiss suggestions without approving
 
-**Plans:** TBD
+**Plans:** 4 plans
+
+Plans:
+- [ ] 44-01-PLAN.md — Create suggest-analyze command for codebase analysis (SUGG-02)
+- [ ] 44-02-PLAN.md — Create suggest-approve tick-to-approve UI (SUGG-01)
+- [ ] 44-03-PLAN.md — Integrate suggestions into build.md Step 4.2 (SUGG-01, SUGG-02)
+- [ ] 44-04-PLAN.md — Integration tests for pheromone suggestion system (SUGG-01, SUGG-02)
 
 ---
 
@@ -294,8 +300,8 @@ Plans:
 | FLOW-01 | Phase 43 | Auto-create learning-observations.json if missing | Pending |
 | FLOW-02 | Phase 43 | Verify observations → proposals → promotions pipeline | Pending |
 | FLOW-03 | Phase 43 | Test end-to-end with real learning | Pending |
-| SUGG-01 | Phase 44 | Show suggested pheromones with tick-to-approve at build start | Pending |
-| SUGG-02 | Phase 44 | Suggestions based on codebase analysis | Pending |
+| SUGG-01 | Phase 44 | Show suggested pheromones with tick-to-approve at build start | Planned |
+| SUGG-02 | Phase 44 | Suggestions based on codebase analysis | Planned |
 
 **Coverage:** 8/8 requirements mapped ✓
 
@@ -366,8 +372,8 @@ The functions exist — they just need to be connected:
 | 40. Lifecycle Enhancement | v5.0 | 2/2 | Complete | 2026-02-22 |
 | 41. Analytics & Improvement | v5.0 | Complete | 2026-02-22 | — |
 | 42. Fix Update Bugs | v6.0 | Complete    | 2026-02-22 | — |
-| 43. Make Learning Flow | v6.0 | 0/3 | Not started | — |
-| 44. Suggest Pheromones | v6.0 | 0/2 | Not started | — |
+| 43. Make Learning Flow | v6.0 | Complete    | 2026-02-22 | — |
+| 44. Suggest Pheromones | v6.0 | 4/4 | Planned | — |
 
 ---
 

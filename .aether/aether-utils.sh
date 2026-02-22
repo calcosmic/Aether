@@ -927,7 +927,7 @@ case "$cmd" in
     cat <<'HELP_EOF'
 {
   "ok": true,
-  "commands": ["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","learning-observe","learning-check-promotion","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-display-text","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","survey-load","survey-verify","pheromone-export","pheromone-write","pheromone-count","pheromone-read","instinct-read","pheromone-prime","pheromone-expire","eternal-init","pheromone-export-xml","pheromone-import-xml","pheromone-validate-xml","wisdom-export-xml","wisdom-import-xml","registry-export-xml","registry-import-xml","force-unlock","changelog-append","changelog-collect-plan-data"],
+  "commands": ["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","learning-observe","learning-check-promotion","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-display-text","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","survey-load","survey-verify","pheromone-export","pheromone-write","pheromone-count","pheromone-read","instinct-read","pheromone-prime","pheromone-expire","eternal-init","pheromone-export-xml","pheromone-import-xml","pheromone-validate-xml","wisdom-export-xml","wisdom-import-xml","registry-export-xml","registry-import-xml","force-unlock","changelog-append","changelog-collect-plan-data","suggest-approve","suggest-quick-dismiss"],
   "sections": {
     "Core": [
       {"name": "help", "description": "List all available commands with sections"},
@@ -1009,6 +1009,10 @@ case "$cmd" in
     "Changelog": [
       {"name": "changelog-append", "description": "Append entry to CHANGELOG.md with date-phase hierarchy"},
       {"name": "changelog-collect-plan-data", "description": "Collect plan data for changelog entry from state files"}
+    ],
+    "Suggestion System": [
+      {"name": "suggest-approve", "description": "Tick-to-approve UI for pheromone suggestions"},
+      {"name": "suggest-quick-dismiss", "description": "Dismiss all suggestions without approving"}
     ]
   },
   "description": "Aether Colony Utility Layer — deterministic ops for the ant colony"
@@ -7933,6 +7937,283 @@ EOF
 
     echo "$result"
     exit 0
+    ;;
+
+  suggest-analyze)
+    # Analyze codebase and return pheromone suggestions based on code patterns
+    # Usage: suggest-analyze [--source-dir DIR] [--max-suggestions N] [--dry-run]
+    # Returns: JSON with suggestions array and analysis metadata
+
+    # Disable ERR trap for this command (grep returns 1 on no match, which triggers trap)
+    trap '' ERR
+
+    source_dir=""
+    max_suggestions=5
+    dry_run=false
+
+    # Parse arguments
+    shift || true  # shift past command name
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --source-dir) source_dir="$2"; shift 2 ;;
+        --max-suggestions) max_suggestions="$2"; shift 2 ;;
+        --dry-run) dry_run=true; shift ;;
+        *) shift ;;
+      esac
+    done
+
+    # Auto-detect source directory if not provided
+    if [[ -z "$source_dir" ]]; then
+      if [[ -d "$AETHER_ROOT/src" ]]; then
+        source_dir="$AETHER_ROOT/src"
+      elif [[ -d "$AETHER_ROOT/lib" ]]; then
+        source_dir="$AETHER_ROOT/lib"
+      else
+        source_dir="$AETHER_ROOT"
+      fi
+    fi
+
+    # Validate source directory
+    if [[ ! -d "$source_dir" ]]; then
+      json_err "$E_FILE_NOT_FOUND" "Source directory not found: $source_dir"
+    fi
+
+    # Build JSON array of suggestions using jq
+    # We use jq to handle deduplication since bash 3.2 doesn't support associative arrays
+    pheromones_file="$DATA_DIR/pheromones.json"
+    session_file="$DATA_DIR/session.json"
+
+    # Create temp file for collecting raw suggestions
+    raw_suggestions=$(mktemp)
+    echo "[]" > "$raw_suggestions"
+
+    analyzed_count=0
+    patterns_found=0
+
+    # Define exclusions
+    exclude_pattern="node_modules|.aether|dist|build|\\.git|coverage|\\.min\\.js"
+
+    # Find files to analyze (respecting exclusions)
+    while IFS= read -r file; do
+      analyzed_count=$((analyzed_count + 1))
+
+      # Skip excluded paths
+      if echo "$file" | grep -qE "$exclude_pattern"; then
+        continue
+      fi
+
+      # Get file extension
+      ext="${file##*.}"
+
+      # Check file size (large files > 300 lines)
+      line_count=$(wc -l < "$file" 2>/dev/null || echo "0")
+      if [[ $line_count -gt 300 ]]; then
+        patterns_found=$((patterns_found + 1))
+        content="Large file: consider refactoring ($line_count lines)"
+        reason="File exceeds 300 lines, consider breaking into smaller modules"
+        hash=$(echo -n "$file:FOCUS:$content" | shasum -a 256 2>/dev/null | cut -d' ' -f1 || echo "$(date +%s)")
+
+        # Append suggestion to raw_suggestions using jq
+        new_suggestion=$(jq -n --arg type "FOCUS" --arg content "$content" --arg file "$file" --arg reason "$reason" --arg hash "$hash" --arg priority "7" '{type: $type, content: $content, file: $file, reason: $reason, hash: $hash, priority: ($priority | tonumber)}')
+        jq --argjson suggestion "$new_suggestion" '. += [$suggestion]' "$raw_suggestions" > "${raw_suggestions}.tmp" && mv "${raw_suggestions}.tmp" "$raw_suggestions"
+      fi
+
+      # Check for TODO/FIXME/XXX comments
+      if [[ "$ext" =~ ^(ts|tsx|js|jsx|py|sh|md)$ ]]; then
+        todo_matches=$( (grep -n "TODO\\|FIXME\\|XXX" "$file" 2>/dev/null || true) | wc -l | tr -d ' \n')
+        if [[ $todo_matches -gt 0 ]]; then
+          patterns_found=$((patterns_found + 1))
+          content="$todo_matches pending TODO/FIXME comments"
+          reason="Unresolved markers indicate technical debt"
+          hash=$(echo -n "$file:FEEDBACK:$content" | shasum -a 256 2>/dev/null | cut -d' ' -f1 || echo "$(date +%s)")
+
+          new_suggestion=$(jq -n --arg type "FEEDBACK" --arg content "$content" --arg file "$file" --arg reason "$reason" --arg hash "$hash" --arg priority "4" '{type: $type, content: $content, file: $file, reason: $reason, hash: $hash, priority: ($priority | tonumber)}')
+          jq --argjson suggestion "$new_suggestion" '. += [$suggestion]' "$raw_suggestions" > "${raw_suggestions}.tmp" && mv "${raw_suggestions}.tmp" "$raw_suggestions"
+        fi
+      fi
+
+      # Check for debug artifacts (console.log, debugger)
+      if [[ "$ext" =~ ^(ts|tsx|js|jsx)$ ]]; then
+        debug_matches=$( (grep -n "console\\.log\\|debugger" "$file" 2>/dev/null || true) | wc -l | tr -d ' \n')
+        if [[ $debug_matches -gt 0 ]]; then
+          patterns_found=$((patterns_found + 1))
+          content="Remove debug artifacts before commit ($debug_matches found)"
+          reason="Debug statements should not be committed to production code"
+          hash=$(echo -n "$file:REDIRECT:$content" | shasum -a 256 2>/dev/null | cut -d' ' -f1 || echo "$(date +%s)")
+
+          new_suggestion=$(jq -n --arg type "REDIRECT" --arg content "$content" --arg file "$file" --arg reason "$reason" --arg hash "$hash" --arg priority "9" '{type: $type, content: $content, file: $file, reason: $reason, hash: $hash, priority: ($priority | tonumber)}')
+          jq --argjson suggestion "$new_suggestion" '. += [$suggestion]' "$raw_suggestions" > "${raw_suggestions}.tmp" && mv "${raw_suggestions}.tmp" "$raw_suggestions"
+        fi
+      fi
+
+      # Check for type safety gaps (: any, : unknown)
+      if [[ "$ext" =~ ^(ts|tsx)$ ]]; then
+        type_gaps=$( (grep -n ": any\\|: unknown" "$file" 2>/dev/null || true) | wc -l | tr -d ' \n')
+        if [[ $type_gaps -gt 0 ]]; then
+          patterns_found=$((patterns_found + 1))
+          content="Type safety gaps detected ($type_gaps instances)"
+          reason="Using 'any' or 'unknown' bypasses TypeScript's type checking"
+          hash=$(echo -n "$file:FEEDBACK:$content" | shasum -a 256 2>/dev/null | cut -d' ' -f1 || echo "$(date +%s)")
+
+          new_suggestion=$(jq -n --arg type "FEEDBACK" --arg content "$content" --arg file "$file" --arg reason "$reason" --arg hash "$hash" --arg priority "5" '{type: $type, content: $content, file: $file, reason: $reason, hash: $hash, priority: ($priority | tonumber)}')
+          jq --argjson suggestion "$new_suggestion" '. += [$suggestion]' "$raw_suggestions" > "${raw_suggestions}.tmp" && mv "${raw_suggestions}.tmp" "$raw_suggestions"
+        fi
+      fi
+
+      # Check for high complexity (function count)
+      if [[ "$ext" =~ ^(ts|tsx|js|jsx|py|sh)$ ]]; then
+        func_count=$(grep -cE "^function|^def |^const.*=.*function|^const.*=.*=>" "$file" 2>/dev/null || echo "0")
+        if [[ $func_count -gt 20 ]]; then
+          patterns_found=$((patterns_found + 1))
+          content="Complex module: test carefully ($func_count functions)"
+          reason="High function count may indicate multiple concerns; verify test coverage"
+          hash=$(echo -n "$file:FOCUS:$content" | shasum -a 256 2>/dev/null | cut -d' ' -f1 || echo "$(date +%s)")
+
+          new_suggestion=$(jq -n --arg type "FOCUS" --arg content "$content" --arg file "$file" --arg reason "$reason" --arg hash "$hash" --arg priority "6" '{type: $type, content: $content, file: $file, reason: $reason, hash: $hash, priority: ($priority | tonumber)}')
+          jq --argjson suggestion "$new_suggestion" '. += [$suggestion]' "$raw_suggestions" > "${raw_suggestions}.tmp" && mv "${raw_suggestions}.tmp" "$raw_suggestions"
+        fi
+      fi
+
+      # Check for test coverage gaps
+      if [[ "$ext" =~ ^(ts|tsx|js|jsx|py)$ ]] && [[ ! "$file" =~ \\.test\\. ]] && [[ ! "$file" =~ \\.spec\\. ]]; then
+        base_name=$(basename "$file" ".${ext}")
+        dir_name=$(dirname "$file")
+
+        # Look for corresponding test file
+        if [[ -f "$dir_name/$base_name.test.$ext" ]] || [[ -f "$dir_name/$base_name.spec.$ext" ]] || \
+           [[ -f "$dir_name/__tests__/$base_name.test.$ext" ]] || [[ -f "$dir_name/../tests/$base_name.test.$ext" ]]; then
+          : # Test file exists
+        else
+          # Only suggest for files with functions (not config/pure data files)
+          if grep -qE "^function|^def |^const.*=.*function|^const.*=.*=>|^export.*function|^class " "$file" 2>/dev/null || false; then
+            patterns_found=$((patterns_found + 1))
+            content="Add tests for uncovered module: $base_name"
+            reason="No corresponding test file found for module with functions"
+            hash=$(echo -n "$file:FOCUS:$content" | shasum -a 256 2>/dev/null | cut -d' ' -f1 || echo "$(date +%s)")
+
+            new_suggestion=$(jq -n --arg type "FOCUS" --arg content "$content" --arg file "$file" --arg reason "$reason" --arg hash "$hash" --arg priority "5" '{type: $type, content: $content, file: $file, reason: $reason, hash: $hash, priority: ($priority | tonumber)}')
+            jq --argjson suggestion "$new_suggestion" '. += [$suggestion]' "$raw_suggestions" > "${raw_suggestions}.tmp" && mv "${raw_suggestions}.tmp" "$raw_suggestions"
+          fi
+        fi
+      fi
+
+    done < <(find "$source_dir" -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" -o -name "*.py" -o -name "*.sh" -o -name "*.md" \) 2>/dev/null | head -100)
+
+    # Deduplicate against existing pheromones and session suggestions using jq
+    # Get existing signal content hashes
+    existing_hashes="[]"
+    if [[ -f "$pheromones_file" ]]; then
+      existing_hashes=$(jq -r '[.signals[] | select(.active == true) | .content.text] | @json' "$pheromones_file" 2>/dev/null || echo "[]")
+    fi
+
+    session_hashes="[]"
+    if [[ -f "$session_file" ]]; then
+      session_hashes=$(jq -r '[.suggested_pheromones[]?.hash // empty] | @json' "$session_file" 2>/dev/null || echo "[]")
+    fi
+
+    # Filter suggestions: remove duplicates and sort by priority
+    suggestions_json=$(jq --argjson existing "$existing_hashes" --argjson session "$session_hashes" --argjson max "$max_suggestions" '
+      # Remove suggestions whose content matches existing signals
+      map(select(.content as $c | $existing | index($c) | not)) |
+      # Remove suggestions whose hash is in session
+      map(select(.hash as $h | $session | index($h) | not)) |
+      # Sort by priority descending and limit
+      sort_by(.priority) | reverse | .[:$max]
+    ' "$raw_suggestions" 2>/dev/null || echo "[]")
+
+    # Clean up temp file
+    rm -f "$raw_suggestions"
+
+    # Build result
+    result=$(jq -n \
+      --argjson suggestions "$suggestions_json" \
+      --argjson analyzed "$analyzed_count" \
+      --argjson patterns "$patterns_found" \
+      '{suggestions: $suggestions, analyzed_files: $analyzed, patterns_found: $patterns}')
+
+    if [[ "$dry_run" == "true" ]]; then
+      echo "Dry run - analyzed: $source_dir" >&2
+    fi
+
+    # Re-enable ERR trap before exiting
+    trap 'if type error_handler &>/dev/null; then error_handler ${LINENO} "$BASH_COMMAND" $?; fi' ERR
+
+    json_ok "$result"
+    ;;
+
+  suggest-record)
+    # Record a suggested pheromone hash to session.json for deduplication
+    # Usage: suggest-record <hash> <type>
+    # Returns: JSON success/failure
+
+    record_hash="${1:-}"
+    record_type="${2:-FEEDBACK}"
+
+    if [[ -z "$record_hash" ]]; then
+      json_err "$E_VALIDATION_FAILED" "suggest-record requires <hash> argument"
+    fi
+
+    session_file="$DATA_DIR/session.json"
+
+    # Initialize suggested_pheromones array if missing
+    if [[ -f "$session_file" ]]; then
+      # Check if suggested_pheromones field exists
+      has_field=$(jq 'has("suggested_pheromones")' "$session_file" 2>/dev/null || echo "false")
+      if [[ "$has_field" != "true" ]]; then
+        # Add the field
+        jq '. + {"suggested_pheromones": []}' "$session_file" > "${session_file}.tmp" && mv "${session_file}.tmp" "$session_file"
+      fi
+
+      # Append new suggestion
+      record_entry=$(jq -n --arg hash "$record_hash" --arg type "$record_type" --arg suggested_at "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" '{hash: $hash, type: $type, suggested_at: $suggested_at}')
+      jq --argjson entry "$record_entry" '.suggested_pheromones += [$entry]' "$session_file" > "${session_file}.tmp" && mv "${session_file}.tmp" "$session_file"
+    else
+      # Create session.json with suggested_pheromones
+      record_entry=$(jq -n --arg hash "$record_hash" --arg type "$record_type" --arg suggested_at "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" '{hash: $hash, type: $type, suggested_at: $suggested_at}')
+      jq -n --argjson entry "$record_entry" '{suggested_pheromones: [$entry]}' > "$session_file"
+    fi
+
+    json_ok '{"recorded":true}'
+    ;;
+
+  suggest-check)
+    # Check if a hash was already suggested this session
+    # Usage: suggest-check <hash>
+    # Returns: JSON {already_suggested: true/false}
+
+    check_hash="${1:-}"
+
+    if [[ -z "$check_hash" ]]; then
+      json_err "$E_VALIDATION_FAILED" "suggest-check requires <hash> argument"
+    fi
+
+    session_file="$DATA_DIR/session.json"
+    already_suggested="false"
+
+    if [[ -f "$session_file" ]]; then
+      count=$(jq --arg hash "$check_hash" '[.suggested_pheromones[]? | select(.hash == $hash)] | length' "$session_file" 2>/dev/null || echo "0")
+      if [[ "$count" -gt 0 ]]; then
+        already_suggested="true"
+      fi
+    fi
+
+    json_ok "{\"already_suggested\":$already_suggested}"
+    ;;
+
+  suggest-clear)
+    # Clear the suggested_pheromones array from session.json
+    # Usage: suggest-clear
+    # Returns: JSON success with count cleared
+
+    session_file="$DATA_DIR/session.json"
+    cleared_count=0
+
+    if [[ -f "$session_file" ]]; then
+      cleared_count=$(jq '.suggested_pheromones | length' "$session_file" 2>/dev/null || echo "0")
+      jq 'del(.suggested_pheromones)' "$session_file" > "${session_file}.tmp" && mv "${session_file}.tmp" "$session_file"
+    fi
+
+    json_ok "{\"cleared\":$cleared_count}"
     ;;
 
   *)
