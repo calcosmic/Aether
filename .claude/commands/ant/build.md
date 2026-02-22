@@ -1425,6 +1425,27 @@ Also update safe-to-clear status:
 - If build completed successfully: `context-update safe-to-clear "YES" "Build complete, ready to continue"`
 - If build failed: `context-update safe-to-clear "NO" "Build failed — run /ant:swarm or /ant:flags"`
 
+### Step 5.10: Check for Promotion Proposals
+
+After build completion (success or failure), check if any observations have met promotion thresholds.
+
+Run using the Bash tool with description "Checking for wisdom promotions...":
+```bash
+proposals=$(bash .aether/aether-utils.sh learning-check-promotion 2>/dev/null || echo '{"proposals":[]}')
+proposal_count=$(echo "$proposals" | jq '.proposals | length')
+echo "{\"proposal_count\": $proposal_count}"
+```
+
+Parse the result. If proposal_count > 0:
+- Display: "📚 $proposal_count wisdom proposal(s) ready for review"
+- Run: `bash .aether/aether-utils.sh learning-approve-proposals`
+- This presents the one-at-a-time UI for user review
+
+If proposal_count == 0:
+- Silently continue (no output needed per user decision)
+
+Note: This runs regardless of build success/failure. Failed builds may have recorded failure observations that are ready for promotion.
+
 ### Step 7: Display Results
 
 **This step runs ONLY after synthesis is complete. All values come from actual worker results.**

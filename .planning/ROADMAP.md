@@ -131,7 +131,7 @@
 <details>
 <summary>🔄 v6.0 System Integration (Phases 42-44) — IN PROGRESS</summary>
 
-- [ ] Phase 42: Fix Update Bugs — atomic writes, counter fix, stale directory cleanup
+- [x] Phase 42: Fix Update Bugs (2 plans) — atomic writes, counter fix, stale directory cleanup (completed 2026-02-22)
 - [ ] Phase 43: Make Learning Flow — auto-create observations file, verify pipeline
 - [ ] Phase 44: Suggest Pheromones — tick-to-approve suggestions at build start
 
@@ -157,7 +157,11 @@
 3. Old directories (.aether/agents/, .aether/commands/) are cleaned from user repos
 4. Update completes without partial file corruption on interrupt
 
-**Plans:** TBD
+**Plans:** 2/2 plans complete
+
+Plans:
+- [ ] 42-01-PLAN.md — Fix atomic writes (UPDATE-01) and counter bug (UPDATE-02)
+- [ ] 42-02-PLAN.md — Extend stale directory cleanup (UPDATE-03)
 
 ---
 
@@ -333,7 +337,7 @@ The functions exist — they just need to be connected:
 | 11. Visual Identity | v1.1 | 6/6 | Complete | 2026-02-18 |
 | 12. Build Progress | v1.1 | 2/2 | Complete | 2026-02-18 |
 | 13. Distribution Reliability | v1.1 | 1/1 | Complete | 2026-02-18 |
-| 14. Foundation Safety | v1.2 | 1/1 | Complete | 2026-02-18 |
+| 14. Foundation Safety | v1.2 | 1/1 | Complete | 2026-02-19 |
 | 15. Distribution Chain | v1.2 | 3/3 | Complete | 2026-02-19 |
 | 16. Lock Lifecycle Hardening | v1.2 | 3/3 | Complete | 2026-02-19 |
 | 17. Error Code Standardization | v1.2 | 3/3 | Complete | 2026-02-19 |
@@ -361,7 +365,7 @@ The functions exist — they just need to be connected:
 | 39. Quality Coverage | v5.0 | 2/2 | Complete | 2026-02-22 |
 | 40. Lifecycle Enhancement | v5.0 | 2/2 | Complete | 2026-02-22 |
 | 41. Analytics & Improvement | v5.0 | Complete | 2026-02-22 | — |
-| 42. Fix Update Bugs | v6.0 | 0/3 | Not started | — |
+| 42. Fix Update Bugs | v6.0 | Complete    | 2026-02-22 | — |
 | 43. Make Learning Flow | v6.0 | 0/3 | Not started | — |
 | 44. Suggest Pheromones | v6.0 | 0/2 | Not started | — |
 
