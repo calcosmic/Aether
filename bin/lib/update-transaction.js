@@ -233,6 +233,40 @@ class UpdateTransaction {
   }
 
   /**
+   * Copy file atomically using temp file + rename pattern
+   * Prevents partial file corruption on process interruption
+   * @param {string} srcPath - Source file path
+   * @param {string} destPath - Destination file path
+   * @private
+   */
+  copyFileAtomic(srcPath, destPath) {
+    const tempPath = `${destPath}.tmp.${process.pid}.${Date.now()}`;
+
+    try {
+      // Copy to temp file first
+      fs.copyFileSync(srcPath, tempPath);
+
+      // Atomic rename (POSIX guarantees atomicity)
+      fs.renameSync(tempPath, destPath);
+
+      // Set executable permission for shell scripts
+      if (destPath.endsWith('.sh')) {
+        fs.chmodSync(destPath, 0o755);
+      }
+    } catch (err) {
+      // Clean up temp file on failure
+      try {
+        if (fs.existsSync(tempPath)) {
+          fs.unlinkSync(tempPath);
+        }
+      } catch {
+        // Ignore cleanup errors
+      }
+      throw err;
+    }
+  }
+
+  /**
    * Check if path is a git repository
    * @returns {boolean} True if git repo
    * @private
