@@ -4573,8 +4573,8 @@ $updated_meta
     fi
 
     # Build proposals array using jq
-    # Define thresholds per wisdom type (META-01):
-    # philosophy: 1, pattern: 1, redirect: 1, stack: 1, decree: 0
+    # Define thresholds per wisdom type (aligned with learning-observe):
+    # philosophy: 1, pattern: 1, redirect: 1, stack: 1, decree: 0, failure: 1
     result=$(jq '
       def get_threshold(type):
         if type == "philosophy" then 1
@@ -4582,6 +4582,7 @@ $updated_meta
         elif type == "redirect" then 1
         elif type == "stack" then 1
         elif type == "decree" then 0
+        elif type == "failure" then 1
         else 1
         end;
 
@@ -4660,15 +4661,16 @@ $updated_meta
     fi
 
     # Get all observations with their thresholds
-    # Define thresholds per wisdom type (META-01):
-    # philosophy: 5, pattern: 3, redirect: 2, stack: 1, decree: 0
+    # Define thresholds per wisdom type (aligned with learning-observe):
+    # philosophy: 1, pattern: 1, redirect: 1, stack: 1, decree: 0, failure: 1
     proposals_json=$(jq '
       def get_threshold(type):
-        if type == "philosophy" then 5
-        elif type == "pattern" then 3
-        elif type == "redirect" then 2
+        if type == "philosophy" then 1
+        elif type == "pattern" then 1
+        elif type == "redirect" then 1
         elif type == "stack" then 1
         elif type == "decree" then 0
+        elif type == "failure" then 1
         else 1
         end;
 
@@ -4697,10 +4699,10 @@ $updated_meta
     fi
 
     # Define wisdom types and their display properties
-    types=("philosophy" "pattern" "redirect" "stack" "decree")
-    type_emojis=("📜" "🧭" "⚠️" "🔧" "🏛️")
-    type_names=("Philosophies" "Patterns" "Redirects" "Stack Wisdom" "Decrees")
-    type_thresholds=(5 3 2 1 0)
+    types=("philosophy" "pattern" "redirect" "stack" "decree" "failure")
+    type_emojis=("📜" "🧭" "⚠️" "🔧" "🏛️" "❌")
+    type_names=("Philosophies" "Patterns" "Redirects" "Stack Wisdom" "Decrees" "Failures")
+    type_thresholds=(1 1 1 1 0 1)
 
     echo ""
     echo "🧠 Promotion Proposals"
@@ -4798,13 +4800,15 @@ $updated_meta
     fi
 
     # Build proposals array using same logic as learning-display-proposals
+    # Aligned thresholds: philosophy: 1, pattern: 1, redirect: 1, stack: 1, decree: 0, failure: 1
     proposals_json=$(jq '
       def get_threshold(type):
-        if type == "philosophy" then 5
-        elif type == "pattern" then 3
-        elif type == "redirect" then 2
+        if type == "philosophy" then 1
+        elif type == "pattern" then 1
+        elif type == "redirect" then 1
         elif type == "stack" then 1
         elif type == "decree" then 0
+        elif type == "failure" then 1
         else 1
         end;
 
