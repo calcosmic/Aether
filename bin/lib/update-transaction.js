@@ -172,7 +172,11 @@ class UpdateTransaction {
 
     // Directories to exclude from sync (user data, local state, and separately-synced dirs)
     // v4.0: archive and chambers added — these are private and must not sync to target repos
-    this.EXCLUDE_DIRS = ['data', 'dreams', 'checkpoints', 'locks', 'temp', 'agents', 'commands', 'rules', 'archive', 'chambers'];
+    // v6.0: oracle, midden, exchange added for complete user data protection
+    this.EXCLUDE_DIRS = ['data', 'dreams', 'oracle', 'midden', 'checkpoints', 'locks', 'temp', 'agents', 'commands', 'rules', 'archive', 'chambers', 'exchange'];
+
+    // Files to exclude from sync (user wisdom, protected files)
+    this.EXCLUDE_FILES = ['QUEEN.md'];
 
     // Target directories for git safety checks
     this.targetDirs = ['.aether', '.claude/commands/ant', '.claude/agents/ant', '.claude/rules', '.opencode/commands/ant', '.opencode/agents'];
@@ -653,7 +657,16 @@ class UpdateTransaction {
    */
   shouldExclude(relPath) {
     const parts = relPath.split(path.sep);
-    return parts.some(part => this.EXCLUDE_DIRS.includes(part));
+    // Check for excluded directories
+    if (parts.some(part => this.EXCLUDE_DIRS.includes(part))) {
+      return true;
+    }
+    // Check for excluded files (QUEEN.md protection)
+    const basename = path.basename(relPath);
+    if (this.EXCLUDE_FILES.includes(basename)) {
+      return true;
+    }
+    return false;
   }
 
   /**

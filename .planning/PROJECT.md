@@ -4,7 +4,19 @@
 
 A self-managing development assistant using ant colony metaphor that prevents context rot. Users install it, it guides them through work with clear commands, tells them when to clear context, and maintains state across sessions. The colony learns from each phase and improves over time. As of v3.0, the wisdom system is complete — pheromones evolve automatically, learnings accumulate, and user approval gates promotion to QUEEN.md.
 
-**Current State:** v5.0 Agent Integration shipped — 8 specialist agents integrated into colony commands
+**Current State:** v6.0 System Integration — making what exists actually work
+
+## Current Milestone: v6.0 System Integration
+
+**Goal:** Wire existing systems together — no new features, just integration
+
+**Target features:**
+- Fix update system to properly sync files to user repos
+- Wire learning pipeline so learnings flow to QUEEN.md
+- Prompt users for pheromones at key moments
+- Verify colony-prime delivers QUEEN.md wisdom to agents
+
+**Philosophy:** QUEEN.md is like CLAUDE.md — users edit directly or system auto-populates. No new commands.
 
 ## Shipped: v5.0 Agent Integration
 

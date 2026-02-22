@@ -11,6 +11,7 @@
 - ✅ **v3.0 Wisdom & Pheromone Evolution** — Phases 32-35 (shipped 2026-02-21)
 - ✅ **v4.0 Memory Pipeline** — Phases 36-37 (shipped 2026-02-21)
 - ✅ **v5.0 Agent Integration** — Phases 38-41 (shipped 2026-02-22)
+- 🔄 **v6.0 System Integration** — Phases 42-44 (in progress)
 
 ## Phases
 
@@ -127,7 +128,77 @@
 
 </details>
 
+<details>
+<summary>🔄 v6.0 System Integration (Phases 42-44) — IN PROGRESS</summary>
+
+- [ ] Phase 42: Fix Update Bugs — atomic writes, counter fix, stale directory cleanup
+- [ ] Phase 43: Make Learning Flow — auto-create observations file, verify pipeline
+- [ ] Phase 44: Suggest Pheromones — tick-to-approve suggestions at build start
+
+**8 requirements mapped. Wire existing systems, don't add new ones.**
+
+</details>
+
+---
+
 ## Phase Details
+
+### Phase 42: Fix Update Bugs
+
+**Goal:** Update system writes files atomically and reports accurate counts
+
+**Depends on:** Phase 41 (v5.0 complete)
+
+**Requirements:** UPDATE-01, UPDATE-02, UPDATE-03
+
+**Success Criteria** (what must be TRUE):
+1. Files are written atomically (temp file + rename) in syncDirWithCleanup
+2. Dry-run mode reports 0 files copied (not counting skipped files)
+3. Old directories (.aether/agents/, .aether/commands/) are cleaned from user repos
+4. Update completes without partial file corruption on interrupt
+
+**Plans:** TBD
+
+---
+
+### Phase 43: Make Learning Flow
+
+**Goal:** Learning observations flow through pipeline to QUEEN.md automatically
+
+**Depends on:** Phase 42
+
+**Requirements:** FLOW-01, FLOW-02, FLOW-03
+
+**Success Criteria** (what must be TRUE):
+1. learning-observations.json is auto-created if missing during /ant:init
+2. Observations recorded during builds accumulate in learning-observations.json
+3. Thresholds trigger promotion proposals automatically
+4. User sees tick-to-approve UI with proposals meeting thresholds
+5. Approved proposals appear in QUEEN.md with correct formatting
+6. colony-prime includes promoted wisdom in worker context
+
+**Plans:** TBD
+
+---
+
+### Phase 44: Suggest Pheromones
+
+**Goal:** System suggests pheromones based on codebase analysis at build start
+
+**Depends on:** Phase 43
+
+**Requirements:** SUGG-01, SUGG-02
+
+**Success Criteria** (what must be TRUE):
+1. Build start analyzes codebase for patterns worth signaling
+2. User sees suggested pheromones with tick-to-approve UI
+3. Approved suggestions are written as FOCUS signals
+4. Suggestions are based on actual code analysis (not random)
+5. User can dismiss suggestions without approving
+
+**Plans:** TBD
+
+---
 
 ### Phase 38: Security Gates
 
@@ -176,11 +247,12 @@
 **Requirements:** LIF-01 through LIF-06
 
 **Success Criteria** (what must be TRUE):
-1. Chronicler spawns before seal ceremony — documentation coverage audit
-2. Chronicler reports gaps but doesn't block (non-blocking)
-3. Ambassador replaces Builder for external API/SDK tasks
-4. Ambassador handles OAuth, rate limiting, circuit breakers
-5. Ambassador returns integration plan for Builder to execute
+1. Chronicler spawns in /ant:seal Step 5.5 before ceremony display
+2. Chronicler surveys documentation coverage (API docs, READMEs, guides)
+3. Chronicler reports gaps but doesn't block seal
+4. Ambassador replaces Builder when task involves external API/SDK/OAuth
+5. Ambassador handles rate limiting, circuit breakers, retry patterns
+6. Ambassador returns integration plan for Builder to execute
 
 **Why this matters:** External integrations are failure-prone. Documentation debt compounds silently.
 
@@ -195,11 +267,12 @@
 **Requirements:** ANA-01 through ANA-06
 
 **Success Criteria** (what must be TRUE):
-1. Sage spawns when colony has 3+ completed phases
-2. Sage provides velocity trends, bug density, review turnaround
-3. Weaver spawns when complexity exceeds thresholds
-4. Weaver refactors and runs tests — reverts if break
-5. Both agents provide insights without blocking
+1. Sage spawns in /ant:seal Step 3.5 when colony has 3+ completed phases
+2. Sage analyzes velocity trends, bug density, review turnaround
+3. Sage provides data-driven insights to wisdom promotion process
+4. Weaver spawns in /ant:continue Step 1.7 when complexity exceeds thresholds
+5. Weaver refactors code to improve maintainability
+6. Weaver runs tests before and after — reverts if break
 
 **Why this matters:** Data-driven insights improve colony wisdom. Proactive refactoring prevents tech debt.
 
@@ -207,43 +280,41 @@
 
 ## Requirement Coverage
 
-| Requirement | Phase | Description |
-|-------------|-------|-------------|
-| MEM-01 | 36 | /ant:continue asks for learnings → writes to QUEEN.md | Complete    | 2026-02-21 | 36 | /ant:build logs failures to midden + learning-observe |
-| MEM-03 | 36 | Lower promotion threshold to 1 + user approval |
-| LOG-01 | 37 | Workers update CHANGELOG.md during work | Complete    | 2026-02-21 | 37 | /ant:resume shows learnings, failures, wisdom |
-| VIS-02 | 37 | /ant:status shows memory health |
+### v6.0 Requirements
 
-**Coverage:** 6/6 requirements mapped ✓
-- v1 requirements (P1 Core): 4/4
-- v2 requirements (P2 Enhancements): 2/2
+| Requirement | Phase | Description | Status |
+|-------------|-------|-------------|--------|
+| UPDATE-01 | Phase 42 | Fix atomic writes in syncDirWithCleanup | Pending |
+| UPDATE-02 | Phase 42 | Fix counter bug in dry-run mode | Pending |
+| UPDATE-03 | Phase 42 | Clean old directories from user repos | Pending |
+| FLOW-01 | Phase 43 | Auto-create learning-observations.json if missing | Pending |
+| FLOW-02 | Phase 43 | Verify observations → proposals → promotions pipeline | Pending |
+| FLOW-03 | Phase 43 | Test end-to-end with real learning | Pending |
+| SUGG-01 | Phase 44 | Show suggested pheromones with tick-to-approve at build start | Pending |
+| SUGG-02 | Phase 44 | Suggestions based on codebase analysis | Pending |
+
+**Coverage:** 8/8 requirements mapped ✓
 
 ---
 
 ## Architecture Alignment
 
-**Principle:** Wire the existing memory systems together. No new infrastructure.
+### v6.0 Philosophy
 
-| Component | v4.0 Enhancement |
-|-----------|------------------|
-| `/ant:continue` | Asks "What did you learn?" → writes to QUEEN.md |
-| `/ant/build` | Logs failures to midden/ + learning-observe |
-| `learning-observe` | Called automatically on failure (not just manually) |
-| `queen-promote` | Threshold 1 + approval (not 5) |
-| `QUEEN.md` | Actually gets populated now |
-| `colony-prime` | Reads populated QUEEN.md (already works) |
-| `CHANGELOG.md` | New — continuously updated by workers |
+**Wire existing systems, don't add new ones.**
+
+The functions exist — they just need to be connected:
+
+| Component | Current State | v6.0 Fix |
+|-----------|---------------|----------|
+| syncDirWithCleanup | Direct copy, no atomicity | Temp file + rename pattern |
+| Dry-run counter | Counts skipped files | Only count actual copies |
+| Stale directories | Partial cleanup | Complete cleanup of old dirs |
+| learning-observations.json | Created on first observe | Auto-create in /ant:init |
+| Learning pipeline | Observations recorded but not checked | Check thresholds after recording |
+| Pheromone suggestions | None | Analyze and suggest at build start |
 
 ---
-
-## Out of Scope
-
-| Feature | Reason |
-|---------|--------|
-| New pheromone types | Existing signals work |
-| Decay mechanisms | Explicit logging is simpler |
-| NEST.md, TRAILS/, BROOD/ | Over-engineering |
-| Complex documentation | QUEEN.md + CHANGELOG.md is enough |
 
 ## Progress
 
@@ -280,16 +351,19 @@
 | 29. Specialist Agents + Agent Tests | v2.0 | Complete | 2026-02-20 | - |
 | 30. Niche Agents | v2.0 | Complete | 2026-02-20 | - |
 | 31. Integration Verification + Cleanup | v2.0 | 3/3 | Complete | 2026-02-20 |
-| 32. Wire QUEEN.md into Commands | v3.0 | Complete    | 2026-02-20 | — |
-| 33. Add Promotion Proposals | v3.0 | Complete    | 2026-02-20 | — |
-| 34. Add User Approval UX | v3.0 | Complete    | 2026-02-20 | — |
-| 35. Lifecycle Integration | v3.0 | Complete    | 2026-02-21 | — |
+| 32. Wire QUEEN.md into Commands | v3.0 | Complete | 2026-02-20 | — |
+| 33. Add Promotion Proposals | v3.0 | Complete | 2026-02-20 | — |
+| 34. Add User Approval UX | v3.0 | Complete | 2026-02-20 | — |
+| 35. Lifecycle Integration | v3.0 | Complete | 2026-02-21 | — |
 | 36. Memory Capture | v4.0 | 3/3 | Complete | 2026-02-21 |
 | 37. Changelog + Visibility | v4.0 | 0/3 | Planned | — |
 | 38. Security Gates | v5.0 | 2/2 | Complete | 2026-02-21 |
 | 39. Quality Coverage | v5.0 | 2/2 | Complete | 2026-02-22 |
 | 40. Lifecycle Enhancement | v5.0 | 2/2 | Complete | 2026-02-22 |
-| 41. Analytics & Improvement | v5.0 | Complete    | 2026-02-22 | — |
+| 41. Analytics & Improvement | v5.0 | Complete | 2026-02-22 | — |
+| 42. Fix Update Bugs | v6.0 | 0/3 | Not started | — |
+| 43. Make Learning Flow | v6.0 | 0/3 | Not started | — |
+| 44. Suggest Pheromones | v6.0 | 0/2 | Not started | — |
 
 ---
 
@@ -303,3 +377,4 @@
 *v3.0 shipped: 2026-02-21*
 *v4.0 shipped: 2026-02-21*
 *v5.0 shipped: 2026-02-22*
+*v6.0 roadmap: 2026-02-22*
