@@ -118,7 +118,120 @@ Sealing cancelled. Colony remains active.
 ```
 Stop here.
 
-### Step 3.5: Wisdom Approval
+### Step 3.5: Analytics Review
+
+Before wisdom approval, spawn Sage to analyze colony trends and provide data-driven insights.
+
+**Check phase threshold and spawn Sage:**
+```bash
+# Check if colony has enough history for meaningful analytics
+phases_completed=$(jq '[.plan.phases[] | select(.status == "completed")] | length' .aether/data/COLONY_STATE.json 2>/dev/null || echo "0")
+
+if [[ "$phases_completed" -ge 3 ]]; then
+  # Generate Sage name and dispatch
+  sage_name=$(bash .aether/aether-utils.sh generate-ant-name "sage")
+  bash .aether/aether-utils.sh spawn-log "Queen" "sage" "$sage_name" "Colony analytics review"
+  bash .aether/aether-utils.sh swarm-display-update "$sage_name" "sage" "analyzing" "Colony analytics review" "Queen" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0
+
+  # Display spawn notification
+  echo ""
+  echo "📜🐜 Sage $sage_name spawning — Analyzing colony trends and patterns..."
+fi
+```
+
+**Spawn Sage using Task tool when threshold is met:**
+If phases_completed >= 3, spawn the Sage agent using Task tool with `subagent_type="aether-sage"`:
+
+```xml
+<task>
+  <description>📜 Sage {sage_name}: Colony analytics review</description>
+  <prompt>
+You are {sage_name}, a 📜 Sage Ant.
+
+Mission: Analyze colony history and provide data-driven insights for wisdom promotion
+
+Data Sources:
+- COLONY_STATE.json: Colony configuration, phases, learnings, instincts
+- activity.log: Activity history with timestamps
+- midden.json: Failure patterns and flagged issues
+
+Analysis Areas:
+1. Velocity Trends: Phase completion rate over time
+2. Bug Density: Error frequency and patterns from midden
+3. Review Turnaround: Time from build to continue
+
+Work:
+1. Read COLONY_STATE.json for phase history and learnings
+2. Read activity.log for velocity patterns
+3. Read midden.json for bug density analysis
+4. Calculate metrics and identify trends
+5. Provide recommendations for wisdom promotion
+
+**IMPORTANT:** You are strictly read-only. Do not modify any files.
+
+Log activity: bash .aether/aether-utils.sh activity-log "ANALYZING" "{sage_name}" "description"
+
+Return ONLY this JSON (no other text):
+{{
+  "ant_name": "{sage_name}",
+  "caste": "sage",
+  "status": "completed" | "failed" | "blocked",
+  "summary": "What you analyzed and found",
+  "key_findings": [],
+  "trends": {{
+    "velocity": "increasing|stable|decreasing",
+    "bug_density": "high|medium|low",
+    "review_turnaround": "fast|moderate|slow"
+  }},
+  "metrics_analyzed": [],
+  "predictions": [],
+  "recommendations": [
+    {{"priority": 1, "action": "", "expected_impact": ""}}
+  ],
+  "next_steps": [],
+  "blockers": []
+}}
+  </prompt>
+</task>
+```
+
+**FALLBACK:** If "Agent type not found", use general-purpose agent and inject role: "You are a Sage Ant - analytics specialist that extracts trends from history to guide decisions."
+
+**Parse Sage JSON output:**
+After spawn, extract from response: `key_findings`, `trends`, `recommendations`
+
+Log completion and update swarm display:
+```bash
+bash .aether/aether-utils.sh spawn-complete "$sage_name" "completed" "Analytics review complete"
+bash .aether/aether-utils.sh swarm-display-update "$sage_name" "sage" "completed" "Analytics review complete" "Queen" '{"read":5,"grep":3,"edit":0,"bash":2}' 100 "fungus_garden" 100
+```
+
+**Display Sage completion line:**
+```
+📜 {sage_name}: Colony analytics review complete ✓
+   Velocity: {trend} | Bug density: {level} | Review turnaround: {speed}
+```
+
+**Log high-priority recommendations to midden (non-blocking):**
+For each recommendation with priority <= 2:
+```bash
+bash .aether/aether-utils.sh midden-write "analytics" "Sage recommendation (P{priority}): {action}" "sage"
+```
+
+**Display insights summary:**
+```
+📜 Sage Insights:
+   Key Findings: {count}
+   Top Recommendation: {first recommendation action}
+```
+
+**Continue to Step 3.6 (non-blocking):**
+Proceed to Step 3.6 regardless of Sage findings — Sage is strictly non-blocking.
+
+**If phases_completed < 3:**
+Skip silently (no output) — proceed directly to Step 3.6.
+
+### Step 3.6: Wisdom Approval
 
 Before sealing, review wisdom proposals accumulated during this colony's lifecycle.
 
