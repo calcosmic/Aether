@@ -3909,6 +3909,121 @@ ANTLOGO
     json_ok "$result"
     ;;
 
+  pheromone-display)
+    # Display active pheromones in formatted table
+    # Usage: pheromone-display [type]
+    #   type: Optional filter (focus/redirect/feedback) or 'all' (default: all)
+    # Returns: Formatted table string (human-readable)
+
+    pd_file="$DATA_DIR/pheromones.json"
+    pd_type="${1:-all}"
+    pd_now=$(date +%s)
+
+    if [[ ! -f "$pd_file" ]]; then
+      echo "No pheromones active. Colony has no signals."
+      echo ""
+      echo "Inject signals with:"
+      echo "  /ant:focus \"area\"    - Guide attention"
+      echo "  /ant:redirect \"avoid\" - Set hard constraint"
+      echo "  /ant:feedback \"note\"  - Provide guidance"
+      exit 0
+    fi
+
+    # Get signals with decay calculation (same as pheromone-read)
+    pd_signals=$(jq -c \
+      --argjson now "$pd_now" \
+      --arg type_filter "$pd_type" \
+      '
+      def to_epoch(ts):
+        if ts == null or ts == "" or ts == "phase_end" then null
+        else
+          (ts | split("T")) as $parts |
+          ($parts[0] | split("-")) as $d |
+          ($parts[1] | rtrimstr("Z") | split(":")) as $t |
+          (($d[0] | tonumber) - 1970) * 365 * 86400 +
+          (($d[1] | tonumber) - 1) * 30 * 86400 +
+          (($d[2] | tonumber) - 1) * 86400 +
+          ($t[0] | tonumber) * 3600 +
+          ($t[1] | tonumber) * 60 +
+          ($t[2] | rtrimstr("Z") | tonumber)
+        end;
+
+      def decay_days(t):
+        if t == "FOCUS"    then 30
+        elif t == "REDIRECT" then 60
+        else 90
+        end;
+
+      .signals | map(
+        (to_epoch(.created_at)) as $created_epoch |
+        (if $created_epoch != null then ($now - $created_epoch) / 86400 else 0 end) as $elapsed_days |
+        (decay_days(.type)) as $dd |
+        ((.strength // 0.8) * (1 - ($elapsed_days / $dd))) as $eff_raw |
+        (if $eff_raw < 0 then 0 else $eff_raw end) as $eff |
+        {
+          id: .id,
+          type: .type,
+          content: .content,
+          strength: (.strength // 0.8),
+          effective_strength: $eff,
+          elapsed_days: $elapsed_days,
+          remaining_days: ($dd - $elapsed_days),
+          created_at: .created_at,
+          active: (.active != false and $eff >= 0.1)
+        }
+      )
+      | map(select(.active == true))
+      | map(select(if $type_filter == "all" or $type_filter == "" then true else (.type | ascii_downcase) == ($type_filter | ascii_downcase) end))
+      | sort_by(-.effective_strength)
+      ' "$pd_file" 2>/dev/null)
+
+    if [[ -z "$pd_signals" || "$pd_signals" == "[]" ]]; then
+      echo "No active pheromones found."
+      if [[ "$pd_type" != "all" ]]; then
+        echo "Filter: $pd_type"
+      fi
+      exit 0
+    fi
+
+    # Count by type
+    pd_focus=$(echo "$pd_signals" | jq '[.[] | select(.type == "FOCUS")] | length')
+    pd_redirect=$(echo "$pd_signals" | jq '[.[] | select(.type == "REDIRECT")] | length')
+    pd_feedback=$(echo "$pd_signals" | jq '[.[] | select(.type == "FEEDBACK")] | length')
+    pd_total=$(echo "$pd_signals" | jq 'length')
+
+    # Display header
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "   A C T I V E   P H E R O M O N E S"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+
+    # Display FOCUS signals
+    if [[ "$pd_focus" -gt 0 && ("$pd_type" == "all" || "$pd_type" == "focus") ]]; then
+      echo "🎯 FOCUS (Pay attention here)"
+      echo "$pd_signals" | jq -r '.[] | select(.type == "FOCUS") | "   \n   [\(.effective_strength * 100 | floor)%] \"\(.content.text // .content // "no content")\"\n      └── \(.elapsed_days | floor)d ago, \(.remaining_days | floor)d remaining"' | head -20
+      echo ""
+    fi
+
+    # Display REDIRECT signals
+    if [[ "$pd_redirect" -gt 0 && ("$pd_type" == "all" || "$pd_type" == "redirect") ]]; then
+      echo "🚫 REDIRECT (Hard constraints - DO NOT do this)"
+      echo "$pd_signals" | jq -r '.[] | select(.type == "REDIRECT") | "   \n   [\(.effective_strength * 100 | floor)%] \"\(.content.text // .content // "no content")\"\n      └── \(.elapsed_days | floor)d ago, \(.remaining_days | floor)d remaining"' | head -20
+      echo ""
+    fi
+
+    # Display FEEDBACK signals
+    if [[ "$pd_feedback" -gt 0 && ("$pd_type" == "all" || "$pd_type" == "feedback") ]]; then
+      echo "💬 FEEDBACK (Guidance to consider)"
+      echo "$pd_signals" | jq -r '.[] | select(.type == "FEEDBACK") | "   \n   [\(.effective_strength * 100 | floor)%] \"\(.content.text // .content // "no content")\"\n      └── \(.elapsed_days | floor)d ago, \(.remaining_days | floor)d remaining"' | head -20
+      echo ""
+    fi
+
+    # Display footer
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "$pd_total signal(s) active | Decay: FOCUS 30d, REDIRECT 60d, FEEDBACK 90d"
+    ;;
+
   pheromone-read)
     # Read active pheromones (FOCUS/REDIRECT) from constraints.json
     # Used to inject active signals into worker prompts
