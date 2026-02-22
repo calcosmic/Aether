@@ -25,11 +25,13 @@ if [ ! -f "$_AETHER_UTILS_DIR/file-lock.sh" ]; then
 fi
 source "$_AETHER_UTILS_DIR/file-lock.sh"
 
-# Aether root detection - use git root if available, otherwise use current directory
-if git rev-parse --show-toplevel >/dev/null 2>&1; then
-    AETHER_ROOT="$(git rev-parse --show-toplevel)"
-else
-    AETHER_ROOT="$(pwd)"
+# Aether root detection - respect existing AETHER_ROOT, or use git root, or use current directory
+if [[ -z "${AETHER_ROOT:-}" ]]; then
+    if git rev-parse --show-toplevel >/dev/null 2>&1; then
+        AETHER_ROOT="$(git rev-parse --show-toplevel)"
+    else
+        AETHER_ROOT="$(pwd)"
+    fi
 fi
 
 TEMP_DIR="$AETHER_ROOT/.aether/temp"

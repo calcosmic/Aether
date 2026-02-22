@@ -15,7 +15,7 @@ set -euo pipefail
 trap 'if type error_handler &>/dev/null; then error_handler ${LINENO} "$BASH_COMMAND" $?; fi' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AETHER_ROOT="$(cd "$SCRIPT_DIR/.." && pwd 2>/dev/null || echo "$SCRIPT_DIR")"
+AETHER_ROOT="${AETHER_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd 2>/dev/null || echo "$SCRIPT_DIR")}"
 DATA_DIR="${DATA_DIR:-$AETHER_ROOT/.aether/data}"
 
 # Initialize lock state before sourcing (file-lock.sh trap needs these)
@@ -4129,7 +4129,15 @@ ANTLOGO
     fi
 
     # Extract METADATA to get promotion thresholds
-    metadata=$(sed -n '/<!-- METADATA/,/-->/p' "$queen_file" | sed '1d;$d' | tr -d '\n' | sed 's/^[[:space:]]*//')
+    # Handle both single-line and multi-line METADATA formats
+    meta_line=$(grep -E '^<!-- METADATA' "$queen_file" | head -1)
+    if [[ "$meta_line" == *"-->" ]]; then
+      # Single-line METADATA
+      metadata=$(echo "$meta_line" | sed 's/<!-- METADATA //; s/ -->$//')
+    else
+      # Multi-line METADATA
+      metadata=$(sed -n '/<!-- METADATA/,/-->/p' "$queen_file" | sed '1d;$d' | tr -d '\n' | sed 's/^[[:space:]]*//')
+    fi
 
     # Get threshold for this type (default: all types=1, decree=0)
     threshold=$(echo "$metadata" | jq -r ".promotion_thresholds.${wisdom_type} // null")

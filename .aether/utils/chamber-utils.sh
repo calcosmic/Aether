@@ -17,7 +17,10 @@ CURRENT_LOCK=${CURRENT_LOCK:-""}
 
 # Get script directory for sourcing (preserve parent SCRIPT_DIR if set)
 __chamber_utils_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AETHER_ROOT="$(cd "$__chamber_utils_dir/../.." && pwd 2>/dev/null || echo "$__chamber_utils_dir/../..")"
+# Respect existing AETHER_ROOT if already set
+if [[ -z "${AETHER_ROOT:-}" ]]; then
+    AETHER_ROOT="$(cd "$__chamber_utils_dir/../.." && pwd 2>/dev/null || echo "$__chamber_utils_dir/../..")"
+fi
 
 # Use parent SCRIPT_DIR if available, otherwise use local
 SCRIPT_DIR="${SCRIPT_DIR:-$__chamber_utils_dir}"

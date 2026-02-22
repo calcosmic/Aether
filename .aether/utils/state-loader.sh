@@ -10,11 +10,13 @@
 #
 # Provides: load_colony_state, unload_colony_state, get_handoff_summary, display_resumption_context
 
-# Aether root detection - use git root if available, otherwise use current directory
-if git rev-parse --show-toplevel >/dev/null 2>&1; then
-    AETHER_ROOT="$(git rev-parse --show-toplevel)"
-else
-    AETHER_ROOT="$(pwd)"
+# Aether root detection - respect existing AETHER_ROOT, or use git root, or use current directory
+if [[ -z "${AETHER_ROOT:-}" ]]; then
+    if git rev-parse --show-toplevel >/dev/null 2>&1; then
+        AETHER_ROOT="$(git rev-parse --show-toplevel)"
+    else
+        AETHER_ROOT="$(pwd)"
+    fi
 fi
 
 SCRIPT_DIR="${SCRIPT_DIR:-$AETHER_ROOT/.aether}"
