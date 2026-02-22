@@ -4,18 +4,20 @@
 
 A self-managing development assistant using ant colony metaphor that prevents context rot. Users install it, it guides them through work with clear commands, tells them when to clear context, and maintains state across sessions. The colony learns from each phase and improves over time. As of v3.0, the wisdom system is complete — pheromones evolve automatically, learnings accumulate, and user approval gates promotion to QUEEN.md.
 
-**Current State:** v3.0 Wisdom & Pheromone Evolution shipped and archived — ready for v4.0 planning
+**Current State:** v5.0 Agent Integration shipped — 8 specialist agents integrated into colony commands
 
-## Current Milestone: v4.0 Memory Pipeline
+## Shipped: v5.0 Agent Integration
 
-**Goal:** Make the colony's memory actually work — short-term (where was I?) and long-term (what did we learn?)
+**Completed:** 2026-02-22
+**Goal:** Integrate 8 specialist agents into existing commands for better security, quality, and efficiency
 
-**Target features:**
-- Learning capture on phase completion → writes to QUEEN.md
-- Failure logging during builds → midden/ + learning-observe
-- Continuous changelog updates by workers
-- Lower promotion threshold (1 + approval, not 5)
-- Visible memory health in /ant:resume and /ant:status
+**Delivered:**
+- ✅ P0: Gatekeeper + Auditor in `/ant:continue` — security gates, quality review
+- ✅ P1: Probe + Measurer in `/ant:continue` and `/ant:build` — coverage, performance
+- ✅ P2: Chronicler + Ambassador in `/ant:seal` and `/ant:build` — documentation, API integration
+- ✅ P3: Sage + Weaver in `/ant:seal` and `/ant:continue` — analytics, proactive refactoring
+
+**24/24 requirements verified.**
 
 ## Core Value
 
@@ -235,11 +237,11 @@ Researching v4.0 Colony Context Enhancement — investigating existing architect
 
 ## Context
 
-Shipped through v3.0 with ~12,352 lines of shell (aether-utils.sh), 34 Claude Code commands, 22 Claude Code subagents. 427 tests passing (427 AVA + 9 bash), 0 failures. All documented bugs fixed. Distribution chain correct end-to-end. Error codes fully standardized. Templates extracted and wired. Agent definitions cleaned and hardened. Wisdom system complete with observation tracking and user approval gates.
+Shipped through v5.0 with ~12,352 lines of shell (aether-utils.sh), 36 Claude Code commands, 22 Claude Code subagents. 490+ tests passing. All documented bugs fixed. Distribution chain correct end-to-end. Error codes fully standardized. Templates extracted and wired. Agent definitions cleaned and hardened. Wisdom system complete with observation tracking and user approval gates. 8 specialist agents integrated into colony workflows.
 
 Tech stack: Bash, jq, xmllint/xmlstarlet, Node.js CLI wrapper.
 
-Seven milestones shipped:
+Eight milestones shipped:
 - v1.0: 46/46 requirements — full repair and stabilization
 - v1.1: 14/15 requirements — visual polish and identity
 - v1.2: 24/24 requirements — hardening and reliability
@@ -247,6 +249,8 @@ Seven milestones shipped:
 - v1.4: 10/10 requirements (partial) — file audit and dead file removal
 - v2.0: 49 requirements — 22 Claude Code subagents shipped
 - v3.0: 25/25 requirements — wisdom and pheromone evolution
+- v4.0: 6/6 requirements — memory pipeline (learnings, changelog, visibility)
+- v5.0: 24/24 requirements — 8 specialist agents integrated into commands
 
 ## Key Decisions
 
@@ -286,4 +290,4 @@ Seven milestones shipped:
 
 ---
 
-*Last updated: 2026-02-21 after v3.0 archived, v4.0 milestone started*
+*Last updated: 2026-02-22 after v5.0 milestone shipped*

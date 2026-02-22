@@ -10,7 +10,7 @@
 - ✅ **v2.0 Worker Emergence** — Phases 27-31 (shipped 2026-02-20)
 - ✅ **v3.0 Wisdom & Pheromone Evolution** — Phases 32-35 (shipped 2026-02-21)
 - ✅ **v4.0 Memory Pipeline** — Phases 36-37 (shipped 2026-02-21)
-- 🔄 **v5.0 Agent Integration** — Phases 38-41 (in progress)
+- ✅ **v5.0 Agent Integration** — Phases 38-41 (shipped 2026-02-22)
 
 ## Phases
 
@@ -116,20 +116,14 @@
 </details>
 
 <details>
-<summary>🔄 v5.0 Agent Integration (Phases 38-41) — IN PROGRESS</summary>
+<summary>✅ v5.0 Agent Integration (Phases 38-41) — SHIPPED 2026-02-22</summary>
 
-- [x] Phase 38: Security Gates — Gatekeeper + Auditor integration in `/ant:continue` (completed 2026-02-21)
-  - [ ] 38-01-PLAN.md — Integrate Gatekeeper agent for supply chain security (SEC-01, SEC-02, SEC-03)
-  - [ ] 38-02-PLAN.md — Integrate Auditor agent for code quality review (SEC-04, SEC-05, SEC-06)
-- [x] Phase 39: Quality Coverage — Probe + Measurer for tests and performance (completed 2026-02-22)
-  - [ ] 39-01-PLAN.md — Integrate Probe agent for test coverage improvement (COV-01, COV-02, COV-03, COV-04)
-  - [ ] 39-02-PLAN.md — Integrate Measurer agent for performance baselines (COV-05, COV-06, COV-07)
-- [x] Phase 40: Lifecycle Enhancement — Chronicler + Ambassador in seal/build (completed 2026-02-22)
-  - [ ] 40-01-PLAN.md — Integrate Chronicler agent for documentation coverage audit (LIF-01, LIF-02, LIF-03)
-  - [ ] 40-02-PLAN.md — Integrate Ambassador agent for external API/SDK integration (LIF-04, LIF-05, LIF-06)
-- [ ] Phase 41: Analytics & Improvement — Sage + Weaver for insights and refactoring
+- [x] Phase 38: Security Gates (2/2 plans) — Gatekeeper + Auditor integration
+- [x] Phase 39: Quality Coverage (2/2 plans) — Probe + Measurer for tests/performance
+- [x] Phase 40: Lifecycle Enhancement (2/2 plans) — Chronicler + Ambassador in seal/build
+- [x] Phase 41: Analytics & Improvement (2/2 plans) — Sage + Weaver for insights/refactoring
 
-**24 requirements mapped. Goal: Integrate 8 specialist agents into existing commands.**
+**24/24 requirements verified. 8 specialist agents integrated into colony commands.**
 
 </details>
 
@@ -292,6 +286,10 @@
 | 35. Lifecycle Integration | v3.0 | Complete    | 2026-02-21 | — |
 | 36. Memory Capture | v4.0 | 3/3 | Complete | 2026-02-21 |
 | 37. Changelog + Visibility | v4.0 | 0/3 | Planned | — |
+| 38. Security Gates | v5.0 | 2/2 | Complete | 2026-02-21 |
+| 39. Quality Coverage | v5.0 | 2/2 | Complete | 2026-02-22 |
+| 40. Lifecycle Enhancement | v5.0 | 2/2 | Complete | 2026-02-22 |
+| 41. Analytics & Improvement | v5.0 | Complete    | 2026-02-22 | — |
 
 ---
 
@@ -304,4 +302,4 @@
 *v2.0 shipped: 2026-02-20*
 *v3.0 shipped: 2026-02-21*
 *v4.0 shipped: 2026-02-21*
-*v5.0 defined: 2026-02-21 (agent integration)*
+*v5.0 shipped: 2026-02-22*

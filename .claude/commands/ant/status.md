@@ -253,6 +253,32 @@ Use the `phase_bar` and `task_bar` values computed in Step 2.7 for the actual ba
    No memory data available. Colony wisdom will accumulate as you complete phases.
 ```
 
+**Pheromone Summary:**
+After the Memory Health table, run:
+```bash
+bash .aether/aether-utils.sh pheromone-count
+```
+
+Display:
+```
+🎯 Active Pheromones
+┌────────────┬───────┬──────────────────────────────────┐
+│ Type       │ Count │ Strongest Signal                 │
+├────────────┼───────┼──────────────────────────────────┤
+│ 🎯 FOCUS   │ {n}   │ {strongest_focus or "none"}      │
+│ 🚫 REDIRECT│ {n}   │ {strongest_redirect or "none"}   │
+│ 💬 FEEDBACK│ {n}   │ {strongest_feedback or "none"}   │
+└────────────┴───────┴──────────────────────────────────┘
+
+Run /ant:pheromones for full details
+```
+
+If all counts are 0:
+```
+🎯 Active Pheromones: None
+   Use /ant:focus, /ant:redirect, or /ant:feedback to inject signals
+```
+
 **Edge cases:**
 - No phases yet: show `[░░░░░░░░░░░░░░░░░░░░] 0/0 phases`
 - No tasks in phase: show `[░░░░░░░░░░░░░░░░░░░░] 0/0 tasks in Phase 0`
