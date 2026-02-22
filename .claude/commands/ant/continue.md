@@ -138,6 +138,109 @@ Record: pass count, fail count, exit code. **STOP if fails.**
 Run using the Bash tool with description "Checking test coverage...": `{coverage_command}  # e.g., npm run test:coverage`
 Record: coverage percentage (target: 80%+ for new code)
 
+#### Step 1.5.1: Probe Coverage Agent (Conditional)
+
+**Test coverage improvement — runs when coverage < 80% AND tests pass.**
+
+1. **Check coverage threshold condition:**
+   - Coverage data is already available from Phase 4 coverage check
+   - If tests failed: Skip Probe silently (coverage data unreliable)
+   - If coverage_percent >= 80%: Skip Probe silently, continue to Phase 5
+   - If coverage_percent < 80% AND tests passed: Proceed to spawn Probe
+
+2. **If skipping Probe:**
+```
+🧪🐜 Probe: Coverage at {coverage_percent}% — {reason_for_skip}
+```
+Continue to Phase 5: Secrets Scan.
+
+3. **If spawning Probe:**
+
+   a. Generate Probe name and dispatch:
+   Run using the Bash tool with description "Generating Probe name...": `probe_name=$(bash .aether/aether-utils.sh generate-ant-name "probe") && bash .aether/aether-utils.sh spawn-log "Queen" "probe" "$probe_name" "Coverage improvement: ${coverage_percent}%" && echo "{\"name\":\"$probe_name\"}"`
+
+   b. Update swarm display (if visual_mode is true):
+   Run using the Bash tool with description "Updating swarm display...": `bash .aether/aether-utils.sh swarm-display-update "$probe_name" "probe" "scanning" "Coverage improvement" "Quality" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0`
+
+   c. Display: `🧪🐜 Probe {probe_name} spawning — Coverage at {coverage_percent}%, generating tests for uncovered paths...`
+
+   d. Determine uncovered files:
+   Run using the Bash tool with description "Getting modified source files...": `modified_source_files=$(git diff --name-only HEAD~1 2>/dev/null || git diff --name-only) && source_files=$(echo "$modified_source_files" | grep -v "\.test\." | grep -v "\.spec\." | grep -v "__tests__") && echo "$source_files"`
+
+   e. Spawn Probe agent:
+
+   Use the Task tool with subagent_type="aether-probe" (if available; otherwise use general-purpose and inject the Probe role from `.opencode/agents/aether-probe.md`):
+
+   ```xml
+   <mission>
+   Improve test coverage for uncovered code paths in the modified files.
+   </mission>
+
+   <work>
+   1. Analyze the modified source files for uncovered branches and edge cases
+   2. Identify which paths lack test coverage
+   3. Generate test cases that exercise uncovered code paths
+   4. Run the new tests to verify they pass
+   5. Report coverage improvements and edge cases discovered
+   </work>
+
+   <context>
+   Current coverage: {coverage_percent}%
+   Target coverage: 80%
+   Modified source files: {modified_source_files}
+   </context>
+
+   <constraints>
+   - Test files ONLY — never modify source code
+   - Follow existing test conventions in the codebase
+   - Do NOT delete or modify existing tests
+   </constraints>
+
+   <output>
+   Provide JSON output matching this schema:
+   {
+     "ant_name": "your probe name",
+     "caste": "probe",
+     "status": "completed" | "failed" | "blocked",
+     "summary": "Brief summary of coverage improvements",
+     "coverage": {
+       "lines": 0,
+       "branches": 0,
+       "functions": 0
+     },
+     "tests_added": ["file1.test.js", "file2.test.js"],
+     "edge_cases_discovered": ["edge case 1", "edge case 2"],
+     "mutation_score": 0,
+     "weak_spots": [],
+     "blockers": []
+   }
+   </output>
+   ```
+
+   f. Parse Probe JSON output and log completion:
+   Extract: `tests_added`, `coverage.lines`, `coverage.branches`, `coverage.functions`, `edge_cases_discovered`, `mutation_score`
+
+   Run using the Bash tool with description "Logging Probe completion...": `bash .aether/aether-utils.sh spawn-complete "$probe_name" "completed" "{\"tests_added\":${#tests_added[@]},\"coverage\":{\"lines\":${coverage_lines},\"branches\":${coverage_branches},\"functions\":${coverage_functions}}}"`
+
+   g. Log findings to midden:
+   Run using the Bash tool with description "Logging Probe findings to midden...": `bash .aether/aether-utils.sh midden-write "coverage" "Probe generated tests, coverage: ${coverage_lines}%/${coverage_branches}%/${coverage_functions}%" "probe"`
+
+   If edge cases found:
+   Run using the Bash tool with description "Logging edge cases to midden...": `bash .aether/aether-utils.sh midden-write "edge_cases" "Found ${#edge_cases_discovered[@]} edge cases" "probe"`
+
+4. **NON-BLOCKING continuation:**
+   Display Probe findings summary:
+   ```
+   🧪🐜 Probe complete — Findings logged to midden, continuing verification...
+      Tests added: {count}
+      Edge cases discovered: {count}
+   ```
+
+   **CRITICAL:** ALWAYS continue to Phase 5 (Secrets Scan) regardless of Probe results. Probe is strictly non-blocking — phase advancement continues even if Probe cannot improve coverage.
+
+5. **Record Probe status for verification report:**
+   Set `probe_status = "ACTIVE"` and store tests_added count and edge_cases count for the verification report.
+
 **Phase 5: Secrets Scan** (basic grep-based secret detection):
 Run using the Bash tool with description "Scanning for exposed secrets...": `grep -rn "sk-\|api_key\|password\s*=" --include="*.ts" --include="*.js" --include="*.py" src/ 2>/dev/null | head -10`
 Run using the Bash tool with description "Scanning for debug artifacts...": `grep -rn "console\.log\|debugger" --include="*.ts" --include="*.tsx" --include="*.js" src/ 2>/dev/null | head -10`
@@ -167,6 +270,7 @@ Display:
 🧹 Lint         [PASS/FAIL/SKIP] (X warnings)
 🧪 Tests        [PASS/FAIL/SKIP] (X/Y passed)
    Coverage     {percent}% (target: 80%)
+   🧪 Probe     [ACTIVE/SKIP] (tests added: X, edge cases: Y)
 🔒 Secrets      [PASS/FAIL] (X issues)
 📦 Gatekeeper   [PASS/WARN/SKIP] (X critical, X high)
 👥 Auditor      [PASS/FAIL] (score: X/100)

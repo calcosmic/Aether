@@ -118,7 +118,7 @@
 <details>
 <summary>🔄 v5.0 Agent Integration (Phases 38-41) — IN PROGRESS</summary>
 
-- [ ] Phase 38: Security Gates — Gatekeeper + Auditor integration in `/ant:continue`
+- [x] Phase 38: Security Gates — Gatekeeper + Auditor integration in `/ant:continue` (completed 2026-02-21)
   - [ ] 38-01-PLAN.md — Integrate Gatekeeper agent for supply chain security (SEC-01, SEC-02, SEC-03)
   - [ ] 38-02-PLAN.md — Integrate Auditor agent for code quality review (SEC-04, SEC-05, SEC-06)
 - [ ] Phase 39: Quality Coverage — Probe + Measurer for tests and performance
