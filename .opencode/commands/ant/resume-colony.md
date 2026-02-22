@@ -49,13 +49,13 @@ Keep state loaded (don't unload yet) - we'll need it for the full display.
 
 ### Step 2: Compute Active Signals
 
-Read active signals from COLONY_STATE.json `signals` array (already loaded in Step 1).
+Run using the Bash tool:
+```bash
+bash .aether/aether-utils.sh pheromone-read
+```
 
-Filter signals where:
-- `expires_at` is null (permanent signals like INIT), OR
-- `expires_at` > current timestamp (not expired)
-
-If `signals` array is empty or all expired, treat as "no active pheromones."
+Use `.result.signals` as the active signal list (already decay-filtered by runtime logic).
+If empty, treat as "no active pheromones."
 
 ### Step 3: Display Restored State
 
@@ -102,7 +102,7 @@ NEXT ACTIONS
 **If visual_mode is true, render final swarm display:**
 ```bash
 bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Colony resumed" "Colony" '{"read":3,"grep":0,"edit":2,"bash":1}' 100 "fungus_garden" 100
-bash .aether/aether-utils.sh swarm-display-render "$resume_id"
+bash .aether/aether-utils.sh swarm-display-text "$resume_id"
 ```
 
 Route to next action based on state:

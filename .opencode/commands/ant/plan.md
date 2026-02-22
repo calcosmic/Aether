@@ -452,7 +452,7 @@ Ready to build.
 **If visual_mode is true, render final swarm display:**
 ```bash
 bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Plan generated" "Colony" '{"read":8,"grep":4,"edit":2,"bash":1}' 100 "fungus_garden" 100
-bash .aether/aether-utils.sh swarm-display-render "$plan_id"
+bash .aether/aether-utils.sh swarm-display-text "$plan_id"
 ```
 
 Read `plan.phases` from COLONY_STATE.json and display:

@@ -19,13 +19,13 @@ bash .aether/aether-utils.sh queen-init
 
 **Example output:**
 ```json
-{"ok":true,"result":{"created":true,"path":".aether/docs/QUEEN.md","source":"~/.aether/system/docs/QUEEN.md.template"}}
+{"ok":true,"result":{"created":true,"path":".aether/QUEEN.md","source":"~/.aether/system/templates/QUEEN.md.template"}}
 ```
 
 **Behavior:**
 - If QUEEN.md already exists, returns `{"created":false}` without overwriting
 - Searches for template in: hub system path, then local .aether/templates/
-- Creates `.aether/docs/` directory if it doesn't exist
+- Creates `.aether/` directory if it doesn't exist
 
 ---
 
@@ -84,8 +84,8 @@ bash .aether/aether-utils.sh queen-promote <type> <content> <colony_name>
 
 The queen commands are part of the colony lifecycle:
 
-1. **Colony startup:** `/ant:colonize` calls `queen-init` to ensure QUEEN.md exists
-2. **Worker priming:** `/ant:swarm` calls `queen-read` to inject wisdom into worker prompts
+1. **Colony startup:** `/ant:init` calls `queen-init` to ensure QUEEN.md exists
+2. **Worker priming:** `/ant:build` loads `colony-prime`, which includes QUEEN wisdom
 3. **Colony end:** `/ant:seal` can call `queen-promote` to persist learnings
 
 ### Adding a New Queen Command

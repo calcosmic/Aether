@@ -263,14 +263,14 @@ run_pher04() {
         notes="${notes:+$notes; }prompt_section missing 'ACTIVE SIGNALS' header (got: ${section:0:100})"
     fi
 
-    # Proxy check: build.md must reference pheromone-prime
-    if ! grep -q "pheromone-prime" "$PROJECT_ROOT/.claude/commands/ant/build.md"; then
+    # Proxy check: orchestrated build path must reference colony context priming
+    if ! grep -q "colony-prime" "$PROJECT_ROOT/.aether/docs/command-playbooks/build-context.md"; then
         status="FAIL"
-        notes="${notes:+$notes; }build.md does not reference pheromone-prime"
+        notes="${notes:+$notes; }build-context.md does not reference colony-prime"
     fi
 
     teardown_e2e_env
-    record_result "PHER-04" "$status" "${notes:-pheromone-prime returns ACTIVE SIGNALS; build.md references it}"
+    record_result "PHER-04" "$status" "${notes:-pheromone-prime returns ACTIVE SIGNALS; build-context.md references colony-prime}"
 }
 
 # ============================================================================
@@ -314,14 +314,14 @@ run_pher05() {
         notes="${notes:+$notes; }aether-utils.sh does not contain INSTINCTS section in pheromone-prime"
     fi
 
-    # Proxy: verify build.md references pheromone_section variable injection
-    if ! grep -q "pheromone_section" "$PROJECT_ROOT/.claude/commands/ant/build.md"; then
+    # Proxy: verify worker prompts inject prompt_section from colony priming
+    if ! grep -q "prompt_section" "$PROJECT_ROOT/.aether/docs/command-playbooks/build-wave.md"; then
         status="FAIL"
-        notes="${notes:+$notes; }build.md missing pheromone_section injection reference"
+        notes="${notes:+$notes; }build-wave.md missing prompt_section injection reference"
     fi
 
     teardown_e2e_env
-    record_result "PHER-05" "$status" "${notes:-instinct-read valid; pheromone-prime INSTINCTS block exists; build.md injects pheromone_section}"
+    record_result "PHER-05" "$status" "${notes:-instinct-read valid; pheromone-prime INSTINCTS block exists; build-wave.md injects prompt_section}"
 }
 
 # ============================================================================

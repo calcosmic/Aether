@@ -427,7 +427,7 @@ Write the result to .aether/HANDOFF.md using the Write tool.
 
 **If visual_mode is true, render swarm display (consolidated):**
 ```bash
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Colony entombed" "Colony" '{"read":3,"grep":0,"edit":2,"bash":5}' 100 "fungus_garden" 100 && bash .aether/aether-utils.sh swarm-display-inline "$entomb_id"
+bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Colony entombed" "Colony" '{"read":3,"grep":0,"edit":2,"bash":5}' 100 "fungus_garden" 100 && bash .aether/aether-utils.sh swarm-display-text "$entomb_id"
 ```
 
 Display:

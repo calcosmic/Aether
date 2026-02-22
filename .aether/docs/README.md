@@ -1,6 +1,12 @@
 # Aether Documentation
 
-This directory contains actively maintained documentation for the Aether colony system. 8 files total plus `disciplines/` subdirectory.
+This directory contains actively maintained documentation for the Aether colony system.
+
+Runtime/behavior authority remains in:
+- `.aether/aether-utils.sh` (execution)
+- `.claude/commands/ant/*.md` (command flow)
+
+Docs in this directory are explanatory references and should not override runtime behavior.
 
 ---
 
@@ -11,6 +17,7 @@ Distributed to target repos via `aether update` (update allowlist):
 | File | Purpose |
 |------|---------|
 | `pheromones.md` | Pheromone system guide (FOCUS/REDIRECT/FEEDBACK signals) |
+| `source-of-truth-map.md` | Authority map and docs/runtime drift tracking |
 
 ---
 
@@ -23,7 +30,8 @@ Packaged in npm, available to all Aether installations:
 | `caste-system.md` | Worker caste definitions and emoji assignments |
 | `QUEEN-SYSTEM.md` | Queen wisdom promotion system |
 | `queen-commands.md` | Queen command documentation |
-| `QUEEN.md` | Generated Queen wisdom file (repo-specific, auto-updated) |
+| `xml-utilities.md` | XML utility/runtime integration reference |
+| `.aether/QUEEN.md` | Generated Queen wisdom file (repo-specific, auto-updated) |
 | `error-codes.md` | Error code reference (E_* constants) |
 
 ---
@@ -51,6 +59,24 @@ Training protocols that govern worker behavior (in `disciplines/` subdirectory):
 | `disciplines/tdd.md` | Test-first development |
 | `disciplines/learning.md` | Pattern detection with validation |
 | `disciplines/coding-standards.md` | Universal code quality rules |
+
+---
+
+## Command Playbooks
+
+Split playbooks used by orchestrator commands:
+
+| File | Purpose |
+|------|---------|
+| `command-playbooks/build-prep.md` | Build preparation and validation |
+| `command-playbooks/build-context.md` | Context and survey loading |
+| `command-playbooks/build-wave.md` | Worker wave orchestration |
+| `command-playbooks/build-verify.md` | Watcher/measurer/chaos verification |
+| `command-playbooks/build-complete.md` | Build synthesis and session updates |
+| `command-playbooks/continue-verify.md` | Continue verification setup |
+| `command-playbooks/continue-gates.md` | Continue quality/security gates |
+| `command-playbooks/continue-advance.md` | State advancement and pheromone/learning steps |
+| `command-playbooks/continue-finalize.md` | Handoff/changelog/session finalization |
 
 ---
 

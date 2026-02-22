@@ -252,9 +252,8 @@ test('validate-state all files have required structure', t => {
 
 // Test: validate-state with invalid target returns error
 // No colony files needed — error fires before any file access
-// Note: command returns error JSON on stdout with exit code 0
 test('validate-state with invalid target returns error', t => {
-  const result = runUtilsCommand('validate-state invalid-target');
+  const result = runUtilsCommandExpectError('validate-state invalid-target');
 
   t.false(result.ok, 'ok should be false for error');
   t.true('error' in result, 'Result should have error field');
@@ -264,9 +263,8 @@ test('validate-state with invalid target returns error', t => {
 
 // Test: validate-state without argument returns error
 // No colony files needed — error fires before any file access
-// Note: command returns error JSON on stdout with exit code 0
 test('validate-state without argument returns error', t => {
-  const result = runUtilsCommand('validate-state');
+  const result = runUtilsCommandExpectError('validate-state');
 
   t.false(result.ok, 'ok should be false for error');
   t.true('error' in result, 'Result should have error field');

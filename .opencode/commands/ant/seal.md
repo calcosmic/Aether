@@ -194,7 +194,7 @@ fi
 **If visual_mode is true, render final swarm display:**
 ```bash
 bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Colony sealed" "Colony" '{"read":3,"grep":0,"edit":2,"bash":3}' 100 "fungus_garden" 100
-bash .aether/aether-utils.sh swarm-display-render "$seal_id"
+bash .aether/aether-utils.sh swarm-display-text "$seal_id"
 ```
 
 Output:

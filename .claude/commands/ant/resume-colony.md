@@ -43,13 +43,13 @@ Keep state loaded (don't unload yet) - we'll need it for the full display.
 
 ### Step 2: Compute Active Signals
 
-Read active signals from COLONY_STATE.json `signals` array (already loaded in Step 1).
+Run using the Bash tool with description "Loading active pheromones...":
+```bash
+bash .aether/aether-utils.sh pheromone-read
+```
 
-Filter signals where:
-- `expires_at` is null (permanent signals like INIT), OR
-- `expires_at` > current timestamp (not expired)
-
-If `signals` array is empty or all expired, treat as "no active pheromones."
+Use `.result.signals` as the active signal list (already decay-filtered by runtime logic).
+If empty, treat as "no active pheromones."
 
 ### Step 3: Display Restored State
 

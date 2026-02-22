@@ -74,7 +74,7 @@ semantic-index() {
     local entry_id="${3:-}"
 
     if [[ -z "$text" ]]; then
-        json_err 1 "semantic-index requires text argument"
+        semantic_json_err 1 "semantic-index requires text argument"
         return 1
     fi
 
@@ -161,12 +161,12 @@ semantic-search() {
     local source_filter="${4:-}"
 
     if [[ -z "$query" ]]; then
-        json_err 1 "semantic-search requires query argument"
+        semantic_json_err 1 "semantic-search requires query argument"
         return 1
     fi
 
     if [[ ! -f "$SEMANTIC_EMBEDDINGS_FILE" ]]; then
-        json_ok '{"results":[]}' "No semantic index found. Run semantic-init first."
+        semantic_json_ok '{"results":[]}' "No semantic index found. Run semantic-init first."
         return 0
     fi
 
@@ -236,7 +236,7 @@ semantic-find-duplicate() {
     local threshold="${2:-0.85}"
 
     if [[ -z "$text" ]]; then
-        json_err 1 "semantic-find-duplicate requires text argument"
+        semantic_json_err 1 "semantic-find-duplicate requires text argument"
         return 1
     fi
 
@@ -249,7 +249,7 @@ semantic-find-duplicate() {
     if [[ "$count" -gt 0 ]]; then
         echo "$result" | jq '. + {"is_duplicate": true}'
     else
-        json_ok "[]" "No duplicates found"
+        semantic_json_ok "[]" "No duplicates found"
     fi
 }
 
@@ -368,7 +368,7 @@ semantic-get-context() {
 # Check semantic layer status
 semantic-status() {
     if [[ ! -f "$SEMANTIC_DATA_DIR/index.json" ]]; then
-        json_ok '{"initialized": false, "message": "Run semantic-init to initialize"}'
+        semantic_json_ok '{"initialized": false, "message": "Run semantic-init to initialize"}'
         return 0
     fi
 
@@ -387,7 +387,7 @@ semantic-status() {
 }
 
 # Helper: Output JSON OK response
-json_ok() {
+semantic_json_ok() {
     local result="${1:-}"
     local message="${2:-}"
     jq -n --argjson result "$result" --arg message "$message" \
@@ -395,7 +395,7 @@ json_ok() {
 }
 
 # Helper: Output JSON error response
-json_err() {
+semantic_json_err() {
     local code="${1:-1}"
     local message="${2:-Unknown error}"
     jq -n --arg code "$code" --arg message "$message" \
@@ -411,3 +411,5 @@ export -f semantic-rebuild
 export -f semantic-get-context
 export -f semantic-status
 export -f semantic-check-deps
+export -f semantic_json_ok
+export -f semantic_json_err

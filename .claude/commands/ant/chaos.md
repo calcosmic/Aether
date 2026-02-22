@@ -225,7 +225,7 @@ For each scenario, produce a finding in this format. Display each to the termina
 **If visual_mode is true, render final swarm display** by running using the Bash tool with description "Updating chaos display...":
 ```bash
 bash .aether/aether-utils.sh swarm-display-update "Chaos Ant" "chaos" "completed" "Resilience test complete" "Colony" '{"read":8,"grep":4,"edit":0,"bash":3}' 100 "fungus_garden" 100
-bash .aether/aether-utils.sh swarm-display-inline "$chaos_id"
+bash .aether/aether-utils.sh swarm-display-text "$chaos_id"
 ```
 
 After all 5 scenarios, compile the structured report:

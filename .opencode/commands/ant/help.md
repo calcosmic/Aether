@@ -105,10 +105,11 @@ HOW IT WORKS
     Graveyards — markers on files where workers previously failed
 
   State Files (.aether/data/):
-    COLONY_STATE.json   Goal, phases, tasks, memory, signals, events
+    COLONY_STATE.json   Goal, phases, tasks, memory, events
     activity.log        Timestamped worker activity
     spawn-tree.txt      Worker spawn hierarchy
-    constraints.json    Focus/redirect pheromone data
+    pheromones.json     Active FOCUS/REDIRECT/FEEDBACK signals
+    constraints.json    Compatibility mirror for focus/redirect data
 
 OPENCODE USERS
 

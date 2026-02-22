@@ -9,7 +9,7 @@ The Queen represents the accumulation of validated knowledge from all colonies. 
 ## File Location
 
 ```
-.aether/docs/QUEEN.md
+.aether/QUEEN.md
 ```
 
 ## Structure
@@ -18,7 +18,7 @@ The Queen represents the accumulation of validated knowledge from all colonies. 
 
 Core beliefs validated through repeated successful application across multiple colonies.
 
-**Threshold:** 5 successful validations required for promotion
+**Threshold:** 1 successful validation required for promotion
 
 Example:
 ```markdown
@@ -29,7 +29,7 @@ Example:
 
 Validated approaches that consistently work. These represent discovered best practices.
 
-**Threshold:** 3 successful validations required for promotion
+**Threshold:** 1 successful validation required for promotion
 
 Example:
 ```markdown
@@ -40,7 +40,7 @@ Example:
 
 Anti-patterns to avoid. Approaches that have caused problems.
 
-**Threshold:** 2 failed validations required for promotion
+**Threshold:** 1 failed validation required for promotion
 
 Example:
 ```markdown
@@ -85,7 +85,7 @@ bash .aether/aether-utils.sh queen-init
 
 **Returns:**
 ```json
-{"created": true, "path": ".aether/docs/QUEEN.md", "source": "~/.aether/system/templates/QUEEN.md.template"}
+{"created": true, "path": ".aether/QUEEN.md", "source": "~/.aether/system/templates/QUEEN.md.template"}
 ```
 
 ### queen-read
@@ -162,9 +162,9 @@ Before creating the chamber, promotes validated learnings to QUEEN.md.
 
 | Type | Threshold | Rationale |
 |------|-----------|-----------|
-| Philosophy | 5 | Core beliefs need strongest validation |
-| Pattern | 3 | Best practices need multiple confirmations |
-| Redirect | 2 | Anti-patterns need fewer failures to document |
+| Philosophy | 1 | Promote validated guidance quickly |
+| Pattern | 1 | Promote reusable practices quickly |
+| Redirect | 1 | Promote anti-pattern protection immediately |
 | Stack | 1 | Tech insights are domain-specific |
 | Decree | 0 | User mandates are immediate |
 
@@ -179,9 +179,9 @@ The QUEEN.md file includes a METADATA block at the end:
   "last_evolved": "2026-02-15T13:08:40Z",
   "colonies_contributed": ["colony-a"],
   "promotion_thresholds": {
-    "philosophy": 5,
-    "pattern": 3,
-    "redirect": 2,
+    "philosophy": 1,
+    "pattern": 1,
+    "redirect": 1,
     "stack": 1,
     "decree": 0
   },

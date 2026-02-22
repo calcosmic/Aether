@@ -29,6 +29,7 @@ colonize_id="colonize-$(date +%s)"
 # Initialize swarm display
 bash .aether/aether-utils.sh swarm-display-init "$colonize_id"
 bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "dispatching" "Surveying territory" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0
+bash .aether/aether-utils.sh swarm-display-text "$colonize_id"
 ```
 
 Display header:
@@ -155,6 +156,12 @@ If the `events` array exceeds 100 entries, remove the oldest entries to keep onl
 Write the updated COLONY_STATE.json.
 
 ### Step 6: Confirm
+
+If `visual_mode` is true:
+```bash
+bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Territory survey complete" "Colony" '{"read":6,"grep":2,"edit":2,"bash":3}' 100 "fungus_garden" 100
+bash .aether/aether-utils.sh swarm-display-text "$colonize_id"
+```
 
 Output header:
 

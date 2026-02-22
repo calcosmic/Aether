@@ -67,7 +67,7 @@ npx aether-colony install
 npm install -g aether-colony
 ```
 
-This installs 22 agents to `~/.claude/agents/ant/` plus 35 slash commands to `~/.claude/commands/ant/`.
+This installs 22 agents to `~/.claude/agents/ant/` plus 36 slash commands to `~/.claude/commands/ant/`.
 
 ---
 
@@ -96,6 +96,10 @@ This installs 22 agents to `~/.claude/agents/ant/` plus 35 slash commands to `~/
 | `/ant:resume-colony` | 🚦 Restore from pause |
 | `/ant:seal` | 🏺 Complete and archive colony |
 | `/ant:entomb` | ⚰️ Create chamber from completed colony |
+
+Implementation note:
+- In Claude Code, `.claude/commands/ant/build.md` is an orchestrator and executes split playbooks under `.aether/docs/command-playbooks/` (`build-prep.md`, `build-context.md`, `build-wave.md`, `build-verify.md`, `build-complete.md`).
+- OpenCode has its own command spec at `.opencode/commands/ant/build.md`.
 
 **Core Flow:**
 ```

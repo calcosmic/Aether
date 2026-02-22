@@ -1,7 +1,7 @@
 #!/bin/bash
-# generate-commands.sh - Sync commands between Claude Code and OpenCode
+# generate-commands.sh - Sync checks for commands and agents
 #
-# This script helps keep commands in sync between the two platforms.
+# This script helps keep command/agent surfaces in sync between platforms.
 # Currently it provides a simple diff-based sync, with plans for full
 # YAML-based generation in the future.
 #
@@ -20,6 +20,9 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
 CLAUDE_DIR="$PROJECT_DIR/.claude/commands/ant"
 OPENCODE_DIR="$PROJECT_DIR/.opencode/commands/ant"
+CLAUDE_AGENT_DIR="$PROJECT_DIR/.claude/agents/ant"
+OPENCODE_AGENT_DIR="$PROJECT_DIR/.opencode/agents"
+AETHER_AGENT_MIRROR_DIR="$PROJECT_DIR/.aether/agents-claude"
 
 # Colors for output
 RED='\033[0;31m'
@@ -83,6 +86,14 @@ list_commands() {
         fi
 
         find "$dir" -name "*.md" -exec basename {} \; | sort
+    fi
+}
+
+# List agent definition files (*.md) by basename
+list_agents() {
+    local dir="$1"
+    if [[ -d "$dir" ]]; then
+        find "$dir" -name "*.md" -type f -exec basename {} \; | sort
     fi
 }
 
@@ -215,13 +226,91 @@ check_content() {
         log_warn "Content drift detected in $drift_count file(s) (non-blocking):"
         echo -e "$drift_files"
         # Content drift is advisory — structural sync is what matters
+        log_info "Content checksum comparison completed ($match_count matched, $drift_count drifted)"
+    else
+        log_info "All file contents match (checksums verified: $match_count files)"
     fi
 
     if [[ "$error_count" -gt 0 ]]; then
         return 1
     fi
 
-    log_info "All file contents match (checksums verified: $match_count files)"
+    return 0
+}
+
+# Check agent sync strategy:
+# 1) Claude <-> OpenCode: structural parity (count + file names)
+# 2) Claude <-> .aether mirror: exact parity (count + names + content hash)
+check_agent_sync() {
+    log_info "Checking agent sync status..."
+
+    local claude_count
+    local opencode_count
+    local mirror_count
+    claude_count=$(count_commands "$CLAUDE_AGENT_DIR")
+    opencode_count=$(count_commands "$OPENCODE_AGENT_DIR")
+    mirror_count=$(count_commands "$AETHER_AGENT_MIRROR_DIR")
+
+    echo "Claude agents:        $claude_count"
+    echo "OpenCode agents:      $opencode_count"
+    echo "Aether mirror agents: $mirror_count"
+
+    if [[ "$claude_count" != "$opencode_count" ]]; then
+        log_error "Claude/OpenCode agent counts don't match!"
+        return 1
+    fi
+
+    if [[ "$claude_count" != "$mirror_count" ]]; then
+        log_error "Claude/.aether mirror agent counts don't match!"
+        return 1
+    fi
+
+    local claude_files
+    local opencode_files
+    local mirror_files
+    claude_files=$(list_agents "$CLAUDE_AGENT_DIR")
+    opencode_files=$(list_agents "$OPENCODE_AGENT_DIR")
+    mirror_files=$(list_agents "$AETHER_AGENT_MIRROR_DIR")
+
+    if [[ "$claude_files" != "$opencode_files" ]]; then
+        log_error "Claude/OpenCode agent file names don't match!"
+        echo ""
+        echo "Only in Claude:"
+        comm -23 <(echo "$claude_files") <(echo "$opencode_files") | sed 's/^/  /'
+        echo ""
+        echo "Only in OpenCode:"
+        comm -13 <(echo "$claude_files") <(echo "$opencode_files") | sed 's/^/  /'
+        return 1
+    fi
+
+    if [[ "$claude_files" != "$mirror_files" ]]; then
+        log_error "Claude/.aether mirror agent file names don't match!"
+        echo ""
+        echo "Only in Claude:"
+        comm -23 <(echo "$claude_files") <(echo "$mirror_files") | sed 's/^/  /'
+        echo ""
+        echo "Only in .aether mirror:"
+        comm -13 <(echo "$claude_files") <(echo "$mirror_files") | sed 's/^/  /'
+        return 1
+    fi
+
+    # Claude and mirror should be byte-identical.
+    local file
+    while IFS= read -r file; do
+        [[ -z "$file" ]] && continue
+        local claude_file="$CLAUDE_AGENT_DIR/$file"
+        local mirror_file="$AETHER_AGENT_MIRROR_DIR/$file"
+        local claude_hash
+        local mirror_hash
+        claude_hash=$(compute_hash "$claude_file")
+        mirror_hash=$(compute_hash "$mirror_file")
+        if [[ "$claude_hash" != "$mirror_hash" ]]; then
+            log_error "Claude/.aether mirror content drift: $file"
+            return 1
+        fi
+    done <<< "$claude_files"
+
+    log_info "Agents are in sync (Claude/OpenCode structural parity, Claude/.aether mirror exact parity)"
     return 0
 }
 
@@ -264,9 +353,12 @@ show_help() {
     echo "Directories:"
     echo "  Claude Code: $CLAUDE_DIR"
     echo "  OpenCode:    $OPENCODE_DIR"
+    echo "  Claude agents: $CLAUDE_AGENT_DIR"
+    echo "  OpenCode agents: $OPENCODE_AGENT_DIR"
+    echo "  Aether mirror agents: $AETHER_AGENT_MIRROR_DIR"
     echo ""
-    echo "Note: Commands are maintained manually in both directories."
-    echo "Use this tool to verify they stay in sync."
+    echo "Note: command/agent specs are maintained manually."
+    echo "Use this tool to verify structural and mirror sync constraints."
 }
 
 # Main
@@ -276,6 +368,8 @@ case "${1:-check}" in
         check_sync
         # Pass 2: content-level checksum comparison
         check_content
+        # Pass 3: agent sync policy checks
+        check_agent_sync
         ;;
     diff)
         show_diff

@@ -60,6 +60,8 @@
 | Slash commands | `.claude/commands/ant/` | Claude Code commands |
 | OpenCode commands | `.opencode/commands/ant/` | OpenCode commands |
 | Agent definitions | `.claude/agents/ant/` | Claude Code agents |
+| Agent mirror (packaging) | `.aether/agents-claude/` | Must stay in sync with `.claude/agents/ant/` |
+| OpenCode agents | `.opencode/agents/` | OpenCode worker definitions |
 | Your notes | `.aether/dreams/` | Never distributed |
 | Dev docs | `.aether/docs/known-issues.md` | Distributed |
 
@@ -98,7 +100,7 @@ aether update      # or /ant:update
 ├── templates/           # 12 templates (colony-state, pheromones, etc.)
 ├── docs/                # Distributed documentation
 ├── exchange/            # XML exchange modules (pheromone-xml, wisdom-xml)
-├── agents-claude/       # 22 Claude agent definitions (NEW)
+├── agents-claude/       # Claude agent mirror used for packaging
 ├── data/                # LOCAL ONLY (never distributed)
 │   ├── COLONY_STATE.json
 │   ├── pheromones.json
@@ -116,8 +118,8 @@ aether update      # or /ant:update
 ├── commands/ant/        # 36 slash commands
 │   ├── init.md          # Colony initialization
 │   ├── plan.md          # Phase planning
-│   ├── build.md         # Phase execution
-│   ├── continue.md      # 6-phase verification
+│   ├── build.md         # Build orchestrator (loads split playbooks)
+│   ├── continue.md      # Continue orchestrator (loads split playbooks)
 │   └── ...
 ├── agents/ant/          # 22 agent definitions
 │   ├── aether-builder.md
@@ -129,6 +131,26 @@ aether update      # or /ant:update
     ├── testing.md
     └── ...
 ```
+
+### Split Playbooks (Reliability)
+
+High-length commands are split into smaller execution playbooks:
+
+- `.aether/docs/command-playbooks/build-prep.md`
+- `.aether/docs/command-playbooks/build-context.md`
+- `.aether/docs/command-playbooks/build-wave.md`
+- `.aether/docs/command-playbooks/build-verify.md`
+- `.aether/docs/command-playbooks/build-complete.md`
+- `.aether/docs/command-playbooks/continue-verify.md`
+- `.aether/docs/command-playbooks/continue-gates.md`
+- `.aether/docs/command-playbooks/continue-advance.md`
+- `.aether/docs/command-playbooks/continue-finalize.md`
+
+Authority note:
+- In Claude Code, `.claude/commands/ant/build.md` and `.claude/commands/ant/continue.md` are orchestrators only.
+- Build/continue execution behavior is defined in `.aether/docs/command-playbooks/*.md`.
+- OpenCode maintains separate command specs in `.opencode/commands/ant/*.md`.
+- Agent parity model: `.claude/agents/ant/*.md` is canonical, `.aether/agents-claude/*.md` is a byte-identical packaging mirror, `.opencode/agents/*.md` maintains structural parity (same filenames/count).
 
 ---
 
@@ -284,7 +306,7 @@ Automated changelog collection:
 ## Verification Commands
 
 ```bash
-# Verify commands in sync between Claude Code and OpenCode
+# Verify command and agent sync policy
 npm run lint:sync
 
 # Run all linters

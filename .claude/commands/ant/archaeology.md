@@ -211,7 +211,7 @@ Synthesize findings into patterns:
 arch_id="archaeology-$(date +%s)"
 bash .aether/aether-utils.sh swarm-display-init "$arch_id"
 bash .aether/aether-utils.sh swarm-display-update "Archaeologist" "archaeologist" "completed" "Excavation complete" "Colony" '{"read":10,"grep":3,"edit":0,"bash":5}' 100 "fungus_garden" 100
-bash .aether/aether-utils.sh swarm-display-inline "$arch_id"
+bash .aether/aether-utils.sh swarm-display-text "$arch_id"
 ```
 
 Display the full report:

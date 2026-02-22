@@ -295,7 +295,7 @@ If either command fails, proceed silently. These are optional bookkeeping.
 **If visual_mode is true, render final swarm display:**
 ```bash
 bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Colony initialized" "Colony" '{"read":5,"grep":2,"edit":3,"bash":2}' 100 "fungus_garden" 100
-bash .aether/aether-utils.sh swarm-display-render "$init_id"
+bash .aether/aether-utils.sh swarm-display-text "$init_id"
 ```
 
 Output this header:

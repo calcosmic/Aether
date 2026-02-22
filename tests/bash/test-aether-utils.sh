@@ -973,11 +973,10 @@ test_flag_add_lock_failure_error_code() {
     echo '{"version":1,"flags":[]}' > "$tmp_dir/.aether/data/flags.json"
 
     # Determine the lock directory that file-lock.sh will use.
-    # file-lock.sh uses git rev-parse --show-toplevel, which returns the Aether
-    # repo root when tests run from the repo. Fall back to cwd if git fails.
-    local repo_root
-    repo_root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-    local lock_dir="$repo_root/.aether/locks"
+    # aether-utils.sh sets AETHER_ROOT from its own SCRIPT_DIR/.., so for
+    # isolated test runs that invoke "$tmp_dir/.aether/aether-utils.sh", locks
+    # live under "$tmp_dir/.aether/locks" (not the repo root).
+    local lock_dir="$tmp_dir/.aether/locks"
     local lock_file="$lock_dir/flags.json.lock"
     local lock_pid_file="${lock_file}.pid"
 

@@ -326,6 +326,12 @@ This handoff serves as the record of the entombed colony.
 
 ### Step 9: Display Result
 
+If `visual_mode` is true:
+```bash
+bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Colony entombed" "Colony" '{"read":3,"grep":0,"edit":2,"bash":5}' 100 "fungus_garden" 100
+bash .aether/aether-utils.sh swarm-display-text "$entomb_id"
+```
+
 ```
 🏺 ═══════════════════════════════════════════════════
    C O L O N Y   E N T O M B E D

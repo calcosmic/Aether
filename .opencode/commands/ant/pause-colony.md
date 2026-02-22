@@ -37,13 +37,13 @@ If `goal` is null, output `No colony initialized. Nothing to pause.` and stop.
 
 ### Step 2: Compute Active Signals
 
-Read active signals from COLONY_STATE.json `signals` array (already loaded in Step 1).
+Run using the Bash tool:
+```bash
+bash .aether/aether-utils.sh pheromone-read
+```
 
-Filter signals where:
-- `expires_at` is null (permanent signals like INIT), OR
-- `expires_at` > current timestamp (not expired)
-
-If `signals` array is empty or all expired, treat as "no active pheromones."
+Use `.result.signals` as the active signal list (already decay-filtered by runtime logic).
+If empty, treat as "no active pheromones."
 
 ### Step 3: Build Handoff Summary
 
@@ -51,7 +51,7 @@ Gather context for the handoff from `COLONY_STATE.json`:
 - `goal` from top level
 - `state` and `current_phase` from top level
 - `workers` object
-- Active signals from `signals` array (with current decayed strengths from Step 2)
+- Active signals from `pheromone-read` output (with current decayed strengths from Step 2)
 - Phase progress from `plan.phases` (how many complete, current phase tasks)
 - What was in progress or pending
 
@@ -179,7 +179,7 @@ Continue to Step 5.
 **If visual_mode is true, render final swarm display:**
 ```bash
 bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Colony paused" "Colony" '{"read":3,"grep":0,"edit":2,"bash":1}' 100 "fungus_garden" 100
-bash .aether/aether-utils.sh swarm-display-render "$pause_id"
+bash .aether/aether-utils.sh swarm-display-text "$pause_id"
 ```
 
 Output header:

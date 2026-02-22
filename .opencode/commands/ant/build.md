@@ -719,13 +719,11 @@ If at least one worker succeeded, continue normally to the next wave.
 
 **Parse each worker's JSON output to collect:** status, files_created, files_modified, blockers
 
-**Visual Mode: Render live display (tmux only):**
-If `visual_mode` is true AND the build is running inside a tmux session (`$TMUX` environment variable is set), render the swarm display:
+**Visual Mode: Render live display:**
+If `visual_mode` is true, render the in-conversation swarm display:
 ```bash
 bash .aether/aether-utils.sh swarm-display-text "$build_id"
 ```
-
-If `$TMUX` is not set, skip this call entirely — do not attempt it. Chat users see the structured completion lines above instead.
 
 ### Step 5.3: Spawn Wave 2+ Workers (Sequential Waves)
 
@@ -1134,13 +1132,13 @@ Also update safe-to-clear status:
 
 **This step runs ONLY after synthesis is complete. All values come from actual worker results.**
 
-**Update swarm display state (always) and render (tmux only):**
+**Update swarm display state (always) and render in conversation when visual mode is enabled:**
 ```bash
 # Update Queen as completed
 bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Phase {id} complete" "Colony" '{"read":10,"grep":5,"edit":5,"bash":2}' 100 "fungus_garden" 100
 ```
 
-If `$TMUX` is set, also render the final swarm display:
+If `visual_mode` is true, also render the final swarm display:
 ```bash
 bash .aether/aether-utils.sh swarm-display-text "$build_id"
 ```

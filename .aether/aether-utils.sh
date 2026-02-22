@@ -2542,26 +2542,81 @@ Files: ${files_changed} files changed"
     [[ ! -d "$hub_system" ]] && json_err "$E_HUB_NOT_FOUND" "Hub system directory not found: $hub_system"
 
     # Allowlist of system files to copy (relative to system/)
+    # Keep this in sync with active runtime dependencies and docs layout.
     allowlist=(
+      # Core runtime
       "aether-utils.sh"
+      "workers.md"
+      "model-profiles.yaml"
+
+      # Docs (active)
+      "docs/README.md"
+      "docs/QUEEN-SYSTEM.md"
+      "docs/queen-commands.md"
+      "docs/caste-system.md"
+      "docs/error-codes.md"
+      "docs/known-issues.md"
+      "docs/pheromones.md"
+      "docs/source-of-truth-map.md"
+      "docs/xml-utilities.md"
+
+      # Disciplines
+      "docs/disciplines/DISCIPLINES.md"
       "docs/disciplines/coding-standards.md"
       "docs/disciplines/debugging.md"
-      "docs/disciplines/DISCIPLINES.md"
       "docs/disciplines/learning.md"
       "docs/disciplines/tdd.md"
       "docs/disciplines/verification-loop.md"
       "docs/disciplines/verification.md"
-      "docs/QUEEN_ANT_ARCHITECTURE.md"
-      "workers.md"
-      "docs/constraints.md"
-      "docs/pathogen-schema-example.json"
-      "docs/pathogen-schema.md"
-      "docs/pheromones.md"
-      "docs/progressive-disclosure.md"
+
+      # Build/continue playbooks (required by orchestrators)
+      "docs/command-playbooks/README.md"
+      "docs/command-playbooks/build-prep.md"
+      "docs/command-playbooks/build-context.md"
+      "docs/command-playbooks/build-wave.md"
+      "docs/command-playbooks/build-verify.md"
+      "docs/command-playbooks/build-complete.md"
+      "docs/command-playbooks/continue-verify.md"
+      "docs/command-playbooks/continue-gates.md"
+      "docs/command-playbooks/continue-advance.md"
+      "docs/command-playbooks/continue-finalize.md"
+
+      # Templates used by runtime generation/bootstrap flows
+      "templates/QUEEN.md.template"
+      "templates/colony-state.template.json"
+      "templates/constraints.template.json"
+      "templates/pheromones.template.json"
+      "templates/handoff.template.md"
+      "templates/handoff-build-success.template.md"
+      "templates/handoff-build-error.template.md"
+      "templates/session.template.json"
+      "templates/learning-observations.template.json"
+      "templates/midden.template.json"
+      "templates/crowned-anthill.template.md"
+      "templates/colony-state-reset.jq.template"
+
+      # Core utilities
       "utils/atomic-write.sh"
+      "utils/chamber-utils.sh"
       "utils/colorize-log.sh"
+      "utils/error-handler.sh"
       "utils/file-lock.sh"
+      "utils/state-loader.sh"
       "utils/watch-spawn-tree.sh"
+
+      # XML utilities and schemas (seal/entomb/tunnels support)
+      "utils/xml-utils.sh"
+      "utils/xml-core.sh"
+      "utils/xml-compose.sh"
+      "utils/xml-convert.sh"
+      "utils/xml-query.sh"
+      "exchange/pheromone-xml.sh"
+      "exchange/wisdom-xml.sh"
+      "exchange/registry-xml.sh"
+      "schemas/pheromone.xsd"
+      "schemas/queen-wisdom.xsd"
+      "schemas/colony-registry.xsd"
+      "schemas/aether-types.xsd"
     )
 
     copied=0
@@ -3403,17 +3458,85 @@ ANTLOGO
       echo "[$bar] ${pct}%"
     }
 
+    # Helper: parse ISO-8601 timestamp to epoch (macOS + Linux)
+    iso_to_epoch_text() {
+      local iso="$1"
+      local epoch=""
+      epoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$iso" +%s 2>/dev/null || true)
+      if [[ -z "$epoch" ]]; then
+        epoch=$(date -d "$iso" +%s 2>/dev/null || true)
+      fi
+      echo "${epoch:-0}"
+    }
+
+    # Helper: duration formatter (e.g., 45s, 3m12s)
+    format_duration_text() {
+      local seconds="${1:-0}"
+      if [[ "$seconds" -lt 60 ]]; then
+        echo "${seconds}s"
+      else
+        local mins=$((seconds / 60))
+        local secs=$((seconds % 60))
+        echo "${mins}m${secs}s"
+      fi
+    }
+
+    # Helper: compact number formatter (e.g., 1.2k, 2.4M)
+    format_compact_tokens() {
+      local n="${1:-0}"
+      if [[ "$n" -ge 1000000 ]]; then
+        awk -v n="$n" 'BEGIN { printf "%.1fM", n/1000000 }'
+      elif [[ "$n" -ge 1000 ]]; then
+        awk -v n="$n" 'BEGIN { printf "%.1fk", n/1000 }'
+      else
+        echo "$n"
+      fi
+    }
+
+    total_tokens=$(jq -r '[.active_ants[]?.tokens // 0] | add // 0' "$display_file" 2>/dev/null || echo "0")
+    started_iso=$(jq -r '.timestamp // ""' "$display_file" 2>/dev/null || echo "")
+    elapsed_text="n/a"
+    if [[ -n "$started_iso" && "$started_iso" != "null" ]]; then
+      started_epoch=$(iso_to_epoch_text "$started_iso")
+      now_epoch=$(date +%s)
+      if [[ "$started_epoch" -gt 0 ]] 2>/dev/null; then
+        total_elapsed=$((now_epoch - started_epoch))
+        [[ "$total_elapsed" -lt 0 ]] && total_elapsed=0
+        elapsed_text=$(format_duration_text "$total_elapsed")
+      fi
+    fi
+
     # Render each ant (max 5)
-    jq -r '.active_ants[0:5][] | "\(.name)|\(.caste)|\(.task // "")|\(.tools.read // 0)|\(.tools.grep // 0)|\(.tools.edit // 0)|\(.tools.bash // 0)|\(.progress // 0)"' "$display_file" 2>/dev/null | while IFS='|' read -r name caste task r g e b progress; do
+    jq -r '.active_ants[0:5][] | "\(.name)|\(.caste)|\(.task // "")|\(.tools.read // 0)|\(.tools.grep // 0)|\(.tools.edit // 0)|\(.tools.bash // 0)|\(.progress // 0)|\(.tokens // 0)|\(.started_at // "")"' "$display_file" 2>/dev/null | while IFS='|' read -r name caste task r g e b progress tokens started_at; do
       emoji=$(get_emoji "$caste")
       tools=$(format_tools_text "$r" "$g" "$e" "$b")
       bar=$(render_bar_text "${progress:-0}" 10)
+      token_str=""
+      elapsed_ant=""
 
       # Truncate task to 25 chars
       [[ ${#task} -gt 25 ]] && task="${task:0:22}..."
 
+      if [[ -n "$tokens" && "$tokens" -gt 0 ]] 2>/dev/null; then
+        token_str="🍯$(format_compact_tokens "$tokens")"
+      fi
+
+      if [[ -n "$started_at" && "$started_at" != "null" ]]; then
+        ant_start_epoch=$(iso_to_epoch_text "$started_at")
+        now_epoch=$(date +%s)
+        if [[ "$ant_start_epoch" -gt 0 ]] 2>/dev/null; then
+          ant_elapsed=$((now_epoch - ant_start_epoch))
+          [[ "$ant_elapsed" -lt 0 ]] && ant_elapsed=0
+          elapsed_ant="($(format_duration_text "$ant_elapsed"))"
+        fi
+      fi
+
       echo "${emoji} ${name} ${bar} ${task}"
-      [[ -n "$tools" ]] && echo "   ${tools}"
+      meta_line=""
+      [[ -n "$tools" ]] && meta_line="${meta_line}${tools} "
+      [[ -n "$elapsed_ant" ]] && meta_line="${meta_line}${elapsed_ant} "
+      [[ -n "$token_str" ]] && meta_line="${meta_line}${token_str}"
+      [[ -n "$meta_line" ]] && echo "   ${meta_line}"
       echo ""
     done
 
@@ -3425,7 +3548,7 @@ ANTLOGO
 
     # Footer
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "${total_active} ants active"
+    echo "⏱️ Elapsed: ${elapsed_text} | 🍯 Total: $(format_compact_tokens "$total_tokens") | ${total_active} ants active"
 
     json_ok "{\"displayed\":true,\"ants\":$total_active}"
     ;;
@@ -3906,151 +4029,6 @@ ANTLOGO
       json_err "$E_JSON_INVALID" \
         "Couldn't assemble queen-read output. QUEEN.md may have formatting issues. Try: run queen-init to reset."
     fi
-    json_ok "$result"
-    ;;
-
-  pheromone-display)
-    # Display active pheromones in formatted table
-    # Usage: pheromone-display [type]
-    #   type: Optional filter (focus/redirect/feedback) or 'all' (default: all)
-    # Returns: Formatted table string (human-readable)
-
-    pd_file="$DATA_DIR/pheromones.json"
-    pd_type="${1:-all}"
-    pd_now=$(date +%s)
-
-    if [[ ! -f "$pd_file" ]]; then
-      echo "No pheromones active. Colony has no signals."
-      echo ""
-      echo "Inject signals with:"
-      echo "  /ant:focus \"area\"    - Guide attention"
-      echo "  /ant:redirect \"avoid\" - Set hard constraint"
-      echo "  /ant:feedback \"note\"  - Provide guidance"
-      exit 0
-    fi
-
-    # Get signals with decay calculation (same as pheromone-read)
-    pd_signals=$(jq -c \
-      --argjson now "$pd_now" \
-      --arg type_filter "$pd_type" \
-      '
-      def to_epoch(ts):
-        if ts == null or ts == "" or ts == "phase_end" then null
-        else
-          (ts | split("T")) as $parts |
-          ($parts[0] | split("-")) as $d |
-          ($parts[1] | rtrimstr("Z") | split(":")) as $t |
-          (($d[0] | tonumber) - 1970) * 365 * 86400 +
-          (($d[1] | tonumber) - 1) * 30 * 86400 +
-          (($d[2] | tonumber) - 1) * 86400 +
-          ($t[0] | tonumber) * 3600 +
-          ($t[1] | tonumber) * 60 +
-          ($t[2] | rtrimstr("Z") | tonumber)
-        end;
-
-      def decay_days(t):
-        if t == "FOCUS"    then 30
-        elif t == "REDIRECT" then 60
-        else 90
-        end;
-
-      .signals | map(
-        (to_epoch(.created_at)) as $created_epoch |
-        (if $created_epoch != null then ($now - $created_epoch) / 86400 else 0 end) as $elapsed_days |
-        (decay_days(.type)) as $dd |
-        ((.strength // 0.8) * (1 - ($elapsed_days / $dd))) as $eff_raw |
-        (if $eff_raw < 0 then 0 else $eff_raw end) as $eff |
-        {
-          id: .id,
-          type: .type,
-          content: .content,
-          strength: (.strength // 0.8),
-          effective_strength: $eff,
-          elapsed_days: $elapsed_days,
-          remaining_days: ($dd - $elapsed_days),
-          created_at: .created_at,
-          active: (.active != false and $eff >= 0.1)
-        }
-      )
-      | map(select(.active == true))
-      | map(select(if $type_filter == "all" or $type_filter == "" then true else (.type | ascii_downcase) == ($type_filter | ascii_downcase) end))
-      | sort_by(-.effective_strength)
-      ' "$pd_file" 2>/dev/null)
-
-    if [[ -z "$pd_signals" || "$pd_signals" == "[]" ]]; then
-      echo "No active pheromones found."
-      if [[ "$pd_type" != "all" ]]; then
-        echo "Filter: $pd_type"
-      fi
-      exit 0
-    fi
-
-    # Count by type
-    pd_focus=$(echo "$pd_signals" | jq '[.[] | select(.type == "FOCUS")] | length')
-    pd_redirect=$(echo "$pd_signals" | jq '[.[] | select(.type == "REDIRECT")] | length')
-    pd_feedback=$(echo "$pd_signals" | jq '[.[] | select(.type == "FEEDBACK")] | length')
-    pd_total=$(echo "$pd_signals" | jq 'length')
-
-    # Display header
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "   A C T I V E   P H E R O M O N E S"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
-
-    # Display FOCUS signals
-    if [[ "$pd_focus" -gt 0 && ("$pd_type" == "all" || "$pd_type" == "focus") ]]; then
-      echo "🎯 FOCUS (Pay attention here)"
-      echo "$pd_signals" | jq -r '.[] | select(.type == "FOCUS") | "   \n   [\(.effective_strength * 100 | floor)%] \"\(.content.text // .content // "no content")\"\n      └── \(.elapsed_days | floor)d ago, \(.remaining_days | floor)d remaining"' | head -20
-      echo ""
-    fi
-
-    # Display REDIRECT signals
-    if [[ "$pd_redirect" -gt 0 && ("$pd_type" == "all" || "$pd_type" == "redirect") ]]; then
-      echo "🚫 REDIRECT (Hard constraints - DO NOT do this)"
-      echo "$pd_signals" | jq -r '.[] | select(.type == "REDIRECT") | "   \n   [\(.effective_strength * 100 | floor)%] \"\(.content.text // .content // "no content")\"\n      └── \(.elapsed_days | floor)d ago, \(.remaining_days | floor)d remaining"' | head -20
-      echo ""
-    fi
-
-    # Display FEEDBACK signals
-    if [[ "$pd_feedback" -gt 0 && ("$pd_type" == "all" || "$pd_type" == "feedback") ]]; then
-      echo "💬 FEEDBACK (Guidance to consider)"
-      echo "$pd_signals" | jq -r '.[] | select(.type == "FEEDBACK") | "   \n   [\(.effective_strength * 100 | floor)%] \"\(.content.text // .content // "no content")\"\n      └── \(.elapsed_days | floor)d ago, \(.remaining_days | floor)d remaining"' | head -20
-      echo ""
-    fi
-
-    # Display footer
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "$pd_total signal(s) active | Decay: FOCUS 30d, REDIRECT 60d, FEEDBACK 90d"
-    ;;
-
-  pheromone-read)
-    # Read active pheromones (FOCUS/REDIRECT) from constraints.json
-    # Used to inject active signals into worker prompts
-    constraints_file="$AETHER_ROOT/.aether/data/constraints.json"
-
-    # Initialize defaults (no local - script-level)
-    priorities='[]'
-    avoid='[]'
-
-    # Check if constraints file exists
-    if [[ -f "$constraints_file" ]]; then
-      # Read focus array as priorities
-      priorities=$(jq -c '.focus // []' "$constraints_file" 2>/dev/null || echo '[]')
-
-      # Read constraints array, extract content and source
-      avoid=$(jq -c '[.constraints[]? | {content: .content, source: .source}] // []' "$constraints_file" 2>/dev/null || echo '[]')
-    fi
-
-    # Build JSON output
-    result=$(jq -n \
-      --argjson priorities "$priorities" \
-      --argjson avoid "$avoid" \
-      '{
-        priorities: $priorities,
-        avoid: $avoid
-      }')
-
     json_ok "$result"
     ;;
 
@@ -6709,7 +6687,8 @@ $updated_meta
     cp_signals_json='{"signal_count":0,"instinct_count":0,"prompt_section":"","log_line":"Primed: no pheromones (file missing)"}'
     cp_pher_warn=""
     if [[ -f "$DATA_DIR/pheromones.json" ]]; then
-      cp_signals_json=$("$SCRIPT_DIR/aether-utils.sh" pheromone-prime 2>&1) || true
+      cp_signals_raw=$("$SCRIPT_DIR/aether-utils.sh" pheromone-prime 2>/dev/null) || cp_signals_raw=""
+      cp_signals_json=$(echo "$cp_signals_raw" | jq -c '.result // {"signal_count":0,"instinct_count":0,"prompt_section":"","log_line":"Primed: 0 signals, 0 instincts"}' 2>/dev/null || echo '{"signal_count":0,"instinct_count":0,"prompt_section":"","log_line":"Primed: 0 signals, 0 instincts"}')
     else
       cp_pher_warn="WARNING: pheromones.json not found - continuing without signals"
     fi
@@ -6718,7 +6697,7 @@ $updated_meta
     cp_signal_count=$(echo "$cp_signals_json" | jq -r '.signal_count // 0' 2>/dev/null || echo "0")
     cp_instinct_count=$(echo "$cp_signals_json" | jq -r '.instinct_count // 0' 2>/dev/null || echo "0")
     cp_prompt_section=$(echo "$cp_signals_json" | jq -r '.prompt_section // ""' 2>/dev/null || echo "")
-    cp_log_line=$(echo "$cp_signals_json" | jq -r '.log_line: 0 signals, 0 instincts // "Primed"' 2>/dev/null || echo "Primed: 0 signals, 0 instincts")
+    cp_log_line=$(echo "$cp_signals_json" | jq -r '.log_line // "Primed: 0 signals, 0 instincts"' 2>/dev/null || echo "Primed: 0 signals, 0 instincts")
 
     # Append warning if pheromones missing
     if [[ -n "$cp_pher_warn" ]]; then

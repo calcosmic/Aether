@@ -456,7 +456,7 @@ fi
 
 **If visual_mode is true, render swarm display BEFORE the ASCII art (consolidated):**
 ```bash
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Colony sealed" "Colony" '{"read":3,"grep":0,"edit":2,"bash":3}' 100 "fungus_garden" 100 && bash .aether/aether-utils.sh swarm-display-inline "$seal_id"
+bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Colony sealed" "Colony" '{"read":3,"grep":0,"edit":2,"bash":3}' 100 "fungus_garden" 100 && bash .aether/aether-utils.sh swarm-display-text "$seal_id"
 ```
 
 Display the ASCII art ceremony:
