@@ -85,7 +85,7 @@ bash .aether/aether-utils.sh queen-promote <type> <content> <colony_name>
 The queen commands are part of the colony lifecycle:
 
 1. **Colony startup:** `/ant:init` calls `queen-init` to ensure QUEEN.md exists
-2. **Worker priming:** `/ant:build` loads `colony-prime`, which includes QUEEN wisdom
+2. **Worker priming:** `/ant:build` loads `colony-prime --compact`, which includes QUEEN wisdom + compact context capsule + top signals
 3. **Colony end:** `/ant:seal` can call `queen-promote` to persist learnings
 
 ### Adding a New Queen Command

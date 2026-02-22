@@ -103,6 +103,16 @@ Select planning depth (prompt user if not explicitly provided):
 - Map user choice to a preset, default to `deep` on unclear input.
 - If overrides are out of range, clamp to valid ranges and continue.
 
+### Step 2.5: Load Compact Context Capsule
+
+Run using the Bash tool with description "Loading compact planning context...":
+```bash
+bash .aether/aether-utils.sh context-capsule --compact --json 2>/dev/null
+```
+
+If JSON is valid and `.ok == true`, extract `.result.prompt_section` into `context_capsule_prompt`.
+If command fails or returns invalid JSON, set `context_capsule_prompt = ""` and continue.
+
 ### Step 3: Initialize Planning State
 
 Update watch files for tmux visibility:
@@ -218,6 +228,8 @@ while iteration < max_iterations AND confidence < target_confidence:
         Goal: "{goal}"
         Iteration: {iteration}/{max_iterations}
 
+        {context_capsule_prompt}
+
         --- EXPLORATION AREAS ---
         Cover ALL of these in a single pass:
         1. Core architecture, entry points, and main modules
@@ -261,6 +273,8 @@ while iteration < max_iterations AND confidence < target_confidence:
 
         Goal: "{goal}"
         Iteration: {iteration}/{max_iterations}
+
+        {context_capsule_prompt}
 
         --- GAPS TO INVESTIGATE ---
         {for each gap in gaps:}
@@ -308,6 +322,8 @@ while iteration < max_iterations AND confidence < target_confidence:
 
     Goal: "{goal}"
     Iteration: {iteration}/{max_iterations}
+
+    {context_capsule_prompt}
 
     --- PLANNING DISCIPLINE ---
     Read .aether/planning.md for full reference.

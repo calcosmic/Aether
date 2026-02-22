@@ -931,7 +931,7 @@ case "$cmd" in
     cat <<'HELP_EOF'
 {
   "ok": true,
-  "commands": ["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","learning-observe","learning-check-promotion","learning-promote-auto","memory-capture","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-display-text","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","phase-insert","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","survey-load","survey-verify","pheromone-export","pheromone-write","pheromone-count","pheromone-read","instinct-read","pheromone-prime","pheromone-expire","eternal-init","pheromone-export-xml","pheromone-import-xml","pheromone-validate-xml","wisdom-export-xml","wisdom-import-xml","registry-export-xml","registry-import-xml","force-unlock","changelog-append","changelog-collect-plan-data","suggest-approve","suggest-quick-dismiss"],
+  "commands": ["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","learning-observe","learning-check-promotion","learning-promote-auto","memory-capture","context-capsule","rolling-summary","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-display-text","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","phase-insert","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","survey-load","survey-verify","pheromone-export","pheromone-write","pheromone-count","pheromone-read","instinct-read","pheromone-prime","pheromone-expire","eternal-init","pheromone-export-xml","pheromone-import-xml","pheromone-validate-xml","wisdom-export-xml","wisdom-import-xml","registry-export-xml","registry-import-xml","force-unlock","changelog-append","changelog-collect-plan-data","suggest-approve","suggest-quick-dismiss"],
   "sections": {
     "Core": [
       {"name": "help", "description": "List all available commands with sections"},
@@ -950,7 +950,9 @@ case "$cmd" in
       {"name": "learning-observe", "description": "Record observation of a learning across colonies"},
       {"name": "learning-check-promotion", "description": "Check which learnings meet promotion thresholds"},
       {"name": "learning-promote-auto", "description": "Auto-promote high-confidence learnings based on recurrence policy"},
-      {"name": "memory-capture", "description": "Capture learning/failure events with auto-pheromone and auto-promotion"}
+      {"name": "memory-capture", "description": "Capture learning/failure events with auto-pheromone and auto-promotion"},
+      {"name": "context-capsule", "description": "Generate a compact state capsule for prompt injection"},
+      {"name": "rolling-summary", "description": "Record/read rolling narrative context (last 15 entries)"}
     ],
     "Model Routing": [
       {"name": "model-profile", "description": "Manage caste-to-model assignments"},
@@ -4947,7 +4949,7 @@ $updated_meta
   memory-capture)
     # Capture learning/failure events with deterministic memory actions.
     # Usage: memory-capture <event_type> <content> [wisdom_type] [source]
-    # event_type: learning|failure|redirect|feedback|success
+    # event_type: learning|failure|redirect|feedback|success|resolution
     mc_event="${1:-}"
     mc_content="${2:-}"
     mc_wisdom_type="${3:-}"
@@ -4957,8 +4959,8 @@ $updated_meta
     [[ -z "$mc_content" ]] && json_err "$E_VALIDATION_FAILED" "Usage: memory-capture <event_type> <content> [wisdom_type] [source]" '{"missing":"content"}'
 
     case "$mc_event" in
-      learning|failure|redirect|feedback|success) ;;
-      *) json_err "$E_VALIDATION_FAILED" "Invalid event_type: $mc_event" '{"valid_event_types":["learning","failure","redirect","feedback","success"]}' ;;
+      learning|failure|redirect|feedback|success|resolution) ;;
+      *) json_err "$E_VALIDATION_FAILED" "Invalid event_type: $mc_event" '{"valid_event_types":["learning","failure","redirect","feedback","success","resolution"]}' ;;
     esac
 
     if [[ -z "$mc_wisdom_type" ]]; then
@@ -4966,7 +4968,7 @@ $updated_meta
         failure) mc_wisdom_type="failure" ;;
         redirect) mc_wisdom_type="redirect" ;;
         feedback) mc_wisdom_type="pattern" ;;
-        learning|success) mc_wisdom_type="pattern" ;;
+        learning|success|resolution) mc_wisdom_type="pattern" ;;
       esac
     fi
 
@@ -5013,6 +5015,12 @@ $updated_meta
         pheromone_strength="0.6"
         pheromone_reason="Auto-emitted from validated learning"
         ;;
+      resolution)
+        pheromone_type="FEEDBACK"
+        pheromone_content="Resolved recurring issue: $mc_content"
+        pheromone_strength="0.75"
+        pheromone_reason="Auto-emitted from resolution event"
+        ;;
     esac
 
     pheromone_created=false
@@ -5034,6 +5042,7 @@ $updated_meta
     fi
 
     bash "$0" activity-log "MEMORY" "system" "Captured $mc_event ($mc_wisdom_type): count=$obs_count auto_promoted=$auto_promoted" >/dev/null 2>&1 || true
+    bash "$0" rolling-summary add "$mc_event" "$mc_content" "$mc_source" >/dev/null 2>&1 || true
 
     json_ok "{\"event_type\":\"$mc_event\",\"wisdom_type\":\"$mc_wisdom_type\",\"observation_count\":$obs_count,\"threshold\":$obs_threshold,\"threshold_met\":$obs_threshold_met,\"pheromone_created\":$pheromone_created,\"signal_id\":\"$pheromone_signal_id\",\"auto_promoted\":$auto_promoted,\"promotion_reason\":\"$auto_reason\"}"
     ;;
@@ -6772,8 +6781,24 @@ $updated_meta
 
   pheromone-prime)
     # Combine active pheromone signals and learned instincts into a prompt-ready block
-    # Usage: pheromone-prime
+    # Usage: pheromone-prime [--compact] [--max-signals N] [--max-instincts N]
     # Returns: JSON with signal_count, instinct_count, prompt_section, log_line
+
+    pp_compact=false
+    pp_max_signals=0
+    pp_max_instincts=5
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --compact) pp_compact=true ;;
+        --max-signals) shift; pp_max_signals="${1:-8}" ;;
+        --max-instincts) shift; pp_max_instincts="${1:-3}" ;;
+      esac
+      shift
+    done
+    [[ "$pp_max_signals" =~ ^[0-9]+$ ]] || pp_max_signals=8
+    [[ "$pp_max_instincts" =~ ^[0-9]+$ ]] || pp_max_instincts=3
+    [[ "$pp_max_signals" -lt 1 ]] && pp_max_signals=8
+    [[ "$pp_max_instincts" -lt 1 ]] && pp_max_instincts=3
 
     pp_pher_file="$DATA_DIR/pheromones.json"
     pp_state_file="$DATA_DIR/COLONY_STATE.json"
@@ -6827,10 +6852,20 @@ $updated_meta
       pp_signals="[]"
     fi
 
-    # Read instincts (confidence >= 0.5, not disproven, max 5)
+    if [[ "$pp_compact" == "true" ]]; then
+      pp_signals=$(echo "$pp_signals" | jq -c --argjson max "$pp_max_signals" '
+        map(. + {priority: (if .type == "REDIRECT" then 1 elif .type == "FOCUS" then 2 elif .type == "FEEDBACK" then 3 elif .type == "POSITION" then 4 else 5 end)})
+        | sort_by(.priority, -(.effective_strength // 0))
+        | .[:$max]
+        | map(del(.priority))
+      ' 2>/dev/null || echo "[]")
+    fi
+
+    # Read instincts (confidence >= 0.5, not disproven)
     pp_instincts="[]"
     if [[ -f "$pp_state_file" ]]; then
       pp_instincts=$(jq -c \
+        --argjson max "$pp_max_instincts" \
         '
         (.memory.instincts // [])
         | map(select(
@@ -6838,7 +6873,7 @@ $updated_meta
             and (.status // "hypothesis") != "disproven"
           ))
         | sort_by(-.confidence)
-        | .[:5]
+        | .[:$max]
         ' "$pp_state_file" 2>/dev/null || echo "[]")
     fi
 
@@ -6854,7 +6889,11 @@ $updated_meta
       pp_section=""
       pp_log_line="Primed: 0 signals, 0 instincts"
     else
-      pp_section="--- ACTIVE SIGNALS (Colony Guidance) ---"$'\n'
+      if [[ "$pp_compact" == "true" ]]; then
+        pp_section="--- COMPACT SIGNALS ---"$'\n'
+      else
+        pp_section="--- ACTIVE SIGNALS (Colony Guidance) ---"$'\n'
+      fi
 
       # FOCUS signals
       pp_focus=$(echo "$pp_signals" | jq -r 'map(select(.type == "FOCUS")) | .[] | "[" + ((.effective_strength * 10 | round) / 10 | tostring) + "] " + (.content.text // (if (.content | type) == "string" then .content else "" end))' 2>/dev/null || echo "")
@@ -6874,10 +6913,20 @@ $updated_meta
         pp_section+=$'\n'"FEEDBACK (Flexible guidance):"$'\n'"$pp_feedback"$'\n'
       fi
 
+      # POSITION signals
+      pp_position=$(echo "$pp_signals" | jq -r 'map(select(.type == "POSITION")) | .[] | "[" + ((.effective_strength * 10 | round) / 10 | tostring) + "] " + (.content.text // (if (.content | type) == "string" then .content else "" end))' 2>/dev/null || echo "")
+      if [[ -n "$pp_position" ]]; then
+        pp_section+=$'\n'"POSITION (Where work last progressed):"$'\n'"$pp_position"$'\n'
+      fi
+
       # Instincts section
       if [[ "$pp_instinct_count" -gt 0 ]]; then
-        pp_section+=$'\n'"--- INSTINCTS (Learned Behaviors) ---"$'\n'
-        pp_section+="Weight by confidence - higher = stronger guidance:"$'\n'
+        if [[ "$pp_compact" == "true" ]]; then
+          pp_section+=$'\n'"--- INSTINCTS (Top) ---"$'\n'
+        else
+          pp_section+=$'\n'"--- INSTINCTS (Learned Behaviors) ---"$'\n'
+          pp_section+="Weight by confidence - higher = stronger guidance:"$'\n'
+        fi
         pp_instinct_lines=$(echo "$pp_instincts" | jq -r '.[] | "[" + ((.confidence * 10 | round) / 10 | tostring) + "] When " + .trigger + " -> " + .action + " (" + (.domain // "general") + ")"' 2>/dev/null || echo "")
         if [[ -n "$pp_instinct_lines" ]]; then
           pp_section+=$'\n'"$pp_instinct_lines"$'\n'
@@ -6898,9 +6947,14 @@ $updated_meta
 
   colony-prime)
     # Unified colony priming: combines wisdom (QUEEN.md) + signals + instincts into single output
-    # Usage: colony-prime
+    # Usage: colony-prime [--compact]
     # Returns: JSON with wisdom, signals, prompt_section
     # Error handling: QUEEN.md missing = FAIL HARD; pheromones.json missing = warn but continue
+
+    cp_compact=false
+    if [[ "${1:-}" == "--compact" ]]; then
+      cp_compact=true
+    fi
 
     cp_global_queen="$HOME/.aether/QUEEN.md"
     cp_local_queen="$AETHER_ROOT/.aether/QUEEN.md"
@@ -7012,7 +7066,11 @@ $updated_meta
     cp_signals_json='{"signal_count":0,"instinct_count":0,"prompt_section":"","log_line":"Primed: no pheromones (file missing)"}'
     cp_pher_warn=""
     if [[ -f "$DATA_DIR/pheromones.json" ]]; then
-      cp_signals_raw=$("$SCRIPT_DIR/aether-utils.sh" pheromone-prime 2>/dev/null) || cp_signals_raw=""
+      if [[ "$cp_compact" == "true" ]]; then
+        cp_signals_raw=$("$SCRIPT_DIR/aether-utils.sh" pheromone-prime --compact --max-signals 8 --max-instincts 3 2>/dev/null) || cp_signals_raw=""
+      else
+        cp_signals_raw=$("$SCRIPT_DIR/aether-utils.sh" pheromone-prime 2>/dev/null) || cp_signals_raw=""
+      fi
       cp_signals_json=$(echo "$cp_signals_raw" | jq -c '.result // {"signal_count":0,"instinct_count":0,"prompt_section":"","log_line":"Primed: 0 signals, 0 instincts"}' 2>/dev/null || echo '{"signal_count":0,"instinct_count":0,"prompt_section":"","log_line":"Primed: 0 signals, 0 instincts"}')
     else
       cp_pher_warn="WARNING: pheromones.json not found - continuing without signals"
@@ -7059,6 +7117,14 @@ $updated_meta
       fi
 
       cp_final_prompt+=$'\n'"--- END QUEEN WISDOM ---"$'\n'
+    fi
+
+    # Add compact context capsule for low-token continuity
+    cp_capsule_prompt=""
+    cp_capsule_raw=$("$SCRIPT_DIR/aether-utils.sh" context-capsule --compact --json 2>/dev/null) || cp_capsule_raw=""
+    cp_capsule_prompt=$(echo "$cp_capsule_raw" | jq -r '.result.prompt_section // ""' 2>/dev/null || echo "")
+    if [[ -n "$cp_capsule_prompt" ]]; then
+      cp_final_prompt+=$'\n'"$cp_capsule_prompt"$'\n'
     fi
 
     # Add pheromone signals section
@@ -7737,6 +7803,260 @@ $updated_meta
     rm -rf "$cax_tmp_dir" "$cax_tmp_pheromones"
 
     json_ok "{\"path\":\"$cax_output\",\"valid\":$cax_valid,\"colony_id\":\"$cax_colony_id\",\"pheromone_count\":$cax_pheromone_count}"
+    ;;
+
+  rolling-summary)
+    # Maintain a bounded rolling narrative log for low-token context recovery.
+    # Usage:
+    #   rolling-summary add <event_type> <summary> [source]
+    #   rolling-summary read [--json]
+    rs_action="${1:-read}"
+    rs_file="$DATA_DIR/rolling-summary.log"
+
+    case "$rs_action" in
+      add)
+        rs_event="${2:-}"
+        rs_summary="${3:-}"
+        rs_source="${4:-system}"
+        [[ -z "$rs_event" || -z "$rs_summary" ]] && json_err "$E_VALIDATION_FAILED" "Usage: rolling-summary add <event_type> <summary> [source]"
+
+        mkdir -p "$DATA_DIR"
+        touch "$rs_file"
+
+        rs_clean_summary=$(printf '%s' "$rs_summary" | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' | sed 's/|/\\/g' | cut -c1-180)
+        rs_clean_source=$(printf '%s' "$rs_source" | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' | sed 's/|/\\/g' | cut -c1-40)
+        rs_clean_event=$(printf '%s' "$rs_event" | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' | sed 's/|/\\/g' | cut -c1-24)
+        rs_ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+        printf '%s|%s|%s|%s\n' "$rs_ts" "$rs_clean_event" "$rs_clean_source" "$rs_clean_summary" >> "$rs_file"
+        tail -n 15 "$rs_file" > "$rs_file.tmp" 2>/dev/null || true
+        mv "$rs_file.tmp" "$rs_file" 2>/dev/null || true
+
+        json_ok "{\"added\":true,\"event\":\"$rs_clean_event\",\"source\":\"$rs_clean_source\"}"
+        ;;
+
+      read)
+        rs_json=false
+        if [[ "${2:-}" == "--json" ]]; then
+          rs_json=true
+        fi
+
+        if [[ ! -f "$rs_file" ]]; then
+          if [[ "$rs_json" == "true" ]]; then
+            json_ok '{"entries":[],"count":0}'
+          else
+            echo "No rolling summary entries."
+          fi
+          exit 0
+        fi
+
+        if [[ "$rs_json" == "true" ]]; then
+          rs_entries=$(awk -F'|' 'NF >= 4 {print $0}' "$rs_file" | tail -n 15 | jq -R 'split("|") | {timestamp: .[0], event: .[1], source: .[2], summary: (.[3:] | join("|"))}' | jq -s '.' 2>/dev/null || echo '[]')
+          rs_count=$(echo "$rs_entries" | jq 'length' 2>/dev/null || echo 0)
+          json_ok "{\"entries\":$rs_entries,\"count\":$rs_count}"
+        else
+          tail -n 15 "$rs_file"
+        fi
+        ;;
+
+      *)
+        json_err "$E_VALIDATION_FAILED" "Usage: rolling-summary add|read ..."
+        ;;
+    esac
+    ;;
+
+  context-capsule)
+    # Generate a compact, bounded context block for prompt injection.
+    # Usage: context-capsule [--compact] [--json] [--max-signals N] [--max-decisions N] [--max-risks N] [--max-words N]
+    cc_compact=false
+    cc_json=false
+    cc_max_signals=8
+    cc_max_decisions=3
+    cc_max_risks=2
+    cc_max_words=220
+
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --compact) cc_compact=true ;;
+        --json) cc_json=true ;;
+        --max-signals) shift; cc_max_signals="${1:-8}" ;;
+        --max-decisions) shift; cc_max_decisions="${1:-3}" ;;
+        --max-risks) shift; cc_max_risks="${1:-2}" ;;
+        --max-words) shift; cc_max_words="${1:-220}" ;;
+      esac
+      shift
+    done
+
+    [[ "$cc_max_signals" =~ ^[0-9]+$ ]] || cc_max_signals=8
+    [[ "$cc_max_decisions" =~ ^[0-9]+$ ]] || cc_max_decisions=3
+    [[ "$cc_max_risks" =~ ^[0-9]+$ ]] || cc_max_risks=2
+    [[ "$cc_max_words" =~ ^[0-9]+$ ]] || cc_max_words=220
+    [[ "$cc_max_signals" -lt 1 ]] && cc_max_signals=1
+    [[ "$cc_max_decisions" -lt 1 ]] && cc_max_decisions=1
+    [[ "$cc_max_risks" -lt 1 ]] && cc_max_risks=1
+    [[ "$cc_max_words" -lt 80 ]] && cc_max_words=80
+
+    cc_state_file="$DATA_DIR/COLONY_STATE.json"
+    cc_flags_file="$DATA_DIR/flags.json"
+    cc_pher_file="$DATA_DIR/pheromones.json"
+    cc_roll_file="$DATA_DIR/rolling-summary.log"
+    cc_now=$(date +%s)
+
+    if [[ ! -f "$cc_state_file" ]]; then
+      json_ok '{"exists":false,"prompt_section":"","word_count":0}'
+      exit 0
+    fi
+
+    cc_goal=$(jq -r '.goal // "No goal set"' "$cc_state_file" 2>/dev/null || echo "No goal set")
+    cc_state=$(jq -r '.state // "IDLE"' "$cc_state_file" 2>/dev/null || echo "IDLE")
+    cc_current_phase=$(jq -r '.current_phase // 0' "$cc_state_file" 2>/dev/null || echo 0)
+    cc_total_phases=$(jq -r '.plan.phases | length // 0' "$cc_state_file" 2>/dev/null || echo 0)
+    cc_phase_name=$(jq -r --argjson p "$cc_current_phase" 'if $p > 0 then (.plan.phases[]? | select(.id == $p) | .name) else "" end' "$cc_state_file" 2>/dev/null | head -1)
+    [[ -z "$cc_phase_name" ]] && cc_phase_name="(unnamed)"
+
+    cc_next_action="/ant:status"
+    if [[ "$cc_total_phases" -eq 0 ]]; then
+      cc_next_action="/ant:plan"
+    elif [[ "$cc_state" == "EXECUTING" ]]; then
+      cc_next_action="/ant:continue"
+    elif [[ "$cc_state" == "READY" && "$cc_current_phase" -eq 0 ]]; then
+      cc_next_action="/ant:build 1"
+    elif [[ "$cc_state" == "READY" && "$cc_current_phase" -gt 0 && "$cc_current_phase" -lt "$cc_total_phases" ]]; then
+      cc_next_action="/ant:build $((cc_current_phase + 1))"
+    elif [[ "$cc_state" == "READY" && "$cc_current_phase" -ge "$cc_total_phases" ]]; then
+      cc_next_action="/ant:seal"
+    elif [[ "$cc_state" == "PAUSED" ]]; then
+      cc_next_action="/ant:resume-colony"
+    fi
+
+    cc_decisions=$(jq -r --argjson n "$cc_max_decisions" '
+      (.memory.decisions // [])
+      | reverse
+      | .[:$n]
+      | map(
+          if type == "object" then
+            (.decision // .summary // .description // .content // tostring)
+          else
+            tostring
+          end
+        )
+      | .[]
+      ' "$cc_state_file" 2>/dev/null | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' | cut -c1-160)
+
+    cc_risks=""
+    if [[ -f "$cc_flags_file" ]]; then
+      cc_risks=$(jq -r --argjson n "$cc_max_risks" '
+        (.flags // [])
+        | map(select((.resolved // false) != true and ((.type // "issue") == "blocker" or (.type // "issue") == "issue"))
+          | (.title // .description // .details // tostring))
+        | .[:$n]
+        | .[]
+      ' "$cc_flags_file" 2>/dev/null | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' | cut -c1-160)
+    fi
+
+    cc_signals=""
+    if [[ -f "$cc_pher_file" ]]; then
+      cc_signals=$(jq -r --argjson now "$cc_now" --argjson max "$cc_max_signals" '
+        def to_epoch(ts):
+          if ts == null or ts == "" or ts == "phase_end" then null
+          else
+            (ts | split("T")) as $parts |
+            ($parts[0] | split("-")) as $d |
+            ($parts[1] | rtrimstr("Z") | split(":")) as $t |
+            (($d[0] | tonumber) - 1970) * 365 * 86400 +
+            (($d[1] | tonumber) - 1) * 30 * 86400 +
+            (($d[2] | tonumber) - 1) * 86400 +
+            ($t[0] | tonumber) * 3600 +
+            ($t[1] | tonumber) * 60 +
+            ($t[2] | rtrimstr("Z") | tonumber)
+          end;
+        def decay_days(t):
+          if t == "FOCUS" then 30 elif t == "REDIRECT" then 60 else 90 end;
+        .signals
+        | map(
+            (to_epoch(.created_at)) as $created_epoch |
+            (if $created_epoch != null then ($now - $created_epoch) / 86400 else 0 end) as $elapsed_days |
+            (decay_days(.type)) as $dd |
+            ((.strength // 0.8) * (1 - ($elapsed_days / $dd))) as $eff_raw |
+            (if $eff_raw < 0 then 0 else $eff_raw end) as $eff |
+            . + {
+              effective_strength: (($eff * 100 | round) / 100),
+              priority: (if .type == "REDIRECT" then 1 elif .type == "FOCUS" then 2 elif .type == "FEEDBACK" then 3 elif .type == "POSITION" then 4 else 5 end)
+            }
+          )
+        | map(select((.active // true) == true and (.effective_strength // 0) >= 0.1))
+        | sort_by(.priority, -(.effective_strength // 0))
+        | .[:$max]
+        | map((.type // "UNKNOWN") + ": " + (.content.text // (if (.content | type) == "string" then .content else "" end)))
+        | .[]
+      ' "$cc_pher_file" 2>/dev/null | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' | cut -c1-160)
+    fi
+
+    cc_roll=""
+    if [[ -f "$cc_roll_file" ]]; then
+      cc_roll=$(tail -n 3 "$cc_roll_file" 2>/dev/null | awk -F'|' 'NF >= 4 {print $2 ": " $4}' | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' | cut -c1-160)
+    fi
+
+    cc_section="--- CONTEXT CAPSULE ---"$'\n'
+    cc_section+="Goal: $(printf '%s' "$cc_goal" | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' | cut -c1-160)"$'\n'
+    cc_section+="State: $cc_state"$'\n'
+    cc_section+="Phase: $cc_current_phase/$cc_total_phases - $(printf '%s' "$cc_phase_name" | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' | cut -c1-120)"$'\n'
+    cc_section+="Next: $cc_next_action"$'\n'
+
+    if [[ -n "$cc_signals" ]]; then
+      cc_section+=$'\n'"Active signals:"$'\n'
+      while IFS= read -r line; do
+        [[ -n "$line" ]] && cc_section+="- $line"$'\n'
+      done <<< "$cc_signals"
+    fi
+
+    if [[ -n "$cc_decisions" ]]; then
+      cc_section+=$'\n'"Recent decisions:"$'\n'
+      while IFS= read -r line; do
+        [[ -n "$line" ]] && cc_section+="- $line"$'\n'
+      done <<< "$cc_decisions"
+    fi
+
+    if [[ -n "$cc_risks" ]]; then
+      cc_section+=$'\n'"Open risks:"$'\n'
+      while IFS= read -r line; do
+        [[ -n "$line" ]] && cc_section+="- $line"$'\n'
+      done <<< "$cc_risks"
+    fi
+
+    if [[ -n "$cc_roll" ]]; then
+      cc_section+=$'\n'"Recent narrative:"$'\n'
+      while IFS= read -r line; do
+        [[ -n "$line" ]] && cc_section+="- $line"$'\n'
+      done <<< "$cc_roll"
+    fi
+
+    cc_section+="--- END CONTEXT CAPSULE ---"
+
+    if [[ "$cc_compact" == "true" ]]; then
+      cc_words=$(printf '%s' "$cc_section" | wc -w | tr -d ' ')
+      if [[ "$cc_words" -gt "$cc_max_words" ]]; then
+        cc_section=$(printf '%s' "$cc_section" | awk '
+          BEGIN{keep=1}
+          /^Recent narrative:/{keep=0}
+          /^--- END CONTEXT CAPSULE ---$/{print; next}
+          {if(keep==1) print}
+        ')
+      fi
+      cc_words=$(printf '%s' "$cc_section" | wc -w | tr -d ' ')
+      if [[ "$cc_words" -gt "$cc_max_words" ]]; then
+        cc_section=$(printf '%s' "$cc_section" | awk '
+          BEGIN{keep=1}
+          /^Open risks:/{keep=0}
+          /^--- END CONTEXT CAPSULE ---$/{print; next}
+          {if(keep==1) print}
+        ')
+      fi
+    fi
+
+    cc_words=$(printf '%s' "$cc_section" | wc -w | tr -d ' ')
+    cc_prompt_json=$(printf '%s' "$cc_section" | jq -Rs '.' 2>/dev/null || echo '""')
+    json_ok "{\"exists\":true,\"state\":\"$cc_state\",\"next_action\":\"$cc_next_action\",\"word_count\":$cc_words,\"prompt_section\":$cc_prompt_json}"
     ;;
 
   # ============================================================================

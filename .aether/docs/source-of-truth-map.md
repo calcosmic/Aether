@@ -51,6 +51,10 @@ Define which files are authoritative for system behavior, which files are derive
 ## Confirmed Implementation Facts
 
 - Utility dispatcher and subcommands are implemented in `.aether/aether-utils.sh` (`case "$cmd" in`).
+- Context continuity primitives are runtime-backed in `.aether/aether-utils.sh`:
+  - `context-capsule` (compact prompt context),
+  - `rolling-summary` (bounded narrative log),
+  - `pheromone-prime --compact` and `colony-prime --compact`.
 - `queen-init` creates `.aether/QUEEN.md` (not `.aether/docs/QUEEN.md`).
 - `queen-read` and `colony-prime` read from `~/.aether/QUEEN.md` and `.aether/QUEEN.md`.
 - `queen-promote` writes to `.aether/QUEEN.md`.
@@ -81,7 +85,7 @@ Define which files are authoritative for system behavior, which files are derive
 | Command playbooks | `.aether/docs/command-playbooks/*.md` | 12 | Active |
 | Templates (all types) | `.aether/templates/*` | 12 | Active |
 | Disciplines | `.aether/docs/disciplines/*.md` | 7 | Active |
-| Tests (all files) | `tests/**` | 65 | Active |
+| Tests (all files) | `tests/**` | 66 | Active |
 
 ## Drift Findings (Docs vs Implementation)
 

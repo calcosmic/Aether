@@ -188,6 +188,18 @@ bash .aether/aether-utils.sh pheromone-write REDIRECT "$pattern_text" \
 
 REDIRECT strength is 0.7 (higher than auto FEEDBACK 0.6 — anti-patterns produce stronger signals than successes). TTL is 30d (not phase_end) because recurring errors should persist across multiple phases.
 
+Also capture each recurring pattern as a resolution candidate so the colony can promote "finally fixed" lessons over time:
+
+```bash
+bash .aether/aether-utils.sh memory-capture \
+  "resolution" \
+  "$pattern_text" \
+  "pattern" \
+  "worker:continue" 2>/dev/null || true
+```
+
+This writes a compact rolling summary entry, emits FEEDBACK guidance, and contributes to recurrence-based promotion in QUEEN wisdom.
+
 If `errors.flagged_patterns` doesn't exist or is empty, skip silently.
 
 #### 2.1c: Expire phase_end signals and archive to midden

@@ -1,10 +1,10 @@
 ### Step 4: Load Colony Context (colony-prime)
 
-Call `colony-prime` to get unified worker context (wisdom + signals + instincts):
+Call `colony-prime --compact` to get unified worker context (wisdom + context capsule + signals + instincts):
 
 Run using the Bash tool with description "Loading colony context...":
 ```bash
-prime_result=$(bash .aether/aether-utils.sh colony-prime 2>/dev/null)
+prime_result=$(bash .aether/aether-utils.sh colony-prime --compact 2>/dev/null)
 ```
 
 **Parse the JSON response:**
@@ -30,7 +30,7 @@ This shows the user exactly what signals are guiding the colony:
 - 🚫 REDIRECT signals (what to avoid - hard constraints)
 - 💬 FEEDBACK signals (guidance to consider)
 
-**Store for worker injection:** The `prompt_section` variable contains the complete formatted context (QUEEN wisdom + pheromone signals) ready for injection.
+**Store for worker injection:** The `prompt_section` variable contains compact formatted context (QUEEN wisdom + context capsule + pheromone signals) ready for injection.
 
 ### Step 4.0: Load Territory Survey
 

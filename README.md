@@ -118,7 +118,8 @@ Implementation note:
 - Before builds: Use FOCUS + REDIRECT to steer the colony
 - After builds: Use FEEDBACK to teach preferences
 - Signals persist in `.aether/data/pheromones.json`
-- Auto-injected into worker prompts via `colony-prime`
+- Auto-injected into worker prompts via `colony-prime --compact`
+- Compact context capsule is injected alongside top signals (goal, phase, next action, risks, recent decisions)
 - **Displayed in `/ant:build`** before workers spawn
 - View active signals with `/ant:pheromones`
 - Decay over time: FOCUS 30d, REDIRECT 60d, FEEDBACK 90d

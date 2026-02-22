@@ -10,6 +10,7 @@ Pheromones are how you communicate with the colony. Instead of micromanaging ind
 - **Optional TTL** -- use `--ttl` flag for wall-clock expiration (e.g., `--ttl 2h` for 2 hours)
 - **Priority levels** determine worker attention: high (REDIRECT), normal (FOCUS), low (FEEDBACK)
 - **Expired signals** are filtered on read -- no cleanup process needed
+- **Compact priming path** (`pheromone-prime --compact`) injects only top signals by priority/strength for low token usage
 
 Run `/ant:status` at any time to see all active pheromones.
 

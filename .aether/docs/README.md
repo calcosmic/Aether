@@ -21,6 +21,7 @@ Distributed to target repos via `aether update` (update allowlist):
 |------|---------|
 | `pheromones.md` | Pheromone system guide (FOCUS/REDIRECT/FEEDBACK signals) |
 | `source-of-truth-map.md` | Authority map and docs/runtime drift tracking |
+| `context-continuity.md` | Context retention architecture (capsules, compact priming, rolling summary) |
 
 ---
 
