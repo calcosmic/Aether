@@ -4112,13 +4112,13 @@ ANTLOGO
     [[ -z "$content" ]] && json_err "$E_VALIDATION_FAILED" "Usage: queen-promote <type> <content> <colony_name>" '{"missing":"content"}'
     [[ -z "$colony_name" ]] && json_err "$E_VALIDATION_FAILED" "Usage: queen-promote <type> <content> <colony_name>" '{"missing":"colony_name"}'
 
-    # Validate type
-    valid_types=("philosophy" "pattern" "redirect" "stack" "decree")
+    # Validate type (failure observations map to pattern when promoted)
+    valid_types=("philosophy" "pattern" "redirect" "stack" "decree" "failure")
     type_valid=false
     for vt in "${valid_types[@]}"; do
       [[ "$wisdom_type" == "$vt" ]] && type_valid=true && break
     done
-    [[ "$type_valid" == "false" ]] && json_err "$E_VALIDATION_FAILED" "Invalid type: $wisdom_type" '{"valid_types":["philosophy","pattern","redirect","stack","decree"]}'
+    [[ "$type_valid" == "false" ]] && json_err "$E_VALIDATION_FAILED" "Invalid type: $wisdom_type" '{"valid_types":["philosophy","pattern","redirect","stack","decree","failure"]}'
 
     queen_file="$AETHER_ROOT/.aether/QUEEN.md"
 
@@ -4170,9 +4170,10 @@ ANTLOGO
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
     # Map type to section header and emoji
+    # Note: failure observations map to Patterns section when promoted
     case "$wisdom_type" in
       philosophy) section_header="## 📜 Philosophies" ;;
-      pattern) section_header="## 🧭 Patterns" ;;
+      pattern|failure) section_header="## 🧭 Patterns" ;;
       redirect) section_header="## ⚠️ Redirects" ;;
       stack) section_header="## 🔧 Stack Wisdom" ;;
       decree) section_header="## 🏛️ Decrees" ;;
