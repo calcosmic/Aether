@@ -3,7 +3,7 @@ name: ant:plan
 description: "📊🐜🗺️🐜📊 Show project plan or generate project-specific phases"
 ---
 
-You are the **Queen**. Orchestrate research and planning until 80% confidence (maximum 4 iterations).
+You are the **Queen**. Orchestrate research and planning until the selected confidence target is reached within the selected iteration budget.
 
 ## Instructions
 
@@ -86,6 +86,23 @@ Parse `$normalized_args`:
 - If contains `--accept`: Set `force_accept = true` (accept current plan regardless of confidence)
 - Otherwise: `force_accept = false`
 
+Select planning depth (prompt user if not explicitly provided):
+- Presets:
+  - `fast`: `target_confidence = 80`, `max_iterations = 4`
+  - `balanced`: `target_confidence = 90`, `max_iterations = 6`
+  - `deep`: `target_confidence = 95`, `max_iterations = 8`
+  - `exhaustive`: `target_confidence = 99`, `max_iterations = 12`
+- Preset selectors:
+  - `--fast`, `--balanced`, `--deep`, `--exhaustive`
+  - `--quality fast|balanced|deep|exhaustive`
+- CLI overrides:
+  - `--target <70-99>` to set `target_confidence`
+  - `--max-iterations <2-12>` to set `max_iterations`
+- If no preset/overrides are provided, ask:
+  `Planning depth? 1) Fast 2) Balanced 3) Deep (recommended) 4) Exhaustive`
+- Map user choice to a preset, default to `deep` on unclear input.
+- If overrides are out of range, clamp to valid ranges and continue.
+
 ### Step 3: Initialize Planning State
 
 Update watch files for tmux visibility:
@@ -98,7 +115,7 @@ AETHER COLONY :: PLANNING
 State: PLANNING
 Phase: 0/0 (generating plan)
 Confidence: 0%
-Iteration: 0/4
+Iteration: 0/{max_iterations}
 
 Active Workers:
   [Research] Starting...
@@ -115,9 +132,9 @@ Progress
 
 [                    ] 0%
 
-Target: 80% confidence
+Target: {target_confidence}% confidence
 
-Iteration: 0/4
+Iteration: 0/{max_iterations}
 Gaps: (analyzing...)
 ```
 
@@ -170,15 +187,15 @@ Initialize tracking:
 - `last_confidence = 0`
 - `stall_count = 0` (consecutive iterations with < 5% improvement)
 
-**Loop (max 4 iterations, 2 agents per iteration: 1 scout + 1 planner):**
+**Loop (max {max_iterations} iterations, 2 agents per iteration: 1 scout + 1 planner):**
 
 ```
-while iteration < 4 AND confidence < 80:
+while iteration < max_iterations AND confidence < target_confidence:
     iteration += 1
 
     # === AUTO-BREAK CHECKS (no user prompt needed) ===
     if iteration > 1:
-        if confidence >= 80:
+        if confidence >= target_confidence:
             Log: "Confidence threshold reached ({confidence}%), finalizing plan"
             break
         if stall_count >= 2:
@@ -199,7 +216,7 @@ while iteration < 4 AND confidence < 80:
         Research the codebase to understand what exists and how it works.
 
         Goal: "{goal}"
-        Iteration: {iteration}/4
+        Iteration: {iteration}/{max_iterations}
 
         --- EXPLORATION AREAS ---
         Cover ALL of these in a single pass:
@@ -243,7 +260,7 @@ while iteration < 4 AND confidence < 80:
         Investigate ONLY these specific knowledge gaps. Do not explore broadly.
 
         Goal: "{goal}"
-        Iteration: {iteration}/4
+        Iteration: {iteration}/{max_iterations}
 
         --- GAPS TO INVESTIGATE ---
         {for each gap in gaps:}
@@ -290,7 +307,7 @@ while iteration < 4 AND confidence < 80:
     Create or refine a project plan based on research findings.
 
     Goal: "{goal}"
-    Iteration: {iteration}/4
+    Iteration: {iteration}/{max_iterations}
 
     --- PLANNING DISCIPLINE ---
     Read .aether/planning.md for full reference.
@@ -423,7 +440,7 @@ Proceed directly to Step 5. No user confirmation needed — the plan auto-finali
 
 ### Step 5: Finalize Plan
 
-Once loop exits (confidence >= 80, max iterations reached, or stall detected):
+Once loop exits (confidence >= {target_confidence}, max iterations reached, or stall detected):
 
 Read current COLONY_STATE.json, then update:
 - Set `plan.phases` to the final phases array
@@ -510,7 +527,7 @@ Each dimension rated 0-100%:
 
 **Overall** = weighted average (knowledge 25%, requirements 25%, risks 20%, dependencies 15%, effort 15%)
 
-**Target: 80%** - Sufficient confidence for autonomous execution. Higher confidence is achieved during builds as gaps are resolved.
+**Target:** Use the selected planning depth target. Higher targets trade latency for stronger up-front plan quality.
 
 ---
 
@@ -518,9 +535,9 @@ Each dimension rated 0-100%:
 
 The planning loop terminates automatically without requiring user input:
 
-1. **Confidence Threshold**: Loop exits when overall confidence reaches 80%
+1. **Confidence Threshold**: Loop exits when overall confidence reaches `{target_confidence}%`
 
-2. **Hard Iteration Cap**: Maximum 4 iterations (8 subagents total: 1 scout + 1 planner per iteration)
+2. **Hard Iteration Cap**: Maximum `{max_iterations}` iterations (2 subagents per iteration: 1 scout + 1 planner)
 
 3. **Stall Detection**: If confidence improves < 5% for 2 consecutive iterations, auto-finalize current plan
 
