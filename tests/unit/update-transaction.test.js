@@ -272,7 +272,7 @@ test('verifyIntegrity updates state to verifying', (t) => {
   t.deepEqual(result.errors, []);
 });
 
-test.skip('verifyIntegrity detects missing files', (t) => {
+test('verifyIntegrity detects missing files', (t) => {
   const { UpdateTransaction } = t.context;
   const { mockFs } = t.context;
 
@@ -281,15 +281,15 @@ test.skip('verifyIntegrity detects missing files', (t) => {
 
   // Mock listFilesRecursive to return a file
   tx.listFilesRecursive = (dir) => {
-    if (dir.includes('system')) return ['test.txt'];
+    if (dir === tx.HUB_SYSTEM_DIR) return ['test.txt'];
     return [];
   };
 
-  // File doesn't exist in destination
+  // Only HUB_SYSTEM_DIR exists, and destination file is missing.
   mockFs.existsSync.callsFake((p) => {
-    if (p.includes('hub')) return true;
-    if (p.includes('/test/repo')) return false;
-    return true;
+    if (p === tx.HUB_SYSTEM_DIR) return true;
+    if (p === '/test/repo/.aether/test.txt') return false;
+    return false;
   });
 
   const result = tx.verifyIntegrity();

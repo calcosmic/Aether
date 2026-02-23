@@ -308,8 +308,8 @@ Only spawn if you encounter genuine surprise:
 
 **Step 1: Check if you can spawn**
 ```bash
-# Check spawn allowance at your depth
-result=$(bash .aether/aether-utils.sh spawn-can-spawn {your_depth})
+# Check spawn allowance at your depth (hard-enforced on deny)
+result=$(bash .aether/aether-utils.sh spawn-can-spawn {your_depth} --enforce)
 # Returns: {"can_spawn": true/false, "depth": N, "max_spawns": N, "current_total": N}
 ```
 

@@ -295,7 +295,10 @@ class UpdateTransaction {
         encoding: 'utf8',
       });
 
-      const lines = result.trim().split('\n').filter(Boolean);
+      // Preserve the two-column porcelain status prefix on each line.
+      // Using `trim()` on the whole output would strip leading spaces from
+      // the first line and can misclassify unstaged vs staged changes.
+      const lines = result.split('\n').filter(line => line.trim().length > 0);
       const tracked = [];
       const untracked = [];
       const staged = [];

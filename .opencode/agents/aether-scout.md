@@ -46,7 +46,7 @@ For external research:
 
 You MAY spawn another scout for parallel research domains:
 ```bash
-bash .aether/aether-utils.sh spawn-can-spawn {your_depth}
+bash .aether/aether-utils.sh spawn-can-spawn {your_depth} --enforce
 bash .aether/aether-utils.sh generate-ant-name "scout"
 bash .aether/aether-utils.sh spawn-log "{your_name}" "scout" "{child_name}" "{research_task}"
 ```

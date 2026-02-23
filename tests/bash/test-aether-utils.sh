@@ -1169,6 +1169,300 @@ test_help_queen_commands_section() {
 }
 
 # ============================================================================
+# Test: spawn-can-spawn --enforce hard-fails when cap exceeded
+# ============================================================================
+test_spawn_can_spawn_enforce() {
+    local output
+    local exit_code
+    local tmp_dir
+    tmp_dir=$(setup_isolated_env)
+
+    # Seed 10 spawned entries to hit global cap.
+    : > "$tmp_dir/.aether/data/spawn-tree.txt"
+    for i in $(seq 1 10); do
+        echo "2026-02-23T00:00:00Z|Queen|builder|Ant-$i|task|default|spawned" >> "$tmp_dir/.aether/data/spawn-tree.txt"
+    done
+
+    set +e
+    output=$(bash "$tmp_dir/.aether/aether-utils.sh" spawn-can-spawn 1 --enforce 2>&1)
+    exit_code=$?
+    set -e
+    rm -rf "$tmp_dir"
+
+    if [[ "$exit_code" -eq 0 ]]; then
+        test_fail "non-zero exit code" "exit code $exit_code"
+        return 1
+    fi
+
+    local json_line
+    json_line=$(echo "$output" | grep '"ok":false' | tail -1)
+    if ! assert_json_valid "$json_line"; then
+        test_fail "valid JSON error" "$output"
+        return 1
+    fi
+
+    if ! assert_ok_false "$json_line"; then
+        test_fail '{"ok":false}' "$json_line"
+        return 1
+    fi
+
+    return 0
+}
+
+# ============================================================================
+# Test: error-add acquires state lock (returns E_LOCK_FAILED when locked)
+# ============================================================================
+test_error_add_lock_failure_error_code() {
+    local tmp_dir
+    tmp_dir=$(setup_isolated_env)
+
+    # Minimal valid state for error-add
+    cat > "$tmp_dir/.aether/data/COLONY_STATE.json" << 'EOF'
+{
+  "version": "3.0",
+  "goal": "test",
+  "state": "active",
+  "current_phase": 1,
+  "plan": {"phases":[]},
+  "memory": {},
+  "errors": {"records": []},
+  "events": [],
+  "signals": [],
+  "graveyards": []
+}
+EOF
+
+    # Create stale lock so acquire_lock fails immediately in non-interactive mode.
+    mkdir -p "$tmp_dir/.aether/locks"
+    echo "99999" > "$tmp_dir/.aether/locks/COLONY_STATE.json.lock"
+    echo "99999" > "$tmp_dir/.aether/locks/COLONY_STATE.json.lock.pid"
+
+    local output
+    set +e
+    output=$(bash "$tmp_dir/.aether/aether-utils.sh" error-add runtime high "lock test" 1 2>&1)
+    set -e
+
+    rm -rf "$tmp_dir"
+
+    local json_line
+    json_line=$(echo "$output" | grep '"ok":false' | tail -1)
+    local code
+    code=$(echo "$json_line" | jq -r '.error.code' 2>/dev/null || echo "")
+
+    if [[ "$code" != "E_LOCK_FAILED" ]]; then
+        test_fail ".error.code = E_LOCK_FAILED" ".error.code = ${code:-<empty>}"
+        return 1
+    fi
+
+    return 0
+}
+
+# ============================================================================
+# Test: queen-thresholds exposes propose/auto map
+# ============================================================================
+test_queen_thresholds_command() {
+    local output
+    output=$(bash "$AETHER_UTILS_SOURCE" queen-thresholds 2>&1)
+
+    if ! assert_json_valid "$output"; then
+        test_fail "valid JSON" "$output"
+        return 1
+    fi
+
+    if ! assert_ok_true "$output"; then
+        test_fail '{"ok":true}' "$output"
+        return 1
+    fi
+
+    local p_propose p_auto
+    p_propose=$(echo "$output" | jq -r '.result.philosophy.propose // "missing"')
+    p_auto=$(echo "$output" | jq -r '.result.philosophy.auto // "missing"')
+    if [[ "$p_propose" != "1" || "$p_auto" != "3" ]]; then
+        test_fail "philosophy thresholds 1/3" "got propose=$p_propose auto=$p_auto"
+        return 1
+    fi
+
+    return 0
+}
+
+# ============================================================================
+# Test: validate-worker-response validates builder schema
+# ============================================================================
+test_validate_worker_response_builder() {
+    local tmp_dir
+    tmp_dir=$(setup_isolated_env)
+
+    local valid_payload
+    valid_payload='{"ant_name":"Hammer-1","task_id":"1.1","status":"completed","summary":"done","tool_count":3,"files_created":[],"files_modified":[],"tests_written":[],"blockers":[]}'
+
+    local output
+    output=$(bash "$tmp_dir/.aether/aether-utils.sh" validate-worker-response builder "$valid_payload" 2>&1)
+    if ! assert_json_valid "$output"; then
+        test_fail "valid JSON for valid payload" "$output"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+    if ! assert_ok_true "$output"; then
+        test_fail '{"ok":true} for valid payload' "$output"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    local invalid_payload
+    invalid_payload='{"ant_name":"Hammer-1","task_id":"1.1","status":"completed","tool_count":3,"files_created":[],"files_modified":[],"tests_written":[],"blockers":[]}'
+
+    local invalid_out
+    set +e
+    invalid_out=$(bash "$tmp_dir/.aether/aether-utils.sh" validate-worker-response builder "$invalid_payload" 2>&1)
+    set -e
+    rm -rf "$tmp_dir"
+
+    local json_line
+    json_line=$(echo "$invalid_out" | grep '"ok":false' | tail -1)
+    if ! assert_json_valid "$json_line"; then
+        test_fail "valid JSON for invalid payload error" "$invalid_out"
+        return 1
+    fi
+    if ! assert_ok_false "$json_line"; then
+        test_fail '{"ok":false} for invalid payload' "$json_line"
+        return 1
+    fi
+
+    return 0
+}
+
+# ============================================================================
+# Test: spawn-efficiency reports counts and percentage
+# ============================================================================
+test_spawn_efficiency_command() {
+    local tmp_dir
+    tmp_dir=$(setup_isolated_env)
+
+    cat > "$tmp_dir/.aether/data/spawn-tree.txt" << 'EOF'
+2026-02-23T00:00:00Z|Queen|builder|Hammer-1|Task|default|spawned
+2026-02-23T00:01:00Z|Hammer-1|completed
+2026-02-23T00:02:00Z|Queen|builder|Hammer-2|Task|default|spawned
+2026-02-23T00:03:00Z|Hammer-2|failed
+EOF
+
+    local output
+    output=$(bash "$tmp_dir/.aether/aether-utils.sh" spawn-efficiency 2>&1)
+    rm -rf "$tmp_dir"
+
+    if ! assert_json_valid "$output"; then
+        test_fail "valid JSON" "$output"
+        return 1
+    fi
+
+    local total completed failed efficiency
+    total=$(echo "$output" | jq -r '.result.total // -1')
+    completed=$(echo "$output" | jq -r '.result.completed // -1')
+    failed=$(echo "$output" | jq -r '.result.failed // -1')
+    efficiency=$(echo "$output" | jq -r '.result.efficiency_pct // -1')
+    if [[ "$total" != "2" || "$completed" != "1" || "$failed" != "1" || "$efficiency" != "50" ]]; then
+        test_fail "spawn-efficiency metrics 2/1/1/50" "got total=$total completed=$completed failed=$failed efficiency=$efficiency"
+        return 1
+    fi
+
+    return 0
+}
+
+# ============================================================================
+# Test: pheromone-expire promotes high-strength expired signals to eternal memory
+# ============================================================================
+test_pheromone_expire_promotes_eternal() {
+    local tmp_dir tmp_home
+    tmp_dir=$(setup_isolated_env)
+    tmp_home=$(mktemp -d)
+
+    cat > "$tmp_dir/.aether/data/pheromones.json" << 'EOF'
+{
+  "version": "1.0.0",
+  "signals": [
+    {
+      "id": "sig_focus_1",
+      "type": "FOCUS",
+      "priority": "normal",
+      "source": "test",
+      "created_at": "2024-01-01T00:00:00Z",
+      "expires_at": "2024-01-02T00:00:00Z",
+      "active": true,
+      "strength": 0.9,
+      "reason": "test",
+      "content": {"text": "Preserve this pattern"}
+    }
+  ]
+}
+EOF
+
+    local output
+    output=$(HOME="$tmp_home" bash "$tmp_dir/.aether/aether-utils.sh" pheromone-expire 2>&1)
+
+    if ! assert_json_valid "$output"; then
+        test_fail "valid JSON" "$output"
+        rm -rf "$tmp_dir" "$tmp_home"
+        return 1
+    fi
+
+    local promoted
+    promoted=$(echo "$output" | jq -r '.result.eternal_promoted // 0')
+    if [[ "$promoted" -lt 1 ]]; then
+        test_fail "eternal_promoted >= 1" "eternal_promoted=$promoted"
+        rm -rf "$tmp_dir" "$tmp_home"
+        return 1
+    fi
+
+    local eternal_file="$tmp_home/.aether/eternal/memory.json"
+    if [[ ! -f "$eternal_file" ]]; then
+        test_fail "eternal memory file exists" "missing $eternal_file"
+        rm -rf "$tmp_dir" "$tmp_home"
+        return 1
+    fi
+
+    local count
+    count=$(jq '.high_value_signals | length' "$eternal_file" 2>/dev/null || echo "0")
+    rm -rf "$tmp_dir" "$tmp_home"
+    if [[ "$count" -lt 1 ]]; then
+        test_fail "high_value_signals length >= 1" "length=$count"
+        return 1
+    fi
+
+    return 0
+}
+
+# ============================================================================
+# Test: entropy-score returns bounded score
+# ============================================================================
+test_entropy_score_command() {
+    local tmp_dir
+    tmp_dir=$(setup_isolated_env)
+
+    # Seed lightweight data to exercise formula.
+    mkdir -p "$tmp_dir/.aether/data/midden"
+    echo '{"entries":[{"category":"failure"}]}' > "$tmp_dir/.aether/data/midden/midden.json"
+    echo '{"signals":[{"active":true}]}' > "$tmp_dir/.aether/data/pheromones.json"
+    echo "t|Queen|builder|A|task|default|spawned" > "$tmp_dir/.aether/data/spawn-tree.txt"
+
+    local output
+    output=$(bash "$tmp_dir/.aether/aether-utils.sh" entropy-score 2>&1)
+    rm -rf "$tmp_dir"
+
+    if ! assert_json_valid "$output"; then
+        test_fail "valid JSON" "$output"
+        return 1
+    fi
+
+    local score
+    score=$(echo "$output" | jq -r '.result.score // -1')
+    if ! [[ "$score" =~ ^[0-9]+$ ]] || [[ "$score" -lt 0 || "$score" -gt 100 ]]; then
+        test_fail "entropy score bounded 0-100" "score=$score"
+        return 1
+    fi
+
+    return 0
+}
+
+# ============================================================================
 # Main Test Runner
 # ============================================================================
 
@@ -1223,6 +1517,15 @@ main() {
 
     # ARCH-08: help sections with Queen Commands group and backward compat (Phase 18-03)
     run_test "test_help_queen_commands_section" "help has Queen Commands section with backward-compat flat commands array (ARCH-08)"
+
+    # Framework hardening regressions (state lock, spawn enforcement, memory lifecycle)
+    run_test "test_spawn_can_spawn_enforce" "spawn-can-spawn --enforce hard-fails when cap exceeded"
+    run_test "test_error_add_lock_failure_error_code" "error-add with held state lock returns E_LOCK_FAILED"
+    run_test "test_queen_thresholds_command" "queen-thresholds returns propose/auto values"
+    run_test "test_validate_worker_response_builder" "validate-worker-response enforces builder schema"
+    run_test "test_spawn_efficiency_command" "spawn-efficiency reports totals and efficiency percentage"
+    run_test "test_pheromone_expire_promotes_eternal" "pheromone-expire promotes high-strength signals to eternal memory"
+    run_test "test_entropy_score_command" "entropy-score returns bounded 0-100 value"
 
     # Print summary
     test_summary

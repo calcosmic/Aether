@@ -85,7 +85,7 @@ You MAY spawn if you encounter genuine surprise:
 
 **Before spawning:**
 ```bash
-bash .aether/aether-utils.sh spawn-can-spawn {your_depth}
+bash .aether/aether-utils.sh spawn-can-spawn {your_depth} --enforce
 bash .aether/aether-utils.sh generate-ant-name "{caste}"
 bash .aether/aether-utils.sh spawn-log "{your_name}" "{caste}" "{child_name}" "{task}"
 ```

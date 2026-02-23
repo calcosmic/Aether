@@ -14,8 +14,12 @@
 [![npm version](https://img.shields.io/npm/v/aether-colony.svg)](https://www.npmjs.com/package/aether-colony)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**v1.1.0**
+**v1.1.5**
 </div>
+
+<p align="center">
+  <img src="./AetherArtork.png" alt="Aether artwork" width="720" />
+</p>
 
 ---
 
@@ -49,10 +53,13 @@ When a Builder hits something complex, it spawns a Scout to research. When code 
 
 - **9 Active Agent Types** — Real subagents spawned via Task tool
 - **35 Slash Commands** — Full lifecycle management
+- **Hard Enforcement Guards** — Spawn budget hard-fail mode, schema-validated worker payloads, and explicit blocker gating
 - **Pheromone System** — Guide the colony with FOCUS, REDIRECT, FEEDBACK signals
+- **State Safety** — Lock + atomic-write protections on critical state and memory mutation paths
 - **Oracle Deep Research** — 50+ iteration autonomous research loop
 - **6-Phase Verification** — Build, types, lint, tests, security, diff
 - **Colony Memory** — Learnings persist across sessions via QUEEN.md
+- **Operational Evolution Loop** — Incident template, regression scaffolding, weekly audit script, and entropy/spawn metrics
 - **Pause/Resume** — Full state serialization for context breaks
 
 ---

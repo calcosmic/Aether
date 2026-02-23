@@ -919,6 +919,46 @@ changelog-collect-plan-data() {
 EOF
 }
 
+# --- Wisdom threshold helpers ---
+# Single source of truth for promotion thresholds.
+# `propose` controls queueing/visibility for queen review.
+# `auto` controls automatic promotion to QUEEN.md.
+get_wisdom_threshold() {
+  local wisdom_type="${1:-}"
+  local mode="${2:-propose}"
+
+  case "$wisdom_type:$mode" in
+    philosophy:propose) echo 1 ;;
+    philosophy:auto) echo 3 ;;
+    pattern:propose) echo 1 ;;
+    pattern:auto) echo 2 ;;
+    redirect:propose) echo 1 ;;
+    redirect:auto) echo 2 ;;
+    stack:propose) echo 1 ;;
+    stack:auto) echo 2 ;;
+    decree:propose) echo 0 ;;
+    decree:auto) echo 0 ;;
+    failure:propose) echo 1 ;;
+    failure:auto) echo 2 ;;
+    *:propose) echo 1 ;;
+    *:auto) echo 2 ;;
+    *) echo 1 ;;
+  esac
+}
+
+get_wisdom_thresholds_json() {
+  cat <<'EOF'
+{
+  "philosophy": {"propose": 1, "auto": 3},
+  "pattern": {"propose": 1, "auto": 2},
+  "redirect": {"propose": 1, "auto": 2},
+  "stack": {"propose": 1, "auto": 2},
+  "decree": {"propose": 0, "auto": 0},
+  "failure": {"propose": 1, "auto": 2}
+}
+EOF
+}
+
 # --- Subcommand dispatch ---
 cmd="${1:-help}"
 shift 2>/dev/null || true
@@ -931,7 +971,7 @@ case "$cmd" in
     cat <<'HELP_EOF'
 {
   "ok": true,
-  "commands": ["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","learning-observe","learning-check-promotion","learning-promote-auto","memory-capture","context-capsule","rolling-summary","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-display-text","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","phase-insert","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","survey-load","survey-verify","pheromone-export","pheromone-write","pheromone-count","pheromone-read","instinct-read","pheromone-prime","pheromone-expire","eternal-init","pheromone-export-xml","pheromone-import-xml","pheromone-validate-xml","wisdom-export-xml","wisdom-import-xml","registry-export-xml","registry-import-xml","force-unlock","changelog-append","changelog-collect-plan-data","suggest-approve","suggest-quick-dismiss"],
+  "commands": ["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","learning-observe","learning-check-promotion","learning-promote-auto","memory-capture","queen-thresholds","context-capsule","rolling-summary","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","spawn-efficiency","validate-worker-response","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-display-text","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","phase-insert","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","incident-rule-add","survey-load","survey-verify","pheromone-export","pheromone-write","pheromone-count","pheromone-read","instinct-read","pheromone-prime","colony-prime","pheromone-expire","eternal-init","eternal-store","pheromone-export-xml","pheromone-import-xml","pheromone-validate-xml","wisdom-export-xml","wisdom-import-xml","registry-export-xml","registry-import-xml","memory-metrics","midden-recent-failures","entropy-score","force-unlock","changelog-append","changelog-collect-plan-data","suggest-approve","suggest-quick-dismiss"],
   "sections": {
     "Core": [
       {"name": "help", "description": "List all available commands with sections"},
@@ -947,6 +987,8 @@ case "$cmd" in
       {"name": "queen-init", "description": "Initialize a new colony QUEEN.md from template"},
       {"name": "queen-read", "description": "Read QUEEN.md wisdom as JSON for worker priming"},
       {"name": "queen-promote", "description": "Promote a validated learning to QUEEN.md wisdom"},
+      {"name": "queen-thresholds", "description": "Return propose/auto promotion thresholds by wisdom type"},
+      {"name": "incident-rule-add", "description": "Append an incident-derived rule to decree/constraint/gate stores"},
       {"name": "learning-observe", "description": "Record observation of a learning across colonies"},
       {"name": "learning-check-promotion", "description": "Check which learnings meet promotion thresholds"},
       {"name": "learning-promote-auto", "description": "Auto-promote high-confidence learnings based on recurrence policy"},
@@ -966,7 +1008,9 @@ case "$cmd" in
       {"name": "spawn-get-depth", "description": "Get spawn depth for an ant name"},
       {"name": "spawn-tree-load", "description": "Load spawn-tree.txt as JSON"},
       {"name": "spawn-tree-active", "description": "List currently active spawns"},
-      {"name": "spawn-tree-depth", "description": "Get depth for a named ant"}
+      {"name": "spawn-tree-depth", "description": "Get depth for a named ant"},
+      {"name": "spawn-efficiency", "description": "Calculate spawn completion efficiency metrics"},
+      {"name": "validate-worker-response", "description": "Validate worker JSON output against caste schema"}
     ],
     "Flag Management": [
       {"name": "flag-add", "description": "Add a flag to flags.json"},
@@ -998,7 +1042,9 @@ case "$cmd" in
       {"name": "pheromone-read", "description": "Read pheromone signals"},
       {"name": "pheromone-count", "description": "Count active pheromone signals"},
       {"name": "pheromone-prime", "description": "Prime the pheromone system"},
+      {"name": "colony-prime", "description": "Assemble unified worker priming payload"},
       {"name": "pheromone-expire", "description": "Expire old pheromone signals"},
+      {"name": "eternal-store", "description": "Store high-value signals in eternal memory"},
       {"name": "pheromone-export", "description": "Export pheromone data to JSON"},
       {"name": "pheromone-export-xml", "description": "Export pheromone data to XML"},
       {"name": "pheromone-import-xml", "description": "Import pheromone data from XML"},
@@ -1013,6 +1059,9 @@ case "$cmd" in
       {"name": "version-check", "description": "Check if Aether version meets requirement"},
       {"name": "registry-add", "description": "Register a repo with Aether"},
       {"name": "bootstrap-system", "description": "Bootstrap minimal system files if missing"},
+      {"name": "memory-metrics", "description": "Aggregate memory health across colony stores"},
+      {"name": "midden-recent-failures", "description": "Read recent failure signals from midden"},
+      {"name": "entropy-score", "description": "Compute colony entropy score (0-100)"},
       {"name": "force-unlock", "description": "Emergency unlock — remove stale lock files"}
     ],
     "Changelog": [
@@ -1052,6 +1101,14 @@ HELP_EOF
       current_version=$(jq -r '.version // "1.0"' "$state_file" 2>/dev/null)
 
       if [[ "$current_version" != "3.0" ]]; then
+        local _migrate_lock_held=false
+        # Skip lock acquisition when caller already holds the state lock
+        # (e.g., state-loader sets AETHER_STATE_LOCKED=true before validation).
+        if [[ "${AETHER_STATE_LOCKED:-false}" != "true" ]] && type acquire_lock &>/dev/null; then
+          acquire_lock "$state_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on COLONY_STATE.json for migration"
+          _migrate_lock_held=true
+        fi
+
         # Add missing v3.0 fields (additive only — idempotent and safe for concurrent access)
         local updated
         updated=$(jq '
@@ -1059,13 +1116,21 @@ HELP_EOF
             if .signals == null then .signals = [] else . end |
             if .graveyards == null then .graveyards = [] else . end |
             if .events == null then .events = [] else . end
-        ' "$state_file" 2>/dev/null)
+        ' "$state_file" 2>/dev/null) || {
+          [[ "$_migrate_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+          json_err "$E_JSON_INVALID" "Failed to migrate COLONY_STATE.json"
+        }
 
         if [[ -n "$updated" ]]; then
-          atomic_write "$state_file" "$updated"
+          atomic_write "$state_file" "$updated" || {
+            [[ "$_migrate_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+            json_err "$E_JSON_INVALID" "Failed to write migrated COLONY_STATE.json"
+          }
           # Notify user of migration (auto-migrate + notify pattern)
           printf '{"ok":true,"warning":"W_MIGRATED","message":"Migrated colony state from v%s to v3.0"}\n' "$current_version" >&2
         fi
+
+        [[ "$_migrate_lock_held" == "true" ]] && release_lock 2>/dev/null || true
       fi
     }
 
@@ -1117,7 +1182,15 @@ HELP_EOF
     ;;
   error-add)
     [[ $# -ge 3 ]] || json_err "$E_VALIDATION_FAILED" "Usage: error-add <category> <severity> <description> [phase]"
-    [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
+    state_file="$DATA_DIR/COLONY_STATE.json"
+    [[ -f "$state_file" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
+
+    state_lock_held=false
+    if type acquire_lock &>/dev/null; then
+      acquire_lock "$state_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on COLONY_STATE.json"
+      state_lock_held=true
+    fi
+
     id="err_$(date -u +%s)_$(head -c 2 /dev/urandom | od -An -tx1 | tr -d ' ')"
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
     phase_val="${4:-null}"
@@ -1129,8 +1202,17 @@ HELP_EOF
     updated=$(jq --arg id "$id" --arg cat "$1" --arg sev "$2" --arg desc "$3" --argjson phase "$phase_jq" --arg ts "$ts" '
       .errors.records += [{id:$id, category:$cat, severity:$sev, description:$desc, root_cause:null, phase:$phase, task_id:null, timestamp:$ts}] |
       if (.errors.records|length) > 50 then .errors.records = .errors.records[-50:] else . end
-    ' "$DATA_DIR/COLONY_STATE.json") || json_err "$E_JSON_INVALID" "Failed to update COLONY_STATE.json"
-    atomic_write "$DATA_DIR/COLONY_STATE.json" "$updated"
+    ' "$state_file") || {
+      [[ "$state_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+      json_err "$E_JSON_INVALID" "Failed to update COLONY_STATE.json"
+    }
+
+    atomic_write "$state_file" "$updated" || {
+      [[ "$state_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+      json_err "$E_JSON_INVALID" "Failed to write COLONY_STATE.json"
+    }
+
+    [[ "$state_lock_held" == "true" ]] && release_lock 2>/dev/null || true
     json_ok "\"$id\""
     ;;
   error-pattern-check)
@@ -1327,12 +1409,22 @@ HELP_EOF
     if [[ "$status" == "failed" ]] || [[ "$status" == "error" ]]; then
       spawn_complete_state_file="$DATA_DIR/COLONY_STATE.json"
       if [[ -f "$spawn_complete_state_file" ]]; then
+        spawn_complete_lock_held=false
+        if type acquire_lock &>/dev/null; then
+          acquire_lock "$spawn_complete_state_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on COLONY_STATE.json"
+          spawn_complete_lock_held=true
+        fi
+
         spawn_complete_updated=$(jq --arg ts "$ts_full" --arg name "$ant_name" --arg st "$status" --arg sum "${summary:-unknown}" \
           '.events += [{"type":"spawn_failed","ant":$name,"status":$st,"summary":$sum,"timestamp":$ts}]' \
           "$spawn_complete_state_file" 2>/dev/null)
         if [[ -n "$spawn_complete_updated" ]]; then
-          atomic_write "$spawn_complete_state_file" "$spawn_complete_updated"
+          atomic_write "$spawn_complete_state_file" "$spawn_complete_updated" || {
+            [[ "$spawn_complete_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+            json_err "$E_JSON_INVALID" "Failed to write COLONY_STATE.json"
+          }
         fi
+        [[ "$spawn_complete_lock_held" == "true" ]] && release_lock 2>/dev/null || true
       fi
     fi
     # Return emoji-formatted result for display
@@ -1340,9 +1432,25 @@ HELP_EOF
     ;;
   spawn-can-spawn)
     # Check if spawning is allowed at given depth
-    # Usage: spawn-can-spawn <depth>
-    # Returns: {can_spawn: bool, depth: N, max_spawns: N, current_total: N}
-    depth="${1:-1}"
+    # Usage: spawn-can-spawn [depth] [--enforce]
+    # Returns: {can_spawn: bool, depth: N, max_spawns: N, current_total: N, global_cap: N}
+    # --enforce: fail with non-zero exit when spawning is not allowed
+    depth=""
+    enforce_mode=false
+    for arg in "$@"; do
+      case "$arg" in
+        --enforce) enforce_mode=true ;;
+        *)
+          if [[ -z "$depth" ]]; then
+            depth="$arg"
+          else
+            json_err "$E_VALIDATION_FAILED" "Usage: spawn-can-spawn [depth] [--enforce]"
+          fi
+          ;;
+      esac
+    done
+    [[ -z "$depth" ]] && depth=1
+    [[ "$depth" =~ ^[0-9]+$ ]] || json_err "$E_VALIDATION_FAILED" "Depth must be a non-negative integer" "{\"provided\":\"$depth\"}"
 
     # Depth limits: 1→4 spawns, 2→2 spawns, 3+→0 spawns
     if [[ $depth -eq 1 ]]; then
@@ -1367,6 +1475,10 @@ HELP_EOF
       can="true"
     else
       can="false"
+    fi
+
+    if [[ "$enforce_mode" == "true" && "$can" == "false" ]]; then
+      json_err "$E_VALIDATION_FAILED" "Spawn cap exceeded: depth=$depth current=$current max=$global_cap"
     fi
 
     json_ok "{\"can_spawn\":$can,\"depth\":$depth,\"max_spawns\":$max_for_depth,\"current_total\":$current,\"global_cap\":$global_cap}"
@@ -2044,6 +2156,106 @@ EOF
     json_ok "\"$name\""
     ;;
 
+  validate-worker-response)
+    # Validate worker JSON payloads against caste-specific schemas.
+    # Usage: validate-worker-response <caste> <json_or_file_path>
+    vw_caste="${1:-}"
+    vw_input="${2:-}"
+
+    [[ -z "$vw_caste" ]] && json_err "$E_VALIDATION_FAILED" "Usage: validate-worker-response <caste> <json_or_file_path>" '{"missing":"caste"}'
+    [[ -z "$vw_input" ]] && json_err "$E_VALIDATION_FAILED" "Usage: validate-worker-response <caste> <json_or_file_path>" '{"missing":"json_or_file_path"}'
+
+    if [[ -f "$vw_input" ]]; then
+      vw_json=$(cat "$vw_input" 2>/dev/null || echo "")
+    else
+      vw_json="$vw_input"
+    fi
+
+    if [[ -z "$vw_json" ]] || ! echo "$vw_json" | jq -e . >/dev/null 2>&1; then
+      json_err "$E_JSON_INVALID" "Worker response is not valid JSON"
+    fi
+
+    vw_caste=$(echo "$vw_caste" | tr '[:upper:]' '[:lower:]')
+
+    case "$vw_caste" in
+      builder)
+        vw_required='["ant_name","task_id","status","summary","tool_count","files_created","files_modified","tests_written","blockers"]'
+        vw_schema='
+          (.ant_name|type=="string") and
+          (.task_id|type=="string") and
+          (.status|type=="string" and (.=="completed" or .=="failed" or .=="blocked")) and
+          (.summary|type=="string") and
+          (.tool_count|type=="number") and
+          (.files_created|type=="array") and
+          (.files_modified|type=="array") and
+          (.tests_written|type=="array") and
+          (.blockers|type=="array")
+        '
+        ;;
+      watcher)
+        vw_required='["ant_name","verification_passed","files_verified","issues_found","quality_score","tool_count","recommendation"]'
+        vw_schema='
+          (.ant_name|type=="string") and
+          (.verification_passed|type=="boolean") and
+          (.files_verified|type=="array") and
+          (.issues_found|type=="array") and
+          (.quality_score|type=="number") and
+          (.tool_count|type=="number") and
+          (.recommendation|type=="string" and (.=="proceed" or .=="fix_required"))
+        '
+        ;;
+      probe)
+        vw_required='["ant_name","status","summary","coverage","tests_added","edge_cases_discovered","mutation_score","weak_spots","blockers"]'
+        vw_schema='
+          (.ant_name|type=="string") and
+          (.status|type=="string" and (.=="completed" or .=="failed" or .=="blocked")) and
+          (.summary|type=="string") and
+          (.coverage|type=="object") and
+          (.coverage.lines|type=="number") and
+          (.coverage.branches|type=="number") and
+          (.coverage.functions|type=="number") and
+          (.tests_added|type=="array") and
+          (.edge_cases_discovered|type=="array") and
+          (.mutation_score|type=="number") and
+          (.weak_spots|type=="array") and
+          (.blockers|type=="array")
+        '
+        ;;
+      scout)
+        vw_required='["ant_name","status","summary","key_findings","recommendations","sources","spawns"]'
+        vw_schema='
+          (.ant_name|type=="string") and
+          (.status|type=="string" and (.=="completed" or .=="failed" or .=="blocked")) and
+          (.summary|type=="string") and
+          (.key_findings|type=="array") and
+          (.recommendations|type=="array") and
+          (.sources|type=="array") and
+          (.spawns|type=="array")
+        '
+        ;;
+      *)
+        vw_required='["ant_name","status","summary"]'
+        vw_schema='
+          (.ant_name|type=="string") and
+          (.status|type=="string" and (.=="completed" or .=="failed" or .=="blocked")) and
+          (.summary|type=="string")
+        '
+        ;;
+    esac
+
+    missing_fields=$(echo "$vw_json" | jq -c --argjson req "$vw_required" '[ $req[] | select(has(.) | not) ]' 2>/dev/null || echo '[]')
+    if [[ "$missing_fields" != "[]" ]]; then
+      details=$(jq -n --arg caste "$vw_caste" --argjson missing "$missing_fields" '{caste:$caste,missing:$missing}')
+      json_err "$E_VALIDATION_FAILED" "Worker response missing required fields" "$details"
+    fi
+
+    if ! echo "$vw_json" | jq -e "$vw_schema" >/dev/null 2>&1; then
+      json_err "$E_VALIDATION_FAILED" "Worker response failed schema validation" "{\"caste\":\"$vw_caste\"}"
+    fi
+
+    json_ok "{\"valid\":true,\"caste\":\"$vw_caste\"}"
+    ;;
+
   # ============================================
   # SWARM UTILITIES (ant:swarm support)
   # ============================================
@@ -2261,7 +2473,15 @@ EOF
     # Record a grave marker when a builder fails at a file
     # Usage: grave-add <file> <ant_name> <task_id> <phase> <failure_summary> [function] [line]
     [[ $# -ge 5 ]] || json_err "$E_VALIDATION_FAILED" "Usage: grave-add <file> <ant_name> <task_id> <phase> <failure_summary> [function] [line]"
-    [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
+    state_file="$DATA_DIR/COLONY_STATE.json"
+    [[ -f "$state_file" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
+
+    grave_lock_held=false
+    if type acquire_lock &>/dev/null; then
+      acquire_lock "$state_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on COLONY_STATE.json"
+      grave_lock_held=true
+    fi
+
     file="$1"
     ant_name="$2"
     task_id="$3"
@@ -2302,8 +2522,17 @@ EOF
         timestamp: $ts
       }])} |
       if (.graveyards | length) > 30 then .graveyards = .graveyards[-30:] else . end
-    ' "$DATA_DIR/COLONY_STATE.json") || json_err "$E_JSON_INVALID" "Failed to update COLONY_STATE.json"
-    atomic_write "$DATA_DIR/COLONY_STATE.json" "$updated"
+    ' "$state_file") || {
+      [[ "$grave_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+      json_err "$E_JSON_INVALID" "Failed to update COLONY_STATE.json"
+    }
+
+    atomic_write "$state_file" "$updated" || {
+      [[ "$grave_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+      json_err "$E_JSON_INVALID" "Failed to write COLONY_STATE.json"
+    }
+
+    [[ "$grave_lock_held" == "true" ]] && release_lock 2>/dev/null || true
     json_ok "\"$id\""
     ;;
 
@@ -2587,6 +2816,7 @@ Files: ${files_changed} files changed"
       "docs/command-playbooks/continue-gates.md"
       "docs/command-playbooks/continue-advance.md"
       "docs/command-playbooks/continue-finalize.md"
+      "docs/INCIDENT_TEMPLATE.md"
 
       # Templates used by runtime generation/bootstrap flows
       "templates/QUEEN.md.template"
@@ -2601,6 +2831,8 @@ Files: ${files_changed} files changed"
       "templates/midden.template.json"
       "templates/crowned-anthill.template.md"
       "templates/colony-state-reset.jq.template"
+      "scripts/weekly-audit.sh"
+      "scripts/incident-test-add.sh"
 
       # Core utilities
       "utils/atomic-write.sh"
@@ -2697,6 +2929,29 @@ Files: ${files_changed} files changed"
     }
     depth=$(get_spawn_depth "$ant_name")
     json_ok "$depth"
+    ;;
+
+  spawn-efficiency)
+    # Calculate spawn efficiency metrics from spawn-tree.txt
+    # Usage: spawn-efficiency
+    spawn_tree_file="$DATA_DIR/spawn-tree.txt"
+    total=0
+    completed=0
+    failed=0
+
+    if [[ -f "$spawn_tree_file" ]]; then
+      total=$(grep -c "|spawned$" "$spawn_tree_file" 2>/dev/null || echo 0)
+      completed=$(grep -c "|completed$" "$spawn_tree_file" 2>/dev/null || echo 0)
+      failed=$(grep -c "|failed$" "$spawn_tree_file" 2>/dev/null || echo 0)
+    fi
+
+    if [[ "$total" -gt 0 ]]; then
+      efficiency=$(( completed * 100 / total ))
+    else
+      efficiency=0
+    fi
+
+    json_ok "{\"total\":$total,\"completed\":$completed,\"failed\":$failed,\"efficiency_pct\":$efficiency}"
     ;;
 
   # --- Model Profile Commands ---
@@ -2987,7 +3242,7 @@ NODESCRIPT
 
     # Acquire lock for safe state mutation
     _phase_lock_held=false
-    if type acquire_lock &>/dev/null && type feature_enabled &>/dev/null && feature_enabled "file_locking"; then
+    if type acquire_lock &>/dev/null; then
       acquire_lock "$state_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on COLONY_STATE.json"
       _phase_lock_held=true
       trap 'release_lock 2>/dev/null || true' EXIT
@@ -4365,6 +4620,112 @@ ANTLOGO
     json_ok "$result"
     ;;
 
+  queen-thresholds)
+    # Return proposal and auto-promotion thresholds for each wisdom type
+    # Usage: queen-thresholds
+    json_ok "$(get_wisdom_thresholds_json)"
+    ;;
+
+  incident-rule-add)
+    # Append an incident-derived rule to long-term guidance stores.
+    # Usage: incident-rule-add <incident_id> <rule_text> [decree|constraint|gate]
+    ir_incident_id="${1:-}"
+    ir_rule_text="${2:-}"
+    ir_rule_type="${3:-decree}"
+
+    [[ -z "$ir_incident_id" ]] && json_err "$E_VALIDATION_FAILED" "Usage: incident-rule-add <incident_id> <rule_text> [decree|constraint|gate]" '{"missing":"incident_id"}'
+    [[ -z "$ir_rule_text" ]] && json_err "$E_VALIDATION_FAILED" "Usage: incident-rule-add <incident_id> <rule_text> [decree|constraint|gate]" '{"missing":"rule_text"}'
+
+    ir_ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    case "$ir_rule_type" in
+      decree)
+        ir_queen_file="$AETHER_ROOT/.aether/QUEEN.md"
+        [[ -f "$ir_queen_file" ]] || json_err "$E_FILE_NOT_FOUND" "QUEEN.md not found" '{"path":".aether/QUEEN.md"}'
+
+        ir_entry="- [${ir_incident_id}] ${ir_rule_text}"
+        ir_tmp="${ir_queen_file}.tmp.$$"
+        awk -v header="## 🏛️ Decrees" -v entry="$ir_entry" '
+          $0 == header && inserted == 0 {print; print ""; print entry; inserted=1; next}
+          {print}
+          END {
+            if (inserted == 0) {
+              print "";
+              print "## 🏛️ Decrees";
+              print "";
+              print entry;
+            }
+          }
+        ' "$ir_queen_file" > "$ir_tmp"
+
+        ir_lock_held=false
+        if type acquire_lock &>/dev/null; then
+          acquire_lock "$ir_queen_file" || {
+            rm -f "$ir_tmp" 2>/dev/null || true
+            json_err "$E_LOCK_FAILED" "Failed to acquire lock on QUEEN.md"
+          }
+          ir_lock_held=true
+        fi
+
+        ir_content=$(cat "$ir_tmp" 2>/dev/null || echo "")
+        atomic_write "$ir_queen_file" "$ir_content" || {
+          rm -f "$ir_tmp" 2>/dev/null || true
+          [[ "$ir_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+          json_err "$E_FILE_NOT_FOUND" "Failed to append decree rule to QUEEN.md"
+        }
+        rm -f "$ir_tmp" 2>/dev/null || true
+        [[ "$ir_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+        ;;
+
+      constraint)
+        ir_constraints_file="$DATA_DIR/constraints.json"
+        [[ -f "$ir_constraints_file" ]] || printf '%s\n' '{"version":"1.0","focus":[],"constraints":[]}' > "$ir_constraints_file"
+
+        ir_lock_held=false
+        if type acquire_lock &>/dev/null; then
+          acquire_lock "$ir_constraints_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on constraints.json"
+          ir_lock_held=true
+        fi
+
+        ir_source="incident:${ir_incident_id}"
+        ir_updated=$(jq --arg id "$ir_incident_id" --arg rule "$ir_rule_text" --arg source "$ir_source" --arg ts "$ir_ts" '
+          .constraints += [{
+            id: $id,
+            type: "INCIDENT_RULE",
+            content: $rule,
+            source: $source,
+            created_at: $ts
+          }]
+        ' "$ir_constraints_file" 2>/dev/null) || {
+          [[ "$ir_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+          json_err "$E_JSON_INVALID" "Failed to update constraints.json"
+        }
+
+        atomic_write "$ir_constraints_file" "$ir_updated" || {
+          [[ "$ir_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+          json_err "$E_JSON_INVALID" "Failed to write constraints.json"
+        }
+        [[ "$ir_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+        ;;
+
+      gate)
+        ir_gate_file="$AETHER_ROOT/.aether/docs/verification-gates.md"
+        mkdir -p "$(dirname "$ir_gate_file")"
+        if [[ ! -f "$ir_gate_file" ]]; then
+          printf '%s\n' "# Verification Gates" > "$ir_gate_file"
+          printf '%s\n' "" >> "$ir_gate_file"
+        fi
+        printf '%s\n' "- [${ir_incident_id}] ${ir_rule_text}" >> "$ir_gate_file"
+        ;;
+
+      *)
+        json_err "$E_VALIDATION_FAILED" "Invalid rule_type: $ir_rule_type. Use decree|constraint|gate"
+        ;;
+    esac
+
+    json_ok "{\"incident_id\":\"$ir_incident_id\",\"rule_type\":\"$ir_rule_type\",\"added\":true,\"timestamp\":\"$ir_ts\"}"
+    ;;
+
   queen-promote)
     # Promote a learning to QUEEN.md wisdom
     # Usage: queen-promote <type> <content> <colony_name>
@@ -4394,29 +4755,8 @@ ANTLOGO
       exit 1
     fi
 
-    # Extract METADATA to get promotion thresholds
-    # Handle both single-line and multi-line METADATA formats
-    meta_line=$(grep -E '^<!-- METADATA' "$queen_file" | head -1)
-    if [[ "$meta_line" == *"-->" ]]; then
-      # Single-line METADATA
-      metadata=$(echo "$meta_line" | sed 's/<!-- METADATA //; s/ -->$//')
-    else
-      # Multi-line METADATA
-      metadata=$(sed -n '/<!-- METADATA/,/-->/p' "$queen_file" | sed '1d;$d' | tr -d '\n' | sed 's/^[[:space:]]*//')
-    fi
-
-    # Get threshold for this type (default: all types=1, decree=0)
-    threshold=$(echo "$metadata" | jq -r ".promotion_thresholds.${wisdom_type} // null")
-    if [[ "$threshold" == "null" ]]; then
-      case "$wisdom_type" in
-        philosophy) threshold=1 ;;  # Was 5
-        pattern) threshold=1 ;;      # Was 3
-        redirect) threshold=1 ;;     # Was 2
-        stack) threshold=1 ;;        # Unchanged
-        decree) threshold=0 ;;       # Unchanged
-        *) threshold=1 ;;
-      esac
-    fi
+    # Thresholds come from the shared command policy to keep promotion behavior consistent.
+    threshold=$(get_wisdom_threshold "$wisdom_type" "propose")
 
     # QUEEN-04: Check threshold against learning-observations.json
     # For decrees, always promote immediately (threshold 0)
@@ -4786,16 +5126,8 @@ $updated_meta
     fi
     trap - EXIT
 
-    # Get threshold for this type
-    case "$wisdom_type" in
-      philosophy) threshold=1 ;;  # Was 5
-      pattern) threshold=1 ;;      # Was 3
-      redirect) threshold=1 ;;     # Was 2
-      stack) threshold=1 ;;        # Unchanged
-      decree) threshold=0 ;;       # Unchanged
-      failure) threshold=1 ;;      # NEW: Failures promote after 1 observation
-      *) threshold=1 ;;
-    esac
+    # Propose-threshold determines when a learning is queueable/reviewable.
+    threshold=$(get_wisdom_threshold "$wisdom_type" "propose")
 
     # Determine if threshold is met
     threshold_met=false
@@ -4847,30 +5179,22 @@ $updated_meta
       json_err "$E_JSON_INVALID" "learning-observations.json has invalid JSON"
     fi
 
-    # Build proposals array using jq
-    # Define thresholds per wisdom type (aligned with learning-observe):
-    # philosophy: 1, pattern: 1, redirect: 1, stack: 1, decree: 0, failure: 1
-    result=$(jq '
+    # Build proposals array using the shared threshold table.
+    thresholds_json=$(get_wisdom_thresholds_json)
+    result=$(jq --argjson thresholds "$thresholds_json" '
       def get_threshold(type):
-        if type == "philosophy" then 1
-        elif type == "pattern" then 1
-        elif type == "redirect" then 1
-        elif type == "stack" then 1
-        elif type == "decree" then 0
-        elif type == "failure" then 1
-        else 1
-        end;
+        ($thresholds[type].propose // 1);
 
       {
         proposals: [
           .observations[] |
-          select(.observation_count >= get_threshold(.wisdom_type)) |
+          select((.observation_count // 0) >= get_threshold(.wisdom_type)) |
           {
             content: .content,
             wisdom_type: .wisdom_type,
             observation_count: .observation_count,
             threshold: get_threshold(.wisdom_type),
-            colonies: .colonies,
+            colonies: (.colonies // []),
             ready: true
           }
         ]
@@ -4895,12 +5219,7 @@ $updated_meta
       colony_name=$(jq -r '.session_id | split("_")[1] // "unknown"' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "unknown")
     fi
 
-    case "$wisdom_type" in
-      decree) policy_threshold=0 ;;
-      philosophy) policy_threshold=3 ;;
-      pattern|stack|redirect|failure) policy_threshold=2 ;;
-      *) policy_threshold=2 ;;
-    esac
+    policy_threshold=$(get_wisdom_threshold "$wisdom_type" "auto")
 
     observations_file="$DATA_DIR/learning-observations.json"
     content_hash="sha256:$(echo -n "$content" | sha256sum | cut -d' ' -f1)"
@@ -5103,18 +5422,10 @@ $updated_meta
     fi
 
     # Get all observations with their thresholds
-    # Define thresholds per wisdom type (aligned with learning-observe):
-    # philosophy: 1, pattern: 1, redirect: 1, stack: 1, decree: 0, failure: 1
-    proposals_json=$(jq '
+    thresholds_json=$(get_wisdom_thresholds_json)
+    proposals_json=$(jq --argjson thresholds "$thresholds_json" '
       def get_threshold(type):
-        if type == "philosophy" then 1
-        elif type == "pattern" then 1
-        elif type == "redirect" then 1
-        elif type == "stack" then 1
-        elif type == "decree" then 0
-        elif type == "failure" then 1
-        else 1
-        end;
+        ($thresholds[type].propose // 1);
 
       {
         proposals: [
@@ -5144,7 +5455,14 @@ $updated_meta
     types=("philosophy" "pattern" "redirect" "stack" "decree" "failure")
     type_emojis=("📜" "🧭" "⚠️" "🔧" "🏛️" "❌")
     type_names=("Philosophies" "Patterns" "Redirects" "Stack Wisdom" "Decrees" "Failures")
-    type_thresholds=(1 1 1 1 0 1)
+    type_thresholds=(
+      "$(get_wisdom_threshold philosophy propose)"
+      "$(get_wisdom_threshold pattern propose)"
+      "$(get_wisdom_threshold redirect propose)"
+      "$(get_wisdom_threshold stack propose)"
+      "$(get_wisdom_threshold decree propose)"
+      "$(get_wisdom_threshold failure propose)"
+    )
 
     echo ""
     echo "🧠 Promotion Proposals"
@@ -5242,17 +5560,10 @@ $updated_meta
     fi
 
     # Build proposals array using same logic as learning-display-proposals
-    # Aligned thresholds: philosophy: 1, pattern: 1, redirect: 1, stack: 1, decree: 0, failure: 1
-    proposals_json=$(jq '
+    thresholds_json=$(get_wisdom_thresholds_json)
+    proposals_json=$(jq --argjson thresholds "$thresholds_json" '
       def get_threshold(type):
-        if type == "philosophy" then 1
-        elif type == "pattern" then 1
-        elif type == "redirect" then 1
-        elif type == "stack" then 1
-        elif type == "decree" then 0
-        elif type == "failure" then 1
-        else 1
-        end;
+        ($thresholds[type].propose // 1);
 
       {
         proposals: [
@@ -6355,6 +6666,14 @@ $updated_meta
       json_err "$E_VALIDATION_FAILED" "pheromone-write requires <content> argument"
     fi
 
+    # Sanitize and bound input content to reduce injection risk in prompt contexts.
+    pw_content="${pw_content//</&lt;}"
+    pw_content="${pw_content//>/&gt;}"
+    pw_content="${pw_content:0:500}"
+    if echo "$pw_content" | grep -Eiq '(\$\(|`|(^|[[:space:]])curl([[:space:]]|$)|(^|[[:space:]])wget([[:space:]]|$)|(^|[[:space:]])rm([[:space:]]|$))'; then
+      json_err "$E_VALIDATION_FAILED" "Pheromone content rejected: potential injection pattern"
+    fi
+
     # Parse optional flags from remaining args (after type and content)
     pw_strength=""
     pw_ttl="phase_end"
@@ -6379,6 +6698,10 @@ $updated_meta
         FOCUS)    pw_strength="0.8" ;;
         FEEDBACK) pw_strength="0.7" ;;
       esac
+    fi
+
+    if ! [[ "$pw_strength" =~ ^(0(\.[0-9]+)?|1(\.0+)?)$ ]]; then
+      json_err "$E_VALIDATION_FAILED" "Strength must be a number between 0.0 and 1.0" "{\"provided\":\"$pw_strength\"}"
     fi
 
     # Apply default reason by type
@@ -6425,6 +6748,12 @@ $updated_meta
 
     pw_file="$DATA_DIR/pheromones.json"
 
+    pw_lock_held=false
+    if type acquire_lock &>/dev/null; then
+      acquire_lock "$pw_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on pheromones.json"
+      pw_lock_held=true
+    fi
+
     # Initialize pheromones.json if missing
     if [[ ! -f "$pw_file" ]]; then
       pw_colony_id="aether-dev"
@@ -6451,9 +6780,14 @@ $updated_meta
 
     pw_updated=$(jq --argjson sig "$pw_signal" '.signals += [$sig]' "$pw_file" 2>/dev/null)
     if [[ -z "$pw_updated" ]]; then
+      [[ "$pw_lock_held" == "true" ]] && release_lock 2>/dev/null || true
       json_err "${E_JSON_INVALID:-E_JSON_INVALID}" "Failed to update pheromones.json — jq parse error"
     fi
-    echo "$pw_updated" > "$pw_file"
+    atomic_write "$pw_file" "$pw_updated" || {
+      [[ "$pw_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+      json_err "$E_JSON_INVALID" "Failed to write pheromones.json"
+    }
+    [[ "$pw_lock_held" == "true" ]] && release_lock 2>/dev/null || true
 
     # Backward compatibility: also write to constraints.json
     pw_cfile="$DATA_DIR/constraints.json"
@@ -7275,13 +7609,40 @@ $updated_meta
       [.signals[] | select(.id as $id | $ids | any(. == $id)) | . + {"archived_at": $archived_at, "active": false}]
     ' "$phe_pheromones_file" 2>/dev/null || echo '[]')
 
+    # Promote high-value expired signals to eternal memory before archival.
+    phe_eternal_promoted=0
+    while IFS= read -r phe_signal; do
+      [[ -z "$phe_signal" ]] && continue
+      phe_strength_int=$(echo "$phe_signal" | jq -r '((.strength // 0) * 100 | floor)' 2>/dev/null || echo "0")
+      if [[ "$phe_strength_int" -gt 80 ]]; then
+        phe_text=$(echo "$phe_signal" | jq -r '.content.text // ""' 2>/dev/null || echo "")
+        phe_type=$(echo "$phe_signal" | jq -r '.type // "UNKNOWN"' 2>/dev/null || echo "UNKNOWN")
+        phe_source=$(echo "$phe_signal" | jq -r '.source // "unknown"' 2>/dev/null || echo "unknown")
+        phe_id=$(echo "$phe_signal" | jq -r '.id // ""' 2>/dev/null || echo "")
+        if [[ -n "$phe_text" ]]; then
+          if bash "$0" eternal-store "$phe_text" --type "$phe_type" --source "$phe_source" --strength "$(echo "$phe_signal" | jq -r '.strength // 0')" --signal-id "$phe_id" --reason "promoted_on_expire" >/dev/null 2>&1; then
+            phe_eternal_promoted=$((phe_eternal_promoted + 1))
+          fi
+        fi
+      fi
+    done < <(echo "$phe_expired_objects" | jq -c '.[]' 2>/dev/null || true)
+
     # Update pheromones.json: set active=false for expired signals (do NOT remove them)
     phe_updated_pheromones=$(jq --argjson ids "$phe_id_array" '
       .signals = [.signals[] | if (.id as $id | $ids | any(. == $id)) then .active = false else . end]
     ' "$phe_pheromones_file" 2>/dev/null)
 
     if [[ -n "$phe_updated_pheromones" ]]; then
-      printf '%s\n' "$phe_updated_pheromones" > "$phe_pheromones_file"
+      phe_lock_held=false
+      if type acquire_lock &>/dev/null; then
+        acquire_lock "$phe_pheromones_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on pheromones.json"
+        phe_lock_held=true
+      fi
+      atomic_write "$phe_pheromones_file" "$phe_updated_pheromones" || {
+        [[ "$phe_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+        json_err "$E_JSON_INVALID" "Failed to write pheromones.json"
+      }
+      [[ "$phe_lock_held" == "true" ]] && release_lock 2>/dev/null || true
     fi
 
     # Append expired signals to midden.json
@@ -7291,13 +7652,22 @@ $updated_meta
     ' "$phe_midden_file" 2>/dev/null)
 
     if [[ -n "$phe_midden_updated" ]]; then
-      printf '%s\n' "$phe_midden_updated" > "$phe_midden_file"
+      phe_midden_lock_held=false
+      if type acquire_lock &>/dev/null; then
+        acquire_lock "$phe_midden_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on midden.json"
+        phe_midden_lock_held=true
+      fi
+      atomic_write "$phe_midden_file" "$phe_midden_updated" || {
+        [[ "$phe_midden_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+        json_err "$E_JSON_INVALID" "Failed to write midden.json"
+      }
+      [[ "$phe_midden_lock_held" == "true" ]] && release_lock 2>/dev/null || true
     fi
 
     phe_remaining_active=$(jq '[.signals[] | select(.active == true)] | length' "$phe_pheromones_file" 2>/dev/null || echo 0)
     phe_midden_total=$(jq '.signals | length' "$phe_midden_file" 2>/dev/null || echo 0)
 
-    json_ok "{\"expired_count\":$phe_expired_count,\"remaining_active\":$phe_remaining_active,\"midden_total\":$phe_midden_total}"
+    json_ok "{\"expired_count\":$phe_expired_count,\"remaining_active\":$phe_remaining_active,\"midden_total\":$phe_midden_total,\"eternal_promoted\":$phe_eternal_promoted}"
     ;;
 
   eternal-init)
@@ -7325,6 +7695,91 @@ $updated_meta
     fi
 
     json_ok "{\"dir\":\"$ei_eternal_dir\",\"initialized\":true,\"already_existed\":$ei_already_existed}"
+    ;;
+
+  eternal-store)
+    # Store a high-value signal in eternal memory.
+    # Usage: eternal-store <content> [--type TYPE] [--source SOURCE] [--strength N] [--signal-id ID] [--reason TEXT] [--created-at ISO8601] [--archived-at ISO8601]
+    es_content="${1:-}"
+    [[ -z "$es_content" ]] && json_err "$E_VALIDATION_FAILED" "Usage: eternal-store <content> [--type TYPE] [--source SOURCE] [--strength N] [--signal-id ID] [--reason TEXT] [--created-at ISO8601] [--archived-at ISO8601]" '{"missing":"content"}'
+
+    es_type="UNKNOWN"
+    es_source="unknown"
+    es_strength="0.0"
+    es_signal_id=""
+    es_reason="manual_store"
+    es_created_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+    es_archived_at="$es_created_at"
+
+    shift
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --type) es_type="${2:-UNKNOWN}"; shift 2 ;;
+        --source) es_source="${2:-unknown}"; shift 2 ;;
+        --strength) es_strength="${2:-0.0}"; shift 2 ;;
+        --signal-id) es_signal_id="${2:-}"; shift 2 ;;
+        --reason) es_reason="${2:-manual_store}"; shift 2 ;;
+        --created-at) es_created_at="${2:-$es_created_at}"; shift 2 ;;
+        --archived-at) es_archived_at="${2:-$es_archived_at}"; shift 2 ;;
+        *) shift ;;
+      esac
+    done
+
+    if ! [[ "$es_strength" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+      json_err "$E_VALIDATION_FAILED" "Strength must be numeric" "{\"provided\":\"$es_strength\"}"
+    fi
+
+    bash "$0" eternal-init >/dev/null 2>&1 || json_err "$E_FILE_NOT_FOUND" "Unable to initialize eternal memory"
+
+    es_memory_file="$HOME/.aether/eternal/memory.json"
+    [[ -f "$es_memory_file" ]] || json_err "$E_FILE_NOT_FOUND" "Eternal memory file not found"
+
+    if ! jq -e . "$es_memory_file" >/dev/null 2>&1; then
+      json_err "$E_JSON_INVALID" "Eternal memory JSON is invalid"
+    fi
+
+    es_entry=$(jq -n \
+      --arg content "$es_content" \
+      --arg type "$es_type" \
+      --arg source "$es_source" \
+      --arg signal_id "$es_signal_id" \
+      --arg reason "$es_reason" \
+      --arg created_at "$es_created_at" \
+      --arg archived_at "$es_archived_at" \
+      --argjson strength "$es_strength" \
+      '{
+        content: $content,
+        type: $type,
+        source: $source,
+        signal_id: $signal_id,
+        reason: $reason,
+        strength: $strength,
+        created_at: $created_at,
+        archived_at: $archived_at
+      }')
+
+    es_lock_held=false
+    if type acquire_lock &>/dev/null; then
+      acquire_lock "$es_memory_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on eternal memory"
+      es_lock_held=true
+    fi
+
+    es_updated=$(jq --argjson entry "$es_entry" '
+      .high_value_signals = ((.high_value_signals // []) + [$entry]) |
+      if (.high_value_signals | length) > 500 then .high_value_signals = .high_value_signals[-500:] else . end |
+      .last_updated = $entry.archived_at
+    ' "$es_memory_file" 2>/dev/null) || {
+      [[ "$es_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+      json_err "$E_JSON_INVALID" "Failed to update eternal memory"
+    }
+
+    atomic_write "$es_memory_file" "$es_updated" || {
+      [[ "$es_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+      json_err "$E_JSON_INVALID" "Failed to write eternal memory"
+    }
+
+    [[ "$es_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+    json_ok "{\"stored\":true,\"signal_id\":\"$es_signal_id\",\"type\":\"$es_type\"}"
     ;;
 
   midden-write)
@@ -8455,6 +8910,42 @@ EOF
     semantic-get-context "$task" "$max_results"
     ;;
 
+  entropy-score)
+    # Calculate colony entropy score (0-100). Higher means more disorder.
+    # Usage: entropy-score
+    spawn_count=0
+    failure_count=0
+    rule_count=0
+    signal_count=0
+
+    if [[ -f "$DATA_DIR/spawn-tree.txt" ]]; then
+      spawn_count=$(grep -c "|spawned$" "$DATA_DIR/spawn-tree.txt" 2>/dev/null || echo 0)
+    fi
+
+    if [[ -f "$DATA_DIR/midden/midden.json" ]]; then
+      failure_count=$(jq '[.entries[]? | select(.category == "failure")] | length' "$DATA_DIR/midden/midden.json" 2>/dev/null || echo 0)
+      if [[ "$failure_count" == "0" ]]; then
+        # Backward compatibility for older midden schema
+        failure_count=$(jq '[.signals[]? | select(.type == "failure")] | length' "$DATA_DIR/midden/midden.json" 2>/dev/null || echo 0)
+      fi
+    fi
+
+    if [[ -f "$AETHER_ROOT/.aether/QUEEN.md" ]]; then
+      rule_count=$(grep -c "^-" "$AETHER_ROOT/.aether/QUEEN.md" 2>/dev/null || echo 0)
+    fi
+
+    if [[ -f "$DATA_DIR/pheromones.json" ]]; then
+      signal_count=$(jq '.signals | length' "$DATA_DIR/pheromones.json" 2>/dev/null || echo 0)
+    fi
+
+    raw_score=$(( (spawn_count * 2) + (failure_count * 5) + signal_count - (rule_count / 2) ))
+    score=$raw_score
+    [[ "$score" -lt 0 ]] && score=0
+    [[ "$score" -gt 100 ]] && score=100
+
+    json_ok "{\"score\":$score,\"spawn_count\":$spawn_count,\"failure_count\":$failure_count,\"rule_count\":$rule_count,\"signal_count\":$signal_count,\"raw\":$raw_score}"
+    ;;
+
   memory-metrics)
     # Aggregate memory health metrics from all data sources
     # Usage: memory-metrics
@@ -8502,20 +8993,20 @@ EOF
     learning_captured="null"
     if [[ -f "$observations_file" ]]; then
       # Get threshold for each wisdom type
-      thresholds=$(bash "$0" queen-thresholds 2>/dev/null | jq -r '.result // {}')
+      thresholds=$(bash "$0" queen-thresholds 2>/dev/null | jq -c '.result // {}')
 
       # Count observations meeting thresholds that aren't in QUEEN.md
       if [[ -f "$queen_file" ]]; then
         queen_content=$(cat "$queen_file" 2>/dev/null)
         pending_observations=$(jq --argjson thresholds "$thresholds" --arg queen "$queen_content" '
           [.observations[]? | select(
-            (.observation_count // 0) >= ($thresholds[.wisdom_type] // 1) and
+            (.observation_count // 0) >= ($thresholds[.wisdom_type].propose // 1) and
             ($queen | contains(.content) | not)
           )] | length
         ' "$observations_file" 2>/dev/null || echo "0")
       else
         pending_observations=$(jq --argjson thresholds "$thresholds" '
-          [.observations[]? | select((.observation_count // 0) >= ($thresholds[.wisdom_type] // 1))] | length
+          [.observations[]? | select((.observation_count // 0) >= ($thresholds[.wisdom_type].propose // 1))] | length
         ' "$observations_file" 2>/dev/null || echo "0")
       fi
 

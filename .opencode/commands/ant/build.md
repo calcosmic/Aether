@@ -523,6 +523,12 @@ For a single worker:
 bash .aether/aether-utils.sh context-update build-start {phase_id} {wave_1_worker_count} {wave_1_task_count}
 ```
 
+Before dispatching each worker, refresh colony context so new pheromones/memory are visible:
+```bash
+prime_result=$(bash .aether/aether-utils.sh colony-prime --compact 2>/dev/null)
+```
+Update `prompt_section` from `prime_result.result.prompt_section`.
+
 For each Wave 1 task, use Task tool with `subagent_type="aether-builder"`, include `description: "🔨 Builder {Ant-Name}: {task_description}"` (DO NOT use run_in_background - multiple Task calls in a single message run in parallel and block until complete):
 
 Log each spawn and update swarm display:
@@ -553,7 +559,7 @@ Work:
 4. Update display: bash .aether/aether-utils.sh swarm-display-update "{Ant-Name}" "builder" "excavating" "current task" "Queen" '{"read":0,"grep":0,"edit":0,"bash":0}' {progress} "fungus_garden" 50
 
 Spawn sub-workers ONLY if 3x complexity:
-- Check: bash .aether/aether-utils.sh spawn-can-spawn {depth}
+- Check: bash .aether/aether-utils.sh spawn-can-spawn {depth} --enforce
 - Generate name: bash .aether/aether-utils.sh generate-ant-name "builder"
 - Announce: "🐜 Spawning {child_name} for {reason}"
 - Log: bash .aether/aether-utils.sh spawn-log "{Ant-Name}" "builder" "{child_name}" "{task}"
@@ -637,6 +643,12 @@ Return ONLY this JSON (no other text):
 
 **Task calls return results directly (no TaskOutput needed).**
 
+Before using any worker payload, validate schema:
+```bash
+bash .aether/aether-utils.sh validate-worker-response builder '{worker_json}'
+```
+If validation fails, treat the worker as failed with blocker `invalid_worker_response`.
+
 **As each worker result arrives, IMMEDIATELY display a single completion line — do not wait for other workers:**
 
 For successful workers:
@@ -717,7 +729,7 @@ bash .aether/aether-utils.sh flag-add "blocker" "{task title}" "{failure summary
 
 If at least one worker succeeded, continue normally to the next wave.
 
-**Parse each worker's JSON output to collect:** status, files_created, files_modified, blockers
+**Parse each worker's validated JSON output to collect:** status, files_created, files_modified, blockers
 
 **Visual Mode: Render live display:**
 If `visual_mode` is true, render the in-conversation swarm display:
@@ -782,7 +794,12 @@ Return ONLY this JSON:
 
 **Task call returns results directly (no TaskOutput needed).**
 
-**Parse the Watcher's JSON response:** verification_passed, issues_found, quality_score, recommendation
+Validate watcher payload first:
+```bash
+bash .aether/aether-utils.sh validate-worker-response watcher '{watcher_json}'
+```
+
+**Parse the Watcher's validated JSON response:** verification_passed, issues_found, quality_score, recommendation
 
 **Display Watcher completion line:**
 

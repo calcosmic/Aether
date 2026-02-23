@@ -52,7 +52,10 @@ Return ONLY this JSON:
 
 **Task call returns results directly (no TaskOutput needed).**
 
-**Parse the Watcher's JSON response:** verification_passed, issues_found, quality_score, recommendation
+Validate watcher payload first:
+Run using the Bash tool with description "Validating watcher response...": `bash .aether/aether-utils.sh validate-worker-response watcher '{watcher_json}'`
+
+**Parse the Watcher's validated JSON response:** verification_passed, issues_found, quality_score, recommendation
 
 **Display Watcher completion line:**
 

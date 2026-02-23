@@ -711,6 +711,9 @@ If `is_integration_phase` is `"true"`:
 **First, mark build start in context:**
 Run using the Bash tool with description "Marking build start...": `bash .aether/aether-utils.sh context-update build-start {phase_id} {wave_1_worker_count} {wave_1_task_count}`
 
+Before dispatching each worker, refresh colony context so new pheromones/memory are visible:
+Run using the Bash tool with description "Refreshing colony context...": `prime_result=$(bash .aether/aether-utils.sh colony-prime --compact 2>/dev/null)` and update `prompt_section` from `prime_result.result.prompt_section`.
+
 For each Wave 1 task, use Task tool with `subagent_type="aether-builder"`, include `description: "🔨 Builder {Ant-Name}: {task_description}"` (DO NOT use run_in_background - multiple Task calls in a single message run in parallel and block until complete):
 
 **PER WORKER:** Build graveyard caution context automatically:
@@ -790,7 +793,7 @@ EOF
 ```
 
 Spawn sub-workers ONLY if 3x complexity:
-- Check spawn budget using Bash tool with description
+- Check spawn budget using Bash tool with description: `bash .aether/aether-utils.sh spawn-can-spawn {depth} --enforce`
 - Generate name using Bash tool with description
 - Announce: "🐜 Spawning {child_name} for {reason}"
 - Log spawn using Bash tool with description
@@ -804,6 +807,10 @@ Return ONLY this JSON (no other text):
 ### Step 5.2: Process Wave 1 Results
 
 **Task calls return results directly (no TaskOutput needed).**
+
+Before using any worker payload, validate schema:
+Run using the Bash tool with description "Validating worker response...": `bash .aether/aether-utils.sh validate-worker-response builder '{worker_json}'`
+If validation fails, treat the worker as failed with blocker `invalid_worker_response`.
 
 **As each worker result arrives, IMMEDIATELY display a single completion line — do not wait for other workers:**
 
@@ -906,7 +913,7 @@ Run using the Bash tool with description "Logging escalation...": `bash .aether/
 
 If at least one worker succeeded, continue normally to the next wave.
 
-**Parse each worker's JSON output to collect:** status, files_created, files_modified, blockers
+**Parse each worker's validated JSON output to collect:** status, files_created, files_modified, blockers
 
 **Visual Mode: Render live display (tmux only):**
 If `visual_mode` is true AND the build is running inside a tmux session (`$TMUX` environment variable is set), run using the Bash tool with description "Rendering build progress...": `bash .aether/aether-utils.sh swarm-display-text "$build_id"`
@@ -977,7 +984,10 @@ Return ONLY this JSON:
 
 **Task call returns results directly (no TaskOutput needed).**
 
-**Parse the Watcher's JSON response:** verification_passed, issues_found, quality_score, recommendation
+Validate watcher payload first:
+Run using the Bash tool with description "Validating watcher response...": `bash .aether/aether-utils.sh validate-worker-response watcher '{watcher_json}'`
+
+**Parse the Watcher's validated JSON response:** verification_passed, issues_found, quality_score, recommendation
 
 **Display Watcher completion line:**
 

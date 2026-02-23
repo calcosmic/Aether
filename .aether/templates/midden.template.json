@@ -3,5 +3,11 @@
   "_version": "1.0",
   "_instructions": "Write to .aether/data/midden/midden.json. No substitution needed. Remove underscore-prefixed keys.",
   "version": "1.0.0",
-  "signals": []
+  "signals": [],
+  "spawn_metrics": {
+    "total_spawned": 0,
+    "completed": 0,
+    "failed": 0,
+    "efficiency_pct": 0
+  }
 }

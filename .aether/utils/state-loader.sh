@@ -72,7 +72,7 @@ load_colony_state() {
 
     # Validate state before loading
     local validation
-    validation=$(bash "$SCRIPT_DIR/aether-utils.sh" validate-state colony 2>/dev/null)
+    validation=$(AETHER_STATE_LOCKED=true bash "$SCRIPT_DIR/aether-utils.sh" validate-state colony 2>/dev/null)
     if ! echo "$validation" | jq -e '.result.pass' >/dev/null 2>&1; then
         # Validation failed - release lock and report error
         if type release_lock &>/dev/null; then
