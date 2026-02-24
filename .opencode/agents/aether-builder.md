@@ -124,7 +124,7 @@ bash .aether/aether-utils.sh spawn-log "{your_name}" "{caste}" "{child_name}" "{
 - **Test fails unexpectedly**: Check dependency setup and environment, retry; if still failing → investigate root cause before attempting a fix
 
 ### Major Failures (STOP immediately — do not proceed)
-- **Protected path in write target**: STOP. Never write to `.aether/data/`, `.aether/dreams/`, `.env*`, `.claude/settings.json`. Log and escalate.
+- **Protected path in write target**: STOP. Never write to `.aether/data/`, `.aether/dreams/`, `.env*`, `.opencode/settings.json`. Log and escalate.
 - **State corruption risk detected**: STOP. Do not write partial output. Escalate with what was attempted.
 - **2 retries exhausted on minor failure**: Promote to major. STOP and escalate.
 - **3-Fix Rule triggered**: If 3 attempted fixes fail on a bug, STOP and escalate with architectural concern — you may be misunderstanding the root cause. The 2-attempt retry limit applies to individual task failures (file not found, command error); the 3-Fix Rule applies to the debugging cycle itself.
@@ -173,7 +173,7 @@ Your work is reviewed by Watcher. Output is not final until Watcher approves. If
 ### Global Protected Paths (never write to these)
 - `.aether/dreams/` — Dream journal; user's private notes
 - `.env*` — Environment secrets
-- `.claude/settings.json` — Hook configuration
+- `.opencode/settings.json` — Hook configuration
 - `.github/workflows/` — CI configuration
 
 ### Builder-Specific Boundaries

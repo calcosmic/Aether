@@ -8,6 +8,8 @@
 ──── 👁️🐜 Spawning {watcher_name} ────
 ```
 
+> **Platform note**: In Claude Code, use `Task tool with subagent_type`. In OpenCode, use the equivalent agent spawning mechanism for your platform (e.g., invoke the agent definition from `.opencode/agents/`).
+
 Spawn the Watcher using Task tool with `subagent_type="aether-watcher"`, include `description: "👁️ Watcher {Watcher-Name}: Independent verification"` (DO NOT use run_in_background - task blocks until complete):
 
 Run using the Bash tool with description "Dispatching watcher...": `bash .aether/aether-utils.sh spawn-log "Queen" "watcher" "{watcher_name}" "Independent verification" && bash .aether/aether-utils.sh swarm-display-update "{watcher_name}" "watcher" "observing" "Verification in progress" "Queen" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "nursery" 50`
@@ -129,6 +131,8 @@ Run using the Bash tool with description "Recording watcher completion...": `bas
 
 5. **Spawn Measurer using Task tool:**
 
+   > **Platform note**: In Claude Code, use `Task tool with subagent_type`. In OpenCode, use the equivalent agent spawning mechanism for your platform (e.g., invoke the agent definition from `.opencode/agents/`).
+
    Spawn the Measurer using Task tool with `subagent_type="aether-measurer"`, include `description: "📊 Measurer {Measurer-Name}: Performance baseline measurement"` (DO NOT use run_in_background - task blocks until complete):
 
    # FALLBACK: If "Agent type not found", use general-purpose and inject role: "You are a Measurer Ant - performance profiler that benchmarks and identifies bottlenecks."
@@ -239,6 +243,8 @@ Run using the Bash tool with description "Dispatching chaos ant...": `bash .aeth
 ```
 ──── 🎲🐜 Spawning {chaos_name} — resilience testing ────
 ```
+
+> **Platform note**: In Claude Code, use `Task tool with subagent_type`. In OpenCode, use the equivalent agent spawning mechanism for your platform (e.g., invoke the agent definition from `.opencode/agents/`).
 
 Spawn the Chaos Ant using Task tool with `subagent_type="aether-chaos"`, include `description: "🎲 Chaos {Chaos-Name}: Resilience testing"` (DO NOT use run_in_background - task blocks until complete):
 # FALLBACK: If "Agent type not found", use general-purpose and inject role: "You are a Chaos Ant - resilience tester that probes edge cases and boundary conditions."

@@ -120,7 +120,7 @@ phase_count_justification: "{if outside 3-6 range}"
 ### Global Protected Paths (never write to these)
 - `.aether/dreams/` — Dream journal; user's private notes
 - `.env*` — Environment secrets
-- `.claude/settings.json` — Hook configuration
+- `.opencode/settings.json` — Hook configuration
 - `.github/workflows/` — CI configuration
 
 ### Route-Setter-Specific Boundaries

@@ -343,8 +343,9 @@ if [[ -f "$eternal_file" ]]; then
     --arg sealed_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     --arg chamber ".aether/chambers/$chamber_name" \
     '{goal: $goal, milestone: $milestone, sealed_at: $sealed_at, chamber: $chamber}')
-  jq --argjson entry "$colony_entry" '.colonies += [$entry]' "$eternal_file" > /tmp/eternal-tmp.json \
-    && mv /tmp/eternal-tmp.json "$eternal_file"
+  tmp_eternal="$(mktemp /tmp/aether-eternal.XXXXXX)"
+  jq --argjson colony_entry "$colony_entry" '.colonies = ((.colonies // []) + [$colony_entry])' "$eternal_file" > "$tmp_eternal" \
+    && mv "$tmp_eternal" "$eternal_file"
 fi
 ```
 

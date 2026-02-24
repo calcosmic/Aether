@@ -41,17 +41,18 @@ Display header:
 📅 Colony Age: {N} days
 ```
 
-### Step 4: Show ASCII Art Anthill
+### Step 4: Show Milestone Description
 
-Read the ASCII art file for the current milestone:
-- First Mound → `.aether/visualizations/anthill-stages/first-mound.txt`
-- Open Chambers → `.aether/visualizations/anthill-stages/open-chambers.txt`
-- Brood Stable → `.aether/visualizations/anthill-stages/brood-stable.txt`
-- Ventilated Nest → `.aether/visualizations/anthill-stages/ventilated-nest.txt`
-- Sealed Chambers → `.aether/visualizations/anthill-stages/sealed-chambers.txt`
-- Crowned Anthill → `.aether/visualizations/anthill-stages/crowned-anthill.txt`
+Display the current milestone with its text description (no external file needed):
 
-Display the ASCII art with current milestone highlighted (bold/bright).
+- First Mound -- "A small pile of earth. The colony has broken ground."
+- Open Chambers -- "Tunnels branch outward. Feature work is underway."
+- Brood Stable -- "The nursery hums. Tests are consistently green."
+- Ventilated Nest -- "Air flows freely. Performance and latency are acceptable."
+- Sealed Chambers -- "Walls are hardened. Interfaces are frozen."
+- Crowned Anthill -- "The spire rises. The colony is release-ready."
+
+Display the matching description for the current milestone.
 
 ### Step 5: Show Journey Progress Bar
 
@@ -87,7 +88,7 @@ Colony Statistics:
 
 ### Edge Cases
 
-- If milestone file doesn't exist: Show error "Milestone visualization not found"
+- If milestone name is unrecognized: Show "Unknown milestone" with the raw name
 - If COLONY_STATE.json missing: "No colony initialized. Run /ant:init first."
 - If phases_completed is 0: All milestones show as upcoming except First Mound
 

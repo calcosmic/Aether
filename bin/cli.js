@@ -65,7 +65,7 @@ if (!HOME) {
 }
 
 // Claude Code paths (global)
-const COMMANDS_SRC = path.join(PACKAGE_DIR, 'commands', 'ant');
+const COMMANDS_SRC = path.join(PACKAGE_DIR, '.claude', 'commands', 'ant');
 const COMMANDS_DEST = path.join(HOME, '.claude', 'commands', 'ant');
 const AGENTS_DEST = path.join(HOME, '.claude', 'agents', 'ant');
 
@@ -737,6 +737,64 @@ function isGitRepo(repoPath) {
   }
 }
 
+// Paths that updates should preserve (never overwrite/stash as "managed")
+const UPDATE_PROTECTED_AETHER_DIRS = new Set([
+  'data',
+  'dreams',
+  'oracle',
+  'midden',
+  'checkpoints',
+  'locks',
+  'temp',
+  'archive',
+  'chambers',
+  'exchange',
+]);
+
+const UPDATE_MANAGED_PREFIXES = [
+  '.claude/commands/ant',
+  '.claude/agents/ant',
+  '.claude/rules',
+  '.opencode/commands/ant',
+  '.opencode/agents',
+];
+
+function normalizePorcelainPath(filePath) {
+  let normalized = filePath;
+
+  // For rename entries, keep only destination path: "old -> new"
+  if (normalized.includes(' -> ')) {
+    normalized = normalized.split(' -> ').pop();
+  }
+
+  // Handle quoted porcelain paths (spaces, escaped chars)
+  if (normalized.startsWith('"') && normalized.endsWith('"')) {
+    normalized = normalized
+      .slice(1, -1)
+      .replace(/\\"/g, '"')
+      .replace(/\\\\/g, '\\');
+  }
+
+  return normalized;
+}
+
+function isManagedUpdatePath(filePath) {
+  const normalized = normalizePorcelainPath(filePath);
+
+  if (normalized === '.aether' || normalized.startsWith('.aether/')) {
+    const rel = normalized === '.aether' ? '' : normalized.slice('.aether/'.length);
+    if (!rel) return true;
+
+    const first = rel.split('/')[0];
+    if (!first || first.startsWith('.')) return false;
+    if (UPDATE_PROTECTED_AETHER_DIRS.has(first)) return false;
+    if (rel === 'QUEEN.md') return false;
+    return true;
+  }
+
+  return UPDATE_MANAGED_PREFIXES.some(prefix => normalized === prefix || normalized.startsWith(`${prefix}/`));
+}
+
 function getGitDirtyFiles(repoPath, targetDirs) {
   try {
     const args = targetDirs.filter(d => fs.existsSync(path.join(repoPath, d)));
@@ -746,7 +804,14 @@ function getGitDirtyFiles(repoPath, targetDirs) {
       stdio: 'pipe',
       encoding: 'utf8',
     });
-    return result.trim().split('\n').filter(Boolean).map(line => line.slice(3));
+    const files = [];
+    for (const line of result.split('\n')) {
+      if (!line || line.length < 4) continue;
+      const filePath = line.slice(3);
+      if (!isManagedUpdatePath(filePath)) continue;
+      files.push(normalizePorcelainPath(filePath));
+    }
+    return [...new Set(files)];
   } catch {
     return [];
   }

@@ -52,6 +52,8 @@ bash .aether/aether-utils.sh spawn-complete "Hammer-42" "completed" "auth module
 
 ## Model Selection (Session-Level)
 
+> **Note**: Model selection is handled by the host IDE (Claude Code or OpenCode). The routing config below is preserved for reference only.
+
 Aether can work with different AI models through a LiteLLM proxy, but **model selection happens at the session level**, not per-worker.
 
 ### How It Works
@@ -601,6 +603,8 @@ Recommendation: {specific fix or investigation needed}
 
 ## Colonizer
 
+> Note: Colonizer is a virtual caste -- surveyor agents assume this role during /ant:colonize.
+
 🗺️ **Purpose:** Explore and index codebase structure. Build semantic understanding, detect patterns, and map dependencies. The colony's explorer -- when new territory is encountered, you venture forth to understand the landscape.
 
 **Model Context:**
@@ -623,7 +627,9 @@ Recommendation: {specific fix or investigation needed}
 
 ## Architect (Merged into Keeper)
 
-> **Note:** As of Phase 25, Architect capabilities are absorbed by the Keeper agent as "Architecture Mode". Workers named with Architect patterns still resolve to the 🏛️🐜 caste emoji. See `.opencode/agents/aether-keeper.md` for the merged definition.
+> Note: Architect responsibilities are now handled by Keeper and Route-Setter agents.
+>
+> As of Phase 25, Architect capabilities are absorbed by the Keeper agent as "Architecture Mode". Workers named with Architect patterns still resolve to the 🏛️🐜 caste emoji. See `.opencode/agents/aether-keeper.md` for the merged definition.
 
 🏛️ **Purpose:** Synthesize knowledge, extract patterns, and coordinate documentation. The colony's wisdom -- when the colony learns, you organize and preserve that knowledge.
 
@@ -691,6 +697,8 @@ Steps:
 ---
 
 ## Prime Worker
+
+> **DEPRECATED**: Prime Worker has been merged into the Builder caste.
 
 🏛️ **Purpose:** Coordinate complex, multi-step colony operations. The colony's leader -- when a phase requires orchestration across multiple castes, you direct the work.
 

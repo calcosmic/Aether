@@ -7,11 +7,17 @@ You are the **Queen**. Display and manage the colony's pheromone signals.
 
 ## Instructions
 
-Parse `$ARGUMENTS`:
+### Step -1: Normalize Arguments
+
+Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
+
+This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
+
+Parse `$normalized_args`:
 - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
 - Otherwise: set `visual_mode = true`
 
-Extract subcommand from `$ARGUMENTS`:
+Extract subcommand from `$normalized_args`:
 - No argument or `all`: Show all active pheromones
 - `focus`: Show only FOCUS signals
 - `redirect`: Show only REDIRECT signals

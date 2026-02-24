@@ -13,7 +13,7 @@
 | Version | v1.1.0 |
 | Slash commands | 36 (Claude + OpenCode) |
 | Agent definitions | 22 |
-| aether-utils.sh | ~8,599 lines, 94 subcommands |
+| aether-utils.sh | ~9,808 lines, 150 subcommands |
 | Tests | 490+ passing |
 | Architecture doc | `RUNTIME UPDATE ARCHITECTURE.md` |
 
@@ -27,7 +27,7 @@
 │                                                                  │
 │   .aether/             ← SOURCE OF TRUTH (packaged directly)    │
 │   ├── workers.md       (edit here)                              │
-│   ├── aether-utils.sh  (7,918 lines, 134 subcommands)           │
+│   ├── aether-utils.sh  (9,808 lines, 150 subcommands)           │
 │   ├── utils/           (18 utility scripts)                     │
 │   ├── docs/            (distributed documentation)              │
 │   └── templates/       (12 templates)                           │
@@ -91,7 +91,7 @@ aether update      # or /ant:update
 ```
 .aether/
 ├── workers.md           # Worker definitions, spawn protocol
-├── aether-utils.sh      # 134 subcommands for state management
+├── aether-utils.sh      # 150 subcommands for state management
 ├── utils/               # 18 utility scripts
 │   ├── file-lock.sh     # Locking primitives
 │   ├── atomic-write.sh  # Safe file writes
@@ -184,7 +184,7 @@ Consolidated guidelines in `.claude/rules/`:
 | Niche | Chaos | Resilience testing |
 | Niche | Archaeologist | Excavates git history |
 | Niche | Gatekeeper | Security gate (NEW) |
-| Niche | Includer | Dependency analysis |
+| Niche | Includer | Accessibility audits |
 | Niche | Measurer | Performance analysis (NEW) |
 | Niche | Sage | Wisdom synthesis |
 | Niche | Ambassador | External integrations |

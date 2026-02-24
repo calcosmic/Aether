@@ -29,6 +29,7 @@ PHEROMONE COMMANDS
   /ant:focus "<area>"    Guide colony attention (priority: normal, expires: phase end)
   /ant:redirect "<pat>"  Warn away from pattern (priority: high, expires: phase end)
   /ant:feedback "<msg>"  Adjust behavior (priority: low, expires: phase end)
+  /ant:pheromones        View and manage active pheromone signals
 
 STATUS & UPDATES
 
@@ -38,27 +39,39 @@ STATUS & UPDATES
   /ant:insert-phase      Insert a corrective phase after current phase
   /ant:flags             List active flags (blockers, issues, notes)
   /ant:flag "<title>"    Create a flag (blocker, issue, or note)
+  /ant:memory-details    Show detailed colony memory — wisdom, promotions, failures
+  /ant:maturity          View colony maturity journey and milestone progress
 
 SESSION COMMANDS
 
   /ant:pause-colony      Save state and create handoff document
   /ant:resume-colony     Restore from pause (full state + context)
+  /ant:resume            Quick session restore (memory health + next steps)
   /ant:watch             Set up tmux session for live colony visibility
 
 COLONY LIFECYCLE
 
   /ant:seal             Seal colony with Crowned Anthill milestone
+  /ant:entomb           Archive completed colony into chambers
+  /ant:lay-eggs         Lay first eggs of new colony (First Eggs milestone)
   /ant:history          Browse colony event history
 
 ADVANCED
 
   /ant:swarm "<bug>"     Parallel scouts investigate stubborn bugs
+  /ant:oracle            Deep research agent using RALF iterative loop
   /ant:organize          Codebase hygiene report (stale files, dead code)
   /ant:council           Convene council for intent clarification
   /ant:dream             Philosophical wanderer — observes and writes wisdom
   /ant:interpret         Review dreams — validate against codebase, discuss action
   /ant:chaos             🎲 Resilience testing — adversarial probing of the codebase
   /ant:archaeology       🏺 Git history analysis — excavate patterns from commit history
+  /ant:tunnels           Browse archived colonies and compare chambers
+
+MAINTENANCE
+
+  /ant:migrate-state     One-time state migration from v1 to v2.0 format
+  /ant:verify-castes     Verify colony caste assignments and system status
 
 TYPICAL WORKFLOW
 

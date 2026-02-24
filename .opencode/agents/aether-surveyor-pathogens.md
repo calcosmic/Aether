@@ -1,7 +1,12 @@
 ---
 name: aether-surveyor-pathogens
 description: "Use this agent for identifying technical debt, bugs, and codebase health concerns. The pathogens surveyor detects what needs fixing."
-tools: Read, Bash, Grep, Glob, Write
+tools:
+  Read: true
+  Bash: true
+  Grep: true
+  Glob: true
+  Write: true
 ---
 
 <role>

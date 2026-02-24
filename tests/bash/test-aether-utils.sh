@@ -989,7 +989,7 @@ test_flag_add_lock_failure_error_code() {
 
     set +e
     local stderr_output
-    stderr_output=$(bash "$tmp_dir/.aether/aether-utils.sh" flag-add issue "test-lock-flag" "testing lock failure" 2>&1)
+    stderr_output=$(AETHER_STALE_LOCK_MODE=error bash "$tmp_dir/.aether/aether-utils.sh" flag-add issue "test-lock-flag" "testing lock failure" 2>&1)
     set -e
 
     # Always clean up lock files — must happen even if test fails
@@ -1239,7 +1239,7 @@ EOF
 
     local output
     set +e
-    output=$(bash "$tmp_dir/.aether/aether-utils.sh" error-add runtime high "lock test" 1 2>&1)
+    output=$(AETHER_STALE_LOCK_MODE=error bash "$tmp_dir/.aether/aether-utils.sh" error-add runtime high "lock test" 1 2>&1)
     set -e
 
     rm -rf "$tmp_dir"
@@ -1254,6 +1254,164 @@ EOF
         return 1
     fi
 
+    return 0
+}
+
+# ============================================================================
+# Test: stale lock auto-recovers in non-interactive mode (default)
+# ============================================================================
+test_flag_add_stale_lock_auto_recovers() {
+    local tmp_dir
+    tmp_dir=$(setup_isolated_env)
+
+    # Create flags.json so flag-add can proceed
+    echo '{"version":1,"flags":[]}' > "$tmp_dir/.aether/data/flags.json"
+
+    # Pre-create stale lock with dead PID
+    local lock_dir="$tmp_dir/.aether/locks"
+    local lock_file="$lock_dir/flags.json.lock"
+    local lock_pid_file="${lock_file}.pid"
+    mkdir -p "$lock_dir"
+    echo "99999" > "$lock_file"
+    echo "99999" > "$lock_pid_file"
+
+    local output
+    output=$(bash "$tmp_dir/.aether/aether-utils.sh" flag-add issue "stale-recovery" "auto cleanup path" 2>&1)
+
+    if ! assert_json_valid "$output"; then
+        test_fail "valid JSON" "$output"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    if ! assert_ok_true "$output"; then
+        test_fail '{"ok":true}' "$output"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    if [[ -f "$lock_file" || -f "$lock_pid_file" ]]; then
+        test_fail "stale lock files removed" "lock files still present"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    local count
+    count=$(jq '.flags | length' "$tmp_dir/.aether/data/flags.json" 2>/dev/null || echo "0")
+    if [[ "$count" -ne 1 ]]; then
+        test_fail "flags.json contains new flag" "count=$count"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    rm -rf "$tmp_dir"
+    return 0
+}
+
+# ============================================================================
+# Test: force-unlock --stale-only removes stale locks but preserves live locks
+# ============================================================================
+test_force_unlock_stale_only() {
+    local tmp_dir
+    tmp_dir=$(setup_isolated_env)
+
+    local lock_dir="$tmp_dir/.aether/locks"
+    mkdir -p "$lock_dir"
+
+    local stale_lock="$lock_dir/stale-resource.lock"
+    local stale_pid="$stale_lock.pid"
+    echo "99999" > "$stale_lock"
+    echo "99999" > "$stale_pid"
+
+    local live_lock="$lock_dir/live-resource.lock"
+    local live_pid="$live_lock.pid"
+    echo "$$" > "$live_lock"
+    echo "$$" > "$live_pid"
+
+    local output
+    output=$(bash "$tmp_dir/.aether/aether-utils.sh" force-unlock --stale-only 2>&1)
+
+    if ! assert_json_valid "$output"; then
+        test_fail "valid JSON" "$output"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    if ! assert_ok_true "$output"; then
+        test_fail '{"ok":true}' "$output"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    local removed skipped
+    removed=$(echo "$output" | jq -r '.result.removed // -1')
+    skipped=$(echo "$output" | jq -r '.result.skipped_live // -1')
+    if [[ "$removed" -ne 1 || "$skipped" -ne 1 ]]; then
+        test_fail "removed=1 and skipped_live=1" "removed=$removed skipped_live=$skipped"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    if [[ -f "$stale_lock" || -f "$stale_pid" ]]; then
+        test_fail "stale lock removed" "stale lock still present"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    if [[ ! -f "$live_lock" || ! -f "$live_pid" ]]; then
+        test_fail "live lock preserved" "live lock removed unexpectedly"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    rm -rf "$tmp_dir"
+    return 0
+}
+
+# ============================================================================
+# Test: session-update argument mapping uses post-dispatch positions
+# ============================================================================
+test_session_update_argument_mapping() {
+    local tmp_dir
+    tmp_dir=$(setup_isolated_env)
+
+    local output
+    output=$(bash "$tmp_dir/.aether/aether-utils.sh" session-update "/ant:continue" "/ant:build 2" "Phase advanced" 2>&1)
+
+    local json_line
+    json_line=$(echo "$output" | grep '"ok":' | tail -1)
+
+    if ! assert_json_valid "$json_line"; then
+        test_fail "valid JSON" "$output"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    if ! assert_ok_true "$json_line"; then
+        test_fail '{"ok":true}' "$output"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    local session_file="$tmp_dir/.aether/data/session.json"
+    if [[ ! -f "$session_file" ]]; then
+        test_fail "session.json created by session-update" "missing session.json"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    local cmd suggested summary
+    cmd=$(jq -r '.last_command // empty' "$session_file" 2>/dev/null || echo "")
+    suggested=$(jq -r '.suggested_next // empty' "$session_file" 2>/dev/null || echo "")
+    summary=$(jq -r '.summary // empty' "$session_file" 2>/dev/null || echo "")
+
+    if [[ "$cmd" != "/ant:continue" || "$suggested" != "/ant:build 2" || "$summary" != "Phase advanced" ]]; then
+        test_fail "session fields match provided args" "last_command=$cmd suggested_next=$suggested summary=$summary"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    rm -rf "$tmp_dir"
     return 0
 }
 
@@ -1501,6 +1659,7 @@ main() {
     run_test "test_flag_resolve_missing_flags_file_error_code" "flag-resolve missing flags.json returns E_FILE_NOT_FOUND (ERR-04)"
     run_test "test_flag_add_missing_args_error_code" "flag-add missing args returns E_VALIDATION_FAILED (ERR-04)"
     run_test "test_flag_add_lock_failure_error_code" "flag-add with held lock returns E_LOCK_FAILED (ERR-04)"
+    run_test "test_flag_add_stale_lock_auto_recovers" "flag-add auto-recovers from stale lock in non-interactive mode"
 
     # ARCH-09/10/03: startup ordering, composed trap, spawn-tree rotation regression tests
     run_test "test_feature_detection_after_fallbacks" "feature detection block is after fallback json_err (ARCH-09)"
@@ -1521,6 +1680,8 @@ main() {
     # Framework hardening regressions (state lock, spawn enforcement, memory lifecycle)
     run_test "test_spawn_can_spawn_enforce" "spawn-can-spawn --enforce hard-fails when cap exceeded"
     run_test "test_error_add_lock_failure_error_code" "error-add with held state lock returns E_LOCK_FAILED"
+    run_test "test_force_unlock_stale_only" "force-unlock --stale-only removes stale locks and preserves live locks"
+    run_test "test_session_update_argument_mapping" "session-update maps args correctly after dispatch shift"
     run_test "test_queen_thresholds_command" "queen-thresholds returns propose/auto values"
     run_test "test_validate_worker_response_builder" "validate-worker-response enforces builder schema"
     run_test "test_spawn_efficiency_command" "spawn-efficiency reports totals and efficiency percentage"

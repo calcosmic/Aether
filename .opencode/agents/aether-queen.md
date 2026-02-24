@@ -270,7 +270,7 @@ Queen's phase completion evidence and critical state changes (colony goal update
 ### Global Protected Paths (never write to these)
 - `.aether/dreams/` — Dream journal; user's private notes
 - `.env*` — Environment secrets
-- `.claude/settings.json` — Hook configuration
+- `.opencode/settings.json` — Hook configuration
 - `.github/workflows/` — CI configuration
 
 ### Queen-Specific Boundaries

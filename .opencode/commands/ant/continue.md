@@ -31,7 +31,7 @@ bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "
 
 ### Step 0.5: Version Check (Non-blocking)
 
-Run using the Bash tool: `bash .aether/aether-utils.sh version-check 2>/dev/null || true`
+Run using the Bash tool: `bash .aether/aether-utils.sh version-check-cached 2>/dev/null || true`
 
 If the command succeeds and the JSON result contains a non-empty string, display it as a one-line notice. Proceed regardless of outcome.
 
@@ -115,7 +115,7 @@ Interpretation:
 
 Survey context is advisory only and must not block advancement by itself.
 
-### Step 1.5: Verification Loop Gate (MANDATORY)
+### Step 1.5.3: Verification Loop Gate (MANDATORY)
 
 **The Iron Law:** No phase advancement without fresh verification evidence.
 
@@ -185,7 +185,73 @@ Record: pass count, fail count, exit code. **STOP if fails.**
 ```
 Record: coverage percentage (target: 80%+ for new code)
 
-**Phase 5: Security Scan**:
+#### Step 1.5.1: Probe Coverage Agent (Conditional)
+
+**Test coverage improvement -- runs when coverage < 80% AND tests pass.**
+
+1. **Check coverage threshold condition:**
+   - Coverage data is already available from Phase 4 coverage check
+   - If tests failed: Skip Probe silently (coverage data unreliable)
+   - If coverage_percent >= 80%: Skip Probe silently, continue to Phase 5
+   - If coverage_percent < 80% AND tests passed: Proceed to spawn Probe
+
+2. **If skipping Probe:**
+```
+Probe: Coverage at {coverage_percent}% -- {reason_for_skip}
+```
+Continue to Phase 5: Secrets Scan.
+
+3. **If spawning Probe:**
+
+   a. Generate Probe name and dispatch:
+   Run using the Bash tool with description "Generating Probe name...": `probe_name=$(bash .aether/aether-utils.sh generate-ant-name "probe") && bash .aether/aether-utils.sh spawn-log "Queen" "probe" "$probe_name" "Coverage improvement: ${coverage_percent}%" && echo "{\"name\":\"$probe_name\"}"`
+
+   b. Update swarm display (if visual_mode is true):
+   Run using the Bash tool with description "Updating swarm display...": `bash .aether/aether-utils.sh swarm-display-update "$probe_name" "probe" "scanning" "Coverage improvement" "Quality" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0`
+
+   c. Display: `Probe {probe_name} spawning -- Coverage at {coverage_percent}%, generating tests for uncovered paths...`
+
+   d. Determine uncovered files:
+   Run using the Bash tool with description "Getting modified source files...": `modified_source_files=$(git diff --name-only HEAD~1 2>/dev/null || git diff --name-only) && source_files=$(echo "$modified_source_files" | grep -v "\.test\." | grep -v "\.spec\." | grep -v "__tests__") && echo "$source_files"`
+
+   e. Spawn Probe agent:
+
+   > **Platform note**: In Claude Code, use `Task tool with subagent_type="aether-probe"`. In OpenCode, use the equivalent agent spawning mechanism for your platform (e.g., invoke the aether-probe agent definition from `.opencode/agents/aether-probe.md`).
+
+   Probe mission: Improve test coverage for uncovered code paths in the modified files.
+   - Analyze the modified source files for uncovered branches and edge cases
+   - Identify which paths lack test coverage
+   - Generate test cases that exercise uncovered code paths
+   - Run the new tests to verify they pass
+   - Report coverage improvements and edge cases discovered
+
+   Constraints:
+   - Test files ONLY -- never modify source code
+   - Follow existing test conventions in the codebase
+   - Do NOT delete or modify existing tests
+
+   f. Parse Probe JSON output and log completion:
+   Extract: `tests_added`, `coverage.lines`, `coverage.branches`, `coverage.functions`, `edge_cases_discovered`
+
+   Run using the Bash tool with description "Logging Probe completion...": `bash .aether/aether-utils.sh spawn-complete "$probe_name" "completed" "{probe_summary}"`
+
+   g. Log findings to midden:
+   Run using the Bash tool with description "Logging Probe findings to midden...": `bash .aether/aether-utils.sh midden-write "coverage" "Probe generated tests, coverage: ${coverage_lines}%/${coverage_branches}%/${coverage_functions}%" "probe"`
+
+4. **NON-BLOCKING continuation:**
+   Display Probe findings summary:
+   ```
+   Probe complete -- Findings logged to midden, continuing verification...
+      Tests added: {count}
+      Edge cases discovered: {count}
+   ```
+
+   **CRITICAL:** ALWAYS continue to Phase 5 (Secrets Scan) regardless of Probe results. Probe is strictly non-blocking.
+
+5. **Record Probe status for verification report:**
+   Set `probe_status = "ACTIVE"` and store tests_added count and edge_cases count for the verification report.
+
+**Phase 5: Secrets Scan**:
 ```bash
 # Check for exposed secrets
 grep -rn "sk-\|api_key\|password\s*=" --include="*.ts" --include="*.js" --include="*.py" src/ 2>/dev/null | head -10
@@ -219,7 +285,10 @@ Display:
 🧹 Lint         [PASS/FAIL/SKIP] (X warnings)
 🧪 Tests        [PASS/FAIL/SKIP] (X/Y passed)
    Coverage     {percent}% (target: 80%)
-🔒 Security     [PASS/FAIL] (X issues)
+   🧪 Probe     [ACTIVE/SKIP] (tests added: X, edge cases: Y)
+🔒 Secrets      [PASS/FAIL] (X issues)
+📦 Gatekeeper   [PASS/WARN/SKIP] (X critical, X high)
+👥 Auditor      [PASS/FAIL] (score: X/100)
 📋 Diff         [X files changed]
 
 ──────────────────────────────────────────────────
@@ -404,9 +473,296 @@ Run /ant:build {phase} again after fixing.
 
 Do NOT proceed to Step 2.
 
-If no CRITICAL issues, continue to Step 1.8.
+If no CRITICAL issues, continue to Step 1.7.1.
 
-### Step 1.8: TDD Evidence Gate (MANDATORY)
+### Step 1.7.1: Proactive Refactoring Gate (Conditional)
+
+**Complexity-based refactoring -- runs when code exceeds maintainability thresholds.**
+
+1. **Get modified/created files from recent work:**
+   Run using the Bash tool with description "Getting modified files for complexity check...": `modified_files=$(git diff --name-only HEAD~1 2>/dev/null || git diff --name-only) && echo "$modified_files"`
+
+2. **Check complexity thresholds for each file:**
+
+   For each file, check:
+   - Line count > 300 lines
+   - Long functions > 50 lines (simplified heuristic)
+   - Directory density > 10 new files
+
+   Run using the Bash tool with description "Checking complexity thresholds...":
+   ```bash
+   modified_files=$(git diff --name-only HEAD~1 2>/dev/null || git diff --name-only)
+
+   complexity_trigger=false
+   files_needing_refactor=""
+
+   for file in $modified_files; do
+     if [[ -f "$file" ]]; then
+       line_count=$(wc -l < "$file" 2>/dev/null || echo "0")
+       if [[ "$line_count" -gt 300 ]]; then
+         complexity_trigger=true
+         files_needing_refactor="$files_needing_refactor $file"
+         continue
+       fi
+
+       long_funcs=$(grep -c "^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_]*[[:space:]]*(" "$file" 2>/dev/null || echo "0")
+       if [[ "$long_funcs" -gt 50 ]]; then
+         complexity_trigger=true
+         files_needing_refactor="$files_needing_refactor $file"
+       fi
+     fi
+   done
+
+   if [[ -n "$modified_files" ]]; then
+     dir_counts=$(echo "$modified_files" | xargs -I {} dirname {} 2>/dev/null | sort | uniq -c | sort -rn)
+     high_density_dir=$(echo "$dir_counts" | awk '$1 > 10 {print $2}' | head -1)
+     if [[ -n "$high_density_dir" ]]; then
+       complexity_trigger=true
+     fi
+   fi
+
+   echo "{\"complexity_trigger\": \"$complexity_trigger\", \"files_needing_refactor\": \"$files_needing_refactor\"}"
+   ```
+
+3. **If complexity thresholds NOT exceeded:**
+   ```
+   Weaver: Complexity thresholds not exceeded -- skipping proactive refactoring
+   ```
+   Continue to Step 1.8.
+
+4. **If complexity thresholds exceeded:**
+
+   a. **Establish test baseline before refactoring:**
+   Run using the Bash tool with description "Establishing test baseline...": `test_output_before=$(npm test 2>&1 || echo "TEST_FAILED") && tests_passing_before=$(echo "$test_output_before" | grep -oE '[0-9]+ passing' | grep -oE '[0-9]+' || echo "0") && echo "Baseline: $tests_passing_before tests passing"`
+
+   b. **Generate Weaver name and dispatch:**
+   Run using the Bash tool with description "Generating Weaver name...": `weaver_name=$(bash .aether/aether-utils.sh generate-ant-name "weaver") && bash .aether/aether-utils.sh spawn-log "Queen" "weaver" "$weaver_name" "Proactive refactoring" && echo "{\"name\":\"$weaver_name\"}"`
+
+   c. **Update swarm display (if visual_mode is true):**
+   Run using the Bash tool with description "Updating swarm display...": `bash .aether/aether-utils.sh swarm-display-update "$weaver_name" "weaver" "refactoring" "Proactive refactoring" "Quality" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0`
+
+   d. **Display:** `Weaver {weaver_name} spawning -- Refactoring complex code...`
+
+   e. **Spawn Weaver agent:**
+
+   > **Platform note**: In Claude Code, use `Task tool with subagent_type="aether-weaver"`. In OpenCode, use the equivalent agent spawning mechanism for your platform (e.g., invoke the aether-weaver agent definition from `.opencode/agents/aether-weaver.md`).
+
+   Weaver mission: Refactor complex code to improve maintainability while preserving behavior.
+   - Analyze target files for complexity issues
+   - Plan incremental refactoring steps
+   - Execute one step at a time
+   - Run tests after each step
+   - If tests pass, continue; if fail, revert and try smaller step
+   - Report all changes made
+
+   Constraints:
+   - NEVER change behavior -- only structure
+   - Run tests after each refactoring step
+   - If tests fail, revert immediately
+   - Do NOT modify test expectations to make tests pass
+   - Do NOT modify .aether/ system files
+
+   f. **Parse Weaver JSON output and verify tests:**
+   Extract: `files_refactored`, `tests_all_passing`, `complexity_before`, `complexity_after`
+
+   Run using the Bash tool with description "Verifying tests after refactoring...":
+   ```bash
+   test_output_after=$(npm test 2>&1 || echo "TEST_FAILED")
+   tests_passing_after=$(echo "$test_output_after" | grep -oE '[0-9]+ passing' | grep -oE '[0-9]+' || echo "0")
+
+   if [[ "$tests_passing_after" -lt "$tests_passing_before" ]]; then
+     echo "REVERT_NEEDED: Tests failed after refactoring"
+     git checkout -- $files_needing_refactor
+     weaver_status="reverted"
+   else
+     echo "PASSING: Tests passing after refactoring ($tests_passing_after)"
+     weaver_status="completed"
+   fi
+   ```
+
+   g. **Log completion:**
+   Run using the Bash tool with description "Logging Weaver completion...": `bash .aether/aether-utils.sh spawn-complete "$weaver_name" "$weaver_status" "Refactoring $weaver_status"`
+
+   h. **Log to midden:**
+   Run using the Bash tool with description "Logging refactoring activity to midden...": `bash .aether/aether-utils.sh midden-write "refactoring" "Weaver refactored files, complexity before/after: ${complexity_before}/${complexity_after}" "weaver"`
+
+5. **Display completion:**
+   ```
+   Weaver: Proactive refactoring {weaver_status}
+      Files refactored: {count} | Complexity: {before} -> {after}
+   ```
+
+6. **NON-BLOCKING continuation:**
+   The Weaver step is NON-BLOCKING -- continue to Step 1.8 regardless of refactoring results.
+
+Continue to Step 1.8.
+
+### Step 1.8: Gatekeeper Security Gate (Conditional)
+
+**Supply chain security audit -- runs only when package.json exists.**
+
+First, check for package.json:
+Run using the Bash tool with description "Checking for package.json...": `test -f package.json && echo "exists" || echo "missing"`
+
+**If package.json is missing:**
+```
+Gatekeeper: No package.json found -- skipping supply chain audit
+```
+Continue to Step 1.9.
+
+**If package.json exists:**
+
+1. Generate Gatekeeper name and log spawn:
+Run using the Bash tool with description "Generating Gatekeeper name...": `gatekeeper_name=$(bash .aether/aether-utils.sh generate-ant-name "gatekeeper") && bash .aether/aether-utils.sh spawn-log "Queen" "gatekeeper" "$gatekeeper_name" "Supply chain security audit" && echo "{\"name\":\"$gatekeeper_name\"}"`
+
+2. Update swarm display (if visual_mode is true):
+Run using the Bash tool with description "Updating swarm display...": `bash .aether/aether-utils.sh swarm-display-update "$gatekeeper_name" "gatekeeper" "scanning" "CVE and license audit" "Security" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0`
+
+3. Display: `Gatekeeper {name} spawning -- Scanning dependencies for CVEs and license compliance...`
+
+4. Spawn Gatekeeper agent:
+
+> **Platform note**: In Claude Code, use `Task tool with subagent_type="aether-gatekeeper"`. In OpenCode, use the equivalent agent spawning mechanism for your platform (e.g., invoke the aether-gatekeeper agent definition from `.opencode/agents/aether-gatekeeper.md`).
+
+Gatekeeper mission: Perform supply chain security audit on this codebase.
+- Inventory all dependencies from package.json
+- Scan for known CVEs using npm audit or equivalent
+- Check license compliance for all packages
+- Assess dependency health (outdated, deprecated, maintenance status)
+- Report findings with severity levels
+
+5. Parse Gatekeeper JSON output and log completion:
+Extract: `security.critical`, `security.high`, `status`
+
+Run using the Bash tool with description "Logging Gatekeeper completion...": `bash .aether/aether-utils.sh spawn-complete "$gatekeeper_name" "completed" "{gatekeeper_summary}"`
+
+**Gate Decision Logic:**
+
+- **If `security.critical > 0`:**
+```
+GATEKEEPER GATE FAILED
+
+Critical security vulnerabilities detected: {critical_count}
+
+CRITICAL CVEs must be fixed before phase advancement.
+
+Required Actions:
+  1. Run `npm audit` to see full details
+  2. Fix or update vulnerable dependencies
+  3. Run /ant:continue again after resolving
+
+The phase will NOT advance with critical CVEs.
+```
+**CRITICAL:** Do NOT proceed to Step 1.9. Stop here.
+
+- **If `security.high > 0`:**
+```
+Gatekeeper: {high_count} high-severity issues found
+
+Security warnings logged to midden for later review.
+Proceeding with caution...
+```
+Run using the Bash tool with description "Logging high-severity warnings...": `bash .aether/aether-utils.sh midden-write "security" "High CVEs found: $high_count" "gatekeeper"`
+Continue to Step 1.9.
+
+- **If clean (no critical or high):**
+```
+Gatekeeper: No critical security issues found
+```
+Continue to Step 1.9.
+
+### Step 1.9: Auditor Quality Gate (MANDATORY)
+
+**Code quality audit -- runs on every `/ant:continue` for consistent coverage.**
+
+1. Generate Auditor name and log spawn:
+Run using the Bash tool with description "Generating Auditor name...": `auditor_name=$(bash .aether/aether-utils.sh generate-ant-name "auditor") && bash .aether/aether-utils.sh spawn-log "Queen" "auditor" "$auditor_name" "Code quality audit" && echo "{\"name\":\"$auditor_name\"}"`
+
+2. Update swarm display (if visual_mode is true):
+Run using the Bash tool with description "Updating swarm display...": `bash .aether/aether-utils.sh swarm-display-update "$auditor_name" "auditor" "reviewing" "Multi-lens code analysis" "Quality" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0`
+
+3. Display: `Auditor {name} spawning -- Reviewing code with multi-lens analysis...`
+
+4. Get modified files for audit context:
+Run using the Bash tool with description "Getting modified files...": `modified_files=$(git diff --name-only HEAD~1 2>/dev/null || git diff --name-only) && echo "$modified_files"`
+
+5. Spawn Auditor agent:
+
+> **Platform note**: In Claude Code, use `Task tool with subagent_type="aether-auditor"`. In OpenCode, use the equivalent agent spawning mechanism for your platform (e.g., invoke the aether-auditor agent definition from `.opencode/agents/aether-auditor.md`).
+
+Auditor mission: Perform comprehensive code quality audit on this codebase.
+- Review all modified files from the recent commit(s)
+- Apply all 4 audit lenses: security, performance, quality, maintainability
+- Score each finding by severity (CRITICAL/HIGH/MEDIUM/LOW/INFO)
+- Calculate overall quality score (0-100)
+- Document specific issues with file:line references and fix suggestions
+
+6. Parse Auditor JSON output and log completion:
+Extract: `findings.critical`, `findings.high`, `findings.medium`, `findings.low`, `findings.info`, `overall_score`, `dimensions_audited`
+
+Run using the Bash tool with description "Logging Auditor completion...": `bash .aether/aether-utils.sh spawn-complete "$auditor_name" "completed" "{auditor_summary}"`
+
+**Gate Decision Logic:**
+
+- **If `findings.critical > 0`:**
+```
+AUDITOR GATE FAILED
+
+Critical code quality issues detected: {critical_count}
+
+CRITICAL findings must be fixed before phase advancement.
+
+Required Actions:
+  1. Review the critical issues listed below
+  2. Fix each critical finding
+  3. Run /ant:continue again after resolving
+
+Critical Findings:
+{list each critical finding with file:line and description}
+
+The phase will NOT advance with critical quality issues.
+```
+Run using the Bash tool with description "Logging critical quality block...": `bash .aether/aether-utils.sh error-flag-pattern "auditor-critical-findings" "$critical_count critical quality issues found" "critical"`
+**CRITICAL:** Do NOT proceed to Step 1.10. Stop here.
+
+- **Else if `overall_score < 60`:**
+```
+AUDITOR GATE FAILED
+
+Code quality score below threshold: {overall_score}/100 (threshold: 60)
+
+Quality score must reach 60+ before phase advancement.
+
+Required Actions:
+  1. Address the top issues preventing score improvement
+  2. Focus on HIGH severity items first
+  3. Run /ant:continue again after improving quality
+
+The phase will NOT advance with quality score below 60.
+```
+Run using the Bash tool with description "Logging quality score block...": `bash .aether/aether-utils.sh error-flag-pattern "auditor-quality-score" "Score $overall_score below threshold 60" "critical"`
+**CRITICAL:** Do NOT proceed to Step 1.10. Stop here.
+
+- **Else if `findings.high > 0`:**
+```
+Auditor: Quality score {overall_score}/100 -- PASSED with warnings
+
+{high_count} high-severity quality issues found:
+{list high findings}
+
+Quality warnings logged to midden for later review.
+Proceeding with caution...
+```
+Run using the Bash tool with description "Logging high-quality warnings...": `bash .aether/aether-utils.sh midden-write "quality" "High severity issues: $high_count (score: $overall_score)" "auditor"`
+Continue to Step 1.10.
+
+- **If clean (score >= 60, no critical):**
+```
+Auditor: Quality score {overall_score}/100 -- PASSED
+```
+Continue to Step 1.10.
+
+### Step 1.10: TDD Evidence Gate (MANDATORY)
 
 **The Iron Law:** No TDD claims without actual test files.
 
@@ -448,9 +804,9 @@ bash .aether/aether-utils.sh error-flag-pattern "fabricated-tdd" "Prime Worker r
 
 **If tests_added == 0 or test files exist matching claims:**
 
-Continue to Step 1.9.
+Continue to Step 1.11.
 
-### Step 1.9: Runtime Verification Gate (MANDATORY)
+### Step 1.11: Runtime Verification Gate (MANDATORY)
 
 **The Iron Law:** Build passing ≠ App working.
 
@@ -478,7 +834,7 @@ Options:
 ```
 ✅🐜 RUNTIME VERIFIED — User confirmed app works.
 ```
-Continue to Step 2.
+Continue to Step 1.12.
 
 **If "Yes, tested but has issues":**
 ```
@@ -517,9 +873,9 @@ User indicated no runnable app for this phase.
 Proceeding to phase advancement.
 ```
 
-Continue to Step 1.10.
+Continue to Step 1.12.
 
-### Step 1.10: Flags Gate (MANDATORY)
+### Step 1.12: Flags Gate (MANDATORY)
 
 **The Iron Law:** No phase advancement with unresolved blockers.
 
@@ -641,7 +997,7 @@ Update COLONY_STATE.json:
      echo "$current_phase_learnings" | jq -r '.learnings[]?.claim // empty' 2>/dev/null | while read -r claim; do
        if [[ -n "$claim" ]]; then
          # Default wisdom_type to "pattern" (threshold: 3 observations)
-         bash .aether/aether-utils.sh learning-observe "$claim" "pattern" "$colony_name" 2>/dev/null || true
+         bash .aether/aether-utils.sh memory-capture "learning" "$claim" "pattern" "worker:continue" 2>/dev/null || true
        fi
      done
      echo "Recorded observations for threshold tracking"
@@ -716,7 +1072,106 @@ Update COLONY_STATE.json:
 
 Write COLONY_STATE.json.
 
-### Step 2.3: Update Handoff Document
+Validate the state file:
+Run using the Bash tool with description "Validating colony state...": `bash .aether/aether-utils.sh validate-state colony`
+
+### Step 2.1: Auto-Emit Phase Pheromones (SILENT)
+
+**This entire step produces NO user-visible output.** All pheromone operations run silently -- learnings are deposited in the background. If any pheromone call fails, log the error and continue. Phase advancement must never fail due to pheromone errors.
+
+#### 2.1a: Auto-emit FEEDBACK pheromone for phase outcome
+
+After learning extraction completes in Step 2, auto-emit a FEEDBACK signal summarizing the phase:
+
+```bash
+# phase_id and phase_name come from Step 2 state update
+# Take the top 1-3 learnings by evidence strength from memory.phase_learnings
+# Compress into a single summary sentence
+
+phase_feedback="Phase $phase_id ($phase_name) completed. Key patterns: {brief summary of 1-3 learnings from Step 2}"
+# Fallback if no learnings: "Phase $phase_id ($phase_name) completed without notable patterns."
+
+bash .aether/aether-utils.sh pheromone-write FEEDBACK "$phase_feedback" \
+  --strength 0.6 \
+  --source "worker:continue" \
+  --reason "Auto-emitted on phase advance: captures what worked and what was learned" \
+  --ttl "30d" 2>/dev/null || true
+```
+
+The strength is 0.6 (auto-emitted = lower than user-emitted 0.7). Source is "worker:continue" to distinguish from user-emitted feedback. TTL is 30d so it survives phase transitions and can guide subsequent work.
+
+#### 2.1b: Auto-emit REDIRECT for recurring error patterns
+
+Check `errors.flagged_patterns[]` in COLONY_STATE.json for patterns that have appeared in 2+ phases:
+
+```bash
+flagged_patterns=$(jq -r '.errors.flagged_patterns[]? | select(.count >= 2) | .pattern' .aether/data/COLONY_STATE.json 2>/dev/null || true)
+```
+
+For each pattern returned by the above query, emit a REDIRECT signal:
+
+```bash
+bash .aether/aether-utils.sh pheromone-write REDIRECT "$pattern_text" \
+  --strength 0.7 \
+  --source "system" \
+  --reason "Auto-emitted: error pattern recurred across 2+ phases" \
+  --ttl "30d" 2>/dev/null || true
+```
+
+Also capture each recurring pattern as a resolution candidate:
+
+```bash
+bash .aether/aether-utils.sh memory-capture \
+  "resolution" \
+  "$pattern_text" \
+  "pattern" \
+  "worker:continue" 2>/dev/null || true
+```
+
+If `errors.flagged_patterns` doesn't exist or is empty, skip silently.
+
+#### 2.1c: Expire phase_end signals and archive to midden
+
+After auto-emission, expire all signals with `expires_at == "phase_end"`:
+
+Run using the Bash tool with description "Maintaining pheromone memory...": `bash .aether/aether-utils.sh pheromone-expire --phase-end-only 2>/dev/null && bash .aether/aether-utils.sh eternal-init 2>/dev/null`
+
+### Step 2.1.5: Check for Promotion Proposals
+
+After extracting learnings, check for observations that have met promotion thresholds and present the tick-to-approve UX.
+
+**Normal proposal flow (MEM-01: Silent skip if empty):**
+
+1. **Check for proposals:**
+   ```bash
+   proposals=$(bash .aether/aether-utils.sh learning-check-promotion 2>/dev/null || echo '{"proposals":[]}')
+   proposal_count=$(echo "$proposals" | jq '.proposals | length')
+   ```
+
+2. **If proposals exist, invoke the approval workflow:**
+
+   Only show the approval UI when there are actual proposals to review:
+
+   ```bash
+   if [[ "$proposal_count" -gt 0 ]]; then
+     bash .aether/aether-utils.sh learning-approve-proposals
+   fi
+   # If no proposals, silently skip without notice
+   ```
+
+   The learning-approve-proposals function handles:
+   - Displaying proposals with checkbox UI
+   - Capturing user selection
+   - Executing batch promotions via queen-promote
+   - Deferring unselected proposals
+   - Offering undo after successful promotions
+
+**Skip conditions:**
+- learning-check-promotion returns empty or fails
+- No proposals to review (silent skip - no output)
+- QUEEN.md does not exist
+
+### Step 2.2: Update Handoff Document
 
 After advancing the phase, update the handoff document with the new current state:
 
@@ -759,7 +1214,7 @@ HANDOFF_EOF
 
 This handoff reflects the post-advancement state, allowing seamless resumption even if the session is lost.
 
-### Step 2.4: Update Changelog
+### Step 2.3: Update Changelog
 
 **Append a changelog entry for the completed phase.**
 
@@ -785,7 +1240,7 @@ If `CHANGELOG.md` exists in the project root:
 
 **If no `CHANGELOG.md` exists**, skip this step silently.
 
-### Step 2.6: Commit Suggestion (Optional)
+### Step 2.4: Commit Suggestion (Optional)
 
 **This step is non-blocking. Skipping does not affect phase advancement or any subsequent steps. Failure to commit has zero consequences.**
 
@@ -846,9 +1301,9 @@ Set `last_commit_suggestion_phase` to `{phase_id}` in COLONY_STATE.json (add the
 
 **Error handling:** If any git command fails (not a repo, merge conflict, pre-commit hook rejection), display the error output and continue to the next step. The commit suggestion is advisory only -- it never blocks the flow.
 
-Continue to Step 2.7 (Context Clear Suggestion), then to Step 2.5 (Project Completion) or Step 3 (Display Result).
+Continue to Step 2.5 (Context Clear Suggestion), then to Step 2.7 (Project Completion) or Step 3 (Display Result).
 
-### Step 2.7: Context Clear Suggestion (Optional)
+### Step 2.5: Context Clear Suggestion (Optional)
 
 **This step is non-blocking. Skipping does not affect phase advancement.**
 
@@ -876,11 +1331,9 @@ Clear context now?
 
 3. **If option 1 ("Yes, clear context"):**
 
-   **IMPORTANT:** Claude Code does not support programmatic /clear. Display instructions:
+   **IMPORTANT:** Most AI platforms do not support programmatic context clearing. Display instructions:
    ```
-   Please type: /clear
-   
-   Then run: /ant:build {next_id}
+   Please clear your context/conversation, then run: /ant:build {next_id}
    ```
    
    Record the suggestion: Set `context_clear_suggested` to `true` in COLONY_STATE.json.
@@ -888,9 +1341,29 @@ Clear context now?
 4. **If option 2 ("No, continue in current context"):**
    Display: `Continuing in current context. State is saved.`
 
-Continue to Step 2.5 (Project Completion) or Step 3 (Display Result).
+Continue to Step 2.6 (Context Update), then Step 2.7 (Project Completion) or Step 3 (Display Result).
 
-### Step 2.5: Project Completion
+### Step 2.6: Update Context Document
+
+After phase advancement is complete, update `.aether/CONTEXT.md`:
+
+**Log the activity:**
+```bash
+bash .aether/aether-utils.sh context-update activity "continue" "Phase {prev_id} completed, advanced to {next_id}" "---"
+```
+
+**Update the phase:**
+```bash
+bash .aether/aether-utils.sh context-update update-phase {next_id} "{next_phase_name}" "YES" "Phase advanced, ready to build"
+```
+
+**Log any decisions from this session:**
+If any architectural decisions were made during verification, also run:
+```bash
+bash .aether/aether-utils.sh context-update decision "{decision_description}" "{rationale}" "Queen"
+```
+
+### Step 2.7: Project Completion
 
 Runs ONLY when all phases complete.
 
@@ -960,3 +1433,9 @@ Output:
 ```
 
 **IMPORTANT:** In the "Next Steps" section above, substitute the actual phase number for `{next_id}` (calculated in Step 2 as `current_phase + 1`). For example, if advancing to phase 4, output `/ant:build 4` not `/ant:build {next_id}`.
+
+### Step 4: Update Session
+
+Update the session tracking file to enable `/ant:resume` after context clear:
+
+Run using the Bash tool with description "Saving session state...": `bash .aether/aether-utils.sh session-update "/ant:continue" "/ant:build {next_id}" "Phase {prev_id} completed, advanced to Phase {next_id}"`

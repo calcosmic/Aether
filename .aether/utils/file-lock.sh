@@ -32,18 +32,37 @@ mkdir -p "$LOCK_DIR"
 # Arguments: file_path (the resource to lock)
 # Returns: 0 on success, 1 on failure
 # Globals: LOCK_ACQUIRED (set to true when lock acquired), CURRENT_LOCK (set to lock file path)
+# Behavior:
+#   - In non-interactive mode, stale locks are auto-cleaned by default.
+#   - Override with AETHER_STALE_LOCK_MODE=error|prompt|auto.
 acquire_lock() {
     local file_path="$1"
     local lock_file="${LOCK_DIR}/$(basename "$file_path").lock"
     local lock_pid_file="${lock_file}.pid"
+    local stale_mode="${AETHER_STALE_LOCK_MODE:-}"
+
+    if [[ -z "$stale_mode" ]]; then
+        if [[ -t 2 ]]; then
+            stale_mode="prompt"
+        else
+            stale_mode="auto"
+        fi
+    fi
 
     # Check if lock file exists and is stale
     if [ -f "$lock_file" ]; then
         local lock_pid
         lock_pid=$(cat "$lock_pid_file" 2>/dev/null || echo "")
+        if [[ -z "$lock_pid" ]]; then
+            # Fallback to lock file payload if .pid sidecar is missing/corrupt.
+            lock_pid=$(cat "$lock_file" 2>/dev/null || echo "")
+        fi
+        lock_pid=$(echo "$lock_pid" | tr -d '[:space:]')
+        [[ "$lock_pid" =~ ^[0-9]+$ ]] || lock_pid=""
+
         local is_stale=false
 
-        # Check age FIRST (before PID check) to handle PID reuse race
+        # Compute lock age for timeout-based stale checks when PID is unavailable.
         local lock_mtime=0
         # Platform-portable mtime: macOS uses stat -f %m, Linux uses stat -c %Y
         if stat -f %m "$lock_file" >/dev/null 2>&1; then
@@ -53,32 +72,44 @@ acquire_lock() {
         fi
         local lock_age=$(( $(date +%s) - lock_mtime ))
 
-        if [[ $lock_age -gt $LOCK_TIMEOUT ]]; then
+        # Mark stale only when we can do so safely:
+        # - PID is known and not running
+        # - No PID could be determined and lock exceeded timeout
+        if [[ -n "$lock_pid" ]] && ! kill -0 "$lock_pid" 2>/dev/null; then
             is_stale=true
-        elif [[ -n "$lock_pid" ]] && ! kill -0 "$lock_pid" 2>/dev/null; then
+        elif [[ -z "$lock_pid" ]] && [[ $lock_age -gt $LOCK_TIMEOUT ]]; then
             is_stale=true
         fi
 
         if [[ "$is_stale" == "true" ]]; then
-            # TTY-gated user prompt — never auto-remove stale locks (locked user decision)
-            if [[ -t 2 ]]; then
-                echo "" >&2
-                echo "Warning: stale lock detected (PID ${lock_pid:-unknown} not running, age ${lock_age}s)" >&2
-                echo "Lock file: $lock_file" >&2
-                printf "Remove stale lock and continue? [y/N] " >&2
-                local response
-                read -r response < /dev/tty
-                if [[ "$response" =~ ^[Yy]$ ]]; then
+            case "$stale_mode" in
+                auto)
                     rm -f "$lock_file" "$lock_pid_file"
-                else
-                    echo "Lock removal declined. Remove manually: rm $lock_file" >&2
+                    ;;
+                prompt)
+                    if [[ -t 2 ]]; then
+                        echo "" >&2
+                        echo "Warning: stale lock detected (PID ${lock_pid:-unknown} not running, age ${lock_age}s)" >&2
+                        echo "Lock file: $lock_file" >&2
+                        printf "Remove stale lock and continue? [y/N] " >&2
+                        local response
+                        read -r response < /dev/tty
+                        if [[ "$response" =~ ^[Yy]$ ]]; then
+                            rm -f "$lock_file" "$lock_pid_file"
+                        else
+                            echo "Lock removal declined. Remove manually: rm $lock_file" >&2
+                            return 1
+                        fi
+                    else
+                        printf '{"ok":false,"error":{"code":"%s","message":"Stale lock found. Remove manually: %s"}}\n' "$E_LOCK_STALE" "$lock_file" >&2
+                        return 1
+                    fi
+                    ;;
+                error|*)
+                    printf '{"ok":false,"error":{"code":"%s","message":"Stale lock found. Remove manually: %s"}}\n' "$E_LOCK_STALE" "$lock_file" >&2
                     return 1
-                fi
-            else
-                # Non-interactive: fail with structured JSON error — do NOT auto-remove
-                printf '{"ok":false,"error":{"code":"%s","message":"Stale lock found. Remove manually: %s"}}\n' "$E_LOCK_STALE" "$lock_file" >&2
-                return 1
-            fi
+                    ;;
+            esac
         fi
     fi
 
@@ -87,7 +118,7 @@ acquire_lock() {
     while [ $retry_count -lt $LOCK_MAX_RETRIES ]; do
         # Try to create lock file atomically
         if (set -o noclobber; echo $$ > "$lock_file") 2>/dev/null; then
-            echo $$ > "$lock_pid_file"
+            echo $$ > "$lock_pid_file" 2>/dev/null || true
             export LOCK_ACQUIRED=true
             export CURRENT_LOCK="$lock_file"
             return 0

@@ -1,7 +1,12 @@
 ---
 name: aether-surveyor-nest
 description: "Use this agent for mapping architecture, directory structure, and codebase topology. The nest surveyor creates a structural map of the entire project."
-tools: Read, Bash, Grep, Glob, Write
+tools:
+  Read: true
+  Bash: true
+  Grep: true
+  Glob: true
+  Write: true
 ---
 
 <role>

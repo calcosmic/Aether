@@ -1,7 +1,12 @@
 ---
 name: aether-surveyor-disciplines
 description: "Use this agent for mapping coding conventions, testing patterns, and development practices. The disciplines surveyor documents how the team builds software."
-tools: Read, Bash, Grep, Glob, Write
+tools:
+  Read: true
+  Bash: true
+  Grep: true
+  Glob: true
+  Write: true
 ---
 
 <role>

@@ -87,6 +87,42 @@ test('detectDirtyRepo identifies modified files', (t) => {
   t.true(result.staged.includes('.aether/staged.md'));
 });
 
+// Test 1.5: detectDirtyRepo ignores protected runtime data paths
+test('detectDirtyRepo ignores protected .aether runtime paths', (t) => {
+  const { UpdateTransaction, mockFs, mockCp } = t.context;
+  const transaction = new UpdateTransaction('/test/repo');
+
+  mockFs.existsSync.withArgs('/test/repo/.aether').returns(true);
+  mockCp.execSync.withArgs(sinon.match(/git status --porcelain/)).returns(
+    ' M .aether/data/COLONY_STATE.json\n?? .aether/checkpoints/chk_1.json\n M .aether/aether-utils.sh\n'
+  );
+
+  const result = transaction.detectDirtyRepo();
+
+  t.true(result.isDirty);
+  t.is(result.tracked.length, 1);
+  t.is(result.untracked.length, 0);
+  t.true(result.tracked.includes('.aether/aether-utils.sh'));
+});
+
+// Test 1.6: detectDirtyRepo stays clean when only protected paths are dirty
+test('detectDirtyRepo returns clean when only protected paths are dirty', (t) => {
+  const { UpdateTransaction, mockFs, mockCp } = t.context;
+  const transaction = new UpdateTransaction('/test/repo');
+
+  mockFs.existsSync.withArgs('/test/repo/.aether').returns(true);
+  mockCp.execSync.withArgs(sinon.match(/git status --porcelain/)).returns(
+    ' M .aether/data/COLONY_STATE.json\n?? .aether/checkpoints/chk_1.json\n'
+  );
+
+  const result = transaction.detectDirtyRepo();
+
+  t.false(result.isDirty);
+  t.is(result.tracked.length, 0);
+  t.is(result.untracked.length, 0);
+  t.is(result.staged.length, 0);
+});
+
 // Test 2: detectDirtyRepo returns clean for no changes
 test('detectDirtyRepo returns clean state for no changes', (t) => {
   const { UpdateTransaction, mockFs, mockCp } = t.context;

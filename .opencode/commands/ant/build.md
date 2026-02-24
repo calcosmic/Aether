@@ -5,25 +5,22 @@ description: "🔨🐜🏗️🐜🔨 Build a phase with pure emergence - colony
 
 You are the **Queen**. You DIRECTLY spawn multiple workers — do not delegate to a single Prime Worker.
 
-The phase to build is: `$ARGUMENTS`
+The phase to build is: `$normalized_args`
 
 ## Instructions
 
+### Step -1: Normalize Arguments
+
+Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
+
+This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
+
+
 ### Step 0: Version Check (Non-blocking)
 
-Run using the Bash tool: `bash .aether/aether-utils.sh version-check 2>/dev/null || true`
+Run using the Bash tool: `bash .aether/aether-utils.sh version-check-cached 2>/dev/null || true`
 
 If the command succeeds and the JSON result contains a non-empty string, display it as a one-line notice. Proceed regardless of outcome.
-
-### Step 0.6: Verify LiteLLM Proxy
-
-Check that the LiteLLM proxy is running for model routing:
-
-```bash
-curl -s http://localhost:4000/health | grep -q "healthy" && echo "Proxy healthy" || echo "Proxy not running - workers will use default model"
-```
-
-If proxy is not healthy, log a warning but continue (workers will fall back to default routing).
 
 ### Step 0.5: Load Colony State
 
@@ -49,7 +46,7 @@ After displaying context, run: `bash .aether/aether-utils.sh unload-state` to re
 
 ### Step 1: Validate + Read State
 
-**Parse $ARGUMENTS:**
+**Parse $normalized_args:**
 1. Extract the phase number (first argument)
 2. Check remaining arguments for flags:
    - If contains `--verbose` or `-v`: set `verbose_mode = true`
@@ -1128,7 +1125,7 @@ Write the result to .aether/HANDOFF.md using the Write tool.
 
 This ensures the handoff always reflects the latest build state, even if the session crashes before explicit pause.
 
-### Step 6.5: Update Context Document
+### Step 6.6: Update Context Document
 
 Log this build activity to `.aether/CONTEXT.md`:
 

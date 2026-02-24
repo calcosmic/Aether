@@ -180,6 +180,27 @@ class UpdateTransaction {
 
     // Target directories for git safety checks
     this.targetDirs = ['.aether', '.claude/commands/ant', '.claude/agents/ant', '.claude/rules', '.opencode/commands/ant', '.opencode/agents'];
+
+    // Managed paths for update safety checks (must align with files update can actually modify)
+    this.protectedAetherDirs = new Set([
+      'data',
+      'dreams',
+      'oracle',
+      'midden',
+      'checkpoints',
+      'locks',
+      'temp',
+      'archive',
+      'chambers',
+      'exchange',
+    ]);
+    this.managedPrefixes = [
+      '.claude/commands/ant',
+      '.claude/agents/ant',
+      '.claude/rules',
+      '.opencode/commands/ant',
+      '.opencode/agents',
+    ];
   }
 
   /**
@@ -214,7 +235,22 @@ class UpdateTransaction {
    */
   writeJsonSync(filePath, data) {
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n');
+    const content = JSON.stringify(data, null, 2) + '\n';
+    const tmpPath = filePath + '.tmp';
+    try {
+      fs.writeFileSync(tmpPath, content);
+      fs.renameSync(tmpPath, filePath);
+    } catch (err) {
+      // Clean up temp file on failure
+      try {
+        if (fs.existsSync(tmpPath)) {
+          fs.unlinkSync(tmpPath);
+        }
+      } catch {
+        // Ignore cleanup errors
+      }
+      throw err;
+    }
   }
 
   /**
@@ -281,6 +317,54 @@ class UpdateTransaction {
   }
 
   /**
+   * Normalize git porcelain path output.
+   * Handles rename syntax and quoted/escaped paths.
+   * @param {string} filePath - Raw path fragment from git porcelain
+   * @returns {string} Normalized path
+   * @private
+   */
+  normalizePorcelainPath(filePath) {
+    let normalized = filePath;
+
+    if (normalized.includes(' -> ')) {
+      normalized = normalized.split(' -> ').pop();
+    }
+
+    if (normalized.startsWith('"') && normalized.endsWith('"')) {
+      normalized = normalized
+        .slice(1, -1)
+        .replace(/\\"/g, '"')
+        .replace(/\\\\/g, '\\');
+    }
+
+    return normalized;
+  }
+
+  /**
+   * True when a path is managed by update and may be overwritten by sync.
+   * Paths under .aether/data and other protected runtime dirs are intentionally excluded.
+   * @param {string} filePath - Normalized or raw path
+   * @returns {boolean} Whether update should treat this path as managed
+   * @private
+   */
+  isManagedUpdatePath(filePath) {
+    const p = this.normalizePorcelainPath(filePath);
+
+    if (p === '.aether' || p.startsWith('.aether/')) {
+      const rel = p === '.aether' ? '' : p.slice('.aether/'.length);
+      if (!rel) return true;
+
+      const first = rel.split('/')[0];
+      if (!first || first.startsWith('.')) return false;
+      if (this.protectedAetherDirs.has(first)) return false;
+      if (rel === 'QUEEN.md') return false;
+      return true;
+    }
+
+    return this.managedPrefixes.some(prefix => p === prefix || p.startsWith(`${prefix}/`));
+  }
+
+  /**
    * Detect dirty repository state with detailed categorization
    * @returns {object} Dirty state info: { isDirty, tracked, untracked, staged }
    */
@@ -302,10 +386,18 @@ class UpdateTransaction {
       const tracked = [];
       const untracked = [];
       const staged = [];
+      let managedCount = 0;
 
       for (const line of lines) {
         const status = line.slice(0, 2);
-        const filePath = line.slice(3);
+        const rawPath = line.slice(3);
+        const filePath = this.normalizePorcelainPath(rawPath);
+
+        if (!this.isManagedUpdatePath(filePath)) {
+          continue;
+        }
+
+        managedCount++;
 
         // Staged changes (in index)
         if (status[0] !== ' ' && status[0] !== '?') {
@@ -322,7 +414,7 @@ class UpdateTransaction {
       }
 
       return {
-        isDirty: lines.length > 0,
+        isDirty: managedCount > 0,
         tracked,
         untracked,
         staged,
@@ -1353,6 +1445,23 @@ class UpdateTransaction {
         this.log('  No checkpoint to rollback to');
         this.state = TransactionStates.ROLLED_BACK;
         return false;
+      }
+
+      // Restore backed-up managed files before stash pop
+      // Stash only contains the user's local modifications; managed files
+      // overwritten by syncFiles must be restored from the checkpoint backup.
+      if (this.checkpoint.backedUpFiles && this.checkpoint.backedUpFiles.length > 0) {
+        for (const entry of this.checkpoint.backedUpFiles) {
+          try {
+            if (fs.existsSync(entry.backupPath)) {
+              fs.mkdirSync(path.dirname(path.join(this.repoPath, entry.relPath)), { recursive: true });
+              fs.copyFileSync(entry.backupPath, path.join(this.repoPath, entry.relPath));
+              this.log(`  Restored managed file: ${entry.relPath}`);
+            }
+          } catch (err) {
+            this.log(`  Warning: could not restore ${entry.relPath}: ${err.message}`);
+          }
+        }
       }
 
       // Restore from stash if available

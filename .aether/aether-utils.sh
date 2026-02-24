@@ -1078,7 +1078,14 @@ case "$cmd" in
 HELP_EOF
     ;;
   version)
-    json_ok '"1.0.0"'
+    # Read version from package.json if available, fallback to embedded
+    _pkg_json="$SCRIPT_DIR/../package.json"
+    if [[ -f "$_pkg_json" ]] && command -v jq >/dev/null 2>&1; then
+      _ver=$(jq -r '.version // "unknown"' "$_pkg_json" 2>/dev/null)
+      json_ok "\"$_ver\""
+    else
+      json_ok '"1.1.5"'
+    fi
     ;;
   validate-state)
     # Schema migration helper: auto-upgrades pre-3.0 state files to v3.0
@@ -3428,6 +3435,22 @@ NODESCRIPT
 
     [[ -z "$ant_name" || -z "$caste" || -z "$ant_status" ]] && json_err "$E_VALIDATION_FAILED" "Usage: swarm-display-update <ant_name> <caste> <ant_status> <task> [parent] [tools_json] [tokens] [chamber] [progress]"
 
+    # Tolerate malformed argument ordering from LLM-generated commands.
+    # Common failure mode: tools_json omitted, so tokens/chamber/progress shift left.
+    tools_type=$(echo "$tools_json" | jq -r 'type' 2>/dev/null || echo "invalid")
+    if [[ "$tools_type" != "object" ]]; then
+      if [[ "$tools_json" =~ ^[0-9]+$ ]] && [[ ! "$tokens" =~ ^[0-9]+$ ]] && [[ "$chamber" =~ ^[0-9]+$ ]]; then
+        progress="$chamber"
+        chamber="$tokens"
+        tokens="$tools_json"
+      fi
+      tools_json="{}"
+    fi
+
+    # Ensure numeric fields are always valid for --argjson.
+    [[ "$tokens" =~ ^-?[0-9]+$ ]] || tokens=0
+    [[ "$progress" =~ ^-?[0-9]+$ ]] || progress=0
+
     display_file="$DATA_DIR/swarm-display.json"
 
     # Initialize if doesn't exist
@@ -3489,7 +3512,7 @@ NODESCRIPT
       # Update chamber activity counts
       # Decrement old chamber if changed
       (if $old_chamber != "" and $old_chamber != $new_chamber and has("chambers") and (.chambers | has($old_chamber)) then
-        .chambers[$old_chamber].activity = [(.chambers[$old_chamber].activity // 1) - 1, 0] | max
+        .chambers[$old_chamber].activity = ([(.chambers[$old_chamber].activity // 1) - 1, 0] | max)
       else
         .
       end) |
@@ -6339,7 +6362,7 @@ $updated_meta
   normalize-args)
     # Normalize arguments from Claude Code ($ARGUMENTS) or OpenCode ($@)
     # Usage: bash .aether/aether-utils.sh normalize-args [args...]
-    # Or: eval "$(bash .aether/aether-utils.sh normalize-args)"
+    # Returns: a plain normalized argument string (safe for direct string parsing)
     #
     # Claude Code passes args in $ARGUMENTS variable
     # OpenCode passes args in $@ (positional parameters)
@@ -6352,21 +6375,17 @@ $updated_meta
       normalized="$ARGUMENTS"
     # Fall back to OpenCode style ($@ positional params)
     elif [ $# -gt 0 ]; then
-      # Preserve arguments with spaces by quoting
-      for arg in "$@"; do
-        if [[ "$arg" == *" "* ]] || [[ "$arg" == *"\t"* ]] || [[ "$arg" == *"\n"* ]]; then
-          # Quote arguments containing whitespace
-          normalized="$normalized \"$arg\""
-        else
-          normalized="$normalized $arg"
-        fi
-      done
-      # Trim leading space
-      normalized="${normalized# }"
+      # Join positional args into one parseable string without adding synthetic quotes
+      normalized="$*"
+    fi
+
+    # Collapse line breaks and repeated whitespace to avoid shell parse edge cases
+    if [[ -n "$normalized" ]]; then
+      normalized="$(printf '%s' "$normalized" | tr '\r\n' '  ' | sed 's/[[:space:]][[:space:]]*/ /g; s/^ //; s/ $//')"
     fi
 
     # Output normalized arguments
-    echo "$normalized"
+    printf '%s\n' "$normalized"
     exit 0
     ;;
 
@@ -6616,9 +6635,9 @@ $updated_meta
     json_ok "{\"command\":\"$command_name\",\"cleared\":\"${cleared// /}\",\"errors\":\"${errors// /}\",\"dry_run\":$([[ "$dry_run" == "--dry-run" ]] && echo "true" || echo "false")}"
     ;;
 
-  pheromone-export)
-    # Export pheromones to eternal XML format
-    # Usage: pheromone-export [input_json] [output_xml]
+  pheromone-export-eternal)
+    # Export pheromones to eternal XML format (distinct from xml-utils.sh pheromone-export function)
+    # Usage: pheromone-export-eternal [input_json] [output_xml]
     #   input_json: Path to pheromones.json (default: .aether/data/pheromones.json)
     #   output_xml: Path to output XML (default: ~/.aether/eternal/pheromones.xml)
 
@@ -6719,9 +6738,9 @@ $updated_meta
 
     # Generate ID and timestamps
     pw_epoch=$(date +%s)
-    pw_epoch_ms="${pw_epoch}000"
+    pw_rand=$(( RANDOM % 10000 ))
     pw_type_lower=$(echo "$pw_type" | tr '[:upper:]' '[:lower:]')
-    pw_id="sig_${pw_type_lower}_${pw_epoch_ms}"
+    pw_id="sig_${pw_type_lower}_${pw_epoch}_${pw_rand}"
     pw_created=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
     # Compute expires_at from TTL
@@ -7811,28 +7830,43 @@ $updated_meta
       printf '%s\n' '{"version":"1.0.0","entries":[]}' > "$mw_midden_file"
     fi
 
-    # Create the new entry
-    mw_new_entry=$(printf '{
-      "id": "%s",
-      "timestamp": "%s",
-      "category": "%s",
-      "source": "%s",
-      "message": "%s",
-      "reviewed": false
-    }' "$mw_entry_id" "$mw_timestamp" "$mw_category" "$mw_source" "$mw_message")
+    # Create the new entry using jq for safe JSON construction
+    mw_new_entry=$(jq -n \
+      --arg id "$mw_entry_id" \
+      --arg ts "$mw_timestamp" \
+      --arg cat "$mw_category" \
+      --arg src "$mw_source" \
+      --arg msg "$mw_message" \
+      '{id: $id, timestamp: $ts, category: $cat, source: $src, message: $msg, reviewed: false}')
 
-    # Append to midden.json using jq
-    mw_updated_midden=$(jq --argjson entry "$mw_new_entry" '
-      .entries += [$entry] |
-      .entry_count = (.entries | length)
-    ' "$mw_midden_file" 2>/dev/null)
+    # Append to midden.json using jq with locking
+    if acquire_lock "$mw_midden_file" 2>/dev/null; then
+      mw_updated_midden=$(jq --argjson entry "$mw_new_entry" '
+        .entries += [$entry] |
+        .entry_count = (.entries | length)
+      ' "$mw_midden_file" 2>/dev/null)
 
-    if [[ -n "$mw_updated_midden" ]]; then
-      printf '%s\n' "$mw_updated_midden" > "$mw_midden_file"
-      json_ok "{\"success\":true,\"entry_id\":\"$mw_entry_id\",\"category\":\"$mw_category\",\"midden_total\":$(jq '.entries | length' "$mw_midden_file" 2>/dev/null || echo 0)}"
+      if [[ -n "$mw_updated_midden" ]]; then
+        printf '%s\n' "$mw_updated_midden" > "$mw_midden_file.tmp" && mv "$mw_midden_file.tmp" "$mw_midden_file"
+        release_lock 2>/dev/null || true
+        json_ok "{\"success\":true,\"entry_id\":\"$mw_entry_id\",\"category\":\"$mw_category\",\"midden_total\":$(jq '.entries | length' "$mw_midden_file" 2>/dev/null || echo 0)}"
+      else
+        release_lock 2>/dev/null || true
+        json_ok "{\"success\":true,\"warning\":\"jq_processing_failed\",\"entry_id\":null}"
+      fi
     else
-      # jq failed, but we still return success (graceful degradation)
-      json_ok "{\"success\":true,\"warning\":\"jq_processing_failed\",\"entry_id\":null}"
+      # Lock failed — graceful degradation, try without lock
+      mw_updated_midden=$(jq --argjson entry "$mw_new_entry" '
+        .entries += [$entry] |
+        .entry_count = (.entries | length)
+      ' "$mw_midden_file" 2>/dev/null)
+
+      if [[ -n "$mw_updated_midden" ]]; then
+        printf '%s\n' "$mw_updated_midden" > "$mw_midden_file.tmp" && mv "$mw_midden_file.tmp" "$mw_midden_file"
+        json_ok "{\"success\":true,\"entry_id\":\"$mw_entry_id\",\"category\":\"$mw_category\",\"warning\":\"lock_unavailable\"}"
+      else
+        json_ok "{\"success\":true,\"warning\":\"jq_processing_failed\",\"entry_id\":null}"
+      fi
     fi
     ;;
 
@@ -8543,7 +8577,7 @@ $updated_meta
     session_file="$DATA_DIR/session.json"
     baseline=$(git rev-parse HEAD 2>/dev/null || echo "")
 
-    cat > "$session_file" << EOF
+    cat > "$session_file.tmp" << EOF
 {
   "session_id": "$session_id",
   "started_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
@@ -8560,15 +8594,16 @@ $updated_meta
   "summary": "Session initialized"
 }
 EOF
+    mv "$session_file.tmp" "$session_file"
     json_ok "{\"session_id\":\"$session_id\",\"goal\":\"$goal\",\"file\":\"$session_file\"}"
     ;;
 
   session-update)
     # Update session with latest activity
     # Usage: session-update <command> [suggested_next] [summary]
-    cmd_run="${2:-}"
-    suggested="${3:-}"
-    summary="${4:-}"
+    cmd_run="${1:-}"
+    suggested="${2:-}"
+    summary="${3:-}"
 
     session_file="$DATA_DIR/session.json"
 
@@ -8619,7 +8654,7 @@ EOF
        .current_phase = $phase |
        .current_milestone = $milestone |
        .active_todos = $todos |
-       .baseline_commit = $baseline' > "$session_file"
+       .baseline_commit = $baseline' > "$session_file.tmp" && mv "$session_file.tmp" "$session_file"
 
     json_ok "{\"updated\":true,\"command\":\"$cmd_run\"}"
     ;;
@@ -8640,7 +8675,9 @@ EOF
     last_cmd_ts=$(echo "$session_data" | jq -r '.last_command_at // .started_at // empty')
     if [[ -n "$last_cmd_ts" ]]; then
       last_epoch=0 now_epoch=0
-      last_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$last_cmd_ts" +%s 2>/dev/null || echo 0)
+      last_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$last_cmd_ts" +%s 2>/dev/null \
+        || date -d "$last_cmd_ts" +%s 2>/dev/null \
+        || echo 0)
       now_epoch=$(date +%s)
       age_hours=$(( (now_epoch - last_epoch) / 3600 ))
       [[ $age_hours -gt 24 ]] && is_stale=true || is_stale=false
@@ -8668,7 +8705,10 @@ EOF
       exit 0
     fi
 
-    last_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$last_cmd_ts" +%s 2>/dev/null || echo 0)
+    # macOS uses -j -f, Linux uses -d
+    last_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$last_cmd_ts" +%s 2>/dev/null \
+      || date -d "$last_cmd_ts" +%s 2>/dev/null \
+      || echo 0)
     now_epoch=$(date +%s)
     age_hours=$(( (now_epoch - last_epoch) / 3600 ))
 
@@ -8679,8 +8719,8 @@ EOF
     fi
     ;;
 
-  session-clear)
-    # Mark session as cleared (preserves file but marks context_cleared)
+  session-clear-context)
+    # Mark session context as cleared (preserves file but marks context_cleared)
     preserve="${2:-false}"
     session_file="$DATA_DIR/session.json"
 
@@ -8799,15 +8839,74 @@ EOF
   # ============================================
 
   force-unlock)
-    # Emergency lock cleanup — removes all lock files
-    # Usage: force-unlock [--yes]
+    # Emergency lock cleanup — remove all locks or stale-only locks
+    # Usage: force-unlock [--yes] [--stale-only]
     # Without --yes, lists locks and asks for confirmation in interactive mode
     lock_dir="${AETHER_ROOT:-.}/.aether/locks"
     auto_yes=false
-    [[ "${1:-}" == "--yes" ]] && auto_yes=true
+    stale_only=false
+
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --yes) auto_yes=true ;;
+        --stale-only) stale_only=true ;;
+      esac
+      shift
+    done
 
     if [[ ! -d "$lock_dir" ]]; then
       json_ok '{"removed":0,"message":"No locks directory found"}'
+      exit 0
+    fi
+
+    if [[ "$stale_only" == "true" ]]; then
+      lock_timeout="${LOCK_TIMEOUT:-300}"
+      scanned=0
+      removed=0
+      skipped_live=0
+
+      is_lock_stale_for_cleanup() {
+        local _lock_file="$1"
+        local _pid_file="${_lock_file}.pid"
+        local _pid
+        _pid=$(cat "$_pid_file" 2>/dev/null || echo "")
+        if [[ -z "$_pid" ]]; then
+          _pid=$(cat "$_lock_file" 2>/dev/null || echo "")
+        fi
+        _pid=$(echo "$_pid" | tr -d '[:space:]')
+        [[ "$_pid" =~ ^[0-9]+$ ]] || _pid=""
+
+        if [[ -n "$_pid" ]]; then
+          kill -0 "$_pid" 2>/dev/null && return 1
+          return 0
+        fi
+
+        local _mtime=0
+        if stat -f %m "$_lock_file" >/dev/null 2>&1; then
+          _mtime=$(stat -f %m "$_lock_file" 2>/dev/null || echo 0)
+        else
+          _mtime=$(stat -c %Y "$_lock_file" 2>/dev/null || echo 0)
+        fi
+        local _age=$(( $(date +%s) - _mtime ))
+        [[ "$_age" -gt "$lock_timeout" ]]
+      }
+
+      for lock_file in "$lock_dir"/*.lock; do
+        [[ -e "$lock_file" ]] || continue
+        scanned=$((scanned + 1))
+        if is_lock_stale_for_cleanup "$lock_file"; then
+          rm -f "$lock_file" "${lock_file}.pid" 2>/dev/null || true
+          removed=$((removed + 1))
+        else
+          skipped_live=$((skipped_live + 1))
+        fi
+      done
+
+      if [[ "$removed" -eq 0 && "$scanned" -eq 0 ]]; then
+        json_ok '{"removed":0,"scanned":0,"skipped_live":0,"message":"No lock files found","mode":"stale-only"}'
+      else
+        json_ok "{\"removed\":$removed,\"scanned\":$scanned,\"skipped_live\":$skipped_live,\"message\":\"Stale locks cleared\",\"mode\":\"stale-only\"}"
+      fi
       exit 0
     fi
 

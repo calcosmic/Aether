@@ -55,10 +55,10 @@ atomic_write() {
     mkdir -p "$target_dir"
 
     # Create unique temp file
-    local temp_file="${TEMP_DIR}/$(basename "$target_file").$$.$(date +%s%N).tmp"
+    local temp_file="${TEMP_DIR}/$(basename "$target_file").$$.$( date +%s )_${RANDOM}.tmp"
 
     # Write content to temp file
-    if ! echo "$content" > "$temp_file"; then
+    if ! printf '%s\n' "$content" > "$temp_file"; then
         echo "Failed to write to temp file: $temp_file"
         rm -f "$temp_file"
         return 1
@@ -71,7 +71,7 @@ atomic_write() {
 
     # Validate JSON if it's a JSON file
     if [[ "$target_file" == *.json ]]; then
-        if ! python3 -c "import json; json.load(open('$temp_file'))" 2>/dev/null; then
+        if ! jq empty "$temp_file" 2>/dev/null; then
             echo "Invalid JSON in temp file: $temp_file"
             rm -f "$temp_file"
             return 1
@@ -110,7 +110,7 @@ atomic_write_from_file() {
     mkdir -p "$target_dir"
 
     # Create unique temp file
-    local temp_file="${TEMP_DIR}/$(basename "$target_file").$$.$(date +%s%N).tmp"
+    local temp_file="${TEMP_DIR}/$(basename "$target_file").$$.$( date +%s )_${RANDOM}.tmp"
 
     # Copy source to temp
     if ! cp "$source_file" "$temp_file"; then
@@ -126,7 +126,7 @@ atomic_write_from_file() {
 
     # Validate JSON if it's a JSON file
     if [[ "$target_file" == *.json ]]; then
-        if ! python3 -c "import json; json.load(open('$temp_file'))" 2>/dev/null; then
+        if ! jq empty "$temp_file" 2>/dev/null; then
             echo "Invalid JSON in temp file: $temp_file"
             rm -f "$temp_file"
             return 1
@@ -218,7 +218,7 @@ list_backups() {
 
 # Cleanup temp files older than 1 hour
 cleanup_temp_files() {
-    find "$TEMP_DIR" -name "*.tmp" -mtime +1/24 -delete 2>/dev/null || true
+    find "$TEMP_DIR" -name "*.tmp" -mmin +60 -delete 2>/dev/null || true
 }
 
 # Export functions

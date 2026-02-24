@@ -169,6 +169,8 @@ If `is_integration_phase` is `"true"`:
    ```
 
 2. **Spawn Ambassador using Task tool:**
+   > **Platform note**: In Claude Code, use `Task tool with subagent_type`. In OpenCode, use the equivalent agent spawning mechanism for your platform (e.g., invoke the agent definition from `.opencode/agents/`).
+
    Spawn the Ambassador using Task tool with `subagent_type="aether-ambassador"`, include `description: "🔌 Ambassador {Ambassador-Name}: External integration design"` (DO NOT use run_in_background - task blocks until complete):
 
    # FALLBACK: If "Agent type not found", use general-purpose and inject role: "You are an Ambassador Ant - integration specialist that designs external API connections."
@@ -274,6 +276,8 @@ Run using the Bash tool with description "Marking build start...": `bash .aether
 
 Before dispatching each worker, refresh colony context so new pheromones/memory are visible:
 Run using the Bash tool with description "Refreshing colony context...": `prime_result=$(bash .aether/aether-utils.sh colony-prime --compact 2>/dev/null)` and update `prompt_section` from `prime_result.result.prompt_section`.
+
+> **Platform note**: In Claude Code, use `Task tool with subagent_type`. In OpenCode, use the equivalent agent spawning mechanism for your platform (e.g., invoke the agent definition from `.opencode/agents/`).
 
 For each Wave 1 task, use Task tool with `subagent_type="aether-builder"`, include `description: "🔨 Builder {Ant-Name}: {task_description}"` (DO NOT use run_in_background - multiple Task calls in a single message run in parallel and block until complete):
 

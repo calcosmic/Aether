@@ -1,7 +1,12 @@
 ---
 name: aether-surveyor-provisions
 description: "Use this agent for mapping technology stack, dependencies, and external integrations. The provisions surveyor inventories what the project relies on."
-tools: Read, Bash, Grep, Glob, Write
+tools:
+  Read: true
+  Bash: true
+  Grep: true
+  Glob: true
+  Write: true
 ---
 
 <role>

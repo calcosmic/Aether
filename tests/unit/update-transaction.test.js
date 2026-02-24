@@ -188,7 +188,7 @@ test.serial('createCheckpoint stashes dirty files', async (t) => {
     if (cmd === 'git rev-parse --git-dir') return '.git';
     if (cmd.includes('git status --porcelain')) {
       // Return in format: "XY filename" where positions 0,1 are status, position 2 is space
-      return ' M file1.txt\n M file2.txt';
+      return ' M .aether/aether-utils.sh\n M .claude/commands/ant/build.md';
     }
     if (cmd.includes('git stash push')) return '';
     if (cmd === 'git stash list') return 'stash@{0}: On main: aether-update-backup';
@@ -202,13 +202,9 @@ test.serial('createCheckpoint stashes dirty files', async (t) => {
 
   t.truthy(checkpoint.stashRef);
   t.is(checkpoint.stashRef, 'stash@{0}');
-  // The code does line.slice(3) to extract filename from "XY filename" format
-  // " M file1.txt" -> slice(3) should give "file1.txt"
-  // But if the mock returns "M file1.txt" (no leading space), slice(3) gives "ile1.txt"
-  // So we expect the actual behavior based on what the code does
   t.true(checkpoint.dirtyFiles.length === 2);
-  t.true(checkpoint.dirtyFiles[0].includes('file1.txt') || checkpoint.dirtyFiles[0].includes('ile1.txt'));
-  t.true(checkpoint.dirtyFiles[1].includes('file2.txt'));
+  t.true(checkpoint.dirtyFiles.includes('.aether/aether-utils.sh'));
+  t.true(checkpoint.dirtyFiles.includes('.claude/commands/ant/build.md'));
 });
 
 test.serial('createCheckpoint throws UpdateError when not in git repo', async (t) => {
@@ -661,8 +657,8 @@ test('readJsonSafe returns null for invalid JSON', (t) => {
   t.is(result, null);
 });
 
-// Test 16: writeJsonSync helper
-test('writeJsonSync writes formatted JSON', (t) => {
+// Test 16: writeJsonSync helper (atomic: write to .tmp then rename)
+test('writeJsonSync writes formatted JSON atomically', (t) => {
   const { UpdateTransaction } = t.context;
   const { mockFs } = t.context;
 
@@ -671,8 +667,12 @@ test('writeJsonSync writes formatted JSON', (t) => {
 
   t.true(mockFs.mkdirSync.calledWith('/test', { recursive: true }));
   t.true(mockFs.writeFileSync.calledWith(
-    '/test/output.json',
+    '/test/output.json.tmp',
     '{\n  "test": "data"\n}\n'
+  ));
+  t.true(mockFs.renameSync.calledWith(
+    '/test/output.json.tmp',
+    '/test/output.json'
   ));
 });
 
@@ -1051,4 +1051,136 @@ test('cleanupStaleAetherDirs handles trash move errors gracefully', (t) => {
   t.is(result.failed.length, 1, 'failed should have 1 entry');
   t.is(result.failed[0].error, 'Failed to move to trash', 'error message should indicate trash failure');
   t.true(result.failed[0].label.includes('agents'), 'label should reference agents');
+});
+
+// ---------------------------------------------------------------------------
+// Test group: writeJsonSync atomicity (ATOMIC-01)
+// ---------------------------------------------------------------------------
+
+test('writeJsonSync writes to temp file then renames atomically', (t) => {
+  const { UpdateTransaction } = t.context;
+  const { mockFs } = t.context;
+
+  const tx = new UpdateTransaction('/test/repo');
+  const data = { test: 'data' };
+  const filePath = '/test/output.json';
+  const expectedContent = JSON.stringify(data, null, 2) + '\n';
+
+  // Track call order
+  const callOrder = [];
+  mockFs.writeFileSync.callsFake((p) => {
+    callOrder.push({ op: 'write', path: p });
+  });
+  mockFs.renameSync.callsFake((from, to) => {
+    callOrder.push({ op: 'rename', from, to });
+  });
+
+  tx.writeJsonSync(filePath, data);
+
+  // Should write to a .tmp file first
+  t.true(callOrder.length >= 2, 'should have at least write + rename');
+  t.is(callOrder[0].op, 'write', 'first operation should be write');
+  t.true(callOrder[0].path.endsWith('.tmp'), 'write should target a .tmp file');
+
+  // Then rename temp to final path
+  t.is(callOrder[1].op, 'rename', 'second operation should be rename');
+  t.is(callOrder[1].to, filePath, 'rename target should be the final file path');
+  t.true(callOrder[1].from.endsWith('.tmp'), 'rename source should be the .tmp file');
+
+  // Verify correct content was written
+  t.is(mockFs.writeFileSync.firstCall.args[1], expectedContent, 'content should be formatted JSON with trailing newline');
+});
+
+test('writeJsonSync cleans up temp file on write failure', (t) => {
+  const { UpdateTransaction } = t.context;
+  const { mockFs } = t.context;
+
+  const tx = new UpdateTransaction('/test/repo');
+
+  mockFs.writeFileSync.throws(new Error('Disk full'));
+  mockFs.existsSync.returns(true);
+
+  const err = t.throws(() => tx.writeJsonSync('/test/output.json', { test: 'data' }));
+  t.true(err.message.includes('Disk full'));
+
+  // Should attempt to clean up the temp file
+  t.true(mockFs.unlinkSync.called, 'should attempt to clean up temp file');
+  t.true(mockFs.unlinkSync.firstCall.args[0].endsWith('.tmp'), 'should clean up the .tmp file');
+});
+
+// ---------------------------------------------------------------------------
+// Test group: Rollback file restoration (ROLLBACK-01)
+// ---------------------------------------------------------------------------
+
+test.serial('rollback restores backed-up managed files before popping stash', async (t) => {
+  const { UpdateTransaction, TransactionStates } = t.context;
+  const { mockFs, mockCp } = t.context;
+
+  const tx = new UpdateTransaction('/test/repo');
+  tx.HOME = '/home/test';
+  tx.checkpoint = {
+    id: 'chk_20260214_120000',
+    stashRef: 'stash@{0}',
+    timestamp: new Date().toISOString(),
+    backedUpFiles: [
+      { relPath: '.aether/workers.md', backupPath: '/test/repo/.aether/checkpoints/chk_20260214_120000_backup/.aether/workers.md' },
+      { relPath: '.claude/commands/ant/build.md', backupPath: '/test/repo/.aether/checkpoints/chk_20260214_120000_backup/.claude/commands/ant/build.md' },
+    ],
+  };
+
+  mockCp.execSync.returns('');
+  mockFs.existsSync.returns(true);
+
+  // Track copy operations to ensure backups are restored
+  const copyOps = [];
+  mockFs.copyFileSync.callsFake((src, dest) => {
+    copyOps.push({ src, dest });
+  });
+
+  const callOrder = [];
+  mockFs.copyFileSync.callsFake((src, dest) => {
+    callOrder.push({ op: 'copy', src, dest });
+  });
+  mockCp.execSync.callsFake((cmd) => {
+    callOrder.push({ op: 'exec', cmd });
+    return '';
+  });
+
+  const result = await tx.rollback();
+
+  t.true(result);
+  t.is(tx.state, TransactionStates.ROLLED_BACK);
+
+  // Backup files should be restored
+  const restoreOps = callOrder.filter(o => o.op === 'copy');
+  t.is(restoreOps.length, 2, 'should restore 2 backed-up files');
+
+  // Stash pop should happen AFTER file restoration
+  const stashPopIndex = callOrder.findIndex(o => o.op === 'exec' && o.cmd.includes('git stash pop'));
+  const lastCopyIndex = callOrder.reduce((max, o, i) => o.op === 'copy' ? i : max, -1);
+  t.true(stashPopIndex > lastCopyIndex, 'stash pop should happen after file restoration');
+});
+
+test.serial('rollback skips file restoration when no backedUpFiles in checkpoint', async (t) => {
+  const { UpdateTransaction, TransactionStates } = t.context;
+  const { mockFs, mockCp } = t.context;
+
+  const tx = new UpdateTransaction('/test/repo');
+  tx.HOME = '/home/test';
+  tx.checkpoint = {
+    id: 'chk_20260214_120000',
+    stashRef: 'stash@{0}',
+    timestamp: new Date().toISOString(),
+    // No backedUpFiles property
+  };
+
+  mockCp.execSync.returns('');
+  mockFs.existsSync.returns(true);
+
+  const result = await tx.rollback();
+
+  t.true(result);
+  t.is(tx.state, TransactionStates.ROLLED_BACK);
+  // copyFileSync should NOT be called for backup restoration
+  t.false(mockFs.copyFileSync.called, 'should not call copyFileSync when no backedUpFiles');
 });

@@ -158,7 +158,7 @@ recommendation: "proceed" | "fix_required"
 ### Global Protected Paths (never write to these)
 - `.aether/dreams/` — Dream journal; user's private notes
 - `.env*` — Environment secrets
-- `.claude/settings.json` — Hook configuration
+- `.opencode/settings.json` — Hook configuration
 - `.github/workflows/` — CI configuration
 
 ### Watcher-Specific Boundaries
