@@ -19,18 +19,7 @@ Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
 
 This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
 
-### Step 0: Initialize Visual Mode (if enabled)
-
-If `visual_mode` is true:
-```bash
-# Generate session ID
-colonize_id="colonize-$(date +%s)"
-
-# Initialize swarm display
-bash .aether/aether-utils.sh swarm-display-init "$colonize_id"
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "dispatching" "Surveying territory" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0
-bash .aether/aether-utils.sh swarm-display-text "$colonize_id"
-```
+### Step 0: Display Header
 
 Display header:
 ```
@@ -156,12 +145,6 @@ If the `events` array exceeds 100 entries, remove the oldest entries to keep onl
 Write the updated COLONY_STATE.json.
 
 ### Step 6: Confirm
-
-If `visual_mode` is true:
-```bash
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Territory survey complete" "Colony" '{"read":6,"grep":2,"edit":2,"bash":3}' 100 "fungus_garden" 100
-bash .aether/aether-utils.sh swarm-display-text "$colonize_id"
-```
 
 Output header:
 

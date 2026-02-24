@@ -29,17 +29,6 @@ Parse `$ARGUMENTS` to determine the action:
 
 ### Step 0.5: Initialize Visual Mode (if enabled)
 
-If `visual_mode` is true, run using the Bash tool with description "Initializing oracle display...":
-```bash
-# Generate session ID
-oracle_id="oracle-$(date +%s)"
-
-# Initialize swarm display
-bash .aether/aether-utils.sh swarm-display-init "$oracle_id"
-bash .aether/aether-utils.sh swarm-display-update "Oracle" "oracle" "researching" "Deep research in progress" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0
-bash .aether/aether-utils.sh swarm-display-text "$oracle_id"
-```
-
 Display visual header:
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -337,12 +326,6 @@ tmux new-session -d -s oracle "cd $(pwd) && bash .aether/oracle/oracle.sh; echo 
 ```
 
 **If TMUX_OK:**
-
-If `visual_mode` is true, update and render the in-conversation display:
-```bash
-bash .aether/aether-utils.sh swarm-display-update "Oracle" "oracle" "researching" "Background tmux session active" "Colony" '{"read":1,"grep":0,"edit":0,"bash":1}' 0 "fungus_garden" 20
-bash .aether/aether-utils.sh swarm-display-text "$oracle_id"
-```
 
 ```
 🔮🐜 Oracle Launched

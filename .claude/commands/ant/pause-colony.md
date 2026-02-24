@@ -14,15 +14,6 @@ Parse `$ARGUMENTS`:
 ### Step 0: Initialize Visual Mode (if enabled)
 
 If `visual_mode` is true, run using the Bash tool with description "Initializing pause display...":
-```bash
-# Generate session ID
-pause_id="pause-$(date +%s)"
-
-# Initialize swarm display
-bash .aether/aether-utils.sh swarm-display-init "$pause_id"
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "Pausing colony" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0
-```
-
 ### Step 1: Read State
 
 Use the Read tool to read `.aether/data/COLONY_STATE.json`.
@@ -190,12 +181,6 @@ bash .aether/aether-utils.sh context-update safe-to-clear "YES" "Colony paused â
 ```
 
 ### Step 5: Display Confirmation
-
-**If visual_mode is true, render final swarm display** by running using the Bash tool with description "Updating pause display...":
-```bash
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Colony paused" "Colony" '{"read":3,"grep":0,"edit":2,"bash":1}' 100 "fungus_garden" 100
-bash .aether/aether-utils.sh swarm-display-text "$pause_id"
-```
 
 Output header:
 

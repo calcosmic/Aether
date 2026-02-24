@@ -11,18 +11,7 @@ Parse `$ARGUMENTS`:
 - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
 - Otherwise: set `visual_mode = true`
 
-### Step 0: Initialize Visual Mode (if enabled)
-
-If `visual_mode` is true:
-Run using the Bash tool with description "Initializing continue display...": `continue_id="continue-$(date +%s)" && bash .aether/aether-utils.sh swarm-display-init "$continue_id" && bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "Phase continuation" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0`
-
-### Step 0.5: Version Check (Non-blocking)
-
-Run using the Bash tool with description "Checking colony version...": `bash .aether/aether-utils.sh version-check-cached 2>/dev/null || true`
-
-If the command succeeds and the JSON result contains a non-empty string, display it as a one-line notice. Proceed regardless of outcome.
-
-### Step 1: Read State + Version Check
+### Step 1: Read State
 
 Read `.aether/data/COLONY_STATE.json`.
 
@@ -186,10 +175,7 @@ Continue to Phase 5: Secrets Scan.
    a. Generate Probe name and dispatch:
    Run using the Bash tool with description "Generating Probe name...": `probe_name=$(bash .aether/aether-utils.sh generate-ant-name "probe") && bash .aether/aether-utils.sh spawn-log "Queen" "probe" "$probe_name" "Coverage improvement: ${coverage_percent}%" && echo "{\"name\":\"$probe_name\"}"`
 
-   b. Update swarm display (if visual_mode is true):
-   Run using the Bash tool with description "Updating swarm display...": `bash .aether/aether-utils.sh swarm-display-update "$probe_name" "probe" "scanning" "Coverage improvement" "Quality" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0`
-
-   c. Display: `🧪🐜 Probe {probe_name} spawning — Coverage at {coverage_percent}%, generating tests for uncovered paths...`
+   b. Display: `🧪🐜 Probe {probe_name} spawning — Coverage at {coverage_percent}%, generating tests for uncovered paths...`
 
    d. Determine uncovered files:
    Run using the Bash tool with description "Getting modified source files...": `modified_source_files=$(git diff --name-only HEAD~1 2>/dev/null || git diff --name-only) && source_files=$(echo "$modified_source_files" | grep -v "\.test\." | grep -v "\.spec\." | grep -v "__tests__") && echo "$source_files"`

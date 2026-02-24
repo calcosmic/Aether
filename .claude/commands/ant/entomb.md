@@ -52,14 +52,6 @@ Do not touch during entomb:
 ### Step 0: Initialize Visual Mode (if enabled)
 
 If `visual_mode` is true:
-```bash
-# Generate session ID
-entomb_id="entomb-$(date +%s)"
-
-# Initialize swarm display (consolidated)
-bash .aether/aether-utils.sh swarm-display-init "$entomb_id" && bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "Entombing colony" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0
-```
-
 ### Step 1: Read State
 
 Read `.aether/data/COLONY_STATE.json`.
@@ -425,11 +417,6 @@ Remove the HTML comment lines at the top of the template.
 Write the result to .aether/HANDOFF.md using the Write tool.
 
 ### Step 12: Display Result
-
-**If visual_mode is true, render swarm display (consolidated):**
-```bash
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Colony entombed" "Colony" '{"read":3,"grep":0,"edit":2,"bash":5}' 100 "fungus_garden" 100 && bash .aether/aether-utils.sh swarm-display-text "$entomb_id"
-```
 
 Display:
 ```

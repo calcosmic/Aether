@@ -258,9 +258,6 @@ Runs ONLY when all phases complete.
 
 ### Step 3: Display Result
 
-**If visual_mode is true, render final swarm display:**
-Run using the Bash tool with description "Rendering advancement summary...": `bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Phase advanced" "Colony" '{"read":5,"grep":2,"edit":3,"bash":2}' 100 "fungus_garden" 100 && bash .aether/aether-utils.sh swarm-display-text "$continue_id"`
-
 Output:
 
 ```

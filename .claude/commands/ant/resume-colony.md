@@ -14,15 +14,6 @@ Parse `$ARGUMENTS`:
 ### Step 0: Initialize Visual Mode (if enabled)
 
 If `visual_mode` is true, run using the Bash tool with description "Initializing resume display...":
-```bash
-# Generate session ID
-resume_id="resume-$(date +%s)"
-
-# Initialize swarm display
-bash .aether/aether-utils.sh swarm-display-init "$resume_id"
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "Resuming colony" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0
-```
-
 ### Step 0.5: Version Check (Non-blocking)
 
 Run using the Bash tool with description "Checking colony version...": `bash .aether/aether-utils.sh version-check-cached 2>/dev/null || true`
@@ -119,12 +110,6 @@ CONTEXT FROM HANDOFF
   <summarize what was happening from .aether/HANDOFF.md>
 
 NEXT ACTIONS
-```
-
-**If visual_mode is true, render final swarm display** by running using the Bash tool with description "Updating resume display...":
-```bash
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Colony resumed" "Colony" '{"read":3,"grep":0,"edit":2,"bash":1}' 100 "fungus_garden" 100
-bash .aether/aether-utils.sh swarm-display-text "$resume_id"
 ```
 
 Route to next action based on state:

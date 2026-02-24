@@ -12,7 +12,7 @@
 
 Spawn the Watcher using Task tool with `subagent_type="aether-watcher"`, include `description: "👁️ Watcher {Watcher-Name}: Independent verification"` (DO NOT use run_in_background - task blocks until complete):
 
-Run using the Bash tool with description "Dispatching watcher...": `bash .aether/aether-utils.sh spawn-log "Queen" "watcher" "{watcher_name}" "Independent verification" && bash .aether/aether-utils.sh swarm-display-update "{watcher_name}" "watcher" "observing" "Verification in progress" "Queen" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "nursery" 50`
+Run using the Bash tool with description "Dispatching watcher...": `bash .aether/aether-utils.sh spawn-log "Queen" "watcher" "{watcher_name}" "Independent verification"`
 
 **Watcher Worker Prompt (CLEAN OUTPUT):**
 ```
@@ -28,7 +28,6 @@ Files to verify:
 
 **IMPORTANT:** When using the Bash tool for activity calls, always include a description parameter:
 - activity-log calls → "Logging {action}..."
-- swarm-display-update calls → "Updating build display..."
 - pheromone-read calls → "Checking colony signals..."
 - spawn-log calls → "Dispatching sub-worker..."
 
@@ -73,9 +72,6 @@ For failed verification:
 
 **Store results for synthesis in Step 5.7**
 
-**Update swarm display when Watcher completes:**
-Run using the Bash tool with description "Recording watcher completion...": `bash .aether/aether-utils.sh swarm-display-update "{watcher_name}" "watcher" "completed" "Verification complete" "Queen" '{"read":3,"grep":2,"edit":0,"bash":1}' 100 "nursery" 100`
-
 ### Step 5.5.1: Measurer Performance Agent (Conditional)
 
 **Conditional step — only runs for performance-sensitive phases.**
@@ -112,7 +108,7 @@ Run using the Bash tool with description "Recording watcher completion...": `bas
 3. **Generate Measurer name and dispatch:**
 
    Run using the Bash tool with description "Naming measurer...": `bash .aether/aether-utils.sh generate-ant-name "measurer"` (store as `{measurer_name}`)
-   Run using the Bash tool with description "Dispatching measurer...": `bash .aether/aether-utils.sh spawn-log "Queen" "measurer" "{measurer_name}" "Performance baseline measurement" && bash .aether/aether-utils.sh swarm-display-update "{measurer_name}" "measurer" "benchmarking" "Performance baseline measurement" "Queen" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 20`
+   Run using the Bash tool with description "Dispatching measurer...": `bash .aether/aether-utils.sh spawn-log "Queen" "measurer" "{measurer_name}" "Performance baseline measurement"`
 
    Display:
    ```
@@ -189,8 +185,8 @@ Run using the Bash tool with description "Recording watcher completion...": `bas
 
    Extract from response: `baselines_established`, `bottlenecks_identified`, `recommendations`, `tool_count`
 
-   Log completion and update swarm display:
-   Run using the Bash tool with description "Recording measurer completion...": `bash .aether/aether-utils.sh spawn-complete "{measurer_name}" "completed" "Baselines established, bottlenecks identified" && bash .aether/aether-utils.sh swarm-display-update "{measurer_name}" "measurer" "completed" "Performance measurement complete" "Queen" '{"read":5,"grep":3,"edit":0,"bash":0}' 100 "fungus_garden" 100`
+   Log completion:
+   Run using the Bash tool with description "Recording measurer completion...": `bash .aether/aether-utils.sh spawn-complete "{measurer_name}" "completed" "Baselines established, bottlenecks identified"`
 
    **Display Measurer completion line:**
    ```
@@ -237,7 +233,7 @@ Generate a chaos ant name and dispatch:
 Run using the Bash tool with description "Naming chaos ant...": `bash .aether/aether-utils.sh generate-ant-name "chaos"` (store as `{chaos_name}`)
 Run using the Bash tool with description "Loading existing flags...": `bash .aether/aether-utils.sh flag-list --phase {phase_number}`
 Parse the result and extract unresolved flag titles into a list: `{existing_flag_titles}` (comma-separated titles from `.result.flags[].title`). If no flags exist, set `{existing_flag_titles}` to "None".
-Run using the Bash tool with description "Dispatching chaos ant...": `bash .aether/aether-utils.sh spawn-log "Queen" "chaos" "{chaos_name}" "Resilience testing of Phase {id} work" && bash .aether/aether-utils.sh swarm-display-update "{chaos_name}" "chaos" "probing" "Resilience testing" "Queen" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "refuse_pile" 75`
+Run using the Bash tool with description "Dispatching chaos ant...": `bash .aether/aether-utils.sh spawn-log "Queen" "chaos" "{chaos_name}" "Resilience testing of Phase {id} work"`
 
 **Announce the resilience testing wave:**
 ```
@@ -262,7 +258,6 @@ Skip these known issues: {existing_flag_titles}
 
 **IMPORTANT:** When using the Bash tool for activity calls, always include a description parameter:
 - activity-log calls → "Logging {action}..."
-- swarm-display-update calls → "Updating build display..."
 - pheromone-read calls → "Checking colony signals..."
 
 Use colony-flavored language, 4-8 words, trailing ellipsis.
@@ -324,8 +319,8 @@ bash .aether/aether-utils.sh memory-capture \
   "worker:chaos" 2>/dev/null || true
 ```
 
-Log chaos ant completion and update swarm display:
-Run using the Bash tool with description "Recording chaos completion...": `bash .aether/aether-utils.sh spawn-complete "{chaos_name}" "completed" "{summary}" && bash .aether/aether-utils.sh swarm-display-update "{chaos_name}" "chaos" "completed" "Resilience testing done" "Queen" '{"read":2,"grep":1,"edit":0,"bash":0}' 100 "refuse_pile" 100`
+Log chaos ant completion:
+Run using the Bash tool with description "Recording chaos completion...": `bash .aether/aether-utils.sh spawn-complete "{chaos_name}" "completed" "{summary}"`
 
 ### Step 5.8: Create Flags for Verification Failures
 

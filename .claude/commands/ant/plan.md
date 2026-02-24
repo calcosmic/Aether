@@ -11,24 +11,7 @@ Parse `$ARGUMENTS`:
 - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
 - Otherwise: set `visual_mode = true`
 
-### Step 0: Initialize Visual Mode (if enabled)
-
-If `visual_mode` is true:
-```bash
-# Generate session ID
-plan_id="plan-$(date +%s)"
-
-# Initialize swarm display (consolidated)
-bash .aether/aether-utils.sh swarm-display-init "$plan_id" && bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "Generating colony plan" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0
-```
-
-### Step 0.5: Version Check (Non-blocking)
-
-Run using the Bash tool with description "Checking colony version...": `bash .aether/aether-utils.sh version-check-cached 2>/dev/null || true`
-
-If the command succeeds and the JSON result contains a non-empty string, display it as a one-line notice. Proceed regardless of outcome.
-
-### Step 1: Read State + Version Check
+### Step 1: Read State
 
 Read `.aether/data/COLONY_STATE.json`.
 
@@ -139,11 +122,6 @@ Target: {target_confidence}% confidence
 
 Iteration: 0/{max_iterations}
 Gaps: (analyzing...)
-```
-
-Log start:
-```bash
-bash .aether/aether-utils.sh activity-log "PLAN_START" "queen" "Iterative planning loop initiated for goal"
 ```
 
 ### Step 3.5: Load Territory Survey
@@ -300,8 +278,6 @@ while iteration < max_iterations AND confidence < target_confidence:
     # Wait for scout to complete.
     # Update gaps list from scout results.
 
-    Log: `bash .aether/aether-utils.sh activity-log "RESEARCH" "scout" "Iteration {iteration}: {scout.findings.length} findings, {scout.gaps_remaining.length} gaps"`
-
     # === PLANNING PHASE (always runs — 1 planner per iteration) ===
 
     Spawn Planning Ant (Route-Setter) via Task tool with subagent_type="aether-route-setter":
@@ -416,8 +392,6 @@ while iteration < max_iterations AND confidence < target_confidence:
 
     Parse planning results. Update plan_draft and confidence.
 
-    Log: `bash .aether/aether-utils.sh activity-log "PLANNING" "route-setter" "Confidence: {confidence}% (+{delta}%)"`
-
     # === UPDATE WATCH FILES ===
 
     Update `.aether/data/watch-status.txt` with current state.
@@ -459,11 +433,6 @@ Read current COLONY_STATE.json, then update:
 
 Write COLONY_STATE.json.
 
-Validate the state file:
-```bash
-bash .aether/aether-utils.sh validate-state colony
-```
-
 Log: `bash .aether/aether-utils.sh activity-log "PLAN_COMPLETE" "queen" "Plan finalized with {confidence}% confidence"`
 
 Update watch-status.txt:
@@ -487,11 +456,6 @@ bash .aether/aether-utils.sh session-update "/ant:plan" "/ant:build 1" "Plan gen
 ```
 
 ### Step 7: Display Plan
-
-**If visual_mode is true, render final swarm display (consolidated):**
-```bash
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Plan generated" "Colony" '{"read":8,"grep":4,"edit":2,"bash":1}' 100 "fungus_garden" 100 && bash .aether/aether-utils.sh swarm-display-text "$plan_id"
-```
 
 Read `plan.phases` from COLONY_STATE.json and display:
 

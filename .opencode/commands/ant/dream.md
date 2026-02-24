@@ -41,19 +41,6 @@ Parse `$normalized_args`:
 - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
 - Otherwise: set `visual_mode = true`
 
-### Step 0.5: Initialize Visual Mode (if enabled)
-
-If `visual_mode` is true:
-```bash
-# Generate session ID
-dream_id="dream-$(date +%s)"
-
-# Initialize swarm display
-bash .aether/aether-utils.sh swarm-display-init "$dream_id"
-bash .aether/aether-utils.sh swarm-display-update "Dreamer" "dreamer" "observing" "Wandering the codebase" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "nursery" 0
-bash .aether/aether-utils.sh swarm-display-text "$dream_id"
-```
-
 ### Step 1: Awaken — Load Context
 
 Read these files in parallel to understand the world you're dreaming about:
@@ -201,12 +188,6 @@ Concerns raised: {count}
 ```
 
 ### Step 5: Display Summary
-
-If `visual_mode` is true:
-```bash
-bash .aether/aether-utils.sh swarm-display-update "Dreamer" "dreamer" "completed" "Dream journal recorded" "Colony" '{"read":8,"grep":2,"edit":1,"bash":1}' 100 "nursery" 100
-bash .aether/aether-utils.sh swarm-display-text "$dream_id"
-```
 
 Output to the terminal:
 

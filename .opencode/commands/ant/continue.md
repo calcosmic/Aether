@@ -17,25 +17,7 @@ Parse `$normalized_args`:
 - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
 - Otherwise: set `visual_mode = true`
 
-### Step 0: Initialize Visual Mode (if enabled)
-
-If `visual_mode` is true:
-```bash
-# Generate session ID
-continue_id="continue-$(date +%s)"
-
-# Initialize swarm display
-bash .aether/aether-utils.sh swarm-display-init "$continue_id"
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "Phase continuation" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0
-```
-
-### Step 0.5: Version Check (Non-blocking)
-
-Run using the Bash tool: `bash .aether/aether-utils.sh version-check-cached 2>/dev/null || true`
-
-If the command succeeds and the JSON result contains a non-empty string, display it as a one-line notice. Proceed regardless of outcome.
-
-### Step 1: Read State + Version Check
+### Step 1: Read State
 
 Read `.aether/data/COLONY_STATE.json`.
 
@@ -206,10 +188,7 @@ Continue to Phase 5: Secrets Scan.
    a. Generate Probe name and dispatch:
    Run using the Bash tool with description "Generating Probe name...": `probe_name=$(bash .aether/aether-utils.sh generate-ant-name "probe") && bash .aether/aether-utils.sh spawn-log "Queen" "probe" "$probe_name" "Coverage improvement: ${coverage_percent}%" && echo "{\"name\":\"$probe_name\"}"`
 
-   b. Update swarm display (if visual_mode is true):
-   Run using the Bash tool with description "Updating swarm display...": `bash .aether/aether-utils.sh swarm-display-update "$probe_name" "probe" "scanning" "Coverage improvement" "Quality" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0`
-
-   c. Display: `Probe {probe_name} spawning -- Coverage at {coverage_percent}%, generating tests for uncovered paths...`
+   b. Display: `Probe {probe_name} spawning -- Coverage at {coverage_percent}%, generating tests for uncovered paths...`
 
    d. Determine uncovered files:
    Run using the Bash tool with description "Getting modified source files...": `modified_source_files=$(git diff --name-only HEAD~1 2>/dev/null || git diff --name-only) && source_files=$(echo "$modified_source_files" | grep -v "\.test\." | grep -v "\.spec\." | grep -v "__tests__") && echo "$source_files"`
@@ -538,10 +517,7 @@ If no CRITICAL issues, continue to Step 1.7.1.
    b. **Generate Weaver name and dispatch:**
    Run using the Bash tool with description "Generating Weaver name...": `weaver_name=$(bash .aether/aether-utils.sh generate-ant-name "weaver") && bash .aether/aether-utils.sh spawn-log "Queen" "weaver" "$weaver_name" "Proactive refactoring" && echo "{\"name\":\"$weaver_name\"}"`
 
-   c. **Update swarm display (if visual_mode is true):**
-   Run using the Bash tool with description "Updating swarm display...": `bash .aether/aether-utils.sh swarm-display-update "$weaver_name" "weaver" "refactoring" "Proactive refactoring" "Quality" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0`
-
-   d. **Display:** `Weaver {weaver_name} spawning -- Refactoring complex code...`
+   c. **Display:** `Weaver {weaver_name} spawning -- Refactoring complex code...`
 
    e. **Spawn Weaver agent:**
 
@@ -615,10 +591,7 @@ Continue to Step 1.9.
 1. Generate Gatekeeper name and log spawn:
 Run using the Bash tool with description "Generating Gatekeeper name...": `gatekeeper_name=$(bash .aether/aether-utils.sh generate-ant-name "gatekeeper") && bash .aether/aether-utils.sh spawn-log "Queen" "gatekeeper" "$gatekeeper_name" "Supply chain security audit" && echo "{\"name\":\"$gatekeeper_name\"}"`
 
-2. Update swarm display (if visual_mode is true):
-Run using the Bash tool with description "Updating swarm display...": `bash .aether/aether-utils.sh swarm-display-update "$gatekeeper_name" "gatekeeper" "scanning" "CVE and license audit" "Security" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0`
-
-3. Display: `Gatekeeper {name} spawning -- Scanning dependencies for CVEs and license compliance...`
+2. Display: `Gatekeeper {name} spawning -- Scanning dependencies for CVEs and license compliance...`
 
 4. Spawn Gatekeeper agent:
 
@@ -678,10 +651,7 @@ Continue to Step 1.9.
 1. Generate Auditor name and log spawn:
 Run using the Bash tool with description "Generating Auditor name...": `auditor_name=$(bash .aether/aether-utils.sh generate-ant-name "auditor") && bash .aether/aether-utils.sh spawn-log "Queen" "auditor" "$auditor_name" "Code quality audit" && echo "{\"name\":\"$auditor_name\"}"`
 
-2. Update swarm display (if visual_mode is true):
-Run using the Bash tool with description "Updating swarm display...": `bash .aether/aether-utils.sh swarm-display-update "$auditor_name" "auditor" "reviewing" "Multi-lens code analysis" "Quality" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0`
-
-3. Display: `Auditor {name} spawning -- Reviewing code with multi-lens analysis...`
+2. Display: `Auditor {name} spawning -- Reviewing code with multi-lens analysis...`
 
 4. Get modified files for audit context:
 Run using the Bash tool with description "Getting modified files...": `modified_files=$(git diff --name-only HEAD~1 2>/dev/null || git diff --name-only) && echo "$modified_files"`
@@ -1393,12 +1363,6 @@ Runs ONLY when all phases complete.
 4. Display next commands and stop.
 
 ### Step 3: Display Result
-
-**If visual_mode is true, render final swarm display:**
-```bash
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Phase advanced" "Colony" '{"read":5,"grep":2,"edit":3,"bash":2}' 100 "fungus_garden" 100
-bash .aether/aether-utils.sh swarm-display-text "$continue_id"
-```
 
 Output:
 

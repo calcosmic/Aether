@@ -68,11 +68,6 @@ Initialize swarm findings:
 bash .aether/aether-utils.sh swarm-findings-init "<swarm_id>"
 ```
 
-Initialize swarm display for real-time tracking:
-```bash
-bash .aether/aether-utils.sh swarm-display-init "<swarm_id>"
-```
-
 Display header:
 ```
 🔥🐜🗡️🐜🔥 ═══════════════════════════════════════════════
@@ -120,14 +115,6 @@ git log --oneline -20 2>/dev/null || echo "(no git history)"
 #### Step 5: Deploy 4 Parallel Scouts
 
 Use the **Task** tool to spawn 4 scouts **in a single message** (parallel execution):
-
-Log each scout to swarm display before spawning:
-```bash
-bash .aether/aether-utils.sh swarm-display-update "{swarm_id}-Archaeologist" "scout" "excavating" "Git history investigation" "Queen" '{"read":0,"grep":0,"edit":0,"bash":3}' 0
-bash .aether/aether-utils.sh swarm-display-update "{swarm_id}-PatternHunter" "scout" "excavating" "Pattern search for similar code" "Queen" '{"read":5,"grep":10,"edit":0,"bash":0}' 0
-bash .aether/aether-utils.sh swarm-display-update "{swarm_id}-ErrorAnalyst" "scout" "excavating" "Error chain analysis" "Queen" '{"read":3,"grep":5,"edit":0,"bash":2}' 0
-bash .aether/aether-utils.sh swarm-display-update "{swarm_id}-WebResearcher" "scout" "excavating" "External source research" "Queen" '{"read":0,"grep":0,"edit":0,"bash":0}' 0
-```
 
 **Scout 1: 🏛️ Git Archaeologist**
 ```
@@ -200,11 +187,6 @@ Wait for all 4 scouts to complete.
 As each scout returns, add their findings:
 ```bash
 bash .aether/aether-utils.sh swarm-findings-add "{swarm_id}" "{scout_type}" "{confidence}" '{finding_json}'
-```
-
-Update scout status in swarm display to "completed":
-```bash
-bash .aether/aether-utils.sh swarm-display-update "{swarm_id}-Archaeologist" "scout" "completed" "Git history investigation" "Queen" '{"read":3,"grep":0,"edit":0,"bash":5}' 150
 ```
 
 Display each scout's report as they complete:
@@ -337,11 +319,6 @@ Swarm will not attempt further fixes on this issue.
 ```
 
 #### Step 10: Cleanup
-
-Clear swarm display:
-```bash
-bash .aether/aether-utils.sh swarm-display-init "complete-{swarm_id}"
-```
 
 Archive swarm findings:
 ```bash

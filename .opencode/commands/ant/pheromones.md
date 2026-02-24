@@ -25,15 +25,6 @@ Extract subcommand from `$normalized_args`:
 - `clear`: Clear expired/inactive signals
 - `expire <id>`: Expire a specific signal by ID
 
-### Step 0: Initialize Visual Mode (if enabled)
-
-If `visual_mode` is true:
-```bash
-pher_id="pheromones-$(date +%s)"
-bash .aether/aether-utils.sh swarm-display-init "$pher_id"
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "Reading pheromones" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0
-```
-
 ### Step 1: Read Colony State
 
 Read `.aether/data/COLONY_STATE.json`.
@@ -132,12 +123,6 @@ bash .aether/aether-utils.sh pheromone-display "{subcommand or 'all'}"
 The output will be the formatted pheromone table.
 
 ### Step 4: Summary and Next Steps
-
-**If visual_mode is true, render final display:**
-```bash
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Pheromones read" "Colony" '{"read":1,"grep":0,"edit":0,"bash":1}' 100 "fungus_garden" 100
-bash .aether/aether-utils.sh swarm-display-text "$pher_id"
-```
 
 Display guidance:
 ```

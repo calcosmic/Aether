@@ -47,15 +47,6 @@ Do not touch during colonize:
 
 ### Step 0: Initialize Visual Mode (if enabled)
 
-If `visual_mode` is true:
-```bash
-# Generate session ID
-colonize_id="colonize-$(date +%s)"
-
-# Initialize swarm display (consolidated)
-bash .aether/aether-utils.sh swarm-display-init "$colonize_id" && bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "dispatching" "Surveying territory" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0
-```
-
 Display header:
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -194,11 +185,6 @@ if [[ "$fresh_count" -lt 7 ]]; then
     echo "  - $doc"
   done
 fi
-```
-
-Display colony activity summary:
-```bash
-bash .aether/aether-utils.sh swarm-display-text "$colonize_id"
 ```
 
 ### Step 5: Update State

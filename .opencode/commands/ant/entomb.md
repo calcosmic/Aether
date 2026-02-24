@@ -17,18 +17,6 @@ Parse `$normalized_args`:
 - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
 - Otherwise: set `visual_mode = true`
 
-### Step 0: Initialize Visual Mode (if enabled)
-
-If `visual_mode` is true:
-```bash
-# Generate session ID
-entomb_id="entomb-$(date +%s)"
-
-# Initialize swarm display
-bash .aether/aether-utils.sh swarm-display-init "$entomb_id"
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "Entombing colony" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0
-```
-
 ### Step 1: Read State
 
 Read `.aether/data/COLONY_STATE.json`.
@@ -325,12 +313,6 @@ Write the result to .aether/HANDOFF.md using the Write tool.
 This handoff serves as the record of the entombed colony.
 
 ### Step 9: Display Result
-
-If `visual_mode` is true:
-```bash
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Colony entombed" "Colony" '{"read":3,"grep":0,"edit":2,"bash":5}' 100 "fungus_garden" 100
-bash .aether/aether-utils.sh swarm-display-text "$entomb_id"
-```
 
 ```
 🏺 ═══════════════════════════════════════════════════

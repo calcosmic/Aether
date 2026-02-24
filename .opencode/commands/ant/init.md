@@ -24,20 +24,6 @@ Note: Use `$normalized_args` instead of `$ARGUMENTS` throughout this command.
 ### Step 0: Initialize Visual Mode (if enabled)
 
 If `visual_mode` is true:
-```bash
-# Generate session ID
-init_id="init-$(date +%s)"
-
-# Initialize swarm display
-bash .aether/aether-utils.sh swarm-display-init "$init_id"
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "Colony initialization" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0
-```
-
-### Step 0.5: Version Check (Non-blocking)
-
-Run using the Bash tool: `bash .aether/aether-utils.sh version-check 2>/dev/null || true`
-
-If the command succeeds and the JSON result contains a non-empty string, display it as a one-line notice. Proceed regardless of outcome.
 
 ### Step 1: Validate Input
 
@@ -291,12 +277,6 @@ cp ~/.aether/version.json .aether/version.json 2>/dev/null || true
 If either command fails, proceed silently. These are optional bookkeeping.
 
 ### Step 6: Display Result
-
-**If visual_mode is true, render final swarm display:**
-```bash
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Colony initialized" "Colony" '{"read":5,"grep":2,"edit":3,"bash":2}' 100 "fungus_garden" 100
-bash .aether/aether-utils.sh swarm-display-text "$init_id"
-```
 
 Output this header:
 

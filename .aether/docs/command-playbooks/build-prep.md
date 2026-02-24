@@ -74,12 +74,6 @@ Do not touch during build:
 - Other agents' config files (only modify files assigned to the current build task)
 </read_only>
 
-### Step 0: Version Check (Non-blocking)
-
-Run using the Bash tool with description "Checking colony version...": `bash .aether/aether-utils.sh version-check-cached 2>/dev/null || true`
-
-If the command succeeds and the JSON result contains a non-empty string, display it as a one-line notice. Proceed regardless of outcome.
-
 ### Step 0.6: Verify LiteLLM Proxy
 
 Check that the LiteLLM proxy is running for model routing:

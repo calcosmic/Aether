@@ -251,11 +251,6 @@ Note: This runs regardless of build success/failure. Failed builds may have reco
 
 **This step runs ONLY after synthesis is complete. All values come from actual worker results.**
 
-**Update swarm display state (always) and render (in-conversation):**
-Run using the Bash tool with description "Recording build completion...": `bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Phase {id} complete" "Colony" '{"read":10,"grep":5,"edit":5,"bash":2}' 100 "fungus_garden" 100`
-
-If `visual_mode` is true, also run using the Bash tool with description "Rendering final swarm display...": `bash .aether/aether-utils.sh swarm-display-text "$build_id"`
-
 **Display BUILD SUMMARY (always shown, replaces compact/verbose split):**
 
 Calculate `total_tools` by summing `tool_count` from all worker return JSONs (builders + watcher + chaos).

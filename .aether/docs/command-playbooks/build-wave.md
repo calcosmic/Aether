@@ -1,24 +1,8 @@
-### Step 5: Initialize Swarm Display and Analyze Tasks
+### Step 5: Analyze Tasks
 
 **YOU (the Queen) will spawn workers directly. Do NOT delegate to a single Prime Worker.**
 
-**Initialize visual swarm tracking:**
-Run using the Bash tool with description "Initializing build display...":
-```bash
-# Generate unique build ID
-build_id="build-$(date +%s)"
-
-# Initialize swarm display for this build
-bash .aether/aether-utils.sh swarm-display-init "$build_id"
-
-# Log phase start
-bash .aether/aether-utils.sh activity-log "EXECUTING" "Queen" "Phase {id}: {name} - Queen dispatching workers"
-
-# Display animated header
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "Phase {id}: {name}" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 10 "fungus_garden" 0
-```
-
-**Show real-time display header:**
+**Show build header:**
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Phase {id}: {name} — {N} waves, {M} tasks
@@ -28,8 +12,6 @@ Phase {id}: {name} — {N} waves, {M} tasks
 Where N = number of builder waves (excluding watcher/chaos) and M = total builder tasks.
 
 Record `build_started_at_epoch=$(date +%s)` — this epoch integer is used by the BUILD SUMMARY block in Step 7 to calculate elapsed time.
-
-Analyze the phase tasks:
 
 Analyze the phase tasks:
 
@@ -159,7 +141,7 @@ If `is_integration_phase` is `"true"`:
 
 1. **Generate Ambassador name and dispatch:**
    Run using the Bash tool with description "Naming ambassador...": `bash .aether/aether-utils.sh generate-ant-name "ambassador"` (store as `{ambassador_name}`)
-   Run using the Bash tool with description "Dispatching ambassador...": `bash .aether/aether-utils.sh spawn-log "Queen" "ambassador" "{ambassador_name}" "External integration design" && bash .aether/aether-utils.sh swarm-display-update "{ambassador_name}" "ambassador" "negotiating" "External integration design" "Queen" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 30`
+   Run using the Bash tool with description "Dispatching ambassador...": `bash .aether/aether-utils.sh spawn-log "Queen" "ambassador" "{ambassador_name}" "External integration design"`
 
    Display:
    ```
@@ -238,8 +220,8 @@ If `is_integration_phase` is `"true"`:
 3. **Parse Ambassador JSON output:**
    Extract from response: `integration_plan`, `env_vars_required`, `error_scenarios_covered`, `blockers`
 
-   Log completion and update swarm display:
-   Run using the Bash tool with description "Recording ambassador completion...": `bash .aether/aether-utils.sh spawn-complete "{ambassador_name}" "completed" "Integration design complete" && bash .aether/aether-utils.sh swarm-display-update "{ambassador_name}" "ambassador" "completed" "Integration design complete" "Queen" '{"read":5,"grep":3,"edit":0,"bash":2}' 100 "fungus_garden" 100`
+   Log completion:
+   Run using the Bash tool with description "Recording ambassador completion...": `bash .aether/aether-utils.sh spawn-complete "{ambassador_name}" "completed" "Integration design complete"`
 
    **Display Ambassador completion line:**
    ```
@@ -291,7 +273,7 @@ For each Wave 1 task, use Task tool with `subagent_type="aether-builder"`, inclu
 - If `grave_context` is non-empty, display a visible line before spawning that worker:
   `⚰️ Graveyard caution for {ant_name}: {file_1} ({level_1}), {file_2} ({level_2})`
 
-**PER WORKER:** Run using the Bash tool with description "Preparing worker {name}...": `bash .aether/aether-utils.sh spawn-log "Queen" "builder" "{ant_name}" "{task_description}" && bash .aether/aether-utils.sh swarm-display-update "{ant_name}" "builder" "excavating" "{task_description}" "Queen" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 10 && bash .aether/aether-utils.sh context-update worker-spawn "{ant_name}" "builder" "{task_description}"`
+**PER WORKER:** Run using the Bash tool with description "Preparing worker {name}...": `bash .aether/aether-utils.sh spawn-log "Queen" "builder" "{ant_name}" "{task_description}" && bash .aether/aether-utils.sh context-update worker-spawn "{ant_name}" "builder" "{task_description}"`
 
 **Builder Worker Prompt (CLEAN OUTPUT):**
 ```
@@ -324,7 +306,6 @@ If integration_plan is provided above, you MUST:
 
 **IMPORTANT:** When using the Bash tool for activity calls, always include a description parameter:
 - activity-log calls → "Logging {action}..."
-- swarm-display-update calls → "Updating build display..."
 - pheromone-read calls → "Checking colony signals..."
 - spawn-can-spawn calls → "Checking spawn budget..."
 - generate-ant-name calls → "Naming sub-worker..."
@@ -336,8 +317,7 @@ Work:
 1. Read .aether/workers.md for Builder discipline
 2. Implement task, write tests
 3. Log activity using Bash tool with description
-4. Update display using Bash tool with description
-5. At natural breakpoints (between tasks, after errors): Check for new signals using Bash tool with description
+4. At natural breakpoints (between tasks, after errors): Check for new signals using Bash tool with description
 
 **Approach Change Logging:**
 If you try an approach that doesn't work and switch to a different approach, log it:
@@ -419,7 +399,7 @@ bash .aether/aether-utils.sh memory-capture \
   "worker:builder" 2>/dev/null || true
 ```
 
-**PER WORKER:** Run using the Bash tool with description "Recording {name} completion...": `bash .aether/aether-utils.sh spawn-complete "{ant_name}" "completed" "{summary}" && bash .aether/aether-utils.sh swarm-display-update "{ant_name}" "builder" "completed" "{task_description}" "Queen" '{"read":5,"grep":3,"edit":2,"bash":1}' 100 "fungus_garden" 100 && bash .aether/aether-utils.sh context-update worker-complete "{ant_name}" "completed"`
+**PER WORKER:** Run using the Bash tool with description "Recording {name} completion...": `bash .aether/aether-utils.sh spawn-complete "{ant_name}" "completed" "{summary}" && bash .aether/aether-utils.sh context-update worker-complete "{ant_name}" "completed"`
 
 **Check for total wave failure:**
 
@@ -479,9 +459,6 @@ Run using the Bash tool with description "Logging escalation...": `bash .aether/
 If at least one worker succeeded, continue normally to the next wave.
 
 **Parse each worker's validated JSON output to collect:** status, files_created, files_modified, blockers
-
-**Visual Mode: Render live display (in-conversation):**
-If `visual_mode` is true, run using the Bash tool with description "Rendering build progress...": `bash .aether/aether-utils.sh swarm-display-text "$build_id"`
 
 ### Step 5.3: Spawn Wave 2+ Workers (Sequential Waves)
 

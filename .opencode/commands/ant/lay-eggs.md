@@ -17,18 +17,6 @@ Parse `$normalized_args`:
 - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
 - Otherwise: set `visual_mode = true`
 
-### Step 0: Initialize Visual Mode (if enabled)
-
-If `visual_mode` is true:
-```bash
-# Generate session ID
-layeggs_id="layeggs-$(date +%s)"
-
-# Initialize swarm display
-bash .aether/aether-utils.sh swarm-display-init "$layeggs_id"
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "Laying first eggs" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "nursery" 0
-```
-
 ### Step 1: Validate Input
 
 - If `$normalized_args` is empty:
@@ -107,12 +95,6 @@ Write `.aether/data/constraints.json`:
 ```
 
 ### Step 6: Display Result
-
-**If visual_mode is true, render final swarm display:**
-```bash
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "First eggs laid" "Colony" '{"read":3,"grep":0,"edit":2,"bash":1}' 100 "nursery" 100
-bash .aether/aether-utils.sh swarm-display-text "$layeggs_id"
-```
 
 ```
 🥚 ═══════════════════════════════════════════════════

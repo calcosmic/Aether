@@ -16,12 +16,6 @@ Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
 This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
 
 
-### Step 0: Version Check (Non-blocking)
-
-Run using the Bash tool: `bash .aether/aether-utils.sh version-check-cached 2>/dev/null || true`
-
-If the command succeeds and the JSON result contains a non-empty string, display it as a one-line notice. Proceed regardless of outcome.
-
 ### Step 0.5: Load Colony State
 
 Run using Bash tool: `bash .aether/aether-utils.sh load-state`
@@ -330,7 +324,6 @@ bash .aether/aether-utils.sh pheromone-read 2>/dev/null
    ```bash
    bash .aether/aether-utils.sh generate-ant-name "archaeologist"
    bash .aether/aether-utils.sh spawn-log "Queen" "scout" "{archaeologist_name}" "Pre-build archaeology scan"
-   bash .aether/aether-utils.sh swarm-display-update "{archaeologist_name}" "scout" "excavating" "Pre-build archaeology scan" "Queen" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 15
    ```
 
    Display:
@@ -367,10 +360,9 @@ bash .aether/aether-utils.sh pheromone-read 2>/dev/null
 
    **Wait for results** (blocking — use TaskOutput with `block: true`).
 
-   Log completion and update swarm display:
+   Log completion:
    ```bash
    bash .aether/aether-utils.sh spawn-complete "{archaeologist_name}" "completed" "Pre-build archaeology scan"
-   bash .aether/aether-utils.sh swarm-display-update "{archaeologist_name}" "scout" "completed" "Pre-build archaeology scan" "Queen" '{"read":8,"grep":5,"edit":0,"bash":2}' 100 "fungus_garden" 100
    ```
 
 3. **Store and display findings:**
@@ -393,22 +385,7 @@ bash .aether/aether-utils.sh pheromone-read 2>/dev/null
 
 **YOU (the Queen) will spawn workers directly. Do NOT delegate to a single Prime Worker.**
 
-**Initialize visual swarm tracking:**
-```bash
-# Generate unique build ID
-build_id="build-$(date +%s)"
-
-# Initialize swarm display for this build
-bash .aether/aether-utils.sh swarm-display-init "$build_id"
-
-# Log phase start
-bash .aether/aether-utils.sh activity-log "EXECUTING" "Queen" "Phase {id}: {name} - Queen dispatching workers"
-
-# Display animated header
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "Phase {id}: {name}" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 10 "fungus_garden" 0
-```
-
-**Show real-time display header:**
+**Show build header:**
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Phase {id}: {name} — {N} waves, {M} tasks
@@ -531,7 +508,6 @@ For each Wave 1 task, use Task tool with `subagent_type="aether-builder"`, inclu
 Log each spawn and update swarm display:
 ```bash
 bash .aether/aether-utils.sh spawn-log "Queen" "builder" "{ant_name}" "{task_description}"
-bash .aether/aether-utils.sh swarm-display-update "{ant_name}" "builder" "excavating" "{task_description}" "Queen" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 10
 bash .aether/aether-utils.sh context-update worker-spawn "{ant_name}" "builder" "{task_description}"
 ```
 
@@ -553,7 +529,6 @@ Work:
 1. Read .aether/workers.md for Builder discipline
 2. Implement task, write tests
 3. Log activity: bash .aether/aether-utils.sh activity-log "ACTION" "{Ant-Name}" "description"
-4. Update display: bash .aether/aether-utils.sh swarm-display-update "{Ant-Name}" "builder" "excavating" "current task" "Queen" '{"read":0,"grep":0,"edit":0,"bash":0}' {progress} "fungus_garden" 50
 
 Spawn sub-workers ONLY if 3x complexity:
 - Check: bash .aether/aether-utils.sh spawn-can-spawn {depth} --enforce
@@ -663,7 +638,6 @@ Where `tool_count` comes from the worker's returned JSON `tool_count` field, and
 Log and update swarm display:
 ```bash
 bash .aether/aether-utils.sh spawn-complete "{ant_name}" "completed" "{summary}"
-bash .aether/aether-utils.sh swarm-display-update "{ant_name}" "builder" "completed" "{task_description}" "Queen" '{"read":5,"grep":3,"edit":2,"bash":1}' 100 "fungus_garden" 100
 bash .aether/aether-utils.sh context-update worker-complete "{ant_name}" "completed"
 ```
 
@@ -728,12 +702,6 @@ If at least one worker succeeded, continue normally to the next wave.
 
 **Parse each worker's validated JSON output to collect:** status, files_created, files_modified, blockers
 
-**Visual Mode: Render live display:**
-If `visual_mode` is true, render the in-conversation swarm display:
-```bash
-bash .aether/aether-utils.sh swarm-display-text "$build_id"
-```
-
 ### Step 5.3: Spawn Wave 2+ Workers (Sequential Waves)
 
 **Before each subsequent wave, display a wave separator:**
@@ -758,7 +726,6 @@ Spawn the Watcher using Task tool with `subagent_type="aether-watcher"`, include
 
 ```bash
 bash .aether/aether-utils.sh spawn-log "Queen" "watcher" "{watcher_name}" "Independent verification"
-bash .aether/aether-utils.sh swarm-display-update "{watcher_name}" "watcher" "observing" "Verification in progress" "Queen" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "nursery" 50
 ```
 
 **Watcher Worker Prompt (CLEAN OUTPUT):**
@@ -812,11 +779,6 @@ For failed verification:
 
 **Store results for synthesis in Step 5.7**
 
-**Update swarm display when Watcher completes:**
-```bash
-bash .aether/aether-utils.sh swarm-display-update "{watcher_name}" "watcher" "completed" "Verification complete" "Queen" '{"read":3,"grep":2,"edit":0,"bash":1}' 100 "nursery" 100
-```
-
 ### Step 5.6: Spawn Chaos Ant for Resilience Testing
 
 **After the Watcher completes, spawn a Chaos Ant to probe the phase work for edge cases and boundary conditions.**
@@ -825,7 +787,6 @@ Generate a chaos ant name and log the spawn:
 ```bash
 bash .aether/aether-utils.sh generate-ant-name "chaos"
 bash .aether/aether-utils.sh spawn-log "Queen" "chaos" "{chaos_name}" "Resilience testing of Phase {id} work"
-bash .aether/aether-utils.sh swarm-display-update "{chaos_name}" "chaos" "probing" "Resilience testing" "Queen" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "refuse_pile" 75
 ```
 
 **Retrieve existing flags for this phase** (to avoid duplicate findings):
@@ -892,7 +853,6 @@ bash .aether/aether-utils.sh activity-log "FLAG" "Chaos" "Created blocker: {find
 Log chaos ant completion and update swarm display:
 ```bash
 bash .aether/aether-utils.sh spawn-complete "{chaos_name}" "completed" "{summary}"
-bash .aether/aether-utils.sh swarm-display-update "{chaos_name}" "chaos" "completed" "Resilience testing done" "Queen" '{"read":2,"grep":1,"edit":0,"bash":0}' 100 "refuse_pile" 100
 ```
 
 ### Step 5.8: Create Flags for Verification Failures
@@ -1145,17 +1105,6 @@ Also update safe-to-clear status:
 ### Step 7: Display Results
 
 **This step runs ONLY after synthesis is complete. All values come from actual worker results.**
-
-**Update swarm display state (always) and render in conversation when visual mode is enabled:**
-```bash
-# Update Queen as completed
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Phase {id} complete" "Colony" '{"read":10,"grep":5,"edit":5,"bash":2}' 100 "fungus_garden" 100
-```
-
-If `visual_mode` is true, also render the final swarm display:
-```bash
-bash .aether/aether-utils.sh swarm-display-text "$build_id"
-```
 
 **Display BUILD SUMMARY (always shown, replaces compact/verbose split):**
 

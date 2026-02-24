@@ -206,14 +206,6 @@ Synthesize findings into patterns:
 
 ### Step 7: Generate Archaeology Report
 
-**If visual_mode is true, render final swarm display** by running using the Bash tool with description "Updating archaeology display...":
-```bash
-arch_id="archaeology-$(date +%s)"
-bash .aether/aether-utils.sh swarm-display-init "$arch_id"
-bash .aether/aether-utils.sh swarm-display-update "Archaeologist" "archaeologist" "completed" "Excavation complete" "Colony" '{"read":10,"grep":3,"edit":0,"bash":5}' 100 "fungus_garden" 100
-bash .aether/aether-utils.sh swarm-display-text "$arch_id"
-```
-
 Display the full report:
 
 ```

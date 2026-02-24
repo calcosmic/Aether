@@ -32,18 +32,7 @@ Parse `$normalized_args` to determine the action:
 3. **If remaining arguments is exactly `status`** — go to **Step 0c: Show Status**
 4. **Otherwise** — go to **Step 0.5: Initialize Visual Mode** then **Step 1: Research Wizard**
 
-### Step 0.5: Initialize Visual Mode (if enabled)
-
-If `visual_mode` is true:
-```bash
-# Generate session ID
-oracle_id="oracle-$(date +%s)"
-
-# Initialize swarm display
-bash .aether/aether-utils.sh swarm-display-init "$oracle_id"
-bash .aether/aether-utils.sh swarm-display-update "Oracle" "oracle" "researching" "Deep research in progress" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0
-bash .aether/aether-utils.sh swarm-display-text "$oracle_id"
-```
+### Step 0.5: Display Header
 
 Display visual header:
 ```
@@ -297,12 +286,6 @@ tmux new-session -d -s oracle "cd $(pwd) && bash .aether/oracle/oracle.sh; echo 
 
 **If TMUX_OK:**
 
-If `visual_mode` is true:
-```bash
-bash .aether/aether-utils.sh swarm-display-update "Oracle" "oracle" "researching" "Background tmux session active" "Colony" '{"read":1,"grep":0,"edit":0,"bash":1}' 30 "fungus_garden" 20
-bash .aether/aether-utils.sh swarm-display-text "$oracle_id"
-```
-
 ```
 🔮 Oracle Launched
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -325,12 +308,6 @@ bash .aether/aether-utils.sh swarm-display-text "$oracle_id"
 Stop here.
 
 **If TMUX_FAIL** (tmux not installed or error):
-
-If `visual_mode` is true:
-```bash
-bash .aether/aether-utils.sh swarm-display-update "Oracle" "oracle" "blocked" "tmux unavailable; manual launch required" "Colony" '{"read":1,"grep":0,"edit":0,"bash":1}' 30 "fungus_garden" 20
-bash .aether/aether-utils.sh swarm-display-text "$oracle_id"
-```
 
 ```
 🔮 Ready to Launch

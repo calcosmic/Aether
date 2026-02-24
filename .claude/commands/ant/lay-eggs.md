@@ -48,10 +48,6 @@ If `visual_mode` is true, run using the Bash tool with description "Initializing
 # Generate session ID and persist it for later steps
 layeggs_id="layeggs-$(date +%s)"
 echo "$layeggs_id" > .aether/data/.layeggs_session
-
-# Initialize swarm display
-bash .aether/aether-utils.sh swarm-display-init "$layeggs_id"
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "Laying first eggs" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "nursery" 0
 ```
 
 ### Step 1: Validate Input
@@ -153,13 +149,6 @@ Write `.aether/data/constraints.json`:
 
 **If visual_mode is true, render final swarm display** by running using the Bash tool with description "Updating colony display...":
 ```bash
-# Read persisted session ID from Step 0
-layeggs_id=$(cat .aether/data/.layeggs_session 2>/dev/null || echo "layeggs-$(date +%s)")
-
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "First eggs laid" "Colony" '{"read":3,"grep":0,"edit":2,"bash":1}' 100 "nursery" 100
-bash .aether/aether-utils.sh swarm-display-text "$layeggs_id"
-```
-
 ```
 🥚 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    F I R S T   E G G S   L A I D

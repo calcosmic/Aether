@@ -13,16 +13,6 @@ Parse `$ARGUMENTS`:
 - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
 - Otherwise: set `visual_mode = true`
 
-### Step 0: Initialize Visual Mode (if enabled)
-
-If `visual_mode` is true, run using the Bash tool with description "Initializing organize display...":
-```bash
-organize_id="organize-$(date +%s)"
-bash .aether/aether-utils.sh swarm-display-init "$organize_id"
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "excavating" "Organize hygiene scan" "Colony" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 0
-bash .aether/aether-utils.sh swarm-display-text "$organize_id"
-```
-
 ### Step 1: Read State
 
 Use the Read tool to read these files (in parallel):
@@ -61,11 +51,6 @@ If no active signals after filtering:
 ### Step 3: Spawn Archivist (Keeper-Ant)
 
 Read `.aether/workers.md` and extract the `## Keeper` section.
-
-If `visual_mode` is true, run using the Bash tool with description "Updating organize display...":
-```bash
-bash .aether/aether-utils.sh swarm-display-update "Archivist" "keeper" "observing" "Codebase hygiene analysis" "Queen" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 30
-```
 
 Spawn via **Task tool** with `subagent_type="aether-keeper"`:
 # FALLBACK: If "Agent type not found", use general-purpose and inject role: "You are a Keeper Ant - curates knowledge and synthesizes patterns."
@@ -200,13 +185,6 @@ bash -c 'printf "━━━━━━━━━━━━━━━━━━━━━
 ```
 
 Then display the keeper-ant's full report verbatim.
-
-If `visual_mode` is true, run using the Bash tool with description "Rendering organize display...":
-```bash
-bash .aether/aether-utils.sh swarm-display-update "Archivist" "keeper" "completed" "Hygiene report complete" "Queen" '{"read":8,"grep":4,"edit":0,"bash":2}' 100 "fungus_garden" 100
-bash .aether/aether-utils.sh swarm-display-update "Queen" "prime" "completed" "Organize complete" "Colony" '{"read":2,"grep":1,"edit":1,"bash":1}' 100 "fungus_garden" 100
-bash .aether/aether-utils.sh swarm-display-text "$organize_id"
-```
 
 ### Step 5: Persist Report
 
