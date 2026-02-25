@@ -267,6 +267,32 @@ Update COLONY_STATE.json:
 
 Run `bash .aether/aether-utils.sh validate-state colony` after write.
 
+### Step 5.1: Update Changelog
+
+**MANDATORY: Record the seal in the project changelog. This step is never skipped.**
+
+If no `CHANGELOG.md` exists, `changelog-append` creates one automatically.
+
+Build a summary of what the colony accomplished across all phases:
+- Collect completed phase names from COLONY_STATE.json
+- Summarize the goal and key outcomes in one line
+
+```bash
+bash .aether/aether-utils.sh changelog-append \
+  "$(date +%Y-%m-%d)" \
+  "seal-crowned-anthill" \
+  "00" \
+  "{key_files_csv}" \
+  "Colony sealed at Crowned Anthill;{goal}" \
+  "{phases_completed} phases completed;Colony wisdom promoted to QUEEN.md" \
+  ""
+```
+
+- `{key_files_csv}` — list the most significant files created or modified across the colony's lifetime (derive from phase plans or git log)
+- `{goal}` — the colony goal from COLONY_STATE.json
+
+**Error handling:** If `changelog-append` fails, log to midden and continue — changelog failure never blocks sealing.
+
 ### Step 5.5: Documentation Coverage Audit
 
 Before writing the seal document, spawn a Chronicler to survey documentation coverage.
