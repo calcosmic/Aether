@@ -1186,29 +1186,42 @@ This handoff reflects the post-advancement state, allowing seamless resumption e
 
 ### Step 2.3: Update Changelog
 
-**Append a changelog entry for the completed phase.**
+**MANDATORY: Append a changelog entry for the completed phase. This step is never skipped.**
 
-If `CHANGELOG.md` exists in the project root:
+If no `CHANGELOG.md` exists, `changelog-append` creates one automatically.
 
-1. Read the file
-2. Find the `## [Unreleased]` section
-3. Under the appropriate sub-heading (`### Added`, `### Changed`, or `### Fixed`), append a bullet for the completed phase:
+**Step 2.3.1: Collect plan data**
 
-```
-- **Phase {id}: {phase_name}** — {one-line summary of what was accomplished}. ({list of key files modified})
+```bash
+bash .aether/aether-utils.sh changelog-collect-plan-data "{phase_identifier}" "{plan_number}"
 ```
 
-**Determining the sub-heading:**
-- If the phase created new features/commands → `### Added`
-- If the phase modified existing behavior → `### Changed`
-- If the phase fixed bugs → `### Fixed`
-- If unclear, default to `### Changed`
+Parse the returned JSON to extract `files`, `decisions`, `worked`, and `requirements` arrays.
 
-**The one-line summary** should describe the user-visible outcome, not implementation details. Derive it from the phase description and task summaries.
+- `{phase_identifier}` is the full phase name (e.g., `36-memory-capture`)
+- `{plan_number}` is the plan number (e.g., `01`)
 
-**If no `## [Unreleased]` section exists**, create one at the top of the file (after the header).
+If the command fails (e.g., no plan file found), fall back to collecting data manually:
+- Files: from `git diff --stat` of the completed phase
+- Decisions: from COLONY_STATE.json `memory.decisions` (last 5)
+- Worked/requirements: leave empty
 
-**If no `CHANGELOG.md` exists**, skip this step silently.
+**Step 2.3.2: Append changelog entry**
+
+```bash
+bash .aether/aether-utils.sh changelog-append \
+  "$(date +%Y-%m-%d)" \
+  "{phase_identifier}" \
+  "{plan_number}" \
+  "{files_csv}" \
+  "{decisions_semicolon_separated}" \
+  "{worked_semicolon_separated}" \
+  "{requirements_csv}"
+```
+
+This atomically writes the entry. If the project already has a Keep a Changelog format, it adds a "Colony Work Log" separator section to keep both formats clean.
+
+**Error handling:** If `changelog-append` fails, log to midden and continue — changelog failure never blocks phase advancement.
 
 ### Step 2.4: Commit Suggestion (Optional)
 
