@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.11] - 2026-02-26
+
+### Fixed
+- `midden-recent-failures` now reads `.entries[]` from midden.json instead of querying non-existent `.signals[]` — builders can finally see past failures
+
+### Added
+- `instinct-create` subcommand with deduplication and 30-instinct cap — programmatic instinct management replaces manual JSON manipulation
+- Midden context injected into builder prompts during build waves — workers avoid repeating past mistakes
+- Decisions auto-emit FEEDBACK pheromones (strength 0.65, TTL 30d) so builders see architectural choices
+- `context-update constraint` now handles `feedback` type alongside `redirect` and `focus`
+- Context-update calls added to Claude Code pheromone commands (focus, redirect, feedback)
+- OpenCode pheromone commands brought to parity with pheromone-write + context-update calls
+
+### Changed
+- `continue-advance.md` instinct extraction simplified to use `instinct-create` instead of inline JSON
+- `learning-promote-auto` now also creates instincts from promoted learnings
+
 ## [1.1.10] - 2026-02-26
 
 ### Changed
