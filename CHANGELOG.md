@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.10] - 2026-02-26
+
+### Changed
+- `lay-eggs` is now a pure bootstrap command — sets up `.aether/` in a repo from the global hub without starting a colony
+- `init` now assumes Aether is already set up and focuses only on starting a colony with a goal
+- All help files, rules, and workflow documentation updated to reflect the lay-eggs/init separation
+
 ## [1.1.5] - 2026-02-23
 
 ### Added
