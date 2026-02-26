@@ -19,10 +19,11 @@ This only applies to genuinely new conversations, not after /clear.
 
 ## Available Commands
 
-### Getting Started
+### Setup & Getting Started
 | Command | Purpose |
 |---------|---------|
-| `/ant:init "<goal>"` | Set colony intention and initialize |
+| `/ant:lay-eggs` | Set up Aether in this repo (one-time, creates .aether/) |
+| `/ant:init "<goal>"` | Start a colony with a goal |
 | `/ant:colonize` | Analyze existing codebase |
 | `/ant:plan` | Generate project phases |
 | `/ant:build <phase>` | Execute a phase with parallel workers |
@@ -75,18 +76,27 @@ This only applies to genuinely new conversations, not after /clear.
 ## Typical Workflow
 
 ```
-/ant:init "Build feature X"    → Set colony goal
-/ant:colonize                  → Understand existing code (optional)
-/ant:plan                      → Generate phases
-/ant:focus "security"          → Steer attention (optional)
-/ant:build 1                   → Execute phase 1
-/ant:continue                  → Verify, learn, advance
-/ant:build 2                   → Execute phase 2
-...repeat until complete...
-/ant:seal                      → Seal completed colony
-```
+First time in a repo:
+0. /ant:lay-eggs                           (set up Aether in this repo)
 
-After `/clear` or session break: `/ant:resume-colony` to restore context.
+Starting a colony:
+1. /ant:init "Build feature X"             (start colony with a goal)
+2. /ant:colonize                           (if existing code)
+3. /ant:plan                               (generates phases)
+4. /ant:focus "security"                   (optional guidance)
+5. /ant:build 1                            (workers execute phase 1)
+6. /ant:continue                           (verify, learn, advance)
+7. /ant:build 2                            (repeat until complete)
+
+After /clear or session break:
+8. /ant:resume-colony                      (restore full context)
+9. /ant:status                             (see where you left off)
+
+After completing a colony:
+10. /ant:seal                              (mark as complete)
+11. /ant:entomb                            (archive to chambers)
+12. /ant:init "next project goal"          (start fresh colony)
+```
 
 ## Worker Castes
 

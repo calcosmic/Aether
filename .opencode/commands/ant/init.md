@@ -45,57 +45,26 @@ Aether Colony
 
 Stop here. Do not proceed.
 
-### Step 1.5: Bootstrap System Files (Conditional)
+### Step 1.5: Verify Aether Setup
 
-Check if `.aether/aether-utils.sh` exists using the Read tool.
+Check if `.aether/aether-utils.sh` exists.
 
-**If the file already exists** — skip this step entirely. System files are present.
+**If the file already exists** — skip this step entirely. Aether is set up.
 
 **If the file does NOT exist:**
-- Check if `~/.aether/system/aether-utils.sh` exists (expand `~` to the user's home directory)
-- **If the hub exists:** Run using the Bash tool:
-  ```bash
-  mkdir -p \
-    .aether/data \
-    .aether/data/midden \
-    .aether/data/backups \
-    .aether/data/survey \
-    .aether/dreams \
-    .aether/chambers \
-    .aether/locks \
-    .aether/temp \
-    .aether/docs \
-    .aether/utils \
-    .aether/templates \
-    .aether/schemas \
-    .aether/exchange \
-    .aether/rules \
-    .claude/rules && \
-  cp -f ~/.aether/system/aether-utils.sh .aether/ && \
-  cp -f ~/.aether/system/workers.md .aether/ 2>/dev/null || true && \
-  cp -f ~/.aether/system/CONTEXT.md .aether/ 2>/dev/null || true && \
-  cp -f ~/.aether/system/model-profiles.yaml .aether/ 2>/dev/null || true && \
-  cp -Rf ~/.aether/system/docs/* .aether/docs/ 2>/dev/null || true && \
-  cp -Rf ~/.aether/system/utils/* .aether/utils/ 2>/dev/null || true && \
-  cp -Rf ~/.aether/system/templates/* .aether/templates/ 2>/dev/null || true && \
-  cp -Rf ~/.aether/system/schemas/* .aether/schemas/ 2>/dev/null || true && \
-  cp -Rf ~/.aether/system/exchange/* .aether/exchange/ 2>/dev/null || true && \
-  cp -Rf ~/.aether/system/rules/* .claude/rules/ 2>/dev/null || true && \
-  touch .aether/dreams/.gitkeep && \
-  touch .aether/chambers/.gitkeep && \
-  touch .aether/data/midden/.gitkeep && \
-  chmod +x .aether/aether-utils.sh
-  ```
-  This copies system files from the global hub into `.aether/` and creates all required directories upfront. Display:
-  ```
-  Bootstrapped system files from global hub.
-  ```
-- **If the hub does NOT exist:** Output:
-  ```
-  No Aether system files found locally or in ~/.aether/system/.
-  Run `aether install` or `npx aether-colony install` to set up the global hub first.
-  ```
-  Stop here. Do not proceed.
+```
+Aether is not set up in this repo yet.
+
+Run /ant:lay-eggs first to create the .aether/ directory
+with all system files, then run /ant:init "your goal" to
+start a colony.
+
+If the global hub isn't installed either:
+  npm install -g aether-colony   (installs the hub)
+  /ant:lay-eggs                  (sets up this repo)
+  /ant:init "your goal"          (starts the colony)
+```
+Stop here. Do not proceed.
 
 ### Step 2: Read Current State
 

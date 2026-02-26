@@ -1,123 +1,192 @@
 ---
 name: ant:lay-eggs
-description: "🥚🐜🥚 Lay first eggs of new colony (First Eggs milestone)"
+description: "🥚🐜🥚 Set up Aether in this repo — creates .aether/ with all system files"
 ---
 
-You are the **Queen**. Begin a new colony, preserving pheromones.
+You are the **Queen**. Prepare this repository for Aether colony development.
 
 ## Instructions
+
+This command sets up the `.aether/` directory structure and copies all system files from the global hub. It does NOT start a colony — that's what `/ant:init "goal"` is for.
 
 ### Step -1: Normalize Arguments
 
 Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
 
-This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
+This ensures arguments work correctly in both Claude Code and OpenCode.
 
-Parse `$normalized_args`:
-- If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
-- Otherwise: set `visual_mode = true`
+<failure_modes>
+### Hub Not Found
+If `~/.aether/system/aether-utils.sh` does not exist:
+- The global hub is not installed
+- Tell the user to run `npm install -g aether-colony` first
+- Stop — cannot proceed without hub
 
-### Step 1: Validate Input
+### Partial Copy Failure
+If some files fail to copy from hub:
+- Report which files succeeded and which failed
+- The user can re-run `/ant:lay-eggs` safely (idempotent)
+</failure_modes>
 
-- If `$normalized_args` is empty:
-  ```
-  Usage: /ant:lay-eggs "<new colony goal>"
+<success_criteria>
+Command is complete when:
+- `.aether/` directory exists with all subdirectories
+- System files (aether-utils.sh, workers.md, etc.) are present
+- Templates, docs, utils, schemas are populated
+- QUEEN.md is initialized
+- User sees confirmation and next steps
+</success_criteria>
 
-  Start a fresh colony, preserving pheromones from prior colonies.
-  Requires current colony to be entombed or reset.
+<read_only>
+Do not touch during lay-eggs:
+- .aether/data/COLONY_STATE.json (colony state belongs to init)
+- .aether/dreams/ contents (user notes — create dir but don't modify files)
+- .aether/chambers/ contents (archived colonies — create dir but don't modify files)
+- Source code files
+- .env* files
+</read_only>
 
-  Example:
-    /ant:lay-eggs "Build a REST API with authentication"
-  ```
-  Stop here.
+### Step 1: Check Hub Availability
 
-### Step 2: Check Current Colony
+Check if the global hub exists by reading `~/.aether/system/aether-utils.sh` (expand `~` to the user's home directory).
 
-- Read `.aether/data/COLONY_STATE.json`
-- If goal is not null AND phases exist with status != "completed":
-  ```
-  Active colony exists: {goal}
+**If the hub does NOT exist:**
+```
+Aether hub not found at ~/.aether/system/
 
-  To start a new colony, you must first:
-  1. Complete all phases, then /ant:entomb to archive
-  2. Or manually reset by deleting .aether/data/COLONY_STATE.json
+The global hub must be installed before setting up a repo.
 
-  Current: Phase {current_phase}, {phases_count} phases in plan
-  ```
-  Stop here.
+  npm install -g aether-colony
 
-### Step 3: Extract Preserved Knowledge
+This installs the Aether CLI and populates the hub at ~/.aether/system/
+with all the system files your repo needs.
 
-- Read current state to extract preserved fields:
-  - `memory.phase_learnings` (all items)
-  - `memory.decisions` (all items)
-  - `memory.instincts` (all items with confidence >= 0.5)
-- Store for use in Step 4
+After installing, run /ant:lay-eggs again.
+```
+Stop here.
 
-### Step 4: Create New Colony State
+### Step 2: Check Existing Setup
 
-Generate new state following RESEARCH.md Pattern 2 (State Reset with Pheromone Preservation):
+Check if `.aether/aether-utils.sh` already exists.
 
-**Fields to preserve from old state:**
-- memory.phase_learnings
-- memory.decisions
-- memory.instincts (high confidence only)
+**If it exists:**
+```
+Aether is already set up in this repo.
 
-**Fields to reset:**
-- goal: new goal from $normalized_args
-- state: "READY"
-- current_phase: 0
-- session_id: new session_{unix_timestamp}_{random}
-- initialized_at: current ISO-8601 timestamp
-- build_started_at: null
-- plan: { generated_at: null, confidence: null, phases: [] }
-- errors: { records: [], flagged_patterns: [] }
-- signals: []
-- graveyards: []
-- events: [colony_initialized event with new goal]
+Refreshing system files from hub...
+```
+Proceed to Step 3 (this makes the command safe to re-run as an update/repair).
 
-**New milestone fields:**
-- milestone: "First Mound"
-- milestone_updated_at: current timestamp
-- milestone_version: "v0.1.0"
+**If it does NOT exist:**
+```
+Setting up Aether in this repo...
+```
+Proceed to Step 3.
 
-Write to `.aether/data/COLONY_STATE.json`
+### Step 3: Create Directory Structure
 
-### Step 5: Reset Constraints
-
-Write `.aether/data/constraints.json`:
-```json
-{
-  "version": "1.0",
-  "focus": [],
-  "constraints": []
-}
+Run:
+```bash
+mkdir -p \
+  .aether/data \
+  .aether/data/midden \
+  .aether/data/backups \
+  .aether/data/survey \
+  .aether/dreams \
+  .aether/chambers \
+  .aether/locks \
+  .aether/temp \
+  .aether/docs \
+  .aether/utils \
+  .aether/templates \
+  .aether/schemas \
+  .aether/exchange \
+  .aether/rules \
+  .aether/scripts \
+  .claude/rules && \
+touch .aether/dreams/.gitkeep && \
+touch .aether/chambers/.gitkeep && \
+touch .aether/data/midden/.gitkeep
 ```
 
-### Step 6: Display Result
+### Step 4: Copy System Files from Hub
+
+Run:
+```bash
+# Core system files
+cp -f ~/.aether/system/aether-utils.sh .aether/ && \
+chmod +x .aether/aether-utils.sh && \
+cp -f ~/.aether/system/workers.md .aether/ 2>/dev/null || true && \
+cp -f ~/.aether/system/CONTEXT.md .aether/ 2>/dev/null || true && \
+cp -f ~/.aether/system/model-profiles.yaml .aether/ 2>/dev/null || true && \
+
+# Directories
+cp -Rf ~/.aether/system/docs/* .aether/docs/ 2>/dev/null || true && \
+cp -Rf ~/.aether/system/utils/* .aether/utils/ 2>/dev/null || true && \
+cp -Rf ~/.aether/system/templates/* .aether/templates/ 2>/dev/null || true && \
+cp -Rf ~/.aether/system/schemas/* .aether/schemas/ 2>/dev/null || true && \
+cp -Rf ~/.aether/system/exchange/* .aether/exchange/ 2>/dev/null || true && \
+cp -Rf ~/.aether/system/rules/* .claude/rules/ 2>/dev/null || true && \
+
+# Version tracking
+cp -f ~/.aether/version.json .aether/version.json 2>/dev/null || true
+
+echo "System files copied."
+```
+
+### Step 5: Initialize QUEEN.md
+
+Run: `bash .aether/aether-utils.sh queen-init`
+
+Parse the JSON result:
+- If `created` is true: note `QUEEN.md initialized`
+- If `created` is false: note `QUEEN.md already exists (preserved)`
+
+### Step 6: Register Repo (Silent)
+
+Run (ignore errors):
+```bash
+bash .aether/aether-utils.sh registry-add "$(pwd)" "$(jq -r '.version // "unknown"' ~/.aether/version.json 2>/dev/null || echo 'unknown')" 2>/dev/null || true
+```
+
+### Step 7: Verify Setup
+
+Run:
+```bash
+dirs=0
+files=0
+for d in .aether/data .aether/docs .aether/utils .aether/templates .aether/schemas .aether/exchange .aether/dreams .aether/chambers; do
+  [ -d "$d" ] && dirs=$((dirs + 1))
+done
+[ -f .aether/aether-utils.sh ] && files=$((files + 1))
+[ -f .aether/workers.md ] && files=$((files + 1))
+[ -f .aether/QUEEN.md ] && files=$((files + 1))
+[ -f .aether/CONTEXT.md ] && files=$((files + 1))
+[ -d .aether/templates ] && templates=$(ls .aether/templates/*.template.* 2>/dev/null | wc -l | tr -d ' ') || templates=0
+[ -d .aether/utils ] && utils=$(ls .aether/utils/*.sh 2>/dev/null | wc -l | tr -d ' ') || utils=0
+
+echo "{\"dirs\": $dirs, \"core_files\": $files, \"templates\": $templates, \"utils\": $utils}"
+```
+
+### Step 8: Display Result
 
 ```
 🥚 ═══════════════════════════════════════════════════
-   F I R S T   E G G S   L A I D
-══════════════════════════════════════════════════ 🥚
+   A E T H E R   R E A D Y
+═══════════════════════════════════════════════════ 🥚
 
-👑 New colony goal:
-   "{goal}"
+   {dirs} directories created
+   {core_files} core system files
+   {templates} templates
+   {utils} utility scripts
+   QUEEN.md: {status}
 
-📋 Session: {session_id}
-🏆 Milestone: First Mound (v0.1.0)
+   .aether/ is set up and ready for colony work.
 
-{If inherited knowledge:}
-🧠 Inherited from prior colonies:
-   {N} instinct(s) | {N} decision(s) | {N} learning(s)
-{End if}
-
-🐜 The colony begins anew.
-
-   /ant:plan      📋 Chart the course
-   /ant:colonize  🗺️  Analyze existing code
+──────────────────────────────────────────────────
+🐜 Next Up
+──────────────────────────────────────────────────
+   /ant:init "your goal"   🌱 Start a colony
+   /ant:colonize            🗺️  Analyze existing code first
+   /ant:help                📖 See all commands
 ```
-
-Include edge case handling:
-- If no prior knowledge: omit the inheritance section
-- If prior colony had no phases: allow laying eggs without entombment

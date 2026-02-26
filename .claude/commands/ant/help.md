@@ -16,9 +16,10 @@ Output the following:
   A multi-agent system built on ant colony intelligence.
   Workers self-organize via pheromone signals. You guide with intention.
 
-GETTING STARTED
+SETUP & GETTING STARTED
 
-  /ant:init "<goal>"     Set colony intention and initialize
+  /ant:lay-eggs          Set up Aether in this repo (one-time, creates .aether/)
+  /ant:init "<goal>"     Start a colony with a goal
   /ant:colonize          Analyze existing codebase (optional)
   /ant:plan              Generate project plan
   /ant:build <phase>     Execute a phase (spawns parallel workers)
@@ -53,7 +54,6 @@ COLONY LIFECYCLE
 
   /ant:seal             Seal colony with Crowned Anthill milestone
   /ant:entomb           Archive completed colony into chambers
-  /ant:lay-eggs         Lay first eggs of new colony (First Eggs milestone)
   /ant:history          Browse colony event history
 
 ADVANCED
@@ -75,7 +75,11 @@ MAINTENANCE
 
 TYPICAL WORKFLOW
 
-  1. /ant:init "Build a REST API with auth"
+  First time in a repo:
+  0. /ant:lay-eggs                           (set up Aether in this repo)
+
+  Starting a colony:
+  1. /ant:init "Build a REST API with auth"  (start colony with a goal)
   2. /ant:colonize                           (if existing code)
   3. /ant:plan                               (generates phases)
   4. /ant:focus "security"                   (optional guidance)
@@ -86,6 +90,11 @@ TYPICAL WORKFLOW
   After /clear or session break:
   8. /ant:resume-colony                      (restore full context)
   9. /ant:status                             (see where you left off)
+
+  After completing a colony:
+  10. /ant:seal                              (mark as complete)
+  11. /ant:entomb                            (archive to chambers)
+  12. /ant:init "next project goal"          (start fresh colony)
 
 WORKER CASTES
 
