@@ -465,6 +465,10 @@ EOF
         sed -i.bak "/^## 💭 Active Pheromones/,/^## /{ /^| Signal |/a\\
 | FOCUS | $c_message | normal |
 }" "$ctx_file" && rm -f "$ctx_file.bak"
+      elif [[ "$c_type" == "feedback" ]]; then
+        sed -i.bak "/^## 💭 Active Pheromones/,/^## /{ /^| Signal |/a\\
+| FEEDBACK | $c_message | low |
+}" "$ctx_file" && rm -f "$ctx_file.bak"
       fi
 
       json_ok "{\"updated\":true,\"action\":\"constraint\",\"type\":\"$c_type\"}"
@@ -499,6 +503,14 @@ EOF
       ' "$ctx_file" > "$ctx_tmp"
 
       mv "$ctx_tmp" "$ctx_file"
+
+      # Auto-emit FEEDBACK pheromone for the decision so builders see it
+      bash "$0" pheromone-write FEEDBACK "Decision: $decision — $rationale" \
+        --strength 0.65 \
+        --source "system:decision" \
+        --reason "Auto-emitted from architectural decision" \
+        --ttl "30d" 2>/dev/null || true
+
       json_ok "{\"updated\":true,\"action\":\"decision\"}"
       ;;
 
@@ -5274,6 +5286,14 @@ $updated_meta
 
     promote_result=$(bash "$0" queen-promote "$wisdom_type" "$content" "$colony_name" 2>/dev/null || echo '{}')
     if echo "$promote_result" | jq -e '.ok == true' >/dev/null 2>&1; then
+      # Also create an instinct from the promoted learning
+      bash "$0" instinct-create \
+        --trigger "When working on $wisdom_type patterns" \
+        --action "$content" \
+        --confidence 0.6 \
+        --domain "$wisdom_type" \
+        --source "promoted_from_learning" \
+        --evidence "Auto-promoted after $observation_count observations" 2>/dev/null || true
       json_ok "{\"promoted\":true,\"mode\":\"auto\",\"policy_threshold\":$policy_threshold,\"observation_count\":$observation_count,\"colony_count\":$colony_count,\"event_type\":\"$event_type\"}"
     else
       promote_msg=$(echo "$promote_result" | jq -r '.error.message // "promotion_failed"' 2>/dev/null || echo "promotion_failed")
@@ -7130,6 +7150,123 @@ $updated_meta
     else
       json_ok "$ir_result"
     fi
+    ;;
+
+  instinct-create)
+    # Create or update an instinct in COLONY_STATE.json
+    # Usage: instinct-create --trigger "when X" --action "do Y" --confidence 0.5 --domain "architecture" --source "phase-3" --evidence "observation"
+    # Deduplicates: if trigger+action matches existing instinct, boosts confidence instead
+    # Cap: max 30 instincts, evicts lowest confidence when exceeded
+
+    ic_trigger=""
+    ic_action=""
+    ic_confidence="0.5"
+    ic_domain="workflow"
+    ic_source=""
+    ic_evidence=""
+
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --trigger)    ic_trigger="$2"; shift 2 ;;
+        --action)     ic_action="$2"; shift 2 ;;
+        --confidence) ic_confidence="$2"; shift 2 ;;
+        --domain)     ic_domain="$2"; shift 2 ;;
+        --source)     ic_source="$2"; shift 2 ;;
+        --evidence)   ic_evidence="$2"; shift 2 ;;
+        *) shift ;;
+      esac
+    done
+
+    [[ -z "$ic_trigger" ]] && json_err "$E_VALIDATION_FAILED" "instinct-create requires --trigger"
+    [[ -z "$ic_action" ]] && json_err "$E_VALIDATION_FAILED" "instinct-create requires --action"
+
+    ic_state_file="$DATA_DIR/COLONY_STATE.json"
+    [[ -f "$ic_state_file" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found. Run /ant:init first."
+
+    # Validate confidence range
+    if ! [[ "$ic_confidence" =~ ^(0(\.[0-9]+)?|1(\.0+)?)$ ]]; then
+      ic_confidence="0.5"
+    fi
+
+    ic_now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    ic_epoch=$(date +%s)
+    ic_id="instinct_${ic_epoch}"
+
+    # Check for existing instinct with matching trigger+action (fuzzy: exact substring match)
+    ic_existing=$(jq -c --arg trigger "$ic_trigger" --arg action "$ic_action" '
+      [(.memory.instincts // [])[] | select(.trigger == $trigger and .action == $action)] | first // null
+    ' "$ic_state_file" 2>/dev/null)
+
+    if [[ -n "$ic_existing" && "$ic_existing" != "null" ]]; then
+      # Update existing: boost confidence by +0.1, increment applications
+      ic_updated=$(jq --arg trigger "$ic_trigger" --arg action "$ic_action" --arg now "$ic_now" '
+        .memory.instincts = [
+          (.memory.instincts // [])[] |
+          if .trigger == $trigger and .action == $action then
+            .confidence = ([(.confidence + 0.1), 1.0] | min) |
+            .applications = ((.applications // 0) + 1) |
+            .last_applied = $now
+          else
+            .
+          end
+        ]
+      ' "$ic_state_file" 2>/dev/null)
+
+      if [[ -n "$ic_updated" ]]; then
+        atomic_write "$ic_state_file" "$ic_updated"
+        ic_new_conf=$(echo "$ic_updated" | jq --arg trigger "$ic_trigger" --arg action "$ic_action" '
+          [(.memory.instincts // [])[] | select(.trigger == $trigger and .action == $action)] | first | .confidence // 0
+        ' 2>/dev/null)
+        json_ok "{\"instinct_id\":\"existing\",\"action\":\"updated\",\"confidence\":$ic_new_conf}"
+      else
+        json_err "$E_INTERNAL" "Failed to update existing instinct"
+      fi
+    else
+      # Create new instinct
+      ic_new_instinct=$(jq -n \
+        --arg id "$ic_id" \
+        --arg trigger "$ic_trigger" \
+        --arg action "$ic_action" \
+        --argjson confidence "$ic_confidence" \
+        --arg status "hypothesis" \
+        --arg domain "$ic_domain" \
+        --arg source "$ic_source" \
+        --arg evidence "$ic_evidence" \
+        --arg created_at "$ic_now" \
+        '{
+          id: $id,
+          trigger: $trigger,
+          action: $action,
+          confidence: $confidence,
+          status: $status,
+          domain: $domain,
+          source: $source,
+          evidence: [$evidence],
+          tested: false,
+          created_at: $created_at,
+          last_applied: null,
+          applications: 0,
+          successes: 0,
+          failures: 0
+        }')
+
+      # Add instinct, enforce 30-instinct cap (evict lowest confidence)
+      ic_updated=$(jq --argjson new_instinct "$ic_new_instinct" '
+        .memory.instincts = (
+          ((.memory.instincts // []) + [$new_instinct])
+          | sort_by(-.confidence)
+          | .[:30]
+        )
+      ' "$ic_state_file" 2>/dev/null)
+
+      if [[ -n "$ic_updated" ]]; then
+        atomic_write "$ic_state_file" "$ic_updated"
+        json_ok "{\"instinct_id\":\"$ic_id\",\"action\":\"created\",\"confidence\":$ic_confidence}"
+      else
+        json_err "$E_INTERNAL" "Failed to create instinct"
+      fi
+    fi
+    exit 0
     ;;
 
   pheromone-prime)
@@ -9183,10 +9320,10 @@ EOF
       exit 0
     fi
 
-    # Extract failures, sort by created_at descending, limit results
+    # Extract failures from .entries[], sort by timestamp descending, limit results
     result=$(jq --argjson limit "$limit" '{
-      "count": ([.signals[]? | select(.type == "failure")] | length),
-      "failures": ([.signals[]? | select(.type == "failure")] | sort_by(.created_at) | reverse | [.[:$limit][] | {created_at, source, context, content: .content.text}])
+      "count": ([.entries[]?] | length),
+      "failures": ([.entries[]?] | sort_by(.timestamp) | reverse | .[:$limit] | [.[] | {timestamp, category, source, message}])
     }' "$midden_file" 2>/dev/null)
 
     if [[ -z "$result" ]]; then

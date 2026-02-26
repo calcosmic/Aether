@@ -259,6 +259,19 @@ Run using the Bash tool with description "Marking build start...": `bash .aether
 Before dispatching each worker, refresh colony context so new pheromones/memory are visible:
 Run using the Bash tool with description "Refreshing colony context...": `prime_result=$(bash .aether/aether-utils.sh colony-prime --compact 2>/dev/null)` and update `prompt_section` from `prime_result.result.prompt_section`.
 
+**PER WAVE:** Query midden for recent failures to inject into builder context:
+Run using the Bash tool with description "Checking midden for recent failures...":
+`midden_result=$(bash .aether/aether-utils.sh midden-recent-failures 5 2>/dev/null || echo '{"count":0,"failures":[]}')`
+
+Parse `midden_result`. If `count > 0`, format as `midden_context`:
+```
+**Previous Failures (from colony midden):**
+- [{category}] {message} (source: {source}, {timestamp})
+...
+```
+
+If `count == 0`, set `midden_context` to empty.
+
 > **Platform note**: In Claude Code, use `Task tool with subagent_type`. In OpenCode, use the equivalent agent spawning mechanism for your platform (e.g., invoke the agent definition from `.opencode/agents/`).
 
 For each Wave 1 task, use Task tool with `subagent_type="aether-builder"`, include `description: "🔨 Builder {Ant-Name}: {task_description}"` (DO NOT use run_in_background - multiple Task calls in a single message run in parallel and block until complete):
@@ -288,6 +301,12 @@ Goal: "{colony_goal}"
 { integration_plan if exists }
 
 { grave_context if exists }
+
+{ midden_context if exists }
+
+**Midden Context (if provided):**
+- These are previous failures from this colony. Avoid repeating these patterns.
+- If a failure is related to your task, take extra care or try a different approach.
 
 **External Integration Context (if provided by Ambassador):**
 If integration_plan is provided above, you MUST:

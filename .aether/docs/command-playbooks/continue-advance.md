@@ -79,50 +79,28 @@ Update COLONY_STATE.json:
 
    Memory capture also auto-emits a FEEDBACK pheromone and attempts auto-promotion when recurrence policy is met.
 
-3. **Extract instincts from patterns:**
+3. **Extract instincts from phase patterns:**
 
-   Read activity.log for patterns from this phase's build.
+   Review the completed phase for repeating patterns. For each pattern observed:
 
-   For each pattern observed (success, error_resolution, user_feedback):
-
-   **If pattern matches existing instinct:**
-   - Update confidence: +0.1 for success outcome, -0.1 for failure
-   - Increment applications count
-   - Update last_applied timestamp
-
-   **If new pattern:**
-   - Create new instinct with initial confidence:
-     - success: 0.4
-     - error_resolution: 0.5
-     - user_feedback: 0.7
-
-   Append to `memory.instincts`:
-   ```json
-   {
-     "id": "instinct_<unix_timestamp>",
-     "trigger": "<when X>",
-     "action": "<do Y>",
-     "confidence": 0.5,
-     "status": "hypothesis",
-     "domain": "<testing|architecture|code-style|debugging|workflow>",
-     "source": "phase-<id>",
-     "evidence": ["<specific observation that led to this>"],
-     "tested": false,
-     "created_at": "<ISO-8601>",
-     "last_applied": null,
-     "applications": 0,
-     "successes": 0,
-     "failures": 0
-   }
+   Run using the Bash tool with description "Creating instinct from pattern...":
+   ```bash
+   bash .aether/aether-utils.sh instinct-create \
+     --trigger "<when this situation arises>" \
+     --action "<what worked or should be done>" \
+     --confidence <0.4-0.7 based on evidence> \
+     --domain "<testing|architecture|code-style|debugging|workflow>" \
+     --source "phase-{id}" \
+     --evidence "<specific observation>" 2>/dev/null || true
    ```
 
-   **Instinct confidence updates:**
-   - Success when applied: +0.1, increment `successes`
-   - Failure when applied: -0.15, increment `failures`
-   - If `failures` >= 2 and `successes` == 0: mark `status: "disproven"`
-   - If `successes` >= 2 and tested: mark `status: "validated"`
+   Confidence guidelines:
+   - 0.4: success pattern (worked once)
+   - 0.5: error_resolution (fixed a problem)
+   - 0.7: user_feedback (explicit guidance)
 
-   Cap: Keep max 30 instincts (remove lowest confidence when exceeded).
+   If pattern matches existing instinct, confidence will be boosted automatically.
+   Cap: max 30 instincts enforced by `instinct-create` (lowest confidence evicted).
 
 4. **Advance state:**
    - Set `current_phase` to next phase number

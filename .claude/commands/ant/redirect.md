@@ -30,6 +30,13 @@ bash .aether/aether-utils.sh pheromone-write REDIRECT "<content>" --strength 0.9
 
 Parse the returned JSON for the signal ID.
 
+### Step 2.5: Update Context Document
+
+Run using the Bash tool with description "Updating context document...":
+```bash
+bash .aether/aether-utils.sh context-update constraint redirect "<content>" "user" 2>/dev/null || true
+```
+
 ### Step 3: Get Active Counts
 
 Run using the Bash tool with description "Counting active signals...":

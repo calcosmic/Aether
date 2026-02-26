@@ -48,6 +48,13 @@ User feedback is high-value learning. Generate ISO-8601 timestamp and append to 
 
 Write COLONY_STATE.json.
 
+### Step 2.5: Update Context Document
+
+Run using the Bash tool with description "Updating context document...":
+```bash
+bash .aether/aether-utils.sh context-update constraint feedback "<content>" "user" 2>/dev/null || true
+```
+
 ### Step 3: Get Active Counts
 
 Run using the Bash tool with description "Counting active signals...":

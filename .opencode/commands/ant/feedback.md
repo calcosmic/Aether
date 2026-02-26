@@ -58,6 +58,12 @@ User feedback is high-value learning. Append to `memory.instincts`:
 
 Write COLONY_STATE.json.
 
+**Write pheromone signal and update context:**
+```bash
+bash .aether/aether-utils.sh pheromone-write FEEDBACK "$normalized_args" --strength 0.7 --reason "User feedback guidance" 2>/dev/null || true
+bash .aether/aether-utils.sh context-update constraint feedback "$normalized_args" "user" 2>/dev/null || true
+```
+
 ### Step 3: Confirm
 
 Output header:

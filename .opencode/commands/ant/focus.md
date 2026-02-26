@@ -36,6 +36,12 @@ If `focus` array exceeds 5 entries, remove the oldest entries to keep only 5.
 
 Write constraints.json.
 
+**Write pheromone signal and update context:**
+```bash
+bash .aether/aether-utils.sh pheromone-write FOCUS "$normalized_args" --strength 0.8 --reason "User directed colony attention" 2>/dev/null || true
+bash .aether/aether-utils.sh context-update constraint focus "$normalized_args" "user" 2>/dev/null || true
+```
+
 ### Step 3: Confirm
 
 Output header:
