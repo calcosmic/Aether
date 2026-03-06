@@ -60,12 +60,11 @@ Plans:
   2. Escalated blocker flags appear as REDIRECT-priority warnings in builder prompts
   3. colony-prime extracts only key decisions (not the entire CONTEXT.md file) to keep prompt size manageable
   4. Blocker-originated REDIRECT warnings are distinguishable from user-set REDIRECT pheromones
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 03-01: Wire CONTEXT.md decision extraction into colony-prime
-- [ ] 03-02: Wire escalated blocker flags as REDIRECT injections into builder prompts
-- [ ] 03-03: Add tests for context expansion completeness
+- [ ] 03-01-PLAN.md — Wire CONTEXT.md decision extraction and blocker flag injection into colony-prime
+- [ ] 03-02-PLAN.md — Integration tests for context expansion end-to-end
 
 ### Phase 4: Pheromone Auto-Emission
 **Goal**: The colony automatically emits pheromone signals from decisions, recurring errors, and success patterns -- no manual /ant:focus or /ant:feedback needed for routine signals
@@ -111,6 +110,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 |-------|----------------|--------|-----------|
 | 1. Instinct Pipeline | 3/3 | Complete    | 2026-03-06 |
 | 2. Learnings Injection | 0/2 | Complete    | 2026-03-06 |
-| 3. Context Expansion | 0/3 | Not started | - |
+| 3. Context Expansion | 0/2 | Not started | - |
 | 4. Pheromone Auto-Emission | 0/4 | Not started | - |
 | 5. Wisdom Promotion | 0/4 | Not started | - |
