@@ -10,27 +10,27 @@ See: .planning/PROJECT.md (updated 2026-03-06)
 ## Current Position
 
 Phase: 1 of 5 (Instinct Pipeline)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: Executing
-Last activity: 2026-03-06 -- Completed 01-01 (instinct write-side)
+Last activity: 2026-03-06 -- Completed 01-02 (instinct read-side)
 
-Progress: [██░░░░░░░░] 7%
+Progress: [█████░░░░░] 13%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 1min
-- Total execution time: 0.02 hours
+- Total plans completed: 2
+- Average duration: 1.5min
+- Total execution time: 0.05 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-instinct-pipeline | 1 | 1min | 1min |
+| 01-instinct-pipeline | 2 | 3min | 1.5min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (1min)
+- Last 5 plans: 01-01 (1min), 01-02 (2min)
 - Trend: starting
 
 *Updated after each plan completion*
@@ -47,6 +47,8 @@ Recent decisions affecting current work:
 - [01-01]: Confidence floor raised from 0.4 to 0.7 -- only validated patterns become instincts
 - [01-01]: Error patterns get 0.8 confidence (higher than success 0.7) as stronger signals
 - [01-01]: Success instincts capped at 2 per phase to prevent noise
+- [01-02]: Same domain-grouped format for compact and non-compact modes
+- [01-02]: No changes needed to build-context.md or build-wave.md -- existing pipeline chain works
 
 ### Pending Todos
 
@@ -59,5 +61,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-06
-Stopped at: Completed 01-01-PLAN.md
-Resume file: .planning/phases/01-instinct-pipeline/01-01-SUMMARY.md
+Stopped at: Completed 01-02-PLAN.md
+Resume file: .planning/phases/01-instinct-pipeline/01-02-SUMMARY.md
