@@ -7410,17 +7410,29 @@ $updated_meta
         pp_section+=$'\n'"POSITION (Where work last progressed):"$'\n'"$pp_position"$'\n'
       fi
 
-      # Instincts section
+      # Instincts section (domain-grouped)
       if [[ "$pp_instinct_count" -gt 0 ]]; then
         if [[ "$pp_compact" == "true" ]]; then
-          pp_section+=$'\n'"--- INSTINCTS (Top) ---"$'\n'
+          pp_section+=$'\n'"--- INSTINCTS (Learned Behaviors) ---"$'\n'
         else
           pp_section+=$'\n'"--- INSTINCTS (Learned Behaviors) ---"$'\n'
           pp_section+="Weight by confidence - higher = stronger guidance:"$'\n'
         fi
-        pp_instinct_lines=$(echo "$pp_instincts" | jq -r '.[] | "[" + ((.confidence * 10 | round) / 10 | tostring) + "] When " + .trigger + " -> " + .action + " (" + (.domain // "general") + ")"' 2>/dev/null || echo "")
+
+        # Group instincts by domain per user decision
+        pp_instinct_lines=$(echo "$pp_instincts" | jq -r '
+          group_by(.domain // "general")
+          | map({
+              domain: (.[0].domain // "general"),
+              items: [.[] | "  [" + ((.confidence * 10 | round) / 10 | tostring) + "] When " + .trigger + " -> " + .action]
+            })
+          | sort_by(.domain)
+          | .[]
+          | "\n" + (.domain | ascii_upcase | .[0:1]) + (.domain | .[1:]) + ":" + "\n" + (.items | join("\n"))
+        ' 2>/dev/null || echo "")
+
         if [[ -n "$pp_instinct_lines" ]]; then
-          pp_section+=$'\n'"$pp_instinct_lines"$'\n'
+          pp_section+="$pp_instinct_lines"$'\n'
         fi
       fi
 
