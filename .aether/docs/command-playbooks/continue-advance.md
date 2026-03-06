@@ -102,6 +102,50 @@ Update COLONY_STATE.json:
    If pattern matches existing instinct, confidence will be boosted automatically.
    Cap: max 30 instincts enforced by `instinct-create` (lowest confidence evicted).
 
+3a. **Extract instincts from recurring error patterns (midden):**
+
+   Query the midden for recent failures and create instincts from recurring patterns:
+
+   Run using the Bash tool with description "Checking midden for error patterns...":
+   ```bash
+   midden_result=$(bash .aether/aether-utils.sh midden-recent-failures 10 2>/dev/null || echo '{"count":0,"failures":[]}')
+   midden_count=$(echo "$midden_result" | jq '.count // 0')
+   ```
+
+   If `midden_count` > 0, review the failure entries for recurring patterns (same category or similar message appearing 2+ times). For each recurring error pattern found:
+
+   Run using the Bash tool with description "Creating instinct from error pattern...":
+   ```bash
+   bash .aether/aether-utils.sh instinct-create \
+     --trigger "<when this error condition arises>" \
+     --action "<how to avoid or handle this error>" \
+     --confidence 0.8 \
+     --domain "<testing|architecture|debugging>" \
+     --source "midden-phase-{id}" \
+     --evidence "<failure message and recurrence count>" 2>/dev/null || true
+   ```
+
+   Error pattern confidence is 0.8 (higher than success patterns) because recurring failures are strong negative signals.
+   If no recurring patterns found, skip silently.
+
+3b. **Extract instincts from success patterns:**
+
+   Review the completed phase for approaches that succeeded on the first attempt or produced notably clean results. For each success pattern:
+
+   Run using the Bash tool with description "Creating instinct from success pattern...":
+   ```bash
+   bash .aether/aether-utils.sh instinct-create \
+     --trigger "<when this type of task arises>" \
+     --action "<the approach that worked well>" \
+     --confidence 0.7 \
+     --domain "<testing|architecture|code-style|workflow>" \
+     --source "success-phase-{id}" \
+     --evidence "<what succeeded and why>" 2>/dev/null || true
+   ```
+
+   Success pattern confidence is 0.7 (minimum threshold). Only create success instincts for genuinely noteworthy approaches, not routine completions.
+   Cap: limit to 2 success instincts per phase to avoid noise.
+
 4. **Advance state:**
    - Set `current_phase` to next phase number
    - Set `state` to `"READY"`
