@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-03-06)
 
 **Core value:** Workers automatically receive all relevant context -- the colony improves itself.
-**Current focus:** Phase 3: Context Expansion (IN PROGRESS)
+**Current focus:** Phase 3: Context Expansion (COMPLETE)
 
 ## Current Position
 
 Phase: 3 of 5 (Context Expansion)
-Plan: 1 of 2 in current phase
-Status: In Progress
-Last activity: 2026-03-06 -- Completed 03-01 (CONTEXT.md decision extraction + blocker flag injection)
+Plan: 2 of 2 in current phase (COMPLETE)
+Status: Phase Complete
+Last activity: 2026-03-06 -- Completed 03-02 (context expansion integration tests)
 
-Progress: [██████░░░░] 60%
+Progress: [███████░░░] 70%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6
+- Total plans completed: 7
 - Average duration: 2min
-- Total execution time: 0.23 hours
+- Total execution time: 0.30 hours
 
 **By Phase:**
 
@@ -29,10 +29,10 @@ Progress: [██████░░░░] 60%
 |-------|-------|-------|----------|
 | 01-instinct-pipeline | 3 | 6min | 2min |
 | 02-learnings-injection | 2 | 5min | 2.5min |
-| 03-context-expansion | 1 | 3min | 3min |
+| 03-context-expansion | 2 | 7min | 3.5min |
 
 **Recent Trend:**
-- Last 5 plans: 01-03 (3min), 02-01 (3min), 02-02 (2min), 03-01 (3min)
+- Last 5 plans: 02-01 (3min), 02-02 (2min), 03-01 (3min), 03-02 (4min)
 - Trend: stable
 
 *Updated after each plan completion*
@@ -59,6 +59,7 @@ Recent decisions affecting current work:
 - [03-01]: Decisions placed after PHASE LEARNINGS and before BLOCKER WARNINGS in prompt assembly order
 - [03-01]: BLOCKER WARNINGS uses [source: ...] prefix format distinct from REDIRECT [strength] prefix
 - [03-01]: Decision cap: 5 non-compact, 3 compact; Blocker cap: 3 non-compact, 2 compact
+- [03-02]: Blocker exclusion assertions target BLOCKER WARNINGS section boundary, not full prompt_section, to avoid context capsule false positives
 
 ### Pending Todos
 
@@ -71,5 +72,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-06
-Stopped at: Completed 03-01-PLAN.md
-Resume file: .planning/phases/03-context-expansion/03-01-SUMMARY.md
+Stopped at: Completed 03-02-PLAN.md (Phase 3 complete)
+Resume file: .planning/phases/03-context-expansion/03-02-SUMMARY.md
