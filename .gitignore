@@ -103,5 +103,5 @@ node_modules/
 !bin/lib/
 .worktrees/
 
-# GSD planning files (local only)
-.planning/
+# GSD planning files
+# .planning/ — tracked for this project
