@@ -7121,6 +7121,7 @@ $updated_meta
     ir_has_instincts=$(jq 'if .memory.instincts then "yes" else "no" end' "$ir_state_file" 2>/dev/null || echo "no")
     if [[ "$ir_has_instincts" != '"yes"' ]]; then
       json_ok '{"instincts":[],"total":0,"filtered":0}'
+      exit 0
     fi
 
     ir_result=$(jq -c \

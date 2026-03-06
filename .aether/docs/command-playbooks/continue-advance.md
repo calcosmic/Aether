@@ -88,16 +88,16 @@ Update COLONY_STATE.json:
    bash .aether/aether-utils.sh instinct-create \
      --trigger "<when this situation arises>" \
      --action "<what worked or should be done>" \
-     --confidence <0.4-0.7 based on evidence> \
+     --confidence <0.7-0.9 based on evidence strength> \
      --domain "<testing|architecture|code-style|debugging|workflow>" \
      --source "phase-{id}" \
      --evidence "<specific observation>" 2>/dev/null || true
    ```
 
    Confidence guidelines:
-   - 0.4: success pattern (worked once)
-   - 0.5: error_resolution (fixed a problem)
-   - 0.7: user_feedback (explicit guidance)
+   - 0.7: success pattern (worked and verified in practice)
+   - 0.8: error_resolution (fixed a recurring problem)
+   - 0.9: user_feedback (explicit user guidance)
 
    If pattern matches existing instinct, confidence will be boosted automatically.
    Cap: max 30 instincts enforced by `instinct-create` (lowest confidence evicted).
