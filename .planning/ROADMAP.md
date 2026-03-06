@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Instinct Pipeline** - High-confidence patterns auto-create instincts that reach builders (completed 2026-03-06)
 - [x] **Phase 2: Learnings Injection** - Phase learnings from previous phases flow into builder prompts (completed 2026-03-06)
-- [ ] **Phase 3: Context Expansion** - CONTEXT.md decisions and blocker flags reach builders
+- [x] **Phase 3: Context Expansion** - CONTEXT.md decisions and blocker flags reach builders (completed 2026-03-06)
 - [ ] **Phase 4: Pheromone Auto-Emission** - Decisions, errors, and success patterns auto-emit pheromones
 - [ ] **Phase 5: Wisdom Promotion** - Observations auto-promote to QUEEN.md and reach builders
 
@@ -110,6 +110,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 |-------|----------------|--------|-----------|
 | 1. Instinct Pipeline | 3/3 | Complete    | 2026-03-06 |
 | 2. Learnings Injection | 0/2 | Complete    | 2026-03-06 |
-| 3. Context Expansion | 0/2 | Not started | - |
+| 3. Context Expansion | 0/2 | Complete    | 2026-03-06 |
 | 4. Pheromone Auto-Emission | 0/4 | Not started | - |
 | 5. Wisdom Promotion | 0/4 | Not started | - |
