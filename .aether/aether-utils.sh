@@ -5395,7 +5395,10 @@ $updated_meta
       fi
     fi
 
-    auto_result=$(bash "$0" learning-promote-auto "$mc_wisdom_type" "$mc_content" "$colony_name" "$mc_event" 2>/dev/null || echo '{}')
+    # learning-promote-auto may emit multiple JSON lines (e.g. instinct-create output
+    # followed by the actual result). Take only the last line as the authoritative result.
+    auto_result_raw=$(bash "$0" learning-promote-auto "$mc_wisdom_type" "$mc_content" "$colony_name" "$mc_event" 2>/dev/null || echo '{}')
+    auto_result=$(echo "$auto_result_raw" | tail -1)
     auto_promoted=false
     auto_reason="promotion_skipped"
     if echo "$auto_result" | jq -e '.ok == true' >/dev/null 2>&1; then
