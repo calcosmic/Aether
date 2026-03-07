@@ -91,13 +91,11 @@ Plans:
   2. Running /ant:seal on a completed colony promotes all qualifying observations to QUEEN.md
   3. Running /ant:build after QUEEN.md has entries shows queen wisdom in the builder's prompt context
   4. colony-prime output includes a "Colony Wisdom" section when QUEEN.md has entries, and omits it when empty
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 05-01: Wire learning-promote-auto into continue-finalize
-- [ ] 05-02: Wire queen-promote into seal.md for final wisdom capture
-- [ ] 05-03: Wire queen-read into colony-prime prompt_section output
-- [ ] 05-04: Add tests for wisdom promotion and injection
+- [ ] 05-01-PLAN.md — Wire batch wisdom auto-promotion into continue-finalize and seal playbooks
+- [ ] 05-02-PLAN.md — Integration tests for wisdom promotion and injection end-to-end
 
 ## Progress
 
@@ -110,4 +108,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 2. Learnings Injection | 0/2 | Complete    | 2026-03-06 |
 | 3. Context Expansion | 0/2 | Complete    | 2026-03-06 |
 | 4. Pheromone Auto-Emission | 0/2 | Complete    | 2026-03-06 |
-| 5. Wisdom Promotion | 0/4 | Not started | - |
+| 5. Wisdom Promotion | 0/2 | Not started | - |
