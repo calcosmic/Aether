@@ -2,11 +2,11 @@
 
 ## What This Is
 
-Aether is a self-managing development assistant that uses ant colony metaphor to orchestrate AI workers across coding sessions. It has 36 commands, 22 agents, and ~10,000 lines of shell infrastructure. The system was designed to be self-improving — learning from each project and getting smarter over time. But the learning and feedback systems are disconnected: data gets captured but never reaches the workers who need it. This project wires the existing systems together so Aether actually becomes the self-improving colony it was designed to be.
+Aether is a self-managing development assistant that uses ant colony metaphor to orchestrate AI workers across coding sessions. It has 36 commands, 22 agents, and ~10,000 lines of shell infrastructure. The colony is now fully self-improving: learnings, decisions, error patterns, and wisdom are automatically captured during `/ant:continue` and injected into builders during `/ant:build` via colony-prime. The learning lifecycle is complete from observation to QUEEN.md wisdom.
 
 ## Core Value
 
-Workers should automatically receive all relevant context — learnings, decisions, error patterns, wisdom — without manual intervention. The colony improves itself.
+Workers automatically receive all relevant context -- learnings, decisions, error patterns, wisdom -- without manual intervention. The colony improves itself.
 
 ## Requirements
 
@@ -23,60 +23,54 @@ Workers should automatically receive all relevant context — learnings, decisio
 - Instinct infrastructure (instinct-create, instinct-read exist)
 - QUEEN.md infrastructure (queen-init, queen-read, queen-promote exist)
 - Suggest-analyze/approve pipeline (pheromone suggestions exist)
+- Phase learnings auto-inject into future builder prompts -- v1.0
+- Key decisions auto-convert to FEEDBACK pheromones -- v1.0
+- Recurring error patterns auto-emit REDIRECT pheromones -- v1.0
+- Learning observations auto-promote to QUEEN.md when thresholds met -- v1.0
+- Escalated flags inject as warnings into next phase builders -- v1.0
+- colony-prime reads CONTEXT.md decisions for builder injection -- v1.0
+- instinct-create called during continue flow with confidence >= 0.7 -- v1.0
+- instinct-read results included in colony-prime output (domain-grouped) -- v1.0
+- queen-promote called during seal and continue flows -- v1.0
+- Success criteria patterns create instincts on recurrence -- v1.0
 
 ### Active
 
-- [ ] Phase learnings auto-inject into future builder prompts
-- [ ] Key decisions auto-convert to FEEDBACK pheromones
-- [ ] Recurring error patterns auto-emit REDIRECT pheromones
-- [ ] Learning observations auto-promote to QUEEN.md when thresholds met
-- [ ] Escalated flags inject as warnings into next phase builders
-- [ ] colony-prime reads CONTEXT.md decisions for builder injection
-- [ ] instinct-create actually called during continue flow
-- [ ] instinct-read results included in colony-prime output
-- [ ] queen-promote called during seal and continue flows
-- [ ] Success criteria patterns create instincts on recurrence
+(No active requirements -- next milestone TBD)
 
 ### Out of Scope
 
-- New commands — connect what exists, don't add surface area
-- New agents — 22 is enough, wire them better
-- UI/visual changes — this is plumbing, not paint
-- Cross-colony wisdom sharing — solve single-colony learning first
-- Model routing verification — separate concern
-- XML migration — do gradually as files are touched
+- Cross-colony wisdom sharing -- solve single-colony learning first
+- Model routing verification -- separate concern
+- XML migration -- do gradually as files are touched
 
 ## Context
 
-Aether v1.1.11 is the current version. 490+ tests passing. 8 milestones shipped (v1.0 through v5.0). The system has been used to build itself across those milestones, accumulating 11 learning observations (some seen 3+ times across colonies) — but QUEEN.md has zero entries because queen-promote is never called. Instincts array is empty because instinct-create is never called. Phase learnings are stored but never read back.
+Aether v1.1.11 with v1.0 colony wiring shipped. 535+ tests passing (490 existing + 45 new integration tests). The colony-prime function in aether-utils.sh now assembles 6 context sections for builders: QUEEN WISDOM, CONTEXT CAPSULE, PHASE LEARNINGS, KEY DECISIONS, BLOCKER WARNINGS, and ACTIVE SIGNALS + INSTINCTS.
 
-The architecture is sound. The utilities work. The gap is purely in the command playbooks and colony-prime not reading/writing the data that already exists.
-
-Key files to modify:
-- `.aether/docs/command-playbooks/build-context.md` — where builder context is assembled
-- `.aether/docs/command-playbooks/build-wave.md` — where builders get their prompts
-- `.aether/docs/command-playbooks/continue-advance.md` — where learnings/instincts should be created
-- `.aether/docs/command-playbooks/continue-finalize.md` — where promotion checks should run
-- `.aether/aether-utils.sh` — colony-prime and pheromone-prime functions
-- `.claude/commands/ant/seal.md` — where final wisdom promotion should happen
+The continue-advance playbook creates instincts (3 sources) and auto-emits pheromones (decisions, errors, success). The continue-finalize playbook runs batch wisdom auto-promotion. The seal command runs batch auto-promotion before interactive review.
 
 ## Constraints
 
-- **No new commands** — only modify existing command playbooks and utility functions
-- **No new state files** — use existing JSON structures (COLONY_STATE, pheromones, learning-observations)
-- **Backward compatible** — existing colonies must not break
-- **Must work in Claude Code** — all output via unicode/emoji, no ANSI
-- **Bash 3.2 compatible** — macOS ships bash 3.2
-- **Test coverage** — new behavior needs tests in existing test framework
+- **No new commands** -- only modify existing command playbooks and utility functions
+- **No new state files** -- use existing JSON structures (COLONY_STATE, pheromones, learning-observations)
+- **Backward compatible** -- existing colonies must not break
+- **Must work in Claude Code** -- all output via unicode/emoji, no ANSI
+- **Bash 3.2 compatible** -- macOS ships bash 3.2
+- **Test coverage** -- new behavior needs tests in existing test framework
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Connect, don't add | System has all pieces, just disconnected | -- Pending |
-| Modify playbooks, not commands | Commands are orchestrators, playbooks define behavior | -- Pending |
-| colony-prime is the integration point | Single function that assembles all context for workers | -- Pending |
-| Auto-promotion with thresholds | queen-promote already has threshold logic, just call it | -- Pending |
+| Connect, don't add | System has all pieces, just disconnected | Good -- 0 new commands, 0 new state files |
+| Modify playbooks, not commands | Commands are orchestrators, playbooks define behavior | Good -- all changes in playbooks + colony-prime |
+| colony-prime is the integration point | Single function that assembles all context for workers | Good -- hub-and-spoke architecture works cleanly |
+| Auto-promotion with thresholds | queen-promote already has threshold logic, just call it | Good -- learning-promote-auto with grep guard |
+| Confidence floor 0.7 for instincts | Only validated patterns become instincts | Good -- prevents noise |
+| auto: source prefix namespace | Distinguishes auto-emitted from manual pheromones | Good -- auto:decision, auto:error, auto:success |
+| Prompt assembly order | QUEEN WISDOM first (highest priority), signals last (most volatile) | Good -- natural information hierarchy |
+| Batch sweep + grep guard | Safe to run auto-promotion multiple times | Good -- idempotent, no double-promotion |
 
 ---
-*Last updated: 2026-03-06 after initialization*
+*Last updated: 2026-03-07 after v1.0 milestone*
