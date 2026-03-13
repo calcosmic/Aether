@@ -30,7 +30,8 @@ Parse `$normalized_args` to determine the action:
 
 2. **If remaining arguments is exactly `stop`** — go to **Step 0b: Stop Oracle**
 3. **If remaining arguments is exactly `status`** — go to **Step 0c: Show Status**
-4. **Otherwise** — go to **Step 0.5: Initialize Visual Mode** then **Step 1: Research Wizard**
+4. **If remaining arguments is exactly `promote`** — go to **Step 0d: Promote Findings**
+5. **Otherwise** — go to **Step 0.5: Initialize Visual Mode** then **Step 1: Research Wizard**
 
 ### Step 0.5: Display Header
 
@@ -99,6 +100,143 @@ Status:      {status}
 
   /ant:oracle stop     Halt the loop
   /ant:oracle          Start new research
+```
+
+Stop here.
+
+---
+
+### Step 0d: Promote Findings to Colony
+
+Check if `.aether/oracle/state.json` exists. If it does NOT exist, or if the status is "active", output:
+
+```
+🔮 Oracle Promote: No Completed Research
+
+   No completed research to promote. Run /ant:oracle first, then wait for completion.
+```
+
+Stop here.
+
+**If state.json exists and status is "complete" or "stopped":**
+
+Read `.aether/oracle/plan.json` and extract high-confidence findings:
+
+```bash
+ORACLE_DIR=".aether/oracle"
+topic=$(jq -r '.topic // "unknown"' "$ORACLE_DIR/state.json")
+status=$(jq -r '.status // "active"' "$ORACLE_DIR/state.json")
+count=$(jq '[.questions[] | select(.status == "answered" and .confidence >= 80)] | length' "$ORACLE_DIR/plan.json" 2>/dev/null || echo "0")
+total=$(jq '[.questions[]] | length' "$ORACLE_DIR/plan.json" 2>/dev/null || echo "0")
+echo "TOPIC=$topic"
+echo "STATUS=$status"
+echo "QUALIFYING=$count"
+echo "TOTAL=$total"
+```
+
+If qualifying count is 0, output:
+
+```
+🔮 Oracle Promote: No Qualifying Findings
+
+   Topic:    {topic}
+   Status:   {status}
+   Findings: 0 of {total} questions meet the threshold (answered + 80%+ confidence)
+
+   Lower-confidence findings remain in .aether/oracle/synthesis.md for reference.
+```
+
+Stop here.
+
+**If qualifying count > 0**, display the summary and ask for confirmation:
+
+```
+🔮 Oracle Promote: Colony Knowledge Integration
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   Oracle Research: {topic}
+   Status: {status}
+   High-confidence findings: {count} (answering {count} of {total} questions)
+
+   These findings will be promoted to:
+   - Colony instincts (COLONY_STATE.json)
+   - Colony learnings (learnings.json)
+   - Observation pipeline (for queen-promote)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+Use AskUserQuestion to ask:
+
+```
+Promote these findings to colony knowledge?
+```
+
+Options:
+1. **Yes, promote all high-confidence findings** -- Push qualifying findings to colony instincts, learnings, and observations
+2. **No, skip promotion** -- Findings remain in .aether/oracle/ for reference only
+
+**If user selects Yes:**
+
+Run promotion. For each qualifying question, call the colony APIs directly:
+
+```bash
+ORACLE_DIR=".aether/oracle"
+UTILS=".aether/aether-utils.sh"
+topic=$(jq -r '.topic // "unknown"' "$ORACLE_DIR/state.json")
+promoted=0
+
+while IFS= read -r question; do
+  q_text=$(echo "$question" | jq -r '.text')
+  q_confidence=$(echo "$question" | jq -r '.confidence')
+  findings_text=$(echo "$question" | jq -r '[.key_findings[].text // .key_findings[]] | join("; ")' 2>/dev/null | head -c 200)
+  first_finding=$(echo "$question" | jq -r '[.key_findings[].text // .key_findings[]] | first // "No findings"' 2>/dev/null)
+
+  bash "$UTILS" instinct-create \
+    --trigger "When researching: $q_text" \
+    --action "Oracle found (${q_confidence}% confidence): $findings_text" \
+    --confidence "$(echo "scale=2; $q_confidence / 100" | bc)" \
+    --domain "research" \
+    --source "oracle:$topic" \
+    --evidence "Oracle research: $q_text" 2>/dev/null || true
+
+  bash "$UTILS" learning-promote \
+    "Oracle: $q_text -- $first_finding" \
+    "oracle" \
+    "oracle-research" \
+    "oracle,research" 2>/dev/null || true
+
+  bash "$UTILS" memory-capture learning \
+    "Oracle research finding: $q_text (${q_confidence}%)" \
+    "pattern" \
+    "oracle:promote" 2>/dev/null || true
+
+  promoted=$((promoted + 1))
+done < <(jq -c '[.questions[] | select(.status == "answered" and .confidence >= 80)] | .[]' "$ORACLE_DIR/plan.json")
+
+echo "Promoted $promoted findings"
+```
+
+Output:
+
+```
+🔮 Oracle Promote: Complete
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   Promoted {count} findings to colony knowledge:
+   - Instincts created in COLONY_STATE.json
+   - Learnings stored in learnings.json
+   - Observations tracked for wisdom promotion
+
+   Run /ant:status to see colony knowledge updates.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+**If user selects No:**
+
+```
+🔮 Promotion skipped. Findings remain in .aether/oracle/synthesis.md.
 ```
 
 Stop here.
