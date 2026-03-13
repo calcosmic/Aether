@@ -42,7 +42,11 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
   2. A research topic decomposes into 3-8 tracked sub-questions with status (open/partial/answered) visible in plan.json
   3. research-plan.md is generated from plan.json showing questions, status, confidence, and next steps -- user can read it at any time to see what oracle is doing
   4. State files pass jq validation after creation and after simulated iteration updates
-**Plans**: TBD
+**Plans:** 2 plans
+
+Plans:
+- [ ] 06-01-PLAN.md -- State infrastructure: validate-oracle-state subcommand, session file updates, oracle.sh orchestrator, oracle.md prompt rewrite
+- [ ] 06-02-PLAN.md -- Wizard commands and tests: update oracle wizard (Claude + OpenCode), ava unit tests, bash integration tests
 
 ### Phase 7: Iteration Prompt Engineering
 **Goal**: Each oracle iteration reads structured state, targets the highest-priority knowledge gap, and writes valid state updates -- deepening research rather than appending
@@ -111,7 +115,7 @@ Note: Phase 10 depends on Phase 8 (not Phase 9), so Phases 9 and 10 could execut
 | 3. Context Expansion | v1.0 | 2/2 | Complete | 2026-03-06 |
 | 4. Pheromone Auto-Emission | v1.0 | 2/2 | Complete | 2026-03-06 |
 | 5. Wisdom Promotion | v1.0 | 2/2 | Complete | 2026-03-07 |
-| 6. State Architecture Foundation | v1.1 | 0/TBD | Not started | - |
+| 6. State Architecture Foundation | v1.1 | 0/2 | Not started | - |
 | 7. Iteration Prompt Engineering | v1.1 | 0/TBD | Not started | - |
 | 8. Orchestrator Upgrade | v1.1 | 0/TBD | Not started | - |
 | 9. Source Tracking and Trust Layer | v1.1 | 0/TBD | Not started | - |
