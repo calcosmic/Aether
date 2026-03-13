@@ -674,6 +674,93 @@ run_synthesis_pass() {
   echo "  $RESEARCH_PLAN_FILE"
 }
 
+# Promote high-confidence oracle findings to colony knowledge
+# Reads plan.json, extracts findings from questions with confidence >= 80% and status "answered"
+# Calls instinct-create, learning-promote, and memory-capture for each qualifying finding
+promote_to_colony() {
+  local plan_file="$1"
+  local state_file="$2"
+  local aether_root="$3"
+  local utils="$aether_root/.aether/aether-utils.sh"
+
+  # Verify state is complete or stopped (not active)
+  local status
+  status=$(jq -r '.status // "active"' "$state_file" 2>/dev/null || echo "active")
+  if [ "$status" = "active" ]; then
+    echo "ERROR: Research is still active. Wait for completion or stop the oracle first."
+    return 1
+  fi
+
+  # Verify colony state exists (promotion requires active colony)
+  if [ ! -f "$aether_root/.aether/data/COLONY_STATE.json" ]; then
+    echo "ERROR: No active colony. Run /ant:init first."
+    return 1
+  fi
+
+  local topic
+  topic=$(jq -r '.topic // "unknown"' "$state_file" 2>/dev/null || echo "unknown")
+
+  # Extract high-confidence answered questions (>= 80%)
+  local questions
+  questions=$(jq -c '[.questions[] | select(.status == "answered" and .confidence >= 80)]' "$plan_file" 2>/dev/null || echo "[]")
+
+  local count
+  count=$(echo "$questions" | jq 'length')
+
+  if [ "$count" -eq 0 ]; then
+    echo "No findings meet promotion threshold (answered + 80%+ confidence)."
+    echo "Lower-confidence findings remain in .aether/oracle/synthesis.md for reference."
+    return 0
+  fi
+
+  echo "Promoting $count high-confidence findings to colony knowledge..."
+
+  # Use process substitution to avoid subshell variable loss with while-read
+  local promoted=0
+  local failed=0
+
+  while IFS= read -r question; do
+    local q_text q_confidence findings_text
+    q_text=$(echo "$question" | jq -r '.text')
+    q_confidence=$(echo "$question" | jq -r '.confidence')
+
+    # Handle both v1.1 structured findings {text, source_ids, iteration} and v1.0 string findings
+    findings_text=$(echo "$question" | jq -r '[.key_findings[].text // .key_findings[]] | join("; ")' 2>/dev/null | head -c 200)
+
+    # Create instinct from the research finding
+    bash "$utils" instinct-create \
+      --trigger "When researching: $q_text" \
+      --action "Oracle found (${q_confidence}% confidence): $findings_text" \
+      --confidence "$(echo "scale=2; $q_confidence / 100" | bc)" \
+      --domain "research" \
+      --source "oracle:$topic" \
+      --evidence "Oracle research: $q_text" 2>/dev/null || true
+
+    # Promote as learning (extract first finding for content)
+    local first_finding
+    first_finding=$(echo "$question" | jq -r '[.key_findings[].text // .key_findings[]] | first // "No findings"' 2>/dev/null)
+    bash "$utils" learning-promote \
+      "Oracle: $q_text -- $first_finding" \
+      "oracle" \
+      "oracle-research" \
+      "oracle,research" 2>/dev/null || true
+
+    # Record via memory-capture for observation tracking
+    bash "$utils" memory-capture learning \
+      "Oracle research finding: $q_text (${q_confidence}%)" \
+      "pattern" \
+      "oracle:promote" 2>/dev/null || true
+
+    promoted=$((promoted + 1))
+  done < <(echo "$questions" | jq -c '.[]')
+
+  echo ""
+  echo "Promoted $promoted findings to colony knowledge."
+  echo "  - Instincts created in COLONY_STATE.json"
+  echo "  - Learnings stored in learnings.json"
+  echo "  - Observations tracked for wisdom promotion"
+}
+
 # Trap handler: synthesize before exit on SIGINT/SIGTERM
 cleanup_and_synthesize() {
   if [ "$INTERRUPTED" = true ]; then

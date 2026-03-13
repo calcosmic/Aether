@@ -1228,7 +1228,8 @@ HELP_EOF
             chk("status";["string"]),
             enum("status";["active","complete","stopped"]),
             if has("strategy") then enum("strategy";["breadth-first","depth-first","adaptive"]) else "pass" end,
-            if has("focus_areas") then (if (.focus_areas | type) == "array" then "pass" else "fail: focus_areas not array" end) else "pass" end
+            if has("focus_areas") then (if (.focus_areas | type) == "array" then "pass" else "fail: focus_areas not array" end) else "pass" end,
+            if has("template") then enum("template";["tech-eval","architecture-review","bug-investigation","best-practices","custom"]) else "pass" end
           ]} | . + {pass: (([.checks[] | select(. == "pass")] | length) == (.checks | length))}
         ' "$ORACLE_DIR/state.json")"
         ;;
