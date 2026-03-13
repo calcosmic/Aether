@@ -123,3 +123,4 @@ the evidence you have. If the question is well-answered, say so.
 - Reference existing findings BEFORE writing new ones -- no restatements
 - Do NOT modify any code files or colony state
 - Only write to `.aether/oracle/` directory
+- If this iteration is labeled "SYNTHESIS PASS" in the directive above, follow those instructions instead of the normal research flow -- consolidate and organize existing findings rather than researching new information
