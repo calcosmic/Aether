@@ -133,6 +133,7 @@ determine_phase() {
 build_oracle_prompt() {
   local state_file="$1"
   local oracle_md="$2"
+  local steering_directive="${3:-}"
 
   local current_phase
   current_phase=$(jq -r '.phase // "survey"' "$state_file" 2>/dev/null || echo "survey")
@@ -216,6 +217,40 @@ DIRECTIVE
       echo ""
       echo "---"
       echo ""
+      ;;
+  esac
+
+  # Inject steering directive if provided
+  if [ -n "$steering_directive" ]; then
+    echo "$steering_directive"
+  fi
+
+  # Read strategy and emit modifier
+  local strategy
+  strategy=$(jq -r '.strategy // "adaptive"' "$state_file" 2>/dev/null || echo "adaptive")
+
+  case "$strategy" in
+    breadth-first)
+      cat <<'STRATEGY'
+
+STRATEGY NOTE: Breadth-first mode is active. Prioritize covering ALL questions
+before going deep on any single one. Aim for broad coverage across the research
+plan. When multiple questions are untouched, target the easiest-to-answer first
+for maximum coverage.
+
+STRATEGY
+      ;;
+    depth-first)
+      cat <<'STRATEGY'
+
+STRATEGY NOTE: Depth-first mode is active. Pick the single most important open
+question and investigate it exhaustively. Push confidence to 80%+ before moving
+to the next question. Prefer thorough, well-sourced answers over broad coverage.
+
+STRATEGY
+      ;;
+    *)
+      # adaptive: no strategy modifier needed
       ;;
   esac
 
@@ -370,6 +405,89 @@ compute_trust_scores() {
        no_source: $nosrc,
        trust_ratio: $ratio
      }' "$plan_file" > "$plan_file.tmp" && mv "$plan_file.tmp" "$plan_file"
+}
+
+# Read active pheromone signals and format as a steering directive for the AI prompt
+# Returns formatted steering text, or empty string if no signals active
+read_steering_signals() {
+  local aether_root="$1"
+  local utils="$aether_root/.aether/aether-utils.sh"
+
+  # Gracefully handle missing pheromone system
+  if [ ! -f "$utils" ]; then
+    echo ""
+    return 0
+  fi
+
+  # Read active signals via pheromone-read (handles decay, expiry, filtering)
+  local signals
+  signals=$(bash "$utils" pheromone-read 2>/dev/null || echo '{"signals":[]}')
+
+  # Extract the signals array from the json_ok wrapper
+  local signal_array
+  signal_array=$(echo "$signals" | jq -c '.result.signals // .signals // []' 2>/dev/null || echo '[]')
+
+  local count
+  count=$(echo "$signal_array" | jq 'length' 2>/dev/null || echo "0")
+
+  if [ "$count" -eq 0 ]; then
+    echo ""
+    return 0
+  fi
+
+  # Format steering directive
+  local directive=""
+
+  # REDIRECT signals (highest priority -- hard constraints, max 2)
+  local redirects
+  redirects=$(echo "$signal_array" | jq -r '
+    map(select(.type == "REDIRECT"))
+    | sort_by(-.effective_strength)
+    | .[:2]
+    | .[] | "- [" + ((.effective_strength * 100 | floor | tostring)) + "%] \"" + (.content.text // "") + "\""
+  ' 2>/dev/null || echo "")
+
+  if [ -n "$redirects" ]; then
+    directive+="**REDIRECT (Hard constraints -- MUST follow):**"$'\n'"$redirects"$'\n\n'
+  fi
+
+  # FOCUS signals (prioritization, max 3)
+  local focuses
+  focuses=$(echo "$signal_array" | jq -r '
+    map(select(.type == "FOCUS"))
+    | sort_by(-.effective_strength)
+    | .[:3]
+    | .[] | "- [" + ((.effective_strength * 100 | floor | tostring)) + "%] \"" + (.content.text // "") + "\""
+  ' 2>/dev/null || echo "")
+
+  if [ -n "$focuses" ]; then
+    directive+="**FOCUS (Prioritize these areas):**"$'\n'"$focuses"$'\n\n'
+  fi
+
+  # FEEDBACK signals (behavioral adjustment, max 2)
+  local feedbacks
+  feedbacks=$(echo "$signal_array" | jq -r '
+    map(select(.type == "FEEDBACK"))
+    | sort_by(-.effective_strength)
+    | .[:2]
+    | .[] | "- [" + ((.effective_strength * 100 | floor | tostring)) + "%] \"" + (.content.text // "") + "\""
+  ' 2>/dev/null || echo "")
+
+  if [ -n "$feedbacks" ]; then
+    directive+="**FEEDBACK (Adjust approach):**"$'\n'"$feedbacks"$'\n\n'
+  fi
+
+  if [ -n "$directive" ]; then
+    echo "## Active Steering Signals"
+    echo ""
+    echo "$directive"
+    echo "When selecting your target question, PRIORITIZE questions related to FOCUS areas."
+    echo "REDIRECT signals are hard constraints -- adjust your approach to comply."
+    echo "FEEDBACK signals are suggestions -- incorporate where appropriate."
+    echo ""
+    echo "---"
+    echo ""
+  fi
 }
 
 # Check if research has converged
@@ -637,17 +755,28 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
     exit 0
   fi
 
+  # Read steering signals from pheromones
+  STEERING_DIRECTIVE=$(read_steering_signals "$AETHER_ROOT")
+
+  # Build iteration header with optional steering info
+  SIGNAL_COUNT=$(echo "$STEERING_DIRECTIVE" | grep -c '^\- \[' 2>/dev/null || echo 0)
+  STRATEGY=$(jq -r '.strategy // "adaptive"' "$STATE_FILE" 2>/dev/null || echo "adaptive")
+
   echo ""
   echo "---------------------------------------------------------------"
   echo "  Iteration $i of $MAX_ITERATIONS"
+  if [ -n "$STEERING_DIRECTIVE" ] || [ "$STRATEGY" != "adaptive" ]; then
+    echo "  Steering: $SIGNAL_COUNT signals active"
+    echo "  Strategy: $STRATEGY"
+  fi
   echo "---------------------------------------------------------------"
 
   # Pre-iteration backup for recovery
   cp "$STATE_FILE" "$STATE_FILE.pre-iteration"
   cp "$PLAN_FILE" "$PLAN_FILE.pre-iteration"
 
-  # Run AI with phase-aware prompt (directive + oracle.md)
-  OUTPUT=$(build_oracle_prompt "$STATE_FILE" "$SCRIPT_DIR/oracle.md" | $AI_CMD 2>&1 | tee /dev/stderr) || true
+  # Run AI with phase-aware prompt (directive + steering + oracle.md)
+  OUTPUT=$(build_oracle_prompt "$STATE_FILE" "$SCRIPT_DIR/oracle.md" "$STEERING_DIRECTIVE" | $AI_CMD 2>&1 | tee /dev/stderr) || true
 
   # Validate and recover from malformed JSON
   if ! validate_and_recover "$STATE_FILE" || ! validate_and_recover "$PLAN_FILE"; then

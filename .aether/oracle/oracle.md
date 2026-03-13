@@ -11,6 +11,20 @@ sub-questions, confidence scores, and accumulated findings.
 Your current research phase and specific instructions were provided above this
 prompt. Follow them. The phase determines your strategy for this iteration.
 
+## Steering Signals
+
+If steering signals appear above this prompt, they were emitted by the user:
+
+- **REDIRECT** signals are HARD CONSTRAINTS. You MUST follow them. If a REDIRECT
+  conflicts with your planned approach, change your approach.
+- **FOCUS** signals indicate priority areas. When choosing your target question,
+  prefer questions related to focus areas. If no questions match, fall back to
+  default targeting (lowest-confidence).
+- **FEEDBACK** signals are gentle adjustments. Incorporate them where appropriate
+  into your research approach and output style.
+
+If no steering signals appear, follow default targeting as described in Instructions.
+
 ## Instructions
 
 ### Step 1: Read State Files
