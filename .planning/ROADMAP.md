@@ -87,7 +87,11 @@ Plans:
   1. Every claim in the research output tracks its source (URL + title + date accessed)
   2. Single-source claims are flagged as low confidence; key claims require 2+ independent sources to be marked high confidence
   3. Final report includes a dedicated sources section with inline citations linking findings to their origins
-**Plans**: TBD
+**Plans:** 2 plans
+
+Plans:
+- [ ] 09-01-PLAN.md -- Source tracking implementation: compute_trust_scores in oracle.sh, source tracking prompt in oracle.md, updated synthesis/research-plan, backward-compatible validation, wizard v1.1 template
+- [ ] 09-02-PLAN.md -- Trust layer tests: Ava unit tests and bash integration tests for trust scoring, validation, and backward compatibility
 
 ### Phase 10: Steering Integration
 **Goal**: Users can steer oracle research mid-session via pheromone signals and configure research strategy without restarting
@@ -126,6 +130,6 @@ Note: Phase 10 depends on Phase 8 (not Phase 9), so Phases 9 and 10 could execut
 | 6. State Architecture Foundation | v1.1 | 0/2 | Not started | - |
 | 7. Iteration Prompt Engineering | v1.1 | Complete    | 2026-03-13 | - |
 | 8. Orchestrator Upgrade | v1.1 | 0/2 | Not started | - |
-| 9. Source Tracking and Trust Layer | v1.1 | 0/TBD | Not started | - |
+| 9. Source Tracking and Trust Layer | v1.1 | 0/2 | Not started | - |
 | 10. Steering Integration | v1.1 | 0/TBD | Not started | - |
 | 11. Colony Knowledge Integration and Output Polish | v1.1 | 0/TBD | Not started | - |
