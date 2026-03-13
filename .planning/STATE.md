@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 
 Milestone: v1.1 Oracle Deep Research
 Phase: 8 of 11 (Orchestrator Upgrade)
-Plan: 1 of 2 in current phase
-Status: In Progress
-Last activity: 2026-03-13 -- Plan 08-01 complete (convergence detection, synthesis-on-exit, signal handling, JSON recovery)
+Plan: 2 of 2 in current phase (PHASE COMPLETE)
+Status: Phase Complete
+Last activity: 2026-03-13 -- Plan 08-02 complete (convergence tests: 20 Ava + 13 bash assertions)
 
-Progress: [#####-----] 50%
+Progress: [######----] 55%
 
 ## Performance Metrics
 
@@ -25,9 +25,9 @@ Progress: [#####-----] 50%
 - Total execution time: 0.61 hours
 
 **v1.1:**
-- Total plans completed: 5
+- Total plans completed: 6
 - Average duration: 4.0min
-- Total execution time: 0.34 hours
+- Total execution time: 0.40 hours
 
 *Updated after each plan completion*
 
@@ -57,6 +57,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - Diminishing returns uses 3-iteration rolling window with phase-adjusted thresholds (investigate: 0, others: 1)
 - Every exit path triggers synthesis pass -- max-iter changed from exit 1 to synthesis + exit 0
 - ORACLE_CONVERGENCE_THRESHOLD and ORACLE_DR_WINDOW env vars for empirical tuning
+- Test oracle.sh convergence functions using same sed extraction + isolation pattern from Phase 7
+- Multi-function sed extraction needed when function A depends on function B (update_convergence_metrics + compute_convergence)
 
 ### Pending Todos
 
@@ -71,5 +73,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-13
-Stopped at: Completed 08-01-PLAN.md
-Resume file: .planning/phases/08-orchestrator-upgrade/08-01-SUMMARY.md
+Stopped at: Completed 08-02-PLAN.md (Phase 8 complete)
+Resume file: .planning/phases/08-orchestrator-upgrade/08-02-SUMMARY.md
