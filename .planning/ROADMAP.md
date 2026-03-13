@@ -101,7 +101,11 @@ Plans:
   1. User can emit FOCUS/REDIRECT/FEEDBACK pheromone signals that the oracle reads between iterations and acts on in the next iteration
   2. User can configure search strategy (breadth-first, depth-first, or adaptive) in the oracle wizard before research begins
   3. User can set focus areas to prioritize certain aspects of the research topic, and oracle visibly prioritizes those areas in subsequent iterations
-**Plans**: TBD
+**Plans:** 2 plans
+
+Plans:
+- [ ] 10-01-PLAN.md -- Steering implementation: read_steering_signals in oracle.sh, build_oracle_prompt strategy modifier, wizard strategy/focus questions, validate-oracle-state extensions
+- [ ] 10-02-PLAN.md -- Steering tests: Ava unit tests and bash integration tests for steering signal reading, strategy handling, and validation
 
 ### Phase 11: Colony Knowledge Integration and Output Polish
 **Goal**: High-confidence research findings promote to colony instincts and learnings; final output adapts its structure to the specific research topic
@@ -131,5 +135,5 @@ Note: Phase 10 depends on Phase 8 (not Phase 9), so Phases 9 and 10 could execut
 | 7. Iteration Prompt Engineering | v1.1 | Complete    | 2026-03-13 | - |
 | 8. Orchestrator Upgrade | v1.1 | 0/2 | Not started | - |
 | 9. Source Tracking and Trust Layer | v1.1 | 0/2 | Not started | - |
-| 10. Steering Integration | v1.1 | 0/TBD | Not started | - |
+| 10. Steering Integration | v1.1 | 0/2 | Not started | - |
 | 11. Colony Knowledge Integration and Output Polish | v1.1 | 0/TBD | Not started | - |
