@@ -58,6 +58,22 @@ generate_research_plan() {
     local next
     next=$(jq -r '[.questions[] | select(.status != "answered")] | sort_by(.confidence) | first | .text // "All questions answered"' "$plan_file")
     echo "Next investigation: $next"
+
+    # Show trust summary if available
+    local trust_ratio
+    trust_ratio=$(jq '.trust_summary.trust_ratio // -1' "$plan_file" 2>/dev/null || echo "-1")
+    if [ "$trust_ratio" -ge 0 ]; then
+      local total single multi
+      total=$(jq '.trust_summary.total_findings // 0' "$plan_file")
+      single=$(jq '.trust_summary.single_source // 0' "$plan_file")
+      multi=$(jq '.trust_summary.multi_source // 0' "$plan_file")
+      echo ""
+      echo "## Source Trust"
+      echo "| Total Findings | Multi-Source | Single-Source | Trust Ratio |"
+      echo "|----------------|-------------|---------------|-------------|"
+      echo "| $total | $multi | $single | ${trust_ratio}% |"
+    fi
+
     echo ""
     echo "---"
     echo "*Generated from plan.json -- do not edit directly*"
@@ -307,6 +323,47 @@ update_convergence_metrics() {
      ' "$state_file" > "$state_file.tmp" && mv "$state_file.tmp" "$state_file"
 }
 
+# Compute trust scores from plan.json source tracking data
+# Writes trust metadata to plan.json (trust_summary field)
+compute_trust_scores() {
+  local plan_file="$1"
+
+  # Check if plan.json uses the new structured findings format
+  local has_structured
+  has_structured=$(jq '
+    [.questions[].key_findings[] | type] | if length == 0 then false else any(. == "object") end
+  ' "$plan_file" 2>/dev/null || echo "false")
+
+  if [ "$has_structured" != "true" ]; then
+    # Pre-Phase-9 plan.json with string findings -- skip trust computation
+    return 0
+  fi
+
+  local total_findings single_source multi_source no_source
+  total_findings=$(jq '[.questions[].key_findings[]] | length' "$plan_file" 2>/dev/null || echo "0")
+  single_source=$(jq '[.questions[].key_findings[] | select(type == "object" and (.source_ids | length) == 1)] | length' "$plan_file" 2>/dev/null || echo "0")
+  multi_source=$(jq '[.questions[].key_findings[] | select(type == "object" and (.source_ids | length) >= 2)] | length' "$plan_file" 2>/dev/null || echo "0")
+  no_source=$(jq '[.questions[].key_findings[] | select(type == "object" and ((.source_ids // []) | length) == 0)] | length' "$plan_file" 2>/dev/null || echo "0")
+
+  local trust_ratio=0
+  if [ "$total_findings" -gt 0 ]; then
+    trust_ratio=$(( multi_source * 100 / total_findings ))
+  fi
+
+  jq --argjson total "$total_findings" \
+     --argjson single "$single_source" \
+     --argjson multi "$multi_source" \
+     --argjson nosrc "$no_source" \
+     --argjson ratio "$trust_ratio" \
+     '.trust_summary = {
+       total_findings: $total,
+       single_source: $single,
+       multi_source: $multi,
+       no_source: $nosrc,
+       trust_ratio: $ratio
+     }' "$plan_file" > "$plan_file.tmp" && mv "$plan_file.tmp" "$plan_file"
+}
+
 # Check if research has converged
 # Returns 0 (true) if composite_score >= threshold AND last 2 history entries have low novelty
 check_convergence() {
@@ -430,7 +487,7 @@ Produce the best possible research report from the current state.
 
 Read ALL of these files:
 - .aether/oracle/state.json -- session metadata
-- .aether/oracle/plan.json -- questions, findings, confidence
+- .aether/oracle/plan.json -- questions, findings, confidence, AND sources registry
 - .aether/oracle/synthesis.md -- accumulated findings
 - .aether/oracle/gaps.md -- remaining unknowns
 
@@ -440,9 +497,10 @@ Then REWRITE synthesis.md as a structured final report:
 
 ### Required Sections:
 1. **Executive Summary** -- 2-3 paragraphs summarizing what was found
-2. **Findings by Question** -- organized by sub-question, with confidence %
+2. **Findings by Question** -- organized by sub-question, with confidence %. Use inline citations [S1], [S2] linking findings to their sources. Flag single-source findings with (single source) marker.
 3. **Open Questions** -- remaining gaps with explanation of what is unknown and why
 4. **Methodology Notes** -- how many iterations, which phases completed
+5. **Sources** -- List ALL sources from plan.json sources registry: Format: [S1] Title -- URL (accessed: date). Group by type (documentation, blog, codebase, etc.). Note total source count and multi-source coverage percentage.
 
 Also update state.json: set status to "complete" if reason is "converged",
 or "stopped" otherwise.
@@ -603,6 +661,9 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
 
   # Update convergence metrics
   update_convergence_metrics "$STATE_FILE" "$PLAN_FILE"
+
+  # Compute trust scores from source tracking data
+  compute_trust_scores "$PLAN_FILE"
 
   # Check for diminishing returns
   DR_RESULT=$(detect_diminishing_returns "$STATE_FILE")
