@@ -73,7 +73,11 @@ Plans:
   2. Oracle detects diminishing returns (e.g., 3 iterations with minimal new findings) and triggers strategy changes or synthesis
   3. On stop signal or max-iterations, oracle runs a synthesis pass that produces a useful structured partial report from whatever state exists
   4. State validation runs after each iteration -- malformed JSON triggers recovery, not silent corruption
-**Plans**: TBD
+**Plans:** 2 plans
+
+Plans:
+- [ ] 08-01-PLAN.md -- Convergence detection, diminishing returns, synthesis pass, signal handling, and JSON recovery in oracle.sh
+- [ ] 08-02-PLAN.md -- Ava unit tests and bash integration tests for all convergence and recovery functions
 
 ### Phase 9: Source Tracking and Trust Layer
 **Goal**: Every factual claim in oracle output tracks its source, and single-source claims are flagged as low confidence
@@ -121,7 +125,7 @@ Note: Phase 10 depends on Phase 8 (not Phase 9), so Phases 9 and 10 could execut
 | 5. Wisdom Promotion | v1.0 | 2/2 | Complete | 2026-03-07 |
 | 6. State Architecture Foundation | v1.1 | 0/2 | Not started | - |
 | 7. Iteration Prompt Engineering | v1.1 | Complete    | 2026-03-13 | - |
-| 8. Orchestrator Upgrade | v1.1 | 0/TBD | Not started | - |
+| 8. Orchestrator Upgrade | v1.1 | 0/2 | Not started | - |
 | 9. Source Tracking and Trust Layer | v1.1 | 0/TBD | Not started | - |
 | 10. Steering Integration | v1.1 | 0/TBD | Not started | - |
 | 11. Colony Knowledge Integration and Output Polish | v1.1 | 0/TBD | Not started | - |
