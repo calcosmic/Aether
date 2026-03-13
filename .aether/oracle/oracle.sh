@@ -3,7 +3,7 @@
 # Usage: ./oracle.sh [max_iterations_override]
 # Based on: https://github.com/snarktank/ralph
 #
-# Configuration is read from research.json (written by /ant:oracle wizard).
+# Configuration is read from state.json (written by /ant:oracle wizard).
 # Command-line arg overrides max_iterations if provided.
 
 set -e
@@ -16,24 +16,66 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AETHER_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Files
-RESEARCH_FILE="$SCRIPT_DIR/research.json"
-PROGRESS_FILE="$SCRIPT_DIR/progress.md"
+STATE_FILE="$SCRIPT_DIR/state.json"
+PLAN_FILE="$SCRIPT_DIR/plan.json"
+GAPS_FILE="$SCRIPT_DIR/gaps.md"
+SYNTHESIS_FILE="$SCRIPT_DIR/synthesis.md"
+RESEARCH_PLAN_FILE="$SCRIPT_DIR/research-plan.md"
 STOP_FILE="$SCRIPT_DIR/.stop"
 ARCHIVE_DIR="$SCRIPT_DIR/archive"
 DISCOVERIES_DIR="$SCRIPT_DIR/discoveries"
 
-# Check research.json exists
-if [ ! -f "$RESEARCH_FILE" ]; then
-  echo "Error: No research.json found. Run /ant:oracle to configure research first."
+# Generate research-plan.md from state.json and plan.json
+generate_research_plan() {
+  local state_file="$STATE_FILE"
+  local plan_file="$PLAN_FILE"
+  local output_file="$RESEARCH_PLAN_FILE"
+
+  # Bail if source files don't exist
+  [ -f "$state_file" ] || return 0
+  [ -f "$plan_file" ] || return 0
+
+  local topic iteration max_iter confidence status
+  topic=$(jq -r '.topic' "$state_file")
+  iteration=$(jq -r '.iteration' "$state_file")
+  max_iter=$(jq -r '.max_iterations' "$state_file")
+  confidence=$(jq -r '.overall_confidence' "$state_file")
+  status=$(jq -r '.status' "$state_file")
+
+  {
+    echo "# Research Plan"
+    echo ""
+    echo "**Topic:** $topic"
+    echo "**Status:** $status | **Iteration:** $iteration of $max_iter"
+    echo "**Overall Confidence:** ${confidence}%"
+    echo ""
+    echo "## Questions"
+    echo "| # | Question | Status | Confidence |"
+    echo "|---|----------|--------|------------|"
+    jq -r '.questions[] | "| \(.id) | \(.text) | \(.status) | \(.confidence)% |"' "$plan_file"
+    echo ""
+    echo "## Next Steps"
+    local next
+    next=$(jq -r '[.questions[] | select(.status != "answered")] | sort_by(.confidence) | first | .text // "All questions answered"' "$plan_file")
+    echo "Next investigation: $next"
+    echo ""
+    echo "---"
+    echo "*Generated from plan.json -- do not edit directly*"
+  } > "$output_file"
+}
+
+# Check state.json exists (wizard must create it before launching oracle.sh)
+if [ ! -f "$STATE_FILE" ]; then
+  echo "Error: No state.json found. Run /ant:oracle to configure research first."
   exit 1
 fi
 
-# Read config from research.json (wizard writes these)
-CURRENT_TOPIC=$(jq -r '.topic // empty' "$RESEARCH_FILE" 2>/dev/null || echo "")
-TARGET_CONFIDENCE=$(jq -r '.target_confidence // 95' "$RESEARCH_FILE" 2>/dev/null || echo "95")
-JSON_MAX_ITER=$(jq -r '.max_iterations // 50' "$RESEARCH_FILE" 2>/dev/null || echo "50")
+# Read config from state.json (wizard writes these)
+CURRENT_TOPIC=$(jq -r '.topic // empty' "$STATE_FILE" 2>/dev/null || echo "")
+TARGET_CONFIDENCE=$(jq -r '.target_confidence // 95' "$STATE_FILE" 2>/dev/null || echo "95")
+JSON_MAX_ITER=$(jq -r '.max_iterations // 50' "$STATE_FILE" 2>/dev/null || echo "50")
 
-# Command-line arg overrides research.json
+# Command-line arg overrides state.json
 MAX_ITERATIONS=${1:-$JSON_MAX_ITER}
 
 # Detect AI CLI (claude or opencode)
@@ -47,35 +89,20 @@ else
 fi
 
 # Archive previous run if topic changed
-LAST_TOPIC_FILE="$SCRIPT_DIR/.last-topic"
-if [ -f "$LAST_TOPIC_FILE" ] && [ -f "$PROGRESS_FILE" ]; then
-  LAST_TOPIC=$(cat "$LAST_TOPIC_FILE" 2>/dev/null || echo "")
-  if [ -n "$CURRENT_TOPIC" ] && [ -n "$LAST_TOPIC" ] && [ "$CURRENT_TOPIC" != "$LAST_TOPIC" ]; then
-    DATE=$(date +%Y-%m-%d)
-    TOPIC_SLUG=$(echo "$LAST_TOPIC" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-\|-$//g')
-    ARCHIVE_FOLDER="$ARCHIVE_DIR/$DATE-$TOPIC_SLUG"
+if [ -f "$STATE_FILE" ]; then
+  LAST_TOPIC=$(jq -r '.topic // empty' "$STATE_FILE" 2>/dev/null || echo "")
+  # If the wizard passed a new topic via environment, compare
+  if [ -n "${ORACLE_NEW_TOPIC:-}" ] && [ -n "$LAST_TOPIC" ] && [ "$ORACLE_NEW_TOPIC" != "$LAST_TOPIC" ]; then
+    ARCHIVE_FOLDER="$ARCHIVE_DIR/$(date +%Y-%m-%d-%H%M%S)"
 
     echo "Archiving previous research: $LAST_TOPIC"
     mkdir -p "$ARCHIVE_FOLDER"
-    [ -f "$RESEARCH_FILE" ] && cp "$RESEARCH_FILE" "$ARCHIVE_FOLDER/"
-    [ -f "$PROGRESS_FILE" ] && cp "$PROGRESS_FILE" "$ARCHIVE_FOLDER/"
+    for f in state.json plan.json gaps.md synthesis.md research-plan.md; do
+      [ -f "$SCRIPT_DIR/$f" ] && cp "$SCRIPT_DIR/$f" "$ARCHIVE_FOLDER/"
+    done
     echo "   Archived to: $ARCHIVE_FOLDER"
-
-    # Reset progress file
-    echo "# Oracle Research Progress" > "$PROGRESS_FILE"
-    echo "" >> "$PROGRESS_FILE"
+    # Do NOT create empty files -- the wizard handles initial file creation
   fi
-fi
-
-# Track current topic
-if [ -n "$CURRENT_TOPIC" ]; then
-  echo "$CURRENT_TOPIC" > "$LAST_TOPIC_FILE"
-fi
-
-# Initialize progress file if needed
-if [ ! -f "$PROGRESS_FILE" ]; then
-  echo "# Oracle Research Progress" > "$PROGRESS_FILE"
-  echo "" >> "$PROGRESS_FILE"
 fi
 
 # Initialize discoveries directory
@@ -109,6 +136,17 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
   # Run AI with oracle.md prompt
   OUTPUT=$($AI_CMD < "$SCRIPT_DIR/oracle.md" 2>&1 | tee /dev/stderr) || true
 
+  # Basic jq validation after iteration (safety check -- Phase 8 adds recovery)
+  if ! jq -e . "$STATE_FILE" >/dev/null 2>&1; then
+    echo "WARNING: state.json is invalid JSON after iteration $i"
+  fi
+  if ! jq -e . "$PLAN_FILE" >/dev/null 2>&1; then
+    echo "WARNING: plan.json is invalid JSON after iteration $i"
+  fi
+
+  # Regenerate research-plan.md from current state
+  generate_research_plan
+
   # Check for completion signal
   if echo "$OUTPUT" | grep -q "<oracle>COMPLETE</oracle>"; then
     echo ""
@@ -129,5 +167,5 @@ echo "==============================================================="
 echo "  ORACLE REACHED MAX ITERATIONS"
 echo "==============================================================="
 echo "Max iterations ($MAX_ITERATIONS) reached without completion."
-echo "Check $PROGRESS_FILE for current research status."
+echo "Check $RESEARCH_PLAN_FILE for current research status."
 exit 1
