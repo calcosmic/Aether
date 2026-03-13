@@ -983,7 +983,7 @@ case "$cmd" in
     cat <<'HELP_EOF'
 {
   "ok": true,
-  "commands": ["help","version","validate-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","learning-observe","learning-check-promotion","learning-promote-auto","memory-capture","queen-thresholds","context-capsule","rolling-summary","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","spawn-efficiency","validate-worker-response","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-display-text","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","phase-insert","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","incident-rule-add","survey-load","survey-verify","pheromone-export","pheromone-write","pheromone-count","pheromone-read","instinct-read","pheromone-prime","colony-prime","pheromone-expire","eternal-init","eternal-store","pheromone-export-xml","pheromone-import-xml","pheromone-validate-xml","wisdom-export-xml","wisdom-import-xml","registry-export-xml","registry-import-xml","memory-metrics","midden-recent-failures","entropy-score","force-unlock","changelog-append","changelog-collect-plan-data","suggest-approve","suggest-quick-dismiss"],
+  "commands": ["help","version","validate-state","validate-oracle-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","learning-observe","learning-check-promotion","learning-promote-auto","memory-capture","queen-thresholds","context-capsule","rolling-summary","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","spawn-efficiency","validate-worker-response","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-display-text","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","phase-insert","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","incident-rule-add","survey-load","survey-verify","pheromone-export","pheromone-write","pheromone-count","pheromone-read","instinct-read","pheromone-prime","colony-prime","pheromone-expire","eternal-init","eternal-store","pheromone-export-xml","pheromone-import-xml","pheromone-validate-xml","wisdom-export-xml","wisdom-import-xml","registry-export-xml","registry-import-xml","memory-metrics","midden-recent-failures","entropy-score","force-unlock","changelog-append","changelog-collect-plan-data","suggest-approve","suggest-quick-dismiss"],
   "sections": {
     "Core": [
       {"name": "help", "description": "List all available commands with sections"},
@@ -991,6 +991,7 @@ case "$cmd" in
     ],
     "Colony State": [
       {"name": "validate-state", "description": "Validate COLONY_STATE.json or constraints.json"},
+      {"name": "validate-oracle-state", "description": "Validate oracle state files (state.json, plan.json)"},
       {"name": "load-state", "description": "Load and lock COLONY_STATE.json"},
       {"name": "unload-state", "description": "Release COLONY_STATE.json lock"},
       {"name": "phase-insert", "description": "Insert a new phase after current phase and renumber safely"}
@@ -1196,6 +1197,78 @@ HELP_EOF
         ;;
       *)
         json_err "$E_VALIDATION_FAILED" "Usage: validate-state colony|constraints|all"
+        ;;
+    esac
+    ;;
+  validate-oracle-state)
+    # Validate oracle state files (state.json, plan.json)
+    # Usage: bash .aether/aether-utils.sh validate-oracle-state state|plan|all
+    # Uses ORACLE_DIR env var override, defaulting to .aether/oracle
+    ORACLE_DIR="${ORACLE_DIR:-.aether/oracle}"
+
+    case "${1:-}" in
+      state)
+        [[ -f "$ORACLE_DIR/state.json" ]] || json_err "$E_FILE_NOT_FOUND" "state.json not found" '{"file":"state.json"}'
+        json_ok "$(jq '
+          def chk(f;t): if has(f) then (if (.[f]|type) as $a | t | any(. == $a) then "pass" else "fail: \(f) is \(.[f]|type), expected \(t|join("|"))" end) else "fail: missing \(f)" end;
+          def enum(f;vals): if has(f) then (if [.[f]] | inside(vals) then "pass" else "fail: \(f) is \(.[f]), expected one of \(vals|join("|"))" end) else "fail: missing \(f)" end;
+          {file:"state.json", checks:[
+            chk("version";["string"]),
+            chk("topic";["string"]),
+            chk("scope";["string"]),
+            enum("scope";["codebase","web","both"]),
+            chk("phase";["string"]),
+            enum("phase";["survey","investigate","synthesize","verify"]),
+            chk("iteration";["number"]),
+            chk("max_iterations";["number"]),
+            chk("target_confidence";["number"]),
+            chk("overall_confidence";["number"]),
+            chk("started_at";["string"]),
+            chk("last_updated";["string"]),
+            chk("status";["string"]),
+            enum("status";["active","complete","stopped"])
+          ]} | . + {pass: (([.checks[] | select(. == "pass")] | length) == (.checks | length))}
+        ' "$ORACLE_DIR/state.json")"
+        ;;
+      plan)
+        [[ -f "$ORACLE_DIR/plan.json" ]] || json_err "$E_FILE_NOT_FOUND" "plan.json not found" '{"file":"plan.json"}'
+        json_ok "$(jq '
+          def chk(f;t): if has(f) then (if (.[f]|type) as $a | t | any(. == $a) then "pass" else "fail: \(f) is \(.[f]|type), expected \(t|join("|"))" end) else "fail: missing \(f)" end;
+          {file:"plan.json", checks:[
+            chk("version";["string"]),
+            chk("questions";["array"]),
+            chk("created_at";["string"]),
+            chk("last_updated";["string"]),
+            if (.questions | length) >= 1 and (.questions | length) <= 8
+              then "pass"
+              else "fail: questions count \(.questions | length) outside 1-8 range"
+            end,
+            if (.questions | all(has("id","text","status","confidence","key_findings","iterations_touched")))
+              then "pass"
+              else "fail: questions missing required fields (id, text, status, confidence, key_findings, iterations_touched)"
+            end,
+            if (.questions | all(.status == "open" or .status == "partial" or .status == "answered"))
+              then "pass"
+              else "fail: invalid status value (must be open|partial|answered)"
+            end,
+            if (.questions | all(.confidence >= 0 and .confidence <= 100))
+              then "pass"
+              else "fail: confidence out of 0-100 range"
+            end
+          ]} | . + {pass: (([.checks[] | select(. == "pass")] | length) == (.checks | length))}
+        ' "$ORACLE_DIR/plan.json")"
+        ;;
+      all)
+        results=()
+        for target in state plan; do
+          results+=("$(ORACLE_DIR="$ORACLE_DIR" bash "$SCRIPT_DIR/aether-utils.sh" validate-oracle-state "$target" 2>/dev/null || echo '{"ok":false}')")
+        done
+        combined=$(printf '%s\n' "${results[@]}" | jq -s '[.[] | .result // {file:"unknown",pass:false}]')
+        all_pass=$(echo "$combined" | jq 'all(.pass)')
+        json_ok "{\"pass\":$all_pass,\"files\":$combined}"
+        ;;
+      *)
+        json_err "$E_VALIDATION_FAILED" "Usage: validate-oracle-state state|plan|all"
         ;;
     esac
     ;;
@@ -6487,7 +6560,7 @@ $updated_meta
         ;;
       oracle)
         session_dir="${ORACLE_DIR:-.aether/oracle}"
-        required_docs="progress.md research.json"
+        required_docs="state.json plan.json gaps.md synthesis.md research-plan.md"
         ;;
       watch)
         session_dir="${WATCH_DIR:-.aether/data}"
@@ -6601,7 +6674,7 @@ $updated_meta
         ;;
       oracle)
         session_dir="${ORACLE_DIR:-.aether/oracle}"
-        files="progress.md research.json .stop"
+        files="state.json plan.json gaps.md synthesis.md research-plan.md .stop .last-topic"
         # Also clear discoveries subdirectory
         subdir_files="discoveries/*"
         ;;
