@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-03-13)
 
 **Core value:** The oracle produces research you can act on -- verified, iteratively deepened, structured for the topic.
-**Current focus:** Phase 9 complete -- Source Tracking and Trust Layer
+**Current focus:** Phase 10 in progress -- Steering Integration
 
 ## Current Position
 
 Milestone: v1.1 Oracle Deep Research
-Phase: 9 of 11 (Source Tracking and Trust Layer)
-Plan: 2 of 2 in current phase (COMPLETE)
-Status: Phase Complete
-Last activity: 2026-03-13 -- Plan 09-02 complete (trust scoring tests: 10 Ava + 9 bash assertions)
+Phase: 10 of 11 (Steering Integration)
+Plan: 1 of 2 in current phase
+Status: In Progress
+Last activity: 2026-03-13 -- Plan 10-01 complete (steering signal reading, strategy handling, wizard extensions)
 
-Progress: [#######---] 70%
+Progress: [########--] 80%
 
 ## Performance Metrics
 
@@ -25,9 +25,9 @@ Progress: [#######---] 70%
 - Total execution time: 0.61 hours
 
 **v1.1:**
-- Total plans completed: 8
+- Total plans completed: 9
 - Average duration: 3.9min
-- Total execution time: 0.52 hours
+- Total execution time: 0.59 hours
 
 *Updated after each plan completion*
 
@@ -63,6 +63,11 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - Source tracking is a prompt+schema problem -- AI records sources, oracle.sh counts them structurally
 - plan.json v1.1 bump is safe -- validate-oracle-state checks version type not value
 - Used jq -n for JSON construction in bash tests instead of heredocs to avoid special character issues with nested objects
+- Strategy is emphasis modifier, not phase transition override -- phase system retains structural metric control
+- Signal caps prevent prompt flooding: max 2 REDIRECT + 3 FOCUS + 2 FEEDBACK signals
+- Wizard focus areas emitted as FOCUS pheromones with --source oracle:wizard and --ttl 24h
+- read_steering_signals degrades gracefully if pheromone system unavailable
+- state.json version bumped to 1.1 matching Phase 9 plan.json pattern
 
 ### Pending Todos
 
@@ -77,5 +82,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-13
-Stopped at: Completed 09-02-PLAN.md (Phase 9 complete)
-Resume file: .planning/phases/09-source-tracking-and-trust-layer/09-02-SUMMARY.md
+Stopped at: Completed 10-01-PLAN.md
+Resume file: .planning/phases/10-steering-integration/10-01-SUMMARY.md
