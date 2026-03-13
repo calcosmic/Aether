@@ -199,6 +199,309 @@ DIRECTIVE
   cat "$oracle_md"
 }
 
+# Compute convergence metrics from plan.json structural data
+# Returns JSON object with gap_resolution_pct, coverage_pct, novelty_delta, total_findings
+compute_convergence() {
+  local plan_file="$1"
+  local state_file="$2"
+
+  local total answered partial_high
+
+  total=$(jq '[.questions[]] | length' "$plan_file" 2>/dev/null || echo "0")
+  answered=$(jq '[.questions[] | select(.status == "answered")] | length' "$plan_file" 2>/dev/null || echo "0")
+  partial_high=$(jq '[.questions[] | select(.status == "partial" and .confidence >= 70)] | length' "$plan_file" 2>/dev/null || echo "0")
+
+  # Gap resolution: fraction of questions substantively addressed
+  local gap_resolution
+  if [ "$total" -eq 0 ]; then
+    gap_resolution=100
+  else
+    gap_resolution=$(( (answered + partial_high) * 100 / total ))
+  fi
+
+  # Coverage: fraction of questions with non-empty iterations_touched
+  local touched coverage
+  touched=$(jq '[.questions[] | select((.iterations_touched // []) | length > 0)] | length' "$plan_file" 2>/dev/null || echo "0")
+  if [ "$total" -eq 0 ]; then
+    coverage=100
+  else
+    coverage=$(( touched * 100 / total ))
+  fi
+
+  # Novelty: compare total findings count to previous iteration
+  local current_findings prev_findings novelty_delta
+  current_findings=$(jq '[.questions[].key_findings | length] | add // 0' "$plan_file" 2>/dev/null || echo "0")
+  prev_findings=$(jq '.convergence.prev_findings_count // 0' "$state_file" 2>/dev/null || echo "0")
+  novelty_delta=$(( current_findings - prev_findings ))
+
+  jq -n --argjson gap "$gap_resolution" --argjson cov "$coverage" \
+        --argjson novelty "$novelty_delta" --argjson findings "$current_findings" \
+    '{gap_resolution_pct: $gap, coverage_pct: $cov, novelty_delta: $novelty, total_findings: $findings}'
+}
+
+# Update convergence metrics in state.json after each iteration
+update_convergence_metrics() {
+  local state_file="$1"
+  local plan_file="$2"
+
+  local metrics
+  metrics=$(compute_convergence "$plan_file" "$state_file")
+
+  local gap_pct coverage_pct novelty_delta total_findings
+  gap_pct=$(echo "$metrics" | jq '.gap_resolution_pct')
+  coverage_pct=$(echo "$metrics" | jq '.coverage_pct')
+  novelty_delta=$(echo "$metrics" | jq '.novelty_delta')
+  total_findings=$(echo "$metrics" | jq '.total_findings')
+
+  local current_confidence prev_confidence confidence_delta current_iteration current_phase
+  current_confidence=$(jq '.overall_confidence // 0' "$state_file" 2>/dev/null || echo "0")
+  prev_confidence=$(jq '.convergence.prev_overall_confidence // 0' "$state_file" 2>/dev/null || echo "0")
+  confidence_delta=$(( current_confidence - prev_confidence ))
+  current_iteration=$(jq '.iteration // 0' "$state_file" 2>/dev/null || echo "0")
+  current_phase=$(jq -r '.phase // "survey"' "$state_file" 2>/dev/null || echo "survey")
+
+  # Compute composite score:
+  # gap_resolution * 0.4 + coverage * 0.3 + (novelty_delta <= 1 ? 100 : 0) * 0.3
+  # Using integer arithmetic scaled by 100
+  local novelty_component composite_score converged
+  if [ "$novelty_delta" -le 1 ]; then
+    novelty_component=100
+  else
+    novelty_component=0
+  fi
+  composite_score=$(( gap_pct * 40 / 100 + coverage_pct * 30 / 100 + novelty_component * 30 / 100 ))
+
+  local conv_threshold
+  conv_threshold=${ORACLE_CONVERGENCE_THRESHOLD:-85}
+  if [ "$composite_score" -ge "$conv_threshold" ]; then
+    converged="true"
+  else
+    converged="false"
+  fi
+
+  # Update state.json with convergence data
+  jq --argjson prev_findings "$total_findings" \
+     --argjson prev_confidence "$current_confidence" \
+     --argjson iteration "$current_iteration" \
+     --argjson novelty "$novelty_delta" \
+     --argjson conf_delta "$confidence_delta" \
+     --argjson gap "$gap_pct" \
+     --argjson cov "$coverage_pct" \
+     --arg phase "$current_phase" \
+     --argjson composite "$composite_score" \
+     --argjson converged "$converged" \
+     '
+     .convergence = (.convergence // {}) |
+     .convergence.prev_findings_count = $prev_findings |
+     .convergence.prev_overall_confidence = $prev_confidence |
+     .convergence.history = ((.convergence.history // []) + [{
+       iteration: $iteration,
+       novelty_delta: $novelty,
+       confidence_delta: $conf_delta,
+       gap_resolution_pct: $gap,
+       coverage_pct: $cov,
+       phase: $phase
+     }]) |
+     .convergence.composite_score = $composite |
+     .convergence.converged = $converged
+     ' "$state_file" > "$state_file.tmp" && mv "$state_file.tmp" "$state_file"
+}
+
+# Check if research has converged
+# Returns 0 (true) if composite_score >= threshold AND last 2 history entries have low novelty
+check_convergence() {
+  local state_file="$1"
+
+  local conv_threshold
+  conv_threshold=${ORACLE_CONVERGENCE_THRESHOLD:-85}
+
+  local composite_score
+  composite_score=$(jq '.convergence.composite_score // 0' "$state_file" 2>/dev/null || echo "0")
+
+  if [ "$composite_score" -lt "$conv_threshold" ]; then
+    return 1
+  fi
+
+  # Check that at least 2 history entries exist and last 2 have novelty_delta <= 1
+  local history_len
+  history_len=$(jq '(.convergence.history // []) | length' "$state_file" 2>/dev/null || echo "0")
+  if [ "$history_len" -lt 2 ]; then
+    return 1
+  fi
+
+  local low_novelty_count
+  low_novelty_count=$(jq '[(.convergence.history // [])[-2:][] | select(.novelty_delta <= 1)] | length' "$state_file" 2>/dev/null || echo "0")
+
+  if [ "$low_novelty_count" -ge 2 ]; then
+    return 0
+  fi
+
+  return 1
+}
+
+# Detect diminishing returns from convergence history
+# Outputs: "strategy_change", "synthesize_now", or "continue"
+detect_diminishing_returns() {
+  local state_file="$1"
+
+  local dr_window
+  dr_window=${ORACLE_DR_WINDOW:-3}
+
+  local history_len
+  history_len=$(jq '(.convergence.history // []) | length' "$state_file" 2>/dev/null || echo "0")
+
+  if [ "$history_len" -lt "$dr_window" ]; then
+    echo "continue"
+    return 0
+  fi
+
+  local current_phase
+  current_phase=$(jq -r '.phase // "survey"' "$state_file" 2>/dev/null || echo "survey")
+
+  # Phase-adjusted novelty threshold
+  local novelty_threshold
+  case "$current_phase" in
+    investigate) novelty_threshold=0 ;;
+    *) novelty_threshold=1 ;;
+  esac
+
+  # Count entries in the last dr_window with novelty at or below threshold
+  local low_change_count
+  low_change_count=$(jq --argjson window "$dr_window" --argjson threshold "$novelty_threshold" \
+    '[(.convergence.history // [])[-$window:][] | select(.novelty_delta <= $threshold)] | length' \
+    "$state_file" 2>/dev/null || echo "0")
+
+  if [ "$low_change_count" -ge "$dr_window" ]; then
+    case "$current_phase" in
+      survey|investigate)
+        echo "strategy_change"
+        ;;
+      synthesize|verify)
+        echo "synthesize_now"
+        ;;
+      *)
+        echo "continue"
+        ;;
+    esac
+  else
+    echo "continue"
+  fi
+}
+
+# Validate a JSON file and recover from backup if invalid
+validate_and_recover() {
+  local file="$1"
+
+  if jq -e . "$file" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  echo "WARNING: $(basename "$file") is invalid JSON. Attempting recovery..." >&2
+
+  # Try pre-iteration backup
+  if [ -f "${file}.pre-iteration" ] && jq -e . "${file}.pre-iteration" >/dev/null 2>&1; then
+    cp "${file}.pre-iteration" "$file"
+    echo "  Recovered $(basename "$file") from pre-iteration backup." >&2
+    return 0
+  fi
+
+  # Fall back to atomic-write backup system
+  if [ -f "$AETHER_ROOT/.aether/utils/atomic-write.sh" ]; then
+    source "$AETHER_ROOT/.aether/utils/atomic-write.sh" 2>/dev/null || true
+    if type restore_backup >/dev/null 2>&1 && restore_backup "$file" 2>/dev/null; then
+      echo "  Recovered $(basename "$file") from atomic-write backup." >&2
+      return 0
+    fi
+  fi
+
+  echo "  FATAL: Cannot recover $(basename "$file")." >&2
+  return 1
+}
+
+# Build the synthesis-specific prompt for the final AI pass
+build_synthesis_prompt() {
+  local reason="$1"
+
+  cat <<SYNTHESIS_DIRECTIVE
+## SYNTHESIS PASS (Final Report)
+
+This is the final pass. The oracle loop has ended (reason: $reason).
+Produce the best possible research report from the current state.
+
+Read ALL of these files:
+- .aether/oracle/state.json -- session metadata
+- .aether/oracle/plan.json -- questions, findings, confidence
+- .aether/oracle/synthesis.md -- accumulated findings
+- .aether/oracle/gaps.md -- remaining unknowns
+
+If any state file is unreadable, skip it and work with what you have.
+
+Then REWRITE synthesis.md as a structured final report:
+
+### Required Sections:
+1. **Executive Summary** -- 2-3 paragraphs summarizing what was found
+2. **Findings by Question** -- organized by sub-question, with confidence %
+3. **Open Questions** -- remaining gaps with explanation of what is unknown and why
+4. **Methodology Notes** -- how many iterations, which phases completed
+
+Also update state.json: set status to "complete" if reason is "converged",
+or "stopped" otherwise.
+
+SYNTHESIS_DIRECTIVE
+
+  # Append the base oracle.md for tool access and rules
+  cat "$SCRIPT_DIR/oracle.md"
+}
+
+# Run the synthesis pass: update state, invoke AI, regenerate research plan
+run_synthesis_pass() {
+  local reason="$1"
+
+  # Update state.json status and stop_reason before AI call
+  local new_status
+  case "$reason" in
+    converged) new_status="complete" ;;
+    *) new_status="stopped" ;;
+  esac
+
+  if [ -f "$STATE_FILE" ] && jq -e . "$STATE_FILE" >/dev/null 2>&1; then
+    jq --arg status "$new_status" --arg reason "$reason" \
+      '.status = $status | .stop_reason = $reason' "$STATE_FILE" > "$STATE_FILE.tmp" && mv "$STATE_FILE.tmp" "$STATE_FILE"
+  fi
+
+  echo ""
+  echo "==============================================================="
+  echo "  SYNTHESIS PASS ($reason)"
+  echo "==============================================================="
+
+  # Invoke AI with synthesis prompt
+  if command -v timeout >/dev/null 2>&1; then
+    build_synthesis_prompt "$reason" | timeout 180 $AI_CMD 2>&1 | tee /dev/stderr || true
+  else
+    build_synthesis_prompt "$reason" | $AI_CMD 2>&1 | tee /dev/stderr || true
+  fi
+
+  # Regenerate research-plan.md one final time
+  generate_research_plan
+
+  echo ""
+  echo "Results saved to:"
+  echo "  $SYNTHESIS_FILE"
+  echo "  $RESEARCH_PLAN_FILE"
+}
+
+# Trap handler: synthesize before exit on SIGINT/SIGTERM
+cleanup_and_synthesize() {
+  if [ "$INTERRUPTED" = true ]; then
+    exit 130
+  fi
+  INTERRUPTED=true
+  echo ""
+  echo "Oracle interrupted. Running synthesis pass..."
+  run_synthesis_pass "interrupted"
+  exit 130
+}
+
 # Check state.json exists (wizard must create it before launching oracle.sh)
 if [ ! -f "$STATE_FILE" ]; then
   echo "Error: No state.json found. Run /ant:oracle to configure research first."
@@ -253,14 +556,19 @@ echo "Confidence:  $TARGET_CONFIDENCE%"
 echo "CLI:         $AI_CMD"
 echo ""
 
+# Signal handling setup
+INTERRUPTED=false
+trap cleanup_and_synthesize SIGINT SIGTERM
+
 # Main loop
 for i in $(seq 1 "$MAX_ITERATIONS"); do
-  # Check for stop signal
+  # Check for stop signal (cooperative stop)
   if [ -f "$STOP_FILE" ]; then
     rm -f "$STOP_FILE"
     echo ""
     echo "Oracle stopped by user at iteration $i"
-    break
+    run_synthesis_pass "stopped"
+    exit 0
   fi
 
   echo ""
@@ -268,15 +576,17 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
   echo "  Iteration $i of $MAX_ITERATIONS"
   echo "---------------------------------------------------------------"
 
+  # Pre-iteration backup for recovery
+  cp "$STATE_FILE" "$STATE_FILE.pre-iteration"
+  cp "$PLAN_FILE" "$PLAN_FILE.pre-iteration"
+
   # Run AI with phase-aware prompt (directive + oracle.md)
   OUTPUT=$(build_oracle_prompt "$STATE_FILE" "$SCRIPT_DIR/oracle.md" | $AI_CMD 2>&1 | tee /dev/stderr) || true
 
-  # Basic jq validation after iteration (safety check -- Phase 8 adds recovery)
-  if ! jq -e . "$STATE_FILE" >/dev/null 2>&1; then
-    echo "WARNING: state.json is invalid JSON after iteration $i"
-  fi
-  if ! jq -e . "$PLAN_FILE" >/dev/null 2>&1; then
-    echo "WARNING: plan.json is invalid JSON after iteration $i"
+  # Validate and recover from malformed JSON
+  if ! validate_and_recover "$STATE_FILE" || ! validate_and_recover "$PLAN_FILE"; then
+    run_synthesis_pass "corruption"
+    exit 1
   fi
 
   # Increment iteration counter
@@ -291,16 +601,41 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
     jq --arg phase "$NEW_PHASE" '.phase = $phase' "$STATE_FILE" > "$STATE_FILE.tmp" && mv "$STATE_FILE.tmp" "$STATE_FILE"
   fi
 
+  # Update convergence metrics
+  update_convergence_metrics "$STATE_FILE" "$PLAN_FILE"
+
+  # Check for diminishing returns
+  DR_RESULT=$(detect_diminishing_returns "$STATE_FILE")
+  case "$DR_RESULT" in
+    strategy_change)
+      echo "  Diminishing returns detected. Advancing to synthesize phase."
+      jq '.phase = "synthesize"' "$STATE_FILE" > "$STATE_FILE.tmp" && mv "$STATE_FILE.tmp" "$STATE_FILE"
+      ;;
+    synthesize_now)
+      echo "  Research plateaued. Running synthesis."
+      run_synthesis_pass "converged"
+      exit 0
+      ;;
+  esac
+
+  # Check for convergence
+  if check_convergence "$STATE_FILE"; then
+    echo "  Research converged."
+    run_synthesis_pass "converged"
+    exit 0
+  fi
+
   # Regenerate research-plan.md from current state
   generate_research_plan
 
-  # Check for completion signal
+  # Check for AI completion signal
   if echo "$OUTPUT" | grep -q "<oracle>COMPLETE</oracle>"; then
     echo ""
     echo "==============================================================="
     echo "  ORACLE RESEARCH COMPLETE!"
     echo "==============================================================="
     echo "Completed at iteration $i"
+    run_synthesis_pass "converged"
     exit 0
   fi
 
@@ -313,6 +648,6 @@ echo ""
 echo "==============================================================="
 echo "  ORACLE REACHED MAX ITERATIONS"
 echo "==============================================================="
-echo "Max iterations ($MAX_ITERATIONS) reached without completion."
-echo "Check $RESEARCH_PLAN_FILE for current research status."
-exit 1
+echo "Max iterations ($MAX_ITERATIONS) reached."
+run_synthesis_pass "max_iterations"
+exit 0
