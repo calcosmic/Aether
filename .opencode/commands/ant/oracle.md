@@ -179,6 +179,37 @@ Options:
 2. **Codebase + web** — Also use WebSearch and WebFetch for docs, best practices, prior art
 3. **Web only** — Focus on external research (libraries, concepts, techniques)
 
+**Question 5: Search Strategy**
+
+(Ask this question for all research types.)
+
+```
+How should the Oracle approach the research?
+```
+
+Options:
+1. **Adaptive (recommended)** -- Oracle decides when to go broad vs deep based on research progress
+2. **Breadth-first** -- Cover all questions with initial findings before going deep on any single one
+3. **Depth-first** -- Pick the most important question and investigate it exhaustively before moving on
+
+**Question 6: Focus Areas** (optional)
+
+```
+Are there specific aspects you want the Oracle to prioritize?
+```
+
+Options:
+1. **No specific focus** -- Let the Oracle decide what to investigate first
+2. **Yes, I have focus areas** -- I want to steer the research toward specific aspects
+
+If the user selects option 2, ask a follow-up AskUserQuestion with free-text:
+
+```
+List your focus areas (comma-separated). Example: "security implications, performance under load, migration path"
+```
+
+Parse the comma-separated response into individual focus area strings.
+
 After collecting all answers, proceed to Step 2.
 
 ---
@@ -211,7 +242,7 @@ Use the Write tool to create `.aether/oracle/state.json`:
 
 ```json
 {
-  "version": "1.0",
+  "version": "1.1",
   "topic": "<the research topic>",
   "scope": "<codebase|web|both>",
   "phase": "survey",
@@ -221,8 +252,20 @@ Use the Write tool to create `.aether/oracle/state.json`:
   "overall_confidence": 0,
   "started_at": "<ISO-8601 UTC timestamp>",
   "last_updated": "<ISO-8601 UTC timestamp>",
-  "status": "active"
+  "status": "active",
+  "strategy": "<strategy from Question 5: adaptive|breadth-first|depth-first>",
+  "focus_areas": [<array of focus area strings from Question 6, or empty array if no focus>]
 }
+```
+
+**Emit focus area pheromones** (if any focus areas were set):
+
+For each focus area string from Question 6:
+
+```bash
+bash .aether/aether-utils.sh pheromone-write FOCUS "$focus_area" \
+  --strength 0.8 --source "oracle:wizard" \
+  --reason "Focus area set in oracle wizard" --ttl "24h" 2>/dev/null || true
 ```
 
 **Write plan.json:**
@@ -322,6 +365,8 @@ Output the research configuration summary, showing the sub-questions from plan.j
 🔄 Iterations:  <max_iterations>
 🎯 Confidence:  <target_confidence>%
 🔍 Scope:       <scope>
+📐 Strategy:    <strategy>
+🎯 Focus:       <focus areas comma-separated, or "None">
 
 📋 Sub-Questions:
    q1. <question text from plan.json>
