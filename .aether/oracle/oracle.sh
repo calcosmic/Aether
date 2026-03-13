@@ -605,6 +605,10 @@ validate_and_recover() {
 build_synthesis_prompt() {
   local reason="$1"
 
+  # Read template type from state.json
+  local template
+  template=$(jq -r '.template // "custom"' "$STATE_FILE" 2>/dev/null || echo "custom")
+
   cat <<SYNTHESIS_DIRECTIVE
 ## SYNTHESIS PASS (Final Report)
 
@@ -619,8 +623,70 @@ Read ALL of these files:
 
 If any state file is unreadable, skip it and work with what you have.
 
-Then REWRITE synthesis.md as a structured final report:
+Then REWRITE synthesis.md as a structured final report.
 
+SYNTHESIS_DIRECTIVE
+
+  # Emit template-specific sections
+  case "$template" in
+    tech-eval)
+      cat <<'TEMPLATE'
+### Required Sections:
+1. **Executive Summary** -- 2-3 paragraphs: what was evaluated, key conclusion, recommendation
+2. **Comparison Matrix** -- Table comparing the evaluated technology against alternatives on key dimensions (performance, community, learning curve, maturity, ecosystem)
+3. **Pros and Cons** -- Bullet lists of advantages and disadvantages with evidence citations
+4. **Adoption Assessment** -- Community size, maintenance status, release cadence, corporate backing
+5. **Migration/Integration Path** -- Steps to adopt, estimated effort, risks
+6. **Recommendation** -- Clear recommendation with confidence level and conditions/caveats
+7. **Open Questions** -- Remaining gaps
+8. **Sources** -- All sources with inline citations [S1], [S2] format
+
+TEMPLATE
+      ;;
+    architecture-review)
+      cat <<'TEMPLATE'
+### Required Sections:
+1. **Executive Summary** -- 2-3 paragraphs: system overview, key findings, critical risks
+2. **Component Map** -- List of major components with responsibilities and boundaries
+3. **Dependency Analysis** -- How components connect, coupling assessment, external dependencies
+4. **Risk Assessment** -- Single points of failure, complexity hotspots, scaling bottlenecks
+5. **Scalability Analysis** -- Current capacity, growth limitations, scaling strategy
+6. **Improvement Recommendations** -- Prioritized list of architectural improvements
+7. **Open Questions** -- Remaining gaps
+8. **Sources** -- All sources with inline citations [S1], [S2] format
+
+TEMPLATE
+      ;;
+    bug-investigation)
+      cat <<'TEMPLATE'
+### Required Sections:
+1. **Executive Summary** -- 1-2 paragraphs: bug description, root cause, recommended fix
+2. **Reproduction Steps** -- Exact steps to reproduce, environment details, frequency
+3. **Root Cause Analysis** -- What causes the bug, code paths involved, why it was introduced
+4. **Impact Assessment** -- Who is affected, severity, data loss risk
+5. **Fix Recommendations** -- Proposed fixes ranked by safety and effort, with tradeoffs
+6. **Related Issues** -- Similar bugs, upstream/downstream effects, regression risk
+7. **Open Questions** -- Remaining gaps
+8. **Sources** -- All sources with inline citations [S1], [S2] format
+
+TEMPLATE
+      ;;
+    best-practices)
+      cat <<'TEMPLATE'
+### Required Sections:
+1. **Executive Summary** -- 2-3 paragraphs: domain overview, current state assessment, key recommendations
+2. **Best Practice Benchmark** -- What industry/community consensus considers best practice, with evidence
+3. **Current State Assessment** -- How the subject compares to best practice (strengths and gaps)
+4. **Gap Analysis** -- Specific gaps between current state and best practice, prioritized by impact
+5. **Action Plan** -- Ordered steps to close gaps, estimated effort, quick wins highlighted
+6. **Open Questions** -- Remaining gaps
+7. **Sources** -- All sources with inline citations [S1], [S2] format
+
+TEMPLATE
+      ;;
+    *)
+      # custom or unrecognized: use existing generic structure
+      cat <<'TEMPLATE'
 ### Required Sections:
 1. **Executive Summary** -- 2-3 paragraphs summarizing what was found
 2. **Findings by Question** -- organized by sub-question, with confidence %. Use inline citations [S1], [S2] linking findings to their sources. Flag single-source findings with (single source) marker.
@@ -628,10 +694,26 @@ Then REWRITE synthesis.md as a structured final report:
 4. **Methodology Notes** -- how many iterations, which phases completed
 5. **Sources** -- List ALL sources from plan.json sources registry: Format: [S1] Title -- URL (accessed: date). Group by type (documentation, blog, codebase, etc.). Note total source count and multi-source coverage percentage.
 
+TEMPLATE
+      ;;
+  esac
+
+  # Common directives for all templates
+  cat <<'COMMON'
+
+### Confidence Grouping:
+Within each findings section, group findings by confidence level:
+- **High confidence (80%+)** -- list first with full citations
+- **Medium confidence (50-79%)** -- list with caveats noted
+- **Low confidence (<50%)** -- list as tentative/unverified
+
+Use inline citations [S1], [S2] linking findings to their sources.
+Flag single-source findings with (single source) marker.
+
 Also update state.json: set status to "complete" if reason is "converged",
 or "stopped" otherwise.
 
-SYNTHESIS_DIRECTIVE
+COMMON
 
   # Append the base oracle.md for tool access and rules
   cat "$SCRIPT_DIR/oracle.md"
