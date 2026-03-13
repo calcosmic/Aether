@@ -66,5 +66,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-13
-Stopped at: Completed 07-02-PLAN.md (Phase 07 complete)
-Resume file: .planning/phases/07-iteration-prompt-engineering/07-02-SUMMARY.md
+Stopped at: Phase 8 context gathered
+Resume file: .planning/phases/08-orchestrator-upgrade/08-CONTEXT.md
