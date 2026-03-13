@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-03-13)
 
 **Core value:** The oracle produces research you can act on -- verified, iteratively deepened, structured for the topic.
-**Current focus:** Phase 10 in progress -- Steering Integration
+**Current focus:** Phase 11 in progress -- Colony Knowledge Integration
 
 ## Current Position
 
 Milestone: v1.1 Oracle Deep Research
-Phase: 10 of 11 (Steering Integration)
-Plan: 2 of 2 in current phase (COMPLETE)
-Status: Phase Complete
-Last activity: 2026-03-13 -- Plan 10-02 complete (steering integration tests)
+Phase: 11 of 11 (Colony Knowledge Integration)
+Plan: 1 of 3 in current phase
+Status: In Progress
+Last activity: 2026-03-13 -- Plan 11-01 complete (colony knowledge promotion)
 
-Progress: [#########-] 90%
+Progress: [##########] 93%
 
 ## Performance Metrics
 
@@ -25,9 +25,9 @@ Progress: [#########-] 90%
 - Total execution time: 0.61 hours
 
 **v1.1:**
-- Total plans completed: 10
+- Total plans completed: 11
 - Average duration: 3.8min
-- Total execution time: 0.64 hours
+- Total execution time: 0.71 hours
 
 *Updated after each plan completion*
 
@@ -70,6 +70,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - state.json version bumped to 1.1 matching Phase 9 plan.json pattern
 - Mock aether-utils.sh approach for isolated pheromone-read testing in steering tests
 - Negative assertions (run_test_not helper) for verifying signal limits and adaptive strategy behavior
+- Wizard calls colony APIs directly instead of sourcing oracle.sh (avoids main-loop execution on source)
+- Process substitution (< <(...)) used to avoid subshell variable loss in while-read promotion loop
+- Template field is optional with enum validation -- backward compatible with existing state.json files
 
 ### Pending Todos
 
@@ -84,5 +87,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-13
-Stopped at: Completed 10-02-PLAN.md (Phase 10 complete)
-Resume file: .planning/phases/10-steering-integration/10-02-SUMMARY.md
+Stopped at: Completed 11-01-PLAN.md
+Resume file: .planning/phases/11-colony-knowledge-integration/11-01-SUMMARY.md
