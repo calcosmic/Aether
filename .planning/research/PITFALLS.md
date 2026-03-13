@@ -1,201 +1,180 @@
 # Pitfalls Research
 
-**Domain:** Autonomous AI Deep Research Loops (iterative deepening with stateless LLM instances)
-**Researched:** 2026-03-13
-**Confidence:** HIGH (verified against Anthropic engineering blog, Karpathy's autoresearch, OpenAI deep research system card, LangChain context management research, and Aether's own oracle archive)
+**Domain:** Adding integration wiring to an existing AI agent orchestration system (markdown playbook files + threshold tuning)
+**Researched:** 2026-03-14
+**Confidence:** HIGH (system read directly; all playbooks and aether-utils.sh inspected; prior v1.0/v1.1 milestone audits reviewed)
+
+---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Append-Only Progress File Becomes Unreadable
+### Pitfall 1: Playbook Edit Makes an Instruction Competing Rather Than Additive
 
 **What goes wrong:**
-The progress file grows unboundedly across iterations. Each stateless instance reads the full file, but as it exceeds thousands of lines, later instances cannot effectively process it. The LLM's attention degrades over long contexts ("context rot"), and critical early findings get buried under layers of later, potentially redundant content. In Aether's archived oracle run, 50 iterations produced 258 lines with repetitive section headers ("Iteration 1-5", "Iteration 6-10") where later iterations restated earlier findings rather than building on them.
+A new instruction in a playbook (continue-advance.md, build-wave.md, etc.) conflicts with an existing instruction rather than adding to it. The agent cannot satisfy both simultaneously, so it satisfies whichever appears earlier in the file and silently ignores the new one. The problem is invisible — the agent produces output, passes verification, and no error is surfaced. The integration wiring simply doesn't fire.
+
+For example: continue-advance.md Step 2 already says "Do NOT record a learning if it wasn't actually tested." Adding a new memory-capture call for hypothetical decisions violates that guard, so the agent skips the new call without reporting it. The developer sees no failure — memory just stays empty.
 
 **Why it happens:**
-The oracle.md instruction says "APPEND to progress.md (never replace, always append)." This is a reasonable safety measure (prevents data loss), but without any compaction or restructuring mechanism, the file becomes an append-only log rather than an evolving knowledge base. Anthropic's own engineering blog identifies this pattern: "overly aggressive compression can result in the loss of subtle but critical context whose importance only becomes apparent later," but the opposite -- no compression at all -- causes context rot where everything gets diluted.
+Playbooks are read as natural language instructions by an AI. When two instructions conflict, the agent disambiguates based on position and apparent authority. Earlier instructions in a file read as the "base rule," later additions read as "qualifications." Additions that look like exceptions to the base rule get silently subordinated.
+
+This is different from code, where a compiler catches contradictions. There is no linter for playbook instruction conflicts.
 
 **How to avoid:**
-Separate the accumulation file from the handoff file. Maintain a raw `findings.md` append-only log for safety, but produce a structured `state.json` (or equivalent) that each iteration reads as its primary input. The state file should contain: (1) answered questions with confidence levels, (2) unanswered questions ranked by priority, (3) a compact summary of key findings, and (4) explicit "do NOT re-investigate" markers. Each iteration rewrites the state file entirely -- it is the iteration's primary output, not an append.
+Before adding any instruction, identify the closest existing instruction it could conflict with. State the relationship explicitly: "In addition to the existing guard at Step X..." or "This fires even when [existing condition] because...". Never assume a new instruction is additive by default — treat it as potentially conflicting until proven otherwise.
 
-Karpathy's autoresearch solves this elegantly: the agent reads `train.py` (current state) and `results.tsv` (compact log of all attempts), not a growing narrative. The state IS the code; the log is structured data.
+Test the specific instruction in isolation: spawn a test build with the new playbook and check whether the new behavior fires AND whether the existing behavior still fires. Both must be true.
 
 **Warning signs:**
-- Progress file exceeds 200 lines (roughly 4K tokens) by iteration 10
-- Later iterations repeat findings from earlier iterations verbatim
-- Confidence score plateaus but iterations keep running
-- Each iteration's "new findings" section shrinks relative to its "reading previous findings" overhead
+- New behavior is described in the playbook but produces no output during a build cycle
+- Step X completes successfully but Step X+1 behavior (the new call) never executes
+- Agent reports completing a step that should have triggered the new integration, but no artifact (pheromone, midden entry, memory capture) was created
+- "Silently skipped" appears in agent output about the new call
 
 **Phase to address:**
-Phase 1 (State Architecture) -- this is the foundational design decision. Getting the state format wrong poisons every subsequent feature.
+Phase that adds memory-capture calls to build-wave.md and continue-advance.md. Each new instruction must be verified against all existing instructions in the same step.
 
 ---
 
-### Pitfall 2: Circular Research (Covering the Same Ground Repeatedly)
+### Pitfall 2: Lowering the Midden Threshold Creates a Noise Spiral
 
 **What goes wrong:**
-Stateless instances have no memory of what they already investigated. Each reads the progress file, picks what seems most important, and often gravitates toward the same subtopic. The oracle runs 50 iterations but only covers 3-4 distinct research threads because each fresh instance independently concludes the same area is most promising. Anthropic's multi-agent research system documented this exact failure: "three agents investigating the same 2025 semiconductor supply chains separately."
+The midden REDIRECT auto-emission threshold is currently 3+ occurrences of the same error category (continue-advance.md Step 2.1c). If this is lowered to 1 or 2, the system emits REDIRECT pheromones after a single ephemeral failure (a flaky test, a network timeout, a file-not-found on a path that was later created). Those REDIRECTs persist for 30d. Future builders read them as hard constraints. They avoid the "failing" category entirely — even after it has been fixed.
+
+The spiral: lower threshold → more REDIRECTs → builders avoid areas → areas go untested → more failures in those areas → even more REDIRECTs → builders treat entire subsystems as off-limits.
+
+This is not hypothetical. The system already shows it can happen: REDIRECT signals have "high priority" and are described in the system as "hard constraints — avoid this." A false REDIRECT is a colony-wide constraint issued on weak evidence.
 
 **Why it happens:**
-The current oracle.md gives no guidance on which questions to prioritize or how to avoid re-covering ground. It says "Work on ONE focused area per iteration" but does not track which areas have been covered. Without an explicit "what has been explored" manifest, each stateless instance makes the same priority judgment from scratch. LLMs exhibit strong recency and salience biases -- they will repeatedly investigate whatever is most prominently described in the progress file.
+The 3+ threshold was set deliberately. The v1.0 milestone audit notes the threshold prevents ephemeral failures from becoming permanent signals. Lowering it in a playbook edit without understanding the downstream effect on REDIRECT persistence (30d TTL) and priority (hard constraint) misses that the threshold is a calibration, not an arbitrary number.
 
 **How to avoid:**
-Implement an explicit exploration tracker in the state file. Structure it as a research tree where each node tracks: question, status (unexplored/in-progress/answered/blocked), confidence, and iteration last touched. Each iteration's instructions should say: "Pick the highest-priority UNEXPLORED or lowest-confidence IN-PROGRESS question. Do NOT re-investigate questions marked ANSWERED unless you have specific contradicting evidence."
+Do not lower the midden threshold below 3 without also either (a) reducing the REDIRECT TTL, (b) adding an expiry path when the failure stops recurring, or (c) changing REDIRECT to FEEDBACK for auto-emitted signals. If the real problem is that single-occurrence failures don't reach the midden at all (because midden-write is never called), fix the write path — don't lower the aggregation threshold.
 
-Autoresearch prevents this via the ratcheting mechanism (monotonic improvement on a metric). For research (which lacks a numeric metric), use question-answering coverage as the ratchet: once a question is marked answered at 90%+ confidence, it stays answered unless explicitly challenged.
+The correct fix for "midden is empty" is to add more midden-write call sites (more places that call it), not to lower the threshold at which those calls produce consequences.
 
 **Warning signs:**
-- Multiple iterations produce findings about the same subtopic
-- The progress file has near-duplicate paragraphs across iteration blocks
-- Confidence score oscillates rather than monotonically increasing
-- New iterations do not reference or build upon specific prior findings
+- REDIRECT pheromones accumulate rapidly after lowering threshold
+- Builder prompts contain many auto:error signals
+- Builders begin skipping tasks or reporting "avoiding pattern X" for things that succeeded recently
+- /ant:pheromones shows 5+ active REDIRECT signals with source "auto:error"
 
 **Phase to address:**
-Phase 1 (State Architecture) for the exploration tracker design. Phase 2 (Iteration Protocol) for the instructions that enforce exploration discipline.
+Phase that addresses midden failure tracking. Fix write path first, evaluate threshold separately only after observing actual accumulation rates.
 
 ---
 
-### Pitfall 3: Self-Assessed Confidence Is Unreliable
+### Pitfall 3: Memory-Capture Calls Produce Observation Count Inflation Without Signal Value
 
 **What goes wrong:**
-The oracle asks each iteration to "Rate your overall confidence (0-100%) that the research is complete" and terminates at a target threshold (e.g., 95%). LLMs are systematically overconfident in self-assessment. Research shows models say "I'm 100% sure" when they are wrong, and self-reported confidence is a poor proxy for actual completeness. The oracle may terminate early (claiming 95% confidence after 5 shallow iterations) or never terminate (unable to honestly claim 99% on subjective questions).
+memory-capture is called at new decision points and failure points. Each call runs learning-observe internally, which increments the observation count for that content hash. If the content is too generic (e.g., "Builder failed on task" or "Phase completed"), many distinct events hash to similar content, inflate observation counts, and trigger auto-promotion to QUEEN.md for content that carries no actionable information.
+
+QUEEN.md fills with entries like "Builder failed on task" (observed 4 times, promoted to pattern). Builders receive this wisdom in colony-prime and learn nothing — or worse, learn to be pessimistic about tasks in general.
+
+The signal-to-noise ratio in colony memory degrades. Over time, the highest-observation-count items are the most generic events, not the most instructive patterns.
 
 **Why it happens:**
-Confidence self-assessment requires metacognition that current LLMs lack. The model is essentially asking "how much do I know about what I don't know?" -- a fundamentally ill-posed question for a system without ground truth. Additionally, confidence calibration varies wildly by domain: factual questions can be verified, but open-ended research questions ("What gaps exist between X and best practices?") have no objective completeness measure.
+memory-capture uses content hashing to detect recurrence. The hash is over the full content string. If content strings are not specific enough (no task name, no category, no distinguishing detail), different events produce similar enough strings that manual review sees them as identical. The observation counter then inflates for a vague claim.
+
+The system has a 30-instinct cap and a 20-phase-learning cap, but these caps evict by lowest confidence, not by specificity. A vague pattern with 5 observations and 0.7 confidence evicts a specific pattern with 2 observations and 0.7 confidence.
 
 **How to avoid:**
-Replace subjective confidence with objective coverage metrics. Track: (1) what percentage of research questions have answers, (2) what percentage of answers cite verifiable sources, (3) whether new iterations are producing novel findings or just restating known ones (novelty rate). Terminate when the novelty rate drops below a threshold (e.g., less than 10% new information in 3 consecutive iterations) AND all research questions have at least one answer. This is a "diminishing returns" detector, not a confidence score.
+Every memory-capture call site must include enough specifics to make the content hash unique to the event class, not the generic event type. Good: `"Builder ${ant_name} failed on task ${task_id}: ${blockers[0]}"`. Bad: `"Builder failed"`.
 
-OpenAI's Deep Research uses a trained model (o3) specifically optimized for multi-step research trajectories. Without that training, generic Claude instances will not produce well-calibrated confidence. Use structural completion metrics instead.
+Add a specificity test before merging any new memory-capture call: if the content could plausibly recur verbatim across many unrelated events, it is too generic. The content should describe a pattern, not an occurrence.
 
 **Warning signs:**
-- Confidence jumps from 40% to 90% in a single iteration
-- Confidence score reaches target but obvious questions remain unanswered
-- Different iterations rate the same state of knowledge at wildly different confidence levels
-- Research terminates but the output is clearly shallow
+- QUEEN.md contains entries like "Phase completed without notable patterns" or "Builder reported failure"
+- /ant:memory-details shows high observation counts for short, vague strings
+- Instinct list contains entries with triggers like "when a task arises" or "when a failure occurs" (no specifics)
+- colony-prime prompt_section output grows in length without growing in specificity
 
 **Phase to address:**
-Phase 2 (Iteration Protocol) for the completion criteria redesign. Phase 4 (Quality/Verification) for testing that the new criteria actually produce good stopping behavior.
+Phase that wires memory-capture into new call sites. Every new call site must include a content format review.
 
 ---
 
-### Pitfall 4: Iterative Appending Without Iterative Deepening
+### Pitfall 4: Playbook Instruction Precision vs. Flexibility Miscalibration
 
 **What goes wrong:**
-The system produces a series of surface-level passes rather than progressively deeper investigation. Iteration 1 covers the topic broadly. Iteration 2 covers it broadly again from a slightly different angle. By iteration 50, you have 50 broad summaries rather than one deep analysis. This is the core problem stated in the project context: "it's iterative appending not iterative deepening."
+The current problem is that agents skip steps (too loose instructions). The fix is to make instructions more precise. But there is a failure mode in the other direction: instructions that are so prescriptive that the agent interprets them as a strict sequence rather than a pattern, and fails the step entirely if a minor condition is unmet rather than adapting.
+
+Example: If continue-advance.md is edited to say "For each learning, run memory-capture with content exactly equal to learning.claim" — and a learning has a null claim — the agent hits the null, cannot satisfy the exact instruction, and stops the memory pipeline entirely. Under the previous loose instruction, it would have skipped and continued.
+
+The paradox: making instructions more precise catches the "skipping" problem but can introduce "hard stop on edge case" failures that are harder to diagnose.
 
 **Why it happens:**
-The oracle.md prompt treats every iteration identically. There is no concept of research phases (broad survey, then focused investigation, then synthesis, then verification). Each fresh instance reads the same "You are an Oracle Ant -- a deep research agent" prompt with no indication of where in the research lifecycle it is. Without phase-awareness, each instance defaults to the same behavior: read the topic, do a broad scan, append findings.
+Natural language precision has a different failure mode than code precision. In code, you handle null explicitly. In a playbook instruction, adding precision can inadvertently remove the agent's discretion to handle edge cases. The agent reads "exactly equal to" as a hard requirement, not a default.
+
+This is especially acute in a system that already has many "CRITICAL:", "MANDATORY:", and "STOP if" markers (all found throughout build-wave.md and continue-verify.md). Adding more strong imperatives raises the overall rigidity of the playbook, making edge-case recovery harder.
 
 **How to avoid:**
-Define explicit research phases that the state file tracks:
+For each new instruction, add an explicit graceful degradation path: "If [condition is unmet], skip silently and continue. Never block step advancement due to memory-capture failure." The existing playbooks do this well (e.g., `2>/dev/null || true` in bash snippets, "If any pheromone call fails, log the error and continue").
 
-1. **Survey** (iterations 1-N): Broad exploration, identify subtopics, map the landscape. Goal: populate the research tree with questions.
-2. **Investigate** (iterations N-M): Deep dive into specific questions one at a time. Goal: answer individual questions with evidence and sources.
-3. **Synthesize** (iterations M-P): Cross-reference findings, identify contradictions, build coherent narrative. Goal: produce structured output.
-4. **Verify** (iterations P-Q): Fact-check key claims, seek disconfirming evidence, validate sources. Goal: confidence in accuracy.
-
-The state file should track current phase. The iteration prompt should change based on phase. This is how Anthropic's multi-agent system works: the lead agent plans distinct research phases, and subagents execute specific focused tasks rather than repeating the broad scan.
+Mirror that pattern in every new instruction. The integration wiring should be opportunistic, not gating.
 
 **Warning signs:**
-- Each iteration's output reads like a standalone research report rather than a continuation
-- Findings stay at the same depth (paragraph-level summaries) across all iterations
-- No iteration ever says "Building on iteration X's finding that..."
-- The word count per iteration stays roughly constant instead of decreasing as the space narrows
+- Phase advancement stops at a step that previously worked fine
+- Error message from a new step references a null or missing field
+- "MANDATORY" or "CRITICAL" keyword added to a new integration step causes it to block on edge cases
+- Agent reports "cannot complete step X" for steps that are supposed to be non-blocking
 
 **Phase to address:**
-Phase 2 (Iteration Protocol) for phase-aware prompting. Phase 1 (State Architecture) for tracking research lifecycle phase in state.
+All phases that edit playbooks. Every new integration instruction must include an explicit non-blocking degradation path.
 
 ---
 
-### Pitfall 5: Hallucination Accumulation Across Iterations
+### Pitfall 5: Backward Compatibility Breaks at the Schema Layer (Not the Playbook Layer)
 
 **What goes wrong:**
-An early iteration introduces an inaccurate claim (hallucination). Subsequent iterations read it from the progress file, treat it as established fact, and build upon it. Over many iterations, the hallucination becomes deeply embedded in the research -- cited, cross-referenced, and relied upon for conclusions. Research on multi-agent hallucination identifies this as "full-chain error propagation across multiple interdependent components" -- minor initial errors compound into systemic inaccuracies.
+Playbook edits often add new bash calls that read from or write to COLONY_STATE.json or pheromones.json. If those calls assume a field exists that was added in v1.0 but is absent in colonies initialized before v1.0, the call fails silently (or loudly) on real-world colony state files. The playbook itself looks correct — the call is properly written — but it breaks on older state.
+
+This is particularly dangerous for midden-write and memory-capture calls that are added to build-wave.md, because build is run on every phase, on every project where Aether is installed. Any colony with state pre-dating the field will fail at the new call.
 
 **Why it happens:**
-Stateless instances have no way to distinguish between verified findings and unverified assertions in the progress file. Everything written by a previous iteration looks equally authoritative. The current oracle.md has no source citation requirement, no verification step, and no mechanism to flag or challenge prior findings. Each iteration implicitly trusts all prior iterations' output.
+The system has an auto-upgrade path in continue-verify.md (version field check, upgrade to v3.0 state). But this path only fires when /ant:continue is run. A colony that runs /ant:build without having run /ant:continue since the upgrade may have old-format state. New calls that assume v3.0 fields (e.g., `.phase.number` in build-wave.md line 344) will return null for older state.
 
 **How to avoid:**
-Require structured source tracking for every factual claim. The state file should track, for each finding: the claim, the source (URL, file path, or "inference"), a verification status (unverified/single-source/multi-source/contradicted), and which iteration produced it. Include a "Verify" research phase where iterations specifically attempt to disprove or find counter-evidence for key claims. Flag any finding that relies solely on LLM inference (no external source) as LOW confidence.
+Use defensive jq reads for every new field access. The pattern already used in build-wave.md is the right one: `jq -r '.session_id | split("_")[1] // "unknown"'` — the `// "unknown"` provides a safe fallback. Apply this pattern to every new field read added as part of integration wiring. Never assume a field exists; always provide a fallback.
 
-Anthropic's research system treats citations as "first-class data" where each chunk carries provenance metadata. Implement a simpler version: each finding gets a source field, and the synthesis phase specifically targets unverified claims for validation.
+For new fields being written (not just read), check whether the write is idempotent on both old and new state format. If the write adds a field that didn't exist, it must work on state files that lack it.
 
 **Warning signs:**
-- Findings appear with no source attribution
-- Later iterations cite earlier iteration findings as authoritative (circular citation)
-- Contradictory claims exist in different sections without acknowledgment
-- "Phantom sources" -- URLs or references that were hallucinated and never verified
+- Integration wiring works in the dev environment (current colony) but fails when tested on a fresh colony with /ant:init
+- jq reads return null or empty string unexpectedly
+- New integration call produces no output on first run of a build after upgrading Aether
+- Error message references a field that was added in v1.0 or v1.1
 
 **Phase to address:**
-Phase 2 (Iteration Protocol) for source citation requirements. Phase 4 (Quality/Verification) for the verification phase and hallucination detection.
+All phases. Schema defensiveness should be a checklist item for every playbook edit that adds jq reads.
 
 ---
 
-### Pitfall 6: Stateless Instance Cannot Understand Context of Prior Failures
+### Pitfall 6: The "Wiring Is Correct But Never Observed" Problem
 
 **What goes wrong:**
-An iteration tries a research approach (e.g., searching for a specific resource, attempting to access a URL that 404s, looking for a codebase pattern that does not exist) and fails. It logs the failure in the progress file as a finding. The next iteration reads this but may attempt the same approach because the progress file captures WHAT was found, not WHY an approach failed or WHAT was tried and abandoned. The state file lacks negative knowledge -- "we tried X and it didn't work, don't try X again."
+All the integration calls are correctly added to playbooks. Memory-capture fires. Midden-write fires. Pheromone-write fires. But the output of those calls is never displayed to the user during the flow, and there is no easy way to verify after the fact that they ran. The developer declares the integration complete based on code review of the playbook, not on observed behavior.
+
+Later, when the colony memory remains empty, it turns out one of the calls has a silent failure path (`2>/dev/null || true`) that swallows an error. The integration is wired but broken, and there is no signal that it is broken.
+
+This is the same failure mode that created the v1.2 milestone — the calls exist in the playbooks already, but real-world observation shows the memory is empty (decisions [], instincts [], only 1 phase_learning).
 
 **Why it happens:**
-Append-only logs naturally capture results, not process. "URL X returned 404" is recorded, but "I searched for documentation on Y and found none exists" is often omitted because the agent focuses on what it found, not what it tried and failed to find. Karpathy's autoresearch explicitly tracks failed experiments in results.tsv (recording "crash" and "discard" outcomes alongside successes) -- most research loop implementations only record successes.
+The existing system explicitly suppresses output for auto-integration calls. Step 2.1 of continue-advance.md begins with: "This entire step produces NO user-visible output. All pheromone operations run silently." This is correct for UX (avoid noise), but it means that broken wiring is also silent. The developer has no feedback loop to know whether silent steps are running or silently failing.
 
 **How to avoid:**
-Add a "dead ends" or "attempted approaches" section to the state file. Each iteration should log: what it tried, what worked, what failed, and what it explicitly chose NOT to do (with reasoning). This is negative knowledge -- equally valuable as positive findings. The state file schema should include a `dead_ends` array alongside `findings`.
+Add an observability step to each phase's verification criteria. Before marking a phase complete, require evidence that the integration actually fired — not just that the code was correctly added. Specifically: run a test build cycle on a controlled colony state and check the resulting memory, midden, and pheromone files directly. "Call exists in playbook" is not sufficient evidence. "Colony state shows new entry after test build" is.
+
+For each new integration wire, define its success artifact: what file is modified, what field is populated, what count increases. Test against that artifact.
 
 **Warning signs:**
-- Error messages or "not found" notes repeat across iterations
-- Iterations attempt to access the same broken URLs
-- The same unsuccessful search queries appear in multiple iterations' tool use
-- Research stalls because every iteration re-discovers the same dead ends
+- Phase declared complete based only on code review of playbook (no runtime verification)
+- Test suite checks that bash commands exist in the playbook file (text matching), but not that they produce output
+- After completing a build cycle on a fresh colony, memory/midden counts are the same as before
+- "|| true" appears on a new integration call that has no other error handling
 
 **Phase to address:**
-Phase 1 (State Architecture) for the dead-ends tracking structure. Phase 2 (Iteration Protocol) for instructing iterations to record negative findings.
-
----
-
-### Pitfall 7: Prompt Overloading Degrades Per-Iteration Quality
-
-**What goes wrong:**
-As the system matures, the iteration prompt grows to include: research questions, current phase, exploration tracker, source citation requirements, dead-end avoidance, output format specifications, and behavioral constraints. The prompt becomes so long and instruction-dense that the LLM's adherence to any individual instruction degrades. Each new requirement added to the prompt slightly reduces compliance with all existing requirements.
-
-**Why it happens:**
-This is "attention budget depletion" -- Anthropic's context engineering guide identifies that each token "depletes the LLM's limited attention budget by some amount." Complex prompts with many concurrent requirements produce worse results than focused prompts with fewer requirements. The oracle currently has a single oracle.md prompt that handles all iteration types identically, and adding more instructions to it will hit diminishing returns.
-
-**How to avoid:**
-Use phase-specific prompts rather than one monolithic prompt. The survey phase gets a survey-focused prompt (short, emphasizing breadth). The investigate phase gets an investigate-focused prompt (emphasizing depth and source citation). The verify phase gets a verification-focused prompt (emphasizing skepticism and counter-evidence). The bash script selects the appropriate prompt based on the current phase from the state file. This keeps each prompt focused and within the model's effective attention budget.
-
-This mirrors Aether's existing "split playbooks" pattern (build-prep.md, build-context.md, etc.) -- apply the same principle to oracle prompts.
-
-**Warning signs:**
-- The oracle.md prompt exceeds 2,000 tokens
-- Iterations ignore specific instructions (e.g., source citation) while following others (e.g., append format)
-- Adding a new instruction causes previously-followed instructions to be dropped
-- Per-iteration output quality decreases as the prompt grows
-
-**Phase to address:**
-Phase 2 (Iteration Protocol) for designing phase-specific prompts. Phase 3 (Prompt Engineering) for testing and tuning individual phase prompts.
-
----
-
-### Pitfall 8: No Mechanism to Correct Course (Autonomy Without Steering)
-
-**What goes wrong:**
-The oracle runs autonomously for hours. The user cannot steer it mid-run except by creating a `.stop` file. If the research goes in an unproductive direction (e.g., investigating tangential subtopics, fixating on one question while ignoring others), there is no mechanism to redirect without stopping and restarting the entire run. The existing pheromone system (FOCUS/REDIRECT/FEEDBACK) is not integrated with the oracle loop.
-
-**Why it happens:**
-The oracle was designed as a "fire and forget" system -- launch it, let it run, read results. This is appropriate for short runs (5 iterations) but dangerous for long runs (50 iterations). Without mid-flight steering, small trajectory errors compound over many iterations. Anthropic's system explicitly includes "scaling rules" and task decomposition to prevent individual agents from going off-track, but Aether's oracle has no equivalent.
-
-**How to avoid:**
-Integrate Aether's existing pheromone system with the oracle loop. Between iterations, the bash script should check for pheromone signals: FOCUS signals reprioritize remaining questions, REDIRECT signals mark approaches as dead ends, FEEDBACK signals adjust research depth or direction. This gives the user steering capability without requiring a full stop-and-restart. Additionally, generate a brief "iteration summary" output after each iteration (visible in tmux) so the user can monitor trajectory and intervene if needed.
-
-**Warning signs:**
-- Research output diverges from the original topic by iteration 15+
-- User discovers poor trajectory only after the full run completes
-- No way to tell mid-run whether the research is productive
-- Oracle spends many iterations on low-priority subtopics while skipping high-priority ones
-
-**Phase to address:**
-Phase 3 (Integration) for wiring pheromones into the oracle loop. Phase 2 (Iteration Protocol) for mid-run visibility and status reporting.
+Every phase. Each phase's success criteria must include at least one runtime verification: run a build cycle and verify a specific artifact was created.
 
 ---
 
@@ -205,68 +184,59 @@ Shortcuts that seem reasonable but create long-term problems.
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Unstructured markdown as sole state format | Simple to read/write, human-friendly | Cannot be programmatically queried, grows unbounded, no schema validation | Never for inter-iteration state. OK for final human-readable output |
-| Single prompt for all iteration types | One file to maintain, simple architecture | Per-iteration quality degrades as prompt grows, cannot optimize per phase | MVP/prototype only. Must split before production use |
-| Self-assessed confidence as termination criterion | Easy to implement (one number comparison) | Unreliable, causes premature termination or infinite loops | Never as sole criterion. OK as supplementary signal alongside structural metrics |
-| Trusting all prior iteration output equally | Simpler state model, no provenance tracking | Hallucinations accumulate, no way to distinguish verified from inferred | Never for factual research. Acceptable for brainstorming/ideation modes |
-| Append-only with no compaction | Zero risk of data loss | Context rot, repeated findings, growing token costs | First 5-10 iterations only. Must introduce structured state before iteration 15 |
+| Adding `2>/dev/null \|\| true` to every new integration call | Prevents blocking on errors | Swallows real failures silently; integration may never fire and you won't know | Acceptable only after runtime verification confirms the call succeeds. Never as a substitute for verification. |
+| Lowering midden threshold instead of adding write sites | Appears to fix "empty midden" with one change | Creates noise spiral via false REDIRECT signals; degrades colony signal quality | Never. Fix the write path instead. |
+| Generic content strings in memory-capture | Simpler to write | Observation inflation; QUEEN.md fills with vague patterns; signal degrades | Never in production call sites. Acceptable in test fixtures only. |
+| Verifying playbook edit by reading the playbook | Fast review cycle | Does not catch silent failures; integration may look correct but not fire | Never as sole verification. Code review is prerequisite, not substitute, for runtime verification. |
+| Adding "MANDATORY" / "CRITICAL" to integration steps | Emphasizes importance | Raises risk that edge cases hard-stop a phase; integration should be opportunistic | Never for memory/midden/pheromone integration. These are always non-blocking. |
 
 ## Integration Gotchas
 
-Common mistakes when connecting the oracle loop to external systems.
+Common mistakes when connecting the integration wiring.
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| Claude CLI (`--print` mode) | Assuming output is clean text; it may include tool call formatting, error messages, or partial responses | Parse output for completion signal only; let the iteration write to files directly rather than capturing stdout |
-| WebSearch/WebFetch tools | Feeding full web page content into progress file, blowing up token count | Instruct iterations to extract and summarize relevant findings only; never paste raw HTML or full page content |
-| Pheromone system | Checking pheromones inside the Claude instance (which is stateless and may not have access to latest state) | Check pheromones in the bash loop BETWEEN iterations, before launching the next instance; inject relevant signals as context |
-| tmux session | Assuming tmux is always available; no fallback | The current oracle.sh already handles this correctly with a TMUX_FAIL fallback. Maintain this pattern |
-| Git state (for code research) | Research iterations making git commits or modifying working tree | The current "Non-Invasive Guarantee" is correct. Enforce read-only access to everything outside `.aether/oracle/` |
+| memory-capture in build-wave.md | Calling memory-capture with content from variables that are null at call time (e.g., `${blockers[0]}` before blockers array is populated) | Read the bash snippet at each call site in build-wave.md; verify all referenced variables are in scope at that point in the flow |
+| pheromone-write for decisions | Emitting a pheromone for every decision, including trivial ones ("used npm install") | Gate on decision significance: decisions with less than 10 words or no rationale should be filtered before emitting |
+| midden-write for "all failure points" | Adding midden-write after every failed tool call in a builder, creating thousands of low-signal entries | Write to midden for task-level failures (builder returned status: failed), not for individual tool call failures within a successful task |
+| instinct-create in continue | Creating instincts for single-phase patterns ("this worked in phase 3") | Instincts should reflect patterns observed across multiple builds or recurring within a phase, not one-off successes |
+| Deduplication via existing pheromone check | The deduplication jq query (`.signals[] \| select(.active == true and .source == "auto:decision" ...)`) may miss signals that decayed but left a hash trace | The current deduplication approach checks only active signals; expired signals with same content can re-emit after TTL. This is acceptable behavior but should be documented as intentional. |
 
 ## Performance Traps
 
-Patterns that work at small scale but fail as iteration count grows.
+Patterns that work at small scale but fail at larger ones.
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| Reading full progress.md every iteration | Iterations slow down; later iterations spend more time reading than researching | Switch to structured state file; keep raw log separate | 15+ iterations (~5K+ tokens in progress file) |
-| No deduplication of findings | Same facts restated in slightly different words across iterations | Hash-based or keyword-based dedup in state file; mark findings with unique IDs | 10+ iterations |
-| Spawning Claude CLI per iteration without cleanup | Zombie processes, orphaned tool connections, temp file accumulation | Add cleanup step in bash loop between iterations (existing `sleep 2` could become a cleanup phase) | 30+ iterations in long runs |
-| Web search for same queries across iterations | Rate limiting, wasted API calls, identical results | Track searched queries in state file; skip if already searched within N iterations | 20+ iterations with web scope |
+| Running midden-recent-failures with high N on every build | continue takes 5-10 seconds just reading the midden before any work | The current call uses N=5 in build-wave.md, N=50 in continue-advance.md Step 2.1c. The N=50 call is for aggregation (finding 3+ recurring categories), which is correct. Keep N bounded. | midden.json exceeds 500 entries (unlikely in normal use, but possible in failure-heavy projects) |
+| colony-prime --compact called per-wave rather than per-build | Repeated context assembly at each wave | --compact is already used; keep it. Do not switch to full colony-prime per-wave. | Not applicable at current scale |
+| base64 encoding/decoding in bash for jq output | Slow on very long strings | Already used throughout. Acceptable for the entry counts involved (< 100 per cycle). | Not applicable |
 
 ## Security Mistakes
 
-Domain-specific security issues for autonomous research loops.
-
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| `--dangerously-skip-permissions` with web research scope | AI instance can fetch arbitrary URLs, potentially triggering SSRF or leaking local network info | Acceptable tradeoff for oracle (needed for autonomy), but document the risk; never run oracle on untrusted networks |
-| Progress file contains hallucinated "findings" presented as authoritative | User trusts and acts on inaccurate information (e.g., "Library X has vulnerability Y") | Source attribution and verification status on every factual claim; clearly label unverified findings |
-| Oracle writing to files outside `.aether/oracle/` | Could corrupt colony state, modify code, or overwrite user files | The existing "Non-Invasive Guarantee" is correct. Test and enforce this boundary |
-| Sensitive information in research.json (API keys, credentials) | Exposed in archive directory, potentially committed to git | Validate research.json contents; warn if it contains patterns matching secrets |
+| Memory-capture content contains sensitive values from worker output | Task descriptions or failure messages containing API keys, passwords, or file paths get promoted to QUEEN.md and distributed | Before merging any new memory-capture call site, review what content string is constructed. Avoid capturing full worker summaries verbatim — extract specific claim types. |
+| midden entries from worker failures contain full error output | Error messages may contain partial secrets or internal paths | The current midden-write call in build-wave.md captures `${blockers[0]}` (first blocker only), not full worker output. Maintain this pattern: capture the category and brief message, not the full stack trace or output. |
 
 ## UX Pitfalls
 
-Common user experience mistakes in this domain.
-
 | Pitfall | User Impact | Better Approach |
 |---------|-------------|-----------------|
-| No visibility into what oracle is doing mid-run | User waits hours, checks progress.md, finds it went sideways | Emit a one-line status per iteration: "Iteration 5/30: Investigating [question]. 3/5 questions answered." Visible in tmux |
-| Progress.md is the only output (no structured summary) | User must read through 50 iterations of raw notes to extract conclusions | Produce a structured `report.md` during synthesis phase with executive summary, key findings, and confidence levels |
-| "Marathon (50 iterations)" sounds productive but wastes resources | User selects max depth thinking more = better; gets diminishing returns after 15 | Recommend depth based on topic complexity; show diminishing returns warning in wizard |
-| Confidence percentage without context | "85% confidence" means nothing without knowing what is missing | Show: "85% complete -- 4/5 questions answered, 1 question unresolved: [specific question]" |
+| Auto-pheromone noise from lowered thresholds | User runs /ant:pheromones and sees 10+ auto-emitted REDIRECTs for normal build variation | Keep existing thresholds; fix write path; let user observe accumulation over real builds before adjusting |
+| QUEEN.md fills with low-value patterns | User opens QUEEN.md expecting distilled wisdom, finds generic entries | Enforce specificity at every memory-capture call site. Content must be actionable, not descriptive. |
+| Integration steps add 10-15 seconds to every build/continue cycle | User notices build cycles slower with no visible benefit if integration is silent | All new integration calls should be non-blocking and run concurrently where possible. The current pattern (`2>/dev/null || true`) is correct for failure handling. Also batch calls where possible (one jq write vs. multiple). |
 
 ## "Looks Done But Isn't" Checklist
 
 Things that appear complete but are missing critical pieces.
 
-- [ ] **Research output:** Has findings but no source attribution -- verify every factual claim has a source
-- [ ] **Structured state:** State file exists but does not track exploration coverage -- verify all research questions have entries
-- [ ] **Completion criteria:** Confidence target reached but novelty rate was not checked -- verify last 3 iterations produced new findings
-- [ ] **Phase transitions:** Survey phase "complete" but investigation phase starts without an explicit question queue -- verify the research tree is populated before transitioning
-- [ ] **Verification phase:** Claims are "verified" but only by re-reading the same source -- verify counter-evidence was sought
-- [ ] **Dead ends:** No dead ends recorded (suspicious) -- verify iterations actually attempted diverse approaches
-- [ ] **Final report:** Report exists but was generated from raw progress file, not synthesized -- verify it has a coherent narrative, not a list of iteration summaries
+- [ ] **Playbook edit:** Instruction added to playbook — verify it does not conflict with an earlier instruction in the same step. Read the full step, not just the new paragraph.
+- [ ] **Memory-capture call:** Call added at new site — verify the content string is specific (includes task ID, ant name, or similar discriminator). Run a test build and check learning-observations.json for the new entry.
+- [ ] **Midden threshold change:** Threshold lowered — verify REDIRECT TTL and priority are still appropriate. Check /ant:pheromones after a test build cycle with the new threshold.
+- [ ] **Integration wiring:** All new bash calls use `2>/dev/null || true` — verify each call also has a runtime test that proves it fires, not just that it does not error.
+- [ ] **Backward compatibility:** New jq read added — verify it uses `// "default"` fallback for every new field, and test on a fresh /ant:init colony state (not just the current dev colony).
+- [ ] **Phase complete:** Build/continue cycle ran in test — verify specific artifacts were created: count entries in midden.json, check pheromones.json for new auto:decision signals, check learning-observations.json for new entries.
 
 ## Recovery Strategies
 
@@ -274,43 +244,35 @@ When pitfalls occur despite prevention, how to recover.
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| Progress file bloated beyond usefulness | LOW | Pause oracle. Manually summarize progress.md into a structured state file. Resume from structured state |
-| Circular research (same ground covered 5+ times) | LOW | Pause oracle. Mark covered questions as ANSWERED in state file. Add explicit "investigate NEXT: [specific question]" directive. Resume |
-| Hallucination embedded in findings | MEDIUM | Pause oracle. Manually review findings for source attribution. Remove or flag unsourced claims. Add verification pass to remaining iterations |
-| Confidence-based termination fired too early | LOW | Re-run with structural completion criteria instead. Previous findings are not lost -- they seed the new run |
-| Oracle went off-topic for 30+ iterations | MEDIUM | Archive the off-topic run. Extract any relevant findings manually. Create a new research.json with more specific questions. Start fresh |
-| Prompt overloading causing instruction non-compliance | MEDIUM | Split into phase-specific prompts. Test each prompt independently before integration. Reduce instruction count per prompt to under 10 directives |
+| Competing instruction — new step silently skipped | LOW | Find the conflicting instruction; add explicit relationship clause ("In addition to..."). Re-run test build cycle. |
+| Midden noise spiral from lowered threshold | MEDIUM | Restore threshold to 3+. Run `jq '.entries \|= map(select(.timestamp > "recent_cutoff"))' midden.json` to prune false entries. Manually expire false REDIRECT pheromones. |
+| Memory capture observation inflation from generic content | MEDIUM | Edit content strings at all new call sites to add specifics. Manually remove inflated observations from learning-observations.json for the generic content hash. |
+| Integration wiring fire but never observed | LOW | Add runtime verification step to the phase plan before marking complete. Run a controlled build on a fresh colony. |
+| Backward compat break on old colony state | LOW | Add `// "fallback"` to the new jq read. Test on a colony initialized with /ant:init (fresh state, not current dev state). |
+| Phase stops on edge case from over-precise instruction | LOW | Add graceful degradation clause to the instruction: "If [condition], skip silently." Re-run the failed continue/build. |
 
 ## Pitfall-to-Phase Mapping
 
-How roadmap phases should address these pitfalls.
-
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| Append-only progress file bloat | Phase 1 (State Architecture) | State file under 2K tokens at iteration 20; raw log separated from handoff state |
-| Circular research | Phase 1 (State Architecture) + Phase 2 (Iteration Protocol) | Exploration tracker shows unique questions covered per iteration; no duplicates across 10+ iterations |
-| Unreliable self-assessed confidence | Phase 2 (Iteration Protocol) | Structural completion criteria (coverage %, novelty rate) used instead of or alongside self-assessed confidence |
-| Iterative appending not deepening | Phase 2 (Iteration Protocol) | Phase transitions visible in state; later iterations demonstrably deeper than earlier ones |
-| Hallucination accumulation | Phase 2 (Iteration Protocol) + Phase 4 (Quality) | Every factual claim in final report has source attribution; verification phase explicitly seeks counter-evidence |
-| Lost negative knowledge | Phase 1 (State Architecture) | Dead-ends tracked in state file; no iteration repeats a known-failed approach |
-| Prompt overloading | Phase 2 (Iteration Protocol) + Phase 3 (Prompt Engineering) | Phase-specific prompts each under 1,500 tokens; measurable instruction compliance rate |
-| No mid-run steering | Phase 3 (Integration) | Pheromone signals checked between iterations; user can FOCUS/REDIRECT without stopping |
+| Competing instructions in playbook | Any phase editing playbooks | Read full step context before adding; test build confirms both old and new behavior fire |
+| Midden threshold noise spiral | Phase addressing midden failure tracking | Fix write call sites first; observe accumulation before adjusting threshold |
+| Memory-capture noise (generic content) | Phase wiring memory-capture to new call sites | Check learning-observations.json for new entries after test build; reject generic content strings |
+| Instruction precision over-correction | All playbook editing phases | Every new integration instruction includes explicit `|| true` and skip clause |
+| Schema backward compat breaks | All phases adding jq reads | Test on fresh /ant:init colony state, not only current dev state |
+| Wiring correct but never observed | Every phase | Success criteria requires runtime artifact verification, not just code review |
 
 ## Sources
 
-- [Anthropic: How we built our multi-agent research system](https://www.anthropic.com/engineering/multi-agent-research-system) -- pitfalls in multi-agent coordination, duplication, source bias, cascading failures (HIGH confidence)
-- [Anthropic: Effective context engineering for AI agents](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) -- context rot, attention budget depletion, prompt overloading, dead-end chasing (HIGH confidence)
-- [LangChain: Context Management for Deep Agents](https://blog.langchain.com/context-management-for-deepagents/) -- context rot, goal drift after summarization, trajectory loss (MEDIUM confidence)
-- [Karpathy autoresearch: DeepWiki analysis](https://deepwiki.com/karpathy/autoresearch/4-agent-operation) -- ratcheting mechanism, results.tsv tracking, monotonic improvement (HIGH confidence)
-- [OpenAI Deep Research System Card](https://cdn.openai.com/deep-research-system-card.pdf) -- multi-step research trajectory optimization, backtracking (MEDIUM confidence)
-- [Galileo: Why Multi-Agent LLM Systems Fail](https://galileo.ai/blog/multi-agent-llm-systems-fail) -- circular exchanges, context loss, coordination breakdowns (MEDIUM confidence)
-- [Solving LLM Repetition Problem in Production](https://arxiv.org/html/2512.04419v1) -- self-reinforcement effect, repetition probability enhancement (MEDIUM confidence)
-- [Ralph Wiggum / Fresh Context Pattern](https://deepwiki.com/FlorianBruniaux/claude-code-ultimate-guide/7.3-fresh-context-pattern-(ralph-loop)) -- progress.txt growth, context window exhaustion (HIGH confidence)
-- [11 Tips For AI Coding With Ralph Wiggum](https://www.aihero.dev/tips-for-ai-coding-with-ralph-wiggum) -- progress file management, truncation, local minimum traps (MEDIUM confidence)
-- [LLM-based Agents Suffer from Hallucinations survey](https://arxiv.org/html/2509.18970v1) -- multi-step hallucination accumulation, chain error propagation (MEDIUM confidence)
-- [CEA: Context Engineering Agent for Enhanced Reliability](https://openreview.net/forum?id=6QUNblHtto) -- structured context management, token efficiency vs memory integrity tradeoff (MEDIUM confidence)
-- Aether oracle archive (`.aether/oracle/archive/2026-02-16-191250-progress.md`) -- first-hand evidence of iterative appending without deepening, repetitive iteration blocks (HIGH confidence, direct observation)
+- Direct inspection of `.aether/docs/command-playbooks/continue-advance.md` (Steps 2, 2.1, 2.1a-2.1e, 2.1.5, 2.1.6) — complete existing integration wiring visible; threshold at 3+ occurrences confirmed (HIGH confidence)
+- Direct inspection of `.aether/docs/command-playbooks/build-wave.md` (Steps 5.1, 5.2) — midden-write and memory-capture call sites visible; content string patterns at current sites reviewed (HIGH confidence)
+- Direct inspection of `.aether/docs/command-playbooks/continue-verify.md` — auto-upgrade path scope confirmed; verification loop gate behavior confirmed (HIGH confidence)
+- Direct inspection of `.aether/aether-utils.sh` (midden-write at line 8211, memory-capture at line 5402, learning-observe at line 5148) — implementation behavior confirmed; graceful degradation patterns confirmed (HIGH confidence)
+- `.planning/PROJECT.md` — v1.2 goal stated: "decisions [], instincts [], only 1 phase_learning" confirming memory is empty despite wiring existing (HIGH confidence)
+- `.planning/MILESTONES.md` — v1.0 shipped all 12 requirements; v1.1 ships 20 requirements; gap diagnosis that wiring exists but isn't producing output (HIGH confidence)
+- Anthropic multi-agent engineering blog — silent failure propagation in agent orchestration; instruction competition in natural language prompts (MEDIUM confidence)
+- General knowledge of LLM playbook/prompt instruction following — priority ordering, conflicting instruction resolution, specificity vs. flexibility tradeoff (MEDIUM confidence; applies to all documented agent systems)
 
 ---
-*Pitfalls research for: Autonomous AI Deep Research Loops*
-*Researched: 2026-03-13*
+*Pitfalls research for: Adding integration wiring to AI agent orchestration system (Aether v1.2 Integration Gaps)*
+*Researched: 2026-03-14*

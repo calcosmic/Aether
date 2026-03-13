@@ -1,521 +1,419 @@
-# Architecture Research: Autonomous Iterative Deep Research Engine
+# Architecture Research: Colony Integration Gap Fixes
 
-**Domain:** Autonomous AI deep research loops (file-based state, stateless iteration agents)
-**Researched:** 2026-03-13
-**Confidence:** HIGH (architecture patterns well-established across RALPH, FS-Researcher, EDR, and production systems)
+**Domain:** Multi-agent colony system — wiring existing components together
+**Researched:** 2026-03-14
+**Confidence:** HIGH (based on direct reading of all relevant source files)
 
-## Standard Architecture
+## What This Milestone Is
 
-### System Overview
+This is not a feature build. It is an integration wiring milestone. The four integration gaps are:
+
+1. **Decisions -> Pheromones (PHER-01):** Key architectural decisions captured in CONTEXT.md never become pheromone signals. Future phases miss them.
+2. **Learnings -> Instincts (promotion path):** Phase learnings are extracted and passed through `memory-capture`, but the promotion-proposal UI (`learning-check-promotion` / `learning-approve-proposals`) doesn't run at the right moments or is skipped silently when it should be surfaced.
+3. **Midden -> Behavior (PHER-02):** Recurring error categories in `midden.json` are read for context but never converted to REDIRECT signals that steer workers away from known failure modes.
+4. **Memory capture consistency:** `memory-capture` is called from some playbook steps but missing in others where failures and successes are recorded.
+
+**All four fixes involve calling existing `aether-utils.sh` subcommands from existing playbook steps.** No new subcommands are required. The implementation surface is playbook markdown files and one or two shell functions.
+
+## System Overview
 
 ```
 +-------------------------------------------------------------------+
-|                     COMMAND LAYER (oracle.md)                      |
-|  Interactive wizard -> research config -> launch control           |
-+---------------------------------+---------------------------------+
-                                  |
-                                  v
-+---------------------------------+---------------------------------+
-|                      ORCHESTRATOR (oracle.sh)                      |
-|  Bash loop: spawn -> wait -> check signals -> repeat               |
-+---------------------------------+---------------------------------+
-                                  |
-          reads state             |            writes state
-          before work             |            after work
-              +-------------------+-------------------+
-              |                                       |
-              v                                       v
-+-----------------------------+   +-----------------------------+
-|      STATE LAYER (JSON)     |   |    KNOWLEDGE LAYER (MD)     |
-|                             |   |                             |
-|  research.json (config)     |   |  findings/                  |
-|  state.json (iteration      |   |    001-<topic>.md           |
-|    metadata, frontier,      |   |    002-<topic>.md           |
-|    coverage tracking)       |   |    ...                      |
-|  plan.json (research plan   |   |  synthesis.md (running      |
-|    with question tree)      |   |    summary, compressed)     |
-|                             |   |  gaps.md (open questions,   |
-+-----------------------------+   |    contradictions)           |
-                                  +-----------------------------+
-              |                                       |
-              v                                       v
-+-----------------------------+   +-----------------------------+
-|     CONTROL FILES           |   |    ARCHIVE LAYER            |
-|                             |   |                             |
-|  .stop (halt signal)        |   |  archive/<date>-<topic>/   |
-|  .pause (pause signal)      |   |    research.json            |
-|  .steer (mid-run steering)  |   |    state.json               |
-|                             |   |    findings/                |
-+-----------------------------+   |    synthesis.md             |
-                                  +-----------------------------+
+|                    COMMAND LAYER (orchestrators)                   |
+|   build.md  continue.md  (load split playbooks by reference)      |
++-------------------------------------------------------------------+
+                              |
+          +-------------------+-------------------+
+          |                                       |
+          v                                       v
++-----------------------+             +---------------------------+
+|    BUILD PLAYBOOKS    |             |    CONTINUE PLAYBOOKS     |
+|                       |             |                           |
+|  build-prep.md        |             |  continue-verify.md       |
+|  build-context.md     |             |  continue-gates.md        |
+|  build-wave.md        |             |  continue-advance.md      |
+|  build-verify.md      |             |  continue-finalize.md     |
+|  build-complete.md    |             |                           |
++-----------+-----------+             +-------------+-------------+
+            |                                       |
+            |   calls                               |   calls
+            v                                       v
++-------------------------------------------------------------------+
+|                      aether-utils.sh (150 subcommands)            |
+|                                                                   |
+|  MEMORY PIPELINE:                                                 |
+|    memory-capture -> learning-observe -> pheromone-write          |
+|                   -> learning-promote-auto -> instinct-create     |
+|                                                                   |
+|  PROMOTION PIPELINE:                                              |
+|    learning-check-promotion -> learning-approve-proposals         |
+|    learning-promote-auto -> queen-promote -> QUEEN.md             |
+|                                                                   |
+|  PHEROMONE PIPELINE:                                              |
+|    pheromone-write -> pheromones.json                             |
+|    colony-prime -> prompt_section (injected into worker prompts)  |
+|                                                                   |
+|  MIDDEN PIPELINE:                                                 |
+|    midden-write -> midden.json                                    |
+|    midden-recent-failures -> failure context for workers          |
+|                                                                   |
+|  INSTINCT PIPELINE:                                               |
+|    instinct-create -> COLONY_STATE.json .memory.instincts[]       |
+|    instinct-read -> included in colony-prime prompt_section       |
++-------------------------------------------------------------------+
+                              |
+          +-------------------+-------------------+
+          |                                       |
+          v                                       v
++---------------------------+         +---------------------------+
+|   DATA LAYER (local only)  |         |   KNOWLEDGE LAYER         |
+|                            |         |                           |
+|  .aether/data/             |         |  .aether/CONTEXT.md       |
+|    COLONY_STATE.json       |         |  .aether/QUEEN.md         |
+|    pheromones.json         |         |  .aether/HANDOFF.md       |
+|    learning-obs.json       |         |                           |
+|    midden/midden.json      |         |                           |
+|    midden/build-failures.md|         |                           |
+|    midden/test-failures.md |         |                           |
++---------------------------+         +---------------------------+
 ```
 
-### Component Responsibilities
+## Component Responsibilities (Integration-Relevant)
 
-| Component | Responsibility | Typical Implementation |
-|-----------|----------------|------------------------|
-| Command Layer (oracle.md) | User interaction, research configuration, launch/status/stop | Slash command with interactive wizard |
-| Orchestrator (oracle.sh) | Outer loop control, iteration spawning, signal checking, convergence detection | Bash script with `for` loop, spawns fresh AI CLI instances |
-| Iteration Prompt (iterate.md) | Per-iteration instructions: read state, research, write structured output | Markdown prompt piped to stateless AI instance |
-| State Layer | Machine-readable iteration metadata, research plan, coverage tracking | JSON files on disk |
-| Knowledge Layer | Human-readable accumulated findings, synthesis, gaps | Markdown files on disk |
-| Control Files | Inter-process signals (stop, pause, steer) | Sentinel files checked per iteration |
-| Archive Layer | Previous research session preservation | Date-stamped directory copies |
+| Component | Responsibility | Current Gap |
+|-----------|----------------|-------------|
+| `continue-advance.md` Step 2.1b | Emit FEEDBACK pheromone per CONTEXT.md decision | GAP-1: Already present in playbook but must be verified to fire every continue run |
+| `continue-advance.md` Step 2.1c | Emit REDIRECT per midden category with 3+ occurrences | GAP-3: Step exists but threshold logic must match actual midden data format |
+| `continue-advance.md` Step 2.5 | memory-capture for each extracted learning | GAP-2: Currently calls memory-capture but promotion-check step (2.1.5) may silently skip |
+| `continue-advance.md` Step 3a | instinct-create from midden error patterns | GAP-3/4: Uses midden-recent-failures but only creates instincts, doesn't emit REDIRECT |
+| `build-wave.md` Step 5.2 | memory-capture on builder failure | GAP-4: Present in MEM-02 block but needs consistent source tagging |
+| `build-verify.md` Step 5.7 | memory-capture on chaos findings | GAP-4: Present in MEM-02 block, pattern needs to be confirmed complete |
+| `build-verify.md` Step 5.8 | memory-capture on watcher failures | GAP-4: Present in MEM-02 block, same confirmation needed |
+| `build-complete.md` Step 5.10 | learning-check-promotion after build | GAP-2: Present but runs after every build; must handle no-proposals case silently |
+| `context-update decision` | auto-emit FEEDBACK pheromone on decision record | GAP-1: `context-update` already calls pheromone-write for decisions at line 508 of aether-utils.sh |
 
-## Recommended Project Structure
+## Integration Points: Where Each Gap Is Wired
 
+### Gap 1: Decisions → Pheromones (PHER-01)
+
+**Current state:** `context-update decision` (aether-utils.sh line ~508) already emits a FEEDBACK pheromone with `source: "system:decision"` when a decision is recorded. The continue-advance.md Step 2.1b reads the CONTEXT.md "Recent Decisions" table and emits FEEDBACK pheromones with `source: "auto:decision"`.
+
+**The gap:** Deduplication in 2.1b checks for both `"auto:decision"` and `"system:decision"` sources — this is correct. However, if `context-update decision` is not called consistently when decisions are made (e.g., during build rather than just continue), some decisions are never promoted.
+
+**Integration point:** `continue-advance.md` Step 2.1b is the primary wiring point. This step already exists and is correct. The milestone should verify it fires on every continue run, not just when learnings exist.
+
+**Subcommands called:**
 ```
-.aether/oracle/
-+-- oracle.sh              # Orchestrator (bash loop)
-+-- oracle.md              # Slash command handler (wizard, status, stop)
-+-- iterate.md             # Per-iteration prompt (the core research agent)
-+-- research.json          # Research configuration (topic, scope, questions)
-+-- state.json             # Iteration state (NEW - replaces implicit state)
-+-- plan.json              # Research plan with question tree (NEW)
-+-- findings/              # Per-iteration structured findings (NEW)
-|   +-- 001-initial-survey.md
-|   +-- 002-api-patterns.md
-|   +-- 003-error-handling.md
-|   +-- ...
-+-- synthesis.md           # Running compressed summary (NEW - replaces progress.md)
-+-- gaps.md                # Open questions and contradictions (NEW)
-+-- .stop                  # Halt signal
-+-- .pause                 # Pause signal (NEW)
-+-- .steer                 # Mid-run steering input (NEW)
-+-- archive/               # Previous research sessions
-|   +-- 2026-03-12-auth-patterns/
-|   +-- ...
-+-- discoveries/           # Standalone reusable discoveries (existing)
-+-- prompts/               # Custom research prompts (existing)
+pheromone-write FEEDBACK "[decision] {text}" --strength 0.6 --source "auto:decision" --ttl "30d"
 ```
 
-### Structure Rationale
+**New vs. modified:** MODIFIED — Step 2.1b already exists, may need robustness fixes.
 
-- **`findings/` directory:** Each iteration writes to its own numbered file instead of appending to a monolithic progress.md. This prevents the "append-only growth" problem where progress.md becomes too large for any single iteration to read. Numbered files create a natural audit trail.
-- **`state.json` (new):** Replaces implicit state tracking. Currently, the only way to know iteration progress is to count `## Iteration` headings in progress.md. Structured JSON enables the orchestrator to make decisions (convergence, branching, re-prioritization) without parsing markdown.
-- **`plan.json` (new):** Externalizes the research plan as a living document the AI can update. Currently, research questions are static in research.json. A plan with priorities, completion status, and sub-questions enables iteration N to direct iteration N+1.
-- **`synthesis.md` (new):** A compressed running summary that replaces progress.md as the primary "what do we know" document. Unlike progress.md (which grows linearly), synthesis.md is rewritten each iteration to stay within a token budget, preventing context exhaustion.
-- **`gaps.md` (new):** Explicit tracking of what is NOT known. This is the key missing piece -- currently the system has no structured way to represent "unanswered questions" that future iterations should pursue.
-- **`.steer` (new):** Enables mid-research steering without stopping. A user can write a steering directive and the next iteration picks it up, adjusting course without losing accumulated state.
+### Gap 2: Learnings → Instincts (Promotion Path)
 
-## Architectural Patterns
+**Current state:** `continue-advance.md` has:
+- Step 2 extracts learnings into COLONY_STATE.json `memory.phase_learnings`
+- Step 2.5 calls `memory-capture "learning"` for each extracted learning
+- Step 2.1.5 calls `learning-check-promotion` and if proposals exist, calls `learning-approve-proposals`
+- Step 2.1.6 batch-sweeps with `learning-promote-auto`
+- Step 3 calls `instinct-create` directly for observed patterns
+- Step 3a calls `instinct-create` from midden error patterns
 
-### Pattern 1: Structured State Bridge
+**The gap:** The promotion pipeline (Steps 2.1.5 and 2.1.6) is in continue-advance.md but step ordering means batch promotion runs AFTER the phase advance. The silent-skip condition (no proposals = no output) is correct per spec, but the ordering matters: promotion should happen before state is written (Step 4), not after.
 
-**What:** Use structured JSON files as the "handoff protocol" between stateless AI iterations. Each iteration reads state, does work, writes updated state. The state file is the only continuity mechanism.
+**Integration point:** The ordering in `continue-advance.md` between Steps 2.5 → 2.1.5 → 2.1.6 → 4. Verify promotion runs before phase advance, not after.
 
-**When to use:** Always. This is the fundamental pattern that makes stateless iterations achieve stateful depth.
-
-**Trade-offs:** JSON is machine-parseable but requires schema discipline. Schema drift across iterations can corrupt state. Must validate JSON on write.
-
-**Current state vs. recommended:**
-
-Current `research.json` (static config only):
-```json
-{
-  "topic": "How auth works",
-  "scope": "both",
-  "questions": ["Q1", "Q2", "Q3"],
-  "max_iterations": 50,
-  "target_confidence": 95
-}
+**Subcommands called:**
+```
+memory-capture "learning" "{claim}" "pattern" "worker:continue"
+learning-check-promotion
+learning-approve-proposals [--verbose]
+learning-promote-auto "{wisdom_type}" "{content}" "{colony}" "learning"
+instinct-create --trigger "..." --action "..." --confidence N --domain "..." --source "..." --evidence "..."
 ```
 
-Recommended `state.json` (living iteration state):
-```json
-{
-  "iteration": 7,
-  "phase": "deepening",
-  "confidence": 62,
-  "coverage": {
-    "Q1": { "status": "complete", "confidence": 90, "findings": ["001", "003"] },
-    "Q2": { "status": "partial", "confidence": 45, "findings": ["002"] },
-    "Q3": { "status": "not_started", "confidence": 0, "findings": [] }
-  },
-  "frontier": ["How does token refresh interact with SSO?", "What happens on network partition?"],
-  "completed_areas": ["basic auth flow", "password hashing", "session management"],
-  "next_priority": "Q2",
-  "stalled_count": 0,
-  "last_finding_file": "003-error-handling.md"
-}
+**New vs. modified:** MODIFIED — ordering fix in continue-advance.md.
+
+### Gap 3: Midden → Behavior (PHER-02)
+
+**Current state:** `continue-advance.md` Step 2.1c already queries `midden-recent-failures 50` and emits REDIRECT pheromones for categories with 3+ occurrences. Step 3a also creates instincts from midden error patterns.
+
+**The gap:** Two-part. First, the midden stores all entries (not just failures — it includes `"coverage"`, `"performance"`, `"refactoring"`, `"integration"`, `"security"`, `"quality"` categories from various agents). The `midden-recent-failures` subcommand returns ALL entries sorted by timestamp, not filtered by failure categories. The Step 2.1c category grouping works correctly on this data, but the 3+ threshold means low-volume genuine failures never trigger REDIRECT.
+
+Second, `build-wave.md` Step 5.2 reads midden at the start of each wave (`midden-recent-failures 5`) to inject context into builder prompts, but this is a display-only read — it does not emit pheromones. Failures found here should also feed back.
+
+**Integration points:**
+1. `continue-advance.md` Step 2.1c — existing, verify threshold and deduplication logic is robust
+2. `build-wave.md` Step 5.2 — existing midden read, no pheromone emission (acceptable — pheromone emission belongs in continue, not build)
+
+**Subcommands called:**
+```
+midden-recent-failures 50
+pheromone-write REDIRECT "[error-pattern] ..." --strength 0.7 --source "auto:error" --ttl "30d"
+memory-capture "resolution" "..." "pattern" "worker:continue"
 ```
 
-### Pattern 2: Research Plan as Living Document
+**New vs. modified:** MODIFIED — verify Step 2.1c threshold and deduplication.
 
-**What:** The research plan (questions to investigate) is a mutable tree, not a static list. Iterations can add sub-questions, mark questions answered, re-prioritize, and branch into unexpected areas.
+### Gap 4: Memory Capture Consistency
 
-**When to use:** Any research deeper than a surface scan (more than 5 iterations).
+**Current state:** `memory-capture` is called from:
+- `build-wave.md` Step 5.2 on builder failure (MEM-02 block)
+- `build-verify.md` Step 5.7 on chaos findings (MEM-02 block)
+- `build-verify.md` Step 5.8 on watcher failures (MEM-02 block)
+- `continue-advance.md` Step 2.5 on learnings
 
-**Trade-offs:** Plan mutation means the research can drift from original intent. Mitigate by anchoring to the original questions in research.json (immutable) while allowing plan.json to evolve.
+**The gap:** Success events are not captured via `memory-capture`. When a builder succeeds, no observation is recorded in `learning-observations.json`, so the pattern never accumulates toward promotion threshold. The midden-write calls on success (e.g., Gatekeeper findings, Auditor scores, Measurer baselines) record context but don't trigger the pheromone/promotion pipeline.
 
-Recommended `plan.json`:
-```json
-{
-  "original_questions": ["Q1", "Q2", "Q3"],
-  "question_tree": [
-    {
-      "id": "Q1",
-      "text": "How does authentication work?",
-      "status": "complete",
-      "confidence": 90,
-      "children": [
-        {
-          "id": "Q1.1",
-          "text": "How are tokens refreshed?",
-          "status": "in_progress",
-          "confidence": 30,
-          "added_by_iteration": 4,
-          "children": []
-        }
-      ]
-    },
-    {
-      "id": "Q2",
-      "text": "What are the error handling patterns?",
-      "status": "in_progress",
-      "confidence": 45,
-      "children": []
-    }
-  ],
-  "abandoned": [
-    { "id": "Q1.2", "text": "LDAP integration?", "reason": "Not relevant to this codebase", "abandoned_at_iteration": 5 }
-  ]
-}
+**Integration points:**
+1. `build-complete.md` Step 5.9 — synthesis step; add `memory-capture "success"` for tasks_completed with patterns_observed from learning section of synthesis JSON
+2. `build-verify.md` Step 5.7 — after chaos completion, add `memory-capture "success"` for `overall_resilience: "strong"`
+
+**Subcommands called (new calls to add):**
+```
+memory-capture "success" "{pattern.trigger}: {pattern.action}" "pattern" "worker:builder"
+memory-capture "failure" "{issue_title}" "failure" "worker:chaos"
 ```
 
-### Pattern 3: Synthesis with Compression
+**New vs. modified:** NEW calls in build-complete.md Step 5.9 and build-verify.md Step 5.7.
 
-**What:** Instead of append-only accumulation (progress.md growing forever), maintain a compressed synthesis that is rewritten each iteration. The synthesis stays within a token budget (e.g., 4000 tokens) so every iteration can read the full state of knowledge without context exhaustion.
+## Data Flow: Memory Pipeline
 
-**When to use:** Any research session exceeding 10 iterations. Below 10, append-only is fine.
+The memory pipeline is the central nervous system of all four integration fixes:
 
-**Trade-offs:** Rewriting synthesis risks losing detail. Mitigate by keeping per-iteration findings/ files as the source of truth -- synthesis is a compressed index, not the primary record.
-
-**How it works:**
 ```
-Iteration N reads:
-  1. state.json (what iteration is this, what's the priority)
-  2. plan.json (what questions remain)
-  3. synthesis.md (compressed summary of ALL prior findings)
-  4. gaps.md (what we don't know yet)
-
-Iteration N does:
-  5. Research (tools: Glob, Grep, Read, WebSearch, WebFetch)
-  6. Write findings/00N-<topic>.md (detailed per-iteration output)
-
-Iteration N writes:
-  7. Update state.json (increment iteration, update coverage, set next_priority)
-  8. Update plan.json (mark questions, add sub-questions)
-  9. Rewrite synthesis.md (merge new findings into compressed summary)
-  10. Update gaps.md (add new gaps, remove resolved ones)
-```
-
-### Pattern 4: Frontier-Based Iteration Direction
-
-**What:** Each iteration explicitly identifies the "frontier" -- the most valuable next area to research. This replaces the current implicit approach where each iteration independently decides what to work on, often duplicating effort.
-
-**When to use:** Always. This is what makes iteration N+1 meaningfully different from iteration N.
-
-**Trade-offs:** Requires discipline from the AI to actually set a frontier. The iterate.md prompt must enforce this.
-
-**Example frontier in state.json:**
-```json
-{
-  "frontier": [
-    "Token refresh flow under SSO -- found reference in auth.js:142 but not traced yet",
-    "Error recovery in database connection pooling -- mentioned in 3 places but contradictory"
-  ],
-  "next_priority": "Token refresh flow under SSO",
-  "priority_reason": "Blocks understanding of Q1.1 which is the last gap in authentication coverage"
-}
+Event Source (builder failure / chaos finding / learning / decision)
+    |
+    v
+memory-capture <event_type> <content> <wisdom_type> <source>
+    |
+    +-- learning-observe -> learning-observations.json
+    |       content_hash: dedup key
+    |       observation_count: increments on repeat
+    |       colonies: [colony_name]
+    |
+    +-- pheromone-write -> pheromones.json
+    |       type: REDIRECT (failure) | FEEDBACK (learning/success)
+    |       strength: 0.7 (failure) | 0.6 (learning/success) | 0.75 (resolution)
+    |       source: worker:continue | worker:builder | worker:chaos | worker:watcher
+    |
+    +-- learning-promote-auto -> (if threshold met)
+            |
+            +-- instinct-create -> COLONY_STATE.json .memory.instincts[]
+            |
+            +-- queen-promote -> QUEEN.md (appended pattern/redirect/philosophy)
 ```
 
-### Pattern 5: Convergence Detection
+## Data Flow: Colony Prime (Worker Context Injection)
 
-**What:** The orchestrator (bash loop) detects when research has converged -- when iterations stop producing new knowledge. This replaces the current "self-reported confidence" which is unreliable (the AI tends to be overconfident or overly conservative).
+Every worker prompt is primed with accumulated colony knowledge via `colony-prime`:
 
-**When to use:** Always. Self-reported confidence should be one signal among several, not the sole termination criterion.
+```
+colony-prime --compact
+    |
+    +-- reads pheromones.json -> active signals (FOCUS/REDIRECT/FEEDBACK)
+    +-- reads COLONY_STATE.json .memory.instincts[] -> instinct list
+    +-- reads QUEEN.md -> queen wisdom entries
+    +-- reads CONTEXT.md -> recent decisions, current phase
+    |
+    v
+prompt_section (formatted markdown)
+    |
+    v
+Builder/Watcher/Chaos worker prompts (injected as {prompt_section})
+```
 
-**Detection signals (checked by oracle.sh):**
+This means: pheromones emitted in `continue-advance.md` are picked up by `colony-prime` before the next build's workers are spawned. The signal propagation chain is:
 
-| Signal | How to detect | Weight |
-|--------|--------------|--------|
-| Self-reported confidence | AI writes confidence to state.json | Low (unreliable alone) |
-| Findings size trend | Track byte count of findings/00N.md -- shrinking findings = diminishing returns | Medium |
-| Gap resolution rate | Count open gaps in gaps.md over time -- plateau = convergence | High |
-| Coverage completeness | All questions in plan.json at "complete" or "abandoned" | High |
-| Stall detection | Same frontier repeated 3+ iterations without progress | High (signals stuck) |
+```
+continue run N -> pheromone-write -> pheromones.json
+                                         |
+                                         v
+build run N+1 -> colony-prime -> prompt_section -> builder worker sees signal
+```
 
-**Implementation in oracle.sh:**
+## Playbook Step Integration Map
+
+Complete map of which playbook steps call which subcommands for the four gaps:
+
+### Build Flow
+
+| Playbook | Step | Subcommand | Gap | Status |
+|----------|------|-----------|-----|--------|
+| build-wave.md | 5.2 (builder failure) | `memory-capture "failure" ...` | GAP-4 | EXISTS (MEM-02) |
+| build-wave.md | 5.2 (wave start) | `midden-recent-failures 5` | GAP-3 | EXISTS (display only) |
+| build-verify.md | 5.7 (chaos critical finding) | `memory-capture "failure" ...` | GAP-4 | EXISTS (MEM-02) |
+| build-verify.md | 5.7 (chaos strong resilience) | `memory-capture "success" ...` | GAP-4 | MISSING |
+| build-verify.md | 5.8 (watcher failure) | `memory-capture "failure" ...` | GAP-4 | EXISTS (MEM-02) |
+| build-complete.md | 5.9 (synthesis patterns_observed) | `memory-capture "success" ...` | GAP-4 | MISSING |
+| build-complete.md | 5.10 (post-build) | `learning-check-promotion` | GAP-2 | EXISTS |
+| build-complete.md | 5.10 (post-build) | `learning-approve-proposals` | GAP-2 | EXISTS |
+
+### Continue Flow
+
+| Playbook | Step | Subcommand | Gap | Status |
+|----------|------|-----------|-----|--------|
+| continue-advance.md | 2.5 (per learning) | `memory-capture "learning" ...` | GAP-2 | EXISTS |
+| continue-advance.md | 2.1.5 | `learning-check-promotion` | GAP-2 | EXISTS |
+| continue-advance.md | 2.1.5 | `learning-approve-proposals` | GAP-2 | EXISTS |
+| continue-advance.md | 2.1.6 | `learning-promote-auto` (batch) | GAP-2 | EXISTS |
+| continue-advance.md | 2.1b | `pheromone-write FEEDBACK "[decision] ..."` | GAP-1 | EXISTS |
+| continue-advance.md | 2.1c | `midden-recent-failures 50` | GAP-3 | EXISTS |
+| continue-advance.md | 2.1c | `pheromone-write REDIRECT "[error-pattern] ..."` | GAP-3 | EXISTS |
+| continue-advance.md | 2.1c | `memory-capture "resolution" ...` | GAP-3 | EXISTS |
+| continue-advance.md | 3 | `instinct-create` (success patterns) | GAP-2 | EXISTS |
+| continue-advance.md | 3a | `instinct-create` (midden errors) | GAP-3 | EXISTS |
+
+## What Is New vs. What Is Modified
+
+### New (does not exist today)
+
+1. `memory-capture "success"` call in `build-verify.md` Step 5.7 — after chaos reports `overall_resilience: "strong"`, capture it as a positive signal.
+
+2. `memory-capture "success"` call in `build-complete.md` Step 5.9 — after synthesis collects `learning.patterns_observed`, emit each pattern through the memory pipeline.
+
+Both calls are additions of ~5-10 lines to existing steps.
+
+### Modified (exists, needs verification or fixing)
+
+1. `continue-advance.md` Step 2.1b — verify it fires on every continue run regardless of whether learnings were extracted. Current code only runs if `[[ -n "$decisions" ]]`. This is correct behavior; the question is whether `decisions` extraction via awk is robust against CONTEXT.md format variations.
+
+2. `continue-advance.md` Step 2.1c — verify the category grouping jq query correctly handles the midden.json format. The `midden-recent-failures` subcommand returns `{count, failures[{timestamp, category, source, message}]}`. The Step 2.1c jq extracts `.failures[].category`, which matches. Threshold is 3+ occurrences. Verify deduplication check queries `pheromones.json .signals[]` with correct field paths.
+
+3. `continue-advance.md` Step 2.1.5 ordering — confirm this step runs before Step 4 (Advance State). Current playbook ordering: Step 2 (extract learnings) → Step 2.5 (memory-capture) → Step 2.1 (auto-emit pheromones) → Step 2.1.5 (promotion proposals) → Step 2.1.6 (batch promotion) → Step 2.2 (handoff) → Step 2.3 (changelog) → Step 4 (advance state). This ordering is correct. No change needed — just confirm.
+
+4. Source tagging consistency in MEM-02 blocks — current `build-wave.md` uses `"worker:builder"` as source. `build-verify.md` chaos block uses `"worker:chaos"`. `build-verify.md` watcher block uses `"worker:watcher"`. These are correct and distinct. The new success calls should use the same source tags.
+
+## Architectural Patterns to Follow
+
+### Pattern 1: Fail-Safe Execution (All Integration Points)
+
+Every call to `aether-utils.sh` in playbook steps uses `2>/dev/null || true`. This is the established pattern. Integration fixes must follow it:
+
 ```bash
-# After each iteration, check convergence
-CONFIDENCE=$(jq -r '.confidence' state.json)
-STALL_COUNT=$(jq -r '.stalled_count' state.json)
-OPEN_GAPS=$(wc -l < gaps.md)  # simplified
-FINDING_SIZE=$(wc -c < "findings/$(printf '%03d' $i)-*.md" 2>/dev/null || echo 0)
+bash .aether/aether-utils.sh memory-capture \
+  "success" \
+  "Resilience strong: {finding summary}" \
+  "pattern" \
+  "worker:chaos" 2>/dev/null || true
+```
 
-# Convergence = high confidence + low gaps + no stall
-if [[ "$CONFIDENCE" -ge "$TARGET" && "$STALL_COUNT" -eq 0 ]]; then
-  echo "CONVERGED: confidence target met"
-  exit 0
+The `|| true` ensures no integration step blocks the primary flow. Pheromone emission, memory capture, and instinct creation are all advisory — they cannot fail the build or continue.
+
+### Pattern 2: Silent When Empty (GAP-2 Promotion)
+
+Per the existing spec and user decision: if `learning-check-promotion` returns zero proposals, produce no output. The promotion UI only appears when there is something to review. The `build-complete.md` Step 5.10 already implements this correctly with:
+
+```bash
+if [[ "$proposal_count" -gt 0 ]]; then
+  bash .aether/aether-utils.sh learning-approve-proposals
 fi
-
-# Stall = 3+ iterations with same frontier
-if [[ "$STALL_COUNT" -ge 3 ]]; then
-  echo "STALLED: research not progressing, consider stopping"
-  # Don't auto-stop, but warn
-fi
 ```
 
-## Data Flow
+New additions should follow the same pattern.
 
-### Per-Iteration Data Flow
+### Pattern 3: Capped Emissions Per Run (GAP-1 and GAP-3)
 
-```
-oracle.sh (orchestrator)
-    |
-    | spawns fresh AI instance with iterate.md prompt
-    v
-+-- AI Instance (stateless, fresh 200K context) --+
-|                                                   |
-|  READS (input to this iteration):                 |
-|    research.json  -- what are we researching       |
-|    state.json     -- where are we in the process   |
-|    plan.json      -- what questions remain          |
-|    synthesis.md   -- compressed prior knowledge     |
-|    gaps.md        -- what we don't know             |
-|    .steer         -- any user steering directives   |
-|                                                   |
-|  DOES (the actual research):                       |
-|    Glob/Grep/Read -- explore codebase              |
-|    WebSearch/WebFetch -- external research          |
-|    Analyze, synthesize, connect                    |
-|                                                   |
-|  WRITES (output of this iteration):                |
-|    findings/00N-<topic>.md -- detailed findings     |
-|    state.json     -- updated iteration state        |
-|    plan.json      -- updated question tree          |
-|    synthesis.md   -- rewritten compressed summary   |
-|    gaps.md        -- updated open questions          |
-|                                                   |
-+---------------------------------------------------+
-    |
-    | AI instance exits, output captured
-    v
-oracle.sh (orchestrator)
-    |
-    | checks: completion signal? convergence? stop file?
-    | decides: continue loop or terminate
-    v
-[Next iteration or COMPLETE]
-```
+Decision pheromones (Step 2.1b): cap at 3 per continue run via `emit_count` counter.
+Error pattern pheromones (Step 2.1c): cap at 3 per continue run via `emit_count` counter.
+Success patterns (new): cap at 2 per build run (matches `instinct-create` success pattern limit in Step 3b).
 
-### Cross-Iteration Knowledge Flow
+These caps prevent pheromone inflation. New additions must respect them.
 
-```
-Iteration 1         Iteration 2         Iteration 3         Iteration N
-+-----------+       +-----------+       +-----------+       +-----------+
-| Survey    |       | Deepen    |       | Synthesize|       | Verify    |
-| landscape |  -->  | Q1 focus  |  -->  | Connect   |  -->  | Fill gaps |
-| Set plan  |       | Find gaps |       | patterns  |       | Converge  |
-+-----------+       +-----------+       +-----------+       +-----------+
-     |                   |                   |                   |
-     v                   v                   v                   v
-state.json:          state.json:          state.json:          state.json:
- iter=1               iter=2               iter=3               iter=N
- conf=15              conf=35              conf=60              conf=92
- phase=survey         phase=deepening      phase=synthesis      phase=verification
-     |                   |                   |                   |
-     v                   v                   v                   v
-synthesis.md:        synthesis.md:        synthesis.md:        synthesis.md:
- "Found 3 main       "Auth uses JWT       "3 patterns          "All questions
-  components..."       with refresh..."     identified..."       answered..."
-     |                   |                   |                   |
-     v                   v                   v                   v
-gaps.md:             gaps.md:             gaps.md:             gaps.md:
- "Q1: ?"              "Q1.1: token         "Q1.1: edge          (empty or
-  "Q2: ?"              refresh?"            case in SSO?"        minimal)
-  "Q3: ?"             "Q2: ?"
-```
+### Pattern 4: Deduplication Before Emission (GAP-1 and GAP-3)
 
-### Key Data Flows
+Both Step 2.1b and 2.1c check `pheromones.json` for existing active signals with matching source before emitting. This prevents duplicate signals across multiple continue runs. New calls in build-complete.md Step 5.9 should also check for existing signals before emitting if they are repeatable.
 
-1. **Config flow (immutable):** `wizard -> research.json -> iterate.md reads it` -- The original research parameters never change. They anchor the research to the user's intent.
+However, `memory-capture` handles its own deduplication internally via content hash in `learning-observations.json`. Calling `memory-capture` multiple times with the same content increments the count rather than creating duplicates. So new `memory-capture "success"` calls do not need external deduplication checks.
 
-2. **State flow (mutable per iteration):** `iterate.md writes state.json -> oracle.sh reads for convergence -> iterate.md reads next iteration` -- The state file is the primary handoff mechanism between iterations.
+## Anti-Patterns to Avoid
 
-3. **Knowledge flow (accumulative):** `iterate.md writes findings/00N.md -> iterate.md reads synthesis.md (compressed prior) -> iterate.md rewrites synthesis.md with new knowledge` -- Knowledge accumulates in findings/ and is compressed into synthesis.md.
+### Anti-Pattern 1: Blocking Integration Calls
 
-4. **Direction flow (adaptive):** `iterate.md writes plan.json + frontier -> iterate.md reads plan.json next iteration -> focuses on frontier` -- Each iteration steers the next toward the most valuable unexplored area.
+**What:** Calling `memory-capture` without `2>/dev/null || true`
+**Why it is wrong:** If the subcommand fails (e.g., COLONY_STATE.json missing, jq error), it blocks the entire build or continue flow.
+**Do this instead:** Always append `2>/dev/null || true` to all integration calls.
 
-5. **Control flow (external signals):** `user touches .stop/.steer -> oracle.sh or iterate.md reads signal -> adjusts behavior` -- External control without interrupting the research process.
+### Anti-Pattern 2: Duplicating Logic That Already Exists
 
-## Research Phases (Emergent Structure)
+**What:** Adding a second midden→pheromone emission path inside the build flow (e.g., after each builder failure in Step 5.2)
+**Why it is wrong:** The midden→pheromone conversion already happens in `continue-advance.md` Step 2.1c. Adding it to build creates duplicate REDIRECT signals and runs the same conversion multiple times per phase.
+**Do this instead:** `build-wave.md` records to midden. `continue-advance.md` reads midden and emits pheromones. One-directional, one place.
 
-The iterate.md prompt should recognize and adapt to distinct research phases. These are not rigidly sequential -- the AI should identify which phase is appropriate based on state.json.
+### Anti-Pattern 3: Emitting Pheromones Inside Worker Prompts
 
-| Phase | Iterations | Focus | Transition Criterion |
-|-------|-----------|-------|---------------------|
-| **Survey** | 1-3 | Broad landscape scan, identify major areas | All original questions have initial coverage |
-| **Deepening** | 4-N | Focused investigation of highest-priority gaps | Coverage > 60% on all questions |
-| **Synthesis** | N-M | Connect findings, identify patterns, resolve contradictions | All questions at "complete" or "abandoned" |
-| **Verification** | M-end | Verify claims, fill remaining gaps, compress final output | Confidence > target, gaps resolved |
+**What:** Instructing builder/watcher agents to call `pheromone-write` directly in their task execution
+**Why it is wrong:** Workers are stateless sub-agents. They complete tasks and return JSON. The Queen (orchestrator playbook) processes results and makes state decisions. Pheromone emission is a Queen responsibility.
+**Do this instead:** Workers write to midden or record in their output JSON. The Queen reads results and emits pheromones.
 
-## Scaling Considerations
+### Anti-Pattern 4: Skipping the memory-capture Pipeline
 
-| Scale | Architecture Adjustments |
-|-------|--------------------------|
-| Quick scan (5 iterations) | Skip plan.json, synthesis.md = simple append, no convergence detection needed |
-| Standard research (15 iterations) | Full architecture as described, synthesis rewriting kicks in at iteration 10 |
-| Deep dive (30+ iterations) | Add findings/ file size monitoring, consider splitting synthesis.md by question, add stall-breaking heuristics |
-| Marathon (50+ iterations) | Add checkpoint system (snapshot state every 10 iterations), implement "rotation" where the AI re-reads original research.json to prevent drift |
+**What:** Calling `pheromone-write` directly from playbook steps instead of routing through `memory-capture`
+**Why it is wrong:** `memory-capture` does three things atomically: records observation count, emits pheromone, and checks auto-promotion. Bypassing it means the observation count never accumulates, so threshold-based promotion never fires.
+**Do this instead:** For learnings and failures, always use `memory-capture`. Only call `pheromone-write` directly for phase-level signals (Step 2.1a) and decision signals (Step 2.1b/2.1c) that are not learning/failure events.
 
-### Scaling Priorities
+## Build Order for This Milestone
 
-1. **First bottleneck: synthesis.md growth.** Without compression, the synthesis grows linearly and eventually exceeds what an iteration can read. Solution: enforce a token budget on synthesis.md and rewrite (not append) each iteration.
-
-2. **Second bottleneck: findings/ directory size.** At 50+ iterations, the AI cannot read all findings. Solution: synthesis.md is the compressed index -- iterations should read synthesis.md, not all findings. Findings/ is the audit trail, not the primary input.
-
-3. **Third bottleneck: research drift.** After 30+ iterations, the research can wander far from original intent. Solution: "rotation" pattern -- every 10 iterations, re-read research.json and explicitly compare current direction against original questions.
-
-## Anti-Patterns
-
-### Anti-Pattern 1: Append-Only Knowledge Accumulation
-
-**What people do:** Each iteration appends findings to a single progress.md file that grows indefinitely.
-**Why it is wrong:** By iteration 20, progress.md exceeds what a fresh AI instance can meaningfully process. Later iterations either skip reading it (losing context) or read a truncated version (losing early findings). The research becomes shallow repetition rather than genuine deepening.
-**Do this instead:** Separate raw findings (append to findings/ directory) from compressed synthesis (rewrite synthesis.md each iteration with a token budget). The synthesis is the "working memory," findings are the "long-term memory."
-
-### Anti-Pattern 2: Self-Reported Confidence as Sole Termination
-
-**What people do:** Ask the AI to rate its confidence 0-100 and stop when it exceeds the target.
-**Why it is wrong:** LLMs are poorly calibrated on meta-cognitive confidence. They tend to report high confidence early (premature termination) or refuse to exceed 90% (wasted iterations). The number is arbitrary and disconnected from actual research quality.
-**Do this instead:** Use multiple convergence signals: coverage completeness, gap resolution rate, findings size trend, AND self-reported confidence. The orchestrator (bash) should aggregate these signals, not rely on any single one.
-
-### Anti-Pattern 3: Undirected Iterations
-
-**What people do:** Give each iteration the same generic prompt ("research this topic") and hope it picks a useful area.
-**Why it is wrong:** Without explicit direction, iterations 1, 5, and 15 may all investigate the same surface-level aspects. The research breadth grows but depth does not. This is "iterative appending, not iterative deepening."
-**Do this instead:** Each iteration must write an explicit frontier (next_priority in state.json) that the next iteration is obligated to pursue. The iterate.md prompt must enforce: "You MUST start by addressing the frontier from state.json before exploring new areas."
-
-### Anti-Pattern 4: Monolithic Per-Iteration Prompt
-
-**What people do:** Put all instructions (read state, research, write findings, update plan, update synthesis, rate confidence) in one prompt.
-**Why it is wrong:** A monolithic prompt with 10+ distinct responsibilities leads to partial execution. The AI completes the first few steps well but skips or shortcuts later steps, especially state file updates.
-**Do this instead:** Structure the iterate.md prompt with explicit numbered steps and mandatory output sections. Consider using XML tags to delimit required outputs so completion can be verified.
-
-### Anti-Pattern 5: No Schema Validation on State Files
-
-**What people do:** Trust the AI to write valid JSON to state.json without verification.
-**Why it is wrong:** One malformed state.json write corrupts all subsequent iterations. The AI has no error correction mechanism for its own output format errors.
-**Do this instead:** The orchestrator (oracle.sh) should validate state.json after each iteration using `jq`. If validation fails, restore from the previous iteration's state and retry or halt.
-
-## Integration Points
-
-### External Services
-
-| Service | Integration Pattern | Notes |
-|---------|---------------------|-------|
-| Claude CLI | Spawned by oracle.sh via `claude --print` | Stateless, fresh context each call |
-| OpenCode CLI | Alternative to Claude CLI | Same interface, detected at runtime |
-| Web search | Used by iterate.md via WebSearch tool | Available when scope includes "web" |
-| File system | Primary state persistence layer | All state lives on disk as files |
-| tmux | Background session management | Optional, falls back to manual launch |
-
-### Internal Boundaries
-
-| Boundary | Communication | Notes |
-|----------|---------------|-------|
-| oracle.md (wizard) <-> oracle.sh (loop) | research.json on disk | Wizard writes config, loop reads it. One-way. |
-| oracle.sh (loop) <-> iterate.md (AI) | state.json, plan.json, synthesis.md, gaps.md | Bidirectional via files. AI reads and writes. |
-| oracle.sh (loop) <-> user | .stop, .steer, .pause files + /ant:oracle status | User writes signal files, loop reads them. |
-| oracle.sh (loop) <-> colony state | NONE (by design) | Oracle never touches COLONY_STATE.json or other colony files. Sandboxed. |
-| findings/ <-> synthesis.md | iterate.md reads synthesis, writes findings | Synthesis is compressed view of all findings. |
-
-### Integration with Aether Colony System
-
-The oracle is intentionally isolated from the colony state system. It does NOT:
-- Read or write COLONY_STATE.json
-- Modify pheromones, constraints, or activity logs
-- Affect colony phase progression
-
-It DOES:
-- Write to `.aether/oracle/` exclusively
-- Produce a final report that can be manually consumed by colony workflows
-- Respect the same CLI detection pattern (claude vs opencode)
-
-This isolation is a feature, not a limitation. Research sessions can run alongside active colony work without interference.
-
-## Build Order (Dependencies Between Components)
-
-The components have clear build-order dependencies:
+The four gaps have no hard dependencies on each other. They can be built in any order. However, the following ordering is recommended for risk management:
 
 ```
-Phase 1: State Layer Foundation
-  state.json schema + validation
-  plan.json schema + question tree
-  gaps.md format specification
-  --> These must exist before iterate.md can reference them
+Phase 1: Verification Only (read the code, write tests)
+  Confirm what exists in each playbook step
+  Write integration tests that assert each pipeline fires
+  Read midden.json format to verify Step 2.1c jq queries
+  --> Zero code changes. Pure reading and test writing.
 
-Phase 2: Iteration Prompt (iterate.md)
-  Read state -> research -> write structured output
-  Depends on: state.json schema, plan.json schema, gaps.md format
-  --> This is the core agent behavior, requires stable state contracts
+Phase 2: Gap-4 Success Capture (lowest risk, additive only)
+  Add memory-capture "success" to build-verify.md Step 5.7
+  Add memory-capture "success" to build-complete.md Step 5.9
+  --> Additive changes. Cannot break existing behavior.
 
-Phase 3: Orchestrator Updates (oracle.sh)
-  Multi-signal convergence detection
-  State validation after each iteration
-  Findings directory management
-  --> Depends on state.json being written correctly by iterate.md
+Phase 3: Gap-3 Midden→REDIRECT Verification (existing code)
+  Run continue with a populated midden to verify Step 2.1c fires
+  Fix jq query if midden format mismatch found
+  --> Fixes existing code. Low risk.
 
-Phase 4: Knowledge Management
-  synthesis.md compression/rewrite logic
-  findings/ directory with numbered files
-  --> Can be built after basic iterate.md works with append-only
+Phase 4: Gap-1 Decision→Pheromone Verification (existing code)
+  Verify Step 2.1b fires and CONTEXT.md awk extraction is robust
+  Test with CONTEXT.md that has Recent Decisions table
+  --> Fixes existing code. Low risk.
 
-Phase 5: Command Layer Updates (oracle.md)
-  Status display reading new state format
-  Steering file support (.steer, .pause)
-  --> Polish layer, depends on everything else working
-
-Phase 6: Advanced Features
-  Convergence heuristics (stall detection, trend analysis)
-  Checkpoint/snapshot system
-  Research drift detection (rotation pattern)
-  --> Only needed for deep/marathon sessions
+Phase 5: Gap-2 Promotion Pipeline Ordering (existing code)
+  Confirm step ordering in continue-advance.md
+  If reordering needed, move steps (not add new ones)
+  --> Structural change. Moderate risk, requires careful testing.
 ```
 
-**Critical path:** Phase 1 -> Phase 2 -> Phase 3. Everything else can be parallelized or deferred.
+**Critical path:** Phase 1 → Phase 5. Phases 2-4 can be parallelized after Phase 1 confirms what exists.
 
-**The key insight:** Phase 2 (iterate.md) is the hardest part. Getting the per-iteration prompt right -- so the AI reliably reads all state, does focused research, and writes all state updates -- determines whether the entire system works. The bash loop and state schemas are straightforward engineering; the prompt is where the intelligence lives.
+**Lowest risk first:** Phases 2 (additive) before 3-4 (fixes) before 5 (structural).
 
-## How Stateless Iterations Achieve Stateful Research Depth
+## Integration with Existing Test Architecture
 
-This is the central architectural question. The answer has five parts:
+The project uses Ava (Node.js) for unit tests and bash scripts for integration tests. Based on the git log (recent commits reference Ava unit tests and bash integration tests), the pattern is:
 
-1. **Structured state files as memory.** Each iteration is stateless (fresh 200K context), but the state files on disk are the persistent memory. The state.json, plan.json, synthesis.md, and gaps.md collectively represent "everything the research knows" in a form compact enough for a fresh AI to consume.
+- `tests/unit/` — Ava tests for subcommand logic
+- `tests/integration/` — Bash scripts that run full playbook flows
 
-2. **Explicit frontier as direction.** The frontier in state.json tells the next iteration exactly where to look. Without this, each iteration would independently decide what to research, leading to redundant coverage. The frontier is the mechanism by which iteration N "talks to" iteration N+1.
+Integration fixes should be tested at the integration level (bash scripts that run a mini-continue or mini-build and assert that `pheromones.json`, `learning-observations.json`, and `COLONY_STATE.json` contain the expected entries).
 
-3. **Synthesis compression as working memory.** The synthesis.md file acts as compressed working memory. It cannot grow indefinitely (token budget), so it forces prioritization -- only the most important findings survive compression. This mirrors how human researchers maintain mental models: lossy compression of raw data into patterns and principles.
-
-4. **Gap tracking as research agenda.** The gaps.md file explicitly tracks what is NOT known. This inverts the default behavior (reporting what was found) to also track what was not found. Gaps are the driver of depth -- each iteration should close gaps, not just add findings.
-
-5. **Convergence detection as termination.** The orchestrator monitors multiple signals to detect when research has genuinely converged (all questions answered, gaps resolved, findings shrinking) rather than relying on the AI's self-assessment. This prevents both premature termination and infinite loops.
-
-Together, these five mechanisms transform a sequence of independent, stateless AI invocations into a coherent, directed, progressively deepening research process.
+Unit tests are appropriate for any new helper functions but the gaps are in playbook steps, not subcommand logic — so integration tests are the primary verification mechanism.
 
 ## Sources
 
-- [RALPH (snarktank/ralph)](https://github.com/snarktank/ralph) -- Original bash loop pattern for autonomous AI agents. Foundation for oracle.sh. HIGH confidence.
-- [FS-Researcher: File-System-Based Agents](https://arxiv.org/abs/2602.01566) -- Dual-agent research framework using filesystem as external memory. Validates findings/ + synthesis.md separation pattern. HIGH confidence.
-- [Enterprise Deep Research (EDR)](https://arxiv.org/html/2510.17797) -- Multi-agent deep research with steerable context engineering. Source for convergence detection, gap tracking, and steering patterns. HIGH confidence.
-- [Multi-Agent Deep Research Architecture](https://trilogyai.substack.com/p/multi-agent-deep-research-architecture) -- Hierarchical iterative research pipeline. Validates question tree and synthesis patterns. MEDIUM confidence (blog post, not peer-reviewed).
-- [Deep Research Agents: Systematic Examination](https://arxiv.org/html/2506.18096v1) -- Comprehensive survey of DR agent architectures. Source for taxonomy and state management patterns. HIGH confidence.
-- [The Ralph Loop: Autonomous AI Agent Architecture](https://blakecrosley.com/blog/ralph-agent-architecture) -- Production experience with Ralph pattern. Source for spawn budgets, completion criteria, convergence. MEDIUM confidence (practitioner report).
-- [AgentFS / Turso](https://github.com/tursodatabase/agentfs) -- Filesystem abstraction for agent state. Validates file-based state management approach. MEDIUM confidence.
-- [Everything is Context: Agentic File System Abstraction](https://arxiv.org/abs/2512.05470) -- Academic grounding for filesystem as context engineering mechanism. HIGH confidence.
+All findings are HIGH confidence — sourced directly from the codebase:
+
+- `/Users/callumcowie/repos/Aether/.aether/docs/command-playbooks/continue-advance.md` — Steps 2, 2.1a-2.1e, 2.1.5, 2.1.6, 3, 3a, 3b
+- `/Users/callumcowie/repos/Aether/.aether/docs/command-playbooks/continue-gates.md` — Steps 1.6-1.12
+- `/Users/callumcowie/repos/Aether/.aether/docs/command-playbooks/continue-verify.md` — Steps 1, 1.5, 1.5.1
+- `/Users/callumcowie/repos/Aether/.aether/docs/command-playbooks/continue-finalize.md` — Steps 2.1.6, 2.2-2.7
+- `/Users/callumcowie/repos/Aether/.aether/docs/command-playbooks/build-wave.md` — Steps 5-5.3
+- `/Users/callumcowie/repos/Aether/.aether/docs/command-playbooks/build-verify.md` — Steps 5.4-5.8
+- `/Users/callumcowie/repos/Aether/.aether/docs/command-playbooks/build-complete.md` — Steps 5.9, 5.10, 6, 7
+- `/Users/callumcowie/repos/Aether/.aether/docs/command-playbooks/build-prep.md` — Steps 0.5-3
+- `/Users/callumcowie/repos/Aether/.aether/docs/command-playbooks/build-context.md` — Steps 4-4.2
+- `/Users/callumcowie/repos/Aether/.aether/aether-utils.sh` — `memory-capture` (line 5402), `midden-write` (line 8211), `midden-recent-failures` (line 9581), `instinct-create` (line 7252), `pheromone-write` (line 6774), `context-update` (line 2763)
 
 ---
-*Architecture research for: Autonomous Iterative Deep Research Engine (Oracle v2)*
-*Researched: 2026-03-13*
+*Architecture research for: Colony Integration Gap Fixes (PHER-01, PHER-02, learnings→instincts, memory-capture consistency)*
+*Researched: 2026-03-14*
