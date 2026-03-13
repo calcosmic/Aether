@@ -277,7 +277,22 @@ Describe the research topic in detail. The more specific, the better the Oracle'
 
 (The user will type their topic via the "Other" free-text option.)
 
-**Question 2: Research Depth**
+**Question 2: Research Template**
+
+```
+What type of research is this?
+```
+
+Options:
+1. **Technology evaluation** -- Compare and evaluate a technology, library, or tool
+2. **Architecture review** -- Analyze system design, components, and dependencies
+3. **Bug investigation** -- Track down and understand a specific bug or issue
+4. **Best practices** -- Research recommended approaches for a domain or technique
+5. **Custom research** -- Free-form research (Oracle decomposes the topic as it sees fit)
+
+Map selection to template value: 1->tech-eval, 2->architecture-review, 3->bug-investigation, 4->best-practices, 5->custom
+
+**Question 3: Research Depth**
 
 ```
 How deep should the Oracle go?
@@ -289,7 +304,7 @@ Options:
 3. **Deep dive (30 iterations)** — Exhaustive research, leaves no stone unturned
 4. **Marathon (50 iterations)** — Maximum depth, may take hours
 
-**Question 3: Confidence Target**
+**Question 4: Confidence Target**
 
 ```
 When should the Oracle consider the research complete?
@@ -301,7 +316,7 @@ Options:
 3. **95% confidence (recommended)** — Thorough, few gaps remaining
 4. **99% confidence** — Near-exhaustive, won't stop until almost everything is known
 
-**Question 4: Research Scope** (only if topic involves codebase)
+**Question 5: Research Scope** (only if topic involves codebase)
 
 ```
 Should the Oracle also search the web, or stay within the codebase?
@@ -312,7 +327,7 @@ Options:
 2. **Codebase + web** — Also use WebSearch and WebFetch for docs, best practices, prior art
 3. **Web only** — Focus on external research (libraries, concepts, techniques)
 
-**Question 5: Search Strategy**
+**Question 6: Search Strategy**
 
 (Ask this question for all research types.)
 
@@ -325,7 +340,7 @@ Options:
 2. **Breadth-first** -- Cover all questions with initial findings before going deep on any single one
 3. **Depth-first** -- Pick the most important question and investigate it exhaustively before moving on
 
-**Question 6: Focus Areas** (optional)
+**Question 7: Focus Areas** (optional)
 
 ```
 Are there specific aspects you want the Oracle to prioritize?
@@ -412,6 +427,7 @@ Use the Write tool to create `.aether/oracle/state.json`:
   "version": "1.1",
   "topic": "<the research topic>",
   "scope": "<codebase|web|both>",
+  "template": "<template from Question 2: tech-eval|architecture-review|bug-investigation|best-practices|custom>",
   "phase": "survey",
   "iteration": 0,
   "max_iterations": <number from depth choice>,
@@ -420,14 +436,14 @@ Use the Write tool to create `.aether/oracle/state.json`:
   "started_at": "<ISO-8601 UTC timestamp>",
   "last_updated": "<ISO-8601 UTC timestamp>",
   "status": "active",
-  "strategy": "<strategy from Question 5: adaptive|breadth-first|depth-first>",
-  "focus_areas": [<array of focus area strings from Question 6, or empty array if no focus>]
+  "strategy": "<strategy from Question 6: adaptive|breadth-first|depth-first>",
+  "focus_areas": [<array of focus area strings from Question 7, or empty array if no focus>]
 }
 ```
 
 **Emit focus area pheromones** (if any focus areas were set):
 
-For each focus area string from Question 6, run using the Bash tool with description "Emitting focus area pheromones...":
+For each focus area string from Question 7, run using the Bash tool with description "Emitting focus area pheromones...":
 
 ```bash
 bash .aether/aether-utils.sh pheromone-write FOCUS "$focus_area" \
@@ -437,7 +453,16 @@ bash .aether/aether-utils.sh pheromone-write FOCUS "$focus_area" \
 
 **Write plan.json:**
 
-Break the topic into 3-8 sub-questions (adapt to topic complexity — broader topics get more questions, focused topics fewer). Use the Write tool to create `.aether/oracle/plan.json`:
+**If template is NOT `custom`**, pre-populate plan.json with the template's default questions. **If template IS `custom`**, break the topic into 3-8 sub-questions (adapt to topic complexity -- broader topics get more questions, focused topics fewer).
+
+Template default questions:
+
+- **tech-eval**: q1 "What problem does this technology solve and what are its core capabilities?", q2 "How does it compare to alternative solutions?", q3 "What are its known limitations and tradeoffs?", q4 "What is the adoption and community status?", q5 "What is the migration or integration path?"
+- **architecture-review**: q1 "What are the main components and their responsibilities?", q2 "What are the dependency relationships between components?", q3 "Where are the risk areas (coupling, complexity, single points of failure)?", q4 "How does it handle scale and growth?", q5 "What would an expert change about this architecture?"
+- **bug-investigation**: q1 "What is the exact failure behavior?", q2 "What are the reproduction conditions?", q3 "What is the root cause?", q4 "What are possible fixes and their tradeoffs?", q5 "Are there related issues or regression risks?"
+- **best-practices**: q1 "What is current industry best practice for this domain?", q2 "How does our implementation compare to best practice?", q3 "What gaps exist between our approach and best practice?", q4 "What is the recommended improvement path?"
+
+Use the Write tool to create `.aether/oracle/plan.json`:
 
 ```json
 {
@@ -446,7 +471,7 @@ Break the topic into 3-8 sub-questions (adapt to topic complexity — broader to
   "questions": [
     {
       "id": "q1",
-      "text": "<specific research question>",
+      "text": "<question text from template or AI-decomposed>",
       "status": "open",
       "confidence": 0,
       "key_findings": [],
@@ -541,6 +566,7 @@ Output the research configuration summary, showing the sub-questions from plan.j
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 📍 Topic:       <topic>
+📐 Template:    <template type, e.g. "tech-eval" or "custom">
 🔄 Iterations:  <max_iterations>
 🎯 Confidence:  <target_confidence>%
 🔍 Scope:       <scope>
