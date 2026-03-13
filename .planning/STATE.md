@@ -11,9 +11,9 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 
 Milestone: v1.1 Oracle Deep Research
 Phase: 6 of 11 (State Architecture Foundation)
-Plan: 1 of 2 in current phase
-Status: Executing (plan 01 complete)
-Last activity: 2026-03-13 -- Completed 06-01 State Architecture Foundation
+Plan: 2 of 2 in current phase (phase complete)
+Status: Phase 06 complete
+Last activity: 2026-03-13 -- Completed 06-02 Oracle Wizard State Files + Tests
 
 Progress: [#####     ] 50%
 
@@ -25,9 +25,9 @@ Progress: [#####     ] 50%
 - Total execution time: 0.61 hours
 
 **v1.1:**
-- Total plans completed: 1
-- Average duration: 4min
-- Total execution time: 0.07 hours
+- Total plans completed: 2
+- Average duration: 5min
+- Total execution time: 0.17 hours
 
 *Updated after each plan completion*
 
@@ -43,6 +43,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - Enum validation in validate-oracle-state uses jq array membership check pattern
 - research-plan.md regenerated after every iteration (negligible cost, always-current user view)
 - Topic change detection reads state.json directly, wizard passes new topic via ORACLE_NEW_TOPIC env var
+- Oracle wizard creates 5 structured files replacing research.json and progress.md
+- Archive uses timestamped subdirectories for cleaner session preservation
+- Status display reads research-plan.md executive summary instead of progress.md tail
 
 ### Pending Todos
 
@@ -57,5 +60,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-13
-Stopped at: Completed 06-01-PLAN.md
-Resume file: .planning/phases/06-state-architecture-foundation/06-02-PLAN.md
+Stopped at: Completed 06-02-PLAN.md (Phase 06 complete)
+Resume file: .planning/phases/07-iteration-prompt-engineering/
