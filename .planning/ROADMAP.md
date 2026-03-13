@@ -28,7 +28,7 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 - [x] **Phase 7: Iteration Prompt Engineering** - Phase-aware prompts that drive gap-targeted, deepening research across iterations (completed 2026-03-13)
 - [ ] **Phase 8: Orchestrator Upgrade** - Multi-signal convergence detection and intelligent loop control in oracle.sh
 - [ ] **Phase 9: Source Tracking and Trust Layer** - Citation tracking and multi-source verification for every factual claim
-- [ ] **Phase 10: Steering Integration** - Mid-session research control via pheromone signals and configurable strategy
+- [x] **Phase 10: Steering Integration** - Mid-session research control via pheromone signals and configurable strategy (completed 2026-03-13)
 - [ ] **Phase 11: Colony Knowledge Integration and Output Polish** - Research findings promote to colony knowledge; adaptive structured reports
 
 ## Phase Details
@@ -101,7 +101,7 @@ Plans:
   1. User can emit FOCUS/REDIRECT/FEEDBACK pheromone signals that the oracle reads between iterations and acts on in the next iteration
   2. User can configure search strategy (breadth-first, depth-first, or adaptive) in the oracle wizard before research begins
   3. User can set focus areas to prioritize certain aspects of the research topic, and oracle visibly prioritizes those areas in subsequent iterations
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 10-01-PLAN.md -- Steering implementation: read_steering_signals in oracle.sh, build_oracle_prompt strategy modifier, wizard strategy/focus questions, validate-oracle-state extensions
@@ -135,5 +135,5 @@ Note: Phase 10 depends on Phase 8 (not Phase 9), so Phases 9 and 10 could execut
 | 7. Iteration Prompt Engineering | v1.1 | Complete    | 2026-03-13 | - |
 | 8. Orchestrator Upgrade | v1.1 | 0/2 | Not started | - |
 | 9. Source Tracking and Trust Layer | v1.1 | 0/2 | Not started | - |
-| 10. Steering Integration | v1.1 | 0/2 | Not started | - |
+| 10. Steering Integration | v1.1 | Complete    | 2026-03-13 | - |
 | 11. Colony Knowledge Integration and Output Polish | v1.1 | 0/TBD | Not started | - |
