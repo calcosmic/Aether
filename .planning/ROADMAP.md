@@ -29,7 +29,7 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 - [ ] **Phase 8: Orchestrator Upgrade** - Multi-signal convergence detection and intelligent loop control in oracle.sh
 - [ ] **Phase 9: Source Tracking and Trust Layer** - Citation tracking and multi-source verification for every factual claim
 - [x] **Phase 10: Steering Integration** - Mid-session research control via pheromone signals and configurable strategy (completed 2026-03-13)
-- [ ] **Phase 11: Colony Knowledge Integration and Output Polish** - Research findings promote to colony knowledge; adaptive structured reports
+- [x] **Phase 11: Colony Knowledge Integration and Output Polish** - Research findings promote to colony knowledge; adaptive structured reports (completed 2026-03-13)
 
 ## Phase Details
 
@@ -116,7 +116,7 @@ Plans:
   2. Pre-built research strategy templates exist for common patterns (tech evaluation, architecture review, bug investigation, best practices) and are selectable in the wizard
   3. Final output is a structured, synthesized report with executive summary, sections organized by sub-question, and findings grouped by confidence level
   4. Output structure adapts to the specific research topic -- a tech evaluation looks different from a bug investigation
-**Plans:** 3 plans
+**Plans:** 3/3 plans complete
 
 Plans:
 - [ ] 11-01-PLAN.md -- Colony knowledge promotion: promote_to_colony function in oracle.sh, promote subcommand in both wizard commands, validate-oracle-state template field extension
@@ -141,4 +141,4 @@ Note: Phase 10 depends on Phase 8 (not Phase 9), so Phases 9 and 10 could execut
 | 8. Orchestrator Upgrade | v1.1 | 0/2 | Not started | - |
 | 9. Source Tracking and Trust Layer | v1.1 | 0/2 | Not started | - |
 | 10. Steering Integration | v1.1 | Complete    | 2026-03-13 | - |
-| 11. Colony Knowledge Integration and Output Polish | v1.1 | 0/3 | Not started | - |
+| 11. Colony Knowledge Integration and Output Polish | v1.1 | Complete    | 2026-03-13 | - |
