@@ -40,7 +40,7 @@ Full details: `.planning/milestones/v1.1-ROADMAP.md`
 **Milestone Goal:** Colony learning loops produce visible output -- decisions, instincts, midden entries, and auto-pheromones accumulate naturally during build/continue cycles.
 
 - [x] **Phase 12: Success Capture and Colony-Prime Enrichment** - Wire memory-capture success events and rolling-summary into the colony knowledge pipeline (completed 2026-03-14)
-- [ ] **Phase 13: Midden Write Path Expansion** - All failure types write to midden with intra-phase threshold checks
+- [x] **Phase 13: Midden Write Path Expansion** - All failure types write to midden with intra-phase threshold checks (completed 2026-03-14)
 - [ ] **Phase 14: Decision-Pheromone and Learning-Instinct Verification** - Verify and fix the decision-to-pheromone dedup and recurrence-calibrated instinct confidence
 
 ## Phase Details
@@ -109,5 +109,5 @@ Phases 13 and 14 can be parallelized after Phase 12 completes (they edit differe
 | 10. Steering Integration | v1.1 | 2/2 | Complete | 2026-03-13 |
 | 11. Colony Knowledge Integration | v1.1 | 3/3 | Complete | 2026-03-13 |
 | 12. Success Capture and Colony-Prime Enrichment | v1.2 | 2/2 | Complete | 2026-03-14 |
-| 13. Midden Write Path Expansion | v1.2 | 0/2 | Not started | - |
+| 13. Midden Write Path Expansion | v1.2 | Complete    | 2026-03-14 | - |
 | 14. Decision-Pheromone and Learning-Instinct Verification | v1.2 | 0/? | Not started | - |
