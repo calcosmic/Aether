@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-03-14)
 
 Milestone: v1.2 Integration Gaps
 Phase: 14 of 14 (Decision Pheromone and Learning-Instinct Verification)
-Plan: 1 of 2 in current phase
-Status: Executing
-Last activity: 2026-03-14 -- Completed 14-01 (decision pheromone format alignment)
+Plan: 2 of 2 in current phase
+Status: Phase Complete
+Last activity: 2026-03-14 -- Completed 14-02 (learning-instinct confidence calibration)
 
-Progress: [█████████░] 90%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -30,9 +30,9 @@ Progress: [█████████░] 90%
 - Total execution time: 0.74 hours
 
 **v1.2:**
-- Total plans completed: 5
-- Average duration: 2.4min
-- Total execution time: 0.20 hours
+- Total plans completed: 6
+- Average duration: 2.8min
+- Total execution time: 0.28 hours
 
 ## Accumulated Context
 
@@ -53,6 +53,7 @@ Recent decisions affecting current work:
 - [13-02]: Threshold block placed between Step 5.2 and Step 5.3 -- runs once per wave after all worker results processed
 - [13-02]: REDIRECT emission cap of 3 per build prevents signal flooding; dedup via auto:error source
 - [14-01]: Dropped rationale from decision pheromone content to match Step 2.1b format for reliable contains() dedup
+- [14-02]: Used decree wisdom_type for observation_count=1 test since pattern auto threshold is 2
 
 ### Pending Todos
 
@@ -65,5 +66,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-14
-Stopped at: Completed 14-01-PLAN.md
-Next step: Execute 14-02-PLAN.md
+Stopped at: Completed 14-02-PLAN.md
+Next step: Phase 14 complete -- all v1.2 plans executed
