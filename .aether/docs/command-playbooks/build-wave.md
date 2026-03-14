@@ -410,6 +410,9 @@ cat >> .aether/midden/build-failures.md << EOF
   error_type: "worker_failure"
 EOF
 
+# Write to structured midden for threshold detection (MID-01)
+bash .aether/aether-utils.sh midden-write "worker_failure" "Builder ${ant_name} failed on task ${task_id}: ${blockers[0]:-$failure_reason}" "builder" 2>/dev/null || true
+
 # Capture failure in memory pipeline (observe + pheromone + auto-promotion)
 bash .aether/aether-utils.sh memory-capture \
   "failure" \

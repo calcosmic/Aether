@@ -311,6 +311,9 @@ cat >> .aether/midden/build-failures.md << EOF
   severity: "${finding.severity}"
 EOF
 
+# Write to structured midden for threshold detection (MID-01)
+bash .aether/aether-utils.sh midden-write "resilience" "Chaos finding: ${finding.title} (${finding.severity})" "chaos" 2>/dev/null || true
+
 # Capture resilience failure in memory pipeline (observe + pheromone + auto-promotion)
 bash .aether/aether-utils.sh memory-capture \
   "failure" \
@@ -363,6 +366,9 @@ cat >> .aether/midden/test-failures.md << EOF
   what_worked: null
   severity: "high"
 EOF
+
+# Write to structured midden for threshold detection (MID-01)
+bash .aether/aether-utils.sh midden-write "verification" "Watcher verification failed: ${issue_title}" "watcher" 2>/dev/null || true
 
 # Capture verification failure in memory pipeline (observe + pheromone + auto-promotion)
 bash .aether/aether-utils.sh memory-capture \
