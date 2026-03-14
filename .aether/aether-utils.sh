@@ -7892,6 +7892,25 @@ $updated_meta
     fi
     # === END blocker flag injection ===
 
+    # === Rolling-summary injection (MEM-02) ===
+    # Read last 5 entries directly (not via context-capsule which truncates)
+    cp_roll_count=5
+    cp_roll_entries=""
+    if [[ -f "$DATA_DIR/rolling-summary.log" ]]; then
+      cp_roll_entries=$(tail -n "$cp_roll_count" "$DATA_DIR/rolling-summary.log" 2>/dev/null | \
+        awk -F'|' 'NF >= 4 {printf "- [%s] %s: %s\n", $1, $2, $4}')
+    fi
+
+    if [[ -n "$cp_roll_entries" ]]; then
+      cp_final_prompt+=$'\n'"--- RECENT ACTIVITY (Colony Narrative) ---"$'\n'
+      cp_final_prompt+="$cp_roll_entries"$'\n'
+      cp_final_prompt+="--- END RECENT ACTIVITY ---"$'\n'
+
+      cp_roll_actual=$(echo "$cp_roll_entries" | grep -c '.' || echo "0")
+      cp_log_line="$cp_log_line, $cp_roll_actual activity entries"
+    fi
+    # === END rolling-summary injection ===
+
     # Add pheromone signals section
     if [[ -n "$cp_prompt_section" && "$cp_prompt_section" != "null" ]]; then
       cp_final_prompt+=$'\n'"$cp_prompt_section"
