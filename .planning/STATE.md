@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-03-14)
 
 Milestone: v1.2 Integration Gaps
 Phase: 13 of 14 (Midden Write Path Expansion)
-Plan: 1 of 2 in current phase
-Status: In progress
-Last activity: 2026-03-14 -- Completed 13-01 (midden-write path expansion)
+Plan: 2 of 2 in current phase (complete)
+Status: Phase 13 complete
+Last activity: 2026-03-14 -- Completed 13-02 (intra-phase threshold detection)
 
-Progress: [█████████░] 50%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -30,9 +30,9 @@ Progress: [█████████░] 50%
 - Total execution time: 0.74 hours
 
 **v1.2:**
-- Total plans completed: 3
+- Total plans completed: 4
 - Average duration: 2.3min
-- Total execution time: 0.12 hours
+- Total execution time: 0.15 hours
 
 ## Accumulated Context
 
@@ -50,6 +50,8 @@ Recent decisions affecting current work:
 - [12-02]: Read entries directly from rolling-summary.log with tail/awk, not via context-capsule subcommand
 - [13-01]: midden-write inserted AFTER heredoc and BEFORE memory-capture to preserve existing flow
 - [13-01]: Category names standardized: worker_failure, resilience, verification, abandoned-approach
+- [13-02]: Threshold block placed between Step 5.2 and Step 5.3 -- runs once per wave after all worker results processed
+- [13-02]: REDIRECT emission cap of 3 per build prevents signal flooding; dedup via auto:error source
 
 ### Pending Todos
 
@@ -62,5 +64,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-14
-Stopped at: Completed 13-01-PLAN.md
-Next step: Execute 13-02-PLAN.md (intra-phase threshold detection)
+Stopped at: Completed 13-02-PLAN.md (Phase 13 complete)
+Next step: Execute Phase 14
