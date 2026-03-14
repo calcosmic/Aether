@@ -322,6 +322,21 @@ bash .aether/aether-utils.sh memory-capture \
 Log chaos ant completion:
 Run using the Bash tool with description "Recording chaos completion...": `bash .aether/aether-utils.sh spawn-complete "{chaos_name}" "completed" "{summary}"`
 
+**Success capture: chaos resilience (MEM-01):**
+
+If `overall_resilience` is `"strong"`:
+
+Run using the Bash tool with description "Capturing chaos resilience success...":
+```bash
+bash .aether/aether-utils.sh memory-capture \
+  "success" \
+  "Chaos resilience strong: ${summary}" \
+  "pattern" \
+  "worker:chaos" 2>/dev/null || true
+```
+
+This records the resilience success in learning-observations.json via the existing memory pipeline (observe + pheromone + auto-promotion + rolling-summary).
+
 ### Step 5.8: Create Flags for Verification Failures
 
 If the Watcher reported `verification_passed: false` or `recommendation: "fix_required"`:
