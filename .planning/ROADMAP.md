@@ -54,11 +54,11 @@ Full details: `.planning/milestones/v1.1-ROADMAP.md`
   2. After a build completes with pattern synthesis, learning-observations.json contains a new success-type entry from build-complete
   3. Colony-prime output includes the last 5 rolling-summary entries so builders see recent colony activity in their prompt
   4. Existing failure-path memory-capture calls still fire unchanged (no regression)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 12-01: TBD
-- [ ] 12-02: TBD
+- [ ] 12-01-PLAN.md -- Wire success capture at build-verify (chaos resilience) and build-complete (pattern synthesis)
+- [ ] 12-02-PLAN.md -- Add rolling-summary section to colony-prime output
 
 ### Phase 13: Midden Write Path Expansion
 **Goal**: Midden data reflects actual colony failure patterns across all agent types, not just builder failures
@@ -108,6 +108,6 @@ Phases 13 and 14 can be parallelized after Phase 12 completes (they edit differe
 | 9. Source Tracking and Trust Layer | v1.1 | 2/2 | Complete | 2026-03-13 |
 | 10. Steering Integration | v1.1 | 2/2 | Complete | 2026-03-13 |
 | 11. Colony Knowledge Integration | v1.1 | 3/3 | Complete | 2026-03-13 |
-| 12. Success Capture and Colony-Prime Enrichment | v1.2 | 0/? | Not started | - |
+| 12. Success Capture and Colony-Prime Enrichment | v1.2 | 0/2 | Not started | - |
 | 13. Midden Write Path Expansion | v1.2 | 0/? | Not started | - |
 | 14. Decision-Pheromone and Learning-Instinct Verification | v1.2 | 0/? | Not started | - |
