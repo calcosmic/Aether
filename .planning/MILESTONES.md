@@ -44,3 +44,29 @@
 
 ---
 
+
+## v1.2 Integration Gaps (Shipped: 2026-03-14)
+
+**Phases completed:** 3 phases, 6 plans, 12 tasks
+**Timeline:** 1 day (2026-03-14)
+**Lines changed:** 5,330 insertions, 1,221 deletions across 36 files
+**New tests:** 7 tests (3 decision-dedup + 4 instinct-confidence)
+**Total tests:** 537 passing
+
+**Key accomplishments:**
+- Success capture pipeline: chaos resilience and pattern synthesis events now enter learning-observations.json via memory-capture "success" — the first success-type entries in the memory pipeline
+- Colony-prime RECENT ACTIVITY: builders now see the last 5 rolling-summary entries in their prompt, giving workers awareness of recent colony activity
+- Midden write path expansion: all failure types (Builder, Chaos, Watcher, Gatekeeper, Auditor, approach-change) now write structured entries to midden.json — not just builder failures
+- Intra-phase midden threshold: when 3+ failures share the same error category during a build wave, a REDIRECT pheromone emits mid-build (capped at 3, deduped via auto:error)
+- Decision pheromone dedup alignment: context-update and continue-advance Step 2.1b now use matching format ("[decision] X" with auto:decision source) for reliable deduplication
+- Recurrence-calibrated instinct confidence: learning-promote-auto computes confidence from observation_count using min(0.7 + (count-1)*0.05, 0.9) instead of fixed 0.6
+
+**Delivered:** Complete integration wiring — colony learning loops now produce visible output. Decisions auto-convert to pheromones, learnings create calibrated instincts, midden captures all failure types with mid-build threshold checks, and success events enter the memory pipeline. All 7 v1.2 requirements satisfied.
+
+**Known tech debt:**
+- build-full.md (monolithic mirror) missing both MEM-01 success capture blocks from split playbooks
+- REQUIREMENTS.md checkboxes not updated during execution (cosmetic)
+- DEC-01 dedup runs at continue time only (intentional design)
+
+---
+

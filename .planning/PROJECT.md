@@ -1,30 +1,28 @@
-# Aether: Oracle Deep Research Engine
+# Aether: Colony Intelligence Platform
 
 ## What This Is
 
-Aether is a self-managing development assistant that uses ant colony metaphor to orchestrate AI workers across coding sessions. It has 36 commands, 22 agents, and ~10,000 lines of shell infrastructure. The colony is fully self-improving with complete learning pipelines (v1.0). The oracle (`/ant:oracle`) is a deep research engine that produces thorough, source-verified, actionable research using a structured RALF-loop pattern with gap-driven iteration, convergence detection, and configurable strategy (v1.1).
+Aether is a self-managing development assistant that uses ant colony metaphor to orchestrate AI workers across coding sessions. It has 36 commands, 22 agents, and ~10,000 lines of shell infrastructure. The colony is fully self-improving with complete learning pipelines (v1.0). The oracle (`/ant:oracle`) is a deep research engine that produces thorough, source-verified, actionable research using a structured RALF-loop pattern (v1.1). Colony learning loops now produce visible output — decisions auto-convert to pheromones, learnings create calibrated instincts, and midden tracks all failure types with mid-build threshold checks (v1.2).
 
 ## Core Value
 
-The oracle produces research you can act on — verified against official sources, iteratively deepened, and structured for the specific topic. It runs autonomously for as long as needed, drilling deeper each iteration rather than just covering more surface area.
-
-## Current Milestone: v1.2 Integration Gaps
-
-**Goal:** Make the colony's learning loops actually produce visible output — decisions, instincts, midden entries, and auto-pheromones should accumulate naturally during build/continue cycles.
-
-**Target features:**
-- Decisions logged during builds auto-convert to pheromones
-- Learnings extracted during continue auto-create instincts
-- Midden failure tracking captures all failure points with lower thresholds
-- Memory-capture wired into key decision and failure points
+The colony learns from its own work. Every build and continue cycle accumulates decisions, instincts, midden entries, and pheromones that make future builds smarter.
 
 ## Current State
 
-**Shipped:** v1.1 Oracle Deep Research (2026-03-13)
-**Oracle core:** 1,188 LOC (oracle.sh + oracle.md)
-**Oracle tests:** 168 tests (87 Ava + 81 bash)
-**Total tests:** 530+ passing
+**Shipped:** v1.2 Integration Gaps (2026-03-14)
+**Total tests:** 537 passing
 **Architecture:** v4.0 (runtime/ eliminated, direct packaging)
+
+### What's Working
+
+The full colony learning loop is wired end-to-end:
+- **Decisions** logged during builds auto-convert to FEEDBACK pheromones (deduped)
+- **Learnings** observed during continue auto-promote to instincts with calibrated confidence (0.7-0.9 based on observation count)
+- **Failures** from all agent types (Builder, Chaos, Watcher, Gatekeeper, Auditor) write structured midden entries
+- **Success events** (chaos resilience, pattern synthesis) enter the memory pipeline
+- **Mid-build threshold checks** emit REDIRECT pheromones when error patterns recur 3+ times
+- **Colony-prime** assembles all context (wisdom, capsule, learnings, decisions, blockers, recent activity, pheromones) into builder prompts
 
 ## Requirements
 
@@ -69,13 +67,17 @@ The oracle produces research you can act on — verified against official source
 - Configurable focus areas via wizard and pheromone emission -- v1.1
 - High-confidence findings promote to colony instincts/learnings -- v1.1
 - Pre-built research strategy templates (tech-eval, architecture-review, bug-investigation, best-practices) -- v1.1
+- Success capture fires at build-verify and build-complete via memory-capture "success" -- v1.2
+- Rolling-summary last 5 entries fed into colony-prime output -- v1.2
+- All failure types write to midden via midden-write (Builder, Chaos, Watcher, Gatekeeper, Auditor) -- v1.2
+- Approach changes captured to midden and memory-capture as abandoned-approach -- v1.2
+- Intra-phase midden threshold check emits REDIRECT mid-build at 3+ occurrences -- v1.2
+- Decision-to-pheromone dedup format aligned between context-update and Step 2.1b -- v1.2
+- Instinct confidence uses recurrence-calibrated scoring (0.7-0.9) based on observation_count -- v1.2
 
 ### Active
 
-- Decisions → pheromones pipeline produces output during continue
-- Learnings → instincts pipeline creates instincts during continue
-- Midden captures failures from all failure points with lower thresholds
-- Memory-capture called at key decision and failure points
+(No active requirements -- next milestone not yet planned)
 
 ### Out of Scope
 
@@ -93,7 +95,9 @@ The oracle produces research you can act on — verified against official source
 
 ## Context
 
-Aether v1.1.0 with oracle deep research shipped. 530+ tests passing. The colony has all the features — pheromones, instincts, midden, memory-capture, decisions — but the integration loops aren't producing output. The memory system is nearly empty: decisions [], instincts [], only 1 phase_learning. The features exist but the wiring between them has gaps that prevent natural accumulation during build/continue cycles.
+Aether v1.2.0 shipped. 537 tests passing. The colony learning loop is fully wired — decisions, instincts, midden entries, and pheromones accumulate naturally during build/continue cycles. The memory system should now populate during real usage (decisions flow to pheromones, learnings flow to instincts, failures flow to midden with threshold-driven REDIRECTs).
+
+Known tech debt: build-full.md (monolithic playbook mirror) is missing MEM-01 success capture blocks that exist in the split playbooks.
 
 ## Constraints
 
@@ -120,6 +124,14 @@ Aether v1.1.0 with oracle deep research shipped. 530+ tests passing. The colony 
 | Strategy as emphasis modifier | Phase system retains structural control | Good -- v1.1 |
 | Wizard calls colony APIs directly | Avoids sourcing oracle.sh main loop | Good -- v1.1 |
 | Templates drive both questions and output | Same template shapes decomposition and synthesis | Good -- v1.1 |
+| Skipped test-first phase | Fold verification into each phase's success criteria | Good -- v1.2 |
+| 3 phases not 5 | MID-03 folded into Phase 13; MEM-02 folded into Phase 12 | Good -- v1.2 |
+| Phases 13+14 parallelizable | Different playbook files, no shared call sites | Good -- v1.2 |
+| Pattern synthesis cap at 2 per build | Prevents observation inflation | Good -- v1.2 |
+| Category names standardized | worker_failure, resilience, verification, abandoned-approach | Good -- v1.2 |
+| REDIRECT emission cap of 3 per build | Prevents signal flooding; dedup via auto:error source | Good -- v1.2 |
+| Dropped rationale from decision pheromone | Match Step 2.1b format for reliable contains() dedup | Good -- v1.2 |
+| Confidence formula min(0.7+(c-1)*0.05, 0.9) | Observation count drives confidence, not fixed value | Good -- v1.2 |
 
 ---
-*Last updated: 2026-03-14 after v1.2 milestone start*
+*Last updated: 2026-03-14 after v1.2 milestone completion*
