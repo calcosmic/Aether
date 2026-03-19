@@ -18,7 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 4: Pheromone Worker Integration** - Update agent definitions to act on signals, verify auto-emit influences builds, wire midden threshold (completed 2026-03-19)
 - [x] **Phase 5: Learning Pipeline Validation** - Validate the observation-to-instinct pipeline end-to-end with real data (completed 2026-03-19)
 - [x] **Phase 6: XML Exchange Activation** - Wire the existing XML exchange system into commands and lifecycle hooks (completed 2026-03-19)
-- [ ] **Phase 7: Fresh Install Hardening** - Smoke test the full install-to-build flow and validate pre-publish artifact rejection
+- [x] **Phase 7: Fresh Install Hardening** - Smoke test the full install-to-build flow and validate pre-publish artifact rejection (completed 2026-03-19)
 - [ ] **Phase 8: Documentation Update** - Update all documentation to match verified behavior
 
 ## Phase Details
@@ -118,7 +118,7 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. The sequence lay-eggs, init, plan, build, continue runs without errors on a clean repo with no prior Aether state
   2. Running validate-package.sh before publish rejects any package that contains test artifacts in QUEEN.md, pheromones.json, or other data files
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 07-01-PLAN.md -- Harden validate-package.sh with content inspection and fix .npmignore to exclude QUEEN.md, temp files, and CONTEXT.md
@@ -133,11 +133,11 @@ Plans:
   2. Pheromone documentation describes the injection model (colony-prime injects context into worker prompts) rather than claiming workers independently read signals
   3. known-issues.md has no stale FIXED statuses and all resolved items have been removed
   4. README and user-facing docs describe only behavior that has been verified working in this milestone
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 08-01: TBD
-- [ ] 08-02: TBD
+- [ ] 08-01-PLAN.md — Update CLAUDE.md to match verified codebase state and clean known-issues.md of resolved entries
+- [ ] 08-02-PLAN.md — Fix pheromone docs injection model and update README, aether-colony.md, source-of-truth-map.md
 
 ## Progress
 
@@ -154,5 +154,5 @@ Note: Phases 2 and 3 both depend only on Phase 1 and could execute in parallel. 
 | 4. Pheromone Worker Integration | 0/2 | Complete    | 2026-03-19 |
 | 5. Learning Pipeline Validation | 0/2 | Complete    | 2026-03-19 |
 | 6. XML Exchange Activation | 0/2 | Complete    | 2026-03-19 |
-| 7. Fresh Install Hardening | 0/2 | Not started | - |
+| 7. Fresh Install Hardening | 0/2 | Complete    | 2026-03-19 |
 | 8. Documentation Update | 0/2 | Not started | - |
