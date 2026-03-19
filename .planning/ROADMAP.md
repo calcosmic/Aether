@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Pheromone Signal Plumbing** - Verify the injection chain end-to-end, fix signal lifecycle and decay, ensure session persistence (completed 2026-03-19)
 - [x] **Phase 4: Pheromone Worker Integration** - Update agent definitions to act on signals, verify auto-emit influences builds, wire midden threshold (completed 2026-03-19)
 - [x] **Phase 5: Learning Pipeline Validation** - Validate the observation-to-instinct pipeline end-to-end with real data (completed 2026-03-19)
-- [ ] **Phase 6: XML Exchange Activation** - Wire the existing XML exchange system into commands and lifecycle hooks
+- [x] **Phase 6: XML Exchange Activation** - Wire the existing XML exchange system into commands and lifecycle hooks (completed 2026-03-19)
 - [ ] **Phase 7: Fresh Install Hardening** - Smoke test the full install-to-build flow and validate pre-publish artifact rejection
 - [ ] **Phase 8: Documentation Update** - Update all documentation to match verified behavior
 
@@ -105,7 +105,7 @@ Plans:
   1. Slash commands exist for exporting and importing signals (e.g., `/ant:export-signals` and `/ant:import-signals` or equivalent)
   2. Exporting signals from one colony and importing them into another produces working signals in the receiving colony
   3. Sealing a colony automatically exports its pheromone signals as part of the seal lifecycle
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 06-01-PLAN.md -- Create /ant:export-signals and /ant:import-signals slash commands with OpenCode parity
@@ -118,11 +118,11 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. The sequence lay-eggs, init, plan, build, continue runs without errors on a clean repo with no prior Aether state
   2. Running validate-package.sh before publish rejects any package that contains test artifacts in QUEEN.md, pheromones.json, or other data files
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 07-01: TBD
-- [ ] 07-02: TBD
+- [ ] 07-01-PLAN.md -- Harden validate-package.sh with content inspection and fix .npmignore to exclude QUEEN.md, temp files, and CONTEXT.md
+- [ ] 07-02-PLAN.md -- Create fresh install smoke test covering the full lay-eggs through continue lifecycle
 
 ### Phase 8: Documentation Update
 **Goal**: All documentation accurately describes verified, working behavior -- no aspirational claims, no references to eliminated features
@@ -153,6 +153,6 @@ Note: Phases 2 and 3 both depend only on Phase 1 and could execute in parallel. 
 | 3. Pheromone Signal Plumbing | 0/3 | Complete    | 2026-03-19 |
 | 4. Pheromone Worker Integration | 0/2 | Complete    | 2026-03-19 |
 | 5. Learning Pipeline Validation | 0/2 | Complete    | 2026-03-19 |
-| 6. XML Exchange Activation | 0/2 | Not started | - |
+| 6. XML Exchange Activation | 0/2 | Complete    | 2026-03-19 |
 | 7. Fresh Install Hardening | 0/2 | Not started | - |
 | 8. Documentation Update | 0/2 | Not started | - |
