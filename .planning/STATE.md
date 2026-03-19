@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** The pheromone system should be a living system -- auto-emitting signals during builds, carrying context across sessions, and actually changing worker behavior -- not just a storage format that nobody reads.
-**Current focus:** Phase 2: Command Audit & Data Tooling
+**Current focus:** Phase 3: Pheromone Signal Plumbing
 
 ## Current Position
 
-Phase: 2 of 8 (Command Audit & Data Tooling)
-Plan: 2 of 2 in current phase
-Status: Phase complete
-Last activity: 2026-03-19 -- Completed 02-02-PLAN.md
+Phase: 3 of 8 (Pheromone Signal Plumbing)
+Plan: 1 of 3 in current phase
+Status: In progress
+Last activity: 2026-03-19 -- Completed 03-01-PLAN.md
 
-Progress: [██░░░░░░░░] 25%
+Progress: [███░░░░░░░] 30%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
+- Total plans completed: 4
 - Average duration: 5min
-- Total execution time: 0.25 hours
+- Total execution time: 0.32 hours
 
 **By Phase:**
 
@@ -29,10 +29,11 @@ Progress: [██░░░░░░░░] 25%
 |-------|-------|-------|----------|
 | 01-data-purge | 1 | 3min | 3min |
 | 02-command-audit-data-tooling | 2 | 12min | 6min |
+| 03-pheromone-signal-plumbing | 1 | 4min | 4min |
 
 **Recent Trend:**
-- Last 5 plans: 3min, 7min, 5min
-- Trend: -
+- Last 5 plans: 3min, 7min, 5min, 4min
+- Trend: stable
 
 *Updated after each plan completion*
 
@@ -54,6 +55,8 @@ Recent decisions affecting current work:
 - [02-02]: Used atomic_write for file modifications when available, with direct write fallback
 - [Phase 02-01]: Naming inconsistencies (help.md, memory-details.md, resume.md) documented as warnings not fixes -- frontmatter name does not affect slash command invocation
 - [Phase 02-01]: Removed broken .aether/planning.md reference from plan.md -- inline rules already provided
+- [03-01]: Replaced approx_epoch (365.25 days/year) with to_epoch (365 days/year) for consistency over precision
+- [03-01]: Fixed jq // operator treating active:false as null -- used explicit if/elif chain instead
 
 ### Pending Todos
 
@@ -67,5 +70,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-19
-Stopped at: Completed 02-02-PLAN.md
+Stopped at: Completed 03-01-PLAN.md
 Resume file: None
