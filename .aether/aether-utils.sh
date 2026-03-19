@@ -983,7 +983,7 @@ case "$cmd" in
     cat <<'HELP_EOF'
 {
   "ok": true,
-  "commands": ["help","version","validate-state","validate-oracle-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","learning-observe","learning-check-promotion","learning-promote-auto","memory-capture","queen-thresholds","context-capsule","rolling-summary","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","spawn-efficiency","validate-worker-response","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-display-text","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","phase-insert","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","incident-rule-add","survey-load","survey-verify","pheromone-export","pheromone-write","pheromone-count","pheromone-read","instinct-read","pheromone-prime","colony-prime","pheromone-expire","eternal-init","eternal-store","pheromone-export-xml","pheromone-import-xml","pheromone-validate-xml","wisdom-export-xml","wisdom-import-xml","registry-export-xml","registry-import-xml","memory-metrics","midden-recent-failures","entropy-score","force-unlock","changelog-append","changelog-collect-plan-data","suggest-approve","suggest-quick-dismiss"],
+  "commands": ["help","version","validate-state","validate-oracle-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","learning-observe","learning-check-promotion","learning-promote-auto","memory-capture","queen-thresholds","context-capsule","rolling-summary","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","spawn-efficiency","validate-worker-response","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-display-text","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","phase-insert","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","incident-rule-add","survey-load","survey-verify","pheromone-export","pheromone-write","pheromone-count","pheromone-read","instinct-read","pheromone-prime","colony-prime","pheromone-expire","eternal-init","eternal-store","pheromone-export-xml","pheromone-import-xml","pheromone-validate-xml","wisdom-export-xml","wisdom-import-xml","registry-export-xml","registry-import-xml","memory-metrics","midden-recent-failures","entropy-score","force-unlock","changelog-append","changelog-collect-plan-data","suggest-approve","suggest-quick-dismiss","data-clean"],
   "sections": {
     "Core": [
       {"name": "help", "description": "List all available commands with sections"},
@@ -1084,6 +1084,9 @@ case "$cmd" in
     "Suggestion System": [
       {"name": "suggest-approve", "description": "Tick-to-approve UI for pheromone suggestions"},
       {"name": "suggest-quick-dismiss", "description": "Dismiss all suggestions without approving"}
+    ],
+    "Maintenance": [
+      {"name": "data-clean", "description": "Scan and remove test/synthetic artifacts from colony data files"}
     ]
   },
   "description": "Aether Colony Utility Layer — deterministic ops for the ant colony"
@@ -10241,6 +10244,250 @@ EOF
       '{dismissed: $dismissed, hashes_recorded: $hashes}')
 
     json_ok "$result"
+    ;;
+
+  data-clean)
+    # Scan and remove test/synthetic artifacts from colony data files.
+    # Usage: data-clean [--dry-run] [--confirm] [--json]
+    # --dry-run (default): scan and report only
+    # --confirm: actually remove artifacts
+    # --json: output as JSON instead of human-readable text
+
+    _dc_confirm=false
+    _dc_json=false
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --confirm) _dc_confirm=true; shift ;;
+        --dry-run) shift ;;
+        --json) _dc_json=true; shift ;;
+        *) shift ;;
+      esac
+    done
+
+    # Test patterns for artifact detection
+    _dc_pheromone_content_pat='test signal|demo focus|sanity signal|test area|test pheromone'
+    _dc_pheromone_id_pat='^(test_|demo_)'
+    _dc_queen_line_pat='test_pattern_|test_decree_|test_evolution_|Test Pattern:|TEST DECREE:|Test Evolution:'
+    _dc_obs_colony_pat='^(test-colony|test|different-colony|alpha-colony|beta-colony|gamma-colony|c1|c2)$'
+    _dc_spawn_name_pat='TestAnt|Test-Worker|test-worker|Bolt-99'
+    _dc_constraint_pat='test area|demo|sanity'
+
+    # Counts
+    _dc_phero_count=0
+    _dc_queen_count=0
+    _dc_obs_count=0
+    _dc_midden_count=0
+    _dc_spawn_count=0
+    _dc_constraint_count=0
+
+    # --- 1. Pheromones ---
+    _dc_phero_file="$DATA_DIR/pheromones.json"
+    if [[ -f "$_dc_phero_file" ]] && jq -e . "$_dc_phero_file" >/dev/null 2>&1; then
+      _dc_phero_count=$(jq --arg cpat "$_dc_pheromone_content_pat" --arg ipat "$_dc_pheromone_id_pat" '
+        [.signals // [] | .[] | select(
+          (.content.text // .content // "" | tostring | test($cpat; "i")) or
+          (.id // "" | test($ipat))
+        )] | length
+      ' "$_dc_phero_file" 2>/dev/null || echo 0)
+    fi
+
+    # --- 2. QUEEN.md ---
+    _dc_queen_file="$AETHER_ROOT/.aether/QUEEN.md"
+    if [[ -f "$_dc_queen_file" ]]; then
+      _dc_queen_count=$(grep -ciE "$_dc_queen_line_pat" "$_dc_queen_file" 2>/dev/null) || _dc_queen_count=0
+    fi
+
+    # --- 3. Learning observations ---
+    _dc_obs_file="$DATA_DIR/learning-observations.json"
+    if [[ -f "$_dc_obs_file" ]] && jq -e . "$_dc_obs_file" >/dev/null 2>&1; then
+      _dc_obs_count=$(jq --arg cpat "$_dc_obs_colony_pat" '
+        [.observations // [] | .[] | select(.colony_id // "" | test($cpat))] | length
+      ' "$_dc_obs_file" 2>/dev/null || echo 0)
+    fi
+
+    # --- 4. Midden ---
+    _dc_midden_file="$DATA_DIR/midden/midden.json"
+    _dc_midden_signal_count=0
+    _dc_midden_entry_count=0
+    if [[ -f "$_dc_midden_file" ]] && jq -e . "$_dc_midden_file" >/dev/null 2>&1; then
+      _dc_midden_signal_count=$(jq --arg cpat "$_dc_pheromone_content_pat" '
+        [.signals // [] | .[] | select(
+          (.content.text // .content // "" | tostring | test($cpat; "i"))
+        )] | length
+      ' "$_dc_midden_file" 2>/dev/null || echo 0)
+      _dc_midden_entry_count=$(jq --arg cpat "$_dc_obs_colony_pat" '
+        [.entries // .failures // [] | .[] | select(.colony_id // "" | test($cpat))] | length
+      ' "$_dc_midden_file" 2>/dev/null || echo 0)
+      _dc_midden_count=$(( _dc_midden_signal_count + _dc_midden_entry_count ))
+    fi
+
+    # --- 5. Spawn tree ---
+    _dc_spawn_file="$DATA_DIR/spawn-tree.txt"
+    if [[ -f "$_dc_spawn_file" ]]; then
+      _dc_spawn_count=$(grep -cE "$_dc_spawn_name_pat" "$_dc_spawn_file" 2>/dev/null) || _dc_spawn_count=0
+    fi
+
+    # --- 6. Constraints ---
+    _dc_constraint_file="$DATA_DIR/constraints.json"
+    if [[ -f "$_dc_constraint_file" ]] && jq -e . "$_dc_constraint_file" >/dev/null 2>&1; then
+      _dc_constraint_count=$(jq --arg cpat "$_dc_constraint_pat" '
+        [.focus // [] | .[] | select(
+          (.content // .area // "" | tostring | test($cpat; "i"))
+        )] | length
+      ' "$_dc_constraint_file" 2>/dev/null || echo 0)
+    fi
+
+    _dc_total=$(( _dc_phero_count + _dc_queen_count + _dc_obs_count + _dc_midden_count + _dc_spawn_count + _dc_constraint_count ))
+
+    # --- Dry-run output ---
+    if [[ "$_dc_confirm" == "false" ]]; then
+      if [[ "$_dc_json" == "true" ]]; then
+        json_ok "$(jq -n \
+          --argjson phero "$_dc_phero_count" \
+          --argjson queen "$_dc_queen_count" \
+          --argjson obs "$_dc_obs_count" \
+          --argjson midden "$_dc_midden_count" \
+          --argjson spawn "$_dc_spawn_count" \
+          --argjson constraints "$_dc_constraint_count" \
+          --argjson total "$_dc_total" \
+          '{mode:"dry-run", pheromones:$phero, queen:$queen, observations:$obs, midden:$midden, spawn_tree:$spawn, constraints:$constraints, total:$total}')"
+      else
+        cat <<DRYRUN_EOF
+Data Clean — Artifact Scan
+==========================
+
+pheromones.json:
+  Found: $_dc_phero_count test signals
+
+QUEEN.md:
+  Found: $_dc_queen_count test entries
+
+learning-observations.json:
+  Found: $_dc_obs_count test observations
+
+midden.json:
+  Found: $_dc_midden_count test entries
+
+spawn-tree.txt:
+  Found: $_dc_spawn_count test worker lines
+
+constraints.json:
+  Found: $_dc_constraint_count test focus entries
+
+Total artifacts: $_dc_total
+DRYRUN_EOF
+        if [[ "$_dc_total" -gt 0 ]]; then
+          echo ""
+          echo "Run with --confirm to remove these artifacts."
+        else
+          echo ""
+          echo "Colony data is clean. No artifacts found."
+        fi
+      fi
+      exit 0
+    fi
+
+    # --- Confirm mode: actually clean ---
+    _dc_removed_phero=0
+    _dc_removed_queen=0
+    _dc_removed_obs=0
+    _dc_removed_midden=0
+    _dc_removed_spawn=0
+    _dc_removed_constraints=0
+
+    # 1. Clean pheromones.json
+    if [[ "$_dc_phero_count" -gt 0 ]] && [[ -f "$_dc_phero_file" ]]; then
+      _dc_removed_phero=$_dc_phero_count
+      _dc_cleaned=$(jq --arg cpat "$_dc_pheromone_content_pat" --arg ipat "$_dc_pheromone_id_pat" '
+        .signals = [.signals // [] | .[] | select(
+          ((.content.text // .content // "" | tostring | test($cpat; "i")) or
+           (.id // "" | test($ipat))) | not
+        )]
+      ' "$_dc_phero_file")
+      if type atomic_write &>/dev/null; then
+        atomic_write "$_dc_phero_file" "$_dc_cleaned"
+      else
+        echo "$_dc_cleaned" > "$_dc_phero_file"
+      fi
+    fi
+
+    # 2. Clean QUEEN.md
+    if [[ "$_dc_queen_count" -gt 0 ]] && [[ -f "$_dc_queen_file" ]]; then
+      _dc_removed_queen=$_dc_queen_count
+      _dc_cleaned=$(grep -viE "$_dc_queen_line_pat" "$_dc_queen_file" || true)
+      if type atomic_write &>/dev/null; then
+        atomic_write "$_dc_queen_file" "$_dc_cleaned"
+      else
+        echo "$_dc_cleaned" > "$_dc_queen_file"
+      fi
+    fi
+
+    # 3. Clean learning-observations.json
+    if [[ "$_dc_obs_count" -gt 0 ]] && [[ -f "$_dc_obs_file" ]]; then
+      _dc_removed_obs=$_dc_obs_count
+      _dc_cleaned=$(jq --arg cpat "$_dc_obs_colony_pat" '
+        .observations = [.observations // [] | .[] | select((.colony_id // "" | test($cpat)) | not)]
+      ' "$_dc_obs_file")
+      if type atomic_write &>/dev/null; then
+        atomic_write "$_dc_obs_file" "$_dc_cleaned"
+      else
+        echo "$_dc_cleaned" > "$_dc_obs_file"
+      fi
+    fi
+
+    # 4. Clean midden.json
+    if [[ "$_dc_midden_count" -gt 0 ]] && [[ -f "$_dc_midden_file" ]]; then
+      _dc_removed_midden=$_dc_midden_count
+      _dc_cleaned=$(jq --arg cpat "$_dc_pheromone_content_pat" --arg ecpat "$_dc_obs_colony_pat" '
+        .signals = [.signals // [] | .[] | select(
+          ((.content.text // .content // "" | tostring | test($cpat; "i"))) | not
+        )] |
+        .entries = [.entries // .failures // [] | .[] | select((.colony_id // "" | test($ecpat)) | not)]
+      ' "$_dc_midden_file")
+      if type atomic_write &>/dev/null; then
+        atomic_write "$_dc_midden_file" "$_dc_cleaned"
+      else
+        echo "$_dc_cleaned" > "$_dc_midden_file"
+      fi
+    fi
+
+    # 5. Clean spawn-tree.txt
+    if [[ "$_dc_spawn_count" -gt 0 ]] && [[ -f "$_dc_spawn_file" ]]; then
+      _dc_removed_spawn=$_dc_spawn_count
+      _dc_cleaned=$(grep -vE "$_dc_spawn_name_pat" "$_dc_spawn_file" || true)
+      if type atomic_write &>/dev/null; then
+        atomic_write "$_dc_spawn_file" "$_dc_cleaned"
+      else
+        echo "$_dc_cleaned" > "$_dc_spawn_file"
+      fi
+    fi
+
+    # 6. Clean constraints.json
+    if [[ "$_dc_constraint_count" -gt 0 ]] && [[ -f "$_dc_constraint_file" ]]; then
+      _dc_removed_constraints=$_dc_constraint_count
+      _dc_cleaned=$(jq --arg cpat "$_dc_constraint_pat" '
+        .focus = [.focus // [] | .[] | select(
+          ((.content // .area // "" | tostring | test($cpat; "i"))) | not
+        )]
+      ' "$_dc_constraint_file")
+      if type atomic_write &>/dev/null; then
+        atomic_write "$_dc_constraint_file" "$_dc_cleaned"
+      else
+        echo "$_dc_cleaned" > "$_dc_constraint_file"
+      fi
+    fi
+
+    _dc_total_removed=$(( _dc_removed_phero + _dc_removed_queen + _dc_removed_obs + _dc_removed_midden + _dc_removed_spawn + _dc_removed_constraints ))
+
+    json_ok "$(jq -n \
+      --argjson phero "$_dc_removed_phero" \
+      --argjson queen "$_dc_removed_queen" \
+      --argjson obs "$_dc_removed_obs" \
+      --argjson midden "$_dc_removed_midden" \
+      --argjson spawn "$_dc_removed_spawn" \
+      --argjson constraints "$_dc_removed_constraints" \
+      --argjson total "$_dc_total_removed" \
+      '{ok:true, removed:{pheromones:$phero, queen:$queen, observations:$obs, midden:$midden, spawn_tree:$spawn, constraints:$constraints}, total:$total}')"
     ;;
 
   *)
