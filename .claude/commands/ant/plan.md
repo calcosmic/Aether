@@ -295,7 +295,6 @@ while iteration < max_iterations AND confidence < target_confidence:
     {context_capsule_prompt}
 
     --- PLANNING DISCIPLINE ---
-    Read .aether/planning.md for full reference.
 
     Key rules:
     - Bite-sized tasks (2-5 minutes each) - one action per task

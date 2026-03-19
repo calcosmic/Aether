@@ -43,7 +43,7 @@
 | pause-colony.md | pass | None |
 | phase.md | pass | None |
 | pheromones.md | pass | None |
-| plan.md | fail | References `.aether/planning.md` (line 298) which does not exist on disk |
+| plan.md | pass | Fixed: removed broken `.aether/planning.md` reference (file did not exist) |
 | redirect.md | pass | None |
 | resume-colony.md | pass | None |
 | resume.md | warning | Frontmatter `name: resume` missing `ant:` prefix (inconsistent with other commands) |
@@ -57,13 +57,13 @@
 
 ## Summary
 
-- **Pass:** 31 commands
+- **Pass:** 32 commands
 - **Warning:** 5 commands (3 naming inconsistencies, 1 intentionally stale migration tool, 1 setup-specific documentation)
-- **Fail:** 1 command (broken file reference in plan.md)
+- **Fail:** 0 commands
 
-### Fail Details
+### Fixes Applied
 
-**plan.md** — Line 298 contains: `Read .aether/planning.md for full reference.` This file does not exist anywhere in the `.aether/` directory. The route-setter agent is instructed to read this file for planning discipline guidance, but the file was never created or has been removed. This is a broken reference that should be fixed or removed.
+**plan.md** -- FIXED: Removed the broken reference `Read .aether/planning.md for full reference.` from the route-setter agent prompt (line 298). The planning discipline rules were already provided inline immediately after the reference, so no content was lost.
 
 ### Warning Details
 
