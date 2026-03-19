@@ -16,12 +16,25 @@ Run `/ant:status` at any time to see all active pheromones.
 
 ---
 
+## How Signals Reach Workers
+
+Workers do not independently read or query pheromone files. Instead, colony-prime handles signal delivery:
+
+1. **colony-prime assembles signals** via `pheromone-prime --compact`, collecting all active signals sorted by priority and strength
+2. **Signals are injected into the `prompt_section`** of the worker spawn context -- they become part of the worker's prompt, not something the worker looks up
+3. **Workers see signals as part of their instructions**, not by reading `.aether/data/pheromones.json` directly
+4. **Builder, Watcher, and Scout** have `pheromone_protocol` sections in their agent definitions (`.claude/agents/ant/`) that instruct them how to act on the injected signals
+
+This injection model means pheromones influence worker behavior through prompt context, the same way any other instruction reaches a worker.
+
+---
+
 ## FOCUS -- Guide Attention
 
 **Command:** `/ant:focus "<area>"`
 **Priority:** normal | **Default expiration:** end of phase
 
-**What it does:** Tells the colony "pay extra attention here." Workers read FOCUS signals and weight this area higher in their task execution.
+**What it does:** Tells the colony "pay extra attention here." FOCUS signals are injected into worker prompts via colony-prime, weighting the indicated area higher in task execution.
 
 ### When to use FOCUS
 
@@ -147,16 +160,16 @@ Auto-emitted signals have their `source` field set to indicate origin: `"worker:
 
 ## Signal Combinations
 
-Pheromones combine. Workers check all active signals and respond accordingly:
+Pheromones combine. colony-prime injects all active signals into worker prompts, ordered by priority:
 
 | Combination | Effect |
 |-------------|--------|
-| FOCUS + FEEDBACK | Workers concentrate on the focused area and adjust approach based on feedback |
-| FOCUS + REDIRECT | Workers prioritize the focused area while avoiding the redirected pattern |
-| FEEDBACK + REDIRECT | Workers adjust approach (feedback) and avoid specific patterns (redirect) |
+| FOCUS + FEEDBACK | The focused area is weighted higher and approach is adjusted based on feedback |
+| FOCUS + REDIRECT | The focused area is prioritized while the redirected pattern is flagged for avoidance |
+| FEEDBACK + REDIRECT | Approach adjustments (feedback) and avoidance patterns (redirect) are both injected |
 | All three | Full steering: attention (FOCUS), avoidance (REDIRECT), and adjustment (FEEDBACK) |
 
-**Priority processing:** Workers check high priority signals first, then normal, then low.
+**Priority processing:** High priority signals appear first in the injected context, then normal, then low.
 
 ---
 
