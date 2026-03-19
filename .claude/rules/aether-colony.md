@@ -73,6 +73,13 @@ This only applies to genuinely new conversations, not after /clear.
 | `/ant:organize` | Codebase hygiene report |
 | `/ant:council` | Intent clarification |
 
+### Data & Exchange
+| Command | Purpose |
+|---------|---------|
+| `/ant:data-clean` | Remove test artifacts from colony data |
+| `/ant:export-signals` | Export pheromone signals to XML |
+| `/ant:import-signals` | Import pheromone signals from XML |
+
 ## Typical Workflow
 
 ```
@@ -136,9 +143,11 @@ State is stored in `.aether/data/COLONY_STATE.json` and includes:
 
 ## Pheromone System
 
-Signals guide colony behavior without hard-coding instructions:
+Signals guide colony behavior through prompt injection -- colony-prime assembles active signals and injects them into worker prompts:
 - **FOCUS** — attracts attention to an area (expires at phase end)
 - **REDIRECT** — repels workers from a pattern (high priority, hard constraint)
 - **FEEDBACK** — calibrates behavior based on observation (low priority)
+
+Workers do not independently read signal files. Builder, Watcher, and Scout have `pheromone_protocol` sections in their agent definitions that govern how they act on injected signals.
 
 Use FOCUS + REDIRECT before builds to steer. Use FEEDBACK after builds to adjust.

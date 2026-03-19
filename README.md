@@ -51,8 +51,8 @@ When a Builder hits something complex, it spawns a Scout to research. When code 
 
 ## Key Features
 
-- **9 Active Agent Types** — Real subagents spawned via Task tool
-- **35 Slash Commands** — Full lifecycle management
+- **22 Agent Definitions** — Real subagents spawned via Task tool
+- **40 Slash Commands** — Full lifecycle management
 - **Hard Enforcement Guards** — Spawn budget hard-fail mode, schema-validated worker payloads, and explicit blocker gating
 - **Pheromone System** — Guide the colony with FOCUS, REDIRECT, FEEDBACK signals
 - **State Safety** — Lock + atomic-write protections on critical state and memory mutation paths
@@ -74,7 +74,7 @@ npx aether-colony install
 npm install -g aether-colony
 ```
 
-This installs 22 agents to `~/.claude/agents/ant/` plus 37 slash commands to `~/.claude/commands/ant/`.
+This installs 22 agents to `~/.claude/agents/ant/` plus 40 slash commands to `~/.claude/commands/ant/`.
 
 ---
 
@@ -156,12 +156,15 @@ Implementation note:
 | `/ant:flags` | 🚩 List blockers and issues |
 | `/ant:help` | 🐜 Full command reference |
 
-### Coordination
+### Coordination & Maintenance
 
 | Command | Description |
 |---------|-------------|
 | `/ant:council` | 🏛️ Clarify intent via multi-choice questions |
 | `/ant:flag` | 🚩 Create project-specific flag (blocker/issue/note) |
+| `/ant:data-clean` | 🧹 Remove test artifacts from colony data |
+| `/ant:export-signals` | 📤 Export pheromone signals to XML |
+| `/ant:import-signals` | 📥 Import pheromone signals from XML |
 
 ---
 
@@ -231,10 +234,10 @@ View memory: `/ant:memory-details`
 ## File Structure
 
 ```
-<your-repo>/.aether/              # Repo-local runtime
+<your-repo>/.aether/              # Repo-local colony files
     ├── QUEEN.md                  # Colony wisdom (persists across sessions)
     ├── workers.md                # Worker specs and spawn protocol
-    ├── aether-utils.sh           # Utility layer (80+ subcommands)
+    ├── aether-utils.sh           # Utility layer (110 subcommands)
     ├── model-profiles.yaml       # Model routing config
     │
     ├── docs/                     # Documentation
