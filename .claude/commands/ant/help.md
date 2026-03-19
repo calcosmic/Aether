@@ -31,6 +31,8 @@ PHEROMONE COMMANDS
   /ant:redirect "<pat>"  Warn away from pattern (priority: high, expires: phase end)
   /ant:feedback "<msg>"  Adjust behavior (priority: low, expires: phase end)
   /ant:pheromones        View and manage active pheromone signals
+  /ant:export-signals [path]  Export pheromone signals to portable XML
+  /ant:import-signals <file> [colony]  Import signals from another colony's XML
 
 STATUS & UPDATES
 

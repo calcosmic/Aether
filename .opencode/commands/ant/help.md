@@ -30,6 +30,8 @@ PHEROMONE COMMANDS
   /ant:focus "<area>"    Guide colony attention (priority: normal, expires: phase end)
   /ant:redirect "<pat>"  Warn away from pattern (priority: high, expires: phase end)
   /ant:feedback "<msg>"  Adjust behavior (priority: low, expires: phase end)
+  /ant:export-signals [path]  Export pheromone signals to portable XML
+  /ant:import-signals <file> [colony]  Import signals from another colony's XML
 
 STATUS & UPDATES
 
