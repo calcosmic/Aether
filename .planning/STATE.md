@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** The pheromone system should be a living system -- auto-emitting signals during builds, carrying context across sessions, and actually changing worker behavior -- not just a storage format that nobody reads.
-**Current focus:** Phase 6 (XML Exchange Activation)
+**Current focus:** Phase 7 (next phase)
 
 ## Current Position
 
-Phase: 6 of 8 (XML Exchange Activation)
-Plan: 1 of 2 in current phase
-Status: In progress
-Last activity: 2026-03-19 -- Completed 06-01-PLAN.md
+Phase: 6 of 8 (XML Exchange Activation) -- COMPLETE
+Plan: 2 of 2 in current phase
+Status: Phase complete
+Last activity: 2026-03-19 -- Completed 06-02-PLAN.md
 
-Progress: [████████░░] 77%
+Progress: [████████░░] 81%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 10
+- Total plans completed: 11
 - Average duration: 4min
-- Total execution time: 0.65 hours
+- Total execution time: 0.70 hours
 
 **By Phase:**
 
@@ -32,10 +32,10 @@ Progress: [████████░░] 77%
 | 03-pheromone-signal-plumbing | 2 | 8min | 4min |
 | 04-pheromone-worker-integration | 2 | 7min | 3.5min |
 | 05-learning-pipeline-validation | 2 | 7min | 3.5min |
-| 06-xml-exchange-activation | 1 | 2min | 2min |
+| 06-xml-exchange-activation | 2 | 5min | 2.5min |
 
 **Recent Trend:**
-- Last 5 plans: 3min, 4min, 3min, 4min, 2min
+- Last 5 plans: 4min, 3min, 4min, 2min, 3min
 - Trend: stable
 
 *Updated after each plan completion*
@@ -73,6 +73,7 @@ Recent decisions affecting current work:
 - [05-02]: Evidence field stored as array by instinct-create -- assertions join array before substring check
 - [06-01]: Pure wiring -- no new subcommands created, only slash command wrappers around existing pheromone-export-xml and pheromone-import-xml
 - [06-01]: OpenCode versions use normalize-args pattern for argument compatibility
+- [06-02]: Export result uses known source count because pheromone-export-xml returns {path, validated} not signal_count
 
 ### Pending Todos
 
@@ -86,5 +87,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-19
-Stopped at: Completed 06-01-PLAN.md
+Stopped at: Completed 06-02-PLAN.md (Phase 6 complete)
 Resume file: None
