@@ -5,32 +5,33 @@
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** The pheromone system should be a living system -- auto-emitting signals during builds, carrying context across sessions, and actually changing worker behavior -- not just a storage format that nobody reads.
-**Current focus:** Phase 1: Data Purge
+**Current focus:** Phase 2: Command Audit & Data Tooling
 
 ## Current Position
 
-Phase: 1 of 8 (Data Purge)
+Phase: 2 of 8 (Command Audit & Data Tooling)
 Plan: 2 of 2 in current phase
 Status: Phase complete
-Last activity: 2026-03-19 -- Completed 01-02-PLAN.md
+Last activity: 2026-03-19 -- Completed 02-02-PLAN.md
 
-Progress: [█░░░░░░░░░] 12%
+Progress: [██░░░░░░░░] 25%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 3min
-- Total execution time: 0.05 hours
+- Total plans completed: 2
+- Average duration: 4min
+- Total execution time: 0.13 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-data-purge | 1 | 3min | 3min |
+| 02-command-audit-data-tooling | 1 | 5min | 5min |
 
 **Recent Trend:**
-- Last 5 plans: 3min
+- Last 5 plans: 3min, 5min
 - Trend: -
 
 *Updated after each plan completion*
@@ -49,6 +50,8 @@ Recent decisions affecting current work:
 - [01-02]: Kept all 16 real worker spawn records in spawn-tree.txt
 - [Phase 01]: Kept sig_feedback_001 despite 'Test coverage' text matching broad regex -- it is a real signal from worker_builder, not test data
 - [Phase 01]: pheromones.json and constraints.json are gitignored -- cleaned locally but not committable to git
+- [02-02]: Placed data-clean subcommand at end of case statement for minimal diff and clear separation
+- [02-02]: Used atomic_write for file modifications when available, with direct write fallback
 
 ### Pending Todos
 
@@ -62,5 +65,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-19
-Stopped at: Completed 01-01-PLAN.md
+Stopped at: Completed 02-02-PLAN.md
 Resume file: None
