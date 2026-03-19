@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 ## Current Position
 
 Phase: 3 of 8 (Pheromone Signal Plumbing)
-Plan: 1 of 3 in current phase
+Plan: 3 of 3 in current phase
 Status: In progress
-Last activity: 2026-03-19 -- Completed 03-01-PLAN.md
+Last activity: 2026-03-19 -- Completed 03-03-PLAN.md
 
-Progress: [███░░░░░░░] 30%
+Progress: [████░░░░░░] 40%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
+- Total plans completed: 5
 - Average duration: 5min
-- Total execution time: 0.32 hours
+- Total execution time: 0.38 hours
 
 **By Phase:**
 
@@ -29,10 +29,10 @@ Progress: [███░░░░░░░] 30%
 |-------|-------|-------|----------|
 | 01-data-purge | 1 | 3min | 3min |
 | 02-command-audit-data-tooling | 2 | 12min | 6min |
-| 03-pheromone-signal-plumbing | 1 | 4min | 4min |
+| 03-pheromone-signal-plumbing | 2 | 8min | 4min |
 
 **Recent Trend:**
-- Last 5 plans: 3min, 7min, 5min, 4min
+- Last 5 plans: 3min, 7min, 5min, 4min, 4min
 - Trend: stable
 
 *Updated after each plan completion*
@@ -57,6 +57,8 @@ Recent decisions affecting current work:
 - [Phase 02-01]: Removed broken .aether/planning.md reference from plan.md -- inline rules already provided
 - [03-01]: Replaced approx_epoch (365.25 days/year) with to_epoch (365 days/year) for consistency over precision
 - [03-01]: Fixed jq // operator treating active:false as null -- used explicit if/elif chain instead
+- [03-03]: Fixed same jq // active:false bug in pheromone-prime and context-capsule (discovered by injection chain tests)
+- [03-03]: prompt_section groups signals by type (FOCUS, REDIRECT, FEEDBACK) not by strength -- test assertions adapted
 
 ### Pending Todos
 
@@ -70,5 +72,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-19
-Stopped at: Completed 03-01-PLAN.md
+Stopped at: Completed 03-03-PLAN.md
 Resume file: None
