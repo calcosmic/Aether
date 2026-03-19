@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** The pheromone system should be a living system -- auto-emitting signals during builds, carrying context across sessions, and actually changing worker behavior -- not just a storage format that nobody reads.
-**Current focus:** Phase 3: Pheromone Signal Plumbing
+**Current focus:** Phase 4: Pheromone Worker Integration
 
 ## Current Position
 
-Phase: 3 of 8 (Pheromone Signal Plumbing)
-Plan: 3 of 3 in current phase
+Phase: 4 of 8 (Pheromone Worker Integration)
+Plan: 1 of 2 in current phase
 Status: In progress
-Last activity: 2026-03-19 -- Completed 03-03-PLAN.md
+Last activity: 2026-03-19 -- Completed 04-01-PLAN.md
 
-Progress: [████░░░░░░] 40%
+Progress: [█████░░░░░] 50%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5
+- Total plans completed: 6
 - Average duration: 5min
-- Total execution time: 0.38 hours
+- Total execution time: 0.43 hours
 
 **By Phase:**
 
@@ -30,9 +30,10 @@ Progress: [████░░░░░░] 40%
 | 01-data-purge | 1 | 3min | 3min |
 | 02-command-audit-data-tooling | 2 | 12min | 6min |
 | 03-pheromone-signal-plumbing | 2 | 8min | 4min |
+| 04-pheromone-worker-integration | 1 | 3min | 3min |
 
 **Recent Trend:**
-- Last 5 plans: 3min, 7min, 5min, 4min, 4min
+- Last 5 plans: 7min, 5min, 4min, 4min, 3min
 - Trend: stable
 
 *Updated after each plan completion*
@@ -59,6 +60,9 @@ Recent decisions affecting current work:
 - [03-01]: Fixed jq // operator treating active:false as null -- used explicit if/elif chain instead
 - [03-03]: Fixed same jq // active:false bug in pheromone-prime and context-capsule (discovered by injection chain tests)
 - [03-03]: prompt_section groups signals by type (FOCUS, REDIRECT, FEEDBACK) not by strength -- test assertions adapted
+- [04-01]: Placed pheromone_protocol after critical_rules, before return_format -- signals are critical but secondary to core rules like TDD
+- [04-01]: Kept protocols under 35 lines using principle-based instructions (workers are LLMs, understand intent)
+- [04-01]: Pre-existing lint:sync command count mismatch (38 vs 37) logged to deferred-items, not fixed (out of scope)
 
 ### Pending Todos
 
@@ -72,5 +76,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-19
-Stopped at: Completed 03-03-PLAN.md
+Stopped at: Completed 04-01-PLAN.md
 Resume file: None
