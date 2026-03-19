@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** The pheromone system should be a living system -- auto-emitting signals during builds, carrying context across sessions, and actually changing worker behavior -- not just a storage format that nobody reads.
-**Current focus:** Phase 7 (Fresh Install Hardening)
+**Current focus:** Phase 8 (Documentation Update)
 
 ## Current Position
 
-Phase: 7 of 8 (Fresh Install Hardening)
+Phase: 8 of 8 (Documentation Update)
 Plan: 2 of 2 in current phase
-Status: Plan 07-02 complete
-Last activity: 2026-03-19 -- Completed 07-02-PLAN.md
+Status: Plan 08-02 complete -- Phase 8 complete -- All phases complete
+Last activity: 2026-03-19 -- Completed 08-02-PLAN.md
 
-Progress: [█████████░] 87%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 13
+- Total plans completed: 15
 - Average duration: 4min
-- Total execution time: 0.82 hours
+- Total execution time: 0.92 hours
 
 **By Phase:**
 
@@ -34,9 +34,10 @@ Progress: [█████████░] 87%
 | 05-learning-pipeline-validation | 2 | 7min | 3.5min |
 | 06-xml-exchange-activation | 2 | 5min | 2.5min |
 | 07-fresh-install-hardening | 2 | 7min | 3.5min |
+| 08-documentation-update | 2 | 6min | 3min |
 
 **Recent Trend:**
-- Last 5 plans: 3min, 4min, 2min, 3min, 3min
+- Last 5 plans: 2min, 3min, 3min, 3min, 3min
 - Trend: stable
 
 *Updated after each plan completion*
@@ -79,6 +80,12 @@ Recent decisions affecting current work:
 - [07-01]: Removed CONTEXT.md from REQUIRED_FILES since it is now excluded from the package
 - [07-02]: Used HOME override pattern from test-install.sh for true environment isolation
 - [07-02]: Handled queen-init nested JSON response (.result.created) which wraps output in {ok:true, result:{...}}
+- [08-01]: Updated version to v1.3.0 to match ROADMAP milestone version
+- [08-01]: Used floor values (530+, 10,000+) for growing counts and exact values (40, 22, 110) for stable counts
+- [08-01]: Removed Workarounds Summary table entirely since all workaround rows were for FIXED issues
+- [08-02]: Used passive voice in signal combination table to avoid implying worker agency
+- [08-02]: Added dedicated "How Signals Reach Workers" section to pheromones.md for injection model clarity
+- [08-02]: Updated test count to exact value (92) in source-of-truth-map since it is a stable inventory count
 
 ### Pending Todos
 
@@ -92,5 +99,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-19
-Stopped at: Completed 07-02-PLAN.md
+Stopped at: Completed 08-02-PLAN.md -- All plans complete
 Resume file: None
