@@ -7169,7 +7169,7 @@ $updated_meta
         ($eff < 0.1 or $expired) as $deactivate |
         . + {
           effective_strength: (($eff * 100 | round) / 100),
-          active: (if $deactivate then false else (.active // true) end)
+          active: (if $deactivate then false elif .active == false then false else true end)
         }
       ) |
       map(select(.active == true)) |
