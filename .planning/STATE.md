@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** The pheromone system should be a living system -- auto-emitting signals during builds, carrying context across sessions, and actually changing worker behavior -- not just a storage format that nobody reads.
-**Current focus:** Phase 5 (Learning Pipeline Validation)
+**Current focus:** Phase 6 (next phase)
 
 ## Current Position
 
-Phase: 5 of 8 (Learning Pipeline Validation)
-Plan: 1 of 2 in current phase
-Status: In progress
-Last activity: 2026-03-19 -- Completed 05-01-PLAN.md
+Phase: 5 of 8 (Learning Pipeline Validation) -- COMPLETE
+Plan: 2 of 2 in current phase
+Status: Phase complete
+Last activity: 2026-03-19 -- Completed 05-02-PLAN.md
 
-Progress: [██████░░░░] 62%
+Progress: [███████░░░] 69%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 8
+- Total plans completed: 9
 - Average duration: 5min
-- Total execution time: 0.55 hours
+- Total execution time: 0.62 hours
 
 **By Phase:**
 
@@ -31,10 +31,10 @@ Progress: [██████░░░░] 62%
 | 02-command-audit-data-tooling | 2 | 12min | 6min |
 | 03-pheromone-signal-plumbing | 2 | 8min | 4min |
 | 04-pheromone-worker-integration | 2 | 7min | 3.5min |
-| 05-learning-pipeline-validation | 1 | 3min | 3min |
+| 05-learning-pipeline-validation | 2 | 7min | 3.5min |
 
 **Recent Trend:**
-- Last 5 plans: 4min, 4min, 3min, 4min, 3min
+- Last 5 plans: 4min, 3min, 4min, 3min, 4min
 - Trend: stable
 
 *Updated after each plan completion*
@@ -68,6 +68,8 @@ Recent decisions affecting current work:
 - [04-02]: Reproduced build-wave.md Step 5.2 threshold logic in JS tests for isolation
 - [05-01]: Third memory-capture returns already_promoted without re-invoking instinct-create -- confidence stays at 0.75 (correct idempotent behavior)
 - [05-01]: Used 4 realistic content strings from actual Aether development phases as non-synthetic test data
+- [05-02]: Agent pheromone_protocol uses 'signals' not 'instincts' directly -- signals is the delivery mechanism that includes instincts, so verification accepts either term
+- [05-02]: Evidence field stored as array by instinct-create -- assertions join array before substring check
 
 ### Pending Todos
 
@@ -81,5 +83,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-19
-Stopped at: Completed 05-01-PLAN.md
+Stopped at: Completed 05-02-PLAN.md (Phase 5 complete)
 Resume file: None
