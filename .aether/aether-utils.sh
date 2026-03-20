@@ -7962,44 +7962,95 @@ $updated_meta
     fi
 
     # === Hive-wisdom injection (HIVE-01) ===
-    # Read high_value_signals from ~/.aether/eternal/memory.json (if it exists)
-    # and format as cross-colony guidance for workers
-    cp_hive_file="$HOME/.aether/eternal/memory.json"
+    # Primary: use hive-read with domain tags from registry for scoped wisdom
+    # Fallback: read high_value_signals from ~/.aether/eternal/memory.json
     cp_hive_count=0
     cp_sec_hive=""
+    cp_hive_source=""
 
     cp_max_hive=5
     if [[ "$cp_compact" == "true" ]]; then
       cp_max_hive=3
     fi
 
-    if [[ -f "$cp_hive_file" ]]; then
-      cp_hive_signals=$(jq -r \
-        --argjson max "$cp_max_hive" \
-        '
-        .high_value_signals // []
-        | .[:$max]
-        ' "$cp_hive_file" 2>/dev/null || echo "[]")
+    # Get domain tags for current repo from registry
+    cp_repo_path="${AETHER_ROOT:-$(pwd)}"
+    cp_domain_tags=$(jq -r --arg repo "$cp_repo_path" \
+      '[.repos[] | select(.path == $repo) | .domain_tags // []] | .[0] // [] | join(",")' \
+      "$HOME/.aether/registry.json" 2>/dev/null || echo "")
 
-      cp_hive_count=$(echo "$cp_hive_signals" | jq 'length' 2>/dev/null || echo "0")
+    # Try hive-read first (domain-scoped retrieval from ~/.aether/hive/wisdom.json)
+    cp_hive_result=""
+    if [[ -n "$cp_domain_tags" ]]; then
+      cp_hive_result=$(bash "$SCRIPT_DIR/aether-utils.sh" hive-read --domain "$cp_domain_tags" --limit "$cp_max_hive" --format text 2>/dev/null) || cp_hive_result=""
+    else
+      cp_hive_result=$(bash "$SCRIPT_DIR/aether-utils.sh" hive-read --limit "$cp_max_hive" --format text 2>/dev/null) || cp_hive_result=""
+    fi
 
-      if [[ "$cp_hive_count" -gt 0 ]]; then
-        cp_hive_section="--- HIVE WISDOM (Cross-Colony Patterns) ---"$'\n'
+    cp_hive_matched=0
+    if [[ -n "$cp_hive_result" ]]; then
+      cp_hive_matched=$(echo "$cp_hive_result" | jq -r '.result.total_matched // 0' 2>/dev/null || echo "0")
+    fi
 
-        cp_hive_lines=$(echo "$cp_hive_signals" | jq -r '
-          .[] | "[" + (.type // "UNKNOWN") + " | " + ((.strength // 0) | tostring) + "] " + (.content // "")
-        ' 2>/dev/null || echo "")
+    if [[ "$cp_hive_matched" -gt 0 ]]; then
+      # Use hive-read text output
+      cp_hive_text=$(echo "$cp_hive_result" | jq -r '.result.text // ""' 2>/dev/null || echo "")
+      cp_hive_count="$cp_hive_matched"
+      if [[ "$cp_hive_count" -gt "$cp_max_hive" ]]; then
+        cp_hive_count="$cp_max_hive"
+      fi
+      cp_hive_source="hive"
 
-        if [[ -n "$cp_hive_lines" ]]; then
-          while IFS= read -r cp_hive_line; do
-            [[ -n "$cp_hive_line" ]] && cp_hive_section+="- $cp_hive_line"$'\n'
-          done <<< "$cp_hive_lines"
+      # Build header with domain info
+      if [[ -n "$cp_domain_tags" ]]; then
+        cp_domain_display=$(echo "$cp_domain_tags" | tr ',' ', ')
+        cp_hive_section="--- HIVE WISDOM (Domain: $cp_domain_display) ---"$'\n'
+      else
+        cp_hive_section="--- HIVE WISDOM (All Domains) ---"$'\n'
+      fi
+
+      # Add hive-read text lines
+      if [[ -n "$cp_hive_text" && "$cp_hive_text" != "(no wisdom entries)" ]]; then
+        while IFS= read -r cp_hive_line; do
+          [[ -n "$cp_hive_line" ]] && cp_hive_section+="- $cp_hive_line"$'\n'
+        done <<< "$cp_hive_text"
+      fi
+
+      cp_hive_section+="--- END HIVE WISDOM ---"
+      cp_sec_hive=$'\n'"$cp_hive_section"$'\n'
+      cp_log_line="$cp_log_line, $cp_hive_count hive"
+    else
+      # Fallback: read from eternal memory (legacy)
+      cp_hive_file="$HOME/.aether/eternal/memory.json"
+      if [[ -f "$cp_hive_file" ]]; then
+        cp_hive_signals=$(jq -r \
+          --argjson max "$cp_max_hive" \
+          '
+          .high_value_signals // []
+          | .[:$max]
+          ' "$cp_hive_file" 2>/dev/null || echo "[]")
+
+        cp_hive_count=$(echo "$cp_hive_signals" | jq 'length' 2>/dev/null || echo "0")
+
+        if [[ "$cp_hive_count" -gt 0 ]]; then
+          cp_hive_section="--- HIVE WISDOM (Cross-Colony Patterns) ---"$'\n'
+          cp_hive_source="eternal"
+
+          cp_hive_lines=$(echo "$cp_hive_signals" | jq -r '
+            .[] | "[" + (.type // "UNKNOWN") + " | " + ((.strength // 0) | tostring) + "] " + (.content // "")
+          ' 2>/dev/null || echo "")
+
+          if [[ -n "$cp_hive_lines" ]]; then
+            while IFS= read -r cp_hive_line; do
+              [[ -n "$cp_hive_line" ]] && cp_hive_section+="- $cp_hive_line"$'\n'
+            done <<< "$cp_hive_lines"
+          fi
+
+          cp_hive_section+="--- END HIVE WISDOM ---"
+
+          cp_sec_hive=$'\n'"$cp_hive_section"$'\n'
+          cp_log_line="$cp_log_line, $cp_hive_count hive"
         fi
-
-        cp_hive_section+="--- END HIVE WISDOM ---"
-
-        cp_sec_hive=$'\n'"$cp_hive_section"$'\n'
-        cp_log_line="$cp_log_line, $cp_hive_count hive"
       fi
     fi
     # === END hive-wisdom injection ===
