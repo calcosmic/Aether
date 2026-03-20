@@ -231,11 +231,11 @@ If nestmates are found:
 
 ### Step 5.6: Register Repo (Silent)
 
-Attempt to register this repo in the global hub. Both steps are silent on failure — registry is not required for the colony to work.
+Attempt to register this repo in the global hub with the colony goal and active status. Both steps are silent on failure — registry is not required for the colony to work.
 
 Run using the Bash tool (ignore errors):
 ```
-bash .aether/aether-utils.sh registry-add "$(pwd)" "$(jq -r '.version // "unknown"' ~/.aether/version.json 2>/dev/null || echo 'unknown')" 2>/dev/null || true
+bash .aether/aether-utils.sh registry-add "$(pwd)" "$(jq -r '.version // "unknown"' ~/.aether/version.json 2>/dev/null || echo 'unknown')" --goal "$ARGUMENTS" --active true 2>/dev/null || true
 ```
 
 Then attempt to write `.aether/version.json` with the hub version:

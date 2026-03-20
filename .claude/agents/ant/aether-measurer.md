@@ -2,6 +2,7 @@
 name: aether-measurer
 description: "Use this agent when performance is degrading, before optimization work to establish a baseline, or when bottlenecks need identification. Profiles code paths, runs benchmarks, analyzes algorithmic complexity, and identifies bottlenecks with file-level specificity. Returns prioritized optimization recommendations with estimated impact. Implementation goes to aether-builder; architectural performance decisions go to Queen."
 tools: Read, Bash, Grep, Glob
+color: yellow
 model: inherit
 ---
 

@@ -2,6 +2,7 @@
 name: aether-surveyor-pathogens
 description: "Use this agent to identify technical debt, bugs, security concerns, and fragile areas in the codebase. Writes PATHOGENS.md to .aether/data/survey/. Spawned by /ant:colonize to detect what needs fixing before colony work begins."
 tools: Read, Grep, Glob, Bash, Write
+color: cyan
 model: inherit
 ---
 

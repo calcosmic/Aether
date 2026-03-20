@@ -2,6 +2,7 @@
 name: aether-auditor
 description: "Use this agent for code review, security audits, and compliance checks. Strictly read-only — returns structured findings (file, line, severity, category, description, suggestion). For security escalations, routes to Queen. Do NOT use for fixes (use aether-builder) or test additions (use aether-probe)."
 tools: Read, Grep, Glob
+color: green
 model: inherit
 ---
 

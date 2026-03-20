@@ -279,6 +279,55 @@ else
 fi
 ```
 
+### Step 3.7: Hive Promotion (NON-BLOCKING)
+
+After QUEEN.md promotion, promote abstracted instincts to the cross-colony hive.
+
+**Extract high-confidence instincts for hive promotion:**
+```bash
+# Get instincts with confidence >= 0.8
+high_conf_instincts=$(jq -r '.instincts[] | select(.confidence >= 0.8) | @base64' .aether/data/COLONY_STATE.json 2>/dev/null || echo "")
+
+# Derive source repo name from current directory
+source_repo="$(pwd)"
+
+hive_promoted_count=0
+hive_errors=0
+for encoded in $high_conf_instincts; do
+  [[ -z "$encoded" ]] && continue
+
+  # Extract trigger and action fields from the instinct object
+  trigger=$(echo "$encoded" | base64 -d | jq -r '.trigger // empty')
+  action=$(echo "$encoded" | base64 -d | jq -r '.action // empty')
+  confidence=$(echo "$encoded" | base64 -d | jq -r '.confidence // 0.7')
+  domain=$(echo "$encoded" | base64 -d | jq -r '.domain // empty')
+
+  [[ -z "$trigger" || -z "$action" ]] && continue
+
+  # Build the promotion text in "When {trigger}: {action}" format
+  promote_text="When ${trigger}: ${action}"
+
+  # Build hive-promote args with --text and --source-repo (required)
+  promote_args=(hive-promote --text "$promote_text" --source-repo "$source_repo" --confidence "$confidence")
+  [[ -n "$domain" ]] && promote_args+=(--domain "$domain")
+
+  # Call hive-promote which orchestrates abstract + store
+  result=$(bash .aether/aether-utils.sh "${promote_args[@]}" 2>/dev/null || echo '{}')
+  was_promoted=$(echo "$result" | jq -r '.result.action // "skipped"' 2>/dev/null || echo "skipped")
+
+  if [[ "$was_promoted" == "promoted" || "$was_promoted" == "merged" ]]; then
+    hive_promoted_count=$((hive_promoted_count + 1))
+  fi
+done
+
+if [[ "$hive_promoted_count" -gt 0 ]]; then
+  echo "Hive promotion: $hive_promoted_count instinct(s) promoted to cross-colony hive"
+fi
+```
+
+**Continue to Step 4 (non-blocking):**
+Proceed to Step 4 regardless of hive promotion results — hive promotion is strictly non-blocking.
+
 ### Step 4: Log Seal Activity
 
 Log the seal ceremony to activity log:
@@ -320,6 +369,17 @@ bash .aether/aether-utils.sh changelog-append \
 - `{goal}` — the colony goal from COLONY_STATE.json
 
 **Error handling:** If `changelog-append` fails, log to midden and continue — changelog failure never blocks sealing.
+
+### Step 5.2: Update Registry (Silent)
+
+Mark the colony as inactive in the global registry. This is silent on failure — registry is not required for the colony to work.
+
+Run using the Bash tool (ignore errors):
+```bash
+bash .aether/aether-utils.sh registry-add "$(pwd)" "$(jq -r '.version // "unknown"' ~/.aether/version.json 2>/dev/null || echo 'unknown')" --active false 2>/dev/null || true
+```
+
+If the command fails, proceed silently. This is optional bookkeeping.
 
 ### Step 5.5: Documentation Coverage Audit
 
@@ -494,7 +554,7 @@ if command -v xmllint >/dev/null 2>&1; then
   pher_result=$(bash .aether/aether-utils.sh pheromone-export-xml ".aether/exchange/pheromones.xml" 2>&1)
   pher_ok=$(echo "$pher_result" | jq -r '.ok // false' 2>/dev/null)
   if [[ "$pher_ok" == "true" ]]; then
-    pher_signal_count=$(echo "$pher_result" | jq -r '.result.signal_count // 0' 2>/dev/null)
+    pher_signal_count=$(jq '[.signals[] | select(.active != false)] | length' .aether/data/pheromones.json 2>/dev/null || echo "0")
     pher_export_line="Signal Export: pheromones.xml (${pher_signal_count} signals, importable by other colonies)"
   else
     pher_export_line="Signal Export: failed (non-blocking)"

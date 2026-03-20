@@ -2,6 +2,7 @@
 name: aether-gatekeeper
 description: "Use this agent when adding new dependencies, before a release, or when a security review of the supply chain is needed — audits dependency manifests for known vulnerabilities, license compliance issues, and supply chain risks without running any commands. Performs static analysis of package.json, lock files, and license declarations. Returns findings with severity ratings and recommended commands for Builder to execute. Do NOT use for dependency updates (use aether-builder)."
 tools: Read, Grep, Glob
+color: red
 model: inherit
 ---
 

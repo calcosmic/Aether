@@ -1,8 +1,8 @@
 # CLAUDE.md — Aether Development Guide
 
-> **Current Version:** v1.3.0
+> **Current Version:** v2.0.0
 > **Architecture:** v4.0 (runtime/ eliminated, direct packaging)
-> **Last Updated:** 2026-03-19 (v1.3 documentation update, integration complete)
+> **Last Updated:** 2026-03-20 (v2.0 — autopilot, hive intelligence, user preferences)
 
 ---
 
@@ -10,8 +10,8 @@
 
 | What | Count/Status |
 |------|--------------|
-| Version | v1.3.0 |
-| Slash commands | 40 (Claude) + 39 (OpenCode) |
+| Version | v2.0.0 |
+| Slash commands | 43 (Claude) + 43 (OpenCode) |
 | Agent definitions | 22 |
 | aether-utils.sh | 10,000+ lines, 110 subcommands |
 | Tests | 530+ passing |
@@ -35,13 +35,21 @@
 │   .aether/data/        ← LOCAL ONLY (excluded by .npmignore)    │
 │   .aether/dreams/      ← LOCAL ONLY (excluded by .npmignore)    │
 │                                                                  │
-│   .claude/commands/ant/ ← 40 slash commands (Claude Code)       │
+│   .claude/commands/ant/ ← 42 slash commands (Claude Code)       │
 │   .claude/agents/ant/   ← 22 agent definitions                  │
-│   .opencode/commands/ant/ ← 39 slash commands (OpenCode)        │
+│   .opencode/commands/ant/ ← 40 slash commands (OpenCode)        │
 │   .opencode/agents/     ← Agent definitions (OpenCode)          │
+│                                                                  │
+│   ~/.aether/           ← HUB (cross-colony, user-level)         │
+│   ├── QUEEN.md         (wisdom + user preferences)               │
+│   └── eternal/         (hive memory — high-value signals)        │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+Colony-prime assembles worker context from: QUEEN.md wisdom, eternal memory,
+pheromone signals, phase learnings, key decisions, blocker flags, user preferences,
+and context capsule — all within a token budget (see Token Budget below).
 
 **See `RUNTIME UPDATE ARCHITECTURE.md` for complete distribution flow.**
 
@@ -64,6 +72,20 @@
 | OpenCode agents | `.opencode/agents/` | OpenCode worker definitions |
 | Your notes | `.aether/dreams/` | Never distributed |
 | Dev docs | `.aether/docs/known-issues.md` | Distributed |
+
+### Autopilot
+
+`/ant:run` — Autopilot that builds, verifies, learns, and advances through phases automatically.
+
+```bash
+/ant:run                       # Run all remaining phases
+/ant:run --max-phases 2        # Run at most 2 phases then stop
+/ant:run --replan-interval 3   # Suggest replan every 3 phases
+/ant:run --continue            # Resume after replan pause
+/ant:run --dry-run             # Preview the autopilot plan
+```
+
+Smart pause conditions: test failures, critical Chaos findings, security gate failures, quality gate failures, runtime verification needed, replan suggestions.
 
 ### Publishing Changes
 
@@ -115,7 +137,7 @@ aether update      # or /ant:update
 
 ```
 .claude/
-├── commands/ant/        # 40 slash commands
+├── commands/ant/        # 42 slash commands
 │   ├── init.md          # Colony initialization
 │   ├── plan.md          # Phase planning
 │   ├── build.md         # Build orchestrator (loads split playbooks)
@@ -211,10 +233,20 @@ User-colony communication via signals:
 - `/ant:pheromones` — Full table of all active signals
 - `pheromone-display` subcommand — Formatted output with strength % and decay
 
-**Signal Injection (v1.3):**
+**Signal Injection:**
 - Colony-prime injects active signals into worker prompts via `prompt_section`
-- Builder, Watcher, and Scout agents have `pheromone_protocol` sections (added Phase 4) that instruct them how to act on injected signals
+- Builder, Watcher, and Scout agents have `pheromone_protocol` sections that instruct them how to act on injected signals
 - Signals are grouped by type (FOCUS, REDIRECT, FEEDBACK) in the injected prompt section
+
+**Content Deduplication (v2.0):**
+- Each signal gets a SHA-256 `content_hash` on creation
+- Writing a duplicate (same type + content hash) reinforces the existing signal instead of creating a new one (strength maxed, `reinforcement_count` incremented)
+- `suggest-analyze` deduplicates suggestions against existing active signals and session suggestions
+
+**Prompt Injection Sanitization (v2.0):**
+- Pheromone content is sanitized before storage: XML structural tags rejected, angle brackets escaped, shell injection patterns blocked
+- Text patterns that attempt LLM instruction override (e.g., "ignore previous instructions") are rejected
+- Content capped at 500 characters
 
 **Exchange:**
 - `/ant:export-signals` — Export pheromone signals to XML for cross-colony sharing
@@ -229,6 +261,68 @@ User-colony communication via signals:
 - `.aether/data/pheromones.json` — Active signals
 - `.aether/data/constraints.json` — Focus areas and constraints (legacy, eventual deprecation)
 - `.aether/docs/pheromones.md` — Full guide
+
+---
+
+## Token Budget
+
+Colony-prime assembles worker context within a character budget to avoid prompt bloat:
+
+| Mode | Budget | When |
+|------|--------|------|
+| Normal | 8,000 chars | Default |
+| Compact | 4,000 chars | `--compact` flag or auto-detected |
+
+**Priority order** (trimmed from bottom when over budget):
+1. Rolling summary (highest priority — never trimmed first)
+2. Phase learnings
+3. Key decisions
+4. Hive wisdom
+5. Context capsule
+6. User preferences
+7. QUEEN.md wisdom
+8. Pheromone signals (lowest priority)
+
+Trimmed sections are logged for debugging.
+
+---
+
+## Hive Intelligence
+
+Cross-colony knowledge stored in the hub (`~/.aether/eternal/`):
+
+- `~/.aether/eternal/memory.json` — High-value signals promoted from expired pheromones
+- Colony-prime reads eternal memory and injects it as `HIVE WISDOM (Cross-Colony Patterns)` into worker prompts
+- `eternal-store` subcommand — Store a high-value signal in eternal memory
+- `eternal-init` subcommand — Initialize the eternal memory structure
+
+Hive wisdom is shared across all colonies on the same machine, providing cross-project learning.
+
+---
+
+## User Preferences
+
+User preferences are stored in the hub `~/.aether/QUEEN.md` under the `## User Preferences` section.
+
+| Command | Purpose |
+|---------|---------|
+| `/ant:preferences "text"` | Add a user preference to hub QUEEN.md |
+| `/ant:preferences --list` | List all user preferences |
+
+- Preferences capture communication style, expertise level, and decision patterns
+- Colony-prime injects user preferences into worker context
+- Max 500 characters per preference entry
+
+---
+
+## Registry
+
+Colony registry tracks all repos using Aether (`~/.aether/registry/`):
+
+- **Domain tags** — Categorize colonies by domain (e.g., `["web", "api"]`)
+- **Colony goal tracking** — `last_colony_goal` stored per repo entry
+- **Active status** — `active_colony` flag per repo
+- Legacy entries are auto-normalized with default values on read
 
 ---
 
@@ -374,6 +468,9 @@ The system's pieces are now **connected**:
 - Decisions become pheromones (auto-emit during builds)
 - Learnings become instincts (observation to promotion pipeline)
 - Midden affects behavior (threshold auto-REDIRECT)
+- Hive wisdom crosses colony boundaries (eternal memory -> colony-prime)
+- User preferences shape worker behavior (QUEEN.md -> colony-prime)
+- Autopilot chains build-verify-advance with smart pausing (/ant:run)
 
 **The ongoing challenge is maintenance** -- keeping documentation accurate,
 data files clean, and test coverage comprehensive as features evolve.
@@ -386,4 +483,4 @@ For OpenCode-specific rules and agents, see `.opencode/OPENCODE.md`
 
 ---
 
-*Updated for Aether v1.3.0 — 2026-03-19 (v1.3 integration complete, documentation updated)*
+*Updated for Aether v2.0.0 — 2026-03-20 (autopilot, hive intelligence, user preferences, pheromone hardening)*

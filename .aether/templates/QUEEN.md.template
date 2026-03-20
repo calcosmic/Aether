@@ -46,6 +46,18 @@ User-mandated rules that override other guidance. These represent explicit direc
 
 ---
 
+## 👤 User Preferences
+
+Observed user communication style, expertise level, and decision-making patterns. These help the colony adapt its behavior to the user.
+
+- **Communication style**: How the user prefers information presented (e.g., plain English, technical detail)
+- **Expertise level**: The user's technical background (e.g., non-technical founder, senior engineer)
+- **Decision patterns**: How the user makes choices (e.g., prefers quick iteration, wants detailed trade-offs)
+
+*No user preferences recorded yet. Preferences are learned from interaction patterns and user feedback.*
+
+---
+
 ## 📊 Evolution Log
 
 Track how wisdom has evolved over time.
@@ -66,14 +78,16 @@ Track how wisdom has evolved over time.
     "pattern": 3,
     "redirect": 2,
     "stack": 1,
-    "decree": 0
+    "decree": 0,
+    "user_prefs": 0
   },
   "stats": {
     "total_philosophies": 0,
     "total_patterns": 0,
     "total_redirects": 0,
     "total_stack_entries": 0,
-    "total_decrees": 0
+    "total_decrees": 0,
+    "total_user_prefs": 0
   }
 }
 -->

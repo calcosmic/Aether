@@ -98,6 +98,50 @@
       "colonies": [
         "1774004031"
       ]
+    },
+    {
+      "content_hash": "sha256:091666755365d45a20c8b34f2b87ea245fd8110989f31f1984d21b9094f68d78",
+      "content": "Domain filtering in colony-prime uses hive-read with domain_tags from registry",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-20T16:21:01Z",
+      "last_seen": "2026-03-20T16:21:01Z",
+      "colonies": [
+        "1774004031"
+      ]
+    },
+    {
+      "content_hash": "sha256:c34441ad0394e84c43a02e52848a911de45a3c246c33b804cc72901342c756f0",
+      "content": "Chaos resilience strong: 5 scenarios tested, hive promotion handles empty instincts, special chars in paths, boundary confidence values correctly",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-20T17:51:38Z",
+      "last_seen": "2026-03-20T17:51:38Z",
+      "colonies": [
+        "1774004031"
+      ]
+    },
+    {
+      "content_hash": "sha256:de8e0bd06a7250f21a7eda4a736a9ca887b19086e356b3403c4a0aac9744d94d",
+      "content": "Archaeology pre-build scans catch API contract mismatches (--instinct vs --text) that would silently fail at runtime",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-20T18:09:02Z",
+      "last_seen": "2026-03-20T18:09:02Z",
+      "colonies": [
+        "1774004031"
+      ]
+    },
+    {
+      "content_hash": "sha256:0d47f94df91761afd4488c05da86823461f36f0cac7b700cca3c15008d6110bb",
+      "content": "Dead code variables (declared but never used) should be caught by auditor and either removed or implemented",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-20T18:09:03Z",
+      "last_seen": "2026-03-20T18:09:03Z",
+      "colonies": [
+        "1774004031"
+      ]
     }
   ]
 }

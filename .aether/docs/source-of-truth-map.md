@@ -1,6 +1,6 @@
 # Aether Source-of-Truth Map
 
-Updated: 2026-03-19 (Phase 8 documentation update -- counts verified against codebase)
+Updated: 2026-03-20 (v2.0 update -- autopilot, preferences, registry domain tags, hive wisdom)
 
 ## Purpose
 
@@ -38,13 +38,17 @@ Define which files are authoritative for system behavior, which files are derive
 | Slash command orchestration | `.claude/commands/ant/*.md` | Includes build/continue orchestrators |
 | Worker behavior specs | `.claude/agents/ant/*.md` | 22 Claude agent definitions (Builder, Watcher, etc.) |
 | Packaged Claude agent mirror | `.aether/agents-claude/*.md` | Distribution mirror; must stay byte-identical with `.claude/agents/ant/*.md` |
-| OpenCode command surface | `.opencode/commands/ant/*.md` | 36 OpenCode command files; structure parity with Claude commands |
+| OpenCode command surface | `.opencode/commands/ant/*.md` | 42 OpenCode command files; structure parity with Claude commands |
 | OpenCode worker behavior specs | `.opencode/agents/*.md` | 22 OpenCode agent definitions |
 | Build/continue split stages | `.aether/docs/command-playbooks/*.md` | Loaded by orchestrators; executable instruction docs |
 | Output templates | `.aether/templates/*` | Templates for generated state/handoff/wisdom/session artifacts |
 | Colony wisdom source | `.aether/QUEEN.md` + `~/.aether/QUEEN.md` | Read by `queen-read`/`colony-prime` |
+| User preferences | `~/.aether/QUEEN.md` (User Preferences section) | Managed by `/ant:preferences`; read by `queen-read`/`colony-prime` |
+| Hive wisdom (cross-repo) | `~/.aether/eternal/memory.json` | High-value signals shared across colonies; read by `colony-prime` |
 | Pheromone runtime state | `.aether/data/pheromones.json` | Active signals with TTL/decay semantics |
+| Autopilot run state | `.aether/data/run-state.json` | Tracks autopilot phase, pause reasons, iteration count |
 | Session/state | `.aether/data/COLONY_STATE.json`, `.aether/data/*.json` | Mutable runtime state |
+| Colony registry | `~/.aether/registry.json` | All registered repos with metadata and domain tags |
 | Package/distribution scope | `package.json` (`files`) + `.npmignore` | Defines what ships vs excluded |
 | Repo-level onboarding docs | `README.md`, `CLAUDE.md` | Should reflect runtime/commands, never override them |
 
@@ -61,8 +65,10 @@ Define which files are authoritative for system behavior, which files are derive
 - `build.md` and `continue.md` are now orchestrators that load split playbooks under `.aether/docs/command-playbooks/`.
 - Orchestrators run playbooks as staged instruction sets (Read-tool execution model), not as bash subcommand wrappers.
 - Cross-platform surfaces are present:
-  - 40 Claude commands and 39 OpenCode commands
+  - 42 Claude commands and 42 OpenCode commands
   - 22 Claude agents and 22 OpenCode agents
+- Autopilot subcommands (`autopilot-init`, `autopilot-update`, `autopilot-status`, `autopilot-stop`, `autopilot-check-replan`) manage autonomous build/continue cycles via `/ant:run`.
+- `registry-list` lists all registered repos with metadata including domain tags.
 - `.aether/agents-claude/*.md` mirrors `.claude/agents/ant/*.md` for packaging/distribution.
 - `npm run lint:sync` enforces:
   - command parity checks,
@@ -77,8 +83,8 @@ Define which files are authoritative for system behavior, which files are derive
 | Core utility entrypoint | `.aether/aether-utils.sh` | 1 | Active |
 | Sourced shell utilities | `.aether/utils/*.sh` | 17 | Active |
 | XML utility scripts | `.aether/utils/xml-*.sh` | 5 | Active (see drift note) |
-| Slash commands (Claude) | `.claude/commands/ant/*.md` | 40 | Active |
-| Slash commands (OpenCode) | `.opencode/commands/ant/*.md` | 39 | Active (content differs from Claude variants) |
+| Slash commands (Claude) | `.claude/commands/ant/*.md` | 42 | Active |
+| Slash commands (OpenCode) | `.opencode/commands/ant/*.md` | 42 | Active (content differs from Claude variants) |
 | Agent definitions (Claude) | `.claude/agents/ant/*.md` | 22 | Active |
 | Agent mirror (packaging) | `.aether/agents-claude/*.md` | 22 | Active mirror (must match Claude agent files exactly) |
 | Agent definitions (OpenCode) | `.opencode/agents/*.md` | 22 | Active (content differs from Claude variants) |

@@ -2,6 +2,7 @@
 name: aether-ambassador
 description: "Use this agent when adding a new third-party API integration, migrating to a new SDK version, or implementing webhook handlers. Ambassador researches the API, implements the integration with proper error handling (timeout, auth failure, rate limits), and verifies connectivity. Never commits credentials — documents required env vars for user to set. Routes implementation questions to aether-builder; SDK or auth decisions to Queen."
 tools: Read, Write, Edit, Bash, Grep, Glob
+color: blue
 model: inherit
 ---
 

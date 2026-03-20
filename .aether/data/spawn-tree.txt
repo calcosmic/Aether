@@ -28,3 +28,39 @@
 2026-03-20T13:05:46Z|Twist-4|completed|Resilience testing: 4 findings (1 HIGH, 2 MEDIUM, 1 LOW)
 2026-03-20T13:08:32Z|Queen|auditor|Inspect-75|Code quality audit|default|spawned
 2026-03-20T13:11:51Z|Inspect-75|completed|Quality audit: score 69/100, 0 critical, 1 high
+2026-03-20T13:27:55Z|Queen|builder|Forge-17|Modify colony-prime for domain-scoped hive retrieval|default|spawned
+2026-03-20T13:35:14Z|Forge-17|completed|Modified colony-prime for domain-scoped hive retrieval
+2026-03-20T13:35:22Z|Queen|builder|Brick-63|Update hive-intelligence tests|default|spawned
+2026-03-20T13:39:11Z|Brick-63|completed|Wrote hive-intelligence domain tests
+2026-03-20T13:39:18Z|Queen|watcher|Guard-45|Independent verification|default|spawned
+2026-03-20T13:42:31Z|Guard-45|completed|Verification passed: 55/55 tests
+2026-03-20T13:42:31Z|Queen|chaos|Jolt-29|Resilience testing of Phase 3 work|default|spawned
+2026-03-20T13:45:28Z|Jolt-29|completed|Resilience testing: 3 findings (0 HIGH, 1 MEDIUM, 2 LOW)
+2026-03-20T16:11:27Z|Queen|auditor|Exam-83|Code quality audit|default|spawned
+2026-03-20T16:14:35Z|Exam-83|completed|{"findings":{"critical":0,"high":0,"medium":1,"low":4,"info":3},"score":83}
+2026-03-20T16:44:03Z|Queen|scout|Dig-48|Pre-build archaeology scan|default|spawned
+2026-03-20T16:46:54Z|Dig-48|completed|Archaeology scan complete
+2026-03-20T16:47:53Z|Queen|builder|Hammer-27|Add Step 3.7 Hive Promotion to seal.md|default|spawned
+2026-03-20T16:49:03Z|Hammer-27|completed|Added Step 3.7 Hive Promotion to seal.md
+2026-03-20T16:49:13Z|Queen|builder|Mason-72|Add hive subcommands to help output|default|spawned
+2026-03-20T16:50:11Z|Mason-72|completed|Verified help output has all hive subcommands
+2026-03-20T16:50:25Z|Queen|builder|Anvil-19|Mirror seal changes to OpenCode seal.md|default|spawned
+2026-03-20T16:51:46Z|Anvil-19|completed|Added Step 5.25 Hive Promotion to OpenCode seal.md
+2026-03-20T16:51:54Z|Queen|watcher|Vigil-64|Independent verification|default|spawned
+2026-03-20T16:54:20Z|Vigil-64|completed|537/537 tests pass, quality 10/10
+2026-03-20T16:54:29Z|Queen|chaos|Probe-43|Resilience testing of Phase 4 work|default|spawned
+2026-03-20T17:00:10Z|Probe-43|completed|Resilience testing: 0 HIGH, 1 MEDIUM (missing hive directory), 1 LOW (cosmetic)
+2026-03-20T17:09:14Z|Queen|scout|Shard-37|Pre-build archaeology scan|default|spawned
+2026-03-20T17:12:31Z|Shard-37|completed|Pre-build archaeology scan
+2026-03-20T17:13:08Z|Queen|builder|Forge-84|Add Step 3.7 Hive Promotion to seal.md|default|spawned
+2026-03-20T17:13:09Z|Queen|builder|Bolt-79|Add hive subcommands to help output|default|spawned
+2026-03-20T17:43:37Z|Forge-84|completed|Fixed Step 3.7 Hive Promotion in both seal.md files
+2026-03-20T17:43:37Z|Bolt-79|completed|Hive subcommands already in help output
+2026-03-20T17:44:00Z|Queen|watcher|Sentinel-39|Independent verification|default|spawned
+2026-03-20T17:46:31Z|Sentinel-39|completed|All criteria passed, 20/20 tests, quality 9/10
+2026-03-20T17:46:39Z|Queen|chaos|Snap-64|Resilience testing of Phase 4 work|default|spawned
+2026-03-20T17:51:35Z|Snap-64|completed|Resilience strong: 5 scenarios, 0 critical/high, 1 medium (missing test for absent instincts key)
+2026-03-20T18:01:04Z|Queen|gatekeeper|{"ok":true,"result":"Gate-81"}|Supply chain security audit|default|spawned
+2026-03-20T18:04:59Z|Queen|auditor|Review-83|Code quality audit|default|spawned
+2026-03-20T18:05:06Z|Gate-81|completed|0 critical, 0 high, 1 medium CVE
+2026-03-20T18:07:30Z|Review-83|completed|Score 81/100, 0 critical, 0 high, 2 medium

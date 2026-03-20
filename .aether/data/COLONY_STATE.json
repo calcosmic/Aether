@@ -1,8 +1,8 @@
 {
   "version": "3.0",
-  "goal": "Build the Hive Brain \u2014 implement the intelligent layer for cross-colony wisdom: abstraction layer that generalizes instincts before promotion, domain-scoped retrieval so hive wisdom filters by repo domain tags, multi-repo validation that boosts confidence when patterns appear across multiple colonies, the ~/.aether/hive/ directory structure (wisdom.json, signals.json, chronicle.json), and the promotion flow from per-repo instincts through abstraction to hive-level wisdom.",
+  "goal": "Build the Hive Brain — implement the intelligent layer for cross-colony wisdom: abstraction layer that generalizes instincts before promotion, domain-scoped retrieval so hive wisdom filters by repo domain tags, multi-repo validation that boosts confidence when patterns appear across multiple colonies, the ~/.aether/hive/ directory structure (wisdom.json, signals.json, chronicle.json), and the promotion flow from per-repo instincts through abstraction to hive-level wisdom.",
   "state": "READY",
-  "current_phase": 4,
+  "current_phase": 5,
   "session_id": "session_1774004031_ilu2vx",
   "initialized_at": "2026-03-20T10:53:51Z",
   "build_started_at": null,
@@ -127,13 +127,13 @@
       {
         "id": 4,
         "name": "Seal Promotion Hook",
-        "status": "pending",
-        "description": "Wire hive promotion into the seal ceremony \u2014 Queen extracts and promotes instincts to hive",
+        "status": "completed",
+        "description": "Wire hive promotion into the seal ceremony — Queen extracts and promotes instincts to hive",
         "tasks": [
           {
             "id": "4.1",
             "description": "Add Step 3.7 Hive Promotion to seal.md",
-            "status": "pending",
+            "status": "completed",
             "depends_on": [
               "2.2"
             ]
@@ -141,7 +141,7 @@
           {
             "id": "4.2",
             "description": "Add hive subcommands to help output",
-            "status": "pending",
+            "status": "completed",
             "depends_on": [
               "1.1",
               "1.2",
@@ -153,7 +153,7 @@
           {
             "id": "4.3",
             "description": "Mirror seal changes to OpenCode seal.md",
-            "status": "pending",
+            "status": "completed",
             "depends_on": [
               "4.1"
             ]
@@ -234,7 +234,7 @@
         "phase_name": "Hive Directory and Schema Foundation",
         "learnings": [
           {
-            "claim": "Hub-level shared files need hub-level locks \u2014 per-repo LOCK_DIR cannot protect cross-repo resources",
+            "claim": "Hub-level shared files need hub-level locks — per-repo LOCK_DIR cannot protect cross-repo resources",
             "status": "validated",
             "tested": true,
             "evidence": "Chaos Ant found cross-repo lock isolation bug, fixed by overriding LOCK_DIR to HOME/.aether/hive/",
@@ -286,6 +286,28 @@
           }
         ],
         "timestamp": "2026-03-20T16:20:48.124270Z"
+      },
+      {
+        "id": "learning_1774030127",
+        "phase": 4,
+        "phase_name": "Seal Promotion Hook",
+        "learnings": [
+          {
+            "claim": "Archaeology pre-build scans catch API contract mismatches (--instinct vs --text) that would silently fail at runtime",
+            "status": "validated",
+            "tested": true,
+            "evidence": "Archaeologist Shard-37 found hive-promote --instinct flag mismatch, builders fixed it, 20 tests pass",
+            "disproven_by": null
+          },
+          {
+            "claim": "Dead code variables (declared but never used) should be caught by auditor and either removed or implemented",
+            "status": "hypothesis",
+            "tested": false,
+            "evidence": "Auditor found hive_errors=0 declared but never incremented in both seal.md files",
+            "disproven_by": null
+          }
+        ],
+        "timestamp": "2026-03-20T18:08:47Z"
       }
     ],
     "decisions": [],
@@ -378,6 +400,8 @@
     "2026-03-20T12:40:40Z|phase_started|build|Phase 2: Abstraction Layer started",
     "2026-03-20T13:22:17Z|phase_advanced|continue|Completed Phase 2, advancing to Phase 3",
     "2026-03-20T13:27:22Z|phase_started|build|Phase 3: Domain-Scoped Retrieval started",
-    "2026-03-20T16:20:48.127437Z|phase_advanced|continue|Completed Phase 3, advancing to Phase 4"
+    "2026-03-20T16:20:48.127437Z|phase_advanced|continue|Completed Phase 3, advancing to Phase 4",
+    "2026-03-20T17:08:09Z|phase_started|build|Phase 4: Seal Promotion Hook started",
+    "2026-03-20T18:08:47Z|phase_advanced|continue|Completed Phase 4, advancing to Phase 5"
   ]
 }

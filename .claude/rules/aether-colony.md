@@ -28,6 +28,8 @@ This only applies to genuinely new conversations, not after /clear.
 | `/ant:plan` | Generate project phases |
 | `/ant:build <phase>` | Execute a phase with parallel workers |
 | `/ant:continue` | Verify work, extract learnings, advance |
+| `/ant:run` | Autopilot -- builds, verifies, learns, and advances through phases automatically |
+| `/ant:preferences` | Add or list user preferences in hub QUEEN.md |
 
 ### Pheromone Signals
 | Command | Priority | Purpose |
@@ -56,6 +58,7 @@ This only applies to genuinely new conversations, not after /clear.
 ### Lifecycle
 | Command | Purpose |
 |---------|---------|
+| `/ant:patrol` | Pre-seal review — verify work against plan, check docs, review issues |
 | `/ant:seal` | Seal colony (Crowned Anthill) |
 | `/ant:entomb` | Archive completed colony |
 | `/ant:maturity` | View colony maturity journey |
@@ -94,6 +97,9 @@ Starting a colony:
 5. /ant:build 1                            (workers execute phase 1)
 6. /ant:continue                           (verify, learn, advance)
 7. /ant:build 2                            (repeat until complete)
+
+Autopilot mode (alternative to steps 5-7):
+5. /ant:run                                (auto build/verify/advance all phases)
 
 After /clear or session break:
 8. /ant:resume-colony                      (restore full context)

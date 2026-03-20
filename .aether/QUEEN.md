@@ -18,7 +18,7 @@ Core beliefs that guide all colony work. These are validated through repeated su
 
 Validated approaches that consistently work. These represent discovered best practices that have proven themselves in the field.
 
-*No patterns recorded yet. Patterns are promoted from PATTERN pheromones after 3+ validations.*
+- **1771335865738** (2026-03-20T12:37:32Z): Use explicit jq if/elif chains instead of the // operator when checking fields that can legitimately be false
 
 ---
 
@@ -52,6 +52,7 @@ Track how wisdom has evolved over time.
 
 | Date | Colony | Change | Details |
 |------|--------|--------|---------|
+| 2026-03-20T12:37:32Z | 1771335865738 | promoted_pattern | Added: Use explicit jq if/elif chains instead of the // o... |
 | 2026-03-19T22:07:00Z | system | initialized | QUEEN.md created from template |
 
 ---
@@ -59,7 +60,7 @@ Track how wisdom has evolved over time.
 <!-- METADATA
 {
   "version": "1.0.0",
-  "last_evolved": "2026-03-19T22:07:00Z",
+  "last_evolved": "2026-03-20T12:37:32Z",
   "colonies_contributed": [],
   "promotion_thresholds": {
     "philosophy": 5,
@@ -70,10 +71,12 @@ Track how wisdom has evolved over time.
   },
   "stats": {
     "total_philosophies": 0,
-    "total_patterns": 0,
+    "total_patterns": 1,
     "total_redirects": 0,
     "total_stack_entries": 0,
     "total_decrees": 0
   }
+,
+  "evolution_log": [{"timestamp": "2026-03-20T12:37:32Z", "action": "promote", "wisdom_type": "pattern", "content_hash": "sha256:f8aa50cfda0f37cac6cabba140bb99f1d75aa6d01a7100fe7a5ccddc2b3a017b", "colony": "1771335865738"}]
 }
 -->
