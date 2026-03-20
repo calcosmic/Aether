@@ -76,3 +76,9 @@
 2026-03-20T19:03:38Z|Queen|auditor|Review-83|Code quality audit|default|spawned
 2026-03-20T19:06:34Z|Protect-96|completed|0 critical, 0 high
 2026-03-20T19:06:34Z|Review-83|completed|Score 88/100, 0 critical
+2026-03-20T19:19:26Z|Queen|builder|Anvil-28|Add Hive Brain section to CLAUDE.md|default|spawned
+2026-03-20T19:21:28Z|Anvil-28|completed|CLAUDE.md updated with Hive Brain docs
+2026-03-20T19:21:37Z|Queen|watcher|Alert-69|Independent verification + full test suite|default|spawned
+2026-03-20T19:28:13Z|Alert-69|completed|533/537 tests, 38/38 hive, lint pass, docs verified
+2026-03-20T19:28:19Z|Queen|chaos|Breach-89|Resilience testing of Phase 6 work|default|spawned
+2026-03-20T19:30:21Z|Breach-89|completed|Resilience moderate: 2 medium doc accuracy gaps, 3 low

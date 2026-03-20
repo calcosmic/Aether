@@ -164,6 +164,17 @@
       "colonies": [
         "1774004031"
       ]
+    },
+    {
+      "content_hash": "sha256:4a25cde7b112716921889232de1a60e002498275399f260c014e6fca66a99d9f",
+      "content": "Documentation chaos testing catches gaps between documented behavior and actual code",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-20T19:38:19Z",
+      "last_seen": "2026-03-20T19:38:19Z",
+      "colonies": [
+        "1774004031"
+      ]
     }
   ]
 }

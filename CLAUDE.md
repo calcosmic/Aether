@@ -13,7 +13,7 @@
 | Version | v2.0.0 |
 | Slash commands | 43 (Claude) + 43 (OpenCode) |
 | Agent definitions | 22 |
-| aether-utils.sh | 10,000+ lines, 110 subcommands |
+| aether-utils.sh | 10,000+ lines, 115 subcommands |
 | Tests | 530+ passing |
 | Architecture doc | `RUNTIME UPDATE ARCHITECTURE.md` |
 
@@ -42,6 +42,8 @@
 │                                                                  │
 │   ~/.aether/           ← HUB (cross-colony, user-level)         │
 │   ├── QUEEN.md         (wisdom + user preferences)               │
+│   ├── hive/            (Hive Brain — cross-colony wisdom)        │
+│   │   └── wisdom.json  (200-entry cap, LRU eviction)            │
 │   └── eternal/         (hive memory — high-value signals)        │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
@@ -287,16 +289,69 @@ Trimmed sections are logged for debugging.
 
 ---
 
-## Hive Intelligence
+## Hive Brain (Cross-Colony Wisdom)
 
-Cross-colony knowledge stored in the hub (`~/.aether/eternal/`):
+The Hive Brain is the intelligent layer for cross-colony knowledge sharing. It stores
+generalized wisdom derived from colony instincts, scoped by domain, and shared across
+all colonies on the same machine.
+
+### Storage
+
+```
+~/.aether/hive/
+└── wisdom.json          # Cross-colony wisdom (200-entry cap, LRU eviction)
+```
+
+- Entries are capped at 200; least-recently-used entries are evicted when full
+- Hub-level file locking prevents concurrent write corruption
+
+### Subcommands
+
+| Subcommand | Purpose |
+|------------|---------|
+| `hive-init` | Initialize `~/.aether/hive/` directory and empty `wisdom.json` |
+| `hive-store` | Store a wisdom entry with deduplication, merge, and 200-cap enforcement |
+| `hive-read` | Read wisdom with domain filtering, confidence threshold, and access tracking |
+| `hive-abstract` | Generalize a repo-specific instinct into cross-colony wisdom text |
+| `hive-promote` | Orchestrate the abstract + store pipeline (end-to-end promotion) |
+
+### Domain-Scoped Retrieval
+
+Colony-prime retrieves hive wisdom scoped to the current project's domain:
+
+1. Reads domain tags from the colony registry entry for the current repo
+2. Calls `hive-read` with those domain tags and a confidence threshold
+3. Injects domain-relevant wisdom into worker prompts as `HIVE WISDOM (Cross-Colony Patterns)`
+4. **Fallback chain:** hive -> eternal -> empty (graceful degradation if no wisdom exists)
+
+### Seal Promotion Hook
+
+During `/ant:seal` (Step 3.7), high-confidence instincts are promoted to the hive:
+
+1. Extracts instincts with confidence >= 0.8 from `COLONY_STATE.json`
+2. Promotes each via `hive-promote` with `--text` and `--source-repo`
+3. **NON-BLOCKING** — promotion failures are logged but never stop the seal
+
+### Multi-Repo Confidence Boosting
+
+When the same wisdom is confirmed across multiple repositories, confidence increases:
+
+| Repos Confirming | Confidence |
+|-----------------|------------|
+| 2 repos | 0.70 |
+| 3 repos | 0.85 |
+| 4+ repos | 0.95 |
+
+- Confidence is **never downgraded** — uses max of current value and tier value
+- Same-repo re-promotion is deduplicated (no duplicate entries)
+
+### Legacy: Eternal Memory
+
+The older eternal memory system (`~/.aether/eternal/`) remains as a fallback:
 
 - `~/.aether/eternal/memory.json` — High-value signals promoted from expired pheromones
-- Colony-prime reads eternal memory and injects it as `HIVE WISDOM (Cross-Colony Patterns)` into worker prompts
-- `eternal-store` subcommand — Store a high-value signal in eternal memory
-- `eternal-init` subcommand — Initialize the eternal memory structure
-
-Hive wisdom is shared across all colonies on the same machine, providing cross-project learning.
+- `eternal-store` / `eternal-init` subcommands still functional
+- Colony-prime falls back to eternal memory when hive has no matching entries
 
 ---
 
@@ -468,7 +523,9 @@ The system's pieces are now **connected**:
 - Decisions become pheromones (auto-emit during builds)
 - Learnings become instincts (observation to promotion pipeline)
 - Midden affects behavior (threshold auto-REDIRECT)
-- Hive wisdom crosses colony boundaries (eternal memory -> colony-prime)
+- Hive Brain crosses colony boundaries (domain-scoped wisdom -> colony-prime)
+- Instincts promote to hive at seal (confidence >= 0.8 -> hive-promote)
+- Multi-repo confirmation boosts confidence (2 repos = 0.7, 4+ = 0.95)
 - User preferences shape worker behavior (QUEEN.md -> colony-prime)
 - Autopilot chains build-verify-advance with smart pausing (/ant:run)
 
@@ -483,4 +540,4 @@ For OpenCode-specific rules and agents, see `.opencode/OPENCODE.md`
 
 ---
 
-*Updated for Aether v2.0.0 — 2026-03-20 (autopilot, hive intelligence, user preferences, pheromone hardening)*
+*Updated for Aether v2.0.0 — 2026-03-20 (autopilot, hive brain, user preferences, pheromone hardening)*
