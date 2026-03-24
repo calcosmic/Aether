@@ -1150,7 +1150,7 @@ HELP_EOF
       if ! jq -e . "$state_file" >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON validity
         # Corrupt state file — backup and error
         if type create_backup &>/dev/null; then
-          if ! create_backup "$state_file" 2>/dev/null; then
+          if ! create_backup "$state_file"; then
             _aether_log_error "Could not create backup of corrupted COLONY_STATE.json"
           fi
         fi
@@ -1290,8 +1290,8 @@ HELP_EOF
 
     # Create backup before writing
     if [[ -f "$sw_state_file" ]]; then
-      if ! create_backup "$sw_state_file" 2>/dev/null; then
-        _aether_log_error "Could not create backup of $(basename "$sw_state_file") before writing"
+      if ! create_backup "$sw_state_file"; then
+        _aether_log_error "Could not create backup of colony state before writing"
       fi
     fi
 
@@ -1529,7 +1529,7 @@ HELP_EOF
     global_file="$DATA_DIR/learnings.json"
 
     if [[ ! -f "$global_file" ]]; then
-      echo '{"learnings":[],"version":1}' > "$global_file"
+      atomic_write "$global_file" '{"learnings":[],"version":1}' || json_err "$E_UNKNOWN" "Failed to initialize learnings file"
     fi
 
     id="global_$(date -u +%s)_$(head -c 2 /dev/urandom | od -An -tx1 | tr -d ' ')"
@@ -1559,7 +1559,10 @@ HELP_EOF
       }]
     ' "$global_file") || json_err "$E_JSON_INVALID" "Failed to update learnings.json"
 
-    echo "$updated" > "$global_file"
+    atomic_write "$global_file" "$updated" || {
+      _aether_log_error "Could not save updated learnings"
+      json_err "$E_UNKNOWN" "Failed to write learnings file"
+    }
     json_ok "{\"promoted\":true,\"id\":\"$id\",\"count\":$((current_count + 1)),\"cap\":50}"
     ;;
   learning-inject)
@@ -1810,7 +1813,7 @@ EOF
     mkdir -p "$DATA_DIR"
 
     if [[ ! -f "$patterns_file" ]]; then
-      echo '{"patterns":[],"version":1}' > "$patterns_file"
+      atomic_write "$patterns_file" '{"patterns":[],"version":1}' || json_err "$E_UNKNOWN" "Failed to initialize error patterns file"
     fi
 
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -1829,7 +1832,10 @@ EOF
           .projects = ((.projects + [$proj]) | unique)
         else . end]
       ' "$patterns_file") || json_err "$E_JSON_INVALID" "Failed to update pattern"
-      echo "$updated" > "$patterns_file"
+      atomic_write "$patterns_file" "$updated" || {
+        _aether_log_error "Could not save updated error patterns"
+        json_err "$E_UNKNOWN" "Failed to write error patterns file"
+      }
       count=$(echo "$updated" | jq --arg name "$pattern_name" '.patterns[] | select(.name == $name) | .occurrences')
       json_ok "{\"updated\":true,\"pattern\":\"$pattern_name\",\"occurrences\":$count}"
     else
@@ -1846,7 +1852,10 @@ EOF
           "resolved": false
         }]
       ' "$patterns_file") || json_err "$E_JSON_INVALID" "Failed to add pattern"
-      echo "$updated" > "$patterns_file"
+      atomic_write "$patterns_file" "$updated" || {
+        _aether_log_error "Could not save new error pattern"
+        json_err "$E_UNKNOWN" "Failed to write error patterns file"
+      }
       json_ok "{\"created\":true,\"pattern\":\"$pattern_name\"}"
     fi
     ;;
@@ -2107,7 +2116,7 @@ EOF
     flags_file="$DATA_DIR/flags.json"
 
     if [[ ! -f "$flags_file" ]]; then
-      echo '{"version":1,"flags":[]}' > "$flags_file"
+      atomic_write "$flags_file" '{"version":1,"flags":[]}' || json_err "$E_UNKNOWN" "Failed to initialize flags file"
     fi
 
     id="flag_$(date -u +%s)_$(head -c 2 /dev/urandom | od -An -tx1 | tr -d ' ')"
@@ -2629,7 +2638,10 @@ EOF
       }]
     ' "$findings_file")
 
-    echo "$updated" > "$findings_file"
+    atomic_write "$findings_file" "$updated" || {
+      _aether_log_error "Could not save swarm findings"
+      json_err "$E_UNKNOWN" "Failed to write swarm findings file"
+    }
     count=$(echo "$updated" | jq '.findings | length')
     json_ok "{\"added\":true,\"scout\":\"$scout_type\",\"total_findings\":$count}"
     ;;
@@ -2665,7 +2677,10 @@ EOF
       .resolved_at = $ts
     ' "$findings_file")
 
-    echo "$updated" > "$findings_file"
+    atomic_write "$findings_file" "$updated" || {
+      _aether_log_error "Could not save swarm solution"
+      json_err "$E_UNKNOWN" "Failed to write swarm findings file"
+    }
     json_ok "{\"solution_set\":true,\"swarm_id\":\"$swarm_id\"}"
     ;;
 
@@ -2987,14 +3002,16 @@ Files: ${files_changed} files changed"
     mkdir -p "$HOME/.aether"
 
     if [[ ! -f "$registry_file" ]]; then
-      echo '{"schema_version":1,"repos":[]}' > "$registry_file"
+      atomic_write "$registry_file" '{"schema_version":1,"repos":[]}' || json_err "$E_UNKNOWN" "Failed to initialize registry file"
     fi
 
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
     # Acquire lock to prevent concurrent read-modify-write races
-    # NOTE: Dangerous suppression -- deferred to Plan 03 (acquire_lock silenced on write path)
-    acquire_lock "$registry_file" 2>/dev/null || true
+    acquire_lock "$registry_file" || {
+      _aether_log_error "Could not lock the registry file"
+      json_err "$E_LOCK_FAILED" "Cannot update registry without a lock"
+    }
 
     # Check if repo already exists in registry
     # SUPPRESS:OK -- read-default: query may return empty
@@ -3038,7 +3055,11 @@ Files: ${files_changed} files changed"
       ' "$registry_file") || json_err "$E_JSON_INVALID" "Failed to update registry"
     fi
 
-    echo "$updated" > "$registry_file"
+    atomic_write "$registry_file" "$updated" || {
+      release_lock "$registry_file" 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
+      _aether_log_error "Could not save registry update"
+      json_err "$E_UNKNOWN" "Failed to write registry file"
+    }
     release_lock "$registry_file" 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
     json_ok "{\"registered\":true,\"path\":\"$repo_path\",\"version\":\"$repo_version\"}"
     ;;
@@ -3555,8 +3576,8 @@ NODESCRIPT
     fi
 
     if type create_backup &>/dev/null; then
-      if ! create_backup "$state_file" 2>/dev/null; then
-        _aether_log_error "Could not create backup of $(basename "$state_file") before phase insertion"
+      if ! create_backup "$state_file"; then
+        _aether_log_error "Could not create backup of colony state before phase insertion"
       fi
     fi
 
@@ -5417,7 +5438,10 @@ $updated_meta
 
     # Initialize file if it doesn't exist
     if [[ ! -f "$observations_file" ]]; then
-      echo '{"observations":[]}' > "$observations_file"
+      atomic_write "$observations_file" '{"observations":[]}' || {
+        _aether_log_error "Could not initialize learning observations file"
+        json_err "$E_UNKNOWN" "Failed to create learning observations file"
+      }
     fi
 
     # Validate JSON structure — circuit breaker with backup recovery
@@ -5453,7 +5477,7 @@ $updated_meta
         else
           # No backups ever existed -- safe to reset from template (first-time corruption)
           echo "Warning: Learning observations file was corrupted. Starting fresh -- this is a first-time recovery." >&2
-          echo '{"observations":[]}' > "$observations_file"
+          atomic_write "$observations_file" '{"observations":[]}'
         fi
       fi
     fi
@@ -7312,16 +7336,18 @@ $updated_meta
     pw_cfile="$DATA_DIR/constraints.json"
     if [[ "$pw_type" == "FOCUS" ]]; then
       if [[ ! -f "$pw_cfile" ]]; then
-        echo '{"version":"1.0","focus":[],"constraints":[]}' > "$pw_cfile"
+        atomic_write "$pw_cfile" '{"version":"1.0","focus":[],"constraints":[]}' || _aether_log_error "Could not initialize constraints file"
       fi
       pw_cfile_updated=$(jq --arg txt "$pw_content" '
         .focus += [$txt] |
         if (.focus | length) > 5 then .focus = .focus[-5:] else . end
       ' "$pw_cfile" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
-      [[ -n "$pw_cfile_updated" ]] && echo "$pw_cfile_updated" > "$pw_cfile"
+      if [[ -n "$pw_cfile_updated" ]]; then
+        atomic_write "$pw_cfile" "$pw_cfile_updated" || _aether_log_error "Could not save focus constraint"
+      fi
     elif [[ "$pw_type" == "REDIRECT" ]]; then
       if [[ ! -f "$pw_cfile" ]]; then
-        echo '{"version":"1.0","focus":[],"constraints":[]}' > "$pw_cfile"
+        atomic_write "$pw_cfile" '{"version":"1.0","focus":[],"constraints":[]}' || _aether_log_error "Could not initialize constraints file"
       fi
       pw_constraint=$(jq -n \
         --arg id "c_${pw_epoch}" \
@@ -7333,7 +7359,9 @@ $updated_meta
         .constraints += [$c] |
         if (.constraints | length) > 10 then .constraints = .constraints[-10:] else . end
       ' "$pw_cfile" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
-      [[ -n "$pw_cfile_updated" ]] && echo "$pw_cfile_updated" > "$pw_cfile"
+      if [[ -n "$pw_cfile_updated" ]]; then
+        atomic_write "$pw_cfile" "$pw_cfile_updated" || _aether_log_error "Could not save redirect constraint"
+      fi
     fi
 
     # Get active signal count
@@ -9537,7 +9565,10 @@ $updated_meta
 
         printf '%s|%s|%s|%s\n' "$rs_ts" "$rs_clean_event" "$rs_clean_source" "$rs_clean_summary" >> "$rs_file"
         tail -n 15 "$rs_file" > "$rs_file.tmp" 2>/dev/null || true  # SUPPRESS:OK -- read-default: file may not exist
-        mv "$rs_file.tmp" "$rs_file" 2>/dev/null || _aether_log_error "Could not save rolling summary update"
+        mv "$rs_file.tmp" "$rs_file" || {
+          _aether_log_error "Could not save rolling summary update"
+          json_err "$E_UNKNOWN" "Failed to finalize rolling summary file"
+        }
 
         json_ok "{\"added\":true,\"event\":\"$rs_clean_event\",\"source\":\"$rs_clean_source\"}"
         ;;
@@ -11211,9 +11242,9 @@ DRYRUN_EOF
         )]
       ' "$_dc_phero_file")
       if type atomic_write &>/dev/null; then
-        atomic_write "$_dc_phero_file" "$_dc_cleaned"
+        atomic_write "$_dc_phero_file" "$_dc_cleaned" || _aether_log_error "Could not save cleaned pheromone data"
       else
-        echo "$_dc_cleaned" > "$_dc_phero_file"
+        echo "$_dc_cleaned" > "$_dc_phero_file" || _aether_log_error "Could not save cleaned pheromone data"
       fi
     fi
 
@@ -11223,9 +11254,9 @@ DRYRUN_EOF
       # SUPPRESS:OK -- read-default: grep returns 1 when all lines match (empty result is valid for cleaning)
       _dc_cleaned=$(grep -viE "$_dc_queen_line_pat" "$_dc_queen_file" || true)
       if type atomic_write &>/dev/null; then
-        atomic_write "$_dc_queen_file" "$_dc_cleaned"
+        atomic_write "$_dc_queen_file" "$_dc_cleaned" || _aether_log_error "Could not save cleaned QUEEN data"
       else
-        echo "$_dc_cleaned" > "$_dc_queen_file"
+        echo "$_dc_cleaned" > "$_dc_queen_file" || _aether_log_error "Could not save cleaned QUEEN data"
       fi
     fi
 
@@ -11236,9 +11267,9 @@ DRYRUN_EOF
         .observations = [.observations // [] | .[] | select((.colony_id // "" | test($cpat)) | not)]
       ' "$_dc_obs_file")
       if type atomic_write &>/dev/null; then
-        atomic_write "$_dc_obs_file" "$_dc_cleaned"
+        atomic_write "$_dc_obs_file" "$_dc_cleaned" || _aether_log_error "Could not save cleaned observations data"
       else
-        echo "$_dc_cleaned" > "$_dc_obs_file"
+        echo "$_dc_cleaned" > "$_dc_obs_file" || _aether_log_error "Could not save cleaned observations data"
       fi
     fi
 
@@ -11252,9 +11283,9 @@ DRYRUN_EOF
         .entries = [.entries // .failures // [] | .[] | select((.colony_id // "" | test($ecpat)) | not)]
       ' "$_dc_midden_file")
       if type atomic_write &>/dev/null; then
-        atomic_write "$_dc_midden_file" "$_dc_cleaned"
+        atomic_write "$_dc_midden_file" "$_dc_cleaned" || _aether_log_error "Could not save cleaned midden data"
       else
-        echo "$_dc_cleaned" > "$_dc_midden_file"
+        echo "$_dc_cleaned" > "$_dc_midden_file" || _aether_log_error "Could not save cleaned midden data"
       fi
     fi
 
@@ -11264,9 +11295,9 @@ DRYRUN_EOF
       # SUPPRESS:OK -- read-default: grep returns 1 when all lines match (empty result is valid for cleaning)
       _dc_cleaned=$(grep -vE "$_dc_spawn_name_pat" "$_dc_spawn_file" || true)
       if type atomic_write &>/dev/null; then
-        atomic_write "$_dc_spawn_file" "$_dc_cleaned"
+        atomic_write "$_dc_spawn_file" "$_dc_cleaned" || _aether_log_error "Could not save cleaned spawn tree"
       else
-        echo "$_dc_cleaned" > "$_dc_spawn_file"
+        echo "$_dc_cleaned" > "$_dc_spawn_file" || _aether_log_error "Could not save cleaned spawn tree"
       fi
     fi
 
@@ -11279,9 +11310,9 @@ DRYRUN_EOF
         )]
       ' "$_dc_constraint_file")
       if type atomic_write &>/dev/null; then
-        atomic_write "$_dc_constraint_file" "$_dc_cleaned"
+        atomic_write "$_dc_constraint_file" "$_dc_cleaned" || _aether_log_error "Could not save cleaned constraints data"
       else
-        echo "$_dc_cleaned" > "$_dc_constraint_file"
+        echo "$_dc_cleaned" > "$_dc_constraint_file" || _aether_log_error "Could not save cleaned constraints data"
       fi
     fi
 
