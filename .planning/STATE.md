@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 ## Current Position
 
 Phase: 10 of 16 (Error Triage) -- IN PROGRESS
-Plan: 1 of 3 complete
+Plan: 2 of 3 complete
 Status: Executing
-Last activity: 2026-03-24 — Completed 10-01 error infrastructure and intentional suppression classification
+Last activity: 2026-03-24 — Completed 10-02 lazy suppression pattern fixes
 
-Progress: [██░░░░░░░░] 10%
+Progress: [██░░░░░░░░] 12%
 
 ## Performance Metrics
 
@@ -36,11 +36,11 @@ Progress: [██░░░░░░░░] 10%
 | 07-fresh-install-hardening | 2 | 7min | 3.5min |
 | 08-documentation-update | 2 | 6min | 3min |
 | 09-quick-wins | 2 | 10min | 5min |
-| 10-error-triage | 1 | 12min | 12min |
+| 10-error-triage | 2 | 28min | 14min |
 
 **Recent Trend:**
-- Last 5 plans: 3min, 3min, 5min, 5min, 12min
-- Trend: increasing (large annotation task)
+- Last 5 plans: 3min, 5min, 5min, 12min, 16min
+- Trend: increasing (large file-wide refactoring tasks)
 
 *Updated after each plan completion*
 
@@ -65,6 +65,9 @@ Recent decisions affecting current work:
 - [10-01]: SUPPRESS:OK categories: cleanup, read-default, existence-test, cross-platform, idempotent, validation
 - [10-01]: 60 type/command-v idioms left uncommented (universally understood)
 - [10-01]: 35 lazy/dangerous patterns deferred to Plans 02/03
+- [10-02]: Actual lazy count was ~25 (not ~110) -- Plan 01 was more thorough than research estimated
+- [10-02]: grep -c on variables is SUPPRESS:OK (grep exit-code handling, not lazy suppression)
+- [10-02]: acquire_lock on registry deferred to Plan 03 (dangerous write-path suppression)
 
 ### Pending Todos
 
@@ -73,11 +76,11 @@ None yet.
 ### Blockers/Concerns
 
 - Research flag: Phase 14 (Planning Depth) needs a design spike on how to distinguish phases needing research from phases that do not
-- Risk: 35 remaining lazy/dangerous suppressions need fixing in Plans 02/03 (down from 338 unclassified)
+- Risk: ~10 dangerous suppressions remain for Plan 03 (create_backup, acquire_lock, direct state writes, jq transforms)
 - Pre-existing: 1 test failure in context-continuity (addressed in Phase 12 via QUAL-09)
 
 ## Session Continuity
 
 Last session: 2026-03-24
-Stopped at: Completed 10-01-PLAN.md (error infrastructure and intentional suppression classification)
+Stopped at: Completed 10-02-PLAN.md (lazy suppression pattern fixes)
 Resume file: None
