@@ -1,3 +1,14 @@
+### Step 4.5: Checkpoint State
+
+Before modifying colony state during the build, create a rolling backup:
+
+Run using the Bash tool with description "Checkpointing colony state...":
+```bash
+bash .aether/aether-utils.sh state-checkpoint "pre-build-wave" 2>/dev/null || echo "Warning: State checkpoint failed -- continuing without backup" >&2
+```
+
+This creates a timestamped backup of COLONY_STATE.json in `.aether/data/backups/` with at most 3 retained.
+
 ### Step 5: Analyze Tasks
 
 **YOU (the Queen) will spawn workers directly. Do NOT delegate to a single Prime Worker.**
@@ -286,6 +297,21 @@ For each Wave 1 task, use Task tool with `subagent_type="aether-builder"`, inclu
 - If `grave_context` is non-empty, display a visible line before spawning that worker:
   `⚰️ Graveyard caution for {ant_name}: {file_1} ({level_1}), {file_2} ({level_2})`
 
+**PER WORKER:** Match and inject skills for the worker's role and task:
+Run using the Bash tool with description "Matching skills for {ant_name}...":
+```bash
+skill_match_result=$(bash .aether/aether-utils.sh skill-match "builder" "{task_description}" 2>/dev/null) || skill_match_result='{"result":{"colony_skills":[],"domain_skills":[]}}'
+skill_inject_result=$(bash .aether/aether-utils.sh skill-inject "$(echo "$skill_match_result" | jq -r '.result')" 2>/dev/null) || skill_inject_result='{"result":{"skill_section":"","colony_count":0,"domain_count":0}}'
+skill_section=$(echo "$skill_inject_result" | jq -r '.result.skill_section // ""')
+skill_colony_count=$(echo "$skill_inject_result" | jq -r '.result.colony_count // 0')
+skill_domain_count=$(echo "$skill_inject_result" | jq -r '.result.domain_count // 0')
+```
+
+Display per worker:
+```
+  🧠 Skills: {colony_count} colony + {domain_count} domain loaded for builder
+```
+
 **PER WORKER:** Run using the Bash tool with description "Preparing worker {name}...": `bash .aether/aether-utils.sh spawn-log "Queen" "builder" "{ant_name}" "{task_description}" && bash .aether/aether-utils.sh context-update worker-spawn "{ant_name}" "builder" "{task_description}"`
 
 **Builder Worker Prompt (CLEAN OUTPUT):**
@@ -317,6 +343,8 @@ If integration_plan is provided above, you MUST:
 5. Reference required env_vars_required (do NOT hardcode values)
 
 { prompt_section }
+
+{ skill_section }
 
 **Graveyard Caution Context (if provided):**
 - Treat `high` caution files as unstable terrain.

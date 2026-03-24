@@ -31,6 +31,7 @@ CURRENT_LOCK=${CURRENT_LOCK:-""}
 [[ -f "$SCRIPT_DIR/utils/semantic-cli.sh" ]] && source "$SCRIPT_DIR/utils/semantic-cli.sh"
 [[ -f "$SCRIPT_DIR/utils/hive.sh" ]] && source "$SCRIPT_DIR/utils/hive.sh"
 [[ -f "$SCRIPT_DIR/utils/midden.sh" ]] && source "$SCRIPT_DIR/utils/midden.sh"
+[[ -f "$SCRIPT_DIR/utils/skills.sh" ]] && source "$SCRIPT_DIR/utils/skills.sh"
 
 # Fallback error constants if error-handler.sh wasn't sourced
 # This prevents "unbound variable" errors in older installations
@@ -1106,6 +1107,19 @@ case "$cmd" in
       {"name": "hive-read", "description": "Read wisdom entries with domain filtering, confidence threshold, and access tracking"},
       {"name": "hive-abstract", "description": "Abstract repo-specific instinct into generalized cross-colony wisdom text"},
       {"name": "hive-promote", "description": "Orchestrate abstract+store pipeline to promote instinct to hive wisdom"}
+    ],
+    "Skills Engine": [
+      {"name": "skill-parse-frontmatter", "description": "Parse YAML-like frontmatter from a SKILL.md file"},
+      {"name": "skill-index", "description": "Scan skills dirs for SKILL.md files and build JSON index"},
+      {"name": "skill-index-read", "description": "Read cached index, rebuild if stale (mtime check)"},
+      {"name": "skill-detect", "description": "Detect domain skills matching the repo (file patterns + packages)"},
+      {"name": "skill-match", "description": "Smart-match skills to worker by role, pheromones, task description"},
+      {"name": "skill-inject", "description": "Load full SKILL.md content for matched skills within 12K budget"},
+      {"name": "skill-list", "description": "List all installed skills with type, domains, detection status"},
+      {"name": "skill-manifest-read", "description": "Read .manifest.json for update safety"},
+      {"name": "skill-cache-rebuild", "description": "Force rebuild of skills index cache"},
+      {"name": "skill-diff", "description": "Compare user skill with shipped Aether version"},
+      {"name": "skill-is-user-created", "description": "Check if a skill is user-created (not in manifest)"}
     ]
   },
   "description": "Aether Colony Utility Layer — deterministic ops for the ant colony"
@@ -1221,6 +1235,32 @@ HELP_EOF
         json_err "$E_VALIDATION_FAILED" "Usage: validate-state colony|constraints|all"
         ;;
     esac
+    ;;
+  state-checkpoint)
+    # Create a rolling backup of COLONY_STATE.json before builds
+    # Usage: bash .aether/aether-utils.sh state-checkpoint [reason]
+    # Uses create_backup from atomic-write.sh (timestamped naming in BACKUP_DIR, max 3)
+    sc_reason="${1:-manual}"
+    sc_state_file="$DATA_DIR/COLONY_STATE.json"
+
+    # Validate state file exists
+    if [[ ! -f "$sc_state_file" ]]; then
+      json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found -- cannot checkpoint"
+    fi
+
+    # Refuse to checkpoint corrupt state
+    if ! jq -e . "$sc_state_file" >/dev/null 2>&1; then
+      json_err "$E_JSON_INVALID" "COLONY_STATE.json is corrupt -- refusing to checkpoint invalid state"
+    fi
+
+    # Create timestamped backup via create_backup (handles MAX_BACKUPS=3 rotation)
+    if type create_backup &>/dev/null; then
+      create_backup "$sc_state_file" || json_err "$E_UNKNOWN" "Failed to create state checkpoint backup"
+    else
+      json_err "$E_FEATURE_UNAVAILABLE" "create_backup function not available -- atomic-write.sh may not be sourced"
+    fi
+
+    json_ok "{\"checkpointed\":true,\"reason\":\"$sc_reason\"}"
     ;;
   validate-oracle-state)
     # Validate oracle state files (state.json, plan.json)
@@ -5301,9 +5341,42 @@ $updated_meta
       echo '{"observations":[]}' > "$observations_file"
     fi
 
-    # Validate JSON structure
+    # Validate JSON structure — circuit breaker with backup recovery
     if ! jq -e . "$observations_file" >/dev/null 2>&1; then
-      json_err "$E_JSON_INVALID" "learning-observations.json has invalid JSON"
+      # Try to recover from backup (with retry-once per user decision)
+      lo_recovered=false
+      for lo_attempt in 1 2; do
+        for lo_bak in "${observations_file}.bak.1" "${observations_file}.bak.2" "${observations_file}.bak.3"; do
+          if [[ -f "$lo_bak" ]] && jq -e . "$lo_bak" >/dev/null 2>&1; then
+            if cp "$lo_bak" "$observations_file" 2>/dev/null; then
+              lo_recovered=true
+              echo "Warning: Learning observations file was corrupted -- restored from backup. Some recent entries may be missing." >&2
+              break 2
+            fi
+            # cp failed -- will retry on next attempt (silent first retry)
+          fi
+        done
+        # If first attempt found a valid backup but cp failed, the second attempt retries
+        # If no valid backup exists, the second attempt won't help -- break early
+        [[ "$lo_attempt" -eq 1 ]] && [[ "$lo_recovered" != "true" ]] && break
+      done
+
+      if [[ "$lo_recovered" != "true" ]]; then
+        # Check if any backups exist at all
+        lo_has_any_backup=false
+        for lo_bak in "${observations_file}.bak.1" "${observations_file}.bak.2" "${observations_file}.bak.3"; do
+          [[ -f "$lo_bak" ]] && lo_has_any_backup=true && break
+        done
+
+        if [[ "$lo_has_any_backup" == "true" ]]; then
+          # Backups exist but ALL are corrupted -- stop and tell user (per locked decision)
+          json_err "$E_JSON_INVALID" "Learning observations and all 3 backups are corrupted. Manual recovery needed."
+        else
+          # No backups ever existed -- safe to reset from template (first-time corruption)
+          echo "Warning: Learning observations file was corrupted. Starting fresh -- this is a first-time recovery." >&2
+          echo '{"observations":[]}' > "$observations_file"
+        fi
+      fi
     fi
 
     # Acquire lock for concurrent access
@@ -5320,6 +5393,12 @@ $updated_meta
 
     if [[ -n "$existing_index" ]]; then
       # Existing observation: increment count, update last_seen, add colony if new
+      # Rotate backups before write (uses .bak.N naming)
+      if [[ -f "$observations_file" ]]; then
+        cp -f "${observations_file}.bak.2" "${observations_file}.bak.3" 2>/dev/null || true
+        cp -f "${observations_file}.bak.1" "${observations_file}.bak.2" 2>/dev/null || true
+        cp -f "$observations_file" "${observations_file}.bak.1" 2>/dev/null || true
+      fi
       tmp_file="${observations_file}.tmp.$$"
 
       jq --arg hash "$content_hash" \
@@ -5344,6 +5423,12 @@ $updated_meta
       is_new=false
     else
       # New observation: create entry
+      # Rotate backups before write (uses .bak.N naming)
+      if [[ -f "$observations_file" ]]; then
+        cp -f "${observations_file}.bak.2" "${observations_file}.bak.3" 2>/dev/null || true
+        cp -f "${observations_file}.bak.1" "${observations_file}.bak.2" 2>/dev/null || true
+        cp -f "$observations_file" "${observations_file}.bak.1" 2>/dev/null || true
+      fi
       tmp_file="${observations_file}.tmp.$$"
 
       jq --arg hash "$content_hash" \
@@ -11213,6 +11298,43 @@ DRYRUN_EOF
         reason: $reason,
         learnings_since_last: $learnings_since_last
       }')"
+    ;;
+
+  # ── Skills Engine ──────────────────────────────────────────────────────────
+  skill-parse-frontmatter)
+    _skill_parse_frontmatter "$1"
+    ;;
+  skill-index)
+    _skill_build_index "${1:-}"
+    ;;
+  skill-index-read)
+    _skill_read_index "${1:-}"
+    ;;
+  skill-detect)
+    _skill_detect_codebase "${1:-.}" "${2:-}"
+    ;;
+  skill-match)
+    _skill_match "$1" "${2:-}" "${3:-}"
+    ;;
+  skill-inject)
+    _skill_inject "$1"
+    ;;
+  skill-list)
+    _skill_list "${1:-}"
+    ;;
+  skill-manifest-read)
+    _skill_manifest_read "$1"
+    ;;
+  skill-cache-rebuild)
+    _sk_rebuild_dir="${1:-${AETHER_SKILLS_DIR:-$HOME/.aether/skills}}"
+    rm -f "$_sk_rebuild_dir/.index.json"
+    _skill_build_index "$_sk_rebuild_dir"
+    ;;
+  skill-diff)
+    _skill_diff "$1" "${2:-}"
+    ;;
+  skill-is-user-created)
+    _skill_is_user_created "$1" "$2"
     ;;
 
   *)
