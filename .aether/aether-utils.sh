@@ -1120,15 +1120,35 @@ case "$cmd" in
     "Skills Engine": [
       {"name": "skill-parse-frontmatter", "description": "Parse YAML-like frontmatter from a SKILL.md file"},
       {"name": "skill-index", "description": "Scan skills dirs for SKILL.md files and build JSON index"},
-      {"name": "skill-index-read", "description": "Read cached index, rebuild if stale (mtime check)"},
+      {"name": "skill-index-read", "description": "Read cached index, rebuild if stale (mtime check) [DEPRECATED]"},
       {"name": "skill-detect", "description": "Detect domain skills matching the repo (file patterns + packages)"},
       {"name": "skill-match", "description": "Smart-match skills to worker by role, pheromones, task description"},
       {"name": "skill-inject", "description": "Load full SKILL.md content for matched skills within 12K budget"},
       {"name": "skill-list", "description": "List all installed skills with type, domains, detection status"},
-      {"name": "skill-manifest-read", "description": "Read .manifest.json for update safety"},
+      {"name": "skill-manifest-read", "description": "Read .manifest.json for update safety [DEPRECATED]"},
       {"name": "skill-cache-rebuild", "description": "Force rebuild of skills index cache"},
       {"name": "skill-diff", "description": "Compare user skill with shipped Aether version"},
-      {"name": "skill-is-user-created", "description": "Check if a skill is user-created (not in manifest)"}
+      {"name": "skill-is-user-created", "description": "Check if a skill is user-created (not in manifest) [DEPRECATED]"}
+    ],
+    "Deprecated": [
+      {"name": "checkpoint-check", "description": "Check dirty files against allowlist [DEPRECATED]"},
+      {"name": "error-pattern-check", "description": "Check for error anti-patterns [DEPRECATED]"},
+      {"name": "error-patterns-check", "description": "Scan for error handling anti-patterns [DEPRECATED]"},
+      {"name": "error-summary", "description": "Summarize error handling patterns [DEPRECATED]"},
+      {"name": "learning-select-proposals", "description": "Interactive learning proposal selector [DEPRECATED]"},
+      {"name": "pheromone-export-eternal", "description": "Export pheromones to eternal memory format [DEPRECATED]"},
+      {"name": "semantic-context", "description": "Semantic search context retrieval [DEPRECATED]"},
+      {"name": "session-clear-context", "description": "Clear session context markers [DEPRECATED]"},
+      {"name": "session-is-stale", "description": "Check session staleness [DEPRECATED]"},
+      {"name": "session-summary", "description": "Generate session summary [DEPRECATED]"},
+      {"name": "skill-index-read", "description": "Read cached skills index [DEPRECATED]"},
+      {"name": "skill-is-user-created", "description": "Check if skill is user-created [DEPRECATED]"},
+      {"name": "skill-manifest-read", "description": "Read skills manifest [DEPRECATED]"},
+      {"name": "suggest-clear", "description": "Clear suggestion state [DEPRECATED]"},
+      {"name": "survey-clear", "description": "Clear survey state [DEPRECATED]"},
+      {"name": "survey-verify-fresh", "description": "Check survey freshness [DEPRECATED]"},
+      {"name": "swarm-display-inline", "description": "Inline swarm display for Claude Code [DEPRECATED]"},
+      {"name": "swarm-display-render", "description": "Terminal render wrapper for swarm display [DEPRECATED]"}
     ]
   },
   "description": "Aether Colony Utility Layer — deterministic ops for the ant colony"
