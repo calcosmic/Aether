@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 ## Current Position
 
 Phase: 13 of 16 (Monolith Modularization)
-Plan: 6 of 9
+Plan: 7 of 9
 Status: In Progress
-Last activity: 2026-03-24 — Completed 13-06 (swarm domain extraction)
+Last activity: 2026-03-24 — Completed 13-07 (learning/instinct domain extraction)
 
-Progress: [██████░░░░] 58%
+Progress: [██████░░░░] 60%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 28
+- Total plans completed: 29
 - Average duration: 5min
-- Total execution time: 2.25 hours
+- Total execution time: 2.4 hours
 
 **By Phase:**
 
@@ -39,11 +39,11 @@ Progress: [██████░░░░] 58%
 | 10-error-triage | 2 | 28min | 14min |
 | 11-dead-code-deprecation | 2 | 9min | 4.5min |
 | 12-state-api-verification | 3 | 41min | 13.7min |
-| 13-monolith-modularization | 6 | 37min | 6.2min |
+| 13-monolith-modularization | 7 | 47min | 6.7min |
 
 **Recent Trend:**
-- Last 5 plans: 4min, 5min, 5min, 7min, 12min
-- Trend: increasing (swarm extraction was the largest by subcommand count)
+- Last 5 plans: 5min, 5min, 7min, 12min, 10min
+- Trend: stable (learning extraction similar complexity to swarm)
 
 *Updated after each plan completion*
 
@@ -102,6 +102,9 @@ Recent decisions affecting current work:
 - [13-06]: Local helper functions renamed with _sw_ prefix to avoid namespace collisions (format_duration, render_progress_bar, etc.)
 - [13-06]: ANSI color variables prefixed with _SW_ inside display functions to avoid global pollution
 - [13-06]: Plan listed autofix-restore/autofix-apply but actual subcommands are autofix-checkpoint/autofix-rollback (17 total)
+- [13-07]: Verbatim extraction of 3 non-contiguous blocks -- same no-refactoring policy as Plans 01-06
+- [13-07]: get_wisdom_threshold and get_wisdom_thresholds_json stay in main file -- shared by queen and learning domains
+- [13-07]: memory-capture stays in main file -- orchestrates learning-observe/learning-promote-auto via subprocess, not a learning domain function
 
 ### Pending Todos
 
@@ -116,5 +119,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-24
-Stopped at: Completed 13-06-PLAN.md (swarm domain extraction) -- Phase 13 plan 6 of 9
+Stopped at: Completed 13-07-PLAN.md (learning/instinct domain extraction) -- Phase 13 plan 7 of 9
 Resume file: None
