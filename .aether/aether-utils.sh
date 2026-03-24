@@ -1487,6 +1487,7 @@ HELP_EOF
     ;;
   error-pattern-check)
     _deprecation_warning "error-pattern-check"
+    # MIGRATE: direct COLONY_STATE.json access -- use _state_read_field instead
     [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
     json_ok "$(jq '
       .errors.records | group_by(.category) | map(select(length >= 3) |
@@ -1497,6 +1498,7 @@ HELP_EOF
     ;;
   error-summary)
     _deprecation_warning "error-summary"
+    # MIGRATE: direct COLONY_STATE.json access -- use _state_read_field instead
     [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
     json_ok "$(jq '{
       total: (.errors.records | length),
@@ -1665,6 +1667,7 @@ HELP_EOF
     json_ok "\"⚡ $emoji $child_name spawned\""
     ;;
   spawn-complete)
+    # Migrated to state-api facade: uses _state_mutate for failed spawn event logging
     # Usage: spawn-complete <ant_name> <status> [summary]
     ant_name="${1:-}"
     status="${2:-completed}"
@@ -1680,27 +1683,13 @@ HELP_EOF
     echo "[$ts] $status_icon $emoji $ant_name: $status${summary:+ - $summary}" >> "$DATA_DIR/activity.log"
     # Update spawn tree
     echo "$ts_full|$ant_name|$status|$summary" >> "$DATA_DIR/spawn-tree.txt"
-    # Log failed spawns to COLONY_STATE.json events array for audit trail (ARCH-04)
+    # Log failed spawns to events array via state-api facade (ARCH-04)
     if [[ "$status" == "failed" ]] || [[ "$status" == "error" ]]; then
-      spawn_complete_state_file="$DATA_DIR/COLONY_STATE.json"
-      if [[ -f "$spawn_complete_state_file" ]]; then
-        spawn_complete_lock_held=false
-        if type acquire_lock &>/dev/null; then
-          acquire_lock "$spawn_complete_state_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on COLONY_STATE.json"
-          spawn_complete_lock_held=true
-        fi
-
-        # SUPPRESS:OK -- read-default: file may not exist yet
-        spawn_complete_updated=$(jq --arg ts "$ts_full" --arg name "$ant_name" --arg st "$status" --arg sum "${summary:-unknown}" \
-          '.events += [{"type":"spawn_failed","ant":$name,"status":$st,"summary":$sum,"timestamp":$ts}]' \
-          "$spawn_complete_state_file" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
-        if [[ -n "$spawn_complete_updated" ]]; then
-          atomic_write "$spawn_complete_state_file" "$spawn_complete_updated" || {
-            [[ "$spawn_complete_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
-            json_err "$E_JSON_INVALID" "Failed to write COLONY_STATE.json"
-          }
-        fi
-        [[ "$spawn_complete_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
+      if [[ -f "$DATA_DIR/COLONY_STATE.json" ]]; then
+        SC_TS="$ts_full" SC_NAME="$ant_name" SC_STATUS="$status" SC_SUMMARY="${summary:-unknown}" \
+          _state_mutate '
+            .events += [{"type":"spawn_failed","ant":env.SC_NAME,"status":env.SC_STATUS,"summary":env.SC_SUMMARY,"timestamp":env.SC_TS}]
+          ' >/dev/null 2>&1 || _aether_log_error "Failed to log spawn failure to colony state"
       fi
     fi
     # Return emoji-formatted result for display
@@ -2767,81 +2756,56 @@ EOF
     ;;
 
   grave-add)
+    # Migrated to state-api facade: uses _state_mutate for atomic grave marker recording
     # Record a grave marker when a builder fails at a file
     # Usage: grave-add <file> <ant_name> <task_id> <phase> <failure_summary> [function] [line]
     [[ $# -ge 5 ]] || json_err "$E_VALIDATION_FAILED" "Usage: grave-add <file> <ant_name> <task_id> <phase> <failure_summary> [function] [line]"
-    state_file="$DATA_DIR/COLONY_STATE.json"
-    [[ -f "$state_file" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
 
-    grave_lock_held=false
-    if type acquire_lock &>/dev/null; then
-      acquire_lock "$state_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on COLONY_STATE.json"
-      grave_lock_held=true
-    fi
+    ga_file="$1"
+    ga_ant_name="$2"
+    ga_task_id="$3"
+    ga_phase="$4"
+    ga_failure_summary="$5"
+    ga_func="${6:-}"
+    ga_line="${7:-}"
+    ga_id="grave_$(date -u +%s)_$(head -c 2 /dev/urandom | od -An -tx1 | tr -d ' ')"
+    ga_ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    GA_ID="$ga_id" GA_FILE="$ga_file" GA_ANT="$ga_ant_name" GA_TID="$ga_task_id" \
+    GA_PHASE="$ga_phase" GA_SUMMARY="$ga_failure_summary" GA_FUNC="$ga_func" \
+    GA_LINE="$ga_line" GA_TS="$ga_ts" \
+      _state_mutate '
+        (env.GA_PHASE | if test("^[0-9]+$") then tonumber else null end) as $phase |
+        (env.GA_FUNC | if . == "" or . == "null" then null else . end) as $func |
+        (env.GA_LINE | if test("^[0-9]+$") then tonumber else null end) as $line |
+        (.graveyards // []) as $graves |
+        . + {graveyards: ($graves + [{
+          id: env.GA_ID,
+          file: env.GA_FILE,
+          ant_name: env.GA_ANT,
+          task_id: env.GA_TID,
+          phase: $phase,
+          failure_summary: env.GA_SUMMARY,
+          function: $func,
+          line: $line,
+          timestamp: env.GA_TS
+        }])} |
+        if (.graveyards | length) > 30 then .graveyards = .graveyards[-30:] else . end
+      ' >/dev/null
 
-    file="$1"
-    ant_name="$2"
-    task_id="$3"
-    phase="$4"
-    failure_summary="$5"
-    func="${6:-null}"
-    line="${7:-null}"
-    id="grave_$(date -u +%s)_$(head -c 2 /dev/urandom | od -An -tx1 | tr -d ' ')"
-    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-    if [[ "$phase" =~ ^[0-9]+$ ]]; then
-      phase_jq="$phase"
-    else
-      phase_jq="null"
-    fi
-    if [[ "$func" == "null" ]]; then
-      func_jq="null"
-    else
-      func_jq="\"$func\""
-    fi
-    if [[ "$line" =~ ^[0-9]+$ ]]; then
-      line_jq="$line"
-    else
-      line_jq="null"
-    fi
-    updated=$(jq --arg id "$id" --arg file "$file" --arg ant "$ant_name" --arg tid "$task_id" \
-      --argjson phase "$phase_jq" --arg summary "$failure_summary" \
-      --argjson func "$func_jq" --argjson line "$line_jq" --arg ts "$ts" '
-      (.graveyards // []) as $graves |
-      . + {graveyards: ($graves + [{
-        id: $id,
-        file: $file,
-        ant_name: $ant,
-        task_id: $tid,
-        phase: $phase,
-        failure_summary: $summary,
-        function: $func,
-        line: $line,
-        timestamp: $ts
-      }])} |
-      if (.graveyards | length) > 30 then .graveyards = .graveyards[-30:] else . end
-    ' "$state_file") || {
-      [[ "$grave_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
-      json_err "$E_JSON_INVALID" "Failed to update COLONY_STATE.json"
-    }
-
-    atomic_write "$state_file" "$updated" || {
-      [[ "$grave_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
-      json_err "$E_JSON_INVALID" "Failed to write COLONY_STATE.json"
-    }
-
-    [[ "$grave_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
-    json_ok "\"$id\""
+    json_ok "\"$ga_id\""
     ;;
 
   grave-check)
+    # Migrated to state-api facade: uses _state_read_field for read-only access
     # Query for grave markers near a file path
     # Usage: grave-check <file_path>
     # Read-only, never modifies state
     [[ $# -ge 1 ]] || json_err "$E_VALIDATION_FAILED" "Usage: grave-check <file_path>"
-    [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
-    check_file="$1"
-    check_dir=$(dirname "$check_file")
-    json_ok "$(jq --arg file "$check_file" --arg dir "$check_dir" '
+    gc_check_file="$1"
+    gc_check_dir=$(dirname "$gc_check_file")
+    gc_state=$(_state_read_field '.')
+    [[ -n "$gc_state" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
+    json_ok "$(echo "$gc_state" | jq --arg file "$gc_check_file" --arg dir "$gc_check_dir" '
       (.graveyards // []) as $graves |
       ($graves | map(select(.file == $file))) as $exact |
       ($graves | map(select((.file | split("/")[:-1] | join("/")) == $dir))) as $dir_matches |
@@ -2852,7 +2816,7 @@ EOF
        elif $dir_count == 1 then "low"
        else "none" end) as $caution |
       {graves: $dir_matches, count: $dir_count, exact_matches: $exact_count, caution_level: $caution}
-    ' "$DATA_DIR/COLONY_STATE.json")"
+    ')"
     ;;
 
   # ============================================
@@ -3531,14 +3495,16 @@ NODESCRIPT
     ;;
 
   milestone-detect)
+    # Migrated to state-api facade: uses _state_read_field for read-only access
     # Detect colony milestone from state
     # Usage: milestone-detect
     # Returns: {ok: true, milestone: "...", version: "...", phases_completed: N, total_phases: N, progress_percent: N}
 
-    [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
+    md_state=$(_state_read_field '.')
+    [[ -n "$md_state" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
 
     # Extract and compute milestone data using jq
-    result=$(jq '
+    result=$(echo "$md_state" | jq '
       # Extract key data
       (.plan.phases // []) as $phases |
       (.errors.records // []) as $errors |
@@ -3588,7 +3554,7 @@ NODESCRIPT
         total_phases: $total_phases,
         progress_percent: $progress
       }
-    ' "$DATA_DIR/COLONY_STATE.json")
+    ')
 
     echo "$result"
     ;;
@@ -5718,6 +5684,7 @@ $updated_meta
     [[ -z "$content" ]] && json_err "$E_VALIDATION_FAILED" "Usage: learning-promote-auto <wisdom_type> <content> [colony_name] [event_type]" '{"missing":"content"}'
 
     if [[ -z "$colony_name" ]]; then
+      # MIGRATE: direct COLONY_STATE.json access -- use _state_read_field instead
       # SUPPRESS:OK -- read-default: query may return empty
       colony_name=$(jq -r '.session_id | split("_")[1] // "unknown"' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "unknown")
     fi
@@ -5817,6 +5784,7 @@ $updated_meta
       esac
     fi
 
+    # MIGRATE: direct COLONY_STATE.json access -- use _state_read_field instead
     # SUPPRESS:OK -- read-default: query may return empty
     colony_name=$(jq -r '.session_id | split("_")[1] // "unknown"' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "unknown")
 
@@ -6369,6 +6337,7 @@ $updated_meta
       exit 0
     fi
 
+    # MIGRATE: direct COLONY_STATE.json access -- use _state_read_field instead
     # Get colony name from COLONY_STATE.json
     colony_name="unknown"
     if [[ -f "$DATA_DIR/COLONY_STATE.json" ]]; then
@@ -7321,6 +7290,7 @@ $updated_meta
     # Initialize pheromones.json if missing
     if [[ ! -f "$pw_file" ]]; then
       pw_colony_id="aether-dev"
+      # MIGRATE: direct COLONY_STATE.json access -- use _state_read_field instead
       if [[ -f "$DATA_DIR/COLONY_STATE.json" ]]; then
         # SUPPRESS:OK -- read-default: query may return empty
         pw_colony_id=$(jq -r '.session_id // "aether-dev"' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "aether-dev")
@@ -7672,6 +7642,7 @@ $updated_meta
     ;;
 
   instinct-read)
+    # Migrated to state-api facade: uses _state_read_field for read-only access
     # Read learned instincts from COLONY_STATE.json memory
     # Usage: instinct-read [--min-confidence N] [--max N] [--domain DOMAIN]
     # Returns: JSON with filtered, confidence-sorted instincts
@@ -7701,21 +7672,20 @@ $updated_meta
       esac
     done
 
-    ir_state_file="$DATA_DIR/COLONY_STATE.json"
-
-    if [[ ! -f "$ir_state_file" ]]; then
+    # Read full state via facade
+    ir_state=$(_state_read_field '.')
+    if [[ -z "$ir_state" ]]; then
       json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found. Run /ant:init first."
     fi
 
     # Check if memory.instincts exists
-    # SUPPRESS:OK -- cross-platform: macOS vs Linux date/stat flags
-    ir_has_instincts=$(jq 'if .memory.instincts then "yes" else "no" end' "$ir_state_file" 2>/dev/null || echo "no")
+    ir_has_instincts=$(echo "$ir_state" | jq 'if .memory.instincts then "yes" else "no" end' 2>/dev/null || echo "no")
     if [[ "$ir_has_instincts" != '"yes"' ]]; then
       json_ok '{"instincts":[],"total":0,"filtered":0}'
       exit 0
     fi
 
-    ir_result=$(jq -c \
+    ir_result=$(echo "$ir_state" | jq -c \
       --argjson min_conf "$ir_min_confidence" \
       --argjson max_count "$ir_max" \
       --arg domain_filter "$ir_domain" \
@@ -7735,7 +7705,7 @@ $updated_meta
           total: $total,
           filtered: (. | length)
         }
-      ' "$ir_state_file" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
+      ' 2>/dev/null)
 
     if [[ -z "$ir_result" || "$ir_result" == "null" ]]; then
       json_ok '{"instincts":[],"total":0,"filtered":0}'
@@ -7931,6 +7901,7 @@ $updated_meta
     [[ "$pp_max_instincts" -lt 1 ]] && pp_max_instincts=3
 
     pp_pher_file="$DATA_DIR/pheromones.json"
+    # MIGRATE: direct COLONY_STATE.json access -- use _state_read_field instead
     pp_state_file="$DATA_DIR/COLONY_STATE.json"
     pp_now_iso=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
@@ -8439,6 +8410,7 @@ $updated_meta
     fi
 
     # === Phase learnings injection ===
+    # MIGRATE: direct COLONY_STATE.json access -- use _state_read_field instead
     # Extract validated learnings from previous phases in COLONY_STATE.json
     # and format as actionable guidance for builders
     cp_current_phase=$(jq -r '.current_phase // 0' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "0")  # SUPPRESS:OK -- read-default: file may not exist yet
@@ -8838,6 +8810,7 @@ $updated_meta
     phe_now_iso=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
     phe_archived_at="$phe_now_iso"
 
+    # MIGRATE: direct COLONY_STATE.json access -- use _state_read_field instead
     # Compute pause_duration from COLONY_STATE.json (pause-aware TTL)
     phe_pause_duration=0
     if [[ -f "$DATA_DIR/COLONY_STATE.json" ]]; then
@@ -9277,6 +9250,7 @@ $updated_meta
 
     # Look for wisdom data: check specified file, then COLONY_STATE memory
     if [[ ! -f "$wex_input" ]]; then
+      # MIGRATE: direct COLONY_STATE.json access -- use _state_read_field instead
       # Try to extract from COLONY_STATE.json memory field
       if [[ -f "$DATA_DIR/COLONY_STATE.json" ]]; then
         wex_memory=$(jq '.memory // {}' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo '{}')  # SUPPRESS:OK -- read-default: returns fallback if missing
@@ -9470,6 +9444,7 @@ $updated_meta
     source "$SCRIPT_DIR/exchange/wisdom-xml.sh"
     cax_wisdom_input="$DATA_DIR/queen-wisdom.json"
     if [[ ! -f "$cax_wisdom_input" ]]; then
+      # MIGRATE: direct COLONY_STATE.json access -- use _state_read_field instead
       # Try extracting from COLONY_STATE.json memory field
       if [[ -f "$DATA_DIR/COLONY_STATE.json" ]]; then
         cax_wex_memory=$(jq '.memory // {}' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo '{}')  # SUPPRESS:OK -- read-default: returns fallback if missing
@@ -9664,6 +9639,7 @@ $updated_meta
     [[ "$cc_max_risks" -lt 1 ]] && cc_max_risks=1
     [[ "$cc_max_words" -lt 80 ]] && cc_max_words=80
 
+    # MIGRATE: direct COLONY_STATE.json access -- use _state_read_field instead
     cc_state_file="$DATA_DIR/COLONY_STATE.json"
     cc_flags_file="$DATA_DIR/flags.json"
     cc_pher_file="$DATA_DIR/pheromones.json"
@@ -9912,6 +9888,7 @@ EOF
       todos=$(grep "^### " TO-DOs.md 2>/dev/null | head -3 | sed 's/^### //' | jq -R . | jq -s .)  # SUPPRESS:OK -- existence-test: file may not exist
     fi
 
+    # MIGRATE: direct COLONY_STATE.json access -- use _state_read_field instead
     # Get colony state if exists
     if [[ -f "$DATA_DIR/COLONY_STATE.json" ]]; then
       # SUPPRESS:OK -- read-default: query may return empty
@@ -10511,6 +10488,7 @@ EOF
     # Usage: resume-dashboard
     # Returns: JSON with current state, memory health, and recent activity
 
+    # MIGRATE: direct COLONY_STATE.json access -- use _state_read_field instead
     colony_state_file="$DATA_DIR/COLONY_STATE.json"
 
     # Get current state from COLONY_STATE.json
@@ -11610,6 +11588,7 @@ DRYRUN_EOF
     # Read total_auto_advanced from run state (actual phase completions)
     _ap_auto_advanced=$(jq -r '.total_auto_advanced // 0' "$_ap_state_file")
 
+    # MIGRATE: direct COLONY_STATE.json access -- use _state_read_field instead
     # Count learnings from COLONY_STATE.json
     _ap_colony_file="$DATA_DIR/COLONY_STATE.json"
     _ap_learnings_count=0
