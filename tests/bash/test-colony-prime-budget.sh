@@ -113,6 +113,16 @@ run_colony_prime() {
         bash "$AETHER_UTILS" colony-prime "$@" 2>/dev/null
 }
 
+# Helper: run colony-prime capturing stderr to a file
+# Usage: run_colony_prime_with_stderr tmpdir stderr_file [args...]
+run_colony_prime_with_stderr() {
+    local tmpdir="$1"
+    local stderr_file="$2"
+    shift 2
+    HOME="$tmpdir" AETHER_ROOT="$tmpdir" DATA_DIR="$tmpdir/.aether/data" \
+        bash "$AETHER_UTILS" colony-prime "$@" 2>"$stderr_file"
+}
+
 # Helper: extract prompt_section length from colony-prime output
 # Uses Python because jq can't parse the output when wisdom fields contain newlines
 get_prompt_length() {
@@ -569,6 +579,211 @@ test_log_line_lists_trimmed_sections() {
 }
 
 # ============================================================================
+# Trimming notification tests (REL-06)
+# ============================================================================
+
+test_trimmed_stderr_normal() {
+    # When sections are trimmed, stderr should contain [trimmed]
+    local tmpdir
+    tmpdir=$(setup_colony_env)
+    local stderr_file="$tmpdir/stderr.log"
+
+    # Add enough content to trigger trimming but NOT key-decisions
+    add_queen_wisdom "$tmpdir"
+    add_large_rolling_summary "$tmpdir" 100
+
+    local result
+    result=$(run_colony_prime_with_stderr "$tmpdir" "$stderr_file")
+
+    local stderr_content
+    stderr_content=$(cat "$stderr_file" 2>/dev/null || echo "")
+
+    # Check if trimming actually occurred (log_line mentions truncated)
+    local log_line
+    log_line=$(echo "$result" | get_log_line)
+
+    if assert_contains "$log_line" "truncated"; then
+        # Trimming occurred -- stderr should contain [trimmed]
+        if ! assert_contains "$stderr_content" "[trimmed]"; then
+            test_fail "Expected [trimmed] in stderr when trimming occurs" "$stderr_content"
+            rm -rf "$tmpdir"
+            return 1
+        fi
+    fi
+    # If no trimming occurred, pass (content under budget)
+
+    rm -rf "$tmpdir"
+    return 0
+}
+
+test_trimmed_stderr_high_priority_decisions() {
+    # When key-decisions are trimmed, stderr should contain [!trimmed]
+    local tmpdir
+    tmpdir=$(setup_colony_env)
+    local stderr_file="$tmpdir/stderr.log"
+
+    # Add massive content to force trimming of key-decisions
+    add_queen_wisdom "$tmpdir"
+    add_large_rolling_summary "$tmpdir" 100
+    add_phase_learnings "$tmpdir" 30
+    add_context_decisions "$tmpdir" 20
+
+    local result
+    result=$(run_colony_prime_with_stderr "$tmpdir" "$stderr_file")
+
+    local stderr_content
+    stderr_content=$(cat "$stderr_file" 2>/dev/null || echo "")
+
+    local log_line
+    log_line=$(echo "$result" | get_log_line)
+
+    if assert_contains "$log_line" "key-decisions"; then
+        # key-decisions was trimmed -- should see [!trimmed]
+        if ! assert_contains "$stderr_content" "[!trimmed]"; then
+            test_fail "Expected [!trimmed] in stderr when key-decisions trimmed" "$stderr_content"
+            rm -rf "$tmpdir"
+            return 1
+        fi
+    fi
+
+    rm -rf "$tmpdir"
+    return 0
+}
+
+test_trimmed_stderr_high_priority_signals() {
+    # When pheromone-signals are trimmed, stderr should contain [!trimmed]
+    local tmpdir
+    tmpdir=$(setup_colony_env)
+    local stderr_file="$tmpdir/stderr.log"
+
+    # Add REDIRECT signals + massive content to force trimming of pheromone-signals
+    add_redirect_signals "$tmpdir" 3
+    add_queen_wisdom "$tmpdir"
+    add_large_rolling_summary "$tmpdir" 100
+    add_phase_learnings "$tmpdir" 30
+    add_context_decisions "$tmpdir" 20
+
+    local result
+    result=$(run_colony_prime_with_stderr "$tmpdir" "$stderr_file")
+
+    local stderr_content
+    stderr_content=$(cat "$stderr_file" 2>/dev/null || echo "")
+
+    local log_line
+    log_line=$(echo "$result" | get_log_line)
+
+    if assert_contains "$log_line" "pheromone-signals"; then
+        # Pheromone signals were trimmed -- should see [!trimmed]
+        if ! assert_contains "$stderr_content" "[!trimmed]"; then
+            test_fail "Expected [!trimmed] in stderr when pheromone-signals trimmed" "$stderr_content"
+            rm -rf "$tmpdir"
+            return 1
+        fi
+    fi
+
+    rm -rf "$tmpdir"
+    return 0
+}
+
+test_no_trimmed_stderr_when_under_budget() {
+    # When no trimming occurs, stderr should NOT contain [trimmed]
+    local tmpdir
+    tmpdir=$(setup_colony_env)
+    local stderr_file="$tmpdir/stderr.log"
+
+    # Use default setup (under budget)
+    local result
+    result=$(run_colony_prime_with_stderr "$tmpdir" "$stderr_file")
+
+    local stderr_content
+    stderr_content=$(cat "$stderr_file" 2>/dev/null || echo "")
+
+    if assert_contains "$stderr_content" "[trimmed]"; then
+        test_fail "Expected no [trimmed] in stderr when under budget" "$stderr_content"
+        rm -rf "$tmpdir"
+        return 1
+    fi
+
+    rm -rf "$tmpdir"
+    return 0
+}
+
+test_trimmed_notice_in_json() {
+    # When trimming occurs, JSON output should include trimmed_notice field
+    local tmpdir
+    tmpdir=$(setup_colony_env)
+
+    add_queen_wisdom "$tmpdir"
+    add_large_rolling_summary "$tmpdir" 100
+    add_phase_learnings "$tmpdir" 30
+    add_context_decisions "$tmpdir" 15
+
+    local result
+    result=$(run_colony_prime "$tmpdir")
+
+    if ! assert_contains "$result" '"ok":true'; then
+        test_fail "Expected ok=true" ""
+        rm -rf "$tmpdir"
+        return 1
+    fi
+
+    local log_line
+    log_line=$(echo "$result" | get_log_line)
+
+    if assert_contains "$log_line" "truncated"; then
+        # Trimming occurred -- check JSON has trimmed_notice
+        if ! assert_contains "$result" '"trimmed_notice"'; then
+            test_fail "Expected trimmed_notice field in JSON output" ""
+            rm -rf "$tmpdir"
+            return 1
+        fi
+        if ! assert_contains "$result" '"trimmed_high_priority"'; then
+            test_fail "Expected trimmed_high_priority field in JSON output" ""
+            rm -rf "$tmpdir"
+            return 1
+        fi
+    fi
+
+    rm -rf "$tmpdir"
+    return 0
+}
+
+test_trimmed_high_priority_field_in_json() {
+    # When high-priority items trimmed, trimmed_high_priority should be true
+    local tmpdir
+    tmpdir=$(setup_colony_env)
+
+    add_queen_wisdom "$tmpdir"
+    add_large_rolling_summary "$tmpdir" 100
+    add_phase_learnings "$tmpdir" 30
+    add_context_decisions "$tmpdir" 20
+
+    local result
+    result=$(run_colony_prime "$tmpdir")
+
+    if ! assert_contains "$result" '"ok":true'; then
+        test_fail "Expected ok=true" ""
+        rm -rf "$tmpdir"
+        return 1
+    fi
+
+    local log_line
+    log_line=$(echo "$result" | get_log_line)
+
+    if assert_contains "$log_line" "key-decisions"; then
+        # key-decisions was trimmed -- trimmed_high_priority should be true
+        if ! assert_contains "$result" '"trimmed_high_priority":true'; then
+            test_fail "Expected trimmed_high_priority:true when key-decisions trimmed" ""
+            rm -rf "$tmpdir"
+            return 1
+        fi
+    fi
+
+    rm -rf "$tmpdir"
+    return 0
+}
+
+# ============================================================================
 # Run tests
 # ============================================================================
 
@@ -581,5 +796,11 @@ run_test test_compact_mode_budget "Compact mode enforces 4000 char budget"
 run_test test_redirects_never_trimmed "REDIRECTs are never trimmed"
 run_test test_truncation_priority_rolling_first "Rolling summary trimmed before other sections"
 run_test test_log_line_lists_trimmed_sections "Log line lists trimmed sections"
+run_test test_trimmed_stderr_normal "Trimmed sections emit [trimmed] to stderr"
+run_test test_trimmed_stderr_high_priority_decisions "Key-decisions trimmed emits [!trimmed] to stderr"
+run_test test_trimmed_stderr_high_priority_signals "Pheromone-signals trimmed emits [!trimmed] to stderr"
+run_test test_no_trimmed_stderr_when_under_budget "No [trimmed] in stderr when under budget"
+run_test test_trimmed_notice_in_json "JSON output includes trimmed_notice field"
+run_test test_trimmed_high_priority_field_in_json "JSON output includes trimmed_high_priority:true"
 
 test_summary

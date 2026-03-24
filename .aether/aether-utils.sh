@@ -8599,6 +8599,25 @@ $updated_meta
     fi
     # === END Budget enforcement ===
 
+    # === Budget trimming notification (REL-06) ===
+    cp_trimmed_notice=""
+    cp_trimmed_high_priority=false
+
+    if [[ -n "${cp_budget_trimmed_list:-}" ]]; then
+      cp_trimmed_sections=$(echo "$cp_budget_trimmed_list" | tr ',' ', ')
+
+      if [[ "$cp_budget_trimmed_list" == *"key-decisions"* ]] || \
+         [[ "$cp_budget_trimmed_list" == *"pheromone-signals"* ]]; then
+        cp_trimmed_high_priority=true
+        cp_trimmed_notice="[!trimmed] Context exceeded ${cp_max_chars}-char budget. Dropped: ${cp_trimmed_sections}. HIGH-PRIORITY items were trimmed -- key decisions or redirect signals may be missing."
+        echo "[!trimmed] Colony context exceeded budget. High-priority sections dropped: $cp_trimmed_sections" >&2
+      else
+        cp_trimmed_notice="[trimmed] Context exceeded ${cp_max_chars}-char budget. Dropped: ${cp_trimmed_sections}."
+        echo "[trimmed] Colony context exceeded budget. Dropped: $cp_trimmed_sections" >&2
+      fi
+    fi
+    # === END Budget trimming notification ===
+
     # Escape for JSON
     cp_prompt_json=$(printf '%s' "$cp_final_prompt" | jq -Rs '.' 2>/dev/null || echo '""')
     cp_log_json=$(printf '%s' "$cp_log_line" | jq -Rs '.' 2>/dev/null || echo '"Primed: 0 signals, 0 instincts"')
@@ -8612,6 +8631,8 @@ $updated_meta
       --arg prompt_json "$cp_prompt_json" \
       --arg log "$cp_log_line" \
       --arg log_json "$cp_log_json" \
+      --arg trimmed_notice "$cp_trimmed_notice" \
+      --argjson trimmed_high_priority "${cp_trimmed_high_priority:-false}" \
       '{
         metadata: $meta,
         wisdom: $wisdom,
@@ -8621,7 +8642,9 @@ $updated_meta
           active_signals: ($signals.prompt_section // "")
         },
         prompt_section: $prompt,
-        log_line: $log
+        log_line: $log,
+        trimmed_notice: $trimmed_notice,
+        trimmed_high_priority: $trimmed_high_priority
       }')
 
     # Validate result
