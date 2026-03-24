@@ -32,6 +32,7 @@ CURRENT_LOCK=${CURRENT_LOCK:-""}
 [[ -f "$SCRIPT_DIR/utils/hive.sh" ]] && source "$SCRIPT_DIR/utils/hive.sh"
 [[ -f "$SCRIPT_DIR/utils/midden.sh" ]] && source "$SCRIPT_DIR/utils/midden.sh"
 [[ -f "$SCRIPT_DIR/utils/skills.sh" ]] && source "$SCRIPT_DIR/utils/skills.sh"
+[[ -f "$SCRIPT_DIR/utils/state-api.sh" ]] && source "$SCRIPT_DIR/utils/state-api.sh"
 
 # Fallback error constants if error-handler.sh wasn't sourced
 # This prevents "unbound variable" errors in older installations
@@ -1166,66 +1167,12 @@ HELP_EOF
     fi
     ;;
   validate-state)
-    # Schema migration helper: auto-upgrades pre-3.0 state files to v3.0
-    # Additive only (never removes fields) — idempotent and safe for concurrent access
-    _migrate_colony_state() {
-      local state_file="$1"
-      [[ -f "$state_file" ]] || return 0
-
-      # First: verify file is parseable JSON at all
-      if ! jq -e . "$state_file" >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON validity
-        # Corrupt state file — backup and error
-        if type create_backup &>/dev/null; then
-          if ! create_backup "$state_file"; then
-            _aether_log_error "Could not create backup of corrupted COLONY_STATE.json"
-          fi
-        fi
-        json_err "$E_JSON_INVALID" \
-          "COLONY_STATE.json is corrupted (invalid JSON). A backup was saved in .aether/data/backups/. Try: run /ant:init to reset colony state."
-      fi
-
-      local current_version
-      current_version=$(jq -r '.version // "1.0"' "$state_file" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
-
-      if [[ "$current_version" != "3.0" ]]; then
-        local _migrate_lock_held=false
-        # Skip lock acquisition when caller already holds the state lock
-        # (e.g., state-loader sets AETHER_STATE_LOCKED=true before validation).
-        if [[ "${AETHER_STATE_LOCKED:-false}" != "true" ]] && type acquire_lock &>/dev/null; then
-          acquire_lock "$state_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on COLONY_STATE.json for migration"
-          _migrate_lock_held=true
-        fi
-
-        # Add missing v3.0 fields (additive only — idempotent and safe for concurrent access)
-        local updated
-        updated=$(jq '
-            .version = "3.0" |
-            if .signals == null then .signals = [] else . end |
-            if .graveyards == null then .graveyards = [] else . end |
-            if .events == null then .events = [] else . end
-        ' "$state_file" 2>/dev/null) || {  # SUPPRESS:OK -- read-default: file may not exist yet
-          [[ "$_migrate_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
-          json_err "$E_JSON_INVALID" "Failed to migrate COLONY_STATE.json"
-        }
-
-        if [[ -n "$updated" ]]; then
-          atomic_write "$state_file" "$updated" || {
-            [[ "$_migrate_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
-            json_err "$E_JSON_INVALID" "Failed to write migrated COLONY_STATE.json"
-          }
-          # Notify user of migration (auto-migrate + notify pattern)
-          printf '{"ok":true,"warning":"W_MIGRATED","message":"Migrated colony state from v%s to v3.0"}\n' "$current_version" >&2
-        fi
-
-        [[ "$_migrate_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
-      fi
-    }
-
+    # Delegates migration to _state_migrate in state-api.sh
     case "${1:-}" in
       colony)
         [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
         # Run schema migration before field validation (ensures v3.0 fields always present)
-        _migrate_colony_state "$DATA_DIR/COLONY_STATE.json"
+        _state_migrate "$DATA_DIR/COLONY_STATE.json"
         json_ok "$(jq '
           def chk(f;t): if has(f) then (if (.[f]|type) as $a | t | any(. == $a) then "pass" else "fail: \(f) is \(.[f]|type), expected \(t|join("|"))" end) else "fail: missing \(f)" end;
           def opt(f;t): if has(f) then (if (.[f]|type) as $a | t | any(. == $a) then "pass" else "fail: \(f) is \(.[f]|type), expected \(t|join("|"))" end) else "pass" end;
@@ -1295,40 +1242,29 @@ HELP_EOF
     json_ok "{\"checkpointed\":true,\"reason\":\"$sc_reason\"}"
     ;;
   state-write)
-    # Write COLONY_STATE.json through a locked, validated, atomic path
-    # Usage: bash .aether/aether-utils.sh state-write '<json>'
-    #    or: cat state.json | bash .aether/aether-utils.sh state-write
-    # Validates JSON, acquires lock, creates backup, writes atomically
-    sw_content="${1:-}"
-    if [[ -z "$sw_content" ]]; then
-      sw_content=$(cat)
+    # MIGRATE: direct COLONY_STATE.json access -- use _state_write instead
+    # Delegates to _state_write in state-api.sh (preserves backward compatibility)
+    _state_write "$@"
+    ;;
+  state-read)
+    # Read full COLONY_STATE.json -- delegates to state-api.sh
+    _state_read "$@"
+    ;;
+  state-read-field)
+    # Read a specific field from COLONY_STATE.json -- wraps _state_read_field with json_ok
+    srf_field="${1:-}"
+    srf_raw=$(_state_read_field "$srf_field")
+    # Wrap raw value in json_ok for subcommand output
+    # If the value is valid JSON (object/array), pass it through; otherwise quote as string
+    if echo "$srf_raw" | jq -e . >/dev/null 2>&1; then
+      json_ok "$srf_raw"
+    else
+      json_ok "$(jq -n --arg v "$srf_raw" '$v')"
     fi
-
-    # Validate JSON
-    if ! echo "$sw_content" | jq -e . >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON validity
-      json_err "$E_JSON_INVALID" "state-write received invalid JSON"
-    fi
-
-    sw_state_file="$DATA_DIR/COLONY_STATE.json"
-
-    # Acquire lock (colony-level, not hub-level)
-    acquire_lock "$sw_state_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on COLONY_STATE.json"
-
-    # Create backup before writing
-    if [[ -f "$sw_state_file" ]]; then
-      if ! create_backup "$sw_state_file"; then
-        _aether_log_error "Could not create backup of colony state before writing"
-      fi
-    fi
-
-    # Write atomically; release lock on failure
-    atomic_write "$sw_state_file" "$sw_content" || {
-      release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
-      json_err "$E_UNKNOWN" "Failed to write COLONY_STATE.json"
-    }
-    release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
-
-    json_ok '{"written":true}'
+    ;;
+  state-mutate)
+    # Read-modify-write COLONY_STATE.json with a jq expression -- delegates to state-api.sh
+    _state_mutate "$@"
     ;;
   validate-oracle-state)
     # Validate oracle state files (state.json, plan.json)
