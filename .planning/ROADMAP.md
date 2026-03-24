@@ -33,7 +33,7 @@ See: `.planning/milestones/v1.3-ROADMAP.md` for full details.
 - [x] **Phase 12: State API & Verification** - Centralize state access and harden verification evidence chain (completed 2026-03-24)
 - [x] **Phase 13: Monolith Modularization** - Extract domain modules from aether-utils.sh (completed 2026-03-24)
 - [x] **Phase 14: Planning Depth** - Add per-phase research to planning and richer build context (completed 2026-03-24)
-- [ ] **Phase 15: Documentation Accuracy** - Update all docs to match verified post-hardening behavior
+- [x] **Phase 15: Documentation Accuracy** - Update all docs to match verified post-hardening behavior (completed 2026-03-24)
 - [ ] **Phase 16: Ship** - Verify clean install end-to-end, version bump, publish to npm
 
 ## Phase Details
@@ -162,10 +162,11 @@ Plans:
   1. A clean `npm install -g aether-colony` followed by `/ant:lay-eggs`, `/ant:init`, `/ant:plan`, `/ant:build` completes without errors on a fresh environment
   2. `bin/validate-package.sh` passes with all content-aware checks for the new module structure
   3. Version is bumped to v2.1.0 and published to npm
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 16-01: TBD
+- [ ] 16-01-PLAN.md — Fix package hygiene (.npmignore, validate-package.sh, CHANGELOG header) and verify dry-run
+- [ ] 16-02-PLAN.md — Manual install walkthrough, version bump to v2.1.0, and publish to npm
 
 ## Progress
 
@@ -188,5 +189,5 @@ Phases execute in numeric order: 9 -> 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16
 | 12. State API & Verification | v2.1 | Complete    | 2026-03-24 | - |
 | 13. Monolith Modularization | v2.1 | Complete    | 2026-03-24 | - |
 | 14. Planning Depth | v2.1 | Complete    | 2026-03-24 | - |
-| 15. Documentation Accuracy | v2.1 | 0/3 | Not started | - |
-| 16. Ship | v2.1 | 0/TBD | Not started | - |
+| 15. Documentation Accuracy | v2.1 | Complete    | 2026-03-24 | - |
+| 16. Ship | v2.1 | 0/2 | Not started | - |
