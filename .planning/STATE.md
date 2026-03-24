@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** Reliably interpret user requests, decompose into work, verify outputs, and ship correct work with minimal back-and-forth.
-**Current focus:** Phase 13 — Monolith Modularization (v2.1 Production Hardening)
+**Current focus:** Phase 14 — Planning Depth (v2.1 Production Hardening)
 
 ## Current Position
 
-Phase: 13 of 16 (Monolith Modularization)
-Plan: 9 of 9
+Phase: 14 of 16 (Planning Depth)
+Plan: 2 of 2
 Status: Phase Complete
-Last activity: 2026-03-24 — Completed 13-09 (colony-archive-xml extraction, phase 13 complete)
+Last activity: 2026-03-24 — Completed 14-02 (research context injection into builder/watcher prompts)
 
-Progress: [████████░░] 80%
+Progress: [█████████░] 88%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 31
+- Total plans completed: 33
 - Average duration: 5min
-- Total execution time: 2.5 hours
+- Total execution time: 2.6 hours
 
 **By Phase:**
 
@@ -40,10 +40,11 @@ Progress: [████████░░] 80%
 | 11-dead-code-deprecation | 2 | 9min | 4.5min |
 | 12-state-api-verification | 3 | 41min | 13.7min |
 | 13-monolith-modularization | 9 | 58min | 6.4min |
+| 14-planning-depth | 2 | 4min | 2min |
 
 **Recent Trend:**
-- Last 5 plans: 7min, 12min, 10min, 6min, 5min
-- Trend: stable (final extraction -- smallest module, completed quickly)
+- Last 5 plans: 10min, 6min, 5min, 2min, 2min
+- Trend: fast (playbook-only edits, no code changes)
 
 *Updated after each plan completion*
 
@@ -111,6 +112,9 @@ Recent decisions affecting current work:
 - [13-09]: colony-archive-xml added to existing chamber-utils.sh (Option A) -- colony lifecycle related, avoids creating 137-line standalone file
 - [13-09]: Verbatim extraction with no refactoring -- same policy as Plans 01-08
 - [13-09]: Phase 13 complete: 11,663 -> 5,262 lines (55% reduction), 9 modules, 72 subcommands extracted
+- [14-02]: Research context gets own 16K character budget (separate from colony-prime 8K and skills 12K)
+- [14-02]: Injection order: archaeology -> integration -> research -> grave -> midden -> prompt_section -> skill_section
+- [14-02]: Missing RESEARCH.md gracefully degrades (empty research_context, build continues)
 
 ### Pending Todos
 
@@ -118,12 +122,12 @@ None yet.
 
 ### Blockers/Concerns
 
-- Research flag: Phase 14 (Planning Depth) needs a design spike on how to distinguish phases needing research from phases that do not
+- Resolved: Phase 14 (Planning Depth) complete -- research always runs (user decision: no skip flag), loaded with 16K budget in build
 - Risk: ~10 dangerous suppressions remain for Plan 03 (create_backup, acquire_lock, direct state writes, jq transforms)
 - Resolved: context-continuity test failure fixed in 12-01 (QUAL-09 complete)
 
 ## Session Continuity
 
 Last session: 2026-03-24
-Stopped at: Completed 13-09-PLAN.md (colony-archive-xml extraction) -- Phase 13 complete (9 of 9 plans)
+Stopped at: Completed 14-02-PLAN.md (research context injection) -- Phase 14 complete (2 of 2 plans)
 Resume file: None
