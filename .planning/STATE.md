@@ -19,9 +19,9 @@ Progress: [█████████░] 88%
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 33
+- Total plans completed: 34
 - Average duration: 5min
-- Total execution time: 2.6 hours
+- Total execution time: 2.8 hours
 
 **By Phase:**
 
@@ -40,11 +40,11 @@ Progress: [█████████░] 88%
 | 11-dead-code-deprecation | 2 | 9min | 4.5min |
 | 12-state-api-verification | 3 | 41min | 13.7min |
 | 13-monolith-modularization | 9 | 58min | 6.4min |
-| 14-planning-depth | 2 | 4min | 2min |
+| 14-planning-depth | 2 | 16min | 8min |
 
 **Recent Trend:**
-- Last 5 plans: 10min, 6min, 5min, 2min, 2min
-- Trend: fast (playbook-only edits, no code changes)
+- Last 5 plans: 6min, 5min, 2min, 2min, 12min
+- Trend: stable (research step required plan.md edits + test creation)
 
 *Updated after each plan completion*
 
@@ -112,6 +112,11 @@ Recent decisions affecting current work:
 - [13-09]: colony-archive-xml added to existing chamber-utils.sh (Option A) -- colony lifecycle related, avoids creating 137-line standalone file
 - [13-09]: Verbatim extraction with no refactoring -- same policy as Plans 01-08
 - [13-09]: Phase 13 complete: 11,663 -> 5,262 lines (55% reduction), 9 modules, 72 subcommands extracted
+- [14-01]: Step 3.6 placed between territory survey (3.5) and planning loop (4) -- natural integration point
+- [14-01]: Scout receives hive wisdom as PRE-EXISTING COLONY WISDOM section to avoid re-discovering known patterns
+- [14-01]: Queen writes RESEARCH.md to disk (scout is read-only) -- consistent with existing agent write policies
+- [14-01]: Research findings summary (compact) injected into Route-Setter prompt alongside scout findings
+- [14-01]: Re-running /ant:plan always deletes and regenerates research from scratch
 - [14-02]: Research context gets own 16K character budget (separate from colony-prime 8K and skills 12K)
 - [14-02]: Injection order: archaeology -> integration -> research -> grave -> midden -> prompt_section -> skill_section
 - [14-02]: Missing RESEARCH.md gracefully degrades (empty research_context, build continues)
@@ -129,5 +134,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-24
-Stopped at: Completed 14-02-PLAN.md (research context injection) -- Phase 14 complete (2 of 2 plans)
+Stopped at: Completed 14-01-PLAN.md (phase domain research step in plan.md) -- Phase 14 fully complete
 Resume file: None
