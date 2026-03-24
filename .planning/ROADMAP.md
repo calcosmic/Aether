@@ -31,7 +31,7 @@ See: `.planning/milestones/v1.3-ROADMAP.md` for full details.
 - [x] **Phase 10: Error Triage** - Classify and fix dangerous error suppressions (completed 2026-03-24)
 - [x] **Phase 11: Dead Code Deprecation** - Audit and deprecate unused subcommands across all surfaces (completed 2026-03-24)
 - [x] **Phase 12: State API & Verification** - Centralize state access and harden verification evidence chain (completed 2026-03-24)
-- [ ] **Phase 13: Monolith Modularization** - Extract domain modules from aether-utils.sh
+- [x] **Phase 13: Monolith Modularization** - Extract domain modules from aether-utils.sh (completed 2026-03-24)
 - [ ] **Phase 14: Planning Depth** - Add per-phase research to planning and richer build context
 - [ ] **Phase 15: Documentation Accuracy** - Update all docs to match verified post-hardening behavior
 - [ ] **Phase 16: Ship** - Verify clean install end-to-end, version bump, publish to npm
@@ -132,11 +132,11 @@ Plans:
   1. `/ant:plan` includes a per-phase research step where scouts investigate domain knowledge, library docs, and patterns before task decomposition
   2. `/ant:build` incorporates research context into builder prompts so workers have domain understanding, not just task lists
   3. Research depth is bounded (one cycle, not a full Oracle RALF loop) to prevent planning from taking longer than execution
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 14-01: TBD
-- [ ] 14-02: TBD
+- [ ] 14-01-PLAN.md — Add Step 3.6 Phase Domain Research to plan.md (Claude + OpenCode) with scout spawn, RESEARCH.md output, and tests
+- [ ] 14-02-PLAN.md — Add Step 4.0.5 Load Phase Research to build playbooks and inject research_context into builder/watcher prompts
 
 ### Phase 15: Documentation Accuracy
 **Goal**: All documentation matches the post-hardening system state with no aspirational claims
@@ -185,7 +185,7 @@ Phases execute in numeric order: 9 -> 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16
 | 10. Error Triage | v2.1 | 3/3 | Complete | 2026-03-24 |
 | 11. Dead Code Deprecation | v2.1 | Complete    | 2026-03-24 | - |
 | 12. State API & Verification | v2.1 | Complete    | 2026-03-24 | - |
-| 13. Monolith Modularization | v2.1 | 0/9 | Not started | - |
-| 14. Planning Depth | v2.1 | 0/TBD | Not started | - |
+| 13. Monolith Modularization | v2.1 | Complete    | 2026-03-24 | - |
+| 14. Planning Depth | v2.1 | 0/2 | Not started | - |
 | 15. Documentation Accuracy | v2.1 | 0/TBD | Not started | - |
 | 16. Ship | v2.1 | 0/TBD | Not started | - |
