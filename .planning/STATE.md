@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 
 ## Current Position
 
-Phase: 11 of 16 (Dead Code Deprecation) -- NOT STARTED
-Plan: 0 of TBD
-Status: Ready to plan
-Last activity: 2026-03-24 — Completed Phase 10 (Error Triage) — all 3 plans done
+Phase: 11 of 16 (Dead Code Deprecation) -- IN PROGRESS
+Plan: 1 of 2
+Status: Executing
+Last activity: 2026-03-24 — Completed 11-01 (deprecation warnings for 18 dead subcommands)
 
 Progress: [███░░░░░░░] 25%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 17
+- Total plans completed: 18
 - Average duration: 5min
-- Total execution time: 1.20 hours
+- Total execution time: 1.25 hours
 
 **By Phase:**
 
@@ -37,10 +37,11 @@ Progress: [███░░░░░░░] 25%
 | 08-documentation-update | 2 | 6min | 3min |
 | 09-quick-wins | 2 | 10min | 5min |
 | 10-error-triage | 2 | 28min | 14min |
+| 11-dead-code-deprecation | 1 | 3min | 3min |
 
 **Recent Trend:**
-- Last 5 plans: 3min, 5min, 5min, 12min, 16min
-- Trend: increasing (large file-wide refactoring tasks)
+- Last 5 plans: 5min, 5min, 12min, 16min, 3min
+- Trend: normalizing (deprecation task was straightforward)
 
 *Updated after each plan completion*
 
@@ -68,6 +69,9 @@ Recent decisions affecting current work:
 - [10-02]: Actual lazy count was ~25 (not ~110) -- Plan 01 was more thorough than research estimated
 - [10-02]: grep -c on variables is SUPPRESS:OK (grep exit-code handling, not lazy suppression)
 - [10-02]: acquire_lock on registry deferred to Plan 03 (dangerous write-path suppression)
+- [11-01]: Deprecation warning uses printf >&2 to avoid breaking JSON stdout contracts
+- [11-01]: Warning format '[deprecated] name -- will be removed in v3.0' for grep-ability
+- [11-01]: Only 3 of 18 deprecated commands appeared in named help sections; rest only in flat commands array
 
 ### Pending Todos
 
@@ -82,5 +86,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-24
-Stopped at: Phase 10 complete, Phase 11 ready to plan
+Stopped at: Completed 11-01-PLAN.md (deprecation warnings)
 Resume file: None
