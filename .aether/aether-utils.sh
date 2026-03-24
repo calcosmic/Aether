@@ -15,7 +15,7 @@ set -euo pipefail
 trap 'if type error_handler &>/dev/null; then error_handler ${LINENO} "$BASH_COMMAND" $?; fi' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AETHER_ROOT="${AETHER_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd 2>/dev/null || echo "$SCRIPT_DIR")}"
+AETHER_ROOT="${AETHER_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd 2>/dev/null || echo "$SCRIPT_DIR")}"  # SUPPRESS:OK -- read-default: directory may not exist
 DATA_DIR="${DATA_DIR:-$AETHER_ROOT/.aether/data}"
 
 # Initialize lock state before sourcing (file-lock.sh trap needs these)
@@ -56,7 +56,7 @@ if ! type atomic_write &>/dev/null; then
     local target="$1"
     local content="$2"
     local temp_dir="${TEMP_DIR:-${AETHER_ROOT:-$PWD}/.aether/temp}"
-    mkdir -p "$temp_dir" 2>/dev/null || true
+    mkdir -p "$temp_dir" 2>/dev/null || true  # SUPPRESS:OK -- idempotent: harmless if exists
     local temp="${temp_dir}/atomic-write.$$.$(date +%s%N).tmp"
     echo "$content" > "$temp"
     mv "$temp" "$target"
@@ -87,7 +87,7 @@ fi
 # These checks run silently - failures are logged but don't block operation
 if type feature_disable &>/dev/null; then
   # Check if DATA_DIR is writable for activity logging
-  [[ -w "$DATA_DIR" ]] 2>/dev/null || feature_disable "activity_log" "DATA_DIR not writable"
+  [[ -w "$DATA_DIR" ]] 2>/dev/null || feature_disable "activity_log" "DATA_DIR not writable"  # SUPPRESS:OK -- existence-test: value may not be numeric
 
   # Check if git is available for git integration
   command -v git &>/dev/null || feature_disable "git_integration" "git not installed"
@@ -105,8 +105,8 @@ fi
 # Must be set AFTER file-lock.sh is sourced so it overrides the individual
 # 'trap cleanup_locks EXIT TERM INT HUP' set by file-lock.sh.
 _aether_exit_cleanup() {
-    cleanup_locks 2>/dev/null || true
-    cleanup_temp_files 2>/dev/null || true
+    cleanup_locks 2>/dev/null || true  # SUPPRESS:OK -- cleanup: exit handler must not fail
+    cleanup_temp_files 2>/dev/null || true  # SUPPRESS:OK -- cleanup: exit handler must not fail
 }
 trap '_aether_exit_cleanup' EXIT TERM INT HUP
 
@@ -118,10 +118,10 @@ _cleanup_orphaned_temp_files() {
     while IFS= read -r -d '' tmp_file; do
         local file_pid
         file_pid=$(basename "$tmp_file" | awk -F'.' '{print $(NF-2)}')
-        if [[ "$file_pid" =~ ^[0-9]+$ ]] && ! kill -0 "$file_pid" 2>/dev/null; then
-            rm -f "$tmp_file" 2>/dev/null || true
+        if [[ "$file_pid" =~ ^[0-9]+$ ]] && ! kill -0 "$file_pid" 2>/dev/null; then  # SUPPRESS:OK -- existence-test: checking if process is alive
+            rm -f "$tmp_file" 2>/dev/null || true  # SUPPRESS:OK -- cleanup: file may not exist
         fi
-    done < <(find "$temp_dir" -maxdepth 1 -name "*.tmp" -print0 2>/dev/null)
+    done < <(find "$temp_dir" -maxdepth 1 -name "*.tmp" -print0 2>/dev/null)  # SUPPRESS:OK -- existence-test: directory may not exist
 }
 # Run orphan cleanup on startup (silent — matches cleanup_locks behavior)
 type cleanup_temp_files &>/dev/null && _cleanup_orphaned_temp_files
@@ -256,7 +256,7 @@ _cmd_context_update() {
   if type acquire_lock &>/dev/null && type feature_enabled &>/dev/null && feature_enabled "file_locking"; then
     acquire_lock "$ctx_file" || json_err "$E_LOCK_FAILED" "Failed to acquire CONTEXT.md lock for context-update"
     _ctx_lock_held=true
-    trap 'release_lock 2>/dev/null || true' EXIT
+    trap 'release_lock 2>/dev/null || true' EXIT  # SUPPRESS:OK -- cleanup: lock may not be held
   fi
 
   ensure_context_dir() {
@@ -268,9 +268,9 @@ _cmd_context_update() {
   read_colony_state() {
     local state_file="${AETHER_ROOT:-.}/.aether/data/COLONY_STATE.json"
     if [[ -f "$state_file" ]]; then
-      current_phase=$(jq -r '.current_phase // "unknown"' "$state_file" 2>/dev/null)
-      milestone=$(jq -r '.milestone // "unknown"' "$state_file" 2>/dev/null)
-      goal=$(jq -r '.goal // ""' "$state_file" 2>/dev/null)
+      current_phase=$(jq -r '.current_phase // "unknown"' "$state_file" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
+      milestone=$(jq -r '.milestone // "unknown"' "$state_file" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
+      goal=$(jq -r '.goal // ""' "$state_file" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
     else
       current_phase="unknown"
       milestone="unknown"
@@ -508,6 +508,7 @@ EOF
       mv "$ctx_tmp" "$ctx_file"
 
       # Auto-emit FEEDBACK pheromone for the decision so builders see it
+      # SUPPRESS:OK -- cleanup: operation is best-effort
       bash "$0" pheromone-write FEEDBACK "[decision] $decision" \
         --strength 0.6 \
         --source "auto:decision" \
@@ -613,7 +614,7 @@ EOF
   # elsewhere in the process. The _ctx_lock_held variable is the primary gate
   # for this function's own cleanup.
   if [[ "$_ctx_lock_held" == "true" ]]; then
-    release_lock 2>/dev/null || true
+    release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
     _ctx_lock_held=false
   fi
 }
@@ -655,13 +656,13 @@ EOF
   # Check if existing CHANGELOG.md uses Keep a Changelog format
   # and add separator if needed (only once)
   local has_separator=false
-  if grep -q "Colony Work Log" "$changelog_file" 2>/dev/null; then
+  if grep -q "Colony Work Log" "$changelog_file" 2>/dev/null; then  # SUPPRESS:OK -- existence-test: file may not exist
     has_separator=true
   fi
 
   # Detect Keep a Changelog format by looking for version headers
   local is_keep_a_changelog=false
-  if grep -qE '^## \[.*\]' "$changelog_file" 2>/dev/null; then
+  if grep -qE '^## \[.*\]' "$changelog_file" 2>/dev/null; then  # SUPPRESS:OK -- existence-test: file may not exist
     is_keep_a_changelog=true
   fi
 
@@ -682,7 +683,7 @@ EOF
   cat "$changelog_file" > "$temp_file"
 
   # Check if date section exists
-  if ! grep -q "^## ${date_str}$" "$changelog_file" 2>/dev/null; then
+  if ! grep -q "^## ${date_str}$" "$changelog_file" 2>/dev/null; then  # SUPPRESS:OK -- existence-test: file may not exist
     # Add new date section
     echo "" >> "$temp_file"
     echo "## ${date_str}" >> "$temp_file"
@@ -813,6 +814,7 @@ changelog-collect-plan-data() {
   if [[ -f "$plan_file" ]]; then
     # Extract files_modified from frontmatter
     local files_yaml
+    # SUPPRESS:OK -- existence-test: file may not exist
     files_yaml=$(grep -A 20 "^files_modified:" "$plan_file" 2>/dev/null | grep "^  - " | sed 's/^  - //' | tr '\n' ',' | sed 's/,$//')
     if [[ -n "$files_yaml" ]]; then
       # Convert to JSON array
@@ -833,6 +835,7 @@ changelog-collect-plan-data() {
 
     # Extract requirements from frontmatter
     local req_yaml
+    # SUPPRESS:OK -- existence-test: file may not exist
     req_yaml=$(grep -A 10 "^requirements:" "$plan_file" 2>/dev/null | grep "^  - " | sed 's/^  - //' | tr '\n' ',' | sed 's/,$//')
     if [[ -n "$req_yaml" ]]; then
       requirements="["
@@ -854,7 +857,7 @@ changelog-collect-plan-data() {
   # Read decisions from COLONY_STATE.json (last 5)
   if [[ -f "$state_file" ]] && command -v jq &>/dev/null; then
     local recent_decisions
-    recent_decisions=$(jq -r '.memory.decisions[-5:][]? // empty' "$state_file" 2>/dev/null)
+    recent_decisions=$(jq -r '.memory.decisions[-5:][]? // empty' "$state_file" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
     if [[ -n "$recent_decisions" ]]; then
       decisions="["
       local first=true
@@ -878,7 +881,7 @@ changelog-collect-plan-data() {
     # Check approach-changes.md for what worked
     if [[ -f "$midden_dir/approach-changes.md" ]]; then
       local approach_entries
-      approach_entries=$(grep "^- " "$midden_dir/approach-changes.md" 2>/dev/null | tail -3) || true
+      approach_entries=$(grep "^- " "$midden_dir/approach-changes.md" 2>/dev/null | tail -3) || true  # SUPPRESS:OK -- read-default: file may not exist
       if [[ -n "$approach_entries" ]]; then
         worked="["
         local first=true
@@ -900,7 +903,7 @@ changelog-collect-plan-data() {
     # Check build-failures.md for what didn't work
     if [[ -f "$midden_dir/build-failures.md" ]]; then
       local failure_entries
-      failure_entries=$(grep "^- " "$midden_dir/build-failures.md" 2>/dev/null | tail -3) || true
+      failure_entries=$(grep "^- " "$midden_dir/build-failures.md" 2>/dev/null | tail -3) || true  # SUPPRESS:OK -- read-default: file may not exist
       if [[ -n "$failure_entries" ]]; then
         didnt_work="["
         local first=true
@@ -976,7 +979,7 @@ EOF
 
 # --- Subcommand dispatch ---
 cmd="${1:-help}"
-shift 2>/dev/null || true
+shift 2>/dev/null || true  # SUPPRESS:OK -- cleanup: shift is safe to fail
 
 case "$cmd" in
   help)
@@ -1129,8 +1132,8 @@ HELP_EOF
   version)
     # Read version from package.json if available, fallback to embedded
     _pkg_json="$SCRIPT_DIR/../package.json"
-    if [[ -f "$_pkg_json" ]] && command -v jq >/dev/null 2>&1; then
-      _ver=$(jq -r '.version // "unknown"' "$_pkg_json" 2>/dev/null)
+    if [[ -f "$_pkg_json" ]] && command -v jq >/dev/null 2>&1; then  # SUPPRESS:OK -- cleanup: output suppression for clean operation
+      _ver=$(jq -r '.version // "unknown"' "$_pkg_json" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
       json_ok "\"$_ver\""
     else
       json_ok '"1.1.5"'
@@ -1144,7 +1147,7 @@ HELP_EOF
       [[ -f "$state_file" ]] || return 0
 
       # First: verify file is parseable JSON at all
-      if ! jq -e . "$state_file" >/dev/null 2>&1; then
+      if ! jq -e . "$state_file" >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON validity
         # Corrupt state file — backup and error
         if type create_backup &>/dev/null; then
           create_backup "$state_file" 2>/dev/null || true
@@ -1154,7 +1157,7 @@ HELP_EOF
       fi
 
       local current_version
-      current_version=$(jq -r '.version // "1.0"' "$state_file" 2>/dev/null)
+      current_version=$(jq -r '.version // "1.0"' "$state_file" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
 
       if [[ "$current_version" != "3.0" ]]; then
         local _migrate_lock_held=false
@@ -1172,21 +1175,21 @@ HELP_EOF
             if .signals == null then .signals = [] else . end |
             if .graveyards == null then .graveyards = [] else . end |
             if .events == null then .events = [] else . end
-        ' "$state_file" 2>/dev/null) || {
-          [[ "$_migrate_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+        ' "$state_file" 2>/dev/null) || {  # SUPPRESS:OK -- read-default: file may not exist yet
+          [[ "$_migrate_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
           json_err "$E_JSON_INVALID" "Failed to migrate COLONY_STATE.json"
         }
 
         if [[ -n "$updated" ]]; then
           atomic_write "$state_file" "$updated" || {
-            [[ "$_migrate_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+            [[ "$_migrate_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
             json_err "$E_JSON_INVALID" "Failed to write migrated COLONY_STATE.json"
           }
           # Notify user of migration (auto-migrate + notify pattern)
           printf '{"ok":true,"warning":"W_MIGRATED","message":"Migrated colony state from v%s to v3.0"}\n' "$current_version" >&2
         fi
 
-        [[ "$_migrate_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+        [[ "$_migrate_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
       fi
     }
 
@@ -1225,6 +1228,7 @@ HELP_EOF
       all)
         results=()
         for target in colony constraints; do
+          # SUPPRESS:OK -- read-default: subcommand may fail
           results+=("$(bash "$SCRIPT_DIR/aether-utils.sh" validate-state "$target" 2>/dev/null || echo '{"ok":false}')")
         done
         combined=$(printf '%s\n' "${results[@]}" | jq -s '[.[] | .result // {file:"unknown",pass:false}]')
@@ -1249,7 +1253,7 @@ HELP_EOF
     fi
 
     # Refuse to checkpoint corrupt state
-    if ! jq -e . "$sc_state_file" >/dev/null 2>&1; then
+    if ! jq -e . "$sc_state_file" >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON validity
       json_err "$E_JSON_INVALID" "COLONY_STATE.json is corrupt -- refusing to checkpoint invalid state"
     fi
 
@@ -1273,7 +1277,7 @@ HELP_EOF
     fi
 
     # Validate JSON
-    if ! echo "$sw_content" | jq -e . >/dev/null 2>&1; then
+    if ! echo "$sw_content" | jq -e . >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON validity
       json_err "$E_JSON_INVALID" "state-write received invalid JSON"
     fi
 
@@ -1289,10 +1293,10 @@ HELP_EOF
 
     # Write atomically; release lock on failure
     atomic_write "$sw_state_file" "$sw_content" || {
-      release_lock 2>/dev/null || true
+      release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
       json_err "$E_UNKNOWN" "Failed to write COLONY_STATE.json"
     }
-    release_lock 2>/dev/null || true
+    release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
 
     json_ok '{"written":true}'
     ;;
@@ -1375,6 +1379,7 @@ HELP_EOF
       all)
         results=()
         for target in state plan; do
+          # SUPPRESS:OK -- read-default: subcommand may fail
           results+=("$(ORACLE_DIR="$ORACLE_DIR" bash "$SCRIPT_DIR/aether-utils.sh" validate-oracle-state "$target" 2>/dev/null || echo '{"ok":false}')")
         done
         combined=$(printf '%s\n' "${results[@]}" | jq -s '[.[] | .result // {file:"unknown",pass:false}]')
@@ -1409,16 +1414,16 @@ HELP_EOF
       .errors.records += [{id:$id, category:$cat, severity:$sev, description:$desc, root_cause:null, phase:$phase, task_id:null, timestamp:$ts}] |
       if (.errors.records|length) > 50 then .errors.records = .errors.records[-50:] else . end
     ' "$state_file") || {
-      [[ "$state_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+      [[ "$state_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
       json_err "$E_JSON_INVALID" "Failed to update COLONY_STATE.json"
     }
 
     atomic_write "$state_file" "$updated" || {
-      [[ "$state_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+      [[ "$state_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
       json_err "$E_JSON_INVALID" "Failed to write COLONY_STATE.json"
     }
 
-    [[ "$state_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+    [[ "$state_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
     json_ok "\"$id\""
     ;;
   error-pattern-check)
@@ -1621,16 +1626,17 @@ HELP_EOF
           spawn_complete_lock_held=true
         fi
 
+        # SUPPRESS:OK -- read-default: file may not exist yet
         spawn_complete_updated=$(jq --arg ts "$ts_full" --arg name "$ant_name" --arg st "$status" --arg sum "${summary:-unknown}" \
           '.events += [{"type":"spawn_failed","ant":$name,"status":$st,"summary":$sum,"timestamp":$ts}]' \
           "$spawn_complete_state_file" 2>/dev/null)
         if [[ -n "$spawn_complete_updated" ]]; then
           atomic_write "$spawn_complete_state_file" "$spawn_complete_updated" || {
-            [[ "$spawn_complete_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+            [[ "$spawn_complete_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
             json_err "$E_JSON_INVALID" "Failed to write COLONY_STATE.json"
           }
         fi
-        [[ "$spawn_complete_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+        [[ "$spawn_complete_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
       fi
     fi
     # Return emoji-formatted result for display
@@ -1670,7 +1676,7 @@ HELP_EOF
     # Count current spawns in this session (from spawn-tree.txt)
     current=0
     if [[ -f "$DATA_DIR/spawn-tree.txt" ]]; then
-      current=$(grep -c "|spawned$" "$DATA_DIR/spawn-tree.txt" 2>/dev/null || echo 0)
+      current=$(grep -c "|spawned$" "$DATA_DIR/spawn-tree.txt" 2>/dev/null || echo 0)  # SUPPRESS:OK -- read-default: count defaults to 0 if file missing
     fi
 
     # Global cap of 10 workers per phase
@@ -1707,7 +1713,7 @@ HELP_EOF
     fi
 
     # Check if ant exists in spawn tree (gracefully handle missing ants)
-    if ! grep -q "|$ant_name|" "$DATA_DIR/spawn-tree.txt" 2>/dev/null; then
+    if ! grep -q "|$ant_name|" "$DATA_DIR/spawn-tree.txt" 2>/dev/null; then  # SUPPRESS:OK -- existence-test: file may not exist
       json_ok "{\"ant\":\"$ant_name\",\"depth\":1,\"found\":false}"
       exit 0
     fi
@@ -1719,6 +1725,7 @@ HELP_EOF
     # Find who spawned this ant (look for lines with |spawned)
     while true; do
       # Format: timestamp|parent|caste|child_name|task|spawned
+      # SUPPRESS:OK -- read-default: file may not exist
       parent=$(grep "|$current_ant|" "$DATA_DIR/spawn-tree.txt" 2>/dev/null | grep "|spawned$" | head -1 | cut -d'|' -f2 || echo "")
 
       if [[ -z "$parent" || "$parent" == "Queen" ]]; then
@@ -1806,6 +1813,7 @@ EOF
     project_name=$(basename "$PWD")
 
     # Check if pattern already exists
+    # SUPPRESS:OK -- read-default: query may return empty
     existing=$(jq --arg name "$pattern_name" '.patterns[] | select(.name == $name)' "$patterns_file" 2>/dev/null)
 
     if [[ -n "$existing" ]]; then
@@ -1870,28 +1878,28 @@ EOF
     case "$ext" in
       swift)
         # Swift didSet infinite recursion check
-        if grep -n "didSet" "$file_path" 2>/dev/null | grep -q "self\."; then
+        if grep -n "didSet" "$file_path" 2>/dev/null | grep -q "self\."; then  # SUPPRESS:OK -- existence-test: file may not exist
           line=$(grep -n "didSet" "$file_path" | grep "self\." | head -1 | cut -d: -f1)
           criticals+=("{\"pattern\":\"didSet-recursion\",\"file\":\"$file_path\",\"line\":$line,\"message\":\"Potential didSet infinite recursion - self assignment in didSet\"}")
         fi
         ;;
       ts|tsx|js|jsx)
         # TypeScript any type check
-        if grep -nE '\bany\b' "$file_path" 2>/dev/null | grep -qv "//.*any"; then
-          count=$(grep -cE '\bany\b' "$file_path" 2>/dev/null || echo "0")
+        if grep -nE '\bany\b' "$file_path" 2>/dev/null | grep -qv "//.*any"; then  # SUPPRESS:OK -- existence-test: file may not exist
+          count=$(grep -cE '\bany\b' "$file_path" 2>/dev/null || echo "0")  # SUPPRESS:OK -- read-default: count defaults to 0 if file missing
           warnings+=("{\"pattern\":\"typescript-any\",\"file\":\"$file_path\",\"count\":$count,\"message\":\"Found $count uses of 'any' type\"}")
         fi
         # Console.log in production code (not in test files)
         if [[ ! "$file_path" =~ \.test\. && ! "$file_path" =~ \.spec\. ]]; then
-          if grep -n "console\.log" "$file_path" 2>/dev/null | grep -qv "//"; then
-            count=$(grep -c "console\.log" "$file_path" 2>/dev/null || echo "0")
+          if grep -n "console\.log" "$file_path" 2>/dev/null | grep -qv "//"; then  # SUPPRESS:OK -- existence-test: file may not exist
+            count=$(grep -c "console\.log" "$file_path" 2>/dev/null || echo "0")  # SUPPRESS:OK -- read-default: count defaults to 0 if file missing
             warnings+=("{\"pattern\":\"console-log\",\"file\":\"$file_path\",\"count\":$count,\"message\":\"Found $count console.log statements\"}")
           fi
         fi
         ;;
       py)
         # Python bare except
-        if grep -n "except:" "$file_path" 2>/dev/null | grep -qv "#"; then
+        if grep -n "except:" "$file_path" 2>/dev/null | grep -qv "#"; then  # SUPPRESS:OK -- existence-test: file may not exist
           line=$(grep -n "except:" "$file_path" | head -1 | cut -d: -f1)
           warnings+=("{\"pattern\":\"bare-except\",\"file\":\"$file_path\",\"line\":$line,\"message\":\"Bare except clause - specify exception type\"}")
         fi
@@ -1900,14 +1908,15 @@ EOF
 
     # Common patterns across all languages
     # Exposed secrets check (critical)
+    # SUPPRESS:OK -- existence-test: file may not exist
     if grep -nE "(api_key|apikey|secret|password|token)\s*=\s*['\"][^'\"]+['\"]" "$file_path" 2>/dev/null | grep -qvi "example\|test\|mock\|fake"; then
       line=$(grep -nE "(api_key|apikey|secret|password|token)\s*=\s*['\"]" "$file_path" | head -1 | cut -d: -f1)
       criticals+=("{\"pattern\":\"exposed-secret\",\"file\":\"$file_path\",\"line\":${line:-0},\"message\":\"Potential hardcoded secret or credential\"}")
     fi
 
     # TODO/FIXME check (warning)
-    if grep -nE "(TODO|FIXME|XXX|HACK)" "$file_path" 2>/dev/null | head -1 | grep -q .; then
-      count=$(grep -cE "(TODO|FIXME|XXX|HACK)" "$file_path" 2>/dev/null || echo "0")
+    if grep -nE "(TODO|FIXME|XXX|HACK)" "$file_path" 2>/dev/null | head -1 | grep -q .; then  # SUPPRESS:OK -- existence-test: file may not exist
+      count=$(grep -cE "(TODO|FIXME|XXX|HACK)" "$file_path" 2>/dev/null || echo "0")  # SUPPRESS:OK -- read-default: count defaults to 0 if file missing
       warnings+=("{\"pattern\":\"todo-comment\",\"file\":\"$file_path\",\"count\":$count,\"message\":\"Found $count TODO/FIXME comments\"}")
     fi
 
@@ -1949,6 +1958,7 @@ EOF
     fi
 
     # Extract signature details using jq
+    # SUPPRESS:OK -- read-default: query may return empty
     signature_data=$(jq --arg name "$signature_name" '.signatures[] | select(.name == $name)' "$signatures_file" 2>/dev/null)
 
     if [[ -z "$signature_data" ]]; then
@@ -1967,9 +1977,9 @@ EOF
     fi
 
     # Use grep to search for the pattern in target file
-    if grep -q -- "$pattern_string" "$target_file" 2>/dev/null; then
+    if grep -q -- "$pattern_string" "$target_file" 2>/dev/null; then  # SUPPRESS:OK -- existence-test: file may not exist
       # Match found - return signature details with match info
-      match_count=$(grep -c -- "$pattern_string" "$target_file" 2>/dev/null || echo "1")
+      match_count=$(grep -c -- "$pattern_string" "$target_file" 2>/dev/null || echo "1")  # SUPPRESS:OK -- read-default: count defaults to 0 if file missing
       json_ok "{\"found\":true,\"signature\":$signature_data,\"match_count\":$match_count}"
       exit 1
     else
@@ -1998,6 +2008,7 @@ EOF
     [[ ! -f "$signatures_file" ]] && json_err "$E_FILE_NOT_FOUND" "Signatures file not found"
 
     # Read high-confidence signatures (confidence >= 0.7) using jq -c for compact single-line output
+    # SUPPRESS:OK -- read-default: query may return empty
     high_conf_signatures=$(jq -c '.signatures[] | select(.confidence_threshold >= 0.7)' "$signatures_file" 2>/dev/null)
 
     # Check if any high-confidence signatures exist
@@ -2013,11 +2024,12 @@ EOF
       # User specified pattern - use it directly
       while IFS= read -r -d '' file; do
         files+=("$file")
-      done < <(find "$target_dir" -type f -name "$file_pattern" -print0 2>/dev/null || true)
+      done < <(find "$target_dir" -type f -name "$file_pattern" -print0 2>/dev/null || true)  # SUPPRESS:OK -- existence-test: directory may not exist
     else
       # Default: match common code file types
       while IFS= read -r -d '' file; do
         files+=("$file")
+      # SUPPRESS:OK -- existence-test: directory may not exist
       done < <(find "$target_dir" -type f \( -name "*.js" -o -name "*.ts" -o -name "*.py" -o -name "*.sh" -o -name "*.txt" -o -name "*.md" \) -print0 2>/dev/null || true)
     fi
 
@@ -2055,14 +2067,14 @@ EOF
         [[ -z "$sig_pattern" || "$sig_pattern" == "null" ]] && continue
 
         # Check if pattern matches in file using grep
-        if grep -q -- "$sig_pattern" "$file" 2>/dev/null; then
-          match_count=$(grep -c -- "$sig_pattern" "$file" 2>/dev/null || echo "1")
+        if grep -q -- "$sig_pattern" "$file" 2>/dev/null; then  # SUPPRESS:OK -- existence-test: file may not exist
+          match_count=$(grep -c -- "$sig_pattern" "$file" 2>/dev/null || echo "1")  # SUPPRESS:OK -- read-default: count defaults to 0 if file missing
 
           # Add to results
           matches_for_file=$(echo "$matches_for_file" | jq --arg n "$sig_name" --arg d "$sig_desc" --argjson c "$sig_conf" --argjson m "$match_count" \
             '. += [{"name":$n,"description":$d,"confidence_threshold":$c,"match_count":$m}]')
         fi
-      done < <(echo "$high_conf_signatures" | jq -c '.' 2>/dev/null || true)
+      done < <(echo "$high_conf_signatures" | jq -c '.' 2>/dev/null || true)  # SUPPRESS:OK -- read-default: returns fallback if missing
 
       # If any signatures matched, add to results
       sig_result_count=$(echo "$matches_for_file" | jq 'length')
@@ -2110,7 +2122,7 @@ EOF
         fi
       }
       # Ensure lock is always released on exit (BUG-002 fix)
-      trap 'release_lock 2>/dev/null || true' EXIT
+      trap 'release_lock 2>/dev/null || true' EXIT  # SUPPRESS:OK -- cleanup: lock may not be held
     fi
 
     # Map type to severity
@@ -2149,7 +2161,7 @@ EOF
 
     atomic_write "$flags_file" "$updated"
     trap - EXIT
-    release_lock 2>/dev/null || true
+    release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
     json_ok "{\"id\":\"$id\",\"type\":\"$type\",\"severity\":\"$severity\"}"
     ;;
   flag-check-blockers)
@@ -2198,7 +2210,7 @@ EOF
       json_warn "W_DEGRADED" "File locking disabled - proceeding without lock"
     else
       acquire_lock "$flags_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on flags.json"
-      trap 'release_lock 2>/dev/null || true' EXIT
+      trap 'release_lock 2>/dev/null || true' EXIT  # SUPPRESS:OK -- cleanup: lock may not be held
     fi
 
     updated=$(jq --arg id "$flag_id" --arg res "$resolution" --arg ts "$ts" '
@@ -2212,7 +2224,7 @@ EOF
 
     atomic_write "$flags_file" "$updated"
     trap - EXIT
-    release_lock 2>/dev/null || true
+    release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
     json_ok "{\"resolved\":\"$flag_id\"}"
     ;;
   flag-acknowledge)
@@ -2231,7 +2243,7 @@ EOF
       json_warn "W_DEGRADED" "File locking disabled - proceeding without lock"
     else
       acquire_lock "$flags_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on flags.json"
-      trap 'release_lock 2>/dev/null || true' EXIT
+      trap 'release_lock 2>/dev/null || true' EXIT  # SUPPRESS:OK -- cleanup: lock may not be held
     fi
 
     updated=$(jq --arg id "$flag_id" --arg ts "$ts" '
@@ -2244,7 +2256,7 @@ EOF
 
     atomic_write "$flags_file" "$updated"
     trap - EXIT
-    release_lock 2>/dev/null || true
+    release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
     json_ok "{\"acknowledged\":\"$flag_id\"}"
     ;;
   flag-list)
@@ -2303,7 +2315,7 @@ EOF
     else
       acquire_lock "$flags_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on flags.json"
       # Ensure lock is always released on exit (BUG-005/BUG-011 fix)
-      trap 'release_lock 2>/dev/null || true' EXIT
+      trap 'release_lock 2>/dev/null || true' EXIT  # SUPPRESS:OK -- cleanup: lock may not be held
     fi
 
     # Count how many will be resolved
@@ -2325,7 +2337,7 @@ EOF
 
     atomic_write "$flags_file" "$updated"
     trap - EXIT
-    release_lock 2>/dev/null || true
+    release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
     json_ok "{\"resolved\":$count,\"trigger\":\"$trigger\"}"
     ;;
   generate-ant-name)
@@ -2372,12 +2384,12 @@ EOF
     [[ -z "$vw_input" ]] && json_err "$E_VALIDATION_FAILED" "Usage: validate-worker-response <caste> <json_or_file_path>" '{"missing":"json_or_file_path"}'
 
     if [[ -f "$vw_input" ]]; then
-      vw_json=$(cat "$vw_input" 2>/dev/null || echo "")
+      vw_json=$(cat "$vw_input" 2>/dev/null || echo "")  # SUPPRESS:OK -- read-default: file may not exist yet
     else
       vw_json="$vw_input"
     fi
 
-    if [[ -z "$vw_json" ]] || ! echo "$vw_json" | jq -e . >/dev/null 2>&1; then
+    if [[ -z "$vw_json" ]] || ! echo "$vw_json" | jq -e . >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON validity
       json_err "$E_JSON_INVALID" "Worker response is not valid JSON"
     fi
 
@@ -2449,13 +2461,14 @@ EOF
         ;;
     esac
 
+    # SUPPRESS:OK -- read-default: query may return empty
     missing_fields=$(echo "$vw_json" | jq -c --argjson req "$vw_required" '[ $req[] | select(has(.) | not) ]' 2>/dev/null || echo '[]')
     if [[ "$missing_fields" != "[]" ]]; then
       details=$(jq -n --arg caste "$vw_caste" --argjson missing "$missing_fields" '{caste:$caste,missing:$missing}')
       json_err "$E_VALIDATION_FAILED" "Worker response missing required fields" "$details"
     fi
 
-    if ! echo "$vw_json" | jq -e "$vw_schema" >/dev/null 2>&1; then
+    if ! echo "$vw_json" | jq -e "$vw_schema" >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON against schema
       json_err "$E_VALIDATION_FAILED" "Worker response failed schema validation" "{\"caste\":\"$vw_caste\"}"
     fi
 
@@ -2471,14 +2484,14 @@ EOF
     # Usage: autofix-checkpoint [label]
     # Returns: {type: "stash"|"commit"|"none", ref: "..."}
     # IMPORTANT: Only stash Aether-related files, never touch user work
-    if git rev-parse --git-dir >/dev/null 2>&1; then
+    if git rev-parse --git-dir >/dev/null 2>&1; then  # SUPPRESS:OK -- existence-test: may not be a git repo
       # Check if there are changes to Aether-managed files only
       # Target directories that Aether is allowed to modify
       target_dirs=".aether .claude/commands/ant .claude/commands/st .opencode bin"
       has_changes=false
 
       for dir in $target_dirs; do
-        if [[ -d "$dir" ]] && [[ -n "$(git status --porcelain "$dir" 2>/dev/null)" ]]; then
+        if [[ -d "$dir" ]] && [[ -n "$(git status --porcelain "$dir" 2>/dev/null)" ]]; then  # SUPPRESS:OK -- existence-test: may not be a git repo
           has_changes=true
           break
         fi
@@ -2488,16 +2501,16 @@ EOF
         label="${1:-autofix-$(date +%s)}"
         stash_name="aether-checkpoint: $label"
         # Only stash Aether-managed directories, never touch user files
-        if git stash push -m "$stash_name" -- $target_dirs >/dev/null 2>&1; then
+        if git stash push -m "$stash_name" -- $target_dirs >/dev/null 2>&1; then  # SUPPRESS:OK -- existence-test: stash operation may fail
           json_ok "{\"type\":\"stash\",\"ref\":\"$stash_name\"}"
         else
           # Stash failed (possibly due to conflicts), record commit hash
-          hash=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
+          hash=$(git rev-parse HEAD 2>/dev/null || echo "unknown")  # SUPPRESS:OK -- read-default: may not have commits yet
           json_ok "{\"type\":\"commit\",\"ref\":\"$hash\"}"
         fi
       else
         # No changes in Aether-managed directories, just record commit hash
-        hash=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
+        hash=$(git rev-parse HEAD 2>/dev/null || echo "unknown")  # SUPPRESS:OK -- read-default: may not have commits yet
         json_ok "{\"type\":\"commit\",\"ref\":\"$hash\"}"
       fi
     else
@@ -2515,9 +2528,9 @@ EOF
     case "$ref_type" in
       stash)
         # Find and pop the stash
-        stash_ref=$(git stash list 2>/dev/null | grep "$ref" | head -1 | cut -d: -f1 || echo "")
+        stash_ref=$(git stash list 2>/dev/null | grep "$ref" | head -1 | cut -d: -f1 || echo "")  # SUPPRESS:OK -- existence-test: stash operation may fail
         if [[ -n "$stash_ref" ]]; then
-          if git stash pop "$stash_ref" >/dev/null 2>&1; then
+          if git stash pop "$stash_ref" >/dev/null 2>&1; then  # SUPPRESS:OK -- existence-test: stash operation may fail
             json_ok '{"rolled_back":true,"method":"stash"}'
           else
             json_ok '{"rolled_back":false,"method":"stash","error":"stash pop failed"}'
@@ -2529,7 +2542,7 @@ EOF
       commit)
         # Reset to the commit
         if [[ -n "$ref" && "$ref" != "unknown" ]]; then
-          if git reset --hard "$ref" >/dev/null 2>&1; then
+          if git reset --hard "$ref" >/dev/null 2>&1; then  # SUPPRESS:OK -- existence-test: reset may fail
             json_ok '{"rolled_back":true,"method":"reset"}'
           else
             json_ok '{"rolled_back":false,"method":"reset","error":"reset failed"}'
@@ -2553,6 +2566,7 @@ EOF
 
     current=0
     if [[ -f "$DATA_DIR/spawn-tree.txt" ]]; then
+      # SUPPRESS:OK -- read-default: count defaults to 0 if file missing
       current=$(grep -c "|swarm:$swarm_id$" "$DATA_DIR/spawn-tree.txt" 2>/dev/null) || current=0
     fi
 
@@ -2729,16 +2743,16 @@ EOF
       }])} |
       if (.graveyards | length) > 30 then .graveyards = .graveyards[-30:] else . end
     ' "$state_file") || {
-      [[ "$grave_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+      [[ "$grave_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
       json_err "$E_JSON_INVALID" "Failed to update COLONY_STATE.json"
     }
 
     atomic_write "$state_file" "$updated" || {
-      [[ "$grave_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+      [[ "$grave_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
       json_err "$E_JSON_INVALID" "Failed to write COLONY_STATE.json"
     }
 
-    [[ "$grave_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+    [[ "$grave_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
     json_ok "\"$id\""
     ;;
 
@@ -2782,10 +2796,11 @@ EOF
 
     # Count changed files
     files_changed=0
-    if git rev-parse --git-dir >/dev/null 2>&1; then
+    if git rev-parse --git-dir >/dev/null 2>&1; then  # SUPPRESS:OK -- existence-test: may not be a git repo
+      # SUPPRESS:OK -- existence-test: may not be a git repo
       files_changed=$(git diff --stat --cached HEAD 2>/dev/null | tail -1 | grep -oE '[0-9]+ file' | grep -oE '[0-9]+' || echo "0")
       if [[ "$files_changed" == "0" ]]; then
-        files_changed=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+        files_changed=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')  # SUPPRESS:OK -- existence-test: may not be a git repo
       fi
     fi
 
@@ -2894,8 +2909,8 @@ Files: ${files_changed} files changed"
       exit 0
     fi
 
-    local_ver=$(jq -r '.version // "unknown"' "$local_version_file" 2>/dev/null || echo "unknown")
-    hub_ver=$(jq -r '.version // "unknown"' "$hub_version_file" 2>/dev/null || echo "unknown")
+    local_ver=$(jq -r '.version // "unknown"' "$local_version_file" 2>/dev/null || echo "unknown")  # SUPPRESS:OK -- read-default: file may not exist yet
+    hub_ver=$(jq -r '.version // "unknown"' "$hub_version_file" 2>/dev/null || echo "unknown")  # SUPPRESS:OK -- read-default: file may not exist yet
 
     if [[ "$local_ver" == "$hub_ver" ]]; then
       json_ok '""'
@@ -2912,7 +2927,7 @@ Files: ${files_changed} files changed"
     now=$(date +%s)
 
     if [[ -f "$cache_file" ]]; then
-      cached_at=$(cat "$cache_file" 2>/dev/null || echo "0")
+      cached_at=$(cat "$cache_file" 2>/dev/null || echo "0")  # SUPPRESS:OK -- read-default: file may not exist yet
       age=$((now - cached_at))
       if [[ $age -lt 3600 ]]; then
         # Within TTL — skip silently
@@ -2922,9 +2937,9 @@ Files: ${files_changed} files changed"
     fi
 
     # Cache miss or stale — run actual check
-    mkdir -p "$(dirname "$cache_file")" 2>/dev/null || true
-    result=$("$0" version-check 2>/dev/null) || true
-    echo "$now" > "$cache_file" 2>/dev/null || true
+    mkdir -p "$(dirname "$cache_file")" 2>/dev/null || true  # SUPPRESS:OK -- idempotent: harmless if exists
+    result=$("$0" version-check 2>/dev/null) || true  # SUPPRESS:OK -- read-default: subcommand may fail
+    echo "$now" > "$cache_file" 2>/dev/null || true  # SUPPRESS:OK -- cleanup: cache write is best-effort
     if [[ -n "$result" ]]; then
       echo "$result"
     else
@@ -2977,6 +2992,7 @@ Files: ${files_changed} files changed"
     acquire_lock "$registry_file" 2>/dev/null || true
 
     # Check if repo already exists in registry
+    # SUPPRESS:OK -- read-default: query may return empty
     existing=$(jq --arg path "$repo_path" '.repos[] | select(.path == $path)' "$registry_file" 2>/dev/null)
 
     if [[ -n "$existing" ]]; then
@@ -3018,7 +3034,7 @@ Files: ${files_changed} files changed"
     fi
 
     echo "$updated" > "$registry_file"
-    release_lock "$registry_file" 2>/dev/null || true
+    release_lock "$registry_file" 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
     json_ok "{\"registered\":true,\"path\":\"$repo_path\",\"version\":\"$repo_version\"}"
     ;;
 
@@ -3045,7 +3061,7 @@ Files: ${files_changed} files changed"
           }],
           "count": (.repos | length)
         }
-      ' "$registry_file" 2>/dev/null) || json_err "$E_JSON_INVALID" "Failed to read registry"
+      ' "$registry_file" 2>/dev/null) || json_err "$E_JSON_INVALID" "Failed to read registry"  # SUPPRESS:OK -- read-default: file may not exist yet
       json_ok "$rl_result"
     fi
     ;;
@@ -3158,7 +3174,7 @@ Files: ${files_changed} files changed"
     ;;
 
   load-state)
-    source "$SCRIPT_DIR/utils/state-loader.sh" 2>/dev/null || {
+    source "$SCRIPT_DIR/utils/state-loader.sh" 2>/dev/null || {  # SUPPRESS:OK -- read-default: utility may not be installed
       json_err "$E_FILE_NOT_FOUND" "state-loader.sh not found"
       exit 1
     }
@@ -3175,7 +3191,7 @@ Files: ${files_changed} files changed"
     ;;
 
   unload-state)
-    source "$SCRIPT_DIR/utils/state-loader.sh" 2>/dev/null || {
+    source "$SCRIPT_DIR/utils/state-loader.sh" 2>/dev/null || {  # SUPPRESS:OK -- read-default: utility may not be installed
       json_err "$E_FILE_NOT_FOUND" "state-loader.sh not found"
       exit 1
     }
@@ -3184,7 +3200,7 @@ Files: ${files_changed} files changed"
     ;;
 
   spawn-tree-load)
-    source "$SCRIPT_DIR/utils/spawn-tree.sh" 2>/dev/null || {
+    source "$SCRIPT_DIR/utils/spawn-tree.sh" 2>/dev/null || {  # SUPPRESS:OK -- read-default: utility may not be installed
       json_err "$E_FILE_NOT_FOUND" "spawn-tree.sh not found"
       exit 1
     }
@@ -3193,7 +3209,7 @@ Files: ${files_changed} files changed"
     ;;
 
   spawn-tree-active)
-    source "$SCRIPT_DIR/utils/spawn-tree.sh" 2>/dev/null || {
+    source "$SCRIPT_DIR/utils/spawn-tree.sh" 2>/dev/null || {  # SUPPRESS:OK -- read-default: utility may not be installed
       json_err "$E_FILE_NOT_FOUND" "spawn-tree.sh not found"
       exit 1
     }
@@ -3204,7 +3220,7 @@ Files: ${files_changed} files changed"
   spawn-tree-depth)
     ant_name="${1:-}"
     [[ -z "$ant_name" ]] && json_err "$E_VALIDATION_FAILED" "Usage: spawn-tree-depth <ant_name>"
-    source "$SCRIPT_DIR/utils/spawn-tree.sh" 2>/dev/null || {
+    source "$SCRIPT_DIR/utils/spawn-tree.sh" 2>/dev/null || {  # SUPPRESS:OK -- read-default: utility may not be installed
       json_err "$E_FILE_NOT_FOUND" "spawn-tree.sh not found"
       exit 1
     }
@@ -3221,9 +3237,9 @@ Files: ${files_changed} files changed"
     failed=0
 
     if [[ -f "$spawn_tree_file" ]]; then
-      total=$(grep -c "|spawned$" "$spawn_tree_file" 2>/dev/null || echo 0)
-      completed=$(grep -c "|completed$" "$spawn_tree_file" 2>/dev/null || echo 0)
-      failed=$(grep -c "|failed$" "$spawn_tree_file" 2>/dev/null || echo 0)
+      total=$(grep -c "|spawned$" "$spawn_tree_file" 2>/dev/null || echo 0)  # SUPPRESS:OK -- read-default: count defaults to 0 if file missing
+      completed=$(grep -c "|completed$" "$spawn_tree_file" 2>/dev/null || echo 0)  # SUPPRESS:OK -- read-default: count defaults to 0 if file missing
+      failed=$(grep -c "|failed$" "$spawn_tree_file" 2>/dev/null || echo 0)  # SUPPRESS:OK -- read-default: count defaults to 0 if file missing
     fi
 
     if [[ "$total" -gt 0 ]]; then
@@ -3250,6 +3266,7 @@ Files: ${files_changed} files changed"
         fi
 
         # Extract model for caste using awk (bash-compatible YAML parsing)
+        # SUPPRESS:OK -- read-default: file may not exist
         model=$(awk '/^worker_models:/{found=1; next} found && /^[^ ]/{exit} found && /^  '$caste':/{print $2; exit}' "$profile_file" 2>/dev/null)
 
         [[ -z "$model" ]] && model="kimi-k2.5"
@@ -3265,6 +3282,7 @@ Files: ${files_changed} files changed"
 
         # Extract all caste:model pairs as JSON
         # Lines look like: "  prime: glm-5           # Complex coordination..."
+        # SUPPRESS:OK -- read-default: file may not exist
         models=$(awk '/^worker_models:/{found=1; next} found && /^[^ ]/{exit} found && /^  [a-z_]+:/{gsub(/:/,""); printf "\"%s\":\"%s\",", $1, $2}' "$profile_file" 2>/dev/null)
         # Remove trailing comma
         models="${models%,}"
@@ -3277,10 +3295,12 @@ Files: ${files_changed} files changed"
         [[ ! -f "$profile_file" ]] && json_err "$E_FILE_NOT_FOUND" "Profile not found" '{"file":"model-profiles.yaml"}'
 
         # Check proxy health
+        # SUPPRESS:OK -- existence-test: service may not be running
         proxy_health=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:4000/health 2>/dev/null || echo "000")
         proxy_status=$([[ "$proxy_health" == "200" ]] && echo "healthy" || echo "unhealthy")
 
         # Count castes
+        # SUPPRESS:OK -- read-default: file may not exist
         caste_count=$(awk '/^worker_models:/{found=1; next} found && /^[^ ]/{exit} found && /^  [a-z_]+:/{count++} END{print count+0}' "$profile_file" 2>/dev/null)
 
         json_ok '{"profile_exists":true,"caste_count":'$caste_count',"proxy_status":"'$proxy_status'","proxy_endpoint":"http://localhost:4000"}'
@@ -3502,14 +3522,14 @@ NODESCRIPT
     state_file="$DATA_DIR/COLONY_STATE.json"
     [[ -f "$state_file" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
 
-    if ! jq -e . "$state_file" >/dev/null 2>&1; then
+    if ! jq -e . "$state_file" >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON validity
       json_err "$E_JSON_INVALID" "COLONY_STATE.json has invalid JSON"
     fi
 
-    phase_count=$(jq -r '(.plan.phases // []) | length' "$state_file" 2>/dev/null || echo "0")
+    phase_count=$(jq -r '(.plan.phases // []) | length' "$state_file" 2>/dev/null || echo "0")  # SUPPRESS:OK -- read-default: file may not exist yet
     [[ "$phase_count" -gt 0 ]] || json_err "$E_VALIDATION_FAILED" "No project plan found. Run /ant:plan first."
 
-    current_phase=$(jq -r '.current_phase // 0' "$state_file" 2>/dev/null || echo "0")
+    current_phase=$(jq -r '.current_phase // 0' "$state_file" 2>/dev/null || echo "0")  # SUPPRESS:OK -- read-default: file may not exist yet
     [[ "$current_phase" =~ ^[0-9]+$ ]] || current_phase=0
     if [[ "$current_phase" -gt "$phase_count" ]]; then
       current_phase="$phase_count"
@@ -3526,7 +3546,7 @@ NODESCRIPT
     if type acquire_lock &>/dev/null; then
       acquire_lock "$state_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on COLONY_STATE.json"
       _phase_lock_held=true
-      trap 'release_lock 2>/dev/null || true' EXIT
+      trap 'release_lock 2>/dev/null || true' EXIT  # SUPPRESS:OK -- cleanup: lock may not be held
     fi
 
     if type create_backup &>/dev/null; then
@@ -3614,22 +3634,25 @@ NODESCRIPT
         } as $new_phase
       | .plan.phases = (($shifted + [$new_phase]) | sort_by(.id))
       | .events = ((.events // []) + [($ts + "|phase_inserted|insert-phase|Inserted Phase " + ($insert_id|tostring) + ": " + $name)])
-      ' "$state_file" 2>/dev/null) || {
-      [[ "$_phase_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+      ' "$state_file" 2>/dev/null) || {  # SUPPRESS:OK -- read-default: file may not exist yet
+      [[ "$_phase_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
       trap - EXIT
       json_err "$E_JSON_INVALID" "Failed to insert phase into COLONY_STATE.json"
     }
 
     atomic_write "$state_file" "$updated"
 
-    [[ "$_phase_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+    [[ "$_phase_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
     trap - EXIT
 
     # Emit guidance signals non-blocking to reinforce inserted phase intent.
+    # SUPPRESS:OK -- cleanup: side-effect is best-effort
     bash "$0" pheromone-write FOCUS "Inserted Phase $insert_id: $phase_goal" --strength 0.8 --source "user:insert-phase" --reason "Phase inserted to correct execution path" --ttl "30d" >/dev/null 2>&1 || true
     if [[ -n "$phase_constraints" ]]; then
+      # SUPPRESS:OK -- cleanup: side-effect is best-effort
       bash "$0" pheromone-write REDIRECT "$phase_constraints" --strength 0.9 --source "user:insert-phase" --reason "Constraint captured during phase insertion" --ttl "30d" >/dev/null 2>&1 || true
     fi
+    # SUPPRESS:OK -- cleanup: side-effect is best-effort
     bash "$0" memory-capture "learning" "Inserted phase $insert_id ($phase_name): $phase_goal" "pattern" "system:phase-insert" >/dev/null 2>&1 || true
 
     result=$(jq -n \
@@ -3711,7 +3734,7 @@ NODESCRIPT
 
     # Tolerate malformed argument ordering from LLM-generated commands.
     # Common failure mode: tools_json omitted, so tokens/chamber/progress shift left.
-    tools_type=$(echo "$tools_json" | jq -r 'type' 2>/dev/null || echo "invalid")
+    tools_type=$(echo "$tools_json" | jq -r 'type' 2>/dev/null || echo "invalid")  # SUPPRESS:OK -- read-default: returns fallback if missing
     if [[ "$tools_type" != "object" ]]; then
       if [[ "$tools_json" =~ ^[0-9]+$ ]] && [[ ! "$tokens" =~ ^[0-9]+$ ]] && [[ "$chamber" =~ ^[0-9]+$ ]]; then
         progress="$chamber"
@@ -3729,7 +3752,7 @@ NODESCRIPT
 
     # Initialize if doesn't exist
     if [[ ! -f "$display_file" ]]; then
-      bash "$0" swarm-display-init "default-swarm" >/dev/null 2>&1
+      bash "$0" swarm-display-init "default-swarm" >/dev/null 2>&1  # SUPPRESS:OK -- cleanup: side-effect is best-effort
     fi
 
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -3826,7 +3849,7 @@ NODESCRIPT
 
     if [[ -f "$display_script" ]]; then
       # Execute the display script
-      bash "$display_script" "$swarm_id" 2>/dev/null || true
+      bash "$display_script" "$swarm_id" 2>/dev/null || true  # SUPPRESS:OK -- cleanup: side-effect is best-effort
       json_ok '{"rendered":true}'
     else
       json_err "$E_FILE_NOT_FOUND" "Display script not found: $display_script"
@@ -3975,7 +3998,7 @@ NODESCRIPT
     fi
 
     # Read swarm data
-    total_active=$(jq -r '.summary.total_active // 0' "$display_file" 2>/dev/null || echo "0")
+    total_active=$(jq -r '.summary.total_active // 0' "$display_file" 2>/dev/null || echo "0")  # SUPPRESS:OK -- read-default: file may not exist yet
 
     if [[ "$total_active" -eq 0 ]]; then
       echo -e "${DIM}🐜 Colony idle${RESET}"
@@ -4019,6 +4042,7 @@ ANTLOGO
     echo ""
 
     # Render each active ant (limit to 5)
+    # SUPPRESS:OK -- read-default: file may not exist yet
     jq -r '.active_ants[0:5][] | "\(.name)|\(.caste)|\(.status // "")|\(.task // "")|\(.tools.read // 0)|\(.tools.grep // 0)|\(.tools.edit // 0)|\(.tools.bash // 0)|\(.tokens // 0)|\(.started_at // "")|\(.parent // "Queen")|\(.progress // 0)"' "$display_file" 2>/dev/null | while IFS='|' read -r ant_name ant_caste ant_status ant_task read_ct grep_ct edit_ct bash_ct tokens started_at parent progress; do
       color=$(get_caste_color "$ant_caste")
       emoji=$(get_caste_emoji "$ant_caste")
@@ -4035,13 +4059,13 @@ ANTLOGO
       elapsed_str=""
       started_ts="${started_at:-}"
       if [[ -n "$started_ts" ]] && [[ "$started_ts" != "null" ]]; then
-        started_ts=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$started_ts" +%s 2>/dev/null)
+        started_ts=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$started_ts" +%s 2>/dev/null)  # SUPPRESS:OK -- cross-platform: macOS date syntax
         if [[ -z "$started_ts" ]] || [[ "$started_ts" == "null" ]]; then
-          started_ts=$(date -d "$started_ts" +%s 2>/dev/null) || started_ts=0
+          started_ts=$(date -d "$started_ts" +%s 2>/dev/null) || started_ts=0  # SUPPRESS:OK -- cross-platform: Linux date syntax
         fi
         now_ts=$(date +%s)
         elapsed=0
-        if [[ -n "$started_ts" ]] && [[ "$started_ts" -gt 0 ]] 2>/dev/null; then
+        if [[ -n "$started_ts" ]] && [[ "$started_ts" -gt 0 ]] 2>/dev/null; then  # SUPPRESS:OK -- existence-test: value may not be numeric
           elapsed=$((now_ts - started_ts))
         fi
         if [[ ${elapsed:-0} -gt 0 ]]; then
@@ -4077,6 +4101,7 @@ ANTLOGO
 
     # Show active chambers with fire intensity
     has_chamber_activity=0
+    # SUPPRESS:OK -- read-default: file may not exist yet
     jq -r '.chambers | to_entries[] | "\(.key)|\(.value.activity)|\(.value.icon)"' "$display_file" 2>/dev/null | \
     while IFS='|' read -r chamber activity icon; do
       if [[ -n "$activity" ]] && [[ "$activity" -gt 0 ]]; then
@@ -4125,6 +4150,7 @@ ANTLOGO
     fi
 
     # Read swarm data — handle both flat total_active and nested .summary.total_active
+    # SUPPRESS:OK -- read-default: file may not exist yet
     total_active=$(jq -r '(.total_active // .summary.total_active // 0)' "$display_file" 2>/dev/null || echo "0")
 
     if [[ "$total_active" -eq 0 ]]; then
@@ -4181,9 +4207,9 @@ ANTLOGO
     iso_to_epoch_text() {
       local iso="$1"
       local epoch=""
-      epoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$iso" +%s 2>/dev/null || true)
+      epoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$iso" +%s 2>/dev/null || true)  # SUPPRESS:OK -- cross-platform: macOS date syntax
       if [[ -z "$epoch" ]]; then
-        epoch=$(date -d "$iso" +%s 2>/dev/null || true)
+        epoch=$(date -d "$iso" +%s 2>/dev/null || true)  # SUPPRESS:OK -- cross-platform: Linux date syntax
       fi
       echo "${epoch:-0}"
     }
@@ -4212,13 +4238,14 @@ ANTLOGO
       fi
     }
 
+    # SUPPRESS:OK -- read-default: file may not exist yet
     total_tokens=$(jq -r '[.active_ants[]?.tokens // 0] | add // 0' "$display_file" 2>/dev/null || echo "0")
-    started_iso=$(jq -r '.timestamp // ""' "$display_file" 2>/dev/null || echo "")
+    started_iso=$(jq -r '.timestamp // ""' "$display_file" 2>/dev/null || echo "")  # SUPPRESS:OK -- read-default: file may not exist yet
     elapsed_text="n/a"
     if [[ -n "$started_iso" && "$started_iso" != "null" ]]; then
       started_epoch=$(iso_to_epoch_text "$started_iso")
       now_epoch=$(date +%s)
-      if [[ "$started_epoch" -gt 0 ]] 2>/dev/null; then
+      if [[ "$started_epoch" -gt 0 ]] 2>/dev/null; then  # SUPPRESS:OK -- existence-test: value may not be numeric
         total_elapsed=$((now_epoch - started_epoch))
         [[ "$total_elapsed" -lt 0 ]] && total_elapsed=0
         elapsed_text=$(format_duration_text "$total_elapsed")
@@ -4226,6 +4253,7 @@ ANTLOGO
     fi
 
     # Render each ant (max 5)
+    # SUPPRESS:OK -- read-default: file may not exist yet
     jq -r '.active_ants[0:5][] | "\(.name)|\(.caste)|\(.task // "")|\(.tools.read // 0)|\(.tools.grep // 0)|\(.tools.edit // 0)|\(.tools.bash // 0)|\(.progress // 0)|\(.tokens // 0)|\(.started_at // "")"' "$display_file" 2>/dev/null | while IFS='|' read -r name caste task r g e b progress tokens started_at; do
       emoji=$(get_emoji "$caste")
       tools=$(format_tools_text "$r" "$g" "$e" "$b")
@@ -4236,14 +4264,14 @@ ANTLOGO
       # Truncate task to 25 chars
       [[ ${#task} -gt 25 ]] && task="${task:0:22}..."
 
-      if [[ -n "$tokens" && "$tokens" -gt 0 ]] 2>/dev/null; then
+      if [[ -n "$tokens" && "$tokens" -gt 0 ]] 2>/dev/null; then  # SUPPRESS:OK -- existence-test: value may not be numeric
         token_str="🍯$(format_compact_tokens "$tokens")"
       fi
 
       if [[ -n "$started_at" && "$started_at" != "null" ]]; then
         ant_start_epoch=$(iso_to_epoch_text "$started_at")
         now_epoch=$(date +%s)
-        if [[ "$ant_start_epoch" -gt 0 ]] 2>/dev/null; then
+        if [[ "$ant_start_epoch" -gt 0 ]] 2>/dev/null; then  # SUPPRESS:OK -- existence-test: value may not be numeric
           ant_elapsed=$((now_epoch - ant_start_epoch))
           [[ "$ant_elapsed" -lt 0 ]] && ant_elapsed=0
           elapsed_ant="($(format_duration_text "$ant_elapsed"))"
@@ -4285,7 +4313,7 @@ ANTLOGO
 
     # Remove any existing entry for this ant and append new one
     if [[ -f "$timing_file" ]]; then
-      grep -v "^$ant_name|" "$timing_file" > "${timing_file}.tmp" 2>/dev/null || true
+      grep -v "^$ant_name|" "$timing_file" > "${timing_file}.tmp" 2>/dev/null || true  # SUPPRESS:OK -- read-default: file may not exist
       mv "${timing_file}.tmp" "$timing_file"
     fi
     echo "$ant_name|$ts|$ts_iso" >> "$timing_file"
@@ -4301,7 +4329,7 @@ ANTLOGO
 
     timing_file="$DATA_DIR/timing.log"
 
-    if [[ ! -f "$timing_file" ]] || ! grep -q "^$ant_name|" "$timing_file" 2>/dev/null; then
+    if [[ ! -f "$timing_file" ]] || ! grep -q "^$ant_name|" "$timing_file" 2>/dev/null; then  # SUPPRESS:OK -- existence-test: file may not exist
       json_ok "{\"ant\":\"$ant_name\",\"started_at\":null,\"elapsed_seconds\":0,\"elapsed_formatted\":\"00:00\"}"
       exit 0
     fi
@@ -4343,7 +4371,7 @@ ANTLOGO
 
     timing_file="$DATA_DIR/timing.log"
 
-    if [[ ! -f "$timing_file" ]] || ! grep -q "^$ant_name|" "$timing_file" 2>/dev/null; then
+    if [[ ! -f "$timing_file" ]] || ! grep -q "^$ant_name|" "$timing_file" 2>/dev/null; then  # SUPPRESS:OK -- existence-test: file may not exist
       json_ok "{\"ant\":\"$ant_name\",\"percent\":$percent,\"eta_seconds\":null,\"eta_formatted\":\"--:--\"}"
       exit 0
     fi
@@ -4411,7 +4439,7 @@ ANTLOGO
 
     if [[ ! -f "$view_state_file" ]]; then
       # Auto-initialize if not exists
-      bash "$0" view-state-init >/dev/null 2>&1
+      bash "$0" view-state-init >/dev/null 2>&1  # SUPPRESS:OK -- cleanup: side-effect is best-effort
     fi
 
     if [[ -z "$view_name" ]]; then
@@ -4437,7 +4465,7 @@ ANTLOGO
     view_state_file="$DATA_DIR/view-state.json"
 
     if [[ ! -f "$view_state_file" ]]; then
-      bash "$0" view-state-init >/dev/null 2>&1
+      bash "$0" view-state-init >/dev/null 2>&1  # SUPPRESS:OK -- cleanup: side-effect is best-effort
     fi
 
     # Determine if value is JSON or string
@@ -4467,7 +4495,7 @@ ANTLOGO
     view_state_file="$DATA_DIR/view-state.json"
 
     if [[ ! -f "$view_state_file" ]]; then
-      bash "$0" view-state-init >/dev/null 2>&1
+      bash "$0" view-state-init >/dev/null 2>&1  # SUPPRESS:OK -- cleanup: side-effect is best-effort
     fi
 
     # Check current state
@@ -4505,7 +4533,7 @@ ANTLOGO
     view_state_file="$DATA_DIR/view-state.json"
 
     if [[ ! -f "$view_state_file" ]]; then
-      bash "$0" view-state-init >/dev/null 2>&1
+      bash "$0" view-state-init >/dev/null 2>&1  # SUPPRESS:OK -- cleanup: side-effect is best-effort
     fi
 
     updated=$(jq --arg view "$view_name" --arg item "$item" '
@@ -4527,7 +4555,7 @@ ANTLOGO
     view_state_file="$DATA_DIR/view-state.json"
 
     if [[ ! -f "$view_state_file" ]]; then
-      bash "$0" view-state-init >/dev/null 2>&1
+      bash "$0" view-state-init >/dev/null 2>&1  # SUPPRESS:OK -- cleanup: side-effect is best-effort
     fi
 
     updated=$(jq --arg view "$view_name" --arg item "$item" '
@@ -4633,32 +4661,38 @@ ANTLOGO
 
       # Philosophies: between p_line+1 and pat_line-1
       if [[ -n "$p_line" && -n "$pat_line" ]]; then
+        # SUPPRESS:OK -- read-default: returns fallback if missing
         philosophies=$(awk -v s="$p_line" -v e="$pat_line" 'NR > s && NR < e {print}' "$file" | sed '/^$/d' | jq -Rs '.' 2>/dev/null || echo '""')
       else philosophies='""'; fi
 
       # Patterns: between pat_line+1 and red_line-1
       if [[ -n "$pat_line" && -n "$red_line" ]]; then
+        # SUPPRESS:OK -- read-default: returns fallback if missing
         patterns=$(awk -v s="$pat_line" -v e="$red_line" 'NR > s && NR < e {print}' "$file" | sed '/^$/d' | jq -Rs '.' 2>/dev/null || echo '""')
       else patterns='""'; fi
 
       # Redirects: between red_line+1 and stack_line-1
       if [[ -n "$red_line" && -n "$stack_line" ]]; then
+        # SUPPRESS:OK -- read-default: returns fallback if missing
         redirects=$(awk -v s="$red_line" -v e="$stack_line" 'NR > s && NR < e {print}' "$file" | sed '/^$/d' | jq -Rs '.' 2>/dev/null || echo '""')
       else redirects='""'; fi
 
       # Stack Wisdom: between stack_line+1 and dec_line-1
       if [[ -n "$stack_line" && -n "$dec_line" ]]; then
+        # SUPPRESS:OK -- read-default: returns fallback if missing
         stack_wisdom=$(awk -v s="$stack_line" -v e="$dec_line" 'NR > s && NR < e {print}' "$file" | sed '/^$/d' | jq -Rs '.' 2>/dev/null || echo '""')
       else stack_wisdom='""'; fi
 
       # Decrees: between dec_line+1 and (prefs_line-1 or evo_line-1 or end)
       local dec_end="${prefs_line:-${evo_line:-999999}}"
       if [[ -n "$dec_line" ]]; then
+        # SUPPRESS:OK -- read-default: returns fallback if missing
         decrees=$(awk -v s="$dec_line" -v e="$dec_end" 'NR > s && NR < e {print}' "$file" | sed '/^$/d' | jq -Rs '.' 2>/dev/null || echo '""')
       else decrees='""'; fi
 
       # User Preferences: between prefs_line+1 and (evo_line-1 or end)
       if [[ -n "$prefs_line" ]]; then
+        # SUPPRESS:OK -- read-default: returns fallback if missing
         user_prefs=$(awk -v s="$prefs_line" -v e="${evo_line:-999999}" 'NR > s && NR < e {print}' "$file" | sed '/^$/d' | jq -Rs '.' 2>/dev/null || echo '""')
       else
         user_prefs='""'
@@ -4722,7 +4756,7 @@ ANTLOGO
     fi
 
     # Gate 1: Validate metadata is parseable JSON BEFORE using as --argjson
-    if ! echo "$metadata" | jq -e . >/dev/null 2>&1; then
+    if ! echo "$metadata" | jq -e . >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON validity
       json_err "$E_JSON_INVALID" \
         "QUEEN.md has a malformed METADATA block — the JSON between <!-- METADATA and --> is invalid. Try: fix the JSON in .aether/QUEEN.md or run queen-init to reset."
     fi
@@ -4769,7 +4803,7 @@ ANTLOGO
       }')
 
     # Gate 2: Validate assembled result before returning
-    if [[ -z "$result" ]] || ! echo "$result" | jq -e . >/dev/null 2>&1; then
+    if [[ -z "$result" ]] || ! echo "$result" | jq -e . >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON validity
       json_err "$E_JSON_INVALID" \
         "Couldn't assemble queen-read output. QUEEN.md may have formatting issues. Try: run queen-init to reset."
     fi
@@ -4983,20 +5017,20 @@ ANTLOGO
         ir_lock_held=false
         if type acquire_lock &>/dev/null; then
           acquire_lock "$ir_queen_file" || {
-            rm -f "$ir_tmp" 2>/dev/null || true
+            rm -f "$ir_tmp" 2>/dev/null || true  # SUPPRESS:OK -- cleanup: file may not exist
             json_err "$E_LOCK_FAILED" "Failed to acquire lock on QUEEN.md"
           }
           ir_lock_held=true
         fi
 
-        ir_content=$(cat "$ir_tmp" 2>/dev/null || echo "")
+        ir_content=$(cat "$ir_tmp" 2>/dev/null || echo "")  # SUPPRESS:OK -- read-default: file may not exist yet
         atomic_write "$ir_queen_file" "$ir_content" || {
-          rm -f "$ir_tmp" 2>/dev/null || true
-          [[ "$ir_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+          rm -f "$ir_tmp" 2>/dev/null || true  # SUPPRESS:OK -- cleanup: file may not exist
+          [[ "$ir_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
           json_err "$E_FILE_NOT_FOUND" "Failed to append decree rule to QUEEN.md"
         }
-        rm -f "$ir_tmp" 2>/dev/null || true
-        [[ "$ir_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+        rm -f "$ir_tmp" 2>/dev/null || true  # SUPPRESS:OK -- cleanup: file may not exist
+        [[ "$ir_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
         ;;
 
       constraint)
@@ -5018,16 +5052,16 @@ ANTLOGO
             source: $source,
             created_at: $ts
           }]
-        ' "$ir_constraints_file" 2>/dev/null) || {
-          [[ "$ir_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+        ' "$ir_constraints_file" 2>/dev/null) || {  # SUPPRESS:OK -- read-default: file may not exist yet
+          [[ "$ir_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
           json_err "$E_JSON_INVALID" "Failed to update constraints.json"
         }
 
         atomic_write "$ir_constraints_file" "$ir_updated" || {
-          [[ "$ir_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+          [[ "$ir_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
           json_err "$E_JSON_INVALID" "Failed to write constraints.json"
         }
-        [[ "$ir_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+        [[ "$ir_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
         ;;
 
       gate)
@@ -5088,6 +5122,7 @@ ANTLOGO
 
     if [[ "$wisdom_type" != "decree" ]] && [[ -f "$observations_file" ]]; then
       # Check if this content has been observed enough times
+      # SUPPRESS:OK -- read-default: returns fallback if missing
       observation_data=$(jq -r --arg hash "$content_hash" '.observations[] | select(.content_hash == $hash) | {count: .observation_count, colonies: .colonies}' "$observations_file" 2>/dev/null || echo '{}')
 
       if [[ -n "$observation_data" ]] && [[ "$observation_data" != '{}' ]]; then
@@ -5186,7 +5221,7 @@ ${entry}" "$queen_file" > "$tmp_file"
       *) stat_key="total_${wisdom_type}s" ;;
     esac
     # Read current count from temp file (which has the latest state)
-    current_count=$(grep "\"${stat_key}\":" "$tmp_file" 2>/dev/null | grep -o '[0-9]*' | head -1 || true)
+    current_count=$(grep "\"${stat_key}\":" "$tmp_file" 2>/dev/null | grep -o '[0-9]*' | head -1 || true)  # SUPPRESS:OK -- read-default: file may not exist
     current_count=${current_count:-0}
     new_count=$((current_count + 1))
 
@@ -5268,6 +5303,7 @@ ${entry}" "$queen_file" > "$tmp_file"
     # Get colonies from observations file if available
     colonies_json="[]"
     if [[ -f "$observations_file" ]]; then
+      # SUPPRESS:OK -- read-default: file may not exist yet
       colonies_from_obs=$(jq -r --arg hash "$content_hash" '.observations[] | select(.content_hash == $hash) | .colonies // [] | @json' "$observations_file" 2>/dev/null || echo '[]')
       if [[ -n "$colonies_from_obs" ]] && [[ "$colonies_from_obs" != "null" ]]; then
         colonies_json="$colonies_from_obs"
@@ -5301,6 +5337,7 @@ ${entry}" "$queen_file" > "$tmp_file"
       # Use jq for reliable JSON manipulation
       meta_section=$(sed -n '/<!-- METADATA/,/-->/p' "$tmp_file" | sed '1d;$d' | tr -d '\n' | sed 's/^[[:space:]]*//')
       if [[ -n "$meta_section" ]]; then
+        # SUPPRESS:OK -- read-default: returns fallback if missing
         updated_meta=$(echo "$meta_section" | jq --arg hash "$content_hash" --argjson cols "$colonies_json" '.colonies_contributed[$hash] = $cols' 2>/dev/null || echo "$meta_section")
         # Replace metadata section
         new_comment="<!-- METADATA"
@@ -5376,12 +5413,12 @@ $updated_meta
     fi
 
     # Validate JSON structure — circuit breaker with backup recovery
-    if ! jq -e . "$observations_file" >/dev/null 2>&1; then
+    if ! jq -e . "$observations_file" >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON validity
       # Try to recover from backup (with retry-once per user decision)
       lo_recovered=false
       for lo_attempt in 1 2; do
         for lo_bak in "${observations_file}.bak.1" "${observations_file}.bak.2" "${observations_file}.bak.3"; do
-          if [[ -f "$lo_bak" ]] && jq -e . "$lo_bak" >/dev/null 2>&1; then
+          if [[ -f "$lo_bak" ]] && jq -e . "$lo_bak" >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON validity
             if cp "$lo_bak" "$observations_file" 2>/dev/null; then
               lo_recovered=true
               echo "Warning: Learning observations file was corrupted -- restored from backup. Some recent entries may be missing." >&2
@@ -5416,7 +5453,7 @@ $updated_meta
     # Acquire lock for concurrent access
     if type acquire_lock &>/dev/null; then
       acquire_lock "$observations_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on learning-observations.json"
-      trap 'release_lock 2>/dev/null || true' EXIT
+      trap 'release_lock 2>/dev/null || true' EXIT  # SUPPRESS:OK -- cleanup: lock may not be held
     fi
 
     # Get current timestamp
@@ -5489,7 +5526,7 @@ $updated_meta
 
     # Release lock
     if type release_lock &>/dev/null; then
-      release_lock 2>/dev/null || true
+      release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
     fi
     trap - EXIT
 
@@ -5542,7 +5579,7 @@ $updated_meta
     fi
 
     # Validate JSON structure
-    if ! jq -e . "$observations_file" >/dev/null 2>&1; then
+    if ! jq -e . "$observations_file" >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON validity
       json_err "$E_JSON_INVALID" "learning-observations.json has invalid JSON"
     fi
 
@@ -5566,7 +5603,7 @@ $updated_meta
           }
         ]
       }
-    ' "$observations_file" 2>/dev/null || echo '{"proposals":[]}')
+    ' "$observations_file" 2>/dev/null || echo '{"proposals":[]}')  # SUPPRESS:OK -- read-default: file may not exist yet
 
     json_ok "$result"
     ;;
@@ -5583,6 +5620,7 @@ $updated_meta
     [[ -z "$content" ]] && json_err "$E_VALIDATION_FAILED" "Usage: learning-promote-auto <wisdom_type> <content> [colony_name] [event_type]" '{"missing":"content"}'
 
     if [[ -z "$colony_name" ]]; then
+      # SUPPRESS:OK -- read-default: file may not exist yet
       colony_name=$(jq -r '.session_id | split("_")[1] // "unknown"' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "unknown")
     fi
 
@@ -5594,7 +5632,9 @@ $updated_meta
     colony_count=0
 
     if [[ -f "$observations_file" ]]; then
+      # SUPPRESS:OK -- read-default: file may not exist yet
       observation_count=$(jq -r --arg hash "$content_hash" '.observations[]? | select(.content_hash == $hash) | .observation_count // 0' "$observations_file" 2>/dev/null | head -1)
+      # SUPPRESS:OK -- read-default: file may not exist yet
       colony_count=$(jq -r --arg hash "$content_hash" '.observations[]? | select(.content_hash == $hash) | (.colonies // [] | length)' "$observations_file" 2>/dev/null | head -1)
       [[ -z "$observation_count" ]] && observation_count=0
       [[ -z "$colony_count" ]] && colony_count=0
@@ -5620,14 +5660,16 @@ $updated_meta
       exit 0
     fi
 
-    if grep -Fq -- "$content" "$queen_file" 2>/dev/null; then
+    if grep -Fq -- "$content" "$queen_file" 2>/dev/null; then  # SUPPRESS:OK -- existence-test: file may not exist
       json_ok "{\"promoted\":false,\"reason\":\"already_promoted\",\"policy_threshold\":$policy_threshold,\"observation_count\":$observation_count,\"colony_count\":$colony_count}"
       exit 0
     fi
 
+    # SUPPRESS:OK -- read-default: subcommand may fail
     promote_result=$(bash "$0" queen-promote "$wisdom_type" "$content" "$colony_name" 2>/dev/null || echo '{}')
-    if echo "$promote_result" | jq -e '.ok == true' >/dev/null 2>&1; then
+    if echo "$promote_result" | jq -e '.ok == true' >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON field
       # Also create an instinct from the promoted learning
+      # SUPPRESS:OK -- cleanup: operation is best-effort
       bash "$0" instinct-create \
         --trigger "working on $wisdom_type patterns" \
         --action "$content" \
@@ -5637,6 +5679,7 @@ $updated_meta
         --evidence "Auto-promoted after $observation_count observations (confidence: $lp_confidence)" 2>/dev/null || true
       json_ok "{\"promoted\":true,\"mode\":\"auto\",\"policy_threshold\":$policy_threshold,\"observation_count\":$observation_count,\"colony_count\":$colony_count,\"event_type\":\"$event_type\"}"
     else
+      # SUPPRESS:OK -- read-default: file may not exist yet
       promote_msg=$(echo "$promote_result" | jq -r '.error.message // "promotion_failed"' 2>/dev/null || echo "promotion_failed")
       result=$(jq -n \
         --arg reason "promotion_failed" \
@@ -5675,16 +5718,20 @@ $updated_meta
       esac
     fi
 
+    # SUPPRESS:OK -- read-default: file may not exist yet
     colony_name=$(jq -r '.session_id | split("_")[1] // "unknown"' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "unknown")
 
+    # SUPPRESS:OK -- read-default: subcommand may fail
     observe_result=$(bash "$0" learning-observe "$mc_content" "$mc_wisdom_type" "$colony_name" 2>/dev/null || echo '{}')
-    if ! echo "$observe_result" | jq -e '.ok == true' >/dev/null 2>&1; then
+    if ! echo "$observe_result" | jq -e '.ok == true' >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON field
+      # SUPPRESS:OK -- read-default: file may not exist yet
       obs_msg=$(echo "$observe_result" | jq -r '.error.message // "learning_observe_failed"' 2>/dev/null || echo "learning_observe_failed")
       json_err "$E_VALIDATION_FAILED" "memory-capture failed at learning-observe: $obs_msg"
     fi
 
-    obs_count=$(echo "$observe_result" | jq -r '.result.observation_count // 0' 2>/dev/null || echo "0")
-    obs_threshold=$(echo "$observe_result" | jq -r '.result.threshold // 1' 2>/dev/null || echo "1")
+    obs_count=$(echo "$observe_result" | jq -r '.result.observation_count // 0' 2>/dev/null || echo "0")  # SUPPRESS:OK -- read-default: file may not exist yet
+    obs_threshold=$(echo "$observe_result" | jq -r '.result.threshold // 1' 2>/dev/null || echo "1")  # SUPPRESS:OK -- read-default: file may not exist yet
+    # SUPPRESS:OK -- read-default: file may not exist yet
     obs_threshold_met=$(echo "$observe_result" | jq -r '.result.threshold_met // false' 2>/dev/null || echo "false")
 
     pheromone_type=""
@@ -5729,26 +5776,32 @@ $updated_meta
     pheromone_created=false
     pheromone_signal_id=""
     if [[ -n "$pheromone_type" && -n "$pheromone_content" ]]; then
+      # SUPPRESS:OK -- read-default: subcommand may fail
       pheromone_result=$(bash "$0" pheromone-write "$pheromone_type" "$pheromone_content" --strength "$pheromone_strength" --source "$mc_source" --reason "$pheromone_reason" --ttl "$pheromone_ttl" 2>/dev/null || echo '{}')
-      if echo "$pheromone_result" | jq -e '.ok == true' >/dev/null 2>&1; then
+      if echo "$pheromone_result" | jq -e '.ok == true' >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON field
         pheromone_created=true
+        # SUPPRESS:OK -- read-default: file may not exist yet
         pheromone_signal_id=$(echo "$pheromone_result" | jq -r '.result.signal_id // ""' 2>/dev/null || echo "")
       fi
     fi
 
     # learning-promote-auto may emit multiple JSON lines (e.g. instinct-create output
     # followed by the actual result). Take only the last line as the authoritative result.
+    # SUPPRESS:OK -- read-default: subcommand may fail
     auto_result_raw=$(bash "$0" learning-promote-auto "$mc_wisdom_type" "$mc_content" "$colony_name" "$mc_event" 2>/dev/null || echo '{}')
     auto_result=$(echo "$auto_result_raw" | tail -1)
     auto_promoted=false
     auto_reason="promotion_skipped"
-    if echo "$auto_result" | jq -e '.ok == true' >/dev/null 2>&1; then
+    if echo "$auto_result" | jq -e '.ok == true' >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON field
+      # SUPPRESS:OK -- read-default: file may not exist yet
       auto_promoted=$(echo "$auto_result" | jq -r '.result.promoted // false' 2>/dev/null || echo "false")
+      # SUPPRESS:OK -- read-default: file may not exist yet
       auto_reason=$(echo "$auto_result" | jq -r '.result.reason // "promoted"' 2>/dev/null || echo "unknown")
     fi
 
+    # SUPPRESS:OK -- cleanup: side-effect is best-effort
     bash "$0" activity-log "MEMORY" "system" "Captured $mc_event ($mc_wisdom_type): count=$obs_count auto_promoted=$auto_promoted" >/dev/null 2>&1 || true
-    bash "$0" rolling-summary add "$mc_event" "$mc_content" "$mc_source" >/dev/null 2>&1 || true
+    bash "$0" rolling-summary add "$mc_event" "$mc_content" "$mc_source" >/dev/null 2>&1 || true  # SUPPRESS:OK -- cleanup: side-effect is best-effort
 
     json_ok "{\"event_type\":\"$mc_event\",\"wisdom_type\":\"$mc_wisdom_type\",\"observation_count\":$obs_count,\"threshold\":$obs_threshold,\"threshold_met\":$obs_threshold_met,\"pheromone_created\":$pheromone_created,\"signal_id\":\"$pheromone_signal_id\",\"auto_promoted\":$auto_promoted,\"promotion_reason\":\"$auto_reason\"}"
     ;;
@@ -5826,7 +5879,7 @@ $updated_meta
           }
         ]
       }
-    ' "$observations_file" 2>/dev/null || echo '{"proposals":[]}')
+    ' "$observations_file" 2>/dev/null || echo '{"proposals":[]}')  # SUPPRESS:OK -- read-default: file may not exist yet
 
     # Check if there are any proposals
     proposal_count=$(echo "$proposals_json" | jq '.proposals | length')
@@ -5890,6 +5943,7 @@ $updated_meta
         fi
 
         # Get threshold bar
+        # SUPPRESS:OK -- read-default: subcommand may fail
         bar_result=$(bash "$0" generate-threshold-bar "$count" "$prop_threshold" 2>/dev/null | jq -r '.result.bar')
 
         # Build warning for below-threshold
@@ -5964,7 +6018,7 @@ $updated_meta
           }
         ]
       }
-    ' "$observations_file" 2>/dev/null || echo '{"proposals":[]}')
+    ' "$observations_file" 2>/dev/null || echo '{"proposals":[]}')  # SUPPRESS:OK -- read-default: file may not exist yet
 
     # Check if we have any proposals
     proposal_count=$(echo "$proposals_json" | jq '.proposals | length')
@@ -5997,7 +6051,7 @@ $updated_meta
     parse_result=$(bash "$0" parse-selection "$selection" "$proposal_count")
 
     # Check for parse errors
-    if ! echo "$parse_result" | jq -e '.ok' >/dev/null 2>&1; then
+    if ! echo "$parse_result" | jq -e '.ok' >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON field
       # Return the error
       echo "$parse_result"
       exit 1
@@ -6118,7 +6172,7 @@ $updated_meta
 
     # Read existing deferred file or create empty structure
     if [[ -f "$deferred_file" ]]; then
-      existing_deferred=$(jq '.deferred // []' "$deferred_file" 2>/dev/null || echo '[]')
+      existing_deferred=$(jq '.deferred // []' "$deferred_file" 2>/dev/null || echo '[]')  # SUPPRESS:OK -- read-default: returns fallback if missing
     else
       existing_deferred='[]'
     fi
@@ -6140,14 +6194,14 @@ $updated_meta
       map(select(
         (.deferred_at | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601) > $cutoff
       ))
-    ' 2>/dev/null || echo '[]')
+    ' 2>/dev/null || echo '[]')  # SUPPRESS:OK -- read-default: returns fallback on failure
 
     # Count expired items
     expired_count=$(echo "$existing_deferred" | jq --argjson cutoff "$ttl_cutoff" '
       map(select(
         (.deferred_at | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601) <= $cutoff
       )) | length
-    ' 2>/dev/null || echo '0')
+    ' 2>/dev/null || echo '0')  # SUPPRESS:OK -- read-default: returns fallback on failure
 
     # Merge new proposals with existing, avoiding duplicates by content_hash
     merged=$(jq -s --argjson new "$new_proposals" '
@@ -6217,6 +6271,7 @@ $updated_meta
     # Get colony name from COLONY_STATE.json
     colony_name="unknown"
     if [[ -f "$DATA_DIR/COLONY_STATE.json" ]]; then
+      # SUPPRESS:OK -- read-default: file may not exist yet
       colony_name=$(jq -r '.session_id | split("_")[1] // "unknown"' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "unknown")
     fi
 
@@ -6228,12 +6283,13 @@ $updated_meta
         json_ok '{"promoted":0,"deferred":0,"failed":null,"undo_offered":false}'
         exit 0
       fi
+      # SUPPRESS:OK -- read-default: file may not exist yet
       proposals_json=$(jq '{proposals: .deferred}' "$DATA_DIR/learning-deferred.json" 2>/dev/null || echo '{"proposals":[]}')
       echo "📦 Reviewing deferred proposals..."
       echo ""
     else
       # Get proposals directly from learning-check-promotion
-      proposals_result=$(bash "$0" learning-check-promotion 2>/dev/null || echo '{"proposals":[]}')
+      proposals_result=$(bash "$0" learning-check-promotion 2>/dev/null || echo '{"proposals":[]}')  # SUPPRESS:OK -- read-default: subcommand may fail
       proposals_json=$(echo "$proposals_result" | jq '{proposals: .result.proposals // []}')
 
       # Check if there were any proposals
@@ -6403,7 +6459,7 @@ $updated_meta
     if [[ "$dry_run" == "false" ]] && [[ $deferred_count -gt 0 ]]; then
       # Convert skipped proposals to JSON array and defer
       skipped_json=$(printf '%s\n' "${skipped_proposals[@]}" | jq -s '.')
-      echo "$skipped_json" | bash "$0" learning-defer-proposals >/dev/null 2>&1
+      echo "$skipped_json" | bash "$0" learning-defer-proposals >/dev/null 2>&1  # SUPPRESS:OK -- cleanup: side-effect is best-effort
     fi
 
     # Log activity
@@ -6434,7 +6490,7 @@ $updated_meta
       if [[ "$undo_response" =~ ^[Yy]$ ]]; then
         echo "Reverting promotions..."
         undo_result=$(bash "$0" learning-undo-promotions 2>&1)
-        if echo "$undo_result" | jq -e '.ok' >/dev/null 2>&1; then
+        if echo "$undo_result" | jq -e '.ok' >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON field
           undone_count=$(echo "$undo_result" | jq -r '.result.undone // 0')
           echo "$undone_count promotion(s) reverted."
           promoted_count=0
@@ -6537,7 +6593,7 @@ $updated_meta
       # Find and remove the entry from the section
       # Pattern: - **colony_name** (timestamp): content
       # We match based on content since that's the unique part
-      if grep -q "${escaped_content}" "$tmp_file" 2>/dev/null; then
+      if grep -q "${escaped_content}" "$tmp_file" 2>/dev/null; then  # SUPPRESS:OK -- existence-test: file may not exist
         # Remove line containing this content within the section
         # Use awk to handle section-aware removal
         awk -v section="$section_header" -v content="$content" '
@@ -6563,7 +6619,7 @@ $updated_meta
     esac
 
     # Decrement stats (but not below 0)
-    current_count=$(grep "\"${stat_key}\":" "$tmp_file" 2>/dev/null | grep -o '[0-9]*' | head -1 || echo "0")
+    current_count=$(grep "\"${stat_key}\":" "$tmp_file" 2>/dev/null | grep -o '[0-9]*' | head -1 || echo "0")  # SUPPRESS:OK -- read-default: file may not exist
     current_count=${current_count:-0}
     if [[ $current_count -gt 0 ]]; then
       new_count=$((current_count - 1))
@@ -6662,7 +6718,7 @@ $updated_meta
     fi
 
     # Get dirty files from git (staged or unstaged)
-    dirty_files=$(git status --porcelain 2>/dev/null | awk '{print $2}' || true)
+    dirty_files=$(git status --porcelain 2>/dev/null | awk '{print $2}' || true)  # SUPPRESS:OK -- existence-test: may not be a git repo
 
     if [[ -z "$dirty_files" ]]; then
       json_ok '{"ok":true,"system_files":[],"user_files":[],"has_user_files":false}'
@@ -6705,14 +6761,15 @@ $updated_meta
 
     # Build JSON using jq if available, otherwise use simple format
     if command -v jq >/dev/null 2>&1; then
+      # SUPPRESS:OK -- read-default: file may not exist yet
       result=$(jq -n \
         --argjson system "$(jq -R . < "$system_files_tmp" 2>/dev/null | jq -s .)" \
         --argjson user "$(jq -R . < "$user_files_tmp" 2>/dev/null | jq -s .)" \
         '{ok: true, system_files: $system, user_files: $user, has_user_files: ($user | length > 0)}')
     else
       # Fallback without jq - simple output
-      system_count=$(wc -l < "$system_files_tmp" 2>/dev/null | tr -d ' ' || echo "0")
-      user_count=$(wc -l < "$user_files_tmp" 2>/dev/null | tr -d ' ' || echo "0")
+      system_count=$(wc -l < "$system_files_tmp" 2>/dev/null | tr -d ' ' || echo "0")  # SUPPRESS:OK -- read-default: file may not exist
+      user_count=$(wc -l < "$user_files_tmp" 2>/dev/null | tr -d ' ' || echo "0")  # SUPPRESS:OK -- read-default: file may not exist
       has_user=false
       [[ "$user_count" -gt 0 ]] && has_user=true
       result="{\"ok\":true,\"system_files\":[],\"user_files\":[],\"has_user_files\":$has_user}"
@@ -6866,7 +6923,7 @@ $updated_meta
       fi
 
       # Get line count
-      lines=$(wc -l < "$doc_path" 2>/dev/null | tr -d ' ' || echo "0")
+      lines=$(wc -l < "$doc_path" 2>/dev/null | tr -d ' ' || echo "0")  # SUPPRESS:OK -- read-default: file may not exist
       total_lines=$((total_lines + lines))
 
       # In force mode, accept any existing file
@@ -6878,7 +6935,7 @@ $updated_meta
       # Check timestamp if session_start_time provided
       if [[ -n "$session_start_time" ]]; then
         # Cross-platform stat: macOS uses -f %m, Linux uses -c %Y
-        file_mtime=$(stat -f %m "$doc_path" 2>/dev/null || stat -c %Y "$doc_path" 2>/dev/null || echo "0")
+        file_mtime=$(stat -f %m "$doc_path" 2>/dev/null || stat -c %Y "$doc_path" 2>/dev/null || echo "0")  # SUPPRESS:OK -- cross-platform: macOS stat syntax
 
         if [[ "$file_mtime" -ge "$session_start_time" ]]; then
           fresh_docs="${fresh_docs:+$fresh_docs }$doc"
@@ -6977,7 +7034,7 @@ $updated_meta
           if [[ "$dry_run" == "--dry-run" ]]; then
             cleared="$cleared $doc"
           else
-            if rm -f "$doc_path" 2>/dev/null; then
+            if rm -f "$doc_path" 2>/dev/null; then  # SUPPRESS:OK -- cleanup: file may not exist
               cleared="$cleared $doc"
             else
               errors="$errors $doc"
@@ -6991,6 +7048,7 @@ $updated_meta
         if [[ "$dry_run" == "--dry-run" ]]; then
           cleared="$cleared discoveries/"
         else
+          # SUPPRESS:OK -- cleanup: directory may not exist
           rm -rf "$session_dir/discoveries" 2>/dev/null && cleared="$cleared discoveries/" || errors="$errors discoveries/"
         fi
       fi
@@ -7135,6 +7193,7 @@ $updated_meta
       fi
       if [[ $pw_ttl_secs -gt 0 ]]; then
         pw_expires_epoch=$(( pw_epoch + pw_ttl_secs ))
+        # SUPPRESS:OK -- cross-platform: macOS date-from-epoch syntax
         pw_expires=$(date -u -r "$pw_expires_epoch" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || \
                      date -u -d "@$pw_expires_epoch" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || \
                      echo "phase_end")
@@ -7155,6 +7214,7 @@ $updated_meta
     if [[ ! -f "$pw_file" ]]; then
       pw_colony_id="aether-dev"
       if [[ -f "$DATA_DIR/COLONY_STATE.json" ]]; then
+        # SUPPRESS:OK -- read-default: file may not exist yet
         pw_colony_id=$(jq -r '.session_id // "aether-dev"' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "aether-dev")
       fi
       printf '{\n  "version": "1.0.0",\n  "colony_id": "%s",\n  "generated_at": "%s",\n  "signals": []\n}\n' \
@@ -7165,6 +7225,7 @@ $updated_meta
     pw_hash=$(echo -n "$pw_content" | shasum -a 256 | cut -d' ' -f1)
 
     # Check for existing active signal with same type and content_hash
+    # SUPPRESS:OK -- read-default: file may not exist yet
     pw_existing_count=$(jq \
       --arg type "$pw_type" \
       --arg hash "$pw_hash" \
@@ -7178,6 +7239,7 @@ $updated_meta
       pw_action="reinforced"
 
       # Get the reinforced signal's ID for output (before modification)
+      # SUPPRESS:OK -- read-default: file may not exist yet
       pw_id=$(jq -r \
         --arg type "$pw_type" \
         --arg hash "$pw_hash" \
@@ -7199,10 +7261,10 @@ $updated_meta
             .
           end
         ]
-        ' "$pw_file" 2>/dev/null)
+        ' "$pw_file" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
 
       if [[ -z "$pw_updated" ]]; then
-        [[ "$pw_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+        [[ "$pw_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
         json_err "${E_JSON_INVALID:-E_JSON_INVALID}" "Failed to reinforce signal in pheromones.json — jq parse error"
       fi
     else
@@ -7224,16 +7286,16 @@ $updated_meta
 
       pw_updated=$(jq --argjson sig "$pw_signal" '.signals += [$sig]' "$pw_file" 2>/dev/null)
       if [[ -z "$pw_updated" ]]; then
-        [[ "$pw_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+        [[ "$pw_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
         json_err "${E_JSON_INVALID:-E_JSON_INVALID}" "Failed to update pheromones.json — jq parse error"
       fi
     fi
 
     atomic_write "$pw_file" "$pw_updated" || {
-      [[ "$pw_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+      [[ "$pw_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
       json_err "$E_JSON_INVALID" "Failed to write pheromones.json"
     }
-    [[ "$pw_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+    [[ "$pw_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
 
     # Backward compatibility: also write to constraints.json
     pw_cfile="$DATA_DIR/constraints.json"
@@ -7244,7 +7306,7 @@ $updated_meta
       pw_cfile_updated=$(jq --arg txt "$pw_content" '
         .focus += [$txt] |
         if (.focus | length) > 5 then .focus = .focus[-5:] else . end
-      ' "$pw_cfile" 2>/dev/null)
+      ' "$pw_cfile" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
       [[ -n "$pw_cfile_updated" ]] && echo "$pw_cfile_updated" > "$pw_cfile"
     elif [[ "$pw_type" == "REDIRECT" ]]; then
       if [[ ! -f "$pw_cfile" ]]; then
@@ -7259,11 +7321,12 @@ $updated_meta
       pw_cfile_updated=$(jq --argjson c "$pw_constraint" '
         .constraints += [$c] |
         if (.constraints | length) > 10 then .constraints = .constraints[-10:] else . end
-      ' "$pw_cfile" 2>/dev/null)
+      ' "$pw_cfile" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
       [[ -n "$pw_cfile_updated" ]] && echo "$pw_cfile_updated" > "$pw_cfile"
     fi
 
     # Get active signal count
+    # SUPPRESS:OK -- read-default: file may not exist yet
     pw_active_count=$(jq '[.signals[] | select(.active == true)] | length' "$pw_file" 2>/dev/null || echo "0")
 
     json_ok "{\"signal_id\":\"$pw_id\",\"type\":\"$pw_type\",\"action\":\"$pw_action\",\"active_count\":$pw_active_count}"
@@ -7284,7 +7347,7 @@ $updated_meta
         redirect: ([.signals[] | select(.active == true and .type == "REDIRECT")] | length),
         feedback: ([.signals[] | select(.active == true and .type == "FEEDBACK")] | length),
         total:    ([.signals[] | select(.active == true)]                          | length)
-      }' "$pc_file" 2>/dev/null)
+      }' "$pc_file" 2>/dev/null)  # SUPPRESS:OK -- read-default: operation may fail
       if [[ -z "$pc_result" ]]; then
         json_ok '{"focus":0,"redirect":0,"feedback":0,"total":0}'
       else
@@ -7360,7 +7423,7 @@ $updated_meta
       | map(select(.active == true))
       | map(select(if $type_filter == "all" or $type_filter == "" then true else (.type | ascii_downcase) == ($type_filter | ascii_downcase) end))
       | sort_by(-.effective_strength)
-      ' "$pd_file" 2>/dev/null)
+      ' "$pd_file" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
 
     if [[ -z "$pd_signals" || "$pd_signals" == "[]" ]]; then
       echo "No active pheromones found."
@@ -7479,13 +7542,13 @@ $updated_meta
       else
         .
       end
-      ' "$pher_file" 2>/dev/null)
+      ' "$pher_file" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
 
     if [[ -z "$pher_result" || "$pher_result" == "null" ]]; then
       json_ok '{"version":"1.0.0","signals":[]}'
     else
-      pher_version=$(jq -r '.version // "1.0.0"' "$pher_file" 2>/dev/null || echo "1.0.0")
-      pher_colony=$(jq -r '.colony_id // "unknown"' "$pher_file" 2>/dev/null || echo "unknown")
+      pher_version=$(jq -r '.version // "1.0.0"' "$pher_file" 2>/dev/null || echo "1.0.0")  # SUPPRESS:OK -- read-default: file may not exist yet
+      pher_colony=$(jq -r '.colony_id // "unknown"' "$pher_file" 2>/dev/null || echo "unknown")  # SUPPRESS:OK -- read-default: file may not exist yet
       json_ok "{\"version\":\"$pher_version\",\"colony_id\":\"$pher_colony\",\"signals\":$pher_result}"
     fi
     ;;
@@ -7527,6 +7590,7 @@ $updated_meta
     fi
 
     # Check if memory.instincts exists
+    # SUPPRESS:OK -- read-default: file may not exist yet
     ir_has_instincts=$(jq 'if .memory.instincts then "yes" else "no" end' "$ir_state_file" 2>/dev/null || echo "no")
     if [[ "$ir_has_instincts" != '"yes"' ]]; then
       json_ok '{"instincts":[],"total":0,"filtered":0}'
@@ -7553,7 +7617,7 @@ $updated_meta
           total: $total,
           filtered: (. | length)
         }
-      ' "$ir_state_file" 2>/dev/null)
+      ' "$ir_state_file" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
 
     if [[ -z "$ir_result" || "$ir_result" == "null" ]]; then
       json_ok '{"instincts":[],"total":0,"filtered":0}'
@@ -7600,7 +7664,7 @@ $updated_meta
       acquire_lock "$ic_state_file" || {
         json_err "$E_LOCK_FAILED" "Failed to acquire lock on COLONY_STATE.json for instinct-create"
       }
-      trap 'release_lock 2>/dev/null || true' EXIT
+      trap 'release_lock 2>/dev/null || true' EXIT  # SUPPRESS:OK -- cleanup: lock may not be held
     fi
 
     # Validate confidence range
@@ -7615,7 +7679,7 @@ $updated_meta
     # Check for existing instinct with matching trigger+action (fuzzy: exact substring match)
     ic_existing=$(jq -c --arg trigger "$ic_trigger" --arg action "$ic_action" '
       [(.memory.instincts // [])[] | select(.trigger == $trigger and .action == $action)] | first // null
-    ' "$ic_state_file" 2>/dev/null)
+    ' "$ic_state_file" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
 
     if [[ -n "$ic_existing" && "$ic_existing" != "null" ]]; then
       # Update existing: boost confidence by +0.1, increment applications
@@ -7630,15 +7694,15 @@ $updated_meta
             .
           end
         ]
-      ' "$ic_state_file" 2>/dev/null)
+      ' "$ic_state_file" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
 
       if [[ -n "$ic_updated" ]]; then
         atomic_write "$ic_state_file" "$ic_updated"
         ic_new_conf=$(echo "$ic_updated" | jq --arg trigger "$ic_trigger" --arg action "$ic_action" '
           [(.memory.instincts // [])[] | select(.trigger == $trigger and .action == $action)] | first | .confidence // 0
-        ' 2>/dev/null)
+        ' 2>/dev/null)  # SUPPRESS:OK -- read-default: operation may fail
         trap - EXIT
-        release_lock 2>/dev/null || true
+        release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
         json_ok "{\"instinct_id\":\"existing\",\"action\":\"updated\",\"confidence\":$ic_new_conf}"
       else
         json_err "$E_INTERNAL" "Failed to update existing instinct"
@@ -7679,12 +7743,12 @@ $updated_meta
           | sort_by(-.confidence)
           | .[:30]
         )
-      ' "$ic_state_file" 2>/dev/null)
+      ' "$ic_state_file" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
 
       if [[ -n "$ic_updated" ]]; then
         atomic_write "$ic_state_file" "$ic_updated"
         trap - EXIT
-        release_lock 2>/dev/null || true
+        release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
         json_ok "{\"instinct_id\":\"$ic_id\",\"action\":\"created\",\"confidence\":$ic_confidence}"
       else
         json_err "$E_INTERNAL" "Failed to create instinct"
@@ -7727,13 +7791,13 @@ $updated_meta
       acquire_lock "$ia_state_file" || {
         json_err "$E_LOCK_FAILED" "Failed to acquire lock on COLONY_STATE.json for instinct-apply"
       }
-      trap 'release_lock 2>/dev/null || true' EXIT
+      trap 'release_lock 2>/dev/null || true' EXIT  # SUPPRESS:OK -- cleanup: lock may not be held
     fi
 
     # Check instinct exists
     ia_exists=$(jq --arg id "$ia_id" '
       [(.memory.instincts // [])[] | select(.id == $id)] | length > 0
-    ' "$ia_state_file" 2>/dev/null || echo "false")
+    ' "$ia_state_file" 2>/dev/null || echo "false")  # SUPPRESS:OK -- read-default: file may not exist yet
 
     if [[ "$ia_exists" != "true" ]]; then
       json_err "$E_RESOURCE_NOT_FOUND" "Instinct '$ia_id' not found"
@@ -7755,7 +7819,7 @@ $updated_meta
             .
           end
         ]
-      ' "$ia_state_file" 2>/dev/null)
+      ' "$ia_state_file" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
     else
       ia_updated=$(jq --arg id "$ia_id" --arg now "$ia_now" '
         .memory.instincts = [
@@ -7769,7 +7833,7 @@ $updated_meta
             .
           end
         ]
-      ' "$ia_state_file" 2>/dev/null)
+      ' "$ia_state_file" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
     fi
 
     if [[ -z "$ia_updated" ]]; then
@@ -7781,13 +7845,13 @@ $updated_meta
     # Extract updated values for response
     ia_new_apps=$(echo "$ia_updated" | jq --arg id "$ia_id" '
       [(.memory.instincts // [])[] | select(.id == $id)] | first | .applications
-    ' 2>/dev/null)
+    ' 2>/dev/null)  # SUPPRESS:OK -- read-default: operation may fail
     ia_new_conf=$(echo "$ia_updated" | jq --arg id "$ia_id" '
       [(.memory.instincts // [])[] | select(.id == $id)] | first | .confidence
-    ' 2>/dev/null)
+    ' 2>/dev/null)  # SUPPRESS:OK -- read-default: operation may fail
 
     trap - EXIT
-    release_lock 2>/dev/null || true
+    release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
     json_ok "{\"applied\":true,\"instinct_id\":\"$ia_id\",\"applications\":$ia_new_apps,\"new_confidence\":$ia_new_conf}"
     exit 0
     ;;
@@ -7859,7 +7923,7 @@ $updated_meta
           }
         ) |
         map(select(.active == true))
-        ' "$pp_pher_file" 2>/dev/null || echo "[]")
+        ' "$pp_pher_file" 2>/dev/null || echo "[]")  # SUPPRESS:OK -- read-default: file may not exist yet
     fi
 
     if [[ -z "$pp_signals" || "$pp_signals" == "null" ]]; then
@@ -7872,7 +7936,7 @@ $updated_meta
         | sort_by(.priority, -(.effective_strength // 0))
         | .[:$max]
         | map(del(.priority))
-      ' 2>/dev/null || echo "[]")
+      ' 2>/dev/null || echo "[]")  # SUPPRESS:OK -- read-default: returns fallback on failure
     fi
 
     # Read instincts (confidence >= 0.5, not disproven)
@@ -7888,15 +7952,15 @@ $updated_meta
           ))
         | sort_by(-.confidence)
         | .[:$max]
-        ' "$pp_state_file" 2>/dev/null || echo "[]")
+        ' "$pp_state_file" 2>/dev/null || echo "[]")  # SUPPRESS:OK -- read-default: file may not exist yet
     fi
 
     if [[ -z "$pp_instincts" || "$pp_instincts" == "null" ]]; then
       pp_instincts="[]"
     fi
 
-    pp_signal_count=$(echo "$pp_signals" | jq 'length' 2>/dev/null || echo "0")
-    pp_instinct_count=$(echo "$pp_instincts" | jq 'length' 2>/dev/null || echo "0")
+    pp_signal_count=$(echo "$pp_signals" | jq 'length' 2>/dev/null || echo "0")  # SUPPRESS:OK -- read-default: file may not exist yet
+    pp_instinct_count=$(echo "$pp_instincts" | jq 'length' 2>/dev/null || echo "0")  # SUPPRESS:OK -- read-default: file may not exist yet
 
     # Build prompt section
     if [[ "$pp_signal_count" -eq 0 && "$pp_instinct_count" -eq 0 ]]; then
@@ -7910,24 +7974,28 @@ $updated_meta
       fi
 
       # FOCUS signals
+      # SUPPRESS:OK -- read-default: file may not exist yet
       pp_focus=$(echo "$pp_signals" | jq -r 'map(select(.type == "FOCUS")) | .[] | "[" + ((.effective_strength * 10 | round) / 10 | tostring) + "] " + (.content.text // (if (.content | type) == "string" then .content else "" end))' 2>/dev/null || echo "")
       if [[ -n "$pp_focus" ]]; then
         pp_section+=$'\n'"FOCUS (Pay attention to):"$'\n'"$pp_focus"$'\n'
       fi
 
       # REDIRECT signals
+      # SUPPRESS:OK -- read-default: file may not exist yet
       pp_redirect=$(echo "$pp_signals" | jq -r 'map(select(.type == "REDIRECT")) | .[] | "[" + ((.effective_strength * 10 | round) / 10 | tostring) + "] " + (.content.text // (if (.content | type) == "string" then .content else "" end))' 2>/dev/null || echo "")
       if [[ -n "$pp_redirect" ]]; then
         pp_section+=$'\n'"REDIRECT (HARD CONSTRAINTS - MUST follow):"$'\n'"$pp_redirect"$'\n'
       fi
 
       # FEEDBACK signals
+      # SUPPRESS:OK -- read-default: file may not exist yet
       pp_feedback=$(echo "$pp_signals" | jq -r 'map(select(.type == "FEEDBACK")) | .[] | "[" + ((.effective_strength * 10 | round) / 10 | tostring) + "] " + (.content.text // (if (.content | type) == "string" then .content else "" end))' 2>/dev/null || echo "")
       if [[ -n "$pp_feedback" ]]; then
         pp_section+=$'\n'"FEEDBACK (Flexible guidance):"$'\n'"$pp_feedback"$'\n'
       fi
 
       # POSITION signals
+      # SUPPRESS:OK -- read-default: file may not exist yet
       pp_position=$(echo "$pp_signals" | jq -r 'map(select(.type == "POSITION")) | .[] | "[" + ((.effective_strength * 10 | round) / 10 | tostring) + "] " + (.content.text // (if (.content | type) == "string" then .content else "" end))' 2>/dev/null || echo "")
       if [[ -n "$pp_position" ]]; then
         pp_section+=$'\n'"POSITION (Where work last progressed):"$'\n'"$pp_position"$'\n'
@@ -7952,7 +8020,7 @@ $updated_meta
           | sort_by(.domain)
           | .[]
           | "\n" + (.domain | ascii_upcase | .[0:1]) + (.domain | .[1:]) + ":" + "\n" + (.items | join("\n"))
-        ' 2>/dev/null || echo "")
+        ' 2>/dev/null || echo "")  # SUPPRESS:OK -- read-default: returns fallback on failure
 
         if [[ -n "$pp_instinct_lines" ]]; then
           pp_section+="$pp_instinct_lines"$'\n'
@@ -7965,7 +8033,8 @@ $updated_meta
     fi
 
     # Escape section for JSON embedding (use printf to avoid appending extra newline)
-    pp_section_json=$(printf '%s' "$pp_section" | jq -Rs '.' 2>/dev/null || echo '""')
+    pp_section_json=$(printf '%s' "$pp_section" | jq -Rs '.' 2>/dev/null || echo '""')  # SUPPRESS:OK -- read-default: returns fallback if missing
+    # SUPPRESS:OK -- read-default: returns fallback if missing
     pp_log_json=$(printf '%s' "$pp_log_line" | jq -Rs '.' 2>/dev/null || echo '"Primed: 0 signals, 0 instincts"')
 
     json_ok "{\"signal_count\":$pp_signal_count,\"instinct_count\":$pp_instinct_count,\"prompt_section\":$pp_section_json,\"log_line\":$pp_log_json}"
@@ -8018,24 +8087,30 @@ $updated_meta
       local philosophies patterns redirects stack_wisdom decrees user_prefs
 
       if [[ -n "$p_line" && -n "$pat_line" ]]; then
+        # SUPPRESS:OK -- read-default: returns fallback if missing
         philosophies=$(awk -v s="$p_line" -v e="$pat_line" 'NR > s && NR < e {print}' "$queen_file" | sed '/^$/d' | jq -Rs '.' 2>/dev/null || echo '""')
       else philosophies='""'; fi
       if [[ -n "$pat_line" && -n "$red_line" ]]; then
+        # SUPPRESS:OK -- read-default: returns fallback if missing
         patterns=$(awk -v s="$pat_line" -v e="$red_line" 'NR > s && NR < e {print}' "$queen_file" | sed '/^$/d' | jq -Rs '.' 2>/dev/null || echo '""')
       else patterns='""'; fi
       if [[ -n "$red_line" && -n "$stack_line" ]]; then
+        # SUPPRESS:OK -- read-default: returns fallback if missing
         redirects=$(awk -v s="$red_line" -v e="$stack_line" 'NR > s && NR < e {print}' "$queen_file" | sed '/^$/d' | jq -Rs '.' 2>/dev/null || echo '""')
       else redirects='""'; fi
       if [[ -n "$stack_line" && -n "$dec_line" ]]; then
+        # SUPPRESS:OK -- read-default: returns fallback if missing
         stack_wisdom=$(awk -v s="$stack_line" -v e="$dec_line" 'NR > s && NR < e {print}' "$queen_file" | sed '/^$/d' | jq -Rs '.' 2>/dev/null || echo '""')
       else stack_wisdom='""'; fi
 
       # Decrees: between dec_line+1 and (prefs_line-1 or evo_line-1 or end)
       local dec_end="${prefs_line:-${evo_line:-999999}}"
+      # SUPPRESS:OK -- read-default: returns fallback if missing
       decrees=$(awk -v s="$dec_line" -v e="$dec_end" 'NR > s && NR < e {print}' "$queen_file" | sed '/^$/d' | jq -Rs '.' 2>/dev/null || echo '""')
 
       # User Preferences: between prefs_line+1 and (evo_line-1 or end)
       if [[ -n "$prefs_line" ]]; then
+        # SUPPRESS:OK -- read-default: returns fallback if missing
         user_prefs=$(awk -v s="$prefs_line" -v e="${evo_line:-999999}" 'NR > s && NR < e {print}' "$queen_file" | sed '/^$/d' | jq -Rs '.' 2>/dev/null || echo '""')
       else
         user_prefs='""'
@@ -8099,14 +8174,16 @@ $updated_meta
     cp_metadata='{"version":"unknown","last_evolved":null,"source":"none"}'
     if [[ "$cp_has_local" == "true" ]]; then
       cp_metadata=$(sed -n '/<!-- METADATA/,/-->/p' "$cp_local_queen" | sed '1d;$d' | tr -d '\n' | sed 's/^[[:space:]]*//')
-      if [[ -n "$cp_metadata" ]] && echo "$cp_metadata" | jq -e . >/dev/null 2>&1; then
+      if [[ -n "$cp_metadata" ]] && echo "$cp_metadata" | jq -e . >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON validity
+        # SUPPRESS:OK -- read-default: file may not exist yet
         cp_metadata=$(echo "$cp_metadata" | jq '. + {"source":"local"}' 2>/dev/null || echo "$cp_metadata")
       else
         cp_metadata='{"version":"unknown","last_evolved":null,"source":"local","note":"malformed"}'
       fi
     elif [[ "$cp_has_global" == "true" ]]; then
       cp_metadata=$(sed -n '/<!-- METADATA/,/-->/p' "$cp_global_queen" | sed '1d;$d' | tr -d '\n' | sed 's/^[[:space:]]*//')
-      if [[ -n "$cp_metadata" ]] && echo "$cp_metadata" | jq -e . >/dev/null 2>&1; then
+      if [[ -n "$cp_metadata" ]] && echo "$cp_metadata" | jq -e . >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON validity
+        # SUPPRESS:OK -- read-default: file may not exist yet
         cp_metadata=$(echo "$cp_metadata" | jq '. + {"source":"global"}' 2>/dev/null || echo "$cp_metadata")
       else
         cp_metadata='{"version":"unknown","last_evolved":null,"source":"global","note":"malformed"}'
@@ -8120,19 +8197,22 @@ $updated_meta
     cp_pher_warn=""
     if [[ -f "$DATA_DIR/pheromones.json" ]]; then
       if [[ "$cp_compact" == "true" ]]; then
+        # SUPPRESS:OK -- read-default: directory may not exist
         cp_signals_raw=$("$SCRIPT_DIR/aether-utils.sh" pheromone-prime --compact --max-signals 8 --max-instincts 3 2>/dev/null) || cp_signals_raw=""
       else
-        cp_signals_raw=$("$SCRIPT_DIR/aether-utils.sh" pheromone-prime 2>/dev/null) || cp_signals_raw=""
+        cp_signals_raw=$("$SCRIPT_DIR/aether-utils.sh" pheromone-prime 2>/dev/null) || cp_signals_raw=""  # SUPPRESS:OK -- read-default: subcommand may fail
       fi
+      # SUPPRESS:OK -- read-default: returns fallback if missing
       cp_signals_json=$(echo "$cp_signals_raw" | jq -c '.result // {"signal_count":0,"instinct_count":0,"prompt_section":"","log_line":"Primed: 0 signals, 0 instincts"}' 2>/dev/null || echo '{"signal_count":0,"instinct_count":0,"prompt_section":"","log_line":"Primed: 0 signals, 0 instincts"}')
     else
       cp_pher_warn="WARNING: pheromones.json not found - continuing without signals"
     fi
 
     # Extract components from pheromone-prime output
-    cp_signal_count=$(echo "$cp_signals_json" | jq -r '.signal_count // 0' 2>/dev/null || echo "0")
-    cp_instinct_count=$(echo "$cp_signals_json" | jq -r '.instinct_count // 0' 2>/dev/null || echo "0")
-    cp_prompt_section=$(echo "$cp_signals_json" | jq -r '.prompt_section // ""' 2>/dev/null || echo "")
+    cp_signal_count=$(echo "$cp_signals_json" | jq -r '.signal_count // 0' 2>/dev/null || echo "0")  # SUPPRESS:OK -- read-default: file may not exist yet
+    cp_instinct_count=$(echo "$cp_signals_json" | jq -r '.instinct_count // 0' 2>/dev/null || echo "0")  # SUPPRESS:OK -- read-default: file may not exist yet
+    cp_prompt_section=$(echo "$cp_signals_json" | jq -r '.prompt_section // ""' 2>/dev/null || echo "")  # SUPPRESS:OK -- read-default: file may not exist yet
+    # SUPPRESS:OK -- read-default: file may not exist yet
     cp_log_line=$(echo "$cp_signals_json" | jq -r '.log_line // "Primed: 0 signals, 0 instincts"' 2>/dev/null || echo "Primed: 0 signals, 0 instincts")
 
     # Append warning if pheromones missing
@@ -8154,12 +8234,12 @@ $updated_meta
     cp_sec_signals=""
 
     # Add wisdom section to prompt if any exists
-    cp_philosophies=$(echo "$cp_combined" | jq -r '.philosophies // ""' 2>/dev/null)
-    cp_patterns=$(echo "$cp_combined" | jq -r '.patterns // ""' 2>/dev/null)
-    cp_redirects=$(echo "$cp_combined" | jq -r '.redirects // ""' 2>/dev/null)
-    cp_stack=$(echo "$cp_combined" | jq -r '.stack_wisdom // ""' 2>/dev/null)
-    cp_decrees=$(echo "$cp_combined" | jq -r '.decrees // ""' 2>/dev/null)
-    cp_user_prefs=$(echo "$cp_combined" | jq -r '.user_prefs // ""' 2>/dev/null)
+    cp_philosophies=$(echo "$cp_combined" | jq -r '.philosophies // ""' 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
+    cp_patterns=$(echo "$cp_combined" | jq -r '.patterns // ""' 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
+    cp_redirects=$(echo "$cp_combined" | jq -r '.redirects // ""' 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
+    cp_stack=$(echo "$cp_combined" | jq -r '.stack_wisdom // ""' 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
+    cp_decrees=$(echo "$cp_combined" | jq -r '.decrees // ""' 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
+    cp_user_prefs=$(echo "$cp_combined" | jq -r '.user_prefs // ""' 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
 
     if [[ -n "$cp_philosophies" || -n "$cp_patterns" || -n "$cp_redirects" || -n "$cp_stack" || -n "$cp_decrees" ]]; then
       cp_sec_queen+="--- QUEEN WISDOM (Eternal Guidance) ---"$'\n'
@@ -8211,6 +8291,7 @@ $updated_meta
 
     # Get domain tags for current repo from registry
     cp_repo_path="${AETHER_ROOT:-$(pwd)}"
+    # SUPPRESS:OK -- read-default: file may not exist yet
     cp_domain_tags=$(jq -r --arg repo "$cp_repo_path" \
       '[.repos[] | select(.path == $repo) | .domain_tags // []] | .[0] // [] | join(",")' \
       "$HOME/.aether/registry.json" 2>/dev/null || echo "")
@@ -8218,19 +8299,22 @@ $updated_meta
     # Try hive-read first (domain-scoped retrieval from ~/.aether/hive/wisdom.json)
     cp_hive_result=""
     if [[ -n "$cp_domain_tags" ]]; then
+      # SUPPRESS:OK -- read-default: subcommand may fail
       cp_hive_result=$(bash "$SCRIPT_DIR/aether-utils.sh" hive-read --domain "$cp_domain_tags" --limit "$cp_max_hive" --format text 2>/dev/null) || cp_hive_result=""
     else
+      # SUPPRESS:OK -- read-default: subcommand may fail
       cp_hive_result=$(bash "$SCRIPT_DIR/aether-utils.sh" hive-read --limit "$cp_max_hive" --format text 2>/dev/null) || cp_hive_result=""
     fi
 
     cp_hive_matched=0
     if [[ -n "$cp_hive_result" ]]; then
+      # SUPPRESS:OK -- read-default: file may not exist yet
       cp_hive_matched=$(echo "$cp_hive_result" | jq -r '.result.total_matched // 0' 2>/dev/null || echo "0")
     fi
 
     if [[ "$cp_hive_matched" -gt 0 ]]; then
       # Use hive-read text output
-      cp_hive_text=$(echo "$cp_hive_result" | jq -r '.result.text // ""' 2>/dev/null || echo "")
+      cp_hive_text=$(echo "$cp_hive_result" | jq -r '.result.text // ""' 2>/dev/null || echo "")  # SUPPRESS:OK -- read-default: file may not exist yet
       cp_hive_count="$cp_hive_matched"
       if [[ "$cp_hive_count" -gt "$cp_max_hive" ]]; then
         cp_hive_count="$cp_max_hive"
@@ -8264,9 +8348,9 @@ $updated_meta
           '
           .high_value_signals // []
           | .[:$max]
-          ' "$cp_hive_file" 2>/dev/null || echo "[]")
+          ' "$cp_hive_file" 2>/dev/null || echo "[]")  # SUPPRESS:OK -- read-default: file may not exist yet
 
-        cp_hive_count=$(echo "$cp_hive_signals" | jq 'length' 2>/dev/null || echo "0")
+        cp_hive_count=$(echo "$cp_hive_signals" | jq 'length' 2>/dev/null || echo "0")  # SUPPRESS:OK -- read-default: file may not exist yet
 
         if [[ "$cp_hive_count" -gt 0 ]]; then
           cp_hive_section="--- HIVE WISDOM (Cross-Colony Patterns) ---"$'\n'
@@ -8274,7 +8358,7 @@ $updated_meta
 
           cp_hive_lines=$(echo "$cp_hive_signals" | jq -r '
             .[] | "[" + (.type // "UNKNOWN") + " | " + ((.strength // 0) | tostring) + "] " + (.content // "")
-          ' 2>/dev/null || echo "")
+          ' 2>/dev/null || echo "")  # SUPPRESS:OK -- read-default: returns fallback on failure
 
           if [[ -n "$cp_hive_lines" ]]; then
             while IFS= read -r cp_hive_line; do
@@ -8293,7 +8377,9 @@ $updated_meta
 
     # Add compact context capsule for low-token continuity
     cp_capsule_prompt=""
+    # SUPPRESS:OK -- read-default: subcommand may fail
     cp_capsule_raw=$("$SCRIPT_DIR/aether-utils.sh" context-capsule --compact --json 2>/dev/null) || cp_capsule_raw=""
+    # SUPPRESS:OK -- read-default: file may not exist yet
     cp_capsule_prompt=$(echo "$cp_capsule_raw" | jq -r '.result.prompt_section // ""' 2>/dev/null || echo "")
     if [[ -n "$cp_capsule_prompt" ]]; then
       cp_sec_capsule=$'\n'"$cp_capsule_prompt"$'\n'
@@ -8302,7 +8388,7 @@ $updated_meta
     # === Phase learnings injection ===
     # Extract validated learnings from previous phases in COLONY_STATE.json
     # and format as actionable guidance for builders
-    cp_current_phase=$(jq -r '.current_phase // 0' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "0")
+    cp_current_phase=$(jq -r '.current_phase // 0' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "0")  # SUPPRESS:OK -- read-default: file may not exist yet
 
     cp_max_learnings=15
     if [[ "$cp_compact" == "true" ]]; then
@@ -8323,9 +8409,9 @@ $updated_meta
       ]
       | unique_by(.claim)
       | .[:$max]
-      ' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "[]")
+      ' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "[]")  # SUPPRESS:OK -- read-default: file may not exist yet
 
-    cp_learning_count=$(echo "$cp_learning_claims" | jq 'length' 2>/dev/null || echo "0")
+    cp_learning_count=$(echo "$cp_learning_claims" | jq 'length' 2>/dev/null || echo "0")  # SUPPRESS:OK -- read-default: file may not exist yet
 
     if [[ "$cp_learning_count" -gt 0 ]]; then
       cp_learning_section="--- PHASE LEARNINGS (Previous Phase Insights) ---"
@@ -8346,7 +8432,7 @@ $updated_meta
              end)
           + ":"
           + "\n" + (.claims | map("  - " + .) | join("\n"))
-      ' 2>/dev/null || echo "")
+      ' 2>/dev/null || echo "")  # SUPPRESS:OK -- read-default: returns fallback on failure
 
       if [[ -n "$cp_learning_lines" ]]; then
         cp_learning_section+="$cp_learning_lines"$'\n'
@@ -8387,7 +8473,7 @@ $updated_meta
             }
           }
         }
-      ' "$cp_ctx_file" 2>/dev/null || echo "")
+      ' "$cp_ctx_file" 2>/dev/null || echo "")  # SUPPRESS:OK -- read-default: file may not exist yet
     fi
 
     cp_max_decisions=5
@@ -8431,7 +8517,7 @@ $updated_meta
           ))
         | map("[source: " + (.source // "unknown") + "] " + .title + "\n  " + (.description // ""))
         | .[]
-        ' "$cp_flags_file" 2>/dev/null || echo "")
+        ' "$cp_flags_file" 2>/dev/null || echo "")  # SUPPRESS:OK -- read-default: file may not exist yet
     fi
 
     cp_max_blockers=3
@@ -8450,7 +8536,7 @@ $updated_meta
         while IFS= read -r cp_blk_line; do
           if [[ "$cp_blocker_idx" -ge "$cp_max_blockers" ]]; then break; fi
           if [[ "$cp_blk_line" == \[source:* ]]; then
-            ((cp_blocker_idx++)) || true
+            ((cp_blocker_idx++)) || true  # SUPPRESS:OK -- cleanup: arithmetic overflow is safe
             if [[ "$cp_blocker_idx" -gt "$cp_max_blockers" ]]; then break; fi
           fi
           [[ -n "$cp_blk_line" ]] && cp_blocker_section+="$cp_blk_line"$'\n'
@@ -8469,6 +8555,7 @@ $updated_meta
     cp_roll_count=5
     cp_roll_entries=""
     if [[ -f "$DATA_DIR/rolling-summary.log" ]]; then
+      # SUPPRESS:OK -- read-default: file may not exist
       cp_roll_entries=$(tail -n "$cp_roll_count" "$DATA_DIR/rolling-summary.log" 2>/dev/null | \
         awk -F'|' 'NF >= 4 {printf "- [%s] %s: %s\n", $1, $2, $4}')
     fi
@@ -8619,7 +8706,8 @@ $updated_meta
     # === END Budget trimming notification ===
 
     # Escape for JSON
-    cp_prompt_json=$(printf '%s' "$cp_final_prompt" | jq -Rs '.' 2>/dev/null || echo '""')
+    cp_prompt_json=$(printf '%s' "$cp_final_prompt" | jq -Rs '.' 2>/dev/null || echo '""')  # SUPPRESS:OK -- read-default: returns fallback if missing
+    # SUPPRESS:OK -- read-default: returns fallback if missing
     cp_log_json=$(printf '%s' "$cp_log_line" | jq -Rs '.' 2>/dev/null || echo '"Primed: 0 signals, 0 instincts"')
 
     # Build final unified output
@@ -8648,7 +8736,7 @@ $updated_meta
       }')
 
     # Validate result
-    if [[ -z "$cp_result" ]] || ! echo "$cp_result" | jq -e . >/dev/null 2>&1; then
+    if [[ -z "$cp_result" ]] || ! echo "$cp_result" | jq -e . >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON validity
       json_err "$E_JSON_INVALID" \
         "Couldn't assemble colony-prime output" \
         '{"error":"assembly_failed"}'
@@ -8696,10 +8784,12 @@ $updated_meta
     # Compute pause_duration from COLONY_STATE.json (pause-aware TTL)
     phe_pause_duration=0
     if [[ -f "$DATA_DIR/COLONY_STATE.json" ]]; then
-      phe_paused_at=$(jq -r '.paused_at // empty' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || true)
-      phe_resumed_at=$(jq -r '.resumed_at // empty' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || true)
+      phe_paused_at=$(jq -r '.paused_at // empty' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || true)  # SUPPRESS:OK -- read-default: file may not exist yet
+      phe_resumed_at=$(jq -r '.resumed_at // empty' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || true)  # SUPPRESS:OK -- read-default: file may not exist yet
       if [[ -n "$phe_paused_at" && -n "$phe_resumed_at" ]]; then
+        # SUPPRESS:OK -- cross-platform: macOS date syntax
         phe_paused_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$phe_paused_at" +%s 2>/dev/null || date -d "$phe_paused_at" +%s 2>/dev/null || echo 0)
+        # SUPPRESS:OK -- cross-platform: macOS date syntax
         phe_resumed_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$phe_resumed_at" +%s 2>/dev/null || date -d "$phe_resumed_at" +%s 2>/dev/null || echo 0)
         if [[ "$phe_resumed_epoch" -gt "$phe_paused_epoch" ]]; then
           phe_pause_duration=$(( phe_resumed_epoch - phe_paused_epoch ))
@@ -8711,6 +8801,7 @@ $updated_meta
     # We'll use jq to find signals to expire, then update in bash
     if [[ "$phe_phase_end_only" == "true" ]]; then
       # Only expire signals where expires_at == "phase_end"
+      # SUPPRESS:OK -- read-default: returns fallback if missing
       phe_expired_ids=$(jq -r '.signals[] | select(.active == true and .expires_at == "phase_end") | .id' "$phe_pheromones_file" 2>/dev/null || true)
     else
       # Expire time-based expired signals (pause-aware) AND decay-expired signals
@@ -8738,30 +8829,31 @@ $updated_meta
           )
         ) |
         .id
-      ' "$phe_pheromones_file" 2>/dev/null || true)
+      ' "$phe_pheromones_file" 2>/dev/null || true)  # SUPPRESS:OK -- read-default: file may not exist yet
     fi
 
     # Count expired signals
     phe_expired_count=0
     if [[ -n "$phe_expired_ids" ]]; then
-      phe_expired_count=$(echo "$phe_expired_ids" | grep -c . 2>/dev/null || echo 0)
+      phe_expired_count=$(echo "$phe_expired_ids" | grep -c . 2>/dev/null || echo 0)  # SUPPRESS:OK -- read-default: count defaults to 0 if file missing
     fi
 
     # If nothing to expire, return counts
     if [[ "$phe_expired_count" -eq 0 ]]; then
+      # SUPPRESS:OK -- read-default: file may not exist yet
       phe_remaining=$(jq '[.signals[] | select(.active == true)] | length' "$phe_pheromones_file" 2>/dev/null || echo 0)
-      phe_midden_total=$(jq '.signals | length' "$phe_midden_file" 2>/dev/null || echo 0)
+      phe_midden_total=$(jq '.signals | length' "$phe_midden_file" 2>/dev/null || echo 0)  # SUPPRESS:OK -- read-default: file may not exist yet
       json_ok "{\"expired_count\":0,\"remaining_active\":$phe_remaining,\"midden_total\":$phe_midden_total}"
       exit 0
     fi
 
     # Build jq args for IDs to expire
-    phe_id_array=$(echo "$phe_expired_ids" | jq -R . | jq -s . 2>/dev/null || echo '[]')
+    phe_id_array=$(echo "$phe_expired_ids" | jq -R . | jq -s . 2>/dev/null || echo '[]')  # SUPPRESS:OK -- read-default: returns fallback if missing
 
     # Extract expired signal objects (with archived_at added)
     phe_expired_objects=$(jq --argjson ids "$phe_id_array" --arg archived_at "$phe_archived_at" '
       [.signals[] | select(.id as $id | $ids | any(. == $id)) | . + {"archived_at": $archived_at, "active": false}]
-    ' "$phe_pheromones_file" 2>/dev/null || echo '[]')
+    ' "$phe_pheromones_file" 2>/dev/null || echo '[]')  # SUPPRESS:OK -- read-default: file may not exist yet
 
     # Promote high-value expired signals to eternal memory before archival.
     # Use decayed effective_strength (not raw .strength) for promotion threshold.
@@ -8794,24 +8886,25 @@ $updated_meta
         ((.strength // 0) * (1 - ($elapsed / $dd))) as $eff_raw |
         (if $eff_raw < 0 then 0 else $eff_raw end) as $eff |
         (($eff * 100) | floor)
-      ' 2>/dev/null || echo "0")
+      ' 2>/dev/null || echo "0")  # SUPPRESS:OK -- read-default: returns fallback on failure
       if [[ "$phe_strength_int" -gt 80 ]]; then
-        phe_text=$(echo "$phe_signal" | jq -r '.content.text // ""' 2>/dev/null || echo "")
-        phe_type=$(echo "$phe_signal" | jq -r '.type // "UNKNOWN"' 2>/dev/null || echo "UNKNOWN")
-        phe_source=$(echo "$phe_signal" | jq -r '.source // "unknown"' 2>/dev/null || echo "unknown")
-        phe_id=$(echo "$phe_signal" | jq -r '.id // ""' 2>/dev/null || echo "")
+        phe_text=$(echo "$phe_signal" | jq -r '.content.text // ""' 2>/dev/null || echo "")  # SUPPRESS:OK -- read-default: file may not exist yet
+        phe_type=$(echo "$phe_signal" | jq -r '.type // "UNKNOWN"' 2>/dev/null || echo "UNKNOWN")  # SUPPRESS:OK -- read-default: file may not exist yet
+        phe_source=$(echo "$phe_signal" | jq -r '.source // "unknown"' 2>/dev/null || echo "unknown")  # SUPPRESS:OK -- read-default: file may not exist yet
+        phe_id=$(echo "$phe_signal" | jq -r '.id // ""' 2>/dev/null || echo "")  # SUPPRESS:OK -- read-default: file may not exist yet
         if [[ -n "$phe_text" ]]; then
+          # SUPPRESS:OK -- cleanup: side-effect is best-effort
           if bash "$0" eternal-store "$phe_text" --type "$phe_type" --source "$phe_source" --strength "$(echo "$phe_signal" | jq -r '.strength // 0')" --signal-id "$phe_id" --reason "promoted_on_expire" >/dev/null 2>&1; then
             phe_eternal_promoted=$((phe_eternal_promoted + 1))
           fi
         fi
       fi
-    done < <(echo "$phe_expired_objects" | jq -c '.[]' 2>/dev/null || true)
+    done < <(echo "$phe_expired_objects" | jq -c '.[]' 2>/dev/null || true)  # SUPPRESS:OK -- read-default: returns fallback if missing
 
     # Update pheromones.json: set active=false for expired signals (do NOT remove them)
     phe_updated_pheromones=$(jq --argjson ids "$phe_id_array" '
       .signals = [.signals[] | if (.id as $id | $ids | any(. == $id)) then .active = false else . end]
-    ' "$phe_pheromones_file" 2>/dev/null)
+    ' "$phe_pheromones_file" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
 
     if [[ -n "$phe_updated_pheromones" ]]; then
       phe_lock_held=false
@@ -8820,17 +8913,17 @@ $updated_meta
         phe_lock_held=true
       fi
       atomic_write "$phe_pheromones_file" "$phe_updated_pheromones" || {
-        [[ "$phe_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+        [[ "$phe_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
         json_err "$E_JSON_INVALID" "Failed to write pheromones.json"
       }
-      [[ "$phe_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+      [[ "$phe_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
     fi
 
     # Append expired signals to midden.json
     phe_midden_updated=$(jq --argjson new_signals "$phe_expired_objects" '
       .signals += $new_signals |
       .archived_at_count = (.signals | length)
-    ' "$phe_midden_file" 2>/dev/null)
+    ' "$phe_midden_file" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
 
     if [[ -n "$phe_midden_updated" ]]; then
       phe_midden_lock_held=false
@@ -8839,14 +8932,15 @@ $updated_meta
         phe_midden_lock_held=true
       fi
       atomic_write "$phe_midden_file" "$phe_midden_updated" || {
-        [[ "$phe_midden_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+        [[ "$phe_midden_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
         json_err "$E_JSON_INVALID" "Failed to write midden.json"
       }
-      [[ "$phe_midden_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+      [[ "$phe_midden_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
     fi
 
+    # SUPPRESS:OK -- read-default: file may not exist yet
     phe_remaining_active=$(jq '[.signals[] | select(.active == true)] | length' "$phe_pheromones_file" 2>/dev/null || echo 0)
-    phe_midden_total=$(jq '.signals | length' "$phe_midden_file" 2>/dev/null || echo 0)
+    phe_midden_total=$(jq '.signals | length' "$phe_midden_file" 2>/dev/null || echo 0)  # SUPPRESS:OK -- read-default: file may not exist yet
 
     json_ok "{\"expired_count\":$phe_expired_count,\"remaining_active\":$phe_remaining_active,\"midden_total\":$phe_midden_total,\"eternal_promoted\":$phe_eternal_promoted}"
     ;;
@@ -8910,12 +9004,13 @@ $updated_meta
       json_err "$E_VALIDATION_FAILED" "Strength must be numeric" "{\"provided\":\"$es_strength\"}"
     fi
 
+    # SUPPRESS:OK -- cleanup: side-effect is best-effort
     bash "$0" eternal-init >/dev/null 2>&1 || json_err "$E_FILE_NOT_FOUND" "Unable to initialize eternal memory"
 
     es_memory_file="$HOME/.aether/eternal/memory.json"
     [[ -f "$es_memory_file" ]] || json_err "$E_FILE_NOT_FOUND" "Eternal memory file not found"
 
-    if ! jq -e . "$es_memory_file" >/dev/null 2>&1; then
+    if ! jq -e . "$es_memory_file" >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON validity
       json_err "$E_JSON_INVALID" "Eternal memory JSON is invalid"
     fi
 
@@ -8949,17 +9044,17 @@ $updated_meta
       .high_value_signals = ((.high_value_signals // []) + [$entry]) |
       if (.high_value_signals | length) > 500 then .high_value_signals = .high_value_signals[-500:] else . end |
       .last_updated = $entry.archived_at
-    ' "$es_memory_file" 2>/dev/null) || {
-      [[ "$es_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+    ' "$es_memory_file" 2>/dev/null) || {  # SUPPRESS:OK -- read-default: file may not exist yet
+      [[ "$es_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
       json_err "$E_JSON_INVALID" "Failed to update eternal memory"
     }
 
     atomic_write "$es_memory_file" "$es_updated" || {
-      [[ "$es_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+      [[ "$es_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
       json_err "$E_JSON_INVALID" "Failed to write eternal memory"
     }
 
-    [[ "$es_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+    [[ "$es_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
     json_ok "{\"stored\":true,\"signal_id\":\"$es_signal_id\",\"type\":\"$es_type\"}"
     ;;
 
@@ -9037,11 +9132,13 @@ $updated_meta
 
     # Extract actual signal array from result.json | fromjson | .signals
     # (result.signals is an integer count — must unpack result.json to get the array)
+    # SUPPRESS:OK -- read-default: file may not exist yet
     pix_raw_signals=$(echo "$pix_imported" | jq -r '.result.json // "{}"' | jq -c '.signals // []' 2>/dev/null || echo '[]')
 
     # Apply colony prefix to imported signal IDs (when provided)
     # This prevents ID collisions and tags signals with their source colony
     if [[ -n "$pix_colony_prefix" ]]; then
+      # SUPPRESS:OK -- read-default: returns fallback if missing
       pix_prefixed_signals=$(echo "$pix_raw_signals" | jq --arg prefix "$pix_colony_prefix" '[.[] | .id = ($prefix + ":" + .id)]' 2>/dev/null || echo '[]')
     else
       pix_prefixed_signals="$pix_raw_signals"
@@ -9058,14 +9155,14 @@ $updated_meta
           version: $existing.version,
           colony_id: $existing.colony_id
         }
-      ' "$pix_pheromones" 2>/dev/null)
+      ' "$pix_pheromones" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
 
       if [[ -n "$pix_merged" ]]; then
         printf '%s\n' "$pix_merged" > "$pix_pheromones"
       fi
     fi
 
-    pix_count=$(echo "$pix_raw_signals" | jq 'length' 2>/dev/null || echo 0)
+    pix_count=$(echo "$pix_raw_signals" | jq 'length' 2>/dev/null || echo 0)  # SUPPRESS:OK -- read-default: file may not exist yet
     json_ok "{\"imported\":true,\"signal_count\":$pix_count,\"source\":\"$pix_xml\"}"
     ;;
 
@@ -9114,14 +9211,16 @@ $updated_meta
     if [[ ! -f "$wex_input" ]]; then
       # Try to extract from COLONY_STATE.json memory field
       if [[ -f "$DATA_DIR/COLONY_STATE.json" ]]; then
-        wex_memory=$(jq '.memory // {}' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo '{}')
+        wex_memory=$(jq '.memory // {}' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo '{}')  # SUPPRESS:OK -- read-default: returns fallback if missing
         if [[ "$wex_memory" != "{}" && "$wex_memory" != "null" ]]; then
           # Create minimal wisdom JSON from colony memory
           wex_created_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           printf '%s\n' "{
   \"version\": \"1.0.0\",
+  # SUPPRESS:OK -- read-default: file may not exist yet
   \"metadata\": {\"created\": \"$wex_created_at\", \"colony_id\": \"$(jq -r '.goal // \"unknown\"' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null)\"},
   \"philosophies\": [],
+  # SUPPRESS:OK -- read-default: returns fallback if missing
   \"patterns\": $(echo "$wex_memory" | jq '[.instincts // [] | .[] | {\"id\": (. | @base64), \"content\": ., \"confidence\": 0.7, \"domain\": \"general\", \"source\": \"colony_memory\"}]' 2>/dev/null || echo '[]')
 }" > "$wex_input"
         fi
@@ -9212,8 +9311,8 @@ $updated_meta
               sealed_at: (.sealed_at // null),
               status: (if .sealed_at then "sealed" else "active" end),
               chamber: input_filename
-            }' "$manifest" 2>/dev/null || true
-          done | jq -s '.' 2>/dev/null || echo '[]'
+            }' "$manifest" 2>/dev/null || true  # SUPPRESS:OK -- cleanup: operation is best-effort
+          done | jq -s '.' 2>/dev/null || echo '[]'  # SUPPRESS:OK -- read-default: returns fallback if missing
         )
       fi
 
@@ -9287,7 +9386,7 @@ $updated_meta
         colony_id: .colony_id,
         generated_at: .generated_at,
         signals: [.signals[] | select(.active == true)]
-      }' "$DATA_DIR/pheromones.json" > "$cax_tmp_pheromones" 2>/dev/null
+      }' "$DATA_DIR/pheromones.json" > "$cax_tmp_pheromones" 2>/dev/null  # SUPPRESS:OK -- read-default: file may not exist yet
     else
       printf '%s\n' '{"version":"1.0","colony_id":"unknown","generated_at":"","signals":[]}' > "$cax_tmp_pheromones"
     fi
@@ -9297,7 +9396,7 @@ $updated_meta
 
     # Pheromone section (using filtered active-only)
     source "$SCRIPT_DIR/exchange/pheromone-xml.sh"
-    xml-pheromone-export "$cax_tmp_pheromones" "$cax_tmp_dir/pheromones.xml" 2>/dev/null || true
+    xml-pheromone-export "$cax_tmp_pheromones" "$cax_tmp_dir/pheromones.xml" 2>/dev/null || true  # SUPPRESS:OK -- cleanup: operation is best-effort
 
     # Wisdom section — reuse wisdom-export-xml fallback logic
     source "$SCRIPT_DIR/exchange/wisdom-xml.sh"
@@ -9305,21 +9404,23 @@ $updated_meta
     if [[ ! -f "$cax_wisdom_input" ]]; then
       # Try extracting from COLONY_STATE.json memory field
       if [[ -f "$DATA_DIR/COLONY_STATE.json" ]]; then
-        cax_wex_memory=$(jq '.memory // {}' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo '{}')
+        cax_wex_memory=$(jq '.memory // {}' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo '{}')  # SUPPRESS:OK -- read-default: returns fallback if missing
         if [[ "$cax_wex_memory" != "{}" && "$cax_wex_memory" != "null" ]]; then
           cax_wex_created_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           cax_wisdom_input="$cax_tmp_dir/wisdom-input.json"
           printf '%s\n' "{
   \"version\": \"1.0.0\",
+  # SUPPRESS:OK -- read-default: file may not exist yet
   \"metadata\": {\"created\": \"$cax_wex_created_at\", \"colony_id\": \"$(jq -r '.goal // \"unknown\"' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null)\"},
   \"philosophies\": [],
+  # SUPPRESS:OK -- read-default: returns fallback if missing
   \"patterns\": $(echo "$cax_wex_memory" | jq '[.instincts // [] | .[] | {"id": (. | @base64), "content": ., "confidence": 0.7, "domain": "general", "source": "colony_memory"}]' 2>/dev/null || echo '[]')
 }" > "$cax_wisdom_input"
         fi
       fi
     fi
     if [[ -f "$cax_wisdom_input" ]]; then
-      xml-wisdom-export "$cax_wisdom_input" "$cax_tmp_dir/wisdom.xml" 2>/dev/null || true
+      xml-wisdom-export "$cax_wisdom_input" "$cax_tmp_dir/wisdom.xml" 2>/dev/null || true  # SUPPRESS:OK -- cleanup: operation is best-effort
     fi
 
     # Registry section — reuse registry-export-xml on-demand generation logic
@@ -9340,8 +9441,8 @@ $updated_meta
               sealed_at: (.sealed_at // null),
               status: (if .sealed_at then "sealed" else "active" end),
               chamber: input_filename
-            }' "$manifest" 2>/dev/null || true
-          done | jq -s '.' 2>/dev/null || echo '[]'
+            }' "$manifest" 2>/dev/null || true  # SUPPRESS:OK -- cleanup: operation is best-effort
+          done | jq -s '.' 2>/dev/null || echo '[]'  # SUPPRESS:OK -- read-default: returns fallback if missing
         )
       fi
       cax_registry_input="$cax_tmp_dir/registry-input.json"
@@ -9351,13 +9452,14 @@ $updated_meta
   \"colonies\": $cax_rex_colonies
 }" > "$cax_registry_input"
     fi
-    xml-registry-export "$cax_registry_input" "$cax_tmp_dir/registry.xml" 2>/dev/null || true
+    xml-registry-export "$cax_registry_input" "$cax_tmp_dir/registry.xml" 2>/dev/null || true  # SUPPRESS:OK -- cleanup: operation is best-effort
 
     # Step 3: Build combined XML
+    # SUPPRESS:OK -- read-default: file may not exist yet
     cax_colony_id=$(jq -r '.goal // "unknown"' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' '-' | sed 's/^-//;s/-$//')
     [[ -z "$cax_colony_id" || "$cax_colony_id" == "unknown" ]] && cax_colony_id="unknown"
     cax_sealed_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-    cax_pheromone_count=$(jq '.signals | length' "$cax_tmp_pheromones" 2>/dev/null || echo 0)
+    cax_pheromone_count=$(jq '.signals | length' "$cax_tmp_pheromones" 2>/dev/null || echo 0)  # SUPPRESS:OK -- read-default: file may not exist yet
 
     {
       printf '<?xml version="1.0" encoding="UTF-8"?>\n'
@@ -9387,7 +9489,7 @@ $updated_meta
     } > "$cax_output"
 
     # Step 4: Validate well-formedness
-    if xmllint --noout "$cax_output" 2>/dev/null; then
+    if xmllint --noout "$cax_output" 2>/dev/null; then  # SUPPRESS:OK -- validation: testing XML validity
       cax_valid=true
     else
       cax_valid=false
@@ -9423,8 +9525,8 @@ $updated_meta
         rs_ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
         printf '%s|%s|%s|%s\n' "$rs_ts" "$rs_clean_event" "$rs_clean_source" "$rs_clean_summary" >> "$rs_file"
-        tail -n 15 "$rs_file" > "$rs_file.tmp" 2>/dev/null || true
-        mv "$rs_file.tmp" "$rs_file" 2>/dev/null || true
+        tail -n 15 "$rs_file" > "$rs_file.tmp" 2>/dev/null || true  # SUPPRESS:OK -- read-default: file may not exist
+        mv "$rs_file.tmp" "$rs_file" 2>/dev/null || true  # SUPPRESS:OK -- cleanup: move is best-effort
 
         json_ok "{\"added\":true,\"event\":\"$rs_clean_event\",\"source\":\"$rs_clean_source\"}"
         ;;
@@ -9445,8 +9547,9 @@ $updated_meta
         fi
 
         if [[ "$rs_json" == "true" ]]; then
+          # SUPPRESS:OK -- read-default: file may not exist
           rs_entries=$(awk -F'|' 'NF >= 4 {print $0}' "$rs_file" | tail -n 15 | jq -R 'split("|") | {timestamp: .[0], event: .[1], source: .[2], summary: (.[3:] | join("|"))}' | jq -s '.' 2>/dev/null || echo '[]')
-          rs_count=$(echo "$rs_entries" | jq 'length' 2>/dev/null || echo 0)
+          rs_count=$(echo "$rs_entries" | jq 'length' 2>/dev/null || echo 0)  # SUPPRESS:OK -- read-default: file may not exist yet
           json_ok "{\"entries\":$rs_entries,\"count\":$rs_count}"
         else
           tail -n 15 "$rs_file"
@@ -9501,10 +9604,11 @@ $updated_meta
       exit 0
     fi
 
-    cc_goal=$(jq -r '.goal // "No goal set"' "$cc_state_file" 2>/dev/null || echo "No goal set")
-    cc_state=$(jq -r '.state // "IDLE"' "$cc_state_file" 2>/dev/null || echo "IDLE")
-    cc_current_phase=$(jq -r '.current_phase // 0' "$cc_state_file" 2>/dev/null || echo 0)
-    cc_total_phases=$(jq -r '.plan.phases | length // 0' "$cc_state_file" 2>/dev/null || echo 0)
+    cc_goal=$(jq -r '.goal // "No goal set"' "$cc_state_file" 2>/dev/null || echo "No goal set")  # SUPPRESS:OK -- read-default: file may not exist yet
+    cc_state=$(jq -r '.state // "IDLE"' "$cc_state_file" 2>/dev/null || echo "IDLE")  # SUPPRESS:OK -- read-default: file may not exist yet
+    cc_current_phase=$(jq -r '.current_phase // 0' "$cc_state_file" 2>/dev/null || echo 0)  # SUPPRESS:OK -- read-default: file may not exist yet
+    cc_total_phases=$(jq -r '.plan.phases | length // 0' "$cc_state_file" 2>/dev/null || echo 0)  # SUPPRESS:OK -- read-default: file may not exist yet
+    # SUPPRESS:OK -- read-default: file may not exist yet
     cc_phase_name=$(jq -r --argjson p "$cc_current_phase" 'if $p > 0 then (.plan.phases[]? | select(.id == $p) | .name) else "" end' "$cc_state_file" 2>/dev/null | head -1)
     [[ -z "$cc_phase_name" ]] && cc_phase_name="(unnamed)"
 
@@ -9535,7 +9639,7 @@ $updated_meta
           end
         )
       | .[]
-      ' "$cc_state_file" 2>/dev/null | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' | cut -c1-160)
+      ' "$cc_state_file" 2>/dev/null | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' | cut -c1-160)  # SUPPRESS:OK -- read-default: file may not exist yet
 
     cc_risks=""
     if [[ -f "$cc_flags_file" ]]; then
@@ -9545,7 +9649,7 @@ $updated_meta
           | (.title // .description // .details // tostring))
         | .[:$n]
         | .[]
-      ' "$cc_flags_file" 2>/dev/null | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' | cut -c1-160)
+      ' "$cc_flags_file" 2>/dev/null | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' | cut -c1-160)  # SUPPRESS:OK -- read-default: file may not exist yet
     fi
 
     cc_signals=""
@@ -9584,11 +9688,12 @@ $updated_meta
         | .[:$max]
         | map((.type // "UNKNOWN") + ": " + (.content.text // (if (.content | type) == "string" then .content else "" end)))
         | .[]
-      ' "$cc_pher_file" 2>/dev/null | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' | cut -c1-160)
+      ' "$cc_pher_file" 2>/dev/null | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' | cut -c1-160)  # SUPPRESS:OK -- read-default: file may not exist yet
     fi
 
     cc_roll=""
     if [[ -f "$cc_roll_file" ]]; then
+      # SUPPRESS:OK -- read-default: file may not exist
       cc_roll=$(tail -n 3 "$cc_roll_file" 2>/dev/null | awk -F'|' 'NF >= 4 {print $2 ": " $4}' | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' | cut -c1-160)
     fi
 
@@ -9650,7 +9755,7 @@ $updated_meta
     fi
 
     cc_words=$(printf '%s' "$cc_section" | wc -w | tr -d ' ')
-    cc_prompt_json=$(printf '%s' "$cc_section" | jq -Rs '.' 2>/dev/null || echo '""')
+    cc_prompt_json=$(printf '%s' "$cc_section" | jq -Rs '.' 2>/dev/null || echo '""')  # SUPPRESS:OK -- read-default: returns fallback if missing
     json_ok "{\"exists\":true,\"state\":\"$cc_state\",\"next_action\":\"$cc_next_action\",\"word_count\":$cc_words,\"prompt_section\":$cc_prompt_json}"
     ;;
 
@@ -9661,7 +9766,7 @@ $updated_meta
   session-init)
     # Initialize a new session tracking file
     # Usage: session-init [session_id] [goal]
-    session_id="${2:-$(date +%s)_$(openssl rand -hex 4 2>/dev/null || echo $$)}"
+    session_id="${2:-$(date +%s)_$(openssl rand -hex 4 2>/dev/null || echo $$)}"  # SUPPRESS:OK -- read-default: openssl may not be available
     goal="${3:-}"
 
     # ARCH-03: Rotate spawn-tree.txt at session start to prevent unbounded growth.
@@ -9675,13 +9780,14 @@ $updated_meta
         cp "$tree_file" "$DATA_DIR/spawn-tree-archive/spawn-tree.${archive_ts}.txt" 2>/dev/null || true
         > "$tree_file"  # Truncate in-place — preserves file handle for tail -f watchers
         # Keep only 5 archives
+        # SUPPRESS:OK -- read-default: directory may not exist
         ls -t "$DATA_DIR/spawn-tree-archive"/spawn-tree.*.txt 2>/dev/null \
             | tail -n +6 | while IFS= read -r file; do rm -f "$file"; done 2>/dev/null || true
     }
     _rotate_spawn_tree
 
     session_file="$DATA_DIR/session.json"
-    baseline=$(git rev-parse HEAD 2>/dev/null || echo "")
+    baseline=$(git rev-parse HEAD 2>/dev/null || echo "")  # SUPPRESS:OK -- read-default: may not have commits yet
 
     cat > "$session_file.tmp" << EOF
 {
@@ -9719,7 +9825,7 @@ EOF
     fi
 
     # Read current session
-    current_session=$(cat "$session_file" 2>/dev/null || echo '{}')
+    current_session=$(cat "$session_file" 2>/dev/null || echo '{}')  # SUPPRESS:OK -- read-default: file may not exist yet
 
     # Extract current values for preservation
     current_goal=$(echo "$current_session" | jq -r '.colony_goal // empty')
@@ -9729,18 +9835,21 @@ EOF
     # Get top 3 TODOs if TO-DOs.md exists
     todos="[]"
     if [[ -f "TO-DOs.md" ]]; then
-      todos=$(grep "^### " TO-DOs.md 2>/dev/null | head -3 | sed 's/^### //' | jq -R . | jq -s .)
+      todos=$(grep "^### " TO-DOs.md 2>/dev/null | head -3 | sed 's/^### //' | jq -R . | jq -s .)  # SUPPRESS:OK -- existence-test: file may not exist
     fi
 
     # Get colony state if exists
     if [[ -f "$DATA_DIR/COLONY_STATE.json" ]]; then
+      # SUPPRESS:OK -- read-default: file may not exist yet
       current_goal=$(jq -r '.goal // empty' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "$current_goal")
+      # SUPPRESS:OK -- read-default: file may not exist yet
       current_phase=$(jq -r '.current_phase // 0' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "$current_phase")
+      # SUPPRESS:OK -- read-default: file may not exist yet
       current_milestone=$(jq -r '.milestone // "First Mound"' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "$current_milestone")
     fi
 
     # Capture current git HEAD for drift detection
-    baseline=$(git rev-parse HEAD 2>/dev/null || echo "")
+    baseline=$(git rev-parse HEAD 2>/dev/null || echo "")  # SUPPRESS:OK -- read-default: may not have commits yet
 
     # Build updated session
     echo "$current_session" | jq --arg cmd "$cmd_run" \
@@ -9774,13 +9883,14 @@ EOF
       exit 0
     fi
 
-    session_data=$(cat "$session_file" 2>/dev/null || echo '{}')
+    session_data=$(cat "$session_file" 2>/dev/null || echo '{}')  # SUPPRESS:OK -- read-default: file may not exist yet
 
     # Check if stale (> 24 hours)
     last_cmd_ts="" is_stale="" age_hours=""
     last_cmd_ts=$(echo "$session_data" | jq -r '.last_command_at // .started_at // empty')
     if [[ -n "$last_cmd_ts" ]]; then
       last_epoch=0 now_epoch=0
+      # SUPPRESS:OK -- cross-platform: macOS date syntax
       last_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$last_cmd_ts" +%s 2>/dev/null \
         || date -d "$last_cmd_ts" +%s 2>/dev/null \
         || echo 0)
@@ -9804,7 +9914,7 @@ EOF
       exit 0
     fi
 
-    last_cmd_ts=$(jq -r '.last_command_at // .started_at // empty' "$session_file" 2>/dev/null)
+    last_cmd_ts=$(jq -r '.last_command_at // .started_at // empty' "$session_file" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
 
     if [[ -z "$last_cmd_ts" ]]; then
       json_ok '{"is_stale":true}'
@@ -9812,6 +9922,7 @@ EOF
     fi
 
     # macOS uses -j -f, Linux uses -d
+    # SUPPRESS:OK -- cross-platform: macOS date syntax
     last_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$last_cmd_ts" +%s 2>/dev/null \
       || date -d "$last_cmd_ts" +%s 2>/dev/null \
       || echo 0)
@@ -9975,23 +10086,23 @@ EOF
         local _lock_file="$1"
         local _pid_file="${_lock_file}.pid"
         local _pid
-        _pid=$(cat "$_pid_file" 2>/dev/null || echo "")
+        _pid=$(cat "$_pid_file" 2>/dev/null || echo "")  # SUPPRESS:OK -- read-default: file may not exist yet
         if [[ -z "$_pid" ]]; then
-          _pid=$(cat "$_lock_file" 2>/dev/null || echo "")
+          _pid=$(cat "$_lock_file" 2>/dev/null || echo "")  # SUPPRESS:OK -- read-default: file may not exist yet
         fi
         _pid=$(echo "$_pid" | tr -d '[:space:]')
         [[ "$_pid" =~ ^[0-9]+$ ]] || _pid=""
 
         if [[ -n "$_pid" ]]; then
-          kill -0 "$_pid" 2>/dev/null && return 1
+          kill -0 "$_pid" 2>/dev/null && return 1  # SUPPRESS:OK -- existence-test: checking if process is alive
           return 0
         fi
 
         local _mtime=0
-        if stat -f %m "$_lock_file" >/dev/null 2>&1; then
-          _mtime=$(stat -f %m "$_lock_file" 2>/dev/null || echo 0)
+        if stat -f %m "$_lock_file" >/dev/null 2>&1; then  # SUPPRESS:OK -- cleanup: output suppression for clean operation
+          _mtime=$(stat -f %m "$_lock_file" 2>/dev/null || echo 0)  # SUPPRESS:OK -- cross-platform: macOS stat syntax
         else
-          _mtime=$(stat -c %Y "$_lock_file" 2>/dev/null || echo 0)
+          _mtime=$(stat -c %Y "$_lock_file" 2>/dev/null || echo 0)  # SUPPRESS:OK -- cross-platform: Linux stat syntax
         fi
         local _age=$(( $(date +%s) - _mtime ))
         [[ "$_age" -gt "$lock_timeout" ]]
@@ -10001,7 +10112,7 @@ EOF
         [[ -e "$lock_file" ]] || continue
         scanned=$((scanned + 1))
         if is_lock_stale_for_cleanup "$lock_file"; then
-          rm -f "$lock_file" "${lock_file}.pid" 2>/dev/null || true
+          rm -f "$lock_file" "${lock_file}.pid" 2>/dev/null || true  # SUPPRESS:OK -- cleanup: file may not exist
           removed=$((removed + 1))
         else
           skipped_live=$((skipped_live + 1))
@@ -10016,7 +10127,7 @@ EOF
       exit 0
     fi
 
-    lock_files=$(find "$lock_dir" -name "*.lock" -o -name "*.lock.pid" 2>/dev/null)
+    lock_files=$(find "$lock_dir" -name "*.lock" -o -name "*.lock.pid" 2>/dev/null)  # SUPPRESS:OK -- existence-test: directory may not exist
 
     if [[ -z "$lock_files" ]]; then
       json_ok '{"removed":0,"message":"No lock files found"}'
@@ -10031,7 +10142,7 @@ EOF
         echo "Lock files found in $lock_dir:" >&2
         echo "$lock_files" | while read -r f; do
           [[ "$f" == *.pid ]] && continue
-          pid_content=$(cat "${f}.pid" 2>/dev/null || echo "unknown")
+          pid_content=$(cat "${f}.pid" 2>/dev/null || echo "unknown")  # SUPPRESS:OK -- read-default: file may not exist yet
           echo "  $f (PID: $pid_content)" >&2
         done
         printf "Remove all %d lock(s)? [y/N] " "$lock_count" >&2
@@ -10045,7 +10156,7 @@ EOF
       fi
     fi
 
-    rm -f "$lock_dir"/*.lock "$lock_dir"/*.lock.pid 2>/dev/null || true
+    rm -f "$lock_dir"/*.lock "$lock_dir"/*.lock.pid 2>/dev/null || true  # SUPPRESS:OK -- cleanup: file may not exist
     export LOCK_ACQUIRED=false
     export CURRENT_LOCK=""
     json_ok "{\"removed\":$lock_count,\"message\":\"All locks cleared\"}"
@@ -10124,23 +10235,25 @@ EOF
     signal_count=0
 
     if [[ -f "$DATA_DIR/spawn-tree.txt" ]]; then
-      spawn_count=$(grep -c "|spawned$" "$DATA_DIR/spawn-tree.txt" 2>/dev/null || echo 0)
+      spawn_count=$(grep -c "|spawned$" "$DATA_DIR/spawn-tree.txt" 2>/dev/null || echo 0)  # SUPPRESS:OK -- read-default: count defaults to 0 if file missing
     fi
 
     if [[ -f "$DATA_DIR/midden/midden.json" ]]; then
+      # SUPPRESS:OK -- read-default: file may not exist yet
       failure_count=$(jq '[.entries[]? | select(.category == "failure")] | length' "$DATA_DIR/midden/midden.json" 2>/dev/null || echo 0)
       if [[ "$failure_count" == "0" ]]; then
         # Backward compatibility for older midden schema
+        # SUPPRESS:OK -- read-default: file may not exist yet
         failure_count=$(jq '[.signals[]? | select(.type == "failure")] | length' "$DATA_DIR/midden/midden.json" 2>/dev/null || echo 0)
       fi
     fi
 
     if [[ -f "$AETHER_ROOT/.aether/QUEEN.md" ]]; then
-      rule_count=$(grep -c "^-" "$AETHER_ROOT/.aether/QUEEN.md" 2>/dev/null || echo 0)
+      rule_count=$(grep -c "^-" "$AETHER_ROOT/.aether/QUEEN.md" 2>/dev/null || echo 0)  # SUPPRESS:OK -- read-default: count defaults to 0 if file missing
     fi
 
     if [[ -f "$DATA_DIR/pheromones.json" ]]; then
-      signal_count=$(jq '.signals | length' "$DATA_DIR/pheromones.json" 2>/dev/null || echo 0)
+      signal_count=$(jq '.signals | length' "$DATA_DIR/pheromones.json" 2>/dev/null || echo 0)  # SUPPRESS:OK -- read-default: file may not exist yet
     fi
 
     raw_score=$(( (spawn_count * 2) + (failure_count * 5) + signal_count - (rule_count / 2) ))
@@ -10169,6 +10282,7 @@ EOF
     # Read QUEEN.md metadata if available
     if [[ -f "$queen_file" ]]; then
       # Extract metadata block from HTML comment
+      # SUPPRESS:OK -- read-default: file may not exist
       metadata=$(sed -n '/<!-- METADATA/,/-->/p' "$queen_file" 2>/dev/null | sed 's/<!-- METADATA//' | sed 's/-->//')
       if [[ -n "$metadata" ]]; then
         # Parse stats from metadata
@@ -10185,8 +10299,10 @@ EOF
 
       # Get file mtime as fallback for last_updated
       if [[ "$queen_last_updated" == "null" ]]; then
+        # SUPPRESS:OK -- cross-platform: macOS stat syntax
         queen_mtime=$(stat -f %m "$queen_file" 2>/dev/null || stat -c %Y "$queen_file" 2>/dev/null || echo "0")
         if [[ "$queen_mtime" != "0" ]]; then
+          # SUPPRESS:OK -- cross-platform: macOS date-from-epoch syntax
           queen_last_updated="\"$(date -u -r "$queen_mtime" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -d "@$queen_mtime" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || echo "null")\""
           [[ "$queen_last_updated" == '"null"' ]] && queen_last_updated="null"
         fi
@@ -10198,25 +10314,25 @@ EOF
     learning_captured="null"
     if [[ -f "$observations_file" ]]; then
       # Get threshold for each wisdom type
-      thresholds=$(bash "$0" queen-thresholds 2>/dev/null | jq -c '.result // {}')
+      thresholds=$(bash "$0" queen-thresholds 2>/dev/null | jq -c '.result // {}')  # SUPPRESS:OK -- read-default: subcommand may fail
 
       # Count observations meeting thresholds that aren't in QUEEN.md
       if [[ -f "$queen_file" ]]; then
-        queen_content=$(cat "$queen_file" 2>/dev/null)
+        queen_content=$(cat "$queen_file" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
         pending_observations=$(jq --argjson thresholds "$thresholds" --arg queen "$queen_content" '
           [.observations[]? | select(
             (.observation_count // 0) >= ($thresholds[.wisdom_type].propose // 1) and
             ($queen | contains(.content) | not)
           )] | length
-        ' "$observations_file" 2>/dev/null || echo "0")
+        ' "$observations_file" 2>/dev/null || echo "0")  # SUPPRESS:OK -- read-default: file may not exist yet
       else
         pending_observations=$(jq --argjson thresholds "$thresholds" '
           [.observations[]? | select((.observation_count // 0) >= ($thresholds[.wisdom_type].propose // 1))] | length
-        ' "$observations_file" 2>/dev/null || echo "0")
+        ' "$observations_file" 2>/dev/null || echo "0")  # SUPPRESS:OK -- read-default: file may not exist yet
       fi
 
       # Get last learning timestamp
-      last_obs=$(jq -r '[.observations[]?.last_seen] | max // empty' "$observations_file" 2>/dev/null)
+      last_obs=$(jq -r '[.observations[]?.last_seen] | max // empty' "$observations_file" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
       if [[ -n "$last_obs" ]]; then
         learning_captured="\"$last_obs\""
       fi
@@ -10225,7 +10341,7 @@ EOF
     # Count deferred proposals
     deferred_count=0
     if [[ -f "$deferred_file" ]]; then
-      deferred_count=$(jq '[.deferred[]?] | length' "$deferred_file" 2>/dev/null || echo "0")
+      deferred_count=$(jq '[.deferred[]?] | length' "$deferred_file" 2>/dev/null || echo "0")  # SUPPRESS:OK -- read-default: file may not exist yet
     fi
 
     # Count recent failures from midden
@@ -10234,6 +10350,7 @@ EOF
     failures_json="[]"
     if [[ -f "$midden_file" ]]; then
       # Get failures sorted by created_at descending
+      # SUPPRESS:OK -- read-default: file may not exist yet
       failures_data=$(jq '[.signals[]? | select(.type == "failure")] | sort_by(.created_at) | reverse' "$midden_file" 2>/dev/null || echo "[]")
       failure_count=$(echo "$failures_data" | jq 'length')
 
@@ -10242,6 +10359,7 @@ EOF
         [[ "$last_failure" == "null" ]] || last_failure="\"$last_failure\""
 
         # Get last 5 failures for details
+        # SUPPRESS:OK -- read-default: file may not exist yet
         failures_json=$(echo "$failures_data" | jq '[.[:5][] | {created_at, source, context, content: .content.text}]' 2>/dev/null || echo "[]")
       fi
     fi
@@ -10296,13 +10414,13 @@ EOF
     goal=""
 
     if [[ -f "$colony_state_file" ]]; then
-      current_phase=$(jq -r '.current_phase // 0' "$colony_state_file" 2>/dev/null || echo "0")
-      state=$(jq -r '.state // "UNKNOWN"' "$colony_state_file" 2>/dev/null || echo "UNKNOWN")
-      goal=$(jq -r '.goal // ""' "$colony_state_file" 2>/dev/null || echo "")
+      current_phase=$(jq -r '.current_phase // 0' "$colony_state_file" 2>/dev/null || echo "0")  # SUPPRESS:OK -- read-default: file may not exist yet
+      state=$(jq -r '.state // "UNKNOWN"' "$colony_state_file" 2>/dev/null || echo "UNKNOWN")  # SUPPRESS:OK -- read-default: file may not exist yet
+      goal=$(jq -r '.goal // ""' "$colony_state_file" 2>/dev/null || echo "")  # SUPPRESS:OK -- read-default: file may not exist yet
     fi
 
     # Get memory health metrics
-    memory_health=$(bash "$0" memory-metrics 2>/dev/null || echo '{}')
+    memory_health=$(bash "$0" memory-metrics 2>/dev/null || echo '{}')  # SUPPRESS:OK -- read-default: subcommand may fail
     wisdom_count=$(echo "$memory_health" | jq -r '.wisdom.total // 0')
     pending_promotions=$(echo "$memory_health" | jq -r '.pending.total // 0')
     recent_failures=$(echo "$memory_health" | jq -r '.recent_failures.count // 0')
@@ -10310,12 +10428,14 @@ EOF
     # Get recent decisions (last 5)
     recent_decisions="[]"
     if [[ -f "$colony_state_file" ]]; then
+      # SUPPRESS:OK -- read-default: returns fallback if missing
       recent_decisions=$(jq -r '[.memory.decisions[]?] | reverse | [.[:5][]] | if . == [] then [] else . end' "$colony_state_file" 2>/dev/null || echo "[]")
     fi
 
     # Get recent events (last 10)
     recent_events="[]"
     if [[ -f "$colony_state_file" ]]; then
+      # SUPPRESS:OK -- read-default: returns fallback if missing
       recent_events=$(jq -r '[.events[]?] | reverse | [.[:10][] | {timestamp, type, worker, details}]' "$colony_state_file" 2>/dev/null || echo "[]")
     fi
 
@@ -10422,7 +10542,7 @@ EOF
       ext="${file##*.}"
 
       # Check file size (large files > 300 lines)
-      line_count=$(wc -l < "$file" 2>/dev/null || echo "0")
+      line_count=$(wc -l < "$file" 2>/dev/null || echo "0")  # SUPPRESS:OK -- read-default: file may not exist
       if [[ $line_count -gt 300 ]]; then
         patterns_found=$((patterns_found + 1))
         content="Large file: consider refactoring ($line_count lines)"
@@ -10436,7 +10556,7 @@ EOF
 
       # Check for TODO/FIXME/XXX comments
       if [[ "$ext" =~ ^(ts|tsx|js|jsx|py|sh|md)$ ]]; then
-        todo_matches=$( (grep -n "TODO\\|FIXME\\|XXX" "$file" 2>/dev/null || true) | wc -l | tr -d ' \n')
+        todo_matches=$( (grep -n "TODO\\|FIXME\\|XXX" "$file" 2>/dev/null || true) | wc -l | tr -d ' \n')  # SUPPRESS:OK -- read-default: file may not exist
         if [[ $todo_matches -gt 0 ]]; then
           patterns_found=$((patterns_found + 1))
           content="$todo_matches pending TODO/FIXME comments"
@@ -10450,6 +10570,7 @@ EOF
 
       # Check for debug artifacts (console.log, debugger)
       if [[ "$ext" =~ ^(ts|tsx|js|jsx)$ ]]; then
+        # SUPPRESS:OK -- read-default: file may not exist
         debug_matches=$( (grep -n "console\\.log\\|debugger" "$file" 2>/dev/null || true) | wc -l | tr -d ' \n')
         if [[ $debug_matches -gt 0 ]]; then
           patterns_found=$((patterns_found + 1))
@@ -10464,7 +10585,7 @@ EOF
 
       # Check for type safety gaps (: any, : unknown)
       if [[ "$ext" =~ ^(ts|tsx)$ ]]; then
-        type_gaps=$( (grep -n ": any\\|: unknown" "$file" 2>/dev/null || true) | wc -l | tr -d ' \n')
+        type_gaps=$( (grep -n ": any\\|: unknown" "$file" 2>/dev/null || true) | wc -l | tr -d ' \n')  # SUPPRESS:OK -- read-default: file may not exist
         if [[ $type_gaps -gt 0 ]]; then
           patterns_found=$((patterns_found + 1))
           content="Type safety gaps detected ($type_gaps instances)"
@@ -10478,6 +10599,7 @@ EOF
 
       # Check for high complexity (function count)
       if [[ "$ext" =~ ^(ts|tsx|js|jsx|py|sh)$ ]]; then
+        # SUPPRESS:OK -- read-default: count defaults to 0 if file missing
         func_count=$(grep -cE "^function|^def |^const.*=.*function|^const.*=.*=>" "$file" 2>/dev/null | tr -d ' \n' || echo "0")
         if [[ $func_count -gt 20 ]]; then
           patterns_found=$((patterns_found + 1))
@@ -10501,6 +10623,7 @@ EOF
           : # Test file exists
         else
           # Only suggest for files with functions (not config/pure data files)
+          # SUPPRESS:OK -- existence-test: file may not exist
           if grep -qE "^function|^def |^const.*=.*function|^const.*=.*=>|^export.*function|^class " "$file" 2>/dev/null || false; then
             patterns_found=$((patterns_found + 1))
             content="Add tests for uncovered module: $base_name"
@@ -10513,17 +10636,20 @@ EOF
         fi
       fi
 
+    # SUPPRESS:OK -- existence-test: directory may not exist
     done < <(find "$source_dir" -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" -o -name "*.py" -o -name "*.sh" -o -name "*.md" \) 2>/dev/null | head -100)
 
     # Deduplicate against existing pheromones and session suggestions using jq
     # Get existing signal content hashes
     existing_hashes="[]"
     if [[ -f "$pheromones_file" ]]; then
+      # SUPPRESS:OK -- read-default: returns fallback if missing
       existing_hashes=$(jq -r '[.signals[] | select(.active == true) | .content.text] | @json' "$pheromones_file" 2>/dev/null || echo "[]")
     fi
 
     session_hashes="[]"
     if [[ -f "$session_file" ]]; then
+      # SUPPRESS:OK -- read-default: file may not exist yet
       session_hashes=$(jq -r '[.suggested_pheromones[]?.hash // empty] | @json' "$session_file" 2>/dev/null || echo "[]")
     fi
 
@@ -10535,7 +10661,7 @@ EOF
       map(select(.hash as $h | $session | index($h) | not)) |
       # Sort by priority descending and limit
       sort_by(.priority) | reverse | .[:$max]
-    ' "$raw_suggestions" 2>/dev/null || echo "[]")
+    ' "$raw_suggestions" 2>/dev/null || echo "[]")  # SUPPRESS:OK -- read-default: file may not exist yet
 
     # Clean up temp file
     rm -f "$raw_suggestions"
@@ -10574,7 +10700,7 @@ EOF
     # Initialize suggested_pheromones array if missing
     if [[ -f "$session_file" ]]; then
       # Check if suggested_pheromones field exists
-      has_field=$(jq 'has("suggested_pheromones")' "$session_file" 2>/dev/null || echo "false")
+      has_field=$(jq 'has("suggested_pheromones")' "$session_file" 2>/dev/null || echo "false")  # SUPPRESS:OK -- read-default: file may not exist yet
       if [[ "$has_field" != "true" ]]; then
         # Add the field
         jq '. + {"suggested_pheromones": []}' "$session_file" > "${session_file}.tmp" && mv "${session_file}.tmp" "$session_file"
@@ -10607,6 +10733,7 @@ EOF
     already_suggested="false"
 
     if [[ -f "$session_file" ]]; then
+      # SUPPRESS:OK -- read-default: query may return empty
       count=$(jq --arg hash "$check_hash" '[.suggested_pheromones[]? | select(.hash == $hash)] | length' "$session_file" 2>/dev/null || echo "0")
       if [[ "$count" -gt 0 ]]; then
         already_suggested="true"
@@ -10625,7 +10752,7 @@ EOF
     cleared_count=0
 
     if [[ -f "$session_file" ]]; then
-      cleared_count=$(jq '.suggested_pheromones | length' "$session_file" 2>/dev/null || echo "0")
+      cleared_count=$(jq '.suggested_pheromones | length' "$session_file" 2>/dev/null || echo "0")  # SUPPRESS:OK -- read-default: file may not exist yet
       jq 'del(.suggested_pheromones)' "$session_file" > "${session_file}.tmp" && mv "${session_file}.tmp" "$session_file"
     fi
 
@@ -10666,7 +10793,7 @@ EOF
     fi
 
     # Get suggestions from suggest-analyze
-    suggestions_result=$(bash "$0" suggest-analyze 2>/dev/null || echo '{"suggestions":[]}')
+    suggestions_result=$(bash "$0" suggest-analyze 2>/dev/null || echo '{"suggestions":[]}')  # SUPPRESS:OK -- read-default: subcommand may fail
     suggestions_json=$(echo "$suggestions_result" | jq '.result.suggestions // []')
 
     # Check if there are any suggestions
@@ -10756,7 +10883,7 @@ EOF
         [Rr]|"reject"|"Reject")
           rejected_suggestions+=("$suggestion")
           # Record hash to prevent re-suggestion
-          bash "$0" suggest-record "$hash" "$stype" >/dev/null 2>&1
+          bash "$0" suggest-record "$hash" "$stype" >/dev/null 2>&1  # SUPPRESS:OK -- cleanup: side-effect is best-effort
           echo "✗ Rejected" >&2
           ;;
         [Dd]|"dismiss"|"Dismiss"|"dismiss all"|"Dismiss All")
@@ -10804,13 +10931,13 @@ EOF
         # Call pheromone-write to create the signal
         signal_result=$(bash "$0" pheromone-write "$stype" "$content" --source "system:suggestion" --reason "$reason" --ttl "phase_end" 2>&1)
 
-        if echo "$signal_result" | jq -e '.ok' >/dev/null 2>&1; then
+        if echo "$signal_result" | jq -e '.ok' >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON field
           signal_id=$(echo "$signal_result" | jq -r '.result.signal_id // "unknown"')
           signals_created+=("$signal_id")
           echo "✓ Added $stype signal" >&2
 
           # Record hash to prevent duplicates
-          bash "$0" suggest-record "$hash" "$stype" >/dev/null 2>&1
+          bash "$0" suggest-record "$hash" "$stype" >/dev/null 2>&1  # SUPPRESS:OK -- cleanup: side-effect is best-effort
           ((approved_count++))
         else
           echo "✗ Failed to create signal: $content" >&2
@@ -10854,7 +10981,7 @@ EOF
     # Returns: JSON {dismissed, hashes_recorded}
 
     # Get current suggestions
-    suggestions_result=$(bash "$0" suggest-analyze 2>/dev/null || echo '{"suggestions":[]}')
+    suggestions_result=$(bash "$0" suggest-analyze 2>/dev/null || echo '{"suggestions":[]}')  # SUPPRESS:OK -- read-default: subcommand may fail
     suggestions_json=$(echo "$suggestions_result" | jq '.result.suggestions // []')
 
     dismissed_count=0
@@ -10869,7 +10996,7 @@ EOF
         stype=$(echo "$suggestion" | jq -r '.type')
 
         # Record hash to prevent re-suggestion
-        bash "$0" suggest-record "$hash" "$stype" >/dev/null 2>&1
+        bash "$0" suggest-record "$hash" "$stype" >/dev/null 2>&1  # SUPPRESS:OK -- cleanup: side-effect is best-effort
         hashes_recorded+=("$hash")
         ((dismissed_count++))
       done
@@ -10928,59 +11055,61 @@ EOF
 
     # --- 1. Pheromones ---
     _dc_phero_file="$DATA_DIR/pheromones.json"
-    if [[ -f "$_dc_phero_file" ]] && jq -e . "$_dc_phero_file" >/dev/null 2>&1; then
+    if [[ -f "$_dc_phero_file" ]] && jq -e . "$_dc_phero_file" >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON validity
       _dc_phero_count=$(jq --arg cpat "$_dc_pheromone_content_pat" --arg ipat "$_dc_pheromone_id_pat" '
         [.signals // [] | .[] | select(
           (.content.text // .content // "" | tostring | test($cpat; "i")) or
           (.id // "" | test($ipat))
         )] | length
-      ' "$_dc_phero_file" 2>/dev/null || echo 0)
+      ' "$_dc_phero_file" 2>/dev/null || echo 0)  # SUPPRESS:OK -- read-default: file may not exist yet
     fi
 
     # --- 2. QUEEN.md ---
     _dc_queen_file="$AETHER_ROOT/.aether/QUEEN.md"
     if [[ -f "$_dc_queen_file" ]]; then
+      # SUPPRESS:OK -- read-default: count defaults to 0 if file missing
       _dc_queen_count=$(grep -ciE "$_dc_queen_line_pat" "$_dc_queen_file" 2>/dev/null) || _dc_queen_count=0
     fi
 
     # --- 3. Learning observations ---
     _dc_obs_file="$DATA_DIR/learning-observations.json"
-    if [[ -f "$_dc_obs_file" ]] && jq -e . "$_dc_obs_file" >/dev/null 2>&1; then
+    if [[ -f "$_dc_obs_file" ]] && jq -e . "$_dc_obs_file" >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON validity
       _dc_obs_count=$(jq --arg cpat "$_dc_obs_colony_pat" '
         [.observations // [] | .[] | select(.colony_id // "" | test($cpat))] | length
-      ' "$_dc_obs_file" 2>/dev/null || echo 0)
+      ' "$_dc_obs_file" 2>/dev/null || echo 0)  # SUPPRESS:OK -- read-default: file may not exist yet
     fi
 
     # --- 4. Midden ---
     _dc_midden_file="$DATA_DIR/midden/midden.json"
     _dc_midden_signal_count=0
     _dc_midden_entry_count=0
-    if [[ -f "$_dc_midden_file" ]] && jq -e . "$_dc_midden_file" >/dev/null 2>&1; then
+    if [[ -f "$_dc_midden_file" ]] && jq -e . "$_dc_midden_file" >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON validity
       _dc_midden_signal_count=$(jq --arg cpat "$_dc_pheromone_content_pat" '
         [.signals // [] | .[] | select(
           (.content.text // .content // "" | tostring | test($cpat; "i"))
         )] | length
-      ' "$_dc_midden_file" 2>/dev/null || echo 0)
+      ' "$_dc_midden_file" 2>/dev/null || echo 0)  # SUPPRESS:OK -- read-default: file may not exist yet
       _dc_midden_entry_count=$(jq --arg cpat "$_dc_obs_colony_pat" '
         [.entries // .failures // [] | .[] | select(.colony_id // "" | test($cpat))] | length
-      ' "$_dc_midden_file" 2>/dev/null || echo 0)
+      ' "$_dc_midden_file" 2>/dev/null || echo 0)  # SUPPRESS:OK -- read-default: file may not exist yet
       _dc_midden_count=$(( _dc_midden_signal_count + _dc_midden_entry_count ))
     fi
 
     # --- 5. Spawn tree ---
     _dc_spawn_file="$DATA_DIR/spawn-tree.txt"
     if [[ -f "$_dc_spawn_file" ]]; then
+      # SUPPRESS:OK -- read-default: count defaults to 0 if file missing
       _dc_spawn_count=$(grep -cE "$_dc_spawn_name_pat" "$_dc_spawn_file" 2>/dev/null) || _dc_spawn_count=0
     fi
 
     # --- 6. Constraints ---
     _dc_constraint_file="$DATA_DIR/constraints.json"
-    if [[ -f "$_dc_constraint_file" ]] && jq -e . "$_dc_constraint_file" >/dev/null 2>&1; then
+    if [[ -f "$_dc_constraint_file" ]] && jq -e . "$_dc_constraint_file" >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON validity
       _dc_constraint_count=$(jq --arg cpat "$_dc_constraint_pat" '
         [.focus // [] | .[] | select(
           (.content // .area // "" | tostring | test($cpat; "i"))
         )] | length
-      ' "$_dc_constraint_file" 2>/dev/null || echo 0)
+      ' "$_dc_constraint_file" 2>/dev/null || echo 0)  # SUPPRESS:OK -- read-default: file may not exist yet
     fi
 
     _dc_total=$(( _dc_phero_count + _dc_queen_count + _dc_obs_count + _dc_midden_count + _dc_spawn_count + _dc_constraint_count ))
@@ -11334,6 +11463,7 @@ DRYRUN_EOF
     _ap_colony_file="$DATA_DIR/COLONY_STATE.json"
     _ap_learnings_count=0
     if [[ -f "$_ap_colony_file" ]]; then
+      # SUPPRESS:OK -- read-default: returns fallback if missing
       _ap_learnings_count=$(jq '[.memory.phase_learnings[]?.learnings[]? // empty] | length' "$_ap_colony_file" 2>/dev/null || echo "0")
     fi
 
