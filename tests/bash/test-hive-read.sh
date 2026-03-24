@@ -481,6 +481,92 @@ test_hive_read_combined_filters() {
     return 0
 }
 
+test_hive_read_string_confidence() {
+    # Entries with string confidence values should be handled correctly (tonumber coercion)
+    local tmpdir
+    tmpdir=$(setup_hive_env)
+    local hive_dir="$tmpdir/.aether/hive"
+    mkdir -p "$hive_dir"
+
+    # Create wisdom.json with mixed confidence types: number and string
+    cat > "$hive_dir/wisdom.json" << 'WISEOF'
+{
+  "version": "1.0.0",
+  "created_at": "2026-03-20T00:00:00Z",
+  "last_updated": "2026-03-20T00:00:00Z",
+  "entries": [
+    {
+      "id": "num111222333",
+      "text": "Numeric confidence entry",
+      "category": "pattern",
+      "confidence": 0.9,
+      "domain_tags": ["general"],
+      "source_repos": ["/repo/alpha"],
+      "validated_count": 2,
+      "created_at": "2026-03-01T00:00:00Z",
+      "last_accessed": "2026-03-15T00:00:00Z",
+      "access_count": 1
+    },
+    {
+      "id": "str222333444",
+      "text": "String confidence entry",
+      "category": "pattern",
+      "confidence": "0.8",
+      "domain_tags": ["general"],
+      "source_repos": ["/repo/beta"],
+      "validated_count": 1,
+      "created_at": "2026-03-02T00:00:00Z",
+      "last_accessed": "2026-03-14T00:00:00Z",
+      "access_count": 0
+    }
+  ],
+  "metadata": {
+    "total_entries": 2,
+    "max_entries": 200,
+    "contributing_repos": ["/repo/alpha", "/repo/beta"]
+  }
+}
+WISEOF
+
+    local result
+    result=$(run_hive_cmd "$tmpdir" hive-read --min-confidence 0.5)
+
+    if ! assert_ok_true "$result"; then
+        test_fail "Expected ok=true" "$result"
+        rm -rf "$tmpdir"
+        return 1
+    fi
+
+    # Both entries should be returned (string "0.8" coerced to number >= 0.5)
+    local total_matched
+    total_matched=$(echo "$result" | jq -r '.result.total_matched')
+    if [[ "$total_matched" != "2" ]]; then
+        test_fail "Expected total_matched=2 (both string and number confidence)" "Got $total_matched"
+        rm -rf "$tmpdir"
+        return 1
+    fi
+
+    # Should be sorted correctly: 0.9 before 0.8
+    local first_id
+    first_id=$(echo "$result" | jq -r '.result.entries[0].id')
+    if [[ "$first_id" != "num111222333" ]]; then
+        test_fail "Expected first entry to be numeric confidence (0.9)" "Got $first_id"
+        rm -rf "$tmpdir"
+        return 1
+    fi
+
+    local second_id
+    second_id=$(echo "$result" | jq -r '.result.entries[1].id')
+    if [[ "$second_id" != "str222333444" ]]; then
+        test_fail "Expected second entry to be string confidence (0.8)" "Got $second_id"
+        rm -rf "$tmpdir"
+        return 1
+    fi
+
+    rm -rf "$tmpdir"
+    return 0
+}
+
 test_hive_read_registered_in_help() {
     # hive-read should appear in help output
     local result
@@ -512,6 +598,7 @@ run_test test_hive_read_last_accessed_updated "Last accessed timestamp updated"
 run_test test_hive_read_no_wisdom_file_fallback "Fallback when wisdom.json missing"
 run_test test_hive_read_text_format "Text format produces readable output"
 run_test test_hive_read_combined_filters "Combined filters work together"
+run_test test_hive_read_string_confidence "hive-read handles string confidence values via tonumber coercion"
 run_test test_hive_read_registered_in_help "hive-read registered in help"
 
 test_summary

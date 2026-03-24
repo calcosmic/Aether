@@ -299,14 +299,14 @@ _hive_read() {
       --argjson limit "$hr_limit" '
       .entries
       | map(
-          select(.confidence >= $min_conf)
+          select((.confidence | tonumber) >= $min_conf)
           | if ($domain_filter | length) > 0 then
               select(
                 [.domain_tags[] as $dt | $domain_filter[] | select(. == $dt)] | length > 0
               )
             else . end
         )
-      | sort_by(-.confidence, -.validated_count)
+      | sort_by(-(.confidence | tonumber), -.validated_count)
       | { total_matched: length, entries: .[:$limit], returned_ids: [.[:$limit][].id] }
     ' "$hr_wisdom_file" 2>/dev/null) || {
       json_ok '{"entries":[],"total_matched":0,"fallback":"filter_error"}'

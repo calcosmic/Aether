@@ -52,7 +52,13 @@ _midden_write() {
       ' "$mw_midden_file" 2>/dev/null)
 
       if [[ -n "$mw_updated_midden" ]]; then
-        printf '%s\n' "$mw_updated_midden" > "$mw_midden_file.tmp" && mv "$mw_midden_file.tmp" "$mw_midden_file"
+        mw_tmp="${mw_midden_file}.tmp.$$"
+        if ! { printf '%s\n' "$mw_updated_midden" > "$mw_tmp" && mv "$mw_tmp" "$mw_midden_file"; }; then
+          # Silent retry (once)
+          if ! { printf '%s\n' "$mw_updated_midden" > "$mw_tmp" && mv "$mw_tmp" "$mw_midden_file"; }; then
+            echo "Warning: Midden write failed after retry -- entry may not have been saved." >&2
+          fi
+        fi
         release_lock 2>/dev/null || true
         json_ok "{\"success\":true,\"entry_id\":\"$mw_entry_id\",\"category\":\"$mw_category\",\"midden_total\":$(jq '.entries | length' "$mw_midden_file" 2>/dev/null || echo 0)}"
       else
@@ -61,13 +67,20 @@ _midden_write() {
       fi
     else
       # Lock failed — graceful degradation, try without lock
+      echo "Warning: Midden write completed without lock -- if another write happened at the same time, one entry may be missing." >&2
       mw_updated_midden=$(jq --argjson entry "$mw_new_entry" '
         .entries += [$entry] |
         .entry_count = (.entries | length)
       ' "$mw_midden_file" 2>/dev/null)
 
       if [[ -n "$mw_updated_midden" ]]; then
-        printf '%s\n' "$mw_updated_midden" > "$mw_midden_file.tmp" && mv "$mw_midden_file.tmp" "$mw_midden_file"
+        mw_tmp="${mw_midden_file}.tmp.$$"
+        if ! { printf '%s\n' "$mw_updated_midden" > "$mw_tmp" && mv "$mw_tmp" "$mw_midden_file"; }; then
+          # Silent retry (once)
+          if ! { printf '%s\n' "$mw_updated_midden" > "$mw_tmp" && mv "$mw_tmp" "$mw_midden_file"; }; then
+            echo "Warning: Midden write failed after retry -- entry may not have been saved." >&2
+          fi
+        fi
         json_ok "{\"success\":true,\"entry_id\":\"$mw_entry_id\",\"category\":\"$mw_category\",\"warning\":\"lock_unavailable\"}"
       else
         json_ok "{\"success\":true,\"warning\":\"jq_processing_failed\",\"entry_id\":null}"
