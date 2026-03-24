@@ -1,6 +1,6 @@
 # Aether Source-of-Truth Map
 
-Updated: 2026-03-20 (v2.0 update -- autopilot, preferences, registry domain tags, hive wisdom)
+Updated: 2026-03-24 (v2.1 accuracy sweep -- post-modularization counts, domain modules, playbook corrections)
 
 ## Purpose
 
@@ -34,12 +34,13 @@ Define which files are authoritative for system behavior, which files are derive
 
 | Domain | Authoritative Files | Notes |
 |---|---|---|
-| Core deterministic operations | `.aether/aether-utils.sh` | Single dispatch surface for subcommands |
+| Core deterministic operations | `.aether/aether-utils.sh` | Dispatcher that loads domain modules on demand (~5,200 lines) |
 | Slash command orchestration | `.claude/commands/ant/*.md` | Includes build/continue orchestrators |
 | Worker behavior specs | `.claude/agents/ant/*.md` | 22 Claude agent definitions (Builder, Watcher, etc.) |
 | Packaged Claude agent mirror | `.aether/agents-claude/*.md` | Distribution mirror; must stay byte-identical with `.claude/agents/ant/*.md` |
-| OpenCode command surface | `.opencode/commands/ant/*.md` | 42 OpenCode command files; structure parity with Claude commands |
+| OpenCode command surface | `.opencode/commands/ant/*.md` | 44 OpenCode command files; structure parity with Claude commands |
 | OpenCode worker behavior specs | `.opencode/agents/*.md` | 22 OpenCode agent definitions |
+| Domain modules | `.aether/utils/{flag,spawn,session,suggest,queen,swarm,learning,pheromone,state-api}.sh` | Extracted from aether-utils.sh in Phase 13; sourced on demand |
 | Build/continue split stages | `.aether/docs/command-playbooks/*.md` | Loaded by orchestrators; executable instruction docs |
 | Output templates | `.aether/templates/*` | Templates for generated state/handoff/wisdom/session artifacts |
 | Colony wisdom source | `.aether/QUEEN.md` + `~/.aether/QUEEN.md` | Read by `queen-read`/`colony-prime` |
@@ -65,7 +66,7 @@ Define which files are authoritative for system behavior, which files are derive
 - `build.md` and `continue.md` are now orchestrators that load split playbooks under `.aether/docs/command-playbooks/`.
 - Orchestrators run playbooks as staged instruction sets (Read-tool execution model), not as bash subcommand wrappers.
 - Cross-platform surfaces are present:
-  - 42 Claude commands and 42 OpenCode commands
+  - 44 Claude commands and 44 OpenCode commands
   - 22 Claude agents and 22 OpenCode agents
 - Autopilot subcommands (`autopilot-init`, `autopilot-update`, `autopilot-status`, `autopilot-stop`, `autopilot-check-replan`) manage autonomous build/continue cycles via `/ant:run`.
 - `registry-list` lists all registered repos with metadata including domain tags.
@@ -81,17 +82,17 @@ Define which files are authoritative for system behavior, which files are derive
 | Category | Location | Count | Status |
 |---|---|---:|---|
 | Core utility entrypoint | `.aether/aether-utils.sh` | 1 | Active |
-| Sourced shell utilities | `.aether/utils/*.sh` | 17 | Active |
+| Sourced shell utilities | `.aether/utils/*.sh` | ~29 | Active (9 domain modules + infrastructure + XML) |
 | XML utility scripts | `.aether/utils/xml-*.sh` | 5 | Active (see drift note) |
-| Slash commands (Claude) | `.claude/commands/ant/*.md` | 42 | Active |
-| Slash commands (OpenCode) | `.opencode/commands/ant/*.md` | 42 | Active (content differs from Claude variants) |
+| Slash commands (Claude) | `.claude/commands/ant/*.md` | 44 | Active |
+| Slash commands (OpenCode) | `.opencode/commands/ant/*.md` | 44 | Active (content differs from Claude variants) |
 | Agent definitions (Claude) | `.claude/agents/ant/*.md` | 22 | Active |
 | Agent mirror (packaging) | `.aether/agents-claude/*.md` | 22 | Active mirror (must match Claude agent files exactly) |
 | Agent definitions (OpenCode) | `.opencode/agents/*.md` | 22 | Active (content differs from Claude variants) |
-| Command playbooks | `.aether/docs/command-playbooks/*.md` | 12 | Active |
+| Command playbooks | `.aether/docs/command-playbooks/*.md` | 9 | Active (5 build + 4 continue; excludes full/README) |
 | Templates (all types) | `.aether/templates/*` | 12 | Active |
 | Disciplines | `.aether/docs/disciplines/*.md` | 7 | Active |
-| Tests (all files) | `tests/**` | 92 | Active |
+| Tests (all files) | `tests/**` | ~140 | Active |
 
 ## Drift Findings (Docs vs Implementation)
 

@@ -7,51 +7,48 @@ Documented issues from Oracle research findings. These are known limitations and
 ## Medium Priority Issues
 
 ### BUG-004: Missing error code in flag-acknowledge
-**Location:** `.aether/aether-utils.sh:930`
+**Location:** `flag-acknowledge` subcommand in `.aether/utils/flag.sh`
 **Severity:** MEDIUM
-**Symptom:** Uses hardcoded string instead of `$E_VALIDATION_FAILED`
-**Impact:** Inconsistent error handling
-**Fix:** Change to `json_err "$E_VALIDATION_FAILED" "Usage: ..."`
+**Status:** [FIXED in v2.1 -- Phase 10 error triage + Phase 13 modularization]
+`flag-acknowledge` now uses `$E_VALIDATION_FAILED`, `$E_FILE_NOT_FOUND`, `$E_LOCK_FAILED`, and `$E_JSON_INVALID` appropriately.
 
 ### BUG-006: No lock release on JSON validation failure
-**Location:** `.aether/utils/atomic-write.sh:66`
+**Location:** `atomic_write` in `.aether/utils/atomic-write.sh`
 **Severity:** MEDIUM
-**Symptom:** If JSON validation fails, temp file cleaned but lock not released
-**Impact:** Lock remains held if caller had acquired it
-**Fix:** Document lock ownership contract clearly
+**Symptom:** If JSON validation fails in `atomic_write`, temp file is cleaned but any lock held by the caller is not released
+**Impact:** Lock remains held if caller had acquired it before calling `atomic_write`
+**Fix:** Document lock ownership contract clearly -- callers must use trap-based cleanup
+**Status:** Open -- `atomic_write` itself does not manage locks; callers are responsible for lock release via EXIT traps
 
 ### BUG-007: 17+ instances of missing error codes
-**Location:** `.aether/aether-utils.sh` various lines
+**Location:** Various subcommands across `.aether/aether-utils.sh` and domain modules
 **Severity:** MEDIUM
-**Symptom:** Commands use hardcoded strings instead of error constants
-**Impact:** Inconsistent error handling, harder programmatic processing
-**Fix:** Standardize all to use `json_err "$E_*" "message"` pattern
+**Status:** [Mostly FIXED in v2.1 -- Phase 10 error triage]
+Phase 10 replaced ~110 lazy error suppressions with proper fallbacks and added `$E_*` constants to ~48 dangerous paths. A small number of uncommented `2>/dev/null` idioms remain (SUPPRESS:OK annotated).
 
 ### BUG-008: Missing error code in flag-add jq failure
-**Location:** `.aether/aether-utils.sh:856`
+**Location:** `flag-add` subcommand in `.aether/utils/flag.sh`
 **Severity:** HIGH
-**Symptom:** Lock released but error code missing on jq failure
-**Impact:** Error response lacks proper error code
-**Fix:** Change to `json_err "$E_JSON_INVALID" "Failed to add flag"`
+**Status:** [FIXED in v2.1 -- Phase 10 error triage + Phase 13 modularization]
+`flag-add` now uses `$E_VALIDATION_FAILED`, `$E_JSON_INVALID`, and proper error handling throughout.
 
 ### BUG-009: Missing error codes in file checks
-**Location:** `.aether/aether-utils.sh:899, 933`
+**Location:** `flag-acknowledge` and related subcommands in `.aether/utils/flag.sh`
 **Severity:** MEDIUM
-**Symptom:** File not found errors use hardcoded strings
-**Impact:** Inconsistent with other file not found errors
-**Fix:** Use `json_err "$E_FILE_NOT_FOUND" "..."`
+**Status:** [FIXED in v2.1 -- Phase 10 error triage + Phase 13 modularization]
+File-not-found errors now use `json_err "$E_FILE_NOT_FOUND" "..."` consistently.
 
 ### BUG-010: Missing error codes in context-update
-**Location:** `.aether/aether-utils.sh:1758+`
+**Location:** `context-update` subcommand in `.aether/aether-utils.sh`
 **Severity:** MEDIUM
-**Symptom:** Various error paths lack error code constants
-**Impact:** Inconsistent error handling
+**Status:** [FIXED in v2.1 -- Phase 10 error triage]
+All error paths now use `$E_FILE_NOT_FOUND`, `$E_LOCK_FAILED`, and `$E_VALIDATION_FAILED` consistently.
 
 ### BUG-012: Missing error code in unknown command
-**Location:** `.aether/aether-utils.sh:2947`
+**Location:** Default case (`*`) in `.aether/aether-utils.sh` dispatch
 **Severity:** LOW
-**Symptom:** Unknown command handler uses bare string
-**Impact:** Inconsistent error response
+**Status:** [FIXED in v2.1 -- Phase 10 error triage]
+Unknown command handler now uses `json_err "$E_VALIDATION_FAILED" "Unknown command: $cmd"`.
 
 ---
 
@@ -61,32 +58,37 @@ Documented issues from Oracle research findings. These are known limitations and
 **Location:** Multiple locations
 **Severity:** MEDIUM
 **Description:** Some `json_err` calls use hardcoded strings instead of constants
-**Pattern:** Commands added early use strings; later commands use constants
+**Status:** [Mostly FIXED in v2.1 -- Phase 10 error triage]
+The majority of error paths now use `$E_*` constants. Remaining intentional suppressions are annotated with SUPPRESS:OK comments.
 
 ### ISSUE-005: Potential infinite loop in spawn-tree
-**Location:** `.aether/aether-utils.sh:402-448`, `spawn-tree.sh:222-263`
+**Location:** `spawn-tree-depth` in `.aether/utils/spawn.sh`
 **Severity:** LOW
 **Description:** Edge case with circular parent chain could cause issues
 **Mitigation:** Safety limit of 5 exists
+**Status:** Open -- low risk due to safety limit; code extracted to `spawn.sh` during Phase 13 modularization
 
 ### ISSUE-006: Fallback json_err incompatible
-**Location:** `.aether/aether-utils.sh:65-72`
+**Location:** `.aether/aether-utils.sh` (lines ~65-72, fallback error handler)
 **Severity:** LOW
 **Description:** Fallback json_err doesn't accept error code parameter
 **Impact:** If error-handler.sh fails to load, error codes are lost
+**Status:** Open -- low risk since error-handler.sh is a stable infrastructure module
 
 ---
 
 ## Architecture Gaps
 
 ### GAP-007: No error code standards documentation
-**Description:** Error codes exist but aren't documented
+**Description:** Error codes exist but aren't documented for external consumers
 **Impact:** Developers don't know which codes to use
+**Status:** Partially addressed -- `_aether_log_error` infrastructure added in Phase 10, but no standalone error code reference doc exists yet
 
 ### GAP-008: Missing error path test coverage
-**Description:** Error handling paths not tested
+**Description:** Error handling paths not fully tested
 **Impact:** Bugs in error handling go undetected
+**Status:** Partially addressed -- Phase 12 added state-api tests; 580+ tests now pass, but error-specific path coverage remains incomplete
 
 ---
 
-*Generated from Oracle Research findings - Updated 2026-03-19 during v1.3 milestone documentation phase*
+*Generated from Oracle Research findings -- Updated 2026-03-24 during v2.1 documentation accuracy phase*

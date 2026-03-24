@@ -1,10 +1,10 @@
 # Aether Colony Disciplines
 
-**Updated:** 2025-02-07
+**Updated:** 2026-03-24
 
 ## Overview
 
-The Aether ant colony system includes 8 integrated disciplines that govern worker behavior. These disciplines are infused directly into worker prompts and command execution.
+The Aether ant colony system includes 7 disciplines (6 core + 1 role-specific) that govern worker behavior. These disciplines are infused directly into worker prompts and command execution.
 
 ## Honest Execution Model
 
@@ -36,7 +36,7 @@ The Aether ant colony system includes 8 integrated disciplines that govern worke
 
 | Discipline | File | Applies To |
 |-----------|------|------------|
-| Planning | `planning.md` | Route-Setter |
+| Planning | `planning.md` (planned, not yet created) | Route-Setter |
 
 ## Learning Validation
 
@@ -77,14 +77,16 @@ No workarounds. Fix issues and re-run.
 .aether/
 ├── workers.md               # Worker roles + honest execution model
 ├── docs/disciplines/
+│   ├── coding-standards.md  # Code quality rules
+│   ├── debugging.md         # Systematic debugging
+│   ├── learning.md          # Colony learning system
+│   ├── tdd.md               # Test-driven development
 │   ├── verification.md      # Evidence before claims
 │   ├── verification-loop.md # 6-phase quality gate
-│   ├── debugging.md         # Systematic debugging
-│   ├── tdd.md               # Test-driven development
-│   ├── learning.md          # Colony learning system
-│   ├── coding-standards.md  # Code quality rules
 │   └── DISCIPLINES.md       # This file
 ```
+
+Note: `planning.md` is referenced in the Role-Specific Disciplines table above but has not yet been created.
 
 ## Reinstall After Updates
 
