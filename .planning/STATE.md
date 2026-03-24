@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** Reliably interpret user requests, decompose into work, verify outputs, and ship correct work with minimal back-and-forth.
-**Current focus:** Phase 11 — Dead Code Deprecation (v2.1 Production Hardening)
+**Current focus:** Phase 12 — State API Verification (v2.1 Production Hardening)
 
 ## Current Position
 
-Phase: 11 of 16 (Dead Code Deprecation) -- COMPLETE
-Plan: 2 of 2
-Status: Phase Complete
-Last activity: 2026-03-24 — Completed 11-02 (test updates for deprecation warnings)
+Phase: 12 of 16 (State API Verification)
+Plan: 1 of 3
+Status: In Progress
+Last activity: 2026-03-24 — Completed 12-01 (test fixes and state API facade)
 
-Progress: [███░░░░░░░] 27%
+Progress: [████░░░░░░] 30%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 19
+- Total plans completed: 20
 - Average duration: 5min
-- Total execution time: 1.25 hours
+- Total execution time: 1.4 hours
 
 **By Phase:**
 
@@ -38,9 +38,10 @@ Progress: [███░░░░░░░] 27%
 | 09-quick-wins | 2 | 10min | 5min |
 | 10-error-triage | 2 | 28min | 14min |
 | 11-dead-code-deprecation | 2 | 9min | 4.5min |
+| 12-state-api-verification | 1 | 9min | 9min |
 
 **Recent Trend:**
-- Last 5 plans: 5min, 12min, 16min, 3min, 6min
+- Last 5 plans: 12min, 16min, 3min, 6min, 9min
 - Trend: normalizing
 
 *Updated after each plan completion*
@@ -74,6 +75,9 @@ Recent decisions affecting current work:
 - [11-01]: Only 3 of 18 deprecated commands appeared in named help sections; rest only in flat commands array
 - [11-02]: Use 2>/dev/null (not 2>&1) for tests parsing JSON stdout from deprecated subcommands
 - [11-02]: Use spawnSync in Node.js tests for separate stderr capture (execSync merges stdio)
+- [12-01]: futureISO(30) for dynamic test dates -- prevents recurring expiration failures
+- [12-01]: state-read-field returns raw for internal callers; subcommand entry wraps in json_ok
+- [12-01]: _state_migrate extracted from validate-state for reuse by state-api.sh
 
 ### Pending Todos
 
@@ -83,10 +87,10 @@ None yet.
 
 - Research flag: Phase 14 (Planning Depth) needs a design spike on how to distinguish phases needing research from phases that do not
 - Risk: ~10 dangerous suppressions remain for Plan 03 (create_backup, acquire_lock, direct state writes, jq transforms)
-- Pre-existing: 1 test failure in context-continuity (addressed in Phase 12 via QUAL-09)
+- Resolved: context-continuity test failure fixed in 12-01 (QUAL-09 complete)
 
 ## Session Continuity
 
 Last session: 2026-03-24
-Stopped at: Completed 11-02-PLAN.md (test updates for deprecation warnings) -- Phase 11 complete
+Stopped at: Completed 12-01-PLAN.md (test fixes and state API facade)
 Resume file: None
