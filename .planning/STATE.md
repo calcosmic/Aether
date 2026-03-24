@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 ## Current Position
 
 Phase: 13 of 16 (Monolith Modularization)
-Plan: 4 of 9
+Plan: 5 of 9
 Status: In Progress
-Last activity: 2026-03-24 — Completed 13-04 (suggest domain extraction)
+Last activity: 2026-03-24 — Completed 13-05 (queen domain extraction)
 
-Progress: [█████░░░░░] 47%
+Progress: [██████░░░░] 53%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 27
+- Total plans completed: 28
 - Average duration: 5min
-- Total execution time: 2.13 hours
+- Total execution time: 2.25 hours
 
 **By Phase:**
 
@@ -39,10 +39,10 @@ Progress: [█████░░░░░] 47%
 | 10-error-triage | 2 | 28min | 14min |
 | 11-dead-code-deprecation | 2 | 9min | 4.5min |
 | 12-state-api-verification | 3 | 41min | 13.7min |
-| 13-monolith-modularization | 4 | 18min | 4.5min |
+| 13-monolith-modularization | 5 | 25min | 5min |
 
 **Recent Trend:**
-- Last 5 plans: 20min, 4min, 4min, 5min, 5min
+- Last 5 plans: 4min, 4min, 5min, 5min, 7min
 - Trend: normalizing
 
 *Updated after each plan completion*
@@ -95,6 +95,9 @@ Recent decisions affecting current work:
 - [13-04]: Verbatim extraction of contiguous block -- same no-refactoring policy as Plans 01-03
 - [13-04]: get_type_emoji moved into suggest.sh -- only caller is _suggest_approve, keeps helper co-located
 - [13-04]: Cross-domain pheromone-write calls preserved as subprocess dispatch (bash $0) -- no conversion to direct function calls
+- [13-05]: Verbatim extraction of non-contiguous blocks -- same no-refactoring policy as Plans 01-04
+- [13-05]: _extract_wisdom_sections moved into queen.sh -- only caller is _queen_read, keeps helper co-located
+- [13-05]: get_wisdom_threshold and get_wisdom_thresholds_json stay in main file -- shared by queen and learning domains
 
 ### Pending Todos
 
@@ -109,5 +112,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-24
-Stopped at: Completed 13-04-PLAN.md (suggest domain extraction) -- Phase 13 plan 4 of 9
+Stopped at: Completed 13-05-PLAN.md (queen domain extraction) -- Phase 13 plan 5 of 9
 Resume file: None
