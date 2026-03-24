@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 ## Current Position
 
 Phase: 16 of 16 (Shipping)
-Plan: 1 of 2
-Status: In Progress
-Last activity: 2026-03-24 — Completed 16-01 (package hygiene)
+Plan: 2 of 2
+Status: Blocked (npm auth required for publish)
+Last activity: 2026-03-24 — Completed 16-02 version bump (publish pending auth)
 
-Progress: [██████████] 97%
+Progress: [██████████] 99%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 38
+- Total plans completed: 39
 - Average duration: 5min
 - Total execution time: 3.0 hours
 
@@ -42,11 +42,11 @@ Progress: [██████████] 97%
 | 13-monolith-modularization | 9 | 58min | 6.4min |
 | 14-planning-depth | 2 | 16min | 8min |
 | 15-documentation-accuracy | 3 | 10min | 3.3min |
-| 16-ship | 1 | 2min | 2min |
+| 16-ship | 2 | 4min | 2min |
 
 **Recent Trend:**
-- Last 5 plans: 12min, 2min, 2min, 6min, 2min
-- Trend: fast (packaging and config changes)
+- Last 5 plans: 2min, 2min, 6min, 2min, 2min
+- Trend: fast (packaging, config, and release changes)
 
 *Updated after each plan completion*
 
@@ -135,6 +135,9 @@ Recent decisions affecting current work:
 - [15-03]: Context-continuity Phases 3-4 marked "(planned, not yet implemented)" per user caveat decision
 - [16-01]: Broad grep for CROWNED/xml/midden matches legitimate files (templates, schemas, utils) -- only actual colony data paths excluded
 - [16-01]: midden/ added to .npmignore explicitly even though data/ covers data/midden/ -- CROWNED-ANTHILL.md and exchange/*.xml are outside data/
+- [16-02]: Uncommitted branch work committed in 4 logical groups before npm version (clean tree required)
+- [16-02]: npm version 2.1.0 used for atomic package.json + commit + tag creation
+- [16-02]: version.json updated separately since npm version only manages package.json
 
 ### Pending Todos
 
@@ -149,5 +152,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-24
-Stopped at: Completed 16-01-PLAN.md (package hygiene) -- 1 of 2 plans done in Phase 16
+Stopped at: Completed 16-02-PLAN.md (version bump) -- publish blocked on npm auth
 Resume file: None
