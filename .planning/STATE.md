@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** Reliably interpret user requests, decompose into work, verify outputs, and ship correct work with minimal back-and-forth.
-**Current focus:** Phase 14 — Planning Depth (v2.1 Production Hardening)
+**Current focus:** Phase 15 — Documentation Accuracy (v2.1 Production Hardening)
 
 ## Current Position
 
-Phase: 14 of 16 (Planning Depth)
-Plan: 2 of 2
-Status: Phase Complete
-Last activity: 2026-03-24 — Completed 14-02 (research context injection into builder/watcher prompts)
+Phase: 15 of 16 (Documentation Accuracy)
+Plan: 2 of 3
+Status: In Progress
+Last activity: 2026-03-24 — Completed 15-02 (README.md rewrite for developer audience)
 
-Progress: [█████████░] 88%
+Progress: [█████████░] 91%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 34
+- Total plans completed: 36
 - Average duration: 5min
-- Total execution time: 2.8 hours
+- Total execution time: 2.9 hours
 
 **By Phase:**
 
@@ -41,10 +41,11 @@ Progress: [█████████░] 88%
 | 12-state-api-verification | 3 | 41min | 13.7min |
 | 13-monolith-modularization | 9 | 58min | 6.4min |
 | 14-planning-depth | 2 | 16min | 8min |
+| 15-documentation-accuracy | 2 | 4min | 2min |
 
 **Recent Trend:**
-- Last 5 plans: 6min, 5min, 2min, 2min, 12min
-- Trend: stable (research step required plan.md edits + test creation)
+- Last 5 plans: 2min, 2min, 12min, 2min, 2min
+- Trend: fast (documentation-only changes)
 
 *Updated after each plan completion*
 
@@ -120,6 +121,13 @@ Recent decisions affecting current work:
 - [14-02]: Research context gets own 16K character budget (separate from colony-prime 8K and skills 12K)
 - [14-02]: Injection order: archaeology -> integration -> research -> grave -> midden -> prompt_section -> skill_section
 - [14-02]: Missing RESEARCH.md gracefully degrades (empty research_context, build continues)
+- [15-01]: Trim order in CLAUDE.md was CRITICALLY inverted -- rolling-summary trimmed FIRST (lowest retention), not last
+- [15-01]: All counts use ~ approximations per user decision to reduce staleness from drift
+- [15-02]: Colony hierarchy diagram uses plain text (no emoji) for better terminal/plain-text rendering
+- [15-02]: Architecture section replaces File Structure with dispatcher + modules diagram
+- [15-02]: Gatekeeper caveat added to Key Features and 6-Phase Verification sections
+- [15-02]: Oracle described as experimental/beta per user decision on partial features
+- [15-02]: skill-create added to Coordination & Maintenance table (was missing from original)
 
 ### Pending Todos
 
@@ -134,5 +142,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-24
-Stopped at: Completed 14-01-PLAN.md (phase domain research step in plan.md) -- Phase 14 fully complete
+Stopped at: Completed 15-01-PLAN.md (CLAUDE.md accuracy corrections)
 Resume file: None
