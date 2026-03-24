@@ -29,7 +29,7 @@ See: `.planning/milestones/v1.3-ROADMAP.md` for full details.
 
 - [x] **Phase 9: Quick Wins** - Six independent reliability fixes with outsized impact (completed 2026-03-24)
 - [x] **Phase 10: Error Triage** - Classify and fix dangerous error suppressions (completed 2026-03-24)
-- [ ] **Phase 11: Dead Code Deprecation** - Audit and deprecate unused subcommands across all surfaces
+- [x] **Phase 11: Dead Code Deprecation** - Audit and deprecate unused subcommands across all surfaces (completed 2026-03-24)
 - [ ] **Phase 12: State API & Verification** - Centralize state access and harden verification evidence chain
 - [ ] **Phase 13: Monolith Modularization** - Extract domain modules from aether-utils.sh
 - [ ] **Phase 14: Planning Depth** - Add per-phase research to planning and richer build context
@@ -94,11 +94,12 @@ Plans:
   2. Test runner exit codes are captured during build-verify and cross-referenced against Watcher verification claims
   3. Builder-claimed file paths are verified against actual filesystem before phase advancement
   4. The pre-existing context-continuity test failure is fixed and the full test suite is green
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 12-01: TBD
-- [ ] 12-02: TBD
+- [ ] 12-01-PLAN.md — Fix date-sensitive test failures and create state-api.sh facade module with core functions
+- [ ] 12-02-PLAN.md — Build verify-claims subcommand with builder claims persistence and continue-verify integration
+- [ ] 12-03-PLAN.md — Migrate 9-10 HIGH/MEDIUM subcommands to state-api facade
 
 ### Phase 13: Monolith Modularization
 **Goal**: aether-utils.sh is reduced from ~11,000 lines to a slim dispatcher by extracting domain modules into independently testable files
@@ -176,8 +177,8 @@ Phases execute in numeric order: 9 -> 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16
 | 8. Documentation Update | v1.3 | 2/2 | Complete | 2026-03-19 |
 | 9. Quick Wins | v2.1 | Complete    | 2026-03-24 | - |
 | 10. Error Triage | v2.1 | 3/3 | Complete | 2026-03-24 |
-| 11. Dead Code Deprecation | v2.1 | 0/TBD | Not started | - |
-| 12. State API & Verification | v2.1 | 0/TBD | Not started | - |
+| 11. Dead Code Deprecation | v2.1 | Complete    | 2026-03-24 | - |
+| 12. State API & Verification | v2.1 | 0/3 | Not started | - |
 | 13. Monolith Modularization | v2.1 | 0/TBD | Not started | - |
 | 14. Planning Depth | v2.1 | 0/TBD | Not started | - |
 | 15. Documentation Accuracy | v2.1 | 0/TBD | Not started | - |
