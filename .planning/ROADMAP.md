@@ -30,7 +30,7 @@ See: `.planning/milestones/v1.3-ROADMAP.md` for full details.
 - [x] **Phase 9: Quick Wins** - Six independent reliability fixes with outsized impact (completed 2026-03-24)
 - [x] **Phase 10: Error Triage** - Classify and fix dangerous error suppressions (completed 2026-03-24)
 - [x] **Phase 11: Dead Code Deprecation** - Audit and deprecate unused subcommands across all surfaces (completed 2026-03-24)
-- [ ] **Phase 12: State API & Verification** - Centralize state access and harden verification evidence chain
+- [x] **Phase 12: State API & Verification** - Centralize state access and harden verification evidence chain (completed 2026-03-24)
 - [ ] **Phase 13: Monolith Modularization** - Extract domain modules from aether-utils.sh
 - [ ] **Phase 14: Planning Depth** - Add per-phase research to planning and richer build context
 - [ ] **Phase 15: Documentation Accuracy** - Update all docs to match verified post-hardening behavior
@@ -111,12 +111,18 @@ Plans:
   3. Remaining domains (queen, colony, swarm, session, spawn, flag, suggest) are extracted following the same proven pattern
   4. aether-utils.sh is under 2,000 lines (setup, sourcing, case dispatch, shared helpers only)
   5. All 530+ tests pass with the modularized structure
-**Plans**: TBD
+**Plans**: 9 plans
 
 Plans:
-- [ ] 13-01: TBD
-- [ ] 13-02: TBD
-- [ ] 13-03: TBD
+- [ ] 13-01-PLAN.md — Extract flag domain (~252 lines, 6 subcommands) into flag.sh
+- [ ] 13-02-PLAN.md — Extract spawn domain (~378 lines, 9 subcommands) into spawn.sh
+- [ ] 13-03-PLAN.md — Extract session domain (~498 lines, 9 subcommands) into session.sh
+- [ ] 13-04-PLAN.md — Extract suggest domain (~587 lines, 6 subcommands) into suggest.sh
+- [ ] 13-05-PLAN.md — Extract queen domain (~815 lines, 4 subcommands) into queen.sh
+- [ ] 13-06-PLAN.md — Extract swarm domain (~1005 lines, 18 subcommands) into swarm.sh
+- [ ] 13-07-PLAN.md — Extract learning/instinct domain (~1823 lines, 13 subcommands) into learning.sh
+- [ ] 13-08-PLAN.md — Extract pheromone domain (~2102 lines, 13+ subcommands) into pheromone.sh
+- [ ] 13-09-PLAN.md — Extract colony-archive-xml and record final line counts
 
 ### Phase 14: Planning Depth
 **Goal**: Aether produces deeper, more substantive plans and builds by investigating domain knowledge before decomposing tasks
@@ -178,8 +184,8 @@ Phases execute in numeric order: 9 -> 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16
 | 9. Quick Wins | v2.1 | Complete    | 2026-03-24 | - |
 | 10. Error Triage | v2.1 | 3/3 | Complete | 2026-03-24 |
 | 11. Dead Code Deprecation | v2.1 | Complete    | 2026-03-24 | - |
-| 12. State API & Verification | v2.1 | 0/3 | Not started | - |
-| 13. Monolith Modularization | v2.1 | 0/TBD | Not started | - |
+| 12. State API & Verification | v2.1 | Complete    | 2026-03-24 | - |
+| 13. Monolith Modularization | v2.1 | 0/9 | Not started | - |
 | 14. Planning Depth | v2.1 | 0/TBD | Not started | - |
 | 15. Documentation Accuracy | v2.1 | 0/TBD | Not started | - |
 | 16. Ship | v2.1 | 0/TBD | Not started | - |
