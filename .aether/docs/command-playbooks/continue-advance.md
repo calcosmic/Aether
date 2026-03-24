@@ -159,7 +159,16 @@ Update COLONY_STATE.json:
    - Keep max 30 instincts (remove lowest confidence)
    - Keep max 100 events
 
-Write COLONY_STATE.json.
+Write the updated state through the locked subcommand. Construct the full updated COLONY_STATE.json content as a variable, then pipe it to state-write:
+
+Run using the Bash tool with description "Writing colony state...":
+```bash
+cat << 'STATEOF' | bash .aether/aether-utils.sh state-write
+<the full JSON content>
+STATEOF
+```
+
+This acquires a lock, creates a rolling backup, validates JSON, and writes atomically. Do NOT use the Write tool to write COLONY_STATE.json directly — always go through state-write.
 
 Validate the state file:
 Run using the Bash tool with description "Validating colony state...": `bash .aether/aether-utils.sh validate-state colony`

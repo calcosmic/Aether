@@ -1262,6 +1262,40 @@ HELP_EOF
 
     json_ok "{\"checkpointed\":true,\"reason\":\"$sc_reason\"}"
     ;;
+  state-write)
+    # Write COLONY_STATE.json through a locked, validated, atomic path
+    # Usage: bash .aether/aether-utils.sh state-write '<json>'
+    #    or: cat state.json | bash .aether/aether-utils.sh state-write
+    # Validates JSON, acquires lock, creates backup, writes atomically
+    sw_content="${1:-}"
+    if [[ -z "$sw_content" ]]; then
+      sw_content=$(cat)
+    fi
+
+    # Validate JSON
+    if ! echo "$sw_content" | jq -e . >/dev/null 2>&1; then
+      json_err "$E_JSON_INVALID" "state-write received invalid JSON"
+    fi
+
+    sw_state_file="$DATA_DIR/COLONY_STATE.json"
+
+    # Acquire lock (colony-level, not hub-level)
+    acquire_lock "$sw_state_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on COLONY_STATE.json"
+
+    # Create backup before writing
+    if [[ -f "$sw_state_file" ]]; then
+      create_backup "$sw_state_file" 2>/dev/null || true
+    fi
+
+    # Write atomically; release lock on failure
+    atomic_write "$sw_state_file" "$sw_content" || {
+      release_lock 2>/dev/null || true
+      json_err "$E_UNKNOWN" "Failed to write COLONY_STATE.json"
+    }
+    release_lock 2>/dev/null || true
+
+    json_ok '{"written":true}'
+    ;;
   validate-oracle-state)
     # Validate oracle state files (state.json, plan.json)
     # Usage: bash .aether/aether-utils.sh validate-oracle-state state|plan|all
