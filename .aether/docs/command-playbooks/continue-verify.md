@@ -150,6 +150,8 @@ Record: warning count, error count.
 Run using the Bash tool with description "Running test suite...": `{test_command} 2>&1 | tail -50`
 Record: pass count, fail count, exit code. **STOP if fails.**
 
+**IMPORTANT:** Store the test command exit code in a variable (e.g., `test_exit_code`) for use in Step 1.5.3 verify-claims.
+
 **Coverage Check** (if coverage command exists):
 Run using the Bash tool with description "Checking test coverage...": `{coverage_command}  # e.g., npm run test:coverage`
 Record: coverage percentage (target: 80%+ for new code)
@@ -339,5 +341,62 @@ All checks completed with evidence:
 
 Proceeding to gate checks...
 ```
+
+Continue to Step 1.5.3.
+
+### Step 1.5.3: Verify Worker Claims (MANDATORY)
+
+Cross-reference worker claims against reality. This step catches fabricated success claims.
+
+**Always runs. No skip flag.**
+
+1. Check if `.aether/data/last-build-claims.json` exists.
+   - If not found: Display "No builder claims file found -- skipping file verification" and continue to Step 1.6. (This handles first-time runs and manual builds.)
+
+2. Capture the test exit code from Phase 4 of the verification loop (stored in `test_exit_code` variable during Phase 4 execution above).
+
+3. Run verification:
+   Run using the Bash tool with description "Verifying worker claims...":
+   ```bash
+   bash .aether/aether-utils.sh verify-claims ".aether/data/last-build-claims.json" "<watcher_json_or_path>" "<test_exit_code>"
+   ```
+
+   For the watcher JSON: use the Watcher output from the most recent build (if available in COLONY_STATE.json events or build synthesis). If no Watcher output is available, pass `'{"verification_passed":true}'` as default (conservative -- only test exit code mismatch can trigger).
+
+4. Parse the result:
+
+   **If verification_status is "passed":**
+   ```
+   Verification passed
+   ```
+   Continue to Step 1.6.
+
+   **If verification_status is "blocked" AND this is the first attempt (retry_count == 0):**
+   Display each mismatch as a plain one-liner:
+   ```
+   Verification issue: Worker claimed src/api/auth.ts was created, but file does not exist.
+   Retrying build for current phase...
+   ```
+
+   Log a flag for each mismatch:
+   Run using the Bash tool with description "Flagging verification mismatch...":
+   ```bash
+   bash .aether/aether-utils.sh flag-create "Verification mismatch: <summary>" --type blocker
+   ```
+
+   **Auto-retry once** (locked decision):
+   - Re-run `/ant:build <current_phase>` for the current phase
+   - After retry build completes, re-run the verification loop from Phase 1
+   - If verify-claims passes on retry: Display "Retrying... passed on retry" and continue to Step 1.6
+   - If verify-claims still blocked on retry: proceed to hard stop below
+
+   **If verification_status is "blocked" AND retry_count >= 1 (retry already attempted):**
+   ```
+   Verification failed after retry.
+   <plain summary of each mismatch>
+   Phase will NOT advance. Fix the issues and run /ant:continue again.
+   ```
+
+   **CRITICAL:** Do NOT proceed to Step 1.6. Do NOT advance the phase. The verification failure is a hard block just like a test failure.
 
 Continue to Step 1.6.
