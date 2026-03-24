@@ -32,6 +32,25 @@ REQUIRED_FILES=(
   "docs/README.md"
   "utils/atomic-write.sh"
   "utils/error-handler.sh"
+  # Domain modules extracted in Phase 13
+  "utils/pheromone.sh"
+  "utils/learning.sh"
+  "utils/state-api.sh"
+  "utils/flag.sh"
+  "utils/session.sh"
+  "utils/spawn.sh"
+  "utils/queen.sh"
+  "utils/suggest.sh"
+  "utils/swarm.sh"
+  # Skills system (v2.0)
+  "utils/skills.sh"
+  # Hive and midden modules
+  "utils/hive.sh"
+  "utils/midden.sh"
+  # Skills manifests
+  "skills/.index.json"
+  "skills/colony/.manifest.json"
+  "skills/domain/.manifest.json"
   "utils/file-lock.sh"
   "templates/QUEEN.md.template"
   "templates/colony-state.template.json"
@@ -116,6 +135,21 @@ if echo "$PACK_LIST" | grep -qE '\.aether/data/'; then
   echo "ERROR: .aether/data/ files would be included in package:" >&2
   echo "$PACK_LIST" | grep -E '\.aether/data/' >&2
   echo "  data/ is local-only. Ensure 'data/' is in .aether/.npmignore" >&2
+  exit 1
+fi
+
+# Check 5: CROWNED-ANTHILL.md must not be in the package
+if echo "$PACK_LIST" | grep -qE '\.aether/CROWNED-ANTHILL\.md'; then
+  echo "ERROR: .aether/CROWNED-ANTHILL.md would be included in package" >&2
+  echo "  CROWNED-ANTHILL.md is a sealed colony record. Add it to .aether/.npmignore" >&2
+  exit 1
+fi
+
+# Check 6: No exchange XML data files in the package
+if echo "$PACK_LIST" | grep -qE '\.aether/exchange/.*\.xml'; then
+  echo "ERROR: Exchange XML data files would be included in package:" >&2
+  echo "$PACK_LIST" | grep -E '\.aether/exchange/.*\.xml' >&2
+  echo "  Add 'exchange/*.xml' to .aether/.npmignore" >&2
   exit 1
 fi
 

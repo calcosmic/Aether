@@ -1,7 +1,7 @@
 # Private directories (never publish)
 data/
 dreams/
-oracle/
+/oracle/
 checkpoints/
 locks/
 temp/
@@ -32,3 +32,12 @@ QUEEN.md
 
 # Per-colony files (excluded from hub sync, must also be excluded from tarball)
 CONTEXT.md
+
+# Colony-specific generated files (v2.1)
+CROWNED-ANTHILL.md
+
+# Midden log files
+midden/
+
+# Exchange data files (keep .sh utility scripts, exclude .xml colony data)
+exchange/*.xml
