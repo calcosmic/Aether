@@ -75,6 +75,7 @@ This only applies to genuinely new conversations, not after /clear.
 | `/ant:archaeology` | Git history analysis |
 | `/ant:organize` | Codebase hygiene report |
 | `/ant:council` | Intent clarification |
+| `/ant:skill-create "<topic>"` | Create custom domain skill with Oracle research |
 
 ### Data & Exchange
 | Command | Purpose |
@@ -97,6 +98,9 @@ Starting a colony:
 5. /ant:build 1                            (workers execute phase 1)
 6. /ant:continue                           (verify, learn, advance)
 7. /ant:build 2                            (repeat until complete)
+
+Skills (optional, enhances builds):
+/ant:skill-create "tailwind"               (create a custom skill)
 
 Autopilot mode (alternative to steps 5-7):
 5. /ant:run                                (auto build/verify/advance all phases)

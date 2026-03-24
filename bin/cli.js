@@ -834,6 +834,9 @@ function gitStashFiles(repoPath, files) {
 // Directories to exclude from hub sync (user data, local state)
 // 'rules' is excluded here because it is synced via a dedicated step (rulesSrc below)
 const HUB_EXCLUDE_DIRS = ['data', 'dreams', 'checkpoints', 'locks', 'temp', 'rules'];
+// Directories excluded only when they are the FIRST path segment under .aether/
+// (e.g., .aether/oracle/ is excluded but .aether/utils/oracle/ is NOT)
+const HUB_EXCLUDE_FIRST_SEGMENT = ['oracle'];
 // Files to exclude from hub sync (repo-local state, not distributable)
 const HUB_EXCLUDE_FILES = ['CONTEXT.md', 'HANDOFF.md'];
 
@@ -847,6 +850,8 @@ function shouldExcludeFromHub(relPath) {
   const basename = path.basename(relPath);
   // Exclude if any part of the path is in the exclude list
   if (parts.some(part => HUB_EXCLUDE_DIRS.includes(part))) return true;
+  // Exclude if first segment matches first-segment-only list (position-aware)
+  if (parts.length > 0 && HUB_EXCLUDE_FIRST_SEGMENT.includes(parts[0])) return true;
   if (HUB_EXCLUDE_FILES.includes(basename)) return true;
   return false;
 }
@@ -955,6 +960,70 @@ function syncAetherToHub(srcDir, destDir) {
   cleanEmptyDirs(destDir);
 
   return { copied, removed, skipped };
+}
+
+/**
+ * Sync skills from source to hub using manifest-aware strategy.
+ * Only syncs skills listed in .manifest.json (Aether-managed).
+ * User-created skills (not in manifest) are never modified or deleted.
+ *
+ * @param {string} skillsSrc - Source skills directory (e.g., .aether/skills)
+ * @param {string} hubSkillsDir - Hub skills directory (e.g., ~/.aether/skills)
+ * @returns {{ synced: string[], skipped: string[], notices: string[] }}
+ */
+function syncSkillsToHub(skillsSrc, hubSkillsDir) {
+  const result = { synced: [], skipped: [], notices: [] };
+
+  if (!fs.existsSync(skillsSrc)) {
+    return result;
+  }
+
+  for (const category of ['colony', 'domain']) {
+    const srcCat = path.join(skillsSrc, category);
+    const hubCat = path.join(hubSkillsDir, category);
+
+    if (!fs.existsSync(srcCat)) continue;
+    fs.mkdirSync(hubCat, { recursive: true });
+
+    // Copy manifest
+    const manifestSrc = path.join(srcCat, '.manifest.json');
+    if (fs.existsSync(manifestSrc)) {
+      fs.copyFileSync(manifestSrc, path.join(hubCat, '.manifest.json'));
+    }
+
+    // Read manifest for owned skills list
+    let manifest = { skills: [] };
+    try {
+      manifest = JSON.parse(fs.readFileSync(manifestSrc, 'utf8'));
+    } catch (e) { /* no manifest = no managed skills */ }
+
+    // Sync only managed skills (skip user-created)
+    const srcDirs = fs.readdirSync(srcCat, { withFileTypes: true })
+      .filter(d => d.isDirectory());
+
+    for (const dir of srcDirs) {
+      if (manifest.skills.includes(dir.name)) {
+        // Managed skill — overwrite via syncDirWithCleanup
+        const srcSkill = path.join(srcCat, dir.name);
+        const hubSkill = path.join(hubCat, dir.name);
+        syncDirWithCleanup(srcSkill, hubSkill);
+        result.synced.push(`${category}/${dir.name}`);
+      } else if (fs.existsSync(path.join(hubCat, dir.name))) {
+        // User-created skill exists with same name — skip and log notice
+        const notice = `Skipped skill '${dir.name}' — user version exists. Run 'aether skill-diff ${dir.name}' to compare.`;
+        result.notices.push(notice);
+        result.skipped.push(`${category}/${dir.name}`);
+      }
+    }
+
+    // Copy README if present
+    const readmeSrc = path.join(srcCat, 'README.md');
+    if (fs.existsSync(readmeSrc)) {
+      fs.copyFileSync(readmeSrc, path.join(hubCat, 'README.md'));
+    }
+  }
+
+  return result;
 }
 
 function setupHub() {
@@ -1105,6 +1174,20 @@ function setupHub() {
       if (result.removed.length > 0) {
         log(`  Hub rules: removed ${result.removed.length} stale files`);
         for (const f of result.removed) log(`    - ${f}`);
+      }
+    }
+
+    // Sync skills to hub (~/.aether/skills/)
+    // Skills install at hub root (NOT in system/) so users can find and create their own
+    const skillsSrc = path.join(aetherSrc, 'skills');
+    const HUB_SKILLS_DIR = path.join(HUB_DIR, 'skills');
+    if (fs.existsSync(skillsSrc)) {
+      const skillsResult = syncSkillsToHub(skillsSrc, HUB_SKILLS_DIR);
+      if (skillsResult.synced.length > 0) {
+        log(`  Hub skills: ${skillsResult.synced.length} managed skills synced -> ${HUB_SKILLS_DIR}`);
+      }
+      for (const notice of skillsResult.notices) {
+        log(`  ${notice}`);
       }
     }
 
@@ -2500,6 +2583,7 @@ module.exports = {
   saveCheckpointMetadata,
   isUserData,
   syncDirWithCleanup,
+  syncSkillsToHub,
   listFilesRecursive,
   cleanEmptyDirs
 };

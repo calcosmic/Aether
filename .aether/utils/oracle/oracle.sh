@@ -15,15 +15,18 @@ unset CLAUDECODE 2>/dev/null || true
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AETHER_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
+# State files live in the colony's .aether/oracle/ directory (not alongside this script)
+ORACLE_STATE_DIR="$AETHER_ROOT/.aether/oracle"
+
 # Files
-STATE_FILE="$SCRIPT_DIR/state.json"
-PLAN_FILE="$SCRIPT_DIR/plan.json"
-GAPS_FILE="$SCRIPT_DIR/gaps.md"
-SYNTHESIS_FILE="$SCRIPT_DIR/synthesis.md"
-RESEARCH_PLAN_FILE="$SCRIPT_DIR/research-plan.md"
-STOP_FILE="$SCRIPT_DIR/.stop"
-ARCHIVE_DIR="$SCRIPT_DIR/archive"
-DISCOVERIES_DIR="$SCRIPT_DIR/discoveries"
+STATE_FILE="$ORACLE_STATE_DIR/state.json"
+PLAN_FILE="$ORACLE_STATE_DIR/plan.json"
+GAPS_FILE="$ORACLE_STATE_DIR/gaps.md"
+SYNTHESIS_FILE="$ORACLE_STATE_DIR/synthesis.md"
+RESEARCH_PLAN_FILE="$ORACLE_STATE_DIR/research-plan.md"
+STOP_FILE="$ORACLE_STATE_DIR/.stop"
+ARCHIVE_DIR="$ORACLE_STATE_DIR/archive"
+DISCOVERIES_DIR="$ORACLE_STATE_DIR/discoveries"
 
 # Generate research-plan.md from state.json and plan.json
 generate_research_plan() {
@@ -889,7 +892,7 @@ if [ -f "$STATE_FILE" ]; then
     echo "Archiving previous research: $LAST_TOPIC"
     mkdir -p "$ARCHIVE_FOLDER"
     for f in state.json plan.json gaps.md synthesis.md research-plan.md; do
-      [ -f "$SCRIPT_DIR/$f" ] && cp "$SCRIPT_DIR/$f" "$ARCHIVE_FOLDER/"
+      [ -f "$ORACLE_STATE_DIR/$f" ] && cp "$ORACLE_STATE_DIR/$f" "$ARCHIVE_FOLDER/"
     done
     echo "   Archived to: $ARCHIVE_FOLDER"
     # Do NOT create empty files -- the wizard handles initial file creation
