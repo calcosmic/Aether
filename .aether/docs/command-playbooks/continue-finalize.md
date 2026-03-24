@@ -31,6 +31,58 @@ fi
 # === END Batch Wisdom Auto-Promotion ===
 ```
 
+### Step 2.1.7: Write Build Learnings to QUEEN.md (QUEEN-01)
+
+After learning extraction and auto-promotion, write the current phase's learnings directly
+to the QUEEN.md Build Learnings section. This captures both successes and failures from every
+build, regardless of recurrence thresholds.
+
+**This step uses queen-write-learnings, which bypasses observation thresholds.**
+Every build writes learnings -- this is the user's explicit decision.
+
+Run using the Bash tool with description "Writing build learnings to QUEEN.md...":
+```bash
+# Get phase info
+current_phase=$(jq -r '.current_phase' .aether/data/COLONY_STATE.json 2>/dev/null || echo "0")
+phase_name=$(jq -r --argjson p "$current_phase" '.plan.phases[] | select(.id == $p) | .name // "unknown"' .aether/data/COLONY_STATE.json 2>/dev/null || echo "unknown")
+
+# Extract learnings from the just-completed phase
+learnings_json=$(jq -r --argjson p "$((current_phase - 1))" '
+  [.memory.phase_learnings[]
+   | select(.phase == $p)
+   | .learnings[]
+   | {
+       claim: .claim,
+       tag: (if (.claim | test("this (codebase|repo|project)"; "i")) then "repo" else "general" end),
+       evidence: (.evidence // "")
+     }
+  ]' .aether/data/COLONY_STATE.json 2>/dev/null || echo '[]')
+
+learnings_count=$(echo "$learnings_json" | jq 'length' 2>/dev/null || echo "0")
+
+if [[ "$learnings_count" -gt 0 ]] && [[ "$learnings_json" != "[]" ]]; then
+    prev_phase=$((current_phase - 1))
+    result=$(bash .aether/aether-utils.sh queen-write-learnings \
+        "$prev_phase" "$phase_name" "$learnings_json" 2>/dev/null || echo '{"ok":false}')
+
+    written=$(echo "$result" | jq -r '.result.written // 0' 2>/dev/null || echo "0")
+    if [[ "$written" -gt 0 ]]; then
+        echo "Written $written learning(s) to QUEEN.md"
+    fi
+fi
+```
+
+**Tag heuristic:**
+- Default tag is "general" (most learnings are broadly applicable)
+- Tag as "repo" if the claim mentions "this codebase", "this repo", "this project", or contains repo-specific names
+- The jq query uses a regex test for common repo-specific indicators
+
+**Brief notice:** The echo statements above ("Written N learning(s) to QUEEN.md") serve as the brief notice.
+They only appear when entries are actually written. No notice for zero writes.
+
+This step is NON-BLOCKING -- QUEEN.md write failures never block phase advancement.
+The dedup check inside queen-write-learnings prevents duplicate entries.
+
 ### Step 2.2: Update Handoff Document
 
 After advancing the phase, update the handoff document with the new current state:
@@ -325,6 +377,10 @@ Output:
 {for each instinct created or updated:}
    [{confidence}] {domain}: {action}
 {end for}
+
+📝 QUEEN.md Updated:
+   Build learnings: {written_count} entries
+   Instincts promoted: {promoted_instinct_count} entries
 
 ─────────────────────────────────────────────────────
 

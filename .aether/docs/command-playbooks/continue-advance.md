@@ -147,6 +147,41 @@ Update COLONY_STATE.json:
    Success pattern confidence is 0.7 (base; calibrate with observation count if available). Only create success instincts for genuinely noteworthy approaches, not routine completions.
    Cap: limit to 2 success instincts per phase to avoid noise.
 
+3c. **Promote high-confidence instincts to QUEEN.md (QUEEN-02):**
+
+   After instinct creation (Steps 3/3a/3b), sweep all instincts for confidence >= 0.8
+   and promote to the QUEEN.md Instincts section. This runs every /ant:continue to catch
+   newly boosted instincts.
+
+   Run using the Bash tool with description "Promoting high-confidence instincts to QUEEN.md...":
+   ```bash
+   instinct_data=$(jq -r '.memory.instincts // []' .aether/data/COLONY_STATE.json 2>/dev/null || echo '[]')
+   promoted_instinct_count=0
+
+   for encoded in $(echo "$instinct_data" | jq -r '.[] | select(.confidence >= 0.8) | @base64'); do
+       trigger=$(echo "$encoded" | base64 -d | jq -r '.trigger')
+       action=$(echo "$encoded" | base64 -d | jq -r '.action')
+       confidence=$(echo "$encoded" | base64 -d | jq -r '.confidence')
+       domain=$(echo "$encoded" | base64 -d | jq -r '.domain // "workflow"')
+
+       # queen-promote-instinct handles dedup internally (skips if already in QUEEN.md)
+       result=$(bash .aether/aether-utils.sh queen-promote-instinct \
+           "$trigger" "$action" "$confidence" "$domain" 2>/dev/null || echo '{"ok":false}')
+
+       was_promoted=$(echo "$result" | jq -r '.result.promoted // false' 2>/dev/null || echo "false")
+       if [[ "$was_promoted" == "true" ]]; then
+           promoted_instinct_count=$((promoted_instinct_count + 1))
+       fi
+   done
+
+   if [[ $promoted_instinct_count -gt 0 ]]; then
+       echo "Promoted $promoted_instinct_count instinct(s) to QUEEN.md"
+   fi
+   ```
+
+   This step is NON-BLOCKING -- if queen-promote-instinct fails for any entry, log and continue.
+   The dedup check inside queen-promote-instinct ensures idempotency (safe to run repeatedly).
+
 4. **Advance state:**
    - Set `current_phase` to next phase number
    - Set `state` to `"READY"`
