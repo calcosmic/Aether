@@ -49,6 +49,12 @@ CURRENT_LOCK=${CURRENT_LOCK:-""}
 : "${E_DEPENDENCY_MISSING:=E_DEPENDENCY_MISSING}"
 : "${E_RESOURCE_NOT_FOUND:=E_RESOURCE_NOT_FOUND}"
 
+# --- Deprecation warning helper ---
+_deprecation_warning() {
+  local cmd_name="$1"
+  printf '[deprecated] %s -- will be removed in v3.0\n' "$cmd_name" >&2
+}
+
 # Fallback atomic_write if not sourced (uses temp file + mv for true atomicity)
 # Uses TEMP_DIR to avoid issues with paths containing spaces in $TMPDIR
 if ! type atomic_write &>/dev/null; then
@@ -1431,6 +1437,7 @@ HELP_EOF
     json_ok "\"$id\""
     ;;
   error-pattern-check)
+    _deprecation_warning "error-pattern-check"
     [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
     json_ok "$(jq '
       .errors.records | group_by(.category) | map(select(length >= 3) |
@@ -1440,6 +1447,7 @@ HELP_EOF
     ' "$DATA_DIR/COLONY_STATE.json")"
     ;;
   error-summary)
+    _deprecation_warning "error-summary"
     [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
     json_ok "$(jq '{
       total: (.errors.records | length),
@@ -1860,6 +1868,7 @@ EOF
     fi
     ;;
   error-patterns-check)
+    _deprecation_warning "error-patterns-check"
     # Check for known error patterns in a file or codebase
     # Returns patterns that should be avoided
     global_file="$DATA_DIR/error-patterns.json"
@@ -3875,6 +3884,7 @@ NODESCRIPT
     ;;
 
   swarm-display-render)
+    _deprecation_warning "swarm-display-render"
     # Render the swarm display to terminal
     # Usage: swarm-display-render [swarm_id]
     swarm_id="${1:-default-swarm}"
@@ -3891,6 +3901,7 @@ NODESCRIPT
     ;;
 
   swarm-display-inline)
+    _deprecation_warning "swarm-display-inline"
     # Inline swarm display for Claude Code (no loop, no clear)
     # Usage: swarm-display-inline [swarm_id]
     swarm_id="${1:-default-swarm}"
@@ -6044,6 +6055,7 @@ $updated_meta
     ;;
 
   learning-select-proposals)
+    _deprecation_warning "learning-select-proposals"
     # Interactive selection of proposals for promotion
     # Usage: learning-select-proposals [--verbose] [--dry-run] [--yes]
     # Returns: JSON with selected/deferred arrays and action taken
@@ -6782,6 +6794,7 @@ $updated_meta
     ;;
 
   checkpoint-check)
+    _deprecation_warning "checkpoint-check"
     allowlist_file="$DATA_DIR/checkpoint-allowlist.json"
 
     if [[ ! -f "$allowlist_file" ]]; then
@@ -6885,6 +6898,7 @@ $updated_meta
 
   # Backward compatibility wrappers for session commands
   survey-verify-fresh)
+    _deprecation_warning "survey-verify-fresh"
     # Backward compatibility: delegate to session-verify-fresh --command survey
     # Usage: bash .aether/aether-utils.sh survey-verify-fresh [--force] <survey_start_unixtime>
 
@@ -6909,6 +6923,7 @@ $updated_meta
     ;;
 
   survey-clear)
+    _deprecation_warning "survey-clear"
     # Backward compatibility: delegate to session-clear --command survey
     # Usage: bash .aether/aether-utils.sh survey-clear [--dry-run]
 
@@ -7131,6 +7146,7 @@ $updated_meta
     ;;
 
   pheromone-export-eternal)
+    _deprecation_warning "pheromone-export-eternal"
     # Export pheromones to eternal XML format (distinct from xml-utils.sh pheromone-export function)
     # Usage: pheromone-export-eternal [input_json] [output_xml]
     #   input_json: Path to pheromones.json (default: .aether/data/pheromones.json)
@@ -10027,6 +10043,7 @@ EOF
     ;;
 
   session-is-stale)
+    _deprecation_warning "session-is-stale"
     # Check if session is stale (returns JSON with is_stale boolean)
     session_file="$DATA_DIR/session.json"
 
@@ -10059,6 +10076,7 @@ EOF
     ;;
 
   session-clear-context)
+    _deprecation_warning "session-clear-context"
     # Mark session context as cleared (preserves file but marks context_cleared)
     preserve="${2:-false}"
     session_file="$DATA_DIR/session.json"
@@ -10104,6 +10122,7 @@ EOF
     ;;
 
   session-summary)
+    _deprecation_warning "session-summary"
     # Get session summary (human-readable or JSON)
     session_file="$DATA_DIR/session.json"
     json_mode="false"
@@ -10347,6 +10366,7 @@ EOF
     ;;
 
   semantic-context)
+    _deprecation_warning "semantic-context"
     # Get context for task (for worker injection)
     # Usage: semantic-context <task_description> [max_results]
     task="${2:-}"
@@ -10914,6 +10934,7 @@ EOF
     ;;
 
   suggest-clear)
+    _deprecation_warning "suggest-clear"
     # Clear the suggested_pheromones array from session.json
     # Usage: suggest-clear
     # Returns: JSON success with count cleared
@@ -11673,6 +11694,7 @@ DRYRUN_EOF
     _skill_build_index "${1:-}"
     ;;
   skill-index-read)
+    _deprecation_warning "skill-index-read"
     _skill_read_index "${1:-}"
     ;;
   skill-detect)
@@ -11688,6 +11710,7 @@ DRYRUN_EOF
     _skill_list "${1:-}"
     ;;
   skill-manifest-read)
+    _deprecation_warning "skill-manifest-read"
     _skill_manifest_read "$1"
     ;;
   skill-cache-rebuild)
@@ -11699,6 +11722,7 @@ DRYRUN_EOF
     _skill_diff "$1" "${2:-}"
     ;;
   skill-is-user-created)
+    _deprecation_warning "skill-is-user-created"
     _skill_is_user_created "$1" "$2"
     ;;
 
