@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 ## Current Position
 
 Phase: 12 of 16 (State API Verification)
-Plan: 2 of 3
-Status: In Progress
-Last activity: 2026-03-24 — Completed 12-02 (verify-claims subcommand and continue integration)
+Plan: 3 of 3
+Status: Phase Complete
+Last activity: 2026-03-24 — Completed 12-03 (subcommand migration to state-api facade)
 
-Progress: [████░░░░░░] 30%
+Progress: [████░░░░░░] 35%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 21
+- Total plans completed: 23
 - Average duration: 5min
-- Total execution time: 1.6 hours
+- Total execution time: 1.9 hours
 
 **By Phase:**
 
@@ -38,10 +38,10 @@ Progress: [████░░░░░░] 30%
 | 09-quick-wins | 2 | 10min | 5min |
 | 10-error-triage | 2 | 28min | 14min |
 | 11-dead-code-deprecation | 2 | 9min | 4.5min |
-| 12-state-api-verification | 2 | 21min | 10.5min |
+| 12-state-api-verification | 3 | 41min | 13.7min |
 
 **Recent Trend:**
-- Last 5 plans: 16min, 3min, 6min, 9min, 12min
+- Last 5 plans: 3min, 6min, 9min, 12min, 20min
 - Trend: normalizing
 
 *Updated after each plan completion*
@@ -81,6 +81,10 @@ Recent decisions affecting current work:
 - [12-02]: Missing builder claims file = graceful skip (not error) for first-time runs
 - [12-02]: Conservative watcher (says fail when tests pass) is not fabrication; only opposite direction blocks
 - [12-02]: verify-claims returns json_ok even for blocked status (ok:true, verification_status:"blocked")
+- [12-03]: env.X in jq expressions for _state_mutate parameter injection (env vars set inline before function call)
+- [12-03]: Read-only migrations use _state_read_field('.') piped to jq for complex multi-field queries
+- [12-03]: grave-add uses jq-side type coercion (tonumber, null detection) instead of bash pre-formatting
+- [12-03]: spawn-complete wraps _state_mutate in error handler (non-critical event logging path)
 
 ### Pending Todos
 
@@ -95,5 +99,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-24
-Stopped at: Completed 12-02-PLAN.md (verify-claims subcommand and continue integration)
+Stopped at: Completed 12-03-PLAN.md (subcommand migration to state-api facade) -- Phase 12 complete
 Resume file: None
