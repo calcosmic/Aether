@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [2.1.0-rc] - 2026-03-24
+## [2.1.0] - 2026-03-24
 
 Six phases of production hardening (Phases 9-14) targeting reliability, maintainability, and developer experience.
 
