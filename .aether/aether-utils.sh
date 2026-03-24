@@ -508,12 +508,12 @@ EOF
       mv "$ctx_tmp" "$ctx_file"
 
       # Auto-emit FEEDBACK pheromone for the decision so builders see it
-      # SUPPRESS:OK -- cleanup: operation is best-effort
       bash "$0" pheromone-write FEEDBACK "[decision] $decision" \
         --strength 0.6 \
         --source "auto:decision" \
         --reason "Auto-emitted from architectural decision" \
-        --ttl "30d" 2>/dev/null || true
+        --ttl "30d" 2>/dev/null \
+        || _aether_log_error "Could not emit feedback signal for decision"
 
       json_ok "{\"updated\":true,\"action\":\"decision\"}"
       ;;
@@ -2943,7 +2943,7 @@ Files: ${files_changed} files changed"
     # Cache miss or stale — run actual check
     mkdir -p "$(dirname "$cache_file")" 2>/dev/null || true  # SUPPRESS:OK -- idempotent: harmless if exists
     result=$("$0" version-check 2>/dev/null) || true  # SUPPRESS:OK -- read-default: subcommand may fail
-    echo "$now" > "$cache_file" 2>/dev/null || true  # SUPPRESS:OK -- cleanup: cache write is best-effort
+    echo "$now" > "$cache_file" 2>/dev/null || _aether_log_error "Could not update cache file $(basename "$cache_file")"
     if [[ -n "$result" ]]; then
       echo "$result"
     else
@@ -2993,6 +2993,7 @@ Files: ${files_changed} files changed"
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
     # Acquire lock to prevent concurrent read-modify-write races
+    # NOTE: Dangerous suppression -- deferred to Plan 03 (acquire_lock silenced on write path)
     acquire_lock "$registry_file" 2>/dev/null || true
 
     # Check if repo already exists in registry
@@ -3652,14 +3653,14 @@ NODESCRIPT
     trap - EXIT
 
     # Emit guidance signals non-blocking to reinforce inserted phase intent.
-    # SUPPRESS:OK -- cleanup: side-effect is best-effort
-    bash "$0" pheromone-write FOCUS "Inserted Phase $insert_id: $phase_goal" --strength 0.8 --source "user:insert-phase" --reason "Phase inserted to correct execution path" --ttl "30d" >/dev/null 2>&1 || true
+    bash "$0" pheromone-write FOCUS "Inserted Phase $insert_id: $phase_goal" --strength 0.8 --source "user:insert-phase" --reason "Phase inserted to correct execution path" --ttl "30d" >/dev/null 2>&1 \
+      || _aether_log_error "Could not emit FOCUS signal for inserted phase"
     if [[ -n "$phase_constraints" ]]; then
-      # SUPPRESS:OK -- cleanup: side-effect is best-effort
-      bash "$0" pheromone-write REDIRECT "$phase_constraints" --strength 0.9 --source "user:insert-phase" --reason "Constraint captured during phase insertion" --ttl "30d" >/dev/null 2>&1 || true
+      bash "$0" pheromone-write REDIRECT "$phase_constraints" --strength 0.9 --source "user:insert-phase" --reason "Constraint captured during phase insertion" --ttl "30d" >/dev/null 2>&1 \
+        || _aether_log_error "Could not emit REDIRECT signal for phase constraints"
     fi
-    # SUPPRESS:OK -- cleanup: side-effect is best-effort
-    bash "$0" memory-capture "learning" "Inserted phase $insert_id ($phase_name): $phase_goal" "pattern" "system:phase-insert" >/dev/null 2>&1 || true
+    bash "$0" memory-capture "learning" "Inserted phase $insert_id ($phase_name): $phase_goal" "pattern" "system:phase-insert" >/dev/null 2>&1 \
+      || _aether_log_error "Could not capture learning for phase insertion"
 
     result=$(jq -n \
       --argjson inserted_phase_id "$insert_id" \
@@ -3758,7 +3759,7 @@ NODESCRIPT
 
     # Initialize if doesn't exist
     if [[ ! -f "$display_file" ]]; then
-      bash "$0" swarm-display-init "default-swarm" >/dev/null 2>&1  # SUPPRESS:OK -- cleanup: side-effect is best-effort
+      bash "$0" swarm-display-init "default-swarm" >/dev/null 2>&1 || _aether_log_error "Could not initialize swarm display"
     fi
 
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -3855,7 +3856,7 @@ NODESCRIPT
 
     if [[ -f "$display_script" ]]; then
       # Execute the display script
-      bash "$display_script" "$swarm_id" 2>/dev/null || true  # SUPPRESS:OK -- cleanup: side-effect is best-effort
+      bash "$display_script" "$swarm_id" 2>/dev/null || _aether_log_error "Could not run swarm display script"
       json_ok '{"rendered":true}'
     else
       json_err "$E_FILE_NOT_FOUND" "Display script not found: $display_script"
@@ -4445,7 +4446,7 @@ ANTLOGO
 
     if [[ ! -f "$view_state_file" ]]; then
       # Auto-initialize if not exists
-      bash "$0" view-state-init >/dev/null 2>&1  # SUPPRESS:OK -- cleanup: side-effect is best-effort
+      bash "$0" view-state-init >/dev/null 2>&1 || _aether_log_error "Could not initialize view state display"
     fi
 
     if [[ -z "$view_name" ]]; then
@@ -4471,7 +4472,7 @@ ANTLOGO
     view_state_file="$DATA_DIR/view-state.json"
 
     if [[ ! -f "$view_state_file" ]]; then
-      bash "$0" view-state-init >/dev/null 2>&1  # SUPPRESS:OK -- cleanup: side-effect is best-effort
+      bash "$0" view-state-init >/dev/null 2>&1 || _aether_log_error "Could not initialize view state display"
     fi
 
     # Determine if value is JSON or string
@@ -4501,7 +4502,7 @@ ANTLOGO
     view_state_file="$DATA_DIR/view-state.json"
 
     if [[ ! -f "$view_state_file" ]]; then
-      bash "$0" view-state-init >/dev/null 2>&1  # SUPPRESS:OK -- cleanup: side-effect is best-effort
+      bash "$0" view-state-init >/dev/null 2>&1 || _aether_log_error "Could not initialize view state display"
     fi
 
     # Check current state
@@ -4539,7 +4540,7 @@ ANTLOGO
     view_state_file="$DATA_DIR/view-state.json"
 
     if [[ ! -f "$view_state_file" ]]; then
-      bash "$0" view-state-init >/dev/null 2>&1  # SUPPRESS:OK -- cleanup: side-effect is best-effort
+      bash "$0" view-state-init >/dev/null 2>&1 || _aether_log_error "Could not initialize view state display"
     fi
 
     updated=$(jq --arg view "$view_name" --arg item "$item" '
@@ -4561,7 +4562,7 @@ ANTLOGO
     view_state_file="$DATA_DIR/view-state.json"
 
     if [[ ! -f "$view_state_file" ]]; then
-      bash "$0" view-state-init >/dev/null 2>&1  # SUPPRESS:OK -- cleanup: side-effect is best-effort
+      bash "$0" view-state-init >/dev/null 2>&1 || _aether_log_error "Could not initialize view state display"
     fi
 
     updated=$(jq --arg view "$view_name" --arg item "$item" '
@@ -5676,14 +5677,14 @@ $updated_meta
     promote_result=$(bash "$0" queen-promote "$wisdom_type" "$content" "$colony_name" 2>/dev/null || echo '{}')
     if echo "$promote_result" | jq -e '.ok == true' >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON field
       # Also create an instinct from the promoted learning
-      # SUPPRESS:OK -- cleanup: operation is best-effort
       bash "$0" instinct-create \
         --trigger "working on $wisdom_type patterns" \
         --action "$content" \
         --confidence "$lp_confidence" \
         --domain "$wisdom_type" \
         --source "promoted_from_learning" \
-        --evidence "Auto-promoted after $observation_count observations (confidence: $lp_confidence)" 2>/dev/null || true
+        --evidence "Auto-promoted after $observation_count observations (confidence: $lp_confidence)" 2>/dev/null \
+        || _aether_log_error "Could not create instinct from promoted learning"
       json_ok "{\"promoted\":true,\"mode\":\"auto\",\"policy_threshold\":$policy_threshold,\"observation_count\":$observation_count,\"colony_count\":$colony_count,\"event_type\":\"$event_type\"}"
     else
       # SUPPRESS:OK -- read-default: file may not exist yet
@@ -5806,9 +5807,10 @@ $updated_meta
       auto_reason=$(echo "$auto_result" | jq -r '.result.reason // "promoted"' 2>/dev/null || echo "unknown")
     fi
 
-    # SUPPRESS:OK -- cleanup: side-effect is best-effort
-    bash "$0" activity-log "MEMORY" "system" "Captured $mc_event ($mc_wisdom_type): count=$obs_count auto_promoted=$auto_promoted" >/dev/null 2>&1 || true
-    bash "$0" rolling-summary add "$mc_event" "$mc_content" "$mc_source" >/dev/null 2>&1 || true  # SUPPRESS:OK -- cleanup: side-effect is best-effort
+    bash "$0" activity-log "MEMORY" "system" "Captured $mc_event ($mc_wisdom_type): count=$obs_count auto_promoted=$auto_promoted" >/dev/null 2>&1 \
+      || _aether_log_error "Could not log memory capture activity"
+    bash "$0" rolling-summary add "$mc_event" "$mc_content" "$mc_source" >/dev/null 2>&1 \
+      || _aether_log_error "Could not update rolling summary"
 
     json_ok "{\"event_type\":\"$mc_event\",\"wisdom_type\":\"$mc_wisdom_type\",\"observation_count\":$obs_count,\"threshold\":$obs_threshold,\"threshold_met\":$obs_threshold_met,\"pheromone_created\":$pheromone_created,\"signal_id\":\"$pheromone_signal_id\",\"auto_promoted\":$auto_promoted,\"promotion_reason\":\"$auto_reason\"}"
     ;;
@@ -6466,7 +6468,7 @@ $updated_meta
     if [[ "$dry_run" == "false" ]] && [[ $deferred_count -gt 0 ]]; then
       # Convert skipped proposals to JSON array and defer
       skipped_json=$(printf '%s\n' "${skipped_proposals[@]}" | jq -s '.')
-      echo "$skipped_json" | bash "$0" learning-defer-proposals >/dev/null 2>&1  # SUPPRESS:OK -- cleanup: side-effect is best-effort
+      echo "$skipped_json" | bash "$0" learning-defer-proposals >/dev/null 2>&1 || _aether_log_error "Could not defer learning proposals"
     fi
 
     # Log activity
@@ -7291,7 +7293,9 @@ $updated_meta
         --argjson reinforcement_count 0 \
         '{id: $id, type: $type, priority: $priority, source: $source, created_at: $created_at, expires_at: $expires_at, active: $active, strength: ($strength | tonumber), reason: $reason, content: {text: $content}, content_hash: $content_hash, reinforcement_count: $reinforcement_count}')
 
-      pw_updated=$(jq --argjson sig "$pw_signal" '.signals += [$sig]' "$pw_file" 2>/dev/null)
+      pw_updated=$(jq --argjson sig "$pw_signal" '.signals += [$sig]' "$pw_file" 2>/dev/null) || {
+        _aether_log_error "Could not append signal to pheromones.json"
+      }
       if [[ -z "$pw_updated" ]]; then
         [[ "$pw_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
         json_err "${E_JSON_INVALID:-E_JSON_INVALID}" "Failed to update pheromones.json — jq parse error"
@@ -9403,7 +9407,7 @@ $updated_meta
 
     # Pheromone section (using filtered active-only)
     source "$SCRIPT_DIR/exchange/pheromone-xml.sh"
-    xml-pheromone-export "$cax_tmp_pheromones" "$cax_tmp_dir/pheromones.xml" 2>/dev/null || true  # SUPPRESS:OK -- cleanup: operation is best-effort
+    xml-pheromone-export "$cax_tmp_pheromones" "$cax_tmp_dir/pheromones.xml" 2>/dev/null || _aether_log_error "Could not export pheromones to XML"
 
     # Wisdom section — reuse wisdom-export-xml fallback logic
     source "$SCRIPT_DIR/exchange/wisdom-xml.sh"
@@ -9427,7 +9431,7 @@ $updated_meta
       fi
     fi
     if [[ -f "$cax_wisdom_input" ]]; then
-      xml-wisdom-export "$cax_wisdom_input" "$cax_tmp_dir/wisdom.xml" 2>/dev/null || true  # SUPPRESS:OK -- cleanup: operation is best-effort
+      xml-wisdom-export "$cax_wisdom_input" "$cax_tmp_dir/wisdom.xml" 2>/dev/null || _aether_log_error "Could not export wisdom to XML"
     fi
 
     # Registry section — reuse registry-export-xml on-demand generation logic
@@ -9459,7 +9463,7 @@ $updated_meta
   \"colonies\": $cax_rex_colonies
 }" > "$cax_registry_input"
     fi
-    xml-registry-export "$cax_registry_input" "$cax_tmp_dir/registry.xml" 2>/dev/null || true  # SUPPRESS:OK -- cleanup: operation is best-effort
+    xml-registry-export "$cax_registry_input" "$cax_tmp_dir/registry.xml" 2>/dev/null || _aether_log_error "Could not export registry to XML"
 
     # Step 3: Build combined XML
     # SUPPRESS:OK -- read-default: file may not exist yet
@@ -9533,7 +9537,7 @@ $updated_meta
 
         printf '%s|%s|%s|%s\n' "$rs_ts" "$rs_clean_event" "$rs_clean_source" "$rs_clean_summary" >> "$rs_file"
         tail -n 15 "$rs_file" > "$rs_file.tmp" 2>/dev/null || true  # SUPPRESS:OK -- read-default: file may not exist
-        mv "$rs_file.tmp" "$rs_file" 2>/dev/null || true  # SUPPRESS:OK -- cleanup: move is best-effort
+        mv "$rs_file.tmp" "$rs_file" 2>/dev/null || _aether_log_error "Could not save rolling summary update"
 
         json_ok "{\"added\":true,\"event\":\"$rs_clean_event\",\"source\":\"$rs_clean_source\"}"
         ;;
@@ -10910,7 +10914,7 @@ EOF
         [Rr]|"reject"|"Reject")
           rejected_suggestions+=("$suggestion")
           # Record hash to prevent re-suggestion
-          bash "$0" suggest-record "$hash" "$stype" >/dev/null 2>&1  # SUPPRESS:OK -- cleanup: side-effect is best-effort
+          bash "$0" suggest-record "$hash" "$stype" >/dev/null 2>&1 || _aether_log_error "Could not record suggestion"
           echo "✗ Rejected" >&2
           ;;
         [Dd]|"dismiss"|"Dismiss"|"dismiss all"|"Dismiss All")
@@ -10964,7 +10968,7 @@ EOF
           echo "✓ Added $stype signal" >&2
 
           # Record hash to prevent duplicates
-          bash "$0" suggest-record "$hash" "$stype" >/dev/null 2>&1  # SUPPRESS:OK -- cleanup: side-effect is best-effort
+          bash "$0" suggest-record "$hash" "$stype" >/dev/null 2>&1 || _aether_log_error "Could not record suggestion"
           ((approved_count++))
         else
           echo "✗ Failed to create signal: $content" >&2
@@ -11023,7 +11027,7 @@ EOF
         stype=$(echo "$suggestion" | jq -r '.type')
 
         # Record hash to prevent re-suggestion
-        bash "$0" suggest-record "$hash" "$stype" >/dev/null 2>&1  # SUPPRESS:OK -- cleanup: side-effect is best-effort
+        bash "$0" suggest-record "$hash" "$stype" >/dev/null 2>&1 || _aether_log_error "Could not record suggestion"
         hashes_recorded+=("$hash")
         ((dismissed_count++))
       done
@@ -11216,6 +11220,7 @@ DRYRUN_EOF
     # 2. Clean QUEEN.md
     if [[ "$_dc_queen_count" -gt 0 ]] && [[ -f "$_dc_queen_file" ]]; then
       _dc_removed_queen=$_dc_queen_count
+      # SUPPRESS:OK -- read-default: grep returns 1 when all lines match (empty result is valid for cleaning)
       _dc_cleaned=$(grep -viE "$_dc_queen_line_pat" "$_dc_queen_file" || true)
       if type atomic_write &>/dev/null; then
         atomic_write "$_dc_queen_file" "$_dc_cleaned"
@@ -11256,6 +11261,7 @@ DRYRUN_EOF
     # 5. Clean spawn-tree.txt
     if [[ "$_dc_spawn_count" -gt 0 ]] && [[ -f "$_dc_spawn_file" ]]; then
       _dc_removed_spawn=$_dc_spawn_count
+      # SUPPRESS:OK -- read-default: grep returns 1 when all lines match (empty result is valid for cleaning)
       _dc_cleaned=$(grep -vE "$_dc_spawn_name_pat" "$_dc_spawn_file" || true)
       if type atomic_write &>/dev/null; then
         atomic_write "$_dc_spawn_file" "$_dc_cleaned"
