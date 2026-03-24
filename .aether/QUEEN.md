@@ -1,57 +1,51 @@
-# QUEEN.md — Colony Wisdom
+# QUEEN.md -- Colony Wisdom
 
-> Last evolved: 2026-03-19T22:07:00Z
-> Colonies contributed: 0
-> Wisdom version: 1.0.0
-
----
-
-## 📜 Philosophies
-
-Core beliefs that guide all colony work. These are validated through repeated successful application across multiple colonies.
-
-*No philosophies recorded yet. Philosophies are promoted from PHILOSOPHY pheromones after 5+ validations.*
+> Last evolved: 2026-03-24T23:40:00Z
+> Wisdom version: 2.0.0
 
 ---
 
-## 🧭 Patterns
+## User Preferences
 
-Validated approaches that consistently work. These represent discovered best practices that have proven themselves in the field.
+Communication style, expertise level, and decision-making patterns observed from the user (the Queen). These shape how the colony communicates and what it prioritizes. User decisions are the most important wisdom.
 
-- **1771335865738** (2026-03-20T12:37:32Z): Use explicit jq if/elif chains instead of the // operator when checking fields that can legitimately be false
-
----
-
-## ⚠️ Redirects
-
-Anti-patterns to avoid. These represent approaches that have caused problems and should be redirected away from.
-
-*No redirects recorded yet. Redirects are promoted from REDIRECT pheromones after 2+ triggers.*
+*No user preferences recorded yet.*
 
 ---
 
-## 🔧 Stack Wisdom
+## Codebase Patterns
 
-Technology-specific insights and constraints detected through codebase analysis.
+Validated approaches that work in this codebase, and anti-patterns to avoid. Includes architecture conventions, naming patterns, error handling style, and technology-specific insights. Tagged [repo] for project-specific or [general] for cross-colony patterns.
 
-*No stack wisdom recorded yet. Stack wisdom is auto-populated by `/ant:colonize`.*
-
----
-
-## 🏛️ Decrees
-
-User-mandated rules that override other guidance. These represent explicit directives from the Queen.
-
-*No decrees recorded yet. Decrees are added via `/ant:decree "<rule>"`.*
+- [general] **Use explicit jq if/elif chains instead of the // operator when checking fields that can legitimately be false** (source: colony 1771335865738, 2026-03-20)
 
 ---
 
-## 📊 Evolution Log
+## Build Learnings
 
-Track how wisdom has evolved over time.
+What worked and what failed during builds. Captures the full picture of colony experience -- successes, failures, and adjustments. Each entry includes the phase where it was learned.
 
-| Date | Colony | Change | Details |
-|------|--------|--------|---------|
+
+
+### Phase 0: migration-test
+- [repo] QUEEN.md v2 migration validated -- *Phase 0 (migration-test)* (2026-03-24)
+---
+
+## Instincts
+
+High-confidence behavioral patterns that have been validated through repeated colony work. Auto-promoted when confidence reaches 0.8 or higher. These represent the colony's deepest learned behaviors.
+
+- [instinct] **testing** (0.85): When codebase changes, then always run full test suite after module extraction
+
+---
+
+## Evolution Log
+
+| Date | Source | Type | Details |
+|------|--------|------|---------|
+| 2026-03-24T23:40:41Z | instinct | promoted_instinct | testing: always run full test suite after module extraction... |
+| 2026-03-24T23:40:36Z | phase-0 | build_learnings | Added 1 learnings from Phase 0: migration-test |
+| 2026-03-24T23:40:00Z | system | migrated | QUEEN.md migrated from v1 (6-section) to v2 (4-section) format |
 | 2026-03-20T12:37:32Z | 1771335865738 | promoted_pattern | Added: Use explicit jq if/elif chains instead of the // o... |
 | 2026-03-19T22:07:00Z | system | initialized | QUEEN.md created from template |
 
@@ -59,24 +53,16 @@ Track how wisdom has evolved over time.
 
 <!-- METADATA
 {
-  "version": "1.0.0",
-  "last_evolved": "2026-03-20T12:37:32Z",
+  "version": "2.0.0",
+  "wisdom_version": "2.0",
+  "last_evolved": "2026-03-24T23:40:41Z",
   "colonies_contributed": [],
-  "promotion_thresholds": {
-    "philosophy": 5,
-    "pattern": 3,
-    "redirect": 2,
-    "stack": 1,
-    "decree": 0
-  },
   "stats": {
-    "total_philosophies": 0,
-    "total_patterns": 1,
-    "total_redirects": 0,
-    "total_stack_entries": 0,
-    "total_decrees": 0
-  }
-,
-  "evolution_log": [{"timestamp": "2026-03-20T12:37:32Z", "action": "promote", "wisdom_type": "pattern", "content_hash": "sha256:f8aa50cfda0f37cac6cabba140bb99f1d75aa6d01a7100fe7a5ccddc2b3a017b", "colony": "1771335865738"}]
+    "total_user_prefs": 0,
+    "total_codebase_patterns": 1,
+    "total_build_learnings": 1,
+    "total_instincts": 1
+  },
+  "evolution_log": [{"timestamp": "2026-03-24T23:40:00Z", "action": "migrate", "wisdom_type": "system", "content_hash": "v1-to-v2-migration", "colony": "system"}, {"timestamp": "2026-03-20T12:37:32Z", "action": "promote", "wisdom_type": "pattern", "content_hash": "sha256:f8aa50cfda0f37cac6cabba140bb99f1d75aa6d01a7100fe7a5ccddc2b3a017b", "colony": "1771335865738"}]
 }
 -->
