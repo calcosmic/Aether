@@ -39,22 +39,22 @@ Aether brings **ant colony intelligence** to AI-assisted development. Instead of
 Works with **Claude Code** and **OpenCode**.
 
 ```
-Queen (you)
-   |
-   v  pheromone signals guide the colony
-   |
-Workers spawn Workers (max depth 3)
-   |
-   |-- Builders     -- implement code (TDD-first)
-   |-- Watchers     -- verify & test
-   |-- Scouts       -- research docs and domains
-   |-- Trackers     -- investigate bugs
-   |-- Colonizers   -- explore codebases (4 parallel scouts)
-   |-- Route-setters -- plan phases
-   |-- Archaeologists -- excavate git history
-   |-- Chaos Ants   -- resilience testing
-   |-- Keepers      -- preserve knowledge
-   +-- ...and more specialists (22 total)
+👑 Queen (you)
+   │
+   ▼ pheromone signals guide the colony
+   │
+🐜 Workers spawn Workers (max depth 3)
+   │
+   ├── 🔨🐜 Builders     — implement code (TDD-first)
+   ├── 👁️🐜 Watchers     — verify & test
+   ├── 🔍🐜 Scouts       — research docs and domains
+   ├── 🐛🐜 Trackers     — investigate bugs
+   ├── 🗺️🐜 Colonizers   — explore codebases (4 parallel scouts)
+   ├── 📋🐜 Route-setters — plan phases
+   ├── 🏺🐜 Archaeologists — excavate git history
+   ├── 🎲🐜 Chaos Ants   — resilience testing
+   ├── 📚🐜 Keepers      — preserve knowledge
+   └── ...and ~22 specialists total
 ```
 
 ---
@@ -127,17 +127,17 @@ Autopilot pauses automatically on test failures, security gate failures, and qua
 
 | Command | Description |
 |---------|-------------|
-| `/ant:lay-eggs` | Set up Aether in this repo (one-time) |
-| `/ant:init "goal"` | Initialize colony with mission |
-| `/ant:plan` | Generate phased roadmap with domain research |
-| `/ant:build N` | Execute phase N with worker waves |
-| `/ant:continue` | 6-phase verification, advance to next phase |
-| `/ant:pause-colony` | Save state for context break |
-| `/ant:resume-colony` | Restore from pause |
-| `/ant:run` | Autopilot -- build, verify, advance automatically |
-| `/ant:patrol` | Pre-seal audit -- verify work against plan |
-| `/ant:seal` | Complete and archive colony |
-| `/ant:entomb` | Create chamber from completed colony |
+| `/ant:lay-eggs` | 🥚 Set up Aether in this repo (one-time) |
+| `/ant:init "goal"` | 🌱 Initialize colony with mission |
+| `/ant:plan` | 📋 Generate phased roadmap with domain research |
+| `/ant:build N` | 🔨 Execute phase N with worker waves |
+| `/ant:continue` | ➡️ 6-phase verification, advance to next phase |
+| `/ant:pause-colony` | 💾 Save state for context break |
+| `/ant:resume-colony` | 🚦 Restore from pause |
+| `/ant:run` | 🐜 Autopilot -- build, verify, advance automatically |
+| `/ant:patrol` | 🔍 Pre-seal audit -- verify work against plan |
+| `/ant:seal` | 🏺 Complete and archive colony |
+| `/ant:entomb` | ⚰️ Create chamber from completed colony |
 
 Implementation note:
 - In Claude Code, `.claude/commands/ant/build.md` is an orchestrator and executes split playbooks under `.aether/docs/command-playbooks/` (`build-prep.md`, `build-context.md`, `build-wave.md`, `build-verify.md`, `build-complete.md`).
@@ -173,38 +173,38 @@ Implementation note:
 
 | Command | Description |
 |---------|-------------|
-| `/ant:colonize` | 4 parallel scouts analyze your codebase |
-| `/ant:oracle ["topic"]` | Deep research with autonomous loop (experimental) |
-| `/ant:archaeology <path>` | Excavate git history for any file |
-| `/ant:chaos <target>` | Resilience testing, edge case probing |
-| `/ant:swarm ["problem"]` | 4 parallel scouts for stubborn bugs |
-| `/ant:dream` | Philosophical codebase wanderer |
-| `/ant:interpret` | Grounds dreams in reality, discusses implementation |
-| `/ant:organize` | Codebase hygiene report |
+| `/ant:colonize` | 📊🗺️ 4 parallel scouts analyze your codebase |
+| `/ant:oracle ["topic"]` | 🔮 Deep research with autonomous loop (experimental) |
+| `/ant:archaeology <path>` | 🏺 Excavate git history for any file |
+| `/ant:chaos <target>` | 🎲 Resilience testing, edge case probing |
+| `/ant:swarm ["problem"]` | 🔥 4 parallel scouts for stubborn bugs |
+| `/ant:dream` | 💭 Philosophical codebase wanderer |
+| `/ant:interpret` | 🔍 Grounds dreams in reality, discusses implementation |
+| `/ant:organize` | 🧹 Codebase hygiene report |
 
 ### Visibility
 
 | Command | Description |
 |---------|-------------|
-| `/ant:status` | Colony overview with memory health |
-| `/ant:pheromones` | View active signals (FOCUS/REDIRECT/FEEDBACK) |
-| `/ant:memory-details` | Wisdom, pending promotions, recent failures |
-| `/ant:watch` | Real-time swarm display |
-| `/ant:history` | Recent activity log |
-| `/ant:flags` | List blockers and issues |
-| `/ant:help` | Full command reference |
+| `/ant:status` | 📈 Colony overview with memory health |
+| `/ant:pheromones` | 🎯 View active signals (FOCUS/REDIRECT/FEEDBACK) |
+| `/ant:memory-details` | 🧠 Wisdom, pending promotions, recent failures |
+| `/ant:watch` | 👁️ Real-time swarm display |
+| `/ant:history` | 📜 Recent activity log |
+| `/ant:flags` | 🚩 List blockers and issues |
+| `/ant:help` | 🐜 Full command reference |
 
 ### Coordination & Maintenance
 
 | Command | Description |
 |---------|-------------|
-| `/ant:council` | Clarify intent via multi-choice questions |
-| `/ant:flag` | Create project-specific flag (blocker/issue/note) |
-| `/ant:data-clean` | Remove test artifacts from colony data |
-| `/ant:export-signals` | Export pheromone signals to XML |
-| `/ant:import-signals` | Import pheromone signals from XML |
-| `/ant:preferences` | Add or list user preferences |
-| `/ant:skill-create` | Create custom domain skill with Oracle research |
+| `/ant:council` | 📜 Clarify intent via multi-choice questions |
+| `/ant:flag` | 🚩 Create project-specific flag (blocker/issue/note) |
+| `/ant:data-clean` | 🧹 Remove test artifacts from colony data |
+| `/ant:export-signals` | 📤 Export pheromone signals to XML |
+| `/ant:import-signals` | 📥 Import pheromone signals from XML |
+| `/ant:preferences` | ⚙️ Add or list user preferences |
+| `/ant:skill-create` | 🐜 Create custom domain skill with Oracle research |
 
 ---
 
