@@ -245,7 +245,7 @@ test_backward_compat_verify() {
   local tmpdir=$(setup_tmpdir)
 
   local result
-  result=$(SURVEY_DIR="$tmpdir" bash "$UTILS_SCRIPT" survey-verify-fresh "" 0)
+  result=$(SURVEY_DIR="$tmpdir" bash "$UTILS_SCRIPT" survey-verify-fresh "" 0 2>/dev/null)
 
   # Backward compat wrapper should work and return ok:true when no stale files
   run_test "backward_compat_verify" '"ok":true' "$result"
@@ -260,9 +260,33 @@ test_backward_compat_clear() {
   echo "test" > "$tmpdir/PROVISIONS.md"
 
   local result
-  result=$(SURVEY_DIR="$tmpdir" bash "$UTILS_SCRIPT" survey-clear --dry-run)
+  result=$(SURVEY_DIR="$tmpdir" bash "$UTILS_SCRIPT" survey-clear --dry-run 2>/dev/null)
 
   run_test "backward_compat_clear" '"dry_run":true' "$result"
+
+  cleanup_tmpdir "$tmpdir"
+}
+
+# Test: survey-verify-fresh emits deprecation warning
+test_survey_verify_fresh_deprecation_warning() {
+  local tmpdir=$(setup_tmpdir)
+
+  local _stderr
+  _stderr=$(SURVEY_DIR="$tmpdir" bash "$UTILS_SCRIPT" survey-verify-fresh "" 0 2>&1 >/dev/null || true)
+  run_test "survey_verify_fresh_deprecation" '[deprecated]' "$_stderr"
+
+  cleanup_tmpdir "$tmpdir"
+}
+
+# Test: survey-clear emits deprecation warning
+test_survey_clear_deprecation_warning() {
+  local tmpdir=$(setup_tmpdir)
+
+  echo "test" > "$tmpdir/PROVISIONS.md"
+
+  local _stderr
+  _stderr=$(SURVEY_DIR="$tmpdir" bash "$UTILS_SCRIPT" survey-clear --dry-run 2>&1 >/dev/null || true)
+  run_test "survey_clear_deprecation" '[deprecated]' "$_stderr"
 
   cleanup_tmpdir "$tmpdir"
 }
@@ -327,6 +351,8 @@ test_protected_seal
 test_protected_entomb
 test_backward_compat_verify
 test_backward_compat_clear
+test_survey_verify_fresh_deprecation_warning
+test_survey_clear_deprecation_warning
 test_empty_arrays
 test_cross_platform_stat
 
