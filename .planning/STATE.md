@@ -9,10 +9,10 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 
 ## Current Position
 
-Phase: 17 of 20 (Local Wisdom Accumulation)
-Plan: 1 of 2 in current phase
-Status: In progress
-Last activity: 2026-03-24 — Completed 17-01 (QUEEN.md restructure + write subcommands)
+Phase: 17 of 20 (Local Wisdom Accumulation) -- COMPLETE
+Plan: 2 of 2 in current phase
+Status: Phase complete
+Last activity: 2026-03-24 — Completed 17-02 (Workflow wiring + QUEEN.md migration)
 
 Progress: [#####.....] 50%
 
@@ -41,6 +41,8 @@ Progress: [#####.....] 50%
 - [17-01]: v1 backward compat maps 6 sections to 2 v2 keys (codebase_patterns, user_prefs)
 - [17-01]: New write subcommands use threshold 0 -- every build writes, no observation counting
 - [17-01]: Build learnings grouped by phase subsections for readability
+- [17-02]: Step 3c placement after all instinct creation ensures newly created instincts are swept for promotion
+- [17-02]: Validation entries left as real seed content documenting the v1-to-v2 migration
 
 ### Pending Todos
 
@@ -48,12 +50,11 @@ None yet.
 
 ### Blockers/Concerns
 
-- QUEEN.md wisdom promotion exists in code but doesn't fire during real colony work — need to trace actual code paths
 - Hive brain has subcommands but no confirmed cross-colony data flow
-- Existing queen.sh and learning.sh modules may need significant changes to support automatic accumulation
+- First blocker resolved: QUEEN.md wisdom promotion now wired into continue playbooks (17-02)
 
 ## Session Continuity
 
 Last session: 2026-03-24
-Stopped at: Completed 17-01-PLAN.md (QUEEN.md restructure + write subcommands)
+Stopped at: Completed 17-02-PLAN.md (Workflow wiring + QUEEN.md migration) -- Phase 17 complete
 Resume file: None
