@@ -9,17 +9,17 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 
 ## Current Position
 
-Phase: 15 of 16 (Documentation Accuracy)
-Plan: 3 of 3
-Status: Phase Complete
-Last activity: 2026-03-24 — Completed 15-03 (docs sweep and v2.1 changelog)
+Phase: 16 of 16 (Shipping)
+Plan: 1 of 2
+Status: In Progress
+Last activity: 2026-03-24 — Completed 16-01 (package hygiene)
 
-Progress: [██████████] 94%
+Progress: [██████████] 97%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 37
+- Total plans completed: 38
 - Average duration: 5min
 - Total execution time: 3.0 hours
 
@@ -42,10 +42,11 @@ Progress: [██████████] 94%
 | 13-monolith-modularization | 9 | 58min | 6.4min |
 | 14-planning-depth | 2 | 16min | 8min |
 | 15-documentation-accuracy | 3 | 10min | 3.3min |
+| 16-ship | 1 | 2min | 2min |
 
 **Recent Trend:**
-- Last 5 plans: 2min, 12min, 2min, 2min, 6min
-- Trend: fast (documentation-only changes)
+- Last 5 plans: 12min, 2min, 2min, 6min, 2min
+- Trend: fast (packaging and config changes)
 
 *Updated after each plan completion*
 
@@ -132,6 +133,8 @@ Recent decisions affecting current work:
 - [15-03]: Subcommand name references instead of line numbers for stability in known-issues.md
 - [15-03]: planning.md discipline noted as "planned, not yet created" rather than removed from table
 - [15-03]: Context-continuity Phases 3-4 marked "(planned, not yet implemented)" per user caveat decision
+- [16-01]: Broad grep for CROWNED/xml/midden matches legitimate files (templates, schemas, utils) -- only actual colony data paths excluded
+- [16-01]: midden/ added to .npmignore explicitly even though data/ covers data/midden/ -- CROWNED-ANTHILL.md and exchange/*.xml are outside data/
 
 ### Pending Todos
 
@@ -146,5 +149,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-24
-Stopped at: Completed 15-03-PLAN.md (docs sweep and v2.1 changelog) -- Phase 15 fully complete
+Stopped at: Completed 16-01-PLAN.md (package hygiene) -- 1 of 2 plans done in Phase 16
 Resume file: None
