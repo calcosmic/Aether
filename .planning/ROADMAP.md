@@ -32,7 +32,7 @@ See: `.planning/milestones/v1.3-ROADMAP.md` for full details.
 - [x] **Phase 11: Dead Code Deprecation** - Audit and deprecate unused subcommands across all surfaces (completed 2026-03-24)
 - [x] **Phase 12: State API & Verification** - Centralize state access and harden verification evidence chain (completed 2026-03-24)
 - [x] **Phase 13: Monolith Modularization** - Extract domain modules from aether-utils.sh (completed 2026-03-24)
-- [ ] **Phase 14: Planning Depth** - Add per-phase research to planning and richer build context
+- [x] **Phase 14: Planning Depth** - Add per-phase research to planning and richer build context (completed 2026-03-24)
 - [ ] **Phase 15: Documentation Accuracy** - Update all docs to match verified post-hardening behavior
 - [ ] **Phase 16: Ship** - Verify clean install end-to-end, version bump, publish to npm
 
@@ -147,11 +147,12 @@ Plans:
   2. CLAUDE.md reflects the current system state (correct subcommand counts, module structure after extraction, accurate architecture diagram)
   3. All files in `docs/` describe verified behavior only — no aspirational claims remain
   4. Known inaccuracies identified by the Oracle audit (trim order, security gate label, etc.) are all corrected
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 15-01: TBD
-- [ ] 15-02: TBD
+- [ ] 15-01-PLAN.md — Update CLAUDE.md with verified counts, correct trim order, and modular architecture diagram
+- [ ] 15-02-PLAN.md — Rewrite README.md for developer audience with full workflow and accurate feature descriptions
+- [ ] 15-03-PLAN.md — Sweep all docs/ files for accuracy and write comprehensive v2.1 changelog
 
 ### Phase 16: Ship
 **Goal**: Aether v2.1.0 is published to npm with a verified clean install experience
@@ -186,6 +187,6 @@ Phases execute in numeric order: 9 -> 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16
 | 11. Dead Code Deprecation | v2.1 | Complete    | 2026-03-24 | - |
 | 12. State API & Verification | v2.1 | Complete    | 2026-03-24 | - |
 | 13. Monolith Modularization | v2.1 | Complete    | 2026-03-24 | - |
-| 14. Planning Depth | v2.1 | 0/2 | Not started | - |
-| 15. Documentation Accuracy | v2.1 | 0/TBD | Not started | - |
+| 14. Planning Depth | v2.1 | Complete    | 2026-03-24 | - |
+| 15. Documentation Accuracy | v2.1 | 0/3 | Not started | - |
 | 16. Ship | v2.1 | 0/TBD | Not started | - |
