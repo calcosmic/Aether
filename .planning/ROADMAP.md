@@ -3,7 +3,8 @@
 ## Milestones
 
 - ✅ **v1.3 Maintenance & Pheromone Integration** — Phases 1-8 (shipped 2026-03-19)
-- [ ] **v2.1 Production Hardening** — Phases 9-16 (in progress)
+- ✅ **v2.1 Production Hardening** — Phases 9-16 (shipped 2026-03-24)
+- [ ] **v2.2 Living Wisdom** — Phases 17-20 (in progress)
 
 ## Phases
 
@@ -23,155 +24,80 @@ See: `.planning/milestones/v1.3-ROADMAP.md` for full details.
 
 </details>
 
-### v2.1 Production Hardening (In Progress)
+<details>
+<summary>v2.1 Production Hardening (Phases 9-16) — SHIPPED 2026-03-24</summary>
 
-**Milestone Goal:** Address Oracle audit findings, make Aether genuinely production-ready — deeper planning, verified features, accurate docs, great first-user experience.
+- [x] Phase 9: Quick Wins (2/2 plans) — completed 2026-03-24
+- [x] Phase 10: Error Triage (3/3 plans) — completed 2026-03-24
+- [x] Phase 11: Dead Code Deprecation (2/2 plans) — completed 2026-03-24
+- [x] Phase 12: State API & Verification (3/3 plans) — completed 2026-03-24
+- [x] Phase 13: Monolith Modularization (9/9 plans) — completed 2026-03-24
+- [x] Phase 14: Planning Depth (2/2 plans) — completed 2026-03-24
+- [x] Phase 15: Documentation Accuracy (3/3 plans) — completed 2026-03-24
+- [x] Phase 16: Ship (2/2 plans) — completed 2026-03-24
 
-- [x] **Phase 9: Quick Wins** - Six independent reliability fixes with outsized impact (completed 2026-03-24)
-- [x] **Phase 10: Error Triage** - Classify and fix dangerous error suppressions (completed 2026-03-24)
-- [x] **Phase 11: Dead Code Deprecation** - Audit and deprecate unused subcommands across all surfaces (completed 2026-03-24)
-- [x] **Phase 12: State API & Verification** - Centralize state access and harden verification evidence chain (completed 2026-03-24)
-- [x] **Phase 13: Monolith Modularization** - Extract domain modules from aether-utils.sh (completed 2026-03-24)
-- [x] **Phase 14: Planning Depth** - Add per-phase research to planning and richer build context (completed 2026-03-24)
-- [x] **Phase 15: Documentation Accuracy** - Update all docs to match verified post-hardening behavior (completed 2026-03-24)
-- [ ] **Phase 16: Ship** - Verify clean install end-to-end, version bump, publish to npm
+</details>
+
+### v2.2 Living Wisdom (In Progress)
+
+**Milestone Goal:** Make QUEEN.md and hive brain actually work — automatic wisdom accumulation during colony work, cross-colony knowledge sharing, so the system genuinely learns and gets smarter over time.
+
+- [ ] **Phase 17: Local Wisdom Accumulation** - Colony automatically writes learnings to QUEEN.md after builds and promotes high-confidence instincts
+- [ ] **Phase 18: Local Wisdom Injection** - Colony-prime reads local QUEEN.md and injects wisdom into worker prompts so builds get smarter
+- [ ] **Phase 19: Cross-Colony Hive** - Seal promotes wisdom to global hive, init seeds new colonies from hive, domain scoping filters relevance
+- [ ] **Phase 20: Hub Wisdom Layer** - Global QUEEN.md accumulates cross-cutting wisdom and colony-prime reads it alongside local wisdom
 
 ## Phase Details
 
-### Phase 9: Quick Wins
-**Goal**: Critical reliability bugs are fixed and the test suite is fully green before structural work begins
-**Depends on**: Nothing (first phase of v2.1)
-**Requirements**: REL-01, REL-02, REL-03, REL-04, REL-05, REL-06
+### Phase 17: Local Wisdom Accumulation
+**Goal**: Colony automatically captures what it learns during builds and promotes high-confidence patterns to QUEEN.md
+**Depends on**: Nothing (first phase of v2.2)
+**Requirements**: QUEEN-01, QUEEN-02
 **Success Criteria** (what must be TRUE):
-  1. Hive wisdom retrieval returns entries regardless of whether confidence is stored as string or number
-  2. Concurrent midden writes do not overwrite each other (PID-scoped temp files)
-  3. A corrupted learning-observations.json recovers automatically from template instead of silently killing the memory pipeline
-  4. COLONY_STATE.json is backed up before every build-wave, with at most 3 rolling checkpoints retained
-  5. Colony-prime emits a visible notice when context is trimmed, and the continue-advance state write goes through a locked subcommand
-**Plans**: 2 plans
-
+  1. After `/ant:build` completes, the local QUEEN.md contains a new entry describing what worked or failed during that build (without user intervention)
+  2. Colony instincts that reach confidence >= 0.8 appear in the QUEEN.md wisdom section automatically (user never manually edits QUEEN.md)
+  3. Repeated builds accumulate multiple wisdom entries in QUEEN.md — the file grows with real colony experience, not template placeholders
+  4. A fresh colony's QUEEN.md starts minimal and fills up as builds execute — the before/after difference is visible
+**Plans:** 2 plans
 Plans:
-- [ ] 09-01-PLAN.md — Fix data integrity bugs (hive type coercion, midden race condition, learning recovery, state checkpoints)
-- [ ] 09-02-PLAN.md — Close state write lock gap and add context trimming notifications
+- [ ] 17-01-PLAN.md — Restructure QUEEN.md template to 4-section format, update all parsers, add write subcommands
+- [ ] 17-02-PLAN.md — Wire write subcommands into continue playbooks, migrate current repo QUEEN.md
 
-### Phase 10: Error Triage
-**Goal**: All 438 error-swallowing patterns are classified, and the ~48 dangerous ones on state-mutation paths are replaced with proper error handling
-**Depends on**: Phase 9
-**Requirements**: REL-07, REL-08, REL-09
+### Phase 18: Local Wisdom Injection
+**Goal**: Workers actually read accumulated QUEEN.md wisdom so each build benefits from previous colony experience
+**Depends on**: Phase 17 (QUEEN.md must have real content to inject)
+**Requirements**: QUEEN-03
 **Success Criteria** (what must be TRUE):
-  1. Every `2>/dev/null`, `|| true`, and `|| :` in aether-utils.sh is categorized as intentional, lazy, or dangerous
-  2. All dangerous-category suppressions on state-writing paths have been replaced with explicit error handling that surfaces failures
-  3. All intentional suppressions carry a `# SUPPRESS:OK` comment explaining why they are safe
-  4. The test suite remains green after all error-handling changes (no regressions from removing suppressions)
-**Plans**: 3 plans
+  1. Colony-prime includes local QUEEN.md wisdom entries in the prompt section sent to builder and watcher agents
+  2. A colony that has accumulated wisdom entries produces different (more informed) worker context than a fresh colony with empty QUEEN.md
+  3. Wisdom injection respects the existing token budget — QUEEN.md content is trimmed if the budget is exceeded, not silently dropped or allowed to overflow
+**Plans**: TBD
 
-Plans:
-- [ ] 10-01-PLAN.md — Add _aether_log_error infrastructure and annotate intentional suppressions with SUPPRESS:OK comments
-- [ ] 10-02-PLAN.md — Fix ~110 lazy error suppressions with proper fallbacks and warnings
-- [ ] 10-03-PLAN.md — Fix ~48 dangerous suppressions on state-mutation paths with atomic writes and validation
-
-### Phase 11: Dead Code Deprecation
-**Goal**: Unused subcommands are identified across all three command surfaces and marked with deprecation warnings before any code is moved or removed
-**Depends on**: Phase 10
-**Requirements**: QUAL-01, QUAL-02, QUAL-03
+### Phase 19: Cross-Colony Hive
+**Goal**: Wisdom flows between colonies — seal exports to the global hive, init imports from it, and domain tags ensure relevance
+**Depends on**: Phase 17 (local wisdom must exist to promote), Phase 18 (injection pattern established)
+**Requirements**: HIVE-01, HIVE-02, HIVE-03
 **Success Criteria** (what must be TRUE):
-  1. All 76 suspected-dead subcommands have been audited against `.claude/commands/`, `.opencode/commands/`, and `~/.aether/skills/` (three-surface grep)
-  2. Confirmed-dead subcommands emit a deprecation warning to stderr when invoked
-  3. Subcommands found to be alive on any surface are documented and removed from the dead list
-  4. Code identified as dead-but-useful is extracted into optional utility modules rather than deleted
-**Plans**: 2 plans
+  1. Running `/ant:seal` on a colony with high-confidence instincts results in new entries appearing in `~/.aether/hive/wisdom.json`
+  2. Running `/ant:init` in a new repo seeds its QUEEN.md with relevant wisdom from the hive — the new colony does not start from zero
+  3. A web project colony receives web-relevant hive wisdom but not CLI-specific patterns (domain scoping filters by registry tags)
+  4. The hive-to-colony flow is end-to-end verifiable: colony A seals wisdom, colony B inits and receives it
+**Plans**: TBD
 
-Plans:
-- [ ] 11-01-PLAN.md — Add _deprecation_warning function, deprecation calls to 18 dead subcommands, and help JSON updates
-- [ ] 11-02-PLAN.md — Update 6 test files to expect deprecation warnings on stderr
-
-### Phase 12: State API & Verification
-**Goal**: COLONY_STATE.json access is centralized through a single facade, and the verification chain catches fabricated worker claims
-**Depends on**: Phase 11
-**Requirements**: QUAL-04, QUAL-08, QUAL-09
+### Phase 20: Hub Wisdom Layer
+**Goal**: A global QUEEN.md at hub level accumulates cross-cutting preferences and wisdom that apply to every colony
+**Depends on**: Phase 18 (local injection pattern), Phase 19 (hive promotion established)
+**Requirements**: HUB-01, HUB-02
 **Success Criteria** (what must be TRUE):
-  1. A `state-api.sh` module handles all COLONY_STATE.json reads and writes with lock/validate/migrate encapsulated
-  2. Test runner exit codes are captured during build-verify and cross-referenced against Watcher verification claims
-  3. Builder-claimed file paths are verified against actual filesystem before phase advancement
-  4. The pre-existing context-continuity test failure is fixed and the full test suite is green
-**Plans**: 3 plans
-
-Plans:
-- [ ] 12-01-PLAN.md — Fix date-sensitive test failures and create state-api.sh facade module with core functions
-- [ ] 12-02-PLAN.md — Build verify-claims subcommand with builder claims persistence and continue-verify integration
-- [ ] 12-03-PLAN.md — Migrate 9-10 HIGH/MEDIUM subcommands to state-api facade
-
-### Phase 13: Monolith Modularization
-**Goal**: aether-utils.sh is reduced from ~11,000 lines to a slim dispatcher by extracting domain modules into independently testable files
-**Depends on**: Phase 12 (state-api facade must exist before domain extraction)
-**Requirements**: QUAL-05, QUAL-06, QUAL-07
-**Success Criteria** (what must be TRUE):
-  1. Pheromone domain (~1,800 lines including colony-prime) lives in `pheromone.sh` and all pheromone subcommands work through the dispatch contract
-  2. Learning/instinct domain (~1,200 lines) lives in `learning.sh` and the full memory pipeline functions correctly
-  3. Remaining domains (queen, colony, swarm, session, spawn, flag, suggest) are extracted following the same proven pattern
-  4. aether-utils.sh is under 2,000 lines (setup, sourcing, case dispatch, shared helpers only)
-  5. All 530+ tests pass with the modularized structure
-**Plans**: 9 plans
-
-Plans:
-- [ ] 13-01-PLAN.md — Extract flag domain (~252 lines, 6 subcommands) into flag.sh
-- [ ] 13-02-PLAN.md — Extract spawn domain (~378 lines, 9 subcommands) into spawn.sh
-- [ ] 13-03-PLAN.md — Extract session domain (~498 lines, 9 subcommands) into session.sh
-- [ ] 13-04-PLAN.md — Extract suggest domain (~587 lines, 6 subcommands) into suggest.sh
-- [ ] 13-05-PLAN.md — Extract queen domain (~815 lines, 4 subcommands) into queen.sh
-- [ ] 13-06-PLAN.md — Extract swarm domain (~1005 lines, 18 subcommands) into swarm.sh
-- [ ] 13-07-PLAN.md — Extract learning/instinct domain (~1823 lines, 13 subcommands) into learning.sh
-- [ ] 13-08-PLAN.md — Extract pheromone domain (~2102 lines, 13+ subcommands) into pheromone.sh
-- [ ] 13-09-PLAN.md — Extract colony-archive-xml and record final line counts
-
-### Phase 14: Planning Depth
-**Goal**: Aether produces deeper, more substantive plans and builds by investigating domain knowledge before decomposing tasks
-**Depends on**: Phase 13 (needs stable infrastructure)
-**Requirements**: UX-01, UX-02
-**Success Criteria** (what must be TRUE):
-  1. `/ant:plan` includes a per-phase research step where scouts investigate domain knowledge, library docs, and patterns before task decomposition
-  2. `/ant:build` incorporates research context into builder prompts so workers have domain understanding, not just task lists
-  3. Research depth is bounded (one cycle, not a full Oracle RALF loop) to prevent planning from taking longer than execution
-**Plans**: 2 plans
-
-Plans:
-- [ ] 14-01-PLAN.md — Add Step 3.6 Phase Domain Research to plan.md (Claude + OpenCode) with scout spawn, RESEARCH.md output, and tests
-- [ ] 14-02-PLAN.md — Add Step 4.0.5 Load Phase Research to build playbooks and inject research_context into builder/watcher prompts
-
-### Phase 15: Documentation Accuracy
-**Goal**: All documentation matches the post-hardening system state with no aspirational claims
-**Depends on**: Phase 14 (all code changes complete)
-**Requirements**: UX-03, UX-04, UX-05
-**Success Criteria** (what must be TRUE):
-  1. README.md has accurate feature descriptions, a clear getting-started guide, and correct counts/capabilities
-  2. CLAUDE.md reflects the current system state (correct subcommand counts, module structure after extraction, accurate architecture diagram)
-  3. All files in `docs/` describe verified behavior only — no aspirational claims remain
-  4. Known inaccuracies identified by the Oracle audit (trim order, security gate label, etc.) are all corrected
-**Plans**: 3 plans
-
-Plans:
-- [ ] 15-01-PLAN.md — Update CLAUDE.md with verified counts, correct trim order, and modular architecture diagram
-- [ ] 15-02-PLAN.md — Rewrite README.md for developer audience with full workflow and accurate feature descriptions
-- [ ] 15-03-PLAN.md — Sweep all docs/ files for accuracy and write comprehensive v2.1 changelog
-
-### Phase 16: Ship
-**Goal**: Aether v2.1.0 is published to npm with a verified clean install experience
-**Depends on**: Phase 15
-**Requirements**: UX-06, UX-07
-**Success Criteria** (what must be TRUE):
-  1. A clean `npm install -g aether-colony` followed by `/ant:lay-eggs`, `/ant:init`, `/ant:plan`, `/ant:build` completes without errors on a fresh environment
-  2. `bin/validate-package.sh` passes with all content-aware checks for the new module structure
-  3. Version is bumped to v2.1.0 and published to npm
-**Plans**: 2 plans
-
-Plans:
-- [ ] 16-01-PLAN.md — Fix package hygiene (.npmignore, validate-package.sh, CHANGELOG header) and verify dry-run
-- [ ] 16-02-PLAN.md — Manual install walkthrough, version bump to v2.1.0, and publish to npm
+  1. The global QUEEN.md (`~/.aether/QUEEN.md`) accumulates user preferences and cross-cutting wisdom that is not specific to any single colony
+  2. Colony-prime reads both local QUEEN.md and global QUEEN.md, injecting relevant wisdom from both sources into worker prompts
+  3. Global wisdom and local wisdom are distinguishable in the injected prompt — workers can see which patterns are colony-specific vs universal
+**Plans**: TBD
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 9 -> 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16
+Phases execute in numeric order: 17 -> 18 -> 19 -> 20
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -183,11 +109,15 @@ Phases execute in numeric order: 9 -> 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16
 | 6. XML Exchange Activation | v1.3 | 2/2 | Complete | 2026-03-19 |
 | 7. Fresh Install Hardening | v1.3 | 2/2 | Complete | 2026-03-19 |
 | 8. Documentation Update | v1.3 | 2/2 | Complete | 2026-03-19 |
-| 9. Quick Wins | v2.1 | Complete    | 2026-03-24 | - |
+| 9. Quick Wins | v2.1 | 2/2 | Complete | 2026-03-24 |
 | 10. Error Triage | v2.1 | 3/3 | Complete | 2026-03-24 |
-| 11. Dead Code Deprecation | v2.1 | Complete    | 2026-03-24 | - |
-| 12. State API & Verification | v2.1 | Complete    | 2026-03-24 | - |
-| 13. Monolith Modularization | v2.1 | Complete    | 2026-03-24 | - |
-| 14. Planning Depth | v2.1 | Complete    | 2026-03-24 | - |
-| 15. Documentation Accuracy | v2.1 | Complete    | 2026-03-24 | - |
-| 16. Ship | v2.1 | 0/2 | Not started | - |
+| 11. Dead Code Deprecation | v2.1 | 2/2 | Complete | 2026-03-24 |
+| 12. State API & Verification | v2.1 | 3/3 | Complete | 2026-03-24 |
+| 13. Monolith Modularization | v2.1 | 9/9 | Complete | 2026-03-24 |
+| 14. Planning Depth | v2.1 | 2/2 | Complete | 2026-03-24 |
+| 15. Documentation Accuracy | v2.1 | 3/3 | Complete | 2026-03-24 |
+| 16. Ship | v2.1 | 2/2 | Complete | 2026-03-24 |
+| 17. Local Wisdom Accumulation | v2.2 | 0/2 | Not started | - |
+| 18. Local Wisdom Injection | v2.2 | 0/TBD | Not started | - |
+| 19. Cross-Colony Hive | v2.2 | 0/TBD | Not started | - |
+| 20. Hub Wisdom Layer | v2.2 | 0/TBD | Not started | - |
