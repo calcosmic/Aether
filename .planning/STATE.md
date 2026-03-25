@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-03-24)
 
 **Core value:** Reliably interpret user requests, decompose into work, verify outputs, and ship correct work with minimal back-and-forth.
-**Current focus:** Phase 17 — Local Wisdom Accumulation (v2.2 Living Wisdom)
+**Current focus:** Phase 18 — Local Wisdom Injection (v2.2 Living Wisdom)
 
 ## Current Position
 
-Phase: 17 of 20 (Local Wisdom Accumulation) -- COMPLETE
-Plan: 2 of 2 in current phase
+Phase: 18 of 20 (Local Wisdom Injection) -- COMPLETE
+Plan: 1 of 1 in current phase
 Status: Phase complete
-Last activity: 2026-03-24 — Completed 17-02 (Workflow wiring + QUEEN.md migration)
+Last activity: 2026-03-25 — Completed 18-01 (Post-extraction filtering + wisdom injection tests)
 
-Progress: [#####.....] 50%
+Progress: [######....] 55%
 
 ## Performance Metrics
 
 **Velocity (from v2.1):**
-- Total plans completed: 39
+- Total plans completed: 40
 - Average duration: 5min
-- Total execution time: 3.0 hours
+- Total execution time: 3.1 hours
 
 **Recent Trend:**
 - v2.1 completed 8 phases, 39 plans in ~3 hours
@@ -43,6 +43,9 @@ Progress: [#####.....] 50%
 - [17-01]: Build learnings grouped by phase subsections for readability
 - [17-02]: Step 3c placement after all instinct creation ensures newly created instincts are swept for promotion
 - [17-02]: Validation entries left as real seed content documenting the v1-to-v2 migration
+- [18-01]: Filter AFTER _extract_wisdom() to avoid dual-function drift with queen.sh
+- [18-01]: Renamed QUEEN WISDOM header from "Eternal Guidance" to "Colony Experience"
+- [18-01]: Entry-only filtering via grep for '^(- |### )' -- simple and reliable
 
 ### Pending Todos
 
@@ -55,6 +58,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-24
-Stopped at: Completed 17-02-PLAN.md (Workflow wiring + QUEEN.md migration) -- Phase 17 complete
+Last session: 2026-03-25
+Stopped at: Completed 18-01-PLAN.md (Post-extraction filtering + wisdom injection tests) -- Phase 18 complete
 Resume file: None
