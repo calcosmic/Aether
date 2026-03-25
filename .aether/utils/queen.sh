@@ -1092,3 +1092,150 @@ _domain_detect() {
 
     json_ok "{\"tags\":\"${tags}\"}"
 }
+
+# ============================================================================
+# _queen_migrate
+# Convert a v1 QUEEN.md (emoji headers) to v2 (clean headers) format
+# Usage: queen-migrate [--target hub|local]
+# --target hub  -> migrates $HOME/.aether/QUEEN.md
+# --target local -> migrates $AETHER_ROOT/.aether/QUEEN.md (default)
+# If already v2 format, prints message and exits 0.
+# ============================================================================
+_queen_migrate() {
+    local qm_target="local"
+
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --target) qm_target="${2:-local}"; shift 2 ;;
+        *) shift ;;
+      esac
+    done
+
+    local qm_file
+    if [[ "$qm_target" == "hub" ]]; then
+      qm_file="$HOME/.aether/QUEEN.md"
+    else
+      qm_file="$AETHER_ROOT/.aether/QUEEN.md"
+    fi
+
+    if [[ ! -f "$qm_file" ]]; then
+      json_err "$E_FILE_NOT_FOUND" "QUEEN.md not found at $qm_file" '{"target":"'"$qm_target"'"}'
+      exit 1
+    fi
+
+    # Check if already v2 format
+    if grep -q '^## Build Learnings$' "$qm_file" 2>/dev/null; then  # SUPPRESS:OK -- existence-test: format detection
+      json_ok '{"migrated":false,"reason":"Already v2 format"}'
+      return 0
+    fi
+
+    # Extract content from v1 format using _extract_wisdom_sections (maps v1 -> v2 keys)
+    local qm_wisdom
+    qm_wisdom=$(_extract_wisdom_sections "$qm_file")
+
+    # Extract real entries from each section
+    # v1 _extract_wisdom_sections produces double-encoded JSON strings, so we need
+    # to unwrap them: jq -r removes outer quotes, then sed strips remaining inner quotes
+    local qm_uprefs qm_codebase qm_learnings qm_instincts
+    qm_uprefs=$(echo "$qm_wisdom" | jq -r '.user_prefs // ""' 2>/dev/null | sed 's/^"//;s/"$//' | sed 's/\\n/\n/g')  # SUPPRESS:OK -- read-default: may be empty
+    qm_uprefs=$(echo "$qm_uprefs" | grep -E '^- ' || true)  # SUPPRESS:OK -- grep returns 1 on no matches
+    qm_codebase=$(echo "$qm_wisdom" | jq -r '.codebase_patterns // ""' 2>/dev/null | sed 's/^"//;s/"$//' | sed 's/\\n/\n/g')  # SUPPRESS:OK -- read-default: may be empty
+    qm_codebase=$(echo "$qm_codebase" | grep -E '^- ' || true)  # SUPPRESS:OK -- grep returns 1 on no matches
+    qm_learnings=$(echo "$qm_wisdom" | jq -r '.build_learnings // ""' 2>/dev/null | sed 's/^"//;s/"$//' | sed 's/\\n/\n/g')  # SUPPRESS:OK -- read-default: may be empty
+    qm_learnings=$(echo "$qm_learnings" | grep -E '^- ' || true)  # SUPPRESS:OK -- grep returns 1 on no matches
+    qm_instincts=$(echo "$qm_wisdom" | jq -r '.instincts // ""' 2>/dev/null | sed 's/^"//;s/"$//' | sed 's/\\n/\n/g')  # SUPPRESS:OK -- read-default: may be empty
+    qm_instincts=$(echo "$qm_instincts" | grep -E '^- ' || true)  # SUPPRESS:OK -- grep returns 1 on no matches
+
+    local qm_ts
+    qm_ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    # Build fresh v2 QUEEN.md
+    local qm_tmp="${qm_file}.migrate.$$"
+    cat > "$qm_tmp" << MIGRATEEOF
+# QUEEN.md -- Colony Wisdom
+
+> Last evolved: $qm_ts
+> Wisdom version: 2.0.0
+
+---
+
+## User Preferences
+
+Communication style, expertise level, and decision-making patterns observed from the user (the Queen). These shape how the colony communicates and what it prioritizes.
+
+MIGRATEEOF
+
+    if [[ -n "$qm_uprefs" ]]; then
+      echo "$qm_uprefs" >> "$qm_tmp"
+    else
+      echo "*No user preferences recorded yet.*" >> "$qm_tmp"
+    fi
+
+    cat >> "$qm_tmp" << 'MIGRATEEOF'
+
+---
+
+## Codebase Patterns
+
+Validated approaches that work in this codebase, and anti-patterns to avoid. Includes architecture conventions, naming patterns, error handling style, and technology-specific insights.
+
+MIGRATEEOF
+
+    if [[ -n "$qm_codebase" ]]; then
+      echo "$qm_codebase" >> "$qm_tmp"
+    else
+      echo "*No codebase patterns recorded yet.*" >> "$qm_tmp"
+    fi
+
+    cat >> "$qm_tmp" << 'MIGRATEEOF'
+
+---
+
+## Build Learnings
+
+What worked and what failed during builds. Captures the full picture of colony experience -- successes, failures, and adjustments.
+
+MIGRATEEOF
+
+    if [[ -n "$qm_learnings" ]]; then
+      echo "$qm_learnings" >> "$qm_tmp"
+    else
+      echo "*No build learnings recorded yet.*" >> "$qm_tmp"
+    fi
+
+    cat >> "$qm_tmp" << 'MIGRATEEOF'
+
+---
+
+## Instincts
+
+High-confidence behavioral patterns that have been validated through repeated colony work. Auto-promoted when confidence reaches 0.8 or higher.
+
+MIGRATEEOF
+
+    if [[ -n "$qm_instincts" ]]; then
+      echo "$qm_instincts" >> "$qm_tmp"
+    else
+      echo "*No instincts recorded yet.*" >> "$qm_tmp"
+    fi
+
+    cat >> "$qm_tmp" << MIGRATEEOF
+
+---
+
+## Evolution Log
+
+| Date | Source | Type | Details |
+|------|--------|------|---------|
+| $qm_ts | system | migration | Migrated from v1 to v2 format |
+
+---
+
+<!-- METADATA {"version":"2.0.0","wisdom_version":"2.0","last_evolved":"$qm_ts","colonies_contributed":[],"stats":{"total_user_prefs":0,"total_codebase_patterns":0,"total_build_learnings":0,"total_instincts":0}} -->
+MIGRATEEOF
+
+    # Atomic move
+    mv "$qm_tmp" "$qm_file"
+
+    json_ok '{"migrated":true,"target":"'"$qm_target"'","format":"v2"}'
+}

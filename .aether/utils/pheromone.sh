@@ -886,15 +886,35 @@ _extract_wisdom() {
   fi
 }
 
+# Detect if global and local QUEEN.md point to the same file (e.g., HOME == AETHER_ROOT in tests)
+# In that case, treat as local only to avoid double-loading the same content
+cp_same_queen=false
+if [[ -f "$cp_global_queen" && -f "$cp_local_queen" ]]; then
+  cp_global_real=$(cd "$(dirname "$cp_global_queen")" && pwd)/$(basename "$cp_global_queen") 2>/dev/null || true  # SUPPRESS:OK -- read-default: path resolution
+  cp_local_real=$(cd "$(dirname "$cp_local_queen")" && pwd)/$(basename "$cp_local_queen") 2>/dev/null || true  # SUPPRESS:OK -- read-default: path resolution
+  if [[ "$cp_global_real" == "$cp_local_real" ]]; then
+    cp_same_queen=true
+  fi
+fi
+
 # Load global QUEEN.md first (~/.aether/QUEEN.md)
-if [[ -f "$cp_global_queen" ]]; then
+# Skip if same file as local (will be loaded as local instead)
+if [[ -f "$cp_global_queen" && "$cp_same_queen" == "false" ]]; then
   cp_has_global=true
+  # Auto-migrate global QUEEN.md from v1 to v2 if needed (Phase 20)
+  if ! grep -q '^## Build Learnings$' "$cp_global_queen" 2>/dev/null; then  # SUPPRESS:OK -- existence-test: format detection
+    "$SCRIPT_DIR/aether-utils.sh" queen-migrate --target hub 2>/dev/null || true  # SUPPRESS:OK -- cleanup: migration is best-effort
+  fi
   cp_global_wisdom=$(_extract_wisdom "$cp_global_queen" "g")
 fi
 
 # Load local QUEEN.md second (.aether/QUEEN.md)
 if [[ -f "$cp_local_queen" ]]; then
   cp_has_local=true
+  # Auto-migrate local QUEEN.md if same as global and was v1 (edge case: HOME == AETHER_ROOT)
+  if [[ "$cp_same_queen" == "true" ]] && ! grep -q '^## Build Learnings$' "$cp_local_queen" 2>/dev/null; then  # SUPPRESS:OK -- existence-test: format detection
+    "$SCRIPT_DIR/aether-utils.sh" queen-migrate --target local 2>/dev/null || true  # SUPPRESS:OK -- cleanup: migration is best-effort
+  fi
   cp_local_wisdom=$(_extract_wisdom "$cp_local_queen" "l")
 fi
 
@@ -906,25 +926,24 @@ if [[ "$cp_has_global" == "false" && "$cp_has_local" == "false" ]]; then
   exit 1
 fi
 
-# Combine wisdom from both levels - local extends global (v2 keys)
-# Each section: global content first, then local content (if exists)
-cp_combined=$(jq -n \
-  --argjson global "$cp_global_wisdom" \
-  --argjson local "$cp_local_wisdom" \
-  '
-  def combine(a; b):
-    if a == "" or a == null then b
-    elif b == "" or b == null then a
-    else a + "\n" + b
-    end;
+# Process global and local wisdom independently (Phase 20: split sections)
+# --- GLOBAL wisdom extraction ---
+cp_global_codebase_raw=$(echo "$cp_global_wisdom" | jq -r '.codebase_patterns // ""' 2>/dev/null)  # SUPPRESS:OK -- read-default: may be empty
+cp_global_instincts_raw=$(echo "$cp_global_wisdom" | jq -r '.instincts // ""' 2>/dev/null)  # SUPPRESS:OK -- read-default: may be empty
+cp_global_prefs_raw=$(echo "$cp_global_wisdom" | jq -r '.user_prefs // ""' 2>/dev/null)  # SUPPRESS:OK -- read-default: may be empty
 
-  {
-    user_prefs: combine($global.user_prefs; $local.user_prefs),
-    codebase_patterns: combine($global.codebase_patterns; $local.codebase_patterns),
-    build_learnings: combine($global.build_learnings; $local.build_learnings),
-    instincts: combine($global.instincts; $local.instincts)
-  }
-  ')
+# --- LOCAL wisdom extraction ---
+cp_local_codebase_raw=$(echo "$cp_local_wisdom" | jq -r '.codebase_patterns // ""' 2>/dev/null)  # SUPPRESS:OK -- read-default: may be empty
+cp_local_learnings_raw=$(echo "$cp_local_wisdom" | jq -r '.build_learnings // ""' 2>/dev/null)  # SUPPRESS:OK -- read-default: may be empty
+cp_local_instincts_raw=$(echo "$cp_local_wisdom" | jq -r '.instincts // ""' 2>/dev/null)  # SUPPRESS:OK -- read-default: may be empty
+cp_local_prefs_raw=$(echo "$cp_local_wisdom" | jq -r '.user_prefs // ""' 2>/dev/null)  # SUPPRESS:OK -- read-default: may be empty
+
+# --- Filter entries independently ---
+cp_global_codebase=$(_filter_wisdom_entries "$cp_global_codebase_raw")
+cp_global_instincts=$(_filter_wisdom_entries "$cp_global_instincts_raw")
+cp_local_codebase=$(_filter_wisdom_entries "$cp_local_codebase_raw")
+cp_local_learnings=$(_filter_wisdom_entries "$cp_local_learnings_raw")
+cp_local_instincts=$(_filter_wisdom_entries "$cp_local_instincts_raw")
 
 # Get metadata from local QUEEN.md if exists, otherwise global
 cp_metadata='{"version":"unknown","last_evolved":null,"source":"none"}'
@@ -979,7 +998,8 @@ fi
 # Build prompt_section that combines wisdom + signals
 # Each section is stored separately for budget enforcement
 cp_final_prompt=""
-cp_sec_queen=""
+cp_sec_queen_global=""
+cp_sec_queen_local=""
 cp_sec_user_prefs=""
 cp_sec_hive=""
 cp_sec_capsule=""
@@ -989,43 +1009,63 @@ cp_sec_blockers=""
 cp_sec_rolling=""
 cp_sec_signals=""
 
-# Add wisdom section to prompt if any exists (v2 keys)
-cp_codebase_patterns=$(echo "$cp_combined" | jq -r '.codebase_patterns // ""' 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
-cp_build_learnings=$(echo "$cp_combined" | jq -r '.build_learnings // ""' 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
-cp_instincts=$(echo "$cp_combined" | jq -r '.instincts // ""' 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
-cp_user_prefs=$(echo "$cp_combined" | jq -r '.user_prefs // ""' 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
+# Build GLOBAL QUEEN WISDOM section (only if real filtered content exists)
+if [[ -n "$cp_global_codebase" || -n "$cp_global_instincts" ]]; then
+  cp_sec_queen_global+="--- QUEEN WISDOM (Global -- All Colonies) ---"$'\n'
 
-# Post-extraction filtering: strip description paragraphs, keep only entries and phase headers
-cp_codebase_filtered=$(_filter_wisdom_entries "$cp_codebase_patterns")
-cp_learnings_filtered=$(_filter_wisdom_entries "$cp_build_learnings")
-cp_instincts_filtered=$(_filter_wisdom_entries "$cp_instincts")
-
-# Only build QUEEN WISDOM section if real entries exist (not just descriptions/placeholders)
-if [[ -n "$cp_codebase_filtered" || -n "$cp_learnings_filtered" || -n "$cp_instincts_filtered" ]]; then
-  cp_sec_queen+="--- QUEEN WISDOM (Colony Experience) ---"$'\n'
-
-  if [[ -n "$cp_codebase_filtered" ]]; then
-    cp_sec_queen+=$'\n'"Codebase Patterns:"$'\n'"$cp_codebase_filtered"$'\n'
+  if [[ -n "$cp_global_codebase" ]]; then
+    cp_sec_queen_global+=$'\n'"Codebase Patterns:"$'\n'"$cp_global_codebase"$'\n'
   fi
-  if [[ -n "$cp_learnings_filtered" ]]; then
-    cp_sec_queen+=$'\n'"Build Learnings:"$'\n'"$cp_learnings_filtered"$'\n'
-  fi
-  if [[ -n "$cp_instincts_filtered" ]]; then
-    cp_sec_queen+=$'\n'"Instincts:"$'\n'"$cp_instincts_filtered"$'\n'
+  if [[ -n "$cp_global_instincts" ]]; then
+    cp_sec_queen_global+=$'\n'"Instincts:"$'\n'"$cp_global_instincts"$'\n'
   fi
 
-  cp_sec_queen+=$'\n'"--- END QUEEN WISDOM ---"$'\n'
+  cp_sec_queen_global+=$'\n'"--- END QUEEN WISDOM (Global) ---"$'\n'
 fi
 
-# Build separate USER PREFERENCES section (distinct from QUEEN WISDOM)
+# Build LOCAL (Colony-Specific) QUEEN WISDOM section
+if [[ -n "$cp_local_codebase" || -n "$cp_local_learnings" || -n "$cp_local_instincts" ]]; then
+  cp_sec_queen_local+="--- QUEEN WISDOM (Colony-Specific) ---"$'\n'
+
+  if [[ -n "$cp_local_codebase" ]]; then
+    cp_sec_queen_local+=$'\n'"Codebase Patterns:"$'\n'"$cp_local_codebase"$'\n'
+  fi
+  if [[ -n "$cp_local_learnings" ]]; then
+    cp_sec_queen_local+=$'\n'"Build Learnings:"$'\n'"$cp_local_learnings"$'\n'
+  fi
+  if [[ -n "$cp_local_instincts" ]]; then
+    cp_sec_queen_local+=$'\n'"Instincts:"$'\n'"$cp_local_instincts"$'\n'
+  fi
+
+  cp_sec_queen_local+=$'\n'"--- END QUEEN WISDOM (Colony-Specific) ---"$'\n'
+fi
+
+# Build USER PREFERENCES section with source labels (Phase 20)
 cp_sec_user_prefs=""
 cp_user_prefs_count=0
-if [[ -n "$cp_user_prefs" && "$cp_user_prefs" != "null" ]]; then
-  # Count entries (lines starting with "- ")
-  cp_user_prefs_count=$(echo "$cp_user_prefs" | grep -c '^- ' || echo "0")  # SUPPRESS:OK -- read-default: grep returns 1 when no matches
+
+# Label global prefs with [global] prefix
+cp_global_prefs_labeled=""
+if [[ -n "$cp_global_prefs_raw" && "$cp_global_prefs_raw" != "null" ]]; then
+  cp_global_prefs_labeled=$(echo "$cp_global_prefs_raw" | grep '^- ' | sed 's/^- /- [global] /' || true)  # SUPPRESS:OK -- grep returns 1 on no matches
+fi
+
+# Label local prefs with [local] prefix
+cp_local_prefs_labeled=""
+if [[ -n "$cp_local_prefs_raw" && "$cp_local_prefs_raw" != "null" ]]; then
+  cp_local_prefs_labeled=$(echo "$cp_local_prefs_raw" | grep '^- ' | sed 's/^- /- [local] /' || true)  # SUPPRESS:OK -- grep returns 1 on no matches
+fi
+
+# Combine labeled prefs
+cp_all_prefs=""
+[[ -n "$cp_global_prefs_labeled" ]] && cp_all_prefs+="$cp_global_prefs_labeled"$'\n'
+[[ -n "$cp_local_prefs_labeled" ]] && cp_all_prefs+="$cp_local_prefs_labeled"$'\n'
+
+if [[ -n "$cp_all_prefs" ]]; then
+  cp_user_prefs_count=$(echo "$cp_all_prefs" | grep -c '^- ' || echo "0")  # SUPPRESS:OK -- read-default: grep returns 1 when no matches
   if [[ "$cp_user_prefs_count" -gt 0 ]]; then
     cp_sec_user_prefs=$'\n'"--- USER PREFERENCES ---"$'\n'
-    cp_sec_user_prefs+="$cp_user_prefs"$'\n'
+    cp_sec_user_prefs+="$cp_all_prefs"
     cp_sec_user_prefs+="--- END USER PREFERENCES ---"$'\n'
     cp_log_line="$cp_log_line, $cp_user_prefs_count user_prefs"
   fi
@@ -1335,11 +1375,11 @@ fi
 # Assemble cp_final_prompt from sections, respecting cp_max_chars budget.
 # Truncation priority (trim first to last):
 #   rolling-summary > phase-learnings > key-decisions > hive-wisdom >
-#   context-capsule > user-prefs > queen-wisdom > pheromone-signals (NEVER trim REDIRECTs)
+#   context-capsule > user-prefs > queen-wisdom-global > queen-wisdom-local > pheromone-signals (NEVER trim REDIRECTs)
 # Blockers are always kept (REDIRECT-priority).
 
-# Assemble all sections in original order
-cp_final_prompt="$cp_sec_queen$cp_sec_user_prefs$cp_sec_hive$cp_sec_capsule$cp_sec_learnings$cp_sec_decisions$cp_sec_blockers$cp_sec_rolling$cp_sec_signals"
+# Assemble all sections in original order (Phase 20: split queen sections)
+cp_final_prompt="$cp_sec_queen_global$cp_sec_queen_local$cp_sec_user_prefs$cp_sec_hive$cp_sec_capsule$cp_sec_learnings$cp_sec_decisions$cp_sec_blockers$cp_sec_rolling$cp_sec_signals"
 
 cp_budget_len=${#cp_final_prompt}
 
@@ -1351,7 +1391,7 @@ if [[ "$cp_budget_len" -gt "$cp_max_chars" ]]; then
   if [[ "$cp_budget_len" -gt "$cp_max_chars" && -n "$cp_sec_rolling" ]]; then
     cp_sec_rolling=""
     cp_budget_trimmed_list="rolling-summary"
-    cp_final_prompt="$cp_sec_queen$cp_sec_user_prefs$cp_sec_hive$cp_sec_capsule$cp_sec_learnings$cp_sec_decisions$cp_sec_blockers$cp_sec_rolling$cp_sec_signals"
+    cp_final_prompt="$cp_sec_queen_global$cp_sec_queen_local$cp_sec_user_prefs$cp_sec_hive$cp_sec_capsule$cp_sec_learnings$cp_sec_decisions$cp_sec_blockers$cp_sec_rolling$cp_sec_signals"
     cp_budget_len=${#cp_final_prompt}
   fi
 
@@ -1359,7 +1399,7 @@ if [[ "$cp_budget_len" -gt "$cp_max_chars" ]]; then
   if [[ "$cp_budget_len" -gt "$cp_max_chars" && -n "$cp_sec_learnings" ]]; then
     cp_sec_learnings=""
     cp_budget_trimmed_list="${cp_budget_trimmed_list:+$cp_budget_trimmed_list,}phase-learnings"
-    cp_final_prompt="$cp_sec_queen$cp_sec_user_prefs$cp_sec_hive$cp_sec_capsule$cp_sec_learnings$cp_sec_decisions$cp_sec_blockers$cp_sec_rolling$cp_sec_signals"
+    cp_final_prompt="$cp_sec_queen_global$cp_sec_queen_local$cp_sec_user_prefs$cp_sec_hive$cp_sec_capsule$cp_sec_learnings$cp_sec_decisions$cp_sec_blockers$cp_sec_rolling$cp_sec_signals"
     cp_budget_len=${#cp_final_prompt}
   fi
 
@@ -1367,7 +1407,7 @@ if [[ "$cp_budget_len" -gt "$cp_max_chars" ]]; then
   if [[ "$cp_budget_len" -gt "$cp_max_chars" && -n "$cp_sec_decisions" ]]; then
     cp_sec_decisions=""
     cp_budget_trimmed_list="${cp_budget_trimmed_list:+$cp_budget_trimmed_list,}key-decisions"
-    cp_final_prompt="$cp_sec_queen$cp_sec_user_prefs$cp_sec_hive$cp_sec_capsule$cp_sec_learnings$cp_sec_decisions$cp_sec_blockers$cp_sec_rolling$cp_sec_signals"
+    cp_final_prompt="$cp_sec_queen_global$cp_sec_queen_local$cp_sec_user_prefs$cp_sec_hive$cp_sec_capsule$cp_sec_learnings$cp_sec_decisions$cp_sec_blockers$cp_sec_rolling$cp_sec_signals"
     cp_budget_len=${#cp_final_prompt}
   fi
 
@@ -1375,7 +1415,7 @@ if [[ "$cp_budget_len" -gt "$cp_max_chars" ]]; then
   if [[ "$cp_budget_len" -gt "$cp_max_chars" && -n "$cp_sec_hive" ]]; then
     cp_sec_hive=""
     cp_budget_trimmed_list="${cp_budget_trimmed_list:+$cp_budget_trimmed_list,}hive-wisdom"
-    cp_final_prompt="$cp_sec_queen$cp_sec_user_prefs$cp_sec_hive$cp_sec_capsule$cp_sec_learnings$cp_sec_decisions$cp_sec_blockers$cp_sec_rolling$cp_sec_signals"
+    cp_final_prompt="$cp_sec_queen_global$cp_sec_queen_local$cp_sec_user_prefs$cp_sec_hive$cp_sec_capsule$cp_sec_learnings$cp_sec_decisions$cp_sec_blockers$cp_sec_rolling$cp_sec_signals"
     cp_budget_len=${#cp_final_prompt}
   fi
 
@@ -1383,7 +1423,7 @@ if [[ "$cp_budget_len" -gt "$cp_max_chars" ]]; then
   if [[ "$cp_budget_len" -gt "$cp_max_chars" && -n "$cp_sec_capsule" ]]; then
     cp_sec_capsule=""
     cp_budget_trimmed_list="${cp_budget_trimmed_list:+$cp_budget_trimmed_list,}context-capsule"
-    cp_final_prompt="$cp_sec_queen$cp_sec_user_prefs$cp_sec_hive$cp_sec_capsule$cp_sec_learnings$cp_sec_decisions$cp_sec_blockers$cp_sec_rolling$cp_sec_signals"
+    cp_final_prompt="$cp_sec_queen_global$cp_sec_queen_local$cp_sec_user_prefs$cp_sec_hive$cp_sec_capsule$cp_sec_learnings$cp_sec_decisions$cp_sec_blockers$cp_sec_rolling$cp_sec_signals"
     cp_budget_len=${#cp_final_prompt}
   fi
 
@@ -1391,19 +1431,27 @@ if [[ "$cp_budget_len" -gt "$cp_max_chars" ]]; then
   if [[ "$cp_budget_len" -gt "$cp_max_chars" && -n "$cp_sec_user_prefs" ]]; then
     cp_sec_user_prefs=""
     cp_budget_trimmed_list="${cp_budget_trimmed_list:+$cp_budget_trimmed_list,}user-prefs"
-    cp_final_prompt="$cp_sec_queen$cp_sec_user_prefs$cp_sec_hive$cp_sec_capsule$cp_sec_learnings$cp_sec_decisions$cp_sec_blockers$cp_sec_rolling$cp_sec_signals"
+    cp_final_prompt="$cp_sec_queen_global$cp_sec_queen_local$cp_sec_user_prefs$cp_sec_hive$cp_sec_capsule$cp_sec_learnings$cp_sec_decisions$cp_sec_blockers$cp_sec_rolling$cp_sec_signals"
     cp_budget_len=${#cp_final_prompt}
   fi
 
-  # 7. Trim queen-wisdom
-  if [[ "$cp_budget_len" -gt "$cp_max_chars" && -n "$cp_sec_queen" ]]; then
-    cp_sec_queen=""
-    cp_budget_trimmed_list="${cp_budget_trimmed_list:+$cp_budget_trimmed_list,}queen-wisdom"
-    cp_final_prompt="$cp_sec_queen$cp_sec_user_prefs$cp_sec_hive$cp_sec_capsule$cp_sec_learnings$cp_sec_decisions$cp_sec_blockers$cp_sec_rolling$cp_sec_signals"
+  # 7. Trim queen-wisdom-global (trim global before local -- local is more relevant)
+  if [[ "$cp_budget_len" -gt "$cp_max_chars" && -n "$cp_sec_queen_global" ]]; then
+    cp_sec_queen_global=""
+    cp_budget_trimmed_list="${cp_budget_trimmed_list:+$cp_budget_trimmed_list,}queen-wisdom-global"
+    cp_final_prompt="$cp_sec_queen_global$cp_sec_queen_local$cp_sec_user_prefs$cp_sec_hive$cp_sec_capsule$cp_sec_learnings$cp_sec_decisions$cp_sec_blockers$cp_sec_rolling$cp_sec_signals"
     cp_budget_len=${#cp_final_prompt}
   fi
 
-  # 8. Trim pheromone-signals (preserve REDIRECTs)
+  # 8. Trim queen-wisdom-local
+  if [[ "$cp_budget_len" -gt "$cp_max_chars" && -n "$cp_sec_queen_local" ]]; then
+    cp_sec_queen_local=""
+    cp_budget_trimmed_list="${cp_budget_trimmed_list:+$cp_budget_trimmed_list,}queen-wisdom-local"
+    cp_final_prompt="$cp_sec_queen_global$cp_sec_queen_local$cp_sec_user_prefs$cp_sec_hive$cp_sec_capsule$cp_sec_learnings$cp_sec_decisions$cp_sec_blockers$cp_sec_rolling$cp_sec_signals"
+    cp_budget_len=${#cp_final_prompt}
+  fi
+
+  # 9. Trim pheromone-signals (preserve REDIRECTs)
   if [[ "$cp_budget_len" -gt "$cp_max_chars" && -n "$cp_sec_signals" ]]; then
     # Extract REDIRECT lines and preserve them
     cp_redirect_preserved=""
@@ -1431,7 +1479,7 @@ if [[ "$cp_budget_len" -gt "$cp_max_chars" ]]; then
     fi
     cp_sec_signals="$cp_redirect_preserved"
     cp_budget_trimmed_list="${cp_budget_trimmed_list:+$cp_budget_trimmed_list,}pheromone-signals"
-    cp_final_prompt="$cp_sec_queen$cp_sec_user_prefs$cp_sec_hive$cp_sec_capsule$cp_sec_learnings$cp_sec_decisions$cp_sec_blockers$cp_sec_rolling$cp_sec_signals"
+    cp_final_prompt="$cp_sec_queen_global$cp_sec_queen_local$cp_sec_user_prefs$cp_sec_hive$cp_sec_capsule$cp_sec_learnings$cp_sec_decisions$cp_sec_blockers$cp_sec_rolling$cp_sec_signals"
     cp_budget_len=${#cp_final_prompt}
   fi
 
@@ -1466,10 +1514,11 @@ cp_prompt_json=$(printf '%s' "$cp_final_prompt" | jq -Rs '.' 2>/dev/null || echo
 # SUPPRESS:OK -- read-default: text escaping returns fallback on empty input
 cp_log_json=$(printf '%s' "$cp_log_line" | jq -Rs '.' 2>/dev/null || echo '"Primed: 0 signals, 0 instincts"')
 
-# Build final unified output
+# Build final unified output (Phase 20: split global/local wisdom)
 cp_result=$(jq -n \
   --argjson meta "$cp_metadata" \
-  --argjson wisdom "$cp_combined" \
+  --argjson wisdom_global "$cp_global_wisdom" \
+  --argjson wisdom_local "$cp_local_wisdom" \
   --argjson signals "$cp_signals_json" \
   --arg prompt "$cp_final_prompt" \
   --arg prompt_json "$cp_prompt_json" \
@@ -1479,7 +1528,7 @@ cp_result=$(jq -n \
   --argjson trimmed_high_priority "${cp_trimmed_high_priority:-false}" \
   '{
     metadata: $meta,
-    wisdom: $wisdom,
+    wisdom: { global: $wisdom_global, local: $wisdom_local },
     signals: {
       signal_count: ($signals.signal_count // 0),
       instinct_count: ($signals.instinct_count // 0),

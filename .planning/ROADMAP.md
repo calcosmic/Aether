@@ -44,7 +44,7 @@ See: `.planning/milestones/v1.3-ROADMAP.md` for full details.
 
 - [x] **Phase 17: Local Wisdom Accumulation** - Colony automatically writes learnings to QUEEN.md after builds and promotes high-confidence instincts (completed 2026-03-24)
 - [x] **Phase 18: Local Wisdom Injection** - Colony-prime reads local QUEEN.md and injects wisdom into worker prompts so builds get smarter (completed 2026-03-25)
-- [ ] **Phase 19: Cross-Colony Hive** - Seal promotes wisdom to global hive, init seeds new colonies from hive, domain scoping filters relevance
+- [x] **Phase 19: Cross-Colony Hive** - Seal promotes wisdom to global hive, init seeds new colonies from hive, domain scoping filters relevance (completed 2026-03-25)
 - [ ] **Phase 20: Hub Wisdom Layer** - Global QUEEN.md accumulates cross-cutting wisdom and colony-prime reads it alongside local wisdom
 
 ## Phase Details
@@ -84,7 +84,7 @@ Plans:
   2. Running `/ant:init` in a new repo seeds its QUEEN.md with relevant wisdom from the hive — the new colony does not start from zero
   3. A web project colony receives web-relevant hive wisdom but not CLI-specific patterns (domain scoping filters by registry tags)
   4. The hive-to-colony flow is end-to-end verifiable: colony A seals wisdom, colony B inits and receives it
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
 - [ ] 19-01-PLAN.md — Fix seal domain tags, add domain auto-detection, create queen-seed-from-hive, wire init hive seeding, end-to-end tests
 
@@ -96,7 +96,9 @@ Plans:
   1. The global QUEEN.md (`~/.aether/QUEEN.md`) accumulates user preferences and cross-cutting wisdom that is not specific to any single colony
   2. Colony-prime reads both local QUEEN.md and global QUEEN.md, injecting relevant wisdom from both sources into worker prompts
   3. Global wisdom and local wisdom are distinguishable in the injected prompt — workers can see which patterns are colony-specific vs universal
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 20-01-PLAN.md — Split colony-prime into global/local QUEEN WISDOM sections, v1 migration, budget enforcement, tests
 
 ## Progress
 
@@ -123,5 +125,5 @@ Phases execute in numeric order: 17 -> 18 -> 19 -> 20
 | 16. Ship | v2.1 | 2/2 | Complete | 2026-03-24 |
 | 17. Local Wisdom Accumulation | v2.2 | Complete    | 2026-03-24 | - |
 | 18. Local Wisdom Injection | v2.2 | Complete    | 2026-03-25 | - |
-| 19. Cross-Colony Hive | v2.2 | 0/1 | Not started | - |
-| 20. Hub Wisdom Layer | v2.2 | 0/TBD | Not started | - |
+| 19. Cross-Colony Hive | v2.2 | Complete    | 2026-03-25 | - |
+| 20. Hub Wisdom Layer | v2.2 | 0/1 | Not started | - |

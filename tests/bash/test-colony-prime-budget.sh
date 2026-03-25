@@ -193,12 +193,13 @@ add_phase_learnings() {
     local state_file="$data_dir/COLONY_STATE.json"
 
     # Build learnings array using python (faster than jq loop)
+    # Each entry must be substantial since colony-prime caps at 15 entries in full mode
     python3 -c "
 import json
 learnings = []
 for i in range(1, $learning_count + 1):
     learnings.append({
-        'claim': f'Learning number {i}: This is a validated insight about the codebase that provides guidance for future development work and testing in the colony. It contains sufficient length to be realistic.',
+        'claim': f'Learning number {i}: This is a validated insight about the codebase that provides extensive guidance for future development work and testing in the colony. It contains sufficient length to be realistic. Additional padding text ensures the budget is exceeded when combined with other sections like rolling summary, decisions, and queen wisdom content.',
         'status': 'validated',
         'evidence': ['test'],
         'confidence': 0.9

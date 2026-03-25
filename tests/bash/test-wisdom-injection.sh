@@ -221,7 +221,7 @@ test_fresh_colony_no_queen_wisdom() {
 }
 
 test_accumulated_colony_has_queen_wisdom() {
-    # Colony with real entries should have QUEEN WISDOM (Colony Experience) section
+    # Colony with real entries should have QUEEN WISDOM (Colony-Specific) section
     local tmpdir
     tmpdir=$(setup_colony_env)
     add_accumulated_wisdom "$tmpdir"
@@ -238,8 +238,8 @@ test_accumulated_colony_has_queen_wisdom() {
     local prompt
     prompt=$(echo "$result" | get_prompt_section)
 
-    if ! assert_contains "$prompt" "QUEEN WISDOM (Colony Experience)"; then
-        test_fail "Accumulated colony should have QUEEN WISDOM (Colony Experience)" "Not found in prompt"
+    if ! assert_contains "$prompt" "QUEEN WISDOM (Colony-Specific)"; then
+        test_fail "Accumulated colony should have QUEEN WISDOM (Colony-Specific)" "Not found in prompt"
         rm -rf "$tmpdir"
         return 1
     fi

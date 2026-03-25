@@ -1033,6 +1033,7 @@ case "$cmd" in
       {"name": "queen-write-learnings", "description": "Write build learnings directly to QUEEN.md Build Learnings section (no threshold)"},
       {"name": "queen-promote-instinct", "description": "Promote a high-confidence instinct to QUEEN.md Instincts section"},
       {"name": "queen-seed-from-hive", "description": "Seed QUEEN.md Codebase Patterns from cross-colony hive wisdom"},
+      {"name": "queen-migrate", "description": "Migrate a QUEEN.md from v1 (emoji headers) to v2 (clean headers) format"},
       {"name": "domain-detect", "description": "Auto-detect repo domain tags from file presence (node, typescript, rust, etc.)"},
       {"name": "incident-rule-add", "description": "Append an incident-derived rule to decree/constraint/gate stores"},
       {"name": "learning-observe", "description": "Record observation of a learning across colonies"},
@@ -3475,6 +3476,7 @@ NODESCRIPT
   queen-write-learnings) _queen_write_learnings "$@" ;;
   queen-promote-instinct) _queen_promote_instinct "$@" ;;
   queen-seed-from-hive) _queen_seed_from_hive "$@" ;;
+  queen-migrate) _queen_migrate "$@" ;;
   domain-detect) _domain_detect "$@" ;;
 
   learning-observe) _learning_observe "$@" ;;
