@@ -933,3 +933,162 @@ ${entry}" "$tmp_file" > "${tmp_file}.rep" && mv "${tmp_file}.rep" "$tmp_file"
 
     json_ok "{\"promoted\":true,\"written\":1,\"domain\":\"${domain}\",\"confidence\":${confidence},\"timestamp\":\"${ts}\"}"
 }
+
+# ============================================================================
+# _queen_seed_from_hive
+# Seed QUEEN.md Codebase Patterns section from cross-colony hive wisdom
+# Usage: queen-seed-from-hive [--domain <csv>] [--limit <N>]
+# Writes [hive]-tagged entries to Codebase Patterns. NON-BLOCKING.
+# ============================================================================
+_queen_seed_from_hive() {
+    local qs_domain=""
+    local qs_limit="5"
+
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --domain) qs_domain="${2:-}"; shift 2 ;;
+        --limit)  qs_limit="${2:-5}"; shift 2 ;;
+        *) shift ;;
+      esac
+    done
+
+    local queen_file="$AETHER_ROOT/.aether/QUEEN.md"
+    [[ -f "$queen_file" ]] || { json_ok '{"seeded":0,"reason":"no_queen_md"}'; return 0; }
+
+    # Read hive wisdom with domain filter
+    local hive_args=(hive-read --limit "$qs_limit" --min-confidence 0.5 --format json)
+    [[ -n "$qs_domain" ]] && hive_args+=(--domain "$qs_domain")
+    local hive_result
+    hive_result=$(bash "$0" "${hive_args[@]}" 2>/dev/null) || { json_ok '{"seeded":0,"reason":"hive_read_failed"}'; return 0; }
+
+    local entry_count
+    entry_count=$(echo "$hive_result" | jq -r '.result.total_matched // 0' 2>/dev/null)
+    [[ "$entry_count" -eq 0 ]] && { json_ok '{"seeded":0,"reason":"no_matching_wisdom"}'; return 0; }
+
+    # Build entries for QUEEN.md Codebase Patterns section
+    local entries=""
+    local seeded=0
+    while IFS= read -r encoded; do
+      [[ -z "$encoded" ]] && continue
+      local text confidence
+      text=$(echo "$encoded" | base64 -d | jq -r '.text // empty')
+      confidence=$(echo "$encoded" | base64 -d | jq -r '.confidence // 0')
+      [[ -z "$text" ]] && continue
+
+      # Dedup: skip if already in QUEEN.md
+      if grep -Fq -- "$text" "$queen_file" 2>/dev/null; then continue; fi
+
+      entries="${entries}- [hive] ${text} (cross-colony, confidence: ${confidence})"$'\n'
+      seeded=$((seeded + 1))
+    done < <(echo "$hive_result" | jq -r '.result.entries[] | @base64')
+
+    [[ "$seeded" -eq 0 ]] && { json_ok '{"seeded":0,"reason":"all_duplicates"}'; return 0; }
+
+    # Write to Codebase Patterns section (reuse placeholder removal pattern from _queen_write_learnings)
+    local tmp_file="${queen_file}.tmp.$$"
+    cp "$queen_file" "$tmp_file"
+
+    local section_line
+    section_line=$(grep -n '^## Codebase Patterns$' "$tmp_file" | head -1 | cut -d: -f1)
+
+    if [[ -z "$section_line" ]]; then
+      rm -f "$tmp_file"
+      json_ok '{"seeded":0,"reason":"no_codebase_patterns_section"}'
+      return 0
+    fi
+
+    # Find end of section (next ## header or end of file)
+    local next_section_line
+    next_section_line=$(tail -n +$((section_line + 1)) "$tmp_file" | grep -n "^## " | head -1 | cut -d: -f1)
+    local section_end
+    if [[ -n "$next_section_line" ]]; then
+      section_end=$((section_line + next_section_line - 1))
+    else
+      section_end=$(wc -l < "$tmp_file")
+    fi
+
+    # Remove placeholder if present
+    # SUPPRESS:OK -- existence-test: grep returns 1 when no matches
+    local has_placeholder
+    has_placeholder=$(sed -n "${section_line},${section_end}p" "$tmp_file" | grep -c "No codebase patterns recorded yet" || true)
+    has_placeholder=${has_placeholder:-0}
+
+    if [[ "$has_placeholder" -gt 0 ]]; then
+      local placeholder_line
+      placeholder_line=$(sed -n "${section_line},${section_end}p" "$tmp_file" | grep -n "^\\*No codebase patterns recorded yet" | head -1 | cut -d: -f1)
+      if [[ -n "$placeholder_line" ]]; then
+        local actual_line=$((section_line + placeholder_line - 1))
+        sed -i.bak "${actual_line}d" "$tmp_file" && rm -f "${tmp_file}.bak"
+        section_end=$((section_end - 1))
+      fi
+    fi
+
+    # Insert entries before the separator (---) that ends the section, or at end
+    local sep_line
+    sep_line=$(sed -n "${section_line},${section_end}p" "$tmp_file" | grep -n "^---$" | tail -1 | cut -d: -f1)
+    local insert_at
+    if [[ -n "$sep_line" ]]; then
+      insert_at=$((section_line + sep_line - 2))
+    else
+      insert_at=$section_end
+    fi
+
+    local temp_entries="${tmp_file}.entries"
+    {
+      head -n "$insert_at" "$tmp_file"
+      printf '%s' "$entries"
+      tail -n +$((insert_at + 1)) "$tmp_file"
+    } > "$temp_entries" && mv "$temp_entries" "$tmp_file"
+
+    # Update Evolution Log with seed event
+    local ts
+    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    local ev_entry="| ${ts} | hive | seed | Seeded ${seeded} cross-colony patterns from hive |"
+    local ev_separator
+    ev_separator=$(grep -n "^|------|" "$tmp_file" | tail -1 | cut -d: -f1)
+    if [[ -n "$ev_separator" ]]; then
+      awk -v line="$ev_separator" -v entry="$ev_entry" 'NR==line{print; print entry; next}1' "$tmp_file" > "${tmp_file}.ev" && mv "${tmp_file}.ev" "$tmp_file"
+    fi
+
+    # Update METADATA stats: increment total_codebase_patterns
+    local current_count
+    current_count=$(grep '"total_codebase_patterns":' "$tmp_file" 2>/dev/null | grep -o '[0-9]*' | head -1 || true)
+    current_count=${current_count:-0}
+    local new_count=$((current_count + seeded))
+    awk -v count="$new_count" '{
+      gsub(/"total_codebase_patterns": [0-9]*/, "\"total_codebase_patterns\": " count)
+      print
+    }' "$tmp_file" > "${tmp_file}.stats" && mv "${tmp_file}.stats" "$tmp_file"
+
+    # Update last_evolved
+    awk -v ts="$ts" '/"last_evolved":/ { gsub(/"last_evolved": "[^"]*"/, "\"last_evolved\": \"" ts "\""); } {print}' "$tmp_file" > "${tmp_file}.meta" && mv "${tmp_file}.meta" "$tmp_file"
+
+    # Atomic move
+    mv "$tmp_file" "$queen_file"
+
+    json_ok "{\"seeded\":${seeded}}"
+}
+
+# ============================================================================
+# _domain_detect
+# Auto-detect repo domain tags from file/directory presence
+# Usage: domain-detect
+# Returns: {"tags":"node,typescript,..."}
+# ============================================================================
+_domain_detect() {
+    local tags=""
+    local root="${AETHER_ROOT:-.}"
+
+    [[ -f "$root/package.json" ]] && tags="${tags:+$tags,}node"
+    [[ -f "$root/tsconfig.json" ]] && tags="${tags:+$tags,}typescript"
+    [[ -f "$root/Cargo.toml" ]] && tags="${tags:+$tags,}rust"
+    [[ -f "$root/go.mod" ]] && tags="${tags:+$tags,}go"
+    [[ -f "$root/requirements.txt" || -f "$root/pyproject.toml" ]] && tags="${tags:+$tags,}python"
+    [[ -d "$root/wp-content" || -f "$root/wp-config.php" ]] && tags="${tags:+$tags,}wordpress"
+    [[ -f "$root/Gemfile" ]] && tags="${tags:+$tags,}ruby"
+    [[ -f "$root/.aether/aether-utils.sh" ]] && tags="${tags:+$tags,}aether"
+    [[ -d "$root/.next" || -f "$root/next.config.js" || -f "$root/next.config.ts" ]] && tags="${tags:+$tags,}nextjs"
+    [[ -f "$root/docker-compose.yml" || -f "$root/Dockerfile" ]] && tags="${tags:+$tags,}docker"
+
+    json_ok "{\"tags\":\"${tags}\"}"
+}

@@ -291,11 +291,15 @@ If nestmates are found:
 
 ### Step 6.6: Register Repo (Silent)
 
-Attempt to register this repo in the global hub with the colony goal and active status. Both steps are silent on failure — registry is not required for the colony to work.
+Attempt to register this repo in the global hub with the colony goal, active status, and auto-detected domain tags. Both steps are silent on failure — registry is not required for the colony to work.
 
 Run using the Bash tool (ignore errors):
-```
-bash .aether/aether-utils.sh registry-add "$(pwd)" "$(jq -r '.version // "unknown"' ~/.aether/version.json 2>/dev/null || echo 'unknown')" --goal "$ARGUMENTS" --active true 2>/dev/null || true
+```bash
+# Auto-detect domain tags from file presence (node, typescript, rust, etc.)
+domain_tags=$(bash .aether/aether-utils.sh domain-detect 2>/dev/null | jq -r '.result.tags // ""' || echo "")
+
+# Register repo with domain tags
+bash .aether/aether-utils.sh registry-add "$(pwd)" "$(jq -r '.version // "unknown"' ~/.aether/version.json 2>/dev/null || echo 'unknown')" --goal "$ARGUMENTS" --active true --tags "$domain_tags" 2>/dev/null || true
 ```
 
 Then attempt to write `.aether/version.json` with the hub version:
@@ -304,6 +308,29 @@ cp ~/.aether/version.json .aether/version.json 2>/dev/null || true
 ```
 
 If either command fails, proceed silently. These are optional bookkeeping.
+
+### Step 6.7: Seed QUEEN.md from Hive (Non-Blocking)
+
+Seed the new colony's QUEEN.md with relevant cross-colony wisdom from the hive.
+
+```bash
+# Read domain tags just registered
+domain_tags=$(jq -r --arg repo "$(pwd)" \
+  '[.repos[] | select(.path == $repo) | .domain_tags // []] | .[0] // [] | join(",")' \
+  "$HOME/.aether/registry.json" 2>/dev/null || echo "")
+
+seed_args="queen-seed-from-hive --limit 5"
+[[ -n "$domain_tags" ]] && seed_args="$seed_args --domain $domain_tags"
+
+seed_result=$(bash .aether/aether-utils.sh $seed_args 2>/dev/null || echo '{}')
+seeded_count=$(echo "$seed_result" | jq -r '.result.seeded // 0' 2>/dev/null || echo "0")
+
+if [[ "$seeded_count" -gt 0 ]]; then
+  echo "Hive wisdom: seeded $seeded_count cross-colony patterns into QUEEN.md"
+fi
+```
+
+Continue to Step 7 regardless of outcome.
 
 ### Step 7: Display Result
 
@@ -333,6 +360,10 @@ Then output the result:
 🏘️ Nest Context: {N} sibling colonies detected
    Context from related projects will be automatically considered
    during planning and execution.
+{End if}
+
+{If seeded_count > 0:}
+🐝 Hive wisdom: {seeded_count} cross-colony pattern(s) seeded into QUEEN.md
 {End if}
 
 💾 State persisted — safe to /clear, then run /ant:plan

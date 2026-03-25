@@ -42,8 +42,8 @@ See: `.planning/milestones/v1.3-ROADMAP.md` for full details.
 
 **Milestone Goal:** Make QUEEN.md and hive brain actually work — automatic wisdom accumulation during colony work, cross-colony knowledge sharing, so the system genuinely learns and gets smarter over time.
 
-- [ ] **Phase 17: Local Wisdom Accumulation** - Colony automatically writes learnings to QUEEN.md after builds and promotes high-confidence instincts
-- [ ] **Phase 18: Local Wisdom Injection** - Colony-prime reads local QUEEN.md and injects wisdom into worker prompts so builds get smarter
+- [x] **Phase 17: Local Wisdom Accumulation** - Colony automatically writes learnings to QUEEN.md after builds and promotes high-confidence instincts (completed 2026-03-24)
+- [x] **Phase 18: Local Wisdom Injection** - Colony-prime reads local QUEEN.md and injects wisdom into worker prompts so builds get smarter (completed 2026-03-25)
 - [ ] **Phase 19: Cross-Colony Hive** - Seal promotes wisdom to global hive, init seeds new colonies from hive, domain scoping filters relevance
 - [ ] **Phase 20: Hub Wisdom Layer** - Global QUEEN.md accumulates cross-cutting wisdom and colony-prime reads it alongside local wisdom
 
@@ -58,7 +58,7 @@ See: `.planning/milestones/v1.3-ROADMAP.md` for full details.
   2. Colony instincts that reach confidence >= 0.8 appear in the QUEEN.md wisdom section automatically (user never manually edits QUEEN.md)
   3. Repeated builds accumulate multiple wisdom entries in QUEEN.md — the file grows with real colony experience, not template placeholders
   4. A fresh colony's QUEEN.md starts minimal and fills up as builds execute — the before/after difference is visible
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 17-01-PLAN.md — Restructure QUEEN.md template to 4-section format, update all parsers, add write subcommands
 - [ ] 17-02-PLAN.md — Wire write subcommands into continue playbooks, migrate current repo QUEEN.md
@@ -71,7 +71,9 @@ Plans:
   1. Colony-prime includes local QUEEN.md wisdom entries in the prompt section sent to builder and watcher agents
   2. A colony that has accumulated wisdom entries produces different (more informed) worker context than a fresh colony with empty QUEEN.md
   3. Wisdom injection respects the existing token budget — QUEEN.md content is trimmed if the budget is exceeded, not silently dropped or allowed to overflow
-**Plans**: TBD
+**Plans:** 1/1 plans complete
+Plans:
+- [ ] 18-01-PLAN.md — Post-extraction wisdom filtering, content-detection gate, fresh-vs-accumulated tests
 
 ### Phase 19: Cross-Colony Hive
 **Goal**: Wisdom flows between colonies — seal exports to the global hive, init imports from it, and domain tags ensure relevance
@@ -82,7 +84,9 @@ Plans:
   2. Running `/ant:init` in a new repo seeds its QUEEN.md with relevant wisdom from the hive — the new colony does not start from zero
   3. A web project colony receives web-relevant hive wisdom but not CLI-specific patterns (domain scoping filters by registry tags)
   4. The hive-to-colony flow is end-to-end verifiable: colony A seals wisdom, colony B inits and receives it
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 19-01-PLAN.md — Fix seal domain tags, add domain auto-detection, create queen-seed-from-hive, wire init hive seeding, end-to-end tests
 
 ### Phase 20: Hub Wisdom Layer
 **Goal**: A global QUEEN.md at hub level accumulates cross-cutting preferences and wisdom that apply to every colony
@@ -117,7 +121,7 @@ Phases execute in numeric order: 17 -> 18 -> 19 -> 20
 | 14. Planning Depth | v2.1 | 2/2 | Complete | 2026-03-24 |
 | 15. Documentation Accuracy | v2.1 | 3/3 | Complete | 2026-03-24 |
 | 16. Ship | v2.1 | 2/2 | Complete | 2026-03-24 |
-| 17. Local Wisdom Accumulation | v2.2 | 0/2 | Not started | - |
-| 18. Local Wisdom Injection | v2.2 | 0/TBD | Not started | - |
-| 19. Cross-Colony Hive | v2.2 | 0/TBD | Not started | - |
+| 17. Local Wisdom Accumulation | v2.2 | Complete    | 2026-03-24 | - |
+| 18. Local Wisdom Injection | v2.2 | Complete    | 2026-03-25 | - |
+| 19. Cross-Colony Hive | v2.2 | 0/1 | Not started | - |
 | 20. Hub Wisdom Layer | v2.2 | 0/TBD | Not started | - |

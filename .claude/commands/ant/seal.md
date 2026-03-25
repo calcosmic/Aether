@@ -291,6 +291,11 @@ high_conf_instincts=$(jq -r '.memory.instincts[] | select(.confidence >= 0.8) | 
 # Derive source repo name from current directory
 source_repo="$(pwd)"
 
+# Read domain tags from registry (NOT from instinct.domain which is a category, not a repo domain)
+repo_domain_tags=$(jq -r --arg repo "$(pwd)" \
+  '[.repos[] | select(.path == $repo) | .domain_tags // []] | .[0] // [] | join(",")' \
+  "$HOME/.aether/registry.json" 2>/dev/null || echo "")
+
 hive_promoted_count=0
 hive_errors=0
 for encoded in $high_conf_instincts; do
@@ -300,7 +305,6 @@ for encoded in $high_conf_instincts; do
   trigger=$(echo "$encoded" | base64 -d | jq -r '.trigger // empty')
   action=$(echo "$encoded" | base64 -d | jq -r '.action // empty')
   confidence=$(echo "$encoded" | base64 -d | jq -r '.confidence // 0.7')
-  domain=$(echo "$encoded" | base64 -d | jq -r '.domain // empty')
 
   [[ -z "$trigger" || -z "$action" ]] && continue
 
@@ -312,7 +316,7 @@ for encoded in $high_conf_instincts; do
 
   # Build hive-promote args with --text and --source-repo (required)
   promote_args=(hive-promote --text "$promote_text" --source-repo "$source_repo" --confidence "$confidence")
-  [[ -n "$domain" ]] && promote_args+=(--domain "$domain")
+  [[ -n "$repo_domain_tags" ]] && promote_args+=(--domain "$repo_domain_tags")
 
   # Call hive-promote which orchestrates abstract + store
   result=$(bash .aether/aether-utils.sh "${promote_args[@]}" 2>/dev/null || echo '{}')
