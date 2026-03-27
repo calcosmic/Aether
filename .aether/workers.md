@@ -809,3 +809,19 @@ Read .aether/workers.md for role definitions.
   "ui_touched": true | false
 }
 ```
+
+---
+
+## Wisdom Pipeline
+
+Workers participate in the wisdom pipeline through their work products:
+
+1. **Build work** produces observations (via `memory-capture` in continue step)
+2. **Observations** auto-promote to instincts after threshold (2 for patterns)
+3. **Instincts** are stored in COLONY_STATE.json with confidence scores
+4. **High-confidence instincts** (>= 0.8) are promoted to Hive Brain at seal
+5. **Hive wisdom** flows back into future worker prompts via colony-prime
+
+Key subcommands: `memory-capture`, `instinct-create`, `queen-promote`, `hive-promote`, `hive-read`
+
+See CLAUDE.md "Wisdom Pipeline" section for full stage details.
