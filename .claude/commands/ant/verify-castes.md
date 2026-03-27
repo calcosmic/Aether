@@ -7,47 +7,48 @@ You are the **Queen**. Display the caste assignments and system status.
 
 ## Step 1: Show Caste Assignments
 
-Display the colony caste structure with model slot assignments:
+Display the colony caste structure as a compact table:
 
 ```
 Aether Colony Caste System
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 CASTE ASSIGNMENTS
-─────────────────
-Slot: OPUS (reasoning/analysis)
-  👑 Queen              - Colony coordination and strategic planning
-  🏺 Archaeologist      - Git history analysis and pattern excavation
-  🗺️ Route Setter      - Task decomposition and planning
-  📜 Sage               - Wisdom synthesis and cross-colony knowledge
-  🔍 Tracker            - Bug investigation and root cause analysis
-  📋 Auditor            - Quality gate and code review
-  🔒 Gatekeeper         - Security scanning and antipattern detection
-  📏 Measurer           - Performance analysis and metrics
-
-Slot: SONNET (execution/implementation)
-  🔨 Builder            - Implementation and coding
-  👁️ Watcher            - Verification and testing
-  🔎 Scout              - Research and exploration
-  🎲 Chaos              - Edge case testing and resilience probing
-  🔬 Probe              - Test coverage analysis
-  🧵 Weaver             - Refactoring specialist
-  🌐 Ambassador         - External integrations
-  🏠 Nest               - Directory structure mapping
-  📚 Disciplines        - Convention documentation
-  🦠 Pathogens          - Tech debt identification
-  📦 Provisions         - Dependency mapping
-
-Slot: INHERIT (uses parent's model)
-  📝 Chronicler        - Documentation
-  ♿ Includer           - Accessibility audits
-  🗄️ Keeper            - Knowledge preservation
-
-───────────────────────────────────────────
+────────────────────────────────────
+Caste                Slot     Active
+────────────────────────────────────
+[reasoning]
+  Archaeologist      opus     yes
+  Auditor            opus     yes
+  Gatekeeper         opus     yes
+  Measurer           opus     yes
+  Queen              opus     yes
+  Route-setter       opus     yes
+  Sage               opus     yes
+  Tracker            opus     yes
+────────────────────────────────────
+[execution]
+  Ambassador         sonnet   yes
+  Builder            sonnet   yes
+  Chaos              sonnet   yes
+  Disciplines        sonnet   yes
+  Nest               sonnet   yes
+  Pathogens          sonnet   yes
+  Probe              sonnet   yes
+  Provisions         sonnet   yes
+  Scout              sonnet   yes
+  Weaver             sonnet   yes
+  Watcher            sonnet   yes
+────────────────────────────────────
+[inherit]
+  Chronicler         inherit  yes
+  Includer           inherit  yes
+  Keeper             inherit  yes
+────────────────────────────────────
 ```
 
-The model slot assignments come from agent frontmatter (`model:` field).
 Source of truth: `.aether/model-profiles.yaml` `worker_models` section.
+Caste slots come from agent frontmatter (`model:` field).
 
 ## Step 2: Check System Status
 
