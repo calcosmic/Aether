@@ -1,237 +1,428 @@
-# Feature Research: Aether v2.1 Production Hardening
+# Feature Research: Aether v2.3 Per-Caste Model Routing
 
-**Domain:** Multi-agent AI development orchestration system -- production readiness
-**Researched:** 2026-03-23
-**Confidence:** HIGH (Oracle audit at 82% confidence with 55 findings, codebase analysis, ecosystem research)
+**Domain:** Multi-agent AI development orchestration -- per-worker model selection
+**Researched:** 2026-03-27
+**Confidence:** HIGH (proven reference implementation in GSD, codebase analysis, YAML config already exists)
 
 ---
 
 ## Context
 
-Aether v2.0 shipped with 22 agents, 44 commands, 28 skills, a pheromone signal system, and cross-colony wisdom sharing. An Oracle audit (12 iterations, 55 findings) exposed the gap between "impressive demo" and "trusted production tool": 338 silent error suppression instances, 43% dead code, state desync risks, shallow planning, and documentation that describes aspirational behavior rather than implemented behavior.
+Aether currently runs all 22 worker agents on the same model -- whatever the parent Claude Code session uses. The `model-profiles.yaml` config and `model-profiles.js` library were built for name-based routing (glm-5, glm-5-turbo) but never integrated into the actual worker spawn path because `workers.md` incorrectly claims the Claude Code Task tool "does not support" per-worker model selection.
 
-The user reports that results feel "small/incremental" because planning lacks depth -- the system decomposes goals quickly but does not research *before* building, leading to naive implementations that miss context.
+This is wrong. GSD's `resolveModelInternal()` proves the Task tool accepts a `model` parameter with values `"inherit"`, `"sonnet"`, or `"haiku"`. GSD uses this to route 11 agent types across 3 profiles (quality/balanced/budget) -- a working production pattern.
 
-This features research focuses on: What bridges that gap? What does production-ready mean in this domain? What must change for users to trust Aether with real work?
+The v2.3 milestone needs to: (1) slot-based routing in Aether, (2) reasoning castes on opus slot, execution castes on sonnet slot, (3) dual-mode support (Claude native + GLM via LiteLLM proxy).
 
 ---
 
-## Feature Landscape
+## Table Stakes
 
-### Table Stakes (Users Expect These)
+Missing any of these = per-caste routing does not actually work.
 
-Missing any of these = users lose trust and revert to running Claude manually.
+| # | Feature | Why Expected | Complexity | Dependencies |
+|---|---------|--------------|------------|--------------|
+| T1 | **Slot-based caste-to-model mapping** | Users must be able to say "prime uses opus, builder uses sonnet" without caring what model names those slots resolve to. Slots abstract away the Claude vs GLM distinction. | LOW | model-profiles.yaml update |
+| T2 | **Worker spawn passes `model` parameter** | The core mechanism. When colony-prime spawns a worker via Task, it must pass the resolved slot as the `model` parameter. Without this, routing config is decorative. | MEDIUM | T1, build-wave.md playbook, continue playbooks |
+| T3 | **Fix workers.md incorrect claim** | Lines 57-90 claim per-caste routing "cannot function due to Claude Code Task tool limitations." This blocks all downstream work -- developers will see it and assume the feature is impossible. | LOW | None |
+| T4 | **Dual-mode slot resolution** | In Claude mode, opus=claude-opus, sonnet=claude-sonnet. In GLM mode, opus=glm-5, sonnet=glm-5-turbo. The slot names stay the same; only the resolution changes based on environment. | MEDIUM | T1, LiteLLM proxy |
+| T5 | **CLI override for per-spawn model** | Users must be able to force a specific slot for a single build wave: `/ant:build 3 --model sonnet`. Already partially exists in build playbooks but validates against model names instead of slots. | LOW | T1 |
 
-| # | Feature | Why Expected | Complexity | Pain Point |
-|---|---------|--------------|------------|------------|
-| T1 | **Error visibility -- no silent failures** | When a tool fails silently 338 times, users get wrong results with no indication why. Production tools surface errors, they do not hide them. | HIGH | Oracle Q3: Three-layer error silence creates invisible failures. Memory pipeline death is invisible to orchestrator. Users cannot trust a system that hides its own failures. |
-| T2 | **State checkpoint and rollback** | LangGraph checkpoints state at every graph step. Users expect to recover from bad phases -- not lose everything. Autopilot chains 5+ phases with no rollback; a mid-run corruption is total loss. | MEDIUM | Oracle Q5 Rec 1+7: No COLONY_STATE.json backup before builds. No git checkpoint before autopilot phases. Subtly bad work that passes gates contaminates subsequent phases. |
-| T3 | **Planning depth -- research before building** | Research shows structured plans achieve 61% first-attempt success vs 23% for ad-hoc prompts (3.2x improvement). Current planning runs max 8 scout iterations but scouts only look at the codebase -- they do not research libraries, patterns, or approaches. | HIGH | User's core complaint: "results feel small/incremental." Planning generates phases with 2-sentence task descriptions. No per-phase research means builders lack context for good decisions. |
-| T4 | **Verification that catches lies** | Schema-only validation means a Builder can claim "completed" while tests actually fail. Demo tools validate structure; production tools validate truth. | MEDIUM | Oracle Q3: Worker response validation is schema-only, not semantic. The system's primary hallucination vector. Existing TDD evidence gate pattern proves this is solvable. |
-| T5 | **Documentation matches behavior** | 6 confirmed instances where docs describe aspirational behavior, not actual behavior. Users who rely on docs to understand guarantees get burned. | LOW | Oracle Pattern 1: "Rolling summary highest priority" in CLAUDE.md but code trims it FIRST. "Security gate" label oversells check-antipattern's 6-pattern coverage. 178 subcommands documented as 125. |
-| T6 | **Dead code removal** | 76 subcommands (43%) are never invoked. 11,272 lines in a single file. Every change risks touching dead code and creating false coupling. Production codebases are lean. | MEDIUM | Oracle Q1: Dead code categories include semantic search (6), swarm display (10), learning display (8), spawning diagnostics (5). Removing unused code reduces aether-utils.sh by 15-20%. |
-| T7 | **Memory pipeline resilience** | A single corrupted JSON file permanently disables all learning (5 downstream steps die silently). Production systems detect AND recover -- not just detect. | MEDIUM | Oracle Q4 Finding 12 + Q5 Rec 8: learning-observations.json corruption kills the entire memory-capture pipeline. Callers wrap with `2>/dev/null || true`. Detection without remediation. |
-| T8 | **Autopilot state consistency** | Autopilot tracks state in run-state.json separately from COLONY_STATE.json. If one updates and the other does not, they desync with no detection or reconciliation. | LOW | Oracle Q5 Rec 9: Desync manifests as the system believing it is on a different phase than reality. Combined with no rollback (T2), this is a "quiet catastrophe" failure mode. |
-| T9 | **Type-safe data operations** | String-typed confidence values silently exclude valid hive wisdom from retrieval. Colonies re-learn patterns they should already know because jq comparison returns false for string vs number. | LOW | Oracle Q3 Finding 7 + confirmed by midden evidence + REDIRECT signal. A 5-line fix with outsized reliability impact. |
+### Table Stakes Detail
 
-### Differentiators (Competitive Advantage)
+**T1: Slot-based caste-to-model mapping**
 
-Features that make Aether genuinely better than running Claude Code manually. Not required, but these are why someone would use Aether.
+The current `model-profiles.yaml` maps castes to model NAMES:
+```yaml
+worker_models:
+  prime: glm-5-turbo
+  builder: glm-5-turbo
+```
 
-| # | Feature | Value Proposition | Complexity | Notes |
-|---|---------|-------------------|------------|-------|
-| D1 | **Per-phase research loop** | Before building each phase, spawn a researcher that investigates the specific domain: reads docs, checks patterns, understands the libraries involved. This is what GSD does that Aether does not -- and it is the primary reason GSD's output quality is higher. Planning depth is the single highest-leverage differentiator. | HIGH | Research shows "Plan-and-Execute" pattern where a capable model creates strategy reduces costs by 90% compared to frontier models doing everything. Aether's current scout does codebase exploration but not domain research. |
-| D2 | **Context trimming transparency** | When colony-prime trims context to fit budget, workers receive silently truncated context. Adding a single notice line ("Context trimmed: rolling-summary, phase-learnings removed") lets workers know what they are missing and query for more if needed. No competitor does this. | LOW | Oracle Q5 Rec 5: ~30 characters added to trimmed output. The information already exists in `cp_budget_trimmed_list` -- it just is not routed to workers. |
-| D3 | **Agent fallback visibility** | When a specialized agent falls back to general-purpose (losing 200+ lines of discipline, format, and boundary constraints), log it as a midden entry and warn the operator. Currently invisible. | LOW | Oracle Q5 Rec 6: A general-purpose agent with "You are a Chaos Ant - resilience tester" has none of the full agent's discipline. Users deserve to know when the system runs at reduced capability. |
-| D4 | **Evidence-based verification** | Extend existing TDD evidence gate pattern: (a) capture test runner exit code during build-verify and cross-reference against Watcher's `verification_passed` claim, (b) verify Builder's `files_created` list against actual filesystem. If claims contradict evidence, reject the response. | MEDIUM | Oracle Q5 Rec 2: Follows the pattern already proven in continue-gates.md Step 1.10. Two targeted additions (~20 lines each) that close the semantic verification gap. |
-| D5 | **Cross-colony learning that actually works** | Fix the type coercion bug so hive wisdom retrieval works correctly, then build on the existing multi-repo confidence boosting. When a pattern is confirmed across 4+ repos, confidence reaches 0.95 -- this is unique in the ecosystem. CrewAI, LangGraph, AutoGen are all stateless. | LOW | The infrastructure exists and is well-designed. The bug (T9) prevents it from working. Once fixed, Aether has the only production-grade cross-session learning pipeline in the multi-agent space. |
-| D6 | **Structured error triage** | Not all 338 error suppressions are bad. Categorize into: (a) Correct (optional/fallback paths), (b) Lazy (hiding real errors), (c) Dangerous (data-writing operations). Fix dangerous first, lazy second, leave correct alone. | HIGH | Oracle Q5 Rec 3: The largest effort but addresses the root cause behind multiple findings. The suggest-analyze ERR trap gap (200 lines without error trapping during builds) is the highest-priority target. |
-| D7 | **Build output quality scoring** | Track quality metrics across builds: test pass rate, files created vs claimed, error count, lint violations. Surface as a quality trend. This transforms "did it work?" into "how well is it working over time?" | MEDIUM | No competitor provides build-over-build quality trends. Aether already has the Auditor and Measurer agents -- wire their output into persistent quality tracking. |
-| D8 | **First-user onboarding polish** | The gap between "npm install -g aether-colony" and "first successful build" is where users are won or lost. Validate the entire flow works without errors, confusion, or silent failures. | MEDIUM | Research shows 80% of production effort is refinement, not initial development. The onboarding flow exists but was not validated end-to-end with the v2.0 changes (skills system, oracle distribution). |
+This must change to map castes to SLOTS:
+```yaml
+worker_models:
+  prime: opus        # reasoning caste
+  builder: sonnet    # execution caste
+```
 
-### Anti-Features (Do NOT Build)
+And add a slot resolution section:
+```yaml
+slot_models:
+  claude:
+    opus: inherit      # uses parent session's opus
+    sonnet: sonnet
+    haiku: haiku
+  glm:
+    opus: glm-5
+    sonnet: glm-5-turbo
+    haiku: glm-4.5-air
+```
 
-Features that seem valuable but create complexity without proportional value.
+The key insight from GSD: opus-tier agents should resolve to `"inherit"` (not `"opus"`) to avoid organization policy version conflicts. `"inherit"` causes the worker to use whatever opus version the user's session is configured with, preventing silent fallbacks to Sonnet.
 
-| # | Anti-Feature | Why Requested | Why Problematic | What to Do Instead |
-|---|--------------|---------------|-----------------|-------------------|
-| A1 | **Web/TUI dashboard** | "Visualize colony state in a browser" | Massive scope increase. Requires server, frontend framework, state synchronization -- all orthogonal to core value of shipping code. Research confirms CLI tools dominate AI agent development workflows in 2026. | Keep ASCII dashboards (`pheromone-display`, `swarm-display`, `/ant:status`). They work in the terminal where users already are. |
-| A2 | **Real-time inter-worker messaging** | "Workers should talk to each other during execution" | Claude Code subagents cannot communicate mid-execution (confirmed by platform constraints). Building this requires an architecture rewrite for uncertain platform support. | Keep Queen-as-coordinator pattern with `prompt_section` injection at spawn. The current one-way coupling is the "healthiest coupling pattern in the system" (Oracle Q2 Finding 4). |
-| A3 | **More agent types** | "Add a Debugger agent, a Deployer agent" | 22 agents already strain context windows. Oracle found 43% dead code -- adding more increases surface area without fixing integration gaps. The fix ratio is rising (33.8% to 45.8%), meaning the error surface grows faster than repairs. | Fix integration between existing 22 agents first. The current agents cover all needed castes. |
-| A4 | **Complex pheromone decay algorithms** | "Signals should decay based on relevance, not just time" | Over-engineering. Relevance-based decay requires understanding intent, which is unsolved. The current linear decay with configurable half-lives (15/30/45 days) works. | Keep current decay model. Fix the existing bugs (type coercion in hive-read) before adding sophistication. |
-| A5 | **Full aether-utils.sh rewrite** | "Rewrite from scratch in a better language" | 11,272 lines of working code with 530+ tests. A rewrite risks losing edge-case handling that was earned through real failures (17 midden entries). The Oracle found the architecture is sound -- risks are in specific implementation details. | Extract dead code into optional modules. Modularize the monolith incrementally. Keep the test suite green throughout. |
-| A6 | **Automatic documentation generation** | "Auto-generate docs from code" | The problem is not generating docs -- it is keeping docs accurate. Auto-generation creates a false sense of currency. Documentation that describes aspirational behavior (the current problem) would persist if generated from comments that describe aspirations. | Manual documentation pass after all fixes are complete. Docs describe the system *as it is*, not as code comments say it should be. |
-| A7 | **Performance optimization (caching, lock backoff)** | "Make state access faster" | Not blocking anything. COLONY_STATE.json is ~1.3KB. Lock contention is theoretical (Oracle reached "operational ceiling" -- static analysis cannot determine actual collision rate). Premature optimization diverts from reliability work. | Defer unless runtime monitoring (which does not exist yet) reveals actual bottlenecks. |
-| A8 | **Multi-repo colony coordination** | "Coordinate work across multiple repositories" | Requires fundamental architecture changes. The hub system (registry, hive, eternal) provides cross-colony wisdom but not coordination. Building coordination requires distributed state management -- a different class of problem. | Cross-colony *wisdom sharing* (which exists) is sufficient. Coordination is a future major version concern. |
+Confidence: HIGH -- GSD has this exact pattern in production.
+
+**T2: Worker spawn passes `model` parameter**
+
+Currently, all 22 Aether agents have `model: inherit` in their frontmatter, and the build playbooks spawn workers without a `model` parameter:
+```
+Task(prompt="...", subagent_type="aether-builder", description="...")
+```
+
+Must become:
+```
+Task(prompt="...", subagent_type="aether-builder", model="sonnet", description="...")
+```
+
+The playbooks that need updating: `build-wave.md`, `build-full.md`, `continue-verify.md`, `build-prep.md`, and any command that spawns workers via Task.
+
+The resolution happens at orchestration time (not at spawn time). Colony-prime reads the profile, resolves each worker's slot, and passes the slot string to the Task call -- exactly like GSD's `resolveModelInternal()`.
+
+Confidence: HIGH -- GSD's `resolveModelInternal()` + `MODEL_PROFILES` table is the proven reference.
+
+**T3: Fix workers.md incorrect claim**
+
+Lines 57-90 of `workers.md` state:
+> "Claude Code's Task tool does not support passing environment variables to spawned workers. All workers inherit the parent session's model configuration."
+
+And:
+> "A model-per-caste routing system was designed and implemented (archived in .aether/archive/model-routing/) but cannot function due to Claude Code Task tool limitations."
+
+GSD's working implementation disproves both claims. The Task tool accepts a `model` parameter. The archived v1 implementation failed because it used model NAMES (glm-5, minimax-2.5) instead of slots, not because of Task tool limitations.
+
+Confidence: HIGH -- codebase evidence, GSD working implementation.
+
+**T4: Dual-mode slot resolution**
+
+Two operational modes exist:
+
+**Claude mode** (default, no proxy):
+- User runs `claude` normally
+- opus slot -> `"inherit"` (parent session's opus model)
+- sonnet slot -> `"sonnet"` (Claude Sonnet)
+- haiku slot -> `"haiku"` (Claude Haiku)
+- No proxy, no environment variable changes
+
+**GLM mode** (via LiteLLM proxy):
+- User sets `ANTHROPIC_BASE_URL=http://localhost:4000`, `ANTHROPIC_AUTH_TOKEN=sk-litellm-local`
+- opus slot -> `"inherit"` (resolves to GLM-5 via proxy model mapping)
+- sonnet slot -> `"sonnet"` (resolves to GLM-5-turbo via proxy model mapping)
+- haiku slot -> `"haiku"` (resolves to GLM-4.5-air via proxy model mapping)
+- LiteLLM proxy config maps slot names to actual GLM models
+
+The beauty of slot-based routing: Aether never needs to know whether the user is in Claude or GLM mode. It passes slot names to the Task tool, and the proxy (or Claude native) handles resolution. The user's environment determines the mode.
+
+Confidence: HIGH -- GSD uses identical slot values; LiteLLM proxy already configured at localhost:4000.
+
+**T5: CLI override for per-spawn model**
+
+Existing build playbooks already have `--model` flag parsing. But they validate against model names. Change to validate against slot names (`opus`, `sonnet`, `haiku`).
+
+Precedence chain (adapted from GSD):
+1. CLI override (`--model opus`) -- highest
+2. User override (`model-profiles.yaml` `user_overrides` section)
+3. Caste default (from `worker_models` table)
+4. Fallback: `sonnet` -- lowest
+
+Confidence: HIGH -- GSD `resolveModelInternal()` implements this exact chain.
+
+---
+
+## Differentiators
+
+These make Aether stand out compared to running Claude Code manually.
+
+| # | Feature | Value Proposition | Complexity | Dependencies |
+|---|---------|-------------------|------------|--------------|
+| D1 | **Task complexity-based auto-routing** | Instead of fixed caste assignments, analyze the task description and route to opus if it contains complexity indicators (design, architecture, strategize) or sonnet if it contains execution indicators (implement, code, refactor). | MEDIUM | T1, task_routing already exists in model-profiles.yaml |
+| D2 | **Per-profile caste assignments** | Like GSD's quality/balanced/budget profiles, Aether could offer profiles: `deep` (all castes on opus), `default` (reasoning=opus, execution=sonnet), `fast` (all castes on sonnet). Users pick based on budget/quality needs. | LOW | T1 |
+| D3 | **Runtime profile switching** | `/ant:set-profile fast` to switch all workers to sonnet for quick iterations, `/ant:set-profile deep` for critical architecture work. No restart needed. | LOW | D2 |
+| D4 | **Model usage tracking and reporting** | Track how many Task calls used opus vs sonnet vs haiku per phase. Display in `/ant:status` and phase summaries. Users can see their token spend profile. | MEDIUM | T2 |
+
+### Differentiators Detail
+
+**D1: Task complexity-based auto-routing**
+
+The `model-profiles.yaml` already has a `task_routing` section with `complexity_indicators`:
+```yaml
+task_routing:
+  complexity_indicators:
+    complex:
+      keywords: [design, architecture, plan, coordinate, synthesize, strategize, optimize]
+      model: glm-5-turbo    # currently -- should be a slot
+    simple:
+      keywords: [implement, code, refactor, write, create]
+      model: glm-5-turbo
+```
+
+This currently maps to model names and all point to the same model. With v2.3, it should map to slots and differentiate:
+```yaml
+task_routing:
+  complexity_indicators:
+    complex:
+      keywords: [design, architecture, plan, coordinate, synthesize, strategize, optimize]
+      slot: opus
+    simple:
+      keywords: [implement, code, refactor, write, create]
+      slot: sonnet
+```
+
+Task-based routing takes precedence over caste defaults when a match is found, but is overridden by CLI override and user overrides. This matches GSD's approach where task context can shift routing.
+
+Complexity: MEDIUM because it requires the build playbooks to (1) read the task description, (2) check for keyword matches, (3) resolve the slot. The matching logic exists in `model-profiles.js` (`getModelForTask()`), so it is a wiring problem, not a new implementation.
+
+Confidence: HIGH -- matching logic already exists, just needs slot adaptation.
+
+**D2: Per-profile caste assignments**
+
+Currently, `model-profiles.yaml` has a single `profile: default`. Extend to support named profiles:
+
+```yaml
+profiles:
+  deep:
+    prime: opus
+    architect: opus
+    oracle: opus
+    builder: opus
+    watcher: opus
+    # all castes on opus
+  default:
+    prime: opus        # reasoning castes
+    architect: opus
+    oracle: opus
+    route_setter: opus
+    archaeologist: opus
+    builder: sonnet    # execution castes
+    watcher: sonnet
+    scout: sonnet
+    chaos: sonnet
+    colonizer: sonnet
+  fast:
+    prime: sonnet
+    # all castes on sonnet
+```
+
+The user selects their profile in `model-profiles.yaml` or via CLI. The `default` profile matches the v2.3 milestone target: reasoning=opus, execution=sonnet.
+
+Complexity: LOW -- it is a data structure change, not a code change. `getModelForCaste()` already reads from `worker_models`; add a profile selector.
+
+Confidence: HIGH -- GSD implements this with quality/balanced/budget profiles.
+
+**D3: Runtime profile switching**
+
+Command: `/ant:set-profile <profile_name>`
+
+Writes to `model-profiles.yaml` `user_overrides` or `active_profile` field. No restart needed because model resolution happens at each spawn time, not at colony init.
+
+Complexity: LOW -- existing `setModelOverride()` and `resetModelOverride()` in `model-profiles.js` already handle YAML write operations.
+
+Confidence: HIGH -- pattern exists in GSD (`/gsd:set-profile`).
+
+**D4: Model usage tracking**
+
+After each build wave, log:
+```
+Phase 3 model usage:
+  opus (inherit): 4 spawns (prime, architect, oracle, route_setter)
+  sonnet: 6 spawns (builder x2, watcher x2, scout, chaos)
+```
+
+Store in COLONY_STATE.json under a `model_usage` field. Display in `/ant:status`.
+
+Complexity: MEDIUM -- requires instrumentation in build playbooks to count spawn calls by slot, plus a new section in status display.
+
+Confidence: MEDIUM -- no reference implementation exists, but it is straightforward data collection.
+
+---
+
+## Anti-Features
+
+Features to explicitly NOT build.
+
+| # | Anti-Feature | Why Avoid | What to Do Instead |
+|---|--------------|-----------|-------------------|
+| A1 | **Per-worker environment variable injection** | Claude Code's Task tool does not support per-subagent environment variables. The archived v1 implementation tried this and failed. | Use the `model` parameter with slot values. This is the correct mechanism. |
+| A2 | **Model name routing (glm-5, glm-5-turbo) in Aether code** | Aether should not know about specific model names. Model names are user configuration (in settings.json or proxy config). Aether routes by slot; the environment resolves slots to names. | Slot-based routing. `model-profiles.yaml` maps castes to slots. Users configure slot-to-name mapping in their environment. |
+| A3 | **Automatic model selection based on cost** | Adding a "pick cheapest model that can handle this" heuristic adds complexity and unpredictability. Users should explicitly choose their profile. | Named profiles (deep/default/fast) that users select once. |
+| A4 | **Health-check-gated model routing** | Do not make routing conditional on LiteLLM proxy health. If the proxy is down, the user's environment variables handle it -- Aether does not need to detect or react to proxy status. | Existing proxy health check in build playbooks (Step 0.6) is advisory only, not routing-conditional. |
+| A5 | **Caste model assignment in agent frontmatter** | The 22 agent `.md` files currently have `model: inherit`. Do not change these to caste-specific values. Agent definitions should stay generic; routing belongs in the orchestration layer. | Keep agents as `model: inherit`. Routing happens in build playbooks when spawning, not in agent definitions. |
+
+### Anti-Features Detail
+
+**A1: Per-worker environment variable injection**
+
+The archived v1 implementation (`.aether/archive/model-routing/`) tried to set per-worker `ANTHROPIC_MODEL=glm-5` via env vars. This does not work because Claude Code's Task tool does not forward environment variables to spawned subagents.
+
+GSD discovered the correct approach: use the Task tool's `model` parameter, which accepts slot values. This is a first-class API feature, not an env var hack.
+
+Confidence: HIGH -- archived v1 failure + GSD working implementation.
+
+**A2: Model name routing in Aether code**
+
+The current `model-profiles.yaml` and `model-profiles.js` route by model name (glm-5, glm-5-turbo). This creates a hard coupling between Aether and specific GLM models, making Claude-native mode impossible without config changes.
+
+The correct design:
+- Aether routes by SLOT (opus, sonnet, haiku)
+- Claude Code resolves slots to Claude models (native)
+- LiteLLM proxy resolves slots to GLM models (when proxy is configured)
+- Aether never knows or cares about the actual model name
+
+The `model-profiles.js` library's `DEFAULT_MODEL = 'glm-5-turbo'` and `validateModel()` function that checks against model names must be refactored to work with slots.
+
+Confidence: HIGH -- GSD uses exclusively slot values; never references model names.
+
+**A5: Caste model assignment in agent frontmatter**
+
+Each of the 22 agent `.md` files has a frontmatter `model: inherit` field. This is correct and should stay. The reason: agent definitions are generic templates. The same builder agent might need to run on opus for a complex task and sonnet for a simple one. Routing is the orchestration layer's responsibility, not the agent's.
+
+If agent frontmatter set `model: opus`, then every builder spawn would use opus regardless of profile or task complexity. That removes all flexibility.
+
+Confidence: HIGH -- matches GSD's approach (agent definitions do not set model; orchestrator resolves at spawn time).
 
 ---
 
 ## Feature Dependencies
 
 ```
-[T1] Error visibility
-    |-- enables --> [D6] Structured error triage (must see errors before categorizing them)
-    |-- enables --> [T7] Memory pipeline resilience (must detect failures to add recovery)
-
-[T2] State checkpoint and rollback
-    |-- enables --> [T8] Autopilot state consistency (reconciliation needs backup to rollback to)
-    |-- enables --> [D7] Build quality scoring (need checkpoint to measure quality delta)
-
-[T3] Planning depth (per-phase research)
-    |-- requires --> [T6] Dead code removal (research must understand what code actually matters)
-    |-- enhances --> [D1] Per-phase research loop (deeper planning enables per-phase research)
-
-[T4] Verification that catches lies
-    |-- enhances --> [D4] Evidence-based verification (same domain, different scope)
-    |-- requires --> [T1] Error visibility (verification must report clearly, not silently)
-
-[T5] Documentation matches behavior
-    |-- requires --> ALL other features complete (document the system as-is, not as-planned)
-
-[T6] Dead code removal
-    |-- independent -- can start immediately
-    |-- enhances --> [T1] Error visibility (fewer code paths = fewer error hiding spots)
-
-[T7] Memory pipeline resilience
-    |-- requires --> [T1] Error visibility (need error surfacing before adding recovery)
-    |-- enhances --> [D5] Cross-colony learning (resilient pipeline = reliable wisdom promotion)
-
-[T9] Type-safe data operations
-    |-- independent -- can start immediately (5-line fix)
-    |-- enables --> [D5] Cross-colony learning (hive-read must work correctly)
-
-[D1] Per-phase research loop
-    |-- requires --> [T3] Planning depth (research infrastructure must exist)
-
-[D2] Context trimming transparency
-    |-- independent -- can start immediately (~30 chars)
-
-[D8] First-user onboarding polish
-    |-- requires --> [T5] Documentation matches behavior
-    |-- requires --> [T6] Dead code removal (clean package)
+T1 (slot mapping) ──────────────────────────────────────┐
+T2 (spawn model param) ────────────────┬────────────────┤
+T3 (fix workers.md) ───────────────────┤                │
+T4 (dual-mode resolution) ─────────────┤                │
+T5 (CLI override) ─────────────────────┘                │
+                                                       │
+D1 (task complexity routing) ────── requires T1, T2    │
+D2 (per-profile assignments) ────── requires T1         │
+D3 (runtime switching) ──────────── requires D2         │
+D4 (usage tracking) ──────────────── requires T2        │
 ```
 
-### Dependency Notes
-
-- **T1 (Error visibility) is the critical enabler.** Three other features depend on it. Without seeing errors, you cannot categorize them (D6), recover from them (T7), or verify truthfully (T4). This must come first.
-- **T5 (Documentation) must come last.** Every other change invalidates documentation. Updating docs mid-work creates double-work.
-- **T9 and D2 are quick wins with zero dependencies.** Both can be done in parallel with anything else. T9 is a 5-line jq fix; D2 is ~30 characters added to colony-prime output.
-- **T2 (State checkpoint) unlocks autopilot reliability.** Without rollback capability, T8 (state reconciliation) and D7 (quality scoring) cannot meaningfully recover from bad states.
-- **D1 (Per-phase research) is the highest-leverage differentiator** but requires T3 (planning depth infrastructure) first. This is the feature that transforms Aether from "fast but shallow" to "thorough and reliable."
-
----
-
-## MVP Definition
-
-### Immediate Wins (can ship in first sprint)
-
-These are independent, low-effort, high-impact fixes identified by the Oracle audit:
-
-- [x] **T9: Type coercion in hive jq filters** -- 5-line fix, confirmed bug with midden evidence. Unblocks cross-colony learning.
-- [x] **D2: Context trimming notification** -- ~30 characters. Information exists but is not routed to workers.
-- [x] **D3: Agent fallback visibility** -- ~10 lines. Log degradation to midden and warn operator.
-- [x] **T8: Autopilot state reconciliation** -- ~10 lines. Compare run-state.json phase with COLONY_STATE.json phase at loop start.
-
-### Foundation Layer (must complete before other work)
-
-- [ ] **T2: State checkpoint before builds** -- `cp COLONY_STATE.json COLONY_STATE.json.phase-N.bak` before each build-wave. Keep last 3. Near-zero cost.
-- [ ] **T1: Error visibility triage** -- Categorize 338 error suppressions. Fix dangerous ones first (data-writing operations). Fix the suggest-analyze ERR trap gap.
-- [ ] **T6: Dead code extraction** -- Move 76 unused subcommands into optional modules. Reduce aether-utils.sh by 15-20%.
-
-### Core Quality (the differentiating work)
-
-- [ ] **T3+D1: Planning depth with per-phase research** -- The single highest-impact feature. Add research step before each build phase. Scouts investigate not just codebase but domain knowledge, library docs, patterns.
-- [ ] **T4+D4: Verification evidence chain** -- Cross-reference test exit codes against Watcher claims. Verify claimed files exist. Reject fabricated responses.
-- [ ] **T7: Memory pipeline circuit breaker** -- If learning-observations.json is corrupted, reset to template, log midden entry, retry. Transforms permanent silent failure into recoverable event.
-
-### Polish (after core is solid)
-
-- [ ] **D6: Structured error triage (remaining instances)** -- Address lazy suppression after dangerous ones are fixed.
-- [ ] **D7: Build quality scoring** -- Wire Auditor and Measurer output into persistent quality tracking.
-- [ ] **D8: First-user onboarding validation** -- End-to-end test of install through first successful build with v2.1 changes.
-- [ ] **T5: Documentation accuracy pass** -- Update all docs to match reality. Must come last.
-
-### Deferred (future milestones)
-
-- [ ] **A2: Inter-worker communication** -- Requires platform changes (Claude Code subagent communication).
-- [ ] **A8: Multi-repo coordination** -- Fundamentally different architecture challenge.
-- [ ] **A7: Performance optimization** -- Defer until runtime monitoring reveals actual bottlenecks.
+**Build order:**
+1. T3 (fix workers.md) -- zero-risk docs fix, unblocks thinking
+2. T1 (slot mapping) -- foundational config change
+3. T4 (dual-mode resolution) -- completes the routing layer
+4. T2 (spawn model param) -- the core integration, touches playbooks
+5. T5 (CLI override) -- extends T2 with user-facing control
+6. D2 (per-profile assignments) -- extends T1 with profiles
+7. D3 (runtime switching) -- extends D2 with commands
+8. D1 (task complexity routing) -- extends T2 with intelligence
+9. D4 (usage tracking) -- observability on top of working routing
 
 ---
 
-## Feature Prioritization Matrix
+## Behavior Matrix: Claude Mode vs GLM Mode
 
-| Feature | User Value | Implementation Cost | Risk if Skipped | Priority |
-|---------|-----------|---------------------|-----------------|----------|
-| T9: Type coercion fix | HIGH | TRIVIAL (5 lines) | Cross-colony learning broken | P0 |
-| D2: Trim notification | MEDIUM | TRIVIAL (30 chars) | Workers operate blind | P0 |
-| D3: Fallback visibility | MEDIUM | LOW (10 lines) | Silent degradation | P0 |
-| T8: State reconciliation | MEDIUM | LOW (10 lines) | Quiet autopilot desync | P0 |
-| T2: State checkpoint | HIGH | LOW (3 lines/site) | Total loss on corruption | P1 |
-| T1: Error visibility | HIGH | HIGH (audit 338) | All other fixes unreliable | P1 |
-| T6: Dead code removal | HIGH | MEDIUM | Maintenance burden grows | P1 |
-| T3+D1: Planning depth | HIGH | HIGH | Users stay disappointed | P1 |
-| T4+D4: Verification | HIGH | MEDIUM (20 lines/check) | Hallucination vector open | P1 |
-| T7: Memory resilience | HIGH | LOW (15 lines) | Permanent silent learning loss | P1 |
-| D6: Error triage (full) | MEDIUM | HIGH (338 instances) | Error surface keeps growing | P2 |
-| D7: Quality scoring | MEDIUM | MEDIUM | No quality trends | P2 |
-| D8: Onboarding polish | HIGH | MEDIUM | New users bounce | P2 |
-| T5: Documentation | HIGH | LOW | Trust gap persists | P2 (must be last) |
+| Aspect | Claude Mode | GLM Mode |
+|--------|-------------|----------|
+| Trigger | User runs `claude` normally | User sets `ANTHROPIC_BASE_URL=http://localhost:4000` |
+| opus slot resolves to | `inherit` -> Claude Opus (parent session version) | `inherit` -> GLM-5 (via proxy) |
+| sonnet slot resolves to | `sonnet` -> Claude Sonnet | `sonnet` -> GLM-5-turbo (via proxy) |
+| haiku slot resolves to | `haiku` -> Claude Haiku | `haiku` -> GLM-4.5-air (via proxy) |
+| model-profiles.yaml | Maps castes to slots | Same config (slot-based, mode-agnostic) |
+| LiteLLM proxy | Not used | Must be running at localhost:4000 |
+| Aether routing code | Identical to GLM mode | Identical to Claude mode |
+| User action to switch | `claude` (native) | `export` env vars + `claude` |
 
-**Priority key:**
-- P0: Do immediately -- independent, trivial effort, outsized impact
-- P1: Foundation + core quality -- blocks user trust and differentiation
-- P2: Polish -- important but depends on P0+P1 completion
+**Key insight:** Aether's routing code is identical in both modes. The only difference is the user's environment. Aether passes slot names to the Task tool; the environment (Claude native or LiteLLM proxy) resolves slots to actual models.
+
+**Edge case -- proxy down in GLM mode:**
+- LiteLLM proxy health check (build-wave Step 0.6) warns user but does not block
+- If proxy is down, Task calls will fail at the Claude Code level (connection refused)
+- Aether should NOT try to detect this and fallback -- that adds complexity for a scenario the user controls
+- User's responsibility to start/stop proxy; Aether's responsibility to warn
+
+**Edge case -- no opus quota in Claude mode:**
+- If user's org blocks opus, the `"inherit"` value means the parent session already failed to get opus
+- The user's session model would already be sonnet/haiku, so `"inherit"` inherits that
+- No special handling needed -- this is exactly why GSD uses `"inherit"` instead of `"opus"`
 
 ---
 
-## Competitor Feature Analysis
+## Caste Classification
 
-| Feature | CrewAI | LangGraph | AutoGen | Claude Code (manual) | Aether (current) | Aether (v2.1 target) |
-|---------|--------|-----------|---------|---------------------|-------------------|----------------------|
-| **State checkpointing** | None | Full (every graph step, PostgresSaver) | Basic | Git only | None (total loss risk) | Per-phase backup + git tag |
-| **Error visibility** | Basic logging | Structured tracing | Conversation history | Terminal output | 338 silent suppressions | Categorized: dangerous/lazy/correct |
-| **Planning depth** | Role-based (shallow) | Graph definition (manual) | Conversational | User-driven | Scout + Route-Setter (codebase only) | Per-phase research + domain investigation |
-| **Verification** | Schema only | Human-in-the-loop | Schema only | User judgment | Schema only | Evidence-based (exit codes, file existence) |
-| **Cross-session learning** | None (stateless) | Checkpoints (no learning) | None | CLAUDE.md only | Instinct pipeline + hive (buggy) | Fixed hive + type coercion + circuit breaker |
-| **Dead code management** | N/A (library) | N/A (library) | N/A (library) | N/A | 43% dead code (76 subcommands) | Modularized, optional modules |
-| **Observability** | Basic | OpenTelemetry integration | Basic | None | Midden + activity log (fire-and-forget) | Structured logging, fallback visibility |
-| **Context management** | Static prompts | State channels | Message history | Context window | Colony-prime with budget (trimming silent) | Trim notification, per-phase context refresh |
+Based on the v2.3 milestone target and GSD's quality profile as reference:
 
-**Key insight:** Aether's competitive advantage is *persistent learning across sessions*. No competitor has this. But it is currently broken (type coercion bug) and fragile (memory pipeline kills silently). Fixing reliability of the existing unique features is higher leverage than building new features that competitors already have.
+### Reasoning Castes (opus slot)
 
-**Second key insight:** Planning depth is where Aether loses to manual Claude Code usage. A human using Claude manually will naturally research before coding. Aether's planning skips research and jumps to task decomposition. Fixing this is the single highest-impact change for output quality.
+| Caste | Rationale |
+|-------|-----------|
+| prime | Orchestrates the entire colony, makes decomposition decisions, coordinates workers |
+| oracle | Deep research via RALF loop -- complex multi-step reasoning with synthesis |
+| archaeologist | Git history analysis requires deep reasoning about intent and context |
+| route_setter | Phase planning and goal decomposition -- architecture decisions |
+| architect | System design -- highest reasoning requirement |
+
+### Execution Castes (sonnet slot)
+
+| Caste | Rationale |
+|-------|-----------|
+| builder | Follows explicit plan instructions; implementation, not decision-making |
+| watcher | Validation and quality checks; follows criteria, does not design them |
+| scout | Research within codebase; structured exploration, not creative reasoning |
+| chaos | Edge case generation and resilience testing; pattern-based, not reasoning |
+| colonizer | Codebase exploration and territory mapping; read-only structured output |
+
+### Future haiku candidates (for budget profile)
+
+| Caste | Rationale |
+|-------|-----------|
+| surveyor-nest | Directory listing -- zero reasoning required |
+| surveyor-provisions | Dependency listing -- structured extraction |
+| probe | Coverage analysis -- pattern matching |
+
+These are lower priority; haiku-tier routing can be added in the budget profile (D2) after v2.3 ships.
+
+---
+
+## Implementation Touch Points
+
+Files that must change for T1-T5 (table stakes):
+
+| File | Change | Complexity |
+|------|--------|------------|
+| `.aether/model-profiles.yaml` | Castes map to slots not model names; add slot_models section; add profiles section | LOW |
+| `.aether/workers.md` lines 57-90 | Remove incorrect "cannot function" claim; document slot-based routing | LOW |
+| `bin/lib/model-profiles.js` | Refactor from name-based to slot-based; DEFAULT_MODEL becomes DEFAULT_SLOT; validateModel becomes validateSlot | MEDIUM |
+| `.aether/docs/command-playbooks/build-wave.md` | Add model resolution step before worker spawns; pass `model` param to Task calls | MEDIUM |
+| `.aether/docs/command-playbooks/build-prep.md` | Resolve model profile at wave start | LOW |
+| `.aether/docs/command-playbooks/continue-verify.md` | Pass model param to spawned verification workers | LOW |
+| `.claude/agents/ant/*.md` (22 files) | No change needed -- keep `model: inherit` | NONE |
+| `.claude/settings.json` | No change needed -- model routing is in model-profiles.yaml, not Claude settings | NONE |
+
+---
+
+## MVP Recommendation
+
+**Ship in v2.3:**
+1. T1 -- Slot-based caste mapping (foundational)
+2. T3 -- Fix workers.md (unblocks mental model)
+3. T4 -- Dual-mode resolution (completes the abstraction)
+4. T2 -- Worker spawn passes model param (makes it real)
+5. T5 -- CLI override (user control)
+
+**Defer to v2.4:**
+- D1 (task complexity routing) -- the keyword matching is brittle; better to ship fixed caste assignments first and refine later
+- D2/D3 (profiles + switching) -- nice-to-have once base routing works
+- D4 (usage tracking) -- observability comes after functionality
+
+**Explicitly out of scope:**
+- A1 through A5 (all anti-features)
+- Per-worker environment variables (proven impossible)
+- Model name routing in Aether code (architectural violation)
 
 ---
 
 ## Sources
 
-### Primary (HIGH confidence -- direct codebase analysis + Oracle audit)
-
-- Oracle audit synthesis: `.aether/oracle/synthesis.md` -- 55 findings across 5 questions at 82% confidence
-- Oracle research plan: `.aether/oracle/research-plan.md` -- 85% trust ratio (47/55 multi-source findings)
-- Oracle gaps analysis: `.aether/oracle/gaps.md` -- All questions answered, 9 contradictions resolved
-- Codebase concerns: `.planning/codebase/CONCERNS.md` -- Tech debt, known bugs, security considerations
-- Current plan.md: `.claude/commands/ant/plan.md` -- Planning loop implementation
-- Build playbooks: `.aether/docs/command-playbooks/build-*.md` -- Build execution flow
-
-### External (MEDIUM confidence -- multiple sources agree)
-
-- [AI Agents in Production: What Actually Works in 2026](https://47billion.com/blog/ai-agents-in-production-frameworks-protocols-and-what-actually-works-in-2026/) -- "80% of effort is refinement, not initial development"
-- [Spec-Driven Verification for Autonomous Coding Agents](https://agent-wars.com/news/2026-03-14-spec-driven-verification-claude-code-agents) -- Independent verification, spec discipline matters more than architectural elaboration
-- [Plan-and-Act: Improving Planning of Agents for Long-Horizon Tasks](https://arxiv.org/html/2503.09572v3) -- Structured plans achieve 61% first-attempt success vs 23% ad-hoc (3.2x)
-- [Dapr Agents GA for Production Reliability](https://www.cncf.io/announcements/2026/03/23/general-availability-of-dapr-agents-delivers-production-reliability-for-enterprise-ai/) -- Durable workflows, state management for production
-- [LangGraph Production: Checkpointing and Error Recovery](https://markaicode.com/langgraph-production-agent/) -- State snapshots at every step, PostgresSaver for production
-- [Azure Agent Observability Best Practices](https://azure.microsoft.com/en-us/blog/agent-factory-top-5-agent-observability-best-practices-for-reliable-ai/) -- Structured logging, tracing, version correlation
-- [OpenTelemetry AI Agent Observability](https://opentelemetry.io/blog/2025/ai-agent-observability/) -- Emerging standards for agent monitoring
-- [Top AI Agent Frameworks 2026](https://www.shakudo.io/blog/top-9-ai-agent-frameworks) -- Framework comparison and production readiness criteria
-- [AI Agent Planning Workflow: Plan-Export-Verify](https://www.loadsys.com/blog/ai-agent-planning-workflow-plan-export-verify/) -- Plan quality determines execution quality
-
-### Previous Milestone (HIGH confidence -- our own validated work)
-
-- v1.3 FEATURES.md: `.planning/research/FEATURES.md` (2026-03-19) -- Pheromone integration, learning pipeline, XML exchange, fresh install hardening
-
----
-
-*Feature research for: Aether v2.1 Production Hardening*
-*Researched: 2026-03-23*
+| Source | Confidence | Evidence |
+|--------|------------|----------|
+| GSD `resolveModelInternal()` (gsd-tools.cjs:3970-3985) | HIGH | Working production code, proven pattern |
+| GSD `MODEL_PROFILES` table (gsd-tools.cjs:128-140) | HIGH | 11 agents, 3 profiles, slot-based |
+| GSD `model-profiles.md` reference | HIGH | Documents the `"inherit"` rationale for opus |
+| GSD `model-profile-resolution.md` reference | HIGH | Documents Task tool model parameter usage |
+| Aether `model-profiles.yaml` (current) | HIGH | Existing config, needs slot adaptation |
+| Aether `model-profiles.js` (current) | HIGH | Existing library, needs refactoring |
+| Aether `workers.md` lines 57-90 | HIGH | Incorrect claim, needs correction |
+| Aether archived model routing (`.aether/archive/model-routing/`) | HIGH | v1 failure -- used model names not slots |
+| Claude Code Task tool `model` parameter | HIGH (inferred from GSD working code) | No official docs accessible; GSD proves it works |
+| LiteLLM proxy config (localhost:4000) | HIGH | Already configured in model-profiles.yaml |

@@ -1,263 +1,168 @@
 # Project Research Summary
 
-**Project:** Aether v2.1 Production Hardening
-**Domain:** Multi-agent CLI orchestration (bash + Node.js)
-**Researched:** 2026-03-23
+**Project:** Aether v2.3 Per-Caste Model Routing
+**Domain:** Multi-agent AI development orchestration -- per-worker model selection via Claude Code native model slots
+**Researched:** 2026-03-27
 **Confidence:** HIGH
 
 ## Executive Summary
 
-Aether v2.0 is a shipped product with a solid architectural foundation — a proven bash+Node.js dual runtime, 22 agents, 44 commands, 28 skills, and cross-colony learning infrastructure that no competitor has. The Oracle audit (12 iterations, 55 findings, 82% confidence) exposed the precise gap between "impressive demo" and "trusted production tool": 338 silent error suppression patterns, 43% dead code, state desync risks under autopilot, and documentation that describes aspirational behavior rather than implemented behavior. This milestone is not about adding features — it is about making the features that exist actually work reliably.
+Aether currently runs all 22 worker agents on the same model. The v2.3 milestone aims to route reasoning-heavy castes (Prime, Oracle, Archaeologist, Route-Setter, Architect) to GLM-5 via the `opus` model slot, while execution castes (Builder, Watcher, Scout, Chaos, Colonizer) stay on GLM-5-turbo via the `sonnet` slot. A previous attempt (v1, archived 2026-02-15) failed because it relied on environment variable injection, which Claude Code's Task tool does not support for spawned subagents. Two developments since then make this feasible: (1) Claude Code's agent frontmatter `model:` field accepts slot aliases (`opus`, `sonnet`, `haiku`, `inherit`) that bypass the env var limitation entirely, and (2) the GSD system proves the Task tool also accepts a `model` parameter directly, enabling dynamic runtime routing. The recommended approach is a hybrid: use agent frontmatter for default routing (static, declarative) and the Task tool `model` parameter for runtime overrides (dynamic, profile-based). A single settings.json change (`ANTHROPIC_DEFAULT_OPUS_MODEL` from `glm-5-turbo` to `glm-5`) activates the opus-to-GLM-5 mapping chain through the existing LiteLLM proxy.
 
-The recommended approach is a tightly sequenced hardening effort that respects the dependency graph of fixes. The Oracle audit provides enough specificity to skip ambiguous analysis phases and go straight to targeted repairs. Six of the highest-impact fixes are trivially small (under 20 lines each): type coercion in hive-read, midden temp file race, memory pipeline circuit breaker, state checkpointing, continue-advance lock gap, and context trimming transparency. These should be executed first as quick wins to demonstrate forward momentum and reduce the blast radius of the larger modularization work.
-
-The primary risk is the refactoring death spiral: the rising bug-fix ratio (33.8% to 45.8%) signals that error handling is load-bearing. Removing `|| true` patterns without replacing them with proper fallback behavior at each call site will cascade failures across the build/continue lifecycle. The mitigation is clear: triage before you touch. Categorize all 338 error suppressions as correct/lazy/dangerous, fix dangerous ones first, and never remove any suppression without an explicit replacement. Dead code removal must precede modularization; documentation must come last.
-
----
+The research identifies one key architectural disagreement to resolve: STACK.md recommends Approach A (changing agent frontmatter directly), while ARCHITECTURE.md and FEATURES.md recommend Approach B (passing `model=` parameter in Task tool calls). Both are proven working. The recommendation is to start with Approach A for the MVP because it is simpler (one-word changes to 14 agent files, zero playbook changes), then layer on Approach B in a follow-up for profile-based switching. The primary risk is GLM-5 instability in agent contexts -- GLM-5 requires tight constraints (temperature 0.4, top_p 0.85, max_tokens 2500) and can loop without them. A secondary risk is that 184 hardcoded model name references across 6 test files will break on any YAML changes, so test infrastructure must be refactored first.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The fundamental stack (bash + jq + Node.js + JSON files) stays. This is not a technology preference but a hard constraint — 530+ tests, 43 slash commands, and 22 agent definitions all depend on the existing interface contract. The research confirmed this is the right call: migrating bash to Node.js would double the Node.js surface area with no reliability benefit; adding SQLite would introduce native binary dependencies for a single-user CLI; rewriting aether-utils.sh would risk losing edge-case handling earned through 17 real midden failures.
+The implementation requires no new infrastructure, models, or environment variables. The entire routing mechanism relies on Claude Code's native model slot system, which already exists in the codebase but is unused (all 22 agents have `model: inherit`).
 
-The hardening is entirely about patterns, not new libraries. The existing `hive.sh`, `midden.sh`, and `skills.sh` extractions prove the modularization pattern works. The existing `atomic-write.sh` and `file-lock.sh` prove the concurrency infrastructure is sound. Every recommended fix extends or corrects what exists rather than replacing it.
+**Core changes:**
+- **settings.json** (1 line): Change `ANTHROPIC_DEFAULT_OPUS_MODEL` from `glm-5-turbo` to `glm-5` -- activates the opus-to-GLM-5 mapping through the LiteLLM proxy. Same change in `settings.json.glm`.
+- **Agent frontmatter** (14 files): Change `model: inherit` to `model: opus` for 3 reasoning agents (queen, archaeologist, route-setter) and `model: sonnet` for 11 execution agents (builder, watcher, scout, chaos, probe, weaver, ambassador, 4 surveyors). Keep 8 specialist agents on `inherit`.
+- **model-profiles.yaml**: Update `worker_models` to split castes into GLM-5/GLM-5-turbo tiers. Optionally add `model_slots` section mapping castes to Claude Code slot names.
+- **bin/lib/model-profiles.js**: Add `getModelSlotForCaste()` function for querying slot assignments. Add `model-slot get <caste>` subcommand to aether-utils.sh.
 
-**Core pattern changes:**
-- Error triage: Three-category classification (correct/lazy/dangerous) with `# SUPPRESS:OK` comment markers for auditable review
-- State protection: `cp COLONY_STATE.json COLONY_STATE.phase-N.bak` before each build — bounded to last 3 checkpoints
-- Memory circuit breaker: Detect-recover-log at the learning-observations.json boundary using the existing template file
-- jq type safety: `(.confidence | tonumber? // 0)` at all numeric comparison sites — 5-line fix
-- Bash modularization: Continue the domain extraction pattern (pheromone.sh, learning.sh, colony.sh) following the proven `hive.sh` precedent
-- ShellCheck escalation: Add `.shellcheckrc` and expand scope from 6 files to all `.sh` files
-
-**Version constraint to change:** Bump Node.js engine requirement from `>=16.0.0` to `>=20.0.0` to align with AVA v6 test requirement. Node 16 and 18 are both EOL; Aether's target audience (Claude Code and OpenCode users) will have Node 20+ installed.
+**What does NOT change:** No new proxy infrastructure, no new models, no new environment variables, no changes to LiteLLM proxy config, no env var workarounds.
 
 ### Expected Features
 
-The features research reveals two distinct tiers: reliability fixes that users need to trust the system, and differentiating improvements that make Aether better than running Claude Code manually.
+**Must have (table stakes):**
+- Slot-based caste-to-model mapping -- users say "prime uses opus, builder uses sonnet" without caring about model names
+- Worker spawns actually use different models -- the core mechanism that makes routing real
+- Dual-mode support -- Claude native (opus=claude-opus, sonnet=claude-sonnet) and GLM proxy (opus=glm-5, sonnet=glm-5-turbo) with identical Aether routing code
+- Fix workers.md incorrect claim that per-caste routing is impossible
+- CLI override for per-spawn model (`/ant:build 3 --model opus`)
 
-**Must have (table stakes — users lose trust without these):**
-- Error visibility: Surface failures instead of hiding them — 338 silent suppressions erode confidence in all outputs
-- State checkpoint and rollback: Per-phase backup before builds — total loss on mid-autopilot corruption is unacceptable
-- Verification that catches lies: Cross-reference test exit codes against Watcher claims — schema-only validation is the primary hallucination vector
-- Dead code removal: 76 unused subcommands (43%) at 11,272 lines — maintenance burden grows with every change
-- Memory pipeline resilience: Corrupted learning-observations.json permanently kills all 5 downstream memory steps silently
-- Autopilot state reconciliation: run-state.json and COLONY_STATE.json can desync with no detection
-- Type-safe data operations: String-typed confidence values silently exclude valid hive wisdom — 5-line fix with outsized impact
-- Documentation matches behavior: 6 confirmed inaccuracies (trim order inversion, subcommand count, security gate label oversell, etc.)
+**Should have (competitive):**
+- Per-profile caste assignments (deep/default/fast profiles like GSD's quality/balanced/budget)
+- Runtime profile switching (`/ant:set-profile fast`)
+- Task complexity-based auto-routing (analyze task description, route complex tasks to opus)
+- Model usage tracking per phase (display in `/ant:status`)
 
-**Should have (competitive — why use Aether over manual Claude):**
-- Per-phase research loop: The single highest-leverage differentiator; structured plans achieve 61% first-attempt success vs 23% ad-hoc (3.2x improvement per published research)
-- Evidence-based verification: Verify Builder's claimed files exist on filesystem; captures fabricated responses
-- Context trimming transparency: One notice line when colony-prime trims context — workers currently operate blind
-- Agent fallback visibility: Log degradation to midden when specialized agent falls back to general-purpose
-- Cross-colony learning that works: The infrastructure exists and is unique in the ecosystem; the type coercion bug prevents it from functioning
-
-**Defer to v3+:**
-- Web/TUI dashboard — orthogonal to core value, massive scope increase
-- Real-time inter-worker messaging — requires platform changes Claude Code does not support
-- More agent types — fix integration gaps in 22 existing agents before adding more
-- Multi-repo colony coordination — fundamentally different architecture problem
+**Defer (v2.4+):**
+- Task complexity routing -- keyword matching is brittle, ship fixed assignments first
+- Profiles and runtime switching -- nice-to-have once base routing works
+- Usage tracking -- observability comes after functionality
+- All anti-features: per-worker env var injection, model name routing in Aether code, cost-based auto-selection, health-check-gated routing
 
 ### Architecture Approach
 
-The target architecture keeps the single-entry-point bash dispatch contract intact (`bash .aether/aether-utils.sh <subcommand>`) while extracting the monolith's logical domains into independently testable modules in `.aether/utils/`. The consumer layer (43 slash commands + 22 agents) sees no change — all 412 call-site references continue to work. The state layer gets a `state-api.sh` facade that centralizes COLONY_STATE.json access and eliminates the dual-write-path race (90 inline jq references in the monolith + 20+ bypass reads in slash commands).
+The routing chain is: Aether model-profiles.yaml defines caste-to-slot mapping. At spawn time, the slot name (`opus` or `sonnet`) reaches Claude Code either via agent frontmatter (static) or Task tool `model` parameter (dynamic). Claude Code resolves the slot to an actual model name via `ANTHROPIC_DEFAULT_OPUS_MODEL` / `ANTHROPIC_DEFAULT_SONNET_MODEL` environment variables in settings.json. The LiteLLM proxy (when active) receives the model name and routes to the appropriate provider backend. Aether never knows or cares about actual model names -- it routes by slot, the environment resolves slots to names.
 
-**Major components:**
-1. `aether-utils.sh` (slimmed dispatcher, ~1,500 lines after extraction) — setup, sourcing, case dispatch, shared helpers only
-2. `state-api.sh` (new) — all COLONY_STATE.json reads/writes with lock/validate/migrate encapsulated; eliminates dual-access path
-3. `pheromone.sh` (extract, ~1,800 lines) — pheromone system + colony-prime; eliminates self-invocation overhead by replacing subprocess spawning with direct function calls
-4. `learning.sh` (extract, ~1,200 lines) — learning engine + memory-capture pipeline; dependent on state-api and pheromone
-5. `queen.sh`, `colony.sh`, `swarm.sh`, `session.sh`, `spawn.sh`, `flag.sh`, `suggest.sh` — remaining domain extractions in dependency order
-6. Error handling audit (final pass across all modules) — classify remaining `2>/dev/null` instances after each module is isolated
+**Two implementation approaches (both proven working):**
 
-**Build order is strict:** state-api first, then pheromone, then learning, then queen, then parallel remaining domains, then error audit last. This dependency graph is non-negotiable — violating it is the primary architecture risk.
+1. **Approach A -- Agent frontmatter (static):** Change `model: inherit` to `model: opus`/`model: sonnet` in agent `.md` files. Simple, declarative, automatic. Downside: requires updating 22+ files across 3 directories (`.claude/agents/ant/`, `.aether/agents-claude/`, `.opencode/agents/`), and cannot do per-build overrides without changing agent definitions.
+2. **Approach B -- Task tool `model` parameter (dynamic):** Pass `model="{slot}"` in each Task tool call, resolved from model-profiles.yaml at build time. Flexible, supports overrides and task-based routing. Downside: must update ~20 spawn points across 7 command files.
+
+**Recommendation:** Start with Approach A for the MVP. It is the simplest path to working per-caste routing with zero playbook changes. Add Approach B later for profile-based switching.
 
 ### Critical Pitfalls
 
-1. **Refactoring death spiral** — The 338 error-swallowing patterns are load-bearing; callers were written to expect silence. Triage before touching. Fix dangerous suppressions (state-writing paths, ~40 instances) first; mark correct suppressions with `# SUPPRESS:OK`; address lazy suppressions last. Never remove `|| true` without an explicit replacement and a regression test.
+1. **Do NOT use environment variable injection.** The v1 archive proves Claude Code's Task tool does not forward env vars to spawned subagents. This is the exact failure mode that archived the previous attempt. Use the `model` parameter or agent frontmatter instead.
 
-2. **Monolith extraction breaks dispatch** — aether-utils.sh functions share file-scoped state invisibly. Remove the 76 dead subcommands before any extraction — dead code creates false dependency signals. Write a contract test for each extraction before moving code. Preserve `set -euo pipefail` in every extracted module (ERR traps are not inherited across `source` boundaries in all bash versions).
+2. **Use Claude Code slot names, not GLM model names, in Aether config.** Aether should route by `opus`/`sonnet`/`haiku`, never by `glm-5`/`glm-5-turbo`. Model names belong in the user's environment (settings.json env vars and LiteLLM proxy config). Mixing abstractions creates coupling and breaks dual-mode support.
 
-3. **State protection deadlock** — COLONY_STATE.json has a dual-access path: bash subcommands (with locks) AND the LLM Write tool (no locks). Do not add lock requirements to the Write tool path — it will deadlock. Implement checkpointing (purely additive `cp`) first; add post-write validation second; defer lock changes until after checkpointing is stable and tested.
+3. **GLM-5 can loop in agent contexts.** GLM-5 requires tight generation constraints (temperature 0.4, top_p 0.85, max_tokens 2500). If these constraints are not enforced (proxy restart without config, temperature override in settings, nested agent calls), GLM-5 workers may loop indefinitely. Add application-level loop detection and consider whether Prime should stay on GLM-5-turbo for safety despite being a "reasoning" caste.
 
-4. **Dead code removal kills live functions** — The Oracle's static analysis covered `.claude/commands/ant/` but NOT `.opencode/commands/ant/` (40 additional commands) or user-created skills at `~/.aether/skills/domain/`. Before removing any subcommand, check all three surfaces. Use deprecation warnings first, removal one cycle later.
+4. **184 hardcoded model names in tests will break on any YAML change.** Six test files contain 184 occurrences of `glm-5-turbo`/`glm-5` in mock profiles. These mocks duplicate YAML data rather than reading from it. Refactor test infrastructure to centralize mocks and read from YAML before changing any model assignments.
 
-5. **Documentation drift after early correction** — Fixing docs before fixing code creates a window where docs are "accurate" but the code is about to change. Document inaccuracies as `[KNOWN INACCURACY]` annotations until the corresponding code is stable. Documentation accuracy pass is the final phase, not the first.
-
----
+5. **The two-model-config-file dance must stay synchronized.** Both `settings.json` and `settings.json.glm` need the `ANTHROPIC_DEFAULT_OPUS_MODEL` change. Make the change atomically and document the coordination.
 
 ## Implications for Roadmap
 
-Based on the combined research, the hardening work falls into a strict dependency graph that maps naturally to 8 phases. The pitfalls research is unusually specific about ordering constraints — violating the sequence below is the primary risk factor for the entire milestone.
+Based on combined research, the implementation should proceed in 5 phases ordered by dependencies and risk.
 
-### Phase 1: Quick Wins and Baseline Stabilization
+### Phase 1: Test Infrastructure Refactor
+**Rationale:** 184 hardcoded model names across 6 test files create a minefield. Any YAML change before centralizing test mocks will cause cascading, hard-to-debug test failures. This must come first. PITFALLS.md identifies this as the critical ordering constraint.
+**Delivers:** Centralized mock profile helper (`tests/helpers/mock-profiles.js`), all test files reading from YAML, consistency validation test
+**Addresses:** Pitfall 4 (184 hardcoded model names)
+**Avoids:** Wasting time debugging "expected glm-5 but got glm-5-turbo" after every config change
+**Research flag:** SKIP -- well-understood refactoring, clear pattern (extract shared helper)
 
-**Rationale:** Six independent fixes with zero dependencies and outsized impact. Establishing a green baseline before any structural work begins is mandatory — the test suite has 1 existing failure (`pheromone-prime --compact respects max signal limit`), and hardening with a red baseline provides no signal for regressions introduced by later changes.
+### Phase 2: Pre-Implementation Cleanup and Config Foundation
+**Rationale:** Fix the incorrect "model routing impossible" claim in workers.md, annotate or delete the archived v1 routing files that confuse developers, and make the single settings.json change that activates the opus-to-GLM-5 mapping chain. These are all low-risk, independent changes that unblock the main work.
+**Delivers:** Corrected workers.md, archived files annotated, `ANTHROPIC_DEFAULT_OPUS_MODEL` set to `glm-5` in both settings files
+**Addresses:** T3 (fix workers.md), Pitfall 9 (archive confusion), the settings.json prerequisite
+**Avoids:** Developers referencing the failed v1 approach, config swap breakage
+**Research flag:** SKIP -- trivial text changes + 1-line env var edit, all verified by direct read
 
-**Delivers:** Fixed hive wisdom retrieval (type coercion, 5 lines), stabilized midden writes (PID-scoped temp file, 3 lines), context trimming transparency (~30 chars added to colony-prime output), autopilot state reconciliation (run-state vs COLONY_STATE comparison at loop start, ~10 lines), agent fallback logging (midden entry on degradation, ~10 lines), and a fully green test suite.
+### Phase 3: Core Routing Mechanism
+**Rationale:** This is the main event. Two approaches exist (frontmatter vs Task tool param). STACK.md recommends frontmatter (simpler), ARCHITECTURE.md recommends Task param (flexible). Both are proven working. The safest path is to implement Approach A (frontmatter) first since it requires only 14 one-word changes to agent files and zero playbook changes. Then validate end-to-end with a single build. If Approach B is desired for profile support, it can be layered on top in Phase 4.
+**Delivers:** 14 agent files updated (3 to `model: opus`, 11 to `model: sonnet`), model-profiles.yaml updated with two-tier caste mapping, `getModelSlotForCaste()` function in model-profiles.js, `model-slot get` subcommand, new slot tests
+**Addresses:** T1 (slot mapping), T2 (spawn model param), T4 (dual-mode resolution), T5 (CLI override)
+**Implements:** The complete routing chain from config to Claude Code to proxy to GLM
+**Avoids:** Pitfall 1 (fiction routing), Pitfall 7 (wrong model names in config), Pitfall 8 (parser divergence)
+**Research flag:** NEEDS RESEARCH for Task tool `model` parameter override precedence -- does a Task tool `model="opus"` override agent frontmatter `model: sonnet`? This determines whether Approach B can coexist with Approach A. Test with a single Task call before committing to the full implementation.
 
-**Addresses:** T9 (type coercion), T8 (autopilot reconciliation), D2 (trim notification), D3 (fallback visibility), Pitfall 7 (hive type coercion migration), Pitfall 8 (test baseline green)
+### Phase 4: Profile System and Dynamic Overrides
+**Rationale:** Once base routing works, add the ability to switch profiles at runtime (deep/default/fast) and override per-build. This is where Approach B (Task tool `model` parameter) becomes valuable -- the build playbook resolves the active profile, looks up the caste's model slot, and passes it in the Task call. Also extends routing to non-build commands (swarm, seal, colonize, patrol, organize).
+**Delivers:** Profile system in model-profiles.yaml, `/ant:set-profile` command, build playbook model resolution step, routing in 7 non-build command files, CLI `--model` flag accepting slot names
+**Addresses:** D2 (per-profile assignments), D3 (runtime switching), Pitfall 5 (missing model logging), Pitfall 6 (lifecycle edge cases)
+**Uses:** getModelSlotForCaste() from Phase 3, model-profiles.yaml profiles section
+**Research flag:** NEEDS RESEARCH for OpenCode agent spawning -- does OpenCode support the `model:` frontmatter field or equivalent? OpenCode parity is a low-priority concern but needs investigation.
 
-**Avoids:** Starting structural work on a red test suite; compounding existing bugs with new changes.
-
-**Research flag:** No deeper research needed — all fixes are pinpointed to exact lines by the Oracle audit.
-
-### Phase 2: Error Handling Triage
-
-**Rationale:** T1 (error visibility) is the critical enabler — three other features depend on it, and the modularization work in Phase 6 will touch the same code paths. This phase is read-only analysis plus dangerous-category fixes only. Attempting modularization before triage creates the refactoring death spiral.
-
-**Delivers:** All 338 error suppressions classified into correct/lazy/dangerous categories with `# SUPPRESS:OK` markers on confirmed-correct instances; ~40 dangerous-category suppressions on state-writing paths replaced with proper error handling; suggest-analyze ERR trap gap (200 lines at lines 10236-10427) fixed; concurrent test failure audit complete.
-
-**Addresses:** T1 (error visibility), D6 (structured error triage), Pitfall 1 (death spiral prevention), Pitfall 8 (tests that assert broken behavior)
-
-**Avoids:** The refactoring death spiral; touching lazy/correct suppressions before dangerous ones are stable.
-
-**Research flag:** No deeper research needed — Oracle Q3 maps all three categories with line-level specificity.
-
-### Phase 3: State Protection and Memory Pipeline
-
-**Rationale:** State checkpointing is purely additive (a `cp` before each build) and cannot break anything. The memory circuit breaker is the other critical non-structural fix. Both must complete before modularization because Phase 6 will touch the code paths these fixes affect.
-
-**Delivers:** Per-phase COLONY_STATE.json checkpoints with 3-checkpoint rotation before each build-wave; memory-capture circuit breaker with template recovery and midden audit trail; continue-advance state write routed through `state-advance` subcommand to close the LLM Write tool lock gap.
-
-**Addresses:** T2 (state checkpoint), T7 (memory pipeline resilience), Pitfall 4 (state protection without deadlock), Pitfall 6 (circuit breaker correctness)
-
-**Avoids:** Total loss on mid-autopilot corruption; permanent silent learning death from corrupted observations file; deadlock from adding bash locks to the LLM Write tool path.
-
-**Research flag:** No deeper research needed — Oracle Rec 1, 7, 8, 9 provide exact implementation patterns.
-
-### Phase 4: Dead Code Deprecation
-
-**Rationale:** Dead code must be deprecated before modularization — live code within the 76 "dead" subcommands creates false dependency signals during extraction. Deprecation (warnings, not removal) is safe; removal happens one cycle later after deprecation warnings confirm no callers exist across all three command surfaces.
-
-**Delivers:** All 76 suspected-dead subcommands emit deprecation warnings to stderr; full three-surface grep audit (`.claude/`, `.opencode/`, `~/.aether/skills/`) confirms which are truly dead; Node.js engine requirement bumped to `>=20.0.0`.
-
-**Addresses:** T6 (dead code removal), Pitfall 5 (hidden live functions in Oracle's static analysis blind spots)
-
-**Avoids:** Breaking OpenCode users or custom user skills by removing subcommands that were outside the Oracle's analysis scope.
-
-**Research flag:** No deeper research needed. The deprecation pattern is standard bash; the work is grep analysis. Actual removal requires one development cycle of runtime confirmation.
-
-### Phase 5: Verification Evidence Chain
-
-**Rationale:** T4 (verification that catches lies) is the primary hallucination vector and is independent of the modularization work. Addressing it before Phase 6 keeps the scope clean and the test signal clear.
-
-**Delivers:** Test runner exit code captured during build-verify and cross-referenced against Watcher's `verification_passed` claim; Builder's `files_created` list verified against actual filesystem; responses that contradict evidence are rejected before advancing the phase.
-
-**Addresses:** T4 (verification), D4 (evidence-based verification)
-
-**Avoids:** Workers fabricating completion claims that pass gates silently; planning advancing on false completion.
-
-**Research flag:** No deeper research needed — Oracle Rec 2 provides the exact pattern; the TDD evidence gate in continue-gates.md Step 1.10 is the proven model to extend.
-
-### Phase 6: Monolith Modularization
-
-**Rationale:** This is the largest structural phase and has the strictest prerequisites — Phases 1 through 4 must all be complete. A green test suite, triaged error handling, protected state, and deprecated dead code are all required before extraction begins. Attempting this earlier is the highest-risk mistake in the entire hardening effort.
-
-**Delivers:** `state-api.sh` facade for all COLONY_STATE.json access; `pheromone.sh` extraction (~1,800 lines including colony-prime); `learning.sh` extraction (~1,200 lines); `queen.sh`, `colony.sh`, and remaining domain modules extracted in dependency order; aether-utils.sh reduced from ~11,272 lines to ~1,500-line dispatcher; dead subcommands confirmed removed after one-cycle deprecation.
-
-**Addresses:** Architecture target state, Pitfall 2 (dispatch contract preservation throughout extraction), T6 (dead code removal confirmed after deprecation cycle)
-
-**Avoids:** Extraction order violations; breaking the single-entry-point bash interface; introducing new shared-state bugs across module boundaries.
-
-**Research flag:** No deeper research needed — the extraction pattern is proven by three existing working examples (`hive.sh`, `midden.sh`, `skills.sh`). Follow the same protocol for each new module.
-
-### Phase 7: Planning Depth and Per-Phase Research
-
-**Rationale:** D1 (per-phase research loop) is the highest-impact differentiator — the gap between Aether and manual Claude Code usage. This comes after core hardening because it builds on stable infrastructure, and because shallow planning on an unstable platform produces research-backed phases that then fail to execute reliably.
-
-**Delivers:** Per-phase research step before each build phase; scouts investigate domain knowledge, library docs, and patterns (not just codebase); research depth flag in phase plans; time-bounded investigation (one cycle, not a full Oracle RALF loop) to prevent the planning recursion pitfall.
-
-**Addresses:** T3 (planning depth), D1 (per-phase research loop), Pitfall 10 (infinite recursion prevention through hard time budget and termination condition)
-
-**Avoids:** Research becoming a bottleneck; planning taking longer than execution; changes to the phase plan schema that break continue.md and autopilot.
-
-**Research flag:** This phase benefits from a targeted design spike. The key question: how to distinguish phases that need research from phases that do not (to avoid universal overhead on simple phases). GSD's pattern (the tool you are reading this from) is the reference model, but adapting it to Aether's scout/route-setter architecture requires a design decision before implementation.
-
-### Phase 8: Documentation Accuracy and Onboarding Polish
-
-**Rationale:** Documentation must come last — every prior code change makes earlier documentation corrections stale. Onboarding polish validates the full install-through-first-build flow with all v2.1 changes in place.
-
-**Delivers:** All 6 known documentation inaccuracies corrected with corresponding doc-truth tests (CLAUDE.md trim order, subcommand count, security gate label, etc.); end-to-end onboarding flow validated on a clean machine; `aether install --force` recovery path for partial installs; post-install validation that warns on missing hub files.
-
-**Addresses:** T5 (documentation matches behavior), D8 (onboarding polish), Pitfall 3 (documentation drift prevention via doc-truth tests), package distribution hardening
-
-**Avoids:** Correcting docs before the code they describe is stable; creating a false sense of accuracy mid-milestone.
-
-**Research flag:** No deeper research needed — the 6 specific inaccuracies are enumerated by the Oracle audit with exact file locations.
+### Phase 5: Verification, Polish, and GLM-5 Loop Prevention
+**Rationale:** After routing is working, harden the system. Add end-to-end model verification (spawn-tree.txt shows actual model per caste), application-level loop detection for GLM-5 castes, update all documentation, and verify the config swap workflow works bidirectionally.
+**Delivers:** spawn-tree.txt model field populated, loop detection warnings, updated verify-castes.md, CLAUDE.md documentation, config swap verification
+**Addresses:** D4 (usage tracking), Pitfall 2 (config swap breakage), Pitfall 3 (GLM-5 looping), Pitfall 10 (stale metadata)
+**Research flag:** NEEDS RESEARCH for GLM-5 constraint passing -- does Claude Code pass temperature/top_p/max_tokens to subagent API calls? If not, GLM-5 may loop in reasoning caste contexts. This is the highest-risk unknown and may require a design decision about whether Prime stays on GLM-5 or falls back to GLM-5-turbo.
 
 ### Phase Ordering Rationale
 
-- Phases 1-3 are strictly ordered: baseline green, then triage errors, then protect state. Each phase's safety net depends on the previous phase being complete.
-- Phase 4 (dead code deprecation) and Phase 5 (verification chain) can overlap with each other but both must precede Phase 6 (modularization).
-- Phase 6 is the critical path item — longest effort, most prerequisites, gates Phase 7.
-- Phase 7 and Phase 8 are sequenced but relatively independent; Phase 8 documentation work could start in parallel with Phase 7's design spike if timeline pressure demands it.
+- Phase 1 must come first because test infrastructure blocks all subsequent YAML changes (Pitfall 4)
+- Phase 2 is zero-risk cleanup that unblocks Phase 3 by fixing docs and enabling the settings.json mapping chain
+- Phase 3 is the core deliverable -- everything else depends on base routing working
+- Phase 4 extends Phase 3 with user-facing features (profiles, overrides, broader command coverage)
+- Phase 5 is safety hardening and documentation -- comes after the feature is working
+- This ordering front-loads risk (prove routing works in Phase 3) and defers polish (Phase 5)
 
 ### Research Flags
 
-Phases likely needing a deeper research or design spike during planning:
-- **Phase 7 (Planning depth):** The exact structure of the per-phase research prompt requires a design decision — specifically, how to distinguish "phases that need research" from "phases that do not" without adding universal overhead to simple phases.
+Phases likely needing deeper research during planning:
+- **Phase 3:** Task tool `model` parameter override precedence -- test whether `Task(model="opus")` overrides agent frontmatter `model: sonnet`. One live test resolves this.
+- **Phase 4:** OpenCode `model:` frontmatter support -- check OpenCode agent spec for equivalent. Low priority but needed for parity.
+- **Phase 5:** GLM-5 constraint passing through Claude Code subagent spawning -- this is the highest-risk unknown. If constraints are not passed, Prime may loop on GLM-5. May require a design decision.
 
-Phases with standard patterns (skip deeper research):
-- **Phase 1:** All fixes pinpointed to exact lines by Oracle audit. No ambiguity.
-- **Phase 2:** Oracle Q3 provides line-level specificity on all 338 suppressions. Three-category triage is a well-understood pattern.
-- **Phase 3:** Oracle Rec 1, 7, 8, 9 provide exact implementation patterns with code examples.
-- **Phase 4:** Deprecation pattern is standard bash; the work is grep analysis across three surfaces.
-- **Phase 5:** TDD evidence gate in continue-gates.md Step 1.10 is the proven model to extend.
-- **Phase 6:** Extraction pattern is proven by three working examples. Dependency graph is confirmed by static analysis.
-- **Phase 8:** The 6 inaccuracies are enumerated; correction is mechanical and paired with doc-truth tests.
-
----
+Phases with standard patterns (skip research-phase):
+- **Phase 1:** Test refactoring -- well-understood pattern, extract shared helper
+- **Phase 2:** Config changes -- trivial edits verified by direct file reads
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | No new dependencies. All patterns derived from direct codebase analysis and Oracle audit at 85% multi-source trust ratio. Anti-patterns confirmed against production bash codebase literature. |
-| Features | HIGH | Oracle audit at 82% confidence with 55 findings; competitor analysis confirms Aether's unique cross-colony learning differentiator; feature dependencies traced explicitly with dependency graph. |
-| Architecture | HIGH | Extraction pattern proven by three working examples in the same codebase. Dependency graph confirmed by static analysis. Consumer API contract (412 call sites) fully mapped. |
-| Pitfalls | HIGH | Grounded in 17 real midden failures, a measured and rising bug-fix ratio, 572+ tests, and static analysis with explicit line citations. Not theoretical — observed behavior with evidence. |
+| Stack | HIGH | Settings.json mechanism verified by direct read. Agent frontmatter confirmed by official Anthropic docs. The mapping chain (frontmatter -> env var -> proxy -> API) is documented Claude Code behavior. |
+| Features | HIGH | GSD provides a working production reference for slot-based routing, profiles, CLI overrides. Caste classification rationale is grounded in GLM-5 vs GLM-5-turbo documented strengths/weaknesses. |
+| Architecture | HIGH | Both approaches (frontmatter and Task param) are proven working in GSD. The routing chain is fully traced from config through Claude Code to proxy. One open question on override precedence. |
+| Pitfalls | HIGH | All pitfalls grounded in direct codebase inspection (184 test occurrences, 20 spawn points, parser divergence verified). The v1 failure mode is documented in detail. |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Dead code surface coverage:** The Oracle's static analysis confirms 76 dead subcommands via `.claude/` and `.aether/docs/` grep. The `.opencode/commands/ant/` surface (40 commands) was not in scope. The deprecation-before-removal strategy in Phase 4 handles this by using runtime warnings as a discovery mechanism.
-
-- **Parallel builder collision rate:** The Oracle reached the "operational ceiling" for static analysis on actual lock contention frequency. The POSIX append atomicity guarantee for `activity.log` and `spawn-tree.txt` is theoretically sound but untested under load. This does not block any phase — it is a monitoring concern for after hardening is complete.
-
-- **Per-phase research prompt design:** Phase 7 introduces a new capability without a prior Aether implementation to reference. The GSD tool provides the model, but adapting it to Aether's scout/route-setter architecture needs a design spike before Phase 7 implementation begins.
-
----
+- **GLM-5 constraint passing through subagent spawning:** Does Claude Code forward temperature/top_p/max_tokens to Task-spawned subagent API calls? If not, GLM-5 reasoning castes may produce unstable output. Resolution: live test during Phase 3 implementation. If constraints are not passed, consider keeping Prime on GLM-5-turbo (inherit) and only routing Archaeologist/Route-Setter to GLM-5.
+- **Task tool `model` parameter vs frontmatter precedence:** If a Task call specifies `model="opus"` but the agent frontmatter says `model: sonnet`, which wins? Resolution: single live test during Phase 3. If Task param does not override, Approach A (frontmatter) is the only viable option.
+- **OpenCode parity:** Does OpenCode support agent frontmatter `model:` field? Resolution: check OpenCode docs during Phase 4. If not, OpenCode agents stay on `inherit` -- acceptable as OpenCode is the secondary target.
+- **Oracle and Architect castes lack dedicated agent files:** Their work runs through Queen or direct CLI invocation. Queen gets `model: opus`, so Queen-performed oracle/architect work uses GLM-5. But direct `/ant:oracle` CLI calls use the parent session model (currently glm-5-turbo). Resolution: acceptable for MVP, document the gap.
 
 ## Sources
 
-### Primary (HIGH confidence — direct codebase analysis + Oracle audit)
+### Primary (HIGH confidence)
+- Official Anthropic docs: Claude Code sub-agents page -- confirms `model:` field accepts `sonnet`, `opus`, `haiku`, `inherit`
+- GSD `resolveModelInternal()` (gsd-tools.cjs:3970-3985) -- working production pattern for slot-based routing
+- GSD `MODEL_PROFILES` table (gsd-tools.cjs:128-140) -- 11 agents, 3 profiles, slot-based mapping
+- GSD `model-profiles.md` / `model-profile-resolution.md` references -- documents `"inherit"` rationale and Task tool usage
+- `~/.claude/settings.json` and `~/.claude/settings.json.glm` -- verified by direct read
+- `.claude/agents/ant/*.md` (22 files) -- all verified, all have `model: inherit` on line 6
+- `.aether/model-profiles.yaml` -- verified by direct read, all 10 castes currently map to glm-5-turbo
+- `.aether/archive/model-routing/README.md` -- v1 failure documentation, confirms env var limitation
 
-- Oracle synthesis: `.aether/oracle/synthesis.md` — 55 findings, 12 iterations, 82% confidence, 85% multi-source trust ratio
-- Oracle gaps: `.aether/oracle/gaps.md` — all 5 questions answered, 9 contradictions resolved
-- Midden records: `.aether/data/midden/midden.json` — 17 real failure entries with timestamps and categories
-- Codebase analysis: `.aether/aether-utils.sh` (11,272 lines), `.aether/utils/` (5,237 lines), `bin/lib/` (6,578 lines)
-- Existing extraction examples: `hive.sh`, `midden.sh`, `skills.sh` in `.aether/utils/` — proven modularization pattern
-
-### Secondary (MEDIUM confidence — multiple external sources agree)
-
-- [Plan-and-Act: Improving Planning of Agents for Long-Horizon Tasks](https://arxiv.org/html/2503.09572v3) — 61% vs 23% first-attempt success rate for structured vs ad-hoc planning (3.2x)
-- [AI Agents in Production: What Actually Works in 2026](https://47billion.com/blog/ai-agents-in-production-frameworks-protocols-and-what-actually-works-in-2026/) — 80% of production effort is refinement, not initial development
-- [LangGraph Production: Checkpointing and Error Recovery](https://markaicode.com/langgraph-production-agent/) — state snapshot patterns as competitor baseline
-- [Spec-Driven Verification for Autonomous Coding Agents](https://agent-wars.com/news/2026-03-14-spec-driven-verification-claude-code-agents) — verification discipline matters more than architectural elaboration
-- [ShellCheck severity documentation](https://shellcheck.net/wiki/severity) — escalation path and `.shellcheckrc` configuration verified
-- [IEEE: Refactoring, Bug Fixing, and New Development Effect on Technical Debt](https://ieeexplore.ieee.org/document/9226289/) — rising fix ratios as a technical debt signal (peer-reviewed)
-- [Bash modularization best practices](https://medium.com/mkdir-awesome/the-ultimate-guide-to-modularizing-bash-script-code-f4a4d53000c2) — source-based modularization performance overhead confirmed negligible
-
-### Tertiary (MEDIUM confidence — single source or domain inference)
-
-- [Composio: Why AI Pilots Fail in Production](https://composio.dev/blog/why-ai-agent-pilots-fail-2026-integration-roadmap) — failure mode patterns in production AI agents
-- [FreeCodeCamp: How to Refactor Complex Codebases](https://www.freecodecamp.org/news/how-to-refactor-complex-codebases/) — incremental refactoring strategies for large bash codebases
+### Secondary (MEDIUM confidence)
+- Claude Code Task tool `model` parameter behavior -- observed working in GSD, not formally documented by Anthropic
+- LiteLLM proxy model name resolution -- proxy config not examined directly, assumed to be correctly configured
+- OpenCode agent frontmatter support -- not yet verified
 
 ---
-
-*Research completed: 2026-03-23*
+*Research completed: 2026-03-27*
 *Ready for roadmap: yes*

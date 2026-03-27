@@ -1,389 +1,364 @@
-# Pitfalls Research
+# Domain Pitfalls: Per-Caste Model Routing
 
-**Domain:** Production hardening of multi-agent AI orchestration system (Aether v2 -> v2.1)
-**Researched:** 2026-03-23
-**Confidence:** HIGH (grounded in 82%-confidence Oracle audit with 55 findings, 17 real midden failures, 572+ test suite, and codebase static analysis)
+**Domain:** Adding per-caste GLM-5/GLM-5-turbo model routing via opus/sonnet model slots in Aether colony orchestration
+**Researched:** 2026-03-27
+**Confidence:** HIGH -- grounded in direct codebase inspection (184 test assertions, spawn mechanism, model-profiles.yaml, settings files, archived routing system, GSD model profile precedent)
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: The Refactoring Death Spiral -- Fixing Errors Introduces More Errors
+### Pitfall 1: The Task Tool Model Parameter Must Actually Be Used -- Or Routing Is Fiction
 
 **What goes wrong:**
-The Oracle found the bug-fix ratio rising from 33.8% to 45.8%, meaning nearly half of all recent changes are fixes for bugs introduced by other changes. When you start a production hardening effort on a codebase in this state, the most natural instinct -- "fix all the error suppression" -- accelerates the spiral. Each error handling fix touches a function used by 10+ callers. Each caller has its own error expectations. Changing the error behavior of a shared function breaks callers that depended on the old (broken) behavior.
+The v1 model routing was archived because Claude Code's Task tool did not support environment variable passing. The archive README states this explicitly (`.aether/archive/model-routing/README.md` line 28): "Claude Code's Task tool does not support environment variable passing to spawned subagents." The current system at v2 still has `spawn-with-model.sh` marked as "non-functional" (archive line 89).
 
-This is the single most dangerous pitfall for Aether's hardening milestone. The 338 error-swallowing patterns in aether-utils.sh exist because callers were written to expect silence. Removing the silence without updating every caller path creates cascading failures across the build/continue lifecycle.
+The GSD system solved this by using the `model` parameter directly on Task calls: `Task(subagent_type="gsd-executor", model="{executor_model}")`. This works because Claude Code's Task tool accepts `"opus"`, `"sonnet"`, `"haiku"`, and `"inherit"` as model parameters. The question for v2.3 is whether the same mechanism can be applied to Aether's builder/watcher/scout spawns.
 
 **Why it happens:**
-The three-layer error suppression (callers suppress memory-capture, memory-capture suppresses sub-steps, sub-steps suppress internals) is load-bearing. The `2>/dev/null || true` pattern on all memory-capture call sites in build-wave.md, build-verify.md, build-complete.md, and continue-advance.md exists because the build lifecycle must not abort when a learning observation fails. If you remove the suppression without adding proper error handling at each layer, a single corrupted learning-observations.json kills all 5 downstream memory steps AND crashes the build.
+The build-wave playbook (`build-wave.md` lines 288-290) currently spawns workers with `subagent_type="aether-builder"` but does NOT pass a `model` parameter. It relies entirely on the parent session's environment (`ANTHROPIC_MODEL` env var) which, as the archive confirms, is NOT inherited by Task-spawned subagents. This means all current spawns use whatever model the parent Queen session uses -- not the caste-specific model.
 
 **How to avoid:**
-1. Triage before fixing. The Oracle's Recommendation 3 is correct: categorize the 338 instances into (a) correct suppression (optional/fallback paths -- keep), (b) lazy suppression (hiding real errors -- fix), (c) dangerous suppression (data-writing operations -- critical fix). Start with category (c) only.
-2. Never remove `|| true` without replacing it with explicit error handling. The pattern is: `result=$(command 2>/dev/null) || { log_warning "command failed"; handle_fallback; }` -- not just deleting `|| true`.
-3. Add a regression test for each suppression point before changing it. If the test does not exist, write the test first, verify it passes with the current behavior, then change the behavior.
-4. Track the fix ratio as a metric. If it rises above 50% during hardening, stop and stabilize before continuing.
+1. Do NOT attempt to use `ANTHROPIC_MODEL` environment variable passing. The archive proves this does not work.
+2. Follow the GSD pattern exactly: resolve the model slot (`"opus"` or `"sonnet"`) before each Task call and pass it as the `model` parameter.
+3. The mapping is: reasoning castes (Prime, Oracle, Archaeologist, Route-Setter, Architect) get `"opus"` slot; execution castes (Builder, Watcher, Scout, Chaos, Colonizer) get `"sonnet"` slot.
+4. Both slots are then mapped to GLM models via the LiteLLM proxy (opus -> glm-5, sonnet -> glm-5-turbo) in the proxy config -- NOT in settings.json.
 
 **Warning signs:**
-- Tests that passed before the hardening phase start failing in unrelated areas
-- The midden starts accumulating "unbound variable crash" entries (3 already exist from previous work)
-- Build or continue commands abort mid-execution with error messages that were previously silent
-- The fix-commit ratio in git log exceeds 1:1 (more fix commits than feature commits)
+- Workers are spawned but their output quality is identical regardless of caste (all using same model)
+- The spawn-tree.txt model column shows the same model for all castes after implementation
+- Claude-only mode works fine but GLM proxy mode shows no difference between castes
 
-**Phase to address:**
-Error handling triage phase -- must come before any modularization work. Triage is read-only analysis; the fixes come after.
+**Phase to address:** Core implementation phase -- this is the foundational mechanism, must be proven working before anything else
 
-**Oracle evidence:** Synthesis Q3 finding 1 (338 error-swallowing patterns), Q3 finding 8 (three-layer error silence), Q5 Recommendation 3 (triage approach), Midden entries (3 unbound variable crashes), Sage analytics (33.8% -> 45.8% rising fix ratio)
+**Evidence:** `.aether/archive/model-routing/README.md` lines 25-44, `.claude/get-shit-done/references/model-profile-resolution.md` lines 17-24, `build-wave.md` line 290
 
 ---
 
-### Pitfall 2: Monolith Extraction Breaks the Case-Statement Dispatch Contract
+### Pitfall 2: Config Swap Workflow Breakage -- The Two-File Dance Gets Fragile
 
 **What goes wrong:**
-aether-utils.sh uses a single case statement to dispatch all 178 subcommands. When you extract subcommands into separate files (the obvious modularization move), you break the dispatch contract. Functions that were defined in the same file scope can no longer reference each other. Helper functions called by the extracted subcommand become undefined. The conditional module sourcing at lines 26-34 (`[[ -f ]] && source`) means modules can silently fail to load, and extracted code inherits this fragility.
+The user switches between Claude API mode and GLM proxy mode by swapping settings files. Currently this works because the model name in settings.json is irrelevant -- the only thing that matters is `ANTHROPIC_BASE_URL` (either pointing to Anthropic or to the LiteLLM proxy). All castes use the same model, so there is no per-caste config to get out of sync.
 
-The Oracle confirmed there are no eval/dynamic dispatch patterns -- it is pure case-statement routing. This means extraction is technically safe, but the 76 dead subcommands (43% of total) create a trap: you cannot tell which helper functions are used only by dead code until you trace every call graph.
+With per-caste routing, the system needs to know which mode is active to decide whether to pass `model: "opus"` or `model: "sonnet"` to Task calls. If the detection logic is wrong, workers get routed to the wrong model.
+
+**Specific failure mode:**
+The user is in Claude API mode (settings.json points to Anthropic). They run `/ant:build`. The build playbook resolves castes and passes `model: "opus"` for Prime. Claude Code interprets `"opus"` as `claude-opus-4` and routes to Anthropic's opus model. This actually works correctly for Claude mode -- it is the GLM proxy mode that requires the proxy-level mapping.
+
+But if the user has GLM proxy settings active (settings.json.3model), `ANTHROPIC_BASE_URL` points to `localhost:4000`. Claude Code sends the `"opus"` request to the LiteLLM proxy, which then maps it to glm-5. This also works -- BUT only if the proxy config has the opus-to-glm-5 mapping.
+
+**The real breakage:** If the proxy config does NOT have the model alias mapping (i.e., the proxy does not know that `opus` should route to `glm-5`), the request fails with "model not found" from the proxy. The proxy silently drops the request or returns an error that Claude Code surfaces as a generic "model error."
 
 **Why it happens:**
-Large bash scripts accumulate shared state through file-scoped variables and functions. An 11,272-line script with 178 subcommands inevitably has functions that are "shared" only because they happen to be in the same file. When you extract subcommand A to a separate file, you discover it depends on helper function X, which also serves subcommand B. You now must decide: duplicate X, extract X to a shared library, or leave A in the monolith.
-
-The 9 already-extracted utility modules (.aether/utils/*.sh) demonstrate this was done before, but the extraction was partial. hive.sh is 24,358 bytes; skills.sh is 20,152 bytes. These are mini-monoliths themselves.
+The current LiteLLM proxy configuration is external to Aether -- it is a separate litellm config.yaml that the user manages. The proxy config and Aether's model-profiles.yaml are two separate systems that need to agree on model aliases. Per-caste routing adds a third layer: settings.json, model-profiles.yaml, and the proxy config must all be aligned.
 
 **How to avoid:**
-1. Before extracting anything, run the dead code removal phase. Remove the 76 confirmed-dead subcommands first. This reduces the file by 15-20% and eliminates false dependency signals. The Oracle confirmed these have no indirect invocation mechanism (case-statement dispatch, not eval).
-2. Extract in dependency order: leaf functions first (no internal dependencies), then mid-level functions, then orchestrators. Never extract an orchestrator (like memory-capture or colony-prime) before its dependencies.
-3. For each extraction, create a "contract test" that calls the extracted function with the same arguments the monolith used and verifies identical output. The existing 572+ tests provide coverage, but they test through the case-statement entry point. You need tests that verify the extracted module independently.
-4. Preserve `set -euo pipefail` in every extracted module. The ERR trap behavior changes when crossing `source` boundaries -- a trap set in the parent is not inherited by sourced scripts in all bash versions. Each extracted module needs its own error configuration header.
+1. Aether should NOT try to detect which mode is active. Instead, Aether should always pass the model slot parameter (`"opus"` or `"sonnet"`) to Task calls. In Claude API mode, Claude Code maps `"opus"` to `claude-opus-4` natively. In proxy mode, the LiteLLM proxy maps it to whatever the proxy config says.
+2. The proxy config mapping (opus -> glm-5, sonnet -> glm-5-turbo) is the user's responsibility. Aether's model-profiles.yaml should document this mapping but NOT try to enforce it.
+3. Add a `model-profile verify` step that checks proxy health AND validates that the expected model aliases exist in the proxy. This already partially exists in aether-utils.sh line 2655-2664.
+4. Do NOT add a "detect active mode" mechanism. Detection is fragile and breaks when the user has non-standard settings. Instead, document the two config files clearly and let the user manage the swap.
 
 **Warning signs:**
-- "Command not found" errors from subcommands that worked before extraction
-- Tests passing when run individually but failing when run as a suite (indicates hidden dependency on shared state from a sourced module)
-- The conditional source pattern (`[[ -f ]] && source`) silently skipping a module that was moved during extraction
+- `/ant:build` spawns workers that fail with "model not found" from the proxy
+- Workers complete but produce output inconsistent with their assigned model (e.g., a builder using opus-level reasoning instead of turbo-level speed)
+- Config swap works in one direction (Claude -> GLM) but not the other
 
-**Phase to address:**
-Dead code removal must come first. Modularization/extraction must come second. They cannot be combined.
+**Phase to address:** Implementation phase -- the model slot mechanism must be designed before config swap integration
 
-**Oracle evidence:** Synthesis Q1 finding 16 (178 subcommands, 76 dead, case-statement dispatch), Q2 finding 2 (silent degradation from conditional sourcing), Q1 finding 14 (CLI/bash separation already clean)
+**Evidence:** `verify-castes.md` lines 46-52, `model-profiles.yaml` line 92-95, `model-verify.js` lines 109-121
 
 ---
 
-### Pitfall 3: Documentation Correction Creates a False Sense of Accuracy
+### Pitfall 3: GLM-5 Looping Despite Proxy Constraints -- The Constraint Escape
 
 **What goes wrong:**
-The Oracle identified 6 instances where documentation says things that are not true (CLAUDE.md claims rolling summary is "highest priority -- never trimmed first" but code trims it first; "125 subcommands" is actually 178; "security gate" oversells the 6-pattern check-antipattern; etc.). The natural response is to update documentation to match reality. But if documentation is corrected while the underlying code is still being refactored, the documentation drifts again within weeks.
+GLM-5 is known to loop in agent workflows. The LiteLLM proxy mitigates this with tight generation constraints (temperature 0.4, top_p 0.85, max_tokens 2500). These constraints work when the proxy is correctly configured. But there are at least four conditions where GLM-5 can escape these constraints:
 
-Worse: documentation corrections that happen in a separate phase from the code changes create a window where documentation is "accurate" but the code is about to change. Anyone reading the docs during that window gets a false understanding.
+1. **Temperature override in settings.json:** If the user's Claude Code settings include `temperature` or `top_p` parameters, they may override the proxy constraints. Claude Code sends these parameters in the API request, and if the LiteLLM proxy is configured to pass them through (rather than enforce its own), GLM-5 runs with the user's values.
+
+2. **Proxy restart:** If the LiteLLM proxy is restarted and the config file is not loaded (e.g., the user runs `litellm` without `--config`), GLM-5 runs with default constraints (temperature 1.0, top_p 1.0, max_tokens unlimited).
+
+3. **Nested agent calls:** GLM-5 spawned as Prime may spawn sub-workers (builders). If the sub-worker spawn does not also apply constraints, the sub-worker runs GLM-5 without constraints. The proxy constraints apply to the request, but GLM-5's own agent tendency to loop is amplified when it spawns further agents.
+
+4. **System prompt too long:** The colony-prime prompt assembly injects queen wisdom, pheromone signals, skills, and research context. If the total prompt exceeds GLM-5's effective reasoning window (not its token limit, but the point where long-context attention degrades), GLM-5 may lose track of termination conditions and loop.
 
 **Why it happens:**
-Documentation and code evolve at different cadences. A doc fix is a 5-minute PR. The corresponding code fix might take a week. If you batch doc fixes into a "documentation accuracy phase" and code fixes into a separate "reliability phase," the two diverge immediately. This is exactly the pattern that created the 6 documentation inaccuracies in the first place -- the code was changed (v2.0 features added), but docs were not updated atomically.
+The proxy constraints are a safety net, but they are not enforced at the application level. Aether relies on the LiteLLM proxy to constrain GLM-5, but Aether has no visibility into whether those constraints are actually in effect. The `model-profile verify` command checks proxy health but does not verify that specific model parameters (temperature, top_p, max_tokens) are set.
 
 **How to avoid:**
-1. Never fix documentation in isolation. Every documentation change must be paired with either (a) the code change it describes, or (b) a test that verifies the documentation claim. If neither exists, add a `[KNOWN INACCURACY]` annotation rather than silently fixing the doc.
-2. Create "doc-truth tests" for critical claims. Example: test that asserts the trim order in colony-prime matches the order documented in CLAUDE.md. This makes documentation drift detectable by CI.
-3. Correct the 6 known inaccuracies atomically with the code phase that changes the related behavior. If the rolling-summary trim order is going to change during error handling improvements, fix the documentation at the same time.
-4. Audit documentation claims only once, at the end of hardening, not at the beginning. Early documentation work is wasted effort if the underlying code is still changing.
+1. Add GLM-5 loop detection at the application level. The spawn-tree.txt already records timestamps. If a worker's spawn-to-completion time exceeds a threshold (e.g., 10 minutes for a single task), log a warning. If completion is not recorded within 20 minutes, flag as likely looped.
+2. Document that reasoning castes (Prime, Oracle) MUST have the LiteLLM proxy running with constraints. If `model-profile verify` detects the proxy is down, warn specifically that GLM-5 castes will loop without constraints.
+3. For the Prime caste specifically: consider whether Prime should ALWAYS use glm-5-turbo despite being a "reasoning" caste. Prime is the orchestrator -- its job is coordination, not deep reasoning. If Prime loops, the entire build hangs.
+4. Ensure the build-wave playbook includes max_turns or equivalent termination instructions in the worker prompt for GLM-5 castes. The current builder prompt does not include explicit termination conditions (build-wave.md lines 326-421).
 
 **Warning signs:**
-- Documentation PRs with no corresponding test or code changes
-- CLAUDE.md edit timestamp is weeks newer than the code it describes
-- Users (or the LLM agents themselves) behaving as though documentation claims are true when they are not -- e.g., expecting rolling summary to be preserved under budget pressure because CLAUDE.md says so
+- A build hangs indefinitely with no worker completions logged to spawn-tree.txt
+- Workers complete but their output is repetitive or circular (GLM-5 re-explaining the same thing)
+- The LiteLLM proxy logs show the same model name in rapid succession (proxy constraint max_tokens is too high, allowing very long responses that look like looping)
 
-**Phase to address:**
-Documentation accuracy should be the final phase, after all code changes are complete and tested. Not the first phase.
+**Phase to address:** Implementation phase (loop detection) and testing phase (verify proxy constraints are effective)
 
-**Oracle evidence:** Synthesis Pattern 1 (6 documentation accuracy instances), Q4 finding 3 (CLAUDE.md trim order inversion), Q1 finding 16 (subcommand count discrepancy), Q3 finding 5 (security gate label oversells)
+**Evidence:** `model-profiles.yaml` lines 16-25 (GLM-5 metadata explicitly warns about "tight constraints for agent stability"), `.aether/archive/model-routing/README.md` line 89, spawn-tree.txt timestamp format
 
 ---
 
-### Pitfall 4: State File Protection Changes Break the Build/Continue Lifecycle
+### Pitfall 4: 184 Hardcoded Model Names In Tests Will Break On Any YAML Change
 
 **What goes wrong:**
-COLONY_STATE.json has 219 direct references across 38 of 43 slash commands and 153 references inside aether-utils.sh. It is accessed through two parallel paths: direct jq calls in slash commands AND via aether-utils.sh subcommands. The Oracle recommends per-phase checkpointing (Rec 1) and closing the continue-advance lock gap (Rec 9). Both are correct and necessary. But implementing them incorrectly breaks the build/continue lifecycle.
+There are 184 occurrences of hardcoded model names (`glm-5-turbo`, `glm-5`, `glm-4.5-air`) across 6 test files. The current model-profiles.yaml has all castes mapped to `glm-5-turbo`. If per-caste routing changes some castes to `glm-5` or adds new model names, every test that asserts on the current model name will fail.
 
-Specifically: the continue-advance step writes COLONY_STATE.json via the LLM Write tool (not a bash command), bypassing all bash-level locking. If you add a lock requirement to state writes, you must also change how the LLM Write tool interaction works in continue-advance -- or the entire continue flow deadlocks.
+Worse: the test files use their own `createMockProfiles()` helper functions that duplicate the model names. These are not reading from the YAML file -- they are hardcoded separately. Changing the YAML does not automatically update the mock profiles in tests.
 
-**Why it happens:**
-The dual-access pattern (jq + subcommands) exists because slash commands are markdown interpreted by Claude Code, not bash scripts. They can call bash subcommands but also use Claude Code's native Write tool. The Write tool does not know about bash file locks. Any hardening that assumes "all state writes go through bash" is wrong.
-
-**How to avoid:**
-1. Map all state mutation paths before adding any locking. The Oracle already traced the full build/continue flow in Synthesis Q2 findings 5-8. Use that trace as the authoritative reference.
-2. Implement checkpointing (backup before write) separately from locking improvements. Checkpointing is purely additive (copy file before mutation) and cannot break existing flows. Locking changes modify control flow and can deadlock.
-3. For the continue-advance LLM Write gap: do not try to add bash locking to the LLM Write tool call. Instead, add a post-write validation step: after the LLM writes COLONY_STATE.json, immediately read it back and validate against schema. This closes the corruption window without changing the write mechanism.
-4. Test the full build-then-continue cycle end-to-end after any state protection change. Unit tests on individual subcommands will not catch lifecycle-level deadlocks.
-
-**Warning signs:**
-- Continue command hangs indefinitely (deadlock from competing lock acquisitions)
-- COLONY_STATE.json contains data from a different phase than expected (race condition between LLM Write and spawn-complete)
-- Backup files (.phase-N.bak) are created but never cleaned up, accumulating disk usage
-- Tests pass but the autopilot loop hangs at the continue step
-
-**Phase to address:**
-State protection phase -- must come after error handling triage (Pitfall 1) but before modularization (Pitfall 2), because state protection changes affect the contract that extracted modules must honor.
-
-**Oracle evidence:** Synthesis Q2 finding 1 (219 references, dual-access), Q2 finding 8 (continue-advance lock gap), Q5 Rec 1 (checkpointing), Q5 Rec 9 (reconciliation)
-
----
-
-### Pitfall 5: Dead Code Removal Accidentally Kills "Hidden Live" Functions
-
-**What goes wrong:**
-The Oracle identified 76 subcommands (43%) as never invoked by any command or playbook. Removing them seems safe -- the Oracle confirmed case-statement dispatch with no eval/dynamic patterns. But some of these "dead" functions are used interactively by operators (via direct `bash .aether/aether-utils.sh <subcommand>` calls in the terminal), used by custom skills, or used by the OpenCode mirror commands that were not included in the Oracle's static analysis scope.
-
-The Oracle analyzed `.claude/commands/ant/` and `.aether/docs/command-playbooks/` for caller references. It did NOT analyze `.opencode/commands/ant/` (40 additional commands), user-created skills at `~/.aether/skills/domain/`, or direct terminal usage patterns.
+The integration test in `model-profiles.test.js` line 422 (`integration: load actual YAML and verify all castes`) reads the actual YAML file but still asserts specific model names: `t.is(modelProfiles.getModelForCaste(profiles, 'builder'), 'glm-5-turbo')`. When builder changes to a different model, this test breaks.
 
 **Why it happens:**
-Static analysis of bash callers can only trace what is written in files within the analyzed scope. Aether has three command surfaces (Claude Code slash commands, OpenCode commands, and direct terminal bash invocation). The Oracle's 85% trust ratio means 15% of findings rely on single sources -- and the dead code finding is based on grep analysis of one command surface.
+The tests were written when all castes used `glm-5-turbo`. The mocks were copy-pasted from the YAML and never updated. There is no test helper that reads the YAML to generate mock profiles dynamically -- each test file has its own copy of the profile data.
 
 **How to avoid:**
-1. Before removing any "dead" subcommand, check all three surfaces: `.claude/commands/ant/`, `.opencode/commands/ant/`, and grep the entire repo including docs and test files.
-2. For subcommands in the "swarm display," "learning display," and "spawning diagnostics" categories identified as dead -- verify these are not used by `/ant:watch`, `/ant:status`, or other display-oriented commands that may call them indirectly through the swarm-display.sh utility.
-3. Do not delete dead code immediately. First, add a deprecation warning: `echo "WARNING: subcommand '$1' is deprecated and will be removed" >&2`. Run for one full development cycle. If no one complains, then remove.
-4. The 76 dead subcommands include "semantic search engine (6)" and "suggest advanced (4)." These were likely built for future features. Check the roadmap for planned features that might need them before removing.
+1. Before changing model-profiles.yaml, create a centralized test helper that reads the actual YAML and generates mock profiles. This way, changing the YAML automatically changes the test expectations.
+2. When changing per-caste assignments, update tests in the SAME commit. Never change the YAML and defer test updates.
+3. Add a "model profile consistency" test that reads the YAML, reads the test mock profiles, and asserts they are in sync. This catches the case where YAML is updated but test mocks are not.
+4. The `createMockProfiles()` helper in each test file should be extracted to a shared test utility (`tests/helpers/mock-profiles.js`) so it only needs to be updated in one place.
 
 **Warning signs:**
-- OpenCode users report "subcommand not found" errors after a release
-- The swarm-display or spawn-tree visualization commands stop working
-- A user-created skill references a subcommand that was removed
-- Tests in tests/bash/ fail because they test removed subcommands (some bash tests may exercise "dead" code)
+- `npm test` fails with "expected 'glm-5' but got 'glm-5-turbo'" or similar assertion errors
+- Tests pass in one test file but fail in another (different mocks are out of sync in different ways)
+- The integration test that reads actual YAML fails while unit tests that use mocks pass (or vice versa)
 
-**Phase to address:**
-Dead code deprecation must come before dead code removal. Deprecation is the first sub-step of modularization. Removal happens one cycle later.
+**Phase to address:** FIRST phase -- before changing any model assignments, refactor test infrastructure to be YAML-driven
 
-**Oracle evidence:** Synthesis Q1 finding 16 (76 dead subcommands, 43% of total), Q1 finding 18 (no eval/dynamic dispatch confirmed), gaps.md (static analysis ceiling acknowledged)
-
----
-
-### Pitfall 6: Memory Pipeline Circuit Breaker Creates New Silent Failures
-
-**What goes wrong:**
-The Oracle's Recommendation 8 (memory pipeline circuit breaker with file recovery) addresses a real problem: corrupted learning-observations.json kills all 5 downstream memory steps silently. The fix is to reset the corrupted file to its template and retry. But if the circuit breaker itself is implemented with the same error-suppression patterns that caused the original problem, you create a new layer of silent failure.
-
-Specifically: if the template file is missing or corrupted, the "recovery" path fails silently. If the midden-write call (to log the corruption event) fails, the audit trail is lost. If the retry succeeds but the original corruption was caused by a concurrent write, the retry will also be corrupted.
-
-**Why it happens:**
-Circuit breaker implementations in bash are inherently fragile because bash has no try/catch mechanism. The `|| { recovery_code; }` pattern looks clean but cannot handle failures within the recovery block without nested error handling. The three-layer suppression problem (Pitfall 1) means adding a circuit breaker adds a fourth layer.
-
-**How to avoid:**
-1. Implement the circuit breaker as a separate, independently-tested function -- not inline in memory-capture. Name it `learning_observations_recover` with its own test suite.
-2. The recovery path must NOT use `|| true`. If recovery fails, it should return a non-zero exit code that the caller can handle. The caller (memory-capture) can then decide to skip learning capture for this cycle and log the failure.
-3. Validate the template file at startup (during module sourcing), not at recovery time. If the template is missing at startup, fail loudly before any colony operations begin.
-4. The midden-write in the recovery path should use a separate, guaranteed-write mechanism (direct append to a recovery log file) rather than the midden system itself, which has its own locking issues (Synthesis Q2 finding 7).
-
-**Warning signs:**
-- The circuit breaker fires repeatedly (indicates the root cause of corruption was not addressed)
-- Learning observations are empty or contain only template data after a build (indicates the breaker fired and reset but new observations were not captured)
-- The midden does not contain corruption entries even though the circuit breaker is logging them (indicates the midden write in the recovery path is also failing)
-
-**Phase to address:**
-Memory pipeline hardening -- must come after error handling triage (Pitfall 1) because the circuit breaker's error handling approach depends on the triage decisions.
-
-**Oracle evidence:** Synthesis Q4 finding 12 (sequential kill-switch), Q3 finding 8 (three-layer error silence), Q5 Rec 8 (circuit breaker design), Q2 finding 7 (midden graceful degradation data loss race)
+**Evidence:** grep of tests/ directory: 184 occurrences across 6 files (model-profiles.test.js: 32, model-profiles-overrides.test.js: 20, model-profiles-task-routing.test.js: 49, cli-override.test.js: 19, cli-telemetry.test.js: 15, telemetry.test.js: 49)
 
 ---
 
 ## Moderate Pitfalls
 
-### Pitfall 7: Hive Brain Type Coercion Fix Breaks Existing Stored Data
+### Pitfall 5: Silent Wrong-Model Spawn -- The Build Playbook Does Not Log Model Selection
 
 **What goes wrong:**
-The string-typed confidence bug (confirmed by both REDIRECT signal and midden entry) causes silent exclusion of valid wisdom from hive-read. The fix is trivial: add `(tonumber? // 0)` to the jq filter. But existing hive entries at `~/.aether/hive/wisdom.json` across all user machines have mixed types. The fix makes previously-excluded entries suddenly visible, potentially flooding worker context with stale or low-quality wisdom that was functionally filtered out.
+The build-wave playbook (`build-wave.md` line 290) spawns workers with `subagent_type="aether-builder"` but does not log which model slot was selected. The `spawn-log` call (`spawn.sh` line 16) accepts an optional `model` parameter, but the build-wave playbook does not pass it. The spawn-tree.txt entry records the model as `"default"` for all workers.
+
+If per-caste routing is implemented but the model selection is not logged, there is no audit trail for debugging. A user reports "my builder seems slower than usual" and there is no way to verify which model the builder actually used.
+
+**Why it happens:**
+The spawn-log function was designed before model routing existed. The model parameter is optional (defaults to `"default"`). The build-wave playbook was written for the single-model era and never updated to pass model information.
 
 **How to avoid:**
-1. Fix the type coercion in hive-read (the read path), and simultaneously add type normalization to hive-store (the write path) so new entries are always numeric.
-2. Add a one-time migration: `hive-migrate` subcommand that reads wisdom.json, coerces all confidence values to numbers, and writes back. Run this during `aether update`.
-3. Do NOT rely on the fix alone. Some entries may have been stored with artificially high confidence as strings. Review the confidence distribution after migration.
+1. When implementing per-caste routing, update the build-wave playbook to pass the resolved model slot to `spawn-log`. The call should look like: `bash .aether/aether-utils.sh spawn-log "Queen" "builder" "{ant_name}" "{task}" "{model_slot}"`.
+2. The spawn-tree.txt format already supports a model field (line 27: `$ts_full|$parent_id|$child_caste|$child_name|$task_summary|$model|$status`). Verify the build-wave playbook populates this field.
+3. Add a post-build verification step that reads spawn-tree.txt and checks that each caste got the expected model slot. If a caste got the wrong model, log a warning to the activity log.
 
 **Warning signs:**
-- Workers suddenly reference wisdom that seems irrelevant or outdated (previously-excluded entries now visible)
-- Colony-prime budget trimming triggers more frequently (more wisdom entries = more content = hits budget cap sooner)
+- spawn-tree.txt shows `"default"` for all workers after per-caste routing is implemented
+- Users cannot determine which model was used for a specific worker
+- Debugging a "wrong model" issue requires re-running the entire build
 
-**Phase to address:** Quick wins / bug fix phase (independent, can be done anytime)
+**Phase to address:** Implementation phase -- model logging should be part of the core routing mechanism
 
-**Oracle evidence:** Synthesis Q3 finding 7, Q4 finding 7, Q5 Rec 4, Midden entry (Chaos finding: String-typed confidence)
+**Evidence:** `spawn.sh` line 16-17 (model parameter), `spawn.sh` line 27 (spawn-tree format with model field), `build-wave.md` line 318 (spawn-log call without model parameter)
 
 ---
 
-### Pitfall 8: Test Suite Becomes a Change Blocker Instead of a Safety Net
+### Pitfall 6: Colony Lifecycle Edge Cases -- Init, Seal, Entomb May Skip Model Resolution
 
 **What goes wrong:**
-Aether has 572+ tests, with 1 currently failing (context-continuity compact signals test). During production hardening, test count typically grows. But if tests are written against current (broken) behavior rather than desired behavior, they cement the bugs they should be catching. Then when you fix the underlying code, dozens of tests fail because they expected the broken behavior.
+The build-wave playbook is the primary spawn mechanism, but Aether has other spawn contexts:
 
-The existing test failure (`pheromone-prime --compact respects max signal limit` checking for 'COMPACT SIGNALS' string) demonstrates this: the test asserts a specific string in the prompt output, but the code was changed and the string format diverged. This is a test coupled to implementation details, not behavior.
+1. **`/ant:init`** initializes a colony. If it spawns workers for colonize/survey, those workers bypass the build-wave playbook and may not get model routing.
+2. **`/ant:seal`** marks a colony complete. It may spawn workers for cleanup or archiving.
+3. **`/ant:entomb`** archives a completed colony.
+4. **`/ant:swarm`** spawns parallel scouts for bug investigation.
+5. **`/ant:oracle`** runs deep research with the RALF loop.
+6. **`/ant:chaos`** runs resilience testing.
+
+These commands may spawn workers directly (via Task tool) without going through the build-wave playbook's model resolution logic. If model routing is only implemented in build-wave.md, workers spawned by these other commands get whatever model the parent session uses.
+
+**Why it happens:**
+The build-wave playbook is the most complex spawn mechanism. Other commands have simpler spawn logic that was not designed with model routing in mind. Each command is a separate markdown file interpreted by Claude Code, so there is no shared "spawn with model" function they all call.
 
 **How to avoid:**
-1. Before hardening, audit existing tests for "testing the bug" patterns. Any test that asserts on error-suppression behavior (e.g., "this function returns empty string on error") should be flagged for review.
-2. New tests during hardening should assert on desired behavior, not current behavior. Write the test for what the code SHOULD do after the fix, then make it pass.
-3. Fix the 1 existing test failure before starting hardening. A test suite that is already red provides no signal -- you cannot distinguish "test broke because of my change" from "test was already broken."
-4. Avoid test explosion. The 572+ tests run in 2+ minutes. If hardening doubles the test count without improving signal-to-noise, CI becomes a bottleneck. Focus on high-value integration tests over unit tests for error handling paths.
+1. Create a shared "model resolution" snippet that can be included in any spawn command. This snippet should: (a) determine the caste, (b) look up the model slot from model-profiles.yaml, (c) pass the model parameter to the Task call.
+2. Audit every command that spawns workers and update it to include the model resolution snippet. Commands to check: init.md, seal.md, entomb.md, swarm.md, oracle.md, chaos.md.
+3. For the initial implementation, it is acceptable to only route models in build-wave.md and have other commands use the default. But document this limitation clearly.
+4. The spawn-log call should always include the model parameter (Pitfall 5), even if the model is "default" for commands that do not yet support routing. This creates an audit trail for future implementation.
 
 **Warning signs:**
-- Test count grows but the same bugs keep recurring (tests are too narrow)
-- Tests that pass with `|| true` in the code under test fail when `|| true` is removed (tests were testing the suppressed path)
-- CI takes longer than 5 minutes (developer velocity drops, people skip tests)
+- Workers spawned by `/ant:swarm` use a different model than workers spawned by `/ant:build`
+- Oracle research quality is inconsistent (sometimes uses glm-5, sometimes glm-5-turbo)
+- Seal/entomb cleanup workers fail if they need capabilities not available in the default model
 
-**Phase to address:** Test audit should be a sub-task of the error handling triage phase
+**Phase to address:** Second phase -- after build-wave routing is proven, extend to other spawn commands
 
-**Oracle evidence:** Sage analytics (rising fix ratio), 1 currently failing test (context-continuity), 572+ tests as existing safety net
+**Evidence:** CLAUDE.md lists 44 commands, build-wave.md is one of 9 playbooks in `.aether/docs/command-playbooks/`
 
 ---
 
-### Pitfall 9: Parallel Builder Race Conditions Are Made Worse by Lock Improvements
+### Pitfall 7: User Settings.json Missing Expected Model Slot Mappings
 
 **What goes wrong:**
-The Oracle found midden.json has a specific data loss race (shared temp file path for lockless writes), activity.log and spawn-tree.txt are unprotected (relying on POSIX append atomicity), and COLONY_STATE.json has a continue-advance lock gap. The instinct is to add locking everywhere. But adding locks to paths that previously did not lock creates new deadlock possibilities and performance bottlenecks.
+The PROJECT.md scope says "Map opus slot to glm-5, sonnet slot to glm-5-turbo." This mapping must exist somewhere for the proxy to route correctly. If the user's settings.json does not have model mappings that align with Aether's expectations (or if the user has custom model aliases), the routing fails silently.
 
-Specifically: midden-write currently falls through to a lockless write when the lock fails (by design -- midden is non-critical). If you make the lock mandatory, a slow builder holding the midden lock blocks all other builders from logging failures. During a cascade of failures (the exact scenario where midden is most needed), the system deadlocks on midden writes instead of recording them.
+Specifically: Claude Code's Task tool accepts `"opus"`, `"sonnet"`, `"haiku"` as model parameters. These are Claude Code's own aliases. In Claude API mode, `"opus"` maps to `claude-opus-4`. In proxy mode, the LiteLLM proxy needs to know that `"opus"` maps to `glm-5`. If the user's proxy config maps `"opus"` to something else (or does not map it at all), the routing is wrong.
+
+**Why it happens:**
+Aether's model-profiles.yaml defines the Aether-level mapping (caste -> model name). The LiteLLM proxy config defines the proxy-level mapping (model alias -> actual model). The user's settings.json defines the Claude Code-level connection. These are three separate config files managed by different parts of the system. They can be independently correct but mutually inconsistent.
 
 **How to avoid:**
-1. Fix the midden temp file race by using PID-qualified temp files (`midden.json.tmp.$$` instead of `midden.json.tmp`). This eliminates the race without adding locks.
-2. For activity.log and spawn-tree.txt, keep the POSIX append pattern. The Oracle confirmed write sizes are well under PIPE_BUF (4096 bytes). Adding locks here is pure overhead with no benefit.
-3. Only add locking where the Oracle identified actual gaps: the continue-advance COLONY_STATE.json write. And even there, prefer validation-after-write over locking (see Pitfall 4).
-4. Never add a blocking lock (wait-for-lock) in a parallel builder code path. If you must lock, use a try-lock with graceful fallback, same as the existing midden pattern but with a PID-qualified temp file.
+1. In `model-profiles.yaml`, use the Claude Code model slot names (`"opus"`, `"sonnet"`, `"haiku"`) as the model identifiers, NOT GLM-specific names. The current YAML uses `glm-5-turbo` directly. Changing to use slot names means the YAML is mode-agnostic: it says "builder uses sonnet" rather than "builder uses glm-5-turbo."
+2. The LiteLLM proxy config is where the actual GLM mapping lives: `opus -> glm-5`, `sonnet -> glm-5-turbo`. This mapping is the user's responsibility. Aether should document the expected mapping but not try to configure the proxy.
+3. Add a `model-profile verify` check that tests the model slot by making a tiny request to the proxy and checking the response. This verifies end-to-end that "opus" actually routes to the expected model.
+4. The `DEFAULT_MODEL` constant in `model-profiles.js` (line 17) should be `"sonnet"` (the safe default), not `"glm-5-turbo"` (a GLM-specific name).
 
 **Warning signs:**
-- Build times increase noticeably after lock additions (lock contention)
-- Parallel builders complete one-at-a-time instead of in parallel (accidental serialization)
-- Deadlock during high-failure scenarios (all builders waiting on midden lock)
+- `model-profile verify` passes (proxy is healthy) but workers get the wrong model
+- Users report that "all workers are using opus" when they should be split
+- The proxy logs show model names that do not match expectations
 
-**Phase to address:** Concurrency fixes -- should be a targeted sub-phase, not a general "add locks everywhere" effort
+**Phase to address:** Implementation phase -- the model naming convention must be decided before writing any code
 
-**Oracle evidence:** Synthesis Q2 findings 6-8 (concurrent write protection analysis), Q2 finding 7 (midden temp file race)
+**Evidence:** `model-profiles.js` line 17 (`DEFAULT_MODEL = 'glm-5-turbo'`), `model-profiles.yaml` lines 4-14 (GLM-specific model names), `verify-castes.md` lines 55-57 (lists GLM model names as "available models via LiteLLM proxy")
 
 ---
 
-### Pitfall 10: Hardening the Planning Quality Creates Infinite Recursion
+### Pitfall 8: The Bash YAML Parser and Node.js Library Can Return Different Results
 
 **What goes wrong:**
-The current planning pipeline (`/ant:plan`) produces shallow phases without per-phase research. The Oracle research was specifically commissioned to improve this. But if you make the planning phase too deep (e.g., requiring Oracle-level research for every phase), the planning phase itself becomes a multi-day effort that produces plans that are stale by the time they are executed.
+Aether has TWO model profile parsers:
+1. **Bash awk parser** in aether-utils.sh (lines 2626-2628) -- used by `model-profile get` and `model-profile list`
+2. **Node.js yaml.load parser** in model-profiles.js (lines 36-57) -- used by `model-profile select` and `model-profile validate`
 
-The planning pipeline currently generates phases by having the LLM analyze the colony state and propose a phase breakdown. Adding research requirements means each phase plan triggers research, which produces findings, which may change the plan, which triggers new research. Without a termination condition, planning becomes the bottleneck.
+The bash parser uses a simple awk pattern (`/^  '$caste':/{print $2; exit}`) that extracts the second field from lines matching the caste name. The Node.js parser uses `js-yaml` which does full YAML parsing including environment variable substitution, multiline strings, comments, and anchors.
+
+These parsers can diverge on:
+- Comments after values (bash parser ignores everything after field 2, Node.js strips comments properly)
+- Environment variable substitution (Node.js handles `${VAR:-default}`, bash parser does not)
+- YAML anchors/aliases (Node.js resolves them, bash parser returns the literal `*anchor`)
+- User overrides section (Node.js reads `user_overrides` and applies them in `getEffectiveModel`, bash parser only reads `worker_models`)
+
+**Why it happens:**
+The bash parser was written first (quick awk for simple YAML). The Node.js library was added later for more complex operations (task routing, override management). Neither was replaced by the other. The bash parser is still used for `model-profile get` because it avoids the Node.js startup overhead.
 
 **How to avoid:**
-1. Add per-phase research only for phases flagged as "likely needs deeper research" (the GSD pattern). Not every phase needs research -- simple phases ("update documentation," "add tests for X") do not benefit from research overhead.
-2. Set a hard time budget for per-phase research: 1 investigation cycle (not a full Oracle RALF loop). If the question cannot be answered in one cycle, flag it for resolution during execution, not planning.
-3. Keep the planning output format unchanged. Do not add new required fields to the phase plan schema -- it would break continue.md and autopilot (run.md) which parse the phase plan structure.
-4. Research findings should inform the plan but not block it. "Uncertainty" is a valid phase annotation, not a reason to stop planning.
+1. When implementing per-caste routing, use ONLY the Node.js library for model resolution in the build-wave playbook. The bash `model-profile get` command is used by other commands and should be updated to delegate to the Node.js library (like `model-profile select` already does).
+2. If the bash parser must be kept (for performance reasons), add a test that runs both parsers against the same YAML and asserts identical output. This catches divergence early.
+3. The `model-profile get` bash implementation does NOT check user_overrides (line 2628-2631). The Node.js `getEffectiveModel` does check them (lines 321-339). If per-caste routing uses `getEffectiveModel` but logging/display uses `model-profile get`, the model shown to the user may differ from the model actually used.
 
 **Warning signs:**
-- Planning takes longer than the execution of a simple phase
-- Plans are revised 3+ times before any phase is built
-- Research findings contradict each other and planning stalls waiting for resolution
-- The autopilot refuses to start because the plan schema changed
+- `model-profile get builder` returns `glm-5-turbo` but the actual spawn uses `glm-5` (because of a user override)
+- `model-profile list` shows different values than what the build-wave playbook resolves
+- Tests pass for the Node.js library but fail for the bash parser (or vice versa)
 
-**Phase to address:** Planning quality improvements should be incremental, not a big-bang rewrite of the planning pipeline
+**Phase to address:** Implementation phase -- standardize on one parser before routing logic depends on consistent results
+
+**Evidence:** aether-utils.sh lines 2626-2631 (bash awk parser), model-profiles.js lines 36-57 (Node.js yaml.load), model-profiles.js lines 321-339 (getEffectiveModel with overrides)
 
 ---
 
-### Pitfall 11: Agent Fallback Degradation Goes Unnoticed During Testing
+## Minor Pitfalls
+
+### Pitfall 9: Archived Model Routing Files Create Confusion
 
 **What goes wrong:**
-When a specialized agent (e.g., aether-chaos.md with 200+ lines of discipline) falls back to a general-purpose agent with a one-sentence role description, the system silently continues at dramatically reduced capability. During development, all 22 agents are available. But in production or in non-standard environments, agent resolution can fail. The Oracle identified this but noted it happens silently.
+`.aether/archive/model-routing/` contains a complete model routing implementation that was archived because it did not work (Task tool limitation). The archive includes model-profiles.yaml with a different caste-to-model mapping (using minimax-2.5 and kimi-k2.5), a model-profiles.js file, and a detailed README explaining why it failed.
 
-If hardening adds new agent capabilities or changes agent definitions, the fallback path is never updated (because the fallback is a single generic sentence). This means any improvement to agents has zero effect when fallback triggers.
+Developers (or the LLM itself) may reference the archived implementation as a "how to do it" guide, not realizing it was specifically archived because it does not work. The archived YAML has different model names and a different architecture (3 models: glm-5, minimax-2.5, kimi-k2.5 vs. current 2 models: glm-5, glm-5-turbo).
 
 **How to avoid:**
-1. Implement the Oracle's Rec 6: log fallback as a midden entry and include a WARNING in build synthesis.
-2. Add an agent resolution test that verifies all 22 agents resolve correctly in the test environment. If any agent falls back during tests, the test should fail.
-3. When adding new capabilities to an agent definition, also update the fallback description to include at least the critical behavioral rules (output format, boundary declarations).
+1. Before starting implementation, add a prominent note to the archived files: "ARCHIVED -- DO NOT REFERENCE FOR IMPLEMENTATION. See v2.3 milestone plan for current approach."
+2. Ensure the new implementation uses the GSD pattern (model parameter on Task call) rather than the archived approach (environment variable passing).
+3. Consider deleting the archive entirely if it causes confusion. The README explains the problem well enough that the archive files are not needed.
 
-**Warning signs:**
-- Build quality is inconsistent between environments (agents resolve in one, fall back in another)
-- Chaos or Gatekeeper findings are unusually shallow (general-purpose agent lacks the discipline of the specialized definition)
+**Phase to address:** Pre-implementation cleanup
 
-**Phase to address:** Agent reliability -- can be addressed alongside the error handling phase since it involves adding logging/detection
-
-**Oracle evidence:** Synthesis Q3 finding 4 (dramatic fallback degradation), Q5 Rec 6 (fallback logging)
+**Evidence:** `.aether/archive/model-routing/README.md`, `.aether/archive/model-routing/model-profiles.yaml` (different model names)
 
 ---
 
-## Technical Debt Patterns
+### Pitfall 10: Model Metadata Section Becomes Stale After Per-Caste Changes
 
-Shortcuts that seem reasonable during hardening but create long-term problems.
+**What goes wrong:**
+model-profiles.yaml has a `model_metadata` section (lines 15-61) with capabilities, context windows, speed, and cost tiers for each model. This metadata is used by `getModelMetadata()` and `getAllAssignments()` in model-profiles.js. If new model names are added or models are renamed, the metadata section must be updated in sync.
 
-| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
-|----------|-------------------|----------------|-----------------|
-| Adding `|| true` to new code to "match existing style" | Consistency with current patterns | Perpetuates the three-layer silence that caused the rising fix ratio | Never -- new code should use explicit error handling |
-| Extracting modules without contract tests | Faster modularization | Silent regressions when shared helpers change | Never -- extraction without tests is invisible breakage |
-| Fixing documentation before fixing code | Looks like progress, addresses known inaccuracies | Documentation drifts again when code changes | Only for the final hardening phase, after code is stable |
-| Removing dead code without deprecation cycle | Immediate file size reduction | Breaks undiscovered callers in OpenCode, user skills, or terminal usage | Only for subcommands with zero grep hits across the ENTIRE repo (including .opencode/) |
-| Making midden writes mandatory (always locked) | Eliminates data loss race | Creates deadlock under cascade failures | Never -- use PID-qualified temp files instead |
-| Adding per-phase research to all phases | Better planning quality | Planning becomes a bottleneck; simple phases do not need research | Only for phases flagged as "likely needs deeper research" |
+Currently, the metadata says glm-5 has `context_window: 200000` and glm-5-turbo has `context_window: 200000`. If the per-caste routing adds a third model (e.g., glm-4.5-air for validation tasks), the metadata section must include it. If it does not, `validateModel()` will reject the new model name because it is not in `model_metadata`.
 
-## "Looks Done But Isn't" Checklist
+**How to avoid:**
+1. Any model name change must update both `worker_models` and `model_metadata` sections.
+2. Add a validation test that checks: for every model in `worker_models`, there is a corresponding entry in `model_metadata`. This catches missing metadata entries immediately.
+3. The `validateModel()` function (model-profiles.js line 131) checks `model_metadata` keys. If a caste is assigned a model that is not in `model_metadata`, validation fails. This is actually good behavior -- but it will surprise developers who add a model to `worker_models` and forget `model_metadata`.
 
-Things that appear complete during hardening but are missing critical pieces.
+**Phase to address:** Implementation phase -- update metadata when changing model assignments
 
-- [ ] **Error handling triage:** Often missing the "correct suppression" category -- 338 instances triaged but all marked as "fix" when many are genuinely correct fallback paths. Verify each category has entries.
-- [ ] **Dead code removal:** Often missing OpenCode command surface check -- grep `.claude/commands/ant/` and `.aether/docs/command-playbooks/` but forget `.opencode/commands/ant/` (40 commands).
-- [ ] **State checkpointing:** Often missing cleanup -- backups created before each phase but never pruned. Verify disk usage after 10+ phases with backups enabled.
-- [ ] **Memory circuit breaker:** Often missing the "what if recovery fails" path -- breaker resets to template but does not handle template-not-found. Verify the template exists at startup.
-- [ ] **Documentation corrections:** Often missing "doc-truth tests" -- documentation updated but no test verifies the claim remains true. Verify at least the 6 known inaccuracies have corresponding tests.
-- [ ] **Type coercion fix:** Often missing the migration step -- hive-read fixed but existing string-typed entries in `~/.aether/hive/wisdom.json` not migrated. Verify migration runs during `aether update`.
-- [ ] **Lock improvements:** Often missing deadlock testing -- locks added but never tested under contention. Verify parallel builders can complete when all contend on the same lock.
-- [ ] **Autopilot reconciliation:** Often missing the "operator prompt" UX -- desync detected but the pause message is confusing. Verify the pause message shows both values and suggests a resolution.
+**Evidence:** model-profiles.yaml lines 15-61, model-profiles.js lines 131-140
 
-## Recovery Strategies
+---
 
-When pitfalls occur despite prevention, how to recover.
+### Pitfall 11: The "inherit" Pattern From GSD Does Not Apply Here
 
-| Pitfall | Recovery Cost | Recovery Steps |
-|---------|---------------|----------------|
-| Refactoring death spiral (fix ratio > 50%) | MEDIUM | Revert to last known-good commit. Run full test suite to confirm green. Resume with smaller, more targeted changes. Track fix ratio per-commit, not per-phase. |
-| Monolith extraction breaks dispatch | LOW | Revert the extraction. The monolith still works. Re-attempt with contract tests written first. |
-| Documentation drift after correction | LOW | Run doc-truth tests. Fix any that fail. If no doc-truth tests exist, re-audit documentation against current code. |
-| State protection deadlock | HIGH | Revert lock changes. The existing unprotected path has worked for all of v1 and v2. Add checkpointing (purely additive) without lock changes. Retry lock changes with deadlock detection. |
-| Dead code removal breaks OpenCode | MEDIUM | Re-add the removed subcommands. Add deprecation warnings. Wait one cycle. Re-check OpenCode surface before removing. |
-| Memory circuit breaker creates new silent failures | MEDIUM | Revert to the original fire-and-forget behavior (it at least captures learnings when not corrupted). Rewrite the breaker as an isolated function with its own test suite. |
-| Parallel builder deadlock from lock additions | HIGH | Revert all lock changes. Build times will return to normal immediately. Re-attempt with try-lock-with-fallback pattern, never blocking locks. |
+**What goes wrong:**
+GSD uses `"inherit"` for opus-tier agents so they use the parent session's model, avoiding org policy conflicts. The PROJECT.md says "Map opus slot -> glm-5." If someone copies the GSD pattern and uses `"inherit"` for reasoning castes, those castes will use the parent Queen's model -- which defeats the purpose of per-caste routing.
 
-## Pitfall-to-Phase Mapping
+The GSD pattern makes sense for GSD because GSD agents are spawned by an orchestrator that may be running on any model. But in Aether, the Queen is always running on the same model as the workers (because of the single-session constraint). There is no "inherit" benefit -- the Queen IS the session model.
 
-How roadmap phases should address these pitfalls.
+**How to avoid:**
+1. Use `"opus"` for reasoning castes, not `"inherit"`. The GSD reasoning for `"inherit"` (avoiding org policy conflicts with specific opus versions) does not apply when routing through a LiteLLM proxy that maps `"opus"` to `glm-5`.
+2. Document why Aether uses `"opus"` instead of `"inherit"`, so future developers do not copy the GSD pattern without understanding the difference.
 
-| Pitfall | Prevention Phase | Verification |
-|---------|------------------|--------------|
-| 1: Refactoring death spiral | Error handling triage (first phase) | Fix ratio tracked per-commit; stays below 50% |
-| 2: Monolith extraction breaks dispatch | Modularization (after triage + dead code) | All 572+ tests pass; no "command not found" errors |
-| 3: Documentation drift | Documentation accuracy (final phase) | Doc-truth tests exist for 6+ known inaccuracies |
-| 4: State protection breaks lifecycle | State protection (after triage, before modularization) | Full build-then-continue cycle completes without deadlock |
-| 5: Dead code removal kills live functions | Dead code deprecation (before modularization) | Deprecation warnings logged; zero complaints after one cycle |
-| 6: Circuit breaker creates new failures | Memory pipeline hardening (after triage) | Circuit breaker fires and recovers in test; recovery failure path also tested |
-| 7: Hive type coercion breaks stored data | Quick wins (independent) | Migration runs cleanly; confidence distribution is reasonable |
-| 8: Tests block instead of protect | Test audit (part of triage phase) | 1 existing failure fixed; no tests assert on suppressed behavior |
-| 9: Locks cause deadlock | Concurrency fixes (targeted sub-phase) | Parallel builders complete under contention in test |
-| 10: Planning recursion | Planning improvements (incremental) | Planning completes in bounded time; autopilot loop unbroken |
-| 11: Agent fallback unnoticed | Agent reliability (alongside triage) | Agent resolution test verifies all 22 agents; fallback logs to midden |
+**Phase to address:** Implementation phase -- model naming decision
 
-## Phase Ordering Implications
+**Evidence:** `.claude/get-shit-done/references/model-profiles.md` line 92 (explains inherit rationale), PROJECT.md line 13 (Aether uses opus slot -> glm-5)
 
-Based on pitfall dependencies, the hardening phases MUST be ordered:
+---
 
-1. **Error handling triage** (read-only analysis, informs all other phases)
-2. **Quick wins** (type coercion, existing test fix -- independent, no risk)
-3. **State protection** (checkpointing is additive; lock changes need triage results)
-4. **Dead code deprecation** (adds warnings, no removal -- must precede modularization)
-5. **Memory pipeline hardening** (circuit breaker depends on triage decisions)
-6. **Concurrency fixes** (targeted, not "add locks everywhere")
-7. **Modularization** (depends on dead code removal, state protection, error handling all being stable)
-8. **Agent reliability** (can parallel with any phase after triage)
-9. **Planning improvements** (incremental, non-blocking)
-10. **Documentation accuracy** (LAST -- only after all code is stable)
+## Phase-Specific Warnings
 
-**Critical ordering constraint:** Modularization (phase 7) depends on phases 1, 3, 4, and 5 all being complete. Attempting modularization before error handling, state protection, and dead code work is the highest-risk mistake.
+| Phase | Likely Pitfall | Mitigation |
+|-------|---------------|------------|
+| Test infrastructure refactor | Pitfall 4: 184 hardcoded model names | Centralize mock profiles before any YAML changes |
+| Core routing implementation | Pitfall 1: Task tool model parameter | Prove with a single Task(spawn, model="opus") call before building full system |
+| Core routing implementation | Pitfall 7: Model naming convention | Use Claude Code slot names ("opus"/"sonnet") not GLM names in model-profiles.yaml |
+| Core routing implementation | Pitfall 8: Parser divergence | Standardize on Node.js library, deprecate bash awk parser |
+| Proxy config documentation | Pitfall 2: Config swap breakage | Document expected proxy mapping clearly, add verify step |
+| GLM-5 loop prevention | Pitfall 3: Constraint escape | Add application-level loop detection, document Prime-as-turbo option |
+| Build playbook update | Pitfall 5: Missing model logging | Pass model slot to spawn-log in every spawn call |
+| Non-build command update | Pitfall 6: Lifecycle edge cases | Audit all spawn commands, update one by one |
+| YAML changes | Pitfall 10: Stale metadata | Add validation test for metadata completeness |
+| Pre-implementation cleanup | Pitfall 9: Archive confusion | Delete or annotate archived files |
+
+---
+
+## Suggested Implementation Order
+
+Based on pitfall dependencies, the phases should be ordered:
+
+1. **Test infrastructure refactor** -- Centralize 184 hardcoded model name references before any YAML changes (Pitfall 4)
+2. **Pre-implementation cleanup** -- Annotate or delete archived routing files (Pitfall 9)
+3. **Core routing mechanism** -- Implement model slot resolution + Task tool model parameter (Pitfalls 1, 7, 8)
+4. **Build playbook integration** -- Wire routing into build-wave.md, add model logging (Pitfalls 5, 10)
+5. **Proxy verification** -- Add end-to-end model verification, document config swap (Pitfall 2)
+6. **GLM-5 loop prevention** -- Add application-level loop detection (Pitfall 3)
+7. **Lifecycle command audit** -- Extend routing to non-build spawn commands (Pitfall 6)
+8. **Documentation update** -- Update verify-castes.md, CLAUDE.md, and all references (Pitfall 11)
+
+**Critical ordering constraint:** Step 1 (test refactor) MUST come before Step 2 (any YAML changes). If YAML changes happen before test infrastructure is updated, every test change becomes a guessing game of "which of the 184 occurrences does this need to match?"
+
+---
 
 ## Sources
 
-- Oracle Synthesis (82% confidence, 55 findings across 5 questions) -- `/Users/callumcowie/repos/Aether/.aether/oracle/synthesis.md`
-- Oracle Gaps (all 5 questions answered, 9 contradictions resolved) -- `/Users/callumcowie/repos/Aether/.aether/oracle/gaps.md`
-- Midden records (17 real failure entries) -- `/Users/callumcowie/repos/Aether/.aether/data/midden/midden.json`
-- Codebase static analysis (11,272 lines, 418 `2>/dev/null` patterns, 104 `|| true` patterns)
-- [Composio: Why AI Pilots Fail in Production](https://composio.dev/blog/why-ai-agent-pilots-fail-2026-integration-roadmap) -- MEDIUM confidence
-- [ML Mastery: 5 Production Scaling Challenges for Agentic AI](https://machinelearningmastery.com/5-production-scaling-challenges-for-agentic-ai-in-2026/) -- MEDIUM confidence
-- [Axify: What Is Dead Code? A 2025 Guide](https://axify.io/blog/dead-code) -- MEDIUM confidence
-- [FreeCodeCamp: How to Refactor Complex Codebases](https://www.freecodecamp.org/news/how-to-refactor-complex-codebases/) -- MEDIUM confidence
-- [Sean Goedecke: Mistakes Engineers Make in Large Codebases](https://www.seangoedecke.com/large-established-codebases/) -- MEDIUM confidence
-- [IEEE: Refactoring, Bug Fixing, and New Development Effect on Technical Debt](https://ieeexplore.ieee.org/document/9226289/) -- HIGH confidence (peer-reviewed)
+- `.aether/archive/model-routing/README.md` -- HIGH confidence (direct codebase inspection, explains why v1 routing failed)
+- `.aether/model-profiles.yaml` -- HIGH confidence (current configuration, lines 1-96)
+- `bin/lib/model-profiles.js` -- HIGH confidence (current library code, 446 lines)
+- `bin/lib/model-verify.js` -- HIGH confidence (verification logic, 289 lines)
+- `.aether/utils/spawn.sh` -- HIGH confidence (spawn mechanism, 240 lines)
+- `.aether/utils/spawn-with-model.sh` -- HIGH confidence (non-functional spawn helper, 57 lines)
+- `.aether/docs/command-playbooks/build-wave.md` -- HIGH confidence (build spawn logic, 598 lines)
+- `.aether/aether-utils.sh` lines 2610-2760 -- HIGH confidence (model-profile bash commands)
+- `.claude/commands/ant/verify-castes.md` -- HIGH confidence (current documentation of model system)
+- `.claude/get-shit-done/references/model-profile-resolution.md` -- HIGH confidence (GSD working pattern)
+- `.claude/get-shit-done/references/model-profiles.md` -- HIGH confidence (GSD model profile table)
+- `.planning/PROJECT.md` -- HIGH confidence (milestone scope definition)
+- Test files (184 model name occurrences) -- HIGH confidence (direct grep results)
 
 ---
-*Pitfalls research for: Aether v2 production hardening*
-*Researched: 2026-03-23*
+*Pitfalls research for: Aether v2.3 Per-Caste Model Routing*
+*Researched: 2026-03-27*

@@ -1,512 +1,547 @@
-# Architecture Research: Production Hardening of Aether CLI
+# Architecture Research: Per-Caste Model Routing
 
-**Domain:** Multi-agent CLI tool (bash + Node.js dual runtime)
-**Researched:** 2026-03-23
-**Confidence:** HIGH (based on direct codebase analysis + established patterns)
+**Domain:** Multi-agent model routing within Claude Code Task tool
+**Researched:** 2026-03-27
+**Confidence:** HIGH (based on direct codebase analysis of all relevant files + GSD proven pattern)
 
-## Current Architecture (As-Is)
+---
 
-```
-+-------------------------------------------------------------------+
-|                    CONSUMER LAYER                                  |
-|  +--------------------+  +--------------------+                    |
-|  | 43 Slash Commands  |  | 22 Agent Defns     |  (Markdown files  |
-|  | (.claude/commands) |  | (.claude/agents)   |   interpreted by  |
-|  +--------+-----------+  +--------+-----------+   Claude Code)    |
-|           | bash exec             | bash exec                     |
-+-----------|------------------------|-----------+------------------+
-|                    MONOLITH (aether-utils.sh)                      |
-|  11,272 lines | 178 subcommands | single case dispatch             |
-|  +---------+ +----------+ +----------+ +----------+               |
-|  | Colony  | | Pheromone| | Learning | | Swarm    | <-- inline     |
-|  | State   | | System   | | Engine   | | Ops      |     in the    |
-|  +----+----+ +----+-----+ +----+-----+ +----+-----+    monolith   |
-|       |           |            |             |                     |
-|  sources at startup:                                               |
-|  +----------+ +----------+ +----------+ +----------+              |
-|  | hive.sh  | |midden.sh | |skills.sh | | xml-*.sh | <-- already  |
-|  | (561 ln) | | (260 ln) | | (502 ln) | | (1023 ln)|   extracted  |
-|  +----------+ +----------+ +----------+ +----------+              |
-|  + file-lock.sh, atomic-write.sh, error-handler.sh (infra)        |
-+-------------------------------------------------------------------+
-|                    NODE.JS CLI (bin/cli.js)                         |
-|  Distribution, hub management, model profiles, telemetry           |
-|  16 modules in bin/lib/ (6,578 lines total)                        |
-|  Does NOT call aether-utils.sh at runtime                          |
-+-------------------------------------------------------------------+
-|                    STATE LAYER                                      |
-|  +------------------+  +--------------+  +--------------+         |
-|  | COLONY_STATE.json|  |pheromones.json|  | midden.json  |         |
-|  | (central nexus)  |  |              |  |              |         |
-|  | 90 refs in bash  |  |              |  |              |         |
-|  | 20+ refs in cmds |  |              |  |              |         |
-|  +------------------+  +--------------+  +--------------+         |
-|  + constraints.json, flags.json, session.json, spawn-tree.txt     |
-|  + ~/.aether/hive/wisdom.json (hub-level)                          |
-+-------------------------------------------------------------------+
-```
+## Executive Summary
 
-### Key Structural Observations
+Per-caste model routing has been attempted once before (v1, archived 2026-02-15) and failed due to Claude Code's Task tool not passing environment variables to spawned subagents. Since then, two things have changed that make this feasible now:
 
-1. **The monolith has a clear extraction precedent.** Hive (561 lines), midden (260 lines), and skills (502 lines) were already extracted into `.aether/utils/` and wired back via thin dispatch entries (e.g., `hive-init) _hive_init "$@" ;;`). This pattern works and should be the model for further extraction.
+1. **Claude Code's Task/Agent tool now supports a `model` parameter** that can be set to `inherit`, `sonnet`, `opus`, or `haiku`. This is proven working in the GSD system (`.claude/get-shit-done/workflows/new-project.md` line 585: `model="{researcher_model}"`).
 
-2. **Two runtimes, minimal cross-talk.** Node.js (bin/cli.js) handles distribution/hub/install. Bash (aether-utils.sh) handles runtime operations. They share error code constants but Node does NOT shell out to bash at runtime (only model-verify.js checks for the file's existence). This is good -- the boundary is clean.
+2. **The `ANTHROPIC_DEFAULT_*_MODEL` environment variables** in `~/.claude/settings.json` map Claude Code's model slots to arbitrary model names via the LiteLLM proxy. This is already configured (line 6-8 of `~/.claude/settings.json`).
 
-3. **Consumers invoke bash directly.** The 43 slash commands and playbooks contain 412 references to `bash .aether/aether-utils.sh <subcommand>`. This is the actual API surface. Subcommand names are the contract.
+The mechanism is: **Agent frontmatter `model: inherit`** (currently set on all 22 agents) controls which model slot a worker uses. By changing specific agent frontmatter from `model: inherit` to `model: opus` or `model: sonnet`, and configuring the environment variable mapping in `~/.claude/settings.json`, each caste can be routed to a different underlying model through the LiteLLM proxy.
 
-4. **COLONY_STATE.json is the coupling nexus.** 90 references in the monolith, 20+ inline jq reads in commands/playbooks that bypass aether-utils.sh entirely (dual write paths).
+**The key insight:** The routing does NOT happen through environment variables or the model-profiles.yaml library at spawn time. It happens through Claude Code's own model slot system, which the LiteLLM proxy then maps to actual model endpoints. The model-profiles.yaml infrastructure is still useful for documentation, CLI commands, and task-based routing, but the actual model selection is the `model:` frontmatter field on agent definitions.
 
-5. **Error swallowing is endemic.** 418 instances of `2>/dev/null`, 104 instances of `|| true`, 89 combined `2>/dev/null || true`. Many are legitimate (optional feature checks), but many hide real failures.
+---
 
-## Recommended Architecture (To-Be)
+## Question 1: Current Flow from Colony-Prime Decision to Spawn
+
+### What Actually Happens Today (All Workers Use Same Model)
 
 ```
-+-------------------------------------------------------------------+
-|                    CONSUMER LAYER (unchanged)                       |
-|  Slash commands + Agents --> bash .aether/aether-utils.sh <cmd>    |
-+-------------------------------------------------------------------+
-|                    DISPATCHER (aether-utils.sh, slimmed)            |
-|  ~1,500 lines: setup, sourcing, case dispatch, shared helpers      |
-|  Sources domain modules on demand (not all at startup)             |
-+-------------------------------------------------------------------+
-|                    DOMAIN MODULES (.aether/utils/)                  |
-|  +----------+ +----------+ +----------+ +----------+              |
-|  |pheromone | | learning | |  colony  | |  swarm   |              |
-|  |  .sh     | |  .sh     | |  .sh     | |  .sh     |              |
-|  +----------+ +----------+ +----------+ +----------+              |
-|  +----------+ +----------+ +----------+ +----------+              |
-|  |  queen   | | session  | | suggest  | |autopilot |              |
-|  |  .sh     | |  .sh     | |  .sh     | |  .sh     |              |
-|  +----------+ +----------+ +----------+ +----------+              |
-|  + existing: hive.sh, midden.sh, skills.sh, xml-*.sh              |
-|  + infra: file-lock.sh, atomic-write.sh, error-handler.sh         |
-+-------------------------------------------------------------------+
-|                    STATE ACCESS LAYER (new)                         |
-|  +----------------------------------------------------------+     |
-|  | state-api.sh                                              |     |
-|  | Facade functions for COLONY_STATE.json reads/writes       |     |
-|  | state_get_phase(), state_get_goal(), state_add_event()    |     |
-|  | All locking/validation encapsulated                       |     |
-|  +----------------------------------------------------------+     |
-|  All domain modules and consumers use state-api.sh                 |
-|  No direct jq on COLONY_STATE.json outside this file               |
-+-------------------------------------------------------------------+
-|                    STATE FILES (unchanged paths)                    |
-|  .aether/data/COLONY_STATE.json, pheromones.json, etc.             |
-+-------------------------------------------------------------------+
+1. User runs: /ant:build 1
+2. build.md (Queen) parses $ARGUMENTS, validates state, loads context
+3. build-wave.md Step 5.1: Queen reads task list, groups by dependencies
+4. For each Wave 1 task:
+   a. Queen generates ant name via: bash .aether/aether-utils.sh generate-ant-name "builder"
+   b. Queen matches skills via: bash .aether/aether-utils.sh skill-match "builder" "..."
+   c. Queen constructs worker prompt (with prompt_section, skill_section, archaeology_context, etc.)
+   d. Queen calls Task tool:
+      Task(prompt="...", subagent_type="aether-builder", description="...")
+5. Claude Code looks up aether-builder agent definition
+   -> frontmatter says: model: inherit
+   -> "inherit" means: use the parent session's model (glm-5-turbo via LiteLLM proxy)
+6. Worker runs with glm-5-turbo regardless of caste
 ```
 
-### Component Responsibilities
+**Critical detail:** The `subagent_type` parameter maps to an agent definition in `.claude/agents/ant/`. The `model:` field in that agent's frontmatter determines which model slot the worker uses. Currently ALL 22 agents have `model: inherit`, so every worker inherits the parent session's model.
 
-| Component | Responsibility | Lines (est.) |
-|-----------|----------------|--------------|
-| aether-utils.sh (dispatcher) | Setup, source modules, case dispatch, shared helpers (json_ok, get_caste_emoji, generate-ant-name, etc.) | ~1,500 |
-| state-api.sh | All COLONY_STATE.json reads/writes, locking, validation, migration | ~400 |
-| pheromone.sh | pheromone-write/read/count/display/prime/expire/export, colony-prime, instinct-* | ~1,800 |
-| learning.sh | learning-observe/promote/inject/check-promotion/approve/select/display/defer/undo | ~1,200 |
-| queen.sh | queen-init/read/promote/thresholds, incident-rule-add | ~500 |
-| colony.sh | validate-state, load-state, unload-state, milestone-detect, memory-capture, context-capsule, rolling-summary | ~600 |
-| swarm.sh | All swarm-* subcommands + swarm-display-* | ~800 |
-| session.sh | session-init/update/read/is-stale/clear/mark-resumed/summary, session-verify-fresh, session-clear | ~400 |
-| spawn.sh | spawn-log/complete/can-spawn/get-depth/tree-*/efficiency, generate-ant-name, validate-worker-response | ~500 |
-| flag.sh | flag-add/check-blockers/resolve/acknowledge/list/auto-resolve | ~300 |
-| suggest.sh | suggest-analyze/record/check/clear/approve/quick-dismiss | ~500 |
-| autopilot.sh | autopilot-init/update/status/stop/check-replan | ~200 |
-| changelog.sh | changelog-append/collect-plan-data (already functions, just move) | ~200 |
-| semantic.sh | semantic-init/index/search/rebuild/status/context | ~100 |
-| misc.sh | error-add/summary, signature-scan/match, check-antipattern, grave-add/check, generate-commit-message, bootstrap-system, etc. | ~600 |
+### Where Model Selection Could Happen
 
-## Modularization Strategy
+There are two independent mechanisms, both potentially useful:
 
-### Phase 1: State Access Layer (foundation -- everything else depends on this)
+**Mechanism A: Agent frontmatter `model:` field (PROVEN WORKING)**
+- Location: `.claude/agents/ant/aether-*.md` frontmatter, line 6
+- Values: `inherit`, `sonnet`, `opus`, `haiku`
+- How it works: Claude Code reads this field when spawning via Task tool, selects the corresponding model
+- Proven in: GSD system uses `model="{researcher_model}"` in Task tool calls
 
-**What:** Create `state-api.sh` with facade functions for COLONY_STATE.json.
+**Mechanism B: Task tool `model` parameter (PROVEN WORKING in GSD)**
+- Location: The Task() call itself in build-wave.md
+- Syntax: `Task(prompt="...", subagent_type="...", model="opus", description="...")`
+- How it works: Overrides the agent definition's model field for that specific spawn
+- Proven in: GSD new-project.md spawns researchers with `model="{researcher_model}"`
 
-**Why first:** 90 references in the monolith + 20+ inline jq reads in commands create the dual-write-path risk. Until state access is centralized, extracting other modules risks creating MORE coupling, not less.
+**Mechanism C: model-profiles.yaml + environment variables (PREVIOUSLY FAILED)**
+- Location: `.aether/model-profiles.yaml`, read by `bin/lib/model-profiles.js`
+- Problem: Claude Code Task tool does NOT pass environment variables to spawned workers
+- Status: Infrastructure exists and works (CLI commands, library, validation) but cannot drive actual model routing
+- Archived at: `.aether/archive/model-routing/README.md`
 
-**Pattern:**
+### Recommendation: Use Mechanism B (Task tool `model` parameter)
+
+This is the most flexible approach because:
+1. **Caste-based routing without modifying agent definitions** -- the build-wave playbook can look up the caste's model slot and pass it in the Task call
+2. **No sync burden** -- changing model assignments doesn't require editing 22 agent files
+3. **CLI override still works** -- `--model` flag in `/ant:build` can override everything
+4. **GSD already proves this works** -- the exact pattern is in production
+
+---
+
+## Question 2: Where model-profiles.yaml Gets Read During a Build
+
+### Code Paths That Read model-profiles.yaml
+
+| Entry Point | Code Path | When Called | Purpose |
+|-------------|-----------|------------|---------|
+| `/ant:build --model X` | build-prep.md Step 1 -> `model-profile validate "$cli_model_override"` | Build start | Validates CLI override model name |
+| `aether caste-models list` | `bin/cli.js` line 1979 -> `loadModelProfiles()` | Manual CLI | Displays caste-to-model table |
+| `aether caste-models set builder=glm-5` | `bin/cli.js` line 2076 -> `setModelOverride()` | Manual CLI | Sets user override in YAML |
+| `aether verify-models` | `bin/cli.js` line 2155 -> verification logic | Manual CLI | Checks routing configuration |
+| `spawn-with-model.sh` | `.aether/utils/spawn-with-model.sh` line 23 -> `model-profile get "$CASTE"` | **NOT USED** | Legacy helper, non-functional |
+| `model-profile get <caste>` | `aether-utils.sh` line 2616 -> awk on YAML | Shell calls | Returns model for caste (JSON) |
+| `model-profile select <caste> <task>` | `aether-utils.sh` line 2668 -> Node.js inline script | Shell calls | Full precedence chain selection |
+
+### Critical Finding: model-profiles.yaml Is NOT Read During Worker Spawn
+
+The build-wave.md playbook (Step 5.1) does NOT call `model-profile get` or `model-profile select` when spawning workers. It only uses:
+1. `generate-ant-name` -- naming the worker
+2. `skill-match` / `skill-inject` -- loading skills
+3. `spawn-log` -- logging the spawn
+4. `colony-prime --compact` -- loading context
+
+**The model-profiles.yaml infrastructure is completely disconnected from the actual spawn path.** This is why the previous attempt failed -- the infrastructure was built but never wired into the spawn mechanism.
+
+### What Needs to Change
+
+The build-wave.md playbook needs to:
+1. Determine the correct model slot for each worker's caste (from model-profiles.yaml or a lookup table)
+2. Pass `model="{resolved_slot}"` in the Task tool call
+
+The model-profiles.yaml can serve as the source of truth for which caste maps to which model slot, but the shell subcommand that reads it (`model-profile get`) must be called during the build prep phase, and the result must be threaded into the Task tool call.
+
+---
+
+## Question 3: How spawn-with-model.sh Determines the Model
+
+### Script Analysis (`.aether/utils/spawn-with-model.sh`)
 
 ```bash
-#!/bin/bash
-# state-api.sh - All COLONY_STATE.json access goes through here
+# Line 23: Get model for this caste
+model_info=$(bash "$AETHER_ROOT/.aether/aether-utils.sh" model-profile get "$CASTE" 2>/dev/null || echo '{"ok":true,"result":{"model":"glm-5-turbo"}}')
+model=$(echo "$model_info" | jq -r '.result.model // "glm-5-turbo"')
 
-# Read functions (no locking needed for atomic reads)
-state_get_goal() {
-    local state_file="$DATA_DIR/COLONY_STATE.json"
-    [[ -f "$state_file" ]] || { echo ""; return 1; }
-    jq -r '.goal // ""' "$state_file"
-}
+# Line 34: Set environment variable
+export ANTHROPIC_MODEL="$model"
 
-state_get_phase() {
-    local state_file="$DATA_DIR/COLONY_STATE.json"
-    [[ -f "$state_file" ]] || { echo "0"; return 1; }
-    jq -r '.current_phase // 0' "$state_file"
-}
-
-state_get_session_id() {
-    local state_file="$DATA_DIR/COLONY_STATE.json"
-    [[ -f "$state_file" ]] || { echo "unknown"; return 1; }
-    jq -r '.session_id // "unknown"' "$state_file"
-}
-
-# Write functions (with locking)
-state_add_event() {
-    local event_type="$1" description="$2" source="${3:-unknown}"
-    local state_file="$DATA_DIR/COLONY_STATE.json"
-    acquire_lock "$state_file" || return 1
-    # ... jq update ...
-    release_lock
-}
-
-# Composite read (load full state for multi-field reads)
-state_load_snapshot() {
-    cat "$DATA_DIR/COLONY_STATE.json"
-}
+# Line 50: Start Claude Code with the environment set
+claude --cwd "$PROJECT_ROOT"
 ```
 
-**Validation approach:** After creating state-api.sh, run the existing 530+ tests. Nothing should break because you are adding new accessor functions, not removing old code. Then incrementally replace inline jq calls in the monolith to use the new functions. Each replacement is testable in isolation.
+**How it works:**
+1. Calls `model-profile get <caste>` to get the model name from YAML
+2. Sets `ANTHROPIC_MODEL` environment variable
+3. Starts Claude Code CLI as a subprocess, inheriting the environment
 
-**Important constraint:** Commands/playbooks that do inline `jq ... .aether/data/COLONY_STATE.json` cannot be migrated in this phase -- they are markdown files interpreted by Claude Code, not bash scripts. Those get a migration guide and are updated as a follow-up task, not a blocker.
+**Why it doesn't work for colony builds:**
+- This script spawns a **separate Claude Code process**, not a Task tool subagent
+- Colony workers are spawned via Claude Code's Task tool, not as separate processes
+- The Task tool does not inherit environment variables from the parent shell
+- This script was designed for an architecture where each worker runs in its own Claude Code instance
 
-### Phase 2: Extract pheromone/instinct system (largest cohesive domain)
+**Verdict:** This script is a vestige of the failed v1 approach. It should be kept for reference but is not useful for the new per-caste routing mechanism.
 
-**What:** Extract pheromone-write/read/count/display/prime/expire/export, colony-prime, instinct-read/create/apply, and eternal-* into `pheromone.sh`.
+---
 
-**Why second:** This is the largest contiguous block (~1,800 lines, anchored by colony-prime at 662 lines alone). It is cohesive -- these subcommands share helper functions and read from pheromones.json. colony-prime is the most complex single subcommand and benefits most from isolation for testing.
+## Question 4: How build.md and continue.md Pass the Model to the Agent Tool
 
-**Extraction pattern (same as hive.sh/midden.sh/skills.sh):**
+### Current State: They Don't
 
-1. Move function bodies into `_pheromone_write()`, `_pheromone_read()`, etc. in `.aether/utils/pheromone.sh`
-2. Source pheromone.sh from aether-utils.sh at startup (same as line 33: `source "$SCRIPT_DIR/utils/hive.sh"`)
-3. Replace case entries with thin dispatchers: `pheromone-write) _pheromone_write "$@" ;;`
-4. Run tests after each subcommand migration
-
-**Risk:** colony-prime depends on pheromone-prime (calls it via `"$SCRIPT_DIR/aether-utils.sh" pheromone-prime`). After extraction, this self-invocation still works because the dispatch entry remains. No change needed. However, after extraction, the self-invocation can be replaced with a direct function call `_pheromone_prime "$@"` for a ~200ms performance improvement (avoids re-spawning bash + re-sourcing modules).
-
-### Phase 3: Extract learning engine
-
-**What:** Extract learning-observe/promote/inject/check-promotion/approve-proposals/select-proposals/display-proposals/defer-proposals/undo-promotions, memory-capture into `learning.sh`.
-
-**Why third:** Second-largest cohesive block (~1,200 lines). Depends on state-api.sh (reads COLONY_STATE.json for instincts/learnings) and on pheromone.sh (memory-capture emits pheromones). So it must come after phases 1-2.
-
-### Phase 4: Extract queen system
-
-**What:** Extract queen-init/read/promote/thresholds, incident-rule-add into `queen.sh`.
-
-**Why fourth:** queen-read and queen-promote are called by colony-prime (extracted in phase 2). After phase 2, colony-prime calls them via the dispatch, so extracting queen functions is safe.
-
-### Phase 5: Extract remaining domains
-
-**What:** Extract swarm, session, spawn, flag, suggest, autopilot, changelog, and misc subcommands into their respective modules.
-
-**Why last:** These are smaller, less coupled, and lower risk. Can be done in parallel or sequentially without dependency issues.
-
-**Ordering within phase 5:**
-1. **swarm.sh** (800 lines, self-contained, 13 subcommands)
-2. **session.sh** (400 lines, 10 subcommands)
-3. **spawn.sh** (500 lines, depends on spawn-tree.sh already extracted)
-4. **flag.sh** (300 lines, standalone)
-5. **suggest.sh** (500 lines, depends on pheromone)
-6. **autopilot.sh** (200 lines, standalone)
-7. **remaining misc** (error-add, signature-scan, grave-*, etc.)
-
-### Phase 6: Error handling audit
-
-**What:** Classify all 418 `2>/dev/null` instances and replace inappropriate ones.
-
-**Why last:** Must happen after modularization. The error patterns span the entire monolith. After extraction, each module can be audited in isolation. Doing this before extraction would mean touching lines that are about to move, creating merge conflicts.
-
-## State File Coupling Reduction
-
-### The Problem
-
-COLONY_STATE.json has two coupling problems:
-
-1. **Write coupling:** 38 subcommands write to it, often with inline jq. If the schema changes, 38 places need updating.
-2. **Read coupling via bypass:** Commands/playbooks do `jq '.current_phase' .aether/data/COLONY_STATE.json` directly, bypassing any validation or locking in aether-utils.sh.
-
-### The Solution: State API Facade
-
+**build.md / build-full.md:** The build playbooks spawn workers using:
 ```
-BEFORE (scattered access):                 AFTER (centralized):
-
-Command A --jq--> COLONY_STATE.json        Command A --> state-api.sh --> COLONY_STATE.json
-Command B --jq--> COLONY_STATE.json        Command B --> state-api.sh -->       |
-aether-utils.sh --jq--> COLONY_STATE       aether-utils.sh --> state-api.sh --> |
+Task tool with subagent_type="aether-builder", description="..."
 ```
 
-### Implementation Details
+There is NO `model` parameter in any of the Task tool calls across the entire build system. The model is entirely determined by the agent definition's `model: inherit` frontmatter.
 
-**Reader functions** (no lock needed for atomic reads):
+**continue.md / continue-full.md:** The continue playbooks do NOT spawn any workers (they verify and advance state). No Task tool calls at all.
 
-| Function | Returns | Replaces |
-|----------|---------|----------|
-| `state_get_goal` | string | `jq -r '.goal'` |
-| `state_get_phase` | int | `jq -r '.current_phase'` |
-| `state_get_state` | string (IDLE/BUILDING/COMPLETED) | `jq -r '.state'` |
-| `state_get_session_id` | string | `jq -r '.session_id'` |
-| `state_get_milestone` | string | `jq -r '.milestone'` |
-| `state_get_phases_json` | JSON array | `jq '.plan.phases'` |
-| `state_get_phase_count` | int | `jq '.plan.phases \| length'` |
-| `state_get_completed_count` | int | `jq '[.plan.phases[] \| select(.status=="completed")] \| length'` |
-| `state_get_instincts` | JSON array | `jq '.instincts // []'` |
-| `state_get_initialized_at` | string | `jq -r '.initialized_at'` |
+**Other commands that spawn workers:**
+| Command | Spawns | Model Parameter |
+|---------|--------|-----------------|
+| `/ant:build` | Builders, Watcher, Chaos, Archaeologist, Ambassador, Measurer | None |
+| `/ant:swarm` | 4 Scouts via Task tool | None |
+| `/ant:colonize` | 4 Surveyors via Task tool | None |
+| `/ant:seal` | Sage, Chronicler via Task tool | None |
+| `/ant:patrol` | Watcher via Task tool | None |
+| `/ant:organize` | Keeper via Task tool | None |
+| `/gsd:new-project` | Researchers, Roadmapper, Synthesizer | **YES** (`model="{researcher_model}"`) |
 
-**Writer functions** (with locking via acquire_lock/release_lock):
+### What Needs to Change
 
-| Function | Does | Replaces |
-|----------|------|----------|
-| `state_set_phase` | Updates current_phase | inline jq + write |
-| `state_set_state` | Updates state field | inline jq + write |
-| `state_add_event` | Appends to events[] | inline jq + write |
-| `state_update_task_status` | Updates task status in phases | inline jq + write |
+Every command that uses the Task tool needs to include the `model` parameter, resolved from the caste's model slot. The build system is the highest priority since it spawns the most workers (6-8 per phase).
 
-**Migration path for commands/playbooks:**
+---
 
-The 20+ inline jq reads in markdown commands cannot call bash functions directly (they run `bash .aether/aether-utils.sh <subcommand>`). Instead, add thin subcommands:
+## Question 5: How the Model Parameter Actually Reaches the Agent Tool
 
+### The Proven Mechanism (from GSD)
+
+The GSD system demonstrates the exact pattern that works:
+
+**Step 1: Resolve model at workflow start**
 ```bash
-# In aether-utils.sh dispatch:
-state-get) state_get_${1:-goal} ;;
+# .claude/get-shit-done/workflows/new-project.md, line 49
+INIT=$(node ./.claude/get-shit-done/bin/gsd-tools.cjs init new-project)
+# Returns JSON with: researcher_model, synthesizer_model, roadmapper_model
 ```
 
-Then commands replace:
-```bash
-# BEFORE
-state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
-
-# AFTER
-state=$(bash .aether/aether-utils.sh state-get state)
+**Step 2: Use model in Task tool call**
+```javascript
+// .claude/get-shit-done/workflows/new-project.md, line 585
+Task(prompt="...", subagent_type="general-purpose", model="{researcher_model}", description="Stack research")
 ```
 
-This adds one process spawn per call vs zero for inline jq, but gains correctness (consistent locking, validation, schema migration).
+**Step 3: Claude Code resolves the model slot**
+- `model="inherit"` -> Uses parent session's model
+- `model="sonnet"` -> Uses Claude's sonnet model (or `ANTHROPIC_DEFAULT_SONNET_MODEL` if set)
+- `model="opus"` -> Uses Claude's opus model (or `ANTHROPIC_DEFAULT_OPUS_MODEL` if set)
+- `model="haiku"` -> Uses Claude's haiku model (or `ANTHROPIC_DEFAULT_HAIKU_MODEL` if set)
 
-## Error Handling Improvement Pattern
-
-### Classification Framework
-
-Not all `2>/dev/null` is bad. Classify each instance into one of four categories:
-
-| Category | Pattern | Action | Example |
-|----------|---------|--------|---------|
-| **Legitimate probe** | Checking if command/file exists | Keep as-is | `command -v jq &>/dev/null` |
-| **Optional degradation** | Feature works without this | Keep, add comment | `[[ -f "$optional_file" ]] && source ... 2>/dev/null` |
-| **Silent data loss** | Write/update fails silently | Replace with json_err or logging | `echo "$updated" > "$file" 2>/dev/null \|\| true` |
-| **Debug sabotage** | Error info discarded on a critical path | Replace with structured error | `jq '...' "$state_file" 2>/dev/null` |
-
-### Estimated Distribution (from codebase analysis)
-
-| Category | Est. Count | Action Needed |
-|----------|------------|---------------|
-| Legitimate probe | ~150 (36%) | None -- these are correct |
-| Optional degradation | ~120 (29%) | Add comment explaining why |
-| Silent data loss | ~80 (19%) | Replace with error handling |
-| Debug sabotage | ~68 (16%) | Replace with structured error |
-
-### Replacement Pattern
-
-**For silent data loss:**
-
-```bash
-# BEFORE
-echo "$updated" > "$state_file" 2>/dev/null || true
-
-# AFTER
-if ! echo "$updated" > "$state_file" 2>/dev/null; then
-    json_err "$E_JSON_INVALID" "Failed to write state file" \
-        "{\"file\":\"$state_file\"}" \
-        "Check disk space and file permissions"
-fi
-```
-
-**For debug sabotage:**
-
-```bash
-# BEFORE
-result=$(jq '.plan.phases' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null)
-
-# AFTER
-result=$(jq '.plan.phases' "$DATA_DIR/COLONY_STATE.json") || {
-    json_err "$E_JSON_INVALID" "Failed to read phases from COLONY_STATE.json"
+**Step 4: LiteLLM proxy maps to actual model**
+The `~/.claude/settings.json` environment variables tell Claude Code what model name to send to the API:
+```json
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://localhost:4000",
+    "ANTHROPIC_AUTH_TOKEN": "sk-litellm-local",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "glm-5-turbo",    // Currently all same
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "glm-5-turbo",   // Currently all same
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "glm-4.5-air"    // Different!
+  }
 }
 ```
 
-### Backward Compatibility
+The LiteLLM proxy at `localhost:4000` receives the model name (e.g., `glm-5-turbo`) and routes to the appropriate provider backend.
 
-The error handling improvements must NOT change the stdout contract. Subcommands that currently output `{"ok":true,"result":...}` on success must continue to do so. The changes affect:
-- stderr output (adding structured errors where there were none)
-- exit codes (changing from 0 to non-zero on actual failures)
-- Removing `|| true` on critical writes
-
-Callers that check `jq -e '.ok'` on stdout will see no change. Callers that ignore exit codes will see no change. Only callers that specifically relied on silent failure (process continuing after a write fails) will be affected -- and those are bugs, not features.
-
-## Data Flow
-
-### Subcommand Invocation Flow
+### The Complete Chain
 
 ```
-Slash command (markdown)
-    |
-    v
-bash .aether/aether-utils.sh <subcommand> [args]
-    |
-    v
-aether-utils.sh: set -euo pipefail, source infra modules
-    |
-    v
-case "$cmd" in
-    <subcommand>) _function_name "$@" ;;
-    |
-    v
-Domain module function (_function_name in utils/<domain>.sh)
-    |
-    +--> state-api.sh (for COLONY_STATE.json access)
-    +--> file-lock.sh (for concurrent access protection)
-    +--> json_ok/json_err (stdout/stderr JSON output)
-    |
-    v
-JSON to stdout (consumed by Claude Code / slash commands)
+Task tool call: model="opus"
+        |
+        v
+Claude Code resolves "opus" to environment variable:
+  ANTHROPIC_DEFAULT_OPUS_MODEL = "glm-5"  (configured in settings.json)
+        |
+        v
+Claude Code sends API request:
+  POST http://localhost:4000/v1/messages
+  model: "glm-5"
+  (via ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN)
+        |
+        v
+LiteLLM proxy receives "glm-5":
+  Routes to Z.AI GLM-5 provider backend
+        |
+        v
+Worker runs on GLM-5 (deep reasoning model)
 ```
 
-### State Mutation Flow (current vs target)
+### Is It In the Prompt Text or a Function Call?
+
+**It is a function parameter, not prompt text.** The `model` parameter is a first-class argument to Claude Code's Task/Agent tool. It is NOT included in the prompt string. This is why the previous approach failed -- they tried to pass it through environment variables and prompt text, but the Task tool has its own `model` parameter.
+
+---
+
+## Integration Architecture
+
+### New vs Modified Components
+
+| Component | Status | Change Required |
+|-----------|--------|-----------------|
+| `~/.claude/settings.json` | MODIFY | Change `ANTHROPIC_DEFAULT_OPUS_MODEL` from `glm-5-turbo` to `glm-5` |
+| `.claude/agents/ant/aether-*.md` (22 files) | MODIFY | Change `model: inherit` to `model: opus` or `model: sonnet` per caste **OR** leave as-is and use Task tool param |
+| `.aether/model-profiles.yaml` | MODIFY | Add model_slot field to caste entries |
+| `.aether/docs/command-playbooks/build-wave.md` | MODIFY | Add model resolution + pass `model=` param in Task calls |
+| `.aether/docs/command-playbooks/build-full.md` | MODIFY | Same model resolution in full build path |
+| `.claude/commands/ant/swarm.md` | MODIFY | Add model param to Scout spawns |
+| `.claude/commands/ant/colonize.md` | MODIFY | Add model param to Surveyor spawns |
+| `.claude/commands/ant/seal.md` | MODIFY | Add model param to Sage/Chronicler spawns |
+| `.claude/commands/ant/patrol.md` | MODIFY | Add model param to Watcher spawn |
+| `.claude/commands/ant/organize.md` | MODIFY | Add model param to Keeper spawn |
+| `bin/lib/model-profiles.js` | MODIFY | Add `getModelSlot()` function for slot resolution |
+| `.aether/aether-utils.sh` | MODIFY | Add `model-slot get <caste>` subcommand |
+| `.aether/utils/spawn-with-model.sh` | NO CHANGE | Legacy, keep for reference |
+| `bin/cli.js` | MODIFY | Update `caste-models list` to show slot mapping |
+
+### Recommended Caste-to-Slot Mapping
+
+| Caste | Model Slot | Actual Model (via proxy) | Rationale |
+|-------|-----------|-------------------------|-----------|
+| queen (prime) | opus | glm-5 | Strategic coordination, deep reasoning |
+| archaeologist | sonnet | glm-5-turbo | Git history parsing is straightforward |
+| architect | opus | glm-5 | System design requires deep reasoning |
+| oracle | opus | glm-5 | Deep research benefits from full reasoning |
+| route_setter | opus | glm-5 | Task decomposition is complex planning |
+| builder | sonnet | glm-5-turbo | Fast, deterministic implementation |
+| watcher | sonnet | glm-5-turbo | Verification is systematic, not creative |
+| scout | sonnet | glm-5-turbo | Research is execution-focused |
+| chaos | sonnet | glm-5-turbo | Edge case testing is methodical |
+| colonizer | sonnet | glm-5-turbo | Environment setup is straightforward |
+| ambassador | opus | glm-5 | Integration design requires reasoning |
+| keeper | sonnet | glm-5-turbo | Documentation is systematic |
+| tracker | sonnet | glm-5-turbo | Bug investigation is methodical |
+| sage | opus | glm-5 | Wisdom synthesis requires reasoning |
+| chaos | sonnet | glm-5-turbo | Resilience testing is methodical |
+| weaver | sonnet | glm-5-turbo | Refactoring follows patterns |
+| gatekeeper | sonnet | glm-5-turbo | Security scanning is systematic |
+| includer | sonnet | glm-5-turbo | Accessibility checks are methodical |
+| measurer | sonnet | glm-5-turbo | Performance analysis follows patterns |
+| chronicler | sonnet | glm-5-turbo | Documentation generation is straightforward |
+| probe | sonnet | glm-5-turbo | Coverage analysis is systematic |
+| auditor | sonnet | glm-5-turbo | Quality analysis is methodical |
+| surveyor-* | sonnet | glm-5-turbo | Codebase analysis is systematic |
+
+**Summary:** 6 castes use `opus` (glm-5), 16 castes use `sonnet` (glm-5-turbo).
+
+### Settings.json Configuration Change
+
+```json
+{
+  "env": {
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "glm-5",         // Was glm-5-turbo
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "glm-5-turbo", // Unchanged
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "glm-4.5-air"   // Unchanged
+  }
+}
+```
+
+This single change in `~/.claude/settings.json` is the **minimum viable configuration**. Combined with changing agent frontmatter from `model: inherit` to `model: opus` or `model: sonnet`, this routes all workers through the proxy to the correct model.
+
+---
+
+## Two Approaches Compared
+
+### Approach A: Agent Frontmatter (Static)
+
+Change `model: inherit` to `model: opus` or `model: sonnet` in each agent's frontmatter.
+
+**Pros:**
+- Zero changes to build playbooks (build-wave.md, swarm.md, etc.)
+- Automatic -- every spawn uses the correct model without playbook logic
+- Simple, declarative
+
+**Cons:**
+- All 22 agent files need updating (including mirrors in `.aether/agents-claude/` and `.opencode/agents/`)
+- Cannot be overridden per-build without also changing agent definitions
+- Cannot do task-based routing (different tasks for same caste using different models)
+- Sync burden: `.claude/agents/ant/*.md` must match `.aether/agents-claude/*.md` (packaging mirror)
+
+### Approach B: Task Tool Parameter (Dynamic) -- RECOMMENDED
+
+Pass `model="{slot}"` in each Task tool call, resolved from model-profiles.yaml at build time.
+
+**Pros:**
+- Agent definitions stay at `model: inherit` (no sync burden)
+- Can be overridden per-build via `--model` flag (already partially implemented)
+- Can do task-based routing (different tasks for same caste using different models)
+- model-profiles.yaml becomes the single source of truth
+- GSD proves this pattern works
+
+**Cons:**
+- Must update every Task tool call in every command that spawns workers (7 commands, ~20 spawn points)
+- Build playbooks need a model resolution step before spawning
+- More complex -- dynamic resolution at runtime
+
+### Recommendation: Approach B
+
+The dynamic approach is worth the complexity because:
+1. It keeps the single-source-of-truth in model-profiles.yaml
+2. The `--model` flag already exists in build.md (Step 1) -- the infrastructure for CLI override is partially built
+3. The GSD system proves the `model` parameter works in Task tool calls
+4. It enables future task-based routing (the `task_routing` section of model-profiles.yaml is already defined)
+
+---
+
+## Data Flow (End-to-End for Build)
+
+### Target Flow
 
 ```
-CURRENT:
-  subcommand --inline jq--> COLONY_STATE.json
-  subcommand --inline jq--> COLONY_STATE.json   <-- no lock!
-  subcommand --load-state--> COLONY_STATE.json  <-- with lock
+1. /ant:build 1
+       |
+       v
+2. build-prep.md Step 1: Parse $ARGUMENTS
+   - Extract phase number
+   - Extract --model flag (if present) -> cli_model_override
+       |
+       v
+3. build-prep.md Step 1 (new): Resolve model slots
+   For each caste that will be spawned:
+     bash .aether/aether-utils.sh model-slot get builder
+     -> {"ok":true,"result":{"slot":"sonnet","model":"glm-5-turbo","source":"profile"}}
+   Store in cross-stage state: builder_model_slot="sonnet"
+       |
+       v
+4. build-context.md Step 0.6: Verify proxy health
+   curl -s http://localhost:4000/health
+       |
+       v
+5. build-wave.md Step 5.1: Spawn Wave 1 workers
+   For each task:
+     Task(
+       prompt="...",
+       subagent_type="aether-builder",
+       model="{builder_model_slot}",          // <-- NEW: resolves to "sonnet"
+       description="..."
+     )
+       |
+       v
+6. Claude Code resolves "sonnet" slot:
+   Reads ANTHROPIC_DEFAULT_SONNET_MODEL from settings.json env
+   Value: "glm-5-turbo"
+       |
+       v
+7. Claude Code sends to LiteLLM proxy:
+   POST http://localhost:4000/v1/messages
+   model: "glm-5-turbo"
+       |
+       v
+8. Builder runs on glm-5-turbo (fast, deterministic)
 
-TARGET:
-  subcommand --state_api--> COLONY_STATE.json   <-- always through API
-  subcommand --state_api--> COLONY_STATE.json   <-- always through API
-  (API handles lock acquisition internally)
+   Meanwhile, if Oracle was spawned:
+   model="opus" -> ANTHROPIC_DEFAULT_OPUS_MODEL -> "glm-5"
+   Oracle runs on glm-5 (deep reasoning)
 ```
 
-## Build Order (Dependency Graph)
-
-```
-Phase 1: state-api.sh
-    |
-    v
-Phase 2: pheromone.sh (uses state-api for colony-prime)
-    |
-    v
-Phase 3: learning.sh (uses state-api + pheromone)
-    |
-    v
-Phase 4: queen.sh (used by colony-prime in pheromone.sh)
-    |
-    +---------------------------------------------+
-    v                                             v
-Phase 5a: swarm.sh (independent)       Phase 5b: session.sh (independent)
-Phase 5c: spawn.sh (independent)       Phase 5d: flag.sh (independent)
-Phase 5e: suggest.sh (uses pheromone)  Phase 5f: autopilot.sh (independent)
-Phase 5g: changelog.sh (independent)   Phase 5h: misc (remaining)
-    |
-    v
-Phase 6: Error handling audit (all modules)
-```
-
-**Each phase is independently testable.** After each extraction:
-1. Run `npm run test:bash` (42 bash test files)
-2. Run `npm run test:unit` (41 unit test files)
-3. Verify subcommand contract: `bash .aether/aether-utils.sh <subcommand>` still returns same JSON
-
-## Dead Code Removal Strategy
-
-The oracle findings identified 76 subcommands (43%) that are never called. These should NOT be removed during modularization. Instead:
-
-1. **During extraction:** Extract all subcommands, including suspected dead ones. This avoids the risk of removing something that IS used but wasn't detected by the static analysis (e.g., dynamically constructed subcommand names).
-
-2. **After extraction:** Add usage tracking via an optional `activity-log` call at the top of each subcommand function. Run for 2-4 weeks across real colonies.
-
-3. **After data collection:** Remove subcommands with zero invocations. Move to a `deprecated/` directory first (not delete) with a 1-version deprecation period.
-
-## Anti-Patterns to Avoid
-
-### Anti-Pattern 1: Lazy Loading via Self-Invocation
-
-**What people do:** `"$SCRIPT_DIR/aether-utils.sh" pheromone-prime` from inside aether-utils.sh itself (colony-prime does this at line 8018).
-
-**Why it's bad:** Spawns a new bash process, re-sources all modules, re-runs setup. For colony-prime (called on every build), this adds ~200ms latency.
-
-**Do this instead:** After extraction, colony-prime and pheromone-prime are in the same module file. Replace the self-invocation with a direct function call: `_pheromone_prime "$@"`.
-
-### Anti-Pattern 2: Inline JSON Construction Without jq
-
-**What people do:** `printf '{"ok":true,"result":{"key":"%s"}}' "$value"` -- building JSON with printf/echo and string interpolation.
-
-**Why it's bad:** Special characters in `$value` (quotes, newlines, backslashes) break the JSON. This is a latent injection/corruption vector.
-
-**Do this instead:** Use jq for all JSON construction: `json_ok "$(jq -n --arg v "$value" '{"key":$v}')"`. This is already done in newer subcommands but not consistently.
-
-### Anti-Pattern 3: Sourcing Everything at Startup
-
-**What people do:** All 10 utility modules are sourced unconditionally on every invocation of aether-utils.sh (lines 26-34).
-
-**Why it's bad:** Running `bash .aether/aether-utils.sh version` sources hive.sh (561 lines), skills.sh (502 lines), midden.sh (260 lines), etc. just to print a version string.
-
-**Do this instead:** Source only infra modules (file-lock, atomic-write, error-handler) at startup. Source domain modules on demand in the case dispatch:
+### New Subcommand: model-slot
 
 ```bash
-pheromone-write|pheromone-read|colony-prime|...)
-    source "$SCRIPT_DIR/utils/pheromone.sh"
-    _${cmd//-/_} "$@"
-    ;;
+# Get the model slot for a caste (returns Claude Code slot name)
+bash .aether/aether-utils.sh model-slot get builder
+# -> {"ok":true,"result":{"slot":"sonnet","model":"glm-5-turbo","source":"profile"}}
+
+# Get all caste-to-slot mappings
+bash .aether/aether-utils.sh model-slot list
+# -> {"ok":true,"result":{"prime":"opus","builder":"sonnet",...}}
+
+# Validate a slot name
+bash .aether/aether-utils.sh model-slot validate sonnet
+# -> {"ok":true,"result":{"valid":true,"valid_slots":["inherit","sonnet","opus","haiku"]}}
 ```
 
-**Trade-off:** Adds complexity to the dispatcher but reduces startup time for simple subcommands by ~50ms. Only worth doing after modules are stable. This is an optimization phase, not part of the initial extraction.
+The `model-slot` subcommand reads `model-profiles.yaml`, looks up the caste, and returns the corresponding Claude Code model slot name. This is a thin wrapper around the existing `model-profile get` subcommand that adds a mapping layer from model names to slot names.
 
-## Scaling Considerations
+---
 
-| Scale | Architecture Adjustments |
-|-------|--------------------------|
-| 1 colony (current) | Monolith is fine for single-user CLI |
-| 5-10 concurrent colonies | File locking prevents corruption but serial access may feel slow |
-| Package distribution | npm pack size matters -- dead code removal reduces download |
-| Developer onboarding | Modular structure makes the codebase navigable for contributors |
+## Spawn Points Requiring Changes
 
-### Why This Matters for a CLI Tool
+### Build System (Priority 1 -- most spawns)
 
-Aether is not a web service -- "scaling" means scaling maintainability and developer comprehension, not throughput. The 11K-line monolith is the single biggest barrier to both. After modularization, a new contributor can understand `pheromone.sh` (1,800 lines in one domain) without reading the other 9,400 lines.
+| File | Spawn Points | Caste(s) | Current Model Param |
+|------|-------------|----------|-------------------|
+| `build-wave.md` Step 5.1 | Wave 1 builders | builder | None |
+| `build-wave.md` Step 5.3 | Wave 2+ builders | builder | None |
+| `build-wave.md` Step 5.4 | Watcher | watcher | None |
+| `build-wave.md` Step 5.5.1 | Measurer | measurer | None |
+| `build-wave.md` Step 5.6 | Chaos | chaos | None |
+| `build-wave.md` Step 4.1 | Archaeologist | archaeologist | None |
+| `build-wave.md` Step 5.1.1 | Ambassador | ambassador | None |
+| `build-full.md` (duplicate) | All above | Same | None |
 
-## Integration Points
+### Other Commands (Priority 2)
 
-### Bash <-> Node.js Boundary
+| File | Spawn Points | Caste(s) |
+|------|-------------|----------|
+| `swarm.md` | 4 scouts | scout |
+| `colonize.md` | 4 surveyors | surveyor-nest, surveyor-disciplines, surveyor-pathogens, surveyor-provisions |
+| `seal.md` | sage + chronicler | sage, chronicler |
+| `patrol.md` | watcher | watcher |
+| `organize.md` | keeper | keeper |
 
-| Boundary | Communication | Contract |
-|----------|---------------|----------|
-| Node CLI install -> Hub setup | Node writes files, bash reads them | File paths and JSON schemas |
-| Node update -> bash subcommands | Node copies bash files to hub | File identity (byte-for-byte copy) |
-| Bash error codes -> Node error codes | Shared constants | error-handler.sh matches errors.js |
-| model-verify.js -> aether-utils.sh | Node checks file existence only | File path convention |
+### Total: ~20 spawn points across 7 command files
 
-**Key insight:** The boundary is clean. Node and bash share data through files, not process invocation. This means modularization of the bash side has ZERO impact on the Node.js side. The only shared contract is error code strings, and those are defined in both `error-handler.sh` and `errors.js` independently.
+---
 
-### Consumer (Slash Commands) -> Bash Contract
+## Backward Compatibility
 
-| Contract Element | Specification |
-|-----------------|---------------|
-| Invocation | `bash .aether/aether-utils.sh <subcommand> [args]` |
-| Success output | `{"ok":true,"result":{...}}\n` to stdout |
-| Error output | `{"ok":false,"error":{...}}\n` to stderr |
-| Exit codes | 0 on success, 1 on error |
-| Subcommand names | Stable -- renaming breaks 412 references |
+### Claude-Only Workflow (No Proxy)
 
-**This contract must be preserved perfectly during modularization.** No subcommand name changes. No output format changes. No exit code changes. The dispatcher pattern (thin case entries delegating to module functions) ensures this naturally.
+When running Claude Code directly (no LiteLLM proxy):
+- `opus` -> Claude Opus (expensive, deep reasoning)
+- `sonnet` -> Claude Sonnet (balanced)
+- `haiku` -> Claude Haiku (fast, cheap)
+
+This still works correctly. The model slots have sensible defaults in Claude Code. The routing layer (LiteLLM proxy) is transparent -- if the proxy isn't running, Claude Code uses its native models.
+
+### CLI Override Flag
+
+The `--model` flag in `/ant:build` (build-prep.md Step 1) already validates model names. This needs to be updated to also accept slot names (`opus`, `sonnet`, `haiku`) and override all workers to that slot.
+
+### OpenCode Parity
+
+OpenCode agent definitions in `.opencode/agents/` need the same `model` field treatment. The spawn mechanism may differ (OpenCode has its own agent spawning), so this needs per-platform investigation.
+
+---
+
+## Build Order for Implementation
+
+### Phase 1: Model Slot Resolution Infrastructure
+1. Add `model-slot` subcommand to aether-utils.sh (reads model-profiles.yaml, returns slot name)
+2. Add `getModelSlot()` to bin/lib/model-profiles.js
+3. Add `model_slot` field to model-profiles.yaml caste entries
+4. Add `aether model-slots` CLI command
+5. Tests for all new functions
+
+### Phase 2: Settings.json Configuration
+1. Update `~/.claude/settings.json` `ANTHROPIC_DEFAULT_OPUS_MODEL` to `glm-5`
+2. Verify proxy routes `glm-5` correctly
+3. Test that `model="opus"` in Task tool actually reaches GLM-5
+
+### Phase 3: Build System Integration (highest impact)
+1. Add model resolution step to build-prep.md
+2. Update build-wave.md to pass `model=` in all Task tool calls
+3. Update build-full.md (mirror of build-wave.md)
+4. Test end-to-end: `/ant:build 1` with different castes using different models
+5. Verify with `/ant:verify-castes` (update this command)
+
+### Phase 4: Other Commands
+1. Update swarm.md Scout spawns
+2. Update colonize.md Surveyor spawns
+3. Update seal.md Sage/Chronicler spawns
+4. Update patrol.md, organize.md
+
+### Phase 5: Polish
+1. Update `/ant:verify-castes` to show actual model routing (remove "archived" message)
+2. Update CLAUDE.md documentation
+3. Add `--model` flag support for opus/sonnet/haiku slot names
+4. OpenCode parity (if applicable)
+
+---
+
+## Pitfalls
+
+### Pitfall 1: Agent Frontmatter vs Task Tool Param Conflict
+If both the agent definition says `model: inherit` and the Task call says `model="opus"`, which wins?
+- **Assumption:** The Task tool `model` parameter overrides the agent frontmatter. This needs verification.
+- **Mitigation:** If Task param doesn't override, fall back to Approach A (changing agent frontmatter).
+
+### Pitfall 2: LiteLLM Proxy Model Name Mismatch
+The proxy must recognize the model name sent by Claude Code. If `ANTHROPIC_DEFAULT_OPUS_MODEL` is set to `glm-5`, the proxy must have `glm-5` configured as a model alias.
+- **Verification:** Check LiteLLM proxy config (litellm_config.yaml) to confirm model aliases.
+- **Mitigation:** The proxy is already running with these models (settings.json lines 70-74 list them).
+
+### Pitfall 3: Build-Full.md vs Build-Wave.md Divergence
+There are TWO build paths: the split-playbook path (build.md -> build-wave.md) and the full path (build-full.md). Both contain spawn logic. Changes must be applied to BOTH.
+- **Mitigation:** build-full.md is a consolidated copy. Apply the same model param changes to both.
+
+### Pitfall 4: Continue Commands Don't Spawn Workers
+The continue playbooks (continue-verify.md, continue-gates.md, etc.) do NOT spawn workers -- they only verify and advance state. No changes needed there. But verify-castes.md should be updated to reflect working routing.
+
+### Pitfall 5: model-profiles.yaml YAML Parsing Fragility
+The shell `awk`-based YAML parser in aether-utils.sh (line 2628) is fragile. It parses indentation-based YAML with awk. If the YAML structure changes, parsing breaks silently.
+- **Mitigation:** The `select` and `validate` subcommands use Node.js for reliable parsing. Add a `model-slot` subcommand that also uses Node.js.
+
+---
 
 ## Sources
 
-- Direct codebase analysis of `.aether/aether-utils.sh` (11,272 lines, 178 subcommands, main case dispatch at line 981)
-- Direct codebase analysis of `.aether/utils/` (21 utility files, 5,237 lines total)
-- Direct codebase analysis of `bin/lib/` (16 Node.js modules, 6,578 lines total)
-- Existing extraction precedent: hive.sh, midden.sh, skills.sh dispatch pattern (verified working)
-- [Bash modularization best practices](https://medium.com/mkdir-awesome/the-ultimate-guide-to-modularizing-bash-script-code-f4a4d53000c2) -- confirms source-based modularization has no meaningful performance overhead
-- [Bash scripting best practices 2026](https://oneuptime.com/blog/post/2026-02-13-bash-best-practices/view) -- set -euo pipefail, namespace variables, modularize into separate .sh files
-- [Bash subcommand dispatch pattern](https://github.com/xwmx/bash-boilerplate/blob/master/bash-subcommands) -- function-based routing via case dispatch
-- [Bash source performance](https://www.baeldung.com/linux/source-include-files) -- no observable performance difference between monolith and split files
-- [Error handling with /dev/null](https://www.cyberciti.biz/faq/how-to-redirect-output-and-errors-to-devnull/) -- production best practice: log to file rather than discard
+- HIGH confidence: Direct codebase analysis of `.claude/agents/ant/*.md` (22 agent definitions, all with `model: inherit`)
+- HIGH confidence: Direct analysis of `~/.claude/settings.json` (environment variable mappings)
+- HIGH confidence: GSD system proven pattern in `.claude/get-shit-done/workflows/new-project.md` (line 585)
+- HIGH confidence: GSD model resolution in `.claude/get-shit-done/bin/gsd-tools.cjs` (MODEL_PROFILES, cmdResolveModel)
+- HIGH confidence: Previous failure documented in `.aether/archive/model-routing/README.md`
+- HIGH confidence: model-profiles.yaml structure and bin/lib/model-profiles.js logic
+- MEDIUM confidence: Task tool `model` parameter behavior (observed working in GSD, not formally documented by Anthropic)
+- MEDIUM confidence: LiteLLM proxy model name resolution (proxy config not examined directly)
 
 ---
-*Architecture research for: Aether CLI production hardening*
-*Researched: 2026-03-23*
+
+*Architecture research for: Aether v2.3 Per-Caste Model Routing*
+*Researched: 2026-03-27*
