@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-03-27)
 
 **Core value:** Reliably interpret user requests, decompose into work, verify outputs, and ship correct work with minimal back-and-forth.
-**Current focus:** v2.5 Smart Init -- Phase 29: Repo Scanning Module
+**Current focus:** v2.5 Smart Init -- Phase 30: Charter Management
 
 ## Current Position
 
-Phase: 29 of 32 (Repo Scanning Module)
-Plan: 3 of 3 complete
-Status: Phase 29 complete -- ready for Phase 30 (Charter Functions)
-Last activity: 2026-03-27 — 29-03 scan module tests complete (14 tests, 616 total passing)
+Phase: 30 of 32 (Charter Management)
+Plan: 1 of 2 complete
+Status: 30-01 charter functions complete -- ready for 30-02
+Last activity: 2026-03-27 — 30-01 charter-write and colony-name subcommands (2 tasks, 2 commits, 616 tests passing)
 
-Progress: [██░░░░░░░░] 21%
+Progress: [███░░░░░░] 23%
 
 ## Performance Metrics
 
 **Velocity (from v2.1):**
-- Total plans completed: 61
+- Total plans completed: 62
 - Average duration: 5min
-- Total execution time: 5.0 hours
+- Total execution time: 5.1 hours
 
 **Recent Trend:**
 - v2.4: 4 phases completed (25-28), 8 plans total, all shipped 2026-03-27
@@ -46,6 +46,8 @@ Recent decisions affecting v2.5 work:
 - [v2.5]: Survey staleness uses 7-day window with COLONY_STATE.json timestamp as primary, file mtime as fallback
 - [v2.5]: Stale survey test requires all 7 survey docs (completeness check precedes staleness check in scan.sh)
 - [v2.5]: assert_json_has_field from test-helpers.sh only supports top-level keys -- use jq -e for nested paths
+- [v2.5]: macOS sed lacks \u Unicode escape -- use awk for title case conversion
+- [v2.5]: Charter entries counted in METADATA stats to prevent drift on repeated re-inits
 
 ### Pending Todos
 
@@ -59,5 +61,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-27
-Stopped at: Completed 29-03 scan module tests (2 tasks, 1 commit, 14 tests passing)
+Stopped at: Completed 30-01 charter functions (2 tasks, 2 commits, charter-write + colony-name subcommands)
 Resume file: None
