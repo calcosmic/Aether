@@ -1012,7 +1012,7 @@ case "$cmd" in
     cat <<'HELP_EOF'
 {
   "ok": true,
-  "commands": ["help","version","validate-state","validate-oracle-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","learning-observe","learning-check-promotion","learning-promote-auto","memory-capture","queen-thresholds","context-capsule","rolling-summary","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","spawn-efficiency","validate-worker-response","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-display-text","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","phase-insert","generate-commit-message","version-check","registry-add","registry-list","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","incident-rule-add","survey-load","survey-verify","pheromone-export","pheromone-write","pheromone-count","pheromone-read","instinct-read","instinct-create","instinct-apply","pheromone-prime","colony-prime","pheromone-expire","eternal-init","eternal-store","pheromone-export-xml","pheromone-import-xml","pheromone-validate-xml","wisdom-export-xml","wisdom-import-xml","registry-export-xml","registry-import-xml","memory-metrics","midden-recent-failures","midden-review","midden-acknowledge","entropy-score","force-unlock","changelog-append","changelog-collect-plan-data","suggest-approve","suggest-quick-dismiss","data-clean","autopilot-init","autopilot-update","autopilot-status","autopilot-stop","autopilot-check-replan","hive-init","hive-store","hive-read","hive-abstract","hive-promote"],
+  "commands": ["help","version","validate-state","validate-oracle-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","learning-observe","learning-check-promotion","learning-promote-auto","memory-capture","queen-thresholds","context-capsule","rolling-summary","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","spawn-efficiency","validate-worker-response","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-display-text","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","phase-insert","generate-commit-message","version-check","registry-add","registry-list","bootstrap-system","model-profile","model-get","model-list","model-slot","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","incident-rule-add","survey-load","survey-verify","pheromone-export","pheromone-write","pheromone-count","pheromone-read","instinct-read","instinct-create","instinct-apply","pheromone-prime","colony-prime","pheromone-expire","eternal-init","eternal-store","pheromone-export-xml","pheromone-import-xml","pheromone-validate-xml","wisdom-export-xml","wisdom-import-xml","registry-export-xml","registry-import-xml","memory-metrics","midden-recent-failures","midden-review","midden-acknowledge","entropy-score","force-unlock","changelog-append","changelog-collect-plan-data","suggest-approve","suggest-quick-dismiss","data-clean","autopilot-init","autopilot-update","autopilot-status","autopilot-stop","autopilot-check-replan","hive-init","hive-store","hive-read","hive-abstract","hive-promote"],
   "sections": {
     "Core": [
       {"name": "help", "description": "List all available commands with sections"},
@@ -1046,7 +1046,8 @@ case "$cmd" in
     "Model Routing": [
       {"name": "model-profile", "description": "Manage caste-to-model assignments"},
       {"name": "model-get", "description": "Get model assignment for a caste"},
-      {"name": "model-list", "description": "List all model assignments"}
+      {"name": "model-list", "description": "List all model assignments"},
+      {"name": "model-slot", "description": "Resolve caste to model slot (get, list, validate)"}
     ],
     "Spawn Management": [
       {"name": "spawn-log", "description": "Log a spawn event to spawn-tree.txt"},
@@ -2619,7 +2620,7 @@ Files: ${files_changed} files changed"
 
         profile_file="$AETHER_ROOT/.aether/model-profiles.yaml"
         if [[ ! -f "$profile_file" ]]; then
-          json_ok '{"model":"kimi-k2.5","source":"default","caste":"'$caste'"}'
+          json_ok '{"model":"glm-5-turbo","source":"default","caste":"'$caste'"}'
           exit 0
         fi
 
@@ -2627,7 +2628,7 @@ Files: ${files_changed} files changed"
         # SUPPRESS:OK -- read-default: file may not exist or format may vary
         model=$(awk '/^worker_models:/{found=1; next} found && /^[^ ]/{exit} found && /^  '$caste':/{print $2; exit}' "$profile_file" 2>/dev/null)
 
-        [[ -z "$model" ]] && model="kimi-k2.5"
+        [[ -z "$model" ]] && model="glm-5-turbo"
         json_ok '{"model":"'$model'","source":"profile","caste":"'$caste'"}'
         ;;
 
@@ -2761,6 +2762,112 @@ NODESCRIPT
       json_err "$E_BASH_ERROR" "Couldn't list model assignments. Try: run 'aether verify-models' to check model configuration."
     fi
     echo "$result"
+    ;;
+
+  # --- Model Slot Commands ---
+  model-slot)
+    action="${1:-}"
+    case "$action" in
+      get)
+        caste="${2:-}"
+        [[ -z "$caste" ]] && json_err "$E_VALIDATION_FAILED" "Usage: model-slot get <caste>"
+
+        profile_file="$AETHER_ROOT/.aether/model-profiles.yaml"
+        if [[ ! -f "$profile_file" ]]; then
+          json_ok '"inherit"'
+          exit 0
+        fi
+
+        # Extract slot for caste using awk (bash-compatible YAML parsing)
+        # SUPPRESS:OK -- read-default: file may not exist or format may vary
+        slot=$(awk '/^worker_models:/{found=1; next} found && /^[^ ]/{exit} found && /^  '$caste':/{print $2; exit}' "$profile_file" 2>/dev/null)
+
+        [[ -z "$slot" ]] && slot="inherit"
+        json_ok "\"$slot\""
+        ;;
+
+      list)
+        profile_file="$AETHER_ROOT/.aether/model-profiles.yaml"
+        if [[ ! -f "$profile_file" ]]; then
+          json_err "$E_FILE_NOT_FOUND" "Profile not found" '{"file":"model-profiles.yaml"}'
+        fi
+
+        # Use Node.js to parse YAML and group castes by slot tier
+        node_script=$(cat << 'NODESCRIPT'
+const fs = require('fs');
+const path = process.argv[2];
+const yaml = require('yaml') || null;
+
+let content;
+try {
+  content = fs.readFileSync(path, 'utf8');
+} catch(e) {
+  console.log(JSON.stringify({ok: false, error: e.message}));
+  process.exit(1);
+}
+
+// Minimal YAML parser for the worker_models section
+function parseWorkerModels(yamlText) {
+  const slots = {opus: [], sonnet: [], haiku: [], inherit: []};
+  let inWorkerModels = false;
+
+  for (const line of yamlText.split('\n')) {
+    if (line.startsWith('worker_models:')) {
+      inWorkerModels = true;
+      continue;
+    }
+    if (inWorkerModels && /^[a-z]/.test(line)) break; // next top-level key
+    if (inWorkerModels && /^  (\w+):\s+(\w+)/.test(line)) {
+      const match = line.match(/^  (\w+):\s+(\w+)/);
+      const caste = match[1];
+      const slot = match[2];
+      if (slots[slot]) {
+        slots[slot].push(caste);
+      } else {
+        slots[slot] = [caste];
+      }
+    }
+  }
+  return slots;
+}
+
+const slots = parseWorkerModels(content);
+console.log(JSON.stringify({ok: true, result: {slots}}));
+NODESCRIPT
+)
+        result=$(echo "$node_script" | node - "$profile_file")
+        echo "$result"
+        ;;
+
+      validate)
+        slot_name="${2:-}"
+        [[ -z "$slot_name" ]] && json_err "$E_VALIDATION_FAILED" "Usage: model-slot validate <slot>"
+
+        # Self-contained validation with inline VALID_SLOTS (mirrors model-profiles.js)
+        node_script=$(cat << 'NODESCRIPT'
+const slot = process.argv[2];
+const VALID_SLOTS = ['opus', 'sonnet', 'haiku', 'inherit'];
+if (!slot || typeof slot !== 'string' || !VALID_SLOTS.includes(slot)) {
+  console.log(JSON.stringify({ ok: true, result: { valid: false, error: 'Invalid slot "' + (slot || '') + '". Valid options: opus, sonnet, haiku, inherit' } }));
+} else {
+  console.log(JSON.stringify({ ok: true, result: { valid: true, error: null } }));
+}
+NODESCRIPT
+)
+        result=$(echo "$node_script" | node - "$slot_name")
+        echo "$result"
+        ;;
+
+      *)
+        echo "Usage: model-slot <command> [args]"
+        echo ""
+        echo "Commands:"
+        echo "  get <caste>       Get slot for caste"
+        echo "  list              List all caste:slot assignments"
+        echo "  validate <slot>   Validate a slot name"
+        json_err "$E_VALIDATION_FAILED" "Usage: model-slot get <caste>|list|validate <slot>"
+        ;;
+    esac
     ;;
 
   # ============================================
