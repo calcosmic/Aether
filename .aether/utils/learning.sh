@@ -3,7 +3,7 @@
 # Provides: _learning_promote, _learning_inject, _learning_observe, _learning_check_promotion,
 #           _learning_promote_auto, _learning_display_proposals, _learning_select_proposals,
 #           _learning_defer_proposals, _learning_approve_proposals, _learning_undo_promotions,
-#           _instinct_read, _instinct_create, _instinct_apply
+#           _instinct_read, _instinct_create, _instinct_apply, _learning_extract_fallback
 # Note: Uses get_wisdom_threshold() and get_wisdom_thresholds_json() from main file.
 #       Cross-domain calls (queen-promote, pheromone-write, activity-log, rolling-summary,
 #       generate-threshold-bar, parse-selection) are all via subprocess dispatch (bash "$0").
@@ -1733,5 +1733,201 @@ _instinct_apply() {
     ia_new_conf=$(_state_read_field "$(printf '[(.memory.instincts // [])[] | select(.id == "%s")] | first | .confidence' "$ia_id")")
 
     json_ok "{\"applied\":true,\"instinct_id\":\"$ia_id\",\"applications\":$ia_new_apps,\"new_confidence\":$ia_new_conf}"
+    exit 0
+}
+
+# ============================================================================
+# _learning_extract_fallback
+# Deterministic fallback for learning extraction when builders skip learning output.
+# Produces structured learning objects from git diff and feeds them through instinct-create.
+# Usage: learning-extract-fallback (no args -- reads git state and colony state)
+# Returns: JSON {"learnings": [...], "count": N}
+# Note: Uses jq for grouping/sorting (bash 3.2 compatible -- no associative arrays)
+# ============================================================================
+_learning_extract_fallback() {
+    # Pre-flight: verify git history exists
+    if ! git rev-parse HEAD~1 >/dev/null 2>&1; then
+        json_ok '{"learnings":[],"count":0}'
+        exit 0
+    fi
+
+    # Pre-flight: verify colony state exists
+    if [[ ! -f "$DATA_DIR/COLONY_STATE.json" ]]; then
+        json_ok '{"learnings":[],"count":0}'
+        exit 0
+    fi
+
+    # Read git diff data
+    lef_stat=$(git diff --stat HEAD~1 2>/dev/null || echo "")
+    lef_files=$(git diff --name-only HEAD~1 2>/dev/null || echo "")
+
+    # Guard: no changes
+    if [[ -z "$lef_files" ]]; then
+        json_ok '{"learnings":[],"count":0}'
+        exit 0
+    fi
+
+    # Read last-build-claims.json if it exists for task context
+    lef_claims=""
+    if [[ -f "$DATA_DIR/last-build-claims.json" ]]; then
+        lef_claims=$(cat "$DATA_DIR/last-build-claims.json" 2>/dev/null || echo "")
+    fi
+
+    # Parse stat data into JSON: extract file path, insertions, deletions per line
+    # git diff --stat format: " path/to/file | 42 +++++---" or " path/to/file | 10"
+    # Also include the full file list for files with 0 insertions (binary/new files)
+    lef_files_json=$(printf '%s\n' "$lef_stat" | awk '
+    {
+        # Skip empty lines
+        if ($0 == "") next
+        # Skip the summary line (e.g., "13 files changed, 693 insertions(+), 128 deletions(-)")
+        if ($0 ~ /files? changed/) next
+        # Split on " | " to get file path and stat
+        idx = index($0, " | ")
+        if (idx > 0) {
+            fpath = substr($0, 1, idx - 1)
+            rest = substr($0, idx + 3)
+            # Extract first two numbers from rest (insertions, deletions)
+            gsub(/[^0-9 ]/, "", rest)
+            n = split(rest, nums, " ")
+            ins = (nums[1] != "" ? nums[1] : 0)
+            del = (nums[2] != "" ? nums[2] : 0)
+        } else {
+            fpath = $0
+            ins = 0
+            del = 0
+        }
+        # Trim whitespace from path (git stat pads with trailing spaces)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", fpath)
+        if (fpath != "") printf "{\"path\":\"%s\",\"ins\":%d,\"del\":%d}\n", fpath, ins, del
+    }' | jq -sc '.')
+
+    # Filter noise files and categorize using jq
+    lef_filtered=$(echo "$lef_files_json" | jq '[.[] |
+        select((.path | startswith(".aether/data/")) | not) |
+        select((.path | startswith(".aether/dreams/")) | not) |
+        select(.path != "package-lock.json") |
+        select((.path | startswith("node_modules/")) | not) |
+        # Categorize (use extra parens around `or` expressions for jq parser)
+        .category = (
+            if ((.path | test("^(tests|test)/")) or (.path | test("_test\\.")) or (.path | test("\\.test\\.")) or (.path | test("\\.spec\\.")))
+            then "testing"
+            elif ((.path | startswith("src/")) or (.path | startswith("lib/")))
+            then "source"
+            elif ((.path | startswith("docs/")) or (.path | endswith(".md")))
+            then "documentation"
+            elif (.path | test("\\.(json|yaml|yml|toml|env|conf|config)$"))
+            then "configuration"
+            else "source"
+            end
+        ) |
+        # Calculate absolute net change
+        .abs_net = ((.ins - .del) | if . < 0 then -. else . end) |
+        # Determine if test file
+        .is_test = (.category == "testing") |
+        # Skip trivial non-test changes (abs_net < 3)
+        select((.is_test == true) or (.abs_net >= 3)) |
+        # Extract directory
+        .dir = (.path | split("/") | .[0:-1] | join("/"))
+    ]')
+
+    # Guard: no significant changes after filtering
+    lef_sig_count=$(echo "$lef_filtered" | jq 'length')
+    if [[ "$lef_sig_count" -eq 0 ]]; then
+        json_ok '{"learnings":[],"count":0}'
+        exit 0
+    fi
+
+    # Group by category, sort by total change magnitude, cap at 5
+    # Using jq for grouping (bash 3.2 compatible)
+    lef_categories=$(echo "$lef_filtered" | jq -r '
+        group_by(.category) |
+        map({
+            category: .[0].category,
+            file_count: length,
+            total_ins: (map(.ins) | add),
+            total_del: (map(.del) | add),
+            total_change: ((map(.ins) | add) + (map(.del) | add)),
+            dir: (map(.dir) | group_by(.) | map({d: .[0], c: length}) | sort_by(-.c) | .[0].d)
+        }) |
+        sort_by(-.total_change) |
+        .[:5]
+    ')
+
+    # Get current phase for source tag
+    lef_phase=$(_state_read_field '.current_phase // 0')
+    lef_phase=${lef_phase:-0}
+
+    # Generate learning objects
+    lef_learnings="[]"
+    lef_count=0
+
+    lef_cat_count=$(echo "$lef_categories" | jq 'length')
+    for ((i=0; i<lef_cat_count && i<5; i++)); do
+        lef_cat_data=$(echo "$lef_categories" | jq ".[$i]")
+        lef_cat=$(echo "$lef_cat_data" | jq -r '.category')
+        lef_fcount=$(echo "$lef_cat_data" | jq -r '.file_count')
+        lef_fins=$(echo "$lef_cat_data" | jq -r '.total_ins')
+        lef_fdel=$(echo "$lef_cat_data" | jq -r '.total_del')
+        lef_fdir=$(echo "$lef_cat_data" | jq -r '.dir')
+
+        # Build fact string
+        lef_fact="Modified $lef_fcount files in $lef_fdir ($lef_fins+/$lef_fdel- lines)"
+
+        # Build interpretation based on category
+        case "$lef_cat" in
+            testing)
+                if [[ "$lef_fdel" == "0" ]]; then
+                    lef_interp="Added tests, improving test coverage"
+                else
+                    lef_interp="Modified tests, likely improving test coverage"
+                fi
+                ;;
+            source)
+                if [[ "$lef_fdel" -gt "$lef_fins" ]]; then
+                    lef_interp="Refactored or simplified $lef_fdir module code"
+                else
+                    lef_interp="Extended or modified $lef_fdir module code"
+                fi
+                ;;
+            configuration)
+                lef_interp="Updated project configuration"
+                ;;
+            documentation)
+                lef_interp="Updated project documentation"
+                ;;
+            *)
+                lef_interp="Modified $lef_fdir files"
+                ;;
+        esac
+
+        # Build trigger and action for instinct-create
+        lef_trigger="when working on $lef_cat"
+        lef_action="$lef_interp"
+
+        # Escape strings for JSON
+        lef_fact_json=$(echo "$lef_fact" | jq -Rs '.')
+        lef_interp_json=$(echo "$lef_interp" | jq -Rs '.')
+
+        # Append to learnings array
+        lef_learnings=$(echo "$lef_learnings" | jq --arg trigger "$lef_trigger" \
+            --arg action "$lef_action" \
+            --argjson fact "$lef_fact_json" \
+            --argjson interp "$lef_interp_json" \
+            '. += [{trigger: $trigger, action: $action, fact: $fact, interpretation: $interp}]')
+
+        # Feed through instinct-create (non-blocking -- failures are logged but don't stop extraction)
+        bash "$0" instinct-create \
+            --trigger "$lef_trigger" \
+            --action "$lef_action" \
+            --confidence 0.5 \
+            --domain "$lef_cat" \
+            --source "fallback-phase-$lef_phase" \
+            --evidence "$lef_fact" >/dev/null 2>&1 || _aether_log_error "Fallback instinct-create failed for $lef_cat"
+
+        lef_count=$((lef_count + 1))
+    done
+
+    json_ok "{\"learnings\":$lef_learnings,\"count\":$lef_count}"
     exit 0
 }

@@ -9,23 +9,23 @@ See: .planning/PROJECT.md (updated 2026-03-27)
 
 ## Current Position
 
-Phase: 26 — Wisdom Pipeline Wiring
-Plan: 1/1 complete (26-01 executed)
-Status: Phase 26 plan 01 complete — hive-promote wired into continue, consolidated wisdom summary added
-Last activity: 2026-03-27 — 26-01 complete (hive-promote in continue-advance, wisdom summary in continue-finalize)
+Phase: 27 — Deterministic Fallback & Dedup
+Plan: 1/2 complete (27-01 executed)
+Status: Phase 27 plan 01 complete -- fuzzy dedup in instinct-create with _normalize_text and _jaccard_similarity helpers
+Last activity: 2026-03-27 — 27-01 complete (fuzzy dedup, synonym expansion, 5 integration tests)
 
 ## Performance Metrics
 
 **Velocity (from v2.1):**
-- Total plans completed: 54
+- Total plans completed: 55
 - Average duration: 5min
-- Total execution time: 4.4 hours
+- Total execution time: 4.6 hours
 
 **Recent Trend:**
 - v2.1 completed 8 phases, 39 plans in ~3 hours
 - v2.2 completed 4 phases, 5 plans
 - v2.3: 4 phases planned, Phase 21 complete, Phase 22 complete (3/3 plans), Phase 23 complete (2/2 plans), Phase 24 complete (2/2 plans: safety warnings + spawn-tree resolution + caste table + config swap)
-- v2.4: Roadmap created, 4 phases planned (25-28), 11 requirements mapped, Phase 25 complete (2/2 plans: agent defs + build wiring), Phase 26 in progress (1/1 plans: hive-promote + wisdom summary)
+- v2.4: Roadmap created, 4 phases planned (25-28), 11 requirements mapped, Phase 25 complete (2/2 plans: agent defs + build wiring), Phase 26 complete (1/1 plans: hive-promote + wisdom summary), Phase 27 in progress (1/2 plans: fuzzy dedup)
 
 *Updated after each plan completion*
 
@@ -64,6 +64,9 @@ Last activity: 2026-03-27 — 26-01 complete (hive-promote in continue-advance, 
 - [v2.3/24-01]: GLM-5 safety warnings in XML-style glm_safety blocks for machine-parseability
 - [v2.3/24-02]: Static caste table in command files -- avoids dynamic resolution failure modes
 - [v2.3/24-02]: Claude API as explicit default in all config swap docs, GLM proxy opt-in
+- [v2.4/27-01]: Expanded synonym map beyond plan spec with base verb forms (write/create/build/fix/resolve) alongside gerunds for correct normalization of common English usage
+- [v2.4/27-01]: Split bc comparison into two (( )) calls to avoid parse error with empty variables in fuzzy dedup
+- [v2.4/27-01]: printf for bc output formatting to ensure valid JSON (bc outputs .8000 not 0.8000)
 
 ### Pending Todos
 
@@ -79,5 +82,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-27
-Stopped at: Completed 26-01 (hive-promote + wisdom summary wired into continue flow)
+Stopped at: Completed 27-01 (fuzzy dedup in instinct-create with normalization and Jaccard similarity)
 Resume file: None

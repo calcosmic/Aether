@@ -3937,6 +3937,7 @@ NODESCRIPT
   instinct-read) _instinct_read "$@" ;;
   instinct-create) _instinct_create "$@" ;;
   instinct-apply) _instinct_apply "$@" ;;
+  learning-extract-fallback) _learning_extract_fallback "$@" ;;
 
 
   pheromone-prime) _pheromone_prime "$@" ;;
