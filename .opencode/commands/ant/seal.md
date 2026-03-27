@@ -318,6 +318,74 @@ If option 2 selected: run /ant:tunnels
 If option 3 selected: display "Run /ant:lay-eggs to begin anew after clearing"
 ```
 
+### Step 6.5: Commit Suggestion (Non-blocking)
+
+After the ceremony, offer to commit all colony work.
+
+**Gate check — skip silently if any fail:**
+1. Not a git repo: `git rev-parse --git-dir 2>/dev/null` fails -> skip
+2. Clean working tree: `git status --porcelain 2>/dev/null` is empty -> skip to Step 6.6
+
+**If uncommitted changes exist:**
+
+Generate a seal commit message:
+```bash
+seal_commit=$(bash .aether/aether-utils.sh generate-commit-message seal "$phases_completed" "$goal" "$colony_age_days" 2>/dev/null)
+seal_message=$(echo "$seal_commit" | jq -r '.result.message // "aether-seal: colony sealed"')
+seal_body=$(echo "$seal_commit" | jq -r '.result.body // ""')
+```
+
+Display the suggestion:
+```
+Commit suggestion:
+  $seal_message
+  $seal_body
+```
+
+Prompt with AskUserQuestion (3 options):
+1. **Commit with this message** — Run `git add -A && git commit -m "$seal_message" -m "$seal_body"`
+2. **Edit message** — Ask user for their preferred message, then commit with that
+3. **Skip** — Do not commit
+
+If the user chooses option 1 or 2 and the commit succeeds, set `seal_committed = true`.
+If the commit fails or user skips, set `seal_committed = false`.
+
+**Error handling:** If `generate-commit-message` fails, fall back to message `"aether-seal: colony sealed"`. Never let commit suggestion failures stop the seal flow.
+
+### Step 6.6: Push Suggestion (Non-blocking)
+
+Only show if a commit was just made in Step 6.5 (`seal_committed == true`) OR if there are unpushed commits.
+
+**Gate check — skip silently if any fail:**
+1. Not a git repo -> skip
+2. No remote configured: `git remote -v 2>/dev/null` is empty -> skip
+
+**Check for unpushed commits:**
+```bash
+unpushed=$(git log --oneline @{u}..HEAD 2>/dev/null | wc -l | tr -d ' ')
+```
+If `unpushed == 0` and `seal_committed == false` -> skip
+
+**If there are commits to push:**
+
+Detect current branch and upstream status:
+```bash
+current_branch=$(git branch --show-current)
+has_upstream=$(git rev-parse --abbrev-ref @{u} 2>/dev/null && echo "yes" || echo "no")
+```
+
+Display: `Push {unpushed} commit(s) to remote? Branch: {current_branch}`
+
+Prompt with AskUserQuestion (2 options):
+1. **Push now** — If upstream exists: `git push`. If no upstream: `git push -u origin $current_branch`
+2. **I'll push later** — Skip
+
+Display result on success or skip.
+
+**Error handling:** If push fails, display the error but do not stop the seal flow.
+
+**Safety:** Never auto-push. Always require explicit user approval.
+
 ### Edge Cases
 
 **If milestone is already "Sealed Chambers" but phases are complete:**
