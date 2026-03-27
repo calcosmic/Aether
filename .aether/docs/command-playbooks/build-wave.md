@@ -58,7 +58,7 @@ Verification
   👁️🐜 {Watcher-Name}  Verify all work independently
   🎲🐜 {Chaos-Name}   Resilience testing (after Watcher)
 
-Total: {N} Builders + 1 Watcher + 1 Chaos = {N+2} spawns
+Total: {N} Builders + 1 Watcher + 1 Chaos + 1 Oracle + 1 Architect = {N+4} spawns
 ```
 
 **Caste Emoji Legend:**
@@ -67,12 +67,151 @@ Total: {N} Builders + 1 Watcher + 1 Chaos = {N+2} spawns
 - 🎲🐜 Chaos    (red if color enabled)
 - 🔍🐜 Scout    (yellow if color enabled)
 - 🏺🐜 Archaeologist (magenta if color enabled)
+- 🔮🐜 Oracle    (indigo if color enabled) — deep research specialist
+- 🏛️🐜 Architect  (violet if color enabled) — architecture design specialist
 - 🥚 Queen/Prime
 
 **Every spawn must show its caste emoji.**
 
 **Add to Caste Emoji Legend:**
 - 🔌🐜 Ambassador (blue if color enabled) — external integration specialist
+
+### Step 5.0.1: Oracle Research Step (Non-Blocking)
+
+**Oracle runs BEFORE worker waves. Failure is non-blocking -- the build continues with a warning.**
+
+1. **Generate Oracle name:**
+   Run using the Bash tool with description "Naming oracle ant...": `bash .aether/aether-utils.sh generate-ant-name "oracle"` (store as `{oracle_name}`)
+
+2. **Log spawn:**
+   Run using the Bash tool with description "Dispatching oracle...": `bash .aether/aether-utils.sh spawn-log "Queen" "oracle" "{oracle_name}" "Phase {phase_id} research"`
+
+3. **Display announcement:**
+```
+━━━ 🔮 O R A C L E   R E S E A R C H ━━━
+──── 🔮🐜 Spawning {oracle_name} — Phase {phase_id} research ────
+```
+
+4. **Spawn Oracle using Task tool with `subagent_type="aether-oracle"`**, include `description: "🔮 Oracle {oracle_name}: Phase {phase_id} research"` (DO NOT use run_in_background):
+
+   > **Platform note**: In Claude Code, use `Task tool with subagent_type`. In OpenCode, use the equivalent agent spawning mechanism for your platform.
+
+   **Oracle Worker Prompt:**
+   ```
+   You are {oracle_name}, a 🔮 Oracle Ant.
+
+   Mission: Conduct deep research for Phase {phase_id}
+
+   Phase: {phase_name}
+   Colony goal: "{colony_goal}"
+
+   Active pheromone signals (if any):
+   {pheromone_summary from prompt_section}
+
+   Tasks to research:
+   {list of phase tasks with descriptions}
+
+   Work:
+   1. Analyze the codebase for patterns relevant to these tasks
+   2. Research best practices, gotchas, and recommended approaches
+   3. Identify potential risks or dependencies
+   4. Write findings to `.aether/data/research/oracle-{phase_id}.md`
+
+   **IMPORTANT:** This is a single-pass research invocation (not iterative RALF loop). Produce your best findings in one pass.
+
+   Return ONLY this JSON (no other text):
+   {
+     "ant_name": "{oracle_name}",
+     "caste": "oracle",
+     "status": "completed" | "failed" | "blocked",
+     "summary": "Key findings and recommendations",
+     "findings": ["finding1", "finding2"],
+     "recommendations": ["rec1", "rec2"],
+     "risks": ["risk1"],
+     "research_file": ".aether/data/research/oracle-{phase_id}.md",
+     "blockers": []
+   }
+   ```
+
+5. **Parse Oracle JSON output:**
+   - If status is `"completed"`, store `oracle_findings` for injection into Architect and Builder prompts.
+   - If status is `"failed"` or `"blocked"`, log warning and set `oracle_findings` to empty:
+
+```
+⚠ Oracle {oracle_name} research unavailable — proceeding without research context
+```
+
+6. **Log completion:**
+   Run using the Bash tool with description "Recording oracle completion...": `bash .aether/aether-utils.sh spawn-complete "{oracle_name}" "{status}" "{summary}"`
+
+### Step 5.0.2: Architect Design Step (Non-Blocking)
+
+**Architect runs AFTER Oracle, BEFORE worker waves. Failure is non-blocking -- the build continues with a warning.**
+
+1. **Generate Architect name:**
+   Run using the Bash tool with description "Naming architect ant...": `bash .aether/aether-utils.sh generate-ant-name "architect"` (store as `{architect_name}`)
+
+2. **Log spawn:**
+   Run using the Bash tool with description "Dispatching architect...": `bash .aether/aether-utils.sh spawn-log "Queen" "architect" "{architect_name}" "Phase {phase_id} design"`
+
+3. **Display announcement:**
+```
+━━━ 🏛️ A R C H I T E C T   D E S I G N ━━━
+──── 🏛️🐜 Spawning {architect_name} — Phase {phase_id} design ────
+```
+
+4. **Spawn Architect using Task tool with `subagent_type="aether-architect"`**, include `description: "🏛️ Architect {architect_name}: Phase {phase_id} design"` (DO NOT use run_in_background):
+
+   > **Platform note**: In Claude Code, use `Task tool with subagent_type`. In OpenCode, use the equivalent agent spawning mechanism for your platform.
+
+   **Architect Worker Prompt:**
+   ```
+   You are {architect_name}, a 🏛️ Architect Ant.
+
+   Mission: Design architecture for Phase {phase_id}
+
+   Phase: {phase_name}
+   Colony goal: "{colony_goal}"
+
+   {oracle_findings if available, otherwise: "No Oracle research available for this phase."}
+
+   Active pheromone signals (if any):
+   {pheromone_summary from prompt_section}
+
+   Tasks to design for:
+   {list of phase tasks with descriptions}
+
+   Work:
+   1. Analyze codebase structure and existing patterns
+   2. Identify architectural boundaries and component relationships
+   3. Design approach (component structure, data flow, interfaces)
+   4. Write design document to `.aether/data/research/architect-{phase_id}.md`
+   5. Return actionable design decisions for Builder consumption
+
+   Return ONLY this JSON (no other text):
+   {
+     "ant_name": "{architect_name}",
+     "caste": "architect",
+     "status": "completed" | "failed" | "blocked",
+     "summary": "Design approach and key decisions",
+     "design_decisions": ["decision1", "decision2"],
+     "component_structure": {"overview": "..."},
+     "data_flow": {"overview": "..."},
+     "design_file": ".aether/data/research/architect-{phase_id}.md",
+     "blockers": []
+   }
+   ```
+
+5. **Parse Architect JSON output:**
+   - If status is `"completed"`, store `architect_design` for injection into Builder prompts.
+   - If status is `"failed"` or `"blocked"`, log warning and set `architect_design` to empty:
+
+```
+⚠ Architect {architect_name} design unavailable — proceeding without design context
+```
+
+6. **Log completion:**
+   Run using the Bash tool with description "Recording architect completion...": `bash .aether/aether-utils.sh spawn-complete "{architect_name}" "{status}" "{summary}"`
 
 ### Step 5.0.5: Select and Announce Workflow Pattern
 
