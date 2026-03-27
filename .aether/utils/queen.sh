@@ -1283,3 +1283,273 @@ _colony_name() {
 
     json_ok "{\"name\":\"$name\",\"source\":\"$source\"}"
 }
+
+# ============================================================================
+# _queen_write_charter()
+# Write or update colony charter content in QUEEN.md using [charter] tags
+# Writes intent+vision to User Preferences, governance+goals to Codebase Patterns
+# Handles re-init: removes existing [charter] entries before writing new ones
+# Usage: charter-write --intent "text" --vision "text" --governance "text" --goals "text" [--colony-name "name"]
+# Returns: {"ok":true,"result":{"written":N,"updated":bool,"colony_name":"...","timestamp":"..."}}
+# ============================================================================
+_queen_write_charter() {
+    local cw_intent=""
+    local cw_vision=""
+    local cw_governance=""
+    local cw_goals=""
+    local cw_colony_name=""
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --intent)      cw_intent="${2:-}"; shift 2 ;;
+            --vision)      cw_vision="${2:-}"; shift 2 ;;
+            --governance)  cw_governance="${2:-}"; shift 2 ;;
+            --goals)       cw_goals="${2:-}"; shift 2 ;;
+            --colony-name) cw_colony_name="${2:-}"; shift 2 ;;
+            *) shift ;;
+        esac
+    done
+
+    # At least one content field must be provided
+    if [[ -z "$cw_intent" && -z "$cw_vision" && -z "$cw_governance" && -z "$cw_goals" ]]; then
+        json_err "$E_VALIDATION_FAILED" "Usage: charter-write --intent <text> --vision <text> --governance <text> --goals <text> [--colony-name <name>]" '{"missing":"all_fields"}'
+        return 1
+    fi
+
+    local queen_file="$AETHER_ROOT/.aether/QUEEN.md"
+    if [[ ! -f "$queen_file" ]]; then
+        json_err "$E_FILE_NOT_FOUND" "QUEEN.md not found. Run queen-init first." '{"path":".aether/QUEEN.md"}'
+        return 1
+    fi
+
+    local ts
+    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    # Derive colony name if not provided
+    if [[ -z "$cw_colony_name" ]]; then
+        local cn_result
+        cn_result=$(bash "$0" colony-name 2>/dev/null) || true
+        cw_colony_name=$(echo "$cn_result" | jq -r '.result.name // ""' 2>/dev/null) || true
+    fi
+
+    # Cap each content field at 200 characters
+    _cap_200() {
+        local val="$1"
+        if [[ ${#val} -gt 200 ]]; then
+            echo "${val:0:197}..."
+        else
+            echo "$val"
+        fi
+    }
+    cw_intent=$(_cap_200 "$cw_intent")
+    cw_vision=$(_cap_200 "$cw_vision")
+    cw_governance=$(_cap_200 "$cw_governance")
+    cw_goals=$(_cap_200 "$cw_goals")
+
+    # Auto-set colony_name in COLONY_STATE.json if not already set
+    if [[ -f "$DATA_DIR/COLONY_STATE.json" ]]; then
+        local current_name
+        current_name=$(jq -r '.colony_name // empty' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null) || true
+        if [[ -z "$current_name" && -n "$cw_colony_name" ]]; then
+            local tmp_state="${DATA_DIR}/COLONY_STATE.json.tmp.$$"
+            jq --arg cn "$cw_colony_name" '.colony_name = $cn' "$DATA_DIR/COLONY_STATE.json" > "$tmp_state" && mv "$tmp_state" "$DATA_DIR/COLONY_STATE.json"
+        fi
+    fi
+
+    # Create temp file for atomic write
+    local tmp_file="${queen_file}.tmp.$$"
+    cp "$queen_file" "$tmp_file"
+
+    # Count existing charter entries before removal (to detect re-init)
+    local existing_charter_count
+    existing_charter_count=$(grep -c '^- \[charter\] ' "$tmp_file" 2>/dev/null || true)
+    existing_charter_count=${existing_charter_count:-0}
+    local is_update="false"
+    if [[ "$existing_charter_count" -gt 0 ]]; then
+        is_update="true"
+    fi
+
+    # Remove ALL existing charter entries (re-init safety -- CHARTER-03)
+    sed -i.bak '/^- \[charter\] /d' "$tmp_file" && rm -f "${tmp_file}.bak"
+
+    # Helper: insert entries into a QUEEN.md section
+    # Usage: _insert_section_entries <tmp_file> <section_name> <placeholder_text> <entries>
+    _insert_section_entries() {
+        local is_file="$1"
+        local is_section="$2"
+        local is_placeholder="$3"
+        local is_entries="$4"
+        local is_tmp="${is_file}.insert"
+
+        local is_section_line
+        is_section_line=$(grep -n "^## ${is_section}\$" "$is_file" | head -1 | cut -d: -f1)
+
+        if [[ -z "$is_section_line" ]]; then
+            return 1
+        fi
+
+        # Find end of section (next ## header or end of file)
+        local is_next_section
+        is_next_section=$(tail -n +$((is_section_line + 1)) "$is_file" | grep -n "^## " | head -1 | cut -d: -f1)
+        local is_section_end
+        if [[ -n "$is_next_section" ]]; then
+            is_section_end=$((is_section_line + is_next_section - 1))
+        else
+            is_section_end=$(wc -l < "$is_file")
+        fi
+
+        # Remove placeholder if present
+        # SUPPRESS:OK -- existence-test: grep returns 1 when no matches
+        local is_has_placeholder
+        is_has_placeholder=$(sed -n "${is_section_line},${is_section_end}p" "$is_file" | grep -c "No .* recorded yet" || true)
+        is_has_placeholder=${is_has_placeholder:-0}
+
+        if [[ "$is_has_placeholder" -gt 0 ]]; then
+            local is_pl_line
+            is_pl_line=$(sed -n "${is_section_line},${is_section_end}p" "$is_file" | grep -n "^\\*No .* recorded yet" | head -1 | cut -d: -f1)
+            if [[ -n "$is_pl_line" ]]; then
+                local is_actual_line=$((is_section_line + is_pl_line - 1))
+                # Replace placeholder with entries
+                {
+                    head -n $((is_actual_line - 1)) "$is_file"
+                    printf '%s\n' "$is_entries"
+                    tail -n +$((is_actual_line + 1)) "$is_file"
+                } > "$is_tmp" && mv "$is_tmp" "$is_file"
+                return 0
+            fi
+        fi
+
+        # No placeholder -- insert before section separator (---) or at section end
+        local is_sep_line
+        is_sep_line=$(sed -n "${is_section_line},${is_section_end}p" "$is_file" | grep -n "^---$" | tail -1 | cut -d: -f1)
+        local is_insert_at
+        if [[ -n "$is_sep_line" ]]; then
+            is_insert_at=$((is_section_line + is_sep_line - 2))
+        else
+            is_insert_at=$is_section_end
+        fi
+
+        {
+            head -n "$is_insert_at" "$is_file"
+            printf '%s\n' "$is_entries"
+            tail -n +$((is_insert_at + 1)) "$is_file"
+        } > "$is_tmp" && mv "$is_tmp" "$is_file"
+        return 0
+    }
+
+    # Build User Preferences entries (intent + vision)
+    local up_entries=""
+    local written=0
+    if [[ -n "$cw_intent" ]]; then
+        up_entries="${up_entries}- [charter] **Intent**: ${cw_intent} (Colony: ${cw_colony_name})"
+        written=$((written + 1))
+    fi
+    if [[ -n "$cw_vision" ]]; then
+        up_entries="${up_entries}"$'\n'"- [charter] **Vision**: ${cw_vision} (Colony: ${cw_colony_name})"
+        written=$((written + 1))
+    fi
+
+    if [[ -n "$up_entries" ]]; then
+        _insert_section_entries "$tmp_file" "User Preferences" "user preferences" "$up_entries"
+    fi
+
+    # Build Codebase Patterns entries (governance + goals)
+    local cp_entries=""
+    if [[ -n "$cw_governance" ]]; then
+        cp_entries="${cp_entries}- [charter] **Governance**: ${cw_governance} (Colony: ${cw_colony_name})"
+        written=$((written + 1))
+    fi
+    if [[ -n "$cw_goals" ]]; then
+        cp_entries="${cp_entries}"$'\n'"- [charter] **Goal**: ${cw_goals} (Colony: ${cw_colony_name})"
+        written=$((written + 1))
+    fi
+
+    if [[ -n "$cp_entries" ]]; then
+        _insert_section_entries "$tmp_file" "Codebase Patterns" "codebase patterns" "$cp_entries"
+    fi
+
+    # Update Evolution Log
+    local ev_type="charter_initialized"
+    local ev_details="Colony charter created for ${cw_colony_name}"
+    if [[ "$is_update" == "true" ]]; then
+        ev_type="charter_updated"
+        ev_details="Colony charter updated for ${cw_colony_name}"
+    fi
+    local ev_entry="| ${ts} | system | ${ev_type} | ${ev_details} |"
+    local ev_separator
+    ev_separator=$(grep -n "^|------|" "$tmp_file" | tail -1 | cut -d: -f1)
+    if [[ -n "$ev_separator" ]]; then
+        awk -v line="$ev_separator" -v entry="$ev_entry" 'NR==line{print; print entry; next}1' "$tmp_file" > "${tmp_file}.ev" && mv "${tmp_file}.ev" "$tmp_file"
+    fi
+
+    # Update METADATA stats -- count non-charter list items in each section, add charter entries
+    local up_section_line
+    up_section_line=$(grep -n '^## User Preferences$' "$tmp_file" | head -1 | cut -d: -f1)
+    local up_next_section
+    up_next_section=$(tail -n +$((up_section_line + 1)) "$tmp_file" | grep -n "^## " | head -1 | cut -d: -f1)
+    local up_section_end
+    if [[ -n "$up_next_section" ]]; then
+        up_section_end=$((up_section_line + up_next_section - 1))
+    else
+        up_section_end=$(wc -l < "$tmp_file")
+    fi
+
+    # Count non-charter list items in User Preferences
+    local up_non_charter
+    up_non_charter=$(sed -n "${up_section_line},${up_section_end}p" "$tmp_file" | grep -c '^- ' | grep -v '^\- \[charter\]' 2>/dev/null || echo "0")
+    # Actually need a different approach: count all list items, then subtract charter ones
+    local up_all_items
+    up_all_items=$(sed -n "${up_section_line},${up_section_end}p" "$tmp_file" | grep -c '^- ' || true)
+    up_all_items=${up_all_items:-0}
+    local up_charter_items
+    up_charter_items=$(sed -n "${up_section_line},${up_section_end}p" "$tmp_file" | grep -c '^- \[charter\] ' || true)
+    up_charter_items=${up_charter_items:-0}
+    up_non_charter=$((up_all_items - up_charter_items))
+
+    # Count charter entries written to User Preferences
+    local up_charter_written=0
+    [[ -n "$cw_intent" ]] && up_charter_written=$((up_charter_written + 1))
+    [[ -n "$cw_vision" ]] && up_charter_written=$((up_charter_written + 1))
+    local up_total=$((up_non_charter + up_charter_written))
+
+    # Count for Codebase Patterns
+    local cp_section_line
+    cp_section_line=$(grep -n '^## Codebase Patterns$' "$tmp_file" | head -1 | cut -d: -f1)
+    local cp_next_section
+    cp_next_section=$(tail -n +$((cp_section_line + 1)) "$tmp_file" | grep -n "^## " | head -1 | cut -d: -f1)
+    local cp_section_end
+    if [[ -n "$cp_next_section" ]]; then
+        cp_section_end=$((cp_section_line + cp_next_section - 1))
+    else
+        cp_section_end=$(wc -l < "$tmp_file")
+    fi
+    local cp_all_items
+    cp_all_items=$(sed -n "${cp_section_line},${cp_section_end}p" "$tmp_file" | grep -c '^- ' || true)
+    cp_all_items=${cp_all_items:-0}
+    local cp_charter_items
+    cp_charter_items=$(sed -n "${cp_section_line},${cp_section_end}p" "$tmp_file" | grep -c '^- \[charter\] ' || true)
+    cp_charter_items=${cp_charter_items:-0}
+    local cp_non_charter=$((cp_all_items - cp_charter_items))
+
+    # Count charter entries written to Codebase Patterns
+    local cp_charter_written=0
+    [[ -n "$cw_governance" ]] && cp_charter_written=$((cp_charter_written + 1))
+    [[ -n "$cw_goals" ]] && cp_charter_written=$((cp_charter_written + 1))
+    local cp_total=$((cp_non_charter + cp_charter_written))
+
+    # Update METADATA stats
+    awk -v up="$up_total" -v cp="$cp_total" '{
+        gsub(/"total_user_prefs": [0-9]*/, "\"total_user_prefs\": " up)
+        gsub(/"total_codebase_patterns": [0-9]*/, "\"total_codebase_patterns\": " cp)
+        print
+    }' "$tmp_file" > "${tmp_file}.stats" && mv "${tmp_file}.stats" "$tmp_file"
+
+    # Update last_evolved
+    awk -v ts="$ts" '/"last_evolved":/ { gsub(/"last_evolved": "[^"]*"/, "\"last_evolved\": \"" ts "\""); } {print}' "$tmp_file" > "${tmp_file}.meta" && mv "${tmp_file}.meta" "$tmp_file"
+
+    # Atomic move
+    mv "$tmp_file" "$queen_file"
+
+    json_ok "{\"written\":${written},\"updated\":${is_update},\"colony_name\":\"${cw_colony_name}\",\"timestamp\":\"${ts}\"}"
+}
