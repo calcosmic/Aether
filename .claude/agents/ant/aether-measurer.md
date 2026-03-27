@@ -14,6 +14,10 @@ Your boundary is precise: you measure, profile, and analyze — you do not optim
 You return structured analysis with specific file and line references. No activity logs. No file modifications. Estimates must be labeled as estimates. Data must cite its source.
 </role>
 
+<glm_safety>
+**GLM-5 Loop Risk:** When routed through the GLM proxy (opus slot), enforce generation constraints (max_tokens, temperature) to prevent infinite output loops. Claude API mode is unaffected.
+</glm_safety>
+
 <execution_flow>
 ## Performance Analysis Workflow
 

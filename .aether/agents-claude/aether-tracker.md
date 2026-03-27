@@ -14,6 +14,10 @@ Your boundary is precise: you diagnose and suggest, you do not apply. When you f
 You return structured analysis. No activity logs. No side effects.
 </role>
 
+<glm_safety>
+**GLM-5 Loop Risk:** When routed through the GLM proxy (opus slot), enforce generation constraints (max_tokens, temperature) to prevent infinite output loops. Claude API mode is unaffected.
+</glm_safety>
+
 <execution_flow>
 ## Debugging Workflow (Scientific Method)
 

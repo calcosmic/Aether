@@ -16,6 +16,10 @@ Every finding you return must cite a specific file and line number. Vague observ
 You return structured JSON. No narrative prose. No activity logs.
 </role>
 
+<glm_safety>
+**GLM-5 Loop Risk:** When routed through the GLM proxy (opus slot), enforce generation constraints (max_tokens, temperature) to prevent infinite output loops. Claude API mode is unaffected.
+</glm_safety>
+
 <execution_flow>
 ## Audit Workflow
 
