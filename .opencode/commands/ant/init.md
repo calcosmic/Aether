@@ -100,7 +100,13 @@ Extract fields with jq defaults for missing data:
 - `has_active`: `.prior_colonies.has_active_colony // false`
 - `active_goal`: `.prior_colonies.active_goal // empty`
 
-If `scan_result` is empty or `jq` fails, set all fields to fallback values and proceed (graceful degradation -- never stop init because scan fails).
+**Intelligence fields (new):**
+- `colony_context_colonies`: `.colony_context.prior_colonies // []` -- array of prior colony summaries (each has goal, phases, outcome, summary)
+- `colony_context_charter`: `.colony_context.existing_charter // {}` -- existing charter content from QUEEN.md
+- `governance_rules`: `.governance.rules // []` -- array of governance rule objects (each has rule, source, strength)
+- `pheromone_suggestions`: `.pheromone_suggestions // []` -- array of suggestion objects (each has type, content, reason, priority)
+
+If `scan_result` is empty or `jq` fails, set all fields to fallback values (empty arrays/objects for intelligence fields) and proceed (graceful degradation -- never stop init because scan fails).
 
 ### Step 4: Detect Re-Init Mode
 
@@ -134,23 +140,45 @@ Re-init mode detected (existing goal: "{existing_goal}")
 Charter will be updated. All colony state, wisdom, instincts, and progress will be preserved.
 ```
 
-Then display the approval prompt as formatted Markdown with three sections:
+Then display the approval prompt as formatted Markdown. Section ordering: Prior Context (if any) -> Charter -> Context -> Pheromones.
 
-**Section 1: Charter**
+**Section 1: Prior Context (conditional -- only when prior colonies exist)**
+
+If `colony_context_colonies` has entries (length > 0), display:
+```markdown
+## Prior Context
+
+Previous colonies in this repo:
+
+{For each colony (max 3, most recent first):}
+- **{goal}** -- {outcome} ({phases} phases){if summary is non-empty: ". {summary}"}
+```
+
+Per locked decision: when no prior colonies exist, omit this section entirely. No placeholder, no header.
+
+Keep each colony to 1-2 lines. Show goal, outcome (milestone), phase count, and summary from CROWNED-ANTHILL.md if available.
+
+**Section 2: Charter**
 ```markdown
 ## Charter
 
 **Intent:** {user's goal from $normalized_args, or existing_intent if re-init}
 **Vision:** {derived from user's goal by Claude, or existing_vision if re-init}
-**Governance:** {blank for fresh init, or existing_governance if re-init}
+**Governance:** {see governance logic below}
 **Goals:** {blank for fresh init, or existing_goals if re-init}
 ```
 
-For fresh init, Claude should derive a brief Vision from the user's goal (1-2 sentences). Governance and Goals start blank. The user fills them in if desired.
+For fresh init, Claude should derive a brief Vision from the user's goal (1-2 sentences). Goals start blank. The user fills them in if desired.
 
-For re-init, pre-populate all fields from existing QUEEN.md charter entries.
+**Governance field logic:**
+- For fresh init with `governance_rules` available (length > 0): pre-populate with semicolon-separated rule text from the detected rules. Format: `"TDD required; ESLint enforced; Follow CONTRIBUTING.md"`. These are editable by the user.
+- For fresh init with no governance_rules: leave blank.
+- For re-init with existing_governance non-empty: pre-populate from existing QUEEN.md charter entries.
+- For re-init with existing_governance empty but governance_rules available: pre-populate from governance_rules.
 
-**Section 2: Context**
+For re-init, pre-populate Intent, Vision, and Goals from existing QUEEN.md charter entries.
+
+**Section 3: Context**
 ```markdown
 ## Context
 
@@ -161,7 +189,27 @@ For re-init, pre-populate all fields from existing QUEEN.md charter entries.
 {if survey_suggestion: **Note:** {survey_suggestion}}
 ```
 
-**Section 3: Pheromones**
+**Section 4: Pheromones**
+
+If `pheromone_suggestions` has entries (length > 0), display:
+```markdown
+## Pheromones
+
+Suggested signals based on repo analysis:
+
+1. [FOCUS] Testing infrastructure present (47 test files) -- maintain TDD discipline
+2. [REDIRECT] Environment files detected -- never commit secrets or .env files
+3. [FOCUS] Code quality tools configured -- follow existing lint/format rules
+
+Edit, remove, or add signals as needed. Approved signals will be auto-applied.
+```
+
+The numbered list uses the actual type and content from `pheromone_suggestions`. Each line format: `{N}. [{type}] {content}`.
+
+Per locked decision: suggestions are fully editable. User can reword, remove, or add their own.
+Per locked decision: all sections look the same -- no visual distinction between auto-generated and user-written content.
+
+If no pheromone suggestions available (empty array), display the existing default:
 ```markdown
 ## Pheromones
 
@@ -203,20 +251,23 @@ Only reached after user approval. ALL file writes happen here.
 bash .aether/aether-utils.sh charter-write --intent "{approved_intent}" --vision "{approved_vision}" --governance "{approved_governance}" --goals "{approved_goals}"
 ```
 
-2. Optionally update the goal field in COLONY_STATE.json in-place:
+2. Auto-apply approved pheromone suggestions (see pheromone auto-apply below).
+
+3. Optionally update the goal field in COLONY_STATE.json in-place:
 ```bash
 jq --arg new_goal "{approved_intent}" '.goal = $new_goal' .aether/data/COLONY_STATE.json > .aether/data/COLONY_STATE.json.tmp && mv .aether/data/COLONY_STATE.json.tmp .aether/data/COLONY_STATE.json
 ```
 
-3. Run `bash .aether/aether-utils.sh session-init "$(jq -r '.session_id' .aether/data/COLONY_STATE.json)" "{approved_intent}"`
+4. Run `bash .aether/aether-utils.sh session-init "$(jq -r '.session_id' .aether/data/COLONY_STATE.json)" "{approved_intent}"`
 
-4. Skip to Step 8 (display result). Do NOT write COLONY_STATE.json from template, do NOT write constraints.json, do NOT write pheromones.json.
+5. Skip to Step 8 (display result). Do NOT write COLONY_STATE.json from template, do NOT write constraints.json, do NOT write pheromones.json.
 
 **If fresh init:**
 
 1. Initialize QUEEN.md (already done in Step 2)
 2. Write charter content via charter-write (same command as above)
-3. Write COLONY_STATE.json from template:
+3. Auto-apply approved pheromone suggestions (see pheromone auto-apply below).
+4. Write COLONY_STATE.json from template:
    - Generate a session ID in the format `session_{unix_timestamp}_{random}` and an ISO-8601 UTC timestamp
    - Resolve template: check `~/.aether/system/templates/colony-state.template.json` first, then `.aether/templates/colony-state.template.json`
    - If no template found: output "Template missing: colony-state.template.json. Run aether update to fix." and stop
@@ -225,12 +276,12 @@ jq --arg new_goal "{approved_intent}" '.goal = $new_goal' .aether/data/COLONY_ST
    - Remove ALL keys starting with underscore
    - Write the resulting JSON to `.aether/data/COLONY_STATE.json` using the Write tool
 
-4. Write constraints.json from template:
+5. Write constraints.json from template:
    - Resolve template: check `~/.aether/system/templates/constraints.template.json` first, then `.aether/templates/constraints.template.json`
    - If no template found: output "Template missing: constraints.template.json. Run aether update to fix." and stop
    - Read template, follow `_instructions`, remove `_` prefixed keys, write to `.aether/data/constraints.json`
 
-5. Initialize runtime files from templates (non-blocking):
+6. Initialize runtime files from templates (non-blocking):
 ```bash
 for template in pheromones midden learning-observations; do
   if [[ "$template" == "midden" ]]; then
@@ -253,15 +304,15 @@ for template in pheromones midden learning-observations; do
 done
 ```
 
-6. Run `bash .aether/aether-utils.sh context-update init "{approved_intent}"`
-7. Run `bash .aether/aether-utils.sh validate-state colony`
-8. Register repo (silent on failure):
+7. Run `bash .aether/aether-utils.sh context-update init "{approved_intent}"`
+8. Run `bash .aether/aether-utils.sh validate-state colony`
+9. Register repo (silent on failure):
 ```bash
 domain_tags=$(bash .aether/aether-utils.sh domain-detect 2>/dev/null | jq -r '.result.tags // ""' || echo "")
 bash .aether/aether-utils.sh registry-add "$(pwd)" "$(jq -r '.version // "unknown"' ~/.aether/version.json 2>/dev/null || echo 'unknown')" --goal "{approved_intent}" --active true --tags "$domain_tags" 2>/dev/null || true
 cp ~/.aether/version.json .aether/version.json 2>/dev/null || true
 ```
-9. Seed QUEEN.md from hive (non-blocking):
+10. Seed QUEEN.md from hive (non-blocking):
 ```bash
 domain_tags=$(jq -r --arg repo "$(pwd)" \
   '[.repos[] | select(.path == $repo) | .domain_tags // []] | .[0] // [] | join(",")' \
@@ -271,7 +322,24 @@ seed_args="queen-seed-from-hive --limit 5"
 seed_result=$(bash .aether/aether-utils.sh $seed_args 2>/dev/null || echo '{}')
 seeded_count=$(echo "$seed_result" | jq -r '.result.seeded // 0' 2>/dev/null || echo "0")
 ```
-10. Run `bash .aether/aether-utils.sh session-init "{session_id}" "{approved_intent}"`
+11. Run `bash .aether/aether-utils.sh session-init "{session_id}" "{approved_intent}"`
+
+**Pheromone auto-apply (referenced by both re-init and fresh init paths above):**
+
+If approved pheromone suggestions exist (the user kept them in the prompt and didn't remove them during the approval loop):
+
+For each approved pheromone suggestion, call:
+```bash
+bash .aether/aether-utils.sh pheromone-write "{type}" '{content}' --source "system:init" --reason '{reason}' --ttl "30d" 2>/dev/null || true
+```
+
+Implementation notes:
+- Claude (the LLM executing init.md) tracks which pheromones the user kept, edited, or removed during the approval loop (Step 6). Only emit pheromones that survived approval.
+- Use single quotes around pheromone content and reason to avoid shell metacharacter issues (per pitfall 4).
+- Each `pheromone-write` call uses `2>/dev/null || true` to make it non-blocking -- a failed write should never stop colony creation.
+- The `--source "system:init"` tag identifies these as init-derived pheromones.
+- The `--ttl "30d"` gives suggestions a 30-day lifespan (project-level conventions, not phase-specific).
+- `pheromone-write` handles deduplication via content hashing -- if a signal with the same content already exists, it will reinforce rather than duplicate.
 
 ### Step 8: Display Result
 
