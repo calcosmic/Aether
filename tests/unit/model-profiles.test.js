@@ -390,7 +390,7 @@ test('integration: load actual YAML and verify all castes', t => {
   }
 
   // Verify all expected models exist
-  const expectedModels = ['glm-5', 'glm-5-turbo', 'glm-4.5-air'];
+  const expectedModels = getModelNames();
 
   for (const model of expectedModels) {
     const result = modelProfiles.validateModel(profiles, model);
@@ -401,13 +401,13 @@ test('integration: load actual YAML and verify all castes', t => {
   const assignments = modelProfiles.getAllAssignments(profiles);
   t.is(assignments.length, 10);
 
-  // Verify all castes use glm-5-turbo
-  t.is(modelProfiles.getModelForCaste(profiles, 'builder'), 'glm-5-turbo');
-  t.is(modelProfiles.getModelForCaste(profiles, 'architect'), 'glm-5-turbo');
-  t.is(modelProfiles.getModelForCaste(profiles, 'oracle'), 'glm-5-turbo');
+  // Verify all castes use the expected default model
+  t.is(modelProfiles.getModelForCaste(profiles, 'builder'), getDefaultModelForCaste('builder'));
+  t.is(modelProfiles.getModelForCaste(profiles, 'architect'), getDefaultModelForCaste('architect'));
+  t.is(modelProfiles.getModelForCaste(profiles, 'oracle'), getDefaultModelForCaste('oracle'));
 
-  // Verify providers
-  t.is(modelProfiles.getProviderForModel(profiles, 'glm-5'), 'z_ai');
-  t.is(modelProfiles.getProviderForModel(profiles, 'glm-5-turbo'), 'z_ai');
-  t.is(modelProfiles.getProviderForModel(profiles, 'glm-4.5-air'), 'z_ai');
+  // Verify providers for all models
+  for (const model of getModelNames()) {
+    t.is(modelProfiles.getProviderForModel(profiles, model), getModelProvider(model), `Provider for ${model} should match`);
+  }
 });
