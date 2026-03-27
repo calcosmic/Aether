@@ -7,7 +7,7 @@ You are the **Queen**. Display the caste assignments and system status.
 
 ## Step 1: Show Caste Assignments
 
-Display the colony caste structure:
+Display the colony caste structure with model slot assignments:
 
 ```
 Aether Colony Caste System
@@ -15,19 +15,39 @@ Aether Colony Caste System
 
 CASTE ASSIGNMENTS
 ─────────────────
-👑 Prime           - Colony coordination and strategic planning
-🏺 Archaeologist   - Git history analysis and pattern excavation
-🏛️ Architect      - System design and documentation
-🔮 Oracle          - Deep research and foresight
-🗺️ Route Setter    - Task decomposition and planning
-🔨 Builder         - Implementation and coding
-👁️ Watcher         - Verification and testing
-🔍 Scout           - Research and exploration
-🎲 Chaos           - Edge case testing and resilience probing
-🧭 Colonizer       - Environment setup and exploration
+Slot: OPUS (reasoning/analysis)
+  👑 Queen              - Colony coordination and strategic planning
+  🏺 Archaeologist      - Git history analysis and pattern excavation
+  🗺️ Route Setter      - Task decomposition and planning
+  📜 Sage               - Wisdom synthesis and cross-colony knowledge
+  🔍 Tracker            - Bug investigation and root cause analysis
+  📋 Auditor            - Quality gate and code review
+  🔒 Gatekeeper         - Security scanning and antipattern detection
+  📏 Measurer           - Performance analysis and metrics
+
+Slot: SONNET (execution/implementation)
+  🔨 Builder            - Implementation and coding
+  👁️ Watcher            - Verification and testing
+  🔎 Scout              - Research and exploration
+  🎲 Chaos              - Edge case testing and resilience probing
+  🔬 Probe              - Test coverage analysis
+  🧵 Weaver             - Refactoring specialist
+  🌐 Ambassador         - External integrations
+  🏠 Nest               - Directory structure mapping
+  📚 Disciplines        - Convention documentation
+  🦠 Pathogens          - Tech debt identification
+  📦 Provisions         - Dependency mapping
+
+Slot: INHERIT (uses parent's model)
+  📝 Chronicler        - Documentation
+  ♿ Includer           - Accessibility audits
+  🗄️ Keeper            - Knowledge preservation
 
 ───────────────────────────────────────────
 ```
+
+The model slot assignments come from agent frontmatter (`model:` field).
+Source of truth: `.aether/model-profiles.yaml` `worker_models` section.
 
 ## Step 2: Check System Status
 
@@ -38,23 +58,25 @@ Check LiteLLM proxy status:
 curl -s http://localhost:4000/health 2>/dev/null | grep -q "healthy" && echo "✓ Proxy healthy" || echo "⚠ Proxy not running"
 ```
 
-## Step 3: Show Current Session Info
+## Step 3: Show Current Model Configuration
+
+Display the active model mapping:
 
 ```
-SESSION INFORMATION
+MODEL CONFIGURATION
 ───────────────────
-All workers in this session use the same model configuration.
-To change models, restart Claude Code with different settings:
+To change models, swap settings files:
 
-export ANTHROPIC_BASE_URL=http://localhost:4000
-export ANTHROPIC_AUTH_TOKEN=sk-litellm-local
-export ANTHROPIC_MODEL=<model-name>
-claude
+  GLM Proxy mode:
+    cp ~/.claude/settings.json.glm ~/.claude/settings.json
+    (opus -> glm-5, sonnet -> glm-5-turbo, haiku -> glm-4.5-air)
 
-Available models (via LiteLLM proxy):
-  • glm-5        - Complex reasoning, architecture, planning
-  • kimi-k2.5    - Fast coding, implementation
-  • minimax-2.5  - Validation, research, exploration
+  Claude API mode:
+    cp ~/.claude/settings.json.claude ~/.claude/settings.json
+    (opus -> claude-opus-4, sonnet -> claude-sonnet-4, haiku -> claude-haiku-4)
+
+Current model mapping can be verified by reading agent frontmatter:
+  grep "^model:" .claude/agents/ant/*.md
 ```
 
 ## Step 4: Summary
@@ -65,21 +87,22 @@ System Status
 ═══════════════════════════════════════════
 Utils: ✓ Operational
 Proxy: {status from Step 2}
-Castes: 10 defined
-
-Note: Model-per-caste routing was attempted but is not
-possible with Claude Code's Task tool (no env var support).
-See archived config: .aether/archive/model-routing/
-Tag: model-routing-v1-archived
+Castes: 22 defined (8 opus, 11 sonnet, 3 inherit)
+Routing: Per-caste via agent frontmatter model: field
 ```
 
 ## Historical Note
 
-A model-per-caste system was designed and implemented but cannot
-function due to Claude Code Task tool limitations. The complete
-configuration is archived in `.aether/archive/model-routing/`.
+Per-caste model routing was initially attempted using environment variable
+injection at spawn time (archived in `.aether/archive/model-routing/`).
+That approach failed due to Claude Code Task tool limitations.
 
-To view the archived configuration:
+The current approach uses agent frontmatter `model:` fields, which Claude Code
+handles natively. No Aether code intervention is required -- Claude Code reads
+the frontmatter and resolves the slot name through `ANTHROPIC_DEFAULT_*_MODEL`
+environment variables.
+
+To view the archived v1 configuration:
 ```bash
 git show model-routing-v1-archived
 ```
