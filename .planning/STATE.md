@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-27)
 ## Current Position
 
 Phase: 32 of 32 (Intelligence Enhancements) -- IN PROGRESS
-Plan: 1 of 3 complete
-Status: Plan 32-01 complete -- intelligence sub-scan functions in scan.sh
-Last activity: 2026-03-27 -- 32-01 intelligence sub-scans (2 tasks, 2 commits, 616 tests passing)
+Plan: 2 of 3 complete
+Status: Plan 32-02 complete -- intelligence-enriched approval prompt in init.md
+Last activity: 2026-03-27 -- 32-02 enriched init prompt (2 tasks, 2 commits, 616 tests passing)
 
-Progress: [██████░░░] 56%
+Progress: [████████░] 78%
 
 ## Performance Metrics
 
@@ -59,6 +59,9 @@ Recent decisions affecting v2.5 work:
 - [v2.5]: Pheromone suggestions use 10 deterministic pattern checks, not LLM inference
 - [v2.5]: Governance rules focus on process/standards (TDD, linting, CI), not technology choices
 - [v2.5]: Legacy manifest formats (phases_completed as array) handled via jq type check
+- [v2.5]: Prior Context section uses conditional display -- omitted entirely when no prior colonies exist (no placeholder)
+- [v2.5]: Governance rules pre-populated as semicolon-separated text in Charter Governance field
+- [v2.5]: Pheromone auto-apply uses 30d TTL and source "system:init" via pheromone-write calls
 
 ### Pending Todos
 
@@ -72,5 +75,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-27
-Stopped at: Completed 32-01 intelligence sub-scans (2 tasks, 2 commits, 616 tests passing)
+Stopped at: Completed 32-02 enriched init prompt (2 tasks, 2 commits, 616 tests passing)
 Resume file: None
