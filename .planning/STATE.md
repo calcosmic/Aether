@@ -5,27 +5,28 @@
 See: .planning/PROJECT.md (updated 2026-03-27)
 
 **Core value:** Reliably interpret user requests, decompose into work, verify outputs, and ship correct work with minimal back-and-forth.
-**Current focus:** v2.4 Living Wisdom
+**Current focus:** v2.5 Smart Init -- Phase 29: Repo Scanning Module
 
 ## Current Position
 
-Phase: 28 — Integration Validation
-Plan: 2/3 complete (28-01, 28-02 executed)
-Status: 28-02 complete -- wisdom pipeline E2E tests (4 tests), 616 tests passing, full pipeline validated
-Last activity: 2026-03-27 — 28-02 complete (wisdom pipeline E2E: memory-capture -> hive-read)
+Phase: 29 of 32 (Repo Scanning Module)
+Plan: 1 of 3 complete
+Status: Plan 29-02 ready
+Last activity: 2026-03-27 — 29-01 scan.sh module skeleton complete
+
+Progress: [█░░░░░░░░░] 10%
 
 ## Performance Metrics
 
 **Velocity (from v2.1):**
-- Total plans completed: 57
+- Total plans completed: 59
 - Average duration: 5min
 - Total execution time: 4.8 hours
 
 **Recent Trend:**
-- v2.1 completed 8 phases, 39 plans in ~3 hours
-- v2.2 completed 4 phases, 5 plans
-- v2.3: 4 phases planned, Phase 21 complete, Phase 22 complete (3/3 plans), Phase 23 complete (2/2 plans), Phase 24 complete (2/2 plans: safety warnings + spawn-tree resolution + caste table + config swap)
-- v2.4: Roadmap created, 4 phases planned (25-28), 11 requirements mapped, Phase 25 complete (2/2 plans: agent defs + build wiring), Phase 26 complete (1/1 plans: hive-promote + wisdom summary), Phase 27 complete (2/2 plans: fuzzy dedup + fallback extraction), Phase 28 in progress (2/3 plans: test baseline repair + wisdom pipeline E2E)
+- v2.4: 4 phases completed (25-28), 8 plans total, all shipped 2026-03-27
+- v2.3: 4 phases completed (21-24), 10 plans total
+- v2.2: 4 phases completed (17-20), 5 plans total
 
 *Updated after each plan completion*
 
@@ -33,44 +34,13 @@ Last activity: 2026-03-27 — 28-02 complete (wisdom pipeline E2E: memory-captur
 
 ### Decisions
 
-- [v2.4]: 4-phase structure: agents first (independent), pipeline wiring (highest value), fallback+dedup (depends on pipeline), integration validation (depends on all)
-- [v2.4]: Phase numbering continues from v2.3 end (phase 24) — v2.4 starts at phase 25
-- [v2.4/25-01]: Oracle output convention: .aether/data/research/oracle-{phase_id}.md -- shared research directory with Architect
-- [v2.4/25-01]: Architect output convention: .aether/data/research/architect-{phase_id}.md -- write-to-research-dir, must-not-modify-source-code boundary
-- [v2.4/25-01]: Oracle distinguished from Scout by Write capability + deeper research + actionable recommendations; Architect distinguished from Keeper by creating new designs vs synthesizing knowledge
-- [v2.4/25-02]: Oracle spawns before Architect, both before workers — non-blocking failures (log warning, continue build)
-- [v2.4/25-02]: Architect in Orchestration tier, Oracle in Niche tier in CLAUDE.md agent table
-- [v2.4/25-02]: Pre-worker specialist spawn pattern: Oracle (research) -> Architect (design) -> Workers (implementation)
-- [v2.4/26-01]: Cross-stage echo pattern for hive_promoted_count and hive_error since shell vars don't persist between Bash tool invocations
-- [v2.4/26-01]: hive-promote runs in continue-advance (not finalize) -- finalize only consumes results for summary line
-- [v2.4/26-01]: Confidence threshold >= 0.8 for hive promotion in continue, matching seal.md pattern
-- [v2.3]: Phase 1 must complete before any model-profiles.yaml changes -- 184 hardcoded model names in tests will break otherwise
-- [v2.3]: Use Approach A (agent frontmatter) for MVP routing -- simpler than Task tool model param, zero playbook changes needed
-- [v2.3]: Aether routes by slot name (opus/sonnet), never by actual model name -- keeps dual-mode support clean
-- [v2.3]: Specialist analysis castes on opus (Tracker, Auditor, Gatekeeper, Measurer) -- reasoning depth improves accuracy on bounded analysis tasks
-- [v2.2]: Focus exclusively on wisdom systems -- ceremony/verification improvements deferred to v2.3
-- [v2.3/21-01]: No caching in mock-profiles helper -- each function call reads fresh YAML so tests break intentionally if YAML changes
-- [v2.3/21-01]: buildMockProfiles uses spread merge for workerModels/modelMetadata, full replacement for taskRouting
-- [v2.3/21-02]: Soft-gate regression test logs violations without failing -- avoids false positives from legitimate test inputs
-- [v2.3/21-02]: Module-level YAML-derived constants (BUILDER_MODEL, ALT_MODEL) at file top avoid repeated helper calls
-- [v2.3/21-03]: Loop-based provider verification in integration tests -- automatically covers new models added to YAML
-- [v2.3/22-01]: keeper placed on inherit tier (3 inherit castes: chronicler, includer, keeper) -- CONTEXT.md listed only 2, needs update
-- [v2.3/22-01]: Slot-based worker_models: castes store slot names (opus/sonnet/inherit), model_slots section provides resolution table
-- [v2.3/22-02]: Agent frontmatter model: field activates Claude Code native routing -- 10 opus, 11 sonnet, 3 inherit across 24 agents
-- [v2.3/22-03]: OpenCode verify-castes mirror updated alongside Claude Code version for sync policy parity
-- [v2.3/23-01]: getModelSlotForCaste returns DEFAULT_SLOT ('inherit') for missing castes -- silent fallback, no console warnings
-- [v2.3/23-01]: validateSlot uses {valid, error} return pattern for centralized slot-name validation
-- [v2.3/24-01]: Spawn-tree auto-resolution uses bash $0 subprocess to model-slot get -- avoids tight coupling between spawn.sh and model-slot modules
-- [v2.3/24-01]: GLM-5 safety warnings in XML-style glm_safety blocks for machine-parseability
-- [v2.3/24-02]: Static caste table in command files -- avoids dynamic resolution failure modes
-- [v2.3/24-02]: Claude API as explicit default in all config swap docs, GLM proxy opt-in
-- [v2.4/27-01]: Expanded synonym map beyond plan spec with base verb forms (write/create/build/fix/resolve) alongside gerunds for correct normalization of common English usage
-- [v2.4/27-01]: Split bc comparison into two (( )) calls to avoid parse error with empty variables in fuzzy dedup
-- [v2.4/27-01]: printf for bc output formatting to ensure valid JSON (bc outputs .8000 not 0.8000)
-- [v2.4/27-02]: Used jq for file grouping/sorting instead of bash associative arrays (bash 3.2 compatibility on macOS)
-- [v2.4/27-02]: Cross-stage echo pattern for fallback_count (same as hive_promoted_count) since shell vars don't persist between Bash tool invocations
-- [v2.4/28-01]: Sonnet tier has 11 castes (not 13 as initially assumed) -- verified against model-profiles.yaml, test assertions must match actual data
-- [v2.4/28-02]: Enhanced parseLastJson with 3-level fallback (last-line, full-output, backward-brace-scan) for pretty-printed multi-line JSON from subprocess commands
+Recent decisions affecting v2.5 work:
+
+- [v2.5]: 4-phase structure follows dependency chain: scan module (foundation) -> charter functions (QUEEN.md writes) -> init.md rewrite (integration) -> intelligence enhancements (enrichment)
+- [v2.5]: QUEEN.md charter content written into EXISTING v2 sections only -- User Preferences for intent/vision, Codebase Patterns for governance/goals. No new `## ` headers (7+ downstream consumers parse by exact header)
+- [v2.5]: scan.sh is a new bash utils module (10th domain module) -- init-research subcommand provides structured JSON research data
+- [v2.5]: Prompt generation is deterministic bash+jq assembly within init.md, NOT LLM-generated
+- [v2.5]: Approval loop is LLM-mediated (Claude Code is the UI) -- display Markdown, wait for user response, continue
 
 ### Pending Todos
 
@@ -78,12 +48,12 @@ None yet.
 
 ### Blockers/Concerns
 
-- Hive brain is a chicken-and-egg problem -- first colony to use the pipeline will not benefit from cross-colony wisdom (expected behavior)
-- GLM-5 constraint passing through subagent spawning is unverified -- deferred (not blocking v2.4)
-- Task tool `model` parameter vs frontmatter precedence untested -- deferred (not blocking v2.4)
+- Approval loop UX is unvalidated -- the LLM-mediated approval pattern needs user testing (flagged in research)
+- Token budget impact of charter content is uncertain -- research recommends 500-char cap for smart-init content to avoid crowding colony-earned wisdom
+- scan.sh performance on large repos unvalidated -- 2-second target may need tuning
 
 ## Session Continuity
 
 Last session: 2026-03-27
-Stopped at: Completed 28-02 (wisdom pipeline E2E tests: 4 tests, full pipeline validated)
+Stopped at: Completed 29-01 scan.sh module skeleton (2 tasks, 2 commits)
 Resume file: None
