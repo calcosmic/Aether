@@ -50,44 +50,64 @@ bash .aether/aether-utils.sh spawn-complete "Hammer-42" "completed" "auth module
 
 ---
 
-## Model Selection (Session-Level)
+## Model Selection (Per-Caste via Agent Frontmatter)
 
-> **Note**: Model selection is handled by the host IDE (Claude Code or OpenCode). The routing config below is preserved for reference only.
+Aether uses a two-tier model routing system. Each agent's model slot is set in its frontmatter `model:` field, and Claude Code resolves the slot to an actual model via environment variables in `~/.claude/settings.json`.
 
-Aether can work with different AI models through a LiteLLM proxy, but **model selection happens at the session level**, not per-worker.
+### Caste-to-Slot Assignment
 
-### How It Works
+| Slot | Castes | Role |
+|------|--------|------|
+| **Opus** | queen, archaeologist, route-setter, sage, tracker, auditor, gatekeeper, measurer | Reasoning, analysis, coordination |
+| **Sonnet** | builder, watcher, scout, chaos, probe, weaver, ambassador, nest, disciplines, pathogens, provisions | Execution, research, implementation |
+| **Inherit** | chronicler, includer, keeper | Uses parent's model |
 
-Claude Code's Task tool does not support passing environment variables to spawned workers. All workers inherit the parent session's model configuration.
+The source of truth for caste-to-slot assignments is `.aether/model-profiles.yaml` (`worker_models` section). Agent frontmatter in `.claude/agents/ant/*.md` mirrors these assignments.
 
-### To Use a Specific Model
+### How Slot Resolution Works
 
-```bash
-# 1. Start LiteLLM proxy (if using)
-cd ~/repos/litellm-proxy && docker-compose up -d
+When Claude Code spawns a sub-agent with `model: opus`, it looks up the `ANTHROPIC_DEFAULT_OPUS_MODEL` environment variable to determine the actual model. The slot name is abstract -- the same routing code works regardless of which models are mapped.
 
-# 2. Set environment variables before starting Claude Code:
-export ANTHROPIC_BASE_URL=http://localhost:4000
-export ANTHROPIC_AUTH_TOKEN=sk-litellm-local
-export ANTHROPIC_MODEL=kimi-k2.5  # or glm-5, minimax-2.5
+### Activating GLM-5 Through the Opus Slot
 
-# 3. Start Claude Code
-claude
+In `~/.claude/settings.json` (or `~/.claude/settings.json.glm` for local proxy mode), set:
+
+```json
+{
+  "env": {
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "glm-5",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "glm-5-turbo",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "glm-4.5-air"
+  }
+}
 ```
 
-### Available Models (via LiteLLM)
+This maps the opus slot to GLM-5 and the sonnet slot to GLM-5-Turbo.
 
-| Model | Best For | Provider |
-|-------|----------|----------|
-| glm-5 | Complex reasoning, architecture, planning | Z_AI |
-| kimi-k2.5 | Fast coding, implementation | Moonshot |
-| minimax-2.5 | Validation, research, exploration | MiniMax |
+### Dual-Mode Switching
+
+The same caste-to-slot assignments work with both Claude API and GLM proxy:
+
+**GLM Proxy mode** (via `~/.claude/settings.json.glm`):
+- opus -> glm-5, sonnet -> glm-5-turbo, haiku -> glm-4.5-air
+- Activate: `cp ~/.claude/settings.json.glm ~/.claude/settings.json`
+
+**Claude API mode** (via `~/.claude/settings.json.claude`):
+- opus -> claude-opus-4, sonnet -> claude-sonnet-4, haiku -> claude-haiku-4
+- Activate: `cp ~/.claude/settings.json.claude ~/.claude/settings.json`
+- No Aether code changes needed to switch modes
+
+### Available Models (via GLM Proxy)
+
+| Model | Slot | Best For | Provider |
+|-------|------|----------|----------|
+| glm-5 | opus | Deep reasoning, bounded analysis | Z_AI |
+| glm-5-turbo | sonnet | Agent workflows, coding, orchestration | Z_AI |
+| glm-4.5-air | haiku | Lightweight/haiku-tier tasks | Z_AI |
 
 ### Historical Note
 
-A model-per-caste routing system was designed and implemented (archived in `.aether/archive/model-routing/`) but cannot function due to Claude Code Task tool limitations. The archive is preserved for future use if the platform adds environment variable support for subagents.
-
-See: `git show model-routing-v1-archived` for the complete configuration.
+A model-per-caste routing system was previously attempted using environment variable injection at spawn time (archived in `.aether/archive/model-routing/`). This approach could not function due to Claude Code Task tool limitations. The current approach uses agent frontmatter `model:` fields, which Claude Code handles natively at spawn time -- no Aether code intervention required.
 
 ---
 
@@ -417,10 +437,10 @@ Next Steps / Recommendations: {required}
 🔨 **Purpose:** Implement code, execute commands, and manipulate files to achieve concrete outcomes. The colony's hands -- when tasks need doing, you make them happen.
 
 **Model Context:**
-- Assigned model: kimi-k2.5
-- Strengths: Code generation, refactoring, multimodal capabilities
-- Best for: Implementation tasks, code writing, visual coding from screenshots
-- Benchmark: 76.8% SWE-Bench Verified, 256K context
+- Assigned model: glm-5-turbo
+- Strengths: Code generation, deterministic output, agent-friendly
+- Best for: Implementation tasks, code writing, agent loops
+- Note: All workers use glm-5-turbo for reliable termination in agent workflows
 
 **When to use:** Code implementation, file manipulation, command execution
 
@@ -474,10 +494,9 @@ Fix count: {N}/3
 👁️ **Purpose:** Validate implementation, run tests, and ensure quality. The colony's guardian -- when work is done, you verify it's correct and complete. Also handles security audits, performance analysis, and test coverage.
 
 **Model Context:**
-- Assigned model: kimi-k2.5
-- Strengths: Validation, testing, visual regression testing
-- Best for: Verification, test coverage analysis, multimodal checks (screenshots)
-- Context window: 256K tokens, multimodal capable
+- Assigned model: glm-5-turbo
+- Strengths: Validation, testing, deterministic output
+- Best for: Verification, test coverage analysis, quality gates
 
 **When to use:** Quality review, testing, validation, security/performance audits, phase completion approval
 
@@ -583,10 +602,9 @@ Recommendation: {specific fix or investigation needed}
 🔍 **Purpose:** Gather information, search documentation, and retrieve context. The colony's researcher -- when the colony needs to know, you venture forth to find answers.
 
 **Model Context:**
-- Assigned model: kimi-k2.5
-- Strengths: Parallel exploration via agent swarm (up to 100 sub-agents), broad research
+- Assigned model: glm-5-turbo
+- Strengths: Research, information gathering, deterministic output
 - Best for: Documentation lookup, pattern discovery, wide exploration
-- Benchmark: Can coordinate 1,500 simultaneous tool calls
 
 **When to use:** Research questions, documentation lookup, finding information, learning new domains
 
@@ -608,10 +626,9 @@ Recommendation: {specific fix or investigation needed}
 🗺️ **Purpose:** Explore and index codebase structure. Build semantic understanding, detect patterns, and map dependencies. The colony's explorer -- when new territory is encountered, you venture forth to understand the landscape.
 
 **Model Context:**
-- Assigned model: kimi-k2.5
-- Strengths: Visual coding, environment setup, can turn screenshots into functional code
-- Best for: Codebase mapping, dependency analysis, UI/prototype generation
-- Multimodal: Can process visual inputs alongside text
+- Assigned model: glm-5-turbo
+- Strengths: Codebase exploration, environment setup
+- Best for: Codebase mapping, dependency analysis, pattern detection
 
 **When to use:** Codebase exploration, structure mapping, dependency analysis, pattern detection
 
@@ -634,10 +651,9 @@ Recommendation: {specific fix or investigation needed}
 🏛️ **Purpose:** Synthesize knowledge, extract patterns, and coordinate documentation. The colony's wisdom -- when the colony learns, you organize and preserve that knowledge.
 
 **Model Context:**
-- Assigned model: glm-5
-- Strengths: Long-context synthesis, pattern extraction, complex documentation
+- Assigned model: glm-5-turbo
+- Strengths: Long-context synthesis, pattern extraction, deterministic output
 - Best for: Synthesizing knowledge, coordinating docs, pattern recognition
-- Benchmark: 744B MoE, 200K context, strong execution with guidance
 
 **When to use:** Knowledge synthesis, pattern extraction, documentation coordination, decision organization
 
@@ -656,10 +672,9 @@ Recommendation: {specific fix or investigation needed}
 📋 **Purpose:** Create structured phase plans, break down goals into achievable tasks, and analyze dependencies. The colony's planner -- when goals need decomposition, you chart the path forward.
 
 **Model Context:**
-- Assigned model: kimi-k2.5
-- Strengths: Structured planning, large context for understanding codebases, fast iteration
+- Assigned model: glm-5-turbo
+- Strengths: Structured planning, deterministic output, reliable termination
 - Best for: Breaking down goals, creating phase structures, dependency analysis
-- Benchmark: 256K context, 76.8% SWE-Bench, strong at structured output
 
 **When to use:** Planning, goal decomposition, phase structuring, dependency analysis
 
