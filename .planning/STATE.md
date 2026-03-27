@@ -5,27 +5,27 @@
 See: .planning/PROJECT.md (updated 2026-03-27)
 
 **Core value:** Reliably interpret user requests, decompose into work, verify outputs, and ship correct work with minimal back-and-forth.
-**Current focus:** v2.5 Smart Init -- Phase 31: init.md Smart Init Rewrite
+**Current focus:** v2.5 Smart Init -- Phase 32: Intelligence Enhancements
 
 ## Current Position
 
-Phase: 31 of 32 (init.md Smart Init Rewrite)
-Plan: 1 of 2 complete
-Status: Plan 31-01 complete -- init.md rewritten with scan-assemble-approve-create flow
-Last activity: 2026-03-27 -- 31-01 smart init rewrite (2 tasks, 2 commits, 616 tests passing)
+Phase: 31 of 32 (init.md Smart Init Rewrite) -- PHASE COMPLETE
+Plan: 2 of 2 complete
+Status: Plan 31-02 complete -- 7 integration tests for smart init flow bash components
+Last activity: 2026-03-27 -- 31-02 smart init flow integration tests (2 tasks, 1 commit, 616 tests passing)
 
-Progress: [███░░░░░░] 26%
+Progress: [██████░░░] 53%
 
 ## Performance Metrics
 
 **Velocity (from v2.1):**
-- Total plans completed: 64
+- Total plans completed: 65
 - Average duration: 5min
-- Total execution time: 5.4 hours
+- Total execution time: 5.5 hours
 
 **Recent Trend:**
 - v2.4: 4 phases completed (25-28), 8 plans total, all shipped 2026-03-27
-- v2.5: Phase 30 complete (2 plans), Phase 31 in progress (1/2 plans complete)
+- v2.5: Phase 30 complete (2 plans), Phase 31 complete (2 plans)
 - v2.3: 4 phases completed (21-24), 10 plans total
 - v2.2: 4 phases completed (17-20), 5 plans total
 
@@ -68,5 +68,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-27
-Stopped at: Completed 31-01 smart init rewrite (2 tasks, 2 commits, 616 tests passing)
+Stopped at: Completed 31-02 smart init flow integration tests (2 tasks, 1 commit, 616 tests passing)
 Resume file: None
