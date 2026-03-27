@@ -63,7 +63,7 @@
 
 - [x] **Phase 25: Agent Definitions (Oracle + Architect)** — AGNT-01, AGNT-02, AGNT-03, AGNT-04, AGNT-05 (completed 2026-03-27)
 - [x] **Phase 26: Wisdom Pipeline Wiring** — PIPE-01, PIPE-02, PIPE-04 (completed 2026-03-27)
-- [ ] **Phase 27: Deterministic Fallback + Dedup** — PIPE-03, VAL-02
+- [x] **Phase 27: Deterministic Fallback + Dedup** — PIPE-03, VAL-02 (completed 2026-03-27)
 - [ ] **Phase 28: Integration Validation** — VAL-01
 
 </details>
@@ -122,7 +122,7 @@ Plans:
 
 Add a deterministic fallback for builder learning extraction. When AI agents skip learning output, extract learnings from git diff + test results. Also add content normalization to instinct deduplication so semantically similar instincts consolidate (not just SHA-256 exact match).
 
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 27-01-PLAN.md — Add text normalization and fuzzy dedup to instinct-create (VAL-02)
@@ -185,7 +185,7 @@ Phases execute in numeric order: 25 -> 26 -> 27 -> 28
 | 24. Safety & Verification | v2.3 | 2/2 | Complete | 2026-03-27 |
 | 25. Agent Definitions (Oracle + Architect) | v2.4 | Complete    | 2026-03-27 | — |
 | 26. Wisdom Pipeline Wiring | v2.4 | Complete    | 2026-03-27 | — |
-| 27. Deterministic Fallback + Dedup | v2.4 | 0 | Pending | — |
+| 27. Deterministic Fallback + Dedup | v2.4 | Complete    | 2026-03-27 | — |
 | 28. Integration Validation | v2.4 | 0 | Pending | — |
 
 ## Coverage Matrix
