@@ -94,6 +94,11 @@ hive_promoted_count="${hive_promoted_count:-0}"  # Default to 0 if Step 3d didn'
 
 wisdom_parts=""
 [[ "$written" -gt 0 ]] && wisdom_parts="$written learning(s) recorded"
+# Capture fallback_count from continue-advance.md Step 2.4
+fallback_count="${fallback_count:-0}"
+if [[ "$fallback_count" -gt 0 ]]; then
+  wisdom_parts="${wisdom_parts} ($fallback_count from fallback)"
+fi
 if [[ "$hive_promoted_count" -gt 0 ]]; then
   [[ -n "$wisdom_parts" ]] && wisdom_parts="$wisdom_parts, "
   wisdom_parts="$wisdom_parts$hive_promoted_count instinct(s) promoted to hive"

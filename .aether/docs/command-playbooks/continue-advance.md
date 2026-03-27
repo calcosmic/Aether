@@ -49,6 +49,30 @@ Update COLONY_STATE.json:
    - It's stating the obvious
    - There's no evidence it works
 
+2.4. **Deterministic fallback extraction (when AI learnings are empty):**
+
+   If the builder produced no learnings (empty or missing `learning.patterns_observed` in synthesis JSON),
+   fire the git-diff-based fallback to extract learnings deterministically.
+
+   ```bash
+   # Check if learnings were extracted from synthesis
+   patterns_count=$(jq '[.memory.phase_learnings[-1].learnings // []] | add | length' .aether/data/COLONY_STATE.json 2>/dev/null || echo "0")
+   fallback_count=0
+
+   if [[ "$patterns_count" -eq 0 ]]; then
+     # Builder skipped learning output -- fire deterministic fallback
+     fallback_result=$(bash .aether/aether-utils.sh learning-extract-fallback 2>/dev/null || echo '{"learnings":[],"count":0}')
+     fallback_count=$(echo "$fallback_result" | jq '.result.count // 0')
+   fi
+
+   # Echo for cross-stage capture (same pattern as hive_promoted_count)
+   echo "fallback_count=$fallback_count"
+   ```
+
+   This is NON-BLOCKING -- if learning-extract-fallback fails, fallback_count stays 0 and no learnings are lost (they just aren't recorded this time).
+
+   **Cross-stage variable passing:** The `fallback_count` value is output via echo for capture in continue-finalize.md's wisdom summary.
+
 2.5. **Capture learnings through memory pipeline:**
 
    For each learning extracted, run the memory pipeline (observation + auto-pheromone + auto-promotion check).
