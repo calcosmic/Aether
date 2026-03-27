@@ -5,28 +5,28 @@
 See: .planning/PROJECT.md (updated 2026-03-27)
 
 **Core value:** Reliably interpret user requests, decompose into work, verify outputs, and ship correct work with minimal back-and-forth.
-**Current focus:** Phase 22 -- Per-Caste Model Routing (v2.3)
+**Current focus:** Phase 23 -- Tooling Overrides (v2.3)
 
 ## Current Position
 
-Phase: 22 of 24 (Per-Caste Model Routing)
-Plan: 03 of 3
+Phase: 23 of 24 (Tooling Overrides)
+Plan: 01 of 2
 Status: Complete
-Last activity: 2026-03-27 -- 22-03 complete (documentation rewrite: workers.md + verify-castes.md)
+Last activity: 2026-03-27 -- 23-01 complete (slot resolution and validation functions)
 
-Progress: [======    ] 100%
+Progress: [======    ] 50%
 
 ## Performance Metrics
 
 **Velocity (from v2.1):**
-- Total plans completed: 48
+- Total plans completed: 49
 - Average duration: 5min
-- Total execution time: 3.9 hours
+- Total execution time: 4.0 hours
 
 **Recent Trend:**
 - v2.1 completed 8 phases, 39 plans in ~3 hours
 - v2.2 completed 4 phases, 5 plans
-- v2.3: 4 phases planned, Phase 21 complete, Phase 22 complete (3/3 plans: YAML routing config, agent frontmatter, documentation)
+- v2.3: 4 phases planned, Phase 21 complete, Phase 22 complete (3/3 plans), Phase 23 in progress (1/2 plans: slot functions)
 
 *Updated after each plan completion*
 
@@ -48,6 +48,8 @@ Progress: [======    ] 100%
 - [v2.3/22-01]: Slot-based worker_models: castes store slot names (opus/sonnet/inherit), model_slots section provides resolution table
 - [v2.3/22-02]: Agent frontmatter model: field activates Claude Code native routing -- 8 opus, 11 sonnet, 3 inherit across 22 agents
 - [v2.3/22-03]: OpenCode verify-castes mirror updated alongside Claude Code version for sync policy parity
+- [v2.3/23-01]: getModelSlotForCaste returns DEFAULT_SLOT ('inherit') for missing castes -- silent fallback, no console warnings
+- [v2.3/23-01]: validateSlot uses {valid, error} return pattern for centralized slot-name validation
 
 ### Pending Todos
 
@@ -62,5 +64,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-27
-Stopped at: Completed 22-03 (Phase 22 documentation rewrite: workers.md + verify-castes.md)
+Stopped at: Completed 23-01 (slot resolution and validation functions)
 Resume file: None
