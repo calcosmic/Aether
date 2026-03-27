@@ -10,22 +10,22 @@ See: .planning/PROJECT.md (updated 2026-03-27)
 ## Current Position
 
 Phase: 27 — Deterministic Fallback & Dedup
-Plan: 1/2 complete (27-01 executed)
-Status: Phase 27 plan 01 complete -- fuzzy dedup in instinct-create with _normalize_text and _jaccard_similarity helpers
-Last activity: 2026-03-27 — 27-01 complete (fuzzy dedup, synonym expansion, 5 integration tests)
+Plan: 2/2 complete (27-01, 27-02 executed)
+Status: Phase 27 complete -- fuzzy dedup in instinct-create + git-diff-based fallback extraction wired into continue playbooks
+Last activity: 2026-03-27 — 27-02 complete (fallback extraction, 6 integration tests, continue playbook wiring)
 
 ## Performance Metrics
 
 **Velocity (from v2.1):**
-- Total plans completed: 55
+- Total plans completed: 56
 - Average duration: 5min
-- Total execution time: 4.6 hours
+- Total execution time: 4.8 hours
 
 **Recent Trend:**
 - v2.1 completed 8 phases, 39 plans in ~3 hours
 - v2.2 completed 4 phases, 5 plans
 - v2.3: 4 phases planned, Phase 21 complete, Phase 22 complete (3/3 plans), Phase 23 complete (2/2 plans), Phase 24 complete (2/2 plans: safety warnings + spawn-tree resolution + caste table + config swap)
-- v2.4: Roadmap created, 4 phases planned (25-28), 11 requirements mapped, Phase 25 complete (2/2 plans: agent defs + build wiring), Phase 26 complete (1/1 plans: hive-promote + wisdom summary), Phase 27 in progress (1/2 plans: fuzzy dedup)
+- v2.4: Roadmap created, 4 phases planned (25-28), 11 requirements mapped, Phase 25 complete (2/2 plans: agent defs + build wiring), Phase 26 complete (1/1 plans: hive-promote + wisdom summary), Phase 27 complete (2/2 plans: fuzzy dedup + fallback extraction)
 
 *Updated after each plan completion*
 
@@ -67,6 +67,8 @@ Last activity: 2026-03-27 — 27-01 complete (fuzzy dedup, synonym expansion, 5 
 - [v2.4/27-01]: Expanded synonym map beyond plan spec with base verb forms (write/create/build/fix/resolve) alongside gerunds for correct normalization of common English usage
 - [v2.4/27-01]: Split bc comparison into two (( )) calls to avoid parse error with empty variables in fuzzy dedup
 - [v2.4/27-01]: printf for bc output formatting to ensure valid JSON (bc outputs .8000 not 0.8000)
+- [v2.4/27-02]: Used jq for file grouping/sorting instead of bash associative arrays (bash 3.2 compatibility on macOS)
+- [v2.4/27-02]: Cross-stage echo pattern for fallback_count (same as hive_promoted_count) since shell vars don't persist between Bash tool invocations
 
 ### Pending Todos
 
@@ -74,13 +76,12 @@ None yet.
 
 ### Blockers/Concerns
 
-- Builder learning extraction quality is unvalidated — git-diff-based fallback is the biggest uncertainty in v2.4
-- Hive brain is a chicken-and-egg problem — first colony to use the pipeline will not benefit from cross-colony wisdom (expected behavior)
-- GLM-5 constraint passing through subagent spawning is unverified — deferred (not blocking v2.4)
-- Task tool `model` parameter vs frontmatter precedence untested — deferred (not blocking v2.4)
+- Hive brain is a chicken-and-egg problem -- first colony to use the pipeline will not benefit from cross-colony wisdom (expected behavior)
+- GLM-5 constraint passing through subagent spawning is unverified -- deferred (not blocking v2.4)
+- Task tool `model` parameter vs frontmatter precedence untested -- deferred (not blocking v2.4)
 
 ## Session Continuity
 
 Last session: 2026-03-27
-Stopped at: Completed 27-01 (fuzzy dedup in instinct-create with normalization and Jaccard similarity)
+Stopped at: Completed 27-02 (git-diff-based fallback extraction wired into continue playbooks)
 Resume file: None
