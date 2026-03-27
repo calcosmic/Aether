@@ -1,183 +1,231 @@
 # Project Research Summary
 
-**Project:** Aether v2.4 Living Wisdom
-**Domain:** Multi-agent colony orchestration -- wisdom accumulation, agent definition gaps, model routing
+**Project:** Aether v2.5 Smart Init
+**Domain:** Multi-agent colony orchestration -- intelligent initialization, wisdom pipeline population, and per-caste model routing
 **Researched:** 2026-03-27
 **Confidence:** HIGH
 
 ## Executive Summary
 
-Aether's wisdom system is fully coded (~3,400 lines across queen.sh, hive.sh, learning.sh, pheromone.sh) with 580+ passing tests, but it is effectively dead: QUEEN.md sections show placeholder text, the hive brain stays empty, and instincts never accumulate beyond 0-1 per colony. The root cause is not a bug but a chain of soft dependencies -- builder agents silently skip learning extraction, hive promotion only fires at seal (which users rarely run), and there are no deterministic fallbacks. The fix is surgical: wire existing functions into the build/continue playbooks at specific points, add fallback extraction logic, and make hive promotion continuous rather than end-of-life-only.
+Aether v2.5 addresses three interconnected problems. First, `/ant:init` is purely mechanical -- it takes a raw goal string, writes template files, and provides zero intelligence about the codebase being initialized. Second, the wisdom pipeline exists as complete shell infrastructure but has a "liveness gap": QUEEN.md sections and hive brain entries remain template-only because the pipeline depends on AI agents reliably extracting learnings (they often skip it) and hive-promote only fires during `/ant:seal` (most colonies never get sealed). Third, per-caste model routing needs a mechanism that survived the v1 archive because Claude Code's Task tool does not pass environment variables to subagents -- the GSD system solved this with the `model` parameter on Task calls.
 
-Two agent castes (Oracle and Architect) are referenced in docs and the Queen's workflow patterns but have no dedicated agent definition files. Oracle runs only as a slash command wizard, and Architect was supposedly merged into Keeper but the merge is incomplete -- neither Keeper nor Route-Setter covers the Architect's original design-decision role. Both need proper agent `.md` files with opus model routing, plus mirror files for OpenCode and packaging.
+The recommended approach is to make init intelligent (research scan, structured prompt generation, approval loop) while keeping the changes as additive as possible. The wisdom pipeline needs deterministic fallbacks at break points where AI-dependent paths silently skip. Model routing should use Claude Code's model slot names (opus/sonnet) passed directly to Task calls, not environment variables.
 
-The PITFALLS.md research covers a tangential but adjacent concern: per-caste model routing. While model routing is out of scope for v2.4 per PROJECT.md ("Per-worker model routing via env vars" is explicitly out of scope), the pitfalls are relevant because the new Oracle and Architect agents need opus model slots, and the existing model infrastructure (model-profiles.yaml, dual parsers, 184 hardcoded test assertions) creates friction. The recommended approach: use Claude Code's native `"opus"` and `"sonnet"` model slot names in Task tool calls, let the LiteLLM proxy handle GLM mapping, and do NOT attempt env var passing (proven not to work in v1).
+**The critical tension in this research:** Stack and Architecture research both propose a QUEEN.md v3 format with new `## ` sections (Intent, Vision, Governance, Goals, Architecture Notes). Pitfalls research explicitly identifies this as the most dangerous change possible because 7+ downstream consumers parse QUEEN.md by exact `## Section Name` header matching via awk/grep. The resolution: do NOT add new `## ` sections to QUEEN.md. Instead, write charter content into existing sections (Intent as a Codebase Pattern, Vision as a Codebase Pattern, Governance rules as User Preferences or Codebase Patterns) using existing queen-promote/queen-write-learnings functions that already handle format correctly. This preserves the "living charter" value while eliminating the format-breakage risk. The charter *concept* survives; the new-section mechanism does not.
 
 ## Key Findings
 
-### Recommended Stack (from STACK.md)
+### Recommended Stack
 
-No new npm packages or languages. All changes are bash playbook modifications and markdown agent definition files.
+All research agrees: zero new npm dependencies. The changes are bash subcommands, Markdown command files, updated templates, and new agent `.md` files.
 
-**Core changes:**
-- **6 new agent `.md` files** (Oracle + Architect, each with Claude, OpenCode, and packaging mirrors) -- fills the two missing caste definitions with proper model routing
-- **continue-advance.md modifications** -- add Step 2.6 (queen-write-learnings) and Step 3d (hive-promote) to wire the wisdom pipeline into the continue flow
-- **build-complete.md fallback** -- add deterministic pattern extraction from git diff + test results when builders skip learning output
-- **colony-name subcommand** -- trivial 10-line addition to aether-utils.sh to DRY up colony name extraction (currently repeated 6+ times via inline jq)
-- **Do NOT modify** queen.sh, hive.sh, learning.sh, pheromone.sh, or existing agent definitions -- all existing code works correctly; the problem is in the calling code
+**Core technologies (unchanged):**
+- Bash 4+ + jq 1.6+ -- all shell utilities, no new runtime deps
+- Markdown commands (init.md) -- the LLM IS the UI for approval loops
+- awk/sed for QUEEN.md section manipulation -- existing pattern, proven reliable
 
-### Expected Features (from FEATURES.md)
+**New components:**
+- `.aether/utils/scan.sh` -- new utils module for lightweight repo scanning (<2s target)
+- `init-research` subcommand -- repo surface scan returning JSON (tech stack, complexity, prior colonies)
+- `init-generate-prompt` subcommand -- bash+jq assembly of structured prompt from goal + research
+- `_queen_write_governance()` -- writes charter content to existing QUEEN.md sections (NOT new sections)
+- `colony-name` subcommand -- DRY helper for colony name extraction from COLONY_STATE.json
+- 6 new agent `.md` files -- Oracle (model: opus, read-heavy with Write tool) and Architect (model: opus, design decisions) for Claude Code + OpenCode + packaging mirrors
+- Hive-promote hook in `/ant:continue` -- mid-colony wisdom promotion (currently seal-only)
+- Deterministic learning extraction fallback in `continue-advance.md` -- git-diff-based when AI skips extraction
 
-**Must have (table stakes):**
-- T1: Builders report learnings during builds -- the linchpin; without this the entire pipeline starves
-- T2: QUEEN.md Build Learnings auto-populates -- code exists, just needs to be called
-- T3: Instincts accumulate reliably from phase patterns -- needs stronger enforcement in continue-advance
-- T6: Oracle agent definition file -- fills critical gap in agent roster
-- T7: Architect agent definition file -- fills gap; distinct from Keeper (curation) and Route-Setter (planning)
+### Expected Features
+
+**Must have (table stakes) -- the intelligence chain:**
+- T1: Lightweight repo scan (<2 seconds) -- without this, init remains blind
+- T2: Auto-generate structured colony prompt from goal + research -- bash+jq, deterministic
+- T3: User approval loop -- LLM-mediated (display Markdown, wait for text response)
+- T4: Charter content in QUEEN.md on first init -- using existing write functions
+- T5: Subsequent inits update charter without resetting colony state -- update-only, never destroy wisdom
+- Wisdom pipeline deterministic fallbacks -- ensure learnings always accumulate even when AI skips
+- Hive-promote in continue flow -- cross-colony wisdom accumulates mid-colony, not just at seal
 
 **Should have (competitive differentiators):**
-- D1: Wisdom growth visible in build output -- makes the learning loop tangible
-- D2: Cross-colony wisdom flows into new colonies -- emergent once hive is populated
-- D5: `/ant:wisdom` status command -- observability for accumulated wisdom
-- D6: Phase completion auto-promotes learnings -- every phase should produce at least one QUEEN.md entry
+- D2: Suggested pheromones from research (FOCUS/REDIRECT suggestions in approval prompt)
+- D3: Colony complexity estimation (informs planning depth)
+- T6: Intelligent colonize suggestion (detect stale/missing survey)
+- T7: Prior colony knowledge inheritance (chambers/tunnels context)
+- Per-caste model routing via Task tool model parameter
 
-**Defer (v2.5+):**
-- D3: Oracle spawnable during builds (requires build-wave Deep Research pattern changes)
-- D4: Architect in planning (requires route-setter integration)
-- Automatic wisdom pruning/decay (removes user knowledge without consent)
-- Real-time wisdom injection mid-build (inconsistent context within a phase)
-- Wisdom sharing between users (privacy violation -- hive is machine-local by design)
+**Defer (v2+):**
+- D1: Research-aware charter suggestions (infer governance from codebase patterns) -- needs validation
+- D4: Chambers/tunnels context in approval prompt -- nice-to-have
+- D5: Goals section auto-populate from /ant:plan -- cross-command integration complexity
+- D6: Architecture Notes from research -- can be derived from T1 data later
 
-### Architecture Approach (from ARCHITECTURE.md)
+### Architecture Approach
 
-The wisdom system has three layers, all with working infrastructure but disconnected from the build/continue flow:
+The architecture follows three independent streams that converge through QUEEN.md:
 
-1. **QUEEN.md layer** -- queen-write-learnings and queen-promote-instinct work correctly but are never called from continue-advance (except queen-promote-instinct for confidence >= 0.8 instincts). Fix: add Step 2.6 to call queen-write-learnings after learning extraction.
-2. **Hive brain layer** -- hive-promote works correctly but only fires during seal. Fix: add Step 3d to continue-advance to promote high-confidence instincts to hive continuously during colony work.
-3. **Instinct layer** -- instinct-create works but instincts are trivialized or skipped by the LLM executing continue. Fix: stronger prompting or structural enforcement in continue-advance.
+**Stream 1: Smart Init** transforms init.md from mechanical file creation into: scan -> generate -> approve -> charter. New scan.sh module (10th domain module) provides `_scan_repo()`, `_scan_quick()`, `_scan_survey_status()`, `_scan_chambers()`. Prompt generation is bash+jq assembly (NOT LLM generation) for determinism. Approval loop uses Claude Code's native execution model (display, stop, wait for user response, continue).
 
-The proposed flow adds two new steps to continue-advance.md: Step 2.6 (queen-write-learnings after extraction) and Step 3d (hive-promote after instinct promotion). Both are non-blocking. Seal becomes a catch-up pass rather than the sole promotion point.
+**Stream 2: Wisdom Pipeline Hardening** adds deterministic fallbacks at four break points in the existing pipeline: (1) builder synthesis JSON missing `learning.patterns_observed` -- add git-diff pattern extraction, (2) AI agent skipping learning extraction during continue -- add bash-based fallback, (3) hive-promote only fires at seal -- add to continue flow, (4) colony name extraction can silently fail -- add dedicated subcommand.
 
-Agent files follow the established 22-file pattern (frontmatter + role + execution_flow + pheromone_protocol + return_format). Oracle gets Write tool (can persist findings) and WebSearch/WebFetch; Architect is read-only like Scout (designs via return JSON, not files).
+**Stream 3: Per-Caste Model Routing** uses Claude Code's Task tool `model` parameter (opus/sonnet slots), NOT environment variable passing (proven not to work in archived v1 routing). Requires: test infrastructure refactor first (184 hardcoded model names), then core routing in build-wave.md, then proxy config documentation.
 
-### Critical Pitfalls (from PITFALLS.md)
+**Major components:**
+1. scan.sh -- lightweight repo scanning, new utils module
+2. queen-governance functions -- charter content management in queen.sh
+3. Oracle + Architect agents -- 6 new `.md` files for spawnable agents
+4. colony-name subcommand -- DRY helper for name extraction
+5. continue-advance.md hardening -- deterministic fallbacks + hive-promote
+6. build-wave.md routing -- model slot resolution + Task tool model parameter
 
-While PITFALLS.md focuses on per-caste model routing (a broader v2.3 concern), several pitfalls are directly relevant to v2.4:
+### Critical Pitfalls
 
-1. **Oracle/Architect agents need proper model slots** -- The Task tool's `model` parameter must be used (not env vars, proven not to work in v1 archive). Reasoning castes get `"opus"`, execution castes get `"sonnet"`. The new agents should use slot names, not GLM-specific names.
-2. **184 hardcoded model names in tests** -- Any change to model-profiles.yaml will break 184 test assertions across 6 files. Must centralize test mocks before any YAML changes. For v2.4, if agent files reference model slots, this matters less (agents don't change the YAML) but remains a ticking time bomb.
-3. **GLM-5 looping on reasoning castes** -- Oracle (opus slot = GLM-5) is a reasoning caste susceptible to looping. The proxy constraints (temperature 0.4, max_tokens 2500) help but can be escaped. The Oracle agent definition should include explicit termination conditions in its prompt.
-4. **Dual YAML parsers (bash awk vs Node.js yaml.load)** -- Can return different results for the same config. Standardize on Node.js for any model resolution.
-5. **Config swap fragility** -- Aether should always pass model slot names (`"opus"`/`"sonnet"`) and let the runtime (Claude API or LiteLLM proxy) handle mapping. Do NOT detect active mode.
+1. **QUEEN.md format fragility (CRITICAL)** -- 7+ downstream consumers parse QUEEN.md by exact `## Section Name` header matching. Adding new sections breaks all of them. Resolution: write charter content into existing sections using existing write functions. NEVER add new `## ` headers.
+
+2. **Wisdom pipeline "liveness gap" (CRITICAL)** -- wisdom stays empty because of a chain of soft dependencies where AI agents skip extraction and hive-promote only fires at seal. Resolution: deterministic fallbacks at each break point; move hive-promote to continue flow.
+
+3. **Model routing via environment variables (CRITICAL)** -- proven not to work (v1 archived). Resolution: use Task tool `model` parameter directly, following GSD's working pattern.
+
+4. **184 hardcoded model names in tests (HIGH)** -- changing model-profiles.yaml without updating test mocks causes mass test failures. Resolution: centralize mock profiles before any YAML changes.
+
+5. **Approval loop fatigue (MODERATE)** -- multiple sequential approval prompts cause decision fatigue. Resolution: single batched proposal, accept-all/modify/reject in one interaction.
+
+6. **GLM-5 looping despite proxy constraints (MODERATE)** -- four escape conditions where GLM-5 can bypass proxy temperature/top_p constraints. Resolution: application-level loop detection, document Prime-as-turbo option.
+
+7. **Token budget exhaustion from smart-init content (MODERATE)** -- charter content could crowd out colony-earned wisdom in the 8,000-char budget. Resolution: cap smart-init content at 500 chars, prioritize colony-earned over smart-init in trimming.
 
 ## Implications for Roadmap
 
 Based on research, suggested phase structure:
 
-### Phase 1: Agent Definitions (Oracle + Architect)
+### Phase 1: Scan Module + Test Infrastructure
 
-**Rationale:** These are independent of the wisdom pipeline changes and can be built first. They fill documented gaps in the agent roster and establish the pattern for the two new opus-slot agents. No existing code needs modification -- purely additive work.
+**Rationale:** Two independent foundations that must be laid first. scan.sh is the data source for all smart init features. Test infrastructure refactor (centralize 184 model name mocks) must happen before any model routing YAML changes. Neither depends on the other, so they can run in parallel.
 
-**Delivers:** 6 new agent `.md` files (Oracle and Architect for Claude, OpenCode, and packaging mirrors), updated workers.md and CLAUDE.md counts (22 -> 24 agents).
+**Delivers:** `.aether/utils/scan.sh` with 5 functions, centralized test helpers for model profiles, scan-repo/scan-quick dispatch cases.
 
-**Addresses:** T6 (Oracle agent file), T7 (Architect agent file)
+**Addresses:** T1 (lightweight repo scan), Pitfall 4 (hardcoded test names)
 
-**Avoids:** Pitfall 9 (archive confusion -- do not reference archived routing implementation), Pitfall 11 (use `"opus"` not `"inherit"`)
+**Avoids:** Starting YAML changes before test mocks are centralized (Pitfall 4), adding scanning logic inline in init.md (anti-pattern)
 
-**Research flags:** Standard patterns -- all 22 existing agents follow an identical structure. No research needed.
+### Phase 2: Queen Charter + Wisdom Pipeline Fallbacks
 
-### Phase 2: Wisdom Pipeline Wiring
+**Rationale:** Charter management and wisdom fallbacks both touch queen.sh and the continue flow but in different ways. Charter writes are additive (new functions). Wisdom fallbacks modify existing playbook steps. Both are independent of each other but both depend on understanding the current QUEEN.md format deeply.
 
-**Rationale:** The core value of the milestone. This phase connects existing functions (queen-write-learnings, hive-promote) into the continue-advance flow. Two surgical additions to continue-advance.md: Step 2.6 (persist learnings to QUEEN.md) and Step 3d (promote to hive brain). Both are non-blocking.
+**Delivers:** `_queen_write_governance()` in queen.sh (writes to existing sections, NOT new sections), deterministic learning extraction fallback in continue-advance.md, hive-promote hook in continue flow, colony-name subcommand.
 
-**Delivers:** QUEEN.md Build Learnings section populates after each phase, hive brain receives entries during colony work (not just at seal), visible wisdom growth in continue output.
+**Addresses:** T4 (charter content), T5 (safe re-init), wisdom pipeline break points 2-4
 
-**Addresses:** T2 (QUEEN.md learnings), T4 (instinct promotion), T5 (hive brain on seal), D1 (visible wisdom growth), D6 (auto-promote learnings)
+**Avoids:** Adding new `## ` sections to QUEEN.md (Pitfall 1), writing directly to QUEEN.md instead of using existing functions
 
-**Uses:** Existing queen.sh, hive.sh, learning.sh functions -- no code changes to these files
+### Phase 3: Init.md Refactor + Agent Definitions
 
-**Implements:** The "living" part of "Living Wisdom" -- wisdom that accumulates as colonies work
+**Rationale:** Now that the foundation (scan.sh, charter functions, wisdom fallbacks) is in place, the user-facing init command can be refactored to use them. The Oracle and Architect agent definitions are independent but belong here because they complete the "missing agents" gap identified in Stack research.
 
-**Avoids:** Anti-pattern 1 (don't call queen-write-learnings before extraction), Anti-pattern 2 (keep hive-promote non-blocking)
+**Delivers:** Refactored init.md with research -> generate -> approve -> charter flow, OpenCode init.md mirror, 6 new agent `.md` files (Oracle + Architect for Claude Code + OpenCode + packaging mirrors).
 
-**Research flags:** Moderate research needed -- the continue-advance.md playbook is 434 lines and the new steps must integrate cleanly with the existing Step 2/3 flow. Should verify the exact insertion points and ensure no step numbering conflicts.
+**Addresses:** T2 (prompt generation), T3 (approval loop), T4+T5 (charter management in init flow), missing agent definitions
 
-### Phase 3: Builder Learning Extraction (Deterministic Fallback)
+**Avoids:** Making approval loop complex (anti-pattern 4 from Architecture), prompt generation as LLM (should be bash+jq)
 
-**Rationale:** This is the linchpin (T1) but depends on Phase 2 being in place -- there is no point extracting learnings if the pipeline to persist them is not wired. This phase adds deterministic fallback extraction to build-complete.md so that even when builders skip learning output, wisdom still accumulates from git diff analysis.
+### Phase 4: Colony-Prime Integration + Model Routing Core
 
-**Delivers:** Fallback pattern extraction in build-complete.md, colony-name subcommand in aether-utils.sh, guaranteed learning data flowing into the pipeline.
+**Rationale:** Colony-prime needs to extract and inject charter content into worker prompts (now that charter content exists in QUEEN.md). Model routing core implements the Task tool model parameter mechanism. Both modify how workers receive context.
 
-**Addresses:** T1 (builders report learnings), T3 (instincts accumulate)
+**Delivers:** Updated `_extract_wisdom()` for charter content extraction, updated trim order in `_colony_prime()`, model slot resolution in build-wave.md, model logging in spawn-log.
 
-**Avoids:** Root cause #1 (builder synthesis JSON missing learning.patterns_observed), Root cause #4 (colony name extraction failure)
+**Addresses:** Charter-to-worker flow, per-caste model routing mechanism (Pitfalls 1, 5, 7 from model routing research)
 
-**Research flags:** Needs research -- the fallback extraction logic (what to extract from git diff, how to structure it) is not well-defined. The quality of deterministic extraction vs AI extraction is unknown and needs validation.
+**Avoids:** Environment variable passing (proven broken), breaking v2 QUEEN.md format reading
 
-### Phase 4: Wisdom Observability + Validation
+### Phase 5: Proxy Verification + Documentation + Validation
 
-**Rationale:** After Phases 1-3, the wisdom system should be working. This phase adds the `/ant:wisdom` status command for observability, runs end-to-end integration tests, and validates the full flow (colony work -> observations -> instincts -> QUEEN.md -> hive -> future colonies).
+**Rationale:** Final integration and hardening. Verify model routing works end-to-end, document config swap workflow, validate QUEEN.md format integrity, update CLAUDE.md.
 
-**Delivers:** `/ant:wisdom` command, integration test suite, documented verification that wisdom flows correctly.
+**Delivers:** End-to-end model verification, config swap documentation, QUEEN.md format validator (queen-validate subcommand), CLAUDE.md updates, full integration test (init -> plan -> build -> verify charter flows to workers).
 
-**Addresses:** D5 (wisdom status command), D2 (cross-colony wisdom -- emergent, needs verification)
-
-**Research flags:** Standard patterns -- `/ant:wisdom` assembles data from existing subcommands. Integration test follows existing colony lifecycle test patterns.
+**Addresses:** Pitfall 2 (config swap), Pitfall 6 (lifecycle edge cases for non-build commands), documentation accuracy
 
 ### Phase Ordering Rationale
 
-- Phase 1 (agents) is independent and establishes the 24-agent roster before docs reference it
-- Phase 2 (pipeline wiring) is the highest-value change and must come before Phase 3 (no point extracting learnings without a pipeline to persist them)
-- Phase 3 (builder fallback) depends on Phase 2 and is the most uncertain work (quality of deterministic extraction is unvalidated)
-- Phase 4 (observability) is low-risk cleanup that validates everything works end-to-end
-- This ordering avoids the anti-pattern of building extraction before persistence, and ensures the pipeline is wired before we try to push data through it
+- Phases 1-2 are parallel-safe (no dependencies between them)
+- Phase 3 depends on both Phase 1 (scan.sh) and Phase 2 (charter functions)
+- Phase 4 depends on Phase 2 (charter content must exist to extract it) and Phase 1 (test infrastructure must be centralized for model routing)
+- Phase 5 depends on all prior phases (end-to-end validation)
+- The ordering respects the dependency graph from Architecture research while incorporating the wisdom pipeline and model routing streams
 
 ### Research Flags
 
 Phases likely needing deeper research during planning:
-- **Phase 3:** Fallback learning extraction quality is unvalidated. How good is git-diff-based extraction compared to AI extraction? Needs a spike or prototype.
-- **Phase 2:** continue-advance.md integration points need precise mapping. The playbook is complex and step numbering must be verified.
+- **Phase 3 (Init.md Refactor):** Approval loop UX is untested -- the "LLM-mediated approval" pattern needs validation that it actually feels natural. Consider `/gsd:research-phase` to prototype the UX.
+- **Phase 4 (Model Routing Core):** The Task tool `model` parameter behavior with GLM proxy needs empirical validation. The GSD precedent is HIGH confidence but Aether's multi-worker spawn pattern is different from GSD's single-executor pattern. Consider `/gsd:research-phase` to prove the mechanism with a single test case before building the full system.
 
 Phases with standard patterns (skip research-phase):
-- **Phase 1:** Agent definition files follow an identical 22-file pattern. Well-documented, low risk.
-- **Phase 4:** Slash command and integration test patterns are well-established in the codebase.
+- **Phase 1 (Scan Module):** Well-documented pattern (9 existing utils modules), straightforward bash functions
+- **Phase 2 (Charter + Wisdom):** Follows existing queen.sh function patterns exactly; wisdom fallbacks are well-understood
+- **Phase 5 (Validation):** Standard integration testing and documentation
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | All findings from direct codebase analysis. No new dependencies. Existing functions verified working. |
-| Features | HIGH | Feature research grounded in codebase analysis plus user testing feedback. Dependency graph is clear. |
-| Architecture | HIGH | All utility functions traced end-to-end. Data flow diagram verified against actual code paths. |
-| Pitfalls | HIGH | Direct codebase inspection of 184 test assertions, archived routing system, dual parsers, proxy config. |
+| Stack (Smart Init) | HIGH | Direct codebase analysis of init.md, queen.sh, all templates. Zero new dependencies. Well-understood execution model. |
+| Stack (Wisdom Pipeline) | HIGH | Direct codebase analysis of learning.sh (1553 lines), queen.sh (1242 lines), hive.sh (562 lines). Root cause analysis traced through full pipeline. |
+| Stack (Model Routing) | HIGH | Archived v1 proves env-var approach fails. GSD provides working Task tool model parameter pattern. |
+| Features | HIGH | Feature list derived from direct codebase gap analysis and PROJECT.md requirements. Competitor analysis is MEDIUM (web search rate-limited). |
+| Architecture (Smart Init) | HIGH | All command files, utils, and templates analyzed. scan.sh placement follows established pattern. |
+| Architecture (Wisdom) | HIGH | Break points identified through full pipeline tracing. Fix locations precise (specific line numbers). |
+| Pitfalls (Smart Init) | HIGH | QUEEN.md consumer analysis exhaustive (7+ consumers identified with line numbers). Token budget math verified. |
+| Pitfalls (Model Routing) | HIGH | 184 test assertions counted. Parser divergence traced through both bash and Node.js paths. GLM-5 constraint escape conditions documented from proxy config. |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Builder learning extraction quality:** We know builders skip learning output, and we know the fix (deterministic fallback), but we do not know how good git-diff-based extraction will be at producing meaningful learnings. This is the biggest uncertainty. Mitigation: Phase 3 should include a prototype/evaluation step before full integration.
-- **Instinct quality from LLM extraction:** The research notes that LLMs executing `/ant:continue` often "trivialize" instincts. Stronger prompting in continue-advance.md may help, but this is a behavioral problem (LLM quality) not a code problem. Mitigation: add structural enforcement (e.g., minimum instinct length, required format) and validate in Phase 4.
-- **Hive emptiness is a chicken-and-egg problem:** Until colonies complete with hive promotion enabled, the hive stays empty, which means colony-prime has nothing to inject. The first colony to use the new pipeline will not benefit from cross-colony wisdom. Mitigation: accept this as expected; document that the system "warms up" after the first colony seals.
+- **Approval loop UX (LOW confidence):** No user testing data on whether the LLM-mediated approval pattern feels natural. The research says it works within Claude Code's execution model, but UX perception is unvalidated. Mitigation: prototype early in Phase 3 and adjust based on feel.
+
+- **Token budget math with charter content (MEDIUM confidence):** Architecture research estimates charter adds ~1000-1500 chars. Pitfalls research recommends a 500-char cap. The actual impact depends on how much charter content users accept. Mitigation: measure after Phase 3 implementation and adjust caps.
+
+- **GLM-5 behavior under per-caste routing (MEDIUM confidence):** The proxy mapping (opus -> glm-5, sonnet -> glm-5-turbo) is assumed to work based on proxy config. But GLM-5's tendency to loop when spawning sub-workers (Pitfall 3) could make Prime-as-opus dangerous. Mitigation: consider Prime-as-turbo despite being a "reasoning" caste; add loop detection early.
+
+- **Competitor feature accuracy (LOW confidence):** Web search was rate-limited for both FEATURES.md and STACK.md competitor analysis. Claims about Cursor/Windsurf/Copilot Workspace/Aider are based on training data, not current documentation. This does not affect implementation decisions but may affect positioning claims.
+
+## The QUEEN.md Tension: Resolution
+
+The core tension between Stack/Architecture (new v3 format with charter sections) and Pitfalls (never add new sections) requires a clear recommendation:
+
+**Recommendation: Write charter content into existing v2 sections. Do NOT create a v3 format with new `## ` headers.**
+
+Specifically:
+- Colony Intent -> written to `## Codebase Patterns` with `[charter]` tag
+- Colony Vision -> written to `## Codebase Patterns` with `[charter]` tag
+- Governance rules -> written to `## User Preferences` with `[charter]` tag
+- Goals -> written to `## Codebase Patterns` with `[charter]` tag (auto-updated by /ant:plan)
+
+This uses existing queen-promote and queen-write-learnings functions which already handle section formatting, METADATA updates, dedup, and evolution log entries. The charter *concept* (intent, vision, governance, goals) survives as content within the existing structure. The format remains v2-compatible. All 7+ downstream consumers continue to work without modification.
+
+The trade-off: charter content is less visually prominent in QUEEN.md (mixed into Codebase Patterns rather than in its own section). This is acceptable because the primary consumer of charter content is colony-prime (which extracts by content, not by section header) and the approval prompt (which shows charter in a formatted display regardless of where it is stored in QUEEN.md).
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- Direct codebase analysis: queen.sh (1,242 lines), hive.sh (562 lines), learning.sh (1,553 lines), pheromone.sh colony-prime (~700 lines)
-- Playbook analysis: build-complete.md (350 lines), continue-advance.md (434 lines), seal.md (lines 290-337), build-wave.md (598 lines)
-- Agent definition analysis: all 22 existing agents in `.claude/agents/ant/`
-- workers.md caste table and model slot assignments
-- model-profiles.yaml, model-profiles.js (446 lines), model-verify.js (289 lines)
-- `.aether/archive/model-routing/README.md` -- explains why v1 routing failed
-- `.claude/get-shit-done/references/model-profile-resolution.md` -- GSD working pattern for model slots
-- `.planning/PROJECT.md` -- milestone v2.4 scope and constraints
+- Direct codebase analysis of init.md (388 lines), queen.sh (1242 lines), learning.sh (1553 lines), hive.sh (562 lines), pheromone.sh (colony-prime, ~800 lines)
+- Direct analysis of all 22 existing agent definitions in `.claude/agents/ant/`
+- `.aether/archive/model-routing/README.md` -- v1 routing failure analysis
+- `.claude/get-shit-done/references/model-profile-resolution.md` -- GSD working pattern
+- model-profiles.yaml, model-profiles.js, model-verify.js -- current model system
+- `.aether/templates/QUEEN.md.template` -- v2 format specification
+- 580+ tests across 6 test files with 184 model name occurrences
+- `.planning/PROJECT.md` -- milestone scope and user feedback
 
 ### Secondary (MEDIUM confidence)
-- User testing feedback documented in PROJECT.md: "QUEEN.md and hive brain are template-only -- never populated with real data"
-- Existing QUEEN.md in Aether repo: 1 instinct, 6 patterns, 1 build learning from ~20 phases of work (evidence that current system barely works)
+- User testing feedback from PROJECT.md: "init is purely mechanical", "users forget colonize", "subsequent inits reset everything"
+- CLI UX research on approval fatigue, "present-don't-commit" pattern (training data)
+- npm/Terraform/cargo approval UX patterns (established precedent)
+- Existing completion-report.md inheritance logic in init.md Step 2.6
 
 ### Tertiary (LOW confidence)
-- Whether builders can reliably produce high-quality learning observations (needs validation in Phase 3)
-- Quality of deterministic git-diff-based extraction as a fallback (untested hypothesis)
+- Competitor feature analysis (Cursor, Windsurf, Copilot Workspace, Aider) -- web search rate-limited
+- Whether approval loop UX feels natural (needs user testing)
+- Whether research-aware charter suggestions produce high-quality governance text (untested)
 
 ---
 *Research completed: 2026-03-27*
