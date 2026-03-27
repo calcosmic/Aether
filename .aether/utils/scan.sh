@@ -363,6 +363,264 @@ _scan_complexity() {
     '{size: $size, metrics: {file_count: $file_count, max_directory_depth: $max_depth, dependency_count: $dep_count}}'
 }
 
+# Scan colony context -- extract prior colony summaries and existing charter content
+# Usage: _scan_colony_context <repo_root>
+# Returns: raw JSON via stdout
+_scan_colony_context() {
+  local root="${1:-.}"
+  local chambers_dir="$root/.aether/chambers"
+  local queen_file="$root/.aether/QUEEN.md"
+
+  local prior_colonies="[]"
+
+  # Extract prior colony summaries from chambers (max 3, most recent first)
+  if [[ -d "$chambers_dir" ]]; then
+    # Sort chamber dirs by name descending (date-prefixed names = reverse alpha = most recent first)
+    local chamber_list
+    chamber_list=$(ls -1d "$chambers_dir"/*/ 2>/dev/null | sort -r)
+
+    local count=0
+    while IFS= read -r chamber; do
+      [[ -z "$chamber" ]] && continue
+      [[ "$count" -ge 3 ]] && break
+
+      local chamber_name
+      chamber_name=$(basename "$chamber")
+      # Skip hidden dirs
+      [[ "$chamber_name" == .* ]] && continue
+
+      local manifest="$chamber/manifest.json"
+      local crowned="$chamber/CROWNED-ANTHILL.md"
+
+      # Skip if neither manifest nor crowned exists
+      [[ ! -f "$manifest" && ! -f "$crowned" ]] && continue
+
+      local goal="" phases="" outcome="" summary=""
+
+      if [[ -f "$manifest" ]]; then
+        goal=$(jq -r '.goal // "unknown"' "$manifest" 2>/dev/null || echo "unknown")
+        # Handle phases_completed being either a number or an array (older manifest formats)
+        local phases_completed total_phases
+        phases_completed=$(jq -r 'if (.phases_completed | type) == "array" then (.phases_completed | length) else (.phases_completed // 0) end' "$manifest" 2>/dev/null || echo "0")
+        total_phases=$(jq -r '.total_phases // 0' "$manifest" 2>/dev/null || echo "0")
+        phases="${phases_completed}/${total_phases}"
+        outcome=$(jq -r '.milestone // "unknown"' "$manifest" 2>/dev/null || echo "unknown")
+      fi
+
+      if [[ -f "$crowned" ]]; then
+        # Extract "The Work" section: lines between "## The Work" and next "## " header (or EOF)
+        # Use sed to get the range, strip header lines, take first 2 content lines, join
+        summary=$(sed -n '/^## The Work$/,/^## /p' "$crowned" 2>/dev/null \
+          | grep -v '^## ' \
+          | sed '/^$/d' \
+          | head -2 \
+          | tr '\n' ' ' \
+          | sed 's/  */ /g; s/^ *//; s/ *$//')
+      fi
+
+      prior_colonies=$(echo "$prior_colonies" | jq \
+        --arg goal "$goal" \
+        --arg phases "$phases" \
+        --arg outcome "$outcome" \
+        --arg summary "$summary" \
+        '. + [{goal: $goal, phases: $phases, outcome: $outcome, summary: $summary}]')
+
+      count=$((count + 1))
+    done <<< "$chamber_list"
+  fi
+
+  # Extract existing charter content from QUEEN.md
+  local charter_intent="" charter_vision="" charter_governance=""
+
+  if [[ -f "$queen_file" ]]; then
+    charter_intent=$(grep '\[charter\] \*\*Intent\*\*:' "$queen_file" 2>/dev/null \
+      | sed 's/.*\*\*Intent\*\*: //' \
+      | sed 's/ (Colony:.*//' || true)
+    charter_vision=$(grep '\[charter\] \*\*Vision\*\*:' "$queen_file" 2>/dev/null \
+      | sed 's/.*\*\*Vision\*\*: //' \
+      | sed 's/ (Colony:.*//' || true)
+    charter_governance=$(grep '\[charter\] \*\*Governance\*\*:' "$queen_file" 2>/dev/null \
+      | sed 's/.*\*\*Governance\*\*: //' \
+      | sed 's/ (Colony:.*//' || true)
+  fi
+
+  jq -n \
+    --argjson prior_colonies "$prior_colonies" \
+    --arg intent "$charter_intent" \
+    --arg vision "$charter_vision" \
+    --arg governance "$charter_governance" \
+    '{prior_colonies: $prior_colonies, existing_charter: {intent: $intent, vision: $vision, governance: $governance}}'
+}
+
+# Scan governance -- detect governance-related config files and produce prescriptive rules
+# Usage: _scan_governance <repo_root>
+# Returns: raw JSON via stdout
+_scan_governance() {
+  local root="${1:-.}"
+  local exclude_flags
+  exclude_flags=$(_scan_find_exclude_flags)
+
+  local rules="[]"
+  local sources_checked=0
+
+  # 1. CONTRIBUTING.md
+  sources_checked=$((sources_checked + 1))
+  if [[ -f "$root/CONTRIBUTING.md" ]]; then
+    local contrib_summary
+    contrib_summary=$(head -20 "$root/CONTRIBUTING.md" 2>/dev/null \
+      | tr '\n' ' ' \
+      | sed 's/  */ /g' \
+      | cut -c1-200)
+    # Skip if file is effectively empty (just whitespace)
+    if [[ -n "$(echo "$contrib_summary" | tr -d '[:space:]')" ]]; then
+      rules=$(echo "$rules" | jq \
+        --arg rule "Follow CONTRIBUTING.md guidelines" \
+        --arg source "CONTRIBUTING.md" \
+        --arg detail "$contrib_summary" \
+        '. + [{rule: $rule, source: $source, detail: $detail, strength: "required"}]')
+    fi
+  fi
+
+  # 2. Test configs -- only emit "TDD required" if test FILES also exist
+  sources_checked=$((sources_checked + 1))
+  local has_test_config=false
+  for tc in "$root"/jest.config.* "$root"/vitest.config.* "$root/pytest.ini"; do
+    if [[ -f "$tc" ]]; then
+      has_test_config=true
+      break
+    fi
+  done
+  # Also check pyproject.toml for pytest section
+  if [[ "$has_test_config" == "false" && -f "$root/pyproject.toml" ]]; then
+    if grep -q '\[tool\.pytest' "$root/pyproject.toml" 2>/dev/null; then
+      has_test_config=true
+    fi
+  fi
+  # Check Cargo.toml for [test] section
+  if [[ "$has_test_config" == "false" && -f "$root/Cargo.toml" ]]; then
+    if grep -q '^\[test\]' "$root/Cargo.toml" 2>/dev/null; then
+      has_test_config=true
+    fi
+  fi
+  # Check for go test files
+  if [[ "$has_test_config" == "false" ]]; then
+    local go_test_count
+    go_test_count=$(find "$root" -maxdepth 4 -type f -name "*_test.go" $exclude_flags 2>/dev/null | wc -l | tr -d ' ')
+    if [[ "$go_test_count" -gt 0 ]]; then
+      has_test_config=true
+    fi
+  fi
+
+  if [[ "$has_test_config" == "true" ]]; then
+    # Cross-reference: check if test files actually exist
+    local test_file_count
+    test_file_count=$(find "$root" -maxdepth 4 -type f \
+      \( -name "*.test.*" -o -name "*.spec.*" -o -name "test_*" -o -name "*_test.go" \) \
+      $exclude_flags 2>/dev/null | wc -l | tr -d ' ')
+
+    # Also check tests/ and __tests__/ directories
+    if [[ "$test_file_count" -eq 0 ]]; then
+      for tdir in "$root/tests" "$root/__tests__" "$root/test"; do
+        if [[ -d "$tdir" ]]; then
+          local dir_count
+          dir_count=$(find "$tdir" -maxdepth 3 -type f $exclude_flags 2>/dev/null | wc -l | tr -d ' ')
+          test_file_count=$((test_file_count + dir_count))
+        fi
+      done
+    fi
+
+    if [[ "$test_file_count" -gt 0 ]]; then
+      rules=$(echo "$rules" | jq \
+        --arg rule "TDD required -- test config and existing tests detected" \
+        --arg source "test configuration" \
+        '. + [{rule: $rule, source: $source, strength: "required"}]')
+    fi
+  fi
+
+  # 3. Linter/formatter configs
+  sources_checked=$((sources_checked + 1))
+  # ESLint
+  local has_eslint=false
+  for ec in "$root"/.eslintrc.* "$root"/eslint.config.*; do
+    if [[ -f "$ec" ]]; then
+      has_eslint=true
+      break
+    fi
+  done
+  if [[ "$has_eslint" == "true" ]]; then
+    rules=$(echo "$rules" | jq \
+      --arg rule "ESLint enforced -- follow existing lint rules" \
+      --arg source "ESLint" \
+      '. + [{rule: $rule, source: $source, strength: "required"}]')
+  fi
+
+  # Prettier
+  local has_prettier=false
+  for pc in "$root"/.prettierrc*; do
+    if [[ -f "$pc" ]]; then
+      has_prettier=true
+      break
+    fi
+  done
+  if [[ "$has_prettier" == "true" ]]; then
+    rules=$(echo "$rules" | jq \
+      --arg rule "Prettier formatting enforced -- maintain consistent code style" \
+      --arg source "Prettier" \
+      '. + [{rule: $rule, source: $source, strength: "required"}]')
+  fi
+
+  # rustfmt
+  if [[ -f "$root/rustfmt.toml" ]]; then
+    rules=$(echo "$rules" | jq \
+      --arg rule "rustfmt enforced -- maintain Rust formatting standards" \
+      --arg source "rustfmt" \
+      '. + [{rule: $rule, source: $source, strength: "required"}]')
+  fi
+
+  # .flake8
+  if [[ -f "$root/.flake8" ]]; then
+    rules=$(echo "$rules" | jq \
+      --arg rule "Flake8 enforced -- follow Python linting rules" \
+      --arg source "Flake8" \
+      '. + [{rule: $rule, source: $source, strength: "required"}]')
+  fi
+
+  # pyproject.toml [tool.black]
+  if [[ -f "$root/pyproject.toml" ]]; then
+    if grep -q '\[tool\.black\]' "$root/pyproject.toml" 2>/dev/null; then
+      rules=$(echo "$rules" | jq \
+        --arg rule "Black formatter enforced -- maintain Python code style" \
+        --arg source "Black" \
+        '. + [{rule: $rule, source: $source, strength: "required"}]')
+    fi
+  fi
+
+  # 4. CI/CD
+  sources_checked=$((sources_checked + 1))
+  local has_ci=false
+  if [[ -d "$root/.github/workflows" ]]; then
+    has_ci=true
+  elif [[ -f "$root/Jenkinsfile" ]]; then
+    has_ci=true
+  elif [[ -f "$root/.gitlab-ci.yml" ]]; then
+    has_ci=true
+  elif [[ -d "$root/.circleci" ]]; then
+    has_ci=true
+  fi
+
+  if [[ "$has_ci" == "true" ]]; then
+    rules=$(echo "$rules" | jq \
+      --arg rule "CI/CD pipeline active -- ensure all checks pass before merging" \
+      --arg source "CI configuration" \
+      '. + [{rule: $rule, source: $source, strength: "required"}]')
+  fi
+
+  jq -n \
+    --argjson rules "$rules" \
+    --argjson sources_checked "$sources_checked" \
+    '{rules: $rules, sources_checked: $sources_checked}'
+}
+
 # Main entry point: scan repo and produce structured research JSON
 # Usage: _scan_init_research [--target <dir>]
 # Options:
