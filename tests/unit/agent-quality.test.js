@@ -6,7 +6,7 @@
  * restrictions, forbidden body patterns, agent count tracking, and body
  * quality (XML sections present, no empty sections, minimum content length).
  *
- * TEST-05 now passes — Phase 30 completed the full 22-agent roster.
+ * TEST-05 now passes — Phase 25 added oracle + architect, completing the full 24-agent roster.
  */
 
 'use strict';
@@ -238,18 +238,20 @@ test('TEST-04: no agent body contains OpenCode-specific invocations', t => {
 // TEST-05: Agent count
 // ---------------------------------------------------------------------------
 
-// Phase 30 complete — all 22 agents shipped:
-// Phase 27-28: queen, builder, watcher, probe, weaver, keeper, scout, route-setter, surveyor (9)
-// Phase 29: tracker, auditor, (+ probe/weaver/keeper/watcher adjustments) → 14 total
-// Phase 30: ambassador, archaeologist, chaos, chronicler, gatekeeper, includer, measurer, sage (8)
-const EXPECTED_AGENT_COUNT = 22;
+// Phase 25 complete — all 24 agents shipped:
+// Core: queen, builder, watcher, scout (4)
+// Orchestration: route-setter, architect (2)
+// Specialist: tracker, auditor, probe, weaver, keeper, gatekeeper, measurer (7)
+// Niche: chaos, archaeologist, oracle, sage, ambassador, includer, chronicler (7)
+// Surveyor: surveyor-nest, surveyor-disciplines, surveyor-pathogens, surveyor-provisions (4)
+const EXPECTED_AGENT_COUNT = 24;
 
-test('TEST-05: agent count matches expected 22', t => {
+test('TEST-05: agent count matches expected 24', t => {
   const files = getAgentFiles();
   t.is(
     files.length,
     EXPECTED_AGENT_COUNT,
-    `Expected ${EXPECTED_AGENT_COUNT} agents, found ${files.length}. Remaining: ${EXPECTED_AGENT_COUNT - files.length} agents needed (Phase 30).`
+    `Expected ${EXPECTED_AGENT_COUNT} agents, found ${files.length}. If you added/removed agents, update EXPECTED_AGENT_COUNT.`
   );
 });
 

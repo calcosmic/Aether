@@ -380,12 +380,12 @@ test('integration: load actual YAML and verify all castes', t => {
 
   const profiles = modelProfiles.loadModelProfiles(repoPath);
 
-  // Verify all expected castes exist (22 castes across 3 tiers)
+  // Verify all expected castes exist (24 castes across 3 tiers)
   const expectedCastes = [
     'queen', 'archaeologist', 'route_setter', 'sage', 'tracker', 'auditor', 'gatekeeper', 'measurer',
     'builder', 'watcher', 'scout', 'chaos', 'probe', 'weaver', 'ambassador',
     'surveyor_nest', 'surveyor_disciplines', 'surveyor_pathogens', 'surveyor_provisions',
-    'chronicler', 'includer', 'keeper'
+    'chronicler', 'includer', 'keeper', 'oracle', 'architect'
   ];
 
   for (const caste of expectedCastes) {
@@ -408,9 +408,9 @@ test('integration: load actual YAML and verify all castes', t => {
     t.true(result.valid, `Model '${model}' should be valid`);
   }
 
-  // Verify assignments work (22 castes)
+  // Verify assignments work (24 castes)
   const assignments = modelProfiles.getAllAssignments(profiles);
-  t.is(assignments.length, 22);
+  t.is(assignments.length, 24);
 
   // Verify castes use slot names
   t.is(modelProfiles.getModelForCaste(profiles, 'builder'), 'sonnet');

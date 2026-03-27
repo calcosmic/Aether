@@ -142,13 +142,18 @@ Plans:
 **Research needed:** No — follows established colony lifecycle test patterns
 **Depends on:** Phases 25, 26, 27 (validates the full chain)
 
-Write an end-to-end integration test that verifies the complete wisdom flow: build produces work, continue extracts learnings, QUEEN.md gets populated, hive brain receives promoted instincts. Also update documentation to reflect the 24-agent roster and wired wisdom pipeline.
+Write an end-to-end integration test that verifies the complete wisdom flow: build produces work, continue extracts learnings, QUEEN.md gets populated, hive brain receives promoted instincts. Also fix 7 pre-existing test failures from Phase 25 agent count change and spawn-tree data pollution.
+
+**Plans:** 2 plans
+
+Plans:
+- [ ] 28-01-PLAN.md — Fix 7 pre-existing test failures (agent count, caste tiers, spawn-tree data pollution)
+- [ ] 28-02-PLAN.md — Write E2E wisdom pipeline integration test (VAL-01)
 
 **Success criteria:**
-1. Integration test passes: init -> plan -> build -> continue -> QUEEN.md has learnings -> hive brain has entries
-2. All 584+ existing tests remain passing (no regressions)
-3. `bin/validate-package.sh` passes (new agent files included in package)
-4. CLAUDE.md and workers.md accurately reflect 24 agents and the wisdom pipeline behavior
+1. Integration test passes: memory-capture -> auto-promote -> QUEEN.md -> instinct-create -> colony-prime -> hive-promote -> hive-read
+2. All 594+ tests pass (0 failures)
+3. `bin/validate-package.sh` passes
 
 ---
 

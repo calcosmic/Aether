@@ -41,7 +41,7 @@ test('getModelSlotForCaste returns "inherit" when worker_models is missing', t =
   t.is(getModelSlotForCaste({}, 'builder'), 'inherit');
 });
 
-test('getModelSlotForCaste returns correct slot for all 22 castes', t => {
+test('getModelSlotForCaste returns correct slot for all 24 castes', t => {
   const profiles = buildMockProfiles();
   const casteNames = getCasteNames();
 
@@ -59,7 +59,7 @@ test('getModelSlotForCaste returns correct slot for all 22 castes', t => {
   const sonnetCastes = casteNames.filter(c => getModelSlotForCaste(profiles, c) === 'sonnet');
   const inheritCastes = casteNames.filter(c => getModelSlotForCaste(profiles, c) === 'inherit');
 
-  t.is(opusCastes.length, 8, 'Should have 8 opus-tier castes');
+  t.is(opusCastes.length, 10, 'Should have 10 opus-tier castes');
   t.is(sonnetCastes.length, 11, 'Should have 11 sonnet-tier castes');
   t.is(inheritCastes.length, 3, 'Should have 3 inherit-tier castes');
 });
