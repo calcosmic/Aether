@@ -1,46 +1,48 @@
-# Requirements: Aether v2.4 Living Wisdom
+# Requirements: Aether v2.5 Smart Init
 
 **Defined:** 2026-03-27
-**Core Value:** Reliably interpret user requests, decompose into work, verify outputs, and ship correct work with minimal back-and-forth.
+**Core Value:** Reliably interpret user requests, decompose into executable work, verify outputs, and ship correct work with minimal back-and-forth.
 
-## v2.4 Requirements
+## v1 Requirements
 
-Requirements for Living Wisdom milestone. Each maps to roadmap phases.
+Requirements for the Smart Init milestone. Each maps to roadmap phases.
 
-### Agent Definitions
+### Scanning
 
-- [x] **AGNT-01**: Oracle has a dedicated agent definition file (.claude/agents/ant/aether-oracle.md) with opus model slot routing
-- [x] **AGNT-02**: Architect has a dedicated agent definition file (.claude/agents/ant/aether-architect.md) with opus model slot routing
-- [x] **AGNT-03**: Oracle and Architect agent files are mirrored to OpenCode (.opencode/agents/) and packaging (.aether/agents-claude/)
-- [x] **AGNT-04**: Oracle agent is spawnable by Queen during builds (not just via /ant:oracle command)
-- [x] **AGNT-05**: Architect agent has design-create mode (can write architecture docs, not just read-only)
+- [ ] **SCAN-01**: System scans repo key files, directory structure, and git history before initialization, producing structured research data in under 2 seconds
+- [ ] **SCAN-02**: System detects stale or missing territory survey and suggests running `/ant:colonize` when appropriate
+- [ ] **SCAN-03**: System estimates repo complexity (small/medium/large) based on file count, directory depth, and dependency count
 
-### Wisdom Pipeline
+### Prompt Generation
 
-- [ ] **PIPE-01**: queen-write-learnings is called during /ant:continue, writing phase learnings to QUEEN.md
-- [ ] **PIPE-02**: hive-promote is called during /ant:continue, promoting instincts to hive brain
-- [ ] **PIPE-03**: Builder learning extraction has a deterministic fallback (git-diff-based) when AI agents skip learning output
-- [ ] **PIPE-04**: Users see visible feedback when wisdom is written (e.g., "3 learnings recorded, 1 instinct promoted" in continue output)
+- [ ] **PROMPT-01**: System generates a structured colony initialization prompt from the user's natural language goal combined with research data, using deterministic bash assembly
+- [ ] **PROMPT-02**: System displays the generated prompt for user review before any colony files are created or modified
+- [ ] **PROMPT-03**: User can edit any section of the generated prompt (charter, pheromones, context) before approving
 
-### Quality & Validation
+### Charter Management
 
-- [ ] **VAL-01**: End-to-end integration test verifies: build → continue → QUEEN.md populated → hive brain populated
-- [ ] **VAL-02**: Instinct deduplication uses content normalization (not just SHA-256 exact match) so semantically similar instincts consolidate
+- [ ] **CHARTER-01**: First init populates QUEEN.md User Preferences section with colony intent and vision derived from the approved prompt
+- [ ] **CHARTER-02**: First init populates QUEEN.md Codebase Patterns section with governance rules, goals, and architecture notes derived from research and approved prompt
+- [ ] **CHARTER-03**: Subsequent inits update charter content (intent, vision, governance) without resetting colony state, wisdom, instincts, learnings, pheromones, or phase progress
 
-## v3 Requirements
+### Intelligence
+
+- [ ] **INTEL-01**: System inherits context from prior colonies by reading completion reports and existing QUEEN.md charter content
+- [ ] **INTEL-02**: System suggests FOCUS and REDIRECT pheromone signals based on research findings, included in the approval prompt for user acceptance
+- [ ] **INTEL-03**: System infers governance suggestions from detected codebase patterns (e.g., test config present suggests TDD governance, CONTRIBUTING.md present suggests its rules as governance)
+
+## v2 Requirements
 
 Deferred to future release. Tracked but not in current roadmap.
 
-### Observability
+### Enhanced Context
 
-- **OBS-01**: /ant:wisdom command to view accumulated wisdom status
-- **OBS-02**: Wisdom dashboard in /ant:status showing QUEEN.md entries, hive brain count, instinct count
+- **CTX-01**: Display chambers/tunnels context in approval prompt (prior colony summaries from archived colonies)
+- **CTX-02**: Extract and display architecture notes from research as a dedicated section in the approval prompt
 
-### Advanced Wisdom
+### Cross-Command Integration
 
-- **WIS-01**: instinct-apply records when instincts are used in practice (success/failure feedback loop)
-- **WIS-02**: QUEEN.md v1/v2 auto-migration called in build flow (queen-migrate)
-- **WIS-03**: Hive promotion also fires during /ant:entomb (not just /ant:seal)
+- **CROSS-01**: Goals section in charter auto-populates from `/ant:plan` phase output (charter evolves with colony lifecycle)
 
 ## Out of Scope
 
@@ -48,12 +50,14 @@ Explicitly excluded. Documented to prevent scope creep.
 
 | Feature | Reason |
 |---------|--------|
-| /ant:wisdom command | Nice-to-have observability, not core to making wisdom work |
-| instinct-apply feedback loop | Requires real colony runs to validate, defer until pipeline is wired |
-| QUEEN.md format migration | Auto-migration exists but is edge-case, handle manually if needed |
-| hive-promote in entomb | Users who want cross-colony wisdom can run /ant:seal; entomb is archive-only |
-| Builder learning quality validation | LLM behavior is hard to test deterministically; pipeline wiring is the priority |
-| Multi-repo wisdom coordination | Architecture-level change, defer to future milestone |
+| Full deep survey on every init | `/ant:colonize` takes 30-60s with 4 agents; too slow for init. Lightweight scan + suggestion instead |
+| Auto-run colonize from init | Removes user control over resource spending. Suggestion is sufficient |
+| LLM-generated prompts | Non-deterministic and untestable. Bash + jq assembly is deterministic |
+| Interactive TUI (inquirer.js, etc.) | Claude Code is a conversational UI. The LLM is the interface |
+| Separate charter file | QUEEN.md is the single source of truth. One file, one source of truth |
+| QUEEN.md v3 format (new sections) | 7+ downstream consumers parse by exact header. Charter content maps to existing v2 sections |
+| Init generates the full plan | Plan generation is a separate concern with its own research loop |
+| Multiple approval rounds | Single unified approval prompt. One pass, not separate approvals for charter/pheromones/context |
 
 ## Traceability
 
@@ -61,21 +65,22 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AGNT-01 (Oracle agent file) | 25 | Pending |
-| AGNT-02 (Architect agent file) | 25 | Pending |
-| AGNT-03 (Agent mirrors) | 25 | Pending |
-| AGNT-04 (Oracle spawnable by Queen) | 25 | Pending |
-| AGNT-05 (Architect design-create mode) | 25 | Pending |
-| PIPE-01 (queen-write-learnings in continue) | 26 | Pending |
-| PIPE-02 (hive-promote in continue) | 26 | Pending |
-| PIPE-04 (Visible wisdom feedback) | 26 | Pending |
-| PIPE-03 (Deterministic fallback) | 27 | Pending |
-| VAL-02 (Content normalization dedup) | 27 | Pending |
-| VAL-01 (E2E integration test) | 28 | Pending |
+| SCAN-01 (Structured research scan <2s) | 29 | Pending |
+| SCAN-02 (Colonize suggestion when stale) | 29 | Pending |
+| SCAN-03 (Repo complexity estimation) | 29 | Pending |
+| PROMPT-01 (Deterministic prompt generation) | 31 | Pending |
+| PROMPT-02 (Display prompt for review) | 31 | Pending |
+| PROMPT-03 (User can edit before approve) | 31 | Pending |
+| CHARTER-01 (First init populates User Preferences) | 30 | Pending |
+| CHARTER-02 (First init populates Codebase Patterns) | 30 | Pending |
+| CHARTER-03 (Re-init updates without resetting) | 30 | Pending |
+| INTEL-01 (Inherit prior colony context) | 32 | Pending |
+| INTEL-02 (Suggest pheromones from research) | 32 | Pending |
+| INTEL-03 (Infer governance from patterns) | 32 | Pending |
 
 **Coverage:**
-- v2.4 requirements: 11 total
-- Mapped to phases: 11
+- v1 requirements: 12 total
+- Mapped to phases: 12
 - Unmapped: 0
 
 ---

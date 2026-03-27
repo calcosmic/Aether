@@ -76,7 +76,7 @@
 - [x] **Phase 29: Repo Scanning Module** — SCAN-01, SCAN-02, SCAN-03 (completed 2026-03-27)
 - [x] **Phase 30: Charter Management** — CHARTER-01, CHARTER-02, CHARTER-03 (completed 2026-03-27)
 - [x] **Phase 31: Init.md Smart Init Rewrite** — PROMPT-01, PROMPT-02, PROMPT-03 (completed 2026-03-27)
-- [ ] **Phase 32: Intelligence Enhancements** — INTEL-01, INTEL-02, INTEL-03
+- [x] **Phase 32: Intelligence Enhancements** — INTEL-01, INTEL-02, INTEL-03 (completed 2026-03-27)
 
 ## Phase Details
 
@@ -140,7 +140,7 @@ Plans:
   1. When prior colonies exist in chambers/tunnels, the approval prompt includes a "Prior Context" section summarizing completion reports and existing QUEEN.md charter content
   2. The approval prompt includes suggested FOCUS and REDIRECT pheromone signals derived from research findings (e.g., test config present suggests FOCUS on testing, security issues suggest REDIRECT patterns)
   3. When a CONTRIBUTING.md, test config, or similar governance files are detected, the approval prompt includes inferred governance suggestions (e.g., "TDD required" from test config, contribution rules from CONTRIBUTING.md)
-**Plans:** 3 plans
+**Plans:** 3/3 plans complete
 
 Plans:
 - [ ] 32-01-PLAN.md — Add intelligence sub-scan functions to scan.sh (colony context, pheromone suggestions, governance inference)
@@ -187,7 +187,7 @@ Phases execute in numeric order: 29 -> 30 -> 31 -> 32
 | 29. Repo Scanning Module | v2.5 | Complete    | 2026-03-27 | - |
 | 30. Charter Management | v2.5 | Complete    | 2026-03-27 | - |
 | 31. Init.md Smart Init Rewrite | v2.5 | Complete    | 2026-03-27 | - |
-| 32. Intelligence Enhancements | v2.5 | 0/3 | Not started | - |
+| 32. Intelligence Enhancements | v2.5 | Complete    | 2026-03-27 | - |
 
 ## Coverage Matrix
 
