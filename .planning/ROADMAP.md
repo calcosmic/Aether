@@ -51,7 +51,7 @@
 
 **Milestone Goal:** Reasoning-heavy castes use GLM-5 via the opus slot while execution castes stay on GLM-5-turbo via sonnet, using model-profiles.yaml as the single source of truth.
 
-- [ ] **Phase 21: Test Infrastructure Refactor** - Centralize test mocks to read from model-profiles.yaml so tests survive YAML changes
+- [x] **Phase 21: Test Infrastructure Refactor** - Centralize test mocks to read from model-profiles.yaml so tests survive YAML changes (completed 2026-03-27)
 - [ ] **Phase 22: Config Foundation & Core Routing** - Map castes to model slots via agent frontmatter, update settings and YAML config
 - [ ] **Phase 23: Tooling & Overrides** - Slot resolution functions, CLI subcommand, and build-time model override flag
 - [ ] **Phase 24: Safety & Verification** - Spawn-tree tracking, verify-castes display, GLM-5 loop warnings, config swap docs
@@ -76,11 +76,14 @@
 **Depends on**: Phase 21 (test infrastructure must be centralized before YAML changes)
 **Requirements**: ROUTE-01, ROUTE-02, ROUTE-03, ROUTE-04, ROUTE-05, ROUTE-06, ROUTE-07, ROUTE-08
 **Success Criteria** (what must be TRUE):
-  1. The queen, archaeologist, and route-setter agent files declare `model: opus` in their frontmatter; all other non-specialist agents declare `model: sonnet`
-  2. `ANTHROPIC_DEFAULT_OPUS_MODEL` in settings.json.3model points to `glm-5`, making opus-slot agents use GLM-5 through the proxy
-  3. A user who swaps to Claude API mode (no proxy) sees the same slot-to-caste assignments resolve to native Claude models without any Aether code changes
-  4. model-profiles.yaml reflects the two-tier split and workers.md no longer claims per-caste routing is impossible
-**Plans**: TBD
+  1. 8 opus castes (queen, archaeologist, route-setter, sage, tracker, auditor, gatekeeper, measurer) declare `model: opus` in frontmatter
+  2. 11 sonnet castes declare `model: sonnet` in frontmatter; 3 inherit castes remain `model: inherit`
+  3. `ANTHROPIC_DEFAULT_OPUS_MODEL` in settings.json points to `glm-5`, making opus-slot agents use GLM-5 through the proxy
+  4. model-profiles.yaml reflects the two-tier split with slot names; workers.md documents dual-mode switching
+**Plans**: 3 plans
+  - [ ] 22-01-PLAN.md -- Fix REQUIREMENTS.md, restructure YAML with slot names, deprecate spawn-with-model.sh
+  - [ ] 22-02-PLAN.md -- Update agent frontmatter model: fields (44 files) and sync mirrors
+  - [ ] 22-03-PLAN.md -- Rewrite workers.md and verify-castes.md documentation
 
 ### Phase 23: Tooling & Overrides
 **Goal**: Aether provides functions and CLI commands to resolve any caste to its model slot, and builders can override the default slot for an entire build
@@ -131,7 +134,7 @@ Phases execute in numeric order: 21 -> 22 -> 23 -> 24
 | 18. Local Wisdom Injection | v2.2 | Complete | Complete | 2026-03-25 |
 | 19. Cross-Colony Hive | v2.2 | Complete | Complete | 2026-03-25 |
 | 20. Hub Wisdom Layer | v2.2 | Complete | Complete | 2026-03-25 |
-| 21. Test Infrastructure Refactor | v2.3 | 0/2 | Not started | - |
-| 22. Config Foundation & Core Routing | v2.3 | 0/? | Not started | - |
+| 21. Test Infrastructure Refactor | v2.3 | Complete    | 2026-03-27 | - |
+| 22. Config Foundation & Core Routing | v2.3 | 0/3 | Not started | - |
 | 23. Tooling & Overrides | v2.3 | 0/? | Not started | - |
 | 24. Safety & Verification | v2.3 | 0/? | Not started | - |

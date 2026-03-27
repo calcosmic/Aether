@@ -12,14 +12,14 @@ See: .planning/PROJECT.md (updated 2026-03-27)
 Phase: 22 of 24 (Per-Caste Model Routing)
 Plan: 01 of --
 Status: Ready to plan
-Last activity: 2026-03-27 -- 21-02 complete (eliminated hardcoded model names, regression test)
+Last activity: 2026-03-27 -- 21-03 complete (integration test gap closure, helper accessors)
 
 Progress: [===       ] 54%
 
 ## Performance Metrics
 
 **Velocity (from v2.1):**
-- Total plans completed: 44
+- Total plans completed: 45
 - Average duration: 5min
 - Total execution time: 3.8 hours
 
@@ -43,6 +43,7 @@ Progress: [===       ] 54%
 - [v2.3/21-01]: buildMockProfiles uses spread merge for workerModels/modelMetadata, full replacement for taskRouting
 - [v2.3/21-02]: Soft-gate regression test logs violations without failing -- avoids false positives from legitimate test inputs
 - [v2.3/21-02]: Module-level YAML-derived constants (BUILDER_MODEL, ALT_MODEL) at file top avoid repeated helper calls
+- [v2.3/21-03]: Loop-based provider verification in integration tests -- automatically covers new models added to YAML
 
 ### Pending Todos
 
@@ -57,5 +58,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-27
-Stopped at: Completed 21-02 (Phase 21 complete)
+Stopped at: Completed 21-03 (Phase 21 gap closure complete)
 Resume file: None
