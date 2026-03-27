@@ -41,6 +41,7 @@ CURRENT_LOCK=${CURRENT_LOCK:-""}
 [[ -f "$SCRIPT_DIR/utils/swarm.sh" ]] && source "$SCRIPT_DIR/utils/swarm.sh"
 [[ -f "$SCRIPT_DIR/utils/learning.sh" ]] && source "$SCRIPT_DIR/utils/learning.sh"
 [[ -f "$SCRIPT_DIR/utils/pheromone.sh" ]] && source "$SCRIPT_DIR/utils/pheromone.sh"
+[[ -f "$SCRIPT_DIR/utils/scan.sh" ]] && source "$SCRIPT_DIR/utils/scan.sh"
 
 # Fallback error constants if error-handler.sh wasn't sourced
 # This prevents "unbound variable" errors in older installations
@@ -1012,7 +1013,7 @@ case "$cmd" in
     cat <<'HELP_EOF'
 {
   "ok": true,
-  "commands": ["help","version","validate-state","validate-oracle-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","learning-observe","learning-check-promotion","learning-promote-auto","memory-capture","queen-thresholds","context-capsule","rolling-summary","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","spawn-efficiency","validate-worker-response","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-display-text","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","phase-insert","generate-commit-message","version-check","registry-add","registry-list","bootstrap-system","model-profile","model-get","model-list","model-slot","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","incident-rule-add","survey-load","survey-verify","pheromone-export","pheromone-write","pheromone-count","pheromone-read","instinct-read","instinct-create","instinct-apply","pheromone-prime","colony-prime","pheromone-expire","eternal-init","eternal-store","pheromone-export-xml","pheromone-import-xml","pheromone-validate-xml","wisdom-export-xml","wisdom-import-xml","registry-export-xml","registry-import-xml","memory-metrics","midden-recent-failures","midden-review","midden-acknowledge","entropy-score","force-unlock","changelog-append","changelog-collect-plan-data","suggest-approve","suggest-quick-dismiss","data-clean","autopilot-init","autopilot-update","autopilot-status","autopilot-stop","autopilot-check-replan","hive-init","hive-store","hive-read","hive-abstract","hive-promote"],
+  "commands": ["help","version","validate-state","validate-oracle-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","learning-observe","learning-check-promotion","learning-promote-auto","memory-capture","queen-thresholds","context-capsule","rolling-summary","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","spawn-efficiency","validate-worker-response","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-display-text","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","phase-insert","generate-commit-message","version-check","registry-add","registry-list","bootstrap-system","model-profile","model-get","model-list","model-slot","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","incident-rule-add","survey-load","survey-verify","pheromone-export","pheromone-write","pheromone-count","pheromone-read","instinct-read","instinct-create","instinct-apply","pheromone-prime","colony-prime","pheromone-expire","eternal-init","eternal-store","pheromone-export-xml","pheromone-import-xml","pheromone-validate-xml","wisdom-export-xml","wisdom-import-xml","registry-export-xml","registry-import-xml","memory-metrics","midden-recent-failures","midden-review","midden-acknowledge","entropy-score","force-unlock","changelog-append","changelog-collect-plan-data","suggest-approve","suggest-quick-dismiss","data-clean","autopilot-init","autopilot-update","autopilot-status","autopilot-stop","autopilot-check-replan","hive-init","hive-store","hive-read","hive-abstract","hive-promote","init-research"],
   "sections": {
     "Core": [
       {"name": "help", "description": "List all available commands with sections"},
@@ -1152,6 +1153,9 @@ case "$cmd" in
       {"name": "skill-cache-rebuild", "description": "Force rebuild of skills index cache"},
       {"name": "skill-diff", "description": "Compare user skill with shipped Aether version"},
       {"name": "skill-is-user-created", "description": "Check if a skill is user-created (not in manifest) [DEPRECATED]"}
+    ],
+    "Smart Init": [
+      {"name": "init-research", "description": "Scan repo and produce structured research JSON for smart init"}
     ],
     "Deprecated": [
       {"name": "checkpoint-check", "description": "Check dirty files against allowlist [DEPRECATED]"},
@@ -5380,6 +5384,11 @@ DRYRUN_EOF
   skill-is-user-created)
     _deprecation_warning "skill-is-user-created"
     _skill_is_user_created "$1" "$2"
+    ;;
+
+  # ── Smart Init ─────────────────────────────────────────────────────────────
+  init-research)
+    _scan_init_research "$@"
     ;;
 
   *)
