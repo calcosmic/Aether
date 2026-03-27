@@ -1,4 +1,3 @@
-const fs = require('fs');
 const path = require('path');
 const test = require('ava');
 const proxyquire = require('proxyquire');
@@ -6,60 +5,14 @@ const sinon = require('sinon');
 
 const MODEL_PROFILES_PATH = path.join(__dirname, '../../bin/lib/model-profiles.js');
 const YAML_PATH = path.join(__dirname, '../../.aether/model-profiles.yaml');
-
-/**
- * Helper to create a mock model profiles object
- * @returns {object} Mock profiles object
- */
-function createMockProfiles() {
-  return {
-    version: '1.0',
-    description: 'Test profiles',
-    worker_models: {
-      builder: 'kimi-k2.5',
-      watcher: 'kimi-k2.5',
-      scout: 'kimi-k2.5',
-      chaos: 'kimi-k2.5',
-      architect: 'glm-5',
-      oracle: 'minimax-2.5',
-      prime: 'glm-5',
-      colonizer: 'kimi-k2.5',
-      route_setter: 'kimi-k2.5',
-      archaeologist: 'glm-5',
-    },
-    model_metadata: {
-      'glm-5': {
-        description: 'Test GLM-5',
-        provider: 'z_ai',
-        capabilities: ['planning'],
-        context_window: 200000,
-        speed: 'medium',
-        cost_tier: 'high',
-      },
-      'minimax-2.5': {
-        description: 'Test MiniMax',
-        provider: 'minimax',
-        capabilities: ['browse', 'search'],
-        context_window: 200000,
-        speed: 'fast',
-        cost_tier: 'medium',
-      },
-      'kimi-k2.5': {
-        description: 'Test Kimi',
-        provider: 'kimi',
-        capabilities: ['coding'],
-        context_window: 256000,
-        speed: 'fast',
-        cost_tier: 'low',
-      },
-    },
-    proxy: {
-      endpoint: 'http://localhost:4000',
-      auth_token: 'sk-litellm-local',
-      health_check: 'http://localhost:4000/health',
-    },
-  };
-}
+const {
+  buildMockProfiles,
+  getDefaultModelForCaste,
+  getModelNames,
+  getCasteNames,
+  getModelMeta,
+  getModelProvider,
+} = require('../helpers/mock-profiles');
 
 // ============================================
 // loadModelProfiles tests
@@ -138,16 +91,16 @@ test('loadModelProfiles throws ConfigurationError for read errors', t => {
 
 test('getModelForCaste returns correct model for known castes', t => {
   const modelProfiles = require(MODEL_PROFILES_PATH);
-  const profiles = createMockProfiles();
+  const profiles = buildMockProfiles();
 
-  t.is(modelProfiles.getModelForCaste(profiles, 'builder'), 'kimi-k2.5');
-  t.is(modelProfiles.getModelForCaste(profiles, 'architect'), 'glm-5');
-  t.is(modelProfiles.getModelForCaste(profiles, 'oracle'), 'minimax-2.5');
+  t.is(modelProfiles.getModelForCaste(profiles, 'builder'), getDefaultModelForCaste('builder'));
+  t.is(modelProfiles.getModelForCaste(profiles, 'architect'), getDefaultModelForCaste('architect'));
+  t.is(modelProfiles.getModelForCaste(profiles, 'oracle'), getDefaultModelForCaste('oracle'));
 });
 
 test('getModelForCaste returns default for unknown caste', t => {
   const modelProfiles = require(MODEL_PROFILES_PATH);
-  const profiles = createMockProfiles();
+  const profiles = buildMockProfiles();
 
   const consoleStub = sinon.stub(console, 'warn');
 
@@ -180,7 +133,7 @@ test('getModelForCaste handles null/undefined profiles gracefully', t => {
 
 test('validateCaste returns valid=true for known castes', t => {
   const modelProfiles = require(MODEL_PROFILES_PATH);
-  const profiles = createMockProfiles();
+  const profiles = buildMockProfiles();
 
   t.true(modelProfiles.validateCaste(profiles, 'builder').valid);
   t.true(modelProfiles.validateCaste(profiles, 'watcher').valid);
@@ -190,7 +143,7 @@ test('validateCaste returns valid=true for known castes', t => {
 
 test('validateCaste returns valid=false for unknown castes', t => {
   const modelProfiles = require(MODEL_PROFILES_PATH);
-  const profiles = createMockProfiles();
+  const profiles = buildMockProfiles();
 
   t.false(modelProfiles.validateCaste(profiles, 'unknown').valid);
   t.false(modelProfiles.validateCaste(profiles, '').valid);
@@ -199,7 +152,7 @@ test('validateCaste returns valid=false for unknown castes', t => {
 
 test('validateCaste returns complete list of valid castes', t => {
   const modelProfiles = require(MODEL_PROFILES_PATH);
-  const profiles = createMockProfiles();
+  const profiles = buildMockProfiles();
 
   const result = modelProfiles.validateCaste(profiles, 'builder');
 
@@ -207,7 +160,7 @@ test('validateCaste returns complete list of valid castes', t => {
   t.true(result.castes.includes('builder'));
   t.true(result.castes.includes('architect'));
   t.true(result.castes.includes('oracle'));
-  t.is(result.castes.length, 10);
+  t.is(result.castes.length, getCasteNames().length);
 });
 
 test('validateCaste handles null/undefined profiles gracefully', t => {
@@ -228,16 +181,16 @@ test('validateCaste handles null/undefined profiles gracefully', t => {
 
 test('validateModel returns valid=true for known models', t => {
   const modelProfiles = require(MODEL_PROFILES_PATH);
-  const profiles = createMockProfiles();
+  const profiles = buildMockProfiles();
 
   t.true(modelProfiles.validateModel(profiles, 'glm-5').valid);
-  t.true(modelProfiles.validateModel(profiles, 'minimax-2.5').valid);
-  t.true(modelProfiles.validateModel(profiles, 'kimi-k2.5').valid);
+  t.true(modelProfiles.validateModel(profiles, 'glm-5-turbo').valid);
+  t.true(modelProfiles.validateModel(profiles, 'glm-4.5-air').valid);
 });
 
 test('validateModel returns valid=false for unknown models', t => {
   const modelProfiles = require(MODEL_PROFILES_PATH);
-  const profiles = createMockProfiles();
+  const profiles = buildMockProfiles();
 
   t.false(modelProfiles.validateModel(profiles, 'gpt-4').valid);
   t.false(modelProfiles.validateModel(profiles, 'unknown-model').valid);
@@ -246,15 +199,15 @@ test('validateModel returns valid=false for unknown models', t => {
 
 test('validateModel returns complete list of valid models', t => {
   const modelProfiles = require(MODEL_PROFILES_PATH);
-  const profiles = createMockProfiles();
+  const profiles = buildMockProfiles();
 
   const result = modelProfiles.validateModel(profiles, 'glm-5');
 
   t.true(Array.isArray(result.models));
   t.true(result.models.includes('glm-5'));
-  t.true(result.models.includes('minimax-2.5'));
-  t.true(result.models.includes('kimi-k2.5'));
-  t.is(result.models.length, 3);
+  t.true(result.models.includes('glm-5-turbo'));
+  t.true(result.models.includes('glm-4.5-air'));
+  t.is(result.models.length, getModelNames().length);
 });
 
 test('validateModel handles null/undefined profiles gracefully', t => {
@@ -275,16 +228,16 @@ test('validateModel handles null/undefined profiles gracefully', t => {
 
 test('getProviderForModel returns correct provider for each model', t => {
   const modelProfiles = require(MODEL_PROFILES_PATH);
-  const profiles = createMockProfiles();
+  const profiles = buildMockProfiles();
 
-  t.is(modelProfiles.getProviderForModel(profiles, 'glm-5'), 'z_ai');
-  t.is(modelProfiles.getProviderForModel(profiles, 'minimax-2.5'), 'minimax');
-  t.is(modelProfiles.getProviderForModel(profiles, 'kimi-k2.5'), 'kimi');
+  t.is(modelProfiles.getProviderForModel(profiles, 'glm-5'), getModelProvider('glm-5'));
+  t.is(modelProfiles.getProviderForModel(profiles, 'glm-5-turbo'), getModelProvider('glm-5-turbo'));
+  t.is(modelProfiles.getProviderForModel(profiles, 'glm-4.5-air'), getModelProvider('glm-4.5-air'));
 });
 
 test('getProviderForModel returns null for unknown model', t => {
   const modelProfiles = require(MODEL_PROFILES_PATH);
-  const profiles = createMockProfiles();
+  const profiles = buildMockProfiles();
 
   t.is(modelProfiles.getProviderForModel(profiles, 'unknown-model'), null);
   t.is(modelProfiles.getProviderForModel(profiles, 'gpt-4'), null);
@@ -304,12 +257,12 @@ test('getProviderForModel handles null/undefined profiles gracefully', t => {
 
 test('getAllAssignments returns array with all castes', t => {
   const modelProfiles = require(MODEL_PROFILES_PATH);
-  const profiles = createMockProfiles();
+  const profiles = buildMockProfiles();
 
   const assignments = modelProfiles.getAllAssignments(profiles);
 
   t.true(Array.isArray(assignments));
-  t.is(assignments.length, 10);
+  t.is(assignments.length, getCasteNames().length);
 
   const casteNames = assignments.map(a => a.caste);
   t.true(casteNames.includes('builder'));
@@ -319,7 +272,7 @@ test('getAllAssignments returns array with all castes', t => {
 
 test('getAllAssignments each entry has caste, model, provider fields', t => {
   const modelProfiles = require(MODEL_PROFILES_PATH);
-  const profiles = createMockProfiles();
+  const profiles = buildMockProfiles();
 
   const assignments = modelProfiles.getAllAssignments(profiles);
 
@@ -335,21 +288,21 @@ test('getAllAssignments each entry has caste, model, provider fields', t => {
 
 test('getAllAssignments includes correct provider for each caste', t => {
   const modelProfiles = require(MODEL_PROFILES_PATH);
-  const profiles = createMockProfiles();
+  const profiles = buildMockProfiles();
 
   const assignments = modelProfiles.getAllAssignments(profiles);
 
   const builder = assignments.find(a => a.caste === 'builder');
-  t.is(builder.model, 'kimi-k2.5');
-  t.is(builder.provider, 'kimi');
+  t.is(builder.model, getDefaultModelForCaste('builder'));
+  t.is(builder.provider, getModelProvider(getDefaultModelForCaste('builder')));
 
   const architect = assignments.find(a => a.caste === 'architect');
-  t.is(architect.model, 'glm-5');
-  t.is(architect.provider, 'z_ai');
+  t.is(architect.model, getDefaultModelForCaste('architect'));
+  t.is(architect.provider, getModelProvider(getDefaultModelForCaste('architect')));
 
   const oracle = assignments.find(a => a.caste === 'oracle');
-  t.is(oracle.model, 'minimax-2.5');
-  t.is(oracle.provider, 'minimax');
+  t.is(oracle.model, getDefaultModelForCaste('oracle'));
+  t.is(oracle.provider, getModelProvider(getDefaultModelForCaste('oracle')));
 });
 
 test('getAllAssignments handles null/undefined profiles gracefully', t => {
@@ -366,18 +319,18 @@ test('getAllAssignments handles null/undefined profiles gracefully', t => {
 
 test('getModelMetadata returns metadata for known models', t => {
   const modelProfiles = require(MODEL_PROFILES_PATH);
-  const profiles = createMockProfiles();
+  const profiles = buildMockProfiles();
 
   const metadata = modelProfiles.getModelMetadata(profiles, 'glm-5');
 
   t.truthy(metadata);
-  t.is(metadata.provider, 'z_ai');
+  t.is(metadata.provider, getModelProvider('glm-5'));
   t.is(metadata.context_window, 200000);
 });
 
 test('getModelMetadata returns null for unknown model', t => {
   const modelProfiles = require(MODEL_PROFILES_PATH);
-  const profiles = createMockProfiles();
+  const profiles = buildMockProfiles();
 
   t.is(modelProfiles.getModelMetadata(profiles, 'unknown'), null);
 });
@@ -388,7 +341,7 @@ test('getModelMetadata returns null for unknown model', t => {
 
 test('getProxyConfig returns proxy configuration', t => {
   const modelProfiles = require(MODEL_PROFILES_PATH);
-  const profiles = createMockProfiles();
+  const profiles = buildMockProfiles();
 
   const config = modelProfiles.getProxyConfig(profiles);
 
@@ -399,7 +352,7 @@ test('getProxyConfig returns proxy configuration', t => {
 
 test('getProxyConfig returns null when proxy not configured', t => {
   const modelProfiles = require(MODEL_PROFILES_PATH);
-  const profiles = createMockProfiles();
+  const profiles = buildMockProfiles();
   delete profiles.proxy;
 
   t.is(modelProfiles.getProxyConfig(profiles), null);
@@ -412,7 +365,7 @@ test('getProxyConfig returns null when proxy not configured', t => {
 test('DEFAULT_MODEL is exported and has expected value', t => {
   const modelProfiles = require(MODEL_PROFILES_PATH);
 
-  t.is(modelProfiles.DEFAULT_MODEL, 'kimi-k2.5');
+  t.is(modelProfiles.DEFAULT_MODEL, 'glm-5-turbo');
 });
 
 // ============================================
@@ -437,7 +390,7 @@ test('integration: load actual YAML and verify all castes', t => {
   }
 
   // Verify all expected models exist
-  const expectedModels = ['glm-5', 'minimax-2.5', 'kimi-k2.5'];
+  const expectedModels = ['glm-5', 'glm-5-turbo', 'glm-4.5-air'];
 
   for (const model of expectedModels) {
     const result = modelProfiles.validateModel(profiles, model);
@@ -448,13 +401,13 @@ test('integration: load actual YAML and verify all castes', t => {
   const assignments = modelProfiles.getAllAssignments(profiles);
   t.is(assignments.length, 10);
 
-  // Verify specific mappings
-  t.is(modelProfiles.getModelForCaste(profiles, 'builder'), 'kimi-k2.5');
-  t.is(modelProfiles.getModelForCaste(profiles, 'architect'), 'glm-5');
-  t.is(modelProfiles.getModelForCaste(profiles, 'oracle'), 'minimax-2.5');
+  // Verify all castes use glm-5-turbo
+  t.is(modelProfiles.getModelForCaste(profiles, 'builder'), 'glm-5-turbo');
+  t.is(modelProfiles.getModelForCaste(profiles, 'architect'), 'glm-5-turbo');
+  t.is(modelProfiles.getModelForCaste(profiles, 'oracle'), 'glm-5-turbo');
 
   // Verify providers
   t.is(modelProfiles.getProviderForModel(profiles, 'glm-5'), 'z_ai');
-  t.is(modelProfiles.getProviderForModel(profiles, 'minimax-2.5'), 'minimax');
-  t.is(modelProfiles.getProviderForModel(profiles, 'kimi-k2.5'), 'kimi');
+  t.is(modelProfiles.getProviderForModel(profiles, 'glm-5-turbo'), 'z_ai');
+  t.is(modelProfiles.getProviderForModel(profiles, 'glm-4.5-air'), 'z_ai');
 });
