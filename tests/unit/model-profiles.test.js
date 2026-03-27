@@ -94,8 +94,8 @@ test('getModelForCaste returns correct model for known castes', t => {
   const profiles = buildMockProfiles();
 
   t.is(modelProfiles.getModelForCaste(profiles, 'builder'), getDefaultModelForCaste('builder'));
-  t.is(modelProfiles.getModelForCaste(profiles, 'architect'), getDefaultModelForCaste('architect'));
-  t.is(modelProfiles.getModelForCaste(profiles, 'oracle'), getDefaultModelForCaste('oracle'));
+  t.is(modelProfiles.getModelForCaste(profiles, 'queen'), getDefaultModelForCaste('queen'));
+  t.is(modelProfiles.getModelForCaste(profiles, 'chronicler'), getDefaultModelForCaste('chronicler'));
 });
 
 test('getModelForCaste returns default for unknown caste', t => {
@@ -137,8 +137,8 @@ test('validateCaste returns valid=true for known castes', t => {
 
   t.true(modelProfiles.validateCaste(profiles, 'builder').valid);
   t.true(modelProfiles.validateCaste(profiles, 'watcher').valid);
-  t.true(modelProfiles.validateCaste(profiles, 'architect').valid);
-  t.true(modelProfiles.validateCaste(profiles, 'prime').valid);
+  t.true(modelProfiles.validateCaste(profiles, 'queen').valid);
+  t.true(modelProfiles.validateCaste(profiles, 'sage').valid);
 });
 
 test('validateCaste returns valid=false for unknown castes', t => {
@@ -158,8 +158,8 @@ test('validateCaste returns complete list of valid castes', t => {
 
   t.true(Array.isArray(result.castes));
   t.true(result.castes.includes('builder'));
-  t.true(result.castes.includes('architect'));
-  t.true(result.castes.includes('oracle'));
+  t.true(result.castes.includes('queen'));
+  t.true(result.castes.includes('sage'));
   t.is(result.castes.length, getCasteNames().length);
 });
 
@@ -266,8 +266,8 @@ test('getAllAssignments returns array with all castes', t => {
 
   const casteNames = assignments.map(a => a.caste);
   t.true(casteNames.includes('builder'));
-  t.true(casteNames.includes('architect'));
-  t.true(casteNames.includes('oracle'));
+  t.true(casteNames.includes('queen'));
+  t.true(casteNames.includes('sage'));
 });
 
 test('getAllAssignments each entry has caste, model, provider fields', t => {
@@ -282,27 +282,29 @@ test('getAllAssignments each entry has caste, model, provider fields', t => {
     t.true('provider' in assignment, 'Assignment should have provider field');
     t.is(typeof assignment.caste, 'string');
     t.is(typeof assignment.model, 'string');
+    // provider may be null when model is a slot name (not a concrete model)
     t.true(assignment.provider === null || typeof assignment.provider === 'string');
   }
 });
 
-test('getAllAssignments includes correct provider for each caste', t => {
+test('getAllAssignments includes correct slot for each caste', t => {
   const modelProfiles = require(MODEL_PROFILES_PATH);
   const profiles = buildMockProfiles();
 
   const assignments = modelProfiles.getAllAssignments(profiles);
 
+  // worker_models now stores slot names, not concrete model names
   const builder = assignments.find(a => a.caste === 'builder');
   t.is(builder.model, getDefaultModelForCaste('builder'));
-  t.is(builder.provider, getModelProvider(getDefaultModelForCaste('builder')));
+  t.is(builder.model, 'sonnet'); // slot name, not concrete model
 
-  const architect = assignments.find(a => a.caste === 'architect');
-  t.is(architect.model, getDefaultModelForCaste('architect'));
-  t.is(architect.provider, getModelProvider(getDefaultModelForCaste('architect')));
+  const queen = assignments.find(a => a.caste === 'queen');
+  t.is(queen.model, getDefaultModelForCaste('queen'));
+  t.is(queen.model, 'opus'); // slot name
 
-  const oracle = assignments.find(a => a.caste === 'oracle');
-  t.is(oracle.model, getDefaultModelForCaste('oracle'));
-  t.is(oracle.provider, getModelProvider(getDefaultModelForCaste('oracle')));
+  const chronicler = assignments.find(a => a.caste === 'chronicler');
+  t.is(chronicler.model, getDefaultModelForCaste('chronicler'));
+  t.is(chronicler.model, 'inherit'); // slot name
 });
 
 test('getAllAssignments handles null/undefined profiles gracefully', t => {
@@ -378,16 +380,25 @@ test('integration: load actual YAML and verify all castes', t => {
 
   const profiles = modelProfiles.loadModelProfiles(repoPath);
 
-  // Verify all expected castes exist
+  // Verify all expected castes exist (22 castes across 3 tiers)
   const expectedCastes = [
-    'prime', 'archaeologist', 'architect', 'oracle', 'route_setter',
-    'builder', 'watcher', 'scout', 'chaos', 'colonizer'
+    'queen', 'archaeologist', 'route_setter', 'sage', 'tracker', 'auditor', 'gatekeeper', 'measurer',
+    'builder', 'watcher', 'scout', 'chaos', 'probe', 'weaver', 'ambassador',
+    'surveyor_nest', 'surveyor_disciplines', 'surveyor_pathogens', 'surveyor_provisions',
+    'chronicler', 'includer', 'keeper'
   ];
 
   for (const caste of expectedCastes) {
     const result = modelProfiles.validateCaste(profiles, caste);
     t.true(result.valid, `Caste '${caste}' should be valid`);
   }
+
+  // Verify model_slots section exists
+  t.truthy(profiles.model_slots, 'Should have model_slots section');
+  t.is(profiles.model_slots.opus, 'glm-5');
+  t.is(profiles.model_slots.sonnet, 'glm-5-turbo');
+  t.is(profiles.model_slots.haiku, 'glm-4.5-air');
+  t.is(profiles.model_slots.inherit, null);
 
   // Verify all expected models exist
   const expectedModels = getModelNames();
@@ -397,16 +408,16 @@ test('integration: load actual YAML and verify all castes', t => {
     t.true(result.valid, `Model '${model}' should be valid`);
   }
 
-  // Verify assignments work
+  // Verify assignments work (22 castes)
   const assignments = modelProfiles.getAllAssignments(profiles);
-  t.is(assignments.length, 10);
+  t.is(assignments.length, 22);
 
-  // Verify all castes use the expected default model
-  t.is(modelProfiles.getModelForCaste(profiles, 'builder'), getDefaultModelForCaste('builder'));
-  t.is(modelProfiles.getModelForCaste(profiles, 'architect'), getDefaultModelForCaste('architect'));
-  t.is(modelProfiles.getModelForCaste(profiles, 'oracle'), getDefaultModelForCaste('oracle'));
+  // Verify castes use slot names
+  t.is(modelProfiles.getModelForCaste(profiles, 'builder'), 'sonnet');
+  t.is(modelProfiles.getModelForCaste(profiles, 'queen'), 'opus');
+  t.is(modelProfiles.getModelForCaste(profiles, 'chronicler'), 'inherit');
 
-  // Verify providers for all models
+  // Verify providers for all concrete models
   for (const model of getModelNames()) {
     t.is(modelProfiles.getProviderForModel(profiles, model), getModelProvider(model), `Provider for ${model} should match`);
   }

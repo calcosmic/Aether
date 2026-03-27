@@ -246,7 +246,7 @@ test('selectModelForTask fallback is used when nothing matches', t => {
   };
 
   const result = modelProfiles.selectModelForTask(emptyProfiles, 'unknown-caste', 'Something');
-  t.is(result.model, getDefaultModelForCaste('builder')); // DEFAULT_MODEL
+  t.is(result.model, modelProfiles.DEFAULT_MODEL); // fallback always returns DEFAULT_MODEL constant
   t.is(result.source, 'fallback');
 });
 
@@ -287,7 +287,7 @@ test('selectModelForTask handles null profiles gracefully', t => {
   const modelProfiles = require(MODEL_PROFILES_PATH);
 
   const result = modelProfiles.selectModelForTask(null, 'builder', 'Design');
-  t.is(result.model, getDefaultModelForCaste('builder'));
+  t.is(result.model, modelProfiles.DEFAULT_MODEL);
   t.is(result.source, 'fallback');
 });
 
@@ -295,7 +295,7 @@ test('selectModelForTask handles undefined profiles gracefully', t => {
   const modelProfiles = require(MODEL_PROFILES_PATH);
 
   const result = modelProfiles.selectModelForTask(undefined, 'builder', 'Design');
-  t.is(result.model, getDefaultModelForCaste('builder'));
+  t.is(result.model, modelProfiles.DEFAULT_MODEL);
   t.is(result.source, 'fallback');
 });
 
@@ -327,17 +327,17 @@ test('selectModelForTask works with different castes', t => {
   // Remove task_routing to test caste defaults directly
   delete profiles.task_routing;
 
-  // architect default is glm-5-turbo
-  const architectResult = modelProfiles.selectModelForTask(profiles, 'architect', 'Something');
-  t.is(architectResult.model, getDefaultModelForCaste('builder'));
-  t.is(architectResult.source, 'caste-default');
+  // queen default is 'opus' slot
+  const queenResult = modelProfiles.selectModelForTask(profiles, 'queen', 'Something');
+  t.is(queenResult.model, getDefaultModelForCaste('queen'));
+  t.is(queenResult.source, 'caste-default');
 
-  // oracle default is glm-5-turbo
-  const oracleResult = modelProfiles.selectModelForTask(profiles, 'oracle', 'Something');
-  t.is(oracleResult.model, getDefaultModelForCaste('builder'));
-  t.is(oracleResult.source, 'caste-default');
+  // chronicler default is 'inherit' slot
+  const chroniclerResult = modelProfiles.selectModelForTask(profiles, 'chronicler', 'Something');
+  t.is(chroniclerResult.model, getDefaultModelForCaste('chronicler'));
+  t.is(chroniclerResult.source, 'caste-default');
 
-  // builder default is glm-5-turbo
+  // builder default is 'sonnet' slot
   const builderResult = modelProfiles.selectModelForTask(profiles, 'builder', 'Something');
   t.is(builderResult.model, getDefaultModelForCaste('builder'));
   t.is(builderResult.source, 'caste-default');
