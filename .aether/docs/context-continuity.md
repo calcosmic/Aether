@@ -1,6 +1,6 @@
 # Context Continuity Plan
 
-Updated: 2026-02-22
+Updated: 2026-03-24
 
 ## Goal
 
@@ -51,13 +51,13 @@ Keep colony context stable across sessions and long conversations without high t
 3. Continue flow:
    - `continue-advance.md` now records recurring pattern resolution candidates through `memory-capture "resolution"`.
 
-### Phase 3: Promotion Intelligence (next)
+### Phase 3: Promotion Intelligence (planned, not yet implemented)
 
 1. Add explicit recurrence-based promotion reasons in `learning-promote-auto` output.
 2. Add deterministic “failure signature -> resolution signature” matching.
 3. Promote matched recurring fixes to QUEEN wisdom faster than generic patterns.
 
-### Phase 4: Session-Wide Coverage (next)
+### Phase 4: Session-Wide Coverage (planned, not yet implemented)
 
 1. Inject `context-capsule` into remaining long-running orchestration commands:
    - `/ant:continue`,

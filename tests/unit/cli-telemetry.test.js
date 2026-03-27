@@ -1,6 +1,13 @@
 const test = require('ava');
 const proxyquire = require('proxyquire');
 
+const { getModelNames, getDefaultModelForCaste } = require('../helpers/mock-profiles');
+
+// Module-level constants derived from YAML via helper
+const BUILDER_MODEL = getDefaultModelForCaste('builder');
+const ALT_MODEL = getModelNames()[0];  // glm-5
+const LIGHT_MODEL = getModelNames()[2]; // glm-4.5-air
+
 // ============================================================================
 // Mock Data Helpers
 // ============================================================================
@@ -10,7 +17,7 @@ function createMockSummary(options = {}) {
     totalSpawns = 10,
     totalModels = 2,
     models = {
-      'kimi-k2.5': {
+      [BUILDER_MODEL]: {
         total_spawns: 6,
         success_rate: 0.95,
         successful_completions: 5,
@@ -19,7 +26,7 @@ function createMockSummary(options = {}) {
           watcher: { spawns: 2, success: 1, failures: 0, blocked: 1 }
         }
       },
-      'glm-5': {
+      [ALT_MODEL]: {
         total_spawns: 4,
         success_rate: 0.5,
         successful_completions: 2,
@@ -29,8 +36,8 @@ function createMockSummary(options = {}) {
       }
     },
     recentDecisions = [
-      { timestamp: '2026-02-14T10:00:00Z', task: 'task-1', caste: 'builder', selected_model: 'kimi-k2.5', source: 'caste-default' },
-      { timestamp: '2026-02-14T10:05:00Z', task: 'task-2', caste: 'scout', selected_model: 'glm-5', source: 'task-based' }
+      { timestamp: '2026-02-14T10:00:00Z', task: 'task-1', caste: 'builder', selected_model: BUILDER_MODEL, source: 'caste-default' },
+      { timestamp: '2026-02-14T10:05:00Z', task: 'task-2', caste: 'scout', selected_model: ALT_MODEL, source: 'task-based' }
     ]
   } = options;
 
@@ -42,10 +49,10 @@ function createMockSummary(options = {}) {
   };
 }
 
-function createMockModelPerformance(modelName = 'kimi-k2.5') {
+function createMockModelPerformance(modelName = BUILDER_MODEL) {
   const performances = {
-    'kimi-k2.5': {
-      model: 'kimi-k2.5',
+    [BUILDER_MODEL]: {
+      model: BUILDER_MODEL,
       total_spawns: 6,
       successful_completions: 5,
       failed_completions: 0,
@@ -56,8 +63,8 @@ function createMockModelPerformance(modelName = 'kimi-k2.5') {
         watcher: { spawns: 2, success: 1, failures: 0, blocked: 1 }
       }
     },
-    'glm-5': {
-      model: 'glm-5',
+    [ALT_MODEL]: {
+      model: ALT_MODEL,
       total_spawns: 4,
       successful_completions: 2,
       failed_completions: 1,
@@ -123,10 +130,10 @@ test('telemetry summary lists all models with stats', async t => {
 
   const summary = mockSummary;
 
-  t.truthy(summary.models['kimi-k2.5']);
-  t.truthy(summary.models['glm-5']);
-  t.is(summary.models['kimi-k2.5'].total_spawns, 6);
-  t.is(summary.models['glm-5'].total_spawns, 4);
+  t.truthy(summary.models[BUILDER_MODEL]);
+  t.truthy(summary.models[ALT_MODEL]);
+  t.is(summary.models[BUILDER_MODEL].total_spawns, 6);
+  t.is(summary.models[ALT_MODEL].total_spawns, 4);
 });
 
 // ============================================================================
@@ -139,9 +146,9 @@ test('telemetry summary shows recent routing decisions', async t => {
 
   t.is(summary.recent_decisions.length, 2);
   t.is(summary.recent_decisions[0].caste, 'builder');
-  t.is(summary.recent_decisions[0].selected_model, 'kimi-k2.5');
+  t.is(summary.recent_decisions[0].selected_model, BUILDER_MODEL);
   t.is(summary.recent_decisions[1].caste, 'scout');
-  t.is(summary.recent_decisions[1].selected_model, 'glm-5');
+  t.is(summary.recent_decisions[1].selected_model, ALT_MODEL);
 });
 
 // ============================================================================
@@ -170,10 +177,10 @@ test('telemetry model displays detailed stats for valid model', async t => {
     getModelPerformance: (repoPath, modelName) => createMockModelPerformance(modelName)
   };
 
-  const performance = mockTelemetry.getModelPerformance('/fake/path', 'kimi-k2.5');
+  const performance = mockTelemetry.getModelPerformance('/fake/path', BUILDER_MODEL);
 
   t.truthy(performance);
-  t.is(performance.model, 'kimi-k2.5');
+  t.is(performance.model, BUILDER_MODEL);
   t.is(performance.total_spawns, 6);
   t.is(performance.successful_completions, 5);
   t.is(performance.failed_completions, 0);
@@ -189,7 +196,7 @@ test('telemetry model shows breakdown by caste', async t => {
     getModelPerformance: (repoPath, modelName) => createMockModelPerformance(modelName)
   };
 
-  const performance = mockTelemetry.getModelPerformance('/fake/path', 'kimi-k2.5');
+  const performance = mockTelemetry.getModelPerformance('/fake/path', BUILDER_MODEL);
 
   t.truthy(performance.by_caste);
   t.truthy(performance.by_caste.builder);
@@ -206,13 +213,13 @@ test('telemetry model calculates success rate correctly', async t => {
     getModelPerformance: (repoPath, modelName) => createMockModelPerformance(modelName)
   };
 
-  const kimiPerf = mockTelemetry.getModelPerformance('/fake/path', 'kimi-k2.5');
-  const glmPerf = mockTelemetry.getModelPerformance('/fake/path', 'glm-5');
+  const kimiPerf = mockTelemetry.getModelPerformance('/fake/path', BUILDER_MODEL);
+  const glmPerf = mockTelemetry.getModelPerformance('/fake/path', ALT_MODEL);
 
-  // kimi-k2.5: 5 successes / 6 spawns = 0.83
+  // Builder model: 5 successes / 6 spawns = 0.83
   t.is(kimiPerf.success_rate, 0.83);
 
-  // glm-5: 2 successes / 4 spawns = 0.5
+  // Alt model: 2 successes / 4 spawns = 0.5
   t.is(glmPerf.success_rate, 0.5);
 });
 
@@ -261,12 +268,12 @@ test('telemetry performance displays all columns correctly', async t => {
     .sort((a, b) => b.success_rate - a.success_rate);
 
   // Verify structure of ranked data
-  t.is(ranked[0].model, 'kimi-k2.5');
+  t.is(ranked[0].model, BUILDER_MODEL);
   t.is(ranked[0].total_spawns, 6);
   t.is(ranked[0].successful_completions, 5);
   t.is(ranked[0].success_rate, 0.95);
 
-  t.is(ranked[1].model, 'glm-5');
+  t.is(ranked[1].model, ALT_MODEL);
   t.is(ranked[1].total_spawns, 4);
   t.is(ranked[1].successful_completions, 2);
   t.is(ranked[1].success_rate, 0.5);
@@ -323,7 +330,7 @@ test('recent decisions are limited to last 10', async t => {
     timestamp: `2026-02-14T10:${String(i).padStart(2, '0')}:00Z`,
     task: `task-${i}`,
     caste: 'builder',
-    selected_model: 'kimi-k2.5',
+    selected_model: BUILDER_MODEL,
     source: 'test'
   }));
 

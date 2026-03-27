@@ -1,79 +1,61 @@
-# QUEEN.md — Colony Wisdom
+# QUEEN.md -- Colony Wisdom
 
 > Last evolved: {TIMESTAMP}
-> Colonies contributed: 0
-> Wisdom version: 1.0.0
+> Wisdom version: 2.0.0
 
 ---
 
-## 📜 Philosophies
+## User Preferences
 
-Core beliefs that guide all colony work. These are validated through repeated successful application across multiple colonies.
+Communication style, expertise level, and decision-making patterns observed from the user (the Queen). These shape how the colony communicates and what it prioritizes. User decisions are the most important wisdom.
 
-*No philosophies recorded yet. Philosophies are promoted from PHILOSOPHY pheromones after 5+ validations.*
-
----
-
-## 🧭 Patterns
-
-Validated approaches that consistently work. These represent discovered best practices that have proven themselves in the field.
-
-*No patterns recorded yet. Patterns are promoted from PATTERN pheromones after 3+ validations.*
+*No user preferences recorded yet.*
 
 ---
 
-## ⚠️ Redirects
+## Codebase Patterns
 
-Anti-patterns to avoid. These represent approaches that have caused problems and should be redirected away from.
+Validated approaches that work in this codebase, and anti-patterns to avoid. Includes architecture conventions, naming patterns, error handling style, and technology-specific insights. Tagged [repo] for project-specific or [general] for cross-colony patterns.
 
-*No redirects recorded yet. Redirects are promoted from REDIRECT pheromones after 2+ triggers.*
-
----
-
-## 🔧 Stack Wisdom
-
-Technology-specific insights and constraints detected through codebase analysis.
-
-*No stack wisdom recorded yet. Stack wisdom is auto-populated by `/ant:colonize`.*
+*No codebase patterns recorded yet.*
 
 ---
 
-## 🏛️ Decrees
+## Build Learnings
 
-User-mandated rules that override other guidance. These represent explicit directives from the Queen.
+What worked and what failed during builds. Captures the full picture of colony experience -- successes, failures, and adjustments. Each entry includes the phase where it was learned.
 
-*No decrees recorded yet. Decrees are added via `/ant:decree "<rule>"`.*
+*No build learnings recorded yet.*
 
 ---
 
-## 📊 Evolution Log
+## Instincts
 
-Track how wisdom has evolved over time.
+High-confidence behavioral patterns that have been validated through repeated colony work. Auto-promoted when confidence reaches 0.8 or higher. These represent the colony's deepest learned behaviors.
 
-| Date | Colony | Change | Details |
-|------|--------|--------|---------|
+*No instincts recorded yet.*
+
+---
+
+## Evolution Log
+
+| Date | Source | Type | Details |
+|------|--------|------|---------|
 | {TIMESTAMP} | system | initialized | QUEEN.md created from template |
 
 ---
 
 <!-- METADATA
 {
-  "version": "1.0.0",
+  "version": "2.0.0",
+  "wisdom_version": "2.0",
   "last_evolved": "{TIMESTAMP}",
   "colonies_contributed": [],
-  "promotion_thresholds": {
-    "philosophy": 5,
-    "pattern": 3,
-    "redirect": 2,
-    "stack": 1,
-    "decree": 0
-  },
   "stats": {
-    "total_philosophies": 0,
-    "total_patterns": 0,
-    "total_redirects": 0,
-    "total_stack_entries": 0,
-    "total_decrees": 0
+    "total_user_prefs": 0,
+    "total_codebase_patterns": 0,
+    "total_build_learnings": 0,
+    "total_instincts": 0
   }
 }
 -->

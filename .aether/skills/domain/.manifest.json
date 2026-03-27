@@ -1,0 +1,24 @@
+{
+  "managed_by": "aether",
+  "version": "2.1.0",
+  "skills": [
+    "django",
+    "docker",
+    "golang",
+    "graphql",
+    "html-css",
+    "nextjs",
+    "nodejs",
+    "postgresql",
+    "prisma",
+    "python",
+    "rails",
+    "react",
+    "rest-api",
+    "svelte",
+    "tailwind",
+    "testing",
+    "typescript",
+    "vue"
+  ]
+}

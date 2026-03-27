@@ -2,7 +2,8 @@
 name: aether-probe
 description: "Use this agent to generate tests, analyze coverage gaps, and discover edge cases. Probe writes test files and runs them to verify they pass — never modifies source code. Invoked by Queen and Builder when coverage is insufficient or test-first development is needed."
 tools: Read, Write, Edit, Bash, Grep, Glob
-model: inherit
+color: green
+model: sonnet
 ---
 
 <role>

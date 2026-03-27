@@ -419,8 +419,8 @@ test.serial('colony-prime includes instincts in prompt_section', async (t) => {
     t.true(resultJson.ok, 'Should return ok=true');
     t.true(resultJson.result.prompt_section.includes('INSTINCTS (Learned Behaviors)'),
       'Should contain INSTINCTS header');
-    t.true(resultJson.result.prompt_section.includes('when API calls fail'),
-      'Should contain instinct trigger text');
+    t.true(resultJson.result.prompt_section.includes('When API calls fail'),
+      'Should contain instinct trigger text (display adds When prefix)');
     t.true(resultJson.result.prompt_section.includes('add retry with backoff'),
       'Should contain instinct action text');
   } finally {
@@ -490,10 +490,309 @@ test.serial('complete pipeline: create -> read -> prime', async (t) => {
     const section = primeJson.result.prompt_section;
     t.true(section.includes('Testing:'), 'Should have Testing domain group');
     t.true(section.includes('Architecture:'), 'Should have Architecture domain group');
-    t.true(section.includes('when tests fail intermittently'), 'Should contain first instinct trigger');
-    t.true(section.includes('when file imports are circular'), 'Should contain second instinct trigger');
+    t.true(section.includes('When tests fail intermittently'), 'Should contain first instinct trigger (display adds When prefix)');
+    t.true(section.includes('When file imports are circular'), 'Should contain second instinct trigger (display adds When prefix)');
     t.true(section.includes('add retry logic to flaky tests'), 'Should contain first instinct action');
     t.true(section.includes('introduce interface layer'), 'Should contain second instinct action');
+  } finally {
+    await cleanupTempDir(tmpDir);
+  }
+});
+
+
+test.serial('colony-prime deduplicates "When" prefix in instinct display (no When-When)', async (t) => {
+  const tmpDir = await createTempDir();
+
+  try {
+    // Setup with instincts that already have "when"/"When" prefixes in triggers
+    await setupTestColony(tmpDir, {
+      instincts: [
+        {
+          id: 'instinct_lower',
+          trigger: 'when API calls fail',
+          action: 'add retry with backoff',
+          confidence: 0.8,
+          status: 'hypothesis',
+          domain: 'resilience',
+          source: 'phase-1',
+          evidence: [],
+          tested: false,
+          created_at: new Date().toISOString(),
+          last_applied: null,
+          applications: 0,
+          successes: 0,
+          failures: 0
+        },
+        {
+          id: 'instinct_upper',
+          trigger: 'When deploying to production',
+          action: 'run smoke tests first',
+          confidence: 0.9,
+          status: 'hypothesis',
+          domain: 'deployment',
+          source: 'phase-2',
+          evidence: [],
+          tested: false,
+          created_at: new Date().toISOString(),
+          last_applied: null,
+          applications: 0,
+          successes: 0,
+          failures: 0
+        },
+        {
+          id: 'instinct_noprefix',
+          trigger: 'working on database migrations',
+          action: 'backup first',
+          confidence: 0.7,
+          status: 'hypothesis',
+          domain: 'database',
+          source: 'phase-1',
+          evidence: [],
+          tested: false,
+          created_at: new Date().toISOString(),
+          last_applied: null,
+          applications: 0,
+          successes: 0,
+          failures: 0
+        }
+      ]
+    });
+
+    const result = runAetherUtil(tmpDir, 'colony-prime', ['--compact']);
+    const resultJson = JSON.parse(result);
+    t.true(resultJson.ok, 'Should return ok=true');
+
+    const section = resultJson.result.prompt_section;
+
+    // The display should NOT contain "When when" or "When When" (doubled prefix)
+    t.false(section.includes('When when'), 'Should NOT have "When when" (doubled prefix)');
+    t.false(section.includes('When When'), 'Should NOT have "When When" (doubled prefix)');
+
+    // Should have exactly one "When " prefix for each instinct
+    t.true(section.includes('When API calls fail'), 'lowercase "when" trigger should display as "When API calls fail"');
+    t.true(section.includes('When deploying to production'), 'uppercase "When" trigger should display as "When deploying to production"');
+    t.true(section.includes('When working on database migrations'), 'no-prefix trigger should display as "When working on database migrations"');
+  } finally {
+    await cleanupTempDir(tmpDir);
+  }
+});
+
+
+// ============================================================================
+// Fuzzy Dedup Tests (27-01)
+// ============================================================================
+
+test.serial('fuzzy dedup: similar trigger+action merges into single instinct', async (t) => {
+  const tmpDir = await createTempDir();
+
+  try {
+    await setupTestColony(tmpDir);
+
+    // Create instinct A -- both trigger and action use base forms
+    const create1 = runAetherUtil(tmpDir, 'instinct-create', [
+      '--trigger', 'when writing tests',
+      '--action', 'write tests for all new code',
+      '--confidence', '0.7',
+      '--domain', 'testing',
+      '--source', 'phase-1',
+      '--evidence', 'observed testing benefit'
+    ]);
+    const result1 = JSON.parse(create1);
+    t.true(result1.ok, 'First instinct-create should succeed');
+    t.is(result1.result.action, 'created', 'First should be created');
+
+    // Create instinct B with similar trigger+action via synonym substitution
+    // "when implementing tests" -> "writing testing" (implementing->writing, when->stop, tests->testing)
+    // "create tests for all new code" -> "writing testing for all new code" (create->writing, tests->testing)
+    // Both normalize to same form => Jaccard 1.00 for both fields
+    const create2 = runAetherUtil(tmpDir, 'instinct-create', [
+      '--trigger', 'when implementing tests',
+      '--action', 'create tests for all new code',
+      '--confidence', '0.9',
+      '--domain', 'testing',
+      '--source', 'phase-2',
+      '--evidence', 'confirmed testing value'
+    ]);
+    const result2 = JSON.parse(create2);
+    t.true(result2.ok, 'Second instinct-create should succeed');
+    t.is(result2.result.action, 'merged', 'Second should be merged (not created)');
+    t.is(result2.result.instinct_id, result1.result.instinct_id, 'Should merge into existing instinct');
+
+    // Verify only 1 instinct exists with averaged confidence
+    const stateFile = path.join(tmpDir, '.aether', 'data', 'COLONY_STATE.json');
+    const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+    t.is(state.memory.instincts.length, 1, 'Should have exactly 1 instinct after merge');
+
+    // Confidence should be averaged: (0.7 + 0.9) / 2 = 0.8
+    t.true(Math.abs(state.memory.instincts[0].confidence - 0.8) < 0.01,
+      'Confidence should be averaged to ~0.8');
+  } finally {
+    await cleanupTempDir(tmpDir);
+  }
+});
+
+
+test.serial('fuzzy dedup: below 80% threshold creates separate instincts', async (t) => {
+  const tmpDir = await createTempDir();
+
+  try {
+    await setupTestColony(tmpDir);
+
+    // Create instinct A
+    const create1 = runAetherUtil(tmpDir, 'instinct-create', [
+      '--trigger', 'when writing tests',
+      '--action', 'write tests for all new code',
+      '--confidence', '0.7',
+      '--domain', 'testing',
+      '--source', 'phase-1',
+      '--evidence', 'observed testing'
+    ]);
+    t.true(JSON.parse(create1).ok, 'First should succeed');
+
+    // Create instinct B with completely different trigger+action
+    const create2 = runAetherUtil(tmpDir, 'instinct-create', [
+      '--trigger', 'when deploying to production',
+      '--action', 'use blue-green deployment strategy',
+      '--confidence', '0.8',
+      '--domain', 'deployment',
+      '--source', 'phase-2',
+      '--evidence', 'deploy issue'
+    ]);
+    const result2 = JSON.parse(create2);
+    t.true(result2.ok, 'Second should succeed');
+    t.is(result2.result.action, 'created', 'Should create new instinct (no false merge)');
+
+    // Verify 2 separate instincts
+    const stateFile = path.join(tmpDir, '.aether', 'data', 'COLONY_STATE.json');
+    const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+    t.is(state.memory.instincts.length, 2, 'Should have 2 separate instincts');
+  } finally {
+    await cleanupTempDir(tmpDir);
+  }
+});
+
+
+test.serial('fuzzy dedup: only trigger matches does not merge', async (t) => {
+  const tmpDir = await createTempDir();
+
+  try {
+    await setupTestColony(tmpDir);
+
+    // Create instinct A
+    const create1 = runAetherUtil(tmpDir, 'instinct-create', [
+      '--trigger', 'when writing tests',
+      '--action', 'write tests for all new code',
+      '--confidence', '0.7',
+      '--domain', 'testing',
+      '--source', 'phase-1',
+      '--evidence', 'testing'
+    ]);
+    t.true(JSON.parse(create1).ok, 'First should succeed');
+
+    // Create instinct B: same trigger pattern but completely different action
+    const create2 = runAetherUtil(tmpDir, 'instinct-create', [
+      '--trigger', 'when implementing tests',
+      '--action', 'deploy to staging server immediately',
+      '--confidence', '0.8',
+      '--domain', 'deployment',
+      '--source', 'phase-2',
+      '--evidence', 'staging'
+    ]);
+    const result2 = JSON.parse(create2);
+    t.true(result2.ok, 'Second should succeed');
+    // Trigger matches (both normalize to "writing testing") but action is completely different
+    t.is(result2.result.action, 'created', 'Should NOT merge when only trigger matches');
+
+    // Verify 2 separate instincts
+    const stateFile = path.join(tmpDir, '.aether', 'data', 'COLONY_STATE.json');
+    const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+    t.is(state.memory.instincts.length, 2, 'Should have 2 instincts (action too different to merge)');
+  } finally {
+    await cleanupTempDir(tmpDir);
+  }
+});
+
+
+test.serial('normalize_text: casing and punctuation normalized', async (t) => {
+  const tmpDir = await createTempDir();
+
+  try {
+    await setupTestColony(tmpDir);
+
+    // Create instinct with mixed case and punctuation
+    const create1 = runAetherUtil(tmpDir, 'instinct-create', [
+      '--trigger', 'When Implementing Tests!',
+      '--action', 'Create tests for all new code.',
+      '--confidence', '0.7',
+      '--domain', 'testing',
+      '--source', 'phase-1',
+      '--evidence', 'punctuation test'
+    ]);
+    t.true(JSON.parse(create1).ok, 'First should succeed');
+
+    // Create instinct with same meaning, different casing/punctuation
+    const create2 = runAetherUtil(tmpDir, 'instinct-create', [
+      '--trigger', 'when writing tests',
+      '--action', 'write tests for all new code',
+      '--confidence', '0.9',
+      '--domain', 'testing',
+      '--source', 'phase-2',
+      '--evidence', 'case test'
+    ]);
+    const result2 = JSON.parse(create2);
+    t.true(result2.ok, 'Second should succeed');
+    t.is(result2.result.action, 'merged', 'Should merge despite casing/punctuation differences');
+
+    // Verify only 1 instinct
+    const stateFile = path.join(tmpDir, '.aether', 'data', 'COLONY_STATE.json');
+    const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+    t.is(state.memory.instincts.length, 1, 'Should have 1 instinct (punctuation/casing normalized)');
+  } finally {
+    await cleanupTempDir(tmpDir);
+  }
+});
+
+
+test.serial('fuzzy dedup: keeps longer text on merge', async (t) => {
+  const tmpDir = await createTempDir();
+
+  try {
+    await setupTestColony(tmpDir);
+
+    // Create instinct A with short trigger and action
+    const create1 = runAetherUtil(tmpDir, 'instinct-create', [
+      '--trigger', 'when writing tests',
+      '--action', 'write tests for new code',
+      '--confidence', '0.7',
+      '--domain', 'testing',
+      '--source', 'phase-1',
+      '--evidence', 'short text'
+    ]);
+    t.true(JSON.parse(create1).ok, 'First should succeed');
+
+    // Create instinct B with longer trigger and action (same meaning via synonyms)
+    // Both normalize identically: trigger -> "writing testing", action -> "writing testing for new code"
+    // But B uses longer words: "implementing" > "writing", "create" > "write"
+    const create2 = runAetherUtil(tmpDir, 'instinct-create', [
+      '--trigger', 'when implementing tests',
+      '--action', 'create tests for new code',
+      '--confidence', '0.9',
+      '--domain', 'testing',
+      '--source', 'phase-2',
+      '--evidence', 'long text'
+    ]);
+    const result2 = JSON.parse(create2);
+    t.true(result2.ok, 'Second should succeed');
+    t.is(result2.result.action, 'merged', 'Should merge');
+
+    // Verify merged instinct keeps the longer text
+    const stateFile = path.join(tmpDir, '.aether', 'data', 'COLONY_STATE.json');
+    const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+    t.is(state.memory.instincts.length, 1, 'Should have 1 instinct');
+    t.is(state.memory.instincts[0].trigger, 'when implementing tests',
+      'Should keep longer trigger (implementing vs writing)');
+    t.is(state.memory.instincts[0].action, 'create tests for new code',
+      'Should keep longer action (create vs write)');
   } finally {
     await cleanupTempDir(tmpDir);
   }

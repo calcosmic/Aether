@@ -306,14 +306,25 @@ test('COLONY_STATE.json events have required fields', t => {
     const event = data.events[i];
     const prefix = `Event ${i}`;
 
-    t.true('timestamp' in event, `${prefix} should have timestamp`);
-    t.true('type' in event, `${prefix} should have type`);
-    t.true('worker' in event, `${prefix} should have worker`);
-    t.true('details' in event, `${prefix} should have details`);
+    if (typeof event === 'string') {
+      // Pipe-delimited format: "timestamp|type|worker|details"
+      const parts = event.split('|');
+      t.true(parts.length >= 4, `${prefix} pipe-delimited event should have at least 4 parts`);
+      const timestamp = new Date(parts[0]);
+      t.false(isNaN(timestamp.getTime()), `${prefix} timestamp should be valid ISO 8601`);
+      t.truthy(parts[1], `${prefix} should have event type`);
+      t.truthy(parts[2], `${prefix} should have worker/source`);
+      t.truthy(parts[3], `${prefix} should have details`);
+    } else {
+      // Object format (legacy)
+      t.true('timestamp' in event, `${prefix} should have timestamp`);
+      t.true('type' in event, `${prefix} should have type`);
+      t.true('worker' in event, `${prefix} should have worker`);
+      t.true('details' in event, `${prefix} should have details`);
 
-    // Validate timestamp format (ISO 8601)
-    const timestamp = new Date(event.timestamp);
-    t.false(isNaN(timestamp.getTime()), `${prefix} timestamp should be valid ISO 8601`);
+      const timestamp = new Date(event.timestamp);
+      t.false(isNaN(timestamp.getTime()), `${prefix} timestamp should be valid ISO 8601`);
+    }
   }
 });
 

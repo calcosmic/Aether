@@ -1,0 +1,16 @@
+{
+  "managed_by": "aether",
+  "version": "2.1.0",
+  "skills": [
+    "build-discipline",
+    "colony-interaction",
+    "colony-lifecycle",
+    "colony-visuals",
+    "context-management",
+    "error-presentation",
+    "pheromone-protocol",
+    "pheromone-visibility",
+    "state-safety",
+    "worker-priming"
+  ]
+}

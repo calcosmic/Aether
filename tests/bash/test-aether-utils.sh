@@ -445,7 +445,7 @@ test_error_summary_empty() {
 }
 EOF
 
-    output=$(bash "$tmp_dir/.aether/aether-utils.sh" error-summary 2>&1)
+    output=$(bash "$tmp_dir/.aether/aether-utils.sh" error-summary 2>/dev/null)
     local exit_code=$?
 
     if ! assert_exit_code $exit_code 0; then
@@ -471,6 +471,39 @@ EOF
     total=$(echo "$output" | jq '.result.total')
     if [[ "$total" -ne 0 ]]; then
         test_fail "total: 0" "total: $total"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    rm -rf "$tmp_dir"
+    return 0
+}
+
+# ============================================================================
+# Test: error-summary emits deprecation warning
+# ============================================================================
+test_error_summary_deprecation_warning() {
+    local tmp_dir
+    tmp_dir=$(setup_isolated_env)
+
+    # Create COLONY_STATE.json with empty errors
+    cat > "$tmp_dir/.aether/data/COLONY_STATE.json" << 'EOF'
+{
+  "goal": "test",
+  "state": "active",
+  "current_phase": 1,
+  "plan": {},
+  "memory": {},
+  "errors": {"records": []},
+  "events": []
+}
+EOF
+
+    # Verify deprecation warning is emitted on stderr
+    local _stderr
+    _stderr=$(bash "$tmp_dir/.aether/aether-utils.sh" error-summary 2>&1 >/dev/null || true)
+    if [[ "$_stderr" != *"[deprecated]"* ]]; then
+        test_fail "stderr contains [deprecated]" "$_stderr"
         rm -rf "$tmp_dir"
         return 1
     fi
@@ -1641,6 +1674,7 @@ main() {
     run_test "test_flag_add_and_list" "flag-add creates flag, flag-list retrieves it"
     run_test "test_generate_ant_name" "generate-ant-name returns valid name"
     run_test "test_error_summary_empty" "error-summary with empty state"
+    run_test "test_error_summary_deprecation_warning" "error-summary emits deprecation warning on stderr"
     run_test "test_invalid_subcommand" "invalid subcommand returns error"
     run_test "test_check_antipattern" "check-antipattern analyzes files"
     run_test "test_bootstrap_system" "bootstrap-system handles missing hub gracefully"

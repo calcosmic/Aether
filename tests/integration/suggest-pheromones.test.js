@@ -660,6 +660,42 @@ test.serial('suggest-clear removes all recorded suggestions', async (t) => {
   }
 });
 
+test.serial('suggest-clear emits deprecation warning on stderr', async (t) => {
+  const tmpDir = await createTempDir();
+
+  try {
+    const { dataDir } = await setupTestColony(tmpDir);
+
+    // Create session.json with recorded suggestions
+    const sessionFile = path.join(dataDir, 'session.json');
+    await fs.promises.writeFile(sessionFile, JSON.stringify({
+      suggested_pheromones: [
+        { hash: 'hash1', type: 'FOCUS', suggested_at: '2026-02-22T00:00:00Z' }
+      ]
+    }, null, 2));
+
+    const scriptPath = path.join(process.cwd(), '.aether', 'aether-utils.sh');
+    const cmdEnv = {
+      ...process.env,
+      AETHER_ROOT: tmpDir,
+      DATA_DIR: dataDir
+    };
+
+    // Run suggest-clear capturing stderr separately
+    const result = require('child_process').spawnSync(
+      'bash', [scriptPath, 'suggest-clear'],
+      { encoding: 'utf8', env: cmdEnv, cwd: tmpDir }
+    );
+
+    t.true(
+      result.stderr.includes('[deprecated]'),
+      'suggest-clear should emit [deprecated] warning on stderr'
+    );
+  } finally {
+    await cleanupTempDir(tmpDir);
+  }
+});
+
 test.serial('suggest-quick-dismiss records all current suggestions', async (t) => {
   const tmpDir = await createTempDir();
 

@@ -193,7 +193,7 @@ while IFS= read -r question; do
   first_finding=$(echo "$question" | jq -r '[.key_findings[].text // .key_findings[]] | first // "No findings"' 2>/dev/null)
 
   bash "$UTILS" instinct-create \
-    --trigger "When researching: $q_text" \
+    --trigger "researching: $q_text" \
     --action "Oracle found (${q_confidence}% confidence): $findings_text" \
     --confidence "$(echo "scale=2; $q_confidence / 100" | bc)" \
     --domain "research" \
@@ -545,7 +545,7 @@ Now launch the loop. Try tmux first, fall back to manual.
 **Try tmux:**
 
 ```bash
-tmux new-session -d -s oracle "cd $(pwd) && bash .aether/oracle/oracle.sh; echo ''; echo '🔮 Oracle loop finished. Press any key to close.'; read -n1" 2>/dev/null && echo "TMUX_OK" || echo "TMUX_FAIL"
+tmux new-session -d -s oracle "cd $(pwd) && bash .aether/utils/oracle/oracle.sh; echo ''; echo '🔮 Oracle loop finished. Press any key to close.'; read -n1" 2>/dev/null && echo "TMUX_OK" || echo "TMUX_FAIL"
 ```
 
 **If TMUX_OK:**
@@ -580,7 +580,7 @@ Stop here.
    tmux not available. Run this in a separate terminal:
 
    cd {current_working_directory}
-   bash .aether/oracle/oracle.sh
+   bash .aether/utils/oracle/oracle.sh
 
    Then come back here:
    📊 Check status:   /ant:oracle status

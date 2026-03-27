@@ -1,0 +1,532 @@
+{
+  "version": "3.0",
+  "goal": "Implement Aether Skills Layer — smart-matched colony and domain skills for workers",
+  "state": "READY",
+  "current_phase": 5,
+  "session_id": "session_1774178419_8700",
+  "initialized_at": "2026-03-22T11:20:19Z",
+  "build_started_at": null,
+  "plan": {
+    "generated_at": "2026-03-22T11:57:30Z",
+    "confidence": 96,
+    "phases": [
+      {
+        "id": 1,
+        "name": "Skill Engine Foundation",
+        "description": "Create skills.sh utility with frontmatter parsing, index caching, codebase detection, skill matching, and injection. Wire into aether-utils.sh dispatch. Write and pass all tests.",
+        "status": "completed",
+        "tasks": [
+          {
+            "id": "1.1",
+            "goal": "Write failing bash tests for skill frontmatter parsing, index building, caching, role-based matching, role filtering, skill injection, and skill listing",
+            "status": "completed",
+            "constraints": [
+              "Follow test-helpers.sh pattern",
+              "Tests create isolated temp dirs with sample SKILL.md files"
+            ],
+            "hints": [
+              "See tests/bash/test-hive-wisdom.sh for pattern"
+            ],
+            "success_criteria": [
+              "tests/bash/test-skills.sh exists",
+              "All tests fail because subcommands don't exist yet"
+            ],
+            "depends_on": []
+          },
+          {
+            "id": "1.2",
+            "goal": "Create .aether/utils/skills.sh with all core functions: frontmatter parser, index builder, cached index reader, codebase detector, skill matcher, skill injector, skill lister, manifest reader, skill diff",
+            "status": "completed",
+            "constraints": [
+              "Follow _prefix_name() convention",
+              "Return JSON via json_ok/json_err",
+              "Use process substitution (not pipe-to-while) to avoid subshell variable loss",
+              "Use find for recursive file detection (not compgen -G with **)",
+              "Log trimmed skills to stderr when budget exceeded"
+            ],
+            "hints": [
+              "See .aether/utils/hive.sh for function patterns",
+              "Implementation plan has complete code at docs/plans/2026-03-22-aether-skills-layer.md"
+            ],
+            "success_criteria": [
+              ".aether/utils/skills.sh exists with all functions"
+            ],
+            "depends_on": []
+          },
+          {
+            "id": "1.3",
+            "goal": "Wire skills.sh into aether-utils.sh: add source line, add 10 dispatch cases, add Skills section to help",
+            "status": "completed",
+            "constraints": [
+              "Source after midden.sh",
+              "Use pattern matching to find insertion points"
+            ],
+            "hints": [
+              "Search for 'midden' in dispatch table to find insertion area"
+            ],
+            "success_criteria": [
+              "bash .aether/aether-utils.sh skill-list returns JSON",
+              "help output shows Skills section"
+            ],
+            "depends_on": [
+              "1.2"
+            ]
+          },
+          {
+            "id": "1.4",
+            "goal": "Create AVA unit tests for skill subcommands and add test:skills npm script to package.json",
+            "status": "completed",
+            "constraints": [
+              "Use execSync to call aether-utils.sh (follow existing AVA patterns)",
+              "Add test:skills script to package.json scripts"
+            ],
+            "hints": [
+              "See tests/unit/spawn-tree.test.js for pattern",
+              "npm run test:bash only runs test-aether-utils.sh — new test files need their own npm script"
+            ],
+            "success_criteria": [
+              "tests/unit/skills.test.js exists and passes",
+              "npm run test:skills runs bash tests"
+            ],
+            "depends_on": [
+              "1.3"
+            ]
+          },
+          {
+            "id": "1.5",
+            "goal": "Run all tests and verify everything passes",
+            "status": "completed",
+            "constraints": [],
+            "hints": [],
+            "success_criteria": [
+              "bash tests/bash/test-skills.sh passes all tests",
+              "npm run test:unit passes including skills tests"
+            ],
+            "depends_on": [
+              "1.4"
+            ]
+          }
+        ],
+        "success_criteria": [
+          "skills.sh exists with all core functions",
+          "All dispatch cases registered",
+          "All bash and AVA tests pass"
+        ]
+      },
+      {
+        "id": 2,
+        "name": "Skill Content Authoring",
+        "description": "Create all 10 colony SKILL.md files, all 18 domain SKILL.md files, both manifests, and domain README. Verify full library indexes correctly.",
+        "status": "completed",
+        "tasks": [
+          {
+            "id": "2.1",
+            "goal": "Create 10 colony skill directories and SKILL.md files under .aether/skills/colony/",
+            "status": "completed",
+            "constraints": [
+              "Frontmatter matches spec Section 5 exactly",
+              "Body teaches the process guide from spec"
+            ],
+            "hints": [
+              "Skills: colony-interaction, colony-visuals, pheromone-visibility, build-discipline, colony-lifecycle, context-management, state-safety, error-presentation, pheromone-protocol, worker-priming"
+            ],
+            "success_criteria": [
+              "10 directories with SKILL.md files exist",
+              "Each parses with skill-parse-frontmatter ok:true"
+            ],
+            "depends_on": [
+              "1.3"
+            ]
+          },
+          {
+            "id": "2.2",
+            "goal": "Create 18 domain skill directories and SKILL.md files under .aether/skills/domain/",
+            "status": "completed",
+            "constraints": [
+              "Frontmatter has detect_files and detect_packages matching spec Section 6",
+              "Body provides technical best practices"
+            ],
+            "hints": [
+              "Frontend: react, nextjs, vue, tailwind, html-css, svelte; Backend: nodejs, python, django, rails, golang; Data: postgresql, rest-api, graphql, prisma; Infra: docker, typescript, testing"
+            ],
+            "success_criteria": [
+              "18 directories with SKILL.md files exist",
+              "Each parses ok:true"
+            ],
+            "depends_on": [
+              "1.3"
+            ]
+          },
+          {
+            "id": "2.3",
+            "goal": "Create both .manifest.json files and domain README.md",
+            "status": "completed",
+            "constraints": [
+              "Colony manifest lists 10 skills",
+              "Domain manifest lists 18 skills"
+            ],
+            "hints": [],
+            "success_criteria": [
+              "Both manifests are valid JSON",
+              "skill-index returns skill_count: 28"
+            ],
+            "depends_on": [
+              "2.1",
+              "2.2"
+            ]
+          }
+        ],
+        "success_criteria": [
+          "28 SKILL.md files exist",
+          "Both manifests valid",
+          "skill-index returns 28"
+        ]
+      },
+      {
+        "id": 3,
+        "name": "Build Pipeline Integration",
+        "description": "Wire skill detection and per-worker injection into build-context.md, build-wave.md, AND build-verify.md so both builders and watchers receive matched skills.",
+        "status": "completed",
+        "tasks": [
+          {
+            "id": "3.1",
+            "goal": "Add skill detection step to build-context.md (index + detect, store results as cross-stage state)",
+            "status": "completed",
+            "constraints": [
+              "Insert after colony-prime step",
+              "Display indexed and matched counts to user"
+            ],
+            "hints": [
+              "Plan Task 5 Step 1 has the markdown"
+            ],
+            "success_criteria": [
+              "build-context.md contains skill detection step"
+            ],
+            "depends_on": [
+              "1.3"
+            ]
+          },
+          {
+            "id": "3.2",
+            "goal": "Add per-worker skill injection to build-wave.md (match by builder role + task, append skill_section after prompt_section)",
+            "status": "completed",
+            "constraints": [
+              "Insert after prompt_section injection",
+              "Display colony + domain skill counts per worker"
+            ],
+            "hints": [
+              "Plan Task 5 Step 2 has the markdown"
+            ],
+            "success_criteria": [
+              "build-wave.md contains skill injection section"
+            ],
+            "depends_on": [
+              "1.3"
+            ]
+          },
+          {
+            "id": "3.3",
+            "goal": "Add skill injection to build-verify.md watcher prompt (same mechanism as build-wave.md but for watcher role)",
+            "status": "completed",
+            "constraints": [
+              "Watcher prompt already has { prompt_section } — add { skill_section } alongside it",
+              "Match skills for watcher role, not builder"
+            ],
+            "hints": [
+              "build-verify.md line 27 has the existing prompt_section injection point"
+            ],
+            "success_criteria": [
+              "build-verify.md watcher prompt includes skill_section"
+            ],
+            "depends_on": [
+              "1.3"
+            ]
+          }
+        ],
+        "success_criteria": [
+          "Skill detection runs once per build",
+          "Builders receive matched skills",
+          "Watchers receive matched skills",
+          "Autopilot (/ant:run) gets skills automatically via same playbooks"
+        ]
+      },
+      {
+        "id": 4,
+        "name": "Hub Distribution and Skill Creation Command",
+        "description": "Add manifest-aware skills sync to setupHub, create /ant:skill-create command with OpenCode parity stub.",
+        "status": "completed",
+        "tasks": [
+          {
+            "id": "4.1",
+            "goal": "Add skills directory sync to setupHub in bin/cli.js — copy managed skills to ~/.aether/skills/ while preserving user-created skills",
+            "status": "completed",
+            "constraints": [
+              "Skills go to ~/.aether/skills/ (NOT ~/.aether/system/skills/)",
+              "Read .manifest.json to determine Aether-managed skills",
+              "Never modify or delete user-created skills",
+              "Log notice when user skill conflicts with shipped name"
+            ],
+            "hints": [
+              "Plan Task 6 has the setupHub code"
+            ],
+            "success_criteria": [
+              "After npm install -g, ~/.aether/skills/ has 28 skill directories",
+              "User-created skills are preserved"
+            ],
+            "depends_on": [
+              "2.3"
+            ]
+          },
+          {
+            "id": "4.2",
+            "goal": "Create /ant:skill-create slash command for Claude Code with Oracle research wizard",
+            "status": "completed",
+            "constraints": [
+              "Must be at .claude/commands/ant/skill-create.md",
+              "Uses Oracle mini-research + AskUserQuestion wizard",
+              "Writes to ~/.aether/skills/domain/{name}/SKILL.md",
+              "Rebuilds index cache after creation"
+            ],
+            "hints": [
+              "Spec Section 7 has the complete flow"
+            ],
+            "success_criteria": [
+              "Command file exists and follows wizard flow"
+            ],
+            "depends_on": []
+          },
+          {
+            "id": "4.3",
+            "goal": "Create matching OpenCode command stub at .opencode/commands/ant/skill-create.md for lint:sync parity",
+            "status": "completed",
+            "constraints": [
+              "CRITICAL: filename must match exactly or lint:sync fails (exit 1)",
+              "Content adapted for OpenCode (uses normalize-args pattern)",
+              "Follow existing OpenCode command format"
+            ],
+            "hints": [
+              "See .opencode/commands/ant/preferences.md for format pattern"
+            ],
+            "success_criteria": [
+              "File exists",
+              "npm run lint:sync passes (command counts match)"
+            ],
+            "depends_on": [
+              "4.2"
+            ]
+          },
+          {
+            "id": "4.4",
+            "goal": "Run npm run lint:sync to verify command parity",
+            "status": "completed",
+            "constraints": [],
+            "hints": [],
+            "success_criteria": [
+              "lint:sync exits 0"
+            ],
+            "depends_on": [
+              "4.3"
+            ]
+          }
+        ],
+        "success_criteria": [
+          "setupHub installs skills with manifest protection",
+          "skill-create command exists in both Claude and OpenCode",
+          "lint:sync passes"
+        ]
+      },
+      {
+        "id": 5,
+        "name": "Documentation and Validation",
+        "description": "Update CLAUDE.md and aether-colony.md, run full test suite, linters, package validation, and end-to-end skill flow.",
+        "status": "completed",
+        "tasks": [
+          {
+            "id": "5.1",
+            "goal": "Add Skills System section to CLAUDE.md and update Quick Reference table",
+            "status": "completed",
+            "constraints": [
+              "Insert after Pheromone System section",
+              "Include subcommand reference table",
+              "Update command counts"
+            ],
+            "hints": [],
+            "success_criteria": [
+              "CLAUDE.md documents skills system"
+            ],
+            "depends_on": []
+          },
+          {
+            "id": "5.2",
+            "goal": "Add /ant:skill-create to aether-colony.md Available Commands table",
+            "status": "completed",
+            "constraints": [],
+            "hints": [],
+            "success_criteria": [
+              "Command listed in rules file"
+            ],
+            "depends_on": []
+          },
+          {
+            "id": "5.3",
+            "goal": "Run full test suite, linters, and package validation",
+            "status": "completed",
+            "constraints": [
+              "All 530+ existing tests must still pass",
+              "npm run lint must pass including lint:sync"
+            ],
+            "hints": [],
+            "success_criteria": [
+              "npm test exits 0",
+              "npm run lint exits 0",
+              "bash bin/validate-package.sh exits 0"
+            ],
+            "depends_on": [
+              "1.5",
+              "2.3",
+              "3.3",
+              "4.4"
+            ]
+          },
+          {
+            "id": "5.4",
+            "goal": "Run end-to-end skill flow: index → detect → match → inject and verify non-empty skill_section",
+            "status": "completed",
+            "constraints": [
+              "Use installed skills at ~/.aether/skills/"
+            ],
+            "hints": [
+              "Plan Task 10 Step 4 has the commands"
+            ],
+            "success_criteria": [
+              "skill-index returns skill_count >= 28",
+              "skill-match returns at least 1 colony skill",
+              "skill-inject returns non-empty skill_section"
+            ],
+            "depends_on": [
+              "4.1"
+            ]
+          }
+        ],
+        "success_criteria": [
+          "Docs updated",
+          "All tests pass",
+          "Linters pass",
+          "E2E flow works"
+        ]
+      }
+    ]
+  },
+  "memory": {
+    "phase_learnings": [
+      {
+        "id": "learning_1774184110",
+        "phase": 1,
+        "phase_name": "Skill Engine Foundation",
+        "learnings": [
+          {
+            "claim": "Process substitution (< <(cmd)) avoids subshell variable loss in while loops piped from jq — critical for accumulating results in bash",
+            "status": "validated",
+            "tested": true,
+            "evidence": "19 bash tests pass including scoring loops that modify variables inside while loops",
+            "disproven_by": null
+          },
+          {
+            "claim": "TDD with background agents works well — write tests first in one agent, implementation in parallel agent, then merge results",
+            "status": "validated",
+            "tested": true,
+            "evidence": "Forge-1 wrote 9 failing tests while Anvil-2 built skills.sh; all tests passed on first wire-up",
+            "disproven_by": null
+          }
+        ],
+        "timestamp": "2026-03-22T12:55:10Z"
+      },
+      {
+        "id": "learning_1774185607",
+        "phase": 2,
+        "phase_name": "Skill Content Authoring",
+        "learnings": [
+          {
+            "claim": "Parallel agents for content authoring (colony vs domain) is highly efficient — independent file sets with no conflicts",
+            "status": "validated",
+            "tested": true,
+            "evidence": "28 SKILL.md files created by 2 parallel builders with zero file conflicts",
+            "disproven_by": null
+          }
+        ],
+        "timestamp": "2026-03-22T13:20:07Z"
+      },
+      {
+        "id": "learning_1774186027",
+        "phase": 3,
+        "phase_name": "Build Pipeline Integration",
+        "learnings": [
+          {
+            "claim": "Playbook modifications (markdown instruction files) can safely be parallelized when each agent edits a different file — no merge conflicts",
+            "status": "validated",
+            "tested": true,
+            "evidence": "3 agents edited build-context.md, build-wave.md, and build-verify.md simultaneously with zero conflicts",
+            "disproven_by": null
+          }
+        ],
+        "timestamp": "2026-03-22T13:27:07Z"
+      }
+    ],
+    "decisions": [
+      "Skills inject outside colony-prime as separate skill_section with 12K budget",
+      "Skills install to ~/.aether/skills/ (not ~/.aether/system/skills/)",
+      "OpenCode command parity required for lint:sync (hard gate)",
+      "New bash tests need explicit npm script (test:skills) — not auto-discovered",
+      "Watcher prompt in build-verify.md also needs skill injection",
+      "Autopilot uses same playbooks — no separate code path to maintain"
+    ],
+    "instincts": [
+      {
+        "id": "instinct_1774184116",
+        "trigger": "building bash utilities with scoring/accumulation loops",
+        "action": "use process substitution (< <(jq)) not pipes to while loops — pipes create subshells that lose variable modifications",
+        "confidence": 0.85,
+        "status": "hypothesis",
+        "domain": "architecture",
+        "source": "phase-1",
+        "evidence": [
+          "19 tests validated scoring functions work correctly with process substitution"
+        ],
+        "tested": false,
+        "created_at": "2026-03-22T12:55:16Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      }
+    ]
+  },
+  "errors": {
+    "records": [],
+    "flagged_patterns": []
+  },
+  "signals": [],
+  "graveyards": [],
+  "events": [
+    "2026-03-22T11:20:19Z|colony_initialized|init|Colony initialized with goal: Implement Aether Skills Layer — smart-matched colony and domain skills for workers",
+    "2026-03-22T11:57:30Z|plan_generated|plan|Generated 5 phases with 96% confidence",
+    "2026-03-22T12:12:27Z|phase_started|build|Phase 1: Skill Engine Foundation started",
+    "2026-03-22T12:27:22Z|phase_completed|build|Phase 1: Skill Engine Foundation completed — 24 tests passing",
+    "2026-03-22T12:55:10Z|phase_advanced|continue|Completed Phase 1: Skill Engine Foundation, advancing to Phase 2: Skill Content Authoring",
+    "2026-03-22T12:57:02Z|phase_started|build|Phase 2: Skill Content Authoring started",
+    "2026-03-22T13:05:56Z|phase_completed|build|Phase 2: Skill Content Authoring completed — 28 SKILL.md files, skill-index returns 28",
+    "2026-03-22T13:20:07Z|phase_advanced|continue|Completed Phase 2: Skill Content Authoring, advancing to Phase 3: Build Pipeline Integration",
+    "2026-03-22T13:21:01Z|phase_started|build|Phase 3: Build Pipeline Integration started",
+    "2026-03-22T13:25:07Z|phase_completed|build|Phase 3: Build Pipeline Integration completed — skill injection in all 3 playbooks",
+    "2026-03-22T13:27:07Z|phase_advanced|continue|Completed Phase 3: Build Pipeline Integration, advancing to Phase 4: Hub Distribution and Skill Creation Command",
+    "2026-03-22T13:29:29Z|phase_started|build|Phase 4: Hub Distribution and Skill Creation Command started",
+    "2026-03-22T13:35:42Z|phase_completed|build|Phase 4: Hub Distribution and Skill Creation completed — setupHub sync, skill-create command, lint:sync 44/44",
+    "2026-03-22T13:42:32Z|phase_advanced|continue|Completed Phase 4, advancing to Phase 5: Documentation and Validation",
+    "2026-03-22T13:43:58Z|phase_started|build|Phase 5: Documentation and Validation started",
+    "2026-03-22T13:46:08Z|phase_completed|build|Phase 5: Documentation and Validation completed — all tests pass, linters pass, E2E verified",
+    "2026-03-22T14:07:48Z|all_phases_complete|continue|All 5 phases verified and complete — Skills Layer fully implemented",
+    "2026-03-22T14:23:17Z|milestone_reached|seal|Achieved Crowned Anthill milestone"
+  ],
+  "milestone": "Crowned Anthill",
+  "milestone_updated_at": "2026-03-22T14:23:17Z"
+}

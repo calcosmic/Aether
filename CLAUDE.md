@@ -1,8 +1,8 @@
 # CLAUDE.md — Aether Development Guide
 
-> **Current Version:** v1.3.0
+> **Current Version:** v2.0.0
 > **Architecture:** v4.0 (runtime/ eliminated, direct packaging)
-> **Last Updated:** 2026-03-19 (v1.3 documentation update, integration complete)
+> **Last Updated:** 2026-03-24 (post-hardening accuracy sweep)
 
 ---
 
@@ -10,11 +10,13 @@
 
 | What | Count/Status |
 |------|--------------|
-| Version | v1.3.0 |
-| Slash commands | 40 (Claude) + 39 (OpenCode) |
-| Agent definitions | 22 |
-| aether-utils.sh | 10,000+ lines, 110 subcommands |
-| Tests | 530+ passing |
+| Version | v2.0.0 |
+| Slash commands | ~44 (Claude) + ~44 (OpenCode) |
+| Agent definitions | 24 |
+| Skills | 28 (10 colony + 18 domain) |
+| aether-utils.sh | ~5,200 lines (dispatcher), ~150 subcommands across all modules |
+| Utils | ~29 scripts (9 domain modules + infrastructure + XML) |
+| Tests | 580+ passing |
 | Architecture doc | `RUNTIME UPDATE ARCHITECTURE.md` |
 
 ---
@@ -27,21 +29,42 @@
 │                                                                  │
 │   .aether/             ← SOURCE OF TRUTH (packaged directly)    │
 │   ├── workers.md       (edit here)                              │
-│   ├── aether-utils.sh  (10,000+ lines, 110 subcommands)          │
-│   ├── utils/           (18 utility scripts)                     │
+│   ├── aether-utils.sh  (dispatcher, ~5,200 lines, ~150 subcmds) │
+│   ├── utils/           (~29 scripts, modular architecture)      │
+│   │   ├── Domain modules (9):                                   │
+│   │   │   flag.sh, spawn.sh, session.sh, suggest.sh,            │
+│   │   │   queen.sh, swarm.sh, learning.sh, pheromone.sh,        │
+│   │   │   state-api.sh                                          │
+│   │   ├── Infrastructure:                                       │
+│   │   │   file-lock.sh, atomic-write.sh, error-handler.sh,      │
+│   │   │   hive.sh, midden.sh, skills.sh                         │
+│   │   └── XML + other:                                          │
+│   │       xml-core.sh, xml-query.sh, xml-compose.sh,            │
+│   │       xml-convert.sh, xml-utils.sh, swarm-display.sh, ...   │
+│   ├── skills/          colony/ (10) + domain/ (18)              │
 │   ├── docs/            (distributed documentation)              │
 │   └── templates/       (12 templates)                           │
 │                                                                  │
 │   .aether/data/        ← LOCAL ONLY (excluded by .npmignore)    │
 │   .aether/dreams/      ← LOCAL ONLY (excluded by .npmignore)    │
 │                                                                  │
-│   .claude/commands/ant/ ← 40 slash commands (Claude Code)       │
-│   .claude/agents/ant/   ← 22 agent definitions                  │
-│   .opencode/commands/ant/ ← 39 slash commands (OpenCode)        │
+│   .claude/commands/ant/ ← 44 slash commands (Claude Code)       │
+│   .claude/agents/ant/   ← 24 agent definitions                  │
+│   .opencode/commands/ant/ ← 44 slash commands (OpenCode)        │
 │   .opencode/agents/     ← Agent definitions (OpenCode)          │
+│                                                                  │
+│   ~/.aether/           ← HUB (cross-colony, user-level)         │
+│   ├── QUEEN.md         (wisdom + user preferences)               │
+│   ├── hive/            (Hive Brain — cross-colony wisdom)        │
+│   │   └── wisdom.json  (200-entry cap, LRU eviction)            │
+│   └── eternal/         (hive memory — high-value signals)        │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+Colony-prime assembles worker context from: QUEEN.md wisdom, eternal memory,
+pheromone signals, phase learnings, key decisions, blocker flags, user preferences,
+and context capsule — all within a token budget (see Token Budget below).
 
 **See `RUNTIME UPDATE ARCHITECTURE.md` for complete distribution flow.**
 
@@ -64,6 +87,20 @@
 | OpenCode agents | `.opencode/agents/` | OpenCode worker definitions |
 | Your notes | `.aether/dreams/` | Never distributed |
 | Dev docs | `.aether/docs/known-issues.md` | Distributed |
+
+### Autopilot
+
+`/ant:run` — Autopilot that builds, verifies, learns, and advances through phases automatically.
+
+```bash
+/ant:run                       # Run all remaining phases
+/ant:run --max-phases 2        # Run at most 2 phases then stop
+/ant:run --replan-interval 3   # Suggest replan every 3 phases
+/ant:run --continue            # Resume after replan pause
+/ant:run --dry-run             # Preview the autopilot plan
+```
+
+Smart pause conditions: test failures, critical Chaos findings, security gate failures, quality gate failures, runtime verification needed, replan suggestions.
 
 ### Publishing Changes
 
@@ -91,12 +128,19 @@ aether update      # or /ant:update
 ```
 .aether/
 ├── workers.md           # Worker definitions, spawn protocol
-├── aether-utils.sh      # 110 subcommands for state management
-├── utils/               # 18 utility scripts
-│   ├── file-lock.sh     # Locking primitives
-│   ├── atomic-write.sh  # Safe file writes
-│   ├── swarm-display.sh # Visualization
-│   └── xml-*.sh         # XML processing
+├── aether-utils.sh      # Dispatcher (~5,200 lines, ~150 subcommands across all modules)
+├── utils/               # ~29 scripts (modular architecture)
+│   ├── Domain modules (9 -- extracted from monolith in Phase 13):
+│   │   flag.sh, spawn.sh, session.sh, suggest.sh,
+│   │   queen.sh, swarm.sh, learning.sh, pheromone.sh, state-api.sh
+│   ├── Infrastructure:
+│   │   file-lock.sh, atomic-write.sh, error-handler.sh,
+│   │   hive.sh, midden.sh, skills.sh
+│   ├── XML utilities:
+│   │   xml-core.sh, xml-query.sh, xml-compose.sh,
+│   │   xml-convert.sh, xml-utils.sh
+│   └── Other:
+│       swarm-display.sh, spawn-tree.sh, oracle.sh, ...
 ├── templates/           # 12 templates (colony-state, pheromones, etc.)
 ├── docs/                # Distributed documentation
 ├── exchange/            # XML exchange modules (pheromone-xml, wisdom-xml)
@@ -115,13 +159,13 @@ aether update      # or /ant:update
 
 ```
 .claude/
-├── commands/ant/        # 40 slash commands
+├── commands/ant/        # 44 slash commands
 │   ├── init.md          # Colony initialization
 │   ├── plan.md          # Phase planning
 │   ├── build.md         # Build orchestrator (loads split playbooks)
 │   ├── continue.md      # Continue orchestrator (loads split playbooks)
 │   └── ...
-├── agents/ant/          # 22 agent definitions
+├── agents/ant/          # 24 agent definitions
 │   ├── aether-builder.md
 │   ├── aether-watcher.md
 │   ├── aether-scout.md
@@ -163,7 +207,7 @@ Consolidated guidelines in `.claude/rules/`:
 
 ---
 
-## The 22 Agents
+## The 24 Agents
 
 | Tier | Agent | Role |
 |------|-------|------|
@@ -172,6 +216,7 @@ Consolidated guidelines in `.claude/rules/`:
 | Orchestration | Queen | Orchestrates phases, spawns workers |
 | Orchestration | Scout | Researches, gathers information |
 | Orchestration | Route-Setter | Plans phases, breaks down goals |
+| Orchestration | Architect | Architecture design, structural planning |
 | Surveyor | surveyor-nest | Maps directory structure |
 | Surveyor | surveyor-disciplines | Documents conventions |
 | Surveyor | surveyor-pathogens | Identifies tech debt |
@@ -187,6 +232,7 @@ Consolidated guidelines in `.claude/rules/`:
 | Niche | Includer | Accessibility audits |
 | Niche | Measurer | Performance analysis (NEW) |
 | Niche | Sage | Wisdom synthesis |
+| Niche | Oracle | Deep research, actionable recommendations |
 | Niche | Ambassador | External integrations |
 | Niche | Chronicler | Documentation |
 
@@ -211,10 +257,20 @@ User-colony communication via signals:
 - `/ant:pheromones` — Full table of all active signals
 - `pheromone-display` subcommand — Formatted output with strength % and decay
 
-**Signal Injection (v1.3):**
+**Signal Injection:**
 - Colony-prime injects active signals into worker prompts via `prompt_section`
-- Builder, Watcher, and Scout agents have `pheromone_protocol` sections (added Phase 4) that instruct them how to act on injected signals
+- Builder, Watcher, and Scout agents have `pheromone_protocol` sections that instruct them how to act on injected signals
 - Signals are grouped by type (FOCUS, REDIRECT, FEEDBACK) in the injected prompt section
+
+**Content Deduplication (v2.0):**
+- Each signal gets a SHA-256 `content_hash` on creation
+- Writing a duplicate (same type + content hash) reinforces the existing signal instead of creating a new one (strength maxed, `reinforcement_count` incremented)
+- `suggest-analyze` deduplicates suggestions against existing active signals and session suggestions
+
+**Prompt Injection Sanitization (v2.0):**
+- Pheromone content is sanitized before storage: XML structural tags rejected, angle brackets escaped, shell injection patterns blocked
+- Text patterns that attempt LLM instruction override (e.g., "ignore previous instructions") are rejected
+- Content capped at 500 characters
 
 **Exchange:**
 - `/ant:export-signals` — Export pheromone signals to XML for cross-colony sharing
@@ -232,13 +288,190 @@ User-colony communication via signals:
 
 ---
 
+## Skills System
+
+Skills provide reusable behavior modules and domain knowledge that workers can load
+on demand. They come in two categories:
+
+- **Colony skills** (10) — Behavioral patterns that shape how workers operate
+  (e.g., TDD discipline, error handling conventions, commit style)
+- **Domain skills** (18) — Technical knowledge for specific frameworks, languages,
+  or tools (e.g., React patterns, Go idioms, database optimization)
+
+### Where Skills Live
+
+| Location | Purpose |
+|----------|---------|
+| `.aether/skills/` | Source of truth (packaged with Aether) |
+| `~/.aether/skills/` | Installed skills (hub-level, shared across colonies) |
+| `~/.aether/skills/domain/` | Custom user-created domain skills |
+
+### How Matching Works
+
+1. Colony-prime builds a skills index via `skill-index` (cached for performance)
+2. `skill-match` scores each skill against the current worker using:
+   - Worker role (builder, watcher, etc.)
+   - Active pheromone signals (FOCUS/REDIRECT)
+   - `skill-detect` patterns matched against the codebase
+3. Top 3 colony skills + top 3 domain skills are selected per worker
+
+### Skill Injection
+
+Skill content is injected separately from colony-prime context:
+
+- Own 8K character budget (independent of the colony-prime token budget)
+- Injected into builder and watcher prompts
+- `skill-inject` assembles matched skills into a prompt section
+
+### Subcommands
+
+| Subcommand | Purpose |
+|------------|---------|
+| `skill-index` | Build/read cached skills index |
+| `skill-detect` | Detect domain skills matching codebase |
+| `skill-match` | Match skills to worker by role + task + pheromones |
+| `skill-inject` | Load matched skills into prompt section |
+| `skill-list` | List all installed skills |
+| `skill-parse-frontmatter` | Parse SKILL.md frontmatter to JSON |
+| `skill-diff` | Compare user skill with shipped version |
+| `skill-cache-rebuild` | Force rebuild of index cache |
+
+### Custom Skills
+
+- `/ant:skill-create` — Oracle-powered skill generation from a description
+- Manual creation: add a `SKILL.md` file to `~/.aether/skills/domain/`
+- Each skill uses frontmatter (name, category, detect patterns, roles)
+
+### Update Safety
+
+- Manifest-based tracking ensures shipped skills update cleanly
+- User-created or user-modified skills are never overwritten during `aether update`
+
+---
+
+## Token Budget
+
+Colony-prime assembles worker context within a character budget to avoid prompt bloat:
+
+| Mode | Budget | When |
+|------|--------|------|
+| Normal | 8,000 chars | Default |
+| Compact | 4,000 chars | `--compact` flag or auto-detected |
+
+**Trim order** (first trimmed = lowest retention priority):
+1. Rolling summary (trimmed first -- lowest retention priority)
+2. Phase learnings
+3. Key decisions
+4. Hive wisdom
+5. Context capsule
+6. User preferences
+7. QUEEN.md wisdom
+8. Pheromone signals (trimmed last -- highest retention priority)
+9. Blockers (NEVER trimmed)
+
+Trimmed sections are logged for debugging. See `pheromone.sh` lines 1284-1340 for implementation.
+
+---
+
+## Hive Brain (Cross-Colony Wisdom)
+
+The Hive Brain is the intelligent layer for cross-colony knowledge sharing. It stores
+generalized wisdom derived from colony instincts, scoped by domain, and shared across
+all colonies on the same machine.
+
+### Storage
+
+```
+~/.aether/hive/
+└── wisdom.json          # Cross-colony wisdom (200-entry cap, LRU eviction)
+```
+
+- Entries are capped at 200; least-recently-used entries are evicted when full
+- Hub-level file locking prevents concurrent write corruption
+
+### Subcommands
+
+| Subcommand | Purpose |
+|------------|---------|
+| `hive-init` | Initialize `~/.aether/hive/` directory and empty `wisdom.json` |
+| `hive-store` | Store a wisdom entry with deduplication, merge, and 200-cap enforcement |
+| `hive-read` | Read wisdom with domain filtering, confidence threshold, and access tracking |
+| `hive-abstract` | Generalize a repo-specific instinct into cross-colony wisdom text |
+| `hive-promote` | Orchestrate the abstract + store pipeline (end-to-end promotion) |
+
+### Domain-Scoped Retrieval
+
+Colony-prime retrieves hive wisdom scoped to the current project's domain:
+
+1. Reads domain tags from the colony registry entry for the current repo
+2. Calls `hive-read` with those domain tags and a confidence threshold
+3. Injects domain-relevant wisdom into worker prompts as `HIVE WISDOM (Cross-Colony Patterns)`
+4. **Fallback chain:** hive -> eternal -> empty (graceful degradation if no wisdom exists)
+
+### Seal Promotion Hook
+
+During `/ant:seal` (Step 3.7), high-confidence instincts are promoted to the hive:
+
+1. Extracts instincts with confidence >= 0.8 from `COLONY_STATE.json`
+2. Promotes each via `hive-promote` with `--text` and `--source-repo`
+3. **NON-BLOCKING** — promotion failures are logged but never stop the seal
+
+### Multi-Repo Confidence Boosting
+
+When the same wisdom is confirmed across multiple repositories, confidence increases:
+
+| Repos Confirming | Confidence |
+|-----------------|------------|
+| 2 repos | 0.70 |
+| 3 repos | 0.85 |
+| 4+ repos | 0.95 |
+
+- Confidence is **never downgraded** — uses max of current value and tier value
+- Same-repo re-promotion is deduplicated (no duplicate entries)
+
+### Legacy: Eternal Memory
+
+The older eternal memory system (`~/.aether/eternal/`) remains as a fallback:
+
+- `~/.aether/eternal/memory.json` — High-value signals promoted from expired pheromones
+- `eternal-store` / `eternal-init` subcommands still functional
+- Colony-prime falls back to eternal memory when hive has no matching entries
+
+---
+
+## User Preferences
+
+User preferences are stored in the hub `~/.aether/QUEEN.md` under the `## User Preferences` section.
+
+| Command | Purpose |
+|---------|---------|
+| `/ant:preferences "text"` | Add a user preference to hub QUEEN.md |
+| `/ant:preferences --list` | List all user preferences |
+
+- Preferences capture communication style, expertise level, and decision patterns
+- Colony-prime injects user preferences into worker context
+- Max 500 characters per preference entry
+
+---
+
+## Registry
+
+Colony registry tracks all repos using Aether (`~/.aether/registry/`):
+
+- **Domain tags** — Categorize colonies by domain (e.g., `["web", "api"]`)
+- **Colony goal tracking** — `last_colony_goal` stored per repo entry
+- **Active status** — `active_colony` flag per repo
+- Legacy entries are auto-normalized with default values on read
+
+---
+
 ## Quality Gates
 
 New agents integrated into continue.md:
 
 ### Gatekeeper (Security)
 - Runs after verification passes
-- Scans for exposed secrets, debug artifacts
+- Scans for exposed secrets, debug artifacts via `check-antipattern` (~6 patterns -- not a full security scanner)
 - Creates blockers if security issues found
 
 ### Auditor (Quality)
@@ -265,6 +498,8 @@ The midden tracks failures for colony learning:
 - `.aether/data/midden/midden.json` — Failure records
 - `midden-write` — Log a failure
 - `midden-recent-failures` — Query recent failures
+- `midden-review` — Review unacknowledged midden entries grouped by category
+- `midden-acknowledge` — Mark midden entries as addressed by id or category
 
 Failures are logged during:
 - Build failures (build.md)
@@ -367,13 +602,45 @@ On the first message of a new conversation, check if `.aether/data/session.json`
 
 ---
 
+## Wisdom Pipeline
+
+The Wisdom Pipeline is the core learning loop of Aether v2.4. Colony work produces
+observations that flow through the system and become reusable wisdom.
+
+### Pipeline Stages
+
+| Stage | Subcommand | Output |
+|-------|-----------|--------|
+| 1. Observe | `memory-capture "learning"` | Records observation to learning-observations.json |
+| 2. Auto-promote | (internal: `learning-promote-auto`) | Triggers after threshold (2 observations for patterns) |
+| 3. Instinct | `instinct-create` | Stores in COLONY_STATE.json with confidence score |
+| 4. QUEEN.md | `queen-promote` | Writes to QUEEN.md Patterns/Philosophies section |
+| 5. Inject | `colony-prime` prompt_section | QUEEN.md wisdom + instincts injected into worker context |
+| 6. Hive store | `hive-promote` | Abstracts instinct, stores in hive wisdom.json (confidence >= 0.8) |
+| 7. Hive read | `hive-read` | Retrieves cross-colony wisdom scoped by domain |
+
+### Key Thresholds
+
+- **Auto-promotion:** Pattern observations need 2 captures to trigger; confidence starts at 0.75
+- **Hive promotion:** Instincts with confidence >= 0.8 are promoted to Hive Brain at `/ant:seal`
+- **Cross-colony boost:** Multi-repo confirmation raises confidence (2 repos = 0.70, 4+ = 0.95)
+
+See [Hive Brain](#hive-brain-cross-colony-wisdom) for cross-colony wisdom details.
+
+---
+
 ## The Core Insight
 
 The system's pieces are now **connected**:
 - Pheromones update context (colony-prime injects signals into worker prompts)
 - Decisions become pheromones (auto-emit during builds)
-- Learnings become instincts (observation to promotion pipeline)
+- Learnings become instincts (observation to promotion pipeline -- see Wisdom Pipeline above)
 - Midden affects behavior (threshold auto-REDIRECT)
+- Hive Brain crosses colony boundaries (domain-scoped wisdom -> colony-prime)
+- Instincts promote to hive at seal (confidence >= 0.8 -> hive-promote)
+- Multi-repo confirmation boosts confidence (2 repos = 0.7, 4+ = 0.95)
+- User preferences shape worker behavior (QUEEN.md -> colony-prime)
+- Autopilot chains build-verify-advance with smart pausing (/ant:run)
 
 **The ongoing challenge is maintenance** -- keeping documentation accurate,
 data files clean, and test coverage comprehensive as features evolve.
@@ -386,4 +653,4 @@ For OpenCode-specific rules and agents, see `.opencode/OPENCODE.md`
 
 ---
 
-*Updated for Aether v1.3.0 — 2026-03-19 (v1.3 integration complete, documentation updated)*
+*Updated for Aether v2.0.0 — 2026-03-24 (post-hardening accuracy sweep)*

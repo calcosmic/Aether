@@ -79,6 +79,52 @@ bash .aether/aether-utils.sh survey-load "{phase_name}" 2>/dev/null
 - `survey_locations` — where to place files
 - `survey_concerns` — concerns to avoid
 
+### Step 4.0.5: Load Phase Research
+
+Load domain research generated during `/ant:plan` for injection into worker prompts:
+
+Run using the Bash tool with description "Loading phase research...":
+```bash
+phase_id="{phase_number}"
+research_file=".aether/data/phase-research/phase-${phase_id}-research.md"
+
+if [[ -f "$research_file" ]]; then
+  research_content=$(cat "$research_file")
+  research_word_count=$(wc -w < "$research_file" | tr -d ' ')
+
+  # Apply 8K character budget (same size as colony-prime's 8K; skills has its own 8K)
+  research_budget=8000
+  if [[ ${#research_content} -gt $research_budget ]]; then
+    research_content="${research_content:0:$research_budget}"
+    echo "[research] trimmed to ${research_budget} chars" >&2
+  fi
+
+  research_context="--- PHASE RESEARCH (Domain Knowledge) ---
+${research_content}
+--- END PHASE RESEARCH ---"
+
+  echo "Research loaded: phase-${phase_id}-research.md (${research_word_count} words)"
+else
+  research_context=""
+  echo "No phase research found -- plan was generated before research feature"
+fi
+```
+
+**Parse the result:**
+- If file exists: `research_context` contains the wrapped research content, ready for injection
+- If file does NOT exist: `research_context` is empty, build continues without research (backward compatibility)
+
+**Display:**
+```
+Research loaded: phase-{phase_id}-research.md ({research_word_count} words)
+```
+Or if no research file:
+```
+No phase research found -- plan was generated before research feature
+```
+
+**Store for worker injection:** The `research_context` variable is now available for build-wave.md and build-verify.md to inject into worker prompts. This 8K budget matches colony-prime's 8K budget; skills also has its own separate 8K budget.
+
 ### Step 4.1: Archaeologist Pre-Build Scan
 
 **Conditional step — only fires when the phase modifies existing files.**
@@ -122,6 +168,51 @@ log a warning and continue to Step 5.
 - If suggest-analyze returns error: Log warning, continue
 - If suggest-approve returns error: Log warning, continue
 - Never let suggestion failures block the build
+
+### Step 4.3: Skill Detection
+
+**Non-blocking step — failures are logged and skipped.**
+
+Build the skills index and detect which domain skills match the current codebase.
+
+**4.3.1 — Build/read the skills index:**
+
+Run using the Bash tool with description "Building skills index...":
+```bash
+skill_index_result=$(bash .aether/aether-utils.sh skill-index 2>/dev/null)
+```
+
+**Parse the JSON response:**
+- If `.ok` is false or command fails: Set `skill_index_count = 0`, log warning, skip to next step
+- If successful: Extract `.result.skill_count` as `skill_index_count`
+
+**4.3.2 — Detect domain skills matching this codebase:**
+
+Run using the Bash tool with description "Detecting codebase skills...":
+```bash
+skill_detect_result=$(bash .aether/aether-utils.sh skill-detect "$(pwd)" 2>/dev/null)
+```
+
+**Parse the JSON response:**
+- If `.ok` is false or command fails: Set `skill_detections = "[]"`, log warning, continue
+- If successful: Extract `.result.detections` as `skill_detections` (JSON array)
+- Count entries in `skill_detections` as `skill_detection_count`
+
+**4.3.3 — Store cross-stage state and display:**
+
+Store the following variables for use by build-wave.md:
+- `skill_index_count` — total number of skills in the index
+- `skill_detections` — JSON array of matched skills with scores (e.g., `[{"name": "react", "score": 70}]`)
+
+Display to user:
+```
+🧠 Skills: {skill_index_count} indexed, {skill_detection_count} matched to codebase
+```
+
+**Error handling:**
+- If `skill-index` fails: Log `⚠️ Skill index unavailable — continuing without skills`, set defaults, continue
+- If `skill-detect` fails: Log `⚠️ Skill detection failed — continuing without matches`, set defaults, continue
+- Never let skill failures block the build
 
 2. **If existing code modification detected — spawn Archaeologist Scout:**
 

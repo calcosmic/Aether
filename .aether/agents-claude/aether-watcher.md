@@ -3,7 +3,7 @@ name: aether-watcher
 description: "Use this agent when validating implementations, running test suites, checking quality gates, or verifying that built work meets specifications. Spawned by /ant:build and /ant:continue after Builder completes. Also use when independent verification of code correctness, security posture, or test coverage is needed."
 tools: Read, Bash, Grep, Glob
 color: green
-model: inherit
+model: sonnet
 ---
 
 <role>

@@ -1,0 +1,1087 @@
+{
+  "version": "1.1",
+  "sources": {
+    "S1": {
+      "url": ".claude/commands/ant/init.md",
+      "title": "Init command definition — colony initialization flow",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S2": {
+      "url": ".aether/aether-utils.sh:201-235",
+      "title": "print-next-up() function — state-based routing",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S3": {
+      "url": ".claude/commands/ant/build.md",
+      "title": "Build command definition — playbook orchestrator",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S4": {
+      "url": ".claude/commands/ant/continue.md",
+      "title": "Continue command definition — verify and advance",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S5": {
+      "url": ".claude/commands/ant/resume.md",
+      "title": "Resume command — 10-step session recovery",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S6": {
+      "url": ".claude/commands/ant/plan.md",
+      "title": "Plan command — iterative research and planning",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S7": {
+      "url": ".aether/docs/command-playbooks/build-complete.md",
+      "title": "Build completion playbook — synthesis and routing",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S8": {
+      "url": ".aether/docs/command-playbooks/build-context.md",
+      "title": "Build context playbook — colony-prime and pheromone injection",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S9": {
+      "url": ".claude/commands/ant/council.md",
+      "title": "Council command — multi-choice intent clarification",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S10": {
+      "url": ".claude/commands/ant/status.md",
+      "title": "Status command — colony dashboard with visual elements",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S11": {
+      "url": "CHANGELOG.md",
+      "title": "Project changelog — v1.1.11 to v2.0.0 changes",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S12": {
+      "url": ".claude/commands/ant/run.md",
+      "title": "Autopilot command — automated build-verify-advance loop",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S13": {
+      "url": ".aether/aether-utils.sh:7855-8510",
+      "title": "colony-prime subcommand — unified worker priming payload",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S14": {
+      "url": ".claude/commands/ant/pause-colony.md",
+      "title": "Pause command — session handoff with state preservation",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S15": {
+      "url": ".claude/commands/ant/resume-colony.md",
+      "title": "Resume-colony command — full state restoration",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S16": {
+      "url": ".aether/workers.md",
+      "title": "Worker definitions — roles, model selection, verification discipline",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S17": {
+      "url": ".claude/commands/ant/seal.md",
+      "title": "Seal command — Crowned Anthill milestone ceremony",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S18": {
+      "url": ".aether/aether-utils.sh:26-33",
+      "title": "Sourcing chain — utility file imports at startup",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S19": {
+      "url": ".aether/utils/hive.sh",
+      "title": "Extracted hive functions — _hive_init/store/read/abstract/promote",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S20": {
+      "url": ".aether/utils/midden.sh",
+      "title": "Extracted midden functions — _midden_write/recent_failures/review/acknowledge",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S21": {
+      "url": ".aether/utils/file-lock.sh:20",
+      "title": "LOCK_DIR definition — sourced before hive/midden",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S22": {
+      "url": ".aether/aether-utils.sh:462-477",
+      "title": "context-update constraint handler — redirect/focus/feedback types",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S23": {
+      "url": ".aether/aether-utils.sh:509-510",
+      "title": "Decision auto-emit FEEDBACK pheromone",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S24": {
+      "url": ".aether/docs/command-playbooks/build-wave.md:262-264",
+      "title": "Midden injection into builder context per wave",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S25": {
+      "url": "tests/bash/test-hive-wisdom.sh",
+      "title": "Hive wisdom bash tests",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S26": {
+      "url": "npm test output",
+      "title": "Test suite run — 542 tests passed",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S27": {
+      "url": ".aether/utils/atomic-write.sh",
+      "title": "Atomic write utility — temp+rename pattern with JSON validation and backup rotation",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S28": {
+      "url": ".aether/utils/file-lock.sh",
+      "title": "File lock utility — noclobber-based locking with stale detection, PID tracking, timeout",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S29": {
+      "url": ".aether/aether-utils.sh:1315-1348",
+      "title": "error-add subcommand — atomic_write for COLONY_STATE.json with lock",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S30": {
+      "url": ".aether/aether-utils.sh:1470-1480",
+      "title": "learning-promote-global — non-atomic echo write to learnings.json",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S31": {
+      "url": ".aether/aether-utils.sh:1740-1763",
+      "title": "error-patterns-record — non-atomic echo writes to patterns_file",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S32": {
+      "url": ".aether/aether-utils.sh:2530-2540",
+      "title": "swarm-findings-add — non-atomic echo write to findings_file",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S33": {
+      "url": ".aether/aether-utils.sh:2935-2946",
+      "title": "registry-register — non-atomic echo write to registry_file",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S34": {
+      "url": ".aether/aether-utils.sh:80-110",
+      "title": "Feature detection and graceful degradation — disables features when deps missing",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S35": {
+      "url": ".aether/aether-utils.sh:8150-8484",
+      "title": "colony-prime budget enforcement — 8-section assembly with priority-ordered trimming",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S36": {
+      "url": ".claude/agents/ant/aether-builder.md:76-110",
+      "title": "Builder agent definition — pheromone_protocol section with REDIRECT/FOCUS/FEEDBACK handling",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S37": {
+      "url": ".claude/agents/ant/aether-watcher.md:93-126",
+      "title": "Watcher agent definition — pheromone_protocol section with verification checkpoints",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S38": {
+      "url": ".claude/agents/ant/aether-scout.md:47-81",
+      "title": "Scout agent definition — pheromone_protocol section with research prioritization",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S39": {
+      "url": ".aether/aether-utils.sh:7676-7853",
+      "title": "pheromone-prime subcommand — signal decay, instinct grouping, prompt_section assembly",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S40": {
+      "url": ".aether/aether-utils.sh:7177-7291",
+      "title": "pheromone-display subcommand — formatted user-facing signal table with decay info",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S41": {
+      "url": ".aether/docs/command-playbooks/build-wave.md:277-319",
+      "title": "Builder Worker Prompt template — prompt_section injected at end of worker spawn",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S42": {
+      "url": ".aether/docs/command-playbooks/build-verify.md:17-27",
+      "title": "Watcher Worker Prompt template — prompt_section injected into verification",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S43": {
+      "url": ".aether/docs/command-playbooks/continue-advance.md:169",
+      "title": "Continue advance — pheromone operations run silently with no user output",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S44": {
+      "url": ".aether/utils/state-loader.sh",
+      "title": "State loader utility — COLONY_STATE.json loading with lock, validation, and HANDOFF.md detection",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S45": {
+      "url": ".aether/aether-utils.sh:9626-9654",
+      "title": "session-read subcommand — returns session state with staleness calculation (>24h threshold)",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S46": {
+      "url": ".aether/docs/command-playbooks/build-wave.md:257-289",
+      "title": "Build wave playbook — context-update calls for build-start, worker-spawn, worker-complete",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S47": {
+      "url": ".aether/docs/command-playbooks/continue-finalize.md:259-270",
+      "title": "Continue finalize playbook — context-update for activity, update-phase, decision",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S48": {
+      "url": ".claude/commands/ant/status.md:224-249",
+      "title": "Status command — ASCII ant art header + emoji dashboard template with box-drawing memory table",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S49": {
+      "url": ".claude/commands/ant/maturity.md:32-87",
+      "title": "Maturity command — ASCII ant art + milestone journey with progress bar and stats",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S50": {
+      "url": ".aether/aether-utils.sh:186-196",
+      "title": "print-standard-banner helper — spaced uppercase with frame, exists but unused by commands",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S51": {
+      "url": ".aether/utils/swarm-display.sh:94-111",
+      "title": "swarm-display.sh render_progress_bar — percentage format (differs from generate-progress-bar)",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S52": {
+      "url": ".claude/commands/ant/ (all 43 files)",
+      "title": "Full slash command directory — grep for print-next-up usage across all commands",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S53": {
+      "url": ".claude/commands/ant/run.md:60-186",
+      "title": "Autopilot loop — Steps 0-6 with 9 playbook chain and 10 pause conditions",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S54": {
+      "url": ".aether/docs/command-playbooks/build-complete.md:313-321",
+      "title": "Build-complete playbook — calls print-next-up and routes to /ant:continue",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S55": {
+      "url": ".aether/docs/command-playbooks/continue-finalize.md:39-72",
+      "title": "Continue-finalize playbook — next phase routing with inline Next Up section",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S56": {
+      "url": ".claude/commands/ant/seal.md:341-348",
+      "title": "Seal Step 5 — sets milestone to Crowned Anthill but does NOT update state field",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S57": {
+      "url": ".claude/commands/ant/entomb.md:346-370",
+      "title": "Entomb state reset — resets COLONY_STATE.json via jq template after archive",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S58": {
+      "url": ".claude/commands/ant/preferences.md",
+      "title": "Preferences command — add/list user preferences (terminal, no next-step routing)",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S59": {
+      "url": ".claude/commands/ant/watch.md",
+      "title": "Watch command — tmux session setup (background utility, no next-step routing)",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S60": {
+      "url": ".claude/commands/ant/plan.md:410-421",
+      "title": "Plan auto-finalize — explicit 'no user prompt needed' after loop exits",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S61": {
+      "url": ".claude/commands/ant/run.md:112-114",
+      "title": "Autopilot override — skips AskUserQuestion for runtime verification, auto-PAUSEs instead",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S62": {
+      "url": ".aether/docs/command-playbooks/continue-gates.md:554-621",
+      "title": "Runtime Verification Gate — AskUserQuestion with 4 options (tested/issues/not tested/skip)",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S63": {
+      "url": ".aether/docs/command-playbooks/continue-finalize.md:179-244",
+      "title": "Commit milestone + context clear — two AskUserQuestion prompts in finalize",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S64": {
+      "url": ".claude/commands/ant/init.md:16-21",
+      "title": "Init overwrite protection — stops if active colony exists, offers 3 choices",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S65": {
+      "url": ".aether/docs/command-playbooks/build-complete.md:165-183",
+      "title": "Visual Checkpoint — AskUserQuestion for UI approval (approve/reject/skip)",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    },
+    "S66": {
+      "url": ".aether/docs/command-playbooks/continue-verify.md:325-331",
+      "title": "Verification failure confirmation — AskUserQuestion to confirm understanding of fixes needed",
+      "type": "codebase",
+      "accessed": "2026-03-21"
+    }
+  },
+  "questions": [
+    {
+      "id": "q1",
+      "text": "Do all 43 slash commands chain together properly — does each command's output naturally guide the user to the next logical command?",
+      "status": "partial",
+      "confidence": 82,
+      "key_findings": [
+        {
+          "text": "print-next-up() is a centralized state machine (IDLE/READY/EXECUTING/PLANNING) that generates context-appropriate next-step suggestions. 30 of 43 commands call this function directly.",
+          "source_ids": [
+            "S2",
+            "S52"
+          ],
+          "iteration": 0
+        },
+        {
+          "text": "31 of 43 commands cross-reference other /ant: commands (125 total occurrences). The core workflow chains correctly: init -> plan -> build -> continue -> build N+1.",
+          "source_ids": [
+            "S1",
+            "S6",
+            "S3",
+            "S4"
+          ],
+          "iteration": 0
+        },
+        {
+          "text": "resume.md computes dynamic next-step routing from COLONY_STATE.json using a 6-case decision tree, handling all major workflow states.",
+          "source_ids": [
+            "S5"
+          ],
+          "iteration": 0
+        },
+        {
+          "text": "Of the 13 commands not calling print-next-up, 11 provide explicit next-step routing. Build/continue delegate to playbooks with routing. Lifecycle commands have tailored Next Up sections. Only preferences and watch are true dead-ends.",
+          "source_ids": [
+            "S52",
+            "S54",
+            "S55",
+            "S58",
+            "S59"
+          ],
+          "iteration": 6
+        },
+        {
+          "text": "/ant:run autopilot chains all 9 playbooks correctly with 10 distinct pause conditions and conditional final routing (all-complete -> seal, max-reached -> run, replan -> plan, paused -> fix).",
+          "source_ids": [
+            "S53",
+            "S12"
+          ],
+          "iteration": 6
+        },
+        {
+          "text": "Post-seal state gap: seal.md sets milestone but NOT state. State remains READY, causing print-next-up to suggest building non-existent phases. The state machine has 4 formal states with no terminal SEALED/COMPLETED state. entomb.md resets to IDLE.",
+          "source_ids": [
+            "S56",
+            "S57",
+            "S2"
+          ],
+          "iteration": 6
+        },
+        {
+          "text": "Synthesis cross-ref: Q2 confirms colony-prime routing works during builds. Q3 confirms post-build routing chains properly. Q7 confirms resume covers all states. Routing is comprehensive — the post-seal gap is an isolated bug, not systemic fragility. Dead-end commands (preferences, watch) are terminal utilities where dead-end behavior is arguably appropriate.",
+          "source_ids": [
+            "S13",
+            "S55",
+            "S63",
+            "S5",
+            "S58",
+            "S59"
+          ],
+          "iteration": 9
+        }
+      ],
+      "iterations_touched": [
+        0,
+        6,
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "id": "q2",
+      "text": "Does the pheromone system (FOCUS/REDIRECT/FEEDBACK) actually inject signals into worker prompts visibly, and are pheromone operations surfaced to the user rather than running silently?",
+      "status": "partial",
+      "confidence": 77,
+      "key_findings": [
+        {
+          "text": "colony-prime assembles a prompt_section combining QUEEN.md wisdom, context capsule, and pheromone signals. Called during build-context.md Step 4 and carried as cross-stage state.",
+          "source_ids": [
+            "S13",
+            "S8"
+          ],
+          "iteration": 0
+        },
+        {
+          "text": "pheromone-display shows signals with strength percentages during build — NOT silent. Display includes type emoji, strength %, age, decay info.",
+          "source_ids": [
+            "S8",
+            "S40"
+          ],
+          "iteration": 0
+        },
+        {
+          "text": "workers.md has ZERO mentions of pheromone/signal/prompt_section. Pheromone protocol is in agent definitions, not central worker docs. Acceptable architecture: workers.md = 'what', agent definitions = 'how'.",
+          "source_ids": [
+            "S16"
+          ],
+          "iteration": 0
+        },
+        {
+          "text": "Only 3 of 22 agents have formal pheromone_protocol: Builder, Watcher, Scout. 19 agents lack protocol. 5 agents mention pheromones incidentally. 86% of agents receive signals but have no formal handling instructions.",
+          "source_ids": [
+            "S36",
+            "S37",
+            "S38"
+          ],
+          "iteration": 3
+        },
+        {
+          "text": "Role-specific signal handling: Builder treats REDIRECTs as implementation constraints, FOCUS as extra-test areas. Watcher treats REDIRECTs as verification checkpoints. Scout treats REDIRECTs as research scope constraints.",
+          "source_ids": [
+            "S36",
+            "S37",
+            "S38"
+          ],
+          "iteration": 3
+        },
+        {
+          "text": "Full injection path: pheromone-prime reads/decays/filters/sorts signals -> colony-prime extracts prompt_section -> budget places signals last (highest persistence) -> build-wave refreshes per wave -> Builder/Watcher templates include prompt_section.",
+          "source_ids": [
+            "S39",
+            "S13",
+            "S35",
+            "S8",
+            "S41",
+            "S42"
+          ],
+          "iteration": 3
+        },
+        {
+          "text": "Visibility is SPLIT: builds show rich pheromone-display table. Continue/advance operations are explicitly 'NO user-visible output'. Part of the broader autonomous-first pattern (cross-ref Q3).",
+          "source_ids": [
+            "S40",
+            "S43"
+          ],
+          "iteration": 3
+        },
+        {
+          "text": "Synthesis cross-ref: The agent protocol gap is a coverage gap, not a functional gap — colony-prime generates prompt_section regardless of whether the receiving agent has a protocol section. Agents without protocol still receive signals through spawn prompt but lack structured handling. Q6 confirms the injection mechanism has no identified reliability risks (budget enforcement handles edge cases gracefully). Q3 confirms silent continue-phase operations are part of the autonomous-first design pattern.",
+          "source_ids": [
+            "S13",
+            "S35",
+            "S60",
+            "S61"
+          ],
+          "iteration": 9
+        }
+      ],
+      "iterations_touched": [
+        0,
+        3,
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "id": "q3",
+      "text": "Are there enough interactive user touchpoints (multiple-choice prompts via AskUserQuestion) throughout the workflow, or does the system run too autonomously without user input?",
+      "status": "partial",
+      "confidence": 82,
+      "key_findings": [
+        {
+          "text": "AskUserQuestion appears in 9 of 43 commands, but command-level count understates reality. Build/continue playbooks contain 6 additional AskUserQuestion invocations: Visual Checkpoint, Verification Failure, Runtime Gate (MANDATORY), Issue Detail, Commit Milestone, Context Clear.",
+          "source_ids": [
+            "S9",
+            "S12",
+            "S17",
+            "S65",
+            "S66",
+            "S62",
+            "S63"
+          ],
+          "iteration": 7
+        },
+        {
+          "text": "Touchpoints are asymmetrically distributed: PRE-BUILD 0-1 prompts, DURING-BUILD 0-1, POST-BUILD 2-4. Creates 'autonomous planning and building with gated verification' — users validate WHETHER results are acceptable but don't shape WHAT or HOW.",
+          "source_ids": [
+            "S60",
+            "S65",
+            "S62",
+            "S63",
+            "S6"
+          ],
+          "iteration": 7
+        },
+        {
+          "text": "Plan auto-finalize is explicit design intent: 'no user prompt needed'. Plans can commit phases to COLONY_STATE.json without user approval. Tension with user profile ('I test like a user').",
+          "source_ids": [
+            "S60",
+            "S6"
+          ],
+          "iteration": 7
+        },
+        {
+          "text": "Autopilot converts Runtime Verification Gate from interactive (4 options) to auto-PAUSE. All 10 pause conditions are negative triggers. ZERO positive checkpoints. Changes UX from 'approve before advancing' to 'system stops, user restarts'.",
+          "source_ids": [
+            "S61",
+            "S53",
+            "S62"
+          ],
+          "iteration": 7
+        },
+        {
+          "text": "Synthesis cross-ref: The autonomous-first pattern is the most strongly validated finding in this audit, independently confirmed by five question tracks: Q1 routing, Q2 silent pheromones, Q3 minimal pre-build interaction, Q4 error state muting, Q7 context staleness during non-build. This is a coherent design philosophy, not an oversight — but it creates genuine tension with the stated user persona.",
+          "source_ids": [
+            "S60",
+            "S43",
+            "S48",
+            "S2",
+            "S46"
+          ],
+          "iteration": 9
+        }
+      ],
+      "iterations_touched": [
+        0,
+        7,
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "id": "q4",
+      "text": "Does the system feel immersive — are visual elements (ASCII art, progress indicators, status displays) consistent and engaging throughout the user journey?",
+      "status": "partial",
+      "confidence": 73,
+      "key_findings": [
+        {
+          "text": "333 matches for visual elements across 43 commands. status.md has ASCII ant art, progress bars, box-drawing tables. Major commands have spaced-letter banners.",
+          "source_ids": [
+            "S10",
+            "S7"
+          ],
+          "iteration": 0
+        },
+        {
+          "text": "--no-visual supported by only 18 of 43 commands (42%). Visual-heavy commands status, maturity, swarm, watch lack opt-out.",
+          "source_ids": [
+            "S10",
+            "S48",
+            "S49",
+            "S51"
+          ],
+          "iteration": 5
+        },
+        {
+          "text": "4+ distinct banner styles with no standardization. print-standard-banner exists but is NEVER called by any command. Abandoned standardization attempt.",
+          "source_ids": [
+            "S48",
+            "S49",
+            "S50",
+            "S10"
+          ],
+          "iteration": 5
+        },
+        {
+          "text": "Two progress bar implementations with different formats (N/M vs N%). Visual utilities developed independently.",
+          "source_ids": [
+            "S50",
+            "S51",
+            "S48",
+            "S49"
+          ],
+          "iteration": 5
+        },
+        {
+          "text": "Error states get plain text while success states get rich formatting. ~15 commands show unformatted error messages. Cross-ref Q3: same happy-path optimization pattern.",
+          "source_ids": [
+            "S10",
+            "S48"
+          ],
+          "iteration": 5
+        },
+        {
+          "text": "Synthesis cross-ref: Visual inconsistency is another instance of Pattern 3 (mechanisms without coverage). Q3 validates error-state poverty from the interaction angle. Q6 confirms the pattern extends to the data layer (silent degradation). Remaining gaps (non-TTY rendering, design intent on per-command theming) require runtime testing and architect input.",
+          "source_ids": [
+            "S50",
+            "S48",
+            "S49",
+            "S51",
+            "S34",
+            "S35"
+          ],
+          "iteration": 9
+        },
+        {
+          "text": "Confidence calibration (70%→73%): Visual inventory is comprehensive for static analysis — 333 matches catalogued, 4 banner styles quantified, --no-visual at 42%, dual progress bars identified, error-state poverty documented. Cross-validation from Q3 (asymmetric interaction design), Q6 (Pattern 3 with 6 independent instances), and Pattern 2 (happy-path richness) corroborates the structural analysis. Evidence ceiling: ~78% — non-TTY runtime testing and architect review of per-command theming intent are the remaining gaps, both unreachable through code analysis.",
+          "source_ids": [
+            "S48",
+            "S49",
+            "S50",
+            "S51",
+            "S10",
+            "S34"
+          ],
+          "iteration": 10
+        }
+      ],
+      "iterations_touched": [
+        0,
+        5,
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "id": "q5",
+      "text": "Has v2.0.0 preserved the core strengths of v1.1.11 (simplicity, reliability, intuitive flow) or have features been lost or broken during the upgrade?",
+      "status": "partial",
+      "confidence": 84,
+      "key_findings": [
+        {
+          "text": "CHANGELOG shows only additions/changes, no removals. v1.1.11 features appear preserved. New features are additive.",
+          "source_ids": [
+            "S11"
+          ],
+          "iteration": 0
+        },
+        {
+          "text": "Extraction sourcing chain verified correct. All 9 extracted functions confirmed. Dispatch table maps all subcommands.",
+          "source_ids": [
+            "S18",
+            "S19",
+            "S20",
+            "S21"
+          ],
+          "iteration": 1
+        },
+        {
+          "text": "All 6 v1.1.11 features traced: midden-recent-failures reads .entries[], instinct-create with dedup, midden injected per wave, decisions auto-emit FEEDBACK, context-update handles feedback type, learning-promote-auto creates instincts. Zero regressions.",
+          "source_ids": [
+            "S20",
+            "S22",
+            "S23",
+            "S24",
+            "S11"
+          ],
+          "iteration": 1
+        },
+        {
+          "text": "542 tests passing (exceeds documented 530+). 36 test files cover hive/midden/pheromone features.",
+          "source_ids": [
+            "S25",
+            "S26"
+          ],
+          "iteration": 1
+        },
+        {
+          "text": "Synthesis cross-ref: Q6 confirms no new risks introduced by v2 — pre-existing risks persist but refactoring didn't worsen them. Q1 confirms routing integrity preserved. Q2 confirms pheromone system functions correctly. The v1.0-v1.1.10 scope gap is beyond the audit's target scope (which specified v1.1.11). Within defined scope, regression analysis is thorough.",
+          "source_ids": [
+            "S27",
+            "S28",
+            "S29",
+            "S2",
+            "S52",
+            "S39",
+            "S13",
+            "S35"
+          ],
+          "iteration": 9
+        }
+      ],
+      "iterations_touched": [
+        0,
+        1,
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "id": "q6",
+      "text": "Where are the risk areas — coupling, complexity, single points of failure, or fragile state management that could break the user experience?",
+      "status": "partial",
+      "confidence": 74,
+      "key_findings": [
+        {
+          "text": "aether-utils.sh is 11,221 lines with 125 subcommands. COLONY_STATE.json is single point of failure. File locking via shell scripts with trap cleanup.",
+          "source_ids": [
+            "S13",
+            "S2"
+          ],
+          "iteration": 0
+        },
+        {
+          "text": "Only 4 of 10+ JSON mutation paths use atomic_write. 6 non-atomic paths can corrupt on process interruption.",
+          "source_ids": [
+            "S27",
+            "S29",
+            "S30",
+            "S31",
+            "S32",
+            "S33"
+          ],
+          "iteration": 2
+        },
+        {
+          "text": "Single-lock architecture: one lock per process, nested acquisition silently overwrites, basename-only keys can collide.",
+          "source_ids": [
+            "S28"
+          ],
+          "iteration": 2
+        },
+        {
+          "text": "Silent failure modes: disabled locking proceeds without protection, corrupted JSON returns defaults, colony-prime drops corrupted sections silently. Cross-ref Q7: same pattern in context management.",
+          "source_ids": [
+            "S34",
+            "S35",
+            "S28"
+          ],
+          "iteration": 2
+        },
+        {
+          "text": "Orphaned backup: restore_backup exists but never called automatically. Cross-ref Pattern 3: mechanisms exist but coverage incomplete.",
+          "source_ids": [
+            "S27"
+          ],
+          "iteration": 2
+        },
+        {
+          "text": "LLM/bash coordination gap: slash commands mutate COLONY_STATE.json via Claude Read/Write with no locking against concurrent bash processes. Last-write-wins.",
+          "source_ids": [
+            "S1",
+            "S3",
+            "S4",
+            "S28"
+          ],
+          "iteration": 2
+        },
+        {
+          "text": "Synthesis cross-ref: Pattern 3 (mechanisms without coverage) is validated across six independent instances in four questions: atomic_write (4/10+ paths), session-verify-fresh (5/43 commands), CONTEXT.md updates (5 commands), print-standard-banner (0 commands), pheromone protocol (3/22 agents), --no-visual (18/43 commands). This is the most pervasive architectural characteristic. Remaining gaps (concurrent write frequency, degradation path testing) require runtime instrumentation.",
+          "source_ids": [
+            "S45",
+            "S46",
+            "S50",
+            "S36",
+            "S48",
+            "S27"
+          ],
+          "iteration": 9
+        }
+      ],
+      "iterations_touched": [
+        0,
+        2,
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "id": "q7",
+      "text": "Does context management work properly — does the system prompt users to clear context at the right times, and does session recovery (resume/pause) restore state faithfully?",
+      "status": "partial",
+      "confidence": 75,
+      "key_findings": [
+        {
+          "text": "Two-tier recovery: resume.md (lightweight, CONTEXT.md) and resume-colony.md (full, HANDOFF.md). Build completion auto-writes HANDOFF.md.",
+          "source_ids": [
+            "S5",
+            "S15",
+            "S14",
+            "S7"
+          ],
+          "iteration": 0
+        },
+        {
+          "text": "CONTEXT.md is persistent activity log; HANDOFF.md is consumed-and-deleted snapshot. No cross-referencing between them.",
+          "source_ids": [
+            "S5",
+            "S15",
+            "S14"
+          ],
+          "iteration": 4
+        },
+        {
+          "text": "resume-colony.md has no fallback for missing HANDOFF.md. Crash without HANDOFF generation causes file-not-found.",
+          "source_ids": [
+            "S44",
+            "S15"
+          ],
+          "iteration": 4
+        },
+        {
+          "text": "session-verify-fresh: only 5 of 43 commands use it. CLAUDE.md claim inaccurate. Cross-ref Q6 Pattern 3.",
+          "source_ids": [
+            "S45",
+            "S5",
+            "S3",
+            "S4",
+            "S6",
+            "S17",
+            "S15"
+          ],
+          "iteration": 4
+        },
+        {
+          "text": "CONTEXT.md: 5 commands + playbooks update it, 30+ don't. Goes stale during non-build workflows.",
+          "source_ids": [
+            "S14",
+            "S1",
+            "S46",
+            "S47"
+          ],
+          "iteration": 4
+        },
+        {
+          "text": "session-read computes staleness but resume.md explicitly ignores it. System never warns about outdated session state.",
+          "source_ids": [
+            "S45",
+            "S5"
+          ],
+          "iteration": 4
+        },
+        {
+          "text": "Synthesis cross-ref: The dual-document disconnect (CONTEXT.md vs HANDOFF.md) is another instance of Pattern 4 (state dimensions disconnected) alongside Q1 state/milestone and Q2 injection/protocol gaps. Q6 confirms silent degradation applies here — staleness computed but unused mirrors restore_backup existing but uncalled. Q5 confirms refactoring didn't introduce new context management risks.",
+          "source_ids": [
+            "S56",
+            "S36",
+            "S27",
+            "S18",
+            "S19"
+          ],
+          "iteration": 9
+        }
+      ],
+      "iterations_touched": [
+        0,
+        4,
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "id": "q8",
+      "text": "What specific improvements are needed to make the system optimal — prioritized action items for command flow, UX, pheromones, and interaction?",
+      "status": "answered",
+      "confidence": 90,
+      "key_findings": [
+        {
+          "text": "15 improvements identified across 4 priority tiers (Critical, High, Medium, Low), synthesized from cross-question analysis of all 7 other questions. Each improvement linked to specific source evidence.",
+          "source_ids": [
+            "S2",
+            "S56",
+            "S45",
+            "S60",
+            "S61",
+            "S53",
+            "S43",
+            "S36",
+            "S37",
+            "S38",
+            "S48",
+            "S50",
+            "S51",
+            "S44",
+            "S15",
+            "S30",
+            "S33"
+          ],
+          "iteration": 8
+        },
+        {
+          "text": "Critical fixes: (1) Post-seal state routing — seal must update state field or print-next-up must handle SEALED [S56, S2]. (2) CLAUDE.md session-verify-fresh documentation correction [S45].",
+          "source_ids": [
+            "S56",
+            "S2",
+            "S45"
+          ],
+          "iteration": 8
+        },
+        {
+          "text": "High-impact UX: (3) Plan approval touchpoint before auto-committing phases [S60]. (4) Autopilot positive checkpoint between phases [S61, S53]. (5) Continue-phase pheromone visibility [S43]. (6) Pheromone protocol expansion to 19 missing agents [S36-S38].",
+          "source_ids": [
+            "S60",
+            "S61",
+            "S53",
+            "S43",
+            "S36",
+            "S37",
+            "S38"
+          ],
+          "iteration": 8
+        },
+        {
+          "text": "Medium consistency: (7) Banner standardization using print-standard-banner [S50]. (8) --no-visual parity to all 43 commands [S48-S51]. (9) Progress bar unification [S50, S51]. (10) Error state visual treatment [S48].",
+          "source_ids": [
+            "S50",
+            "S48",
+            "S49",
+            "S51"
+          ],
+          "iteration": 8
+        },
+        {
+          "text": "Low technical debt: (11) resume-colony HANDOFF.md fallback [S44, S15]. (12) Non-atomic write migration [S30-S33]. (13) Dead-end routing for preferences/watch [S58, S59]. (14) session-verify-fresh expansion [S45]. (15) CONTEXT.md update coverage [S46, S47].",
+          "source_ids": [
+            "S44",
+            "S15",
+            "S30",
+            "S33",
+            "S58",
+            "S59",
+            "S45",
+            "S46",
+            "S47"
+          ],
+          "iteration": 8
+        },
+        {
+          "text": "4 cross-question patterns identified: (1) Autonomous-first, validate-after (Q1+Q3+Q7). (2) Happy-path visual richness, error-state poverty (Q3+Q4). (3) Mechanisms exist but coverage incomplete (Q6+Q7). (4) State dimensions disconnected (Q1+Q2).",
+          "source_ids": [
+            "S2",
+            "S56",
+            "S60",
+            "S43",
+            "S48",
+            "S27",
+            "S45",
+            "S50",
+            "S36"
+          ],
+          "iteration": 8
+        },
+        {
+          "text": "8 contradictions resolved: pheromone priority naming (confusion not bug), session-verify-fresh claim (doc bug), plan autonomy vs user profile (design tension), workers.md vs agent definitions (evolved separation), atomic/non-atomic coexistence (incomplete migration), seal milestone/state disconnect (bug), staleness computed but ignored (over-engineering), print-standard-banner unused (abandoned attempt).",
+          "source_ids": [
+            "S35",
+            "S45",
+            "S60",
+            "S16",
+            "S36",
+            "S27",
+            "S56",
+            "S5",
+            "S50"
+          ],
+          "iteration": 8
+        },
+        {
+          "text": "Synthesis cross-ref: All 4 patterns are validated by multiple independent question tracks. The improvement list is stable — no new issues discovered in synthesis iterations. Confidence is capped at 90% because final priority ordering requires user validation (what matters most to THEIR workflow).",
+          "source_ids": [
+            "S2",
+            "S56",
+            "S60",
+            "S43",
+            "S48",
+            "S27",
+            "S45",
+            "S50",
+            "S36"
+          ],
+          "iteration": 9
+        }
+      ],
+      "iterations_touched": [
+        0,
+        8,
+        9
+      ]
+    }
+  ],
+  "created_at": "2026-03-21T21:51:20Z",
+  "last_updated": "2026-03-22T00:30:00Z",
+  "trust_summary": {
+    "total_findings": 54,
+    "single_source": 5,
+    "multi_source": 49,
+    "no_source": 0,
+    "trust_ratio": 90
+  }
+}

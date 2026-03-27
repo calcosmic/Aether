@@ -3,6 +3,12 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+const { getDefaultModelForCaste, getModelNames } = require('../helpers/mock-profiles');
+
+// Module-level constants derived from YAML via helper
+const BUILDER_MODEL = getDefaultModelForCaste('builder');
+const ALT_MODEL = getModelNames()[0];  // glm-5
+
 // Import the module under test
 const {
   recordSpawnTelemetry,
@@ -103,7 +109,7 @@ test('recordSpawnTelemetry creates telemetry.json if it does not exist', t => {
   const result = recordSpawnTelemetry(tempDir, {
     task: 'test-task',
     caste: 'builder',
-    model: 'kimi-k2.5',
+    model: BUILDER_MODEL,
     source: 'test'
   });
 
@@ -117,7 +123,7 @@ test('recordSpawnTelemetry creates telemetry.json if it does not exist', t => {
   const data = JSON.parse(fs.readFileSync(telemetryPath, 'utf8'));
   t.is(data.version, TELEMETRY_VERSION);
   t.is(data.routing_decisions.length, 1);
-  t.is(data.models['kimi-k2.5'].total_spawns, 1);
+  t.is(data.models[BUILDER_MODEL].total_spawns, 1);
 
   cleanupTempDir(tempDir);
 });
@@ -132,19 +138,19 @@ test('recordSpawnTelemetry increments total_spawns for the model', t => {
   recordSpawnTelemetry(tempDir, {
     task: 'task-1',
     caste: 'builder',
-    model: 'kimi-k2.5',
+    model: BUILDER_MODEL,
     source: 'test'
   });
 
   recordSpawnTelemetry(tempDir, {
     task: 'task-2',
     caste: 'watcher',
-    model: 'kimi-k2.5',
+    model: BUILDER_MODEL,
     source: 'test'
   });
 
   const data = loadTelemetry(tempDir);
-  t.is(data.models['kimi-k2.5'].total_spawns, 2);
+  t.is(data.models[BUILDER_MODEL].total_spawns, 2);
 
   cleanupTempDir(tempDir);
 });
@@ -158,19 +164,19 @@ test('recordSpawnTelemetry creates by_caste entry if new caste', t => {
   recordSpawnTelemetry(tempDir, {
     task: 'task-1',
     caste: 'builder',
-    model: 'kimi-k2.5',
+    model: BUILDER_MODEL,
     source: 'test'
   });
 
   recordSpawnTelemetry(tempDir, {
     task: 'task-2',
     caste: 'watcher',
-    model: 'kimi-k2.5',
+    model: BUILDER_MODEL,
     source: 'test'
   });
 
   const data = loadTelemetry(tempDir);
-  const modelStats = data.models['kimi-k2.5'];
+  const modelStats = data.models[BUILDER_MODEL];
 
   t.truthy(modelStats.by_caste.builder);
   t.truthy(modelStats.by_caste.watcher);
@@ -189,14 +195,14 @@ test('recordSpawnTelemetry appends to routing_decisions', t => {
   recordSpawnTelemetry(tempDir, {
     task: 'task-1',
     caste: 'builder',
-    model: 'kimi-k2.5',
+    model: BUILDER_MODEL,
     source: 'caste-default'
   });
 
   recordSpawnTelemetry(tempDir, {
     task: 'task-2',
     caste: 'watcher',
-    model: 'glm-5',
+    model: ALT_MODEL,
     source: 'task-based'
   });
 
@@ -231,7 +237,7 @@ test('recordSpawnTelemetry rotates routing_decisions at 1000 entries', t => {
   recordSpawnTelemetry(tempDir, {
     task: 'task-1000',
     caste: 'builder',
-    model: 'kimi-k2.5',
+    model: BUILDER_MODEL,
     source: 'test'
   });
 
@@ -242,7 +248,7 @@ test('recordSpawnTelemetry rotates routing_decisions at 1000 entries', t => {
   recordSpawnTelemetry(tempDir, {
     task: 'task-1001',
     caste: 'builder',
-    model: 'kimi-k2.5',
+    model: BUILDER_MODEL,
     source: 'test'
   });
 
@@ -266,7 +272,7 @@ test('recordSpawnTelemetry uses atomic writes', t => {
   recordSpawnTelemetry(tempDir, {
     task: 'atomic-test',
     caste: 'builder',
-    model: 'kimi-k2.5',
+    model: BUILDER_MODEL,
     source: 'test'
   });
 
@@ -290,7 +296,7 @@ test('updateSpawnOutcome updates successful_completions counter', t => {
   const result = recordSpawnTelemetry(tempDir, {
     task: 'test-task',
     caste: 'builder',
-    model: 'kimi-k2.5',
+    model: BUILDER_MODEL,
     source: 'test'
   });
 
@@ -298,9 +304,9 @@ test('updateSpawnOutcome updates successful_completions counter', t => {
   t.true(updateResult);
 
   const data = loadTelemetry(tempDir);
-  t.is(data.models['kimi-k2.5'].successful_completions, 1);
-  t.is(data.models['kimi-k2.5'].failed_completions, 0);
-  t.is(data.models['kimi-k2.5'].blocked, 0);
+  t.is(data.models[BUILDER_MODEL].successful_completions, 1);
+  t.is(data.models[BUILDER_MODEL].failed_completions, 0);
+  t.is(data.models[BUILDER_MODEL].blocked, 0);
 
   cleanupTempDir(tempDir);
 });
@@ -314,16 +320,16 @@ test('updateSpawnOutcome updates failed_completions counter', t => {
   const result = recordSpawnTelemetry(tempDir, {
     task: 'test-task',
     caste: 'builder',
-    model: 'kimi-k2.5',
+    model: BUILDER_MODEL,
     source: 'test'
   });
 
   updateSpawnOutcome(tempDir, result.decision_id, 'failed');
 
   const data = loadTelemetry(tempDir);
-  t.is(data.models['kimi-k2.5'].successful_completions, 0);
-  t.is(data.models['kimi-k2.5'].failed_completions, 1);
-  t.is(data.models['kimi-k2.5'].blocked, 0);
+  t.is(data.models[BUILDER_MODEL].successful_completions, 0);
+  t.is(data.models[BUILDER_MODEL].failed_completions, 1);
+  t.is(data.models[BUILDER_MODEL].blocked, 0);
 
   cleanupTempDir(tempDir);
 });
@@ -337,16 +343,16 @@ test('updateSpawnOutcome updates blocked counter', t => {
   const result = recordSpawnTelemetry(tempDir, {
     task: 'test-task',
     caste: 'builder',
-    model: 'kimi-k2.5',
+    model: BUILDER_MODEL,
     source: 'test'
   });
 
   updateSpawnOutcome(tempDir, result.decision_id, 'blocked');
 
   const data = loadTelemetry(tempDir);
-  t.is(data.models['kimi-k2.5'].successful_completions, 0);
-  t.is(data.models['kimi-k2.5'].failed_completions, 0);
-  t.is(data.models['kimi-k2.5'].blocked, 1);
+  t.is(data.models[BUILDER_MODEL].successful_completions, 0);
+  t.is(data.models[BUILDER_MODEL].failed_completions, 0);
+  t.is(data.models[BUILDER_MODEL].blocked, 1);
 
   cleanupTempDir(tempDir);
 });
@@ -360,14 +366,14 @@ test('updateSpawnOutcome updates by_caste counters correctly', t => {
   const result = recordSpawnTelemetry(tempDir, {
     task: 'test-task',
     caste: 'builder',
-    model: 'kimi-k2.5',
+    model: BUILDER_MODEL,
     source: 'test'
   });
 
   updateSpawnOutcome(tempDir, result.decision_id, 'completed');
 
   const data = loadTelemetry(tempDir);
-  const casteStats = data.models['kimi-k2.5'].by_caste.builder;
+  const casteStats = data.models[BUILDER_MODEL].by_caste.builder;
 
   t.is(casteStats.spawns, 1);
   t.is(casteStats.success, 1);
@@ -421,7 +427,7 @@ test('updateSpawnOutcome returns false for invalid outcome', t => {
   const result = recordSpawnTelemetry(tempDir, {
     task: 'test-task',
     caste: 'builder',
-    model: 'kimi-k2.5',
+    model: BUILDER_MODEL,
     source: 'test'
   });
 
@@ -441,14 +447,14 @@ test('getTelemetrySummary returns correct structure', t => {
   recordSpawnTelemetry(tempDir, {
     task: 'task-1',
     caste: 'builder',
-    model: 'kimi-k2.5',
+    model: BUILDER_MODEL,
     source: 'test'
   });
 
   recordSpawnTelemetry(tempDir, {
     task: 'task-2',
     caste: 'watcher',
-    model: 'glm-5',
+    model: ALT_MODEL,
     source: 'test'
   });
 
@@ -456,8 +462,8 @@ test('getTelemetrySummary returns correct structure', t => {
 
   t.is(summary.total_spawns, 2);
   t.is(summary.total_models, 2);
-  t.truthy(summary.models['kimi-k2.5']);
-  t.truthy(summary.models['glm-5']);
+  t.truthy(summary.models[BUILDER_MODEL]);
+  t.truthy(summary.models[ALT_MODEL]);
   t.is(summary.recent_decisions.length, 2);
 
   cleanupTempDir(tempDir);
@@ -473,7 +479,7 @@ test('getTelemetrySummary calculates success_rate correctly', t => {
   const result1 = recordSpawnTelemetry(tempDir, {
     task: 'task-1',
     caste: 'builder',
-    model: 'kimi-k2.5',
+    model: BUILDER_MODEL,
     source: 'test'
   });
   updateSpawnOutcome(tempDir, result1.decision_id, 'completed');
@@ -481,7 +487,7 @@ test('getTelemetrySummary calculates success_rate correctly', t => {
   const result2 = recordSpawnTelemetry(tempDir, {
     task: 'task-2',
     caste: 'builder',
-    model: 'kimi-k2.5',
+    model: BUILDER_MODEL,
     source: 'test'
   });
   updateSpawnOutcome(tempDir, result2.decision_id, 'failed');
@@ -489,12 +495,12 @@ test('getTelemetrySummary calculates success_rate correctly', t => {
   recordSpawnTelemetry(tempDir, {
     task: 'task-3',
     caste: 'builder',
-    model: 'kimi-k2.5',
+    model: BUILDER_MODEL,
     source: 'test'
   });
 
   const summary = getTelemetrySummary(tempDir);
-  const modelStats = summary.models['kimi-k2.5'];
+  const modelStats = summary.models[BUILDER_MODEL];
 
   t.is(modelStats.total_spawns, 3);
   t.is(modelStats.success_rate, 0.33); // 1 success / 3 spawns, rounded to 2 decimals
@@ -513,7 +519,7 @@ test('getTelemetrySummary returns last 10 routing decisions', t => {
     recordSpawnTelemetry(tempDir, {
       task: `task-${i}`,
       caste: 'builder',
-      model: 'kimi-k2.5',
+      model: BUILDER_MODEL,
       source: 'test'
     });
   }
@@ -538,7 +544,7 @@ test('getModelPerformance returns correct stats for a model', t => {
   const result1 = recordSpawnTelemetry(tempDir, {
     task: 'task-1',
     caste: 'builder',
-    model: 'kimi-k2.5',
+    model: BUILDER_MODEL,
     source: 'test'
   });
   updateSpawnOutcome(tempDir, result1.decision_id, 'completed');
@@ -546,7 +552,7 @@ test('getModelPerformance returns correct stats for a model', t => {
   const result2 = recordSpawnTelemetry(tempDir, {
     task: 'task-2',
     caste: 'watcher',
-    model: 'kimi-k2.5',
+    model: BUILDER_MODEL,
     source: 'test'
   });
   updateSpawnOutcome(tempDir, result2.decision_id, 'failed');
@@ -554,15 +560,15 @@ test('getModelPerformance returns correct stats for a model', t => {
   const result3 = recordSpawnTelemetry(tempDir, {
     task: 'task-3',
     caste: 'builder',
-    model: 'kimi-k2.5',
+    model: BUILDER_MODEL,
     source: 'test'
   });
   updateSpawnOutcome(tempDir, result3.decision_id, 'blocked');
 
-  const perf = getModelPerformance(tempDir, 'kimi-k2.5');
+  const perf = getModelPerformance(tempDir, BUILDER_MODEL);
 
   t.truthy(perf);
-  t.is(perf.model, 'kimi-k2.5');
+  t.is(perf.model, BUILDER_MODEL);
   t.is(perf.total_spawns, 3);
   t.is(perf.successful_completions, 1);
   t.is(perf.failed_completions, 1);
@@ -595,14 +601,14 @@ test('getRoutingStats returns all stats when no filters', t => {
   recordSpawnTelemetry(tempDir, {
     task: 'task-1',
     caste: 'builder',
-    model: 'kimi-k2.5',
+    model: BUILDER_MODEL,
     source: 'caste-default'
   });
 
   recordSpawnTelemetry(tempDir, {
     task: 'task-2',
     caste: 'watcher',
-    model: 'glm-5',
+    model: ALT_MODEL,
     source: 'task-based'
   });
 
@@ -611,8 +617,8 @@ test('getRoutingStats returns all stats when no filters', t => {
   t.is(stats.total_decisions, 2);
   t.is(stats.by_source['caste-default'], 1);
   t.is(stats.by_source['task-based'], 1);
-  t.is(stats.by_model['kimi-k2.5'], 1);
-  t.is(stats.by_model['glm-5'], 1);
+  t.is(stats.by_model[BUILDER_MODEL], 1);
+  t.is(stats.by_model[ALT_MODEL], 1);
   t.truthy(stats.date_range);
 
   cleanupTempDir(tempDir);
@@ -627,28 +633,28 @@ test('getRoutingStats filters by caste correctly', t => {
   recordSpawnTelemetry(tempDir, {
     task: 'task-1',
     caste: 'builder',
-    model: 'kimi-k2.5',
+    model: BUILDER_MODEL,
     source: 'test'
   });
 
   recordSpawnTelemetry(tempDir, {
     task: 'task-2',
     caste: 'watcher',
-    model: 'glm-5',
+    model: ALT_MODEL,
     source: 'test'
   });
 
   recordSpawnTelemetry(tempDir, {
     task: 'task-3',
     caste: 'builder',
-    model: 'kimi-k2.5',
+    model: BUILDER_MODEL,
     source: 'test'
   });
 
   const stats = getRoutingStats(tempDir, { caste: 'builder' });
 
   t.is(stats.total_decisions, 2);
-  t.is(stats.by_model['kimi-k2.5'], 2);
+  t.is(stats.by_model[BUILDER_MODEL], 2);
 
   cleanupTempDir(tempDir);
 });
@@ -704,7 +710,7 @@ test('getRoutingStats returns empty stats when no decisions match', t => {
   recordSpawnTelemetry(tempDir, {
     task: 'task-1',
     caste: 'builder',
-    model: 'kimi-k2.5',
+    model: BUILDER_MODEL,
     source: 'test'
   });
 
@@ -785,7 +791,7 @@ test('recordSpawnTelemetry uses provided timestamp', t => {
   const result = recordSpawnTelemetry(tempDir, {
     task: 'test-task',
     caste: 'builder',
-    model: 'kimi-k2.5',
+    model: BUILDER_MODEL,
     source: 'test',
     timestamp: customTimestamp
   });
@@ -808,28 +814,28 @@ test('Multiple models tracked independently', t => {
   recordSpawnTelemetry(tempDir, {
     task: 'task-1',
     caste: 'builder',
-    model: 'kimi-k2.5',
+    model: BUILDER_MODEL,
     source: 'test'
   });
 
   recordSpawnTelemetry(tempDir, {
     task: 'task-2',
     caste: 'builder',
-    model: 'kimi-k2.5',
+    model: BUILDER_MODEL,
     source: 'test'
   });
 
   recordSpawnTelemetry(tempDir, {
     task: 'task-3',
     caste: 'watcher',
-    model: 'glm-5',
+    model: ALT_MODEL,
     source: 'test'
   });
 
   const data = loadTelemetry(tempDir);
 
-  t.is(data.models['kimi-k2.5'].total_spawns, 2);
-  t.is(data.models['glm-5'].total_spawns, 1);
+  t.is(data.models[BUILDER_MODEL].total_spawns, 2);
+  t.is(data.models[ALT_MODEL].total_spawns, 1);
 
   cleanupTempDir(tempDir);
 });

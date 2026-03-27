@@ -1,18 +1,18 @@
 # Aether E2E Test Results
 
-**Generated:** 2026-02-18T02:53:53Z
-**Duration:** 13s
+**Generated:** 2026-03-20T07:41:28Z
+**Duration:** 17s
 
 ## Summary
 
 | Metric | Value |
 |--------|-------|
 | Total Requirements | 46 |
-| PASS | 46 |
-| FAIL | 0 |
+| PASS | 26 |
+| FAIL | 20 |
 | UNKNOWN | 0 |
-| Pass Rate | 100% |
-| Overall | ALL PASS |
+| Pass Rate | 56% |
+| Overall | HAS FAILURES |
 
 ## Lifecycle Integration Test
 
@@ -28,14 +28,14 @@
 | ERR-02 | Agents stop spawning (no infinite loops) | PASS | test-err.sh |
 | ERR-03 | Clear error messages when things fail | PASS | test-err.sh |
 | STA-01 | COLONY_STATE.json updates correctly on all operations | PASS | test-sta.sh |
-| STA-02 | No file path hallucinations (commands find right files) | PASS | test-sta.sh |
+| STA-02 | No file path hallucinations (commands find right files) | FAIL | test-sta.sh |
 | STA-03 | Files created in correct repositories | PASS | test-sta.sh |
-| CMD-01 | /ant:lay-eggs starts new colony with pheromone preservation | PASS | test-cmd.sh |
+| CMD-01 | /ant:lay-eggs starts new colony with pheromone preservation | FAIL | test-cmd.sh |
 | CMD-02 | /ant:init initializes after lay-eggs | PASS | test-cmd.sh |
-| CMD-03 | /ant:colonize analyzes existing codebase | PASS | test-cmd.sh |
-| CMD-04 | /ant:plan generates project plan | PASS | test-cmd.sh |
-| CMD-05 | /ant:build executes phase with worker spawning | PASS | test-cmd.sh |
-| CMD-06 | /ant:continue verifies, extracts learnings, advances phase | PASS | test-cmd.sh |
+| CMD-03 | /ant:colonize analyzes existing codebase | FAIL | test-cmd.sh |
+| CMD-04 | /ant:plan generates project plan | FAIL | test-cmd.sh |
+| CMD-05 | /ant:build executes phase with worker spawning | FAIL | test-cmd.sh |
+| CMD-06 | /ant:continue verifies, extracts learnings, advances phase | FAIL | test-cmd.sh |
 | CMD-07 | /ant:status shows colony dashboard | PASS | test-cmd.sh |
 | CMD-08 | All commands find correct files (no hallucinations) | PASS | test-cmd.sh |
 | PHER-01 | FOCUS signal attracts attention to areas | PASS | test-pher.sh |
@@ -48,28 +48,28 @@
 | VIS-03 | Colors for different castes | PASS | test-vis.sh |
 | VIS-04 | Progress indication during builds | PASS | test-vis.sh |
 | VIS-05 | Stage banners use ant-themed names (DIGESTING, EXCAVATING, etc.) | PASS | test-vis.sh |
-| VIS-06 | GSD-style formatting for phase transitions | PASS | test-vis.sh |
+| VIS-06 | GSD-style formatting for phase transitions | FAIL | test-vis.sh |
 | CTX-01 | Session state persists across /clear | PASS | test-ctx.sh |
 | CTX-02 | Clear next command guidance at phase boundaries | PASS | test-ctx.sh |
-| CTX-03 | Context document tells next session what was happening | PASS | test-ctx.sh |
-| SES-01 | /ant:pause-colony saves state and creates handoff | PASS | test-ses.sh |
-| SES-02 | /ant:resume-colony restores full context | PASS | test-ses.sh |
-| SES-03 | /ant:watch shows live colony visibility | PASS | test-ses.sh |
+| CTX-03 | Context document tells next session what was happening | FAIL | test-ctx.sh |
+| SES-01 | /ant:pause-colony saves state and creates handoff | FAIL | test-ses.sh |
+| SES-02 | /ant:resume-colony restores full context | FAIL | test-ses.sh |
+| SES-03 | /ant:watch shows live colony visibility | FAIL | test-ses.sh |
 | LIF-01 | /ant:seal creates Crowned Anthill milestone | PASS | test-lif.sh |
 | LIF-02 | /ant:entomb archives colony to chambers | PASS | test-lif.sh |
 | LIF-03 | /ant:tunnels browses archived colonies | PASS | test-lif.sh |
-| ADV-01 | /ant:oracle performs deep research (RALF loop) | PASS | test-adv.sh |
-| ADV-02 | /ant:chaos performs resilience testing | PASS | test-adv.sh |
-| ADV-03 | /ant:archaeology analyzes git history | PASS | test-adv.sh |
-| ADV-04 | /ant:dream philosophical wanderer writes wisdom | PASS | test-adv.sh |
-| ADV-05 | /ant:interpret validates dreams against reality | PASS | test-adv.sh |
+| ADV-01 | /ant:oracle performs deep research (RALF loop) | FAIL | test-adv.sh |
+| ADV-02 | /ant:chaos performs resilience testing | FAIL | test-adv.sh |
+| ADV-03 | /ant:archaeology analyzes git history | FAIL | test-adv.sh |
+| ADV-04 | /ant:dream philosophical wanderer writes wisdom | FAIL | test-adv.sh |
+| ADV-05 | /ant:interpret validates dreams against reality | FAIL | test-adv.sh |
 | XML-01 | Pheromones stored/retrieved via XML format | PASS | test-xml.sh |
 | XML-02 | Wisdom exchange uses XML structure | PASS | test-xml.sh |
 | XML-03 | Registry uses XML for cross-colony communication | PASS | test-xml.sh |
-| DOC-01 | Phase learnings extracted and documented (ant-themed) | PASS | test-doc.sh |
-| DOC-02 | Colony memories stored with ant naming (pheromones.md) | PASS | test-doc.sh |
-| DOC-03 | Progress tracked with ant metaphors (nursery, chambers) | PASS | test-doc.sh |
-| DOC-04 | Handoff documents use ant themes | PASS | test-doc.sh |
+| DOC-01 | Phase learnings extracted and documented (ant-themed) | FAIL | test-doc.sh |
+| DOC-02 | Colony memories stored with ant naming (pheromones.md) | FAIL | test-doc.sh |
+| DOC-03 | Progress tracked with ant metaphors (nursery, chambers) | FAIL | test-doc.sh |
+| DOC-04 | Handoff documents use ant themes | FAIL | test-doc.sh |
 
 ---
 *Generated by tests/e2e/run-all-e2e.sh*

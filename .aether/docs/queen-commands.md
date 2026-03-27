@@ -90,8 +90,9 @@ The queen commands are part of the colony lifecycle:
 
 ### Adding a New Queen Command
 
-1. Add the case block in `aether-utils.sh` (alongside existing `queen-*` blocks)
-2. Add it to the flat `commands` array in the `help)` case block
-3. Add it to the "Queen Commands" section in help's `sections` JSON
-4. Update this file with usage documentation
-5. Add tests in `tests/bash/test-aether-utils.sh`
+1. Add the function implementation in `.aether/utils/queen.sh` (domain module)
+2. Add the dispatch case in `aether-utils.sh` (alongside existing `queen-*` blocks)
+3. Add it to the flat `commands` array in the `help)` case block
+4. Add it to the "Queen Commands" section in help's `sections` JSON
+5. Update this file with usage documentation
+6. Add tests in `tests/bash/test-aether-utils.sh`

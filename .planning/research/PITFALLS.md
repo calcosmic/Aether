@@ -1,309 +1,364 @@
-# Domain Pitfalls
+# Domain Pitfalls: Per-Caste Model Routing
 
-**Domain:** Multi-agent colony orchestration system maintenance (pheromone integration, cleanup, fresh-install polish)
-**Researched:** 2026-03-19
-**Overall Confidence:** HIGH (grounded in codebase audit + multi-agent failure research)
+**Domain:** Adding per-caste GLM-5/GLM-5-turbo model routing via opus/sonnet model slots in Aether colony orchestration
+**Researched:** 2026-03-27
+**Confidence:** HIGH -- grounded in direct codebase inspection (184 test assertions, spawn mechanism, model-profiles.yaml, settings files, archived routing system, GSD model profile precedent)
 
 ---
 
 ## Critical Pitfalls
 
-Mistakes that cause rewrites, broken colonies, or cascading test failures.
+### Pitfall 1: The Task Tool Model Parameter Must Actually Be Used -- Or Routing Is Fiction
 
-### Pitfall 1: Test Data Cleanup Corrupts the Canonical State Templates
+**What goes wrong:**
+The v1 model routing was archived because Claude Code's Task tool did not support environment variable passing. The archive README states this explicitly (`.aether/archive/model-routing/README.md` line 28): "Claude Code's Task tool does not support environment variable passing to spawned subagents." The current system at v2 still has `spawn-with-model.sh` marked as "non-functional" (archive line 89).
 
-**What goes wrong:** Cleaning test artifacts from QUEEN.md, pheromones.json, and constraints.json seems like a simple find-and-delete, but the line between "test data" and "template data" is blurry. The QUEEN.md currently has legitimate entries (`colony-a` through `colony-e`) mixed with 25+ junk `test-colony` entries. Deleting too aggressively removes the seed data that new colonies need. Deleting too conservatively leaves test artifacts that pollute every future colony.
+The GSD system solved this by using the `model` parameter directly on Task calls: `Task(subagent_type="gsd-executor", model="{executor_model}")`. This works because Claude Code's Task tool accepts `"opus"`, `"sonnet"`, `"haiku"`, and `"inherit"` as model parameters. The question for v2.3 is whether the same mechanism can be applied to Aether's builder/watcher/scout spawns.
 
-**Why it happens:** Tests wrote directly to the canonical `.aether/` files instead of isolated temp directories. The integration tests (pheromone-auto-emission.test.js, suggest-pheromones.test.js) correctly use temp dirs, but earlier development testing wrote to the real files. There is no flag distinguishing "seed data" from "test residue."
+**Why it happens:**
+The build-wave playbook (`build-wave.md` lines 288-290) currently spawns workers with `subagent_type="aether-builder"` but does NOT pass a `model` parameter. It relies entirely on the parent session's environment (`ANTHROPIC_MODEL` env var) which, as the archive confirms, is NOT inherited by Task-spawned subagents. This means all current spawns use whatever model the parent Queen session uses -- not the caste-specific model.
 
-**Consequences:**
-- If seed entries are removed: `colony-prime` produces empty wisdom sections; new colonies lack starter philosophies
-- If test entries remain: every colony inherits "Test pattern" and "Immediate decree test" entries, making the system look broken to new users
-- COLONY_STATE.json contains a goal from a completely different project (Electron-to-Xcode migration) which will confuse fresh sessions
+**How to avoid:**
+1. Do NOT attempt to use `ANTHROPIC_MODEL` environment variable passing. The archive proves this does not work.
+2. Follow the GSD pattern exactly: resolve the model slot (`"opus"` or `"sonnet"`) before each Task call and pass it as the `model` parameter.
+3. The mapping is: reasoning castes (Prime, Oracle, Archaeologist, Route-Setter, Architect) get `"opus"` slot; execution castes (Builder, Watcher, Scout, Chaos, Colonizer) get `"sonnet"` slot.
+4. Both slots are then mapped to GLM models via the LiteLLM proxy (opus -> glm-5, sonnet -> glm-5-turbo) in the proxy config -- NOT in settings.json.
 
-**Prevention:**
-1. Before cleanup, document which QUEEN.md entries are canonical seeds (colony-a through colony-e) vs test residue (everything with "test-colony" source)
-2. Create a "golden state" snapshot: pristine QUEEN.md, empty pheromones.json, clean constraints.json -- commit as the known-good baseline
-3. Add a CI check: `npm run lint:state` that validates state files against expected schemas and rejects entries with "test" in source/colony fields
-4. Ensure all future tests use `AETHER_ROOT=$tmpDir` isolation (the existing integration tests already do this correctly)
+**Warning signs:**
+- Workers are spawned but their output quality is identical regardless of caste (all using same model)
+- The spawn-tree.txt model column shows the same model for all castes after implementation
+- Claude-only mode works fine but GLM proxy mode shows no difference between castes
 
-**Detection:**
-- Run `grep -c "test-colony\|test.*pattern\|Immediate decree" .aether/QUEEN.md` -- count > 0 means test pollution remains
-- Check if COLONY_STATE.json goal mentions "Electron" or "Xcode" -- stale cross-project state
-- constraints.json focus array containing "test area" or "sanity signal" entries
+**Phase to address:** Core implementation phase -- this is the foundational mechanism, must be proven working before anything else
 
-**Phase mapping:** This should be the FIRST thing addressed in Phase 1 (cleanup). Everything downstream depends on clean state.
-
----
-
-### Pitfall 2: Pheromone Integration Creates a "Write-Only" Signal System
-
-**What goes wrong:** The pheromone system has complete write infrastructure (pheromone-write, pheromone-emit, suggest-analyze, suggest-approve) and complete read infrastructure (pheromone-read, pheromone-display, colony-prime). The gap is behavioral: workers receive pheromone signals via `colony-prime --compact` in the build-context playbook, but no worker agent definition actually references or acts on these signals. The builder agent definition does not mention pheromones at all. Signals are injected into prompts but there is no enforcement, feedback loop, or verification that workers changed behavior based on signals.
-
-**Why it happens:** This is the classic "event-driven architecture without consumers" anti-pattern. The plumbing was built bottom-up (storage, emission, display) without top-down validation (do workers actually read and respond to these signals?). Research on multi-agent system failures shows that 79% of coordination failures originate from specification issues, not technical implementation -- the specs (agent definitions) never required pheromone consumption.
-
-**Consequences:**
-- Users emit FOCUS/REDIRECT/FEEDBACK signals expecting behavior change, but workers ignore them
-- The suggest-analyze system auto-creates signals that nobody reads, creating signal noise
-- Pheromones accumulate without effect, training users that the feature is decorative
-- No feedback loop means signal quality cannot improve over time
-
-**Prevention:**
-1. Integration must be top-down: modify worker agent definitions (especially aether-builder.md, aether-watcher.md) to explicitly reference and act on pheromone signals
-2. Add a "signal acknowledgment" mechanism: workers report which signals influenced their decisions
-3. Start with REDIRECT (highest priority, simplest behavior: "avoid X") before FOCUS or FEEDBACK
-4. Add integration test: emit REDIRECT signal, run build, verify worker output references the constraint
-5. Validate pheromone consumption in the build-verify playbook: check worker outputs for signal acknowledgment
-
-**Detection:**
-- Search agent definitions for "pheromone": zero matches in aether-builder.md = workers are signal-blind
-- Run a build with active REDIRECT signals and check if worker output mentions the constraint
-- Count ratio of pheromone-write calls to pheromone-read calls across all playbooks
-
-**Phase mapping:** This is the CORE work of Phase 2 or 3 (pheromone integration). Should not be attempted until cleanup is complete.
+**Evidence:** `.aether/archive/model-routing/README.md` lines 25-44, `.claude/get-shit-done/references/model-profile-resolution.md` lines 17-24, `build-wave.md` line 290
 
 ---
 
-### Pitfall 3: Breaking 490+ Tests by Changing State Schemas or Utility Signatures
+### Pitfall 2: Config Swap Workflow Breakage -- The Two-File Dance Gets Fragile
 
-**What goes wrong:** The 10,249-line aether-utils.sh has 150 subcommands. Changing the JSON structure of pheromones.json, modifying pheromone-write arguments, or altering colony-prime output format breaks tests across multiple test suites (unit, integration, bash) simultaneously. The tests are spread across 47+ files, and a single schema change can create a "red wall" of failures that is demoralizing and hard to diagnose.
+**What goes wrong:**
+The user switches between Claude API mode and GLM proxy mode by swapping settings files. Currently this works because the model name in settings.json is irrelevant -- the only thing that matters is `ANTHROPIC_BASE_URL` (either pointing to Anthropic or to the LiteLLM proxy). All castes use the same model, so there is no per-caste config to get out of sync.
 
-**Why it happens:** The monolithic utility file means changes have a blast radius equal to the entire system. There is no module boundary between pheromone logic, state management, wisdom promotion, and spawn management. A change to how signals are structured in pheromones.json can break colony-prime, which breaks build-context, which breaks integration tests.
+With per-caste routing, the system needs to know which mode is active to decide whether to pass `model: "opus"` or `model: "sonnet"` to Task calls. If the detection logic is wrong, workers get routed to the wrong model.
 
-**Consequences:**
-- Developer changes one thing, sees 50 test failures, panics, reverts everything
-- "Fix forward" attempts create more breakage as fixes cascade
-- Maintenance paralysis: nobody wants to touch the utility file because everything depends on it
+**Specific failure mode:**
+The user is in Claude API mode (settings.json points to Anthropic). They run `/ant:build`. The build playbook resolves castes and passes `model: "opus"` for Prime. Claude Code interprets `"opus"` as `claude-opus-4` and routes to Anthropic's opus model. This actually works correctly for Claude mode -- it is the GLM proxy mode that requires the proxy-level mapping.
 
-**Prevention:**
-1. Before ANY schema change, run full test suite and record baseline: `npm test 2>&1 | tail -5` to capture pass/fail count
-2. Make schema changes additive-only: new fields yes, renamed/removed fields no. If pheromones.json needs new structure, add fields alongside old ones
-3. Use feature flags for new behavior: `if [[ -n "${AETHER_V2_SIGNALS:-}" ]]; then` -- allows gradual rollout
-4. Write the new tests FIRST (TDD), then modify the implementation to pass them
-5. Run `npm test` after EVERY atomic change, not after a batch of changes
+But if the user has GLM proxy settings active (settings.json.3model), `ANTHROPIC_BASE_URL` points to `localhost:4000`. Claude Code sends the `"opus"` request to the LiteLLM proxy, which then maps it to glm-5. This also works -- BUT only if the proxy config has the opus-to-glm-5 mapping.
 
-**Detection:**
-- Before starting work: `npm test` baseline must be green (490+ passing)
-- After each file save: run affected test subset
-- If more than 5 tests break from one change, the change is too broad -- split it
+**The real breakage:** If the proxy config does NOT have the model alias mapping (i.e., the proxy does not know that `opus` should route to `glm-5`), the request fails with "model not found" from the proxy. The proxy silently drops the request or returns an error that Claude Code surfaces as a generic "model error."
 
-**Phase mapping:** Every phase must run full test suite as exit gate. The cleanup phase is especially risky because it touches state files that tests may implicitly depend on.
+**Why it happens:**
+The current LiteLLM proxy configuration is external to Aether -- it is a separate litellm config.yaml that the user manages. The proxy config and Aether's model-profiles.yaml are two separate systems that need to agree on model aliases. Per-caste routing adds a third layer: settings.json, model-profiles.yaml, and the proxy config must all be aligned.
+
+**How to avoid:**
+1. Aether should NOT try to detect which mode is active. Instead, Aether should always pass the model slot parameter (`"opus"` or `"sonnet"`) to Task calls. In Claude API mode, Claude Code maps `"opus"` to `claude-opus-4` natively. In proxy mode, the LiteLLM proxy maps it to whatever the proxy config says.
+2. The proxy config mapping (opus -> glm-5, sonnet -> glm-5-turbo) is the user's responsibility. Aether's model-profiles.yaml should document this mapping but NOT try to enforce it.
+3. Add a `model-profile verify` step that checks proxy health AND validates that the expected model aliases exist in the proxy. This already partially exists in aether-utils.sh line 2655-2664.
+4. Do NOT add a "detect active mode" mechanism. Detection is fragile and breaks when the user has non-standard settings. Instead, document the two config files clearly and let the user manage the swap.
+
+**Warning signs:**
+- `/ant:build` spawns workers that fail with "model not found" from the proxy
+- Workers complete but produce output inconsistent with their assigned model (e.g., a builder using opus-level reasoning instead of turbo-level speed)
+- Config swap works in one direction (Claude -> GLM) but not the other
+
+**Phase to address:** Implementation phase -- the model slot mechanism must be designed before config swap integration
+
+**Evidence:** `verify-castes.md` lines 46-52, `model-profiles.yaml` line 92-95, `model-verify.js` lines 109-121
 
 ---
 
-### Pitfall 4: XML Exchange System Removal Creates Dead Code References
+### Pitfall 3: GLM-5 Looping Despite Proxy Constraints -- The Constraint Escape
 
-**What goes wrong:** The XML exchange system (.aether/exchange/, .aether/schemas/) has 6 files and ~500 lines of shell code that are completely unwired from any command or playbook. No command references pheromone-export-xml, pheromone-import-xml, wisdom-xml, or registry-xml. However, the aether-utils.sh help listing advertises these commands, and existing tests (tests/bash/test-pheromone-xml.sh, tests/bash/test-xinclude-composition.sh) exercise them. Archiving or removing the XML system without updating ALL references creates a broken help system and failing tests.
+**What goes wrong:**
+GLM-5 is known to loop in agent workflows. The LiteLLM proxy mitigates this with tight generation constraints (temperature 0.4, top_p 0.85, max_tokens 2500). These constraints work when the proxy is correctly configured. But there are at least four conditions where GLM-5 can escape these constraints:
 
-**Why it happens:** The XML system was built as a complete feature but never integrated into the actual colony lifecycle (pause/resume/seal commands don't call it). It exists as a parallel, unused layer. The CONCERNS.md audit correctly identified this as an integration gap, and the PROJECT.md marks it for archival. But "archive" is ambiguous -- does it mean delete, move to an archive directory, or comment out?
+1. **Temperature override in settings.json:** If the user's Claude Code settings include `temperature` or `top_p` parameters, they may override the proxy constraints. Claude Code sends these parameters in the API request, and if the LiteLLM proxy is configured to pass them through (rather than enforce its own), GLM-5 runs with the user's values.
 
-**Consequences:**
-- If deleted: test-pheromone-xml.sh and test-xinclude-composition.sh fail; help listing references nonexistent commands
-- If kept: security concern (XXE vulnerability in XInclude processing without circular reference detection) remains in the codebase
-- If partially removed: dead references create confusing error messages
+2. **Proxy restart:** If the LiteLLM proxy is restarted and the config file is not loaded (e.g., the user runs `litellm` without `--config`), GLM-5 runs with default constraints (temperature 1.0, top_p 1.0, max_tokens unlimited).
 
-**Prevention:**
-1. Define "archive" precisely: move .aether/exchange/ and .aether/schemas/ to .aether/archive/exchange/ and .aether/archive/schemas/
-2. Move corresponding tests to a disabled/archive state (rename to .skip or move to tests/archived/)
-3. Remove XML-related entries from the aether-utils.sh help command listing
-4. Keep the archive accessible for future reference but out of the active codebase
-5. Update validate-package.sh if it checks for exchange/ directory presence
+3. **Nested agent calls:** GLM-5 spawned as Prime may spawn sub-workers (builders). If the sub-worker spawn does not also apply constraints, the sub-worker runs GLM-5 without constraints. The proxy constraints apply to the request, but GLM-5's own agent tendency to loop is amplified when it spawns further agents.
 
-**Detection:**
-- After archival: `grep -r "pheromone-xml\|wisdom-xml\|registry-xml\|exchange/" .aether/aether-utils.sh` should return only archive references
-- Run `npm test` and `npm run test:bash` immediately after
-- Check `npm pack --dry-run` to verify archive is excluded from distribution
+4. **System prompt too long:** The colony-prime prompt assembly injects queen wisdom, pheromone signals, skills, and research context. If the total prompt exceeds GLM-5's effective reasoning window (not its token limit, but the point where long-context attention degrades), GLM-5 may lose track of termination conditions and loop.
 
-**Phase mapping:** Phase 1 (cleanup) -- but must be done AFTER test data cleanup and BEFORE pheromone integration, so the integration work builds on a clean foundation.
+**Why it happens:**
+The proxy constraints are a safety net, but they are not enforced at the application level. Aether relies on the LiteLLM proxy to constrain GLM-5, but Aether has no visibility into whether those constraints are actually in effect. The `model-profile verify` command checks proxy health but does not verify that specific model parameters (temperature, top_p, max_tokens) are set.
+
+**How to avoid:**
+1. Add GLM-5 loop detection at the application level. The spawn-tree.txt already records timestamps. If a worker's spawn-to-completion time exceeds a threshold (e.g., 10 minutes for a single task), log a warning. If completion is not recorded within 20 minutes, flag as likely looped.
+2. Document that reasoning castes (Prime, Oracle) MUST have the LiteLLM proxy running with constraints. If `model-profile verify` detects the proxy is down, warn specifically that GLM-5 castes will loop without constraints.
+3. For the Prime caste specifically: consider whether Prime should ALWAYS use glm-5-turbo despite being a "reasoning" caste. Prime is the orchestrator -- its job is coordination, not deep reasoning. If Prime loops, the entire build hangs.
+4. Ensure the build-wave playbook includes max_turns or equivalent termination instructions in the worker prompt for GLM-5 castes. The current builder prompt does not include explicit termination conditions (build-wave.md lines 326-421).
+
+**Warning signs:**
+- A build hangs indefinitely with no worker completions logged to spawn-tree.txt
+- Workers complete but their output is repetitive or circular (GLM-5 re-explaining the same thing)
+- The LiteLLM proxy logs show the same model name in rapid succession (proxy constraint max_tokens is too high, allowing very long responses that look like looping)
+
+**Phase to address:** Implementation phase (loop detection) and testing phase (verify proxy constraints are effective)
+
+**Evidence:** `model-profiles.yaml` lines 16-25 (GLM-5 metadata explicitly warns about "tight constraints for agent stability"), `.aether/archive/model-routing/README.md` line 89, spawn-tree.txt timestamp format
+
+---
+
+### Pitfall 4: 184 Hardcoded Model Names In Tests Will Break On Any YAML Change
+
+**What goes wrong:**
+There are 184 occurrences of hardcoded model names (`glm-5-turbo`, `glm-5`, `glm-4.5-air`) across 6 test files. The current model-profiles.yaml has all castes mapped to `glm-5-turbo`. If per-caste routing changes some castes to `glm-5` or adds new model names, every test that asserts on the current model name will fail.
+
+Worse: the test files use their own `createMockProfiles()` helper functions that duplicate the model names. These are not reading from the YAML file -- they are hardcoded separately. Changing the YAML does not automatically update the mock profiles in tests.
+
+The integration test in `model-profiles.test.js` line 422 (`integration: load actual YAML and verify all castes`) reads the actual YAML file but still asserts specific model names: `t.is(modelProfiles.getModelForCaste(profiles, 'builder'), 'glm-5-turbo')`. When builder changes to a different model, this test breaks.
+
+**Why it happens:**
+The tests were written when all castes used `glm-5-turbo`. The mocks were copy-pasted from the YAML and never updated. There is no test helper that reads the YAML to generate mock profiles dynamically -- each test file has its own copy of the profile data.
+
+**How to avoid:**
+1. Before changing model-profiles.yaml, create a centralized test helper that reads the actual YAML and generates mock profiles. This way, changing the YAML automatically changes the test expectations.
+2. When changing per-caste assignments, update tests in the SAME commit. Never change the YAML and defer test updates.
+3. Add a "model profile consistency" test that reads the YAML, reads the test mock profiles, and asserts they are in sync. This catches the case where YAML is updated but test mocks are not.
+4. The `createMockProfiles()` helper in each test file should be extracted to a shared test utility (`tests/helpers/mock-profiles.js`) so it only needs to be updated in one place.
+
+**Warning signs:**
+- `npm test` fails with "expected 'glm-5' but got 'glm-5-turbo'" or similar assertion errors
+- Tests pass in one test file but fail in another (different mocks are out of sync in different ways)
+- The integration test that reads actual YAML fails while unit tests that use mocks pass (or vice versa)
+
+**Phase to address:** FIRST phase -- before changing any model assignments, refactor test infrastructure to be YAML-driven
+
+**Evidence:** grep of tests/ directory: 184 occurrences across 6 files (model-profiles.test.js: 32, model-profiles-overrides.test.js: 20, model-profiles-task-routing.test.js: 49, cli-override.test.js: 19, cli-telemetry.test.js: 15, telemetry.test.js: 49)
 
 ---
 
 ## Moderate Pitfalls
 
-### Pitfall 5: Pheromone Decay Math Has No Tests and Uses Platform-Dependent Date Arithmetic
+### Pitfall 5: Silent Wrong-Model Spawn -- The Build Playbook Does Not Log Model Selection
 
-**What goes wrong:** Pheromone signals have TTL-based expiration using epoch timestamps. The expiration calculation in pheromone-write (lines 6870-6889) uses `date -r` (macOS) with fallback to `date -d` (Linux). The decay display in pheromone-display computes strength decay over time. Neither path has dedicated tests, and the date arithmetic differs between macOS and Linux.
+**What goes wrong:**
+The build-wave playbook (`build-wave.md` line 290) spawns workers with `subagent_type="aether-builder"` but does not log which model slot was selected. The `spawn-log` call (`spawn.sh` line 16) accepts an optional `model` parameter, but the build-wave playbook does not pass it. The spawn-tree.txt entry records the model as `"default"` for all workers.
 
-**Why it happens:** Bash date handling is notoriously inconsistent across platforms. macOS uses BSD date, Linux uses GNU date. The code has a fallback chain but the fallback itself is untested.
+If per-caste routing is implemented but the model selection is not logged, there is no audit trail for debugging. A user reports "my builder seems slower than usual" and there is no way to verify which model the builder actually used.
 
-**Prevention:**
-1. Write explicit decay math tests with known timestamps: create signal at epoch X, check decay at epoch X+3600 (1 hour), X+86400 (1 day)
-2. Test on both macOS and Linux (CI should cover this)
-3. Consider using a date wrapper function that normalizes behavior across platforms
-4. Test edge cases: signals created before DST transition, signals with "phase_end" TTL
+**Why it happens:**
+The spawn-log function was designed before model routing existed. The model parameter is optional (defaults to `"default"`). The build-wave playbook was written for the single-model era and never updated to pass model information.
 
-**Detection:**
-- Run `bash .aether/aether-utils.sh pheromone-display` and check if decay percentages make sense
-- Create a signal with `--ttl 1h`, wait 30 minutes, verify strength is ~50%
+**How to avoid:**
+1. When implementing per-caste routing, update the build-wave playbook to pass the resolved model slot to `spawn-log`. The call should look like: `bash .aether/aether-utils.sh spawn-log "Queen" "builder" "{ant_name}" "{task}" "{model_slot}"`.
+2. The spawn-tree.txt format already supports a model field (line 27: `$ts_full|$parent_id|$child_caste|$child_name|$task_summary|$model|$status`). Verify the build-wave playbook populates this field.
+3. Add a post-build verification step that reads spawn-tree.txt and checks that each caste got the expected model slot. If a caste got the wrong model, log a warning to the activity log.
 
-**Phase mapping:** Phase 2 (pheromone integration) -- decay math must work before signals can be trusted.
+**Warning signs:**
+- spawn-tree.txt shows `"default"` for all workers after per-caste routing is implemented
+- Users cannot determine which model was used for a specific worker
+- Debugging a "wrong model" issue requires re-running the entire build
 
----
+**Phase to address:** Implementation phase -- model logging should be part of the core routing mechanism
 
-### Pitfall 6: Fresh Install Breaks Because Global Hub Assumes Existing State
-
-**What goes wrong:** `npm install -g aether-colony` runs postinstall which calls setupHub() to populate `~/.aether/`. If the user then runs `aether update` in a new repo, it copies files from the hub. But the hub's QUEEN.md may contain test data from the developer's environment (if the package was built from a polluted state), and the hub's version may conflict with what `aether init` expects.
-
-**Why it happens:** The distribution pipeline copies `.aether/` contents to the npm package. If `.aether/QUEEN.md` has test pollution when `npm publish` runs, that pollution ships to every user.
-
-**Prevention:**
-1. Add a pre-publish validation step to validate-package.sh that checks QUEEN.md for test artifacts
-2. Create a "clean" QUEEN.md template at `.aether/templates/QUEEN.md.template` that is used for distribution instead of the working QUEEN.md
-3. Test the full install flow: `npm pack`, install the tarball in a fresh directory, run `aether init`, verify clean state
-
-**Detection:**
-- `npm pack --dry-run | grep QUEEN.md` -- if QUEEN.md is included, inspect it for test data
-- After install: check `~/.aether/QUEEN.md` for "test-colony" entries
-
-**Phase mapping:** Phase 3 or 4 (fresh-install polish) -- but cleanup in Phase 1 prevents this if done correctly.
+**Evidence:** `spawn.sh` line 16-17 (model parameter), `spawn.sh` line 27 (spawn-tree format with model field), `build-wave.md` line 318 (spawn-log call without model parameter)
 
 ---
 
-### Pitfall 7: Signal Accumulation Without Garbage Collection Creates Noise
+### Pitfall 6: Colony Lifecycle Edge Cases -- Init, Seal, Entomb May Skip Model Resolution
 
-**What goes wrong:** pheromones.json currently has 9 signals, several marked `active: false` with `expires_at: "phase_end"`. But no phase has advanced (current_phase is 0), so "phase_end" never triggers. Expired signals accumulate indefinitely. The pheromone-display command shows all signals including expired ones, creating visual noise that drowns out real signals.
+**What goes wrong:**
+The build-wave playbook is the primary spawn mechanism, but Aether has other spawn contexts:
 
-**Why it happens:** The pheromone-expire subcommand exists but is never called automatically. There is no cron, no lifecycle hook, and no garbage collection in the build pipeline. The build-context playbook reads signals but does not prune expired ones.
+1. **`/ant:init`** initializes a colony. If it spawns workers for colonize/survey, those workers bypass the build-wave playbook and may not get model routing.
+2. **`/ant:seal`** marks a colony complete. It may spawn workers for cleanup or archiving.
+3. **`/ant:entomb`** archives a completed colony.
+4. **`/ant:swarm`** spawns parallel scouts for bug investigation.
+5. **`/ant:oracle`** runs deep research with the RALF loop.
+6. **`/ant:chaos`** runs resilience testing.
 
-**Prevention:**
-1. Add `pheromone-expire` call to the build-prep playbook (run before loading signals)
-2. Add `pheromone-expire` call to the continue playbook (clean up after phase completion)
-3. Implement a maximum signal count (e.g., 20 active signals) with oldest-first eviction
-4. pheromone-display should filter expired signals by default (add `--all` flag for full view)
+These commands may spawn workers directly (via Task tool) without going through the build-wave playbook's model resolution logic. If model routing is only implemented in build-wave.md, workers spawned by these other commands get whatever model the parent session uses.
 
-**Detection:**
-- `jq '[.signals[] | select(.active == false)] | length' .aether/data/pheromones.json` -- count of inactive signals
-- If inactive count exceeds active count, garbage collection is needed
+**Why it happens:**
+The build-wave playbook is the most complex spawn mechanism. Other commands have simpler spawn logic that was not designed with model routing in mind. Each command is a separate markdown file interpreted by Claude Code, so there is no shared "spawn with model" function they all call.
 
-**Phase mapping:** Phase 2 (pheromone integration) -- must be solved alongside signal reading.
+**How to avoid:**
+1. Create a shared "model resolution" snippet that can be included in any spawn command. This snippet should: (a) determine the caste, (b) look up the model slot from model-profiles.yaml, (c) pass the model parameter to the Task call.
+2. Audit every command that spawns workers and update it to include the model resolution snippet. Commands to check: init.md, seal.md, entomb.md, swarm.md, oracle.md, chaos.md.
+3. For the initial implementation, it is acceptable to only route models in build-wave.md and have other commands use the default. But document this limitation clearly.
+4. The spawn-log call should always include the model parameter (Pitfall 5), even if the model is "default" for commands that do not yet support routing. This creates an audit trail for future implementation.
 
----
+**Warning signs:**
+- Workers spawned by `/ant:swarm` use a different model than workers spawned by `/ant:build`
+- Oracle research quality is inconsistent (sometimes uses glm-5, sometimes glm-5-turbo)
+- Seal/entomb cleanup workers fail if they need capabilities not available in the default model
 
-### Pitfall 8: Stale COLONY_STATE.json From Wrong Project Causes Confusing UX
+**Phase to address:** Second phase -- after build-wave routing is proven, extend to other spawn commands
 
-**What goes wrong:** The current COLONY_STATE.json has goal "Ensure the electron version of the app..." from a completely different project. A new user running `/ant:status` or `/ant:resume` sees this stale goal and is confused. The session recovery check in CLAUDE.md says to display "Previous colony session detected: {goal}" which would show the wrong project's goal.
-
-**Why it happens:** Colony state is per-repo but not validated against the repo it belongs to. There is no repo fingerprint or project identifier in the state file. Any colony initialized in this repo leaves state that persists across unrelated sessions.
-
-**Prevention:**
-1. Add repo fingerprint to COLONY_STATE.json (e.g., first 8 chars of repo origin URL hash)
-2. On `/ant:init`, validate that existing state matches current repo before offering resume
-3. For the immediate cleanup: reset COLONY_STATE.json to a clean template or delete it entirely
-4. Consider adding a `stale_after` timestamp that auto-invalidates state after 7 days of no activity
-
-**Detection:**
-- Check if COLONY_STATE.json goal mentions anything unrelated to current project
-- Check `initialized_at` -- if months old and no phases completed, it is stale
-
-**Phase mapping:** Phase 1 (cleanup) -- must be resolved before any colony operations make sense.
+**Evidence:** CLAUDE.md lists 44 commands, build-wave.md is one of 9 playbooks in `.aether/docs/command-playbooks/`
 
 ---
 
-### Pitfall 9: Concurrent Agent Modifications During Build Create State Races
+### Pitfall 7: User Settings.json Missing Expected Model Slot Mappings
 
-**What goes wrong:** During `/ant:build`, multiple workers are spawned in parallel waves. If two workers both try to emit pheromones (via memory-capture which calls pheromone-write), they race on the pheromones.json file lock. The lock system has a 50-second timeout with 100 retries at 500ms intervals, but no exponential backoff and no jitter. Under parallel worker load, this can cause lock contention, duplicate signals, or worker timeout.
+**What goes wrong:**
+The PROJECT.md scope says "Map opus slot to glm-5, sonnet slot to glm-5-turbo." This mapping must exist somewhere for the proxy to route correctly. If the user's settings.json does not have model mappings that align with Aether's expectations (or if the user has custom model aliases), the routing fails silently.
 
-**Why it happens:** The file-based locking system was designed for single-threaded command execution, not parallel worker builds. The CONCERNS.md identified this: "aggressive polling could waste CPU on slow filesystems" and "if colony has 10+ concurrent commands, some will timeout."
+Specifically: Claude Code's Task tool accepts `"opus"`, `"sonnet"`, `"haiku"` as model parameters. These are Claude Code's own aliases. In Claude API mode, `"opus"` maps to `claude-opus-4`. In proxy mode, the LiteLLM proxy needs to know that `"opus"` maps to `glm-5`. If the user's proxy config maps `"opus"` to something else (or does not map it at all), the routing is wrong.
 
-**Prevention:**
-1. Make pheromone emission non-blocking: workers write to per-worker signal files, build-verify merges them
-2. Add jitter to lock retry: `sleep $(( RANDOM % 500 ))ms` instead of fixed 500ms
-3. Limit pheromone-write calls during build waves (batch signals, emit once after wave completes)
-4. Test with 3+ parallel pheromone-write calls to verify lock correctness
+**Why it happens:**
+Aether's model-profiles.yaml defines the Aether-level mapping (caste -> model name). The LiteLLM proxy config defines the proxy-level mapping (model alias -> actual model). The user's settings.json defines the Claude Code-level connection. These are three separate config files managed by different parts of the system. They can be independently correct but mutually inconsistent.
 
-**Detection:**
-- During builds: watch for "Failed to acquire lock on pheromones.json" in worker output
-- Check for duplicate signal IDs in pheromones.json after a multi-worker build
-- Monitor lock file age: `ls -la /tmp/.aether-*.lock` during builds
+**How to avoid:**
+1. In `model-profiles.yaml`, use the Claude Code model slot names (`"opus"`, `"sonnet"`, `"haiku"`) as the model identifiers, NOT GLM-specific names. The current YAML uses `glm-5-turbo` directly. Changing to use slot names means the YAML is mode-agnostic: it says "builder uses sonnet" rather than "builder uses glm-5-turbo."
+2. The LiteLLM proxy config is where the actual GLM mapping lives: `opus -> glm-5`, `sonnet -> glm-5-turbo`. This mapping is the user's responsibility. Aether should document the expected mapping but not try to configure the proxy.
+3. Add a `model-profile verify` check that tests the model slot by making a tiny request to the proxy and checking the response. This verifies end-to-end that "opus" actually routes to the expected model.
+4. The `DEFAULT_MODEL` constant in `model-profiles.js` (line 17) should be `"sonnet"` (the safe default), not `"glm-5-turbo"` (a GLM-specific name).
 
-**Phase mapping:** Phase 2 (pheromone integration) -- must be addressed when making pheromones auto-emit during builds.
+**Warning signs:**
+- `model-profile verify` passes (proxy is healthy) but workers get the wrong model
+- Users report that "all workers are using opus" when they should be split
+- The proxy logs show model names that do not match expectations
+
+**Phase to address:** Implementation phase -- the model naming convention must be decided before writing any code
+
+**Evidence:** `model-profiles.js` line 17 (`DEFAULT_MODEL = 'glm-5-turbo'`), `model-profiles.yaml` lines 4-14 (GLM-specific model names), `verify-castes.md` lines 55-57 (lists GLM model names as "available models via LiteLLM proxy")
+
+---
+
+### Pitfall 8: The Bash YAML Parser and Node.js Library Can Return Different Results
+
+**What goes wrong:**
+Aether has TWO model profile parsers:
+1. **Bash awk parser** in aether-utils.sh (lines 2626-2628) -- used by `model-profile get` and `model-profile list`
+2. **Node.js yaml.load parser** in model-profiles.js (lines 36-57) -- used by `model-profile select` and `model-profile validate`
+
+The bash parser uses a simple awk pattern (`/^  '$caste':/{print $2; exit}`) that extracts the second field from lines matching the caste name. The Node.js parser uses `js-yaml` which does full YAML parsing including environment variable substitution, multiline strings, comments, and anchors.
+
+These parsers can diverge on:
+- Comments after values (bash parser ignores everything after field 2, Node.js strips comments properly)
+- Environment variable substitution (Node.js handles `${VAR:-default}`, bash parser does not)
+- YAML anchors/aliases (Node.js resolves them, bash parser returns the literal `*anchor`)
+- User overrides section (Node.js reads `user_overrides` and applies them in `getEffectiveModel`, bash parser only reads `worker_models`)
+
+**Why it happens:**
+The bash parser was written first (quick awk for simple YAML). The Node.js library was added later for more complex operations (task routing, override management). Neither was replaced by the other. The bash parser is still used for `model-profile get` because it avoids the Node.js startup overhead.
+
+**How to avoid:**
+1. When implementing per-caste routing, use ONLY the Node.js library for model resolution in the build-wave playbook. The bash `model-profile get` command is used by other commands and should be updated to delegate to the Node.js library (like `model-profile select` already does).
+2. If the bash parser must be kept (for performance reasons), add a test that runs both parsers against the same YAML and asserts identical output. This catches divergence early.
+3. The `model-profile get` bash implementation does NOT check user_overrides (line 2628-2631). The Node.js `getEffectiveModel` does check them (lines 321-339). If per-caste routing uses `getEffectiveModel` but logging/display uses `model-profile get`, the model shown to the user may differ from the model actually used.
+
+**Warning signs:**
+- `model-profile get builder` returns `glm-5-turbo` but the actual spawn uses `glm-5` (because of a user override)
+- `model-profile list` shows different values than what the build-wave playbook resolves
+- Tests pass for the Node.js library but fail for the bash parser (or vice versa)
+
+**Phase to address:** Implementation phase -- standardize on one parser before routing logic depends on consistent results
+
+**Evidence:** aether-utils.sh lines 2626-2631 (bash awk parser), model-profiles.js lines 36-57 (Node.js yaml.load), model-profiles.js lines 321-339 (getEffectiveModel with overrides)
 
 ---
 
 ## Minor Pitfalls
 
-### Pitfall 10: Agent Definition Updates Break OpenCode Parity
+### Pitfall 9: Archived Model Routing Files Create Confusion
 
-**What goes wrong:** Modifying Claude agent definitions in `.claude/agents/ant/` to add pheromone awareness requires mirroring changes to `.aether/agents-claude/` (packaging mirror) and `.opencode/agents/` (structural parity). Missing any of these three locations creates drift. The `lint:sync` check verifies count parity but not content parity.
+**What goes wrong:**
+`.aether/archive/model-routing/` contains a complete model routing implementation that was archived because it did not work (Task tool limitation). The archive includes model-profiles.yaml with a different caste-to-model mapping (using minimax-2.5 and kimi-k2.5), a model-profiles.js file, and a detailed README explaining why it failed.
 
-**Prevention:**
-1. Always edit `.claude/agents/ant/` first, then copy to `.aether/agents-claude/`
-2. Update `.opencode/agents/` with equivalent structural changes
-3. Run `npm run lint:sync` after every agent definition change
-4. Consider adding content hash comparison to lint:sync
+Developers (or the LLM itself) may reference the archived implementation as a "how to do it" guide, not realizing it was specifically archived because it does not work. The archived YAML has different model names and a different architecture (3 models: glm-5, minimax-2.5, kimi-k2.5 vs. current 2 models: glm-5, glm-5-turbo).
 
-**Phase mapping:** Phase 2 (pheromone integration) -- every agent definition change must update all three locations.
+**How to avoid:**
+1. Before starting implementation, add a prominent note to the archived files: "ARCHIVED -- DO NOT REFERENCE FOR IMPLEMENTATION. See v2.3 milestone plan for current approach."
+2. Ensure the new implementation uses the GSD pattern (model parameter on Task call) rather than the archived approach (environment variable passing).
+3. Consider deleting the archive entirely if it causes confusion. The README explains the problem well enough that the archive files are not needed.
 
----
+**Phase to address:** Pre-implementation cleanup
 
-### Pitfall 11: Documentation Updates Create Inconsistency Between CLAUDE.md and Actual Behavior
-
-**What goes wrong:** CLAUDE.md describes the pheromone system as "signals guide colony behavior" but the actual behavior is "signals are stored and displayed." Updating docs to match new pheromone integration before the integration is complete creates a different kind of inconsistency: docs promise features that do not work yet.
-
-**Prevention:**
-1. Update documentation AFTER integration is verified, not during
-2. Use "[PLANNED]" markers for features in progress
-3. Test documentation claims by following them literally: does doing what the docs say produce the expected result?
-
-**Phase mapping:** Phase 3 or 4 (documentation update) -- must happen after pheromone integration is verified.
+**Evidence:** `.aether/archive/model-routing/README.md`, `.aether/archive/model-routing/model-profiles.yaml` (different model names)
 
 ---
 
-### Pitfall 12: Constraints.json Has Stale XML-Era Constraints
+### Pitfall 10: Model Metadata Section Becomes Stale After Per-Caste Changes
 
-**What goes wrong:** constraints.json contains AVOID constraints from the XML migration era: "Breaking changes to existing JSON files" and "Compromised hybrid approaches that limit XML capabilities." These constraints are no longer relevant since the XML system is being archived. If pheromone integration reads these constraints, it will apply outdated guidance.
+**What goes wrong:**
+model-profiles.yaml has a `model_metadata` section (lines 15-61) with capabilities, context windows, speed, and cost tiers for each model. This metadata is used by `getModelMetadata()` and `getAllAssignments()` in model-profiles.js. If new model names are added or models are renamed, the metadata section must be updated in sync.
 
-**Prevention:**
-1. Review all constraints.json entries during cleanup phase
-2. Remove or mark constraints that reference archived features
-3. Add `archived_at` field to constraints for soft deletion
+Currently, the metadata says glm-5 has `context_window: 200000` and glm-5-turbo has `context_window: 200000`. If the per-caste routing adds a third model (e.g., glm-4.5-air for validation tasks), the metadata section must include it. If it does not, `validateModel()` will reject the new model name because it is not in `model_metadata`.
 
-**Phase mapping:** Phase 1 (cleanup) -- alongside QUEEN.md and pheromones.json cleanup.
+**How to avoid:**
+1. Any model name change must update both `worker_models` and `model_metadata` sections.
+2. Add a validation test that checks: for every model in `worker_models`, there is a corresponding entry in `model_metadata`. This catches missing metadata entries immediately.
+3. The `validateModel()` function (model-profiles.js line 131) checks `model_metadata` keys. If a caste is assigned a model that is not in `model_metadata`, validation fails. This is actually good behavior -- but it will surprise developers who add a model to `worker_models` and forget `model_metadata`.
+
+**Phase to address:** Implementation phase -- update metadata when changing model assignments
+
+**Evidence:** model-profiles.yaml lines 15-61, model-profiles.js lines 131-140
+
+---
+
+### Pitfall 11: The "inherit" Pattern From GSD Does Not Apply Here
+
+**What goes wrong:**
+GSD uses `"inherit"` for opus-tier agents so they use the parent session's model, avoiding org policy conflicts. The PROJECT.md says "Map opus slot -> glm-5." If someone copies the GSD pattern and uses `"inherit"` for reasoning castes, those castes will use the parent Queen's model -- which defeats the purpose of per-caste routing.
+
+The GSD pattern makes sense for GSD because GSD agents are spawned by an orchestrator that may be running on any model. But in Aether, the Queen is always running on the same model as the workers (because of the single-session constraint). There is no "inherit" benefit -- the Queen IS the session model.
+
+**How to avoid:**
+1. Use `"opus"` for reasoning castes, not `"inherit"`. The GSD reasoning for `"inherit"` (avoiding org policy conflicts with specific opus versions) does not apply when routing through a LiteLLM proxy that maps `"opus"` to `glm-5`.
+2. Document why Aether uses `"opus"` instead of `"inherit"`, so future developers do not copy the GSD pattern without understanding the difference.
+
+**Phase to address:** Implementation phase -- model naming decision
+
+**Evidence:** `.claude/get-shit-done/references/model-profiles.md` line 92 (explains inherit rationale), PROJECT.md line 13 (Aether uses opus slot -> glm-5)
 
 ---
 
 ## Phase-Specific Warnings
 
-| Phase Topic | Likely Pitfall | Mitigation |
-|-------------|---------------|------------|
-| State cleanup (Phase 1) | Removing seed data along with test data (Pitfall 1) | Document canonical entries before deleting; create golden snapshot |
-| State cleanup (Phase 1) | Stale COLONY_STATE.json confuses subsequent phases (Pitfall 8) | Reset to clean state or delete entirely |
-| State cleanup (Phase 1) | XML archival leaves dead references (Pitfall 4) | Audit all references in utils, tests, help text, package validation |
-| State cleanup (Phase 1) | Constraints.json contains stale XML-era rules (Pitfall 12) | Review all entries, remove/archive irrelevant ones |
-| Pheromone integration (Phase 2) | Write-only signal system (Pitfall 2) | Start from agent definitions, not from plumbing |
-| Pheromone integration (Phase 2) | Decay math untested (Pitfall 5) | Write decay tests before relying on decay for behavior |
-| Pheromone integration (Phase 2) | Signal accumulation noise (Pitfall 7) | Add expire calls to build lifecycle |
-| Pheromone integration (Phase 2) | Lock contention during parallel builds (Pitfall 9) | Batch signal writes, add jitter to retries |
-| Pheromone integration (Phase 2) | Agent definition drift across 3 mirrors (Pitfall 10) | Update all 3 locations, run lint:sync |
-| Documentation update (Phase 3) | Docs promise features not yet working (Pitfall 11) | Update docs only after integration verified |
-| Fresh install (Phase 4) | Polluted state ships in npm package (Pitfall 6) | Validate package contents in pre-publish step |
-| All phases | Test regression from schema changes (Pitfall 3) | Run full test suite after every atomic change |
+| Phase | Likely Pitfall | Mitigation |
+|-------|---------------|------------|
+| Test infrastructure refactor | Pitfall 4: 184 hardcoded model names | Centralize mock profiles before any YAML changes |
+| Core routing implementation | Pitfall 1: Task tool model parameter | Prove with a single Task(spawn, model="opus") call before building full system |
+| Core routing implementation | Pitfall 7: Model naming convention | Use Claude Code slot names ("opus"/"sonnet") not GLM names in model-profiles.yaml |
+| Core routing implementation | Pitfall 8: Parser divergence | Standardize on Node.js library, deprecate bash awk parser |
+| Proxy config documentation | Pitfall 2: Config swap breakage | Document expected proxy mapping clearly, add verify step |
+| GLM-5 loop prevention | Pitfall 3: Constraint escape | Add application-level loop detection, document Prime-as-turbo option |
+| Build playbook update | Pitfall 5: Missing model logging | Pass model slot to spawn-log in every spawn call |
+| Non-build command update | Pitfall 6: Lifecycle edge cases | Audit all spawn commands, update one by one |
+| YAML changes | Pitfall 10: Stale metadata | Add validation test for metadata completeness |
+| Pre-implementation cleanup | Pitfall 9: Archive confusion | Delete or annotate archived files |
+
+---
+
+## Suggested Implementation Order
+
+Based on pitfall dependencies, the phases should be ordered:
+
+1. **Test infrastructure refactor** -- Centralize 184 hardcoded model name references before any YAML changes (Pitfall 4)
+2. **Pre-implementation cleanup** -- Annotate or delete archived routing files (Pitfall 9)
+3. **Core routing mechanism** -- Implement model slot resolution + Task tool model parameter (Pitfalls 1, 7, 8)
+4. **Build playbook integration** -- Wire routing into build-wave.md, add model logging (Pitfalls 5, 10)
+5. **Proxy verification** -- Add end-to-end model verification, document config swap (Pitfall 2)
+6. **GLM-5 loop prevention** -- Add application-level loop detection (Pitfall 3)
+7. **Lifecycle command audit** -- Extend routing to non-build spawn commands (Pitfall 6)
+8. **Documentation update** -- Update verify-castes.md, CLAUDE.md, and all references (Pitfall 11)
+
+**Critical ordering constraint:** Step 1 (test refactor) MUST come before Step 2 (any YAML changes). If YAML changes happen before test infrastructure is updated, every test change becomes a guessing game of "which of the 184 occurrences does this need to match?"
 
 ---
 
 ## Sources
 
-### Codebase Evidence (HIGH confidence)
-- `.planning/codebase/CONCERNS.md` -- 390-line audit identifying all technical debt, security issues, test gaps
-- `.aether/data/pheromones.json` -- 9 signals, most test artifacts, confirms signal accumulation
-- `.aether/data/COLONY_STATE.json` -- stale goal from different project, confirms cross-project pollution
-- `.aether/QUEEN.md` -- 25+ test entries mixed with 5 seed entries, confirms test data pollution
-- `.aether/data/constraints.json` -- XML-era constraints still active, confirms stale guidance
-- `.claude/agents/ant/aether-builder.md` -- zero pheromone references, confirms workers are signal-blind
-- `.aether/exchange/` -- 6 files, zero references from commands, confirms XML system is unwired
-- `tests/integration/pheromone-auto-emission.test.js` -- uses temp dirs correctly, shows good test isolation pattern
-
-### Research (MEDIUM confidence)
-- [Why Your Multi-Agent System is Failing: 17x Error Trap](https://towardsdatascience.com/why-your-multi-agent-system-is-failing-escaping-the-17x-error-trap-of-the-bag-of-agents/) -- error amplification in multi-agent architectures without coordination topology
-- [Multi-Agent System Reliability: Failure Patterns](https://www.getmaxim.ai/articles/multi-agent-system-reliability-failure-patterns-root-causes-and-production-validation-strategies/) -- state synchronization breakdowns, communication protocol failures, 79% of failures from specification issues
-- [Why Do Multi-Agent LLM Systems Fail?](https://arxiv.org/html/2503.13657v1) -- research on specification ambiguities and coordination gaps as primary failure source
-- [Event-Driven Architecture: The Hard Parts](https://threedots.tech/episode/event-driven-architecture/) -- complexity in debugging, eventual consistency, schema evolution
-- [Digital Pheromones: Agent Coordination](https://www.distributedthoughts.org/digital-pheromones-what-ants-know-about-agent-coordination/) -- pheromone paradigm for async agent coordination, environment-as-channel pattern
-
-### Research (LOW confidence -- verify before acting)
-- [Event-Driven Architecture: 5 Pitfalls to Avoid](https://medium.com/wix-engineering/event-driven-architecture-5-pitfalls-to-avoid-b3ebf885bdb1) -- context propagation without correlation IDs (applicable to signal tracing); could not fetch full content
-- [Common Pitfalls in Event-Driven Architectures](https://medium.com/insiderengineering/common-pitfalls-in-event-driven-architectures-de84ad8f7f25) -- duplicate events, unclear ownership, brittle integrations; could not fetch full content
+- `.aether/archive/model-routing/README.md` -- HIGH confidence (direct codebase inspection, explains why v1 routing failed)
+- `.aether/model-profiles.yaml` -- HIGH confidence (current configuration, lines 1-96)
+- `bin/lib/model-profiles.js` -- HIGH confidence (current library code, 446 lines)
+- `bin/lib/model-verify.js` -- HIGH confidence (verification logic, 289 lines)
+- `.aether/utils/spawn.sh` -- HIGH confidence (spawn mechanism, 240 lines)
+- `.aether/utils/spawn-with-model.sh` -- HIGH confidence (non-functional spawn helper, 57 lines)
+- `.aether/docs/command-playbooks/build-wave.md` -- HIGH confidence (build spawn logic, 598 lines)
+- `.aether/aether-utils.sh` lines 2610-2760 -- HIGH confidence (model-profile bash commands)
+- `.claude/commands/ant/verify-castes.md` -- HIGH confidence (current documentation of model system)
+- `.claude/get-shit-done/references/model-profile-resolution.md` -- HIGH confidence (GSD working pattern)
+- `.claude/get-shit-done/references/model-profiles.md` -- HIGH confidence (GSD model profile table)
+- `.planning/PROJECT.md` -- HIGH confidence (milestone scope definition)
+- Test files (184 model name occurrences) -- HIGH confidence (direct grep results)
 
 ---
-
-*Pitfalls analysis: 2026-03-19*
+*Pitfalls research for: Aether v2.3 Per-Caste Model Routing*
+*Researched: 2026-03-27*

@@ -1,0 +1,1014 @@
+{
+  "version": "1.1",
+  "sources": {
+    "S1": {
+      "url": ".aether/aether-utils.sh",
+      "title": "Core utility script — 11,272 lines, ~125 subcommands",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S2": {
+      "url": "bin/cli.js",
+      "title": "CLI entry point and library modules",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S3": {
+      "url": ".claude/commands/ant/",
+      "title": "43 slash command definitions",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S4": {
+      "url": ".claude/agents/ant/",
+      "title": "22 agent definition files",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S5": {
+      "url": ".aether/skills/",
+      "title": "Skills directory — 10 colony + 18 domain",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S6": {
+      "url": "CLAUDE.md",
+      "title": "Project instructions — Pheromone System section",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S7": {
+      "url": ".aether/data/COLONY_STATE.json",
+      "title": "Colony state persistence file",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S8": {
+      "url": "CLAUDE.md",
+      "title": "Project instructions — Hub and Hive Brain sections",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S9": {
+      "url": ".aether/utils/",
+      "title": "22 utility scripts extracted from monolith",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S10": {
+      "url": ".aether/exchange/",
+      "title": "XML exchange modules for cross-colony sharing",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S11": {
+      "url": ".aether/templates/",
+      "title": "12 initialization template files",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S12": {
+      "url": ".aether/docs/",
+      "title": "Internal documentation and command playbooks",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S13": {
+      "url": ".aether/workers.md",
+      "title": "Worker role definitions and spawn protocol",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S14": {
+      "url": ".claude/commands/ant/ (grep for COLONY_STATE references)",
+      "title": "219 COLONY_STATE.json references across 38 slash commands",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S15": {
+      "url": ".aether/docs/command-playbooks/build-wave.md",
+      "title": "Build wave orchestration playbook — spawn protocol",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S16": {
+      "url": ".aether/utils/ (source chain analysis)",
+      "title": "Utility module source dependency chain",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S17": {
+      "url": ".aether/aether-utils.sh (validate-worker-response, lines 2305-2400)",
+      "title": "Worker response validation — schema-only checking",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S18": {
+      "url": ".claude/agents/ant/aether-watcher.md",
+      "title": "Watcher agent definition — Evidence Iron Law, verification workflow",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S19": {
+      "url": ".claude/agents/ant/aether-queen.md",
+      "title": "Queen agent definition — Verification Discipline Iron Law",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S20": {
+      "url": ".aether/docs/command-playbooks/build-verify.md",
+      "title": "Build verification playbook — Watcher spawn and result processing",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S21": {
+      "url": ".aether/aether-utils.sh (check-antipattern, lines 1797-1860)",
+      "title": "Anti-pattern detection — limited to 6 patterns across 4 languages",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S22": {
+      "url": ".aether/utils/file-lock.sh",
+      "title": "Bash PID-based locking with noclobber",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S23": {
+      "url": "bin/lib/file-lock.js",
+      "title": "Node.js PID-based locking with exclusive open",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S24": {
+      "url": ".aether/utils/hive.sh (hive-read, lines 240-320)",
+      "title": "Hive read with confidence filtering — argjson type coercion",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S25": {
+      "url": ".aether/docs/command-playbooks/ (FALLBACK comments)",
+      "title": "Agent fallback patterns across 4 playbook files",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S26": {
+      "url": ".claude/agents/ant/aether-scout.md",
+      "title": "Scout agent — anti-fabrication rules and source tracking",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S27": {
+      "url": ".claude/agents/ant/aether-measurer.md",
+      "title": "Measurer agent — honest measurement vs fabrication rules",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S28": {
+      "url": ".aether/aether-utils.sh (suggest-analyze ERR trap, lines 10235-10427)",
+      "title": "ERR trap disabled for 200-line suggest-analyze region",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S29": {
+      "url": ".aether/aether-utils.sh (colony-prime, lines 7869-8460)",
+      "title": "Colony-prime context assembly with 8-level budget trimming",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S30": {
+      "url": ".aether/aether-utils.sh (rolling-summary, lines 9274-9332)",
+      "title": "Rolling summary — bounded 15-entry narrative log",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S31": {
+      "url": ".aether/aether-utils.sh (context-capsule, lines 9334-9400+)",
+      "title": "Context capsule — compact 220-word state snapshot for prompt injection",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S32": {
+      "url": ".aether/aether-utils.sh (session-read, lines 9640-9668)",
+      "title": "Session read with 24-hour staleness detection",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S33": {
+      "url": ".claude/commands/ant/resume.md",
+      "title": "Resume command — 10-step session restore with drift detection and blocking guards",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S34": {
+      "url": ".claude/commands/ant/resume-colony.md",
+      "title": "Resume-colony — full state restoration with HANDOFF.md, pheromones, survey context",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S35": {
+      "url": ".aether/utils/hive.sh (hive-store, lines 63-238)",
+      "title": "Hive store — deduplication, cross-repo merge, 200-entry cap with LRU eviction",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S36": {
+      "url": ".aether/utils/hive.sh (hive-read, lines 240-375)",
+      "title": "Hive read — domain-scoped filtering, access tracking, text/JSON output",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S37": {
+      "url": ".aether/utils/hive.sh (hive-abstract, lines 377-399)",
+      "title": "Hive abstract — text transformation of repo-specific to generalized wisdom",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S38": {
+      "url": ".claude/commands/ant/run.md",
+      "title": "Autopilot command — build-continue-advance loop with 10 pause conditions",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S39": {
+      "url": ".aether/skills/colony/state-safety/SKILL.md",
+      "title": "State safety skill — prescribes atomic writes, file locking, backup strategy, corruption detection",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S40": {
+      "url": ".aether/docs/error-codes.md",
+      "title": "Error code reference — 11 error codes with recovery suggestions",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S41": {
+      "url": ".aether/docs/command-playbooks/continue-gates.md",
+      "title": "Continue gates — 7 mandatory gates including TDD evidence, runtime verification, spawn enforcement",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S42": {
+      "url": ".aether/aether-utils.sh (autopilot-update, lines 11067-11124)",
+      "title": "Autopilot state management — run-state.json tracking",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S43": {
+      "url": ".claude/commands/ant/entomb.md",
+      "title": "Entomb command — only location where COLONY_STATE.json backup is created",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S44": {
+      "url": ".aether/docs/command-playbooks/build-prep.md",
+      "title": "Build prep — state set to EXECUTING with locking",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S45": {
+      "url": ".aether/docs/command-playbooks/build-context.md",
+      "title": "Build context — colony-prime assembly, survey load, archaeology, skill detection",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S46": {
+      "url": ".aether/docs/command-playbooks/build-complete.md",
+      "title": "Build complete — synthesis, handoff update, promotion proposals, session update",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S47": {
+      "url": ".aether/docs/command-playbooks/continue-verify.md",
+      "title": "Continue verify — 6-phase verification loop with command resolution priority chain",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S48": {
+      "url": ".aether/docs/command-playbooks/continue-gates.md",
+      "title": "Continue gates — spawn enforcement, anti-pattern, Gatekeeper, Auditor, TDD, runtime, flags",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S49": {
+      "url": ".aether/docs/command-playbooks/continue-advance.md",
+      "title": "Continue advance — state update, learning extraction, instinct creation, pheromone auto-emission",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S50": {
+      "url": ".aether/docs/command-playbooks/continue-finalize.md",
+      "title": "Continue finalize — handoff, changelog, commit suggestion, context clear, session update",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S51": {
+      "url": ".aether/utils/state-loader.sh",
+      "title": "State loader — load-state acquires lock, unload-state releases, validation before load",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S52": {
+      "url": ".aether/utils/midden.sh",
+      "title": "Midden write — lock-protected with graceful degradation (lockless fallback)",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S53": {
+      "url": ".aether/aether-utils.sh (spawn-log, lines 1517-1537)",
+      "title": "Spawn-log — append-only to activity.log and spawn-tree.txt, NO locking",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S54": {
+      "url": ".aether/aether-utils.sh (pheromone-write, lines 6919-7078)",
+      "title": "Pheromone write — lock-protected, SHA-256 dedup, sanitization",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S55": {
+      "url": ".aether/aether-utils.sh (spawn-complete, lines 1538-1573)",
+      "title": "Spawn-complete — writes to COLONY_STATE.json events (with lock) on failure only",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S56": {
+      "url": ".aether/aether-utils.sh (memory-capture, lines 5547-5648)",
+      "title": "Memory-capture — 5-step pipeline: observe, pheromone, promote, activity-log, rolling-summary",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S57": {
+      "url": ".aether/docs/command-playbooks/build-wave.md (line 379-383)",
+      "title": "Memory-capture caller in build-wave with 2>/dev/null || true",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S58": {
+      "url": ".aether/docs/command-playbooks/continue-advance.md (line 66)",
+      "title": "Memory-capture caller in continue-advance with fire-and-forget pattern",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S59": {
+      "url": ".aether/aether-utils.sh (learning-promote-auto, lines 5469-5544)",
+      "title": "Auto-promotion pipeline — queen-promote + instinct-create with || true on instinct step",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S60": {
+      "url": ".aether/aether-utils.sh (autopilot-update, lines 11067-11124)",
+      "title": "Run-state.json atomic update — separate state file from COLONY_STATE.json",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S61": {
+      "url": ".claude/commands/ant/run.md",
+      "title": "Autopilot Execution Contract — 10 binary pause conditions, halt on hard failure",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S62": {
+      "url": ".aether/data/midden/midden.json",
+      "title": "17 real midden entries — historical evidence of lock, type, crash, and quality failures",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S63": {
+      "url": ".aether/aether-utils.sh (_cmd_context_update, lines 242-590)",
+      "title": "CONTEXT.md management — 11 action types with lock protection (LOCK-04)",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S64": {
+      "url": ".aether/docs/command-playbooks/build-complete.md (lines 239-243)",
+      "title": "Build-complete CONTEXT.md update — activity log + build-complete status",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S65": {
+      "url": ".aether/docs/command-playbooks/continue-finalize.md (lines 253-271)",
+      "title": "Continue-finalize CONTEXT.md update — activity log + phase advancement + decision logging",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S66": {
+      "url": ".aether/docs/command-playbooks/continue-advance.md (lines 194-233)",
+      "title": "Continue-advance decision-to-pheromone bridge — extracts CONTEXT.md decisions, auto-emits FEEDBACK",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S67": {
+      "url": ".aether/aether-utils.sh (context-capsule, lines 9334-9527)",
+      "title": "Context capsule — handles missing/corrupted files with cascading defaults, compact mode",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S68": {
+      "url": ".aether/aether-utils.sh (memory-capture, lines 5575-5578)",
+      "title": "Memory-capture checkpoint — learning-observe failure kills entire pipeline via json_err",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S69": {
+      "url": ".aether/aether-utils.sh (learning-observe, lines 5319-5321)",
+      "title": "Learning-observe JSON validation — corrupted file triggers json_err non-zero exit",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S70": {
+      "url": ".aether/aether-utils.sh (colony-prime budget, lines 8490-8493)",
+      "title": "Budget trimming log — records trimmed sections in log_line but NOT in prompt_section",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S71": {
+      "url": "bin/cli.js + bin/lib/ (18 modules)",
+      "title": "CLI responsibility analysis — 20 install/setup, 5 model/routing, 7 status/telemetry, 4 utility commands; never invokes aether-utils.sh",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S72": {
+      "url": ".aether/aether-utils.sh (colony-prime, lines 7869-8529; pheromone-prime, lines 7690-7867)",
+      "title": "Colony-prime complete orchestration — 9 sections from 8 data sources, JSON output with prompt_section for worker injection",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    },
+    "S73": {
+      "url": ".claude/commands/ant/*.md + .aether/docs/command-playbooks/*.md (subcommand invocation analysis)",
+      "title": "Subcommand criticality — 178 total, 43 critical path, 76 dead code, top 7 account for 50% of calls",
+      "type": "codebase",
+      "accessed": "2026-03-23"
+    }
+  },
+  "questions": [
+    {
+      "id": "q1",
+      "text": "What are the main components and their responsibilities in the Aether system?",
+      "status": "answered",
+      "confidence": 85,
+      "key_findings": [
+        {
+          "text": "System has 13 major components: aether-utils.sh (11,272-line monolithic bash utility with ~125 subcommands), CLI (Node.js bin/cli.js with 16 lib modules), 43 slash commands, 22 agent definitions across 3 tiers, skills system (10 colony + 18 domain), pheromone signal system (FOCUS/REDIRECT/FEEDBACK), colony state persistence, hub (~/.aether/ with hive brain), 22 extracted utility scripts, XML exchange system, 12 templates, internal documentation with split playbooks, and workers.md role definitions.",
+          "source_ids": [
+            "S1",
+            "S2",
+            "S3",
+            "S4",
+            "S5",
+            "S6",
+            "S7",
+            "S8",
+            "S9",
+            "S10",
+            "S11",
+            "S12",
+            "S13"
+          ],
+          "iteration": 0
+        },
+        {
+          "text": "aether-utils.sh is the backbone — a single bash script sourcing 9 utility modules (file-lock, atomic-write, error-handler, chamber-utils, xml-utils, semantic-cli, hive, midden, skills). All subcommands output JSON to stdout with non-zero exit + JSON errors to stderr. Uses set -euo pipefail with structured ERR trap.",
+          "source_ids": [
+            "S1"
+          ],
+          "iteration": 0
+        },
+        {
+          "text": "CLI is a Node.js tool (commander-based) with typed error hierarchy (AetherError, HubError, RepoError, GitError, ValidationError, FileSystemError, ConfigurationError). Manages hub installation, transactional updates (UpdateTransaction), model profiles, proxy health, state synchronization, telemetry, and spawn logging.",
+          "source_ids": [
+            "S2"
+          ],
+          "iteration": 0
+        },
+        {
+          "text": "Colony-prime (subcommand in aether-utils.sh) assembles worker context within a token budget (8K normal, 4K compact) from: rolling summary, phase learnings, key decisions, hive wisdom, context capsule, user preferences, QUEEN.md wisdom, pheromone signals — trimmed from bottom when over budget.",
+          "source_ids": [
+            "S1",
+            "S6"
+          ],
+          "iteration": 0
+        },
+        {
+          "text": "CLI vs. aether-utils.sh boundary is clean with no overlaps. CLI (bin/cli.js + 18 bin/lib/ modules) handles plumbing: installation/hub distribution (install, update with transactional rollback, uninstall, checkpoint), model profile CRUD (caste-models list/set/reset/verify), telemetry (spawn-log, spawn-tree, performance), and state-sync. CLI NEVER invokes aether-utils.sh directly. Bash layer (178 subcommands) handles all domain logic: colony operations, signals, learning, worker lifecycle. Slash commands (.claude/commands/ant/) bridge the two by calling `bash .aether/aether-utils.sh <subcommand>`. The only cross-link is CLI copying aether-utils.sh to hub during npm install.",
+          "source_ids": [
+            "S71",
+            "S2",
+            "S1"
+          ],
+          "iteration": 8
+        },
+        {
+          "text": "Colony-prime is a read-only aggregator assembling 9 sections from 8 data sources in order: (1) QUEEN.md wisdom — extracts 6 sections from global + local, local extends global; FAILS HARD if neither exists. (2) Pheromone-prime — reads pheromones.json with decay, deactivates below 0.1; extracts instincts (confidence >= 0.5). (3) Hive-read — domain-scoped from registry.json tags, LRU tracking; falls back to eternal. (4) Context-capsule — 220-word bounded. (5) Phase-learnings from previous phases. (6) Key-decisions from CONTEXT.md. (7) Blocker warnings (never trimmed). (8) Rolling-summary last 5 of 15. Output: JSON with prompt_section + log_line + metadata. Per-wave refresh during builds.",
+          "source_ids": [
+            "S72",
+            "S29",
+            "S1"
+          ],
+          "iteration": 8
+        },
+        {
+          "text": "Of 178 total subcommands, only 43 (24%) are critical path for build/continue lifecycle. Top 7 account for ~50% of all invocations: activity-log (49), print-next-up (38), spawn-log (37), midden-write (34), normalize-args (33), generate-ant-name (32), context-update (31). These 7 are single points of failure. 76 subcommands (43%) are dead code. Removing unused categories could reduce aether-utils.sh by 15-20%.",
+          "source_ids": [
+            "S73",
+            "S1",
+            "S3"
+          ],
+          "iteration": 8
+        },
+        {
+          "text": "Agent interaction follows strict one-way coupling: (1) Playbooks spawn via Task tool with subagent_type. (2) Colony-prime prompt_section injected alongside archaeology, skill, midden context. (3) Agents explicitly warned not to modify .aether/data/ or aether-utils.sh. (4) Results flow back as JSON to orchestrating command for state persistence. This is the healthiest coupling pattern in the system.",
+          "source_ids": [
+            "S4",
+            "S15",
+            "S73"
+          ],
+          "iteration": 8
+        },
+        {
+          "text": "SYNTHESIS: Dead-code indirect callers resolved — aether-utils.sh uses a case statement for subcommand dispatch (not eval/dynamic dispatch), so the 76 dead subcommands identified by S73's grep analysis across all .md files have no indirect invocation mechanism. CLI/bash hub race resolved — CLI writes hub only during npm install/update [S71], bash during colony operations [S1], temporally disjoint with no concurrent access path in normal workflow.",
+          "source_ids": [
+            "S1",
+            "S71",
+            "S73"
+          ],
+          "iteration": 10
+        }
+      ],
+      "iterations_touched": [
+        0,
+        8,
+        10
+      ]
+    },
+    {
+      "id": "q2",
+      "text": "What are the dependency relationships between components, and where are coupling risks?",
+      "status": "answered",
+      "confidence": 82,
+      "key_findings": [
+        {
+          "text": "COLONY_STATE.json is the central coupling nexus: 219 direct references across 38 of 43 slash commands, plus 153 references in aether-utils.sh. Both slash commands and aether-utils.sh read/write it — slash commands via direct jq calls AND via aether-utils.sh subcommands, creating two parallel access paths to the same file with potential consistency risks.",
+          "source_ids": [
+            "S14",
+            "S1"
+          ],
+          "iteration": 1
+        },
+        {
+          "text": "aether-utils.sh sources 9 utility modules at startup with conditional guards ([[ -f ]] && source). Source chain: file-lock.sh → atomic-write.sh depends on file-lock.sh → xml-utils.sh sources xml-core.sh, xml-query.sh, xml-convert.sh, xml-compose.sh, plus exchange modules. Any missing module degrades silently due to the conditional sourcing pattern.",
+          "source_ids": [
+            "S1",
+            "S16"
+          ],
+          "iteration": 1
+        },
+        {
+          "text": "CLI (bin/cli.js) and aether-utils.sh are nearly parallel systems with minimal cross-calling. CLI handles hub installation, transactional updates, and model profiles in Node.js. Slash commands call aether-utils.sh via bash subprocess. The only CLI→bash link is CLI copying aether-utils.sh to hub during install. Both have independent file-lock implementations and error hierarchies — risk of divergent state handling between runtimes.",
+          "source_ids": [
+            "S2",
+            "S1"
+          ],
+          "iteration": 1
+        },
+        {
+          "text": "Agent definitions do NOT call aether-utils.sh directly. Agents are spawned by playbooks via Task tool. Colony-prime context injected into agent prompts. Agents explicitly warned not to modify data files. Coupling is one-way: orchestrator → agent → results back to orchestrator.",
+          "source_ids": [
+            "S4",
+            "S15"
+          ],
+          "iteration": 1
+        },
+        {
+          "text": "Complete build/continue data flow traced through 9 playbooks. State mutation sequence: (1) build-prep writes state='EXECUTING' with lock; (2) build-context reads (no lock) for colony-prime; (3) build-wave spawns parallel builders writing to activity.log (no lock), spawn-tree.txt (no lock), midden.json (lock with fallback), pheromones.json (locked); (4) build-complete writes HANDOFF.md, last-build-result.json, CONTEXT.md, session.json; (5) continue-verify reads with load-state lock; (6) continue-gates 7 mandatory gates (read-only); (7) continue-advance writes COLONY_STATE.json via LLM Write tool (NO bash lock), auto-emits pheromones (locked); (8) continue-finalize writes HANDOFF.md, CHANGELOG.md, session.json, CONTEXT.md.",
+          "source_ids": [
+            "S44",
+            "S45",
+            "S15",
+            "S46",
+            "S47",
+            "S48",
+            "S49",
+            "S50"
+          ],
+          "iteration": 5
+        },
+        {
+          "text": "Concurrent write protection is inconsistent across 5 shared files: pheromones.json FULLY PROTECTED (acquire_lock); midden.json PARTIALLY PROTECTED (lock with lockless fallback creating shared-temp-file race); activity.log UNPROTECTED (POSIX append reliance); spawn-tree.txt UNPROTECTED (same); COLONY_STATE.json MIXED (bash commands use lock, LLM Write tool in continue-advance does not).",
+          "source_ids": [
+            "S54",
+            "S52",
+            "S53",
+            "S55",
+            "S51"
+          ],
+          "iteration": 5
+        },
+        {
+          "text": "Midden graceful degradation creates specific data loss race: when lock fails, both paths write to SAME temp path ($mw_midden_file.tmp). Under simultaneous lockless writes, one entry is silently lost. Impact: silent loss of failure records during high-concurrency failure scenarios.",
+          "source_ids": [
+            "S52"
+          ],
+          "iteration": 5
+        },
+        {
+          "text": "Continue-advance has a latent COLONY_STATE.json race window: continue-verify acquires and releases lock, then continue-advance writes via LLM Write tool (no bash lock). If a slow builder's spawn-complete fires in between, the LLM's full-file overwrite destroys the event entry. Mitigated by sequential flow but window exists for long-running agents.",
+          "source_ids": [
+            "S51",
+            "S55",
+            "S49"
+          ],
+          "iteration": 5
+        },
+        {
+          "text": "SYNTHESIS: Cross-validated with Q3 midden evidence — 17 real failures [S62] confirm coupling risks materialized (lock isolation, unbound variables). POSIX append safety for activity.log/spawn-tree.txt effectively resolved: spawn-log entries are short (<100 bytes), well under PIPE_BUF (4096) [S53]. Remaining unknowns (concurrent write frequency, precise bug count beyond midden) are operational metrics requiring runtime monitoring — code analysis ceiling reached for this question.",
+          "source_ids": [
+            "S62",
+            "S53",
+            "S1"
+          ],
+          "iteration": 10
+        }
+      ],
+      "iterations_touched": [
+        1,
+        5,
+        10
+      ]
+    },
+    {
+      "id": "q3",
+      "text": "Where are the risk areas — execution reliability gaps, silent failures, fake autonomy, hallucination vectors, and verification weaknesses?",
+      "status": "answered",
+      "confidence": 82,
+      "key_findings": [
+        {
+          "text": "Silent error suppression at industrial scale: ~338 instances of error-swallowing patterns. ERR trap disabled for suggest-analyze (lines 10236-10427), creating ~200-line untrapped window during builds. Combined with conditional module sourcing, errors propagate without detection.",
+          "source_ids": [
+            "S1",
+            "S28"
+          ],
+          "iteration": 2
+        },
+        {
+          "text": "Worker response validation is schema-only, not semantic: validate-worker-response checks JSON structure but CANNOT detect a Builder claiming 'completed' when tests failed, or a Watcher reporting 'verification_passed: true' without running verification. This is the system's primary hallucination vector.",
+          "source_ids": [
+            "S17",
+            "S20"
+          ],
+          "iteration": 2
+        },
+        {
+          "text": "Verification chain is prompt-enforced, not programmatically enforced: Queen, Watcher, Scout all have 'Iron Laws' in their markdown prompts. No hard programmatic check that tests ran, builds executed, or claimed files exist. However, the prompt-level discipline is thorough: Watcher requires 4 execution verification steps and has a quality score ceiling rule.",
+          "source_ids": [
+            "S18",
+            "S19",
+            "S26",
+            "S27"
+          ],
+          "iteration": 2
+        },
+        {
+          "text": "Agent fallback degrades dramatically: FALLBACK comments in playbooks replace 200+ line agent definitions with single-sentence role descriptions. A general-purpose agent with 'You are a Chaos Ant' has none of the discipline, output format, or boundary constraints.",
+          "source_ids": [
+            "S25",
+            "S4"
+          ],
+          "iteration": 2
+        },
+        {
+          "text": "Anti-pattern detection covers only 6 patterns: didSet recursion (Swift), any type (TS/JS), console.log (TS/JS), bare except (Python), exposed secrets, TODO/FIXME. No OWASP top 10 beyond hardcoded secrets. The 'Gatekeeper security gate' relies partly on this thin layer.",
+          "source_ids": [
+            "S21"
+          ],
+          "iteration": 2
+        },
+        {
+          "text": "Dual file-lock implementations share naming but use different atomic-create mechanisms: bash noclobber vs Node.js 'wx' flag. Under simultaneous access, mutual exclusion may fail. REDIRECT signal confirms known concern.",
+          "source_ids": [
+            "S22",
+            "S23"
+          ],
+          "iteration": 2
+        },
+        {
+          "text": "Hive-read uses jq --argjson for confidence filtering. String-typed confidence (\"0.8\" instead of 0.8) causes silent exclusion. REDIRECT signal confirms this has occurred. Fix: tonumber? type coercion.",
+          "source_ids": [
+            "S24"
+          ],
+          "iteration": 2
+        },
+        {
+          "text": "Memory pipeline is universally fire-and-forget with 3-layer silence: callers suppress memory-capture, memory-capture has sequential kill-switch at step 1 (learning-observe failure kills all 5 downstream steps), sub-steps suppress their own failures. queen-promote/instinct-create inconsistency possible within step 3. Corrected understanding from Q4: pipeline is sequential chain, not independent per-step.",
+          "source_ids": [
+            "S56",
+            "S57",
+            "S58",
+            "S59",
+            "S68",
+            "S69"
+          ],
+          "iteration": 6
+        },
+        {
+          "text": "Autopilot has no mechanism for subtly bad work or dual-state desync: all 10 pause conditions are binary. No detection for gate-passing but logically incorrect code. run-state.json and COLONY_STATE.json can desync (different update mechanisms) with no reconciliation. Resume reads COLONY_STATE.json as authoritative, ignores run-state.json.",
+          "source_ids": [
+            "S38",
+            "S60",
+            "S61"
+          ],
+          "iteration": 6
+        },
+        {
+          "text": "Historical evidence from 17 midden entries confirms 5+ risks materialized: cross-repo lock isolation (high), string-typed confidence (medium), 3 unbound variable crashes, unsanitized json_ok output, fix ratio rising 33.8%→45.8% (error surface growing faster than repairs).",
+          "source_ids": [
+            "S62"
+          ],
+          "iteration": 6
+        },
+        {
+          "text": "SYNTHESIS: Remaining risk unknowns assessed against cross-question evidence. suggest-analyze ERR trap failure rate is operational-only (unmeasurable from code). Worker fallback percentage: low in Claude Code (all 22 agents registered [S4]), only triggers in non-standard environments. json_ok injection: low practical risk since category values come from code-controlled strings [S62], not user input. Dual file-lock race: mitigated by temporal separation — CLI writes hub only during install [S71], bash during colony operations [S1], not concurrent. 10 risks fully characterized with 9/10 having dedicated Q5 recommendations.",
+          "source_ids": [
+            "S4",
+            "S62",
+            "S71",
+            "S1"
+          ],
+          "iteration": 10
+        }
+      ],
+      "iterations_touched": [
+        2,
+        6,
+        10
+      ]
+    },
+    {
+      "id": "q4",
+      "text": "How does the memory and context management system handle state persistence, session resume, context rot, and cross-colony knowledge sharing?",
+      "status": "answered",
+      "confidence": 82,
+      "key_findings": [
+        {
+          "text": "Dual-file state persistence: session.json (lightweight metadata) and COLONY_STATE.json (authoritative state). Resume reads both, COLONY_STATE.json always authoritative. Missing/corrupted COLONY_STATE.json blocks resume — asks user to start fresh.",
+          "source_ids": [
+            "S32",
+            "S33"
+          ],
+          "iteration": 3
+        },
+        {
+          "text": "Three-tier session resume: Brief (1-line for /build, /plan), Extended (+ timestamp for /status), Full (/resume-colony with complete state + HANDOFF.md + pheromones + survey + phase progress). Prevents over-loading simple commands.",
+          "source_ids": [
+            "S33",
+            "S34"
+          ],
+          "iteration": 3
+        },
+        {
+          "text": "Colony-prime budget: 8K normal / 4K compact. Trim order (first removed): rolling-summary → phase-learnings → key-decisions → hive-wisdom → context-capsule → user-prefs → queen-wisdom → pheromone-signals. Blockers NEVER trimmed. REDIRECT signals preserved. CRITICAL: no feedback to workers when trimmed. CLAUDE.md says 'rolling summary highest priority' but code trims it FIRST — documentation inverted.",
+          "source_ids": [
+            "S29"
+          ],
+          "iteration": 3
+        },
+        {
+          "text": "Rolling summary: bounded 15-entry log, pipe-delimited, 180-char cap. Colony-prime injects last 5 as 'RECENT ACTIVITY'. First section trimmed under budget pressure — workers lose narrative continuity silently.",
+          "source_ids": [
+            "S30",
+            "S29"
+          ],
+          "iteration": 3
+        },
+        {
+          "text": "Context capsule: 220-word max snapshot from COLONY_STATE.json. 5th-priority in trimming — survives after rolling-summary, learnings, decisions, hive-wisdom trimmed. Provides 'low-token continuity'.",
+          "source_ids": [
+            "S31",
+            "S29"
+          ],
+          "iteration": 3
+        },
+        {
+          "text": "Hive brain cross-colony retrieval: registry.json domain tags → hive-read (domain filter + confidence threshold + LRU tracking) → fallback to eternal memory. Returns up to 5 entries (3 compact). Domain-scoped prevents cross-domain pollution.",
+          "source_ids": [
+            "S29",
+            "S36",
+            "S35"
+          ],
+          "iteration": 3
+        },
+        {
+          "text": "Hive-store dedup via content hash (SHA-256). Same-repo re-promotion skipped. Cross-repo merge with confidence boosting (2=0.70, 3=0.85, 4+=0.95). Confidence never downgraded (max). 200-entry LRU cap. Known bug: string-typed confidence causes silent exclusion.",
+          "source_ids": [
+            "S35",
+            "S36",
+            "S24"
+          ],
+          "iteration": 3
+        },
+        {
+          "text": "Staleness detected (>24h) but never blocks restoration. Drift detection (baseline_commit vs HEAD) is informational only. Deliberate design: availability over caution.",
+          "source_ids": [
+            "S32",
+            "S33"
+          ],
+          "iteration": 3
+        },
+        {
+          "text": "CONTEXT.md: 11 action types managed by _cmd_context_update with lock protection (LOCK-04). Init creates 10-section template including recovery guide. Updated at 4 lifecycle points. Worker spawn tracking provides per-worker build visibility.",
+          "source_ids": [
+            "S63",
+            "S64",
+            "S65",
+            "S66"
+          ],
+          "iteration": 7
+        },
+        {
+          "text": "CONTEXT.md as decision-to-pheromone bridge: continue-advance extracts decisions via awk, auto-emits FEEDBACK pheromones (up to 3 per continue). Potential double-emit from context-update decision action, but dedup catches it (identical format). Failed emission is silent (2>/dev/null || true).",
+          "source_ids": [
+            "S66",
+            "S63"
+          ],
+          "iteration": 7
+        },
+        {
+          "text": "Context capsule handles corruption gracefully: missing COLONY_STATE.json → clean early exit. Corrupted → cascading defaults (goal→'No goal set', state→'IDLE'). Missing auxiliary files → empty sections. Compact mode strips sections progressively. One of the most defensive functions — never crashes.",
+          "source_ids": [
+            "S67"
+          ],
+          "iteration": 7
+        },
+        {
+          "text": "Memory-capture: sequential kill-switch at step 1. Corrupted learning-observations.json triggers json_err → kills all 5 downstream steps. Callers' '2>/dev/null || true' hides total pipeline death. Detection without remediation — no file reset or recovery. Corrects Q3's 'fire-and-forget per step' characterization.",
+          "source_ids": [
+            "S68",
+            "S69",
+            "S56"
+          ],
+          "iteration": 7
+        },
+        {
+          "text": "Budget trimming info exists but not routed to workers: trimmed sections recorded in cp_budget_trimmed_list, appended to cp_log_line (visible to orchestrator). NOT in prompt_section (what workers see). Missing routing, not missing data.",
+          "source_ids": [
+            "S70",
+            "S29"
+          ],
+          "iteration": 7
+        },
+        {
+          "text": "SYNTHESIS: Memory system fully traced from input to output across all 13 findings. Remaining unknowns (budget trimming frequency, CONTEXT.md awk edge cases, memory-capture corruption frequency) are operational metrics requiring runtime data. CONTEXT.md awk risk is low since the table format is system-controlled — the system writes the table it later reads [S63]. Cross-validated: context capsule resilience (finding 11) is one of the strongest defense patterns, confirmed independently by Q1 colony-prime analysis and Q3 risk assessment.",
+          "source_ids": [
+            "S63",
+            "S67",
+            "S29"
+          ],
+          "iteration": 10
+        }
+      ],
+      "iterations_touched": [
+        3,
+        7,
+        10
+      ]
+    },
+    {
+      "id": "q5",
+      "text": "What would an expert change about this architecture to minimize user input while maximizing safety, verifiability, and autonomous execution capability?",
+      "status": "answered",
+      "confidence": 80,
+      "key_findings": [
+        {
+          "text": "RECOMMENDATION 1 — Per-phase COLONY_STATE.json checkpointing. Only entomb creates backups. State-safety skill prescribes backups but they're not implemented in builds/continues/autopilot. Fix: cp COLONY_STATE.json COLONY_STATE.json.phase-N.bak before each build-wave. Near-zero cost, prevents total loss.",
+          "source_ids": [
+            "S38",
+            "S39",
+            "S43",
+            "S42"
+          ],
+          "iteration": 4
+        },
+        {
+          "text": "RECOMMENDATION 2 — Extend evidence trail to close semantic verification gap. 8 programmatic gates exist but Builder/Watcher claims aren't verified. Fix: (a) capture test runner exit code and cross-reference Watcher's verification_passed, (b) verify Builder's files_created against filesystem. Follows proven TDD evidence gate pattern.",
+          "source_ids": [
+            "S41",
+            "S17",
+            "S20",
+            "S38"
+          ],
+          "iteration": 4
+        },
+        {
+          "text": "RECOMMENDATION 3 — Triage ~338 error suppression instances into correct/lazy/dangerous categories. Priority targets: suggest-analyze ERR trap gap (200 lines during builds), any 2>/dev/null on atomic_write or state mutation calls, conditional module sourcing.",
+          "source_ids": [
+            "S1",
+            "S28"
+          ],
+          "iteration": 4
+        },
+        {
+          "text": "RECOMMENDATION 4 — Type coercion in hive jq filters. String-typed confidence silently excludes wisdom. Fix: (tonumber? // 0) before numeric comparisons. ~5-line fix with outsized impact on cross-colony knowledge transfer. Confirmed bug via REDIRECT signal and midden evidence.",
+          "source_ids": [
+            "S24",
+            "S36",
+            "S35"
+          ],
+          "iteration": 4
+        },
+        {
+          "text": "RECOMMENDATION 5 — Context trimming notification. Workers receive silently truncated context. Fix: add NOTICE line listing removed sections (~30 chars). Also fix CLAUDE.md documentation inversion about rolling-summary priority.",
+          "source_ids": [
+            "S29",
+            "S30"
+          ],
+          "iteration": 4
+        },
+        {
+          "text": "RECOMMENDATION 6 — Agent fallback degradation logging. Specialized→general-purpose fallback happens silently. Fix: (a) midden entry, (b) WARNING in build synthesis, (c) optional FEEDBACK pheromone.",
+          "source_ids": [
+            "S25",
+            "S4"
+          ],
+          "iteration": 4
+        },
+        {
+          "text": "RECOMMENDATION 7 — Git checkpoint branches for autopilot. No code rollback exists. Fix: lightweight git tag (aether/pre-phase-N) before each build. Combined with Rec 1, provides full state + code rollback. autofix-checkpoint subcommand already implements git stashing.",
+          "source_ids": [
+            "S38",
+            "S42",
+            "S1"
+          ],
+          "iteration": 4
+        },
+        {
+          "text": "RECOMMENDATION 8 (Synthesis) — Memory pipeline circuit breaker with file recovery. learning-observations.json corruption permanently disables all 5 memory pipeline steps silently (Q3 finding 8 + Q4 finding 12). Fix: if jq validation fails, reset file to template, log midden entry, retry. ~15 lines. Only recommendation addressing a confirmed 'detection without remediation' gap.",
+          "source_ids": [
+            "S56",
+            "S68",
+            "S69"
+          ],
+          "iteration": 9
+        },
+        {
+          "text": "RECOMMENDATION 9 (Synthesis) — Autopilot run-state.json ↔ COLONY_STATE.json reconciliation. Dual-state desync risk (Q3 finding 9) has no detection. Fix: compare current_phase between files at autopilot loop start, pause if disagreement. ~10 lines. Depends on Rec 1 for rollback capability.",
+          "source_ids": [
+            "S60",
+            "S42",
+            "S38"
+          ],
+          "iteration": 9
+        },
+        {
+          "text": "PRIORITY MATRIX (Synthesis): Cross-question analysis establishes implementation order. Tier 1 (immediate, independent, low-effort): Rec 4 (5 lines, confirmed bug), Rec 1 (3 lines/site, prevents total loss), Rec 8 (15 lines, permanent silent failure). Tier 2 (medium effort): Rec 5 (30 chars, workers blind), Rec 2 (20 lines/check, hallucination vector), Rec 9 (10 lines, depends on Rec 1). Tier 3 (larger scope): Rec 6 (10 lines, lower impact), Rec 7 (5 lines, depends on Rec 1), Rec 3 (audit 338 instances, root cause). Recs 1+4+8 can be done in parallel.",
+          "source_ids": [
+            "S62",
+            "S24",
+            "S38",
+            "S43",
+            "S56",
+            "S68"
+          ],
+          "iteration": 9
+        },
+        {
+          "text": "FEASIBILITY VALIDATION (Synthesis): Cross-question evidence confirms all top-priority fixes are implementable: Rec 1 — build-prep already holds file lock [S44], adding cp is one line. Rec 2 — TDD evidence gate [S41] proves the pattern works. Rec 4 — exact jq filter line identified [S24]. Rec 7 — autofix-checkpoint already does git stashing [S1]. Architecture is sound at macro level (agent isolation, context capsule resilience, pheromone dedup, CLI/bash boundary) — risks are concentrated in implementation details.",
+          "source_ids": [
+            "S44",
+            "S41",
+            "S24",
+            "S1",
+            "S4",
+            "S67",
+            "S66",
+            "S71"
+          ],
+          "iteration": 9
+        },
+        {
+          "text": "COVERAGE ANALYSIS (Synthesis): 9 recommendations cover 8 of 10 Q3 risk findings with dedicated fixes. Two unaddressed risks are lower priority: (1) Dual file-lock [Q3.6] — mitigated by temporal separation (CLI during install only [S71], bash during operations [S1]); mkdir-based locking would be the code fix if needed. (2) check-antipattern scope [Q3.5] — documentation accuracy issue (Pattern 1), not a code fix; recommend renaming to 'basic anti-pattern check' and advising external scanners. All critical and medium risks have dedicated recommendations.",
+          "source_ids": [
+            "S22",
+            "S23",
+            "S21",
+            "S71",
+            "S1"
+          ],
+          "iteration": 10
+        }
+      ],
+      "iterations_touched": [
+        4,
+        9,
+        10
+      ]
+    }
+  ],
+  "created_at": "2026-03-23T16:06:44Z",
+  "last_updated": "2026-03-23T17:30:00Z",
+  "trust_summary": {
+    "total_findings": 55,
+    "single_source": 8,
+    "multi_source": 47,
+    "no_source": 0,
+    "trust_ratio": 85
+  }
+}

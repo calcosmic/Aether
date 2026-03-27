@@ -1,371 +1,805 @@
-# Architecture Research: Signal/Event Propagation in Aether's Multi-Agent Colony
+# Architecture Research: Smart Init System for Aether v2.5
 
-**Domain:** Multi-agent CLI orchestration system with stigmergic coordination
-**Researched:** 2026-03-19
-**Confidence:** HIGH (primary source is the codebase itself; patterns verified against multi-agent literature)
+**Domain:** Aether colony initialization system (slash commands, shell utils, QUEEN.md governance, prompt generation)
+**Researched:** 2026-03-27
+**Confidence:** HIGH (based on direct codebase analysis of init.md, plan.md, colonize.md, queen.sh, pheromone.sh colony-prime, session.sh, state-api.sh, and all template files)
 
-## Current System Overview
+---
 
-```
- USER COMMANDS                          STATE STORES
- (/ant:focus, /ant:redirect,           (pheromones.json, COLONY_STATE.json,
-  /ant:feedback, /ant:build N)           learning-observations.json, midden.json)
-        |                                       ^       |
-        v                                       |       |
- +--------------+                               |       |
- | COMMAND      |--- pheromone-write ---------->+       |
- | LAYER        |                                       |
- | (slash cmds) |                                       |
- +------+-------+                                       |
-        |                                               |
-        v                                               |
- +--------------+                                       |
- | PLAYBOOK     |--- colony-prime ---> prompt_section   |
- | ORCHESTRATOR |                          |            |
- | (build-*.md, |<--- pheromone-display ---+            |
- |  continue-*) |                                       |
- +------+-------+                                       |
-        |                                               |
-        | prompt_section injected                       |
-        | into worker prompts                           |
-        v                                               |
- +--------------------+                                 |
- | WORKER AGENTS      |--- memory-capture ------------->+
- | (Builder, Watcher,  |--- midden-write -------------->+
- |  Chaos, Ambassador, |--- pheromone-write (auto) ---->+
- |  Measurer, etc.)    |                                |
- +--------------------+                                 |
-                                                        |
- +--------------------+                                 |
- | UTILITY LAYER      |<-------------------------------+
- | (aether-utils.sh)  |
- | 150 subcommands    |
- | File locking       |
- | Atomic writes      |
- +--------------------+
-```
+## Executive Summary
 
-### How Signals Flow Today (The Working Path)
+The current `/ant:init` command (388 lines in `.claude/commands/ant/init.md`) is a mechanical file-setup operation: parse the goal string, write COLONY_STATE.json from a template, initialize constraints, pheromones, midden, learning-observations, create a session file, and register the repo. It does zero research about the repo being initialized, generates no structured prompt, and offers no approval step.
 
-1. **User emits signal** via `/ant:focus`, `/ant:redirect`, `/ant:feedback`
-2. **pheromone-write** appends signal to `pheromones.json` (with locking, atomic write, decay metadata)
-3. **colony-prime --compact** reads `pheromones.json`, extracts active signals, formats them into `prompt_section` markdown
-4. **build-context.md** (Step 4) calls `colony-prime --compact` and stores the result as `prompt_section`
-5. **build-wave.md** (Step 5.1) injects `prompt_section` into each Builder worker's prompt text
-6. **Workers execute** with signals as inline context -- they see the signals as text in their prompt
-7. **Workers also told** to periodically check `pheromone-read` at "natural breakpoints" (instruction in prompt, not enforced)
+The smart init milestone needs to transform this into an intelligent first step that (1) scans the repo to understand its structure, (2) generates a structured colony initialization prompt combining the user's natural language goal with repo context, (3) presents the prompt for approval before proceeding, and (4) manages QUEEN.md as a living colony charter with new governance sections (intent, vision, goals, architecture).
 
-### The Gap: Where Integration Breaks Down
+The key architectural insight: **init.md is a Markdown prompt executed by Claude Code's LLM**. It does not run as a traditional program. Every step is an instruction the LLM follows, calling tools (Bash, Read, Write, Glob) at each step. This means "approval loops" and "prompt generation" must work within Claude Code's execution model -- the LLM can present text to the user and wait for a response, then continue.
 
-The signal propagation chain has clear weak points:
+---
 
-| Integration Point | Status | Issue |
-|-------------------|--------|-------|
-| User -> pheromones.json | WORKING | pheromone-write handles locking, validation, decay |
-| pheromones.json -> colony-prime | WORKING | colony-prime reads, filters expired, formats |
-| colony-prime -> prompt_section | WORKING | build-context.md stores result |
-| prompt_section -> worker prompts | PARTIAL | Injected into Builder prompts but workers don't enforce reading |
-| Auto-emitted signals (memory-capture) | WORKING | Writes to pheromones.json, but only consumed next build cycle |
-| Midden -> REDIRECT (threshold) | WORKING | build-wave.md Step 5.2 checks midden thresholds mid-build |
-| continue -> pheromone auto-emission | WORKING | Steps 2.1a-d emit FEEDBACK/REDIRECT from learnings/errors/decisions |
-| phase_end expiration | WORKING | pheromone-expire --phase-end-only runs in continue |
-| Fresh-install initialization | MISSING | pheromones.json created lazily by pheromone-write, not by init |
-| Signal strength display | WORKING | pheromone-display shows decay percentages |
-| Mid-build signal refresh | PARTIAL | build-wave.md refreshes colony-prime per wave, but not per worker |
+## Part 1: System Overview
 
-## Component Boundaries
-
-| Component | Responsibility | Communicates With | Data Format |
-|-----------|---------------|-------------------|-------------|
-| **pheromone-write** | Create/append signals | pheromones.json, constraints.json (backward compat) | JSON signal objects |
-| **pheromone-read** | Read active signals with decay calculation | pheromones.json | Filtered JSON array |
-| **pheromone-display** | Human-readable signal table | pheromones.json | Formatted text |
-| **pheromone-prime** | Format signals + instincts for prompt injection | pheromones.json, COLONY_STATE.json (instincts) | Markdown prompt section |
-| **pheromone-expire** | Archive expired signals to midden | pheromones.json, midden.json | JSON mutation |
-| **colony-prime** | Unified priming: wisdom + signals + learnings + capsule | QUEEN.md, pheromones.json, COLONY_STATE.json, CONTEXT.md | Combined prompt section |
-| **memory-capture** | Unified event handler: observe + emit pheromone + check promotion | learning-observations.json, pheromones.json, QUEEN.md | Multi-step pipeline |
-| **suggest-analyze** | Codebase analysis for suggested signals | File system, pheromones.json | JSON suggestions |
-| **suggest-approve** | Interactive approval for suggested signals | pheromones.json | JSON + interactive |
-| **build-context.md** | Loads colony-prime into prompt_section at build start | colony-prime, pheromone-display | In-memory variable |
-| **build-wave.md** | Refreshes colony-prime per wave, injects into worker prompts | colony-prime, worker Task calls | Text in worker prompts |
-| **continue-advance.md** | Auto-emits signals from learnings/errors/decisions, expires phase_end signals | pheromone-write, pheromone-expire, memory-capture | JSON mutations |
-
-## Data Flow: Signal Lifecycle
-
-### 1. Signal Creation Flow
+### Current Init Architecture
 
 ```
-User/System Decision
+User types: /ant:init "Build a REST API with authentication"
     |
     v
-pheromone-write(type, content, --strength, --ttl, --source, --reason)
+init.md (388 lines of Markdown instructions for Claude Code LLM)
     |
-    +---> Validate type (FOCUS/REDIRECT/FEEDBACK)
-    +---> Sanitize content (XSS-like prevention, 500 char limit)
-    +---> Generate ID (sig_{type}_{epoch}_{random})
-    +---> Compute expires_at from TTL
-    +---> Acquire file lock
-    +---> Append signal to pheromones.json .signals[]
-    +---> Write constraints.json (backward compatibility)
-    +---> Release lock
-    |
-    v
-Signal stored with: {id, type, priority, source, created_at, expires_at, active, strength, reason, content}
+    +-- Step 1: Validate input (goal string not empty)
+    +-- Step 1.5: Verify aether-utils.sh exists
+    +-- Step 1.6: queen-init (create QUEEN.md from template)
+    +-- Step 2: Read COLONY_STATE.json (check existing state)
+    +-- Step 2.6: Load prior colony knowledge (completion-report.md)
+    +-- Step 3: Write COLONY_STATE.json (from template with substitutions)
+    +-- Step 4: Initialize constraints.json (from template)
+    +-- Step 4.5: Initialize runtime files (pheromones, midden, learning-obs)
+    +-- Step 5: context-update init "$ARGUMENTS" (creates CONTEXT.md)
+    +-- Step 6: validate-state colony
+    +-- Step 6.5: Detect nestmates
+    +-- Step 6.6: Register repo (silent, non-blocking)
+    +-- Step 6.7: Seed QUEEN.md from hive (non-blocking)
+    +-- Step 7: Display result
+    +-- Step 8: session-init
 ```
 
-### 2. Signal Consumption Flow (During Build)
+### Proposed Smart Init Architecture
 
 ```
-/ant:build N
-    |
-    v
-build-context.md Step 4:
-    colony-prime --compact
-        |
-        +---> Read QUEEN.md (global + local wisdom)
-        +---> Call pheromone-prime --compact --max-signals 8 --max-instincts 3
-        |         |
-        |         +---> Read pheromones.json
-        |         +---> Filter: active==true, not expired (decay calc)
-        |         +---> Sort by priority (high->normal->low), then strength
-        |         +---> Take top N signals
-        |         +---> Read instincts from COLONY_STATE.json
-        |         +---> Format as markdown section
-        |         v
-        +---> Append context capsule (context-capsule --compact)
-        +---> Append phase learnings from COLONY_STATE.json
-        +---> Combine into prompt_section
-        v
-    prompt_section variable stored in-memory
-
-build-wave.md Step 5.1:
-    Before each wave:
-        colony-prime --compact (REFRESH)
-        |
-        v
-    Updated prompt_section
-        |
-        v
-    Injected into each worker's Task tool prompt:
-        "{ prompt_section }"
-        |
-        v
-    Worker reads signals AS TEXT (no structured API)
-    Worker instructed to "check for new signals" at breakpoints
-    (but this is advisory -- no enforcement mechanism)
-```
-
-### 3. Signal Auto-Emission Flow (After Build)
-
-```
-continue-advance.md Step 2.1:
-    |
-    +---> 2.1a: FEEDBACK from phase outcome (learnings summary, strength 0.6, TTL 30d)
-    +---> 2.1b: FEEDBACK from phase decisions (from CONTEXT.md, strength 0.6, TTL 30d, cap 3)
-    +---> 2.1c: REDIRECT from midden error patterns (3+ occurrences, strength 0.7, TTL 30d, cap 3)
-    +---> 2.1d: FEEDBACK from recurring success criteria (2+ phases, strength 0.6, TTL 30d, cap 2)
-    +---> 2.1e: Expire phase_end signals, archive to midden
+User types: /ant:init "Build a REST API with authentication"
     |
     v
-All auto-emitted signals have source="auto:*" and are deduplicated against existing active signals
-
-memory-capture (called throughout build):
+init.md (refactored, modular)
     |
-    +---> learning-observe (record in learning-observations.json)
-    +---> pheromone-write (auto-emit REDIRECT for failures, FEEDBACK for learnings)
-    +---> learning-promote-auto (check if observation meets QUEEN.md promotion threshold)
+    +-- Step 1: Validate input [EXISTING]
+    +-- Step 1.5: Verify aether-utils.sh exists [EXISTING]
+    |
+    +-- Step 2: REPO SCAN (NEW)
+    |   |-- Lightweight scan: package manifests, entry points, config
+    |   |-- Check survey freshness: survey files exist and recent?
+    |   |-- Check chambers: prior colonies exist?
+    |   |-- Domain detection: what kind of project is this?
+    |   +-- Output: scan_summary JSON (tech, size, survey status)
+    |
+    +-- Step 3: GENERATE COLONY PROMPT (NEW)
+    |   |-- Combine user goal + scan_summary + hive wisdom
+    |   |-- Produce structured colony initialization document:
+    |   |   - Intent (what the user wants)
+    |   |   - Vision (what success looks like)
+    |   |   - Governance (rules, constraints)
+    |   |   - Goals (measurable outcomes)
+    |   |   - Architecture notes (if survey available)
+    |   +-- Output: colony_prompt (Markdown text)
+    |
+    +-- Step 4: APPROVAL LOOP (NEW)
+    |   |-- Display generated prompt to user
+    |   |-- Wait for user response (approve / edit / cancel)
+    |   |-- If approved: proceed to write files
+    |   |-- If edited: regenerate from user modifications
+    |   |-- If cancelled: stop, no files written
+    |
+    +-- Step 5: QUEEN.MD GOVERNANCE UPDATE (NEW)
+    |   |-- If QUEEN.md exists and has governance sections: UPDATE
+    |   |-- If QUEEN.md exists but no governance: ADD new sections
+    |   |-- If QUEEN.md doesn't exist: CREATE with governance sections
+    |   +-- New sections: ## Intent, ## Vision, ## Governance, ## Goals, ## Architecture
+    |
+    +-- Step 6: Write COLONY_STATE.json [EXISTING - Step 3]
+    +-- Step 7: Initialize constraints [EXISTING - Step 4]
+    +-- Step 8: Initialize runtime files [EXISTING - Step 4.5]
+    +-- Step 9: context-update [EXISTING - Step 5]
+    +-- Step 10: Validate state [EXISTING - Step 6]
+    +-- Step 11: Register + seed [EXISTING - Steps 6.5-6.7]
+    +-- Step 12: Display result [EXISTING - Step 7]
+    +-- Step 13: session-init [EXISTING - Step 8]
+```
+
+---
+
+## Part 2: Question 1 -- Where Does Lightweight Repo Scanning Live?
+
+### Options Considered
+
+| Option | Location | Pros | Cons |
+|--------|----------|------|------|
+| A) New utils module | `.aether/utils/scan.sh` | Clean separation, testable | New module to maintain, 10th domain module |
+| B) Extend existing domain-detect | `queen.sh:_domain_detect()` | Already exists, just expand | queen.sh is 1242 lines, already heavy |
+| C) Inline in init.md | Steps within init.md | No new code | Not testable, not reusable, init.md already 388 lines |
+| D) New subcommands in existing module | `state-api.sh` or `session.sh` | Uses existing infrastructure | Wrong domain concern |
+
+### Recommendation: Option A -- New `scan.sh` utils module
+
+**Rationale:**
+
+1. **Clean domain boundary.** Repo scanning is a distinct concern from state management, session tracking, or queen wisdom. It deserves its own module.
+
+2. **Already have precedent.** The modularization in v2.1 (Phase 13) extracted 9 domain modules from the monolith. The pattern is established: each module has a single responsibility, is sourced by aether-utils.sh, and exposes functions with `_module_function` naming.
+
+3. **Testable in isolation.** Shell functions in `.aether/utils/scan.sh` can be tested independently via the bash test infrastructure (tests/bash/).
+
+4. **Reusable by other commands.** Both `/ant:init` and `/ant:colonize` need repo scanning. Currently, colonize.md (Step 2) does inline scanning with Glob/Read tool calls. A shared `scan.sh` module means both commands call the same functions.
+
+5. **Keeps init.md manageable.** init.md is already 388 lines. Adding scanning logic inline would push it past 500 lines, which is the established threshold for splitting into playbooks.
+
+### Module Structure
+
+```
+.aether/utils/scan.sh
+  _scan_repo()          -- Full repo scan, returns JSON with tech/size/survey status
+  _scan_quick()         -- Lightweight scan (package manifests + entry points only)
+  _scan_survey_status() -- Check if territory survey exists and is fresh
+  _scan_chambers()      -- Check for prior colony chambers
+  _scan_domain()        -- Enhanced domain detection (extends existing _domain_detect)
+```
+
+### Integration with aether-utils.sh
+
+Add to the source block (after line 42):
+```bash
+[[ -f "$SCRIPT_DIR/utils/scan.sh" ]] && source "$SCRIPT_DIR/utils/scan.sh"
+```
+
+Add dispatch cases:
+```bash
+scan-repo) _scan_repo "$@" ;;
+scan-quick) _scan_quick "$@" ;;
+scan-survey-status) _scan_survey_status "$@" ;;
+scan-chambers) _scan_chambers "$@" ;;
+```
+
+### What _scan_repo Returns
+
+```json
+{
+  "ok": true,
+  "result": {
+    "tech_stack": {
+      "language": "typescript",
+      "framework": "express",
+      "runtime": "node"
+    },
+    "entry_points": ["src/index.ts", "src/server.ts"],
+    "project_type": "api",
+    "has_tests": true,
+    "has_ci": true,
+    "file_count": 47,
+    "directory_count": 12,
+    "domain_tags": ["node", "typescript"],
+    "survey": {
+      "exists": true,
+      "last_surveyed": "2026-03-20T14:00:00Z",
+      "is_fresh": false,
+      "stale_documents": ["PROVISIONS.md"]
+    },
+    "chambers": {
+      "count": 2,
+      "last_colony_goal": "Add authentication"
+    },
+    "prior_knowledge": {
+      "has_completion_report": true,
+      "instinct_count": 3,
+      "learning_count": 5
+    }
+  }
+}
+```
+
+### Relationship to Existing domain-detect
+
+The existing `_domain_detect()` in queen.sh (lines 1078-1094) does simple file-presence detection (checks for package.json, Cargo.toml, go.mod, etc.). The new `_scan_domain()` should call `_domain_detect()` first, then enrich with additional signals:
+
+- Parse package.json for framework detection (check dependencies)
+- Check for tsconfig.json to distinguish TypeScript from JavaScript
+- Check for test directories (test/, tests/, __tests__/) to detect testing patterns
+- Count files in src/ vs lib/ to estimate project size
+
+This means `_domain_detect()` stays in queen.sh (it is also called by init.md Step 6.6 for registry), and `_scan_domain()` in scan.sh wraps it with enrichment.
+
+---
+
+## Part 3: Question 2 -- How Does the Prompt Generator Work?
+
+### The Core Idea
+
+The prompt generator transforms a user's natural language goal + repo scan results + hive wisdom into a structured colony initialization document. This document becomes the "colony charter" -- it defines what the colony is trying to achieve and how it should operate.
+
+### Where It Lives
+
+**The prompt generator should NOT be a shell subcommand.** It is an LLM operation that requires synthesis and judgment. Shell scripts are for deterministic operations (file I/O, JSON manipulation, state transitions). The prompt generator needs the LLM's ability to interpret natural language, reason about project structure, and produce coherent prose.
+
+**Implementation: A step within init.md** (Steps 2-3 of the proposed architecture). The step instructs the Claude Code LLM to:
+
+1. Read the scan results from `_scan_repo`
+2. Read hive wisdom via `hive-read`
+3. Read prior completion-report.md if it exists
+4. Synthesize these into a structured Markdown document
+
+### Structured Colony Prompt Format
+
+```markdown
+# Colony Charter: {goal_summary}
+
+## Intent
+{1-2 paragraphs: what the user wants to achieve, interpreted from their goal string}
+
+## Vision
+{1-2 paragraphs: what success looks like for this colony}
+
+## Governance
+### Constraints
+- {rules from REDIRECT pheromones if any}
+- {constraints inferred from scan (e.g., "must maintain existing API compatibility")}
+
+### Quality Standards
+- {testing expectations from scan}
+- {code style from DISCIPLINES.md if survey available}
+
+### Communication
+- {user preferences from QUEEN.md or hub}
+
+## Goals
+1. {primary goal from user input}
+2. {inferred goals from scan}
+3. {goals from prior colony knowledge if applicable}
+
+## Architecture Notes
+{if survey available: key patterns from BLUEPRINT.md, tech stack from PROVISIONS.md}
+{if no survey: "Run /ant:colonize for deeper architectural context"}
+
+## Prior Knowledge
+{if completion-report.md exists: inherited instincts and learnings}
+{if hive wisdom available: relevant cross-colony patterns}
+```
+
+### Why This Works in Claude Code's Execution Model
+
+In Claude Code, a slash command is a Markdown prompt. The LLM reads it and follows the instructions step by step. Between steps, the LLM can:
+
+- Call Bash to run shell commands
+- Call Read to read files
+- Call Write to create files
+- Present text to the user and wait for response
+
+So the flow is:
+
+```
+Step 2 (in init.md): Run _scan_repo via Bash tool
+    |
     v
-Creates signals during build that are consumed in NEXT build cycle
+LLM has scan results in context
+    |
+Step 3 (in init.md): LLM synthesizes prompt from:
+    - scan results (JSON from Step 2)
+    - user goal ($ARGUMENTS)
+    - hive wisdom (from hive-read via Bash)
+    - prior knowledge (from completion-report.md via Read)
+    |
+    v
+LLM generates colony_prompt (Markdown text)
+    |
+Step 4 (in init.md): LLM presents colony_prompt to user
+    |
+    v
+User responds: "looks good" / "change X" / "cancel"
+    |
+    v
+LLM proceeds or adjusts based on response
 ```
 
-### 4. Signal Expiration Flow
+### No New Shell Subcommand Needed
+
+The prompt generator is purely an LLM operation within init.md. No new `prompt-generate` subcommand is needed. The scan results provide the data; the LLM does the synthesis.
+
+However, the scan results themselves DO need to be available as a shell subcommand so the LLM can call them via Bash:
 
 ```
-Two expiration mechanisms:
-
-1. Phase-scoped: expires_at == "phase_end"
-   - Expired by: pheromone-expire --phase-end-only (in continue-advance Step 2.1e)
-   - Archived to: midden/midden.json
-
-2. Time-scoped: expires_at == ISO-8601 timestamp
-   - Expired by: pheromone-read decay calculation (real-time filtering on read)
-   - Natural decay reduces effective strength over time:
-     FOCUS:    15-day half-life, 30-day full decay
-     REDIRECT: 30-day half-life, 60-day full decay
-     FEEDBACK: 45-day half-life, 90-day full decay
-   - Signals below 10% strength treated as inactive
-
-3. Pause-aware: Wall-clock TTLs extended by colony pause duration
+bash .aether/aether-utils.sh scan-repo
 ```
 
-## Architectural Patterns Applied
+---
 
-### Pattern: Stigmergic Blackboard (Already in Use)
+## Part 4: Question 3 -- How Does the Approval Loop Work?
 
-**What:** Agents coordinate through a shared environment (pheromones.json) rather than direct messaging. Signals decay naturally, preventing stale data accumulation. The environment (JSON files) IS the communication medium.
+### Claude Code's Execution Model
 
-**Aether's implementation:** This is the core pattern. Workers never message each other directly. All coordination flows through pheromones.json and COLONY_STATE.json. The system is textbook stigmergy -- agents modify the environment, other agents sense those modifications and adjust behavior.
+Claude Code executes slash commands as sequential instructions in a Markdown prompt. The LLM processes the prompt step by step. **Between steps, the LLM can pause and wait for user input.**
 
-**Strength:** Scales naturally. Adding a 23rd agent type requires zero changes to the signal system. Agents are fully decoupled from each other.
+This is how existing commands already work. For example, in init.md Step 2, if state already exists, the LLM presents a warning and the user responds. The LLM then continues based on the response.
 
-### Pattern: Hierarchical Decomposition (Already in Use)
+### Proposed Approval Loop Pattern
 
-**What:** Queen orchestrator breaks work into waves, delegates to specialized workers, gathers results.
-
-**Aether's implementation:** Build playbook decomposes phases into dependency-ordered waves. Queen spawns Builder/Watcher/Chaos agents per wave. Results bubble up through JSON return values.
-
-### Pattern: Generator-Critic (Already in Use)
-
-**What:** Builder generates code, Watcher validates independently.
-
-**Aether's implementation:** Builder agents implement tasks, Watcher agent independently verifies. This is enforced by the Spawn Gate and Watcher Gate in continue-gates.md.
-
-## Patterns to Follow for Integration Work
-
-### Pattern 1: Signal Injection at Construction Time
-
-**What:** Signals must be part of the worker's initial context, not something workers discover mid-execution. The prompt_section from colony-prime is the canonical injection point.
-
-**When:** Every time a worker is spawned.
-
-**Implementation note:** This already works. The key insight is that `prompt_section` is the single bottleneck for signal delivery. Any new signal type or integration point must flow through colony-prime to reach workers.
-
-### Pattern 2: Event-Carried State Transfer
-
-**What:** When signals change, the change event carries enough state for the consumer to act without querying the source. This is what memory-capture does -- it observes an event, writes the observation, emits a pheromone, and checks promotion thresholds in a single pipeline.
-
-**When:** Any time a build outcome, failure, or learning is recorded.
-
-**Implementation note:** memory-capture is the unified pipeline. All new event types should flow through it rather than creating parallel paths.
-
-### Pattern 3: Deduplication by Content Hash
-
-**What:** Auto-emitted signals check for existing active signals with matching content before creating duplicates. This prevents signal pile-up across multiple build/continue cycles.
-
-**When:** Every auto-emission (Steps 2.1a-d in continue-advance).
-
-**Implementation note:** Each auto-emission step includes a jq-based deduplication check. New auto-emission paths must follow the same pattern: check `.signals[] | select(.active == true and .source == "{source}" and (.content.text | contains($text)))`.
-
-## Anti-Patterns to Avoid
-
-### Anti-Pattern 1: Direct Agent-to-Agent Communication
-
-**What people do:** Try to have one worker message another worker directly (e.g., Builder telling Watcher "focus on file X").
-**Why it's wrong:** Violates the stigmergic model. Creates coupling between agent types. Breaks when agent types are added/removed.
-**Do this instead:** Have the Builder emit a FOCUS pheromone via pheromone-write. The Watcher picks it up through its own colony-prime injection on the next cycle.
-
-### Anti-Pattern 2: Signal Checking as Runtime Obligation
-
-**What people do:** Instruct workers to "periodically check pheromone-read during execution."
-**Why it's wrong:** Workers are sub-agents with limited tool call budgets. Checking signals mid-task burns tool calls on infrastructure instead of task work. Workers cannot reliably be trusted to follow advisory instructions.
-**Do this instead:** Front-load all signal context at spawn time via prompt_section. Workers should receive all relevant signals before they start, not discover them mid-flight. The per-wave colony-prime refresh (build-wave.md Step 5.1) handles inter-wave signal updates.
-
-### Anti-Pattern 3: Parallel Signal Stores
-
-**What people do:** Store signals in both pheromones.json AND constraints.json AND COLONY_STATE.json.
-**Why it's wrong:** Creates consistency bugs. The backward-compatibility write to constraints.json in pheromone-write already demonstrates this risk -- it's a maintenance burden.
-**Do this instead:** pheromones.json is the single source of truth for active signals. constraints.json should be deprecated in favor of reading REDIRECT signals from pheromones.json directly. COLONY_STATE.json stores instincts (learned patterns), which are a different concern.
-
-### Anti-Pattern 4: Unbounded Signal Accumulation
-
-**What people do:** Auto-emit signals without caps, creating dozens of signals that dilute attention.
-**Why it's wrong:** colony-prime with --compact takes top 8 signals. If there are 50 active signals, the most relevant may be pushed out. Workers can only process a limited context window.
-**Do this instead:** Cap auto-emissions per cycle (already done: 3 decision pheromones, 3 error patterns, 2 success criteria per continue). Decay and expire aggressively. The 8-signal compact limit in pheromone-prime is correct.
-
-## Recommended Project Structure for Integration Work
+In init.md, after generating the colony prompt (Step 3), add a step that:
 
 ```
-.aether/
- aether-utils.sh            # Signal subcommands live here (pheromone-*, colony-prime, memory-capture)
- data/
-   pheromones.json           # Active signals (source of truth)
-   COLONY_STATE.json         # Colony state + instincts + phase learnings
-   learning-observations.json # Observation counts for promotion tracking
-   midden/
-     midden.json             # Archived expired signals + failure records
-   constraints.json          # DEPRECATED: backward compat only
- templates/
-   pheromones.template.json  # Initial pheromones.json structure
- docs/
-   pheromones.md             # User guide for signal system
-   command-playbooks/
-     build-context.md        # Where colony-prime is called (Step 4)
-     build-wave.md           # Where prompt_section is injected (Step 5.1)
-     continue-advance.md     # Where auto-emission and expiration happen (Step 2.1)
+### Step 4: Present Colony Charter for Approval
+
+Display the generated colony charter:
+
+{colony_prompt}
+
+Then ask:
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   C O L O N Y   C H A R T E R
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Review the colony charter above. Options:
+  1. Approve -- proceed with initialization
+  2. Edit -- tell me what to change
+  3. Cancel -- do not initialize
+
+Waiting for your decision.
 ```
 
-### Structure Rationale
+Wait for the user's response.
 
-- **pheromones.json is the hub:** All signal reads and writes go through it. There is no secondary signal store.
-- **colony-prime is the aggregator:** It combines wisdom + signals + learnings + context capsule into a single injectable section. Downstream consumers never read pheromones.json directly -- they consume colony-prime output.
-- **memory-capture is the pipeline:** All event recording (learning, failure, success, redirect) flows through this single entry point, which handles observe + emit + promote in sequence.
-- **Playbooks are the integration points:** build-context.md and build-wave.md are where signals enter the worker execution path. continue-advance.md is where signals are emitted and expired.
+- If the user approves: proceed to Step 5 (write files)
+- If the user requests edits: modify the colony_prompt based on their feedback, re-present, and wait again
+- If the user cancels: output "Colony initialization cancelled. No files were written." and STOP
+```
 
-## Integration Points for the Milestone
+### Why This Works
 
-### Integration Point 1: Fresh-Install Initialization
+This is identical to how the existing init.md Step 2 works when detecting existing state. The LLM presents information and waits for user response. No special mechanism is needed -- this is Claude Code's normal execution model.
 
-| Boundary | Communication | Status |
-|----------|---------------|--------|
-| /ant:init -> pheromones.json | Should create from template | MISSING |
-| /ant:lay-eggs -> pheromones.json | Should create from template | NEEDS VERIFICATION |
+### Potential Pitfall: Context Window Pressure
 
-**Current behavior:** pheromones.json is created lazily by pheromone-write when the first signal is emitted. This means colony-prime (called in build-context.md) may encounter a missing file on a fresh install before any signals are emitted. It handles this gracefully (warns and continues), but the system would be cleaner if initialized upfront.
+The colony prompt + approval display + subsequent file writes all happen in a single conversation turn. If the scan results or colony prompt are very large, they consume context that could be needed for later steps.
 
-### Integration Point 2: Pheromone Display in Status
+**Mitigation:** Keep the colony prompt under 2000 characters. The scan results should be summarized, not raw JSON. The approval display should show the prompt, not the full scan data.
 
-| Boundary | Communication | Status |
-|----------|---------------|--------|
-| /ant:status -> pheromone-display | Should show active signals in status dashboard | NEEDS VERIFICATION |
+---
 
-### Integration Point 3: Signal Cleanup on Colony Seal/Entomb
+## Part 5: Question 4 -- How Does QUEEN.md Governance Update Work?
 
-| Boundary | Communication | Status |
-|----------|---------------|--------|
-| /ant:seal -> pheromone-expire | Should expire all signals when colony is sealed | NEEDS VERIFICATION |
-| /ant:entomb -> pheromones.json | Should archive all signals to completed colony archive | NEEDS VERIFICATION |
+### Current QUEEN.md Structure (v2 format)
 
-### Integration Point 4: constraints.json Deprecation
+```markdown
+# QUEEN.md -- Colony Wisdom
 
-| Boundary | Communication | Status |
-|----------|---------------|--------|
-| pheromone-write -> constraints.json | Backward compat write | SHOULD DEPRECATE |
-| Any consumer of constraints.json | Should read from pheromones.json instead | NEEDS AUDIT |
+> Last evolved: {TIMESTAMP}
+> Wisdom version: 2.0.0
 
-## Scaling Considerations
+---
 
-| Concern | At 5-10 signals | At 20-50 signals | At 100+ signals |
-|---------|-----------------|-------------------|-----------------|
-| File I/O | Negligible | Acceptable | Could slow jq parsing; consider cleanup |
-| Prompt token cost | ~200 tokens (compact) | ~500 tokens | colony-prime --compact caps at 8 signals, so stays bounded |
-| Signal relevance | All visible | Ranking matters (priority + strength) | Many signals lost to compact limit; need stronger decay |
-| Deduplication cost | Trivial | O(n) per emission | jq `.signals[]` scan gets expensive; consider indexing by content hash |
+## User Preferences
+{user preferences}
 
-### Scaling Priorities
+---
 
-1. **First bottleneck:** Signal accumulation without cleanup. The pheromone-expire mechanism only runs during `/ant:continue`. Long build sessions without continue cycles can accumulate stale signals. Mitigation: also expire during build-context.md Step 4.
-2. **Second bottleneck:** jq parsing of large pheromones.json. Each read/write operation parses the entire file. At 100+ signals (including inactive), jq performance degrades. Mitigation: periodic compaction that removes inactive signals entirely.
+## Codebase Patterns
+{validated patterns and anti-patterns}
 
-## Build Order Implications
+---
 
-Based on the component boundaries and data flow analysis:
+## Build Learnings
+{what worked and what failed}
 
-1. **Initialization first** -- Ensure pheromones.json is created during /ant:init and /ant:lay-eggs from the template. This unblocks all downstream consumers.
-2. **Audit constraints.json consumers** -- Before deprecating, find all code paths that read constraints.json and migrate to pheromones.json reads.
-3. **Verify status integration** -- Ensure /ant:status shows active signals via pheromone-display.
-4. **Verify lifecycle cleanup** -- Ensure /ant:seal and /ant:entomb properly handle signal archival.
-5. **Polish fresh-install flow** -- Test the entire path: lay-eggs -> init -> focus -> build -> continue -> signals appear in worker prompts.
+---
+
+## Instincts
+{high-confidence behavioral patterns}
+
+---
+
+## Evolution Log
+{table of changes}
+
+---
+
+<!-- METADATA {json} -->
+```
+
+### Proposed QUEEN.md Structure (v3 format)
+
+```markdown
+# QUEEN.md -- Colony Charter & Wisdom
+
+> Last evolved: {TIMESTAMP}
+> Wisdom version: 3.0.0
+> Colony goal: {goal}
+
+---
+
+## Intent
+{what this colony is trying to achieve}
+
+---
+
+## Vision
+{what success looks like}
+
+---
+
+## Governance
+### Constraints
+{hard rules}
+
+### Quality Standards
+{testing, code style, review expectations}
+
+---
+
+## Goals
+{measurable outcomes}
+
+---
+
+## Architecture Notes
+{tech stack, patterns, key decisions}
+
+---
+
+## User Preferences
+{communication style, expertise level, decision patterns}
+
+---
+
+## Codebase Patterns
+{validated approaches and anti-patterns}
+
+---
+
+## Build Learnings
+{what worked and what failed}
+
+---
+
+## Instincts
+{high-confidence behavioral patterns}
+
+---
+
+## Evolution Log
+{table of changes}
+
+---
+
+<!-- METADATA {json with v3.0 version} -->
+```
+
+### Where New Sections Are Written
+
+**Option A: New queen-governance subcommand in queen.sh**
+
+Add a function `_queen_write_governance()` that:
+1. Reads the current QUEEN.md
+2. Checks if Intent/Vision/Governance/Goals/Architecture sections exist
+3. If not: inserts them after the header, before User Preferences
+4. If yes: updates the content (preserving existing wisdom sections below)
+5. Updates METADATA to version 3.0.0
+
+This follows the exact pattern of `_queen_write_learnings()` and `_queen_promote_instinct()` -- both find a section, manipulate it with awk/sed, and do atomic writes.
+
+**Option B: New utils module for governance**
+
+Create `.aether/utils/governance.sh` with `_governance_write()`.
+
+**Recommendation: Option A** -- queen.sh already owns all QUEEN.md manipulation. Adding governance functions there keeps the "one file owns one document" principle. The `_queen_write_governance()` function is naturally a sibling of `_queen_promote()`, `_queen_write_learnings()`, and `_queen_promote_instinct()`.
+
+### How Re-init Works (Update Without Reset)
+
+The PROJECT.md states: "Re-running init should update Queen file, not destroy colony state."
+
+This means:
+
+1. **COLONY_STATE.json**: Do NOT overwrite if it already exists with an active goal. The existing Step 2 already handles this (warns, asks confirmation).
+
+2. **QUEEN.md governance sections**: Update the Intent, Vision, Goals sections with the new goal. Do NOT touch User Preferences, Codebase Patterns, Build Learnings, or Instincts -- those accumulate through colony work.
+
+3. **Runtime files** (pheromones, midden, learning-observations): Do NOT overwrite if they already exist. Step 4.5 already handles this (only creates if missing).
+
+4. **Session**: Update session-init with the new goal but preserve phase state.
+
+### Template Changes
+
+The QUEEN.md template (`.aether/templates/QUEEN.md.template`) needs to be updated to v3 format with the new sections. However, existing colonies with v2 QUEEN.md files must be handled:
+
+- `_queen_init()` creates from template only if QUEEN.md doesn't exist
+- `_queen_write_governance()` adds new sections to existing v2 files
+- A migration path (like the existing v1->v2 migration in `_queen_migrate()`) could add empty governance sections to v2 files
+
+### Impact on colony-prime (Worker Context Assembly)
+
+The `_colony_prime()` function in pheromone.sh (lines 735-1284) extracts wisdom from QUEEN.md using `_extract_wisdom()`. Currently it looks for 4 sections: User Preferences, Codebase Patterns, Build Learnings, Instincts.
+
+**New sections must be injected into worker context.** The Intent and Goals sections are particularly valuable -- workers should know what the colony is trying to achieve. Architecture Notes from the survey provide critical context for builders.
+
+The `_extract_wisdom()` function needs a v3 path that also extracts:
+- `intent` -- the colony's purpose
+- `goals` -- measurable outcomes
+- `architecture_notes` -- tech stack and patterns from survey
+
+These get added to the `prompt_section` that colony-prime assembles. They should be injected with HIGH retention priority (trimmed late in the budget), since they are fundamental context for every worker.
+
+**Token budget impact:** The current budget is 8,000 chars (4,000 compact). Adding intent + goals + architecture adds roughly 500-1500 chars. This is manageable but requires the trim order to be updated.
+
+### Updated Trim Order
+
+```
+1. Rolling summary (trimmed first -- lowest retention priority)
+2. Phase learnings
+3. Key decisions
+4. Hive wisdom
+5. Context capsule
+6. Build learnings
+7. User preferences
+8. Codebase patterns
+9. Pheromone signals
+10. Instincts
+11. Intent + Goals (trimmed last -- highest retention priority)
+12. Blockers (NEVER trimmed)
+```
+
+---
+
+## Part 6: Component Boundaries
+
+### New Components
+
+| Component | File | Responsibility | Dependencies |
+|-----------|------|----------------|-------------|
+| scan.sh | `.aether/utils/scan.sh` | Repo scanning functions | aether-utils.sh infrastructure (json_ok, jq) |
+| scan-repo subcommand | dispatch in aether-utils.sh | Full repo scan entry point | scan.sh sourced |
+| scan-quick subcommand | dispatch in aether-utils.sh | Lightweight scan entry point | scan.sh sourced |
+| queen-governance subcommand | dispatch in aether-utils.sh | Write governance sections | queen.sh sourced |
+| QUEEN.md v3 template | `.aether/templates/QUEEN.md.template` | Template with governance sections | None |
+| init.md (refactored) | `.claude/commands/ant/init.md` | Smart init command | scan.sh, queen-governance |
+| OpenCode init.md | `.opencode/commands/ant/init.md` | OpenCode parallel | Same as above |
+
+### Modified Components
+
+| Component | File | Change | Risk |
+|-----------|------|--------|------|
+| queen.sh | `.aether/utils/queen.sh` | Add `_queen_write_governance()` function | Low -- additive, no changes to existing functions |
+| aether-utils.sh | `.aether/aether-utils.sh` | Add source for scan.sh, add dispatch cases | Low -- follows established pattern |
+| pheromone.sh | `.aether/utils/pheromone.sh` | Update `_extract_wisdom()` for v3 QUEEN.md format, update trim order in `_colony_prime()` | Medium -- must not break v2 format reading |
+| colony-state template | `.aether/templates/colony-state.template.json` | Possibly add governance fields to state | Low -- additive JSON fields |
+| CLAUDE.md | `CLAUDE.md` | Document new QUEEN.md sections, update QUEEN.md structure description | Low -- documentation only |
+
+### NOT Modified
+
+| Component | Why |
+|-----------|-----|
+| session.sh | No changes to session management |
+| state-api.sh | No changes to state read/write |
+| hive.sh | No changes to hive brain |
+| learning.sh | No changes to learning pipeline |
+| pheromone write/display | No changes to signal management |
+| build/continue playbooks | No changes to build flow |
+| Agent definitions | No changes to worker agents |
+| OpenCode agent definitions | No changes |
+
+---
+
+## Part 7: Data Flow
+
+### Smart Init Data Flow
+
+```
+/ant:init "Build a REST API"
+    |
+    v
+[1] _scan_repo (Bash call)
+    |-- Reads: package.json, tsconfig.json, etc.
+    |-- Checks: .aether/data/survey/ freshness
+    |-- Checks: .aether/chambers/ for prior colonies
+    |-- Calls: _domain_detect (existing in queen.sh)
+    |-- Returns: scan_summary JSON
+    |
+    v
+[2] hive-read (Bash call)
+    |-- Reads: ~/.aether/hive/wisdom.json
+    |-- Filters: by domain tags from scan
+    |-- Returns: relevant cross-colony wisdom
+    |
+    v
+[3] LLM Synthesis (in init.md)
+    |-- Input: user goal + scan_summary + hive wisdom
+    |-- Output: colony_prompt (structured Markdown)
+    |
+    v
+[4] User Approval (interactive)
+    |-- Display: colony_prompt
+    |-- Wait: for user response
+    |-- Branch: approve / edit / cancel
+    |
+    v
+[5] _queen_write_governance (Bash call)
+    |-- Input: approved intent, vision, governance, goals, architecture
+    |-- Reads: existing .aether/QUEEN.md
+    |-- Inserts: new governance sections (or updates existing)
+    |-- Updates: METADATA version to 3.0.0
+    |
+    v
+[6] Write COLONY_STATE.json (existing flow)
+    |-- Template substitution
+    |-- Prior knowledge inheritance
+    |
+    v
+[7] Initialize runtime files (existing flow)
+    |-- pheromones.json (if missing)
+    |-- midden.json (if missing)
+    |-- learning-observations.json (if missing)
+    |
+    v
+[8] session-init (existing flow)
+    |-- Create session.json
+    |-- Baseline commit capture
+```
+
+### How Governance Flows to Workers
+
+```
+QUEEN.md (v3) with governance sections
+    |
+    v
+_colony_prime() (pheromone.sh)
+    |-- _extract_wisdom() extracts intent, goals, architecture
+    |-- Builds prompt_section with governance context
+    |-- Injects into worker prompts via build-context.md Step 4
+    |
+    v
+Worker (Builder/Watcher/Scout) receives:
+    "--- COLONY INTENT ---
+    Build a REST API with authentication for a SaaS product
+    --- END COLONY INTENT ---
+
+    --- COLONY GOALS ---
+    1. Working API with CRUD endpoints
+    2. JWT authentication middleware
+    3. Test coverage > 80%
+    --- END COLONY GOALS ---"
+
+    --- COLONY ARCHITECTURE ---
+    Stack: TypeScript + Express + PostgreSQL
+    Pattern: Repository pattern for data access
+    --- END COLONY ARCHITECTURE ---"
+```
+
+---
+
+## Part 8: Anti-Patterns
+
+### Anti-Pattern 1: Making scan.sh do too much
+
+The scan should be FAST (under 2 seconds). It reads a few files and checks directory existence. It should NOT:
+- Parse every source file (that's what /ant:colonize does)
+- Run git log analysis (that's what /ant:archaeology does)
+- Check test coverage (that's what /ant:chaos does)
+
+Keep scan.sh to: file presence checks, manifest parsing, directory counting.
+
+### Anti-Pattern 2: Writing governance sections with sed/awk directly in init.md
+
+The init.md file is a Markdown prompt. It should call shell subcommands for file manipulation, not contain inline sed/awk. The pattern is:
+```
+Run using Bash tool:
+bash .aether/aether-utils.sh queen-governance --intent "..." --vision "..." ...
+```
+NOT:
+```
+Use sed to insert sections into QUEEN.md...
+```
+
+### Anti-Pattern 3: Breaking v2 QUEEN.md backward compatibility
+
+The `_extract_wisdom()` function in pheromone.sh must continue to read v2 format QUEEN.md files. New v3 files get additional sections extracted. The format detection (line 783: `grep -q '^## Build Learnings$'`) should be extended, not replaced. A v3 file can be detected by checking for `^## Intent$`.
+
+### Anti-Pattern 4: Making the approval loop complex
+
+The approval loop should be simple: show, wait, proceed or stop. Do NOT add:
+- Multi-round negotiation
+- Version history of the prompt
+- Side-by-side comparison with prior colonies
+
+The user can always re-run `/ant:init` if they want to change the charter.
+
+### Anti-Pattern 5: Putting governance data in COLONY_STATE.json
+
+Governance (intent, vision, goals, architecture) lives in QUEEN.md, not COLONY_STATE.json. COLONY_STATE.json tracks operational state (current phase, plan, events, instincts). QUEEN.md is the charter -- the "why" and "what". COLONY_STATE.json is the "where are we". Mixing them breaks the separation of concerns.
+
+---
+
+## Part 9: Build Order
+
+### Phase 1: Scan Module (no dependencies)
+
+1. Create `.aether/utils/scan.sh` with `_scan_repo()`, `_scan_quick()`, `_scan_survey_status()`, `_scan_chambers()`, `_scan_domain()`
+2. Add source line to aether-utils.sh
+3. Add dispatch cases to aether-utils.sh
+4. Write tests for scan functions
+5. Update QUEEN.md template to v3 format (add empty governance sections)
+
+**Risk:** None -- purely additive, no existing code modified.
+
+### Phase 2: Queen Governance (depends on Phase 1 for template)
+
+1. Add `_queen_write_governance()` to queen.sh
+2. Add `queen-governance` dispatch case to aether-utils.sh
+3. Update `_queen_init()` to use v3 template
+4. Write tests for governance write function
+
+**Risk:** Medium -- modifying queen.sh requires careful section manipulation. Follow the pattern of `_queen_write_learnings()` exactly.
+
+### Phase 3: Colony-Prime v3 Support (depends on Phase 2)
+
+1. Update `_extract_wisdom()` in pheromone.sh to handle v3 format (add intent, goals, architecture extraction)
+2. Update `_colony_prime()` trim order to include governance sections
+3. Add governance sections to the prompt_section assembly
+4. Write tests for v3 extraction
+
+**Risk:** Medium -- must not break v2 format. Test both v2 and v3 files.
+
+### Phase 4: Init.md Refactor (depends on Phases 1-3)
+
+1. Refactor init.md to add scan step (before state write)
+2. Add prompt generation step (LLM synthesis)
+3. Add approval loop step
+4. Add governance write step (after approval)
+5. Update OpenCode init.md for parity
+6. End-to-end test: run /ant:init, verify governance sections in QUEEN.md
+
+**Risk:** Medium -- init.md is 388 lines and is the most-used command. Changes must be tested thoroughly.
+
+### Phase 5: Documentation and Validation
+
+1. Update CLAUDE.md with new QUEEN.md v3 structure
+2. Update workers.md if needed
+3. Full integration test: init -> plan -> build -> verify governance flows to workers
+4. Run validate-package.sh
+
+### Dependency Graph
+
+```
+Phase 1 (scan.sh)    Phase 2 (queen-governance)
+    |                       |
+    v                       v
+    |-----> Phase 3 (colony-prime v3) <-----|
+                  |
+                  v
+           Phase 4 (init.md refactor)
+                  |
+                  v
+           Phase 5 (docs + validation)
+```
+
+Phases 1 and 2 can be built in parallel. Phase 3 depends on both (needs scan data to enrich governance, needs governance functions to exist). Phase 4 depends on Phase 3. Phase 5 is final.
+
+---
+
+## Part 10: Risk Assessment
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|------------|
+| scan.sh slow on large repos | Medium | Low | Scan only reads file existence and manifest files, not source. Cap at 50 files checked. |
+| QUEEN.md v3 breaks v2 consumers | Medium | High | `_extract_wisdom()` has format detection. Test v2 and v3 paths. Add v3 detection alongside existing v2 detection. |
+| Token budget exceeded with governance | Low | Medium | Governance adds ~1000 chars. Trim order puts it at high retention priority. Compact mode already trims aggressively. |
+| Approval loop confuses users | Medium | Low | Keep it simple: show, approve/edit/cancel. One interaction, not a negotiation. |
+| init.md refactor breaks existing behavior | Medium | High | Test all existing init scenarios (fresh, re-init, prior knowledge) before and after refactor. |
+| Governance sections empty on update | Low | Low | `_queen_write_governance()` only writes if content is non-empty. Existing v2 QUEEN.md files without governance sections get them added with placeholder text. |
+| OpenCode parity broken | Low | Low | OpenCode init.md needs same changes. Review manually after Claude Code changes are stable. |
+
+---
 
 ## Sources
 
-- **Codebase analysis:** Direct reading of aether-utils.sh (pheromone-write, pheromone-read, pheromone-prime, colony-prime, memory-capture), build playbooks (build-context.md, build-wave.md, build-verify.md, build-complete.md), continue playbooks (continue-verify.md, continue-gates.md, continue-advance.md, continue-finalize.md), pheromones.md user guide. **HIGH confidence.**
-- [Google's Eight Essential Multi-Agent Design Patterns (InfoQ)](https://www.infoq.com/news/2026/01/multi-agent-design-patterns/) -- Validates Aether's hierarchical decomposition + generator-critic patterns. **MEDIUM confidence.**
-- [Four Design Patterns for Event-Driven Multi-Agent Systems (Confluent)](https://www.confluent.io/blog/event-driven-multi-agent-systems/) -- Event-carried state transfer pattern matches memory-capture pipeline. **MEDIUM confidence.**
-- [Why Multi-Agent Systems Don't Need Managers: Lessons from Ant Colonies](https://www.rodriguez.today/articles/emergent-coordination-without-managers) -- Pressure field + decay model validates Aether's signal decay design. **MEDIUM confidence.**
-- [Introducing SBP: Multi-Agent Coordination via Digital Pheromones](https://dev.to/naveentvelu/introducing-sbp-multi-agent-coordination-via-digital-pheromones-2j4e) -- Stigmergic Blackboard Protocol mirrors Aether's pheromones.json approach. **MEDIUM confidence.**
-- [Stigmergy (Wikipedia)](https://en.wikipedia.org/wiki/Stigmergy) -- Foundational concept validation. **HIGH confidence.**
-- [Self-Organising in Multi-agent Coordination Using Stigmergy (Springer)](https://link.springer.com/chapter/10.1007/978-3-540-24701-2_8) -- Academic validation of pheromone-based coordination patterns. **MEDIUM confidence.**
+- HIGH confidence: Direct analysis of `.claude/commands/ant/init.md` (388 lines) -- full step flow traced
+- HIGH confidence: Direct analysis of `.claude/commands/ant/colonize.md` (257 lines) -- existing scanning patterns traced
+- HIGH confidence: Direct analysis of `.claude/commands/ant/plan.md` (667 lines) -- planning context loading traced
+- HIGH confidence: Direct analysis of `.aether/utils/queen.sh` (1242 lines) -- all queen functions traced, section manipulation patterns documented
+- HIGH confidence: Direct analysis of `.aether/utils/pheromone.sh` `_colony_prime()` function (lines 735-1284) -- full context assembly traced, trim order documented
+- HIGH confidence: Direct analysis of `.aether/utils/pheromone.sh` `_extract_wisdom()` function (lines 779-887) -- v2 format extraction documented
+- HIGH confidence: Direct analysis of `.aether/utils/session.sh` (547 lines) -- session management patterns documented
+- HIGH confidence: Direct analysis of `.aether/utils/state-api.sh` (200 lines) -- state read/write/mutate documented
+- HIGH confidence: Direct analysis of `.aether/templates/QUEEN.md.template` (62 lines) -- v2 template structure documented
+- HIGH confidence: Direct analysis of `.aether/templates/colony-state.template.json` (36 lines) -- state template structure documented
+- HIGH confidence: Direct analysis of `.aether/aether-utils.sh` (first 100 lines) -- source loading and dispatch pattern documented
+- HIGH confidence: Direct analysis of `.planning/PROJECT.md` -- v2.5 milestone scope and user feedback documented
+- HIGH confidence: Pattern analysis of 9 existing utils modules -- modularization pattern confirmed
 
 ---
-*Architecture research for: Aether pheromone integration and signal propagation*
-*Researched: 2026-03-19*
+
+*Architecture research for: Aether v2.5 Smart Init*
+*Researched: 2026-03-27*

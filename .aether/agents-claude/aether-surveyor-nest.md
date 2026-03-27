@@ -2,7 +2,8 @@
 name: aether-surveyor-nest
 description: "Use this agent to map the codebase's architecture, directory structure, and project topology. Writes BLUEPRINT.md and CHAMBERS.md to .aether/data/survey/. Spawned by /ant:colonize to survey the nest before colony work begins. Use when colony context is missing or stale for this project."
 tools: Read, Grep, Glob, Bash, Write
-model: inherit
+color: cyan
+model: sonnet
 ---
 
 <role>

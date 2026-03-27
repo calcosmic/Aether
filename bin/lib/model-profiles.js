@@ -14,7 +14,57 @@ const { ConfigurationError } = require('./errors');
 /**
  * Default model to use when caste is not found
  */
-const DEFAULT_MODEL = 'kimi-k2.5';
+const DEFAULT_MODEL = 'glm-5-turbo';
+
+/**
+ * Valid slot names that castes can be assigned to
+ */
+const VALID_SLOTS = ['opus', 'sonnet', 'haiku', 'inherit'];
+
+/**
+ * Default slot returned when caste lookup fails
+ */
+const DEFAULT_SLOT = 'inherit';
+
+/**
+ * Get the assigned model slot for a specific caste.
+ * Pure lookup -- no console warnings, no side effects.
+ *
+ * @param {object|null|undefined} profiles - Parsed model profiles
+ * @param {string} caste - Caste name (e.g., 'builder', 'watcher')
+ * @returns {string} Slot name ('opus', 'sonnet', 'haiku', 'inherit')
+ */
+function getModelSlotForCaste(profiles, caste) {
+  if (!profiles || typeof profiles !== 'object') {
+    return DEFAULT_SLOT;
+  }
+
+  return profiles.worker_models?.[caste] || DEFAULT_SLOT;
+}
+
+/**
+ * Validate whether a slot name is recognized.
+ *
+ * @param {string|null|undefined} slot - Slot name to validate
+ * @returns {{valid: boolean, error: string|null}}
+ */
+function validateSlot(slot) {
+  if (!slot || typeof slot !== 'string') {
+    return {
+      valid: false,
+      error: `Invalid slot "${slot}". Valid options: opus, sonnet, haiku, inherit`,
+    };
+  }
+
+  if (VALID_SLOTS.includes(slot)) {
+    return { valid: true, error: null };
+  }
+
+  return {
+    valid: false,
+    error: `Invalid slot "${slot}". Valid options: opus, sonnet, haiku, inherit`,
+  };
+}
 
 /**
  * Load and parse model profiles from YAML file
@@ -429,8 +479,10 @@ function selectModelForTask(profiles, caste, taskDescription, cliOverride = null
 module.exports = {
   loadModelProfiles,
   getModelForCaste,
+  getModelSlotForCaste,
   validateCaste,
   validateModel,
+  validateSlot,
   getProviderForModel,
   getAllAssignments,
   getModelMetadata,
@@ -442,4 +494,6 @@ module.exports = {
   getModelForTask,
   selectModelForTask,
   DEFAULT_MODEL,
+  VALID_SLOTS,
+  DEFAULT_SLOT,
 };

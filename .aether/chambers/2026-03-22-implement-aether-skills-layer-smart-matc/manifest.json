@@ -1,0 +1,13 @@
+{
+  "entombed_at": "2026-03-22T14:30:18Z",
+  "goal": "Implement Aether Skills Layer — smart-matched colony and domain skills for workers",
+  "phases_completed": 5,
+  "total_phases": 5,
+  "milestone": "Crowned Anthill",
+  "version": "3.0",
+  "decisions": ["Skills inject outside colony-prime as separate skill_section with 12K budget","Skills install to ~/.aether/skills/ (not ~/.aether/system/skills/)","OpenCode command parity required for lint:sync (hard gate)","New bash tests need explicit npm script (test:skills) — not auto-discovered","Watcher prompt in build-verify.md also needs skill injection","Autopilot uses same playbooks — no separate code path to maintain"],
+  "learnings": [{"id":"learning_1774184110","phase":1,"phase_name":"Skill Engine Foundation","learnings":[{"claim":"Process substitution (< <(cmd)) avoids subshell variable loss in while loops piped from jq — critical for accumulating results in bash","status":"validated","tested":true,"evidence":"19 bash tests pass including scoring loops that modify variables inside while loops","disproven_by":null},{"claim":"TDD with background agents works well — write tests first in one agent, implementation in parallel agent, then merge results","status":"validated","tested":true,"evidence":"Forge-1 wrote 9 failing tests while Anvil-2 built skills.sh; all tests passed on first wire-up","disproven_by":null}],"timestamp":"2026-03-22T12:55:10Z"},{"id":"learning_1774185607","phase":2,"phase_name":"Skill Content Authoring","learnings":[{"claim":"Parallel agents for content authoring (colony vs domain) is highly efficient — independent file sets with no conflicts","status":"validated","tested":true,"evidence":"28 SKILL.md files created by 2 parallel builders with zero file conflicts","disproven_by":null}],"timestamp":"2026-03-22T13:20:07Z"},{"id":"learning_1774186027","phase":3,"phase_name":"Build Pipeline Integration","learnings":[{"claim":"Playbook modifications (markdown instruction files) can safely be parallelized when each agent edits a different file — no merge conflicts","status":"validated","tested":true,"evidence":"3 agents edited build-context.md, build-wave.md, and build-verify.md simultaneously with zero conflicts","disproven_by":null}],"timestamp":"2026-03-22T13:27:07Z"}],
+  "files": {
+    "COLONY_STATE.json": "af357370a0335aa862b55451214c508b57dc59d3ea2129dbb63db05df9fc84a7"
+  }
+}

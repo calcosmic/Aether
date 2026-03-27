@@ -1,0 +1,405 @@
+{
+  "version": "3.0",
+  "goal": "Ship-ready Aether v2: close the loops the Dreamer found (wisdom plumbing, midden reviews, monolith decomposition, TO-DOS cleanup), push to hub, and prepare for other repos to use",
+  "state": "READY",
+  "current_phase": 5,
+  "session_id": "session_1774047872_0106db2a",
+  "initialized_at": "2026-03-20T23:04:32Z",
+  "build_started_at": null,
+  "plan": {
+    "generated_at": "2026-03-21T00:11:20Z",
+    "confidence": 91,
+    "phases": [
+      {
+        "id": 1,
+        "name": "Fix Wisdom Plumbing",
+        "status": "completed",
+        "description": "Fix when-when stutter across 4 locations, fix instinct-create locking bug, add instinct-apply subcommand",
+        "tasks": [
+          {
+            "id": "1.1",
+            "description": "Fix when-when stutter in seal.md (Claude + OpenCode) — strip leading when from trigger before prepending When",
+            "status": "completed",
+            "depends_on": []
+          },
+          {
+            "id": "1.2",
+            "description": "Fix when-when in prompt-print display (aether-utils.sh line 7714)",
+            "status": "completed",
+            "depends_on": []
+          },
+          {
+            "id": "1.3",
+            "description": "Fix learning-promote-auto trigger format (line 5509) — remove When prefix from auto-created triggers",
+            "status": "completed",
+            "depends_on": []
+          },
+          {
+            "id": "1.4",
+            "description": "Fix instinct-create locking bug — add acquire_lock/release_lock around COLONY_STATE.json mutation",
+            "status": "completed",
+            "depends_on": []
+          },
+          {
+            "id": "1.5",
+            "description": "Add instinct-apply subcommand — records application outcomes and adjusts confidence",
+            "status": "completed",
+            "depends_on": [
+              "1.4"
+            ]
+          }
+        ],
+        "success_criteria": [
+          "No When-when stutter in any instinct display or hive promotion",
+          "instinct-create holds lock during state mutation",
+          "instinct-apply subcommand exists and works",
+          "All existing tests pass"
+        ]
+      },
+      {
+        "id": 2,
+        "name": "Add Midden Review Mechanism",
+        "status": "completed",
+        "description": "Add midden-review and midden-acknowledge subcommands to close the midden feedback loop",
+        "tasks": [
+          {
+            "id": "2.1",
+            "description": "Add midden-review subcommand — lists unacknowledged failures grouped by category with filtering",
+            "status": "completed",
+            "depends_on": []
+          },
+          {
+            "id": "2.2",
+            "description": "Add midden-acknowledge subcommand — marks entries as addressed with a reason",
+            "status": "completed",
+            "depends_on": [
+              "2.1"
+            ]
+          },
+          {
+            "id": "2.3",
+            "description": "Write tests for midden-review and midden-acknowledge (6 test cases)",
+            "status": "completed",
+            "depends_on": [
+              "2.1",
+              "2.2"
+            ]
+          }
+        ],
+        "success_criteria": [
+          "midden-review returns unacknowledged entries",
+          "midden-acknowledge marks entries as handled",
+          "6 new tests pass"
+        ]
+      },
+      {
+        "id": 3,
+        "name": "Extract Utility Groups from Monolith",
+        "status": "completed",
+        "description": "Extract hive-* (548 lines) and midden-* subcommands from aether-utils.sh into .aether/utils/ files",
+        "tasks": [
+          {
+            "id": "3.1",
+            "description": "Extract hive-init/store/read/abstract/promote into .aether/utils/hive.sh — preserve LOCK_DIR save/restore pattern",
+            "status": "completed",
+            "depends_on": []
+          },
+          {
+            "id": "3.2",
+            "description": "Extract midden-write/recent-failures/review/acknowledge into .aether/utils/midden.sh",
+            "status": "completed",
+            "depends_on": [
+              "3.1"
+            ]
+          },
+          {
+            "id": "3.3",
+            "description": "Run full test suite and validate-package.sh to verify zero regressions",
+            "status": "completed",
+            "depends_on": [
+              "3.1",
+              "3.2"
+            ]
+          }
+        ],
+        "success_criteria": [
+          "hive.sh and midden.sh exist in .aether/utils/",
+          "aether-utils.sh is ~640+ lines shorter",
+          "All tests pass with zero regressions"
+        ]
+      },
+      {
+        "id": 4,
+        "name": "Clean Up Documentation",
+        "status": "completed",
+        "description": "Update TO-DOS.md, README.md, CHANGELOG.md, and CLAUDE.md to reflect v2.0.0 reality",
+        "tasks": [
+          {
+            "id": "4.1",
+            "description": "Audit TO-DOS.md — mark 8+ implemented items as done, keep genuinely pending items, remove superseded items",
+            "status": "completed",
+            "depends_on": []
+          },
+          {
+            "id": "4.2",
+            "description": "Update README.md — version to v2.0.0, command count to 43, expand caste table to 22 agents, add v2 features",
+            "status": "completed",
+            "depends_on": []
+          },
+          {
+            "id": "4.3",
+            "description": "Write CHANGELOG [2.0.0] entry with Added/Fixed/Changed sections documenting all v2 features",
+            "status": "completed",
+            "depends_on": []
+          },
+          {
+            "id": "4.4",
+            "description": "Update CLAUDE.md Quick Reference — line count, subcommand count, add new subcommands to tables",
+            "status": "completed",
+            "depends_on": []
+          }
+        ],
+        "success_criteria": [
+          "TO-DOS.md only shows genuinely pending work",
+          "README.md shows v2.0.0 with accurate counts",
+          "CHANGELOG has [2.0.0] entry",
+          "CLAUDE.md numbers are accurate"
+        ]
+      },
+      {
+        "id": 5,
+        "name": "Version Bump and Publish Prep",
+        "status": "completed",
+        "description": "Bump package.json to 2.0.0, run full validation, verify hub install works",
+        "tasks": [
+          {
+            "id": "5.1",
+            "description": "Bump package.json version from 1.1.11 to 2.0.0",
+            "status": "completed",
+            "depends_on": []
+          },
+          {
+            "id": "5.2",
+            "description": "Run full validation: npm test + validate-package.sh + npm pack --dry-run",
+            "status": "completed",
+            "depends_on": [
+              "5.1"
+            ]
+          },
+          {
+            "id": "5.3",
+            "description": "Run npm install -g . to push to hub and verify hub setup works",
+            "status": "completed",
+            "depends_on": [
+              "5.2"
+            ]
+          }
+        ],
+        "success_criteria": [
+          "package.json version is 2.0.0",
+          "All tests pass",
+          "Hub install succeeds",
+          "Other repos can pull v2 via aether update"
+        ]
+      }
+    ]
+  },
+  "memory": {
+    "phase_learnings": [
+      {
+        "id": "learning_1774056288",
+        "phase": 1,
+        "phase_name": "Fix Wisdom Plumbing",
+        "learnings": [
+          {
+            "claim": "Archaeologist pre-build scans catch latent bugs in recently-added code that was never tested in production (jq path .instincts vs .memory.instincts)",
+            "status": "validated",
+            "tested": true,
+            "evidence": "Strata-8 found seal.md used wrong jq path — builders fixed it alongside the stutter fix",
+            "disproven_by": null
+          },
+          {
+            "claim": "When fixing one bug in a code block, checking the surrounding 10 lines often reveals related bugs in the same commit",
+            "status": "validated",
+            "tested": true,
+            "evidence": "When-when stutter fix exposed adjacent jq path bug — both introduced in same commit 839ddf2",
+            "disproven_by": null
+          },
+          {
+            "claim": "Trap-based lock cleanup (acquire -> trap EXIT -> work -> trap - EXIT -> release) prevents deadlocks on error paths",
+            "status": "validated",
+            "tested": true,
+            "evidence": "instinct-create locking fix uses canonical pattern from flag-add, 7 tests pass including lock cleanup test",
+            "disproven_by": null
+          }
+        ],
+        "timestamp": "2026-03-21T01:24:48Z"
+      },
+      {
+        "id": "learning_1774058544",
+        "phase": 2,
+        "phase_name": "Add Midden Review Mechanism",
+        "learnings": [
+          {
+            "claim": "Combining related subcommands (review+acknowledge) into a single builder task produces cleaner, more consistent APIs than splitting across workers",
+            "status": "validated",
+            "tested": true,
+            "evidence": "Mason-87 built both subcommands with consistent argument patterns and shared jq expressions, 6 tests pass",
+            "disproven_by": null
+          }
+        ],
+        "timestamp": "2026-03-21T02:02:24Z"
+      },
+      {
+        "id": "learning_1774063264",
+        "phase": 3,
+        "phase_name": "Extract Utility Groups from Monolith",
+        "learnings": [
+          {
+            "claim": "Extracting bash case blocks into sourced function files requires changing positional parameter references ($2 to $1) since functions receive arguments differently than case blocks",
+            "status": "validated",
+            "tested": true,
+            "evidence": "Chaos Ant found midden-recent-failures $2 bug after extraction — limit arg was silently ignored until fixed to $1",
+            "disproven_by": null
+          },
+          {
+            "claim": "Source-and-delegate extraction pattern preserves behavior when shared infrastructure (json_ok, json_err, error constants, LOCK_DIR) is defined before the source line",
+            "status": "validated",
+            "tested": true,
+            "evidence": "576 tests pass after extracting 9 subcommands with zero behavioral changes",
+            "disproven_by": null
+          }
+        ],
+        "timestamp": "2026-03-21T03:21:04Z"
+      },
+      {
+        "id": "learning_1774064416",
+        "phase": 4,
+        "phase_name": "Clean Up Documentation",
+        "learnings": [
+          {
+            "claim": "Documentation updates benefit from Watcher cross-checking all number references — secondary locations (architecture diagrams, directory listings) easily get missed by the builder",
+            "status": "validated",
+            "tested": true,
+            "evidence": "Watcher found 4 stale number references in secondary CLAUDE.md locations that all 4 builders missed",
+            "disproven_by": null
+          }
+        ],
+        "timestamp": "2026-03-21T03:40:16Z"
+      },
+      {
+        "id": "learning_1774070983",
+        "phase": 5,
+        "phase_name": "Version Bump and Publish Prep",
+        "learnings": [
+          {
+            "claim": "npm install -g . with a prepublishOnly hook running validate-package.sh provides an end-to-end verification gate before hub deployment",
+            "status": "validated",
+            "tested": true,
+            "evidence": "Package validation runs automatically during global install, catches file/content issues before hub push",
+            "disproven_by": null
+          }
+        ],
+        "timestamp": "2026-03-21T05:29:43Z"
+      }
+    ],
+    "decisions": [],
+    "instincts": [
+      {
+        "id": "instinct_1774056300",
+        "trigger": "fixing a bug in recently-added code",
+        "action": "check the surrounding lines in the same commit for related bugs",
+        "confidence": 0.8,
+        "status": "hypothesis",
+        "domain": "debugging",
+        "source": "phase-1",
+        "evidence": [
+          "When-when fix exposed adjacent jq path bug — both from same commit"
+        ],
+        "tested": false,
+        "created_at": "2026-03-21T01:25:00Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774056300",
+        "trigger": "adding file locking to a case block in aether-utils.sh",
+        "action": "use the trap-based pattern: acquire -> trap EXIT -> work -> trap - EXIT -> release",
+        "confidence": 0.8,
+        "status": "hypothesis",
+        "domain": "architecture",
+        "source": "phase-1",
+        "evidence": [
+          "Canonical pattern from flag-add, confirmed by 3 prior deadlock bug fixes"
+        ],
+        "tested": false,
+        "created_at": "2026-03-21T01:25:00Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774063281",
+        "trigger": "extracting bash case blocks into sourced function files",
+        "action": "audit positional parameter references — case blocks use script args, functions use function args",
+        "confidence": 0.8,
+        "status": "hypothesis",
+        "domain": "architecture",
+        "source": "phase-3",
+        "evidence": [
+          "midden-recent-failures limit bug: $2 worked in case block but needed $1 in function"
+        ],
+        "tested": false,
+        "created_at": "2026-03-21T03:21:21Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774058602",
+        "trigger": "building related read+write subcommands for the same data store",
+        "action": "assign to a single builder to ensure consistent argument patterns and shared jq logic",
+        "confidence": 0.7,
+        "status": "hypothesis",
+        "domain": "workflow",
+        "source": "phase-2",
+        "evidence": [
+          "midden-review and midden-acknowledge built together with consistent API"
+        ],
+        "tested": false,
+        "created_at": "2026-03-21T02:03:22Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      }
+    ]
+  },
+  "errors": {
+    "records": [],
+    "flagged_patterns": []
+  },
+  "signals": [],
+  "graveyards": [],
+  "events": [
+    "2026-03-20T23:04:32Z|colony_initialized|init|Colony initialized with goal: Ship-ready Aether v2: close the loops the Dreamer found (wisdom plumbing, midden reviews, monolith decomposition, TO-DOS cleanup), push to hub, and prepare for other repos to use",
+    "2026-03-21T00:11:20Z|plan_generated|plan|Generated 5 phases with 91% confidence (3 iterations)",
+    "2026-03-21T00:26:24Z|phase_started|build|Phase 1: Fix Wisdom Plumbing started",
+    "2026-03-21T01:24:48Z|phase_advanced|continue|Completed Phase 1, advancing to Phase 2",
+    "2026-03-21T01:40:55Z|phase_started|build|Phase 2: Add Midden Review Mechanism started",
+    "2026-03-21T02:02:24Z|phase_advanced|continue|Completed Phase 2, advancing to Phase 3",
+    "2026-03-21T02:35:52Z|phase_started|build|Phase 3: Extract Utility Groups from Monolith started",
+    "2026-03-21T03:21:04Z|phase_advanced|continue|Completed Phase 3, advancing to Phase 4",
+    "2026-03-21T03:26:19Z|phase_started|build|Phase 4: Clean Up Documentation started",
+    "2026-03-21T03:40:16Z|phase_advanced|continue|Completed Phase 4, advancing to Phase 5",
+    "2026-03-21T03:49:16Z|phase_started|build|Phase 5: Version Bump and Publish Prep started",
+    "2026-03-21T05:29:43Z|phase_advanced|continue|Completed Phase 5 (final) — ALL PHASES COMPLETE",
+    "2026-03-21T06:09:53Z|milestone_reached|seal|Achieved Crowned Anthill milestone"
+  ],
+  "milestone": "Crowned Anthill",
+  "milestone_updated_at": "2026-03-21T06:09:53Z"
+}

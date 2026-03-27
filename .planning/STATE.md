@@ -2,102 +2,52 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-19)
+See: .planning/PROJECT.md (updated 2026-03-27)
 
-**Core value:** The pheromone system should be a living system -- auto-emitting signals during builds, carrying context across sessions, and actually changing worker behavior -- not just a storage format that nobody reads.
-**Current focus:** Phase 8 (Documentation Update)
+**Core value:** Reliably interpret user requests, decompose into work, verify outputs, and ship correct work with minimal back-and-forth.
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 8 of 8 (Documentation Update)
-Plan: 2 of 2 in current phase
-Status: Plan 08-02 complete -- Phase 8 complete -- All phases complete
-Last activity: 2026-03-19 -- Completed 08-02-PLAN.md
+Phase: 32 of 32 — all milestones through v2.5 complete
+Status: v2.5 Smart Init shipped 2026-03-27
+Last activity: 2026-03-27 — milestone v2.5 archived
 
-Progress: [██████████] 100%
+Progress: [█████████] 100% (v1.3 through v2.5)
 
 ## Performance Metrics
 
-**Velocity:**
-- Total plans completed: 15
-- Average duration: 4min
-- Total execution time: 0.92 hours
+**Velocity (from v2.1):**
+- Total plans completed: 82 (across v2.1-v2.5)
+- Average duration: 5min
+- Total execution time: ~7 hours
 
-**By Phase:**
+**Milestone History:**
+- v1.3: 8 phases (1-8), 17 plans — shipped 2026-03-19
+- v2.1: 8 phases (9-16), 39 plans — shipped 2026-03-24
+- v2.2: 4 phases (17-20), 5 plans — shipped 2026-03-25
+- v2.3: 4 phases (21-24), 10 plans — shipped 2026-03-27
+- v2.4: 4 phases (25-28), 8 plans — shipped 2026-03-27
+- v2.5: 4 phases (29-32), 10 plans — shipped 2026-03-27
 
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| 01-data-purge | 1 | 3min | 3min |
-| 02-command-audit-data-tooling | 2 | 12min | 6min |
-| 03-pheromone-signal-plumbing | 2 | 8min | 4min |
-| 04-pheromone-worker-integration | 2 | 7min | 3.5min |
-| 05-learning-pipeline-validation | 2 | 7min | 3.5min |
-| 06-xml-exchange-activation | 2 | 5min | 2.5min |
-| 07-fresh-install-hardening | 2 | 7min | 3.5min |
-| 08-documentation-update | 2 | 6min | 3min |
-
-**Recent Trend:**
-- Last 5 plans: 2min, 3min, 3min, 3min, 3min
-- Trend: stable
-
-*Updated after each plan completion*
+*Updated after v2.5 milestone completion*
 
 ## Accumulated Context
 
 ### Decisions
 
-Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
-
-- [Roadmap]: Clean before integrating -- test data must be purged before pheromone integration can be validated
-- [Roadmap]: XML exchange system should be ACTIVATED (wired into commands), not archived
-- [Roadmap]: constraints.json is a legacy parallel store; eventual deprecation in favor of pheromones.json
-- [01-02]: Force-added gitignored data files to commit purge changes for traceability
-- [01-02]: Kept all 16 real worker spawn records in spawn-tree.txt
-- [Phase 01]: Kept sig_feedback_001 despite 'Test coverage' text matching broad regex -- it is a real signal from worker_builder, not test data
-- [Phase 01]: pheromones.json and constraints.json are gitignored -- cleaned locally but not committable to git
-- [02-02]: Placed data-clean subcommand at end of case statement for minimal diff and clear separation
-- [02-02]: Used atomic_write for file modifications when available, with direct write fallback
-- [Phase 02-01]: Naming inconsistencies (help.md, memory-details.md, resume.md) documented as warnings not fixes -- frontmatter name does not affect slash command invocation
-- [Phase 02-01]: Removed broken .aether/planning.md reference from plan.md -- inline rules already provided
-- [03-01]: Replaced approx_epoch (365.25 days/year) with to_epoch (365 days/year) for consistency over precision
-- [03-01]: Fixed jq // operator treating active:false as null -- used explicit if/elif chain instead
-- [03-03]: Fixed same jq // active:false bug in pheromone-prime and context-capsule (discovered by injection chain tests)
-- [03-03]: prompt_section groups signals by type (FOCUS, REDIRECT, FEEDBACK) not by strength -- test assertions adapted
-- [04-01]: Placed pheromone_protocol after critical_rules, before return_format -- signals are critical but secondary to core rules like TDD
-- [04-01]: Kept protocols under 35 lines using principle-based instructions (workers are LLMs, understand intent)
-- [04-01]: Pre-existing lint:sync command count mismatch (38 vs 37) logged to deferred-items, not fixed (out of scope)
-- [04-02]: Defined 'influence' as signal in prompt_section + agent has pheromone_protocol -- maximum verifiable without live LLM builds
-- [04-02]: Reproduced build-wave.md Step 5.2 threshold logic in JS tests for isolation
-- [05-01]: Third memory-capture returns already_promoted without re-invoking instinct-create -- confidence stays at 0.75 (correct idempotent behavior)
-- [05-01]: Used 4 realistic content strings from actual Aether development phases as non-synthetic test data
-- [05-02]: Agent pheromone_protocol uses 'signals' not 'instincts' directly -- signals is the delivery mechanism that includes instincts, so verification accepts either term
-- [05-02]: Evidence field stored as array by instinct-create -- assertions join array before substring check
-- [06-01]: Pure wiring -- no new subcommands created, only slash command wrappers around existing pheromone-export-xml and pheromone-import-xml
-- [06-01]: OpenCode versions use normalize-args pattern for argument compatibility
-- [06-02]: Export result uses known source count because pheromone-export-xml returns {path, validated} not signal_count
-- [07-01]: QUEEN.md excluded from npm package entirely -- always created from template during install, never shipped pre-populated
-- [07-01]: Removed CONTEXT.md from REQUIRED_FILES since it is now excluded from the package
-- [07-02]: Used HOME override pattern from test-install.sh for true environment isolation
-- [07-02]: Handled queen-init nested JSON response (.result.created) which wraps output in {ok:true, result:{...}}
-- [08-01]: Updated version to v1.3.0 to match ROADMAP milestone version
-- [08-01]: Used floor values (530+, 10,000+) for growing counts and exact values (40, 22, 110) for stable counts
-- [08-01]: Removed Workarounds Summary table entirely since all workaround rows were for FIXED issues
-- [08-02]: Used passive voice in signal combination table to avoid implying worker agency
-- [08-02]: Added dedicated "How Signals Reach Workers" section to pheromones.md for injection model clarity
-- [08-02]: Updated test count to exact value (92) in source-of-truth-map since it is a stable inventory count
+All v2.5 decisions archived to PROJECT.md Key Decisions table.
 
 ### Pending Todos
 
-None yet.
+None.
 
 ### Blockers/Concerns
 
-- Research flag: Phase 3 (Pheromone Signal Plumbing) likely needs research-phase during planning due to multiple interacting components across bash, playbooks, and agent definitions
-- Risk: aether-utils.sh has 150 subcommands with no module boundaries; schema changes can cascade across 47+ test files
+None active.
 
 ## Session Continuity
 
-Last session: 2026-03-19
-Stopped at: Completed 08-02-PLAN.md -- All plans complete
+Last session: 2026-03-27
+Stopped at: v2.5 milestone complete, archived
 Resume file: None

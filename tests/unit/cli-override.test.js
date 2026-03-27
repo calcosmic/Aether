@@ -11,6 +11,11 @@ const fs = require('fs');
 const os = require('os');
 const { execSync } = require('child_process');
 
+const { getModelNames } = require('../helpers/mock-profiles');
+
+// Module-level constants derived from YAML via helper
+const MODELS = getModelNames(); // ['glm-5', 'glm-5-turbo', 'glm-4.5-air']
+
 // Test utilities
 function createTempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'aether-cli-test-'));
@@ -63,37 +68,39 @@ function createMockModelProfiles(tempDir) {
     }
   }
 
+  // Use index-based access so YAML changes flow through automatically
+  // MODELS = ['glm-5', 'glm-5-turbo', 'glm-4.5-air'] from YAML
   const yamlContent = `worker_models:
-  prime: glm-5
-  builder: kimi-k2.5
-  watcher: minimax-2.5
-  scout: kimi-k2.5
-  chaos: minimax-2.5
-  oracle: glm-5
+  prime: ${MODELS[0]}
+  builder: ${MODELS[1]}
+  watcher: ${MODELS[2]}
+  scout: ${MODELS[1]}
+  chaos: ${MODELS[2]}
+  oracle: ${MODELS[0]}
 
 model_metadata:
-  glm-5:
+  ${MODELS[0]}:
     provider: openrouter
     description: Complex reasoning and architecture
-  kimi-k2.5:
+  ${MODELS[1]}:
     provider: openrouter
     description: Fast implementation and coding
-  minimax-2.5:
+  ${MODELS[2]}:
     provider: openrouter
     description: Validation and research
 
 task_routing:
-  default_model: kimi-k2.5
+  default_model: ${MODELS[1]}
   complexity_indicators:
     complex:
       keywords: ["design", "architect", "plan", "complex", "refactor"]
-      model: glm-5
+      model: ${MODELS[0]}
     simple:
       keywords: ["implement", "code", "write", "create", "build"]
-      model: kimi-k2.5
+      model: ${MODELS[1]}
     validate:
       keywords: ["test", "verify", "check", "validate", "review"]
-      model: minimax-2.5
+      model: ${MODELS[2]}
 `;
 
   fs.writeFileSync(path.join(aetherDir, 'model-profiles.yaml'), yamlContent);
@@ -117,7 +124,7 @@ test('model-profile select returns task-routing default when no keyword match', 
 
     const parsed = JSON.parse(result);
     t.true(parsed.ok, 'Result should be ok');
-    t.is(parsed.result.model, 'kimi-k2.5', 'Should return default model from task routing');
+    t.is(parsed.result.model, MODELS[1], 'Should return default model from task routing');
     t.is(parsed.result.source, 'task-routing', 'Source should be task-routing when default_model is used as catch-all');
   } finally {
     cleanupTempDir(tempDir);
@@ -130,13 +137,13 @@ test('model-profile select returns CLI override when provided', t => {
 
   try {
     const result = execSync(
-      `bash .aether/aether-utils.sh model-profile select builder "implement feature" "glm-5"`,
+      `bash .aether/aether-utils.sh model-profile select builder "implement feature" "${MODELS[0]}"`,
       { cwd: tempDir, encoding: 'utf8' }
     );
 
     const parsed = JSON.parse(result);
     t.true(parsed.ok, 'Result should be ok');
-    t.is(parsed.result.model, 'glm-5', 'Should return CLI override model');
+    t.is(parsed.result.model, MODELS[0], 'Should return CLI override model');
     t.is(parsed.result.source, 'cli-override', 'Source should be cli-override');
   } finally {
     cleanupTempDir(tempDir);
@@ -156,7 +163,7 @@ test('model-profile select returns task-routing model when no CLI override', t =
 
     const parsed = JSON.parse(result);
     t.true(parsed.ok, 'Result should be ok');
-    t.is(parsed.result.model, 'glm-5', 'Should return task-routed model (design -> glm-5)');
+    t.is(parsed.result.model, MODELS[0], `Should return task-routed model (design -> ${MODELS[0]})`);
     t.is(parsed.result.source, 'task-routing', 'Source should be task-routing');
   } finally {
     cleanupTempDir(tempDir);
@@ -170,7 +177,7 @@ test('model-profile select returns user override when no CLI override', t => {
   // Add user override
   const profilePath = path.join(tempDir, '.aether', 'model-profiles.yaml');
   let content = fs.readFileSync(profilePath, 'utf8');
-  content += '\nuser_overrides:\n  builder: glm-5\n';
+  content += `\nuser_overrides:\n  builder: ${MODELS[0]}\n`;
   fs.writeFileSync(profilePath, content);
 
   try {
@@ -181,7 +188,7 @@ test('model-profile select returns user override when no CLI override', t => {
 
     const parsed = JSON.parse(result);
     t.true(parsed.ok, 'Result should be ok');
-    t.is(parsed.result.model, 'glm-5', 'Should return user override model');
+    t.is(parsed.result.model, MODELS[0], 'Should return user override model');
     t.is(parsed.result.source, 'user-override', 'Source should be user-override');
   } finally {
     cleanupTempDir(tempDir);
@@ -195,19 +202,19 @@ test('model-profile select CLI override takes precedence over user override', t 
   // Add user override
   const profilePath = path.join(tempDir, '.aether', 'model-profiles.yaml');
   let content = fs.readFileSync(profilePath, 'utf8');
-  content += '\nuser_overrides:\n  builder: glm-5\n';
+  content += `\nuser_overrides:\n  builder: ${MODELS[0]}\n`;
   fs.writeFileSync(profilePath, content);
 
   try {
     // CLI override should win over user override
     const result = execSync(
-      `bash .aether/aether-utils.sh model-profile select builder "implement feature" "minimax-2.5"`,
+      `bash .aether/aether-utils.sh model-profile select builder "implement feature" "${MODELS[2]}"`,
       { cwd: tempDir, encoding: 'utf8' }
     );
 
     const parsed = JSON.parse(result);
     t.true(parsed.ok, 'Result should be ok');
-    t.is(parsed.result.model, 'minimax-2.5', 'CLI override should take precedence');
+    t.is(parsed.result.model, MODELS[2], 'CLI override should take precedence');
     t.is(parsed.result.source, 'cli-override', 'Source should be cli-override');
   } finally {
     cleanupTempDir(tempDir);
@@ -223,7 +230,7 @@ test('model-profile validate returns valid:true for known models', t => {
   createMockModelProfiles(tempDir);
 
   try {
-    for (const model of ['glm-5', 'kimi-k2.5', 'minimax-2.5']) {
+    for (const model of MODELS) {
       const result = execSync(
         `bash .aether/aether-utils.sh model-profile validate ${model}`,
         { cwd: tempDir, encoding: 'utf8' }
@@ -252,7 +259,7 @@ test('model-profile validate returns valid:false for unknown models', t => {
     t.true(parsed.ok, 'Result should be ok');
     t.false(parsed.result.valid, 'Unknown model should be invalid');
     t.true(Array.isArray(parsed.result.models), 'Should return list of valid models');
-    t.true(parsed.result.models.includes('glm-5'), 'Valid models should include glm-5');
+    t.true(parsed.result.models.includes(MODELS[0]), `Valid models should include ${MODELS[0]}`);
   } finally {
     cleanupTempDir(tempDir);
   }
@@ -281,8 +288,8 @@ test('argument parsing: phase only', t => {
 });
 
 test('argument parsing: phase with --model flag', t => {
-  // Simulate parsing "1 --model glm-5"
-  const args = '1 --model glm-5';
+  // Simulate parsing "1 --model {MODELS[0]}"
+  const args = `1 --model ${MODELS[0]}`;
   const parts = args.trim().split(/\s+/);
   const phase = parts[0];
   let cli_model_override = '';
@@ -295,12 +302,12 @@ test('argument parsing: phase with --model flag', t => {
   }
 
   t.is(phase, '1');
-  t.is(cli_model_override, 'glm-5');
+  t.is(cli_model_override, MODELS[0]);
 });
 
 test('argument parsing: phase with -m short flag', t => {
-  // Simulate parsing "1 -m glm-5"
-  const args = '1 -m glm-5';
+  // Simulate parsing "1 -m {MODELS[0]}"
+  const args = `1 -m ${MODELS[0]}`;
   const parts = args.trim().split(/\s+/);
   const phase = parts[0];
   let cli_model_override = '';
@@ -313,12 +320,12 @@ test('argument parsing: phase with -m short flag', t => {
   }
 
   t.is(phase, '1');
-  t.is(cli_model_override, 'glm-5');
+  t.is(cli_model_override, MODELS[0]);
 });
 
 test('argument parsing: phase with verbose and model flags', t => {
-  // Simulate parsing "1 --verbose --model glm-5"
-  const args = '1 --verbose --model glm-5';
+  // Simulate parsing "1 --verbose --model {MODELS[0]}"
+  const args = `1 --verbose --model ${MODELS[0]}`;
   const parts = args.trim().split(/\s+/);
   const phase = parts[0];
   let verbose_mode = false;
@@ -336,7 +343,7 @@ test('argument parsing: phase with verbose and model flags', t => {
 
   t.is(phase, '1');
   t.true(verbose_mode);
-  t.is(cli_model_override, 'glm-5');
+  t.is(cli_model_override, MODELS[0]);
 });
 
 // ============================================
@@ -350,7 +357,7 @@ test('integration: end-to-end model selection with all override types', t => {
   // Add user override
   const profilePath = path.join(tempDir, '.aether', 'model-profiles.yaml');
   let content = fs.readFileSync(profilePath, 'utf8');
-  content += '\nuser_overrides:\n  watcher: glm-5\n';
+  content += `\nuser_overrides:\n  watcher: ${MODELS[0]}\n`;
   fs.writeFileSync(profilePath, content);
 
   try {
@@ -369,7 +376,7 @@ test('integration: end-to-end model selection with all override types', t => {
     );
     parsed = JSON.parse(result);
     t.is(parsed.result.source, 'task-routing', 'Should use task routing for design tasks');
-    t.is(parsed.result.model, 'glm-5', 'Design tasks should route to glm-5');
+    t.is(parsed.result.model, MODELS[0], `Design tasks should route to ${MODELS[0]}`);
 
     // Test 3: User override
     result = execSync(
@@ -378,16 +385,16 @@ test('integration: end-to-end model selection with all override types', t => {
     );
     parsed = JSON.parse(result);
     t.is(parsed.result.source, 'user-override', 'Watcher should use user override');
-    t.is(parsed.result.model, 'glm-5', 'User override should be glm-5');
+    t.is(parsed.result.model, MODELS[0], `User override should be ${MODELS[0]}`);
 
     // Test 4: CLI override
     result = execSync(
-      `bash .aether/aether-utils.sh model-profile select builder "any task" "minimax-2.5"`,
+      `bash .aether/aether-utils.sh model-profile select builder "any task" "${MODELS[2]}"`,
       { cwd: tempDir, encoding: 'utf8' }
     );
     parsed = JSON.parse(result);
     t.is(parsed.result.source, 'cli-override', 'CLI override should take precedence');
-    t.is(parsed.result.model, 'minimax-2.5', 'CLI override should be minimax-2.5');
+    t.is(parsed.result.model, MODELS[2], `CLI override should be ${MODELS[2]}`);
 
   } finally {
     cleanupTempDir(tempDir);

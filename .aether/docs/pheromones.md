@@ -221,7 +221,7 @@ Displays all active signals in a formatted table with:
 
 ---
 
-## Automatic Suggestions (v6.0)
+## Automatic Suggestions
 
 The colony can analyze your codebase and suggest pheromones worth capturing.
 

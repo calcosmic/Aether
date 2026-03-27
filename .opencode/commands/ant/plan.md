@@ -164,6 +164,129 @@ ls .aether/data/survey/*.md 2>/dev/null
 
 **If no survey:** Continue without survey context (scouts will do fresh exploration)
 
+### Step 3.6: Phase Domain Research
+
+Investigate domain knowledge for each phase before the planning loop begins. This runs every time `/ant:plan` generates a new plan -- no skip flag.
+
+**1. Retrieve hive wisdom for research priming:**
+
+```bash
+hive_context=$(bash .aether/aether-utils.sh hive-read --limit 5 --format text 2>/dev/null)
+```
+
+Parse the JSON result to extract `.result.text` as `hive_text`. If command fails or returns empty, set `hive_text = ""`.
+
+**2. Clean any previous research for this phase:**
+
+```bash
+research_dir=".aether/data/phase-research"
+mkdir -p "$research_dir"
+rm -f "$research_dir/phase-{phase_number}-research.md"
+```
+
+Re-running /ant:plan always re-researches from scratch.
+
+**3. Spawn Research Scout** via Task tool with `subagent_type="aether-scout"`:
+
+FALLBACK: If "Agent type not found", use general-purpose and inject role: "You are a Scout Ant performing Phase Domain Research."
+
+```
+You are a Scout Ant performing Phase Domain Research.
+
+--- MISSION ---
+Investigate the domain knowledge needed for Phase {phase_number}: {phase_name}
+Goal: "{goal}"
+Phase description: "{phase_description}"
+
+{context_capsule_prompt}
+
+--- PRE-EXISTING COLONY WISDOM ---
+{hive_text}
+
+--- RESEARCH AREAS ---
+1. Key patterns in the existing codebase relevant to this phase
+2. External library/API documentation if the phase involves external tools
+3. Common gotchas and pitfalls in this domain
+4. Recommended implementation approach based on findings
+
+--- SCOPE CONSTRAINTS ---
+- Maximum 5 key patterns
+- Maximum 3 gotchas
+- Maximum 1 recommended approach paragraph
+- Total output under 3000 words
+- Prioritize actionable guidance over exhaustive documentation
+- Check hive wisdom above first -- do not re-discover known patterns
+
+--- TOOLS ---
+Use: Glob, Grep, Read, WebSearch, WebFetch
+Do NOT use: Task, Write, Edit
+
+--- OUTPUT FORMAT ---
+Return JSON:
+{
+  "hive_wisdom_used": ["list of hive entries that were relevant"],
+  "key_patterns": [
+    {"pattern": "description", "source": "file path or URL", "relevance": "why it matters for this phase"}
+  ],
+  "external_context": [
+    {"topic": "what", "finding": "description", "source": "URL or doc reference"}
+  ],
+  "gotchas": [
+    {"issue": "what can go wrong", "prevention": "how to avoid it", "source": "evidence"}
+  ],
+  "recommended_approach": "synthesis paragraph",
+  "files_to_study": ["path1", "path2"]
+}
+```
+
+**4. Wait for scout to complete** (blocking -- direct Task return).
+
+**5. Parse scout JSON output and write RESEARCH.md to disk.** The Queen (plan.md orchestrator) writes the file -- scout is read-only. Write to: `.aether/data/phase-research/phase-{phase_number}-research.md`
+
+RESEARCH.md format (6 fixed sections):
+
+```markdown
+# Phase {N} Research: {Phase Name}
+
+**Generated:** {ISO-8601 timestamp}
+**Phase:** {N} - {Phase Name}
+**Research scope:** {brief summary of what was investigated}
+
+## Hive Wisdom (Pre-existing Knowledge)
+{Format hive_wisdom_used entries, or "No relevant hive wisdom found" if empty}
+
+## Key Patterns
+{Format each key_patterns entry as: **{pattern}:** {relevance} (Source: {source})}
+
+## External Context
+{Format each external_context entry as: **{topic}:** {finding} (Source: {source})}
+{If empty: "No external research needed for this phase"}
+
+## Gotchas
+{Format each gotchas entry as: **{issue}:** {prevention} (Source: {source})}
+
+## Recommended Approach
+{recommended_approach text}
+
+## Files to Study
+{Format as bullet list of file paths}
+```
+
+**6. Store research findings** in a variable `research_findings_summary` for injection into the Route-Setter prompt in Step 4. This is a compact summary (not the full RESEARCH.md):
+
+```
+Key Patterns: {bullet list of pattern names}
+Gotchas: {bullet list of gotcha titles}
+Recommended: {recommended_approach, first sentence only}
+Files: {comma-separated file paths}
+```
+
+**7. Display completion:**
+
+```
+Research complete: phase-{phase_number}-research.md ({word_count} words)
+```
+
 ### Step 4: Research and Planning Loop
 
 Initialize tracking:
@@ -336,6 +459,9 @@ while iteration < max_iterations AND confidence < target_confidence:
 
     --- RESEARCH FINDINGS ---
     {scout.findings formatted — compact, max 5 items}
+
+    --- PHASE DOMAIN RESEARCH (from Step 3.6) ---
+    {research_findings_summary if available, otherwise omit this section}
 
     Remaining Gaps:
     {gaps formatted — compact, max 3 items}

@@ -14,6 +14,16 @@ Spawn the Watcher using Task tool with `subagent_type="aether-watcher"`, include
 
 Run using the Bash tool with description "Dispatching watcher...": `bash .aether/aether-utils.sh spawn-log "Queen" "watcher" "{watcher_name}" "Independent verification"`
 
+**Load skills for the Watcher role (NON-BLOCKING):**
+
+```bash
+skill_match_result=$(bash .aether/aether-utils.sh skill-match "watcher" "{verification_context}" 2>/dev/null)
+skill_inject_result=$(bash .aether/aether-utils.sh skill-inject "$(echo $skill_match_result | jq -r '.result')" 2>/dev/null)
+skill_section=$(echo "$skill_inject_result" | jq -r '.result.skill_section // ""')
+```
+
+Display: `🧠 Skills loaded for watcher verification`
+
 **Watcher Worker Prompt (CLEAN OUTPUT):**
 ```
 You are {Watcher-Name}, a 👁️🐜 Watcher Ant.
@@ -24,7 +34,15 @@ Files to verify:
 - Created: {list from builder results}
 - Modified: {list from builder results}
 
+{ research_context if exists }
+
+**Phase Research Context (if provided):**
+- Use domain research to verify builders followed recommended patterns and avoided documented gotchas.
+- Check that gotchas listed in research were properly handled.
+
 { prompt_section }
+
+{ skill_section }
 
 **IMPORTANT:** When using the Bash tool for activity calls, always include a description parameter:
 - activity-log calls → "Logging {action}..."

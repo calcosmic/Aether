@@ -55,6 +55,11 @@ function runUtil(tempDir, subcommand, args = []) {
   return JSON.parse(out);
 }
 
+function futureISO(daysAhead = 30) {
+  return new Date(Date.now() + daysAhead * 24 * 60 * 60 * 1000)
+    .toISOString().replace(/\.\d+Z$/, 'Z');
+}
+
 function seedState(tempDir) {
   const state = {
     version: '3.0',
@@ -94,7 +99,7 @@ function seedState(tempDir) {
         content: { text: 'No synchronous file I/O' },
         strength: 0.9,
         created_at: '2026-02-22T00:00:00Z',
-        expires_at: '2026-03-22T00:00:00Z',
+        expires_at: futureISO(30),
         active: true
       },
       {
@@ -103,7 +108,7 @@ function seedState(tempDir) {
         content: { text: 'Error handling paths' },
         strength: 0.8,
         created_at: '2026-02-22T00:00:00Z',
-        expires_at: '2026-03-22T00:00:00Z',
+        expires_at: futureISO(30),
         active: true
       },
       {
@@ -112,7 +117,7 @@ function seedState(tempDir) {
         content: { text: 'Prefer small, testable functions' },
         strength: 0.6,
         created_at: '2026-02-22T00:00:00Z',
-        expires_at: '2026-03-22T00:00:00Z',
+        expires_at: futureISO(30),
         active: true
       }
     ]

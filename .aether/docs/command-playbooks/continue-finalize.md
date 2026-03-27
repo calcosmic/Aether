@@ -31,6 +31,92 @@ fi
 # === END Batch Wisdom Auto-Promotion ===
 ```
 
+### Step 2.1.7: Write Build Learnings to QUEEN.md (QUEEN-01)
+
+After learning extraction and auto-promotion, write the current phase's learnings directly
+to the QUEEN.md Build Learnings section. This captures both successes and failures from every
+build, regardless of recurrence thresholds.
+
+**This step uses queen-write-learnings, which bypasses observation thresholds.**
+Every build writes learnings -- this is the user's explicit decision.
+
+Run using the Bash tool with description "Writing build learnings to QUEEN.md...":
+```bash
+# Get phase info
+current_phase=$(jq -r '.current_phase' .aether/data/COLONY_STATE.json 2>/dev/null || echo "0")
+phase_name=$(jq -r --argjson p "$current_phase" '.plan.phases[] | select(.id == $p) | .name // "unknown"' .aether/data/COLONY_STATE.json 2>/dev/null || echo "unknown")
+
+# Extract learnings from the just-completed phase
+learnings_json=$(jq -r --argjson p "$((current_phase - 1))" '
+  [.memory.phase_learnings[]
+   | select(.phase == $p)
+   | .learnings[]
+   | {
+       claim: .claim,
+       tag: (if (.claim | test("this (codebase|repo|project)"; "i")) then "repo" else "general" end),
+       evidence: (.evidence // "")
+     }
+  ]' .aether/data/COLONY_STATE.json 2>/dev/null || echo '[]')
+
+learnings_count=$(echo "$learnings_json" | jq 'length' 2>/dev/null || echo "0")
+
+if [[ "$learnings_count" -gt 0 ]] && [[ "$learnings_json" != "[]" ]]; then
+    prev_phase=$((current_phase - 1))
+    queen_error="false"
+    result=$(bash .aether/aether-utils.sh queen-write-learnings \
+        "$prev_phase" "$phase_name" "$learnings_json" 2>/dev/null || echo '{"ok":false}')
+    [[ "$result" == '{"ok":false}' ]] && queen_error="true"
+
+    written=$(echo "$result" | jq -r '.result.written // 0' 2>/dev/null || echo "0")
+fi
+```
+
+**Tag heuristic:**
+- Default tag is "general" (most learnings are broadly applicable)
+- Tag as "repo" if the claim mentions "this codebase", "this repo", "this project", or contains repo-specific names
+- The jq query uses a regex test for common repo-specific indicators
+
+**Brief notice:** The consolidated wisdom summary (below) serves as the brief notice.
+It only appears when entries are actually written or instincts are promoted. No notice for zero writes.
+
+This step is NON-BLOCKING -- QUEEN.md write failures never block phase advancement.
+The dedup check inside queen-write-learnings prevents duplicate entries.
+
+### Wisdom Summary (PIPE-04)
+
+After both queen-write-learnings and hive promotion complete, output a single consolidated wisdom line. This replaces the individual "Written N learning(s)" echo from Step 2.1.7 above.
+
+```bash
+# === Consolidated Wisdom Summary ===
+# Build summary from both queen-write-learnings (Step 2.1.7) and hive promotion (Step 3d)
+# Capture the hive_promoted_count passed from continue-advance.md
+hive_promoted_count="${hive_promoted_count:-0}"  # Default to 0 if Step 3d didn't run
+
+wisdom_parts=""
+[[ "$written" -gt 0 ]] && wisdom_parts="$written learning(s) recorded"
+# Capture fallback_count from continue-advance.md Step 2.4
+fallback_count="${fallback_count:-0}"
+if [[ "$fallback_count" -gt 0 ]]; then
+  wisdom_parts="${wisdom_parts} ($fallback_count from fallback)"
+fi
+if [[ "$hive_promoted_count" -gt 0 ]]; then
+  [[ -n "$wisdom_parts" ]] && wisdom_parts="$wisdom_parts, "
+  wisdom_parts="$wisdom_parts$hive_promoted_count instinct(s) promoted to hive"
+fi
+
+if [[ -n "$wisdom_parts" ]]; then
+  echo "$wisdom_parts"
+fi
+
+# Warning for failures (non-blocking)
+wisdom_failures=0
+[[ "$queen_error" == "true" ]] && wisdom_failures=$((wisdom_failures + 1))
+[[ "$hive_error" == "true" ]] && wisdom_failures=$((wisdom_failures + 1))
+if [[ "$wisdom_failures" -gt 0 ]]; then
+  echo "Warning: $wisdom_failures wisdom write(s) failed"
+fi
+```
+
 ### Step 2.2: Update Handoff Document
 
 After advancing the phase, update the handoff document with the new current state:
@@ -325,6 +411,10 @@ Output:
 {for each instinct created or updated:}
    [{confidence}] {domain}: {action}
 {end for}
+
+📝 QUEEN.md Updated:
+   Build learnings: {written_count} entries
+   Instincts promoted: {promoted_instinct_count} entries
 
 ─────────────────────────────────────────────────────
 

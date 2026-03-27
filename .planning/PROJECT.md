@@ -1,71 +1,96 @@
-# Aether Maintenance & Pheromone Integration
+# Aether Colony Orchestration System
 
 ## What This Is
 
-Aether is a multi-agent colony orchestration system for AI-assisted development. It provides 36 slash commands, 22 specialized worker agents, and a pheromone signaling system for guiding colony behavior. This project is a maintenance push to clean up test artifacts, fix broken commands, make the pheromone system actually work end-to-end, update outdated docs, and ensure a clean fresh-install experience.
+Aether is a multi-agent colony orchestration system for AI-assisted development. It provides 44 slash commands, 24 specialized worker agents, 28 skills (10 colony + 18 domain), a living pheromone signaling system, and intelligent colony initialization with repo scanning and charter management. Distributed as `aether-colony` on npm, it works with Claude Code and OpenCode.
 
 ## Core Value
 
-The pheromone system should be a living system — auto-emitting signals during builds, carrying context across sessions, and actually changing worker behavior — not just a storage format that nobody reads.
+The system must reliably interpret a user request, decompose it into executable work, verify outputs, and ship correct work with minimal user back-and-forth — not just look autonomous, but actually deliver.
 
 ## Requirements
 
 ### Validated
 
 - Colony lifecycle works (init, plan, build, continue, seal, entomb) — existing
-- 22 worker agents defined with caste roles — existing
+- 24 worker agents defined with caste roles — existing (updated from 22 in v2.4)
 - State management with file locking and atomic writes — existing
 - Pheromone signal storage (FOCUS/REDIRECT/FEEDBACK) — existing
-- XML exchange system for cross-colony knowledge transfer — existing
-- 490+ tests passing (AVA + bash) — existing
 - NPM distribution via `aether-colony` package — existing
 - Multi-provider support (Claude Code + OpenCode) — existing
 - Midden failure tracking system — existing
 - QUEEN.md wisdom promotion pipeline — existing
+- ✓ Clean colony state — all test artifacts purged — v1.3
+- ✓ Pheromone injection chain — signals flow emit → store → inject → worker — v1.3
+- ✓ Worker pheromone protocol — builder/watcher/scout act on signals — v1.3
+- ✓ Learning pipeline — observations auto-promote to instincts in worker prompts — v1.3
+- ✓ XML exchange — /ant:export-signals, /ant:import-signals, seal auto-export — v1.3
+- ✓ Fresh install hardened — lifecycle smoke test + content-aware validate-package.sh — v1.3
+- ✓ Documentation accuracy — all docs match verified behavior — v1.3
+- ✓ 537+ tests passing (AVA + bash) — v1.3
+- ✓ QUEEN.md structured wisdom (4-section template, auto-populated by builds) — v2.2
+- ✓ Cross-colony hive brain with domain-scoped retrieval — v2.2
+- ✓ Per-caste model routing via slots (opus/sonnet/haiku) — v2.3
+- ✓ Oracle and Architect agents with wisdom pipeline wiring — v2.4
+- ✓ Fuzzy dedup for instincts + deterministic fallback learning extraction — v2.4
+- ✓ Repo scanning module — tech stack, directory, git, survey, complexity in <2s — v2.5
+- ✓ Charter management — colony-name + charter-write populating QUEEN.md v2 sections — v2.5
+- ✓ Smart init — scan-assemble-approve-create flow with re-init safety — v2.5
+- ✓ Intelligence enrichment — prior colony context, pheromone suggestions, governance inference — v2.5
 
 ### Active
 
-- [ ] Clean test artifacts from colony memory (QUEEN.md, pheromones.json, constraints.json)
-- [ ] Reset stale colony state (COLONY_STATE.json from wrong project)
-- [ ] Archive unused XML exchange system (built but never integrated into commands)
-- [ ] Make pheromones auto-emit during builds based on discovered patterns
-- [ ] Make pheromones carry across sessions (survive /clear and resume)
-- [ ] Make workers actually read and act on pheromone signals
-- [ ] Fix broken or unreliable slash commands
-- [ ] Update outdated documentation (CLAUDE.md, README, docs/)
-- [ ] Ensure fresh install works cleanly (npm install -g, aether update in a new repo)
+(No active milestone — planning next)
 
 ### Out of Scope
 
-- Splitting aether-utils.sh into modules — large refactor, separate initiative
-- Web/TUI dashboard — nice to have, not this round
+- Full rewrite of aether-utils.sh — extract modules, don't rewrite from scratch
+- Web/TUI dashboard — CLI tool, ASCII dashboards work in terminal
 - Multi-repo colony coordination — future architecture work
 - Performance optimization (state caching, lock backoff) — defer unless blocking
+- Agent Teams inter-worker communication — subagents can't communicate mid-execution
+- LLM-generated prompts — non-deterministic and untestable; bash + jq assembly is deterministic
+- Full deep survey on every init — too slow; lightweight scan + suggestion instead
 
 ## Context
 
-- Aether is at v1.1.0, published on npm as `aether-colony`
-- The codebase has accumulated test data in QUEEN.md (25+ junk entries), pheromones.json (5 test signals), and constraints.json (entire focus array is test data)
-- COLONY_STATE.json contains a stale goal from a different project (Electron-to-Xcode migration from February)
-- The XML exchange system (.aether/exchange/, .aether/schemas/) was fully built but never wired into actual commands
-- The CONCERNS.md audit identified pheromone integration as a key gap: signals are stored but don't influence worker behavior
-- Commands are split into playbooks (.aether/docs/command-playbooks/) for reliability
-- The codebase mapper identified 390 lines of concerns including security, tech debt, and test coverage gaps
+- Aether is at v2.5.0, shipped v2.5 Smart Init on 2026-03-27
+- v2.5 shipped: Smart init (repo scanning, charter management, approval flow, intelligence enrichment), 50 new tests
+- v2.4 shipped: Oracle + Architect agents, wisdom pipeline wiring, fuzzy dedup, deterministic fallback
+- v2.3 shipped: Per-caste model routing, model-slot CLI, 24 agents configured
+- v2.2 shipped: QUEEN.md structured wisdom, cross-colony hive brain, wisdom injection
+- v2.1 shipped: Error handling hardened, monolith modularized (10 modules), state API centralized
+- ~44 Claude commands, ~44 OpenCode commands, 24 agents, ~150+ subcommands across 10 domain modules
+- aether-utils.sh dispatcher + 10 domain modules (scan.sh added in v2.5)
+- 616+ tests passing, all green
+- Previous user feedback (QUEEN.md dead, init mechanical) addressed by v2.2-v2.5 milestones
 
 ## Constraints
 
-- **Testing**: All changes must maintain 490+ passing tests; new features need tests
+- **Testing**: All changes must maintain 616+ passing tests; new features need tests
 - **Compatibility**: Must work with bash 4+, Node 16+, jq 1.6+
-- **Distribution**: Changes must pass `bin/validate-package.sh` before publish
+- **Distribution**: Changes must pass `bin/validate-package.sh` (content-aware) before publish
 - **No breaking changes**: Existing colonies using Aether must not break on update
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Archive XML system (don't integrate) | Built but unused; JSON system works; integration effort unclear payoff | -- Pending |
-| Pheromone integration is top priority | User's primary pain point; signals exist but don't influence behavior | -- Pending |
-| Fresh install as "done" test | If someone can install and run a colony without issues, maintenance is complete | -- Pending |
+| Activate XML system (don't archive) | Cross-colony signal transfer has clear value | ✓ Good — /ant:export-signals and /ant:import-signals created |
+| Pheromone integration is top priority | User's primary pain point; signals exist but don't influence behavior | ✓ Good — full injection chain + worker protocols |
+| Fresh install as "done" test | If someone can install and run a colony without issues, maintenance is complete | ✓ Good — 430-line smoke test validates full lifecycle |
+| Clean before integrating | Test data must be purged before pheromone integration can be validated | ✓ Good — Phase 1 first, integration phases after |
+| Principle-based agent protocols | Workers are LLMs — they understand intent, don't need 100-line rule sets | ✓ Good — 35 lines per agent, all effective |
+| Define "influence" structurally | Signal in prompt + agent has protocol = maximum testable without live LLM | ✓ Good — pragmatic definition, fully tested |
+| Oracle distribution fix | oracle.sh excluded from npm by .npmignore blanket rule | ✓ Good — moved to .aether/utils/oracle/, position-aware HUB_EXCLUDE |
+| Extract modules not rewrite | 76 unused subcommands should be modularized, not deleted | ✓ Good — 9→10 domain modules extracted, 55% reduction |
+| Deepen planning quality | Aether plans too quickly vs GSD's per-phase research depth | ✓ Good — Step 3.6 research scout + 16K builder context |
+| Focus v2.2 on wisdom systems only | User test showed QUEEN.md and hive are dead features; ceremony/verification issues deferred | ✓ Good — v2.4 picks up where v2.2 left off |
+| Per-caste model routing via slots | GLM-5 needs tight constraints for reasoning castes; opus/sonnet slots provide clean routing | ✓ Good — 24 agents configured, caste table static |
+| Smart init as update-not-reset | Re-running init should update Queen file, not destroy colony state | ✓ Good — re-init skips template writes, charter-write updates in-place |
+| Add governance to QUEEN.md | QUEEN.md should be a full colony charter (intent, vision, governance) not just wisdom | ✓ Good — charter-write populates existing v2 sections, no new headers |
+| Intelligent colonize prompting | Users forget to colonize; system should suggest it at appropriate times | ✓ Good — scan detects stale/missing survey, suggests colonize in init prompt |
+| Deterministic prompt generation | Colony prompts must be testable and reproducible | ✓ Good — bash + jq assembly, 12 tested pattern checks |
 
 ---
-*Last updated: 2026-03-19 after initialization*
+*Last updated: 2026-03-27 after v2.5 milestone*

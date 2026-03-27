@@ -1,16 +1,46 @@
-2026-02-16T11:43:10Z|Queen|surveyor|Toiler-47|Mapping provisions and trails|default|spawned
-2026-02-16T11:43:10Z|Queen|surveyor|Worker-72|Mapping nest structure|default|spawned
-2026-02-16T11:43:10Z|Queen|surveyor|Toiler-72|Mapping disciplines and sentinels|default|spawned
-2026-02-16T11:43:10Z|Queen|surveyor|Ant-56|Identifying pathogens|default|spawned
-2026-02-16T14:48:36Z|Scout-AI|scout|Roam-64|Research JSON vs XML technical comparisons - schema validation, query languages, namespaces, mixed content, document composition, streaming|default|spawned
-2026-02-16T14:48:37Z|Scout-AI|scout|Quest-14|Research real-world hybrid JSON/XML use cases - configuration systems, build tools, data exchange, registries|default|spawned
-2026-02-16T14:48:38Z|Scout-AI|scout|Path-75|Research shell integration - XML tools vs jq, cross-platform, performance, scripting|default|spawned
-2026-02-16T14:48:39Z|Scout-AI|scout|Roam-88|Research industry trends - why XML fell from APIs, where XML still dominates, modern tooling|default|spawned
-2026-02-16T16:03:48Z|Bolt-48|completed|Created pheromone.xsd and example XML
-2026-02-16T16:03:49Z|Anvil-71|completed|Created queen-wisdom.xsd and example XML
-2026-02-16T16:03:50Z|Chip-43|completed|Created colony-registry.xsd and example XML
-2026-02-16T16:03:51Z|Weld-66|completed|Created xml-utils.sh with 14 passing tests
-2026-02-16T16:10:19Z|Sharp-33|completed|Verification found 2 issues
-2026-02-16T16:10:20Z|Snap-27|completed|Resilience testing found 5 findings
-2026-02-16T16:31:47Z|Mason-16|completed|Created pheromone export function with XSD validation
-2026-02-16T16:44:12Z|Queen|watcher|Sharp-33|Verify Phase 2 XML implementation|default|spawned
+2026-03-22T19:26:49Z|Queen|builder|Weld-2|Move oracle.sh and oracle.md to .aether/utils/oracle/|default|spawned
+2026-03-22T19:27:48Z|Weld-2|completed|Moved oracle infrastructure files via git mv
+2026-03-22T19:27:54Z|Queen|builder|Forge-16|Fix AETHER_ROOT derivation|default|spawned
+2026-03-22T19:27:54Z|Queen|builder|Bolt-98|Fix .aether/.npmignore anchor|default|spawned
+2026-03-22T19:30:19Z|Forge-16|completed|Fixed AETHER_ROOT path
+2026-03-22T19:30:19Z|Bolt-98|completed|Anchored .npmignore pattern
+2026-03-22T19:30:25Z|Queen|builder|Anvil-82|Redirect state file paths to .aether/oracle/|default|spawned
+2026-03-22T19:31:33Z|Anvil-82|completed|Redirected state file paths
+2026-03-22T19:31:44Z|Queen|watcher|Vigil-96|Independent verification|default|spawned
+2026-03-22T19:35:08Z|Queen|chaos|Snap-12|Resilience testing of Phase 1 work|default|spawned
+2026-03-22T19:38:38Z|Vigil-96|completed|Verification found line 895 bug (fixed) plus Phase 2 path updates needed
+2026-03-22T19:38:38Z|Snap-12|completed|Resilience moderate - ORACLE_STATE_DIR refactor clean, command files deferred to Phase 2
+2026-03-22T19:41:11Z|Queen|gatekeeper|Gate-94|Supply chain security audit|default|spawned
+2026-03-22T19:44:00Z|Queen|auditor|Review-75|Code quality audit|default|spawned
+2026-03-22T19:46:07Z|Gate-94|completed|No critical CVEs
+2026-03-22T19:46:07Z|Review-75|completed|Score 71/100
+2026-03-22T19:59:02Z|Queen|builder|Hammer-52|Update command files|default|spawned
+2026-03-22T19:59:02Z|Queen|builder|Anvil-67|Update e2e test|default|spawned
+2026-03-22T19:59:02Z|Queen|builder|Hammer-82|Update 13 test files|default|spawned
+2026-03-22T20:16:09Z|Hammer-52|completed|Updated command files
+2026-03-22T20:16:09Z|Anvil-67|completed|Updated e2e test
+2026-03-22T20:16:10Z|Hammer-82|completed|Updated 13 test files
+2026-03-22T20:16:16Z|Queen|builder|Brick-96|Sweep repo for remaining old-path references|default|spawned
+2026-03-22T20:16:55Z|Brick-96|completed|Codebase clean - zero old-path references
+2026-03-22T20:17:01Z|Queen|watcher|Sentinel-37|Independent verification|default|spawned
+2026-03-22T20:22:27Z|Sentinel-37|completed|Found SCRIPT_DIR bugs in 2 colony test files — fixed by Queen
+2026-03-22T20:22:27Z|Queen|chaos|Breach-52|Resilience testing of Phase 2|default|spawned
+2026-03-22T20:23:25Z|Breach-52|completed|Resilience strong - all functional references clean
+2026-03-23T15:27:56Z|Queen|builder|Weld-28|Verify npm pack|default|spawned
+2026-03-23T15:28:37Z|Weld-28|completed|npm pack verified
+2026-03-23T15:28:37Z|Queen|builder|Forge-43|Run validate-package.sh|default|spawned
+2026-03-23T15:29:03Z|Forge-43|completed|validate-package.sh passed
+2026-03-23T15:29:09Z|Queen|watcher|Alert-83|Independent verification|default|spawned
+2026-03-23T15:29:58Z|Alert-83|completed|All verification passed 10/10
+2026-03-23T15:29:58Z|Queen|chaos|Shake-98|Resilience testing Phase 3|default|spawned
+2026-03-23T15:33:04Z|Shake-98|completed|1 medium (dev workflow), 1 info (latent substring match)
+2026-03-23T15:44:23Z|Queen|builder|Forge-52|Run full test suite|default|spawned
+2026-03-23T15:46:22Z|Forge-52|completed|572 passed, 0 oracle failures
+2026-03-23T15:46:22Z|Queen|builder|Weld-66|Install globally and verify hub|default|spawned
+2026-03-23T15:47:45Z|Weld-66|completed|Global install verified, oracle.sh in hub
+2026-03-23T15:47:51Z|Queen|watcher|Guard-80|Final verification|default|spawned
+2026-03-23T15:47:51Z|Queen|chaos|Breach-95|Final resilience testing|default|spawned
+2026-03-23T15:52:05Z|Guard-80|completed|All criteria verified 9/10
+2026-03-23T15:52:05Z|Breach-95|completed|Hub leak found and fixed
+2026-03-23T15:58:28Z|Queen|sage|Helper-15|Colony analytics review|default|spawned
+2026-03-23T16:01:03Z|Helper-15|completed|Analytics review complete

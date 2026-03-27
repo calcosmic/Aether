@@ -139,14 +139,14 @@ if ! check_copy_parity "oracle" "$sot_oracle" "$live_oracle"; then
   adv01_notes="$adv01_notes [FAIL: parity mismatch]"
 fi
 
-# Check 6: oracle.sh exists at .aether/oracle/ (not utils/ — per oracle.md references)
-oracle_sh="$PROJECT_ROOT/.aether/oracle/oracle.sh"
+# Check 6: oracle.sh exists at .aether/utils/oracle/
+oracle_sh="$PROJECT_ROOT/.aether/utils/oracle/oracle.sh"
 if [[ -f "$oracle_sh" ]]; then
-  echo "  PASS: oracle.sh exists at .aether/oracle/oracle.sh"
+  echo "  PASS: oracle.sh exists at .aether/utils/oracle/oracle.sh"
 else
   adv01_pass=false
-  adv01_notes="$adv01_notes [FAIL: .aether/oracle/oracle.sh missing]"
-  echo "  FAIL: oracle.sh not found at .aether/oracle/oracle.sh"
+  adv01_notes="$adv01_notes [FAIL: .aether/utils/oracle/oracle.sh missing]"
+  echo "  FAIL: oracle.sh not found at .aether/utils/oracle/oracle.sh"
 fi
 
 if $adv01_pass; then
@@ -408,6 +408,32 @@ if $adv05_pass; then
   record_result "ADV-05" "PASS" "interpret.md verified: dream/validate ref, SoT copy, parity ok, OpenCode copy present"
 else
   record_result "ADV-05" "FAIL" "$adv05_notes"
+fi
+
+# ============================================================================
+# ADV-DEPR: swarm-display-inline emits deprecation warning
+# ============================================================================
+
+echo ""
+echo "--- ADV-DEPR: swarm-display-inline deprecation warning ---"
+
+adv_depr_pass=true
+adv_depr_notes=""
+
+# Invoke swarm-display-inline and capture stderr only
+_stderr=$(bash "$PROJECT_ROOT/.aether/aether-utils.sh" swarm-display-inline 2>&1 >/dev/null || true)
+if [[ "$_stderr" == *"[deprecated]"* ]]; then
+  echo "  PASS: swarm-display-inline emits deprecation warning"
+else
+  adv_depr_pass=false
+  adv_depr_notes="$adv_depr_notes [FAIL: swarm-display-inline did not emit [deprecated] on stderr]"
+  echo "  FAIL: swarm-display-inline did not emit deprecation warning"
+fi
+
+if $adv_depr_pass; then
+  record_result "ADV-DEPR" "PASS" "swarm-display-inline emits [deprecated] warning on stderr"
+else
+  record_result "ADV-DEPR" "FAIL" "$adv_depr_notes"
 fi
 
 # ============================================================================

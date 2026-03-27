@@ -15,7 +15,7 @@ set -euo pipefail
 trap 'if type error_handler &>/dev/null; then error_handler ${LINENO} "$BASH_COMMAND" $?; fi' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AETHER_ROOT="${AETHER_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd 2>/dev/null || echo "$SCRIPT_DIR")}"
+AETHER_ROOT="${AETHER_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd 2>/dev/null || echo "$SCRIPT_DIR")}"  # SUPPRESS:OK -- read-default: directory may not exist
 DATA_DIR="${DATA_DIR:-$AETHER_ROOT/.aether/data}"
 
 # Initialize lock state before sourcing (file-lock.sh trap needs these)
@@ -29,6 +29,19 @@ CURRENT_LOCK=${CURRENT_LOCK:-""}
 [[ -f "$SCRIPT_DIR/utils/chamber-utils.sh" ]] && source "$SCRIPT_DIR/utils/chamber-utils.sh"
 [[ -f "$SCRIPT_DIR/utils/xml-utils.sh" ]] && source "$SCRIPT_DIR/utils/xml-utils.sh"
 [[ -f "$SCRIPT_DIR/utils/semantic-cli.sh" ]] && source "$SCRIPT_DIR/utils/semantic-cli.sh"
+[[ -f "$SCRIPT_DIR/utils/hive.sh" ]] && source "$SCRIPT_DIR/utils/hive.sh"
+[[ -f "$SCRIPT_DIR/utils/midden.sh" ]] && source "$SCRIPT_DIR/utils/midden.sh"
+[[ -f "$SCRIPT_DIR/utils/skills.sh" ]] && source "$SCRIPT_DIR/utils/skills.sh"
+[[ -f "$SCRIPT_DIR/utils/state-api.sh" ]] && source "$SCRIPT_DIR/utils/state-api.sh"
+[[ -f "$SCRIPT_DIR/utils/flag.sh" ]] && source "$SCRIPT_DIR/utils/flag.sh"
+[[ -f "$SCRIPT_DIR/utils/spawn.sh" ]] && source "$SCRIPT_DIR/utils/spawn.sh"
+[[ -f "$SCRIPT_DIR/utils/session.sh" ]] && source "$SCRIPT_DIR/utils/session.sh"
+[[ -f "$SCRIPT_DIR/utils/suggest.sh" ]] && source "$SCRIPT_DIR/utils/suggest.sh"
+[[ -f "$SCRIPT_DIR/utils/queen.sh" ]] && source "$SCRIPT_DIR/utils/queen.sh"
+[[ -f "$SCRIPT_DIR/utils/swarm.sh" ]] && source "$SCRIPT_DIR/utils/swarm.sh"
+[[ -f "$SCRIPT_DIR/utils/learning.sh" ]] && source "$SCRIPT_DIR/utils/learning.sh"
+[[ -f "$SCRIPT_DIR/utils/pheromone.sh" ]] && source "$SCRIPT_DIR/utils/pheromone.sh"
+[[ -f "$SCRIPT_DIR/utils/scan.sh" ]] && source "$SCRIPT_DIR/utils/scan.sh"
 
 # Fallback error constants if error-handler.sh wasn't sourced
 # This prevents "unbound variable" errors in older installations
@@ -46,6 +59,12 @@ CURRENT_LOCK=${CURRENT_LOCK:-""}
 : "${E_DEPENDENCY_MISSING:=E_DEPENDENCY_MISSING}"
 : "${E_RESOURCE_NOT_FOUND:=E_RESOURCE_NOT_FOUND}"
 
+# --- Deprecation warning helper ---
+_deprecation_warning() {
+  local cmd_name="$1"
+  printf '[deprecated] %s -- will be removed in v3.0\n' "$cmd_name" >&2
+}
+
 # Fallback atomic_write if not sourced (uses temp file + mv for true atomicity)
 # Uses TEMP_DIR to avoid issues with paths containing spaces in $TMPDIR
 if ! type atomic_write &>/dev/null; then
@@ -53,7 +72,7 @@ if ! type atomic_write &>/dev/null; then
     local target="$1"
     local content="$2"
     local temp_dir="${TEMP_DIR:-${AETHER_ROOT:-$PWD}/.aether/temp}"
-    mkdir -p "$temp_dir" 2>/dev/null || true
+    mkdir -p "$temp_dir" 2>/dev/null || true  # SUPPRESS:OK -- idempotent: harmless if exists
     local temp="${temp_dir}/atomic-write.$$.$(date +%s%N).tmp"
     echo "$content" > "$temp"
     mv "$temp" "$target"
@@ -84,7 +103,7 @@ fi
 # These checks run silently - failures are logged but don't block operation
 if type feature_disable &>/dev/null; then
   # Check if DATA_DIR is writable for activity logging
-  [[ -w "$DATA_DIR" ]] 2>/dev/null || feature_disable "activity_log" "DATA_DIR not writable"
+  [[ -w "$DATA_DIR" ]] 2>/dev/null || feature_disable "activity_log" "DATA_DIR not writable"  # SUPPRESS:OK -- existence-test: value may not be numeric
 
   # Check if git is available for git integration
   command -v git &>/dev/null || feature_disable "git_integration" "git not installed"
@@ -102,8 +121,8 @@ fi
 # Must be set AFTER file-lock.sh is sourced so it overrides the individual
 # 'trap cleanup_locks EXIT TERM INT HUP' set by file-lock.sh.
 _aether_exit_cleanup() {
-    cleanup_locks 2>/dev/null || true
-    cleanup_temp_files 2>/dev/null || true
+    cleanup_locks 2>/dev/null || true  # SUPPRESS:OK -- cleanup: exit handler must not fail
+    cleanup_temp_files 2>/dev/null || true  # SUPPRESS:OK -- cleanup: exit handler must not fail
 }
 trap '_aether_exit_cleanup' EXIT TERM INT HUP
 
@@ -115,10 +134,10 @@ _cleanup_orphaned_temp_files() {
     while IFS= read -r -d '' tmp_file; do
         local file_pid
         file_pid=$(basename "$tmp_file" | awk -F'.' '{print $(NF-2)}')
-        if [[ "$file_pid" =~ ^[0-9]+$ ]] && ! kill -0 "$file_pid" 2>/dev/null; then
-            rm -f "$tmp_file" 2>/dev/null || true
+        if [[ "$file_pid" =~ ^[0-9]+$ ]] && ! kill -0 "$file_pid" 2>/dev/null; then  # SUPPRESS:OK -- existence-test: checking if process is alive
+            rm -f "$tmp_file" 2>/dev/null || true  # SUPPRESS:OK -- cleanup: file may not exist
         fi
-    done < <(find "$temp_dir" -maxdepth 1 -name "*.tmp" -print0 2>/dev/null)
+    done < <(find "$temp_dir" -maxdepth 1 -name "*.tmp" -print0 2>/dev/null)  # SUPPRESS:OK -- existence-test: directory may not exist
 }
 # Run orphan cleanup on startup (silent — matches cleanup_locks behavior)
 type cleanup_temp_files &>/dev/null && _cleanup_orphaned_temp_files
@@ -253,7 +272,7 @@ _cmd_context_update() {
   if type acquire_lock &>/dev/null && type feature_enabled &>/dev/null && feature_enabled "file_locking"; then
     acquire_lock "$ctx_file" || json_err "$E_LOCK_FAILED" "Failed to acquire CONTEXT.md lock for context-update"
     _ctx_lock_held=true
-    trap 'release_lock 2>/dev/null || true' EXIT
+    trap 'release_lock 2>/dev/null || true' EXIT  # SUPPRESS:OK -- cleanup: lock may not be held
   fi
 
   ensure_context_dir() {
@@ -265,9 +284,9 @@ _cmd_context_update() {
   read_colony_state() {
     local state_file="${AETHER_ROOT:-.}/.aether/data/COLONY_STATE.json"
     if [[ -f "$state_file" ]]; then
-      current_phase=$(jq -r '.current_phase // "unknown"' "$state_file" 2>/dev/null)
-      milestone=$(jq -r '.milestone // "unknown"' "$state_file" 2>/dev/null)
-      goal=$(jq -r '.goal // ""' "$state_file" 2>/dev/null)
+      current_phase=$(jq -r '.current_phase // "unknown"' "$state_file" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
+      milestone=$(jq -r '.milestone // "unknown"' "$state_file" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
+      goal=$(jq -r '.goal // ""' "$state_file" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
     else
       current_phase="unknown"
       milestone="unknown"
@@ -509,7 +528,8 @@ EOF
         --strength 0.6 \
         --source "auto:decision" \
         --reason "Auto-emitted from architectural decision" \
-        --ttl "30d" 2>/dev/null || true
+        --ttl "30d" 2>/dev/null \
+        || _aether_log_error "Could not emit feedback signal for decision"  # SUPPRESS:OK -- read-default: returns fallback on failure
 
       json_ok "{\"updated\":true,\"action\":\"decision\"}"
       ;;
@@ -610,7 +630,7 @@ EOF
   # elsewhere in the process. The _ctx_lock_held variable is the primary gate
   # for this function's own cleanup.
   if [[ "$_ctx_lock_held" == "true" ]]; then
-    release_lock 2>/dev/null || true
+    release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
     _ctx_lock_held=false
   fi
 }
@@ -652,13 +672,13 @@ EOF
   # Check if existing CHANGELOG.md uses Keep a Changelog format
   # and add separator if needed (only once)
   local has_separator=false
-  if grep -q "Colony Work Log" "$changelog_file" 2>/dev/null; then
+  if grep -q "Colony Work Log" "$changelog_file" 2>/dev/null; then  # SUPPRESS:OK -- existence-test: file may not exist
     has_separator=true
   fi
 
   # Detect Keep a Changelog format by looking for version headers
   local is_keep_a_changelog=false
-  if grep -qE '^## \[.*\]' "$changelog_file" 2>/dev/null; then
+  if grep -qE '^## \[.*\]' "$changelog_file" 2>/dev/null; then  # SUPPRESS:OK -- existence-test: file may not exist
     is_keep_a_changelog=true
   fi
 
@@ -679,7 +699,7 @@ EOF
   cat "$changelog_file" > "$temp_file"
 
   # Check if date section exists
-  if ! grep -q "^## ${date_str}$" "$changelog_file" 2>/dev/null; then
+  if ! grep -q "^## ${date_str}$" "$changelog_file" 2>/dev/null; then  # SUPPRESS:OK -- existence-test: file may not exist
     # Add new date section
     echo "" >> "$temp_file"
     echo "## ${date_str}" >> "$temp_file"
@@ -810,6 +830,7 @@ changelog-collect-plan-data() {
   if [[ -f "$plan_file" ]]; then
     # Extract files_modified from frontmatter
     local files_yaml
+    # SUPPRESS:OK -- read-default: section may not exist in file
     files_yaml=$(grep -A 20 "^files_modified:" "$plan_file" 2>/dev/null | grep "^  - " | sed 's/^  - //' | tr '\n' ',' | sed 's/,$//')
     if [[ -n "$files_yaml" ]]; then
       # Convert to JSON array
@@ -830,6 +851,7 @@ changelog-collect-plan-data() {
 
     # Extract requirements from frontmatter
     local req_yaml
+    # SUPPRESS:OK -- read-default: section may not exist in file
     req_yaml=$(grep -A 10 "^requirements:" "$plan_file" 2>/dev/null | grep "^  - " | sed 's/^  - //' | tr '\n' ',' | sed 's/,$//')
     if [[ -n "$req_yaml" ]]; then
       requirements="["
@@ -851,7 +873,7 @@ changelog-collect-plan-data() {
   # Read decisions from COLONY_STATE.json (last 5)
   if [[ -f "$state_file" ]] && command -v jq &>/dev/null; then
     local recent_decisions
-    recent_decisions=$(jq -r '.memory.decisions[-5:][]? // empty' "$state_file" 2>/dev/null)
+    recent_decisions=$(jq -r '.memory.decisions[-5:][]? // empty' "$state_file" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
     if [[ -n "$recent_decisions" ]]; then
       decisions="["
       local first=true
@@ -875,7 +897,7 @@ changelog-collect-plan-data() {
     # Check approach-changes.md for what worked
     if [[ -f "$midden_dir/approach-changes.md" ]]; then
       local approach_entries
-      approach_entries=$(grep "^- " "$midden_dir/approach-changes.md" 2>/dev/null | tail -3) || true
+      approach_entries=$(grep "^- " "$midden_dir/approach-changes.md" 2>/dev/null | tail -3) || true  # SUPPRESS:OK -- read-default: file may not exist
       if [[ -n "$approach_entries" ]]; then
         worked="["
         local first=true
@@ -897,7 +919,7 @@ changelog-collect-plan-data() {
     # Check build-failures.md for what didn't work
     if [[ -f "$midden_dir/build-failures.md" ]]; then
       local failure_entries
-      failure_entries=$(grep "^- " "$midden_dir/build-failures.md" 2>/dev/null | tail -3) || true
+      failure_entries=$(grep "^- " "$midden_dir/build-failures.md" 2>/dev/null | tail -3) || true  # SUPPRESS:OK -- read-default: file may not exist
       if [[ -n "$failure_entries" ]]; then
         didnt_work="["
         local first=true
@@ -940,6 +962,12 @@ get_wisdom_threshold() {
   local mode="${2:-propose}"
 
   case "$wisdom_type:$mode" in
+    # V2 types (no threshold -- always write)
+    build_learning:propose) echo 0 ;;
+    build_learning:auto) echo 0 ;;
+    instinct:propose) echo 0 ;;
+    instinct:auto) echo 0 ;;
+    # V1 types (backward compat)
     philosophy:propose) echo 1 ;;
     philosophy:auto) echo 3 ;;
     pattern:propose) echo 1 ;;
@@ -961,6 +989,8 @@ get_wisdom_threshold() {
 get_wisdom_thresholds_json() {
   cat <<'EOF'
 {
+  "build_learning": {"propose": 0, "auto": 0},
+  "instinct": {"propose": 0, "auto": 0},
   "philosophy": {"propose": 1, "auto": 3},
   "pattern": {"propose": 1, "auto": 2},
   "redirect": {"propose": 1, "auto": 2},
@@ -973,7 +1003,7 @@ EOF
 
 # --- Subcommand dispatch ---
 cmd="${1:-help}"
-shift 2>/dev/null || true
+shift 2>/dev/null || true  # SUPPRESS:OK -- cleanup: shift is safe to fail
 
 case "$cmd" in
   help)
@@ -983,7 +1013,7 @@ case "$cmd" in
     cat <<'HELP_EOF'
 {
   "ok": true,
-  "commands": ["help","version","validate-state","validate-oracle-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","learning-observe","learning-check-promotion","learning-promote-auto","memory-capture","queen-thresholds","context-capsule","rolling-summary","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","spawn-efficiency","validate-worker-response","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-display-text","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","phase-insert","generate-commit-message","version-check","registry-add","bootstrap-system","model-profile","model-get","model-list","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","incident-rule-add","survey-load","survey-verify","pheromone-export","pheromone-write","pheromone-count","pheromone-read","instinct-read","pheromone-prime","colony-prime","pheromone-expire","eternal-init","eternal-store","pheromone-export-xml","pheromone-import-xml","pheromone-validate-xml","wisdom-export-xml","wisdom-import-xml","registry-export-xml","registry-import-xml","memory-metrics","midden-recent-failures","entropy-score","force-unlock","changelog-append","changelog-collect-plan-data","suggest-approve","suggest-quick-dismiss","data-clean"],
+  "commands": ["help","version","validate-state","validate-oracle-state","load-state","unload-state","error-add","error-pattern-check","error-summary","activity-log","activity-log-init","activity-log-read","learning-promote","learning-inject","learning-observe","learning-check-promotion","learning-promote-auto","memory-capture","queen-thresholds","context-capsule","rolling-summary","generate-ant-name","spawn-log","spawn-complete","spawn-can-spawn","spawn-get-depth","spawn-tree-load","spawn-tree-active","spawn-tree-depth","spawn-efficiency","validate-worker-response","update-progress","check-antipattern","error-flag-pattern","signature-scan","signature-match","flag-add","flag-check-blockers","flag-resolve","flag-acknowledge","flag-list","flag-auto-resolve","autofix-checkpoint","autofix-rollback","spawn-can-spawn-swarm","swarm-findings-init","swarm-findings-add","swarm-findings-read","swarm-solution-set","swarm-cleanup","swarm-activity-log","swarm-display-init","swarm-display-update","swarm-display-get","swarm-display-text","swarm-timing-start","swarm-timing-get","swarm-timing-eta","view-state-init","view-state-get","view-state-set","view-state-toggle","view-state-expand","view-state-collapse","grave-add","grave-check","phase-insert","generate-commit-message","version-check","registry-add","registry-list","bootstrap-system","model-profile","model-get","model-list","model-slot","chamber-create","chamber-verify","chamber-list","milestone-detect","queen-init","queen-read","queen-promote","incident-rule-add","survey-load","survey-verify","pheromone-export","pheromone-write","pheromone-count","pheromone-read","instinct-read","instinct-create","instinct-apply","pheromone-prime","colony-prime","pheromone-expire","eternal-init","eternal-store","pheromone-export-xml","pheromone-import-xml","pheromone-validate-xml","wisdom-export-xml","wisdom-import-xml","registry-export-xml","registry-import-xml","memory-metrics","midden-recent-failures","midden-review","midden-acknowledge","entropy-score","force-unlock","changelog-append","changelog-collect-plan-data","suggest-approve","suggest-quick-dismiss","data-clean","autopilot-init","autopilot-update","autopilot-status","autopilot-stop","autopilot-check-replan","hive-init","hive-store","hive-read","hive-abstract","hive-promote","init-research","charter-write","colony-name"],
   "sections": {
     "Core": [
       {"name": "help", "description": "List all available commands with sections"},
@@ -1001,6 +1031,13 @@ case "$cmd" in
       {"name": "queen-read", "description": "Read QUEEN.md wisdom as JSON for worker priming"},
       {"name": "queen-promote", "description": "Promote a validated learning to QUEEN.md wisdom"},
       {"name": "queen-thresholds", "description": "Return propose/auto promotion thresholds by wisdom type"},
+      {"name": "queen-write-learnings", "description": "Write build learnings directly to QUEEN.md Build Learnings section (no threshold)"},
+      {"name": "queen-promote-instinct", "description": "Promote a high-confidence instinct to QUEEN.md Instincts section"},
+      {"name": "queen-seed-from-hive", "description": "Seed QUEEN.md Codebase Patterns from cross-colony hive wisdom"},
+      {"name": "queen-migrate", "description": "Migrate a QUEEN.md from v1 (emoji headers) to v2 (clean headers) format"},
+      {"name": "charter-write", "description": "Write or update colony charter content in QUEEN.md"},
+      {"name": "colony-name", "description": "Derive human-readable colony name from repo context"},
+      {"name": "domain-detect", "description": "Auto-detect repo domain tags from file presence (node, typescript, rust, etc.)"},
       {"name": "incident-rule-add", "description": "Append an incident-derived rule to decree/constraint/gate stores"},
       {"name": "learning-observe", "description": "Record observation of a learning across colonies"},
       {"name": "learning-check-promotion", "description": "Check which learnings meet promotion thresholds"},
@@ -1012,7 +1049,8 @@ case "$cmd" in
     "Model Routing": [
       {"name": "model-profile", "description": "Manage caste-to-model assignments"},
       {"name": "model-get", "description": "Get model assignment for a caste"},
-      {"name": "model-list", "description": "List all model assignments"}
+      {"name": "model-list", "description": "List all model assignments"},
+      {"name": "model-slot", "description": "Resolve caste to model slot (get, list, validate)"}
     ],
     "Spawn Management": [
       {"name": "spawn-log", "description": "Log a spawn event to spawn-tree.txt"},
@@ -1070,10 +1108,13 @@ case "$cmd" in
       {"name": "activity-log-read", "description": "Read recent activity log entries"},
       {"name": "generate-commit-message", "description": "Generate a commit message from git diff"},
       {"name": "version-check", "description": "Check if Aether version meets requirement"},
-      {"name": "registry-add", "description": "Register a repo with Aether"},
+      {"name": "registry-add", "description": "Register a repo with Aether (supports --tags, --goal, --active)"},
+      {"name": "registry-list", "description": "List all registered repos with metadata"},
       {"name": "bootstrap-system", "description": "Bootstrap minimal system files if missing"},
       {"name": "memory-metrics", "description": "Aggregate memory health across colony stores"},
       {"name": "midden-recent-failures", "description": "Read recent failure signals from midden"},
+      {"name": "midden-review", "description": "Review unacknowledged midden entries grouped by category"},
+      {"name": "midden-acknowledge", "description": "Acknowledge midden entries by id or category"},
       {"name": "entropy-score", "description": "Compute colony entropy score (0-100)"},
       {"name": "force-unlock", "description": "Emergency unlock — remove stale lock files"}
     ],
@@ -1087,6 +1128,56 @@ case "$cmd" in
     ],
     "Maintenance": [
       {"name": "data-clean", "description": "Scan and remove test/synthetic artifacts from colony data files"}
+    ],
+    "Autopilot": [
+      {"name": "autopilot-init", "description": "Initialize autopilot run state (run-state.json)"},
+      {"name": "autopilot-update", "description": "Update autopilot state after phase action"},
+      {"name": "autopilot-status", "description": "Return current autopilot state"},
+      {"name": "autopilot-stop", "description": "Stop or complete an autopilot run with reason"},
+      {"name": "autopilot-check-replan", "description": "Check if replan trigger should fire based on completed phases"}
+    ],
+    "Hive Intelligence": [
+      {"name": "hive-init", "description": "Initialize ~/.aether/hive/ directory and wisdom.json schema"},
+      {"name": "hive-store", "description": "Store wisdom entry with dedup, merge, and 200-entry cap"},
+      {"name": "hive-read", "description": "Read wisdom entries with domain filtering, confidence threshold, and access tracking"},
+      {"name": "hive-abstract", "description": "Abstract repo-specific instinct into generalized cross-colony wisdom text"},
+      {"name": "hive-promote", "description": "Orchestrate abstract+store pipeline to promote instinct to hive wisdom"}
+    ],
+    "Skills Engine": [
+      {"name": "skill-parse-frontmatter", "description": "Parse YAML-like frontmatter from a SKILL.md file"},
+      {"name": "skill-index", "description": "Scan skills dirs for SKILL.md files and build JSON index"},
+      {"name": "skill-index-read", "description": "Read cached index, rebuild if stale (mtime check) [DEPRECATED]"},
+      {"name": "skill-detect", "description": "Detect domain skills matching the repo (file patterns + packages)"},
+      {"name": "skill-match", "description": "Smart-match skills to worker by role, pheromones, task description"},
+      {"name": "skill-inject", "description": "Load full SKILL.md content for matched skills within 8K budget"},
+      {"name": "skill-list", "description": "List all installed skills with type, domains, detection status"},
+      {"name": "skill-manifest-read", "description": "Read .manifest.json for update safety [DEPRECATED]"},
+      {"name": "skill-cache-rebuild", "description": "Force rebuild of skills index cache"},
+      {"name": "skill-diff", "description": "Compare user skill with shipped Aether version"},
+      {"name": "skill-is-user-created", "description": "Check if a skill is user-created (not in manifest) [DEPRECATED]"}
+    ],
+    "Smart Init": [
+      {"name": "init-research", "description": "Scan repo and produce structured research JSON for smart init"}
+    ],
+    "Deprecated": [
+      {"name": "checkpoint-check", "description": "Check dirty files against allowlist [DEPRECATED]"},
+      {"name": "error-pattern-check", "description": "Check for error anti-patterns [DEPRECATED]"},
+      {"name": "error-patterns-check", "description": "Scan for error handling anti-patterns [DEPRECATED]"},
+      {"name": "error-summary", "description": "Summarize error handling patterns [DEPRECATED]"},
+      {"name": "learning-select-proposals", "description": "Interactive learning proposal selector [DEPRECATED]"},
+      {"name": "pheromone-export-eternal", "description": "Export pheromones to eternal memory format [DEPRECATED]"},
+      {"name": "semantic-context", "description": "Semantic search context retrieval [DEPRECATED]"},
+      {"name": "session-clear-context", "description": "Clear session context markers [DEPRECATED]"},
+      {"name": "session-is-stale", "description": "Check session staleness [DEPRECATED]"},
+      {"name": "session-summary", "description": "Generate session summary [DEPRECATED]"},
+      {"name": "skill-index-read", "description": "Read cached skills index [DEPRECATED]"},
+      {"name": "skill-is-user-created", "description": "Check if skill is user-created [DEPRECATED]"},
+      {"name": "skill-manifest-read", "description": "Read skills manifest [DEPRECATED]"},
+      {"name": "suggest-clear", "description": "Clear suggestion state [DEPRECATED]"},
+      {"name": "survey-clear", "description": "Clear survey state [DEPRECATED]"},
+      {"name": "survey-verify-fresh", "description": "Check survey freshness [DEPRECATED]"},
+      {"name": "swarm-display-inline", "description": "Inline swarm display for Claude Code [DEPRECATED]"},
+      {"name": "swarm-display-render", "description": "Terminal render wrapper for swarm display [DEPRECATED]"}
     ]
   },
   "description": "Aether Colony Utility Layer — deterministic ops for the ant colony"
@@ -1096,73 +1187,23 @@ HELP_EOF
   version)
     # Read version from package.json if available, fallback to embedded
     _pkg_json="$SCRIPT_DIR/../package.json"
-    if [[ -f "$_pkg_json" ]] && command -v jq >/dev/null 2>&1; then
-      _ver=$(jq -r '.version // "unknown"' "$_pkg_json" 2>/dev/null)
+    if [[ -f "$_pkg_json" ]] && command -v jq >/dev/null 2>&1; then  # SUPPRESS:OK -- cleanup: output suppression for clean operation
+      _ver=$(jq -r '.version // "unknown"' "$_pkg_json" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
       json_ok "\"$_ver\""
     else
       json_ok '"1.1.5"'
     fi
     ;;
   validate-state)
-    # Schema migration helper: auto-upgrades pre-3.0 state files to v3.0
-    # Additive only (never removes fields) — idempotent and safe for concurrent access
-    _migrate_colony_state() {
-      local state_file="$1"
-      [[ -f "$state_file" ]] || return 0
-
-      # First: verify file is parseable JSON at all
-      if ! jq -e . "$state_file" >/dev/null 2>&1; then
-        # Corrupt state file — backup and error
-        if type create_backup &>/dev/null; then
-          create_backup "$state_file" 2>/dev/null || true
-        fi
-        json_err "$E_JSON_INVALID" \
-          "COLONY_STATE.json is corrupted (invalid JSON). A backup was saved in .aether/data/backups/. Try: run /ant:init to reset colony state."
-      fi
-
-      local current_version
-      current_version=$(jq -r '.version // "1.0"' "$state_file" 2>/dev/null)
-
-      if [[ "$current_version" != "3.0" ]]; then
-        local _migrate_lock_held=false
-        # Skip lock acquisition when caller already holds the state lock
-        # (e.g., state-loader sets AETHER_STATE_LOCKED=true before validation).
-        if [[ "${AETHER_STATE_LOCKED:-false}" != "true" ]] && type acquire_lock &>/dev/null; then
-          acquire_lock "$state_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on COLONY_STATE.json for migration"
-          _migrate_lock_held=true
-        fi
-
-        # Add missing v3.0 fields (additive only — idempotent and safe for concurrent access)
-        local updated
-        updated=$(jq '
-            .version = "3.0" |
-            if .signals == null then .signals = [] else . end |
-            if .graveyards == null then .graveyards = [] else . end |
-            if .events == null then .events = [] else . end
-        ' "$state_file" 2>/dev/null) || {
-          [[ "$_migrate_lock_held" == "true" ]] && release_lock 2>/dev/null || true
-          json_err "$E_JSON_INVALID" "Failed to migrate COLONY_STATE.json"
-        }
-
-        if [[ -n "$updated" ]]; then
-          atomic_write "$state_file" "$updated" || {
-            [[ "$_migrate_lock_held" == "true" ]] && release_lock 2>/dev/null || true
-            json_err "$E_JSON_INVALID" "Failed to write migrated COLONY_STATE.json"
-          }
-          # Notify user of migration (auto-migrate + notify pattern)
-          printf '{"ok":true,"warning":"W_MIGRATED","message":"Migrated colony state from v%s to v3.0"}\n' "$current_version" >&2
-        fi
-
-        [[ "$_migrate_lock_held" == "true" ]] && release_lock 2>/dev/null || true
-      fi
-    }
-
+    # Migrated to state-api facade: uses _state_read_field for reads, _state_migrate for schema migration
     case "${1:-}" in
       colony)
-        [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
+        # Read full state via facade (handles missing file error)
+        vs_state=$(_state_read_field '.')
+        [[ -n "$vs_state" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
         # Run schema migration before field validation (ensures v3.0 fields always present)
-        _migrate_colony_state "$DATA_DIR/COLONY_STATE.json"
-        json_ok "$(jq '
+        _state_migrate "$DATA_DIR/COLONY_STATE.json"
+        json_ok "$(echo "$vs_state" | jq '
           def chk(f;t): if has(f) then (if (.[f]|type) as $a | t | any(. == $a) then "pass" else "fail: \(f) is \(.[f]|type), expected \(t|join("|"))" end) else "fail: missing \(f)" end;
           def opt(f;t): if has(f) then (if (.[f]|type) as $a | t | any(. == $a) then "pass" else "fail: \(f) is \(.[f]|type), expected \(t|join("|"))" end) else "pass" end;
           {file:"COLONY_STATE.json", checks:[
@@ -1177,7 +1218,7 @@ HELP_EOF
             opt("initialized_at";["string","null"]),
             opt("build_started_at";["string","null"])
           ]} | . + {pass: (([.checks[] | select(. == "pass")] | length) == (.checks | length))}
-        ' "$DATA_DIR/COLONY_STATE.json")"
+        ')"
         ;;
       constraints)
         [[ -f "$DATA_DIR/constraints.json" ]] || json_err "$E_FILE_NOT_FOUND" "constraints.json not found" '{"file":"constraints.json"}'
@@ -1192,6 +1233,7 @@ HELP_EOF
       all)
         results=()
         for target in colony constraints; do
+          # SUPPRESS:OK -- read-default: validation may fail on missing files
           results+=("$(bash "$SCRIPT_DIR/aether-utils.sh" validate-state "$target" 2>/dev/null || echo '{"ok":false}')")
         done
         combined=$(printf '%s\n' "${results[@]}" | jq -s '[.[] | .result // {file:"unknown",pass:false}]')
@@ -1202,6 +1244,154 @@ HELP_EOF
         json_err "$E_VALIDATION_FAILED" "Usage: validate-state colony|constraints|all"
         ;;
     esac
+    ;;
+  state-checkpoint)
+    # Create a rolling backup of COLONY_STATE.json before builds
+    # Usage: bash .aether/aether-utils.sh state-checkpoint [reason]
+    # Uses create_backup from atomic-write.sh (timestamped naming in BACKUP_DIR, max 3)
+    sc_reason="${1:-manual}"
+    sc_state_file="$DATA_DIR/COLONY_STATE.json"
+
+    # Validate state file exists
+    if [[ ! -f "$sc_state_file" ]]; then
+      json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found -- cannot checkpoint"
+    fi
+
+    # Refuse to checkpoint corrupt state
+    if ! jq -e . "$sc_state_file" >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON validity
+      json_err "$E_JSON_INVALID" "COLONY_STATE.json is corrupt -- refusing to checkpoint invalid state"
+    fi
+
+    # Create timestamped backup via create_backup (handles MAX_BACKUPS=3 rotation)
+    if type create_backup &>/dev/null; then
+      create_backup "$sc_state_file" || json_err "$E_UNKNOWN" "Failed to create state checkpoint backup"
+    else
+      json_err "$E_FEATURE_UNAVAILABLE" "create_backup function not available -- atomic-write.sh may not be sourced"
+    fi
+
+    json_ok "{\"checkpointed\":true,\"reason\":\"$sc_reason\"}"
+    ;;
+  state-write)
+    # MIGRATE: direct COLONY_STATE.json access -- use _state_write instead
+    # Delegates to _state_write in state-api.sh (preserves backward compatibility)
+    _state_write "$@"
+    ;;
+  state-read)
+    # Read full COLONY_STATE.json -- delegates to state-api.sh
+    _state_read "$@"
+    ;;
+  state-read-field)
+    # Read a specific field from COLONY_STATE.json -- wraps _state_read_field with json_ok
+    srf_field="${1:-}"
+    srf_raw=$(_state_read_field "$srf_field")
+    # Wrap raw value in json_ok for subcommand output
+    # If the value is valid JSON (object/array), pass it through; otherwise quote as string
+    if echo "$srf_raw" | jq -e . >/dev/null 2>&1; then
+      json_ok "$srf_raw"
+    else
+      json_ok "$(jq -n --arg v "$srf_raw" '$v')"
+    fi
+    ;;
+  state-mutate)
+    # Read-modify-write COLONY_STATE.json with a jq expression -- delegates to state-api.sh
+    _state_mutate "$@"
+    ;;
+  verify-claims)
+    # Cross-reference worker claims against reality (QUAL-08)
+    # Usage: bash .aether/aether-utils.sh verify-claims <builder-claims-json> <watcher-claims-json-or-path> <test-exit-code>
+    # Returns JSON with verification_status, checks_run, mismatches, blocked, summary
+    _verify_claims() {
+      local vc_builder_claims="${1:-}"
+      local vc_watcher_claims="${2:-}"
+      local vc_test_exit_code="${3:-0}"
+      local vc_blocked=false
+      local vc_mismatches="[]"
+      local vc_checks_run=0
+      local vc_summary="Verification passed"
+
+      # --- Check 1: Builder-claimed files exist ---
+      vc_checks_run=$((vc_checks_run + 1))
+
+      if [[ -n "$vc_builder_claims" && -f "$vc_builder_claims" ]]; then
+        # Read files_created and files_modified arrays
+        local vc_files
+        vc_files=$(jq -r '(.files_created // []) + (.files_modified // []) | .[]' "$vc_builder_claims" 2>/dev/null || echo "")
+
+        if [[ -n "$vc_files" ]]; then
+          local vc_missing_files=""
+          local vc_missing_count=0
+          while IFS= read -r vc_file_path; do
+            if [[ -n "$vc_file_path" && ! -f "$vc_file_path" ]]; then
+              vc_missing_count=$((vc_missing_count + 1))
+              vc_missing_files="${vc_missing_files}${vc_file_path},"
+            fi
+          done <<< "$vc_files"
+
+          if [[ $vc_missing_count -gt 0 ]]; then
+            vc_blocked=true
+            # Build mismatches array entries for missing files
+            local vc_total_claimed
+            vc_total_claimed=$(echo "$vc_files" | wc -l | tr -d ' ')
+            vc_missing_files="${vc_missing_files%,}" # trim trailing comma
+            # Build JSON array of missing file mismatches
+            local vc_mm_arr="[]"
+            IFS=',' read -ra vc_mm_parts <<< "$vc_missing_files"
+            for vc_mm_f in "${vc_mm_parts[@]}"; do
+              vc_mm_arr=$(echo "$vc_mm_arr" | jq --arg f "$vc_mm_f" '. + [{"type":"missing_file","file":$f,"message":"Worker claimed file was created/modified, but file does not exist"}]')
+            done
+            vc_mismatches="$vc_mm_arr"
+            vc_summary="Worker claimed $vc_total_claimed files, but $vc_missing_count missing: ${vc_missing_files}. Blocked."
+          fi
+        fi
+      fi
+      # If builder claims file does not exist, skip file check gracefully (no block)
+
+      # --- Check 2: Test exit code vs Watcher verification_passed ---
+      vc_checks_run=$((vc_checks_run + 1))
+
+      local vc_watcher_passed="true"
+      if [[ -n "$vc_watcher_claims" ]]; then
+        if [[ -f "$vc_watcher_claims" ]]; then
+          vc_watcher_passed=$(jq -r '.verification_passed // true' "$vc_watcher_claims" 2>/dev/null || echo "true")
+        else
+          # Treat as inline JSON
+          vc_watcher_passed=$(echo "$vc_watcher_claims" | jq -r '.verification_passed // true' 2>/dev/null || echo "true")
+        fi
+      fi
+
+      # Fabrication: test exit code != 0 but watcher claims passed
+      if [[ "$vc_test_exit_code" != "0" && "$vc_watcher_passed" == "true" ]]; then
+        vc_blocked=true
+        vc_mismatches=$(echo "$vc_mismatches" | jq --arg code "$vc_test_exit_code" '. + [{"type":"test_mismatch","message":"Test exit code was \($code) but watcher claimed verification_passed: true"}]')
+        if [[ "$vc_summary" == "Verification passed" ]]; then
+          vc_summary="Test exit code $vc_test_exit_code but watcher claimed tests passed. Blocked."
+        else
+          vc_summary="${vc_summary} Also: test exit code $vc_test_exit_code but watcher claimed tests passed."
+        fi
+      fi
+
+      # --- Build result ---
+      local vc_status="passed"
+      if [[ "$vc_blocked" == "true" ]]; then
+        vc_status="blocked"
+      fi
+
+      json_ok "$(jq -n \
+        --arg status "$vc_status" \
+        --argjson checks "$vc_checks_run" \
+        --argjson mismatches "$vc_mismatches" \
+        --argjson blocked "$vc_blocked" \
+        --arg summary "$vc_summary" \
+        '{
+          "verification_status": $status,
+          "checks_run": $checks,
+          "mismatches": $mismatches,
+          "blocked": $blocked,
+          "summary": $summary
+        }'
+      )"
+    }
+    _verify_claims "$@"
     ;;
   validate-oracle-state)
     # Validate oracle state files (state.json, plan.json)
@@ -1282,6 +1472,7 @@ HELP_EOF
       all)
         results=()
         for target in state plan; do
+          # SUPPRESS:OK -- read-default: validation may fail on missing files
           results+=("$(ORACLE_DIR="$ORACLE_DIR" bash "$SCRIPT_DIR/aether-utils.sh" validate-oracle-state "$target" 2>/dev/null || echo '{"ok":false}')")
         done
         combined=$(printf '%s\n' "${results[@]}" | jq -s '[.[] | .result // {file:"unknown",pass:false}]')
@@ -1294,41 +1485,37 @@ HELP_EOF
     esac
     ;;
   error-add)
+    # Migrated to state-api facade: uses _state_mutate for atomic read-modify-write
     [[ $# -ge 3 ]] || json_err "$E_VALIDATION_FAILED" "Usage: error-add <category> <severity> <description> [phase]"
-    state_file="$DATA_DIR/COLONY_STATE.json"
-    [[ -f "$state_file" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
 
-    state_lock_held=false
-    if type acquire_lock &>/dev/null; then
-      acquire_lock "$state_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on COLONY_STATE.json"
-      state_lock_held=true
-    fi
-
-    id="err_$(date -u +%s)_$(head -c 2 /dev/urandom | od -An -tx1 | tr -d ' ')"
-    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-    phase_val="${4:-null}"
-    if [[ "$phase_val" =~ ^[0-9]+$ ]]; then
-      phase_jq="$phase_val"
+    ea_id="err_$(date -u +%s)_$(head -c 2 /dev/urandom | od -An -tx1 | tr -d ' ')"
+    ea_ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    ea_phase_val="${4:-null}"
+    if [[ "$ea_phase_val" =~ ^[0-9]+$ ]]; then
+      ea_phase_jq="$ea_phase_val"
     else
-      phase_jq="null"
+      ea_phase_jq="null"
     fi
-    updated=$(jq --arg id "$id" --arg cat "$1" --arg sev "$2" --arg desc "$3" --argjson phase "$phase_jq" --arg ts "$ts" '
-      .errors.records += [{id:$id, category:$cat, severity:$sev, description:$desc, root_cause:null, phase:$phase, task_id:null, timestamp:$ts}] |
-      if (.errors.records|length) > 50 then .errors.records = .errors.records[-50:] else . end
-    ' "$state_file") || {
-      [[ "$state_lock_held" == "true" ]] && release_lock 2>/dev/null || true
-      json_err "$E_JSON_INVALID" "Failed to update COLONY_STATE.json"
-    }
+    EA_ID="$ea_id" EA_CAT="$1" EA_SEV="$2" EA_DESC="$3" EA_PHASE="$ea_phase_jq" EA_TS="$ea_ts" \
+      _state_mutate '
+        .errors.records += [{
+          id: env.EA_ID,
+          category: env.EA_CAT,
+          severity: env.EA_SEV,
+          description: env.EA_DESC,
+          root_cause: null,
+          phase: (env.EA_PHASE | if . == "null" then null else tonumber end),
+          task_id: null,
+          timestamp: env.EA_TS
+        }] |
+        if (.errors.records|length) > 50 then .errors.records = .errors.records[-50:] else . end
+      ' >/dev/null
 
-    atomic_write "$state_file" "$updated" || {
-      [[ "$state_lock_held" == "true" ]] && release_lock 2>/dev/null || true
-      json_err "$E_JSON_INVALID" "Failed to write COLONY_STATE.json"
-    }
-
-    [[ "$state_lock_held" == "true" ]] && release_lock 2>/dev/null || true
-    json_ok "\"$id\""
+    json_ok "\"$ea_id\""
     ;;
   error-pattern-check)
+    _deprecation_warning "error-pattern-check"
+    # MIGRATE: direct COLONY_STATE.json access -- use _state_read_field instead
     [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
     json_ok "$(jq '
       .errors.records | group_by(.category) | map(select(length >= 3) |
@@ -1338,6 +1525,8 @@ HELP_EOF
     ' "$DATA_DIR/COLONY_STATE.json")"
     ;;
   error-summary)
+    _deprecation_warning "error-summary"
+    # MIGRATE: direct COLONY_STATE.json access -- use _state_read_field instead
     [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
     json_ok "$(jq '{
       total: (.errors.records | length),
@@ -1416,233 +1605,12 @@ HELP_EOF
     fi
     json_ok "$(echo "$content" | jq -Rs '.')"
     ;;
-  learning-promote)
-    [[ $# -ge 3 ]] || json_err "$E_VALIDATION_FAILED" "Usage: learning-promote <content> <source_project> <source_phase> [tags]"
-    content="$1"
-    source_project="$2"
-    source_phase="$3"
-    tags="${4:-}"
-
-    mkdir -p "$DATA_DIR"
-    global_file="$DATA_DIR/learnings.json"
-
-    if [[ ! -f "$global_file" ]]; then
-      echo '{"learnings":[],"version":1}' > "$global_file"
-    fi
-
-    id="global_$(date -u +%s)_$(head -c 2 /dev/urandom | od -An -tx1 | tr -d ' ')"
-    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-
-    if [[ -n "$tags" ]]; then
-      tags_json=$(echo "$tags" | jq -R 'split(",")')
-    else
-      tags_json="[]"
-    fi
-
-    current_count=$(jq '.learnings | length' "$global_file")
-    if [[ $current_count -ge 50 ]]; then
-      json_ok "{\"promoted\":false,\"reason\":\"cap_reached\",\"current_count\":$current_count,\"cap\":50}"
-      exit 0
-    fi
-
-    updated=$(jq --arg id "$id" --arg content "$content" --arg sp "$source_project" \
-      --arg phase "$source_phase" --argjson tags "$tags_json" --arg ts "$ts" '
-      .learnings += [{
-        id: $id,
-        content: $content,
-        source_project: $sp,
-        source_phase: $phase,
-        tags: $tags,
-        promoted_at: $ts
-      }]
-    ' "$global_file") || json_err "$E_JSON_INVALID" "Failed to update learnings.json"
-
-    echo "$updated" > "$global_file"
-    json_ok "{\"promoted\":true,\"id\":\"$id\",\"count\":$((current_count + 1)),\"cap\":50}"
-    ;;
-  learning-inject)
-    [[ $# -ge 1 ]] || json_err "$E_VALIDATION_FAILED" "Usage: learning-inject <tech_keywords_csv>"
-    keywords="$1"
-
-    global_file="$DATA_DIR/learnings.json"
-
-    if [[ ! -f "$global_file" ]]; then
-      json_ok '{"learnings":[],"count":0}'
-      exit 0
-    fi
-
-    json_ok "$(jq --arg kw "$keywords" '
-      ($kw | split(",") | map(ascii_downcase | ltrimstr(" ") | rtrimstr(" "))) as $keywords |
-      .learnings | map(
-        select(
-          .tags as $tags |
-          ($keywords | any(. as $k | $tags | any(ascii_downcase | contains($k))))
-        )
-      ) | {learnings: ., count: length}
-    ' "$global_file")"
-    ;;
-  spawn-log)
-    # Usage: spawn-log <parent_id> <child_caste> <child_name> <task_summary> [model] [status]
-    parent_id="${1:-}"
-    child_caste="${2:-}"
-    child_name="${3:-}"
-    task_summary="${4:-}"
-    model="${5:-default}"
-    status="${6:-spawned}"
-    [[ -z "$parent_id" || -z "$child_caste" || -z "$task_summary" ]] && json_err "$E_VALIDATION_FAILED" "Usage: spawn-log <parent_id> <child_caste> <child_name> <task_summary> [model] [status]"
-    mkdir -p "$DATA_DIR"
-    ts=$(date -u +"%H:%M:%S")
-    ts_full=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-    emoji=$(get_caste_emoji "$child_caste")
-    parent_emoji=$(get_caste_emoji "$parent_id")
-    # Log to activity log with spawn format, emojis, and model info
-    echo "[$ts] ⚡ SPAWN $parent_emoji $parent_id -> $emoji $child_name ($child_caste): $task_summary [model: $model]" >> "$DATA_DIR/activity.log"
-    # Log to spawn tree file for visualization (NEW FORMAT: includes model field)
-    echo "$ts_full|$parent_id|$child_caste|$child_name|$task_summary|$model|$status" >> "$DATA_DIR/spawn-tree.txt"
-    # Return emoji-formatted result for display
-    json_ok "\"⚡ $emoji $child_name spawned\""
-    ;;
-  spawn-complete)
-    # Usage: spawn-complete <ant_name> <status> [summary]
-    ant_name="${1:-}"
-    status="${2:-completed}"
-    summary="${3:-}"
-    [[ -z "$ant_name" ]] && json_err "$E_VALIDATION_FAILED" "Usage: spawn-complete <ant_name> <status> [summary]"
-    mkdir -p "$DATA_DIR"
-    ts=$(date -u +"%H:%M:%S")
-    ts_full=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-    emoji=$(get_caste_emoji "$ant_name")
-    status_icon="✅"
-    [[ "$status" == "failed" ]] && status_icon="❌"
-    [[ "$status" == "blocked" ]] && status_icon="🚫"
-    echo "[$ts] $status_icon $emoji $ant_name: $status${summary:+ - $summary}" >> "$DATA_DIR/activity.log"
-    # Update spawn tree
-    echo "$ts_full|$ant_name|$status|$summary" >> "$DATA_DIR/spawn-tree.txt"
-    # Log failed spawns to COLONY_STATE.json events array for audit trail (ARCH-04)
-    if [[ "$status" == "failed" ]] || [[ "$status" == "error" ]]; then
-      spawn_complete_state_file="$DATA_DIR/COLONY_STATE.json"
-      if [[ -f "$spawn_complete_state_file" ]]; then
-        spawn_complete_lock_held=false
-        if type acquire_lock &>/dev/null; then
-          acquire_lock "$spawn_complete_state_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on COLONY_STATE.json"
-          spawn_complete_lock_held=true
-        fi
-
-        spawn_complete_updated=$(jq --arg ts "$ts_full" --arg name "$ant_name" --arg st "$status" --arg sum "${summary:-unknown}" \
-          '.events += [{"type":"spawn_failed","ant":$name,"status":$st,"summary":$sum,"timestamp":$ts}]' \
-          "$spawn_complete_state_file" 2>/dev/null)
-        if [[ -n "$spawn_complete_updated" ]]; then
-          atomic_write "$spawn_complete_state_file" "$spawn_complete_updated" || {
-            [[ "$spawn_complete_lock_held" == "true" ]] && release_lock 2>/dev/null || true
-            json_err "$E_JSON_INVALID" "Failed to write COLONY_STATE.json"
-          }
-        fi
-        [[ "$spawn_complete_lock_held" == "true" ]] && release_lock 2>/dev/null || true
-      fi
-    fi
-    # Return emoji-formatted result for display
-    json_ok "\"$status_icon $emoji $ant_name: ${summary:-$status}\""
-    ;;
-  spawn-can-spawn)
-    # Check if spawning is allowed at given depth
-    # Usage: spawn-can-spawn [depth] [--enforce]
-    # Returns: {can_spawn: bool, depth: N, max_spawns: N, current_total: N, global_cap: N}
-    # --enforce: fail with non-zero exit when spawning is not allowed
-    depth=""
-    enforce_mode=false
-    for arg in "$@"; do
-      case "$arg" in
-        --enforce) enforce_mode=true ;;
-        *)
-          if [[ -z "$depth" ]]; then
-            depth="$arg"
-          else
-            json_err "$E_VALIDATION_FAILED" "Usage: spawn-can-spawn [depth] [--enforce]"
-          fi
-          ;;
-      esac
-    done
-    [[ -z "$depth" ]] && depth=1
-    [[ "$depth" =~ ^[0-9]+$ ]] || json_err "$E_VALIDATION_FAILED" "Depth must be a non-negative integer" "{\"provided\":\"$depth\"}"
-
-    # Depth limits: 1→4 spawns, 2→2 spawns, 3+→0 spawns
-    if [[ $depth -eq 1 ]]; then
-      max_for_depth=4
-    elif [[ $depth -eq 2 ]]; then
-      max_for_depth=2
-    else
-      max_for_depth=0
-    fi
-
-    # Count current spawns in this session (from spawn-tree.txt)
-    current=0
-    if [[ -f "$DATA_DIR/spawn-tree.txt" ]]; then
-      current=$(grep -c "|spawned$" "$DATA_DIR/spawn-tree.txt" 2>/dev/null || echo 0)
-    fi
-
-    # Global cap of 10 workers per phase
-    global_cap=10
-
-    # Can spawn if: depth < 3 AND under global cap
-    if [[ $depth -lt 3 && $current -lt $global_cap ]]; then
-      can="true"
-    else
-      can="false"
-    fi
-
-    if [[ "$enforce_mode" == "true" && "$can" == "false" ]]; then
-      json_err "$E_VALIDATION_FAILED" "Spawn cap exceeded: depth=$depth current=$current max=$global_cap"
-    fi
-
-    json_ok "{\"can_spawn\":$can,\"depth\":$depth,\"max_spawns\":$max_for_depth,\"current_total\":$current,\"global_cap\":$global_cap}"
-    ;;
-  spawn-get-depth)
-    # Return depth for a given ant name by tracing spawn tree
-    # Usage: spawn-get-depth <ant_name>
-    # Queen = depth 0, Queen's spawns = depth 1, their spawns = depth 2, etc.
-    ant_name="${1:-Queen}"
-
-    if [[ "$ant_name" == "Queen" ]]; then
-      json_ok '{"ant":"Queen","depth":0}'
-      exit 0
-    fi
-
-    # Check if spawn tree exists
-    if [[ ! -f "$DATA_DIR/spawn-tree.txt" ]]; then
-      json_ok "{\"ant\":\"$ant_name\",\"depth\":1,\"found\":false}"
-      exit 0
-    fi
-
-    # Check if ant exists in spawn tree (gracefully handle missing ants)
-    if ! grep -q "|$ant_name|" "$DATA_DIR/spawn-tree.txt" 2>/dev/null; then
-      json_ok "{\"ant\":\"$ant_name\",\"depth\":1,\"found\":false}"
-      exit 0
-    fi
-
-    # Find the spawn record for this ant and trace parents
-    depth=1
-    current_ant="$ant_name"
-
-    # Find who spawned this ant (look for lines with |spawned)
-    while true; do
-      # Format: timestamp|parent|caste|child_name|task|spawned
-      parent=$(grep "|$current_ant|" "$DATA_DIR/spawn-tree.txt" 2>/dev/null | grep "|spawned$" | head -1 | cut -d'|' -f2 || echo "")
-
-      if [[ -z "$parent" || "$parent" == "Queen" ]]; then
-        break
-      fi
-
-      depth=$((depth + 1))
-      current_ant="$parent"
-
-      # Safety limit
-      if [[ $depth -gt 5 ]]; then
-        break
-      fi
-    done
-
-    json_ok "{\"ant\":\"$ant_name\",\"depth\":$depth,\"found\":true}"
-    ;;
+  learning-promote) _learning_promote "$@" ;;
+  learning-inject) _learning_inject "$@" ;;
+  spawn-log) _spawn_log "$@" ;;
+  spawn-complete) _spawn_complete "$@" ;;
+  spawn-can-spawn) _spawn_can_spawn "$@" ;;
+  spawn-get-depth) _spawn_get_depth "$@" ;;
   update-progress)
     # Usage: update-progress <percent> <message> [phase] [total_phases]
     percent="${1:-0}"
@@ -1706,13 +1674,14 @@ EOF
     mkdir -p "$DATA_DIR"
 
     if [[ ! -f "$patterns_file" ]]; then
-      echo '{"patterns":[],"version":1}' > "$patterns_file"
+      atomic_write "$patterns_file" '{"patterns":[],"version":1}' || json_err "$E_UNKNOWN" "Failed to initialize error patterns file"
     fi
 
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
     project_name=$(basename "$PWD")
 
     # Check if pattern already exists
+    # SUPPRESS:OK -- read-default: query may return empty
     existing=$(jq --arg name "$pattern_name" '.patterns[] | select(.name == $name)' "$patterns_file" 2>/dev/null)
 
     if [[ -n "$existing" ]]; then
@@ -1724,7 +1693,10 @@ EOF
           .projects = ((.projects + [$proj]) | unique)
         else . end]
       ' "$patterns_file") || json_err "$E_JSON_INVALID" "Failed to update pattern"
-      echo "$updated" > "$patterns_file"
+      atomic_write "$patterns_file" "$updated" || {
+        _aether_log_error "Could not save updated error patterns"
+        json_err "$E_UNKNOWN" "Failed to write error patterns file"
+      }
       count=$(echo "$updated" | jq --arg name "$pattern_name" '.patterns[] | select(.name == $name) | .occurrences')
       json_ok "{\"updated\":true,\"pattern\":\"$pattern_name\",\"occurrences\":$count}"
     else
@@ -1741,11 +1713,15 @@ EOF
           "resolved": false
         }]
       ' "$patterns_file") || json_err "$E_JSON_INVALID" "Failed to add pattern"
-      echo "$updated" > "$patterns_file"
+      atomic_write "$patterns_file" "$updated" || {
+        _aether_log_error "Could not save new error pattern"
+        json_err "$E_UNKNOWN" "Failed to write error patterns file"
+      }
       json_ok "{\"created\":true,\"pattern\":\"$pattern_name\"}"
     fi
     ;;
   error-patterns-check)
+    _deprecation_warning "error-patterns-check"
     # Check for known error patterns in a file or codebase
     # Returns patterns that should be avoided
     global_file="$DATA_DIR/error-patterns.json"
@@ -1777,28 +1753,28 @@ EOF
     case "$ext" in
       swift)
         # Swift didSet infinite recursion check
-        if grep -n "didSet" "$file_path" 2>/dev/null | grep -q "self\."; then
+        if grep -n "didSet" "$file_path" 2>/dev/null | grep -q "self\."; then  # SUPPRESS:OK -- existence-test: file may not exist
           line=$(grep -n "didSet" "$file_path" | grep "self\." | head -1 | cut -d: -f1)
           criticals+=("{\"pattern\":\"didSet-recursion\",\"file\":\"$file_path\",\"line\":$line,\"message\":\"Potential didSet infinite recursion - self assignment in didSet\"}")
         fi
         ;;
       ts|tsx|js|jsx)
         # TypeScript any type check
-        if grep -nE '\bany\b' "$file_path" 2>/dev/null | grep -qv "//.*any"; then
-          count=$(grep -cE '\bany\b' "$file_path" 2>/dev/null || echo "0")
+        if grep -nE '\bany\b' "$file_path" 2>/dev/null | grep -qv "//.*any"; then  # SUPPRESS:OK -- existence-test: file may not exist
+          count=$(grep -cE '\bany\b' "$file_path" 2>/dev/null || echo "0")  # SUPPRESS:OK -- read-default: count defaults to 0 if file missing
           warnings+=("{\"pattern\":\"typescript-any\",\"file\":\"$file_path\",\"count\":$count,\"message\":\"Found $count uses of 'any' type\"}")
         fi
         # Console.log in production code (not in test files)
         if [[ ! "$file_path" =~ \.test\. && ! "$file_path" =~ \.spec\. ]]; then
-          if grep -n "console\.log" "$file_path" 2>/dev/null | grep -qv "//"; then
-            count=$(grep -c "console\.log" "$file_path" 2>/dev/null || echo "0")
+          if grep -n "console\.log" "$file_path" 2>/dev/null | grep -qv "//"; then  # SUPPRESS:OK -- existence-test: file may not exist
+            count=$(grep -c "console\.log" "$file_path" 2>/dev/null || echo "0")  # SUPPRESS:OK -- read-default: count defaults to 0 if file missing
             warnings+=("{\"pattern\":\"console-log\",\"file\":\"$file_path\",\"count\":$count,\"message\":\"Found $count console.log statements\"}")
           fi
         fi
         ;;
       py)
         # Python bare except
-        if grep -n "except:" "$file_path" 2>/dev/null | grep -qv "#"; then
+        if grep -n "except:" "$file_path" 2>/dev/null | grep -qv "#"; then  # SUPPRESS:OK -- existence-test: file may not exist
           line=$(grep -n "except:" "$file_path" | head -1 | cut -d: -f1)
           warnings+=("{\"pattern\":\"bare-except\",\"file\":\"$file_path\",\"line\":$line,\"message\":\"Bare except clause - specify exception type\"}")
         fi
@@ -1807,14 +1783,15 @@ EOF
 
     # Common patterns across all languages
     # Exposed secrets check (critical)
+    # SUPPRESS:OK -- existence-test: grep returns 1 when no matches
     if grep -nE "(api_key|apikey|secret|password|token)\s*=\s*['\"][^'\"]+['\"]" "$file_path" 2>/dev/null | grep -qvi "example\|test\|mock\|fake"; then
       line=$(grep -nE "(api_key|apikey|secret|password|token)\s*=\s*['\"]" "$file_path" | head -1 | cut -d: -f1)
       criticals+=("{\"pattern\":\"exposed-secret\",\"file\":\"$file_path\",\"line\":${line:-0},\"message\":\"Potential hardcoded secret or credential\"}")
     fi
 
     # TODO/FIXME check (warning)
-    if grep -nE "(TODO|FIXME|XXX|HACK)" "$file_path" 2>/dev/null | head -1 | grep -q .; then
-      count=$(grep -cE "(TODO|FIXME|XXX|HACK)" "$file_path" 2>/dev/null || echo "0")
+    if grep -nE "(TODO|FIXME|XXX|HACK)" "$file_path" 2>/dev/null | head -1 | grep -q .; then  # SUPPRESS:OK -- existence-test: file may not exist
+      count=$(grep -cE "(TODO|FIXME|XXX|HACK)" "$file_path" 2>/dev/null || echo "0")  # SUPPRESS:OK -- read-default: count defaults to 0 if file missing
       warnings+=("{\"pattern\":\"todo-comment\",\"file\":\"$file_path\",\"count\":$count,\"message\":\"Found $count TODO/FIXME comments\"}")
     fi
 
@@ -1856,6 +1833,7 @@ EOF
     fi
 
     # Extract signature details using jq
+    # SUPPRESS:OK -- read-default: query may return empty
     signature_data=$(jq --arg name "$signature_name" '.signatures[] | select(.name == $name)' "$signatures_file" 2>/dev/null)
 
     if [[ -z "$signature_data" ]]; then
@@ -1874,9 +1852,9 @@ EOF
     fi
 
     # Use grep to search for the pattern in target file
-    if grep -q -- "$pattern_string" "$target_file" 2>/dev/null; then
+    if grep -q -- "$pattern_string" "$target_file" 2>/dev/null; then  # SUPPRESS:OK -- existence-test: file may not exist
       # Match found - return signature details with match info
-      match_count=$(grep -c -- "$pattern_string" "$target_file" 2>/dev/null || echo "1")
+      match_count=$(grep -c -- "$pattern_string" "$target_file" 2>/dev/null || echo "1")  # SUPPRESS:OK -- read-default: count defaults to 0 if file missing
       json_ok "{\"found\":true,\"signature\":$signature_data,\"match_count\":$match_count}"
       exit 1
     else
@@ -1905,10 +1883,11 @@ EOF
     [[ ! -f "$signatures_file" ]] && json_err "$E_FILE_NOT_FOUND" "Signatures file not found"
 
     # Read high-confidence signatures (confidence >= 0.7) using jq -c for compact single-line output
+    # SUPPRESS:OK -- read-default: query may return empty
     high_conf_signatures=$(jq -c '.signatures[] | select(.confidence_threshold >= 0.7)' "$signatures_file" 2>/dev/null)
 
     # Check if any high-confidence signatures exist
-    sig_count=$(echo "$high_conf_signatures" | grep -c '{' || echo 0)
+    sig_count=$(echo "$high_conf_signatures" | grep -c '{' || echo 0)  # SUPPRESS:OK -- read-default: grep returns 1 when no matches
     if [[ "$sig_count" -eq 0 ]]; then
       json_ok '{"files_scanned":0,"matches":{},"signatures_checked":0}'
       exit 0
@@ -1920,11 +1899,12 @@ EOF
       # User specified pattern - use it directly
       while IFS= read -r -d '' file; do
         files+=("$file")
-      done < <(find "$target_dir" -type f -name "$file_pattern" -print0 2>/dev/null || true)
+      done < <(find "$target_dir" -type f -name "$file_pattern" -print0 2>/dev/null || true)  # SUPPRESS:OK -- existence-test: directory may not exist
     else
       # Default: match common code file types
       while IFS= read -r -d '' file; do
         files+=("$file")
+      # SUPPRESS:OK -- existence-test: directory may not exist
       done < <(find "$target_dir" -type f \( -name "*.js" -o -name "*.ts" -o -name "*.py" -o -name "*.sh" -o -name "*.txt" -o -name "*.md" \) -print0 2>/dev/null || true)
     fi
 
@@ -1962,14 +1942,14 @@ EOF
         [[ -z "$sig_pattern" || "$sig_pattern" == "null" ]] && continue
 
         # Check if pattern matches in file using grep
-        if grep -q -- "$sig_pattern" "$file" 2>/dev/null; then
-          match_count=$(grep -c -- "$sig_pattern" "$file" 2>/dev/null || echo "1")
+        if grep -q -- "$sig_pattern" "$file" 2>/dev/null; then  # SUPPRESS:OK -- existence-test: file may not exist
+          match_count=$(grep -c -- "$sig_pattern" "$file" 2>/dev/null || echo "1")  # SUPPRESS:OK -- read-default: count defaults to 0 if file missing
 
           # Add to results
           matches_for_file=$(echo "$matches_for_file" | jq --arg n "$sig_name" --arg d "$sig_desc" --argjson c "$sig_conf" --argjson m "$match_count" \
             '. += [{"name":$n,"description":$d,"confidence_threshold":$c,"match_count":$m}]')
         fi
-      done < <(echo "$high_conf_signatures" | jq -c '.' 2>/dev/null || true)
+      done < <(echo "$high_conf_signatures" | jq -c '.' 2>/dev/null || true)  # SUPPRESS:OK -- read-default: returns fallback if missing
 
       # If any signatures matched, add to results
       sig_result_count=$(echo "$matches_for_file" | jq 'length')
@@ -1983,258 +1963,12 @@ EOF
 
     json_ok "{\"files_scanned\":$file_count,\"matches\":$matched_files,\"signatures_checked\":$sig_count}"
     ;;
-  flag-add)
-    # Add a project-specific flag (blocker, issue, or note)
-    # Usage: flag-add <type> <title> <description> [source] [phase]
-    # Types: blocker (critical, blocks advancement), issue (high, warning), note (low, info)
-    type="${1:-issue}"
-    title="${2:-}"
-    desc="${3:-}"
-    source="${4:-manual}"
-    phase="${5:-null}"
-    [[ -z "$title" ]] && json_err "$E_VALIDATION_FAILED" "Usage: flag-add <type> <title> <description> [source] [phase]"
-
-    mkdir -p "$DATA_DIR"
-    flags_file="$DATA_DIR/flags.json"
-
-    if [[ ! -f "$flags_file" ]]; then
-      echo '{"version":1,"flags":[]}' > "$flags_file"
-    fi
-
-    id="flag_$(date -u +%s)_$(head -c 2 /dev/urandom | od -An -tx1 | tr -d ' ')"
-    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-
-    # Acquire lock for atomic flag update (degrade gracefully if locking unavailable)
-    if type feature_enabled &>/dev/null && ! feature_enabled "file_locking"; then
-      json_warn "W_DEGRADED" "File locking disabled - proceeding without lock: $(type _feature_reason &>/dev/null && _feature_reason file_locking || echo 'unknown')"
-    else
-      acquire_lock "$flags_file" || {
-        if type json_err &>/dev/null; then
-          json_err "$E_LOCK_FAILED" "Failed to acquire lock on flags.json"
-        else
-          echo '{"ok":false,"error":"Failed to acquire lock on flags.json"}' >&2
-          exit 1
-        fi
-      }
-      # Ensure lock is always released on exit (BUG-002 fix)
-      trap 'release_lock 2>/dev/null || true' EXIT
-    fi
-
-    # Map type to severity
-    case "$type" in
-      blocker)  severity="critical" ;;
-      issue)    severity="high" ;;
-      note)     severity="low" ;;
-      *)        severity="medium" ;;
-    esac
-
-    # Handle phase as number or null
-    if [[ "$phase" =~ ^[0-9]+$ ]]; then
-      phase_jq="$phase"
-    else
-      phase_jq="null"
-    fi
-
-    updated=$(jq --arg id "$id" --arg type "$type" --arg sev "$severity" \
-      --arg title "$title" --arg desc "$desc" --arg source "$source" \
-      --argjson phase "$phase_jq" --arg ts "$ts" '
-      .flags += [{
-        id: $id,
-        type: $type,
-        severity: $sev,
-        title: $title,
-        description: $desc,
-        source: $source,
-        phase: $phase,
-        created_at: $ts,
-        acknowledged_at: null,
-        resolved_at: null,
-        resolution: null,
-        auto_resolve_on: (if $type == "blocker" and ($source | test("chaos") | not) then "build_pass" else null end)
-      }]
-    ' "$flags_file") || { json_err "$E_JSON_INVALID" "Failed to add flag"; }
-
-    atomic_write "$flags_file" "$updated"
-    trap - EXIT
-    release_lock 2>/dev/null || true
-    json_ok "{\"id\":\"$id\",\"type\":\"$type\",\"severity\":\"$severity\"}"
-    ;;
-  flag-check-blockers)
-    # Count unresolved blockers for the current phase
-    # Usage: flag-check-blockers [phase]
-    phase="${1:-}"
-    flags_file="$DATA_DIR/flags.json"
-
-    if [[ ! -f "$flags_file" ]]; then
-      json_ok '{"blockers":0,"issues":0,"notes":0}'
-      exit 0
-    fi
-
-    if [[ -n "$phase" && "$phase" =~ ^[0-9]+$ ]]; then
-      # Filter by phase
-      result=$(jq --argjson phase "$phase" '{
-        blockers: [.flags[] | select(.type == "blocker" and .resolved_at == null and (.phase == $phase or .phase == null))] | length,
-        issues: [.flags[] | select(.type == "issue" and .resolved_at == null and (.phase == $phase or .phase == null))] | length,
-        notes: [.flags[] | select(.type == "note" and .resolved_at == null and (.phase == $phase or .phase == null))] | length
-      }' "$flags_file")
-    else
-      # All unresolved
-      result=$(jq '{
-        blockers: [.flags[] | select(.type == "blocker" and .resolved_at == null)] | length,
-        issues: [.flags[] | select(.type == "issue" and .resolved_at == null)] | length,
-        notes: [.flags[] | select(.type == "note" and .resolved_at == null)] | length
-      }' "$flags_file")
-    fi
-
-    json_ok "$result"
-    ;;
-  flag-resolve)
-    # Resolve a flag with optional resolution message
-    # Usage: flag-resolve <flag_id> [resolution_message]
-    flag_id="${1:-}"
-    resolution="${2:-Resolved}"
-    [[ -z "$flag_id" ]] && json_err "$E_VALIDATION_FAILED" "Usage: flag-resolve <flag_id> [resolution_message]"
-
-    flags_file="$DATA_DIR/flags.json"
-    [[ ! -f "$flags_file" ]] && json_err "$E_FILE_NOT_FOUND" "No flags file found"
-
-    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-
-    # Acquire lock for atomic flag update (degrade gracefully if locking unavailable)
-    if type feature_enabled &>/dev/null && ! feature_enabled "file_locking"; then
-      json_warn "W_DEGRADED" "File locking disabled - proceeding without lock"
-    else
-      acquire_lock "$flags_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on flags.json"
-      trap 'release_lock 2>/dev/null || true' EXIT
-    fi
-
-    updated=$(jq --arg id "$flag_id" --arg res "$resolution" --arg ts "$ts" '
-      .flags = [.flags[] | if .id == $id then
-        .resolved_at = $ts |
-        .resolution = $res
-      else . end]
-    ' "$flags_file") || {
-      json_err "$E_JSON_INVALID" "Failed to resolve flag"
-    }
-
-    atomic_write "$flags_file" "$updated"
-    trap - EXIT
-    release_lock 2>/dev/null || true
-    json_ok "{\"resolved\":\"$flag_id\"}"
-    ;;
-  flag-acknowledge)
-    # Acknowledge a flag (issue continues but noted)
-    # Usage: flag-acknowledge <flag_id>
-    flag_id="${1:-}"
-    [[ -z "$flag_id" ]] && json_err "$E_VALIDATION_FAILED" "Usage: flag-acknowledge <flag_id>"
-
-    flags_file="$DATA_DIR/flags.json"
-    [[ ! -f "$flags_file" ]] && json_err "$E_FILE_NOT_FOUND" "No flags file found"
-
-    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-
-    # Acquire lock for atomic flag update (degrade gracefully if locking unavailable)
-    if type feature_enabled &>/dev/null && ! feature_enabled "file_locking"; then
-      json_warn "W_DEGRADED" "File locking disabled - proceeding without lock"
-    else
-      acquire_lock "$flags_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on flags.json"
-      trap 'release_lock 2>/dev/null || true' EXIT
-    fi
-
-    updated=$(jq --arg id "$flag_id" --arg ts "$ts" '
-      .flags = [.flags[] | if .id == $id then
-        .acknowledged_at = $ts
-      else . end]
-    ' "$flags_file") || {
-      json_err "$E_JSON_INVALID" "Failed to acknowledge flag"
-    }
-
-    atomic_write "$flags_file" "$updated"
-    trap - EXIT
-    release_lock 2>/dev/null || true
-    json_ok "{\"acknowledged\":\"$flag_id\"}"
-    ;;
-  flag-list)
-    # List flags, optionally filtered
-    # Usage: flag-list [--all] [--type blocker|issue|note] [--phase N]
-    flags_file="$DATA_DIR/flags.json"
-    show_all="false"
-    filter_type=""
-    filter_phase=""
-
-    while [[ $# -gt 0 ]]; do
-      case "$1" in
-        --all) show_all="true"; shift ;;
-        --type) filter_type="$2"; shift 2 ;;
-        --phase) filter_phase="$2"; shift 2 ;;
-        *) shift ;;
-      esac
-    done
-
-    if [[ ! -f "$flags_file" ]]; then
-      json_ok '{"flags":[],"count":0}'
-      exit 0
-    fi
-
-    # Build jq filter
-    jq_filter='.flags'
-
-    if [[ "$show_all" != "true" ]]; then
-      jq_filter+=' | [.[] | select(.resolved_at == null)]'
-    fi
-
-    if [[ -n "$filter_type" ]]; then
-      jq_filter+=" | [.[] | select(.type == \"$filter_type\")]"
-    fi
-
-    if [[ -n "$filter_phase" && "$filter_phase" =~ ^[0-9]+$ ]]; then
-      jq_filter+=" | [.[] | select(.phase == $filter_phase or .phase == null)]"
-    fi
-
-    result=$(jq "{flags: ($jq_filter), count: ($jq_filter | length)}" "$flags_file")
-    json_ok "$result"
-    ;;
-  flag-auto-resolve)
-    # Auto-resolve flags based on trigger (e.g., build_pass)
-    # Usage: flag-auto-resolve <trigger>
-    trigger="${1:-build_pass}"
-    flags_file="$DATA_DIR/flags.json"
-
-    if [[ ! -f "$flags_file" ]]; then json_ok '{"resolved":0}'; exit 0; fi
-
-    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-
-    # Acquire lock for atomic flag update (degrade gracefully if locking unavailable)
-    if type feature_enabled &>/dev/null && ! feature_enabled "file_locking"; then
-      json_warn "W_DEGRADED" "File locking disabled - proceeding without lock"
-    else
-      acquire_lock "$flags_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on flags.json"
-      # Ensure lock is always released on exit (BUG-005/BUG-011 fix)
-      trap 'release_lock 2>/dev/null || true' EXIT
-    fi
-
-    # Count how many will be resolved
-    count=$(jq --arg trigger "$trigger" '
-      [.flags[] | select(.auto_resolve_on == $trigger and .resolved_at == null)] | length
-    ' "$flags_file") || {
-      json_err "$E_JSON_INVALID" "Failed to count flags for auto-resolve"
-    }
-
-    # Resolve them
-    updated=$(jq --arg trigger "$trigger" --arg ts "$ts" '
-      .flags = [.flags[] | if .auto_resolve_on == $trigger and .resolved_at == null then
-        .resolved_at = $ts |
-        .resolution = "Auto-resolved on " + $trigger
-      else . end]
-    ' "$flags_file") || {
-      json_err "$E_JSON_INVALID" "Failed to auto-resolve flags"
-    }
-
-    atomic_write "$flags_file" "$updated"
-    trap - EXIT
-    release_lock 2>/dev/null || true
-    json_ok "{\"resolved\":$count,\"trigger\":\"$trigger\"}"
-    ;;
+  flag-add) _flag_add "$@" ;;
+  flag-check-blockers) _flag_check_blockers "$@" ;;
+  flag-resolve) _flag_resolve "$@" ;;
+  flag-acknowledge) _flag_acknowledge "$@" ;;
+  flag-list) _flag_list "$@" ;;
+  flag-auto-resolve) _flag_auto_resolve "$@" ;;
   generate-ant-name)
     caste="${1:-builder}"
     # Caste-specific prefixes for personality
@@ -2279,12 +2013,12 @@ EOF
     [[ -z "$vw_input" ]] && json_err "$E_VALIDATION_FAILED" "Usage: validate-worker-response <caste> <json_or_file_path>" '{"missing":"json_or_file_path"}'
 
     if [[ -f "$vw_input" ]]; then
-      vw_json=$(cat "$vw_input" 2>/dev/null || echo "")
+      vw_json=$(cat "$vw_input" 2>/dev/null || echo "")  # SUPPRESS:OK -- read-default: file may not exist yet
     else
       vw_json="$vw_input"
     fi
 
-    if [[ -z "$vw_json" ]] || ! echo "$vw_json" | jq -e . >/dev/null 2>&1; then
+    if [[ -z "$vw_json" ]] || ! echo "$vw_json" | jq -e . >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON validity
       json_err "$E_JSON_INVALID" "Worker response is not valid JSON"
     fi
 
@@ -2356,13 +2090,14 @@ EOF
         ;;
     esac
 
+    # SUPPRESS:OK -- read-default: query may return empty
     missing_fields=$(echo "$vw_json" | jq -c --argjson req "$vw_required" '[ $req[] | select(has(.) | not) ]' 2>/dev/null || echo '[]')
     if [[ "$missing_fields" != "[]" ]]; then
       details=$(jq -n --arg caste "$vw_caste" --argjson missing "$missing_fields" '{caste:$caste,missing:$missing}')
       json_err "$E_VALIDATION_FAILED" "Worker response missing required fields" "$details"
     fi
 
-    if ! echo "$vw_json" | jq -e "$vw_schema" >/dev/null 2>&1; then
+    if ! echo "$vw_json" | jq -e "$vw_schema" >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON against schema
       json_err "$E_VALIDATION_FAILED" "Worker response failed schema validation" "{\"caste\":\"$vw_caste\"}"
     fi
 
@@ -2370,294 +2105,71 @@ EOF
     ;;
 
   # ============================================
-  # SWARM UTILITIES (ant:swarm support)
+  # SWARM UTILITIES (ant:swarm support) — dispatched to utils/swarm.sh
   # ============================================
 
-  autofix-checkpoint)
-    # Create checkpoint before applying auto-fix
-    # Usage: autofix-checkpoint [label]
-    # Returns: {type: "stash"|"commit"|"none", ref: "..."}
-    # IMPORTANT: Only stash Aether-related files, never touch user work
-    if git rev-parse --git-dir >/dev/null 2>&1; then
-      # Check if there are changes to Aether-managed files only
-      # Target directories that Aether is allowed to modify
-      target_dirs=".aether .claude/commands/ant .claude/commands/st .opencode bin"
-      has_changes=false
+  autofix-checkpoint) _autofix_checkpoint "$@" ;;
+  autofix-rollback) _autofix_rollback "$@" ;;
 
-      for dir in $target_dirs; do
-        if [[ -d "$dir" ]] && [[ -n "$(git status --porcelain "$dir" 2>/dev/null)" ]]; then
-          has_changes=true
-          break
-        fi
-      done
+  spawn-can-spawn-swarm) _spawn_can_spawn_swarm "$@" ;;
 
-      if [[ "$has_changes" == "true" ]]; then
-        label="${1:-autofix-$(date +%s)}"
-        stash_name="aether-checkpoint: $label"
-        # Only stash Aether-managed directories, never touch user files
-        if git stash push -m "$stash_name" -- $target_dirs >/dev/null 2>&1; then
-          json_ok "{\"type\":\"stash\",\"ref\":\"$stash_name\"}"
-        else
-          # Stash failed (possibly due to conflicts), record commit hash
-          hash=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
-          json_ok "{\"type\":\"commit\",\"ref\":\"$hash\"}"
-        fi
-      else
-        # No changes in Aether-managed directories, just record commit hash
-        hash=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
-        json_ok "{\"type\":\"commit\",\"ref\":\"$hash\"}"
-      fi
-    else
-      json_ok '{"type":"none","ref":null}'
-    fi
-    ;;
-
-  autofix-rollback)
-    # Rollback from checkpoint if fix failed
-    # Usage: autofix-rollback <type> <ref>
-    # Returns: {rolled_back: bool, method: "stash"|"reset"|"none"}
-    ref_type="${1:-none}"
-    ref="${2:-}"
-
-    case "$ref_type" in
-      stash)
-        # Find and pop the stash
-        stash_ref=$(git stash list 2>/dev/null | grep "$ref" | head -1 | cut -d: -f1 || echo "")
-        if [[ -n "$stash_ref" ]]; then
-          if git stash pop "$stash_ref" >/dev/null 2>&1; then
-            json_ok '{"rolled_back":true,"method":"stash"}'
-          else
-            json_ok '{"rolled_back":false,"method":"stash","error":"stash pop failed"}'
-          fi
-        else
-          json_ok '{"rolled_back":false,"method":"stash","error":"stash not found"}'
-        fi
-        ;;
-      commit)
-        # Reset to the commit
-        if [[ -n "$ref" && "$ref" != "unknown" ]]; then
-          if git reset --hard "$ref" >/dev/null 2>&1; then
-            json_ok '{"rolled_back":true,"method":"reset"}'
-          else
-            json_ok '{"rolled_back":false,"method":"reset","error":"reset failed"}'
-          fi
-        else
-          json_ok '{"rolled_back":false,"method":"reset","error":"invalid ref"}'
-        fi
-        ;;
-      none|*)
-        json_ok '{"rolled_back":false,"method":"none"}'
-        ;;
-    esac
-    ;;
-
-  spawn-can-spawn-swarm)
-    # Check if swarm can spawn more scouts (separate from phase workers)
-    # Usage: spawn-can-spawn-swarm <swarm_id>
-    # Swarm has its own cap of 6 (4 scouts + 2 sub-scouts max)
-    swarm_id="${1:-swarm}"
-    swarm_cap=6
-
-    current=0
-    if [[ -f "$DATA_DIR/spawn-tree.txt" ]]; then
-      current=$(grep -c "|swarm:$swarm_id$" "$DATA_DIR/spawn-tree.txt" 2>/dev/null) || current=0
-    fi
-
-    if [[ $current -lt $swarm_cap ]]; then
-      can="true"
-      remaining=$((swarm_cap - current))
-    else
-      can="false"
-      remaining=0
-    fi
-
-    json_ok "{\"can_spawn\":$can,\"current\":$current,\"cap\":$swarm_cap,\"remaining\":$remaining,\"swarm_id\":\"$swarm_id\"}"
-    ;;
-
-  swarm-findings-init)
-    # Initialize swarm findings file
-    # Usage: swarm-findings-init <swarm_id>
-    swarm_id="${1:-swarm-$(date +%s)}"
-    findings_file="$DATA_DIR/swarm-findings-$swarm_id.json"
-
-    mkdir -p "$DATA_DIR"
-    cat > "$findings_file" <<EOF
-{
-  "swarm_id": "$swarm_id",
-  "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "status": "active",
-  "findings": [],
-  "solution": null
-}
-EOF
-    json_ok "{\"swarm_id\":\"$swarm_id\",\"file\":\"$findings_file\"}"
-    ;;
-
-  swarm-findings-add)
-    # Add a finding from a scout
-    # Usage: swarm-findings-add <swarm_id> <scout_type> <confidence> <finding_json>
-    swarm_id="${1:-}"
-    scout_type="${2:-}"
-    confidence="${3:-0.5}"
-    finding="${4:-}"
-
-    [[ -z "$swarm_id" || -z "$scout_type" || -z "$finding" ]] && json_err "$E_VALIDATION_FAILED" "Usage: swarm-findings-add <swarm_id> <scout_type> <confidence> <finding_json>"
-
-    findings_file="$DATA_DIR/swarm-findings-$swarm_id.json"
-    [[ ! -f "$findings_file" ]] && json_err "$E_FILE_NOT_FOUND" "Swarm findings file not found: $swarm_id"
-
-    ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-
-    # Add finding to array
-    updated=$(jq --arg scout "$scout_type" --arg conf "$confidence" --arg ts "$ts" --argjson finding "$finding" '
-      .findings += [{
-        "scout": $scout,
-        "confidence": ($conf | tonumber),
-        "timestamp": $ts,
-        "finding": $finding
-      }]
-    ' "$findings_file")
-
-    echo "$updated" > "$findings_file"
-    count=$(echo "$updated" | jq '.findings | length')
-    json_ok "{\"added\":true,\"scout\":\"$scout_type\",\"total_findings\":$count}"
-    ;;
-
-  swarm-findings-read)
-    # Read all findings for a swarm
-    # Usage: swarm-findings-read <swarm_id>
-    swarm_id="${1:-}"
-    [[ -z "$swarm_id" ]] && json_err "$E_VALIDATION_FAILED" "Usage: swarm-findings-read <swarm_id>"
-
-    findings_file="$DATA_DIR/swarm-findings-$swarm_id.json"
-    [[ ! -f "$findings_file" ]] && json_err "$E_FILE_NOT_FOUND" "Swarm findings file not found: $swarm_id"
-
-    json_ok "$(cat "$findings_file")"
-    ;;
-
-  swarm-solution-set)
-    # Set the chosen solution for a swarm
-    # Usage: swarm-solution-set <swarm_id> <solution_json>
-    swarm_id="${1:-}"
-    solution="${2:-}"
-
-    [[ -z "$swarm_id" || -z "$solution" ]] && json_err "$E_VALIDATION_FAILED" "Usage: swarm-solution-set <swarm_id> <solution_json>"
-
-    findings_file="$DATA_DIR/swarm-findings-$swarm_id.json"
-    [[ ! -f "$findings_file" ]] && json_err "$E_FILE_NOT_FOUND" "Swarm findings file not found: $swarm_id"
-
-    ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-
-    updated=$(jq --argjson solution "$solution" --arg ts "$ts" '
-      .solution = $solution |
-      .status = "resolved" |
-      .resolved_at = $ts
-    ' "$findings_file")
-
-    echo "$updated" > "$findings_file"
-    json_ok "{\"solution_set\":true,\"swarm_id\":\"$swarm_id\"}"
-    ;;
-
-  swarm-cleanup)
-    # Clean up swarm files after completion
-    # Usage: swarm-cleanup <swarm_id> [--archive]
-    swarm_id="${1:-}"
-    archive="${2:-}"
-
-    [[ -z "$swarm_id" ]] && json_err "$E_VALIDATION_FAILED" "Usage: swarm-cleanup <swarm_id> [--archive]"
-
-    findings_file="$DATA_DIR/swarm-findings-$swarm_id.json"
-
-    if [[ -f "$findings_file" ]]; then
-      if [[ "$archive" == "--archive" ]]; then
-        mkdir -p "$DATA_DIR/swarm-archive"
-        mv "$findings_file" "$DATA_DIR/swarm-archive/"
-        json_ok "{\"archived\":true,\"swarm_id\":\"$swarm_id\"}"
-      else
-        rm -f "$findings_file"
-        json_ok "{\"deleted\":true,\"swarm_id\":\"$swarm_id\"}"
-      fi
-    else
-      json_ok "{\"not_found\":true,\"swarm_id\":\"$swarm_id\"}"
-    fi
-    ;;
+  swarm-findings-init) _swarm_findings_init "$@" ;;
+  swarm-findings-add) _swarm_findings_add "$@" ;;
+  swarm-findings-read) _swarm_findings_read "$@" ;;
+  swarm-solution-set) _swarm_solution_set "$@" ;;
+  swarm-cleanup) _swarm_cleanup "$@" ;;
 
   grave-add)
+    # Migrated to state-api facade: uses _state_mutate for atomic grave marker recording
     # Record a grave marker when a builder fails at a file
     # Usage: grave-add <file> <ant_name> <task_id> <phase> <failure_summary> [function] [line]
     [[ $# -ge 5 ]] || json_err "$E_VALIDATION_FAILED" "Usage: grave-add <file> <ant_name> <task_id> <phase> <failure_summary> [function] [line]"
-    state_file="$DATA_DIR/COLONY_STATE.json"
-    [[ -f "$state_file" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
 
-    grave_lock_held=false
-    if type acquire_lock &>/dev/null; then
-      acquire_lock "$state_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on COLONY_STATE.json"
-      grave_lock_held=true
-    fi
+    ga_file="$1"
+    ga_ant_name="$2"
+    ga_task_id="$3"
+    ga_phase="$4"
+    ga_failure_summary="$5"
+    ga_func="${6:-}"
+    ga_line="${7:-}"
+    ga_id="grave_$(date -u +%s)_$(head -c 2 /dev/urandom | od -An -tx1 | tr -d ' ')"
+    ga_ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    GA_ID="$ga_id" GA_FILE="$ga_file" GA_ANT="$ga_ant_name" GA_TID="$ga_task_id" \
+    GA_PHASE="$ga_phase" GA_SUMMARY="$ga_failure_summary" GA_FUNC="$ga_func" \
+    GA_LINE="$ga_line" GA_TS="$ga_ts" \
+      _state_mutate '
+        (env.GA_PHASE | if test("^[0-9]+$") then tonumber else null end) as $phase |
+        (env.GA_FUNC | if . == "" or . == "null" then null else . end) as $func |
+        (env.GA_LINE | if test("^[0-9]+$") then tonumber else null end) as $line |
+        (.graveyards // []) as $graves |
+        . + {graveyards: ($graves + [{
+          id: env.GA_ID,
+          file: env.GA_FILE,
+          ant_name: env.GA_ANT,
+          task_id: env.GA_TID,
+          phase: $phase,
+          failure_summary: env.GA_SUMMARY,
+          function: $func,
+          line: $line,
+          timestamp: env.GA_TS
+        }])} |
+        if (.graveyards | length) > 30 then .graveyards = .graveyards[-30:] else . end
+      ' >/dev/null
 
-    file="$1"
-    ant_name="$2"
-    task_id="$3"
-    phase="$4"
-    failure_summary="$5"
-    func="${6:-null}"
-    line="${7:-null}"
-    id="grave_$(date -u +%s)_$(head -c 2 /dev/urandom | od -An -tx1 | tr -d ' ')"
-    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-    if [[ "$phase" =~ ^[0-9]+$ ]]; then
-      phase_jq="$phase"
-    else
-      phase_jq="null"
-    fi
-    if [[ "$func" == "null" ]]; then
-      func_jq="null"
-    else
-      func_jq="\"$func\""
-    fi
-    if [[ "$line" =~ ^[0-9]+$ ]]; then
-      line_jq="$line"
-    else
-      line_jq="null"
-    fi
-    updated=$(jq --arg id "$id" --arg file "$file" --arg ant "$ant_name" --arg tid "$task_id" \
-      --argjson phase "$phase_jq" --arg summary "$failure_summary" \
-      --argjson func "$func_jq" --argjson line "$line_jq" --arg ts "$ts" '
-      (.graveyards // []) as $graves |
-      . + {graveyards: ($graves + [{
-        id: $id,
-        file: $file,
-        ant_name: $ant,
-        task_id: $tid,
-        phase: $phase,
-        failure_summary: $summary,
-        function: $func,
-        line: $line,
-        timestamp: $ts
-      }])} |
-      if (.graveyards | length) > 30 then .graveyards = .graveyards[-30:] else . end
-    ' "$state_file") || {
-      [[ "$grave_lock_held" == "true" ]] && release_lock 2>/dev/null || true
-      json_err "$E_JSON_INVALID" "Failed to update COLONY_STATE.json"
-    }
-
-    atomic_write "$state_file" "$updated" || {
-      [[ "$grave_lock_held" == "true" ]] && release_lock 2>/dev/null || true
-      json_err "$E_JSON_INVALID" "Failed to write COLONY_STATE.json"
-    }
-
-    [[ "$grave_lock_held" == "true" ]] && release_lock 2>/dev/null || true
-    json_ok "\"$id\""
+    json_ok "\"$ga_id\""
     ;;
 
   grave-check)
+    # Migrated to state-api facade: uses _state_read_field for read-only access
     # Query for grave markers near a file path
     # Usage: grave-check <file_path>
     # Read-only, never modifies state
     [[ $# -ge 1 ]] || json_err "$E_VALIDATION_FAILED" "Usage: grave-check <file_path>"
-    [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
-    check_file="$1"
-    check_dir=$(dirname "$check_file")
-    json_ok "$(jq --arg file "$check_file" --arg dir "$check_dir" '
+    gc_check_file="$1"
+    gc_check_dir=$(dirname "$gc_check_file")
+    gc_state=$(_state_read_field '.')
+    [[ -n "$gc_state" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
+    json_ok "$(echo "$gc_state" | jq --arg file "$gc_check_file" --arg dir "$gc_check_dir" '
       (.graveyards // []) as $graves |
       ($graves | map(select(.file == $file))) as $exact |
       ($graves | map(select((.file | split("/")[:-1] | join("/")) == $dir))) as $dir_matches |
@@ -2668,7 +2180,7 @@ EOF
        elif $dir_count == 1 then "low"
        else "none" end) as $caution |
       {graves: $dir_matches, count: $dir_count, exact_matches: $exact_count, caution_level: $caution}
-    ' "$DATA_DIR/COLONY_STATE.json")"
+    ')"
     ;;
 
   # ============================================
@@ -2689,10 +2201,11 @@ EOF
 
     # Count changed files
     files_changed=0
-    if git rev-parse --git-dir >/dev/null 2>&1; then
+    if git rev-parse --git-dir >/dev/null 2>&1; then  # SUPPRESS:OK -- existence-test: may not be a git repo
+      # SUPPRESS:OK -- existence-test: grep returns 1 when no matches
       files_changed=$(git diff --stat --cached HEAD 2>/dev/null | tail -1 | grep -oE '[0-9]+ file' | grep -oE '[0-9]+' || echo "0")
       if [[ "$files_changed" == "0" ]]; then
-        files_changed=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+        files_changed=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')  # SUPPRESS:OK -- existence-test: may not be a git repo
       fi
     fi
 
@@ -2801,8 +2314,8 @@ Files: ${files_changed} files changed"
       exit 0
     fi
 
-    local_ver=$(jq -r '.version // "unknown"' "$local_version_file" 2>/dev/null || echo "unknown")
-    hub_ver=$(jq -r '.version // "unknown"' "$hub_version_file" 2>/dev/null || echo "unknown")
+    local_ver=$(jq -r '.version // "unknown"' "$local_version_file" 2>/dev/null || echo "unknown")  # SUPPRESS:OK -- read-default: file may not exist yet
+    hub_ver=$(jq -r '.version // "unknown"' "$hub_version_file" 2>/dev/null || echo "unknown")  # SUPPRESS:OK -- read-default: file may not exist yet
 
     if [[ "$local_ver" == "$hub_ver" ]]; then
       json_ok '""'
@@ -2819,7 +2332,7 @@ Files: ${files_changed} files changed"
     now=$(date +%s)
 
     if [[ -f "$cache_file" ]]; then
-      cached_at=$(cat "$cache_file" 2>/dev/null || echo "0")
+      cached_at=$(cat "$cache_file" 2>/dev/null || echo "0")  # SUPPRESS:OK -- read-default: file may not exist yet
       age=$((now - cached_at))
       if [[ $age -lt 3600 ]]; then
         # Within TTL — skip silently
@@ -2829,9 +2342,9 @@ Files: ${files_changed} files changed"
     fi
 
     # Cache miss or stale — run actual check
-    mkdir -p "$(dirname "$cache_file")" 2>/dev/null || true
-    result=$("$0" version-check 2>/dev/null) || true
-    echo "$now" > "$cache_file" 2>/dev/null || true
+    mkdir -p "$(dirname "$cache_file")" 2>/dev/null || true  # SUPPRESS:OK -- idempotent: harmless if exists
+    result=$("$0" version-check 2>/dev/null) || true  # SUPPRESS:OK -- read-default: subcommand may fail
+    echo "$now" > "$cache_file" 2>/dev/null || _aether_log_error "Could not update cache file $(basename "$cache_file")"
     if [[ -n "$result" ]]; then
       echo "$result"
     else
@@ -2841,45 +2354,128 @@ Files: ${files_changed} files changed"
 
   registry-add)
     # Add or update a repo entry in ~/.aether/registry.json
-    # Usage: registry-add <repo_path> <version>
+    # Usage: registry-add <repo_path> <version> [--tags "a,b,c"] [--goal "text"] [--active true|false]
     repo_path="${1:-}"
     repo_version="${2:-}"
-    [[ -z "$repo_path" || -z "$repo_version" ]] && json_err "$E_VALIDATION_FAILED" "Usage: registry-add <repo_path> <version>"
+    [[ -z "$repo_path" || -z "$repo_version" ]] && json_err "$E_VALIDATION_FAILED" "Usage: registry-add <repo_path> <version> [--tags \"a,b\"] [--goal \"text\"] [--active true|false]"
+
+    # Parse optional flags after positional args
+    shift 2
+    ra_tags=""
+    ra_goal=""
+    ra_active="false"
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --tags)  ra_tags="${2:-}"; shift 2 ;;
+        --goal)  ra_goal="${2:-}"; shift 2 ;;
+        --active) ra_active="${2:-false}"; shift 2 ;;
+        *) shift ;;
+      esac
+    done
+
+    # Convert comma-separated tags to JSON array
+    ra_tags_json="[]"
+    if [[ -n "$ra_tags" ]]; then
+      ra_tags_json=$(echo "$ra_tags" | jq -R 'split(",") | map(select(length > 0))') || ra_tags_json="[]"
+    fi
+
+    # Normalize active to boolean string
+    if [[ "$ra_active" != "true" ]]; then
+      ra_active="false"
+    fi
 
     registry_file="$HOME/.aether/registry.json"
     mkdir -p "$HOME/.aether"
 
     if [[ ! -f "$registry_file" ]]; then
-      echo '{"schema_version":1,"repos":[]}' > "$registry_file"
+      atomic_write "$registry_file" '{"schema_version":1,"repos":[]}' || json_err "$E_UNKNOWN" "Failed to initialize registry file"
     fi
 
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
+    # Acquire lock to prevent concurrent read-modify-write races
+    acquire_lock "$registry_file" || {
+      _aether_log_error "Could not lock the registry file"
+      json_err "$E_LOCK_FAILED" "Cannot update registry without a lock"
+    }
+
     # Check if repo already exists in registry
+    # SUPPRESS:OK -- read-default: query may return empty
     existing=$(jq --arg path "$repo_path" '.repos[] | select(.path == $path)' "$registry_file" 2>/dev/null)
 
     if [[ -n "$existing" ]]; then
-      # Update existing entry
-      updated=$(jq --arg path "$repo_path" --arg ver "$repo_version" --arg ts "$ts" '
+      # Update existing entry — merge new fields
+      updated=$(jq \
+        --arg path "$repo_path" \
+        --arg ver "$repo_version" \
+        --arg ts "$ts" \
+        --argjson tags "$ra_tags_json" \
+        --arg goal "$ra_goal" \
+        --argjson active "$ra_active" '
         .repos = [.repos[] | if .path == $path then
           .version = $ver |
-          .updated_at = $ts
+          .updated_at = $ts |
+          .domain_tags = $tags |
+          (if $goal != "" then .last_colony_goal = $goal else . end) |
+          .active_colony = $active
         else . end]
       ' "$registry_file") || json_err "$E_JSON_INVALID" "Failed to update registry"
     else
-      # Add new entry
-      updated=$(jq --arg path "$repo_path" --arg ver "$repo_version" --arg ts "$ts" '
+      # Add new entry with all fields
+      updated=$(jq \
+        --arg path "$repo_path" \
+        --arg ver "$repo_version" \
+        --arg ts "$ts" \
+        --argjson tags "$ra_tags_json" \
+        --arg goal "$ra_goal" \
+        --argjson active "$ra_active" '
         .repos += [{
           "path": $path,
           "version": $ver,
           "registered_at": $ts,
-          "updated_at": $ts
+          "updated_at": $ts,
+          "domain_tags": $tags,
+          "last_colony_goal": (if $goal != "" then $goal else null end),
+          "active_colony": $active
         }]
       ' "$registry_file") || json_err "$E_JSON_INVALID" "Failed to update registry"
     fi
 
-    echo "$updated" > "$registry_file"
+    atomic_write "$registry_file" "$updated" || {
+      release_lock "$registry_file" 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
+      _aether_log_error "Could not save registry update"
+      json_err "$E_UNKNOWN" "Failed to write registry file"
+    }
+    release_lock "$registry_file" 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
     json_ok "{\"registered\":true,\"path\":\"$repo_path\",\"version\":\"$repo_version\"}"
+    ;;
+
+  registry-list)
+    # List all registered repos with domain tags, goal, and active status
+    # Usage: registry-list
+    # Returns JSON with all repos and their metadata (defaults for missing fields)
+    registry_file="$HOME/.aether/registry.json"
+
+    if [[ ! -f "$registry_file" ]]; then
+      json_ok '{"repos":[],"count":0}'
+    else
+      # Normalize legacy entries: default domain_tags=[], last_colony_goal=null, active_colony=false
+      rl_result=$(jq '
+        {
+          "repos": [.repos[] | {
+            "path": .path,
+            "version": .version,
+            "registered_at": .registered_at,
+            "updated_at": .updated_at,
+            "domain_tags": (if .domain_tags then .domain_tags else [] end),
+            "last_colony_goal": (if .last_colony_goal then .last_colony_goal else null end),
+            "active_colony": (if .active_colony then .active_colony else false end)
+          }],
+          "count": (.repos | length)
+        }
+      ' "$registry_file" 2>/dev/null) || json_err "$E_JSON_INVALID" "Failed to read registry"  # SUPPRESS:OK -- read-default: file may not exist yet
+      json_ok "$rl_result"
+    fi
     ;;
 
   bootstrap-system)
@@ -2990,7 +2586,7 @@ Files: ${files_changed} files changed"
     ;;
 
   load-state)
-    source "$SCRIPT_DIR/utils/state-loader.sh" 2>/dev/null || {
+    source "$SCRIPT_DIR/utils/state-loader.sh" 2>/dev/null || {  # SUPPRESS:OK -- read-default: utility may not be installed
       json_err "$E_FILE_NOT_FOUND" "state-loader.sh not found"
       exit 1
     }
@@ -3007,7 +2603,7 @@ Files: ${files_changed} files changed"
     ;;
 
   unload-state)
-    source "$SCRIPT_DIR/utils/state-loader.sh" 2>/dev/null || {
+    source "$SCRIPT_DIR/utils/state-loader.sh" 2>/dev/null || {  # SUPPRESS:OK -- read-default: utility may not be installed
       json_err "$E_FILE_NOT_FOUND" "state-loader.sh not found"
       exit 1
     }
@@ -3015,57 +2611,10 @@ Files: ${files_changed} files changed"
     json_ok '{"unloaded":true}'
     ;;
 
-  spawn-tree-load)
-    source "$SCRIPT_DIR/utils/spawn-tree.sh" 2>/dev/null || {
-      json_err "$E_FILE_NOT_FOUND" "spawn-tree.sh not found"
-      exit 1
-    }
-    tree_json=$(reconstruct_tree_json)
-    json_ok "$tree_json"
-    ;;
-
-  spawn-tree-active)
-    source "$SCRIPT_DIR/utils/spawn-tree.sh" 2>/dev/null || {
-      json_err "$E_FILE_NOT_FOUND" "spawn-tree.sh not found"
-      exit 1
-    }
-    active=$(get_active_spawns)
-    json_ok "$active"
-    ;;
-
-  spawn-tree-depth)
-    ant_name="${1:-}"
-    [[ -z "$ant_name" ]] && json_err "$E_VALIDATION_FAILED" "Usage: spawn-tree-depth <ant_name>"
-    source "$SCRIPT_DIR/utils/spawn-tree.sh" 2>/dev/null || {
-      json_err "$E_FILE_NOT_FOUND" "spawn-tree.sh not found"
-      exit 1
-    }
-    depth=$(get_spawn_depth "$ant_name")
-    json_ok "$depth"
-    ;;
-
-  spawn-efficiency)
-    # Calculate spawn efficiency metrics from spawn-tree.txt
-    # Usage: spawn-efficiency
-    spawn_tree_file="$DATA_DIR/spawn-tree.txt"
-    total=0
-    completed=0
-    failed=0
-
-    if [[ -f "$spawn_tree_file" ]]; then
-      total=$(grep -c "|spawned$" "$spawn_tree_file" 2>/dev/null || echo 0)
-      completed=$(grep -c "|completed$" "$spawn_tree_file" 2>/dev/null || echo 0)
-      failed=$(grep -c "|failed$" "$spawn_tree_file" 2>/dev/null || echo 0)
-    fi
-
-    if [[ "$total" -gt 0 ]]; then
-      efficiency=$(( completed * 100 / total ))
-    else
-      efficiency=0
-    fi
-
-    json_ok "{\"total\":$total,\"completed\":$completed,\"failed\":$failed,\"efficiency_pct\":$efficiency}"
-    ;;
+  spawn-tree-load) _spawn_tree_load "$@" ;;
+  spawn-tree-active) _spawn_tree_active "$@" ;;
+  spawn-tree-depth) _spawn_tree_depth "$@" ;;
+  spawn-efficiency) _spawn_efficiency "$@" ;;
 
   # --- Model Profile Commands ---
   model-profile)
@@ -3077,14 +2626,15 @@ Files: ${files_changed} files changed"
 
         profile_file="$AETHER_ROOT/.aether/model-profiles.yaml"
         if [[ ! -f "$profile_file" ]]; then
-          json_ok '{"model":"kimi-k2.5","source":"default","caste":"'$caste'"}'
+          json_ok '{"model":"glm-5-turbo","source":"default","caste":"'$caste'"}'
           exit 0
         fi
 
         # Extract model for caste using awk (bash-compatible YAML parsing)
+        # SUPPRESS:OK -- read-default: file may not exist or format may vary
         model=$(awk '/^worker_models:/{found=1; next} found && /^[^ ]/{exit} found && /^  '$caste':/{print $2; exit}' "$profile_file" 2>/dev/null)
 
-        [[ -z "$model" ]] && model="kimi-k2.5"
+        [[ -z "$model" ]] && model="glm-5-turbo"
         json_ok '{"model":"'$model'","source":"profile","caste":"'$caste'"}'
         ;;
 
@@ -3097,6 +2647,7 @@ Files: ${files_changed} files changed"
 
         # Extract all caste:model pairs as JSON
         # Lines look like: "  prime: glm-5           # Complex coordination..."
+        # SUPPRESS:OK -- read-default: file may not exist or format may vary
         models=$(awk '/^worker_models:/{found=1; next} found && /^[^ ]/{exit} found && /^  [a-z_]+:/{gsub(/:/,""); printf "\"%s\":\"%s\",", $1, $2}' "$profile_file" 2>/dev/null)
         # Remove trailing comma
         models="${models%,}"
@@ -3109,10 +2660,12 @@ Files: ${files_changed} files changed"
         [[ ! -f "$profile_file" ]] && json_err "$E_FILE_NOT_FOUND" "Profile not found" '{"file":"model-profiles.yaml"}'
 
         # Check proxy health
+        # SUPPRESS:OK -- read-default: service may not be running
         proxy_health=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:4000/health 2>/dev/null || echo "000")
         proxy_status=$([[ "$proxy_health" == "200" ]] && echo "healthy" || echo "unhealthy")
 
         # Count castes
+        # SUPPRESS:OK -- read-default: file may not exist or format may vary
         caste_count=$(awk '/^worker_models:/{found=1; next} found && /^[^ ]/{exit} found && /^  [a-z_]+:/{count++} END{print count+0}' "$profile_file" 2>/dev/null)
 
         json_ok '{"profile_exists":true,"caste_count":'$caste_count',"proxy_status":"'$proxy_status'","proxy_endpoint":"http://localhost:4000"}'
@@ -3217,6 +2770,112 @@ NODESCRIPT
     echo "$result"
     ;;
 
+  # --- Model Slot Commands ---
+  model-slot)
+    action="${1:-}"
+    case "$action" in
+      get)
+        caste="${2:-}"
+        [[ -z "$caste" ]] && json_err "$E_VALIDATION_FAILED" "Usage: model-slot get <caste>"
+
+        profile_file="$AETHER_ROOT/.aether/model-profiles.yaml"
+        if [[ ! -f "$profile_file" ]]; then
+          json_ok '"inherit"'
+          exit 0
+        fi
+
+        # Extract slot for caste using awk (bash-compatible YAML parsing)
+        # SUPPRESS:OK -- read-default: file may not exist or format may vary
+        slot=$(awk '/^worker_models:/{found=1; next} found && /^[^ ]/{exit} found && /^  '$caste':/{print $2; exit}' "$profile_file" 2>/dev/null)
+
+        [[ -z "$slot" ]] && slot="inherit"
+        json_ok "\"$slot\""
+        ;;
+
+      list)
+        profile_file="$AETHER_ROOT/.aether/model-profiles.yaml"
+        if [[ ! -f "$profile_file" ]]; then
+          json_err "$E_FILE_NOT_FOUND" "Profile not found" '{"file":"model-profiles.yaml"}'
+        fi
+
+        # Use Node.js to parse YAML and group castes by slot tier
+        node_script=$(cat << 'NODESCRIPT'
+const fs = require('fs');
+const path = process.argv[2];
+const yaml = require('yaml') || null;
+
+let content;
+try {
+  content = fs.readFileSync(path, 'utf8');
+} catch(e) {
+  console.log(JSON.stringify({ok: false, error: e.message}));
+  process.exit(1);
+}
+
+// Minimal YAML parser for the worker_models section
+function parseWorkerModels(yamlText) {
+  const slots = {opus: [], sonnet: [], haiku: [], inherit: []};
+  let inWorkerModels = false;
+
+  for (const line of yamlText.split('\n')) {
+    if (line.startsWith('worker_models:')) {
+      inWorkerModels = true;
+      continue;
+    }
+    if (inWorkerModels && /^[a-z]/.test(line)) break; // next top-level key
+    if (inWorkerModels && /^  (\w+):\s+(\w+)/.test(line)) {
+      const match = line.match(/^  (\w+):\s+(\w+)/);
+      const caste = match[1];
+      const slot = match[2];
+      if (slots[slot]) {
+        slots[slot].push(caste);
+      } else {
+        slots[slot] = [caste];
+      }
+    }
+  }
+  return slots;
+}
+
+const slots = parseWorkerModels(content);
+console.log(JSON.stringify({ok: true, result: {slots}}));
+NODESCRIPT
+)
+        result=$(echo "$node_script" | node - "$profile_file")
+        echo "$result"
+        ;;
+
+      validate)
+        slot_name="${2:-}"
+        [[ -z "$slot_name" ]] && json_err "$E_VALIDATION_FAILED" "Usage: model-slot validate <slot>"
+
+        # Self-contained validation with inline VALID_SLOTS (mirrors model-profiles.js)
+        node_script=$(cat << 'NODESCRIPT'
+const slot = process.argv[2];
+const VALID_SLOTS = ['opus', 'sonnet', 'haiku', 'inherit'];
+if (!slot || typeof slot !== 'string' || !VALID_SLOTS.includes(slot)) {
+  console.log(JSON.stringify({ ok: true, result: { valid: false, error: 'Invalid slot "' + (slot || '') + '". Valid options: opus, sonnet, haiku, inherit' } }));
+} else {
+  console.log(JSON.stringify({ ok: true, result: { valid: true, error: null } }));
+}
+NODESCRIPT
+)
+        result=$(echo "$node_script" | node - "$slot_name")
+        echo "$result"
+        ;;
+
+      *)
+        echo "Usage: model-slot <command> [args]"
+        echo ""
+        echo "Commands:"
+        echo "  get <caste>       Get slot for caste"
+        echo "  list              List all caste:slot assignments"
+        echo "  validate <slot>   Validate a slot name"
+        json_err "$E_VALIDATION_FAILED" "Usage: model-slot get <caste>|list|validate <slot>"
+        ;;
+    esac
+    ;;
+
   # ============================================
   # CHAMBER UTILITIES (colony lifecycle)
   # ============================================
@@ -3259,14 +2918,16 @@ NODESCRIPT
     ;;
 
   milestone-detect)
+    # Migrated to state-api facade: uses _state_read_field for read-only access
     # Detect colony milestone from state
     # Usage: milestone-detect
     # Returns: {ok: true, milestone: "...", version: "...", phases_completed: N, total_phases: N, progress_percent: N}
 
-    [[ -f "$DATA_DIR/COLONY_STATE.json" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
+    md_state=$(_state_read_field '.')
+    [[ -n "$md_state" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
 
     # Extract and compute milestone data using jq
-    result=$(jq '
+    result=$(echo "$md_state" | jq '
       # Extract key data
       (.plan.phases // []) as $phases |
       (.errors.records // []) as $errors |
@@ -3316,12 +2977,13 @@ NODESCRIPT
         total_phases: $total_phases,
         progress_percent: $progress
       }
-    ' "$DATA_DIR/COLONY_STATE.json")
+    ')
 
     echo "$result"
     ;;
 
   phase-insert)
+    # Migrated to state-api facade: uses _state_read_field for reads, _state_mutate for atomic write
     # Insert a new phase immediately after current_phase and renumber downstream phases safely.
     # Usage: phase-insert <phase_name> <goal> [constraints]
     phase_name="${1:-}"
@@ -3331,47 +2993,32 @@ NODESCRIPT
     [[ -n "$phase_name" ]] || json_err "$E_VALIDATION_FAILED" "Usage: phase-insert <phase_name> <goal> [constraints]" '{"missing":"phase_name"}'
     [[ -n "$phase_goal" ]] || json_err "$E_VALIDATION_FAILED" "Usage: phase-insert <phase_name> <goal> [constraints]" '{"missing":"goal"}'
 
-    state_file="$DATA_DIR/COLONY_STATE.json"
-    [[ -f "$state_file" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found" '{"file":"COLONY_STATE.json"}'
+    # Read phase count and current_phase via state-api facade
+    pi_phase_count=$(_state_read_field '(.plan.phases // []) | length')
+    [[ -n "$pi_phase_count" && "$pi_phase_count" -gt 0 ]] 2>/dev/null || json_err "$E_VALIDATION_FAILED" "No project plan found. Run /ant:plan first."
 
-    if ! jq -e . "$state_file" >/dev/null 2>&1; then
-      json_err "$E_JSON_INVALID" "COLONY_STATE.json has invalid JSON"
+    pi_current_phase=$(_state_read_field '.current_phase // 0')
+    [[ "$pi_current_phase" =~ ^[0-9]+$ ]] || pi_current_phase=0
+    if [[ "$pi_current_phase" -gt "$pi_phase_count" ]]; then
+      pi_current_phase="$pi_phase_count"
+    fi
+    if [[ "$pi_current_phase" -lt 0 ]]; then
+      pi_current_phase=0
     fi
 
-    phase_count=$(jq -r '(.plan.phases // []) | length' "$state_file" 2>/dev/null || echo "0")
-    [[ "$phase_count" -gt 0 ]] || json_err "$E_VALIDATION_FAILED" "No project plan found. Run /ant:plan first."
-
-    current_phase=$(jq -r '.current_phase // 0' "$state_file" 2>/dev/null || echo "0")
-    [[ "$current_phase" =~ ^[0-9]+$ ]] || current_phase=0
-    if [[ "$current_phase" -gt "$phase_count" ]]; then
-      current_phase="$phase_count"
-    fi
-    if [[ "$current_phase" -lt 0 ]]; then
-      current_phase=0
-    fi
-
-    insert_id=$((current_phase + 1))
+    insert_id=$((pi_current_phase + 1))
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-    # Acquire lock for safe state mutation
-    _phase_lock_held=false
-    if type acquire_lock &>/dev/null; then
-      acquire_lock "$state_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on COLONY_STATE.json"
-      _phase_lock_held=true
-      trap 'release_lock 2>/dev/null || true' EXIT
-    fi
+    # Use _state_mutate for atomic read-modify-write (handles locking and backup)
+    PI_INSERT_ID="$insert_id" PI_NAME="$phase_name" PI_GOAL="$phase_goal" \
+    PI_CONSTRAINTS="$phase_constraints" PI_TS="$ts" \
+      _state_mutate '
+      (env.PI_INSERT_ID | tonumber) as $insert_id |
+      env.PI_NAME as $name |
+      env.PI_GOAL as $goal |
+      env.PI_CONSTRAINTS as $constraints |
+      env.PI_TS as $ts |
 
-    if type create_backup &>/dev/null; then
-      create_backup "$state_file" 2>/dev/null || true
-    fi
-
-    updated=$(jq \
-      --argjson insert_id "$insert_id" \
-      --arg name "$phase_name" \
-      --arg goal "$phase_goal" \
-      --arg constraints "$phase_constraints" \
-      --arg ts "$ts" \
-      '
       def tail_id:
         if (type == "string") and test("^[0-9]+\\.") then
           capture("^[0-9]+\\.(?<tail>.+)$").tail
@@ -3446,30 +3093,24 @@ NODESCRIPT
         } as $new_phase
       | .plan.phases = (($shifted + [$new_phase]) | sort_by(.id))
       | .events = ((.events // []) + [($ts + "|phase_inserted|insert-phase|Inserted Phase " + ($insert_id|tostring) + ": " + $name)])
-      ' "$state_file" 2>/dev/null) || {
-      [[ "$_phase_lock_held" == "true" ]] && release_lock 2>/dev/null || true
-      trap - EXIT
-      json_err "$E_JSON_INVALID" "Failed to insert phase into COLONY_STATE.json"
-    }
-
-    atomic_write "$state_file" "$updated"
-
-    [[ "$_phase_lock_held" == "true" ]] && release_lock 2>/dev/null || true
-    trap - EXIT
+      ' >/dev/null
 
     # Emit guidance signals non-blocking to reinforce inserted phase intent.
-    bash "$0" pheromone-write FOCUS "Inserted Phase $insert_id: $phase_goal" --strength 0.8 --source "user:insert-phase" --reason "Phase inserted to correct execution path" --ttl "30d" >/dev/null 2>&1 || true
+    bash "$0" pheromone-write FOCUS "Inserted Phase $insert_id: $phase_goal" --strength 0.8 --source "user:insert-phase" --reason "Phase inserted to correct execution path" --ttl "30d" >/dev/null 2>&1 \
+      || _aether_log_error "Could not emit FOCUS signal for inserted phase"
     if [[ -n "$phase_constraints" ]]; then
-      bash "$0" pheromone-write REDIRECT "$phase_constraints" --strength 0.9 --source "user:insert-phase" --reason "Constraint captured during phase insertion" --ttl "30d" >/dev/null 2>&1 || true
+      bash "$0" pheromone-write REDIRECT "$phase_constraints" --strength 0.9 --source "user:insert-phase" --reason "Constraint captured during phase insertion" --ttl "30d" >/dev/null 2>&1 \
+        || _aether_log_error "Could not emit REDIRECT signal for phase constraints"
     fi
-    bash "$0" memory-capture "learning" "Inserted phase $insert_id ($phase_name): $phase_goal" "pattern" "system:phase-insert" >/dev/null 2>&1 || true
+    bash "$0" memory-capture "learning" "Inserted phase $insert_id ($phase_name): $phase_goal" "pattern" "system:phase-insert" >/dev/null 2>&1 \
+      || _aether_log_error "Could not capture learning for phase insertion"
 
     result=$(jq -n \
       --argjson inserted_phase_id "$insert_id" \
       --arg phase_name "$phase_name" \
       --arg phase_goal "$phase_goal" \
       --arg constraints "$phase_constraints" \
-      --argjson after_phase "$current_phase" \
+      --argjson after_phase "$pi_current_phase" \
       '{
         inserted: true,
         inserted_phase_id: $inserted_phase_id,
@@ -3482,726 +3123,25 @@ NODESCRIPT
     ;;
 
   # ============================================
-  # SWARM ACTIVITY TRACKING (colony visualization)
+  # SWARM ACTIVITY TRACKING (colony visualization) — dispatched to utils/swarm.sh
   # ============================================
 
-  swarm-activity-log)
-    # Log an activity entry for swarm visualization
-    # Usage: swarm-activity-log <ant_name> <action> <details>
-    ant_name="${1:-}"
-    action="${2:-}"
-    details="${3:-}"
-    [[ -z "$ant_name" || -z "$action" || -z "$details" ]] && json_err "$E_VALIDATION_FAILED" "Usage: swarm-activity-log <ant_name> <action> <details>"
+  swarm-activity-log) _swarm_activity_log "$@" ;;
 
-    mkdir -p "$DATA_DIR"
-    log_file="$DATA_DIR/swarm-activity.log"
-    ts=$(date -u +"%H:%M:%S")
-    echo "[$ts] $ant_name: $action $details" >> "$log_file"
-    json_ok '"logged"'
-    ;;
+  swarm-display-init) _swarm_display_init "$@" ;;
 
-  swarm-display-init)
-    # Initialize swarm display state file
-    # Usage: swarm-display-init <swarm_id>
-    swarm_id="${1:-swarm-$(date +%s)}"
-    mkdir -p "$DATA_DIR"
+  swarm-display-update) _swarm_display_update "$@" ;;
+  swarm-display-get) _swarm_display_get "$@" ;;
+  swarm-display-render) _swarm_display_render "$@" ;;
 
-    display_file="$DATA_DIR/swarm-display.json"
-    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  swarm-display-inline) _swarm_display_inline "$@" ;;
 
-    atomic_write "$display_file" "{
-  \"swarm_id\": \"$swarm_id\",
-  \"timestamp\": \"$ts\",
-  \"active_ants\": [],
-  \"summary\": { \"total_active\": 0, \"by_caste\": {}, \"by_zone\": {} },
-  \"chambers\": {
-    \"fungus_garden\": {\"activity\": 0, \"icon\": \"🍄\"},
-    \"nursery\": {\"activity\": 0, \"icon\": \"🥚\"},
-    \"refuse_pile\": {\"activity\": 0, \"icon\": \"🗑️\"},
-    \"throne_room\": {\"activity\": 0, \"icon\": \"👑\"},
-    \"foraging_trail\": {\"activity\": 0, \"icon\": \"🌿\"}
-  }
-}"
-    json_ok "{\"swarm_id\":\"$swarm_id\",\"initialized\":true}"
-    ;;
 
-  swarm-display-update)
-    # Update ant activity in swarm display
-    # Usage: swarm-display-update <ant_name> <caste> <ant_status> <task> [parent] [tools_json] [tokens] [chamber] [progress]
-    ant_name="${1:-}"
-    caste="${2:-}"
-    ant_status="${3:-}"
-    task="${4:-}"
-    parent="${5:-}"
-    tools_json="${6:-}"
-    [[ -z "$tools_json" ]] && tools_json="{}"
-    tokens="${7:-0}"
-    chamber="${8:-}"
-    progress="${9:-0}"
+  swarm-display-text) _swarm_display_text "$@" ;;
 
-    [[ -z "$ant_name" || -z "$caste" || -z "$ant_status" ]] && json_err "$E_VALIDATION_FAILED" "Usage: swarm-display-update <ant_name> <caste> <ant_status> <task> [parent] [tools_json] [tokens] [chamber] [progress]"
-
-    # Tolerate malformed argument ordering from LLM-generated commands.
-    # Common failure mode: tools_json omitted, so tokens/chamber/progress shift left.
-    tools_type=$(echo "$tools_json" | jq -r 'type' 2>/dev/null || echo "invalid")
-    if [[ "$tools_type" != "object" ]]; then
-      if [[ "$tools_json" =~ ^[0-9]+$ ]] && [[ ! "$tokens" =~ ^[0-9]+$ ]] && [[ "$chamber" =~ ^[0-9]+$ ]]; then
-        progress="$chamber"
-        chamber="$tokens"
-        tokens="$tools_json"
-      fi
-      tools_json="{}"
-    fi
-
-    # Ensure numeric fields are always valid for --argjson.
-    [[ "$tokens" =~ ^-?[0-9]+$ ]] || tokens=0
-    [[ "$progress" =~ ^-?[0-9]+$ ]] || progress=0
-
-    display_file="$DATA_DIR/swarm-display.json"
-
-    # Initialize if doesn't exist
-    if [[ ! -f "$display_file" ]]; then
-      bash "$0" swarm-display-init "default-swarm" >/dev/null 2>&1
-    fi
-
-    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-
-    # Read current display and update using jq
-    updated=$(jq --arg ant "$ant_name" --arg caste "$caste" --arg ant_status "$ant_status" \
-      --arg task "$task" --arg parent "$parent" --argjson tools "$tools_json" \
-      --argjson tokens "$tokens" --arg ts "$ts" --arg chamber "$chamber" --argjson progress "$progress" '
-      # Find existing ant or create new entry
-      (.active_ants | map(select(.name == $ant)) | length) as $exists |
-      # Get old chamber if ant exists
-      (if $exists > 0 then
-        (.active_ants[] | select(.name == $ant) | .chamber // "")
-      else
-        ""
-      end) as $old_chamber |
-      # Determine new chamber
-      (if $chamber != "" then $chamber else $old_chamber end) as $new_chamber |
-      if $exists > 0 then
-        # Update existing ant
-        .active_ants = [.active_ants[] | if .name == $ant then
-          . + {
-            caste: $caste,
-            status: $ant_status,
-            task: $task,
-            parent: (if $parent != "" then $parent else .parent end),
-            tools: (if $tools != {} then $tools else .tools end),
-            tokens: (.tokens + $tokens),
-            chamber: (if $chamber != "" then $chamber else (.chamber // null) end),
-            progress: (if $progress > 0 then $progress else (.progress // 0) end),
-            updated_at: $ts
-          }
-        else . end]
-      else
-        # Add new ant
-        .active_ants += [{
-          name: $ant,
-          caste: $caste,
-          status: $ant_status,
-          task: $task,
-          parent: (if $parent != "" then $parent else null end),
-          tools: (if $tools != {} then $tools else {read:0,grep:0,edit:0,bash:0} end),
-          tokens: $tokens,
-          chamber: (if $chamber != "" then $chamber else null end),
-          progress: $progress,
-          started_at: $ts,
-          updated_at: $ts
-        }]
-      end |
-      # Recalculate summary
-      .summary.total_active = (.active_ants | length) |
-      .summary.by_caste = (.active_ants | group_by(.caste) | map({key: .[0].caste, value: length}) | from_entries) |
-      .summary.by_zone = (.active_ants | group_by(.status) | map({key: .[0].status, value: length}) | from_entries) |
-      # Update chamber activity counts
-      # Decrement old chamber if changed
-      (if $old_chamber != "" and $old_chamber != $new_chamber and has("chambers") and (.chambers | has($old_chamber)) then
-        .chambers[$old_chamber].activity = ([(.chambers[$old_chamber].activity // 1) - 1, 0] | max)
-      else
-        .
-      end) |
-      # Increment new chamber
-      (if $new_chamber != "" and has("chambers") and (.chambers | has($new_chamber)) then
-        .chambers[$new_chamber].activity = (.chambers[$new_chamber].activity // 0) + 1
-      else
-        .
-      end)
-    ' "$display_file") || json_err "$E_JSON_INVALID" "Failed to update swarm display"
-
-    atomic_write "$display_file" "$updated"
-
-    # Get emoji for response
-    emoji=$(get_caste_emoji "$caste")
-    json_ok "{\"updated\":true,\"ant\":\"$ant_name\",\"caste\":\"$caste\",\"emoji\":\"$emoji\",\"chamber\":\"$chamber\",\"progress\":$progress}"
-    ;;
-
-  swarm-display-get)
-    # Get current swarm display state
-    # Usage: swarm-display-get
-    display_file="$DATA_DIR/swarm-display.json"
-
-    if [[ ! -f "$display_file" ]]; then
-      json_ok '{"swarm_id":null,"active_ants":[],"summary":{"total_active":0,"by_caste":{},"by_zone":{}},"chambers":{}}'
-    else
-      json_ok "$(cat "$display_file")"
-    fi
-    ;;
-
-  swarm-display-render)
-    # Render the swarm display to terminal
-    # Usage: swarm-display-render [swarm_id]
-    swarm_id="${1:-default-swarm}"
-
-    display_script="$SCRIPT_DIR/utils/swarm-display.sh"
-
-    if [[ -f "$display_script" ]]; then
-      # Execute the display script
-      bash "$display_script" "$swarm_id" 2>/dev/null || true
-      json_ok '{"rendered":true}'
-    else
-      json_err "$E_FILE_NOT_FOUND" "Display script not found: $display_script"
-    fi
-    ;;
-
-  swarm-display-inline)
-    # Inline swarm display for Claude Code (no loop, no clear)
-    # Usage: swarm-display-inline [swarm_id]
-    swarm_id="${1:-default-swarm}"
-    display_file="$DATA_DIR/swarm-display.json"
-
-    # ANSI colors
-    BLUE='\033[34m'
-    GREEN='\033[32m'
-    YELLOW='\033[33m'
-    RED='\033[31m'
-    MAGENTA='\033[35m'
-    BOLD='\033[1m'
-    DIM='\033[2m'
-    RESET='\033[0m'
-
-    # Caste colors
-    get_caste_color() {
-      case "$1" in
-        builder) echo "$BLUE" ;;
-        watcher) echo "$GREEN" ;;
-        scout) echo "$YELLOW" ;;
-        chaos) echo "$RED" ;;
-        prime) echo "$MAGENTA" ;;
-        oracle) echo "$MAGENTA" ;;
-        route_setter) echo "$MAGENTA" ;;
-        *) echo "$RESET" ;;
-      esac
-    }
-
-    # Caste emojis with ant
-    get_caste_emoji() {
-      case "$1" in
-        builder) echo "🔨🐜" ;;
-        watcher) echo "👁️🐜" ;;
-        scout) echo "🔍🐜" ;;
-        chaos) echo "🎲🐜" ;;
-        prime) echo "👑🐜" ;;
-        oracle) echo "🔮🐜" ;;
-        route_setter) echo "🧭🐜" ;;
-        archaeologist) echo "🏺🐜" ;;
-        chronicler) echo "📝🐜" ;;
-        gatekeeper) echo "📦🐜" ;;
-        guardian) echo "🛡️🐜" ;;
-        includer) echo "♿🐜" ;;
-        keeper) echo "📚🐜" ;;
-        measurer) echo "⚡🐜" ;;
-        probe) echo "🧪🐜" ;;
-        sage) echo "📜🐜" ;;
-        tracker) echo "🐛🐜" ;;
-        weaver) echo "🔄🐜" ;;
-        colonizer) echo "🌱🐜" ;;
-        dreamer) echo "💭🐜" ;;
-        *) echo "🐜" ;;
-      esac
-    }
-
-    # Status phrases
-    get_status_phrase() {
-      case "$1" in
-        builder) echo "excavating..." ;;
-        watcher) echo "observing..." ;;
-        scout) echo "exploring..." ;;
-        chaos) echo "testing..." ;;
-        prime) echo "coordinating..." ;;
-        oracle) echo "researching..." ;;
-        route_setter) echo "planning..." ;;
-        *) echo "working..." ;;
-      esac
-    }
-
-    # Excavation phrase based on progress
-    get_excavation_phrase() {
-      local progress="${1:-0}"
-      if [[ "$progress" -lt 25 ]]; then
-        echo "🚧 Starting excavation..."
-      elif [[ "$progress" -lt 50 ]]; then
-        echo "⛏️  Digging deeper..."
-      elif [[ "$progress" -lt 75 ]]; then
-        echo "🪨 Moving earth..."
-      elif [[ "$progress" -lt 100 ]]; then
-        echo "🏗️  Almost there..."
-      else
-        echo "✅ Excavation complete!"
-      fi
-    }
-
-    # Format tools: "📖5 🔍3 ✏️2 ⚡1"
-    format_tools() {
-      local read="${1:-0}"
-      local grep="${2:-0}"
-      local edit="${3:-0}"
-      local bash="${4:-0}"
-      local result=""
-      [[ "$read" -gt 0 ]] && result="${result}📖${read} "
-      [[ "$grep" -gt 0 ]] && result="${result}🔍${grep} "
-      [[ "$edit" -gt 0 ]] && result="${result}✏️${edit} "
-      [[ "$bash" -gt 0 ]] && result="${result}⚡${bash}"
-      echo "$result"
-    }
-
-    # Render progress bar (green when working)
-    render_progress_bar() {
-      local percent="${1:-0}"
-      local width="${2:-20}"
-      [[ "$percent" -lt 0 ]] && percent=0
-      [[ "$percent" -gt 100 ]] && percent=100
-      local filled=$((percent * width / 100))
-      local empty=$((width - filled))
-      local bar=""
-      for ((i=0; i<filled; i++)); do bar+="█"; done
-      for ((i=0; i<empty; i++)); do bar+="░"; done
-      echo -e "${GREEN}[$bar]${RESET} ${percent}%"
-    }
-
-    # Format duration
-    format_duration() {
-      local seconds="${1:-0}"
-      if [[ "$seconds" -lt 60 ]]; then
-        echo "${seconds}s"
-      else
-        local mins=$((seconds / 60))
-        local secs=$((seconds % 60))
-        echo "${mins}m${secs}s"
-      fi
-    }
-
-    # Check for display file
-    if [[ ! -f "$display_file" ]]; then
-      echo -e "${DIM}🐜 No active swarm data${RESET}"
-      json_ok '{"displayed":false,"reason":"no_data"}'
-      exit 0
-    fi
-
-    # Check for jq
-    if ! command -v jq >/dev/null 2>&1; then
-      echo -e "${DIM}🐜 Swarm active (jq not available for details)${RESET}"
-      json_ok '{"displayed":true,"warning":"jq_missing"}'
-      exit 0
-    fi
-
-    # Read swarm data
-    total_active=$(jq -r '.summary.total_active // 0' "$display_file" 2>/dev/null || echo "0")
-
-    if [[ "$total_active" -eq 0 ]]; then
-      echo -e "${DIM}🐜 Colony idle${RESET}"
-      json_ok '{"displayed":true,"ants":0}'
-      exit 0
-    fi
-
-    # Render header with ant logo
-    echo ""
-    cat << 'ANTLOGO'
-
-
-                                      ▁▐▖      ▁
-                            ▗▇▇███▆▇▃▅████▆▇▆▅▟██▛▇
-                             ▝▜▅▛██████████████▜▅██
-                          ▁▂▀▇▆██▙▜██████████▛▟███▛▁▃▁
-                         ▕▂▁▉▅████▙▞██████▜█▚▟████▅▊ ▐
-                        ▗▁▐█▀▜████▛▃▝▁████▍▘▟▜████▛▀█▂ ▖
-                    ▁▎▝█▁▝▍▆▜████▊▐▀▏▀▍▂▂▝▀▕▀▌█████▀▅▐▚ █▏▁▁
-                      ▂▚▃▇▙█▟████▛▏ ▝▜▐▛▀▍▛▘ ▕█████▆▊▐▂▃▞▂▔
-                       ▚▔█▛██████▙▟▍▜▍▜▃▃▖▟▛▐██████▛▛▜▔▔▞
-                        ▋▖▍▊▖██████▇▃▁▝██▘▝▃████▜█▜ ▋▐▐▗
-                        ▍▌▇█▅▂▜██████████████████▉▃▄▋▖  ▝
-                      ▁▎▍▁▜▟███▀▀▜████████████▛▀▀███▆▂  ▁▁
-                     ██ ▆▇▌▁▕▚▅▆███▛████████▜███▆▄▞▁▁▐▅▎ █▉
-                     ▆█████▛▃▟█▀████████████████▛█▙▙▜▉▟▛▜█▌▗
-                     ▅▆▋ ▁▁▁▔▕▁▁▁▇█████▛▀▀▀▁▜▇▇▁▁▁▁▁▁▁▁ ▐▊▗
-                   ▗▆▃▃▃▔███▖▔██▀▀▝▀██▀▍█▛▁▐█▏█▛▀▀▏█▛▀▜█▆▃▃▆▖
-                   ▝▗▖  ▟█▟█▙ █▛▀▘  █▊ ▕█▛▀▜█▏█▛▀▘ █▋▆█▛  ▗▖
-                   ▘ ▘ ▟▛  ▝▀▘▀▀▀▀▘ ▀▀▂▂█▙▂▐▀▏▀▀▀▀▘▀▘ ▝▀▅▂▝ ▕▏
-                    ▕▕  ▃▗▄▔▗▄▄▗▗▗▔▄▄▄▄▗▄▄▗▔▃▃▃▗▄▂▄▃▗▄▂▖▖ ▏▁
-                    ▝▘▏ ▔▔   ▁▔▁▔▔▁▔▔▔▔▔▔▔▁▁ ▔▔   ▔▔▔▔
-                             ▀ ▀▝▘▀▀▔▘▘▀▝▕▀▀▝▝▀▔▀ ▀▔▘
-                            ▘ ▗▅▁▝▚▃▀▆▟██▙▆▝▃ ▘ ▁▗▌
-                               ▔▀▔▝ ▔▀▟▜▛▛▀▔    ▀
-
-
-ANTLOGO
-    echo -e "${BOLD}AETHER COLONY :: Colony Activity${RESET}"
-    echo -e "${DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-    echo ""
-
-    # Render each active ant (limit to 5)
-    jq -r '.active_ants[0:5][] | "\(.name)|\(.caste)|\(.status // "")|\(.task // "")|\(.tools.read // 0)|\(.tools.grep // 0)|\(.tools.edit // 0)|\(.tools.bash // 0)|\(.tokens // 0)|\(.started_at // "")|\(.parent // "Queen")|\(.progress // 0)"' "$display_file" 2>/dev/null | while IFS='|' read -r ant_name ant_caste ant_status ant_task read_ct grep_ct edit_ct bash_ct tokens started_at parent progress; do
-      color=$(get_caste_color "$ant_caste")
-      emoji=$(get_caste_emoji "$ant_caste")
-      phrase=$(get_status_phrase "$ant_caste")
-
-      # Format tools
-      tools_str=$(format_tools "$read_ct" "$grep_ct" "$edit_ct" "$bash_ct")
-
-      # Truncate task if too long
-      display_task="$ant_task"
-      [[ ${#display_task} -gt 35 ]] && display_task="${display_task:0:32}..."
-
-      # Calculate elapsed time
-      elapsed_str=""
-      started_ts="${started_at:-}"
-      if [[ -n "$started_ts" ]] && [[ "$started_ts" != "null" ]]; then
-        started_ts=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$started_ts" +%s 2>/dev/null)
-        if [[ -z "$started_ts" ]] || [[ "$started_ts" == "null" ]]; then
-          started_ts=$(date -d "$started_ts" +%s 2>/dev/null) || started_ts=0
-        fi
-        now_ts=$(date +%s)
-        elapsed=0
-        if [[ -n "$started_ts" ]] && [[ "$started_ts" -gt 0 ]] 2>/dev/null; then
-          elapsed=$((now_ts - started_ts))
-        fi
-        if [[ ${elapsed:-0} -gt 0 ]]; then
-          elapsed_str="($(format_duration $elapsed))"
-        fi
-      fi
-
-      # Token indicator
-      token_str=""
-      if [[ -n "$tokens" ]] && [[ "$tokens" -gt 0 ]]; then
-        token_str="🍯${tokens}"
-      fi
-
-      # Output ant line: "🐜 Builder: excavating... Implement auth 📖5 🔍3 (2m3s) 🍯1250"
-      echo -e "${color}${emoji} ${BOLD}${ant_name}${RESET}${color}: ${phrase}${RESET} ${display_task}"
-      echo -e "   ${tools_str} ${DIM}${elapsed_str}${RESET} ${token_str}"
-
-      # Show progress bar if progress > 0
-      if [[ -n "$progress" ]] && [[ "$progress" -gt 0 ]]; then
-        progress_bar=$(render_progress_bar "$progress" 15)
-        excavation_phrase=$(get_excavation_phrase "$progress")
-        echo -e "   ${DIM}${progress_bar}${RESET}"
-        echo -e "   ${DIM}${excavation_phrase}${RESET}"
-      fi
-
-      echo ""
-    done
-
-    # Chamber activity map
-    echo -e "${DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-    echo ""
-    echo -e "${BOLD}Chamber Activity:${RESET}"
-
-    # Show active chambers with fire intensity
-    has_chamber_activity=0
-    jq -r '.chambers | to_entries[] | "\(.key)|\(.value.activity)|\(.value.icon)"' "$display_file" 2>/dev/null | \
-    while IFS='|' read -r chamber activity icon; do
-      if [[ -n "$activity" ]] && [[ "$activity" -gt 0 ]]; then
-        has_chamber_activity=1
-        if [[ "$activity" -ge 5 ]]; then
-          fires="🔥🔥🔥"
-        elif [[ "$activity" -ge 3 ]]; then
-          fires="🔥🔥"
-        else
-          fires="🔥"
-        fi
-        chamber_name="${chamber//_/ }"
-        echo -e "  ${icon} ${chamber_name} ${fires} (${activity} ants)"
-      fi
-    done
-
-    if [[ "$has_chamber_activity" -eq 0 ]]; then
-      echo -e "${DIM}  (no chamber activity)${RESET}"
-    fi
-
-    # Summary
-    echo ""
-    echo -e "${DIM}${total_active} forager$([[ "$total_active" -eq 1 ]] || echo "s") excavating...${RESET}"
-
-    json_ok "{\"displayed\":true,\"ants\":$total_active}"
-    ;;
-
-  swarm-display-text)
-    # Plain-text swarm display for Claude conversation (no ANSI codes)
-    # Usage: swarm-display-text [swarm_id]
-    swarm_id="${1:-default-swarm}"
-    display_file="$DATA_DIR/swarm-display.json"
-
-    # Check for display file
-    if [[ ! -f "$display_file" ]]; then
-      echo "🐜 Colony idle"
-      json_ok '{"displayed":false,"reason":"no_data"}'
-      exit 0
-    fi
-
-    # Check for jq
-    if ! command -v jq >/dev/null 2>&1; then
-      echo "🐜 Swarm active (details unavailable)"
-      json_ok '{"displayed":true,"warning":"jq_missing"}'
-      exit 0
-    fi
-
-    # Read swarm data — handle both flat total_active and nested .summary.total_active
-    total_active=$(jq -r '(.total_active // .summary.total_active // 0)' "$display_file" 2>/dev/null || echo "0")
-
-    if [[ "$total_active" -eq 0 ]]; then
-      echo "🐜 Colony idle"
-      json_ok '{"displayed":true,"ants":0}'
-      exit 0
-    fi
-
-    # Compact header
-    echo "🐜 COLONY ACTIVITY"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-    # Caste emoji lookup
-    get_emoji() {
-      case "$1" in
-        builder)       echo "🔨🐜" ;;
-        watcher)       echo "👁️🐜" ;;
-        scout)         echo "🔍🐜" ;;
-        chaos)         echo "🎲🐜" ;;
-        prime)         echo "👑🐜" ;;
-        oracle)        echo "🔮🐜" ;;
-        route_setter)  echo "🧭🐜" ;;
-        archaeologist) echo "🏺🐜" ;;
-        surveyor)      echo "📊🐜" ;;
-        *)             echo "🐜" ;;
-      esac
-    }
-
-    # Format tool counts (only non-zero)
-    format_tools_text() {
-      local r="${1:-0}" g="${2:-0}" e="${3:-0}" b="${4:-0}"
-      local result=""
-      [[ "$r" -gt 0 ]] && result="${result}📖${r} "
-      [[ "$g" -gt 0 ]] && result="${result}🔍${g} "
-      [[ "$e" -gt 0 ]] && result="${result}✏️${e} "
-      [[ "$b" -gt 0 ]] && result="${result}⚡${b}"
-      echo "$result"
-    }
-
-    # Progress bar using block characters (no ANSI)
-    render_bar_text() {
-      local pct="${1:-0}" w="${2:-10}"
-      [[ "$pct" -lt 0 ]] && pct=0
-      [[ "$pct" -gt 100 ]] && pct=100
-      local filled=$((pct * w / 100))
-      local empty=$((w - filled))
-      local bar=""
-      for ((i=0; i<filled; i++)); do bar+="█"; done
-      for ((i=0; i<empty; i++)); do bar+="░"; done
-      echo "[$bar] ${pct}%"
-    }
-
-    # Helper: parse ISO-8601 timestamp to epoch (macOS + Linux)
-    iso_to_epoch_text() {
-      local iso="$1"
-      local epoch=""
-      epoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$iso" +%s 2>/dev/null || true)
-      if [[ -z "$epoch" ]]; then
-        epoch=$(date -d "$iso" +%s 2>/dev/null || true)
-      fi
-      echo "${epoch:-0}"
-    }
-
-    # Helper: duration formatter (e.g., 45s, 3m12s)
-    format_duration_text() {
-      local seconds="${1:-0}"
-      if [[ "$seconds" -lt 60 ]]; then
-        echo "${seconds}s"
-      else
-        local mins=$((seconds / 60))
-        local secs=$((seconds % 60))
-        echo "${mins}m${secs}s"
-      fi
-    }
-
-    # Helper: compact number formatter (e.g., 1.2k, 2.4M)
-    format_compact_tokens() {
-      local n="${1:-0}"
-      if [[ "$n" -ge 1000000 ]]; then
-        awk -v n="$n" 'BEGIN { printf "%.1fM", n/1000000 }'
-      elif [[ "$n" -ge 1000 ]]; then
-        awk -v n="$n" 'BEGIN { printf "%.1fk", n/1000 }'
-      else
-        echo "$n"
-      fi
-    }
-
-    total_tokens=$(jq -r '[.active_ants[]?.tokens // 0] | add // 0' "$display_file" 2>/dev/null || echo "0")
-    started_iso=$(jq -r '.timestamp // ""' "$display_file" 2>/dev/null || echo "")
-    elapsed_text="n/a"
-    if [[ -n "$started_iso" && "$started_iso" != "null" ]]; then
-      started_epoch=$(iso_to_epoch_text "$started_iso")
-      now_epoch=$(date +%s)
-      if [[ "$started_epoch" -gt 0 ]] 2>/dev/null; then
-        total_elapsed=$((now_epoch - started_epoch))
-        [[ "$total_elapsed" -lt 0 ]] && total_elapsed=0
-        elapsed_text=$(format_duration_text "$total_elapsed")
-      fi
-    fi
-
-    # Render each ant (max 5)
-    jq -r '.active_ants[0:5][] | "\(.name)|\(.caste)|\(.task // "")|\(.tools.read // 0)|\(.tools.grep // 0)|\(.tools.edit // 0)|\(.tools.bash // 0)|\(.progress // 0)|\(.tokens // 0)|\(.started_at // "")"' "$display_file" 2>/dev/null | while IFS='|' read -r name caste task r g e b progress tokens started_at; do
-      emoji=$(get_emoji "$caste")
-      tools=$(format_tools_text "$r" "$g" "$e" "$b")
-      bar=$(render_bar_text "${progress:-0}" 10)
-      token_str=""
-      elapsed_ant=""
-
-      # Truncate task to 25 chars
-      [[ ${#task} -gt 25 ]] && task="${task:0:22}..."
-
-      if [[ -n "$tokens" && "$tokens" -gt 0 ]] 2>/dev/null; then
-        token_str="🍯$(format_compact_tokens "$tokens")"
-      fi
-
-      if [[ -n "$started_at" && "$started_at" != "null" ]]; then
-        ant_start_epoch=$(iso_to_epoch_text "$started_at")
-        now_epoch=$(date +%s)
-        if [[ "$ant_start_epoch" -gt 0 ]] 2>/dev/null; then
-          ant_elapsed=$((now_epoch - ant_start_epoch))
-          [[ "$ant_elapsed" -lt 0 ]] && ant_elapsed=0
-          elapsed_ant="($(format_duration_text "$ant_elapsed"))"
-        fi
-      fi
-
-      echo "${emoji} ${name} ${bar} ${task}"
-      meta_line=""
-      [[ -n "$tools" ]] && meta_line="${meta_line}${tools} "
-      [[ -n "$elapsed_ant" ]] && meta_line="${meta_line}${elapsed_ant} "
-      [[ -n "$token_str" ]] && meta_line="${meta_line}${token_str}"
-      [[ -n "$meta_line" ]] && echo "   ${meta_line}"
-      echo ""
-    done
-
-    # Overflow indicator
-    if [[ "$total_active" -gt 5 ]]; then
-      echo "   +$((total_active - 5)) more ants..."
-      echo ""
-    fi
-
-    # Footer
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "⏱️ Elapsed: ${elapsed_text} | 🍯 Total: $(format_compact_tokens "$total_tokens") | ${total_active} ants active"
-
-    json_ok "{\"displayed\":true,\"ants\":$total_active}"
-    ;;
-
-  swarm-timing-start)
-    # Record start time for an ant
-    # Usage: swarm-timing-start <ant_name>
-    ant_name="${1:-}"
-    [[ -z "$ant_name" ]] && json_err "$E_VALIDATION_FAILED" "Usage: swarm-timing-start <ant_name>"
-
-    mkdir -p "$DATA_DIR"
-    timing_file="$DATA_DIR/timing.log"
-    ts=$(date +%s)
-    ts_iso=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-
-    # Remove any existing entry for this ant and append new one
-    if [[ -f "$timing_file" ]]; then
-      grep -v "^$ant_name|" "$timing_file" > "${timing_file}.tmp" 2>/dev/null || true
-      mv "${timing_file}.tmp" "$timing_file"
-    fi
-    echo "$ant_name|$ts|$ts_iso" >> "$timing_file"
-
-    json_ok "{\"ant\":\"$ant_name\",\"started_at\":\"$ts_iso\",\"timestamp\":$ts}"
-    ;;
-
-  swarm-timing-get)
-    # Get elapsed time for an ant
-    # Usage: swarm-timing-get <ant_name>
-    ant_name="${1:-}"
-    [[ -z "$ant_name" ]] && json_err "$E_VALIDATION_FAILED" "Usage: swarm-timing-get <ant_name>"
-
-    timing_file="$DATA_DIR/timing.log"
-
-    if [[ ! -f "$timing_file" ]] || ! grep -q "^$ant_name|" "$timing_file" 2>/dev/null; then
-      json_ok "{\"ant\":\"$ant_name\",\"started_at\":null,\"elapsed_seconds\":0,\"elapsed_formatted\":\"00:00\"}"
-      exit 0
-    fi
-
-    # Read start time
-    start_line=$(grep "^$ant_name|" "$timing_file" | tail -1)
-    start_ts=$(echo "$start_line" | cut -d'|' -f2)
-    start_iso=$(echo "$start_line" | cut -d'|' -f3)
-
-    now=$(date +%s)
-    elapsed=$((now - start_ts))
-
-    # Format as MM:SS
-    mins=$((elapsed / 60))
-    secs=$((elapsed % 60))
-    formatted=$(printf "%02d:%02d" $mins $secs)
-
-    json_ok "{\"ant\":\"$ant_name\",\"started_at\":\"$start_iso\",\"elapsed_seconds\":$elapsed,\"elapsed_formatted\":\"$formatted\"}"
-    ;;
-
-  swarm-timing-eta)
-    # Calculate ETA based on progress percentage
-    # Usage: swarm-timing-eta <ant_name> <percent_complete>
-    ant_name="${1:-}"
-    percent="${2:-0}"
-    [[ -z "$ant_name" ]] && json_err "$E_VALIDATION_FAILED" "Usage: swarm-timing-eta <ant_name> <percent_complete>"
-
-    # Validate percent is a number
-    if ! [[ "$percent" =~ ^[0-9]+$ ]]; then
-      percent=0
-    fi
-
-    # Clamp percent to 0-100
-    if [[ $percent -lt 0 ]]; then
-      percent=0
-    elif [[ $percent -gt 100 ]]; then
-      percent=100
-    fi
-
-    timing_file="$DATA_DIR/timing.log"
-
-    if [[ ! -f "$timing_file" ]] || ! grep -q "^$ant_name|" "$timing_file" 2>/dev/null; then
-      json_ok "{\"ant\":\"$ant_name\",\"percent\":$percent,\"eta_seconds\":null,\"eta_formatted\":\"--:--\"}"
-      exit 0
-    fi
-
-    # Read start time
-    start_ts=$(grep "^$ant_name|" "$timing_file" | tail -1 | cut -d'|' -f2)
-    now=$(date +%s)
-    elapsed=$((now - start_ts))
-
-    # Calculate ETA
-    if [[ $percent -le 0 ]]; then
-      eta_seconds=null
-      eta_formatted="--:--"
-    elif [[ $percent -ge 100 ]]; then
-      eta_seconds=0
-      eta_formatted="00:00"
-    else
-      # ETA = (elapsed / percent) * (100 - percent)
-      eta_seconds=$(( (elapsed * (100 - percent)) / percent ))
-      mins=$((eta_seconds / 60))
-      secs=$((eta_seconds % 60))
-      eta_formatted=$(printf "%02d:%02d" $mins $secs)
-    fi
-
-    json_ok "{\"ant\":\"$ant_name\",\"percent\":$percent,\"eta_seconds\":$eta_seconds,\"eta_formatted\":\"$eta_formatted\"}"
-    ;;
+  swarm-timing-start) _swarm_timing_start "$@" ;;
+  swarm-timing-get) _swarm_timing_get "$@" ;;
+  swarm-timing-eta) _swarm_timing_eta "$@" ;;
 
   # ============================================
   # VIEW STATE MANAGEMENT (collapsible views)
@@ -4243,7 +3183,7 @@ ANTLOGO
 
     if [[ ! -f "$view_state_file" ]]; then
       # Auto-initialize if not exists
-      bash "$0" view-state-init >/dev/null 2>&1
+      bash "$0" view-state-init >/dev/null 2>&1 || _aether_log_error "Could not initialize view state display"
     fi
 
     if [[ -z "$view_name" ]]; then
@@ -4269,7 +3209,7 @@ ANTLOGO
     view_state_file="$DATA_DIR/view-state.json"
 
     if [[ ! -f "$view_state_file" ]]; then
-      bash "$0" view-state-init >/dev/null 2>&1
+      bash "$0" view-state-init >/dev/null 2>&1 || _aether_log_error "Could not initialize view state display"
     fi
 
     # Determine if value is JSON or string
@@ -4299,7 +3239,7 @@ ANTLOGO
     view_state_file="$DATA_DIR/view-state.json"
 
     if [[ ! -f "$view_state_file" ]]; then
-      bash "$0" view-state-init >/dev/null 2>&1
+      bash "$0" view-state-init >/dev/null 2>&1 || _aether_log_error "Could not initialize view state display"
     fi
 
     # Check current state
@@ -4337,7 +3277,7 @@ ANTLOGO
     view_state_file="$DATA_DIR/view-state.json"
 
     if [[ ! -f "$view_state_file" ]]; then
-      bash "$0" view-state-init >/dev/null 2>&1
+      bash "$0" view-state-init >/dev/null 2>&1 || _aether_log_error "Could not initialize view state display"
     fi
 
     updated=$(jq --arg view "$view_name" --arg item "$item" '
@@ -4359,7 +3299,7 @@ ANTLOGO
     view_state_file="$DATA_DIR/view-state.json"
 
     if [[ ! -f "$view_state_file" ]]; then
-      bash "$0" view-state-init >/dev/null 2>&1
+      bash "$0" view-state-init >/dev/null 2>&1 || _aether_log_error "Could not initialize view state display"
     fi
 
     updated=$(jq --arg view "$view_name" --arg item "$item" '
@@ -4371,217 +3311,9 @@ ANTLOGO
     json_ok "{\"item\":\"$item\",\"state\":\"collapsed\",\"view\":\"$view_name\"}"
     ;;
 
-  queen-init)
-    # Initialize QUEEN.md from template
-    # Creates .aether/QUEEN.md from template if missing
-    queen_file="$AETHER_ROOT/.aether/QUEEN.md"
+  queen-init) _queen_init "$@" ;;
 
-    # Check multiple locations for template
-    # Order: hub (system/) -> dev (.aether/) -> repo local -> legacy
-    template_file=""
-    for path in \
-      "$HOME/.aether/system/templates/QUEEN.md.template" \
-      "$AETHER_ROOT/.aether/templates/QUEEN.md.template" \
-      "$HOME/.aether/templates/QUEEN.md.template"; do
-      if [[ -f "$path" ]]; then
-        template_file="$path"
-        break
-      fi
-    done
-
-    # Ensure .aether directory exists
-    mkdir -p "$AETHER_ROOT/.aether"
-
-    # Check if QUEEN.md already exists and has content
-    if [[ -f "$queen_file" ]] && [[ -s "$queen_file" ]]; then
-      json_ok '{"created":false,"path":".aether/QUEEN.md","reason":"already_exists"}'
-      exit 0
-    fi
-
-    # Check if template was found
-    if [[ -z "$template_file" ]]; then
-      json_err "$E_FILE_NOT_FOUND" \
-        "Template not found. Run: npm install -g aether && aether install to restore it." \
-        '{"templates_checked":["~/.aether/system/templates/QUEEN.md.template",".aether/templates/QUEEN.md.template","~/.aether/templates/QUEEN.md.template"]}'
-      exit 1
-    fi
-
-    # Create QUEEN.md from template with timestamp substitution
-    timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-    sed -e "s/{TIMESTAMP}/$timestamp/g" "$template_file" > "$queen_file"
-
-    if [[ -f "$queen_file" ]]; then
-      json_ok "{\"created\":true,\"path\":\".aether/QUEEN.md\",\"source\":\"$template_file\"}"
-    else
-      json_err "$E_FILE_NOT_FOUND" "Failed to create QUEEN.md" '{"path":".aether/QUEEN.md"}'
-      exit 1
-    fi
-    ;;
-
-  queen-read)
-    # Read QUEEN.md and return wisdom as JSON for worker priming
-    # Supports two-level loading: global (~/.aether/QUEEN.md) first, then local (.aether/QUEEN.md)
-    # Local wisdom extends/global - entries are combined per category
-
-    queen_global="$HOME/.aether/QUEEN.md"
-    queen_local="$AETHER_ROOT/.aether/QUEEN.md"
-
-    # Track which files exist
-    has_global=false
-    has_local=false
-
-    # Check for global QUEEN.md
-    if [[ -f "$queen_global" ]]; then
-      has_global=true
-    fi
-
-    # Check for local QUEEN.md
-    if [[ -f "$queen_local" ]]; then
-      has_local=true
-    fi
-
-    # FAIL HARD if no QUEEN.md found at all
-    if [[ "$has_global" == "false" && "$has_local" == "false" ]]; then
-      json_err "$E_FILE_NOT_FOUND" "QUEEN.md not found" '{"global_path":"~/.aether/QUEEN.md","local_path":".aether/QUEEN.md"}'
-      exit 1
-    fi
-
-    # Helper function to extract wisdom sections from a file
-    # Uses line number approach to avoid macOS awk range issues
-    _extract_wisdom_sections() {
-      local file="$1"
-
-      # Find line numbers for each section
-      local p_line=$(awk '/^## 📜 Philosophies$/ {print NR; exit}' "$file")
-      local pat_line=$(awk '/^## 🧭 Patterns$/ {print NR; exit}' "$file")
-      local red_line=$(awk '/^## ⚠️ Redirects$/ {print NR; exit}' "$file")
-      local stack_line=$(awk '/^## 🔧 Stack Wisdom$/ {print NR; exit}' "$file")
-      local dec_line=$(awk '/^## 🏛️ Decrees$/ {print NR; exit}' "$file")
-      local evo_line=$(awk '/^## 📊 Evolution Log$/ {print NR; exit}' "$file")
-
-      # Extract each section: lines between section header and next header
-      local philosophies patterns redirects stack_wisdom decrees
-
-      # Philosophies: between p_line+1 and pat_line-1
-      philosophies=$(awk -v s="$p_line" -v e="$pat_line" 'NR > s && NR < e {print}' "$file" | sed '/^$/d' | jq -Rs '.' 2>/dev/null || echo '""')
-
-      # Patterns: between pat_line+1 and red_line-1
-      patterns=$(awk -v s="$pat_line" -v e="$red_line" 'NR > s && NR < e {print}' "$file" | sed '/^$/d' | jq -Rs '.' 2>/dev/null || echo '""')
-
-      # Redirects: between red_line+1 and stack_line-1
-      redirects=$(awk -v s="$red_line" -v e="$stack_line" 'NR > s && NR < e {print}' "$file" | sed '/^$/d' | jq -Rs '.' 2>/dev/null || echo '""')
-
-      # Stack Wisdom: between stack_line+1 and dec_line-1
-      stack_wisdom=$(awk -v s="$stack_line" -v e="$dec_line" 'NR > s && NR < e {print}' "$file" | sed '/^$/d' | jq -Rs '.' 2>/dev/null || echo '""')
-
-      # Decrees: between dec_line+1 and (evo_line-1 or end)
-      decrees=$(awk -v s="$dec_line" -v e="${evo_line:-999999}" 'NR > s && NR < e {print}' "$file" | sed '/^$/d' | jq -Rs '.' 2>/dev/null || echo '""')
-
-      # Output as JSON
-      jq -n \
-        --arg philosophies "$philosophies" \
-        --arg patterns "$patterns" \
-        --arg redirects "$redirects" \
-        --arg stack_wisdom "$stack_wisdom" \
-        --arg decrees "$decrees" \
-        '{philosophies: $philosophies, patterns: $patterns, redirects: $redirects, stack_wisdom: $stack_wisdom, decrees: $decrees}'
-    }
-
-    # Extract wisdom from global (if exists)
-    global_wisdom='{"philosophies":"","patterns":"","redirects":"","stack_wisdom":"","decrees":""}'
-    if [[ "$has_global" == "true" ]]; then
-      global_wisdom=$(_extract_wisdom_sections "$queen_global")
-    fi
-
-    # Extract wisdom from local (if exists)
-    local_wisdom='{"philosophies":"","patterns":"","redirects":"","stack_wisdom":"","decrees":""}'
-    if [[ "$has_local" == "true" ]]; then
-      local_wisdom=$(_extract_wisdom_sections "$queen_local")
-    fi
-
-    # Combine wisdom: local extends global - content appended
-    combined=$(jq -n \
-      --argjson global "$global_wisdom" \
-      --argjson local "$local_wisdom" \
-      '
-      def combine(a; b):
-        if a == "" or a == null then b
-        elif b == "" or b == null then a
-        else a + "\n" + b
-        end;
-
-      {
-        philosophies: combine($global.philosophies; $local.philosophies),
-        patterns: combine($global.patterns; $local.patterns),
-        redirects: combine($global.redirects; $local.redirects),
-        stack_wisdom: combine($global.stack_wisdom; $local.stack_wisdom),
-        decrees: combine($global.decrees; $local.decrees)
-      }
-      ')
-
-    # Get metadata from local (preferred) or global
-    metadata='{"version":"unknown","last_evolved":null,"source":"none"}'
-    if [[ "$has_local" == "true" ]]; then
-      metadata=$(sed -n '/<!-- METADATA/,/-->/p' "$queen_local" | sed '1d;$d' | tr -d '\n' | sed 's/^[[:space:]]*//')
-    elif [[ "$has_global" == "true" ]]; then
-      metadata=$(sed -n '/<!-- METADATA/,/-->/p' "$queen_global" | sed '1d;$d' | tr -d '\n' | sed 's/^[[:space:]]*//')
-    fi
-
-    # If no metadata found, return empty structure
-    if [[ -z "$metadata" ]]; then
-      metadata='{"version":"unknown","last_evolved":null,"source":"none","stats":{}}'
-    fi
-
-    # Gate 1: Validate metadata is parseable JSON BEFORE using as --argjson
-    if ! echo "$metadata" | jq -e . >/dev/null 2>&1; then
-      json_err "$E_JSON_INVALID" \
-        "QUEEN.md has a malformed METADATA block — the JSON between <!-- METADATA and --> is invalid. Try: fix the JSON in .aether/QUEEN.md or run queen-init to reset."
-    fi
-
-    # Extract individual combined wisdom values
-    philosophies=$(echo "$combined" | jq -r '.philosophies')
-    patterns=$(echo "$combined" | jq -r '.patterns')
-    redirects=$(echo "$combined" | jq -r '.redirects')
-    stack_wisdom=$(echo "$combined" | jq -r '.stack_wisdom')
-    decrees=$(echo "$combined" | jq -r '.decrees')
-
-    # Build JSON output
-    result=$(jq -n \
-      --argjson meta "$metadata" \
-      --arg philosophies "$philosophies" \
-      --arg patterns "$patterns" \
-      --arg redirects "$redirects" \
-      --arg stack_wisdom "$stack_wisdom" \
-      --arg decrees "$decrees" \
-      '{
-        metadata: $meta,
-        wisdom: {
-          philosophies: $philosophies,
-          patterns: $patterns,
-          redirects: $redirects,
-          stack_wisdom: $stack_wisdom,
-          decrees: $decrees
-        },
-        priming: {
-          has_philosophies: ($philosophies | length) > 0 and $philosophies != "*No philosophies recorded yet.*\n",
-          has_patterns: ($patterns | length) > 0 and $patterns != "*No patterns recorded yet.*\n",
-          has_redirects: ($redirects | length) > 0 and $redirects != "*No redirects recorded yet.*\n",
-          has_stack_wisdom: ($stack_wisdom | length) > 0 and $stack_wisdom != "*No stack wisdom recorded yet.*\n",
-          has_decrees: ($decrees | length) > 0 and $decrees != "*No decrees recorded yet.*\n"
-        },
-        sources: {
-          has_global: ($meta.source == "global" or $meta.source == "local"),
-          has_local: ($meta.source == "local")
-        }
-      }')
-
-    # Gate 2: Validate assembled result before returning
-    if [[ -z "$result" ]] || ! echo "$result" | jq -e . >/dev/null 2>&1; then
-      json_err "$E_JSON_INVALID" \
-        "Couldn't assemble queen-read output. QUEEN.md may have formatting issues. Try: run queen-init to reset."
-    fi
-    json_ok "$result"
-    ;;
+  queen-read) _queen_read "$@" ;;
 
   generate-threshold-bar)
     # Generate visual threshold progress bar
@@ -4749,11 +3481,7 @@ ANTLOGO
     json_ok "$result"
     ;;
 
-  queen-thresholds)
-    # Return proposal and auto-promotion thresholds for each wisdom type
-    # Usage: queen-thresholds
-    json_ok "$(get_wisdom_thresholds_json)"
-    ;;
+  queen-thresholds) _queen_thresholds "$@" ;;
 
   incident-rule-add)
     # Append an incident-derived rule to long-term guidance stores.
@@ -4790,25 +3518,27 @@ ANTLOGO
         ir_lock_held=false
         if type acquire_lock &>/dev/null; then
           acquire_lock "$ir_queen_file" || {
-            rm -f "$ir_tmp" 2>/dev/null || true
+            rm -f "$ir_tmp" 2>/dev/null || true  # SUPPRESS:OK -- cleanup: file may not exist
             json_err "$E_LOCK_FAILED" "Failed to acquire lock on QUEEN.md"
           }
           ir_lock_held=true
         fi
 
-        ir_content=$(cat "$ir_tmp" 2>/dev/null || echo "")
+        ir_content=$(cat "$ir_tmp" 2>/dev/null || echo "")  # SUPPRESS:OK -- read-default: file may not exist yet
         atomic_write "$ir_queen_file" "$ir_content" || {
-          rm -f "$ir_tmp" 2>/dev/null || true
-          [[ "$ir_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+          rm -f "$ir_tmp" 2>/dev/null || true  # SUPPRESS:OK -- cleanup: file may not exist
+          [[ "$ir_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
           json_err "$E_FILE_NOT_FOUND" "Failed to append decree rule to QUEEN.md"
         }
-        rm -f "$ir_tmp" 2>/dev/null || true
-        [[ "$ir_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+        rm -f "$ir_tmp" 2>/dev/null || true  # SUPPRESS:OK -- cleanup: file may not exist
+        [[ "$ir_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
         ;;
 
       constraint)
         ir_constraints_file="$DATA_DIR/constraints.json"
-        [[ -f "$ir_constraints_file" ]] || printf '%s\n' '{"version":"1.0","focus":[],"constraints":[]}' > "$ir_constraints_file"
+        if [[ ! -f "$ir_constraints_file" ]]; then
+          atomic_write "$ir_constraints_file" '{"version":"1.0","focus":[],"constraints":[]}' || json_err "$E_UNKNOWN" "Failed to initialize constraints file"
+        fi
 
         ir_lock_held=false
         if type acquire_lock &>/dev/null; then
@@ -4825,16 +3555,16 @@ ANTLOGO
             source: $source,
             created_at: $ts
           }]
-        ' "$ir_constraints_file" 2>/dev/null) || {
-          [[ "$ir_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+        ' "$ir_constraints_file" 2>/dev/null) || {  # SUPPRESS:OK -- read-default: file may not exist yet
+          [[ "$ir_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
           json_err "$E_JSON_INVALID" "Failed to update constraints.json"
         }
 
         atomic_write "$ir_constraints_file" "$ir_updated" || {
-          [[ "$ir_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+          [[ "$ir_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
           json_err "$E_JSON_INVALID" "Failed to write constraints.json"
         }
-        [[ "$ir_lock_held" == "true" ]] && release_lock 2>/dev/null || true
+        [[ "$ir_lock_held" == "true" ]] && release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
         ;;
 
       gate)
@@ -4855,561 +3585,18 @@ ANTLOGO
     json_ok "{\"incident_id\":\"$ir_incident_id\",\"rule_type\":\"$ir_rule_type\",\"added\":true,\"timestamp\":\"$ir_ts\"}"
     ;;
 
-  queen-promote)
-    # Promote a learning to QUEEN.md wisdom
-    # Usage: queen-promote <type> <content> <colony_name>
-    # Types: philosophy, pattern, redirect, stack, decree
-    wisdom_type="${1:-}"
-    content="${2:-}"
-    colony_name="${3:-}"
-
-    # Validate required arguments
-    [[ -z "$wisdom_type" ]] && json_err "$E_VALIDATION_FAILED" "Usage: queen-promote <type> <content> <colony_name>" '{"missing":"type"}'
-    [[ -z "$content" ]] && json_err "$E_VALIDATION_FAILED" "Usage: queen-promote <type> <content> <colony_name>" '{"missing":"content"}'
-    [[ -z "$colony_name" ]] && json_err "$E_VALIDATION_FAILED" "Usage: queen-promote <type> <content> <colony_name>" '{"missing":"colony_name"}'
-
-    # Validate type (failure observations map to pattern when promoted)
-    valid_types=("philosophy" "pattern" "redirect" "stack" "decree" "failure")
-    type_valid=false
-    for vt in "${valid_types[@]}"; do
-      [[ "$wisdom_type" == "$vt" ]] && type_valid=true && break
-    done
-    [[ "$type_valid" == "false" ]] && json_err "$E_VALIDATION_FAILED" "Invalid type: $wisdom_type" '{"valid_types":["philosophy","pattern","redirect","stack","decree","failure"]}'
-
-    queen_file="$AETHER_ROOT/.aether/QUEEN.md"
-
-    # Check if QUEEN.md exists
-    if [[ ! -f "$queen_file" ]]; then
-      json_err "$E_FILE_NOT_FOUND" "QUEEN.md not found" '{"path":".aether/QUEEN.md"}'
-      exit 1
-    fi
-
-    # Thresholds come from the shared command policy to keep promotion behavior consistent.
-    threshold=$(get_wisdom_threshold "$wisdom_type" "propose")
-
-    # QUEEN-04: Check threshold against learning-observations.json
-    # For decrees, always promote immediately (threshold 0)
-    # For other types, verify observation count meets threshold
-    observations_file="$DATA_DIR/learning-observations.json"
-    content_hash="sha256:$(echo -n "$content" | sha256sum | cut -d' ' -f1)"
-
-    if [[ "$wisdom_type" != "decree" ]] && [[ -f "$observations_file" ]]; then
-      # Check if this content has been observed enough times
-      observation_data=$(jq -r --arg hash "$content_hash" '.observations[] | select(.content_hash == $hash) | {count: .observation_count, colonies: .colonies}' "$observations_file" 2>/dev/null || echo '{}')
-
-      if [[ -n "$observation_data" ]] && [[ "$observation_data" != '{}' ]]; then
-        obs_count=$(echo "$observation_data" | jq -r '.count // 0')
-        obs_colonies=$(echo "$observation_data" | jq -r '.colonies // []')
-
-        if [[ "$obs_count" -lt "$threshold" ]]; then
-          json_err "$E_VALIDATION_FAILED" "Threshold not met: $obs_count/$threshold observations" "{\"observation_count\":$obs_count,\"threshold\":$threshold,\"content_hash\":\"$content_hash\"}"
-        fi
-      else
-        # No observations found for this content
-        json_err "$E_VALIDATION_FAILED" "No observations found for this content" "{\"threshold\":$threshold,\"content_hash\":\"$content_hash\"}"
-      fi
-    fi
-
-    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-
-    # Map type to section header and emoji
-    # Note: failure observations map to Patterns section when promoted
-    case "$wisdom_type" in
-      philosophy) section_header="## 📜 Philosophies" ;;
-      pattern|failure) section_header="## 🧭 Patterns" ;;
-      redirect) section_header="## ⚠️ Redirects" ;;
-      stack) section_header="## 🔧 Stack Wisdom" ;;
-      decree) section_header="## 🏛️ Decrees" ;;
-    esac
-
-    # Build the new entry
-    entry="- **${colony_name}** (${ts}): ${content}"
-
-    # Create temp file for atomic write
-    tmp_file="${queen_file}.tmp.$$"
-
-    # Find line numbers for section boundaries
-    section_line=$(grep -n "^${section_header}$" "$queen_file" | head -1 | cut -d: -f1)
-    next_section_line=$(tail -n +$((section_line + 1)) "$queen_file" | grep -n "^## " | head -1 | cut -d: -f1)
-    if [[ -n "$next_section_line" ]]; then
-      section_end=$((section_line + next_section_line - 1))
-    else
-      section_end=$(wc -l < "$queen_file")
-    fi
-
-    # Check if section has placeholder (grep returns 1 when no matches, handle with || true)
-    has_placeholder=$(sed -n "${section_line},${section_end}p" "$queen_file" | grep -c "No.*recorded yet" || true)
-    has_placeholder=${has_placeholder:-0}
-
-    if [[ "$has_placeholder" -gt 0 ]]; then
-      # Replace placeholder with entry - only within the target section
-      # Find the specific line number of the placeholder within the section
-      placeholder_line=$(sed -n "${section_line},${section_end}p" "$queen_file" | grep -n "^\\*No .* recorded yet" | head -1 | cut -d: -f1)
-      if [[ -n "$placeholder_line" ]]; then
-        actual_line=$((section_line + placeholder_line - 1))
-        sed "${actual_line}c\\
-${entry}" "$queen_file" > "$tmp_file"
-      else
-        # Fallback: insert after section header
-        sed "${section_line}a\\
-${entry}" "$queen_file" > "$tmp_file"
-      fi
-    else
-      # Insert entry after the description paragraph (after the second empty line in section)
-      # The structure is: header, blank, description, blank, [entries...]
-      # We want to insert after the blank line following the description
-      empty_lines=$(sed -n "$((section_line + 1)),${section_end}p" "$queen_file" | grep -n "^$" | cut -d: -f1)
-      # Get the second empty line (after description)
-      insert_line=$(echo "$empty_lines" | sed -n '2p')
-      if [[ -n "$insert_line" ]]; then
-        insert_line=$((section_line + insert_line))
-      else
-        # Fallback: use first empty line
-        insert_line=$(echo "$empty_lines" | head -1)
-        if [[ -n "$insert_line" ]]; then
-          insert_line=$((section_line + insert_line))
-        else
-          insert_line=$((section_line + 1))
-        fi
-      fi
-      # Insert the entry after the found line
-      sed "${insert_line}a\\
-${entry}" "$queen_file" > "$tmp_file"
-    fi
-
-    # Update Evolution Log in temp file
-    ev_entry="| ${ts} | ${colony_name} | promoted_${wisdom_type} | Added: ${content:0:50}... |"
-    # Find the line after the separator in Evolution Log table
-    ev_separator=$(grep -n "^|------|" "$tmp_file" | tail -1 | cut -d: -f1)
-
-    # Use awk for cross-platform insertion
-    awk -v line="$ev_separator" -v entry="$ev_entry" 'NR==line{print; print entry; next}1' "$tmp_file" > "${tmp_file}.ev" && mv "${tmp_file}.ev" "$tmp_file"
-
-    # Update METADATA stats in temp file
-    # Map wisdom_type to stat key (irregular plurals handled)
-    case "$wisdom_type" in
-      stack) stat_key="total_stack_entries" ;;
-      philosophy) stat_key="total_philosophies" ;;
-      *) stat_key="total_${wisdom_type}s" ;;
-    esac
-    # Read current count from temp file (which has the latest state)
-    current_count=$(grep "\"${stat_key}\":" "$tmp_file" 2>/dev/null | grep -o '[0-9]*' | head -1 || true)
-    current_count=${current_count:-0}
-    new_count=$((current_count + 1))
-
-    # Update last_evolved using awk
-    awk -v ts="$ts" '/"last_evolved":/ { gsub(/"last_evolved": "[^"]*"/, "\"last_evolved\": \"" ts "\""); } {print}' "$tmp_file" > "${tmp_file}.meta" && mv "${tmp_file}.meta" "$tmp_file"
-
-    # Update stats count using awk
-    awk -v type="$stat_key" -v count="$new_count" '{
-      gsub("\"" type "\": [0-9]*", "\"" type "\": " count)
-      print
-    }' "$tmp_file" > "${tmp_file}.stats" && mv "${tmp_file}.stats" "$tmp_file"
-
-    # META-02: Update evolution_log in METADATA JSON
-    # Add entry with timestamp, action, wisdom_type, content_hash
-    ev_log_entry="{\"timestamp\": \"$ts\", \"action\": \"promote\", \"wisdom_type\": \"$wisdom_type\", \"content_hash\": \"$content_hash\", \"colony\": \"$colony_name\"}"
-
-    # Check if evolution_log exists in metadata, add if not
-    if ! grep -q '"evolution_log"' "$tmp_file"; then
-      # Add evolution_log array after stats
-      awk -v entry="$ev_log_entry" '
-        /"stats": \{/ {
-          print
-          # Read until closing brace of stats
-          while (getline > 0) {
-            print
-            if (/\}/) break
-          }
-          # Add comma and evolution_log
-          print ","
-          print "  \"evolution_log\": [" entry "]"
-          next
-        }
-        { print }
-      ' "$tmp_file" > "${tmp_file}.evlog" && mv "${tmp_file}.evlog" "$tmp_file"
-    else
-      # Append to existing evolution_log array
-      awk -v entry="$ev_log_entry" '
-        /"evolution_log": \[/ {
-          # Check if array is empty or has items
-          if (/\]/) {
-            # Empty array - replace with entry
-            gsub(/"evolution_log": \[\]/, "\"evolution_log\": [" entry "]")
-          } else {
-            # Has items - need to add before closing bracket
-            # For now, just print and handle in next iteration
-          }
-          print
-          next
-        }
-        # Handle multi-line evolution_log arrays
-        /"evolution_log": \[/ && !/\]/ {
-          print
-          getline
-          if (/\]/) {
-            # Was empty, now add entry
-            print entry
-            print "]"
-          } else {
-            # Has items, add comma and entry before closing
-            print
-            while (getline > 0) {
-              if (/^\s*\]/) {
-                print ","
-                print entry
-                print "]"
-                break
-              }
-              print
-            }
-          }
-          next
-        }
-        { print }
-      ' "$tmp_file" > "${tmp_file}.evlog" && mv "${tmp_file}.evlog" "$tmp_file"
-    fi
-
-    # META-04: Update colonies_contributed mapping in METADATA JSON
-    # This maps content_hash to array of colonies that contributed
-    # Get colonies from observations file if available
-    colonies_json="[]"
-    if [[ -f "$observations_file" ]]; then
-      colonies_from_obs=$(jq -r --arg hash "$content_hash" '.observations[] | select(.content_hash == $hash) | .colonies // [] | @json' "$observations_file" 2>/dev/null || echo '[]')
-      if [[ -n "$colonies_from_obs" ]] && [[ "$colonies_from_obs" != "null" ]]; then
-        colonies_json="$colonies_from_obs"
-      fi
-    fi
-
-    # Add colonies_contributed object if not present
-    if ! grep -q '"colonies_contributed"' "$tmp_file"; then
-      # Add after evolution_log or stats
-      awk -v hash="$content_hash" -v colonies="$colonies_json" '
-        /"evolution_log": / {
-          print
-          # Skip to end of evolution_log array
-          brace_count = 1
-          while (getline > 0) {
-            print
-            if (/\[/) brace_count++
-            if (/\]/) brace_count--
-            if (brace_count == 0) break
-          }
-          print ","
-          print "  \"colonies_contributed\": {"
-          print "    \"" hash "\": " colonies
-          print "  }"
-          next
-        }
-        { print }
-      ' "$tmp_file" > "${tmp_file}.colmap" && mv "${tmp_file}.colmap" "$tmp_file"
-    else
-      # Update existing colonies_contributed - add/update entry for this hash
-      # Use jq for reliable JSON manipulation
-      meta_section=$(sed -n '/<!-- METADATA/,/-->/p' "$tmp_file" | sed '1d;$d' | tr -d '\n' | sed 's/^[[:space:]]*//')
-      if [[ -n "$meta_section" ]]; then
-        updated_meta=$(echo "$meta_section" | jq --arg hash "$content_hash" --argjson cols "$colonies_json" '.colonies_contributed[$hash] = $cols' 2>/dev/null || echo "$meta_section")
-        # Replace metadata section
-        new_comment="<!-- METADATA"
-        new_comment="$new_comment
-$updated_meta
--->"
-        awk -v new="$new_comment" '/<!-- METADATA/,/-->/{ if (/<!-- METADATA/) print new; next }1' "$tmp_file" > "${tmp_file}.metaupd" && mv "${tmp_file}.metaupd" "$tmp_file"
-      fi
-    fi
-
-    # Add colony to colonies_contributed array (legacy) if not present
-    if ! grep -q "\"${colony_name}\"" "$tmp_file"; then
-      # Add to colonies_contributed array using awk - handle empty and non-empty arrays
-      awk -v colony="$colony_name" '
-        /"colonies_contributed": \[\]/ {
-          gsub(/"colonies_contributed": \[\]/, "\"colonies_contributed\": [\"" colony "\"]")
-          print
-          next
-        }
-        /"colonies_contributed": \[/ && !/\]/ {
-          # Multi-line array, add at next closing bracket
-          print
-          next
-        }
-        /"colonies_contributed": \[/ {
-          # Single-line array with elements
-          gsub(/\]$/, "\"" colony "\", ]")
-          print
-          next
-        }
-        { print }
-      ' "$tmp_file" > "${tmp_file}.col" && mv "${tmp_file}.col" "$tmp_file"
-    fi
-
-    # Atomic move
-    mv "$tmp_file" "$queen_file"
-
-    json_ok "{\"promoted\":true,\"type\":\"$wisdom_type\",\"colony\":\"$colony_name\",\"timestamp\":\"$ts\",\"threshold\":$threshold,\"new_count\":$new_count,\"content_hash\":\"$content_hash\"}"
-    ;;
-
-  learning-observe)
-    # Record observation of a learning across colonies
-    # Usage: learning-observe <content> <wisdom_type> [colony_name]
-    # Returns: JSON with observation_count, threshold status, and colonies list
-    content="${1:-}"
-    wisdom_type="${2:-}"
-    colony_name="${3:-unknown}"
-
-    # Validate required arguments
-    [[ -z "$content" ]] && json_err "$E_VALIDATION_FAILED" "Usage: learning-observe <content> <wisdom_type> [colony_name]" '{"missing":"content"}'
-    [[ -z "$wisdom_type" ]] && json_err "$E_VALIDATION_FAILED" "Usage: learning-observe <content> <wisdom_type> [colony_name]" '{"missing":"wisdom_type"}'
-
-    # Validate wisdom_type
-    valid_types=("philosophy" "pattern" "redirect" "stack" "decree" "failure")
-    type_valid=false
-    for vt in "${valid_types[@]}"; do
-      [[ "$wisdom_type" == "$vt" ]] && type_valid=true && break
-    done
-    [[ "$type_valid" == "false" ]] && json_err "$E_VALIDATION_FAILED" "Invalid wisdom_type: $wisdom_type" '{"valid_types":["philosophy","pattern","redirect","stack","decree","failure"]}'
-
-    # Generate SHA256 hash of content for deduplication
-    content_hash="sha256:$(echo -n "$content" | sha256sum | cut -d' ' -f1)"
-
-    # Observations file path
-    observations_file="$DATA_DIR/learning-observations.json"
-
-    # Ensure data directory exists
-    [[ ! -d "$DATA_DIR" ]] && mkdir -p "$DATA_DIR"
-
-    # Initialize file if it doesn't exist
-    if [[ ! -f "$observations_file" ]]; then
-      echo '{"observations":[]}' > "$observations_file"
-    fi
-
-    # Validate JSON structure
-    if ! jq -e . "$observations_file" >/dev/null 2>&1; then
-      json_err "$E_JSON_INVALID" "learning-observations.json has invalid JSON"
-    fi
-
-    # Acquire lock for concurrent access
-    if type acquire_lock &>/dev/null; then
-      acquire_lock "$observations_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on learning-observations.json"
-      trap 'release_lock 2>/dev/null || true' EXIT
-    fi
-
-    # Get current timestamp
-    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-
-    # Check if observation with same hash already exists
-    existing_index=$(jq -r --arg hash "$content_hash" '.observations | to_entries[] | select(.value.content_hash == $hash) | .key' "$observations_file" | head -1)
-
-    if [[ -n "$existing_index" ]]; then
-      # Existing observation: increment count, update last_seen, add colony if new
-      tmp_file="${observations_file}.tmp.$$"
-
-      jq --arg hash "$content_hash" \
-         --arg colony "$colony_name" \
-         --arg ts "$ts" \
-         '
-         .observations |= map(
-           if .content_hash == $hash then
-             .observation_count += 1 |
-             .last_seen = $ts |
-             .colonies = ((.colonies + [$colony]) | unique)
-           else
-             .
-           end
-         )' "$observations_file" > "$tmp_file"
-
-      mv "$tmp_file" "$observations_file"
-
-      # Get updated observation data
-      observation_count=$(jq -r --arg hash "$content_hash" '.observations[] | select(.content_hash == $hash) | .observation_count' "$observations_file")
-      colonies=$(jq -r --arg hash "$content_hash" '.observations[] | select(.content_hash == $hash) | .colonies' "$observations_file")
-      is_new=false
-    else
-      # New observation: create entry
-      tmp_file="${observations_file}.tmp.$$"
-
-      jq --arg hash "$content_hash" \
-         --arg content "$content" \
-         --arg type "$wisdom_type" \
-         --arg colony "$colony_name" \
-         --arg ts "$ts" \
-         '.observations += [{
-           "content_hash": $hash,
-           "content": $content,
-           "wisdom_type": $type,
-           "observation_count": 1,
-           "first_seen": $ts,
-           "last_seen": $ts,
-           "colonies": [$colony]
-         }]' "$observations_file" > "$tmp_file"
-
-      mv "$tmp_file" "$observations_file"
-
-      observation_count=1
-      colonies="[\"$colony_name\"]"
-      is_new=true
-    fi
-
-    # Release lock
-    if type release_lock &>/dev/null; then
-      release_lock 2>/dev/null || true
-    fi
-    trap - EXIT
-
-    # Propose-threshold determines when a learning is queueable/reviewable.
-    threshold=$(get_wisdom_threshold "$wisdom_type" "propose")
-
-    # Determine if threshold is met
-    threshold_met=false
-    [[ "$observation_count" -ge "$threshold" ]] && threshold_met=true
-
-    # Return result
-    result=$(jq -n \
-      --arg hash "$content_hash" \
-      --arg content "$content" \
-      --arg type "$wisdom_type" \
-      --argjson count "$observation_count" \
-      --argjson threshold "$threshold" \
-      --argjson threshold_met "$threshold_met" \
-      --argjson colonies "$colonies" \
-      --argjson is_new "$is_new" \
-      '{
-        content_hash: $hash,
-        content: $content,
-        wisdom_type: $type,
-        observation_count: $count,
-        threshold: $threshold,
-        threshold_met: $threshold_met,
-        colonies: $colonies,
-        is_new: $is_new
-      }')
-
-    json_ok "$result"
-    ;;
-
-  learning-check-promotion)
-    # Check which learnings meet promotion thresholds
-    # Usage: learning-check-promotion [path_to_observations_file]
-    # Returns: JSON array of proposals meeting thresholds
-    observations_file="${1:-$DATA_DIR/learning-observations.json}"
-
-    # Default to empty file path if not provided and data dir doesn't exist
-    if [[ -z "${1:-}" ]] && [[ ! -d "$DATA_DIR" ]]; then
-      observations_file=""
-    fi
-
-    # If file doesn't exist or is empty, return empty proposals
-    if [[ -z "$observations_file" ]] || [[ ! -f "$observations_file" ]]; then
-      json_ok '{"proposals":[]}'
-      exit 0
-    fi
-
-    # Validate JSON structure
-    if ! jq -e . "$observations_file" >/dev/null 2>&1; then
-      json_err "$E_JSON_INVALID" "learning-observations.json has invalid JSON"
-    fi
-
-    # Build proposals array using the shared threshold table.
-    thresholds_json=$(get_wisdom_thresholds_json)
-    result=$(jq --argjson thresholds "$thresholds_json" '
-      def get_threshold(type):
-        ($thresholds[type].propose // 1);
-
-      {
-        proposals: [
-          .observations[] |
-          select((.observation_count // 0) >= get_threshold(.wisdom_type)) |
-          {
-            content: .content,
-            wisdom_type: .wisdom_type,
-            observation_count: .observation_count,
-            threshold: get_threshold(.wisdom_type),
-            colonies: (.colonies // []),
-            ready: true
-          }
-        ]
-      }
-    ' "$observations_file" 2>/dev/null || echo '{"proposals":[]}')
-
-    json_ok "$result"
-    ;;
-
-  learning-promote-auto)
-    # Auto-promote high-confidence learnings using recurrence policy.
-    # Usage: learning-promote-auto <wisdom_type> <content> [colony_name] [event_type]
-    wisdom_type="${1:-}"
-    content="${2:-}"
-    colony_name="${3:-}"
-    event_type="${4:-learning}"
-
-    [[ -z "$wisdom_type" ]] && json_err "$E_VALIDATION_FAILED" "Usage: learning-promote-auto <wisdom_type> <content> [colony_name] [event_type]" '{"missing":"wisdom_type"}'
-    [[ -z "$content" ]] && json_err "$E_VALIDATION_FAILED" "Usage: learning-promote-auto <wisdom_type> <content> [colony_name] [event_type]" '{"missing":"content"}'
-
-    if [[ -z "$colony_name" ]]; then
-      colony_name=$(jq -r '.session_id | split("_")[1] // "unknown"' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "unknown")
-    fi
-
-    policy_threshold=$(get_wisdom_threshold "$wisdom_type" "auto")
-
-    observations_file="$DATA_DIR/learning-observations.json"
-    content_hash="sha256:$(echo -n "$content" | sha256sum | cut -d' ' -f1)"
-    observation_count=0
-    colony_count=0
-
-    if [[ -f "$observations_file" ]]; then
-      observation_count=$(jq -r --arg hash "$content_hash" '.observations[]? | select(.content_hash == $hash) | .observation_count // 0' "$observations_file" 2>/dev/null | head -1)
-      colony_count=$(jq -r --arg hash "$content_hash" '.observations[]? | select(.content_hash == $hash) | (.colonies // [] | length)' "$observations_file" 2>/dev/null | head -1)
-      [[ -z "$observation_count" ]] && observation_count=0
-      [[ -z "$colony_count" ]] && colony_count=0
-    fi
-
-    # LRN-01: Recurrence-calibrated confidence
-    # Formula: min(0.7 + (observation_count - 1) * 0.05, 0.9)
-    lp_confidence=$(awk -v c="${observation_count:-1}" 'BEGIN {
-      v = 0.7 + (c - 1) * 0.05
-      if (v > 0.9) v = 0.9
-      if (v < 0.7) v = 0.7
-      printf "%.2f", v
-    }')
-
-    if [[ "$policy_threshold" -gt 0 && "$observation_count" -lt "$policy_threshold" ]]; then
-      json_ok "{\"promoted\":false,\"reason\":\"threshold_not_met\",\"policy_threshold\":$policy_threshold,\"observation_count\":$observation_count,\"colony_count\":$colony_count,\"event_type\":\"$event_type\"}"
-      exit 0
-    fi
-
-    queen_file="$AETHER_ROOT/.aether/QUEEN.md"
-    if [[ ! -f "$queen_file" ]]; then
-      json_ok "{\"promoted\":false,\"reason\":\"queen_missing\",\"policy_threshold\":$policy_threshold,\"observation_count\":$observation_count,\"colony_count\":$colony_count}"
-      exit 0
-    fi
-
-    if grep -Fq -- "$content" "$queen_file" 2>/dev/null; then
-      json_ok "{\"promoted\":false,\"reason\":\"already_promoted\",\"policy_threshold\":$policy_threshold,\"observation_count\":$observation_count,\"colony_count\":$colony_count}"
-      exit 0
-    fi
-
-    promote_result=$(bash "$0" queen-promote "$wisdom_type" "$content" "$colony_name" 2>/dev/null || echo '{}')
-    if echo "$promote_result" | jq -e '.ok == true' >/dev/null 2>&1; then
-      # Also create an instinct from the promoted learning
-      bash "$0" instinct-create \
-        --trigger "When working on $wisdom_type patterns" \
-        --action "$content" \
-        --confidence "$lp_confidence" \
-        --domain "$wisdom_type" \
-        --source "promoted_from_learning" \
-        --evidence "Auto-promoted after $observation_count observations (confidence: $lp_confidence)" 2>/dev/null || true
-      json_ok "{\"promoted\":true,\"mode\":\"auto\",\"policy_threshold\":$policy_threshold,\"observation_count\":$observation_count,\"colony_count\":$colony_count,\"event_type\":\"$event_type\"}"
-    else
-      promote_msg=$(echo "$promote_result" | jq -r '.error.message // "promotion_failed"' 2>/dev/null || echo "promotion_failed")
-      result=$(jq -n \
-        --arg reason "promotion_failed" \
-        --arg message "$promote_msg" \
-        --argjson policy_threshold "$policy_threshold" \
-        --argjson observation_count "$observation_count" \
-        --argjson colony_count "$colony_count" \
-        '{promoted:false, reason:$reason, message:$message, policy_threshold:$policy_threshold, observation_count:$observation_count, colony_count:$colony_count}')
-      json_ok "$result"
-    fi
-    ;;
+  queen-promote) _queen_promote "$@" ;;
+  queen-write-learnings) _queen_write_learnings "$@" ;;
+  queen-promote-instinct) _queen_promote_instinct "$@" ;;
+  queen-seed-from-hive) _queen_seed_from_hive "$@" ;;
+  queen-migrate) _queen_migrate "$@" ;;
+  charter-write) _queen_write_charter "$@" ;;
+  colony-name) _colony_name "$@" ;;
+  domain-detect) _domain_detect "$@" ;;
+
+  learning-observe) _learning_observe "$@" ;;
+  learning-check-promotion) _learning_check_promotion "$@" ;;
+  learning-promote-auto) _learning_promote_auto "$@" ;;
 
   memory-capture)
     # Capture learning/failure events with deterministic memory actions.
@@ -5437,16 +3624,21 @@ $updated_meta
       esac
     fi
 
+    # MIGRATE: direct COLONY_STATE.json access -- use _state_read_field instead
+    # SUPPRESS:OK -- read-default: query may return empty
     colony_name=$(jq -r '.session_id | split("_")[1] // "unknown"' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "unknown")
 
+    # SUPPRESS:OK -- read-default: returns fallback on failure
     observe_result=$(bash "$0" learning-observe "$mc_content" "$mc_wisdom_type" "$colony_name" 2>/dev/null || echo '{}')
-    if ! echo "$observe_result" | jq -e '.ok == true' >/dev/null 2>&1; then
+    if ! echo "$observe_result" | jq -e '.ok == true' >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON field
+      # SUPPRESS:OK -- read-default: query may return empty
       obs_msg=$(echo "$observe_result" | jq -r '.error.message // "learning_observe_failed"' 2>/dev/null || echo "learning_observe_failed")
       json_err "$E_VALIDATION_FAILED" "memory-capture failed at learning-observe: $obs_msg"
     fi
 
-    obs_count=$(echo "$observe_result" | jq -r '.result.observation_count // 0' 2>/dev/null || echo "0")
-    obs_threshold=$(echo "$observe_result" | jq -r '.result.threshold // 1' 2>/dev/null || echo "1")
+    obs_count=$(echo "$observe_result" | jq -r '.result.observation_count // 0' 2>/dev/null || echo "0")  # SUPPRESS:OK -- read-default: file may not exist yet
+    obs_threshold=$(echo "$observe_result" | jq -r '.result.threshold // 1' 2>/dev/null || echo "1")  # SUPPRESS:OK -- read-default: file may not exist yet
+    # SUPPRESS:OK -- read-default: query may return empty
     obs_threshold_met=$(echo "$observe_result" | jq -r '.result.threshold_met // false' 2>/dev/null || echo "false")
 
     pheromone_type=""
@@ -5491,869 +3683,42 @@ $updated_meta
     pheromone_created=false
     pheromone_signal_id=""
     if [[ -n "$pheromone_type" && -n "$pheromone_content" ]]; then
+      # SUPPRESS:OK -- read-default: returns fallback on failure
       pheromone_result=$(bash "$0" pheromone-write "$pheromone_type" "$pheromone_content" --strength "$pheromone_strength" --source "$mc_source" --reason "$pheromone_reason" --ttl "$pheromone_ttl" 2>/dev/null || echo '{}')
-      if echo "$pheromone_result" | jq -e '.ok == true' >/dev/null 2>&1; then
+      if echo "$pheromone_result" | jq -e '.ok == true' >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON field
         pheromone_created=true
+        # SUPPRESS:OK -- read-default: query may return empty
         pheromone_signal_id=$(echo "$pheromone_result" | jq -r '.result.signal_id // ""' 2>/dev/null || echo "")
       fi
     fi
 
     # learning-promote-auto may emit multiple JSON lines (e.g. instinct-create output
     # followed by the actual result). Take only the last line as the authoritative result.
+    # SUPPRESS:OK -- read-default: returns fallback on failure
     auto_result_raw=$(bash "$0" learning-promote-auto "$mc_wisdom_type" "$mc_content" "$colony_name" "$mc_event" 2>/dev/null || echo '{}')
     auto_result=$(echo "$auto_result_raw" | tail -1)
     auto_promoted=false
     auto_reason="promotion_skipped"
-    if echo "$auto_result" | jq -e '.ok == true' >/dev/null 2>&1; then
+    if echo "$auto_result" | jq -e '.ok == true' >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON field
+      # SUPPRESS:OK -- read-default: query may return empty
       auto_promoted=$(echo "$auto_result" | jq -r '.result.promoted // false' 2>/dev/null || echo "false")
+      # SUPPRESS:OK -- read-default: query may return empty
       auto_reason=$(echo "$auto_result" | jq -r '.result.reason // "promoted"' 2>/dev/null || echo "unknown")
     fi
 
-    bash "$0" activity-log "MEMORY" "system" "Captured $mc_event ($mc_wisdom_type): count=$obs_count auto_promoted=$auto_promoted" >/dev/null 2>&1 || true
-    bash "$0" rolling-summary add "$mc_event" "$mc_content" "$mc_source" >/dev/null 2>&1 || true
+    bash "$0" activity-log "MEMORY" "system" "Captured $mc_event ($mc_wisdom_type): count=$obs_count auto_promoted=$auto_promoted" >/dev/null 2>&1 \
+      || _aether_log_error "Could not log memory capture activity"
+    bash "$0" rolling-summary add "$mc_event" "$mc_content" "$mc_source" >/dev/null 2>&1 \
+      || _aether_log_error "Could not update rolling summary"
 
     json_ok "{\"event_type\":\"$mc_event\",\"wisdom_type\":\"$mc_wisdom_type\",\"observation_count\":$obs_count,\"threshold\":$obs_threshold,\"threshold_met\":$obs_threshold_met,\"pheromone_created\":$pheromone_created,\"signal_id\":\"$pheromone_signal_id\",\"auto_promoted\":$auto_promoted,\"promotion_reason\":\"$auto_reason\"}"
     ;;
 
-  learning-display-proposals)
-    # Display promotion proposals with checkbox-style UI
-    # Usage: learning-display-proposals [observations_file] [--verbose] [--no-color]
-    # Returns: Formatted display output (not JSON - for human consumption)
-
-    verbose=false
-    no_color=false
-    observations_file=""
-
-    # Parse arguments
-    for arg in "$@"; do
-      case "$arg" in
-        --verbose) verbose=true ;;
-        --no-color) no_color=true ;;
-        *)
-          # If argument doesn't start with --, treat as file path
-          if [[ "$arg" != --* ]] && [[ -z "$observations_file" ]]; then
-            observations_file="$arg"
-          fi
-          ;;
-      esac
-    done
-
-    # Detect color support
-    use_color=false
-    if [[ "$no_color" == "false" ]] && [[ -t 1 ]]; then
-      use_color=true
-    fi
-
-    # Color codes
-    reset=""
-    yellow=""
-    red=""
-    cyan=""
-    if [[ "$use_color" == "true" ]]; then
-      reset="\033[0m"
-      yellow="\033[33m"
-      red="\033[31m"
-      cyan="\033[36m"
-    fi
-
-    # Determine observations file path
-    if [[ -z "$observations_file" ]]; then
-      observations_file="$DATA_DIR/learning-observations.json"
-    fi
-
-    # Check if file exists and has content
-    if [[ ! -f "$observations_file" ]] || [[ ! -s "$observations_file" ]]; then
-      echo "No observations found."
-      echo ""
-      echo "Observations accumulate as colonies report learnings."
-      echo "Run this command again after more activity."
-      exit 0
-    fi
-
-    # Get all observations with their thresholds
-    thresholds_json=$(get_wisdom_thresholds_json)
-    proposals_json=$(jq --argjson thresholds "$thresholds_json" '
-      def get_threshold(type):
-        ($thresholds[type].propose // 1);
-
-      {
-        proposals: [
-          .observations[] |
-          {
-            content: .content,
-            wisdom_type: .wisdom_type,
-            observation_count: .observation_count,
-            threshold: get_threshold(.wisdom_type),
-            colonies: .colonies
-          }
-        ]
-      }
-    ' "$observations_file" 2>/dev/null || echo '{"proposals":[]}')
-
-    # Check if there are any proposals
-    proposal_count=$(echo "$proposals_json" | jq '.proposals | length')
-    if [[ "$proposal_count" -eq 0 ]]; then
-      echo "No proposals ready for promotion."
-      echo ""
-      echo "Observations accumulate as colonies report learnings."
-      echo "Run this command again after more activity."
-      exit 0
-    fi
-
-    # Define wisdom types and their display properties
-    types=("philosophy" "pattern" "redirect" "stack" "decree" "failure")
-    type_emojis=("📜" "🧭" "⚠️" "🔧" "🏛️" "❌")
-    type_names=("Philosophies" "Patterns" "Redirects" "Stack Wisdom" "Decrees" "Failures")
-    type_thresholds=(
-      "$(get_wisdom_threshold philosophy propose)"
-      "$(get_wisdom_threshold pattern propose)"
-      "$(get_wisdom_threshold redirect propose)"
-      "$(get_wisdom_threshold stack propose)"
-      "$(get_wisdom_threshold decree propose)"
-      "$(get_wisdom_threshold failure propose)"
-    )
-
-    echo ""
-    echo "🧠 Promotion Proposals"
-    echo "====================="
-    echo ""
-    echo "Select proposals to promote to QUEEN.md wisdom:"
-    echo "(Enter numbers like '1 3 5', or press Enter to defer all)"
-    echo ""
-
-    # Build flat list of all proposals with global numbering
-    global_idx=1
-    declare -a all_proposals
-
-    for i in "${!types[@]}"; do
-      type="${types[$i]}"
-      threshold="${type_thresholds[$i]}"
-
-      # Get proposals of this type
-      type_proposals=$(echo "$proposals_json" | jq --arg t "$type" '.proposals | map(select(.wisdom_type == $t))')
-      type_count=$(echo "$type_proposals" | jq 'length')
-
-      [[ "$type_count" -eq 0 ]] && continue
-
-      # Print group header
-      echo "${type_emojis[$i]} ${type_names[$i]} (threshold: $threshold)"
-
-      # Process each proposal using index to avoid subshell issues
-      for ((j=0; j<type_count; j++)); do
-        proposal=$(echo "$type_proposals" | jq -c ".[$j]")
-        content=$(echo "$proposal" | jq -r '.content')
-        count=$(echo "$proposal" | jq -r '.observation_count')
-        prop_threshold=$(echo "$proposal" | jq -r '.threshold')
-
-        # Truncate content if not verbose
-        display_content="$content"
-        if [[ "$verbose" != "true" && ${#content} -gt 40 ]]; then
-          display_content="${content:0:37}..."
-        fi
-
-        # Get threshold bar
-        bar_result=$(bash "$0" generate-threshold-bar "$count" "$prop_threshold" 2>/dev/null | jq -r '.result.bar')
-
-        # Build warning for below-threshold
-        warning=""
-        if [[ "$count" -lt "$prop_threshold" ]]; then
-          if [[ "$use_color" == "true" ]]; then
-            warning=" ${yellow}⚠️ below threshold${reset}"
-          else
-            warning=" ⚠️ below threshold"
-          fi
-        fi
-
-        # Print formatted line
-        printf "  [ ] %d. \"%s\" %s (%d/%d)%s\n" "$global_idx" "$display_content" "$bar_result" "$count" "$prop_threshold" "$warning"
-
-        # Store for later reference
-        all_proposals+=("$proposal")
-
-        global_idx=$((global_idx + 1))
-      done
-
-      echo ""
-    done
-
-    echo "───────────────────────────────────────────────────"
-    echo ""
-    ;;
-
-  learning-select-proposals)
-    # Interactive selection of proposals for promotion
-    # Usage: learning-select-proposals [--verbose] [--dry-run] [--yes]
-    # Returns: JSON with selected/deferred arrays and action taken
-    #
-    # Flow: display proposals -> capture input -> parse selection -> output JSON
-
-    verbose=false
-    dry_run=false
-    skip_confirm=false
-
-    # Parse arguments
-    for arg in "$@"; do
-      case "$arg" in
-        --verbose) verbose=true ;;
-        --dry-run) dry_run=true ;;
-        --yes) skip_confirm=true ;;
-      esac
-    done
-
-    # Get all observations (not just threshold-meeting ones) for display consistency
-    # This matches learning-display-proposals behavior
-    observations_file="$DATA_DIR/learning-observations.json"
-    if [[ ! -f "$observations_file" ]]; then
-      json_ok '{"selected":[],"deferred":[],"count":0,"action":"none","reason":"no_observations_file"}'
-      exit 0
-    fi
-
-    # Build proposals array using same logic as learning-display-proposals
-    thresholds_json=$(get_wisdom_thresholds_json)
-    proposals_json=$(jq --argjson thresholds "$thresholds_json" '
-      def get_threshold(type):
-        ($thresholds[type].propose // 1);
-
-      {
-        proposals: [
-          .observations[] |
-          {
-            content: .content,
-            wisdom_type: .wisdom_type,
-            observation_count: .observation_count,
-            threshold: get_threshold(.wisdom_type),
-            colonies: .colonies
-          }
-        ]
-      }
-    ' "$observations_file" 2>/dev/null || echo '{"proposals":[]}')
-
-    # Check if we have any proposals
-    proposal_count=$(echo "$proposals_json" | jq '.proposals | length')
-    if [[ "$proposal_count" -eq 0 ]]; then
-      json_ok '{"selected":[],"deferred":[],"count":0,"action":"none","reason":"no_proposals"}'
-      exit 0
-    fi
-
-    # Display proposals
-    if [[ "$dry_run" == "false" ]]; then
-      if [[ "$verbose" == "true" ]]; then
-        bash "$0" learning-display-proposals --verbose
-      else
-        bash "$0" learning-display-proposals
-      fi
-    fi
-
-    # Capture user input (unless dry-run)
-    selection=""
-    if [[ "$dry_run" == "true" ]]; then
-      # In dry-run mode, select all proposals
-      selection=$(seq 1 $proposal_count | tr '\n' ' ')
-      echo "Dry run: would select all $proposal_count proposals"
-    else
-      echo -n "Enter numbers to select (e.g., '1 3 5'), or press Enter to defer all: "
-      read -r selection
-    fi
-
-    # Parse the selection
-    parse_result=$(bash "$0" parse-selection "$selection" "$proposal_count")
-
-    # Check for parse errors
-    if ! echo "$parse_result" | jq -e '.ok' >/dev/null 2>&1; then
-      # Return the error
-      echo "$parse_result"
-      exit 1
-    fi
-
-    # Extract selected and deferred arrays
-    selected_indices=$(echo "$parse_result" | jq -r '.result.selected // []')
-    deferred_indices=$(echo "$parse_result" | jq -r '.result.deferred // []')
-    action=$(echo "$parse_result" | jq -r '.result.action // "select"')
-    selected_count=$(echo "$selected_indices" | jq 'length')
-    deferred_count=$(echo "$deferred_indices" | jq 'length')
-
-    # Show summary
-    if [[ "$dry_run" == "false" ]]; then
-      echo ""
-      echo "$selected_count proposal(s) selected, $deferred_count deferred"
-    fi
-
-    # Preview and confirmation (if selections made and not skipping)
-    confirmed=true
-    if [[ "$selected_count" -gt 0 && "$dry_run" == "false" && "$skip_confirm" == "false" ]]; then
-      echo ""
-      echo "───────────────────────────────────────────────────"
-      echo "📋 Selected for Promotion:"
-      echo ""
-
-      # Track below-threshold count for warning
-      below_threshold_count=0
-
-      # Display each selected proposal with full details
-      echo "$selected_indices" | jq -r '.[]' | while read -r idx; do
-        proposal=$(echo "$proposals_json" | jq -r ".proposals[$idx]")
-        content=$(echo "$proposal" | jq -r '.content')
-        ptype=$(echo "$proposal" | jq -r '.wisdom_type')
-        count=$(echo "$proposal" | jq -r '.observation_count')
-        threshold=$(echo "$proposal" | jq -r '.threshold')
-
-        # Capitalize type for display
-        type_display=$(echo "$ptype" | awk '{print toupper(substr($0,1,1)) tolower(substr($0,2))}')
-
-        # Check if below threshold
-        status=""
-        if [[ "$count" -lt "$threshold" ]]; then
-          status=" [⚠️ Early promotion - below threshold]"
-          below_threshold_count=$((below_threshold_count + 1))
-        fi
-
-        echo "  • $type_display: \"$content\"$status"
-      done
-
-      # Show warning if any below threshold
-      if [[ "$below_threshold_count" -gt 0 ]]; then
-        echo ""
-        echo "⚠️  $below_threshold_count item(s) below threshold will be early promoted"
-      fi
-
-      # Confirmation prompt
-      echo ""
-      echo -n "Proceed with promotion? (y/n): "
-      read -r confirm_response
-
-      if [[ ! "$confirm_response" =~ ^[Yy]$ ]]; then
-        confirmed=false
-        echo "Selection cancelled. Treating as defer-all."
-        # Move all to deferred
-        action="defer_all"
-        deferred_indices=$(jq -n --argjson s "$selected_indices" --argjson d "$deferred_indices" '($s + $d)')
-        selected_indices="[]"
-        selected_count=0
-        deferred_count=$(echo "$deferred_indices" | jq 'length')
-      fi
-    fi
-
-    # Build result JSON
-    result=$(jq -n \
-      --argjson selected "$selected_indices" \
-      --argjson deferred "$deferred_indices" \
-      --argjson proposals "$proposals_json" \
-      --arg action "$action" \
-      --argjson count "$proposal_count" \
-      --arg confirmed "$confirmed" \
-      '{
-        selected: $selected,
-        deferred: $deferred,
-        count: $count,
-        action: $action,
-        confirmed: ($confirmed == "true"),
-        proposals: $proposals.proposals
-      }')
-
-    json_ok "$result"
-    ;;
-
-  learning-defer-proposals)
-    # Store unselected proposals in learning-deferred.json for later review
-    # Usage: echo '[{proposal1}, {proposal2}]' | bash aether-utils.sh learning-defer-proposals
-    # Returns: JSON with count of newly deferred items
-
-    # Read proposals from stdin
-    proposals_json=$(cat)
-
-    # Validate input
-    if [[ -z "$proposals_json" ]] || [[ "$proposals_json" == "[]" ]]; then
-      json_ok '{"deferred":0,"new":0,"expired":0}'
-      exit 0
-    fi
-
-    deferred_file="$DATA_DIR/learning-deferred.json"
-
-    # Ensure data directory exists
-    [[ ! -d "$DATA_DIR" ]] && mkdir -p "$DATA_DIR"
-
-    # Acquire lock
-    acquire_lock "$deferred_file" 5 || {
-      json_err "$E_LOCK_TIMEOUT" "Could not acquire lock on deferred file"
-      exit 1
-    }
-
-    # Read existing deferred file or create empty structure
-    if [[ -f "$deferred_file" ]]; then
-      existing_deferred=$(jq '.deferred // []' "$deferred_file" 2>/dev/null || echo '[]')
-    else
-      existing_deferred='[]'
-    fi
-
-    # Current timestamp for new entries
-    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-    current_epoch=$(date +%s)
-
-    # Add deferred_at timestamp to each new proposal
-    new_proposals=$(echo "$proposals_json" | jq --arg ts "$ts" '
-      map(. + {deferred_at: $ts})
-    ')
-
-    # Calculate TTL cutoff (30 days ago)
-    ttl_cutoff=$((current_epoch - 30 * 24 * 60 * 60))
-
-    # Filter existing deferred: remove expired entries
-    filtered_existing=$(echo "$existing_deferred" | jq --argjson cutoff "$ttl_cutoff" '
-      map(select(
-        (.deferred_at | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601) > $cutoff
-      ))
-    ' 2>/dev/null || echo '[]')
-
-    # Count expired items
-    expired_count=$(echo "$existing_deferred" | jq --argjson cutoff "$ttl_cutoff" '
-      map(select(
-        (.deferred_at | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601) <= $cutoff
-      )) | length
-    ' 2>/dev/null || echo '0')
-
-    # Merge new proposals with existing, avoiding duplicates by content_hash
-    merged=$(jq -s --argjson new "$new_proposals" '
-      def unique_by_hash:
-        group_by(.content_hash) | map(first);
-
-      (.[0] // []) + $new | unique_by_hash
-    ' <<< "$filtered_existing")
-
-    # Count new items (those that weren't in existing)
-    existing_hashes=$(echo "$filtered_existing" | jq -r 'map(.content_hash) | join(" ")')
-    new_count=0
-    if [[ -n "$existing_hashes" ]]; then
-      new_count=$(echo "$new_proposals" | jq --arg existing "$existing_hashes" '
-        [$existing | split(" ")[]] as $hashes |
-        map(select(.content_hash as $h | $hashes | index($h) | not)) |
-        length
-      ')
-    else
-      new_count=$(echo "$new_proposals" | jq 'length')
-    fi
-
-    # Write atomically
-    tmp_file="${deferred_file}.tmp.$$"
-    jq -n --argjson deferred "$merged" '{deferred: $deferred}' > "$tmp_file"
-    mv "$tmp_file" "$deferred_file"
-
-    # Release lock
-    release_lock
-
-    # Log activity
-    total_count=$(echo "$merged" | jq 'length')
-    bash "$0" activity-log "DEFERRED" "Queen" "Stored $new_count new deferred proposal(s), $expired_count expired removed, $total_count total"
-
-    json_ok "{\"deferred\":$total_count,\"new\":$new_count,\"expired\":$expired_count}"
-    ;;
-
-  learning-approve-proposals)
-    # Orchestrate full approval workflow: one-at-a-time display with Approve/Reject/Skip
-    # Usage: learning-approve-proposals [--verbose] [--dry-run] [--yes] [--deferred]
-    # Returns: JSON summary {promoted, deferred, failed, undo_offered}
-
-    verbose=false
-    dry_run=false
-    skip_confirm=false
-    deferred_mode=false
-    undo_mode=false
-
-    # Parse arguments
-    for arg in "$@"; do
-      case "$arg" in
-        --verbose) verbose=true ;;
-        --dry-run) dry_run=true ;;
-        --yes) skip_confirm=true ;;
-        --deferred) deferred_mode=true ;;
-        --undo) undo_mode=true ;;
-      esac
-    done
-
-    # Handle --undo mode
-    if [[ "$undo_mode" == "true" ]]; then
-      undo_result=$(bash "$0" learning-undo-promotions 2>&1)
-      echo "$undo_result"
-      exit 0
-    fi
-
-    # Get colony name from COLONY_STATE.json
-    colony_name="unknown"
-    if [[ -f "$DATA_DIR/COLONY_STATE.json" ]]; then
-      colony_name=$(jq -r '.session_id | split("_")[1] // "unknown"' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "unknown")
-    fi
-
-    # Load proposals based on mode
-    if [[ "$deferred_mode" == "true" ]]; then
-      # Load from deferred file
-      if [[ ! -f "$DATA_DIR/learning-deferred.json" ]]; then
-        echo "No deferred proposals to review."
-        json_ok '{"promoted":0,"deferred":0,"failed":null,"undo_offered":false}'
-        exit 0
-      fi
-      proposals_json=$(jq '{proposals: .deferred}' "$DATA_DIR/learning-deferred.json" 2>/dev/null || echo '{"proposals":[]}')
-      echo "📦 Reviewing deferred proposals..."
-      echo ""
-    else
-      # Get proposals directly from learning-check-promotion
-      proposals_result=$(bash "$0" learning-check-promotion 2>/dev/null || echo '{"proposals":[]}')
-      proposals_json=$(echo "$proposals_result" | jq '{proposals: .result.proposals // []}')
-
-      # Check if there were any proposals
-      proposal_count=$(echo "$proposals_json" | jq '.proposals | length')
-      if [[ "$proposal_count" -eq 0 ]]; then
-        json_ok '{"promoted":0,"deferred":0,"failed":null,"undo_offered":false}'
-        exit 0
-      fi
-    fi
-
-    # Get proposal count
-    proposal_count=$(echo "$proposals_json" | jq '.proposals | length')
-    if [[ "$proposal_count" -eq 0 ]]; then
-      echo "No proposals available."
-      json_ok '{"promoted":0,"deferred":0,"failed":null,"undo_offered":false}'
-      exit 0
-    fi
-
-    # Define wisdom type emojis and names for display
-    declare -A type_emojis
-    declare -A type_names
-    type_emojis=(
-      ["philosophy"]="📜"
-      ["pattern"]="🧭"
-      ["redirect"]="⚠️"
-      ["stack"]="🔧"
-      ["decree"]="🏛️"
-      ["failure"]="❌"
-    )
-    type_names=(
-      ["philosophy"]="Philosophy"
-      ["pattern"]="Pattern"
-      ["redirect"]="Redirect"
-      ["stack"]="Stack Wisdom"
-      ["decree"]="Decree"
-      ["failure"]="Failure"
-    )
-
-    # Arrays to track results
-    approved_proposals=()
-    rejected_proposals=()
-    skipped_proposals=()
-
-    # Process proposals one at a time
-    echo ""
-    echo "🧠 Wisdom Promotion Review"
-    echo "══════════════════════════"
-    echo ""
-    echo "$proposal_count proposal(s) ready for review"
-    echo ""
-
-    for ((i=0; i<proposal_count; i++)); do
-      proposal=$(echo "$proposals_json" | jq ".proposals[$i]")
-      ptype=$(echo "$proposal" | jq -r '.wisdom_type')
-      content=$(echo "$proposal" | jq -r '.content')
-      count=$(echo "$proposal" | jq -r '.observation_count // 1')
-      threshold=$(echo "$proposal" | jq -r '.threshold // 1')
-
-      emoji="${type_emojis[$ptype]:-📝}"
-      name="${type_names[$ptype]:-$ptype}"
-
-      # Display proposal
-      echo "───────────────────────────────────────────────────"
-      echo "Proposal $((i+1)) of $proposal_count"
-      echo "───────────────────────────────────────────────────"
-      echo ""
-      echo "$emoji $name (observed $count time(s), threshold: $threshold)"
-      echo ""
-      echo "$content"
-      echo ""
-      echo "───────────────────────────────────────────────────"
-
-      # Handle dry-run mode
-      if [[ "$dry_run" == "true" ]]; then
-        echo "Dry run: would approve"
-        approved_proposals+=("$proposal")
-        echo ""
-        continue
-      fi
-
-      # Handle --yes mode (auto-approve all)
-      if [[ "$skip_confirm" == "true" ]]; then
-        approved_proposals+=("$proposal")
-        echo "✓ Auto-approved (--yes mode)"
-        echo ""
-        continue
-      fi
-
-      # Prompt for action
-      echo -n "[A]pprove  [R]eject  [S]kip  Your choice: "
-      read -r choice
-
-      case "$choice" in
-        [Aa]|"approve"|"Approve")
-          approved_proposals+=("$proposal")
-          echo "✓ Approved"
-          ;;
-        [Rr]|"reject"|"Reject")
-          rejected_proposals+=("$proposal")
-          echo "✗ Rejected"
-          ;;
-        [Ss]|""|"skip"|"Skip")
-          skipped_proposals+=("$proposal")
-          echo "→ Skipped"
-          ;;
-        *)
-          # Invalid input - default to skip
-          skipped_proposals+=("$proposal")
-          echo "→ Skipped (invalid input)"
-          ;;
-      esac
-      echo ""
-    done
-
-    # Execute promotions for approved proposals
-    promoted_count=0
-    failed_item=""
-    promoted_items=()
-
-    if [[ ${#approved_proposals[@]} -gt 0 ]]; then
-      echo ""
-      echo "Promoting ${#approved_proposals[@]} observation(s)..."
-      echo ""
-
-      for proposal in "${approved_proposals[@]}"; do
-        ptype=$(echo "$proposal" | jq -r '.wisdom_type')
-        content=$(echo "$proposal" | jq -r '.content')
-
-        if [[ "$dry_run" == "true" ]]; then
-          echo "Dry run: would promote $ptype: \"$content\""
-          ((promoted_count++))
-          promoted_items+=("$proposal")
-          continue
-        fi
-
-        # Call queen-promote
-        promote_result=$(bash "$0" queen-promote "$ptype" "$content" "$colony_name" 2>&1) || {
-          echo "✗ Failed to promote: $content"
-          echo "  Error: $promote_result"
-          failed_item="$content"
-          # Prompt for retry on failure
-          echo ""
-          echo -n "Write to QUEEN.md failed. Retry? (y/n): "
-          read -r retry_response
-          if [[ "$retry_response" =~ ^[Yy]$ ]]; then
-            # Retry once
-            promote_result=$(bash "$0" queen-promote "$ptype" "$content" "$colony_name" 2>&1) || {
-              echo "✗ Retry failed. Keeping proposal pending."
-              skipped_proposals+=("$proposal")
-              continue
-            }
-          else
-            echo "Skipping this proposal. It will remain pending."
-            skipped_proposals+=("$proposal")
-            continue
-          fi
-        }
-
-        echo "✓ Promoted ${ptype^}: \"$content\""
-        ((promoted_count++))
-        promoted_items+=("$proposal")
-      done
-    fi
-
-    # Handle deferred proposals (skipped ones go to deferred)
-    deferred_count=${#skipped_proposals[@]}
-    if [[ "$dry_run" == "false" ]] && [[ $deferred_count -gt 0 ]]; then
-      # Convert skipped proposals to JSON array and defer
-      skipped_json=$(printf '%s\n' "${skipped_proposals[@]}" | jq -s '.')
-      echo "$skipped_json" | bash "$0" learning-defer-proposals >/dev/null 2>&1
-    fi
-
-    # Log activity
-    if [[ "$dry_run" == "false" ]]; then
-      bash "$0" activity-log "PROMOTED" "Queen" "Promoted $promoted_count observation(s), deferred $deferred_count, rejected ${#rejected_proposals[@]}"
-    fi
-
-    # Display summary
-    echo ""
-    echo "═══════════════════════════════════════════════════"
-    echo "Summary: $promoted_count approved, ${#rejected_proposals[@]} rejected, $deferred_count skipped"
-    echo "═══════════════════════════════════════════════════"
-    echo ""
-
-    # Offer undo if promotions succeeded
-    undo_offered=false
-    if [[ "$promoted_count" -gt 0 ]] && [[ "$dry_run" == "false" ]] && [[ -z "$failed_item" ]]; then
-      undo_offered=true
-
-      # Store undo info
-      undo_file="$DATA_DIR/.promotion-undo.json"
-      promoted_json=$(printf '%s\n' "${promoted_items[@]}" | jq -s '.')
-      jq -n --argjson items "$promoted_json" --arg ts "$(date +%s)" '{promoted: $items, timestamp: ($ts | tonumber)}' > "$undo_file"
-
-      echo -n "Undo these promotions? (y/n): "
-      read -r undo_response
-
-      if [[ "$undo_response" =~ ^[Yy]$ ]]; then
-        echo "Reverting promotions..."
-        undo_result=$(bash "$0" learning-undo-promotions 2>&1)
-        if echo "$undo_result" | jq -e '.ok' >/dev/null 2>&1; then
-          undone_count=$(echo "$undo_result" | jq -r '.result.undone // 0')
-          echo "$undone_count promotion(s) reverted."
-          promoted_count=0
-        else
-          echo "Undo failed: $(echo "$undo_result" | jq -r '.error.message // "Unknown error"')"
-        fi
-      else
-        echo "Promotions kept."
-      fi
-    fi
-
-    # Build result
-    result=$(jq -n \
-      --argjson promoted "$promoted_count" \
-      --argjson deferred "$deferred_count" \
-      --argjson rejected "${#rejected_proposals[@]}" \
-      --arg failed "${failed_item:-null}" \
-      --argjson undo "$undo_offered" \
-      '{promoted: $promoted, deferred: $deferred, rejected: $rejected, failed: $failed, undo_offered: $undo}')
-
-    json_ok "$result"
-    ;;
-
-  learning-undo-promotions)
-    # Revert promotions from QUEEN.md using undo file
-    # Usage: learning-undo-promotions
-    # Returns: JSON with count of undone items
-
-    undo_file="$DATA_DIR/.promotion-undo.json"
-
-    # Check if undo file exists
-    if [[ ! -f "$undo_file" ]]; then
-      json_err "$E_FILE_NOT_FOUND" "No undo file found. Cannot undo promotions."
-      exit 1
-    fi
-
-    # Read undo data
-    undo_data=$(cat "$undo_file")
-    undo_timestamp=$(echo "$undo_data" | jq -r '.timestamp // 0')
-    current_time=$(date +%s)
-
-    # Check 24h TTL
-    ttl_seconds=$((24 * 60 * 60))
-    time_diff=$((current_time - undo_timestamp))
-
-    if [[ $time_diff -gt $ttl_seconds ]]; then
-      # Remove expired undo file
-      rm -f "$undo_file"
-      json_err "$E_VALIDATION_FAILED" "Undo window expired (24h limit)"
-      exit 1
-    fi
-
-    queen_file="$AETHER_ROOT/.aether/QUEEN.md"
-
-    # Check if QUEEN.md exists
-    if [[ ! -f "$queen_file" ]]; then
-      json_err "$E_FILE_NOT_FOUND" "QUEEN.md not found"
-      exit 1
-    fi
-
-    # Process each promoted item
-    undone_count=0
-    failed_items=()
-
-    # Read promoted items from undo file
-    promoted_items=$(echo "$undo_data" | jq -c '.promoted[]?')
-
-    if [[ -z "$promoted_items" ]]; then
-      rm -f "$undo_file"
-      json_err "$E_VALIDATION_FAILED" "No promoted items in undo file"
-      exit 1
-    fi
-
-    # Create temp file for atomic write
-    tmp_file="${queen_file}.tmp.$$"
-
-    # Copy current QUEEN.md to temp
-    cp "$queen_file" "$tmp_file"
-
-    # Process each item
-    while IFS= read -r item; do
-      [[ -z "$item" ]] && continue
-
-      ptype=$(echo "$item" | jq -r '.wisdom_type')
-      content=$(echo "$item" | jq -r '.content')
-
-      # Map type to section header
-      case "$ptype" in
-        philosophy) section_header="## 📜 Philosophies" ;;
-        pattern) section_header="## 🧭 Patterns" ;;
-        redirect) section_header="## ⚠️ Redirects" ;;
-        stack) section_header="## 🔧 Stack Wisdom" ;;
-        decree) section_header="## 🏛️ Decrees" ;;
-        *) continue ;;
-      esac
-
-      # Escape content for sed (basic escaping)
-      escaped_content=$(echo "$content" | sed 's/[\\/&]/\\&/g')
-
-      # Find and remove the entry from the section
-      # Pattern: - **colony_name** (timestamp): content
-      # We match based on content since that's the unique part
-      if grep -q "${escaped_content}" "$tmp_file" 2>/dev/null; then
-        # Remove line containing this content within the section
-        # Use awk to handle section-aware removal
-        awk -v section="$section_header" -v content="$content" '
-          BEGIN { in_section = 0 }
-          $0 == section { in_section = 1 }
-          in_section && $0 ~ /^## / && $0 != section { in_section = 0 }
-          in_section && $0 ~ content { skip = 1; next }
-          { if (!skip) print; skip = 0 }
-        ' "$tmp_file" > "${tmp_file}.new" && mv "${tmp_file}.new" "$tmp_file"
-
-        ((undone_count++))
-      else
-        # Entry already removed or not found
-        failed_items+=("$content")
-      fi
-    done <<< "$promoted_items"
-
-    # Update METADATA stats in temp file - decrement counts
-    case "$ptype" in
-      stack) stat_key="total_stack_entries" ;;
-      philosophy) stat_key="total_philosophies" ;;
-      *) stat_key="total_${ptype}s" ;;
-    esac
-
-    # Decrement stats (but not below 0)
-    current_count=$(grep "\"${stat_key}\":" "$tmp_file" 2>/dev/null | grep -o '[0-9]*' | head -1 || echo "0")
-    current_count=${current_count:-0}
-    if [[ $current_count -gt 0 ]]; then
-      new_count=$((current_count - 1))
-      awk -v type="$stat_key" -v count="$new_count" '{
-        gsub("\"" type "\": [0-9]*", "\"" type "\": " count)
-        print
-      }' "$tmp_file" > "${tmp_file}.stats" && mv "${tmp_file}.stats" "$tmp_file"
-    fi
-
-    # Atomic move
-    mv "$tmp_file" "$queen_file"
-
-    # Remove undo file after successful revert
-    rm -f "$undo_file"
-
-    # Log activity
-    bash "$0" activity-log "UNDONE" "Queen" "Reverted $undone_count promotion(s) from QUEEN.md"
-
-    # Build result
-    if [[ ${#failed_items[@]} -gt 0 ]]; then
-      failed_json=$(printf '%s\n' "${failed_items[@]}" | jq -R . | jq -s '.')
-      result=$(jq -n --argjson undone "$undone_count" --argjson failed "$failed_json" '{undone: $undone, not_found: $failed}')
-    else
-      result=$(jq -n --argjson undone "$undone_count" '{undone: $undone, not_found: []}')
-    fi
-
-    json_ok "$result"
-    ;;
+  learning-display-proposals) _learning_display_proposals "$@" ;;
+  learning-select-proposals) _learning_select_proposals "$@" ;;
+  learning-defer-proposals) _learning_defer_proposals "$@" ;;
+  learning-approve-proposals) _learning_approve_proposals "$@" ;;
+  learning-undo-promotions) _learning_undo_promotions "$@" ;;
 
   survey-load)
     phase_type="${1:-}"
@@ -6417,6 +3782,7 @@ $updated_meta
     ;;
 
   checkpoint-check)
+    _deprecation_warning "checkpoint-check"
     allowlist_file="$DATA_DIR/checkpoint-allowlist.json"
 
     if [[ ! -f "$allowlist_file" ]]; then
@@ -6424,7 +3790,7 @@ $updated_meta
     fi
 
     # Get dirty files from git (staged or unstaged)
-    dirty_files=$(git status --porcelain 2>/dev/null | awk '{print $2}' || true)
+    dirty_files=$(git status --porcelain 2>/dev/null | awk '{print $2}' || true)  # SUPPRESS:OK -- existence-test: may not be a git repo
 
     if [[ -z "$dirty_files" ]]; then
       json_ok '{"ok":true,"system_files":[],"user_files":[],"has_user_files":false}'
@@ -6467,14 +3833,17 @@ $updated_meta
 
     # Build JSON using jq if available, otherwise use simple format
     if command -v jq >/dev/null 2>&1; then
+      # SUPPRESS:OK -- read-default: file may not exist yet
       result=$(jq -n \
+        # SUPPRESS:OK -- read-default: text escaping returns fallback on empty input
         --argjson system "$(jq -R . < "$system_files_tmp" 2>/dev/null | jq -s .)" \
+        # SUPPRESS:OK -- read-default: text escaping returns fallback on empty input
         --argjson user "$(jq -R . < "$user_files_tmp" 2>/dev/null | jq -s .)" \
         '{ok: true, system_files: $system, user_files: $user, has_user_files: ($user | length > 0)}')
     else
       # Fallback without jq - simple output
-      system_count=$(wc -l < "$system_files_tmp" 2>/dev/null | tr -d ' ' || echo "0")
-      user_count=$(wc -l < "$user_files_tmp" 2>/dev/null | tr -d ' ' || echo "0")
+      system_count=$(wc -l < "$system_files_tmp" 2>/dev/null | tr -d ' ' || echo "0")  # SUPPRESS:OK -- read-default: file may not exist
+      user_count=$(wc -l < "$user_files_tmp" 2>/dev/null | tr -d ' ' || echo "0")  # SUPPRESS:OK -- read-default: file may not exist
       has_user=false
       [[ "$user_count" -gt 0 ]] && has_user=true
       result="{\"ok\":true,\"system_files\":[],\"user_files\":[],\"has_user_files\":$has_user}"
@@ -6517,6 +3886,7 @@ $updated_meta
 
   # Backward compatibility wrappers for session commands
   survey-verify-fresh)
+    _deprecation_warning "survey-verify-fresh"
     # Backward compatibility: delegate to session-verify-fresh --command survey
     # Usage: bash .aether/aether-utils.sh survey-verify-fresh [--force] <survey_start_unixtime>
 
@@ -6541,6 +3911,7 @@ $updated_meta
     ;;
 
   survey-clear)
+    _deprecation_warning "survey-clear"
     # Backward compatibility: delegate to session-clear --command survey
     # Usage: bash .aether/aether-utils.sh survey-clear [--dry-run]
 
@@ -6561,1876 +3932,49 @@ $updated_meta
     fi
     ;;
 
-  session-verify-fresh)
-    # Generic session freshness verification
-    # Usage: bash .aether/aether-utils.sh session-verify-fresh --command <name> [--force] <session_start_unixtime>
-    # Returns: JSON with pass/fail status and file details
+  session-verify-fresh) _session_verify_fresh "$@" ;;
+  session-clear) _session_clear "$@" ;;
 
-    # Parse arguments
-    command_name=""
-    force_mode=""
-    session_start_time=""
 
-    while [[ $# -gt 0 ]]; do
-      case "$1" in
-        --command) command_name="$2"; shift 2 ;;
-        --force) force_mode="--force"; shift ;;
-        *) session_start_time="$1"; shift ;;
-      esac
-    done
+  pheromone-export-eternal) _deprecation_warning "pheromone-export-eternal"; _pheromone_export_eternal "$@" ;;
+  pheromone-write) _pheromone_write "$@" ;;
+  pheromone-count) _pheromone_count "$@" ;;
+  pheromone-display) _pheromone_display "$@" ;;
+  pheromone-read) _pheromone_read "$@" ;;
 
-    # Validate command name
-    [[ -z "$command_name" ]] && json_err "$E_VALIDATION_FAILED" "Usage: session-verify-fresh --command <name> [--force] <session_start>"
+  instinct-read) _instinct_read "$@" ;;
+  instinct-create) _instinct_create "$@" ;;
+  instinct-apply) _instinct_apply "$@" ;;
+  learning-extract-fallback) _learning_extract_fallback "$@" ;;
 
-    # Map command to directory and files (using env var override pattern)
-    case "$command_name" in
-      survey)
-        session_dir="${SURVEY_DIR:-.aether/data/survey}"
-        required_docs="PROVISIONS.md TRAILS.md BLUEPRINT.md CHAMBERS.md DISCIPLINES.md SENTINEL-PROTOCOLS.md PATHOGENS.md"
-        ;;
-      oracle)
-        session_dir="${ORACLE_DIR:-.aether/oracle}"
-        required_docs="state.json plan.json gaps.md synthesis.md research-plan.md"
-        ;;
-      watch)
-        session_dir="${WATCH_DIR:-.aether/data}"
-        required_docs="watch-status.txt watch-progress.txt"
-        ;;
-      swarm)
-        session_dir="${SWARM_DIR:-.aether/data/swarm}"
-        required_docs="findings.json"
-        ;;
-      init)
-        session_dir="${INIT_DIR:-.aether/data}"
-        required_docs="COLONY_STATE.json constraints.json"
-        ;;
-      seal|entomb)
-        session_dir="${ARCHIVE_DIR:-.aether/data/archive}"
-        required_docs="manifest.json"
-        ;;
-      *)
-        json_err "$E_VALIDATION_FAILED" "Unknown command: $command_name" '{"commands":["survey","oracle","watch","swarm","init","seal","entomb"]}'
-        ;;
-    esac
 
-    # Initialize result arrays
-    fresh_docs=""
-    stale_docs=""
-    missing_docs=""
-    total_lines=0
+  pheromone-prime) _pheromone_prime "$@" ;;
+  colony-prime) _colony_prime "$@" ;;
+  pheromone-expire) _pheromone_expire "$@" ;;
+  eternal-init) _eternal_init "$@" ;;
+  eternal-store) _eternal_store "$@" ;;
 
-    for doc in $required_docs; do
-      doc_path="$session_dir/$doc"
+  hive-init) _hive_init "$@" ;;
 
-      if [[ ! -f "$doc_path" ]]; then
-        missing_docs="${missing_docs:+$missing_docs }$doc"
-        continue
-      fi
+  hive-store) _hive_store "$@" ;;
 
-      # Get line count
-      lines=$(wc -l < "$doc_path" 2>/dev/null | tr -d ' ' || echo "0")
-      total_lines=$((total_lines + lines))
+  hive-read) _hive_read "$@" ;;
 
-      # In force mode, accept any existing file
-      if [[ "$force_mode" == "--force" ]]; then
-        fresh_docs="${fresh_docs:+$fresh_docs }$doc"
-        continue
-      fi
+  hive-abstract) _hive_abstract "$@" ;;
 
-      # Check timestamp if session_start_time provided
-      if [[ -n "$session_start_time" ]]; then
-        # Cross-platform stat: macOS uses -f %m, Linux uses -c %Y
-        file_mtime=$(stat -f %m "$doc_path" 2>/dev/null || stat -c %Y "$doc_path" 2>/dev/null || echo "0")
+  hive-promote) _hive_promote "$@" ;;
 
-        if [[ "$file_mtime" -ge "$session_start_time" ]]; then
-          fresh_docs="${fresh_docs:+$fresh_docs }$doc"
-        else
-          stale_docs="${stale_docs:+$stale_docs }$doc"
-        fi
-      else
-        # No start time provided - accept existing file (backward compatible)
-        fresh_docs="${fresh_docs:+$fresh_docs }$doc"
-      fi
-    done
-
-    # Determine pass/fail
-    # pass = true if: no stale files (fresh files can coexist with missing files)
-    # missing files are ok - they will be created during the session
-    pass=false
-    if [[ "$force_mode" == "--force" ]] || [[ -z "$stale_docs" ]]; then
-      pass=true
-    fi
-
-    # Build JSON response
-    fresh_json=""
-    for item in $fresh_docs; do fresh_json="$fresh_json\"$item\","; done
-    fresh_json="[${fresh_json%,}]"
-
-    stale_json=""
-    for item in $stale_docs; do stale_json="$stale_json\"$item\","; done
-    stale_json="[${stale_json%,}]"
-
-    missing_json=""
-    for item in $missing_docs; do missing_json="$missing_json\"$item\","; done
-    missing_json="[${missing_json%,}]"
-
-    echo "{\"ok\":$pass,\"command\":\"$command_name\",\"fresh\":$fresh_json,\"stale\":$stale_json,\"missing\":$missing_json,\"total_lines\":$total_lines}"
-    exit 0
-    ;;
-
-  session-clear)
-    # Generic session file clearing
-    # Usage: bash .aether/aether-utils.sh session-clear --command <name> [--dry-run]
-
-    # Parse arguments
-    command_name=""
-    dry_run=""
-
-    while [[ $# -gt 0 ]]; do
-      case "$1" in
-        --command) command_name="$2"; shift 2 ;;
-        --dry-run) dry_run="--dry-run"; shift ;;
-        *) shift ;;
-      esac
-    done
-
-    [[ -z "$command_name" ]] && json_err "$E_VALIDATION_FAILED" "Usage: session-clear --command <name> [--dry-run]"
-
-    # Map command to directory and files
-    case "$command_name" in
-      survey)
-        session_dir="${SURVEY_DIR:-.aether/data/survey}"
-        files="PROVISIONS.md TRAILS.md BLUEPRINT.md CHAMBERS.md DISCIPLINES.md SENTINEL-PROTOCOLS.md PATHOGENS.md"
-        ;;
-      oracle)
-        session_dir="${ORACLE_DIR:-.aether/oracle}"
-        files="state.json plan.json gaps.md synthesis.md research-plan.md .stop .last-topic"
-        # Also clear discoveries subdirectory
-        subdir_files="discoveries/*"
-        ;;
-      watch)
-        session_dir="${WATCH_DIR:-.aether/data}"
-        files="watch-status.txt watch-progress.txt"
-        ;;
-      swarm)
-        session_dir="${SWARM_DIR:-.aether/data/swarm}"
-        files="findings.json display.json timing.json"
-        ;;
-      init)
-        # Init clear is destructive - blocked for auto-clear
-        json_err "$E_VALIDATION_FAILED" "Command 'init' is protected and cannot be auto-cleared. Use manual removal of COLONY_STATE.json if absolutely necessary."
-        ;;
-      seal|entomb)
-        # Archive operations should never be auto-cleared
-        json_err "$E_VALIDATION_FAILED" "Command '$command_name' is protected and cannot be auto-cleared. Archives and chambers must be managed manually."
-        ;;
-      *)
-        json_err "$E_VALIDATION_FAILED" "Unknown command: $command_name"
-        ;;
-    esac
-
-    cleared=""
-    errors=""
-
-    if [[ -d "$session_dir" && -n "$files" ]]; then
-      for doc in $files; do
-        doc_path="$session_dir/$doc"
-        if [[ -f "$doc_path" ]]; then
-          if [[ "$dry_run" == "--dry-run" ]]; then
-            cleared="$cleared $doc"
-          else
-            if rm -f "$doc_path" 2>/dev/null; then
-              cleared="$cleared $doc"
-            else
-              errors="$errors $doc"
-            fi
-          fi
-        fi
-      done
-
-      # Handle oracle discoveries subdirectory
-      if [[ "$command_name" == "oracle" && -d "$session_dir/discoveries" ]]; then
-        if [[ "$dry_run" == "--dry-run" ]]; then
-          cleared="$cleared discoveries/"
-        else
-          rm -rf "$session_dir/discoveries" 2>/dev/null && cleared="$cleared discoveries/" || errors="$errors discoveries/"
-        fi
-      fi
-    fi
-
-    json_ok "{\"command\":\"$command_name\",\"cleared\":\"${cleared// /}\",\"errors\":\"${errors// /}\",\"dry_run\":$([[ "$dry_run" == "--dry-run" ]] && echo "true" || echo "false")}"
-    ;;
-
-  pheromone-export-eternal)
-    # Export pheromones to eternal XML format (distinct from xml-utils.sh pheromone-export function)
-    # Usage: pheromone-export-eternal [input_json] [output_xml]
-    #   input_json: Path to pheromones.json (default: .aether/data/pheromones.json)
-    #   output_xml: Path to output XML (default: ~/.aether/eternal/pheromones.xml)
-
-    input_json="${1:-.aether/data/pheromones.json}"
-    output_xml="${2:-$HOME/.aether/eternal/pheromones.xml}"
-    schema_file="${3:-$SCRIPT_DIR/schemas/pheromone.xsd}"
-
-    # Ensure xml-utils.sh is sourced
-    if ! type pheromone-export &>/dev/null; then
-      [[ -f "$SCRIPT_DIR/utils/xml-utils.sh" ]] && source "$SCRIPT_DIR/utils/xml-utils.sh"
-    fi
-
-    if type pheromone-export &>/dev/null; then
-      pheromone-export "$input_json" "$output_xml" "$schema_file"
-    else
-      json_err "$E_DEPENDENCY_MISSING" "xml-utils.sh not available. Try: run aether update to restore utility scripts."
-    fi
-    ;;
-
-  pheromone-write)
-    # Write a pheromone signal to pheromones.json
-    # Usage: pheromone-write <type> <content> [--strength N] [--ttl TTL] [--source SOURCE] [--reason REASON]
-    #   type:       FOCUS, REDIRECT, or FEEDBACK
-    #   content:    signal text (required, max 500 chars)
-    #   --strength: 0.0-1.0 (defaults: REDIRECT=0.9, FOCUS=0.8, FEEDBACK=0.7)
-    #   --ttl:      phase_end (default), 2h, 1d, 7d, 30d, etc.
-    #   --source:   user (default), worker:builder, system
-    #   --reason:   human-readable explanation
-
-    pw_type="${1:-}"
-    pw_content="${2:-}"
-
-    # Validate type
-    if [[ -z "$pw_type" ]]; then
-      json_err "$E_VALIDATION_FAILED" "pheromone-write requires <type> argument (FOCUS, REDIRECT, or FEEDBACK)"
-    fi
-
-    pw_type=$(echo "$pw_type" | tr '[:lower:]' '[:upper:]')
-    case "$pw_type" in
-      FOCUS|REDIRECT|FEEDBACK) ;;
-      *) json_err "$E_VALIDATION_FAILED" "Invalid pheromone type: $pw_type. Must be FOCUS, REDIRECT, or FEEDBACK" ;;
-    esac
-
-    if [[ -z "$pw_content" ]]; then
-      json_err "$E_VALIDATION_FAILED" "pheromone-write requires <content> argument"
-    fi
-
-    # Sanitize and bound input content to reduce injection risk in prompt contexts.
-    pw_content="${pw_content//</&lt;}"
-    pw_content="${pw_content//>/&gt;}"
-    pw_content="${pw_content:0:500}"
-    if echo "$pw_content" | grep -Eiq '(\$\(|`|(^|[[:space:]])curl([[:space:]]|$)|(^|[[:space:]])wget([[:space:]]|$)|(^|[[:space:]])rm([[:space:]]|$))'; then
-      json_err "$E_VALIDATION_FAILED" "Pheromone content rejected: potential injection pattern"
-    fi
-
-    # Parse optional flags from remaining args (after type and content)
-    pw_strength=""
-    pw_ttl="phase_end"
-    pw_source="user"
-    pw_reason=""
-
-    shift 2  # shift past type and content
-    while [[ $# -gt 0 ]]; do
-      case "$1" in
-        --strength) pw_strength="$2"; shift 2 ;;
-        --ttl)      pw_ttl="$2"; shift 2 ;;
-        --source)   pw_source="$2"; shift 2 ;;
-        --reason)   pw_reason="$2"; shift 2 ;;
-        *) shift ;;
-      esac
-    done
-
-    # Apply default strength by type
-    if [[ -z "$pw_strength" ]]; then
-      case "$pw_type" in
-        REDIRECT) pw_strength="0.9" ;;
-        FOCUS)    pw_strength="0.8" ;;
-        FEEDBACK) pw_strength="0.7" ;;
-      esac
-    fi
-
-    if ! [[ "$pw_strength" =~ ^(0(\.[0-9]+)?|1(\.0+)?)$ ]]; then
-      json_err "$E_VALIDATION_FAILED" "Strength must be a number between 0.0 and 1.0" "{\"provided\":\"$pw_strength\"}"
-    fi
-
-    # Apply default reason by type
-    if [[ -z "$pw_reason" ]]; then
-      pw_type_lower_r=$(echo "$pw_type" | tr '[:upper:]' '[:lower:]')
-      pw_reason="User emitted via /ant:${pw_type_lower_r}"
-    fi
-
-    # Set priority by type
-    case "$pw_type" in
-      REDIRECT) pw_priority="high" ;;
-      FOCUS)    pw_priority="normal" ;;
-      FEEDBACK) pw_priority="low" ;;
-    esac
-
-    # Generate ID and timestamps
-    pw_epoch=$(date +%s)
-    pw_rand=$(( RANDOM % 10000 ))
-    pw_type_lower=$(echo "$pw_type" | tr '[:upper:]' '[:lower:]')
-    pw_id="sig_${pw_type_lower}_${pw_epoch}_${pw_rand}"
-    pw_created=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-
-    # Compute expires_at from TTL
-    if [[ "$pw_ttl" == "phase_end" ]]; then
-      pw_expires="phase_end"
-    else
-      pw_ttl_secs=0
-      if [[ "$pw_ttl" =~ ^([0-9]+)m$ ]]; then
-        pw_ttl_secs=$(( ${BASH_REMATCH[1]} * 60 ))
-      elif [[ "$pw_ttl" =~ ^([0-9]+)h$ ]]; then
-        pw_ttl_secs=$(( ${BASH_REMATCH[1]} * 3600 ))
-      elif [[ "$pw_ttl" =~ ^([0-9]+)d$ ]]; then
-        pw_ttl_secs=$(( ${BASH_REMATCH[1]} * 86400 ))
-      fi
-      if [[ $pw_ttl_secs -gt 0 ]]; then
-        pw_expires_epoch=$(( pw_epoch + pw_ttl_secs ))
-        pw_expires=$(date -u -r "$pw_expires_epoch" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || \
-                     date -u -d "@$pw_expires_epoch" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || \
-                     echo "phase_end")
-      else
-        pw_expires="phase_end"
-      fi
-    fi
-
-    pw_file="$DATA_DIR/pheromones.json"
-
-    pw_lock_held=false
-    if type acquire_lock &>/dev/null; then
-      acquire_lock "$pw_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on pheromones.json"
-      pw_lock_held=true
-    fi
-
-    # Initialize pheromones.json if missing
-    if [[ ! -f "$pw_file" ]]; then
-      pw_colony_id="aether-dev"
-      if [[ -f "$DATA_DIR/COLONY_STATE.json" ]]; then
-        pw_colony_id=$(jq -r '.session_id // "aether-dev"' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "aether-dev")
-      fi
-      printf '{\n  "version": "1.0.0",\n  "colony_id": "%s",\n  "generated_at": "%s",\n  "signals": []\n}\n' \
-        "$pw_colony_id" "$pw_created" > "$pw_file"
-    fi
-
-    # Build signal object and append to pheromones.json
-    pw_signal=$(jq -n \
-      --arg id "$pw_id" \
-      --arg type "$pw_type" \
-      --arg priority "$pw_priority" \
-      --arg source "$pw_source" \
-      --arg created_at "$pw_created" \
-      --arg expires_at "$pw_expires" \
-      --argjson active true \
-      --argjson strength "$pw_strength" \
-      --arg reason "$pw_reason" \
-      --arg content "$pw_content" \
-      '{id: $id, type: $type, priority: $priority, source: $source, created_at: $created_at, expires_at: $expires_at, active: $active, strength: ($strength | tonumber), reason: $reason, content: {text: $content}}')
-
-    pw_updated=$(jq --argjson sig "$pw_signal" '.signals += [$sig]' "$pw_file" 2>/dev/null)
-    if [[ -z "$pw_updated" ]]; then
-      [[ "$pw_lock_held" == "true" ]] && release_lock 2>/dev/null || true
-      json_err "${E_JSON_INVALID:-E_JSON_INVALID}" "Failed to update pheromones.json — jq parse error"
-    fi
-    atomic_write "$pw_file" "$pw_updated" || {
-      [[ "$pw_lock_held" == "true" ]] && release_lock 2>/dev/null || true
-      json_err "$E_JSON_INVALID" "Failed to write pheromones.json"
-    }
-    [[ "$pw_lock_held" == "true" ]] && release_lock 2>/dev/null || true
-
-    # Backward compatibility: also write to constraints.json
-    pw_cfile="$DATA_DIR/constraints.json"
-    if [[ "$pw_type" == "FOCUS" ]]; then
-      if [[ ! -f "$pw_cfile" ]]; then
-        echo '{"version":"1.0","focus":[],"constraints":[]}' > "$pw_cfile"
-      fi
-      pw_cfile_updated=$(jq --arg txt "$pw_content" '
-        .focus += [$txt] |
-        if (.focus | length) > 5 then .focus = .focus[-5:] else . end
-      ' "$pw_cfile" 2>/dev/null)
-      [[ -n "$pw_cfile_updated" ]] && echo "$pw_cfile_updated" > "$pw_cfile"
-    elif [[ "$pw_type" == "REDIRECT" ]]; then
-      if [[ ! -f "$pw_cfile" ]]; then
-        echo '{"version":"1.0","focus":[],"constraints":[]}' > "$pw_cfile"
-      fi
-      pw_constraint=$(jq -n \
-        --arg id "c_${pw_epoch}" \
-        --arg content "$pw_content" \
-        --arg source "user:redirect" \
-        --arg created_at "$pw_created" \
-        '{id: $id, type: "AVOID", content: $content, source: $source, created_at: $created_at}')
-      pw_cfile_updated=$(jq --argjson c "$pw_constraint" '
-        .constraints += [$c] |
-        if (.constraints | length) > 10 then .constraints = .constraints[-10:] else . end
-      ' "$pw_cfile" 2>/dev/null)
-      [[ -n "$pw_cfile_updated" ]] && echo "$pw_cfile_updated" > "$pw_cfile"
-    fi
-
-    # Get active signal count
-    pw_active_count=$(jq '[.signals[] | select(.active == true)] | length' "$pw_file" 2>/dev/null || echo "0")
-
-    json_ok "{\"signal_id\":\"$pw_id\",\"type\":\"$pw_type\",\"active_count\":$pw_active_count}"
-    ;;
-
-  pheromone-count)
-    # Count active pheromone signals by type
-    # Usage: pheromone-count
-    # Returns: JSON with per-type counts
-
-    pc_file="$DATA_DIR/pheromones.json"
-
-    if [[ ! -f "$pc_file" ]]; then
-      json_ok '{"focus":0,"redirect":0,"feedback":0,"total":0}'
-    else
-      pc_result=$(jq -c '{
-        focus:    ([.signals[] | select(.active == true and .type == "FOCUS")]    | length),
-        redirect: ([.signals[] | select(.active == true and .type == "REDIRECT")] | length),
-        feedback: ([.signals[] | select(.active == true and .type == "FEEDBACK")] | length),
-        total:    ([.signals[] | select(.active == true)]                          | length)
-      }' "$pc_file" 2>/dev/null)
-      if [[ -z "$pc_result" ]]; then
-        json_ok '{"focus":0,"redirect":0,"feedback":0,"total":0}'
-      else
-        json_ok "$pc_result"
-      fi
-    fi
-    ;;
-
-  pheromone-display)
-    # Display active pheromones in formatted table
-    # Usage: pheromone-display [type]
-    #   type: Optional filter (focus/redirect/feedback) or 'all' (default: all)
-    # Returns: Formatted table string (human-readable)
-
-    pd_file="$DATA_DIR/pheromones.json"
-    pd_type="${1:-all}"
-    pd_now_iso=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-
-    if [[ ! -f "$pd_file" ]]; then
-      echo "No pheromones active. Colony has no signals."
-      echo ""
-      echo "Inject signals with:"
-      echo "  /ant:focus \"area\"    - Guide attention"
-      echo "  /ant:redirect \"avoid\" - Set hard constraint"
-      echo "  /ant:feedback \"note\"  - Provide guidance"
-      exit 0
-    fi
-
-    # Get signals with decay calculation (same as pheromone-read)
-    pd_signals=$(jq -c \
-      --arg now_iso "$pd_now_iso" \
-      --arg type_filter "$pd_type" \
-      '
-      def to_epoch(ts):
-        if ts == null or ts == "" or ts == "phase_end" then null
-        else
-          (ts | split("T")) as $parts |
-          ($parts[0] | split("-")) as $d |
-          ($parts[1] | rtrimstr("Z") | split(":")) as $t |
-          (($d[0] | tonumber) - 1970) * 365 * 86400 +
-          (($d[1] | tonumber) - 1) * 30 * 86400 +
-          (($d[2] | tonumber) - 1) * 86400 +
-          ($t[0] | tonumber) * 3600 +
-          ($t[1] | tonumber) * 60 +
-          ($t[2] | rtrimstr("Z") | tonumber)
-        end;
-
-      def decay_days(t):
-        if t == "FOCUS"    then 30
-        elif t == "REDIRECT" then 60
-        else 90
-        end;
-
-      (to_epoch($now_iso)) as $now |
-      .signals | map(
-        (to_epoch(.created_at)) as $created_epoch |
-        (if $created_epoch != null then ($now - $created_epoch) / 86400 else 0 end) as $elapsed_days |
-        (decay_days(.type)) as $dd |
-        ((.strength // 0.8) * (1 - ($elapsed_days / $dd))) as $eff_raw |
-        (if $eff_raw < 0 then 0 else $eff_raw end) as $eff |
-        {
-          id: .id,
-          type: .type,
-          content: .content,
-          strength: (.strength // 0.8),
-          effective_strength: $eff,
-          elapsed_days: $elapsed_days,
-          remaining_days: ($dd - $elapsed_days),
-          created_at: .created_at,
-          active: (.active != false and $eff >= 0.1)
-        }
-      )
-      | map(select(.active == true))
-      | map(select(if $type_filter == "all" or $type_filter == "" then true else (.type | ascii_downcase) == ($type_filter | ascii_downcase) end))
-      | sort_by(-.effective_strength)
-      ' "$pd_file" 2>/dev/null)
-
-    if [[ -z "$pd_signals" || "$pd_signals" == "[]" ]]; then
-      echo "No active pheromones found."
-      if [[ "$pd_type" != "all" ]]; then
-        echo "Filter: $pd_type"
-      fi
-      exit 0
-    fi
-
-    # Count by type
-    pd_focus=$(echo "$pd_signals" | jq '[.[] | select(.type == "FOCUS")] | length')
-    pd_redirect=$(echo "$pd_signals" | jq '[.[] | select(.type == "REDIRECT")] | length')
-    pd_feedback=$(echo "$pd_signals" | jq '[.[] | select(.type == "FEEDBACK")] | length')
-    pd_total=$(echo "$pd_signals" | jq 'length')
-
-    # Display header
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "   A C T I V E   P H E R O M O N E S"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
-
-    # Display FOCUS signals
-    if [[ "$pd_focus" -gt 0 && ("$pd_type" == "all" || "$pd_type" == "focus") ]]; then
-      echo "🎯 FOCUS (Pay attention here)"
-      echo "$pd_signals" | jq -r '.[] | select(.type == "FOCUS") | "   \n   [\(.effective_strength * 100 | floor)%] \"\(.content.text // .content // "no content")\"\n      └── \(.elapsed_days | floor)d ago, \(.remaining_days | floor)d remaining"' | head -20
-      echo ""
-    fi
-
-    # Display REDIRECT signals
-    if [[ "$pd_redirect" -gt 0 && ("$pd_type" == "all" || "$pd_type" == "redirect") ]]; then
-      echo "🚫 REDIRECT (Hard constraints - DO NOT do this)"
-      echo "$pd_signals" | jq -r '.[] | select(.type == "REDIRECT") | "   \n   [\(.effective_strength * 100 | floor)%] \"\(.content.text // .content // "no content")\"\n      └── \(.elapsed_days | floor)d ago, \(.remaining_days | floor)d remaining"' | head -20
-      echo ""
-    fi
-
-    # Display FEEDBACK signals
-    if [[ "$pd_feedback" -gt 0 && ("$pd_type" == "all" || "$pd_type" == "feedback") ]]; then
-      echo "💬 FEEDBACK (Guidance to consider)"
-      echo "$pd_signals" | jq -r '.[] | select(.type == "FEEDBACK") | "   \n   [\(.effective_strength * 100 | floor)%] \"\(.content.text // .content // "no content")\"\n      └── \(.elapsed_days | floor)d ago, \(.remaining_days | floor)d remaining"' | head -20
-      echo ""
-    fi
-
-    # Display footer
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "$pd_total signal(s) active | Decay: FOCUS 30d, REDIRECT 60d, FEEDBACK 90d"
-    ;;
-
-  pheromone-read)
-    # Read pheromones from colony data with decay calculation
-    # Usage: pheromone-read [type]
-    #   type: Filter by pheromone type (focus, redirect, feedback) or 'all' (default: all)
-    # Returns: JSON object with pheromones array including effective_strength
-
-    pher_type="${1:-all}"
-    pher_file="$DATA_DIR/pheromones.json"
-
-    # Check if file exists
-    if [[ ! -f "$pher_file" ]]; then
-      json_err "$E_FILE_NOT_FOUND" "Pheromones file not found. Run /ant:colonize first to initialize the colony."
-    fi
-
-    # Get current time as ISO for consistent epoch conversion
-    pher_now_iso=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-
-    # Apply decay and expiry at read time
-    # Decay rates: FOCUS=30d, REDIRECT=60d, FEEDBACK/PATTERN=90d
-    # effective_strength = original_strength * (1 - elapsed_days / decay_days)
-    # If effective_strength < 0.1, mark inactive
-    # Also check expires_at: if not "phase_end" and past expiry, mark inactive
-    pher_type_upper=$(echo "$pher_type" | tr '[:lower:]' '[:upper:]')
-
-    pher_result=$(jq -c \
-      --arg now_iso "$pher_now_iso" \
-      --arg type_filter "$pher_type_upper" \
-      '
-      # Rough ISO-8601 to epoch: accumulate years*365d + month*30d + days + time
-      def to_epoch(ts):
-        if ts == null or ts == "" or ts == "phase_end" then null
-        else
-          (ts | split("T")) as $parts |
-          ($parts[0] | split("-")) as $d |
-          ($parts[1] | rtrimstr("Z") | split(":")) as $t |
-          (($d[0] | tonumber) - 1970) * 365 * 86400 +
-          (($d[1] | tonumber) - 1) * 30 * 86400 +
-          (($d[2] | tonumber) - 1) * 86400 +
-          ($t[0] | tonumber) * 3600 +
-          ($t[1] | tonumber) * 60 +
-          ($t[2] | rtrimstr("Z") | tonumber)
-        end;
-
-      def decay_days(t):
-        if t == "FOCUS"    then 30
-        elif t == "REDIRECT" then 60
-        else 90
-        end;
-
-      (to_epoch($now_iso)) as $now |
-      .signals | map(
-        (to_epoch(.created_at)) as $created_epoch |
-        (if $created_epoch != null then ($now - $created_epoch) / 86400 else 0 end) as $elapsed_days |
-        (decay_days(.type)) as $dd |
-        ((.strength // 0.8) * (1 - ($elapsed_days / $dd))) as $eff_raw |
-        (if $eff_raw < 0 then 0 else $eff_raw end) as $eff |
-        (to_epoch(.expires_at)) as $exp_epoch |
-        ($exp_epoch != null and $exp_epoch <= $now) as $expired |
-        ($eff < 0.1 or $expired) as $deactivate |
-        . + {
-          effective_strength: (($eff * 100 | round) / 100),
-          active: (if $deactivate then false elif .active == false then false else true end)
-        }
-      ) |
-      map(select(.active == true)) |
-      if $type_filter != "ALL" then
-        map(select(.type == $type_filter))
-      else
-        .
-      end
-      ' "$pher_file" 2>/dev/null)
-
-    if [[ -z "$pher_result" || "$pher_result" == "null" ]]; then
-      json_ok '{"version":"1.0.0","signals":[]}'
-    else
-      pher_version=$(jq -r '.version // "1.0.0"' "$pher_file" 2>/dev/null || echo "1.0.0")
-      pher_colony=$(jq -r '.colony_id // "unknown"' "$pher_file" 2>/dev/null || echo "unknown")
-      json_ok "{\"version\":\"$pher_version\",\"colony_id\":\"$pher_colony\",\"signals\":$pher_result}"
-    fi
-    ;;
-
-  instinct-read)
-    # Read learned instincts from COLONY_STATE.json memory
-    # Usage: instinct-read [--min-confidence N] [--max N] [--domain DOMAIN]
-    # Returns: JSON with filtered, confidence-sorted instincts
-
-    ir_min_confidence="0.5"
-    ir_max="5"
-    ir_domain=""
-
-    # Parse flags from positional args
-    ir_shift=1
-    while [[ $ir_shift -le $# ]]; do
-      eval "ir_arg=\${$ir_shift}"
-      ir_shift=$((ir_shift + 1))
-      case "$ir_arg" in
-        --min-confidence)
-          eval "ir_min_confidence=\${$ir_shift}"
-          ir_shift=$((ir_shift + 1))
-          ;;
-        --max)
-          eval "ir_max=\${$ir_shift}"
-          ir_shift=$((ir_shift + 1))
-          ;;
-        --domain)
-          eval "ir_domain=\${$ir_shift}"
-          ir_shift=$((ir_shift + 1))
-          ;;
-      esac
-    done
-
-    ir_state_file="$DATA_DIR/COLONY_STATE.json"
-
-    if [[ ! -f "$ir_state_file" ]]; then
-      json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found. Run /ant:init first."
-    fi
-
-    # Check if memory.instincts exists
-    ir_has_instincts=$(jq 'if .memory.instincts then "yes" else "no" end' "$ir_state_file" 2>/dev/null || echo "no")
-    if [[ "$ir_has_instincts" != '"yes"' ]]; then
-      json_ok '{"instincts":[],"total":0,"filtered":0}'
-      exit 0
-    fi
-
-    ir_result=$(jq -c \
-      --argjson min_conf "$ir_min_confidence" \
-      --argjson max_count "$ir_max" \
-      --arg domain_filter "$ir_domain" \
-      '
-      (.memory.instincts // []) as $all |
-      ($all | length) as $total |
-      $all
-      | map(select(
-          (.confidence // 0) >= $min_conf
-          and (.status // "hypothesis") != "disproven"
-          and (if $domain_filter != "" then (.domain // "") == $domain_filter else true end)
-        ))
-      | sort_by(-.confidence)
-      | .[:$max_count]
-      | {
-          instincts: .,
-          total: $total,
-          filtered: (. | length)
-        }
-      ' "$ir_state_file" 2>/dev/null)
-
-    if [[ -z "$ir_result" || "$ir_result" == "null" ]]; then
-      json_ok '{"instincts":[],"total":0,"filtered":0}'
-    else
-      json_ok "$ir_result"
-    fi
-    ;;
-
-  instinct-create)
-    # Create or update an instinct in COLONY_STATE.json
-    # Usage: instinct-create --trigger "when X" --action "do Y" --confidence 0.5 --domain "architecture" --source "phase-3" --evidence "observation"
-    # Deduplicates: if trigger+action matches existing instinct, boosts confidence instead
-    # Cap: max 30 instincts, evicts lowest confidence when exceeded
-
-    ic_trigger=""
-    ic_action=""
-    ic_confidence="0.5"
-    ic_domain="workflow"
-    ic_source=""
-    ic_evidence=""
-
-    while [[ $# -gt 0 ]]; do
-      case "$1" in
-        --trigger)    ic_trigger="$2"; shift 2 ;;
-        --action)     ic_action="$2"; shift 2 ;;
-        --confidence) ic_confidence="$2"; shift 2 ;;
-        --domain)     ic_domain="$2"; shift 2 ;;
-        --source)     ic_source="$2"; shift 2 ;;
-        --evidence)   ic_evidence="$2"; shift 2 ;;
-        *) shift ;;
-      esac
-    done
-
-    [[ -z "$ic_trigger" ]] && json_err "$E_VALIDATION_FAILED" "instinct-create requires --trigger"
-    [[ -z "$ic_action" ]] && json_err "$E_VALIDATION_FAILED" "instinct-create requires --action"
-
-    ic_state_file="$DATA_DIR/COLONY_STATE.json"
-    [[ -f "$ic_state_file" ]] || json_err "$E_FILE_NOT_FOUND" "COLONY_STATE.json not found. Run /ant:init first."
-
-    # Validate confidence range
-    if ! [[ "$ic_confidence" =~ ^(0(\.[0-9]+)?|1(\.0+)?)$ ]]; then
-      ic_confidence="0.5"
-    fi
-
-    ic_now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-    ic_epoch=$(date +%s)
-    ic_id="instinct_${ic_epoch}"
-
-    # Check for existing instinct with matching trigger+action (fuzzy: exact substring match)
-    ic_existing=$(jq -c --arg trigger "$ic_trigger" --arg action "$ic_action" '
-      [(.memory.instincts // [])[] | select(.trigger == $trigger and .action == $action)] | first // null
-    ' "$ic_state_file" 2>/dev/null)
-
-    if [[ -n "$ic_existing" && "$ic_existing" != "null" ]]; then
-      # Update existing: boost confidence by +0.1, increment applications
-      ic_updated=$(jq --arg trigger "$ic_trigger" --arg action "$ic_action" --arg now "$ic_now" '
-        .memory.instincts = [
-          (.memory.instincts // [])[] |
-          if .trigger == $trigger and .action == $action then
-            .confidence = ([(.confidence + 0.1), 1.0] | min) |
-            .applications = ((.applications // 0) + 1) |
-            .last_applied = $now
-          else
-            .
-          end
-        ]
-      ' "$ic_state_file" 2>/dev/null)
-
-      if [[ -n "$ic_updated" ]]; then
-        atomic_write "$ic_state_file" "$ic_updated"
-        ic_new_conf=$(echo "$ic_updated" | jq --arg trigger "$ic_trigger" --arg action "$ic_action" '
-          [(.memory.instincts // [])[] | select(.trigger == $trigger and .action == $action)] | first | .confidence // 0
-        ' 2>/dev/null)
-        json_ok "{\"instinct_id\":\"existing\",\"action\":\"updated\",\"confidence\":$ic_new_conf}"
-      else
-        json_err "$E_INTERNAL" "Failed to update existing instinct"
-      fi
-    else
-      # Create new instinct
-      ic_new_instinct=$(jq -n \
-        --arg id "$ic_id" \
-        --arg trigger "$ic_trigger" \
-        --arg action "$ic_action" \
-        --argjson confidence "$ic_confidence" \
-        --arg status "hypothesis" \
-        --arg domain "$ic_domain" \
-        --arg source "$ic_source" \
-        --arg evidence "$ic_evidence" \
-        --arg created_at "$ic_now" \
-        '{
-          id: $id,
-          trigger: $trigger,
-          action: $action,
-          confidence: $confidence,
-          status: $status,
-          domain: $domain,
-          source: $source,
-          evidence: [$evidence],
-          tested: false,
-          created_at: $created_at,
-          last_applied: null,
-          applications: 0,
-          successes: 0,
-          failures: 0
-        }')
-
-      # Add instinct, enforce 30-instinct cap (evict lowest confidence)
-      ic_updated=$(jq --argjson new_instinct "$ic_new_instinct" '
-        .memory.instincts = (
-          ((.memory.instincts // []) + [$new_instinct])
-          | sort_by(-.confidence)
-          | .[:30]
-        )
-      ' "$ic_state_file" 2>/dev/null)
-
-      if [[ -n "$ic_updated" ]]; then
-        atomic_write "$ic_state_file" "$ic_updated"
-        json_ok "{\"instinct_id\":\"$ic_id\",\"action\":\"created\",\"confidence\":$ic_confidence}"
-      else
-        json_err "$E_INTERNAL" "Failed to create instinct"
-      fi
-    fi
-    exit 0
-    ;;
-
-  pheromone-prime)
-    # Combine active pheromone signals and learned instincts into a prompt-ready block
-    # Usage: pheromone-prime [--compact] [--max-signals N] [--max-instincts N]
-    # Returns: JSON with signal_count, instinct_count, prompt_section, log_line
-
-    pp_compact=false
-    pp_max_signals=0
-    pp_max_instincts=5
-    while [[ $# -gt 0 ]]; do
-      case "$1" in
-        --compact) pp_compact=true ;;
-        --max-signals) shift; pp_max_signals="${1:-8}" ;;
-        --max-instincts) shift; pp_max_instincts="${1:-3}" ;;
-      esac
-      shift
-    done
-    [[ "$pp_max_signals" =~ ^[0-9]+$ ]] || pp_max_signals=8
-    [[ "$pp_max_instincts" =~ ^[0-9]+$ ]] || pp_max_instincts=3
-    [[ "$pp_max_signals" -lt 1 ]] && pp_max_signals=8
-    [[ "$pp_max_instincts" -lt 1 ]] && pp_max_instincts=3
-
-    pp_pher_file="$DATA_DIR/pheromones.json"
-    pp_state_file="$DATA_DIR/COLONY_STATE.json"
-    pp_now_iso=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-
-    # Read active signals (same decay logic as pheromone-read)
-    pp_signals="[]"
-    if [[ -f "$pp_pher_file" ]]; then
-      pp_signals=$(jq -c \
-        --arg now_iso "$pp_now_iso" \
-        '
-        def to_epoch(ts):
-          if ts == null or ts == "" or ts == "phase_end" then null
-          else
-            (ts | split("T")) as $parts |
-            ($parts[0] | split("-")) as $d |
-            ($parts[1] | rtrimstr("Z") | split(":")) as $t |
-            (($d[0] | tonumber) - 1970) * 365 * 86400 +
-            (($d[1] | tonumber) - 1) * 30 * 86400 +
-            (($d[2] | tonumber) - 1) * 86400 +
-            ($t[0] | tonumber) * 3600 +
-            ($t[1] | tonumber) * 60 +
-            ($t[2] | rtrimstr("Z") | tonumber)
-          end;
-
-        def decay_days(t):
-          if t == "FOCUS"    then 30
-          elif t == "REDIRECT" then 60
-          else 90
-          end;
-
-        (to_epoch($now_iso)) as $now |
-        .signals | map(
-          (to_epoch(.created_at)) as $created_epoch |
-          (if $created_epoch != null then ($now - $created_epoch) / 86400 else 0 end) as $elapsed_days |
-          (decay_days(.type)) as $dd |
-          ((.strength // 0.8) * (1 - ($elapsed_days / $dd))) as $eff_raw |
-          (if $eff_raw < 0 then 0 else $eff_raw end) as $eff |
-          (to_epoch(.expires_at)) as $exp_epoch |
-          ($exp_epoch != null and $exp_epoch <= $now) as $expired |
-          ($eff < 0.1 or $expired) as $deactivate |
-          . + {
-            effective_strength: (($eff * 100 | round) / 100),
-            active: (if $deactivate then false elif .active == false then false else true end)
-          }
-        ) |
-        map(select(.active == true))
-        ' "$pp_pher_file" 2>/dev/null || echo "[]")
-    fi
-
-    if [[ -z "$pp_signals" || "$pp_signals" == "null" ]]; then
-      pp_signals="[]"
-    fi
-
-    if [[ "$pp_compact" == "true" ]]; then
-      pp_signals=$(echo "$pp_signals" | jq -c --argjson max "$pp_max_signals" '
-        map(. + {priority: (if .type == "REDIRECT" then 1 elif .type == "FOCUS" then 2 elif .type == "FEEDBACK" then 3 elif .type == "POSITION" then 4 else 5 end)})
-        | sort_by(.priority, -(.effective_strength // 0))
-        | .[:$max]
-        | map(del(.priority))
-      ' 2>/dev/null || echo "[]")
-    fi
-
-    # Read instincts (confidence >= 0.5, not disproven)
-    pp_instincts="[]"
-    if [[ -f "$pp_state_file" ]]; then
-      pp_instincts=$(jq -c \
-        --argjson max "$pp_max_instincts" \
-        '
-        (.memory.instincts // [])
-        | map(select(
-            (.confidence // 0) >= 0.5
-            and (.status // "hypothesis") != "disproven"
-          ))
-        | sort_by(-.confidence)
-        | .[:$max]
-        ' "$pp_state_file" 2>/dev/null || echo "[]")
-    fi
-
-    if [[ -z "$pp_instincts" || "$pp_instincts" == "null" ]]; then
-      pp_instincts="[]"
-    fi
-
-    pp_signal_count=$(echo "$pp_signals" | jq 'length' 2>/dev/null || echo "0")
-    pp_instinct_count=$(echo "$pp_instincts" | jq 'length' 2>/dev/null || echo "0")
-
-    # Build prompt section
-    if [[ "$pp_signal_count" -eq 0 && "$pp_instinct_count" -eq 0 ]]; then
-      pp_section=""
-      pp_log_line="Primed: 0 signals, 0 instincts"
-    else
-      if [[ "$pp_compact" == "true" ]]; then
-        pp_section="--- COMPACT SIGNALS ---"$'\n'
-      else
-        pp_section="--- ACTIVE SIGNALS (Colony Guidance) ---"$'\n'
-      fi
-
-      # FOCUS signals
-      pp_focus=$(echo "$pp_signals" | jq -r 'map(select(.type == "FOCUS")) | .[] | "[" + ((.effective_strength * 10 | round) / 10 | tostring) + "] " + (.content.text // (if (.content | type) == "string" then .content else "" end))' 2>/dev/null || echo "")
-      if [[ -n "$pp_focus" ]]; then
-        pp_section+=$'\n'"FOCUS (Pay attention to):"$'\n'"$pp_focus"$'\n'
-      fi
-
-      # REDIRECT signals
-      pp_redirect=$(echo "$pp_signals" | jq -r 'map(select(.type == "REDIRECT")) | .[] | "[" + ((.effective_strength * 10 | round) / 10 | tostring) + "] " + (.content.text // (if (.content | type) == "string" then .content else "" end))' 2>/dev/null || echo "")
-      if [[ -n "$pp_redirect" ]]; then
-        pp_section+=$'\n'"REDIRECT (HARD CONSTRAINTS - MUST follow):"$'\n'"$pp_redirect"$'\n'
-      fi
-
-      # FEEDBACK signals
-      pp_feedback=$(echo "$pp_signals" | jq -r 'map(select(.type == "FEEDBACK")) | .[] | "[" + ((.effective_strength * 10 | round) / 10 | tostring) + "] " + (.content.text // (if (.content | type) == "string" then .content else "" end))' 2>/dev/null || echo "")
-      if [[ -n "$pp_feedback" ]]; then
-        pp_section+=$'\n'"FEEDBACK (Flexible guidance):"$'\n'"$pp_feedback"$'\n'
-      fi
-
-      # POSITION signals
-      pp_position=$(echo "$pp_signals" | jq -r 'map(select(.type == "POSITION")) | .[] | "[" + ((.effective_strength * 10 | round) / 10 | tostring) + "] " + (.content.text // (if (.content | type) == "string" then .content else "" end))' 2>/dev/null || echo "")
-      if [[ -n "$pp_position" ]]; then
-        pp_section+=$'\n'"POSITION (Where work last progressed):"$'\n'"$pp_position"$'\n'
-      fi
-
-      # Instincts section (domain-grouped)
-      if [[ "$pp_instinct_count" -gt 0 ]]; then
-        if [[ "$pp_compact" == "true" ]]; then
-          pp_section+=$'\n'"--- INSTINCTS (Learned Behaviors) ---"$'\n'
-        else
-          pp_section+=$'\n'"--- INSTINCTS (Learned Behaviors) ---"$'\n'
-          pp_section+="Weight by confidence - higher = stronger guidance:"$'\n'
-        fi
-
-        # Group instincts by domain per user decision
-        pp_instinct_lines=$(echo "$pp_instincts" | jq -r '
-          group_by(.domain // "general")
-          | map({
-              domain: (.[0].domain // "general"),
-              items: [.[] | "  [" + ((.confidence * 10 | round) / 10 | tostring) + "] When " + .trigger + " -> " + .action]
-            })
-          | sort_by(.domain)
-          | .[]
-          | "\n" + (.domain | ascii_upcase | .[0:1]) + (.domain | .[1:]) + ":" + "\n" + (.items | join("\n"))
-        ' 2>/dev/null || echo "")
-
-        if [[ -n "$pp_instinct_lines" ]]; then
-          pp_section+="$pp_instinct_lines"$'\n'
-        fi
-      fi
-
-      pp_section+=$'\n'"--- END COLONY CONTEXT ---"
-
-      pp_log_line="Primed: ${pp_signal_count} signals, ${pp_instinct_count} instincts"
-    fi
-
-    # Escape section for JSON embedding (use printf to avoid appending extra newline)
-    pp_section_json=$(printf '%s' "$pp_section" | jq -Rs '.' 2>/dev/null || echo '""')
-    pp_log_json=$(printf '%s' "$pp_log_line" | jq -Rs '.' 2>/dev/null || echo '"Primed: 0 signals, 0 instincts"')
-
-    json_ok "{\"signal_count\":$pp_signal_count,\"instinct_count\":$pp_instinct_count,\"prompt_section\":$pp_section_json,\"log_line\":$pp_log_json}"
-    ;;
-
-  colony-prime)
-    # Unified colony priming: combines wisdom (QUEEN.md) + signals + instincts into single output
-    # Usage: colony-prime [--compact]
-    # Returns: JSON with wisdom, signals, prompt_section
-    # Error handling: QUEEN.md missing = FAIL HARD; pheromones.json missing = warn but continue
-
-    cp_compact=false
-    if [[ "${1:-}" == "--compact" ]]; then
-      cp_compact=true
-    fi
-
-    cp_global_queen="$HOME/.aether/QUEEN.md"
-    cp_local_queen="$AETHER_ROOT/.aether/QUEEN.md"
-
-    # Track if we have any QUEEN.md
-    cp_has_global=false
-    cp_has_local=false
-    cp_wisdom_json='{}'
-
-    # Initialize empty wisdom objects (used if file doesn't exist)
-    cp_global_wisdom='{" philosophies":"","patterns":"","redirects":"","stack_wisdom":"","decrees":""}'
-    cp_local_wisdom='{" philosophies":"","patterns":"","redirects":"","stack_wisdom":"","decrees":""}'
-
-    # Helper to extract wisdom sections from a QUEEN.md file
-    # Uses line number approach to avoid macOS awk range issues
-    _extract_wisdom() {
-      local queen_file="$1"
-
-      # Find line numbers for each section
-      local p_line=$(awk '/^## 📜 Philosophies$/ {print NR; exit}' "$queen_file")
-      local pat_line=$(awk '/^## 🧭 Patterns$/ {print NR; exit}' "$queen_file")
-      local red_line=$(awk '/^## ⚠️ Redirects$/ {print NR; exit}' "$queen_file")
-      local stack_line=$(awk '/^## 🔧 Stack Wisdom$/ {print NR; exit}' "$queen_file")
-      local dec_line=$(awk '/^## 🏛️ Decrees$/ {print NR; exit}' "$queen_file")
-      local evo_line=$(awk '/^## 📊 Evolution Log$/ {print NR; exit}' "$queen_file")
-
-      # Extract sections
-      local philosophies patterns redirects stack_wisdom decrees
-
-      philosophies=$(awk -v s="$p_line" -v e="$pat_line" 'NR > s && NR < e {print}' "$queen_file" | sed '/^$/d' | jq -Rs '.' 2>/dev/null || echo '""')
-      patterns=$(awk -v s="$pat_line" -v e="$red_line" 'NR > s && NR < e {print}' "$queen_file" | sed '/^$/d' | jq -Rs '.' 2>/dev/null || echo '""')
-      redirects=$(awk -v s="$red_line" -v e="$stack_line" 'NR > s && NR < e {print}' "$queen_file" | sed '/^$/d' | jq -Rs '.' 2>/dev/null || echo '""')
-      stack_wisdom=$(awk -v s="$stack_line" -v e="$dec_line" 'NR > s && NR < e {print}' "$queen_file" | sed '/^$/d' | jq -Rs '.' 2>/dev/null || echo '""')
-      decrees=$(awk -v s="$dec_line" -v e="${evo_line:-999999}" 'NR > s && NR < e {print}' "$queen_file" | sed '/^$/d' | jq -Rs '.' 2>/dev/null || echo '""')
-
-      # Return empty strings if any extraction failed
-      philosophies=${philosophies:-'""'}
-      patterns=${patterns:-'""'}
-      redirects=${redirects:-'""'}
-      stack_wisdom=${stack_wisdom:-'""'}
-      decrees=${decrees:-'""'}
-
-      # Build JSON directly with already-quoted strings
-      echo "{\"philosophies\":$philosophies,\"patterns\":$patterns,\"redirects\":$redirects,\"stack_wisdom\":$stack_wisdom,\"decrees\":$decrees}"
-    }
-
-    # Load global QUEEN.md first (~/.aether/QUEEN.md)
-    if [[ -f "$cp_global_queen" ]]; then
-      cp_has_global=true
-      cp_global_wisdom=$(_extract_wisdom "$cp_global_queen" "g")
-    fi
-
-    # Load local QUEEN.md second (.aether/QUEEN.md)
-    if [[ -f "$cp_local_queen" ]]; then
-      cp_has_local=true
-      cp_local_wisdom=$(_extract_wisdom "$cp_local_queen" "l")
-    fi
-
-    # FAIL HARD if no QUEEN.md found at all
-    if [[ "$cp_has_global" == "false" && "$cp_has_local" == "false" ]]; then
-      json_err "$E_FILE_NOT_FOUND" \
-        "QUEEN.md not found in either ~/.aether/QUEEN.md or .aether/QUEEN.md. Run /ant:init to create a colony." \
-        '{"global_path":"~/.aether/QUEEN.md","local_path":".aether/QUEEN.md"}'
-      exit 1
-    fi
-
-    # Combine wisdom from both levels - local extends global
-    # Each section: global content first, then local content (if exists)
-    cp_combined=$(jq -n \
-      --argjson global "$cp_global_wisdom" \
-      --argjson local "$cp_local_wisdom" \
-      '
-      def combine(a; b):
-        if a == "" or a == null then b
-        elif b == "" or b == null then a
-        else a + "\n" + b
-        end;
-
-      {
-        philosophies: combine($global.philosophies; $local.philosophies),
-        patterns: combine($global.patterns; $local.patterns),
-        redirects: combine($global.redirects; $local.redirects),
-        stack_wisdom: combine($global.stack_wisdom; $local.stack_wisdom),
-        decrees: combine($global.decrees; $local.decrees)
-      }
-      ')
-
-    # Get metadata from local QUEEN.md if exists, otherwise global
-    cp_metadata='{"version":"unknown","last_evolved":null,"source":"none"}'
-    if [[ "$cp_has_local" == "true" ]]; then
-      cp_metadata=$(sed -n '/<!-- METADATA/,/-->/p' "$cp_local_queen" | sed '1d;$d' | tr -d '\n' | sed 's/^[[:space:]]*//')
-      if [[ -n "$cp_metadata" ]] && echo "$cp_metadata" | jq -e . >/dev/null 2>&1; then
-        cp_metadata=$(echo "$cp_metadata" | jq '. + {"source":"local"}' 2>/dev/null || echo "$cp_metadata")
-      else
-        cp_metadata='{"version":"unknown","last_evolved":null,"source":"local","note":"malformed"}'
-      fi
-    elif [[ "$cp_has_global" == "true" ]]; then
-      cp_metadata=$(sed -n '/<!-- METADATA/,/-->/p' "$cp_global_queen" | sed '1d;$d' | tr -d '\n' | sed 's/^[[:space:]]*//')
-      if [[ -n "$cp_metadata" ]] && echo "$cp_metadata" | jq -e . >/dev/null 2>&1; then
-        cp_metadata=$(echo "$cp_metadata" | jq '. + {"source":"global"}' 2>/dev/null || echo "$cp_metadata")
-      else
-        cp_metadata='{"version":"unknown","last_evolved":null,"source":"global","note":"malformed"}'
-      fi
-    fi
-
-    # Now get signals + instincts via pheromone-prime
-    # Trap error: if pheromones.json missing, warn but continue
-    # Call pheromone-prime by re-invoking the script (it's a case branch, not a function)
-    cp_signals_json='{"signal_count":0,"instinct_count":0,"prompt_section":"","log_line":"Primed: no pheromones (file missing)"}'
-    cp_pher_warn=""
-    if [[ -f "$DATA_DIR/pheromones.json" ]]; then
-      if [[ "$cp_compact" == "true" ]]; then
-        cp_signals_raw=$("$SCRIPT_DIR/aether-utils.sh" pheromone-prime --compact --max-signals 8 --max-instincts 3 2>/dev/null) || cp_signals_raw=""
-      else
-        cp_signals_raw=$("$SCRIPT_DIR/aether-utils.sh" pheromone-prime 2>/dev/null) || cp_signals_raw=""
-      fi
-      cp_signals_json=$(echo "$cp_signals_raw" | jq -c '.result // {"signal_count":0,"instinct_count":0,"prompt_section":"","log_line":"Primed: 0 signals, 0 instincts"}' 2>/dev/null || echo '{"signal_count":0,"instinct_count":0,"prompt_section":"","log_line":"Primed: 0 signals, 0 instincts"}')
-    else
-      cp_pher_warn="WARNING: pheromones.json not found - continuing without signals"
-    fi
-
-    # Extract components from pheromone-prime output
-    cp_signal_count=$(echo "$cp_signals_json" | jq -r '.signal_count // 0' 2>/dev/null || echo "0")
-    cp_instinct_count=$(echo "$cp_signals_json" | jq -r '.instinct_count // 0' 2>/dev/null || echo "0")
-    cp_prompt_section=$(echo "$cp_signals_json" | jq -r '.prompt_section // ""' 2>/dev/null || echo "")
-    cp_log_line=$(echo "$cp_signals_json" | jq -r '.log_line // "Primed: 0 signals, 0 instincts"' 2>/dev/null || echo "Primed: 0 signals, 0 instincts")
-
-    # Append warning if pheromones missing
-    if [[ -n "$cp_pher_warn" ]]; then
-      cp_log_line="$cp_log_line; $cp_pher_warn"
-    fi
-
-    # Build prompt_section that combines wisdom + signals
-    cp_final_prompt=""
-
-    # Add wisdom section to prompt if any exists
-    cp_philosophies=$(echo "$cp_combined" | jq -r '.philosophies // ""' 2>/dev/null)
-    cp_patterns=$(echo "$cp_combined" | jq -r '.patterns // ""' 2>/dev/null)
-    cp_redirects=$(echo "$cp_combined" | jq -r '.redirects // ""' 2>/dev/null)
-    cp_stack=$(echo "$cp_combined" | jq -r '.stack_wisdom // ""' 2>/dev/null)
-    cp_decrees=$(echo "$cp_combined" | jq -r '.decrees // ""' 2>/dev/null)
-
-    if [[ -n "$cp_philosophies" || -n "$cp_patterns" || -n "$cp_redirects" || -n "$cp_stack" || -n "$cp_decrees" ]]; then
-      cp_final_prompt+="--- QUEEN WISDOM (Eternal Guidance) ---"$'\n'
-
-      if [[ -n "$cp_philosophies" && "$cp_philosophies" != "null" ]]; then
-        cp_final_prompt+=$'\n'"📜 Philosophies:"$'\n'"$cp_philosophies"$'\n'
-      fi
-      if [[ -n "$cp_patterns" && "$cp_patterns" != "null" ]]; then
-        cp_final_prompt+=$'\n'"🧭 Patterns:"$'\n'"$cp_patterns"$'\n'
-      fi
-      if [[ -n "$cp_redirects" && "$cp_redirects" != "null" ]]; then
-        cp_final_prompt+=$'\n'"⚠️ Redirects (AVOID these):"$'\n'"$cp_redirects"$'\n'
-      fi
-      if [[ -n "$cp_stack" && "$cp_stack" != "null" ]]; then
-        cp_final_prompt+=$'\n'"🔧 Stack Wisdom:"$'\n'"$cp_stack"$'\n'
-      fi
-      if [[ -n "$cp_decrees" && "$cp_decrees" != "null" ]]; then
-        cp_final_prompt+=$'\n'"🏛️ Decrees:"$'\n'"$cp_decrees"$'\n'
-      fi
-
-      cp_final_prompt+=$'\n'"--- END QUEEN WISDOM ---"$'\n'
-    fi
-
-    # Add compact context capsule for low-token continuity
-    cp_capsule_prompt=""
-    cp_capsule_raw=$("$SCRIPT_DIR/aether-utils.sh" context-capsule --compact --json 2>/dev/null) || cp_capsule_raw=""
-    cp_capsule_prompt=$(echo "$cp_capsule_raw" | jq -r '.result.prompt_section // ""' 2>/dev/null || echo "")
-    if [[ -n "$cp_capsule_prompt" ]]; then
-      cp_final_prompt+=$'\n'"$cp_capsule_prompt"$'\n'
-    fi
-
-    # === Phase learnings injection ===
-    # Extract validated learnings from previous phases in COLONY_STATE.json
-    # and format as actionable guidance for builders
-    cp_current_phase=$(jq -r '.current_phase // 0' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "0")
-
-    cp_max_learnings=15
-    if [[ "$cp_compact" == "true" ]]; then
-      cp_max_learnings=5
-    fi
-
-    cp_learning_claims=$(jq -r \
-      --argjson current "$cp_current_phase" \
-      --argjson max "$cp_max_learnings" \
-      '
-      [
-        (.memory.phase_learnings // [])[]
-        | select((.phase | type) == "string" or ((.phase | tonumber) < $current))
-        | .phase as $p | .phase_name as $pn
-        | .learnings[]
-        | select(.status == "validated")
-        | {phase: $p, phase_name: $pn, claim: .claim}
-      ]
-      | unique_by(.claim)
-      | .[:$max]
-      ' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "[]")
-
-    cp_learning_count=$(echo "$cp_learning_claims" | jq 'length' 2>/dev/null || echo "0")
-
-    if [[ "$cp_learning_count" -gt 0 ]]; then
-      cp_learning_section="--- PHASE LEARNINGS (Previous Phase Insights) ---"
-
-      cp_learning_lines=$(echo "$cp_learning_claims" | jq -r '
-        group_by(.phase)
-        | map({
-            phase: .[0].phase,
-            phase_name: .[0].phase_name,
-            claims: [.[].claim]
-          })
-        | sort_by(if .phase == "inherited" then -1 else (.phase | tonumber) end)
-        | .[]
-        | "\n"
-          + (if .phase == "inherited" then "Inherited"
-             elif .phase_name != "" then "Phase " + (.phase | tostring) + " (" + .phase_name + ")"
-             else "Phase " + (.phase | tostring)
-             end)
-          + ":"
-          + "\n" + (.claims | map("  - " + .) | join("\n"))
-      ' 2>/dev/null || echo "")
-
-      if [[ -n "$cp_learning_lines" ]]; then
-        cp_learning_section+="$cp_learning_lines"$'\n'
-      fi
-
-      cp_learning_section+=$'\n'"--- END PHASE LEARNINGS ---"
-
-      cp_final_prompt+=$'\n'"$cp_learning_section"$'\n'
-
-      cp_log_line="$cp_log_line, $cp_learning_count learnings"
-    fi
-    # === End phase learnings injection ===
-
-    # === CONTEXT.md decision injection (CTX-01) ===
-    # Extract key decisions from CONTEXT.md "Recent Decisions" table
-    # and inject as actionable context for builders
-    cp_ctx_file="$AETHER_ROOT/.aether/CONTEXT.md"
-    cp_decision_count=0
-
-    cp_decisions=""
-    if [[ -f "$cp_ctx_file" ]]; then
-      cp_decisions=$(awk '
-        /^## .*Recent Decisions/ { in_section=1; next }
-        in_section && /^\| Date / { next }
-        in_section && /^\|[-]+/ { next }
-        in_section && /^---/ { exit }
-        in_section && /^\| [0-9]{4}-[0-9]{2}/ {
-          split($0, fields, "|")
-          decision = fields[3]
-          rationale = fields[4]
-          gsub(/^[[:space:]]+|[[:space:]]+$/, "", decision)
-          gsub(/^[[:space:]]+|[[:space:]]+$/, "", rationale)
-          if (decision != "") {
-            if (rationale != "" && rationale != "-") {
-              print decision " (" rationale ")"
-            } else {
-              print decision
-            }
-          }
-        }
-      ' "$cp_ctx_file" 2>/dev/null || echo "")
-    fi
-
-    cp_max_decisions=5
-    if [[ "$cp_compact" == "true" ]]; then
-      cp_max_decisions=3
-    fi
-
-    if [[ -n "$cp_decisions" ]]; then
-      cp_trimmed_decisions=$(echo "$cp_decisions" | tail -n "$cp_max_decisions")
-      cp_decision_count=$(echo "$cp_trimmed_decisions" | grep -c '.' || echo "0")
-
-      if [[ "$cp_decision_count" -gt 0 ]]; then
-        cp_decision_section="--- KEY DECISIONS (Active Decisions) ---"$'\n'
-        while IFS= read -r cp_dec_line; do
-          [[ -n "$cp_dec_line" ]] && cp_decision_section+="- $cp_dec_line"$'\n'
-        done <<< "$cp_trimmed_decisions"
-        cp_decision_section+="--- END KEY DECISIONS ---"
-
-        cp_final_prompt+=$'\n'"$cp_decision_section"$'\n'
-        cp_log_line="$cp_log_line, $cp_decision_count decisions"
-      fi
-    fi
-    # === END CONTEXT.md decision injection ===
-
-    # === Blocker flag injection (CTX-02) ===
-    # Extract unresolved blocker flags for the current phase from flags.json
-    # and inject as REDIRECT-priority warnings distinct from user pheromones
-    cp_flags_file="$DATA_DIR/flags.json"
-    cp_blocker_count=0
-
-    cp_blockers=""
-    if [[ -f "$cp_flags_file" ]]; then
-      cp_blockers=$(jq -r \
-        --argjson phase "$cp_current_phase" \
-        '
-        .flags
-        | map(select(
-            .type == "blocker"
-            and .resolved_at == null
-            and (.phase == $phase or .phase == null)
-          ))
-        | map("[source: " + (.source // "unknown") + "] " + .title + "\n  " + (.description // ""))
-        | .[]
-        ' "$cp_flags_file" 2>/dev/null || echo "")
-    fi
-
-    cp_max_blockers=3
-    if [[ "$cp_compact" == "true" ]]; then
-      cp_max_blockers=2
-    fi
-
-    if [[ -n "$cp_blockers" ]]; then
-      cp_blocker_count=$(echo "$cp_blockers" | grep -c '^\[source:' || echo "0")
-
-      if [[ "$cp_blocker_count" -gt 0 ]]; then
-        cp_blocker_section="--- BLOCKER WARNINGS (Unresolved Build Blockers) ---"$'\n'
-        cp_blocker_section+="These are critical issues that MUST be addressed. Treat as REDIRECT-priority."$'\n'
-
-        cp_blocker_idx=0
-        while IFS= read -r cp_blk_line; do
-          if [[ "$cp_blocker_idx" -ge "$cp_max_blockers" ]]; then break; fi
-          if [[ "$cp_blk_line" == \[source:* ]]; then
-            ((cp_blocker_idx++)) || true
-            if [[ "$cp_blocker_idx" -gt "$cp_max_blockers" ]]; then break; fi
-          fi
-          [[ -n "$cp_blk_line" ]] && cp_blocker_section+="$cp_blk_line"$'\n'
-        done <<< "$cp_blockers"
-
-        cp_blocker_section+="--- END BLOCKER WARNINGS ---"
-
-        cp_final_prompt+=$'\n'"$cp_blocker_section"$'\n'
-        cp_log_line="$cp_log_line, $cp_blocker_count blockers"
-      fi
-    fi
-    # === END blocker flag injection ===
-
-    # === Rolling-summary injection (MEM-02) ===
-    # Read last 5 entries directly (not via context-capsule which truncates)
-    cp_roll_count=5
-    cp_roll_entries=""
-    if [[ -f "$DATA_DIR/rolling-summary.log" ]]; then
-      cp_roll_entries=$(tail -n "$cp_roll_count" "$DATA_DIR/rolling-summary.log" 2>/dev/null | \
-        awk -F'|' 'NF >= 4 {printf "- [%s] %s: %s\n", $1, $2, $4}')
-    fi
-
-    if [[ -n "$cp_roll_entries" ]]; then
-      cp_final_prompt+=$'\n'"--- RECENT ACTIVITY (Colony Narrative) ---"$'\n'
-      cp_final_prompt+="$cp_roll_entries"$'\n'
-      cp_final_prompt+="--- END RECENT ACTIVITY ---"$'\n'
-
-      cp_roll_actual=$(echo "$cp_roll_entries" | grep -c '.' || echo "0")
-      cp_log_line="$cp_log_line, $cp_roll_actual activity entries"
-    fi
-    # === END rolling-summary injection ===
-
-    # Add pheromone signals section
-    if [[ -n "$cp_prompt_section" && "$cp_prompt_section" != "null" ]]; then
-      cp_final_prompt+=$'\n'"$cp_prompt_section"
-    fi
-
-    # Escape for JSON
-    cp_prompt_json=$(printf '%s' "$cp_final_prompt" | jq -Rs '.' 2>/dev/null || echo '""')
-    cp_log_json=$(printf '%s' "$cp_log_line" | jq -Rs '.' 2>/dev/null || echo '"Primed: 0 signals, 0 instincts"')
-
-    # Build final unified output
-    cp_result=$(jq -n \
-      --argjson meta "$cp_metadata" \
-      --argjson wisdom "$cp_combined" \
-      --argjson signals "$cp_signals_json" \
-      --arg prompt "$cp_final_prompt" \
-      --arg prompt_json "$cp_prompt_json" \
-      --arg log "$cp_log_line" \
-      --arg log_json "$cp_log_json" \
-      '{
-        metadata: $meta,
-        wisdom: $wisdom,
-        signals: {
-          signal_count: ($signals.signal_count // 0),
-          instinct_count: ($signals.instinct_count // 0),
-          active_signals: ($signals.prompt_section // "")
-        },
-        prompt_section: $prompt,
-        log_line: $log
-      }')
-
-    # Validate result
-    if [[ -z "$cp_result" ]] || ! echo "$cp_result" | jq -e . >/dev/null 2>&1; then
-      json_err "$E_JSON_INVALID" \
-        "Couldn't assemble colony-prime output" \
-        '{"error":"assembly_failed"}'
-    fi
-
-    json_ok "$cp_result"
-    ;;
-
-  pheromone-expire)
-    # Archive expired pheromone signals to midden
-    # Usage: pheromone-expire [--phase-end-only]
-    #
-    # Two modes:
-    #   --phase-end-only  Only expire signals where expires_at == "phase_end"
-    #   (no flag)         Expire signals where expires_at is an ISO-8601 timestamp
-    #                     <= now, AND signals where effective_strength < 0.1
-
-    phe_phase_end_only="false"
-    while [[ $# -gt 0 ]]; do
-      case "$1" in
-        --phase-end-only) phe_phase_end_only="true"; shift ;;
-        *) shift ;;
-      esac
-    done
-
-    phe_pheromones_file="$DATA_DIR/pheromones.json"
-    phe_midden_dir="$DATA_DIR/midden"
-    phe_midden_file="$phe_midden_dir/midden.json"
-
-    # Handle missing pheromones.json gracefully
-    if [[ ! -f "$phe_pheromones_file" ]]; then
-      json_ok '{"expired_count":0,"remaining_active":0,"midden_total":0}'
-      exit 0
-    fi
-
-    # Ensure midden directory and file exist
-    mkdir -p "$phe_midden_dir"
-    if [[ ! -f "$phe_midden_file" ]]; then
-      printf '%s\n' '{"version":"1.0.0","archived_at_count":0,"signals":[]}' > "$phe_midden_file"
-    fi
-
-    phe_now_iso=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-    phe_archived_at="$phe_now_iso"
-
-    # Compute pause_duration from COLONY_STATE.json (pause-aware TTL)
-    phe_pause_duration=0
-    if [[ -f "$DATA_DIR/COLONY_STATE.json" ]]; then
-      phe_paused_at=$(jq -r '.paused_at // empty' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || true)
-      phe_resumed_at=$(jq -r '.resumed_at // empty' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || true)
-      if [[ -n "$phe_paused_at" && -n "$phe_resumed_at" ]]; then
-        phe_paused_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$phe_paused_at" +%s 2>/dev/null || date -d "$phe_paused_at" +%s 2>/dev/null || echo 0)
-        phe_resumed_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$phe_resumed_at" +%s 2>/dev/null || date -d "$phe_resumed_at" +%s 2>/dev/null || echo 0)
-        if [[ "$phe_resumed_epoch" -gt "$phe_paused_epoch" ]]; then
-          phe_pause_duration=$(( phe_resumed_epoch - phe_paused_epoch ))
-        fi
-      fi
-    fi
-
-    # Identify expired signal IDs
-    # We'll use jq to find signals to expire, then update in bash
-    if [[ "$phe_phase_end_only" == "true" ]]; then
-      # Only expire signals where expires_at == "phase_end"
-      phe_expired_ids=$(jq -r '.signals[] | select(.active == true and .expires_at == "phase_end") | .id' "$phe_pheromones_file" 2>/dev/null || true)
-    else
-      # Expire time-based expired signals (pause-aware) AND decay-expired signals
-      phe_expired_ids=$(jq -r --arg now_iso "$phe_now_iso" --argjson pause_secs "$phe_pause_duration" '
-        def to_epoch(ts):
-          if ts == null or ts == "" or ts == "phase_end" then null
-          else
-            (ts | split("T")) as $parts |
-            ($parts[0] | split("-")) as $d |
-            ($parts[1] | rtrimstr("Z") | split(":")) as $t |
-            (($d[0] | tonumber) - 1970) * 365 * 86400 +
-            (($d[1] | tonumber) - 1) * 30 * 86400 +
-            (($d[2] | tonumber) - 1) * 86400 +
-            ($t[0] | tonumber) * 3600 +
-            ($t[1] | tonumber) * 60 +
-            ($t[2] | rtrimstr("Z") | tonumber)
-          end;
-        (to_epoch($now_iso)) as $now |
-        .signals[] |
-        select(.active == true) |
-        select(
-          (.expires_at != "phase_end" and .expires_at != null and .expires_at != "") and
-          (
-            (to_epoch(.expires_at)) + $pause_secs <= $now
-          )
-        ) |
-        .id
-      ' "$phe_pheromones_file" 2>/dev/null || true)
-    fi
-
-    # Count expired signals
-    phe_expired_count=0
-    if [[ -n "$phe_expired_ids" ]]; then
-      phe_expired_count=$(echo "$phe_expired_ids" | grep -c . 2>/dev/null || echo 0)
-    fi
-
-    # If nothing to expire, return counts
-    if [[ "$phe_expired_count" -eq 0 ]]; then
-      phe_remaining=$(jq '[.signals[] | select(.active == true)] | length' "$phe_pheromones_file" 2>/dev/null || echo 0)
-      phe_midden_total=$(jq '.signals | length' "$phe_midden_file" 2>/dev/null || echo 0)
-      json_ok "{\"expired_count\":0,\"remaining_active\":$phe_remaining,\"midden_total\":$phe_midden_total}"
-      exit 0
-    fi
-
-    # Build jq args for IDs to expire
-    phe_id_array=$(echo "$phe_expired_ids" | jq -R . | jq -s . 2>/dev/null || echo '[]')
-
-    # Extract expired signal objects (with archived_at added)
-    phe_expired_objects=$(jq --argjson ids "$phe_id_array" --arg archived_at "$phe_archived_at" '
-      [.signals[] | select(.id as $id | $ids | any(. == $id)) | . + {"archived_at": $archived_at, "active": false}]
-    ' "$phe_pheromones_file" 2>/dev/null || echo '[]')
-
-    # Promote high-value expired signals to eternal memory before archival.
-    phe_eternal_promoted=0
-    while IFS= read -r phe_signal; do
-      [[ -z "$phe_signal" ]] && continue
-      phe_strength_int=$(echo "$phe_signal" | jq -r '((.strength // 0) * 100 | floor)' 2>/dev/null || echo "0")
-      if [[ "$phe_strength_int" -gt 80 ]]; then
-        phe_text=$(echo "$phe_signal" | jq -r '.content.text // ""' 2>/dev/null || echo "")
-        phe_type=$(echo "$phe_signal" | jq -r '.type // "UNKNOWN"' 2>/dev/null || echo "UNKNOWN")
-        phe_source=$(echo "$phe_signal" | jq -r '.source // "unknown"' 2>/dev/null || echo "unknown")
-        phe_id=$(echo "$phe_signal" | jq -r '.id // ""' 2>/dev/null || echo "")
-        if [[ -n "$phe_text" ]]; then
-          if bash "$0" eternal-store "$phe_text" --type "$phe_type" --source "$phe_source" --strength "$(echo "$phe_signal" | jq -r '.strength // 0')" --signal-id "$phe_id" --reason "promoted_on_expire" >/dev/null 2>&1; then
-            phe_eternal_promoted=$((phe_eternal_promoted + 1))
-          fi
-        fi
-      fi
-    done < <(echo "$phe_expired_objects" | jq -c '.[]' 2>/dev/null || true)
-
-    # Update pheromones.json: set active=false for expired signals (do NOT remove them)
-    phe_updated_pheromones=$(jq --argjson ids "$phe_id_array" '
-      .signals = [.signals[] | if (.id as $id | $ids | any(. == $id)) then .active = false else . end]
-    ' "$phe_pheromones_file" 2>/dev/null)
-
-    if [[ -n "$phe_updated_pheromones" ]]; then
-      phe_lock_held=false
-      if type acquire_lock &>/dev/null; then
-        acquire_lock "$phe_pheromones_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on pheromones.json"
-        phe_lock_held=true
-      fi
-      atomic_write "$phe_pheromones_file" "$phe_updated_pheromones" || {
-        [[ "$phe_lock_held" == "true" ]] && release_lock 2>/dev/null || true
-        json_err "$E_JSON_INVALID" "Failed to write pheromones.json"
-      }
-      [[ "$phe_lock_held" == "true" ]] && release_lock 2>/dev/null || true
-    fi
-
-    # Append expired signals to midden.json
-    phe_midden_updated=$(jq --argjson new_signals "$phe_expired_objects" '
-      .signals += $new_signals |
-      .archived_at_count = (.signals | length)
-    ' "$phe_midden_file" 2>/dev/null)
-
-    if [[ -n "$phe_midden_updated" ]]; then
-      phe_midden_lock_held=false
-      if type acquire_lock &>/dev/null; then
-        acquire_lock "$phe_midden_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on midden.json"
-        phe_midden_lock_held=true
-      fi
-      atomic_write "$phe_midden_file" "$phe_midden_updated" || {
-        [[ "$phe_midden_lock_held" == "true" ]] && release_lock 2>/dev/null || true
-        json_err "$E_JSON_INVALID" "Failed to write midden.json"
-      }
-      [[ "$phe_midden_lock_held" == "true" ]] && release_lock 2>/dev/null || true
-    fi
-
-    phe_remaining_active=$(jq '[.signals[] | select(.active == true)] | length' "$phe_pheromones_file" 2>/dev/null || echo 0)
-    phe_midden_total=$(jq '.signals | length' "$phe_midden_file" 2>/dev/null || echo 0)
-
-    json_ok "{\"expired_count\":$phe_expired_count,\"remaining_active\":$phe_remaining_active,\"midden_total\":$phe_midden_total,\"eternal_promoted\":$phe_eternal_promoted}"
-    ;;
-
-  eternal-init)
-    # Initialize the ~/.aether/eternal/ directory and memory.json schema
-    # Usage: eternal-init
-    # Idempotent: safe to call multiple times
-
-    ei_eternal_dir="$HOME/.aether/eternal"
-    ei_memory_file="$ei_eternal_dir/memory.json"
-    ei_already_existed="false"
-
-    mkdir -p "$ei_eternal_dir"
-
-    if [[ -f "$ei_memory_file" ]]; then
-      ei_already_existed="true"
-    else
-      ei_created_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-      printf '%s\n' "{
-  \"version\": \"1.0.0\",
-  \"created_at\": \"$ei_created_at\",
-  \"colonies\": [],
-  \"high_value_signals\": [],
-  \"cross_session_patterns\": []
-}" > "$ei_memory_file"
-    fi
-
-    json_ok "{\"dir\":\"$ei_eternal_dir\",\"initialized\":true,\"already_existed\":$ei_already_existed}"
-    ;;
-
-  eternal-store)
-    # Store a high-value signal in eternal memory.
-    # Usage: eternal-store <content> [--type TYPE] [--source SOURCE] [--strength N] [--signal-id ID] [--reason TEXT] [--created-at ISO8601] [--archived-at ISO8601]
-    es_content="${1:-}"
-    [[ -z "$es_content" ]] && json_err "$E_VALIDATION_FAILED" "Usage: eternal-store <content> [--type TYPE] [--source SOURCE] [--strength N] [--signal-id ID] [--reason TEXT] [--created-at ISO8601] [--archived-at ISO8601]" '{"missing":"content"}'
-
-    es_type="UNKNOWN"
-    es_source="unknown"
-    es_strength="0.0"
-    es_signal_id=""
-    es_reason="manual_store"
-    es_created_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-    es_archived_at="$es_created_at"
-
-    shift
-    while [[ $# -gt 0 ]]; do
-      case "$1" in
-        --type) es_type="${2:-UNKNOWN}"; shift 2 ;;
-        --source) es_source="${2:-unknown}"; shift 2 ;;
-        --strength) es_strength="${2:-0.0}"; shift 2 ;;
-        --signal-id) es_signal_id="${2:-}"; shift 2 ;;
-        --reason) es_reason="${2:-manual_store}"; shift 2 ;;
-        --created-at) es_created_at="${2:-$es_created_at}"; shift 2 ;;
-        --archived-at) es_archived_at="${2:-$es_archived_at}"; shift 2 ;;
-        *) shift ;;
-      esac
-    done
-
-    if ! [[ "$es_strength" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
-      json_err "$E_VALIDATION_FAILED" "Strength must be numeric" "{\"provided\":\"$es_strength\"}"
-    fi
-
-    bash "$0" eternal-init >/dev/null 2>&1 || json_err "$E_FILE_NOT_FOUND" "Unable to initialize eternal memory"
-
-    es_memory_file="$HOME/.aether/eternal/memory.json"
-    [[ -f "$es_memory_file" ]] || json_err "$E_FILE_NOT_FOUND" "Eternal memory file not found"
-
-    if ! jq -e . "$es_memory_file" >/dev/null 2>&1; then
-      json_err "$E_JSON_INVALID" "Eternal memory JSON is invalid"
-    fi
-
-    es_entry=$(jq -n \
-      --arg content "$es_content" \
-      --arg type "$es_type" \
-      --arg source "$es_source" \
-      --arg signal_id "$es_signal_id" \
-      --arg reason "$es_reason" \
-      --arg created_at "$es_created_at" \
-      --arg archived_at "$es_archived_at" \
-      --argjson strength "$es_strength" \
-      '{
-        content: $content,
-        type: $type,
-        source: $source,
-        signal_id: $signal_id,
-        reason: $reason,
-        strength: $strength,
-        created_at: $created_at,
-        archived_at: $archived_at
-      }')
-
-    es_lock_held=false
-    if type acquire_lock &>/dev/null; then
-      acquire_lock "$es_memory_file" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on eternal memory"
-      es_lock_held=true
-    fi
-
-    es_updated=$(jq --argjson entry "$es_entry" '
-      .high_value_signals = ((.high_value_signals // []) + [$entry]) |
-      if (.high_value_signals | length) > 500 then .high_value_signals = .high_value_signals[-500:] else . end |
-      .last_updated = $entry.archived_at
-    ' "$es_memory_file" 2>/dev/null) || {
-      [[ "$es_lock_held" == "true" ]] && release_lock 2>/dev/null || true
-      json_err "$E_JSON_INVALID" "Failed to update eternal memory"
-    }
-
-    atomic_write "$es_memory_file" "$es_updated" || {
-      [[ "$es_lock_held" == "true" ]] && release_lock 2>/dev/null || true
-      json_err "$E_JSON_INVALID" "Failed to write eternal memory"
-    }
-
-    [[ "$es_lock_held" == "true" ]] && release_lock 2>/dev/null || true
-    json_ok "{\"stored\":true,\"signal_id\":\"$es_signal_id\",\"type\":\"$es_type\"}"
-    ;;
-
-  midden-write)
-    # Write a warning/observation to the midden for later review
-    # Usage: midden-write <category> <message> <source>
-    # Example: midden-write "security" "High CVEs found: 3" "gatekeeper"
-    # Returns: JSON with success status and entry details
-
-    mw_category="${1:-general}"
-    mw_message="${2:-}"
-    mw_source="${3:-unknown}"
-
-    # Graceful degradation: if no message, return success but note it
-    if [[ -z "$mw_message" ]]; then
-      json_ok "{\"success\":true,\"warning\":\"no_message_provided\",\"entry_id\":null}"
-      exit 0
-    fi
-
-    mw_midden_dir="$DATA_DIR/midden"
-    mw_midden_file="$mw_midden_dir/midden.json"
-    mw_timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-    mw_entry_id="midden_$(date +%s)_$$"
-
-    # Create midden directory if it doesn't exist
-    mkdir -p "$mw_midden_dir"
-
-    # Initialize midden.json if it doesn't exist
-    if [[ ! -f "$mw_midden_file" ]]; then
-      printf '%s\n' '{"version":"1.0.0","entries":[]}' > "$mw_midden_file"
-    fi
-
-    # Create the new entry using jq for safe JSON construction
-    mw_new_entry=$(jq -n \
-      --arg id "$mw_entry_id" \
-      --arg ts "$mw_timestamp" \
-      --arg cat "$mw_category" \
-      --arg src "$mw_source" \
-      --arg msg "$mw_message" \
-      '{id: $id, timestamp: $ts, category: $cat, source: $src, message: $msg, reviewed: false}')
-
-    # Append to midden.json using jq with locking
-    if acquire_lock "$mw_midden_file" 2>/dev/null; then
-      mw_updated_midden=$(jq --argjson entry "$mw_new_entry" '
-        .entries += [$entry] |
-        .entry_count = (.entries | length)
-      ' "$mw_midden_file" 2>/dev/null)
-
-      if [[ -n "$mw_updated_midden" ]]; then
-        printf '%s\n' "$mw_updated_midden" > "$mw_midden_file.tmp" && mv "$mw_midden_file.tmp" "$mw_midden_file"
-        release_lock 2>/dev/null || true
-        json_ok "{\"success\":true,\"entry_id\":\"$mw_entry_id\",\"category\":\"$mw_category\",\"midden_total\":$(jq '.entries | length' "$mw_midden_file" 2>/dev/null || echo 0)}"
-      else
-        release_lock 2>/dev/null || true
-        json_ok "{\"success\":true,\"warning\":\"jq_processing_failed\",\"entry_id\":null}"
-      fi
-    else
-      # Lock failed — graceful degradation, try without lock
-      mw_updated_midden=$(jq --argjson entry "$mw_new_entry" '
-        .entries += [$entry] |
-        .entry_count = (.entries | length)
-      ' "$mw_midden_file" 2>/dev/null)
-
-      if [[ -n "$mw_updated_midden" ]]; then
-        printf '%s\n' "$mw_updated_midden" > "$mw_midden_file.tmp" && mv "$mw_midden_file.tmp" "$mw_midden_file"
-        json_ok "{\"success\":true,\"entry_id\":\"$mw_entry_id\",\"category\":\"$mw_category\",\"warning\":\"lock_unavailable\"}"
-      else
-        json_ok "{\"success\":true,\"warning\":\"jq_processing_failed\",\"entry_id\":null}"
-      fi
-    fi
-    ;;
+  midden-write) _midden_write "$@" ;;
 
   # ============================================================================
   # XML Exchange Commands
   # ============================================================================
 
-  pheromone-export-xml)
-    # Export pheromones.json to XML format
-    # Usage: pheromone-export-xml [output_file]
-    # Default output: .aether/exchange/pheromones.xml
 
-    pex_output="${1:-$SCRIPT_DIR/exchange/pheromones.xml}"
-    pex_pheromones="$DATA_DIR/pheromones.json"
+  pheromone-export-xml) _pheromone_export_xml "$@" ;;
+  pheromone-import-xml) _pheromone_import_xml "$@" ;;
+  pheromone-validate-xml) _pheromone_validate_xml "$@" ;;
 
-    # Graceful degradation: check for xmllint
-    if ! command -v xmllint >/dev/null 2>&1; then
-      json_err "$E_FEATURE_UNAVAILABLE" "xmllint is not installed. Try: xcode-select --install on macOS."
-    fi
-
-    # Check pheromones.json exists
-    if [[ ! -f "$pex_pheromones" ]]; then
-      json_err "$E_FILE_NOT_FOUND" "Couldn't find pheromones.json. Try: run /ant:init first."
-    fi
-
-    # Ensure output directory exists
-    mkdir -p "$(dirname "$pex_output")"
-
-    # Source the exchange script
-    source "$SCRIPT_DIR/exchange/pheromone-xml.sh"
-
-    # Call the export function
-    xml-pheromone-export "$pex_pheromones" "$pex_output"
-    ;;
-
-  pheromone-import-xml)
-    # Import pheromone signals from XML into pheromones.json
-    # Usage: pheromone-import-xml <xml_file> [colony_prefix]
-    # When colony_prefix is provided, imported signal IDs are tagged with "${prefix}:" before merge
-
-    pix_xml="${1:-}"
-    pix_colony_prefix="${2:-}"
-    pix_pheromones="$DATA_DIR/pheromones.json"
-
-    if [[ -z "$pix_xml" ]]; then
-      json_err "$E_VALIDATION_FAILED" "Missing XML file argument. Try: pheromone-import-xml <xml_file> [colony_prefix]."
-    fi
-
-    if [[ ! -f "$pix_xml" ]]; then
-      json_err "$E_FILE_NOT_FOUND" "XML file not found: $pix_xml. Try: check the file path."
-    fi
-
-    # Graceful degradation: check for xmllint
-    if ! command -v xmllint >/dev/null 2>&1; then
-      json_err "$E_FEATURE_UNAVAILABLE" "xmllint is not installed. Try: xcode-select --install on macOS."
-    fi
-
-    # Source the exchange script
-    source "$SCRIPT_DIR/exchange/pheromone-xml.sh"
-
-    # Import XML to get JSON signals
-    pix_imported=$(xml-pheromone-import "$pix_xml")
-
-    # Extract actual signal array from result.json | fromjson | .signals
-    # (result.signals is an integer count — must unpack result.json to get the array)
-    pix_raw_signals=$(echo "$pix_imported" | jq -r '.result.json // "{}"' | jq -c '.signals // []' 2>/dev/null || echo '[]')
-
-    # Apply colony prefix to imported signal IDs (when provided)
-    # This prevents ID collisions and tags signals with their source colony
-    if [[ -n "$pix_colony_prefix" ]]; then
-      pix_prefixed_signals=$(echo "$pix_raw_signals" | jq --arg prefix "$pix_colony_prefix" '[.[] | .id = ($prefix + ":" + .id)]' 2>/dev/null || echo '[]')
-    else
-      pix_prefixed_signals="$pix_raw_signals"
-    fi
-
-    # If pheromones.json exists, merge; otherwise create
-    if [[ -f "$pix_pheromones" ]]; then
-      # Merge: imported signals first, existing signals last
-      # map(last) keeps current colony's version on ID collision — current colony always wins
-      pix_merged=$(jq -s --argjson new_signals "$pix_prefixed_signals" '
-        .[0] as $existing |
-        {
-          signals: ([$new_signals[], $existing.signals[]] | group_by(.id) | map(last)),
-          version: $existing.version,
-          colony_id: $existing.colony_id
-        }
-      ' "$pix_pheromones" 2>/dev/null)
-
-      if [[ -n "$pix_merged" ]]; then
-        printf '%s\n' "$pix_merged" > "$pix_pheromones"
-      fi
-    fi
-
-    pix_count=$(echo "$pix_raw_signals" | jq 'length' 2>/dev/null || echo 0)
-    json_ok "{\"imported\":true,\"signal_count\":$pix_count,\"source\":\"$pix_xml\"}"
-    ;;
-
-  pheromone-validate-xml)
-    # Validate pheromone XML against XSD schema
-    # Usage: pheromone-validate-xml <xml_file>
-
-    pvx_xml="${1:-}"
-    pvx_xsd="$SCRIPT_DIR/schemas/pheromone.xsd"
-
-    if [[ -z "$pvx_xml" ]]; then
-      json_err "$E_VALIDATION_FAILED" "Missing XML file argument. Try: pheromone-validate-xml <xml_file>."
-    fi
-
-    if [[ ! -f "$pvx_xml" ]]; then
-      json_err "$E_FILE_NOT_FOUND" "XML file not found: $pvx_xml. Try: check the file path."
-    fi
-
-    # Graceful degradation: check for xmllint
-    if ! command -v xmllint >/dev/null 2>&1; then
-      json_err "$E_FEATURE_UNAVAILABLE" "xmllint is not installed. Try: xcode-select --install on macOS."
-    fi
-
-    # Source the exchange script
-    source "$SCRIPT_DIR/exchange/pheromone-xml.sh"
-
-    # Call validate function
-    xml-pheromone-validate "$pvx_xml" "$pvx_xsd"
-    ;;
 
   wisdom-export-xml)
     # Export queen wisdom to XML format
@@ -8448,16 +3992,19 @@ $updated_meta
 
     # Look for wisdom data: check specified file, then COLONY_STATE memory
     if [[ ! -f "$wex_input" ]]; then
+      # MIGRATE: direct COLONY_STATE.json access -- use _state_read_field instead
       # Try to extract from COLONY_STATE.json memory field
       if [[ -f "$DATA_DIR/COLONY_STATE.json" ]]; then
-        wex_memory=$(jq '.memory // {}' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo '{}')
+        wex_memory=$(jq '.memory // {}' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo '{}')  # SUPPRESS:OK -- read-default: returns fallback if missing
         if [[ "$wex_memory" != "{}" && "$wex_memory" != "null" ]]; then
           # Create minimal wisdom JSON from colony memory
           wex_created_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           printf '%s\n' "{
   \"version\": \"1.0.0\",
+  # SUPPRESS:OK -- read-default: query may return empty
   \"metadata\": {\"created\": \"$wex_created_at\", \"colony_id\": \"$(jq -r '.goal // \"unknown\"' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null)\"},
   \"philosophies\": [],
+  # SUPPRESS:OK -- read-default: query may return empty
   \"patterns\": $(echo "$wex_memory" | jq '[.instincts // [] | .[] | {\"id\": (. | @base64), \"content\": ., \"confidence\": 0.7, \"domain\": \"general\", \"source\": \"colony_memory\"}]' 2>/dev/null || echo '[]')
 }" > "$wex_input"
         fi
@@ -8548,8 +4095,8 @@ $updated_meta
               sealed_at: (.sealed_at // null),
               status: (if .sealed_at then "sealed" else "active" end),
               chamber: input_filename
-            }' "$manifest" 2>/dev/null || true
-          done | jq -s '.' 2>/dev/null || echo '[]'
+            }' "$manifest" 2>/dev/null || true  # SUPPRESS:OK -- cleanup: operation is best-effort
+          done | jq -s '.' 2>/dev/null || echo '[]'  # SUPPRESS:OK -- read-default: returns fallback if missing
         )
       fi
 
@@ -8601,139 +4148,7 @@ $updated_meta
     xml-registry-import "$rix_xml" "$rix_output"
     ;;
 
-  colony-archive-xml)
-    # Export combined colony archive XML containing pheromones, wisdom, and registry
-    # Usage: colony-archive-xml [output_file]
-    # Default output: .aether/exchange/colony-archive.xml
-    # Always filters to active-only pheromone signals
-
-    # Graceful degradation: check for xmllint
-    if ! command -v xmllint >/dev/null 2>&1; then
-      json_err "$E_FEATURE_UNAVAILABLE" "xmllint is not installed. Try: xcode-select --install on macOS."
-    fi
-
-    cax_output="${1:-$SCRIPT_DIR/exchange/colony-archive.xml}"
-    mkdir -p "$(dirname "$cax_output")"
-
-    # Step 1: Filter active-only pheromone signals to a temp file
-    cax_tmp_pheromones=$(mktemp)
-    if [[ -f "$DATA_DIR/pheromones.json" ]]; then
-      jq '{
-        version: .version,
-        colony_id: .colony_id,
-        generated_at: .generated_at,
-        signals: [.signals[] | select(.active == true)]
-      }' "$DATA_DIR/pheromones.json" > "$cax_tmp_pheromones" 2>/dev/null
-    else
-      printf '%s\n' '{"version":"1.0","colony_id":"unknown","generated_at":"","signals":[]}' > "$cax_tmp_pheromones"
-    fi
-
-    # Step 2: Export each section to temp XML files
-    cax_tmp_dir=$(mktemp -d)
-
-    # Pheromone section (using filtered active-only)
-    source "$SCRIPT_DIR/exchange/pheromone-xml.sh"
-    xml-pheromone-export "$cax_tmp_pheromones" "$cax_tmp_dir/pheromones.xml" 2>/dev/null || true
-
-    # Wisdom section — reuse wisdom-export-xml fallback logic
-    source "$SCRIPT_DIR/exchange/wisdom-xml.sh"
-    cax_wisdom_input="$DATA_DIR/queen-wisdom.json"
-    if [[ ! -f "$cax_wisdom_input" ]]; then
-      # Try extracting from COLONY_STATE.json memory field
-      if [[ -f "$DATA_DIR/COLONY_STATE.json" ]]; then
-        cax_wex_memory=$(jq '.memory // {}' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo '{}')
-        if [[ "$cax_wex_memory" != "{}" && "$cax_wex_memory" != "null" ]]; then
-          cax_wex_created_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          cax_wisdom_input="$cax_tmp_dir/wisdom-input.json"
-          printf '%s\n' "{
-  \"version\": \"1.0.0\",
-  \"metadata\": {\"created\": \"$cax_wex_created_at\", \"colony_id\": \"$(jq -r '.goal // \"unknown\"' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null)\"},
-  \"philosophies\": [],
-  \"patterns\": $(echo "$cax_wex_memory" | jq '[.instincts // [] | .[] | {"id": (. | @base64), "content": ., "confidence": 0.7, "domain": "general", "source": "colony_memory"}]' 2>/dev/null || echo '[]')
-}" > "$cax_wisdom_input"
-        fi
-      fi
-    fi
-    if [[ -f "$cax_wisdom_input" ]]; then
-      xml-wisdom-export "$cax_wisdom_input" "$cax_tmp_dir/wisdom.xml" 2>/dev/null || true
-    fi
-
-    # Registry section — reuse registry-export-xml on-demand generation logic
-    source "$SCRIPT_DIR/exchange/registry-xml.sh"
-    cax_registry_input="$DATA_DIR/colony-registry.json"
-    if [[ ! -f "$cax_registry_input" ]]; then
-      cax_rex_chambers_dir="$AETHER_ROOT/.aether/chambers"
-      cax_rex_generated_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-      cax_rex_colonies="[]"
-      if [[ -d "$cax_rex_chambers_dir" ]]; then
-        cax_rex_colonies=$(
-          for manifest in "$cax_rex_chambers_dir"/*/manifest.json; do
-            [[ -f "$manifest" ]] || continue
-            jq -c '{
-              id: (.colony_id // .goal // "unknown"),
-              name: (.goal // "Unnamed Colony"),
-              created_at: (.created_at // "unknown"),
-              sealed_at: (.sealed_at // null),
-              status: (if .sealed_at then "sealed" else "active" end),
-              chamber: input_filename
-            }' "$manifest" 2>/dev/null || true
-          done | jq -s '.' 2>/dev/null || echo '[]'
-        )
-      fi
-      cax_registry_input="$cax_tmp_dir/registry-input.json"
-      printf '%s\n' "{
-  \"version\": \"1.0.0\",
-  \"generated_at\": \"$cax_rex_generated_at\",
-  \"colonies\": $cax_rex_colonies
-}" > "$cax_registry_input"
-    fi
-    xml-registry-export "$cax_registry_input" "$cax_tmp_dir/registry.xml" 2>/dev/null || true
-
-    # Step 3: Build combined XML
-    cax_colony_id=$(jq -r '.goal // "unknown"' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' '-' | sed 's/^-//;s/-$//')
-    [[ -z "$cax_colony_id" || "$cax_colony_id" == "unknown" ]] && cax_colony_id="unknown"
-    cax_sealed_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-    cax_pheromone_count=$(jq '.signals | length' "$cax_tmp_pheromones" 2>/dev/null || echo 0)
-
-    {
-      printf '<?xml version="1.0" encoding="UTF-8"?>\n'
-      printf '<colony-archive\n'
-      printf '    xmlns="http://aether.colony/schemas/archive/1.0"\n'
-      printf '    colony_id="%s"\n' "$cax_colony_id"
-      printf '    sealed_at="%s"\n' "$cax_sealed_at"
-      printf '    version="1.0.0"\n'
-      printf '    pheromone_count="%s">\n' "$cax_pheromone_count"
-
-      # Append pheromone section (strip XML declaration)
-      if [[ -f "$cax_tmp_dir/pheromones.xml" ]]; then
-        sed '1{/^<?xml/d;}' "$cax_tmp_dir/pheromones.xml"
-      fi
-
-      # Append wisdom section (strip XML declaration)
-      if [[ -f "$cax_tmp_dir/wisdom.xml" ]]; then
-        sed '1{/^<?xml/d;}' "$cax_tmp_dir/wisdom.xml"
-      fi
-
-      # Append registry section (strip XML declaration)
-      if [[ -f "$cax_tmp_dir/registry.xml" ]]; then
-        sed '1{/^<?xml/d;}' "$cax_tmp_dir/registry.xml"
-      fi
-
-      printf '</colony-archive>\n'
-    } > "$cax_output"
-
-    # Step 4: Validate well-formedness
-    if xmllint --noout "$cax_output" 2>/dev/null; then
-      cax_valid=true
-    else
-      cax_valid=false
-    fi
-
-    # Step 5: Cleanup temp files
-    rm -rf "$cax_tmp_dir" "$cax_tmp_pheromones"
-
-    json_ok "{\"path\":\"$cax_output\",\"valid\":$cax_valid,\"colony_id\":\"$cax_colony_id\",\"pheromone_count\":$cax_pheromone_count}"
-    ;;
+  colony-archive-xml) _colony_archive_xml "$@" ;;
 
   rolling-summary)
     # Maintain a bounded rolling narrative log for low-token context recovery.
@@ -8759,8 +4174,11 @@ $updated_meta
         rs_ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
         printf '%s|%s|%s|%s\n' "$rs_ts" "$rs_clean_event" "$rs_clean_source" "$rs_clean_summary" >> "$rs_file"
-        tail -n 15 "$rs_file" > "$rs_file.tmp" 2>/dev/null || true
-        mv "$rs_file.tmp" "$rs_file" 2>/dev/null || true
+        tail -n 15 "$rs_file" > "$rs_file.tmp" 2>/dev/null || true  # SUPPRESS:OK -- read-default: file may not exist
+        mv "$rs_file.tmp" "$rs_file" || {
+          _aether_log_error "Could not save rolling summary update"
+          json_err "$E_UNKNOWN" "Failed to finalize rolling summary file"
+        }
 
         json_ok "{\"added\":true,\"event\":\"$rs_clean_event\",\"source\":\"$rs_clean_source\"}"
         ;;
@@ -8781,8 +4199,9 @@ $updated_meta
         fi
 
         if [[ "$rs_json" == "true" ]]; then
+          # SUPPRESS:OK -- read-default: text escaping returns fallback on empty input
           rs_entries=$(awk -F'|' 'NF >= 4 {print $0}' "$rs_file" | tail -n 15 | jq -R 'split("|") | {timestamp: .[0], event: .[1], source: .[2], summary: (.[3:] | join("|"))}' | jq -s '.' 2>/dev/null || echo '[]')
-          rs_count=$(echo "$rs_entries" | jq 'length' 2>/dev/null || echo 0)
+          rs_count=$(echo "$rs_entries" | jq 'length' 2>/dev/null || echo 0)  # SUPPRESS:OK -- read-default: file may not exist yet
           json_ok "{\"entries\":$rs_entries,\"count\":$rs_count}"
         else
           tail -n 15 "$rs_file"
@@ -8826,6 +4245,7 @@ $updated_meta
     [[ "$cc_max_risks" -lt 1 ]] && cc_max_risks=1
     [[ "$cc_max_words" -lt 80 ]] && cc_max_words=80
 
+    # MIGRATE: direct COLONY_STATE.json access -- use _state_read_field instead
     cc_state_file="$DATA_DIR/COLONY_STATE.json"
     cc_flags_file="$DATA_DIR/flags.json"
     cc_pher_file="$DATA_DIR/pheromones.json"
@@ -8837,10 +4257,11 @@ $updated_meta
       exit 0
     fi
 
-    cc_goal=$(jq -r '.goal // "No goal set"' "$cc_state_file" 2>/dev/null || echo "No goal set")
-    cc_state=$(jq -r '.state // "IDLE"' "$cc_state_file" 2>/dev/null || echo "IDLE")
-    cc_current_phase=$(jq -r '.current_phase // 0' "$cc_state_file" 2>/dev/null || echo 0)
-    cc_total_phases=$(jq -r '.plan.phases | length // 0' "$cc_state_file" 2>/dev/null || echo 0)
+    cc_goal=$(jq -r '.goal // "No goal set"' "$cc_state_file" 2>/dev/null || echo "No goal set")  # SUPPRESS:OK -- read-default: file may not exist yet
+    cc_state=$(jq -r '.state // "IDLE"' "$cc_state_file" 2>/dev/null || echo "IDLE")  # SUPPRESS:OK -- read-default: file may not exist yet
+    cc_current_phase=$(jq -r '.current_phase // 0' "$cc_state_file" 2>/dev/null || echo 0)  # SUPPRESS:OK -- read-default: file may not exist yet
+    cc_total_phases=$(jq -r '.plan.phases | length // 0' "$cc_state_file" 2>/dev/null || echo 0)  # SUPPRESS:OK -- read-default: file may not exist yet
+    # SUPPRESS:OK -- cross-platform: macOS vs Linux date/stat flags
     cc_phase_name=$(jq -r --argjson p "$cc_current_phase" 'if $p > 0 then (.plan.phases[]? | select(.id == $p) | .name) else "" end' "$cc_state_file" 2>/dev/null | head -1)
     [[ -z "$cc_phase_name" ]] && cc_phase_name="(unnamed)"
 
@@ -8871,7 +4292,7 @@ $updated_meta
           end
         )
       | .[]
-      ' "$cc_state_file" 2>/dev/null | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' | cut -c1-160)
+      ' "$cc_state_file" 2>/dev/null | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' | cut -c1-160)  # SUPPRESS:OK -- read-default: file may not exist yet
 
     cc_risks=""
     if [[ -f "$cc_flags_file" ]]; then
@@ -8881,7 +4302,7 @@ $updated_meta
           | (.title // .description // .details // tostring))
         | .[:$n]
         | .[]
-      ' "$cc_flags_file" 2>/dev/null | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' | cut -c1-160)
+      ' "$cc_flags_file" 2>/dev/null | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' | cut -c1-160)  # SUPPRESS:OK -- read-default: file may not exist yet
     fi
 
     cc_signals=""
@@ -8920,11 +4341,12 @@ $updated_meta
         | .[:$max]
         | map((.type // "UNKNOWN") + ": " + (.content.text // (if (.content | type) == "string" then .content else "" end)))
         | .[]
-      ' "$cc_pher_file" 2>/dev/null | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' | cut -c1-160)
+      ' "$cc_pher_file" 2>/dev/null | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' | cut -c1-160)  # SUPPRESS:OK -- read-default: file may not exist yet
     fi
 
     cc_roll=""
     if [[ -f "$cc_roll_file" ]]; then
+      # SUPPRESS:OK -- read-default: file may not exist or format may vary
       cc_roll=$(tail -n 3 "$cc_roll_file" 2>/dev/null | awk -F'|' 'NF >= 4 {print $2 ": " $4}' | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' | cut -c1-160)
     fi
 
@@ -8986,269 +4408,17 @@ $updated_meta
     fi
 
     cc_words=$(printf '%s' "$cc_section" | wc -w | tr -d ' ')
-    cc_prompt_json=$(printf '%s' "$cc_section" | jq -Rs '.' 2>/dev/null || echo '""')
+    cc_prompt_json=$(printf '%s' "$cc_section" | jq -Rs '.' 2>/dev/null || echo '""')  # SUPPRESS:OK -- read-default: returns fallback if missing
     json_ok "{\"exists\":true,\"state\":\"$cc_state\",\"next_action\":\"$cc_next_action\",\"word_count\":$cc_words,\"prompt_section\":$cc_prompt_json}"
     ;;
 
-  # ============================================================================
-  # Session Continuity Commands
-  # ============================================================================
-
-  session-init)
-    # Initialize a new session tracking file
-    # Usage: session-init [session_id] [goal]
-    session_id="${2:-$(date +%s)_$(openssl rand -hex 4 2>/dev/null || echo $$)}"
-    goal="${3:-}"
-
-    # ARCH-03: Rotate spawn-tree.txt at session start to prevent unbounded growth.
-    # Archives previous session's tree to a timestamped file; caps archive count at 5.
-    _rotate_spawn_tree() {
-        local tree_file="$DATA_DIR/spawn-tree.txt"
-        [[ -f "$tree_file" ]] && [[ -s "$tree_file" ]] || return 0
-        mkdir -p "$DATA_DIR/spawn-tree-archive"
-        local archive_ts
-        archive_ts=$(date +%Y%m%d_%H%M%S)
-        cp "$tree_file" "$DATA_DIR/spawn-tree-archive/spawn-tree.${archive_ts}.txt" 2>/dev/null || true
-        > "$tree_file"  # Truncate in-place — preserves file handle for tail -f watchers
-        # Keep only 5 archives
-        ls -t "$DATA_DIR/spawn-tree-archive"/spawn-tree.*.txt 2>/dev/null \
-            | tail -n +6 | while IFS= read -r file; do rm -f "$file"; done 2>/dev/null || true
-    }
-    _rotate_spawn_tree
-
-    session_file="$DATA_DIR/session.json"
-    baseline=$(git rev-parse HEAD 2>/dev/null || echo "")
-
-    cat > "$session_file.tmp" << EOF
-{
-  "session_id": "$session_id",
-  "started_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
-  "last_command": null,
-  "last_command_at": null,
-  "colony_goal": "$goal",
-  "current_phase": 0,
-  "current_milestone": "First Mound",
-  "suggested_next": "/ant:plan",
-  "context_cleared": false,
-  "baseline_commit": "$baseline",
-  "resumed_at": null,
-  "active_todos": [],
-  "summary": "Session initialized"
-}
-EOF
-    mv "$session_file.tmp" "$session_file"
-    json_ok "{\"session_id\":\"$session_id\",\"goal\":\"$goal\",\"file\":\"$session_file\"}"
-    ;;
-
-  session-update)
-    # Update session with latest activity
-    # Usage: session-update <command> [suggested_next] [summary]
-    cmd_run="${1:-}"
-    suggested="${2:-}"
-    summary="${3:-}"
-
-    session_file="$DATA_DIR/session.json"
-
-    if [[ ! -f "$session_file" ]]; then
-      # Auto-initialize if doesn't exist
-      bash "$0" session-init "auto_$(date +%s)" ""
-    fi
-
-    # Read current session
-    current_session=$(cat "$session_file" 2>/dev/null || echo '{}')
-
-    # Extract current values for preservation
-    current_goal=$(echo "$current_session" | jq -r '.colony_goal // empty')
-    current_phase=$(echo "$current_session" | jq -r '.current_phase // 0')
-    current_milestone=$(echo "$current_session" | jq -r '.current_milestone // "First Mound"')
-
-    # Get top 3 TODOs if TO-DOs.md exists
-    todos="[]"
-    if [[ -f "TO-DOs.md" ]]; then
-      todos=$(grep "^### " TO-DOs.md 2>/dev/null | head -3 | sed 's/^### //' | jq -R . | jq -s .)
-    fi
-
-    # Get colony state if exists
-    if [[ -f "$DATA_DIR/COLONY_STATE.json" ]]; then
-      current_goal=$(jq -r '.goal // empty' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "$current_goal")
-      current_phase=$(jq -r '.current_phase // 0' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "$current_phase")
-      current_milestone=$(jq -r '.milestone // "First Mound"' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "$current_milestone")
-    fi
-
-    # Capture current git HEAD for drift detection
-    baseline=$(git rev-parse HEAD 2>/dev/null || echo "")
-
-    # Build updated session
-    echo "$current_session" | jq --arg cmd "$cmd_run" \
-      --arg ts "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
-      --arg suggested "$suggested" \
-      --arg summary "$summary" \
-      --arg goal "$current_goal" \
-      --argjson phase "$current_phase" \
-      --arg milestone "$current_milestone" \
-      --argjson todos "$todos" \
-      --arg baseline "$baseline" \
-      '.last_command = $cmd |
-       .last_command_at = $ts |
-       .suggested_next = $suggested |
-       .summary = $summary |
-       .colony_goal = $goal |
-       .current_phase = $phase |
-       .current_milestone = $milestone |
-       .active_todos = $todos |
-       .baseline_commit = $baseline' > "$session_file.tmp" && mv "$session_file.tmp" "$session_file"
-
-    json_ok "{\"updated\":true,\"command\":\"$cmd_run\"}"
-    ;;
-
-  session-read)
-    # Read and return current session state
-    session_file="$DATA_DIR/session.json"
-
-    if [[ ! -f "$session_file" ]]; then
-      json_ok "{\"exists\":false,\"session\":null}"
-      exit 0
-    fi
-
-    session_data=$(cat "$session_file" 2>/dev/null || echo '{}')
-
-    # Check if stale (> 24 hours)
-    last_cmd_ts="" is_stale="" age_hours=""
-    last_cmd_ts=$(echo "$session_data" | jq -r '.last_command_at // .started_at // empty')
-    if [[ -n "$last_cmd_ts" ]]; then
-      last_epoch=0 now_epoch=0
-      last_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$last_cmd_ts" +%s 2>/dev/null \
-        || date -d "$last_cmd_ts" +%s 2>/dev/null \
-        || echo 0)
-      now_epoch=$(date +%s)
-      age_hours=$(( (now_epoch - last_epoch) / 3600 ))
-      [[ $age_hours -gt 24 ]] && is_stale=true || is_stale=false
-    else
-      is_stale="false"
-      age_hours="unknown"
-    fi
-
-    json_ok "{\"exists\":true,\"is_stale\":$is_stale,\"age_hours\":$age_hours,\"session\":$session_data}"
-    ;;
-
-  session-is-stale)
-    # Check if session is stale (returns JSON with is_stale boolean)
-    session_file="$DATA_DIR/session.json"
-
-    if [[ ! -f "$session_file" ]]; then
-      json_ok '{"is_stale":true}'
-      exit 0
-    fi
-
-    last_cmd_ts=$(jq -r '.last_command_at // .started_at // empty' "$session_file" 2>/dev/null)
-
-    if [[ -z "$last_cmd_ts" ]]; then
-      json_ok '{"is_stale":true}'
-      exit 0
-    fi
-
-    # macOS uses -j -f, Linux uses -d
-    last_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$last_cmd_ts" +%s 2>/dev/null \
-      || date -d "$last_cmd_ts" +%s 2>/dev/null \
-      || echo 0)
-    now_epoch=$(date +%s)
-    age_hours=$(( (now_epoch - last_epoch) / 3600 ))
-
-    if [[ $age_hours -gt 24 ]]; then
-      json_ok '{"is_stale":true}'
-    else
-      json_ok '{"is_stale":false}'
-    fi
-    ;;
-
-  session-clear-context)
-    # Mark session context as cleared (preserves file but marks context_cleared)
-    preserve="${2:-false}"
-    session_file="$DATA_DIR/session.json"
-
-    if [[ -f "$session_file" ]]; then
-      if [[ "$preserve" == "true" ]]; then
-        # Just mark as cleared
-        jq '.context_cleared = true' "$session_file" > "$session_file.tmp" && mv "$session_file.tmp" "$session_file"
-        json_ok "{\"cleared\":true,\"preserved\":true}"
-      else
-        # Remove file entirely
-        rm -f "$session_file"
-        json_ok "{\"cleared\":true,\"preserved\":false}"
-      fi
-    else
-      json_ok "{\"cleared\":false,\"reason\":\"no_session_exists\"}"
-    fi
-    ;;
-
-  session-mark-resumed)
-    # Mark session as resumed
-    session_file="$DATA_DIR/session.json"
-
-    if [[ -f "$session_file" ]]; then
-      jq --arg ts "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
-         '.resumed_at = $ts | .context_cleared = false' "$session_file" > "$session_file.tmp" && mv "$session_file.tmp" "$session_file"
-      json_ok "{\"resumed\":true,\"timestamp\":\"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"}"
-    else
-      json_err "$E_RESOURCE_NOT_FOUND" "No active session to mark as resumed. Try: run /ant:init to start a new session."
-    fi
-    ;;
-
-  session-summary)
-    # Get session summary (human-readable or JSON)
-    session_file="$DATA_DIR/session.json"
-    json_mode="false"
-
-    # Parse --json flag (command name already shifted by main dispatch)
-    while [[ $# -gt 0 ]]; do
-      case "$1" in
-        --json)
-          json_mode="true"
-          shift
-          ;;
-        *)
-          shift
-          ;;
-      esac
-    done
-
-    if [[ ! -f "$session_file" ]]; then
-      if [[ "$json_mode" == "true" ]]; then
-        json_ok '{"exists":false,"goal":null,"phase":0}'
-      else
-        echo "No active session found."
-      fi
-      exit 0
-    fi
-
-    goal=$(jq -r '.colony_goal // "No goal set"' "$session_file")
-    phase=$(jq -r '.current_phase // 0' "$session_file")
-    milestone=$(jq -r '.current_milestone // "First Mound"' "$session_file")
-    last_cmd=$(jq -r '.last_command // "None"' "$session_file")
-    last_at=$(jq -r '.last_command_at // "Unknown"' "$session_file")
-    suggested=$(jq -r '.suggested_next // "None"' "$session_file")
-    cleared=$(jq -r '.context_cleared // false' "$session_file")
-
-    if [[ "$json_mode" == "true" ]]; then
-      # Escape goal for JSON
-      goal_escaped=$(echo "$goal" | jq -Rs . | tr -d '\n')
-      milestone_escaped=$(echo "$milestone" | jq -Rs . | tr -d '\n')
-      last_cmd_escaped=$(echo "$last_cmd" | jq -Rs . | tr -d '\n')
-      last_at_escaped=$(echo "$last_at" | jq -Rs . | tr -d '\n')
-      suggested_escaped=$(echo "$suggested" | jq -Rs . | tr -d '\n')
-      json_ok "{\"exists\":true,\"goal\":$goal_escaped,\"phase\":$phase,\"milestone\":$milestone_escaped,\"last_command\":$last_cmd_escaped,\"last_active\":$last_at_escaped,\"suggested_next\":$suggested_escaped,\"context_cleared\":$cleared}"
-    else
-      echo "Session Summary"
-      echo "=================="
-      echo "Goal: $goal"
-      [[ "$phase" != "0" ]] && echo "Phase: $phase"
-      echo "Milestone: $milestone"
-      echo "Last Command: $last_cmd"
-      echo "Last Active: $last_at"
-      [[ "$suggested" != "None" ]] && echo "Suggested Next: $suggested"
-      [[ "$cleared" == "true" ]] && echo "Status: Context was cleared"
-    fi
-    ;;
+  session-init) _session_init "$@" ;;
+  session-update) _session_update "$@" ;;
+  session-read) _session_read "$@" ;;
+  session-is-stale) _session_is_stale "$@" ;;
+  session-clear-context) _session_clear_context "$@" ;;
+  session-mark-resumed) _session_mark_resumed "$@" ;;
+  session-summary) _session_summary "$@" ;;
 
   generate-progress-bar)
     generate-progress-bar "$@"
@@ -9311,23 +4481,23 @@ EOF
         local _lock_file="$1"
         local _pid_file="${_lock_file}.pid"
         local _pid
-        _pid=$(cat "$_pid_file" 2>/dev/null || echo "")
+        _pid=$(cat "$_pid_file" 2>/dev/null || echo "")  # SUPPRESS:OK -- read-default: file may not exist yet
         if [[ -z "$_pid" ]]; then
-          _pid=$(cat "$_lock_file" 2>/dev/null || echo "")
+          _pid=$(cat "$_lock_file" 2>/dev/null || echo "")  # SUPPRESS:OK -- read-default: file may not exist yet
         fi
         _pid=$(echo "$_pid" | tr -d '[:space:]')
         [[ "$_pid" =~ ^[0-9]+$ ]] || _pid=""
 
         if [[ -n "$_pid" ]]; then
-          kill -0 "$_pid" 2>/dev/null && return 1
+          kill -0 "$_pid" 2>/dev/null && return 1  # SUPPRESS:OK -- existence-test: checking if process is alive
           return 0
         fi
 
         local _mtime=0
-        if stat -f %m "$_lock_file" >/dev/null 2>&1; then
-          _mtime=$(stat -f %m "$_lock_file" 2>/dev/null || echo 0)
+        if stat -f %m "$_lock_file" >/dev/null 2>&1; then  # SUPPRESS:OK -- cleanup: output suppression for clean operation
+          _mtime=$(stat -f %m "$_lock_file" 2>/dev/null || echo 0)  # SUPPRESS:OK -- cross-platform: macOS stat syntax
         else
-          _mtime=$(stat -c %Y "$_lock_file" 2>/dev/null || echo 0)
+          _mtime=$(stat -c %Y "$_lock_file" 2>/dev/null || echo 0)  # SUPPRESS:OK -- cross-platform: Linux stat syntax
         fi
         local _age=$(( $(date +%s) - _mtime ))
         [[ "$_age" -gt "$lock_timeout" ]]
@@ -9337,7 +4507,7 @@ EOF
         [[ -e "$lock_file" ]] || continue
         scanned=$((scanned + 1))
         if is_lock_stale_for_cleanup "$lock_file"; then
-          rm -f "$lock_file" "${lock_file}.pid" 2>/dev/null || true
+          rm -f "$lock_file" "${lock_file}.pid" 2>/dev/null || true  # SUPPRESS:OK -- cleanup: file may not exist
           removed=$((removed + 1))
         else
           skipped_live=$((skipped_live + 1))
@@ -9352,14 +4522,14 @@ EOF
       exit 0
     fi
 
-    lock_files=$(find "$lock_dir" -name "*.lock" -o -name "*.lock.pid" 2>/dev/null)
+    lock_files=$(find "$lock_dir" -name "*.lock" -o -name "*.lock.pid" 2>/dev/null)  # SUPPRESS:OK -- existence-test: directory may not exist
 
     if [[ -z "$lock_files" ]]; then
       json_ok '{"removed":0,"message":"No lock files found"}'
       exit 0
     fi
 
-    lock_count=$(echo "$lock_files" | grep -c '\.lock$' || echo "0")
+    lock_count=$(echo "$lock_files" | grep -c '\.lock$' || echo "0")  # SUPPRESS:OK -- read-default: grep returns 1 when no matches
 
     if [[ "$auto_yes" != "true" ]]; then
       if [[ -t 2 ]]; then
@@ -9367,7 +4537,7 @@ EOF
         echo "Lock files found in $lock_dir:" >&2
         echo "$lock_files" | while read -r f; do
           [[ "$f" == *.pid ]] && continue
-          pid_content=$(cat "${f}.pid" 2>/dev/null || echo "unknown")
+          pid_content=$(cat "${f}.pid" 2>/dev/null || echo "unknown")  # SUPPRESS:OK -- read-default: file may not exist yet
           echo "  $f (PID: $pid_content)" >&2
         done
         printf "Remove all %d lock(s)? [y/N] " "$lock_count" >&2
@@ -9381,7 +4551,7 @@ EOF
       fi
     fi
 
-    rm -f "$lock_dir"/*.lock "$lock_dir"/*.lock.pid 2>/dev/null || true
+    rm -f "$lock_dir"/*.lock "$lock_dir"/*.lock.pid 2>/dev/null || true  # SUPPRESS:OK -- cleanup: file may not exist
     export LOCK_ACQUIRED=false
     export CURRENT_LOCK=""
     json_ok "{\"removed\":$lock_count,\"message\":\"All locks cleared\"}"
@@ -9438,6 +4608,7 @@ EOF
     ;;
 
   semantic-context)
+    _deprecation_warning "semantic-context"
     # Get context for task (for worker injection)
     # Usage: semantic-context <task_description> [max_results]
     task="${2:-}"
@@ -9460,23 +4631,25 @@ EOF
     signal_count=0
 
     if [[ -f "$DATA_DIR/spawn-tree.txt" ]]; then
-      spawn_count=$(grep -c "|spawned$" "$DATA_DIR/spawn-tree.txt" 2>/dev/null || echo 0)
+      spawn_count=$(grep -c "|spawned$" "$DATA_DIR/spawn-tree.txt" 2>/dev/null || echo 0)  # SUPPRESS:OK -- read-default: count defaults to 0 if file missing
     fi
 
     if [[ -f "$DATA_DIR/midden/midden.json" ]]; then
+      # SUPPRESS:OK -- read-default: query may return empty
       failure_count=$(jq '[.entries[]? | select(.category == "failure")] | length' "$DATA_DIR/midden/midden.json" 2>/dev/null || echo 0)
       if [[ "$failure_count" == "0" ]]; then
         # Backward compatibility for older midden schema
+        # SUPPRESS:OK -- read-default: file may not exist yet
         failure_count=$(jq '[.signals[]? | select(.type == "failure")] | length' "$DATA_DIR/midden/midden.json" 2>/dev/null || echo 0)
       fi
     fi
 
     if [[ -f "$AETHER_ROOT/.aether/QUEEN.md" ]]; then
-      rule_count=$(grep -c "^-" "$AETHER_ROOT/.aether/QUEEN.md" 2>/dev/null || echo 0)
+      rule_count=$(grep -c "^-" "$AETHER_ROOT/.aether/QUEEN.md" 2>/dev/null || echo 0)  # SUPPRESS:OK -- read-default: count defaults to 0 if file missing
     fi
 
     if [[ -f "$DATA_DIR/pheromones.json" ]]; then
-      signal_count=$(jq '.signals | length' "$DATA_DIR/pheromones.json" 2>/dev/null || echo 0)
+      signal_count=$(jq '.signals | length' "$DATA_DIR/pheromones.json" 2>/dev/null || echo 0)  # SUPPRESS:OK -- read-default: file may not exist yet
     fi
 
     raw_score=$(( (spawn_count * 2) + (failure_count * 5) + signal_count - (rule_count / 2) ))
@@ -9505,6 +4678,7 @@ EOF
     # Read QUEEN.md metadata if available
     if [[ -f "$queen_file" ]]; then
       # Extract metadata block from HTML comment
+      # SUPPRESS:OK -- read-default: section may not exist in file
       metadata=$(sed -n '/<!-- METADATA/,/-->/p' "$queen_file" 2>/dev/null | sed 's/<!-- METADATA//' | sed 's/-->//')
       if [[ -n "$metadata" ]]; then
         # Parse stats from metadata
@@ -9521,8 +4695,10 @@ EOF
 
       # Get file mtime as fallback for last_updated
       if [[ "$queen_last_updated" == "null" ]]; then
+        # SUPPRESS:OK -- cross-platform: macOS vs Linux date/stat flags
         queen_mtime=$(stat -f %m "$queen_file" 2>/dev/null || stat -c %Y "$queen_file" 2>/dev/null || echo "0")
         if [[ "$queen_mtime" != "0" ]]; then
+          # SUPPRESS:OK -- cross-platform: macOS vs Linux date/stat flags
           queen_last_updated="\"$(date -u -r "$queen_mtime" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -d "@$queen_mtime" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || echo "null")\""
           [[ "$queen_last_updated" == '"null"' ]] && queen_last_updated="null"
         fi
@@ -9534,25 +4710,25 @@ EOF
     learning_captured="null"
     if [[ -f "$observations_file" ]]; then
       # Get threshold for each wisdom type
-      thresholds=$(bash "$0" queen-thresholds 2>/dev/null | jq -c '.result // {}')
+      thresholds=$(bash "$0" queen-thresholds 2>/dev/null | jq -c '.result // {}')  # SUPPRESS:OK -- read-default: subcommand may fail
 
       # Count observations meeting thresholds that aren't in QUEEN.md
       if [[ -f "$queen_file" ]]; then
-        queen_content=$(cat "$queen_file" 2>/dev/null)
+        queen_content=$(cat "$queen_file" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
         pending_observations=$(jq --argjson thresholds "$thresholds" --arg queen "$queen_content" '
           [.observations[]? | select(
             (.observation_count // 0) >= ($thresholds[.wisdom_type].propose // 1) and
             ($queen | contains(.content) | not)
           )] | length
-        ' "$observations_file" 2>/dev/null || echo "0")
+        ' "$observations_file" 2>/dev/null || echo "0")  # SUPPRESS:OK -- read-default: file may not exist yet
       else
         pending_observations=$(jq --argjson thresholds "$thresholds" '
           [.observations[]? | select((.observation_count // 0) >= ($thresholds[.wisdom_type].propose // 1))] | length
-        ' "$observations_file" 2>/dev/null || echo "0")
+        ' "$observations_file" 2>/dev/null || echo "0")  # SUPPRESS:OK -- read-default: file may not exist yet
       fi
 
       # Get last learning timestamp
-      last_obs=$(jq -r '[.observations[]?.last_seen] | max // empty' "$observations_file" 2>/dev/null)
+      last_obs=$(jq -r '[.observations[]?.last_seen] | max // empty' "$observations_file" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
       if [[ -n "$last_obs" ]]; then
         learning_captured="\"$last_obs\""
       fi
@@ -9561,7 +4737,7 @@ EOF
     # Count deferred proposals
     deferred_count=0
     if [[ -f "$deferred_file" ]]; then
-      deferred_count=$(jq '[.deferred[]?] | length' "$deferred_file" 2>/dev/null || echo "0")
+      deferred_count=$(jq '[.deferred[]?] | length' "$deferred_file" 2>/dev/null || echo "0")  # SUPPRESS:OK -- read-default: file may not exist yet
     fi
 
     # Count recent failures from midden
@@ -9570,6 +4746,7 @@ EOF
     failures_json="[]"
     if [[ -f "$midden_file" ]]; then
       # Get failures sorted by created_at descending
+      # SUPPRESS:OK -- read-default: file may not exist yet
       failures_data=$(jq '[.signals[]? | select(.type == "failure")] | sort_by(.created_at) | reverse' "$midden_file" 2>/dev/null || echo "[]")
       failure_count=$(echo "$failures_data" | jq 'length')
 
@@ -9578,6 +4755,7 @@ EOF
         [[ "$last_failure" == "null" ]] || last_failure="\"$last_failure\""
 
         # Get last 5 failures for details
+        # SUPPRESS:OK -- read-default: returns fallback on failure
         failures_json=$(echo "$failures_data" | jq '[.[:5][] | {created_at, source, context, content: .content.text}]' 2>/dev/null || echo "[]")
       fi
     fi
@@ -9612,38 +4790,18 @@ EOF
     exit 0
     ;;
 
-  midden-recent-failures)
-    # Extract recent failure entries from midden.json
-    # Usage: midden-recent-failures [limit]
-    # Returns: JSON with count and failures array
+  midden-recent-failures) _midden_recent_failures "$@" ;;
 
-    limit="${2:-5}"
-    midden_file="$DATA_DIR/midden/midden.json"
+  midden-review) _midden_review "$@" ;;
 
-    if [[ ! -f "$midden_file" ]]; then
-      echo '{"count":0,"failures":[]}'
-      exit 0
-    fi
-
-    # Extract failures from .entries[], sort by timestamp descending, limit results
-    result=$(jq --argjson limit "$limit" '{
-      "count": ([.entries[]?] | length),
-      "failures": ([.entries[]?] | sort_by(.timestamp) | reverse | .[:$limit] | [.[] | {timestamp, category, source, message}])
-    }' "$midden_file" 2>/dev/null)
-
-    if [[ -z "$result" ]]; then
-      echo '{"count":0,"failures":[]}'
-    else
-      echo "$result"
-    fi
-    exit 0
-    ;;
+  midden-acknowledge) _midden_acknowledge "$@" ;;
 
   resume-dashboard)
     # Generate dashboard data for /ant:resume command
     # Usage: resume-dashboard
     # Returns: JSON with current state, memory health, and recent activity
 
+    # MIGRATE: direct COLONY_STATE.json access -- use _state_read_field instead
     colony_state_file="$DATA_DIR/COLONY_STATE.json"
 
     # Get current state from COLONY_STATE.json
@@ -9653,13 +4811,13 @@ EOF
     goal=""
 
     if [[ -f "$colony_state_file" ]]; then
-      current_phase=$(jq -r '.current_phase // 0' "$colony_state_file" 2>/dev/null || echo "0")
-      state=$(jq -r '.state // "UNKNOWN"' "$colony_state_file" 2>/dev/null || echo "UNKNOWN")
-      goal=$(jq -r '.goal // ""' "$colony_state_file" 2>/dev/null || echo "")
+      current_phase=$(jq -r '.current_phase // 0' "$colony_state_file" 2>/dev/null || echo "0")  # SUPPRESS:OK -- read-default: file may not exist yet
+      state=$(jq -r '.state // "UNKNOWN"' "$colony_state_file" 2>/dev/null || echo "UNKNOWN")  # SUPPRESS:OK -- read-default: file may not exist yet
+      goal=$(jq -r '.goal // ""' "$colony_state_file" 2>/dev/null || echo "")  # SUPPRESS:OK -- read-default: file may not exist yet
     fi
 
     # Get memory health metrics
-    memory_health=$(bash "$0" memory-metrics 2>/dev/null || echo '{}')
+    memory_health=$(bash "$0" memory-metrics 2>/dev/null || echo '{}')  # SUPPRESS:OK -- read-default: subcommand may fail
     wisdom_count=$(echo "$memory_health" | jq -r '.wisdom.total // 0')
     pending_promotions=$(echo "$memory_health" | jq -r '.pending.total // 0')
     recent_failures=$(echo "$memory_health" | jq -r '.recent_failures.count // 0')
@@ -9667,12 +4825,14 @@ EOF
     # Get recent decisions (last 5)
     recent_decisions="[]"
     if [[ -f "$colony_state_file" ]]; then
+      # SUPPRESS:OK -- cross-platform: macOS vs Linux date/stat flags
       recent_decisions=$(jq -r '[.memory.decisions[]?] | reverse | [.[:5][]] | if . == [] then [] else . end' "$colony_state_file" 2>/dev/null || echo "[]")
     fi
 
     # Get recent events (last 10)
     recent_events="[]"
     if [[ -f "$colony_state_file" ]]; then
+      # SUPPRESS:OK -- cross-platform: macOS vs Linux date/stat flags
       recent_events=$(jq -r '[.events[]?] | reverse | [.[:10][] | {timestamp, type, worker, details}]' "$colony_state_file" 2>/dev/null || echo "[]")
     fi
 
@@ -9712,542 +4872,12 @@ EOF
     exit 0
     ;;
 
-  suggest-analyze)
-    # Analyze codebase and return pheromone suggestions based on code patterns
-    # Usage: suggest-analyze [--source-dir DIR] [--max-suggestions N] [--dry-run]
-    # Returns: JSON with suggestions array and analysis metadata
-
-    # Disable ERR trap for this command (grep returns 1 on no match, which triggers trap)
-    trap '' ERR
-
-    source_dir=""
-    max_suggestions=5
-    dry_run=false
-
-    # Parse arguments - note: $1 is already shifted by the main dispatch
-    # So $1 here is the first argument after 'suggest-analyze'
-    while [[ $# -gt 0 ]]; do
-      case "$1" in
-        --source-dir) source_dir="$2"; shift 2 ;;
-        --max-suggestions) max_suggestions="$2"; shift 2 ;;
-        --dry-run) dry_run=true; shift ;;
-        *) shift ;;
-      esac
-    done
-
-    # Auto-detect source directory if not provided
-    if [[ -z "$source_dir" ]]; then
-      if [[ -d "$AETHER_ROOT/src" ]]; then
-        source_dir="$AETHER_ROOT/src"
-      elif [[ -d "$AETHER_ROOT/lib" ]]; then
-        source_dir="$AETHER_ROOT/lib"
-      else
-        source_dir="$AETHER_ROOT"
-      fi
-    fi
-
-    # Validate source directory
-    if [[ ! -d "$source_dir" ]]; then
-      json_err "$E_FILE_NOT_FOUND" "Source directory not found: $source_dir"
-    fi
-
-    # Build JSON array of suggestions using jq
-    # We use jq to handle deduplication since bash 3.2 doesn't support associative arrays
-    pheromones_file="$DATA_DIR/pheromones.json"
-    session_file="$DATA_DIR/session.json"
-
-    # Create temp file for collecting raw suggestions
-    raw_suggestions=$(mktemp)
-    echo "[]" > "$raw_suggestions"
-
-    analyzed_count=0
-    patterns_found=0
-
-    # Define exclusions (use word boundaries to avoid matching partial paths)
-    exclude_pattern="node_modules/|/.aether/|/dist/|/build/|/\\.git/|/coverage/|\\.min\\.js"
-
-    # Find files to analyze (respecting exclusions)
-    while IFS= read -r file || [[ -n "$file" ]]; do
-      analyzed_count=$((analyzed_count + 1))
-
-      # Skip excluded paths
-      if echo "$file" | grep -qE "$exclude_pattern"; then
-        continue
-      fi
-
-      # Get file extension
-      ext="${file##*.}"
-
-      # Check file size (large files > 300 lines)
-      line_count=$(wc -l < "$file" 2>/dev/null || echo "0")
-      if [[ $line_count -gt 300 ]]; then
-        patterns_found=$((patterns_found + 1))
-        content="Large file: consider refactoring ($line_count lines)"
-        reason="File exceeds 300 lines, consider breaking into smaller modules"
-        hash=$(echo -n "$file:FOCUS:$content" | shasum -a 256 2>/dev/null | cut -d' ' -f1 || echo "$(date +%s)")
-
-        # Append suggestion to raw_suggestions using jq
-        new_suggestion=$(jq -n --arg type "FOCUS" --arg content "$content" --arg file "$file" --arg reason "$reason" --arg hash "$hash" --arg priority "7" '{type: $type, content: $content, file: $file, reason: $reason, hash: $hash, priority: ($priority | tonumber)}')
-        jq --argjson suggestion "$new_suggestion" '. += [$suggestion]' "$raw_suggestions" > "${raw_suggestions}.tmp" && mv "${raw_suggestions}.tmp" "$raw_suggestions"
-      fi
-
-      # Check for TODO/FIXME/XXX comments
-      if [[ "$ext" =~ ^(ts|tsx|js|jsx|py|sh|md)$ ]]; then
-        todo_matches=$( (grep -n "TODO\\|FIXME\\|XXX" "$file" 2>/dev/null || true) | wc -l | tr -d ' \n')
-        if [[ $todo_matches -gt 0 ]]; then
-          patterns_found=$((patterns_found + 1))
-          content="$todo_matches pending TODO/FIXME comments"
-          reason="Unresolved markers indicate technical debt"
-          hash=$(echo -n "$file:FEEDBACK:$content" | shasum -a 256 2>/dev/null | cut -d' ' -f1 || echo "$(date +%s)")
-
-          new_suggestion=$(jq -n --arg type "FEEDBACK" --arg content "$content" --arg file "$file" --arg reason "$reason" --arg hash "$hash" --arg priority "4" '{type: $type, content: $content, file: $file, reason: $reason, hash: $hash, priority: ($priority | tonumber)}')
-          jq --argjson suggestion "$new_suggestion" '. += [$suggestion]' "$raw_suggestions" > "${raw_suggestions}.tmp" && mv "${raw_suggestions}.tmp" "$raw_suggestions"
-        fi
-      fi
-
-      # Check for debug artifacts (console.log, debugger)
-      if [[ "$ext" =~ ^(ts|tsx|js|jsx)$ ]]; then
-        debug_matches=$( (grep -n "console\\.log\\|debugger" "$file" 2>/dev/null || true) | wc -l | tr -d ' \n')
-        if [[ $debug_matches -gt 0 ]]; then
-          patterns_found=$((patterns_found + 1))
-          content="Remove debug artifacts before commit ($debug_matches found)"
-          reason="Debug statements should not be committed to production code"
-          hash=$(echo -n "$file:REDIRECT:$content" | shasum -a 256 2>/dev/null | cut -d' ' -f1 || echo "$(date +%s)")
-
-          new_suggestion=$(jq -n --arg type "REDIRECT" --arg content "$content" --arg file "$file" --arg reason "$reason" --arg hash "$hash" --arg priority "9" '{type: $type, content: $content, file: $file, reason: $reason, hash: $hash, priority: ($priority | tonumber)}')
-          jq --argjson suggestion "$new_suggestion" '. += [$suggestion]' "$raw_suggestions" > "${raw_suggestions}.tmp" && mv "${raw_suggestions}.tmp" "$raw_suggestions"
-        fi
-      fi
-
-      # Check for type safety gaps (: any, : unknown)
-      if [[ "$ext" =~ ^(ts|tsx)$ ]]; then
-        type_gaps=$( (grep -n ": any\\|: unknown" "$file" 2>/dev/null || true) | wc -l | tr -d ' \n')
-        if [[ $type_gaps -gt 0 ]]; then
-          patterns_found=$((patterns_found + 1))
-          content="Type safety gaps detected ($type_gaps instances)"
-          reason="Using 'any' or 'unknown' bypasses TypeScript's type checking"
-          hash=$(echo -n "$file:FEEDBACK:$content" | shasum -a 256 2>/dev/null | cut -d' ' -f1 || echo "$(date +%s)")
-
-          new_suggestion=$(jq -n --arg type "FEEDBACK" --arg content "$content" --arg file "$file" --arg reason "$reason" --arg hash "$hash" --arg priority "5" '{type: $type, content: $content, file: $file, reason: $reason, hash: $hash, priority: ($priority | tonumber)}')
-          jq --argjson suggestion "$new_suggestion" '. += [$suggestion]' "$raw_suggestions" > "${raw_suggestions}.tmp" && mv "${raw_suggestions}.tmp" "$raw_suggestions"
-        fi
-      fi
-
-      # Check for high complexity (function count)
-      if [[ "$ext" =~ ^(ts|tsx|js|jsx|py|sh)$ ]]; then
-        func_count=$(grep -cE "^function|^def |^const.*=.*function|^const.*=.*=>" "$file" 2>/dev/null | tr -d ' \n' || echo "0")
-        if [[ $func_count -gt 20 ]]; then
-          patterns_found=$((patterns_found + 1))
-          content="Complex module: test carefully ($func_count functions)"
-          reason="High function count may indicate multiple concerns; verify test coverage"
-          hash=$(echo -n "$file:FOCUS:$content" | shasum -a 256 2>/dev/null | cut -d' ' -f1 || echo "$(date +%s)")
-
-          new_suggestion=$(jq -n --arg type "FOCUS" --arg content "$content" --arg file "$file" --arg reason "$reason" --arg hash "$hash" --arg priority "6" '{type: $type, content: $content, file: $file, reason: $reason, hash: $hash, priority: ($priority | tonumber)}')
-          jq --argjson suggestion "$new_suggestion" '. += [$suggestion]' "$raw_suggestions" > "${raw_suggestions}.tmp" && mv "${raw_suggestions}.tmp" "$raw_suggestions"
-        fi
-      fi
-
-      # Check for test coverage gaps
-      if [[ "$ext" =~ ^(ts|tsx|js|jsx|py)$ ]] && [[ ! "$file" =~ \\.test\\. ]] && [[ ! "$file" =~ \\.spec\\. ]]; then
-        base_name=$(basename "$file" ".${ext}")
-        dir_name=$(dirname "$file")
-
-        # Look for corresponding test file
-        if [[ -f "$dir_name/$base_name.test.$ext" ]] || [[ -f "$dir_name/$base_name.spec.$ext" ]] || \
-           [[ -f "$dir_name/__tests__/$base_name.test.$ext" ]] || [[ -f "$dir_name/../tests/$base_name.test.$ext" ]]; then
-          : # Test file exists
-        else
-          # Only suggest for files with functions (not config/pure data files)
-          if grep -qE "^function|^def |^const.*=.*function|^const.*=.*=>|^export.*function|^class " "$file" 2>/dev/null || false; then
-            patterns_found=$((patterns_found + 1))
-            content="Add tests for uncovered module: $base_name"
-            reason="No corresponding test file found for module with functions"
-            hash=$(echo -n "$file:FOCUS:$content" | shasum -a 256 2>/dev/null | cut -d' ' -f1 || echo "$(date +%s)")
-
-            new_suggestion=$(jq -n --arg type "FOCUS" --arg content "$content" --arg file "$file" --arg reason "$reason" --arg hash "$hash" --arg priority "5" '{type: $type, content: $content, file: $file, reason: $reason, hash: $hash, priority: ($priority | tonumber)}')
-            jq --argjson suggestion "$new_suggestion" '. += [$suggestion]' "$raw_suggestions" > "${raw_suggestions}.tmp" && mv "${raw_suggestions}.tmp" "$raw_suggestions"
-          fi
-        fi
-      fi
-
-    done < <(find "$source_dir" -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" -o -name "*.py" -o -name "*.sh" -o -name "*.md" \) 2>/dev/null | head -100)
-
-    # Deduplicate against existing pheromones and session suggestions using jq
-    # Get existing signal content hashes
-    existing_hashes="[]"
-    if [[ -f "$pheromones_file" ]]; then
-      existing_hashes=$(jq -r '[.signals[] | select(.active == true) | .content.text] | @json' "$pheromones_file" 2>/dev/null || echo "[]")
-    fi
-
-    session_hashes="[]"
-    if [[ -f "$session_file" ]]; then
-      session_hashes=$(jq -r '[.suggested_pheromones[]?.hash // empty] | @json' "$session_file" 2>/dev/null || echo "[]")
-    fi
-
-    # Filter suggestions: remove duplicates and sort by priority
-    suggestions_json=$(jq --argjson existing "$existing_hashes" --argjson session "$session_hashes" --argjson max "$max_suggestions" '
-      # Remove suggestions whose content matches existing signals
-      map(select(.content as $c | $existing | index($c) | not)) |
-      # Remove suggestions whose hash is in session
-      map(select(.hash as $h | $session | index($h) | not)) |
-      # Sort by priority descending and limit
-      sort_by(.priority) | reverse | .[:$max]
-    ' "$raw_suggestions" 2>/dev/null || echo "[]")
-
-    # Clean up temp file
-    rm -f "$raw_suggestions"
-
-    # Build result
-    result=$(jq -n \
-      --argjson suggestions "$suggestions_json" \
-      --argjson analyzed "$analyzed_count" \
-      --argjson patterns "$patterns_found" \
-      '{suggestions: $suggestions, analyzed_files: $analyzed, patterns_found: $patterns}')
-
-    if [[ "$dry_run" == "true" ]]; then
-      echo "Dry run - analyzed: $source_dir" >&2
-    fi
-
-    # Re-enable ERR trap before exiting
-    trap 'if type error_handler &>/dev/null; then error_handler ${LINENO} "$BASH_COMMAND" $?; fi' ERR
-
-    json_ok "$result"
-    ;;
-
-  suggest-record)
-    # Record a suggested pheromone hash to session.json for deduplication
-    # Usage: suggest-record <hash> <type>
-    # Returns: JSON success/failure
-
-    record_hash="${1:-}"
-    record_type="${2:-FEEDBACK}"
-
-    if [[ -z "$record_hash" ]]; then
-      json_err "$E_VALIDATION_FAILED" "suggest-record requires <hash> argument"
-    fi
-
-    session_file="$DATA_DIR/session.json"
-
-    # Initialize suggested_pheromones array if missing
-    if [[ -f "$session_file" ]]; then
-      # Check if suggested_pheromones field exists
-      has_field=$(jq 'has("suggested_pheromones")' "$session_file" 2>/dev/null || echo "false")
-      if [[ "$has_field" != "true" ]]; then
-        # Add the field
-        jq '. + {"suggested_pheromones": []}' "$session_file" > "${session_file}.tmp" && mv "${session_file}.tmp" "$session_file"
-      fi
-
-      # Append new suggestion
-      record_entry=$(jq -n --arg hash "$record_hash" --arg type "$record_type" --arg suggested_at "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" '{hash: $hash, type: $type, suggested_at: $suggested_at}')
-      jq --argjson entry "$record_entry" '.suggested_pheromones += [$entry]' "$session_file" > "${session_file}.tmp" && mv "${session_file}.tmp" "$session_file"
-    else
-      # Create session.json with suggested_pheromones
-      record_entry=$(jq -n --arg hash "$record_hash" --arg type "$record_type" --arg suggested_at "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" '{hash: $hash, type: $type, suggested_at: $suggested_at}')
-      jq -n --argjson entry "$record_entry" '{suggested_pheromones: [$entry]}' > "$session_file"
-    fi
-
-    json_ok '{"recorded":true}'
-    ;;
-
-  suggest-check)
-    # Check if a hash was already suggested this session
-    # Usage: suggest-check <hash>
-    # Returns: JSON {already_suggested: true/false}
-
-    check_hash="${1:-}"
-
-    if [[ -z "$check_hash" ]]; then
-      json_err "$E_VALIDATION_FAILED" "suggest-check requires <hash> argument"
-    fi
-
-    session_file="$DATA_DIR/session.json"
-    already_suggested="false"
-
-    if [[ -f "$session_file" ]]; then
-      count=$(jq --arg hash "$check_hash" '[.suggested_pheromones[]? | select(.hash == $hash)] | length' "$session_file" 2>/dev/null || echo "0")
-      if [[ "$count" -gt 0 ]]; then
-        already_suggested="true"
-      fi
-    fi
-
-    json_ok "{\"already_suggested\":$already_suggested}"
-    ;;
-
-  suggest-clear)
-    # Clear the suggested_pheromones array from session.json
-    # Usage: suggest-clear
-    # Returns: JSON success with count cleared
-
-    session_file="$DATA_DIR/session.json"
-    cleared_count=0
-
-    if [[ -f "$session_file" ]]; then
-      cleared_count=$(jq '.suggested_pheromones | length' "$session_file" 2>/dev/null || echo "0")
-      jq 'del(.suggested_pheromones)' "$session_file" > "${session_file}.tmp" && mv "${session_file}.tmp" "$session_file"
-    fi
-
-    json_ok "{\"cleared\":$cleared_count}"
-    ;;
-
-  suggest-approve)
-    # Orchestrate pheromone suggestion approval workflow: one-at-a-time display with Approve/Reject/Skip/Dismiss All
-    # Usage: suggest-approve [--verbose] [--dry-run] [--yes] [--no-suggest]
-    # Returns: JSON summary {approved, rejected, skipped, signals_created}
-
-    verbose=false
-    dry_run=false
-    skip_confirm=false
-    no_suggest=false
-
-    # Parse arguments
-    for arg in "$@"; do
-      case "$arg" in
-        --verbose) verbose=true ;;
-        --dry-run) dry_run=true ;;
-        --yes) skip_confirm=true ;;
-        --no-suggest) no_suggest=true ;;
-      esac
-    done
-
-    # Handle --no-suggest flag - exit immediately
-    if [[ "$no_suggest" == "true" ]]; then
-      json_ok '{"approved":0,"rejected":0,"skipped":0,"signals_created":[],"reason":"--no-suggest flag"}'
-      exit 0
-    fi
-
-    # Check for non-interactive mode (no tty)
-    if [[ ! -t 0 ]] && [[ "$skip_confirm" != "true" ]]; then
-      echo "Non-interactive mode: skipping suggestions (use --yes to auto-approve)" >&2
-      json_ok '{"approved":0,"rejected":0,"skipped":0,"signals_created":[],"reason":"non-interactive mode"}'
-      exit 0
-    fi
-
-    # Get suggestions from suggest-analyze
-    suggestions_result=$(bash "$0" suggest-analyze 2>/dev/null || echo '{"suggestions":[]}')
-    suggestions_json=$(echo "$suggestions_result" | jq '.result.suggestions // []')
-
-    # Check if there are any suggestions
-    suggestion_count=$(echo "$suggestions_json" | jq 'length')
-    if [[ "$suggestion_count" -eq 0 ]]; then
-      # Exit silently when no suggestions
-      json_ok '{"approved":0,"rejected":0,"skipped":0,"signals_created":[]}'
-      exit 0
-    fi
-
-    # Define type emojis (using function for bash 3.2 compatibility)
-    get_type_emoji() {
-      case "$1" in
-        FOCUS) echo "🎯" ;;
-        REDIRECT) echo "🚫" ;;
-        FEEDBACK) echo "💬" ;;
-        *) echo "📝" ;;
-      esac
-    }
-
-    # Arrays to track results
-    approved_suggestions=()
-    rejected_suggestions=()
-    skipped_suggestions=()
-    signals_created=()
-
-    # Display header (to stderr so stdout is valid JSON)
-    echo "" >&2
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
-    echo "   S U G G E S T E D   P H E R O M O N E S" >&2
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
-    echo "" >&2
-    echo "Based on code analysis, the colony suggests these signals:" >&2
-    echo "" >&2
-
-    # Process suggestions one at a time
-    for ((i=0; i<suggestion_count; i++)); do
-      suggestion=$(echo "$suggestions_json" | jq ".[$i]")
-      stype=$(echo "$suggestion" | jq -r '.type')
-      content=$(echo "$suggestion" | jq -r '.content')
-      file=$(echo "$suggestion" | jq -r '.file')
-      reason=$(echo "$suggestion" | jq -r '.reason')
-      priority=$(echo "$suggestion" | jq -r '.priority // 5')
-      hash=$(echo "$suggestion" | jq -r '.hash')
-
-      emoji=$(get_type_emoji "$stype")
-
-      # Display suggestion (to stderr so stdout is valid JSON)
-      echo "───────────────────────────────────────────────────" >&2
-      echo "Suggestion $((i+1)) of $suggestion_count" >&2
-      echo "───────────────────────────────────────────────────" >&2
-      echo "" >&2
-      echo "$emoji $stype (priority: $priority/10)" >&2
-      echo "" >&2
-      echo "$content" >&2
-      echo "" >&2
-      echo "Detected in: $file" >&2
-      echo "Reason: $reason" >&2
-      echo "" >&2
-      echo "───────────────────────────────────────────────────" >&2
-
-      # Handle dry-run mode
-      if [[ "$dry_run" == "true" ]]; then
-        echo "Dry run: would approve" >&2
-        approved_suggestions+=("$suggestion")
-        echo "" >&2
-        continue
-      fi
-
-      # Handle --yes mode (auto-approve all)
-      if [[ "$skip_confirm" == "true" ]]; then
-        approved_suggestions+=("$suggestion")
-        echo "✓ Auto-approved (--yes mode)" >&2
-        echo "" >&2
-        continue
-      fi
-
-      # Prompt for action (to stderr so stdout is valid JSON)
-      echo -n "[A]pprove  [R]eject  [S]kip  [D]ismiss All  Your choice: " >&2
-      read -r choice
-
-      case "$choice" in
-        [Aa]|"approve"|"Approve")
-          approved_suggestions+=("$suggestion")
-          echo "✓ Approved" >&2
-          ;;
-        [Rr]|"reject"|"Reject")
-          rejected_suggestions+=("$suggestion")
-          # Record hash to prevent re-suggestion
-          bash "$0" suggest-record "$hash" "$stype" >/dev/null 2>&1
-          echo "✗ Rejected" >&2
-          ;;
-        [Dd]|"dismiss"|"Dismiss"|"dismiss all"|"Dismiss All")
-          # Dismiss all remaining suggestions
-          for ((j=i; j<suggestion_count; j++)); do
-            remaining=$(echo "$suggestions_json" | jq ".[$j]")
-            skipped_suggestions+=("$remaining")
-          done
-          echo "→ Dismissed all remaining suggestions" >&2
-          break
-          ;;
-        [Ss]|""|"skip"|"Skip")
-          skipped_suggestions+=("$suggestion")
-          echo "→ Skipped" >&2
-          ;;
-        *)
-          # Invalid input - default to skip
-          skipped_suggestions+=("$suggestion")
-          echo "→ Skipped (invalid input)" >&2
-          ;;
-      esac
-      echo "" >&2
-    done
-
-    # Execute approvals for approved suggestions
-    approved_count=0
-    if [[ ${#approved_suggestions[@]} -gt 0 ]]; then
-      echo "" >&2
-      echo "Creating pheromone signals for ${#approved_suggestions[@]} approved suggestion(s)..." >&2
-      echo "" >&2
-
-      for suggestion in "${approved_suggestions[@]}"; do
-        stype=$(echo "$suggestion" | jq -r '.type')
-        content=$(echo "$suggestion" | jq -r '.content')
-        reason=$(echo "$suggestion" | jq -r '.reason')
-        hash=$(echo "$suggestion" | jq -r '.hash')
-
-        if [[ "$dry_run" == "true" ]]; then
-          echo "Dry run: would create $stype signal: \"$content\"" >&2
-          ((approved_count++))
-          signals_created+=("dry_run_sig_$approved_count")
-          continue
-        fi
-
-        # Call pheromone-write to create the signal
-        signal_result=$(bash "$0" pheromone-write "$stype" "$content" --source "system:suggestion" --reason "$reason" --ttl "phase_end" 2>&1)
-
-        if echo "$signal_result" | jq -e '.ok' >/dev/null 2>&1; then
-          signal_id=$(echo "$signal_result" | jq -r '.result.signal_id // "unknown"')
-          signals_created+=("$signal_id")
-          echo "✓ Added $stype signal" >&2
-
-          # Record hash to prevent duplicates
-          bash "$0" suggest-record "$hash" "$stype" >/dev/null 2>&1
-          ((approved_count++))
-        else
-          echo "✗ Failed to create signal: $content" >&2
-          echo "  Error: $(echo "$signal_result" | jq -r '.error.message // "Unknown error"')" >&2
-        fi
-      done
-    fi
-
-    # Record rejected suggestions (already recorded during loop, but ensure consistency)
-    rejected_count=${#rejected_suggestions[@]}
-
-    # Skipped suggestions (not recorded, may suggest again)
-    skipped_count=${#skipped_suggestions[@]}
-
-    # Display summary (to stderr so stdout is valid JSON)
-    echo "" >&2
-    echo "═══════════════════════════════════════════════════" >&2
-    echo "Summary: $approved_count approved, $rejected_count rejected, $skipped_count skipped" >&2
-    echo "═══════════════════════════════════════════════════" >&2
-    echo "" >&2
-
-    # Build result with signals_created as JSON array (handle empty array case)
-    if [[ ${#signals_created[@]} -gt 0 ]]; then
-      signals_json=$(printf '%s\n' "${signals_created[@]}" | jq -R . | jq -s .)
-    else
-      signals_json="[]"
-    fi
-    result=$(jq -n \
-      --argjson approved "$approved_count" \
-      --argjson rejected "$rejected_count" \
-      --argjson skipped "$skipped_count" \
-      --argjson signals "$signals_json" \
-      '{approved: $approved, rejected: $rejected, skipped: $skipped, signals_created: $signals}')
-
-    json_ok "$result"
-    ;;
-
-  suggest-quick-dismiss)
-    # Quick dismiss all current suggestions - records hashes to prevent re-suggestion
-    # Usage: suggest-quick-dismiss
-    # Returns: JSON {dismissed, hashes_recorded}
-
-    # Get current suggestions
-    suggestions_result=$(bash "$0" suggest-analyze 2>/dev/null || echo '{"suggestions":[]}')
-    suggestions_json=$(echo "$suggestions_result" | jq '.result.suggestions // []')
-
-    dismissed_count=0
-    hashes_recorded=()
-
-    suggestion_count=$(echo "$suggestions_json" | jq 'length')
-
-    if [[ "$suggestion_count" -gt 0 ]]; then
-      for ((i=0; i<suggestion_count; i++)); do
-        suggestion=$(echo "$suggestions_json" | jq ".[$i]")
-        hash=$(echo "$suggestion" | jq -r '.hash')
-        stype=$(echo "$suggestion" | jq -r '.type')
-
-        # Record hash to prevent re-suggestion
-        bash "$0" suggest-record "$hash" "$stype" >/dev/null 2>&1
-        hashes_recorded+=("$hash")
-        ((dismissed_count++))
-      done
-    fi
-
-    # Output message to stderr so stdout is valid JSON only
-    echo "Suggestions dismissed. Run with --yes to auto-approve in future." >&2
-
-    # Build result with hashes as JSON array (handle empty array case)
-    if [[ ${#hashes_recorded[@]} -gt 0 ]]; then
-      hashes_json=$(printf '%s\n' "${hashes_recorded[@]}" | jq -R . | jq -s .)
-    else
-      hashes_json="[]"
-    fi
-    result=$(jq -n \
-      --argjson dismissed "$dismissed_count" \
-      --argjson hashes "$hashes_json" \
-      '{dismissed: $dismissed, hashes_recorded: $hashes}')
-
-    json_ok "$result"
-    ;;
+  suggest-analyze) _suggest_analyze "$@" ;;
+  suggest-record) _suggest_record "$@" ;;
+  suggest-check) _suggest_check "$@" ;;
+  suggest-clear) _suggest_clear "$@" ;;
+  suggest-approve) _suggest_approve "$@" ;;
+  suggest-quick-dismiss) _suggest_quick_dismiss "$@" ;;
 
   data-clean)
     # Scan and remove test/synthetic artifacts from colony data files.
@@ -10285,59 +4915,61 @@ EOF
 
     # --- 1. Pheromones ---
     _dc_phero_file="$DATA_DIR/pheromones.json"
-    if [[ -f "$_dc_phero_file" ]] && jq -e . "$_dc_phero_file" >/dev/null 2>&1; then
+    if [[ -f "$_dc_phero_file" ]] && jq -e . "$_dc_phero_file" >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON validity
       _dc_phero_count=$(jq --arg cpat "$_dc_pheromone_content_pat" --arg ipat "$_dc_pheromone_id_pat" '
         [.signals // [] | .[] | select(
           (.content.text // .content // "" | tostring | test($cpat; "i")) or
           (.id // "" | test($ipat))
         )] | length
-      ' "$_dc_phero_file" 2>/dev/null || echo 0)
+      ' "$_dc_phero_file" 2>/dev/null || echo 0)  # SUPPRESS:OK -- read-default: file may not exist yet
     fi
 
     # --- 2. QUEEN.md ---
     _dc_queen_file="$AETHER_ROOT/.aether/QUEEN.md"
     if [[ -f "$_dc_queen_file" ]]; then
+      # SUPPRESS:OK -- existence-test: grep returns 1 when no matches
       _dc_queen_count=$(grep -ciE "$_dc_queen_line_pat" "$_dc_queen_file" 2>/dev/null) || _dc_queen_count=0
     fi
 
     # --- 3. Learning observations ---
     _dc_obs_file="$DATA_DIR/learning-observations.json"
-    if [[ -f "$_dc_obs_file" ]] && jq -e . "$_dc_obs_file" >/dev/null 2>&1; then
+    if [[ -f "$_dc_obs_file" ]] && jq -e . "$_dc_obs_file" >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON validity
       _dc_obs_count=$(jq --arg cpat "$_dc_obs_colony_pat" '
         [.observations // [] | .[] | select(.colony_id // "" | test($cpat))] | length
-      ' "$_dc_obs_file" 2>/dev/null || echo 0)
+      ' "$_dc_obs_file" 2>/dev/null || echo 0)  # SUPPRESS:OK -- read-default: file may not exist yet
     fi
 
     # --- 4. Midden ---
     _dc_midden_file="$DATA_DIR/midden/midden.json"
     _dc_midden_signal_count=0
     _dc_midden_entry_count=0
-    if [[ -f "$_dc_midden_file" ]] && jq -e . "$_dc_midden_file" >/dev/null 2>&1; then
+    if [[ -f "$_dc_midden_file" ]] && jq -e . "$_dc_midden_file" >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON validity
       _dc_midden_signal_count=$(jq --arg cpat "$_dc_pheromone_content_pat" '
         [.signals // [] | .[] | select(
           (.content.text // .content // "" | tostring | test($cpat; "i"))
         )] | length
-      ' "$_dc_midden_file" 2>/dev/null || echo 0)
+      ' "$_dc_midden_file" 2>/dev/null || echo 0)  # SUPPRESS:OK -- read-default: file may not exist yet
       _dc_midden_entry_count=$(jq --arg cpat "$_dc_obs_colony_pat" '
         [.entries // .failures // [] | .[] | select(.colony_id // "" | test($cpat))] | length
-      ' "$_dc_midden_file" 2>/dev/null || echo 0)
+      ' "$_dc_midden_file" 2>/dev/null || echo 0)  # SUPPRESS:OK -- read-default: file may not exist yet
       _dc_midden_count=$(( _dc_midden_signal_count + _dc_midden_entry_count ))
     fi
 
     # --- 5. Spawn tree ---
     _dc_spawn_file="$DATA_DIR/spawn-tree.txt"
     if [[ -f "$_dc_spawn_file" ]]; then
+      # SUPPRESS:OK -- existence-test: grep returns 1 when no matches
       _dc_spawn_count=$(grep -cE "$_dc_spawn_name_pat" "$_dc_spawn_file" 2>/dev/null) || _dc_spawn_count=0
     fi
 
     # --- 6. Constraints ---
     _dc_constraint_file="$DATA_DIR/constraints.json"
-    if [[ -f "$_dc_constraint_file" ]] && jq -e . "$_dc_constraint_file" >/dev/null 2>&1; then
+    if [[ -f "$_dc_constraint_file" ]] && jq -e . "$_dc_constraint_file" >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON validity
       _dc_constraint_count=$(jq --arg cpat "$_dc_constraint_pat" '
         [.focus // [] | .[] | select(
           (.content // .area // "" | tostring | test($cpat; "i"))
         )] | length
-      ' "$_dc_constraint_file" 2>/dev/null || echo 0)
+      ' "$_dc_constraint_file" 2>/dev/null || echo 0)  # SUPPRESS:OK -- read-default: file may not exist yet
     fi
 
     _dc_total=$(( _dc_phero_count + _dc_queen_count + _dc_obs_count + _dc_midden_count + _dc_spawn_count + _dc_constraint_count ))
@@ -10406,23 +5038,22 @@ DRYRUN_EOF
           ((.content.text // .content // "" | tostring | test($cpat; "i")) or
            (.id // "" | test($ipat))) | not
         )]
-      ' "$_dc_phero_file")
-      if type atomic_write &>/dev/null; then
-        atomic_write "$_dc_phero_file" "$_dc_cleaned"
+      ' "$_dc_phero_file") || {
+        _aether_log_error "Could not process pheromone data for cleaning"
+      }
+      if [[ -n "$_dc_cleaned" && "$_dc_cleaned" != "null" ]]; then
+        atomic_write "$_dc_phero_file" "$_dc_cleaned" || _aether_log_error "Could not save cleaned pheromone data"
       else
-        echo "$_dc_cleaned" > "$_dc_phero_file"
+        _aether_log_error "Pheromone cleaning produced empty result -- not overwriting"
       fi
     fi
 
     # 2. Clean QUEEN.md
     if [[ "$_dc_queen_count" -gt 0 ]] && [[ -f "$_dc_queen_file" ]]; then
       _dc_removed_queen=$_dc_queen_count
+      # SUPPRESS:OK -- read-default: grep returns 1 when all lines match (empty result is valid)
       _dc_cleaned=$(grep -viE "$_dc_queen_line_pat" "$_dc_queen_file" || true)
-      if type atomic_write &>/dev/null; then
-        atomic_write "$_dc_queen_file" "$_dc_cleaned"
-      else
-        echo "$_dc_cleaned" > "$_dc_queen_file"
-      fi
+      atomic_write "$_dc_queen_file" "$_dc_cleaned" || _aether_log_error "Could not save cleaned QUEEN data"
     fi
 
     # 3. Clean learning-observations.json
@@ -10430,11 +5061,13 @@ DRYRUN_EOF
       _dc_removed_obs=$_dc_obs_count
       _dc_cleaned=$(jq --arg cpat "$_dc_obs_colony_pat" '
         .observations = [.observations // [] | .[] | select((.colony_id // "" | test($cpat)) | not)]
-      ' "$_dc_obs_file")
-      if type atomic_write &>/dev/null; then
-        atomic_write "$_dc_obs_file" "$_dc_cleaned"
+      ' "$_dc_obs_file") || {
+        _aether_log_error "Could not process observations data for cleaning"
+      }
+      if [[ -n "$_dc_cleaned" && "$_dc_cleaned" != "null" ]]; then
+        atomic_write "$_dc_obs_file" "$_dc_cleaned" || _aether_log_error "Could not save cleaned observations data"
       else
-        echo "$_dc_cleaned" > "$_dc_obs_file"
+        _aether_log_error "Observations cleaning produced empty result -- not overwriting"
       fi
     fi
 
@@ -10446,23 +5079,22 @@ DRYRUN_EOF
           ((.content.text // .content // "" | tostring | test($cpat; "i"))) | not
         )] |
         .entries = [.entries // .failures // [] | .[] | select((.colony_id // "" | test($ecpat)) | not)]
-      ' "$_dc_midden_file")
-      if type atomic_write &>/dev/null; then
-        atomic_write "$_dc_midden_file" "$_dc_cleaned"
+      ' "$_dc_midden_file") || {
+        _aether_log_error "Could not process midden data for cleaning"
+      }
+      if [[ -n "$_dc_cleaned" && "$_dc_cleaned" != "null" ]]; then
+        atomic_write "$_dc_midden_file" "$_dc_cleaned" || _aether_log_error "Could not save cleaned midden data"
       else
-        echo "$_dc_cleaned" > "$_dc_midden_file"
+        _aether_log_error "Midden cleaning produced empty result -- not overwriting"
       fi
     fi
 
     # 5. Clean spawn-tree.txt
     if [[ "$_dc_spawn_count" -gt 0 ]] && [[ -f "$_dc_spawn_file" ]]; then
       _dc_removed_spawn=$_dc_spawn_count
+      # SUPPRESS:OK -- read-default: grep returns 1 when all lines match (empty result is valid)
       _dc_cleaned=$(grep -vE "$_dc_spawn_name_pat" "$_dc_spawn_file" || true)
-      if type atomic_write &>/dev/null; then
-        atomic_write "$_dc_spawn_file" "$_dc_cleaned"
-      else
-        echo "$_dc_cleaned" > "$_dc_spawn_file"
-      fi
+      atomic_write "$_dc_spawn_file" "$_dc_cleaned" || _aether_log_error "Could not save cleaned spawn tree"
     fi
 
     # 6. Clean constraints.json
@@ -10472,11 +5104,13 @@ DRYRUN_EOF
         .focus = [.focus // [] | .[] | select(
           ((.content // .area // "" | tostring | test($cpat; "i"))) | not
         )]
-      ' "$_dc_constraint_file")
-      if type atomic_write &>/dev/null; then
-        atomic_write "$_dc_constraint_file" "$_dc_cleaned"
+      ' "$_dc_constraint_file") || {
+        _aether_log_error "Could not process constraints data for cleaning"
+      }
+      if [[ -n "$_dc_cleaned" && "$_dc_cleaned" != "null" ]]; then
+        atomic_write "$_dc_constraint_file" "$_dc_cleaned" || _aether_log_error "Could not save cleaned constraints data"
       else
-        echo "$_dc_cleaned" > "$_dc_constraint_file"
+        _aether_log_error "Constraints cleaning produced empty result -- not overwriting"
       fi
     fi
 
@@ -10491,6 +5125,274 @@ DRYRUN_EOF
       --argjson constraints "$_dc_removed_constraints" \
       --argjson total "$_dc_total_removed" \
       '{ok:true, removed:{pheromones:$phero, queen:$queen, observations:$obs, midden:$midden, spawn_tree:$spawn, constraints:$constraints}, total:$total}')"
+    ;;
+
+  # --- Autopilot State Tracking ---
+  # Tracks /ant:run autopilot sessions in run-state.json (separate from COLONY_STATE.json)
+  # Optional — colonies without /ant:run are unaffected
+
+  autopilot-init)
+    # Initialize autopilot run state
+    # Usage: autopilot-init --total-phases N --start-phase N [--max-phases N]
+    _ap_total_phases=""
+    _ap_start_phase=""
+    _ap_max_phases="null"
+
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --total-phases) _ap_total_phases="$2"; shift 2 ;;
+        --start-phase) _ap_start_phase="$2"; shift 2 ;;
+        --max-phases) _ap_max_phases="$2"; shift 2 ;;
+        *) shift ;;
+      esac
+    done
+
+    if [[ -z "$_ap_total_phases" || -z "$_ap_start_phase" ]]; then
+      json_err "$E_VALIDATION_FAILED" "autopilot-init requires --total-phases and --start-phase"
+    fi
+
+    _ap_now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    _ap_state_file="$DATA_DIR/run-state.json"
+
+    _ap_state=$(jq -n \
+      --arg version "1.0" \
+      --arg status "running" \
+      --arg started_at "$_ap_now" \
+      --arg last_updated "$_ap_now" \
+      --argjson total_phases "$_ap_total_phases" \
+      --argjson start_phase "$_ap_start_phase" \
+      --argjson current_phase "$_ap_start_phase" \
+      --argjson max_phases "$_ap_max_phases" \
+      '{
+        version: $version,
+        status: $status,
+        started_at: $started_at,
+        last_updated: $last_updated,
+        phases_completed_in_run: 0,
+        total_phases: $total_phases,
+        start_phase: $start_phase,
+        current_phase: $current_phase,
+        max_phases: (if $max_phases == null then null else $max_phases end),
+        pause_reason: null,
+        last_action: null,
+        total_auto_advanced: 0,
+        phase_results: []
+      }')
+
+    atomic_write "$_ap_state_file" "$_ap_state"
+    json_ok '{"created":"run-state.json"}'
+    ;;
+
+  autopilot-update)
+    # Update autopilot run state after a phase action
+    # Usage: autopilot-update --action build|continue|advance --phase N [--result success|failure]
+    _ap_action=""
+    _ap_phase=""
+    _ap_result=""
+
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --action) _ap_action="$2"; shift 2 ;;
+        --phase) _ap_phase="$2"; shift 2 ;;
+        --result) _ap_result="$2"; shift 2 ;;
+        *) shift ;;
+      esac
+    done
+
+    _ap_state_file="$DATA_DIR/run-state.json"
+
+    if [[ ! -f "$_ap_state_file" ]]; then
+      json_err "$E_FILE_NOT_FOUND" "run-state.json not found — autopilot not active"
+    fi
+
+    if [[ -z "$_ap_action" || -z "$_ap_phase" ]]; then
+      json_err "$E_VALIDATION_FAILED" "autopilot-update requires --action and --phase"
+    fi
+
+    _ap_now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    # Build phase result entry if --result provided
+    _ap_result_entry="null"
+    if [[ -n "$_ap_result" ]]; then
+      _ap_result_entry=$(jq -n \
+        --argjson phase "$_ap_phase" \
+        --arg action "$_ap_action" \
+        --arg result "$_ap_result" \
+        --arg timestamp "$_ap_now" \
+        '{phase: $phase, action: $action, result: $result, timestamp: $timestamp}')
+    fi
+
+    # Update state atomically
+    _ap_updated=$(jq \
+      --arg last_updated "$_ap_now" \
+      --arg last_action "$_ap_action" \
+      --argjson current_phase "$_ap_phase" \
+      --argjson result_entry "$_ap_result_entry" \
+      --arg action "$_ap_action" \
+      '
+      .last_updated = $last_updated |
+      .last_action = $last_action |
+      .current_phase = $current_phase |
+      (if $action == "advance" then .phases_completed_in_run += 1 else . end) |
+      (if $action == "advance" then .total_auto_advanced += 1 else . end) |
+      (if $result_entry != null then .phase_results += [$result_entry] else . end)
+      ' "$_ap_state_file")
+
+    atomic_write "$_ap_state_file" "$_ap_updated"
+    json_ok '{"updated":true}'
+    ;;
+
+  autopilot-status)
+    # Return current autopilot state
+    # Usage: autopilot-status
+    _ap_state_file="$DATA_DIR/run-state.json"
+
+    if [[ ! -f "$_ap_state_file" ]]; then
+      json_ok '{"status":"not_active"}'
+      exit 0
+    fi
+
+    json_ok "$(cat "$_ap_state_file")"
+    ;;
+
+  autopilot-stop)
+    # Stop or complete an autopilot run
+    # Usage: autopilot-stop --reason "why" [--status stopped|completed]
+    _ap_reason=""
+    _ap_stop_status="stopped"
+
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --reason) _ap_reason="$2"; shift 2 ;;
+        --status) _ap_stop_status="$2"; shift 2 ;;
+        *) shift ;;
+      esac
+    done
+
+    _ap_state_file="$DATA_DIR/run-state.json"
+
+    if [[ ! -f "$_ap_state_file" ]]; then
+      json_err "$E_FILE_NOT_FOUND" "run-state.json not found — autopilot not active"
+    fi
+
+    if [[ -z "$_ap_reason" ]]; then
+      json_err "$E_VALIDATION_FAILED" "autopilot-stop requires --reason"
+    fi
+
+    _ap_now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    _ap_updated=$(jq \
+      --arg status "$_ap_stop_status" \
+      --arg reason "$_ap_reason" \
+      --arg last_updated "$_ap_now" \
+      '
+      .status = $status |
+      .pause_reason = $reason |
+      .last_updated = $last_updated
+      ' "$_ap_state_file")
+
+    atomic_write "$_ap_state_file" "$_ap_updated"
+    json_ok "{\"status\":\"$_ap_stop_status\"}"
+    ;;
+
+  autopilot-check-replan)
+    # Check if a replan trigger should fire based on completed phases
+    # Usage: autopilot-check-replan [--interval N]
+    # Returns: {should_replan: bool, reason: string, learnings_since_last: number}
+    _ap_interval=2
+
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --interval) _ap_interval="$2"; shift 2 ;;
+        *) shift ;;
+      esac
+    done
+
+    if [[ "$_ap_interval" -le 0 ]]; then
+      json_err "$E_VALIDATION_FAILED" "autopilot-check-replan --interval must be > 0 (got $_ap_interval)"
+    fi
+
+    _ap_state_file="$DATA_DIR/run-state.json"
+
+    if [[ ! -f "$_ap_state_file" ]]; then
+      json_err "$E_FILE_NOT_FOUND" "run-state.json not found — autopilot not active"
+    fi
+
+    # Read total_auto_advanced from run state (actual phase completions)
+    _ap_auto_advanced=$(jq -r '.total_auto_advanced // 0' "$_ap_state_file")
+
+    # MIGRATE: direct COLONY_STATE.json access -- use _state_read_field instead
+    # Count learnings from COLONY_STATE.json
+    _ap_colony_file="$DATA_DIR/COLONY_STATE.json"
+    _ap_learnings_count=0
+    if [[ -f "$_ap_colony_file" ]]; then
+      # SUPPRESS:OK -- read-default: query may return empty
+      _ap_learnings_count=$(jq '[.memory.phase_learnings[]?.learnings[]? // empty] | length' "$_ap_colony_file" 2>/dev/null || echo "0")
+    fi
+
+    # Check if replan should trigger: auto_advanced > 0 and is a multiple of interval
+    _ap_should_replan="false"
+    _ap_reason="No replan needed"
+
+    if [[ "$_ap_auto_advanced" -gt 0 ]] && [[ $(( _ap_auto_advanced % _ap_interval )) -eq 0 ]]; then
+      _ap_should_replan="true"
+      _ap_reason="$_ap_auto_advanced phases auto-completed (replan interval: every $_ap_interval). $_ap_learnings_count learnings accumulated — consider /ant:plan to regenerate."
+    fi
+
+    json_ok "$(jq -n \
+      --argjson should_replan "$_ap_should_replan" \
+      --arg reason "$_ap_reason" \
+      --argjson learnings_since_last "$_ap_learnings_count" \
+      '{
+        should_replan: $should_replan,
+        reason: $reason,
+        learnings_since_last: $learnings_since_last
+      }')"
+    ;;
+
+  # ── Skills Engine ──────────────────────────────────────────────────────────
+  skill-parse-frontmatter)
+    _skill_parse_frontmatter "$1"
+    ;;
+  skill-index)
+    _skill_build_index "${1:-}"
+    ;;
+  skill-index-read)
+    _deprecation_warning "skill-index-read"
+    _skill_read_index "${1:-}"
+    ;;
+  skill-detect)
+    _skill_detect_codebase "${1:-.}" "${2:-}"
+    ;;
+  skill-match)
+    _skill_match "$1" "${2:-}" "${3:-}"
+    ;;
+  skill-inject)
+    _skill_inject "$1"
+    ;;
+  skill-list)
+    _skill_list "${1:-}"
+    ;;
+  skill-manifest-read)
+    _deprecation_warning "skill-manifest-read"
+    _skill_manifest_read "$1"
+    ;;
+  skill-cache-rebuild)
+    _sk_rebuild_dir="${1:-${AETHER_SKILLS_DIR:-$HOME/.aether/skills}}"
+    rm -f "$_sk_rebuild_dir/.index.json"
+    _skill_build_index "$_sk_rebuild_dir"
+    ;;
+  skill-diff)
+    _skill_diff "$1" "${2:-}"
+    ;;
+  skill-is-user-created)
+    _deprecation_warning "skill-is-user-created"
+    _skill_is_user_created "$1" "$2"
+    ;;
+
+  # ── Smart Init ─────────────────────────────────────────────────────────────
+  init-research)
+    _scan_init_research "$@"
     ;;
 
   *)

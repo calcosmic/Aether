@@ -1,0 +1,649 @@
+{
+  "version": "1.0",
+  "built_at": "2026-03-22T14:07:30Z",
+  "skill_count": 28,
+  "skills": [
+    {
+      "name": "build-discipline",
+      "description": "Use when implementing code, writing tests, or executing build tasks as a builder worker",
+      "type": "colony",
+      "domains": [
+        "building",
+        "testing",
+        "quality",
+        "implementation"
+      ],
+      "agent_roles": [
+        "builder"
+      ],
+      "detect_files": [],
+      "detect_packages": [],
+      "priority": "normal",
+      "version": "1.0",
+      "file_path": ".aether/skills/colony/build-discipline/SKILL.md"
+    },
+    {
+      "name": "colony-interaction",
+      "description": "Use when executing commands that involve major decisions, plan commits, build starts, verifications, or phase advances",
+      "type": "colony",
+      "domains": [
+        "interaction",
+        "ux",
+        "workflow"
+      ],
+      "agent_roles": [
+        "builder",
+        "watcher",
+        "route_setter",
+        "architect"
+      ],
+      "detect_files": [],
+      "detect_packages": [],
+      "priority": "normal",
+      "version": "1.0",
+      "file_path": ".aether/skills/colony/colony-interaction/SKILL.md"
+    },
+    {
+      "name": "colony-lifecycle",
+      "description": "Use when producing command output, handling state transitions, or routing users to the next action in the colony workflow",
+      "type": "colony",
+      "domains": [
+        "lifecycle",
+        "routing",
+        "workflow",
+        "state"
+      ],
+      "agent_roles": [
+        "builder",
+        "watcher",
+        "route_setter",
+        "architect"
+      ],
+      "detect_files": [],
+      "detect_packages": [],
+      "priority": "normal",
+      "version": "1.0",
+      "file_path": ".aether/skills/colony/colony-lifecycle/SKILL.md"
+    },
+    {
+      "name": "colony-visuals",
+      "description": "Use when producing any user-facing output including banners, progress indicators, section headers, or command results",
+      "type": "colony",
+      "domains": [
+        "visuals",
+        "ux",
+        "formatting"
+      ],
+      "agent_roles": [
+        "builder",
+        "watcher",
+        "chronicler",
+        "scout"
+      ],
+      "detect_files": [],
+      "detect_packages": [],
+      "priority": "normal",
+      "version": "1.0",
+      "file_path": ".aether/skills/colony/colony-visuals/SKILL.md"
+    },
+    {
+      "name": "context-management",
+      "description": "Use when performing state-changing operations, recovering sessions, creating handoffs, or managing context freshness",
+      "type": "colony",
+      "domains": [
+        "context",
+        "session",
+        "recovery",
+        "state"
+      ],
+      "agent_roles": [
+        "builder",
+        "watcher",
+        "scout",
+        "architect"
+      ],
+      "detect_files": [],
+      "detect_packages": [],
+      "priority": "normal",
+      "version": "1.0",
+      "file_path": ".aether/skills/colony/context-management/SKILL.md"
+    },
+    {
+      "name": "error-presentation",
+      "description": "Use when an operation fails, an error occurs, or a warning needs to be communicated to the user",
+      "type": "colony",
+      "domains": [
+        "errors",
+        "ux",
+        "formatting",
+        "diagnostics"
+      ],
+      "agent_roles": [
+        "builder",
+        "watcher",
+        "scout"
+      ],
+      "detect_files": [],
+      "detect_packages": [],
+      "priority": "normal",
+      "version": "1.0",
+      "file_path": ".aether/skills/colony/error-presentation/SKILL.md"
+    },
+    {
+      "name": "pheromone-protocol",
+      "description": "Use when pheromone signals are present in your assembled context and you need to interpret and comply with them",
+      "type": "colony",
+      "domains": [
+        "pheromones",
+        "protocol",
+        "signals",
+        "compliance"
+      ],
+      "agent_roles": [
+        "builder",
+        "watcher",
+        "scout",
+        "chaos",
+        "oracle",
+        "architect",
+        "colonizer",
+        "route_setter",
+        "archaeologist",
+        "chronicler",
+        "keeper",
+        "tracker",
+        "probe",
+        "weaver",
+        "auditor",
+        "gatekeeper",
+        "includer",
+        "measurer",
+        "sage",
+        "ambassador"
+      ],
+      "detect_files": [],
+      "detect_packages": [],
+      "priority": "normal",
+      "version": "1.0",
+      "file_path": ".aether/skills/colony/pheromone-protocol/SKILL.md"
+    },
+    {
+      "name": "pheromone-visibility",
+      "description": "Use when performing any pheromone operation including creating, reinforcing, expiring, or auto-emitting signals during builds and continues",
+      "type": "colony",
+      "domains": [
+        "pheromones",
+        "visibility",
+        "ux"
+      ],
+      "agent_roles": [
+        "builder",
+        "watcher",
+        "scout"
+      ],
+      "detect_files": [],
+      "detect_packages": [],
+      "priority": "normal",
+      "version": "1.0",
+      "file_path": ".aether/skills/colony/pheromone-visibility/SKILL.md"
+    },
+    {
+      "name": "state-safety",
+      "description": "Use when reading or writing JSON state files including COLONY_STATE.json, pheromones.json, constraints.json, or session.json",
+      "type": "colony",
+      "domains": [
+        "security",
+        "state",
+        "data-integrity",
+        "safety"
+      ],
+      "agent_roles": [
+        "builder",
+        "watcher"
+      ],
+      "detect_files": [],
+      "detect_packages": [],
+      "priority": "normal",
+      "version": "1.0",
+      "file_path": ".aether/skills/colony/state-safety/SKILL.md"
+    },
+    {
+      "name": "worker-priming",
+      "description": "Use when starting work as a spawned worker to understand what context you have been given and how to use it",
+      "type": "colony",
+      "domains": [
+        "context",
+        "priming",
+        "awareness"
+      ],
+      "agent_roles": [
+        "builder",
+        "watcher",
+        "scout",
+        "chaos",
+        "oracle",
+        "architect",
+        "colonizer",
+        "route_setter",
+        "archaeologist",
+        "chronicler",
+        "keeper",
+        "tracker",
+        "probe",
+        "weaver",
+        "auditor",
+        "gatekeeper",
+        "includer",
+        "measurer",
+        "sage",
+        "ambassador"
+      ],
+      "detect_files": [],
+      "detect_packages": [],
+      "priority": "normal",
+      "version": "1.0",
+      "file_path": ".aether/skills/colony/worker-priming/SKILL.md"
+    },
+    {
+      "name": "django",
+      "description": "Use when the project uses Django for Python web development",
+      "type": "domain",
+      "domains": [
+        "backend",
+        "python",
+        "web"
+      ],
+      "agent_roles": [
+        "builder"
+      ],
+      "detect_files": [
+        "manage.py"
+      ],
+      "detect_packages": [
+        "django"
+      ],
+      "priority": "normal",
+      "version": "1.0",
+      "file_path": ".aether/skills/domain/django/SKILL.md"
+    },
+    {
+      "name": "docker",
+      "description": "Use when the project uses Docker for containerization and deployment",
+      "type": "domain",
+      "domains": [
+        "infrastructure",
+        "containers",
+        "deployment"
+      ],
+      "agent_roles": [
+        "builder"
+      ],
+      "detect_files": [
+        "Dockerfile*",
+        "docker-compose.*"
+      ],
+      "detect_packages": [],
+      "priority": "normal",
+      "version": "1.0",
+      "file_path": ".aether/skills/domain/docker/SKILL.md"
+    },
+    {
+      "name": "golang",
+      "description": "Use when the project uses Go for systems programming or backend services",
+      "type": "domain",
+      "domains": [
+        "backend",
+        "systems",
+        "concurrency"
+      ],
+      "agent_roles": [
+        "builder"
+      ],
+      "detect_files": [
+        "go.mod",
+        "*.go"
+      ],
+      "detect_packages": [],
+      "priority": "normal",
+      "version": "1.0",
+      "file_path": ".aether/skills/domain/golang/SKILL.md"
+    },
+    {
+      "name": "graphql",
+      "description": "Use when the project uses GraphQL for API queries and mutations",
+      "type": "domain",
+      "domains": [
+        "api",
+        "query",
+        "schema"
+      ],
+      "agent_roles": [
+        "builder"
+      ],
+      "detect_files": [
+        "*.graphql"
+      ],
+      "detect_packages": [
+        "apollo",
+        "graphql"
+      ],
+      "priority": "normal",
+      "version": "1.0",
+      "file_path": ".aether/skills/domain/graphql/SKILL.md"
+    },
+    {
+      "name": "html-css",
+      "description": "Use when the project uses plain HTML, CSS, or SCSS for web pages",
+      "type": "domain",
+      "domains": [
+        "frontend",
+        "styling",
+        "markup"
+      ],
+      "agent_roles": [
+        "builder"
+      ],
+      "detect_files": [
+        "*.html",
+        "*.css",
+        "*.scss"
+      ],
+      "detect_packages": [],
+      "priority": "normal",
+      "version": "1.0",
+      "file_path": ".aether/skills/domain/html-css/SKILL.md"
+    },
+    {
+      "name": "nextjs",
+      "description": "Use when the project uses Next.js for server-side rendering or full-stack React",
+      "type": "domain",
+      "domains": [
+        "frontend",
+        "ssr",
+        "fullstack"
+      ],
+      "agent_roles": [
+        "builder"
+      ],
+      "detect_files": [
+        "next.config.*"
+      ],
+      "detect_packages": [
+        "next"
+      ],
+      "priority": "normal",
+      "version": "1.0",
+      "file_path": ".aether/skills/domain/nextjs/SKILL.md"
+    },
+    {
+      "name": "nodejs",
+      "description": "Use when the project uses Node.js for server-side JavaScript",
+      "type": "domain",
+      "domains": [
+        "backend",
+        "server",
+        "api"
+      ],
+      "agent_roles": [
+        "builder"
+      ],
+      "detect_files": [
+        "*.js",
+        "*.mjs"
+      ],
+      "detect_packages": [
+        "express",
+        "fastify"
+      ],
+      "priority": "normal",
+      "version": "1.0",
+      "file_path": ".aether/skills/domain/nodejs/SKILL.md"
+    },
+    {
+      "name": "postgresql",
+      "description": "Use when the project uses PostgreSQL for relational data storage",
+      "type": "domain",
+      "domains": [
+        "database",
+        "sql",
+        "data"
+      ],
+      "agent_roles": [
+        "builder"
+      ],
+      "detect_files": [
+        "*.sql"
+      ],
+      "detect_packages": [
+        "pg",
+        "psycopg2"
+      ],
+      "priority": "normal",
+      "version": "1.0",
+      "file_path": ".aether/skills/domain/postgresql/SKILL.md"
+    },
+    {
+      "name": "prisma",
+      "description": "Use when the project uses Prisma ORM for database access",
+      "type": "domain",
+      "domains": [
+        "database",
+        "orm",
+        "schema"
+      ],
+      "agent_roles": [
+        "builder"
+      ],
+      "detect_files": [
+        "schema.prisma"
+      ],
+      "detect_packages": [
+        "@prisma/client"
+      ],
+      "priority": "normal",
+      "version": "1.0",
+      "file_path": ".aether/skills/domain/prisma/SKILL.md"
+    },
+    {
+      "name": "python",
+      "description": "Use when the project uses Python for backend, scripting, or data work",
+      "type": "domain",
+      "domains": [
+        "backend",
+        "scripting",
+        "data"
+      ],
+      "agent_roles": [
+        "builder"
+      ],
+      "detect_files": [
+        "*.py",
+        "requirements.txt",
+        "pyproject.toml"
+      ],
+      "detect_packages": [],
+      "priority": "normal",
+      "version": "1.0",
+      "file_path": ".aether/skills/domain/python/SKILL.md"
+    },
+    {
+      "name": "rails",
+      "description": "Use when the project uses Ruby on Rails for web development",
+      "type": "domain",
+      "domains": [
+        "backend",
+        "ruby",
+        "web"
+      ],
+      "agent_roles": [
+        "builder"
+      ],
+      "detect_files": [
+        "Gemfile",
+        "config/routes.rb"
+      ],
+      "detect_packages": [],
+      "priority": "normal",
+      "version": "1.0",
+      "file_path": ".aether/skills/domain/rails/SKILL.md"
+    },
+    {
+      "name": "react",
+      "description": "Use when the project uses React for building user interfaces",
+      "type": "domain",
+      "domains": [
+        "frontend",
+        "components",
+        "ui"
+      ],
+      "agent_roles": [
+        "builder"
+      ],
+      "detect_files": [
+        "*.jsx",
+        "*.tsx"
+      ],
+      "detect_packages": [
+        "react"
+      ],
+      "priority": "normal",
+      "version": "1.0",
+      "file_path": ".aether/skills/domain/react/SKILL.md"
+    },
+    {
+      "name": "rest-api",
+      "description": "Use when the project designs or consumes RESTful HTTP APIs",
+      "type": "domain",
+      "domains": [
+        "api",
+        "http",
+        "design"
+      ],
+      "agent_roles": [
+        "builder"
+      ],
+      "detect_files": [
+        "openapi.*",
+        "swagger.*"
+      ],
+      "detect_packages": [],
+      "priority": "normal",
+      "version": "1.0",
+      "file_path": ".aether/skills/domain/rest-api/SKILL.md"
+    },
+    {
+      "name": "svelte",
+      "description": "Use when the project uses Svelte or SvelteKit for building reactive UIs",
+      "type": "domain",
+      "domains": [
+        "frontend",
+        "components",
+        "ui"
+      ],
+      "agent_roles": [
+        "builder"
+      ],
+      "detect_files": [
+        "*.svelte",
+        "svelte.config.*"
+      ],
+      "detect_packages": [
+        "svelte"
+      ],
+      "priority": "normal",
+      "version": "1.0",
+      "file_path": ".aether/skills/domain/svelte/SKILL.md"
+    },
+    {
+      "name": "tailwind",
+      "description": "Use when the project uses Tailwind CSS for utility-first styling",
+      "type": "domain",
+      "domains": [
+        "css",
+        "frontend",
+        "styling"
+      ],
+      "agent_roles": [
+        "builder"
+      ],
+      "detect_files": [
+        "tailwind.config.*"
+      ],
+      "detect_packages": [
+        "tailwindcss"
+      ],
+      "priority": "normal",
+      "version": "1.0",
+      "file_path": ".aether/skills/domain/tailwind/SKILL.md"
+    },
+    {
+      "name": "testing",
+      "description": "Use when the project needs automated testing with Jest, Vitest, pytest, or similar frameworks",
+      "type": "domain",
+      "domains": [
+        "testing",
+        "quality",
+        "tdd"
+      ],
+      "agent_roles": [
+        "builder"
+      ],
+      "detect_files": [
+        "*.test.*",
+        "*.spec.*"
+      ],
+      "detect_packages": [
+        "jest",
+        "vitest",
+        "pytest"
+      ],
+      "priority": "normal",
+      "version": "1.0",
+      "file_path": ".aether/skills/domain/testing/SKILL.md"
+    },
+    {
+      "name": "typescript",
+      "description": "Use when the project uses TypeScript for type-safe JavaScript development",
+      "type": "domain",
+      "domains": [
+        "typing",
+        "language",
+        "safety"
+      ],
+      "agent_roles": [
+        "builder"
+      ],
+      "detect_files": [
+        "tsconfig.json",
+        "*.ts"
+      ],
+      "detect_packages": [],
+      "priority": "normal",
+      "version": "1.0",
+      "file_path": ".aether/skills/domain/typescript/SKILL.md"
+    },
+    {
+      "name": "vue",
+      "description": "Use when the project uses Vue.js for building reactive user interfaces",
+      "type": "domain",
+      "domains": [
+        "frontend",
+        "components",
+        "ui"
+      ],
+      "agent_roles": [
+        "builder"
+      ],
+      "detect_files": [
+        "*.vue",
+        "vue.config.*"
+      ],
+      "detect_packages": [
+        "vue"
+      ],
+      "priority": "normal",
+      "version": "1.0",
+      "file_path": ".aether/skills/domain/vue/SKILL.md"
+    }
+  ]
+}

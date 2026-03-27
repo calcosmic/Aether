@@ -1,152 +1,117 @@
-# Stack Research: Pheromone Integration for Aether Colony System
+# Stack Research: Living Wisdom Pipeline -- Making It Actually Populate
 
-**Domain:** Multi-agent CLI orchestration / signal-event system maintenance
-**Researched:** 2026-03-19
-**Confidence:** HIGH (existing stack is well-established; recommendations are evolutionary, not revolutionary)
-
-## Context: Existing Stack (Not Changing)
-
-Aether is already built. This research is about what to **add or upgrade** to make the pheromone system work end-to-end, not about rebuilding the foundation. The existing stack is:
-
-| Layer | Technology | Status |
-|-------|-----------|--------|
-| Core logic | Bash (`aether-utils.sh`, ~10K lines, 150 subcommands) | Staying |
-| CLI entry | Node.js + Commander.js v12 | Staying |
-| JSON processing | `jq` (system dependency) | Staying |
-| File safety | Custom `file-lock.sh` + `atomic-write.sh` | Staying |
-| Testing (JS) | AVA v6 | Staying |
-| Testing (bash) | Custom test harness (`test-aether-utils.sh`) | Staying |
-| Distribution | npm package | Staying |
-| State storage | JSON files (COLONY_STATE.json, pheromones.json, etc.) | Staying |
-
-**The job is not new infrastructure. The job is wiring existing pieces together and hardening the seams.**
+**Domain:** Multi-agent colony orchestration -- wisdom accumulation, hive brain, and agent definition gaps
+**Researched:** 2026-03-27
+**Confidence:** HIGH (based on direct codebase analysis of 22 agent files, 9 domain modules, 580+ tests, and build/continue playbook flow)
 
 ---
 
-## Recommended Stack Additions
+## Executive Summary
 
-### Core Technologies (Upgrade/Add)
+The wisdom pipeline exists as complete, tested shell infrastructure but has a **liveness gap**: QUEEN.md sections and hive brain entries remain template-only in real colony work because the pipeline depends on colony work actually running through the full build/continue flow, and the flow itself has several friction points where wisdom extraction is optional, silently skipped, or depends on AI agent behavior rather than deterministic shell.
 
-| Technology | Version | Purpose | Why Recommended | Confidence |
-|------------|---------|---------|-----------------|------------|
-| Commander.js | ^14.0.3 | CLI framework (upgrade from ^12) | Current version requires Node v20+, matches project's direction. v15 goes ESM-only in May 2026 -- stay on v14 for now to keep CJS compatibility with existing codebase | HIGH |
-| Ajv | ^8.18.0 | JSON Schema validation for pheromone signals | Fastest validator at 14M ops/sec. Validates signal shape at write-time to prevent malformed pheromones from entering the system. Aether already uses JSON Schema concepts (XSD for XML exchange); Ajv standardizes this for JSON | HIGH |
-| picocolors | ^1.1.1 (already installed) | Terminal colors | Already a dependency. No change needed | HIGH |
+This research identifies **three categories of work** needed to close the gap:
 
-### Supporting Libraries (Add)
-
-| Library | Version | Purpose | When to Use | Confidence |
-|---------|---------|---------|-------------|------------|
-| Ajv | ^8.18.0 | Validate pheromone signal JSON before write | Every `pheromone-write` call. Schema ensures `type`, `content.text`, `strength`, `expires_at` are valid before persisting | HIGH |
-| chokidar | ^4.0.3 | File watching for live pheromone monitoring | Only if building a `--watch` mode for `/ant:pheromones`. Current `pheromone-display` is poll-based; chokidar enables reactive updates. Used in 30M+ repos, proven stable | MEDIUM |
-| js-yaml | ^4.1.0 (already installed) | YAML parsing | Already a dependency. No change needed | HIGH |
-
-### Development Tools (No Changes)
-
-| Tool | Purpose | Notes |
-|------|---------|-------|
-| AVA ^6.0 | Unit tests (JS layer) | Current version 6.4.1 is latest stable. Supports Node 20+. No upgrade needed |
-| ShellCheck | Bash linting | Already in lint scripts. Keep using for new bash code |
-| bats-core 1.13.0 | Bash test framework | **Recommended addition** for structured bash testing instead of the custom harness. TAP-compliant, supports setup/teardown. However, the existing custom harness works -- adopt only if adding significant new bash test coverage |
-| sinon ^19.0.5 | JS test mocking | Already installed. No change needed |
-| proxyquire ^2.1.3 | Module stubbing | Already installed. No change needed |
+1. **Agent definition files** -- Oracle and Architect are referenced in docs but have no dedicated `.md` agent files in `.claude/agents/ant/` or `.opencode/agents/`. They are currently handled as inline prompts or absorbed by other agents.
+2. **Build flow integration hardening** -- The continue-advance and continue-finalize playbooks have the right steps but depend on colony name extraction from `COLONY_STATE.json`, observation threshold gating, and AI agent willingness to extract learnings. These need deterministic fallbacks.
+3. **Hive brain population** -- `hive-promote` only fires during `/ant:seal` (colony completion), meaning cross-colony wisdom never accumulates unless a colony is fully sealed. Mid-colony promotion hooks are missing.
 
 ---
 
-## What the Pheromone Integration Actually Needs (Stack Perspective)
+## Recommended Stack (Changes Only)
 
-The gap is not missing libraries. The gap is **missing wiring**. Here is what each integration point needs from a technology standpoint:
+### New Agent Definition Files
 
-### 1. Signal Validation (Ajv -- NEW)
+| File | Purpose | Model | Tools | Why |
+|------|---------|-------|-------|-----|
+| `.claude/agents/ant/aether-oracle.md` | Dedicated Oracle agent for deep research (RALF loop) | opus | Read, Write, Edit, Bash, Grep, Glob, WebSearch, WebFetch | Oracle is currently invoked via `/ant:oracle` command wizard only -- no agent definition means Queen cannot spawn an Oracle worker during builds. The Deep Research workflow pattern in `aether-queen.md` references "Oracle-led" but has no agent to delegate to. |
+| `.claude/agents/ant/aether-architect.md` | Dedicated Architect agent for system design decisions | opus | Read, Write, Edit, Bash, Grep, Glob | Workers.md line 647 says "Architect responsibilities are now handled by Keeper" but the merge is incomplete: there is no architecture-specific agent that Queen can spawn for design work. The caste emoji `🏛️🐜` is still defined and used in naming. |
+| `.opencode/agents/aether-oracle.md` | OpenCode mirror of Oracle agent | inherit | Read, Write, Edit, Bash, Grep, Glob, WebSearch, WebFetch | Agent parity requirement from CLAUDE.md. |
+| `.opencode/agents/aether-architect.md` | OpenCode mirror of Architect agent | inherit | Read, Write, Edit, Bash, Grep, Glob | Agent parity requirement. |
+| `.aether/agents-claude/aether-oracle.md` | Packaging mirror for Claude agents | opus | (same as .claude) | Byte-identical mirror requirement. |
+| `.aether/agents-claude/aether-architect.md` | Packaging mirror for Architect | opus | (same as .claude) | Byte-identical mirror requirement. |
 
-**Problem:** `pheromone-write` accepts any JSON shape. Malformed signals cause silent failures downstream when `pheromone-read` or `pheromone-prime` tries to process them.
+**Total: 6 new agent `.md` files.**
 
-**Solution:** Add Ajv-based JSON Schema validation in the Node.js CLI layer. Define a schema for the pheromone signal shape and validate before the bash layer writes.
+**Oracle agent design notes:**
+- Currently the Oracle is a slash command wizard (`/ant:oracle`) that launches a bash RALF loop via `oracle.sh` in a tmux session. It is NOT a spawnable agent.
+- The Queen's "Deep Research" pattern says "Oracle-led" but cannot actually spawn an Oracle because no agent definition exists.
+- The Oracle agent should be a read-heavy research agent with WebSearch/WebFetch for external research, NOT the tmux-based loop. The tmux loop stays as the `/ant:oracle` command. The agent is for when Queen needs to spawn an Oracle worker during a build.
+- Key difference from Scout: Oracle has Write tool (can write findings), deeper research mandate, and `model: opus` (needs reasoning depth). Scout is `model: sonnet`, read-only, quick lookup.
 
-**Why Ajv over alternatives:**
-- Ajv: 14M ops/sec, JSON Schema standard, shareable across languages
-- Zod: Great for TypeScript, but Aether is CJS JavaScript -- no TypeScript benefit
-- Joi: Slower, heavier API, no JSON Schema standard compatibility
+**Architect agent design notes:**
+- Workers.md line 647 says "merged into Keeper" but this merge is incomplete:
+  - Keeper (`aether-keeper.md`) exists and handles knowledge curation
+  - Route-Setter (`aether-route-setter.md`) exists and handles phase planning
+  - Neither handles the Architect's original role: making system design decisions during builds
+  - The caste emoji `🏛️🐜` is still defined and used in ant naming
+- The Architect agent should bridge the gap: when Queen encounters a phase that needs architecture decisions, she should be able to spawn an Architect rather than trying to make those decisions herself or delegating to Keeper (who curates existing knowledge, not designs new architecture).
 
-**Implementation pattern:**
-```javascript
-// bin/lib/pheromone-schema.js
-const Ajv = require('ajv');
-const ajv = new Ajv({ allErrors: true });
+### Build Flow Integration Hardening
 
-const signalSchema = {
-  type: 'object',
-  required: ['type', 'content'],
-  properties: {
-    type: { enum: ['FOCUS', 'REDIRECT', 'FEEDBACK'] },
-    content: {
-      type: 'object',
-      required: ['text'],
-      properties: { text: { type: 'string', minLength: 1 } }
-    },
-    strength: { type: 'number', minimum: 0, maximum: 1 },
-    expires_at: { type: 'string' },
-  }
-};
+| Component | Current State | Required Change | Why |
+|-----------|--------------|-----------------|-----|
+| `continue-advance.md` Step 2 (learnings extraction) | Depends on AI agent extracting learnings from phase work and writing them to `memory.phase_learnings` | Add deterministic fallback: if no learnings extracted by AI, run a bash-based learning extraction from git diff + test results | AI agents frequently skip learning extraction because it is not a hard gate. A fallback ensures wisdom always accumulates. |
+| `continue-advance.md` Step 2.5 (memory-capture loop) | Correctly calls `memory-capture` for each learning | No change needed -- this step is well-designed | Already fires `learning-observe` + `pheromone-write` + `learning-promote-auto` for each learning. |
+| `continue-advance.md` Step 2.1.6 (batch auto-promotion) | Sweeps all observations and auto-promotes those meeting thresholds | No change needed -- this step is well-designed | Correctly iterates `learning-observations.json` and calls `learning-promote-auto`. |
+| `continue-advance.md` Step 2.1.7 (queen-write-learnings) | Correctly calls `queen-write-learnings` for current phase | No change needed | Already bypasses observation thresholds -- every build writes learnings. |
+| `continue-advance.md` Step 3c (instinct promotion to QUEEN.md) | Sweeps instincts with confidence >= 0.8 and promotes via `queen-promote-instinct` | No change needed | Correctly runs every `/ant:continue`. |
+| `build-complete.md` Step 5.9 (success capture) | Captures up to 2 patterns from `learning.patterns_observed` | **FRAGILE**: depends on builder including `learning.patterns_observed` in synthesis JSON. Most builders don't include this field. | Need to add a fallback pattern extraction step that runs regardless of builder output. |
+| Colony name extraction | `jq -r '.session_id | split("_")[1]' COLONY_STATE.json` used in multiple places | Create a dedicated `colony-name` subcommand that handles edge cases (missing session_id, malformed format) | Colony name is used by `memory-capture`, `queen-promote`, `hive-promote`, and `learning-promote-auto`. A single source of truth prevents silent failures. |
 
-const validate = ajv.compile(signalSchema);
-module.exports = { validate, signalSchema };
-```
+### Hive Brain Population
 
-### 2. Signal Reading in Workers (No New Tech -- Bash)
+| Component | Current State | Required Change | Why |
+|-----------|--------------|-----------------|-----|
+| `hive-promote` call site | Only in `/ant:seal` Step 3.7 | Add `hive-promote` call to `/ant:continue` Step 2.1.7 (after queen-write-learnings) | Hive only gets populated when a colony is sealed. Most colonies never get sealed. Mid-colony promotion ensures cross-colony wisdom accumulates. |
+| `queen-seed-from-hive` call site | Only in `/ant:init` Step 322 | Add call to `/ant:build` Step 4 (colony-prime loading) as a pre-build seed step | Hive wisdom is only seeded at colony init. If a colony runs multiple phases, new hive wisdom from other colonies never arrives. |
+| Domain tag detection | `_domain_detect()` exists but is only called during seal | Call `_domain_detect()` during `/ant:continue` when promoting to hive | Domain tags are needed for `hive-promote --domain`. Without them, wisdom has no domain scoping and retrieval is less useful. |
 
-**Problem:** Workers (Builder, Watcher, Chaos, etc.) receive `prompt_section` from `colony-prime` but don't parse or act on individual signals programmatically.
+### What NOT to Touch
 
-**Solution:** This is a prompt engineering + bash wiring problem. The `pheromone-prime` output already produces structured text blocks. Workers need to be updated to read and respond to these blocks. No new library needed.
-
-### 3. Signal Auto-Emission During Builds (No New Tech -- Bash)
-
-**Problem:** Auto-emission in `continue-advance.md` Steps 2.1a-2.1d is well-defined but fragile. Failures in pheromone writes silently swallow errors.
-
-**Solution:** Add structured error reporting in the existing bash layer. The `memory-capture` function already handles auto-pheromone emission. The wiring gap is in the build playbooks, not in missing technology.
-
-### 4. Signal Lifecycle Management (No New Tech -- jq)
-
-**Problem:** Decay calculation in `pheromone-read` uses approximate epoch math (30-day months). Expired signals accumulate in pheromones.json.
-
-**Solution:** Fix the jq decay math and add a cleanup step. No new library -- this is a jq logic fix.
-
-### 5. Cross-Session Signal Persistence (No New Tech -- File I/O)
-
-**Problem:** Signals with `expires_at: "phase_end"` are expired by `pheromone-expire --phase-end-only`, but there is no mechanism to carry high-value signals across colony sessions.
-
-**Solution:** The `eternal-init` and `pheromone-export-eternal` subcommands already exist. The gap is that they are not called at the right lifecycle points. This is a playbook wiring fix, not a technology gap.
+| Component | Why Not |
+|-----------|---------|
+| `queen.sh` (1242 lines) | Complete, well-tested. The functions `_queen_init`, `_queen_read`, `_queen_promote`, `_queen_write_learnings`, `_queen_promote_instinct`, `_queen_seed_from_hive`, `_queen_migrate` all work correctly. The problem is not in these functions -- it is in the calling code. |
+| `hive.sh` (562 lines) | Complete, well-tested. `_hive_init`, `_hive_store`, `_hive_read`, `_hive_abstract`, `_hive_promote` all work correctly. The problem is call sites. |
+| `learning.sh` (1553 lines) | Complete, well-tested. The full pipeline (`_learning_observe` -> `_learning_promote_auto` -> `queen-promote` -> `instinct-create`) works end-to-end. The problem is that it is not triggered reliably. |
+| `pheromone.sh` (`_colony_prime`) | Context assembly works. The problem is upstream -- if QUEEN.md has no content, colony-prime correctly injects empty sections. |
+| Agent definitions (existing 22) | No changes needed to existing agent `.md` files. The new Oracle and Architect agents are additive. |
+| `aether-utils.sh` dispatcher | Only needs new subcommand for `colony-name` (trivial 10-line addition). No changes to existing dispatch. |
+| Test suite (580+ tests) | No existing tests need modification. New tests for new functionality only. |
 
 ---
 
 ## Installation
 
 ```bash
-# New dependency (only addition)
-npm install ajv@^8.18.0
+# No new npm packages needed -- all changes are bash + markdown files
 
-# Optional: upgrade commander (currently ^12, recommend ^14)
-npm install commander@^14.0.3
+# New agent files to create (6 files):
+# .claude/agents/ant/aether-oracle.md
+# .claude/agents/ant/aether-architect.md
+# .opencode/agents/aether-oracle.md
+# .opencode/agents/aether-architect.md
+# .aether/agents-claude/aether-oracle.md
+# .aether/agents-claude/aether-architect.md
 
-# Optional: add file watching for live pheromone display
-npm install chokidar@^4.0.3
-
-# Optional: structured bash testing
-brew install bats-core  # or: npm install -g bats
+# Existing files to modify (4 files):
+# .aether/aether-utils.sh (add colony-name subcommand)
+# .aether/docs/command-playbooks/continue-advance.md (add fallback learning extraction + hive-promote)
+# .aether/docs/command-playbooks/build-complete.md (add deterministic pattern extraction)
+# .claude/commands/ant/build.md (if hive-seed step needed)
 ```
 
 ---
 
 ## Alternatives Considered
 
-| Recommended | Alternative | When to Use Alternative |
-|-------------|-------------|-------------------------|
-| Ajv (JSON Schema) | Zod | If project migrates to TypeScript. Zod's type inference is wasted in plain JS |
-| Ajv (JSON Schema) | Joi | If you need complex custom validation beyond schema (e.g., conditional required fields with async checks). Joi is 40x slower but more expressive for edge cases |
-| Keep bash for signal logic | Migrate signal logic to Node.js | If aether-utils.sh exceeds ~15K lines and jq operations become the bottleneck. Currently at ~10K lines -- still manageable |
-| jq for JSON processing | Node.js native JSON | If concurrent write contention becomes a real problem (multiple agents writing pheromones.json simultaneously). Node.js has better locking primitives. Current file-lock.sh is adequate for sequential builds |
-| Custom bash test harness | bats-core 1.13.0 | If adding 20+ new bash test cases for pheromone integration. bats provides proper test isolation, TAP output, and setup/teardown. For fewer tests, the existing harness is fine |
-| chokidar for file watching | Node.js native fs.watch | If targeting Node 22+ only. fs.watch is now more reliable on modern Node but still has cross-platform quirks. chokidar handles edge cases |
+| Recommended | Alternative | Why Not |
+|-------------|-------------|---------|
+| New Oracle agent `.md` | Add Oracle logic to Scout agent | Scout is `model: sonnet` (fast, cheap) and read-only. Oracle needs `model: opus` (deep reasoning) and Write tool for synthesis documents. Merging would dilute both roles. |
+| New Architect agent `.md` | Keep merged in Keeper | Keeper's role is "knowledge curation and pattern archiving" -- it preserves existing wisdom. Architect's role is "making new design decisions" -- it creates new wisdom. These are fundamentally different operations. |
+| Add `hive-promote` to `/ant:continue` | Add `hive-promote` to `/ant:build` | Build is about implementation, not wisdom accumulation. Continue is the right place -- it already extracts learnings and promotes instincts. Hive promotion is a natural extension of Step 2.1.7. |
+| Deterministic learning extraction from git diff | Keep relying on AI agent extraction | AI agents work well when the phase produces clear learnings, but silently skip extraction when they are focused on implementation. A deterministic fallback ensures wisdom ALWAYS accumulates, even if lower quality. |
+| `colony-name` subcommand | Keep inline `jq` extraction | The colony name extraction pattern `jq -r '.session_id | split("_")[1]'` is repeated in at least 6 locations across playbooks and utility code. A single subcommand is DRY and handles edge cases (missing session_id returns "unknown" instead of producing errors). |
 
 ---
 
@@ -154,81 +119,89 @@ brew install bats-core  # or: npm install -g bats
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| Event sourcing frameworks (reSolve, EventSourcing.NodeJS) | Massive overkill. Aether's pheromone system is a simple signal store with decay, not a CQRS event log. Adding event sourcing infrastructure would triple complexity for zero benefit | JSON files with atomic writes (already have this) |
-| Redis / SQLite for signal storage | Adds a runtime dependency to a CLI tool distributed via npm. Users would need Redis running or SQLite binaries. JSON files are portable, human-readable, and sufficient at Aether's scale (dozens of signals, not millions) | pheromones.json with file locking (already have this) |
-| RxJS / event emitter libraries | Signals are not real-time streams. They are written during builds and read during builds. There is no "push" use case. Adding reactive programming adds conceptual overhead with no benefit | Direct file read/write with jq (already have this) |
-| Multi-agent orchestration frameworks (LangGraph, CrewAI, AutoGen) | These are for LLM-to-LLM agent orchestration. Aether's agents are prompt-driven Claude Code subagents, not autonomous LLM chains. Different paradigm entirely | Current slash-command + Task tool spawning (already have this) |
-| TypeScript migration | The codebase is CJS Node.js + bash. A TypeScript migration would touch every JS file, break the existing test suite, and add a build step -- all for a system that is prompt-driven, not logic-heavy. The Node.js layer is thin (CLI entry, file operations, validation). The real logic lives in bash and markdown playbooks | Keep CJS JavaScript. Add JSDoc type annotations if type safety is desired |
-| Zod | Only beneficial for TypeScript projects. In plain CJS JavaScript, Zod's type inference provides no benefit over Ajv, and Ajv is 7x faster | Ajv |
-| Complex pub/sub (NATS, RabbitMQ) | CLI tool, not a distributed service. Agents run in the same process tree. File-based signaling is the right abstraction for this scale | File-based pheromones.json (already have this) |
+| Modifying `queen-promote` threshold logic | Thresholds are calibrated and tested. Changing them risks either noise (too low) or silence (too high). | Add more call sites instead of lowering thresholds |
+| Adding new wisdom types | The 6 existing types (philosophy, pattern, redirect, stack, decree, failure) cover all colony learning categories | Map new learning sources to existing types |
+| Making hive-promote synchronous/blocking | Hive promotion should never block phase advancement. The existing non-blocking pattern from seal.md is correct. | Fire-and-forget with error logging, same as seal.md |
+| Creating a new "wisdom daemon" or background process | Adds complexity, failure modes, and maintenance burden. The existing on-demand pattern (promote when work completes) is sufficient. | Hook into existing build/continue flow |
 
 ---
 
 ## Stack Patterns by Variant
 
-**If adding new pheromone subcommands (bash):**
-- Follow existing pattern in `aether-utils.sh`: case branch, `json_ok`/`json_err` return, file-lock + atomic-write for mutations
-- Use `jq` for all JSON processing (no inline node calls from bash)
-- Add corresponding test in `tests/bash/test-aether-utils.sh`
+**If colony runs single-phase builds (common for small tasks):**
+- The `/ant:continue` step will fire once and extract learnings from that single phase
+- Hive promotion will fire once with whatever observations accumulated
+- This is sufficient -- single-phase colonies don't produce enough wisdom to justify more complexity
 
-**If adding new validation/schema logic (Node.js):**
-- Add to `bin/lib/` directory following existing patterns (`errors.js`, `model-profiles.js`)
-- Use Ajv for schema compilation at module load time (compile once, validate many)
-- Add AVA tests in `tests/unit/`
+**If colony runs multi-phase builds (5+ phases):**
+- Each `/ant:continue` will extract learnings from the completed phase
+- Observations accumulate across phases (same content hash increments count)
+- After 2+ phases with similar learnings, `learning-promote-auto` fires and promotes to QUEEN.md
+- Hive promotion fires each continue, gradually building cross-colony wisdom
+- This is the primary use case for the deterministic fallback -- multi-phase colonies produce the most learning opportunities
 
-**If modifying build/continue playbooks (markdown):**
-- Playbooks are in `.aether/docs/command-playbooks/`
-- Changes here are prompt-engineering, not code -- no library dependency
-- Test by running the actual command in a colony session
-
-**If adding cross-session signal persistence:**
-- Use existing `eternal-init` + `pheromone-export-eternal` subcommands
-- Storage goes to `~/.aether/eternal/pheromones.xml`
-- No new technology needed -- just call existing subcommands at right lifecycle points
+**If colony is sealed (`/ant:seal`):**
+- Seal already promotes high-confidence instincts to hive (Step 3.7)
+- Adding hive-promote to continue means seal promotes a second time (idempotent due to dedup)
+- No conflict -- hive-store's dedup handles same-content promotion gracefully
 
 ---
 
 ## Version Compatibility
 
-| Package | Compatible With | Notes |
-|---------|-----------------|-------|
-| commander@^14.0.3 | Node.js >=20 | v15 (May 2026) will be ESM-only. Stay on v14 for CJS compatibility |
-| ajv@^8.18.0 | Node.js >=16 | Supports both CJS and ESM. Safe to use with current `"engines": {"node": ">=16.0.0"}` |
-| chokidar@^4.0.3 | Node.js >=14 | v5 is ESM-only. Stay on v4 if adding this dependency |
-| ava@^6.0 | Node.js >=20 | Already installed. No compatibility concerns |
-| jq | Any version >= 1.5 | System dependency. Most systems have 1.6+. No concerns |
-| bash | 3.2+ | macOS ships 3.2 (GPLv2). All existing code works with 3.2. Avoid bash 4+ features (associative arrays, `${var,,}` lowercasing) |
+| Component | Compatible With | Notes |
+|-----------|-----------------|-------|
+| New agent `.md` files | Claude Code 1.0.x, OpenCode 0.x | Standard frontmatter format used by all 22 existing agents |
+| `colony-name` subcommand | aether-utils.sh dispatcher (v2.0+) | New subcommand in existing dispatcher case statement |
+| `continue-advance.md` changes | All existing phases | Changes are additive (new steps + fallbacks), not modifying existing flow |
+| `build-complete.md` changes | All existing phases | Pattern extraction fallback runs after synthesis, does not replace it |
+| `hive-promote` in continue | `hive.sh` (v1.0+) | `_hive_promote` already handles all edge cases (dedup, confidence boosting, LRU eviction) |
 
 ---
 
-## Key Insight: The Stack is Not the Problem
+## Root Cause Analysis: Why Wisdom Stays Empty
 
-The existing stack (bash + jq + Node.js + JSON files) is well-suited for Aether's pheromone system. The integration gap is **behavioral, not technological**:
+After analyzing the full pipeline, the root cause is not a single bug but a **chain of soft dependencies**:
 
-1. **Workers receive signals but do not act on them** -- this is a prompt/playbook problem
-2. **Auto-emission exists but is fragile** -- this is error-handling in bash, not a missing library
-3. **Signals do not carry across sessions** -- the infrastructure exists (`eternal-*`), it is just not wired into lifecycle
-4. **No validation at write time** -- Ajv fixes this (the one actual technology gap)
-5. **Decay math is approximate** -- this is a jq formula fix
+```
+Build completes
+  -> Builder MAY include learning.patterns_observed in synthesis JSON (Step 5.9)
+    -> If missing: no success patterns captured, memory-capture never fires for successes
+  -> Continue fires, AI extracts learnings to memory.phase_learnings (Step 2)
+    -> If AI skips: no learnings extracted, pipeline gets nothing
+  -> memory-capture fires for each learning (Step 2.5)
+    -> learning-observe records observation (always works if called)
+    -> pheromone-write emits FEEDBACK (always works if called)
+    -> learning-promote-auto checks threshold (works but needs threshold to be met)
+  -> queen-write-learnings fires (Step 2.1.7)
+    -> Writes to QUEEN.md Build Learnings (always works if learnings exist)
+  -> queen-promote-instinct fires for confidence >= 0.8 (Step 3c)
+    -> Promotes to QUEEN.md Instincts (always works if instincts exist with high confidence)
+  -> hive-promote fires ONLY during seal (Step 3.7 of seal.md)
+    -> NEVER fires during normal build/continue flow
+```
 
-Adding Ajv for schema validation is the only genuine technology addition. Everything else is wiring, error handling, and prompt engineering within the existing stack.
+**The break points:**
+1. Builder synthesis JSON may not include `learning.patterns_observed` -- no fallback
+2. AI agent may not extract learnings during continue -- no fallback
+3. Hive promotion is seal-only -- no mid-colony promotion
+4. Colony name extraction can silently fail if `session_id` is missing -- no fallback
+
+**The fix:** Add deterministic fallbacks at each break point so wisdom accumulates even when the AI-dependent path skips.
 
 ---
 
 ## Sources
 
-- [Commander.js npm page](https://www.npmjs.com/package/commander) -- verified v14.0.3 is latest stable, v15 ESM-only in May 2026 (HIGH confidence)
-- [Ajv npm page](https://www.npmjs.com/package/ajv) -- verified v8.18.0 is latest stable (HIGH confidence)
-- [Ajv official docs](https://ajv.js.org/) -- JSON Schema draft-2020-12 support confirmed (HIGH confidence)
-- [AVA GitHub](https://github.com/avajs/ava) -- v6.4.1 confirmed latest, Node 20+ required (HIGH confidence)
-- [bats-core GitHub](https://github.com/bats-core/bats-core) -- v1.13.0 latest, Bash 3.2+ compatible (HIGH confidence)
-- [chokidar GitHub](https://github.com/paulmillr/chokidar) -- v4 confirmed CJS-compatible (MEDIUM confidence)
-- [Validation library comparison](https://www.bitovi.com/blog/comparing-schema-validation-libraries-ajv-joi-yup-and-zod) -- Ajv 14M ops/sec vs Joi 322K vs Zod 1.9M benchmarks (MEDIUM confidence)
-- [jq issue #2152](https://github.com/jqlang/jq/issues/2152) -- confirmed in-place write hazard requiring temp file pattern (HIGH confidence)
-- [Stigmergy patterns in multi-agent systems](https://www.rodriguez.today/articles/emergent-coordination-without-managers) -- validated pheromone/stigmergy as established coordination pattern (MEDIUM confidence)
-- [TTL best practices](https://www.imperva.com/learn/performance/time-to-live-ttl/) -- decay/expiration patterns verified against existing Aether implementation (MEDIUM confidence)
-- Existing codebase analysis: `aether-utils.sh`, `pheromones.json`, `file-lock.sh`, `atomic-write.sh`, build/continue playbooks (HIGH confidence -- primary source)
+- HIGH: Direct codebase analysis of `.aether/utils/queen.sh` (1242 lines), `.aether/utils/hive.sh` (562 lines), `.aether/utils/learning.sh` (1553 lines)
+- HIGH: Playbook analysis of `build-complete.md`, `continue-advance.md`, `continue-finalize.md`
+- HIGH: Agent definition analysis of all 22 existing agents in `.claude/agents/ant/`
+- HIGH: workers.md line 647 (Architect merge note), oracle.md (Oracle command wizard)
+- HIGH: QUEEN.md template (`.aether/templates/QUEEN.md.template`)
+- HIGH: Local QUEEN.md content showing actual population state (1 codebase pattern, 1 build learning, 1 instinct from ~20 phases of work)
+- HIGH: `aether-utils.sh` dispatcher (subcommand registration)
+- HIGH: `colony-prime` in `pheromone.sh` (context assembly logic)
 
 ---
-*Stack research for: Aether pheromone integration milestone*
-*Researched: 2026-03-19*
+*Stack research for: Living Wisdom Pipeline -- Making It Actually Populate*
+*Researched: 2026-03-27*

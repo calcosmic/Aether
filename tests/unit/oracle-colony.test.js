@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
-const ORACLE_SH = path.join(__dirname, '../../.aether/oracle/oracle.sh');
+const ORACLE_SH = path.join(__dirname, '../../.aether/utils/oracle/oracle.sh');
 const PROJECT_ROOT = path.join(__dirname, '../..');
 
 /**
@@ -137,7 +137,7 @@ echo "EXIT_CODE:$?"
  * @returns {string} - The prompt output
  */
 function runBuildSynthesisPrompt(stateFile, reason = 'converged') {
-  const scriptDir = path.join(PROJECT_ROOT, '.aether/oracle');
+  const scriptDir = path.join(PROJECT_ROOT, '.aether/utils/oracle');
   const cmd = `bash -c 'set +e
 STATE_FILE="${stateFile}"
 SCRIPT_DIR="${scriptDir}"

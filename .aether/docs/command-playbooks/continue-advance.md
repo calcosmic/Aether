@@ -49,6 +49,30 @@ Update COLONY_STATE.json:
    - It's stating the obvious
    - There's no evidence it works
 
+2.4. **Deterministic fallback extraction (when AI learnings are empty):**
+
+   If the builder produced no learnings (empty or missing `learning.patterns_observed` in synthesis JSON),
+   fire the git-diff-based fallback to extract learnings deterministically.
+
+   ```bash
+   # Check if learnings were extracted from synthesis
+   patterns_count=$(jq '[.memory.phase_learnings[-1].learnings // []] | add | length' .aether/data/COLONY_STATE.json 2>/dev/null || echo "0")
+   fallback_count=0
+
+   if [[ "$patterns_count" -eq 0 ]]; then
+     # Builder skipped learning output -- fire deterministic fallback
+     fallback_result=$(bash .aether/aether-utils.sh learning-extract-fallback 2>/dev/null || echo '{"learnings":[],"count":0}')
+     fallback_count=$(echo "$fallback_result" | jq '.result.count // 0')
+   fi
+
+   # Echo for cross-stage capture (same pattern as hive_promoted_count)
+   echo "fallback_count=$fallback_count"
+   ```
+
+   This is NON-BLOCKING -- if learning-extract-fallback fails, fallback_count stays 0 and no learnings are lost (they just aren't recorded this time).
+
+   **Cross-stage variable passing:** The `fallback_count` value is output via echo for capture in continue-finalize.md's wisdom summary.
+
 2.5. **Capture learnings through memory pipeline:**
 
    For each learning extracted, run the memory pipeline (observation + auto-pheromone + auto-promotion check).
@@ -147,6 +171,107 @@ Update COLONY_STATE.json:
    Success pattern confidence is 0.7 (base; calibrate with observation count if available). Only create success instincts for genuinely noteworthy approaches, not routine completions.
    Cap: limit to 2 success instincts per phase to avoid noise.
 
+3c. **Promote high-confidence instincts to QUEEN.md (QUEEN-02):**
+
+   After instinct creation (Steps 3/3a/3b), sweep all instincts for confidence >= 0.8
+   and promote to the QUEEN.md Instincts section. This runs every /ant:continue to catch
+   newly boosted instincts.
+
+   Run using the Bash tool with description "Promoting high-confidence instincts to QUEEN.md...":
+   ```bash
+   instinct_data=$(jq -r '.memory.instincts // []' .aether/data/COLONY_STATE.json 2>/dev/null || echo '[]')
+   promoted_instinct_count=0
+
+   for encoded in $(echo "$instinct_data" | jq -r '.[] | select(.confidence >= 0.8) | @base64'); do
+       trigger=$(echo "$encoded" | base64 -d | jq -r '.trigger')
+       action=$(echo "$encoded" | base64 -d | jq -r '.action')
+       confidence=$(echo "$encoded" | base64 -d | jq -r '.confidence')
+       domain=$(echo "$encoded" | base64 -d | jq -r '.domain // "workflow"')
+
+       # queen-promote-instinct handles dedup internally (skips if already in QUEEN.md)
+       result=$(bash .aether/aether-utils.sh queen-promote-instinct \
+           "$trigger" "$action" "$confidence" "$domain" 2>/dev/null || echo '{"ok":false}')
+
+       was_promoted=$(echo "$result" | jq -r '.result.promoted // false' 2>/dev/null || echo "false")
+       if [[ "$was_promoted" == "true" ]]; then
+           promoted_instinct_count=$((promoted_instinct_count + 1))
+       fi
+   done
+
+   if [[ $promoted_instinct_count -gt 0 ]]; then
+       echo "Promoted $promoted_instinct_count instinct(s) to QUEEN.md"
+   fi
+   ```
+
+   This step is NON-BLOCKING -- if queen-promote-instinct fails for any entry, log and continue.
+   The dedup check inside queen-promote-instinct ensures idempotency (safe to run repeatedly).
+
+3d. **Hive Promotion (NON-BLOCKING):**
+
+   After QUEEN.md promotion, promote abstracted instincts to the cross-colony hive.
+
+   Run using the Bash tool with description "Promoting high-confidence instincts to hive...":
+   ```bash
+   # Get instincts with confidence >= 0.8
+   high_conf_instincts=$(jq -r '.memory.instincts[] | select(.confidence >= 0.8) | @base64' .aether/data/COLONY_STATE.json 2>/dev/null || echo "")
+
+   # Derive source repo name from current directory
+   source_repo="$(pwd)"
+
+   # Read domain tags from registry (NOT from instinct.domain which is a category, not a repo domain)
+   repo_domain_tags=$(jq -r --arg repo "$(pwd)" \
+     '[.repos[] | select(.path == $repo) | .domain_tags // []] | .[0] // [] | join(",")' \
+     "$HOME/.aether/registry.json" 2>/dev/null || echo "")
+
+   hive_promoted_count=0
+   hive_errors=0
+   for encoded in $high_conf_instincts; do
+     [[ -z "$encoded" ]] && continue
+
+     # Extract trigger and action fields from the instinct object
+     trigger=$(echo "$encoded" | base64 -d | jq -r '.trigger // empty')
+     action=$(echo "$encoded" | base64 -d | jq -r '.action // empty')
+     confidence=$(echo "$encoded" | base64 -d | jq -r '.confidence // 0.7')
+
+     [[ -z "$trigger" || -z "$action" ]] && continue
+
+     # Strip leading "When " or "when " from trigger to avoid "When When..." stutter
+     trigger_clean=$(echo "$trigger" | sed 's/^[Ww]hen //')
+
+     # Build the promotion text in "When {trigger}: {action}" format
+     promote_text="When ${trigger_clean}: ${action}"
+
+     # Build hive-promote args with --text and --source-repo (required)
+     promote_args=(hive-promote --text "$promote_text" --source-repo "$source_repo" --confidence "$confidence")
+     [[ -n "$repo_domain_tags" ]] && promote_args+=(--domain "$repo_domain_tags")
+
+     # Call hive-promote which orchestrates abstract + store
+     result=$(bash .aether/aether-utils.sh "${promote_args[@]}" 2>/dev/null || echo '{}')
+     was_promoted=$(echo "$result" | jq -r '.result.action // "skipped"' 2>/dev/null || echo "skipped")
+
+     if [[ "$was_promoted" == "promoted" || "$was_promoted" == "merged" ]]; then
+       hive_promoted_count=$((hive_promoted_count + 1))
+     else
+       hive_errors=$((hive_errors + 1))
+     fi
+   done
+
+   if [[ "$hive_promoted_count" -gt 0 ]]; then
+     echo "Hive promotion: $hive_promoted_count instinct(s) promoted to cross-colony hive"
+   fi
+
+   # Store results for cross-stage summary line
+   echo "hive_promoted_count=$hive_promoted_count"
+   hive_error=$([[ $hive_errors -gt 0 ]] && echo 'true' || echo 'false')
+   echo "hive_error=$hive_error"
+   ```
+
+   This step promotes high-confidence instincts to the cross-colony hive. It runs every /ant:continue and is idempotent -- hive-store deduplicates via SHA-256, so re-promoting existing instincts is safe.
+
+   NON-BLOCKING: hive promotion failures never stop the continue flow.
+
+   **Cross-stage variable passing:** The `hive_promoted_count` and `hive_error` values are output via echo for cross-stage capture. **IMPORTANT:** When executing continue-finalize.md after this step, Claude must capture these echoed values from the advance output and pass them as variables when running the finalize wisdom summary code. Shell variables do not persist between Bash tool invocations, so this explicit capture-and-forward step is required.
+
 4. **Advance state:**
    - Set `current_phase` to next phase number
    - Set `state` to `"READY"`
@@ -159,7 +284,16 @@ Update COLONY_STATE.json:
    - Keep max 30 instincts (remove lowest confidence)
    - Keep max 100 events
 
-Write COLONY_STATE.json.
+Write the updated state through the locked subcommand. Construct the full updated COLONY_STATE.json content as a variable, then pipe it to state-write:
+
+Run using the Bash tool with description "Writing colony state...":
+```bash
+cat << 'STATEOF' | bash .aether/aether-utils.sh state-write
+<the full JSON content>
+STATEOF
+```
+
+This acquires a lock, creates a rolling backup, validates JSON, and writes atomically. Do NOT use the Write tool to write COLONY_STATE.json directly — always go through state-write.
 
 Validate the state file:
 Run using the Bash tool with description "Validating colony state...": `bash .aether/aether-utils.sh validate-state colony`

@@ -65,6 +65,23 @@ bash .aether/aether-utils.sh memory-capture \
 
 The cap of 2 prevents observation count inflation when builds produce many patterns. Each captured pattern enters learning-observations.json with a content hash for deduplication across builds.
 
+### Step 5.9.1: Persist Builder Claims (MANDATORY)
+
+Write builder file claims to `.aether/data/last-build-claims.json` for verification during /ant:continue.
+
+Collect from each builder worker's output:
+- files_created: [...all files_created from all builders...]
+- files_modified: [...all files_modified from all builders...]
+
+Run using the Bash tool with description "Persisting builder claims...":
+```bash
+echo '{"files_created":[...], "files_modified":[...], "build_phase": N, "timestamp": "ISO8601"}' > .aether/data/last-build-claims.json
+```
+
+Replace the `[...]` placeholders with the actual arrays collected from builder outputs, `N` with the current phase number, and `ISO8601` with the current timestamp.
+
+This file is consumed by verify-claims during /ant:continue.
+
 **Error Handoff Update:**
 If workers failed, update handoff with error context for recovery:
 

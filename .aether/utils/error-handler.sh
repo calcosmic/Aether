@@ -116,6 +116,20 @@ json_warn() {
   fi
 }
 
+# --- _aether_log_error function for surfaced errors ---
+# Dual output: [error] prefix to stderr (screen) + timestamped entry to errors.log (file)
+# Distinct from: json_err (structured JSON), json_warn (non-fatal JSON), ⚠ (recovery), [trimmed] (budget)
+_aether_log_error() {
+  local message="$1"
+  local timestamp
+  timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  echo "[error] $message" >&2
+  if [[ -n "${DATA_DIR:-}" ]]; then
+    mkdir -p "$DATA_DIR" 2>/dev/null  # SUPPRESS:OK -- idempotent: ensure dir exists
+    echo "[$timestamp] $message" >> "$DATA_DIR/errors.log" 2>/dev/null  # SUPPRESS:OK -- cleanup: log write is best-effort
+  fi
+}
+
 # --- error_handler function for trap ERR ---
 # Captures: line number, command, exit code
 # Usage: trap 'error_handler ${LINENO} "$BASH_COMMAND" $?' ERR
@@ -198,7 +212,7 @@ feature_log_degradation() {
 }
 
 # --- Export all functions and variables ---
-export -f json_err json_warn error_handler
+export -f json_err json_warn _aether_log_error error_handler
 export -f feature_enable feature_disable feature_enabled feature_log_degradation
 export -f _get_recovery _recovery_hub_not_found _recovery_repo_not_init
 export -f _recovery_file_not_found _recovery_json_invalid _recovery_lock_failed

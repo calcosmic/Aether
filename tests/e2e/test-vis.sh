@@ -335,6 +335,29 @@ run_vis06() {
 }
 
 # ============================================================================
+# VIS-DEPR: swarm-display-inline emits deprecation warning
+# ============================================================================
+
+run_vis_depr() {
+    log_info "VIS-DEPR: swarm-display-inline emits deprecation warning"
+
+    local notes=""
+    local status="PASS"
+
+    local utils="$PROJECT_ROOT/.aether/aether-utils.sh"
+
+    # Invoke swarm-display-inline and capture stderr only
+    local _stderr
+    _stderr=$(bash "$utils" swarm-display-inline 2>&1 >/dev/null || true)
+    if [[ "$_stderr" != *"[deprecated]"* ]]; then
+        status="FAIL"
+        notes="swarm-display-inline did not emit [deprecated] warning on stderr"
+    fi
+
+    record_result "VIS-DEPR" "$status" "${notes:-swarm-display-inline emits [deprecated] warning on stderr}"
+}
+
+# ============================================================================
 # Main
 # ============================================================================
 
@@ -350,6 +373,7 @@ run_vis03
 run_vis04
 run_vis05
 run_vis06
+run_vis_depr
 
 # Write external results file if requested (for master runner)
 if [[ -n "$EXTERNAL_RESULTS_FILE" && -n "$RESULTS_FILE" && -f "$RESULTS_FILE" ]]; then

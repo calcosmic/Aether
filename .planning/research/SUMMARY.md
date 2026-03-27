@@ -1,188 +1,232 @@
 # Project Research Summary
 
-**Project:** Aether v1.3 Maintenance Milestone — Pheromone Integration & System Polish
-**Domain:** Multi-agent CLI orchestration system with stigmergic coordination
-**Researched:** 2026-03-19
+**Project:** Aether v2.5 Smart Init
+**Domain:** Multi-agent colony orchestration -- intelligent initialization, wisdom pipeline population, and per-caste model routing
+**Researched:** 2026-03-27
 **Confidence:** HIGH
 
 ## Executive Summary
 
-Aether is a mature multi-agent CLI orchestration system with ~10K lines of bash, 150 subcommands, 22 agents, 36 slash commands, and 490+ tests. The v1.3 maintenance milestone is not about adding new capabilities — it is about wiring together what already exists. The core insight from all four research streams is the same: the infrastructure is complete but the integration seams are broken. Signals can be written and read, but workers do not act on them. The learning pipeline exists but is polluted with test data that prevents validating real behavior. The fresh-install experience is documented but not smoke-tested and ships test artifacts.
+Aether v2.5 addresses three interconnected problems. First, `/ant:init` is purely mechanical -- it takes a raw goal string, writes template files, and provides zero intelligence about the codebase being initialized. Second, the wisdom pipeline exists as complete shell infrastructure but has a "liveness gap": QUEEN.md sections and hive brain entries remain template-only because the pipeline depends on AI agents reliably extracting learnings (they often skip it) and hive-promote only fires during `/ant:seal` (most colonies never get sealed). Third, per-caste model routing needs a mechanism that survived the v1 archive because Claude Code's Task tool does not pass environment variables to subagents -- the GSD system solved this with the `model` parameter on Task calls.
 
-The recommended approach is strictly sequential: clean the system before integrating it. Test data pollution in pheromones.json, COLONY_STATE.json, QUEEN.md, and constraints.json must be removed first because everything downstream depends on clean state. Only then can pheromone injection be verified end-to-end, the learning pipeline validated, and the fresh-install experience hardened. Doing integration work on a polluted system produces misleading results and wastes effort.
+The recommended approach is to make init intelligent (research scan, structured prompt generation, approval loop) while keeping the changes as additive as possible. The wisdom pipeline needs deterministic fallbacks at break points where AI-dependent paths silently skip. Model routing should use Claude Code's model slot names (opus/sonnet) passed directly to Task calls, not environment variables.
 
-The key risk is the size of the blast radius. aether-utils.sh has 150 subcommands with no module boundaries. A single schema change can break tests across 47+ files simultaneously. The mitigation is strict discipline: run the full test suite after every atomic change, make schema changes additive-only, and never batch changes. The second risk is documentation drift — the docs currently claim workers "read signals" when they actually receive injected context. Updating docs before the integration is verified creates a second round of corrections.
+**The critical tension in this research:** Stack and Architecture research both propose a QUEEN.md v3 format with new `## ` sections (Intent, Vision, Governance, Goals, Architecture Notes). Pitfalls research explicitly identifies this as the most dangerous change possible because 7+ downstream consumers parse QUEEN.md by exact `## Section Name` header matching via awk/grep. The resolution: do NOT add new `## ` sections to QUEEN.md. Instead, write charter content into existing sections (Intent as a Codebase Pattern, Vision as a Codebase Pattern, Governance rules as User Preferences or Codebase Patterns) using existing queen-promote/queen-write-learnings functions that already handle format correctly. This preserves the "living charter" value while eliminating the format-breakage risk. The charter *concept* survives; the new-section mechanism does not.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The existing stack (bash + jq + Node.js CJS + JSON files) is the right stack for this system. No new infrastructure is needed. The one genuine technology addition is **Ajv** (`^8.18.0`) for JSON Schema validation of pheromone signals at write time — this prevents malformed signals from entering the system silently. Everything else identified as a "gap" is wiring, error handling, or prompt engineering within the existing stack.
+All research agrees: zero new npm dependencies. The changes are bash subcommands, Markdown command files, updated templates, and new agent `.md` files.
 
-**Core technologies:**
-- **bash + jq** — Signal storage and lifecycle logic; 150 subcommands in aether-utils.sh. Stay as-is, avoid migrating signal logic to Node.js until file exceeds ~15K lines
-- **Ajv `^8.18.0`** — Schema validation for pheromone signal JSON before write; only genuine new dependency. 14M ops/sec, CJS-compatible, JSON Schema standard (not Zod which requires TypeScript benefit)
-- **Commander.js `^14.0.3`** — Upgrade from current `^12`; stay on v14 (v15 goes ESM-only May 2026 which would break CJS codebase)
-- **AVA `^6.4.1`** — Already installed, no change. Covers JS unit tests
-- **Custom bash test harness** — Keep for now; adopt bats-core only if adding 20+ new bash test cases
+**Core technologies (unchanged):**
+- Bash 4+ + jq 1.6+ -- all shell utilities, no new runtime deps
+- Markdown commands (init.md) -- the LLM IS the UI for approval loops
+- awk/sed for QUEEN.md section manipulation -- existing pattern, proven reliable
+
+**New components:**
+- `.aether/utils/scan.sh` -- new utils module for lightweight repo scanning (<2s target)
+- `init-research` subcommand -- repo surface scan returning JSON (tech stack, complexity, prior colonies)
+- `init-generate-prompt` subcommand -- bash+jq assembly of structured prompt from goal + research
+- `_queen_write_governance()` -- writes charter content to existing QUEEN.md sections (NOT new sections)
+- `colony-name` subcommand -- DRY helper for colony name extraction from COLONY_STATE.json
+- 6 new agent `.md` files -- Oracle (model: opus, read-heavy with Write tool) and Architect (model: opus, design decisions) for Claude Code + OpenCode + packaging mirrors
+- Hive-promote hook in `/ant:continue` -- mid-colony wisdom promotion (currently seal-only)
+- Deterministic learning extraction fallback in `continue-advance.md` -- git-diff-based when AI skips extraction
 
 ### Expected Features
 
-All features for this milestone are maintenance and wiring work, not new capabilities.
+**Must have (table stakes) -- the intelligence chain:**
+- T1: Lightweight repo scan (<2 seconds) -- without this, init remains blind
+- T2: Auto-generate structured colony prompt from goal + research -- bash+jq, deterministic
+- T3: User approval loop -- LLM-mediated (display Markdown, wait for text response)
+- T4: Charter content in QUEEN.md on first init -- using existing write functions
+- T5: Subsequent inits update charter without resetting colony state -- update-only, never destroy wisdom
+- Wisdom pipeline deterministic fallbacks -- ensure learnings always accumulate even when AI skips
+- Hive-promote in continue flow -- cross-colony wisdom accumulates mid-colony, not just at seal
 
-**Must have (table stakes):**
-- **Clean data files on install** — test artifacts in pheromones.json, COLONY_STATE.json, QUEEN.md, constraints.json make the system look broken to new users; 11 learning-observations are entirely test data
-- **Pheromones that actually affect worker behavior** — the docs claim signals guide workers but no agent definition references pheromones; injection model works but must be verified end-to-end
-- **Working fresh install flow** — lay-eggs -> init -> plan -> build must work without errors; no smoke test validates this today
-- **Documentation that matches reality** — CLAUDE.md references eliminated features; pheromone docs describe aspirational behavior; known-issues.md has stale FIXED statuses
-
-**Should have (competitive):**
-- **Closed-loop learning pipeline** — observation -> learning -> instinct -> pheromone exists as components but is not validated end-to-end; unique differentiator among multi-agent frameworks
-- **`data-clean` command** — utility to purge test artifacts and expired signals safely; no competitor needs this (they are stateless), but Aether's persistence model requires it
-- **XML exchange command surface** — `/ant:export-signals`, `/ant:import-signals` using the fully-built but unactivated pheromone-xml.sh exchange module
+**Should have (competitive differentiators):**
+- D2: Suggested pheromones from research (FOCUS/REDIRECT suggestions in approval prompt)
+- D3: Colony complexity estimation (informs planning depth)
+- T6: Intelligent colonize suggestion (detect stale/missing survey)
+- T7: Prior colony knowledge inheritance (chambers/tunnels context)
+- Per-caste model routing via Task tool model parameter
 
 **Defer (v2+):**
-- **Agent Teams migration** — Claude Code Agent Teams (Feb 2026) enables inter-worker communication; significant architecture change, current system works adequately
-- **Cross-colony wisdom sync** — requires XML exchange to be activated and tested first
-- **Dashboard web UI** — out of scope for a CLI tool; ASCII dashboards already work
+- D1: Research-aware charter suggestions (infer governance from codebase patterns) -- needs validation
+- D4: Chambers/tunnels context in approval prompt -- nice-to-have
+- D5: Goals section auto-populate from /ant:plan -- cross-command integration complexity
+- D6: Architecture Notes from research -- can be derived from T1 data later
 
 ### Architecture Approach
 
-Aether implements textbook stigmergic coordination: workers never communicate directly, all coordination flows through shared environment files (pheromones.json, COLONY_STATE.json). The Queen orchestrator reads signals, compiles them into `prompt_section` via `colony-prime`, and injects that context into each worker's spawn prompt. This injection model is architecturally sound — the gap is not the model, it is missing verification that the injection is happening correctly and that workers are acting on the injected context.
+The architecture follows three independent streams that converge through QUEEN.md:
 
-**Major components and their signal roles:**
-1. **pheromones.json** — Single source of truth for active signals; constraints.json is a deprecated backward-compat write that should eventually be eliminated
-2. **colony-prime** — The single aggregation point: wisdom + signals + learnings + context capsule = prompt_section. All new signal types must flow through this, never directly to workers
-3. **memory-capture** — Unified pipeline entry point: observe + emit pheromone + check promotion threshold. All new event recording must go through this, not parallel paths
-4. **build-wave.md + continue-advance.md** — The integration points where signals enter and exit the build lifecycle; these are prompt-engineering files, not code, and are where most wiring work happens
+**Stream 1: Smart Init** transforms init.md from mechanical file creation into: scan -> generate -> approve -> charter. New scan.sh module (10th domain module) provides `_scan_repo()`, `_scan_quick()`, `_scan_survey_status()`, `_scan_chambers()`. Prompt generation is bash+jq assembly (NOT LLM generation) for determinism. Approval loop uses Claude Code's native execution model (display, stop, wait for user response, continue).
+
+**Stream 2: Wisdom Pipeline Hardening** adds deterministic fallbacks at four break points in the existing pipeline: (1) builder synthesis JSON missing `learning.patterns_observed` -- add git-diff pattern extraction, (2) AI agent skipping learning extraction during continue -- add bash-based fallback, (3) hive-promote only fires at seal -- add to continue flow, (4) colony name extraction can silently fail -- add dedicated subcommand.
+
+**Stream 3: Per-Caste Model Routing** uses Claude Code's Task tool `model` parameter (opus/sonnet slots), NOT environment variable passing (proven not to work in archived v1 routing). Requires: test infrastructure refactor first (184 hardcoded model names), then core routing in build-wave.md, then proxy config documentation.
+
+**Major components:**
+1. scan.sh -- lightweight repo scanning, new utils module
+2. queen-governance functions -- charter content management in queen.sh
+3. Oracle + Architect agents -- 6 new `.md` files for spawnable agents
+4. colony-name subcommand -- DRY helper for name extraction
+5. continue-advance.md hardening -- deterministic fallbacks + hive-promote
+6. build-wave.md routing -- model slot resolution + Task tool model parameter
 
 ### Critical Pitfalls
 
-1. **Test data cleanup removes canonical seed data** — QUEEN.md has 5 legitimate seed entries mixed with 25+ test entries. Aggressive cleanup removes seeds that new colonies need; insufficient cleanup ships test artifacts. Prevention: document canonical entries before deleting, create a golden-state snapshot as baseline, add CI validation
-2. **Write-only signal system** — The pheromone plumbing was built bottom-up without verifying workers act on signals. Fix must be top-down: start from agent definitions (aether-builder.md, aether-watcher.md), not from plumbing. Start with REDIRECT (simplest behavior) before FOCUS or FEEDBACK
-3. **Test cascade from schema changes** — aether-utils.sh has no module boundaries; one JSON schema change can fail 50+ tests simultaneously. Prevention: additive-only schema changes, run full test suite after every atomic change, write tests first (TDD)
-4. **XML archival leaves dead references** — The XML exchange system has 6 files, tests, and aether-utils.sh help entries but zero active wiring. "Archive" must mean a specific, complete operation: move files, disable tests, remove from help listing, update validate-package.sh
-5. **Lock contention during parallel builds** — File-based locking has no jitter; parallel workers racing on pheromones.json can cause timeouts. Prevention: batch signal writes per wave, add jitter to retry, test with 3+ concurrent writes
+1. **QUEEN.md format fragility (CRITICAL)** -- 7+ downstream consumers parse QUEEN.md by exact `## Section Name` header matching. Adding new sections breaks all of them. Resolution: write charter content into existing sections using existing write functions. NEVER add new `## ` headers.
+
+2. **Wisdom pipeline "liveness gap" (CRITICAL)** -- wisdom stays empty because of a chain of soft dependencies where AI agents skip extraction and hive-promote only fires at seal. Resolution: deterministic fallbacks at each break point; move hive-promote to continue flow.
+
+3. **Model routing via environment variables (CRITICAL)** -- proven not to work (v1 archived). Resolution: use Task tool `model` parameter directly, following GSD's working pattern.
+
+4. **184 hardcoded model names in tests (HIGH)** -- changing model-profiles.yaml without updating test mocks causes mass test failures. Resolution: centralize mock profiles before any YAML changes.
+
+5. **Approval loop fatigue (MODERATE)** -- multiple sequential approval prompts cause decision fatigue. Resolution: single batched proposal, accept-all/modify/reject in one interaction.
+
+6. **GLM-5 looping despite proxy constraints (MODERATE)** -- four escape conditions where GLM-5 can bypass proxy temperature/top_p constraints. Resolution: application-level loop detection, document Prime-as-turbo option.
+
+7. **Token budget exhaustion from smart-init content (MODERATE)** -- charter content could crowd out colony-earned wisdom in the 8,000-char budget. Resolution: cap smart-init content at 500 chars, prioritize colony-earned over smart-init in trimming.
 
 ## Implications for Roadmap
 
-Based on combined research, the dependency chain is clear: clean before integrating, integrate before documenting, document before polishing.
+Based on research, suggested phase structure:
 
-### Phase 1: Data Cleanup and State Reset
+### Phase 1: Scan Module + Test Infrastructure
 
-**Rationale:** Everything downstream depends on clean state. The learning pipeline cannot be validated with test-only observations. The fresh install cannot be verified if templates ship test artifacts. Signal injection cannot be audited when signals are fake. This phase has no upstream dependencies and is the prerequisite for all other phases.
+**Rationale:** Two independent foundations that must be laid first. scan.sh is the data source for all smart init features. Test infrastructure refactor (centralize 184 model name mocks) must happen before any model routing YAML changes. Neither depends on the other, so they can run in parallel.
 
-**Delivers:** Clean, verifiable baseline state. Canonical QUEEN.md with only seed entries. Empty or minimal pheromones.json. Reset COLONY_STATE.json. Archived XML system with no dead references. Stale constraints.json entries removed.
+**Delivers:** `.aether/utils/scan.sh` with 5 functions, centralized test helpers for model profiles, scan-repo/scan-quick dispatch cases.
 
-**Addresses:** Test data purge (P1), broken command audit (P1), stale state cleanup
+**Addresses:** T1 (lightweight repo scan), Pitfall 4 (hardcoded test names)
 
-**Avoids:** Pitfall 1 (seed data removal), Pitfall 3 (test cascade), Pitfall 4 (XML dead references), Pitfall 8 (stale cross-project COLONY_STATE), Pitfall 12 (XML-era constraints)
+**Avoids:** Starting YAML changes before test mocks are centralized (Pitfall 4), adding scanning logic inline in init.md (anti-pattern)
 
-**Research flag:** Standard patterns — cleanup work is well-understood, no deep research needed
+### Phase 2: Queen Charter + Wisdom Pipeline Fallbacks
 
-### Phase 2: Pheromone Integration Verification
+**Rationale:** Charter management and wisdom fallbacks both touch queen.sh and the continue flow but in different ways. Charter writes are additive (new functions). Wisdom fallbacks modify existing playbook steps. Both are independent of each other but both depend on understanding the current QUEEN.md format deeply.
 
-**Rationale:** With clean data, the pheromone injection chain can be audited and verified end-to-end. The architectural approach (injection model via colony-prime) is correct; the gaps are in verification, error handling, and signal lifecycle management. This phase makes signals actually do what the docs claim.
+**Delivers:** `_queen_write_governance()` in queen.sh (writes to existing sections, NOT new sections), deterministic learning extraction fallback in continue-advance.md, hive-promote hook in continue flow, colony-name subcommand.
 
-**Delivers:** Verified signal flow from `/ant:focus` through to worker prompt context. Pheromone-expire wired into build lifecycle (not just continue). Decay math tested with known timestamps. Signal garbage collection preventing accumulation. Agent definitions updated to reference and acknowledge signals. All three agent definition locations kept in sync (claude/agents, aether/agents-claude, opencode/agents).
+**Addresses:** T4 (charter content), T5 (safe re-init), wisdom pipeline break points 2-4
 
-**Addresses:** Pheromone injection audit (P1), signal lifecycle management, decay math validation
+**Avoids:** Adding new `## ` sections to QUEEN.md (Pitfall 1), writing directly to QUEEN.md instead of using existing functions
 
-**Avoids:** Pitfall 2 (write-only system), Pitfall 5 (decay math untested), Pitfall 7 (signal accumulation), Pitfall 9 (lock contention), Pitfall 10 (agent definition drift)
+### Phase 3: Init.md Refactor + Agent Definitions
 
-**Research flag:** Likely needs research-phase — signal injection across the prompt_section boundary involves multiple interacting components; validate the audit approach before executing
+**Rationale:** Now that the foundation (scan.sh, charter functions, wisdom fallbacks) is in place, the user-facing init command can be refactored to use them. The Oracle and Architect agent definitions are independent but belong here because they complete the "missing agents" gap identified in Stack research.
 
-### Phase 3: Learning Pipeline End-to-End Validation
+**Delivers:** Refactored init.md with research -> generate -> approve -> charter flow, OpenCode init.md mirror, 6 new agent `.md` files (Oracle + Architect for Claude Code + OpenCode + packaging mirrors).
 
-**Rationale:** Once signals work correctly and state is clean, the learning pipeline (observation -> learning -> instinct -> pheromone) can be validated with real data. This is Aether's primary differentiator over stateless competitors and should be verified before documentation is updated to describe it.
+**Addresses:** T2 (prompt generation), T3 (approval loop), T4+T5 (charter management in init flow), missing agent definitions
 
-**Delivers:** End-to-end integration test following one observation through full pipeline. Real observation data in learning-observations.json. Verified that instincts appear in colony-prime output. Closed-loop confirmation that the learning system improves colony behavior.
+**Avoids:** Making approval loop complex (anti-pattern 4 from Architecture), prompt generation as LLM (should be bash+jq)
 
-**Addresses:** Learning pipeline e2e test (P2), closed-loop verification, real-world instinct validation
+### Phase 4: Colony-Prime Integration + Model Routing Core
 
-**Avoids:** Pitfall 1 (test data skewing pipeline results — must be clean from Phase 1 first)
+**Rationale:** Colony-prime needs to extract and inject charter content into worker prompts (now that charter content exists in QUEEN.md). Model routing core implements the Task tool model parameter mechanism. Both modify how workers receive context.
 
-**Research flag:** Standard patterns — pipeline components are individually tested; integration test follows established test patterns already in codebase
+**Delivers:** Updated `_extract_wisdom()` for charter content extraction, updated trim order in `_colony_prime()`, model slot resolution in build-wave.md, model logging in spawn-log.
 
-### Phase 4: Fresh Install Polish and Documentation Update
+**Addresses:** Charter-to-worker flow, per-caste model routing mechanism (Pitfalls 1, 5, 7 from model routing research)
 
-**Rationale:** Documentation must be updated last, after all verified behavior is confirmed. The fresh install flow can only be smoke-tested once cleanup (Phase 1) and pheromone integration (Phase 2) are complete. This phase also validates that the distribution pipeline does not ship polluted state.
+**Avoids:** Environment variable passing (proven broken), breaking v2 QUEEN.md format reading
 
-**Delivers:** Automated smoke test for lay-eggs -> init -> plan -> build -> continue on a clean repo. Pre-publish validation step that rejects QUEEN.md test artifacts. Documentation updated to match verified behavior (not aspirational). `/ant:pheromones` behavior documented accurately (injection model, not independent worker reads).
+### Phase 5: Proxy Verification + Documentation + Validation
 
-**Addresses:** Fresh install smoke test (P1), documentation accuracy pass (P1), distribution pipeline validation
+**Rationale:** Final integration and hardening. Verify model routing works end-to-end, document config swap workflow, validate QUEEN.md format integrity, update CLAUDE.md.
 
-**Avoids:** Pitfall 6 (polluted state ships in npm), Pitfall 11 (docs promise features not working)
+**Delivers:** End-to-end model verification, config swap documentation, QUEEN.md format validator (queen-validate subcommand), CLAUDE.md updates, full integration test (init -> plan -> build -> verify charter flows to workers).
 
-**Research flag:** Standard patterns — smoke testing and documentation are well-understood; pre-publish validation follows existing validate-package.sh patterns
-
-### Phase 5: Secondary Features (P2 Items)
-
-**Rationale:** After the core system is clean, verified, and documented, the P2 enhancements add real value without risk of obscuring underlying issues.
-
-**Delivers:** `data-clean` command for safe artifact removal. XML exchange command surface (`/ant:export-signals`, `/ant:import-signals`). Error code standardization (BUG-004, -007, -008, -009, -010, -012). Commander.js upgrade to v14.
-
-**Addresses:** All P2 features from FEATURES.md
-
-**Research flag:** Standard patterns for data-clean and Commander upgrade; XML command surface may need brief research-phase to validate pheromone-xml.sh API surface
+**Addresses:** Pitfall 2 (config swap), Pitfall 6 (lifecycle edge cases for non-build commands), documentation accuracy
 
 ### Phase Ordering Rationale
 
-- **Cleanup before integration:** Clean state is a prerequisite; integrating on polluted data produces misleading validation results
-- **Integration before documentation:** Docs must describe verified behavior; updating docs mid-integration creates a second correction pass
-- **Documentation before polish:** P2 features should be documented in the same pass as P1 behavior, not retrofitted separately
-- **XML deferred from cleanup to secondary:** XML archival in Phase 1 removes the dead code; XML command surface in Phase 5 activates the exchange functionality if and only if the core system is solid
+- Phases 1-2 are parallel-safe (no dependencies between them)
+- Phase 3 depends on both Phase 1 (scan.sh) and Phase 2 (charter functions)
+- Phase 4 depends on Phase 2 (charter content must exist to extract it) and Phase 1 (test infrastructure must be centralized for model routing)
+- Phase 5 depends on all prior phases (end-to-end validation)
+- The ordering respects the dependency graph from Architecture research while incorporating the wisdom pipeline and model routing streams
 
 ### Research Flags
 
-Phases likely needing `/gsd:research-phase` during planning:
-- **Phase 2 (Pheromone Integration):** Multiple interacting components across bash, playbooks, and agent definitions; the audit approach should be planned carefully before executing to avoid missing integration points or creating documentation that describes half-fixed behavior
+Phases likely needing deeper research during planning:
+- **Phase 3 (Init.md Refactor):** Approval loop UX is untested -- the "LLM-mediated approval" pattern needs validation that it actually feels natural. Consider `/gsd:research-phase` to prototype the UX.
+- **Phase 4 (Model Routing Core):** The Task tool `model` parameter behavior with GLM proxy needs empirical validation. The GSD precedent is HIGH confidence but Aether's multi-worker spawn pattern is different from GSD's single-executor pattern. Consider `/gsd:research-phase` to prove the mechanism with a single test case before building the full system.
 
 Phases with standard patterns (skip research-phase):
-- **Phase 1 (Cleanup):** File cleanup and state reset are well-understood; the risk is carefulness (see Pitfall 1), not knowledge gaps
-- **Phase 3 (Learning Pipeline):** Components are individually tested; integration test follows existing test patterns in codebase
-- **Phase 4 (Fresh Install + Docs):** Smoke testing and documentation update are well-understood; pre-publish validation extends an existing script
-- **Phase 5 (Secondary Features):** Each item has a clear implementation path; may need brief API check for XML commands
+- **Phase 1 (Scan Module):** Well-documented pattern (9 existing utils modules), straightforward bash functions
+- **Phase 2 (Charter + Wisdom):** Follows existing queen.sh function patterns exactly; wisdom fallbacks are well-understood
+- **Phase 5 (Validation):** Standard integration testing and documentation
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Existing stack is verified working; Ajv recommendation based on benchmarks and CJS compatibility; Commander v14/v15 ESM boundary verified |
-| Features | HIGH | Based on deep codebase analysis; test pollution confirmed by file inspection; pheromone flow gaps confirmed by grep analysis of agent definitions |
-| Architecture | HIGH | Primary source is the codebase itself; stigmergic pattern validated against multi-agent literature; component boundaries traced through actual code paths |
-| Pitfalls | HIGH | Grounded in 390-line CONCERNS.md audit plus direct file inspection; moderate-confidence items sourced from multi-agent failure research that aligns with observed codebase issues |
+| Stack (Smart Init) | HIGH | Direct codebase analysis of init.md, queen.sh, all templates. Zero new dependencies. Well-understood execution model. |
+| Stack (Wisdom Pipeline) | HIGH | Direct codebase analysis of learning.sh (1553 lines), queen.sh (1242 lines), hive.sh (562 lines). Root cause analysis traced through full pipeline. |
+| Stack (Model Routing) | HIGH | Archived v1 proves env-var approach fails. GSD provides working Task tool model parameter pattern. |
+| Features | HIGH | Feature list derived from direct codebase gap analysis and PROJECT.md requirements. Competitor analysis is MEDIUM (web search rate-limited). |
+| Architecture (Smart Init) | HIGH | All command files, utils, and templates analyzed. scan.sh placement follows established pattern. |
+| Architecture (Wisdom) | HIGH | Break points identified through full pipeline tracing. Fix locations precise (specific line numbers). |
+| Pitfalls (Smart Init) | HIGH | QUEEN.md consumer analysis exhaustive (7+ consumers identified with line numbers). Token budget math verified. |
+| Pitfalls (Model Routing) | HIGH | 184 test assertions counted. Parser divergence traced through both bash and Node.js paths. GLM-5 constraint escape conditions documented from proxy config. |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Worker signal acknowledgment mechanism:** Research identifies that workers should acknowledge which signals influenced their decisions, but the exact implementation (structured output field? prose reference in worker output?) is not specified. Resolve during Phase 2 planning.
-- **constraints.json deprecation timeline:** The file is written by pheromone-write for backward compatibility and may be read by undiscovered consumers. A full audit of constraints.json readers is needed before deprecating. Handle during Phase 2 audit.
-- **XML command surface scope:** pheromone-xml.sh exists and is tested but the public API surface for `/ant:export-signals` and `/ant:import-signals` is undefined. Needs brief design pass during Phase 5 planning.
-- **Lock contention under real parallel load:** Pitfall 9 identifies the theoretical problem; the actual severity depends on how many workers emit pheromones simultaneously in practice. Validate during Phase 2 with a multi-worker test before deciding whether batching is required.
+- **Approval loop UX (LOW confidence):** No user testing data on whether the LLM-mediated approval pattern feels natural. The research says it works within Claude Code's execution model, but UX perception is unvalidated. Mitigation: prototype early in Phase 3 and adjust based on feel.
+
+- **Token budget math with charter content (MEDIUM confidence):** Architecture research estimates charter adds ~1000-1500 chars. Pitfalls research recommends a 500-char cap. The actual impact depends on how much charter content users accept. Mitigation: measure after Phase 3 implementation and adjust caps.
+
+- **GLM-5 behavior under per-caste routing (MEDIUM confidence):** The proxy mapping (opus -> glm-5, sonnet -> glm-5-turbo) is assumed to work based on proxy config. But GLM-5's tendency to loop when spawning sub-workers (Pitfall 3) could make Prime-as-opus dangerous. Mitigation: consider Prime-as-turbo despite being a "reasoning" caste; add loop detection early.
+
+- **Competitor feature accuracy (LOW confidence):** Web search was rate-limited for both FEATURES.md and STACK.md competitor analysis. Claims about Cursor/Windsurf/Copilot Workspace/Aider are based on training data, not current documentation. This does not affect implementation decisions but may affect positioning claims.
+
+## The QUEEN.md Tension: Resolution
+
+The core tension between Stack/Architecture (new v3 format with charter sections) and Pitfalls (never add new sections) requires a clear recommendation:
+
+**Recommendation: Write charter content into existing v2 sections. Do NOT create a v3 format with new `## ` headers.**
+
+Specifically:
+- Colony Intent -> written to `## Codebase Patterns` with `[charter]` tag
+- Colony Vision -> written to `## Codebase Patterns` with `[charter]` tag
+- Governance rules -> written to `## User Preferences` with `[charter]` tag
+- Goals -> written to `## Codebase Patterns` with `[charter]` tag (auto-updated by /ant:plan)
+
+This uses existing queen-promote and queen-write-learnings functions which already handle section formatting, METADATA updates, dedup, and evolution log entries. The charter *concept* (intent, vision, governance, goals) survives as content within the existing structure. The format remains v2-compatible. All 7+ downstream consumers continue to work without modification.
+
+The trade-off: charter content is less visually prominent in QUEEN.md (mixed into Codebase Patterns rather than in its own section). This is acceptable because the primary consumer of charter content is colony-prime (which extracts by content, not by section header) and the approval prompt (which shows charter in a formatted display regardless of where it is stored in QUEEN.md).
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- Direct codebase analysis: `aether-utils.sh`, `pheromones.json`, `COLONY_STATE.json`, `QUEEN.md`, `constraints.json`, `learning-observations.json` — test pollution confirmed by inspection
-- Direct codebase analysis: `.claude/agents/ant/*.md` — zero pheromone references in agent definitions confirmed
-- Direct codebase analysis: `build-context.md`, `build-wave.md`, `continue-advance.md` — signal injection chain traced
-- Direct codebase analysis: `.aether/exchange/*.sh` — XML system confirmed built and untested from commands
-- `.planning/codebase/CONCERNS.md` — 390-line codebase audit identifying all technical debt
+- Direct codebase analysis of init.md (388 lines), queen.sh (1242 lines), learning.sh (1553 lines), hive.sh (562 lines), pheromone.sh (colony-prime, ~800 lines)
+- Direct analysis of all 22 existing agent definitions in `.claude/agents/ant/`
+- `.aether/archive/model-routing/README.md` -- v1 routing failure analysis
+- `.claude/get-shit-done/references/model-profile-resolution.md` -- GSD working pattern
+- model-profiles.yaml, model-profiles.js, model-verify.js -- current model system
+- `.aether/templates/QUEEN.md.template` -- v2 format specification
+- 580+ tests across 6 test files with 184 model name occurrences
+- `.planning/PROJECT.md` -- milestone scope and user feedback
 
 ### Secondary (MEDIUM confidence)
-- [Commander.js npm](https://www.npmjs.com/package/commander) — v14 latest stable, v15 ESM-only May 2026
-- [Ajv npm](https://www.npmjs.com/package/ajv) + [Ajv docs](https://ajv.js.org/) — v8.18.0 latest, CJS-compatible, 14M ops/sec benchmark
-- [bats-core GitHub](https://github.com/bats-core/bats-core) — v1.13.0, Bash 3.2+ compatible
-- [Multi-Agent Orchestration Patterns 2026](https://www.ai-agentsplus.com/blog/multi-agent-orchestration-patterns-2026) — hierarchical decomposition, generator-critic patterns
-- [Stigmergy (Wikipedia)](https://en.wikipedia.org/wiki/Stigmergy) — foundational pattern validation
-- [Multi-Agent System Reliability Failure Patterns](https://www.getmaxim.ai/articles/multi-agent-system-reliability-failure-patterns-root-causes-and-production-validation-strategies/) — 79% of failures from specification issues, validates top-down integration approach
+- User testing feedback from PROJECT.md: "init is purely mechanical", "users forget colonize", "subsequent inits reset everything"
+- CLI UX research on approval fatigue, "present-don't-commit" pattern (training data)
+- npm/Terraform/cargo approval UX patterns (established precedent)
+- Existing completion-report.md inheritance logic in init.md Step 2.6
 
-### Tertiary (LOW confidence — verify before acting)
-- [Event-Driven Architecture pitfalls](https://medium.com/wix-engineering/event-driven-architecture-5-pitfalls-to-avoid-b3ebf885bdb1) — context propagation patterns; full content not verified
-- [Why Multi-Agent Systems Fail](https://towardsdatascience.com/why-your-multi-agent-system-is-failing-escaping-the-17x-error-trap-of-the-bag-of-agents/) — error amplification without coordination topology; general pattern, not Aether-specific
+### Tertiary (LOW confidence)
+- Competitor feature analysis (Cursor, Windsurf, Copilot Workspace, Aider) -- web search rate-limited
+- Whether approval loop UX feels natural (needs user testing)
+- Whether research-aware charter suggestions produce high-quality governance text (untested)
 
 ---
-*Research completed: 2026-03-19*
+*Research completed: 2026-03-27*
 *Ready for roadmap: yes*

@@ -5,7 +5,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AETHER_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-ORACLE_SH="$AETHER_ROOT/.aether/oracle/oracle.sh"
+ORACLE_SH="$AETHER_ROOT/.aether/utils/oracle/oracle.sh"
 
 # Test counters
 TESTS_RUN=0
@@ -279,7 +279,7 @@ test_build_synthesis_prompt_templates() {
   output=$(bash -c "
     set +e
     STATE_FILE='$tmpdir/state.json'
-    SCRIPT_DIR='$AETHER_ROOT/.aether/oracle'
+    SCRIPT_DIR='$AETHER_ROOT/.aether/utils/oracle'
     eval \"\$(sed -n '/^build_synthesis_prompt()/,/^}/p' '$ORACLE_SH')\"
     build_synthesis_prompt 'converged'
   " 2>/dev/null)
@@ -294,7 +294,7 @@ test_build_synthesis_prompt_templates() {
   output=$(bash -c "
     set +e
     STATE_FILE='$tmpdir/state.json'
-    SCRIPT_DIR='$AETHER_ROOT/.aether/oracle'
+    SCRIPT_DIR='$AETHER_ROOT/.aether/utils/oracle'
     eval \"\$(sed -n '/^build_synthesis_prompt()/,/^}/p' '$ORACLE_SH')\"
     build_synthesis_prompt 'converged'
   " 2>/dev/null)
@@ -309,7 +309,7 @@ test_build_synthesis_prompt_templates() {
   output=$(bash -c "
     set +e
     STATE_FILE='$tmpdir/state.json'
-    SCRIPT_DIR='$AETHER_ROOT/.aether/oracle'
+    SCRIPT_DIR='$AETHER_ROOT/.aether/utils/oracle'
     eval \"\$(sed -n '/^build_synthesis_prompt()/,/^}/p' '$ORACLE_SH')\"
     build_synthesis_prompt 'converged'
   " 2>/dev/null)
@@ -324,7 +324,7 @@ test_build_synthesis_prompt_templates() {
   output=$(bash -c "
     set +e
     STATE_FILE='$tmpdir/state.json'
-    SCRIPT_DIR='$AETHER_ROOT/.aether/oracle'
+    SCRIPT_DIR='$AETHER_ROOT/.aether/utils/oracle'
     eval \"\$(sed -n '/^build_synthesis_prompt()/,/^}/p' '$ORACLE_SH')\"
     build_synthesis_prompt 'converged'
   " 2>/dev/null)
@@ -339,7 +339,7 @@ test_build_synthesis_prompt_templates() {
   output=$(bash -c "
     set +e
     STATE_FILE='$tmpdir/state.json'
-    SCRIPT_DIR='$AETHER_ROOT/.aether/oracle'
+    SCRIPT_DIR='$AETHER_ROOT/.aether/utils/oracle'
     eval \"\$(sed -n '/^build_synthesis_prompt()/,/^}/p' '$ORACLE_SH')\"
     build_synthesis_prompt 'converged'
   " 2>/dev/null)
@@ -358,7 +358,7 @@ test_build_synthesis_prompt_templates() {
     output=$(bash -c "
       set +e
       STATE_FILE='$tmpdir/state.json'
-      SCRIPT_DIR='$AETHER_ROOT/.aether/oracle'
+      SCRIPT_DIR='$AETHER_ROOT/.aether/utils/oracle'
       eval \"\$(sed -n '/^build_synthesis_prompt()/,/^}/p' '$ORACLE_SH')\"
       build_synthesis_prompt 'converged'
     " 2>/dev/null)

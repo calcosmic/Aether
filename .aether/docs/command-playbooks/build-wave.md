@@ -1,3 +1,14 @@
+### Step 4.5: Checkpoint State
+
+Before modifying colony state during the build, create a rolling backup:
+
+Run using the Bash tool with description "Checkpointing colony state...":
+```bash
+bash .aether/aether-utils.sh state-checkpoint "pre-build-wave" 2>/dev/null || echo "Warning: State checkpoint failed -- continuing without backup" >&2
+```
+
+This creates a timestamped backup of COLONY_STATE.json in `.aether/data/backups/` with at most 3 retained.
+
 ### Step 5: Analyze Tasks
 
 **YOU (the Queen) will spawn workers directly. Do NOT delegate to a single Prime Worker.**
@@ -47,7 +58,7 @@ Verification
   👁️🐜 {Watcher-Name}  Verify all work independently
   🎲🐜 {Chaos-Name}   Resilience testing (after Watcher)
 
-Total: {N} Builders + 1 Watcher + 1 Chaos = {N+2} spawns
+Total: {N} Builders + 1 Watcher + 1 Chaos + 1 Oracle + 1 Architect = {N+4} spawns
 ```
 
 **Caste Emoji Legend:**
@@ -56,12 +67,151 @@ Total: {N} Builders + 1 Watcher + 1 Chaos = {N+2} spawns
 - 🎲🐜 Chaos    (red if color enabled)
 - 🔍🐜 Scout    (yellow if color enabled)
 - 🏺🐜 Archaeologist (magenta if color enabled)
+- 🔮🐜 Oracle    (indigo if color enabled) — deep research specialist
+- 🏛️🐜 Architect  (violet if color enabled) — architecture design specialist
 - 🥚 Queen/Prime
 
 **Every spawn must show its caste emoji.**
 
 **Add to Caste Emoji Legend:**
 - 🔌🐜 Ambassador (blue if color enabled) — external integration specialist
+
+### Step 5.0.1: Oracle Research Step (Non-Blocking)
+
+**Oracle runs BEFORE worker waves. Failure is non-blocking -- the build continues with a warning.**
+
+1. **Generate Oracle name:**
+   Run using the Bash tool with description "Naming oracle ant...": `bash .aether/aether-utils.sh generate-ant-name "oracle"` (store as `{oracle_name}`)
+
+2. **Log spawn:**
+   Run using the Bash tool with description "Dispatching oracle...": `bash .aether/aether-utils.sh spawn-log "Queen" "oracle" "{oracle_name}" "Phase {phase_id} research"`
+
+3. **Display announcement:**
+```
+━━━ 🔮 O R A C L E   R E S E A R C H ━━━
+──── 🔮🐜 Spawning {oracle_name} — Phase {phase_id} research ────
+```
+
+4. **Spawn Oracle using Task tool with `subagent_type="aether-oracle"`**, include `description: "🔮 Oracle {oracle_name}: Phase {phase_id} research"` (DO NOT use run_in_background):
+
+   > **Platform note**: In Claude Code, use `Task tool with subagent_type`. In OpenCode, use the equivalent agent spawning mechanism for your platform.
+
+   **Oracle Worker Prompt:**
+   ```
+   You are {oracle_name}, a 🔮 Oracle Ant.
+
+   Mission: Conduct deep research for Phase {phase_id}
+
+   Phase: {phase_name}
+   Colony goal: "{colony_goal}"
+
+   Active pheromone signals (if any):
+   {pheromone_summary from prompt_section}
+
+   Tasks to research:
+   {list of phase tasks with descriptions}
+
+   Work:
+   1. Analyze the codebase for patterns relevant to these tasks
+   2. Research best practices, gotchas, and recommended approaches
+   3. Identify potential risks or dependencies
+   4. Write findings to `.aether/data/research/oracle-{phase_id}.md`
+
+   **IMPORTANT:** This is a single-pass research invocation (not iterative RALF loop). Produce your best findings in one pass.
+
+   Return ONLY this JSON (no other text):
+   {
+     "ant_name": "{oracle_name}",
+     "caste": "oracle",
+     "status": "completed" | "failed" | "blocked",
+     "summary": "Key findings and recommendations",
+     "findings": ["finding1", "finding2"],
+     "recommendations": ["rec1", "rec2"],
+     "risks": ["risk1"],
+     "research_file": ".aether/data/research/oracle-{phase_id}.md",
+     "blockers": []
+   }
+   ```
+
+5. **Parse Oracle JSON output:**
+   - If status is `"completed"`, store `oracle_findings` for injection into Architect and Builder prompts.
+   - If status is `"failed"` or `"blocked"`, log warning and set `oracle_findings` to empty:
+
+```
+⚠ Oracle {oracle_name} research unavailable — proceeding without research context
+```
+
+6. **Log completion:**
+   Run using the Bash tool with description "Recording oracle completion...": `bash .aether/aether-utils.sh spawn-complete "{oracle_name}" "{status}" "{summary}"`
+
+### Step 5.0.2: Architect Design Step (Non-Blocking)
+
+**Architect runs AFTER Oracle, BEFORE worker waves. Failure is non-blocking -- the build continues with a warning.**
+
+1. **Generate Architect name:**
+   Run using the Bash tool with description "Naming architect ant...": `bash .aether/aether-utils.sh generate-ant-name "architect"` (store as `{architect_name}`)
+
+2. **Log spawn:**
+   Run using the Bash tool with description "Dispatching architect...": `bash .aether/aether-utils.sh spawn-log "Queen" "architect" "{architect_name}" "Phase {phase_id} design"`
+
+3. **Display announcement:**
+```
+━━━ 🏛️ A R C H I T E C T   D E S I G N ━━━
+──── 🏛️🐜 Spawning {architect_name} — Phase {phase_id} design ────
+```
+
+4. **Spawn Architect using Task tool with `subagent_type="aether-architect"`**, include `description: "🏛️ Architect {architect_name}: Phase {phase_id} design"` (DO NOT use run_in_background):
+
+   > **Platform note**: In Claude Code, use `Task tool with subagent_type`. In OpenCode, use the equivalent agent spawning mechanism for your platform.
+
+   **Architect Worker Prompt:**
+   ```
+   You are {architect_name}, a 🏛️ Architect Ant.
+
+   Mission: Design architecture for Phase {phase_id}
+
+   Phase: {phase_name}
+   Colony goal: "{colony_goal}"
+
+   {oracle_findings if available, otherwise: "No Oracle research available for this phase."}
+
+   Active pheromone signals (if any):
+   {pheromone_summary from prompt_section}
+
+   Tasks to design for:
+   {list of phase tasks with descriptions}
+
+   Work:
+   1. Analyze codebase structure and existing patterns
+   2. Identify architectural boundaries and component relationships
+   3. Design approach (component structure, data flow, interfaces)
+   4. Write design document to `.aether/data/research/architect-{phase_id}.md`
+   5. Return actionable design decisions for Builder consumption
+
+   Return ONLY this JSON (no other text):
+   {
+     "ant_name": "{architect_name}",
+     "caste": "architect",
+     "status": "completed" | "failed" | "blocked",
+     "summary": "Design approach and key decisions",
+     "design_decisions": ["decision1", "decision2"],
+     "component_structure": {"overview": "..."},
+     "data_flow": {"overview": "..."},
+     "design_file": ".aether/data/research/architect-{phase_id}.md",
+     "blockers": []
+   }
+   ```
+
+5. **Parse Architect JSON output:**
+   - If status is `"completed"`, store `architect_design` for injection into Builder prompts.
+   - If status is `"failed"` or `"blocked"`, log warning and set `architect_design` to empty:
+
+```
+⚠ Architect {architect_name} design unavailable — proceeding without design context
+```
+
+6. **Log completion:**
+   Run using the Bash tool with description "Recording architect completion...": `bash .aether/aether-utils.sh spawn-complete "{architect_name}" "{status}" "{summary}"`
 
 ### Step 5.0.5: Select and Announce Workflow Pattern
 
@@ -261,7 +411,7 @@ Run using the Bash tool with description "Refreshing colony context...": `prime_
 
 **PER WAVE:** Query midden for recent failures to inject into builder context:
 Run using the Bash tool with description "Checking midden for recent failures...":
-`midden_result=$(bash .aether/aether-utils.sh midden-recent-failures 5 2>/dev/null || echo '{"count":0,"failures":[]}')`
+`midden_result=$(bash .aether/aether-utils.sh midden-recent-failures 3 2>/dev/null || echo '{"count":0,"failures":[]}')`
 
 Parse `midden_result`. If `count > 0`, format as `midden_context`:
 ```
@@ -269,6 +419,8 @@ Parse `midden_result`. If `count > 0`, format as `midden_context`:
 - [{category}] {message} (source: {source}, {timestamp})
 ...
 ```
+
+**Budget cap:** `midden_context` must not exceed 2000 characters. If it exceeds the cap, truncate and append `[midden truncated]`.
 
 If `count == 0`, set `midden_context` to empty.
 
@@ -282,11 +434,40 @@ For each Wave 1 task, use Task tool with `subagent_type="aether-builder"`, inclu
   `bash .aether/aether-utils.sh grave-check "{file}"`
 - Parse each JSON result and keep only entries where `caution_level` is `high` or `low`.
 - Merge these into a single `grave_context` block for that worker.
+- **Budget cap:** `grave_context` must not exceed 2000 characters per worker. If it exceeds the cap, truncate and append `[graveyard truncated]`.
 - If no file paths are identified, or all checks return `none`, set `grave_context` to empty.
 - If `grave_context` is non-empty, display a visible line before spawning that worker:
   `⚰️ Graveyard caution for {ant_name}: {file_1} ({level_1}), {file_2} ({level_2})`
 
+**PER WORKER:** Match and inject skills for the worker's role and task:
+Run using the Bash tool with description "Matching skills for {ant_name}...":
+```bash
+skill_match_result=$(bash .aether/aether-utils.sh skill-match "builder" "{task_description}" 2>/dev/null) || skill_match_result='{"result":{"colony_skills":[],"domain_skills":[]}}'
+skill_inject_result=$(bash .aether/aether-utils.sh skill-inject "$(echo "$skill_match_result" | jq -r '.result')" 2>/dev/null) || skill_inject_result='{"result":{"skill_section":"","colony_count":0,"domain_count":0}}'
+skill_section=$(echo "$skill_inject_result" | jq -r '.result.skill_section // ""')
+skill_colony_count=$(echo "$skill_inject_result" | jq -r '.result.colony_count // 0')
+skill_domain_count=$(echo "$skill_inject_result" | jq -r '.result.domain_count // 0')
+```
+
+Display per worker:
+```
+  🧠 Skills: {colony_count} colony + {domain_count} domain loaded for builder
+```
+
 **PER WORKER:** Run using the Bash tool with description "Preparing worker {name}...": `bash .aether/aether-utils.sh spawn-log "Queen" "builder" "{ant_name}" "{task_description}" && bash .aether/aether-utils.sh context-update worker-spawn "{ant_name}" "builder" "{task_description}"`
+
+**Context layer budget caps (enforce before injecting into prompt):**
+- `archaeology_context`: cap at 4000 characters. If it exceeds the cap, truncate and append `[archaeology truncated]`.
+- `midden_context`: cap at 2000 characters (already enforced above).
+- `grave_context`: cap at 2000 characters per worker (already enforced above).
+
+**Model Override Injection:**
+If `cli_model_override` is set (from `--model` flag parsed in Step 1), construct `model_override_section` as:
+```
+**Model Override Active:**
+This build is running with `--model {cli_model_override}`. All workers are directed to use the `{cli_model_override}` slot for this build. This overrides your default model slot assignment.
+```
+Inject this section into each worker prompt (Builder, Watcher, Chaos) after the Goal line. If `cli_model_override` is not set, omit the section entirely.
 
 **Builder Worker Prompt (CLEAN OUTPUT):**
 ```
@@ -296,9 +477,17 @@ Task {id}: {description}
 
 Goal: "{colony_goal}"
 
+{ model_override_section if cli_model_override is set }
+
 { archaeology_context if exists }
 
 { integration_plan if exists }
+
+{ research_context if exists }
+
+**Phase Research Context (if provided):**
+- This is domain research conducted during planning. Use it to understand patterns, avoid gotchas, and follow the recommended approach.
+- If the research mentions specific files to study, read them before implementing.
 
 { grave_context if exists }
 
@@ -317,6 +506,8 @@ If integration_plan is provided above, you MUST:
 5. Reference required env_vars_required (do NOT hardcode values)
 
 { prompt_section }
+
+{ skill_section }
 
 **Graveyard Caution Context (if provided):**
 - Treat `high` caution files as unstable terrain.

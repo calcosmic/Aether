@@ -154,7 +154,9 @@ run_area_test "test-ses.sh"  "$RESULTS_DIR/ses.results"
 run_area_test "test-lif.sh"  "$RESULTS_DIR/lif.results"
 run_area_test "test-adv.sh"  "$RESULTS_DIR/adv.results"
 run_area_test "test-xml.sh"  "$RESULTS_DIR/xml.results"
+run_area_test "test-xml-commands.sh" "$RESULTS_DIR/xmlcmd.results"
 run_area_test "test-doc.sh"  "$RESULTS_DIR/doc.results"
+run_area_test "test-fresh-install.sh" "$RESULTS_DIR/fresh.results"
 
 # Run lifecycle test separately
 echo "  Running test-lifecycle.sh (integration)..."

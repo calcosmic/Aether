@@ -692,9 +692,9 @@ test.serial('instinct auto-generated trigger format matches expected pattern', a
     t.truthy(instinct, 'Should have instinct with matching action');
 
     // Verify trigger matches auto-generated format from learning-promote-auto
-    // Format: "When working on {wisdom_type} patterns" (lines 5393-5399 of aether-utils.sh)
-    t.is(instinct.trigger, 'When working on pattern patterns',
-      'Trigger should match auto-generated format: "When working on pattern patterns"');
+    // Format: "working on {wisdom_type} patterns" (no "When" prefix — display adds it)
+    t.is(instinct.trigger, 'working on pattern patterns',
+      'Trigger should match auto-generated format: "working on pattern patterns" (no When prefix)');
 
     // Also verify other auto-generated fields
     t.is(instinct.source, 'promoted_from_learning',

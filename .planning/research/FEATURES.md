@@ -1,126 +1,149 @@
-# Feature Research: Aether v1.3 Maintenance Milestone
+# Feature Research: Aether v2.5 Smart Init System
 
-**Domain:** Multi-agent AI orchestration system maintenance (pheromone integration, cleanup, fresh-install polish)
-**Researched:** 2026-03-19
-**Confidence:** HIGH (based on deep codebase analysis + ecosystem research)
+**Domain:** Multi-agent colony orchestration -- intelligent initialization with repo scanning, prompt generation, approval loops, and Queen file governance
+**Researched:** 2026-03-27
+**Confidence:** HIGH (based on direct codebase analysis of init.md, colonize.md, council.md, queen.sh, QUEEN.md template, and all related commands; web search was rate-limited but codebase provides comprehensive evidence)
 
 ---
 
 ## Context
 
-This is a **maintenance milestone** for an existing, mature system. The goal is not new capabilities -- it is wiring together what exists, cleaning up debris from development, and making the system solid for new users. The codebase has 150 shell subcommands, 22 agents, 36 slash commands, and 490+ tests. It works, but has accumulated integration gaps and test pollution.
+The current `/ant:init` is purely mechanical: it takes a raw user goal string, creates COLONY_STATE.json from a template, initializes QUEEN.md as an empty wisdom document, and registers the repo. No research, no prompt refinement, no approval, no intelligence. Users forget to run `/ant:colonize` before planning. Re-running init warns about overwriting but offers no graceful update path.
+
+The smart init milestone transforms `/ant:init` from a file-creation script into an intelligent first step: research the repo, generate a structured colony initialization prompt, show it for approval, and manage QUEEN.md as a living colony charter with intent, vision, and governance sections.
+
+### Current Pain Points (from PROJECT.md user feedback)
+
+1. `/ant:init` is mechanical -- takes raw goal string, sets up files, no research or intelligence
+2. Users forget to run `/ant:colonize` before building
+3. Subsequent inits reset everything (destructive -- warns but still overwrites)
+4. QUEEN.md is initialized as empty wisdom doc with no project context
+5. No structured colony prompt generated from natural language
+
+### Existing Infrastructure That Smart Init Builds On
+
+| Existing System | What It Does | How Smart Init Uses It |
+|----------------|-------------|----------------------|
+| `/ant:colonize` (257 lines) | 4 parallel scout survey producing 7 documents | Smart init needs a lightweight version of this, not the full deep survey |
+| `/ant:council` (295 lines) | Multi-choice intent clarification via pheromone injection | Approval loop pattern is similar -- gather input, translate to structured output |
+| `queen-init` subcommand | Creates QUEEN.md from template | Still needed for fresh colonies, but enhanced with charter sections |
+| `queen-read` / `queen-promote` | QUEEN.md manipulation | Charter update must coexist with wisdom sections |
+| `domain-detect` subcommand | Auto-detects domain tags from file presence | Init research can reuse this for tech stack detection |
+| `session-verify-fresh` | Detects stale state files | Already used in init Step 2 for freshness checking |
+| `suggest-analyze` / `suggest.sh` | Codebase pattern analysis | Research scan can reuse pattern detection logic |
 
 ---
 
-## Feature Landscape
+## Table Stakes
 
-### Table Stakes (Users Expect These)
+Missing any of these = smart init still feels dumb.
 
-Features users assume exist. Missing these = product feels broken or untrustworthy.
+| # | Feature | Why Expected | Complexity | Dependencies | Notes |
+|---|---------|--------------|------------|--------------|-------|
+| T1 | **Lightweight repo scan before initialization** | Users expect the system to know what it is initializing. Running init on a 500-file TypeScript repo should produce different context than running it on an empty directory. Currently init has zero awareness of the codebase. | MEDIUM | `init-research` bash subcommand, existing `domain-detect` | Fast surface scan: key config files, directory structure, git history, prior colony data. Target: <2 seconds. NOT a full colonize (which takes 30-60 seconds with 4 parallel agents). This is the single most important table-stakes feature -- without it, init remains blind. |
+| T2 | **Auto-generate structured colony prompt from natural language** | The user types `/ant:init "Build a REST API"`. The system should expand this into a structured prompt with context, suggested focus areas, and charter fields. Currently the raw string becomes the colony goal with zero refinement. | MEDIUM | T1 (research data feeds prompt generation), `init-generate-prompt` bash subcommand | Bash + jq string assembly, not LLM generation. Deterministic and testable. Takes user goal + research JSON and produces structured prompt text with charter fields and suggested pheromones. |
+| T3 | **User approval loop before proceeding** | Users must see and approve what the system is about to do before any files are created or modified. This is the core of "smart" -- the system proposes, the user disposes. Currently init creates files immediately with no preview. | LOW | T2 (need generated prompt to display) | LLM-mediated: display formatted prompt, wait for user confirmation, handle edits, loop until approved. No TUI library needed -- the LLM IS the UI (same pattern as build-wave plan confirmation). |
+| T4 | **QUEEN.md charter sections on first init** | QUEEN.md should be a colony charter (intent, vision, governance, goals, architecture) plus wisdom -- not just an empty wisdom doc. First init should populate the charter sections. Currently QUEEN.md is initialized with placeholder text in 4 wisdom sections. | MEDIUM | `queen-charter-init` bash subcommand, updated QUEEN.md template | Adds Colony Charter section above existing wisdom sections. Charter fields (intent, vision, governance, architecture notes) are populated from the approved prompt. |
+| T5 | **Subsequent inits update charter without resetting colony state** | Re-running `/ant:init` with a new goal should update the charter (intent, vision) but NEVER destroy accumulated wisdom, instincts, pheromones, or phase progress. Currently re-init warns about overwriting but still resets COLONY_STATE.json. | MEDIUM | T4, `queen-charter-update` bash subcommand | `_queen_charter_update` finds charter section by awk line-number and replaces specific fields. Wisdom sections completely untouched. COLONY_STATE.json goal updated, plan and phase progress preserved. |
+| T6 | **Intelligent colonize suggestion** | When no recent territory survey exists or the codebase has changed significantly since the last survey, init should suggest running `/ant:colonize`. Users forget to run it, which means `/ant:plan` operates without survey context. | LOW | T1 (research detects stale/missing survey) | Simple boolean: if no `.aether/data/survey/` directory or survey files are stale (checked via `session-verify-fresh --command survey`), display a suggestion. Non-blocking -- does not auto-run colonize. |
+| T7 | **Prior colony knowledge inheritance** | Already partially implemented in current init.md Step 2.6 (reads `completion-report.md`). Smart init should also inherit from QUEEN.md charter of prior colonies in chambers, not just completion reports. | LOW | T1 (research detects prior colonies), existing Step 2.6 logic | Read `.aether/QUEEN.md` charter section if it exists. Display inherited context in the approval prompt. This makes re-init feel like a continuation, not a reset. |
 
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| **Clean data files on install** | Test artifacts ("TestAnt6", "test signal", "test area") in COLONY_STATE.json, pheromones.json, learning-observations.json, constraints.json make the system look broken | LOW | 6+ files contain test pollution. `learning-observations.json` is entirely test data (11 observations, all from "test-colony"). Constraints.json has 3 test focus areas. Must ship clean templates OR add a data-reset command. |
-| **Pheromones actually affect worker behavior** | The docs say "Workers read FOCUS signals and weight this area higher" but no agent definition reads pheromones | HIGH | `colony-prime` injects signals into `prompt_section`, but this is only referenced in build-wave.md builder prompts. The 22 agent definitions themselves contain zero references to `pheromone-read`, `pheromone-prime`, or `colony-prime`. Signal propagation depends entirely on the orchestrator injecting `{ prompt_section }` -- workers cannot self-check signals at "natural breakpoints" as the worker prompt instructs because no agent has this wired. |
-| **Working fresh install flow** | `npm install -g aether-colony` -> `/ant:lay-eggs` -> `/ant:init` should work without errors or confusion | MEDIUM | The flow exists and is well-documented, but: (1) no smoke test validates it end-to-end, (2) templates ship with test data, (3) QUEEN.md init can fail silently, (4) version.json copy can fail silently. Users hitting any silent failure get a degraded experience with no warning. |
-| **All documented commands actually work** | 36 slash commands are listed in help/docs -- all should function | MEDIUM | Some commands reference features that may have drifted. The `tunnels` command, `verify-castes` command, and `migrate-state` command need validation. Commands referencing `session.json` must verify that file exists in current state format. |
-| **Stale state detection and cleanup** | Colony state from a different project (goal: "Ensure the electron version...") should not persist across projects | LOW | COLONY_STATE.json currently has a stale goal from a previous project. The init command warns but does not auto-archive. The `session-verify-fresh` mechanism exists but only checks timestamps, not goal relevance. |
-| **Documentation matches reality** | Docs describe features that exist, not aspirational features | MEDIUM | CLAUDE.md references "runtime/" which was eliminated. Pheromone docs claim workers "read FOCUS signals" which is architecturally true (via injection) but not operationally true (workers cannot read them independently). Known-issues.md has FIXED items still listed as unfixed in some sections. |
+---
 
-### Differentiators (Competitive Advantage)
+## Differentiators
 
-Features that set Aether apart from other multi-agent orchestration systems. Not required for basic function, but provide real value.
+Features that make Aether's init feel genuinely intelligent rather than just "prompt + approve."
 
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| **Signal-aware worker behavior** | Workers that actually respond to pheromone signals at runtime (not just at spawn) make the colony feel alive and responsive to user steering | HIGH | Currently workers get a static `prompt_section` at spawn time. The build-wave.md instructs builders to "check for new signals at natural breakpoints" but provides no mechanism. True signal-awareness would mean workers call `pheromone-read` mid-execution -- but Claude Code subagents cannot spawn other subagents and running bash commands mid-task for signal checks is expensive. The realistic differentiator is high-quality signal injection at spawn. |
-| **Closed-loop learning pipeline** | Observations become learnings become instincts become pheromones -- a full feedback loop that improves colony behavior over time | MEDIUM | The pipeline components exist: `memory-capture` -> `learning-observe` -> `learning-promote-auto` -> `instinct-create`. But the loop is not closed: (1) instincts are created but never verified to change behavior, (2) pheromone auto-emission from midden works but is not tested in real scenarios, (3) test data pollution prevents seeing real learning in action. Cleaning the pipeline data and validating the full loop is the differentiator. |
-| **Data hygiene tooling** | A `data-reset` or `data-clean` command that purges test artifacts while preserving real colony state | LOW | No multi-agent framework offers this because most do not persist state across sessions. Aether's persistence model makes this uniquely necessary and valuable. |
-| **XML exchange system for cross-colony communication** | Pheromone/wisdom XML export/import for sharing signals between colonies | LOW (exists) | The exchange system (`pheromone-xml.sh`, `wisdom-xml.sh`, `registry-xml.sh`) is fully built with 5 XML utility scripts, but zero commands or playbooks reference it. It is dead code. The value is there -- cross-colony signal sharing is a differentiator no competitor has -- but it needs a surface (command or automatic trigger) to be useful. |
-| **Graveyard caution system** | Files with troubled history get flagged for workers with "proceed carefully" warnings | LOW (exists) | Already implemented via `grave-check` in build-wave.md. This is a genuine differentiator -- no other multi-agent system uses git history to inform worker behavior. Needs validation that it works in practice. |
-| **Midden threshold auto-REDIRECT** | Recurring failures automatically emit REDIRECT pheromones to steer the colony away from problematic patterns | LOW (exists) | Implemented in build-wave.md Step 5.2. Needs real-world validation -- has only been tested with synthetic data. |
+| # | Feature | Value Proposition | Complexity | Dependencies | Notes |
+|---|---------|-------------------|------------|--------------|-------|
+| D1 | **Research-aware charter suggestions** | The system infers vision and governance from what it finds. A repo with 47 TypeScript files and a `jest.config.js` should auto-suggest "Follow existing TDD patterns" as governance. A greenfield project should default to "Establish testing patterns in Phase 1." | MEDIUM | T1 (research data), T2 (prompt generation) | Pattern: read test config -> suggest TDD governance. Read `.env.example` -> suggest env-var governance. Read existing `CONTRIBUTING.md` -> suggest its rules as governance. This is what makes init feel like it "understands" the project. |
+| D2 | **Suggested pheromones from research** | Init generates suggested FOCUS and REDIRECT signals based on the research scan. User sees these in the approval prompt and can accept, reject, or modify them before they are injected. | LOW | T1 (research data), T2 (prompt generation) | Examples: research finds 12 `TODO` comments -> suggest FOCUS "technical debt cleanup". Research finds no test files -> suggest REDIRECT "skip tests". These are suggestions only -- user must approve. |
+| D3 | **Colony complexity estimation** | Research produces a complexity estimate (small/medium/large) that informs the planning depth suggestion. A small repo gets `--fast` plan suggestion, a large repo gets `--deep`. | LOW | T1 (research data) | Based on: file count, directory depth, dependency count, git history length. Display in approval prompt: "Complexity: medium (47 files, 12 dependencies) -- suggest balanced planning depth." |
+| D4 | **Chambers/tunnels context in approval prompt** | When prior archived colonies exist in `.aether/chambers/`, the approval prompt shows a summary: "2 prior colonies found. Last goal: 'Ship Aether v2'. Key instincts available for inheritance." | LOW | T1 (research detects chambers) | Read chamber names and goals from `.aether/chambers/*/COLONY_STATE.json` (if accessible). Display compact summary. Makes the user aware of institutional knowledge without overwhelming them. |
+| D5 | **Goals section auto-populates from /ant:plan** | After `/ant:plan` generates phases, the charter Goals section updates automatically with the phase names and success criteria. The charter becomes a living document that evolves with the colony. | LOW | T4 (charter must exist), `/ant:plan` command | Add a step to plan.md that calls `queen-charter-update` with the generated phase goals. The charter's Goals section becomes a checklist that tracks plan progress. |
+| D6 | **Architecture Notes from research** | Research extracts key architecture patterns (framework detected, module structure, entry points) and populates the Architecture Notes charter section. This gives colony-prime concrete architecture context from the first build. | LOW | T1 (research data), T4 (charter init) | Examples: "Express + TypeScript, modular structure under src/. Entry: src/index.ts. ORM: Prisma." This context flows into worker prompts via colony-prime. |
 
-### Anti-Features (Commonly Requested, Often Problematic)
+---
 
-Features that seem good but create problems in this maintenance context.
+## Anti-Features
+
+Features that seem good but create problems in the init context.
 
 | Feature | Why Requested | Why Problematic | Alternative |
 |---------|---------------|-----------------|-------------|
-| **New agent types** | "Add a Debugger agent, a Deployer agent" | 22 agents already strain context windows. Adding more increases the surface area to maintain without solving integration gaps. | Fix the integration between existing 22 agents first. The current agents cover all needed castes. |
-| **Real-time inter-worker messaging** | "Workers should talk to each other during execution" | Claude Code Task tool subagents cannot communicate with each other mid-execution. The Agent Teams feature (Feb 2026) enables this, but migrating to it is a v2 concern, not a maintenance fix. | Keep using the Queen-as-coordinator pattern with `prompt_section` injection at spawn time. |
-| **Complex pheromone decay algorithms** | "Signals should decay based on relevance, not just time" | Over-engineering. The current linear decay with configurable half-lives (15/30/45 days) is sufficient. Relevance-based decay requires understanding intent, which is an unsolved problem. | Keep current decay model. Add a manual `pheromone-clear-expired` command for housekeeping. |
-| **Automatic XML migration** | "Convert all JSON state to XML" | The XML system was built for cross-colony exchange, not as a replacement for JSON state management. Migrating internal state to XML adds complexity without user-facing value. | Keep JSON for internal state, XML for exchange/export. Document this boundary clearly. |
-| **Dashboard web UI** | "Visualize colony state in a browser" | Massive scope increase. Aether runs in terminal/CLI context. A web UI requires a server, frontend framework, state synchronization -- all orthogonal to the core value. | Keep the ASCII-art dashboards (`pheromone-display`, `swarm-display`, `/ant:status`). They work well in the terminal context. |
-| **Per-worker model routing** | "Different models for different castes" | Was built, tested, and archived because Claude Code Task tool does not support per-subagent environment variables. The architecture cannot support this until the platform changes. | Use session-level model selection as documented. Preserve the archive for future platform evolution. |
+| Full deep survey on every init | Thorough codebase analysis like `/ant:colonize` | `/ant:colonize` takes 30-60 seconds with 4 parallel agents. Running this on every init would make init feel slow and wasteful, especially for re-inits where the codebase has not changed. Users want init to be fast. | Lightweight research scan (<2 seconds) for init. Suggest colonize when survey is stale or missing (T6). |
+| Auto-run colonize from init | Users forget to run colonize, so just do it for them | Colonize spawns 4 parallel agents that explore the entire codebase. This is expensive (token-heavy, time-consuming) and may not be needed if the codebase is small or hasn't changed. Auto-running it removes user control over when to spend resources. | Intelligent suggestion (T6) -- display "No recent survey. Consider running /ant:colonize after init." User decides. |
+| LLM-generated prompt instead of bash assembly | LLM could produce richer, more creative prompts | LLM generation is non-deterministic and untestable. Two inits with the same goal and repo could produce different prompts. Bash + jq assembly is deterministic, testable, and fast. The LLM's role is to display and facilitate the approval loop, not to generate the prompt. | Bash `init-generate-prompt` subcommand assembles from research JSON. LLM handles display + approval. |
+| Multiple approval rounds with different aspects | Approve charter separately from pheromones separately from plan | Increases user friction. Each approval round is a context switch. Users want to get to building fast. The approval loop should be ONE pass: see everything, edit anything, approve once. | Single unified approval prompt showing all aspects (charter + pheromones + context). One approval. |
+| Interactive TUI for approval (inquirer.js, etc.) | Rich terminal UI with checkboxes, dropdowns | Claude Code and OpenCode are conversational AI tools. The user is already in a chat interface. Adding a TUI library creates a dependency, platform compatibility issues, and a fundamentally different interaction model from the rest of Aether. | LLM-mediated approval (display Markdown, wait for text response). The LLM IS the UI. |
+| QUEEN.md as separate charter + wisdom files | Keep charter concerns separate from wisdom concerns | QUEEN.md is already the single source of truth loaded by colony-prime. Splitting into two files means colony-prime must load two files, and the user must maintain two files. The METADATA JSON block already supports arbitrary fields. | Single QUEEN.md with charter section above wisdom sections. One file, one source of truth. |
+| Auto-reset COLONY_STATE.json on re-init | Clean slate for new colony goal | Destructive and surprising. Users expect re-init to update the goal, not destroy their phase progress, instincts, and learnings. The current init warns about this but still does it. | T5: charter update preserves state. Only goal changes. Phase progress, instincts, learnings, pheromones all preserved. |
+| Init generates the full plan | Skip `/ant:plan`, generate phases during init | Plan generation requires a research loop (multiple scout + planner iterations). This makes init slow and conflates two distinct concerns: "what do we want" (init) vs "how do we get there" (plan). Users may want to run `/ant:focus` and `/ant:redirect` between init and plan. | Init sets up the colony with a charter. Plan is a separate step. Init suggests `/ant:plan` as the next step. |
+| Prompt injection via user goal | "Ignore previous instructions and..." | The init command takes `$ARGUMENTS` as a raw goal string. If the user is malicious or the goal comes from an automated system, prompt injection is possible. | Content sanitization already exists in pheromone system (XML tags rejected, angle brackets escaped). Apply same sanitization to goal text before storing in COLONY_STATE.json and QUEEN.md. |
 
 ---
 
 ## Feature Dependencies
 
 ```
-[Test data cleanup]
-    └──enables──> [Learning pipeline validation]
-                       └──enables──> [Closed-loop verification]
+[T1: Lightweight repo scan]
+    └──enables──> [T2: Auto-generate structured prompt]
+                    └──enables──> [T3: User approval loop]
+                                    └──enables──> [T4: QUEEN.md charter sections]
+                                                    └──enables──> [T5: Subsequent inits update charter]
+                                                    └──enables──> [D5: Goals auto-populate from plan]
+                                                    └──enables──> [D6: Architecture Notes from research]
 
-[Pheromone signal injection audit]
-    └──enables──> [Worker signal-awareness validation]
-    └──enables──> [Auto-emission verification]
+[T1: Lightweight repo scan]
+    └──enables──> [T6: Intelligent colonize suggestion]
+    └──enables──> [D4: Chambers/tunnels context]
+    └──enables──> [D3: Colony complexity estimation]
+    └──enables──> [D1: Research-aware charter suggestions]
+    └──enables──> [D2: Suggested pheromones from research]
 
-[Fresh install flow validation]
-    └──requires──> [Clean templates]
-    └──requires──> [Working command chain]
-
-[XML exchange activation]
-    └──requires──> [Pheromone system working correctly]
-    └──requires──> [Command surface for XML operations]
-
-[Documentation update]
-    └──requires──> [All other fixes complete]
-    └──requires──> [Feature audit complete]
-
-[Stale state cleanup]
-    └──enhances──> [Fresh install flow]
-    └──conflicts──> [Running during active colony] (must not clobber active work)
+[T7: Prior colony knowledge inheritance]
+    └──requires──> [T1: Research detects prior colonies]
+    └──enhances──> [T2: Prompt generation includes inherited context]
 ```
 
 ### Dependency Notes
 
-- **Test data cleanup enables learning pipeline validation:** Cannot verify the learning pipeline works correctly when all observation data is synthetic test entries. Clean first, then validate.
-- **Pheromone injection audit enables worker awareness:** Must understand exactly how `prompt_section` flows through the system before claiming signals affect behavior. The audit may reveal that injection is working fine and the gap is only in documentation -- or it may reveal real wiring issues.
-- **Documentation update requires all other fixes:** Docs should be updated last because they describe the system as it is, not as it was. Updating docs before fixing things creates a second round of doc updates.
-- **XML exchange activation requires working pheromones:** Cannot export/import signals that are not correctly read. Fix the core system before extending it.
-- **Stale state cleanup conflicts with active colony:** A `data-reset` command must check for active colony state and warn/abort if a colony is mid-execution. Cleaning data during a build would corrupt state.
+- **T1 is the foundation.** Without repo scanning, every other feature is operating blind. The research scan produces the JSON data that feeds prompt generation, charter suggestions, pheromone suggestions, and complexity estimation.
+- **T2 and T3 form the "smart" core.** Research (T1) feeds prompt generation (T2), which feeds the approval loop (T3). This is the minimum viable intelligence chain.
+- **T4 and T5 are the charter management pair.** T4 creates the charter on first init. T5 updates it on subsequent inits. They must preserve wisdom sections.
+- **D1-D6 are enhancements that use T1 data.** They do not require the full T1-T5 chain to work, but they produce their best results when the full chain is in place.
+- **T7 is independent of T4/T5.** It reads prior colony data (from completion-report.md or QUEEN.md) and injects it into the prompt. It does not modify QUEEN.md itself.
+- **D5 requires plan.md changes.** The charter Goals section auto-populates from plan output. This is a cross-command dependency (init -> plan).
 
 ---
 
 ## MVP Definition
 
-### Launch With (Maintenance Milestone v1)
+### Launch With (Phase 1 of milestone)
 
-Minimum viable deliverables for this milestone -- what is needed to call the maintenance work complete.
+Minimum to make init feel intelligent.
 
-- [x] **Test data purge** -- Remove all synthetic test data from `.aether/data/` files (pheromones.json, constraints.json, learning-observations.json, COLONY_STATE.json, spawn-tree.txt, midden). Either clean the committed files or ensure templates are clean and add a reset command.
-- [ ] **Pheromone injection audit** -- Trace the full path from user running `/ant:focus "X"` through to a builder worker receiving that signal in its prompt. Document exactly where signals flow, identify gaps, fix any broken links.
-- [ ] **Fresh install smoke test** -- Create an automated test that validates `lay-eggs` -> `init` -> `plan` -> `build` on a clean repo. This prevents regressions in the onboarding experience.
-- [ ] **Broken command audit** -- Run every slash command with `--help` or minimal args. Document which ones error. Fix critical ones, log non-critical ones as known issues.
-- [ ] **Documentation accuracy pass** -- Update CLAUDE.md, pheromones.md, known-issues.md to reflect current reality. Remove references to eliminated features (runtime/), update FIXED statuses, correct pheromone behavior descriptions.
+- [ ] **T1** -- Lightweight repo scan (init-research bash subcommand, <2 seconds)
+- [ ] **T2** -- Auto-generate structured colony prompt (init-generate-prompt bash subcommand)
+- [ ] **T3** -- User approval loop (LLM-mediated display + confirm/edit)
+- [ ] **T4** -- QUEEN.md charter sections on first init (queen-charter-init)
+- [ ] **T5** -- Subsequent inits update charter without resetting (queen-charter-update)
 
-### Add After Validation (v1.x)
+Rationale: T1-T5 form the complete intelligence chain: scan -> generate -> approve -> charter. After these, a user running `/ant:init "Build a REST API"` sees a structured proposal based on their repo, can edit it, and gets a populated QUEEN.md charter. Re-running init updates the charter without destroying accumulated wisdom.
 
-Features to add once the core cleanup is validated working.
+### Add After Validation (Phase 2 of milestone)
 
-- [ ] **`data-clean` command** -- Dedicated utility to purge test artifacts, expired pheromones, and stale signals. Safe to run anytime with confirmation prompt. Trigger: users report confusion from old data.
-- [ ] **XML exchange command surface** -- Create `/ant:export-signals` and `/ant:import-signals` commands that use the existing `pheromone-xml.sh` exchange module. Trigger: users with multiple colonies want to share signals.
-- [ ] **Learning pipeline end-to-end test** -- Integration test that follows an observation through the full pipeline: `memory-capture` -> `learning-observe` -> threshold met -> `learning-promote-auto` -> `instinct-create` -> instinct appears in `colony-prime` output. Trigger: pipeline components are clean and individually tested.
-- [ ] **Error code standardization** -- Address BUG-004, BUG-007, BUG-008, BUG-009, BUG-010, BUG-012: replace all hardcoded error strings with `E_*` constants. Trigger: when touching aether-utils.sh for other fixes.
+- [ ] **T6** -- Intelligent colonize suggestion (detect stale/missing survey)
+- [ ] **T7** -- Prior colony knowledge inheritance (chambers/tunnels context)
+- [ ] **D2** -- Suggested pheromones from research (FOCUS/REDIRECT suggestions in approval)
+- [ ] **D3** -- Colony complexity estimation (informs planning depth suggestion)
 
-### Future Consideration (v2+)
+### Future Consideration (Phase 3 or defer)
 
-Features to defer until the maintenance milestone is complete and system is stable.
-
-- [ ] **Agent Teams migration** -- Claude Code Agent Teams (released Feb 2026) enables inter-worker communication. Migrating from Task tool subagents to teammates would unlock real-time signal propagation. Defer because: requires significant architecture changes and the current system works.
-- [ ] **Cross-colony wisdom sync** -- Use the XML exchange to automatically sync wisdom across colonies in the same registry. Defer because: requires the exchange system to be activated and tested first.
-- [ ] **Pheromone visualization improvements** -- Enhanced ASCII/terminal UI for signal display with time-series decay visualization. Defer because: current `pheromone-display` works, this is polish.
+- [ ] **D1** -- Research-aware charter suggestions (infer governance from codebase patterns)
+- [ ] **D4** -- Chambers/tunnels context in approval prompt (read archived colony summaries)
+- [ ] **D5** -- Goals section auto-populates from /ant:plan (cross-command integration)
+- [ ] **D6** -- Architecture Notes from research (populate charter architecture section)
 
 ---
 
@@ -128,111 +151,241 @@ Features to defer until the maintenance milestone is complete and system is stab
 
 | Feature | User Value | Implementation Cost | Priority |
 |---------|------------|---------------------|----------|
-| Test data purge | HIGH | LOW | P1 |
-| Pheromone injection audit | HIGH | MEDIUM | P1 |
-| Fresh install smoke test | HIGH | MEDIUM | P1 |
-| Documentation accuracy pass | HIGH | LOW | P1 |
-| Broken command audit | MEDIUM | MEDIUM | P1 |
-| `data-clean` command | MEDIUM | LOW | P2 |
-| Learning pipeline e2e test | MEDIUM | MEDIUM | P2 |
-| XML exchange commands | LOW | LOW | P2 |
-| Error code standardization | LOW | MEDIUM | P2 |
-| Agent Teams migration | HIGH | HIGH | P3 |
-| Cross-colony wisdom sync | MEDIUM | HIGH | P3 |
-| Pheromone visualization | LOW | MEDIUM | P3 |
+| T1: Lightweight repo scan | HIGH -- init knows what it is initializing | MEDIUM -- new bash subcommand, ~200 lines | P1 |
+| T2: Auto-generate structured prompt | HIGH -- user sees intelligent proposal | MEDIUM -- bash + jq assembly, ~150 lines | P1 |
+| T3: User approval loop | HIGH -- user has control before files change | LOW -- LLM-mediated, no new code | P1 |
+| T4: QUEEN.md charter sections | HIGH -- QUEEN.md becomes meaningful on first init | MEDIUM -- queen.sh functions + template, ~200 lines | P1 |
+| T5: Subsequent inits update charter | HIGH -- re-init is safe, not destructive | MEDIUM -- queen-charter-update, ~150 lines | P1 |
+| T6: Intelligent colonize suggestion | MEDIUM -- fixes "forgot to colonize" problem | LOW -- stale detection + display message | P2 |
+| D2: Suggested pheromones | MEDIUM -- saves user from manual /ant:focus step | LOW -- derive from research patterns | P2 |
+| T7: Prior colony inheritance | MEDIUM -- continuity across colony lifecycles | LOW -- read existing data, display in prompt | P2 |
+| D3: Complexity estimation | MEDIUM -- smarter planning depth suggestion | LOW -- heuristic from file count + deps | P2 |
+| D1: Research-aware charter suggestions | MEDIUM -- init infers governance from codebase | MEDIUM -- pattern matching on research data | P3 |
+| D4: Chambers context | LOW -- nice awareness of history | LOW -- read chamber names | P3 |
+| D5: Goals auto-populate from plan | MEDIUM -- charter evolves with colony | MEDIUM -- plan.md integration | P3 |
+| D6: Architecture Notes from research | LOW -- useful context but not essential | LOW -- extract from research data | P3 |
 
 **Priority key:**
-- P1: Must have for this milestone -- fixes broken or misleading behavior
-- P2: Should have -- improves reliability and developer experience
-- P3: Future work -- requires architecture changes or depends on P2 completion
+- P1: Must have for launch -- the intelligence chain
+- P2: Should have, adds significant value
+- P3: Nice to have, polish
 
 ---
 
-## Competitor Feature Analysis
+## Competitor / Analog Feature Analysis
 
-| Feature | CrewAI | AutoGen | LangGraph | OpenAI Swarm | Aether |
-|---------|--------|---------|-----------|--------------|--------|
-| Signal/pheromone system | None | None | State channels (basic) | Handoff only | Full pheromone system with FOCUS/REDIRECT/FEEDBACK, decay, TTL |
-| Cross-session memory | None (stateless) | None | Checkpointing | None (stateless) | COLONY_STATE.json + session.json + QUEEN.md wisdom |
-| Learning pipeline | None | None | None | None | Observation -> learning -> instinct pipeline (unique) |
-| Worker specialization | Role-based agents | Conversational agents | Graph nodes | Function-based | 22 typed agents with caste system |
-| Failure tracking | Basic logging | Conversation history | State persistence | None | Midden system with threshold-based auto-REDIRECT |
-| Fresh install experience | pip install + API key | pip install + API key | pip install + API key | pip install | npm install + lay-eggs + init (multi-step) |
-| XML exchange | None | None | None | None | Built but unactivated |
-| State cleanup | Not needed (stateless) | Not needed | Manual | Not needed | Needed but missing |
+| Feature | Cursor | Windsurf | Copilot Workspace | Aider | Aether (planned) |
+|---------|--------|----------|-------------------|-------|------------------|
+| Project setup / init | Manual `.cursorrules` | Manual `.windsurfrules` | Auto-scans repo on workspace open | Manual `CONVENTIONS.md` | Auto-research + generate + approve |
+| Repo awareness on init | No (reads files as context but no init step) | No (Cascade reads files on demand) | Yes (indexes repo structure) | No (reads files on demand) | Yes (lightweight scan <2s) |
+| Structured prompt generation | No (user writes rules manually) | No (user writes rules or asks Cascade) | No (task description only) | No (conventions are free-form) | Yes (goal + research -> structured prompt) |
+| User approval before setup | No (instant apply) | No (instant apply) | No (instant apply) | No (instant apply) | Yes (display + approve/edit loop) |
+| Governance document evolution | No (static file) | No (static file) | No (no governance concept) | No (static file) | Yes (charter updates on re-init, preserves wisdom) |
+| Cross-session knowledge | No (each session starts fresh) | No (each session starts fresh) | No (each workspace starts fresh) | No (each session starts fresh) | Yes (prior colony knowledge inheritance) |
+| Colonize suggestion | N/A | N/A | N/A | N/A | Yes (detect stale survey, suggest /ant:colonize) |
 
-**Key observation:** Aether's persistent state model is its biggest differentiator AND its biggest maintenance burden. Competitors avoid this problem by being stateless -- but that means they cannot learn across sessions. The maintenance milestone should lean into persistence as a strength while fixing the hygiene issues it creates.
+**Key insight:** No existing AI coding tool has a smart init flow that combines repo scanning, structured prompt generation, user approval, and evolving governance. Most tools rely on static instruction files that the user must create and maintain manually. Aether's approach of making init intelligent and QUEEN.md a living charter is genuinely differentiated.
+
+**Confidence:** MEDIUM on competitor analysis -- web search was rate-limited, so competitor features are based on training data knowledge (pre-2025) rather than current documentation. The Aether analysis is HIGH confidence (direct codebase inspection).
 
 ---
 
-## Current State Evidence
+## What the Smart Init Experience Should Look Like
 
-### Test Data Pollution (confirmed via codebase analysis)
+### Fresh Colony (Empty or New Repo)
 
-| File | Test Artifacts Found |
-|------|---------------------|
-| `COLONY_STATE.json` | "TestAnt6" in memory.phase_learnings, "test error" in errors.records |
-| `pheromones.json` | 3 signals with "test" content: "test area for pheromone unification", "test area", "test signal" |
-| `constraints.json` | 3 focus entries: "test area for pheromone unification", "test area", "test signal" |
-| `learning-observations.json` | **Entire file is test data** (11 observations, all from "test-colony", "alpha-colony", "beta-colony", etc.) |
-| `spawn-tree.txt` | "TestAnt6" entry |
+**Current experience:**
+```
+$ /ant:init "Build a REST API with authentication"
 
-### Pheromone Flow Gap (confirmed via grep analysis)
+[388 lines of file creation steps execute silently]
 
-| Component | Pheromone Awareness | Status |
-|-----------|-------------------|--------|
-| `pheromone-write` (aether-utils.sh) | Writes signals | WORKING |
-| `pheromone-read` (aether-utils.sh) | Reads signals with decay | WORKING |
-| `pheromone-prime` (aether-utils.sh) | Compiles signals for injection | WORKING |
-| `colony-prime` (aether-utils.sh) | Combines wisdom + signals + instincts | WORKING |
-| `build-context.md` (playbook) | Calls colony-prime, stores prompt_section | WORKING |
-| `build-wave.md` (playbook) | Injects `{ prompt_section }` into builder prompts | WORKING |
-| Agent definitions (22 files) | **None read pheromones independently** | GAP -- by design (injection model) |
-| Worker self-check ("At natural breakpoints: Check for new signals") | Instruction in worker prompt but no mechanism provided | GAP -- aspiration vs reality |
+AETHER COLONY
+Queen has set the colony's intention
+   "Build a REST API with authentication"
+Colony Status: READY
+Next Up: /ant:plan
+```
 
-**Assessment:** The injection model (Queen reads signals, injects into worker prompts) is architecturally sound. The gap is documentation claiming workers "read signals" when they receive injected context. Fix the docs, not the architecture.
+**Smart init experience:**
+```
+$ /ant:init "Build a REST API with authentication"
 
-### XML Exchange System (confirmed via file analysis)
+Scanning repository...
 
-| Component | Status |
-|-----------|--------|
-| `pheromone-xml.sh` | Built, tested (test-pheromone-xml.sh exists) |
-| `wisdom-xml.sh` | Built |
-| `registry-xml.sh` | Built |
-| `xml-core.sh` | Built |
-| `xml-convert.sh`, `xml-query.sh`, `xml-compose.sh`, `xml-utils.sh` | Built |
-| Commands referencing XML | **None** -- zero slash commands use the exchange system |
-| Playbooks referencing XML | **None** -- zero playbooks call exchange functions |
+PROPOSED COLONY INITIALIZATION
+================================================================
 
-**Assessment:** The XML exchange is complete, tested infrastructure with zero activation surface. Either create commands to use it or explicitly document it as "infrastructure for future use."
+Goal: Build a REST API with authentication
+
+Repository Context:
+  Language: TypeScript
+  Framework: None detected (greenfield)
+  Files: 3 (README, package.json, tsconfig.json)
+  Tests: None detected
+  Complexity: Small
+
+Colony Charter:
+  Intent: Build a REST API with authentication
+  Vision: A production-ready REST API with JWT authentication,
+          rate limiting, input validation, and comprehensive tests
+  Governance:
+    - Establish testing patterns in Phase 1
+    - Follow existing TypeScript strict mode
+    - All endpoints must have request validation
+  Architecture Notes: Greenfield project. Suggested stack: Express + TypeScript.
+
+Suggested Guidance:
+  FOCUS: "authentication and authorization"
+  FOCUS: "test coverage"
+  REDIRECT: "skip validation"
+
+Planning Suggestion: balanced (4-6 iterations, 90% confidence target)
+
+================================================================
+
+Review the proposed setup above.
+- Edit any section by describing what to change
+- Type "approved" to proceed
+- Type "cancel" to abort
+
+> [user types "approved"]
+
+Colony initialized.
+  QUEEN.md: Colony Charter created with 4 sections
+  State persisted: .aether/data/COLONY_STATE.json
+  Suggested pheromones: 2 FOCUS signals ready to inject
+
+  Next: /ant:colonize (recommended for deeper analysis)
+        /ant:plan    (generate execution plan)
+        /ant:focus   (set additional focus areas)
+```
+
+### Re-Init on Active Colony
+
+**Current experience:**
+```
+$ /ant:init "Add WebSocket support to the API"
+
+Colony already initialized with goal: "Build a REST API with authentication"
+State freshness: fresh
+Proceeding with new goal: "Add WebSocket support to the API"
+
+[ALL PREVIOUS STATE IS OVERWRITTEN]
+```
+
+**Smart init experience:**
+```
+$ /ant:init "Add WebSocket support to the API"
+
+Scanning repository...
+
+PROPOSED CHARTER UPDATE
+================================================================
+
+Current Colony: "Build a REST API with authentication"
+  Phase: 3 of 5 (in progress)
+  Instincts: 4 | Learnings: 7 | Survey: complete
+
+New Goal: Add WebSocket support to the API
+
+Charter Changes:
+  Intent: Build a REST API with WebSocket support for real-time features
+  Vision: [UPDATED] A production-ready REST API with JWT auth,
+          WebSocket connections, and comprehensive tests
+  Governance: [PRESERVED] No changes
+  Architecture Notes: [UPDATED] Express + TypeScript + ws library.
+          Existing REST endpoints preserved.
+
+What happens:
+  - Colony goal updated (does NOT reset phase progress)
+  - Charter sections updated (does NOT touch wisdom/instincts)
+  - Phases 1-3 preserved, Phase 4+ may need re-planning
+
+================================================================
+
+Review the proposed changes.
+- Edit any section
+- Type "approved" to update charter
+- Type "cancel" to keep current goal
+
+> [user types "approved"]
+
+Charter updated. Phase progress preserved.
+Consider running /ant:plan to adjust remaining phases for new goal.
+
+  Next: /ant:plan    (re-plan remaining phases)
+        /ant:build 4 (continue with current plan)
+```
+
+### Init with Prior Colony Chambers
+
+```
+$ /ant:init "Refactor the auth module"
+
+Scanning repository...
+
+PROPOSED COLONY INITIALIZATION
+================================================================
+
+Goal: Refactor the auth module
+
+Repository Context:
+  Language: TypeScript
+  Framework: Express
+  Files: 47 | Tests: Yes (jest)
+  Complexity: Medium
+
+Prior Colony Knowledge:
+  2 archived colonies found
+  - "Ship Aether v2" (2026-03-21) -- 5 instincts available
+  - "Implement skills layer" (2026-03-22) -- 3 instincts available
+
+  Inherited instinct: [0.85] testing: always run full test suite
+    after module extraction
+  Inherited learning: JWT token validation must check expiry
+    before verifying signature
+
+Colony Charter:
+  Intent: Refactor the auth module
+  Vision: Cleaner auth architecture with separation of concerns,
+          leveraging existing patterns from prior colonies
+  Governance:
+    - Follow existing codebase conventions (from survey)
+    - Maintain backward compatibility
+    - All existing tests must continue to pass
+  Architecture Notes: Express + TypeScript, JWT auth module at
+    src/auth/. Consider extracting to src/middleware/.
+
+================================================================
+```
 
 ---
 
 ## Sources
 
-- Codebase analysis (HIGH confidence):
-  - `.aether/data/pheromones.json` -- confirmed test pollution
-  - `.aether/data/COLONY_STATE.json` -- confirmed stale state and test data
-  - `.aether/data/learning-observations.json` -- confirmed entirely test data
-  - `.aether/data/constraints.json` -- confirmed test focus entries
-  - `.claude/agents/ant/*.md` -- confirmed no agent reads pheromones independently
-  - `.aether/docs/command-playbooks/build-wave.md` -- confirmed prompt_section injection model
-  - `.aether/docs/command-playbooks/build-context.md` -- confirmed colony-prime integration
-  - `.aether/exchange/*.sh` -- confirmed XML system built but unused
-  - `.claude/commands/ant/lay-eggs.md` -- confirmed fresh install flow
-  - `.aether/docs/known-issues.md` -- confirmed documentation staleness
+### Primary (HIGH confidence)
+- Direct codebase analysis of `.claude/commands/ant/init.md` (388 lines, current mechanical init flow)
+- Direct codebase analysis of `.claude/commands/ant/colonize.md` (257 lines, deep survey with 4 parallel agents)
+- Direct codebase analysis of `.claude/commands/ant/council.md` (295 lines, intent clarification via pheromones)
+- Direct codebase analysis of `.aether/utils/queen.sh` (1,242 lines, all QUEEN.md manipulation)
+- Direct codebase analysis of `.aether/templates/QUEEN.md.template` (v2 format, 4 wisdom sections)
+- Direct codebase analysis of `.aether/QUEEN.md` (actual data: 1 instinct, 6 patterns, 1 learning from ~20 phases)
+- Direct codebase analysis of `.aether/chambers/` directory (2 archived colonies)
+- `.planning/PROJECT.md` (v2.5 milestone requirements and user feedback)
+- `.planning/research/STACK-SMART-INIT.md` (complementary stack research for this milestone)
 
-- External research (MEDIUM confidence):
-  - [Multi-Agent Systems & AI Orchestration Guide 2026](https://www.codebridge.tech/articles/mastering-multi-agent-orchestration-coordination-is-the-new-scale-frontier) -- orchestration patterns
-  - [Multi-Agent Orchestration Patterns](https://www.ai-agentsplus.com/blog/multi-agent-orchestration-patterns-2026) -- signal propagation patterns
-  - [Memory for AI Agents: A New Paradigm of Context Engineering](https://thenewstack.io/memory-for-ai-agents-a-new-paradigm-of-context-engineering/) -- persistence patterns
-  - [The 6 Best AI Agent Memory Frameworks 2026](https://machinelearningmastery.com/the-6-best-ai-agent-memory-frameworks-you-should-try-in-2026/) -- memory management
-  - [Create custom subagents - Claude Code Docs](https://code.claude.com/docs/en/sub-agents) -- Claude Code subagent patterns
-  - [Claude Code Agent Teams](https://code.visualstudio.com/blogs/2026/02/05/multi-agent-development) -- future multi-agent patterns
-  - [Anthropic: Building Effective Agents](https://www.anthropic.com/research/building-effective-agents) -- agent design best practices
-  - [OpenTelemetry AI Agent Observability](https://opentelemetry.io/blog/2025/ai-agent-observability/) -- observability standards
+### Secondary (MEDIUM confidence)
+- User testing feedback from PROJECT.md: "init is purely mechanical", "users forget to run /ant:colonize", "subsequent inits reset everything"
+- Existing completion-report.md inheritance logic in init.md Step 2.6 (partial prior colony knowledge)
+- Existing `domain-detect` subcommand for auto-detecting tech stack
+- Existing `session-verify-fresh` subcommand for staleness detection
+
+### Tertiary (LOW confidence)
+- Competitor feature analysis (Cursor, Windsurf, Copilot Workspace, Aider) -- web search was rate-limited; competitor features based on training data knowledge (pre-2025) rather than current docs
+- Whether research-aware charter suggestions (D1) produce high-quality governance text (untested hypothesis)
+- Whether the approval loop UX feels natural or cumbersome (needs user testing)
 
 ---
-
-*Feature research for: Aether v1.3 Maintenance Milestone*
-*Researched: 2026-03-19*
+*Feature research for: Aether v2.5 Smart Init System*
+*Researched: 2026-03-27*

@@ -2,7 +2,8 @@
 name: aether-weaver
 description: "Use this agent to refactor code without changing behavior. Weaver runs tests before and after every refactoring step — if tests break, it reverts immediately. Do NOT use for new features (use aether-builder) or bug fixes (use aether-tracker + aether-builder)."
 tools: Read, Write, Edit, Bash, Grep, Glob
-model: inherit
+color: purple
+model: sonnet
 ---
 
 <role>

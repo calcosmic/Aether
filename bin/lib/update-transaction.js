@@ -796,6 +796,42 @@ class UpdateTransaction {
   }
 
   /**
+   * Get files that the update would actually overwrite (hub version differs from repo version).
+   * Used by the dirty-file check to only warn about files that matter.
+   * @returns {string[]} Repo-relative paths of files that would be overwritten
+   */
+  getConflictingFiles() {
+    const conflicts = [];
+
+    // Helper: check a hub->repo dir pair for differing files
+    const checkDir = (hubDir, repoDir, prefix) => {
+      if (!fs.existsSync(hubDir)) return;
+      const srcFiles = this.listFilesRecursive(hubDir);
+      for (const relPath of srcFiles) {
+        if (this.shouldExclude(relPath)) continue;
+        const destPath = path.join(repoDir, relPath);
+        if (fs.existsSync(destPath)) {
+          const srcHash = this.hashFileSync(path.join(hubDir, relPath));
+          const destHash = this.hashFileSync(destPath);
+          if (srcHash !== destHash) {
+            conflicts.push(`${prefix}${relPath}`);
+          }
+        }
+      }
+    };
+
+    const repoAether = path.join(this.repoPath, '.aether');
+    checkDir(this.HUB_SYSTEM_DIR, repoAether, '.aether/');
+    checkDir(this.HUB_COMMANDS_CLAUDE, path.join(this.repoPath, '.claude', 'commands', 'ant'), '.claude/commands/ant/');
+    checkDir(this.HUB_COMMANDS_OPENCODE, path.join(this.repoPath, '.opencode', 'commands', 'ant'), '.opencode/commands/ant/');
+    checkDir(this.HUB_AGENTS, path.join(this.repoPath, '.opencode', 'agents'), '.opencode/agents/');
+    checkDir(this.HUB_AGENTS_CLAUDE, path.join(this.repoPath, '.claude', 'agents', 'ant'), '.claude/agents/ant/');
+    checkDir(this.HUB_RULES, path.join(this.repoPath, '.claude', 'rules'), '.claude/rules/');
+
+    return conflicts;
+  }
+
+  /**
    * Sync .aether/ directory from hub to repo, excluding user data directories
    * @param {string} srcDir - Source hub directory
    * @param {string} destDir - Destination repo .aether/ directory

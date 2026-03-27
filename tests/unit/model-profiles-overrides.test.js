@@ -1,71 +1,36 @@
-const fs = require('fs');
 const path = require('path');
 const test = require('ava');
 const proxyquire = require('proxyquire');
 const sinon = require('sinon');
 
 const MODEL_PROFILES_PATH = path.join(__dirname, '../../bin/lib/model-profiles.js');
+const { buildMockProfiles, getModelNames } = require('../helpers/mock-profiles');
 
 /**
- * Helper to create a mock model profiles object
- * @returns {object} Mock profiles object
+ * Override test models -- uses actual YAML model names but assigns
+ * different models per caste to test override interactions.
  */
-function createMockProfiles() {
-  return {
-    version: '1.0',
-    description: 'Test profiles',
-    worker_models: {
-      builder: 'kimi-k2.5',
-      watcher: 'kimi-k2.5',
-      scout: 'kimi-k2.5',
-      chaos: 'kimi-k2.5',
-      architect: 'glm-5',
-      oracle: 'minimax-2.5',
-      prime: 'glm-5',
-      colonizer: 'kimi-k2.5',
-      route_setter: 'kimi-k2.5',
-      archaeologist: 'glm-5',
-    },
-    model_metadata: {
-      'glm-5': {
-        description: 'Test GLM-5',
-        provider: 'z_ai',
-        capabilities: ['planning'],
-        context_window: 200000,
-        speed: 'medium',
-        cost_tier: 'high',
-      },
-      'minimax-2.5': {
-        description: 'Test MiniMax',
-        provider: 'minimax',
-        capabilities: ['browse', 'search'],
-        context_window: 200000,
-        speed: 'fast',
-        cost_tier: 'medium',
-      },
-      'kimi-k2.5': {
-        description: 'Test Kimi',
-        provider: 'kimi',
-        capabilities: ['coding'],
-        context_window: 256000,
-        speed: 'fast',
-        cost_tier: 'low',
-      },
-    },
-    proxy: {
-      endpoint: 'http://localhost:4000',
-      auth_token: 'sk-litellm-local',
-      health_check: 'http://localhost:4000/health',
-    },
-  };
-}
+const OVERRIDE_TEST_MODELS = getModelNames(); // ['glm-5', 'glm-5-turbo', 'glm-4.5-air']
+
+const CUSTOM_WORKER_MODELS = {
+  builder: OVERRIDE_TEST_MODELS[1],       // glm-5-turbo (same as YAML)
+  watcher: OVERRIDE_TEST_MODELS[1],       // glm-5-turbo
+  scout: OVERRIDE_TEST_MODELS[1],         // glm-5-turbo
+  chaos: OVERRIDE_TEST_MODELS[1],         // glm-5-turbo
+  architect: OVERRIDE_TEST_MODELS[0],     // glm-5 (DIFFERENT from YAML)
+  oracle: OVERRIDE_TEST_MODELS[2],        // glm-4.5-air (DIFFERENT from YAML)
+  prime: OVERRIDE_TEST_MODELS[0],         // glm-5 (DIFFERENT from YAML)
+  colonizer: OVERRIDE_TEST_MODELS[1],     // glm-5-turbo
+  route_setter: OVERRIDE_TEST_MODELS[1],  // glm-5-turbo
+  archaeologist: OVERRIDE_TEST_MODELS[0], // glm-5 (DIFFERENT from YAML)
+};
 
 // ============================================
 // setModelOverride tests
 // ============================================
 
 test('setModelOverride successfully sets override for valid caste/model', t => {
-  const profiles = createMockProfiles();
+  const profiles = buildMockProfiles({ workerModels: CUSTOM_WORKER_MODELS });
   const yamlContent = require('js-yaml').dump(profiles);
 
   const fsMock = {
@@ -78,7 +43,7 @@ test('setModelOverride successfully sets override for valid caste/model', t => {
     fs: fsMock,
   });
 
-  const result = modelProfiles.setModelOverride('/fake/path', 'builder', 'glm-5');
+  const result = modelProfiles.setModelOverride('/fake/path', 'builder', OVERRIDE_TEST_MODELS[0]);
 
   t.true(result.success);
   t.is(result.previous, null);
@@ -87,12 +52,12 @@ test('setModelOverride successfully sets override for valid caste/model', t => {
   // Verify the written content includes user_overrides
   const writtenContent = fsMock.writeFileSync.firstCall.args[1];
   t.true(writtenContent.includes('user_overrides'));
-  t.true(writtenContent.includes('builder: glm-5'));
+  t.true(writtenContent.includes(`builder: ${OVERRIDE_TEST_MODELS[0]}`));
 });
 
 test('setModelOverride returns previous value when updating existing override', t => {
-  const profiles = createMockProfiles();
-  profiles.user_overrides = { builder: 'kimi-k2.5' };
+  const profiles = buildMockProfiles({ workerModels: CUSTOM_WORKER_MODELS });
+  profiles.user_overrides = { builder: OVERRIDE_TEST_MODELS[1] };
   const yamlContent = require('js-yaml').dump(profiles);
 
   const fsMock = {
@@ -105,14 +70,14 @@ test('setModelOverride returns previous value when updating existing override', 
     fs: fsMock,
   });
 
-  const result = modelProfiles.setModelOverride('/fake/path', 'builder', 'glm-5');
+  const result = modelProfiles.setModelOverride('/fake/path', 'builder', OVERRIDE_TEST_MODELS[0]);
 
   t.true(result.success);
-  t.is(result.previous, 'kimi-k2.5');
+  t.is(result.previous, OVERRIDE_TEST_MODELS[1]);
 });
 
 test('setModelOverride throws ValidationError for invalid caste', t => {
-  const profiles = createMockProfiles();
+  const profiles = buildMockProfiles({ workerModels: CUSTOM_WORKER_MODELS });
   const yamlContent = require('js-yaml').dump(profiles);
 
   const fsMock = {
@@ -126,7 +91,7 @@ test('setModelOverride throws ValidationError for invalid caste', t => {
   });
 
   const error = t.throws(() => {
-    modelProfiles.setModelOverride('/fake/path', 'invalid_caste', 'glm-5');
+    modelProfiles.setModelOverride('/fake/path', 'invalid_caste', OVERRIDE_TEST_MODELS[0]);
   });
 
   t.is(error.name, 'ValidationError');
@@ -135,7 +100,7 @@ test('setModelOverride throws ValidationError for invalid caste', t => {
 });
 
 test('setModelOverride throws ValidationError for invalid model', t => {
-  const profiles = createMockProfiles();
+  const profiles = buildMockProfiles({ workerModels: CUSTOM_WORKER_MODELS });
   const yamlContent = require('js-yaml').dump(profiles);
 
   const fsMock = {
@@ -154,11 +119,11 @@ test('setModelOverride throws ValidationError for invalid model', t => {
 
   t.is(error.name, 'ValidationError');
   t.true(error.message.includes('Invalid model'));
-  t.true(error.details.validModels.includes('glm-5'));
+  t.true(error.details.validModels.includes(OVERRIDE_TEST_MODELS[0]));
 });
 
 test('setModelOverride creates user_overrides section if not exists', t => {
-  const profiles = createMockProfiles();
+  const profiles = buildMockProfiles({ workerModels: CUSTOM_WORKER_MODELS });
   delete profiles.user_overrides;
   const yamlContent = require('js-yaml').dump(profiles);
 
@@ -172,13 +137,13 @@ test('setModelOverride creates user_overrides section if not exists', t => {
     fs: fsMock,
   });
 
-  modelProfiles.setModelOverride('/fake/path', 'builder', 'glm-5');
+  modelProfiles.setModelOverride('/fake/path', 'builder', OVERRIDE_TEST_MODELS[0]);
 
   const writtenContent = fsMock.writeFileSync.firstCall.args[1];
   const writtenData = require('js-yaml').load(writtenContent);
 
   t.truthy(writtenData.user_overrides);
-  t.is(writtenData.user_overrides.builder, 'glm-5');
+  t.is(writtenData.user_overrides.builder, OVERRIDE_TEST_MODELS[0]);
 });
 
 // ============================================
@@ -186,8 +151,8 @@ test('setModelOverride creates user_overrides section if not exists', t => {
 // ============================================
 
 test('resetModelOverride successfully removes override', t => {
-  const profiles = createMockProfiles();
-  profiles.user_overrides = { builder: 'glm-5', watcher: 'minimax-2.5' };
+  const profiles = buildMockProfiles({ workerModels: CUSTOM_WORKER_MODELS });
+  profiles.user_overrides = { builder: OVERRIDE_TEST_MODELS[0], watcher: OVERRIDE_TEST_MODELS[2] };
   const yamlContent = require('js-yaml').dump(profiles);
 
   const fsMock = {
@@ -211,11 +176,11 @@ test('resetModelOverride successfully removes override', t => {
   const writtenData = require('js-yaml').load(writtenContent);
 
   t.is(writtenData.user_overrides.builder, undefined);
-  t.is(writtenData.user_overrides.watcher, 'minimax-2.5');
+  t.is(writtenData.user_overrides.watcher, OVERRIDE_TEST_MODELS[2]);
 });
 
 test('resetModelOverride returns hadOverride: false if no override existed', t => {
-  const profiles = createMockProfiles();
+  const profiles = buildMockProfiles({ workerModels: CUSTOM_WORKER_MODELS });
   const yamlContent = require('js-yaml').dump(profiles);
 
   const fsMock = {
@@ -236,8 +201,8 @@ test('resetModelOverride returns hadOverride: false if no override existed', t =
 });
 
 test('resetModelOverride removes user_overrides section when empty', t => {
-  const profiles = createMockProfiles();
-  profiles.user_overrides = { builder: 'glm-5' };
+  const profiles = buildMockProfiles({ workerModels: CUSTOM_WORKER_MODELS });
+  profiles.user_overrides = { builder: OVERRIDE_TEST_MODELS[0] };
   const yamlContent = require('js-yaml').dump(profiles);
 
   const fsMock = {
@@ -259,7 +224,7 @@ test('resetModelOverride removes user_overrides section when empty', t => {
 });
 
 test('resetModelOverride throws ValidationError for invalid caste', t => {
-  const profiles = createMockProfiles();
+  const profiles = buildMockProfiles({ workerModels: CUSTOM_WORKER_MODELS });
   const yamlContent = require('js-yaml').dump(profiles);
 
   const fsMock = {
@@ -286,28 +251,28 @@ test('resetModelOverride throws ValidationError for invalid caste', t => {
 
 test('getEffectiveModel returns override model when user_override exists', t => {
   const modelProfiles = require(MODEL_PROFILES_PATH);
-  const profiles = createMockProfiles();
-  profiles.user_overrides = { builder: 'glm-5' };
+  const profiles = buildMockProfiles({ workerModels: CUSTOM_WORKER_MODELS });
+  profiles.user_overrides = { builder: OVERRIDE_TEST_MODELS[0] };
 
   const result = modelProfiles.getEffectiveModel(profiles, 'builder');
 
-  t.is(result.model, 'glm-5');
+  t.is(result.model, OVERRIDE_TEST_MODELS[0]);
   t.is(result.source, 'override');
 });
 
 test('getEffectiveModel returns default model when no override', t => {
   const modelProfiles = require(MODEL_PROFILES_PATH);
-  const profiles = createMockProfiles();
+  const profiles = buildMockProfiles({ workerModels: CUSTOM_WORKER_MODELS });
 
   const result = modelProfiles.getEffectiveModel(profiles, 'builder');
 
-  t.is(result.model, 'kimi-k2.5');
+  t.is(result.model, OVERRIDE_TEST_MODELS[1]);
   t.is(result.source, 'default');
 });
 
 test('getEffectiveModel returns fallback when caste not found', t => {
   const modelProfiles = require(MODEL_PROFILES_PATH);
-  const profiles = createMockProfiles();
+  const profiles = buildMockProfiles({ workerModels: CUSTOM_WORKER_MODELS });
 
   const result = modelProfiles.getEffectiveModel(profiles, 'unknown_caste');
 
@@ -329,14 +294,14 @@ test('getEffectiveModel returns fallback for null/undefined profiles', t => {
 
 test('getEffectiveModel override takes precedence over default', t => {
   const modelProfiles = require(MODEL_PROFILES_PATH);
-  const profiles = createMockProfiles();
+  const profiles = buildMockProfiles({ workerModels: CUSTOM_WORKER_MODELS });
 
-  // Default is kimi-k2.5, override to glm-5
-  profiles.user_overrides = { builder: 'glm-5' };
+  // Default is OVERRIDE_TEST_MODELS[1], override to OVERRIDE_TEST_MODELS[0]
+  profiles.user_overrides = { builder: OVERRIDE_TEST_MODELS[0] };
 
   const result = modelProfiles.getEffectiveModel(profiles, 'builder');
 
-  t.is(result.model, 'glm-5');
+  t.is(result.model, OVERRIDE_TEST_MODELS[0]);
   t.is(result.source, 'override');
   t.not(result.model, profiles.worker_models.builder);
 });
@@ -347,7 +312,7 @@ test('getEffectiveModel override takes precedence over default', t => {
 
 test('getUserOverrides returns empty object when no overrides', t => {
   const modelProfiles = require(MODEL_PROFILES_PATH);
-  const profiles = createMockProfiles();
+  const profiles = buildMockProfiles({ workerModels: CUSTOM_WORKER_MODELS });
 
   const result = modelProfiles.getUserOverrides(profiles);
 
@@ -356,16 +321,16 @@ test('getUserOverrides returns empty object when no overrides', t => {
 
 test('getUserOverrides returns all overrides when present', t => {
   const modelProfiles = require(MODEL_PROFILES_PATH);
-  const profiles = createMockProfiles();
+  const profiles = buildMockProfiles({ workerModels: CUSTOM_WORKER_MODELS });
   profiles.user_overrides = {
-    builder: 'glm-5',
-    watcher: 'minimax-2.5',
+    builder: OVERRIDE_TEST_MODELS[0],
+    watcher: OVERRIDE_TEST_MODELS[2],
   };
 
   const result = modelProfiles.getUserOverrides(profiles);
 
-  t.is(result.builder, 'glm-5');
-  t.is(result.watcher, 'minimax-2.5');
+  t.is(result.builder, OVERRIDE_TEST_MODELS[0]);
+  t.is(result.watcher, OVERRIDE_TEST_MODELS[2]);
   t.is(Object.keys(result).length, 2);
 });
 
@@ -382,7 +347,7 @@ test('getUserOverrides returns empty object for null/undefined profiles', t => {
 // ============================================
 
 test('integration: full set/reset workflow', t => {
-  const profiles = createMockProfiles();
+  const profiles = buildMockProfiles({ workerModels: CUSTOM_WORKER_MODELS });
   const yamlContent = require('js-yaml').dump(profiles);
 
   let currentContent = yamlContent;
@@ -399,25 +364,25 @@ test('integration: full set/reset workflow', t => {
   });
 
   // Step 1: Set override
-  const setResult = modelProfiles.setModelOverride('/fake/path', 'builder', 'glm-5');
+  const setResult = modelProfiles.setModelOverride('/fake/path', 'builder', OVERRIDE_TEST_MODELS[0]);
   t.true(setResult.success);
   t.is(setResult.previous, null);
 
   // Step 2: Verify effective model shows override
   let currentProfiles = require('js-yaml').load(currentContent);
   let effective = modelProfiles.getEffectiveModel(currentProfiles, 'builder');
-  t.is(effective.model, 'glm-5');
+  t.is(effective.model, OVERRIDE_TEST_MODELS[0]);
   t.is(effective.source, 'override');
 
   // Step 3: Update override
-  const updateResult = modelProfiles.setModelOverride('/fake/path', 'builder', 'minimax-2.5');
+  const updateResult = modelProfiles.setModelOverride('/fake/path', 'builder', OVERRIDE_TEST_MODELS[2]);
   t.true(updateResult.success);
-  t.is(updateResult.previous, 'glm-5');
+  t.is(updateResult.previous, OVERRIDE_TEST_MODELS[0]);
 
   // Step 4: Verify new effective model
   currentProfiles = require('js-yaml').load(currentContent);
   effective = modelProfiles.getEffectiveModel(currentProfiles, 'builder');
-  t.is(effective.model, 'minimax-2.5');
+  t.is(effective.model, OVERRIDE_TEST_MODELS[2]);
   t.is(effective.source, 'override');
 
   // Step 5: Reset override
@@ -428,6 +393,6 @@ test('integration: full set/reset workflow', t => {
   // Step 6: Verify back to default
   currentProfiles = require('js-yaml').load(currentContent);
   effective = modelProfiles.getEffectiveModel(currentProfiles, 'builder');
-  t.is(effective.model, 'kimi-k2.5');
+  t.is(effective.model, OVERRIDE_TEST_MODELS[1]);
   t.is(effective.source, 'default');
 });

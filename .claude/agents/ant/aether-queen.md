@@ -2,7 +2,8 @@
 name: aether-queen
 description: "Use this agent when coordinating multi-phase projects, managing multiple workers across a build session, or executing colony workflows like SPBV, Investigate-Fix, Refactor, Compliance, or Documentation Sprint. Spawned by /ant:build and /ant:colonize when a goal requires planning, delegation, and synthesis across multiple steps. Do NOT use for single-task implementation (use aether-builder) or quick research (use aether-scout)."
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
-model: inherit
+color: red
+model: opus
 ---
 
 <role>
@@ -17,6 +18,10 @@ As Queen, you:
 
 Progress is tracked through structured returns, not activity logs.
 </role>
+
+<glm_safety>
+**GLM-5 Loop Risk:** When routed through the GLM proxy (opus slot), enforce generation constraints (max_tokens, temperature) to prevent infinite output loops. Claude API mode is unaffected.
+</glm_safety>
 
 <execution_flow>
 ## Workflow Patterns

@@ -19,9 +19,27 @@ PROJECT_ROOT="${3:-$AETHER_ROOT}"
 [[ -z "$CASTE" ]] && { echo "Usage: spawn-with-model.sh <caste> <task_description> [project_root]" >&2; exit 1; }
 [[ -z "$TASK" ]] && { echo "Usage: spawn-with-model.sh <caste> <task_description> [project_root]" >&2; exit 1; }
 
-# Get model for this caste
-model_info=$(bash "$AETHER_ROOT/.aether/aether-utils.sh" model-profile get "$CASTE" 2>/dev/null || echo '{"ok":true,"result":{"model":"kimi-k2.5"}}')
-model=$(echo "$model_info" | jq -r '.result.model // "kimi-k2.5"')
+# DEPRECATED: Per-caste model routing is now handled by agent frontmatter `model:` field.
+# This script is preserved for backward compatibility but will be removed in a future version.
+# See: .aether/workers.md "Model Selection" section for current routing approach.
+echo "[DEPRECATED] spawn-with-model.sh is superseded by agent frontmatter model: field" >&2
+echo "  Per-caste routing is now handled by Claude Code natively." >&2
+echo "  This script will be removed in a future version." >&2
+
+# Get slot name for this caste from YAML
+slot_info=$(bash "$AETHER_ROOT/.aether/aether-utils.sh" model-profile get "$CASTE" 2>/dev/null || echo '{"ok":true,"result":{"model":"inherit"}}')
+slot=$(echo "$slot_info" | jq -r '.result.model // "inherit"')
+
+# Resolve slot name to concrete model via model_slots section in YAML
+case "$slot" in
+  opus|sonnet|haiku)
+    resolved=$(node -e "const p=require('./bin/lib/model-profiles').loadModelProfiles('.'); console.log(p.model_slots?.['$slot']||'glm-5-turbo')" 2>/dev/null)
+    model="${resolved:-glm-5-turbo}"
+    ;;
+  inherit|*)
+    model="glm-5-turbo"
+    ;;
+esac
 
 # Log the spawn with model
 ant_name=$(bash "$AETHER_ROOT/.aether/aether-utils.sh" generate-ant-name "$CASTE" 2>/dev/null || echo "${CASTE}-$(date +%s)")

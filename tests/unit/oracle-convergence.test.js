@@ -4,8 +4,8 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
-const ORACLE_SH = path.join(__dirname, '../../.aether/oracle/oracle.sh');
-const ORACLE_MD = path.join(__dirname, '../../.aether/oracle/oracle.md');
+const ORACLE_SH = path.join(__dirname, '../../.aether/utils/oracle/oracle.sh');
+const ORACLE_MD = path.join(__dirname, '../../.aether/utils/oracle/oracle.md');
 const PROJECT_ROOT = path.join(__dirname, '../..');
 
 /**

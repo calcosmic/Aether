@@ -1,20 +1,586 @@
 {
   "version": "3.0",
-  "goal": "",
-  "state": "IDLE",
-  "current_phase": 0,
-  "session_id": "session_1771335865738_rcwosn",
-  "initialized_at": "2026-02-17T13:44:25.737Z",
+  "goal": "Fix why Oracle tmux session dies immediately — oracle.sh doesn't exist. Oracle is meant to run autonomously like a ralph loop. Ensure the Oracle background execution path works when installed in other repos.",
+  "state": "COMPLETED",
+  "current_phase": 4,
+  "session_id": "session_1774204068_833298357",
+  "initialized_at": "2026-03-22T18:27:52Z",
   "build_started_at": null,
   "plan": {
-    "generated_at": null,
-    "confidence": null,
-    "phases": []
+    "generated_at": "2026-03-22T18:44:48Z",
+    "confidence": 95,
+    "phases": [
+      {
+        "id": 1,
+        "name": "Move oracle infrastructure to distributable location",
+        "description": "Relocate oracle.sh and oracle.md from .aether/oracle/ to .aether/utils/oracle/ (co-located), fix AETHER_ROOT derivation, and redirect state file paths back to .aether/oracle/",
+        "status": "completed",
+        "tasks": [
+          {
+            "id": "1.1",
+            "goal": "Move oracle.sh and oracle.md to .aether/utils/oracle/ (co-located)",
+            "constraints": [
+              "oracle.sh and oracle.md MUST remain in the same directory — oracle.sh uses SCRIPT_DIR/oracle.md at lines 258, 719, 948"
+            ],
+            "hints": [
+              "mkdir -p .aether/utils/oracle/ then mv both files"
+            ],
+            "success_criteria": [
+              "Both files exist at .aether/utils/oracle/",
+              "Neither file exists at .aether/oracle/oracle.sh or .aether/oracle/oracle.md"
+            ],
+            "depends_on": [],
+            "status": "completed"
+          },
+          {
+            "id": "1.2",
+            "goal": "Fix AETHER_ROOT derivation to correctly resolve to repo root from new depth (3 levels: .aether/utils/oracle/)",
+            "constraints": [
+              "AETHER_ROOT must equal repo root",
+              "oracle.sh line 16: change from one level up to three levels up"
+            ],
+            "hints": [
+              "Line 16: cd SCRIPT_DIR/../../.. gives repo root from .aether/utils/oracle/"
+            ],
+            "success_criteria": [
+              "AETHER_ROOT resolves to repo root",
+              "Lines 592, 593, 414 find their target files via AETHER_ROOT"
+            ],
+            "depends_on": [
+              "1.1"
+            ],
+            "status": "completed"
+          },
+          {
+            "id": "1.3",
+            "goal": "Redirect state file paths from SCRIPT_DIR to AETHER_ROOT/.aether/oracle/",
+            "constraints": [
+              "State files (state.json, plan.json, gaps.md, synthesis.md, etc.) must point to .aether/oracle/",
+              "SCRIPT_DIR/oracle.md references must NOT change"
+            ],
+            "hints": [
+              "Add ORACLE_STATE_DIR=AETHER_ROOT/.aether/oracle after AETHER_ROOT",
+              "Replace SCRIPT_DIR with ORACLE_STATE_DIR for lines 19-26 only"
+            ],
+            "success_criteria": [
+              "Lines 19-26 use ORACLE_STATE_DIR",
+              "oracle.md references at lines 258, 719, 948 still use SCRIPT_DIR"
+            ],
+            "depends_on": [
+              "1.2"
+            ],
+            "status": "completed"
+          },
+          {
+            "id": "1.4",
+            "goal": "Fix .aether/.npmignore: anchor oracle/ pattern to /oracle/ so it only excludes .aether/oracle/ (state) and NOT .aether/utils/oracle/ (infrastructure)",
+            "constraints": [
+              "Unanchored oracle/ matches at any depth — would exclude utils/oracle/ too",
+              "Root .npmignore uses .aether/oracle/ (anchored) which is already correct"
+            ],
+            "hints": [
+              ".aether/.npmignore line 4: change oracle/ to /oracle/"
+            ],
+            "success_criteria": [
+              "npm pack --dry-run includes .aether/utils/oracle/oracle.sh",
+              "npm pack --dry-run excludes .aether/oracle/ state files"
+            ],
+            "depends_on": [
+              "1.1"
+            ],
+            "status": "completed"
+          }
+        ],
+        "success_criteria": [
+          "oracle.sh and oracle.md co-located at .aether/utils/oracle/",
+          "AETHER_ROOT = repo root",
+          "State files point to .aether/oracle/",
+          ".npmignore correctly scoped"
+        ]
+      },
+      {
+        "id": 2,
+        "name": "Update all oracle.sh path references across codebase",
+        "description": "Update every reference to .aether/oracle/oracle.sh to use .aether/utils/oracle/oracle.sh — command files, test files, and e2e tests",
+        "status": "completed",
+        "tasks": [
+          {
+            "id": "2.1",
+            "goal": "Update tmux launch paths in both command files (.claude and .opencode oracle.md)",
+            "constraints": [
+              "Both tmux and non-tmux fallback paths must be updated",
+              "4 line changes total across 2 files"
+            ],
+            "hints": [
+              ".claude/commands/ant/oracle.md lines 589,624 and .opencode/commands/ant/oracle.md lines 548,583"
+            ],
+            "success_criteria": [
+              "grep oracle/oracle.sh returns zero hits in both command files"
+            ],
+            "depends_on": [],
+            "status": "completed"
+          },
+          {
+            "id": "2.2",
+            "goal": "Update e2e test oracle.sh existence check to new path",
+            "constraints": [
+              "tests/e2e/test-adv.sh lines 142-149 — ADV-01 Check 6"
+            ],
+            "hints": [
+              "Update path, comment, and PASS/FAIL messages"
+            ],
+            "success_criteria": [
+              "ADV-01 Check 6 validates oracle.sh at .aether/utils/oracle/oracle.sh"
+            ],
+            "depends_on": [],
+            "status": "completed"
+          },
+          {
+            "id": "2.3",
+            "goal": "Update ORACLE_SH path in all 13 oracle test files (6 bash, 7 unit)",
+            "constraints": [
+              "Bash: ORACLE_SH=AETHER_ROOT/.aether/utils/oracle/oracle.sh",
+              "Unit: path.join(__dirname, '../../.aether/utils/oracle/oracle.sh')"
+            ],
+            "hints": [
+              "6 bash test files + 7 unit test files — each has path near the top"
+            ],
+            "success_criteria": [
+              "grep -r '.aether/oracle/oracle.sh' tests/ returns zero results"
+            ],
+            "depends_on": [],
+            "status": "completed"
+          },
+          {
+            "id": "2.4",
+            "goal": "Search entire repo for any remaining old-path references and update them",
+            "constraints": [
+              "Exclude CHANGELOG.md, .aether/chambers/, archive files"
+            ],
+            "hints": [
+              "Check aether-utils.sh, CLAUDE.md, docs"
+            ],
+            "success_criteria": [
+              "grep -r '.aether/oracle/oracle\\.' across repo (excluding archives) returns zero results"
+            ],
+            "depends_on": [
+              "2.1",
+              "2.2",
+              "2.3"
+            ],
+            "status": "completed"
+          }
+        ],
+        "success_criteria": [
+          "Zero references to old oracle.sh path in active codebase"
+        ]
+      },
+      {
+        "id": 3,
+        "name": "Verify distribution pipeline",
+        "description": "Confirm distribution exclusions handle the split correctly: .aether/utils/oracle/ distributed, .aether/oracle/ state stays private",
+        "status": "completed",
+        "tasks": [
+          {
+            "id": "3.1",
+            "goal": "Verify npm pack includes oracle infrastructure and excludes oracle state",
+            "constraints": [
+              "npm pack --dry-run must show .aether/utils/oracle/ files",
+              "Must NOT show .aether/oracle/ files"
+            ],
+            "hints": [
+              "npm pack --dry-run 2>&1 | grep oracle"
+            ],
+            "success_criteria": [
+              "oracle.sh and oracle.md appear in pack output from utils/oracle/",
+              "No files from .aether/oracle/ in pack output"
+            ],
+            "depends_on": [],
+            "status": "completed"
+          },
+          {
+            "id": "3.2",
+            "goal": "Run validate-package.sh and confirm it passes with the new layout",
+            "constraints": [
+              "Must exit 0"
+            ],
+            "hints": [
+              "bash bin/validate-package.sh"
+            ],
+            "success_criteria": [
+              "validate-package.sh exits 0"
+            ],
+            "depends_on": [
+              "3.1"
+            ],
+            "status": "completed"
+          }
+        ],
+        "success_criteria": [
+          "Distribution pipeline correctly includes infrastructure, excludes state"
+        ]
+      },
+      {
+        "id": 4,
+        "name": "End-to-end validation",
+        "description": "Run full test suite, install globally, and verify oracle.sh is distributed to hub — confirming the original bug is fixed",
+        "status": "completed",
+        "tasks": [
+          {
+            "id": "4.1",
+            "goal": "Run full test suite and verify all tests pass",
+            "constraints": [
+              "All 530+ tests must pass",
+              "Zero oracle-related failures"
+            ],
+            "hints": [
+              "npm test"
+            ],
+            "success_criteria": [
+              "npm test exits 0"
+            ],
+            "depends_on": [],
+            "status": "completed"
+          },
+          {
+            "id": "4.2",
+            "goal": "Install globally and verify oracle.sh is distributed to hub",
+            "constraints": [
+              "npm install -g . must succeed",
+              "oracle.sh must exist in hub after install"
+            ],
+            "hints": [
+              "Check ~/.aether/system/utils/oracle/ after install"
+            ],
+            "success_criteria": [
+              "oracle.sh and oracle.md exist in hub",
+              "tmux launch path resolves to existing file in installed repos"
+            ],
+            "depends_on": [
+              "4.1"
+            ],
+            "status": "completed"
+          }
+        ],
+        "success_criteria": [
+          "All tests pass",
+          "Hub distribution includes oracle infrastructure",
+          "Original bug fixed"
+        ]
+      }
+    ]
   },
   "memory": {
-    "phase_learnings": [],
+    "phase_learnings": [
+      {
+        "phase": "inherited",
+        "learning": "Process substitution avoids subshell variable loss in bash while loops",
+        "status": "validated",
+        "source": "inherited:completion-report"
+      },
+      {
+        "phase": "inherited",
+        "learning": "TDD with parallel background agents speeds up foundation work",
+        "status": "validated",
+        "source": "inherited:completion-report"
+      },
+      {
+        "phase": "inherited",
+        "learning": "Parallel agents for content authoring is efficient with independent file sets",
+        "status": "validated",
+        "source": "inherited:completion-report"
+      },
+      {
+        "id": "learning_1774208917",
+        "phase": 1,
+        "phase_name": "Move oracle infrastructure to distributable location",
+        "learnings": [
+          {
+            "claim": "Watcher independently catches state-path bugs (line 895 archive using SCRIPT_DIR instead of ORACLE_STATE_DIR) that builders miss during refactoring",
+            "status": "validated",
+            "tested": true,
+            "evidence": "Vigil-96 caught the bug, fix was applied and verified",
+            "disproven_by": null
+          },
+          {
+            "claim": "When moving bash scripts, separate infrastructure (distributable code) from state (per-instance data) using distinct directory variables (SCRIPT_DIR vs ORACLE_STATE_DIR)",
+            "status": "validated",
+            "tested": true,
+            "evidence": "Successfully separated oracle.sh (utils/oracle/) from state files (oracle/) with ORACLE_STATE_DIR variable",
+            "disproven_by": null
+          },
+          {
+            "claim": "Anchor .npmignore patterns with leading slash when directory name appears at multiple depths to prevent unintended exclusion",
+            "status": "validated",
+            "tested": true,
+            "evidence": "Unanchored oracle/ would have excluded utils/oracle/ too; /oracle/ correctly scopes to top-level only",
+            "disproven_by": null
+          }
+        ],
+        "timestamp": "2026-03-22T19:48:37Z"
+      },
+      {
+        "id": "learning_1774279585",
+        "phase": 2,
+        "phase_name": "Update all oracle.sh path references across codebase",
+        "learnings": [
+          {
+            "claim": "SCRIPT_DIR references in test harness setup are easily missed when the main ORACLE_SH path constant is updated — grep for SCRIPT_DIR separately",
+            "status": "validated",
+            "tested": true,
+            "evidence": "Watcher caught 7 SCRIPT_DIR refs in oracle-colony tests that builders missed despite updating ORACLE_SH",
+            "disproven_by": null
+          }
+        ],
+        "timestamp": "2026-03-23T15:26:25Z"
+      },
+      {
+        "id": "learning_1774280570",
+        "phase": 3,
+        "phase_name": "Verify distribution pipeline",
+        "learnings": [
+          {
+            "claim": "Distribution pipeline has three independent exclusion layers (.npmignore, HUB_EXCLUDE_DIRS, UPDATE_PROTECTED_AETHER_DIRS) — verify each separately",
+            "status": "validated",
+            "tested": true,
+            "evidence": "All three layers verified independently: .npmignore excludes oracle state, HUB_EXCLUDE_DIRS allows utils/oracle, UPDATE_PROTECTED_AETHER_DIRS protects oracle state",
+            "disproven_by": null
+          }
+        ],
+        "timestamp": "2026-03-23T15:42:50Z"
+      },
+      {
+        "id": "learning_1774281392",
+        "phase": 4,
+        "phase_name": "End-to-end validation",
+        "learnings": [
+          {
+            "claim": "Position-aware path exclusion (first-segment-only) is needed when a directory name appears at multiple depths in the tree",
+            "status": "validated",
+            "tested": true,
+            "evidence": "HUB_EXCLUDE_DIRS uses parts.some() which matches any segment — adding oracle would also block utils/oracle/. Fixed with HUB_EXCLUDE_FIRST_SEGMENT using parts[0] check.",
+            "disproven_by": null
+          }
+        ],
+        "timestamp": "2026-03-23T15:56:32Z"
+      }
+    ],
     "decisions": [],
-    "instincts": []
+    "instincts": [
+      {
+        "id": "instinct_1774619576",
+        "trigger": "when working on documentation",
+        "action": "Updated project documentation",
+        "confidence": 0.8999999999999999,
+        "status": "hypothesis",
+        "domain": "documentation",
+        "source": "fallback-phase-4",
+        "evidence": [
+          "Modified 5 files in .planning (231+/0- lines)"
+        ],
+        "tested": false,
+        "created_at": "2026-03-27T13:52:56Z",
+        "last_applied": "2026-03-27T13:59:04Z",
+        "applications": 4,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774619578",
+        "trigger": "when working on testing",
+        "action": "Added tests, improving test coverage",
+        "confidence": 0.8999999999999999,
+        "status": "hypothesis",
+        "domain": "testing",
+        "source": "fallback-phase-4",
+        "evidence": [
+          "Modified 1 files in tests/integration (221+/0- lines)"
+        ],
+        "tested": false,
+        "created_at": "2026-03-27T13:52:58Z",
+        "last_applied": "2026-03-27T13:59:04Z",
+        "applications": 4,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_inherited_1",
+        "trigger": "bash accumulation loops with pipes",
+        "action": "Use process substitution not pipes for accumulation loops",
+        "confidence": 0.85,
+        "domain": "architecture",
+        "source": "inherited:completion-report",
+        "evidence": [
+          "Validated in prior colony session"
+        ],
+        "created_at": "2026-03-22T18:27:52Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0
+      },
+      {
+        "id": "instinct_1774208929",
+        "trigger": "moving bash scripts to new directory",
+        "action": "Separate infrastructure variables (SCRIPT_DIR) from state variables (STATE_DIR) and grep for all SCRIPT_DIR references to catch missed state file paths",
+        "confidence": 0.8,
+        "status": "hypothesis",
+        "domain": "architecture",
+        "source": "phase-1",
+        "evidence": [
+          "Watcher caught line 895 archive operation using SCRIPT_DIR instead of ORACLE_STATE_DIR"
+        ],
+        "tested": false,
+        "created_at": "2026-03-22T19:48:49Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774619575",
+        "trigger": "when working on source",
+        "action": "Extended or modified .aether/utils module code",
+        "confidence": 0.7999999999999999,
+        "status": "hypothesis",
+        "domain": "source",
+        "source": "fallback-phase-4",
+        "evidence": [
+          "Modified 3 files in .aether/utils (341+/0- lines)"
+        ],
+        "tested": false,
+        "created_at": "2026-03-27T13:52:55Z",
+        "last_applied": "2026-03-27T13:53:40Z",
+        "applications": 3,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774618130",
+        "trigger": "test",
+        "action": "test",
+        "confidence": 0.7,
+        "status": "hypothesis",
+        "domain": "workflow",
+        "source": "",
+        "evidence": [
+          ""
+        ],
+        "tested": false,
+        "created_at": "2026-03-27T13:28:50Z",
+        "last_applied": "2026-03-27T13:31:14Z",
+        "applications": 2,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774287690",
+        "trigger": "researching: What are the main components and their responsibilities in the Aether system?",
+        "action": "Oracle found (85% confidence): System has 13 major components: aether-utils.sh (11,272-line monolithic bash utility with ~125 subcommands), CLI (Node.js bin/cli.js with 16 lib modules), 43 slash commands, 22 agent definitions acros",
+        "confidence": 0.5,
+        "status": "hypothesis",
+        "domain": "research",
+        "source": "oracle:production-readiness",
+        "evidence": [
+          "Oracle research: What are the main components and their responsibilities in the Aether system?"
+        ],
+        "tested": false,
+        "created_at": "2026-03-23T17:41:29Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774287691",
+        "trigger": "researching: What are the dependency relationships between components, and where are coupling risks?",
+        "action": "Oracle found (82% confidence): COLONY_STATE.json is the central coupling nexus: 219 direct references across 38 of 43 slash commands, plus 153 references in aether-utils.sh. Both slash commands and aether-utils.sh read/write it —",
+        "confidence": 0.5,
+        "status": "hypothesis",
+        "domain": "research",
+        "source": "oracle:production-readiness",
+        "evidence": [
+          "Oracle research: What are the dependency relationships between components, and where are coupling risks?"
+        ],
+        "tested": false,
+        "created_at": "2026-03-23T17:41:31Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774287692",
+        "trigger": "researching: Where are the risk areas — execution reliability gaps, silent failures, fake autonomy, hallucination vectors, and verification weaknesses?",
+        "action": "Oracle found (82% confidence): Silent error suppression at industrial scale: ~338 instances of error-swallowing patterns. ERR trap disabled for suggest-analyze (lines 10236-10427), creating ~200-line untrapped window during builds.",
+        "confidence": 0.5,
+        "status": "hypothesis",
+        "domain": "research",
+        "source": "oracle:production-readiness",
+        "evidence": [
+          "Oracle research: Where are the risk areas — execution reliability gaps, silent failures, fake autonomy, hallucination vectors, and verification weaknesses?"
+        ],
+        "tested": false,
+        "created_at": "2026-03-23T17:41:32Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774287693",
+        "trigger": "researching: How does the memory and context management system handle state persistence, session resume, context rot, and cross-colony knowledge sharing?",
+        "action": "Oracle found (82% confidence): Dual-file state persistence: session.json (lightweight metadata) and COLONY_STATE.json (authoritative state). Resume reads both, COLONY_STATE.json always authoritative. Missing/corrupted COLONY_STATE.",
+        "confidence": 0.5,
+        "status": "hypothesis",
+        "domain": "research",
+        "source": "oracle:production-readiness",
+        "evidence": [
+          "Oracle research: How does the memory and context management system handle state persistence, session resume, context rot, and cross-colony knowledge sharing?"
+        ],
+        "tested": false,
+        "created_at": "2026-03-23T17:41:33Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774287694",
+        "trigger": "researching: What would an expert change about this architecture to minimize user input while maximizing safety, verifiability, and autonomous execution capability?",
+        "action": "Oracle found (80% confidence): RECOMMENDATION 1 — Per-phase COLONY_STATE.json checkpointing. Only entomb creates backups. State-safety skill prescribes backups but they're not implemented in builds/continues/autopilot. Fix: cp CO",
+        "confidence": 0.5,
+        "status": "hypothesis",
+        "domain": "research",
+        "source": "oracle:production-readiness",
+        "evidence": [
+          "Oracle research: What would an expert change about this architecture to minimize user input while maximizing safety, verifiability, and autonomous execution capability?"
+        ],
+        "tested": false,
+        "created_at": "2026-03-23T17:41:34Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774619944",
+        "trigger": "when working on source",
+        "action": "Extended or modified bin module code",
+        "confidence": 0.5,
+        "status": "hypothesis",
+        "domain": "source",
+        "source": "fallback-phase-4",
+        "evidence": [
+          "Modified 2 files in bin (54+/0- lines)"
+        ],
+        "tested": false,
+        "created_at": "2026-03-27T13:59:04Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      }
+    ]
   },
   "errors": {
     "records": [],
@@ -23,13 +589,19 @@
   "signals": [],
   "graveyards": [],
   "events": [
-    {
-      "timestamp": "2026-02-17T13:44:25.737Z",
-      "type": "colony_initialized",
-      "worker": "init",
-      "details": "Colony initialized with goal: Aether colony"
-    }
+    "2026-03-22T18:27:52Z|colony_initialized|init|Colony initialized with goal: Fix why Oracle tmux session dies immediately — oracle.sh doesn't exist. Oracle is meant to run autonomously like a ralph loop.",
+    "2026-03-22T18:44:48Z|plan_generated|plan|Generated 4 phases with 95% confidence",
+    "2026-03-22T19:25:38Z|phase_started|build|Phase 1: Move oracle infrastructure to distributable location started",
+    "2026-03-22T19:48:37Z|phase_advanced|continue|Completed Phase 1, advancing to Phase 2",
+    "2026-03-22T19:58:28Z|phase_started|build|Phase 2: Update all oracle.sh path references started",
+    "2026-03-23T15:26:25Z|phase_advanced|continue|Completed Phase 2, advancing to Phase 3",
+    "2026-03-23T15:27:36Z|phase_started|build|Phase 3: Verify distribution pipeline started",
+    "2026-03-23T15:42:50Z|phase_advanced|continue|Completed Phase 3, advancing to Phase 4",
+    "2026-03-23T15:44:03Z|phase_started|build|Phase 4: End-to-end validation started",
+    "2026-03-23T15:56:32Z|phase_advanced|continue|Completed Phase 4 — all phases complete, project done",
+    "2026-03-23T16:01:40Z|milestone_reached|seal|Achieved Crowned Anthill milestone"
   ],
-  "created_at": "2026-02-17T13:44:25.737Z",
-  "last_updated": "2026-03-19T16:33:26Z"
+  "milestone": "Crowned Anthill",
+  "milestone_updated_at": "2026-03-23T16:01:40Z",
+  "colony_name": "Aether Colony"
 }

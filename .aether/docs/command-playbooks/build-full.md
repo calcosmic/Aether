@@ -127,26 +127,25 @@ Options:
   --verbose, -v       Show full completion details (spawn tree, TDD, patterns)
   --no-visual         Disable real-time visual display (visual is on by default)
   --no-suggest        Skip pheromone suggestion analysis
-  --model, -m <name>  Override model for this build (one-time)
+  --model, -m <slot>  Override model slot for this build (one-time; opus|sonnet|haiku|inherit)
 
 Examples:
   /ant:build 1              Build Phase 1 (with visual display)
   /ant:build 1 --verbose    Build Phase 1 (full details + visual)
   /ant:build 1 --no-visual  Build Phase 1 without visual display
   /ant:build 1 --no-suggest Build Phase 1 without pheromone suggestions
-  /ant:build 1 --model glm-5    Build Phase 1 with glm-5 for all workers
+  /ant:build 1 --model opus    Build Phase 1 with opus slot for all workers
 ```
 
 Stop here.
 
 **Validate CLI model override (if provided):**
 If `cli_model_override` is set:
-1. Run using the Bash tool with description "Validating model override...": `bash .aether/aether-utils.sh model-profile validate "$cli_model_override"`
+1. Run using the Bash tool with description "Validating model override...": `bash .aether/aether-utils.sh model-slot validate "$cli_model_override"`
 2. Parse JSON result - if `.result.valid` is false:
-   - Display: `Error: Invalid model "$cli_model_override"`
-   - Display: `Valid models: {list from .result.models}`
+   - Display: `Error: Invalid slot "$cli_model_override". {error message from .result.error}`
    - Stop here
-3. If valid: Display `Using override model: {model}`
+3. If valid: Display `Using override slot: {slot}`
 
 **Auto-upgrade old state:**
 If `version` field is missing, "1.0", or "2.0":
@@ -995,6 +994,8 @@ You are {Watcher-Name}, a 👁️🐜 Watcher Ant.
 
 Verify all work done by Builders in Phase {id}.
 
+{ model_override_section if cli_model_override is set }
+
 Files to verify:
 - Created: {list from builder results}
 - Modified: {list from builder results}
@@ -1221,6 +1222,8 @@ Spawn the Chaos Ant using Task tool with `subagent_type="aether-chaos"`, include
 You are {Chaos-Name}, a 🎲🐜 Chaos Ant.
 
 Test Phase {id} work for edge cases and boundary conditions.
+
+{ model_override_section if cli_model_override is set }
 
 Files to test:
 - {list from builder results}
