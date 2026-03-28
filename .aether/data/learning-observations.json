@@ -439,6 +439,61 @@
       "colonies": [
         "1774650429"
       ]
+    },
+    {
+      "content_hash": "sha256:9a5c700af1d8aff1390736194801871b5aa4558c600d5a58c0e97c328c9dd51a",
+      "content": "Resilience issue found: JSON objects stored as ant names break spawn-tree JSON output (critical)",
+      "wisdom_type": "failure",
+      "observation_count": 1,
+      "first_seen": "2026-03-28T02:08:17Z",
+      "last_seen": "2026-03-28T02:08:17Z",
+      "colonies": [
+        "1774650429"
+      ]
+    },
+    {
+      "content_hash": "sha256:1d8d580c3a268dbd56737d8c42a1e3cbe8774da5cc54e946d4ee175cea20c504",
+      "content": "Resilience issue found: spawn-tree-load passes raw output without validation (high)",
+      "wisdom_type": "failure",
+      "observation_count": 1,
+      "first_seen": "2026-03-28T02:08:18Z",
+      "last_seen": "2026-03-28T02:08:18Z",
+      "colonies": [
+        "1774650429"
+      ]
+    },
+    {
+      "content_hash": "sha256:bfcbf0257ae0068d98e84aecedf546412a324e62998a43e7f92ef81e2315b46e",
+      "content": "Resilience issue found: Newline chars in queen-promote destroy QUEEN.md (critical)",
+      "wisdom_type": "failure",
+      "observation_count": 1,
+      "first_seen": "2026-03-28T03:17:04Z",
+      "last_seen": "2026-03-28T03:17:04Z",
+      "colonies": [
+        "1774650429"
+      ]
+    },
+    {
+      "content_hash": "sha256:6456ef83dbb75a6ebecfb30d74643f4a4eb18edbe2f5db2ff7d1ffc77aea254d",
+      "content": "Shell functions using sed c-command for line replacement must use head/tail instead to handle multi-line content safely on macOS BSD sed",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-28T03:45:41Z",
+      "last_seen": "2026-03-28T03:45:41Z",
+      "colonies": [
+        "1774650429"
+      ]
+    },
+    {
+      "content_hash": "sha256:68c83159345ad3969f4fe51e2e82085978b32669819c7a50c4f8ae621beddaee",
+      "content": "Every atomic mv that overwrites a critical file must have a non-empty size guard to prevent data destruction from upstream pipeline failures",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-28T03:45:43Z",
+      "last_seen": "2026-03-28T03:45:43Z",
+      "colonies": [
+        "1774650429"
+      ]
     }
   ]
 }

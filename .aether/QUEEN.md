@@ -18,6 +18,8 @@ Communication style, expertise level, and decision-making patterns observed from
 
 Validated approaches that work in this codebase, and anti-patterns to avoid. Includes architecture conventions, naming patterns, error handling style, and technology-specific insights. Tagged [repo] for project-specific or [general] for cross-colony patterns.
 
+- **1774650429** (2026-03-28T03:45:43Z): Every atomic mv that overwrites a critical file must have a non-empty size guard to prevent data destruction from upstream pipeline failures
+- **1774650429** (2026-03-28T03:45:41Z): Shell functions using sed c-command for line replacement must use head/tail instead to handle multi-line content safely on macOS BSD sed
 - **1774650429** (2026-03-28T00:14:55Z): Shell functions that embed user-derived values in JSON output strings must use jq for safe construction to prevent JSON injection from special characters
 - **1774650429** (2026-03-28T00:14:51Z): Shell functions that set traps must compose with _aether_exit_cleanup to avoid orphaning file locks and temp files when the function exits abnormally
 - **1774650429** (2026-03-27T23:20:16Z): Test fixtures with hardcoded dates will break as calendar time advances — use dynamic date computation with cross-platform fallbacks instead
@@ -51,12 +53,18 @@ High-confidence behavioral patterns that have been validated through repeated co
 
 - [instinct] **testing** (0.8): When test fixtures use hardcoded dates, then replace with dynamic cross-platform date computation to prevent time-based test degradation
 - [instinct] **code-style** (0.8): When shell functions set EXIT/TERM traps, then compose trap with _aether_exit_cleanup to preserve lock and temp file cleanup on abnormal exit
+- [instinct] **code-style** (0.85): When shell scripts use sed c-command for line replacement, then replace with head/tail pattern for cross-platform newline safety — sed c breaks on macOS BSD with multi-line content
+- [instinct] **code-style** (0.85): When atomic mv overwrites a critical data file, then add non-empty size guard (if [[ ! -s file ]]) before mv to prevent data destruction from upstream pipeline failures
 ---
 
 ## Evolution Log
 
 | Date | Source | Type | Details |
 |------|--------|------|---------|
+| 2026-03-28T03:46:05Z | instinct | promoted_instinct | code-style: add non-empty size guard (if [[ ! -s file ]]) befo... |
+| 2026-03-28T03:46:05Z | instinct | promoted_instinct | code-style: replace with head/tail pattern for cross-platform ... |
+| 2026-03-28T03:45:43Z | 1774650429 | promoted_pattern | Added: Every atomic mv that overwrites a critical file mu... |
+| 2026-03-28T03:45:41Z | 1774650429 | promoted_pattern | Added: Shell functions using sed c-command for line repla... |
 | 2026-03-28T00:15:09Z | instinct | promoted_instinct | code-style: compose trap with _aether_exit_cleanup to preserve... |
 | 2026-03-28T00:14:55Z | 1774650429 | promoted_pattern | Added: Shell functions that embed user-derived values in ... |
 | 2026-03-28T00:14:51Z | 1774650429 | promoted_pattern | Added: Shell functions that set traps must compose with _... |
@@ -86,13 +94,13 @@ High-confidence behavioral patterns that have been validated through repeated co
 {
   "version": "2.0.0",
   "wisdom_version": "2.0",
-  "last_evolved": "2026-03-28T00:15:09Z",
+  "last_evolved": "2026-03-28T03:46:05Z",
   "colonies_contributed": ["1774645519"],
   "stats": {
     "total_user_prefs": 2,
-    "total_codebase_patterns": 12,
+    "total_codebase_patterns": 14,
     "total_build_learnings": 1,
-    "total_instincts": 3
+    "total_instincts": 5
   },
   "evolution_log": [{"timestamp": "2026-03-24T23:40:00Z", "action": "migrate", "wisdom_type": "system", "content_hash": "v1-to-v2-migration", "colony": "system"}, {"timestamp": "2026-03-20T12:37:32Z", "action": "promote", "wisdom_type": "pattern", "content_hash": "sha256:f8aa50cfda0f37cac6cabba140bb99f1d75aa6d01a7100fe7a5ccddc2b3a017b", "colony": "1771335865738"}]
 }

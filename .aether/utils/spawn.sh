@@ -51,12 +51,12 @@ _spawn_complete() {
     echo "[$ts] $status_icon $emoji $ant_name: $status${summary:+ - $summary}" >> "$DATA_DIR/activity.log"
     # Update spawn tree
     echo "$ts_full|$ant_name|$status|$summary" >> "$DATA_DIR/spawn-tree.txt"
-    # Log failed spawns to events array via state-api facade (ARCH-04)
+    # Log failed spawns to events array as pipe-delimited strings (matching template format)
     if [[ "$status" == "failed" ]] || [[ "$status" == "error" ]]; then
       if [[ -f "$DATA_DIR/COLONY_STATE.json" ]]; then
-        SC_TS="$ts_full" SC_NAME="$ant_name" SC_STATUS="$status" SC_SUMMARY="${summary:-unknown}" \
+        SC_EVENT="$ts_full|spawn_failed|$ant_name|${summary:-unknown}" \
           _state_mutate '
-            .events += [{"type":"spawn_failed","ant":env.SC_NAME,"status":env.SC_STATUS,"summary":env.SC_SUMMARY,"timestamp":env.SC_TS}]
+            .events += [env.SC_EVENT]
           ' >/dev/null 2>&1 || _aether_log_error "Failed to log spawn failure to colony state"
       fi
     fi
@@ -197,7 +197,12 @@ _spawn_tree_load() {
       exit 1
     }
     tree_json=$(reconstruct_tree_json)
-    json_ok "$tree_json"
+    if echo "$tree_json" | jq -e . >/dev/null 2>&1; then
+      json_ok "$tree_json"
+    else
+      json_err "$E_VALIDATION_FAILED" "spawn tree reconstruction produced invalid JSON"
+      return 1
+    fi
 }
 
 _spawn_tree_active() {

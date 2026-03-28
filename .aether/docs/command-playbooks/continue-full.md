@@ -146,7 +146,7 @@ Continue to Phase 5: Secrets Scan.
 3. **If spawning Probe:**
 
    a. Generate Probe name and dispatch:
-   Run using the Bash tool with description "Generating Probe name...": `probe_name=$(bash .aether/aether-utils.sh generate-ant-name "probe") && bash .aether/aether-utils.sh spawn-log "Queen" "probe" "$probe_name" "Coverage improvement: ${coverage_percent}%" && echo "{\"name\":\"$probe_name\"}"`
+   Run using the Bash tool with description "Generating Probe name...": `probe_name=$(bash .aether/aether-utils.sh generate-ant-name "probe" | jq -r '.result') && bash .aether/aether-utils.sh spawn-log "Queen" "probe" "$probe_name" "Coverage improvement: ${coverage_percent}%" && echo "{\"name\":\"$probe_name\"}"`
 
 
    c. Display: `🧪🐜 Probe {probe_name} spawning — Coverage at {coverage_percent}%, generating tests for uncovered paths...`
@@ -502,7 +502,7 @@ If no CRITICAL issues, continue to Step 1.7.1.
    Run using the Bash tool with description "Establishing test baseline...": `test_output_before=$(npm test 2>&1 || echo "TEST_FAILED") && tests_passing_before=$(echo "$test_output_before" | grep -oE '[0-9]+ passing' | grep -oE '[0-9]+' || echo "0") && echo "Baseline: $tests_passing_before tests passing"`
 
    b. **Generate Weaver name and dispatch:**
-   Run using the Bash tool with description "Generating Weaver name...": `weaver_name=$(bash .aether/aether-utils.sh generate-ant-name "weaver") && bash .aether/aether-utils.sh spawn-log "Queen" "weaver" "$weaver_name" "Proactive refactoring" && echo "{\"name\":\"$weaver_name\"}"`
+   Run using the Bash tool with description "Generating Weaver name...": `weaver_name=$(bash .aether/aether-utils.sh generate-ant-name "weaver" | jq -r '.result') && bash .aether/aether-utils.sh spawn-log "Queen" "weaver" "$weaver_name" "Proactive refactoring" && echo "{\"name\":\"$weaver_name\"}"`
 
 
    d. **Display:** `🔄🐜 Weaver {weaver_name} spawning — Refactoring complex code...`
@@ -617,7 +617,7 @@ Continue to Step 1.9.
 **If package.json exists:**
 
 1. Generate Gatekeeper name and log spawn:
-Run using the Bash tool with description "Generating Gatekeeper name...": `gatekeeper_name=$(bash .aether/aether-utils.sh generate-ant-name "gatekeeper") && bash .aether/aether-utils.sh spawn-log "Queen" "gatekeeper" "$gatekeeper_name" "Supply chain security audit" && echo "{\"name\":\"$gatekeeper_name\"}"`
+Run using the Bash tool with description "Generating Gatekeeper name...": `gatekeeper_name=$(bash .aether/aether-utils.sh generate-ant-name "gatekeeper" | jq -r '.result') && bash .aether/aether-utils.sh spawn-log "Queen" "gatekeeper" "$gatekeeper_name" "Supply chain security audit" && echo "{\"name\":\"$gatekeeper_name\"}"`
 
 2. Display: `📦🐜 Gatekeeper {name} spawning — Scanning dependencies for CVEs and license compliance...`
 
@@ -706,7 +706,7 @@ Continue to Step 1.9.
 **Code quality audit — runs on every `/ant:continue` for consistent coverage.**
 
 1. Generate Auditor name and log spawn:
-Run using the Bash tool with description "Generating Auditor name...": `auditor_name=$(bash .aether/aether-utils.sh generate-ant-name "auditor") && bash .aether/aether-utils.sh spawn-log "Queen" "auditor" "$auditor_name" "Code quality audit" && echo "{\"name\":\"$auditor_name\"}"`
+Run using the Bash tool with description "Generating Auditor name...": `auditor_name=$(bash .aether/aether-utils.sh generate-ant-name "auditor" | jq -r '.result') && bash .aether/aether-utils.sh spawn-log "Queen" "auditor" "$auditor_name" "Code quality audit" && echo "{\"name\":\"$auditor_name\"}"`
 
 2. Display: `👥🐜 Auditor {name} spawning — Reviewing code with multi-lens analysis...`
 

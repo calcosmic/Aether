@@ -263,12 +263,20 @@ _queen_read() {
     instincts=$(echo "$combined" | jq -r '.instincts')
 
     # Build JSON output (v2 keys)
+    # Pass shell-level file existence flags to jq (these are authoritative, not $meta.source)
+    local hg_json="false"
+    local hl_json="false"
+    [[ "$has_global" == "true" ]] && hg_json="true"
+    [[ "$has_local" == "true" ]] && hl_json="true"
+
     result=$(jq -n \
       --argjson meta "$metadata" \
       --arg user_prefs "$user_prefs" \
       --arg codebase_patterns "$codebase_patterns" \
       --arg build_learnings "$build_learnings" \
       --arg instincts "$instincts" \
+      --argjson has_g "$hg_json" \
+      --argjson has_l "$hl_json" \
       '{
         metadata: $meta,
         wisdom: {
@@ -278,14 +286,14 @@ _queen_read() {
           instincts: $instincts
         },
         priming: {
-          has_user_prefs: ($user_prefs | length) > 0 and ($user_prefs | test("No user preferences recorded yet") | not),
-          has_codebase_patterns: ($codebase_patterns | length) > 0 and ($codebase_patterns | test("No codebase patterns recorded yet") | not),
-          has_build_learnings: ($build_learnings | length) > 0 and ($build_learnings | test("No build learnings recorded yet") | not),
-          has_instincts: ($instincts | length) > 0 and ($instincts | test("No instincts recorded yet") | not)
+          has_user_prefs: ([$user_prefs | split("\n")[] | select(startswith("- "))] | length) > 0,
+          has_codebase_patterns: ([$codebase_patterns | split("\n")[] | select(startswith("- "))] | length) > 0,
+          has_build_learnings: ([$build_learnings | split("\n")[] | select(startswith("- ") or startswith("#"))] | length) > 0,
+          has_instincts: ([$instincts | split("\n")[] | select(startswith("- "))] | length) > 0
         },
         sources: {
-          has_global: ($meta.source == "global" or $meta.source == "local"),
-          has_local: ($meta.source == "local")
+          has_global: $has_g,
+          has_local: $has_l
         }
       }')
 
@@ -434,12 +442,19 @@ _queen_promote() {
       placeholder_line=$(sed -n "${section_line},${section_end}p" "$queen_file" | grep -n "^\\*No .* recorded yet" | head -1 | cut -d: -f1)
       if [[ -n "$placeholder_line" ]]; then
         actual_line=$((section_line + placeholder_line - 1))
-        sed "${actual_line}c\\
-${entry}" "$queen_file" > "$tmp_file"
+        # Use head/tail instead of sed c-command for newline safety (sed c\ breaks on multi-line content on macOS)
+        {
+          head -n $((actual_line - 1)) "$queen_file"
+          echo "$entry"
+          tail -n +$((actual_line + 1)) "$queen_file"
+        } > "$tmp_file"
       else
-        # Fallback: insert after section header
-        sed "${section_line}a\\
-${entry}" "$queen_file" > "$tmp_file"
+        # Fallback: insert after section header using head/tail
+        {
+          head -n "$section_line" "$queen_file"
+          echo "$entry"
+          tail -n +$((section_line + 1)) "$queen_file"
+        } > "$tmp_file"
       fi
     else
       # Insert entry after the description paragraph (after the second empty line in section)
@@ -459,18 +474,23 @@ ${entry}" "$queen_file" > "$tmp_file"
           insert_line=$((section_line + 1))
         fi
       fi
-      # Insert the entry after the found line
-      sed "${insert_line}a\\
-${entry}" "$queen_file" > "$tmp_file"
+      # Insert the entry after the found line using head/tail for newline safety
+      {
+        head -n "$insert_line" "$queen_file"
+        echo "$entry"
+        tail -n +$((insert_line + 1)) "$queen_file"
+      } > "$tmp_file"
     fi
 
     # Update Evolution Log in temp file
     ev_entry="| ${ts} | ${colony_name} | promoted_${wisdom_type} | Added: ${content:0:50}... |"
     # Find the line after the separator in Evolution Log table
-    ev_separator=$(grep -n "^|------|" "$tmp_file" | tail -1 | cut -d: -f1)
+    ev_separator=$(grep -n "^|------|" "$tmp_file" | tail -1 | cut -d: -f1 || true)
 
-    # Use awk for cross-platform insertion
-    awk -v line="$ev_separator" -v entry="$ev_entry" 'NR==line{print; print entry; next}1' "$tmp_file" > "${tmp_file}.ev" && mv "${tmp_file}.ev" "$tmp_file"
+    # Use awk for cross-platform insertion (only if separator found)
+    if [[ -n "$ev_separator" ]]; then
+      awk -v line="$ev_separator" -v entry="$ev_entry" 'NR==line{print; print entry; next}1' "$tmp_file" > "${tmp_file}.ev" && mv "${tmp_file}.ev" "$tmp_file"
+    fi
 
     # Update METADATA stats in temp file
     # Map wisdom_type to stat key -- detect v2 vs v1 METADATA format
@@ -644,6 +664,13 @@ $updated_meta
     # Restore default cleanup trap before final move (file becomes permanent)
     trap '_aether_exit_cleanup 2>/dev/null || true' EXIT TERM INT HUP
 
+    # Safety guard: never overwrite QUEEN.md with empty content
+    if [[ ! -s "$tmp_file" ]]; then
+      rm -f "$tmp_file"
+      json_err "$E_INTERNAL" "queen-promote produced empty output — aborting to protect QUEEN.md"
+      return 1
+    fi
+
     # Atomic move
     mv "$tmp_file" "$queen_file"
 
@@ -807,7 +834,7 @@ _queen_write_learnings() {
     # Update Evolution Log
     local ev_entry="| ${ts} | phase-${phase_id} | build_learnings | Added ${written} learnings from Phase ${phase_id}: ${phase_name} |"
     local ev_separator
-    ev_separator=$(grep -n "^|------|" "$tmp_file" | tail -1 | cut -d: -f1)
+    ev_separator=$(grep -n "^|------|" "$tmp_file" | tail -1 | cut -d: -f1 || true)
     if [[ -n "$ev_separator" ]]; then
       awk -v line="$ev_separator" -v entry="$ev_entry" 'NR==line{print; print entry; next}1' "$tmp_file" > "${tmp_file}.ev" && mv "${tmp_file}.ev" "$tmp_file"
     fi
@@ -824,6 +851,13 @@ _queen_write_learnings() {
 
     # Update last_evolved
     awk -v ts="$ts" '/"last_evolved":/ { gsub(/"last_evolved": "[^"]*"/, "\"last_evolved\": \"" ts "\""); } {print}' "$tmp_file" > "${tmp_file}.meta" && mv "${tmp_file}.meta" "$tmp_file"
+
+    # Safety guard: never overwrite QUEEN.md with empty content
+    if [[ ! -s "$tmp_file" ]]; then
+      rm -f "$tmp_file"
+      json_err "$E_INTERNAL" "queen-write-learnings produced empty output — aborting to protect QUEEN.md"
+      return 1
+    fi
 
     # Atomic move
     mv "$tmp_file" "$queen_file"
@@ -900,8 +934,12 @@ _queen_promote_instinct() {
       placeholder_line=$(sed -n "${section_line},${section_end}p" "$tmp_file" | grep -n "^\\*No instincts recorded yet" | head -1 | cut -d: -f1)
       if [[ -n "$placeholder_line" ]]; then
         local actual_line=$((section_line + placeholder_line - 1))
-        sed "${actual_line}c\\
-${entry}" "$tmp_file" > "${tmp_file}.rep" && mv "${tmp_file}.rep" "$tmp_file"
+        # Use head/tail instead of sed c-command for newline safety
+        {
+          head -n $((actual_line - 1)) "$tmp_file"
+          echo "$entry"
+          tail -n +$((actual_line + 1)) "$tmp_file"
+        } > "${tmp_file}.rep" && mv "${tmp_file}.rep" "$tmp_file"
       fi
     else
       # Append entry before section separator (---) or at end
@@ -925,7 +963,7 @@ ${entry}" "$tmp_file" > "${tmp_file}.rep" && mv "${tmp_file}.rep" "$tmp_file"
     # Update Evolution Log
     local ev_entry="| ${ts} | instinct | promoted_instinct | ${domain}: ${action:0:50}... |"
     local ev_separator
-    ev_separator=$(grep -n "^|------|" "$tmp_file" | tail -1 | cut -d: -f1)
+    ev_separator=$(grep -n "^|------|" "$tmp_file" | tail -1 | cut -d: -f1 || true)
     if [[ -n "$ev_separator" ]]; then
       awk -v line="$ev_separator" -v entry="$ev_entry" 'NR==line{print; print entry; next}1' "$tmp_file" > "${tmp_file}.ev" && mv "${tmp_file}.ev" "$tmp_file"
     fi
@@ -942,6 +980,13 @@ ${entry}" "$tmp_file" > "${tmp_file}.rep" && mv "${tmp_file}.rep" "$tmp_file"
 
     # Update last_evolved
     awk -v ts="$ts" '/"last_evolved":/ { gsub(/"last_evolved": "[^"]*"/, "\"last_evolved\": \"" ts "\""); } {print}' "$tmp_file" > "${tmp_file}.meta" && mv "${tmp_file}.meta" "$tmp_file"
+
+    # Safety guard: never overwrite QUEEN.md with empty content
+    if [[ ! -s "$tmp_file" ]]; then
+      rm -f "$tmp_file"
+      json_err "$E_INTERNAL" "queen-promote-instinct produced empty output — aborting to protect QUEEN.md"
+      return 1
+    fi
 
     # Atomic move
     mv "$tmp_file" "$queen_file"
@@ -1060,7 +1105,7 @@ _queen_seed_from_hive() {
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
     local ev_entry="| ${ts} | hive | seed | Seeded ${seeded} cross-colony patterns from hive |"
     local ev_separator
-    ev_separator=$(grep -n "^|------|" "$tmp_file" | tail -1 | cut -d: -f1)
+    ev_separator=$(grep -n "^|------|" "$tmp_file" | tail -1 | cut -d: -f1 || true)
     if [[ -n "$ev_separator" ]]; then
       awk -v line="$ev_separator" -v entry="$ev_entry" 'NR==line{print; print entry; next}1' "$tmp_file" > "${tmp_file}.ev" && mv "${tmp_file}.ev" "$tmp_file"
     fi
@@ -1077,6 +1122,13 @@ _queen_seed_from_hive() {
 
     # Update last_evolved
     awk -v ts="$ts" '/"last_evolved":/ { gsub(/"last_evolved": "[^"]*"/, "\"last_evolved\": \"" ts "\""); } {print}' "$tmp_file" > "${tmp_file}.meta" && mv "${tmp_file}.meta" "$tmp_file"
+
+    # Safety guard: never overwrite QUEEN.md with empty content
+    if [[ ! -s "$tmp_file" ]]; then
+      rm -f "$tmp_file"
+      json_err "$E_INTERNAL" "queen-seed-from-hive produced empty output — aborting to protect QUEEN.md"
+      return 1
+    fi
 
     # Atomic move
     mv "$tmp_file" "$queen_file"
@@ -1501,7 +1553,7 @@ _queen_write_charter() {
     fi
     local ev_entry="| ${ts} | system | ${ev_type} | ${ev_details} |"
     local ev_separator
-    ev_separator=$(grep -n "^|------|" "$tmp_file" | tail -1 | cut -d: -f1)
+    ev_separator=$(grep -n "^|------|" "$tmp_file" | tail -1 | cut -d: -f1 || true)
     if [[ -n "$ev_separator" ]]; then
         awk -v line="$ev_separator" -v entry="$ev_entry" 'NR==line{print; print entry; next}1' "$tmp_file" > "${tmp_file}.ev" && mv "${tmp_file}.ev" "$tmp_file"
     fi
@@ -1577,6 +1629,13 @@ _queen_write_charter() {
 
     # Update last_evolved
     awk -v ts="$ts" '/"last_evolved":/ { gsub(/"last_evolved": "[^"]*"/, "\"last_evolved\": \"" ts "\""); } {print}' "$tmp_file" > "${tmp_file}.meta" && mv "${tmp_file}.meta" "$tmp_file"
+
+    # Safety guard: never overwrite QUEEN.md with empty content
+    if [[ ! -s "$tmp_file" ]]; then
+      rm -f "$tmp_file"
+      json_err "$E_INTERNAL" "queen-write-charter produced empty output — aborting to protect QUEEN.md"
+      return 1
+    fi
 
     # Atomic move
     mv "$tmp_file" "$queen_file"

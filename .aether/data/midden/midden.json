@@ -280,7 +280,55 @@
       "acknowledged": true,
       "acknowledged_at": "2026-03-22T14:19:11Z",
       "acknowledge_reason": ""
+    },
+    {
+      "id": "midden_1774662909_54334",
+      "timestamp": "2026-03-28T01:55:09Z",
+      "category": "worker_failure",
+      "source": "builder",
+      "message": "Builder Weld-37 failed on task 5.1: 4 spawn-tree tests failing due to invalid JSON output from spawn-tree.sh (modified in this session)",
+      "reviewed": false
+    },
+    {
+      "id": "midden_1774663697_94139",
+      "timestamp": "2026-03-28T02:08:17Z",
+      "category": "resilience",
+      "source": "chaos",
+      "message": "Chaos finding: JSON objects as ant names break spawn-tree JSON output (critical)",
+      "reviewed": false
+    },
+    {
+      "id": "midden_1774663698_94645",
+      "timestamp": "2026-03-28T02:08:18Z",
+      "category": "resilience",
+      "source": "chaos",
+      "message": "Chaos finding: spawn-tree-load no JSON validation before json_ok (high)",
+      "reviewed": false
+    },
+    {
+      "id": "midden_1774667821_41195",
+      "timestamp": "2026-03-28T03:17:01Z",
+      "category": "resilience",
+      "source": "chaos",
+      "message": "Chaos finding: Newline chars in queen-promote destroy QUEEN.md (critical)",
+      "reviewed": false
+    },
+    {
+      "id": "midden_1774667822_41255",
+      "timestamp": "2026-03-28T03:17:02Z",
+      "category": "resilience",
+      "source": "chaos",
+      "message": "Chaos finding: grep-pipefail kills queen-promote functions (high)",
+      "reviewed": false
+    },
+    {
+      "id": "midden_1774669451_20782",
+      "timestamp": "2026-03-28T03:44:11Z",
+      "category": "security",
+      "source": "gatekeeper",
+      "message": "High CVEs found: 4",
+      "reviewed": false
     }
   ],
-  "entry_count": 17
+  "entry_count": 23
 }

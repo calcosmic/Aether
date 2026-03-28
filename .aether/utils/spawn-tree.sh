@@ -181,12 +181,15 @@ $current_children $child_idx" "$children_file"
         fi
         local child_name
         child_name=$(sed -n "$((child_idx + 1))p" "$names_file")
+        child_name=$(echo "$child_name" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g')
         children_json+="\"$child_name\""
       done
     fi
     children_json+="]"
 
-    # Escape task for JSON
+    # Escape all string fields for JSON safety
+    name=$(echo "$name" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g')
+    parent=$(echo "$parent" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g')
     task=$(echo "$task" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g')
 
     spawns_json+="{"
@@ -307,7 +310,9 @@ get_active_spawns() {
           active_json+=","
         fi
 
-        # Escape task for JSON
+        # Escape all string fields for JSON safety
+        child_name=$(echo "$child_name" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g')
+        parent=$(echo "$parent" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g')
         task=$(echo "$task" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g')
 
         active_json+="{"

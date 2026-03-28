@@ -3,7 +3,7 @@
   "goal": "Comprehensive audit of today's session work — verify QUEEN.md, pheromone system, wisdom pipeline, charter-write, and all colony lifecycle changes are functioning correctly",
   "colony_name": "Aether Colony",
   "state": "READY",
-  "current_phase": 3,
+  "current_phase": 4,
   "session_id": "session_1774650429_217110",
   "initialized_at": "2026-03-27T22:27:09Z",
   "build_started_at": null,
@@ -128,7 +128,7 @@
         "id": 3,
         "name": "Audit QUEEN.md and wisdom pipeline integrity",
         "description": "Verify queen-read parses QUEEN.md correctly and promotion pipeline (observations -> instincts -> QUEEN.md -> hive) is intact.",
-        "status": "pending",
+        "status": "completed",
         "tasks": [
           {
             "id": "3.1",
@@ -146,7 +146,7 @@
               "All sections parsed"
             ],
             "depends_on": [],
-            "status": "pending"
+            "status": "completed"
           },
           {
             "id": "3.2",
@@ -166,7 +166,7 @@
             "depends_on": [
               "3.1"
             ],
-            "status": "pending"
+            "status": "completed"
           }
         ],
         "success_criteria": [
@@ -360,10 +360,68 @@
           }
         ],
         "timestamp": "2026-03-28T00:11:12Z"
+      },
+      {
+        "id": "learning_1774669530",
+        "phase": 3,
+        "phase_name": "Audit QUEEN.md and wisdom pipeline integrity",
+        "learnings": [
+          {
+            "claim": "Shell functions using sed c-command for line replacement must use head/tail instead to handle multi-line content safely on macOS BSD sed",
+            "status": "validated",
+            "tested": true,
+            "evidence": "sed c-command produced empty output on macOS when entry variable contained newlines, silently overwriting QUEEN.md with 0 bytes. head/tail pattern from lines 917-922 handles multi-line content correctly.",
+            "disproven_by": null
+          },
+          {
+            "claim": "Every atomic mv that overwrites a critical file must have a non-empty size guard to prevent data destruction from upstream pipeline failures",
+            "status": "validated",
+            "tested": true,
+            "evidence": "5 mv operations in queen.sh could overwrite QUEEN.md with empty content if any preceding awk/sed/head-tail pipeline produced empty output. Adding if [[ ! -s $tmp_file ]] guard prevents data loss.",
+            "disproven_by": null
+          }
+        ],
+        "timestamp": "2026-03-28T03:45:30Z"
       }
     ],
     "decisions": [],
     "instincts": [
+      {
+        "id": "instinct_1774669550",
+        "trigger": "shell scripts use sed c-command for line replacement",
+        "action": "replace with head/tail pattern for cross-platform newline safety — sed c breaks on macOS BSD with multi-line content",
+        "confidence": 0.85,
+        "status": "hypothesis",
+        "domain": "code-style",
+        "source": "phase-3",
+        "evidence": [
+          "queen.sh sed c-command produced empty output on macOS when entry contained newlines, overwriting QUEEN.md with 0 bytes"
+        ],
+        "tested": false,
+        "created_at": "2026-03-28T03:45:50Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774669556",
+        "trigger": "atomic mv overwrites a critical data file",
+        "action": "add non-empty size guard (if [[ ! -s file ]]) before mv to prevent data destruction from upstream pipeline failures",
+        "confidence": 0.85,
+        "status": "hypothesis",
+        "domain": "code-style",
+        "source": "phase-3",
+        "evidence": [
+          "5 mv operations in queen.sh could silently destroy QUEEN.md content if preceding awk/sed pipeline produced empty output"
+        ],
+        "tested": false,
+        "created_at": "2026-03-28T03:45:56Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
       {
         "id": "instinct_1774653613",
         "trigger": "test fixtures use hardcoded dates",
@@ -404,7 +462,7 @@
         "id": "instinct_1774653272",
         "trigger": "working on pattern patterns",
         "action": "Chaos resilience moderate: 5 scenarios tested on pheromone-expire date fix, 3 resilient, 2 findings (static fallback staleness, double date failure)",
-        "confidence": 0.70,
+        "confidence": 0.7,
         "status": "hypothesis",
         "domain": "pattern",
         "source": "promoted_from_learning",
@@ -422,7 +480,7 @@
         "id": "instinct_1774653616",
         "trigger": "working on pattern patterns",
         "action": "Test fixtures with hardcoded dates will break as calendar time advances — use dynamic date computation with cross-platform fallbacks instead",
-        "confidence": 0.70,
+        "confidence": 0.7,
         "status": "hypothesis",
         "domain": "pattern",
         "source": "promoted_from_learning",
@@ -440,7 +498,7 @@
         "id": "instinct_1774656892",
         "trigger": "working on pattern patterns",
         "action": "Shell functions that set traps must compose with _aether_exit_cleanup to avoid orphaning file locks and temp files when the function exits abnormally",
-        "confidence": 0.70,
+        "confidence": 0.7,
         "status": "hypothesis",
         "domain": "pattern",
         "source": "promoted_from_learning",
@@ -458,7 +516,7 @@
         "id": "instinct_1774656895",
         "trigger": "working on pattern patterns",
         "action": "Shell functions that embed user-derived values in JSON output strings must use jq for safe construction to prevent JSON injection from special characters",
-        "confidence": 0.70,
+        "confidence": 0.7,
         "status": "hypothesis",
         "domain": "pattern",
         "source": "promoted_from_learning",
@@ -467,6 +525,42 @@
         ],
         "tested": false,
         "created_at": "2026-03-28T00:14:55Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774669542",
+        "trigger": "working on pattern patterns",
+        "action": "Shell functions using sed c-command for line replacement must use head/tail instead to handle multi-line content safely on macOS BSD sed",
+        "confidence": 0.70,
+        "status": "hypothesis",
+        "domain": "pattern",
+        "source": "promoted_from_learning",
+        "evidence": [
+          ""
+        ],
+        "tested": false,
+        "created_at": "2026-03-28T03:45:42Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774669544",
+        "trigger": "working on pattern patterns",
+        "action": "Every atomic mv that overwrites a critical file must have a non-empty size guard to prevent data destruction from upstream pipeline failures",
+        "confidence": 0.70,
+        "status": "hypothesis",
+        "domain": "pattern",
+        "source": "promoted_from_learning",
+        "evidence": [
+          ""
+        ],
+        "tested": false,
+        "created_at": "2026-03-28T03:45:44Z",
         "last_applied": null,
         "applications": 0,
         "successes": 0,
@@ -485,7 +579,10 @@
     "2026-03-27T22:52:12Z|plan_generated|plan|Generated 6 phases with 92% confidence",
     "2026-03-27T22:56:12Z|phase_started|build|Phase 1: Fix failing test 42: eternal promotion strength check started",
     "2026-03-27T23:19:58Z|phase_advanced|continue|Completed Phase 1, advancing to Phase 2",
-    "2026-03-28T00:11:12Z|phase_advanced|continue|Completed Phase 2, advancing to Phase 3"
+    "2026-03-28T00:11:12Z|phase_advanced|continue|Completed Phase 2, advancing to Phase 3",
+    "2026-03-28T01:55:06Z|spawn_failed|Weld-37|npm test: 612/616 passed, 4 spawn-tree failures (invalid JSON)",
+    "2026-03-28T02:34:04Z|phase_started|build|Phase 3: Audit QUEEN.md and wisdom pipeline integrity started",
+    "2026-03-28T03:45:30Z|phase_advanced|continue|Completed Phase 3, advancing to Phase 4"
   ],
   "milestone": null,
   "milestone_updated_at": null
