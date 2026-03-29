@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.6
 milestone_name: Bugfix & Hardening
 status: executing
-stopped_at: 34-03 complete, continuing with 34-04
-last_updated: "2026-03-29T07:40:00.000Z"
-last_activity: 2026-03-29 -- Phase 34 wave 3 starting
+stopped_at: 34-04 complete, continuing with 34-05
+last_updated: "2026-03-29T07:52:00.000Z"
+last_activity: 2026-03-29 -- Phase 34 wave 3+4
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 9
-  completed_plans: 6
-  percent: 16
+  completed_plans: 7
+  percent: 24
 ---
 
 # Project State
@@ -26,17 +26,17 @@ See: .planning/PROJECT.md (updated 2026-03-29)
 ## Current Position
 
 Phase: 34 (cross-colony-isolation) — EXECUTING
-Plan: 3 of 5 (34-03 complete, 34-04 + 34-05 remaining)
-Status: Executing Phase 34, Wave 3
-Last activity: 2026-03-29 -- continuing with waves 3+4
+Plan: 4 of 5 (34-04 complete, 34-05 remaining)
+Status: Executing Phase 34, Wave 3+4
+Last activity: 2026-03-29 -- 34-04 complete
 
-Progress: [█████░░░] 60% (34-01, 34-02, 34-03 complete)
+Progress: [██████░░] 80% (34-01, 34-02, 34-03, 34-04 complete)
 
 ## Performance Metrics
 
 **Velocity (from v2.1-v2.5):**
 
-- Total plans completed: 86 (82 from v2.1-v2.5 + 4 from v2.6)
+- Total plans completed: 88 (82 from v2.1-v2.5 + 6 from v2.6)
 - Average duration: 5min
 - Total execution time: ~7 hours
 
@@ -56,12 +56,21 @@ Progress: [█████░░░] 60% (34-01, 34-02, 34-03 complete)
 | 33-02 | json_ok escaping + sanitize-on-read | 35min | 3 | 13 |
 | 33-03 | lock safety + atomic write hardening | 27min | 2 | 3 |
 | 33-04 | data safety tests + status display | 11min | 2 | 2 |
+| 34-01 | colony name extraction | 5min | 2 | 2 |
+| 34-02 | hub lock isolation | 4min | 2 | 2 |
+| 34-03 | per-colony data directory infrastructure | 4min | 2 | 1 |
+| 34-04 | utils modules COLONY_DATA_DIR migration | 10min | 2 | 14 |
 
 *Updated during Phase 34 execution*
 
 ## Accumulated Context
 
 ### Decisions
+
+**From 34-04:**
+- Standalone scripts (swarm-display.sh, watch-spawn-tree.sh) resolve COLONY_DATA_DIR inline since they are not sourced by aether-utils.sh
+- error-handler.sh safely uses COLONY_DATA_DIR since it is sourced after COLONY_DATA_DIR initialization
+- state-api.sh and state-loader.sh unchanged -- they only reference COLONY_STATE.json at DATA_DIR
 
 **From 34-03:**
 - COLONY_STATE.json remains at DATA_DIR root as the colony identification anchor
@@ -90,5 +99,5 @@ None active.
 ## Session Continuity
 
 Last session: 2026-03-29
-Stopped at: 34-03 complete, continuing with 34-04 (utils modules migration)
-Resume file: .planning/phases/34-cross-colony-isolation/34-03-SUMMARY.md
+Stopped at: 34-04 complete, continuing with 34-05
+Resume file: .planning/phases/34-cross-colony-isolation/34-04-SUMMARY.md
