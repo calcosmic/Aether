@@ -276,8 +276,26 @@ Use the `phase_bar` and `task_bar` values computed in Step 2.7 for the actual ba
    No memory data available. Colony wisdom will accumulate as you complete phases.
 ```
 
-**Pheromone Summary:**
+**Data Safety:**
 After the Memory Health table, run:
+```bash
+bash .aether/aether-utils.sh data-safety-stats
+```
+
+If the result contains non-zero counts, display:
+```
+🛡️ Data Safety
+  Stale locks cleaned: {stale_locks_cleaned}
+  JSON validation rejects: {json_validation_rejects}
+```
+
+If all counts are 0 or the subcommand returns no data, display:
+```
+🛡️ Data Safety: No issues detected
+```
+
+**Pheromone Summary:**
+After the Data Safety section, run:
 ```bash
 bash .aether/aether-utils.sh pheromone-count
 ```
