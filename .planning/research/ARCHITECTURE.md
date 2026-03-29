@@ -1,805 +1,566 @@
-# Architecture Research: Smart Init System for Aether v2.5
+# Architecture Research: v2.6 Bugfix & Hardening
 
-**Domain:** Aether colony initialization system (slash commands, shell utils, QUEEN.md governance, prompt generation)
-**Researched:** 2026-03-27
-**Confidence:** HIGH (based on direct codebase analysis of init.md, plan.md, colonize.md, queen.sh, pheromone.sh colony-prime, session.sh, state-api.sh, and all template files)
+**Domain:** Aether colony orchestration system -- cross-colony isolation, lock scope safety, input sanitization
+**Researched:** 2026-03-29
+**Confidence:** HIGH (based on direct codebase analysis of file-lock.sh, hive.sh, state-api.sh, atomic-write.sh, spawn.sh, spawn-tree.sh, swarm.sh, queen.sh, learning.sh, and aether-utils.sh dispatcher)
 
 ---
 
 ## Executive Summary
 
-The current `/ant:init` command (388 lines in `.claude/commands/ant/init.md`) is a mechanical file-setup operation: parse the goal string, write COLONY_STATE.json from a template, initialize constraints, pheromones, midden, learning-observations, create a session file, and register the repo. It does zero research about the repo being initialized, generates no structured prompt, and offers no approval step.
+Aether's colony system operates across two storage scopes: **colony-local** (`.aether/` within each repo) and **hub-shared** (`~/.aether/` across all colonies). The current architecture has four architectural-level bugs that undermine this two-scope model:
 
-The smart init milestone needs to transform this into an intelligent first step that (1) scans the repo to understand its structure, (2) generates a structured colony initialization prompt combining the user's natural language goal with repo context, (3) presents the prompt for approval before proceeding, and (4) manages QUEEN.md as a living colony charter with new governance sections (intent, vision, goals, architecture).
+1. **LOCK_DIR mutation in hive.sh** temporarily redirects colony-local lock writes to the hub directory. If colony-local code runs during this window (e.g., a concurrent colony operation), locks land in the wrong directory, breaking mutual exclusion.
 
-The key architectural insight: **init.md is a Markdown prompt executed by Claude Code's LLM**. It does not run as a traditional program. Every step is an instruction the LLM follows, calling tools (Bash, Read, Write, Glob) at each step. This means "approval loops" and "prompt generation" must work within Claude Code's execution model -- the LLM can present text to the user and wait for a response, then continue.
+2. **QUEEN.md promotion writes to colony-local without namespacing.** `queen-promote` writes wisdom to `$AETHER_ROOT/.aether/QUEEN.md` (colony-local) using the format `- **{colony_name}** ({ts}): {content}`, but `queen-read` merges global and local QUEEN.md files with simple string concatenation. Colony-specific wisdom from one repo leaks into every other colony on the same machine via the global read path.
 
----
+3. **spawn.sh and spawn-tree.sh interpolate user-controlled `ant_name` into grep patterns** without escaping. An ant name containing regex metacharacters (`|`, `.`, `*`) causes incorrect matches in the spawn tree, and in pathological cases could match unintended records.
 
-## Part 1: System Overview
+4. **atomic-write.sh does not release locks on JSON validation failure.** When `atomic_write` is called for a `.json` target and jq validation fails, the function returns 1 without releasing the lock. The caller (`_state_write`) does release the lock on atomic_write failure, but `_state_mutate` acquires its own lock before calling atomic_write and has a gap where the jq mutation step can fail without releasing.
 
-### Current Init Architecture
-
-```
-User types: /ant:init "Build a REST API with authentication"
-    |
-    v
-init.md (388 lines of Markdown instructions for Claude Code LLM)
-    |
-    +-- Step 1: Validate input (goal string not empty)
-    +-- Step 1.5: Verify aether-utils.sh exists
-    +-- Step 1.6: queen-init (create QUEEN.md from template)
-    +-- Step 2: Read COLONY_STATE.json (check existing state)
-    +-- Step 2.6: Load prior colony knowledge (completion-report.md)
-    +-- Step 3: Write COLONY_STATE.json (from template with substitutions)
-    +-- Step 4: Initialize constraints.json (from template)
-    +-- Step 4.5: Initialize runtime files (pheromones, midden, learning-obs)
-    +-- Step 5: context-update init "$ARGUMENTS" (creates CONTEXT.md)
-    +-- Step 6: validate-state colony
-    +-- Step 6.5: Detect nestmates
-    +-- Step 6.6: Register repo (silent, non-blocking)
-    +-- Step 6.7: Seed QUEEN.md from hive (non-blocking)
-    +-- Step 7: Display result
-    +-- Step 8: session-init
-```
-
-### Proposed Smart Init Architecture
-
-```
-User types: /ant:init "Build a REST API with authentication"
-    |
-    v
-init.md (refactored, modular)
-    |
-    +-- Step 1: Validate input [EXISTING]
-    +-- Step 1.5: Verify aether-utils.sh exists [EXISTING]
-    |
-    +-- Step 2: REPO SCAN (NEW)
-    |   |-- Lightweight scan: package manifests, entry points, config
-    |   |-- Check survey freshness: survey files exist and recent?
-    |   |-- Check chambers: prior colonies exist?
-    |   |-- Domain detection: what kind of project is this?
-    |   +-- Output: scan_summary JSON (tech, size, survey status)
-    |
-    +-- Step 3: GENERATE COLONY PROMPT (NEW)
-    |   |-- Combine user goal + scan_summary + hive wisdom
-    |   |-- Produce structured colony initialization document:
-    |   |   - Intent (what the user wants)
-    |   |   - Vision (what success looks like)
-    |   |   - Governance (rules, constraints)
-    |   |   - Goals (measurable outcomes)
-    |   |   - Architecture notes (if survey available)
-    |   +-- Output: colony_prompt (Markdown text)
-    |
-    +-- Step 4: APPROVAL LOOP (NEW)
-    |   |-- Display generated prompt to user
-    |   |-- Wait for user response (approve / edit / cancel)
-    |   |-- If approved: proceed to write files
-    |   |-- If edited: regenerate from user modifications
-    |   |-- If cancelled: stop, no files written
-    |
-    +-- Step 5: QUEEN.MD GOVERNANCE UPDATE (NEW)
-    |   |-- If QUEEN.md exists and has governance sections: UPDATE
-    |   |-- If QUEEN.md exists but no governance: ADD new sections
-    |   |-- If QUEEN.md doesn't exist: CREATE with governance sections
-    |   +-- New sections: ## Intent, ## Vision, ## Governance, ## Goals, ## Architecture
-    |
-    +-- Step 6: Write COLONY_STATE.json [EXISTING - Step 3]
-    +-- Step 7: Initialize constraints [EXISTING - Step 4]
-    +-- Step 8: Initialize runtime files [EXISTING - Step 4.5]
-    +-- Step 9: context-update [EXISTING - Step 5]
-    +-- Step 10: Validate state [EXISTING - Step 6]
-    +-- Step 11: Register + seed [EXISTING - Steps 6.5-6.7]
-    +-- Step 12: Display result [EXISTING - Step 7]
-    +-- Step 13: session-init [EXISTING - Step 8]
-```
+This document maps the correct architectural boundaries, prescribes patterns for safe cross-scope operations, and identifies the specific code changes needed.
 
 ---
 
-## Part 2: Question 1 -- Where Does Lightweight Repo Scanning Live?
+## Part 1: The Two-Scope Storage Model
 
-### Options Considered
-
-| Option | Location | Pros | Cons |
-|--------|----------|------|------|
-| A) New utils module | `.aether/utils/scan.sh` | Clean separation, testable | New module to maintain, 10th domain module |
-| B) Extend existing domain-detect | `queen.sh:_domain_detect()` | Already exists, just expand | queen.sh is 1242 lines, already heavy |
-| C) Inline in init.md | Steps within init.md | No new code | Not testable, not reusable, init.md already 388 lines |
-| D) New subcommands in existing module | `state-api.sh` or `session.sh` | Uses existing infrastructure | Wrong domain concern |
-
-### Recommendation: Option A -- New `scan.sh` utils module
-
-**Rationale:**
-
-1. **Clean domain boundary.** Repo scanning is a distinct concern from state management, session tracking, or queen wisdom. It deserves its own module.
-
-2. **Already have precedent.** The modularization in v2.1 (Phase 13) extracted 9 domain modules from the monolith. The pattern is established: each module has a single responsibility, is sourced by aether-utils.sh, and exposes functions with `_module_function` naming.
-
-3. **Testable in isolation.** Shell functions in `.aether/utils/scan.sh` can be tested independently via the bash test infrastructure (tests/bash/).
-
-4. **Reusable by other commands.** Both `/ant:init` and `/ant:colonize` need repo scanning. Currently, colonize.md (Step 2) does inline scanning with Glob/Read tool calls. A shared `scan.sh` module means both commands call the same functions.
-
-5. **Keeps init.md manageable.** init.md is already 388 lines. Adding scanning logic inline would push it past 500 lines, which is the established threshold for splitting into playbooks.
-
-### Module Structure
+### Current Architecture
 
 ```
-.aether/utils/scan.sh
-  _scan_repo()          -- Full repo scan, returns JSON with tech/size/survey status
-  _scan_quick()         -- Lightweight scan (package manifests + entry points only)
-  _scan_survey_status() -- Check if territory survey exists and is fresh
-  _scan_chambers()      -- Check for prior colony chambers
-  _scan_domain()        -- Enhanced domain detection (extends existing _domain_detect)
+COLONY-LOCAL (.aether/)               HUB-SHARED (~/.aether/)
++---------------------------+         +---------------------------+
+| .aether/data/             |         | ~/.aether/                 |
+|   COLONY_STATE.json       |         |   QUEEN.md (global wisdom) |
+|   pheromones.json         |         |   hive/wisdom.json         |
+|   constraints.json        |         |   registry.json            |
+|   learning-obs.json       |         |   eternal/memory.json      |
+|   midden/midden.json      |         |   skills/                  |
+|   spawn-tree.txt          |         |   system/                  |
+|   session.json            |         |   manifest.json            |
+|   activity.log            |         |   version.json             |
+| .aether/locks/            |         |   .aether/ (internal hub)  |
+| .aether/QUEEN.md (local)  |         |                           |
+| .aether/dreams/           |         |                           |
+| .aether/temp/             |         |                           |
++---------------------------+         +---------------------------+
+         |                                      |
+         +--- MUTEX BUG: LOCK_DIR leak --------+
+         +--- WISDOM BUG: unscoped writes -----+
+         +--- INJECTION BUG: unescaped grep ---+
 ```
 
-### Integration with aether-utils.sh
+### Correct Architecture
 
-Add to the source block (after line 42):
+The two-scope model should enforce these rules:
+
+| Property | Colony-Local | Hub-Shared |
+|----------|-------------|------------|
+| Scope | Single repo only | All repos on machine |
+| Lock dir | `$AETHER_ROOT/.aether/locks/` | `~/.aether/hive/locks/` (dedicated) |
+| State | COLONY_STATE.json | wisdom.json, registry.json |
+| QUEEN.md | Per-colony wisdom | Cross-colony preferences only |
+| Writes | Never touch hub paths | Never touch colony paths |
+| Mutual exclusion | Per-colony | Cross-colony (hub resources) |
+
+### The Ownership Principle
+
+**Every piece of state has exactly one owner scope.** Reads can cross boundaries (a colony reads hub wisdom), but writes must target the owner scope exclusively. When a colony-local operation needs to write hub state (e.g., promoting to hive), it should use a dedicated hub-write function that never touches the colony-local lock directory.
+
+---
+
+## Part 2: Bug #1 -- LOCK_DIR Mutation in hive.sh
+
+### What Goes Wrong
+
+`hive.sh` implements a save/restore pattern for `LOCK_DIR`:
+
 ```bash
-[[ -f "$SCRIPT_DIR/utils/scan.sh" ]] && source "$SCRIPT_DIR/utils/scan.sh"
+# In _hive_init (line 46-48), _hive_store (line 133-135), _hive_read (line 327-329):
+hs_saved_lock_dir="$LOCK_DIR"
+LOCK_DIR="$HOME/.aether/hive"
+acquire_lock "$hs_wisdom_file" || { LOCK_DIR="$hs_saved_lock_dir"; json_err ... }
 ```
 
-Add dispatch cases:
+The intent: hub-level locks for `wisdom.json` provide cross-colony mutual exclusion. The mechanism: temporarily mutate the global `LOCK_DIR` so `acquire_lock` creates lock files in `~/.aether/hive/` instead of `$AETHER_ROOT/.aether/locks/`.
+
+**The bug:** `LOCK_DIR` is a **global shell variable** sourced at startup by `file-lock.sh` (line 20). When `hive.sh` mutates it, the change is visible to ALL code running in the same shell session. If `acquire_lock` or `release_lock` is called for a colony-local resource during this window (e.g., from a concurrent subshell, a trap handler, or a nested function call), the lock file lands in `~/.aether/hive/` instead of `.aether/locks/`.
+
+**Consequences:**
+- Colony-local locks go to the hub directory, breaking per-colony isolation
+- Concurrent colony operations may not see each other's locks
+- Stale lock detection may reference wrong directory
+- The trap-based `cleanup_locks` in `file-lock.sh` (line 157) uses the mutated `LOCK_DIR`
+
+**Note:** The save/restore pattern *appears* correct on every individual code path. The issue is that shell does not have thread safety -- any code that runs between the save and restore (including signal handlers, background jobs, or function calls within the same scope) sees the mutated value. In practice, since `aether-utils.sh` runs as a single process, the risk is primarily from:
+1. Signal handlers (EXIT, TERM, INT, HUP traps)
+2. The `hive-promote` function calling `hive-store` via `bash "$0"` (subshell -- safe, but wasteful)
+3. Future concurrent execution patterns
+
+### Recommended Fix: Dedicated Hub Lock Function
+
+Instead of mutating a global, introduce a scoped lock acquisition pattern:
+
+**Pattern: Parameterized Lock Acquisition**
+
 ```bash
-scan-repo) _scan_repo "$@" ;;
-scan-quick) _scan_quick "$@" ;;
-scan-survey-status) _scan_survey_status "$@" ;;
-scan-chambers) _scan_chambers "$@" ;;
-```
+# file-lock.sh -- add optional lock_dir parameter
+acquire_lock() {
+    local file_path="$1"
+    local lock_dir_override="${2:-}"  # NEW: optional override
+    local effective_lock_dir="${lock_dir_override:-$LOCK_DIR}"
+    local lock_file="${effective_lock_dir}/$(basename "$file_path").lock"
+    # ... rest of function uses $effective_lock_dir instead of $LOCK_DIR
+}
 
-### What _scan_repo Returns
-
-```json
-{
-  "ok": true,
-  "result": {
-    "tech_stack": {
-      "language": "typescript",
-      "framework": "express",
-      "runtime": "node"
-    },
-    "entry_points": ["src/index.ts", "src/server.ts"],
-    "project_type": "api",
-    "has_tests": true,
-    "has_ci": true,
-    "file_count": 47,
-    "directory_count": 12,
-    "domain_tags": ["node", "typescript"],
-    "survey": {
-      "exists": true,
-      "last_surveyed": "2026-03-20T14:00:00Z",
-      "is_fresh": false,
-      "stale_documents": ["PROVISIONS.md"]
-    },
-    "chambers": {
-      "count": 2,
-      "last_colony_goal": "Add authentication"
-    },
-    "prior_knowledge": {
-      "has_completion_report": true,
-      "instinct_count": 3,
-      "learning_count": 5
-    }
-  }
+release_lock() {
+    # No change needed -- uses CURRENT_LOCK which already contains full path
+    ...
 }
 ```
 
-### Relationship to Existing domain-detect
+**Pattern: Hub Lock Helper**
 
-The existing `_domain_detect()` in queen.sh (lines 1078-1094) does simple file-presence detection (checks for package.json, Cargo.toml, go.mod, etc.). The new `_scan_domain()` should call `_domain_detect()` first, then enrich with additional signals:
-
-- Parse package.json for framework detection (check dependencies)
-- Check for tsconfig.json to distinguish TypeScript from JavaScript
-- Check for test directories (test/, tests/, __tests__/) to detect testing patterns
-- Count files in src/ vs lib/ to estimate project size
-
-This means `_domain_detect()` stays in queen.sh (it is also called by init.md Step 6.6 for registry), and `_scan_domain()` in scan.sh wraps it with enrichment.
-
----
-
-## Part 3: Question 2 -- How Does the Prompt Generator Work?
-
-### The Core Idea
-
-The prompt generator transforms a user's natural language goal + repo scan results + hive wisdom into a structured colony initialization document. This document becomes the "colony charter" -- it defines what the colony is trying to achieve and how it should operate.
-
-### Where It Lives
-
-**The prompt generator should NOT be a shell subcommand.** It is an LLM operation that requires synthesis and judgment. Shell scripts are for deterministic operations (file I/O, JSON manipulation, state transitions). The prompt generator needs the LLM's ability to interpret natural language, reason about project structure, and produce coherent prose.
-
-**Implementation: A step within init.md** (Steps 2-3 of the proposed architecture). The step instructs the Claude Code LLM to:
-
-1. Read the scan results from `_scan_repo`
-2. Read hive wisdom via `hive-read`
-3. Read prior completion-report.md if it exists
-4. Synthesize these into a structured Markdown document
-
-### Structured Colony Prompt Format
-
-```markdown
-# Colony Charter: {goal_summary}
-
-## Intent
-{1-2 paragraphs: what the user wants to achieve, interpreted from their goal string}
-
-## Vision
-{1-2 paragraphs: what success looks like for this colony}
-
-## Governance
-### Constraints
-- {rules from REDIRECT pheromones if any}
-- {constraints inferred from scan (e.g., "must maintain existing API compatibility")}
-
-### Quality Standards
-- {testing expectations from scan}
-- {code style from DISCIPLINES.md if survey available}
-
-### Communication
-- {user preferences from QUEEN.md or hub}
-
-## Goals
-1. {primary goal from user input}
-2. {inferred goals from scan}
-3. {goals from prior colony knowledge if applicable}
-
-## Architecture Notes
-{if survey available: key patterns from BLUEPRINT.md, tech stack from PROVISIONS.md}
-{if no survey: "Run /ant:colonize for deeper architectural context"}
-
-## Prior Knowledge
-{if completion-report.md exists: inherited instincts and learnings}
-{if hive wisdom available: relevant cross-colony patterns}
+```bash
+# hive.sh -- new helper, replaces save/restore pattern
+_hive_acquire_lock() {
+    local file_path="$1"
+    acquire_lock "$file_path" "$HOME/.aether/hive/locks"
+}
 ```
 
-### Why This Works in Claude Code's Execution Model
+This eliminates the global mutation entirely. Lock directory is determined at call time, not by environment state.
 
-In Claude Code, a slash command is a Markdown prompt. The LLM reads it and follows the instructions step by step. Between steps, the LLM can:
+**Migration path:**
+1. Add `lock_dir_override` parameter to `acquire_lock` in `file-lock.sh`
+2. Create `~/.aether/hive/locks/` directory (currently hive.sh uses `~/.aether/hive/` directly, which puts lock files alongside data files)
+3. Replace all save/restore patterns in `hive.sh` with `_hive_acquire_lock`
+4. Verify `cleanup_locks` trap still works (it does -- `CURRENT_LOCK` contains the full path)
 
-- Call Bash to run shell commands
-- Call Read to read files
-- Call Write to create files
-- Present text to the user and wait for response
+### Lock Directory Should Be Separate From Data
 
-So the flow is:
+Currently hive.sh puts locks in `~/.aether/hive/` (same directory as `wisdom.json`). This is an anti-pattern: lock files and data files should be in separate directories for clean lifecycle management. The fix above uses `~/.aether/hive/locks/` as a dedicated lock directory.
 
-```
-Step 2 (in init.md): Run _scan_repo via Bash tool
-    |
-    v
-LLM has scan results in context
-    |
-Step 3 (in init.md): LLM synthesizes prompt from:
-    - scan results (JSON from Step 2)
-    - user goal ($ARGUMENTS)
-    - hive wisdom (from hive-read via Bash)
-    - prior knowledge (from completion-report.md via Read)
-    |
-    v
-LLM generates colony_prompt (Markdown text)
-    |
-Step 4 (in init.md): LLM presents colony_prompt to user
-    |
-    v
-User responds: "looks good" / "change X" / "cancel"
-    |
-    v
-LLM proceeds or adjusts based on response
+---
+
+## Part 3: Bug #2 -- QUEEN.md Namespacing
+
+### What Goes Wrong
+
+`queen-promote` (queen.sh line 349) writes to `$AETHER_ROOT/.aether/QUEEN.md` -- the **colony-local** QUEEN.md. The entry format includes a colony_name tag:
+
+```bash
+entry="- ${entry_prefix}**${colony_name}** (${ts}): ${content}"
 ```
 
-### No New Shell Subcommand Needed
+However, `queen-read` (queen.sh line 183) reads **both** global and local QUEEN.md and merges them:
 
-The prompt generator is purely an LLM operation within init.md. No new `prompt-generate` subcommand is needed. The scan results provide the data; the LLM does the synthesis.
-
-However, the scan results themselves DO need to be available as a shell subcommand so the LLM can call them via Bash:
-
-```
-bash .aether/aether-utils.sh scan-repo
+```bash
+queen_global="$HOME/.aether/QUEEN.md"   # hub
+queen_local="$AETHER_ROOT/.aether/QUEEN.md"  # colony
+# ... reads both, concatenates content per section
 ```
 
----
+**The problem:** Colony-specific wisdom written to the local QUEEN.md is only visible within that colony. This is correct behavior for per-colony learnings. But `queen-promote` is called from `learning-promote-auto` (learning.sh line 423), which is triggered by observations from colony work. These learnings are always colony-scoped, never promoted to the hub.
 
-## Part 4: Question 3 -- How Does the Approval Loop Work?
+Meanwhile, `queen-read` merges global and local without distinguishing provenance. A worker reading QUEEN.md sees a flat list of wisdom entries from both scopes, some tagged with colony names and some not, with no way to tell which scope they came from.
 
-### Claude Code's Execution Model
+**The deeper issue:** There is no mechanism to promote colony wisdom to the hub QUEEN.md. The `queen-promote` function always writes to the local file. The hub QUEEN.md (`~/.aether/QUEEN.md`) is only populated by:
+1. Manual user preferences via `/ant:preferences`
+2. Initial setup
 
-Claude Code executes slash commands as sequential instructions in a Markdown prompt. The LLM processes the prompt step by step. **Between steps, the LLM can pause and wait for user input.**
+Colony learnings that should cross colony boundaries (the whole purpose of the hive system) never reach the hub QUEEN.md. Instead, they go through the separate `hive-promote` pipeline to `wisdom.json`. This means there are **two parallel wisdom systems** (QUEEN.md and hive wisdom.json) that don't communicate.
 
-This is how existing commands already work. For example, in init.md Step 2, if state already exists, the LLM presents a warning and the user responds. The LLM then continues based on the response.
+### Recommended Fix: Explicit Scope Parameter
 
-### Proposed Approval Loop Pattern
+Add a `--scope` parameter to `queen-promote`:
 
-In init.md, after generating the colony prompt (Step 3), add a step that:
+```bash
+# queen-promote <type> <content> <colony_name> [--scope local|hub]
+# Default: local (current behavior, backward compatible)
 
-```
-### Step 4: Present Colony Charter for Approval
+queen_scope="local"
+for arg in "$@"; do
+  case "$arg" in
+    --scope) queen_scope="${2:-local}"; shift 2 ;;
+  esac
+done
 
-Display the generated colony charter:
-
-{colony_prompt}
-
-Then ask:
-
-```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   C O L O N Y   C H A R T E R
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Review the colony charter above. Options:
-  1. Approve -- proceed with initialization
-  2. Edit -- tell me what to change
-  3. Cancel -- do not initialize
-
-Waiting for your decision.
+if [[ "$queen_scope" == "hub" ]]; then
+  queen_file="$HOME/.aether/QUEEN.md"
+else
+  queen_file="$AETHER_ROOT/.aether/QUEEN.md"
+fi
 ```
 
-Wait for the user's response.
+**When to use each scope:**
 
-- If the user approves: proceed to Step 5 (write files)
-- If the user requests edits: modify the colony_prompt based on their feedback, re-present, and wait again
-- If the user cancels: output "Colony initialization cancelled. No files were written." and STOP
+| Write source | Scope | Rationale |
+|-------------|-------|-----------|
+| `learning-promote-auto` | local | Colony-specific learnings |
+| `/ant:preferences` | hub | User preferences apply globally |
+| `hive-promote` (high confidence) | hub | Cross-colony validated wisdom |
+| `/ant:seal` wisdom export | hub | Colony-completed wisdom worth sharing |
+
+**Migration path:**
+1. Add `--scope` parameter to `queen-promote` (default: `local`)
+2. No existing callers change behavior (backward compatible)
+3. Add hub-scoped promotion call in `hive-promote` for entries with confidence >= 0.9
+4. Document the two-scope model in QUEEN.md header
+
+### The Two-System Problem (Longer Term)
+
+The parallel wisdom systems (QUEEN.md and hive wisdom.json) should eventually converge. The current state:
+
+- **QUEEN.md** (Markdown): Human-readable, used for worker priming, edited by `queen-promote`
+- **hive wisdom.json** (JSON): Machine-readable, cross-colony, accessed via `hive-read`
+
+The `queen-read` function already returns JSON, so the worker priming pipeline already works with structured data. The hive system provides deduplication, confidence scoring, and domain scoping that QUEEN.md lacks. The recommended long-term direction is:
+
+1. **Keep QUEEN.md as the human-readable view** -- a rendering of wisdom.json filtered by domain
+2. **Make hive wisdom.json the single source of truth** -- all writes go through hive-store
+3. **queen-read becomes a hive-read proxy** -- reads from wisdom.json, formats for display
+
+This is NOT a v2.6 change. It is documented here as architectural context for future work.
+
+---
+
+## Part 4: Bug #3 -- Unsafe ant_name Interpolation
+
+### What Goes Wrong
+
+`spawn.sh` and `spawn-tree.sh` use `ant_name` in grep patterns without escaping:
+
+**spawn.sh, line 139:**
+```bash
+if ! grep -q "|$ant_name|" "$DATA_DIR/spawn-tree.txt" 2>/dev/null; then
 ```
 
-### Why This Works
-
-This is identical to how the existing init.md Step 2 works when detecting existing state. The LLM presents information and waits for user response. No special mechanism is needed -- this is Claude Code's normal execution model.
-
-### Potential Pitfall: Context Window Pressure
-
-The colony prompt + approval display + subsequent file writes all happen in a single conversation turn. If the scan results or colony prompt are very large, they consume context that could be needed for later steps.
-
-**Mitigation:** Keep the colony prompt under 2000 characters. The scan results should be summarized, not raw JSON. The approval display should show the prompt, not the full scan data.
-
----
-
-## Part 5: Question 4 -- How Does QUEEN.md Governance Update Work?
-
-### Current QUEEN.md Structure (v2 format)
-
-```markdown
-# QUEEN.md -- Colony Wisdom
-
-> Last evolved: {TIMESTAMP}
-> Wisdom version: 2.0.0
-
----
-
-## User Preferences
-{user preferences}
-
----
-
-## Codebase Patterns
-{validated patterns and anti-patterns}
-
----
-
-## Build Learnings
-{what worked and what failed}
-
----
-
-## Instincts
-{high-confidence behavioral patterns}
-
----
-
-## Evolution Log
-{table of changes}
-
----
-
-<!-- METADATA {json} -->
+**spawn.sh, line 152:**
+```bash
+parent=$(grep "|$current_ant|" "$DATA_DIR/spawn-tree.txt" 2>/dev/null | grep "|spawned$" | head -1 | cut -d'|' -f2)
 ```
 
-### Proposed QUEEN.md Structure (v3 format)
-
-```markdown
-# QUEEN.md -- Colony Charter & Wisdom
-
-> Last evolved: {TIMESTAMP}
-> Wisdom version: 3.0.0
-> Colony goal: {goal}
-
----
-
-## Intent
-{what this colony is trying to achieve}
-
----
-
-## Vision
-{what success looks like}
-
----
-
-## Governance
-### Constraints
-{hard rules}
-
-### Quality Standards
-{testing, code style, review expectations}
-
----
-
-## Goals
-{measurable outcomes}
-
----
-
-## Architecture Notes
-{tech stack, patterns, key decisions}
-
----
-
-## User Preferences
-{communication style, expertise level, decision patterns}
-
----
-
-## Codebase Patterns
-{validated approaches and anti-patterns}
-
----
-
-## Build Learnings
-{what worked and what failed}
-
----
-
-## Instincts
-{high-confidence behavioral patterns}
-
----
-
-## Evolution Log
-{table of changes}
-
----
-
-<!-- METADATA {json with v3.0 version} -->
+**spawn-tree.sh, line 98:**
+```bash
+if ! grep -q "|$ant_name|" "$file_path" 2>/dev/null; then
 ```
 
-### Where New Sections Are Written
-
-**Option A: New queen-governance subcommand in queen.sh**
-
-Add a function `_queen_write_governance()` that:
-1. Reads the current QUEEN.md
-2. Checks if Intent/Vision/Governance/Goals/Architecture sections exist
-3. If not: inserts them after the header, before User Preferences
-4. If yes: updates the content (preserving existing wisdom sections below)
-5. Updates METADATA to version 3.0.0
-
-This follows the exact pattern of `_queen_write_learnings()` and `_queen_promote_instinct()` -- both find a section, manipulate it with awk/sed, and do atomic writes.
-
-**Option B: New utils module for governance**
-
-Create `.aether/utils/governance.sh` with `_governance_write()`.
-
-**Recommendation: Option A** -- queen.sh already owns all QUEEN.md manipulation. Adding governance functions there keeps the "one file owns one document" principle. The `_queen_write_governance()` function is naturally a sibling of `_queen_promote()`, `_queen_write_learnings()`, and `_queen_promote_instinct()`.
-
-### How Re-init Works (Update Without Reset)
-
-The PROJECT.md states: "Re-running init should update Queen file, not destroy colony state."
-
-This means:
-
-1. **COLONY_STATE.json**: Do NOT overwrite if it already exists with an active goal. The existing Step 2 already handles this (warns, asks confirmation).
-
-2. **QUEEN.md governance sections**: Update the Intent, Vision, Goals sections with the new goal. Do NOT touch User Preferences, Codebase Patterns, Build Learnings, or Instincts -- those accumulate through colony work.
-
-3. **Runtime files** (pheromones, midden, learning-observations): Do NOT overwrite if they already exist. Step 4.5 already handles this (only creates if missing).
-
-4. **Session**: Update session-init with the new goal but preserve phase state.
-
-### Template Changes
-
-The QUEEN.md template (`.aether/templates/QUEEN.md.template`) needs to be updated to v3 format with the new sections. However, existing colonies with v2 QUEEN.md files must be handled:
-
-- `_queen_init()` creates from template only if QUEEN.md doesn't exist
-- `_queen_write_governance()` adds new sections to existing v2 files
-- A migration path (like the existing v1->v2 migration in `_queen_migrate()`) could add empty governance sections to v2 files
-
-### Impact on colony-prime (Worker Context Assembly)
-
-The `_colony_prime()` function in pheromone.sh (lines 735-1284) extracts wisdom from QUEEN.md using `_extract_wisdom()`. Currently it looks for 4 sections: User Preferences, Codebase Patterns, Build Learnings, Instincts.
-
-**New sections must be injected into worker context.** The Intent and Goals sections are particularly valuable -- workers should know what the colony is trying to achieve. Architecture Notes from the survey provide critical context for builders.
-
-The `_extract_wisdom()` function needs a v3 path that also extracts:
-- `intent` -- the colony's purpose
-- `goals` -- measurable outcomes
-- `architecture_notes` -- tech stack and patterns from survey
-
-These get added to the `prompt_section` that colony-prime assembles. They should be injected with HIGH retention priority (trimmed late in the budget), since they are fundamental context for every worker.
-
-**Token budget impact:** The current budget is 8,000 chars (4,000 compact). Adding intent + goals + architecture adds roughly 500-1500 chars. This is manageable but requires the trim order to be updated.
-
-### Updated Trim Order
-
+**spawn-tree.sh, line 111:**
+```bash
+parent=$(grep "|$current|" "$file_path" 2>/dev/null | grep "|spawned$" | head -1 | cut -d'|' -f2)
 ```
-1. Rolling summary (trimmed first -- lowest retention priority)
-2. Phase learnings
-3. Key decisions
-4. Hive wisdom
-5. Context capsule
-6. Build learnings
-7. User preferences
-8. Codebase patterns
-9. Pheromone signals
-10. Instincts
-11. Intent + Goals (trimmed last -- highest retention priority)
-12. Blockers (NEVER trimmed)
+
+**swarm.sh, line 896:**
+```bash
+grep -v "^$ant_name|" "$timing_file" > "${timing_file}.tmp"
 ```
+
+**swarm.sh, line 915:**
+```bash
+if [[ ! -f "$timing_file" ]] || ! grep -q "^$ant_name|" "$timing_file"
+```
+
+The spawn-tree format is pipe-delimited: `timestamp|parent|caste|child_name|task|model|status`. If `ant_name` contains `|`, grep will match different fields than intended. If it contains `.` or `*`, it acts as a regex wildcard. If it contains regex anchors (`^`, `$`), it can match unintended positions.
+
+**Practical risk:** Ant names are generated by the colony system (e.g., "Builder", "Scout-1", "swarm:investigate-3") and are typically safe. However, the `--task` parameter in `_spawn_log` is user-controlled and appears in the spawn tree as field 5. The `child_name` (field 4) is derived from the agent definition and is typically safe. The `parent_id` (field 2) comes from the caller.
+
+The actual risk vectors:
+1. Agent names with special characters (future agents may have complex names)
+2. Task summaries containing `|` (common in technical descriptions)
+3. Swarm IDs containing `|` (swarm IDs are user-provided in some paths)
+
+### Recommended Fix: Fixed-String Matching
+
+Replace regex grep with `grep -F` (fixed-string) for all ant_name lookups:
+
+```bash
+# BEFORE (regex):
+grep -q "|$ant_name|" "$file_path"
+
+# AFTER (fixed-string):
+grep -Fq "|$ant_name|" "$file_path"
+```
+
+For patterns that need regex (e.g., `|spawned$`), keep those as-is since they match literal fixed strings anyway.
+
+**Full list of changes:**
+
+| File | Line | Current | Fix |
+|------|------|---------|-----|
+| spawn.sh | 139 | `grep -q "|$ant_name|"` | `grep -Fq "|$ant_name|"` |
+| spawn.sh | 152 | `grep "|$current_ant|"` | `grep -F "|$current_ant|"` |
+| spawn-tree.sh | 98 | `grep -q "|$ant_name|"` | `grep -Fq "|$ant_name|"` |
+| spawn-tree.sh | 111 | `grep "|$current|"` | `grep -F "|$current|"` |
+| spawn-tree.sh | 231 | `grep "|$current|"` | `grep -F "|$current|"` |
+| swarm.sh | 896 | `grep -v "^$ant_name|"` | `grep -Fv "^$ant_name|"` |
+| swarm.sh | 915 | `grep -q "^$ant_name|"` | `grep -Fq "^$ant_name|"` |
+| swarm.sh | 921 | `grep "^$ant_name|"` | `grep -F "^$ant_name|"` |
+| swarm.sh | 960 | `grep -q "^$ant_name|"` | `grep -Fq "^$ant_name|"` |
+| swarm.sh | 966 | `grep "^$ant_name|"` | `grep -F "^$ant_name|"` |
+
+### Input Validation (Defense in Depth)
+
+In addition to `grep -F`, add validation at the entry point where ant names are created:
+
+```bash
+# In _spawn_log, after parsing arguments:
+if [[ "$child_name" =~ [\|\$\`] ]]; then
+    json_err "$E_VALIDATION_FAILED" "Ant name contains unsafe characters" '{"name":"$child_name"}'
+fi
+```
+
+This prevents unsafe names from entering the spawn tree at all.
 
 ---
 
-## Part 6: Component Boundaries
+## Part 5: Bug #4 -- atomic-write.sh Lock Release on Validation Failure
 
-### New Components
+### What Goes Wrong
 
-| Component | File | Responsibility | Dependencies |
-|-----------|------|----------------|-------------|
-| scan.sh | `.aether/utils/scan.sh` | Repo scanning functions | aether-utils.sh infrastructure (json_ok, jq) |
-| scan-repo subcommand | dispatch in aether-utils.sh | Full repo scan entry point | scan.sh sourced |
-| scan-quick subcommand | dispatch in aether-utils.sh | Lightweight scan entry point | scan.sh sourced |
-| queen-governance subcommand | dispatch in aether-utils.sh | Write governance sections | queen.sh sourced |
-| QUEEN.md v3 template | `.aether/templates/QUEEN.md.template` | Template with governance sections | None |
-| init.md (refactored) | `.claude/commands/ant/init.md` | Smart init command | scan.sh, queen-governance |
-| OpenCode init.md | `.opencode/commands/ant/init.md` | OpenCode parallel | Same as above |
+`atomic_write` (atomic-write.sh lines 49-94) acquires no locks itself -- it relies on callers to manage locking. However, `_state_write` (state-api.sh line 77) acquires a lock, then calls `atomic_write`. If `atomic_write` fails (e.g., JSON validation failure on line 74), `_state_write` does release the lock (line 88):
 
-### Modified Components
+```bash
+atomic_write "$sw_state_file" "$sw_content" || {
+    release_lock 2>/dev/null || true
+    json_err "$E_UNKNOWN" "Failed to write COLONY_STATE.json"
+}
+```
 
-| Component | File | Change | Risk |
-|-----------|------|--------|------|
-| queen.sh | `.aether/utils/queen.sh` | Add `_queen_write_governance()` function | Low -- additive, no changes to existing functions |
-| aether-utils.sh | `.aether/aether-utils.sh` | Add source for scan.sh, add dispatch cases | Low -- follows established pattern |
-| pheromone.sh | `.aether/utils/pheromone.sh` | Update `_extract_wisdom()` for v3 QUEEN.md format, update trim order in `_colony_prime()` | Medium -- must not break v2 format reading |
-| colony-state template | `.aether/templates/colony-state.template.json` | Possibly add governance fields to state | Low -- additive JSON fields |
-| CLAUDE.md | `CLAUDE.md` | Document new QUEEN.md sections, update QUEEN.md structure description | Low -- documentation only |
+This path is correct. The actual gap is in `_state_mutate` (state-api.sh lines 96-145):
 
-### NOT Modified
+```bash
+# Line 125: jq mutation can fail
+sm_updated=$(jq "$sm_expr" "$sm_state_file" 2>/dev/null) || {
+    release_lock 2>/dev/null || true  # CORRECT: releases on jq failure
+    json_err ...
+}
 
-| Component | Why |
-|-----------|-----|
-| session.sh | No changes to session management |
-| state-api.sh | No changes to state read/write |
-| hive.sh | No changes to hive brain |
-| learning.sh | No changes to learning pipeline |
-| pheromone write/display | No changes to signal management |
-| build/continue playbooks | No changes to build flow |
-| Agent definitions | No changes to worker agents |
-| OpenCode agent definitions | No changes |
+# Line 131: result validation
+if [[ -z "$sm_updated" ]] || ! echo "$sm_updated" | jq -e . >/dev/null 2>&1; then
+    release_lock 2>/dev/null || true  # CORRECT: releases on invalid result
+    json_err ...
+fi
+
+# Line 137: atomic_write can fail
+atomic_write "$sm_state_file" "$sm_updated" || {
+    release_lock 2>/dev/null || true  # CORRECT: releases on write failure
+    json_err ...
+}
+
+# Line 142: success path
+release_lock 2>/dev/null || true  # CORRECT: releases on success
+```
+
+**Revised assessment:** After careful line-by-line review, `_state_mutate` actually handles lock release correctly on ALL failure paths. Each `||` block after the critical operation releases the lock before erroring out. The code uses `2>/dev/null || true` to suppress errors from `release_lock` itself (lock may already be released or may not be held).
+
+**The remaining concern:** `atomic_write` itself (in atomic-write.sh) is a lower-level utility that does NOT acquire or release locks. If a future caller of `atomic_write` forgets to release the lock on failure, the lock leaks. This is a **design fragility** rather than an active bug.
+
+### Recommended Fix: Lock-Aware Atomic Write (Optional)
+
+Two options, ranked by preference:
+
+**Option A (Recommended): Document the Contract**
+
+Add a clear contract comment to `atomic_write`:
+
+```bash
+# CONTRACT: atomic_write does NOT manage locks.
+# Callers MUST acquire_lock before calling and release_lock after,
+# handling all failure paths. See _state_write and _state_mutate for examples.
+```
+
+**Option B: Wrapper Function**
+
+Create a `locked_atomic_write` wrapper in state-api.sh:
+
+```bash
+_locked_atomic_write() {
+    local target="$1"
+    local content="$2"
+    acquire_lock "$target" || return 1
+    if ! atomic_write "$target" "$content"; then
+        release_lock 2>/dev/null || true
+        return 1
+    fi
+    release_lock 2>/dev/null || true
+    return 0
+}
+```
+
+Option A is sufficient for v2.6. Option B is better for long-term safety.
 
 ---
 
-## Part 7: Data Flow
+## Part 6: CLAUDE.md Documentation Error
 
-### Smart Init Data Flow
+The CLAUDE.md states:
 
-```
-/ant:init "Build a REST API"
-    |
-    v
-[1] _scan_repo (Bash call)
-    |-- Reads: package.json, tsconfig.json, etc.
-    |-- Checks: .aether/data/survey/ freshness
-    |-- Checks: .aether/chambers/ for prior colonies
-    |-- Calls: _domain_detect (existing in queen.sh)
-    |-- Returns: scan_summary JSON
-    |
-    v
-[2] hive-read (Bash call)
-    |-- Reads: ~/.aether/hive/wisdom.json
-    |-- Filters: by domain tags from scan
-    |-- Returns: relevant cross-colony wisdom
-    |
-    v
-[3] LLM Synthesis (in init.md)
-    |-- Input: user goal + scan_summary + hive wisdom
-    |-- Output: colony_prompt (structured Markdown)
-    |
-    v
-[4] User Approval (interactive)
-    |-- Display: colony_prompt
-    |-- Wait: for user response
-    |-- Branch: approve / edit / cancel
-    |
-    v
-[5] _queen_write_governance (Bash call)
-    |-- Input: approved intent, vision, governance, goals, architecture
-    |-- Reads: existing .aether/QUEEN.md
-    |-- Inserts: new governance sections (or updates existing)
-    |-- Updates: METADATA version to 3.0.0
-    |
-    v
-[6] Write COLONY_STATE.json (existing flow)
-    |-- Template substitution
-    |-- Prior knowledge inheritance
-    |
-    v
-[7] Initialize runtime files (existing flow)
-    |-- pheromones.json (if missing)
-    |-- midden.json (if missing)
-    |-- learning-observations.json (if missing)
-    |
-    v
-[8] session-init (existing flow)
-    |-- Create session.json
-    |-- Baseline commit capture
+> `LOCK_DIR = .aether/data/locks/ (colony-local)`
+
+The actual code in `file-lock.sh` line 20:
+
+```bash
+LOCK_DIR="$AETHER_ROOT/.aether/locks"
 ```
 
-### How Governance Flows to Workers
+And confirmed by `.npmignore` line 12:
 
 ```
-QUEEN.md (v3) with governance sections
-    |
-    v
-_colony_prime() (pheromone.sh)
-    |-- _extract_wisdom() extracts intent, goals, architecture
-    |-- Builds prompt_section with governance context
-    |-- Injects into worker prompts via build-context.md Step 4
-    |
-    v
-Worker (Builder/Watcher/Scout) receives:
-    "--- COLONY INTENT ---
-    Build a REST API with authentication for a SaaS product
-    --- END COLONY INTENT ---
+.aether/locks/
+```
 
-    --- COLONY GOALS ---
-    1. Working API with CRUD endpoints
-    2. JWT authentication middleware
-    3. Test coverage > 80%
-    --- END COLONY GOALS ---"
+The correct path is `.aether/locks/`, not `.aether/data/locks/`. The `aether-utils.sh` dispatcher also references `.aether/locks/` on line 4485.
 
-    --- COLONY ARCHITECTURE ---
-    Stack: TypeScript + Express + PostgreSQL
-    Pattern: Repository pattern for data access
-    --- END COLONY ARCHITECTURE ---"
+**Fix:** Update CLAUDE.md to reflect the actual path.
+
+---
+
+## Part 7: Architectural Patterns for Cross-Scope Operations
+
+### Pattern 1: Scoped Lock Acquisition
+
+**What:** Lock acquisition that takes an explicit scope parameter instead of relying on a mutable global.
+
+**When:** Any code that needs to lock hub resources (wisdom.json, registry.json) while also potentially locking colony-local resources.
+
+**Implementation:**
+
+```bash
+# Colony-local lock (default behavior, unchanged)
+acquire_lock "$DATA_DIR/COLONY_STATE.json"
+
+# Hub-scoped lock (new capability)
+acquire_lock "$HOME/.aether/hive/wisdom.json" "$HOME/.aether/hive/locks"
+
+# Via helper
+_hive_acquire_lock "$HOME/.aether/hive/wisdom.json"
+```
+
+### Pattern 2: Explicit Scope for QUEEN.md Writes
+
+**What:** Every write to QUEEN.md specifies whether it targets colony-local or hub scope.
+
+**When:** Any function that promotes wisdom, preferences, or learnings.
+
+**Implementation:**
+
+```bash
+queen-promote <type> <content> <colony_name> [--scope local|hub]
+# local (default): writes to $AETHER_ROOT/.aether/QUEEN.md
+# hub: writes to $HOME/.aether/QUEEN.md
+```
+
+### Pattern 3: Fixed-String Matching for User Data
+
+**What:** All grep operations on user-controlled data use `grep -F` (fixed-string mode).
+
+**When:** Any grep where the pattern includes data derived from user input, ant names, task summaries, or swarm IDs.
+
+**Implementation:**
+
+```bash
+# Rule: If the variable could contain | . * [ ] $ ^, use -F
+grep -Fq "|$user_controlled|" "$data_file"
+```
+
+### Pattern 4: Lock Contract Documentation
+
+**What:** Functions that require callers to manage locks document this explicitly.
+
+**When:** Any function that modifies shared state but does not manage its own locking.
+
+**Implementation:**
+
+```bash
+# CONTRACT: Caller must hold lock on $target_file.
+# This function does NOT acquire or release locks.
+atomic_write() { ... }
 ```
 
 ---
 
-## Part 8: Anti-Patterns
+## Part 8: Anti-Patterns to Avoid
 
-### Anti-Pattern 1: Making scan.sh do too much
+### Anti-Pattern 1: Global Variable Mutation for Scope Switching
 
-The scan should be FAST (under 2 seconds). It reads a few files and checks directory existence. It should NOT:
-- Parse every source file (that's what /ant:colonize does)
-- Run git log analysis (that's what /ant:archaeology does)
-- Check test coverage (that's what /ant:chaos does)
+**What people do:** Save a global, mutate it, do work, restore it.
+**Why it's wrong:** Signal handlers, traps, and concurrent subshells see the mutated value. Shell has no thread safety.
+**Do this instead:** Pass the scope as a parameter to the function that needs it.
 
-Keep scan.sh to: file presence checks, manifest parsing, directory counting.
+### Anti-Pattern 2: Implicit Scope in Write Functions
 
-### Anti-Pattern 2: Writing governance sections with sed/awk directly in init.md
+**What people do:** A write function determines its target from global state (AETHER_ROOT) without an explicit scope parameter.
+**Why it's wrong:** When the same function is called from different contexts (colony-local vs hub), the caller must know the implementation detail of which path the function uses.
+**Do this instead:** Accept a `--scope` or `--target` parameter that makes the write destination explicit.
 
-The init.md file is a Markdown prompt. It should call shell subcommands for file manipulation, not contain inline sed/awk. The pattern is:
-```
-Run using Bash tool:
-bash .aether/aether-utils.sh queen-governance --intent "..." --vision "..." ...
-```
-NOT:
-```
-Use sed to insert sections into QUEEN.md...
-```
+### Anti-Pattern 3: Regex Grep on Structured Data
 
-### Anti-Pattern 3: Breaking v2 QUEEN.md backward compatibility
-
-The `_extract_wisdom()` function in pheromone.sh must continue to read v2 format QUEEN.md files. New v3 files get additional sections extracted. The format detection (line 783: `grep -q '^## Build Learnings$'`) should be extended, not replaced. A v3 file can be detected by checking for `^## Intent$`.
-
-### Anti-Pattern 4: Making the approval loop complex
-
-The approval loop should be simple: show, wait, proceed or stop. Do NOT add:
-- Multi-round negotiation
-- Version history of the prompt
-- Side-by-side comparison with prior colonies
-
-The user can always re-run `/ant:init` if they want to change the charter.
-
-### Anti-Pattern 5: Putting governance data in COLONY_STATE.json
-
-Governance (intent, vision, goals, architecture) lives in QUEEN.md, not COLONY_STATE.json. COLONY_STATE.json tracks operational state (current phase, plan, events, instincts). QUEEN.md is the charter -- the "why" and "what". COLONY_STATE.json is the "where are we". Mixing them breaks the separation of concerns.
+**What people do:** Use `grep "$variable"` to search pipe-delimited or structured text.
+**Why it's wrong:** The variable may contain regex metacharacters that change the match semantics.
+**Do this instead:** Use `grep -F "$variable"` for literal matching, or use `awk -F'|' '$4 == name'` for field-specific matching.
 
 ---
 
-## Part 9: Build Order
+## Part 9: Migration Path
 
-### Phase 1: Scan Module (no dependencies)
+### Phase 1: Safe, Backward-Compatible Changes
 
-1. Create `.aether/utils/scan.sh` with `_scan_repo()`, `_scan_quick()`, `_scan_survey_status()`, `_scan_chambers()`, `_scan_domain()`
-2. Add source line to aether-utils.sh
-3. Add dispatch cases to aether-utils.sh
-4. Write tests for scan functions
-5. Update QUEEN.md template to v3 format (add empty governance sections)
+These changes cannot break existing colonies:
 
-**Risk:** None -- purely additive, no existing code modified.
+1. **file-lock.sh:** Add optional `lock_dir_override` parameter to `acquire_lock` (backward compatible -- existing callers pass no second argument)
+2. **spawn.sh, spawn-tree.sh, swarm.sh:** Add `-F` flag to all grep calls using ant_name (changes regex to fixed-string, no behavior change for current ant names)
+3. **CLAUDE.md:** Fix LOCK_DIR path documentation
+4. **atomic-write.sh:** Add CONTRACT comment documenting lock management responsibility
 
-### Phase 2: Queen Governance (depends on Phase 1 for template)
+### Phase 2: hive.sh Refactor (Requires Testing)
 
-1. Add `_queen_write_governance()` to queen.sh
-2. Add `queen-governance` dispatch case to aether-utils.sh
-3. Update `_queen_init()` to use v3 template
-4. Write tests for governance write function
+1. **hive.sh:** Replace all LOCK_DIR save/restore patterns with `_hive_acquire_lock` helper
+2. **hive.sh:** Create `~/.aether/hive/locks/` directory
+3. **Verify:** Run hive-init, hive-store, hive-read, hive-promote against both single-colony and multi-colony setups
 
-**Risk:** Medium -- modifying queen.sh requires careful section manipulation. Follow the pattern of `_queen_write_learnings()` exactly.
+### Phase 3: QUEEN.md Scope Parameter (Requires Testing)
 
-### Phase 3: Colony-Prime v3 Support (depends on Phase 2)
+1. **queen.sh:** Add `--scope local|hub` to `_queen_promote` (default: local)
+2. **hive-promote:** Add hub-scoped queen-promote call for high-confidence entries
+3. **Verify:** Confirm colony-local writes still go to `.aether/QUEEN.md` and hub writes go to `~/.aether/QUEEN.md`
 
-1. Update `_extract_wisdom()` in pheromone.sh to handle v3 format (add intent, goals, architecture extraction)
-2. Update `_colony_prime()` trim order to include governance sections
-3. Add governance sections to the prompt_section assembly
-4. Write tests for v3 extraction
+### Data Migration
 
-**Risk:** Medium -- must not break v2 format. Test both v2 and v3 files.
-
-### Phase 4: Init.md Refactor (depends on Phases 1-3)
-
-1. Refactor init.md to add scan step (before state write)
-2. Add prompt generation step (LLM synthesis)
-3. Add approval loop step
-4. Add governance write step (after approval)
-5. Update OpenCode init.md for parity
-6. End-to-end test: run /ant:init, verify governance sections in QUEEN.md
-
-**Risk:** Medium -- init.md is 388 lines and is the most-used command. Changes must be tested thoroughly.
-
-### Phase 5: Documentation and Validation
-
-1. Update CLAUDE.md with new QUEEN.md v3 structure
-2. Update workers.md if needed
-3. Full integration test: init -> plan -> build -> verify governance flows to workers
-4. Run validate-package.sh
-
-### Dependency Graph
-
-```
-Phase 1 (scan.sh)    Phase 2 (queen-governance)
-    |                       |
-    v                       v
-    |-----> Phase 3 (colony-prime v3) <-----|
-                  |
-                  v
-           Phase 4 (init.md refactor)
-                  |
-                  v
-           Phase 5 (docs + validation)
-```
-
-Phases 1 and 2 can be built in parallel. Phase 3 depends on both (needs scan data to enrich governance, needs governance functions to exist). Phase 4 depends on Phase 3. Phase 5 is final.
+No data migration is needed. All changes are backward compatible:
+- Lock files in the old location (`~/.aether/hive/`) still work; new lock files go to `~/.aether/hive/locks/`
+- QUEEN.md scope parameter defaults to `local`, preserving existing behavior
+- grep -F produces identical results for current ant names (no special characters)
 
 ---
 
 ## Part 10: Risk Assessment
 
-| Risk | Likelihood | Impact | Mitigation |
-|------|-----------|--------|------------|
-| scan.sh slow on large repos | Medium | Low | Scan only reads file existence and manifest files, not source. Cap at 50 files checked. |
-| QUEEN.md v3 breaks v2 consumers | Medium | High | `_extract_wisdom()` has format detection. Test v2 and v3 paths. Add v3 detection alongside existing v2 detection. |
-| Token budget exceeded with governance | Low | Medium | Governance adds ~1000 chars. Trim order puts it at high retention priority. Compact mode already trims aggressively. |
-| Approval loop confuses users | Medium | Low | Keep it simple: show, approve/edit/cancel. One interaction, not a negotiation. |
-| init.md refactor breaks existing behavior | Medium | High | Test all existing init scenarios (fresh, re-init, prior knowledge) before and after refactor. |
-| Governance sections empty on update | Low | Low | `_queen_write_governance()` only writes if content is non-empty. Existing v2 QUEEN.md files without governance sections get them added with placeholder text. |
-| OpenCode parity broken | Low | Low | OpenCode init.md needs same changes. Review manually after Claude Code changes are stable. |
+| Change | Risk | Mitigation |
+|--------|------|------------|
+| file-lock.sh parameter addition | Low | New parameter is optional, defaults to current behavior |
+| grep -F flag additions | Very Low | Only affects matching behavior for strings with regex metacharacters; current ant names don't have these |
+| hive.sh LOCK_DIR refactor | Medium | Must verify all hive operations in multi-colony setup; existing lock files in old location need cleanup |
+| queen-promote --scope | Low | Default is `local`, matching current behavior |
+| CLAUDE.md documentation fix | None | Documentation only |
 
 ---
 
 ## Sources
 
-- HIGH confidence: Direct analysis of `.claude/commands/ant/init.md` (388 lines) -- full step flow traced
-- HIGH confidence: Direct analysis of `.claude/commands/ant/colonize.md` (257 lines) -- existing scanning patterns traced
-- HIGH confidence: Direct analysis of `.claude/commands/ant/plan.md` (667 lines) -- planning context loading traced
-- HIGH confidence: Direct analysis of `.aether/utils/queen.sh` (1242 lines) -- all queen functions traced, section manipulation patterns documented
-- HIGH confidence: Direct analysis of `.aether/utils/pheromone.sh` `_colony_prime()` function (lines 735-1284) -- full context assembly traced, trim order documented
-- HIGH confidence: Direct analysis of `.aether/utils/pheromone.sh` `_extract_wisdom()` function (lines 779-887) -- v2 format extraction documented
-- HIGH confidence: Direct analysis of `.aether/utils/session.sh` (547 lines) -- session management patterns documented
-- HIGH confidence: Direct analysis of `.aether/utils/state-api.sh` (200 lines) -- state read/write/mutate documented
-- HIGH confidence: Direct analysis of `.aether/templates/QUEEN.md.template` (62 lines) -- v2 template structure documented
-- HIGH confidence: Direct analysis of `.aether/templates/colony-state.template.json` (36 lines) -- state template structure documented
-- HIGH confidence: Direct analysis of `.aether/aether-utils.sh` (first 100 lines) -- source loading and dispatch pattern documented
-- HIGH confidence: Direct analysis of `.planning/PROJECT.md` -- v2.5 milestone scope and user feedback documented
-- HIGH confidence: Pattern analysis of 9 existing utils modules -- modularization pattern confirmed
+- Direct codebase analysis (confidence: HIGH):
+  - `.aether/utils/file-lock.sh` (192 lines) -- LOCK_DIR definition, acquire_lock, release_lock
+  - `.aether/utils/hive.sh` (562 lines) -- LOCK_DIR save/restore pattern in _hive_init, _hive_store, _hive_read
+  - `.aether/utils/state-api.sh` (200 lines) -- _state_write, _state_mutate lock management
+  - `.aether/utils/atomic-write.sh` (227 lines) -- atomic_write, JSON validation
+  - `.aether/utils/spawn.sh` (260 lines) -- grep patterns with ant_name
+  - `.aether/utils/spawn-tree.sh` (263 lines) -- grep patterns with ant_name
+  - `.aether/utils/swarm.sh` (990+ lines) -- grep patterns with ant_name in timing functions
+  - `.aether/utils/queen.sh` (1650+ lines) -- queen-promote write path, queen-read merge logic
+  - `.aether/utils/learning.sh` (560+ lines) -- learning-promote-auto call to queen-promote
+  - `.aether/aether-utils.sh` (5200+ lines) -- dispatcher, DATA_DIR/LOCK_DIR initialization
+  - `.npmignore` -- confirms `.aether/locks/` exclusion from package
+  - `~/.aether/` -- hub directory structure verification
 
 ---
-
-*Architecture research for: Aether v2.5 Smart Init*
-*Researched: 2026-03-27*
+*Architecture research for: Aether v2.6 Bugfix & Hardening -- cross-colony isolation, lock scope safety, input sanitization*
+*Researched: 2026-03-29*
