@@ -1038,6 +1038,7 @@ case "$cmd" in
       {"name": "queen-migrate", "description": "Migrate a QUEEN.md from v1 (emoji headers) to v2 (clean headers) format"},
       {"name": "charter-write", "description": "Write or update colony charter content in QUEEN.md"},
       {"name": "colony-name", "description": "Derive human-readable colony name from repo context"},
+      {"name": "colony-depth", "description": "Read or write colony depth (light/standard/deep/full)"},
       {"name": "domain-detect", "description": "Auto-detect repo domain tags from file presence (node, typescript, rust, etc.)"},
       {"name": "incident-rule-add", "description": "Append an incident-derived rule to decree/constraint/gate stores"},
       {"name": "learning-observe", "description": "Record observation of a learning across colonies"},
@@ -3618,6 +3619,7 @@ NODESCRIPT
   queen-migrate) _queen_migrate "$@" ;;
   charter-write) _queen_write_charter "$@" ;;
   colony-name) _colony_name "$@" ;;
+  colony-depth) _colony_depth "$@" ;;
   domain-detect) _domain_detect "$@" ;;
 
   learning-observe) _learning_observe "$@" ;;
