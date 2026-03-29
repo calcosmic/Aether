@@ -117,7 +117,7 @@
   2. `LOCK_DIR` in hive.sh is passed as a function parameter, never mutated as a global variable
   3. Shared data files (pheromones.json, learning-observations.json, session.json, run-state.json) include colony namespace so two colonies writing concurrently do not overwrite each other
   4. Existing single-colony workflows still work identically (no regression)
-**Plans:** 5 plans
+**Plans:** 1/5 plans executed
 
 Plans:
 - [ ] 34-01-PLAN.md — Replace all 13 session_id splitting locations with colony-name subcommand (3 shell + 9 playbook + 1 OpenCode)
@@ -206,7 +206,7 @@ Plans:
 | 31. Init.md Smart Init Rewrite | v2.5 | 2/2 | Complete | 2026-03-27 |
 | 32. Intelligence Enhancements | v2.5 | 3/3 | Complete | 2026-03-27 |
 | 33. Input Escaping & Atomic Write Safety | v2.6 | Complete    | 2026-03-29 | - |
-| 34. Cross-Colony Isolation | v2.6 | 0/TBD | Not started | - |
+| 34. Cross-Colony Isolation | 1/5 | In Progress|  | - |
 | 35. Colony Depth & Model Routing | v2.6 | 0/TBD | Not started | - |
 | 36. YAML Command Generator | v2.6 | 0/TBD | Not started | - |
 | 37. XML Core Integration | v2.6 | 0/TBD | Not started | - |

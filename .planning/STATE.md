@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-03-29)
 
 ## Current Position
 
-Phase: 33 of 38 (Input Escaping & Atomic Write Safety)
-Plan: 4 of 4
-Status: Phase 33 complete (all 4 plans)
-Last activity: 2026-03-29 -- Completed 33-04 (data safety tests + status display)
+Phase: 34 of 38 (Cross-Colony Isolation)
+Plan: 1 of 5
+Status: Executing phase 34 -- Plan 01 complete
+Last activity: 2026-03-29 -- Completed 34-01 (colony name extraction)
 
-Progress: [##........] 16% (v2.6: 4/24 plans estimated)
+Progress: [##........] 20% (v2.6: 5/24 plans estimated)
 
 ## Performance Metrics
 
@@ -38,13 +38,16 @@ Progress: [##........] 16% (v2.6: 4/24 plans estimated)
 | 33-02 | json_ok escaping + sanitize-on-read | 35min | 3 | 13 |
 | 33-03 | lock safety + atomic write hardening | 27min | 2 | 3 |
 | 33-04 | data safety tests + status display | 11min | 2 | 2 |
+| 34-01 | colony name extraction | 8min | 2 | 7 |
 
-*Updated after 33-04 completion*
+*Updated after 34-01 completion*
 
 ## Accumulated Context
 
 ### Decisions
 
+- Shell scripts use bash "$0" colony-name; playbooks use bash .aether/aether-utils.sh colony-name (absolute path)
+- Empty result fallback with [[ -z ]] guard ensures unknown is always set on failure
 - Use `jq -n --arg` for strings and `--argjson` for numbers/booleans in json_ok construction
 - Drop `^` and `$` regex anchors when switching to `grep -F` since fixed-string mode treats them as literals
 - Ant names are unique per swarm, so `grep -F` without anchors is safe for timing file lookups
@@ -65,5 +68,5 @@ None active.
 ## Session Continuity
 
 Last session: 2026-03-29
-Stopped at: Completed 33-04-PLAN.md (Phase 33 complete)
-Resume file: .planning/phases/33-input-escaping-atomic-write-safety/33-04-SUMMARY.md
+Stopped at: Completed 34-01-PLAN.md (colony name extraction)
+Resume file: .planning/phases/34-cross-colony-isolation/34-01-SUMMARY.md
