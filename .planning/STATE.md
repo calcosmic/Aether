@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.6
 milestone_name: Bugfix & Hardening
 status: executing
-stopped_at: Completed 35-04-PLAN.md
-last_updated: "2026-03-29T10:04:39.820Z"
+stopped_at: Completed 36-03-PLAN.md
+last_updated: "2026-03-29T11:17:38.573Z"
 last_activity: 2026-03-29
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 13
-  completed_plans: 13
+  total_plans: 17
+  completed_plans: 15
   percent: 80
 ---
 
@@ -21,12 +21,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-29)
 
 **Core value:** Reliably interpret user requests, decompose into work, verify outputs, and ship correct work with minimal back-and-forth.
-**Current focus:** Phase 34 — Cross-Colony Isolation
+**Current focus:** Phase 36 — yaml-command-generator
 
 ## Current Position
 
-Phase: 36
-Plan: Not started
+Phase: 36 (yaml-command-generator) — EXECUTING
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-03-29
 
@@ -64,10 +64,17 @@ Progress: [██████░░] 80% (34-01, 34-02, 34-03, 34-04 complete)
 *Updated during Phase 34 execution*
 | Phase 34 P05 | 6min | 1 tasks | 1 files |
 | Phase 35 P04 | 6min | 2 tasks | 7 files |
+| Phase 36 P01 | 4min | 2 tasks | 2 files |
+| Phase 36 P03 | 14min | 2 tasks | 22 files |
 
 ## Accumulated Context
 
 ### Decisions
+
+**From 36-01:**
+
+- Generated files include header comment marking them as generated artifacts
+- body_claude/body_opencode skip template processing since content is already provider-specific
 
 **From 34-04:**
 
@@ -96,6 +103,8 @@ Progress: [██████░░] 80% (34-01, 34-02, 34-03, 34-04 complete)
 - [Phase 35]: Used DEPTH CHECK guard clause pattern at top of each gated spawn step for consistency
 - [Phase 35]: Inserted depth display as Step 2.5.5 in status.md to avoid renumbering existing non-sequential steps
 - [Phase 35]: Depth read uses graceful fallback to standard when colony-depth get fails
+- [Phase 36]: Used body_claude/body_opencode for 16 of 22 complex commands where provider bodies are structurally different
+- [Phase 36]: Used standard body with provider-exclusive blocks for focus, redirect, feedback, status, init, flag (6 commands with mixed shared/exclusive content)
 
 ### Pending Todos
 
@@ -107,6 +116,6 @@ None active.
 
 ## Session Continuity
 
-Last session: 2026-03-29T09:54:35.394Z
-Stopped at: Completed 35-04-PLAN.md
+Last session: 2026-03-29T11:17:38.569Z
+Stopped at: Completed 36-03-PLAN.md
 Resume file: None

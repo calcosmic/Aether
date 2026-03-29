@@ -146,7 +146,13 @@ Plans:
   2. Running the generator script produces .claude/commands/ant/*.md and .opencode/commands/ant/*.md from YAML sources
   3. Generated output matches (or improves upon) the current hand-written command files — no loss of functionality
   4. `npm run lint:sync` validates that generated files are up-to-date with YAML sources
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+- [x] 36-01-PLAN.md — Generator engine (bin/generate-commands.js) + unit tests
+- [ ] 36-02-PLAN.md — Convert 22 simpler commands to YAML source format
+- [x] 36-03-PLAN.md — Convert 22 complex commands to YAML (including build.md, continue.md)
+- [ ] 36-04-PLAN.md — Update sync tooling (generate-commands.sh) + npm scripts + full validation
 
 ### Phase 37: XML Core Integration
 **Goal**: XML export/import is wired into colony lifecycle commands so cross-colony data transfer happens automatically at key moments
@@ -208,6 +214,6 @@ Plans:
 | 33. Input Escaping & Atomic Write Safety | v2.6 | Complete    | 2026-03-29 | - |
 | 34. Cross-Colony Isolation | v2.6 | 2/5 | Complete    | 2026-03-29 |
 | 35. Colony Depth & Model Routing | v2.6 | 0/TBD | Complete    | 2026-03-29 |
-| 36. YAML Command Generator | v2.6 | 0/TBD | Not started | - |
+| 36. YAML Command Generator | v2.6 | 2/4 | In Progress|  |
 | 37. XML Core Integration | v2.6 | 0/TBD | Not started | - |
 | 38. Cleanup & Maintenance | v2.6 | 0/TBD | Not started | - |
