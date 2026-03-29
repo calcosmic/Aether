@@ -18,6 +18,8 @@ Communication style, expertise level, and decision-making patterns observed from
 
 Validated approaches that work in this codebase, and anti-patterns to avoid. Includes architecture conventions, naming patterns, error handling style, and technology-specific insights. Tagged [repo] for project-specific or [general] for cross-colony patterns.
 
+- **1774650429** (2026-03-28T23:56:11Z): JSON injection in spawn.sh persists despite being identified as an instinct — pattern recurs because the fix was applied only to queen.sh, not spawn.sh
+- **1774650429** (2026-03-28T23:56:09Z): Lifecycle commands (init, seal, entomb) properly handle colony_version through template system — init uses colony-state.template.json, seal has 12 references, entomb reads and displays it
 - **1774650429** (2026-03-28T03:45:43Z): Every atomic mv that overwrites a critical file must have a non-empty size guard to prevent data destruction from upstream pipeline failures
 - **1774650429** (2026-03-28T03:45:41Z): Shell functions using sed c-command for line replacement must use head/tail instead to handle multi-line content safely on macOS BSD sed
 - **1774650429** (2026-03-28T00:14:55Z): Shell functions that embed user-derived values in JSON output strings must use jq for safe construction to prevent JSON injection from special characters
@@ -61,6 +63,8 @@ High-confidence behavioral patterns that have been validated through repeated co
 
 | Date | Source | Type | Details |
 |------|--------|------|---------|
+| 2026-03-28T23:56:11Z | 1774650429 | promoted_pattern | Added: JSON injection in spawn.sh persists despite being ... |
+| 2026-03-28T23:56:09Z | 1774650429 | promoted_pattern | Added: Lifecycle commands (init, seal, entomb) properly h... |
 | 2026-03-28T03:46:05Z | instinct | promoted_instinct | code-style: add non-empty size guard (if [[ ! -s file ]]) befo... |
 | 2026-03-28T03:46:05Z | instinct | promoted_instinct | code-style: replace with head/tail pattern for cross-platform ... |
 | 2026-03-28T03:45:43Z | 1774650429 | promoted_pattern | Added: Every atomic mv that overwrites a critical file mu... |
@@ -94,11 +98,11 @@ High-confidence behavioral patterns that have been validated through repeated co
 {
   "version": "2.0.0",
   "wisdom_version": "2.0",
-  "last_evolved": "2026-03-28T03:46:05Z",
+  "last_evolved": "2026-03-28T23:56:11Z",
   "colonies_contributed": ["1774645519"],
   "stats": {
     "total_user_prefs": 2,
-    "total_codebase_patterns": 14,
+    "total_codebase_patterns": 16,
     "total_build_learnings": 1,
     "total_instincts": 5
   },

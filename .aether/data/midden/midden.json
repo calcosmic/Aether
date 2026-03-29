@@ -328,7 +328,15 @@
       "source": "gatekeeper",
       "message": "High CVEs found: 4",
       "reviewed": false
+    },
+    {
+      "id": "midden_1774742061_42588",
+      "timestamp": "2026-03-28T23:54:21Z",
+      "category": "quality",
+      "source": "auditor",
+      "message": "High severity issues: 3 (score: 61) — orphaned .metaupd temps, JSON injection in spawn.sh, broken grep in spawn-tree.sh",
+      "reviewed": false
     }
   ],
-  "entry_count": 23
+  "entry_count": 24
 }

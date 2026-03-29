@@ -3,11 +3,12 @@
   "goal": "Comprehensive audit of today's session work — verify QUEEN.md, pheromone system, wisdom pipeline, charter-write, and all colony lifecycle changes are functioning correctly",
   "colony_name": "Aether Colony",
   "state": "READY",
-  "current_phase": 4,
+  "current_phase": 5,
   "session_id": "session_1774650429_217110",
   "initialized_at": "2026-03-27T22:27:09Z",
   "build_started_at": null,
   "colony_version": 1,
+  "last_commit_suggestion_phase": null,
   "plan": {
     "generated_at": "2026-03-27T22:52:12Z",
     "confidence": 92,
@@ -71,8 +72,7 @@
             "id": "2.1",
             "goal": "Run all 5 new test files individually — verify combined 41 tests pass",
             "constraints": [
-              "Run each file individually",
-              "Files: test-queen-charter (13), test-colony-version-template (7), test-emoji-audit (8), test-midden-bridge (4), test-seal-version-increment (9)"
+              "Run each file individually"
             ],
             "hints": [
               "All 5 passed in pre-plan verification"
@@ -178,7 +178,7 @@
         "id": 4,
         "name": "Verify colony lifecycle commands",
         "description": "Confirm seal, entomb, init commands work with today changes: commit synthesis, push prompts, colony_version.",
-        "status": "pending",
+        "status": "completed",
         "tasks": [
           {
             "id": "4.1",
@@ -194,7 +194,7 @@
               "colony_version present"
             ],
             "depends_on": [],
-            "status": "pending"
+            "status": "completed"
           },
           {
             "id": "4.2",
@@ -211,7 +211,7 @@
               "Parity maintained"
             ],
             "depends_on": [],
-            "status": "pending"
+            "status": "completed"
           },
           {
             "id": "4.3",
@@ -227,7 +227,7 @@
               "Parity between versions"
             ],
             "depends_on": [],
-            "status": "pending"
+            "status": "completed"
           }
         ],
         "success_criteria": [
@@ -382,6 +382,28 @@
           }
         ],
         "timestamp": "2026-03-28T03:45:30Z"
+      },
+      {
+        "id": "learning_1774742100",
+        "phase": 4,
+        "phase_name": "Verify colony lifecycle commands",
+        "learnings": [
+          {
+            "claim": "Lifecycle commands (init, seal, entomb) properly handle colony_version through template system — init uses colony-state.template.json, seal has 12 references, entomb reads and displays it",
+            "status": "validated",
+            "tested": true,
+            "evidence": "Grep confirmed init.md references colony-state.template.json which contains colony_version:1, seal.md has 12 colony_version references, entomb.md has 5 references including display formatting",
+            "disproven_by": null
+          },
+          {
+            "claim": "JSON injection in spawn.sh persists despite being identified as an instinct — pattern recurs because the fix was applied only to queen.sh, not spawn.sh",
+            "status": "hypothesis",
+            "tested": false,
+            "evidence": "Auditor Inspect-60 found spawn.sh:34,64,134,140,167,191 embed variables directly into JSON strings. Colony instinct at confidence 0.8 already identifies this pattern but fix was not applied to spawn.sh",
+            "disproven_by": null
+          }
+        ],
+        "timestamp": "2026-03-29T00:15:00Z"
       }
     ],
     "decisions": [],
@@ -565,6 +587,42 @@
         "applications": 0,
         "successes": 0,
         "failures": 0
+      },
+      {
+        "id": "instinct_1774742169",
+        "trigger": "working on pattern patterns",
+        "action": "Lifecycle commands (init, seal, entomb) properly handle colony_version through template system — init uses colony-state.template.json, seal has 12 references, entomb reads and displays it",
+        "confidence": 0.70,
+        "status": "hypothesis",
+        "domain": "pattern",
+        "source": "promoted_from_learning",
+        "evidence": [
+          ""
+        ],
+        "tested": false,
+        "created_at": "2026-03-28T23:56:09Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774742172",
+        "trigger": "working on pattern patterns",
+        "action": "JSON injection in spawn.sh persists despite being identified as an instinct — pattern recurs because the fix was applied only to queen.sh, not spawn.sh",
+        "confidence": 0.70,
+        "status": "hypothesis",
+        "domain": "pattern",
+        "source": "promoted_from_learning",
+        "evidence": [
+          ""
+        ],
+        "tested": false,
+        "created_at": "2026-03-28T23:56:12Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
       }
     ]
   },
@@ -582,7 +640,9 @@
     "2026-03-28T00:11:12Z|phase_advanced|continue|Completed Phase 2, advancing to Phase 3",
     "2026-03-28T01:55:06Z|spawn_failed|Weld-37|npm test: 612/616 passed, 4 spawn-tree failures (invalid JSON)",
     "2026-03-28T02:34:04Z|phase_started|build|Phase 3: Audit QUEEN.md and wisdom pipeline integrity started",
-    "2026-03-28T03:45:30Z|phase_advanced|continue|Completed Phase 3, advancing to Phase 4"
+    "2026-03-28T03:45:30Z|phase_advanced|continue|Completed Phase 3, advancing to Phase 4",
+    "2026-03-28T23:17:01Z|phase_started|build|Phase 4: Verify colony lifecycle commands started",
+    "2026-03-29T00:15:00Z|phase_advanced|continue|Completed Phase 4, advancing to Phase 5"
   ],
   "milestone": null,
   "milestone_updated_at": null

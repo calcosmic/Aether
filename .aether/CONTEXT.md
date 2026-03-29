@@ -8,9 +8,9 @@
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2026-03-28T03:47:01Z |
-| **Current Phase** | 4 |
-| **Phase Name** | Verify colony lifecycle commands |
+| **Last Updated** | 2026-03-28T23:57:22Z |
+| **Current Phase** | 5 |
+| **Phase Name** | Full regression test suite |
 | **Milestone** | First Mound |
 | **Colony Status** | initializing |
 | **Safe to Clear?** | YES — Phase advanced, ready to build |
@@ -23,12 +23,6 @@ Fix why Oracle tmux session dies immediately — oracle.sh doesn't exist. Oracle
 
 ---
 
-## 📍 What's In Progress
-
-**Build completed** — success
-## 📍 What's In Progress
-
-**Build completed** — success
 ## ⚠️ Active Constraints (REDIRECT Signals)
 
 | Constraint | Source | Date Set |
@@ -55,6 +49,8 @@ Fix why Oracle tmux session dies immediately — oracle.sh doesn't exist. Oracle
 
 | Timestamp | Command | Result | Files Changed |
 |-----------|---------|--------|---------------|
+| 2026-03-28T23:57:21Z | continue | Phase 4 completed, advanced to 5 | — |
+| 2026-03-28T23:23:19Z | build 4 | completed | 0 |
 | 2026-03-28T03:47:01Z | continue | Phase 3 completed, advanced to 4 | — |
 | 2026-03-28T03:17:34Z | build 3 | completed | 0 |
 | 2026-03-28T02:09:04Z | build 5 | failed | 0 |

@@ -494,6 +494,28 @@
       "colonies": [
         "1774650429"
       ]
+    },
+    {
+      "content_hash": "sha256:6c482645f927c1a9a2acdf67408757a4e73486f6ccd42e1307ca0395f5652f3f",
+      "content": "Lifecycle commands (init, seal, entomb) properly handle colony_version through template system — init uses colony-state.template.json, seal has 12 references, entomb reads and displays it",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-28T23:56:08Z",
+      "last_seen": "2026-03-28T23:56:08Z",
+      "colonies": [
+        "1774650429"
+      ]
+    },
+    {
+      "content_hash": "sha256:dd2615fe5e448a278232bf4f5fa9251c4cd5fcc71f4859e77a7136ac007f0e64",
+      "content": "JSON injection in spawn.sh persists despite being identified as an instinct — pattern recurs because the fix was applied only to queen.sh, not spawn.sh",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-28T23:56:11Z",
+      "last_seen": "2026-03-28T23:56:11Z",
+      "colonies": [
+        "1774650429"
+      ]
     }
   ]
 }
