@@ -1603,7 +1603,7 @@ HELP_EOF
     log_file="$DATA_DIR/activity.log"
     [[ -f "$log_file" ]] || json_err "$E_FILE_NOT_FOUND" "activity.log not found" '{"file":"activity.log"}'
     if [ -n "$caste_filter" ]; then
-      content=$(grep "$caste_filter" "$log_file" | tail -20)
+      content=$(grep -F "$caste_filter" "$log_file" | tail -20)
     else
       content=$(cat "$log_file")
     fi
