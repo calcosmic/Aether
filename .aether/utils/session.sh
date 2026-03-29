@@ -226,19 +226,19 @@ _session_clear() {
 # Archives previous session's tree to a timestamped file; caps archive count at 5.
 # ============================================================================
 _rotate_spawn_tree() {
-    local tree_file="$DATA_DIR/spawn-tree.txt"
+    local tree_file="$COLONY_DATA_DIR/spawn-tree.txt"
     [[ -f "$tree_file" ]] && [[ -s "$tree_file" ]] || return 0
-    mkdir -p "$DATA_DIR/spawn-tree-archive"
+    mkdir -p "$COLONY_DATA_DIR/spawn-tree-archive"
     local archive_ts
     archive_ts=$(date +%Y%m%d_%H%M%S)
-    if ! cp "$tree_file" "$DATA_DIR/spawn-tree-archive/spawn-tree.${archive_ts}.txt" 2>/dev/null; then  # SUPPRESS:OK -- cleanup: backup copy is best-effort
+    if ! cp "$tree_file" "$COLONY_DATA_DIR/spawn-tree-archive/spawn-tree.${archive_ts}.txt" 2>/dev/null; then  # SUPPRESS:OK -- cleanup: backup copy is best-effort
       _aether_log_error "Could not archive spawn-tree before rotation"
     fi
     > "$tree_file"  # Truncate in-place — preserves file handle for tail -f watchers
     # Keep only 5 archives
     # SUPPRESS:OK -- read-default: directory may not exist
     # SUPPRESS:OK -- cleanup: rotation cleanup is best-effort
-    ls -t "$DATA_DIR/spawn-tree-archive"/spawn-tree.*.txt 2>/dev/null \
+    ls -t "$COLONY_DATA_DIR/spawn-tree-archive"/spawn-tree.*.txt 2>/dev/null \
         | tail -n +6 | while IFS= read -r file; do rm -f "$file"; done 2>/dev/null || true  # SUPPRESS:OK -- cleanup: file may not exist
 }
 
@@ -253,7 +253,7 @@ _session_init() {
 
     _rotate_spawn_tree
 
-    local session_file="$DATA_DIR/session.json"
+    local session_file="$COLONY_DATA_DIR/session.json"
     local baseline
     baseline=$(git rev-parse HEAD 2>/dev/null || echo "")  # SUPPRESS:OK -- read-default: may not have commits yet
 
@@ -289,7 +289,7 @@ _session_update() {
     local suggested="${2:-}"
     local summary="${3:-}"
 
-    local session_file="$DATA_DIR/session.json"
+    local session_file="$COLONY_DATA_DIR/session.json"
 
     if [[ ! -f "$session_file" ]]; then
       # Auto-initialize if doesn't exist
@@ -369,7 +369,7 @@ _session_update() {
 # Read and return current session state
 # ============================================================================
 _session_read() {
-    local session_file="$DATA_DIR/session.json"
+    local session_file="$COLONY_DATA_DIR/session.json"
 
     if [[ ! -f "$session_file" ]]; then
       json_ok "{\"exists\":false,\"session\":null}"
@@ -408,7 +408,7 @@ _session_read() {
 # ============================================================================
 _session_is_stale() {
     _deprecation_warning "session-is-stale"
-    local session_file="$DATA_DIR/session.json"
+    local session_file="$COLONY_DATA_DIR/session.json"
 
     if [[ ! -f "$session_file" ]]; then
       json_ok '{"is_stale":true}'
@@ -447,7 +447,7 @@ _session_is_stale() {
 _session_clear_context() {
     _deprecation_warning "session-clear-context"
     local preserve="${1:-false}"
-    local session_file="$DATA_DIR/session.json"
+    local session_file="$COLONY_DATA_DIR/session.json"
 
     if [[ -f "$session_file" ]]; then
       if [[ "$preserve" == "true" ]]; then
@@ -475,7 +475,7 @@ _session_clear_context() {
 # Mark session as resumed
 # ============================================================================
 _session_mark_resumed() {
-    local session_file="$DATA_DIR/session.json"
+    local session_file="$COLONY_DATA_DIR/session.json"
 
     if [[ -f "$session_file" ]]; then
       jq --arg ts "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
@@ -498,7 +498,7 @@ _session_mark_resumed() {
 # ============================================================================
 _session_summary() {
     _deprecation_warning "session-summary"
-    local session_file="$DATA_DIR/session.json"
+    local session_file="$COLONY_DATA_DIR/session.json"
     local json_mode="false"
 
     # Parse --json flag (command name already shifted by main dispatch)
