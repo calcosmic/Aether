@@ -86,7 +86,7 @@
 
 - [x] **Phase 33: Input Escaping & Atomic Write Safety** - Fix ant_name injection in grep/JSON, jq-escape all dynamic values, release locks on validation failure (completed 2026-03-29)
 - [x] **Phase 34: Cross-Colony Isolation** - Eliminate information bleed between colonies via proper name extraction, lock scoping, and file namespacing (completed 2026-03-29)
-- [ ] **Phase 35: Colony Depth & Model Routing** - Depth selector gates Oracle/Scout spawns; model routing either wired end-to-end or dead code removed
+- [x] **Phase 35: Colony Depth & Model Routing** - Depth selector gates Oracle/Scout spawns; model routing either wired end-to-end or dead code removed (completed 2026-03-29)
 - [ ] **Phase 36: YAML Command Generator** - Single YAML source produces both Claude and OpenCode command markdown
 - [ ] **Phase 37: XML Core Integration** - XML export/import wired into seal, entomb, and init lifecycle commands
 - [ ] **Phase 38: Cleanup & Maintenance** - Deprecate old npm versions, generate error code docs, remove dead awk code
@@ -207,7 +207,7 @@ Plans:
 | 32. Intelligence Enhancements | v2.5 | 3/3 | Complete | 2026-03-27 |
 | 33. Input Escaping & Atomic Write Safety | v2.6 | Complete    | 2026-03-29 | - |
 | 34. Cross-Colony Isolation | v2.6 | 2/5 | Complete    | 2026-03-29 |
-| 35. Colony Depth & Model Routing | v2.6 | 0/TBD | Not started | - |
+| 35. Colony Depth & Model Routing | v2.6 | 0/TBD | Complete    | 2026-03-29 |
 | 36. YAML Command Generator | v2.6 | 0/TBD | Not started | - |
 | 37. XML Core Integration | v2.6 | 0/TBD | Not started | - |
 | 38. Cleanup & Maintenance | v2.6 | 0/TBD | Not started | - |
