@@ -25,7 +25,7 @@ parse_spawn_tree() {
   NF == 7 && $7 == "spawned" {
     names[n] = $4; parents[n] = $2; castes[n] = $3
     tasks[n] = $5; statuses[n] = "spawned"; timestamps[n] = $1
-    models[n] = $6; completed_at[n] = ""; children_str[n] = ""
+    completed_at[n] = ""; children_str[n] = ""
     name_to_idx[$4] = n; n++
   }
   $3 ~ /^(completed|failed|blocked)$/ && NF >= 4 {
