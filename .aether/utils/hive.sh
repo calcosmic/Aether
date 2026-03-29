@@ -6,9 +6,9 @@
 # All shared infrastructure (json_ok, json_err, atomic_write, acquire_lock,
 # release_lock, LOCK_DIR, DATA_DIR, SCRIPT_DIR, error constants) is available.
 #
-# LOCK_DIR GOTCHA: hive-store, hive-read, hive-init temporarily mutate LOCK_DIR
-# to ~/.aether/hive/ via a save/restore pattern. This is intentional for
-# hub-level cross-repo mutual exclusion.
+# Lock handling: hive-store, hive-read, hive-init use acquire_lock_at/release_lock_at
+# with colony-tagged lock files for cross-repo mutual exclusion on hub-level resources.
+# This avoids global LOCK_DIR mutation (previous approach).
 
 _hive_init() {
     # Initialize the ~/.aether/hive/ directory and wisdom.json schema
@@ -41,20 +41,21 @@ _hive_init() {
         }')
 
       hv_lock_held=false
-      if type acquire_lock &>/dev/null; then
-        # Use hub-level lock dir so cross-repo locks provide mutual exclusion
-        hv_saved_lock_dir="$LOCK_DIR"
-        LOCK_DIR="$hv_hive_dir"
-        acquire_lock "$hv_wisdom_file" || { LOCK_DIR="$hv_saved_lock_dir"; json_err "$E_LOCK_FAILED" "Failed to acquire lock on wisdom.json"; }
+      hv_lock_file=""
+      if type acquire_lock_at &>/dev/null; then
+        hv_colony_tag=$(bash "$0" colony-name 2>/dev/null | jq -r '.result.name // ""' | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' '-' | sed 's/^-//;s/-$//') || true
+        [[ -z "$hv_colony_tag" ]] && hv_colony_tag="unknown"
+        acquire_lock_at "$hv_wisdom_file" "$hv_hive_dir" "$hv_colony_tag" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on wisdom.json"
+        hv_lock_file="$LOCK_AT_FILE"
         hv_lock_held=true
       fi
 
       atomic_write "$hv_wisdom_file" "$hv_initial_schema" || {
-        [[ "$hv_lock_held" == "true" ]] && { release_lock 2>/dev/null || true; LOCK_DIR="${hv_saved_lock_dir:-$LOCK_DIR}"; }
+        [[ "$hv_lock_held" == "true" ]] && { release_lock_at "$hv_lock_file" 2>/dev/null || true; hv_lock_held=false; }
         json_err "$E_JSON_INVALID" "Failed to write wisdom.json"
       }
 
-      [[ "$hv_lock_held" == "true" ]] && { release_lock 2>/dev/null || true; LOCK_DIR="${hv_saved_lock_dir:-$LOCK_DIR}"; }
+      [[ "$hv_lock_held" == "true" ]] && { release_lock_at "$hv_lock_file" 2>/dev/null || true; hv_lock_held=false; }
     fi
 
     json_ok "$(jq -n --arg dir "$hv_hive_dir" --argjson already_existed "$hv_already_existed" '{dir: $dir, initialized: true, already_existed: $already_existed}')"
@@ -127,12 +128,14 @@ _hive_store() {
 
     hs_now_iso=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-    # Acquire lock — use hub-level lock dir for cross-repo mutual exclusion
+    # Acquire lock — use colony-tagged lock in hub dir for cross-repo mutual exclusion
     hs_lock_held=false
-    if type acquire_lock &>/dev/null; then
-      hs_saved_lock_dir="$LOCK_DIR"
-      LOCK_DIR="$HOME/.aether/hive"
-      acquire_lock "$hs_wisdom_file" || { LOCK_DIR="$hs_saved_lock_dir"; json_err "$E_LOCK_FAILED" "Failed to acquire lock on wisdom.json"; }
+    hs_lock_file=""
+    if type acquire_lock_at &>/dev/null; then
+      hs_colony_tag=$(bash "$0" colony-name 2>/dev/null | jq -r '.result.name // ""' | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' '-' | sed 's/^-//;s/-$//') || true
+      [[ -z "$hs_colony_tag" ]] && hs_colony_tag="unknown"
+      acquire_lock_at "$hs_wisdom_file" "$HOME/.aether/hive" "$hs_colony_tag" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on wisdom.json"
+      hs_lock_file="$LOCK_AT_FILE"
       hs_lock_held=true
     fi
 
@@ -149,7 +152,7 @@ _hive_store() {
 
       if [[ "$hs_has_repo" == "true" ]]; then
         # Same repo duplicate — skip
-        [[ "$hs_lock_held" == "true" ]] && { release_lock 2>/dev/null || true; LOCK_DIR="${hs_saved_lock_dir:-$LOCK_DIR}"; }
+        [[ "$hs_lock_held" == "true" ]] && { release_lock_at "$hs_lock_file" 2>/dev/null || true; hs_lock_held=false; }
         json_ok "$(jq -n --arg id "$hs_content_hash" \
           '{action: "skipped", reason: "duplicate from same repo", id: $id}')"
       else
@@ -176,16 +179,16 @@ _hive_store() {
           .metadata.contributing_repos = ([.entries[].source_repos[]] | unique) |
           .last_updated = $now
         ' "$hs_wisdom_file" 2>/dev/null) || {
-          [[ "$hs_lock_held" == "true" ]] && { release_lock 2>/dev/null || true; LOCK_DIR="${hs_saved_lock_dir:-$LOCK_DIR}"; }
+          [[ "$hs_lock_held" == "true" ]] && { release_lock_at "$hs_lock_file" 2>/dev/null || true; hs_lock_held=false; }
           json_err "$E_JSON_INVALID" "Failed to merge wisdom entry"
         }
 
         atomic_write "$hs_wisdom_file" "$hs_updated" || {
-          [[ "$hs_lock_held" == "true" ]] && { release_lock 2>/dev/null || true; LOCK_DIR="${hs_saved_lock_dir:-$LOCK_DIR}"; }
+          [[ "$hs_lock_held" == "true" ]] && { release_lock_at "$hs_lock_file" 2>/dev/null || true; hs_lock_held=false; }
           json_err "$E_JSON_INVALID" "Failed to write merged wisdom entry"
         }
 
-        [[ "$hs_lock_held" == "true" ]] && { release_lock 2>/dev/null || true; LOCK_DIR="${hs_saved_lock_dir:-$LOCK_DIR}"; }
+        [[ "$hs_lock_held" == "true" ]] && { release_lock_at "$hs_lock_file" 2>/dev/null || true; hs_lock_held=false; }
         hs_new_count=$(echo "$hs_updated" | jq --arg hash "$hs_content_hash" '.entries[] | select(.id == $hash) | .validated_count')
         hs_new_confidence=$(echo "$hs_updated" | jq --arg hash "$hs_content_hash" '.entries[] | select(.id == $hash) | .confidence')
         json_ok "$(jq -n --arg id "$hs_content_hash" --argjson validated_count "$hs_new_count" \
@@ -226,16 +229,16 @@ _hive_store() {
         .metadata.contributing_repos = ([.entries[].source_repos[]] | unique) |
         .last_updated = $now
       ' "$hs_wisdom_file" 2>/dev/null) || {
-        [[ "$hs_lock_held" == "true" ]] && { release_lock 2>/dev/null || true; LOCK_DIR="${hs_saved_lock_dir:-$LOCK_DIR}"; }
+        [[ "$hs_lock_held" == "true" ]] && { release_lock_at "$hs_lock_file" 2>/dev/null || true; hs_lock_held=false; }
         json_err "$E_JSON_INVALID" "Failed to append wisdom entry"
       }
 
       atomic_write "$hs_wisdom_file" "$hs_updated" || {
-        [[ "$hs_lock_held" == "true" ]] && { release_lock 2>/dev/null || true; LOCK_DIR="${hs_saved_lock_dir:-$LOCK_DIR}"; }
+        [[ "$hs_lock_held" == "true" ]] && { release_lock_at "$hs_lock_file" 2>/dev/null || true; hs_lock_held=false; }
         json_err "$E_JSON_INVALID" "Failed to write new wisdom entry"
       }
 
-      [[ "$hs_lock_held" == "true" ]] && { release_lock 2>/dev/null || true; LOCK_DIR="${hs_saved_lock_dir:-$LOCK_DIR}"; }
+      [[ "$hs_lock_held" == "true" ]] && { release_lock_at "$hs_lock_file" 2>/dev/null || true; hs_lock_held=false; }
       json_ok "$(jq -n --arg id "$hs_content_hash" --arg category "$hs_category" \
         '{action: "stored", id: $id, category: $category}')"
     fi
@@ -326,11 +329,12 @@ _hive_read() {
       hr_now_iso=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
       hr_lock_held=false
-      if type acquire_lock &>/dev/null; then
-        # Use hub-level lock dir for cross-repo mutual exclusion
-        hr_saved_lock_dir="$LOCK_DIR"
-        LOCK_DIR="$HOME/.aether/hive"
-        acquire_lock "$hr_wisdom_file" || { LOCK_DIR="$hr_saved_lock_dir"; json_err "$E_LOCK_FAILED" "Failed to acquire lock on wisdom.json"; }
+      hr_lock_file=""
+      if type acquire_lock_at &>/dev/null; then
+        hr_colony_tag=$(bash "$0" colony-name 2>/dev/null | jq -r '.result.name // ""' | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' '-' | sed 's/^-//;s/-$//') || true
+        [[ -z "$hr_colony_tag" ]] && hr_colony_tag="unknown"
+        acquire_lock_at "$hr_wisdom_file" "$HOME/.aether/hive" "$hr_colony_tag" || json_err "$E_LOCK_FAILED" "Failed to acquire lock on wisdom.json"
+        hr_lock_file="$LOCK_AT_FILE"
         hr_lock_held=true
       fi
 
@@ -345,16 +349,16 @@ _hive_read() {
         ] |
         .last_updated = $now
       ' "$hr_wisdom_file" 2>/dev/null) || {
-        [[ "$hr_lock_held" == "true" ]] && { release_lock 2>/dev/null || true; LOCK_DIR="${hr_saved_lock_dir:-$LOCK_DIR}"; }
+        [[ "$hr_lock_held" == "true" ]] && { release_lock_at "$hr_lock_file" 2>/dev/null || true; hr_lock_held=false; }
         json_err "$E_JSON_INVALID" "Failed to update access tracking in wisdom.json"
       }
 
       atomic_write "$hr_wisdom_file" "$hr_updated" || {
-        [[ "$hr_lock_held" == "true" ]] && { release_lock 2>/dev/null || true; LOCK_DIR="${hr_saved_lock_dir:-$LOCK_DIR}"; }
+        [[ "$hr_lock_held" == "true" ]] && { release_lock_at "$hr_lock_file" 2>/dev/null || true; hr_lock_held=false; }
         json_err "$E_JSON_INVALID" "Failed to write updated wisdom.json"
       }
 
-      [[ "$hr_lock_held" == "true" ]] && { release_lock 2>/dev/null || true; LOCK_DIR="${hr_saved_lock_dir:-$LOCK_DIR}"; }
+      [[ "$hr_lock_held" == "true" ]] && { release_lock_at "$hr_lock_file" 2>/dev/null || true; hr_lock_held=false; }
     fi
 
     # Format output
