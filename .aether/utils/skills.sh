@@ -408,7 +408,10 @@ _skill_inject() {
     local si_escaped_section
     si_escaped_section=$(echo "$si_skill_section" | jq -Rs '.' 2>/dev/null)
 
-    json_ok "{\"skill_section\": $si_escaped_section, \"colony_count\": $si_colony_count, \"domain_count\": $si_domain_count, \"total_chars\": $si_total_chars}"
+    json_ok "$(jq -n --argjson skill_section "$si_escaped_section" \
+      --argjson colony_count "$si_colony_count" --argjson domain_count "$si_domain_count" \
+      --argjson total_chars "$si_total_chars" \
+      '{skill_section: $skill_section, colony_count: $colony_count, domain_count: $domain_count, total_chars: $total_chars}')"
 }
 
 # List all installed skills

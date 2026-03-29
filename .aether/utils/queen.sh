@@ -1307,7 +1307,7 @@ MIGRATEEOF
     # Atomic move
     mv "$qm_tmp" "$qm_file"
 
-    json_ok '{"migrated":true,"target":"'"$qm_target"'","format":"v2"}'
+    json_ok "$(jq -n --arg target "$qm_target" '{migrated: true, target: $target, format: "v2"}')"
 }
 
 # ============================================================================
