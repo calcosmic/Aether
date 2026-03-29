@@ -9,11 +9,12 @@ See: .planning/PROJECT.md (updated 2026-03-27)
 
 ## Current Position
 
-Phase: 32 of 32 — all milestones through v2.5 complete
-Status: v2.5 Smart Init shipped 2026-03-27
-Last activity: 2026-03-27 — milestone v2.5 archived
+Phase: 35 — colony-depth-model-routing
+Current Plan: 3 of 4
+Status: Executing phase 35 plans
+Last activity: 2026-03-29 — 35-03 dead model routing removal complete
 
-Progress: [█████████] 100% (v1.3 through v2.5)
+Progress: [██████░░░] 75% (3/4 plans complete)
 
 ## Performance Metrics
 
@@ -38,6 +39,10 @@ Progress: [█████████] 100% (v1.3 through v2.5)
 
 All v2.5 decisions archived to PROJECT.md Key Decisions table.
 
+- [35-03] Removed ~5500 lines of dead model routing code (shell + JS + tests)
+- [35-03] Agent frontmatter model: fields are the routing mechanism, not env var injection
+- [35-03] --depth flag replaces --model flag in build playbooks
+
 ### Pending Todos
 
 None.
@@ -48,6 +53,6 @@ None active.
 
 ## Session Continuity
 
-Last session: 2026-03-27
-Stopped at: v2.5 milestone complete, archived
+Last session: 2026-03-29
+Stopped at: Completed 35-03-PLAN.md
 Resume file: None

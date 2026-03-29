@@ -79,6 +79,13 @@
 
 </details>
 
+**Colony Depth & Model Routing (Phase 35) — IN PROGRESS**
+
+- [x] Phase 35-01: Colony Depth Subcommands (complete)
+- [x] Phase 35-02: Archive Model Routing (complete)
+- [x] Phase 35-03: Dead Model Routing Removal (3/4 plans complete)
+- [ ] Phase 35-04: Documentation & CLAUDE.md Updates
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -115,3 +122,4 @@
 | 30. Charter Management | v2.5 | 2/2 | Complete | 2026-03-27 |
 | 31. Init.md Smart Init Rewrite | v2.5 | 2/2 | Complete | 2026-03-27 |
 | 32. Intelligence Enhancements | v2.5 | 3/3 | Complete | 2026-03-27 |
+| 35. Colony Depth & Model Routing | v2.6 | 3/4 | In Progress | - |
