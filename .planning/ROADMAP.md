@@ -215,5 +215,5 @@ Plans:
 | 34. Cross-Colony Isolation | v2.6 | 2/5 | Complete    | 2026-03-29 |
 | 35. Colony Depth & Model Routing | v2.6 | 0/TBD | Complete    | 2026-03-29 |
 | 36. YAML Command Generator | v2.6 | 2/4 | Complete    | 2026-03-29 |
-| 37. XML Core Integration | v2.6 | 0/TBD | Not started | - |
+| 37. XML Core Integration | v2.6 | 2/3 | In Progress | -- |
 | 38. Cleanup & Maintenance | v2.6 | 0/TBD | Not started | - |

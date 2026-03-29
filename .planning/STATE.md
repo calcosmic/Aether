@@ -25,12 +25,11 @@ See: .planning/PROJECT.md (updated 2026-03-29)
 
 ## Current Position
 
-Phase: 37
-Plan: Not started
-Status: Ready to execute
+Phase: 37 of 37 (xml-core-integration) — Wave 1 complete
+Status: Executing wave 2
 Last activity: 2026-03-29
 
-Progress: [██████░░] 80% (34-01, 34-02, 34-03, 34-04 complete)
+Progress: [█████████ ] 100% (v1.3 through v2.5) + phase 37 in progress
 
 ## Performance Metrics
 
@@ -106,6 +105,10 @@ Progress: [██████░░] 80% (34-01, 34-02, 34-03, 34-04 complete)
 - [Phase 36]: Used body_claude/body_opencode for 16 of 22 complex commands where provider bodies are structurally different
 - [Phase 36]: Used standard body with provider-exclusive blocks for focus, redirect, feedback, status, init, flag (6 commands with mixed shared/exclusive content)
 
+- [37-02] Import step placed after colony creation so data files exist as targets
+- [37-02] xmllint required before offering import (hard dependency of pheromone-import-xml)
+- [37-02] All three data types imported together, no cherry-picking (per D-09)
+
 ### Pending Todos
 
 - Add Data Safety display step to .claude/commands/ant/status.md (requires command file edit permission)
@@ -116,6 +119,6 @@ None active.
 
 ## Session Continuity
 
-Last session: 2026-03-29T11:17:38.569Z
-Stopped at: Completed 36-03-PLAN.md
+Last session: 2026-03-29
+Stopped at: Wave 1 complete, executing Wave 2
 Resume file: None
