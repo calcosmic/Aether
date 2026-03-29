@@ -1,0 +1,123 @@
+name: "ant:redirect"
+description: "Emit REDIRECT signal to warn colony away from patterns"
+description_opencode: "⚠️🐜🚧🐜⚠️ Emit REDIRECT signal to warn colony away from patterns"
+body: |
+  {{#claude}}
+  You are the **Queen**. Emit a REDIRECT pheromone signal.
+  {{/claude}}
+  {{#opencode}}
+  You are the **Queen**. Add an AVOID constraint.
+  {{/opencode}}
+
+  ## Instructions
+
+  The pattern to avoid is: `{{ARGUMENTS}}`
+
+  ### Step 1: Validate
+
+  If `{{ARGUMENTS}}` empty -> show usage: `/ant:redirect <pattern to avoid>`, stop.
+  If content > 500 chars -> "Redirect content too long (max 500 chars)", stop.
+
+  {{#claude}}
+  Parse optional flags from `$ARGUMENTS`:
+  - `--ttl <value>`: signal lifetime (e.g., `2h`, `1d`, `7d`). Default: `phase_end`.
+  - Strip flags from content before using it as the pattern.
+  {{/claude}}
+
+  ### Step 2: Write Signal
+
+  Read `.aether/data/COLONY_STATE.json`.
+  If `goal: null` -> "No colony initialized.", stop.
+
+  {{#claude}}
+  {{TOOL_PREFIX "Setting colony redirect..."}}
+  ```bash
+  bash .aether/aether-utils.sh pheromone-write REDIRECT "<content>" --strength 0.9 --reason "User warned colony away from pattern" --ttl <ttl>
+  ```
+
+  Parse the returned JSON for the signal ID.
+
+  ### Step 2.5: Update Context Document
+
+  {{TOOL_PREFIX "Updating context document..."}}
+  ```bash
+  bash .aether/aether-utils.sh context-update constraint redirect "<content>" "user" 2>/dev/null || true
+  ```
+
+  ### Step 3: Get Active Counts
+
+  {{TOOL_PREFIX "Counting active signals..."}}
+  ```bash
+  bash .aether/aether-utils.sh pheromone-count
+  ```
+
+  ### Step 4: Confirm
+
+  Output (3-4 lines, no banners):
+  ```
+  REDIRECT signal emitted
+    Avoid: "<content truncated to 60 chars>"
+    Strength: 0.9 | Expires: <phase end or ttl value>
+    Active signals: <focus_count> FOCUS, <redirect_count> REDIRECT, <feedback_count> FEEDBACK
+  ```
+  {{/claude}}
+  {{#opencode}}
+  Read `.aether/data/constraints.json`. If file doesn't exist, create it with:
+  ```json
+  {"version": "1.0", "focus": [], "constraints": []}
+  ```
+
+  Generate constraint ID: `c_<unix_timestamp_ms>`
+
+  Append to `constraints` array:
+  ```json
+  {
+    "id": "<generated_id>",
+    "type": "AVOID",
+    "content": "<pattern to avoid>",
+    "source": "user:redirect",
+    "created_at": "<ISO-8601 timestamp>"
+  }
+  ```
+
+  If `constraints` array exceeds 10 entries, remove the oldest entries to keep only 10.
+
+  Write constraints.json.
+
+  **Write pheromone signal and update context:**
+  ```bash
+  bash .aether/aether-utils.sh pheromone-write REDIRECT "$normalized_args" --strength 0.9 --reason "User warned colony away from pattern" 2>/dev/null || true
+  bash .aether/aether-utils.sh context-update constraint redirect "$normalized_args" "user" 2>/dev/null || true
+  ```
+
+  ### Step 3: Confirm
+
+  Output header:
+
+  ```
+  ⚠️🐜🚧🐜⚠️ ═══════════════════════════════════════════════════
+     R E D I R E C T   S I G N A L
+  ═══════════════════════════════════════════════════ ⚠️🐜🚧🐜⚠️
+  ```
+
+  Then output:
+  ```
+  🚫 REDIRECT signal emitted
+
+     Avoid: "{content preview}"
+
+  🐜 Colony warned away from this pattern.
+  ```
+  {{/opencode}}
+
+  {{#claude}}
+  ### Step 5: Next Up
+
+  Generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":
+  ```bash
+  state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
+  current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
+  total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
+  bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
+  ```
+  {{/claude}}
