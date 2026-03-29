@@ -3662,9 +3662,8 @@ NODESCRIPT
       esac
     fi
 
-    # MIGRATE: direct COLONY_STATE.json access -- use _state_read_field instead
-    # SUPPRESS:OK -- read-default: query may return empty
-    colony_name=$(jq -r '.session_id | split("_")[1] // "unknown"' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "unknown")
+    colony_name=$(bash "$0" colony-name 2>/dev/null | jq -r '.result.name // ""') || colony_name="unknown"
+    [[ -z "$colony_name" ]] && colony_name="unknown"
 
     # SUPPRESS:OK -- read-default: returns fallback on failure
     observe_result=$(bash "$0" learning-observe "$mc_content" "$mc_wisdom_type" "$colony_name" 2>/dev/null || echo '{}')

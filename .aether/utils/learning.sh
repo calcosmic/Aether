@@ -373,9 +373,8 @@ _learning_promote_auto() {
     [[ -z "$content" ]] && json_err "$E_VALIDATION_FAILED" "Usage: learning-promote-auto <wisdom_type> <content> [colony_name] [event_type]" '{"missing":"content"}'
 
     if [[ -z "$colony_name" ]]; then
-      # MIGRATE: direct COLONY_STATE.json access -- use _state_read_field instead
-      # SUPPRESS:OK -- read-default: query may return empty
-      colony_name=$(jq -r '.session_id | split("_")[1] // "unknown"' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "unknown")
+      colony_name=$(bash "$0" colony-name 2>/dev/null | jq -r '.result.name // ""') || colony_name="unknown"
+      [[ -z "$colony_name" ]] && colony_name="unknown"
     fi
 
     policy_threshold=$(get_wisdom_threshold "$wisdom_type" "auto")
@@ -922,13 +921,9 @@ _learning_approve_proposals() {
       exit 0
     fi
 
-    # MIGRATE: direct COLONY_STATE.json access -- use _state_read_field instead
-    # Get colony name from COLONY_STATE.json
-    colony_name="unknown"
-    if [[ -f "$DATA_DIR/COLONY_STATE.json" ]]; then
-      # SUPPRESS:OK -- read-default: query may return empty
-      colony_name=$(jq -r '.session_id | split("_")[1] // "unknown"' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "unknown")
-    fi
+    # Get colony name via proper subcommand
+    colony_name=$(bash "$0" colony-name 2>/dev/null | jq -r '.result.name // ""') || colony_name="unknown"
+    [[ -z "$colony_name" ]] && colony_name="unknown"
 
     # Load proposals based on mode
     if [[ "$deferred_mode" == "true" ]]; then
