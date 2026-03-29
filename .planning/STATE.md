@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-03-29)
 ## Current Position
 
 Phase: 33 of 38 (Input Escaping & Atomic Write Safety)
-Plan: 1 of 4
-Status: Plan 01 complete
-Last activity: 2026-03-29 -- Completed 33-01 (grep -F and json_ok escaping)
+Plan: 3 of 4
+Status: Plan 03 complete
+Last activity: 2026-03-29 -- Completed 33-03 (lock safety & atomic write hardening)
 
-Progress: [#.........] 4% (v2.6: 1/24 plans estimated)
+Progress: [##........] 12% (v2.6: 3/24 plans estimated)
 
 ## Performance Metrics
 
 **Velocity (from v2.1-v2.5):**
-- Total plans completed: 83 (82 from v2.1-v2.5 + 1 from v2.6)
+- Total plans completed: 85 (82 from v2.1-v2.5 + 3 from v2.6)
 - Average duration: 5min
 - Total execution time: ~7 hours
 
@@ -35,8 +35,9 @@ Progress: [#.........] 4% (v2.6: 1/24 plans estimated)
 | Phase | Plan | Duration | Tasks | Files |
 |-------|------|----------|-------|-------|
 | 33-01 | grep-F + json_ok escaping | 23min | 2 | 4 |
+| 33-03 | lock safety + atomic write hardening | 27min | 2 | 3 |
 
-*Updated after 33-01 completion*
+*Updated after 33-03 completion*
 
 ## Accumulated Context
 
@@ -45,6 +46,9 @@ Progress: [#.........] 4% (v2.6: 1/24 plans estimated)
 - Use `jq -n --arg` for strings and `--argjson` for numbers/booleans in json_ok construction
 - Drop `^` and `$` regex anchors when switching to `grep -F` since fixed-string mode treats them as literals
 - Ant names are unique per swarm, so `grep -F` without anchors is safe for timing file lookups
+- Trap-based lock cleanup is the standard pattern; explicit release_lock kept as defense-in-depth
+- Safety stats are best-effort and never fail the calling operation
+- Safety stats stored in .aether/data/safety-stats.json (local-only)
 
 ### Pending Todos
 
@@ -57,5 +61,5 @@ None active.
 ## Session Continuity
 
 Last session: 2026-03-29
-Stopped at: Completed 33-01-PLAN.md
-Resume file: .planning/phases/33-input-escaping-atomic-write-safety/33-01-SUMMARY.md
+Stopped at: Completed 33-03-PLAN.md
+Resume file: .planning/phases/33-input-escaping-atomic-write-safety/33-03-SUMMARY.md
