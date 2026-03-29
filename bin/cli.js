@@ -22,25 +22,6 @@ const { logError, logActivity } = require('./lib/logger');
 const { UpdateTransaction, UpdateError, UpdateErrorCodes } = require('./lib/update-transaction');
 const { initializeRepo, isInitialized } = require('./lib/init');
 const { syncStateFromPlanning, reconcileStates } = require('./lib/state-sync');
-const { createVerificationReport } = require('./lib/model-verify');
-const {
-  loadModelProfiles,
-  getAllAssignments,
-  getProviderForModel,
-  validateCaste,
-  validateModel,
-  setModelOverride,
-  resetModelOverride,
-  getEffectiveModel,
-  getUserOverrides,
-  getModelMetadata,
-  getProxyConfig,
-} = require('./lib/model-profiles');
-const {
-  checkProxyHealth,
-  verifyModelRouting,
-  formatProxyStatusColored,
-} = require('./lib/proxy-health');
 const { findNestmates, formatNestmates, loadNestmateTodos } = require('./lib/nestmate-loader');
 const { logSpawn, formatSpawnTree } = require('./lib/spawn-logger');
 const {
@@ -1044,7 +1025,7 @@ function setupHub() {
       fs.mkdirSync(HUB_SYSTEM_DIR, { recursive: true });
 
       // Move system files to system/
-      const systemFiles = ['aether-utils.sh', 'workers.md', 'model-profiles.yaml'];
+      const systemFiles = ['aether-utils.sh', 'workers.md'];
       const systemDirs = ['docs', 'utils', 'commands', 'agents', 'schemas', 'exchange', 'templates', 'lib'];
 
       for (const file of systemFiles) {
@@ -1945,260 +1926,6 @@ program
     }
   }));
 
-// Caste emoji mapping for display
-const CASTE_EMOJIS = {
-  builder: '🔨',
-  watcher: '👁️',
-  scout: '🔍',
-  chaos: '🎲',
-  oracle: '🔮',
-  architect: '🏗️',
-  prime: '🏛️',
-  colonizer: '🌱',
-  route_setter: '🧭',
-  archaeologist: '📜',
-};
-
-/**
- * Format context window for display
- * @param {number} contextWindow - Context window size
- * @returns {string} Formatted string (e.g., "256K")
- */
-function formatContextWindow(contextWindow) {
-  if (!contextWindow) return '-';
-  if (contextWindow >= 1000) {
-    return `${Math.round(contextWindow / 1000)}K`;
-  }
-  return String(contextWindow);
-}
-
-// Caste-models command - Manage caste-to-model assignments
-const casteModelsCmd = program
-  .command('caste-models')
-  .description('Manage caste-to-model assignments');
-
-// list subcommand
-casteModelsCmd
-  .command('list')
-  .description('List current model assignments per caste')
-  .option('--verify', 'Verify model availability on proxy')
-  .action(wrapCommand(async (options) => {
-    const repoPath = process.cwd();
-    const profiles = loadModelProfiles(repoPath);
-    const overrides = getUserOverrides(profiles);
-    const proxyConfig = getProxyConfig(profiles);
-
-    // Check proxy health
-    let proxyHealth = null;
-    let proxyModels = null;
-    if (proxyConfig?.endpoint) {
-      proxyHealth = await checkProxyHealth(proxyConfig.endpoint);
-      if (proxyHealth.healthy && proxyHealth.models) {
-        proxyModels = proxyHealth.models;
-      }
-    }
-
-    console.log(c.header('Caste Model Assignments\n'));
-
-    // Display proxy status
-    if (proxyConfig?.endpoint) {
-      const proxyStatus = formatProxyStatusColored(proxyHealth, c) + c.dim(` @ ${proxyConfig.endpoint}`);
-      console.log(`Proxy: ${proxyStatus}`);
-      if (!proxyHealth?.healthy) {
-        console.log(c.warning('Warning: Using default model (glm-5-turbo) for all castes'));
-      }
-      console.log('');
-    }
-
-    // Table header - add Verify column if --verify flag
-    const verifyFlag = options.verify;
-    const header = verifyFlag
-      ? `${'Caste'.padEnd(14)} ${'Model'.padEnd(14)} ${'Provider'.padEnd(10)} ${'Context'.padEnd(8)} Verify Status`
-      : `${'Caste'.padEnd(14)} ${'Model'.padEnd(14)} ${'Provider'.padEnd(10)} ${'Context'.padEnd(8)} Status`;
-    console.log(header);
-    console.log(verifyFlag ? '─'.repeat(70) : '─'.repeat(60));
-
-    // Get all assignments
-    const assignments = getAllAssignments(profiles);
-
-    for (const assignment of assignments) {
-      const emoji = CASTE_EMOJIS[assignment.caste] || '•';
-      const casteName = assignment.caste.charAt(0).toUpperCase() + assignment.caste.slice(1);
-      const casteDisplay = `${emoji} ${casteName}`;
-
-      // Check for override
-      const hasOverride = overrides[assignment.caste] !== undefined;
-      const effectiveModel = getEffectiveModel(profiles, assignment.caste);
-      const modelDisplay = effectiveModel.model + (hasOverride ? ' (override)' : '');
-
-      // Get model metadata
-      const metadata = getModelMetadata(profiles, effectiveModel.model);
-      const provider = metadata?.provider || assignment.provider || '-';
-      const contextWindow = formatContextWindow(metadata?.context_window);
-
-      // Status indicator based on proxy health
-      const status = proxyHealth?.healthy ? '✓' : '⚠';
-
-      // Verify flag - check if model is available on proxy
-      let verifyStatus = '';
-      if (verifyFlag) {
-        if (proxyModels) {
-          const isAvailable = proxyModels.includes(effectiveModel.model);
-          verifyStatus = isAvailable ? '✓' : '✗';
-        } else {
-          verifyStatus = '?';
-        }
-        console.log(
-          `${casteDisplay.padEnd(14)} ${modelDisplay.padEnd(14)} ${provider.padEnd(10)} ${contextWindow.padEnd(8)} ${verifyStatus.padEnd(7)} ${status}`
-        );
-      } else {
-        console.log(
-          `${casteDisplay.padEnd(14)} ${modelDisplay.padEnd(14)} ${provider.padEnd(10)} ${contextWindow.padEnd(8)} ${status}`
-        );
-      }
-    }
-
-    // Show overrides summary if any exist
-    const overrideCount = Object.keys(overrides).length;
-    if (overrideCount > 0) {
-      console.log('');
-      console.log(c.info(`Active overrides: ${overrideCount}`));
-      for (const [caste, model] of Object.entries(overrides)) {
-        console.log(`  ${caste}: ${model}`);
-      }
-    }
-  }));
-
-// set subcommand
-casteModelsCmd
-  .command('set')
-  .description('Set model override for a caste')
-  .argument('<assignment>', 'caste=model (e.g., builder=glm-5)')
-  .action(wrapCommand(async (assignment) => {
-    // Parse caste=model format
-    const match = assignment.match(/^([^=]+)=(.+)$/);
-    if (!match) {
-      const error = new ValidationError(
-        `Invalid assignment format: '${assignment}'`,
-        { received: assignment },
-        'Use format: caste=model (e.g., builder=glm-5)'
-      );
-      throw error;
-    }
-
-    const [, caste, model] = match;
-
-    const repoPath = process.cwd();
-
-    // Validate and set
-    try {
-      const result = setModelOverride(repoPath, caste, model);
-
-      if (result.previous) {
-        console.log(c.success(`Updated ${caste}: ${result.previous} → ${model}`));
-      } else {
-        console.log(c.success(`Set ${caste} to ${model}`));
-      }
-    } catch (error) {
-      if (error.name === 'ValidationError') {
-        // Add helpful suggestions
-        if (error.details?.validCastes) {
-          console.error(c.error(`Error: ${error.message}`));
-          console.error('\nValid castes:');
-          for (const casteName of error.details.validCastes) {
-            const emoji = CASTE_EMOJIS[casteName] || '•';
-            console.error(`  ${emoji} ${casteName}`);
-          }
-        } else if (error.details?.validModels) {
-          console.error(c.error(`Error: ${error.message}`));
-          console.error('\nValid models:');
-          for (const modelName of error.details.validModels) {
-            console.error(`  • ${modelName}`);
-          }
-        }
-        process.exit(1);
-      }
-      throw error;
-    }
-  }));
-
-// reset subcommand
-casteModelsCmd
-  .command('reset')
-  .description('Reset caste to default model (remove override)')
-  .argument('<caste>', 'caste name (e.g., builder)')
-  .action(wrapCommand(async (caste) => {
-    const repoPath = process.cwd();
-
-    try {
-      const result = resetModelOverride(repoPath, caste);
-
-      if (result.hadOverride) {
-        console.log(c.success(`Reset ${caste} to default model`));
-      } else {
-        console.log(c.info(`${caste} was already using default model`));
-      }
-    } catch (error) {
-      if (error.name === 'ValidationError' && error.details?.validCastes) {
-        console.error(c.error(`Error: ${error.message}`));
-        console.error('\nValid castes:');
-        for (const casteName of error.details.validCastes) {
-          const emoji = CASTE_EMOJIS[casteName] || '•';
-          console.error(`  ${emoji} ${casteName}`);
-        }
-        process.exit(1);
-      }
-      throw error;
-    }
-  }));
-
-// Verify-models command - Verify model routing configuration
-program
-  .command('verify-models')
-  .description('Verify model routing configuration is active')
-  .action(wrapCommand(async () => {
-    const repoPath = process.cwd();
-    const report = await createVerificationReport(repoPath);
-
-    console.log('=== Model Routing Verification ===\n');
-
-    // Proxy status
-    console.log(`LiteLLM Proxy: ${report.proxy.running ? '✓ Running' : '✗ Not running'}`);
-    if (report.proxy.running) {
-      console.log(`  Latency: ${report.proxy.latency}ms`);
-    }
-
-    // Environment
-    console.log(`\nEnvironment:`);
-    console.log(`  ANTHROPIC_MODEL: ${report.env.model || '(not set)'}`);
-    console.log(`  ANTHROPIC_BASE_URL: ${report.env.baseUrl || '(not set)'}`);
-
-    // Caste assignments
-    console.log(`\nCaste Model Assignments:`);
-    for (const [caste, info] of Object.entries(report.castes)) {
-      const status = info.assigned ? '✓' : '✗';
-      console.log(`  ${status} ${caste}: ${info.model || 'default'}`);
-    }
-
-    // Model profiles file
-    console.log(`\nModel Profiles File:`);
-    if (report.profilesFile.exists) {
-      console.log(`  ✓ Found: ${report.profilesFile.path}`);
-      const profileCount = Object.keys(report.profilesFile.profiles).length;
-      console.log(`  Profiles: ${profileCount} castes configured`);
-    } else {
-      console.log(`  ✗ Not found: ${report.profilesFile.path}`);
-    }
-
-    // Issues
-    if (report.issues.length > 0) {
-      console.log(`\nIssues Found:`);
-      report.issues.forEach(issue => console.log(`  ⚠ ${issue}`));
-    }
-
-    // Recommendation
-    console.log(`\n${report.recommendation}`);
-  }));
 
 // Spawn-log command - Log a worker spawn event
 program
@@ -2534,8 +2261,7 @@ program
       console.log('Next steps:');
       console.log('  1. Define your colony goal in .aether/data/COLONY_STATE.json');
       console.log('  2. Run: aether sync-state');
-      console.log('  3. Run: aether verify-models');
-      console.log('  4. Start building: /ant:init');
+      console.log('  3. Start building: /ant:init');
     }
   }));
 
@@ -2547,7 +2273,6 @@ program.on('--help', () => {
   console.log('  install              Install slash-commands and set up distribution hub');
   console.log('  update               Update current repo from hub');
   console.log('  sync-state           Synchronize COLONY_STATE.json with .planning/STATE.md');
-  console.log('  verify-models        Verify model routing configuration');
   console.log('  version              Show installed version');
   console.log('  uninstall            Remove slash-commands (preserves project state and hub)');
   console.log('');
