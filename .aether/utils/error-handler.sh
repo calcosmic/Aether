@@ -87,8 +87,8 @@ json_err() {
     "$code" "$escaped_message" "$details_json" "$recovery" "$timestamp" >&2
 
   # Log to activity.log (best effort)
-  if [[ -n "${DATA_DIR:-}" ]]; then
-    echo "[$timestamp] ERROR $code: $escaped_message" >> "$DATA_DIR/activity.log" 2>/dev/null || true
+  if [[ -n "${COLONY_DATA_DIR:-}" ]]; then
+    echo "[$timestamp] ERROR $code: $escaped_message" >> "$COLONY_DATA_DIR/activity.log" 2>/dev/null || true
   fi
 
   exit 1
@@ -111,8 +111,8 @@ json_warn() {
     "$code" "$escaped_message" "$timestamp"
 
   # Log to activity.log (best effort)
-  if [[ -n "${DATA_DIR:-}" ]]; then
-    echo "[$timestamp] WARN $code: $escaped_message" >> "$DATA_DIR/activity.log" 2>/dev/null || true
+  if [[ -n "${COLONY_DATA_DIR:-}" ]]; then
+    echo "[$timestamp] WARN $code: $escaped_message" >> "$COLONY_DATA_DIR/activity.log" 2>/dev/null || true
   fi
 }
 
@@ -124,9 +124,9 @@ _aether_log_error() {
   local timestamp
   timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   echo "[error] $message" >&2
-  if [[ -n "${DATA_DIR:-}" ]]; then
+  if [[ -n "${COLONY_DATA_DIR:-}" ]]; then
     mkdir -p "$DATA_DIR" 2>/dev/null  # SUPPRESS:OK -- idempotent: ensure dir exists
-    echo "[$timestamp] $message" >> "$DATA_DIR/errors.log" 2>/dev/null  # SUPPRESS:OK -- cleanup: log write is best-effort
+    echo "[$timestamp] $message" >> "$COLONY_DATA_DIR/errors.log" 2>/dev/null  # SUPPRESS:OK -- cleanup: log write is best-effort
   fi
 }
 
@@ -153,8 +153,8 @@ error_handler() {
     "$E_BASH_ERROR" "$details" "$(_recovery_default)" "$timestamp" >&2
 
   # Log to activity.log (best effort)
-  if [[ -n "${DATA_DIR:-}" ]]; then
-    echo "[$timestamp] ERROR $E_BASH_ERROR: Command failed at line $line_num (exit $exit_code)" >> "$DATA_DIR/activity.log" 2>/dev/null || true
+  if [[ -n "${COLONY_DATA_DIR:-}" ]]; then
+    echo "[$timestamp] ERROR $E_BASH_ERROR: Command failed at line $line_num (exit $exit_code)" >> "$COLONY_DATA_DIR/activity.log" 2>/dev/null || true
   fi
 
   exit 1

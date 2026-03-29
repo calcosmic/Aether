@@ -5068,7 +5068,7 @@ EOF
     # Read data safety statistics from safety-stats.json
     # Usage: data-safety-stats
     # Returns: JSON with safety event counts, or defaults if no stats file exists
-    _ds_stats_file="$DATA_DIR/safety-stats.json"
+    _ds_stats_file="$COLONY_DATA_DIR/safety-stats.json"
     if [[ -f "$_ds_stats_file" ]]; then
       _ds_stale=$(jq -r '.stale_locks_cleaned // 0' "$_ds_stats_file" 2>/dev/null || echo 0)
       _ds_rejects=$(jq -r '.json_validation_rejects // 0' "$_ds_stats_file" 2>/dev/null || echo 0)

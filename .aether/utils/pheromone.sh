@@ -165,7 +165,7 @@ else
   fi
 fi
 
-pw_file="$DATA_DIR/pheromones.json"
+pw_file="$COLONY_DATA_DIR/pheromones.json"
 
 pw_lock_held=false
 if type acquire_lock &>/dev/null; then
@@ -270,7 +270,7 @@ atomic_write "$pw_file" "$pw_updated" || {
 [[ "$pw_lock_held" == "true" ]] && { release_lock 2>/dev/null || true; trap - EXIT; }  # SUPPRESS:OK -- cleanup: lock may not be held
 
 # Backward compatibility: also write to constraints.json
-pw_cfile="$DATA_DIR/constraints.json"
+pw_cfile="$COLONY_DATA_DIR/constraints.json"
 if [[ "$pw_type" == "FOCUS" ]]; then
   if [[ ! -f "$pw_cfile" ]]; then
     atomic_write "$pw_cfile" '{"version":"1.0","focus":[],"constraints":[]}' || _aether_log_error "Could not initialize constraints file"
@@ -317,7 +317,7 @@ _pheromone_count() {
 # Usage: pheromone-count
 # Returns: JSON with per-type counts
 
-pc_file="$DATA_DIR/pheromones.json"
+pc_file="$COLONY_DATA_DIR/pheromones.json"
 
 if [[ ! -f "$pc_file" ]]; then
   json_ok '{"focus":0,"redirect":0,"feedback":0,"total":0}'
@@ -346,7 +346,7 @@ _pheromone_display() {
 #   type: Optional filter (focus/redirect/feedback) or 'all' (default: all)
 # Returns: Formatted table string (human-readable)
 
-pd_file="$DATA_DIR/pheromones.json"
+pd_file="$COLONY_DATA_DIR/pheromones.json"
 pd_type="${1:-all}"
 pd_now_iso=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
@@ -467,7 +467,7 @@ _pheromone_read() {
 # Returns: JSON object with pheromones array including effective_strength
 
 pher_type="${1:-all}"
-pher_file="$DATA_DIR/pheromones.json"
+pher_file="$COLONY_DATA_DIR/pheromones.json"
 
 # Check if file exists
 if [[ ! -f "$pher_file" ]]; then
@@ -566,7 +566,7 @@ done
 [[ "$pp_max_signals" -lt 1 ]] && pp_max_signals=8
 [[ "$pp_max_instincts" -lt 1 ]] && pp_max_instincts=3
 
-pp_pher_file="$DATA_DIR/pheromones.json"
+pp_pher_file="$COLONY_DATA_DIR/pheromones.json"
 # MIGRATE: direct COLONY_STATE.json access -- use _state_read_field instead
 pp_state_file="$DATA_DIR/COLONY_STATE.json"
 pp_now_iso=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -972,7 +972,7 @@ fi
 # Call pheromone-prime by re-invoking the script (it's a case branch, not a function)
 cp_signals_json='{"signal_count":0,"instinct_count":0,"prompt_section":"","log_line":"Primed: no pheromones (file missing)"}'
 cp_pher_warn=""
-if [[ -f "$DATA_DIR/pheromones.json" ]]; then
+if [[ -f "$COLONY_DATA_DIR/pheromones.json" ]]; then
   if [[ "$cp_compact" == "true" ]]; then
     # SUPPRESS:OK -- read-default: subcommand call returns fallback on failure
     cp_signals_raw=$("$SCRIPT_DIR/aether-utils.sh" pheromone-prime --compact --max-signals 8 --max-instincts 3 2>/dev/null) || cp_signals_raw=""
@@ -1298,7 +1298,7 @@ fi
 # === Blocker flag injection (CTX-02) ===
 # Extract unresolved blocker flags for the current phase from flags.json
 # and inject as REDIRECT-priority warnings distinct from user pheromones
-cp_flags_file="$DATA_DIR/flags.json"
+cp_flags_file="$COLONY_DATA_DIR/flags.json"
 cp_blocker_count=0
 
 cp_blockers=""
@@ -1351,10 +1351,10 @@ fi
 # Read last 5 entries directly (not via context-capsule which truncates)
 cp_roll_count=5
 cp_roll_entries=""
-if [[ -f "$DATA_DIR/rolling-summary.log" ]]; then
+if [[ -f "$COLONY_DATA_DIR/rolling-summary.log" ]]; then
   # SUPPRESS:OK -- read-default: file may not exist
   # SUPPRESS:OK -- read-default: file may not exist yet
-  cp_roll_entries=$(tail -n "$cp_roll_count" "$DATA_DIR/rolling-summary.log" 2>/dev/null | \
+  cp_roll_entries=$(tail -n "$cp_roll_count" "$COLONY_DATA_DIR/rolling-summary.log" 2>/dev/null | \
     awk -F'|' 'NF >= 4 {printf "- [%s] %s: %s\n", $1, $2, $4}')
 fi
 
@@ -1573,8 +1573,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-phe_pheromones_file="$DATA_DIR/pheromones.json"
-phe_midden_dir="$DATA_DIR/midden"
+phe_pheromones_file="$COLONY_DATA_DIR/pheromones.json"
+phe_midden_dir="$COLONY_DATA_DIR/midden"
 phe_midden_file="$phe_midden_dir/midden.json"
 
 # Handle missing pheromones.json gracefully
@@ -1906,7 +1906,7 @@ _pheromone_export_xml() {
 # Default output: .aether/exchange/pheromones.xml
 
 pex_output="${1:-$SCRIPT_DIR/exchange/pheromones.xml}"
-pex_pheromones="$DATA_DIR/pheromones.json"
+pex_pheromones="$COLONY_DATA_DIR/pheromones.json"
 
 # Graceful degradation: check for xmllint
 if ! command -v xmllint >/dev/null 2>&1; then
@@ -1939,7 +1939,7 @@ _pheromone_import_xml() {
 
 pix_xml="${1:-}"
 pix_colony_prefix="${2:-}"
-pix_pheromones="$DATA_DIR/pheromones.json"
+pix_pheromones="$COLONY_DATA_DIR/pheromones.json"
 
 if [[ -z "$pix_xml" ]]; then
   json_err "$E_VALIDATION_FAILED" "Missing XML file argument. Try: pheromone-import-xml <xml_file> [colony_prefix]."

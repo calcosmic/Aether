@@ -4,7 +4,16 @@
 
 SWARM_ID="${1:-current}"
 DATA_DIR="${DATA_DIR:-.aether/data}"
-DISPLAY_FILE="$DATA_DIR/swarm-display.json"
+# Resolve COLONY_DATA_DIR for per-colony files (standalone script)
+COLONY_DATA_DIR="${COLONY_DATA_DIR:-$DATA_DIR}"
+if [[ -f "$DATA_DIR/COLONY_STATE.json" ]]; then
+  _cn=$(jq -r '.colony_name // empty' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null)
+  if [[ -n "$_cn" ]]; then
+    _cn_safe=$(echo "$_cn" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//')
+    [[ -n "$_cn_safe" ]] && COLONY_DATA_DIR="$DATA_DIR/colonies/$_cn_safe"
+  fi
+fi
+DISPLAY_FILE="$COLONY_DATA_DIR/swarm-display.json"
 
 # ANSI colors (matching caste-colors.js)
 BLUE='\033[34m'

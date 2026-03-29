@@ -40,7 +40,7 @@ _midden_write() {
       return 0
     fi
 
-    mw_midden_dir="$DATA_DIR/midden"
+    mw_midden_dir="$COLONY_DATA_DIR/midden"
     mw_midden_file="$mw_midden_dir/midden.json"
     mw_timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
     mw_entry_id="midden_$(date +%s)_$$"
@@ -103,7 +103,7 @@ _midden_recent_failures() {
     # Returns: JSON with count and failures array
 
     limit="${1:-5}"
-    midden_file="$DATA_DIR/midden/midden.json"
+    midden_file="$COLONY_DATA_DIR/midden/midden.json"
 
     if [[ ! -f "$midden_file" ]]; then
       echo '{"count":0,"failures":[]}'
@@ -142,7 +142,7 @@ _midden_review() {
       esac
     done
 
-    mr_midden_file="$DATA_DIR/midden/midden.json"
+    mr_midden_file="$COLONY_DATA_DIR/midden/midden.json"
 
     if [[ ! -f "$mr_midden_file" ]]; then
       json_ok '{"unacknowledged_count":0,"categories":{},"entries":[]}'
@@ -199,7 +199,7 @@ _midden_ingest_errors() {
       esac
     done
 
-    mie_errors_file="$DATA_DIR/errors.log"
+    mie_errors_file="$COLONY_DATA_DIR/errors.log"
 
     # No errors.log → nothing to ingest
     if [[ ! -f "$mie_errors_file" ]]; then
@@ -268,7 +268,7 @@ _midden_acknowledge() {
       json_err "$E_VALIDATION_FAILED" "midden-acknowledge requires --id or --category"
     fi
 
-    ma_midden_file="$DATA_DIR/midden/midden.json"
+    ma_midden_file="$COLONY_DATA_DIR/midden/midden.json"
 
     if [[ ! -f "$ma_midden_file" ]]; then
       json_err "$E_FILE_NOT_FOUND" "midden.json not found"

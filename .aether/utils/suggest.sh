@@ -63,8 +63,8 @@ _suggest_analyze() {
 
     # Build JSON array of suggestions using jq
     # We use jq to handle deduplication since bash 3.2 doesn't support associative arrays
-    pheromones_file="$DATA_DIR/pheromones.json"
-    session_file="$DATA_DIR/session.json"
+    pheromones_file="$COLONY_DATA_DIR/pheromones.json"
+    session_file="$COLONY_DATA_DIR/session.json"
 
     # Create temp file for collecting raw suggestions
     raw_suggestions=$(mktemp)
@@ -266,7 +266,7 @@ _suggest_record() {
       json_err "$E_VALIDATION_FAILED" "suggest-record requires <hash> argument"
     fi
 
-    session_file="$DATA_DIR/session.json"
+    session_file="$COLONY_DATA_DIR/session.json"
 
     # Initialize suggested_pheromones array if missing
     if [[ -f "$session_file" ]]; then
@@ -316,7 +316,7 @@ _suggest_check() {
       json_err "$E_VALIDATION_FAILED" "suggest-check requires <hash> argument"
     fi
 
-    session_file="$DATA_DIR/session.json"
+    session_file="$COLONY_DATA_DIR/session.json"
     already_suggested="false"
 
     if [[ -f "$session_file" ]]; then
@@ -339,7 +339,7 @@ _suggest_check() {
 # ============================================================================
 _suggest_clear() {
     _deprecation_warning "suggest-clear"
-    session_file="$DATA_DIR/session.json"
+    session_file="$COLONY_DATA_DIR/session.json"
     cleared_count=0
 
     if [[ -f "$session_file" ]]; then

@@ -17,8 +17,8 @@ _flag_add() {
     phase="${5:-null}"
     [[ -z "$title" ]] && json_err "$E_VALIDATION_FAILED" "Usage: flag-add <type> <title> <description> [source] [phase]"
 
-    mkdir -p "$DATA_DIR"
-    flags_file="$DATA_DIR/flags.json"
+    mkdir -p "$COLONY_DATA_DIR"
+    flags_file="$COLONY_DATA_DIR/flags.json"
 
     if [[ ! -f "$flags_file" ]]; then
       atomic_write "$flags_file" '{"version":1,"flags":[]}' || json_err "$E_UNKNOWN" "Failed to initialize flags file"
@@ -88,7 +88,7 @@ _flag_check_blockers() {
     # Count unresolved blockers for the current phase
     # Usage: flag-check-blockers [phase]
     phase="${1:-}"
-    flags_file="$DATA_DIR/flags.json"
+    flags_file="$COLONY_DATA_DIR/flags.json"
 
     if [[ ! -f "$flags_file" ]]; then
       json_ok '{"blockers":0,"issues":0,"notes":0}'
@@ -121,7 +121,7 @@ _flag_resolve() {
     resolution="${2:-Resolved}"
     [[ -z "$flag_id" ]] && json_err "$E_VALIDATION_FAILED" "Usage: flag-resolve <flag_id> [resolution_message]"
 
-    flags_file="$DATA_DIR/flags.json"
+    flags_file="$COLONY_DATA_DIR/flags.json"
     [[ ! -f "$flags_file" ]] && json_err "$E_FILE_NOT_FOUND" "No flags file found"
 
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -155,7 +155,7 @@ _flag_acknowledge() {
     flag_id="${1:-}"
     [[ -z "$flag_id" ]] && json_err "$E_VALIDATION_FAILED" "Usage: flag-acknowledge <flag_id>"
 
-    flags_file="$DATA_DIR/flags.json"
+    flags_file="$COLONY_DATA_DIR/flags.json"
     [[ ! -f "$flags_file" ]] && json_err "$E_FILE_NOT_FOUND" "No flags file found"
 
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -185,7 +185,7 @@ _flag_acknowledge() {
 _flag_list() {
     # List flags, optionally filtered
     # Usage: flag-list [--all] [--type blocker|issue|note] [--phase N]
-    flags_file="$DATA_DIR/flags.json"
+    flags_file="$COLONY_DATA_DIR/flags.json"
     show_all="false"
     filter_type=""
     filter_phase=""
@@ -227,7 +227,7 @@ _flag_auto_resolve() {
     # Auto-resolve flags based on trigger (e.g., build_pass)
     # Usage: flag-auto-resolve <trigger>
     trigger="${1:-build_pass}"
-    flags_file="$DATA_DIR/flags.json"
+    flags_file="$COLONY_DATA_DIR/flags.json"
 
     if [[ ! -f "$flags_file" ]]; then json_ok '{"resolved":0}'; exit 0; fi
 

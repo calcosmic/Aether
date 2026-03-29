@@ -98,9 +98,9 @@ _autofix_rollback() {
 # ============================================================================
 _swarm_findings_init() {
     swarm_id="${1:-swarm-$(date +%s)}"
-    findings_file="$DATA_DIR/swarm-findings-$swarm_id.json"
+    findings_file="$COLONY_DATA_DIR/swarm-findings-$swarm_id.json"
 
-    mkdir -p "$DATA_DIR"
+    mkdir -p "$COLONY_DATA_DIR"
     # Build initial findings JSON safely via jq (swarm_id may contain JSON-special chars)
     local init_json
     init_json=$(jq -n --arg sid "$swarm_id" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{
@@ -128,7 +128,7 @@ _swarm_findings_add() {
 
     [[ -z "$swarm_id" || -z "$scout_type" || -z "$finding" ]] && json_err "$E_VALIDATION_FAILED" "Usage: swarm-findings-add <swarm_id> <scout_type> <confidence> <finding_json>"
 
-    findings_file="$DATA_DIR/swarm-findings-$swarm_id.json"
+    findings_file="$COLONY_DATA_DIR/swarm-findings-$swarm_id.json"
     [[ ! -f "$findings_file" ]] && json_err "$E_FILE_NOT_FOUND" "Swarm findings file not found: $swarm_id"
 
     ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -161,7 +161,7 @@ _swarm_findings_read() {
     swarm_id="${1:-}"
     [[ -z "$swarm_id" ]] && json_err "$E_VALIDATION_FAILED" "Usage: swarm-findings-read <swarm_id>"
 
-    findings_file="$DATA_DIR/swarm-findings-$swarm_id.json"
+    findings_file="$COLONY_DATA_DIR/swarm-findings-$swarm_id.json"
     [[ ! -f "$findings_file" ]] && json_err "$E_FILE_NOT_FOUND" "Swarm findings file not found: $swarm_id"
 
     json_ok "$(cat "$findings_file")"
@@ -178,7 +178,7 @@ _swarm_solution_set() {
 
     [[ -z "$swarm_id" || -z "$solution" ]] && json_err "$E_VALIDATION_FAILED" "Usage: swarm-solution-set <swarm_id> <solution_json>"
 
-    findings_file="$DATA_DIR/swarm-findings-$swarm_id.json"
+    findings_file="$COLONY_DATA_DIR/swarm-findings-$swarm_id.json"
     [[ ! -f "$findings_file" ]] && json_err "$E_FILE_NOT_FOUND" "Swarm findings file not found: $swarm_id"
 
     ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -207,12 +207,12 @@ _swarm_cleanup() {
 
     [[ -z "$swarm_id" ]] && json_err "$E_VALIDATION_FAILED" "Usage: swarm-cleanup <swarm_id> [--archive]"
 
-    findings_file="$DATA_DIR/swarm-findings-$swarm_id.json"
+    findings_file="$COLONY_DATA_DIR/swarm-findings-$swarm_id.json"
 
     if [[ -f "$findings_file" ]]; then
       if [[ "$archive" == "--archive" ]]; then
-        mkdir -p "$DATA_DIR/swarm-archive"
-        mv "$findings_file" "$DATA_DIR/swarm-archive/"
+        mkdir -p "$COLONY_DATA_DIR/swarm-archive"
+        mv "$findings_file" "$COLONY_DATA_DIR/swarm-archive/"
         json_ok "$(jq -n --arg swarm_id "$swarm_id" '{archived: true, swarm_id: $swarm_id}')"
       else
         rm -f "$findings_file"
@@ -234,8 +234,8 @@ _swarm_activity_log() {
     details="${3:-}"
     [[ -z "$ant_name" || -z "$action" || -z "$details" ]] && json_err "$E_VALIDATION_FAILED" "Usage: swarm-activity-log <ant_name> <action> <details>"
 
-    mkdir -p "$DATA_DIR"
-    log_file="$DATA_DIR/swarm-activity.log"
+    mkdir -p "$COLONY_DATA_DIR"
+    log_file="$COLONY_DATA_DIR/swarm-activity.log"
     ts=$(date -u +"%H:%M:%S")
     echo "[$ts] $ant_name: $action $details" >> "$log_file"
     json_ok '"logged"'
@@ -248,9 +248,9 @@ _swarm_activity_log() {
 # ============================================================================
 _swarm_display_init() {
     swarm_id="${1:-swarm-$(date +%s)}"
-    mkdir -p "$DATA_DIR"
+    mkdir -p "$COLONY_DATA_DIR"
 
-    display_file="$DATA_DIR/swarm-display.json"
+    display_file="$COLONY_DATA_DIR/swarm-display.json"
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
     # Build initial display JSON safely via jq (swarm_id may contain JSON-special chars)
@@ -308,7 +308,7 @@ _swarm_display_update() {
     [[ "$tokens" =~ ^-?[0-9]+$ ]] || tokens=0
     [[ "$progress" =~ ^-?[0-9]+$ ]] || progress=0
 
-    display_file="$DATA_DIR/swarm-display.json"
+    display_file="$COLONY_DATA_DIR/swarm-display.json"
 
     # Initialize if doesn't exist
     if [[ ! -f "$display_file" ]]; then
@@ -396,7 +396,7 @@ _swarm_display_update() {
 # Usage: _swarm_display_get
 # ============================================================================
 _swarm_display_get() {
-    display_file="$DATA_DIR/swarm-display.json"
+    display_file="$COLONY_DATA_DIR/swarm-display.json"
 
     if [[ ! -f "$display_file" ]]; then
       json_ok '{"swarm_id":null,"active_ants":[],"summary":{"total_active":0,"by_caste":{},"by_zone":{}},"chambers":{}}'
@@ -549,7 +549,7 @@ _sw_format_duration() {
 _swarm_display_inline() {
     _deprecation_warning "swarm-display-inline"
     swarm_id="${1:-default-swarm}"
-    display_file="$DATA_DIR/swarm-display.json"
+    display_file="$COLONY_DATA_DIR/swarm-display.json"
 
     # ANSI colors
     _SW_BLUE='\033[34m'
@@ -794,7 +794,7 @@ _sw_format_compact_tokens() {
 # ============================================================================
 _swarm_display_text() {
     swarm_id="${1:-default-swarm}"
-    display_file="$DATA_DIR/swarm-display.json"
+    display_file="$COLONY_DATA_DIR/swarm-display.json"
 
     # Check for display file
     if [[ ! -f "$display_file" ]]; then
@@ -895,8 +895,8 @@ _swarm_timing_start() {
     ant_name="${1:-}"
     [[ -z "$ant_name" ]] && json_err "$E_VALIDATION_FAILED" "Usage: swarm-timing-start <ant_name>"
 
-    mkdir -p "$DATA_DIR"
-    timing_file="$DATA_DIR/timing.log"
+    mkdir -p "$COLONY_DATA_DIR"
+    timing_file="$COLONY_DATA_DIR/timing.log"
     ts=$(date +%s)
     ts_iso=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
@@ -921,7 +921,7 @@ _swarm_timing_get() {
     ant_name="${1:-}"
     [[ -z "$ant_name" ]] && json_err "$E_VALIDATION_FAILED" "Usage: swarm-timing-get <ant_name>"
 
-    timing_file="$DATA_DIR/timing.log"
+    timing_file="$COLONY_DATA_DIR/timing.log"
 
     # -F: ant_name may contain regex metacharacters; ^ anchor dropped (ant names are unique per swarm)
     if [[ ! -f "$timing_file" ]] || ! grep -qF "$ant_name|" "$timing_file" 2>/dev/null; then  # SUPPRESS:OK -- existence-test: file may not exist
@@ -969,7 +969,7 @@ _swarm_timing_eta() {
       percent=100
     fi
 
-    timing_file="$DATA_DIR/timing.log"
+    timing_file="$COLONY_DATA_DIR/timing.log"
 
     # -F: ant_name may contain regex metacharacters; ^ anchor dropped (ant names are unique per swarm)
     if [[ ! -f "$timing_file" ]] || ! grep -qF "$ant_name|" "$timing_file" 2>/dev/null; then  # SUPPRESS:OK -- existence-test: file may not exist

@@ -21,7 +21,7 @@ _learning_promote() {
     tags="${4:-}"
 
     mkdir -p "$DATA_DIR"
-    global_file="$DATA_DIR/learnings.json"
+    global_file="$COLONY_DATA_DIR/learnings.json"
 
     if [[ ! -f "$global_file" ]]; then
       atomic_write "$global_file" '{"learnings":[],"version":1}' || json_err "$E_UNKNOWN" "Failed to initialize learnings file"
@@ -70,7 +70,7 @@ _learning_inject() {
     [[ $# -ge 1 ]] || json_err "$E_VALIDATION_FAILED" "Usage: learning-inject <tech_keywords_csv>"
     keywords="$1"
 
-    global_file="$DATA_DIR/learnings.json"
+    global_file="$COLONY_DATA_DIR/learnings.json"
 
     if [[ ! -f "$global_file" ]]; then
       json_ok '{"learnings":[],"count":0}'
@@ -118,7 +118,7 @@ _learning_observe() {
     content_hash="sha256:$(echo -n "$content" | sha256sum | cut -d' ' -f1)"
 
     # Observations file path
-    observations_file="$DATA_DIR/learning-observations.json"
+    observations_file="$COLONY_DATA_DIR/learning-observations.json"
 
     # Ensure data directory exists
     [[ ! -d "$DATA_DIR" ]] && mkdir -p "$DATA_DIR"
@@ -315,7 +315,7 @@ _learning_observe() {
 # Returns: JSON array of proposals meeting thresholds
 # ============================================================================
 _learning_check_promotion() {
-    observations_file="${1:-$DATA_DIR/learning-observations.json}"
+    observations_file="${1:-$COLONY_DATA_DIR/learning-observations.json}"
 
     # Default to empty file path if not provided and data dir doesn't exist
     if [[ -z "${1:-}" ]] && [[ ! -d "$DATA_DIR" ]]; then
@@ -379,7 +379,7 @@ _learning_promote_auto() {
 
     policy_threshold=$(get_wisdom_threshold "$wisdom_type" "auto")
 
-    observations_file="$DATA_DIR/learning-observations.json"
+    observations_file="$COLONY_DATA_DIR/learning-observations.json"
     content_hash="sha256:$(echo -n "$content" | sha256sum | cut -d' ' -f1)"
     observation_count=0
     colony_count=0
@@ -491,7 +491,7 @@ _learning_display_proposals() {
 
     # Determine observations file path
     if [[ -z "$observations_file" ]]; then
-      observations_file="$DATA_DIR/learning-observations.json"
+      observations_file="$COLONY_DATA_DIR/learning-observations.json"
     fi
 
     # Check if file exists and has content
@@ -643,7 +643,7 @@ _learning_select_proposals() {
 
     # Get all observations (not just threshold-meeting ones) for display consistency
     # This matches learning-display-proposals behavior
-    observations_file="$DATA_DIR/learning-observations.json"
+    observations_file="$COLONY_DATA_DIR/learning-observations.json"
     if [[ ! -f "$observations_file" ]]; then
       json_ok '{"selected":[],"deferred":[],"count":0,"action":"none","reason":"no_observations_file"}'
       exit 0
@@ -810,7 +810,7 @@ _learning_defer_proposals() {
       exit 0
     fi
 
-    deferred_file="$DATA_DIR/learning-deferred.json"
+    deferred_file="$COLONY_DATA_DIR/learning-deferred.json"
 
     # Ensure data directory exists
     [[ ! -d "$DATA_DIR" ]] && mkdir -p "$DATA_DIR"
@@ -928,13 +928,13 @@ _learning_approve_proposals() {
     # Load proposals based on mode
     if [[ "$deferred_mode" == "true" ]]; then
       # Load from deferred file
-      if [[ ! -f "$DATA_DIR/learning-deferred.json" ]]; then
+      if [[ ! -f "$COLONY_DATA_DIR/learning-deferred.json" ]]; then
         echo "No deferred proposals to review."
         json_ok '{"promoted":0,"deferred":0,"failed":null,"undo_offered":false}'
         exit 0
       fi
       # SUPPRESS:OK -- read-default: returns fallback on failure
-      proposals_json=$(jq '{proposals: .deferred}' "$DATA_DIR/learning-deferred.json" 2>/dev/null || echo '{"proposals":[]}')
+      proposals_json=$(jq '{proposals: .deferred}' "$COLONY_DATA_DIR/learning-deferred.json" 2>/dev/null || echo '{"proposals":[]}')
       echo "📦 Reviewing deferred proposals..."
       echo ""
     else
@@ -1130,7 +1130,7 @@ _learning_approve_proposals() {
       undo_offered=true
 
       # Store undo info
-      undo_file="$DATA_DIR/.promotion-undo.json"
+      undo_file="$COLONY_DATA_DIR/.promotion-undo.json"
       promoted_json=$(printf '%s\n' "${promoted_items[@]}" | jq -s '.')
       jq -n --argjson items "$promoted_json" --arg ts "$(date +%s)" '{promoted: $items, timestamp: ($ts | tonumber)}' > "$undo_file"
 
@@ -1171,7 +1171,7 @@ _learning_approve_proposals() {
 # Returns: JSON with count of undone items
 # ============================================================================
 _learning_undo_promotions() {
-    undo_file="$DATA_DIR/.promotion-undo.json"
+    undo_file="$COLONY_DATA_DIR/.promotion-undo.json"
 
     # Check if undo file exists
     if [[ ! -f "$undo_file" ]]; then
@@ -1764,8 +1764,8 @@ _learning_extract_fallback() {
 
     # Read last-build-claims.json if it exists for task context
     lef_claims=""
-    if [[ -f "$DATA_DIR/last-build-claims.json" ]]; then
-        lef_claims=$(cat "$DATA_DIR/last-build-claims.json" 2>/dev/null || echo "")
+    if [[ -f "$COLONY_DATA_DIR/last-build-claims.json" ]]; then
+        lef_claims=$(cat "$COLONY_DATA_DIR/last-build-claims.json" 2>/dev/null || echo "")
     fi
 
     # Parse stat data into JSON: extract file path, insertions, deletions per line

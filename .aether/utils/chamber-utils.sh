@@ -314,13 +314,13 @@ _colony_archive_xml() {
 
     # Step 1: Filter active-only pheromone signals to a temp file
     cax_tmp_pheromones=$(mktemp)
-    if [[ -f "$DATA_DIR/pheromones.json" ]]; then
+    if [[ -f "$COLONY_DATA_DIR/pheromones.json" ]]; then
       jq '{
         version: .version,
         colony_id: .colony_id,
         generated_at: .generated_at,
         signals: [.signals[] | select(.active == true)]
-      }' "$DATA_DIR/pheromones.json" > "$cax_tmp_pheromones" 2>/dev/null  # SUPPRESS:OK -- read-default: file may not exist yet
+      }' "$COLONY_DATA_DIR/pheromones.json" > "$cax_tmp_pheromones" 2>/dev/null  # SUPPRESS:OK -- read-default: file may not exist yet
     else
       printf '%s\n' '{"version":"1.0","colony_id":"unknown","generated_at":"","signals":[]}' > "$cax_tmp_pheromones"
     fi

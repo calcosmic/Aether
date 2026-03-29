@@ -21,15 +21,15 @@ _spawn_log() {
       [[ -n "$slot" && "$slot" != "null" ]] && model="$slot"
     fi
     [[ -z "$parent_id" || -z "$child_caste" || -z "$task_summary" ]] && json_err "$E_VALIDATION_FAILED" "Usage: spawn-log <parent_id> <child_caste> <child_name> <task_summary> [model] [status]"
-    mkdir -p "$DATA_DIR"
+    mkdir -p "$COLONY_DATA_DIR"
     ts=$(date -u +"%H:%M:%S")
     ts_full=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
     emoji=$(get_caste_emoji "$child_caste")
     parent_emoji=$(get_caste_emoji "$parent_id")
     # Log to activity log with spawn format, emojis, and model info
-    echo "[$ts] ⚡ SPAWN $parent_emoji $parent_id -> $emoji $child_name ($child_caste): $task_summary [model: $model]" >> "$DATA_DIR/activity.log"
+    echo "[$ts] ⚡ SPAWN $parent_emoji $parent_id -> $emoji $child_name ($child_caste): $task_summary [model: $model]" >> "$COLONY_DATA_DIR/activity.log"
     # Log to spawn tree file for visualization (NEW FORMAT: includes model field)
-    echo "$ts_full|$parent_id|$child_caste|$child_name|$task_summary|$model|$status" >> "$DATA_DIR/spawn-tree.txt"
+    echo "$ts_full|$parent_id|$child_caste|$child_name|$task_summary|$model|$status" >> "$COLONY_DATA_DIR/spawn-tree.txt"
     # Return emoji-formatted result for display (jq-safe: child_name may contain JSON-special chars)
     json_ok "$(jq -n --arg msg "⚡ $emoji $child_name spawned" '$msg')"
 }
@@ -41,16 +41,16 @@ _spawn_complete() {
     status="${2:-completed}"
     summary="${3:-}"
     [[ -z "$ant_name" ]] && json_err "$E_VALIDATION_FAILED" "Usage: spawn-complete <ant_name> <status> [summary]"
-    mkdir -p "$DATA_DIR"
+    mkdir -p "$COLONY_DATA_DIR"
     ts=$(date -u +"%H:%M:%S")
     ts_full=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
     emoji=$(get_caste_emoji "$ant_name")
     status_icon="✅"
     [[ "$status" == "failed" ]] && status_icon="❌"
     [[ "$status" == "blocked" ]] && status_icon="🚫"
-    echo "[$ts] $status_icon $emoji $ant_name: $status${summary:+ - $summary}" >> "$DATA_DIR/activity.log"
+    echo "[$ts] $status_icon $emoji $ant_name: $status${summary:+ - $summary}" >> "$COLONY_DATA_DIR/activity.log"
     # Update spawn tree
-    echo "$ts_full|$ant_name|$status|$summary" >> "$DATA_DIR/spawn-tree.txt"
+    echo "$ts_full|$ant_name|$status|$summary" >> "$COLONY_DATA_DIR/spawn-tree.txt"
     # Log failed spawns to events array as pipe-delimited strings (matching template format)
     if [[ "$status" == "failed" ]] || [[ "$status" == "error" ]]; then
       if [[ -f "$DATA_DIR/COLONY_STATE.json" ]]; then
@@ -97,8 +97,8 @@ _spawn_can_spawn() {
 
     # Count current spawns in this session (from spawn-tree.txt)
     current=0
-    if [[ -f "$DATA_DIR/spawn-tree.txt" ]]; then
-      current=$(grep -c "|spawned$" "$DATA_DIR/spawn-tree.txt" 2>/dev/null || echo 0)  # SUPPRESS:OK -- read-default: count defaults to 0 if file missing
+    if [[ -f "$COLONY_DATA_DIR/spawn-tree.txt" ]]; then
+      current=$(grep -c "|spawned$" "$COLONY_DATA_DIR/spawn-tree.txt" 2>/dev/null || echo 0)  # SUPPRESS:OK -- read-default: count defaults to 0 if file missing
     fi
 
     # Global cap of 10 workers per phase
@@ -130,13 +130,13 @@ _spawn_get_depth() {
     fi
 
     # Check if spawn tree exists
-    if [[ ! -f "$DATA_DIR/spawn-tree.txt" ]]; then
+    if [[ ! -f "$COLONY_DATA_DIR/spawn-tree.txt" ]]; then
       json_ok "$(jq -n --arg ant "$ant_name" '{ant: $ant, depth: 1, found: false}')"
       exit 0
     fi
 
     # Check if ant exists in spawn tree (gracefully handle missing ants)
-    if ! grep -qF "|$ant_name|" "$DATA_DIR/spawn-tree.txt" 2>/dev/null; then  # SUPPRESS:OK -- existence-test: file may not exist; -F: ant_name may contain regex metacharacters
+    if ! grep -qF "|$ant_name|" "$COLONY_DATA_DIR/spawn-tree.txt" 2>/dev/null; then  # SUPPRESS:OK -- existence-test: file may not exist; -F: ant_name may contain regex metacharacters
       json_ok "$(jq -n --arg ant "$ant_name" '{ant: $ant, depth: 1, found: false}')"
       exit 0
     fi
@@ -149,7 +149,7 @@ _spawn_get_depth() {
     while true; do
       # Format: timestamp|parent|caste|child_name|task|spawned
       # SUPPRESS:OK -- read-default: returns fallback on failure
-      parent=$(grep -F "|$current_ant|" "$DATA_DIR/spawn-tree.txt" 2>/dev/null | grep "|spawned$" | head -1 | cut -d'|' -f2 || echo "")
+      parent=$(grep -F "|$current_ant|" "$COLONY_DATA_DIR/spawn-tree.txt" 2>/dev/null | grep "|spawned$" | head -1 | cut -d'|' -f2 || echo "")
 
       if [[ -z "$parent" || "$parent" == "Queen" ]]; then
         break
@@ -175,10 +175,10 @@ _spawn_can_spawn_swarm() {
     swarm_cap=6
 
     current=0
-    if [[ -f "$DATA_DIR/spawn-tree.txt" ]]; then
+    if [[ -f "$COLONY_DATA_DIR/spawn-tree.txt" ]]; then
       # SUPPRESS:OK -- existence-test: grep returns 1 when no matches
       # -F: swarm_id may contain regex metacharacters; anchor $ dropped (swarm_id is unique, no substring collision risk)
-      current=$(grep -cF "|swarm:$swarm_id" "$DATA_DIR/spawn-tree.txt" 2>/dev/null) || current=0
+      current=$(grep -cF "|swarm:$swarm_id" "$COLONY_DATA_DIR/spawn-tree.txt" 2>/dev/null) || current=0
     fi
 
     if [[ $current -lt $swarm_cap ]]; then
@@ -241,7 +241,7 @@ _spawn_tree_depth() {
 _spawn_efficiency() {
     # Calculate spawn efficiency metrics from spawn-tree.txt
     # Usage: spawn-efficiency
-    spawn_tree_file="$DATA_DIR/spawn-tree.txt"
+    spawn_tree_file="$COLONY_DATA_DIR/spawn-tree.txt"
     total=0
     completed=0
     failed=0

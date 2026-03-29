@@ -360,7 +360,7 @@ _queen_promote() {
     # QUEEN-04: Check threshold against learning-observations.json
     # For decrees, always promote immediately (threshold 0)
     # For other types, verify observation count meets threshold
-    observations_file="$DATA_DIR/learning-observations.json"
+    observations_file="$COLONY_DATA_DIR/learning-observations.json"
     content_hash="sha256:$(echo -n "$content" | sha256sum | cut -d' ' -f1)"
 
     if [[ "$wisdom_type" != "decree" ]] && [[ -f "$observations_file" ]]; then

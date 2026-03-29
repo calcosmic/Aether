@@ -3,8 +3,17 @@
 # Usage: bash watch-spawn-tree.sh [data_dir]
 
 DATA_DIR="${1:-.aether/data}"
-SPAWN_FILE="$DATA_DIR/spawn-tree.txt"
-VIEW_STATE_FILE="$DATA_DIR/view-state.json"
+# Resolve COLONY_DATA_DIR for per-colony files (standalone script)
+COLONY_DATA_DIR="${COLONY_DATA_DIR:-$DATA_DIR}"
+if [[ -f "$DATA_DIR/COLONY_STATE.json" ]]; then
+  _cn=$(jq -r '.colony_name // empty' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null)
+  if [[ -n "$_cn" ]]; then
+    _cn_safe=$(echo "$_cn" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//')
+    [[ -n "$_cn_safe" ]] && COLONY_DATA_DIR="$DATA_DIR/colonies/$_cn_safe"
+  fi
+fi
+SPAWN_FILE="$COLONY_DATA_DIR/spawn-tree.txt"
+VIEW_STATE_FILE="$COLONY_DATA_DIR/view-state.json"
 
 # ANSI colors
 YELLOW='\033[33m'
