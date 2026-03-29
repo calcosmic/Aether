@@ -431,11 +431,11 @@ _learning_promote_auto() {
         # SUPPRESS:OK -- read-default: returns fallback on failure
         --evidence "Auto-promoted after $observation_count observations (confidence: $lp_confidence)" 2>/dev/null \
         || _aether_log_error "Could not create instinct from promoted learning"
-      json_ok "$(jq -n --argjson pt "$policy_threshold" --argjson oc "$observation_count" --argjson cc "$colony_count" --arg et "$event_type" '{promoted: true, mode: "auto", policy_threshold: $pt, observation_count: $oc, colony_count: $cc, event_type: $et}')"
+      json_ok "$(jq -nc --argjson pt "$policy_threshold" --argjson oc "$observation_count" --argjson cc "$colony_count" --arg et "$event_type" '{promoted: true, mode: "auto", policy_threshold: $pt, observation_count: $oc, colony_count: $cc, event_type: $et}')"
     else
       # SUPPRESS:OK -- read-default: query may return empty
       promote_msg=$(echo "$promote_result" | jq -r '.error.message // "promotion_failed"' 2>/dev/null || echo "promotion_failed")
-      result=$(jq -n \
+      result=$(jq -nc \
         --arg reason "promotion_failed" \
         --arg message "$promote_msg" \
         --argjson policy_threshold "$policy_threshold" \
