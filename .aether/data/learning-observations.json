@@ -582,6 +582,17 @@
       "colonies": [
         "1774650429"
       ]
+    },
+    {
+      "content_hash": "sha256:029937d2729610e43d7519b97b1e48df3a236f8e83b841400acf3ed34e3ba123",
+      "content": "Audit reports must use actual test output counts, not builder-claimed counts — always cross-verify bash test pass rates against live test-aether-utils.sh output",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-29T02:42:41Z",
+      "last_seen": "2026-03-29T02:42:41Z",
+      "colonies": [
+        "1774650429"
+      ]
     }
   ]
 }

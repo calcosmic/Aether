@@ -89,3 +89,8 @@
 2026-03-29T01:54:51Z|Guard-76|completed|All 9 spawn-tree tests pass, 616 full suite, no regressions
 2026-03-29T01:54:58Z|Queen|chaos|Twist-48|Resilience testing of Phase 6 work|sonnet|spawned
 2026-03-29T01:57:35Z|Twist-48|completed|Strong resilience: 4/5 resilient, 1 medium finding (newline in task summaries)
+2026-03-29T02:12:48Z|Queen|builder|Weld-93|Produce audit report|sonnet|spawned
+2026-03-29T02:21:20Z|Weld-93|completed|Audit report produced
+2026-03-29T02:21:32Z|Queen|watcher|Alert-96|Independent verification|sonnet|spawned
+2026-03-29T02:27:04Z|Queen|chaos|Jolt-38|Resilience testing of Phase 7 work|sonnet|spawned
+2026-03-29T02:34:45Z|Jolt-38|completed|3 findings: 1 HIGH (pass rate misstated), 2 MEDIUM (instinct count, CVE packages omitted)

@@ -18,6 +18,30 @@ Communication style, expertise level, and decision-making patterns observed from
 
 Validated approaches that work in this codebase, and anti-patterns to avoid. Includes architecture conventions, naming patterns, error handling style, and technology-specific insights. Tagged [repo] for project-specific or [general] for cross-colony patterns.
 
+- **1774204068** (2026-03-29T02:47:07Z): Separate infrastructure from state using distinct directory variables when moving scripts
+- **1774204068** (2026-03-29T02:47:00Z): Watcher independently catches state-path bugs that builders miss during refactoring
+- **1774178419** (2026-03-29T02:46:52Z): TDD with parallel background agents speeds up Phase 1 type work
+- **1774178419** (2026-03-29T02:46:40Z): Process substitution avoids subshell variable loss in bash while loops
+- **1774047872** (2026-03-29T02:46:24Z): Watcher cross-checking catches stale number references in secondary doc locations
+- **1774047872** (2026-03-29T02:46:05Z): Extracting case blocks to functions requires changing positional parameter references
+- **1774047872** (2026-03-29T02:45:53Z): Combining related subcommands into a single builder produces consistent APIs
+- **1774047872** (2026-03-29T02:45:46Z): When fixing one bug check surrounding lines for related bugs from the same commit
+- **1774047872** (2026-03-29T02:45:38Z): Archaeologist pre-build scans catch latent bugs in recently-added code
+- **1774047872** (2026-03-29T02:45:30Z): Chaos resilience moderate: confidence cap correct, special chars safe, zero-instincts seal works. Medium: unbound var crash on missing flag values
+- **1774004031** (2026-03-29T02:45:21Z): Documentation chaos testing catches gaps between documented behavior and actual code
+- **1774004031** (2026-03-29T02:45:13Z): Confidence tier calculations should be inside atomic jq pipelines to preserve lock safety
+- **1774004031** (2026-03-29T02:45:06Z): Dead code variables (declared but never used) should be caught by auditor and either removed or implemented
+- **1774004031** (2026-03-29T02:44:59Z): Archaeology pre-build scans catch API contract mismatches (--instinct vs --text) that would silently fail at runtime
+- **1774004031** (2026-03-29T02:44:52Z): Chaos resilience strong: 5 scenarios tested, hive promotion handles empty instincts, special chars in paths, boundary confidence values correctly
+- **1774004031** (2026-03-29T02:44:45Z): Domain filtering in colony-prime uses hive-read with domain_tags from registry
+- **1774004031** (2026-03-29T02:44:38Z): Text transformation placeholders should avoid angle brackets to prevent double-escaping
+- **1774004031** (2026-03-29T02:44:32Z): Orchestrator commands should delegate to sibling subcommands via bash $0 rather than duplicating logic
+- **1774004031** (2026-03-29T02:44:25Z): Content sanitization pattern from pheromone-write is reusable for any user-supplied text input
+- **1774004031** (2026-03-29T02:44:18Z): Hub-level shared files need hub-level locks — per-repo LOCK_DIR cannot protect cross-repo resources
+- **1773987784** (2026-03-29T02:44:12Z): Two wisdom extraction functions must be updated in lockstep
+- **1773987784** (2026-03-29T02:44:06Z): Colony-prime token budget 8000 chars matches measured output of 2000-5000 chars
+- **1773987784** (2026-03-29T02:44:01Z): Prompt injection regex needs multi-word support with optional groups
+- **1774650429** (2026-03-29T02:42:42Z): Audit reports must use actual test output counts, not builder-claimed counts — always cross-verify bash test pass rates against live test-aether-utils.sh output
 - **1774650429** (2026-03-29T02:06:34Z): awk NF==7 for spawn detection and $3 match for completion detection handles pipes-in-summary edge cases
 - **1774650429** (2026-03-29T02:06:30Z): Replacing bash while-read+sed loops with single-pass awk eliminates O(n^2) subprocess forking
 - **1774650429** (2026-03-29T01:57:37Z): Chaos resilience strong: 4/5 scenarios resilient for spawn-tree awk rewrite, 1 medium finding on newline edge case
@@ -66,12 +90,42 @@ High-confidence behavioral patterns that have been validated through repeated co
 - [instinct] **code-style** (0.85): When shell scripts use sed c-command for line replacement, then replace with head/tail pattern for cross-platform newline safety — sed c breaks on macOS BSD with multi-line content
 - [instinct] **code-style** (0.85): When atomic mv overwrites a critical data file, then add non-empty size guard (if [[ ! -s file ]]) before mv to prevent data destruction from upstream pipeline failures
 - [instinct] **code-style** (0.85): When bash scripts use while-read+sed/cut loops for file parsing, then replace with single-pass awk to eliminate O(n^2) subprocess forking
+- [instinct] **code-style** (0.85): When bash scripts use while-read+sed/cut loops for file parsing, then replace with single-pass awk to eliminate O(n^2) subprocess forking — awk has associative arrays even when bash 3.2 does not
+- [instinct] **workflow** (0.85): When builder produces audit or summary report with test metrics, then cross-verify all pass/fail counts against live test output before accepting report as complete — builder claims are not authoritative
+- [instinct] **workflow** (0.8): When resilience testing (chaos ant) finds data accuracy issues in builder output, then always cross-verify builder claims against live test/command output before accepting — chaos findings on data accuracy should be treated as blockers
 ---
 
 ## Evolution Log
 
 | Date | Source | Type | Details |
 |------|--------|------|---------|
+| 2026-03-29T02:47:07Z | 1774204068 | promoted_pattern | Added: Separate infrastructure from state using distinct ... |
+| 2026-03-29T02:47:00Z | 1774204068 | promoted_pattern | Added: Watcher independently catches state-path bugs that... |
+| 2026-03-29T02:46:52Z | 1774178419 | promoted_pattern | Added: TDD with parallel background agents speeds up Phas... |
+| 2026-03-29T02:46:40Z | 1774178419 | promoted_pattern | Added: Process substitution avoids subshell variable loss... |
+| 2026-03-29T02:46:24Z | 1774047872 | promoted_pattern | Added: Watcher cross-checking catches stale number refere... |
+| 2026-03-29T02:46:05Z | 1774047872 | promoted_pattern | Added: Extracting case blocks to functions requires chang... |
+| 2026-03-29T02:45:53Z | 1774047872 | promoted_pattern | Added: Combining related subcommands into a single builde... |
+| 2026-03-29T02:45:46Z | 1774047872 | promoted_pattern | Added: When fixing one bug check surrounding lines for re... |
+| 2026-03-29T02:45:38Z | 1774047872 | promoted_pattern | Added: Archaeologist pre-build scans catch latent bugs in... |
+| 2026-03-29T02:45:30Z | 1774047872 | promoted_pattern | Added: Chaos resilience moderate: confidence cap correct,... |
+| 2026-03-29T02:45:21Z | 1774004031 | promoted_pattern | Added: Documentation chaos testing catches gaps between d... |
+| 2026-03-29T02:45:13Z | 1774004031 | promoted_pattern | Added: Confidence tier calculations should be inside atom... |
+| 2026-03-29T02:45:06Z | 1774004031 | promoted_pattern | Added: Dead code variables (declared but never used) shou... |
+| 2026-03-29T02:44:59Z | 1774004031 | promoted_pattern | Added: Archaeology pre-build scans catch API contract mis... |
+| 2026-03-29T02:44:52Z | 1774004031 | promoted_pattern | Added: Chaos resilience strong: 5 scenarios tested, hive ... |
+| 2026-03-29T02:44:45Z | 1774004031 | promoted_pattern | Added: Domain filtering in colony-prime uses hive-read wi... |
+| 2026-03-29T02:44:38Z | 1774004031 | promoted_pattern | Added: Text transformation placeholders should avoid angl... |
+| 2026-03-29T02:44:32Z | 1774004031 | promoted_pattern | Added: Orchestrator commands should delegate to sibling s... |
+| 2026-03-29T02:44:25Z | 1774004031 | promoted_pattern | Added: Content sanitization pattern from pheromone-write ... |
+| 2026-03-29T02:44:18Z | 1774004031 | promoted_pattern | Added: Hub-level shared files need hub-level locks — per-... |
+| 2026-03-29T02:44:12Z | 1773987784 | promoted_pattern | Added: Two wisdom extraction functions must be updated in... |
+| 2026-03-29T02:44:06Z | 1773987784 | promoted_pattern | Added: Colony-prime token budget 8000 chars matches measu... |
+| 2026-03-29T02:44:01Z | 1773987784 | promoted_pattern | Added: Prompt injection regex needs multi-word support wi... |
+| 2026-03-29T02:43:26Z | instinct | promoted_instinct | workflow: always cross-verify builder claims against live te... |
+| 2026-03-29T02:43:26Z | instinct | promoted_instinct | workflow: cross-verify all pass/fail counts against live tes... |
+| 2026-03-29T02:43:25Z | instinct | promoted_instinct | code-style: replace with single-pass awk to eliminate O(n^2) s... |
+| 2026-03-29T02:42:42Z | 1774650429 | promoted_pattern | Added: Audit reports must use actual test output counts, ... |
 | 2026-03-29T02:07:09Z | phase-6 | build_learnings | Added 2 learnings from Phase 6: Stabilize spawn-tree parsing and JSON output |
 | 2026-03-29T02:06:48Z | instinct | promoted_instinct | code-style: replace with single-pass awk to eliminate O(n^2) s... |
 | 2026-03-29T02:06:34Z | 1774650429 | promoted_pattern | Added: awk NF==7 for spawn detection and $3 match for com... |
@@ -113,13 +167,13 @@ High-confidence behavioral patterns that have been validated through repeated co
 {
   "version": "2.0.0",
   "wisdom_version": "2.0",
-  "last_evolved": "2026-03-29T02:07:09Z",
+  "last_evolved": "2026-03-29T02:47:07Z",
   "colonies_contributed": ["1774645519"],
   "stats": {
     "total_user_prefs": 2,
-    "total_codebase_patterns": 20,
+    "total_codebase_patterns": 44,
     "total_build_learnings": 3,
-    "total_instincts": 6
+    "total_instincts": 9
   },
   "evolution_log": [{"timestamp": "2026-03-24T23:40:00Z", "action": "migrate", "wisdom_type": "system", "content_hash": "v1-to-v2-migration", "colony": "system"}, {"timestamp": "2026-03-20T12:37:32Z", "action": "promote", "wisdom_type": "pattern", "content_hash": "sha256:f8aa50cfda0f37cac6cabba140bb99f1d75aa6d01a7100fe7a5ccddc2b3a017b", "colony": "1771335865738"}]
 }
