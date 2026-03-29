@@ -101,15 +101,16 @@ _swarm_findings_init() {
     findings_file="$DATA_DIR/swarm-findings-$swarm_id.json"
 
     mkdir -p "$DATA_DIR"
-    cat > "$findings_file" <<EOF
-{
-  "swarm_id": "$swarm_id",
-  "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "status": "active",
-  "findings": [],
-  "solution": null
-}
-EOF
+    # Build initial findings JSON safely via jq (swarm_id may contain JSON-special chars)
+    local init_json
+    init_json=$(jq -n --arg sid "$swarm_id" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{
+      swarm_id: $sid,
+      created_at: $ts,
+      status: "active",
+      findings: [],
+      solution: null
+    }')
+    echo "$init_json" > "$findings_file"
     json_ok "$(jq -n --arg swarm_id "$swarm_id" --arg file "$findings_file" \
       '{swarm_id: $swarm_id, file: $file}')"
 }
@@ -147,7 +148,8 @@ _swarm_findings_add() {
       json_err "$E_UNKNOWN" "Failed to write swarm findings file"
     }
     count=$(echo "$updated" | jq '.findings | length')
-    json_ok "{\"added\":true,\"scout\":\"$scout_type\",\"total_findings\":$count}"
+    json_ok "$(jq -n --arg scout "$scout_type" --argjson total_findings "$count" \
+      '{added: true, scout: $scout, total_findings: $total_findings}')"
 }
 
 # ============================================================================
@@ -191,7 +193,7 @@ _swarm_solution_set() {
       _aether_log_error "Could not save swarm solution"
       json_err "$E_UNKNOWN" "Failed to write swarm findings file"
     }
-    json_ok "{\"solution_set\":true,\"swarm_id\":\"$swarm_id\"}"
+    json_ok "$(jq -n --arg swarm_id "$swarm_id" '{solution_set: true, swarm_id: $swarm_id}')"
 }
 
 # ============================================================================
@@ -211,13 +213,13 @@ _swarm_cleanup() {
       if [[ "$archive" == "--archive" ]]; then
         mkdir -p "$DATA_DIR/swarm-archive"
         mv "$findings_file" "$DATA_DIR/swarm-archive/"
-        json_ok "{\"archived\":true,\"swarm_id\":\"$swarm_id\"}"
+        json_ok "$(jq -n --arg swarm_id "$swarm_id" '{archived: true, swarm_id: $swarm_id}')"
       else
         rm -f "$findings_file"
-        json_ok "{\"deleted\":true,\"swarm_id\":\"$swarm_id\"}"
+        json_ok "$(jq -n --arg swarm_id "$swarm_id" '{deleted: true, swarm_id: $swarm_id}')"
       fi
     else
-      json_ok "{\"not_found\":true,\"swarm_id\":\"$swarm_id\"}"
+      json_ok "$(jq -n --arg swarm_id "$swarm_id" '{not_found: true, swarm_id: $swarm_id}')"
     fi
 }
 
