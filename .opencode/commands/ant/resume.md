@@ -68,12 +68,21 @@ Use the Read tool to read `.aether/data/COLONY_STATE.json`.
 
 COLONY_STATE.json is the authoritative source for goal and state (session.json may be stale). Extract:
 - `goal` (use this as authoritative, overriding session.json colony_goal)
+- `milestone` (check for sealed colony)
 - `state` (READY, PLANNING, EXECUTING, PAUSED)
 - `current_phase`
 - `plan.phases` (array with id, name, status for each phase)
 - `plan.generated_at`
 - `memory.decisions` (flat list — do NOT distinguish user vs Claude origin)
 - `events` (last 5 for recent activity context)
+
+**If `milestone` == `"Crowned Anthill"`:** This colony has been sealed. Display:
+```
+This colony has been sealed (Crowned Anthill).
+
+Start a new colony with /ant:init "new goal"
+```
+Stop here — do NOT display stale phase data from the sealed colony.
 
 If the file is missing or the JSON cannot be parsed, **stop immediately** and display:
 

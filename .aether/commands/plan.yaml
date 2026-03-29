@@ -20,11 +20,17 @@ body_claude: |
   3. Output: `State auto-upgraded to v3.0`
   4. Continue with command.
 
-  Extract: `goal`, `plan.phases`
+  Extract: `goal`, `milestone`, `plan.phases`
 
   **Validate:** If `goal: null`:
   ```
   No colony initialized. Run /ant:init "<goal>" first.
+  ```
+  Stop here.
+
+  If `milestone` == `"Crowned Anthill"`:
+  ```
+  This colony has been sealed. Start a new colony with /ant:init "new goal".
   ```
   Stop here.
 
@@ -683,11 +689,17 @@ body_opencode: |
   3. Output: `State auto-upgraded to v3.0`
   4. Continue with command.
 
-  Extract: `goal`, `plan.phases`
+  Extract: `goal`, `milestone`, `plan.phases`
 
   **Validate:** If `goal: null`:
   ```
   No colony initialized. Run /ant:init "<goal>" first.
+  ```
+  Stop here.
+
+  If `milestone` == `"Crowned Anthill"`:
+  ```
+  This colony has been sealed. Start a new colony with /ant:init "new goal".
   ```
   Stop here.
 

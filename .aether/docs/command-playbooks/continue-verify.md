@@ -26,6 +26,7 @@ Extract: `goal`, `state`, `current_phase`, `plan.phases`, `errors`, `memory`, `e
 
 **Validation:**
 - If `goal: null` -> output "No colony initialized. Run /ant:init first." and stop.
+- If `milestone` == `"Crowned Anthill"` -> output "This colony has been sealed. Start a new colony with `/ant:init \"new goal\"`." and stop.
 - If `plan.phases` is empty -> output "No project plan. Run /ant:plan first." and stop.
 
 ### Step 1.5: Load State and Show Resumption Context

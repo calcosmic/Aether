@@ -135,8 +135,14 @@ body: |
 
   Use Read tool to check `.aether/data/COLONY_STATE.json`.
 
-  - If file exists AND has a non-null `goal` field: set `reinit_mode = true`, store `existing_goal`
-  - Otherwise: set `reinit_mode = false`
+  - If file exists AND has a non-null `goal` field:
+    - Check the `milestone` field. If `milestone == "Crowned Anthill"`:
+      - This is a **sealed colony**. Treat as **fresh init**, NOT re-init.
+      - Set `reinit_mode = false`
+      - Display: `Previous colony was sealed. Starting fresh colony.`
+      - The old COLONY_STATE.json will be overwritten in Step 7 (fresh init path).
+    - Otherwise (colony exists but is NOT sealed): set `reinit_mode = true`, store `existing_goal`
+  - If file does not exist or `goal` is null: set `reinit_mode = false`
 
   If re-init mode, read existing charter entries from `.aether/QUEEN.md`:
   ```bash

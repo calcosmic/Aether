@@ -98,7 +98,8 @@ If the command fails (non-zero exit or JSON has ok: false):
 If successful:
 1. Parse the state JSON from result field
 2. Check if goal is null - if so: "No colony initialized. Run /ant:init first." and stop
-3. Extract current_phase and phase name from plan.phases[current_phase - 1].name
+3. Check if `milestone` == `"Crowned Anthill"` - if so: "This colony has been sealed. Start a new colony with `/ant:init \"new goal\"`." and stop
+4. Extract current_phase and phase name from plan.phases[current_phase - 1].name
 4. Display brief resumption context:
    ```
    🔄 Resuming: Phase X - Name
