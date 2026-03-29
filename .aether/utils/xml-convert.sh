@@ -103,7 +103,7 @@ xml-to-json() {
             fi
             local escaped_json
             escaped_json=$(echo "$json_output" | jq -Rs '.')
-            xml_json_ok "{\"format\":\"object\",\"json\":$escaped_json}"
+            xml_json_ok "$(jq -n --argjson json "$escaped_json" '{format: "object", json: $json}')"
             return 0
         fi
     fi
@@ -147,7 +147,9 @@ XSLT
             xml_json_err "CONVERSION_ERROR" "XSLT conversion failed"
             return 1
         }
-        xml_json_ok "{\"format\":\"object\",\"json\":$(echo "$json_result" | jq -Rs '.')}"
+        local xslt_escaped_json
+        xslt_escaped_json=$(echo "$json_result" | jq -Rs '.')
+        xml_json_ok "$(jq -n --argjson json "$xslt_escaped_json" '{format: "object", json: $json}')"
         return 0
     fi
 
@@ -158,7 +160,9 @@ XSLT
             xml_json_err "CONVERSION_ERROR" "xmlstarlet conversion failed"
             return 1
         }
-        xml_json_ok "{\"format\":\"object\",\"json\":$(echo "$json_result" | jq -Rs '.')}"
+        local xmlstar_escaped_json
+        xmlstar_escaped_json=$(echo "$json_result" | jq -Rs '.')
+        xml_json_ok "$(jq -n --argjson json "$xmlstar_escaped_json" '{format: "object", json: $json}')"
         return 0
     fi
 
@@ -216,7 +220,7 @@ json-to-xml() {
     # Escape the XML for JSON output
     local escaped_xml
     escaped_xml=$(echo "$xml_output" | jq -Rs '.')
-    xml_json_ok "{\"xml\":$escaped_xml}"
+    xml_json_ok "$(jq -n --argjson xml "$escaped_xml" '{xml: $xml}')"
 }
 
 # ============================================================================
@@ -259,7 +263,7 @@ xml-merge() {
 
         local escaped_output
         escaped_output=$(echo "$output_file" | jq -Rs '.[:-1]')
-        xml_json_ok "{\"merged\":true,\"output\":$escaped_output,\"sources_resolved\":$resolved_count}"
+        xml_json_ok "$(jq -n --argjson output "$escaped_output" --argjson sources_resolved "$resolved_count" '{merged: true, output: $output, sources_resolved: $sources_resolved}')"
         return 0
     fi
 

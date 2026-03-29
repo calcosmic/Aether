@@ -89,10 +89,8 @@ xml-validate() {
         xml_json_ok '{"valid":true,"errors":[]}'
         return 0
     } || {
-        # Escape errors for JSON
-        local escaped_errors
-        escaped_errors=$(echo "$errors" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g' | tr '\n' ' ')
-        xml_json_ok "{\"valid\":false,\"errors\":[\"$escaped_errors\"]}"
+        # Escape errors for JSON using jq
+        xml_json_ok "$(jq -n --arg errors "$errors" '{valid: false, errors: [$errors]}')"
         return 0
     }
 }
@@ -144,12 +142,10 @@ xml-format() {
 
     if [[ -n "$output_file" ]]; then
         echo "$formatted" > "$output_file"
-        xml_json_ok "{\"formatted\":true,\"path\":\"$output_file\"}"
+        xml_json_ok "$(jq -n --arg path "$output_file" '{formatted: true, path: $path}')"
     else
-        # Escape for JSON
-        local escaped
-        escaped=$(echo "$formatted" | sed 's/\\/\\\\/g; s/"/\\"/g' | tr '\n' ' ')
-        xml_json_ok "{\"formatted\":true,\"output\":\"$escaped\"}"
+        # Escape for JSON using jq
+        xml_json_ok "$(jq -n --arg output "$formatted" '{formatted: true, output: $output}')"
     fi
 }
 

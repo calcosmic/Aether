@@ -112,9 +112,9 @@ xml-query-attr() {
             fi
         done
         json_array="$json_array]"
-        xml_json_ok "{\"attribute\":\"$attr_name\",\"values\":$json_array}"
+        xml_json_ok "$(jq -n --arg attribute "$attr_name" --argjson values "$json_array" '{attribute: $attribute, values: $values}')"
     else
-        xml_json_ok "{\"attribute\":\"$attr_name\",\"values\":[]}"
+        xml_json_ok "$(jq -n --arg attribute "$attr_name" '{attribute: $attribute, values: []}')"
     fi
 }
 
@@ -160,9 +160,9 @@ xml-query-text() {
             fi
         done
         json_array="$json_array]"
-        xml_json_ok "{\"element\":\"$element_name\",\"text\":$json_array}"
+        xml_json_ok "$(jq -n --arg element "$element_name" --argjson text "$json_array" '{element: $element, text: $text}')"
     else
-        xml_json_ok "{\"element\":\"$element_name\",\"text\":[]}"
+        xml_json_ok "$(jq -n --arg element "$element_name" '{element: $element, text: []}')"
     fi
 }
 

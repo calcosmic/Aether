@@ -433,7 +433,7 @@ _colony_archive_xml() {
     # Step 5: Cleanup temp files
     rm -rf "$cax_tmp_dir" "$cax_tmp_pheromones"
 
-    json_ok "{\"path\":\"$cax_output\",\"valid\":$cax_valid,\"colony_id\":\"$cax_colony_id\",\"pheromone_count\":$cax_pheromone_count}"
+    json_ok "$(jq -n --arg path "$cax_output" --argjson valid "$cax_valid" --arg colony_id "$cax_colony_id" --argjson pheromone_count "$cax_pheromone_count" '{path: $path, valid: $valid, colony_id: $colony_id, pheromone_count: $pheromone_count}')"
 }
 
 # Export functions for use in other scripts

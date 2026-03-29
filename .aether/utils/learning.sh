@@ -58,7 +58,7 @@ _learning_promote() {
       _aether_log_error "Could not save updated learnings"
       json_err "$E_UNKNOWN" "Failed to write learnings file"
     }
-    json_ok "{\"promoted\":true,\"id\":\"$id\",\"count\":$((current_count + 1)),\"cap\":50}"
+    json_ok "$(jq -n --arg id "$id" --argjson count "$((current_count + 1))" '{promoted: true, id: $id, count: $count, cap: 50}')"
 }
 
 # ============================================================================
@@ -404,7 +404,7 @@ _learning_promote_auto() {
     }')
 
     if [[ "$policy_threshold" -gt 0 && "$observation_count" -lt "$policy_threshold" ]]; then
-      json_ok "{\"promoted\":false,\"reason\":\"threshold_not_met\",\"policy_threshold\":$policy_threshold,\"observation_count\":$observation_count,\"colony_count\":$colony_count,\"event_type\":\"$event_type\"}"
+      json_ok "$(jq -n --argjson pt "$policy_threshold" --argjson oc "$observation_count" --argjson cc "$colony_count" --arg et "$event_type" '{promoted: false, reason: "threshold_not_met", policy_threshold: $pt, observation_count: $oc, colony_count: $cc, event_type: $et}')"
       exit 0
     fi
 
@@ -432,7 +432,7 @@ _learning_promote_auto() {
         # SUPPRESS:OK -- read-default: returns fallback on failure
         --evidence "Auto-promoted after $observation_count observations (confidence: $lp_confidence)" 2>/dev/null \
         || _aether_log_error "Could not create instinct from promoted learning"
-      json_ok "{\"promoted\":true,\"mode\":\"auto\",\"policy_threshold\":$policy_threshold,\"observation_count\":$observation_count,\"colony_count\":$colony_count,\"event_type\":\"$event_type\"}"
+      json_ok "$(jq -n --argjson pt "$policy_threshold" --argjson oc "$observation_count" --argjson cc "$colony_count" --arg et "$event_type" '{promoted: true, mode: "auto", policy_threshold: $pt, observation_count: $oc, colony_count: $cc, event_type: $et}')"
     else
       # SUPPRESS:OK -- read-default: query may return empty
       promote_msg=$(echo "$promote_result" | jq -r '.error.message // "promotion_failed"' 2>/dev/null || echo "promotion_failed")
@@ -1625,7 +1625,7 @@ _instinct_create() {
             ]
           ' >/dev/null
 
-        json_ok "{\"instinct_id\":\"$ic_best_id\",\"action\":\"merged\",\"confidence\":$ic_new_conf}"
+        json_ok "$(jq -n --arg iid "$ic_best_id" --argjson conf "$ic_new_conf" '{instinct_id: $iid, action: "merged", confidence: $conf}')"
         exit 0
       fi
 
@@ -1655,7 +1655,7 @@ _instinct_create() {
           )
         ' >/dev/null
 
-      json_ok "{\"instinct_id\":\"$ic_id\",\"action\":\"created\",\"confidence\":$ic_confidence}"
+      json_ok "$(jq -n --arg iid "$ic_id" --argjson conf "$ic_confidence" '{instinct_id: $iid, action: "created", confidence: $conf}')"
     fi
     exit 0
 }
@@ -1732,7 +1732,7 @@ _instinct_apply() {
     ia_new_apps=$(_state_read_field "$(printf '[(.memory.instincts // [])[] | select(.id == "%s")] | first | .applications' "$ia_id")")
     ia_new_conf=$(_state_read_field "$(printf '[(.memory.instincts // [])[] | select(.id == "%s")] | first | .confidence' "$ia_id")")
 
-    json_ok "{\"applied\":true,\"instinct_id\":\"$ia_id\",\"applications\":$ia_new_apps,\"new_confidence\":$ia_new_conf}"
+    json_ok "$(jq -n --arg iid "$ia_id" --argjson apps "$ia_new_apps" --argjson conf "$ia_new_conf" '{applied: true, instinct_id: $iid, applications: $apps, new_confidence: $conf}')"
     exit 0
 }
 

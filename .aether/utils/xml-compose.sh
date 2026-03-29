@@ -113,12 +113,12 @@ xml-compose() {
             echo "$composed" > "$output_xml"
             local escaped_output
             escaped_output=$(echo "$output_xml" | jq -Rs '.[:-1]')
-            xml_json_ok "{\"composed\":true,\"output\":$escaped_output,\"sources_resolved\":\"auto\"}"
+            xml_json_ok "$(jq -n --argjson output "$escaped_output" '{composed: true, output: $output, sources_resolved: "auto"}')"
         else
             # Output to stdout wrapped in JSON
             local escaped_composed
             escaped_composed=$(echo "$composed" | jq -Rs '.')
-            xml_json_ok "{\"composed\":true,\"xml\":$escaped_composed,\"sources_resolved\":\"auto\"}"
+            xml_json_ok "$(jq -n --argjson xml "$escaped_composed" '{composed: true, xml: $xml, sources_resolved: "auto"}')"
         fi
         return 0
     fi

@@ -57,7 +57,7 @@ _hive_init() {
       [[ "$hv_lock_held" == "true" ]] && { release_lock 2>/dev/null || true; LOCK_DIR="${hv_saved_lock_dir:-$LOCK_DIR}"; }
     fi
 
-    json_ok "{\"dir\":\"$hv_hive_dir\",\"initialized\":true,\"already_existed\":$hv_already_existed}"
+    json_ok "$(jq -n --arg dir "$hv_hive_dir" --argjson already_existed "$hv_already_existed" '{dir: $dir, initialized: true, already_existed: $already_existed}')"
 }
 
 _hive_store() {

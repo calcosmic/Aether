@@ -305,7 +305,7 @@ fi
 # SUPPRESS:OK -- read-default: query may return empty
 pw_active_count=$(jq '[.signals[] | select(.active == true)] | length' "$pw_file" 2>/dev/null || echo "0")
 
-json_ok "{\"signal_id\":\"$pw_id\",\"type\":\"$pw_type\",\"action\":\"$pw_action\",\"active_count\":$pw_active_count}"
+json_ok "$(jq -n --arg signal_id "$pw_id" --arg type "$pw_type" --arg action "$pw_action" --argjson active_count "$pw_active_count" '{signal_id: $signal_id, type: $type, action: $action, active_count: $active_count}')"
 }
 
 # ============================================================================
@@ -537,7 +537,7 @@ if [[ -z "$pher_result" || "$pher_result" == "null" ]]; then
 else
   pher_version=$(jq -r '.version // "1.0.0"' "$pher_file" 2>/dev/null || echo "1.0.0")  # SUPPRESS:OK -- read-default: file may not exist yet
   pher_colony=$(jq -r '.colony_id // "unknown"' "$pher_file" 2>/dev/null || echo "unknown")  # SUPPRESS:OK -- read-default: file may not exist yet
-  json_ok "{\"version\":\"$pher_version\",\"colony_id\":\"$pher_colony\",\"signals\":$pher_result}"
+  json_ok "$(jq -n --arg version "$pher_version" --arg colony_id "$pher_colony" --argjson signals "$pher_result" '{version: $version, colony_id: $colony_id, signals: $signals}')"
 fi
 }
 
@@ -727,7 +727,7 @@ pp_section_json=$(printf '%s' "$pp_section" | jq -Rs '.' 2>/dev/null || echo '""
 # SUPPRESS:OK -- read-default: text escaping returns fallback on empty input
 pp_log_json=$(printf '%s' "$pp_log_line" | jq -Rs '.' 2>/dev/null || echo '"Primed: 0 signals, 0 instincts"')
 
-json_ok "{\"signal_count\":$pp_signal_count,\"instinct_count\":$pp_instinct_count,\"prompt_section\":$pp_section_json,\"log_line\":$pp_log_json}"
+json_ok "$(jq -n --argjson signal_count "$pp_signal_count" --argjson instinct_count "$pp_instinct_count" --argjson prompt_section "$pp_section_json" --argjson log_line "$pp_log_json" '{signal_count: $signal_count, instinct_count: $instinct_count, prompt_section: $prompt_section, log_line: $log_line}')"
 }
 
 # ============================================================================
@@ -1801,7 +1801,7 @@ else
   }
 fi
 
-json_ok "{\"dir\":\"$ei_eternal_dir\",\"initialized\":true,\"already_existed\":$ei_already_existed}"
+json_ok "$(jq -n --arg dir "$ei_eternal_dir" --argjson already_existed "$ei_already_existed" '{dir: $dir, initialized: true, already_existed: $already_existed}')"
 }
 
 # ============================================================================
@@ -1893,7 +1893,7 @@ atomic_write "$es_memory_file" "$es_updated" || {
 }
 
 [[ "$es_lock_held" == "true" ]] && { release_lock 2>/dev/null || true; trap - EXIT; }  # SUPPRESS:OK -- cleanup: lock may not be held
-json_ok "{\"stored\":true,\"signal_id\":\"$es_signal_id\",\"type\":\"$es_type\"}"
+json_ok "$(jq -n --arg signal_id "$es_signal_id" --arg type "$es_type" '{stored: true, signal_id: $signal_id, type: $type}')"
 }
 
 # ============================================================================
@@ -1993,7 +1993,7 @@ if [[ -f "$pix_pheromones" ]]; then
 fi
 
 pix_count=$(echo "$pix_raw_signals" | jq 'length' 2>/dev/null || echo 0)  # SUPPRESS:OK -- read-default: file may not exist yet
-json_ok "{\"imported\":true,\"signal_count\":$pix_count,\"source\":\"$pix_xml\"}"
+json_ok "$(jq -n --argjson signal_count "$pix_count" --arg source "$pix_xml" '{imported: true, signal_count: $signal_count, source: $source}')"
 }
 
 # ============================================================================
