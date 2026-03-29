@@ -57,7 +57,7 @@ _hive_init() {
       [[ "$hv_lock_held" == "true" ]] && { release_lock 2>/dev/null || true; LOCK_DIR="${hv_saved_lock_dir:-$LOCK_DIR}"; }
     fi
 
-    json_ok "{\"dir\":\"$hv_hive_dir\",\"initialized\":true,\"already_existed\":$hv_already_existed}"
+    json_ok "$(jq -n --arg dir "$hv_hive_dir" --argjson already_existed "$hv_already_existed" '{dir: $dir, initialized: true, already_existed: $already_existed}')"
 }
 
 _hive_store() {
@@ -150,7 +150,8 @@ _hive_store() {
       if [[ "$hs_has_repo" == "true" ]]; then
         # Same repo duplicate — skip
         [[ "$hs_lock_held" == "true" ]] && { release_lock 2>/dev/null || true; LOCK_DIR="${hs_saved_lock_dir:-$LOCK_DIR}"; }
-        json_ok "{\"action\":\"skipped\",\"reason\":\"duplicate from same repo\",\"id\":\"$hs_content_hash\"}"
+        json_ok "$(jq -n --arg id "$hs_content_hash" \
+          '{action: "skipped", reason: "duplicate from same repo", id: $id}')"
       else
         # Different repo — merge: increment validated_count, add repo, boost confidence
         hs_updated=$(jq --arg hash "$hs_content_hash" \
@@ -187,7 +188,9 @@ _hive_store() {
         [[ "$hs_lock_held" == "true" ]] && { release_lock 2>/dev/null || true; LOCK_DIR="${hs_saved_lock_dir:-$LOCK_DIR}"; }
         hs_new_count=$(echo "$hs_updated" | jq --arg hash "$hs_content_hash" '.entries[] | select(.id == $hash) | .validated_count')
         hs_new_confidence=$(echo "$hs_updated" | jq --arg hash "$hs_content_hash" '.entries[] | select(.id == $hash) | .confidence')
-        json_ok "{\"action\":\"merged\",\"id\":\"$hs_content_hash\",\"validated_count\":$hs_new_count,\"confidence\":$hs_new_confidence}"
+        json_ok "$(jq -n --arg id "$hs_content_hash" --argjson validated_count "$hs_new_count" \
+          --argjson confidence "$hs_new_confidence" \
+          '{action: "merged", id: $id, validated_count: $validated_count, confidence: $confidence}')"
       fi
     else
       # New entry — build and append
@@ -233,7 +236,8 @@ _hive_store() {
       }
 
       [[ "$hs_lock_held" == "true" ]] && { release_lock 2>/dev/null || true; LOCK_DIR="${hs_saved_lock_dir:-$LOCK_DIR}"; }
-      json_ok "{\"action\":\"stored\",\"id\":\"$hs_content_hash\",\"category\":\"$hs_category\"}"
+      json_ok "$(jq -n --arg id "$hs_content_hash" --arg category "$hs_category" \
+        '{action: "stored", id: $id, category: $category}')"
     fi
 }
 
@@ -368,9 +372,12 @@ _hive_read() {
       ' 2>/dev/null)
 
       hr_text_escaped=$(echo "$hr_text_output" | jq -Rs '.')
-      json_ok "{\"entries\":$hr_entries,\"total_matched\":$hr_total_matched,\"text\":$hr_text_escaped}"
+      json_ok "$(jq -n --argjson entries "$hr_entries" --argjson total_matched "$hr_total_matched" \
+        --argjson text "$hr_text_escaped" \
+        '{entries: $entries, total_matched: $total_matched, text: $text}')"
     else
-      json_ok "{\"entries\":$hr_entries,\"total_matched\":$hr_total_matched}"
+      json_ok "$(jq -n --argjson entries "$hr_entries" --argjson total_matched "$hr_total_matched" \
+        '{entries: $entries, total_matched: $total_matched}')"
     fi
 }
 

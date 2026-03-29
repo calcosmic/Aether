@@ -320,7 +320,7 @@
         "id": 7,
         "name": "Audit summary and documentation",
         "description": "Produce audit findings summary: what works, what was fixed, pre-existing issues, recommendations.",
-        "status": "pending",
+        "status": "completed",
         "tasks": [
           {
             "id": "7.1",
@@ -342,7 +342,7 @@
               "7.1",
               "7.2"
             ],
-            "status": "pending"
+            "status": "completed"
           }
         ],
         "success_criteria": [
@@ -456,6 +456,21 @@
           }
         ],
         "timestamp": "2026-03-29T02:06:14Z"
+      },
+      {
+        "id": "learning_1774752144",
+        "phase": 7,
+        "phase_name": "Audit summary and documentation",
+        "learnings": [
+          {
+            "claim": "Audit reports must use actual test output counts, not builder-claimed counts — always cross-verify bash test pass rates against live test-aether-utils.sh output",
+            "status": "validated",
+            "tested": true,
+            "evidence": "Builder reported 42/43 bash tests passing; actual run showed 37/43 (12 failures in dual-mode). Chaos ant caught the discrepancy.",
+            "disproven_by": null
+          }
+        ],
+        "timestamp": "2026-03-29T02:42:24Z"
       }
     ],
     "decisions": [],
@@ -515,6 +530,24 @@
         "failures": 0
       },
       {
+        "id": "instinct_1774752174",
+        "trigger": "builder produces audit or summary report with test metrics",
+        "action": "cross-verify all pass/fail counts against live test output before accepting report as complete — builder claims are not authoritative",
+        "confidence": 0.85,
+        "status": "hypothesis",
+        "domain": "workflow",
+        "source": "phase-7",
+        "evidence": [
+          "Builder reported 42/43 bash tests passing; live run showed 37/43. Chaos ant caught the 5-test discrepancy."
+        ],
+        "tested": false,
+        "created_at": "2026-03-29T02:42:54Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
         "id": "instinct_1774653613",
         "trigger": "test fixtures use hardcoded dates",
         "action": "replace with dynamic cross-platform date computation to prevent time-based test degradation",
@@ -545,6 +578,24 @@
         ],
         "tested": false,
         "created_at": "2026-03-28T00:11:12Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774752193",
+        "trigger": "resilience testing (chaos ant) finds data accuracy issues in builder output",
+        "action": "always cross-verify builder claims against live test/command output before accepting — chaos findings on data accuracy should be treated as blockers",
+        "confidence": 0.8,
+        "status": "hypothesis",
+        "domain": "workflow",
+        "source": "midden-phase-7",
+        "evidence": [
+          "4 resilience failures recorded in midden; chaos ant found 3 data accuracy issues including misstated bash test pass rate"
+        ],
+        "tested": false,
+        "created_at": "2026-03-29T02:43:13Z",
         "last_applied": null,
         "applications": 0,
         "successes": 0,
@@ -765,6 +816,204 @@
         "applications": 0,
         "successes": 0,
         "failures": 0
+      },
+      {
+        "id": "instinct_1774752162",
+        "trigger": "working on pattern patterns",
+        "action": "Audit reports must use actual test output counts, not builder-claimed counts — always cross-verify bash test pass rates against live test-aether-utils.sh output",
+        "confidence": 0.70,
+        "status": "hypothesis",
+        "domain": "pattern",
+        "source": "promoted_from_learning",
+        "evidence": [
+          ""
+        ],
+        "tested": false,
+        "created_at": "2026-03-29T02:42:42Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774752241",
+        "trigger": "working on pattern patterns",
+        "action": "Prompt injection regex needs multi-word support with optional groups",
+        "confidence": 0.70,
+        "status": "hypothesis",
+        "domain": "pattern",
+        "source": "promoted_from_learning",
+        "evidence": [
+          ""
+        ],
+        "tested": false,
+        "created_at": "2026-03-29T02:44:01Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774752246",
+        "trigger": "working on pattern patterns",
+        "action": "Colony-prime token budget 8000 chars matches measured output of 2000-5000 chars",
+        "confidence": 0.70,
+        "status": "hypothesis",
+        "domain": "pattern",
+        "source": "promoted_from_learning",
+        "evidence": [
+          ""
+        ],
+        "tested": false,
+        "created_at": "2026-03-29T02:44:06Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774752252",
+        "trigger": "working on pattern patterns",
+        "action": "Two wisdom extraction functions must be updated in lockstep",
+        "confidence": 0.70,
+        "status": "hypothesis",
+        "domain": "pattern",
+        "source": "promoted_from_learning",
+        "evidence": [
+          ""
+        ],
+        "tested": false,
+        "created_at": "2026-03-29T02:44:12Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774752259",
+        "trigger": "working on pattern patterns",
+        "action": "Hub-level shared files need hub-level locks — per-repo LOCK_DIR cannot protect cross-repo resources",
+        "confidence": 0.70,
+        "status": "hypothesis",
+        "domain": "pattern",
+        "source": "promoted_from_learning",
+        "evidence": [
+          ""
+        ],
+        "tested": false,
+        "created_at": "2026-03-29T02:44:19Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774752265",
+        "trigger": "working on pattern patterns",
+        "action": "Content sanitization pattern from pheromone-write is reusable for any user-supplied text input",
+        "confidence": 0.70,
+        "status": "hypothesis",
+        "domain": "pattern",
+        "source": "promoted_from_learning",
+        "evidence": [
+          ""
+        ],
+        "tested": false,
+        "created_at": "2026-03-29T02:44:25Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774752272",
+        "trigger": "working on pattern patterns",
+        "action": "Orchestrator commands should delegate to sibling subcommands via bash $0 rather than duplicating logic",
+        "confidence": 0.70,
+        "status": "hypothesis",
+        "domain": "pattern",
+        "source": "promoted_from_learning",
+        "evidence": [
+          ""
+        ],
+        "tested": false,
+        "created_at": "2026-03-29T02:44:32Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774752278",
+        "trigger": "working on pattern patterns",
+        "action": "Text transformation placeholders should avoid angle brackets to prevent double-escaping",
+        "confidence": 0.70,
+        "status": "hypothesis",
+        "domain": "pattern",
+        "source": "promoted_from_learning",
+        "evidence": [
+          ""
+        ],
+        "tested": false,
+        "created_at": "2026-03-29T02:44:38Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774752285",
+        "trigger": "working on pattern patterns",
+        "action": "Domain filtering in colony-prime uses hive-read with domain_tags from registry",
+        "confidence": 0.70,
+        "status": "hypothesis",
+        "domain": "pattern",
+        "source": "promoted_from_learning",
+        "evidence": [
+          ""
+        ],
+        "tested": false,
+        "created_at": "2026-03-29T02:44:45Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774752292",
+        "trigger": "working on pattern patterns",
+        "action": "Chaos resilience strong: 5 scenarios tested, hive promotion handles empty instincts, special chars in paths, boundary confidence values correctly",
+        "confidence": 0.70,
+        "status": "hypothesis",
+        "domain": "pattern",
+        "source": "promoted_from_learning",
+        "evidence": [
+          ""
+        ],
+        "tested": false,
+        "created_at": "2026-03-29T02:44:52Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774752299",
+        "trigger": "working on pattern patterns",
+        "action": "Archaeology pre-build scans catch API contract mismatches (--instinct vs --text) that would silently fail at runtime",
+        "confidence": 0.70,
+        "status": "hypothesis",
+        "domain": "pattern",
+        "source": "promoted_from_learning",
+        "evidence": [
+          ""
+        ],
+        "tested": false,
+        "created_at": "2026-03-29T02:44:59Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
       }
     ]
   },
@@ -789,7 +1038,9 @@
     "2026-03-29T00:30:55Z|spawn_failed|Mason-41|npm test: 614 pass, 2 fail (pre-existing spawn-tree ETIMEDOUT)",
     "2026-03-29T01:11:48Z|phase_inserted|insert-phase|Inserted Phase 6: Stabilize spawn-tree parsing and JSON output",
     "2026-03-29T01:20:58Z|phase_started|build|Phase 6: Stabilize spawn-tree parsing and JSON output started",
-    "2026-03-29T02:06:14Z|phase_advanced|continue|Completed Phase 6, advancing to Phase 7"
+    "2026-03-29T02:06:14Z|phase_advanced|continue|Completed Phase 6, advancing to Phase 7",
+    "2026-03-29T02:10:30Z|phase_started|build|Phase 7: Audit summary and documentation started",
+    "2026-03-29T02:42:24Z|phase_advanced|continue|Completed Phase 7, all phases complete"
   ],
   "milestone": null,
   "milestone_updated_at": null

@@ -43,9 +43,44 @@ mkdir -p "$TEMP_DIR" "$BACKUP_DIR"
 # Number of backups to keep
 MAX_BACKUPS=3
 
+# Safety stats file for tracking data safety events (best-effort, never fails operations)
+SAFETY_STATS_FILE="${AETHER_ROOT}/.aether/data/safety-stats.json"
+
+# Increment a safety stats counter (best-effort, never fails the calling operation)
+# Arguments: counter_name (e.g., "stale_locks_cleaned", "json_validation_rejects")
+_safety_stats_increment() {
+    local counter_name="$1"
+    local stats_file="$SAFETY_STATS_FILE"
+    local now_iso
+    now_iso=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "unknown")
+
+    # Ensure data directory exists
+    mkdir -p "$(dirname "$stats_file")" 2>/dev/null || return 0
+
+    # Initialize if missing
+    if [[ ! -f "$stats_file" ]]; then
+        printf '{"stale_locks_cleaned":0,"json_validation_rejects":0,"last_updated":"%s"}\n' "$now_iso" > "$stats_file" 2>/dev/null || return 0
+    fi
+
+    # Increment counter (best-effort, don't fail on jq errors)
+    local updated
+    updated=$(jq --arg key "$counter_name" --arg ts "$now_iso" '
+        .[$key] = ((.[$key] // 0) + 1) |
+        .last_updated = $ts
+    ' "$stats_file" 2>/dev/null) || return 0
+
+    if [[ -n "$updated" ]]; then
+        printf '%s\n' "$updated" > "$stats_file" 2>/dev/null || return 0
+    fi
+}
+
 # Atomic write: write content to file via temporary file
 # Arguments: target_file, content
 # Returns: 0 on success, 1 on failure
+# NOTE: atomic_write does NOT interact with file locks. Lock management
+# (acquire_lock/release_lock) is the CALLER's responsibility. If you need
+# exclusive access, acquire the lock before calling atomic_write, and release
+# it after (including on error paths).
 atomic_write() {
     local target_file="$1"
     local content="$2"
@@ -69,11 +104,12 @@ atomic_write() {
         create_backup "$target_file"
     fi
 
-    # Validate JSON if it's a JSON file
+    # Validate JSON if it's a JSON file (lock management is caller's responsibility)
     if [[ "$target_file" == *.json ]]; then
         if ! jq empty "$temp_file" 2>/dev/null; then
             echo "Invalid JSON in temp file: $temp_file"
             rm -f "$temp_file"
+            _safety_stats_increment "json_validation_rejects" 2>/dev/null || true
             return 1
         fi
     fi
@@ -124,11 +160,12 @@ atomic_write_from_file() {
         create_backup "$target_file"
     fi
 
-    # Validate JSON if it's a JSON file
+    # Validate JSON if it's a JSON file (lock management is caller's responsibility)
     if [[ "$target_file" == *.json ]]; then
         if ! jq empty "$temp_file" 2>/dev/null; then
             echo "Invalid JSON in temp file: $temp_file"
             rm -f "$temp_file"
+            _safety_stats_increment "json_validation_rejects" 2>/dev/null || true
             return 1
         fi
     fi
@@ -223,4 +260,4 @@ cleanup_temp_files() {
 
 # Export functions
 export -f atomic_write atomic_write_from_file create_backup rotate_backups
-export -f restore_backup list_backups cleanup_temp_files
+export -f restore_backup list_backups cleanup_temp_files _safety_stats_increment

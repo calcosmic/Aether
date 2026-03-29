@@ -85,6 +85,8 @@ acquire_lock() {
             case "$stale_mode" in
                 auto)
                     rm -f "$lock_file" "$lock_pid_file"
+                    # Track stale lock cleanup in safety stats (best-effort)
+                    type _safety_stats_increment &>/dev/null && _safety_stats_increment "stale_locks_cleaned" 2>/dev/null || true
                     ;;
                 prompt)
                     if [[ -t 2 ]]; then
@@ -96,6 +98,7 @@ acquire_lock() {
                         read -r response < /dev/tty
                         if [[ "$response" =~ ^[Yy]$ ]]; then
                             rm -f "$lock_file" "$lock_pid_file"
+                            type _safety_stats_increment &>/dev/null && _safety_stats_increment "stale_locks_cleaned" 2>/dev/null || true
                         else
                             echo "Lock removal declined. Remove manually: rm $lock_file" >&2
                             return 1

@@ -72,7 +72,9 @@ _midden_write() {
       if [[ -n "$mw_updated_midden" ]]; then
         _midden_try_write "$mw_updated_midden" "$mw_midden_file"
         release_lock 2>/dev/null || true
-        json_ok "{\"success\":true,\"entry_id\":\"$mw_entry_id\",\"category\":\"$mw_category\",\"midden_total\":$(jq '.entries | length' "$mw_midden_file" 2>/dev/null || echo 0)}"
+        mw_total=$(jq '.entries | length' "$mw_midden_file" 2>/dev/null || echo 0)
+        json_ok "$(jq -n --arg entry_id "$mw_entry_id" --arg category "$mw_category" --argjson midden_total "$mw_total" \
+          '{success: true, entry_id: $entry_id, category: $category, midden_total: $midden_total}')"
       else
         release_lock 2>/dev/null || true
         json_ok "{\"success\":true,\"warning\":\"jq_processing_failed\",\"entry_id\":null}"
@@ -87,7 +89,8 @@ _midden_write() {
 
       if [[ -n "$mw_updated_midden" ]]; then
         _midden_try_write "$mw_updated_midden" "$mw_midden_file"
-        json_ok "{\"success\":true,\"entry_id\":\"$mw_entry_id\",\"category\":\"$mw_category\",\"warning\":\"lock_unavailable\"}"
+        json_ok "$(jq -n --arg entry_id "$mw_entry_id" --arg category "$mw_category" \
+          '{success: true, entry_id: $entry_id, category: $category, warning: "lock_unavailable"}')"
       else
         json_ok "{\"success\":true,\"warning\":\"jq_processing_failed\",\"entry_id\":null}"
       fi
@@ -333,6 +336,7 @@ _midden_acknowledge() {
     trap - EXIT
     release_lock 2>/dev/null || true
 
-    json_ok "{\"acknowledged\":true,\"count\":$ma_count,\"reason\":$(echo "$ma_reason" | jq -Rs '.')}"
+    json_ok "$(jq -n --argjson count "$ma_count" --arg reason "$ma_reason" \
+      '{acknowledged: true, count: $count, reason: $reason}')"
     return 0
 }

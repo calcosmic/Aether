@@ -249,7 +249,7 @@ _skill_detect_codebase() {
         fi
     done < <(echo "$dc_index" | jq -c '.skills[] | select(.type == "domain") | select((.detect_files | length > 0) or (.detect_packages | length > 0))' 2>/dev/null)
 
-    json_ok "{\"detections\": $dc_detections}"
+    json_ok "$(jq -n --argjson detections "$dc_detections" '{detections: $detections}')"
 }
 
 # Smart-match skills to a worker by role, pheromones, and task description
@@ -331,7 +331,8 @@ _skill_match() {
     local sm_top_domain
     sm_top_domain=$(echo "$sm_scored_domain" | jq "[.[] | select(.match_score >= $sm_min_score)] | [sort_by(-.match_score) | limit($sm_max_domain; .[])]" 2>/dev/null)
 
-    json_ok "{\"colony_skills\": ${sm_top_colony:-[]}, \"domain_skills\": ${sm_top_domain:-[]}}"
+    json_ok "$(jq -n --argjson colony "${sm_top_colony:-[]}" --argjson domain "${sm_top_domain:-[]}" \
+      '{colony_skills: $colony, domain_skills: $domain}')"
 }
 
 # Load full SKILL.md content for matched skills, assemble within 8K char budget
@@ -407,7 +408,10 @@ _skill_inject() {
     local si_escaped_section
     si_escaped_section=$(echo "$si_skill_section" | jq -Rs '.' 2>/dev/null)
 
-    json_ok "{\"skill_section\": $si_escaped_section, \"colony_count\": $si_colony_count, \"domain_count\": $si_domain_count, \"total_chars\": $si_total_chars}"
+    json_ok "$(jq -n --argjson skill_section "$si_escaped_section" \
+      --argjson colony_count "$si_colony_count" --argjson domain_count "$si_domain_count" \
+      --argjson total_chars "$si_total_chars" \
+      '{skill_section: $skill_section, colony_count: $colony_count, domain_count: $domain_count, total_chars: $total_chars}')"
 }
 
 # List all installed skills
@@ -467,7 +471,8 @@ _skill_diff() {
     fi
 
     if [[ -z "$sd_system_file" ]]; then
-        json_ok "{\"status\": \"user_only\", \"message\": \"Skill '$skill_name' is user-created with no Aether equivalent\"}"
+        json_ok "$(jq -n --arg name "$skill_name" \
+          '{status: "user_only", message: ("Skill \u0027" + $name + "\u0027 is user-created with no Aether equivalent")}')"
         return
     fi
 
@@ -479,7 +484,8 @@ _skill_diff() {
         sd_diff_output=$(diff -u "$sd_system_file" "$sd_user_file" 2>/dev/null | head -50)
         local sd_escaped_diff
         sd_escaped_diff=$(echo "$sd_diff_output" | jq -Rs '.' 2>/dev/null)
-        json_ok "{\"status\": \"different\", \"message\": \"User and Aether versions differ\", \"diff\": $sd_escaped_diff}"
+        json_ok "$(jq -n --argjson diff "$sd_escaped_diff" \
+          '{status: "different", message: "User and Aether versions differ", diff: $diff}')"
     fi
 }
 

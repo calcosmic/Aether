@@ -123,7 +123,10 @@ _session_verify_fresh() {
     for item in $missing_docs; do missing_json="$missing_json\"$item\","; done
     missing_json="[${missing_json%,}]"
 
-    echo "{\"ok\":$pass,\"command\":\"$command_name\",\"fresh\":$fresh_json,\"stale\":$stale_json,\"missing\":$missing_json,\"total_lines\":$total_lines}"
+    echo "$(jq -n --argjson ok "$pass" --arg command "$command_name" \
+      --argjson fresh "$fresh_json" --argjson stale "$stale_json" \
+      --argjson missing "$missing_json" --argjson total_lines "$total_lines" \
+      '{ok: $ok, command: $command, fresh: $fresh, stale: $stale, missing: $missing, total_lines: $total_lines}')"
     exit 0
 }
 
@@ -211,7 +214,10 @@ _session_clear() {
       fi
     fi
 
-    json_ok "{\"command\":\"$command_name\",\"cleared\":\"${cleared// /}\",\"errors\":\"${errors// /}\",\"dry_run\":$([[ "$dry_run" == "--dry-run" ]] && echo "true" || echo "false")}"
+    local dry_run_bool=$([[ "$dry_run" == "--dry-run" ]] && echo "true" || echo "false")
+    json_ok "$(jq -n --arg command "$command_name" --arg cleared "${cleared// /}" \
+      --arg errors "${errors// /}" --argjson dry_run "$dry_run_bool" \
+      '{command: $command, cleared: $cleared, errors: $errors, dry_run: $dry_run}')"
 }
 
 # ============================================================================
@@ -251,25 +257,26 @@ _session_init() {
     local baseline
     baseline=$(git rev-parse HEAD 2>/dev/null || echo "")  # SUPPRESS:OK -- read-default: may not have commits yet
 
-    cat > "$session_file.tmp" << EOF
-{
-  "session_id": "$session_id",
-  "started_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
-  "last_command": null,
-  "last_command_at": null,
-  "colony_goal": "$goal",
-  "current_phase": 0,
-  "current_milestone": "First Mound",
-  "suggested_next": "/ant:plan",
-  "context_cleared": false,
-  "baseline_commit": "$baseline",
-  "resumed_at": null,
-  "active_todos": [],
-  "summary": "Session initialized"
-}
-EOF
+    jq -n --arg sid "$session_id" --arg started "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+      --arg goal "$goal" --arg baseline "$baseline" \
+      '{
+        session_id: $sid,
+        started_at: $started,
+        last_command: null,
+        last_command_at: null,
+        colony_goal: $goal,
+        current_phase: 0,
+        current_milestone: "First Mound",
+        suggested_next: "/ant:plan",
+        context_cleared: false,
+        baseline_commit: $baseline,
+        resumed_at: null,
+        active_todos: [],
+        summary: "Session initialized"
+      }' > "$session_file.tmp"
     mv "$session_file.tmp" "$session_file"
-    json_ok "{\"session_id\":\"$session_id\",\"goal\":\"$goal\",\"file\":\"$session_file\"}"
+    json_ok "$(jq -n --arg sid "$session_id" --arg goal "$goal" --arg file "$session_file" \
+      '{session_id: $sid, goal: $goal, file: $file}')"
 }
 
 # ============================================================================
@@ -295,7 +302,7 @@ _session_update() {
 
     # Extract current values for preservation
     local current_goal current_phase current_milestone
-    current_goal=$(echo "$current_session" | jq -r '.colony_goal // empty')
+    current_goal=$(sanitize_read_value "$(echo "$current_session" | jq -r '.colony_goal // empty')")
     current_phase=$(echo "$current_session" | jq -r '.current_phase // 0')
     current_milestone=$(echo "$current_session" | jq -r '.current_milestone // "First Mound"')
 
@@ -309,7 +316,7 @@ _session_update() {
     # Get colony state if exists
     if [[ -f "$DATA_DIR/COLONY_STATE.json" ]]; then
       # SUPPRESS:OK -- read-default: query may return empty
-      current_goal=$(jq -r '.goal // empty' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "$current_goal")
+      current_goal=$(sanitize_read_value "$(jq -r '.goal // empty' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "$current_goal")")
       # SUPPRESS:OK -- read-default: query may return empty
       current_phase=$(jq -r '.current_phase // 0' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "$current_phase")
       # SUPPRESS:OK -- read-default: query may return empty
@@ -354,7 +361,7 @@ _session_update() {
       json_err "$E_UNKNOWN" "Failed to rename temporary session file"
     }
 
-    json_ok "{\"updated\":true,\"command\":\"$cmd_run\"}"
+    json_ok "$(jq -n --arg cmd "$cmd_run" '{updated: true, command: $cmd}')"
 }
 
 # ============================================================================
@@ -390,7 +397,9 @@ _session_read() {
       age_hours="unknown"
     fi
 
-    json_ok "{\"exists\":true,\"is_stale\":$is_stale,\"age_hours\":$age_hours,\"session\":$session_data}"
+    json_ok "$(jq -n --argjson is_stale "$is_stale" --argjson age "$age_hours" \
+      --argjson session "$session_data" \
+      '{exists: true, is_stale: $is_stale, age_hours: $age, session: $session}')"
 }
 
 # ============================================================================
@@ -477,7 +486,7 @@ _session_mark_resumed() {
       if [[ -s "$session_file.tmp" ]]; then
         mv "$session_file.tmp" "$session_file" || _aether_log_error "Could not finalize session resume"
       fi
-      json_ok "{\"resumed\":true,\"timestamp\":\"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"}"
+      json_ok "$(jq -n --arg ts "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" '{resumed: true, timestamp: $ts}')"
     else
       json_err "$E_RESOURCE_NOT_FOUND" "No active session to mark as resumed. Try: run /ant:init to start a new session."
     fi
@@ -515,7 +524,7 @@ _session_summary() {
     fi
 
     local goal phase milestone last_cmd last_at suggested cleared
-    goal=$(jq -r '.colony_goal // "No goal set"' "$session_file")
+    goal=$(sanitize_read_value "$(jq -r '.colony_goal // "No goal set"' "$session_file")")
     phase=$(jq -r '.current_phase // 0' "$session_file")
     milestone=$(jq -r '.current_milestone // "First Mound"' "$session_file")
     last_cmd=$(jq -r '.last_command // "None"' "$session_file")
@@ -524,14 +533,11 @@ _session_summary() {
     cleared=$(jq -r '.context_cleared // false' "$session_file")
 
     if [[ "$json_mode" == "true" ]]; then
-      # Escape goal for JSON
-      local goal_escaped milestone_escaped last_cmd_escaped last_at_escaped suggested_escaped
-      goal_escaped=$(echo "$goal" | jq -Rs . | tr -d '\n')
-      milestone_escaped=$(echo "$milestone" | jq -Rs . | tr -d '\n')
-      last_cmd_escaped=$(echo "$last_cmd" | jq -Rs . | tr -d '\n')
-      last_at_escaped=$(echo "$last_at" | jq -Rs . | tr -d '\n')
-      suggested_escaped=$(echo "$suggested" | jq -Rs . | tr -d '\n')
-      json_ok "{\"exists\":true,\"goal\":$goal_escaped,\"phase\":$phase,\"milestone\":$milestone_escaped,\"last_command\":$last_cmd_escaped,\"last_active\":$last_at_escaped,\"suggested_next\":$suggested_escaped,\"context_cleared\":$cleared}"
+      json_ok "$(jq -n --arg goal "$goal" --argjson phase "$phase" \
+        --arg milestone "$milestone" --arg last_cmd "$last_cmd" \
+        --arg last_at "$last_at" --arg suggested "$suggested" \
+        --argjson cleared "$cleared" \
+        '{exists: true, goal: $goal, phase: $phase, milestone: $milestone, last_command: $last_cmd, last_active: $last_at, suggested_next: $suggested, context_cleared: $cleared}')"
     else
       echo "Session Summary"
       echo "=================="

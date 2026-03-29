@@ -33,16 +33,16 @@ _autofix_checkpoint() {
         stash_name="aether-checkpoint: $label"
         # Only stash Aether-managed directories, never touch user files
         if git stash push -m "$stash_name" -- $target_dirs >/dev/null 2>&1; then  # SUPPRESS:OK -- existence-test: stash operation may fail
-          json_ok "{\"type\":\"stash\",\"ref\":\"$stash_name\"}"
+          json_ok "$(jq -n --arg ref "$stash_name" '{type: "stash", ref: $ref}')"
         else
           # Stash failed (possibly due to conflicts), record commit hash
           hash=$(git rev-parse HEAD 2>/dev/null || echo "unknown")  # SUPPRESS:OK -- read-default: may not have commits yet
-          json_ok "{\"type\":\"commit\",\"ref\":\"$hash\"}"
+          json_ok "$(jq -n --arg ref "$hash" '{type: "commit", ref: $ref}')"
         fi
       else
         # No changes in Aether-managed directories, just record commit hash
         hash=$(git rev-parse HEAD 2>/dev/null || echo "unknown")  # SUPPRESS:OK -- read-default: may not have commits yet
-        json_ok "{\"type\":\"commit\",\"ref\":\"$hash\"}"
+        json_ok "$(jq -n --arg ref "$hash" '{type: "commit", ref: $ref}')"
       fi
     else
       json_ok '{"type":"none","ref":null}'
@@ -101,16 +101,18 @@ _swarm_findings_init() {
     findings_file="$DATA_DIR/swarm-findings-$swarm_id.json"
 
     mkdir -p "$DATA_DIR"
-    cat > "$findings_file" <<EOF
-{
-  "swarm_id": "$swarm_id",
-  "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "status": "active",
-  "findings": [],
-  "solution": null
-}
-EOF
-    json_ok "{\"swarm_id\":\"$swarm_id\",\"file\":\"$findings_file\"}"
+    # Build initial findings JSON safely via jq (swarm_id may contain JSON-special chars)
+    local init_json
+    init_json=$(jq -n --arg sid "$swarm_id" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{
+      swarm_id: $sid,
+      created_at: $ts,
+      status: "active",
+      findings: [],
+      solution: null
+    }')
+    echo "$init_json" > "$findings_file"
+    json_ok "$(jq -n --arg swarm_id "$swarm_id" --arg file "$findings_file" \
+      '{swarm_id: $swarm_id, file: $file}')"
 }
 
 # ============================================================================
@@ -146,7 +148,8 @@ _swarm_findings_add() {
       json_err "$E_UNKNOWN" "Failed to write swarm findings file"
     }
     count=$(echo "$updated" | jq '.findings | length')
-    json_ok "{\"added\":true,\"scout\":\"$scout_type\",\"total_findings\":$count}"
+    json_ok "$(jq -n --arg scout "$scout_type" --argjson total_findings "$count" \
+      '{added: true, scout: $scout, total_findings: $total_findings}')"
 }
 
 # ============================================================================
@@ -190,7 +193,7 @@ _swarm_solution_set() {
       _aether_log_error "Could not save swarm solution"
       json_err "$E_UNKNOWN" "Failed to write swarm findings file"
     }
-    json_ok "{\"solution_set\":true,\"swarm_id\":\"$swarm_id\"}"
+    json_ok "$(jq -n --arg swarm_id "$swarm_id" '{solution_set: true, swarm_id: $swarm_id}')"
 }
 
 # ============================================================================
@@ -210,13 +213,13 @@ _swarm_cleanup() {
       if [[ "$archive" == "--archive" ]]; then
         mkdir -p "$DATA_DIR/swarm-archive"
         mv "$findings_file" "$DATA_DIR/swarm-archive/"
-        json_ok "{\"archived\":true,\"swarm_id\":\"$swarm_id\"}"
+        json_ok "$(jq -n --arg swarm_id "$swarm_id" '{archived: true, swarm_id: $swarm_id}')"
       else
         rm -f "$findings_file"
-        json_ok "{\"deleted\":true,\"swarm_id\":\"$swarm_id\"}"
+        json_ok "$(jq -n --arg swarm_id "$swarm_id" '{deleted: true, swarm_id: $swarm_id}')"
       fi
     else
-      json_ok "{\"not_found\":true,\"swarm_id\":\"$swarm_id\"}"
+      json_ok "$(jq -n --arg swarm_id "$swarm_id" '{not_found: true, swarm_id: $swarm_id}')"
     fi
 }
 
@@ -250,20 +253,24 @@ _swarm_display_init() {
     display_file="$DATA_DIR/swarm-display.json"
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-    atomic_write "$display_file" "{
-  \"swarm_id\": \"$swarm_id\",
-  \"timestamp\": \"$ts\",
-  \"active_ants\": [],
-  \"summary\": { \"total_active\": 0, \"by_caste\": {}, \"by_zone\": {} },
-  \"chambers\": {
-    \"fungus_garden\": {\"activity\": 0, \"icon\": \"🍄\"},
-    \"nursery\": {\"activity\": 0, \"icon\": \"🥚\"},
-    \"refuse_pile\": {\"activity\": 0, \"icon\": \"🗑️\"},
-    \"throne_room\": {\"activity\": 0, \"icon\": \"👑\"},
-    \"foraging_trail\": {\"activity\": 0, \"icon\": \"🌿\"}
-  }
-}"
-    json_ok "{\"swarm_id\":\"$swarm_id\",\"initialized\":true}"
+    # Build initial display JSON safely via jq (swarm_id may contain JSON-special chars)
+    local init_json
+    init_json=$(jq -n --arg sid "$swarm_id" --arg ts "$ts" \
+      --arg e1 "🍄" --arg e2 "🥚" --arg e3 "🗑️" --arg e4 "👑" --arg e5 "🌿" '{
+      swarm_id: $sid,
+      timestamp: $ts,
+      active_ants: [],
+      summary: { total_active: 0, by_caste: {}, by_zone: {} },
+      chambers: {
+        fungus_garden: {activity: 0, icon: $e1},
+        nursery: {activity: 0, icon: $e2},
+        refuse_pile: {activity: 0, icon: $e3},
+        throne_room: {activity: 0, icon: $e4},
+        foraging_trail: {activity: 0, icon: $e5}
+      }
+    }')
+    atomic_write "$display_file" "$init_json"
+    json_ok "$(jq -n --arg sid "$swarm_id" '{swarm_id: $sid, initialized: true}')"
 }
 
 # ============================================================================
@@ -378,7 +385,9 @@ _swarm_display_update() {
 
     # Get emoji for response
     emoji=$(get_caste_emoji "$caste")
-    json_ok "{\"updated\":true,\"ant\":\"$ant_name\",\"caste\":\"$caste\",\"emoji\":\"$emoji\",\"chamber\":\"$chamber\",\"progress\":$progress}"
+    json_ok "$(jq -n --arg ant "$ant_name" --arg caste "$caste" --arg emoji "$emoji" \
+      --arg chamber "$chamber" --argjson progress "$progress" \
+      '{updated: true, ant: $ant, caste: $caste, emoji: $emoji, chamber: $chamber, progress: $progress}')"
 }
 
 # ============================================================================
@@ -893,12 +902,14 @@ _swarm_timing_start() {
 
     # Remove any existing entry for this ant and append new one
     if [[ -f "$timing_file" ]]; then
-      grep -v "^$ant_name|" "$timing_file" > "${timing_file}.tmp" 2>/dev/null || true  # SUPPRESS:OK -- read-default: file may not exist
+      # -F: ant_name may contain regex metacharacters; ^ anchor dropped (ant names are unique per swarm, no substring collision)
+      grep -vF "$ant_name|" "$timing_file" > "${timing_file}.tmp" 2>/dev/null || true  # SUPPRESS:OK -- read-default: file may not exist
       mv "${timing_file}.tmp" "$timing_file"
     fi
     echo "$ant_name|$ts|$ts_iso" >> "$timing_file"
 
-    json_ok "{\"ant\":\"$ant_name\",\"started_at\":\"$ts_iso\",\"timestamp\":$ts}"
+    json_ok "$(jq -n --arg ant "$ant_name" --arg started_at "$ts_iso" --argjson timestamp "$ts" \
+      '{ant: $ant, started_at: $started_at, timestamp: $timestamp}')"
 }
 
 # ============================================================================
@@ -912,13 +923,14 @@ _swarm_timing_get() {
 
     timing_file="$DATA_DIR/timing.log"
 
-    if [[ ! -f "$timing_file" ]] || ! grep -q "^$ant_name|" "$timing_file" 2>/dev/null; then  # SUPPRESS:OK -- existence-test: file may not exist
-      json_ok "{\"ant\":\"$ant_name\",\"started_at\":null,\"elapsed_seconds\":0,\"elapsed_formatted\":\"00:00\"}"
+    # -F: ant_name may contain regex metacharacters; ^ anchor dropped (ant names are unique per swarm)
+    if [[ ! -f "$timing_file" ]] || ! grep -qF "$ant_name|" "$timing_file" 2>/dev/null; then  # SUPPRESS:OK -- existence-test: file may not exist
+      json_ok "$(jq -n --arg ant "$ant_name" '{ant: $ant, started_at: null, elapsed_seconds: 0, elapsed_formatted: "00:00"}')"
       exit 0
     fi
 
     # Read start time
-    start_line=$(grep "^$ant_name|" "$timing_file" | tail -1)
+    start_line=$(grep -F "$ant_name|" "$timing_file" | tail -1)
     start_ts=$(echo "$start_line" | cut -d'|' -f2)
     start_iso=$(echo "$start_line" | cut -d'|' -f3)
 
@@ -930,7 +942,9 @@ _swarm_timing_get() {
     secs=$((elapsed % 60))
     formatted=$(printf "%02d:%02d" $mins $secs)
 
-    json_ok "{\"ant\":\"$ant_name\",\"started_at\":\"$start_iso\",\"elapsed_seconds\":$elapsed,\"elapsed_formatted\":\"$formatted\"}"
+    json_ok "$(jq -n --arg ant "$ant_name" --arg started_at "$start_iso" \
+      --argjson elapsed "$elapsed" --arg formatted "$formatted" \
+      '{ant: $ant, started_at: $started_at, elapsed_seconds: $elapsed, elapsed_formatted: $formatted}')"
 }
 
 # ============================================================================
@@ -957,13 +971,15 @@ _swarm_timing_eta() {
 
     timing_file="$DATA_DIR/timing.log"
 
-    if [[ ! -f "$timing_file" ]] || ! grep -q "^$ant_name|" "$timing_file" 2>/dev/null; then  # SUPPRESS:OK -- existence-test: file may not exist
-      json_ok "{\"ant\":\"$ant_name\",\"percent\":$percent,\"eta_seconds\":null,\"eta_formatted\":\"--:--\"}"
+    # -F: ant_name may contain regex metacharacters; ^ anchor dropped (ant names are unique per swarm)
+    if [[ ! -f "$timing_file" ]] || ! grep -qF "$ant_name|" "$timing_file" 2>/dev/null; then  # SUPPRESS:OK -- existence-test: file may not exist
+      json_ok "$(jq -n --arg ant "$ant_name" --argjson percent "$percent" \
+        '{ant: $ant, percent: $percent, eta_seconds: null, eta_formatted: "--:--"}')"
       exit 0
     fi
 
     # Read start time
-    start_ts=$(grep "^$ant_name|" "$timing_file" | tail -1 | cut -d'|' -f2)
+    start_ts=$(grep -F "$ant_name|" "$timing_file" | tail -1 | cut -d'|' -f2)
     now=$(date +%s)
     elapsed=$((now - start_ts))
 
@@ -982,5 +998,7 @@ _swarm_timing_eta() {
       eta_formatted=$(printf "%02d:%02d" $mins $secs)
     fi
 
-    json_ok "{\"ant\":\"$ant_name\",\"percent\":$percent,\"eta_seconds\":$eta_seconds,\"eta_formatted\":\"$eta_formatted\"}"
+    json_ok "$(jq -n --arg ant "$ant_name" --argjson percent "$percent" \
+      --argjson eta "$eta_seconds" --arg eta_fmt "$eta_formatted" \
+      '{ant: $ant, percent: $percent, eta_seconds: $eta, eta_formatted: $eta_fmt}')"
 }

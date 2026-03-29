@@ -66,6 +66,18 @@ _deprecation_warning() {
   printf '[deprecated] %s -- will be removed in v3.0\n' "$cmd_name" >&2
 }
 
+# --- Sanitize-on-read helper ---
+# Normalize a string value read from JSON that may contain raw control characters
+# from pre-escaping-era writes. Strips literal control chars (except \n \t),
+# and trims leading/trailing whitespace. Returns cleaned string on stdout.
+# This is defensive normalization -- if data was written correctly, it's a no-op.
+sanitize_read_value() {
+  local raw="${1:-}"
+  [[ -z "$raw" ]] && return 0
+  # Strip ASCII control characters except newline (0x0A) and tab (0x09)
+  printf '%s' "$raw" | tr -d '\000-\010\013\014\016-\037'
+}
+
 # Fallback atomic_write if not sourced (uses temp file + mv for true atomicity)
 # Uses TEMP_DIR to avoid issues with paths containing spaces in $TMPDIR
 if ! type atomic_write &>/dev/null; then
@@ -1603,7 +1615,7 @@ HELP_EOF
     log_file="$DATA_DIR/activity.log"
     [[ -f "$log_file" ]] || json_err "$E_FILE_NOT_FOUND" "activity.log not found" '{"file":"activity.log"}'
     if [ -n "$caste_filter" ]; then
-      content=$(grep "$caste_filter" "$log_file" | tail -20)
+      content=$(grep -F "$caste_filter" "$log_file" | tail -20)
     else
       content=$(cat "$log_file")
     fi
@@ -4864,6 +4876,9 @@ EOF
       recent_events=$(jq -r '[.events[]?] | reverse | [.[:10][] | {timestamp, type, worker, details}]' "$colony_state_file" 2>/dev/null || echo "[]")
     fi
 
+    # Get data safety stats (best-effort)
+    ds_stats=$(bash "$0" data-safety-stats 2>/dev/null | jq -r '.result // {}' 2>/dev/null || echo '{}')  # SUPPRESS:OK -- read-default: subcommand may fail
+
     # Build dashboard JSON
     result=$(jq -n \
       --argjson phase "$current_phase" \
@@ -4874,6 +4889,7 @@ EOF
       --argjson failures "$recent_failures" \
       --argjson decisions "$recent_decisions" \
       --argjson events "$recent_events" \
+      --argjson data_safety "$ds_stats" \
       '{
         "current": {
           "phase": $phase,
@@ -4886,6 +4902,7 @@ EOF
           "pending_promotions": $pending,
           "recent_failures": $failures
         },
+        "data_safety": $data_safety,
         "recent": {
           "decisions": $decisions,
           "events": $events
@@ -4897,6 +4914,28 @@ EOF
       }')
 
     echo "$result"
+    exit 0
+    ;;
+
+  data-safety-stats)
+    # Read data safety statistics from safety-stats.json
+    # Usage: data-safety-stats
+    # Returns: JSON with safety event counts, or defaults if no stats file exists
+    _ds_stats_file="$DATA_DIR/safety-stats.json"
+    if [[ -f "$_ds_stats_file" ]]; then
+      _ds_stale=$(jq -r '.stale_locks_cleaned // 0' "$_ds_stats_file" 2>/dev/null || echo 0)
+      _ds_rejects=$(jq -r '.json_validation_rejects // 0' "$_ds_stats_file" 2>/dev/null || echo 0)
+      _ds_updated=$(jq -r '.last_updated // "unknown"' "$_ds_stats_file" 2>/dev/null || echo "unknown")
+      _ds_total=$(( _ds_stale + _ds_rejects ))
+      json_ok "$(jq -n \
+        --argjson stale_locks_cleaned "$_ds_stale" \
+        --argjson json_validation_rejects "$_ds_rejects" \
+        --argjson total_events "$_ds_total" \
+        --arg last_updated "$_ds_updated" \
+        '{stale_locks_cleaned: $stale_locks_cleaned, json_validation_rejects: $json_validation_rejects, total_events: $total_events, last_updated: $last_updated}')"
+    else
+      json_ok '{"stale_locks_cleaned":0,"json_validation_rejects":0,"total_events":0,"last_updated":null}'
+    fi
     exit 0
     ;;
 
