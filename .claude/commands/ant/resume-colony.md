@@ -28,8 +28,9 @@ Run using the Bash tool with description "Restoring colony session...": `bash .a
 If successful:
 1. Parse state from result
 2. If goal is null: Show "No colony state found..." message and stop
-3. Check if paused flag is true - if not, note "Colony was not paused, but resuming anyway"
-4. Extract all state fields for display
+3. If `milestone` == `"Crowned Anthill"`: Show "This colony has been sealed. Start a new colony with `/ant:init \"new goal\"`." and stop
+4. Check if paused flag is true - if not, note "Colony was not paused, but resuming anyway"
+5. Extract all state fields for display
 
 Keep state loaded (don't unload yet) - we'll need it for the full display.
 

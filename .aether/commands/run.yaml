@@ -61,6 +61,7 @@ body: |
   ### Step 0: Initialize
 
   1. Read `.aether/data/COLONY_STATE.json`; validate goal + plan.phases exist
+     - If `milestone` == `"Crowned Anthill"`: output "This colony has been sealed. Start a new colony with `/ant:init \"new goal\"`." and stop
   2. Determine remaining incomplete phases; apply `--max-phases` cap
   3. Set `phases_completed = 0`, `autopilot_start = $(date +%s)`
   4. Record pre-build blocker count: `bash .aether/aether-utils.sh flag-check-blockers {phase}`

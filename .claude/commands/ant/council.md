@@ -29,6 +29,12 @@ No colony initialized. Run /ant:init first.
 ```
 Stop here.
 
+If `milestone` == `"Crowned Anthill"`:
+```
+This colony has been sealed. Start a new colony with /ant:init "new goal".
+```
+Stop here.
+
 Capture the current state for context:
 - `prior_state` = state field value (READY, EXECUTING, PLANNING, etc.)
 - `current_phase` = current_phase field value

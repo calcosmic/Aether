@@ -69,6 +69,8 @@ Read `.aether/data/COLONY_STATE.json`.
 
 **If the file exists:** continue.
 
+**If `milestone` == `"Crowned Anthill"`:** output "This colony has been sealed. Start a new colony with `/ant:init \"new goal\"`.", stop.
+
 **If `plan.phases` is not empty:** output "Colony already has phases. Use /ant:continue.", stop.
 
 ### Step 2: Quick Surface Scan (for session context)

@@ -16,6 +16,10 @@ If `goal` is null:
 `No colony initialized. Run /ant:init first.`
 Stop.
 
+If `milestone` == `"Crowned Anthill"`:
+`This colony has been sealed. Start a new colony with /ant:init "new goal".`
+Stop.
+
 If `plan.phases` is empty:
 `No project plan. Run /ant:plan first.`
 Stop.
