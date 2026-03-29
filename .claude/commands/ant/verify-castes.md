@@ -49,7 +49,7 @@ Caste                Slot     Active
 ────────────────────────────────────
 ```
 
-Source of truth: `.aether/model-profiles.yaml` `worker_models` section.
+Source of truth: Agent frontmatter `model:` fields in `.claude/agents/ant/*.md`.
 Caste slots come from agent frontmatter (`model:` field).
 
 ## Step 2: Check System Status

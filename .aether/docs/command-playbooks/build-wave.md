@@ -460,14 +460,6 @@ Display per worker:
 - `midden_context`: cap at 2000 characters (already enforced above).
 - `grave_context`: cap at 2000 characters per worker (already enforced above).
 
-**Model Override Injection:**
-If `cli_model_override` is set (from `--model` flag parsed in Step 1), construct `model_override_section` as:
-```
-**Model Override Active:**
-This build is running with `--model {cli_model_override}`. All workers are directed to use the `{cli_model_override}` slot for this build. This overrides your default model slot assignment.
-```
-Inject this section into each worker prompt (Builder, Watcher, Chaos) after the Goal line. If `cli_model_override` is not set, omit the section entirely.
-
 **Builder Worker Prompt (CLEAN OUTPUT):**
 ```
 You are {Ant-Name}, a 🔨🐜 Builder Ant.
@@ -475,8 +467,6 @@ You are {Ant-Name}, a 🔨🐜 Builder Ant.
 Task {id}: {description}
 
 Goal: "{colony_goal}"
-
-{ model_override_section if cli_model_override is set }
 
 { archaeology_context if exists }
 

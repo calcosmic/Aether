@@ -10,7 +10,6 @@
 const fs = require('fs');
 const path = require('path');
 const { logActivity } = require('./logger');
-const { recordSpawnTelemetry } = require('./telemetry');
 
 /**
  * Caste emoji mapping for display
@@ -71,20 +70,6 @@ async function logSpawn(repoPath, { parent, caste, child, task, model, status = 
     const casteForLog = caste || 'ant';
     const description = `${child} (${caste}): ${task} [model: ${model || 'default'}]`;
     logActivity('SPAWN', casteForLog, description);
-
-    // Record telemetry for performance tracking
-    // Handle errors gracefully - don't fail spawn logging if telemetry fails
-    try {
-      recordSpawnTelemetry(repoPath, {
-        task: task || 'unknown',
-        caste: caste || 'unknown',
-        model: model || 'default',
-        source: source || 'caste-default',
-        timestamp
-      });
-    } catch (telemetryError) {
-      // Silent fail for telemetry errors
-    }
 
     return true;
   } catch (error) {

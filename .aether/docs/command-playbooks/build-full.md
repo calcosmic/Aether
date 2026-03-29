@@ -114,38 +114,38 @@ After displaying context, run using the Bash tool with description "Releasing co
 2. Check remaining arguments for flags:
    - If contains `--verbose` or `-v`: set `verbose_mode = true`
    - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
-   - If contains `--model <name>` or `-m <name>`: set `cli_model_override = <name>`
    - If contains `--no-suggest`: set `suggest_enabled = false` (suggestions are ON by default)
+   - If contains `--depth <level>`: set `cli_depth_override = <level>`
    - Otherwise: set `visual_mode = true`, `suggest_enabled = true` (defaults)
 
 If the phase number is empty or not a number:
 
 ```
-Usage: /ant:build <phase_number> [--verbose|-v] [--no-visual] [--no-suggest] [--model <model>|-m <model>]
+Usage: /ant:build <phase_number> [--verbose|-v] [--no-visual] [--no-suggest] [--depth <level>]
 
 Options:
   --verbose, -v       Show full completion details (spawn tree, TDD, patterns)
   --no-visual         Disable real-time visual display (visual is on by default)
   --no-suggest        Skip pheromone suggestion analysis
-  --model, -m <slot>  Override model slot for this build (one-time; opus|sonnet|haiku|inherit)
+  --depth <level>     Set colony depth for this build (light|standard|deep|full)
 
 Examples:
   /ant:build 1              Build Phase 1 (with visual display)
   /ant:build 1 --verbose    Build Phase 1 (full details + visual)
   /ant:build 1 --no-visual  Build Phase 1 without visual display
   /ant:build 1 --no-suggest Build Phase 1 without pheromone suggestions
-  /ant:build 1 --model opus    Build Phase 1 with opus slot for all workers
+  /ant:build 1 --depth deep Build Phase 1 with thorough investigation
 ```
 
 Stop here.
 
-**Validate CLI model override (if provided):**
-If `cli_model_override` is set:
-1. Run using the Bash tool with description "Validating model override...": `bash .aether/aether-utils.sh model-slot validate "$cli_model_override"`
-2. Parse JSON result - if `.result.valid` is false:
-   - Display: `Error: Invalid slot "$cli_model_override". {error message from .result.error}`
+**Set colony depth (if --depth flag provided):**
+If `cli_depth_override` is set:
+1. Run using the Bash tool with description "Setting colony depth...": `bash .aether/aether-utils.sh colony-depth set "$cli_depth_override"`
+2. Parse JSON result - if `.ok` is false:
+   - Display: `Error: Invalid depth "$cli_depth_override". Use: light, standard, deep, full`
    - Stop here
-3. If valid: Display `Using override slot: {slot}`
+3. If valid: Display `Colony depth: {level}`
 
 **Auto-upgrade old state:**
 If `version` field is missing, "1.0", or "2.0":
@@ -996,8 +996,6 @@ You are {Watcher-Name}, a 👁️🐜 Watcher Ant.
 
 Verify all work done by Builders in Phase {id}.
 
-{ model_override_section if cli_model_override is set }
-
 Files to verify:
 - Created: {list from builder results}
 - Modified: {list from builder results}
@@ -1224,8 +1222,6 @@ Spawn the Chaos Ant using Task tool with `subagent_type="aether-chaos"`, include
 You are {Chaos-Name}, a 🎲🐜 Chaos Ant.
 
 Test Phase {id} work for edge cases and boundary conditions.
-
-{ model_override_section if cli_model_override is set }
 
 Files to test:
 - {list from builder results}

@@ -51,64 +51,21 @@ bash .aether/aether-utils.sh spawn-complete "Hammer-42" "completed" "auth module
 
 ---
 
-## Model Selection (Per-Caste via Agent Frontmatter)
+## Model Selection
 
-Aether uses a two-tier model routing system. Each agent's model slot is set in its frontmatter `model:` field, and Claude Code resolves the slot to an actual model via environment variables in `~/.claude/settings.json`.
+Model routing is handled natively by Claude Code through agent frontmatter `model:` fields.
+Each agent definition in `.claude/agents/ant/*.md` specifies its model slot (opus, sonnet, or inherit).
+Claude Code resolves these slots via environment variables in `~/.claude/settings.json`.
 
-### Caste-to-Slot Assignment
+**Slot mapping (in `~/.claude/settings.json`):**
+- `ANTHROPIC_DEFAULT_OPUS_MODEL` -> opus slot
+- `ANTHROPIC_DEFAULT_SONNET_MODEL` -> sonnet slot
+- `ANTHROPIC_DEFAULT_HAIKU_MODEL` -> haiku slot
 
-| Slot | Castes | Role |
-|------|--------|------|
-| **Opus** | queen, archaeologist, route-setter, sage, tracker, auditor, gatekeeper, measurer, oracle, architect | Reasoning, analysis, coordination |
-| **Sonnet** | builder, watcher, scout, chaos, probe, weaver, ambassador, nest, disciplines, pathogens, provisions | Execution, research, implementation |
-| **Inherit** | chronicler, includer, keeper | Uses parent's model |
-
-The source of truth for caste-to-slot assignments is `.aether/model-profiles.yaml` (`worker_models` section). Agent frontmatter in `.claude/agents/ant/*.md` mirrors these assignments.
-
-### How Slot Resolution Works
-
-When Claude Code spawns a sub-agent with `model: opus`, it looks up the `ANTHROPIC_DEFAULT_OPUS_MODEL` environment variable to determine the actual model. The slot name is abstract -- the same routing code works regardless of which models are mapped.
-
-### Activating GLM-5 Through the Opus Slot
-
-In `~/.claude/settings.json` (or `~/.claude/settings.json.glm` for local proxy mode), set:
-
-```json
-{
-  "env": {
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "glm-5",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "glm-5-turbo",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "glm-4.5-air"
-  }
-}
-```
-
-This maps the opus slot to GLM-5 and the sonnet slot to GLM-5-Turbo.
-
-### Dual-Mode Switching
-
-**Default: Claude API mode.** GLM proxy is opt-in via settings.json change.
-No Aether code changes needed to switch between modes.
-
-**GLM Proxy mode** (via `~/.claude/settings.json.glm`):
-- opus -> glm-5, sonnet -> glm-5-turbo, haiku -> glm-4.5-air
-- Activate: `cp ~/.claude/settings.json.glm ~/.claude/settings.json`
-
-**Claude API mode** (via `~/.claude/settings.json.claude`):
-- opus -> claude-opus-4, sonnet -> claude-sonnet-4, haiku -> claude-haiku-4
-- Activate: `cp ~/.claude/settings.json.claude ~/.claude/settings.json`
-
-### Available Models (via GLM Proxy)
-
-| Model | Slot | Best For | Provider |
-|-------|------|----------|----------|
-| glm-5 | opus | Deep reasoning, bounded analysis | Z_AI |
-| glm-5-turbo | sonnet | Agent workflows, coding, orchestration | Z_AI |
-| glm-4.5-air | haiku | Lightweight/haiku-tier tasks | Z_AI |
-
-### Historical Note
-
-A model-per-caste routing system was previously attempted using environment variable injection at spawn time (archived in `.aether/archive/model-routing/`). This approach could not function due to Claude Code Task tool limitations. The current approach uses agent frontmatter `model:` fields, which Claude Code handles natively at spawn time -- no Aether code intervention required.
+> **Historical note:** A model-per-caste routing system using environment variable injection
+> at spawn time was previously built and archived (see `.aether/archive/model-routing/`).
+> That approach could not function due to Claude Code Task tool limitations (env vars
+> are not passed to subagents). The current approach uses agent frontmatter natively.
 
 ---
 

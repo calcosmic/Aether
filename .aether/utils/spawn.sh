@@ -15,11 +15,9 @@ _spawn_log() {
     task_summary="${4:-}"
     model="${5:-default}"
     status="${6:-spawned}"
-    # Auto-resolve model slot from caste if not explicitly provided
-    if [[ "$model" == "default" ]]; then
-      slot=$(bash "$0" model-slot get "$child_caste" 2>/dev/null | jq -r '.result // "inherit"')
-      [[ -n "$slot" && "$slot" != "null" ]] && model="$slot"
-    fi
+    # Model slot resolution removed (archived: .aether/archive/model-routing/)
+    # Agent frontmatter model: fields handle routing natively via Claude Code.
+    [[ "$model" == "default" ]] && model="inherit"
     [[ -z "$parent_id" || -z "$child_caste" || -z "$task_summary" ]] && json_err "$E_VALIDATION_FAILED" "Usage: spawn-log <parent_id> <child_caste> <child_name> <task_summary> [model] [status]"
     mkdir -p "$COLONY_DATA_DIR"
     ts=$(date -u +"%H:%M:%S")

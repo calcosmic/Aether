@@ -79,7 +79,7 @@ replan suggestion (every {replan_interval} phases)
 
 Execute build playbooks in order, carrying cross-stage state
 (`phase_id`, `visual_mode`, `verbose_mode`, `suggest_enabled`,
-`cli_model_override`, `prompt_section`, `wave_results`,
+`prompt_section`, `wave_results`,
 `verification_status`, `synthesis_status`, `next_action`):
 
 1. `.aether/docs/command-playbooks/build-prep.md`

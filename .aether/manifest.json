@@ -1,6 +1,6 @@
 {
   "generated_at": "2026-02-20T04:22:40.202Z",
-  "file_count": 73,
+  "file_count": 71,
   "files": {
     ".npmignore": "sha256:b81b62cff35b2e07fb97b4908e9e3ddc58da9f5125f288987b2e4f4c64dc52fb",
     "CONTEXT.md": "sha256:566a34a140557a04d0b336f4e0c756f8884319c28296b30be752e70a72b7041a",
@@ -34,7 +34,6 @@
     "exchange/registry-xml.sh": "sha256:871dbbba264849b2c678c99de27699f6efda887e5c2f72057a34a328b320d704",
     "exchange/wisdom-xml.sh": "sha256:4cea63d8e0b595d098adc67d0e341cd4a8a5266921ffda9a77c0ce1d6009c4e1",
     "ledger.jsonl": "sha256:2978045065ee17fc841227d5b6d97842562f6ef251ec73fcc31062d51ec10042",
-    "model-profiles.yaml": "sha256:58c2299176feefa01d8fe339f66fe5bb9195aa65842f4e50817018cf8a9f18c5",
     "registry.json": "sha256:cb195bc27d1a07c6b53f340a72d3c89dfa7144afa5ecbcd359eaab9bd587b2cd",
     "rules/aether-colony.md": "sha256:ae973cdbfb042bae8e77ff072d36108f145c8c0ad0a32e76da5a40f3bd2096d5",
     "schemas/aether-types.xsd": "sha256:c8e6972e9716c642bc91999134c73dff4a4a1c04fa7b29ea0029762e46cc58f2",
@@ -64,7 +63,6 @@
     "utils/queen-to-md.xsl": "sha256:ade7b60efa8ed619ab4d3bb460dbc53f9d12689037f1cbfc0bfcc35e7d44c869",
     "utils/semantic-cli.sh": "sha256:905b0c458a54578d43fca0a41c574ad64f970b5a92f720386b2a6f8e87f3ae11",
     "utils/spawn-tree.sh": "sha256:41f90b341656908ded5bc7e79bfff7acc00958a4f8511530156d4dae960a291c",
-    "utils/spawn-with-model.sh": "sha256:9cf3dbd6a03cfde293ddb0c397064c31d5ccae616f4bfea7118cb9bd55afed2c",
     "utils/state-loader.sh": "sha256:19598a1f4c26d28e068c32f497fa45ab61705a663157d514b6a2a46b7edc6c83",
     "utils/swarm-display.sh": "sha256:9a18294322355ec8209321493109fb5002b1432169d6ec265d677965c5da1dd3",
     "utils/watch-spawn-tree.sh": "sha256:e6ad394dfe451828703e75b921d5ae023d3b7eaca95cad61ea010c194c7fd9f3",

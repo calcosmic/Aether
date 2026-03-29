@@ -24,10 +24,6 @@ const { initializeRepo, isInitialized } = require('./lib/init');
 const { syncStateFromPlanning, reconcileStates } = require('./lib/state-sync');
 const { findNestmates, formatNestmates, loadNestmateTodos } = require('./lib/nestmate-loader');
 const { logSpawn, formatSpawnTree } = require('./lib/spawn-logger');
-const {
-  getTelemetrySummary,
-  getModelPerformance,
-} = require('./lib/telemetry');
 
 // Color palette
 const c = require('./lib/colors');
@@ -1926,6 +1922,212 @@ program
     }
   }));
 
+// Caste emoji mapping for display
+const CASTE_EMOJIS = {
+  builder: '🔨',
+  watcher: '👁️',
+  scout: '🔍',
+  chaos: '🎲',
+  oracle: '🔮',
+  architect: '🏗️',
+  prime: '🏛️',
+  colonizer: '🌱',
+  route_setter: '🧭',
+  archaeologist: '📜',
+};
+
+/**
+ * Format context window for display
+ * @param {number} contextWindow - Context window size
+ * @returns {string} Formatted string (e.g., "256K")
+ */
+function formatContextWindow(contextWindow) {
+  if (!contextWindow) return '-';
+  if (contextWindow >= 1000) {
+    return `${Math.round(contextWindow / 1000)}K`;
+  }
+  return String(contextWindow);
+}
+
+// Caste-models command - Manage caste-to-model assignments
+const casteModelsCmd = program
+  .command('caste-models')
+  .description('Manage caste-to-model assignments');
+
+// list subcommand
+casteModelsCmd
+  .command('list')
+  .description('List current model assignments per caste')
+  .option('--verify', 'Verify model availability on proxy')
+  .action(wrapCommand(async (options) => {
+    const repoPath = process.cwd();
+    const profiles = loadModelProfiles(repoPath);
+    const overrides = getUserOverrides(profiles);
+    const proxyConfig = getProxyConfig(profiles);
+
+    // Check proxy health
+    let proxyHealth = null;
+    let proxyModels = null;
+    if (proxyConfig?.endpoint) {
+      proxyHealth = await checkProxyHealth(proxyConfig.endpoint);
+      if (proxyHealth.healthy && proxyHealth.models) {
+        proxyModels = proxyHealth.models;
+      }
+    }
+
+    console.log(c.header('Caste Model Assignments\n'));
+
+    // Display proxy status
+    if (proxyConfig?.endpoint) {
+      const proxyStatus = formatProxyStatusColored(proxyHealth, c) + c.dim(` @ ${proxyConfig.endpoint}`);
+      console.log(`Proxy: ${proxyStatus}`);
+      if (!proxyHealth?.healthy) {
+        console.log(c.warning('Warning: Using default model (glm-5-turbo) for all castes'));
+      }
+      console.log('');
+    }
+
+    // Table header - add Verify column if --verify flag
+    const verifyFlag = options.verify;
+    const header = verifyFlag
+      ? `${'Caste'.padEnd(14)} ${'Model'.padEnd(14)} ${'Provider'.padEnd(10)} ${'Context'.padEnd(8)} Verify Status`
+      : `${'Caste'.padEnd(14)} ${'Model'.padEnd(14)} ${'Provider'.padEnd(10)} ${'Context'.padEnd(8)} Status`;
+    console.log(header);
+    console.log(verifyFlag ? '─'.repeat(70) : '─'.repeat(60));
+
+    // Get all assignments
+    const assignments = getAllAssignments(profiles);
+
+    for (const assignment of assignments) {
+      const emoji = CASTE_EMOJIS[assignment.caste] || '•';
+      const casteName = assignment.caste.charAt(0).toUpperCase() + assignment.caste.slice(1);
+      const casteDisplay = `${emoji} ${casteName}`;
+
+      // Check for override
+      const hasOverride = overrides[assignment.caste] !== undefined;
+      const effectiveModel = getEffectiveModel(profiles, assignment.caste);
+      const modelDisplay = effectiveModel.model + (hasOverride ? ' (override)' : '');
+
+      // Get model metadata
+      const metadata = getModelMetadata(profiles, effectiveModel.model);
+      const provider = metadata?.provider || assignment.provider || '-';
+      const contextWindow = formatContextWindow(metadata?.context_window);
+
+      // Status indicator based on proxy health
+      const status = proxyHealth?.healthy ? '✓' : '⚠';
+
+      // Verify flag - check if model is available on proxy
+      let verifyStatus = '';
+      if (verifyFlag) {
+        if (proxyModels) {
+          const isAvailable = proxyModels.includes(effectiveModel.model);
+          verifyStatus = isAvailable ? '✓' : '✗';
+        } else {
+          verifyStatus = '?';
+        }
+        console.log(
+          `${casteDisplay.padEnd(14)} ${modelDisplay.padEnd(14)} ${provider.padEnd(10)} ${contextWindow.padEnd(8)} ${verifyStatus.padEnd(7)} ${status}`
+        );
+      } else {
+        console.log(
+          `${casteDisplay.padEnd(14)} ${modelDisplay.padEnd(14)} ${provider.padEnd(10)} ${contextWindow.padEnd(8)} ${status}`
+        );
+      }
+    }
+
+    // Show overrides summary if any exist
+    const overrideCount = Object.keys(overrides).length;
+    if (overrideCount > 0) {
+      console.log('');
+      console.log(c.info(`Active overrides: ${overrideCount}`));
+      for (const [caste, model] of Object.entries(overrides)) {
+        console.log(`  ${caste}: ${model}`);
+      }
+    }
+  }));
+
+// set subcommand
+casteModelsCmd
+  .command('set')
+  .description('Set model override for a caste')
+  .argument('<assignment>', 'caste=model (e.g., builder=glm-5)')
+  .action(wrapCommand(async (assignment) => {
+    // Parse caste=model format
+    const match = assignment.match(/^([^=]+)=(.+)$/);
+    if (!match) {
+      const error = new ValidationError(
+        `Invalid assignment format: '${assignment}'`,
+        { received: assignment },
+        'Use format: caste=model (e.g., builder=glm-5)'
+      );
+      throw error;
+    }
+
+    const [, caste, model] = match;
+
+    const repoPath = process.cwd();
+
+    // Validate and set
+    try {
+      const result = setModelOverride(repoPath, caste, model);
+
+      if (result.previous) {
+        console.log(c.success(`Updated ${caste}: ${result.previous} → ${model}`));
+      } else {
+        console.log(c.success(`Set ${caste} to ${model}`));
+      }
+    } catch (error) {
+      if (error.name === 'ValidationError') {
+        // Add helpful suggestions
+        if (error.details?.validCastes) {
+          console.error(c.error(`Error: ${error.message}`));
+          console.error('\nValid castes:');
+          for (const casteName of error.details.validCastes) {
+            const emoji = CASTE_EMOJIS[casteName] || '•';
+            console.error(`  ${emoji} ${casteName}`);
+          }
+        } else if (error.details?.validModels) {
+          console.error(c.error(`Error: ${error.message}`));
+          console.error('\nValid models:');
+          for (const modelName of error.details.validModels) {
+            console.error(`  • ${modelName}`);
+          }
+        }
+        process.exit(1);
+      }
+      throw error;
+    }
+  }));
+
+// reset subcommand
+casteModelsCmd
+  .command('reset')
+  .description('Reset caste to default model (remove override)')
+  .argument('<caste>', 'caste name (e.g., builder)')
+  .action(wrapCommand(async (caste) => {
+    const repoPath = process.cwd();
+
+    try {
+      const result = resetModelOverride(repoPath, caste);
+
+      if (result.hadOverride) {
+        console.log(c.success(`Reset ${caste} to default model`));
+      } else {
+        console.log(c.info(`${caste} was already using default model`));
+      }
+    } catch (error) {
+      if (error.name === 'ValidationError' && error.details?.validCastes) {
+        console.error(c.error(`Error: ${error.message}`));
+        console.error('\nValid castes:');
+        for (const casteName of error.details.validCastes) {
+          const emoji = CASTE_EMOJIS[casteName] || '•';
+          console.error(`  ${emoji} ${casteName}`);
+        }
+        process.exit(1);
+      }
+      throw error;
+    }
+  }));
 
 // Spawn-log command - Log a worker spawn event
 program
@@ -2054,141 +2256,6 @@ program
 
     console.log(`Found ${nestmates.length} nestmate(s):\n`);
     console.log(formatNestmates(nestmates));
-  }));
-
-// Telemetry command - View model performance telemetry
-const telemetryCmd = program
-  .command('telemetry')
-  .description('View model performance telemetry')
-  .action(wrapCommand(async () => {
-    // Default action: show summary
-    const repoPath = process.cwd();
-    const summary = getTelemetrySummary(repoPath);
-
-    console.log(c.header('Model Performance Telemetry\n'));
-    console.log(`Total Spawns: ${summary.total_spawns}`);
-    console.log(`Models Used: ${summary.total_models}\n`);
-
-    if (summary.total_spawns === 0) {
-      console.log(c.info('No telemetry data yet. Run some builds to collect data.'));
-      return;
-    }
-
-    console.log('Model Performance:');
-    console.log('─'.repeat(60));
-    for (const [model, stats] of Object.entries(summary.models)) {
-      const rate = (stats.success_rate * 100).toFixed(1);
-      const rateColor = stats.success_rate >= 0.9 ? c.success :
-                       stats.success_rate >= 0.7 ? c.warning : c.error;
-      console.log(`  ${model.padEnd(15)} ${String(stats.total_spawns).padStart(4)} spawns  ${rateColor(rate + '%')} success`);
-    }
-
-    if (summary.recent_decisions.length > 0) {
-      console.log('\nRecent Routing Decisions:');
-      console.log('─'.repeat(60));
-      for (const decision of summary.recent_decisions.slice(-5)) {
-        console.log(`  ${decision.caste.padEnd(10)} → ${decision.selected_model.padEnd(12)} (${decision.source})`);
-      }
-    }
-  }));
-
-// summary subcommand (explicit)
-telemetryCmd
-  .command('summary')
-  .description('Show overall telemetry summary')
-  .action(wrapCommand(async () => {
-    const repoPath = process.cwd();
-    const summary = getTelemetrySummary(repoPath);
-
-    console.log(c.header('Model Performance Telemetry\n'));
-    console.log(`Total Spawns: ${summary.total_spawns}`);
-    console.log(`Models Used: ${summary.total_models}\n`);
-
-    if (summary.total_spawns === 0) {
-      console.log(c.info('No telemetry data yet. Run some builds to collect data.'));
-      return;
-    }
-
-    console.log('Model Performance:');
-    console.log('─'.repeat(60));
-    for (const [model, stats] of Object.entries(summary.models)) {
-      const rate = (stats.success_rate * 100).toFixed(1);
-      const rateColor = stats.success_rate >= 0.9 ? c.success :
-                       stats.success_rate >= 0.7 ? c.warning : c.error;
-      console.log(`  ${model.padEnd(15)} ${String(stats.total_spawns).padStart(4)} spawns  ${rateColor(rate + '%')} success`);
-    }
-
-    if (summary.recent_decisions.length > 0) {
-      console.log('\nRecent Routing Decisions:');
-      console.log('─'.repeat(60));
-      for (const decision of summary.recent_decisions.slice(-5)) {
-        console.log(`  ${decision.caste.padEnd(10)} → ${decision.selected_model.padEnd(12)} (${decision.source})`);
-      }
-    }
-  }));
-
-// model subcommand
-telemetryCmd
-  .command('model <model-name>')
-  .description('Show detailed performance for a specific model')
-  .action(wrapCommand(async (modelName) => {
-    const repoPath = process.cwd();
-    const performance = getModelPerformance(repoPath, modelName);
-
-    if (!performance) {
-      console.log(c.warning(`No data for model: ${modelName}`));
-      return;
-    }
-
-    console.log(c.header(`Model Performance: ${modelName}\n`));
-    console.log(`Total Spawns: ${performance.total_spawns}`);
-    console.log(`Success Rate: ${(performance.success_rate * 100).toFixed(1)}%`);
-    console.log(`  ✓ Completed: ${performance.successful_completions}`);
-    console.log(`  ✗ Failed: ${performance.failed_completions}`);
-    console.log(`  🚫 Blocked: ${performance.blocked}`);
-
-    if (Object.keys(performance.by_caste).length > 0) {
-      console.log('\nPerformance by Caste:');
-      console.log('─'.repeat(50));
-      for (const [caste, stats] of Object.entries(performance.by_caste)) {
-        const casteRate = stats.spawns > 0 ? (stats.success / stats.spawns * 100).toFixed(1) : '0.0';
-        console.log(`  ${caste.padEnd(12)} ${String(stats.spawns).padStart(4)} spawns  ${casteRate}% success`);
-      }
-    }
-  }));
-
-// performance subcommand
-telemetryCmd
-  .command('performance')
-  .description('Show models ranked by performance')
-  .action(wrapCommand(async () => {
-    const repoPath = process.cwd();
-    const summary = getTelemetrySummary(repoPath);
-
-    console.log(c.header('Model Performance Ranking\n'));
-
-    if (summary.total_spawns === 0) {
-      console.log(c.info('No telemetry data yet. Run some builds to collect data.'));
-      return;
-    }
-
-    // Sort models by success rate
-    const ranked = Object.entries(summary.models)
-      .map(([model, stats]) => ({ model, ...stats }))
-      .sort((a, b) => b.success_rate - a.success_rate);
-
-    console.log(`${'Rank'.padEnd(6)} ${'Model'.padEnd(15)} ${'Spawns'.padStart(6)} ${'Success'.padStart(8)} ${'Rate'.padStart(6)}`);
-    console.log('─'.repeat(60));
-
-    ranked.forEach((m, i) => {
-      const rank = `${i + 1}.`.padEnd(6);
-      const rate = (m.success_rate * 100).toFixed(1);
-      const rateColor = m.success_rate >= 0.9 ? c.success :
-                       m.success_rate >= 0.7 ? c.warning : c.error;
-      console.log(`${rank} ${m.model.padEnd(15)} ${String(m.total_spawns).padStart(6)} ${String(m.successful_completions || 0).padStart(8)} ${rateColor(rate.padStart(5) + '%')}`);
-    });
-
-    console.log('\n' + c.dim('Tip: Use "aether telemetry model <name>" for detailed stats'));
   }));
 
 // Context command - Show auto-loaded context

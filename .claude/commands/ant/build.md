@@ -51,7 +51,6 @@ Carry these values forward when produced:
 - `visual_mode`
 - `verbose_mode`
 - `suggest_enabled`
-- `cli_model_override`
 - `prompt_section`
 - `wave_results`
 - `verification_status`

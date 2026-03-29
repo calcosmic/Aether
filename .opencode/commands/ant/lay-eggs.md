@@ -118,8 +118,6 @@ cp -f ~/.aether/system/aether-utils.sh .aether/ && \
 chmod +x .aether/aether-utils.sh && \
 cp -f ~/.aether/system/workers.md .aether/ 2>/dev/null || true && \
 cp -f ~/.aether/system/CONTEXT.md .aether/ 2>/dev/null || true && \
-cp -f ~/.aether/system/model-profiles.yaml .aether/ 2>/dev/null || true && \
-
 # Directories
 cp -Rf ~/.aether/system/docs/* .aether/docs/ 2>/dev/null || true && \
 cp -Rf ~/.aether/system/utils/* .aether/utils/ 2>/dev/null || true && \

@@ -45,36 +45,35 @@ After displaying context, run: `bash .aether/aether-utils.sh unload-state` to re
 2. Check remaining arguments for flags:
    - If contains `--verbose` or `-v`: set `verbose_mode = true`
    - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
-   - If contains `--model <name>` or `-m <name>`: set `cli_model_override = <name>`
+   - If contains `--depth <level>`: set `cli_depth_override = <level>`
    - Otherwise: set `visual_mode = true` (visual is default)
 
 If the phase number is empty or not a number:
 
 ```
-Usage: /ant:build <phase_number> [--verbose|-v] [--no-visual] [--model <model>|-m <model>]
+Usage: /ant:build <phase_number> [--verbose|-v] [--no-visual] [--depth <level>]
 
 Options:
   --verbose, -v       Show full completion details (spawn tree, TDD, patterns)
   --no-visual         Disable real-time visual display (visual is on by default)
-  --model, -m <name>  Override model for this build (one-time)
+  --depth <level>     Set colony depth for this build (light|standard|deep|full)
 
 Examples:
   /ant:build 1              Build Phase 1 (with visual display)
   /ant:build 1 --verbose    Build Phase 1 (full details + visual)
   /ant:build 1 --no-visual  Build Phase 1 without visual display
-  /ant:build 1 --model glm-5    Build Phase 1 with glm-5 for all workers
+  /ant:build 1 --depth deep Build Phase 1 with thorough investigation
 ```
 
 Stop here.
 
-**Validate CLI model override (if provided):**
-If `cli_model_override` is set:
-1. Validate the model: `bash .aether/aether-utils.sh model-profile validate "$cli_model_override"`
-2. Parse JSON result - if `.result.valid` is false:
-   - Display: `Error: Invalid model "$cli_model_override"`
-   - Display: `Valid models: {list from .result.models}`
+**Set colony depth (if --depth flag provided):**
+If `cli_depth_override` is set:
+1. Run using Bash tool: `bash .aether/aether-utils.sh colony-depth set "$cli_depth_override"`
+2. Parse JSON result - if `.ok` is false:
+   - Display: `Error: Invalid depth "$cli_depth_override". Use: light, standard, deep, full`
    - Stop here
-3. If valid: Display `Using override model: {model}`
+3. If valid: Display `Colony depth: {level}`
 
 **Auto-upgrade old state:**
 If `version` field is missing, "1.0", or "2.0":
