@@ -1355,6 +1355,49 @@ _colony_name() {
 }
 
 # ============================================================================
+# _colony_depth()
+# Read or write colony depth setting (controls agent spawn thoroughness)
+# Values: light, standard (default), deep, full
+# NOTE: This is "colony depth" (build thoroughness), NOT "spawn depth"
+#       (_spawn_get_depth which controls sub-worker nesting levels 1/2/3).
+# Usage: colony-depth [get|set <value>]
+# Returns: {"ok":true,"result":{"depth":"standard","source":"..."}}
+# ============================================================================
+_colony_depth() {
+    local action="${1:-get}"
+
+    case "$action" in
+        get)
+            local depth
+            depth=$(jq -r '.colony_depth // "standard"' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null || echo "standard")
+            local source="default"
+            if [[ "$(jq -r '.colony_depth // empty' "$DATA_DIR/COLONY_STATE.json" 2>/dev/null)" != "" ]]; then
+                source="colony_state"
+            fi
+            json_ok "$(jq -n --arg depth "$depth" --arg source "$source" '{depth: $depth, source: $source}')"
+            ;;
+        set)
+            local new_depth="${2:-}"
+            case "$new_depth" in
+                light|standard|deep|full)
+                    local tmp="${DATA_DIR}/COLONY_STATE.json.tmp.$$"
+                    jq --arg d "$new_depth" '.colony_depth = $d' "$DATA_DIR/COLONY_STATE.json" > "$tmp" && mv "$tmp" "$DATA_DIR/COLONY_STATE.json"
+                    json_ok "$(jq -n --arg depth "$new_depth" '{depth: $depth, updated: true}')"
+                    ;;
+                *)
+                    json_err "$E_VALIDATION_FAILED" "Invalid depth. Use: light, standard, deep, full" "$(jq -n --arg got "$new_depth" '{got: $got}')"
+                    return 1
+                    ;;
+            esac
+            ;;
+        *)
+            json_err "$E_VALIDATION_FAILED" "Usage: colony-depth [get|set <value>]" "{}"
+            return 1
+            ;;
+    esac
+}
+
+# ============================================================================
 # _queen_write_charter()
 # Write or update colony charter content in QUEEN.md using [charter] tags
 # Writes intent+vision to User Preferences, governance+goals to Codebase Patterns
