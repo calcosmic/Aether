@@ -211,7 +211,12 @@ _spawn_tree_active() {
       exit 1
     }
     active=$(get_active_spawns)
-    json_ok "$active"
+    if echo "$active" | jq -e . >/dev/null 2>&1; then
+      json_ok "$active"
+    else
+      json_err "$E_VALIDATION_FAILED" "spawn-tree active produced invalid JSON"
+      return 1
+    fi
 }
 
 _spawn_tree_depth() {
@@ -222,7 +227,12 @@ _spawn_tree_depth() {
       exit 1
     }
     depth=$(get_spawn_depth "$ant_name")
-    json_ok "$depth"
+    if echo "$depth" | jq -e . >/dev/null 2>&1; then
+      json_ok "$depth"
+    else
+      json_err "$E_VALIDATION_FAILED" "spawn-tree depth produced invalid JSON"
+      return 1
+    fi
 }
 
 _spawn_efficiency() {

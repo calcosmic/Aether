@@ -15,209 +15,65 @@ SPAWN_TREE_FILE="${SPAWN_TREE_FILE:-$SPAWN_TREE_DATA_DIR/spawn-tree.txt}"
 parse_spawn_tree() {
   local file_path="${1:-$SPAWN_TREE_FILE}"
 
-  # Check if file exists
-  if [[ ! -f "$file_path" ]]; then
+  if [[ ! -f "$file_path" ]] || [[ ! -s "$file_path" ]]; then
     echo '{"spawns":[],"metadata":{"total_count":0,"active_count":0,"completed_count":0,"file_exists":false}}'
     return 0
   fi
 
-  # Temporary files for data storage (Bash 3.2 compatible)
-  local tmpdir
-  tmpdir=$(mktemp -d)
-  local names_file="$tmpdir/names"
-  local parents_file="$tmpdir/parents"
-  local castes_file="$tmpdir/castes"
-  local tasks_file="$tmpdir/tasks"
-  local statuses_file="$tmpdir/statuses"
-  local timestamps_file="$tmpdir/timestamps"
-  local completed_file="$tmpdir/completed"
-  local children_file="$tmpdir/children"
-
-  touch "$names_file" "$parents_file" "$castes_file" "$tasks_file" "$statuses_file" "$timestamps_file" "$completed_file" "$children_file"
-
-  # Read file line by line
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    # Skip empty lines
-    [[ -z "$line" ]] && continue
-
-    # Count pipe separators to determine line type
-    local pipe_count
-    pipe_count=$(echo "$line" | tr -cd '|' | wc -c | tr -d ' ')
-
-    if [[ $pipe_count -eq 6 ]]; then
-      # Spawn event: timestamp|parent|caste|child_name|task|model|status
-      local timestamp parent caste child_name task model spawn_status
-      timestamp=$(echo "$line" | cut -d'|' -f1)
-      parent=$(echo "$line" | cut -d'|' -f2)
-      caste=$(echo "$line" | cut -d'|' -f3)
-      child_name=$(echo "$line" | cut -d'|' -f4)
-      task=$(echo "$line" | cut -d'|' -f5)
-      model=$(echo "$line" | cut -d'|' -f6)
-      spawn_status=$(echo "$line" | cut -d'|' -f7)
-
-      # Add to files
-      echo "$child_name" >> "$names_file"
-      echo "$parent" >> "$parents_file"
-      echo "$caste" >> "$castes_file"
-      echo "$task" >> "$tasks_file"
-      echo "$spawn_status" >> "$statuses_file"
-      echo "$timestamp" >> "$timestamps_file"
-      echo "" >> "$completed_file"
-      echo "" >> "$children_file"
-
-    elif [[ $pipe_count -eq 3 ]]; then
-      # Completion event: timestamp|ant_name|status|summary
-      local timestamp ant_name complete_status summary
-      timestamp=$(echo "$line" | cut -d'|' -f1)
-      ant_name=$(echo "$line" | cut -d'|' -f2)
-      complete_status=$(echo "$line" | cut -d'|' -f3)
-
-      # Find the ant and update its status
-      local idx=0
-      local found=0
-      while IFS= read -r name; do
-        if [[ "$name" == "$ant_name" ]]; then
-          found=1
-          break
-        fi
-        ((idx++))
-      done < "$names_file"
-
-      if [[ $found -eq 1 ]]; then
-        # Update status at line idx+1 (sed is 1-indexed)
-        sed -i.bak "${idx}d" "$statuses_file" 2>/dev/null || sed -i "${idx}d" "$statuses_file"
-        sed -i.bak "${idx}i\\
-$complete_status" "$statuses_file" 2>/dev/null || sed -i "${idx}i\\
-$complete_status" "$statuses_file"
-        sed -i.bak "${idx}d" "$completed_file" 2>/dev/null || sed -i "${idx}d" "$completed_file"
-        sed -i.bak "${idx}i\\
-$timestamp" "$completed_file" 2>/dev/null || sed -i "${idx}i\\
-$timestamp" "$completed_file"
-        rm -f "$statuses_file.bak" "$completed_file.bak" 2>/dev/null
-      fi
-    fi
-  done < "$file_path"
-
-  # Build parent-child relationships
-  local total_count
-  total_count=$(wc -l < "$names_file" | tr -d ' ')
-
-  if [[ $total_count -gt 0 ]]; then
-    local i
-    for ((i = 1; i <= total_count; i++)); do
-      local parent
-      parent=$(sed -n "${i}p" "$parents_file")
-
-      # Find parent index
-      local parent_idx=0
-      local found=0
-      while IFS= read -r name; do
-        if [[ "$name" == "$parent" ]]; then
-          found=1
-          break
-        fi
-        ((parent_idx++))
-      done < "$names_file"
-
-      if [[ $found -eq 1 ]]; then
-        # Add child i-1 to parent's children (0-indexed)
-        local child_idx=$((i - 1))
-        local current_children
-        current_children=$(sed -n "$((parent_idx + 1))p" "$children_file")
-        if [[ -z "$current_children" ]]; then
-          sed -i.bak "$((parent_idx + 1))d" "$children_file" 2>/dev/null || sed -i "$((parent_idx + 1))d" "$children_file"
-          sed -i.bak "$((parent_idx + 1))i\\
-$child_idx" "$children_file" 2>/dev/null || sed -i "$((parent_idx + 1))i\\
-$child_idx" "$children_file"
-        else
-          sed -i.bak "$((parent_idx + 1))d" "$children_file" 2>/dev/null || sed -i "$((parent_idx + 1))d" "$children_file"
-          sed -i.bak "$((parent_idx + 1))i\\
-$current_children $child_idx" "$children_file" 2>/dev/null || sed -i "$((parent_idx + 1))i\\
-$current_children $child_idx" "$children_file"
-        fi
-        rm -f "$children_file.bak" 2>/dev/null
-      fi
-    done
-  fi
-
-  # Count statuses
-  local active_count=0
-  local completed_count=0
-  while IFS= read -r status; do
-    if [[ "$status" == "active" || "$status" == "spawned" ]]; then
-      ((active_count++))
-    elif [[ "$status" == "completed" || "$status" == "failed" || "$status" == "blocked" ]]; then
-      ((completed_count++))
-    fi
-  done < "$statuses_file"
-
-  # Build spawns array
-  local spawns_json="["
-  local i
-  for ((i = 1; i <= total_count; i++)); do
-    if [[ $i -gt 1 ]]; then
-      spawns_json+=","
-    fi
-
-    local name parent caste task status timestamp completed children
-    name=$(sed -n "${i}p" "$names_file")
-    parent=$(sed -n "${i}p" "$parents_file")
-    caste=$(sed -n "${i}p" "$castes_file")
-    task=$(sed -n "${i}p" "$tasks_file")
-    status=$(sed -n "${i}p" "$statuses_file")
-    timestamp=$(sed -n "${i}p" "$timestamps_file")
-    completed=$(sed -n "${i}p" "$completed_file")
-    children=$(sed -n "${i}p" "$children_file")
-
-    # Build children array
-    local children_json="["
-    if [[ -n "$children" ]]; then
-      local first_child=true
-      for child_idx in $children; do
-        if [[ "$first_child" == "true" ]]; then
-          first_child=false
-        else
-          children_json+=","
-        fi
-        local child_name
-        child_name=$(sed -n "$((child_idx + 1))p" "$names_file")
-        child_name=$(echo "$child_name" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g')
-        children_json+="\"$child_name\""
-      done
-    fi
-    children_json+="]"
-
-    # Escape all string fields for JSON safety
-    name=$(echo "$name" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g')
-    parent=$(echo "$parent" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g')
-    task=$(echo "$task" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g')
-
-    spawns_json+="{"
-    spawns_json+="\"name\":\"$name\","
-    spawns_json+="\"parent\":\"$parent\","
-    spawns_json+="\"caste\":\"$caste\","
-    spawns_json+="\"task\":\"$task\","
-    spawns_json+="\"status\":\"$status\","
-    spawns_json+="\"spawned_at\":\"$timestamp\","
-    spawns_json+="\"completed_at\":\"$completed\","
-    spawns_json+="\"children\":$children_json"
-    spawns_json+="}"
-  done
-  spawns_json+="]"
-
-  # Output JSON
-  echo "{"
-  echo "  \"spawns\": $spawns_json,"
-  echo "  \"metadata\": {"
-  echo "    \"total_count\": $total_count,"
-  echo "    \"active_count\": $active_count,"
-  echo "    \"completed_count\": $completed_count,"
-  echo "    \"file_exists\": true"
-  echo "  }"
-  echo "}"
-
-  # Cleanup
-  rm -rf "$tmpdir"
+  awk -F'|' '
+  BEGIN { n=0; active=0; completed_n=0 }
+  NF == 7 && $7 == "spawned" {
+    names[n] = $4; parents[n] = $2; castes[n] = $3
+    tasks[n] = $5; statuses[n] = "spawned"; timestamps[n] = $1
+    models[n] = $6; completed_at[n] = ""; children_str[n] = ""
+    name_to_idx[$4] = n; n++
+  }
+  $3 ~ /^(completed|failed|blocked)$/ && NF >= 4 {
+    ant = $2
+    if (ant in name_to_idx) {
+      idx = name_to_idx[ant]; statuses[idx] = $3; completed_at[idx] = $1
+    }
+  }
+  END {
+    for (i = 0; i < n; i++) {
+      p = parents[i]
+      if (p in name_to_idx) {
+        pidx = name_to_idx[p]
+        if (children_str[pidx] == "") children_str[pidx] = i
+        else children_str[pidx] = children_str[pidx] " " i
+      }
+    }
+    for (i = 0; i < n; i++) {
+      if (statuses[i] == "spawned" || statuses[i] == "active") active++
+      else if (statuses[i] ~ /^(completed|failed|blocked)$/) completed_n++
+    }
+    printf "{"
+    printf "\"spawns\":["
+    for (i = 0; i < n; i++) {
+      if (i > 0) printf ","
+      nm = names[i]; gsub(/\\/, "\\\\", nm); gsub(/"/, "\\\"", nm); gsub(/\t/, "\\t", nm)
+      pr = parents[i]; gsub(/\\/, "\\\\", pr); gsub(/"/, "\\\"", pr); gsub(/\t/, "\\t", pr)
+      tk = tasks[i]; gsub(/\\/, "\\\\", tk); gsub(/"/, "\\\"", tk); gsub(/\t/, "\\t", tk)
+      printf "{\"name\":\"%s\",\"parent\":\"%s\",\"caste\":\"%s\",", nm, pr, castes[i]
+      printf "\"task\":\"%s\",\"status\":\"%s\",", tk, statuses[i]
+      printf "\"spawned_at\":\"%s\",\"completed_at\":\"%s\",", timestamps[i], completed_at[i]
+      printf "\"children\":["
+      if (children_str[i] != "") {
+        split(children_str[i], cidxs, " ")
+        for (j = 1; j <= length(cidxs); j++) {
+          if (j > 1) printf ","
+          cn = names[cidxs[j]+0]
+          gsub(/\\/, "\\\\", cn); gsub(/"/, "\\\"", cn); gsub(/\t/, "\\t", cn)
+          printf "\"%s\"", cn
+        }
+      }
+      printf "]}"
+    }
+    printf "],"
+    printf "\"metadata\":{\"total_count\":%d,\"active_count\":%d,\"completed_count\":%d,\"file_exists\":true}", n, active, completed_n
+    printf "}"
+  }
+  ' "$file_path"
 }
 
 # Get spawn depth for a given ant name
@@ -272,62 +128,35 @@ get_spawn_depth() {
 get_active_spawns() {
   local file_path="${1:-$SPAWN_TREE_FILE}"
 
-  if [[ ! -f "$file_path" ]]; then
+  if [[ ! -f "$file_path" ]] || [[ ! -s "$file_path" ]]; then
     echo "[]"
     return 0
   fi
 
-  local active_json="["
-  local first=true
-
-  # Read spawn events and check if completed
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    [[ -z "$line" ]] && continue
-
-    local pipe_count
-    pipe_count=$(echo "$line" | tr -cd '|' | wc -c | tr -d ' ')
-
-    if [[ $pipe_count -eq 6 ]]; then
-      # Spawn event: timestamp|parent|caste|child_name|task|model|status
-      local timestamp parent caste child_name task model spawn_status
-      timestamp=$(echo "$line" | cut -d'|' -f1)
-      parent=$(echo "$line" | cut -d'|' -f2)
-      caste=$(echo "$line" | cut -d'|' -f3)
-      child_name=$(echo "$line" | cut -d'|' -f4)
-      task=$(echo "$line" | cut -d'|' -f5)
-      model=$(echo "$line" | cut -d'|' -f6)
-
-      # Check if this ant has a completion event
-      local is_completed=false
-      if grep -q "^[^|]*|$child_name|completed\|^[^|]*|$child_name|failed\|^[^|]*|$child_name|blocked" "$file_path" 2>/dev/null; then
-        is_completed=true
-      fi
-
-      if [[ "$is_completed" == "false" ]]; then
-        if [[ "$first" == "true" ]]; then
-          first=false
-        else
-          active_json+=","
-        fi
-
-        # Escape all string fields for JSON safety
-        child_name=$(echo "$child_name" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g')
-        parent=$(echo "$parent" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g')
-        task=$(echo "$task" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g')
-
-        active_json+="{"
-        active_json+="\"name\":\"$child_name\","
-        active_json+="\"caste\":\"$caste\","
-        active_json+="\"parent\":\"$parent\","
-        active_json+="\"task\":\"$task\","
-        active_json+="\"spawned_at\":\"$timestamp\""
-        active_json+="}"
-      fi
-    fi
-  done < "$file_path"
-
-  active_json+="]"
-  echo "$active_json"
+  awk -F'|' '
+  BEGIN { spawn_n=0 }
+  $3 ~ /^(completed|failed|blocked)$/ && NF >= 4 { done_set[$2] = 1 }
+  NF == 7 && $7 == "spawned" {
+    spawn_names[spawn_n] = $4; spawn_parents[spawn_n] = $2
+    spawn_castes[spawn_n] = $3; spawn_tasks[spawn_n] = $5
+    spawn_ts[spawn_n] = $1; spawn_n++
+  }
+  END {
+    printf "["
+    first = 1
+    for (i = 0; i < spawn_n; i++) {
+      if (!(spawn_names[i] in done_set)) {
+        if (!first) printf ","
+        first = 0
+        nm = spawn_names[i]; gsub(/\\/, "\\\\", nm); gsub(/"/, "\\\"", nm); gsub(/\t/, "\\t", nm)
+        pr = spawn_parents[i]; gsub(/\\/, "\\\\", pr); gsub(/"/, "\\\"", pr); gsub(/\t/, "\\t", pr)
+        tk = spawn_tasks[i]; gsub(/\\/, "\\\\", tk); gsub(/"/, "\\\"", tk); gsub(/\t/, "\\t", tk)
+        printf "{\"name\":\"%s\",\"caste\":\"%s\",\"parent\":\"%s\",\"task\":\"%s\",\"spawned_at\":\"%s\"}", nm, spawn_castes[i], pr, tk, spawn_ts[i]
+      }
+    }
+    printf "]"
+  }
+  ' "$file_path"
 }
 
 # Get direct children of a spawn

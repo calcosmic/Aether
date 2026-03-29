@@ -516,6 +516,72 @@
       "colonies": [
         "1774650429"
       ]
+    },
+    {
+      "content_hash": "sha256:19dccc1b70acc7111e33e49c709a8abf85aec07b4cad5b291174fab0c9849b0d",
+      "content": "Resilience issue found: All 9 spawn-tree tests time out due to O(n^2) parse_spawn_tree scaling (critical)",
+      "wisdom_type": "failure",
+      "observation_count": 1,
+      "first_seen": "2026-03-29T00:45:07Z",
+      "last_seen": "2026-03-29T00:45:07Z",
+      "colonies": [
+        "1774650429"
+      ]
+    },
+    {
+      "content_hash": "sha256:a1dc4ec0254d861959727f0468426f1d1fa63fde3042b3880d615c880240972b",
+      "content": "Resilience issue found: spawn-tree-active test passes for wrong reason — 5-pipe fixture format bypasses logic (high)",
+      "wisdom_type": "failure",
+      "observation_count": 1,
+      "first_seen": "2026-03-29T00:45:09Z",
+      "last_seen": "2026-03-29T00:45:09Z",
+      "colonies": [
+        "1774650429"
+      ]
+    },
+    {
+      "content_hash": "sha256:d73b11dbb58640b15252302548589267bb06bc1450e1e027f268ed1587595627",
+      "content": "Inserted phase 6 (Stabilize spawn-tree parsing and JSON output): Fix all 3 spawn-tree blockers: (1) Fix O(n^2) parse_spawn_tree scaling that causes test timeouts, (2) JSON-escape ant names before interpolation into JSON output strings, (3) Add structural JSON validation in spawn-tree-load before passing through json_ok",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-29T01:11:50Z",
+      "last_seen": "2026-03-29T01:11:50Z",
+      "colonies": [
+        "1774650429"
+      ]
+    },
+    {
+      "content_hash": "sha256:f8393f2f8a853c7fa971d68aefedb2fc6f54f01317e730087568c1eab79482b5",
+      "content": "Chaos resilience strong: 4/5 scenarios resilient for spawn-tree awk rewrite, 1 medium finding on newline edge case",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-29T01:57:36Z",
+      "last_seen": "2026-03-29T01:57:36Z",
+      "colonies": [
+        "1774650429"
+      ]
+    },
+    {
+      "content_hash": "sha256:a0e93b080b94f359e909fa20ed8f140a76d3c72c2171b533e320306b0ad2f2af",
+      "content": "Replacing bash while-read+sed loops with single-pass awk eliminates O(n^2) subprocess forking",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-29T02:06:29Z",
+      "last_seen": "2026-03-29T02:06:29Z",
+      "colonies": [
+        "1774650429"
+      ]
+    },
+    {
+      "content_hash": "sha256:2300e4fc53a35261b9ffec146a456429cfb2411c193ae77dae3d1342713efd04",
+      "content": "awk NF==7 for spawn detection and $3 match for completion detection handles pipes-in-summary edge cases",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-29T02:06:33Z",
+      "last_seen": "2026-03-29T02:06:33Z",
+      "colonies": [
+        "1774650429"
+      ]
     }
   ]
 }

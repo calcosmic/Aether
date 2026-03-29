@@ -336,7 +336,55 @@
       "source": "auditor",
       "message": "High severity issues: 3 (score: 61) — orphaned .metaupd temps, JSON injection in spawn.sh, broken grep in spawn-tree.sh",
       "reviewed": false
+    },
+    {
+      "id": "midden_1774744258_79019",
+      "timestamp": "2026-03-29T00:30:58Z",
+      "category": "worker_failure",
+      "source": "builder",
+      "message": "Builder Mason-41 failed on task 5.1: spawn-tree tests ETIMEDOUT (pre-existing blocker, not new regression)",
+      "reviewed": false
+    },
+    {
+      "id": "midden_1774745107_85716",
+      "timestamp": "2026-03-29T00:45:07Z",
+      "category": "resilience",
+      "source": "chaos",
+      "message": "Chaos finding: All 9 spawn-tree tests time out due to O(n^2) parse_spawn_tree scaling (critical)",
+      "reviewed": false
+    },
+    {
+      "id": "midden_1774745108_86382",
+      "timestamp": "2026-03-29T00:45:08Z",
+      "category": "resilience",
+      "source": "chaos",
+      "message": "Chaos finding: spawn-tree-active test passes for wrong reason — 5-pipe fixture format bypasses logic (high)",
+      "reviewed": false
+    },
+    {
+      "id": "midden_1774746402_85376",
+      "timestamp": "2026-03-29T01:06:42Z",
+      "category": "quality",
+      "source": "auditor",
+      "message": "High severity issues: 2 (score: 63) — stale CONTEXT.md, generic instinct triggers",
+      "reviewed": false
+    },
+    {
+      "id": "midden_1774749715_41832",
+      "timestamp": "2026-03-29T02:01:55Z",
+      "category": "security",
+      "source": "gatekeeper",
+      "message": "High CVEs found: 4 (minimatch, path-to-regexp, picomatch, node-tar)",
+      "reviewed": false
+    },
+    {
+      "id": "midden_1774749780_42099",
+      "timestamp": "2026-03-29T02:03:00Z",
+      "category": "quality",
+      "source": "auditor",
+      "message": "High severity issues: 1 (score: 67) - unescaped ant_name in helper functions",
+      "reviewed": false
     }
   ],
-  "entry_count": 24
+  "entry_count": 30
 }

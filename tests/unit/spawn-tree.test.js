@@ -123,9 +123,9 @@ test('spawn-tree-depth handles deep chains correctly', t => {
   // Create a spawn chain
   // Queen -> Level1 -> Level2 -> Level3 (3 levels deep from Queen)
   const testData = [
-    '2026-02-13T10:00:00Z|Queen|builder|Level1|Task 1|spawned',
-    '2026-02-13T10:01:00Z|Level1|builder|Level2|Task 2|spawned',
-    '2026-02-13T10:02:00Z|Level2|builder|Level3|Task 3|spawned'
+    '2026-02-13T10:00:00Z|Queen|builder|Level1|Task 1|default|spawned',
+    '2026-02-13T10:01:00Z|Level1|builder|Level2|Task 2|default|spawned',
+    '2026-02-13T10:02:00Z|Level2|builder|Level3|Task 3|default|spawned'
   ].join('\n');
 
   fs.writeFileSync(tempSpawnTree, testData);
@@ -195,9 +195,9 @@ test('spawn-tree-active returns empty array when no active spawns', t => {
   const tempSpawnTree = path.join(tempDir, 'spawn-tree.txt');
 
   const testData = [
-    '2026-02-13T10:00:00Z|Queen|builder|Done1|Task 1|spawned',
+    '2026-02-13T10:00:00Z|Queen|builder|Done1|Task 1|default|spawned',
     '2026-02-13T10:01:00Z|Done1|completed|Completed task',
-    '2026-02-13T10:02:00Z|Queen|builder|Done2|Task 2|spawned',
+    '2026-02-13T10:02:00Z|Queen|builder|Done2|Task 2|default|spawned',
     '2026-02-13T10:03:00Z|Done2|completed|Completed task'
   ].join('\n');
 

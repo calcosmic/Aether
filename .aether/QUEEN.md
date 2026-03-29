@@ -18,6 +18,10 @@ Communication style, expertise level, and decision-making patterns observed from
 
 Validated approaches that work in this codebase, and anti-patterns to avoid. Includes architecture conventions, naming patterns, error handling style, and technology-specific insights. Tagged [repo] for project-specific or [general] for cross-colony patterns.
 
+- **1774650429** (2026-03-29T02:06:34Z): awk NF==7 for spawn detection and $3 match for completion detection handles pipes-in-summary edge cases
+- **1774650429** (2026-03-29T02:06:30Z): Replacing bash while-read+sed loops with single-pass awk eliminates O(n^2) subprocess forking
+- **1774650429** (2026-03-29T01:57:37Z): Chaos resilience strong: 4/5 scenarios resilient for spawn-tree awk rewrite, 1 medium finding on newline edge case
+- **1774650429** (2026-03-29T01:11:51Z): Inserted phase 6 (Stabilize spawn-tree parsing and JSON output): Fix all 3 spawn-tree blockers: (1) Fix O(n^2) parse_spawn_tree scaling that causes test timeouts, (2) JSON-escape ant names before interpolation into JSON output strings, (3) Add structural JSON validation in spawn-tree-load before passing through json_ok
 - **1774650429** (2026-03-28T23:56:11Z): JSON injection in spawn.sh persists despite being identified as an instinct — pattern recurs because the fix was applied only to queen.sh, not spawn.sh
 - **1774650429** (2026-03-28T23:56:09Z): Lifecycle commands (init, seal, entomb) properly handle colony_version through template system — init uses colony-state.template.json, seal has 12 references, entomb reads and displays it
 - **1774650429** (2026-03-28T03:45:43Z): Every atomic mv that overwrites a critical file must have a non-empty size guard to prevent data destruction from upstream pipeline failures
@@ -45,6 +49,10 @@ What worked and what failed during builds. Captures the full picture of colony e
 
 ### Phase 0: migration-test
 - [repo] QUEEN.md v2 migration validated -- *Phase 0 (migration-test)* (2026-03-24)
+
+### Phase 6: Stabilize spawn-tree parsing and JSON output
+- [general] Replacing bash while-read+sed loops with single-pass awk eliminates O(n^2) subprocess forking — 4000+ forks reduced to 1 awk process, runtime from 23s to 1.7s -- *Phase 6 (Stabilize spawn-tree parsing and JSON output)* (2026-03-29)
+- [general] awk NF==7 for spawn detection and $3 match for completion detection handles pipes-in-summary edge cases that pipe-counting cannot -- *Phase 6 (Stabilize spawn-tree parsing and JSON output)* (2026-03-29)
 ---
 
 ## Instincts
@@ -57,12 +65,19 @@ High-confidence behavioral patterns that have been validated through repeated co
 - [instinct] **code-style** (0.8): When shell functions set EXIT/TERM traps, then compose trap with _aether_exit_cleanup to preserve lock and temp file cleanup on abnormal exit
 - [instinct] **code-style** (0.85): When shell scripts use sed c-command for line replacement, then replace with head/tail pattern for cross-platform newline safety — sed c breaks on macOS BSD with multi-line content
 - [instinct] **code-style** (0.85): When atomic mv overwrites a critical data file, then add non-empty size guard (if [[ ! -s file ]]) before mv to prevent data destruction from upstream pipeline failures
+- [instinct] **code-style** (0.85): When bash scripts use while-read+sed/cut loops for file parsing, then replace with single-pass awk to eliminate O(n^2) subprocess forking
 ---
 
 ## Evolution Log
 
 | Date | Source | Type | Details |
 |------|--------|------|---------|
+| 2026-03-29T02:07:09Z | phase-6 | build_learnings | Added 2 learnings from Phase 6: Stabilize spawn-tree parsing and JSON output |
+| 2026-03-29T02:06:48Z | instinct | promoted_instinct | code-style: replace with single-pass awk to eliminate O(n^2) s... |
+| 2026-03-29T02:06:34Z | 1774650429 | promoted_pattern | Added: awk NF==7 for spawn detection and $3 match for com... |
+| 2026-03-29T02:06:30Z | 1774650429 | promoted_pattern | Added: Replacing bash while-read+sed loops with single-pa... |
+| 2026-03-29T01:57:37Z | 1774650429 | promoted_pattern | Added: Chaos resilience strong: 4/5 scenarios resilient f... |
+| 2026-03-29T01:11:51Z | 1774650429 | promoted_pattern | Added: Inserted phase 6 (Stabilize spawn-tree parsing and... |
 | 2026-03-28T23:56:11Z | 1774650429 | promoted_pattern | Added: JSON injection in spawn.sh persists despite being ... |
 | 2026-03-28T23:56:09Z | 1774650429 | promoted_pattern | Added: Lifecycle commands (init, seal, entomb) properly h... |
 | 2026-03-28T03:46:05Z | instinct | promoted_instinct | code-style: add non-empty size guard (if [[ ! -s file ]]) befo... |
@@ -98,13 +113,13 @@ High-confidence behavioral patterns that have been validated through repeated co
 {
   "version": "2.0.0",
   "wisdom_version": "2.0",
-  "last_evolved": "2026-03-28T23:56:11Z",
+  "last_evolved": "2026-03-29T02:07:09Z",
   "colonies_contributed": ["1774645519"],
   "stats": {
     "total_user_prefs": 2,
-    "total_codebase_patterns": 16,
-    "total_build_learnings": 1,
-    "total_instincts": 5
+    "total_codebase_patterns": 20,
+    "total_build_learnings": 3,
+    "total_instincts": 6
   },
   "evolution_log": [{"timestamp": "2026-03-24T23:40:00Z", "action": "migrate", "wisdom_type": "system", "content_hash": "v1-to-v2-migration", "colony": "system"}, {"timestamp": "2026-03-20T12:37:32Z", "action": "promote", "wisdom_type": "pattern", "content_hash": "sha256:f8aa50cfda0f37cac6cabba140bb99f1d75aa6d01a7100fe7a5ccddc2b3a017b", "colony": "1771335865738"}]
 }

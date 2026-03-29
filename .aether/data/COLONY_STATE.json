@@ -3,7 +3,7 @@
   "goal": "Comprehensive audit of today's session work — verify QUEEN.md, pheromone system, wisdom pipeline, charter-write, and all colony lifecycle changes are functioning correctly",
   "colony_name": "Aether Colony",
   "state": "READY",
-  "current_phase": 5,
+  "current_phase": 7,
   "session_id": "session_1774650429_217110",
   "initialized_at": "2026-03-27T22:27:09Z",
   "build_started_at": null,
@@ -240,7 +240,7 @@
         "id": 5,
         "name": "Full regression test suite",
         "description": "Run complete test suite and verify baseline holds with no regressions.",
-        "status": "pending",
+        "status": "in_progress",
         "tasks": [
           {
             "id": "5.1",
@@ -288,12 +288,42 @@
       },
       {
         "id": 6,
+        "name": "Stabilize spawn-tree parsing and JSON output",
+        "description": "Fix all 3 spawn-tree blockers: (1) Fix O(n^2) parse_spawn_tree scaling that causes test timeouts, (2) JSON-escape ant names before interpolation into JSON output strings, (3) Add structural JSON validation in spawn-tree-load before passing through json_ok",
+        "status": "completed",
+        "tasks": [
+          {
+            "id": "6.1",
+            "description": "Diagnose and correct: Fix all 3 spawn-tree blockers: (1) Fix O(n^2) parse_spawn_tree scaling that causes test timeouts, (2) JSON-escape ant names before interpolation into JSON output strings, (3) Add structural JSON validation in spawn-tree-load before passing through json_ok",
+            "success_criteria": [
+              "Root cause identified with evidence",
+              "Fix implemented in targeted area"
+            ],
+            "status": "completed"
+          },
+          {
+            "id": "6.2",
+            "description": "Validate the correction end-to-end",
+            "success_criteria": [
+              "Previously failing behavior now works",
+              "No regressions introduced in adjacent flows"
+            ],
+            "status": "completed"
+          }
+        ],
+        "success_criteria": [
+          "Inserted-phase objective is resolved in real usage",
+          "User confirms expected behavior after changes"
+        ]
+      },
+      {
+        "id": 7,
         "name": "Audit summary and documentation",
         "description": "Produce audit findings summary: what works, what was fixed, pre-existing issues, recommendations.",
         "status": "pending",
         "tasks": [
           {
-            "id": "6.1",
+            "id": "7.1",
             "goal": "Produce audit report: verified features, test 42 fix, 6 pre-existing failures, any other issues",
             "constraints": [
               "Plain-English summary",
@@ -309,8 +339,8 @@
               "No unresolved blockers"
             ],
             "depends_on": [
-              "5.1",
-              "5.2"
+              "7.1",
+              "7.2"
             ],
             "status": "pending"
           }
@@ -404,6 +434,28 @@
           }
         ],
         "timestamp": "2026-03-29T00:15:00Z"
+      },
+      {
+        "id": "learning_1774749974",
+        "phase": 6,
+        "phase_name": "Stabilize spawn-tree parsing and JSON output",
+        "learnings": [
+          {
+            "claim": "Replacing bash while-read+sed loops with single-pass awk eliminates O(n^2) subprocess forking — 4000+ forks reduced to 1 awk process, runtime from 23s to 1.7s",
+            "status": "validated",
+            "tested": true,
+            "evidence": "Watcher confirmed 9/9 spawn-tree tests pass, 616/616 full suite pass, spawn-tree-load returns valid JSON with 45 spawns",
+            "disproven_by": null
+          },
+          {
+            "claim": "awk NF==7 for spawn detection and $3 match for completion detection handles pipes-in-summary edge cases that pipe-counting cannot",
+            "status": "validated",
+            "tested": true,
+            "evidence": "Chaos ant confirmed completion lines with || in summary are correctly parsed via $3 content check rather than field count",
+            "disproven_by": null
+          }
+        ],
+        "timestamp": "2026-03-29T02:06:14Z"
       }
     ],
     "decisions": [],
@@ -439,6 +491,24 @@
         ],
         "tested": false,
         "created_at": "2026-03-28T03:45:56Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774749998",
+        "trigger": "bash scripts use while-read+sed/cut loops for file parsing",
+        "action": "replace with single-pass awk to eliminate O(n^2) subprocess forking — awk has associative arrays even when bash 3.2 does not",
+        "confidence": 0.85,
+        "status": "hypothesis",
+        "domain": "code-style",
+        "source": "phase-6",
+        "evidence": [
+          "spawn-tree.sh: 4000+ subprocess forks reduced to 1 awk process, runtime 23s to 1.7s"
+        ],
+        "tested": false,
+        "created_at": "2026-03-29T02:06:38Z",
         "last_applied": null,
         "applications": 0,
         "successes": 0,
@@ -556,7 +626,7 @@
         "id": "instinct_1774669542",
         "trigger": "working on pattern patterns",
         "action": "Shell functions using sed c-command for line replacement must use head/tail instead to handle multi-line content safely on macOS BSD sed",
-        "confidence": 0.70,
+        "confidence": 0.7,
         "status": "hypothesis",
         "domain": "pattern",
         "source": "promoted_from_learning",
@@ -574,7 +644,7 @@
         "id": "instinct_1774669544",
         "trigger": "working on pattern patterns",
         "action": "Every atomic mv that overwrites a critical file must have a non-empty size guard to prevent data destruction from upstream pipeline failures",
-        "confidence": 0.70,
+        "confidence": 0.7,
         "status": "hypothesis",
         "domain": "pattern",
         "source": "promoted_from_learning",
@@ -592,7 +662,7 @@
         "id": "instinct_1774742169",
         "trigger": "working on pattern patterns",
         "action": "Lifecycle commands (init, seal, entomb) properly handle colony_version through template system — init uses colony-state.template.json, seal has 12 references, entomb reads and displays it",
-        "confidence": 0.70,
+        "confidence": 0.7,
         "status": "hypothesis",
         "domain": "pattern",
         "source": "promoted_from_learning",
@@ -610,7 +680,7 @@
         "id": "instinct_1774742172",
         "trigger": "working on pattern patterns",
         "action": "JSON injection in spawn.sh persists despite being identified as an instinct — pattern recurs because the fix was applied only to queen.sh, not spawn.sh",
-        "confidence": 0.70,
+        "confidence": 0.7,
         "status": "hypothesis",
         "domain": "pattern",
         "source": "promoted_from_learning",
@@ -619,6 +689,78 @@
         ],
         "tested": false,
         "created_at": "2026-03-28T23:56:12Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774746711",
+        "trigger": "working on pattern patterns",
+        "action": "Inserted phase 6 (Stabilize spawn-tree parsing and JSON output): Fix all 3 spawn-tree blockers: (1) Fix O(n^2) parse_spawn_tree scaling that causes test timeouts, (2) JSON-escape ant names before interpolation into JSON output strings, (3) Add structural JSON validation in spawn-tree-load before passing through json_ok",
+        "confidence": 0.7,
+        "status": "hypothesis",
+        "domain": "pattern",
+        "source": "promoted_from_learning",
+        "evidence": [
+          ""
+        ],
+        "tested": false,
+        "created_at": "2026-03-29T01:11:51Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774749458",
+        "trigger": "working on pattern patterns",
+        "action": "Chaos resilience strong: 4/5 scenarios resilient for spawn-tree awk rewrite, 1 medium finding on newline edge case",
+        "confidence": 0.7,
+        "status": "hypothesis",
+        "domain": "pattern",
+        "source": "promoted_from_learning",
+        "evidence": [
+          ""
+        ],
+        "tested": false,
+        "created_at": "2026-03-29T01:57:38Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774749990",
+        "trigger": "working on pattern patterns",
+        "action": "Replacing bash while-read+sed loops with single-pass awk eliminates O(n^2) subprocess forking",
+        "confidence": 0.70,
+        "status": "hypothesis",
+        "domain": "pattern",
+        "source": "promoted_from_learning",
+        "evidence": [
+          ""
+        ],
+        "tested": false,
+        "created_at": "2026-03-29T02:06:30Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774749995",
+        "trigger": "working on pattern patterns",
+        "action": "awk NF==7 for spawn detection and $3 match for completion detection handles pipes-in-summary edge cases",
+        "confidence": 0.70,
+        "status": "hypothesis",
+        "domain": "pattern",
+        "source": "promoted_from_learning",
+        "evidence": [
+          ""
+        ],
+        "tested": false,
+        "created_at": "2026-03-29T02:06:35Z",
         "last_applied": null,
         "applications": 0,
         "successes": 0,
@@ -642,7 +784,12 @@
     "2026-03-28T02:34:04Z|phase_started|build|Phase 3: Audit QUEEN.md and wisdom pipeline integrity started",
     "2026-03-28T03:45:30Z|phase_advanced|continue|Completed Phase 3, advancing to Phase 4",
     "2026-03-28T23:17:01Z|phase_started|build|Phase 4: Verify colony lifecycle commands started",
-    "2026-03-29T00:15:00Z|phase_advanced|continue|Completed Phase 4, advancing to Phase 5"
+    "2026-03-29T00:15:00Z|phase_advanced|continue|Completed Phase 4, advancing to Phase 5",
+    "2026-03-29T00:04:57Z|phase_started|build|Phase 5: Full regression test suite started",
+    "2026-03-29T00:30:55Z|spawn_failed|Mason-41|npm test: 614 pass, 2 fail (pre-existing spawn-tree ETIMEDOUT)",
+    "2026-03-29T01:11:48Z|phase_inserted|insert-phase|Inserted Phase 6: Stabilize spawn-tree parsing and JSON output",
+    "2026-03-29T01:20:58Z|phase_started|build|Phase 6: Stabilize spawn-tree parsing and JSON output started",
+    "2026-03-29T02:06:14Z|phase_advanced|continue|Completed Phase 6, advancing to Phase 7"
   ],
   "milestone": null,
   "milestone_updated_at": null
