@@ -4876,6 +4876,9 @@ EOF
       recent_events=$(jq -r '[.events[]?] | reverse | [.[:10][] | {timestamp, type, worker, details}]' "$colony_state_file" 2>/dev/null || echo "[]")
     fi
 
+    # Get data safety stats (best-effort)
+    ds_stats=$(bash "$0" data-safety-stats 2>/dev/null | jq -r '.result // {}' 2>/dev/null || echo '{}')  # SUPPRESS:OK -- read-default: subcommand may fail
+
     # Build dashboard JSON
     result=$(jq -n \
       --argjson phase "$current_phase" \
@@ -4886,6 +4889,7 @@ EOF
       --argjson failures "$recent_failures" \
       --argjson decisions "$recent_decisions" \
       --argjson events "$recent_events" \
+      --argjson data_safety "$ds_stats" \
       '{
         "current": {
           "phase": $phase,
@@ -4898,6 +4902,7 @@ EOF
           "pending_promotions": $pending,
           "recent_failures": $failures
         },
+        "data_safety": $data_safety,
         "recent": {
           "decisions": $decisions,
           "events": $events
@@ -4909,6 +4914,28 @@ EOF
       }')
 
     echo "$result"
+    exit 0
+    ;;
+
+  data-safety-stats)
+    # Read data safety statistics from safety-stats.json
+    # Usage: data-safety-stats
+    # Returns: JSON with safety event counts, or defaults if no stats file exists
+    _ds_stats_file="$DATA_DIR/safety-stats.json"
+    if [[ -f "$_ds_stats_file" ]]; then
+      _ds_stale=$(jq -r '.stale_locks_cleaned // 0' "$_ds_stats_file" 2>/dev/null || echo 0)
+      _ds_rejects=$(jq -r '.json_validation_rejects // 0' "$_ds_stats_file" 2>/dev/null || echo 0)
+      _ds_updated=$(jq -r '.last_updated // "unknown"' "$_ds_stats_file" 2>/dev/null || echo "unknown")
+      _ds_total=$(( _ds_stale + _ds_rejects ))
+      json_ok "$(jq -n \
+        --argjson stale_locks_cleaned "$_ds_stale" \
+        --argjson json_validation_rejects "$_ds_rejects" \
+        --argjson total_events "$_ds_total" \
+        --arg last_updated "$_ds_updated" \
+        '{stale_locks_cleaned: $stale_locks_cleaned, json_validation_rejects: $json_validation_rejects, total_events: $total_events, last_updated: $last_updated}')"
+    else
+      json_ok '{"stale_locks_cleaned":0,"json_validation_rejects":0,"total_events":0,"last_updated":null}'
+    fi
     exit 0
     ;;
 
