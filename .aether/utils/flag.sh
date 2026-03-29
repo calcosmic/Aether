@@ -80,7 +80,8 @@ _flag_add() {
     atomic_write "$flags_file" "$updated"
     trap - EXIT
     release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
-    json_ok "{\"id\":\"$id\",\"type\":\"$type\",\"severity\":\"$severity\"}"
+    json_ok "$(jq -n --arg id "$id" --arg type "$type" --arg severity "$severity" \
+      '{id: $id, type: $type, severity: $severity}')"
 }
 
 _flag_check_blockers() {
@@ -145,7 +146,7 @@ _flag_resolve() {
     atomic_write "$flags_file" "$updated"
     trap - EXIT
     release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
-    json_ok "{\"resolved\":\"$flag_id\"}"
+    json_ok "$(jq -n --arg id "$flag_id" '{resolved: $id}')"
 }
 
 _flag_acknowledge() {
@@ -178,7 +179,7 @@ _flag_acknowledge() {
     atomic_write "$flags_file" "$updated"
     trap - EXIT
     release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
-    json_ok "{\"acknowledged\":\"$flag_id\"}"
+    json_ok "$(jq -n --arg id "$flag_id" '{acknowledged: $id}')"
 }
 
 _flag_list() {
@@ -261,5 +262,6 @@ _flag_auto_resolve() {
     atomic_write "$flags_file" "$updated"
     trap - EXIT
     release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
-    json_ok "{\"resolved\":$count,\"trigger\":\"$trigger\"}"
+    json_ok "$(jq -n --argjson count "$count" --arg trigger "$trigger" \
+      '{resolved: $count, trigger: $trigger}')"
 }

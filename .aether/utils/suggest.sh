@@ -327,7 +327,7 @@ _suggest_check() {
       fi
     fi
 
-    json_ok "{\"already_suggested\":$already_suggested}"
+    json_ok "$(jq -n --argjson already "$already_suggested" '{already_suggested: $already}')"
 }
 
 # ============================================================================
@@ -353,7 +353,7 @@ _suggest_clear() {
       fi
     fi
 
-    json_ok "{\"cleared\":$cleared_count}"
+    json_ok "$(jq -n --argjson cleared "$cleared_count" '{cleared: $cleared}')"
 }
 
 # ============================================================================

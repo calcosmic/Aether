@@ -166,7 +166,7 @@ _queen_init() {
     sed -e "s/{TIMESTAMP}/$timestamp/g" "$template_file" > "$queen_file"
 
     if [[ -f "$queen_file" ]]; then
-      json_ok "{\"created\":true,\"path\":\".aether/QUEEN.md\",\"source\":\"$template_file\"}"
+      json_ok "$(jq -n --arg source "$template_file" '{created: true, path: ".aether/QUEEN.md", source: $source}')"
     else
       json_err "$E_FILE_NOT_FOUND" "Failed to create QUEEN.md" '{"path":".aether/QUEEN.md"}'
       exit 1
@@ -738,7 +738,8 @@ _queen_write_learnings() {
 
     # If nothing to write, return early
     if [[ "$written" -eq 0 ]]; then
-      json_ok "{\"written\":0,\"phase\":\"${phase_id}\",\"timestamp\":\"${ts}\",\"reason\":\"all_duplicates_or_empty\"}"
+      json_ok "$(jq -n --arg phase "$phase_id" --arg ts "$ts" \
+        '{written: 0, phase: $phase, timestamp: $ts, reason: "all_duplicates_or_empty"}')"
       return 0
     fi
 
@@ -862,7 +863,8 @@ _queen_write_learnings() {
     # Atomic move
     mv "$tmp_file" "$queen_file"
 
-    json_ok "{\"written\":${written},\"phase\":\"${phase_id}\",\"timestamp\":\"${ts}\"}"
+    json_ok "$(jq -n --argjson written "$written" --arg phase "$phase_id" --arg ts "$ts" \
+      '{written: $written, phase: $phase, timestamp: $ts}')"
 }
 
 # ============================================================================
@@ -991,7 +993,8 @@ _queen_promote_instinct() {
     # Atomic move
     mv "$tmp_file" "$queen_file"
 
-    json_ok "{\"promoted\":true,\"written\":1,\"domain\":\"${domain}\",\"confidence\":${confidence},\"timestamp\":\"${ts}\"}"
+    json_ok "$(jq -n --arg domain "$domain" --argjson confidence "$confidence" --arg ts "$ts" \
+      '{promoted: true, written: 1, domain: $domain, confidence: $confidence, timestamp: $ts}')"
 }
 
 # ============================================================================
@@ -1133,7 +1136,7 @@ _queen_seed_from_hive() {
     # Atomic move
     mv "$tmp_file" "$queen_file"
 
-    json_ok "{\"seeded\":${seeded}}"
+    json_ok "$(jq -n --argjson seeded "$seeded" '{seeded: $seeded}')"
 }
 
 # ============================================================================
@@ -1157,7 +1160,7 @@ _domain_detect() {
     [[ -d "$root/.next" || -f "$root/next.config.js" || -f "$root/next.config.ts" ]] && tags="${tags:+$tags,}nextjs"
     [[ -f "$root/docker-compose.yml" || -f "$root/Dockerfile" ]] && tags="${tags:+$tags,}docker"
 
-    json_ok "{\"tags\":\"${tags}\"}"
+    json_ok "$(jq -n --arg tags "$tags" '{tags: $tags}')"
 }
 
 # ============================================================================
@@ -1646,5 +1649,7 @@ _queen_write_charter() {
             "{\"written\":${written},\"sections_failed\":${sections_failed},\"colony_name\":\"${cw_colony_name}\",\"timestamp\":\"${ts}\"}"
         return 1
     fi
-    json_ok "{\"written\":${written},\"updated\":${is_update},\"colony_name\":\"${cw_colony_name}\",\"timestamp\":\"${ts}\",\"sections_failed\":${sections_failed}}"
+    json_ok "$(jq -n --argjson written "$written" --argjson updated "$is_update" \
+      --arg colony_name "$cw_colony_name" --arg ts "$ts" --argjson sections_failed "$sections_failed" \
+      '{written: $written, updated: $updated, colony_name: $colony_name, timestamp: $ts, sections_failed: $sections_failed}')"
 }
