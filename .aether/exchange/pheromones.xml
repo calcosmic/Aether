@@ -2,10 +2,149 @@
 <pheromones xmlns="http://aether.colony/schemas/pheromones"
             xmlns:ph="http://aether.colony/schemas/pheromones"
             version="1.0.0"
-            generated_at="2026-03-30T04:28:38Z"
+            generated_at="2026-03-30T07:29:28Z"
             colony_id="unknown">
   <metadata>
     <source type="system">aether-pheromone-converter</source>
     <context>Colony pheromone signals</context>
   </metadata>
+  <signal id="imported:"
+          type="FOCUS"
+          priority="normal"
+          source="system"
+          created_at="2026-03-30T07:29:28Z"
+          active="true">
+  </signal>
+  <signal id="sig_focus_1774845897_1157"
+          type="FOCUS"
+          priority="normal"
+          source="system:init"
+          created_at="2026-03-30T04:44:57Z"
+          expires_at="2026-04-29T04:44:57Z"
+          active="true">
+    <content>
+      <text>CI/CD pipeline active -- ensure changes pass all checks</text>
+    </content>
+  </signal>
+  <signal id="sig_focus_1774845897_3090"
+          type="FOCUS"
+          priority="normal"
+          source="system:init"
+          created_at="2026-03-30T04:44:57Z"
+          expires_at="2026-04-29T04:44:57Z"
+          active="true">
+    <content>
+      <text>Testing infrastructure present (64 test files) -- maintain TDD discipline</text>
+    </content>
+  </signal>
+  <signal id="sig_focus_1774845897_6067"
+          type="FOCUS"
+          priority="normal"
+          source="system:init"
+          created_at="2026-03-30T04:44:57Z"
+          expires_at="2026-04-29T04:44:57Z"
+          active="true">
+    <content>
+      <text>Large codebase -- scope changes carefully, prefer incremental work</text>
+    </content>
+  </signal>
+  <signal id="sig_feedback_1774849554_9451"
+          type="FEEDBACK"
+          priority="low"
+          source="worker:continue"
+          created_at="2026-03-30T05:45:54Z"
+          expires_at="2026-04-29T05:45:54Z"
+          active="true">
+    <content>
+      <text>Learning captured: When adding awk gsub escaping, order matters: backslash must be first to prevent double-escaping</text>
+    </content>
+  </signal>
+  <signal id="sig_feedback_1774849556_4644"
+          type="FEEDBACK"
+          priority="low"
+          source="worker:continue"
+          created_at="2026-03-30T05:45:56Z"
+          expires_at="2026-04-29T05:45:56Z"
+          active="true">
+    <content>
+      <text>Learning captured: Literal newlines break awk NF guards, CR is the testable control char for embedded content</text>
+    </content>
+  </signal>
+  <signal id="sig_feedback_1774849568_740"
+          type="FEEDBACK"
+          priority="low"
+          source="worker:continue"
+          created_at="2026-03-30T05:46:08Z"
+          expires_at="2026-04-29T05:46:08Z"
+          active="true">
+    <content>
+      <text>Phase 1 (Harden JSON escaping) completed. Key patterns: gsub order matters (backslash first), CR is primary testable control char for pipe-delimited records</text>
+    </content>
+  </signal>
+  <signal id="sig_feedback_1774851263_7418"
+          type="FEEDBACK"
+          priority="low"
+          source="worker:continue"
+          created_at="2026-03-30T06:14:23Z"
+          expires_at="2026-04-29T06:14:23Z"
+          active="true">
+    <content>
+      <text>Learning captured: awk -v interprets C-style escapes — use ENVIRON[] for user content</text>
+    </content>
+  </signal>
+  <signal id="sig_feedback_1774851265_1998"
+          type="FEEDBACK"
+          priority="low"
+          source="worker:continue"
+          created_at="2026-03-30T06:14:25Z"
+          expires_at="2026-04-29T06:14:25Z"
+          active="true">
+    <content>
+      <text>Learning captured: Multi-line strings cannot pass via awk -v — use head/tail concatenation</text>
+    </content>
+  </signal>
+  <signal id="sig_feedback_1774851278_7636"
+          type="FEEDBACK"
+          priority="low"
+          source="worker:continue"
+          created_at="2026-03-30T06:14:38Z"
+          expires_at="2026-04-29T06:14:38Z"
+          active="true">
+    <content>
+      <text>Phase 2 (Fix queen-promote newline destruction) completed. Key patterns: use ENVIRON[] not awk -v for user content, head/tail for multi-line block replacement</text>
+    </content>
+  </signal>
+  <signal id="sig_feedback_1774852076_3184"
+          type="FEEDBACK"
+          priority="low"
+          source="worker:continue"
+          created_at="2026-03-30T06:27:56Z"
+          expires_at="2026-04-29T06:27:56Z"
+          active="true">
+    <content>
+      <text>Phase 3 (Filter test noise) completed. Guard pattern: AETHER_TESTING=1 check before activity.log writes</text>
+    </content>
+  </signal>
+  <signal id="sig_feedback_1774852964_3507"
+          type="FEEDBACK"
+          priority="low"
+          source="worker:continue"
+          created_at="2026-03-30T06:42:44Z"
+          expires_at="2026-04-29T06:42:44Z"
+          active="true">
+    <content>
+      <text>Phase 4 (Update high-CVE deps) completed. npm overrides for transitive dep pinning, 0 vulnerabilities</text>
+    </content>
+  </signal>
+  <signal id="sig_feedback_1774854719_7199"
+          type="FEEDBACK"
+          priority="low"
+          source="worker:continue"
+          created_at="2026-03-30T07:11:59Z"
+          expires_at="2026-04-29T07:11:59Z"
+          active="true">
+    <content>
+      <text>Phase 5 (Final verification) completed. All 5 phases done: spawn-tree JSON escaping, queen-promote awk fix, test noise filter, CVE deps, midden cleanup</text>
+    </content>
+  </signal>
 </pheromones>

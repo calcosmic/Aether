@@ -2,7 +2,7 @@
   "version": "3.0",
   "goal": "Fix critical midden entries (spawn-tree O(n^2), queen-promote newline destruction, JSON ant names), reduce aether-utils.sh bug-fix ratio through targeted fixes, update 4 high-CVE dependencies (minimatch, path-to-regexp, picomatch, node-tar), and filter test noise from activity log",
   "colony_name": null,
-  "colony_version": 1,
+  "colony_version": 2,
   "state": "READY",
   "current_phase": 5,
   "session_id": "session_1774845857_55502",
@@ -273,7 +273,11 @@
     "2026-03-30T06:42:36Z|phase_advanced|continue|Completed Phase 4, advancing to Phase 5",
     "2026-03-30T06:58:30Z|phase_started|build|Phase 5: Verify fixes and acknowledge midden entries started",
     "2026-03-30T07:11:51Z|phase_completed|continue|Phase 5: Verify fixes and acknowledge midden entries completed",
-    "2026-03-30T07:11:51Z|all_phases_completed|continue|All 5 phases completed"
+    "2026-03-30T07:11:51Z|all_phases_completed|continue|All 5 phases completed",
+    "2026-03-30T07:26:25Z|milestone_reached|seal|Achieved Crowned Anthill milestone",
+    "2026-03-30T07:28:39Z|milestone_reached|seal|Achieved Crowned Anthill milestone"
   ],
-  "territory_surveyed": "2026-03-30T04:53:04Z"
+  "territory_surveyed": "2026-03-30T04:53:04Z",
+  "milestone": "Crowned Anthill",
+  "milestone_updated_at": "2026-03-30T07:28:39Z"
 }

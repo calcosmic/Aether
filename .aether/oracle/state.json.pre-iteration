@@ -4,12 +4,12 @@
   "scope": "both",
   "template": "custom",
   "phase": "survey",
-  "iteration": 1,
+  "iteration": 4,
   "max_iterations": 50,
   "target_confidence": 95,
-  "overall_confidence": 5,
+  "overall_confidence": 24,
   "started_at": "2026-03-30T00:00:00Z",
-  "last_updated": "2026-03-30T07:12:57Z",
+  "last_updated": "2026-03-30T07:27:38Z",
   "status": "active",
   "strategy": "adaptive",
   "focus_areas": [
@@ -20,8 +20,8 @@
     "academic papers on AI coding assistant evaluation"
   ],
   "convergence": {
-    "prev_findings_count": 4,
-    "prev_overall_confidence": 5,
+    "prev_findings_count": 21,
+    "prev_overall_confidence": 24,
     "history": [
       {
         "iteration": 1,
@@ -30,9 +30,33 @@
         "gap_resolution_pct": 0,
         "coverage_pct": 14,
         "phase": "survey"
+      },
+      {
+        "iteration": 2,
+        "novelty_delta": 6,
+        "confidence_delta": 4,
+        "gap_resolution_pct": 0,
+        "coverage_pct": 28,
+        "phase": "survey"
+      },
+      {
+        "iteration": 3,
+        "novelty_delta": 6,
+        "confidence_delta": 10,
+        "gap_resolution_pct": 0,
+        "coverage_pct": 42,
+        "phase": "survey"
+      },
+      {
+        "iteration": 4,
+        "novelty_delta": 5,
+        "confidence_delta": 5,
+        "gap_resolution_pct": 0,
+        "coverage_pct": 57,
+        "phase": "survey"
       }
     ],
-    "composite_score": 4,
+    "composite_score": 17,
     "converged": false
   }
 }

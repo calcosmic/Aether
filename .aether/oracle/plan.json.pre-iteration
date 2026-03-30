@@ -36,6 +36,150 @@
       "title": "DORA Report 2024 – A Look at Throughput and Stability - RedMonk",
       "type": "blog",
       "accessed": "2026-03-30"
+    },
+    "S7": {
+      "url": "https://verityai.co/blog/humaneval-mbpp-code-generation-benchmarks",
+      "title": "HumanEval & MBPP: Setting the Standard for Code Generation Benchmarks",
+      "type": "blog",
+      "accessed": "2026-03-30"
+    },
+    "S8": {
+      "url": "https://arxiv.org/pdf/2107.03374",
+      "title": "Evaluating Large Language Models Trained on Code (Codex paper, Chen et al. 2021)",
+      "type": "academic",
+      "accessed": "2026-03-30"
+    },
+    "S9": {
+      "url": "https://epoch.ai/benchmarks/swe-bench-verified",
+      "title": "SWE-bench Verified - Epoch AI",
+      "type": "official",
+      "accessed": "2026-03-30"
+    },
+    "S10": {
+      "url": "https://huggingface.co/blog/leaderboard-bigcodebench",
+      "title": "BigCodeBench: The Next Generation of HumanEval - Hugging Face Blog",
+      "type": "blog",
+      "accessed": "2026-03-30"
+    },
+    "S11": {
+      "url": "https://symflower.com/en/company/blog/2025/benchmarks-llm-agents/",
+      "title": "Benchmarks evaluating LLM agents for software development - Symflower",
+      "type": "blog",
+      "accessed": "2026-03-30"
+    },
+    "S12": {
+      "url": "https://localaimaster.com/models/best-ai-coding-models",
+      "title": "Best AI for Coding 2026: Top 20 Ranked by SWE-Bench Score",
+      "type": "blog",
+      "accessed": "2026-03-30"
+    },
+    "S13": {
+      "url": "https://github.com/nuprl/MultiPL-E",
+      "title": "MultiPL-E: A multi-programming language benchmark for LLMs - GitHub",
+      "type": "github",
+      "accessed": "2026-03-30"
+    },
+    "S14": {
+      "url": "https://ainativedev.io/news/8-benchmarks-shaping-the-next-generation-of-ai-agents",
+      "title": "8 benchmarks shaping the next generation of AI agents",
+      "type": "blog",
+      "accessed": "2026-03-30"
+    },
+    "S15": {
+      "url": "https://leehanchung.github.io/blogs/2025/09/08/pass-at-k/",
+      "title": "Statistics for AI/ML, Part 4: pass@k and Unbiased Estimator",
+      "type": "blog",
+      "accessed": "2026-03-30"
+    },
+    "S16": {
+      "url": "https://arxiv.org/html/2307.07924v5",
+      "title": "ChatDev: Communicative Agents for Software Development (ACL 2024)",
+      "type": "academic",
+      "accessed": "2026-03-30"
+    },
+    "S17": {
+      "url": "https://dl.acm.org/doi/10.1145/3712003",
+      "title": "LLM-Based Multi-Agent Systems for Software Engineering: Literature Review, Vision, and the Road Ahead (ACM TOSEM, He et al. 2025)",
+      "type": "academic",
+      "accessed": "2026-03-30"
+    },
+    "S18": {
+      "url": "https://arxiv.org/pdf/2507.13190",
+      "title": "GEMMAS: Graph-based Evaluation Metrics for Multi Agent Systems (EMNLP 2025 Industry)",
+      "type": "academic",
+      "accessed": "2026-03-30"
+    },
+    "S19": {
+      "url": "https://arxiv.org/abs/2503.01935",
+      "title": "MultiAgentBench: Evaluating the Collaboration and Competition of LLM agents (2025)",
+      "type": "academic",
+      "accessed": "2026-03-30"
+    },
+    "S20": {
+      "url": "https://smythos.com/developers/agent-comparisons/metagpt-vs-chatdev/",
+      "title": "MetaGPT Vs ChatDev: In-Depth Comparison And Analysis - Smythos",
+      "type": "blog",
+      "accessed": "2026-03-30"
+    },
+    "S21": {
+      "url": "https://proceedings.iclr.cc/paper_files/paper/2024/file/6507b115562bb0a305f1958ccc87355a-Paper-Conference.pdf",
+      "title": "MetaGPT: Meta Programming for a Multi-Agent Collaborative Framework (ICLR 2024)",
+      "type": "academic",
+      "accessed": "2026-03-30"
+    },
+    "S22": {
+      "url": "https://en.wikipedia.org/wiki/Cyclomatic_complexity",
+      "title": "Cyclomatic complexity - Wikipedia",
+      "type": "documentation",
+      "accessed": "2026-03-30"
+    },
+    "S23": {
+      "url": "https://www.mccabe.com/pdf/mccabe-nist235r.pdf",
+      "title": "NIST SP 500-235: Structured Testing: A Testing Methodology Using the Cyclomatic Complexity Metric",
+      "type": "official",
+      "accessed": "2026-03-30"
+    },
+    "S24": {
+      "url": "https://en.wikipedia.org/wiki/Halstead_complexity_measures",
+      "title": "Halstead complexity measures - Wikipedia",
+      "type": "documentation",
+      "accessed": "2026-03-30"
+    },
+    "S25": {
+      "url": "https://www.verifysoft.com/en_halstead_metrics.html",
+      "title": "Verifysoft: Halstead Metrics reference",
+      "type": "documentation",
+      "accessed": "2026-03-30"
+    },
+    "S26": {
+      "url": "https://quality.arc42.org/articles/iso-25010-update-2023",
+      "title": "Update on ISO 25010, version 2023 - arc42 Quality Model",
+      "type": "documentation",
+      "accessed": "2026-03-30"
+    },
+    "S27": {
+      "url": "https://www.iso.org/standard/78176.html",
+      "title": "ISO/IEC 25010:2023 - Product quality model (official ISO page)",
+      "type": "official",
+      "accessed": "2026-03-30"
+    },
+    "S28": {
+      "url": "https://learn.microsoft.com/en-us/visualstudio/code-quality/code-metrics-maintainability-index-range-and-meaning",
+      "title": "Code metrics - Maintainability Index range and meaning - Microsoft Learn",
+      "type": "documentation",
+      "accessed": "2026-03-30"
+    },
+    "S29": {
+      "url": "https://en.wikipedia.org/wiki/SQALE",
+      "title": "SQALE - Wikipedia",
+      "type": "documentation",
+      "accessed": "2026-03-30"
+    },
+    "S30": {
+      "url": "https://ieeexplore.ieee.org/document/6225997",
+      "title": "The SQALE method for evaluating Technical Debt (Letouzey, IEEE/ACM MTD 2012)",
+      "type": "academic",
+      "accessed": "2026-03-30"
     }
   },
   "questions": [
@@ -83,26 +227,169 @@
     {
       "id": "q2",
       "text": "What AI coding benchmarks exist (SWE-bench, HumanEval, MBPP, MultiPL-E, CodeContests, BigCodeBench), how is each scored (pass@k, exact match, execution-based), what are current state-of-the-art results, and how could a multi-agent orchestration system like Aether be evaluated against them?",
-      "status": "open",
-      "confidence": 0,
-      "key_findings": [],
-      "iterations_touched": []
+      "status": "partial",
+      "confidence": 30,
+      "key_findings": [
+        {
+          "text": "HumanEval contains 164 hand-crafted Python programming problems. MBPP contains 974 Python challenges (500 training, 474 test). Both use the pass@k metric: pass@k = 1 - C(n-c,k)/C(n,k), where n = total samples generated, c = correct samples passing unit tests, k = number of draws. This unbiased estimator calculates the probability that at least one of k drawn solutions passes all test cases. Typical evaluation: generate n>=k samples (commonly n=200), count correct c, compute formula.",
+          "source_ids": [
+            "S7",
+            "S8",
+            "S15"
+          ],
+          "iteration": 1
+        },
+        {
+          "text": "SWE-bench evaluates LLMs on real-world GitHub issues — given a codebase and issue description, the model generates a patch. Scored by 'resolved rate' (% of issues where the patch passes the repository's original unit tests). Three variants: SWE-bench Full (~2,300 tasks), SWE-bench Lite (300-instance curated subset), SWE-bench Verified (484 human-validated samples from 12 open-source Python repos). Models cannot modify tests — gold standard tests from the repo are used for grading.",
+          "source_ids": [
+            "S9",
+            "S11"
+          ],
+          "iteration": 1
+        },
+        {
+          "text": "Current SOTA on SWE-bench Verified (March 2026): Claude 4 Sonnet 77.2%, GPT-5 74.9%, Gemini 2.5 Pro 73.1%, Claude Opus 4 71.8%, GPT-4o 70.3%, o3-mini 69.5%, DeepSeek V3 68.4%. On HumanEval pass@1: o1-mini achieves 96.2%. Note: SWE-bench scores reflect agent scaffolding quality as much as raw model capability — the same model can score very differently with different scaffolds.",
+          "source_ids": [
+            "S12",
+            "S7"
+          ],
+          "iteration": 1
+        },
+        {
+          "text": "BigCodeBench is positioned as 'next-generation HumanEval' — 1,140 tasks requiring function calls across 139 libraries and 7 domains. Uses calibrated Pass@1 (adds missing imports during eval to counter 'model laziness') plus an Elo rating system (chess-style, 500 bootstrap iterations). Two variants: Complete (code completion from docstrings) and Instruct (natural language instructions). Human performance: 97%. Best models: ~61% on Complete, ~51% on Instruct — a much harder benchmark than HumanEval.",
+          "source_ids": [
+            "S10"
+          ],
+          "iteration": 1
+        },
+        {
+          "text": "MultiPL-E translates HumanEval and MBPP to 18 programming languages, enabling cross-language evaluation using the same test-case-based correctness methodology. CodeContests focuses on competitive programming problems but is less commonly used due to lack of easy evaluation infrastructure. Emerging benchmarks (2025-2026): SWE-bench Pro (enterprise complexity), FeatureBench (complex feature development), DPAI Arena by JetBrains (multi-workflow, multi-language), DevQualityEval, and SWE-EVO (long-horizon software evolution across multiple commits).",
+          "source_ids": [
+            "S13",
+            "S11",
+            "S14"
+          ],
+          "iteration": 1
+        },
+        {
+          "text": "For multi-agent systems like Aether: existing benchmarks primarily evaluate isolated issue resolution (single patches), not multi-step orchestration. SWE-EVO (2026) specifically addresses this gap by evaluating agents on software evolution across multiple commits. DPAI Arena evaluates full engineering lifecycle workflows. However, no established benchmark directly measures task delegation efficiency, inter-agent communication overhead, or collective problem-solving — these would need custom instrumentation. Aether's 24-agent architecture with phase-based builds is closer to SWE-EVO's 'long-horizon' framing than traditional single-issue benchmarks.",
+          "source_ids": [
+            "S14",
+            "S11"
+          ],
+          "iteration": 1
+        }
+      ],
+      "iterations_touched": [
+        1
+      ]
     },
     {
       "id": "q3",
       "text": "What academic research exists on evaluating multi-agent AI systems — specifically metrics for task delegation efficiency, inter-agent communication overhead, autonomous decision accuracy, and collective problem-solving effectiveness (e.g., Park et al. generative agents, AutoGen, ChatDev, MetaGPT evaluations)?",
-      "status": "open",
-      "confidence": 0,
-      "key_findings": [],
-      "iterations_touched": []
+      "status": "partial",
+      "confidence": 35,
+      "key_findings": [
+        {
+          "text": "ChatDev (ACL 2024) established four metrics for multi-agent software development: Completeness (% of software without placeholder code), Executability (% that compiles and runs), Consistency (cosine distance between semantic embeddings of requirements and generated code), and Quality (product of completeness × executability × consistency). Results: ChatDev scored Quality 0.3953 vs MetaGPT 0.1523 vs GPT-Engineer 0.1419. ChatDev won 88% of human pairwise evaluations against MetaGPT and 90.16% against GPT-Engineer.",
+          "source_ids": [
+            "S16",
+            "S20"
+          ],
+          "iteration": 2
+        },
+        {
+          "text": "Multi-agent communication overhead is quantifiable: ChatDev averages 22,949 tokens and 148.2 seconds per software task; MetaGPT uses 29,279 tokens and 154.0 seconds; single-agent GPT-Engineer uses only 7,183 tokens and 15.6 seconds. ChatDev generates 4.39 files (144.3 LOC avg), MetaGPT 4.42 files (153.3 LOC), GPT-Engineer 3.95 files (70.2 LOC). Multi-agent systems cost ~3-4x more tokens but produce 2x more code with significantly higher quality. Large multi-agent groups can exceed $10 per HumanEval task due to serial message billing.",
+          "source_ids": [
+            "S16",
+            "S20"
+          ],
+          "iteration": 2
+        },
+        {
+          "text": "ChatDev limits agent communication to 10 rounds per subtask or 2 unchanged code modifications (whichever comes first), establishing bounded interaction protocols. MetaGPT uses Standard Operating Procedures (SOPs) to structure agent delegation — roles include Product Manager, Architect, Project Manager, Engineer, QA. MetaGPT achieves 100% task completion rate and 3.9/4.0 executability score (vs ChatDev's 2.1/4.0), but lower quality score due to less cooperative communication.",
+          "source_ids": [
+            "S16",
+            "S20",
+            "S21"
+          ],
+          "iteration": 2
+        },
+        {
+          "text": "GEMMAS (EMNLP 2025 Industry) introduces graph-based metrics for multi-agent collaboration: Information Diversity Score (IDS) measures diversity of information exchanged among agents — whether agents leverage distinct knowledge sources. Unnecessary Path Ratio (UPR) measures collaboration efficiency: UPR = (Actual Steps - Optimal Steps) / Actual Steps, identifying redundant or circular interactions. Together IDS+UPR assess information richness and communication overhead beyond task-completion accuracy.",
+          "source_ids": [
+            "S18"
+          ],
+          "iteration": 2
+        },
+        {
+          "text": "MultiAgentBench (2025) evaluates LLM multi-agent systems using milestone-based KPIs across collaboration and competition scenarios. Tests coordination topologies: star, chain, tree, graph, group discussion, and cognitive planning. Graph topology performed best in research scenarios. Cognitive planning improved milestone achievement by 3%. gpt-4o-mini achieved the highest average task score. The benchmark measures both task completion and collaboration quality separately.",
+          "source_ids": [
+            "S19"
+          ],
+          "iteration": 2
+        },
+        {
+          "text": "Major ACM TOSEM survey (He et al., July 2025) identifies a critical gap: no standardized evaluation metrics exist for multi-agent SE collaboration. Current benchmarks fail to assess cooperation and collective decision-making. The survey proposes five evaluation dimensions needing development: (1) Collaborative Design — agents' capacity to converge on unified architecture, (2) Task Coordination — effective task division based on expertise, (3) Conflict Resolution — handling conflicts constructively in real time, (4) Integration Quality — seamless code integration and peer review, (5) Proactive Communication — agents preemptively requesting needed information. These remain proposed, not implemented.",
+          "source_ids": [
+            "S17"
+          ],
+          "iteration": 2
+        }
+      ],
+      "iterations_touched": [
+        2
+      ]
     },
     {
       "id": "q4",
       "text": "What software quality metrics have rigorous published academic or standards-body backing (Halstead complexity, McCabe cyclomatic complexity, Maintainability Index, SQALE, ISO 25010 quality characteristics) — and what published thresholds define 'good' vs 'excellent' code quality?",
-      "status": "open",
-      "confidence": 0,
-      "key_findings": [],
-      "iterations_touched": []
+      "status": "partial",
+      "confidence": 30,
+      "key_findings": [
+        {
+          "text": "McCabe Cyclomatic Complexity (1976): Measures independent paths through a program's control flow graph. Formula: M = E - N + 2P (edges - nodes + 2*connected components). McCabe recommended an upper bound of 10, calling it 'a reasonable, but not magical, upper limit.' NIST SP 500-235 corroborated this threshold with substantial evidence. Risk categories: 1-10 simple/low risk, 11-20 moderate complexity, 21-50 complex/high risk, 50+ untestable. Limits above 10 reserved for projects with experienced staff, formal design, structured programming, code walkthroughs, and comprehensive test plans.",
+          "source_ids": [
+            "S22",
+            "S23"
+          ],
+          "iteration": 3
+        },
+        {
+          "text": "Halstead Complexity Measures (Maurice Halstead, 1977): Based on four base counts from source code tokens — n1 (distinct operators), n2 (distinct operands), N1 (total operators), N2 (total operands). Derived metrics: Vocabulary n = n1+n2, Program Length N = N1+N2, Calculated Length N' = n1*log2(n1) + n2*log2(n2), Volume V = N*log2(n), Difficulty D = (n1/2)*(N2/n2), Effort E = D*V, Time to program T = E/18 seconds, Predicted bugs B = V/3000. Published thresholds: function Volume should be 20-1000; Volume > 1000 indicates the function does too many things.",
+          "source_ids": [
+            "S24",
+            "S25"
+          ],
+          "iteration": 3
+        },
+        {
+          "text": "ISO/IEC 25010:2023 — Updated November 2023 from the 2011 version. Defines nine quality characteristics (was eight): Functional Suitability, Performance Efficiency, Compatibility, Interaction Capability (renamed from Usability), Reliability, Security, Maintainability, Flexibility (renamed from Portability), and Safety (new). New subcharacteristics added: inclusivity, self-descriptiveness, resistance, scalability. User interface aesthetics replaced by user engagement; maturity replaced by faultlessness. Part of the SQuaRE (Systems and software Quality Requirements and Evaluation) family of standards.",
+          "source_ids": [
+            "S26",
+            "S27"
+          ],
+          "iteration": 3
+        },
+        {
+          "text": "Maintainability Index (MI): Original formula from Oman & Hagemeister (1992): MI = 171 - 5.2*ln(HV) - 0.23*CC - 16.2*ln(LOC), where HV = Halstead Volume, CC = Cyclomatic Complexity, LOC = Lines of Code. Visual Studio normalizes to 0-100 scale: MI = MAX(0, (171 - 5.2*ln(HV) - 0.23*CC - 16.2*ln(LOC)) * 100/171). Thresholds: Green 20-100 (good maintainability), Yellow 10-19 (moderate), Red 0-9 (low — high confidence of a problem). Microsoft chose conservative thresholds to minimize false positives.",
+          "source_ids": [
+            "S28"
+          ],
+          "iteration": 3
+        },
+        {
+          "text": "SQALE (Software Quality Assessment based on Lifecycle Expectations, Letouzey 2012): Method for evaluating technical debt based on ISO 9126/ISO 25010 quality model. Measures the 'distance to conformity' as remediation cost — estimated time to fix each non-conformance found by static analysis. Two cost models: remediation cost (time to fix) and non-remediation cost (ongoing business impact of leaving debt unfixed). Quality characteristics mapped directly to ISO 25010 hierarchy, enabling standardized cost-benefit analysis for technical debt prioritization. Used by SonarQube as the underlying technical debt measurement model.",
+          "source_ids": [
+            "S29",
+            "S30"
+          ],
+          "iteration": 3
+        }
+      ],
+      "iterations_touched": [
+        3
+      ]
     },
     {
       "id": "q5",
@@ -130,12 +417,12 @@
     }
   ],
   "created_at": "2026-03-30T00:00:00Z",
-  "last_updated": "2026-03-30T00:30:00Z",
+  "last_updated": "2026-03-30T08:45:00Z",
   "trust_summary": {
-    "total_findings": 4,
-    "single_source": 2,
-    "multi_source": 2,
+    "total_findings": 21,
+    "single_source": 7,
+    "multi_source": 14,
     "no_source": 0,
-    "trust_ratio": 50
+    "trust_ratio": 66
   }
 }
