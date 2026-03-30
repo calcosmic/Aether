@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.6
 milestone_name: Bugfix & Hardening
 status: executing
-stopped_at: Phase 39 context gathered (assumptions mode)
-last_updated: "2026-03-30T19:16:04.900Z"
-last_activity: 2026-03-30 -- Phase 39 execution started
+stopped_at: Completed 40-02-PLAN.md
+last_updated: "2026-03-30T20:42:13.556Z"
+last_activity: 2026-03-30
 progress:
-  total_phases: 12
-  completed_phases: 5
-  total_plans: 24
-  completed_plans: 21
+  total_phases: 29
+  completed_phases: 7
+  total_plans: 27
+  completed_plans: 61
   percent: 100
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 ## Current Position
 
 Phase: 39 (state-safety) — EXECUTING
-Plan: 1 of 2
-Status: Executing Phase 39
-Last activity: 2026-03-30 -- Phase 39 execution started
+Plan: 2 of 2
+Status: Ready to execute
+Last activity: 2026-03-30
 
 Progress: ████████████████████ 100% (v1.3 through v2.6 shipped)
 
@@ -73,6 +73,8 @@ Progress: ████████████████████ 100% (v1.
 - Sequential merge within waves, parallel PRs per wave
 - Branch-local state (pheromones, midden, COLONY_STATE.json) needs hub-level coordination
 - Auto-fix convergence works for single-branch CI failures; cross-branch conflicts need prevention
+- [Phase 40]: Export file moved to .aether/exchange/ instead of gitignore exception for .aether/data/ -- cleaner, exchange/ is already tracked
+- [Phase 40]: Pheromone export in seal only runs on non-main branches, non-blocking
 
 ### Pending Todos
 
@@ -89,6 +91,6 @@ None active.
 
 ## Session Continuity
 
-Last session: 2026-03-30T18:31:30.082Z
-Stopped at: Phase 39 context gathered (assumptions mode)
-Resume file: .planning/phases/39-state-safety/39-CONTEXT.md
+Last session: 2026-03-30T20:42:13.552Z
+Stopped at: Completed 40-02-PLAN.md
+Resume file: None
