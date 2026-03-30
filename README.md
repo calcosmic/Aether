@@ -8,9 +8,12 @@
 [![npm downloads](https://img.shields.io/npm/dw/aether-colony.svg?style=flat-square)](https://www.npmjs.com/package/aether-colony)
 [![License: MIT](https://img.shields.io/github/license/calcosmic/Aether.svg?style=flat-square)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/calcosmic/Aether.svg?style=flat-square)](https://github.com/calcosmic/Aether/stargazers)
+[![Sponsor](https://img.shields.io/badge/Sponsor-GitHub-%23ea4aaa.svg?style=flat-square&logo=github)](https://github.com/sponsors/calcosmic)
 
 Spawn a colony of 24 AI specialists that self-organize around your goal using pheromone signals.
 1,000+ weekly installs.
+
+*Artificial Ecology For Thought and Emergent Reasoning*
 
 *The whole is greater than the sum of its ants.*
 
@@ -228,6 +231,26 @@ That's it. Five commands from zero to shipped.
 
 - **[Claude Code](https://docs.anthropic.com/en/docs/claude-code)** — 44 slash commands + 24 agent definitions
 - **[OpenCode](https://github.com/opencode-ai/opencode)** — 44 slash commands + agent definitions
+
+## ❤️ Support Aether
+
+If Aether has been useful to you, here's how you can keep the colony alive:
+
+**[Sponsor on GitHub](https://github.com/sponsors/calcosmic)** (preferred)
+
+<details>
+<summary>💡 Crypto — no middlemen, no fees</summary>
+
+| Network | Address |
+|---------|---------|
+| **ETH** (MetaMask) | `0xE7F8C9BE190c207D49DF01b82747cf7B6Bd1c809` |
+| **SOL** (Phantom) | `6DVTdoZvvi9siUpgmRJZxk5Kqho8TZiN2ZzyVUVC9gX8` |
+
+</details>
+
+[PayPal](https://www.paypal.com/ncp/payment/RENG7ZMW5F59L) · [Buy Me a Coffee](https://buymeacoffee.com/music5y)
+
+*Your support funds servers, new features, docs, and keeps Aether free & open source (MIT).*
 
 ## 📄 License
 
