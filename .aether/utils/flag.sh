@@ -204,22 +204,33 @@ _flag_list() {
       exit 0
     fi
 
-    # Build jq filter
-    jq_filter='.flags'
-
-    if [[ "$show_all" != "true" ]]; then
-      jq_filter+=' | [.[] | select(.resolved_at == null)]'
-    fi
-
-    if [[ -n "$filter_type" ]]; then
-      jq_filter+=" | [.[] | select(.type == \"$filter_type\")]"
-    fi
-
+    # Validate filter_phase as numeric (safe for --argjson)
     if [[ -n "$filter_phase" && "$filter_phase" =~ ^[0-9]+$ ]]; then
-      jq_filter+=" | [.[] | select(.phase == $filter_phase or .phase == null)]"
+      phase_num="$filter_phase"
+    else
+      phase_num=""
     fi
 
-    result=$(jq "{flags: ($jq_filter), count: ($jq_filter | length)}" "$flags_file")
+    # Build jq command with --arg to prevent filter injection
+    # filter_type is passed via --arg (safe string interpolation in jq)
+    # phase_num is passed via --argjson (numeric-only, pre-validated)
+    if [[ -n "$phase_num" ]]; then
+      result=$(jq --arg ft "$filter_type" --argjson ph "$phase_num" --argjson all "$show_all" '
+        .flags
+        | (if $all | not then [.[] | select(.resolved_at == null)] else . end)
+        | (if $ft != "" then [.[] | select(.type == $ft)] else . end)
+        | (if $ph != null then [.[] | select(.phase == $ph or .phase == null)] else . end)
+        | {flags: ., count: length}
+      ' "$flags_file")
+    else
+      result=$(jq --arg ft "$filter_type" --argjson all "$show_all" '
+        .flags
+        | (if $all | not then [.[] | select(.resolved_at == null)] else . end)
+        | (if $ft != "" then [.[] | select(.type == $ft)] else . end)
+        | {flags: ., count: length}
+      ' "$flags_file")
+    fi
+
     json_ok "$result"
 }
 

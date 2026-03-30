@@ -1,62 +1,80 @@
 {
   "version": "1.1",
-  "topic": "Scientifically established and industry-standard software engineering metrics for measuring development tool efficiency and AI-assisted coding productivity — for Aether website showcase to sponsors and backers",
+  "topic": "PR-based, branch/worktree coding workflow for Aether's multi-agent colony system",
   "scope": "both",
   "template": "custom",
-  "phase": "survey",
+  "phase": "investigate",
   "iteration": 4,
-  "max_iterations": 50,
-  "target_confidence": 95,
-  "overall_confidence": 24,
-  "started_at": "2026-03-30T00:00:00Z",
-  "last_updated": "2026-03-30T07:27:38Z",
+  "max_iterations": 30,
+  "target_confidence": 90,
+  "overall_confidence": 39,
+  "started_at": "2026-03-30T20:30:00Z",
+  "last_updated": "2026-03-30T11:45:15Z",
   "status": "active",
   "strategy": "adaptive",
   "focus_areas": [
-    "DORA metrics",
-    "SWE-bench/HumanEval benchmarks",
-    "multi-agent system evaluation",
-    "software maintainability indices",
-    "academic papers on AI coding assistant evaluation"
+    "git worktree",
+    "AI coding workflows",
+    "PR automation",
+    "code review pipelines",
+    "branch management",
+    "merge safety",
+    "Aether architecture mapping"
   ],
   "convergence": {
-    "prev_findings_count": 21,
-    "prev_overall_confidence": 24,
+    "prev_findings_count": 33,
+    "prev_overall_confidence": 39,
     "history": [
       {
         "iteration": 1,
-        "novelty_delta": 4,
-        "confidence_delta": 5,
+        "novelty_delta": 6,
+        "confidence_delta": 8,
         "gap_resolution_pct": 0,
-        "coverage_pct": 14,
+        "coverage_pct": 20,
         "phase": "survey"
       },
       {
         "iteration": 2,
-        "novelty_delta": 6,
-        "confidence_delta": 4,
+        "novelty_delta": 7,
+        "confidence_delta": 7,
         "gap_resolution_pct": 0,
-        "coverage_pct": 28,
+        "coverage_pct": 40,
         "phase": "survey"
       },
       {
         "iteration": 3,
-        "novelty_delta": 6,
-        "confidence_delta": 10,
+        "novelty_delta": 18,
+        "confidence_delta": 17,
         "gap_resolution_pct": 0,
-        "coverage_pct": 42,
+        "coverage_pct": 100,
         "phase": "survey"
       },
       {
-        "iteration": 4,
-        "novelty_delta": 5,
-        "confidence_delta": 5,
+        "iteration": 3,
+        "novelty_delta": 14,
+        "confidence_delta": 17,
         "gap_resolution_pct": 0,
-        "coverage_pct": 57,
-        "phase": "survey"
+        "coverage_pct": 100,
+        "phase": "investigate"
+      },
+      {
+        "iteration": 3,
+        "novelty_delta": 6,
+        "confidence_delta": 7,
+        "gap_resolution_pct": 15,
+        "coverage_pct": 100,
+        "phase": "investigate"
+      },
+      {
+        "iteration": 4,
+        "novelty_delta": 6,
+        "confidence_delta": 7,
+        "gap_resolution_pct": 0,
+        "coverage_pct": 100,
+        "phase": "investigate"
       }
     ],
-    "composite_score": 17,
+    "composite_score": 30,
     "converged": false
   }
 }

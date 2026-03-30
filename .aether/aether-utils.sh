@@ -108,7 +108,7 @@ if ! type json_err &>/dev/null; then
     local code="${1:-E_UNKNOWN}"
     local message="${2:-An unknown error occurred}"
     printf '[aether] Warning: error-handler.sh not loaded — using minimal fallback\n' >&2
-    printf '{"ok":false,"error":{"code":"%s","message":"%s"}}\n' "$code" "$message" >&2
+    printf '%s\n' "$(jq -nc --arg c "$code" --arg m "$message" '{ok:false,error:{code:$c,message:$m}}')" >&2
     exit 1
   }
 fi
@@ -1374,7 +1374,7 @@ HELP_EOF
     _pkg_json="$SCRIPT_DIR/../package.json"
     if [[ -f "$_pkg_json" ]] && command -v jq >/dev/null 2>&1; then  # SUPPRESS:OK -- cleanup: output suppression for clean operation
       _ver=$(jq -r '.version // "unknown"' "$_pkg_json" 2>/dev/null)  # SUPPRESS:OK -- read-default: file may not exist yet
-      json_ok "\"$_ver\""
+      json_ok "$(jq -nc --arg v "$_ver" '$v')"
     else
       json_ok '"1.1.5"'
     fi
@@ -1455,7 +1455,7 @@ HELP_EOF
       json_err "$E_FEATURE_UNAVAILABLE" "create_backup function not available -- atomic-write.sh may not be sourced"
     fi
 
-    json_ok "{\"checkpointed\":true,\"reason\":\"$sc_reason\"}"
+    json_ok "$(jq -nc --arg reason "$sc_reason" '{checkpointed:true,reason:$reason}')"
     ;;
   state-write)
     # MIGRATE: direct COLONY_STATE.json access -- use _state_write instead
@@ -1697,7 +1697,7 @@ HELP_EOF
         if (.errors.records|length) > 50 then .errors.records = .errors.records[-50:] else . end
       ' >/dev/null
 
-    json_ok "\"$ea_id\""
+    json_ok "$(jq -nc --arg id "$ea_id" '$id')"
     ;;
   error-pattern-check)
     _deprecation_warning "error-pattern-check"
@@ -1890,7 +1890,7 @@ EOF
         json_err "$E_UNKNOWN" "Failed to write error patterns file"
       }
       count=$(echo "$updated" | jq --arg name "$pattern_name" '.patterns[] | select(.name == $name) | .occurrences')
-      json_ok "{\"updated\":true,\"pattern\":\"$pattern_name\",\"occurrences\":$count}"
+      json_ok "$(jq -nc --arg p "$pattern_name" --argjson c "$count" '{updated:true,pattern:$p,occurrences:$c}')"
     else
       # Add new pattern
       updated=$(jq --arg name "$pattern_name" --arg desc "$description" --arg sev "$severity" --arg ts "$ts" --arg proj "$project_name" '
@@ -1909,7 +1909,7 @@ EOF
         _aether_log_error "Could not save new error pattern"
         json_err "$E_UNKNOWN" "Failed to write error patterns file"
       }
-      json_ok "{\"created\":true,\"pattern\":\"$pattern_name\"}"
+      json_ok "$(jq -nc --arg p "$pattern_name" '{created:true,pattern:$p}')"
     fi
     ;;
   error-patterns-check)
@@ -2192,7 +2192,7 @@ EOF
     prefix="${prefixes[$idx]}"
     num=$((RANDOM % 99 + 1))
     name="${prefix}-${num}"
-    json_ok "\"$name\""
+    json_ok "$(jq -nc --arg n "$name" '$n')"
     ;;
 
   validate-worker-response)
@@ -2293,7 +2293,7 @@ EOF
       json_err "$E_VALIDATION_FAILED" "Worker response failed schema validation" "{\"caste\":\"$vw_caste\"}"
     fi
 
-    json_ok "{\"valid\":true,\"caste\":\"$vw_caste\"}"
+    json_ok "$(jq -nc --arg c "$vw_caste" '{valid:true,caste:$c}')"
     ;;
 
   # ============================================
@@ -2348,7 +2348,7 @@ EOF
         if (.graveyards | length) > 30 then .graveyards = .graveyards[-30:] else . end
       ' >/dev/null
 
-    json_ok "\"$ga_id\""
+    json_ok "$(jq -nc --arg id "$ga_id" '$id')"
     ;;
 
   grave-check)
@@ -2535,7 +2535,7 @@ Files: ${files_changed} files changed"
       json_ok '""'
     else
       printf -v msg 'Update available: %s to %s (run /ant:update)' "$local_ver" "$hub_ver"
-      json_ok "$msg"
+      json_ok "$(jq -nc --arg m "$msg" '$m')"
     fi
     ;;
 
@@ -2661,7 +2661,7 @@ Files: ${files_changed} files changed"
       json_err "$E_UNKNOWN" "Failed to write registry file"
     }
     release_lock "$registry_file" 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
-    json_ok "{\"registered\":true,\"path\":\"$repo_path\",\"version\":\"$repo_version\"}"
+    json_ok "$(jq -nc --arg p "$repo_path" --arg v "$repo_version" '{registered:true,path:$p,version:$v}')"
     ;;
 
   registry-list)
@@ -2806,7 +2806,8 @@ Files: ${files_changed} files changed"
     if [[ $? -eq 0 ]]; then
       # Output success with handoff info if detected
       if [[ "$HANDOFF_DETECTED" == "true" ]]; then
-        json_ok "{\"loaded\":true,\"handoff_detected\":true,\"handoff_summary\":\"$(get_handoff_summary)\"}"
+        _handoff_summary=$(get_handoff_summary)
+        json_ok "$(jq -nc --arg hs "$_handoff_summary" '{loaded:true,handoff_detected:true,handoff_summary:$hs}')"
       else
         json_ok '{"loaded":true}'
       fi
@@ -3143,10 +3144,10 @@ Files: ${files_changed} files changed"
       json_ok "$(cat "$view_state_file")"
     elif [[ -z "$key" ]]; then
       # Return specific view
-      json_ok "$(jq ".${view_name} // {}" "$view_state_file")"
+      json_ok "$(jq --arg v "$view_name" '.[$v] // {}' "$view_state_file")"
     else
       # Return specific key from view
-      json_ok "$(jq ".${view_name}.${key} // null" "$view_state_file")"
+      json_ok "$(jq --arg v "$view_name" --arg k "$key" '.[$v][$k] // null' "$view_state_file")"
     fi
     ;;
 
@@ -3178,7 +3179,7 @@ Files: ${files_changed} files changed"
     fi
 
     atomic_write "$view_state_file" "$updated"
-    json_ok "$(echo "$updated" | jq ".${view_name}")"
+    json_ok "$(echo "$updated" | jq --arg v "$view_name" '.[$v]')"
     ;;
 
   view-state-toggle)
@@ -3216,7 +3217,7 @@ Files: ${files_changed} files changed"
     fi
 
     atomic_write "$view_state_file" "$updated"
-    json_ok "{\"item\":\"$item\",\"state\":\"$new_state\",\"view\":\"$view_name\"}"
+    json_ok "$(jq -nc --arg i "$item" --arg s "$new_state" --arg v "$view_name" '{item:$i,state:$s,view:$v}')"
     ;;
 
   view-state-expand)
@@ -3238,7 +3239,7 @@ Files: ${files_changed} files changed"
     ' "$view_state_file") || json_err "$E_JSON_INVALID" "Failed to update view state"
 
     atomic_write "$view_state_file" "$updated"
-    json_ok "{\"item\":\"$item\",\"state\":\"expanded\",\"view\":\"$view_name\"}"
+    json_ok "$(jq -nc --arg i "$item" --arg v "$view_name" '{item:$i,state:"expanded",view:$v}')"
     ;;
 
   view-state-collapse)
@@ -3260,7 +3261,7 @@ Files: ${files_changed} files changed"
     ' "$view_state_file") || json_err "$E_JSON_INVALID" "Failed to update view state"
 
     atomic_write "$view_state_file" "$updated"
-    json_ok "{\"item\":\"$item\",\"state\":\"collapsed\",\"view\":\"$view_name\"}"
+    json_ok "$(jq -nc --arg i "$item" --arg v "$view_name" '{item:$i,state:"collapsed",view:$v}')"
     ;;
 
   queen-init) _queen_init "$@" ;;
@@ -3327,7 +3328,7 @@ Files: ${files_changed} files changed"
       bar="[$bar]"
     fi
 
-    json_ok "{\"bar\":\"$bar\",\"count\":$obs_count,\"threshold\":$threshold}"
+    json_ok "$(jq -nc --arg b "$bar" --argjson c "$obs_count" --argjson t "$threshold" '{bar:$b,count:$c,threshold:$t}')"
     ;;
 
   parse-selection)
@@ -3534,7 +3535,7 @@ Files: ${files_changed} files changed"
         ;;
     esac
 
-    json_ok "{\"incident_id\":\"$ir_incident_id\",\"rule_type\":\"$ir_rule_type\",\"added\":true,\"timestamp\":\"$ir_ts\"}"
+    json_ok "$(jq -nc --arg id "$ir_incident_id" --arg rt "$ir_rule_type" --arg ts "$ir_ts" '{incident_id:$id,rule_type:$rt,added:true,timestamp:$ts}')"
     ;;
 
   queen-promote) _queen_promote "$@" ;;
@@ -3663,7 +3664,7 @@ Files: ${files_changed} files changed"
     bash "$0" rolling-summary add "$mc_event" "$mc_content" "$mc_source" >/dev/null 2>&1 \
       || _aether_log_error "Could not update rolling summary"
 
-    json_ok "{\"event_type\":\"$mc_event\",\"wisdom_type\":\"$mc_wisdom_type\",\"observation_count\":$obs_count,\"threshold\":$obs_threshold,\"threshold_met\":$obs_threshold_met,\"pheromone_created\":$pheromone_created,\"signal_id\":\"$pheromone_signal_id\",\"auto_promoted\":$auto_promoted,\"promotion_reason\":\"$auto_reason\"}"
+    json_ok "$(jq -nc --arg et "$mc_event" --arg wt "$mc_wisdom_type" --argjson oc "$obs_count" --argjson th "$obs_threshold" --argjson tm "$obs_threshold_met" --argjson pc "$pheromone_created" --arg sid "$pheromone_signal_id" --argjson ap "$auto_promoted" --arg pr "$auto_reason" '{event_type:$et,wisdom_type:$wt,observation_count:$oc,threshold:$th,threshold_met:$tm,pheromone_created:$pc,signal_id:$sid,auto_promoted:$ap,promotion_reason:$pr}')"
     ;;
 
   learning-display-proposals) _learning_display_proposals "$@" ;;
@@ -3708,7 +3709,7 @@ Files: ${files_changed} files changed"
         ;;
     esac
 
-    json_ok "{\"ok\":true,\"docs\":\"$docs\",\"dir\":\"$survey_dir\"}"
+    json_ok "$(jq -nc --arg d "$docs" --arg dir "$survey_dir" '{ok:true,docs:$d,dir:$dir}')"
     ;;
 
   survey-verify)
@@ -3730,7 +3731,7 @@ Files: ${files_changed} files changed"
       json_err "$E_FILE_NOT_FOUND" "Missing survey documents" "{\"missing\":\"$missing\"}"
     fi
 
-    json_ok "{\"ok\":true,\"counts\":\"$counts\"}"
+    json_ok "$(jq -nc --arg c "$counts" '{ok:true,counts:$c}')"
     ;;
 
   checkpoint-check)
@@ -4134,7 +4135,7 @@ Files: ${files_changed} files changed"
           json_err "$E_UNKNOWN" "Failed to finalize rolling summary file"
         }
 
-        json_ok "{\"added\":true,\"event\":\"$rs_clean_event\",\"source\":\"$rs_clean_source\"}"
+        json_ok "$(jq -nc --arg e "$rs_clean_event" --arg s "$rs_clean_source" '{added:true,event:$e,source:$s}')"
         ;;
 
       read)
@@ -4363,7 +4364,7 @@ Files: ${files_changed} files changed"
 
     cc_words=$(printf '%s' "$cc_section" | wc -w | tr -d ' ')
     cc_prompt_json=$(printf '%s' "$cc_section" | jq -Rs '.' 2>/dev/null || echo '""')  # SUPPRESS:OK -- read-default: returns fallback if missing
-    json_ok "{\"exists\":true,\"state\":\"$cc_state\",\"next_action\":\"$cc_next_action\",\"word_count\":$cc_words,\"prompt_section\":$cc_prompt_json}"
+    json_ok "$(jq -nc --arg st "$cc_state" --arg na "$cc_next_action" --argjson wc "$cc_words" --argjson ps "$cc_prompt_json" '{exists:true,state:$st,next_action:$na,word_count:$wc,prompt_section:$ps}')"
     ;;
 
   session-init) _session_init "$@" ;;

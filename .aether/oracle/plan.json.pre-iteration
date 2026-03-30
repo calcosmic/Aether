@@ -2,220 +2,305 @@
   "version": "1.1",
   "sources": {
     "S1": {
-      "url": "https://dora.dev/guides/dora-metrics-four-keys/",
-      "title": "DORA's software delivery metrics: the four keys (official)",
-      "type": "official",
+      "url": "https://code.claude.com/docs/en/common-workflows",
+      "title": "Claude Code Docs — Common Workflows (Worktree Section)",
+      "type": "documentation",
       "accessed": "2026-03-30"
     },
     "S2": {
-      "url": "https://dora.dev/research/2024/dora-report/",
-      "title": "DORA Accelerate State of DevOps Report 2024",
-      "type": "official",
-      "accessed": "2026-03-30"
-    },
-    "S3": {
-      "url": "https://cloud.google.com/blog/products/devops-sre/using-the-four-keys-to-measure-your-devops-performance",
-      "title": "Use Four Keys metrics to measure DevOps performance - Google Cloud Blog",
+      "url": "https://www.nrmitchi.com/2025/10/using-git-worktrees-for-multi-feature-development-with-ai-agents/",
+      "title": "Using Git Worktrees for Multi-Feature Development with AI Agents — Nick Mitchinson",
       "type": "blog",
       "accessed": "2026-03-30"
     },
+    "S3": {
+      "url": "https://github.com/ComposioHQ/agent-orchestrator",
+      "title": "ComposioHQ/agent-orchestrator — Agentic orchestrator for parallel coding agents",
+      "type": "github",
+      "accessed": "2026-03-30"
+    },
     "S4": {
-      "url": "https://docs.gitlab.com/user/analytics/dora_metrics/",
-      "title": "DevOps Research and Assessment (DORA) metrics - GitLab Docs",
+      "url": "https://gitcheatsheet.dev/docs/advanced/worktrees/performance/",
+      "title": "Performance Optimization for Git Worktrees — Git Cheat Sheet",
       "type": "documentation",
       "accessed": "2026-03-30"
     },
     "S5": {
-      "url": "https://redmonk.com/rstephens/2025/12/18/dora2025/",
-      "title": "DORA 2025: Measuring Software Delivery After AI - RedMonk",
-      "type": "blog",
+      "url": "https://www.threads.com/@boris_cherny/post/DVAAnexgRUj",
+      "title": "Boris Cherny — Introducing built-in git worktree support for Claude Code",
+      "type": "official",
       "accessed": "2026-03-30"
     },
     "S6": {
-      "url": "https://redmonk.com/rstephens/2024/11/26/dora2024/",
-      "title": "DORA Report 2024 – A Look at Throughput and Stability - RedMonk",
-      "type": "blog",
+      "url": ".claude/worktrees/",
+      "title": "Aether repo — existing agent worktree directories",
+      "type": "codebase",
       "accessed": "2026-03-30"
     },
     "S7": {
-      "url": "https://verityai.co/blog/humaneval-mbpp-code-generation-benchmarks",
-      "title": "HumanEval & MBPP: Setting the Standard for Code Generation Benchmarks",
-      "type": "blog",
+      "url": "https://code.claude.com/docs/en/github-actions",
+      "title": "Claude Code GitHub Actions — Official Documentation",
+      "type": "documentation",
       "accessed": "2026-03-30"
     },
     "S8": {
-      "url": "https://arxiv.org/pdf/2107.03374",
-      "title": "Evaluating Large Language Models Trained on Code (Codex paper, Chen et al. 2021)",
-      "type": "academic",
+      "url": "https://docs.github.com/en/copilot/concepts/agents/coding-agent/about-coding-agent",
+      "title": "About GitHub Copilot coding agent — GitHub Docs",
+      "type": "documentation",
       "accessed": "2026-03-30"
     },
     "S9": {
-      "url": "https://epoch.ai/benchmarks/swe-bench-verified",
-      "title": "SWE-bench Verified - Epoch AI",
+      "url": "https://github.blog/ai-and-ml/github-copilot/github-copilot-coding-agent-101-getting-started-with-agentic-workflows-on-github/",
+      "title": "GitHub Copilot coding agent 101 — GitHub Blog",
       "type": "official",
       "accessed": "2026-03-30"
     },
     "S10": {
-      "url": "https://huggingface.co/blog/leaderboard-bigcodebench",
-      "title": "BigCodeBench: The Next Generation of HumanEval - Hugging Face Blog",
-      "type": "blog",
+      "url": "https://docs.devin.ai/work-with-devin/devin-review",
+      "title": "Devin Review — Devin Docs",
+      "type": "documentation",
       "accessed": "2026-03-30"
     },
     "S11": {
-      "url": "https://symflower.com/en/company/blog/2025/benchmarks-llm-agents/",
-      "title": "Benchmarks evaluating LLM agents for software development - Symflower",
-      "type": "blog",
+      "url": "https://developers.openai.com/codex/workflows",
+      "title": "Codex Workflows — OpenAI Developers",
+      "type": "documentation",
       "accessed": "2026-03-30"
     },
     "S12": {
-      "url": "https://localaimaster.com/models/best-ai-coding-models",
-      "title": "Best AI for Coding 2026: Top 20 Ranked by SWE-Bench Score",
-      "type": "blog",
+      "url": "https://aider.chat/docs/git.html",
+      "title": "Git Integration — Aider Documentation",
+      "type": "documentation",
       "accessed": "2026-03-30"
     },
     "S13": {
-      "url": "https://github.com/nuprl/MultiPL-E",
-      "title": "MultiPL-E: A multi-programming language benchmark for LLMs - GitHub",
+      "url": "https://github.com/sweepai/sweep",
+      "title": "Sweep AI — GitHub Repository",
       "type": "github",
       "accessed": "2026-03-30"
     },
     "S14": {
-      "url": "https://ainativedev.io/news/8-benchmarks-shaping-the-next-generation-of-ai-agents",
-      "title": "8 benchmarks shaping the next generation of AI agents",
-      "type": "blog",
+      "url": "https://github.com/anthropics/claude-code-action",
+      "title": "anthropics/claude-code-action — GitHub Repository",
+      "type": "github",
       "accessed": "2026-03-30"
     },
     "S15": {
-      "url": "https://leehanchung.github.io/blogs/2025/09/08/pass-at-k/",
-      "title": "Statistics for AI/ML, Part 4: pass@k and Unbiased Estimator",
-      "type": "blog",
+      "url": "https://github.com/openai/codex-action",
+      "title": "openai/codex-action — GitHub Repository",
+      "type": "github",
       "accessed": "2026-03-30"
     },
     "S16": {
-      "url": "https://arxiv.org/html/2307.07924v5",
-      "title": "ChatDev: Communicative Agents for Software Development (ACL 2024)",
-      "type": "academic",
-      "accessed": "2026-03-30"
-    },
-    "S17": {
-      "url": "https://dl.acm.org/doi/10.1145/3712003",
-      "title": "LLM-Based Multi-Agent Systems for Software Engineering: Literature Review, Vision, and the Road Ahead (ACM TOSEM, He et al. 2025)",
-      "type": "academic",
-      "accessed": "2026-03-30"
-    },
-    "S18": {
-      "url": "https://arxiv.org/pdf/2507.13190",
-      "title": "GEMMAS: Graph-based Evaluation Metrics for Multi Agent Systems (EMNLP 2025 Industry)",
-      "type": "academic",
-      "accessed": "2026-03-30"
-    },
-    "S19": {
-      "url": "https://arxiv.org/abs/2503.01935",
-      "title": "MultiAgentBench: Evaluating the Collaboration and Competition of LLM agents (2025)",
-      "type": "academic",
-      "accessed": "2026-03-30"
-    },
-    "S20": {
-      "url": "https://smythos.com/developers/agent-comparisons/metagpt-vs-chatdev/",
-      "title": "MetaGPT Vs ChatDev: In-Depth Comparison And Analysis - Smythos",
+      "url": "https://cognition.ai/blog/devin-101-automatic-pr-reviews-with-the-devin-api",
+      "title": "Devin 101: Automatic PR Reviews with the Devin API — Cognition",
       "type": "blog",
       "accessed": "2026-03-30"
     },
+    "S17": {
+      "url": "https://github.com/mirrajabi/aider-github-action",
+      "title": "mirrajabi/aider-github-action — Run Aider in GitHub Workflows",
+      "type": "github",
+      "accessed": "2026-03-30"
+    },
+    "S18": {
+      "url": ".aether/docs/command-playbooks/continue-gates.md",
+      "title": "Aether continue-gates playbook — 7 mandatory quality gates",
+      "type": "codebase",
+      "accessed": "2026-03-30"
+    },
+    "S19": {
+      "url": ".aether/docs/command-playbooks/build-wave.md",
+      "title": "Aether build-wave playbook — parallel worker orchestration",
+      "type": "codebase",
+      "accessed": "2026-03-30"
+    },
+    "S20": {
+      "url": ".aether/docs/command-playbooks/continue-verify.md",
+      "title": "Aether continue-verify playbook — 6-phase verification loop",
+      "type": "codebase",
+      "accessed": "2026-03-30"
+    },
     "S21": {
-      "url": "https://proceedings.iclr.cc/paper_files/paper/2024/file/6507b115562bb0a305f1958ccc87355a-Paper-Conference.pdf",
-      "title": "MetaGPT: Meta Programming for a Multi-Agent Collaborative Framework (ICLR 2024)",
-      "type": "academic",
+      "url": ".claude/agents/ant/aether-watcher.md",
+      "title": "Aether Watcher agent definition — quality verification",
+      "type": "codebase",
       "accessed": "2026-03-30"
     },
     "S22": {
-      "url": "https://en.wikipedia.org/wiki/Cyclomatic_complexity",
-      "title": "Cyclomatic complexity - Wikipedia",
-      "type": "documentation",
+      "url": ".claude/agents/ant/aether-gatekeeper.md",
+      "title": "Aether Gatekeeper agent definition — supply chain security",
+      "type": "codebase",
       "accessed": "2026-03-30"
     },
     "S23": {
-      "url": "https://www.mccabe.com/pdf/mccabe-nist235r.pdf",
-      "title": "NIST SP 500-235: Structured Testing: A Testing Methodology Using the Cyclomatic Complexity Metric",
-      "type": "official",
+      "url": ".claude/agents/ant/aether-auditor.md",
+      "title": "Aether Auditor agent definition — code quality audit",
+      "type": "codebase",
       "accessed": "2026-03-30"
     },
     "S24": {
-      "url": "https://en.wikipedia.org/wiki/Halstead_complexity_measures",
-      "title": "Halstead complexity measures - Wikipedia",
-      "type": "documentation",
+      "url": ".claude/agents/ant/aether-probe.md",
+      "title": "Aether Probe agent definition — coverage and edge cases",
+      "type": "codebase",
       "accessed": "2026-03-30"
     },
     "S25": {
-      "url": "https://www.verifysoft.com/en_halstead_metrics.html",
-      "title": "Verifysoft: Halstead Metrics reference",
-      "type": "documentation",
+      "url": "https://www.coderabbit.ai/blog/how-to-integrate-ai-code-review-into-your-devops-pipeline",
+      "title": "CodeRabbit — How to Integrate AI Code Review into Your DevOps Pipeline",
+      "type": "blog",
       "accessed": "2026-03-30"
     },
     "S26": {
-      "url": "https://quality.arc42.org/articles/iso-25010-update-2023",
-      "title": "Update on ISO 25010, version 2023 - arc42 Quality Model",
+      "url": "https://docs.sourcery.ai/Code-Review/Overview/",
+      "title": "Sourcery Code Review Overview — Official Docs",
       "type": "documentation",
       "accessed": "2026-03-30"
     },
     "S27": {
-      "url": "https://www.iso.org/standard/78176.html",
-      "title": "ISO/IEC 25010:2023 - Product quality model (official ISO page)",
-      "type": "official",
+      "url": "https://ancuta.org/posts/ai-agents-in-your-ci-cd-why-github-rulesets-matter/",
+      "title": "AI Agents in CI/CD — Why GitHub Rulesets Matter",
+      "type": "blog",
       "accessed": "2026-03-30"
     },
     "S28": {
-      "url": "https://learn.microsoft.com/en-us/visualstudio/code-quality/code-metrics-maintainability-index-range-and-meaning",
-      "title": "Code metrics - Maintainability Index range and meaning - Microsoft Learn",
-      "type": "documentation",
+      "url": "https://github.com/clash-sh/clash",
+      "title": "Clash — Pre-merge conflict detection for git worktrees",
+      "type": "github",
       "accessed": "2026-03-30"
     },
     "S29": {
-      "url": "https://en.wikipedia.org/wiki/SQALE",
-      "title": "SQALE - Wikipedia",
-      "type": "documentation",
+      "url": "https://mike.bailey.net.au/notes/software/git/aidock/ai-branch-naming-conventions/",
+      "title": "AI Branch Naming Conventions — Community Recommendations",
+      "type": "blog",
       "accessed": "2026-03-30"
     },
     "S30": {
-      "url": "https://ieeexplore.ieee.org/document/6225997",
-      "title": "The SQALE method for evaluating Technical Debt (Letouzey, IEEE/ACM MTD 2012)",
-      "type": "academic",
+      "url": "https://github.blog/changelog/2025-10-16-copilot-coding-agent-uses-better-branch-names-and-pull-request-titles/",
+      "title": "Copilot Coding Agent Branch Naming Changelog — GitHub Blog",
+      "type": "official",
+      "accessed": "2026-03-30"
+    },
+    "S31": {
+      "url": "https://www.coderabbit.ai/blog/code-with-ai-review-with-coderabbits-ide-extension-apply-fixes-in-one-click",
+      "title": "CodeRabbit IDE Extension — One-click Fix Capabilities",
+      "type": "blog",
+      "accessed": "2026-03-30"
+    },
+    "S32": {
+      "url": "https://www.termdock.com/en/blog/git-worktree-conflicts-ai-agents",
+      "title": "Git Worktree Conflicts with AI Agents — Termdock",
+      "type": "blog",
+      "accessed": "2026-03-30"
+    },
+    "S33": {
+      "url": "https://gist.github.com/bemijonathan/8bc892b1e12954e45a906e0704cff86d",
+      "title": ".coderabbit.yaml configuration reference",
+      "type": "documentation",
+      "accessed": "2026-03-30"
+    },
+    "S34": {
+      "url": "https://docs.github.com/articles/about-status-checks",
+      "title": "About Status Checks — GitHub Docs",
+      "type": "documentation",
+      "accessed": "2026-03-30"
+    },
+    "S35": {
+      "url": "https://www.pullchecklist.com/posts/github-actions-status-checks",
+      "title": "Master GitHub Actions Status Checks for Seamless CI/CD — Pull Checklist",
+      "type": "blog",
+      "accessed": "2026-03-30"
+    },
+    "S36": {
+      "url": "https://dsifry.github.io/goodtogo/",
+      "title": "Good To Go — Deterministic PR Readiness Detection for AI Coding Agents",
+      "type": "documentation",
+      "accessed": "2026-03-30"
+    },
+    "S37": {
+      "url": "https://github.com/dsifry/goodtogo",
+      "title": "dsifry/goodtogo — GitHub Repository",
+      "type": "github",
+      "accessed": "2026-03-30"
+    },
+    "S38": {
+      "url": "https://docs.coderabbit.ai/finishing-touches/autofix",
+      "title": "CodeRabbit Autofix — Official Documentation",
+      "type": "documentation",
+      "accessed": "2026-03-30"
+    },
+    "S39": {
+      "url": "https://github.com/agynio/gh-pr-review",
+      "title": "gh-pr-review — GitHub CLI Extension for LLM-Ready PR Review",
+      "type": "github",
+      "accessed": "2026-03-30"
+    },
+    "S40": {
+      "url": "https://factory.ai/news/agent-readiness",
+      "title": "Factory.ai Agent Readiness — Repository Maturity Framework",
+      "type": "official",
+      "accessed": "2026-03-30"
+    },
+    "S41": {
+      "url": "https://dev.to/rahulxsingh/the-state-of-ai-code-review-in-2026-trends-tools-and-whats-next-2gfh",
+      "title": "The State of AI Code Review in 2026 — Trends, Tools, and What's Next",
+      "type": "blog",
+      "accessed": "2026-03-30"
+    },
+    "S42": {
+      "url": "https://oneuptime.com/blog/post/2026-01-26-status-checks-github-actions/view",
+      "title": "How to Configure Status Checks in GitHub Actions — OneUptime",
+      "type": "blog",
       "accessed": "2026-03-30"
     }
   },
   "questions": [
     {
       "id": "q1",
-      "text": "What are the four DORA metrics (Lead Time for Changes, Deployment Frequency, Change Failure Rate, Mean Time to Recovery) — their academic origins in Forsgren et al. 'Accelerate' (2018), exact calculation formulas, and what Google's benchmarks define as 'low', 'medium', 'high', and 'elite' performance levels?",
+      "text": "Git worktree workflows for AI agents: How do Cursor Worktrees, Claude Code multi-branch patterns, and Copilot Workspace handle parallel AI development on separate branches? What are proven patterns for avoiding conflicts between parallel agent worktrees? What is the max safe number of parallel worktrees and how are they cleaned up?",
       "status": "partial",
-      "confidence": 35,
+      "confidence": 40,
       "key_findings": [
         {
-          "text": "The four DORA metrics are: Deployment Frequency (how often code deploys to production), Lead Time for Changes (time from commit to production deploy), Change Failure Rate (% of deployments causing production failures requiring rollback/hotfix), and Mean Time to Recovery (time to restore service after production failure). Originated from Dr. Nicole Forsgren, Jez Humble, and Gene Kim's 'Accelerate: The Science of Lean Software and DevOps' (2018), based on 6+ years of State of DevOps survey research.",
+          "text": "Claude Code has native --worktree (-w) flag. Creates worktrees at <repo>/.claude/worktrees/<name>, branches from origin/HEAD (branch named worktree-<name>). Subagents use isolation: worktree in frontmatter for automatic worktree creation. Auto-cleanup: no changes = worktree + branch removed; changes exist = user prompted to keep/remove. .worktreeinclude file copies gitignored files (like .env) to new worktrees.",
           "source_ids": [
             "S1",
-            "S3"
+            "S5"
           ],
           "iteration": 0
         },
         {
-          "text": "Calculation approaches: Deployment Frequency uses the average (mean) of successful deployments per time period. Lead Time, Change Failure Rate, and MTTR all use the median rather than mean, as median provides a more accurate view of typical performance and is less skewed by outliers.",
+          "text": "Aether repo already has 10 active agent worktrees (agent-a09afdfa through agent-aea49f19), each on separate worktree-agent-* branches. These were created by Claude Code's subagent isolation system. This is the existing parallel development pattern in the codebase.",
+          "source_ids": [
+            "S6"
+          ],
+          "iteration": 0
+        },
+        {
+          "text": "Cursor supports up to 8 parallel agents via git worktrees (Feb 2026). Windsurf supports 5 parallel Cascade agents via worktrees (Wave 13). This establishes the industry pattern: all major AI coding tools converged on git worktrees for parallel agent isolation.",
+          "source_ids": [
+            "S1"
+          ],
+          "iteration": 0
+        },
+        {
+          "text": "No hard git limit on worktree count. Practical limits are RAM/CPU: ~5-6 concurrent worktrees with active builds on 32GB RAM, 10+ on 64GB. Developers find 2-4 manually trackable. Filesystem inode limits matter on ext4; XFS/ZFS preferred for high counts. Selective execution reduces overhead 60-80%.",
           "source_ids": [
             "S4"
           ],
           "iteration": 0
         },
         {
-          "text": "2024 DORA benchmark levels — Elite: lead time <1 day, deploy on demand, ~5% failure rate, recovery <1 hour (19% of respondents). High: lead time 1 day–1 week, deploy daily–weekly, ~20% failure rate, recovery <1 day (22%). Medium: lead time 1 week–1 month, deploy weekly–monthly, ~10% failure rate, recovery <1 day (35%). Low: remaining performers (25%). These are NOT pre-defined benchmarks — they shift year-to-year based on survey response clustering.",
+          "text": "Conflict avoidance patterns: (1) Each agent works in isolation on its own branch — conflicts handled at merge time. (2) Restrict agents to specific directories. (3) Prohibit force pushes and cross-branch modifications. (4) Use .claude/rules.md configuration guards per worktree. (5) Agent-created worktrees show 'slightly less consistent results' than human-established boundaries.",
           "source_ids": [
-            "S2",
-            "S6"
+            "S2"
           ],
           "iteration": 0
         },
         {
-          "text": "In 2025, DORA moved away from the low/medium/high/elite cluster model entirely, introducing a new framework based on 'archetypes' rather than fixed performance tiers. A fifth metric (reliability) has also been added to the original four.",
+          "text": "ComposioHQ agent-orchestrator is an open-source MIT-licensed orchestrator: each agent gets own worktree + branch + PR. Plugin architecture: runtime (tmux/Docker/K8s), agent (Claude Code/Codex/Aider), workspace (worktree/clone). CI failures auto-fixed with retry logic (default 2 attempts). Review comment routing back to agents. Dashboard on port 3000.",
           "source_ids": [
-            "S5"
+            "S3"
           ],
           "iteration": 0
         }
@@ -226,55 +311,63 @@
     },
     {
       "id": "q2",
-      "text": "What AI coding benchmarks exist (SWE-bench, HumanEval, MBPP, MultiPL-E, CodeContests, BigCodeBench), how is each scored (pass@k, exact match, execution-based), what are current state-of-the-art results, and how could a multi-agent orchestration system like Aether be evaluated against them?",
+      "text": "PR-based AI coding workflows: How do production AI coding tools (Cursor, Windsurf, Claude Code, Devin, Sweep, Aider) handle branch creation, PR generation, and merge automation? What is the state of the art for AI-generated PRs with proper descriptions, test evidence, and review context? Find open-source implementations and documented real workflows.",
       "status": "partial",
-      "confidence": 30,
+      "confidence": 35,
       "key_findings": [
         {
-          "text": "HumanEval contains 164 hand-crafted Python programming problems. MBPP contains 974 Python challenges (500 training, 474 test). Both use the pass@k metric: pass@k = 1 - C(n-c,k)/C(n,k), where n = total samples generated, c = correct samples passing unit tests, k = number of draws. This unbiased estimator calculates the probability that at least one of k drawn solutions passes all test cases. Typical evaluation: generate n>=k samples (commonly n=200), count correct c, compute formula.",
+          "text": "Claude Code GitHub Actions (anthropics/claude-code-action@v1): Full CI/CD PR workflow triggered by @claude mentions in issues/PRs. Auto-creates branches and PRs, supports skills integration, respects CLAUDE.md for coding standards. Configurable via claude_args (--max-turns, --model, --allowedTools). Supports direct API, AWS Bedrock, and Google Vertex AI backends. Auto-detects interactive vs automation mode. PR descriptions are AI-generated with 'why' focus.",
           "source_ids": [
             "S7",
-            "S8",
-            "S15"
-          ],
-          "iteration": 1
-        },
-        {
-          "text": "SWE-bench evaluates LLMs on real-world GitHub issues — given a codebase and issue description, the model generates a patch. Scored by 'resolved rate' (% of issues where the patch passes the repository's original unit tests). Three variants: SWE-bench Full (~2,300 tasks), SWE-bench Lite (300-instance curated subset), SWE-bench Verified (484 human-validated samples from 12 open-source Python repos). Models cannot modify tests — gold standard tests from the repo are used for grading.",
-          "source_ids": [
-            "S9",
-            "S11"
-          ],
-          "iteration": 1
-        },
-        {
-          "text": "Current SOTA on SWE-bench Verified (March 2026): Claude 4 Sonnet 77.2%, GPT-5 74.9%, Gemini 2.5 Pro 73.1%, Claude Opus 4 71.8%, GPT-4o 70.3%, o3-mini 69.5%, DeepSeek V3 68.4%. On HumanEval pass@1: o1-mini achieves 96.2%. Note: SWE-bench scores reflect agent scaffolding quality as much as raw model capability — the same model can score very differently with different scaffolds.",
-          "source_ids": [
-            "S12",
-            "S7"
-          ],
-          "iteration": 1
-        },
-        {
-          "text": "BigCodeBench is positioned as 'next-generation HumanEval' — 1,140 tasks requiring function calls across 139 libraries and 7 domains. Uses calibrated Pass@1 (adds missing imports during eval to counter 'model laziness') plus an Elo rating system (chess-style, 500 bootstrap iterations). Two variants: Complete (code completion from docstrings) and Instruct (natural language instructions). Human performance: 97%. Best models: ~61% on Complete, ~51% on Instruct — a much harder benchmark than HumanEval.",
-          "source_ids": [
-            "S10"
-          ],
-          "iteration": 1
-        },
-        {
-          "text": "MultiPL-E translates HumanEval and MBPP to 18 programming languages, enabling cross-language evaluation using the same test-case-based correctness methodology. CodeContests focuses on competitive programming problems but is less commonly used due to lack of easy evaluation infrastructure. Emerging benchmarks (2025-2026): SWE-bench Pro (enterprise complexity), FeatureBench (complex feature development), DPAI Arena by JetBrains (multi-workflow, multi-language), DevQualityEval, and SWE-EVO (long-horizon software evolution across multiple commits).",
-          "source_ids": [
-            "S13",
-            "S11",
             "S14"
           ],
           "iteration": 1
         },
         {
-          "text": "For multi-agent systems like Aether: existing benchmarks primarily evaluate isolated issue resolution (single patches), not multi-step orchestration. SWE-EVO (2026) specifically addresses this gap by evaluating agents on software evolution across multiple commits. DPAI Arena evaluates full engineering lifecycle workflows. However, no established benchmark directly measures task delegation efficiency, inter-agent communication overhead, or collective problem-solving — these would need custom instrumentation. Aether's 24-agent architecture with phase-based builds is closer to SWE-EVO's 'long-horizon' framing than traditional single-issue benchmarks.",
+          "text": "GitHub Copilot Coding Agent: Automates branch creation (copilot/<description> naming), commit writing, PR opening, and PR description writing. Works asynchronously in ephemeral GitHub Actions environments. Single repo, single PR per task. Review comments route back to agent for iteration. 40-60% success rate on well-scoped issues. Cannot bypass branch protection (e.g., signed commits).",
           "source_ids": [
-            "S14",
+            "S8",
+            "S9"
+          ],
+          "iteration": 1
+        },
+        {
+          "text": "Devin Review: Auto-reviews trigger on PR open, commit push, draft-to-ready transitions, or reviewer enrollment. Confidence-based bug labeling: 'Bugs' (severe/non-severe) and 'Flags' (investigate/informational). Auto-fix generates suggested code changes in the diff view. Groups changes logically (not alphabetically), detects code moves/copies. CLI available via 'npx devin-review {pr-url}' using git worktrees. Free for regular GitHub repos.",
+          "source_ids": [
+            "S10",
+            "S16"
+          ],
+          "iteration": 1
+        },
+        {
+          "text": "OpenAI Codex (openai/codex-action@v1): GitHub Action that installs codex-cli, starts Responses API proxy, runs codex exec. Supports @codex review comments on PRs, automatic review on every PR when enabled. Jira-to-GitHub PR automation pipeline available. GPT-5.2-Codex recommended for code review accuracy. Works with both GitHub Actions and Jenkins for on-premises deployments.",
+          "source_ids": [
+            "S11",
+            "S15"
+          ],
+          "iteration": 1
+        },
+        {
+          "text": "Aider: Tight git integration with auto-commits using Conventional Commits, '(aider)' attribution suffix on author/committer. In-chat /diff, /undo, /commit, /git commands. GitHub Action (mirrajabi/aider-github-action) for issue-to-PR workflows. No built-in branch management or merge automation — operates on current branch only. Codebase map for large project navigation.",
+          "source_ids": [
+            "S12",
+            "S17"
+          ],
+          "iteration": 1
+        },
+        {
+          "text": "Sweep AI (YC S23): Originally a GitHub issue-to-PR bot — describe task in issue, Sweep plans changes, writes code, creates PR with human review gate. Open-source. Now pivoted to JetBrains AI coding assistant while maintaining GitHub workflow capabilities.",
+          "source_ids": [
+            "S13"
+          ],
+          "iteration": 1
+        },
+        {
+          "text": "Industry convergence pattern: All major AI coding tools converged on the same workflow shape: (1) task/issue as input → PR as output, (2) AI creates branch + commits + PR description automatically, (3) human review as mandatory gate before merge, (4) CI/CD integration via GitHub Actions, (5) review comments routed back to agents for iteration, (6) CLAUDE.md/REVIEW.md instruction files for customizing agent behavior per repo.",
+          "source_ids": [
+            "S7",
+            "S8",
+            "S10",
             "S11"
           ],
           "iteration": 1
@@ -286,53 +379,63 @@
     },
     {
       "id": "q3",
-      "text": "What academic research exists on evaluating multi-agent AI systems — specifically metrics for task delegation efficiency, inter-agent communication overhead, autonomous decision accuracy, and collective problem-solving effectiveness (e.g., Park et al. generative agents, AutoGen, ChatDev, MetaGPT evaluations)?",
+      "text": "Aether architecture integration: How should Aether's existing systems map to a PR workflow? Specifically: 24 agents (builder, watcher, gatekeeper, auditor, probe), quality gates in continue-gates.md (7 mandatory gates), midden failure tracking, pheromone steering (FOCUS/REDIRECT/FEEDBACK), colony phases with task tracking. Should each phase become a PR? Should agents review each other's PRs? How does queen/colony-prime orchestrate parallel branch work? Examine existing worktree support (.claude/worktrees/agent-*).",
       "status": "partial",
       "confidence": 35,
       "key_findings": [
         {
-          "text": "ChatDev (ACL 2024) established four metrics for multi-agent software development: Completeness (% of software without placeholder code), Executability (% that compiles and runs), Consistency (cosine distance between semantic embeddings of requirements and generated code), and Quality (product of completeness × executability × consistency). Results: ChatDev scored Quality 0.3953 vs MetaGPT 0.1523 vs GPT-Engineer 0.1419. ChatDev won 88% of human pairwise evaluations against MetaGPT and 90.16% against GPT-Engineer.",
-          "source_ids": [
-            "S16",
-            "S20"
-          ],
-          "iteration": 2
-        },
-        {
-          "text": "Multi-agent communication overhead is quantifiable: ChatDev averages 22,949 tokens and 148.2 seconds per software task; MetaGPT uses 29,279 tokens and 154.0 seconds; single-agent GPT-Engineer uses only 7,183 tokens and 15.6 seconds. ChatDev generates 4.39 files (144.3 LOC avg), MetaGPT 4.42 files (153.3 LOC), GPT-Engineer 3.95 files (70.2 LOC). Multi-agent systems cost ~3-4x more tokens but produce 2x more code with significantly higher quality. Large multi-agent groups can exceed $10 per HumanEval task due to serial message billing.",
-          "source_ids": [
-            "S16",
-            "S20"
-          ],
-          "iteration": 2
-        },
-        {
-          "text": "ChatDev limits agent communication to 10 rounds per subtask or 2 unchanged code modifications (whichever comes first), establishing bounded interaction protocols. MetaGPT uses Standard Operating Procedures (SOPs) to structure agent delegation — roles include Product Manager, Architect, Project Manager, Engineer, QA. MetaGPT achieves 100% task completion rate and 3.9/4.0 executability score (vs ChatDev's 2.1/4.0), but lower quality score due to less cooperative communication.",
-          "source_ids": [
-            "S16",
-            "S20",
-            "S21"
-          ],
-          "iteration": 2
-        },
-        {
-          "text": "GEMMAS (EMNLP 2025 Industry) introduces graph-based metrics for multi-agent collaboration: Information Diversity Score (IDS) measures diversity of information exchanged among agents — whether agents leverage distinct knowledge sources. Unnecessary Path Ratio (UPR) measures collaboration efficiency: UPR = (Actual Steps - Optimal Steps) / Actual Steps, identifying redundant or circular interactions. Together IDS+UPR assess information richness and communication overhead beyond task-completion accuracy.",
+          "text": "Aether's 7 mandatory continue gates map naturally to PR status checks: (1) Spawn Enforcement — verify parallelism, (2) Anti-Pattern — scan for known bad patterns, (3) Gatekeeper — supply chain security (conditional on package.json), (4) Auditor — code quality scoring (block if score < 60 or critical findings), (5) TDD Evidence — verify test files exist for claimed tests, (6) Runtime Verification — interactive user confirmation, (7) Flags — no unresolved blockers. Gates 1-5 and 7 are automatable as GitHub Actions checks; Gate 6 (Runtime Verification) requires interactive user input and would need adaptation for PR workflows.",
           "source_ids": [
             "S18"
           ],
           "iteration": 2
         },
         {
-          "text": "MultiAgentBench (2025) evaluates LLM multi-agent systems using milestone-based KPIs across collaboration and competition scenarios. Tests coordination topologies: star, chain, tree, graph, group discussion, and cognitive planning. Graph topology performed best in research scenarios. Cognitive planning improved milestone achievement by 3%. gpt-4o-mini achieved the highest average task score. The benchmark measures both task completion and collaboration quality separately.",
+          "text": "No Aether agents currently use isolation: worktree in their definitions. All 24 agents run in the main repo context. Worker isolation is enforced through role-based tool restrictions: Watcher/Gatekeeper/Auditor are read-only (no Write/Edit/Bash), Builder writes only to assigned files, Probe writes only test files. This means switching to worktree-per-agent would be a new architectural pattern, not an enhancement of an existing one.",
+          "source_ids": [
+            "S21",
+            "S22",
+            "S23",
+            "S24"
+          ],
+          "iteration": 2
+        },
+        {
+          "text": "Build orchestration spawns workers in dependency-ordered waves: Wave 1 (no dependencies) runs in parallel via multiple Task tool calls, subsequent waves are sequential. Conditional agents (Oracle, Architect, Ambassador) spawn pre-wave. After all Builders, Watcher and Chaos are always spawned. This wave structure maps to a 'parallel PRs per wave, sequential merge between waves' pattern.",
           "source_ids": [
             "S19"
           ],
           "iteration": 2
         },
         {
-          "text": "Major ACM TOSEM survey (He et al., July 2025) identifies a critical gap: no standardized evaluation metrics exist for multi-agent SE collaboration. Current benchmarks fail to assess cooperation and collective decision-making. The survey proposes five evaluation dimensions needing development: (1) Collaborative Design — agents' capacity to converge on unified architecture, (2) Task Coordination — effective task division based on expertise, (3) Conflict Resolution — handling conflicts constructively in real time, (4) Integration Quality — seamless code integration and peer review, (5) Proactive Communication — agents preemptively requesting needed information. These remain proposed, not implemented.",
+          "text": "Review agents already produce structured JSON output ideal for PR comments: Watcher returns {verification_passed, issues_found[{severity, file, line, description}], quality_score 1-10}. Auditor returns {findings{critical, high, medium, low}, issues[{file, line, severity, category}], overall_score 0-100}. Gatekeeper returns {security_findings, licenses, version_pinning_gaps}. Probe returns {tests_added, coverage{lines%, branches%, functions%}, edge_cases_discovered}.",
           "source_ids": [
-            "S17"
+            "S21",
+            "S22",
+            "S23",
+            "S24"
+          ],
+          "iteration": 2
+        },
+        {
+          "text": "Colony-prime context assembly injects pheromones, QUEEN.md wisdom, instincts, research context, and skills into every worker prompt. In a PR workflow, colony-prime would need to run once per PR branch to set context, then again at merge time. The --compact mode (4K char budget) exists for context-constrained environments like CI.",
+          "source_ids": [
+            "S19"
+          ],
+          "iteration": 2
+        },
+        {
+          "text": "Continue flow has a natural PR lifecycle mapping: continue-verify (6-phase: build, types, lint, tests, coverage, secrets) → PR CI checks; continue-gates (7 gates) → PR required status checks; continue-advance (learning extraction, instinct creation, QUEEN.md promotion) → post-merge hooks; continue-finalize (changelog, handoff) → post-merge automation. The verification loop's command resolution chain (CLAUDE.md → codebase.md → language heuristics) would need to be replicated in CI config.",
+          "source_ids": [
+            "S20",
+            "S18"
+          ],
+          "iteration": 2
+        },
+        {
+          "text": "Build failure handling has a tiered escalation model: total wave failure → halt; partial wave failure → Tier 3 (Queen respawns with different caste); Tier 3 fails → Tier 4 (ask user). In a PR model, Tier 3 would mean auto-pushing fix commits to the PR branch; Tier 4 would mean requesting human review with context. Midden tracks failures with category/source/timestamp, and auto-emits REDIRECT pheromones when a category recurs 3+ times.",
+          "source_ids": [
+            "S19"
           ],
           "iteration": 2
         }
@@ -343,86 +446,138 @@
     },
     {
       "id": "q4",
-      "text": "What software quality metrics have rigorous published academic or standards-body backing (Halstead complexity, McCabe cyclomatic complexity, Maintainability Index, SQALE, ISO 25010 quality characteristics) — and what published thresholds define 'good' vs 'excellent' code quality?",
+      "text": "Review automation pipeline design: What should the automated review pipeline look like? Pre-merge gates (tests pass, lint clean, no antipatterns, coverage threshold), agent-based code review (watcher reviews builder's code, auditor scores quality, probe measures coverage), conflict detection and resolution strategy, merge approval criteria. Research how GitHub Actions + AI review tools (CodeRabbit, Sourcery) structure their review pipelines.",
       "status": "partial",
-      "confidence": 30,
+      "confidence": 60,
       "key_findings": [
         {
-          "text": "McCabe Cyclomatic Complexity (1976): Measures independent paths through a program's control flow graph. Formula: M = E - N + 2P (edges - nodes + 2*connected components). McCabe recommended an upper bound of 10, calling it 'a reasonable, but not magical, upper limit.' NIST SP 500-235 corroborated this threshold with substantial evidence. Risk categories: 1-10 simple/low risk, 11-20 moderate complexity, 21-50 complex/high risk, 50+ untestable. Limits above 10 reserved for projects with experienced staff, formal design, structured programming, code walkthroughs, and comprehensive test plans.",
+          "text": "CodeRabbit has a 4-stage PR review pipeline: (1) preprocess PR content and build context, (2) run LLM analysis, (3) post-process AI response, (4) post review as PR comments. Configurable via .coderabbit.yaml with review profiles: 'chill' (bugs and security only) vs 'assertive' (style, naming, docs, best practices). Supports one-click commit suggestions for simple fixes and 'Fix with AI' for complex changes. File-level custom instructions via path_filters and file_path_instructions.",
           "source_ids": [
-            "S22",
-            "S23"
+            "S25",
+            "S31",
+            "S33"
           ],
-          "iteration": 3
+          "iteration": 2
         },
         {
-          "text": "Halstead Complexity Measures (Maurice Halstead, 1977): Based on four base counts from source code tokens — n1 (distinct operators), n2 (distinct operands), N1 (total operators), N2 (total operands). Derived metrics: Vocabulary n = n1+n2, Program Length N = N1+N2, Calculated Length N' = n1*log2(n1) + n2*log2(n2), Volume V = N*log2(n), Difficulty D = (n1/2)*(N2/n2), Effort E = D*V, Time to program T = E/18 seconds, Predicted bugs B = V/3000. Published thresholds: function Volume should be 20-1000; Volume > 1000 indicates the function does too many things.",
+          "text": "Sourcery uses a hybrid LLM + static analysis approach: multiple specialized AI reviewers examine code from different angles, with a validation pass to reduce false positives. Tracks general code quality, security, complexity, docs, and testing. Per-function quality scores flag lowest-scoring functions. Configuration is primarily dashboard-based (not file-based like CodeRabbit). Static rule comments limited to Python and JavaScript only.",
           "source_ids": [
-            "S24",
-            "S25"
+            "S26"
           ],
-          "iteration": 3
+          "iteration": 2
         },
         {
-          "text": "ISO/IEC 25010:2023 — Updated November 2023 from the 2011 version. Defines nine quality characteristics (was eight): Functional Suitability, Performance Efficiency, Compatibility, Interaction Capability (renamed from Usability), Reliability, Security, Maintainability, Flexibility (renamed from Portability), and Safety (new). New subcharacteristics added: inclusivity, self-descriptiveness, resistance, scalability. User interface aesthetics replaced by user engagement; maturity replaced by faultlessness. Part of the SQuaRE (Systems and software Quality Requirements and Evaluation) family of standards.",
-          "source_ids": [
-            "S26",
-            "S27"
-          ],
-          "iteration": 3
-        },
-        {
-          "text": "Maintainability Index (MI): Original formula from Oman & Hagemeister (1992): MI = 171 - 5.2*ln(HV) - 0.23*CC - 16.2*ln(LOC), where HV = Halstead Volume, CC = Cyclomatic Complexity, LOC = Lines of Code. Visual Studio normalizes to 0-100 scale: MI = MAX(0, (171 - 5.2*ln(HV) - 0.23*CC - 16.2*ln(LOC)) * 100/171). Thresholds: Green 20-100 (good maintainability), Yellow 10-19 (moderate), Red 0-9 (low — high confidence of a problem). Microsoft chose conservative thresholds to minimize false positives.",
+          "text": "Clash (clash-sh/clash) provides pre-merge conflict detection between git worktrees via in-memory merge-tree simulation (Rust gix library). Non-destructive. Can integrate as a Claude Code PreToolUse hook running 'clash check <file>' before Write/Edit operations. Also supports 'clash status' (conflict matrix across all worktrees), 'clash watch' (live TUI), and JSON output for automation.",
           "source_ids": [
             "S28"
           ],
+          "iteration": 2
+        },
+        {
+          "text": "GitHub Actions gate aggregation uses the composite gate job pattern: a single required 'gate' job with 'needs: [lint, test, security, ...]' that runs only after all dependent jobs finish. Check suites aggregate the highest-priority conclusion from all check runs — if any single check fails, the suite reflects failure. Three successful statuses: success, skipped, neutral. All required checks must pass against the latest commit SHA before merge is allowed. For path-filtered workflows, skipped checks remain 'Pending' and block merge unless handled.",
+          "source_ids": [
+            "S34",
+            "S35",
+            "S42"
+          ],
           "iteration": 3
         },
         {
-          "text": "SQALE (Software Quality Assessment based on Lifecycle Expectations, Letouzey 2012): Method for evaluating technical debt based on ISO 9126/ISO 25010 quality model. Measures the 'distance to conformity' as remediation cost — estimated time to fix each non-conformance found by static analysis. Two cost models: remediation cost (time to fix) and non-remediation cost (ongoing business impact of leaving debt unfixed). Quality characteristics mapped directly to ISO 25010 hierarchy, enabling standardized cost-benefit analysis for technical debt prioritization. Used by SonarQube as the underlying technical debt measurement model.",
+          "text": "Two auto-fix commit patterns emerged in 2025-2026: (1) Direct commit — CodeRabbit's '@coderabbitai autofix' pushes fixes directly to the current PR branch as a single commit. (2) Stacked PR — '@coderabbitai autofix stacked pr' creates a separate branch off the working branch and opens an independent PR targeting it. The 4-step autofix flow: trigger (PR comment or checkbox) → collection (scan unresolved threads, gather 'Prompt for AI Agents' blocks) → generation+verification (agent applies fixes, runs build verification) → delivery (commit or stacked PR). Even if verification fails, changes are still delivered for iteration.",
           "source_ids": [
-            "S29",
-            "S30"
+            "S38",
+            "S41"
+          ],
+          "iteration": 3
+        },
+        {
+          "text": "Good To Go (dsifry/goodtogo) provides deterministic PR readiness detection for AI coding agents. Classifies every PR comment as ACTIONABLE (must fix), NON_ACTIONABLE (safe to ignore: praise, nitpicks, resolved), or AMBIGUOUS (needs human judgment). Has built-in parsers for CodeRabbit, Greptile, Claude Code, and Cursor review formats. Returns one of 5 statuses: READY, ACTION_REQUIRED, UNRESOLVED, CI_FAILING, ERROR. JSON output: {status, action_items[], actionable_comments[], ci_status{}, threads{}}. Can be deployed as a GitHub Actions required status check. Supports '/rerun-gtg' comment command for re-checks without rebuilding CI.",
+          "source_ids": [
+            "S36",
+            "S37"
+          ],
+          "iteration": 3
+        },
+        {
+          "text": "gh-pr-review CLI extension provides LLM-optimized PR review thread management. Single 'review view' command returns entire assembled review structure as JSON (reviews → comments → thread_comments hierarchy with thread_id, path, line, is_resolved, is_outdated). Agent workflow: (1) fetch unresolved threads via 'gh pr-review review view --unresolved --not_outdated', (2) reply with 'comments reply --thread-id <id> --body \"Fixed in commit abc\"', (3) resolve via 'threads resolve --thread-id <id>'. Server-side filtering (--reviewer, --states, --unresolved, --tail) reduces payload for LLM token efficiency. Registers as Vercel add-skill for agent integration.",
+          "source_ids": [
+            "S39"
+          ],
+          "iteration": 3
+        },
+        {
+          "text": "Pipeline composition for Aether should follow a 5-tier design: Tier 1 (CI, parallel) — build, types, lint, tests, coverage, secrets scan, anti-pattern scan; Tier 2 (Agent Reviews, parallel after Tier 1) — Watcher verification, Gatekeeper security, Auditor quality gate, Probe coverage, Chaos resilience; Tier 3 (Aggregation) — composite gate job aggregates Tier 1+2, Good To Go readiness check evaluates comment/thread resolution; Tier 4 (Human Gate) — required human review approval + runtime verification confirmation; Tier 5 (Post-merge) — learning extraction, instinct creation, QUEEN.md promotion, changelog, pheromone updates. This maps Aether's existing continue-verify (Tier 1), continue-gates (Tier 2+3), and continue-advance/finalize (Tier 5) into a PR-native structure.",
+          "source_ids": [
+            "S18",
+            "S20",
+            "S34",
+            "S35",
+            "S36"
+          ],
+          "iteration": 3
+        },
+        {
+          "text": "Factory.ai's Agent Readiness framework evaluates repository maturity across 8 dimensions (style/validation, build, testing, docs, dev environment, code quality, observability, security) with 5 maturity levels. Level 3 ('Standardized') is the threshold for 'production-ready for agents' — requiring E2E tests, maintained docs, security scanning. Binary pass/fail criteria based on file existence and configuration parsing. Progression requires 80% of criteria at each level plus all previous levels. This provides a framework for evaluating whether a repo is ready for Aether's PR workflow automation.",
+          "source_ids": [
+            "S40"
           ],
           "iteration": 3
         }
       ],
       "iterations_touched": [
+        2,
         3
       ]
     },
     {
       "id": "q5",
-      "text": "What empirical software engineering metrics exist for reliability measurement — defect density per KLOC, test coverage effectiveness (mutation testing, branch vs line), MTTR, reliability growth models — with published industry benchmarks from IEEE, ISO, or academic sources?",
-      "status": "open",
-      "confidence": 0,
-      "key_findings": [],
-      "iterations_touched": []
-    },
-    {
-      "id": "q6",
-      "text": "How could Aether instrument its existing data sources (580+ tests across 64 test files, 24 agents with structured JSON returns, pheromone signal lifecycle, midden failure tracking, colony state phase transitions, build phase timing, learning/instinct promotion pipeline) to concretely calculate the metrics identified in q1-q5?",
-      "status": "open",
-      "confidence": 0,
-      "key_findings": [],
-      "iterations_touched": []
-    },
-    {
-      "id": "q7",
-      "text": "What presentation frameworks and maturity models exist for communicating development progress to non-technical sponsors (Capability Maturity Model CMMI, Technology Readiness Levels TRL, OKR-based dashboards, GitHub's 'readme stats' patterns) — which would best serve an open-source AI tool website seeking donations?",
-      "status": "open",
-      "confidence": 0,
-      "key_findings": [],
-      "iterations_touched": []
+      "text": "Branch naming, organization, and safeguards: What branch naming conventions work for AI-generated work? How to organize feature/fix/experiment branches? How to handle long-lived vs short-lived branches? What safety mechanisms are needed: merge conflict handling, force-push prevention, main branch protection, rollback to pre-merge state, partial failure handling (some PRs pass, some fail in a batch)?",
+      "status": "partial",
+      "confidence": 25,
+      "key_findings": [
+        {
+          "text": "AI tool branch naming conventions: Copilot uses 'copilot/<description>' (changed Oct 2025 from UUIDs to human-readable), Codex uses 'codex/<description>', Claude Code uses 'worktree-<name>' (active community request to make prefix configurable). Community recommendation: 'ai/<agent-name>/<task>' pattern (e.g. 'ai/claude/add-authentication-feature'). No tool currently allows custom prefix configuration.",
+          "source_ids": [
+            "S30",
+            "S29"
+          ],
+          "iteration": 2
+        },
+        {
+          "text": "GitHub Ruleset safeguards for AI agent branches: (1) Required human approval before merge — single most important safeguard, (2) Stale approval dismissal — new commits after approval auto-revoke it, (3) Force push prevention — disabled by default on protected branches, (4) Code scanning as required status check. Empirical: 0 unauthorized writes landed in protected branches across 50 test runs.",
+          "source_ids": [
+            "S27"
+          ],
+          "iteration": 2
+        },
+        {
+          "text": "Conflict hotspot patterns for parallel AI agents: shared files (route definitions, config files, barrel exports/index files) are primary conflict sources. Mitigations: single-writer rules per file, additive-only changes in separate files, early and frequent merges back to main. Lock file divergence (package-lock.json, yarn.lock) is an underappreciated conflict source when parallel agents independently install packages.",
+          "source_ids": [
+            "S32",
+            "S28"
+          ],
+          "iteration": 2
+        },
+        {
+          "text": "AI agent CI tokens should be scoped to single repo with 60-minute TTL to limit blast radius. Stale worktree references accumulate silently after deletion — 'git worktree prune' should run periodically in orchestration systems.",
+          "source_ids": [
+            "S27"
+          ],
+          "iteration": 2
+        }
+      ],
+      "iterations_touched": [
+        2
+      ]
     }
   ],
-  "created_at": "2026-03-30T00:00:00Z",
-  "last_updated": "2026-03-30T08:45:00Z",
+  "created_at": "2026-03-30T20:30:00Z",
+  "last_updated": "2026-03-30T21:45:00Z",
   "trust_summary": {
-    "total_findings": 21,
-    "single_source": 7,
-    "multi_source": 14,
+    "total_findings": 33,
+    "single_source": 16,
+    "multi_source": 17,
     "no_source": 0,
-    "trust_ratio": 66
+    "trust_ratio": 51
   }
 }

@@ -1,27 +1,25 @@
 # Research Plan
 
-**Topic:** Scientifically established and industry-standard software engineering metrics for measuring development tool efficiency and AI-assisted coding productivity — for Aether website showcase to sponsors and backers
-**Status:** active | **Iteration:** 4 of 50
-**Overall Confidence:** 24%
+**Topic:** PR-based, branch/worktree coding workflow for Aether's multi-agent colony system
+**Status:** active | **Iteration:** 4 of 30
+**Overall Confidence:** 39%
 
 ## Questions
 | # | Question | Status | Confidence |
 |---|----------|--------|------------|
-| q1 | What are the four DORA metrics (Lead Time for Changes, Deployment Frequency, Change Failure Rate, Mean Time to Recovery) — their academic origins in Forsgren et al. 'Accelerate' (2018), exact calculation formulas, and what Google's benchmarks define as 'low', 'medium', 'high', and 'elite' performance levels? | partial | 35% |
-| q2 | What AI coding benchmarks exist (SWE-bench, HumanEval, MBPP, MultiPL-E, CodeContests, BigCodeBench), how is each scored (pass@k, exact match, execution-based), what are current state-of-the-art results, and how could a multi-agent orchestration system like Aether be evaluated against them? | partial | 30% |
-| q3 | What academic research exists on evaluating multi-agent AI systems — specifically metrics for task delegation efficiency, inter-agent communication overhead, autonomous decision accuracy, and collective problem-solving effectiveness (e.g., Park et al. generative agents, AutoGen, ChatDev, MetaGPT evaluations)? | partial | 35% |
-| q4 | What software quality metrics have rigorous published academic or standards-body backing (Halstead complexity, McCabe cyclomatic complexity, Maintainability Index, SQALE, ISO 25010 quality characteristics) — and what published thresholds define 'good' vs 'excellent' code quality? | partial | 30% |
-| q5 | What empirical software engineering metrics exist for reliability measurement — defect density per KLOC, test coverage effectiveness (mutation testing, branch vs line), MTTR, reliability growth models — with published industry benchmarks from IEEE, ISO, or academic sources? | open | 0% |
-| q6 | How could Aether instrument its existing data sources (580+ tests across 64 test files, 24 agents with structured JSON returns, pheromone signal lifecycle, midden failure tracking, colony state phase transitions, build phase timing, learning/instinct promotion pipeline) to concretely calculate the metrics identified in q1-q5? | open | 0% |
-| q7 | What presentation frameworks and maturity models exist for communicating development progress to non-technical sponsors (Capability Maturity Model CMMI, Technology Readiness Levels TRL, OKR-based dashboards, GitHub's 'readme stats' patterns) — which would best serve an open-source AI tool website seeking donations? | open | 0% |
+| q1 | Git worktree workflows for AI agents: How do Cursor Worktrees, Claude Code multi-branch patterns, and Copilot Workspace handle parallel AI development on separate branches? What are proven patterns for avoiding conflicts between parallel agent worktrees? What is the max safe number of parallel worktrees and how are they cleaned up? | partial | 40% |
+| q2 | PR-based AI coding workflows: How do production AI coding tools (Cursor, Windsurf, Claude Code, Devin, Sweep, Aider) handle branch creation, PR generation, and merge automation? What is the state of the art for AI-generated PRs with proper descriptions, test evidence, and review context? Find open-source implementations and documented real workflows. | partial | 35% |
+| q3 | Aether architecture integration: How should Aether's existing systems map to a PR workflow? Specifically: 24 agents (builder, watcher, gatekeeper, auditor, probe), quality gates in continue-gates.md (7 mandatory gates), midden failure tracking, pheromone steering (FOCUS/REDIRECT/FEEDBACK), colony phases with task tracking. Should each phase become a PR? Should agents review each other's PRs? How does queen/colony-prime orchestrate parallel branch work? Examine existing worktree support (.claude/worktrees/agent-*). | partial | 35% |
+| q4 | Review automation pipeline design: What should the automated review pipeline look like? Pre-merge gates (tests pass, lint clean, no antipatterns, coverage threshold), agent-based code review (watcher reviews builder's code, auditor scores quality, probe measures coverage), conflict detection and resolution strategy, merge approval criteria. Research how GitHub Actions + AI review tools (CodeRabbit, Sourcery) structure their review pipelines. | partial | 60% |
+| q5 | Branch naming, organization, and safeguards: What branch naming conventions work for AI-generated work? How to organize feature/fix/experiment branches? How to handle long-lived vs short-lived branches? What safety mechanisms are needed: merge conflict handling, force-push prevention, main branch protection, rollback to pre-merge state, partial failure handling (some PRs pass, some fail in a batch)? | partial | 25% |
 
 ## Next Steps
-Next investigation: What empirical software engineering metrics exist for reliability measurement — defect density per KLOC, test coverage effectiveness (mutation testing, branch vs line), MTTR, reliability growth models — with published industry benchmarks from IEEE, ISO, or academic sources?
+Next investigation: Branch naming, organization, and safeguards: What branch naming conventions work for AI-generated work? How to organize feature/fix/experiment branches? How to handle long-lived vs short-lived branches? What safety mechanisms are needed: merge conflict handling, force-push prevention, main branch protection, rollback to pre-merge state, partial failure handling (some PRs pass, some fail in a batch)?
 
 ## Source Trust
 | Total Findings | Multi-Source | Single-Source | Trust Ratio |
 |----------------|-------------|---------------|-------------|
-| 21 | 14 | 7 | 66% |
+| 33 | 17 | 16 | 51% |
 
 ---
 *Generated from plan.json -- do not edit directly*

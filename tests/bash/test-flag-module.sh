@@ -144,6 +144,61 @@ test_flag_check_blockers() {
 }
 
 # ============================================================================
+# Test: flag-list --type rejects jq metacharacters (no filter injection)
+# ============================================================================
+test_flag_list_type_no_injection() {
+    local tmp_dir
+    tmp_dir=$(setup_flag_env)
+
+    # Add a single blocker flag
+    run_flag_cmd "$tmp_dir" flag-add blocker "Safe flag" "Testing injection guard" > /dev/null
+
+    # Inject jq via --type using comma-operator payload.
+    # If filter_type is interpolated unsafely into the jq filter string,
+    # the payload 'blocker", .version, "' breaks out of the string literal
+    # and turns select(.type == "blocker", .version, "") into a comma
+    # expression where .version (truthy "1") lets every flag through twice,
+    # producing count=2 instead of count=1.
+    local result
+    result=$(run_flag_cmd "$tmp_dir" flag-list --type 'blocker", .version, "')
+
+    # With the fix, the type string is passed via --arg and no injection
+    # occurs: the literal string won't match any .type field, so count must be 0.
+    # Before the fix, injection duplicates the flag yielding count=2.
+    local count
+    count=$(echo "$result" | jq -r '.result.count // 0' 2>/dev/null)
+    [[ "$count" -eq 0 ]] || { rm -rf "$tmp_dir"; return 1; }
+
+    rm -rf "$tmp_dir"
+}
+
+# ============================================================================
+# Test: flag-list --type with valid type works correctly
+# ============================================================================
+test_flag_list_type_filter() {
+    local tmp_dir
+    tmp_dir=$(setup_flag_env)
+
+    # Add a blocker and a note
+    run_flag_cmd "$tmp_dir" flag-add blocker "Blocker A" "desc" > /dev/null
+    run_flag_cmd "$tmp_dir" flag-add note "Note B" "desc" > /dev/null
+
+    # Filter for blocker only
+    local result
+    result=$(run_flag_cmd "$tmp_dir" flag-list --type blocker)
+
+    assert_ok_true "$result" || { rm -rf "$tmp_dir"; return 1; }
+
+    local count
+    count=$(echo "$result" | jq -r '.result.count')
+    [[ "$count" -eq 1 ]] || { rm -rf "$tmp_dir"; return 1; }
+
+    assert_json_field_equals "$result" ".result.flags[0].type" "blocker" || { rm -rf "$tmp_dir"; return 1; }
+
+    rm -rf "$tmp_dir"
+}
+
+# ============================================================================
 # Run all tests
 # ============================================================================
 echo "=== Flag Module Smoke Tests ==="
@@ -153,5 +208,7 @@ run_test test_module_exists "flag.sh exists and passes syntax check"
 run_test test_flag_add "flag-add creates flag with correct type and severity"
 run_test test_flag_list "flag-list returns added flags"
 run_test test_flag_check_blockers "flag-check-blockers detects blocker flags"
+run_test test_flag_list_type_no_injection "flag-list --type rejects jq metacharacter injection"
+run_test test_flag_list_type_filter "flag-list --type filters correctly by type"
 
 test_summary

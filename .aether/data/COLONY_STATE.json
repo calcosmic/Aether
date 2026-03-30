@@ -4,7 +4,7 @@
   "colony_name": null,
   "colony_version": 1,
   "state": "READY",
-  "current_phase": 3,
+  "current_phase": 5,
   "session_id": "session_1774856077_89243",
   "initialized_at": "2026-03-30T07:34:37Z",
   "build_started_at": null,
@@ -27,7 +27,7 @@
       {
         "id": 3,
         "name": "Harden remaining scattered json_ok sites",
-        "status": "pending",
+        "status": "completed",
         "description": "Convert ~15 remaining string-interpolating json_ok calls across view-state, rolling-summary, memory-capture, registry-add, and utils modules"
       },
       {
@@ -90,6 +90,28 @@
           }
         ],
         "timestamp": "2026-03-30T10:17:54Z"
+      },
+      {
+        "id": "learning_1774874400",
+        "phase": 3,
+        "phase_name": "Harden remaining scattered json_ok sites",
+        "learnings": [
+          {
+            "claim": "json_ok hardening has two distinct injection classes: string interpolation in JSON output (json_ok pattern) and variable interpolation in jq filter expressions (.${var} pattern) — both require --arg parameterization but at different layers",
+            "status": "validated",
+            "tested": true,
+            "evidence": "Auditor caught view-state .${view_name} jq filter injection (lines 3147/3150/3182) as a HIGH finding separate from the json_ok string sites; both fixed with --arg",
+            "disproven_by": null
+          },
+          {
+            "claim": "Quality gate re-audit after fixing HIGH findings raised score from 53 to 73, confirming the fixes addressed the root issues not just symptoms",
+            "status": "validated",
+            "tested": true,
+            "evidence": "Auditor Check-85 confirmed 0 HIGH findings after fixing view-state and fallback json_err",
+            "disproven_by": null
+          }
+        ],
+        "timestamp": "2026-03-30T11:45:00Z"
       }
     ],
     "decisions": [],
@@ -113,6 +135,24 @@
         "failures": 0
       },
       {
+        "id": "instinct_1774871005",
+        "trigger": "hardening jq filter expressions with user-controlled variables",
+        "action": "Use jq --arg for string variables and --argjson for numeric/boolean instead of raw .dollar-var interpolation in jq filter strings",
+        "confidence": 0.85,
+        "status": "hypothesis",
+        "domain": "code-style",
+        "source": "phase-3",
+        "evidence": [
+          "view-state .dollar-view_name jq filter injection caught by Auditor; same class as json_ok string injection but at filter layer"
+        ],
+        "tested": false,
+        "created_at": "2026-03-30T11:43:25Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
         "id": "instinct_1774866123",
         "trigger": "validating JSON files that may be empty",
         "action": "Check file size with -s flag before running jq parse; return valid pass result for empty legacy files",
@@ -125,6 +165,42 @@
         ],
         "tested": false,
         "created_at": "2026-03-30T10:22:03Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774871012",
+        "trigger": "working on pattern patterns",
+        "action": "json_ok hardening has two distinct injection classes: string interpolation in JSON output (json_ok pattern) and variable interpolation in jq filter expressions (.${var} pattern) — both require --arg parameterization but at different layers",
+        "confidence": 0.70,
+        "status": "hypothesis",
+        "domain": "pattern",
+        "source": "promoted_from_learning",
+        "evidence": [
+          ""
+        ],
+        "tested": false,
+        "created_at": "2026-03-30T11:43:32Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774871015",
+        "trigger": "working on pattern patterns",
+        "action": "Quality gate re-audit after fixing HIGH findings raised score from 53 to 73, confirming the fixes addressed the root issues not just symptoms",
+        "confidence": 0.70,
+        "status": "hypothesis",
+        "domain": "pattern",
+        "source": "promoted_from_learning",
+        "evidence": [
+          ""
+        ],
+        "tested": false,
+        "created_at": "2026-03-30T11:43:35Z",
         "last_applied": null,
         "applications": 0,
         "successes": 0,
@@ -147,6 +223,9 @@
     "2026-03-30T09:39:00Z|phase_completed|continue|Phase 2: Harden commit-message + changelog + activity-log json_ok sites completed (reconciled)",
     "2026-03-30T09:39:00Z|phase_advanced|continue|Completed Phase 2, advancing to Phase 3 (reconciled)",
     "2026-03-30T09:45:00Z|phase_completed|continue|Phase 4: Add per-phase checkpointing to continue and seal completed (reconciled)",
-    "2026-03-30T10:17:54Z|state_reconciled|continue|State reconciled: Phases 2 and 4 marked completed, current_phase set to 3"
+    "2026-03-30T10:17:54Z|state_reconciled|continue|State reconciled: Phases 2 and 4 marked completed, current_phase set to 3",
+    "2026-03-30T12:00:00Z|phase_started|build|Phase 3: Harden remaining scattered json_ok sites started",
+    "2026-03-30T11:45:00Z|phase_completed|continue|Phase 3: Harden remaining scattered json_ok sites completed",
+    "2026-03-30T11:45:00Z|phase_advanced|continue|Completed Phase 3, advancing to Phase 5 (Phase 4 already completed)"
   ]
 }

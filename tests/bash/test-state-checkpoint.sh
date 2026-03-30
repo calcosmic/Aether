@@ -186,6 +186,44 @@ test_checkpoint_in_source() {
 }
 
 # ============================================================================
+# Test 5: state-checkpoint records the correct reason for all 3 checkpoint sites
+# ============================================================================
+test_checkpoint_reason_recorded() {
+    local tmpdir
+    tmpdir=$(setup_checkpoint_env)
+
+    local reasons=("pre-build-wave" "pre-continue-advance" "pre-seal")
+    local all_pass=true
+
+    for reason in "${reasons[@]}"; do
+        local result exit_code=0
+        result=$(run_cmd "$tmpdir" state-checkpoint "$reason") || exit_code=$?
+
+        if [[ "$exit_code" -ne 0 ]]; then
+            test_fail "Expected exit code 0 for reason '$reason'" "Got exit code $exit_code, output: $result"
+            all_pass=false
+            continue
+        fi
+
+        local recorded_reason
+        recorded_reason=$(echo "$result" | jq -r '.result.reason' 2>/dev/null)
+
+        if [[ "$recorded_reason" != "$reason" ]]; then
+            test_fail "Expected reason '$reason'" "Got '$recorded_reason' from: $result"
+            all_pass=false
+        fi
+    done
+
+    rm -rf "$tmpdir"
+
+    if [[ "$all_pass" == "true" ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# ============================================================================
 # Run all tests
 # ============================================================================
 
@@ -196,5 +234,6 @@ run_test test_checkpoint_creates_backup "state-checkpoint creates backup file"
 run_test test_checkpoint_max_3_retention "state-checkpoint retains at most 3 backups"
 run_test test_checkpoint_refuses_corrupt "state-checkpoint refuses corrupt COLONY_STATE.json"
 run_test test_checkpoint_in_source "state-checkpoint registered in aether-utils.sh"
+run_test test_checkpoint_reason_recorded "state-checkpoint records correct reason for all 3 checkpoint sites"
 
 test_summary
