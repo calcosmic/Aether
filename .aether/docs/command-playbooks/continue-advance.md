@@ -315,6 +315,32 @@ bash .aether/aether-utils.sh state-mutate \
 Validate the state file:
 Run using the Bash tool with description "Validating colony state...": `bash .aether/aether-utils.sh validate-state colony`
 
+### Step 2.0.5: Pheromone Merge-Back (SILENT, NON-BLOCKING)
+
+If a `pheromone-branch-export.json` exists in `.aether/exchange/` (written by seal ceremony on a PR branch and merged to main), run merge-back to collect branch-discovered signals into main's pheromone store. This entire step is silent and non-blocking -- continue proceeds even if merge-back fails.
+
+Run using the Bash tool with description "Checking for pheromone merge-back file...":
+```bash
+# Check if a branch pheromone export was merged into main
+export_file=".aether/exchange/pheromone-branch-export.json"
+if [[ -f "$export_file" ]]; then
+  merge_result=$(bash .aether/aether-utils.sh pheromone-merge-back --export-file "$export_file" 2>/dev/null || echo '{"ok":false}')
+  merge_ok=$(echo "$merge_result" | jq -r '.ok // false' 2>/dev/null)
+  if [[ "$merge_ok" == "true" ]]; then
+    new_count=$(echo "$merge_result" | jq -r '.result.new_signals_written // 0' 2>/dev/null)
+    skipped=$(echo "$merge_result" | jq -r '.result.skipped_count // 0' 2>/dev/null)
+    conflicts=$(echo "$merge_result" | jq -r '.result.conflicts_resolved // [] | length' 2>/dev/null)
+    if [[ "$new_count" -gt 0 || "$conflicts" -gt 0 ]]; then
+      echo "Pheromone merge-back: $new_count new, $conflicts conflicts resolved, $skipped skipped (from merged branch)"
+    fi
+    # Clean up export file after successful merge
+    rm -f "$export_file" 2>/dev/null || true
+  else
+    echo "Pheromone merge-back: failed (non-blocking)"
+  fi
+fi
+```
+
 ### Step 2.1: Auto-Emit Phase Pheromones (SILENT)
 
 **This entire step produces NO user-visible output.** All pheromone operations run silently — learnings are deposited in the background. If any pheromone call fails, log the error and continue. Phase advancement must never fail due to pheromone errors.
