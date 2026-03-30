@@ -285,19 +285,115 @@ Update COLONY_STATE.json:
    - Keep max 30 instincts (remove lowest confidence)
    - Keep max 100 events
 
-Write the updated state through the locked subcommand. Construct the full updated COLONY_STATE.json content as a variable, then pipe it to state-write:
+Write the updated state through targeted `state-mutate` calls. Each call acquires a lock, creates a backup, applies the jq expression, validates, and writes atomically. Do NOT use the Write tool or `state-write` with full JSON content — always use `state-mutate` to avoid stale-context corruption.
 
-Run using the Bash tool with description "Writing colony state...":
+Run using the Bash tool with description "Advancing colony state...":
 ```bash
-cat << 'STATEOF' | bash .aether/aether-utils.sh state-write
-<the full JSON content>
-STATEOF
+# Mark current phase completed
+bash .aether/aether-utils.sh state-mutate --argjson pid "$current_phase" \
+  '.plan.phases |= map(if .id == $pid then .status = "completed" else . end)'
+
+# Append learning (if any — skip if no learnings were extracted in Step 2)
+# bash .aether/aether-utils.sh state-mutate --argjson learning "$learning_json" \
+#   '.memory.phase_learnings += [$learning]'
+
+# Advance to next phase
+bash .aether/aether-utils.sh state-mutate \
+  --argjson pid "$current_phase" \
+  --argjson next "$next_phase" \
+  --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  '.current_phase = $next | .state = "READY" | .build_started_at = null | .events += [$timestamp + "|phase_advanced|continue|Completed Phase " + ($pid|tostring) + ", advancing to Phase " + ($next|tostring)]'
 ```
 
-This acquires a lock, creates a rolling backup, validates JSON, and writes atomically. Do NOT use the Write tool to write COLONY_STATE.json directly — always go through state-write.
+Run using the Bash tool with description "Enforcing memory caps...":
+```bash
+# Cap enforcement — keep arrays bounded
+bash .aether/aether-utils.sh state-mutate \
+  '.memory.phase_learnings = (.memory.phase_learnings[-20:]) | .memory.decisions = (.memory.decisions[-30:]) | .memory.instincts = (.memory.instincts | sort_by(.confidence) | .[-30:]) | .events = (.events[-100:])'
+```
 
 Validate the state file:
 Run using the Bash tool with description "Validating colony state...": `bash .aether/aether-utils.sh validate-state colony`
+
+### Step 2.0.5: Pheromone Merge-Back (SILENT, NON-BLOCKING)
+
+If a `pheromone-branch-export.json` exists in `.aether/exchange/` (written by seal ceremony on a PR branch and merged to main), run merge-back to collect branch-discovered signals into main's pheromone store. This entire step is silent and non-blocking -- continue proceeds even if merge-back fails.
+
+Run using the Bash tool with description "Checking for pheromone merge-back file...":
+```bash
+# Check if a branch pheromone export was merged into main
+export_file=".aether/exchange/pheromone-branch-export.json"
+if [[ -f "$export_file" ]]; then
+  merge_result=$(bash .aether/aether-utils.sh pheromone-merge-back --export-file "$export_file" 2>/dev/null || echo '{"ok":false}')
+  merge_ok=$(echo "$merge_result" | jq -r '.ok // false' 2>/dev/null)
+  if [[ "$merge_ok" == "true" ]]; then
+    new_count=$(echo "$merge_result" | jq -r '.result.new_signals_written // 0' 2>/dev/null)
+    skipped=$(echo "$merge_result" | jq -r '.result.skipped_count // 0' 2>/dev/null)
+    conflicts=$(echo "$merge_result" | jq -r '.result.conflicts_resolved // [] | length' 2>/dev/null)
+    if [[ "$new_count" -gt 0 || "$conflicts" -gt 0 ]]; then
+      echo "Pheromone merge-back: $new_count new, $conflicts conflicts resolved, $skipped skipped (from merged branch)"
+    fi
+    # Clean up export file after successful merge
+    rm -f "$export_file" 2>/dev/null || true
+  else
+    echo "Pheromone merge-back: failed (non-blocking)"
+  fi
+fi
+```
+
+### Step 2.0.6: Midden Collection (NON-BLOCKING)
+
+After pheromone merge-back, collect failure records from any recently merged branch worktrees. This step is silent and non-blocking -- continue proceeds even if collection fails.
+
+**Per D-04: Wire midden-collect into /ant:continue flow.**
+
+If the colony uses a PR-based workflow and a merge just happened, attempt to collect the branch's midden entries:
+
+Run using the Bash tool with description "Collecting branch midden entries...":
+```bash
+# Check if there's a recently merged branch to collect from
+# The merge info comes from git log or COLONY_STATE context
+last_merge_branch="${last_merged_branch:-}"
+last_merge_sha="${last_merge_sha:-}"
+
+if [[ -n "$last_merge_branch" && -n "$last_merge_sha" ]]; then
+  collect_result=$(bash .aether/aether-utils.sh midden-collect \
+    --branch "$last_merge_branch" --merge-sha "$last_merge_sha" \
+    2>/dev/null || echo '{"ok":false}')
+  collect_ok=$(echo "$collect_result" | jq -r '.ok // false' 2>/dev/null)
+  if [[ "$collect_ok" == "true" ]]; then
+    collect_status=$(echo "$collect_result" | jq -r '.result.status // "unknown"' 2>/dev/null)
+    if [[ "$collect_status" == "collected" ]]; then
+      new_entries=$(echo "$collect_result" | jq -r '.result.entries_collected // 0' 2>/dev/null)
+      echo "Midden: collected $new_entries failure entries from branch $last_merge_branch"
+    fi
+  fi
+fi
+```
+
+This step is NON-BLOCKING -- continue proceeds regardless of collection outcome. If `last_merge_branch` and `last_merge_sha` are not set (e.g., no recent merge), this step is silently skipped.
+
+### Step 2.0.7: Cross-PR Midden Analysis (NON-BLOCKING)
+
+After midden collection (Step 2.0.6), run cross-PR analysis to detect systemic failure patterns across multiple merged branches. Auto-emits REDIRECT pheromones to hub if systemic patterns found.
+
+**Per D-05: Wire midden-cross-pr-analysis into /ant:continue flow.**
+
+Run using the Bash tool with description "Running cross-PR midden analysis...":
+```bash
+analysis_result=$(bash .aether/aether-utils.sh midden-cross-pr-analysis --window 14 \
+  2>/dev/null || echo '{"ok":false}')
+analysis_ok=$(echo "$analysis_result" | jq -r '.ok // false' 2>/dev/null)
+if [[ "$analysis_ok" == "true" ]]; then
+  systemic=$(echo "$analysis_result" | jq -r '.result.systemic_categories // [] | length' 2>/dev/null || echo "0")
+  if [[ "$systemic" -gt 0 ]]; then
+    categories=$(echo "$analysis_result" | jq -r '.result.systemic_categories | join(", ")' 2>/dev/null)
+    echo "Midden: cross-PR systemic pattern detected in: $categories (REDIRECT emitted)"
+  fi
+fi
+```
+
+This step is NON-BLOCKING -- advance proceeds regardless of analysis outcome.
 
 ### Step 2.1: Auto-Emit Phase Pheromones (SILENT)
 
