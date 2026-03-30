@@ -573,6 +573,25 @@ Read current COLONY_STATE.json, then update:
 
 Write COLONY_STATE.json.
 
+**Verify the write** — read back and confirm the plan persisted:
+```bash
+verify_phases=$(jq '.plan.phases | length' .aether/data/COLONY_STATE.json)
+verify_timestamp=$(jq -r '.plan.generated_at' .aether/data/COLONY_STATE.json)
+verify_state=$(jq -r '.state' .aether/data/COLONY_STATE.json)
+if [[ "$verify_phases" -lt 1 || "$verify_timestamp" == "null" || "$verify_state" != "READY" ]]; then
+  echo "ERROR: Plan write verification failed (phases=$verify_phases, generated_at=$verify_timestamp, state=$verify_state)"
+  echo "Attempting retry write..."
+  bash .aether/aether-utils.sh state-write "$(jq --argjson phases "$(echo '$PLAN_JSON' | jq '.plan.phases')" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '.plan.phases = $phases | .plan.generated_at = $ts | .state = "READY"' .aether/data/COLONY_STATE.json)"
+  verify_phases=$(jq '.plan.phases | length' .aether/data/COLONY_STATE.json)
+  if [[ "$verify_phases" -lt 1 ]]; then
+    echo "FATAL: Retry write also failed. Plan was not persisted."
+    echo "Re-run /ant:plan to regenerate."
+    stop
+  fi
+fi
+echo "Plan verified: $verify_phases phases, generated_at=$verify_timestamp, state=$verify_state"
+```
+
 Log plan completion: `bash .aether/aether-utils.sh activity-log "PLAN_COMPLETE" "queen" "Plan finalized with {confidence}% confidence"`
 
 Update watch-status.txt:

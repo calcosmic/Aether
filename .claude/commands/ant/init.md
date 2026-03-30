@@ -279,14 +279,29 @@ bash .aether/aether-utils.sh charter-write --intent "{approved_intent}" --vision
 
 2. Auto-apply approved pheromone suggestions (see pheromone auto-apply below).
 
-3. Optionally update the goal field in COLONY_STATE.json in-place:
+3. Update the goal field in COLONY_STATE.json in-place using the state API:
 ```bash
-jq --arg new_goal "{approved_intent}" '.goal = $new_goal' .aether/data/COLONY_STATE.json > .aether/data/COLONY_STATE.json.tmp && mv .aether/data/COLONY_STATE.json.tmp .aether/data/COLONY_STATE.json
+bash .aether/aether-utils.sh state-write "$(jq --arg new_goal "{approved_intent}" '.goal = $new_goal' .aether/data/COLONY_STATE.json)"
 ```
 
-4. Run `bash .aether/aether-utils.sh session-init "$(jq -r '.session_id' .aether/data/COLONY_STATE.json)" "{approved_intent}"`
+4. **Verify the write** — read back and confirm goal is set:
+```bash
+verify_goal=$(jq -r '.goal' .aether/data/COLONY_STATE.json)
+if [[ "$verify_goal" == "null" || -z "$verify_goal" ]]; then
+  echo "ERROR: Colony state write failed — goal is still null after write. Re-run /ant:init."
+  # Attempt recovery: write goal directly
+  jq --arg g "{approved_intent}" '.goal = $g' .aether/data/COLONY_STATE.json > .aether/data/COLONY_STATE.json.tmp && mv .aether/data/COLONY_STATE.json.tmp .aether/data/COLONY_STATE.json
+  verify_goal=$(jq -r '.goal' .aether/data/COLONY_STATE.json)
+  if [[ "$verify_goal" == "null" || -z "$verify_goal" ]]; then
+    echo "FATAL: Recovery write also failed. Colony state may be corrupted."
+    stop
+  fi
+fi
+```
 
-5. Skip to Step 8 (display result). Do NOT write COLONY_STATE.json from template, do NOT write constraints.json, do NOT write pheromones.json.
+5. Run `bash .aether/aether-utils.sh session-init "$(jq -r '.session_id' .aether/data/COLONY_STATE.json)" "{approved_intent}"`
+
+6. Skip to Step 8 (display result). Do NOT write COLONY_STATE.json from template, do NOT write constraints.json, do NOT write pheromones.json.
 
 **If fresh init:**
 
@@ -302,12 +317,24 @@ jq --arg new_goal "{approved_intent}" '.goal = $new_goal' .aether/data/COLONY_ST
    - Remove ALL keys starting with underscore
    - Write the resulting JSON to `.aether/data/COLONY_STATE.json` using the Write tool
 
-5. Write constraints.json from template:
+5. **Verify the write** — read back and confirm COLONY_STATE.json is valid and goal is set:
+```bash
+verify_goal=$(jq -r '.goal' .aether/data/COLONY_STATE.json 2>/dev/null)
+verify_valid=$(jq -e . .aether/data/COLONY_STATE.json >/dev/null 2>&1 && echo "valid" || echo "invalid")
+if [[ "$verify_valid" != "valid" || "$verify_goal" == "null" || -z "$verify_goal" ]]; then
+  echo "ERROR: Colony state write verification failed (valid=$verify_valid, goal=$verify_goal)"
+  echo "The colony file may be corrupted. Remove .aether/data/COLONY_STATE.json and re-run /ant:init."
+  stop
+fi
+echo "Colony state verified: goal=\"$verify_goal\""
+```
+
+6. Write constraints.json from template:
    - Resolve template: check `~/.aether/system/templates/constraints.template.json` first, then `.aether/templates/constraints.template.json`
    - If no template found: output "Template missing: constraints.template.json. Run aether update to fix." and stop
    - Read template, follow `_instructions`, remove `_` prefixed keys, write to `.aether/data/constraints.json`
 
-6. Initialize runtime files from templates (non-blocking):
+7. Initialize runtime files from templates (non-blocking):
 ```bash
 for template in pheromones midden learning-observations; do
   if [[ "$template" == "midden" ]]; then
@@ -330,15 +357,15 @@ for template in pheromones midden learning-observations; do
 done
 ```
 
-7. Run `bash .aether/aether-utils.sh context-update init "{approved_intent}"`
-8. Run `bash .aether/aether-utils.sh validate-state colony`
-9. Register repo (silent on failure):
+8. Run `bash .aether/aether-utils.sh context-update init "{approved_intent}"`
+9. Run `bash .aether/aether-utils.sh validate-state colony`
+10. Register repo (silent on failure):
 ```bash
 domain_tags=$(bash .aether/aether-utils.sh domain-detect 2>/dev/null | jq -r '.result.tags // ""' || echo "")
 bash .aether/aether-utils.sh registry-add "$(pwd)" "$(jq -r '.version // "unknown"' ~/.aether/version.json 2>/dev/null || echo 'unknown')" --goal "{approved_intent}" --active true --tags "$domain_tags" 2>/dev/null || true
 cp ~/.aether/version.json .aether/version.json 2>/dev/null || true
 ```
-10. Seed QUEEN.md from hive (non-blocking):
+11. Seed QUEEN.md from hive (non-blocking):
 ```bash
 domain_tags=$(jq -r --arg repo "$(pwd)" \
   '[.repos[] | select(.path == $repo) | .domain_tags // []] | .[0] // [] | join(",")' \
@@ -348,7 +375,7 @@ seed_args="queen-seed-from-hive --limit 5"
 seed_result=$(bash .aether/aether-utils.sh $seed_args 2>/dev/null || echo '{}')
 seeded_count=$(echo "$seed_result" | jq -r '.result.seeded // 0' 2>/dev/null || echo "0")
 ```
-11. Run `bash .aether/aether-utils.sh session-init "{session_id}" "{approved_intent}"`
+12. Run `bash .aether/aether-utils.sh session-init "{session_id}" "{approved_intent}"`
 
 **Pheromone auto-apply (referenced by both re-init and fresh init paths above):**
 
