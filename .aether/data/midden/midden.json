@@ -287,7 +287,10 @@
       "category": "worker_failure",
       "source": "builder",
       "message": "Builder Weld-37 failed on task 5.1: 4 spawn-tree tests failing due to invalid JSON output from spawn-tree.sh (modified in this session)",
-      "reviewed": false
+      "reviewed": false,
+      "acknowledged": true,
+      "acknowledged_at": "2026-03-30T07:00:48Z",
+      "acknowledge_reason": ""
     },
     {
       "id": "midden_1774663697_94139",
@@ -295,7 +298,10 @@
       "category": "resilience",
       "source": "chaos",
       "message": "Chaos finding: JSON objects as ant names break spawn-tree JSON output (critical)",
-      "reviewed": false
+      "reviewed": false,
+      "acknowledged": true,
+      "acknowledged_at": "2026-03-30T07:00:44Z",
+      "acknowledge_reason": ""
     },
     {
       "id": "midden_1774663698_94645",
@@ -303,7 +309,10 @@
       "category": "resilience",
       "source": "chaos",
       "message": "Chaos finding: spawn-tree-load no JSON validation before json_ok (high)",
-      "reviewed": false
+      "reviewed": false,
+      "acknowledged": true,
+      "acknowledged_at": "2026-03-30T07:01:08Z",
+      "acknowledge_reason": ""
     },
     {
       "id": "midden_1774667821_41195",
@@ -311,7 +320,10 @@
       "category": "resilience",
       "source": "chaos",
       "message": "Chaos finding: Newline chars in queen-promote destroy QUEEN.md (critical)",
-      "reviewed": false
+      "reviewed": false,
+      "acknowledged": true,
+      "acknowledged_at": "2026-03-30T07:00:58Z",
+      "acknowledge_reason": ""
     },
     {
       "id": "midden_1774667822_41255",
@@ -319,7 +331,10 @@
       "category": "resilience",
       "source": "chaos",
       "message": "Chaos finding: grep-pipefail kills queen-promote functions (high)",
-      "reviewed": false
+      "reviewed": false,
+      "acknowledged": true,
+      "acknowledged_at": "2026-03-30T07:00:58Z",
+      "acknowledge_reason": ""
     },
     {
       "id": "midden_1774669451_20782",
@@ -327,7 +342,10 @@
       "category": "security",
       "source": "gatekeeper",
       "message": "High CVEs found: 4",
-      "reviewed": false
+      "reviewed": false,
+      "acknowledged": true,
+      "acknowledged_at": "2026-03-30T07:01:04Z",
+      "acknowledge_reason": ""
     },
     {
       "id": "midden_1774742061_42588",
@@ -343,7 +361,10 @@
       "category": "worker_failure",
       "source": "builder",
       "message": "Builder Mason-41 failed on task 5.1: spawn-tree tests ETIMEDOUT (pre-existing blocker, not new regression)",
-      "reviewed": false
+      "reviewed": false,
+      "acknowledged": true,
+      "acknowledged_at": "2026-03-30T07:00:53Z",
+      "acknowledge_reason": ""
     },
     {
       "id": "midden_1774745107_85716",
@@ -351,7 +372,10 @@
       "category": "resilience",
       "source": "chaos",
       "message": "Chaos finding: All 9 spawn-tree tests time out due to O(n^2) parse_spawn_tree scaling (critical)",
-      "reviewed": false
+      "reviewed": false,
+      "acknowledged": true,
+      "acknowledged_at": "2026-03-30T07:00:49Z",
+      "acknowledge_reason": ""
     },
     {
       "id": "midden_1774745108_86382",
@@ -376,7 +400,10 @@
       "category": "security",
       "source": "gatekeeper",
       "message": "High CVEs found: 4 (minimatch, path-to-regexp, picomatch, node-tar)",
-      "reviewed": false
+      "reviewed": false,
+      "acknowledged": true,
+      "acknowledged_at": "2026-03-30T07:01:04Z",
+      "acknowledge_reason": ""
     },
     {
       "id": "midden_1774749780_42099",
@@ -395,7 +422,10 @@
       "reviewed": false,
       "tags": [
         "verified"
-      ]
+      ],
+      "acknowledged": true,
+      "acknowledged_at": "2026-03-30T07:02:21Z",
+      "acknowledge_reason": ""
     },
     {
       "id": "midden_1774849419_72226",

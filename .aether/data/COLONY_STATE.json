@@ -39,7 +39,7 @@
       {
         "id": 5,
         "name": "Verify fixes and acknowledge midden entries",
-        "status": "pending",
+        "status": "completed",
         "description": "Run full test suite, acknowledge 7+ resolved midden entries including already-fixed O(n^2) spawn-tree"
       }
     ]
@@ -119,6 +119,21 @@
           }
         ],
         "timestamp": "2026-03-30T06:42:36Z"
+      },
+      {
+        "id": "learning_1774854711",
+        "phase": 5,
+        "phase_name": "Verify fixes and acknowledge midden entries",
+        "learnings": [
+          {
+            "claim": "Final verification sweeps with midden acknowledgment provide a clean closure record of what was fixed vs what remains open",
+            "status": "validated",
+            "tested": true,
+            "evidence": "9 entries acknowledged, 7 genuine open issues documented, full test suite green",
+            "disproven_by": null
+          }
+        ],
+        "timestamp": "2026-03-30T07:11:51Z"
       }
     ],
     "decisions": [],
@@ -255,7 +270,10 @@
     "2026-03-30T06:27:46Z|phase_advanced|continue|Completed Phase 3, advancing to Phase 4",
     "2026-03-30T06:29:34Z|phase_started|build|Phase 4: Update high-CVE dependencies started",
     "2026-03-30T06:42:36Z|phase_completed|continue|Phase 4: Update high-CVE dependencies completed",
-    "2026-03-30T06:42:36Z|phase_advanced|continue|Completed Phase 4, advancing to Phase 5"
+    "2026-03-30T06:42:36Z|phase_advanced|continue|Completed Phase 4, advancing to Phase 5",
+    "2026-03-30T06:58:30Z|phase_started|build|Phase 5: Verify fixes and acknowledge midden entries started",
+    "2026-03-30T07:11:51Z|phase_completed|continue|Phase 5: Verify fixes and acknowledge midden entries completed",
+    "2026-03-30T07:11:51Z|all_phases_completed|continue|All 5 phases completed"
   ],
   "territory_surveyed": "2026-03-30T04:53:04Z"
 }
