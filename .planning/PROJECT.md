@@ -40,7 +40,13 @@ The system must reliably interpret a user request, decompose it into executable 
 
 ### Active
 
-(No active milestone — planning next)
+- Complete state-mutate migration — all COLONY_STATE.json writes use atomic mutations — v2.7
+- Cross-branch pheromone propagation — user signals reach all worktree branches — v2.7
+- Midden cross-PR collection — branch failures ingested on merge — v2.7
+- CI context assembly (pr-context) — machine-readable colony context for CI — v2.7
+- Clash detection wired into task-as-PR workflow — v2.7
+- Release hygiene — published package excludes dev artifacts — v2.7
+- Ship v2.7.0 clean release to hub — v2.7
 
 ### Out of Scope
 
@@ -54,7 +60,9 @@ The system must reliably interpret a user request, decompose it into executable 
 
 ## Context
 
-- Aether is at v2.5.0, shipped v2.5 Smart Init on 2026-03-27
+- Aether is at v2.6.0, completing Bugfix & Hardening milestone
+- v2.6 shipped: Input escaping, cross-colony isolation, depth gating, YAML command generator, XML lifecycle integration
+- v2.7 in progress: PR workflow implementation + stability + clean release
 - v2.5 shipped: Smart init (repo scanning, charter management, approval flow, intelligence enrichment), 50 new tests
 - v2.4 shipped: Oracle + Architect agents, wisdom pipeline wiring, fuzzy dedup, deterministic fallback
 - v2.3 shipped: Per-caste model routing, model-slot CLI, 24 agents configured
@@ -93,4 +101,4 @@ The system must reliably interpret a user request, decompose it into executable 
 | Deterministic prompt generation | Colony prompts must be testable and reproducible | ✓ Good — bash + jq assembly, 12 tested pattern checks |
 
 ---
-*Last updated: 2026-03-29 after Phase 37 (XML Core Integration) — v2.6 Bugfix & Hardening in progress*
+*Last updated: 2026-03-30 after v2.6 completion — v2.7 PR Workflow + Stability in progress*

@@ -1,11 +1,14 @@
 {
+  "current_phase": 2,
+  "state": "EXECUTING",
+  "events": [
+    "2026-01-01T00:00:00Z|init|queen|colony initialized"
+  ],
   "version": "3.0",
+  "signals": [],
+  "graveyards": [],
   "goal": null,
-  "state": "IDLE",
-  "current_phase": 0,
-  "plan": {
-    "phases": []
-  },
+  "plan": {},
   "memory": {
     "phase_learnings": [],
     "decisions": [],
@@ -13,11 +16,5 @@
   },
   "errors": {
     "records": []
-  },
-  "events": [],
-  "session_id": null,
-  "initialized_at": null,
-  "build_started_at": null,
-  "signals": [],
-  "graveyards": []
+  }
 }
