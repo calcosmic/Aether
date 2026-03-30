@@ -403,3 +403,41 @@ bash .aether/aether-utils.sh memory-capture \
 ```
 
 This ensures verification failures are persisted as blockers that survive context resets. Chaos Ant findings are flagged in Step 5.7.
+
+### Step 5.9: Midden Collection for Merged Branches (NON-BLOCKING)
+
+**Per D-04: Wire midden-collect into /ant:run flow (build-verify phase).**
+
+If this build is running on main after a merge (detected via COLONY_STATE or git log), attempt midden collection:
+
+Run using the Bash tool with description "Collecting midden from merged branch...":
+```bash
+# Only runs if merge context is available
+if [[ -n "${last_merged_branch:-}" && -n "${last_merge_sha:-}" ]]; then
+  collect_result=$(bash .aether/aether-utils.sh midden-collect \
+    --branch "$last_merged_branch" --merge-sha "$last_merge_sha" \
+    2>/dev/null || echo '{"ok":false}')
+  collect_ok=$(echo "$collect_result" | jq -r '.ok // false' 2>/dev/null)
+  if [[ "$collect_ok" == "true" ]]; then
+    collect_status=$(echo "$collect_result" | jq -r '.result.status // "unknown"' 2>/dev/null)
+    new_entries=$(echo "$collect_result" | jq -r '.result.entries_collected // 0' 2>/dev/null)
+    if [[ "$collect_status" == "collected" && "$new_entries" -gt 0 ]]; then
+      echo "Midden: collected $new_entries entries from $last_merged_branch"
+    fi
+  fi
+
+  # Run cross-PR analysis after collection (per D-05)
+  analysis_result=$(bash .aether/aether-utils.sh midden-cross-pr-analysis --window 14 \
+    2>/dev/null || echo '{"ok":false}')
+  analysis_ok=$(echo "$analysis_result" | jq -r '.ok // false' 2>/dev/null)
+  if [[ "$analysis_ok" == "true" ]]; then
+    systemic=$(echo "$analysis_result" | jq -r '.result.systemic_categories // [] | length' 2>/dev/null || echo "0")
+    if [[ "$systemic" -gt 0 ]]; then
+      categories=$(echo "$analysis_result" | jq -r '.result.systemic_categories | join(", ")' 2>/dev/null)
+      echo "Midden: cross-PR systemic: $categories"
+    fi
+  fi
+fi
+```
+
+This step is NON-BLOCKING -- build verification proceeds regardless of collection or analysis outcome.

@@ -405,3 +405,35 @@ Cross-reference worker claims against reality. This step catches fabricated succ
    **CRITICAL:** Do NOT proceed to Step 1.6. Do NOT advance the phase. The verification failure is a hard block just like a test failure.
 
 Continue to Step 1.6.
+
+### Step 2.0.6: Midden Collection (NON-BLOCKING)
+
+After verification passes, collect failure records from any recently merged branch worktrees. This step is silent and non-blocking -- continue proceeds even if collection fails.
+
+**Per D-04: Wire midden-collect into /ant:continue flow.**
+
+If the colony uses a PR-based workflow and a merge just happened, attempt to collect the branch's midden entries:
+
+Run using the Bash tool with description "Collecting branch midden entries...":
+```bash
+# Check if there's a recently merged branch to collect from
+# The merge info comes from git log or COLONY_STATE context
+last_merge_branch="${last_merged_branch:-}"
+last_merge_sha="${last_merge_sha:-}"
+
+if [[ -n "$last_merge_branch" && -n "$last_merge_sha" ]]; then
+  collect_result=$(bash .aether/aether-utils.sh midden-collect \
+    --branch "$last_merge_branch" --merge-sha "$last_merge_sha" \
+    2>/dev/null || echo '{"ok":false}')
+  collect_ok=$(echo "$collect_result" | jq -r '.ok // false' 2>/dev/null)
+  if [[ "$collect_ok" == "true" ]]; then
+    collect_status=$(echo "$collect_result" | jq -r '.result.status // "unknown"' 2>/dev/null)
+    if [[ "$collect_status" == "collected" ]]; then
+      new_entries=$(echo "$collect_result" | jq -r '.result.entries_collected // 0' 2>/dev/null)
+      echo "Midden: collected $new_entries failure entries from branch $last_merge_branch"
+    fi
+  fi
+fi
+```
+
+This step is NON-BLOCKING -- continue proceeds regardless of collection outcome. If `last_merge_branch` and `last_merge_sha` are not set (e.g., no recent merge), this step is silently skipped.

@@ -341,6 +341,60 @@ if [[ -f "$export_file" ]]; then
 fi
 ```
 
+### Step 2.0.6: Midden Collection (NON-BLOCKING)
+
+After pheromone merge-back, collect failure records from any recently merged branch worktrees. This step is silent and non-blocking -- continue proceeds even if collection fails.
+
+**Per D-04: Wire midden-collect into /ant:continue flow.**
+
+If the colony uses a PR-based workflow and a merge just happened, attempt to collect the branch's midden entries:
+
+Run using the Bash tool with description "Collecting branch midden entries...":
+```bash
+# Check if there's a recently merged branch to collect from
+# The merge info comes from git log or COLONY_STATE context
+last_merge_branch="${last_merged_branch:-}"
+last_merge_sha="${last_merge_sha:-}"
+
+if [[ -n "$last_merge_branch" && -n "$last_merge_sha" ]]; then
+  collect_result=$(bash .aether/aether-utils.sh midden-collect \
+    --branch "$last_merge_branch" --merge-sha "$last_merge_sha" \
+    2>/dev/null || echo '{"ok":false}')
+  collect_ok=$(echo "$collect_result" | jq -r '.ok // false' 2>/dev/null)
+  if [[ "$collect_ok" == "true" ]]; then
+    collect_status=$(echo "$collect_result" | jq -r '.result.status // "unknown"' 2>/dev/null)
+    if [[ "$collect_status" == "collected" ]]; then
+      new_entries=$(echo "$collect_result" | jq -r '.result.entries_collected // 0' 2>/dev/null)
+      echo "Midden: collected $new_entries failure entries from branch $last_merge_branch"
+    fi
+  fi
+fi
+```
+
+This step is NON-BLOCKING -- continue proceeds regardless of collection outcome. If `last_merge_branch` and `last_merge_sha` are not set (e.g., no recent merge), this step is silently skipped.
+
+### Step 2.0.7: Cross-PR Midden Analysis (NON-BLOCKING)
+
+After midden collection (Step 2.0.6), run cross-PR analysis to detect systemic failure patterns across multiple merged branches. Auto-emits REDIRECT pheromones to hub if systemic patterns found.
+
+**Per D-05: Wire midden-cross-pr-analysis into /ant:continue flow.**
+
+Run using the Bash tool with description "Running cross-PR midden analysis...":
+```bash
+analysis_result=$(bash .aether/aether-utils.sh midden-cross-pr-analysis --window 14 \
+  2>/dev/null || echo '{"ok":false}')
+analysis_ok=$(echo "$analysis_result" | jq -r '.ok // false' 2>/dev/null)
+if [[ "$analysis_ok" == "true" ]]; then
+  systemic=$(echo "$analysis_result" | jq -r '.result.systemic_categories // [] | length' 2>/dev/null || echo "0")
+  if [[ "$systemic" -gt 0 ]]; then
+    categories=$(echo "$analysis_result" | jq -r '.result.systemic_categories | join(", ")' 2>/dev/null)
+    echo "Midden: cross-PR systemic pattern detected in: $categories (REDIRECT emitted)"
+  fi
+fi
+```
+
+This step is NON-BLOCKING -- advance proceeds regardless of analysis outcome.
+
 ### Step 2.1: Auto-Emit Phase Pheromones (SILENT)
 
 **This entire step produces NO user-visible output.** All pheromone operations run silently — learnings are deposited in the background. If any pheromone call fails, log the error and continue. Phase advancement must never fail due to pheromone errors.
