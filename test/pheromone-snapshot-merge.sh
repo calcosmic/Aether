@@ -34,7 +34,7 @@ setup_test_repo() {
   git init -q
   git config user.email "test@aether.dev"
   git config user.name "Test"
-  mkdir -p .aether/data .aether/locks
+  mkdir -p .aether/data .aether/locks .aether/exchange
   # Create a dummy commit so HEAD is valid
   echo "init" > .aether/data/.gitkeep
   git add .aether/data/.gitkeep
@@ -476,7 +476,7 @@ create_pheromones "$td" '[
 git -C "$td" checkout -q -b feature/test-branch 2>/dev/null || true
 result=$(run_pheromone "$td" pheromone-export-branch)
 if echo "$result" | jq -e '.ok == true' >/dev/null 2>&1; then
-  export_file="$td/.aether/data/pheromone-branch-export.json"
+  export_file="$td/.aether/exchange/pheromone-branch-export.json"
   if [[ -f "$export_file" ]]; then
     assert_json_eq "export schema" "$(cat "$export_file")" '.schema' "pheromone-branch-export-v1"
   else
@@ -511,7 +511,7 @@ echo "4b. Merge log returns entries after merge-back"
 td=$(setup_test_repo)
 # Create main pheromones (empty) and a branch export with eligible signals
 create_pheromones "$td" '[]'
-cat > "$td/.aether/data/pheromone-branch-export.json" <<'EXPORT_EOF'
+cat > "$td/.aether/exchange/pheromone-branch-export.json" <<'EXPORT_EOF'
 {
   "schema": "pheromone-branch-export-v1",
   "exported_at": "2026-03-30T14:00:00Z",
@@ -562,7 +562,7 @@ echo ""
 echo "5a. New worker REDIRECT merges to main pheromones"
 td=$(setup_test_repo)
 create_pheromones "$td" '[]'
-cat > "$td/.aether/data/pheromone-branch-export.json" <<'EXPORT_EOF'
+cat > "$td/.aether/exchange/pheromone-branch-export.json" <<'EXPORT_EOF'
 {
   "schema": "pheromone-branch-export-v1",
   "exported_at": "2026-03-30T14:00:00Z",
@@ -609,7 +609,7 @@ rm -rf "$td"
 echo "5b. Ineligible signals are skipped during merge-back"
 td=$(setup_test_repo)
 create_pheromones "$td" '[]'
-cat > "$td/.aether/data/pheromone-branch-export.json" <<'EXPORT_EOF'
+cat > "$td/.aether/exchange/pheromone-branch-export.json" <<'EXPORT_EOF'
 {
   "schema": "pheromone-branch-export-v1",
   "exported_at": "2026-03-30T14:00:00Z",
@@ -697,7 +697,7 @@ create_pheromones "$td" '[
    "created_at":"2026-03-30T12:00:00Z","expires_at":"phase_end","active":true,
    "strength":0.7,"reason":"test","content":{"text":"avoid X"},"content_hash":"sha256:conflict1","reinforcement_count":1}
 ]'
-cat > "$td/.aether/data/pheromone-branch-export.json" <<'EXPORT_EOF'
+cat > "$td/.aether/exchange/pheromone-branch-export.json" <<'EXPORT_EOF'
 {
   "schema": "pheromone-branch-export-v1",
   "exported_at": "2026-03-30T14:00:00Z",
@@ -751,7 +751,7 @@ create_pheromones "$td" '[
 ]'
 # This should not happen in practice (user FOCUS is not eligible for export),
 # but test the conflict resolution engine directly
-cat > "$td/.aether/data/pheromone-branch-export.json" <<'EXPORT_EOF'
+cat > "$td/.aether/exchange/pheromone-branch-export.json" <<'EXPORT_EOF'
 {
   "schema": "pheromone-branch-export-v1",
   "exported_at": "2026-03-30T14:00:00Z",
@@ -813,7 +813,7 @@ create_pheromones "$td" '[
    "created_at":"2026-03-30T12:00:00Z","expires_at":"phase_end","active":true,
    "strength":0.7,"reason":"test","content":{"text":"test coverage thin"},"content_hash":"sha256:fb_conflict","reinforcement_count":0}
 ]'
-cat > "$td/.aether/data/pheromone-branch-export.json" <<'EXPORT_EOF'
+cat > "$td/.aether/exchange/pheromone-branch-export.json" <<'EXPORT_EOF'
 {
   "schema": "pheromone-branch-export-v1",
   "exported_at": "2026-03-30T14:00:00Z",
@@ -856,7 +856,7 @@ create_pheromones "$td" '[
    "created_at":"2026-03-30T12:00:00Z","expires_at":"phase_end","active":true,
    "strength":0.7,"reason":"test","content":{"text":"minor note"},"content_hash":"sha256:fb_weak","reinforcement_count":0}
 ]'
-cat > "$td/.aether/data/pheromone-branch-export.json" <<'EXPORT_EOF'
+cat > "$td/.aether/exchange/pheromone-branch-export.json" <<'EXPORT_EOF'
 {
   "schema": "pheromone-branch-export-v1",
   "exported_at": "2026-03-30T14:00:00Z",
@@ -925,7 +925,7 @@ echo "9a. --last 1 returns only the most recent entry"
 td=$(setup_test_repo)
 create_pheromones "$td" '[]'
 # Run two merge-backs with different branches
-cat > "$td/.aether/data/pheromone-branch-export.json" <<'EXPORT_EOF'
+cat > "$td/.aether/exchange/pheromone-branch-export.json" <<'EXPORT_EOF'
 {
   "schema": "pheromone-branch-export-v1",
   "exported_at": "2026-03-30T14:00:00Z",
@@ -944,7 +944,7 @@ cat > "$td/.aether/data/pheromone-branch-export.json" <<'EXPORT_EOF'
 EXPORT_EOF
 run_pheromone "$td" pheromone-merge-back >/dev/null 2>&1 || true
 
-cat > "$td/.aether/data/pheromone-branch-export.json" <<'EXPORT_EOF'
+cat > "$td/.aether/exchange/pheromone-branch-export.json" <<'EXPORT_EOF'
 {
   "schema": "pheromone-branch-export-v1",
   "exported_at": "2026-03-30T15:00:00Z",
@@ -982,7 +982,7 @@ echo ""
 echo "10a. Invalid export schema is rejected"
 td=$(setup_test_repo)
 create_pheromones "$td" '[]'
-printf '{"schema":"wrong-schema","exported_at":"x","branch_name":"x","branch_commit":"x","signals":[],"total_signals":0,"eligible_count":0,"ineligible_count":0}' > "$td/.aether/data/pheromone-branch-export.json"
+printf '{"schema":"wrong-schema","exported_at":"x","branch_name":"x","branch_commit":"x","signals":[],"total_signals":0,"eligible_count":0,"ineligible_count":0}' > "$td/.aether/exchange/pheromone-branch-export.json"
 assert_exit_fail "merge-back rejects invalid schema" run_pheromone "$td" pheromone-merge-back
 rm -rf "$td"
 
@@ -995,7 +995,7 @@ echo ""
 echo "11a. Multiple eligible signals merge in one pass"
 td=$(setup_test_repo)
 create_pheromones "$td" '[]'
-cat > "$td/.aether/data/pheromone-branch-export.json" <<'EXPORT_EOF'
+cat > "$td/.aether/exchange/pheromone-branch-export.json" <<'EXPORT_EOF'
 {
   "schema": "pheromone-branch-export-v1",
   "exported_at": "2026-03-30T14:00:00Z",
@@ -1095,7 +1095,7 @@ setup_worktree_with_pheromones() {
   fi
 
   # Minimal COLONY_STATE.json
-  cat > .aether/data/COLONY_STATE.json << 'CS EOF'
+  cat > .aether/data/COLONY_STATE.json << 'CSEOF'
 {
   "version": "3.0",
   "goal": "Test worktree pheromone injection",
@@ -1108,7 +1108,7 @@ setup_worktree_with_pheromones() {
   "errors": { "records": [], "flagged_patterns": [] },
   "events": [], "signals": [], "graveyards": [], "workers": [], "spawn_tree": []
 }
-CS EOF
+CSEOF
 
   # Make an initial commit so HEAD is valid
   echo "# test" > README.md
@@ -1127,7 +1127,7 @@ run_worktree_create() {
     bash "$workdir/.aether/aether-utils.sh" worktree-create "$@" 2>&1 )
 }
 
-# 14a. Worktree creation triggers pheromone-snapshot-inject (verified by _snapshot metadata)
+# 14a. Worktree creation triggers pheromone-snapshot-inject (verified by snapshot file)
 echo "14a. worktree_create_injects_pheromones"
 td=$(setup_worktree_with_pheromones)
 create_pheromones "$td" '[
@@ -1141,17 +1141,22 @@ create_pheromones "$td" '[
 result=$(run_worktree_create "$td" --branch "test-inject-1")
 if echo "$result" | jq -e '.ok == true' >/dev/null 2>&1; then
   wt_dir=$(echo "$result" | jq -r '.result.worktree_dir')
-  if [[ -f "$wt_dir/.aether/data/pheromones.json" ]]; then
-    # Key check: _snapshot metadata must be present (proves pheromone-snapshot-inject ran)
-    snapshot_branch=$(jq -r '._snapshot.snapshot_from_branch // empty' "$wt_dir/.aether/data/pheromones.json" 2>/dev/null)
+  # Key check: pheromone-snapshot.json must be present (proves pheromone-snapshot-inject ran)
+  if [[ -f "$wt_dir/.aether/data/pheromone-snapshot.json" ]]; then
+    snapshot_branch=$(jq -r '.snapshot_from_branch // empty' "$wt_dir/.aether/data/pheromone-snapshot.json" 2>/dev/null)
     if [[ -n "$snapshot_branch" ]]; then
-      echo "  PASS: worktree_create_injects_pheromones -- snapshot metadata present (from_branch=$snapshot_branch)"
+      echo "  PASS: worktree_create_injects_pheromones -- snapshot file present (from_branch=$snapshot_branch)"
       ((PASS++))
     else
-      echo "  FAIL: worktree_create_injects_pheromones -- no _snapshot metadata in worktree pheromones.json"
+      echo "  FAIL: worktree_create_injects_pheromones -- snapshot file exists but missing from_branch"
       ((FAIL++))
     fi
-    # Also verify active signals are present
+  else
+    echo "  FAIL: worktree_create_injects_pheromones -- no pheromone-snapshot.json in worktree"
+    ((FAIL++))
+  fi
+  # Also verify active signals are present
+  if [[ -f "$wt_dir/.aether/data/pheromones.json" ]]; then
     wt_signal_count=$(jq '[.signals[] | select(.active == true)] | length' "$wt_dir/.aether/data/pheromones.json" 2>/dev/null || echo "0")
     if [[ "$wt_signal_count" -ge 2 ]]; then
       echo "  PASS: worktree has $wt_signal_count active signals"

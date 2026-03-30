@@ -78,6 +78,22 @@ _worktree_create() {
         cp -r "$AETHER_ROOT/.aether/data/." "$worktree_dir/.aether/data/" 2>/dev/null || true  # SUPPRESS:OK -- copy: data dir may be empty
     fi
 
+    # Inject main's pheromone signals into the worktree (per D-01)
+    # Non-blocking: if injection fails, worktree still works without injected signals
+    if [[ -f "$worktree_dir/.aether/data/pheromones.json" ]]; then
+      local main_head
+      main_head=$(git -C "$AETHER_ROOT" rev-parse HEAD 2>/dev/null || echo "unknown")
+      (
+        cd "$worktree_dir" 2>/dev/null && \
+        AETHER_ROOT="$worktree_dir" \
+        DATA_DIR="$worktree_dir/.aether/data" \
+        COLONY_DATA_DIR="$worktree_dir/.aether/data" \
+        bash "$worktree_dir/.aether/aether-utils.sh" \
+          pheromone-snapshot-inject --from-branch "$base" --from-commit "$main_head" \
+        2>/dev/null || true
+      )
+    fi
+
     # Build result JSON
     local result
     result=$(jq -n \

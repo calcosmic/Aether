@@ -2261,7 +2261,7 @@ _pheromone_export_branch() {
 # Export branch's eligible signals for merge-back
 # Usage: pheromone-export-branch
 # Returns: JSON with eligible_count, ineligible_count, total_signals
-# Side effect: writes .aether/data/pheromone-branch-export.json
+# Side effect: writes .aether/exchange/pheromone-branch-export.json
 
 peb_file="$COLONY_DATA_DIR/pheromones.json"
 
@@ -2367,7 +2367,9 @@ peb_export=$(jq -n \
     ineligible_count: $ineligible
   }')
 
-peb_export_file="$COLONY_DATA_DIR/pheromone-branch-export.json"
+peb_export_dir="$AETHER_ROOT/.aether/exchange"
+mkdir -p "$peb_export_dir" 2>/dev/null || true
+peb_export_file="$peb_export_dir/pheromone-branch-export.json"
 atomic_write "$peb_export_file" "$peb_export" 2>/dev/null || {
   _aether_log_error "Could not write pheromone branch export"
 }
@@ -2394,7 +2396,7 @@ json_ok "$(jq -n \
 _pheromone_merge_back() {
 # Merge eligible branch signals into main's pheromones.json
 # Usage: pheromone-merge-back [--export-file PATH]
-#   --export-file: path to branch export JSON (default: .aether/data/pheromone-branch-export.json)
+#   --export-file: path to branch export JSON (default: .aether/exchange/pheromone-branch-export.json)
 # Returns: JSON with new_signals_written, skipped_count, conflicts_resolved
 # Side effect: appends to .aether/data/pheromone-merge-log.json
 
@@ -2409,9 +2411,9 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Default export file path
+# Default export file path (exchange/ is git-tracked for cross-branch propagation)
 if [[ -z "$pmb_export_file" ]]; then
-  pmb_export_file="$COLONY_DATA_DIR/pheromone-branch-export.json"
+  pmb_export_file="$AETHER_ROOT/.aether/exchange/pheromone-branch-export.json"
 fi
 
 # Edge case: no export file -- no-op
