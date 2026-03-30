@@ -32,7 +32,7 @@ _autofix_checkpoint() {
         label="${1:-autofix-$(date +%s)}"
         stash_name="aether-checkpoint: $label"
         # Only stash Aether-managed directories, never touch user files
-        if git stash push -m "$stash_name" -- $target_dirs >/dev/null 2>&1; then  # SUPPRESS:OK -- existence-test: stash operation may fail
+        if git stash push -m "$stash_name" -- $target_dirs ":(exclude).aether/data/" >/dev/null 2>&1; then  # SUPPRESS:OK -- existence-test: stash operation may fail
           json_ok "$(jq -n --arg ref "$stash_name" '{type: "stash", ref: $ref}')"
         else
           # Stash failed (possibly due to conflicts), record commit hash
