@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<colony-registry xmlns="http://aether.colony/schemas/registry/1.0"
+                 version="1.0.0"
+                 generated_at="2026-02-18T01:48:47Z">
+  <colony id="Remove Aether developing Aether self-reference while preserving findings" status="active" created_at="2026-02-15T15:59:13Z">
+    <name>Remove Aether developing Aether self-reference while preserving findings</name>
+  </colony>
+  <colony id="v1.1 Bug Fixes &amp; Update System Repair" status="active" created_at="unknown">
+    <name>v1.1 Bug Fixes &amp; Update System Repair</name>
+  </colony>
+</colony-registry>

@@ -1,0 +1,11 @@
+{
+  "version": "1.0",
+  "focus": [
+    "CI/CD pipeline active -- ensure changes pass all checks",
+    "Large codebase -- scope changes carefully, prefer incremental work",
+    "Testing infrastructure present (69 test files) — maintain TDD discipline",
+    "CI/CD pipeline active — ensure changes pass all checks",
+    "Large codebase — scope changes carefully, prefer incremental work"
+  ],
+  "constraints": []
+}

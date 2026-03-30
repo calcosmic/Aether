@@ -1,0 +1,1734 @@
+{
+  "signals": [
+    {
+      "id": "sig_feedback_001",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker_builder",
+      "created_at": "2026-02-16T12:00:00Z",
+      "active": true,
+      "content": {
+        "text": "Test coverage is good, continue maintaining 80%+ coverage",
+        "data": {
+          "format": "json",
+          "coverage_percent": 85
+        }
+      },
+      "tags": [
+        {
+          "value": "testing",
+          "weight": 0.7,
+          "category": "quality"
+        },
+        {
+          "value": "coverage",
+          "weight": 0.6,
+          "category": "metric"
+        }
+      ]
+    },
+    {
+      "id": "sig_redirect_001",
+      "type": "REDIRECT",
+      "priority": "high",
+      "source": "system",
+      "created_at": "2026-02-16T08:00:00Z",
+      "expires_at": "2026-03-16T08:00:00Z",
+      "active": false,
+      "content": {
+        "text": "Avoid editing runtime/ directly - edit .aether/ instead"
+      },
+      "tags": [
+        {
+          "value": "safety",
+          "weight": 1.0,
+          "category": "constraint"
+        },
+        {
+          "value": "runtime",
+          "weight": 0.8,
+          "category": "path"
+        }
+      ],
+      "scope": {
+        "global": true
+      }
+    },
+    {
+      "id": "sig_redirect_1771366398000",
+      "type": "REDIRECT",
+      "priority": "high",
+      "source": "user",
+      "created_at": "2026-02-17T22:13:18Z",
+      "expires_at": "phase_end",
+      "active": false,
+      "strength": 0.9,
+      "reason": "User emitted via /ant:redirect",
+      "content": {
+        "text": "avoid direct runtime edits"
+      }
+    },
+    {
+      "id": "sig_feedback_1773947444_5500",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:builder",
+      "created_at": "2026-03-19T19:10:44Z",
+      "expires_at": "2026-04-18T19:10:44Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Use explicit jq if/elif chains instead of the // operator when checking fields that can legitimately be false"
+      }
+    },
+    {
+      "id": "sig_feedback_1773947445_8361",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:builder",
+      "created_at": "2026-03-19T19:10:45Z",
+      "expires_at": "2026-04-18T19:10:45Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Use explicit jq if/elif chains instead of the // operator when checking fields that can legitimately be false"
+      }
+    },
+    {
+      "id": "sig_focus_1773991045_1869",
+      "type": "FOCUS",
+      "priority": "normal",
+      "source": "test",
+      "created_at": "2026-03-20T07:17:25Z",
+      "expires_at": "2026-03-21T07:17:25Z",
+      "active": false,
+      "strength": 0.8,
+      "reason": "test",
+      "content": {
+        "text": "Focus on error handling in auth module"
+      },
+      "content_hash": "623f01cf9eb62f6a8bdb1f2b3ea0c3318741f478c578928c3fc2371ec2173a10",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1773991241_8159",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-20T07:20:41Z",
+      "expires_at": "2026-04-19T07:20:41Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted on phase advance",
+      "content": {
+        "text": "Phase 1 (Security Foundation) completed. Key patterns: multi-word regex for injection detection, 8000-char token budget, decayed effective_strength for eternal promotion, SHA-256 dedup with reinforce-on-collision"
+      },
+      "content_hash": "c7265bdecc11ad3139931ff822acd389e605409d07b8dbec2273b7865b421deb",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1773991242_4782",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-20T07:20:42Z",
+      "expires_at": "2026-04-19T07:20:42Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Prompt injection regex needs multi-word support with optional groups"
+      },
+      "content_hash": "29581c983fcd68491d949c870febd4ab41abb6c8675f93d49da21273a2d8beab",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1773991243_5821",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-20T07:20:43Z",
+      "expires_at": "2026-04-19T07:20:43Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Colony-prime token budget 8000 chars matches measured output of 2000-5000 chars"
+      },
+      "content_hash": "f5bafe56ed16e1b0cb8283b0ad220e052fb09b2a9d2e4f6ca3ef70d40332c095",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1773992956_5767",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-20T07:49:16Z",
+      "expires_at": "2026-04-19T07:49:16Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted on phase advance",
+      "content": {
+        "text": "Phase 2 (Queen Memory) completed. Key patterns: dual-function lockstep updates for _extract_wisdom, template placeholder detection needed, section header guards prevent content leakage"
+      },
+      "content_hash": "1382343662ba3d3aa880a81ac191654662c9ff3e0d12f1e8202e9c96f50fd709",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1773992957_5158",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-20T07:49:17Z",
+      "expires_at": "2026-04-19T07:49:17Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Two wisdom extraction functions must be updated in lockstep"
+      },
+      "content_hash": "0c27abd7f96553bab762dc86c26670e375770d8fd11618d320bad2fcb4f18015",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1773995408_8861",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-20T08:30:08Z",
+      "expires_at": "2026-04-19T08:30:08Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted on phase advance",
+      "content": {
+        "text": "Phase 3 (Hive Reads) completed. Key patterns: jq defaults for external data defense, registry needs file locking, hive wisdom trimmed before local context"
+      },
+      "content_hash": "5962f58913fcc83927026d6a02e109afb44929b299d30099379aeb586efc784d",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1773996777_3794",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-20T08:52:57Z",
+      "expires_at": "2026-04-19T08:52:57Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted on phase advance",
+      "content": {
+        "text": "Phase 4 (Autopilot) completed. Key patterns: separate run-state from colony-state, guard modulo ops against zero, gate counter increments by action type"
+      },
+      "content_hash": "516690e6d2baa60868152d11835e3957b712cdab54e5c9182f82ef787121ddc9",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_redirect_1774008779_4117",
+      "type": "REDIRECT",
+      "priority": "high",
+      "source": "worker:chaos",
+      "created_at": "2026-03-20T12:12:59Z",
+      "expires_at": "2026-04-19T12:12:59Z",
+      "active": true,
+      "strength": 0.7,
+      "reason": "Auto-emitted from failure event",
+      "content": {
+        "text": "Avoid repeating failure: Resilience issue found: Cross-repo lock isolation mismatch (high)"
+      },
+      "content_hash": "36d7372ebcfd222d9d18af1952039daaa86da014c10a6120ed74646e5f4acf54",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774010222_2039",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-20T12:37:02Z",
+      "expires_at": "2026-04-19T12:37:02Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Hub-level shared files need hub-level locks — per-repo LOCK_DIR cannot protect cross-repo resources"
+      },
+      "content_hash": "a35ff5f9672445622fa3f624938c863a27bd419df4ebd0967db8f831f351ade7",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774010223_310",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-20T12:37:03Z",
+      "expires_at": "2026-04-19T12:37:03Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Content sanitization pattern from pheromone-write is reusable for any user-supplied text input"
+      },
+      "content_hash": "3ddcd78e11d1448e0efd4f25a70dadc5ada25926fccba2f1124cdb7da5d730c7",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774010234_2399",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-20T12:37:14Z",
+      "expires_at": "2026-04-19T12:37:14Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted on phase advance",
+      "content": {
+        "text": "Phase 1 (Hive Directory and Schema Foundation) completed. Key patterns: hub-level lock isolation for shared files, sanitization pattern reuse from pheromone-write, atomic_write for all hub-level JSON mutations"
+      },
+      "content_hash": "26f2ff51b6f000ce772256939ae32b2704508a16ac669109a18794c1aaace96c",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774012954_1562",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-20T13:22:34Z",
+      "expires_at": "2026-04-19T13:22:34Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Orchestrator commands should delegate to sibling subcommands via bash $0 rather than duplicating logic"
+      },
+      "content_hash": "e684ad8e2b8a134f238d9d7135bd0951ae96e5d3297f43b806ca050fe60b7328",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774012955_4365",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-20T13:22:35Z",
+      "expires_at": "2026-04-19T13:22:35Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Text transformation placeholders should avoid angle brackets to prevent double-escaping"
+      },
+      "content_hash": "9096be4806d86541405d1cd21e927f8a334ba3372073587654800176722338ea",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774012956_9091",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-20T13:22:36Z",
+      "expires_at": "2026-04-19T13:22:36Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted on phase advance",
+      "content": {
+        "text": "Phase 2 (Abstraction Layer) completed. Key patterns: orchestrator delegation via bash $0, path/version/branch stripping regex, pipeline error propagation"
+      },
+      "content_hash": "6091fbfaf63b54efd333190f6e781382188a20ef4187322698bf031cedbe7b4d",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774023661_1997",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-20T16:21:01Z",
+      "expires_at": "2026-04-19T16:21:01Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Domain filtering in colony-prime uses hive-read with domain_tags from registry"
+      },
+      "content_hash": "057765eca97e7db5ab7ab3b9ca04dc209fbbceb9c15bdbd2e75c178ba8f9b5f7",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774029098_9942",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:chaos",
+      "created_at": "2026-03-20T17:51:38Z",
+      "expires_at": "2026-04-19T17:51:38Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Chaos resilience strong: 5 scenarios tested, hive promotion handles empty instincts, special chars in paths, boundary confidence values correctly"
+      },
+      "content_hash": "fdbab511ddb2191b4e3ef907c6d844bfe4ed4e331071145dc7d49cfece625593",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774030142_9217",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-20T18:09:02Z",
+      "expires_at": "2026-04-19T18:09:02Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Archaeology pre-build scans catch API contract mismatches (--instinct vs --text) that would silently fail at runtime"
+      },
+      "content_hash": "c9be373f2a57181c53e4eaae52d23038866799abdbff1f421deacb8c5a02cd6c",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774030143_3779",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-20T18:09:03Z",
+      "expires_at": "2026-04-19T18:09:03Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Dead code variables (declared but never used) should be caught by auditor and either removed or implemented"
+      },
+      "content_hash": "2b88f75cda684d67925af9aef4f0b6b6faf28742a425f96dd56841561c170f74",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774030156_4289",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-20T18:09:16Z",
+      "expires_at": "2026-04-19T18:09:16Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted on phase advance",
+      "content": {
+        "text": "Phase 4 (Seal Promotion Hook) completed. Key patterns: archaeology pre-build scans catch API mismatches, dead code variables should be flagged by auditor"
+      },
+      "content_hash": "fc630a9d30f3376880c0ebaf671e7af3e4b2cb02292a780486c4394fe3ca6b29",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_redirect_1774032795_2205",
+      "type": "REDIRECT",
+      "priority": "high",
+      "source": "worker:chaos",
+      "created_at": "2026-03-20T18:53:15Z",
+      "expires_at": "2026-04-19T18:53:15Z",
+      "active": true,
+      "strength": 0.7,
+      "reason": "Auto-emitted from failure event",
+      "content": {
+        "text": "Avoid repeating failure: Resilience issue found: String-typed confidence causes silent hive-read failure (medium)"
+      },
+      "content_hash": "9bc60886aad815eebb46fed8ebc3d39d764f5fb3040961dca7d5a6222659a152",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774033631_2608",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-20T19:07:11Z",
+      "expires_at": "2026-04-19T19:07:11Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Confidence tier calculations should be inside atomic jq pipelines to preserve lock safety"
+      },
+      "content_hash": "69632ff6039dce3d7f45e2dfed9bacad5fb290fd09cbb3f69a1d12f6c229cb3b",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774033631_7828",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-20T19:07:11Z",
+      "expires_at": "2026-04-19T19:07:11Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted on phase advance",
+      "content": {
+        "text": "Phase 5 (Multi-Repo Validation) completed. Key patterns: confidence tiers inside atomic jq pipelines, never-downgrade via max(), awk for float math"
+      },
+      "content_hash": "48ac6d3878a7a1c50d8d00d2242465d87b7f95084d58ba31c5b8423cb5af065c",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774035499_2561",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-20T19:38:19Z",
+      "expires_at": "2026-04-19T19:38:19Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Documentation chaos testing catches gaps between documented behavior and actual code"
+      },
+      "content_hash": "32e4b60dae5f59baf28ea4ee8329cee5cc6448e40edf21cb9340c19de58a70a2",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774035500_3711",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-20T19:38:20Z",
+      "expires_at": "2026-04-19T19:38:20Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted on phase advance",
+      "content": {
+        "text": "Phase 6 (Documentation and Validation) completed. Key patterns: chaos testing docs against code catches accuracy gaps, 38/38 hive tests pass"
+      },
+      "content_hash": "c24e7a68481cfa71932f67c4c290402cefc0b06bcbbb42b501956591d3cc2468",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774054977_6657",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:chaos",
+      "created_at": "2026-03-21T01:02:57Z",
+      "expires_at": "2026-04-20T01:02:57Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Chaos resilience moderate: confidence cap correct, special chars safe, zero-instincts seal works. Medium: unbound var crash on missing flag values"
+      },
+      "content_hash": "32b5db9547f8a409e957b7f78b0715265adb269ed6c9ffa05cee8ddc9e1f37be",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774056301_9599",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-21T01:25:01Z",
+      "expires_at": "2026-04-20T01:25:01Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Archaeologist pre-build scans catch latent bugs in recently-added code"
+      },
+      "content_hash": "dca3a423c2a34c24b08214a96a85fada0621888ed4f3b58adb9db50e0a29ee97",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774056302_5139",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-21T01:25:02Z",
+      "expires_at": "2026-04-20T01:25:02Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: When fixing one bug check surrounding lines for related bugs from the same commit"
+      },
+      "content_hash": "a613fbadab218847d4b6dc9b02314a89bf27ec67d55176347bb343ab7b9155f2",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774056312_457",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-21T01:25:12Z",
+      "expires_at": "2026-04-20T01:25:12Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted on phase advance",
+      "content": {
+        "text": "Phase 1 (Fix Wisdom Plumbing) completed. Key patterns: archaeologist pre-scan catches latent bugs, trap-based locking prevents deadlocks, when-when stutter fixed across 4 sites"
+      },
+      "content_hash": "04dc7ac79fc4412907996275b6f14b38d0b4efeac6544decfd67f8250a0435e2",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774058602_3823",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-21T02:03:22Z",
+      "expires_at": "2026-04-20T02:03:22Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Combining related subcommands into a single builder produces consistent APIs"
+      },
+      "content_hash": "65acd2a60b2ce8e25d8e10104c21fbec952f69a3bf6940638b123d0999898816",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774058603_8134",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-21T02:03:23Z",
+      "expires_at": "2026-04-20T02:03:23Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted on phase advance",
+      "content": {
+        "text": "Phase 2 (Add Midden Review) completed. Key patterns: single builder for related subcommands, trap-based locking, 6 tests"
+      },
+      "content_hash": "126b3b2c1ccea5c38f74b90b3aa27d3222afecb8695efafd0f5c2804e9cd04fb",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774063282_4523",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-21T03:21:22Z",
+      "expires_at": "2026-04-20T03:21:22Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Extracting case blocks to functions requires changing positional parameter references"
+      },
+      "content_hash": "24dd5356a38efce34b5723d10477ccb3d617e51cad303945a5725d985bc46dae",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774063283_1088",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-21T03:21:23Z",
+      "expires_at": "2026-04-20T03:21:23Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted on phase advance",
+      "content": {
+        "text": "Phase 3 (Extract Monolith) completed. Key patterns: source-and-delegate with function wrappers, positional param audit needed after extraction"
+      },
+      "content_hash": "b60950ab7f72d8414a29284f588b38e2b57a76ba81c63f214059e7bb7f9ed825",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774064431_2310",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-21T03:40:31Z",
+      "expires_at": "2026-04-20T03:40:31Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Watcher cross-checking catches stale number references in secondary doc locations"
+      },
+      "content_hash": "74c3b1ced5864e072867c7476f8800fefd31acbf337281a2f2b0a3995f49fd42",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774064432_1642",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-21T03:40:32Z",
+      "expires_at": "2026-04-20T03:40:32Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted on phase advance",
+      "content": {
+        "text": "Phase 4 (Clean Up Documentation) completed. Key patterns: parallel doc builders for independent files, Watcher catches stale numbers in secondary locations"
+      },
+      "content_hash": "cb30d3cf99aea1df7184ec5f3eb533ebede8ffcbd139944632417f15d9c060ef",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774070995_5816",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-21T05:29:55Z",
+      "expires_at": "2026-04-20T05:29:55Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted on final phase",
+      "content": {
+        "text": "Phase 5 (Version Bump) completed. All 5 phases complete — v2.0.0 on hub"
+      },
+      "content_hash": "bf09c02d555eb2803d93ba832339c8a9ef4fd8d741f98dd37aca0958c8a4ed19",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774184122_5",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-22T12:55:22Z",
+      "expires_at": "2026-04-21T12:55:22Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Process substitution avoids subshell variable loss in bash while loops"
+      },
+      "content_hash": "a0c74aa69a46c9b0adbfa615e2d99a5c63cd5fa99fab77863eb1200687ca31b3",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774184123_1952",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-22T12:55:23Z",
+      "expires_at": "2026-04-21T12:55:23Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: TDD with parallel background agents speeds up Phase 1 type work"
+      },
+      "content_hash": "8f06c4df690fa0539f8b3c0f3cdbdf3c0974e3734e61136f0e7cffbb89cafff2",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774184132_8868",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "auto:decision",
+      "created_at": "2026-03-22T12:55:32Z",
+      "expires_at": "2026-04-21T12:55:32Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from architectural decision",
+      "content": {
+        "text": "[decision] Phase 1 complete — skills engine built with 10 functions, 24 tests. Advancing to Phase 2: Skill Content Authoring"
+      },
+      "content_hash": "a4e620d9ad080fc97aa7452d405258b2439cf5c3d76ec5531debaf1562d13d14",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774208927_1093",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-22T19:48:47Z",
+      "expires_at": "2026-04-21T19:48:47Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Watcher independently catches state-path bugs that builders miss during refactoring"
+      },
+      "content_hash": "06d86dba6664c4aa0a7fc040ecb0c433b94bd2e42d369f65302010a462e8ecce",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774208928_2567",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-22T19:48:48Z",
+      "expires_at": "2026-04-21T19:48:48Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Separate infrastructure from state using distinct directory variables when moving scripts"
+      },
+      "content_hash": "5af407fdc3a45d9c4522672537080c181c5ea99e9a2e0e660ff9d4572e7bada6",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774208929_4042",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-22T19:48:49Z",
+      "expires_at": "2026-04-21T19:48:49Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Anchor .npmignore patterns with leading slash when directory name appears at multiple depths"
+      },
+      "content_hash": "da0e9b01f7cc8bb192ae99f227607aac6abad194a612c753af1da54397e5eb81",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774208937_4173",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-22T19:48:57Z",
+      "expires_at": "2026-04-21T19:48:57Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted on phase advance",
+      "content": {
+        "text": "Phase 1 (Move oracle infrastructure) completed. Key patterns: separate infrastructure from state with distinct dir variables, anchor .npmignore with leading slash, Watcher catches path bugs builders miss"
+      },
+      "content_hash": "e15784480adb75552c733a2179e3b4459abed3155c6c71ac5a47eb9885a5901e",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774279597_3017",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-23T15:26:37Z",
+      "expires_at": "2026-04-22T15:26:37Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: SCRIPT_DIR references in test harness setup are easily missed when updating main path constants — grep separately"
+      },
+      "content_hash": "cd2dd7b3cc0f1c69ada9a1ba23b450e1b3b7567a6b8529dddea7bdab2f6c42f7",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774279598_3636",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-23T15:26:38Z",
+      "expires_at": "2026-04-22T15:26:38Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted on phase advance",
+      "content": {
+        "text": "Phase 2 (Update oracle path references) completed. Key pattern: SCRIPT_DIR in test harness setups are separate from ORACLE_SH constants and easy to miss"
+      },
+      "content_hash": "d740de8c111132f908b35c45a9cafb4190067cba2dd944112cb83677b169e82b",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774280582_6713",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-23T15:43:02Z",
+      "expires_at": "2026-04-22T15:43:02Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Distribution pipeline has three independent exclusion layers — verify each separately"
+      },
+      "content_hash": "e3d9dfaa6e64af70dd25c78de478411981f45e0637e0a6e34b50849b1c0e9ffd",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774280582_1933",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-23T15:43:02Z",
+      "expires_at": "2026-04-22T15:43:02Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted on phase advance",
+      "content": {
+        "text": "Phase 3 (Verify distribution pipeline) completed. All three exclusion layers verified independently"
+      },
+      "content_hash": "beb3b252a96440d08d209ec0945dcabde8d4d84c1750f83896378e05649d00d9",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774281404_2366",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-23T15:56:44Z",
+      "expires_at": "2026-04-22T15:56:44Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Position-aware path exclusion (first-segment-only) is needed when a directory name appears at multiple depths"
+      },
+      "content_hash": "d9c615de861abe57906d7ec249a3b9618c2a9f2f1575928b1c2289673794a75d",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774281404_1656",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-23T15:56:44Z",
+      "expires_at": "2026-04-22T15:56:44Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted on project completion",
+      "content": {
+        "text": "Phase 4 (End-to-end validation) completed. All 4 phases done — oracle distribution fix verified end-to-end"
+      },
+      "content_hash": "73bceec3d314bcd08ec8c750171fb17c355fe2f6790b97fd6fb904fe55b8aaf0",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774287690_8334",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "oracle:promote",
+      "created_at": "2026-03-23T17:41:30Z",
+      "expires_at": "2026-04-22T17:41:30Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Oracle research finding: What are the main components and their responsibilities in the Aether system? (85%)"
+      },
+      "content_hash": "28ae3797dc0a7ff849c6bfb22417c872c10f4fabdb14878b9b154e7525d0be6b",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774287691_218",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "oracle:promote",
+      "created_at": "2026-03-23T17:41:31Z",
+      "expires_at": "2026-04-22T17:41:31Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Oracle research finding: What are the dependency relationships between components, and where are coupling risks? (82%)"
+      },
+      "content_hash": "d264828b9d7f1b451cfd9561682b5cf13e47df53e28e2b4da7fbe83bcf0a6a65",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774287693_9334",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "oracle:promote",
+      "created_at": "2026-03-23T17:41:33Z",
+      "expires_at": "2026-04-22T17:41:33Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Oracle research finding: Where are the risk areas — execution reliability gaps, silent failures, fake autonomy, hallucination vectors, and verification weaknesses? (82%)"
+      },
+      "content_hash": "8efa1a3827784ea887c3329b058802f3659376db1e1d9fa9c5e1a0d6778277ba",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774287694_7542",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "oracle:promote",
+      "created_at": "2026-03-23T17:41:34Z",
+      "expires_at": "2026-04-22T17:41:34Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Oracle research finding: How does the memory and context management system handle state persistence, session resume, context rot, and cross-colony knowledge sharing? (82%)"
+      },
+      "content_hash": "7046937c88c9a8579015a142e6995fcf979c36ded2b6d223412193b32d3c70ca",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774287695_9427",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "oracle:promote",
+      "created_at": "2026-03-23T17:41:35Z",
+      "expires_at": "2026-04-22T17:41:35Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Oracle research finding: What would an expert change about this architecture to minimize user input while maximizing safety, verifiability, and autonomous execution capability? (80%)"
+      },
+      "content_hash": "27b813e270054c87a0c67ca75340fb46cfb002ca956b4b07cf717164c41ec721",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_focus_1774637555_5246",
+      "type": "FOCUS",
+      "priority": "normal",
+      "source": "system:init",
+      "created_at": "2026-03-27T19:16:31Z",
+      "expires_at": "2026-04-26T18:52:35Z",
+      "active": true,
+      "strength": 0.8,
+      "reason": "Detected 69 test files",
+      "content": {
+        "text": "Testing infrastructure present (69 test files) -- maintain TDD discipline"
+      },
+      "content_hash": "f34cdc0660ec95f06fd705d21fe413c191873c61a40648aa138865bec496edda",
+      "reinforcement_count": 1
+    },
+    {
+      "id": "sig_focus_1774637556_5136",
+      "type": "FOCUS",
+      "priority": "normal",
+      "source": "system:init",
+      "created_at": "2026-03-27T19:16:31Z",
+      "expires_at": "2026-04-26T18:52:36Z",
+      "active": true,
+      "strength": 0.8,
+      "reason": "Detected CI/CD configuration",
+      "content": {
+        "text": "CI/CD pipeline active -- ensure changes pass all checks"
+      },
+      "content_hash": "45f675d2e4b9d3ed28143f1b5692a264b752b85ea09e20bf7bb90295472a3051",
+      "reinforcement_count": 1
+    },
+    {
+      "id": "sig_focus_1774637556_1863",
+      "type": "FOCUS",
+      "priority": "normal",
+      "source": "system:init",
+      "created_at": "2026-03-27T19:16:32Z",
+      "expires_at": "2026-04-26T18:52:36Z",
+      "active": true,
+      "strength": 0.8,
+      "reason": "Detected 5488 files (threshold: 500)",
+      "content": {
+        "text": "Large codebase -- scope changes carefully, prefer incremental work"
+      },
+      "content_hash": "b572db585d585d3ee78980336dcc4eeec633656f97f96a4d902f00080106c9f2",
+      "reinforcement_count": 1
+    },
+    {
+      "id": "sig_focus_1774638138_9979",
+      "type": "FOCUS",
+      "priority": "normal",
+      "source": "user",
+      "created_at": "2026-03-27T19:02:18Z",
+      "expires_at": "phase_end",
+      "active": false,
+      "strength": 0.8,
+      "reason": "User directed colony attention",
+      "content": {
+        "text": "make sure the commit messages are useful and memorable not just numbers and digits"
+      },
+      "content_hash": "42f74f28fa346f1039064ffacd5ce2b94c0d3eb69c40515929dc78a29e672acb",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_focus_1774641546_9085",
+      "type": "FOCUS",
+      "priority": "normal",
+      "source": "system:init",
+      "created_at": "2026-03-27T22:27:18Z",
+      "expires_at": "2026-04-26T19:59:06Z",
+      "active": true,
+      "strength": 0.8,
+      "reason": "Detected 69 test files",
+      "content": {
+        "text": "Testing infrastructure present (69 test files) — maintain TDD discipline"
+      },
+      "content_hash": "72a77150f0b060783cea698e7136e957532333d6e02b492473e9fe9a23d01c56",
+      "reinforcement_count": 2
+    },
+    {
+      "id": "sig_focus_1774641547_6244",
+      "type": "FOCUS",
+      "priority": "normal",
+      "source": "system:init",
+      "created_at": "2026-03-27T22:27:19Z",
+      "expires_at": "2026-04-26T19:59:07Z",
+      "active": true,
+      "strength": 0.8,
+      "reason": "Detected CI/CD configuration",
+      "content": {
+        "text": "CI/CD pipeline active — ensure changes pass all checks"
+      },
+      "content_hash": "175ab3d483aa30f24fc4113df3620ed500a0e1bce1726198389132fc59a0b4e3",
+      "reinforcement_count": 2
+    },
+    {
+      "id": "sig_focus_1774641547_2971",
+      "type": "FOCUS",
+      "priority": "normal",
+      "source": "system:init",
+      "created_at": "2026-03-27T21:05:28Z",
+      "expires_at": "2026-04-26T19:59:07Z",
+      "active": true,
+      "strength": 0.8,
+      "reason": "Detected 5529 files (threshold: 500)",
+      "content": {
+        "text": "Large codebase — scope changes carefully, prefer incremental work"
+      },
+      "content_hash": "ada5f6b1e6ab5ae436f2c5d7b83ed3e22287dd52053750e644a39259af073a61",
+      "reinforcement_count": 1
+    },
+    {
+      "id": "sig_focus_1774645528_9997",
+      "type": "FOCUS",
+      "priority": "normal",
+      "source": "system:init",
+      "created_at": "2026-03-27T21:05:28Z",
+      "expires_at": "2026-04-26T21:05:28Z",
+      "active": true,
+      "strength": 0.8,
+      "reason": "User priority: visual styling matters",
+      "content": {
+        "text": "Visual consistency — use colony-visuals SKILL.md emoji reference map as canonical source"
+      },
+      "content_hash": "3967a585f9e7ce5addd3ea5f1941c17e48e831ca7ad568993e557792d88c21b8",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_focus_1774648237_850",
+      "type": "FOCUS",
+      "priority": "normal",
+      "source": "user:insert-phase",
+      "created_at": "2026-03-27T21:50:37Z",
+      "expires_at": "2026-04-26T21:50:37Z",
+      "active": true,
+      "strength": 0.8,
+      "reason": "Phase inserted to correct execution path",
+      "content": {
+        "text": "Inserted Phase 5: Add caste emojis to all ant spawn announcements and phase header displays across all commands — every spawn shows its caste emoji and phase headers include visual emoji markers"
+      },
+      "content_hash": "bbcae15fb345f1fccfb9226edf24d2c10b8a794eb747c2d83510d084fc8f846a",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774648240_1054",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "system:phase-insert",
+      "created_at": "2026-03-27T21:50:40Z",
+      "expires_at": "2026-04-26T21:50:40Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Inserted phase 5 (Stabilize caste emojis in spawn and phase displays): Add caste emojis to all ant spawn announcements and phase header displays across all commands — every spawn shows its caste emoji and phase headers include visual emoji markers"
+      },
+      "content_hash": "df61e4ae7704d25aba1b2b193143042d488de83faae20fbc6cfff34a5795bbef",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_focus_1774650440_1947",
+      "type": "FOCUS",
+      "priority": "normal",
+      "source": "system:init",
+      "created_at": "2026-03-27T22:27:20Z",
+      "expires_at": "2026-04-26T22:27:20Z",
+      "active": true,
+      "strength": 0.8,
+      "reason": "User priority: verification audit",
+      "content": {
+        "text": "This is an AUDIT colony — verify, do not modify. Read-only investigation unless a bug is found."
+      },
+      "content_hash": "28ec2e82576a1f8b02049c4244830aade68b7a70de6d5c77ec7106d0025353a3",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_focus_1774651980_2476",
+      "type": "FOCUS",
+      "priority": "normal",
+      "source": "user",
+      "created_at": "2026-03-27T22:53:00Z",
+      "expires_at": "phase_end",
+      "active": false,
+      "strength": 0.8,
+      "reason": "User directed colony attention",
+      "content": {
+        "text": "aim to bring back the emojis and stuff that we had because things look dull now"
+      },
+      "content_hash": "a43f7552d98ef8d3548894d82dfb94103ab4eead12b29e5ea22aaa2d8ce8595b",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774653271_1522",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:chaos",
+      "created_at": "2026-03-27T23:14:31Z",
+      "expires_at": "2026-04-26T23:14:31Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Chaos resilience moderate: 5 scenarios tested on pheromone-expire date fix, 3 resilient, 2 findings (static fallback staleness, double date failure)"
+      },
+      "content_hash": "da7f952d657bcf8c3eb20ca3985ca7f845977c9a517ff5d7a28ee8b38a44518d",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_focus_1774653316_9383",
+      "type": "FOCUS",
+      "priority": "normal",
+      "source": "user",
+      "created_at": "2026-03-27T23:15:16Z",
+      "expires_at": "phase_end",
+      "active": false,
+      "strength": 0.8,
+      "reason": "User directed colony attention",
+      "content": {
+        "text": "Minor note: pheromone-xml.sh may be missing from exchange folder — non-critical, only affects XML signal import/export"
+      },
+      "content_hash": "284f5faffe13fa00f5e967e2dd64539231f43edd5dc65c8d1e981648fb25d4fe",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774653615_6145",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-27T23:20:15Z",
+      "expires_at": "2026-04-26T23:20:15Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Test fixtures with hardcoded dates will break as calendar time advances — use dynamic date computation with cross-platform fallbacks instead"
+      },
+      "content_hash": "aa7787a503ba00dbdd0c0b26fcf5e891c4f7f5a191cfc2247f3a2699d68d23c5",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774653647_8263",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-27T23:20:47Z",
+      "expires_at": "2026-04-26T23:20:47Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted on phase advance",
+      "content": {
+        "text": "Phase 1 (Fix test 42) completed. Key pattern: hardcoded test dates break over time — use dynamic cross-platform date computation"
+      },
+      "content_hash": "93906efc9eab6dd9f508c6f579d013b2de6812dd67021efc0f82d1dd7488232d",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774656890_2838",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-28T00:14:50Z",
+      "expires_at": "2026-04-27T00:14:50Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Shell functions that set traps must compose with _aether_exit_cleanup to avoid orphaning file locks and temp files when the function exits abnormally"
+      },
+      "content_hash": "19e0f29da2839cd60f80f5cb46a7064850ca85505d943e0a092f908534a276e4",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774656894_5661",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-28T00:14:54Z",
+      "expires_at": "2026-04-27T00:14:54Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Shell functions that embed user-derived values in JSON output strings must use jq for safe construction to prevent JSON injection from special characters"
+      },
+      "content_hash": "74dd1cb9d037c4774a165f5c2c73e1e27312789375d53a28b019d56331262e35",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774656934_855",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-28T00:15:34Z",
+      "expires_at": "2026-04-27T00:15:34Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted on phase advance",
+      "content": {
+        "text": "Phase 2 (Verify today new test files and implementations) completed. Key patterns: shell trap composition must include _aether_exit_cleanup; JSON output construction must use jq for user-derived values"
+      },
+      "content_hash": "a747f481c0b92c95a985c965dfd0bfe0c9fdac47aaea4c35ffdc5f3febe379e8",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774657699_8936",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:weld-12",
+      "created_at": "2026-03-28T00:28:33Z",
+      "expires_at": "2026-04-27T00:28:19Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Weld-12 pipeline test: wisdom pipeline chain verification pattern"
+      },
+      "content_hash": "4fd3de468ba8d97c26525f2254762e39fc5f02ba9940dd56a6792bd0353ae98b",
+      "reinforcement_count": 1
+    },
+    {
+      "id": "sig_feedback_1774659996_2339",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "system:memory-capture",
+      "created_at": "2026-03-28T01:06:36Z",
+      "expires_at": "2026-04-27T01:06:36Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Continue-verify test observation"
+      },
+      "content_hash": "5662a09b122deae88b5186ac14df5f04b91128d7b4bc6c1707ced84b83f9b9fb",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774660979_3211",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-28T01:22:59Z",
+      "expires_at": "2026-04-27T01:22:59Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Playbook commands that chain generate-ant-name into spawn-log must parse the JSON result to extract the name — passing raw JSON corrupts spawn-tree.txt and breaks downstream parsers"
+      },
+      "content_hash": "1dcfb60272aa6ad676351e384caaa97fb4e53759938e6d4f89b0694dabf56156",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774660984_7446",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-28T01:23:04Z",
+      "expires_at": "2026-04-27T01:23:04Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Shell scripts building JSON output must escape all string fields including name and parent to prevent injection from special characters"
+      },
+      "content_hash": "1d6a4999d0f6a920202861eb2be3f1e5f120a74171b2746a8acf363078d4bd96",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774661006_7342",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-28T01:23:26Z",
+      "expires_at": "2026-04-27T01:23:26Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted on phase advance",
+      "content": {
+        "text": "Phase 3 (Audit QUEEN.md and wisdom pipeline integrity) completed. Key patterns: playbook commands must parse generate-ant-name JSON before passing to spawn-log; all JSON string fields need escaping"
+      },
+      "content_hash": "f93b9db8f2cd89119bbcbf161716e0fda028c9280dea99afcfc8a9db0c10866d",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774661772_9290",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-28T01:36:12Z",
+      "expires_at": "2026-04-27T01:36:12Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: OpenCode entomb.md is missing several Claude-only features — functional parity is partial"
+      },
+      "content_hash": "e9784a5fb6dce116c5e7d04a22dd25c192c48869cfcd9ea62f990d9b6464ee93",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774661778_1293",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-28T01:36:18Z",
+      "expires_at": "2026-04-27T01:36:18Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted on phase advance",
+      "content": {
+        "text": "Phase 4 (Verify colony lifecycle commands) completed. Key finding: entomb.md OpenCode version missing wisdom approval, eternal memory, expanded archival vs Claude version"
+      },
+      "content_hash": "9d0287f3dd215c4fd465cf7decc2049bd152141430d1bbde066582365427c445",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_redirect_1774663697_2058",
+      "type": "REDIRECT",
+      "priority": "high",
+      "source": "worker:chaos",
+      "created_at": "2026-03-28T02:08:17Z",
+      "expires_at": "2026-04-27T02:08:17Z",
+      "active": true,
+      "strength": 0.7,
+      "reason": "Auto-emitted from failure event",
+      "content": {
+        "text": "Avoid repeating failure: Resilience issue found: JSON objects stored as ant names break spawn-tree JSON output (critical)"
+      },
+      "content_hash": "0c0243abb822698cfc02f9eaa9e3fc18dc404ac3671c57c9bb12dbb07a248ad7",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_redirect_1774663699_9357",
+      "type": "REDIRECT",
+      "priority": "high",
+      "source": "worker:chaos",
+      "created_at": "2026-03-28T02:08:19Z",
+      "expires_at": "2026-04-27T02:08:19Z",
+      "active": true,
+      "strength": 0.7,
+      "reason": "Auto-emitted from failure event",
+      "content": {
+        "text": "Avoid repeating failure: Resilience issue found: spawn-tree-load passes raw output without validation (high)"
+      },
+      "content_hash": "8eaae1114d97bb7c55d60cfcda710cdf6c43d757fe65f56b0bc2621584fa0a84",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_focus_1774664831_21",
+      "type": "FOCUS",
+      "priority": "normal",
+      "source": "swarm-fix",
+      "created_at": "2026-03-28T02:27:11Z",
+      "expires_at": "2026-04-27T02:27:11Z",
+      "active": true,
+      "strength": 0.8,
+      "reason": "Swarm fix: spawn-tree JSON corruption caused by unescaped name/parent fields",
+      "content": {
+        "text": "spawn-tree.sh: all string fields must be JSON-escaped before interpolation into JSON output"
+      },
+      "content_hash": "e25e6b9586f864f920c6e869913b72c4f35a0032691820a6ec778c52d2289620",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_redirect_1774664831_3975",
+      "type": "REDIRECT",
+      "priority": "high",
+      "source": "swarm-fix",
+      "created_at": "2026-03-28T02:27:11Z",
+      "expires_at": "2026-05-27T02:27:11Z",
+      "active": true,
+      "strength": 0.9,
+      "reason": "Root cause of spawn-tree corruption: raw JSON envelope used as ant name",
+      "content": {
+        "text": "Never capture generate-ant-name output without piping through jq -r .result"
+      },
+      "content_hash": "6a3740f6c7d1255e80783e51b182b5af3b998715b5838090519640c08b49fee9",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_redirect_1774667824_1679",
+      "type": "REDIRECT",
+      "priority": "high",
+      "source": "worker:chaos",
+      "created_at": "2026-03-28T03:17:04Z",
+      "expires_at": "2026-04-27T03:17:04Z",
+      "active": true,
+      "strength": 0.7,
+      "reason": "Auto-emitted from failure event",
+      "content": {
+        "text": "Avoid repeating failure: Resilience issue found: Newline chars in queen-promote destroy QUEEN.md (critical)"
+      },
+      "content_hash": "ba547bfba47b0ac3e241b3e45c7d4207d75ccdfc3ef65b5ee1bdc4e2c9455931",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774669541_7818",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-28T03:45:41Z",
+      "expires_at": "2026-04-27T03:45:41Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Shell functions using sed c-command for line replacement must use head/tail instead to handle multi-line content safely on macOS BSD sed"
+      },
+      "content_hash": "1c539e6ae08d7712214c40d3067e32b19eafe3c9223727921a75ba1475843edd",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774669543_9197",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-28T03:45:43Z",
+      "expires_at": "2026-04-27T03:45:43Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Every atomic mv that overwrites a critical file must have a non-empty size guard to prevent data destruction from upstream pipeline failures"
+      },
+      "content_hash": "8684bd048a495d73e15d6d3772a003df6ee79e82a5ba5d57c1fdcf0c6c477648",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774669584_6077",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-28T03:46:24Z",
+      "expires_at": "2026-04-27T03:46:24Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted on phase advance",
+      "content": {
+        "text": "Phase 3 (Audit QUEEN.md and wisdom pipeline integrity) completed. Key patterns: sed c-command must use head/tail for newline safety; all atomic mv operations need empty-file guards"
+      },
+      "content_hash": "3172743139473dc26848e16b063061418c20f15626d3eb0c31dcf89c50dd1ea9",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774742168_9612",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-28T23:56:08Z",
+      "expires_at": "2026-04-27T23:56:08Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Lifecycle commands (init, seal, entomb) properly handle colony_version through template system — init uses colony-state.template.json, seal has 12 references, entomb reads and displays it"
+      },
+      "content_hash": "4fd0f8759b6dc668fbff15c4a3d92ef487fbe08630fe546c79cc86cb4bbf6c10",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774742171_6467",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-28T23:56:11Z",
+      "expires_at": "2026-04-27T23:56:11Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: JSON injection in spawn.sh persists despite being identified as an instinct — pattern recurs because the fix was applied only to queen.sh, not spawn.sh"
+      },
+      "content_hash": "53b55dc441bd789e4534d11960149d9fa55edac2b5db5e73638dd141b7f19f1a",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774742205_5511",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-28T23:56:45Z",
+      "expires_at": "2026-04-27T23:56:45Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted on phase advance: captures what worked and what was learned",
+      "content": {
+        "text": "Phase 4 (Verify colony lifecycle commands) completed. Key patterns: lifecycle commands properly handle colony_version through template system, command parity maintained across Claude/OpenCode"
+      },
+      "content_hash": "832e1ad66c763086aefdda811a61f3efe1c82bddf9478036f235f0fe9cb6432a",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_redirect_1774745107_4249",
+      "type": "REDIRECT",
+      "priority": "high",
+      "source": "worker:chaos",
+      "created_at": "2026-03-29T00:45:07Z",
+      "expires_at": "2026-04-28T00:45:07Z",
+      "active": true,
+      "strength": 0.7,
+      "reason": "Auto-emitted from failure event",
+      "content": {
+        "text": "Avoid repeating failure: Resilience issue found: All 9 spawn-tree tests time out due to O(n^2) parse_spawn_tree scaling (critical)"
+      },
+      "content_hash": "46499dd2a61f78afc79cee6654684421505442abf7ef561732c47fa32ac9ff49",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_redirect_1774745109_5540",
+      "type": "REDIRECT",
+      "priority": "high",
+      "source": "worker:chaos",
+      "created_at": "2026-03-29T00:45:09Z",
+      "expires_at": "2026-04-28T00:45:09Z",
+      "active": true,
+      "strength": 0.7,
+      "reason": "Auto-emitted from failure event",
+      "content": {
+        "text": "Avoid repeating failure: Resilience issue found: spawn-tree-active test passes for wrong reason — 5-pipe fixture format bypasses logic (high)"
+      },
+      "content_hash": "3486c431662ab5fb725af3dad1ad6743415afe77a20369c251c61342f985aadc",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_focus_1774746708_7788",
+      "type": "FOCUS",
+      "priority": "normal",
+      "source": "user:insert-phase",
+      "created_at": "2026-03-29T01:11:48Z",
+      "expires_at": "2026-04-28T01:11:48Z",
+      "active": true,
+      "strength": 0.8,
+      "reason": "Phase inserted to correct execution path",
+      "content": {
+        "text": "Inserted Phase 6: Fix all 3 spawn-tree blockers: (1) Fix O(n^2) parse_spawn_tree scaling that causes test timeouts, (2) JSON-escape ant names before interpolation into JSON output strings, (3) Add structural JSON validation in spawn-tree-load before passing through json_ok"
+      },
+      "content_hash": "21c4317876cf4d126923dbe66b9229689848bbb62724ea5b9ab05dc66184e4bb",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_redirect_1774746709_6763",
+      "type": "REDIRECT",
+      "priority": "high",
+      "source": "user:insert-phase",
+      "created_at": "2026-03-29T01:11:49Z",
+      "expires_at": "2026-04-28T01:11:49Z",
+      "active": true,
+      "strength": 0.9,
+      "reason": "Constraint captured during phase insertion",
+      "content": {
+        "text": "Minimal changes only — smallest possible fix, no refactoring beyond what is needed. All currently-passing tests must continue to pass."
+      },
+      "content_hash": "5374a5584d880f0290d015f3ef13b7a5013080713dc8c9a829196ab4317f0b9d",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774746710_3994",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "system:phase-insert",
+      "created_at": "2026-03-29T01:11:50Z",
+      "expires_at": "2026-04-28T01:11:50Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Inserted phase 6 (Stabilize spawn-tree parsing and JSON output): Fix all 3 spawn-tree blockers: (1) Fix O(n^2) parse_spawn_tree scaling that causes test timeouts, (2) JSON-escape ant names before interpolation into JSON output strings, (3) Add structural JSON validation in spawn-tree-load before passing through json_ok"
+      },
+      "content_hash": "f6dac9d9d4806fb4a70d16e365a8a61bd5e6a338a56e8a4a6158618a1a784e82",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774749456_5544",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:chaos",
+      "created_at": "2026-03-29T01:57:36Z",
+      "expires_at": "2026-04-28T01:57:36Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Chaos resilience strong: 4/5 scenarios resilient for spawn-tree awk rewrite, 1 medium finding on newline edge case"
+      },
+      "content_hash": "95e445398292500b937905fe13d967fe1736a658d3ef343ce0f1dfe3a4d3388b",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774749989_515",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-29T02:06:29Z",
+      "expires_at": "2026-04-28T02:06:29Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Replacing bash while-read+sed loops with single-pass awk eliminates O(n^2) subprocess forking"
+      },
+      "content_hash": "56e560b56e40bda2876c08901e0f8b93dd4cd1ce89de11daaef1dbefccc99fd6",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774749994_983",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-29T02:06:34Z",
+      "expires_at": "2026-04-28T02:06:34Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: awk NF==7 for spawn detection and $3 match for completion detection handles pipes-in-summary edge cases"
+      },
+      "content_hash": "bc888a2ea7b3eedadc5a420f4343ef666d668952e26639844be67b6a34da78cf",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774750002_2079",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-29T02:06:42Z",
+      "expires_at": "2026-04-28T02:06:42Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted on phase advance",
+      "content": {
+        "text": "Phase 6 (Stabilize spawn-tree parsing and JSON output) completed. Key patterns: single-pass awk eliminates O(n^2) subprocess forking, NF-based detection handles pipes-in-summary edge cases"
+      },
+      "content_hash": "31347935b3c38d3773d70c0bb14989854e062a1d0adb5c73d0563df8d9606072",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774752156_2746",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-29T02:42:36Z",
+      "expires_at": "2026-04-28T02:42:36Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted on phase advance",
+      "content": {
+        "text": "Phase 7 (Audit summary and documentation) completed. Key pattern: audit report pass rates must be verified against live test output, not builder claims"
+      },
+      "content_hash": "f116612313fa02618484547473c58a8035376296de2ecd006cf33c3d625f5299",
+      "reinforcement_count": 0
+    },
+    {
+      "id": "sig_feedback_1774752161_6295",
+      "type": "FEEDBACK",
+      "priority": "low",
+      "source": "worker:continue",
+      "created_at": "2026-03-29T02:42:41Z",
+      "expires_at": "2026-04-28T02:42:41Z",
+      "active": true,
+      "strength": 0.6,
+      "reason": "Auto-emitted from validated learning",
+      "content": {
+        "text": "Learning captured: Audit reports must use actual test output counts, not builder-claimed counts — always cross-verify bash test pass rates against live test-aether-utils.sh output"
+      },
+      "content_hash": "1ccff3c015f0f1982c9dd5abc6b12363fc130cd714f4e747cc2f8bbf6f747e19",
+      "reinforcement_count": 0
+    }
+  ],
+  "version": "1.0.0",
+  "colony_id": "aether-dev"
+}

@@ -1,73 +1,38 @@
 {
   "version": "1.1",
-  "topic": "Implementation plan for unimplemented Aether features: bug fixes (A1-A4), TODO clearance (B1-B4), RAG pipeline (C1-C6), agent competition (D1-D4), GSD-inspired colony features (headless mode, immune response, vital signs, federation, council expansion, midden library, secret sentinel, quick mode, crash recovery), and polish items (E1-E6)",
+  "topic": "Scientifically established and industry-standard software engineering metrics for measuring development tool efficiency and AI-assisted coding productivity — for Aether website showcase to sponsors and backers",
   "scope": "both",
   "template": "custom",
-  "phase": "verify",
-  "iteration": 5,
+  "phase": "survey",
+  "iteration": 1,
   "max_iterations": 50,
-  "target_confidence": 99,
-  "overall_confidence": 90,
-  "started_at": "2026-03-30T07:02:15Z",
-  "last_updated": "2026-03-30T05:36:55Z",
-  "status": "complete",
+  "target_confidence": 95,
+  "overall_confidence": 5,
+  "started_at": "2026-03-30T00:00:00Z",
+  "last_updated": "2026-03-30T07:12:57Z",
+  "status": "active",
   "strategy": "adaptive",
-  "focus_areas": [],
+  "focus_areas": [
+    "DORA metrics",
+    "SWE-bench/HumanEval benchmarks",
+    "multi-agent system evaluation",
+    "software maintainability indices",
+    "academic papers on AI coding assistant evaluation"
+  ],
   "convergence": {
-    "prev_findings_count": 55,
-    "prev_overall_confidence": 90,
+    "prev_findings_count": 4,
+    "prev_overall_confidence": 5,
     "history": [
       {
         "iteration": 1,
-        "novelty_delta": 6,
-        "confidence_delta": 4,
-        "gap_resolution_pct": 0,
-        "coverage_pct": 12,
-        "phase": "survey"
-      },
-      {
-        "iteration": 2,
         "novelty_delta": 4,
-        "confidence_delta": 4,
-        "gap_resolution_pct": 0,
-        "coverage_pct": 25,
-        "phase": "survey"
-      },
-      {
-        "iteration": 3,
-        "novelty_delta": 5,
-        "confidence_delta": 3,
-        "gap_resolution_pct": 0,
-        "coverage_pct": 37,
-        "phase": "survey"
-      },
-      {
-        "iteration": 3,
-        "novelty_delta": 45,
-        "confidence_delta": 3,
-        "gap_resolution_pct": 100,
-        "coverage_pct": 100,
-        "phase": "verify"
-      },
-      {
-        "iteration": 4,
-        "novelty_delta": 0,
-        "confidence_delta": 74,
-        "gap_resolution_pct": 100,
-        "coverage_pct": 100,
-        "phase": "verify"
-      },
-      {
-        "iteration": 5,
-        "novelty_delta": 0,
         "confidence_delta": 5,
-        "gap_resolution_pct": 100,
-        "coverage_pct": 100,
-        "phase": "verify"
+        "gap_resolution_pct": 0,
+        "coverage_pct": 14,
+        "phase": "survey"
       }
     ],
-    "composite_score": 100,
-    "converged": true
-  },
-  "stop_reason": "converged"
+    "composite_score": 4,
+    "converged": false
+  }
 }

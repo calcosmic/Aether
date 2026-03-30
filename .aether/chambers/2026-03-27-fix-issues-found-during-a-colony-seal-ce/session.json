@@ -1,0 +1,19 @@
+{
+  "session_id": "session_1774204068_833298357",
+  "started_at": "2026-03-27T19:59:14Z",
+  "last_command": "/ant:run",
+  "last_command_at": "2026-03-27T20:32:50Z",
+  "colony_goal": "Fix issues found during a colony seal ceremony audit — charter-write silent failures, blocked wisdom promotions, missing midden-ERROR_LOG bridge, and Sage analytics accuracy",
+  "current_phase": 5,
+  "current_milestone": "Crowned Anthill",
+  "suggested_next": "/ant:seal",
+  "context_cleared": false,
+  "baseline_commit": "75cd5018df986ac2a2fc71509934b5857346d424",
+  "resumed_at": null,
+  "active_todos": [
+    "Deprecate old 2.x npm versions - 2026-02-12",
+    "Deeply Integrate XML System Into Core Commands - 2026-02-16",
+    "Convert Colony Prompts to XML Format - 2026-02-15"
+  ],
+  "summary": "Autopilot complete: 5 phases done"
+}

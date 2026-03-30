@@ -1,0 +1,19 @@
+{
+  "session_id": "session_1774650429_217110",
+  "started_at": "2026-03-27T22:27:20Z",
+  "last_command": "/ant:continue",
+  "last_command_at": "2026-03-29T02:47:24Z",
+  "colony_goal": "Comprehensive audit of today's session work — verify QUEEN.md, pheromone system, wisdom pipeline, charter-write, and all colony lifecycle changes are functioning correctly",
+  "current_phase": 7,
+  "current_milestone": "First Mound",
+  "suggested_next": "",
+  "context_cleared": false,
+  "baseline_commit": "bce1941b9644498b3fa0880679880a50b339f9ac",
+  "resumed_at": null,
+  "active_todos": [
+    "Deprecate old 2.x npm versions - 2026-02-12",
+    "Deeply Integrate XML System Into Core Commands - 2026-02-16",
+    "Convert Colony Prompts to XML Format - 2026-02-15"
+  ],
+  "summary": "All 7 phases completed — colony ready to seal"
+}

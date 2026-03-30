@@ -1,0 +1,19 @@
+{
+  "session_id": "session_1774806158_2241",
+  "started_at": "2026-03-29T17:42:56Z",
+  "last_command": "/ant:run",
+  "last_command_at": "2026-03-29T19:22:23Z",
+  "colony_goal": "Implement next-generation Aether features: immune response system (trophallaxis repair + scarification), headless autopilot (--headless flag + pending decisions), colony vital signs dashboard, /ant:quick scout missions, council expansion (advocate/challenger/sage), and midden library for persistent debug knowledge",
+  "current_phase": 6,
+  "current_milestone": "First Mound",
+  "suggested_next": "/ant:seal",
+  "context_cleared": false,
+  "baseline_commit": "6ad92fbcd71871bcd6e864bdafab22b21a1a1549",
+  "resumed_at": "2026-03-30T04:25:41Z",
+  "active_todos": [
+    "Deprecate old 2.x npm versions - 2026-02-12",
+    "Deeply Integrate XML System Into Core Commands - 2026-02-16",
+    "Convert Colony Prompts to XML Format - 2026-02-15"
+  ],
+  "summary": "Autopilot: All 6 phases completed"
+}

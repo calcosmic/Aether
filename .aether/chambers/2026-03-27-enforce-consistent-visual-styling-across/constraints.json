@@ -1,0 +1,11 @@
+{
+  "version": "1.0",
+  "focus": [
+    "Testing infrastructure present (69 test files) — maintain TDD discipline",
+    "CI/CD pipeline active — ensure changes pass all checks",
+    "Large codebase — scope changes carefully, prefer incremental work",
+    "Visual consistency — use colony-visuals SKILL.md emoji reference map as canonical source",
+    "Inserted Phase 5: Add caste emojis to all ant spawn announcements and phase header displays across all commands — every spawn shows its caste emoji and phase headers include visual emoji markers"
+  ],
+  "constraints": []
+}

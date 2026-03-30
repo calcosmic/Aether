@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<queen-wisdom xmlns="http://aether.colony/schemas/queen-wisdom/1.0"
+               xmlns:qw="http://aether.colony/schemas/queen-wisdom/1.0">
+  <metadata>
+    <version>1.0.0</version>
+    <created>2026-02-18T01:48:47Z</created>
+    <modified>2026-02-18T01:48:47Z</modified>
+    <colony_id></colony_id>
+  </metadata>
+  <philosophies>
+  </philosophies>
+  <patterns>
+  </patterns>
+</queen-wisdom>

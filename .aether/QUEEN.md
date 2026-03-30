@@ -19,6 +19,8 @@ Communication style, expertise level, and decision-making patterns observed from
 
 Validated approaches that work in this codebase, and anti-patterns to avoid. Includes architecture conventions, naming patterns, error handling style, and technology-specific insights. Tagged [repo] for project-specific or [general] for cross-colony patterns.
 
+- **Aether Colony** (2026-03-30T06:14:25Z): Multi-line strings cannot pass via awk -v — use head/tail concatenation
+- **Aether Colony** (2026-03-30T06:14:23Z): awk -v interprets C-style escapes — use ENVIRON[] for user content
 - **Aether Colony** (2026-03-30T05:45:56Z): Literal newlines break awk NF guards, CR is the testable control char for embedded content
 - **Aether Colony** (2026-03-30T05:45:54Z): When adding awk gsub escaping, order matters: backslash must be first to prevent double-escaping
 - **1774204068** (2026-03-29T17:39:31Z): Oracle research finding: What would an expert change about this architecture to minimize user input while maximizing safety, verifiability, and autonomous execution capability? (80%)
@@ -111,6 +113,8 @@ High-confidence behavioral patterns that have been validated through repeated co
 
 | Date | Source | Type | Details |
 |------|--------|------|---------|
+| 2026-03-30T06:14:25Z | Aether Colony | promoted_pattern | Added: Multi-line strings cannot pass via awk -v — use he... |
+| 2026-03-30T06:14:23Z | Aether Colony | promoted_pattern | Added: awk -v interprets C-style escapes — use ENVIRON[] ... |
 | 2026-03-30T05:45:56Z | Aether Colony | promoted_pattern | Added: Literal newlines break awk NF guards, CR is the te... |
 | 2026-03-30T05:45:54Z | Aether Colony | promoted_pattern | Added: When adding awk gsub escaping, order matters: back... |
 | 2026-03-30T04:44:16Z | system | charter_updated | Colony charter updated for Aether Colony |
@@ -190,17 +194,5 @@ High-confidence behavioral patterns that have been validated through repeated co
 ---
 
 <!-- METADATA
-{
-  "version": "2.0.0",
-  "wisdom_version": "2.0",
-  "last_evolved": "2026-03-30T05:45:56Z",
-  "colonies_contributed": ["1774645519"],
-  "stats": {
-    "total_user_prefs": 3,
-    "total_codebase_patterns": 55,
-    "total_build_learnings": 3,
-    "total_instincts": 9
-  },
-  "evolution_log": [{"timestamp": "2026-03-24T23:40:00Z", "action": "migrate", "wisdom_type": "system", "content_hash": "v1-to-v2-migration", "colony": "system"}, {"timestamp": "2026-03-20T12:37:32Z", "action": "promote", "wisdom_type": "pattern", "content_hash": "sha256:f8aa50cfda0f37cac6cabba140bb99f1d75aa6d01a7100fe7a5ccddc2b3a017b", "colony": "1771335865738"}]
-}
+{  "version": "2.0.0",  "wisdom_version": "2.0",  "last_evolved": "2026-03-30T06:14:25Z",  "colonies_contributed": ["1774645519"],  "stats": {    "total_user_prefs": 3,    "total_codebase_patterns": 3,    "total_build_learnings": 3,    "total_instincts": 9  },  "evolution_log": [{"timestamp": "2026-03-24T23:40:00Z", "action": "migrate", "wisdom_type": "system", "content_hash": "v1-to-v2-migration", "colony": "system"}, {"timestamp": "2026-03-20T12:37:32Z", "action": "promote", "wisdom_type": "pattern", "content_hash": "sha256:f8aa50cfda0f37cac6cabba140bb99f1d75aa6d01a7100fe7a5ccddc2b3a017b", "colony": "1771335865738"}]}
 -->

@@ -1,0 +1,61 @@
+{
+  "version": "1.0",
+  "focus": [
+    "This is an AUDIT colony — verify, do not modify. Read-only investigation unless a bug is found.",
+    "aim to bring back the emojis and stuff that we had because things look dull now",
+    "Minor note: pheromone-xml.sh may be missing from exchange folder — non-critical, only affects XML signal import/export",
+    "spawn-tree.sh: all string fields must be JSON-escaped before interpolation into JSON output",
+    "Inserted Phase 6: Fix all 3 spawn-tree blockers: (1) Fix O(n^2) parse_spawn_tree scaling that causes test timeouts, (2) JSON-escape ant names before interpolation into JSON output strings, (3) Add structural JSON validation in spawn-tree-load before passing through json_ok"
+  ],
+  "constraints": [
+    {
+      "id": "c_1774663697",
+      "type": "AVOID",
+      "content": "Avoid repeating failure: Resilience issue found: JSON objects stored as ant names break spawn-tree JSON output (critical)",
+      "source": "user:redirect",
+      "created_at": "2026-03-28T02:08:17Z"
+    },
+    {
+      "id": "c_1774663699",
+      "type": "AVOID",
+      "content": "Avoid repeating failure: Resilience issue found: spawn-tree-load passes raw output without validation (high)",
+      "source": "user:redirect",
+      "created_at": "2026-03-28T02:08:19Z"
+    },
+    {
+      "id": "c_1774664831",
+      "type": "AVOID",
+      "content": "Never capture generate-ant-name output without piping through jq -r .result",
+      "source": "user:redirect",
+      "created_at": "2026-03-28T02:27:11Z"
+    },
+    {
+      "id": "c_1774667824",
+      "type": "AVOID",
+      "content": "Avoid repeating failure: Resilience issue found: Newline chars in queen-promote destroy QUEEN.md (critical)",
+      "source": "user:redirect",
+      "created_at": "2026-03-28T03:17:04Z"
+    },
+    {
+      "id": "c_1774745107",
+      "type": "AVOID",
+      "content": "Avoid repeating failure: Resilience issue found: All 9 spawn-tree tests time out due to O(n^2) parse_spawn_tree scaling (critical)",
+      "source": "user:redirect",
+      "created_at": "2026-03-29T00:45:07Z"
+    },
+    {
+      "id": "c_1774745109",
+      "type": "AVOID",
+      "content": "Avoid repeating failure: Resilience issue found: spawn-tree-active test passes for wrong reason — 5-pipe fixture format bypasses logic (high)",
+      "source": "user:redirect",
+      "created_at": "2026-03-29T00:45:09Z"
+    },
+    {
+      "id": "c_1774746709",
+      "type": "AVOID",
+      "content": "Minimal changes only — smallest possible fix, no refactoring beyond what is needed. All currently-passing tests must continue to pass.",
+      "source": "user:redirect",
+      "created_at": "2026-03-29T01:11:49Z"
+    }
+  ]
+}
