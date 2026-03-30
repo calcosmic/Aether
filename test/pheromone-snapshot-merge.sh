@@ -121,6 +121,15 @@ assert_exit_fail() {
   fi
 }
 
+# Run a worktree-create command in a test repo context
+# Args: workdir, args...
+run_worktree_create() {
+  local workdir="$1"
+  shift
+  (cd "$workdir" && AETHER_ROOT="$workdir" DATA_DIR="$workdir/.aether/data" COLONY_DATA_DIR="$workdir/.aether/data" AETHER_TESTING=1 \
+    bash "$workdir/.aether/aether-utils.sh" worktree-create "$@" 2>&1)
+}
+
 # ============================================================
 echo "=== Pheromone Snapshot Inject & Merge-Back Tests ==="
 echo ""
@@ -1056,6 +1065,183 @@ td=$(setup_test_repo)
 # Do not create pheromones.json
 assert_exit_fail "export-branch fails without pheromones.json" run_pheromone "$td" pheromone-export-branch
 rm -rf "$td"
+
+# ============================================================
+echo ""
+echo "--- 14. worktree-create integration: pheromone injection ---"
+echo ""
+
+# Helper: Set up a full worktree test environment with utils copied
+setup_worktree_with_pheromones() {
+  local tmpdir
+  tmpdir=$(mktemp -d)
+  cd "$tmpdir" || return 1
+  git init -q
+  git config user.email "test@aether.dev"
+  git config user.name "Test"
+
+  # Create full .aether structure
+  mkdir -p .aether/data .aether/locks .aether/utils .aether/exchange
+
+  # Copy aether-utils.sh (dispatcher)
+  cp "$REPO_ROOT/.aether/aether-utils.sh" .aether/aether-utils.sh
+
+  # Copy all utils
+  cp -r "$REPO_ROOT/.aether/utils/." .aether/utils/ 2>/dev/null || true
+
+  # Copy exchange if present
+  if [[ -d "$REPO_ROOT/.aether/exchange" ]]; then
+    cp -r "$REPO_ROOT/.aether/exchange/." .aether/exchange/ 2>/dev/null || true
+  fi
+
+  # Minimal COLONY_STATE.json
+  cat > .aether/data/COLONY_STATE.json << 'CS EOF'
+{
+  "version": "3.0",
+  "goal": "Test worktree pheromone injection",
+  "state": "READY",
+  "current_phase": 1,
+  "session_id": "test-session",
+  "initialized_at": "2026-01-01T00:00:00Z",
+  "plan": { "phases": [{ "id": 1, "name": "Test", "status": "pending" }] },
+  "memory": { "phase_learnings": [], "decisions": [], "instincts": [] },
+  "errors": { "records": [], "flagged_patterns": [] },
+  "events": [], "signals": [], "graveyards": [], "workers": [], "spawn_tree": []
+}
+CS EOF
+
+  # Make an initial commit so HEAD is valid
+  echo "# test" > README.md
+  git add README.md
+  git commit -q -m "initial commit"
+
+  echo "$tmpdir"
+}
+
+# Helper: Run worktree-create in a test repo
+run_worktree_create() {
+  local workdir="$1"
+  shift
+  ( cd "$workdir" && AETHER_ROOT="$workdir" DATA_DIR="$workdir/.aether/data" \
+    COLONY_DATA_DIR="$workdir/.aether/data" \
+    bash "$workdir/.aether/aether-utils.sh" worktree-create "$@" 2>&1 )
+}
+
+# 14a. Worktree creation triggers pheromone-snapshot-inject (verified by _snapshot metadata)
+echo "14a. worktree_create_injects_pheromones"
+td=$(setup_worktree_with_pheromones)
+create_pheromones "$td" '[
+  {"id":"sig_redirect_user","type":"REDIRECT","priority":"high","source":"user",
+   "created_at":"2026-03-30T12:00:00Z","expires_at":"phase_end","active":true,
+   "strength":0.9,"reason":"test","content":{"text":"avoid X"},"content_hash":"hash_wt_rx","reinforcement_count":0},
+  {"id":"sig_focus_user","type":"FOCUS","priority":"normal","source":"user",
+   "created_at":"2026-03-30T12:00:00Z","expires_at":"phase_end","active":true,
+   "strength":0.8,"reason":"test","content":{"text":"security"},"content_hash":"hash_wt_f1","reinforcement_count":0}
+]'
+result=$(run_worktree_create "$td" --branch "test-inject-1")
+if echo "$result" | jq -e '.ok == true' >/dev/null 2>&1; then
+  wt_dir=$(echo "$result" | jq -r '.result.worktree_dir')
+  if [[ -f "$wt_dir/.aether/data/pheromones.json" ]]; then
+    # Key check: _snapshot metadata must be present (proves pheromone-snapshot-inject ran)
+    snapshot_branch=$(jq -r '._snapshot.snapshot_from_branch // empty' "$wt_dir/.aether/data/pheromones.json" 2>/dev/null)
+    if [[ -n "$snapshot_branch" ]]; then
+      echo "  PASS: worktree_create_injects_pheromones -- snapshot metadata present (from_branch=$snapshot_branch)"
+      ((PASS++))
+    else
+      echo "  FAIL: worktree_create_injects_pheromones -- no _snapshot metadata in worktree pheromones.json"
+      ((FAIL++))
+    fi
+    # Also verify active signals are present
+    wt_signal_count=$(jq '[.signals[] | select(.active == true)] | length' "$wt_dir/.aether/data/pheromones.json" 2>/dev/null || echo "0")
+    if [[ "$wt_signal_count" -ge 2 ]]; then
+      echo "  PASS: worktree has $wt_signal_count active signals"
+      ((PASS++))
+    else
+      echo "  FAIL: worktree has $wt_signal_count active signals, expected >= 2"
+      ((FAIL++))
+    fi
+  else
+    echo "  FAIL: worktree_create_injects_pheromones -- pheromones.json not found in worktree"
+    ((FAIL++))
+  fi
+else
+  echo "  FAIL: worktree_create_injects_pheromones -- command failed: $(echo "$result" | head -3)"
+  ((FAIL++))
+fi
+# Cleanup worktree and temp dir
+cd / 2>/dev/null || true
+rm -rf "$td" 2>/dev/null || true
+
+# 14b. Worktree inject includes REDIRECT and user FOCUS with injection metadata
+echo "14b. worktree_create_inject_includes_redirect_and_focus"
+td=$(setup_worktree_with_pheromones)
+create_pheromones "$td" '[
+  {"id":"sig_redirect_u","type":"REDIRECT","priority":"high","source":"user",
+   "created_at":"2026-03-30T12:00:00Z","expires_at":"phase_end","active":true,
+   "strength":0.9,"reason":"test","content":{"text":"avoid X"},"content_hash":"hash_wt_r1","reinforcement_count":0},
+  {"id":"sig_focus_u","type":"FOCUS","priority":"normal","source":"user",
+   "created_at":"2026-03-30T12:00:00Z","expires_at":"phase_end","active":true,
+   "strength":0.8,"reason":"test","content":{"text":"auth"},"content_hash":"hash_wt_f1","reinforcement_count":0},
+  {"id":"sig_feedback_w","type":"FEEDBACK","priority":"low","source":"worker:builder",
+   "created_at":"2026-03-30T12:00:00Z","expires_at":"phase_end","active":true,
+   "strength":0.7,"reason":"test","content":{"text":"nice pattern"},"content_hash":"hash_wt_b1","reinforcement_count":0}
+]'
+result=$(run_worktree_create "$td" --branch "test-inject-2")
+if echo "$result" | jq -e '.ok == true' >/dev/null 2>&1; then
+  wt_dir=$(echo "$result" | jq -r '.result.worktree_dir')
+  if [[ -f "$wt_dir/.aether/data/pheromones.json" ]]; then
+    # Check REDIRECT is present
+    has_redirect=$(jq '[.signals[] | select(.type == "REDIRECT" and .active == true)] | length' "$wt_dir/.aether/data/pheromones.json" 2>/dev/null || echo "0")
+    if [[ "$has_redirect" -ge 1 ]]; then
+      echo "  PASS: REDIRECT present in worktree pheromones"
+      ((PASS++))
+    else
+      echo "  FAIL: REDIRECT missing from worktree pheromones"
+      ((FAIL++))
+    fi
+    # Check user FOCUS is present
+    has_user_focus=$(jq '[.signals[] | select(.type == "FOCUS" and .source == "user" and .active == true)] | length' "$wt_dir/.aether/data/pheromones.json" 2>/dev/null || echo "0")
+    if [[ "$has_user_focus" -ge 1 ]]; then
+      echo "  PASS: user FOCUS present in worktree pheromones"
+      ((PASS++))
+    else
+      echo "  FAIL: user FOCUS missing from worktree pheromones"
+      ((FAIL++))
+    fi
+    # Verify injection ran: at least one signal should have "Injected from" in reason
+    injected_reason_count=$(jq '[.signals[] | select(.reason | test("Injected from"))] | length' "$wt_dir/.aether/data/pheromones.json" 2>/dev/null || echo "0")
+    if [[ "$injected_reason_count" -ge 1 ]]; then
+      echo "  PASS: injection reason metadata present ($injected_reason_count signals)"
+      ((PASS++))
+    else
+      echo "  FAIL: no signals have injection reason metadata"
+      ((FAIL++))
+    fi
+  else
+    echo "  FAIL: pheromones.json not found in worktree"
+    ((FAIL++))
+  fi
+else
+  echo "  FAIL: worktree-create command failed: $(echo "$result" | head -3)"
+  ((FAIL++))
+fi
+cd / 2>/dev/null || true
+rm -rf "$td" 2>/dev/null || true
+
+# 14c. Worktree creation succeeds without pheromones.json
+echo "14c. worktree_create_succeeds_without_pheromones"
+td=$(setup_worktree_with_pheromones)
+# Do NOT create pheromones.json
+result=$(run_worktree_create "$td" --branch "test-no-phero")
+if echo "$result" | jq -e '.ok == true' >/dev/null 2>&1; then
+  echo "  PASS: worktree_create_succeeds_without_pheromones"
+  ((PASS++))
+else
+  echo "  FAIL: worktree_create_succeeds_without_pheromones -- command failed: $(echo "$result" | head -3)"
+  ((FAIL++))
+fi
+cd / 2>/dev/null || true
+rm -rf "$td" 2>/dev/null || true
 
 # ============================================================
 echo ""
