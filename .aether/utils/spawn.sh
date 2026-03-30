@@ -25,7 +25,7 @@ _spawn_log() {
     emoji=$(get_caste_emoji "$child_caste")
     parent_emoji=$(get_caste_emoji "$parent_id")
     # Log to activity log with spawn format, emojis, and model info
-    echo "[$ts] ⚡ SPAWN $parent_emoji $parent_id -> $emoji $child_name ($child_caste): $task_summary [model: $model]" >> "$COLONY_DATA_DIR/activity.log"
+    [[ "${AETHER_TESTING:-}" != "1" ]] && echo "[$ts] ⚡ SPAWN $parent_emoji $parent_id -> $emoji $child_name ($child_caste): $task_summary [model: $model]" >> "$COLONY_DATA_DIR/activity.log"
     # Log to spawn tree file for visualization (NEW FORMAT: includes model field)
     echo "$ts_full|$parent_id|$child_caste|$child_name|$task_summary|$model|$status" >> "$COLONY_DATA_DIR/spawn-tree.txt"
     # Return emoji-formatted result for display (jq-safe: child_name may contain JSON-special chars)
@@ -46,7 +46,7 @@ _spawn_complete() {
     status_icon="✅"
     [[ "$status" == "failed" ]] && status_icon="❌"
     [[ "$status" == "blocked" ]] && status_icon="🚫"
-    echo "[$ts] $status_icon $emoji $ant_name: $status${summary:+ - $summary}" >> "$COLONY_DATA_DIR/activity.log"
+    [[ "${AETHER_TESTING:-}" != "1" ]] && echo "[$ts] $status_icon $emoji $ant_name: $status${summary:+ - $summary}" >> "$COLONY_DATA_DIR/activity.log"
     # Update spawn tree
     echo "$ts_full|$ant_name|$status|$summary" >> "$COLONY_DATA_DIR/spawn-tree.txt"
     # Log failed spawns to events array as pipe-delimited strings (matching template format)

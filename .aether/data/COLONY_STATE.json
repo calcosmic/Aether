@@ -4,7 +4,7 @@
   "colony_name": null,
   "colony_version": 1,
   "state": "READY",
-  "current_phase": 3,
+  "current_phase": 4,
   "session_id": "session_1774845857_55502",
   "initialized_at": "2026-03-30T04:44:17Z",
   "build_started_at": null,
@@ -27,7 +27,7 @@
       {
         "id": 3,
         "name": "Filter test noise from activity log",
-        "status": "pending",
+        "status": "completed",
         "description": "Add AETHER_TESTING env guard to all 5 activity.log write points in error-handler.sh and spawn.sh"
       },
       {
@@ -89,6 +89,21 @@
           }
         ],
         "timestamp": "2026-03-30T06:14:14Z"
+      },
+      {
+        "id": "learning_1774852066",
+        "phase": 3,
+        "phase_name": "Filter test noise from activity log",
+        "learnings": [
+          {
+            "claim": "Guarding the central activity-log subcommand plus individual write sites provides defense-in-depth for test isolation",
+            "status": "validated",
+            "tested": true,
+            "evidence": "All 6 write points guarded with AETHER_TESTING check",
+            "disproven_by": null
+          }
+        ],
+        "timestamp": "2026-03-30T06:27:46Z"
       }
     ],
     "decisions": [],
@@ -219,7 +234,10 @@
     "2026-03-30T05:45:45Z|phase_advanced|continue|Completed Phase 1, advancing to Phase 2",
     "2026-03-30T05:53:21Z|phase_started|build|Phase 2: Fix queen-promote newline destruction started",
     "2026-03-30T06:14:14Z|phase_completed|continue|Phase 2: Fix queen-promote newline destruction completed",
-    "2026-03-30T06:14:14Z|phase_advanced|continue|Completed Phase 2, advancing to Phase 3"
+    "2026-03-30T06:14:14Z|phase_advanced|continue|Completed Phase 2, advancing to Phase 3",
+    "2026-03-30T06:17:04Z|phase_started|build|Phase 3: Filter test noise from activity log started",
+    "2026-03-30T06:27:46Z|phase_completed|continue|Phase 3: Filter test noise from activity log completed",
+    "2026-03-30T06:27:46Z|phase_advanced|continue|Completed Phase 3, advancing to Phase 4"
   ],
   "territory_surveyed": "2026-03-30T04:53:04Z"
 }

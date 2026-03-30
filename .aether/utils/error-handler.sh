@@ -87,7 +87,7 @@ json_err() {
     "$code" "$escaped_message" "$details_json" "$recovery" "$timestamp" >&2
 
   # Log to activity.log (best effort)
-  if [[ -n "${COLONY_DATA_DIR:-}" ]]; then
+  if [[ -n "${COLONY_DATA_DIR:-}" ]] && [[ "${AETHER_TESTING:-}" != "1" ]]; then
     echo "[$timestamp] ERROR $code: $escaped_message" >> "$COLONY_DATA_DIR/activity.log" 2>/dev/null || true
   fi
 
@@ -111,7 +111,7 @@ json_warn() {
     "$code" "$escaped_message" "$timestamp"
 
   # Log to activity.log (best effort)
-  if [[ -n "${COLONY_DATA_DIR:-}" ]]; then
+  if [[ -n "${COLONY_DATA_DIR:-}" ]] && [[ "${AETHER_TESTING:-}" != "1" ]]; then
     echo "[$timestamp] WARN $code: $escaped_message" >> "$COLONY_DATA_DIR/activity.log" 2>/dev/null || true
   fi
 }
@@ -153,7 +153,7 @@ error_handler() {
     "$E_BASH_ERROR" "$details" "$(_recovery_default)" "$timestamp" >&2
 
   # Log to activity.log (best effort)
-  if [[ -n "${COLONY_DATA_DIR:-}" ]]; then
+  if [[ -n "${COLONY_DATA_DIR:-}" ]] && [[ "${AETHER_TESTING:-}" != "1" ]]; then
     echo "[$timestamp] ERROR $E_BASH_ERROR: Command failed at line $line_num (exit $exit_code)" >> "$COLONY_DATA_DIR/activity.log" 2>/dev/null || true
   fi
 

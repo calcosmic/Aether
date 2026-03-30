@@ -1733,6 +1733,12 @@ HELP_EOF
       exit 0
     fi
 
+    # Skip writes during test runs to prevent test noise in activity.log
+    if [[ "${AETHER_TESTING:-}" == "1" ]]; then
+      json_ok '"logged"'
+      exit 0
+    fi
+
     log_file="$COLONY_DATA_DIR/activity.log"
     mkdir -p "$COLONY_DATA_DIR"
     ts=$(date -u +"%H:%M:%S")

@@ -37,3 +37,7 @@
 2026-03-30T06:06:33Z|Chip-44|completed|Fixed awk -v backslash in queen.sh, deleted 62 orphan metaupd files
 2026-03-30T06:06:41Z|Queen|watcher|Alert-37|Independent verification|inherit|spawned
 2026-03-30T06:10:44Z|Alert-37|completed|Verification passed: all 10 criteria met, 13/13 queen tests pass
+2026-03-30T06:17:31Z|Queen|builder|Chip-30|Add AETHER_TESTING env guard to activity.log write points|inherit|spawned
+2026-03-30T06:21:44Z|Chip-30|completed|Added AETHER_TESTING guard to 6 activity.log write points
+2026-03-30T06:21:52Z|Queen|watcher|Sharp-42|Independent verification|inherit|spawned
+2026-03-30T06:25:21Z|Sharp-42|completed|Verification passed: all 6 AETHER_TESTING guards confirmed
