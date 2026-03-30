@@ -69,5 +69,13 @@
     "commander": "^12.1.0",
     "js-yaml": "^4.1.0",
     "picocolors": "^1.1.1"
+  },
+  "overrides": {
+    "minimatch": "^9.0.7",
+    "brace-expansion": "^2.0.3",
+    "path-to-regexp": "^8.4.0",
+    "picomatch": "^4.0.4",
+    "tar": "^7.5.11",
+    "diff": "^8.0.3"
   }
 }

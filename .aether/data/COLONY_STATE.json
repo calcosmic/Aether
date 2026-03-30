@@ -4,7 +4,7 @@
   "colony_name": null,
   "colony_version": 1,
   "state": "READY",
-  "current_phase": 4,
+  "current_phase": 5,
   "session_id": "session_1774845857_55502",
   "initialized_at": "2026-03-30T04:44:17Z",
   "build_started_at": null,
@@ -33,7 +33,7 @@
       {
         "id": 4,
         "name": "Update high-CVE dependencies",
-        "status": "pending",
+        "status": "completed",
         "description": "Run npm audit fix for minimatch, path-to-regexp, picomatch, tar; add npm overrides if needed for nested picomatch"
       },
       {
@@ -104,6 +104,21 @@
           }
         ],
         "timestamp": "2026-03-30T06:27:46Z"
+      },
+      {
+        "id": "learning_1774852956",
+        "phase": 4,
+        "phase_name": "Update high-CVE dependencies",
+        "learnings": [
+          {
+            "claim": "npm overrides are the correct mechanism for pinning safe versions of transitive dependencies without modifying direct deps",
+            "status": "validated",
+            "tested": true,
+            "evidence": "6 overrides added, npm audit shows 0 vulnerabilities, all tests pass",
+            "disproven_by": null
+          }
+        ],
+        "timestamp": "2026-03-30T06:42:36Z"
       }
     ],
     "decisions": [],
@@ -237,7 +252,10 @@
     "2026-03-30T06:14:14Z|phase_advanced|continue|Completed Phase 2, advancing to Phase 3",
     "2026-03-30T06:17:04Z|phase_started|build|Phase 3: Filter test noise from activity log started",
     "2026-03-30T06:27:46Z|phase_completed|continue|Phase 3: Filter test noise from activity log completed",
-    "2026-03-30T06:27:46Z|phase_advanced|continue|Completed Phase 3, advancing to Phase 4"
+    "2026-03-30T06:27:46Z|phase_advanced|continue|Completed Phase 3, advancing to Phase 4",
+    "2026-03-30T06:29:34Z|phase_started|build|Phase 4: Update high-CVE dependencies started",
+    "2026-03-30T06:42:36Z|phase_completed|continue|Phase 4: Update high-CVE dependencies completed",
+    "2026-03-30T06:42:36Z|phase_advanced|continue|Completed Phase 4, advancing to Phase 5"
   ],
   "territory_surveyed": "2026-03-30T04:53:04Z"
 }
