@@ -571,7 +571,15 @@ Read current COLONY_STATE.json, then update:
 - Set `state` to `"READY"`
 - Append event: `"<timestamp>|plan_generated|plan|Generated {N} phases with {confidence}% confidence"`
 
-Write COLONY_STATE.json.
+Write COLONY_STATE.json using state-mutate (atomic, locked, validated):
+```bash
+bash .aether/aether-utils.sh state-mutate \
+  --argjson phases "$(echo '$PLAN_JSON' | jq '.plan.phases')" \
+  --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  --argjson n "$PHASE_COUNT" \
+  --argjson conf "$CONFIDENCE" \
+  '.plan.phases = $phases | .plan.generated_at = $ts | .state = "READY" | .events += [$ts + "|plan_generated|plan|Generated " + ($n|tostring) + " phases with " + ($conf|tostring) + "% confidence"]'
+```
 
 **Verify the write** — read back and confirm the plan persisted:
 ```bash
@@ -581,7 +589,7 @@ verify_state=$(jq -r '.state' .aether/data/COLONY_STATE.json)
 if [[ "$verify_phases" -lt 1 || "$verify_timestamp" == "null" || "$verify_state" != "READY" ]]; then
   echo "ERROR: Plan write verification failed (phases=$verify_phases, generated_at=$verify_timestamp, state=$verify_state)"
   echo "Attempting retry write..."
-  bash .aether/aether-utils.sh state-write "$(jq --argjson phases "$(echo '$PLAN_JSON' | jq '.plan.phases')" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '.plan.phases = $phases | .plan.generated_at = $ts | .state = "READY"' .aether/data/COLONY_STATE.json)"
+  bash .aether/aether-utils.sh state-mutate --argjson phases "$(echo '$PLAN_JSON' | jq '.plan.phases')" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '.plan.phases = $phases | .plan.generated_at = $ts | .state = "READY"'
   verify_phases=$(jq '.plan.phases | length' .aether/data/COLONY_STATE.json)
   if [[ "$verify_phases" -lt 1 ]]; then
     echo "FATAL: Retry write also failed. Plan was not persisted."

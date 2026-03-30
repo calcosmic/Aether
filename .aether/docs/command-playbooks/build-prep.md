@@ -226,7 +226,7 @@ Parse the JSON result (`.result.blockers`):
 
 ### Step 2: Update State
 
-Read then update `.aether/data/COLONY_STATE.json`:
+Update `.aether/data/COLONY_STATE.json` using state-mutate (atomic, locked, validated):
 - Set `state` to `"EXECUTING"`
 - Set `current_phase` to the phase number
 - Set the phase's `status` to `"in_progress"` in `plan.phases[N]`
@@ -235,7 +235,14 @@ Read then update `.aether/data/COLONY_STATE.json`:
 
 If `events` exceeds 100 entries, keep only the last 100.
 
-Write COLONY_STATE.json.
+Run using the Bash tool with description "Updating colony state for build...":
+```bash
+bash .aether/aether-utils.sh state-mutate \
+  --argjson phase "$PHASE_NUMBER" \
+  --arg phase_name "$PHASE_NAME" \
+  --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  '.state = "EXECUTING" | .current_phase = $phase | .plan.phases |= map(if .id == $phase then .status = "in_progress" else . end) | .build_started_at = $timestamp | .events = ((.events[-99:]) + [$timestamp + "|phase_started|build|Phase " + ($phase|tostring) + ": " + $phase_name + " started"])'
+```
 
 Validate the state file:
 Run using the Bash tool with description "Validating colony state...":

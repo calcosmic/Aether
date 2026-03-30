@@ -285,16 +285,32 @@ Update COLONY_STATE.json:
    - Keep max 30 instincts (remove lowest confidence)
    - Keep max 100 events
 
-Write the updated state through the locked subcommand. Construct the full updated COLONY_STATE.json content as a variable, then pipe it to state-write:
+Write the updated state through targeted `state-mutate` calls. Each call acquires a lock, creates a backup, applies the jq expression, validates, and writes atomically. Do NOT use the Write tool or `state-write` with full JSON content — always use `state-mutate` to avoid stale-context corruption.
 
-Run using the Bash tool with description "Writing colony state...":
+Run using the Bash tool with description "Advancing colony state...":
 ```bash
-cat << 'STATEOF' | bash .aether/aether-utils.sh state-write
-<the full JSON content>
-STATEOF
+# Mark current phase completed
+bash .aether/aether-utils.sh state-mutate --argjson pid "$current_phase" \
+  '.plan.phases |= map(if .id == $pid then .status = "completed" else . end)'
+
+# Append learning (if any — skip if no learnings were extracted in Step 2)
+# bash .aether/aether-utils.sh state-mutate --argjson learning "$learning_json" \
+#   '.memory.phase_learnings += [$learning]'
+
+# Advance to next phase
+bash .aether/aether-utils.sh state-mutate \
+  --argjson pid "$current_phase" \
+  --argjson next "$next_phase" \
+  --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  '.current_phase = $next | .state = "READY" | .build_started_at = null | .events += [$timestamp + "|phase_advanced|continue|Completed Phase " + ($pid|tostring) + ", advancing to Phase " + ($next|tostring)]'
 ```
 
-This acquires a lock, creates a rolling backup, validates JSON, and writes atomically. Do NOT use the Write tool to write COLONY_STATE.json directly — always go through state-write.
+Run using the Bash tool with description "Enforcing memory caps...":
+```bash
+# Cap enforcement — keep arrays bounded
+bash .aether/aether-utils.sh state-mutate \
+  '.memory.phase_learnings = (.memory.phase_learnings[-20:]) | .memory.decisions = (.memory.decisions[-30:]) | .memory.instincts = (.memory.instincts | sort_by(.confidence) | .[-30:]) | .events = (.events[-100:])'
+```
 
 Validate the state file:
 Run using the Bash tool with description "Validating colony state...": `bash .aether/aether-utils.sh validate-state colony`

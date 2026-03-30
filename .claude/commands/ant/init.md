@@ -281,7 +281,7 @@ bash .aether/aether-utils.sh charter-write --intent "{approved_intent}" --vision
 
 3. Update the goal field in COLONY_STATE.json in-place using the state API:
 ```bash
-bash .aether/aether-utils.sh state-write "$(jq --arg new_goal "{approved_intent}" '.goal = $new_goal' .aether/data/COLONY_STATE.json)"
+bash .aether/aether-utils.sh state-mutate --arg new_goal "{approved_intent}" '.goal = $new_goal'
 ```
 
 4. **Verify the write** — read back and confirm goal is set:

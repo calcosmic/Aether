@@ -139,14 +139,11 @@ current_colony_version=$(jq -r '.colony_version // 0' .aether/data/COLONY_STATE.
 [[ "$current_colony_version" =~ ^[0-9]+$ ]] || current_colony_version=0
 new_colony_version=$(( current_colony_version + 1 ))
 
-# Write incremented value back — guard against empty output destroying the file
-updated=$(jq --argjson v "$new_colony_version" '.colony_version = $v' .aether/data/COLONY_STATE.json 2>/dev/null)
-if [[ -n "$updated" && ${#updated} -gt 10 ]]; then
-  echo "$updated" > .aether/data/COLONY_STATE.json
-else
-  echo "Warning: jq update failed — colony_version defaults to 1, state file unchanged"
+# Write incremented value back via state-mutate (atomic, locked, validated)
+bash .aether/aether-utils.sh state-mutate --argjson v "$new_colony_version" '.colony_version = $v' || {
+  echo "Warning: state-mutate failed — colony_version defaults to 1, state file unchanged"
   new_colony_version=1
-fi
+}
 ```
 
 Use `new_colony_version` as `{colony_version}` throughout the rest of the seal ceremony (e.g., display as "Crowned Anthill v{colony_version}").

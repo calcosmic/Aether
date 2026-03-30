@@ -96,11 +96,32 @@ _state_write() {
 
 _state_mutate() {
     # Read-modify-write COLONY_STATE.json with a jq expression
-    # Usage: state-mutate '<jq_expression>'
+    # Usage: state-mutate [--arg NAME VALUE] [--argjson NAME VALUE] '<jq_expression>'
+    # Supports jq --arg, --argjson, --slurpfile, --rawfile flags (forwarded to jq)
     # Acquires lock, creates backup, applies jq, validates, writes atomically
     # Returns: json_ok with mutated:true, or json_err on failure
 
-    sm_expr="${1:-}"
+    # Parse jq flags (--arg, --argjson, --slurpfile, --rawfile) from arguments
+    # The jq expression is always the last argument (after all flags)
+    local sm_jq_flags=()
+    local sm_expr=""
+    local i=0
+    local args=("$@")
+
+    while [[ $i -lt ${#args[@]} ]]; do
+        case "${args[$i]}" in
+            --arg|--argjson|--slurpfile|--rawfile)
+                # Flag requires a name and value — consume next two args
+                sm_jq_flags+=("${args[$i]}" "${args[$((i+1))]}" "${args[$((i+2))]}")
+                i=$((i + 3))
+                ;;
+            *)
+                # Last argument is the jq expression
+                sm_expr="${args[$i]}"
+                i=$((i + 1))
+                ;;
+        esac
+    done
 
     if [[ -z "$sm_expr" ]]; then
         json_err "$E_VALIDATION_FAILED" "state-mutate requires a jq expression argument"
@@ -122,8 +143,8 @@ _state_mutate() {
         fi
     fi
 
-    # Apply jq expression to current state
-    sm_updated=$(jq "$sm_expr" "$sm_state_file" 2>/dev/null) || {
+    # Apply jq expression to current state (with forwarded flags)
+    sm_updated=$(jq ${sm_jq_flags[@]+"${sm_jq_flags[@]}"} "$sm_expr" "$sm_state_file" 2>/dev/null) || {
         release_lock 2>/dev/null || true  # SUPPRESS:OK -- cleanup: lock may not be held
         json_err "$E_JSON_INVALID" "jq expression failed: $sm_expr"
     }
