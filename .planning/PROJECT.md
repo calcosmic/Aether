@@ -42,7 +42,7 @@ The system must reliably interpret a user request, decompose it into executable 
 
 - Complete state-mutate migration — all COLONY_STATE.json writes use atomic mutations — v2.7
 - Cross-branch pheromone propagation — user signals reach all worktree branches — v2.7
-- Midden cross-PR collection — branch failures ingested on merge — v2.7
+- ✓ Midden cross-PR collection — branch failures ingested on merge — v2.7 (Phase 41)
 - CI context assembly (pr-context) — machine-readable colony context for CI — v2.7
 - Clash detection wired into task-as-PR workflow — v2.7
 - Release hygiene — published package excludes dev artifacts — v2.7
@@ -101,4 +101,4 @@ The system must reliably interpret a user request, decompose it into executable 
 | Deterministic prompt generation | Colony prompts must be testable and reproducible | ✓ Good — bash + jq assembly, 12 tested pattern checks |
 
 ---
-*Last updated: 2026-03-30 after v2.6 completion — v2.7 PR Workflow + Stability in progress*
+*Last updated: 2026-03-31 after Phase 41 completion — v2.7 PR Workflow + Stability in progress*
