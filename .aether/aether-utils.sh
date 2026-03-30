@@ -1275,6 +1275,10 @@ case "$cmd" in
       {"name": "midden-acknowledge", "description": "Acknowledge midden entries by id or category"},
       {"name": "midden-search", "description": "Search midden entries by keyword with optional category/source filters"},
       {"name": "midden-tag", "description": "Add or remove a tag from a midden entry"},
+      {"name": "midden-collect", "description": "Collect midden entries from a merged branch worktree into main's midden"},
+      {"name": "midden-handle-revert", "description": "Tag entries from a reverted merge commit"},
+      {"name": "midden-cross-pr-analysis", "description": "Detect cross-PR failure patterns with auto-REDIRECT emission"},
+      {"name": "midden-prune", "description": "Retention cleanup for collected merges and reverted entries"},
       {"name": "entropy-score", "description": "Compute colony entropy score (0-100)"},
       {"name": "colony-vital-signs", "description": "Compute colony health metrics from existing data (velocity, errors, signals, memory, overall score)"},
       {"name": "force-unlock", "description": "Emergency unlock — remove stale lock files"}
@@ -4761,6 +4765,14 @@ EOF
   midden-search) _midden_search "$@" ;;
 
   midden-tag) _midden_tag "$@" ;;
+
+  midden-collect) _midden_collect "$@" ;;
+
+  midden-handle-revert) _midden_handle_revert "$@" ;;
+
+  midden-cross-pr-analysis) _midden_cross_pr_analysis "$@" ;;
+
+  midden-prune) _midden_prune "$@" ;;
 
   trophallaxis-diagnose) _trophallaxis_diagnose "$@" ;;
 

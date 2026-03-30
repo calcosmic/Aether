@@ -518,3 +518,537 @@ _midden_acknowledge() {
       '{acknowledged: true, count: $count, reason: $reason}')"
     return 0
 }
+
+# ============================================================================
+# Cross-Branch Midden Collection (Phase 41)
+# ============================================================================
+
+_midden_collect() {
+    # Collect midden entries from a merged branch worktree into main's midden
+    # Usage: midden-collect --branch <name> --merge-sha <sha> [--dry-run]
+    # Returns: JSON with collection status and counts
+    #
+    # Dual-layer idempotency:
+    #   Layer 1: Merge fingerprint in collected-merges.json (fast path)
+    #   Layer 2: Per-entry ID dedup (safety net)
+
+    mc_branch=""
+    mc_merge_sha=""
+    mc_dry_run=false
+
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --branch)     mc_branch="${2:-}"; shift 2 ;;
+        --merge-sha)  mc_merge_sha="${2:-}"; shift 2 ;;
+        --dry-run)    mc_dry_run=true; shift ;;
+        *) shift ;;
+      esac
+    done
+
+    # Validate required args
+    if [[ -z "$mc_branch" ]]; then
+      json_err "$E_VALIDATION_FAILED" "midden-collect requires --branch"
+    fi
+    if [[ -z "$mc_merge_sha" ]]; then
+      json_err "$E_VALIDATION_FAILED" "midden-collect requires --merge-sha"
+    fi
+
+    # Resolve worktree midden path
+    mc_worktree_midden=""
+    mc_candidate="$AETHER_ROOT/.aether/worktrees/$mc_branch/.aether/data/midden/midden.json"
+
+    if [[ -f "$mc_candidate" ]]; then
+      mc_worktree_midden="$mc_candidate"
+    else
+      # Fallback: check git worktree list
+      mc_wt_path=$(git -C "$AETHER_ROOT" worktree list --porcelain 2>/dev/null | grep -F "worktree" | head -1 | cut -d' ' -f2 || true)
+      if [[ -n "$mc_wt_path" && -f "$mc_wt_path/.aether/data/midden/midden.json" ]]; then
+        mc_worktree_midden="$mc_wt_path/.aether/data/midden/midden.json"
+      fi
+    fi
+
+    if [[ -z "$mc_worktree_midden" || ! -f "$mc_worktree_midden" ]]; then
+      json_ok "$(jq -n --arg branch "$mc_branch" \
+        '{status: "worktree_not_found", entries_collected: 0, branch: $branch}')"
+      return 0
+    fi
+
+    # Read branch midden.json
+    mc_branch_data=$(cat "$mc_worktree_midden" 2>/dev/null || echo "")
+
+    if [[ -z "$mc_branch_data" ]]; then
+      json_ok '{"status":"empty_branch_midden","entries_collected":0}'
+      return 0
+    fi
+
+    # Validate branch midden.json is valid JSON
+    if ! echo "$mc_branch_data" | jq empty 2>/dev/null; then
+      json_err "$E_INTERNAL" "Branch midden.json is corrupt"
+    fi
+
+    # Check for entries
+    mc_branch_count=$(echo "$mc_branch_data" | jq '[.entries[]?] | length' 2>/dev/null || echo "0")
+    if [[ "$mc_branch_count" -eq 0 ]]; then
+      json_ok '{"status":"empty_branch_midden","entries_collected":0}'
+      return 0
+    fi
+
+    mc_midden_dir="$COLONY_DATA_DIR/midden"
+    mc_midden_file="$mc_midden_dir/midden.json"
+    mc_merges_file="$mc_midden_dir/collected-merges.json"
+    mc_timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    mkdir -p "$mc_midden_dir"
+
+    # Initialize midden.json if missing
+    if [[ ! -f "$mc_midden_file" ]]; then
+      printf '%s\n' '{"version":"1.0.0","entries":[]}' > "$mc_midden_file"
+    fi
+
+    # Initialize collected-merges.json if missing
+    if [[ ! -f "$mc_merges_file" ]]; then
+      printf '%s\n' '{"version":"1.0.0","merges":[]}' > "$mc_merges_file"
+    fi
+
+    # LAYER 1: Check merge fingerprint
+    mc_already=$(jq --arg sha "$mc_merge_sha" --arg branch "$mc_branch" \
+      '[.merges[]? | select(.merge_commit == $sha and .branch_name == $branch)] | length > 0' \
+      "$mc_merges_file" 2>/dev/null || echo "false")
+
+    if [[ "$mc_already" == "true" ]]; then
+      json_ok "$(jq -n --arg sha "$mc_merge_sha" --arg branch "$mc_branch" \
+        '{status: "already_collected", merge_commit: $sha, branch: $branch, entries_collected: 0}')"
+      return 0
+    fi
+
+    if [[ "$mc_dry_run" == "true" ]]; then
+      json_ok "$(jq -n --arg branch "$mc_branch" --arg sha "$mc_merge_sha" --argjson count "$mc_branch_count" \
+        '{status: "dry_run", branch: $branch, merge_commit: $sha, entries_would_collect: $count}')"
+      return 0
+    fi
+
+    # LAYER 2: Per-entry ID dedup — get existing IDs from main's midden
+    mc_existing_ids=$(jq -r '[.entries[]?.id] | map(select(. != null))' "$mc_midden_file" 2>/dev/null || echo "[]")
+
+    # Filter branch entries: exclude those with IDs already in main, then enrich
+    mc_new_entries=$(jq --argjson existing_ids "$mc_existing_ids" \
+      --arg branch "$mc_branch" \
+      --arg ts "$mc_timestamp" \
+      --arg sha "$mc_merge_sha" \
+      '
+      [.entries[]?] |
+      map(select([.id] | inside($existing_ids) | not)) |
+      map(. + {
+        collected_from: $branch,
+        collected_at: $ts,
+        merge_commit: $sha,
+        original_entry_id: .id
+      })
+      ' "$mc_worktree_midden" 2>/dev/null || echo "[]")
+
+    mc_new_count=$(echo "$mc_new_entries" | jq 'length' 2>/dev/null || echo "0")
+    mc_skipped=$((mc_branch_count - mc_new_count))
+
+    if [[ "$mc_new_count" -gt 0 ]]; then
+      # Append enriched entries to main's midden
+      acquire_lock "$mc_midden_file" || {
+        json_err "$E_LOCK_FAILED" "Failed to acquire lock on midden.json"
+      }
+      trap 'release_lock 2>/dev/null || true' EXIT
+
+      mc_updated=$(jq --argjson new_entries "$mc_new_entries" \
+        '.entries += $new_entries' "$mc_midden_file" 2>/dev/null)
+
+      if [[ -z "$mc_updated" ]]; then
+        trap - EXIT
+        release_lock 2>/dev/null || true
+        json_err "$E_INTERNAL" "Failed to update midden.json with collected entries"
+      fi
+
+      atomic_write "$mc_midden_file" "$mc_updated"
+
+      trap - EXIT
+      release_lock 2>/dev/null || true
+    fi
+
+    # Write fingerprint to collected-merges.json
+    mc_fingerprint=$(printf '%s|%s|%d' "$mc_branch" "$mc_merge_sha" "$mc_new_count" | shasum -a 256 | cut -d' ' -f1)
+
+    acquire_lock "$mc_merges_file" || {
+      # Non-fatal — entries were collected but fingerprint may be missing
+      json_ok "$(jq -n --arg branch "$mc_branch" --arg sha "$mc_merge_sha" \
+        --argjson collected "$mc_new_count" --argjson skipped "$mc_skipped" \
+        '{status: "collected", entries_collected: $collected, entries_skipped_dup: $skipped, branch: $branch, merge_commit: $sha, warning: "fingerprint_write_failed"}')"
+      return 0
+    }
+    trap 'release_lock 2>/dev/null || true' EXIT
+
+    mc_merges_updated=$(jq --arg sha "$mc_merge_sha" --arg branch "$mc_branch" \
+      --arg ts "$mc_timestamp" --argjson collected "$mc_new_count" \
+      --argjson skipped "$mc_skipped" --arg fp "$mc_fingerprint" \
+      '.merges += [{
+        merge_commit: $sha,
+        branch_name: $branch,
+        collected_at: $ts,
+        entries_collected: $collected,
+        entries_skipped_dup: $skipped,
+        fingerprint: $fp
+      }]' "$mc_merges_file" 2>/dev/null)
+
+    if [[ -n "$mc_merges_updated" ]]; then
+      atomic_write "$mc_merges_file" "$mc_merges_updated"
+    fi
+
+    trap - EXIT
+    release_lock 2>/dev/null || true
+
+    json_ok "$(jq -n --arg branch "$mc_branch" --arg sha "$mc_merge_sha" \
+      --argjson collected "$mc_new_count" --argjson skipped "$mc_skipped" \
+      '{status: "collected", entries_collected: $collected, entries_skipped_dup: $skipped, branch: $branch, merge_commit: $sha}')"
+    return 0
+}
+
+_midden_handle_revert() {
+    # Tag entries from a reverted merge commit (not delete)
+    # Usage: midden-handle-revert --sha <revert-sha>
+    #    OR: midden-handle-revert --revert-commit <sha> --original-merge <sha>
+    # Returns: JSON with revert status and tagged count
+
+    mhr_revert_sha=""
+    mhr_original_merge=""
+
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --sha)            mhr_revert_sha="${2:-}"; shift 2 ;;
+        --revert-commit)  mhr_revert_sha="${2:-}"; shift 2 ;;
+        --original-merge) mhr_original_merge="${2:-}"; shift 2 ;;
+        *) shift ;;
+      esac
+    done
+
+    if [[ -z "$mhr_revert_sha" ]]; then
+      json_err "$E_VALIDATION_FAILED" "midden-handle-revert requires --sha or --revert-commit"
+    fi
+
+    mc_midden_dir="$COLONY_DATA_DIR/midden"
+    mc_merges_file="$mc_midden_dir/collected-merges.json"
+
+    # If no original-merge given, try to find it from collected-merges by parsing commit message
+    if [[ -z "$mhr_original_merge" ]]; then
+      # Try git log to find the reverted merge
+      mhr_original_merge=$(git -C "$AETHER_ROOT" log -1 --format="%b" "$mhr_revert_sha" 2>/dev/null \
+        | grep -oE '[0-9a-f]{7,40}' | head -1 || true)
+    fi
+
+    if [[ -z "$mhr_original_merge" ]]; then
+      json_ok "$(jq -n --arg sha "$mhr_revert_sha" \
+        '{status: "original_merge_not_resolved", revert_commit: $sha, entries_tagged: 0}')"
+      return 0
+    fi
+
+    # Check collected-merges.json exists
+    if [[ ! -f "$mc_merges_file" ]]; then
+      json_ok "$(jq -n --arg sha "$mhr_revert_sha" --arg merge "$mhr_original_merge" \
+        '{status: "merge_not_found", revert_commit: $sha, original_merge: $merge, entries_tagged: 0}')"
+      return 0
+    fi
+
+    # Check if the original merge exists in collected-merges
+    mhr_found=$(jq --arg merge "$mhr_original_merge" \
+      '[.merges[]? | select(.merge_commit == $merge)] | length > 0' \
+      "$mc_merges_file" 2>/dev/null || echo "false")
+
+    if [[ "$mhr_found" != "true" ]]; then
+      json_ok "$(jq -n --arg sha "$mhr_revert_sha" --arg merge "$mhr_original_merge" \
+        '{status: "merge_not_found", revert_commit: $sha, original_merge: $merge, entries_tagged: 0}')"
+      return 0
+    fi
+
+    mhr_midden_file="$mc_midden_dir/midden.json"
+    mhr_timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    mhr_tagged=0
+
+    # Tag entries in main's midden.json
+    if [[ -f "$mhr_midden_file" ]]; then
+      acquire_lock "$mhr_midden_file" || {
+        json_err "$E_LOCK_FAILED" "Failed to acquire lock on midden.json"
+      }
+      trap 'release_lock 2>/dev/null || true' EXIT
+
+      mhr_updated=$(jq --arg revert_sha "$mhr_revert_sha" --arg merge_sha "$mhr_original_merge" \
+        '
+        .entries = [.entries[] |
+          if .merge_commit == $merge_sha then
+            . + {
+              tags: ((.tags // []) + ["reverted:" + $revert_sha]) | unique,
+              reviewed: false
+            }
+          else
+            .
+          end
+        ]
+        ' "$mhr_midden_file" 2>/dev/null)
+
+      if [[ -n "$mhr_updated" ]]; then
+        atomic_write "$mhr_midden_file" "$mhr_updated"
+        mhr_tagged=$(echo "$mhr_updated" | jq --arg merge_sha "$mhr_original_merge" \
+          '[.entries[] | select(.merge_commit == $merge_sha)] | length' 2>/dev/null || echo "0")
+      fi
+
+      trap - EXIT
+      release_lock 2>/dev/null || true
+    fi
+
+    # Update collected-merges.json: mark merge as reverted
+    acquire_lock "$mc_merges_file" || true
+    trap 'release_lock 2>/dev/null || true' EXIT
+
+    mhr_merges_updated=$(jq --arg revert_sha "$mhr_revert_sha" \
+      --arg merge_sha "$mhr_original_merge" --arg ts "$mhr_timestamp" \
+      '
+      .merges = [.merges[] |
+        if .merge_commit == $merge_sha then
+          . + {reverted_by: $revert_sha, reverted_at: $ts, status: "reverted"}
+        else
+          .
+        end
+      ]
+      ' "$mc_merges_file" 2>/dev/null)
+
+    if [[ -n "$mhr_merges_updated" ]]; then
+      atomic_write "$mc_merges_file" "$mhr_merges_updated"
+    fi
+
+    trap - EXIT
+    release_lock 2>/dev/null || true
+
+    json_ok "$(jq -n --arg sha "$mhr_revert_sha" --arg merge "$mhr_original_merge" \
+      --argjson tagged "$mhr_tagged" \
+      '{revert_commit: $sha, original_merge: $merge, entries_tagged: $tagged, entries_deleted: 0}')"
+    return 0
+}
+
+_midden_cross_pr_analysis() {
+    # Detect cross-PR failure patterns and auto-emit REDIRECT for systemic issues
+    # Usage: midden-cross-pr-analysis [--category <cat>] [--window <days>]
+    # Returns: JSON with category analysis, scores, classifications
+
+    mca_category=""
+    mca_window=14
+
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --category) mca_category="${2:-}"; shift 2 ;;
+        --window)   mca_window="${2:-14}"; shift 2 ;;
+        *) shift ;;
+      esac
+    done
+
+    mca_midden_file="$COLONY_DATA_DIR/midden/midden.json"
+
+    if [[ ! -f "$mca_midden_file" ]]; then
+      json_ok "$(jq -n --argjson window "$mca_window" \
+        '{analysis_timestamp: "now", window_days: $window, total_entries_scanned: 0, categories: {}, systemic_categories: []}')"
+      return 0
+    fi
+
+    mca_timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    # Calculate cutoff timestamp: NOW - window_days
+    mca_cutoff=$(date -u -v-"${mca_window}d" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || \
+      python3 -c "import datetime; print((datetime.datetime.utcnow() - datetime.timedelta(days=$mca_window)).strftime('%Y-%m-%dT%H:%M:%SZ'))" 2>/dev/null || \
+      date -u -d "$mca_window days ago" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "")
+
+    mca_result=$(jq --arg cutoff "$mca_cutoff" \
+      --arg category "$mca_category" --argjson window "$mca_window" \
+      '
+      # Collect cross-branch entries within window, excluding reverted
+      [.entries // [] | .[] |
+        select(.collected_from != null) |
+        select(.reviewed != true) |
+        select(.tags // [] | map(startswith("reverted:")) | any | not) |
+        select(if ($cutoff | length) > 0 then .timestamp >= $cutoff else true end) |
+        if ($category | length) > 0 then select(.category == $category) else . end
+      ] |
+      . as $entries |
+
+      # Group by category
+      ($entries | group_by(.category) | map({key: .[0].category, value: .}) | from_entries) as $by_cat |
+
+      # Compute metrics per category
+      ($by_cat | to_entries | map({
+        key: .key,
+        value: {
+          total_entries: (.value | length),
+          unique_prs: ([.value[].collected_from] | unique | length),
+          entries_per_pr: (.value | group_by(.collected_from) | map({key: .[0].collected_from, value: length}) | from_entries),
+          cross_pr_score: (
+            (([.value[].collected_from] | unique | length) / 5) * 0.6 +
+            ((.value | length) / 10) * 0.4
+          ),
+          classification: (
+            if (([.value[].collected_from] | unique | length) >= 3) and ((.value | length) >= 5) then
+              "cross-pr-critical"
+            elif (([.value[].collected_from] | unique | length) >= 2) and ((.value | length) >= 3) then
+              "cross-pr-systemic"
+            else
+              "single-pr"
+            end
+          ),
+          auto_redirect_emitted: false
+        }
+      }) | from_entries) as $analysis |
+
+      # Collect systemic categories
+      [$analysis | to_entries[] | select(.value.classification == "cross-pr-systemic" or .value.classification == "cross-pr-critical") | .key] as $systemic |
+
+      {
+        total_entries_scanned: ($entries | length),
+        categories: $analysis,
+        systemic_categories: $systemic
+      }
+      ' "$mca_midden_file" 2>/dev/null)
+
+    if [[ -z "$mca_result" ]]; then
+      json_ok "$(jq -n --argjson window "$mca_window" \
+        '{analysis_timestamp: "now", window_days: $window, total_entries_scanned: 0, categories: {}, systemic_categories: []}')"
+      return 0
+    fi
+
+    # Auto-emit REDIRECT for systemic/critical categories
+    mca_systemic=$(echo "$mca_result" | jq -r '.systemic_categories // [] | .[]' 2>/dev/null || true)
+    for mca_cat in $mca_systemic; do
+      mca_cat_data=$(echo "$mca_result" | jq --arg cat "$mca_cat" '.categories[$cat]' 2>/dev/null || echo "{}")
+      mca_unique_prs=$(echo "$mca_cat_data" | jq -r '.unique_prs // 0' 2>/dev/null || echo "0")
+      mca_total=$(echo "$mca_cat_data" | jq -r '.total_entries // 0' 2>/dev/null || echo "0")
+      mca_score=$(echo "$mca_cat_data" | jq -r '.cross_pr_score // 0' 2>/dev/null || echo "0")
+
+      # Compute strength: 0.5 + (score * 0.5), capped at 1.0
+      mca_strength=$(jq -n --argjson score "$mca_score" '0.5 + ($score * 0.5) | if . > 1.0 then 1.0 else . * 100 | round / 100 end' 2>/dev/null || echo "0.7")
+
+      # NON-BLOCKING: emit REDIRECT, swallow all output
+      bash "$AETHER_ROOT/.aether/aether-utils.sh" pheromone-write REDIRECT \
+        "[cross-pr-pattern] $mca_cat failures across $mca_unique_prs PRs in $mca_window days ($mca_total entries)" \
+        --strength "$mca_strength" \
+        --source "auto:cross-pr" \
+        --reason "Auto-emitted: cross-PR systemic failure pattern detected" \
+        --ttl "30d" >/dev/null 2>&1 || true
+
+      # Mark as emitted in the result
+      mca_result=$(echo "$mca_result" | jq --arg cat "$mca_cat" '.categories[$cat].auto_redirect_emitted = true' 2>/dev/null || echo "$mca_result")
+    done
+
+    json_ok "$(echo "$mca_result" | jq --arg ts "$mca_timestamp" --argjson window "$mca_window" \
+      '. + {analysis_timestamp: $ts, window_days: $window}' 2>/dev/null || echo "$mca_result")"
+    return 0
+}
+
+_midden_prune() {
+    # Retention cleanup for collected merges and reverted entries
+    # Usage: midden-prune --stale-merges
+    #    OR: midden-prune --reverted --age <days>
+    # Returns: JSON with prune counts
+
+    mp_stale_merges=false
+    mp_reverted=false
+    mp_age=30
+
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --stale-merges) mp_stale_merges=true; shift ;;
+        --reverted)     mp_reverted=true; shift ;;
+        --age)          mp_age="${2:-30}"; shift 2 ;;
+        *) shift ;;
+      esac
+    done
+
+    mp_midden_dir="$COLONY_DATA_DIR/midden"
+    mp_merges_file="$mp_midden_dir/collected-merges.json"
+    mp_midden_file="$mp_midden_dir/midden.json"
+    mp_pruned_merges=0
+    mp_pruned_reverted=0
+
+    if [[ "$mp_stale_merges" == "true" ]]; then
+      if [[ -f "$mp_merges_file" ]]; then
+        mp_cutoff=$(date -u -v-"90d" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || \
+          python3 -c "import datetime; print((datetime.datetime.utcnow() - datetime.timedelta(days=90)).strftime('%Y-%m-%dT%H:%M:%SZ'))" 2>/dev/null || \
+          date -u -d "90 days ago" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "")
+
+        if [[ -n "$mp_cutoff" ]]; then
+          acquire_lock "$mp_merges_file" || true
+          trap 'release_lock 2>/dev/null || true' EXIT
+
+          mp_before=$(jq '.merges | length' "$mp_merges_file" 2>/dev/null || echo "0")
+          mp_before=${mp_before:-0}
+          mp_merges_updated=$(jq --arg cutoff "$mp_cutoff" \
+            '.merges = [.merges // [] | .[] | select(.collected_at >= $cutoff)]' \
+            "$mp_merges_file" 2>/dev/null)
+          mp_after=$(echo "$mp_merges_updated" | jq '.merges | length' 2>/dev/null || echo "0")
+          mp_after=${mp_after:-0}
+
+          if [[ -n "$mp_merges_updated" ]]; then
+            atomic_write "$mp_merges_file" "$mp_merges_updated"
+            mp_pruned_merges=$((mp_before - mp_after))
+          fi
+
+          trap - EXIT
+          release_lock 2>/dev/null || true
+        fi
+      fi
+    fi
+
+    if [[ "$mp_reverted" == "true" ]]; then
+      if [[ -f "$mp_midden_file" && -f "$mp_merges_file" ]]; then
+        mp_cutoff=$(date -u -v-"${mp_age}d" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || \
+          python3 -c "import datetime; print((datetime.datetime.utcnow() - datetime.timedelta(days=$mp_age)).strftime('%Y-%m-%dT%H:%M:%SZ'))" 2>/dev/null || \
+          date -u -d "$mp_age days ago" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "")
+
+        if [[ -n "$mp_cutoff" ]]; then
+          # Find revert timestamps from collected-merges.json
+          mp_revert_map=$(jq -r '[.merges // [] | .[] | select(.status == "reverted")] | map({merge_commit: .merge_commit, reverted_at: .reverted_at})' "$mp_merges_file" 2>/dev/null || echo "[]")
+
+          acquire_lock "$mp_midden_file" || true
+          trap 'release_lock 2>/dev/null || true' EXIT
+
+          mp_now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          # Acknowledge reverted entries older than threshold
+          mp_updated=$(jq --argjson revert_map "$mp_revert_map" \
+            --arg cutoff "$mp_cutoff" --arg now "$mp_now" --argjson age "$mp_age" \
+            '
+            .entries = [.entries // [] | .[] |
+              if .tags // [] | map(startswith("reverted:")) | any then
+                # Find the revert timestamp for this entry
+                ($revert_map | map(select(.merge_commit == .merge_commit)) | first // {}) as $merge_info |
+                if ($merge_info.reverted_at // "") != "" and ($merge_info.reverted_at < $cutoff) and .acknowledged != true then
+                  . + {
+                    acknowledged: true,
+                    acknowledged_at: $now,
+                    acknowledge_reason: ("auto-pruned: reverted entry older than " + ($age | tostring) + " days")
+                  }
+                else .
+                end
+              else .
+              end
+            ]
+            ' "$mp_midden_file" 2>/dev/null)
+
+          if [[ -n "$mp_updated" ]]; then
+            mp_before=$(jq '[.entries // [] | .[] | select(.tags // [] | map(startswith("reverted:")) | any and .acknowledged != true)] | length' "$mp_midden_file" 2>/dev/null || echo "0")
+            mp_before=${mp_before:-0}
+            mp_after=$(jq '[.entries // [] | .[] | select(.tags // [] | map(startswith("reverted:")) | any and .acknowledged != true)] | length' <<< "$mp_updated" 2>/dev/null || echo "0")
+            mp_after=${mp_after:-0}
+            atomic_write "$mp_midden_file" "$mp_updated"
+            mp_pruned_reverted=$((mp_before - mp_after))
+          fi
+
+          trap - EXIT
+          release_lock 2>/dev/null || true
+        fi
+      fi
+    fi
+
+    json_ok "$(jq -n --argjson pruned_merges "$mp_pruned_merges" --argjson pruned_reverted "$mp_pruned_reverted" \
+      '{pruned_merges: $pruned_merges, pruned_reverted: $pruned_reverted}')"
+    return 0
+}
