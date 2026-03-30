@@ -225,8 +225,11 @@ test_normal_operation() {
     fi
 
     # Result should be valid JSON with ok=true
+    # Strip any [error] log lines before parsing -- backup rotation emits [error]
+    # lines to stderr when no prior backups exist, which gets mixed into $output
+    # by run_cmd_with_stderr's 2>&1 redirect.
     local ok_val
-    ok_val=$(echo "$output" | jq -r '.ok' 2>/dev/null)
+    ok_val=$(echo "$output" | grep -v '^\[error\]' | jq -r '.ok' 2>/dev/null)
     if [[ "$ok_val" != "true" ]]; then
         test_fail "Expected ok=true" "Got ok=$ok_val from: $output"
         rm -rf "$tmpdir"
@@ -241,9 +244,15 @@ test_normal_operation() {
 # Test 5: Verify backup rotation happens before writes
 # ============================================================================
 test_backup_rotation_source() {
-    # Verify that the source code contains .bak.N rotation patterns before writes
+    # Verify that the source code contains .bak.N rotation patterns before writes.
+    # After the monolith extraction (commit d0a7a69), backup rotation code lives in
+    # learning.sh, not aether-utils.sh.
+    local learning_sh
+    learning_sh="$(dirname "$AETHER_UTILS")/utils/learning.sh"
     local bak_rotation_count
-    bak_rotation_count=$(grep -c 'cp -f.*\.bak\.' "$AETHER_UTILS" 2>/dev/null || echo "0")
+    bak_rotation_count=$(grep -c 'cp -f.*\.bak\.' "$learning_sh" 2>/dev/null || true)
+    # grep -c returns "0" (exit 1) when no matches; normalize to integer
+    bak_rotation_count="${bak_rotation_count:-0}"
 
     # Should have at least 6 cp -f .bak lines (3 per write path x 2 paths)
     if [[ "$bak_rotation_count" -ge 6 ]]; then
@@ -258,11 +267,15 @@ test_backup_rotation_source() {
 # Test 6: Verify retry-once loop is present in recovery code
 # ============================================================================
 test_retry_loop_present() {
-    # Verify the lo_attempt retry loop exists in the source
-    if grep -q 'lo_attempt' "$AETHER_UTILS"; then
+    # Verify the lo_attempt retry loop exists in the source.
+    # After the monolith extraction (commit f00d79b), the retry loop lives in
+    # learning.sh, not aether-utils.sh.
+    local learning_sh
+    learning_sh="$(dirname "$AETHER_UTILS")/utils/learning.sh"
+    if grep -q 'lo_attempt' "$learning_sh"; then
         return 0
     else
-        test_fail "Expected lo_attempt retry loop in aether-utils.sh" "Pattern not found"
+        test_fail "Expected lo_attempt retry loop in learning.sh" "Pattern not found in $learning_sh"
         return 1
     fi
 }

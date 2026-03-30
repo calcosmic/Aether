@@ -21,3 +21,15 @@
 2026-03-30T11:33:40Z|Review-17|completed|{"findings":{"critical":0,"high":2,"medium":5,"low":5,"info":4},"score":53}
 2026-03-30T11:34:21Z|Queen|auditor|Check-85|Quality re-audit after HIGH fixes|inherit|spawned
 2026-03-30T11:38:32Z|Check-85|completed|{"findings":{"critical":0,"high":0,"medium":4,"low":3,"info":4},"score":73}
+2026-03-30T11:48:47Z|Queen|scout|Strata-7|Pre-build archaeology scan|inherit|spawned
+2026-03-30T11:51:52Z|Strata-7|completed|Pre-build archaeology scan
+2026-03-30T11:52:38Z|Queen|builder|Anvil-17|Add (.confidence // 0) fallback to hive-read + null-confidence test|inherit|spawned
+2026-03-30T11:52:39Z|Queen|builder|Anvil-94|Fix 3 failing tests in test-learning-recovery.sh|inherit|spawned
+2026-03-30T11:55:25Z|Anvil-17|completed|hive-read null safety fix + null-confidence test
+2026-03-30T11:55:25Z|Anvil-94|completed|Fixed 3 failing learning recovery tests
+2026-03-30T11:55:38Z|Queen|watcher|Watch-71|Independent verification|inherit|spawned
+2026-03-30T11:57:47Z|Watch-71|completed|All verification passed, 529 tests, quality 9/10
+2026-03-30T12:12:25Z|Queen|gatekeeper|Shield-50|Supply chain security audit|inherit|spawned
+2026-03-30T12:12:26Z|Queen|auditor|Review-82|Code quality audit|inherit|spawned
+2026-03-30T12:16:35Z|Shield-50|completed|0 critical, 0 high CVEs
+2026-03-30T12:16:35Z|Review-82|completed|Score 91/100, 0 critical, 0 high findings

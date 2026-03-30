@@ -567,6 +567,113 @@ WISEOF
     return 0
 }
 
+test_hive_read_null_confidence() {
+    # Entries with null or missing confidence should be treated as 0 (not cause a jq error)
+    local tmpdir
+    tmpdir=$(setup_hive_env)
+    local hive_dir="$tmpdir/.aether/hive"
+    mkdir -p "$hive_dir"
+
+    # Create wisdom.json with one null confidence and one missing confidence field
+    cat > "$hive_dir/wisdom.json" << 'WISEOF'
+{
+  "version": "1.0.0",
+  "created_at": "2026-03-20T00:00:00Z",
+  "last_updated": "2026-03-20T00:00:00Z",
+  "entries": [
+    {
+      "id": "null111222333",
+      "text": "Entry with null confidence field",
+      "category": "pattern",
+      "confidence": null,
+      "domain_tags": ["general"],
+      "source_repos": ["/repo/alpha"],
+      "validated_count": 1,
+      "created_at": "2026-03-01T00:00:00Z",
+      "last_accessed": "2026-03-15T00:00:00Z",
+      "access_count": 0
+    },
+    {
+      "id": "missing111222",
+      "text": "Entry with missing confidence field",
+      "category": "pattern",
+      "domain_tags": ["general"],
+      "source_repos": ["/repo/beta"],
+      "validated_count": 1,
+      "created_at": "2026-03-02T00:00:00Z",
+      "last_accessed": "2026-03-14T00:00:00Z",
+      "access_count": 0
+    },
+    {
+      "id": "good111222333",
+      "text": "Entry with normal confidence field",
+      "category": "pattern",
+      "confidence": 0.85,
+      "domain_tags": ["general"],
+      "source_repos": ["/repo/gamma"],
+      "validated_count": 2,
+      "created_at": "2026-03-03T00:00:00Z",
+      "last_accessed": "2026-03-13T00:00:00Z",
+      "access_count": 1
+    }
+  ],
+  "metadata": {
+    "total_entries": 3,
+    "max_entries": 200,
+    "contributing_repos": ["/repo/alpha", "/repo/beta", "/repo/gamma"]
+  }
+}
+WISEOF
+
+    # With default min-confidence (0.0), all three entries should be returned
+    local result
+    result=$(run_hive_cmd "$tmpdir" hive-read --min-confidence 0.0)
+
+    if ! assert_ok_true "$result"; then
+        test_fail "Expected ok=true (not filter_error fallback) for null/missing confidence entries" "$result"
+        rm -rf "$tmpdir"
+        return 1
+    fi
+
+    local total_matched
+    total_matched=$(echo "$result" | jq -r '.result.total_matched')
+    if [[ "$total_matched" != "3" ]]; then
+        test_fail "Expected total_matched=3 (null/missing confidence treated as 0, not filtered)" "Got $total_matched"
+        rm -rf "$tmpdir"
+        return 1
+    fi
+
+    # Null/missing confidence entries should sort last (after the 0.85 entry)
+    local first_id
+    first_id=$(echo "$result" | jq -r '.result.entries[0].id')
+    if [[ "$first_id" != "good111222333" ]]; then
+        test_fail "Expected entry with confidence 0.85 to sort first" "Got $first_id"
+        rm -rf "$tmpdir"
+        return 1
+    fi
+
+    # With min-confidence 0.5, null/missing confidence entries (treated as 0) should be excluded
+    local filtered_result
+    filtered_result=$(run_hive_cmd "$tmpdir" hive-read --min-confidence 0.5)
+
+    if ! assert_ok_true "$filtered_result"; then
+        test_fail "Expected ok=true with min-confidence filter on null entries" "$filtered_result"
+        rm -rf "$tmpdir"
+        return 1
+    fi
+
+    local filtered_matched
+    filtered_matched=$(echo "$filtered_result" | jq -r '.result.total_matched')
+    if [[ "$filtered_matched" != "1" ]]; then
+        test_fail "Expected total_matched=1 (only the 0.85 entry passes min-confidence 0.5)" "Got $filtered_matched"
+        rm -rf "$tmpdir"
+        return 1
+    fi
+
+    rm -rf "$tmpdir"
+    return 0
+}
+
 test_hive_read_registered_in_help() {
     # hive-read should appear in help output
     local result
@@ -599,6 +706,7 @@ run_test test_hive_read_no_wisdom_file_fallback "Fallback when wisdom.json missi
 run_test test_hive_read_text_format "Text format produces readable output"
 run_test test_hive_read_combined_filters "Combined filters work together"
 run_test test_hive_read_string_confidence "hive-read handles string confidence values via tonumber coercion"
+run_test test_hive_read_null_confidence "hive-read handles null and missing confidence fields via // 0 fallback"
 run_test test_hive_read_registered_in_help "hive-read registered in help"
 
 test_summary

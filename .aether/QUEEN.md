@@ -19,6 +19,10 @@ Communication style, expertise level, and decision-making patterns observed from
 
 Validated approaches that work in this codebase, and anti-patterns to avoid. Includes architecture conventions, naming patterns, error handling style, and technology-specific insights. Tagged [repo] for project-specific or [general] for cross-colony patterns.
 
+- **Aether Colony** (2026-03-30T12:19:36Z): After monolith extraction tests that grep source code break when code moves to extracted modules
+- **Aether Colony** (2026-03-30T12:19:34Z): Archaeology pre-build scans prevent regression when modifying same lines as prior bug fixes
+- **Aether Colony** (2026-03-30T11:43:35Z): Quality gate re-audit after fixing HIGH findings raised score from 53 to 73, confirming the fixes addressed the root issues not just symptoms
+- **Aether Colony** (2026-03-30T11:43:32Z): json_ok hardening has two distinct injection classes: string interpolation in JSON output (json_ok pattern) and variable interpolation in jq filter expressions (.${var} pattern) — both require --arg parameterization but at different layers
 - **Aether Colony** (2026-03-30T06:14:25Z): Multi-line strings cannot pass via awk -v — use head/tail concatenation
 - **Aether Colony** (2026-03-30T06:14:23Z): awk -v interprets C-style escapes — use ENVIRON[] for user content
 - **Aether Colony** (2026-03-30T05:45:56Z): Literal newlines break awk NF guards, CR is the testable control char for embedded content
@@ -91,6 +95,10 @@ What worked and what failed during builds. Captures the full picture of colony e
 ### Phase 6: Stabilize spawn-tree parsing and JSON output
 - [general] Replacing bash while-read+sed loops with single-pass awk eliminates O(n^2) subprocess forking — 4000+ forks reduced to 1 awk process, runtime from 23s to 1.7s -- *Phase 6 (Stabilize spawn-tree parsing and JSON output)* (2026-03-29)
 - [general] awk NF==7 for spawn detection and $3 match for completion detection handles pipes-in-summary edge cases that pipe-counting cannot -- *Phase 6 (Stabilize spawn-tree parsing and JSON output)* (2026-03-29)
+
+### Phase 5: Fix hive-read null safety and learning recovery tests
+- [general] Archaeology pre-build scans that identify specific prior bug-fix commits prevent regression when modifying the same lines — Strata-7 caught the tonumber requirement that would otherwise have been missed -- *Phase 5 (Fix hive-read null safety and learning recovery tests)* (2026-03-30)
+- [general] After monolith extraction, tests that grep source code for structural patterns break when the code moves to extracted modules — always check grep targets against the actual module location -- *Phase 5 (Fix hive-read null safety and learning recovery tests)* (2026-03-30)
 ---
 
 ## Instincts
@@ -107,12 +115,27 @@ High-confidence behavioral patterns that have been validated through repeated co
 - [instinct] **code-style** (0.85): When bash scripts use while-read+sed/cut loops for file parsing, then replace with single-pass awk to eliminate O(n^2) subprocess forking — awk has associative arrays even when bash 3.2 does not
 - [instinct] **workflow** (0.85): When builder produces audit or summary report with test metrics, then cross-verify all pass/fail counts against live test output before accepting report as complete — builder claims are not authoritative
 - [instinct] **workflow** (0.8): When resilience testing (chaos ant) finds data accuracy issues in builder output, then always cross-verify builder claims against live test/command output before accepting — chaos findings on data accuracy should be treated as blockers
+- [instinct] **code-style** (0.85): When hardening json_ok calls with user-controlled strings, then Use jq -nc --arg for safe escaping instead of raw string interpolation; test with special characters
+- [instinct] **code-style** (0.85): When hardening jq filter expressions with user-controlled variables, then Use jq --arg for string variables and --argjson for numeric/boolean instead of raw .dollar-var interpolation in jq filter strings
+- [instinct] **debugging** (0.8): When validating JSON files that may be empty, then Check file size with -s flag before running jq parse; return valid pass result for empty legacy files
+- [instinct] **workflow** (0.8): When modifying lines that were previously bug-fixed, then Run archaeology pre-build scan to identify prior fixes at the exact change site and preserve their invariants
+- [instinct] **testing** (0.8): When tests grep source code for structural patterns after monolith extraction, then Verify grep targets point to the extracted module file, not the original monolith
 ---
 
 ## Evolution Log
 
 | Date | Source | Type | Details |
 |------|--------|------|---------|
+| 2026-03-30T12:20:25Z | phase-5 | build_learnings | Added 2 learnings from Phase 5: Fix hive-read null safety and learning recovery tests |
+| 2026-03-30T12:19:53Z | instinct | promoted_instinct | testing: Verify grep targets point to the extracted module ... |
+| 2026-03-30T12:19:52Z | instinct | promoted_instinct | workflow: Run archaeology pre-build scan to identify prior f... |
+| 2026-03-30T12:19:36Z | Aether Colony | promoted_pattern | Added: After monolith extraction tests that grep source c... |
+| 2026-03-30T12:19:34Z | Aether Colony | promoted_pattern | Added: Archaeology pre-build scans prevent regression whe... |
+| 2026-03-30T11:43:45Z | instinct | promoted_instinct | debugging: Check file size with -s flag before running jq par... |
+| 2026-03-30T11:43:45Z | instinct | promoted_instinct | code-style: Use jq --arg for string variables and --argjson fo... |
+| 2026-03-30T11:43:45Z | instinct | promoted_instinct | code-style: Use jq -nc --arg for safe escaping instead of raw ... |
+| 2026-03-30T11:43:35Z | Aether Colony | promoted_pattern | Added: Quality gate re-audit after fixing HIGH findings r... |
+| 2026-03-30T11:43:32Z | Aether Colony | promoted_pattern | Added: json_ok hardening has two distinct injection class... |
 | 2026-03-30T06:14:25Z | Aether Colony | promoted_pattern | Added: Multi-line strings cannot pass via awk -v — use he... |
 | 2026-03-30T06:14:23Z | Aether Colony | promoted_pattern | Added: awk -v interprets C-style escapes — use ENVIRON[] ... |
 | 2026-03-30T05:45:56Z | Aether Colony | promoted_pattern | Added: Literal newlines break awk NF guards, CR is the te... |
@@ -194,5 +217,5 @@ High-confidence behavioral patterns that have been validated through repeated co
 ---
 
 <!-- METADATA
-{  "version": "2.0.0",  "wisdom_version": "2.0",  "last_evolved": "2026-03-30T06:14:25Z",  "colonies_contributed": ["1774645519"],  "stats": {    "total_user_prefs": 3,    "total_codebase_patterns": 3,    "total_build_learnings": 3,    "total_instincts": 9  },  "evolution_log": [{"timestamp": "2026-03-24T23:40:00Z", "action": "migrate", "wisdom_type": "system", "content_hash": "v1-to-v2-migration", "colony": "system"}, {"timestamp": "2026-03-20T12:37:32Z", "action": "promote", "wisdom_type": "pattern", "content_hash": "sha256:f8aa50cfda0f37cac6cabba140bb99f1d75aa6d01a7100fe7a5ccddc2b3a017b", "colony": "1771335865738"}]}
+{  "version": "2.0.0",  "wisdom_version": "2.0",  "last_evolved": "2026-03-30T12:20:25Z",  "colonies_contributed": ["1774645519"],  "stats": {    "total_user_prefs": 3,    "total_codebase_patterns": 3,    "total_build_learnings": 4,    "total_instincts": 3  },  "evolution_log": [{"timestamp": "2026-03-24T23:40:00Z", "action": "migrate", "wisdom_type": "system", "content_hash": "v1-to-v2-migration", "colony": "system"}, {"timestamp": "2026-03-20T12:37:32Z", "action": "promote", "wisdom_type": "pattern", "content_hash": "sha256:f8aa50cfda0f37cac6cabba140bb99f1d75aa6d01a7100fe7a5ccddc2b3a017b", "colony": "1771335865738"}]}
 -->

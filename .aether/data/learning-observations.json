@@ -637,6 +637,50 @@
       "colonies": [
         "Aether Colony"
       ]
+    },
+    {
+      "content_hash": "sha256:4b280716f13a956445d256691695c146195ba37b63539df4152f2c70da9328af",
+      "content": "json_ok hardening has two distinct injection classes: string interpolation in JSON output (json_ok pattern) and variable interpolation in jq filter expressions (.${var} pattern) — both require --arg parameterization but at different layers",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-30T11:43:31Z",
+      "last_seen": "2026-03-30T11:43:31Z",
+      "colonies": [
+        "Aether Colony"
+      ]
+    },
+    {
+      "content_hash": "sha256:db79e102db5c81d1714d6d815ca1da2b52f387e46c57ed76984611ca0596ae2c",
+      "content": "Quality gate re-audit after fixing HIGH findings raised score from 53 to 73, confirming the fixes addressed the root issues not just symptoms",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-30T11:43:34Z",
+      "last_seen": "2026-03-30T11:43:34Z",
+      "colonies": [
+        "Aether Colony"
+      ]
+    },
+    {
+      "content_hash": "sha256:0e3acfcada296c395118c17c9440b8f7dec31baca7906f2f43049716a8fbdf77",
+      "content": "Archaeology pre-build scans prevent regression when modifying same lines as prior bug fixes",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-30T12:19:33Z",
+      "last_seen": "2026-03-30T12:19:33Z",
+      "colonies": [
+        "Aether Colony"
+      ]
+    },
+    {
+      "content_hash": "sha256:9e91f291a04d7e0f9e7e159c4ac6c8da46cf26959fe209a3df2d5464591afc7c",
+      "content": "After monolith extraction tests that grep source code break when code moves to extracted modules",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-30T12:19:35Z",
+      "last_seen": "2026-03-30T12:19:35Z",
+      "colonies": [
+        "Aether Colony"
+      ]
     }
   ]
 }

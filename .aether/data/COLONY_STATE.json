@@ -39,7 +39,7 @@
       {
         "id": 5,
         "name": "Fix hive-read null safety and learning recovery tests",
-        "status": "pending",
+        "status": "completed",
         "description": "Add (.confidence // 0) fallback to hive-read lines 309/316, fix 3 failing tests in test-learning-recovery.sh, add null-confidence test"
       }
     ]
@@ -112,6 +112,28 @@
           }
         ],
         "timestamp": "2026-03-30T11:45:00Z"
+      },
+      {
+        "id": "learning_1774873163",
+        "phase": 5,
+        "phase_name": "Fix hive-read null safety and learning recovery tests",
+        "learnings": [
+          {
+            "claim": "Archaeology pre-build scans that identify specific prior bug-fix commits prevent regression when modifying the same lines — Strata-7 caught the tonumber requirement that would otherwise have been missed",
+            "status": "validated",
+            "tested": true,
+            "evidence": "Archaeologist identified commit 42a4912 tonumber fix at exact lines 309/316; builders composed ((.confidence // 0) | tonumber) correctly",
+            "disproven_by": null
+          },
+          {
+            "claim": "After monolith extraction, tests that grep source code for structural patterns break when the code moves to extracted modules — always check grep targets against the actual module location",
+            "status": "validated",
+            "tested": true,
+            "evidence": "Tests 5 and 6 in test-learning-recovery.sh grepped aether-utils.sh but code was in utils/learning.sh since commit f00d79b",
+            "disproven_by": null
+          }
+        ],
+        "timestamp": "2026-03-30T12:19:23Z"
       }
     ],
     "decisions": [],
@@ -171,6 +193,42 @@
         "failures": 0
       },
       {
+        "id": "instinct_1774873178",
+        "trigger": "modifying lines that were previously bug-fixed",
+        "action": "Run archaeology pre-build scan to identify prior fixes at the exact change site and preserve their invariants",
+        "confidence": 0.8,
+        "status": "hypothesis",
+        "domain": "workflow",
+        "source": "phase-5",
+        "evidence": [
+          "Strata-7 caught tonumber fix at hive.sh:309/316, builders preserved it as ((.confidence // 0) | tonumber)"
+        ],
+        "tested": false,
+        "created_at": "2026-03-30T12:19:38Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774873181",
+        "trigger": "tests grep source code for structural patterns after monolith extraction",
+        "action": "Verify grep targets point to the extracted module file, not the original monolith",
+        "confidence": 0.8,
+        "status": "hypothesis",
+        "domain": "testing",
+        "source": "phase-5",
+        "evidence": [
+          "test-learning-recovery.sh tests 5/6 grepped aether-utils.sh but code was extracted to utils/learning.sh"
+        ],
+        "tested": false,
+        "created_at": "2026-03-30T12:19:41Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
         "id": "instinct_1774871012",
         "trigger": "working on pattern patterns",
         "action": "json_ok hardening has two distinct injection classes: string interpolation in JSON output (json_ok pattern) and variable interpolation in jq filter expressions (.${var} pattern) — both require --arg parameterization but at different layers",
@@ -205,6 +263,42 @@
         "applications": 0,
         "successes": 0,
         "failures": 0
+      },
+      {
+        "id": "instinct_1774873174",
+        "trigger": "working on pattern patterns",
+        "action": "Archaeology pre-build scans prevent regression when modifying same lines as prior bug fixes",
+        "confidence": 0.70,
+        "status": "hypothesis",
+        "domain": "pattern",
+        "source": "promoted_from_learning",
+        "evidence": [
+          ""
+        ],
+        "tested": false,
+        "created_at": "2026-03-30T12:19:34Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774873176",
+        "trigger": "working on pattern patterns",
+        "action": "After monolith extraction tests that grep source code break when code moves to extracted modules",
+        "confidence": 0.70,
+        "status": "hypothesis",
+        "domain": "pattern",
+        "source": "promoted_from_learning",
+        "evidence": [
+          ""
+        ],
+        "tested": false,
+        "created_at": "2026-03-30T12:19:36Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
       }
     ]
   },
@@ -226,6 +320,9 @@
     "2026-03-30T10:17:54Z|state_reconciled|continue|State reconciled: Phases 2 and 4 marked completed, current_phase set to 3",
     "2026-03-30T12:00:00Z|phase_started|build|Phase 3: Harden remaining scattered json_ok sites started",
     "2026-03-30T11:45:00Z|phase_completed|continue|Phase 3: Harden remaining scattered json_ok sites completed",
-    "2026-03-30T11:45:00Z|phase_advanced|continue|Completed Phase 3, advancing to Phase 5 (Phase 4 already completed)"
+    "2026-03-30T11:45:00Z|phase_advanced|continue|Completed Phase 3, advancing to Phase 5 (Phase 4 already completed)",
+    "2026-03-30T11:47:28Z|phase_started|build|Phase 5: Fix hive-read null safety and learning recovery tests started",
+    "2026-03-30T12:19:23Z|phase_completed|continue|Phase 5: Fix hive-read null safety and learning recovery tests completed",
+    "2026-03-30T12:19:23Z|all_phases_completed|continue|All 5 phases completed"
   ]
 }
