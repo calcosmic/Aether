@@ -1252,6 +1252,7 @@ case "$cmd" in
       {"name": "pheromone-count", "description": "Count active pheromone signals"},
       {"name": "pheromone-prime", "description": "Prime the pheromone system"},
       {"name": "colony-prime", "description": "Assemble unified worker priming payload"},
+      {"name": "pr-context", "description": "Generate CI-ready colony context as structured JSON"},
       {"name": "pheromone-expire", "description": "Expire old pheromone signals"},
       {"name": "eternal-store", "description": "Store high-value signals in eternal memory"},
       {"name": "pheromone-export", "description": "Export pheromone data to JSON"},
@@ -3903,6 +3904,7 @@ Files: ${files_changed} files changed"
 
   pheromone-prime) _pheromone_prime "$@" ;;
   colony-prime) _colony_prime "$@" ;;
+  pr-context) _pr_context "$@" ;;
   pheromone-expire) _pheromone_expire "$@" ;;
   eternal-init) _eternal_init "$@" ;;
   eternal-store) _eternal_store "$@" ;;
