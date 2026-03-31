@@ -138,7 +138,7 @@ test_colony_prime_unchanged() {
         local output
         output=$(bash "$budget_test" 2>&1) || {
             log_error "colony-prime budget tests FAILED (regression from _budget_enforce extraction)"
-            echo "$output" | tail -20
+            printf '%s' "$output" | tail -20
             return 1
         }
         return 0
@@ -298,9 +298,11 @@ test_missing_colony_state() {
 
     # colony_state.exists should be false
     local exists
-    exists=$(echo "$output" | jq -r '.result.colony_state.exists // "missing"' 2>/dev/null)
-    if [[ "$exists" == "missing" ]]; then
-        exists=$(echo "$output" | jq -r '.colony_state.exists // "missing"' 2>/dev/null)
+    # Use jq without `//` alternative operator since `false` is a valid boolean value
+    # and `//` treats false as null-like (returns the alternative)
+    exists=$(printf '%s' "$output" | jq -r 'if .result.colony_state == null then "missing" else .result.colony_state.exists end' 2>/dev/null)
+    if [[ "$exists" == "null" ]]; then
+        exists=$(printf '%s' "$output" | jq -r 'if .colony_state == null then "missing" else .colony_state.exists end' 2>/dev/null)
     fi
     if [[ "$exists" != "false" ]]; then
         log_error "Expected colony_state.exists=false, got: $exists"
