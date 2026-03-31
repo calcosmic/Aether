@@ -1723,3 +1723,17 @@ bash .aether/aether-utils.sh session-update "/ant:continue" "/ant:build {next_id
 ```
 
 Run using the Bash tool with description "Saving session state...": `bash .aether/aether-utils.sh session-update "/ant:continue" "/ant:build {next_id}" "Phase {prev_id} completed, advanced to Phase {next_id}"`
+
+### Step 4.5: Housekeeping (Non-Blocking)
+
+Prune stale backups and temp files. This runs automatically — failures never affect phase advancement.
+
+Run using the Bash tool with description "Pruning stale backups...":
+```bash
+bash .aether/aether-utils.sh backup-prune-global 2>/dev/null || true
+```
+
+Run using the Bash tool with description "Cleaning temp files...":
+```bash
+bash .aether/aether-utils.sh temp-clean 2>/dev/null || true
+```

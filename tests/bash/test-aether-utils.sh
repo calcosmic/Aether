@@ -116,7 +116,7 @@ test_version() {
         return 1
     fi
 
-    if ! assert_json_field_equals "$output" ".result" "1.0.0"; then
+    if ! assert_json_field_equals_equals "$output" ".result" "1.0.0"; then
         test_fail '"1.0.0"' "$(echo "$output" | jq -r '.result')"
         return 1
     fi
@@ -1832,6 +1832,135 @@ test_colony_vital_signs_missing_files() {
 }
 
 # ============================================================================
+# Test: backup-prune-global (under cap)
+# ============================================================================
+test_backup_prune_global_under_cap() {
+    local tmp_dir
+    tmp_dir=$(setup_isolated_env)
+    mkdir -p "$tmp_dir/.aether/data/backups"
+
+    # Create 5 backup files (under 50 cap)
+    for i in $(seq 1 5); do
+        touch "$tmp_dir/.aether/data/backups/test.${i}.backup"
+    done
+
+    local output
+    output=$(bash "$tmp_dir/.aether/aether-utils.sh" backup-prune-global 2>&1)
+
+    if ! assert_json_field_equals "$output" ".result.pruned" "0"; then
+        test_fail "pruned=0" "$output"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    if ! assert_json_field_equals "$output" ".result.kept" "5"; then
+        test_fail "kept=5" "$output"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    rm -rf "$tmp_dir"
+    return 0
+}
+
+# ============================================================================
+# Test: backup-prune-global (over cap)
+# ============================================================================
+test_backup_prune_global_over_cap() {
+    local tmp_dir
+    tmp_dir=$(setup_isolated_env)
+    mkdir -p "$tmp_dir/.aether/data/backups"
+
+    # Create 52 backup files (over 50 cap)
+    for i in $(seq 1 52); do
+        touch "$tmp_dir/.aether/data/backups/file${i}.${i}.backup"
+        sleep 0.01  # ensure distinct mtimes
+    done
+
+    local output
+    output=$(bash "$tmp_dir/.aether/aether-utils.sh" backup-prune-global 2>&1)
+
+    local pruned
+    pruned=$(echo "$output" | jq -r '.result.pruned // 0')
+
+    if [[ "$pruned" -lt 1 ]]; then
+        test_fail "pruned >= 1" "pruned=$pruned output=$output"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    local remaining
+    remaining=$(find "$tmp_dir/.aether/data/backups" -type f | wc -l | tr -d ' ')
+    if [[ "$remaining" -gt 50 ]]; then
+        test_fail "remaining <= 50" "remaining=$remaining"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    rm -rf "$tmp_dir"
+    return 0
+}
+
+# ============================================================================
+# Test: temp-clean removes old files
+# ============================================================================
+test_temp_clean_removes_old_files() {
+    local tmp_dir
+    tmp_dir=$(setup_isolated_env)
+    mkdir -p "$tmp_dir/.aether/temp"
+
+    # Create a file and backdate it 10 days
+    touch "$tmp_dir/.aether/temp/old-file.tmp"
+    touch -t "$(date -v-10d +%Y%m%d%H%M.%S 2>/dev/null || date -d '10 days ago' +%Y%m%d%H%M.%S 2>/dev/null)" "$tmp_dir/.aether/temp/old-file.tmp" 2>/dev/null
+
+    local output
+    output=$(bash "$tmp_dir/.aether/aether-utils.sh" temp-clean 2>&1)
+
+    local cleaned
+    cleaned=$(echo "$output" | jq -r '.result.cleaned // 0')
+
+    if [[ "$cleaned" -lt 1 ]]; then
+        test_fail "cleaned >= 1" "cleaned=$cleaned (touch -t may not work on this platform)"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    rm -rf "$tmp_dir"
+    return 0
+}
+
+# ============================================================================
+# Test: temp-clean keeps recent files
+# ============================================================================
+test_temp_clean_keeps_recent_files() {
+    local tmp_dir
+    tmp_dir=$(setup_isolated_env)
+    mkdir -p "$tmp_dir/.aether/temp"
+
+    # Create a fresh file (should NOT be cleaned)
+    touch "$tmp_dir/.aether/temp/recent-file.tmp"
+
+    local output
+    output=$(bash "$tmp_dir/.aether/aether-utils.sh" temp-clean 2>&1)
+
+    if ! assert_json_field_equals "$output" ".result.cleaned" "0"; then
+        test_fail "cleaned=0" "$output"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    # Verify file still exists
+    if [[ ! -f "$tmp_dir/.aether/temp/recent-file.tmp" ]]; then
+        test_fail "recent file preserved" "file was deleted"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    rm -rf "$tmp_dir"
+    return 0
+}
+
+# ============================================================================
 # Main Test Runner
 # ============================================================================
 
@@ -1902,6 +2031,12 @@ main() {
     run_test "test_entropy_score_command" "entropy-score returns bounded 0-100 value"
     run_test "test_colony_vital_signs_command" "colony-vital-signs returns valid JSON with all required keys"
     run_test "test_colony_vital_signs_missing_files" "colony-vital-signs gracefully degrades when data files are missing"
+
+    # Housekeeping subcommands
+    run_test "test_backup_prune_global_under_cap" "backup-prune-global returns pruned=0 when under cap"
+    run_test "test_backup_prune_global_over_cap" "backup-prune-global prunes files beyond 50-file cap"
+    run_test "test_temp_clean_removes_old_files" "temp-clean removes files older than 7 days"
+    run_test "test_temp_clean_keeps_recent_files" "temp-clean keeps files newer than 7 days"
 
     # Print summary
     test_summary

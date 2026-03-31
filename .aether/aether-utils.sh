@@ -1298,7 +1298,9 @@ case "$cmd" in
       {"name": "suggest-quick-dismiss", "description": "Dismiss all suggestions without approving"}
     ],
     "Maintenance": [
-      {"name": "data-clean", "description": "Scan and remove test/synthetic artifacts from colony data files"}
+      {"name": "data-clean", "description": "Scan and remove test/synthetic artifacts from colony data files"},
+      {"name": "backup-prune-global", "description": "Prune .aether/data/backups/ to 50-file global cap (newest kept)"},
+      {"name": "temp-clean", "description": "Remove files from .aether/temp/ older than 7 days"}
     ],
     "Autopilot": [
       {"name": "autopilot-init", "description": "Initialize autopilot run state (run-state.json)"},
@@ -5178,6 +5180,50 @@ DRYRUN_EOF
       --argjson constraints "$_dc_removed_constraints" \
       --argjson total "$_dc_total_removed" \
       '{ok:true, removed:{pheromones:$phero, queen:$queen, observations:$obs, midden:$midden, spawn_tree:$spawn, constraints:$constraints}, total:$total}')"
+    ;;
+
+  # --- Housekeeping Subcommands ---
+
+  backup-prune-global)
+    # Prune .aether/data/backups/ to a global cap of 50 files (newest kept).
+    # Per-filename rotation (MAX_BACKUPS=3) already runs in atomic-write.sh.
+    # This is the global sweep for unique-filename growth.
+    _bpg_cap=50
+    _bpg_dir="${BACKUP_DIR:-$DATA_DIR/backups}"
+
+    if [[ ! -d "$_bpg_dir" ]]; then
+      json_ok '{"pruned":0,"kept":0,"dir_exists":false}'; exit 0
+    fi
+
+    _bpg_total=$(find "$_bpg_dir" -maxdepth 1 -type f 2>/dev/null | wc -l | tr -d ' ')
+
+    if [[ "$_bpg_total" -le "$_bpg_cap" ]]; then
+      json_ok "$(jq -n --argjson pruned 0 --argjson kept "$_bpg_total" '{pruned:$pruned,kept:$kept}')"; exit 0
+    fi
+
+    _bpg_pruned=0
+    while IFS= read -r _bpg_file; do
+      rm -f "$_bpg_file" 2>/dev/null && _bpg_pruned=$((_bpg_pruned + 1))
+    done < <(find "$_bpg_dir" -maxdepth 1 -type f -print0 2>/dev/null | xargs -0 ls -t 2>/dev/null | tail -n +$((_bpg_cap + 1)))
+
+    _bpg_kept=$((_bpg_total - _bpg_pruned))
+    json_ok "$(jq -n --argjson pruned "$_bpg_pruned" --argjson kept "$_bpg_kept" '{pruned:$pruned,kept:$kept}')"
+    ;;
+
+  temp-clean)
+    # Remove files from .aether/temp/ older than 7 days.
+    _tc_dir="$AETHER_ROOT/.aether/temp"
+    _tc_cleaned=0
+
+    if [[ ! -d "$_tc_dir" ]]; then
+      json_ok '{"cleaned":0,"dir_exists":false}'; exit 0
+    fi
+
+    while IFS= read -r _tc_file; do
+      rm -f "$_tc_file" 2>/dev/null && _tc_cleaned=$((_tc_cleaned + 1))
+    done < <(find "$_tc_dir" -maxdepth 1 -type f -mtime +7 2>/dev/null)
+
+    json_ok "$(jq -n --argjson cleaned "$_tc_cleaned" '{cleaned:$cleaned}')"
     ;;
 
   # --- Autopilot State Tracking ---
