@@ -8,8 +8,8 @@
 - **v2.3 Per-Caste Model Routing** -- Phases 21-24 (shipped 2026-03-27)
 - **v2.4 Living Wisdom** -- Phases 25-28 (shipped 2026-03-27)
 - **v2.5 Smart Init** -- Phases 29-32 (shipped 2026-03-27)
-- **v2.6 Bugfix & Hardening** -- Phases 33-38 (in progress)
-- **v2.7 Release Hygiene & Ship** -- Phase 44 (in progress)
+- **v2.6 Bugfix & Hardening** -- Phases 33-38 (shipped 2026-03-30)
+- **v2.7 PR Workflow + Stability** -- Phases 39-44 (planned)
 
 ## Phases
 
@@ -81,7 +81,7 @@
 
 </details>
 
-### v2.6 Bugfix & Hardening (In Progress)
+### v2.6 Bugfix & Hardening (Shipped)
 
 **Milestone Goal:** Fix critical data-corruption bugs, harden infrastructure, clear high-priority TODOs.
 
@@ -91,6 +91,17 @@
 - [x] **Phase 36: YAML Command Generator** - Single YAML source produces both Claude and OpenCode command markdown (completed 2026-03-29)
 - [x] **Phase 37: XML Core Integration** - XML export/import wired into seal, entomb, and init lifecycle commands (completed 2026-03-29)
 - [x] **Phase 38: Cleanup & Maintenance** - Deprecate old npm versions, generate error code docs, remove dead awk code (completed 2026-03-29)
+
+### v2.7 PR Workflow + Stability (Planned)
+
+**Milestone Goal:** Make multi-branch colony work safe and productive -- clash detection prevents conflicts, pheromones propagate across branches, failures collect on merge, and CI agents get structured context.
+
+- [ ] **Phase 39: State Safety** -- STATE-01, STATE-02
+- [x] **Phase 40: Pheromone Propagation** -- PHERO-01, PHERO-02, PHERO-03 (completed 2026-03-30)
+- [x] **Phase 41: Midden Collection** -- MIDD-01, MIDD-02, MIDD-03 (completed 2026-03-30)
+- [ ] **Phase 42: CI Context Assembly** -- CI-01, CI-02, CI-03
+- [x] **Phase 43: Clash Detection Integration** -- CLASH-01, CLASH-02, CLASH-03 (completed 2026-03-31)
+- [ ] **Phase 44: Release Hygiene & Ship** -- REL-01, REL-02, REL-03, TEST-01, TEST-02
 
 ## Phase Details
 
@@ -180,6 +191,111 @@ Plans:
 - [x] 38-01-PLAN.md -- Remove dead models[] awk array from spawn-tree.sh + audit error-codes.md completeness
 - [ ] 38-02-PLAN.md -- Deprecate old npm versions + fix dist-tag + align package.json version
 
+### Phase 39: State Safety
+**Goal**: All COLONY_STATE.json writes use atomic mutations and test suite passes on clean/empty state
+**Depends on**: Nothing (foundation for all subsequent phases)
+**Requirements**: STATE-01, STATE-02
+**Success Criteria** (what must be TRUE):
+  1. `grep -rn 'jq "\(.*\)" ' .aether/ --include='*.sh' | grep COLONY_STATE` returns zero results -- no raw jq writes to state file
+  2. Every COLONY_STATE.json write path goes through `state-mutate` with atomic file locking
+  3. `npm test` passes with zero failures when COLONY_STATE.json contains minimal valid state
+  4. State validation tests handle missing optional fields gracefully (no hard failure on empty colony)
+**Existing work**: state-mutate subcommand exists in state-api.sh; 4 pheromone subcommands already migrated; design doc at `.aether/docs/state-contract-design.md`
+**Plans:** 2 plans
+
+Plans:
+- [ ] 39-01-PLAN.md -- Stash protection: add pathspec exclusion to 3 stash entry points (swarm.sh, build-prep.md, build-full.md)
+- [ ] 39-02-PLAN.md -- State migration + test fixes: migrate queen.sh to _state_mutate, reset COLONY_STATE.json, fix 11 failing tests
+
+---
+
+### Phase 40: Pheromone Propagation
+**Goal**: Pheromone signals flow across git branches -- signals from main reach worktrees, and branch-specific signals merge back after PR
+**Depends on**: Phase 39 (state safety must be solid before adding cross-branch writes)
+**Requirements**: PHERO-01, PHERO-02, PHERO-03
+**Success Criteria** (what must be TRUE):
+  1. Creating a worktree branch via `_worktree_create` automatically copies active main-branch pheromones into the branch
+  2. `pheromone-snapshot-inject` produces a valid snapshot JSON that can be read by the branch's pheromone system
+  3. `pheromone-merge-back` merges user-created branch signals into main without duplicating existing signals
+  4. Merge conflict resolution follows priority: REDIRECT > FOCUS > FEEDBACK, with strength-based dedup
+**Existing work**: 4 subcommand stubs in pheromone.sh; design doc at `.aether/docs/pheromone-propagation-design.md`; test file at `test/pheromone-snapshot-merge.sh`
+
+---
+
+### Phase 41: Midden Collection
+**Goal**: Failure records from merged branches are collected into main's midden with idempotency and cross-PR pattern detection
+**Depends on**: Phase 40 (pheromone propagation pattern informs midden flow)
+**Requirements**: MIDD-01, MIDD-02, MIDD-03
+**Success Criteria** (what must be TRUE):
+  1. `midden-collect --branch <branch> --merge-sha <sha>` ingests failure records from the branch into main's midden
+  2. Running midden-collect twice with the same merge SHA produces no duplicates (idempotent)
+  3. `midden-handle-revert --sha <sha>` tags affected entries rather than deleting them
+  4. `midden-cross-pr-analysis` returns failure patterns detected across 2+ PRs
+**Existing work**: Design doc at `.aether/docs/midden-collection-design.md`; existing midden.sh has core write/read/acknowledge functions
+
+---
+
+### Phase 42: CI Context Assembly
+**Goal**: CI agents get machine-readable colony context via `pr-context` subcommand, replacing interactive colony-prime for automated workflows
+**Depends on**: Phase 41 (needs midden data for complete context)
+**Requirements**: CI-01, CI-02, CI-03
+**Success Criteria** (what must be TRUE):
+  1. `aether pr-context` outputs valid JSON with sections: colony_state, pheromones, phase_context, blockers, hive_wisdom
+  2. When a source file is missing or corrupt, pr-context returns partial data with the missing section marked as `null` -- never hard-fails
+  3. Normal mode output stays under 6,000 characters; compact mode under 3,000 characters
+  4. Token budget trimming follows the same priority order as colony-prime (rolling summary first, blockers never)
+**Existing work**: Design doc at `.aether/docs/ci-context-assembly-design.md`; colony-prime prompt assembly exists as reference implementation
+**Plans:** 2 plans
+
+Plans:
+- [ ] 42-01-PLAN.md -- Extract _budget_enforce(), implement pr-context with all sections, cache, midden, tests
+- [ ] 42-02-PLAN.md -- Wire pr-context into /ant:continue and /ant:run playbooks
+
+---
+
+### Phase 42.1: Release hygiene -- version drift, npm packaging, command sync, doc accuracy (INSERTED)
+
+**Goal:** Fix version drift in CLAUDE.md, expand validate-package.sh coverage to all packaged utils, regenerate stale YAML-generated commands, and correct inaccurate documentation counts.
+**Requirements**: REL-01, REL-02
+**Depends on:** Phase 42
+**Plans:** 2/2 plans complete
+
+Plans:
+- [x] 42.1-01-PLAN.md -- Expand validate-package.sh REQUIRED_FILES to all 35 utils + regenerate stale commands
+- [ ] 42.1-02-PLAN.md -- Fix CLAUDE.md version drift and stale documentation counts
+
+### Phase 43: Clash Detection Integration
+**Goal**: Task-as-PR workflow prevents file conflicts between parallel worktrees via hooks and automatic context setup
+**Depends on**: Phase 40 (worktree creation needs pheromone injection)
+**Requirements**: CLASH-01, CLASH-02, CLASH-03
+**Success Criteria** (what must be TRUE):
+  1. Editing a file that is modified in another active worktree triggers a PreToolUse hook that blocks the edit with a clear message
+  2. `_worktree_create` automatically copies colony context (COLONY_STATE.json, pheromones.json) and runs pheromone-snapshot-inject
+  3. `.gitattributes` merge driver resolves package-lock.json conflicts by keeping "ours"
+  4. `.aether/data/` files are on the allowlist -- never trigger clash detection (branch-local state)
+**Existing work**: clash-detect.sh, clash-pre-tool-use.js hook, worktree.sh, merge-driver-lockfile.sh; 4 test files (~1,036 lines total)
+**Plans:** 2/2 plans complete
+
+Plans:
+- [x] 43-01-PLAN.md -- Wire clash-detect.sh and worktree.sh into aether-utils.sh dispatcher (source lines, dispatch cases, help JSON)
+- [ ] 43-02-PLAN.md -- Wire clash detection and merge driver setup into /ant:init (Step 7.6, read-only list fix, hook verification)
+
+---
+
+### Phase 44: Release Hygiene & Ship
+**Goal**: Published package is clean of dev artifacts, all tests pass, and v2.7.0 ships to npm
+**Depends on**: Phases 39-43 (all features must be complete)
+**Requirements**: REL-01, REL-02, REL-03, TEST-01, TEST-02
+**Success Criteria** (what must be TRUE):
+  1. `npm pack --dry-run` output contains no test data, worktree references, colony state, or dev artifacts
+  2. `bin/validate-package.sh` passes with zero warnings
+  3. `npm test` shows 620+ passing tests with zero failures
+  4. `npm install -g . && aether --version` succeeds on a clean machine
+  5. CLAUDE.md updated with v2.7 changes, version bumped to v2.7.0
+**Existing work**: validate-package.sh exists; .npmignore covers most paths; new v2.7 modules may have added untracked file types
+
+---
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -220,6 +336,12 @@ Plans:
 | 34. Cross-Colony Isolation | v2.6 | 2/5 | Complete    | 2026-03-29 |
 | 35. Colony Depth & Model Routing | v2.6 | 0/TBD | Complete    | 2026-03-29 |
 | 36. YAML Command Generator | v2.6 | 2/4 | Complete    | 2026-03-29 |
-| 37. XML Core Integration | v2.6 | 3/3 | Complete    | 2026-03-29 |
+| 37. XML Core Integration | v2.6 | 3/3 | Complete | 2026-03-29 |
 | 38. Cleanup & Maintenance | v2.6 | 1/2 | Complete    | 2026-03-29 |
-| 44. Release Hygiene & Ship | v2.7 | 1/3 | In Progress | - |
+| 39. State Safety | v2.7 | 0/2 | Pending | -- |
+| 40. Pheromone Propagation | v2.7 | 1/1 | Complete   | 2026-03-30 |
+| 41. Midden Collection | v2.7 | 0/0 | Complete    | 2026-03-30 |
+| 42. CI Context Assembly | v2.7 | 0/2 | Pending | -- |
+| 42.1 Release Hygiene | v2.7 | 1/2 | Complete    | 2026-03-31 |
+| 43. Clash Detection Integration | v2.7 | 1/2 | Complete    | 2026-03-31 |
+| 44. Release Hygiene & Ship | v2.7 | 1/3 | In Progress | -- |

@@ -1,6 +1,6 @@
 # CLAUDE.md — Aether Development Guide
 
-> **Current Version:** v2.7-dev
+> **Current Version:** v2.7.0
 > **Architecture:** v4.0 (runtime/ eliminated, direct packaging)
 > **Last Updated:** 2026-03-31
 
@@ -10,11 +10,11 @@
 
 | What | Count/Status |
 |------|--------------|
-| Version | v2.7-dev |
+| Version | v2.7.0 |
 | Slash commands | ~45 (Claude) + ~45 (OpenCode) |
 | Agent definitions | 24 |
 | Skills | 28 (10 colony + 18 domain) |
-| aether-utils.sh | ~5,400 lines (dispatcher), ~130+ subcommands across all modules |
+| aether-utils.sh | ~5,500 lines (dispatcher), ~130+ subcommands across all modules |
 | Utils | 35 scripts (9 domain modules + infrastructure + XML + exchange + misc) |
 | Tests | 500+ passing |
 | Architecture doc | `RUNTIME UPDATE ARCHITECTURE.md` |
@@ -29,7 +29,7 @@
 │                                                                  │
 │   .aether/             ← SOURCE OF TRUTH (packaged directly)    │
 │   ├── workers.md       (edit here)                              │
-│   ├── aether-utils.sh  (dispatcher, ~5,400 lines, ~130+ subcmds) │
+│   ├── aether-utils.sh  (dispatcher, ~5,500 lines, ~130+ subcmds) │
 │   ├── utils/           (35 scripts, modular architecture)       │
 │   │   ├── Domain modules (9):                                   │
 │   │   │   flag.sh, spawn.sh, session.sh, suggest.sh,            │
@@ -128,7 +128,7 @@ aether update      # or /ant:update
 ```
 .aether/
 ├── workers.md           # Worker definitions, spawn protocol
-├── aether-utils.sh      # Dispatcher (~5,400 lines, ~130+ subcommands across all modules)
+├── aether-utils.sh      # Dispatcher (~5,500 lines, ~130+ subcommands across all modules)
 ├── utils/               # 35 scripts (modular architecture)
 │   ├── Domain modules (9 -- extracted from monolith in Phase 13):
 │   │   flag.sh, spawn.sh, session.sh, suggest.sh,
@@ -656,4 +656,4 @@ For OpenCode-specific rules and agents, see `.opencode/OPENCODE.md`
 
 ---
 
-*Updated for Aether v2.7-dev — 2026-03-31*
+*Updated for Aether v2.7.0 — 2026-03-31*
