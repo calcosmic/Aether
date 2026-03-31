@@ -101,4 +101,4 @@ The system must reliably interpret a user request, decompose it into executable 
 | Deterministic prompt generation | Colony prompts must be testable and reproducible | ✓ Good — bash + jq assembly, 12 tested pattern checks |
 
 ---
-*Last updated: 2026-03-31 after Phase 41 completion — v2.7 PR Workflow + Stability in progress*
+*Last updated: 2026-03-31 after Phase 42.1 completion — release hygiene (packaging validation, doc accuracy)*
