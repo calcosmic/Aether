@@ -88,7 +88,7 @@ That's it. Five commands from zero to shipped.
 ## ✨ Key Features
 
 - 🐜 **24 Specialized Agents** — Real subagents spawned via Task tool, from builders to archaeologists
-- ⚡ **44 Slash Commands** — Full lifecycle management across Claude Code and OpenCode
+- ⚡ **45 Slash Commands** — Full lifecycle management across Claude Code and OpenCode
 - 🎯 **Pheromone System** — Guide the colony with FOCUS, REDIRECT, FEEDBACK signals
 - 🧠 **Colony Memory** — Learnings persist across sessions via QUEEN.md wisdom
 - 🌐 **Hive Brain** — Cross-colony wisdom sharing with domain-scoped retrieval
@@ -212,10 +212,10 @@ That's it. Five commands from zero to shipped.
 
 ```
 .aether/                      # 🐜 Colony files (repo-local)
-├── aether-utils.sh           # ⚡ Dispatcher (~5,200 lines, ~150 subcommands)
-├── utils/                    # 🔧 ~29 modular scripts
+├── aether-utils.sh           # ⚡ Dispatcher (~5,500 lines, ~130+ subcommands)
+├── utils/                    # 🔧 35 modular scripts
 ├── skills/                   # 📚 28 skills (10 colony + 18 domain)
-├── commands/                 # 📖 44 YAML command sources
+├── commands/                 # 📖 45 YAML command sources
 ├── exchange/                 # 📤 XML exchange modules
 ├── docs/                     # 📝 Documentation
 ├── templates/                # 📋 12 templates
@@ -229,8 +229,8 @@ That's it. Five commands from zero to shipped.
 
 ## 🔌 Works With
 
-- **[Claude Code](https://docs.anthropic.com/en/docs/claude-code)** — 44 slash commands + 24 agent definitions
-- **[OpenCode](https://github.com/opencode-ai/opencode)** — 44 slash commands + agent definitions
+- **[Claude Code](https://docs.anthropic.com/en/docs/claude-code)** — 45 slash commands + 24 agent definitions
+- **[OpenCode](https://github.com/opencode-ai/opencode)** — 45 slash commands + agent definitions
 
 ## ❤️ Support Aether
 

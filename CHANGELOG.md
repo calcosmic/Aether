@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.3.0] - 2026-03-31
+
+Aether v2.7 — PR Workflow + Stability. Six phases (39-44) adding multi-branch safety, clash detection, and release hardening.
+
+### Added
+- **Pheromone propagation** — Signals flow across git branches via `pheromone-snapshot-inject` and `pheromone-merge-back`; worktree creation auto-copies active pheromones
+- **Midden collection** — Failure records from merged branches collected into main via `midden-collect` with idempotent dedup; cross-PR pattern detection via `midden-cross-pr-analysis`; revert-aware tagging via `midden-handle-revert`
+- **Clash detection** — PreToolUse hook (`clash-pre-tool-use.js`) blocks edits to files modified in other active worktrees; `.aether/data/` files allowlisted (branch-local state)
+- **Worktree utilities** — `_worktree_create` auto-copies colony context (COLONY_STATE.json, pheromones.json) and runs pheromone-snapshot-inject
+- **Merge driver** — `.gitattributes` merge driver resolves package-lock.json conflicts by keeping "ours" via `merge-driver-lockfile.sh`
+- **Midden wiring** — `midden-collect` and `midden-cross-pr-analysis` wired into `/ant:continue` playbooks (non-blocking, follows pheromone merge-back pattern)
+
+### Changed
+- **Package validation** — `validate-package.sh` expanded from 15 to 38+ required file entries (100% coverage of packaged utils)
+- **NPX installer** — `npx-install.js` now sources Claude agents from `.aether/agents-claude/` (previously used `.opencode/agents/` incorrectly)
+- **Package cleanliness** — 8 dev-only files excluded from npm tarball (scripts/, design docs, example schemas)
+- **CLAUDE.md** — Full accuracy audit: version bumped to v2.7.0, all counts verified (5,500 lines, 35 utils, 45 commands, 509 tests)
+- **README.md** — Architecture counts updated (35 utils, 45 commands, ~5,500 lines)
+- **YAML commands** — 6 stale command files regenerated from YAML sources (init, plan, seal for Claude and OpenCode)
+
+### Fixed
+- **Clash detection dispatcher** — `clash-detect.sh` and `worktree.sh` wired into `aether-utils.sh` dispatcher (source lines, dispatch cases, help JSON)
+- **Init command** — Clash detection hook verification and read-only worktree list integrated into `/ant:init` Step 7.6
+
 ## [2.1.0] - 2026-03-24
 
 Six phases of production hardening (Phases 9-14) targeting reliability, maintainability, and developer experience.
