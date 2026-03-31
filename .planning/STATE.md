@@ -3,11 +3,11 @@ gsd_state_version: 1.0
 milestone: v2.6
 milestone_name: Bugfix & Hardening
 status: executing
-stopped_at: Completed 43-01-PLAN.md
-last_updated: "2026-03-31T04:51:23.559Z"
+stopped_at: Phase 44 context gathered
+last_updated: "2026-03-31T05:19:06.522Z"
 last_activity: 2026-03-31
 progress:
-  total_phases: 36
+  total_phases: 37
   completed_phases: 34
   total_plans: 95
   completed_plans: 92
@@ -140,6 +140,6 @@ None active.
 
 ## Session Continuity
 
-Last session: 2026-03-31T04:31:52.007Z
-Stopped at: Completed 43-01-PLAN.md
-Resume file: None
+Last session: 2026-03-31T05:19:06.512Z
+Stopped at: Phase 44 context gathered
+Resume file: .planning/phases/44-release-hygiene-ship/44-CONTEXT.md
