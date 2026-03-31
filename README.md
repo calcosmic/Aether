@@ -1,18 +1,10 @@
 <div align="center">
 
-<br>
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="./AetherLogo.png" />
-  <source media="(prefers-color-scheme: light)" srcset="./AetherLogo.png" />
-  <img src="./AetherLogo.png" alt="Aether" width="240" />
-</picture>
-
-<br>
+<img src="./AetherBanner.png" alt="Aether" width="100%" />
 
 # Aether
 
-### Artificial Ecology for Thought and Emergent Reasoning
+**Artificial Ecology for Thought and Emergent Reasoning**
 
 <br>
 
@@ -24,45 +16,37 @@
 
 <br>
 
-Multi-agent AI development for **Claude Code** and **OpenCode**.
-<br>
-Spawn 24 specialists that self-organize around your goal using pheromone signals.
-
-<br>
-
 ```
 $ npx aether-colony
 ```
 
 <br>
 
-*The whole is greater than the sum of its ants.*
-
-<br>
+*The whole is greater than the sum of its ants.* 🐜
 
 </div>
 
 ---
 
-## The Problem
+## Why Aether
 
-AI coding assistants work sequentially — one agent does everything: research, code, test, review. When it hits something complex, it either guesses or asks you. There's no specialization, no parallel work, no memory across sessions.
+Every AI coding tool now has "agents." Most of them are the same thing repackaged — a loop that plans, executes, and checks. That's not a colony. That's one ant doing laps.
 
-## The Solution
+Aether is different because it's modeled on how **real ant colonies work**: no central brain, no single agent trying to be everything. Instead, 24 specialized workers self-organize around your goal. A Builder writes code. When it hits something unfamiliar, it doesn't guess — it spawns a Scout to research. When code lands, a Watcher spawns to verify. A Tracker hunts bugs. An Archaeologist digs through git history. They work in parallel, in waves, across phases.
 
-Aether brings **ant colony intelligence** to AI-assisted development. Instead of one AI doing everything, you get a colony of specialists that self-organize around your goal.
+**What actually makes this different:**
 
-Workers spawn workers dynamically (max depth 3, max 10 per phase). When a Builder hits something complex, it spawns a Scout to research. When code is written, a Watcher spawns to verify. The colony adapts to the problem.
+🐜 **Pheromone signals, not prompt engineering.** You steer the colony the way a queen steers ants — with signals, not instructions. Drop a FOCUS signal on "security" and every worker weighs it. Drop a REDIRECT on "no raw SQL" and it becomes a hard constraint. The colony adapts without you rewriting prompts.
 
-You steer the colony with **pheromone signals**, not micromanagement:
+🐜 **Memory that compounds.** Learnings from one build become instincts for the next. Instincts promote to QUEEN.md wisdom. High-confidence wisdom flows to the Hive Brain and crosses into other projects on your machine. Your colonies get smarter over time.
+
+🐜 **Built to be fun.** You set a goal, the colony builds it. You steer with signals, not micromanagement. You watch workers spawn workers. You seal the colony when it's done and start a new one. It feels like tending a garden, not writing tickets.
 
 ```
-/ant:focus "security"              # "Pay attention here"
-/ant:redirect "no jQuery"          # "Don't do this" (hard constraint)
-/ant:feedback "prefer composition" # "Adjust based on this"
+/ant:focus "security"              # 🐜 "Pay attention here"
+/ant:redirect "no jQuery"          # 🐜 "Don't do this"
+/ant:feedback "prefer composition" # 🐜 "Adjust based on this"
 ```
-
-The colony **remembers**. Wisdom, learnings, and instincts persist across sessions. The Hive Brain shares knowledge across colonies on your machine.
 
 ## Quick Start
 
