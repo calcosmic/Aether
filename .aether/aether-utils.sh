@@ -1260,7 +1260,10 @@ case "$cmd" in
       {"name": "pheromone-export", "description": "Export pheromone data to JSON"},
       {"name": "pheromone-export-xml", "description": "Export pheromone data to XML"},
       {"name": "pheromone-import-xml", "description": "Import pheromone data from XML"},
-      {"name": "pheromone-validate-xml", "description": "Validate pheromone XML against schema"}
+      {"name": "pheromone-validate-xml", "description": "Validate pheromone XML against schema"},
+      {"name": "pheromone-snapshot-inject", "description": "Copy active pheromone signals into a new worktree branch"},
+      {"name": "pheromone-export-branch", "description": "Export branch-specific pheromone signals for merge"},
+      {"name": "pheromone-merge-back", "description": "Merge eligible branch pheromone signals back to main"}
     ],
     "Utilities": [
       {"name": "generate-ant-name", "description": "Generate a unique ant name with caste prefix"},
@@ -3907,6 +3910,9 @@ Files: ${files_changed} files changed"
   pheromone-count) _pheromone_count "$@" ;;
   pheromone-display) _pheromone_display "$@" ;;
   pheromone-read) _pheromone_read "$@" ;;
+  pheromone-snapshot-inject) _pheromone_snapshot_inject "$@" ;;
+  pheromone-export-branch) _pheromone_export_branch "$@" ;;
+  pheromone-merge-back) _pheromone_merge_back "$@" ;;
 
   instinct-read) _instinct_read "$@" ;;
   instinct-create) _instinct_create "$@" ;;

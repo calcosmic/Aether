@@ -41,7 +41,6 @@ Do not touch during init:
 - .aether/dreams/ (user notes)
 - .aether/chambers/ (archived colonies)
 - .env* files
-- .claude/settings.json
 - .github/workflows/
 </read_only>
 
@@ -470,6 +469,24 @@ Display "Import skipped. Starting fresh colony." and proceed to Step 8.
 **If xml_import_available is false (no chambers, no XML, or no xmllint):**
 
 Skip silently -- proceed directly to Step 8 without any mention of import (per D-11).
+### Step 7.5: Install Clash Detection Hook
+
+If `.aether/utils/clash-detect.sh` exists, run:
+
+```bash
+bash .aether/aether-utils.sh clash-setup --install 2>/dev/null || true
+```
+
+This installs the PreToolUse hook that prevents conflicting edits across worktrees.
+Non-blocking — if it fails, init continues normally.
+
+Also configure the merge driver for package-lock.json:
+
+```bash
+git config merge.lockfile.driver "bash .aether/utils/merge-driver-lockfile.sh %O %A %B" 2>/dev/null || true
+git config merge.lockfile.name "npm lockfile auto-merge" 2>/dev/null || true
+```
+
 ### Step 8: Display Result
 
 Display the success header and result block:
