@@ -41,3 +41,13 @@ midden/
 
 # Exchange data files (keep .sh utility scripts, exclude .xml colony data)
 exchange/*.xml
+
+# Dev scripts (never needed at runtime)
+scripts/
+
+# Internal design docs (completed, not user-facing)
+docs/*-design.md
+docs/plans/
+
+# Example files (not real schemas)
+schemas/example-prompt-builder.xml

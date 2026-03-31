@@ -32,7 +32,7 @@ const CLAUDE_AGENTS_DIR = path.join(HOME_DIR, '.claude', 'agents', 'ant');
 const PACKAGE_ROOT = path.resolve(__dirname, '..');
 const AETHER_SRC = path.join(PACKAGE_ROOT, '.aether');
 const CLAUDE_COMMANDS_SRC = path.join(PACKAGE_ROOT, '.claude', 'commands', 'ant');
-const OPENCODE_AGENTS_SRC = path.join(PACKAGE_ROOT, '.opencode', 'agents');
+const CLAUDE_AGENTS_SRC = path.join(PACKAGE_ROOT, '.aether', 'agents-claude');
 const OPENCODE_COMMANDS_SRC = path.join(PACKAGE_ROOT, '.opencode', 'commands', 'ant');
 
 function log(message, type = 'info') {
@@ -132,10 +132,10 @@ function install() {
     filesCopied += cmdCount;
   }
 
-  // Step 4: Copy Claude Code agents (from OpenCode agents)
+  // Step 4: Copy Claude Code agents (from agents-claude mirror)
   log('Installing Claude Code agents...', 'ant');
-  if (fs.existsSync(OPENCODE_AGENTS_SRC)) {
-    const agentCount = copyDir(OPENCODE_AGENTS_SRC, CLAUDE_AGENTS_DIR);
+  if (fs.existsSync(CLAUDE_AGENTS_SRC)) {
+    const agentCount = copyDir(CLAUDE_AGENTS_SRC, CLAUDE_AGENTS_DIR);
     log(`  Installed ${agentCount} agents to ~/.claude/agents/ant/`, 'success');
     filesCopied += agentCount;
   }
