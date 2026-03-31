@@ -155,7 +155,7 @@ Strip `(Colony: ...)` suffixes using sed. If grep finds nothing, variables remai
 Display a brief header:
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   A E T H E R   C O L O N Y   I N I T
+🥚 A E T H E R   C O L O N Y   I N I T
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
