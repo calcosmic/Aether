@@ -245,6 +245,11 @@ Plans:
   3. Normal mode output stays under 6,000 characters; compact mode under 3,000 characters
   4. Token budget trimming follows the same priority order as colony-prime (rolling summary first, blockers never)
 **Existing work**: Design doc at `.aether/docs/ci-context-assembly-design.md`; colony-prime prompt assembly exists as reference implementation
+**Plans:** 2 plans
+
+Plans:
+- [ ] 42-01-PLAN.md -- Extract _budget_enforce(), implement pr-context with all sections, cache, midden, tests
+- [ ] 42-02-PLAN.md -- Wire pr-context into /ant:continue and /ant:run playbooks
 
 ---
 
@@ -320,6 +325,6 @@ Plans:
 | 39. State Safety | v2.7 | 0/2 | Pending | -- |
 | 40. Pheromone Propagation | v2.7 | 1/1 | Complete   | 2026-03-30 |
 | 41. Midden Collection | v2.7 | 0/0 | Complete    | 2026-03-30 |
-| 42. CI Context Assembly | v2.7 | 0/0 | Pending | -- |
+| 42. CI Context Assembly | v2.7 | 0/2 | Pending | -- |
 | 43. Clash Detection Integration | v2.7 | 0/0 | Pending | -- |
 | 44. Release Hygiene & Ship | v2.7 | 0/0 | Pending | -- |
