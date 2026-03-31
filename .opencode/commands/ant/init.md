@@ -377,7 +377,14 @@ domain_tags=$(bash .aether/aether-utils.sh domain-detect 2>/dev/null | jq -r '.r
 bash .aether/aether-utils.sh registry-add "$(pwd)" "$(jq -r '.version // "unknown"' ~/.aether/version.json 2>/dev/null || echo 'unknown')" --goal "{approved_intent}" --active true --tags "$domain_tags" 2>/dev/null || true
 cp ~/.aether/version.json .aether/version.json 2>/dev/null || true
 ```
-11. Seed QUEEN.md from hive (non-blocking):
+11. Install clash detection hook and merge driver (non-blocking):
+```bash
+# Install PreToolUse hook to detect file conflicts across worktrees
+bash .aether/aether-utils.sh clash-setup --install 2>/dev/null || true
+# Register lockfile merge driver (keeps "ours" on package-lock.json conflicts)
+git config merge.lockfile.driver "bash .aether/utils/merge-driver-lockfile.sh %O %A %B" 2>/dev/null || true
+```
+12. Seed QUEEN.md from hive (non-blocking):
 ```bash
 domain_tags=$(jq -r --arg repo "$(pwd)" \
   '[.repos[] | select(.path == $repo) | .domain_tags // []] | .[0] // [] | join(",")' \
@@ -387,7 +394,7 @@ seed_args="queen-seed-from-hive --limit 5"
 seed_result=$(bash .aether/aether-utils.sh $seed_args 2>/dev/null || echo '{}')
 seeded_count=$(echo "$seed_result" | jq -r '.result.seeded // 0' 2>/dev/null || echo "0")
 ```
-12. Run `bash .aether/aether-utils.sh session-init "{session_id}" "{approved_intent}"`
+13. Run `bash .aether/aether-utils.sh session-init "{session_id}" "{approved_intent}"`
 
 **Pheromone auto-apply (referenced by both re-init and fresh init paths above):**
 

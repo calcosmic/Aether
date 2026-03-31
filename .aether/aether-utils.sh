@@ -1351,12 +1351,6 @@ case "$cmd" in
       {"name": "council-history", "description": "List past deliberations with their outcomes"},
       {"name": "council-budget-check", "description": "Check if current spawn budget allows N more spawns"}
     ],
-    "Clash Detection": [
-      {"name": "clash-check", "description": "Check if a file has conflicts across active worktrees"},
-      {"name": "clash-setup", "description": "Install or uninstall the PreToolUse clash detection hook"},
-      {"name": "worktree-create", "description": "Create a git worktree with colony context copy"},
-      {"name": "worktree-cleanup", "description": "Remove a git worktree and clean up tracking"}
-    ],
     "Deprecated": [
       {"name": "checkpoint-check", "description": "Check dirty files against allowlist [DEPRECATED]"},
       {"name": "error-pattern-check", "description": "Check for error anti-patterns [DEPRECATED]"},
@@ -5447,15 +5441,15 @@ DRYRUN_EOF
     _emoji_audit_main "${1:-$(pwd)}"
     ;;
 
-  # ── Clash Detection ──────────────────────────────────────────────────────────
-  clash-check)
+  # ── Clash Detection ─────────────────────────────────────────────────────────
+  clash-detect|clash-check)
     _clash_detect "$@"
     ;;
   clash-setup)
     _clash_setup "$@"
     ;;
 
-  # ── Worktree Management ──────────────────────────────────────────────────────
+  # ── Worktree Management ─────────────────────────────────────────────────────
   worktree-create)
     _worktree_create "$@"
     ;;
