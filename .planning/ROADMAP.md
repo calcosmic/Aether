@@ -94,14 +94,14 @@
 
 ### v2.7 PR Workflow + Stability (Planned)
 
-**Milestone Goal:** Make multi-branch colony work safe and productive — clash detection prevents conflicts, pheromones propagate across branches, failures collect on merge, and CI agents get structured context.
+**Milestone Goal:** Make multi-branch colony work safe and productive -- clash detection prevents conflicts, pheromones propagate across branches, failures collect on merge, and CI agents get structured context.
 
-- [ ] **Phase 39: State Safety** — STATE-01, STATE-02
-- [x] **Phase 40: Pheromone Propagation** — PHERO-01, PHERO-02, PHERO-03 (completed 2026-03-30)
-- [x] **Phase 41: Midden Collection** — MIDD-01, MIDD-02, MIDD-03 (completed 2026-03-30)
-- [ ] **Phase 42: CI Context Assembly** — CI-01, CI-02, CI-03
-- [ ] **Phase 43: Clash Detection Integration** — CLASH-01, CLASH-02, CLASH-03
-- [ ] **Phase 44: Release Hygiene & Ship** — REL-01, REL-02, REL-03, TEST-01, TEST-02
+- [ ] **Phase 39: State Safety** -- STATE-01, STATE-02
+- [x] **Phase 40: Pheromone Propagation** -- PHERO-01, PHERO-02, PHERO-03 (completed 2026-03-30)
+- [x] **Phase 41: Midden Collection** -- MIDD-01, MIDD-02, MIDD-03 (completed 2026-03-30)
+- [ ] **Phase 42: CI Context Assembly** -- CI-01, CI-02, CI-03
+- [ ] **Phase 43: Clash Detection Integration** -- CLASH-01, CLASH-02, CLASH-03
+- [ ] **Phase 44: Release Hygiene & Ship** -- REL-01, REL-02, REL-03, TEST-01, TEST-02
 
 ## Phase Details
 
@@ -253,7 +253,7 @@ Plans:
 
 ---
 
-### Phase 42.1: Release hygiene — version drift, npm packaging, command sync, doc accuracy (INSERTED)
+### Phase 42.1: Release hygiene -- version drift, npm packaging, command sync, doc accuracy (INSERTED)
 
 **Goal:** Fix version drift in CLAUDE.md, expand validate-package.sh coverage to all packaged utils, regenerate stale YAML-generated commands, and correct inaccurate documentation counts.
 **Requirements**: REL-01, REL-02
@@ -274,6 +274,11 @@ Plans:
   3. `.gitattributes` merge driver resolves package-lock.json conflicts by keeping "ours"
   4. `.aether/data/` files are on the allowlist -- never trigger clash detection (branch-local state)
 **Existing work**: clash-detect.sh, clash-pre-tool-use.js hook, worktree.sh, merge-driver-lockfile.sh; 4 test files (~1,036 lines total)
+**Plans:** 1/2 plans executed
+
+Plans:
+- [x] 43-01-PLAN.md -- Wire clash-detect.sh and worktree.sh into aether-utils.sh dispatcher (source lines, dispatch cases, help JSON)
+- [ ] 43-02-PLAN.md -- Wire clash detection and merge driver setup into /ant:init (Step 7.6, read-only list fix, hook verification)
 
 ---
 
@@ -331,12 +336,12 @@ Plans:
 | 34. Cross-Colony Isolation | v2.6 | 2/5 | Complete    | 2026-03-29 |
 | 35. Colony Depth & Model Routing | v2.6 | 0/TBD | Complete    | 2026-03-29 |
 | 36. YAML Command Generator | v2.6 | 2/4 | Complete    | 2026-03-29 |
-| 37. XML Core Integration | v2.6 | 3/3 | Complete    | 2026-03-29 |
+| 37. XML Core Integration | v2.6 | 3/3 | Complete | 2026-03-29 |
 | 38. Cleanup & Maintenance | v2.6 | 1/2 | Complete    | 2026-03-29 |
 | 39. State Safety | v2.7 | 0/2 | Pending | -- |
 | 40. Pheromone Propagation | v2.7 | 1/1 | Complete   | 2026-03-30 |
 | 41. Midden Collection | v2.7 | 0/0 | Complete    | 2026-03-30 |
 | 42. CI Context Assembly | v2.7 | 0/2 | Pending | -- |
 | 42.1 Release Hygiene | v2.7 | 1/2 | Complete    | 2026-03-31 |
-| 43. Clash Detection Integration | v2.7 | 0/0 | Pending | -- |
+| 43. Clash Detection Integration | v2.7 | 1/2 | In Progress|  |
 | 44. Release Hygiene & Ship | v2.7 | 0/0 | Pending | -- |
