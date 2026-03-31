@@ -258,7 +258,7 @@ Plans:
 **Goal:** Fix version drift in CLAUDE.md, expand validate-package.sh coverage to all packaged utils, regenerate stale YAML-generated commands, and correct inaccurate documentation counts.
 **Requirements**: REL-01, REL-02
 **Depends on:** Phase 42
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [x] 42.1-01-PLAN.md -- Expand validate-package.sh REQUIRED_FILES to all 35 utils + regenerate stale commands
@@ -337,6 +337,6 @@ Plans:
 | 40. Pheromone Propagation | v2.7 | 1/1 | Complete   | 2026-03-30 |
 | 41. Midden Collection | v2.7 | 0/0 | Complete    | 2026-03-30 |
 | 42. CI Context Assembly | v2.7 | 0/2 | Pending | -- |
-| 42.1 Release Hygiene | v2.7 | 1/2 | In Progress|  |
+| 42.1 Release Hygiene | v2.7 | 1/2 | Complete    | 2026-03-31 |
 | 43. Clash Detection Integration | v2.7 | 0/0 | Pending | -- |
 | 44. Release Hygiene & Ship | v2.7 | 0/0 | Pending | -- |
