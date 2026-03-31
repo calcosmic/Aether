@@ -731,6 +731,161 @@ json_ok "$(jq -n --argjson signal_count "$pp_signal_count" --argjson instinct_co
 }
 
 # ============================================================================
+# _budget_enforce
+# Shared budget enforcement for colony-prime and pr-context.
+# Trims sections in priority order when assembled prompt exceeds character budget.
+# Usage: _budget_enforce "<prefix>"
+#   prefix: variable prefix ("cp_" for colony-prime, "pc_" for pr-context)
+# Reads/writes via indirect access:
+#   {prefix}max_chars, {prefix}budget_len, {prefix}final_prompt,
+#   {prefix}sec_rolling, {prefix}sec_learnings, {prefix}sec_decisions,
+#   {prefix}sec_hive, {prefix}sec_capsule, {prefix}sec_user_prefs,
+#   {prefix}sec_queen_global, {prefix}sec_queen_local, {prefix}sec_signals,
+#   {prefix}sec_blockers, {prefix}budget_trimmed_list
+# Trim order: rolling > learnings > decisions > hive > capsule > user_prefs >
+#   queen_global > queen_local > signals (preserves REDIRECTs). NEVER trims blockers.
+# ============================================================================
+_budget_enforce() {
+  local _be_prefix="${1:-cp_}"
+
+  # Assemble final_prompt from sections
+  eval "local _be_sec_queen_global=\"\${${_be_prefix}sec_queen_global}\""
+  eval "local _be_sec_queen_local=\"\${${_be_prefix}sec_queen_local}\""
+  eval "local _be_sec_user_prefs=\"\${${_be_prefix}sec_user_prefs}\""
+  eval "local _be_sec_hive=\"\${${_be_prefix}sec_hive}\""
+  eval "local _be_sec_capsule=\"\${${_be_prefix}sec_capsule}\""
+  eval "local _be_sec_learnings=\"\${${_be_prefix}sec_learnings}\""
+  eval "local _be_sec_decisions=\"\${${_be_prefix}sec_decisions}\""
+  eval "local _be_sec_blockers=\"\${${_be_prefix}sec_blockers}\""
+  eval "local _be_sec_rolling=\"\${${_be_prefix}sec_rolling}\""
+  eval "local _be_sec_signals=\"\${${_be_prefix}sec_signals}\""
+
+  eval "local _be_max_chars=\${${_be_prefix}max_chars}"
+
+  # Assemble all sections in order
+  local _be_final_prompt="$_be_sec_queen_global$_be_sec_queen_local$_be_sec_user_prefs$_be_sec_hive$_be_sec_capsule$_be_sec_learnings$_be_sec_decisions$_be_sec_blockers$_be_sec_rolling$_be_sec_signals"
+
+  local _be_budget_len=${#_be_final_prompt}
+  local _be_trimmed_list=""
+
+  if [[ "$_be_budget_len" -gt "$_be_max_chars" ]]; then
+    # Over budget -- trim sections in priority order (first = trimmed first)
+
+    # 1. Trim rolling-summary
+    if [[ "$_be_budget_len" -gt "$_be_max_chars" && -n "$_be_sec_rolling" ]]; then
+      _be_sec_rolling=""
+      _be_trimmed_list="rolling-summary"
+      _be_final_prompt="$_be_sec_queen_global$_be_sec_queen_local$_be_sec_user_prefs$_be_sec_hive$_be_sec_capsule$_be_sec_learnings$_be_sec_decisions$_be_sec_blockers$_be_sec_rolling$_be_sec_signals"
+      _be_budget_len=${#_be_final_prompt}
+    fi
+
+    # 2. Trim phase-learnings
+    if [[ "$_be_budget_len" -gt "$_be_max_chars" && -n "$_be_sec_learnings" ]]; then
+      _be_sec_learnings=""
+      _be_trimmed_list="${_be_trimmed_list:+$_be_trimmed_list,}phase-learnings"
+      _be_final_prompt="$_be_sec_queen_global$_be_sec_queen_local$_be_sec_user_prefs$_be_sec_hive$_be_sec_capsule$_be_sec_learnings$_be_sec_decisions$_be_sec_blockers$_be_sec_rolling$_be_sec_signals"
+      _be_budget_len=${#_be_final_prompt}
+    fi
+
+    # 3. Trim key-decisions
+    if [[ "$_be_budget_len" -gt "$_be_max_chars" && -n "$_be_sec_decisions" ]]; then
+      _be_sec_decisions=""
+      _be_trimmed_list="${_be_trimmed_list:+$_be_trimmed_list,}key-decisions"
+      _be_final_prompt="$_be_sec_queen_global$_be_sec_queen_local$_be_sec_user_prefs$_be_sec_hive$_be_sec_capsule$_be_sec_learnings$_be_sec_decisions$_be_sec_blockers$_be_sec_rolling$_be_sec_signals"
+      _be_budget_len=${#_be_final_prompt}
+    fi
+
+    # 4. Trim hive-wisdom
+    if [[ "$_be_budget_len" -gt "$_be_max_chars" && -n "$_be_sec_hive" ]]; then
+      _be_sec_hive=""
+      _be_trimmed_list="${_be_trimmed_list:+$_be_trimmed_list,}hive-wisdom"
+      _be_final_prompt="$_be_sec_queen_global$_be_sec_queen_local$_be_sec_user_prefs$_be_sec_hive$_be_sec_capsule$_be_sec_learnings$_be_sec_decisions$_be_sec_blockers$_be_sec_rolling$_be_sec_signals"
+      _be_budget_len=${#_be_final_prompt}
+    fi
+
+    # 5. Trim context-capsule
+    if [[ "$_be_budget_len" -gt "$_be_max_chars" && -n "$_be_sec_capsule" ]]; then
+      _be_sec_capsule=""
+      _be_trimmed_list="${_be_trimmed_list:+$_be_trimmed_list,}context-capsule"
+      _be_final_prompt="$_be_sec_queen_global$_be_sec_queen_local$_be_sec_user_prefs$_be_sec_hive$_be_sec_capsule$_be_sec_learnings$_be_sec_decisions$_be_sec_blockers$_be_sec_rolling$_be_sec_signals"
+      _be_budget_len=${#_be_final_prompt}
+    fi
+
+    # 6. Trim user-prefs
+    if [[ "$_be_budget_len" -gt "$_be_max_chars" && -n "$_be_sec_user_prefs" ]]; then
+      _be_sec_user_prefs=""
+      _be_trimmed_list="${_be_trimmed_list:+$_be_trimmed_list,}user-prefs"
+      _be_final_prompt="$_be_sec_queen_global$_be_sec_queen_local$_be_sec_user_prefs$_be_sec_hive$_be_sec_capsule$_be_sec_learnings$_be_sec_decisions$_be_sec_blockers$_be_sec_rolling$_be_sec_signals"
+      _be_budget_len=${#_be_final_prompt}
+    fi
+
+    # 7. Trim queen-wisdom-global (trim global before local -- local is more relevant)
+    if [[ "$_be_budget_len" -gt "$_be_max_chars" && -n "$_be_sec_queen_global" ]]; then
+      _be_sec_queen_global=""
+      _be_trimmed_list="${_be_trimmed_list:+$_be_trimmed_list,}queen-wisdom-global"
+      _be_final_prompt="$_be_sec_queen_global$_be_sec_queen_local$_be_sec_user_prefs$_be_sec_hive$_be_sec_capsule$_be_sec_learnings$_be_sec_decisions$_be_sec_blockers$_be_sec_rolling$_be_sec_signals"
+      _be_budget_len=${#_be_final_prompt}
+    fi
+
+    # 8. Trim queen-wisdom-local
+    if [[ "$_be_budget_len" -gt "$_be_max_chars" && -n "$_be_sec_queen_local" ]]; then
+      _be_sec_queen_local=""
+      _be_trimmed_list="${_be_trimmed_list:+$_be_trimmed_list,}queen-wisdom-local"
+      _be_final_prompt="$_be_sec_queen_global$_be_sec_queen_local$_be_sec_user_prefs$_be_sec_hive$_be_sec_capsule$_be_sec_learnings$_be_sec_decisions$_be_sec_blockers$_be_sec_rolling$_be_sec_signals"
+      _be_budget_len=${#_be_final_prompt}
+    fi
+
+    # 9. Trim pheromone-signals (preserve REDIRECTs)
+    if [[ "$_be_budget_len" -gt "$_be_max_chars" && -n "$_be_sec_signals" ]]; then
+      # Extract REDIRECT lines and preserve them
+      local _be_redirect_preserved=""
+      if [[ "$_be_sec_signals" == *"REDIRECT (HARD CONSTRAINTS"* ]]; then
+        local _be_redirect_lines=""
+        local _be_in_redirect=false
+        local _be_rl
+        while IFS= read -r _be_rl; do
+          if [[ "$_be_rl" == *"REDIRECT (HARD CONSTRAINTS"* ]]; then
+            _be_in_redirect=true
+            _be_redirect_lines+="$_be_rl"$'\n'
+          elif [[ "$_be_in_redirect" == "true" ]]; then
+            if [[ "$_be_rl" == "FOCUS "* ]] || [[ "$_be_rl" == "FEEDBACK "* ]] || \
+                 [[ "$_be_rl" == "POSITION "* ]] || [[ "$_be_rl" == "--- "* ]]; then
+              _be_in_redirect=false
+            else
+              _be_redirect_lines+="$_be_rl"$'\n'
+            fi
+          fi
+        done <<< "$_be_sec_signals"
+        if [[ -n "$_be_redirect_lines" ]]; then
+          _be_redirect_preserved=$'\n'"--- ACTIVE SIGNALS (Colony Guidance) ---"$'\n'
+          _be_redirect_preserved+=$'\n'"$_be_redirect_lines"
+          _be_redirect_preserved+=$'\n'"--- END COLONY CONTEXT ---"
+        fi
+      fi
+      _be_sec_signals="$_be_redirect_preserved"
+      _be_trimmed_list="${_be_trimmed_list:+$_be_trimmed_list,}pheromone-signals"
+      _be_final_prompt="$_be_sec_queen_global$_be_sec_queen_local$_be_sec_user_prefs$_be_sec_hive$_be_sec_capsule$_be_sec_learnings$_be_sec_decisions$_be_sec_blockers$_be_sec_rolling$_be_sec_signals"
+      _be_budget_len=${#_be_final_prompt}
+    fi
+  fi
+
+  # Write back to caller's variables
+  eval "${_be_prefix}sec_queen_global=\"\$_be_sec_queen_global\""
+  eval "${_be_prefix}sec_queen_local=\"\$_be_sec_queen_local\""
+  eval "${_be_prefix}sec_user_prefs=\"\$_be_sec_user_prefs\""
+  eval "${_be_prefix}sec_hive=\"\$_be_sec_hive\""
+  eval "${_be_prefix}sec_capsule=\"\$_be_sec_capsule\""
+  eval "${_be_prefix}sec_learnings=\"\$_be_sec_learnings\""
+  eval "${_be_prefix}sec_decisions=\"\$_be_sec_decisions\""
+  eval "${_be_prefix}sec_blockers=\"\$_be_sec_blockers\""
+  eval "${_be_prefix}sec_rolling=\"\$_be_sec_rolling\""
+  eval "${_be_prefix}sec_signals=\"\$_be_sec_signals\""
+  eval "${_be_prefix}final_prompt=\"\$_be_final_prompt\""
+  eval "${_be_prefix}budget_len=\"\$_be_budget_len\""
+  eval "${_be_prefix}budget_trimmed_list=\"\$_be_trimmed_list\""
+}
+
+# ============================================================================
 # _colony_prime
 # Unified colony priming: combines wisdom (QUEEN.md) + signals + instincts into single output
 # ============================================================================
@@ -1380,115 +1535,11 @@ fi
 #   context-capsule > user-prefs > queen-wisdom-global > queen-wisdom-local > pheromone-signals (NEVER trim REDIRECTs)
 # Blockers are always kept (REDIRECT-priority).
 
-# Assemble all sections in original order (Phase 20: split queen sections)
-cp_final_prompt="$cp_sec_queen_global$cp_sec_queen_local$cp_sec_user_prefs$cp_sec_hive$cp_sec_capsule$cp_sec_learnings$cp_sec_decisions$cp_sec_blockers$cp_sec_rolling$cp_sec_signals"
+_budget_enforce "cp_"
 
-cp_budget_len=${#cp_final_prompt}
-
-if [[ "$cp_budget_len" -gt "$cp_max_chars" ]]; then
-  # Over budget -- trim sections in priority order (first = trimmed first)
-  cp_budget_trimmed_list=""
-
-  # 1. Trim rolling-summary
-  if [[ "$cp_budget_len" -gt "$cp_max_chars" && -n "$cp_sec_rolling" ]]; then
-    cp_sec_rolling=""
-    cp_budget_trimmed_list="rolling-summary"
-    cp_final_prompt="$cp_sec_queen_global$cp_sec_queen_local$cp_sec_user_prefs$cp_sec_hive$cp_sec_capsule$cp_sec_learnings$cp_sec_decisions$cp_sec_blockers$cp_sec_rolling$cp_sec_signals"
-    cp_budget_len=${#cp_final_prompt}
-  fi
-
-  # 2. Trim phase-learnings
-  if [[ "$cp_budget_len" -gt "$cp_max_chars" && -n "$cp_sec_learnings" ]]; then
-    cp_sec_learnings=""
-    cp_budget_trimmed_list="${cp_budget_trimmed_list:+$cp_budget_trimmed_list,}phase-learnings"
-    cp_final_prompt="$cp_sec_queen_global$cp_sec_queen_local$cp_sec_user_prefs$cp_sec_hive$cp_sec_capsule$cp_sec_learnings$cp_sec_decisions$cp_sec_blockers$cp_sec_rolling$cp_sec_signals"
-    cp_budget_len=${#cp_final_prompt}
-  fi
-
-  # 3. Trim key-decisions
-  if [[ "$cp_budget_len" -gt "$cp_max_chars" && -n "$cp_sec_decisions" ]]; then
-    cp_sec_decisions=""
-    cp_budget_trimmed_list="${cp_budget_trimmed_list:+$cp_budget_trimmed_list,}key-decisions"
-    cp_final_prompt="$cp_sec_queen_global$cp_sec_queen_local$cp_sec_user_prefs$cp_sec_hive$cp_sec_capsule$cp_sec_learnings$cp_sec_decisions$cp_sec_blockers$cp_sec_rolling$cp_sec_signals"
-    cp_budget_len=${#cp_final_prompt}
-  fi
-
-  # 4. Trim hive-wisdom
-  if [[ "$cp_budget_len" -gt "$cp_max_chars" && -n "$cp_sec_hive" ]]; then
-    cp_sec_hive=""
-    cp_budget_trimmed_list="${cp_budget_trimmed_list:+$cp_budget_trimmed_list,}hive-wisdom"
-    cp_final_prompt="$cp_sec_queen_global$cp_sec_queen_local$cp_sec_user_prefs$cp_sec_hive$cp_sec_capsule$cp_sec_learnings$cp_sec_decisions$cp_sec_blockers$cp_sec_rolling$cp_sec_signals"
-    cp_budget_len=${#cp_final_prompt}
-  fi
-
-  # 5. Trim context-capsule
-  if [[ "$cp_budget_len" -gt "$cp_max_chars" && -n "$cp_sec_capsule" ]]; then
-    cp_sec_capsule=""
-    cp_budget_trimmed_list="${cp_budget_trimmed_list:+$cp_budget_trimmed_list,}context-capsule"
-    cp_final_prompt="$cp_sec_queen_global$cp_sec_queen_local$cp_sec_user_prefs$cp_sec_hive$cp_sec_capsule$cp_sec_learnings$cp_sec_decisions$cp_sec_blockers$cp_sec_rolling$cp_sec_signals"
-    cp_budget_len=${#cp_final_prompt}
-  fi
-
-  # 6. Trim user-prefs
-  if [[ "$cp_budget_len" -gt "$cp_max_chars" && -n "$cp_sec_user_prefs" ]]; then
-    cp_sec_user_prefs=""
-    cp_budget_trimmed_list="${cp_budget_trimmed_list:+$cp_budget_trimmed_list,}user-prefs"
-    cp_final_prompt="$cp_sec_queen_global$cp_sec_queen_local$cp_sec_user_prefs$cp_sec_hive$cp_sec_capsule$cp_sec_learnings$cp_sec_decisions$cp_sec_blockers$cp_sec_rolling$cp_sec_signals"
-    cp_budget_len=${#cp_final_prompt}
-  fi
-
-  # 7. Trim queen-wisdom-global (trim global before local -- local is more relevant)
-  if [[ "$cp_budget_len" -gt "$cp_max_chars" && -n "$cp_sec_queen_global" ]]; then
-    cp_sec_queen_global=""
-    cp_budget_trimmed_list="${cp_budget_trimmed_list:+$cp_budget_trimmed_list,}queen-wisdom-global"
-    cp_final_prompt="$cp_sec_queen_global$cp_sec_queen_local$cp_sec_user_prefs$cp_sec_hive$cp_sec_capsule$cp_sec_learnings$cp_sec_decisions$cp_sec_blockers$cp_sec_rolling$cp_sec_signals"
-    cp_budget_len=${#cp_final_prompt}
-  fi
-
-  # 8. Trim queen-wisdom-local
-  if [[ "$cp_budget_len" -gt "$cp_max_chars" && -n "$cp_sec_queen_local" ]]; then
-    cp_sec_queen_local=""
-    cp_budget_trimmed_list="${cp_budget_trimmed_list:+$cp_budget_trimmed_list,}queen-wisdom-local"
-    cp_final_prompt="$cp_sec_queen_global$cp_sec_queen_local$cp_sec_user_prefs$cp_sec_hive$cp_sec_capsule$cp_sec_learnings$cp_sec_decisions$cp_sec_blockers$cp_sec_rolling$cp_sec_signals"
-    cp_budget_len=${#cp_final_prompt}
-  fi
-
-  # 9. Trim pheromone-signals (preserve REDIRECTs)
-  if [[ "$cp_budget_len" -gt "$cp_max_chars" && -n "$cp_sec_signals" ]]; then
-    # Extract REDIRECT lines and preserve them
-    cp_redirect_preserved=""
-    if [[ "$cp_sec_signals" == *"REDIRECT (HARD CONSTRAINTS"* ]]; then
-      cp_redirect_lines=""
-      cp_in_redirect=false
-      while IFS= read -r cp_rl; do
-        if [[ "$cp_rl" == *"REDIRECT (HARD CONSTRAINTS"* ]]; then
-          cp_in_redirect=true
-          cp_redirect_lines+="$cp_rl"$'\n'
-        elif [[ "$cp_in_redirect" == "true" ]]; then
-          if [[ "$cp_rl" == "FOCUS "* ]] || [[ "$cp_rl" == "FEEDBACK "* ]] || \
-               [[ "$cp_rl" == "POSITION "* ]] || [[ "$cp_rl" == "--- "* ]]; then
-            cp_in_redirect=false
-          else
-            cp_redirect_lines+="$cp_rl"$'\n'
-          fi
-        fi
-      done <<< "$cp_sec_signals"
-      if [[ -n "$cp_redirect_lines" ]]; then
-        cp_redirect_preserved=$'\n'"--- ACTIVE SIGNALS (Colony Guidance) ---"$'\n'
-        cp_redirect_preserved+=$'\n'"$cp_redirect_lines"
-        cp_redirect_preserved+=$'\n'"--- END COLONY CONTEXT ---"
-      fi
-    fi
-    cp_sec_signals="$cp_redirect_preserved"
-    cp_budget_trimmed_list="${cp_budget_trimmed_list:+$cp_budget_trimmed_list,}pheromone-signals"
-    cp_final_prompt="$cp_sec_queen_global$cp_sec_queen_local$cp_sec_user_prefs$cp_sec_hive$cp_sec_capsule$cp_sec_learnings$cp_sec_decisions$cp_sec_blockers$cp_sec_rolling$cp_sec_signals"
-    cp_budget_len=${#cp_final_prompt}
-  fi
-
-  # Append truncation note to log line
-  if [[ -n "$cp_budget_trimmed_list" ]]; then
-    cp_log_line="$cp_log_line, truncated: $cp_budget_trimmed_list (budget: ${cp_max_chars})"
-  fi
+# Append truncation note to log line (post _budget_enforce)
+if [[ -n "${cp_budget_trimmed_list:-}" ]]; then
+  cp_log_line="$cp_log_line, truncated: $cp_budget_trimmed_list (budget: ${cp_max_chars})"
 fi
 # === END Budget enforcement ===
 
