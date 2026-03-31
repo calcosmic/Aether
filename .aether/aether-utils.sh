@@ -1269,7 +1269,7 @@ case "$cmd" in
       {"name": "generate-ant-name", "description": "Generate a unique ant name with caste prefix"},
       {"name": "activity-log", "description": "Append an entry to the activity log"},
       {"name": "activity-log-init", "description": "Initialize the activity log file"},
-      {"name": "activity-log-read", "description": "Read recent activity log entries"},
+      {"name": "activity-log-read", "description": "Read recent activity log entries; --no-errors excludes ERROR/WARN lines"},
       {"name": "generate-commit-message", "description": "Generate a commit message (types: milestone, pause, fix, contextual, seal)"},
       {"name": "version-check", "description": "Check if Aether version meets requirement"},
       {"name": "registry-add", "description": "Register a repo with Aether (supports --tags, --goal, --active)"},
@@ -1798,6 +1798,12 @@ HELP_EOF
     json_ok "{\"archived\":$archived_flag}"
     ;;
   activity-log-read)
+    # Parse optional --no-errors flag before positional caste_filter
+    _alr_no_errors=false
+    if [[ "${1:-}" == "--no-errors" ]]; then
+      _alr_no_errors=true
+      shift
+    fi
     caste_filter="${1:-}"
 
     # Graceful degradation: check if activity logging is enabled
@@ -1813,6 +1819,12 @@ HELP_EOF
     else
       content=$(cat "$log_file")
     fi
+
+    # Filter out ERROR/WARN lines if --no-errors flag was set
+    if [[ "$_alr_no_errors" == "true" ]]; then
+      content=$(echo "$content" | grep -vE 'ERROR|WARN' || true)
+    fi
+
     json_ok "$(echo "$content" | jq -Rs '.')"
     ;;
   learning-promote) _learning_promote "$@" ;;

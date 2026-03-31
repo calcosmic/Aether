@@ -1961,6 +1961,97 @@ test_temp_clean_keeps_recent_files() {
 }
 
 # ============================================================================
+# Test: activity-log-read --no-errors
+# ============================================================================
+test_activity_log_read_no_errors() {
+    local tmp_dir
+    tmp_dir=$(setup_isolated_env)
+
+    # Create a log with mixed lines
+    cat > "$tmp_dir/.aether/data/activity.log" << 'LOGEOF'
+[12:00:00] INFO builder Started task 1.1
+[12:00:01] ERROR E_FILE_NOT_FOUND COLONY_STATE.json not found
+[12:00:02] INFO watcher Verification passed
+[12:00:03] WARN W_DEGRADED Activity logging disabled
+[12:00:04] INFO scout Research complete
+LOGEOF
+
+    # Without flag: should include ERROR and WARN lines
+    local output_all
+    output_all=$(bash "$tmp_dir/.aether/aether-utils.sh" activity-log-read 2>&1)
+    local all_content
+    all_content=$(echo "$output_all" | jq -r '.result // ""')
+    if ! echo "$all_content" | grep -q 'ERROR'; then
+        test_fail "unfiltered output contains ERROR" "no ERROR found"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    # With flag: should exclude ERROR and WARN lines
+    local output_filtered
+    output_filtered=$(bash "$tmp_dir/.aether/aether-utils.sh" activity-log-read --no-errors 2>&1)
+    local filtered_content
+    filtered_content=$(echo "$output_filtered" | jq -r '.result // ""')
+    if echo "$filtered_content" | grep -qE 'ERROR|WARN'; then
+        test_fail "no ERROR/WARN in filtered output" "found ERROR or WARN: $filtered_content"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    # Verify INFO lines are preserved
+    if ! echo "$filtered_content" | grep -q 'builder'; then
+        test_fail "INFO lines preserved" "no builder line found"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    rm -rf "$tmp_dir"
+    return 0
+}
+
+# ============================================================================
+# Test: activity-log-read --no-errors with caste filter
+# ============================================================================
+test_activity_log_read_no_errors_with_caste() {
+    local tmp_dir
+    tmp_dir=$(setup_isolated_env)
+
+    cat > "$tmp_dir/.aether/data/activity.log" << 'LOGEOF'
+[12:00:00] INFO builder Started task 1.1
+[12:00:01] ERROR builder Failed validation
+[12:00:02] INFO watcher Verification passed
+[12:00:03] INFO builder Completed task 1.1
+LOGEOF
+
+    # Combined: --no-errors builder should only show INFO builder lines
+    local output
+    output=$(bash "$tmp_dir/.aether/aether-utils.sh" activity-log-read --no-errors builder 2>&1)
+    local content
+    content=$(echo "$output" | jq -r '.result // ""')
+
+    if echo "$content" | grep -q 'ERROR'; then
+        test_fail "no ERROR lines" "found ERROR in output"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    if echo "$content" | grep -q 'watcher'; then
+        test_fail "no watcher lines" "found watcher in output"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    if ! echo "$content" | grep -q 'builder'; then
+        test_fail "builder lines present" "no builder line found"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    rm -rf "$tmp_dir"
+    return 0
+}
+
+# ============================================================================
 # Main Test Runner
 # ============================================================================
 
@@ -2031,6 +2122,10 @@ main() {
     run_test "test_entropy_score_command" "entropy-score returns bounded 0-100 value"
     run_test "test_colony_vital_signs_command" "colony-vital-signs returns valid JSON with all required keys"
     run_test "test_colony_vital_signs_missing_files" "colony-vital-signs gracefully degrades when data files are missing"
+
+    # Activity log filter
+    run_test "test_activity_log_read_no_errors" "activity-log-read --no-errors excludes ERROR and WARN lines"
+    run_test "test_activity_log_read_no_errors_with_caste" "activity-log-read --no-errors combined with caste filter"
 
     # Housekeeping subcommands
     run_test "test_backup_prune_global_under_cap" "backup-prune-global returns pruned=0 when under cap"
