@@ -311,8 +311,8 @@ Plans:
 **Plans:** 1/2 plans executed
 
 Plans:
-- [x] 45-01-PLAN.md -- Define typed structs for all 6 data files (pheromones, learning-observations, midden, flags, constraints, session), fix ColonyState gaps, golden file parity tests (STOR-01)
-- [ ] 45-02-PLAN.md -- Storage infrastructure: backup rotation, AETHER_ROOT path resolution, JSONL malformed line handling (STOR-02, STOR-03)
+- [ ] 45-01-PLAN.md -- Define typed structs for all 6 data files (pheromones, learning-observations, midden, flags, constraints, session), fix ColonyState gaps, golden file parity tests (STOR-01)
+- [x] 45-02-PLAN.md -- Storage infrastructure: backup rotation, AETHER_ROOT path resolution, JSONL malformed line handling (STOR-02, STOR-03)
 
 ### Phase 46: Event Bus
 **Goal**: Typed events flow through the system via Go channels with crash-recoverable persistence -- replacing the shell's file-based pub/sub
