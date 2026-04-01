@@ -91,16 +91,18 @@ _learning_inject() {
 # ============================================================================
 # _learning_observe
 # Record observation of a learning across colonies
-# Usage: learning-observe <content> <wisdom_type> [colony_name]
-# Returns: JSON with observation_count, threshold status, and colonies list
+# Usage: learning-observe <content> <wisdom_type> [colony_name] [source_type] [evidence_type]
+# Returns: JSON with observation_count, threshold status, colonies list, and trust_score
 # ============================================================================
 _learning_observe() {
     # Record observation of a learning across colonies
-    # Usage: learning-observe <content> <wisdom_type> [colony_name]
-    # Returns: JSON with observation_count, threshold status, and colonies list
+    # Usage: learning-observe <content> <wisdom_type> [colony_name] [source_type] [evidence_type]
+    # Returns: JSON with observation_count, threshold status, colonies list, and trust_score
     content="${1:-}"
     wisdom_type="${2:-}"
     colony_name="${3:-unknown}"
+    local source_type="${4:-observation}"
+    local evidence_type="${5:-anecdotal}"
 
     # Validate required arguments
     [[ -z "$content" ]] && json_err "$E_VALIDATION_FAILED" "Usage: learning-observe <content> <wisdom_type> [colony_name]" '{"missing":"content"}'
@@ -178,6 +180,9 @@ _learning_observe() {
     # Get current timestamp
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
+    # Initialize trust_score (set for new observations; left as default for existing)
+    local trust_score="0.490000"
+
     # Check if observation with same hash already exists
     existing_index=$(jq -r --arg hash "$content_hash" '.observations | to_entries[] | select(.value.content_hash == $hash) | .key' "$observations_file" | head -1)
 
@@ -235,11 +240,20 @@ _learning_observe() {
       fi
       tmp_file="${observations_file}.tmp.$$"
 
+      # Compute trust score for new observation
+      local trust_result
+      trust_result=$(bash "$0" trust-calculate --source "$source_type" --evidence "$evidence_type" --days-since 0 2>/dev/null)
+      local trust_score
+      trust_score=$(echo "$trust_result" | jq -r '.result.score // "0.490000"' 2>/dev/null)
+
       jq --arg hash "$content_hash" \
          --arg content "$content" \
          --arg type "$wisdom_type" \
          --arg colony "$colony_name" \
          --arg ts "$ts" \
+         --arg trust_score "$trust_score" \
+         --arg source_type "$source_type" \
+         --arg evidence_type "$evidence_type" \
          '.observations += [{
            "content_hash": $hash,
            "content": $content,
@@ -247,7 +261,11 @@ _learning_observe() {
            "observation_count": 1,
            "first_seen": $ts,
            "last_seen": $ts,
-           "colonies": [$colony]
+           "colonies": [$colony],
+           "trust_score": ($trust_score | tonumber),
+           "source_type": $source_type,
+           "evidence_type": $evidence_type,
+           "compression_level": 0
          }]' "$observations_file" > "$tmp_file" || {
         _aether_log_error "Could not create new observation entry"
         rm -f "$tmp_file"
@@ -294,6 +312,7 @@ _learning_observe() {
       --argjson threshold_met "$threshold_met" \
       --argjson colonies "$colonies" \
       --argjson is_new "$is_new" \
+      --arg trust_score "$trust_score" \
       '{
         content_hash: $hash,
         content: $content,
@@ -302,7 +321,8 @@ _learning_observe() {
         threshold: $threshold,
         threshold_met: $threshold_met,
         colonies: $colonies,
-        is_new: $is_new
+        is_new: $is_new,
+        trust_score: ($trust_score | tonumber)
       }')
 
     json_ok "$result"

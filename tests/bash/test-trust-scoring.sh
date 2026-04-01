@@ -298,6 +298,59 @@ test_decay_output_fields() {
 }
 
 # ============================================================================
+# TEST: learning-observe integration — trust_score present in output
+# ============================================================================
+test_learning_observe_with_trust_score() {
+    local tmpdir
+    tmpdir=$(setup_trust_env)
+
+    # Seed a minimal COLONY_STATE.json so colony-name works without error
+    mkdir -p "$tmpdir/.aether/data"
+    cat > "$tmpdir/.aether/data/COLONY_STATE.json" <<'JSON'
+{"goal":"test","state":"active","current_phase":1,"plan":{"id":"t","tasks":[]},"memory":{},"errors":{"records":[]},"events":[],"session_id":"t","initialized_at":"2026-01-01T00:00:00Z"}
+JSON
+
+    local result
+    result=$(AETHER_ROOT="$tmpdir" DATA_DIR="$tmpdir/.aether/data" \
+        bash "$tmpdir/.aether/aether-utils.sh" \
+        learning-observe "test observation content" "pattern" "test-colony" "observation" "anecdotal" 2>/dev/null || true)
+
+    rm -rf "$tmpdir"
+
+    assert_ok_true "$result" || return 1
+    assert_json_has_field "$(echo "$result" | jq '.result')" "trust_score" || return 1
+
+    local ts
+    ts=$(echo "$result" | jq -r '.result.trust_score')
+    # trust_score must be a number > 0
+    [[ $(awk "BEGIN{print ($ts > 0)}" 2>/dev/null || echo "0") == "1" ]] || return 1
+}
+
+# ============================================================================
+# TEST: learning-observe backward compatibility — no optional args still works
+# ============================================================================
+test_learning_observe_backward_compat() {
+    local tmpdir
+    tmpdir=$(setup_trust_env)
+
+    mkdir -p "$tmpdir/.aether/data"
+    cat > "$tmpdir/.aether/data/COLONY_STATE.json" <<'JSON'
+{"goal":"test","state":"active","current_phase":1,"plan":{"id":"t","tasks":[]},"memory":{},"errors":{"records":[]},"events":[],"session_id":"t","initialized_at":"2026-01-01T00:00:00Z"}
+JSON
+
+    local result
+    result=$(AETHER_ROOT="$tmpdir" DATA_DIR="$tmpdir/.aether/data" \
+        bash "$tmpdir/.aether/aether-utils.sh" \
+        learning-observe "backward compat test" "pattern" "test-colony" 2>/dev/null || true)
+
+    rm -rf "$tmpdir"
+
+    assert_ok_true "$result" || return 1
+    assert_json_has_field "$(echo "$result" | jq '.result')" "observation_count" || return 1
+    assert_json_has_field "$(echo "$result" | jq '.result')" "trust_score" || return 1
+}
+
+# ============================================================================
 # Main: run all tests
 # ============================================================================
 
@@ -320,5 +373,7 @@ run_test "test_decay_missing_args"          "trust-decay: missing args => error"
 run_test "test_tier_missing_args"           "trust-tier: missing args => error"
 run_test "test_calculate_includes_components" "trust-calculate: output includes component scores"
 run_test "test_decay_output_fields"         "trust-decay: output includes required fields"
+run_test "test_learning_observe_with_trust_score" "learning-observe: trust_score present when source_type+evidence_type given"
+run_test "test_learning_observe_backward_compat"  "learning-observe: backward compat — no optional args still works"
 
 test_summary

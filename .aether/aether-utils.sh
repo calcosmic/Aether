@@ -50,6 +50,8 @@ CURRENT_LOCK=${CURRENT_LOCK:-""}
 [[ -f "$SCRIPT_DIR/utils/worktree.sh" ]] && source "$SCRIPT_DIR/utils/worktree.sh"
 [[ -f "$SCRIPT_DIR/utils/event-bus.sh" ]] && source "$SCRIPT_DIR/utils/event-bus.sh"
 [[ -f "$SCRIPT_DIR/utils/trust-scoring.sh" ]] && source "$SCRIPT_DIR/utils/trust-scoring.sh"
+[[ -f "$SCRIPT_DIR/utils/instinct-store.sh" ]] && source "$SCRIPT_DIR/utils/instinct-store.sh"
+[[ -f "$SCRIPT_DIR/utils/graph.sh" ]] && source "$SCRIPT_DIR/utils/graph.sh"
 
 # Fallback error constants if error-handler.sh wasn't sourced
 # This prevents "unbound variable" errors in older installations
@@ -3586,12 +3588,14 @@ Files: ${files_changed} files changed"
 
   memory-capture)
     # Capture learning/failure events with deterministic memory actions.
-    # Usage: memory-capture <event_type> <content> [wisdom_type] [source]
+    # Usage: memory-capture <event_type> <content> [wisdom_type] [source] [source_type] [evidence_type]
     # event_type: learning|failure|redirect|feedback|success|resolution
     mc_event="${1:-}"
     mc_content="${2:-}"
     mc_wisdom_type="${3:-}"
     mc_source="${4:-system:memory-capture}"
+    mc_source_type="${5:-observation}"
+    mc_evidence_type="${6:-anecdotal}"
 
     [[ -z "$mc_event" ]] && json_err "$E_VALIDATION_FAILED" "Usage: memory-capture <event_type> <content> [wisdom_type] [source]" '{"missing":"event_type"}'
     [[ -z "$mc_content" ]] && json_err "$E_VALIDATION_FAILED" "Usage: memory-capture <event_type> <content> [wisdom_type] [source]" '{"missing":"content"}'
@@ -3614,7 +3618,7 @@ Files: ${files_changed} files changed"
     [[ -z "$colony_name" ]] && colony_name="unknown"
 
     # SUPPRESS:OK -- read-default: returns fallback on failure
-    observe_result=$(bash "$0" learning-observe "$mc_content" "$mc_wisdom_type" "$colony_name" 2>/dev/null || echo '{}')
+    observe_result=$(bash "$0" learning-observe "$mc_content" "$mc_wisdom_type" "$colony_name" "$mc_source_type" "$mc_evidence_type" 2>/dev/null || echo '{}')
     if ! echo "$observe_result" | jq -e '.ok == true' >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON field
       # SUPPRESS:OK -- read-default: query may return empty
       obs_msg=$(echo "$observe_result" | jq -r '.error.message // "learning_observe_failed"' 2>/dev/null || echo "learning_observe_failed")
@@ -5552,6 +5556,34 @@ DRYRUN_EOF
     ;;
   trust-tier)
     _trust_tier "$@"
+    ;;
+
+  # ── Instinct Store ─────────────────────────────────────────────────────────
+  instinct-store)
+    _instinct_store "$@"
+    ;;
+  instinct-read-trusted)
+    _instinct_read_trusted "$@"
+    ;;
+  instinct-decay-all)
+    _instinct_decay_all "$@"
+    ;;
+  instinct-archive)
+    _instinct_archive "$@"
+    ;;
+
+  # ── Graph Traversal ────────────────────────────────────────────────────────
+  graph-link)
+    _graph_link "$@"
+    ;;
+  graph-neighbors)
+    _graph_neighbors "$@"
+    ;;
+  graph-reach)
+    _graph_reach "$@"
+    ;;
+  graph-cluster)
+    _graph_cluster "$@"
     ;;
 
   *)
