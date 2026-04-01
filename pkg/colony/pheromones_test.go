@@ -1,7 +1,9 @@
 package colony
 
 import (
+	"bytes"
 	"encoding/json"
+	"os"
 	"testing"
 )
 
@@ -104,5 +106,24 @@ func TestPheromoneFileRoundTrip(t *testing.T) {
 	}
 	if decoded.Version == nil || *decoded.Version != "1.0" {
 		t.Errorf("version mismatch")
+	}
+}
+
+func TestGoldenPheromones(t *testing.T) {
+	golden, err := os.ReadFile("testdata/pheromones.golden.json")
+	if err != nil {
+		t.Fatalf("read golden: %v", err)
+	}
+	var file PheromoneFile
+	if err := json.Unmarshal(golden, &file); err != nil {
+		t.Fatalf("unmarshal golden: %v", err)
+	}
+	produced, err := json.MarshalIndent(file, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	produced = append(produced, '\n')
+	if !bytes.Equal(golden, produced) {
+		t.Errorf("golden mismatch:\nexpected:\n%s\n\ngot:\n%s", golden, produced)
 	}
 }

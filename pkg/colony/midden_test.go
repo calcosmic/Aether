@@ -1,6 +1,8 @@
 package colony
 
 import (
+	"bytes"
+	"os"
 	"encoding/json"
 	"testing"
 )
@@ -73,5 +75,24 @@ func TestMiddenEntryNullableFields(t *testing.T) {
 	}
 	if len(decoded.Tags) != 1 || decoded.Tags[0] != "test" {
 		t.Errorf("tags mismatch")
+	}
+}
+
+func TestGoldenMidden(t *testing.T) {
+	golden, err := os.ReadFile("testdata/midden.golden.json")
+	if err != nil {
+		t.Fatalf("read golden: %v", err)
+	}
+	var file MiddenFile
+	if err := json.Unmarshal(golden, &file); err != nil {
+		t.Fatalf("unmarshal golden: %v", err)
+	}
+	produced, err := json.MarshalIndent(file, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	produced = append(produced, '\n')
+	if !bytes.Equal(golden, produced) {
+		t.Errorf("golden mismatch:\nexpected:\n%s\n\ngot:\n%s", golden, produced)
 	}
 }

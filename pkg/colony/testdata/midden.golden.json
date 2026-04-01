@@ -1,0 +1,455 @@
+{
+  "version": "1.0.0",
+  "archived_at_count": 5,
+  "signals": [
+    {
+      "id": "sig_redirect_001",
+      "type": "REDIRECT",
+      "priority": "high",
+      "source": "system",
+      "created_at": "2026-02-16T08:00:00Z",
+      "expires_at": "2026-03-16T08:00:00Z",
+      "active": false,
+      "content": {
+        "text": "Avoid editing runtime/ directly - edit .aether/ instead"
+      },
+      "archived_at": "2026-03-20T19:50:49Z",
+      "tags": [
+        {
+          "value": "safety",
+          "weight": 1,
+          "category": "constraint"
+        },
+        {
+          "value": "runtime",
+          "weight": 0.8,
+          "category": "path"
+        }
+      ],
+      "scope": {
+        "global": true
+      }
+    },
+    {
+      "id": "sig_focus_1773991045_1869",
+      "type": "FOCUS",
+      "priority": "normal",
+      "source": "test",
+      "created_at": "2026-03-20T07:17:25Z",
+      "expires_at": "2026-03-21T07:17:25Z",
+      "active": false,
+      "strength": 0.8,
+      "reason": "test",
+      "content": {
+        "text": "Focus on error handling in auth module"
+      },
+      "content_hash": "623f01cf9eb62f6a8bdb1f2b3ea0c3318741f478c578928c3fc2371ec2173a10",
+      "reinforcement_count": 0,
+      "archived_at": "2026-03-27T14:47:05Z"
+    },
+    {
+      "id": "sig_focus_1774638138_9979",
+      "type": "FOCUS",
+      "priority": "normal",
+      "source": "user",
+      "created_at": "2026-03-27T19:02:18Z",
+      "expires_at": "phase_end",
+      "active": false,
+      "strength": 0.8,
+      "reason": "User directed colony attention",
+      "content": {
+        "text": "make sure the commit messages are useful and memorable not just numbers and digits"
+      },
+      "content_hash": "42f74f28fa346f1039064ffacd5ce2b94c0d3eb69c40515929dc78a29e672acb",
+      "reinforcement_count": 0,
+      "archived_at": "2026-03-27T23:20:47Z"
+    },
+    {
+      "id": "sig_focus_1774651980_2476",
+      "type": "FOCUS",
+      "priority": "normal",
+      "source": "user",
+      "created_at": "2026-03-27T22:53:00Z",
+      "expires_at": "phase_end",
+      "active": false,
+      "strength": 0.8,
+      "reason": "User directed colony attention",
+      "content": {
+        "text": "aim to bring back the emojis and stuff that we had because things look dull now"
+      },
+      "content_hash": "a43f7552d98ef8d3548894d82dfb94103ab4eead12b29e5ea22aaa2d8ce8595b",
+      "reinforcement_count": 0,
+      "archived_at": "2026-03-27T23:20:47Z"
+    },
+    {
+      "id": "sig_focus_1774653316_9383",
+      "type": "FOCUS",
+      "priority": "normal",
+      "source": "user",
+      "created_at": "2026-03-27T23:15:16Z",
+      "expires_at": "phase_end",
+      "active": false,
+      "strength": 0.8,
+      "reason": "User directed colony attention",
+      "content": {
+        "text": "Minor note: pheromone-xml.sh may be missing from exchange folder — non-critical, only affects XML signal import/export"
+      },
+      "content_hash": "284f5faffe13fa00f5e967e2dd64539231f43edd5dc65c8d1e981648fb25d4fe",
+      "reinforcement_count": 0,
+      "archived_at": "2026-03-27T23:20:47Z"
+    }
+  ],
+  "entries": [
+    {
+      "id": "midden_1771717833_19573",
+      "timestamp": "2026-02-21T23:50:33Z",
+      "category": "security",
+      "source": "gatekeeper",
+      "message": "High CVEs found: 3",
+      "reviewed": false,
+      "acknowledged": true,
+      "acknowledged_at": "2026-03-22T14:19:12Z",
+      "acknowledge_reason": ""
+    },
+    {
+      "id": "midden_1774008777_29962",
+      "timestamp": "2026-03-20T12:12:57Z",
+      "category": "resilience",
+      "source": "chaos",
+      "message": "Chaos finding: Cross-repo lock isolation mismatch (high) - lock at AETHER_ROOT but target at HOME",
+      "reviewed": false,
+      "acknowledged": true,
+      "acknowledged_at": "2026-03-22T14:19:11Z",
+      "acknowledge_reason": ""
+    },
+    {
+      "id": "midden_1774009746_76712",
+      "timestamp": "2026-03-20T12:29:06Z",
+      "category": "quality",
+      "source": "auditor",
+      "message": "High severity issues: 1 (score: 72) - unsanitized category in json_ok output",
+      "reviewed": false,
+      "acknowledged": true,
+      "acknowledged_at": "2026-03-22T14:19:11Z",
+      "acknowledge_reason": ""
+    },
+    {
+      "id": "midden_1774012312_90936",
+      "timestamp": "2026-03-20T13:11:52Z",
+      "category": "quality",
+      "source": "auditor",
+      "message": "High severity: placeholder double-escaping in hive-promote pipeline (score: 69)",
+      "reviewed": false,
+      "acknowledged": true,
+      "acknowledged_at": "2026-03-22T14:19:11Z",
+      "acknowledge_reason": ""
+    },
+    {
+      "id": "midden_1774032794_46183",
+      "timestamp": "2026-03-20T18:53:14Z",
+      "category": "resilience",
+      "source": "chaos",
+      "message": "Chaos finding: String-typed confidence causes silent hive-read failure (medium)",
+      "reviewed": false,
+      "acknowledged": true,
+      "acknowledged_at": "2026-03-22T14:19:11Z",
+      "acknowledge_reason": ""
+    },
+    {
+      "id": "midden_1774036709_43066",
+      "timestamp": "2026-03-20T19:58:29Z",
+      "category": "documentation",
+      "source": "chronicler",
+      "message": "Gap (high): README.md shows v1.1.5 but project is v2.0.0 — version drift across README, package.json, CLAUDE.md",
+      "reviewed": false,
+      "acknowledged": true,
+      "acknowledged_at": "2026-03-22T14:19:12Z",
+      "acknowledge_reason": ""
+    },
+    {
+      "id": "midden_1774036709_43138",
+      "timestamp": "2026-03-20T19:58:29Z",
+      "category": "documentation",
+      "source": "chronicler",
+      "message": "Gap (high): README missing 11 commands and all v2.0 features (Hive Brain, Autopilot, Preferences)",
+      "reviewed": false,
+      "acknowledged": true,
+      "acknowledged_at": "2026-03-22T14:19:12Z",
+      "acknowledge_reason": ""
+    },
+    {
+      "id": "midden_1774036709_43208",
+      "timestamp": "2026-03-20T19:58:29Z",
+      "category": "documentation",
+      "source": "chronicler",
+      "message": "Gap (high): CHANGELOG.md has no formal [2.0.0] entry — latest is [1.1.11]",
+      "reviewed": false,
+      "acknowledged": true,
+      "acknowledged_at": "2026-03-22T14:19:12Z",
+      "acknowledge_reason": ""
+    },
+    {
+      "id": "midden_1774036709_43279",
+      "timestamp": "2026-03-20T19:58:29Z",
+      "category": "documentation",
+      "source": "chronicler",
+      "message": "Gap (medium): No dedicated Hive Brain or Autopilot user guides exist",
+      "reviewed": false,
+      "acknowledged": true,
+      "acknowledged_at": "2026-03-22T14:19:12Z",
+      "acknowledge_reason": ""
+    },
+    {
+      "id": "midden_1774036709_43350",
+      "timestamp": "2026-03-20T19:58:29Z",
+      "category": "documentation",
+      "source": "chronicler",
+      "message": "Gap (medium): README castes table shows only 10 of 22 agents",
+      "reviewed": false,
+      "acknowledged": true,
+      "acknowledged_at": "2026-03-22T14:19:12Z",
+      "acknowledge_reason": ""
+    },
+    {
+      "id": "midden_1774036709_43422",
+      "timestamp": "2026-03-20T19:58:29Z",
+      "category": "documentation",
+      "source": "chronicler",
+      "message": "Gap (medium): bin/cli.js has 19 functions missing JSDoc",
+      "reviewed": false,
+      "acknowledged": true,
+      "acknowledged_at": "2026-03-22T14:19:12Z",
+      "acknowledge_reason": ""
+    },
+    {
+      "id": "midden_1774036726_45289",
+      "timestamp": "2026-03-20T19:58:46Z",
+      "category": "analytics",
+      "source": "sage",
+      "message": "Sage recommendation (P1): aether-utils.sh fix ratio rising (33.8% -\u003e 45.8%) — 11,732 lines, 115 subcommands, top candidate for splitting",
+      "reviewed": false
+    },
+    {
+      "id": "midden_1774036726_45345",
+      "timestamp": "2026-03-20T19:58:46Z",
+      "category": "analytics",
+      "source": "sage",
+      "message": "Sage recommendation (P2): 5 unreviewed midden entries including 27-day-old security finding (3 high CVEs)",
+      "reviewed": false
+    },
+    {
+      "id": "midden_1774054977_71663",
+      "timestamp": "2026-03-21T01:02:57Z",
+      "category": "resilience",
+      "source": "chaos",
+      "message": "Chaos finding: Unbound variable crash when --id flag passed without value (medium)",
+      "reviewed": false,
+      "acknowledged": true,
+      "acknowledged_at": "2026-03-22T14:19:11Z",
+      "acknowledge_reason": ""
+    },
+    {
+      "id": "midden_1774057831_64927",
+      "timestamp": "2026-03-21T01:50:31Z",
+      "category": "resilience",
+      "source": "chaos",
+      "message": "Chaos finding: midden-acknowledge crashes on missing entries array (high)",
+      "reviewed": false,
+      "acknowledged": true,
+      "acknowledged_at": "2026-03-22T14:19:11Z",
+      "acknowledge_reason": ""
+    },
+    {
+      "id": "midden_1774057831_64983",
+      "timestamp": "2026-03-21T01:50:31Z",
+      "category": "resilience",
+      "source": "chaos",
+      "message": "Chaos finding: midden-review crashes on null category (high)",
+      "reviewed": false,
+      "acknowledged": true,
+      "acknowledged_at": "2026-03-22T14:19:11Z",
+      "acknowledge_reason": ""
+    },
+    {
+      "id": "midden_1774061707_32378",
+      "timestamp": "2026-03-21T02:55:07Z",
+      "category": "resilience",
+      "source": "chaos",
+      "message": "Chaos finding: E_INTERNAL undefined - triggers unbound variable crash (medium)",
+      "reviewed": false,
+      "acknowledged": true,
+      "acknowledged_at": "2026-03-22T14:19:11Z",
+      "acknowledge_reason": ""
+    },
+    {
+      "id": "midden_1774662909_54334",
+      "timestamp": "2026-03-28T01:55:09Z",
+      "category": "worker_failure",
+      "source": "builder",
+      "message": "Builder Weld-37 failed on task 5.1: 4 spawn-tree tests failing due to invalid JSON output from spawn-tree.sh (modified in this session)",
+      "reviewed": false,
+      "acknowledged": true,
+      "acknowledged_at": "2026-03-30T07:00:48Z",
+      "acknowledge_reason": ""
+    },
+    {
+      "id": "midden_1774663697_94139",
+      "timestamp": "2026-03-28T02:08:17Z",
+      "category": "resilience",
+      "source": "chaos",
+      "message": "Chaos finding: JSON objects as ant names break spawn-tree JSON output (critical)",
+      "reviewed": false,
+      "acknowledged": true,
+      "acknowledged_at": "2026-03-30T07:00:44Z",
+      "acknowledge_reason": ""
+    },
+    {
+      "id": "midden_1774663698_94645",
+      "timestamp": "2026-03-28T02:08:18Z",
+      "category": "resilience",
+      "source": "chaos",
+      "message": "Chaos finding: spawn-tree-load no JSON validation before json_ok (high)",
+      "reviewed": false,
+      "acknowledged": true,
+      "acknowledged_at": "2026-03-30T07:01:08Z",
+      "acknowledge_reason": ""
+    },
+    {
+      "id": "midden_1774667821_41195",
+      "timestamp": "2026-03-28T03:17:01Z",
+      "category": "resilience",
+      "source": "chaos",
+      "message": "Chaos finding: Newline chars in queen-promote destroy QUEEN.md (critical)",
+      "reviewed": false,
+      "acknowledged": true,
+      "acknowledged_at": "2026-03-30T07:00:58Z",
+      "acknowledge_reason": ""
+    },
+    {
+      "id": "midden_1774667822_41255",
+      "timestamp": "2026-03-28T03:17:02Z",
+      "category": "resilience",
+      "source": "chaos",
+      "message": "Chaos finding: grep-pipefail kills queen-promote functions (high)",
+      "reviewed": false,
+      "acknowledged": true,
+      "acknowledged_at": "2026-03-30T07:00:58Z",
+      "acknowledge_reason": ""
+    },
+    {
+      "id": "midden_1774669451_20782",
+      "timestamp": "2026-03-28T03:44:11Z",
+      "category": "security",
+      "source": "gatekeeper",
+      "message": "High CVEs found: 4",
+      "reviewed": false,
+      "acknowledged": true,
+      "acknowledged_at": "2026-03-30T07:01:04Z",
+      "acknowledge_reason": ""
+    },
+    {
+      "id": "midden_1774742061_42588",
+      "timestamp": "2026-03-28T23:54:21Z",
+      "category": "quality",
+      "source": "auditor",
+      "message": "High severity issues: 3 (score: 61) — orphaned .metaupd temps, JSON injection in spawn.sh, broken grep in spawn-tree.sh",
+      "reviewed": false
+    },
+    {
+      "id": "midden_1774744258_79019",
+      "timestamp": "2026-03-29T00:30:58Z",
+      "category": "worker_failure",
+      "source": "builder",
+      "message": "Builder Mason-41 failed on task 5.1: spawn-tree tests ETIMEDOUT (pre-existing blocker, not new regression)",
+      "reviewed": false,
+      "acknowledged": true,
+      "acknowledged_at": "2026-03-30T07:00:53Z",
+      "acknowledge_reason": ""
+    },
+    {
+      "id": "midden_1774745107_85716",
+      "timestamp": "2026-03-29T00:45:07Z",
+      "category": "resilience",
+      "source": "chaos",
+      "message": "Chaos finding: All 9 spawn-tree tests time out due to O(n^2) parse_spawn_tree scaling (critical)",
+      "reviewed": false,
+      "acknowledged": true,
+      "acknowledged_at": "2026-03-30T07:00:49Z",
+      "acknowledge_reason": ""
+    },
+    {
+      "id": "midden_1774745108_86382",
+      "timestamp": "2026-03-29T00:45:08Z",
+      "category": "resilience",
+      "source": "chaos",
+      "message": "Chaos finding: spawn-tree-active test passes for wrong reason — 5-pipe fixture format bypasses logic (high)",
+      "reviewed": false
+    },
+    {
+      "id": "midden_1774746402_85376",
+      "timestamp": "2026-03-29T01:06:42Z",
+      "category": "quality",
+      "source": "auditor",
+      "message": "High severity issues: 2 (score: 63) — stale CONTEXT.md, generic instinct triggers",
+      "reviewed": false
+    },
+    {
+      "id": "midden_1774749715_41832",
+      "timestamp": "2026-03-29T02:01:55Z",
+      "category": "security",
+      "source": "gatekeeper",
+      "message": "High CVEs found: 4 (minimatch, path-to-regexp, picomatch, node-tar)",
+      "reviewed": false,
+      "acknowledged": true,
+      "acknowledged_at": "2026-03-30T07:01:04Z",
+      "acknowledge_reason": ""
+    },
+    {
+      "id": "midden_1774749780_42099",
+      "timestamp": "2026-03-29T02:03:00Z",
+      "category": "quality",
+      "source": "auditor",
+      "message": "High severity issues: 1 (score: 67) - unescaped ant_name in helper functions",
+      "reviewed": false
+    },
+    {
+      "id": "midden_1774808061_45068",
+      "timestamp": "2026-03-29T18:14:21Z",
+      "category": "test-cat",
+      "source": "watcher",
+      "message": "hello world search test",
+      "reviewed": false,
+      "acknowledged": true,
+      "acknowledged_at": "2026-03-30T07:02:21Z",
+      "acknowledge_reason": "",
+      "tags": [
+        "verified"
+      ]
+    },
+    {
+      "id": "midden_1774849419_72226",
+      "timestamp": "2026-03-30T05:43:39Z",
+      "category": "quality",
+      "source": "auditor",
+      "message": "High severity issues: 1 (score: 63) - unescaped caste/status/timestamp fields in awk printf",
+      "reviewed": false
+    },
+    {
+      "id": "midden_1774877958_25447",
+      "timestamp": "2026-03-30T13:39:18Z",
+      "category": "analytics",
+      "source": "sage",
+      "message": "Sage recommendation (P1): spawn.sh highest churn-to-size ratio (0.035) and bug-fix ratio (55.6%) -- refactoring candidate",
+      "reviewed": false
+    },
+    {
+      "id": "midden_1774877959_25506",
+      "timestamp": "2026-03-30T13:39:19Z",
+      "category": "analytics",
+      "source": "sage",
+      "message": "Sage recommendation (P2): spawn.sh parse_spawn_tree O(n^2) scaling -- 9 tests timeout",
+      "reviewed": false
+    }
+  ],
+  "entry_count": 34
+}

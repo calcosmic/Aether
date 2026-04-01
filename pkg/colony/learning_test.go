@@ -1,6 +1,8 @@
 package colony
 
 import (
+	"bytes"
+	"os"
 	"encoding/json"
 	"testing"
 )
@@ -31,5 +33,24 @@ func TestLearningFileRoundTrip(t *testing.T) {
 	}
 	if decoded.Observations[1].Colonies[0] != "456" {
 		t.Errorf("colonies mismatch")
+	}
+}
+
+func TestGoldenLearning(t *testing.T) {
+	golden, err := os.ReadFile("testdata/learning-observations.golden.json")
+	if err != nil {
+		t.Fatalf("read golden: %v", err)
+	}
+	var file LearningFile
+	if err := json.Unmarshal(golden, &file); err != nil {
+		t.Fatalf("unmarshal golden: %v", err)
+	}
+	produced, err := json.MarshalIndent(file, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	produced = append(produced, '\n')
+	if !bytes.Equal(golden, produced) {
+		t.Errorf("golden mismatch:\nexpected:\n%s\n\ngot:\n%s", golden, produced)
 	}
 }
