@@ -82,6 +82,7 @@ This only applies to genuinely new conversations, not after /clear.
 | `/ant:skill-create "<topic>"` | Create custom domain skill with Oracle research |
 | `/ant:insert-phase` | Insert a corrective phase into the active plan |
 | `/ant:tunnels` | Browse archived colonies, compare chambers |
+| `/ant:quick` | Execute a quick task with minimal overhead |
 | `/ant:migrate-state` | One-time state migration from v1 to v2.0 format |
 
 ### Data & Exchange

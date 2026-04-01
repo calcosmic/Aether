@@ -1,8 +1,8 @@
 # CLAUDE.md — Aether Development Guide
 
-> **Current Version:** v2.7.0
+> **Current Version:** v2.8.0 (documentation version; npm package version in package.json)
 > **Architecture:** v4.0 (runtime/ eliminated, direct packaging)
-> **Last Updated:** 2026-03-31
+> **Last Updated:** 2026-04-01
 
 ---
 

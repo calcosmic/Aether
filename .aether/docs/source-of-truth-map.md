@@ -36,10 +36,10 @@ Define which files are authoritative for system behavior, which files are derive
 |---|---|---|
 | Core deterministic operations | `.aether/aether-utils.sh` | Dispatcher that loads domain modules on demand (~5,200 lines) |
 | Slash command orchestration | `.claude/commands/ant/*.md` | Includes build/continue orchestrators |
-| Worker behavior specs | `.claude/agents/ant/*.md` | 22 Claude agent definitions (Builder, Watcher, etc.) |
+| Worker behavior specs | `.claude/agents/ant/*.md` | 24 Claude agent definitions (Builder, Watcher, etc.) |
 | Packaged Claude agent mirror | `.aether/agents-claude/*.md` | Distribution mirror; must stay byte-identical with `.claude/agents/ant/*.md` |
-| OpenCode command surface | `.opencode/commands/ant/*.md` | 44 OpenCode command files; structure parity with Claude commands |
-| OpenCode worker behavior specs | `.opencode/agents/*.md` | 22 OpenCode agent definitions |
+| OpenCode command surface | `.opencode/commands/ant/*.md` | 45 OpenCode command files; structure parity with Claude commands |
+| OpenCode worker behavior specs | `.opencode/agents/*.md` | 24 OpenCode agent definitions |
 | Domain modules | `.aether/utils/{flag,spawn,session,suggest,queen,swarm,learning,pheromone,state-api}.sh` | Extracted from aether-utils.sh in Phase 13; sourced on demand |
 | Build/continue split stages | `.aether/docs/command-playbooks/*.md` | Loaded by orchestrators; executable instruction docs |
 | Output templates | `.aether/templates/*` | Templates for generated state/handoff/wisdom/session artifacts |
@@ -66,8 +66,8 @@ Define which files are authoritative for system behavior, which files are derive
 - `build.md` and `continue.md` are now orchestrators that load split playbooks under `.aether/docs/command-playbooks/`.
 - Orchestrators run playbooks as staged instruction sets (Read-tool execution model), not as bash subcommand wrappers.
 - Cross-platform surfaces are present:
-  - 44 Claude commands and 44 OpenCode commands
-  - 22 Claude agents and 22 OpenCode agents
+  - 45 Claude commands and 45 OpenCode commands
+  - 24 Claude agents and 24 OpenCode agents
 - Autopilot subcommands (`autopilot-init`, `autopilot-update`, `autopilot-status`, `autopilot-stop`, `autopilot-check-replan`) manage autonomous build/continue cycles via `/ant:run`.
 - `registry-list` lists all registered repos with metadata including domain tags.
 - `.aether/agents-claude/*.md` mirrors `.claude/agents/ant/*.md` for packaging/distribution.
@@ -84,11 +84,11 @@ Define which files are authoritative for system behavior, which files are derive
 | Core utility entrypoint | `.aether/aether-utils.sh` | 1 | Active |
 | Sourced shell utilities | `.aether/utils/*.sh` | ~29 | Active (9 domain modules + infrastructure + XML) |
 | XML utility scripts | `.aether/utils/xml-*.sh` | 5 | Active (see drift note) |
-| Slash commands (Claude) | `.claude/commands/ant/*.md` | 44 | Active |
-| Slash commands (OpenCode) | `.opencode/commands/ant/*.md` | 44 | Active (content differs from Claude variants) |
-| Agent definitions (Claude) | `.claude/agents/ant/*.md` | 22 | Active |
-| Agent mirror (packaging) | `.aether/agents-claude/*.md` | 22 | Active mirror (must match Claude agent files exactly) |
-| Agent definitions (OpenCode) | `.opencode/agents/*.md` | 22 | Active (content differs from Claude variants) |
+| Slash commands (Claude) | `.claude/commands/ant/*.md` | 45 | Active |
+| Slash commands (OpenCode) | `.opencode/commands/ant/*.md` | 45 | Active (content differs from Claude variants) |
+| Agent definitions (Claude) | `.claude/agents/ant/*.md` | 24 | Active |
+| Agent mirror (packaging) | `.aether/agents-claude/*.md` | 24 | Active mirror (must match Claude agent files exactly) |
+| Agent definitions (OpenCode) | `.opencode/agents/*.md` | 24 | Active (content differs from Claude variants) |
 | Command playbooks | `.aether/docs/command-playbooks/*.md` | 9 | Active (5 build + 4 continue; excludes full/README) |
 | Templates (all types) | `.aether/templates/*` | 12 | Active |
 | Disciplines | `.aether/docs/disciplines/*.md` | 7 | Active |
