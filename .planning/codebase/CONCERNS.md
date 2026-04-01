@@ -1,390 +1,222 @@
 # Codebase Concerns
 
-**Analysis Date:** 2026-03-19
+**Analysis Date:** 2026-04-01
 
-## Tech Debt
+## Shell-to-Go Migration Concerns
 
-**Single Monolithic Utility Script:**
-- Issue: `.aether/aether-utils.sh` is 10,249 lines — largest single file in the system
-- Files: `.aether/aether-utils.sh`
-- Impact: Difficult to navigate, test, and maintain; all 150 subcommands in one file creates change risk
-- Fix approach: Split into domain-specific modules (state-management.sh, pheromone-management.sh, wisdom-management.sh, etc.) with clear boundaries and single responsibility
+### Go skeleton is nearly empty -- only 2 of 8 packages have real code
+- Issue: Six of eight Go packages are empty stubs (package declaration only, no types or functions)
+- Files: `pkg/agent/agent.go`, `pkg/events/events.go`, `pkg/graph/graph.go`, `pkg/llm/llm.go`, `pkg/memory/memory.go`, `internal/config/config.go`, `internal/testing/testing.go`
+- Impact: The Go rewrite has not begun in earnest. These packages represent the core domains: agent management, event bus, knowledge graph, LLM integration, memory/wisdom pipeline, and configuration.
+- Fix approach: Prioritize porting `pkg/storage/storage.go` (already complete) and `pkg/colony/colony.go` (types + state machine done) patterns into the remaining packages. The shell implementations in `.aether/utils/` serve as behavioral specifications.
 
-**Inconsistent Error Code Usage:**
-- Issue: Some `json_err` calls use hardcoded strings instead of error constants (e.g., "Failed to add flag" vs. `$E_JSON_INVALID`)
-- Files: `.aether/aether-utils.sh` (lines 74, 814, 856, 899, 930, 933, 1758+, 2947)
-- Impact: Inconsistent error handling; callers cannot programmatically detect error types
-- Fix approach: Standardize all error calls to use `json_err "$E_*" "message"` pattern; audit all 150 subcommands for compliance
+### Go CLI entry point is a no-op
+- Issue: `cmd/aether/main.go` contains `func main() {}` -- nothing happens when the binary runs
+- Files: `cmd/aether/main.go`
+- Impact: The Go binary cannot replace `bin/cli.js` or `.aether/aether-utils.sh` in any capacity
+- Fix approach: Wire cobra/urfave CLI, implement subcommand dispatch, port critical paths first (init, state-read, state-write, pheromone-write)
 
-**Incomplete Error Code Documentation:**
-- Issue: Error code constants exist (E_JSON_INVALID, E_LOCK_FAILED, etc.) but aren't documented
-- Files: `.aether/utils/error-handler.sh`, `.aether/aether-utils.sh` (lines 33-47)
-- Impact: Developers don't know which error codes to use for new commands
-- Fix approach: Create `.aether/docs/error-codes.md` documenting all E_* constants, when to use each, and their exit codes
+### Go test for real colony state is brittle
+- Issue: `TestRoundTripRealColonyState` hardcodes expectations (`current_phase: 2`, `version: "3.0"`) against the live `COLONY_STATE.json`. The test currently fails because `current_phase` is 4, not 2.
+- Files: `pkg/colony/colony_test.go:119-154`
+- Impact: Test breaks every time colony state changes. Creates noise in CI.
+- Fix approach: Make the test assertion-free for structural fields (just verify parse/unmarshal round-trip succeeds) or use a fixture file instead of the live data file.
 
-**Missing Entrypoint for JSON Processing Failure:**
-- Issue: Fallback `json_err` in `.aether/aether-utils.sh` (lines 69-79) is used if error-handler.sh fails to load
-- Files: `.aether/aether-utils.sh:69-79`
-- Impact: If error-handler.sh is corrupted or missing, error codes are lost and callers cannot parse responses
-- Fix approach: Ensure error-handler.sh is always available; add validation on load; consider pre-parsing validation
-
-**Activity Logging Not Atomic:**
-- Issue: Activity log appends happen outside atomic write boundary; log could be truncated if process dies
-- Files: `.aether/aether-utils.sh:1353-1401`
-- Impact: Activity log entries lost on crash; difficult to debug multi-session issues
-- Fix approach: Use atomic write pattern for log appends; rotate logs on size threshold
+### Three version numbering schemes coexist
+- Issue: `package.json` says `5.3.2`, `CLAUDE.md` says `v2.8.0` (header) and `v2.7.0` (table), `COLONY_STATE.json` says `"3.0"`, and `CHANGELOG.md` starts at `[5.3.0]`. Four different version numbers in four files.
+- Files: `package.json`, `CLAUDE.md`, `.aether/data/COLONY_STATE.json`, `CHANGELOG.md`
+- Impact: Impossible to determine actual release version. Documentation accuracy is undermined. The Go module (`go.mod`) has no version at all.
+- Fix approach: Establish single source of truth. `package.json` is the canonical npm version. `COLONY_STATE.json` version should track colony lifecycle stages (seal/entomb counter), not product version. `CLAUDE.md` should read from `package.json`.
 
 ---
 
-## Known Bugs
+## Shell Script Fragility
 
-**Hardcoded Error Code in flag-acknowledge:**
-- Severity: MEDIUM
-- Symptom: Uses hardcoded string instead of `$E_VALIDATION_FAILED`
-- Files: `.aether/aether-utils.sh:930`
-- Fix: Change to `json_err "$E_VALIDATION_FAILED" "Usage: ..."`
+### 30,000+ lines of shell across 57 scripts with 130+ subcommands
+- Issue: The entire colony runtime is implemented in bash with 57 shell scripts totaling 30,114 lines. The main dispatcher (`aether-utils.sh`) alone is 5,642 lines with 336 case arms. This is the core motivation for the Go rewrite.
+- Files: `.aether/aether-utils.sh` (5,642 lines), `.aether/utils/pheromone.sh` (3,297), `.aether/utils/learning.sh` (2,000), `.aether/utils/queen.sh` (1,708)
+- Impact: Hard to reason about correctness. No compiler. Error handling depends on `set -euo pipefail` and manual `trap` setup. New contributors face a steep learning curve.
+- Fix approach: Incremental Go porting. Start with the storage layer (`storage.go` is done), then state API, then pheromone system.
 
-**Missing Fallback for Lock Release on JSON Validation:**
-- Severity: MEDIUM
-- Symptom: If JSON validation fails in atomic_write, temp file cleaned but lock not released
-- Files: `.aether/utils/atomic-write.sh:66`
-- Impact: Lock remains held if caller had acquired it; subsequent operations hang
-- Fix: Document lock ownership contract clearly; add force-unlock as safety valve (IMPLEMENTED in Phase 16)
+### 1,207 error suppressions (`2>/dev/null`) across shell scripts
+- Issue: Over 1,200 instances of `2>/dev/null` error suppression. While many are annotated with `SUPPRESS:OK` comments (added in Phase 10 error triage), the sheer volume makes it impossible to audit for silently swallowed errors.
+- Files: All `.aether/utils/*.sh` (worst: `aether-utils.sh` at 207, `scan.sh` at ~76, `suggest.sh` at ~54, `queen.sh` at ~60, `session.sh` at ~41)
+- Impact: Real errors can be hidden among intentional suppressions. Debugging production issues requires reading through hundreds of suppression sites.
+- Fix approach: Go's explicit error handling eliminates this class of problem entirely. During migration, ensure every shell `2>/dev/null` maps to an explicit Go error check or `os.IsNotExist` guard.
 
----
+### Heavy jq dependency -- hundreds of invocations per script
+- Issue: The shell scripts depend critically on `jq` for JSON manipulation. The top consumers: `scan.sh` (~76 jq calls), `suggest.sh` (~54), `queen.sh` (~60), `pheromone.sh` (~40), `swarm.sh` (~35), `skills.sh` (~43), `session.sh` (~41), `state-api.sh` (~28). If `jq` is missing or produces unexpected output, subcommands fail silently or produce malformed JSON.
+- Files: All `.aether/utils/*.sh`
+- Impact: External dependency that must be present on every developer's machine. jq version differences can cause subtle parsing failures. No validation that jq output is valid before passing it to downstream commands.
+- Fix approach: Go's `encoding/json` eliminates jq dependency entirely. The `storage.go` package already handles JSON marshaling/unmarshaling natively.
 
-## Security Considerations
+### Only 13 of 57 shell scripts have strict mode
+- Issue: Only the main dispatcher (`aether-utils.sh`) and 12 other scripts use `set -e` or `set -euo pipefail`. The remaining 44 utility scripts are sourced into the dispatcher and rely on its strict mode, but if any are run standalone (e.g., during testing or debugging), errors go undetected.
+- Files: `.aether/utils/*.sh` (most files)
+- Impact: Standalone execution of utility scripts can silently fail or produce partial results
+- Fix approach: Go enforces error checking at compile time and runtime. Each package is independently safe.
 
-**Git Operations with execSync:**
-- Risk: Git commands use execSync with file arguments; shell injection possible if filenames contain shell metacharacters
-- Files: `.bin/lib/update-transaction.js` (lines with execSync and git commands)
-- Current mitigation: File arguments quoted (`"${file}"`)
-- Recommendations: Use array arguments instead of string concatenation; pass array to execSync with shell: false
+### Fallback atomic_write bypasses JSON validation
+- Issue: The fallback `atomic_write` in `aether-utils.sh` (lines 104-112) writes content via `echo > temp; mv temp target` without any JSON validation. This fallback activates when `atomic-write.sh` fails to source. Corrupted JSON could be written to COLONY_STATE.json without detection.
+- Files: `.aether/aether-utils.sh:104-112`
+- Impact: Data corruption if the fallback path is triggered during a partial installation
+- Fix approach: The Go `storage.go` implementation validates JSON on every write for `.json` files. This is already solved.
 
-**Checkpoint Stashing Allows User Data Loss:**
-- Risk: Build checkpoint could stash user work (TO-DOs.md, dreams, Oracle specs) before allowlist was implemented
-- Files: `.aether/data/checkpoint-allowlist.json`, `build.md` (Claude and OpenCode)
-- Current mitigation: Explicit allowlist system implemented in Phase 16; user data never touched
-- Recommendations: Document allowlist in user guide; add warning if user files present during checkpoint
+### Lock ownership is caller-managed, not library-managed
+- Issue: `atomic-write.sh` documents that callers must manage lock release via EXIT traps (BUG-006 in known-issues.md). If a caller forgets to set up a trap, or the trap fails, locks remain held indefinitely.
+- Files: `.aether/utils/atomic-write.sh`, `.aether/utils/file-lock.sh` (313 lines of lock management)
+- Impact: Deadlocks requiring manual lock file deletion (`rm .aether/data/*.lock`)
+- Fix approach: Go's `defer` pattern and `storage.go`'s built-in mutex management eliminate this. The `Store` type uses per-path `sync.RWMutex` with automatic release.
 
-**XML Processing Without Validation:**
-- Risk: XML files processed via pheromone-xml.sh, wisdom-xml.sh without schema validation
-- Files: `.aether/exchange/pheromone-xml.sh`, `.aether/exchange/wisdom-xml.sh`
-- Current mitigation: xsd-validate subcommand available
-- Recommendations: Always validate before processing; reject invalid XML early in pipeline
-
-**No Rate Limiting on Lock Retries:**
-- Risk: acquire_lock retries 100 times with 500ms interval (50 second total); no backoff or max CPU safeguard
-- Files: `.aether/utils/file-lock.sh:22-23`
-- Impact: Aggressive polling could waste CPU on slow filesystems
-- Recommendations: Implement exponential backoff; add jitter to prevent thundering herd
-
----
-
-## Performance Bottlenecks
-
-**Synchronous JSON Parsing in Hot Path:**
-- Problem: Every context-update operation parses COLONY_STATE.json via jq; no caching
-- Files: `.aether/aether-utils.sh:1105-1145` (context-update), `.aether/aether-utils.sh:251` (acquire_lock)
-- Cause: jq invoked for every field access; no in-memory state cache
-- Improvement path: Load state once at command start; cache in-memory for duration of operation; write back atomically at end
-
-**Spawn Tree Not Rotated:**
-- Problem: `spawn-tree.txt` grows unbounded; tail -f becomes slow after many sessions
-- Files: `.aether/data/spawn-tree.txt`, `.aether/aether-utils.sh:402-448`
-- Cause: Entries appended every spawn; no rotation policy
-- Improvement path: Implement spawn-tree rotation with timestamp archives (PARTIALLY FIXED in Phase 18-01: `_rotate_spawn_tree` added but may need tuning)
-
-**Activity Log Unbounded Growth:**
-- Problem: `activity.log` (134KB observed) grows with every command; no size limit or rotation
-- Files: `.aether/data/activity.log` (134KB), `.aether/aether-utils.sh:1353-1401`
-- Cause: Append-only log with no cleanup policy
-- Improvement path: Rotate logs on size threshold (e.g., 5MB); compress old logs; implement retention policy (e.g., keep 10 rotated files)
-
-**No Connection Pooling for External Services:**
-- Problem: Each pheromone-display, wisdom-read call may make HTTP requests; no pooling or caching
-- Files: `.aether/exchange/pheromone-xml.sh`, `.aether/exchange/wisdom-xml.sh`
-- Impact: Slow for repeated calls; no resilience to transient failures
-- Improvement path: Implement caching layer; add retry logic with exponential backoff
-
-**State File Corruption Risk on Disk Full:**
-- Problem: If disk fills during atomic write, temp file may not be cleaned; lock may not be released
-- Files: `.aether/utils/atomic-write.sh:61-86`
-- Impact: Prevents future operations until disk is freed and lock manually cleared
-- Improvement path: Check disk space before write; implement pre-write validation; improve error messages
+### Placeholder build summary line
+- Issue: Line 952 in `aether-utils.sh` contains `# What didn't (placeholder - would come from midden)` indicating an incomplete implementation in the build summary generation.
+- Files: `.aether/aether-utils.sh:952`
+- Impact: Build summaries are missing failure information from the midden system
+- Fix approach: Implement midden integration in the build summary, or port to Go where the data flow can be properly wired.
 
 ---
 
-## Fragile Areas
+## Compatibility Risks
 
-**File Lock System:**
-- Files: `.aether/utils/file-lock.sh`, `.aether/aether-utils.sh:99-110` (trap handling)
-- Why fragile: Multiple exit paths (normal, error, signal); trap pattern replaces previous traps; PID-based staleness detection races with process creation
-- Safe modification: Add comprehensive lock lifecycle tests; use explicit cleanup with EXIT trap; validate PID before using
-- Test coverage: `tests/bash/test-lock-lifecycle.sh` covers basic cases but not edge cases (SIGKILL, rapid retries, clock skew)
+### npm CLI (bin/cli.js) duplicates shell logic in JavaScript
+- Issue: `bin/cli.js` (2,223 lines) reimplements colony initialization, state synchronization, and file operations in JavaScript using Node.js. `bin/lib/` contains 5,443 lines across 14 JS files including `update-transaction.js` (1,709 lines), `file-lock.js` (695 lines), `state-guard.js` (602 lines), and `state-sync.js` (516 lines). These must stay in sync with the shell implementations.
+- Files: `bin/cli.js`, `bin/lib/*.js`
+- Impact: Three implementations of the same logic (shell, Node.js CLI, and soon Go). Any behavioral change must be replicated in all three. Inconsistencies between implementations are a real risk.
+- Fix approach: Go binary should replace both `bin/cli.js` and `.aether/aether-utils.sh`. Until migration is complete, `bin/cli.js` should delegate to shell scripts rather than reimplementing logic.
 
-**Pheromone Decay Calculation:**
-- Files: `.aether/aether-utils.sh` (pheromone-display, pheromone-decay subcommands)
-- Why fragile: Epoch-based decay; timezone-aware calculation complex; off-by-one errors in decay scoring
-- Safe modification: Add date utility wrapper; document epoch expectations; test with known decay scenarios
-- Test coverage: No dedicated tests for decay math; audited in Phase 33 with `fix: separate lay-eggs (bootstrap) from init (colony start)` but validation tests needed
+### 12 deprecated subcommands still shipped
+- Issue: 12 subcommands emit deprecation warnings (`_deprecation_warning`) but remain functional and shipped in the package. They are marked for removal in "v3.0" but no migration timeline exists.
+- Files: `.aether/aether-utils.sh` (search for `_deprecation_warning`)
+- Impact: Dead code increases package size, adds attack surface, and confuses users. The "v3.0" removal target is ambiguous given the version numbering chaos.
+- Fix approach: Set a firm removal date. Add migration guide for each deprecated command. Remove in the Go rewrite.
 
-**JSON Schema Validation on State Migration:**
-- Files: `.aether/aether-utils.sh:1105-1145` (_migrate_colony_state)
-- Why fragile: Pre-v3.0 state files assumed to have compatible structure; additive-only migration doesn't validate required fields
-- Safe modification: Add strict schema validation before and after migration; test with malformed state files
-- Test coverage: No tests for migration with corrupt state; Phase 18-04 added backup-on-error but validation is loose
+### OpenCode agent parity maintenance burden
+- Issue: Every agent and command must be maintained in three places: `.claude/commands/ant/`, `.claude/agents/ant/`, and `.opencode/commands/ant/` + `.opencode/agents/`. YAML-based generation (`src/commands/_meta/*.yaml`, `bin/generate-commands.js`) exists but only covers 6 of ~45 commands.
+- Files: `.claude/commands/ant/` (45 files), `.opencode/commands/ant/` (45 files), `.claude/agents/ant/` (24 files), `.opencode/agents/` (24 files), `src/commands/_meta/*.yaml`
+- Impact: High maintenance burden. Any command change requires manual edits in 2-3 places. Parity drift is likely.
+- Fix approach: YAML-based generation should cover all commands, not just 6. Or the Go CLI should serve as the single source and generate provider-specific formats.
 
-**XML XInclude Processing:**
-- Files: `.aether/exchange/pheromone-xml.sh` (xinclude handling), `.aether/utils/xml-compose.sh`
-- Why fragile: Recursive includes possible; circular references not detected; external entity expansion risk
-- Safe modification: Track include depth; reject cycles; validate DTD before processing
-- Test coverage: `tests/bash/test-xinclude-composition.sh` exists but doesn't test circular includes or XXE attacks
-
-**Spawn Tree Entry Cleanup:**
-- Files: `.aether/data/spawn-tree.txt`, `.aether/utils/spawn-tree.sh:222-263`
-- Why fragile: Entries never deleted; stale entries can confuse parent chain traversal; infinite loop possible with circular parents
-- Safe modification: Add entry expiration logic; validate parent chain before using; add loop detection
-- Test coverage: Safety limit of 5 exists but circular reference tests missing
+### COLONY_STATE.json schema has no formal specification
+- Issue: The colony state JSON schema is defined implicitly by the Go types in `pkg/colony/colony.go` and the shell scripts' jq usage. There is no JSON Schema, no formal validation layer, and no migration system for schema changes.
+- Files: `pkg/colony/colony.go`, `.aether/utils/state-api.sh`
+- Impact: Schema changes can break the shell scripts silently. The Go round-trip test (`TestRoundTripRealColonyState`) fails because the real data has drifted from test expectations.
+- Fix approach: Define a JSON Schema for COLONY_STATE.json. Add schema validation to `state-api.sh`. Use the Go types as the canonical schema definition.
 
 ---
 
-## Scaling Limits
+## Known Bugs (from known-issues.md)
 
-**State File Size:**
-- Current capacity: COLONY_STATE.json ~1.3KB (observed); can grow with event history, pheromones, learnings
-- Limit: At 10,000 events + 100 pheromones + 100 learnings, file could reach 50KB; jq parsing time becomes noticeable
-- Scaling path: Implement state archival; split into COLONY_STATE.json + events.jsonl + learnings.jsonl; use streaming JSON parser
+### BUG-006: Lock not released on JSON validation failure
+- Symptoms: If JSON validation fails in `atomic_write`, the temp file is cleaned but any lock held by the caller is not released
+- Files: `.aether/utils/atomic-write.sh`
+- Trigger: Write malformed JSON to a locked file
+- Workaround: Callers must use trap-based cleanup (documented but not enforced)
+- Status: Open
 
-**Concurrent Access Serialization:**
-- Current capacity: Single lock file serializes all operations; 50-second max lock wait time
-- Limit: If colony has 10+ concurrent commands, some will timeout; no queuing mechanism
-- Scaling path: Implement fine-grained locking (per-resource locks); add work queue with timeout; implement optimistic concurrency
+### ISSUE-005: Potential infinite loop in spawn-tree
+- Symptoms: Edge case with circular parent chain in spawn tree
+- Files: `.aether/utils/spawn.sh` (`spawn-tree-depth`)
+- Trigger: Manually corrupted spawn tree data with circular references
+- Workaround: Safety limit of 5 depth exists
+- Status: Open, low risk
 
-**Backup Directory Growth:**
-- Current capacity: MAX_BACKUPS=3 in atomic-write.sh keeps 3 versions
-- Limit: Each backup ~1.3KB; no cleanup for old backups beyond limit; could accumulate if backup rotation fails
-- Scaling path: Implement timestamp-based cleanup; test backup rotation under load
-
----
-
-## Clustering/Distribution Issues
-
-**No Multi-Repo Support:**
-- Issue: Session state in `.aether/data/` tied to single repo; no support for multi-project colonies
-- Files: `.aether/aether-utils.sh:18-19` (AETHER_ROOT detection)
-- Impact: Cannot coordinate work across multiple repos; requires separate session per repo
-- Improvement path: Add multi-workspace state management; implement session pooling
-
-**No Network Distribution:**
-- Issue: All state stored locally; no sync mechanism for shared repos (e.g., monorepo with multiple branches)
-- Files: `.aether/data/COLONY_STATE.json` (local only)
-- Impact: Two developers on different branches cannot coordinate pheromones or learnings
-- Improvement path: Add git-based state sync; implement CRDT for conflict-free merges
+### ISSUE-006: Fallback json_err loses error codes
+- Symptoms: If `error-handler.sh` fails to load, the fallback `json_err` in `aether-utils.sh` does not accept error code parameters
+- Files: `.aether/aether-utils.sh:67-82`
+- Trigger: Corrupted installation where error-handler.sh is missing
+- Workaround: None -- error codes silently lost
+- Status: Open, low risk
 
 ---
 
-## Dependencies at Risk
+## Performance Concerns
 
-**jq Version Compatibility:**
-- Risk: aether-utils.sh uses jq extensively; jq 1.6 has subtle parsing differences from 1.7+
-- Impact: Commands that work in CI (jq 1.7) fail locally (jq 1.6)
-- Migration plan: Add jq version detection; conditionally use compatibility patterns; test against both versions
+### Every subcommand sources 35+ shell scripts
+- Issue: The main dispatcher sources 35 utility scripts on every invocation (lines 27-65 of `aether-utils.sh`). This includes all domain modules, XML utilities, curation ants, and infrastructure modules regardless of which subcommand is being called.
+- Files: `.aether/aether-utils.sh:27-65`
+- Impact: Every `aether-utils.sh` invocation pays the startup cost of parsing 30,000+ lines of bash. For frequently called subcommands (e.g., `state-read`, `pheromone-read`), this adds significant latency.
+- Fix approach: Go binary eliminates startup overhead entirely. For interim improvement, consider lazy-sourcing only the modules needed for the requested subcommand.
 
-**Bash Version Compatibility:**
-- Risk: Uses bash 4+ features (associative arrays, declare -A); macOS ships bash 3.2 by default
-- Impact: Commands fail on systems with bash 3.x
-- Migration plan: Add bash version check on startup; provide homebrew formula for updated bash; add compatibility shims
+### jq subprocess overhead per JSON operation
+- Issue: Each `jq` invocation spawns a new process. Scripts like `scan.sh` (~76 calls) and `suggest.sh` (~54 calls) spawn dozens of subprocesses per invocation.
+- Files: `.aether/utils/scan.sh`, `.aether/utils/suggest.sh`
+- Impact: Measurable latency on complex operations. Particularly slow on macOS where process creation is expensive.
+- Fix approach: Go's native JSON handling is in-process with zero subprocess overhead.
 
-**Node.js Minimum Version:**
-- Risk: package.json requires Node >=16.0.0; some systems may have older versions
-- Impact: Installation fails silently; user confused
-- Migration plan: Add preinstall check; provide clear error message with upgrade instructions
-
-**Git Version Requirements:**
-- Risk: Some commands use git features from 2.x; no version check
-- Impact: Fail on systems with older git (e.g., CentOS 7 with git 1.8)
-- Migration plan: Add git version detection; feature-flag based on version; document minimum requirement
-
----
-
-## Missing Critical Features
-
-**No Audit Trail for State Changes:**
-- Problem: COLONY_STATE.json modified by 150+ subcommands; no tracking of who/what changed it
-- Blocks: Cannot investigate state corruption; difficult to debug multi-session issues
-- Fix: Add audit logging to atomic_write; record caller, timestamp, before/after state
-
-**No State Rollback Mechanism:**
-- Problem: If state corruption occurs, no way to recover to known-good version
-- Blocks: Cannot recover from data corruption without manual intervention
-- Fix: Keep versioned state backups (not just latest); implement rollback command; expose via /ant:rollback
-
-**No Batch Operations:**
-- Problem: Each operation acquires lock separately; no atomic multi-operation transactions
-- Blocks: Cannot safely update multiple state files together (e.g., pheromones + constraints)
-- Fix: Implement transaction wrapper; allow multiple operations in single lock acquisition
-
-**No Observability Dashboard:**
-- Problem: No way to see current state without reading JSON files
-- Blocks: Cannot debug live issues; /ant:status shows limited info
-- Fix: Create web dashboard (or TUI) showing live pheromones, constraints, events, learnings
-
-**No Performance Monitoring:**
-- Problem: No metrics for command execution time, lock wait time, jq parse time
-- Blocks: Cannot identify performance bottlenecks; cannot track improvements
-- Fix: Add timing instrumentation to key operations; emit metrics to file; create performance dashboard
-
-**No Dead Letter Queue:**
-- Problem: Failed spawns lose context; no way to retry or inspect failure
-- Blocks: Transient spawn failures cause build failures; no recovery path
-- Fix: Implement DLQ for failed tasks; expose via /ant:dlq; allow manual retry
+### Colony state file grows unbounded
+- Issue: COLONY_STATE.json accumulates events, learnings, instincts, error records, and graveyard entries without any size limit or pruning mechanism. Over long-lived colonies, this file can grow to hundreds of KB.
+- Files: `.aether/data/COLONY_STATE.json`, `.aether/utils/state-api.sh`
+- Impact: Every `state-read` and `state-write` must parse the full file. JSON manipulation via jq becomes slower as the file grows.
+- Fix approach: Add archival/pruning to the consolidation pipeline. Move old events and completed graveyards to separate files.
 
 ---
 
 ## Test Coverage Gaps
 
-**Untested Spawn Tree Circular References:**
-- What's not tested: Spawn tree with circular parent chains (A→B→C→A)
-- Files: `.aether/utils/spawn-tree.sh:222-263`, `tests/bash/test-spawn-tree.sh`
-- Risk: If circular reference occurs, spawn-parent traversal loops infinitely (loop limit of 5 may not trigger)
-- Priority: HIGH — spawn tree is critical for swarm operations
+### Go packages have zero tests for 6 of 8 packages
+- Issue: Only `pkg/colony` and `pkg/storage` have test files. Six packages (`agent`, `events`, `graph`, `llm`, `memory`, `config`, `testing`) have no tests at all.
+- Files: All `pkg/*/` and `internal/*/` directories except `pkg/colony/` and `pkg/storage/`
+- Risk: As Go implementation grows, untested packages will accumulate bugs
+- Priority: High -- test infrastructure should be established before significant Go code is written
 
-**Untested Lock Acquisition Under Disk Full:**
-- What's not tested: acquire_lock behavior when /aether/locks/ directory runs out of space
-- Files: `.aether/utils/file-lock.sh:38-129`
-- Risk: Lock creation fails; no cleanup; subsequent operations see stale lock
-- Priority: MEDIUM — disk full is rare but should degrade gracefully
+### Shell test for colony round-trip is broken
+- Issue: `TestRoundTripRealColonyState` in `pkg/colony/colony_test.go:135` expects `current_phase: 2` but the actual file has `current_phase: 4`. The test fails on `go test ./...`.
+- Files: `pkg/colony/colony_test.go:135`
+- Risk: CI will show false failures, reducing trust in the test suite
+- Priority: Medium -- fix by making assertions dynamic or using a fixture
 
-**Untested JSON Parsing with Malformed State:**
-- What's not tested: jq processing when COLONY_STATE.json is corrupt (truncated, extra commas, missing braces)
-- Files: `.aether/aether-utils.sh:1105-1145`
-- Risk: jq error not caught; command fails without proper error message
-- Priority: HIGH — state corruption is possible during crashes
+### Error path test coverage is incomplete
+- Issue: `known-issues.md` (GAP-008) documents that error handling paths are not fully tested despite Phase 12 adding state-api tests. The 92 bash test files cover happy paths well but edge cases (malformed JSON, missing files, permission errors, lock contention) are undertested.
+- Files: `.aether/docs/known-issues.md` (GAP-008)
+- Risk: Error handling regressions go undetected
+- Priority: Medium
 
-**Untested Pheromone Decay Edge Cases:**
-- What's not tested: Decay calculations with leap seconds, DST transitions, clocks set backwards
-- Files: `.aether/aether-utils.sh` (pheromone decay), `tests/bash/test-pheromone*.sh`
-- Risk: Decay calculations off by hours or days in edge cases; pheromones decay too fast/slow
-- Priority: MEDIUM — edge cases rare but scoring will be wrong
-
-**Untested XML with External Entities:**
-- What's not tested: pheromone-xml.sh processing with XXE payloads (e.g., <!DOCTYPE root [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>)
-- Files: `.aether/exchange/pheromone-xml.sh`, `tests/bash/test-xml-security.sh`
-- Risk: Could leak sensitive files; security vulnerability
-- Priority: HIGH — XXE is a known attack vector
-
-**Untested Context Update with Concurrent Modification:**
-- What's not tested: Two context-update calls racing on COLONY_STATE.json
-- Files: `.aether/aether-utils.sh:251-290` (context-update with lock)
-- Risk: Lock implementation assumed correct but not stress-tested
-- Priority: MEDIUM — race condition unlikely but catastrophic if it happens
-
-**Untested Graceful Degradation:**
-- What's not tested: Commands when feature_disable() has been called (activity_log, git_integration, json_processing, file_locking all disabled)
-- Files: `.aether/aether-utils.sh:85-97`, `tests/bash/test-aether-utils.sh`
-- Risk: Feature detection works but degraded mode never tested; hidden failures
-- Priority: LOW — feature detection is defensive code, rarely triggered
+### No integration tests for shell-to-Go compatibility
+- Issue: There are no tests verifying that the Go `storage.go` implementation produces identical output to the shell `atomic-write.sh` when operating on the same files.
+- Files: None exist
+- Risk: Subtle behavioral differences between shell and Go implementations could cause data corruption during migration
+- Priority: High -- needed before any production Go usage
 
 ---
 
-## Integration Gaps
+## Scaling Limits
 
-**GSD Integration Not Fully Hardened:**
-- Issue: `/gsd:map-codebase` spawned from Aether but documents aren't fed back into pheromone system
-- Files: `.claude/commands/gsd/map-codebase.md`, `.aether/aether-utils.sh` (no GSD signal handling)
-- Impact: GSD findings (tech debt, concerns) aren't incorporated into colony decisions
-- Fix: Add GSD signal handler; convert GSD CONCERNS.md findings into pheromones
+### Single-process shell architecture prevents parallelism
+- Issue: The entire colony system runs as a single bash process with file-based locking. The TO-DOS.md explicitly marks "Multi-Ant Parallel Execution" as "DO NOT IMPLEMENT" without discussion. File locking (`file-lock.sh`, 313 lines) uses `flock`-style locking with PID-based stale detection.
+- Files: `.aether/utils/file-lock.sh`, `TO-DOS.md` (Colony Lifecycle section)
+- Current capacity: One colony operation at a time per machine
+- Limit: Cannot run parallel builders, watchers, or scouts without risking COLONY_STATE.json corruption
+- Scaling path: Go's goroutines + the `storage.go` mutex-based locking enable safe concurrent access. The per-path `sync.RWMutex` in `Store` already supports concurrent readers with exclusive writers.
 
-**OpenCode Agent Definitions May Drift:**
-- Issue: `.claude/agents/ant/*.md` (canonical) and `.opencode/agents/*.md` (OpenCode mirror) must stay in sync
-- Files: All agent definitions in both directories
-- Impact: If OpenCode definitions diverge, behavior differs between Claude Code and OpenCode
-- Fix: Implement `lint:sync` check for agent count parity; add automated sync on publish
-
-**Model Routing Not Integrated with Pheromones:**
-- Issue: Model profiles exist in `.aether/archive/model-routing/model-profiles.js` but not referenced by pheromone system
-- Files: `.aether/archive/model-routing/model-profiles.js`, `.aether/aether-utils.sh` (no model routing)
-- Impact: Worker assignment doesn't respect model profiles; workers may get routed to wrong models
-- Fix: Integrate model routing into spawn logic; add pheromone for model preference
-
-**Survey Data Not Persisted Across Sessions:**
-- Issue: Survey results in `.aether/data/survey/` not loaded on session resume
-- Files: `.aether/data/survey/`, `.aether/aether-utils.sh` (no survey loading)
-- Impact: Codebase reanalyzed each session; slow; no learning from previous survey
-- Fix: Load survey results on session init; cache in COLONY_STATE.json; invalidate on code change
+### File-based IPC limits cross-process communication
+- Issue: Colony components communicate through JSON files (COLONY_STATE.json, pheromones.json, events.jsonl). No socket, pipe, or shared memory communication exists.
+- Files: `.aether/data/*.json`, `.aether/data/*.jsonl`
+- Current capacity: Sufficient for single-user, single-colony workflow
+- Limit: High-latency communication for real-time operations. File contention under concurrent access.
+- Scaling path: Go enables in-process communication via channels, or external communication via gRPC/HTTP.
 
 ---
 
-## Architecture Concerns
+## Dependencies at Risk
 
-**Error Handler Fallback Chain Too Complex:**
-- Issue: Multiple error handling layers (error-handler.sh, fallback json_err, bash trap) could mask root causes
-- Files: `.aether/utils/error-handler.sh`, `.aether/aether-utils.sh:12-79`
-- Impact: Errors from missing dependencies (jq, git) reported as generic "E_UNKNOWN"
-- Fix: Simplify to single error path; add dependency check at startup; fail fast on missing dependencies
+### jq is a hard runtime dependency with no fallback
+- Issue: All JSON manipulation in shell scripts depends on `jq`. No graceful degradation exists. If jq is missing, subcommands produce empty/garbled output.
+- Files: All `.aether/utils/*.sh` (~800+ jq invocations total)
+- Risk: Installation on minimal systems without jq fails silently
+- Migration plan: Go eliminates this dependency entirely
 
-**Feature Detection Brittle:**
-- Issue: feature_disable() called but no way to check feature status at runtime; commands don't verify features before use
-- Files: `.aether/aether-utils.sh:85-97`, individual commands (no feature checks)
-- Impact: If feature disabled, command fails mysteriously instead of with clear error
-- Fix: Add feature_enabled() check; each command verifies required features before use
+### Bash version assumptions
+- Issue: Scripts use bash-specific features (arrays, `[[ ]]`, `mapfile`, process substitution, `BASH_SOURCE`) that require bash 4+. macOS ships bash 3.2 by default due to GPL v3 licensing.
+- Files: All `.aether/utils/*.sh`
+- Risk: Scripts fail on default macOS bash. Users must install bash 5+ via Homebrew.
+- Migration plan: Go binary has no bash dependency
 
-**No Clear Separation of Concerns in aether-utils.sh:**
-- Issue: Single file contains state management, pheromone logic, wisdom logic, spawn management, XML processing
-- Files: `.aether/aether-utils.sh` (10,249 lines)
-- Impact: Hard to understand data flow; difficult to modify without side effects; testing is global
-- Fix: Refactor into modules: state-mgmt.sh (150 lines), pheromone-mgmt.sh (200 lines), wisdom-mgmt.sh (150 lines), etc.
-
----
-
-## Documentation Gaps
-
-**No Operational Runbook:**
-- Missing: How to diagnose lock deadlocks, state corruption, stale pheromones
-- Impact: Operators resort to manual file inspection; no systematic troubleshooting steps
-- Fix: Create `.aether/docs/runbook.md` with diagnostic tools and recovery procedures
-
-**No Performance Tuning Guide:**
-- Missing: How to optimize for large codebases, high concurrency, slow filesystems
-- Impact: Users have no way to improve performance
-- Fix: Create `.aether/docs/performance-tuning.md` with configuration options and benchmarks
-
-**No Security Hardening Guide:**
-- Missing: Best practices for securing state files, logs, credentials in multi-user environments
-- Impact: Users may leak sensitive data in activity logs or dreams
-- Fix: Create `.aether/docs/security.md` with permissions model and secrets handling
+### Node.js required for CLI but not for core operations
+- Issue: `bin/cli.js` requires Node.js >= 16 for installation and update operations. Core colony operations (via `aether-utils.sh`) only need bash + jq. The Go rewrite should eliminate the Node.js dependency entirely.
+- Files: `package.json` (engines: node >= 16.0.0), `bin/cli.js`
+- Risk: Adding a runtime dependency for what is fundamentally a shell tool
+- Migration plan: Go binary is self-contained with no runtime dependencies beyond the OS
 
 ---
 
-## Summary by Severity
-
-**Critical (Fix Now):**
-- Monolithic 10K-line aether-utils.sh (refactor)
-- Hardcoded error codes (standardize to E_* constants)
-- No audit trail for state changes (add logging)
-- XXE vulnerability in XML processing (add validation)
-
-**High (Fix Soon):**
-- Missing error code documentation (create guide)
-- Unbounded activity.log growth (implement rotation)
-- Untested circular spawn tree references (add tests)
-- Untested malformed state handling (add tests)
-- No rollback mechanism (implement recovery)
-
-**Medium (Fix This Quarter):**
-- Lock acquisition could be aggressive (add backoff)
-- Pheromone decay math untested (add validation)
-- Spawn tree rotation partial (complete tuning)
-- Activity logging not atomic (refactor to atomic writes)
-- GSD integration not feeding back (add signal handler)
-
-**Low (Backlog):**
-- Model routing not integrated with pheromones
-- Survey data not persisted across sessions
-- No observability dashboard
-- No dead letter queue for failed spawns
-
----
-
-*Concerns audit: 2026-03-19*
+*Concerns audit: 2026-04-01*

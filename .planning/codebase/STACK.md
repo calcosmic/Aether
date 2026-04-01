@@ -1,115 +1,134 @@
 # Technology Stack
 
-**Analysis Date:** 2026-03-19
+**Analysis Date:** 2026-04-01
 
 ## Languages
 
 **Primary:**
-- Bash - Core system orchestration and state management (150+ subcommands in `aether-utils.sh`)
-- JavaScript/Node.js - CLI orchestration and model routing
-- Markdown - Command and agent specifications
+- Bash 3.2+ - Core colony runtime: dispatcher (`aether-utils.sh`, 5,642 lines), 50+ utility modules in `.aether/utils/`, 92 bash test files, agent definitions (markdown), slash command specs (markdown)
+- Go 1.26.1 - Emerging rewrite target: module skeleton with types and storage layer
+- JavaScript (Node.js v25.8.2) - CLI tooling and npm distribution: `bin/cli.js` (2,223 lines), `bin/lib/` (14 modules, 5,443 lines total), test framework glue
 
 **Secondary:**
-- XML - Data exchange format for pheromones, wisdom, and registry
+- Markdown - Agent definitions (24 files), slash commands (45 Claude + 45 OpenCode), skills definitions (28), templates (12), documentation
+- JSON - Colony state, pheromones, observations, instincts, config files
+- JSONL - Event bus persistence, learning observations
+- XML - Cross-colony signal exchange (`.aether/exchange/`)
+- jq - JSON processing in bash (referenced throughout utils)
+- XSLT - Queen-to-markdown transformation (`queen-to-md.xsl`)
 
 ## Runtime
 
 **Environment:**
-- Node.js >= 16.0.0
+- macOS (darwin/arm64) -- primary development target
+- Bash 3.2+ (macOS default) -- core runtime for shell layer
+- Node.js >= 16.0.0 (current: v25.8.2) -- npm CLI tooling
+- Go 1.26.1 -- skeleton module, not yet functional
 
-**Package Manager:**
-- npm - Distributed via `npm install -g aether-colony` or `npx aether-colony install`
-- Lockfile: `package-lock.json` (present)
+**Package Managers:**
+- npm -- primary package manager for `aether-colony` distribution
+  - Lockfile: `package-lock.json` present
+- Go modules -- `go.mod` with single dependency (no external Go deps yet)
 
 ## Frameworks
 
 **Core:**
-- Commander.js ^12.1.0 - CLI argument parsing and command routing (`bin/cli.js`)
-- No web framework - This is a system toolkit, not a web application
+- No external application framework. The system is self-contained: bash scripts orchestrated by a dispatcher pattern, distributed as an npm package.
 
 **Testing:**
-- AVA ^6.0.0 - JavaScript unit testing framework (490+ passing tests)
-- Sinon ^19.0.5 - Test doubles and mocking
-- ProxyQuire ^2.1.3 - Module mocking for Node.js
+- AVA ^6.0.0 -- JavaScript unit test runner for `bin/lib/` modules
+  - Config: inline in `package.json` (`ava.files`, `ava.timeout`)
+  - Runs: `tests/unit/**/*.test.js`
+- Bash test harness -- custom `bats`-style test framework
+  - 92 bash test files in `tests/bash/`
+  - Shared helpers in `tests/bash/test-helpers.sh`
+  - Runner: `bash tests/bash/test-aether-utils.sh` (dispatches sub-tests)
+- Go testing -- standard `testing` package
+  - `golang_test.go` (root) -- compilation smoke test
+  - `pkg/colony/colony_test.go` -- state machine and JSON round-trip
+  - `pkg/storage/storage_test.go` -- atomic file operations
 
 **Build/Dev:**
-- Shellcheck - Shell script linting (`npm run lint:shell`)
-- Generate-commands.sh - Generates sync checks between Claude and OpenCode commands
+- npm scripts -- primary build orchestration
+- `shellcheck` -- bash linting (error severity)
+- `bin/generate-commands.sh` -- command/agent sync verification between Claude and OpenCode
+- `bin/validate-package.sh` -- pre-publish validation
 
 ## Key Dependencies
 
-**Critical:**
-- js-yaml ^4.1.0 - YAML parsing (used in command/agent specs)
-- picocolors ^1.1.1 - Terminal color formatting (16+ color palette for agent castes)
+**Critical (npm):**
+- `commander` ^12.1.0 -- CLI argument parsing for `bin/cli.js`
+- `js-yaml` ^4.1.0 -- YAML parsing (used in config/skills)
+- `picocolors` ^1.1.1 -- terminal color output
 
-**Infrastructure:**
-- LiteLLM proxy - Model routing via `ANTHROPIC_BASE_URL` environment variable (http://localhost:4000 default)
-- Git - Version control integration (required for archaeology, state sync via git hooks)
-- curl - HTTP health checks to LiteLLM proxy endpoint
-- jq - JSON processing and validation (state file operations)
-- xmlstarlet - XML processing for pheromone/wisdom exchange
-- bash - Shell scripting runtime (POSIX-compliant)
+**Critical (bash):**
+- `jq` -- JSON processing (assumed available on system)
+- `sha256sum` / `shasum` -- content hashing (pheromone dedup, trust scoring)
+- `git` -- version control integration, archaeology, worktree management
+- `tmux` -- live monitoring (`/ant:watch`)
+
+**Dev (npm):**
+- `ava` ^6.0.0 -- test runner
+- `proxyquire` ^2.1.3 -- module mocking for tests
+- `sinon` ^19.0.5 -- spies/stubs/mocks for tests
+
+**No Go external dependencies yet.** The `go.mod` declares only the local module.
 
 ## Configuration
 
 **Environment:**
-- `ANTHROPIC_BASE_URL` - LiteLLM proxy endpoint (default: http://localhost:4000)
-- `ANTHROPIC_AUTH_TOKEN` - Proxy authentication (default: sk-litellm-local)
-- `ANTHROPIC_MODEL` - Model assignment for worker spawns
-- `HOME` - User home directory (required)
-- `AETHER_ROOT` - Project root (auto-detected)
+- `HOME` -- hub directory location (`~/.aether/`)
+- `AETHER_ROOT` -- optional override for colony root directory
+- `DATA_DIR` -- optional override for data directory
+- `npm` `engines` field requires `node >= 16.0.0`
 
 **Build:**
-- `package.json` - NPM manifest with test, lint, and install scripts
-- `.npmignore` - Excludes local data (`.aether/data/`, `.aether/dreams/`) from package distribution
-- `bin/validate-package.sh` - Runs during `npm install` and `prepublishOnly` to verify integrity
+- `package.json` -- npm package definition, scripts, dependencies
+- `.npmignore` -- controls what gets published (excludes `.aether/data/`, `.aether/dreams/`, `.planning/`, logs, dev files)
+- `bin/validate-package.sh` -- pre-publish checklist (required files, excluded directories)
+- `bin/generate-commands.sh` -- verifies Claude/OpenCode command parity
 
-**Files:**
-- `bin/cli.js` - Entry point for `aether` command (v1.1.11)
-- `bin/lib/` - 16 utility modules for state management, model profiles, file locking, telemetry, logging
+**Go:**
+- `go.mod` -- module declaration (`github.com/aether-colony/aether`, go 1.26.1)
+- No `go.sum` yet (no external dependencies)
 
 ## Platform Requirements
 
 **Development:**
-- Node.js 16+ (runtime)
-- Bash 4+ (shell scripting)
-- curl (HTTP requests)
-- jq (JSON processing)
-- git (version control, optional but recommended)
-- xmlstarlet or xsltproc (optional, XML processing)
-- shellcheck (optional, linting)
+- macOS or Linux (bash, jq, sha256sum, git)
+- Node.js >= 16.0.0
+- Go 1.26.1 (for Go skeleton work)
+- `shellcheck` (recommended for bash linting)
+- `tmux` (for `/ant:watch`)
 
-**Production (LiteLLM Proxy):**
-- LiteLLM proxy server running on localhost:4000
-- Environment variables set: ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN, ANTHROPIC_MODEL
+**Production (npm distribution):**
+- `npm install -g aether-colony` installs globally
+- CLI entry: `aether` command (via `bin/cli.js`)
+- NPX entry: `npx aether-colony` (via `bin/npx-entry.js`)
+- Files installed: `bin/`, `.claude/commands/ant/`, `.claude/agents/ant/`, `.opencode/commands/ant/`, `.opencode/agents/`, `.aether/`, `README.md`, `LICENSE`, `CHANGELOG.md`
 
-**Distribution:**
-- npm registry (package published as `aether-colony`)
-- Global install location: `~/.npm` or equivalent
-- Global commands copied to: `~/.claude/commands/ant/`, `~/.claude/agents/ant/`, `~/.opencode/commands/ant/`
+**Distribution targets:**
+- Claude Code -- `.claude/commands/ant/*.md` (45 slash commands), `.claude/agents/ant/*.md` (24 agents)
+- OpenCode -- `.opencode/commands/ant/*.md` (45 commands), `.opencode/agents/*.md` (24 agents)
+- Both share `.aether/` runtime (shell scripts, skills, templates, docs)
 
-## Distribution & Packaging
+## Codebase Size
 
-**NPM Package Contents:**
-- `bin/` - CLI executables
-- `.claude/commands/ant/` - 36 slash commands for Claude Code
-- `.claude/agents/ant/` - 22 agent definitions
-- `.aether/` - Source of truth (utility scripts, templates, exchange modules)
-- `.opencode/commands/ant/` - OpenCode command specs
-- `.opencode/agents/` - OpenCode worker definitions
-- Documentation and README
-
-**Excluded from Package:**
-- `.aether/data/` - Runtime state (COLONY_STATE.json, pheromones.json, activity logs)
-- `.aether/dreams/` - User notes and session logs
-- `.aether/checkpoints/` - Session checkpoints
-- `node_modules/` - Dependencies
-
-**Post-Install Setup:**
-- `bin/npx-install.js` - Runs via postinstall hook to copy commands/agents to global locations
-- `bin/cli.js install --quiet` - Sets up Claude Code and OpenCode integration points
-- Hub creation: `~/.aether/` system directory established for multi-colony support
+| Component | Files | Approx Lines |
+|-----------|-------|-------------|
+| Shell dispatcher | 1 | 5,642 |
+| Shell utils | 50 | ~20,900 |
+| Shell curation ants | 9 | ~2,000 |
+| Bash tests | 92 | ~40,900 |
+| Node.js CLI + lib | 15 | ~7,700 |
+| Node.js unit tests | 41 | ~14,500 |
+| Node.js integration tests | 23 | ~11,800 |
+| Node.js e2e tests | ~30 | ~5,000 |
+| Go source | 11 | ~370 (types + storage only) |
+| Go tests | 2 | ~1,170 |
+| Markdown (agents, commands, skills, docs) | ~140+ | -- |
+| Templates (JSON, jq, md) | 12 | -- |
 
 ---
 
-*Stack analysis: 2026-03-19*
+*Stack analysis: 2026-04-01*
