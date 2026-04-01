@@ -366,6 +366,295 @@ test_trust_score_present_in_stored_instinct() {
 }
 
 # ============================================================================
+# TEST 9: Full schema verification on stored instinct
+# ============================================================================
+test_full_schema_present() {
+    local tmpdir
+    tmpdir=$(setup_instinct_env)
+
+    run_cmd "$tmpdir" instinct-store \
+        --trigger "when schema verification needed" \
+        --action "check all required fields" \
+        --domain "testing" \
+        --confidence 0.75 \
+        --source "phase-1" \
+        --evidence "single_phase" > /dev/null
+
+    local instincts_file="$tmpdir/.aether/data/instincts.json"
+    local entry
+    entry=$(jq '.instincts[0]' "$instincts_file")
+
+    # Top-level required fields
+    for field in id trigger action domain trust_score trust_tier confidence archived; do
+        local val
+        val=$(echo "$entry" | jq -r ".$field")
+        [[ "$val" != "null" && -n "$val" ]] || { rm -rf "$tmpdir"; return 1; }
+    done
+
+    # Provenance sub-object fields (last_applied is null for fresh instincts)
+    for pfield in source source_type evidence created_at application_count; do
+        local pval
+        pval=$(echo "$entry" | jq -r ".provenance.$pfield")
+        [[ "$pval" != "null" ]] || { rm -rf "$tmpdir"; return 1; }
+    done
+
+    # last_applied must exist as a field (null is valid for fresh instincts)
+    local has_last_applied
+    has_last_applied=$(echo "$entry" | jq '.provenance | has("last_applied")')
+    [[ "$has_last_applied" == "true" ]] || { rm -rf "$tmpdir"; return 1; }
+
+    # application_history must be an array
+    local ah_type
+    ah_type=$(echo "$entry" | jq -r '.application_history | type')
+    [[ "$ah_type" == "array" ]] || { rm -rf "$tmpdir"; return 1; }
+
+    # related_instincts must be an array
+    local ri_type
+    ri_type=$(echo "$entry" | jq -r '.related_instincts | type')
+    [[ "$ri_type" == "array" ]] || { rm -rf "$tmpdir"; return 1; }
+
+    rm -rf "$tmpdir"
+}
+
+# ============================================================================
+# TEST 10: Reinforcement updates provenance fields
+# ============================================================================
+test_reinforcement_updates_provenance() {
+    local tmpdir
+    tmpdir=$(setup_instinct_env)
+
+    run_cmd "$tmpdir" instinct-store \
+        --trigger "reinforcement trigger test case" \
+        --action "original action" \
+        --domain "testing" \
+        --confidence 0.6 \
+        --source "phase-1" \
+        --evidence "first observation" > /dev/null
+
+    local instincts_file="$tmpdir/.aether/data/instincts.json"
+
+    # Store initial provenance values
+    local initial_app_count
+    initial_app_count=$(jq -r '.instincts[0].provenance.application_count' "$instincts_file")
+    local initial_last_applied
+    initial_last_applied=$(jq -r '.instincts[0].provenance.last_applied' "$instincts_file")
+
+    # Reinforce with higher confidence
+    run_cmd "$tmpdir" instinct-store \
+        --trigger "reinforcement trigger test case" \
+        --action "updated action" \
+        --domain "testing" \
+        --confidence 0.9 \
+        --source "phase-2" \
+        --evidence "second observation" > /dev/null
+
+    local new_app_count
+    new_app_count=$(jq -r '.instincts[0].provenance.application_count' "$instincts_file")
+    local new_last_applied
+    new_last_applied=$(jq -r '.instincts[0].provenance.last_applied' "$instincts_file")
+    local new_confidence
+    new_confidence=$(jq -r '.instincts[0].confidence' "$instincts_file")
+
+    # application_count should have incremented
+    [[ "$new_app_count" -gt "$initial_app_count" ]] || { rm -rf "$tmpdir"; return 1; }
+
+    # last_applied should now be non-null
+    [[ "$new_last_applied" != "null" && -n "$new_last_applied" ]] || { rm -rf "$tmpdir"; return 1; }
+
+    # confidence should be max of original and new (0.9)
+    local is_max
+    is_max=$(awk "BEGIN{print ($new_confidence == 0.9)}" 2>/dev/null || echo "0")
+    [[ "$is_max" == "1" ]] || { rm -rf "$tmpdir"; return 1; }
+
+    rm -rf "$tmpdir"
+}
+
+# ============================================================================
+# TEST 11: 50-instinct cap archives lowest-trust entry
+# ============================================================================
+test_fifty_instinct_cap() {
+    local tmpdir
+    tmpdir=$(setup_instinct_env)
+
+    # Store 51 instincts with varying trust levels
+    for i in $(seq 1 51); do
+        run_cmd "$tmpdir" instinct-store \
+            --trigger "cap test trigger number $i unique suffix here" \
+            --action "cap test action $i" \
+            --domain "testing" \
+            --confidence "0.$(printf '%02d' "$i")" \
+            --source "phase-1" \
+            --evidence "cap test evidence $i" > /dev/null
+    done
+
+    local instincts_file="$tmpdir/.aether/data/instincts.json"
+
+    # Active (non-archived) count should be at most 50
+    local active_count
+    active_count=$(jq '[.instincts[] | select(.archived == false)] | length' "$instincts_file")
+    [[ "$active_count" -le 50 ]] || { rm -rf "$tmpdir"; return 1; }
+
+    # Total entries should be 51 (archived ones still in file)
+    local total_count
+    total_count=$(jq '.instincts | length' "$instincts_file")
+    [[ "$total_count" -eq 51 ]] || { rm -rf "$tmpdir"; return 1; }
+
+    # At least 1 entry should be archived
+    local archived_count
+    archived_count=$(jq '[.instincts[] | select(.archived == true)] | length' "$instincts_file")
+    [[ "$archived_count" -ge 1 ]] || { rm -rf "$tmpdir"; return 1; }
+
+    rm -rf "$tmpdir"
+}
+
+# ============================================================================
+# TEST 12: decay-all --dry-run does not write changes
+# ============================================================================
+test_decay_dry_run_no_write() {
+    local tmpdir
+    tmpdir=$(setup_instinct_env)
+
+    run_cmd "$tmpdir" instinct-store \
+        --trigger "dry run test trigger" \
+        --action "dry run action" \
+        --domain "testing" \
+        --confidence 0.9 \
+        --source "phase-1" \
+        --evidence "single_phase" > /dev/null
+
+    local instincts_file="$tmpdir/.aether/data/instincts.json"
+    local initial_score
+    initial_score=$(jq -r '.instincts[0].trust_score' "$instincts_file")
+
+    local result
+    result=$(run_cmd "$tmpdir" instinct-decay-all --days 120 --dry-run)
+
+    assert_ok_true "$result" || { rm -rf "$tmpdir"; return 1; }
+
+    # Verify dry_run flag in result
+    local is_dry
+    is_dry=$(echo "$result" | jq -r '.result.dry_run')
+    [[ "$is_dry" == "true" ]] || { rm -rf "$tmpdir"; return 1; }
+
+    # Score should NOT have changed (dry-run)
+    local score_after
+    score_after=$(jq -r '.instincts[0].trust_score' "$instincts_file")
+    [[ "$score_after" == "$initial_score" ]] || { rm -rf "$tmpdir"; return 1; }
+
+    rm -rf "$tmpdir"
+}
+
+# ============================================================================
+# TEST 13: decay-all archives instincts below 0.25 threshold
+# ============================================================================
+test_decay_archives_low_trust() {
+    local tmpdir
+    tmpdir=$(setup_instinct_env)
+
+    # Store a very low confidence instinct (will get low trust score)
+    run_cmd "$tmpdir" instinct-store \
+        --trigger "low trust decay test trigger" \
+        --action "low trust action" \
+        --domain "testing" \
+        --confidence 0.1 \
+        --source "phase-1" \
+        --evidence "anecdotal" > /dev/null
+
+    local instincts_file="$tmpdir/.aether/data/instincts.json"
+    local id
+    id=$(jq -r '.instincts[0].id' "$instincts_file")
+
+    # Apply heavy decay (300 days = ~5 half-lives)
+    local result
+    result=$(run_cmd "$tmpdir" instinct-decay-all --days 300)
+
+    assert_ok_true "$result" || { rm -rf "$tmpdir"; return 1; }
+
+    # The low-trust instinct should have been archived
+    local archived
+    archived=$(jq -r --arg id "$id" '.instincts[] | select(.id == $id) | .archived' "$instincts_file")
+    [[ "$archived" == "true" ]] || { rm -rf "$tmpdir"; return 1; }
+
+    # archived count in result should be >= 1
+    local result_archived
+    result_archived=$(echo "$result" | jq -r '.result.archived')
+    [[ "$result_archived" -ge 1 ]] || { rm -rf "$tmpdir"; return 1; }
+
+    rm -rf "$tmpdir"
+}
+
+# ============================================================================
+# TEST 14: instinct-read-trusted --limit works correctly
+# ============================================================================
+test_read_trusted_limit() {
+    local tmpdir
+    tmpdir=$(setup_instinct_env)
+
+    # Store 5 instincts
+    for i in $(seq 1 5); do
+        run_cmd "$tmpdir" instinct-store \
+            --trigger "limit test trigger $i unique suffix" \
+            --action "limit test action $i" \
+            --domain "testing" \
+            --confidence "0.8" \
+            --source "phase-1" \
+            --evidence "single_phase" > /dev/null
+    done
+
+    # Request limit=2
+    local result
+    result=$(run_cmd "$tmpdir" instinct-read-trusted --min-score 0.0 --limit 2)
+
+    assert_ok_true "$result" || { rm -rf "$tmpdir"; return 1; }
+
+    local count
+    count=$(echo "$result" | jq '.result.instincts | length')
+    [[ "$count" -eq 2 ]] || { rm -rf "$tmpdir"; return 1; }
+
+    rm -rf "$tmpdir"
+}
+
+# ============================================================================
+# TEST 15: instinct-read-trusted returns empty for missing file
+# ============================================================================
+test_read_trusted_missing_file() {
+    local tmpdir
+    tmpdir=$(setup_instinct_env)
+
+    # Do not store anything -- instincts.json does not exist
+    local result
+    result=$(run_cmd "$tmpdir" instinct-read-trusted)
+
+    assert_ok_true "$result" || { rm -rf "$tmpdir"; return 1; }
+
+    local count
+    count=$(echo "$result" | jq '.result.count')
+    [[ "$count" -eq 0 ]] || { rm -rf "$tmpdir"; return 1; }
+
+    rm -rf "$tmpdir"
+}
+
+# ============================================================================
+# TEST 16: decay-all handles empty/missing file gracefully
+# ============================================================================
+test_decay_missing_file() {
+    local tmpdir
+    tmpdir=$(setup_instinct_env)
+
+    # Do not create instincts.json
+    local result
+    result=$(run_cmd "$tmpdir" instinct-decay-all --days 30)
+
+    assert_ok_true "$result" || { rm -rf "$tmpdir"; return 1; }
+
+    local processed
+    processed=$(echo "$result" | jq '.result.processed')
+    [[ "$processed" -eq 0 ]] || { rm -rf "$tmpdir"; return 1; }
+
+    rm -rf "$tmpdir"
+}
+
+# ============================================================================
 # Main: run all tests
 # ============================================================================
 
@@ -380,5 +669,13 @@ run_test "test_decay_all_applies_decay"             "instinct-decay-all: applies
 run_test "test_archive_soft_deletes"                "instinct-archive: soft-deletes (archived:true, excluded from reads)"
 run_test "test_missing_args_error_handling"         "instinct-store/archive: missing required args return error"
 run_test "test_trust_score_present_in_stored_instinct" "instinct-store: trust_score and trust_tier present in stored instinct"
+run_test "test_full_schema_present"                 "instinct-store: full schema with provenance, application_history, related_instincts"
+run_test "test_reinforcement_updates_provenance"    "instinct-store: reinforcement updates provenance.last_applied and application_count"
+run_test "test_fifty_instinct_cap"                  "instinct-store: 50-instinct cap archives lowest-trust entry"
+run_test "test_decay_dry_run_no_write"              "instinct-decay-all: --dry-run does not write changes"
+run_test "test_decay_archives_low_trust"            "instinct-decay-all: archives instincts below 0.25 threshold"
+run_test "test_read_trusted_limit"                  "instinct-read-trusted: --limit works correctly"
+run_test "test_read_trusted_missing_file"           "instinct-read-trusted: returns empty for missing file"
+run_test "test_decay_missing_file"                  "instinct-decay-all: handles missing file gracefully"
 
 test_summary

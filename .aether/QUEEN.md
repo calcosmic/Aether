@@ -19,6 +19,11 @@ Communication style, expertise level, and decision-making patterns observed from
 
 Validated approaches that work in this codebase, and anti-patterns to avoid. Includes architecture conventions, naming patterns, error handling style, and technology-specific insights. Tagged [repo] for project-specific or [general] for cross-colony patterns.
 
+- **Aether Colony** (2026-04-01T17:30:37Z): Backward-compatible migration for existing observations lets new fields coexist with old data
+- **Aether Colony** (2026-04-01T17:30:34Z): jq-based graph layer provides adequate relationship traversal for instinct networks
+- **Aether Colony** (2026-04-01T17:30:31Z): Standalone instinct storage with full schema is cleaner than embedding instincts in COLONY_STATE.json
+- **Aether Colony** (2026-04-01T17:21:38Z): Modifying existing code (learning.sh) and verifying new modules (graph.sh, instinct-store.sh) can safely run in parallel when modifications are additive (evidence: 3 parallel builders, 0 merge conflicts)
+- **Aether Colony** (2026-04-01T17:21:35Z): Existing observations now recalculate trust_score on re-observation via trust-calculate with source_type/evidence_type/days_since (evidence: 34 tests pass, watcher quality 9/10)
 - **Aether Colony** (2026-04-01T10:07:24Z): Splitting related subcommands into separate files avoids parallel builder merge conflicts
 - **Aether Colony** (2026-04-01T09:51:44Z): Curation modules with no shared state can be built in parallel then integrated by orchestrator
 - **Aether Colony** (2026-04-01T09:20:45Z): Additive modifications to existing files can safely parallel with new file creation
@@ -123,6 +128,9 @@ What worked and what failed during builds. Captures the full picture of colony e
 - [general] Running lint:sync and lint as a dedicated verification phase after code changes confirms no sync drift — useful as a final gate before colony seal -- *Phase 3 (Trust-Scored Storage and Graph Layer)* (2026-04-01)
 - [general] Modifying existing code (learning.sh) and creating new modules (graph.sh, instinct-store.sh) can safely run in parallel when the modifications are additive (new fields, new function args) -- *Phase 3 (Trust-Scored Storage and Graph Layer)* (2026-04-01)
 
+- [general] Standalone instinct storage with full schema (trust_score, trust_tier, provenance, application_history, related_instincts) is cleaner than embedding instincts in COLONY_STATE.json — enables independent queries and decay without touching colony state -- *Phase 3 (Trust-Scored Storage and Graph Layer)* (2026-04-01)
+- [general] jq-based graph layer provides adequate relationship traversal for instinct networks up to a few hundred edges — BFS reach with max-hops=3 cap prevents pathological queries -- *Phase 3 (Trust-Scored Storage and Graph Layer)* (2026-04-01)
+- [general] Backward-compatible migration for existing observations (legacy trust_score backfill at 0.49) lets new fields coexist with old data without breaking reads -- *Phase 3 (Trust-Scored Storage and Graph Layer)* (2026-04-01)
 ### Phase 4: Curation Ants
 - [general] Curation ant modules that share no state can be built in parallel across two builders (core vs ops), then integrated by a third builder for orchestration -- *Phase 4 (Curation Ants)* (2026-04-01)
 ---
@@ -146,12 +154,20 @@ High-confidence behavioral patterns that have been validated through repeated co
 - [instinct] **debugging** (0.8): When validating JSON files that may be empty, then Check file size with -s flag before running jq parse; return valid pass result for empty legacy files
 - [instinct] **workflow** (0.8): When modifying lines that were previously bug-fixed, then Run archaeology pre-build scan to identify prior fixes at the exact change site and preserve their invariants
 - [instinct] **testing** (0.8): When tests grep source code for structural patterns after monolith extraction, then Verify grep targets point to the extracted module file, not the original monolith
+- [instinct] **testing** (0.8): When untracked test files or documentation exist from a prior session, then verify assumptions match actual architecture before trusting their assertions
 ---
 
 ## Evolution Log
 
 | Date | Source | Type | Details |
 |------|--------|------|---------|
+| 2026-04-01T17:32:04Z | phase-3 | build_learnings | Added 3 learnings from Phase 3: Trust-Scored Storage and Graph Layer |
+| 2026-04-01T17:31:00Z | instinct | promoted_instinct | testing: verify assumptions match actual architecture befor... |
+| 2026-04-01T17:30:37Z | Aether Colony | promoted_pattern | Added: Backward-compatible migration for existing observa... |
+| 2026-04-01T17:30:34Z | Aether Colony | promoted_pattern | Added: jq-based graph layer provides adequate relationshi... |
+| 2026-04-01T17:30:31Z | Aether Colony | promoted_pattern | Added: Standalone instinct storage with full schema is cl... |
+| 2026-04-01T17:21:38Z | Aether Colony | promoted_pattern | Added: Modifying existing code (learning.sh) and verifyin... |
+| 2026-04-01T17:21:35Z | Aether Colony | promoted_pattern | Added: Existing observations now recalculate trust_score ... |
 | 2026-04-01T10:22:01Z | phase-6 | build_learnings | Added 1 learnings from Phase 6: Documentation and Full Test Sweep |
 | 2026-04-01T10:07:42Z | phase-5 | build_learnings | Added 1 learnings from Phase 5: Consolidation Pipeline Integration |
 | 2026-04-01T10:07:24Z | Aether Colony | promoted_pattern | Added: Splitting related subcommands into separate files ... |
@@ -259,5 +275,5 @@ High-confidence behavioral patterns that have been validated through repeated co
 ---
 
 <!-- METADATA
-{  "version": "2.0.0",  "wisdom_version": "2.0",  "last_evolved": "2026-04-01T10:22:01Z",  "colonies_contributed": ["1774645519"],  "stats": {    "total_user_prefs": 3,    "total_codebase_patterns": 3,    "total_build_learnings": 3,    "total_instincts": 3  },  "evolution_log": [{"timestamp": "2026-03-24T23:40:00Z", "action": "migrate", "wisdom_type": "system", "content_hash": "v1-to-v2-migration", "colony": "system"}, {"timestamp": "2026-03-20T12:37:32Z", "action": "promote", "wisdom_type": "pattern", "content_hash": "sha256:f8aa50cfda0f37cac6cabba140bb99f1d75aa6d01a7100fe7a5ccddc2b3a017b", "colony": "1771335865738"}]}
+{  "version": "2.0.0",  "wisdom_version": "2.0",  "last_evolved": "2026-04-01T17:32:04Z",  "colonies_contributed": ["1774645519"],  "stats": {    "total_user_prefs": 3,    "total_codebase_patterns": 3,    "total_build_learnings": 5,    "total_instincts": 3  },  "evolution_log": [{"timestamp": "2026-03-24T23:40:00Z", "action": "migrate", "wisdom_type": "system", "content_hash": "v1-to-v2-migration", "colony": "system"}, {"timestamp": "2026-03-20T12:37:32Z", "action": "promote", "wisdom_type": "pattern", "content_hash": "sha256:f8aa50cfda0f37cac6cabba140bb99f1d75aa6d01a7100fe7a5ccddc2b3a017b", "colony": "1771335865738"}]}
 -->
