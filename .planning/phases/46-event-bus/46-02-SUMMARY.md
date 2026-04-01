@@ -76,6 +76,13 @@ None.
 - Phase 49 (Agent System) also depends on the event bus for agent event subscriptions
 - Event bus API is stable: Publish, Subscribe, Unsubscribe, Close, Query, Replay, Cleanup, LoadAndReplay
 
+## Self-Check: PASSED
+
+- SUMMARY.md exists at expected path
+- Commit b75b9a1 found (ROADMAP + SUMMARY commit)
+- Commit 8f11ad3 found (STATE + ROADMAP final commit)
+- All 32 event bus tests passing (`go test ./pkg/events/`)
+
 ---
 *Phase: 46-event-bus*
 *Completed: 2026-04-01*
