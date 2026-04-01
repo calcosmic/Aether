@@ -19,6 +19,8 @@ Communication style, expertise level, and decision-making patterns observed from
 
 Validated approaches that work in this codebase, and anti-patterns to avoid. Includes architecture conventions, naming patterns, error handling style, and technology-specific insights. Tagged [repo] for project-specific or [general] for cross-colony patterns.
 
+- **Aether Colony** (2026-04-01T08:57:46Z): Builders that self-register dispatcher entries eliminate Wave 2 dependency
+- **Aether Colony** (2026-04-01T08:57:44Z): Shell utility modules with pure calculation logic can be built independently by parallel builders
 - **Aether Colony** (2026-03-31T21:11:17Z): Untracked test files can encode wrong assumptions about architecture
 - **Aether Colony** (2026-03-31T21:11:15Z): Parallel swarm audits with 4 scouts are effective for commit review
 - **Aether Colony** (2026-03-31T08:51:57Z): Stage Audit Gate pattern: add pre-synthesis verification gate to build orchestrators ensures all stages complete before synthesis (evidence: all 6 success criteria passed, watcher quality 9/10)
@@ -107,6 +109,10 @@ What worked and what failed during builds. Captures the full picture of colony e
 - [general] Adding pre-synthesis verification gates to build orchestrators catches incomplete builds before synthesis — gate should name all prerequisite stages explicitly -- *Phase 1 (Enforce non-skippable playbook execution in build orchestrators)* (2026-03-31)
 - [general] Parallel swarm audits (4 scouts) are effective for commit review — each scout can deeply examine a specific area while cross-referencing findings -- *Phase 1 (Commit Audit)* (2026-03-31)
 - [general] Untracked test files can encode wrong assumptions — test-colony-data-dir.sh expected COLONY_DATA_DIR for COLONY_STATE.json but the architecture requires DATA_DIR -- *Phase 1 (Commit Audit)* (2026-03-31)
+
+### Phase 2: Trust Scoring Engine and Event Bus Foundation
+- [general] Shell utility modules with pure calculation logic (no side effects) can be built independently by parallel builders without merge conflicts -- *Phase 2 (Trust Scoring Engine and Event Bus Foundation)* (2026-04-01)
+- [general] Builders that self-register their dispatcher entries eliminate Wave 2 dependency — the registration task becomes implicit -- *Phase 2 (Trust Scoring Engine and Event Bus Foundation)* (2026-04-01)
 ---
 
 ## Instincts
@@ -134,6 +140,9 @@ High-confidence behavioral patterns that have been validated through repeated co
 
 | Date | Source | Type | Details |
 |------|--------|------|---------|
+| 2026-04-01T08:58:07Z | phase-2 | build_learnings | Added 2 learnings from Phase 2: Trust Scoring Engine and Event Bus Foundation |
+| 2026-04-01T08:57:46Z | Aether Colony | promoted_pattern | Added: Builders that self-register dispatcher entries eli... |
+| 2026-04-01T08:57:44Z | Aether Colony | promoted_pattern | Added: Shell utility modules with pure calculation logic ... |
 | 2026-03-31T21:12:16Z | phase-1 | build_learnings | Added 2 learnings from Phase 1: Commit Audit |
 | 2026-03-31T21:11:17Z | Aether Colony | promoted_pattern | Added: Untracked test files can encode wrong assumptions ... |
 | 2026-03-31T21:11:15Z | Aether Colony | promoted_pattern | Added: Parallel swarm audits with 4 scouts are effective ... |
@@ -231,5 +240,5 @@ High-confidence behavioral patterns that have been validated through repeated co
 ---
 
 <!-- METADATA
-{  "version": "2.0.0",  "wisdom_version": "2.0",  "last_evolved": "2026-03-31T21:12:16Z",  "colonies_contributed": ["1774645519"],  "stats": {    "total_user_prefs": 3,    "total_codebase_patterns": 3,    "total_build_learnings": 4,    "total_instincts": 3  },  "evolution_log": [{"timestamp": "2026-03-24T23:40:00Z", "action": "migrate", "wisdom_type": "system", "content_hash": "v1-to-v2-migration", "colony": "system"}, {"timestamp": "2026-03-20T12:37:32Z", "action": "promote", "wisdom_type": "pattern", "content_hash": "sha256:f8aa50cfda0f37cac6cabba140bb99f1d75aa6d01a7100fe7a5ccddc2b3a017b", "colony": "1771335865738"}]}
+{  "version": "2.0.0",  "wisdom_version": "2.0",  "last_evolved": "2026-04-01T08:58:07Z",  "colonies_contributed": ["1774645519"],  "stats": {    "total_user_prefs": 3,    "total_codebase_patterns": 3,    "total_build_learnings": 4,    "total_instincts": 3  },  "evolution_log": [{"timestamp": "2026-03-24T23:40:00Z", "action": "migrate", "wisdom_type": "system", "content_hash": "v1-to-v2-migration", "colony": "system"}, {"timestamp": "2026-03-20T12:37:32Z", "action": "promote", "wisdom_type": "pattern", "content_hash": "sha256:f8aa50cfda0f37cac6cabba140bb99f1d75aa6d01a7100fe7a5ccddc2b3a017b", "colony": "1771335865738"}]}
 -->

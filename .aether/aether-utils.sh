@@ -48,6 +48,8 @@ CURRENT_LOCK=${CURRENT_LOCK:-""}
 [[ -f "$SCRIPT_DIR/utils/council.sh" ]] && source "$SCRIPT_DIR/utils/council.sh"
 [[ -f "$SCRIPT_DIR/utils/clash-detect.sh" ]] && source "$SCRIPT_DIR/utils/clash-detect.sh"
 [[ -f "$SCRIPT_DIR/utils/worktree.sh" ]] && source "$SCRIPT_DIR/utils/worktree.sh"
+[[ -f "$SCRIPT_DIR/utils/event-bus.sh" ]] && source "$SCRIPT_DIR/utils/event-bus.sh"
+[[ -f "$SCRIPT_DIR/utils/trust-scoring.sh" ]] && source "$SCRIPT_DIR/utils/trust-scoring.sh"
 
 # Fallback error constants if error-handler.sh wasn't sourced
 # This prevents "unbound variable" errors in older installations
@@ -5525,6 +5527,31 @@ DRYRUN_EOF
     ;;
   worktree-cleanup)
     _worktree_cleanup "$@"
+    ;;
+
+  # ── Event Bus ───────────────────────────────────────────────────────────────
+  event-publish)
+    _event_publish "$@"
+    ;;
+  event-subscribe)
+    _event_subscribe "$@"
+    ;;
+  event-cleanup)
+    _event_cleanup "$@"
+    ;;
+  event-replay)
+    _event_replay "$@"
+    ;;
+
+  # ── Trust Scoring ──────────────────────────────────────────────────────────
+  trust-calculate)
+    _trust_calculate "$@"
+    ;;
+  trust-decay)
+    _trust_decay "$@"
+    ;;
+  trust-tier)
+    _trust_tier "$@"
     ;;
 
   *)
