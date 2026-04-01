@@ -15,8 +15,9 @@
 | Agent definitions | 24 |
 | Skills | 28 (10 colony + 18 domain) |
 | aether-utils.sh | ~5,500 lines (dispatcher), ~130+ subcommands across all modules |
-| Utils | 35 scripts (9 domain modules + infrastructure + XML + exchange + misc) |
-| Tests | 500+ passing |
+| Utils | 50 scripts (41 top-level + 9 curation ants) |
+| Tests | 524+ passing |
+| Curation Ants | 8 ants + 1 orchestrator (`.aether/utils/curation-ants/`) |
 | Architecture doc | `RUNTIME UPDATE ARCHITECTURE.md` |
 
 ---
@@ -30,7 +31,7 @@
 │   .aether/             ← SOURCE OF TRUTH (packaged directly)    │
 │   ├── workers.md       (edit here)                              │
 │   ├── aether-utils.sh  (dispatcher, ~5,500 lines, ~130+ subcmds) │
-│   ├── utils/           (35 scripts, modular architecture)       │
+│   ├── utils/           (50 scripts, modular architecture)       │
 │   │   ├── Domain modules (9):                                   │
 │   │   │   flag.sh, spawn.sh, session.sh, suggest.sh,            │
 │   │   │   queen.sh, swarm.sh, learning.sh, pheromone.sh,        │
@@ -38,9 +39,16 @@
 │   │   ├── Infrastructure:                                       │
 │   │   │   file-lock.sh, atomic-write.sh, error-handler.sh,      │
 │   │   │   hive.sh, midden.sh, skills.sh                         │
-│   │   └── XML + other:                                          │
-│   │       xml-core.sh, xml-query.sh, xml-compose.sh,            │
-│   │       xml-convert.sh, xml-utils.sh, swarm-display.sh, ...   │
+│   │   ├── Structural Learning Stack:                            │
+│   │   │   trust-scoring.sh, event-bus.sh, instinct-store.sh,    │
+│   │   │   graph.sh, consolidation.sh, consolidation-seal.sh     │
+│   │   ├── XML + other:                                          │
+│   │   │   xml-core.sh, xml-query.sh, xml-compose.sh,            │
+│   │   │   xml-convert.sh, xml-utils.sh, swarm-display.sh, ...   │
+│   │   └── curation-ants/ (8 ants + orchestrator):              │
+│   │       orchestrator.sh, archivist.sh, critic.sh,             │
+│   │       herald.sh, janitor.sh, librarian.sh,                  │
+│   │       nurse.sh, scribe.sh, sentinel.sh                      │
 │   ├── skills/          colony/ (10) + domain/ (18)              │
 │   ├── docs/            (distributed documentation)              │
 │   └── templates/       (12 templates)                           │
@@ -129,18 +137,24 @@ aether update      # or /ant:update
 .aether/
 ├── workers.md           # Worker definitions, spawn protocol
 ├── aether-utils.sh      # Dispatcher (~5,500 lines, ~130+ subcommands across all modules)
-├── utils/               # 35 scripts (modular architecture)
+├── utils/               # 50 scripts (modular architecture)
 │   ├── Domain modules (9 -- extracted from monolith in Phase 13):
 │   │   flag.sh, spawn.sh, session.sh, suggest.sh,
 │   │   queen.sh, swarm.sh, learning.sh, pheromone.sh, state-api.sh
 │   ├── Infrastructure:
 │   │   file-lock.sh, atomic-write.sh, error-handler.sh,
 │   │   hive.sh, midden.sh, skills.sh
+│   ├── Structural Learning Stack:
+│   │   trust-scoring.sh, event-bus.sh, instinct-store.sh,
+│   │   graph.sh, consolidation.sh, consolidation-seal.sh
 │   ├── XML utilities:
 │   │   xml-core.sh, xml-query.sh, xml-compose.sh,
 │   │   xml-convert.sh, xml-utils.sh
-│   └── Other:
-│       swarm-display.sh, spawn-tree.sh, oracle.sh, ...
+│   ├── Other:
+│   │   swarm-display.sh, spawn-tree.sh, oracle.sh, ...
+│   └── curation-ants/   # 8 ants + orchestrator
+│       orchestrator.sh, archivist.sh, critic.sh, herald.sh,
+│       janitor.sh, librarian.sh, nurse.sh, scribe.sh, sentinel.sh
 ├── templates/           # 12 templates (colony-state, pheromones, etc.)
 ├── docs/                # Distributed documentation
 ├── exchange/            # XML exchange modules (pheromone-xml, wisdom-xml)
@@ -570,6 +584,14 @@ npm pack --dry-run
 
 # Audit emoji usage in command files against canonical reference map
 bash .aether/aether-utils.sh emoji-audit
+
+# Run Structural Learning Stack unit tests
+bash tests/bash/test-trust-scoring.sh
+bash tests/bash/test-event-bus.sh
+bash tests/bash/test-instinct-store.sh
+bash tests/bash/test-graph.sh
+bash tests/bash/test-consolidation.sh
+bash tests/bash/test-curation-ants.sh
 ```
 
 ---
@@ -615,12 +637,16 @@ observations that flow through the system and become reusable wisdom.
 | Stage | Subcommand | Output |
 |-------|-----------|--------|
 | 1. Observe | `memory-capture "learning"` | Records observation to learning-observations.json |
+| 1a. Trust score | `trust-score-compute` | Assigns weighted trust score to observation (40/35/25, 7 tiers) |
+| 1b. Event bus | `event-bus-publish` | Publishes scored event to JSONL event bus with TTL |
 | 2. Auto-promote | (internal: `learning-promote-auto`) | Triggers after threshold (2 observations for patterns) |
-| 3. Instinct | `instinct-create` | Stores in COLONY_STATE.json with confidence score |
+| 3. Instinct | `instinct-create` | Stores in instinct-store.sh + COLONY_STATE.json with provenance |
 | 4. QUEEN.md | `queen-promote` | Writes to QUEEN.md Patterns/Philosophies section |
 | 5. Inject | `colony-prime` prompt_section | QUEEN.md wisdom + instincts injected into worker context |
 | 6. Hive store | `hive-promote` | Abstracts instinct, stores in hive wisdom.json (confidence >= 0.8) |
 | 7. Hive read | `hive-read` | Retrieves cross-colony wisdom scoped by domain |
+
+**See `.aether/docs/structural-learning-stack.md` for the full Structural Learning Stack documentation.**
 
 ### Key Thresholds
 
@@ -629,6 +655,37 @@ observations that flow through the system and become reusable wisdom.
 - **Cross-colony boost:** Multi-repo confirmation raises confidence (2 repos = 0.70, 4+ = 0.95)
 
 See [Hive Brain](#hive-brain-cross-colony-wisdom) for cross-colony wisdom details.
+
+---
+
+## Structural Learning Stack
+
+The memory consolidation pipeline that upgrades the Wisdom Pipeline with
+trust scoring, graph relationships, and automated curation.
+
+**See `.aether/docs/structural-learning-stack.md` for complete documentation.**
+
+Key additions:
+- Trust scoring engine (40/35/25 weighted, 60-day half-life, 7 tiers)
+- JSONL event bus with pub/sub and TTL cleanup
+- Standalone instinct storage with full provenance
+- jq-based graph layer for instinct relationships
+- 8 curation ants with orchestrated execution
+- Lifecycle integration: phase-end at /ant:continue, full at /ant:seal
+
+### Curation Ants
+
+| Ant | Role |
+|-----|------|
+| `orchestrator.sh` | Coordinates curation pipeline execution |
+| `archivist.sh` | Archives and retrieves historical observations |
+| `critic.sh` | Evaluates instinct quality and confidence |
+| `herald.sh` | Broadcasts high-confidence instincts to hive |
+| `janitor.sh` | Cleans stale events and expired TTL entries |
+| `librarian.sh` | Indexes and catalogs instinct relationships |
+| `nurse.sh` | Heals low-confidence instincts with supporting evidence |
+| `scribe.sh` | Records curation decisions and audit trail |
+| `sentinel.sh` | Guards against instinct corruption and conflicts |
 
 ---
 

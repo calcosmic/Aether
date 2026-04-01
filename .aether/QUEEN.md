@@ -104,6 +104,7 @@ What worked and what failed during builds. Captures the full picture of colony e
 - [general] Replacing bash while-read+sed loops with single-pass awk eliminates O(n^2) subprocess forking — 4000+ forks reduced to 1 awk process, runtime from 23s to 1.7s -- *Phase 6 (Stabilize spawn-tree parsing and JSON output)* (2026-03-29)
 - [general] awk NF==7 for spawn detection and $3 match for completion detection handles pipes-in-summary edge cases that pipe-counting cannot -- *Phase 6 (Stabilize spawn-tree parsing and JSON output)* (2026-03-29)
 
+- [general] Documentation and test sweep phases benefit from parallel doc builders + Queen-driven test execution, keeping the phase fast -- *Phase 6 (Documentation and Full Test Sweep)* (2026-04-01)
 ### Phase 5: Fix hive-read null safety and learning recovery tests
 - [general] Archaeology pre-build scans that identify specific prior bug-fix commits prevent regression when modifying the same lines — Strata-7 caught the tonumber requirement that would otherwise have been missed -- *Phase 5 (Fix hive-read null safety and learning recovery tests)* (2026-03-30)
 - [general] After monolith extraction, tests that grep source code for structural patterns break when the code moves to extracted modules — always check grep targets against the actual module location -- *Phase 5 (Fix hive-read null safety and learning recovery tests)* (2026-03-30)
@@ -151,6 +152,7 @@ High-confidence behavioral patterns that have been validated through repeated co
 
 | Date | Source | Type | Details |
 |------|--------|------|---------|
+| 2026-04-01T10:22:01Z | phase-6 | build_learnings | Added 1 learnings from Phase 6: Documentation and Full Test Sweep |
 | 2026-04-01T10:07:42Z | phase-5 | build_learnings | Added 1 learnings from Phase 5: Consolidation Pipeline Integration |
 | 2026-04-01T10:07:24Z | Aether Colony | promoted_pattern | Added: Splitting related subcommands into separate files ... |
 | 2026-04-01T09:52:02Z | phase-4 | build_learnings | Added 1 learnings from Phase 4: Curation Ants |
@@ -257,5 +259,5 @@ High-confidence behavioral patterns that have been validated through repeated co
 ---
 
 <!-- METADATA
-{  "version": "2.0.0",  "wisdom_version": "2.0",  "last_evolved": "2026-04-01T10:07:42Z",  "colonies_contributed": ["1774645519"],  "stats": {    "total_user_prefs": 3,    "total_codebase_patterns": 3,    "total_build_learnings": 3,    "total_instincts": 3  },  "evolution_log": [{"timestamp": "2026-03-24T23:40:00Z", "action": "migrate", "wisdom_type": "system", "content_hash": "v1-to-v2-migration", "colony": "system"}, {"timestamp": "2026-03-20T12:37:32Z", "action": "promote", "wisdom_type": "pattern", "content_hash": "sha256:f8aa50cfda0f37cac6cabba140bb99f1d75aa6d01a7100fe7a5ccddc2b3a017b", "colony": "1771335865738"}]}
+{  "version": "2.0.0",  "wisdom_version": "2.0",  "last_evolved": "2026-04-01T10:22:01Z",  "colonies_contributed": ["1774645519"],  "stats": {    "total_user_prefs": 3,    "total_codebase_patterns": 3,    "total_build_learnings": 3,    "total_instincts": 3  },  "evolution_log": [{"timestamp": "2026-03-24T23:40:00Z", "action": "migrate", "wisdom_type": "system", "content_hash": "v1-to-v2-migration", "colony": "system"}, {"timestamp": "2026-03-20T12:37:32Z", "action": "promote", "wisdom_type": "pattern", "content_hash": "sha256:f8aa50cfda0f37cac6cabba140bb99f1d75aa6d01a7100fe7a5ccddc2b3a017b", "colony": "1771335865738"}]}
 -->
