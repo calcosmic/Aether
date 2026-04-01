@@ -111,8 +111,8 @@
 
 **Milestone Goal:** Replace all shell scripts with a native Go binary, eliminating bash/jq/curl dependencies while preserving exact behavioral parity with the existing system.
 
-- [ ] **Phase 45: Core Storage** - STOR-01, STOR-02, STOR-03
-- [ ] **Phase 46: Event Bus** - EVT-01, EVT-02, EVT-03
+- [x] **Phase 45: Core Storage** - STOR-01, STOR-02, STOR-03
+- [x] **Phase 46: Event Bus** - EVT-01, EVT-02, EVT-03
 - [ ] **Phase 47: Memory Pipeline** - MEM-01 through MEM-05
 - [ ] **Phase 48: Graph Layer** - GRAPH-01 through GRAPH-04
 - [ ] **Phase 49: Agent System + LLM** - AGENT-01 through AGENT-04, LLM-01 through LLM-04
