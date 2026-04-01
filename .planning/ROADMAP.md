@@ -9,7 +9,8 @@
 - **v2.4 Living Wisdom** -- Phases 25-28 (shipped 2026-03-27)
 - **v2.5 Smart Init** -- Phases 29-32 (shipped 2026-03-27)
 - **v2.6 Bugfix & Hardening** -- Phases 33-38 (shipped 2026-03-30)
-- **v2.7 PR Workflow + Stability** -- Phases 39-44 (planned)
+- **v2.7 PR Workflow + Stability** -- Phases 39-44 (shipped 2026-03-31)
+- **v5.4 Shell-to-Go Rewrite** -- Phases 45-51 (in progress)
 
 ## Phases
 
@@ -81,29 +82,47 @@
 
 </details>
 
-### v2.6 Bugfix & Hardening (Shipped)
+<details>
+<summary>v2.6 Bugfix & Hardening (Phases 33-38) -- SHIPPED 2026-03-30</summary>
 
-**Milestone Goal:** Fix critical data-corruption bugs, harden infrastructure, clear high-priority TODOs.
+- [x] **Phase 33: Input Escaping & Atomic Write Safety** - Fix ant_name injection in grep/JSON, jq-escape all dynamic values, release locks on validation failure
+- [x] **Phase 34: Cross-Colony Isolation** - Eliminate information bleed between colonies via proper name extraction, lock scoping, and file namespacing
+- [x] **Phase 35: Colony Depth & Model Routing** - Depth selector gates Oracle/Scout spawns; model routing either wired end-to-end or dead code removed
+- [x] **Phase 36: YAML Command Generator** - Single YAML source produces both Claude and OpenCode command markdown
+- [x] **Phase 37: XML Core Integration** - XML export/import wired into seal, entomb, and init lifecycle commands
+- [x] **Phase 38: Cleanup & Maintenance** - Deprecate old npm versions, generate error code docs, remove dead awk code
 
-- [x] **Phase 33: Input Escaping & Atomic Write Safety** - Fix ant_name injection in grep/JSON, jq-escape all dynamic values, release locks on validation failure (completed 2026-03-29)
-- [x] **Phase 34: Cross-Colony Isolation** - Eliminate information bleed between colonies via proper name extraction, lock scoping, and file namespacing (completed 2026-03-29)
-- [x] **Phase 35: Colony Depth & Model Routing** - Depth selector gates Oracle/Scout spawns; model routing either wired end-to-end or dead code removed (completed 2026-03-29)
-- [x] **Phase 36: YAML Command Generator** - Single YAML source produces both Claude and OpenCode command markdown (completed 2026-03-29)
-- [x] **Phase 37: XML Core Integration** - XML export/import wired into seal, entomb, and init lifecycle commands (completed 2026-03-29)
-- [x] **Phase 38: Cleanup & Maintenance** - Deprecate old npm versions, generate error code docs, remove dead awk code (completed 2026-03-29)
+</details>
 
-### v2.7 PR Workflow + Stability (Planned)
+<details>
+<summary>v2.7 PR Workflow + Stability (Phases 39-44) -- SHIPPED 2026-03-31</summary>
 
-**Milestone Goal:** Make multi-branch colony work safe and productive -- clash detection prevents conflicts, pheromones propagate across branches, failures collect on merge, and CI agents get structured context.
+- [x] **Phase 39: State Safety** -- STATE-01, STATE-02
+- [x] **Phase 40: Pheromone Propagation** -- PHERO-01, PHERO-02, PHERO-03
+- [x] **Phase 41: Midden Collection** -- MIDD-01, MIDD-02, MIDD-03
+- [x] **Phase 42: CI Context Assembly** -- CI-01, CI-02, CI-03
+- [x] **Phase 42.1: Release Hygiene** -- REL-01, REL-02
+- [x] **Phase 43: Clash Detection Integration** -- CLASH-01, CLASH-02, CLASH-03
+- [x] **Phase 44: Release Hygiene & Ship** -- REL-01, REL-02, REL-03, TEST-01, TEST-02
 
-- [ ] **Phase 39: State Safety** -- STATE-01, STATE-02
-- [x] **Phase 40: Pheromone Propagation** -- PHERO-01, PHERO-02, PHERO-03 (completed 2026-03-30)
-- [x] **Phase 41: Midden Collection** -- MIDD-01, MIDD-02, MIDD-03 (completed 2026-03-30)
-- [ ] **Phase 42: CI Context Assembly** -- CI-01, CI-02, CI-03
-- [x] **Phase 43: Clash Detection Integration** -- CLASH-01, CLASH-02, CLASH-03 (completed 2026-03-31)
-- [ ] **Phase 44: Release Hygiene & Ship** -- REL-01, REL-02, REL-03, TEST-01, TEST-02
+</details>
+
+### v5.4 Shell-to-Go Rewrite (In Progress)
+
+**Milestone Goal:** Replace all shell scripts with a native Go binary, eliminating bash/jq/curl dependencies while preserving exact behavioral parity with the existing system.
+
+- [ ] **Phase 45: Core Storage** - STOR-01, STOR-02, STOR-03
+- [ ] **Phase 46: Event Bus** - EVT-01, EVT-02, EVT-03
+- [ ] **Phase 47: Memory Pipeline** - MEM-01 through MEM-05
+- [ ] **Phase 48: Graph Layer** - GRAPH-01 through GRAPH-04
+- [ ] **Phase 49: Agent System + LLM** - AGENT-01 through AGENT-04, LLM-01 through LLM-04
+- [ ] **Phase 50: CLI Commands** - CLI-01 through CLI-04
+- [ ] **Phase 51: XML Exchange + Distribution + Testing** - XML-01 through XML-04, DIST-01 through DIST-03, TEST-01 through TEST-03
 
 ## Phase Details
+
+<details>
+<summary>Phase details for v1.3 through v2.7 (Phases 1-44)</summary>
 
 ### Phase 33: Input Escaping & Atomic Write Safety
 **Goal**: Dynamic values flowing through grep patterns, JSON construction, and atomic writes cannot corrupt data or break commands
@@ -207,8 +226,6 @@ Plans:
 - [ ] 39-01-PLAN.md -- Stash protection: add pathspec exclusion to 3 stash entry points (swarm.sh, build-prep.md, build-full.md)
 - [ ] 39-02-PLAN.md -- State migration + test fixes: migrate queen.sh to _state_mutate, reset COLONY_STATE.json, fix 11 failing tests
 
----
-
 ### Phase 40: Pheromone Propagation
 **Goal**: Pheromone signals flow across git branches -- signals from main reach worktrees, and branch-specific signals merge back after PR
 **Depends on**: Phase 39 (state safety must be solid before adding cross-branch writes)
@@ -218,9 +235,6 @@ Plans:
   2. `pheromone-snapshot-inject` produces a valid snapshot JSON that can be read by the branch's pheromone system
   3. `pheromone-merge-back` merges user-created branch signals into main without duplicating existing signals
   4. Merge conflict resolution follows priority: REDIRECT > FOCUS > FEEDBACK, with strength-based dedup
-**Existing work**: 4 subcommand stubs in pheromone.sh; design doc at `.aether/docs/pheromone-propagation-design.md`; test file at `test/pheromone-snapshot-merge.sh`
-
----
 
 ### Phase 41: Midden Collection
 **Goal**: Failure records from merged branches are collected into main's midden with idempotency and cross-PR pattern detection
@@ -231,9 +245,6 @@ Plans:
   2. Running midden-collect twice with the same merge SHA produces no duplicates (idempotent)
   3. `midden-handle-revert --sha <sha>` tags affected entries rather than deleting them
   4. `midden-cross-pr-analysis` returns failure patterns detected across 2+ PRs
-**Existing work**: Design doc at `.aether/docs/midden-collection-design.md`; existing midden.sh has core write/read/acknowledge functions
-
----
 
 ### Phase 42: CI Context Assembly
 **Goal**: CI agents get machine-readable colony context via `pr-context` subcommand, replacing interactive colony-prime for automated workflows
@@ -244,17 +255,13 @@ Plans:
   2. When a source file is missing or corrupt, pr-context returns partial data with the missing section marked as `null` -- never hard-fails
   3. Normal mode output stays under 6,000 characters; compact mode under 3,000 characters
   4. Token budget trimming follows the same priority order as colony-prime (rolling summary first, blockers never)
-**Existing work**: Design doc at `.aether/docs/ci-context-assembly-design.md`; colony-prime prompt assembly exists as reference implementation
 **Plans:** 2 plans
 
 Plans:
 - [ ] 42-01-PLAN.md -- Extract _budget_enforce(), implement pr-context with all sections, cache, midden, tests
 - [ ] 42-02-PLAN.md -- Wire pr-context into /ant:continue and /ant:run playbooks
 
----
-
-### Phase 42.1: Release hygiene -- version drift, npm packaging, command sync, doc accuracy (INSERTED)
-
+### Phase 42.1: Release hygiene (INSERTED)
 **Goal:** Fix version drift in CLAUDE.md, expand validate-package.sh coverage to all packaged utils, regenerate stale YAML-generated commands, and correct inaccurate documentation counts.
 **Requirements**: REL-01, REL-02
 **Depends on:** Phase 42
@@ -273,14 +280,11 @@ Plans:
   2. `_worktree_create` automatically copies colony context (COLONY_STATE.json, pheromones.json) and runs pheromone-snapshot-inject
   3. `.gitattributes` merge driver resolves package-lock.json conflicts by keeping "ours"
   4. `.aether/data/` files are on the allowlist -- never trigger clash detection (branch-local state)
-**Existing work**: clash-detect.sh, clash-pre-tool-use.js hook, worktree.sh, merge-driver-lockfile.sh; 4 test files (~1,036 lines total)
 **Plans:** 2/2 plans complete
 
 Plans:
-- [x] 43-01-PLAN.md -- Wire clash-detect.sh and worktree.sh into aether-utils.sh dispatcher (source lines, dispatch cases, help JSON)
-- [ ] 43-02-PLAN.md -- Wire clash detection and merge driver setup into /ant:init (Step 7.6, read-only list fix, hook verification)
-
----
+- [x] 43-01-PLAN.md -- Wire clash-detect.sh and worktree.sh into aether-utils.sh dispatcher
+- [ ] 43-02-PLAN.md -- Wire clash detection and merge driver setup into /ant:init
 
 ### Phase 44: Release Hygiene & Ship
 **Goal**: Published package is clean of dev artifacts, all tests pass, and v2.7.0 ships to npm
@@ -292,11 +296,105 @@ Plans:
   3. `npm test` shows 620+ passing tests with zero failures
   4. `npm install -g . && aether --version` succeeds on a clean machine
   5. CLAUDE.md updated with v2.7 changes, version bumped to v2.7.0
-**Existing work**: validate-package.sh exists; .npmignore covers most paths; new v2.7 modules may have added untracked file types
 
----
+</details>
+
+### Phase 45: Core Storage
+**Goal**: Go reads and writes all existing colony data files with identical behavior to the shell implementation -- no data loss, no partial writes, no format drift
+**Depends on**: Nothing (foundation -- every subsequent phase reads/writes through this layer)
+**Requirements**: STOR-01, STOR-02, STOR-03
+**Success Criteria** (what must be TRUE):
+  1. Go reads every existing JSON file (COLONY_STATE, pheromones, learnings, instincts, flags, constraints, midden) and produces structurally identical output when re-serialized -- round-trip tests prove byte-level parity
+  2. Killing the process mid-write never leaves a partial or corrupt JSON file on disk -- temp+rename atomic writes match the shell `atomic_write` contract
+  3. JSONL append and read operations produce the same line format as shell -- blank lines are skipped, malformed lines are logged and skipped
+  4. A Go test suite of 20+ cases covers normal reads, missing files, corrupt JSON, concurrent writes, and large files
+**Plans:** 2 plans
+
+Plans:
+- [ ] 45-01-PLAN.md -- Define typed structs for all 6 data files (pheromones, learning-observations, midden, flags, constraints, session), fix ColonyState gaps, golden file parity tests (STOR-01)
+- [ ] 45-02-PLAN.md -- Storage infrastructure: backup rotation, AETHER_ROOT path resolution, JSONL malformed line handling (STOR-02, STOR-03)
+
+### Phase 46: Event Bus
+**Goal**: Typed events flow through the system via Go channels with crash-recoverable persistence -- replacing the shell's file-based pub/sub
+**Depends on**: Phase 45 (event persistence uses JSONL storage layer)
+**Requirements**: EVT-01, EVT-02, EVT-03
+**Success Criteria** (what must be TRUE):
+  1. Publishers emit typed events to named channels and all active subscribers receive them in order with sub-microsecond latency
+  2. After a simulated crash (process kill), the bus replays persisted events from JSONL so no events are lost
+  3. Events with expired TTLs are pruned on load and on schedule -- behavior matches the shell `event-bus-publish` TTL pruning
+  4. Channel subscribe/unsubscribe works without blocking publishers -- goroutines clean up on unsubscribe
+**Plans**: TBD
+
+### Phase 47: Memory Pipeline
+**Goal**: Observations flow through trust scoring, auto-promote to instincts, and high-confidence instincts promote to QUEEN.md -- identical outcomes to the shell wisdom pipeline
+**Depends on**: Phase 46 (observations and promotions flow as events)
+**Requirements**: MEM-01, MEM-02, MEM-03, MEM-04, MEM-05
+**Success Criteria** (what must be TRUE):
+  1. Trust scores calculated by Go produce the same numeric result as the shell ADR-002 algorithm (40/35/25 weighted, 60-day half-life, 7 tiers) for identical inputs
+  2. An observation is auto-promoted to an instinct when trust reaches 0.50 or 3+ similar patterns are captured -- matches shell `learning-promote-auto` thresholds
+  3. Promoted instincts include full provenance (source observation IDs, timestamp, confidence) and graph edges link source to instinct
+  4. QUEEN.md sections written by Go match the existing 4-section template format -- no structural changes to the file
+  5. Phase-end consolidation runs trust decay, archives entries below threshold, and checks promotion eligibility -- output matches shell consolidation
+**Plans**: TBD
+
+### Phase 48: Graph Layer
+**Goal**: A directed graph tracks relationships between learnings, instincts, phases, and colonies -- queryable via BFS and cycle detection
+**Depends on**: Phase 47 (graph edges are created during instinct promotion)
+**Requirements**: GRAPH-01, GRAPH-02, GRAPH-03, GRAPH-04
+**Success Criteria** (what must be TRUE):
+  1. Nodes of all 5 types (learning, instinct, queen, phase, colony) and all 16 edge types can be added, queried, and removed from the in-memory directed graph
+  2. 1-hop and 2-hop neighbor queries return the same set of connected nodes as the jq graph layer for identical input data
+  3. Shortest path (BFS) finds the minimum-hop route between two nodes; cycle detection identifies all cycles in the graph
+  4. Graph serializes to JSON and deserializes back without data loss -- round-trip parity verified against shell-produced graph JSON
+**Plans**: TBD
+
+### Phase 49: Agent System + LLM
+**Goal**: Go agents run in goroutine pools with Anthropic LLM calls, replacing shell subprocess spawning and enabling tool-use loops
+**Depends on**: Phase 46 (agents subscribe to events), Phase 47 (curation ants handle memory events)
+**Requirements**: AGENT-01, AGENT-02, AGENT-03, AGENT-04, LLM-01, LLM-02, LLM-03, LLM-04
+**Success Criteria** (what must be TRUE):
+  1. All agents implement a common interface (Name, Caste, Triggers, Execute) -- adding a new agent requires only implementing the interface and registering it
+  2. Worker pool runs multiple agents concurrently with bounded goroutines -- pool limit prevents resource exhaustion under load
+  3. Spawn tracking records all running agents in a tree structure matching the shell spawn-tree.txt format
+  4. The 8 curation ants subscribe to typed memory events and execute their handlers when events arrive -- matches shell ant orchestrator behavior
+  5. Anthropic SDK sends a message and receives a valid response with correct role, content, and stop reason
+  6. Streaming responses accumulate SSE chunks into a complete message -- caller receives the same result as a non-streaming call
+  7. Tool use loop detects tool call blocks, executes the requested tool, and returns the result -- completes when the model returns a text-only response
+  8. Agent YAML frontmatter (model, tools, triggers) parses into Go structs that configure agent behavior
+**Plans**: TBD
+
+### Phase 50: CLI Commands
+**Goal**: All 37 colony commands are accessible via a Go binary with Cobra, producing output identical to the shell commands
+**Depends on**: Phase 45 (all commands read/write via storage layer), Phase 47 (memory commands), Phase 49 (agent commands)
+**Requirements**: CLI-01, CLI-02, CLI-03, CLI-04
+**Success Criteria** (what must be TRUE):
+  1. Running `aether init`, `aether build`, `aether status`, and all 34 other subcommands from the Go binary produces the same exit code and side effects as the shell equivalents
+  2. Shell completion scripts for bash, zsh, and fish generate from the Cobra command tree -- tab completion works identically to shell command completion
+  3. `aether status` output matches the shell `/ant:status` dashboard character-for-character in structure and data
+  4. All read-only commands (status, phase, flags, history, pheromones, memory-details) produce byte-identical output to their shell counterparts for the same input data
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 51: XML Exchange + Distribution + Testing
+**Goal**: XML export/import, cross-platform binary distribution, and full test parity complete the Go rewrite -- the binary replaces npm
+**Depends on**: Phase 50 (CLI commands), Phase 48 (graph layer used by XML exchange)
+**Requirements**: XML-01, XML-02, XML-03, XML-04, DIST-01, DIST-02, DIST-03, TEST-01, TEST-02, TEST-03
+**Success Criteria** (what must be TRUE):
+  1. Pheromone export/import produces valid XML that validates against existing XSD schemas and round-trips without data loss
+  2. Wisdom export/import respects confidence threshold filtering -- only entries above the threshold appear in XML output
+  3. Registry export/import includes lineage tracking up to depth 10 -- matches shell behavior
+  4. `go install github.com/aether-colony/aether@latest` produces a working binary on a clean machine
+  5. Cross-compiled binaries for linux/darwin/windows on amd64/arm64 all pass their test suites
+  6. `aether --version` reports a version string matching the npm package version
+  7. All existing shell test cases have Go equivalents that pass -- parity verified against shell-produced output fixtures
+  8. `go test -race ./...` passes with zero race conditions detected
+  9. Golden file tests compare Go JSON output against shell-produced fixtures -- byte-identical or documented difference
+**Plans**: TBD
 
 ## Progress
+
+**Execution Order:**
+Phases execute in numeric order: 1 -> 2 -> ... -> 44 -> 45 -> 46 -> 47 -> 48 -> 49 -> 50 -> 51
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -316,32 +414,39 @@ Plans:
 | 14. Planning Depth | v2.1 | 2/2 | Complete | 2026-03-24 |
 | 15. Documentation Accuracy | v2.1 | 3/3 | Complete | 2026-03-24 |
 | 16. Ship | v2.1 | 2/2 | Complete | 2026-03-24 |
-| 17. Local Wisdom Accumulation | v2.2 | Complete | Complete | 2026-03-24 |
-| 18. Local Wisdom Injection | v2.2 | Complete | Complete | 2026-03-25 |
-| 19. Cross-Colony Hive | v2.2 | Complete | Complete | 2026-03-25 |
-| 20. Hub Wisdom Layer | v2.2 | Complete | Complete | 2026-03-25 |
-| 21. Test Infrastructure Refactor | v2.3 | Complete | Complete | 2026-03-27 |
-| 22. Config Foundation & Core Routing | v2.3 | Complete | Complete | 2026-03-27 |
-| 23. Tooling & Overrides | v2.3 | Complete | Complete | 2026-03-27 |
+| 17. Local Wisdom Accumulation | v2.2 | - | Complete | 2026-03-24 |
+| 18. Local Wisdom Injection | v2.2 | - | Complete | 2026-03-25 |
+| 19. Cross-Colony Hive | v2.2 | - | Complete | 2026-03-25 |
+| 20. Hub Wisdom Layer | v2.2 | - | Complete | 2026-03-25 |
+| 21. Test Infrastructure Refactor | v2.3 | - | Complete | 2026-03-27 |
+| 22. Config Foundation & Core Routing | v2.3 | - | Complete | 2026-03-27 |
+| 23. Tooling & Overrides | v2.3 | - | Complete | 2026-03-27 |
 | 24. Safety & Verification | v2.3 | 2/2 | Complete | 2026-03-27 |
-| 25. Agent Definitions (Oracle + Architect) | v2.4 | Complete | Complete | 2026-03-27 |
-| 26. Wisdom Pipeline Wiring | v2.4 | Complete | Complete | 2026-03-27 |
-| 27. Deterministic Fallback + Dedup | v2.4 | Complete | Complete | 2026-03-27 |
-| 28. Integration Validation | v2.4 | Complete | Complete | 2026-03-27 |
+| 25. Agent Definitions | v2.4 | - | Complete | 2026-03-27 |
+| 26. Wisdom Pipeline Wiring | v2.4 | - | Complete | 2026-03-27 |
+| 27. Deterministic Fallback + Dedup | v2.4 | - | Complete | 2026-03-27 |
+| 28. Integration Validation | v2.4 | - | Complete | 2026-03-27 |
 | 29. Repo Scanning Module | v2.5 | 3/3 | Complete | 2026-03-27 |
 | 30. Charter Management | v2.5 | 2/2 | Complete | 2026-03-27 |
-| 31. Init.md Smart Init Rewrite | v2.5 | 2/2 | Complete | 2026-03-27 |
+| 31. Init Smart Init Rewrite | v2.5 | 2/2 | Complete | 2026-03-27 |
 | 32. Intelligence Enhancements | v2.5 | 3/3 | Complete | 2026-03-27 |
-| 33. Input Escaping & Atomic Write Safety | v2.6 | Complete    | Complete | 2026-03-29 | - |
-| 34. Cross-Colony Isolation | v2.6 | 2/5 | Complete    | 2026-03-29 |
-| 35. Colony Depth & Model Routing | v2.6 | 0/TBD | Complete    | 2026-03-29 |
-| 36. YAML Command Generator | v2.6 | 2/4 | Complete    | 2026-03-29 |
-| 37. XML Core Integration | v2.6 | 3/3 | Complete | 2026-03-29 |
-| 38. Cleanup & Maintenance | v2.6 | 1/2 | Complete    | 2026-03-29 |
-| 39. State Safety | v2.7 | 0/2 | Pending | -- |
-| 40. Pheromone Propagation | v2.7 | 1/1 | Complete   | 2026-03-30 |
-| 41. Midden Collection | v2.7 | 0/0 | Complete    | 2026-03-30 |
-| 42. CI Context Assembly | v2.7 | 0/2 | Pending | -- |
-| 42.1 Release Hygiene | v2.7 | 1/2 | Complete    | 2026-03-31 |
-| 43. Clash Detection Integration | v2.7 | 1/2 | Complete    | 2026-03-31 |
-| 44. Release Hygiene & Ship | v2.7 | 1/3 | In Progress | -- |
+| 33. Input Escaping | v2.6 | - | Complete | 2026-03-29 |
+| 34. Cross-Colony Isolation | v2.6 | - | Complete | 2026-03-29 |
+| 35. Colony Depth & Model Routing | v2.6 | - | Complete | 2026-03-29 |
+| 36. YAML Command Generator | v2.6 | - | Complete | 2026-03-29 |
+| 37. XML Core Integration | v2.6 | - | Complete | 2026-03-29 |
+| 38. Cleanup & Maintenance | v2.6 | - | Complete | 2026-03-29 |
+| 39. State Safety | v2.7 | - | Complete | 2026-03-31 |
+| 40. Pheromone Propagation | v2.7 | - | Complete | 2026-03-31 |
+| 41. Midden Collection | v2.7 | - | Complete | 2026-03-31 |
+| 42. CI Context Assembly | v2.7 | - | Complete | 2026-03-31 |
+| 42.1. Release Hygiene | v2.7 | - | Complete | 2026-03-31 |
+| 43. Clash Detection | v2.7 | - | Complete | 2026-03-31 |
+| 44. Release Hygiene & Ship | v2.7 | - | Complete | 2026-03-31 |
+| 45. Core Storage | v5.4 | 0/2 | Not started | - |
+| 46. Event Bus | v5.4 | 0/TBD | Not started | - |
+| 47. Memory Pipeline | v5.4 | 0/TBD | Not started | - |
+| 48. Graph Layer | v5.4 | 0/TBD | Not started | - |
+| 49. Agent System + LLM | v5.4 | 0/TBD | Not started | - |
+| 50. CLI Commands | v5.4 | 0/TBD | Not started | - |
+| 51. XML Exchange + Dist + Testing | v5.4 | 0/TBD | Not started | - |
