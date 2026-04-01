@@ -5,6 +5,8 @@ package storage
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -44,8 +46,10 @@ func (s *Store) AtomicWrite(path string, data []byte) error {
 		return fmt.Errorf("storage: create dir %q: %w", dir, err)
 	}
 
-	// Write to temp file first
-	tmpPath := fullPath + ".tmp." + fmt.Sprintf("%d", os.Getpid())
+	// Write to temp file first with unique suffix for concurrent safety
+	rnd := make([]byte, 4)
+	rand.Read(rnd)
+	tmpPath := fullPath + ".tmp." + fmt.Sprintf("%d-%s", os.Getpid(), hex.EncodeToString(rnd))
 	success := false
 	defer func() {
 		if !success {
