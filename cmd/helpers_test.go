@@ -131,3 +131,94 @@ func TestEnvelopeJSONMatch(t *testing.T) {
 		t.Errorf("envelope mismatch:\ngot:      %q\nexpected: %q", got, expected)
 	}
 }
+
+// --- Completion tests ---
+
+func TestCompletionBash(t *testing.T) {
+	output := captureStdout(t, func() {
+		rootCmd.SetArgs([]string{"completion", "bash"})
+		defer rootCmd.SetArgs([]string{})
+
+		err := rootCmd.Execute()
+		if err != nil {
+			t.Fatalf("completion bash returned error: %v", err)
+		}
+	})
+
+	if !strings.Contains(output, "complete -F") && !strings.Contains(output, "# bash completion") {
+		t.Errorf("bash completion output doesn't look like a bash completion script: %s", truncate(output, 200))
+	}
+}
+
+func TestCompletionZsh(t *testing.T) {
+	output := captureStdout(t, func() {
+		rootCmd.SetArgs([]string{"completion", "zsh"})
+		defer rootCmd.SetArgs([]string{})
+
+		err := rootCmd.Execute()
+		if err != nil {
+			t.Fatalf("completion zsh returned error: %v", err)
+		}
+	})
+
+	if !strings.Contains(output, "#compdef") {
+		t.Errorf("zsh completion output doesn't contain #compdef: %s", truncate(output, 200))
+	}
+}
+
+func TestCompletionFish(t *testing.T) {
+	output := captureStdout(t, func() {
+		rootCmd.SetArgs([]string{"completion", "fish"})
+		defer rootCmd.SetArgs([]string{})
+
+		err := rootCmd.Execute()
+		if err != nil {
+			t.Fatalf("completion fish returned error: %v", err)
+		}
+	})
+
+	// Cobra uses "complete -c" for fish (not "--command")
+	if !strings.Contains(output, "complete -c aether") && !strings.Contains(output, "complete --command aether") {
+		t.Errorf("fish completion output doesn't contain fish complete directive: %s", truncate(output, 200))
+	}
+}
+
+func TestCompletionInvalid(t *testing.T) {
+	rootCmd.SetArgs([]string{"completion", "invalid"})
+	defer rootCmd.SetArgs([]string{})
+
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Fatal("completion with invalid arg should return error, got nil")
+	}
+	if !strings.Contains(err.Error(), "invalid") && !strings.Contains(err.Error(), "accepts") {
+		t.Errorf("expected error about invalid argument, got: %v", err)
+	}
+}
+
+func truncate(s string, maxLen int) string {
+	if len(s) > maxLen {
+		return s[:maxLen] + "..."
+	}
+	return s
+}
+
+// captureStdout captures os.Stdout output during the execution of fn.
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("failed to create pipe: %v", err)
+	}
+	os.Stdout = w
+
+	fn()
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	return buf.String()
+}

@@ -106,3 +106,7 @@ node_modules/
 # GSD planning files
 # .planning/ — tracked for this project
 .planning/
+
+# Go build output
+/aether
+*.test
