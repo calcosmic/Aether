@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.6
 milestone_name: Bugfix & Hardening
 status: executing
-stopped_at: Completed 44-02-PLAN.md
-last_updated: "2026-03-31T06:08:05.876Z"
+stopped_at: Completed 49-02-PLAN.md
+last_updated: "2026-04-02T03:41:31.038Z"
 last_activity: 2026-03-31
 progress:
-  total_phases: 34
+  total_phases: 35
   completed_phases: 6
   total_plans: 28
-  completed_plans: 68
+  completed_plans: 70
   percent: 100
 ---
 
@@ -72,6 +72,7 @@ Progress: [█████████ ] 100% (v1.3 through v2.5) + phase 37 in 
 | Phase 42.1 P01 | 4min | 2 tasks | 7 files |
 | Phase 43 P01 | 3min | 2 tasks | 1 files |
 | Phase 44 P02 | 3min | 2 tasks | 3 files |
+| Phase 49 P02 | 21 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -132,6 +133,9 @@ Progress: [█████████ ] 100% (v1.3 through v2.5) + phase 37 in 
 - [Phase 43]: Research predicted 5/12 worktree test failures but dispatcher wiring resolved all 12
 - [Phase 44]: Used ~5,500 for aether-utils.sh line count (actual 5,469) for rounding stability
 - [Phase 44]: CHANGELOG uses npm version [5.3.0] as section header per keepachangelog convention
+- [Phase 49]: Functional options pattern for LLM Client construction (WithModel, WithMaxTokens, WithAPIKey)
+- [Phase 49]: Streaming tests use SDK NewStreaming with httptest SSE servers (concrete type, not interface)
+- [Phase 49]: Custom ToolRunner loop rather than SDK toolrunner for testability and explicit control
 
 ### Pending Todos
 
@@ -143,6 +147,6 @@ None active.
 
 ## Session Continuity
 
-Last session: 2026-03-31T06:08:05.872Z
-Stopped at: Completed 44-02-PLAN.md
+Last session: 2026-04-02T03:41:31.034Z
+Stopped at: Completed 49-02-PLAN.md
 Resume file: None
