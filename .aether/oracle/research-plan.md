@@ -1,25 +1,26 @@
 # Research Plan
 
-**Topic:** PR-based, branch/worktree coding workflow for Aether's multi-agent colony system
-**Status:** active | **Iteration:** 7 of 30
-**Overall Confidence:** 58%
+**Topic:** Post-worktree-merge recovery: fix Go compile errors (cmd/flags.go, cmd/history.go, cmd/phase.go unused imports), close the worktree merge-back gap in build playbooks, verify npm publish flow with Go code, plan push/publish sequence, assess other repos via registry, and chart Go transition roadmap from .planning/ phases.
+**Status:** active | **Iteration:** 5 of 30
+**Overall Confidence:** 40%
 
 ## Questions
 | # | Question | Status | Confidence |
 |---|----------|--------|------------|
-| q1 | Git worktree workflows for AI agents: How do Cursor Worktrees, Claude Code multi-branch patterns, and Copilot Workspace handle parallel AI development on separate branches? What are proven patterns for avoiding conflicts between parallel agent worktrees? What is the max safe number of parallel worktrees and how are they cleaned up? | partial | 40% |
-| q2 | PR-based AI coding workflows: How do production AI coding tools (Cursor, Windsurf, Claude Code, Devin, Sweep, Aider) handle branch creation, PR generation, and merge automation? What is the state of the art for AI-generated PRs with proper descriptions, test evidence, and review context? Find open-source implementations and documented real workflows. | partial | 60% |
-| q3 | Aether architecture integration: How should Aether's existing systems map to a PR workflow? Specifically: 24 agents (builder, watcher, gatekeeper, auditor, probe), quality gates in continue-gates.md (7 mandatory gates), midden failure tracking, pheromone steering (FOCUS/REDIRECT/FEEDBACK), colony phases with task tracking. Should each phase become a PR? Should agents review each other's PRs? How does queen/colony-prime orchestrate parallel branch work? Examine existing worktree support (.claude/worktrees/agent-*). | partial | 65% |
-| q4 | Review automation pipeline design: What should the automated review pipeline look like? Pre-merge gates (tests pass, lint clean, no antipatterns, coverage threshold), agent-based code review (watcher reviews builder's code, auditor scores quality, probe measures coverage), conflict detection and resolution strategy, merge approval criteria. Research how GitHub Actions + AI review tools (CodeRabbit, Sourcery) structure their review pipelines. | partial | 60% |
-| q5 | Branch naming, organization, and safeguards: What branch naming conventions work for AI-generated work? How to organize feature/fix/experiment branches? How to handle long-lived vs short-lived branches? What safety mechanisms are needed: merge conflict handling, force-push prevention, main branch protection, rollback to pre-merge state, partial failure handling (some PRs pass, some fail in a batch)? | partial | 65% |
+| q1 | Fix the compile errors: read cmd/flags.go, cmd/history.go, cmd/phase.go and ALL other Go files. Identify every unused import and fix them so go build ./cmd/aether succeeds. Verify with go test ./... and go test -race ./pkg/... | answered | 95% |
+| q2 | Fix the worktree merge-back gap: read build playbooks (.aether/docs/command-playbooks/build-*.md), continue playbooks (.aether/docs/command-playbooks/continue-*.md), and command orchestrators (.claude/commands/ant/build.md, continue.md). Identify WHERE in the wave lifecycle to add merge-back, design the step with safety checks and conflict handling, and decide if it belongs in build, continue, or a new dedicated playbook. | partial | 35% |
+| q3 | Verify the publish flow: read package.json, bin/validate-package.sh, .npmignore, .gitignore. Determine if Go binary needs compilation in npm publish, whether go.mod/Go sources are included or excluded, check pre-publish hooks, and validate .gitignore doesn't exclude needed Go files. | partial | 40% |
+| q4 | Plan the push and publish sequence: determine branch strategy (main?), whether go mod tidy should run, whether npm version needs bumping, and what repos need updating via aether update. Read ~/.aether/registry/ to find affected repos. | partial | 72% |
+| q5 | Assess other repos that may be affected: check ~/.aether/registry/ for repos using Aether, check for stale colony state referencing old branch structure, and determine if aether update needs manual intervention. | open | 0% |
+| q6 | Go transition roadmap: read .planning/ROADMAP.md and .planning/STATE.md, assess phase status, determine where we are in shell-to-Go conversion, identify next logical phase to implement, and recommend which high-frequency shell subcommands should migrate to Go next. | open | 0% |
 
 ## Next Steps
-Next investigation: Git worktree workflows for AI agents: How do Cursor Worktrees, Claude Code multi-branch patterns, and Copilot Workspace handle parallel AI development on separate branches? What are proven patterns for avoiding conflicts between parallel agent worktrees? What is the max safe number of parallel worktrees and how are they cleaned up?
+Next investigation: Assess other repos that may be affected: check ~/.aether/registry/ for repos using Aether, check for stale colony state referencing old branch structure, and determine if aether update needs manual intervention.
 
 ## Source Trust
 | Total Findings | Multi-Source | Single-Source | Trust Ratio |
 |----------------|-------------|---------------|-------------|
-| 53 | 25 | 28 | 47% |
+| 24 | 13 | 11 | 54% |
 
 ---
 *Generated from plan.json -- do not edit directly*

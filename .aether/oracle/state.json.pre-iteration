@@ -1,128 +1,56 @@
 {
   "version": "1.1",
-  "topic": "PR-based, branch/worktree coding workflow for Aether's multi-agent colony system",
+  "topic": "Post-worktree-merge recovery: fix Go compile errors (cmd/flags.go, cmd/history.go, cmd/phase.go unused imports), close the worktree merge-back gap in build playbooks, verify npm publish flow with Go code, plan push/publish sequence, assess other repos via registry, and chart Go transition roadmap from .planning/ phases.",
   "scope": "both",
   "template": "custom",
-  "phase": "synthesize",
-  "iteration": 7,
+  "phase": "investigate",
+  "iteration": 5,
   "max_iterations": 30,
-  "target_confidence": 90,
-  "overall_confidence": 58,
-  "started_at": "2026-03-30T20:30:00Z",
-  "last_updated": "2026-03-30T12:20:10Z",
+  "target_confidence": 99,
+  "overall_confidence": 40,
+  "started_at": "2026-04-02T08:44:22Z",
+  "last_updated": "2026-04-02T09:16:41Z",
   "status": "active",
   "strategy": "adaptive",
-  "focus_areas": [
-    "git worktree",
-    "AI coding workflows",
-    "PR automation",
-    "code review pipelines",
-    "branch management",
-    "merge safety",
-    "Aether architecture mapping"
-  ],
+  "focus_areas": [],
   "convergence": {
-    "prev_findings_count": 53,
-    "prev_overall_confidence": 58,
+    "prev_findings_count": 24,
+    "prev_overall_confidence": 40,
     "history": [
       {
-        "iteration": 1,
-        "novelty_delta": 6,
-        "confidence_delta": 8,
-        "gap_resolution_pct": 0,
-        "coverage_pct": 20,
-        "phase": "survey"
-      },
-      {
         "iteration": 2,
-        "novelty_delta": 7,
-        "confidence_delta": 7,
-        "gap_resolution_pct": 0,
-        "coverage_pct": 40,
+        "novelty_delta": 6,
+        "confidence_delta": 10,
+        "gap_resolution_pct": 16,
+        "coverage_pct": 33,
         "phase": "survey"
       },
       {
         "iteration": 3,
-        "novelty_delta": 18,
-        "confidence_delta": 17,
+        "novelty_delta": 5,
+        "confidence_delta": 2,
         "gap_resolution_pct": 0,
-        "coverage_pct": 100,
+        "coverage_pct": 50,
         "phase": "survey"
-      },
-      {
-        "iteration": 3,
-        "novelty_delta": 14,
-        "confidence_delta": 17,
-        "gap_resolution_pct": 0,
-        "coverage_pct": 100,
-        "phase": "investigate"
-      },
-      {
-        "iteration": 3,
-        "novelty_delta": 6,
-        "confidence_delta": 7,
-        "gap_resolution_pct": 15,
-        "coverage_pct": 100,
-        "phase": "investigate"
-      },
-      {
-        "iteration": 4,
-        "novelty_delta": 6,
-        "confidence_delta": 7,
-        "gap_resolution_pct": 0,
-        "coverage_pct": 100,
-        "phase": "investigate"
       },
       {
         "iteration": 4,
         "novelty_delta": 8,
-        "confidence_delta": 8,
-        "gap_resolution_pct": 30,
-        "coverage_pct": 100,
+        "confidence_delta": 12,
+        "gap_resolution_pct": 16,
+        "coverage_pct": 67,
         "phase": "investigate"
       },
       {
         "iteration": 5,
-        "novelty_delta": 9,
-        "confidence_delta": 8,
-        "gap_resolution_pct": 0,
-        "coverage_pct": 100,
+        "novelty_delta": 0,
+        "confidence_delta": 12,
+        "gap_resolution_pct": 33,
+        "coverage_pct": 66,
         "phase": "investigate"
-      },
-      {
-        "iteration": 5,
-        "novelty_delta": 5,
-        "confidence_delta": 6,
-        "gap_resolution_pct": 25,
-        "coverage_pct": 100,
-        "phase": "investigate"
-      },
-      {
-        "iteration": 6,
-        "novelty_delta": 5,
-        "confidence_delta": 6,
-        "gap_resolution_pct": 0,
-        "coverage_pct": 100,
-        "phase": "investigate"
-      },
-      {
-        "iteration": 6,
-        "novelty_delta": 6,
-        "confidence_delta": 5,
-        "gap_resolution_pct": 20,
-        "coverage_pct": 100,
-        "phase": "investigate"
-      },
-      {
-        "iteration": 7,
-        "novelty_delta": 6,
-        "confidence_delta": 5,
-        "gap_resolution_pct": 0,
-        "coverage_pct": 100,
-        "phase": "synthesize"
       }
     ],
-    "composite_score": 30,
+    "composite_score": 62,
     "converged": false
   }
 }

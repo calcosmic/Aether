@@ -5543,6 +5543,9 @@ DRYRUN_EOF
   worktree-cleanup)
     _worktree_cleanup "$@"
     ;;
+  worktree-merge)
+    _worktree_merge "$@"
+    ;;
 
   # ── Event Bus ───────────────────────────────────────────────────────────────
   event-publish)

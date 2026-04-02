@@ -2,849 +2,415 @@
   "version": "1.1",
   "sources": {
     "S1": {
-      "url": "https://code.claude.com/docs/en/common-workflows",
-      "title": "Claude Code Docs — Common Workflows (Worktree Section)",
-      "type": "documentation",
-      "accessed": "2026-03-30"
+      "url": "cmd/flags.go",
+      "title": "flags.go command source - unused strings import on line 5",
+      "type": "codebase",
+      "accessed": "2026-04-02"
     },
     "S2": {
-      "url": "https://www.nrmitchi.com/2025/10/using-git-worktrees-for-multi-feature-development-with-ai-agents/",
-      "title": "Using Git Worktrees for Multi-Feature Development with AI Agents — Nick Mitchinson",
-      "type": "blog",
-      "accessed": "2026-03-30"
+      "url": "cmd/history.go",
+      "title": "history.go command source - compiles clean, strings used in parseEvent()",
+      "type": "codebase",
+      "accessed": "2026-04-02"
     },
     "S3": {
-      "url": "https://github.com/ComposioHQ/agent-orchestrator",
-      "title": "ComposioHQ/agent-orchestrator — Agentic orchestrator for parallel coding agents",
-      "type": "github",
-      "accessed": "2026-03-30"
+      "url": "cmd/phase.go",
+      "title": "phase.go command source - compiles clean, strings used in renderPhaseDetails()",
+      "type": "codebase",
+      "accessed": "2026-04-02"
     },
     "S4": {
-      "url": "https://gitcheatsheet.dev/docs/advanced/worktrees/performance/",
-      "title": "Performance Optimization for Git Worktrees — Git Cheat Sheet",
-      "type": "documentation",
-      "accessed": "2026-03-30"
+      "url": ".aether/utils/worktree.sh",
+      "title": "worktree.sh - worktree-create and worktree-cleanup functions",
+      "type": "codebase",
+      "accessed": "2026-04-02"
     },
     "S5": {
-      "url": "https://www.threads.com/@boris_cherny/post/DVAAnexgRUj",
-      "title": "Boris Cherny — Introducing built-in git worktree support for Claude Code",
-      "type": "official",
-      "accessed": "2026-03-30"
+      "url": ".aether/docs/command-playbooks/build-wave.md",
+      "title": "build-wave.md - worker spawning playbook (Steps 4.5-5.3)",
+      "type": "codebase",
+      "accessed": "2026-04-02"
     },
     "S6": {
-      "url": ".claude/worktrees/",
-      "title": "Aether repo — existing agent worktree directories",
+      "url": ".aether/docs/command-playbooks/build-verify.md",
+      "title": "build-verify.md - verification playbook (Steps 5.3.5-5.9, watcher/chaos/measurer/midden)",
       "type": "codebase",
-      "accessed": "2026-03-30"
+      "accessed": "2026-04-02"
     },
     "S7": {
-      "url": "https://code.claude.com/docs/en/github-actions",
-      "title": "Claude Code GitHub Actions — Official Documentation",
-      "type": "documentation",
-      "accessed": "2026-03-30"
+      "url": ".aether/docs/command-playbooks/build-complete.md",
+      "title": "build-complete.md - synthesis and results (Steps 5.9-8)",
+      "type": "codebase",
+      "accessed": "2026-04-02"
     },
     "S8": {
-      "url": "https://docs.github.com/en/copilot/concepts/agents/coding-agent/about-coding-agent",
-      "title": "About GitHub Copilot coding agent — GitHub Docs",
-      "type": "documentation",
-      "accessed": "2026-03-30"
+      "url": ".aether/docs/command-playbooks/continue-verify.md",
+      "title": "continue-verify.md - verification loop, claims verification, midden collection",
+      "type": "codebase",
+      "accessed": "2026-04-02"
     },
     "S9": {
-      "url": "https://github.blog/ai-and-ml/github-copilot/github-copilot-coding-agent-101-getting-started-with-agentic-workflows-on-github/",
-      "title": "GitHub Copilot coding agent 101 — GitHub Blog",
-      "type": "official",
-      "accessed": "2026-03-30"
+      "url": ".aether/docs/command-playbooks/continue-advance.md",
+      "title": "continue-advance.md - state update, pheromone merge-back, midden collection, instinct promotion",
+      "type": "codebase",
+      "accessed": "2026-04-02"
     },
     "S10": {
-      "url": "https://docs.devin.ai/work-with-devin/devin-review",
-      "title": "Devin Review — Devin Docs",
-      "type": "documentation",
-      "accessed": "2026-03-30"
+      "url": ".aether/docs/command-playbooks/continue-finalize.md",
+      "title": "continue-finalize.md - wisdom summary, handoff, changelog, commit suggestion",
+      "type": "codebase",
+      "accessed": "2026-04-02"
     },
     "S11": {
-      "url": "https://developers.openai.com/codex/workflows",
-      "title": "Codex Workflows — OpenAI Developers",
-      "type": "documentation",
-      "accessed": "2026-03-30"
+      "url": ".claude/commands/ant/build.md",
+      "title": "build.md orchestrator - 5-stage build pipeline",
+      "type": "codebase",
+      "accessed": "2026-04-02"
     },
     "S12": {
-      "url": "https://aider.chat/docs/git.html",
-      "title": "Git Integration — Aider Documentation",
-      "type": "documentation",
-      "accessed": "2026-03-30"
+      "url": ".claude/commands/ant/continue.md",
+      "title": "continue.md orchestrator - 4-stage continue pipeline",
+      "type": "codebase",
+      "accessed": "2026-04-02"
     },
     "S13": {
-      "url": "https://github.com/sweepai/sweep",
-      "title": "Sweep AI — GitHub Repository",
-      "type": "github",
-      "accessed": "2026-03-30"
+      "url": "package.json",
+      "title": "package.json - npm package config with files whitelist, scripts, bin entries",
+      "type": "codebase",
+      "accessed": "2026-04-02"
     },
     "S14": {
-      "url": "https://github.com/anthropics/claude-code-action",
-      "title": "anthropics/claude-code-action — GitHub Repository",
-      "type": "github",
-      "accessed": "2026-03-30"
+      "url": ".npmignore",
+      "title": ".npmignore - root-level npm publish exclusions (planning, dev, cache, git)",
+      "type": "codebase",
+      "accessed": "2026-04-02"
     },
     "S15": {
-      "url": "https://github.com/openai/codex-action",
-      "title": "openai/codex-action — GitHub Repository",
-      "type": "github",
-      "accessed": "2026-03-30"
+      "url": ".aether/.npmignore",
+      "title": ".aether/.npmignore - subdirectory npm exclusions for private dirs and files",
+      "type": "codebase",
+      "accessed": "2026-04-02"
     },
     "S16": {
-      "url": "https://cognition.ai/blog/devin-101-automatic-pr-reviews-with-the-devin-api",
-      "title": "Devin 101: Automatic PR Reviews with the Devin API — Cognition",
-      "type": "blog",
-      "accessed": "2026-03-30"
+      "url": "bin/validate-package.sh",
+      "title": "validate-package.sh - pre-publish validation checking required .aether/ files and content",
+      "type": "codebase",
+      "accessed": "2026-04-02"
     },
     "S17": {
-      "url": "https://github.com/mirrajabi/aider-github-action",
-      "title": "mirrajabi/aider-github-action — Run Aider in GitHub Workflows",
-      "type": "github",
-      "accessed": "2026-03-30"
+      "url": "go.mod",
+      "title": "go.mod - Go module definition, requires cobra, pretty, yaml, anthropic-sdk",
+      "type": "codebase",
+      "accessed": "2026-04-02"
     },
     "S18": {
-      "url": ".aether/docs/command-playbooks/continue-gates.md",
-      "title": "Aether continue-gates playbook — 7 mandatory quality gates",
+      "url": "bin/cli.js",
+      "title": "bin/cli.js - Node.js CLI entry point with install, update, checkpoint commands",
       "type": "codebase",
-      "accessed": "2026-03-30"
+      "accessed": "2026-04-02"
     },
     "S19": {
-      "url": ".aether/docs/command-playbooks/build-wave.md",
-      "title": "Aether build-wave playbook — parallel worker orchestration",
+      "url": ".gitignore",
+      "title": ".gitignore - excludes /aether binary, *.test, build/dist, .planning/",
       "type": "codebase",
-      "accessed": "2026-03-30"
+      "accessed": "2026-04-02"
     },
     "S20": {
-      "url": ".aether/docs/command-playbooks/continue-verify.md",
-      "title": "Aether continue-verify playbook — 6-phase verification loop",
+      "url": ".github/workflows/ci.yml",
+      "title": "ci.yml - Node.js-only CI pipeline (lint, test, runtime sync, npm audit)",
       "type": "codebase",
-      "accessed": "2026-03-30"
+      "accessed": "2026-04-02"
     },
     "S21": {
-      "url": ".claude/agents/ant/aether-watcher.md",
-      "title": "Aether Watcher agent definition — quality verification",
+      "url": "~/.aether/registry.json",
+      "title": "registry.json - 46 repos registered, versions 1.1.0 to 5.3.2, 14 active colonies",
       "type": "codebase",
-      "accessed": "2026-03-30"
+      "accessed": "2026-04-02"
     },
     "S22": {
-      "url": ".claude/agents/ant/aether-gatekeeper.md",
-      "title": "Aether Gatekeeper agent definition — supply chain security",
+      "url": ".github/workflows/deploy-pages.yml",
+      "title": "deploy-pages.yml - GitHub Pages deployment on push to main (site/ path filter)",
       "type": "codebase",
-      "accessed": "2026-03-30"
+      "accessed": "2026-04-02"
     },
     "S23": {
-      "url": ".claude/agents/ant/aether-auditor.md",
-      "title": "Aether Auditor agent definition — code quality audit",
+      "url": ".github/workflows/correlation-pipeline.yml",
+      "title": "correlation-pipeline.yml - weekly npm download spike detection and release correlation",
       "type": "codebase",
-      "accessed": "2026-03-30"
+      "accessed": "2026-04-02"
     },
     "S24": {
-      "url": ".claude/agents/ant/aether-probe.md",
-      "title": "Aether Probe agent definition — coverage and edge cases",
+      "url": ".planning/STATE.md",
+      "title": "STATE.md - v5.4 Shell-to-Go Rewrite, Phase 50 executing (1/6 plans), 14/20 phases complete",
       "type": "codebase",
-      "accessed": "2026-03-30"
+      "accessed": "2026-04-02"
     },
     "S25": {
-      "url": "https://www.coderabbit.ai/blog/how-to-integrate-ai-code-review-into-your-devops-pipeline",
-      "title": "CodeRabbit — How to Integrate AI Code Review into Your DevOps Pipeline",
-      "type": "blog",
-      "accessed": "2026-03-30"
-    },
-    "S26": {
-      "url": "https://docs.sourcery.ai/Code-Review/Overview/",
-      "title": "Sourcery Code Review Overview — Official Docs",
-      "type": "documentation",
-      "accessed": "2026-03-30"
-    },
-    "S27": {
-      "url": "https://ancuta.org/posts/ai-agents-in-your-ci-cd-why-github-rulesets-matter/",
-      "title": "AI Agents in CI/CD — Why GitHub Rulesets Matter",
-      "type": "blog",
-      "accessed": "2026-03-30"
-    },
-    "S28": {
-      "url": "https://github.com/clash-sh/clash",
-      "title": "Clash — Pre-merge conflict detection for git worktrees",
-      "type": "github",
-      "accessed": "2026-03-30"
-    },
-    "S29": {
-      "url": "https://mike.bailey.net.au/notes/software/git/aidock/ai-branch-naming-conventions/",
-      "title": "AI Branch Naming Conventions — Community Recommendations",
-      "type": "blog",
-      "accessed": "2026-03-30"
-    },
-    "S30": {
-      "url": "https://github.blog/changelog/2025-10-16-copilot-coding-agent-uses-better-branch-names-and-pull-request-titles/",
-      "title": "Copilot Coding Agent Branch Naming Changelog — GitHub Blog",
-      "type": "official",
-      "accessed": "2026-03-30"
-    },
-    "S31": {
-      "url": "https://www.coderabbit.ai/blog/code-with-ai-review-with-coderabbits-ide-extension-apply-fixes-in-one-click",
-      "title": "CodeRabbit IDE Extension — One-click Fix Capabilities",
-      "type": "blog",
-      "accessed": "2026-03-30"
-    },
-    "S32": {
-      "url": "https://www.termdock.com/en/blog/git-worktree-conflicts-ai-agents",
-      "title": "Git Worktree Conflicts with AI Agents — Termdock",
-      "type": "blog",
-      "accessed": "2026-03-30"
-    },
-    "S33": {
-      "url": "https://gist.github.com/bemijonathan/8bc892b1e12954e45a906e0704cff86d",
-      "title": ".coderabbit.yaml configuration reference",
-      "type": "documentation",
-      "accessed": "2026-03-30"
-    },
-    "S34": {
-      "url": "https://docs.github.com/articles/about-status-checks",
-      "title": "About Status Checks — GitHub Docs",
-      "type": "documentation",
-      "accessed": "2026-03-30"
-    },
-    "S35": {
-      "url": "https://www.pullchecklist.com/posts/github-actions-status-checks",
-      "title": "Master GitHub Actions Status Checks for Seamless CI/CD — Pull Checklist",
-      "type": "blog",
-      "accessed": "2026-03-30"
-    },
-    "S36": {
-      "url": "https://dsifry.github.io/goodtogo/",
-      "title": "Good To Go — Deterministic PR Readiness Detection for AI Coding Agents",
-      "type": "documentation",
-      "accessed": "2026-03-30"
-    },
-    "S37": {
-      "url": "https://github.com/dsifry/goodtogo",
-      "title": "dsifry/goodtogo — GitHub Repository",
-      "type": "github",
-      "accessed": "2026-03-30"
-    },
-    "S38": {
-      "url": "https://docs.coderabbit.ai/finishing-touches/autofix",
-      "title": "CodeRabbit Autofix — Official Documentation",
-      "type": "documentation",
-      "accessed": "2026-03-30"
-    },
-    "S39": {
-      "url": "https://github.com/agynio/gh-pr-review",
-      "title": "gh-pr-review — GitHub CLI Extension for LLM-Ready PR Review",
-      "type": "github",
-      "accessed": "2026-03-30"
-    },
-    "S40": {
-      "url": "https://factory.ai/news/agent-readiness",
-      "title": "Factory.ai Agent Readiness — Repository Maturity Framework",
-      "type": "official",
-      "accessed": "2026-03-30"
-    },
-    "S41": {
-      "url": "https://dev.to/rahulxsingh/the-state-of-ai-code-review-in-2026-trends-tools-and-whats-next-2gfh",
-      "title": "The State of AI Code Review in 2026 — Trends, Tools, and What's Next",
-      "type": "blog",
-      "accessed": "2026-03-30"
-    },
-    "S42": {
-      "url": "https://oneuptime.com/blog/post/2026-01-26-status-checks-github-actions/view",
-      "title": "How to Configure Status Checks in GitHub Actions — OneUptime",
-      "type": "blog",
-      "accessed": "2026-03-30"
-    },
-    "S43": {
-      "url": "https://docs.mergify.com/merge-queue/batches/",
-      "title": "Mergify Merge Queue Batches — Official Documentation",
-      "type": "documentation",
-      "accessed": "2026-03-30"
-    },
-    "S44": {
-      "url": "https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue",
-      "title": "Managing a Merge Queue — GitHub Docs",
-      "type": "documentation",
-      "accessed": "2026-03-30"
-    },
-    "S45": {
-      "url": "https://devtoolbox.dedyn.io/blog/github-merge-queue-pending-checks-rollback-guide",
-      "title": "GitHub Merge Queue Pending Checks: Unblock Rollback PRs — DevToolbox",
-      "type": "blog",
-      "accessed": "2026-03-30"
-    },
-    "S46": {
-      "url": "https://nx.dev/blog/git-worktrees-ai-agents",
-      "title": "How Git Worktrees Changed My AI Agent Workflow — Nx Blog",
-      "type": "blog",
-      "accessed": "2026-03-30"
-    },
-    "S47": {
-      "url": "https://dev.to/cloudx/resolving-git-conflicts-in-package-lockjson-using-a-merge-driver-2ipk",
-      "title": "Resolving Git Conflicts in package-lock.json Using a Merge Driver — DEV Community",
-      "type": "blog",
-      "accessed": "2026-03-30"
-    },
-    "S48": {
-      "url": "https://vibecoding.app/blog/agentmaxxing",
-      "title": "Agentmaxxing: Run Multiple AI Agents in Parallel (2026)",
-      "type": "blog",
-      "accessed": "2026-03-30"
-    },
-    "S49": {
-      "url": "https://pkarnal.com/blog/open-sourcing-agent-orchestrator",
-      "title": "Open-Sourcing Agent Orchestrator — Prateek Karnal",
-      "type": "blog",
-      "accessed": "2026-03-30"
-    },
-    "S50": {
-      "url": "https://www.gofast.ai/blog/agent-versioning-rollbacks",
-      "title": "Agent Versioning and Rollbacks: Lessons from Production — GoFast.ai",
-      "type": "blog",
-      "accessed": "2026-03-30"
-    },
-    "S51": {
-      "url": ".aether/templates/colony-state-template.json",
-      "title": "Aether colony state template — phase/task structure definition",
+      "url": ".planning/ROADMAP.md",
+      "title": "ROADMAP.md - 51 phases total, Phase 51 (XML+Dist+Testing) handles Go binary distribution",
       "type": "codebase",
-      "accessed": "2026-03-30"
-    },
-    "S52": {
-      "url": ".aether/utils/pheromone.sh",
-      "title": "Aether pheromone.sh — colony-prime context assembly, signal storage, decay",
-      "type": "codebase",
-      "accessed": "2026-03-30"
-    },
-    "S53": {
-      "url": ".aether/utils/midden.sh",
-      "title": "Aether midden.sh — failure tracking, auto-REDIRECT mechanism",
-      "type": "codebase",
-      "accessed": "2026-03-30"
-    },
-    "S54": {
-      "url": ".claude/commands/ant/plan.md",
-      "title": "Aether plan.md — phase planning, task granularity rules",
-      "type": "codebase",
-      "accessed": "2026-03-30"
-    },
-    "S55": {
-      "url": "https://devblogs.microsoft.com/dotnet/ten-months-with-cca-in-dotnet-runtime/",
-      "title": "Ten Months with Copilot Coding Agent in dotnet/runtime — .NET Blog",
-      "type": "official",
-      "accessed": "2026-03-30"
-    },
-    "S56": {
-      "url": "https://medium.com/@rethinkyourunderstanding/smarter-pull-requests-balancing-ai-automation-and-human-review-ebb7d586e968",
-      "title": "Smarter Pull Requests: Balancing AI, Automation, and Human Review — Medium",
-      "type": "blog",
-      "accessed": "2026-03-30"
-    },
-    "S57": {
-      "url": "https://cli.github.com/manual/gh_pr_merge",
-      "title": "gh pr merge — GitHub CLI Manual",
-      "type": "documentation",
-      "accessed": "2026-03-30"
-    },
-    "S58": {
-      "url": "https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md",
-      "title": "claude-code-action usage.md — PR configuration and review workflow",
-      "type": "documentation",
-      "accessed": "2026-03-30"
-    },
-    "S59": {
-      "url": "https://systemprompt.io/guides/claude-code-github-actions",
-      "title": "Claude Code GitHub Actions: 5 Copy-Paste Workflow Recipes for CI/CD",
-      "type": "blog",
-      "accessed": "2026-03-30"
-    },
-    "S60": {
-      "url": "https://github.com/dotnet/runtime/blob/main/.github/copilot-instructions.md",
-      "title": "dotnet/runtime copilot-instructions.md — instruction file that achieved 72% success",
-      "type": "github",
-      "accessed": "2026-03-30"
-    },
-    "S61": {
-      "url": "https://devblogs.microsoft.com/dotnet/prompt-files-and-instructions-files-explained/",
-      "title": "Prompt Files and Instructions Files Explained — .NET Blog",
-      "type": "official",
-      "accessed": "2026-03-30"
+      "accessed": "2026-04-02"
     }
   },
   "questions": [
     {
       "id": "q1",
-      "text": "Git worktree workflows for AI agents: How do Cursor Worktrees, Claude Code multi-branch patterns, and Copilot Workspace handle parallel AI development on separate branches? What are proven patterns for avoiding conflicts between parallel agent worktrees? What is the max safe number of parallel worktrees and how are they cleaned up?",
-      "status": "partial",
-      "confidence": 40,
+      "text": "Fix the compile errors: read cmd/flags.go, cmd/history.go, cmd/phase.go and ALL other Go files. Identify every unused import and fix them so go build ./cmd/aether succeeds. Verify with go test ./... and go test -race ./pkg/...",
+      "status": "answered",
+      "confidence": 95,
       "key_findings": [
         {
-          "text": "Claude Code has native --worktree (-w) flag. Creates worktrees at <repo>/.claude/worktrees/<name>, branches from origin/HEAD (branch named worktree-<name>). Subagents use isolation: worktree in frontmatter for automatic worktree creation. Auto-cleanup: no changes = worktree + branch removed; changes exist = user prompted to keep/remove. .worktreeinclude file copies gitignored files (like .env) to new worktrees.",
-          "source_ids": [
-            "S1",
-            "S5"
-          ],
-          "iteration": 0
-        },
-        {
-          "text": "Aether repo already has 10 active agent worktrees (agent-a09afdfa through agent-aea49f19), each on separate worktree-agent-* branches. These were created by Claude Code's subagent isolation system. This is the existing parallel development pattern in the codebase.",
-          "source_ids": [
-            "S6"
-          ],
-          "iteration": 0
-        },
-        {
-          "text": "Cursor supports up to 8 parallel agents via git worktrees (Feb 2026). Windsurf supports 5 parallel Cascade agents via worktrees (Wave 13). This establishes the industry pattern: all major AI coding tools converged on git worktrees for parallel agent isolation.",
+          "text": "Single compile error: cmd/flags.go:5:2 imports \"strings\" but never uses it. The file uses fmt, colony, table, and cobra but has no strings function calls anywhere in its 93 lines.",
           "source_ids": [
             "S1"
           ],
-          "iteration": 0
+          "iteration": 1
         },
         {
-          "text": "No hard git limit on worktree count. Practical limits are RAM/CPU: ~5-6 concurrent worktrees with active builds on 32GB RAM, 10+ on 64GB. Developers find 2-4 manually trackable. Filesystem inode limits matter on ext4; XFS/ZFS preferred for high counts. Selective execution reduces overhead 60-80%.",
-          "source_ids": [
-            "S4"
-          ],
-          "iteration": 0
-        },
-        {
-          "text": "Conflict avoidance patterns: (1) Each agent works in isolation on its own branch — conflicts handled at merge time. (2) Restrict agents to specific directories. (3) Prohibit force pushes and cross-branch modifications. (4) Use .claude/rules.md configuration guards per worktree. (5) Agent-created worktrees show 'slightly less consistent results' than human-established boundaries.",
+          "text": "cmd/history.go compiles clean - strings is used by parseEvent() (strings.SplitN on line 70) and filter logic (strings.Contains on line 43).",
           "source_ids": [
             "S2"
           ],
-          "iteration": 0
+          "iteration": 1
         },
         {
-          "text": "ComposioHQ agent-orchestrator is an open-source MIT-licensed orchestrator: each agent gets own worktree + branch + PR. Plugin architecture: runtime (tmux/Docker/K8s), agent (Claude Code/Codex/Aider), workspace (worktree/clone). CI failures auto-fixed with retry logic (default 2 attempts). Review comment routing back to agents. Dashboard on port 3000.",
+          "text": "cmd/phase.go compiles clean - strings is used by strings.Builder in renderPhaseDetails() (line 55).",
           "source_ids": [
             "S3"
           ],
-          "iteration": 0
+          "iteration": 1
+        },
+        {
+          "text": "All pkg/ tests pass including race tests: agent, agent/curation, colony, events, graph, llm, memory, storage - all OK with -race flag.",
+          "source_ids": [
+            "S1"
+          ],
+          "iteration": 1
+        },
+        {
+          "text": "cmd/ has 13 Go files totaling 1,713 lines. Only flags.go has a compile error. The fix is removing the unused \"strings\" import from line 5.",
+          "source_ids": [
+            "S1",
+            "S2",
+            "S3"
+          ],
+          "iteration": 1
         }
       ],
       "iterations_touched": [
-        0
+        1
       ]
     },
     {
       "id": "q2",
-      "text": "PR-based AI coding workflows: How do production AI coding tools (Cursor, Windsurf, Claude Code, Devin, Sweep, Aider) handle branch creation, PR generation, and merge automation? What is the state of the art for AI-generated PRs with proper descriptions, test evidence, and review context? Find open-source implementations and documented real workflows.",
+      "text": "Fix the worktree merge-back gap: read build playbooks (.aether/docs/command-playbooks/build-*.md), continue playbooks (.aether/docs/command-playbooks/continue-*.md), and command orchestrators (.claude/commands/ant/build.md, continue.md). Identify WHERE in the wave lifecycle to add merge-back, design the step with safety checks and conflict handling, and decide if it belongs in build, continue, or a new dedicated playbook.",
       "status": "partial",
-      "confidence": 60,
+      "confidence": 35,
       "key_findings": [
         {
-          "text": "Claude Code GitHub Actions (anthropics/claude-code-action@v1): Full CI/CD PR workflow triggered by @claude mentions in issues/PRs. Auto-creates branches and PRs, supports skills integration, respects CLAUDE.md for coding standards. Configurable via claude_args (--max-turns, --model, --allowedTools). Supports direct API, AWS Bedrock, and Google Vertex AI backends. Auto-detects interactive vs automation mode. PR descriptions are AI-generated with 'why' focus.",
+          "text": "worktree.sh provides two functions: _worktree_create (creates git worktree, copies .aether/data/ and .aether/exchange/, injects main's pheromone signals) and _worktree_cleanup (removes worktree and deletes branch). There is NO merge function - worktree-cleanup deletes without merging changes back.",
           "source_ids": [
-            "S7",
-            "S14"
+            "S4"
           ],
-          "iteration": 1
+          "iteration": 2
         },
         {
-          "text": "GitHub Copilot Coding Agent: Automates branch creation (copilot/<description> naming), commit writing, PR opening, and PR description writing. Works asynchronously in ephemeral GitHub Actions environments. Single repo, single PR per task. Review comments route back to agent for iteration. 40-60% success rate on well-scoped issues. Cannot bypass branch protection (e.g., signed commits).",
+          "text": "The build pipeline has 5 stages (prep, context, wave, verify, complete) with NO worktree merge step. build-wave.md spawns workers but agents create worktrees independently. build-verify.md has Step 5.9 referencing $last_merged_branch/$last_merge_sha but these are never populated. build-complete.md synthesis has no merge step either.",
           "source_ids": [
+            "S5",
+            "S6",
+            "S7",
+            "S11"
+          ],
+          "iteration": 2
+        },
+        {
+          "text": "The continue pipeline has 4 stages (verify, gates, advance, finalize). continue-advance.md has Step 2.0.5 (Pheromone Merge-Back) that checks for pheromone-branch-export.json and Step 2.0.6 (Midden Collection) that checks $last_merged_branch/$last_merge_sha. Both are dead code paths because no prior step sets these variables or creates the export file from a worktree.",
+          "source_ids": [
+            "S9",
+            "S8"
+          ],
+          "iteration": 2
+        },
+        {
+          "text": "Best placement for merge-back: continue-advance.md Step 2.0.4 (between 'Update State' at Step 2 and 'Pheromone Merge-Back' at Step 2.0.5). Rationale: merge must happen after phase state update but before pheromone/midden collection that depends on having merged code. The existing Step 2.0.5 (pheromone merge-back) and Step 2.0.6 (midden collection) would become functional once merge-back populates $last_merged_branch and $last_merge_sha.",
+          "source_ids": [
+            "S9",
+            "S10"
+          ],
+          "iteration": 2
+        },
+        {
+          "text": "Three feature branches exist but are orphaned: feature/v2-living-hive, gsd/49-agent-system-llm, gsd/phase-47-memory-pipeline. No worktrees are currently active (git worktree list shows only main). These branches contain valuable work that was never merged back - this is the exact gap the memory warns about.",
+          "source_ids": [
+            "S4"
+          ],
+          "iteration": 2
+        },
+        {
+          "text": "Safety checks needed for merge-back step: (1) check for uncommitted changes in worktree, (2) verify build passes in worktree before merge, (3) check for merge conflicts, (4) validate tests pass after merge on main, (5) create flag on unresolvable conflicts. For .aether/data/ conflicts, always prefer main (colony state is authoritative on main).",
+          "source_ids": [
+            "S5",
+            "S6",
             "S8",
             "S9"
           ],
-          "iteration": 1
-        },
-        {
-          "text": "Devin Review: Auto-reviews trigger on PR open, commit push, draft-to-ready transitions, or reviewer enrollment. Confidence-based bug labeling: 'Bugs' (severe/non-severe) and 'Flags' (investigate/informational). Auto-fix generates suggested code changes in the diff view. Groups changes logically (not alphabetically), detects code moves/copies. CLI available via 'npx devin-review {pr-url}' using git worktrees. Free for regular GitHub repos.",
-          "source_ids": [
-            "S10",
-            "S16"
-          ],
-          "iteration": 1
-        },
-        {
-          "text": "OpenAI Codex (openai/codex-action@v1): GitHub Action that installs codex-cli, starts Responses API proxy, runs codex exec. Supports @codex review comments on PRs, automatic review on every PR when enabled. Jira-to-GitHub PR automation pipeline available. GPT-5.2-Codex recommended for code review accuracy. Works with both GitHub Actions and Jenkins for on-premises deployments.",
-          "source_ids": [
-            "S11",
-            "S15"
-          ],
-          "iteration": 1
-        },
-        {
-          "text": "Aider: Tight git integration with auto-commits using Conventional Commits, '(aider)' attribution suffix on author/committer. In-chat /diff, /undo, /commit, /git commands. GitHub Action (mirrajabi/aider-github-action) for issue-to-PR workflows. No built-in branch management or merge automation — operates on current branch only. Codebase map for large project navigation.",
-          "source_ids": [
-            "S12",
-            "S17"
-          ],
-          "iteration": 1
-        },
-        {
-          "text": "Sweep AI (YC S23): Originally a GitHub issue-to-PR bot — describe task in issue, Sweep plans changes, writes code, creates PR with human review gate. Open-source. Now pivoted to JetBrains AI coding assistant while maintaining GitHub workflow capabilities.",
-          "source_ids": [
-            "S13"
-          ],
-          "iteration": 1
-        },
-        {
-          "text": "Industry convergence pattern: All major AI coding tools converged on the same workflow shape: (1) task/issue as input → PR as output, (2) AI creates branch + commits + PR description automatically, (3) human review as mandatory gate before merge, (4) CI/CD integration via GitHub Actions, (5) review comments routed back to agents for iteration, (6) CLAUDE.md/REVIEW.md instruction files for customizing agent behavior per repo.",
-          "source_ids": [
-            "S7",
-            "S8",
-            "S10",
-            "S11"
-          ],
-          "iteration": 1
-        },
-        {
-          "text": "Microsoft dotnet/runtime Copilot Coding Agent empirical study (878 PRs, 10 months): 67.9% overall success rate (535 merged, 253 closed, 90 open). Monthly progression from 41.7% (May 2025) to steady 71-72% (Jan-Mar 2026). The 31-point improvement came entirely from instruction quality (copilot-instructions.md refinement), NOT model improvements. Task success by type: Removal/Cleanup 84.7%, Testing 75.6%, Bug Fix 69.4%, Feature 64.5%, Performance 54.5%. Scope sweet spot: 1-50 lines at 76-80%, drops to 64% for 101-500 lines (complex enough to involve multiple components, not large enough to be well-scoped refactorings). Test code comprised 65.7% of CCA lines vs 49.9% for humans. Revert rate: 0.6% (statistically indistinguishable from human 0.8%).",
-          "source_ids": [
-            "S55"
-          ],
-          "iteration": 6
-        },
-        {
-          "text": "PR review bottleneck economics (Microsoft dotnet/runtime): The bottleneck has shifted from code production to code review. One person generated 9 PRs during a single flight — creating 5-9 hours of review work for the team. Each complex PR requires 30-60 minutes of human review. Median time to merge across the project is ~2 days, with 58% of PRs merging within 3 days. 3 of 9 flight-experiment PRs remained unmerged after a week despite not being problematic. This asymmetric production/review capacity is the core tension in AI-generated PR workflows.",
-          "source_ids": [
-            "S55"
-          ],
-          "iteration": 6
-        },
-        {
-          "text": "Instruction file format as the key lever: copilot-instructions.md (Copilot) and CLAUDE.md (Claude Code) serve as the primary mechanism for improving AI PR success rates. Microsoft's dotnet/runtime instruction file specifies: exact build commands per component (avoiding 20+ minute unnecessary full builds), testing patterns (ConditionalFact decorators, platform-specific test restrictions), code conventions (.editorconfig compliance, pattern matching, file-scoped namespaces), and the rule 'Any code you commit MUST compile, and new and existing tests related to the change MUST pass.' The recommended structure for instruction files: Purpose/Scope, Tooling/Versions, Build/Run/Test commands, Output format and PR description template, Behavior/Tone, Failures/Rollback, Examples of accepted PRs.",
-          "source_ids": [
-            "S55",
-            "S60",
-            "S61"
-          ],
-          "iteration": 6
-        },
-        {
-          "text": "Evidence-based PR template pattern: Emerging best practice mandates 'links, not assertions' — PRs must include direct links to test execution results (not just test file names), coverage percentage figures from automated tooling, security scan results (SAST/SCA), observable metrics tied to dashboards, and rollback toggle configurations. CI enforcement blocks merges when evidence is missing. The four mandatory PR sections: (1) Outcome statement with risk assessment, (2) Test links with coverage metrics, (3) Security scan results, (4) Rollback plan. AI agents that note testing limitations in PR descriptions (e.g., 'couldn't test Windows code path, recommend human verification') show higher trust than those that silently omit evidence.",
-          "source_ids": [
-            "S55",
-            "S56"
-          ],
-          "iteration": 6
-        },
-        {
-          "text": "GitHub CLI auto-merge (gh pr merge --auto): Enables programmatic auto-merge that triggers only after all required reviews and status checks pass. Works with merge queues — PR joins queue automatically when checks pass. Supports --squash, --merge, --rebase strategies. Safety feature: --match-head-commit <SHA> verifies no new commits were pushed before merge. --delete-branch auto-cleans after merge. --admin bypasses requirements (dangerous, should be governance-gated). --disable-auto turns off auto-merge. No AI coding tool currently enables auto-merge by default — all use human review as the gate — but the CLI mechanism exists for teams that want to opt into auto-merge after all automated gates pass.",
-          "source_ids": [
-            "S57"
-          ],
-          "iteration": 6
-        },
-        {
-          "text": "Claude Code Action PR configuration specifics: Branch prefix configurable (default 'claude/', customizable via branch_prefix input). use_sticky_comment: true aggregates all Claude comments into a single updating comment per PR. classify_inline_comments: true buffers inline comments and classifies via Haiku model before posting, preventing test/probe subagent comments from cluttering PR threads. include_fix_links: true adds 'Fix this' links in review feedback that open Claude Code with context. Structured output via --json-schema enables programmatic downstream handling (e.g., if: fromJSON(steps.analyze.outputs.structured_output).is_flaky == true). Trigger mechanisms: trigger_phrase (@claude), assignee_trigger (issue assignment), label_trigger (label-based). Commit signing supported via use_commit_signing or ssh_signing_key.",
-          "source_ids": [
-            "S58",
-            "S59"
-          ],
-          "iteration": 6
+          "iteration": 2
         }
       ],
       "iterations_touched": [
-        1,
-        6
+        2
       ]
     },
     {
       "id": "q3",
-      "text": "Aether architecture integration: How should Aether's existing systems map to a PR workflow? Specifically: 24 agents (builder, watcher, gatekeeper, auditor, probe), quality gates in continue-gates.md (7 mandatory gates), midden failure tracking, pheromone steering (FOCUS/REDIRECT/FEEDBACK), colony phases with task tracking. Should each phase become a PR? Should agents review each other's PRs? How does queen/colony-prime orchestrate parallel branch work? Examine existing worktree support (.claude/worktrees/agent-*).",
+      "text": "Verify the publish flow: read package.json, bin/validate-package.sh, .npmignore, .gitignore. Determine if Go binary needs compilation in npm publish, whether go.mod/Go sources are included or excluded, check pre-publish hooks, and validate .gitignore doesn't exclude needed Go files.",
       "status": "partial",
-      "confidence": 65,
+      "confidence": 40,
       "key_findings": [
         {
-          "text": "Aether's 7 mandatory continue gates map naturally to PR status checks: (1) Spawn Enforcement — verify parallelism, (2) Anti-Pattern — scan for known bad patterns, (3) Gatekeeper — supply chain security (conditional on package.json), (4) Auditor — code quality scoring (block if score < 60 or critical findings), (5) TDD Evidence — verify test files exist for claimed tests, (6) Runtime Verification — interactive user confirmation, (7) Flags — no unresolved blockers. Gates 1-5 and 7 are automatable as GitHub Actions checks; Gate 6 (Runtime Verification) requires interactive user input and would need adaptation for PR workflows.",
+          "text": "npm `files` whitelist in package.json does NOT include Go source directories (cmd/, pkg/) or go.mod. The whitelist only includes: bin/, .claude/commands/ant/, .claude/agents/ant/, .opencode/commands/ant/, .opencode/agents/, .opencode/opencode.json, .aether/, README.md, LICENSE, DISCLAIMER.md, CHANGELOG.md. Go source code will NOT be published in the npm package.",
           "source_ids": [
+            "S13"
+          ],
+          "iteration": 3
+        },
+        {
+          "text": "No Go compilation in npm publish pipeline. `prepublishOnly` runs `bash bin/validate-package.sh` which only checks for .aether/ file existence (shell scripts, templates, skills manifests) and content-aware checks (no QUEEN.md, no temp files, no data/). validate-package.sh has ZERO Go awareness — no go build, no go test, no go.mod checks.",
+          "source_ids": [
+            "S16",
+            "S13"
+          ],
+          "iteration": 3
+        },
+        {
+          "text": "Go binary is a local-only companion CLI. .gitignore excludes `/aether` (compiled binary) and `*.test` (test binaries). The Go module (go.mod) is tracked in git but won't be in the npm tarball. The npm package's bin entries (bin/cli.js, bin/npx-entry.js) are both Node.js entry points — Go binary is NOT invoked during install or runtime of the npm package.",
+          "source_ids": [
+            "S19",
+            "S13",
             "S18"
           ],
-          "iteration": 2
+          "iteration": 3
         },
         {
-          "text": "No Aether agents currently use isolation: worktree in their definitions. All 24 agents run in the main repo context. Worker isolation is enforced through role-based tool restrictions: Watcher/Gatekeeper/Auditor are read-only (no Write/Edit/Bash), Builder writes only to assigned files, Probe writes only test files. This means switching to worktree-per-agent would be a new architectural pattern, not an enhancement of an existing one.",
+          "text": "Postinstall hook is Node.js only: `node bin/cli.js install --quiet` syncs .aether/ to ~/.aether/system/, copies commands/agents to ~/.claude/ and ~/.opencode/. No Go compilation happens during npm install. The entire npm distribution pipeline is Node.js + Bash.",
           "source_ids": [
-            "S21",
-            "S22",
-            "S23",
-            "S24"
-          ],
-          "iteration": 2
-        },
-        {
-          "text": "Build orchestration spawns workers in dependency-ordered waves: Wave 1 (no dependencies) runs in parallel via multiple Task tool calls, subsequent waves are sequential. Conditional agents (Oracle, Architect, Ambassador) spawn pre-wave. After all Builders, Watcher and Chaos are always spawned. This wave structure maps to a 'parallel PRs per wave, sequential merge between waves' pattern.",
-          "source_ids": [
-            "S19"
-          ],
-          "iteration": 2
-        },
-        {
-          "text": "Review agents already produce structured JSON output ideal for PR comments: Watcher returns {verification_passed, issues_found[{severity, file, line, description}], quality_score 1-10}. Auditor returns {findings{critical, high, medium, low}, issues[{file, line, severity, category}], overall_score 0-100}. Gatekeeper returns {security_findings, licenses, version_pinning_gaps}. Probe returns {tests_added, coverage{lines%, branches%, functions%}, edge_cases_discovered}.",
-          "source_ids": [
-            "S21",
-            "S22",
-            "S23",
-            "S24"
-          ],
-          "iteration": 2
-        },
-        {
-          "text": "Colony-prime context assembly injects pheromones, QUEEN.md wisdom, instincts, research context, and skills into every worker prompt. In a PR workflow, colony-prime would need to run once per PR branch to set context, then again at merge time. The --compact mode (4K char budget) exists for CI-constrained environments like CI.",
-          "source_ids": [
-            "S19"
-          ],
-          "iteration": 2
-        },
-        {
-          "text": "Continue flow has a natural PR lifecycle mapping: continue-verify (6-phase: build, types, lint, tests, coverage, secrets) → PR CI checks; continue-gates (7 gates) → PR required status checks; continue-advance (learning extraction, instinct creation, QUEEN.md promotion) → post-merge hooks; continue-finalize (changelog, handoff) → post-merge automation. The verification loop's command resolution chain (CLAUDE.md → codebase.md → language heuristics) would need CI config replication.",
-          "source_ids": [
-            "S20",
+            "S13",
             "S18"
           ],
-          "iteration": 2
-        },
-        {
-          "text": "Build failure handling has a tiered escalation model: total wave failure → halt; partial wave failure → Tier 3 (Queen respawns with different caste); Tier 3 fails → Tier 4 (ask user). In a PR model, Tier 3 would mean auto-pushing fix commits to the PR branch; Tier 4 would mean requesting human review with context. Midden tracks failures with category/source/timestamp, and auto-emits REDIRECT pheromones when a category recurs 3+ times.",
-          "source_ids": [
-            "S19"
-          ],
-          "iteration": 2
-        },
-        {
-          "text": "TASK-as-PR is the correct granularity, not phase-as-PR. Tasks are atomic 2-5 minute units modifying 1-3 files each with explicit depends_on arrays. Phases contain 2-5 tasks (avg 3) and are too coarse for a single PR. Task dependencies create natural wave groupings: Wave 1 tasks (depends_on: []) become parallel PRs, Wave 2+ tasks (depends_on Wave 1 task IDs) are created after Wave 1 PRs merge. This maps directly to build-wave.md's existing orchestration. Phase completion becomes a milestone (all task PRs merged + verification PR passes), not a single PR.",
-          "source_ids": [
-            "S51",
-            "S54",
-            "S19"
-          ],
-          "iteration": 5
-        },
-        {
-          "text": "Pheromones are inherently branch-local state with no cross-branch awareness. Stored at .aether/data/pheromones.json with colony-scoped paths resolved by colony_name (not git branch). Colony-prime reads pheromones from the current working tree's local file. For PR workflows, pheromones face a propagation problem: signals emitted in one task branch are invisible to other parallel task branches. Three cross-branch workarounds exist: (1) QUEEN.md at ~/.aether/ is global and branch-agnostic, (2) eternal memory at ~/.aether/eternal/ persists high-strength signals across branches, (3) XML export/import (_pheromone_export_eternal, _pheromone_import_xml) can serialize signals for sharing. Design recommendation: use main branch's pheromones.json as the canonical source, inject via colony-prime at task branch creation time, and merge new signals back to main after each task PR merges.",
-          "source_ids": [
-            "S52"
-          ],
-          "iteration": 5
-        },
-        {
-          "text": "Midden failure tracking is also branch-local (.aether/data/midden/midden.json) with file-locked writes for thread safety. Each entry has id, timestamp, category, source, message, reviewed boolean. The auto-REDIRECT mechanism checks for 3+ occurrences of the same error category via _midden_recent_failures, then emits a REDIRECT pheromone (strength 0.9, expires phase_end), capped at 3 REDIRECT emissions per wave. For PR workflows: midden entries from failed task branches must be collected back to main branch after merge. A post-merge hook should run _midden_ingest_errors to capture any errors.log from the PR branch. Cross-PR failure pattern detection requires reading main's consolidated midden, not individual branch middens.",
-          "source_ids": [
-            "S53",
-            "S19"
-          ],
-          "iteration": 5
-        },
-        {
-          "text": "Colony-prime has a split between cacheable (immutable) and volatile (must-be-fresh) context sources. Cacheable for CI: QUEEN.md wisdom (global + local, rarely changes), registry domain tags, learned instincts from COLONY_STATE.json, phase learnings history. Volatile (must be fresh per PR): active pheromone signals (time-decay calculation changes on every read), blocker flags (resolved status changes), recent decisions. The --compact mode (4K chars vs 8K normal) reduces limits across all sources: hive 5→3, learnings 15→5, decisions 5→3, blockers 3→2. CI strategy: cache QUEEN.md + registry as build artifacts, read pheromones + flags fresh from main branch, use --compact to minimize token cost per CI run.",
-          "source_ids": [
-            "S52",
-            "S18"
-          ],
-          "iteration": 5
-        },
-        {
-          "text": "Runtime Verification (Gate 6) presents 4 options via AskUserQuestion: (1) 'Yes, tested and working' → proceeds, (2) 'Yes, tested but has issues' → blocks with critical error logged to midden, (3) 'No, haven't tested yet' → pauses until user tests, (4) 'Skip (not applicable)' → valid for docs/config/library phases. For PR workflow adaptation: Option 1 maps to a deployment preview with passing smoke tests (GitHub deployment_status check). Option 2 maps to a PR comment with 'changes requested' review. Option 3 maps to a pending deployment check that blocks merge. Option 4 maps to auto-skip when PR diff contains only .md/.json/.sh files with no entry point. The interactive prompt could become a required reviewer approval with a checklist comment template.",
-          "source_ids": [
-            "S18"
-          ],
-          "iteration": 5
-        }
-      ],
-      "iterations_touched": [
-        2,
-        5
-      ]
-    },
-    {
-      "id": "q4",
-      "text": "Review automation pipeline design: What should the automated review pipeline look like? Pre-merge gates (tests pass, lint clean, no antipatterns, coverage threshold), agent-based code review (watcher reviews builder's code, auditor scores quality, probe measures coverage), conflict detection and resolution strategy, merge approval criteria. Research how GitHub Actions + AI review tools (CodeRabbit, Sourcery) structure their review pipelines.",
-      "status": "partial",
-      "confidence": 60,
-      "key_findings": [
-        {
-          "text": "CodeRabbit has a 4-stage PR review pipeline: (1) preprocess PR content and build context, (2) run LLM analysis, (3) post-process AI response, (4) post review as PR comments. Configurable via .coderabbit.yaml with review profiles: 'chill' (bugs and security only) vs 'assertive' (style, naming, docs, best practices). Supports one-click commit suggestions for simple fixes and 'Fix with AI' for complex changes. File-level custom instructions via path_filters and file_path_instructions.",
-          "source_ids": [
-            "S25",
-            "S31",
-            "S33"
-          ],
-          "iteration": 2
-        },
-        {
-          "text": "Sourcery uses a hybrid LLM + static analysis approach: multiple specialized AI reviewers examine code from different angles, with a validation pass to reduce false positives. Tracks general code quality, security, complexity, docs, and testing. Per-function quality scores flag lowest-scoring functions. Configuration is primarily dashboard-based (not file-based like CodeRabbit). Static rule comments limited to Python and JavaScript only.",
-          "source_ids": [
-            "S26"
-          ],
-          "iteration": 2
-        },
-        {
-          "text": "Clash (clash-sh/clash) provides pre-merge conflict detection between git worktrees via in-memory merge-tree simulation (Rust gix library). Non-destructive. Can integrate as a Claude Code PreToolUse hook running 'clash check <file>' before Write/Edit operations. Also supports 'clash status' (conflict matrix across all worktrees), 'clash watch' (live TUI), and JSON output for automation.",
-          "source_ids": [
-            "S28"
-          ],
-          "iteration": 2
-        },
-        {
-          "text": "GitHub Actions gate aggregation uses the composite gate job pattern: a single required 'gate' job with 'needs: [lint, test, security, ...]' that runs only after all dependent jobs finish. Check suites aggregate the highest-priority conclusion from all check runs — if any single check fails, the suite reflects failure. Three successful statuses: success, skipped, neutral. All required checks must pass against the latest commit SHA before merge is allowed. For path-filtered workflows, skipped checks remain 'Pending' and block merge unless handled.",
-          "source_ids": [
-            "S34",
-            "S35",
-            "S42"
-          ],
           "iteration": 3
         },
         {
-          "text": "Two auto-fix commit patterns emerged in 2025-2026: (1) Direct commit — CodeRabbit's '@coderabbitai autofix' pushes fixes directly to the current PR branch as a single commit. (2) Stacked PR — '@coderabbitai autofix stacked pr' creates a separate branch off the working branch and opens an independent PR targeting it. The 4-step autofix flow: trigger (PR comment or checkbox) → collection (scan unresolved threads, gather 'Prompt for AI Agents' blocks) → generation+verification (agent applies fixes, runs build verification) → delivery (commit or stacked PR). Even if verification fails, changes are still delivered for iteration.",
+          "text": "Dual .npmignore system: root .npmignore excludes .planning/, .ralph/, .cache/, .git/ and dev files. .aether/.npmignore (subdirectory-level) excludes private dirs (data/, dreams/, oracle/, checkpoints/, locks/, temp/, archive/, chambers/) and private files (QUEEN.md, CONTEXT.md, CROWNED-ANTHILL.md, exchange/*.xml). Neither has any Go-related rules because Go files aren't in the .aether/ subtree.",
           "source_ids": [
-            "S38",
-            "S41"
-          ],
-          "iteration": 3
-        },
-        {
-          "text": "Good To Go (dsifry/goodtogo) provides deterministic PR readiness detection for AI coding agents. Classifies every PR comment as ACTIONABLE (must fix), NON_ACTIONABLE (safe to ignore: praise, nitpicks, resolved), or AMBIGUOUS (needs human judgment). Has built-in parsers for CodeRabbit, Greptile, Claude Code, and Cursor review formats. Returns one of 5 statuses: READY, ACTION_REQUIRED, UNRESOLVED, CI_FAILING, ERROR. JSON output: {status, action_items[], actionable_comments[], ci_status{}, threads{}}. Can be deployed as a GitHub Actions required status check. Supports '/rerun-gtg' comment command for re-checks without rebuilding CI.",
-          "source_ids": [
-            "S36",
-            "S37"
-          ],
-          "iteration": 3
-        },
-        {
-          "text": "gh-pr-review CLI extension provides LLM-optimized PR review thread management. Single 'review view' command returns entire assembled review structure as JSON (reviews → comments → thread_comments hierarchy with thread_id, path, line, is_resolved, is_outdated). Agent workflow: (1) fetch unresolved threads via 'gh pr-review review view --unresolved --not_outdated', (2) reply with 'comments reply --thread-id <id> --body \"Fixed in commit abc\"', (3) resolve via 'threads resolve --thread-id <id>'. Server-side filtering (--reviewer, --states, --unresolved, --tail) reduces payload for LLM token efficiency. Registers as Vercel add-skill for agent integration.",
-          "source_ids": [
-            "S39"
-          ],
-          "iteration": 3
-        },
-        {
-          "text": "Pipeline composition for Aether should follow a 5-tier design: Tier 1 (CI, parallel) — build, types, lint, tests, coverage, secrets scan, anti-pattern scan; Tier 2 (Agent Reviews, parallel after Tier 1) — Watcher verification, Gatekeeper security, Auditor quality gate, Probe coverage, Chaos resilience; Tier 3 (Aggregation) — composite gate job aggregates Tier 1+2, Good To Go readiness check evaluates comment/thread resolution; Tier 4 (Human Gate) — required human review approval + runtime verification confirmation; Tier 5 (Post-merge) — learning extraction, instinct creation, QUEEN.md promotion, changelog, pheromone updates. This maps Aether's existing continue-verify (Tier 1), continue-gates (Tier 2+3), and continue-advance/finalize (Tier 5) into a PR-native structure.",
-          "source_ids": [
-            "S18",
-            "S20",
-            "S34",
-            "S35",
-            "S36"
-          ],
-          "iteration": 3
-        },
-        {
-          "text": "Factory.ai's Agent Readiness framework evaluates repository maturity across 8 dimensions (style/validation, build, testing, docs, dev environment, code quality, observability, security) with 5 maturity levels. Level 3 ('Standardized') is the threshold for 'production-ready for agents' — requiring E2E tests, maintained docs, security scanning. Binary pass/fail criteria based on file existence and configuration parsing. Progression requires 80% of criteria at each level plus all previous levels. This provides a framework for evaluating whether a repo is ready for Aether's PR workflow automation.",
-          "source_ids": [
-            "S40"
+            "S14",
+            "S15"
           ],
           "iteration": 3
         }
       ],
       "iterations_touched": [
-        2,
         3
       ]
     },
     {
-      "id": "q5",
-      "text": "Branch naming, organization, and safeguards: What branch naming conventions work for AI-generated work? How to organize feature/fix/experiment branches? How to handle long-lived vs short-lived branches? What safety mechanisms are needed: merge conflict handling, force-push prevention, main branch protection, rollback to pre-merge state, partial failure handling (some PRs pass, some fail in a batch)?",
+      "id": "q4",
+      "text": "Plan the push and publish sequence: determine branch strategy (main?), whether go mod tidy should run, whether npm version needs bumping, and what repos need updating via aether update. Read ~/.aether/registry/ to find affected repos.",
       "status": "partial",
-      "confidence": 65,
+      "confidence": 72,
       "key_findings": [
         {
-          "text": "AI tool branch naming conventions: Copilot uses 'copilot/<description>' (changed Oct 2025 from UUIDs to human-readable), Codex uses 'codex/<description>', Claude Code uses 'worktree-<name>' (active community request to make prefix configurable). Community recommendation: 'ai/<agent-name>/<task>' pattern (e.g. 'ai/claude/add-authentication-feature'). No tool currently allows custom prefix configuration.",
+          "text": "Branch strategy: All current work is directly on main. The git log shows direct commits (no PR workflow) for all Go work since Phase 45. Three orphaned feature branches exist (feature/v2-living-hive, gsd/49-agent-system-llm, gsd/phase-47-memory-pipeline) but no active worktrees. The REDIRECT signal requires PR-based workflow but current practice is direct-to-main.",
           "source_ids": [
-            "S30",
-            "S29"
-          ],
-          "iteration": 2
-        },
-        {
-          "text": "GitHub Ruleset safeguards for AI agent branches: (1) Required human approval before merge — single most important safeguard, (2) Stale approval dismissal — new commits after approval auto-revoke it, (3) Force push prevention — disabled by default on protected branches, (4) Code scanning as required status check. Empirical: 0 unauthorized writes landed in protected branches across 50 test runs.",
-          "source_ids": [
-            "S27"
-          ],
-          "iteration": 2
-        },
-        {
-          "text": "Conflict hotspot patterns for parallel AI agents: shared files (route definitions, config files, barrel exports/index files) are primary conflict sources. Mitigations: single-writer rules per file, additive-only changes in separate files, early and frequent merges back to main. Lock file divergence (package-lock.json, yarn.lock) is an underappreciated conflict source when parallel agents independently install packages.",
-          "source_ids": [
-            "S32",
-            "S28"
-          ],
-          "iteration": 2
-        },
-        {
-          "text": "AI agent CI tokens should be scoped to single repo with 60-minute TTL to limit blast radius. Stale worktree references accumulate silently after deletion — 'git worktree prune' should run periodically in orchestration systems.",
-          "source_ids": [
-            "S27"
-          ],
-          "iteration": 2
-        },
-        {
-          "text": "Merge queue batch failure handling (Mergify bisection algorithm): When a batch of PRs fails CI, Mergify splits the batch and retests recursively. First splits by max_parallel_checks, retests sub-batches. If a sub-batch passes, it merges. If it fails, further subdivision occurs until a single PR is isolated as the culprit and removed from the queue. Configurable via batch_size, batch_max_wait_time, and batch_max_failure_resolution_attempts. This is the state-of-the-art for partial failure handling in batched PR merges.",
-          "source_ids": [
-            "S43"
+            "S21"
           ],
           "iteration": 4
         },
         {
-          "text": "GitHub Merge Queue uses FIFO ordering with temporary branches (gh-readonly-queue/{base_branch}/pr-{number}). When a PR fails CI in a merge group, it's automatically removed and the queue reconstructs temporary branches for remaining PRs. Configuration: build concurrency (1-100 parallel merge_group webhooks), merge limits (1-100 PRs per operation), minimum PRs before merging, status check timeout. Requires merge_group event trigger in GitHub Actions workflows alongside pull_request. Queue jumping causes full rebuild of all in-progress PRs.",
+          "text": "go mod tidy is NOT needed — `go mod tidy -diff` produces no output, confirming go.mod/go.sum are clean. Dependencies: cobra v1.10.2, go-pretty v6.7.8, anthropic-sdk-go v1.29.0, testify v1.11.1, gjson v1.18.0.",
           "source_ids": [
-            "S44"
+            "S17"
           ],
           "iteration": 4
         },
         {
-          "text": "Merge queue rollback complications: Rollback PRs can get stuck with 'Pending' checks when workflows don't include merge_group event triggers, runners are saturated, or active base branch changes cause repeated queue resets. Safe unblocking: verify trigger declarations include merge_group, check runner capacity, create fresh rollback from protected tip with revert commits. Emergency bypass requires formal governance escalation — no ad-hoc protection bypasses. Commands: 'git switch -c rollback/pending-checks origin/main' then 'git revert -m 1 <merge-hash>'.",
+          "text": "npm version should NOT be bumped yet. Current version is 5.3.2, last published to npm. The Go CLI is incomplete — Phase 50 (CLI Commands) is 1/6 plans, Phase 51 (Distribution) hasn't started. Bumping version before Phase 51 ships would be premature since Go binary isn't distributed. Phase 51 success criterion #5 states: `go install github.com/aether-colony/aether@latest` produces a working binary on a clean machine.",
           "source_ids": [
-            "S45"
+            "S13",
+            "S24",
+            "S25"
           ],
           "iteration": 4
         },
         {
-          "text": "Lock file merge conflict resolution has two automated approaches: (1) Custom 'theirs' merge driver — 'git config merge.theirs.driver \"cp -f %B %A\"' with '.gitattributes: package-lock.json merge=theirs', auto-accepts upstream then 'npm install' regenerates local changes. (2) npm-merge-driver — 'npx npm-merge-driver install --global', intelligently syncs lock with package.json changes (but project is archived/unmaintained). Alternative: mark as binary in .gitattributes ('package-lock.json merge=binary') to force manual resolution. For AI agent workflows, the 'theirs + npm install' pattern is most robust since agents can automate the npm install step.",
+          "text": "CI/CD pipeline (ci.yml) is Node.js ONLY — no Go steps. Runs: checkout, setup Node 20, npm ci, lint, test, runtime/ sync check, npm audit. ZERO Go steps: no setup-go, no go build, no go test. Go compile errors will NOT be caught by CI. This needs fixing before Phase 51 ships the Go binary, but isn't blocking now.",
           "source_ids": [
-            "S47"
+            "S20"
           ],
           "iteration": 4
         },
         {
-          "text": "Universal consensus on short-lived branches for AI agents: 'Don't let worktree branches drift far from main. The longer they diverge, the harder the merge.' All sources converge on short-lived worktree branches (minutes to hours, not days). Long-lived branches explicitly warned against. Typical lifecycle: create worktree → agent works → create PR → merge → cleanup. The @johnlindquist/worktree CLI standardizes lifecycle with 'wt new/open/list/remove' commands and automatic naming conventions.",
+          "text": "Registry has 46 repos. Version distribution: 10 repos at 5.3.2 (latest), 3 at 5.2.1, 1 at 5.1.0, 1 at 5.0.0, 1 at 3.1.17, remaining ~30 at older versions. 14 repos have active_colony: true. After any npm publish, repos running `aether update` would get shell/Bash changes only — Go code is not distributed via npm. Phase 51 plans to add `go install` distribution.",
           "source_ids": [
-            "S46",
-            "S48"
+            "S21"
           ],
           "iteration": 4
         },
         {
-          "text": "Sequential merge as conflict resolution pattern: When multiple agents complete work in parallel worktrees, merge one branch at a time into main, running full test suite after each merge. This prevents cascade failures and identifies exactly which branch introduced problems. NTM terminal tool warns in real-time when two agents edit the same file. AMUX provides SQLite CAS kanban board so agents don't duplicate work. Post-merge integration testing is mandatory — the Agentmaxxing walkthrough shows tests failing due to response format mismatches between independently-working agents.",
+          "text": "Other GitHub workflows: deploy-pages.yml (deploys site/ on push to main with path filter), correlation-pipeline.yml (weekly npm download spike detection, triggers on release:published or weekly cron), badges.yml (badge updates). None involve Go. The correlation pipeline triggers on `release:published` events, implying npm publish creates GitHub releases.",
           "source_ids": [
-            "S48",
-            "S46"
+            "S22",
+            "S23"
           ],
           "iteration": 4
         },
         {
-          "text": "CI auto-fix as failure recovery in PR branches: ComposioHQ agent-orchestrator achieved 84.6% CI success rate across all sessions, with all 41 CI failures across 9 branches eventually self-corrected by agents. PR #125 went through 12 failure→fix cycles autonomously. The reactions system triggers agent respawn on ci_failed events with failure context: 'CI failed on this PR. Read failure logs and fix issues.' Cross-agent merge conflicts remain unsolved — flagged as human responsibility. A 'reconciler for automatic conflict resolution' is on their roadmap but not yet implemented.",
+          "text": "Recommended push sequence for current state: (1) Fix compile error — remove unused strings import from cmd/flags.go, (2) Verify locally: go build ./cmd/aether && go test ./... && go test -race ./pkg/..., (3) Verify npm: npm test && npm run lint, (4) Commit to main (or PR per REDIRECT signal), (5) NO npm publish needed — Go changes don't affect npm package, (6) NO aether update needed in other repos — only shell/command files trigger updates. The three modified cmd/*.go files only affect local Go compilation.",
           "source_ids": [
-            "S49"
+            "S13",
+            "S20",
+            "S17"
           ],
           "iteration": 4
         },
         {
-          "text": "Rollback strategy design for AI-generated PRs: Multi-layered approach recommended: (1) Git revert via GitHub's PR revert button creates a rollback PR preserving audit trail. (2) Blue-green deployments keep previous version alive for instant reversion. (3) Feature flags toggle specific behavior without full rollback. (4) Canary deployments with automated abort if success rate drops below threshold (e.g., 95%). (5) Always keep last 2-3 versions ready for fast re-deployment. (6) Define rollback thresholds on business KPIs (conversion rates, error rates), not just technical metrics. AIOps systems can auto-detect breaking commits and trigger emergency rollback PRs.",
+          "text": "Uncommitted changes are minimal: cmd/flags.go (1 deletion — unused import), cmd/history.go (1 deletion), cmd/phase.go (1 deletion). These are all unused import removals, likely from the worktree merge. Plus oracle state files (.aether/oracle/*). Total: 3 deletions in Go code, 6 modified oracle files.",
           "source_ids": [
-            "S50"
-          ],
-          "iteration": 4
-        },
-        {
-          "text": "Practical safeguards for parallel AI agent branches: (1) One branch per worktree — no agent cohabitation, (2) Descriptive naming (feature/settings-api clarifies scope), (3) Frequent merging to prevent divergence, (4) NTM conflict warnings when two agents edit same file, (5) Shared resource locking scripts (database, testing instances), (6) Full test suite post-merge, (7) Cap at 5-7 concurrent agents before rate limits and review bottleneck eat gains, (8) Per-directory rule files for context alignment, (9) Minimum task duration ~30min sequential for positive ROI on parallel agents.",
-          "source_ids": [
-            "S48"
+            "S1",
+            "S2",
+            "S3"
           ],
           "iteration": 4
         }
       ],
       "iterations_touched": [
-        2,
         4
       ]
+    },
+    {
+      "id": "q5",
+      "text": "Assess other repos that may be affected: check ~/.aether/registry/ for repos using Aether, check for stale colony state referencing old branch structure, and determine if aether update needs manual intervention.",
+      "status": "open",
+      "confidence": 0,
+      "key_findings": [],
+      "iterations_touched": []
+    },
+    {
+      "id": "q6",
+      "text": "Go transition roadmap: read .planning/ROADMAP.md and .planning/STATE.md, assess phase status, determine where we are in shell-to-Go conversion, identify next logical phase to implement, and recommend which high-frequency shell subcommands should migrate to Go next.",
+      "status": "open",
+      "confidence": 0,
+      "key_findings": [],
+      "iterations_touched": []
     }
   ],
-  "created_at": "2026-03-30T20:30:00Z",
-  "last_updated": "2026-03-31T00:30:00Z",
+  "created_at": "2026-04-02T08:44:22Z",
+  "last_updated": "2026-04-02T10:45:00Z",
   "trust_summary": {
-    "total_findings": 53,
-    "single_source": 28,
-    "multi_source": 25,
+    "total_findings": 24,
+    "single_source": 11,
+    "multi_source": 13,
     "no_source": 0,
-    "trust_ratio": 47
+    "trust_ratio": 54
   }
 }
