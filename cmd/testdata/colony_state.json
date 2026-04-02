@@ -1,0 +1,119 @@
+{
+  "version": "3.0",
+  "goal": "Test colony goal for CLI development",
+  "colony_name": "test-colony",
+  "colony_version": 1,
+  "state": "EXECUTING",
+  "current_phase": 2,
+  "session_id": "session_123_abc",
+  "initialized_at": "2026-04-01T10:00:00Z",
+  "build_started_at": "2026-04-01T12:00:00Z",
+  "colony_depth": "standard",
+  "milestone": "Open Chambers",
+  "milestone_updated_at": "2026-04-01T10:00:00Z",
+  "plan": {
+    "generated_at": "2026-04-01T09:00:00Z",
+    "confidence": 0.85,
+    "phases": [
+      {
+        "id": 1,
+        "name": "Foundation",
+        "description": "Set up the foundation",
+        "status": "completed",
+        "tasks": [
+          {"id": "1.1", "goal": "Create project structure", "status": "completed"},
+          {"id": "1.2", "goal": "Set up dependencies", "status": "completed"}
+        ]
+      },
+      {
+        "id": 2,
+        "name": "Core Features",
+        "description": "Build core features",
+        "status": "in_progress",
+        "tasks": [
+          {"id": "2.1", "goal": "Implement status command", "status": "completed"},
+          {"id": "2.2", "goal": "Implement phase command", "status": "completed"},
+          {"id": "2.3", "goal": "Implement flags command", "status": "in_progress"},
+          {"id": "2.4", "goal": "Implement history command", "status": "pending"}
+        ]
+      },
+      {
+        "id": 3,
+        "name": "Polish",
+        "description": "Polish and ship",
+        "status": "pending",
+        "tasks": [
+          {"id": "3.1", "goal": "Add completion scripts", "status": "pending"},
+          {"id": "3.2", "goal": "Write documentation", "status": "pending"}
+        ]
+      }
+    ]
+  },
+  "memory": {
+    "phase_learnings": [
+      {
+        "id": "pl_001",
+        "phase": 1,
+        "phase_name": "Foundation",
+        "learnings": [
+          {"claim": "Use cobra for CLI", "status": "validated", "tested": true, "evidence": "Working CLI"}
+        ],
+        "timestamp": "2026-04-01T11:00:00Z"
+      }
+    ],
+    "decisions": [
+      {
+        "id": "dec_001",
+        "phase": 1,
+        "claim": "Use outputOK for JSON responses",
+        "rationale": "Matches shell json_ok format",
+        "timestamp": "2026-04-01T10:30:00Z"
+      }
+    ],
+    "instincts": [
+      {
+        "id": "inst_001",
+        "trigger": "When building CLI commands",
+        "action": "Use init() for registration pattern",
+        "confidence": 0.8,
+        "status": "validated",
+        "domain": "cli",
+        "source": "promoted_from_learning",
+        "evidence": ["Working status command"],
+        "tested": true,
+        "created_at": "2026-04-01T11:00:00Z",
+        "last_applied": null,
+        "applications": 3,
+        "successes": 3,
+        "failures": 0
+      },
+      {
+        "id": "inst_002",
+        "trigger": "When writing tests",
+        "action": "Use temp directories for isolation",
+        "confidence": 0.5,
+        "status": "hypothesis",
+        "domain": "testing",
+        "source": "observation",
+        "evidence": ["Isolated tests pass reliably"],
+        "tested": false,
+        "created_at": "2026-04-01T11:30:00Z",
+        "last_applied": null,
+        "applications": 1,
+        "successes": 1,
+        "failures": 0
+      }
+    ]
+  },
+  "errors": {
+    "records": [],
+    "flagged_patterns": []
+  },
+  "signals": [],
+  "graveyards": [],
+  "events": [
+    "2026-04-01T10:00:00Z|init|system|Colony initialized",
+    "2026-04-01T12:00:00Z|build|system|Build started for phase 1",
+    "2026-04-01T14:00:00Z|complete|system|Phase 1 completed"
+  ]
+}
