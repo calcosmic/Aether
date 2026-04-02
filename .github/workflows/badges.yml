@@ -1,0 +1,66 @@
+name: Update Badge Data
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-badges:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch npm download stats
+        run: |
+          # Weekly downloads
+          WEEKLY=$(curl -s "https://api.npmjs.org/downloads/point/last-week/aether-colony" | jq -r '.downloads // 0')
+          # Monthly downloads
+          MONTHLY=$(curl -s "https://api.npmjs.org/downloads/point/last-month/aether-colony" | jq -r '.downloads // 0')
+          # Total downloads (approximate via range from package first publish)
+          TOTAL=$(curl -s "https://api.npmjs.org/downloads/range/2020-01-01:$(date +%Y-%m-%d)/aether-colony" | jq '[.downloads[].downloads] | add // 0')
+
+          # Format numbers with commas for display
+          format_number() {
+            printf "%'d" "$1" 2>/dev/null || echo "$1"
+          }
+
+          # Update badge JSON files
+          echo "{\"schemaVersion\":1,\"label\":\"downloads/week\",\"message\":\"$(format_number $WEEKLY)\",\"color\":\"blue\"}" > docs/badges/weekly-downloads.json
+          echo "{\"schemaVersion\":1,\"label\":\"downloads/month\",\"message\":\"$(format_number $MONTHLY)\",\"color\":\"blue\"}" > docs/badges/monthly-downloads.json
+          echo "{\"schemaVersion\":1,\"label\":\"total downloads\",\"message\":\"$(format_number $TOTAL)\",\"color\":\"blue\"}" > docs/badges/total-downloads.json
+
+      - name: Fetch package metadata
+        run: |
+          # Bundle size (unpacked size from npm registry)
+          SIZE=$(curl -s "https://registry.npmjs.org/aether-colony/latest" | jq -r '.dist.unpackedSize // 0')
+          SIZE_KB=$((SIZE / 1024))
+          if [ "$SIZE_KB" -gt 1024 ]; then
+            SIZE_DISPLAY="$((SIZE_KB / 1024))MB"
+          else
+            SIZE_DISPLAY="${SIZE_KB}KB"
+          fi
+          echo "{\"schemaVersion\":1,\"label\":\"bundle size\",\"message\":\"$SIZE_DISPLAY\",\"color\":\"green\"}" > docs/badges/bundle-size.json
+
+      - name: Update static badges
+        run: |
+          # Test count - static value matching current suite
+          echo "{\"schemaVersion\":1,\"label\":\"tests\",\"message\":\"524+\",\"color\":\"brightgreen\"}" > docs/badges/test-count.json
+
+          # Command and agent counts - static values from CLAUDE.md
+          echo "{\"schemaVersion\":1,\"label\":\"commands\",\"message\":\"45\",\"color\":\"orange\"}" > docs/badges/commands.json
+          echo "{\"schemaVersion\":1,\"label\":\"agents\",\"message\":\"24\",\"color\":\"purple\"}" > docs/badges/agents.json
+
+          # Colony version from package.json
+          VERSION=$(jq -r '.version' package.json)
+          echo "{\"schemaVersion\":1,\"label\":\"colony\",\"message\":\"v${VERSION}\",\"color\":\"gold\"}" > docs/badges/colony-version.json
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/badges/
+          git diff --staged --quiet || (git commit -m "chore: update badge data [skip ci]" && git push)

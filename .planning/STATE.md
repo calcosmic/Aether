@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.6
-milestone_name: Bugfix & Hardening
+milestone: v5.4
+milestone_name: Shell-to-Go Rewrite
 status: executing
-stopped_at: Completed 49-02-PLAN.md
-last_updated: "2026-04-02T03:41:31.038Z"
-last_activity: 2026-03-31
+stopped_at: Completed 49-01-PLAN.md
+last_updated: "2026-04-02T03:29:30.807Z"
+last_activity: 2026-04-02
 progress:
-  total_phases: 35
-  completed_phases: 6
-  total_plans: 28
-  completed_plans: 70
-  percent: 100
+  total_phases: 20
+  completed_phases: 13
+  total_plans: 53
+  completed_plans: 45
 ---
 
 # Project State
@@ -21,16 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-29)
 
 **Core value:** Reliably interpret user requests, decompose into work, verify outputs, and ship correct work with minimal back-and-forth.
-**Current focus:** Phase 43 — clash-detection-integration
+**Current focus:** Phase 49 — agent-system-llm
 
 ## Current Position
 
-Phase: 43
-Plan: Not started
+Phase: 49 (agent-system-llm) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-03-31
-
-Progress: [█████████ ] 100% (v1.3 through v2.5) + phase 37 in progress
+Last activity: 2026-04-02
 
 ## Performance Metrics
 
@@ -72,7 +69,8 @@ Progress: [█████████ ] 100% (v1.3 through v2.5) + phase 37 in 
 | Phase 42.1 P01 | 4min | 2 tasks | 7 files |
 | Phase 43 P01 | 3min | 2 tasks | 1 files |
 | Phase 44 P02 | 3min | 2 tasks | 3 files |
-| Phase 49 P02 | 21 | 2 tasks | 7 files |
+| Phase 45 P02 | 12min | 2 tasks | 6 files |
+| Phase 49 P01 | 472 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -133,9 +131,12 @@ Progress: [█████████ ] 100% (v1.3 through v2.5) + phase 37 in 
 - [Phase 43]: Research predicted 5/12 worktree test failures but dispatcher wiring resolved all 12
 - [Phase 44]: Used ~5,500 for aether-utils.sh line count (actual 5,469) for rounding stability
 - [Phase 44]: CHANGELOG uses npm version [5.3.0] as section header per keepachangelog convention
-- [Phase 49]: Functional options pattern for LLM Client construction (WithModel, WithMaxTokens, WithAPIKey)
-- [Phase 49]: Streaming tests use SDK NewStreaming with httptest SSE servers (concrete type, not interface)
-- [Phase 49]: Custom ToolRunner loop rather than SDK toolrunner for testability and explicit control
+- [45-02]: Used crypto/rand hex suffix for temp file naming instead of PID-only for concurrent safety
+- [45-02]: Used fmt.Fprintf to stderr for malformed JSONL logging instead of log.Printf
+- [45-02]: Created full Store type in storage.go since the file did not exist despite plan referencing it
+- [Phase 49]: Sentinel error types (DuplicateAgentError, AgentNotFoundError) for type-safe agent registry error handling
+- [Phase 49]: Registry.List/Match return agents sorted by name for deterministic ordering
+- [Phase 49]: YAML frontmatter parser strips leading whitespace before delimiter detection
 
 ### Pending Todos
 
@@ -147,6 +148,6 @@ None active.
 
 ## Session Continuity
 
-Last session: 2026-04-02T03:41:31.034Z
-Stopped at: Completed 49-02-PLAN.md
+Last session: 2026-04-02T03:29:30.802Z
+Stopped at: Completed 49-01-PLAN.md
 Resume file: None

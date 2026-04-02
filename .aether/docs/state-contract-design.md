@@ -44,7 +44,9 @@ colony context.
 | 22 | `phase-research/` | Per-phase research artifacts | build commands |
 
 **Key property:** All branch-local state uses `COLONY_DATA_DIR` (which resolves to
-`.aether/data/` or `.aether/data/colonies/{name}/` when colony_name is set).
+`.aether/data/` or `.aether/data/colonies/{name}/` when colony_name is set),
+except `COLONY_STATE.json` which always uses `DATA_DIR` (it must remain at the
+root for `_resolve_colony_data_dir` bootstrap).
 
 ### Hub-Global State (`~/.aether/` -- outside repo, branch-agnostic)
 

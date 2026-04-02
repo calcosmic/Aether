@@ -1,3 +1,36 @@
+### Stage Audit Gate (Pre-Synthesis Check)
+
+**This gate runs before Step 5.9. All 4 prior playbook stages must have completed with "ok" status.**
+
+Check the cross-stage state record for each of the following stages:
+
+| Stage | Playbook | Required Status |
+|-------|----------|----------------|
+| 1 | build-prep | ok |
+| 2 | build-context | ok |
+| 3 | build-wave | ok |
+| 4 | build-verify | ok |
+
+To verify, read the cross-stage state (typically `.aether/data/build-stage-state.json` or the in-memory record accumulated during the build run) and confirm each stage entry has `"status": "ok"`.
+
+**If any stage is missing or did not complete with "ok" status:**
+- HALT — do not proceed to Step 5.9
+- Display:
+  ```
+  Stage Audit FAILED — cannot synthesize results.
+
+  Missing or failed stages:
+    {list each stage name with its recorded status, or "not recorded" if absent}
+
+  Recovery options:
+    1. Re-run the missing stage(s) manually, then retry /ant:build
+    2. Run /ant:flags to review blockers
+    3. Run /ant:swarm to auto-repair failed tasks
+  ```
+- Return `{"status": "failed", "summary": "Stage audit failed — stages {names} did not complete successfully"}` and stop.
+
+**If all 4 stages passed:** proceed to Step 5.9.
+
 ### Step 5.9: Synthesize Results
 
 **This step runs after all worker tasks have completed (Builders, Watcher, Chaos).**
@@ -253,7 +286,7 @@ Write the result to .aether/HANDOFF.md using the Write tool.
 
 This ensures the handoff always reflects the latest build state, even if the session crashes before explicit pause.
 
-### Step 6.5: Update Context Document
+### Step 6.6: Update Context Document
 
 Log this build activity to `.aether/CONTEXT.md`:
 
@@ -263,7 +296,7 @@ Also update safe-to-clear status:
 - If build completed successfully: `context-update safe-to-clear "YES" "Build complete, ready to continue"`
 - If build failed: `context-update safe-to-clear "NO" "Build failed — run /ant:swarm or /ant:flags"`
 
-### Step 5.10: Check for Promotion Proposals
+### Step 6.7: Check for Promotion Proposals
 
 After build completion (success or failure), check if any observations have met promotion thresholds.
 
@@ -295,14 +328,14 @@ Calculate `elapsed` using `build_started_at_epoch` (epoch integer captured at St
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   B U I L D   S U M M A R Y
+🔨 B U I L D   S U M M A R Y
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Phase {id}: {name}
-Pattern:  {selected_pattern}
+📍 Phase {id}: {name}
+🎲 Pattern:  {selected_pattern}
 
-Workers:  {pass_count} passed  {fail_count} failed  ({total} total)
-Tools:    {total_tools} calls across all workers
-Duration: {elapsed}
+🐜 Workers:  {pass_count} passed  {fail_count} failed  ({total} total)
+🛠️ Tools:    {total_tools} calls across all workers
+⏱️ Duration: {elapsed}
 
 {if measurer_ran:}
 📊 Measurer: {baseline_count} baselines established, {bottleneck_count} bottlenecks identified

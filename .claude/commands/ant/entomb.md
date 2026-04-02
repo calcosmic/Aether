@@ -444,7 +444,7 @@ Write the result to .aether/HANDOFF.md using the Write tool.
 Display:
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   C O L O N Y   E N T O M B E D
+⚰️ C O L O N Y   E N T O M B E D
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Entombed v{colony_version}

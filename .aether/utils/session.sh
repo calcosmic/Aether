@@ -275,6 +275,13 @@ _session_init() {
         summary: "Session initialized"
       }' > "$session_file.tmp"
     mv "$session_file.tmp" "$session_file"
+
+    # Mirror to legacy path so session recovery (which checks .aether/data/session.json) works
+    local legacy_session="$DATA_DIR/session.json"
+    if [[ "$session_file" != "$legacy_session" ]]; then
+      cp "$session_file" "$legacy_session" 2>/dev/null || true
+    fi
+
     json_ok "$(jq -n --arg sid "$session_id" --arg goal "$goal" --arg file "$session_file" \
       '{session_id: $sid, goal: $goal, file: $file}')"
 }
@@ -360,6 +367,12 @@ _session_update() {
       rm -f "$session_file.tmp"
       json_err "$E_UNKNOWN" "Failed to rename temporary session file"
     }
+
+    # Mirror to legacy path so session recovery (which checks .aether/data/session.json) works
+    local legacy_session="$DATA_DIR/session.json"
+    if [[ "$session_file" != "$legacy_session" ]]; then
+      cp "$session_file" "$legacy_session" 2>/dev/null || true
+    fi
 
     json_ok "$(jq -n --arg cmd "$cmd_run" '{updated: true, command: $cmd}')"
 }

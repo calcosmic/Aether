@@ -172,8 +172,9 @@ class UpdateTransaction {
 
     // Directories to exclude from sync (user data, local state, and separately-synced dirs)
     // v4.0: archive and chambers added — these are private and must not sync to target repos
-    // v6.0: oracle, midden, exchange added for complete user data protection
-    this.EXCLUDE_DIRS = ['data', 'dreams', 'oracle', 'midden', 'checkpoints', 'locks', 'temp', 'agents', 'commands', 'rules', 'archive', 'chambers', 'exchange'];
+    // v6.0: oracle, midden added for complete user data protection
+    // v7.0: exchange removed from exclusion — .sh scripts must distribute; .xml/.json data excluded by file extension
+    this.EXCLUDE_DIRS = ['data', 'dreams', 'oracle', 'midden', 'checkpoints', 'locks', 'temp', 'agents', 'commands', 'rules', 'archive', 'chambers'];
 
     // Files to exclude from sync (user wisdom, protected files)
     this.EXCLUDE_FILES = ['QUEEN.md'];
@@ -192,7 +193,6 @@ class UpdateTransaction {
       'temp',
       'archive',
       'chambers',
-      'exchange',
     ]);
     this.managedPrefixes = [
       '.claude/commands/ant',
@@ -790,6 +790,11 @@ class UpdateTransaction {
     // Check for excluded files (QUEEN.md protection)
     const basename = path.basename(relPath);
     if (this.EXCLUDE_FILES.includes(basename)) {
+      return true;
+    }
+    // Protect exchange data files — only .sh scripts should distribute
+    // Only filter files (not directories), so the exchange dir itself is traversed
+    if (parts.includes('exchange') && !basename.endsWith('.sh') && !relPath.endsWith('exchange')) {
       return true;
     }
     return false;

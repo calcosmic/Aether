@@ -967,6 +967,32 @@ test('shouldExclude returns true for agents, commands, and rules paths', (t) => 
   t.false(tx.shouldExclude('workers.md'), 'workers.md should not be excluded');
 });
 
+test('shouldExclude returns false for exchange .sh scripts (permitted)', (t) => {
+  const { UpdateTransaction } = t.context;
+
+  const tx = new UpdateTransaction('/test/repo');
+
+  t.false(tx.shouldExclude('exchange/pheromone-xml.sh'), 'exchange .sh files should be permitted');
+  t.false(tx.shouldExclude('exchange/wisdom-xml.sh'), 'exchange .sh files should be permitted');
+});
+
+test('shouldExclude returns true for exchange data files (blocked)', (t) => {
+  const { UpdateTransaction } = t.context;
+
+  const tx = new UpdateTransaction('/test/repo');
+
+  t.true(tx.shouldExclude('exchange/pheromone-export.xml'), 'exchange .xml files should be excluded');
+  t.true(tx.shouldExclude('exchange/pheromone-branch-export.json'), 'exchange .json files should be excluded');
+});
+
+test('shouldExclude returns false for exchange directory itself (traversal allowed)', (t) => {
+  const { UpdateTransaction } = t.context;
+
+  const tx = new UpdateTransaction('/test/repo');
+
+  t.false(tx.shouldExclude('exchange'), 'exchange directory itself should not be excluded');
+});
+
 // ---------------------------------------------------------------------------
 // Test group: Stale-dir cleanup (DIST-06)
 // ---------------------------------------------------------------------------

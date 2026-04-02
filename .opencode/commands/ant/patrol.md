@@ -85,7 +85,7 @@ Extract from COLONY_STATE.json:
 Display audit header:
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   C O L O N Y   A U D I T
+🔍 C O L O N Y   A U D I T
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Goal: {goal}
@@ -507,7 +507,7 @@ Display the formatted audit summary:
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   A U D I T   R E S U L T S
+📋 A U D I T   R E S U L T S
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Goal: {goal}

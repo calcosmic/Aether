@@ -8,11 +8,20 @@
 
 <br>
 
-[![npm version](https://img.shields.io/npm/v/aether-colony.svg?style=flat-square)](https://www.npmjs.com/package/aether-colony)
-[![npm downloads](https://img.shields.io/npm/dw/aether-colony.svg?style=flat-square)](https://www.npmjs.com/package/aether-colony)
+[![npm version](https://img.shields.io/npm/v/aether-colony.svg?style=flat-square)](https://www.npmjs.com/package/aether-colony?utm_source=github&utm_medium=readme&utm_campaign=aether)
+[![npm downloads](https://img.shields.io/npm/dw/aether-colony.svg?style=flat-square)](https://www.npmjs.com/package/aether-colony?utm_source=github&utm_medium=readme&utm_campaign=aether)
 [![License: MIT](https://img.shields.io/github/license/calcosmic/Aether.svg?style=flat-square)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/calcosmic/Aether.svg?style=flat-square)](https://github.com/calcosmic/Aether/stargazers)
-[![Sponsor](https://img.shields.io/badge/Sponsor-GitHub-%23ea4aaa.svg?style=flat-square&logo=github)](https://github.com/sponsors/calcosmic)
+[![Sponsor](https://img.shields.io/badge/Sponsor-GitHub-%23ea4aaa.svg?style=flat-square&logo=github)](https://github.com/sponsors/calcosmic?utm_source=github&utm_medium=readme&utm_campaign=aether)
+
+[![weekly downloads](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/calcosmic/Aether/main/docs/badges/weekly-downloads.json&style=flat-square)](https://www.npmjs.com/package/aether-colony?utm_source=github&utm_medium=readme&utm_campaign=aether)
+[![monthly downloads](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/calcosmic/Aether/main/docs/badges/monthly-downloads.json&style=flat-square)](https://www.npmjs.com/package/aether-colony?utm_source=github&utm_medium=readme&utm_campaign=aether)
+[![total downloads](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/calcosmic/Aether/main/docs/badges/total-downloads.json&style=flat-square)](https://www.npmjs.com/package/aether-colony?utm_source=github&utm_medium=readme&utm_campaign=aether)
+[![bundle size](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/calcosmic/Aether/main/docs/badges/bundle-size.json&style=flat-square)](https://www.npmjs.com/package/aether-colony?utm_source=github&utm_medium=readme&utm_campaign=aether)
+![test count](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/calcosmic/Aether/main/docs/badges/test-count.json&style=flat-square)
+![commands](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/calcosmic/Aether/main/docs/badges/commands.json&style=flat-square)
+![agents](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/calcosmic/Aether/main/docs/badges/agents.json&style=flat-square)
+[![colony version](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/calcosmic/Aether/main/docs/badges/colony-version.json&style=flat-square)](https://github.com/calcosmic/Aether/releases)
 
 <br>
 
@@ -26,7 +35,7 @@ $ npx aether-colony
 
 <br>
 
-[![🐜 aetherantcolony.com](https://img.shields.io/badge/%F0%9F%90%9C_aetherantcolony.com-7B3FE4?style=for-the-badge&logoColor=white)](https://aetherantcolony.com)
+[![🐜 aetherantcolony.com](https://img.shields.io/badge/%F0%9F%90%9C_aetherantcolony.com-7B3FE4?style=for-the-badge&logoColor=white)](https://aetherantcolony.com?utm_source=github&utm_medium=readme&utm_campaign=aether)
 
 </div>
 
@@ -219,14 +228,14 @@ Five commands from zero to shipped.
 
 ## Works With
 
-- **[Claude Code](https://docs.anthropic.com/en/docs/claude-code)** — 45 slash commands + 24 agent definitions
-- **[OpenCode](https://github.com/opencode-ai/opencode)** — 45 slash commands + agent definitions
+- **[Claude Code](https://docs.anthropic.com/en/docs/claude-code?utm_source=github&utm_medium=readme&utm_campaign=aether)** — 45 slash commands + 24 agent definitions
+- **[OpenCode](https://github.com/opencode-ai/opencode?utm_source=github&utm_medium=readme&utm_campaign=aether)** — 45 slash commands + agent definitions
 
 ## Support
 
 If Aether has been useful to you:
 
-**[Sponsor on GitHub](https://github.com/sponsors/calcosmic)**
+**[Sponsor on GitHub](https://github.com/sponsors/calcosmic?utm_source=github&utm_medium=readme&utm_campaign=aether)**
 
 <details>
 <summary>Crypto</summary>
@@ -238,7 +247,7 @@ If Aether has been useful to you:
 
 </details>
 
-[PayPal](https://www.paypal.com/ncp/payment/RENG7ZMW5F59L) · [Buy Me a Coffee](https://buymeacoffee.com/music5y)
+[PayPal](https://www.paypal.com/ncp/payment/RENG7ZMW5F59L?utm_source=github&utm_medium=readme&utm_campaign=aether) · [Buy Me a Coffee](https://buymeacoffee.com/music5y?utm_source=github&utm_medium=readme&utm_campaign=aether)
 
 ## License
 

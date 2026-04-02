@@ -40,13 +40,17 @@ The system must reliably interpret a user request, decompose it into executable 
 
 ### Active
 
-- Complete state-mutate migration — all COLONY_STATE.json writes use atomic mutations — v2.7
-- Cross-branch pheromone propagation — user signals reach all worktree branches — v2.7
-- ✓ Midden cross-PR collection — branch failures ingested on merge — v2.7 (Phase 41)
-- CI context assembly (pr-context) — machine-readable colony context for CI — v2.7
-- Clash detection wired into task-as-PR workflow — v2.7
-- Release hygiene — published package excludes dev artifacts — v2.7
-- Ship v2.7.0 clean release to hub — v2.7
+- Go CLI with Cobra — all 37 commands ported from shell — v5.4
+- ✓ Event bus — channels + JSONL replacing file-based pub/sub — v5.4 (Phase 46)
+- Trust scoring — native float64 replacing bc subprocess — v5.4
+- Memory pipeline — observation → instinct → QUEEN promotion — v5.4
+- Graph layer — BFS, cycle detection, relationship tracking — v5.4
+- Agent/worker system — goroutine pools replacing shell subprocesses — v5.4
+- LLM integration — Anthropic Go SDK for agent Claude calls — v5.4
+- XML exchange — native Go replacing xmllint/xmlstarlet — v5.4
+- ✓ Storage layer — typed Go structs for all colony data, atomic writes, backup rotation, path resolution — Phase 45
+- Full test parity — all existing tests ported to Go — v5.4
+- Distribution — Go binary replacing npm package — v5.4
 
 ### Out of Scope
 
@@ -58,20 +62,32 @@ The system must reliably interpret a user request, decompose it into executable 
 - LLM-generated prompts — non-deterministic and untestable; bash + jq assembly is deterministic
 - Full deep survey on every init — too slow; lightweight scan + suggestion instead
 
+## Current Milestone: v5.4 Shell-to-Go Rewrite
+
+**Goal:** Replace all shell scripts with a native Go binary, eliminating bash/jq/curl dependencies while preserving exact behavioral parity with the existing system.
+
+**Target features:**
+- Complete Go implementation of all colony runtime (60+ shell scripts → Go packages)
+- Cobra CLI with all 37 commands ported
+- Event bus (channels + JSONL), trust scoring, memory pipeline, graph layer
+- LLM integration via Anthropic Go SDK
+- XML exchange layer (32 functions, native Go replacing xmllint)
+- All existing tests ported + new Go tests for parity verification
+- Distribution changes from npm package to Go binary
+
 ## Context
 
-- Aether is at v2.6.0, completing Bugfix & Hardening milestone
-- v2.6 shipped: Input escaping, cross-colony isolation, depth gating, YAML command generator, XML lifecycle integration
-- v2.7 in progress: PR workflow implementation + stability + clean release
-- v2.5 shipped: Smart init (repo scanning, charter management, approval flow, intelligence enrichment), 50 new tests
-- v2.4 shipped: Oracle + Architect agents, wisdom pipeline wiring, fuzzy dedup, deterministic fallback
+- Aether is at v5.3.2 on npm, transitioning from shell to Go
+- v2.7 shipped: PR workflow, clash detection, pheromone propagation, release hygiene
+- v2.6 shipped: Input escaping, cross-colony isolation, depth gating, YAML command generator
+- v2.5 shipped: Smart init (repo scanning, charter management, approval flow), 50 new tests
+- v2.4 shipped: Oracle + Architect agents, wisdom pipeline wiring, fuzzy dedup
 - v2.3 shipped: Per-caste model routing, model-slot CLI, 24 agents configured
 - v2.2 shipped: QUEEN.md structured wisdom, cross-colony hive brain, wisdom injection
 - v2.1 shipped: Error handling hardened, monolith modularized (10 modules), state API centralized
-- ~44 Claude commands, ~44 OpenCode commands, 24 agents, ~150+ subcommands across 10 domain modules
-- aether-utils.sh dispatcher + 10 domain modules (scan.sh added in v2.5)
-- 616+ tests passing, all green
-- Previous user feedback (QUEEN.md dead, init mechanical) addressed by v2.2-v2.5 milestones
+- Phase 45 complete: typed Go structs for all colony data files (7 types), storage package (atomic writes, backup rotation, path resolution), 74 tests passing
+- 60+ shell scripts, ~44 commands, 24 agents, ~150+ subcommands across 10 domain modules
+- Oracle research completed (25 iterations, 100% confidence) covering full conversion spec
 
 ## Constraints
 
@@ -100,5 +116,22 @@ The system must reliably interpret a user request, decompose it into executable 
 | Intelligent colonize prompting | Users forget to colonize; system should suggest it at appropriate times | ✓ Good — scan detects stale/missing survey, suggests colonize in init prompt |
 | Deterministic prompt generation | Colony prompts must be testable and reproducible | ✓ Good — bash + jq assembly, 12 tested pattern checks |
 
+## Evolution
+
+This document evolves at phase transitions and milestone boundaries.
+
+**After each phase transition** (via `/gsd:transition`):
+1. Requirements invalidated? → Move to Out of Scope with reason
+2. Requirements validated? → Move to Validated with phase reference
+3. New requirements emerged? → Add to Active
+4. Decisions to log? → Add to Key Decisions
+5. "What This Is" still accurate? → Update if drifted
+
+**After each milestone** (via `/gsd:complete-milestone`):
+1. Full review of all sections
+2. Core Value check — still the right priority?
+3. Audit Out of Scope — reasons still valid?
+4. Update Context with current state
+
 ---
-*Last updated: 2026-03-31 after Phase 42.1 completion — release hygiene (packaging validation, doc accuracy)*
+*Last updated: 2026-04-01 after Phase 46 (event bus) completion*

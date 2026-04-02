@@ -238,7 +238,7 @@ Cross-compare all findings:
 Rank fix options:
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-              S O L U T I O N   R A N K I N G
+🏆 S O L U T I O N   R A N K I N G
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 #1 [0.85 confidence] {best solution}

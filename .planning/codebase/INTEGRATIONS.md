@@ -1,177 +1,204 @@
 # External Integrations
 
-**Analysis Date:** 2026-03-19
+**Analysis Date:** 2026-04-01
 
-## APIs & External Services
+## LLM Providers
 
-**LLM Model Routing:**
-- LiteLLM Proxy - Routes API calls to configured LLM providers
-  - SDK/Client: Direct HTTP via curl and fetch in Node.js
-  - Endpoint: `http://localhost:4000` (configurable via `ANTHROPIC_BASE_URL`)
-  - Auth: Token-based via `ANTHROPIC_AUTH_TOKEN` (default: `sk-litellm-local`)
-  - Health check: `GET /health` endpoint polled by `bin/lib/proxy-health.js`
-  - Model list: `GET /models` endpoint (OpenAI format)
-  - Purpose: Abstracts away underlying LLM provider (Anthropic Claude, other models)
+**Anthropic (Claude Code):**
+- Primary target platform for colony orchestration
+- Integration: 24 agent definitions in `.claude/agents/ant/*.md` define worker personas
+- 45 slash commands in `.claude/commands/ant/*.md` define user-facing commands
+- Agent definitions reference `prompt_section`, `pheromone_protocol`, and `tools` configurations
+- Colony-prime assembles context and injects into worker prompts via markdown templates
 
-**Claude Code / OpenCode Integration:**
-- Claude Code and OpenCode are spawned as external processes
-  - Method: `claude --cwd <project_root>` command-line invocation
-  - Context: Spawned with environment variables for model routing
-  - Task delivery: Via inline prompts in agent specifications and command files
-  - No direct API calls - communication via environment and file system
+**OpenCode:**
+- Secondary target platform
+- 24 agent definitions in `.opencode/agents/*.md` (structural parity with Claude)
+- 45 commands in `.opencode/commands/ant/*.md`
+- Config: `.opencode/opencode.json` (schema reference only)
+- OpenCode-specific rules in `.opencode/OPENCODE.md`
+
+**LLM Abstraction (Go skeleton):**
+- `pkg/llm/llm.go` -- package docstring declares "Anthropic SDK integration for colony worker interactions"
+- Not yet implemented (stub only)
 
 ## Data Storage
 
-**Databases:**
-- Not applicable - No database connections (relational, document, or otherwise)
+**Colony State (local filesystem):**
+- Primary: `.aether/data/COLONY_STATE.json` -- full colony state (goal, phases, tasks, memory, signals, errors)
+- Backup: `.aether/data/COLONY_STATE.json.bak`
+- JSON format, 2-space indentation, trailing newline
+- Go types in `pkg/colony/colony.go` provide exact round-trip compatibility
 
-**File Storage:**
-- Local filesystem only
-  - Primary: `.aether/data/` - Runtime state and colony memory
-  - State files: `COLONY_STATE.json`, `pheromones.json`, `constraints.json`, `learning-observations.json`
-  - Logs: `activity.log`, `spawn-tree.txt`, `flags.json`
-  - Failure tracking: `.aether/data/midden/` - Structured failure records
-  - Backups: `.aether/data/backups/` - Incremental state snapshots
+**Pheromone Signals (local filesystem):**
+- `.aether/data/pheromones.json` -- active FOCUS/REDIRECT/FEEDBACK signals
+- Content deduplication via SHA-256 hashing
+- Prompt injection sanitization (XML tags, angle brackets, shell patterns blocked)
+- 500-character content cap
 
-**Caching:**
-- Not applicable - No external caching service used
-- In-memory: Command execution state cached during CLI invocation
-- File-system locks: `file-lock.sh` provides distributed locking primitives (`/tmp/.aether-*.lock`)
+**Learning Observations (local filesystem):**
+- `.aether/data/learning-observations.json` -- captured observations
+- Rotating backups: `.learning-observations.json.bak.{1,2,3}`
+
+**Event Bus (local filesystem):**
+- JSONL format (`.aether/data/` event files)
+- Pub/sub with TTL-based cleanup
+- Go implementation in `pkg/events/events.go` (stub)
+- Go storage layer supports `AppendJSONL`/`ReadJSONL` in `pkg/storage/storage.go`
+
+**Hive Brain (cross-colony, user-level):**
+- `~/.aether/hive/wisdom.json` -- 200-entry cap, LRU eviction
+- Hub-level file locking prevents concurrent write corruption
+- Domain-scoped retrieval for cross-colony wisdom
+
+**Eternal Memory (legacy fallback):**
+- `~/.aether/eternal/memory.json` -- high-value signals from expired pheromones
+
+**Midden (failure tracking):**
+- `.aether/data/midden/midden.json` -- failure records with acknowledgment tracking
+
+**Session Data:**
+- `.aether/data/session.json` -- current session state
+- `.aether/data/pending-decisions.json` -- queued decisions
+
+**Other State Files:**
+- `.aether/data/constraints.json` -- focus areas and constraints (legacy)
+- `.aether/data/queen-wisdom.json` -- cached wisdom
+- `.aether/data/last-build-claims.json` -- build verification state
+- `.aether/data/last-build-result.json` -- build outcome
+- `.aether/data/phase-research/` -- per-phase research data
+- `.aether/data/survey/` -- territory survey results
+- `.aether/data/watch/` -- live monitoring state
+- `.aether/data/spawn-tree.txt` -- worker spawn tree
+- `.aether/data/rolling-summary.log` -- rolling session summary
+- `.aether/data/activity.log` -- activity tracking
+- `.aether/data/errors.log` -- error log
+
+**Colony Registry (user-level):**
+- `~/.aether/registry.json` -- tracks all repos using Aether with domain tags and active status
+
+**Go Storage Abstraction:**
+- `pkg/storage/storage.go` -- atomic JSON writes (temp file + rename), per-path RWMutex, JSONL append
+- Mirrors bash patterns from `atomic-write.sh` and `file-lock.sh`
+- Designed for exact compatibility with existing `.aether/data/` file formats
+
+## File Storage
+
+**Local filesystem only.** No cloud storage integrations.
+- Colony data in `.aether/data/`
+- Session notes in `.aether/dreams/`
+- Oracle research in `.aether/oracle/`
+- Archived colonies in `.aether/chambers/`
+
+## Caching
+
+**Skills Index Cache:**
+- `skill-index` builds a cached skills index for performance
+- `skill-cache-rebuild` forces index rebuild
+
+**Colony-Prime Context Cache:**
+- Token budget system (8K normal, 4K compact) with trim priority ordering
+
+**Spawn Tree Archive:**
+- `.aether/data/spawn-tree-archive/` -- historical spawn trees
 
 ## Authentication & Identity
 
-**Auth Provider:**
-- Custom implementation
-  - No OAuth, SAML, or third-party auth service
-  - Authentication is implicit: Whoever has access to the file system and can run `aether` commands
-  - Token authentication for LiteLLM proxy uses simple static token (`sk-litellm-local` by default, configurable)
-  - No user accounts or role-based access control - Colony operates as single logical actor
+**No external auth provider.** The system operates entirely on local filesystem permissions.
+- User identity derived from `HOME` environment variable
+- Hub directory at `~/.aether/` serves as user-level identity boundary
+- No API keys, tokens, or credentials in the codebase
+- User preferences stored in `~/.aether/QUEEN.md`
 
-**Authorization:**
-- File system permissions only
-  - `.aether/data/` directory permissions determine who can access colony state
-  - Atomic writes and file locking prevent concurrent modification race conditions
+## Cross-Colony Exchange
 
-## Monitoring & Observability
-
-**Error Tracking:**
-- In-process only - No external error tracking service
-  - Errors logged to `.aether/data/activity.log` (JSON lines format)
-  - Error context: `bin/lib/errors.js` defines structured error types (AetherError, RepoError, GitError, etc.)
-  - Failure records: `.aether/data/midden/midden.json` tracks failures for colony learning
-
-**Logs:**
-- File-based logging via `bin/lib/logger.js`
-  - Activity log: `.aether/data/activity.log` (all operations: SPAWN, COMPLETE, ACTIVITY)
-  - Spawn tree: `.aether/data/spawn-tree.txt` (hierarchical worker spawn visualization)
-  - Telemetry: `.aether/data/view-state.json` (model performance, spawn metrics)
-  - Rotation: Not implemented - logs grow indefinitely until manually archived
-
-**Metrics:**
-- In-memory collection via `bin/lib/telemetry.js`
-  - Spawn count, model usage, caste distribution
-  - Timing metrics: Task duration, phase execution time
-  - Memory state: Event count, learnings count, instincts count (displayed in `/ant:status`)
+**XML Signal Exchange:**
+- `/ant:export-signals` -- exports pheromone signals to XML
+- `/ant:import-signals` -- imports pheromone signals from XML
+- Implementation: `.aether/exchange/pheromone-xml.sh`, `wisdom-xml.sh`, `registry-xml.sh`
+- XML utilities: `xml-core.sh`, `xml-query.sh`, `xml-compose.sh`, `xml-convert.sh`, `xml-utils.sh`
+- XSLT: `queen-to-md.xsl` for Queen wisdom transformation
 
 ## CI/CD & Deployment
 
-**Hosting:**
-- Distributed package via npm registry
-  - Package: `aether-colony` on npmjs.com
-  - Installation: `npm install -g aether-colony` or `npx aether-colony install`
-  - No server hosting - Client-side toolkit for local Claude Code environments
+**npm Publishing:**
+- `npm publish` with `prepublishOnly` hook running `validate-package.sh`
+- Distributed via npm registry as `aether-colony` package
+- `npm install -g .` for local development testing (runs `validate-package.sh` then `setupHub()`)
 
-**Package Distribution:**
-- npm postinstall script: `bin/npx-install.js`
-  - Copies slash commands to `~/.claude/commands/ant/`
-  - Copies agent definitions to `~/.claude/agents/ant/`
-  - Copies OpenCode commands to `~/.opencode/commands/ant/`
-  - Creates hub directory: `~/.aether/`
+**Validation Pipeline:**
+```bash
+npm run lint           # shellcheck + JSON validation + command sync check
+npm test               # unit tests (AVA)
+npm run test:bash      # bash integration tests
+npm run test:intelligence  # intelligence pipeline tests
+npm run lint:sync      # verify Claude/OpenCode command and agent parity
+```
 
-**CI Pipeline:**
-- GitHub Actions (inferred from `.github/workflows/` reference in CLAUDE.md)
-- Local development testing:
-  - Shell linting: `npm run lint:shell` (shellcheck)
-  - Sync validation: `npm run lint:sync` (command/agent parity)
-  - JSON validation: `npm run lint:json` (state file format)
-  - Unit tests: `npm run test:unit` (AVA, 490+ tests)
-  - Bash integration tests: `npm run test:bash` (functional shell tests)
+**Git Integration:**
+- Archaeology agent reads git history
+- Worktree management via `.aether/utils/worktree.sh`
+- Clash detection via `.aether/utils/clash-detect.sh`
+- Merge driver for lockfiles: `.aether/utils/merge-driver-lockfile.sh`
 
-**Release Process:**
-- Manual via `npm publish`
-  - Runs `prepublishOnly` hook: Executes `bin/validate-package.sh`
-  - Validates package integrity before upload to npm registry
+**No CI/CD pipeline detected.** No GitHub Actions, Travis CI, or similar configuration files.
+
+## Error Handling
+
+**Structured Error System (Node.js):**
+- `bin/lib/errors.js` -- error class hierarchy (AetherError, HubError, RepoError, GitError, ValidationError, FileSystemError, ConfigurationError)
+- Structured JSON error output to stderr
+- Exit codes mapped to error types via `getExitCode()`
+
+**Structured Error System (Bash):**
+- `.aether/utils/error-handler.sh` -- error constants (E_UNKNOWN, E_HUB_NOT_FOUND, E_REPO_NOT_INITIALIZED, etc.)
+- `trap` handler in dispatcher for line-level error context
+- JSON error messages to stderr
+
+**State Guard (Node.js):**
+- `bin/lib/state-guard.js` -- enforces "Iron Law" (phase advancement requires fresh verification)
+- Idempotency checks, file locking, structured error codes
+
+## Monitoring & Observability
+
+**Built-in monitoring (no external services):**
+- `/ant:status` -- colony dashboard with memory health table
+- `/ant:memory-details` -- detailed drill-down view
+- `/ant:watch` -- live tmux monitoring of worker processes
+- `/ant:history` -- browse colony events
+- Activity logging to `.aether/data/activity.log`
+- Error logging to `.aether/data/errors.log`
+- Spawn logging via `bin/lib/spawn-logger.js`
+
+**No external error tracking, APM, or log aggregation services.**
+
+## Skills System
+
+**Domain Skills (18):**
+- django, docker, golang, graphql, html-css, nextjs, nodejs, postgresql, prisma, python, rails, react, rest-api, svelte, tailwind, testing, typescript, vue
+
+**Colony Skills (10):**
+- build-discipline, colony-interaction, colony-lifecycle, colony-visuals, context-management, error-presentation, pheromone-protocol, pheromone-visibility, state-safety, worker-priming
+
+**Custom Skills:**
+- Users can create skills in `~/.aether/skills/domain/`
+- `/ant:skill-create "<topic>"` generates skills via Oracle research
 
 ## Environment Configuration
 
 **Required env vars:**
-- `ANTHROPIC_BASE_URL` - LiteLLM proxy endpoint (default: http://localhost:4000)
-- `ANTHROPIC_AUTH_TOKEN` - Proxy auth token (default: sk-litellm-local)
-- `ANTHROPIC_MODEL` - LLM model identifier (caste-specific, e.g., claude-3.5-sonnet)
-- `HOME` - User home directory (required for hub location)
+- `HOME` -- hub directory location (mandatory)
 
 **Optional env vars:**
-- `AETHER_ROOT` - Project root override (auto-detected from `.aether/` location)
-- `DATA_DIR` - State directory override (default: `$AETHER_ROOT/.aether/data`)
-- `TEMP_DIR` - Temporary directory for atomic writes (default: system temp)
+- `AETHER_ROOT` -- override colony root directory
+- `DATA_DIR` -- override data directory
 
-**Secrets location:**
-- Not managed by Aether - User responsible for:
-  - Setting `ANTHROPIC_AUTH_TOKEN` securely (via shell profile or environment management)
-  - Protecting `.aether/data/` directory permissions
-  - Securing LiteLLM proxy deployment (authentication, TLS)
+**No secrets, API keys, or credential files in the codebase.**
 
 ## Webhooks & Callbacks
 
-**Incoming:**
-- Not applicable - No webhook endpoints
-
-**Outgoing:**
-- Git integration (optional)
-  - Post-install hook creates git config (inferred from `syncStateFromPlanning` in `bin/lib/state-sync.js`)
-  - Reads from `.planning/` directory structure for phase plans (inferred from clone/sync operations)
-  - Commits colony state changes if git hooks are configured
-
-**File System Events:**
-- Monitoring via `bash .aether/utils/watch-spawn-tree.sh` (optional)
-  - Watches `.aether/data/spawn-tree.txt` for real-time spawn visualization
-  - Used with tmux (see `/ant:watch` command)
-
-## External Tool Dependencies
-
-**Required (Hard):**
-- bash 4+ - Shell scripting execution
-- node 16+ - JavaScript runtime
-- curl - HTTP health checks to proxy
-
-**Optional (Graceful Degradation):**
-- jq - JSON processing (fallback XML parsing without it)
-- git - Version control operations and state sync
-- xmlstarlet - XML to JSON conversion (fallback to xsltproc or xml2json)
-- tmux - Terminal multiplexing for `/ant:watch` live monitoring
-
-**Conditional:**
-- claude - Claude Code CLI (required if spawning workers in Claude Code)
-- opencode - OpenCode CLI (required if spawning workers in OpenCode)
-
-## Model Routing & LLM Provider Abstraction
-
-**LiteLLM Proxy Integration:**
-- Routes requests through configurable proxy (`http://localhost:4000`)
-- Supports multiple LLM providers (Anthropic, OpenAI, etc.) via single proxy configuration
-- Model profiles: `bin/lib/model-profiles.js` maps castes to specific models
-  - Builder, Watcher, Scout, etc. each can have different model assignments
-  - Override system: `aether set-model-override <caste> <model>`
-  - Model verification: `/ant:verify-models` checks proxy health and model availability
-
-**Execution Flow:**
-1. Worker caste spawned with task
-2. `spawn-with-model.sh` queries model profile for caste
-3. Sets `ANTHROPIC_MODEL` and `ANTHROPIC_BASE_URL` in environment
-4. Claude Code/OpenCode spawned with these env vars
-5. LLM provider (via proxy) receives request
-6. Response routed back to worker
+**None.** The system operates entirely through CLI commands and local file I/O.
 
 ---
 
-*Integration audit: 2026-03-19*
+*Integration audit: 2026-04-01*

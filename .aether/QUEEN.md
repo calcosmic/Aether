@@ -11,14 +11,27 @@ Communication style, expertise level, and decision-making patterns observed from
 
 - **test-colony** (2026-03-29T06:03:45Z): test content
 
-- [charter] **Intent**: Fix critical midden entries (spawn-tree O(n^2), queen-promote newline destruction, JSON ant names), reduce aether-utils.sh bug-fix ratio through targeted fixes, update 4 high-CVE dependencies (mini... (Colony: Aether Colony)
-- [charter] **Vision**: Harden Aether operational foundations -- fix the bugs that chaos testing surfaced, clean up security debt in dependencies, and make the activity log useful again as a monitoring signal. This is a s... (Colony: Aether Colony)
+- [charter] **Intent**: Review the last 15 commits (3019dec to d1754ea) for correctness, then implement Aether Structural Learning Stack — the memory consolidation pipeline that fixes the broken bridge between short-term ... (Colony: Aether Colony)
+- [charter] **Vision**: Fix Aether broken learning loop. Currently, observations die in short-term memory — nothing reliably flows to instincts or QUEEN.md. Build production-ready infrastructure so the colony genuinely le... (Colony: Aether Colony)
 ---
 
 ## Codebase Patterns
 
 Validated approaches that work in this codebase, and anti-patterns to avoid. Includes architecture conventions, naming patterns, error handling style, and technology-specific insights. Tagged [repo] for project-specific or [general] for cross-colony patterns.
 
+- **Aether Colony** (2026-04-01T17:30:37Z): Backward-compatible migration for existing observations lets new fields coexist with old data
+- **Aether Colony** (2026-04-01T17:30:34Z): jq-based graph layer provides adequate relationship traversal for instinct networks
+- **Aether Colony** (2026-04-01T17:30:31Z): Standalone instinct storage with full schema is cleaner than embedding instincts in COLONY_STATE.json
+- **Aether Colony** (2026-04-01T17:21:38Z): Modifying existing code (learning.sh) and verifying new modules (graph.sh, instinct-store.sh) can safely run in parallel when modifications are additive (evidence: 3 parallel builders, 0 merge conflicts)
+- **Aether Colony** (2026-04-01T17:21:35Z): Existing observations now recalculate trust_score on re-observation via trust-calculate with source_type/evidence_type/days_since (evidence: 34 tests pass, watcher quality 9/10)
+- **Aether Colony** (2026-04-01T10:07:24Z): Splitting related subcommands into separate files avoids parallel builder merge conflicts
+- **Aether Colony** (2026-04-01T09:51:44Z): Curation modules with no shared state can be built in parallel then integrated by orchestrator
+- **Aether Colony** (2026-04-01T09:20:45Z): Additive modifications to existing files can safely parallel with new file creation
+- **Aether Colony** (2026-04-01T08:57:46Z): Builders that self-register dispatcher entries eliminate Wave 2 dependency
+- **Aether Colony** (2026-04-01T08:57:44Z): Shell utility modules with pure calculation logic can be built independently by parallel builders
+- **Aether Colony** (2026-03-31T21:11:17Z): Untracked test files can encode wrong assumptions about architecture
+- **Aether Colony** (2026-03-31T21:11:15Z): Parallel swarm audits with 4 scouts are effective for commit review
+- **Aether Colony** (2026-03-31T08:51:57Z): Stage Audit Gate pattern: add pre-synthesis verification gate to build orchestrators ensures all stages complete before synthesis (evidence: all 6 success criteria passed, watcher quality 9/10)
 - **Aether Colony** (2026-03-30T12:19:36Z): After monolith extraction tests that grep source code break when code moves to extracted modules
 - **Aether Colony** (2026-03-30T12:19:34Z): Archaeology pre-build scans prevent regression when modifying same lines as prior bug fixes
 - **Aether Colony** (2026-03-30T11:43:35Z): Quality gate re-audit after fixing HIGH findings raised score from 53 to 73, confirming the fixes addressed the root issues not just symptoms
@@ -80,7 +93,7 @@ Validated approaches that work in this codebase, and anti-patterns to avoid. Inc
 - [hive] When Deploying files via SFTP to Cloudways: Use -oPreferredAuthentications=password flags for Cloudways SFTP (cross-colony, confidence: 0.9)
 - [hive] When Verifying deployed changes on Cloudways: Use ?nocache= to bypass Varnish when verifying deploys (cross-colony, confidence: 0.9)
 - [hive] When building bash utilities with scoring/accumulation loops: use process substitution (&lt; &lt;(jq)) not pipes to while loops — pipes create subshells that lose variable modifications (cross-colony, confidence: 0.85)
-- [charter] **Governance**: CI/CD pipeline active -- ensure all checks pass before merging (Colony: Aether Colony)
+- [charter] **Governance**: CI/CD pipeline active — ensure all checks pass before merging; TDD discipline required for all new scripts; shellcheck compliance mandatory; use atomic-write.sh pattern for all JSON writes (Colony: Aether Colony)
 ---
 
 ## Build Learnings
@@ -96,9 +109,30 @@ What worked and what failed during builds. Captures the full picture of colony e
 - [general] Replacing bash while-read+sed loops with single-pass awk eliminates O(n^2) subprocess forking — 4000+ forks reduced to 1 awk process, runtime from 23s to 1.7s -- *Phase 6 (Stabilize spawn-tree parsing and JSON output)* (2026-03-29)
 - [general] awk NF==7 for spawn detection and $3 match for completion detection handles pipes-in-summary edge cases that pipe-counting cannot -- *Phase 6 (Stabilize spawn-tree parsing and JSON output)* (2026-03-29)
 
+- [general] Documentation and test sweep phases benefit from parallel doc builders + Queen-driven test execution, keeping the phase fast -- *Phase 6 (Documentation and Full Test Sweep)* (2026-04-01)
 ### Phase 5: Fix hive-read null safety and learning recovery tests
 - [general] Archaeology pre-build scans that identify specific prior bug-fix commits prevent regression when modifying the same lines — Strata-7 caught the tonumber requirement that would otherwise have been missed -- *Phase 5 (Fix hive-read null safety and learning recovery tests)* (2026-03-30)
 - [general] After monolith extraction, tests that grep source code for structural patterns break when the code moves to extracted modules — always check grep targets against the actual module location -- *Phase 5 (Fix hive-read null safety and learning recovery tests)* (2026-03-30)
+
+- [general] Splitting consolidation into separate files (consolidation.sh + consolidation-seal.sh) avoids merge conflicts when built in parallel -- *Phase 5 (Consolidation Pipeline Integration)* (2026-04-01)
+### Phase 1: Enforce non-skippable playbook execution in build orchestrators
+- [general] Adding pre-synthesis verification gates to build orchestrators catches incomplete builds before synthesis — gate should name all prerequisite stages explicitly -- *Phase 1 (Enforce non-skippable playbook execution in build orchestrators)* (2026-03-31)
+- [general] Parallel swarm audits (4 scouts) are effective for commit review — each scout can deeply examine a specific area while cross-referencing findings -- *Phase 1 (Commit Audit)* (2026-03-31)
+- [general] Untracked test files can encode wrong assumptions — test-colony-data-dir.sh expected COLONY_DATA_DIR for COLONY_STATE.json but the architecture requires DATA_DIR -- *Phase 1 (Commit Audit)* (2026-03-31)
+
+### Phase 2: Trust Scoring Engine and Event Bus Foundation
+- [general] Shell utility modules with pure calculation logic (no side effects) can be built independently by parallel builders without merge conflicts -- *Phase 2 (Trust Scoring Engine and Event Bus Foundation)* (2026-04-01)
+- [general] Builders that self-register their dispatcher entries eliminate Wave 2 dependency — the registration task becomes implicit -- *Phase 2 (Trust Scoring Engine and Event Bus Foundation)* (2026-04-01)
+
+### Phase 3: Trust-Scored Storage and Graph Layer
+- [general] Running lint:sync and lint as a dedicated verification phase after code changes confirms no sync drift — useful as a final gate before colony seal -- *Phase 3 (Trust-Scored Storage and Graph Layer)* (2026-04-01)
+- [general] Modifying existing code (learning.sh) and creating new modules (graph.sh, instinct-store.sh) can safely run in parallel when the modifications are additive (new fields, new function args) -- *Phase 3 (Trust-Scored Storage and Graph Layer)* (2026-04-01)
+
+- [general] Standalone instinct storage with full schema (trust_score, trust_tier, provenance, application_history, related_instincts) is cleaner than embedding instincts in COLONY_STATE.json — enables independent queries and decay without touching colony state -- *Phase 3 (Trust-Scored Storage and Graph Layer)* (2026-04-01)
+- [general] jq-based graph layer provides adequate relationship traversal for instinct networks up to a few hundred edges — BFS reach with max-hops=3 cap prevents pathological queries -- *Phase 3 (Trust-Scored Storage and Graph Layer)* (2026-04-01)
+- [general] Backward-compatible migration for existing observations (legacy trust_score backfill at 0.49) lets new fields coexist with old data without breaking reads -- *Phase 3 (Trust-Scored Storage and Graph Layer)* (2026-04-01)
+### Phase 4: Curation Ants
+- [general] Curation ant modules that share no state can be built in parallel across two builders (core vs ops), then integrated by a third builder for orchestration -- *Phase 4 (Curation Ants)* (2026-04-01)
 ---
 
 ## Instincts
@@ -120,12 +154,36 @@ High-confidence behavioral patterns that have been validated through repeated co
 - [instinct] **debugging** (0.8): When validating JSON files that may be empty, then Check file size with -s flag before running jq parse; return valid pass result for empty legacy files
 - [instinct] **workflow** (0.8): When modifying lines that were previously bug-fixed, then Run archaeology pre-build scan to identify prior fixes at the exact change site and preserve their invariants
 - [instinct] **testing** (0.8): When tests grep source code for structural patterns after monolith extraction, then Verify grep targets point to the extracted module file, not the original monolith
+- [instinct] **testing** (0.8): When untracked test files or documentation exist from a prior session, then verify assumptions match actual architecture before trusting their assertions
 ---
 
 ## Evolution Log
 
 | Date | Source | Type | Details |
 |------|--------|------|---------|
+| 2026-04-01T17:32:04Z | phase-3 | build_learnings | Added 3 learnings from Phase 3: Trust-Scored Storage and Graph Layer |
+| 2026-04-01T17:31:00Z | instinct | promoted_instinct | testing: verify assumptions match actual architecture befor... |
+| 2026-04-01T17:30:37Z | Aether Colony | promoted_pattern | Added: Backward-compatible migration for existing observa... |
+| 2026-04-01T17:30:34Z | Aether Colony | promoted_pattern | Added: jq-based graph layer provides adequate relationshi... |
+| 2026-04-01T17:30:31Z | Aether Colony | promoted_pattern | Added: Standalone instinct storage with full schema is cl... |
+| 2026-04-01T17:21:38Z | Aether Colony | promoted_pattern | Added: Modifying existing code (learning.sh) and verifyin... |
+| 2026-04-01T17:21:35Z | Aether Colony | promoted_pattern | Added: Existing observations now recalculate trust_score ... |
+| 2026-04-01T10:22:01Z | phase-6 | build_learnings | Added 1 learnings from Phase 6: Documentation and Full Test Sweep |
+| 2026-04-01T10:07:42Z | phase-5 | build_learnings | Added 1 learnings from Phase 5: Consolidation Pipeline Integration |
+| 2026-04-01T10:07:24Z | Aether Colony | promoted_pattern | Added: Splitting related subcommands into separate files ... |
+| 2026-04-01T09:52:02Z | phase-4 | build_learnings | Added 1 learnings from Phase 4: Curation Ants |
+| 2026-04-01T09:51:44Z | Aether Colony | promoted_pattern | Added: Curation modules with no shared state can be built... |
+| 2026-04-01T09:21:03Z | phase-3 | build_learnings | Added 2 learnings from Phase 3: Trust-Scored Storage and Graph Layer |
+| 2026-04-01T09:20:45Z | Aether Colony | promoted_pattern | Added: Additive modifications to existing files can safel... |
+| 2026-04-01T08:58:07Z | phase-2 | build_learnings | Added 2 learnings from Phase 2: Trust Scoring Engine and Event Bus Foundation |
+| 2026-04-01T08:57:46Z | Aether Colony | promoted_pattern | Added: Builders that self-register dispatcher entries eli... |
+| 2026-04-01T08:57:44Z | Aether Colony | promoted_pattern | Added: Shell utility modules with pure calculation logic ... |
+| 2026-03-31T21:12:16Z | phase-1 | build_learnings | Added 2 learnings from Phase 1: Commit Audit |
+| 2026-03-31T21:11:17Z | Aether Colony | promoted_pattern | Added: Untracked test files can encode wrong assumptions ... |
+| 2026-03-31T21:11:15Z | Aether Colony | promoted_pattern | Added: Parallel swarm audits with 4 scouts are effective ... |
+| 2026-03-31T19:29:46Z | system | charter_updated | Colony charter updated for Aether Colony |
+| 2026-03-31T09:08:09Z | phase-1 | build_learnings | Added 1 learnings from Phase 1: Enforce non-skippable playbook execution in build orchestrators |
+| 2026-03-31T08:51:57Z | Aether Colony | promoted_pattern | Added: Stage Audit Gate pattern: add pre-synthesis verifi... |
 | 2026-03-30T12:20:25Z | phase-5 | build_learnings | Added 2 learnings from Phase 5: Fix hive-read null safety and learning recovery tests |
 | 2026-03-30T12:19:53Z | instinct | promoted_instinct | testing: Verify grep targets point to the extracted module ... |
 | 2026-03-30T12:19:52Z | instinct | promoted_instinct | workflow: Run archaeology pre-build scan to identify prior f... |
@@ -217,5 +275,5 @@ High-confidence behavioral patterns that have been validated through repeated co
 ---
 
 <!-- METADATA
-{  "version": "2.0.0",  "wisdom_version": "2.0",  "last_evolved": "2026-03-30T12:20:25Z",  "colonies_contributed": ["1774645519"],  "stats": {    "total_user_prefs": 3,    "total_codebase_patterns": 3,    "total_build_learnings": 4,    "total_instincts": 3  },  "evolution_log": [{"timestamp": "2026-03-24T23:40:00Z", "action": "migrate", "wisdom_type": "system", "content_hash": "v1-to-v2-migration", "colony": "system"}, {"timestamp": "2026-03-20T12:37:32Z", "action": "promote", "wisdom_type": "pattern", "content_hash": "sha256:f8aa50cfda0f37cac6cabba140bb99f1d75aa6d01a7100fe7a5ccddc2b3a017b", "colony": "1771335865738"}]}
+{  "version": "2.0.0",  "wisdom_version": "2.0",  "last_evolved": "2026-04-01T17:32:04Z",  "colonies_contributed": ["1774645519"],  "stats": {    "total_user_prefs": 3,    "total_codebase_patterns": 3,    "total_build_learnings": 5,    "total_instincts": 3  },  "evolution_log": [{"timestamp": "2026-03-24T23:40:00Z", "action": "migrate", "wisdom_type": "system", "content_hash": "v1-to-v2-migration", "colony": "system"}, {"timestamp": "2026-03-20T12:37:32Z", "action": "promote", "wisdom_type": "pattern", "content_hash": "sha256:f8aa50cfda0f37cac6cabba140bb99f1d75aa6d01a7100fe7a5ccddc2b3a017b", "colony": "1771335865738"}]}
 -->

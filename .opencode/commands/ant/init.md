@@ -53,7 +53,6 @@ Do not touch during init:
 - .aether/dreams/ (user notes)
 - .aether/chambers/ (archived colonies)
 - .env* files
-- .claude/settings.json
 - .github/workflows/
 </read_only>
 
@@ -168,7 +167,7 @@ Strip `(Colony: ...)` suffixes using sed. If grep finds nothing, variables remai
 Display a brief header:
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   A E T H E R   C O L O N Y   I N I T
+🥚 A E T H E R   C O L O N Y   I N I T
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
@@ -482,30 +481,48 @@ Display "Import skipped. Starting fresh colony." and proceed to Step 8.
 **If xml_import_available is false (no chambers, no XML, or no xmllint):**
 
 Skip silently -- proceed directly to Step 8 without any mention of import (per D-11).
+### Step 7.5: Install Clash Detection Hook
+
+If `.aether/utils/clash-detect.sh` exists, run:
+
+```bash
+bash .aether/aether-utils.sh clash-setup --install 2>/dev/null || true
+```
+
+This installs the PreToolUse hook that prevents conflicting edits across worktrees.
+Non-blocking — if it fails, init continues normally.
+
+Also configure the merge driver for package-lock.json:
+
+```bash
+git config merge.lockfile.driver "bash .aether/utils/merge-driver-lockfile.sh %O %A %B" 2>/dev/null || true
+git config merge.lockfile.name "npm lockfile auto-merge" 2>/dev/null || true
+```
+
 ### Step 8: Display Result
 
 Display the success header and result block:
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   A E T H E R   C O L O N Y
+🥚 A E T H E R   C O L O N Y
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Queen has set the colony's intention
+👑 Queen has set the colony's intention
 
    "{approved_intent}"
 
-   Colony Status: READY
+   🟢 Colony Status: READY
 
-{If re-init: "   Mode: Re-init (charter updated, state preserved)"}
-{If fresh and seeded_count > 0: "   Hive wisdom: {seeded_count} cross-colony pattern(s) seeded into QUEEN.md"}
+{If re-init: "   🔄 Mode: Re-init (charter updated, state preserved)"}
+{If fresh and seeded_count > 0: "   🧠 Hive wisdom: {seeded_count} cross-colony pattern(s) seeded into QUEEN.md"}
 
-State persisted -- safe to /clear, then run /ant:plan
+💾 State persisted -- safe to /clear, then run /ant:plan
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   Next Up
+🐜 Next Up
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   /ant:plan                 Generate execution plan
-   /ant:status               Check colony state
-   /ant:focus                Set initial focus
+   /ant:plan                 📊 Generate execution plan
+   /ant:status               📋 Check colony state
+   /ant:focus                🎯 Set initial focus
 ```

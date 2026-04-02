@@ -91,16 +91,18 @@ _learning_inject() {
 # ============================================================================
 # _learning_observe
 # Record observation of a learning across colonies
-# Usage: learning-observe <content> <wisdom_type> [colony_name]
-# Returns: JSON with observation_count, threshold status, and colonies list
+# Usage: learning-observe <content> <wisdom_type> [colony_name] [source_type] [evidence_type]
+# Returns: JSON with observation_count, threshold status, colonies list, and trust_score
 # ============================================================================
 _learning_observe() {
     # Record observation of a learning across colonies
-    # Usage: learning-observe <content> <wisdom_type> [colony_name]
-    # Returns: JSON with observation_count, threshold status, and colonies list
+    # Usage: learning-observe <content> <wisdom_type> [colony_name] [source_type] [evidence_type]
+    # Returns: JSON with observation_count, threshold status, colonies list, and trust_score
     content="${1:-}"
     wisdom_type="${2:-}"
     colony_name="${3:-unknown}"
+    local source_type="${4:-observation}"
+    local evidence_type="${5:-anecdotal}"
 
     # Validate required arguments
     [[ -z "$content" ]] && json_err "$E_VALIDATION_FAILED" "Usage: learning-observe <content> <wisdom_type> [colony_name]" '{"missing":"content"}'
@@ -178,11 +180,64 @@ _learning_observe() {
     # Get current timestamp
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
+    # Initialize trust_score (set for new observations; left as default for existing)
+    local trust_score="0.490000"
+
+    # --- Legacy migration: backfill missing fields on any entries that lack trust_score ---
+    local has_legacy
+    has_legacy=$(jq '[.observations[] | select(.trust_score == null)] | length' "$observations_file")
+    if [[ "$has_legacy" -gt 0 ]]; then
+      jq '.observations |= map(
+        if .trust_score == null then
+          .trust_score = 0.49 |
+          .source_type = "legacy" |
+          .evidence_type = "indirect" |
+          .compression_level = 0
+        else . end
+      )' "$observations_file" > "${observations_file}.migrate.$$" && \
+      mv "${observations_file}.migrate.$$" "$observations_file" 2>/dev/null || {
+        rm -f "${observations_file}.migrate.$$"
+        _aether_log_error "Could not backfill legacy observation fields"
+      }
+    fi
+
     # Check if observation with same hash already exists
     existing_index=$(jq -r --arg hash "$content_hash" '.observations | to_entries[] | select(.value.content_hash == $hash) | .key' "$observations_file" | head -1)
 
     if [[ -n "$existing_index" ]]; then
       # Existing observation: increment count, update last_seen, add colony if new
+      # Recalculate trust_score based on existing source/evidence types and days since first_seen
+      local existing_source existing_evidence existing_first_seen days_since
+      existing_source=$(jq -r --arg hash "$content_hash" '.observations[] | select(.content_hash == $hash) | .source_type // "observation"' "$observations_file")
+      existing_evidence=$(jq -r --arg hash "$content_hash" '.observations[] | select(.content_hash == $hash) | .evidence_type // "anecdotal"' "$observations_file")
+
+      # Map legacy/invalid types to valid trust-calculate types
+      case "$existing_source" in
+        user_feedback|error_resolution|success_pattern|observation|heuristic) ;;
+        *) existing_source="observation" ;;
+      esac
+      case "$existing_evidence" in
+        test_verified|multi_phase|single_phase|anecdotal) ;;
+        *) existing_evidence="anecdotal" ;;
+      esac
+      existing_first_seen=$(jq -r --arg hash "$content_hash" '.observations[] | select(.content_hash == $hash) | .first_seen' "$observations_file")
+
+      # Compute days since first_seen
+      if [[ -n "$existing_first_seen" ]]; then
+        local epoch_first epoch_now
+        epoch_first=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$existing_first_seen" "+%s" 2>/dev/null || echo "0")
+        epoch_now=$(date -u +%s)
+        days_since=$(( (epoch_now - epoch_first) / 86400 ))
+        [[ "$days_since" -lt 0 ]] && days_since=0
+      else
+        days_since=0
+      fi
+
+      # Calculate trust score for the re-observation
+      local trust_result
+      trust_result=$(bash "$0" trust-calculate --source "$existing_source" --evidence "$existing_evidence" --days-since "$days_since" 2>/dev/null)
+      trust_score=$(echo "$trust_result" | jq -r '.result.score // "0.490000"' 2>/dev/null)
+
       # Rotate backups before write (uses .bak.N naming)
       if [[ -f "$observations_file" ]]; then
         cp -f "${observations_file}.bak.2" "${observations_file}.bak.3" 2>/dev/null || _aether_log_error "Could not rotate observations backup .bak.2 to .bak.3"
@@ -194,12 +249,14 @@ _learning_observe() {
       jq --arg hash "$content_hash" \
          --arg colony "$colony_name" \
          --arg ts "$ts" \
+         --argjson trust_score "$trust_score" \
          '
          .observations |= map(
            if .content_hash == $hash then
              .observation_count += 1 |
              .last_seen = $ts |
-             .colonies = ((.colonies + [$colony]) | unique)
+             .colonies = ((.colonies + [$colony]) | unique) |
+             .trust_score = ($trust_score | tonumber)
            else
              .
            end
@@ -235,11 +292,20 @@ _learning_observe() {
       fi
       tmp_file="${observations_file}.tmp.$$"
 
+      # Compute trust score for new observation
+      local trust_result
+      trust_result=$(bash "$0" trust-calculate --source "$source_type" --evidence "$evidence_type" --days-since 0 2>/dev/null)
+      local trust_score
+      trust_score=$(echo "$trust_result" | jq -r '.result.score // "0.490000"' 2>/dev/null)
+
       jq --arg hash "$content_hash" \
          --arg content "$content" \
          --arg type "$wisdom_type" \
          --arg colony "$colony_name" \
          --arg ts "$ts" \
+         --arg trust_score "$trust_score" \
+         --arg source_type "$source_type" \
+         --arg evidence_type "$evidence_type" \
          '.observations += [{
            "content_hash": $hash,
            "content": $content,
@@ -247,7 +313,11 @@ _learning_observe() {
            "observation_count": 1,
            "first_seen": $ts,
            "last_seen": $ts,
-           "colonies": [$colony]
+           "colonies": [$colony],
+           "trust_score": ($trust_score | tonumber),
+           "source_type": $source_type,
+           "evidence_type": $evidence_type,
+           "compression_level": 0
          }]' "$observations_file" > "$tmp_file" || {
         _aether_log_error "Could not create new observation entry"
         rm -f "$tmp_file"
@@ -294,6 +364,7 @@ _learning_observe() {
       --argjson threshold_met "$threshold_met" \
       --argjson colonies "$colonies" \
       --argjson is_new "$is_new" \
+      --arg trust_score "$trust_score" \
       '{
         content_hash: $hash,
         content: $content,
@@ -302,7 +373,8 @@ _learning_observe() {
         threshold: $threshold,
         threshold_met: $threshold_met,
         colonies: $colonies,
-        is_new: $is_new
+        is_new: $is_new,
+        trust_score: ($trust_score | tonumber)
       }')
 
     json_ok "$result"

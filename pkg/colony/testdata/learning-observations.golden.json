@@ -1,0 +1,686 @@
+{
+  "observations": [
+    {
+      "content_hash": "sha256:f8aa50cfda0f37cac6cabba140bb99f1d75aa6d01a7100fe7a5ccddc2b3a017b",
+      "content": "Use explicit jq if/elif chains instead of the // operator when checking fields that can legitimately be false",
+      "wisdom_type": "pattern",
+      "observation_count": 2,
+      "first_seen": "2026-03-19T19:10:44Z",
+      "last_seen": "2026-03-19T19:10:45Z",
+      "colonies": [
+        "1771335865738"
+      ]
+    },
+    {
+      "content_hash": "sha256:2811295c55a4efb0bf6b5d679ab6276e6a5767c5b3655491b7740e1fd57e5ec5",
+      "content": "Prompt injection regex needs multi-word support with optional groups",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-20T07:20:42Z",
+      "last_seen": "2026-03-20T07:20:42Z",
+      "colonies": [
+        "1773987784"
+      ]
+    },
+    {
+      "content_hash": "sha256:471ecd6341d643d814a9dfeee224040eb9b8b1287bf6bc34b99443d50e6d7290",
+      "content": "Colony-prime token budget 8000 chars matches measured output of 2000-5000 chars",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-20T07:20:43Z",
+      "last_seen": "2026-03-20T07:20:43Z",
+      "colonies": [
+        "1773987784"
+      ]
+    },
+    {
+      "content_hash": "sha256:8404cee7f2750fad3c368fc8389b4b18385c54656709e719297d12de6347d808",
+      "content": "Two wisdom extraction functions must be updated in lockstep",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-20T07:49:17Z",
+      "last_seen": "2026-03-20T07:49:17Z",
+      "colonies": [
+        "1773987784"
+      ]
+    },
+    {
+      "content_hash": "sha256:f7aae08395d3c9f59a2284a8073e281c6fbb38922bc30eb79ba770a8d9e60d68",
+      "content": "Resilience issue found: Cross-repo lock isolation mismatch (high)",
+      "wisdom_type": "failure",
+      "observation_count": 1,
+      "first_seen": "2026-03-20T12:12:59Z",
+      "last_seen": "2026-03-20T12:12:59Z",
+      "colonies": [
+        "1774004031"
+      ]
+    },
+    {
+      "content_hash": "sha256:e0d9bca58570ce0794acee35bb161ebcb22d67711ba8ef5739a8d9fc899719d5",
+      "content": "Hub-level shared files need hub-level locks — per-repo LOCK_DIR cannot protect cross-repo resources",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-20T12:37:02Z",
+      "last_seen": "2026-03-20T12:37:02Z",
+      "colonies": [
+        "1774004031"
+      ]
+    },
+    {
+      "content_hash": "sha256:e0324701a5aa3800570e0bf73eb2634c88e804c7859a2d9734e1b0d4dbef34b3",
+      "content": "Content sanitization pattern from pheromone-write is reusable for any user-supplied text input",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-20T12:37:02Z",
+      "last_seen": "2026-03-20T12:37:02Z",
+      "colonies": [
+        "1774004031"
+      ]
+    },
+    {
+      "content_hash": "sha256:0b3149e23fb96a13a35a36ee25be84304bd61370093cafa39d7189b39bb52f8f",
+      "content": "Orchestrator commands should delegate to sibling subcommands via bash $0 rather than duplicating logic",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-20T13:22:34Z",
+      "last_seen": "2026-03-20T13:22:34Z",
+      "colonies": [
+        "1774004031"
+      ]
+    },
+    {
+      "content_hash": "sha256:8fed8b2988d366f3b7ddc006516ffe4ac8a70eac14cb0a30ef0c707b272870b1",
+      "content": "Text transformation placeholders should avoid angle brackets to prevent double-escaping",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-20T13:22:35Z",
+      "last_seen": "2026-03-20T13:22:35Z",
+      "colonies": [
+        "1774004031"
+      ]
+    },
+    {
+      "content_hash": "sha256:091666755365d45a20c8b34f2b87ea245fd8110989f31f1984d21b9094f68d78",
+      "content": "Domain filtering in colony-prime uses hive-read with domain_tags from registry",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-20T16:21:01Z",
+      "last_seen": "2026-03-20T16:21:01Z",
+      "colonies": [
+        "1774004031"
+      ]
+    },
+    {
+      "content_hash": "sha256:c34441ad0394e84c43a02e52848a911de45a3c246c33b804cc72901342c756f0",
+      "content": "Chaos resilience strong: 5 scenarios tested, hive promotion handles empty instincts, special chars in paths, boundary confidence values correctly",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-20T17:51:38Z",
+      "last_seen": "2026-03-20T17:51:38Z",
+      "colonies": [
+        "1774004031"
+      ]
+    },
+    {
+      "content_hash": "sha256:de8e0bd06a7250f21a7eda4a736a9ca887b19086e356b3403c4a0aac9744d94d",
+      "content": "Archaeology pre-build scans catch API contract mismatches (--instinct vs --text) that would silently fail at runtime",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-20T18:09:02Z",
+      "last_seen": "2026-03-20T18:09:02Z",
+      "colonies": [
+        "1774004031"
+      ]
+    },
+    {
+      "content_hash": "sha256:0d47f94df91761afd4488c05da86823461f36f0cac7b700cca3c15008d6110bb",
+      "content": "Dead code variables (declared but never used) should be caught by auditor and either removed or implemented",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-20T18:09:03Z",
+      "last_seen": "2026-03-20T18:09:03Z",
+      "colonies": [
+        "1774004031"
+      ]
+    },
+    {
+      "content_hash": "sha256:4e84e3a9d719987fd92dd83de08ea481616b54d12c9641655173f99173490271",
+      "content": "Resilience issue found: String-typed confidence causes silent hive-read failure (medium)",
+      "wisdom_type": "failure",
+      "observation_count": 1,
+      "first_seen": "2026-03-20T18:53:15Z",
+      "last_seen": "2026-03-20T18:53:15Z",
+      "colonies": [
+        "1774004031"
+      ]
+    },
+    {
+      "content_hash": "sha256:744752b62c1693c4db7feaec54e4422748949376623bf85e9c56280c052e8896",
+      "content": "Confidence tier calculations should be inside atomic jq pipelines to preserve lock safety",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-20T19:07:11Z",
+      "last_seen": "2026-03-20T19:07:11Z",
+      "colonies": [
+        "1774004031"
+      ]
+    },
+    {
+      "content_hash": "sha256:4a25cde7b112716921889232de1a60e002498275399f260c014e6fca66a99d9f",
+      "content": "Documentation chaos testing catches gaps between documented behavior and actual code",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-20T19:38:19Z",
+      "last_seen": "2026-03-20T19:38:19Z",
+      "colonies": [
+        "1774004031"
+      ]
+    },
+    {
+      "content_hash": "sha256:69174f7d2e9c2bee83ec4226efa62711e0e9c358c0fbc9c930eab8886eb5b6e5",
+      "content": "Chaos resilience moderate: confidence cap correct, special chars safe, zero-instincts seal works. Medium: unbound var crash on missing flag values",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-21T01:02:57Z",
+      "last_seen": "2026-03-21T01:02:57Z",
+      "colonies": [
+        "1774047872"
+      ]
+    },
+    {
+      "content_hash": "sha256:1a94259506e2923b7f8cfbdc0fdd18ba38e02ad6185a1e880457e8724dea9c4f",
+      "content": "Archaeologist pre-build scans catch latent bugs in recently-added code",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-21T01:25:01Z",
+      "last_seen": "2026-03-21T01:25:01Z",
+      "colonies": [
+        "1774047872"
+      ]
+    },
+    {
+      "content_hash": "sha256:e89aac03db78058035e46a22a9747456573164df2f302426a72c6464931717f6",
+      "content": "When fixing one bug check surrounding lines for related bugs from the same commit",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-21T01:25:02Z",
+      "last_seen": "2026-03-21T01:25:02Z",
+      "colonies": [
+        "1774047872"
+      ]
+    },
+    {
+      "content_hash": "sha256:0f9c8bd66ed3806f3c151945b6d7b593d1e64d1a1dc6f61cb7bef9e59f8799ac",
+      "content": "Combining related subcommands into a single builder produces consistent APIs",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-21T02:03:22Z",
+      "last_seen": "2026-03-21T02:03:22Z",
+      "colonies": [
+        "1774047872"
+      ]
+    },
+    {
+      "content_hash": "sha256:83c0915490df38d34864dca9b7ae3e30d5b16dfafe1fe6a80ffdf2052a31d06f",
+      "content": "Extracting case blocks to functions requires changing positional parameter references",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-21T03:21:22Z",
+      "last_seen": "2026-03-21T03:21:22Z",
+      "colonies": [
+        "1774047872"
+      ]
+    },
+    {
+      "content_hash": "sha256:9a1c495174c92921da9e126374266e1297f7435b9bb4c1cf59c591729aaa896f",
+      "content": "Watcher cross-checking catches stale number references in secondary doc locations",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-21T03:40:31Z",
+      "last_seen": "2026-03-21T03:40:31Z",
+      "colonies": [
+        "1774047872"
+      ]
+    },
+    {
+      "content_hash": "sha256:33f07de1afec4f6511b9a255b6fd5327835ee4e165296eb1a6b29535435b49a0",
+      "content": "Process substitution avoids subshell variable loss in bash while loops",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-22T12:55:22Z",
+      "last_seen": "2026-03-22T12:55:22Z",
+      "colonies": [
+        "1774178419"
+      ]
+    },
+    {
+      "content_hash": "sha256:bc5ae6371487c2e05bef1a78ad8c3ede4538ba45d264af24730307c2aa66a6ce",
+      "content": "TDD with parallel background agents speeds up Phase 1 type work",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-22T12:55:23Z",
+      "last_seen": "2026-03-22T12:55:23Z",
+      "colonies": [
+        "1774178419"
+      ]
+    },
+    {
+      "content_hash": "sha256:a4d82a2637ea6b73386ca6beb20edd7a8932837c03607997a7dd47833114721c",
+      "content": "Watcher independently catches state-path bugs that builders miss during refactoring",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-22T19:48:47Z",
+      "last_seen": "2026-03-22T19:48:47Z",
+      "colonies": [
+        "1774204068"
+      ]
+    },
+    {
+      "content_hash": "sha256:53e5ad2e20cc575786ea0bfe734da16af4f09f3994e7fb2a90a93d85ef4a104f",
+      "content": "Separate infrastructure from state using distinct directory variables when moving scripts",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-22T19:48:48Z",
+      "last_seen": "2026-03-22T19:48:48Z",
+      "colonies": [
+        "1774204068"
+      ]
+    },
+    {
+      "content_hash": "sha256:b4b50accb2eac535ccca71cba057e55d91b5497febdeea143ae7e2a4e4333940",
+      "content": "Anchor .npmignore patterns with leading slash when directory name appears at multiple depths",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-22T19:48:49Z",
+      "last_seen": "2026-03-22T19:48:49Z",
+      "colonies": [
+        "1774204068"
+      ]
+    },
+    {
+      "content_hash": "sha256:bd6d4044c86ce149a473e66203ddccbef629d8bf4c76a0bde0f75eff078632e8",
+      "content": "SCRIPT_DIR references in test harness setup are easily missed when updating main path constants — grep separately",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-23T15:26:37Z",
+      "last_seen": "2026-03-23T15:26:37Z",
+      "colonies": [
+        "1774204068"
+      ]
+    },
+    {
+      "content_hash": "sha256:a3be9e194732b527f599b33ce0ad48e31b561720f248a6beac775f220eb3b24a",
+      "content": "Distribution pipeline has three independent exclusion layers — verify each separately",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-23T15:43:02Z",
+      "last_seen": "2026-03-23T15:43:02Z",
+      "colonies": [
+        "1774204068"
+      ]
+    },
+    {
+      "content_hash": "sha256:8b6cc3b1eb81e08523bd6b80da6dbf0d02af420e14967dc4e3f40478cc6f3c8e",
+      "content": "Position-aware path exclusion (first-segment-only) is needed when a directory name appears at multiple depths",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-23T15:56:43Z",
+      "last_seen": "2026-03-23T15:56:43Z",
+      "colonies": [
+        "1774204068"
+      ]
+    },
+    {
+      "content_hash": "sha256:23a4b314b4186037b260912cf3071f4c435cea836f58fe4a328fb7f54d839df3",
+      "content": "Oracle research finding: What are the main components and their responsibilities in the Aether system? (85%)",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-23T17:41:30Z",
+      "last_seen": "2026-03-23T17:41:30Z",
+      "colonies": [
+        "1774204068"
+      ]
+    },
+    {
+      "content_hash": "sha256:78db8bcb6ab616b7f4c5cd35e896e06a73a15f2028e4be04c904c21132fadc50",
+      "content": "Oracle research finding: What are the dependency relationships between components, and where are coupling risks? (82%)",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-23T17:41:31Z",
+      "last_seen": "2026-03-23T17:41:31Z",
+      "colonies": [
+        "1774204068"
+      ]
+    },
+    {
+      "content_hash": "sha256:3c8ad53d7d9a4bc37f5f9f3551cbcfd42b78226841da8a86516c9e43546bd605",
+      "content": "Oracle research finding: Where are the risk areas — execution reliability gaps, silent failures, fake autonomy, hallucination vectors, and verification weaknesses? (82%)",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-23T17:41:32Z",
+      "last_seen": "2026-03-23T17:41:32Z",
+      "colonies": [
+        "1774204068"
+      ]
+    },
+    {
+      "content_hash": "sha256:6040664a0982317c825bab0a3ff941ef1e1a63ae2150bbe4ee5b487748700dd5",
+      "content": "Oracle research finding: How does the memory and context management system handle state persistence, session resume, context rot, and cross-colony knowledge sharing? (82%)",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-23T17:41:34Z",
+      "last_seen": "2026-03-23T17:41:34Z",
+      "colonies": [
+        "1774204068"
+      ]
+    },
+    {
+      "content_hash": "sha256:8f3f163dfa40c9a3d19d62d1db525af25b86b869ed74f6f23858bbc20c120c9d",
+      "content": "Oracle research finding: What would an expert change about this architecture to minimize user input while maximizing safety, verifiability, and autonomous execution capability? (80%)",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-23T17:41:35Z",
+      "last_seen": "2026-03-23T17:41:35Z",
+      "colonies": [
+        "1774204068"
+      ]
+    },
+    {
+      "content_hash": "sha256:43451abdf28c314acee52b7a15e30249a00fb2498ae598437f78f09323079bb7",
+      "content": "Inserted phase 5 (Stabilize caste emojis in spawn and phase displays): Add caste emojis to all ant spawn announcements and phase header displays across all commands — every spawn shows its caste emoji and phase headers include visual emoji markers",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-27T21:50:39Z",
+      "last_seen": "2026-03-27T21:50:39Z",
+      "colonies": [
+        "1774645519"
+      ]
+    },
+    {
+      "content_hash": "sha256:512d998e11057d93f7dcb90ebc94d2cbaa5911ed29d5d31d23c05adb52161bde",
+      "content": "Chaos resilience moderate: 5 scenarios tested on pheromone-expire date fix, 3 resilient, 2 findings (static fallback staleness, double date failure)",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-27T23:14:31Z",
+      "last_seen": "2026-03-27T23:14:31Z",
+      "colonies": [
+        "1774650429"
+      ]
+    },
+    {
+      "content_hash": "sha256:b805b1fdcf2c27f12422230d58487a172ef0568f35bbdd717e7403c3909080c4",
+      "content": "Test fixtures with hardcoded dates will break as calendar time advances — use dynamic date computation with cross-platform fallbacks instead",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-27T23:20:15Z",
+      "last_seen": "2026-03-27T23:20:15Z",
+      "colonies": [
+        "1774650429"
+      ]
+    },
+    {
+      "content_hash": "sha256:e989c50720e671042655ed2d71a922eea8221c07062af11ec1a21d8ec74cefb1",
+      "content": "Shell functions that set traps must compose with _aether_exit_cleanup to avoid orphaning file locks and temp files when the function exits abnormally",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-28T00:14:50Z",
+      "last_seen": "2026-03-28T00:14:50Z",
+      "colonies": [
+        "1774650429"
+      ]
+    },
+    {
+      "content_hash": "sha256:e36583d85746ec2f71eb8668c1a714190acb783b7d6d989af9734f57bcf1a07a",
+      "content": "Shell functions that embed user-derived values in JSON output strings must use jq for safe construction to prevent JSON injection from special characters",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-28T00:14:54Z",
+      "last_seen": "2026-03-28T00:14:54Z",
+      "colonies": [
+        "1774650429"
+      ]
+    },
+    {
+      "content_hash": "sha256:9a5c700af1d8aff1390736194801871b5aa4558c600d5a58c0e97c328c9dd51a",
+      "content": "Resilience issue found: JSON objects stored as ant names break spawn-tree JSON output (critical)",
+      "wisdom_type": "failure",
+      "observation_count": 1,
+      "first_seen": "2026-03-28T02:08:17Z",
+      "last_seen": "2026-03-28T02:08:17Z",
+      "colonies": [
+        "1774650429"
+      ]
+    },
+    {
+      "content_hash": "sha256:1d8d580c3a268dbd56737d8c42a1e3cbe8774da5cc54e946d4ee175cea20c504",
+      "content": "Resilience issue found: spawn-tree-load passes raw output without validation (high)",
+      "wisdom_type": "failure",
+      "observation_count": 1,
+      "first_seen": "2026-03-28T02:08:18Z",
+      "last_seen": "2026-03-28T02:08:18Z",
+      "colonies": [
+        "1774650429"
+      ]
+    },
+    {
+      "content_hash": "sha256:bfcbf0257ae0068d98e84aecedf546412a324e62998a43e7f92ef81e2315b46e",
+      "content": "Resilience issue found: Newline chars in queen-promote destroy QUEEN.md (critical)",
+      "wisdom_type": "failure",
+      "observation_count": 1,
+      "first_seen": "2026-03-28T03:17:04Z",
+      "last_seen": "2026-03-28T03:17:04Z",
+      "colonies": [
+        "1774650429"
+      ]
+    },
+    {
+      "content_hash": "sha256:6456ef83dbb75a6ebecfb30d74643f4a4eb18edbe2f5db2ff7d1ffc77aea254d",
+      "content": "Shell functions using sed c-command for line replacement must use head/tail instead to handle multi-line content safely on macOS BSD sed",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-28T03:45:41Z",
+      "last_seen": "2026-03-28T03:45:41Z",
+      "colonies": [
+        "1774650429"
+      ]
+    },
+    {
+      "content_hash": "sha256:68c83159345ad3969f4fe51e2e82085978b32669819c7a50c4f8ae621beddaee",
+      "content": "Every atomic mv that overwrites a critical file must have a non-empty size guard to prevent data destruction from upstream pipeline failures",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-28T03:45:43Z",
+      "last_seen": "2026-03-28T03:45:43Z",
+      "colonies": [
+        "1774650429"
+      ]
+    },
+    {
+      "content_hash": "sha256:6c482645f927c1a9a2acdf67408757a4e73486f6ccd42e1307ca0395f5652f3f",
+      "content": "Lifecycle commands (init, seal, entomb) properly handle colony_version through template system — init uses colony-state.template.json, seal has 12 references, entomb reads and displays it",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-28T23:56:08Z",
+      "last_seen": "2026-03-28T23:56:08Z",
+      "colonies": [
+        "1774650429"
+      ]
+    },
+    {
+      "content_hash": "sha256:dd2615fe5e448a278232bf4f5fa9251c4cd5fcc71f4859e77a7136ac007f0e64",
+      "content": "JSON injection in spawn.sh persists despite being identified as an instinct — pattern recurs because the fix was applied only to queen.sh, not spawn.sh",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-28T23:56:11Z",
+      "last_seen": "2026-03-28T23:56:11Z",
+      "colonies": [
+        "1774650429"
+      ]
+    },
+    {
+      "content_hash": "sha256:19dccc1b70acc7111e33e49c709a8abf85aec07b4cad5b291174fab0c9849b0d",
+      "content": "Resilience issue found: All 9 spawn-tree tests time out due to O(n^2) parse_spawn_tree scaling (critical)",
+      "wisdom_type": "failure",
+      "observation_count": 1,
+      "first_seen": "2026-03-29T00:45:07Z",
+      "last_seen": "2026-03-29T00:45:07Z",
+      "colonies": [
+        "1774650429"
+      ]
+    },
+    {
+      "content_hash": "sha256:a1dc4ec0254d861959727f0468426f1d1fa63fde3042b3880d615c880240972b",
+      "content": "Resilience issue found: spawn-tree-active test passes for wrong reason — 5-pipe fixture format bypasses logic (high)",
+      "wisdom_type": "failure",
+      "observation_count": 1,
+      "first_seen": "2026-03-29T00:45:09Z",
+      "last_seen": "2026-03-29T00:45:09Z",
+      "colonies": [
+        "1774650429"
+      ]
+    },
+    {
+      "content_hash": "sha256:d73b11dbb58640b15252302548589267bb06bc1450e1e027f268ed1587595627",
+      "content": "Inserted phase 6 (Stabilize spawn-tree parsing and JSON output): Fix all 3 spawn-tree blockers: (1) Fix O(n^2) parse_spawn_tree scaling that causes test timeouts, (2) JSON-escape ant names before interpolation into JSON output strings, (3) Add structural JSON validation in spawn-tree-load before passing through json_ok",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-29T01:11:50Z",
+      "last_seen": "2026-03-29T01:11:50Z",
+      "colonies": [
+        "1774650429"
+      ]
+    },
+    {
+      "content_hash": "sha256:f8393f2f8a853c7fa971d68aefedb2fc6f54f01317e730087568c1eab79482b5",
+      "content": "Chaos resilience strong: 4/5 scenarios resilient for spawn-tree awk rewrite, 1 medium finding on newline edge case",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-29T01:57:36Z",
+      "last_seen": "2026-03-29T01:57:36Z",
+      "colonies": [
+        "1774650429"
+      ]
+    },
+    {
+      "content_hash": "sha256:a0e93b080b94f359e909fa20ed8f140a76d3c72c2171b533e320306b0ad2f2af",
+      "content": "Replacing bash while-read+sed loops with single-pass awk eliminates O(n^2) subprocess forking",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-29T02:06:29Z",
+      "last_seen": "2026-03-29T02:06:29Z",
+      "colonies": [
+        "1774650429"
+      ]
+    },
+    {
+      "content_hash": "sha256:2300e4fc53a35261b9ffec146a456429cfb2411c193ae77dae3d1342713efd04",
+      "content": "awk NF==7 for spawn detection and $3 match for completion detection handles pipes-in-summary edge cases",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-29T02:06:33Z",
+      "last_seen": "2026-03-29T02:06:33Z",
+      "colonies": [
+        "1774650429"
+      ]
+    },
+    {
+      "content_hash": "sha256:029937d2729610e43d7519b97b1e48df3a236f8e83b841400acf3ed34e3ba123",
+      "content": "Audit reports must use actual test output counts, not builder-claimed counts — always cross-verify bash test pass rates against live test-aether-utils.sh output",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-29T02:42:41Z",
+      "last_seen": "2026-03-29T02:42:41Z",
+      "colonies": [
+        "1774650429"
+      ]
+    },
+    {
+      "content_hash": "sha256:8389141fc83ca87c344f391b4b736d4be6185963611fff066474e09440c6da46",
+      "content": "When adding awk gsub escaping, order matters: backslash must be first to prevent double-escaping",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-30T05:45:54Z",
+      "last_seen": "2026-03-30T05:45:54Z",
+      "colonies": [
+        "Aether Colony"
+      ]
+    },
+    {
+      "content_hash": "sha256:6406b522b877957741908e414498622d71cfe0881a3d2bac288036ed89379d2e",
+      "content": "Literal newlines break awk NF guards, CR is the testable control char for embedded content",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-30T05:45:55Z",
+      "last_seen": "2026-03-30T05:45:55Z",
+      "colonies": [
+        "Aether Colony"
+      ]
+    },
+    {
+      "content_hash": "sha256:c76d81d39e9aa53826743b06224714a07c902050c77331af55420d0d092a20f7",
+      "content": "awk -v interprets C-style escapes — use ENVIRON[] for user content",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-30T06:14:23Z",
+      "last_seen": "2026-03-30T06:14:23Z",
+      "colonies": [
+        "Aether Colony"
+      ]
+    },
+    {
+      "content_hash": "sha256:48ffc36db00c9abaa2504c73ca00f9bdc7fdf6967703fe66a807502912abe827",
+      "content": "Multi-line strings cannot pass via awk -v — use head/tail concatenation",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-30T06:14:25Z",
+      "last_seen": "2026-03-30T06:14:25Z",
+      "colonies": [
+        "Aether Colony"
+      ]
+    },
+    {
+      "content_hash": "sha256:4b280716f13a956445d256691695c146195ba37b63539df4152f2c70da9328af",
+      "content": "json_ok hardening has two distinct injection classes: string interpolation in JSON output (json_ok pattern) and variable interpolation in jq filter expressions (.${var} pattern) — both require --arg parameterization but at different layers",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-30T11:43:31Z",
+      "last_seen": "2026-03-30T11:43:31Z",
+      "colonies": [
+        "Aether Colony"
+      ]
+    },
+    {
+      "content_hash": "sha256:db79e102db5c81d1714d6d815ca1da2b52f387e46c57ed76984611ca0596ae2c",
+      "content": "Quality gate re-audit after fixing HIGH findings raised score from 53 to 73, confirming the fixes addressed the root issues not just symptoms",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-30T11:43:34Z",
+      "last_seen": "2026-03-30T11:43:34Z",
+      "colonies": [
+        "Aether Colony"
+      ]
+    },
+    {
+      "content_hash": "sha256:0e3acfcada296c395118c17c9440b8f7dec31baca7906f2f43049716a8fbdf77",
+      "content": "Archaeology pre-build scans prevent regression when modifying same lines as prior bug fixes",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-30T12:19:33Z",
+      "last_seen": "2026-03-30T12:19:33Z",
+      "colonies": [
+        "Aether Colony"
+      ]
+    },
+    {
+      "content_hash": "sha256:9e91f291a04d7e0f9e7e159c4ac6c8da46cf26959fe209a3df2d5464591afc7c",
+      "content": "After monolith extraction tests that grep source code break when code moves to extracted modules",
+      "wisdom_type": "pattern",
+      "observation_count": 1,
+      "first_seen": "2026-03-30T12:19:35Z",
+      "last_seen": "2026-03-30T12:19:35Z",
+      "colonies": [
+        "Aether Colony"
+      ]
+    }
+  ]
+}

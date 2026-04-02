@@ -879,6 +879,41 @@ bash .aether/aether-utils.sh activity-log "FLAG" "Watcher" "Created blocker: {is
 
 This ensures verification failures are persisted as blockers that survive context resets. Chaos Ant findings are flagged in Step 5.7.
 
+### Stage Audit Gate (Pre-Synthesis Check)
+
+**This gate runs before Step 5.9. All build stages must have completed before synthesizing results.**
+
+Verify that each of the following stages has a recorded completion status:
+
+| Stage | Steps | Required |
+|-------|-------|----------|
+| Builder waves | Steps 5.1–5.3 | At least 1 worker completed (status "completed") |
+| Watcher | Steps 5.4–5.5 | Watcher returned a result (any status) |
+| Chaos | Steps 5.6–5.7 | Chaos ant returned a result (any status) |
+
+Check by reviewing the in-memory worker results accumulated during Steps 5.1–5.7:
+- `builder_results` — results from all builder wave tasks
+- `watcher_result` — result from Step 5.5
+- `chaos_result` — result from Step 5.7
+
+**If any stage result is absent (stage did not run or returned no result):**
+- HALT — do not proceed to Step 5.9
+- Display:
+  ```
+  Stage Audit FAILED — cannot synthesize results.
+
+  Missing or incomplete stages:
+    {list each missing stage: "Builders — no results recorded" / "Watcher — did not complete" / "Chaos — did not complete"}
+
+  Recovery options:
+    1. Re-run /ant:build to restart this phase
+    2. Run /ant:flags to review blockers
+    3. Run /ant:swarm to auto-repair failed tasks
+  ```
+- Return `{"status": "failed", "summary": "Stage audit failed — stages did not complete"}` and stop.
+
+**If all stages have results (even if some workers failed):** proceed to Step 5.9.
+
 ### Step 5.9: Synthesize Results
 
 **This step runs after all worker tasks have completed (Builders, Watcher, Chaos).**

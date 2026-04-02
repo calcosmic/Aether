@@ -1,20 +1,517 @@
 {
-  "current_phase": 2,
-  "state": "EXECUTING",
+  "current_phase": 4,
+  "state": "READY",
   "events": [
-    "2026-01-01T00:00:00Z|init|queen|colony initialized"
+    "2026-03-31T07:34:40Z|init|queen|colony initialized: Fix dream journal gaps",
+    "2026-03-31T07:59:12Z|phase_started|build|Phase 1: Automatic backup and temp pruning in continue flow started",
+    "2026-03-31T08:41:29Z|phase_started|build|Phase 1: Enforce non-skippable playbook execution in build orchestrators started",
+    "2026-03-31T09:07:33Z|phase_advanced|continue|Completed Phase 1, advancing to Phase 2",
+    "2026-03-31T09:10:56Z|phase_started|build|Phase 2: Write and run shouldExclude exchange distribution unit tests started",
+    "2026-03-31T09:41:13Z|phase_started|build|Phase 3: Verify sync and lint clean started",
+    "2026-03-31T09:53:15Z|phase_advanced|continue|All 3 phases completed — colony goal achieved",
+    "2026-03-31T19:45:32Z|plan_generated|plan|Generated 6 phases with 70% confidence",
+    "2026-03-31T19:49:47Z|phase_started|build|Phase 1: Commit Audit started",
+    "2026-03-31T21:10:53Z|phase_advanced|continue|Completed Phase 1, advancing to Phase 2",
+    "2026-04-01T16:37:36Z|phase_started|build|Phase 2: Trust Scoring Engine and Event Bus Foundation started",
+    "2026-04-01T16:40:02Z|phase_completed|build|Phase 2: Trust Scoring Engine and Event Bus Foundation completed (pre-existing)",
+    "2026-04-01T16:54:14Z|phase_advanced|continue|Completed Phase 2, advancing to Phase 3",
+    "2026-04-01T17:01:37Z|phase_started|build|Phase 3: Trust-Scored Storage and Graph Layer started",
+    "2026-04-01T17:31:18Z|phase_advanced|continue|Completed Phase 3, advancing to Phase 4"
   ],
   "version": "3.0",
   "signals": [],
   "graveyards": [],
-  "goal": null,
-  "plan": {},
+  "goal": "Review the last 15 commits (3019dec to d1754ea) for correctness, then implement Aether Structural Learning Stack — the memory consolidation pipeline that fixes the broken bridge between short-term and long-term memory (learnings.json → instincts → QUEEN.md). Includes event bus, trust scoring engine, graph layer, trust-scored storage, 8 curation ants, consolidation pipeline, and full test coverage.",
+  "plan": {
+    "phases": [
+      {
+        "id": 1,
+        "name": "Commit Audit",
+        "description": "Review commits 3019dec to d1754ea for correctness — verify Stage Audit Gate, exchange shouldExclude tests, state-api DATA_DIR fix, packaging integrity, and cross-reference consistency",
+        "tasks": [
+          {
+            "id": "1.1",
+            "goal": "Audit Stage Audit Gate implementation in build-complete.md and build.yaml — verify the gate halts when prerequisite stages are missing and cannot be bypassed",
+            "status": "completed"
+          },
+          {
+            "id": "1.2",
+            "goal": "Audit exchange shouldExclude tests in update-transaction.test.js — verify the 3 tests prove .sh permitted, .xml/.json blocked, and directory not blocked",
+            "status": "completed"
+          },
+          {
+            "id": "1.3",
+            "goal": "Audit state-api.sh DATA_DIR fix — trace $DATA_DIR vs $COLONY_DATA_DIR usage and verify consistency across all COLONY_STATE.json references",
+            "status": "completed"
+          },
+          {
+            "id": "1.4",
+            "goal": "Run full verification suite (npm test, npm run lint:sync, npm run lint) and verify cross-reference consistency between playbooks, YAML sources, generated commands, and agent definitions",
+            "status": "completed"
+          }
+        ],
+        "success_criteria": [
+          "All commits in range audited with individual verdicts",
+          "npm test, npm run lint:sync, npm run lint all pass cleanly",
+          "Findings documented with any issues flagged"
+        ],
+        "status": "completed"
+      },
+      {
+        "id": 2,
+        "name": "Trust Scoring Engine and Event Bus Foundation",
+        "description": "Build the two foundational infrastructure components: trust scoring engine (40/35/25 weighted formula, 60-day half-life, 0.2 floor, 7 tiers) and JSONL event bus (pub/sub, TTL cleanup)",
+        "tasks": [
+          {
+            "id": "2.1",
+            "goal": "Create trust scoring engine at .aether/utils/trust-scoring.sh — trust-calculate, trust-decay, trust-tier subcommands with 40/35/25 source/evidence/activity weights and 60-day half-life",
+            "status": "completed"
+          },
+          {
+            "id": "2.2",
+            "goal": "Create JSONL event bus at .aether/utils/event-bus.sh — event-publish, event-subscribe, event-cleanup, event-replay subcommands with TTL-based cleanup and file-lock.sh for concurrency",
+            "status": "completed"
+          },
+          {
+            "id": "2.3",
+            "goal": "Register trust-scoring.sh and event-bus.sh in aether-utils.sh dispatcher — add source lines, case entries, and templates",
+            "status": "completed"
+          }
+        ],
+        "success_criteria": [
+          "trust-scoring.sh and event-bus.sh exist with working subcommands",
+          "Both registered in dispatcher and callable via aether-utils.sh",
+          "tests/bash/test-trust-scoring.sh and tests/bash/test-event-bus.sh pass"
+        ],
+        "status": "completed"
+      },
+      {
+        "id": 3,
+        "name": "Trust-Scored Storage and Graph Layer",
+        "description": "Upgrade observation storage with trust scores, create standalone instincts.json with full schema, and build jq-based graph layer for instinct relationships",
+        "tasks": [
+          {
+            "id": "3.1",
+            "goal": "Upgrade learning-observe in learning.sh to compute and store trust_score, source_type, and compression_level — backward-compatible migration for existing 62 entries",
+            "status": "completed"
+          },
+          {
+            "id": "3.2",
+            "goal": "Create standalone instincts.json with full schema (trust_score, trust_tier, provenance, application_history, related_instincts) — expose instinct-store, instinct-read-trusted, instinct-decay-all, instinct-archive subcommands",
+            "status": "completed"
+          },
+          {
+            "id": "3.3",
+            "goal": "Create jq-based graph layer at .aether/utils/graph.sh — graph-link, graph-neighbors, graph-reach, graph-cluster subcommands for instinct relationship traversal",
+            "status": "completed"
+          }
+        ],
+        "success_criteria": [
+          "Observations carry trust scores on write",
+          "instincts.json exists as standalone file with full schema",
+          "Graph traversal works for 1-2 hop queries via jq",
+          "All test files pass"
+        ],
+        "status": "completed"
+      },
+      {
+        "id": 4,
+        "name": "Curation Ants",
+        "description": "Implement 8 curation ant scripts in .aether/utils/curation-ants/ — nurse, herald, librarian, archivist, sentinel, janitor, scribe, critic — with curation-run orchestrator",
+        "tasks": [
+          {
+            "id": "4.1",
+            "goal": "Create 4 core curation ants: nurse.sh (trust recalculation), herald.sh (QUEEN.md promotion at trust >= 0.75), librarian.sh (inventory stats), critic.sh (contradiction detection via graph)",
+            "status": "pending"
+          },
+          {
+            "id": "4.2",
+            "goal": "Create 4 operational curation ants: sentinel.sh (health monitoring), janitor.sh (expired event/archive pruning), archivist.sh (low-trust archival), scribe.sh (markdown report generation)",
+            "status": "pending"
+          },
+          {
+            "id": "4.3",
+            "goal": "Register all 8 ants in dispatcher and create curation-run orchestrator with correct execution order: Sentinel → Nurse → Critic → Herald → Janitor → Archivist → Librarian → Scribe",
+            "status": "pending"
+          }
+        ],
+        "success_criteria": [
+          "8 scripts exist in .aether/utils/curation-ants/",
+          "All registered in dispatcher",
+          "curation-run orchestrator executes end-to-end",
+          "Test files pass"
+        ],
+        "status": "pending"
+      },
+      {
+        "id": 5,
+        "name": "Consolidation Pipeline Integration",
+        "description": "Wire the stack into Aether lifecycle — lightweight consolidation at /ant:continue, full consolidation at /ant:seal, plus end-to-end integration test",
+        "tasks": [
+          {
+            "id": "5.1",
+            "goal": "Create consolidation-phase-end subcommand (runs Nurse + Herald + Janitor) and integrate into continue-finalize.md after learning extraction",
+            "status": "pending"
+          },
+          {
+            "id": "5.2",
+            "goal": "Create consolidation-seal subcommand (runs full curation-run + final trust-decay-all + archival) and integrate into seal flow before hive-promote",
+            "status": "pending"
+          },
+          {
+            "id": "5.3",
+            "goal": "Create end-to-end integration test covering full pipeline: observe → trust score → promote to instinct → graph link → curation-run → herald promotion to QUEEN.md → consolidation",
+            "status": "pending"
+          }
+        ],
+        "success_criteria": [
+          "Phase-end consolidation integrated into continue flow",
+          "Seal consolidation integrated into seal flow",
+          "E2E test passes covering full pipeline",
+          "No regressions in existing test suite"
+        ],
+        "status": "pending"
+      },
+      {
+        "id": 6,
+        "name": "Documentation and Full Test Sweep",
+        "description": "Document the Structural Learning Stack, update CLAUDE.md, and verify complete test suite passes with zero regressions",
+        "tasks": [
+          {
+            "id": "6.1",
+            "goal": "Create architecture documentation at .aether/docs/structural-learning-stack.md covering pipeline stages, trust formula, 7 tiers, curation ant responsibilities, and integration points",
+            "status": "pending"
+          },
+          {
+            "id": "6.2",
+            "goal": "Update CLAUDE.md with new component counts, architecture references, and Wisdom Pipeline stages",
+            "status": "pending"
+          },
+          {
+            "id": "6.3",
+            "goal": "Run complete test suite (all existing + 9 new test files) and verify zero regressions",
+            "status": "pending"
+          }
+        ],
+        "success_criteria": [
+          "Architecture doc exists at .aether/docs/structural-learning-stack.md",
+          "CLAUDE.md updated with accurate counts",
+          "Full test suite passes with zero regressions"
+        ],
+        "status": "pending"
+      }
+    ],
+    "generated_at": "2026-03-31T19:45:32Z"
+  },
   "memory": {
-    "phase_learnings": [],
+    "phase_learnings": [
+      {
+        "id": "learning_1774948046",
+        "phase": 1,
+        "phase_name": "Enforce non-skippable playbook execution in build orchestrators",
+        "learnings": [
+          {
+            "claim": "Adding pre-synthesis verification gates to build orchestrators catches incomplete builds before synthesis — gate should name all prerequisite stages explicitly",
+            "status": "hypothesis",
+            "tested": false,
+            "evidence": "All 6 success criteria passed on first build attempt, watcher quality 9/10",
+            "disproven_by": null
+          }
+        ],
+        "timestamp": "2026-03-31T09:07:26Z"
+      },
+      {
+        "id": "learning_1774950789",
+        "phase": 3,
+        "phase_name": "Verify sync and lint clean",
+        "learnings": [
+          {
+            "claim": "Running lint:sync and lint as a dedicated verification phase after code changes confirms no sync drift — useful as a final gate before colony seal",
+            "status": "hypothesis",
+            "tested": false,
+            "evidence": "lint:sync confirmed 45+45 commands and 24 agents in sync, lint (shellcheck+json+sync) all clean, 524 tests pass",
+            "disproven_by": null
+          }
+        ],
+        "timestamp": "2026-03-31T09:53:09Z"
+      },
+      {
+        "id": "learning_1774991500",
+        "phase": 1,
+        "phase_name": "Commit Audit",
+        "learnings": [
+          {
+            "claim": "Parallel swarm audits (4 scouts) are effective for commit review — each scout can deeply examine a specific area while cross-referencing findings",
+            "status": "validated",
+            "tested": true,
+            "evidence": "4 scouts produced structured verdicts for Stage Audit Gate, Exchange Tests, State API, and Cross-Reference consistency",
+            "disproven_by": null
+          },
+          {
+            "claim": "Untracked test files can encode wrong assumptions — test-colony-data-dir.sh expected COLONY_DATA_DIR for COLONY_STATE.json but the architecture requires DATA_DIR",
+            "status": "validated",
+            "tested": true,
+            "evidence": "Scout 3 traced _resolve_colony_data_dir bootstrap chain and confirmed COLONY_STATE.json must stay at DATA_DIR root",
+            "disproven_by": null
+          }
+        ],
+        "timestamp": "2026-03-31T20:50:00Z"
+      },
+      {
+        "id": "learning_1775064500",
+        "phase": 3,
+        "phase_name": "Trust-Scored Storage and Graph Layer",
+        "learnings": [
+          {
+            "claim": "Standalone instinct storage with full schema (trust_score, trust_tier, provenance, application_history, related_instincts) is cleaner than embedding instincts in COLONY_STATE.json — enables independent queries and decay without touching colony state",
+            "status": "validated",
+            "tested": true,
+            "evidence": "instinct-store.sh with 16 tests passing, instinct-read-trusted/decay-all/archive all functional, 50-instinct cap with automatic archival",
+            "disproven_by": null
+          },
+          {
+            "claim": "jq-based graph layer provides adequate relationship traversal for instinct networks up to a few hundred edges — BFS reach with max-hops=3 cap prevents pathological queries",
+            "status": "hypothesis",
+            "tested": true,
+            "evidence": "graph.sh with graph-link/neighbors/reach/cluster all functional, union-find clustering works for current scale",
+            "disproven_by": null
+          },
+          {
+            "claim": "Backward-compatible migration for existing observations (legacy trust_score backfill at 0.49) lets new fields coexist with old data without breaking reads",
+            "status": "validated",
+            "tested": true,
+            "evidence": "learning-observe now computes trust_score on write, legacy migration fills 62 existing entries with 0.49 default, all 524 tests pass",
+            "disproven_by": null
+          }
+        ],
+        "timestamp": "2026-04-01T17:30:24Z"
+      }
+    ],
     "decisions": [],
-    "instincts": []
+    "instincts": [
+      {
+        "id": "instinct_1774947118",
+        "trigger": "working on pattern patterns",
+        "action": "Stage Audit Gate pattern: add pre-synthesis verification gate to build orchestrators ensures all stages complete before synthesis (evidence: all 6 success criteria passed, watcher quality 9/10)",
+        "confidence": 0.70,
+        "status": "hypothesis",
+        "domain": "pattern",
+        "source": "promoted_from_learning",
+        "evidence": [
+          ""
+        ],
+        "tested": false,
+        "created_at": "2026-03-31T08:51:58Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774991475",
+        "trigger": "working on pattern patterns",
+        "action": "Parallel swarm audits with 4 scouts are effective for commit review",
+        "confidence": 0.70,
+        "status": "hypothesis",
+        "domain": "pattern",
+        "source": "promoted_from_learning",
+        "evidence": [
+          ""
+        ],
+        "tested": false,
+        "created_at": "2026-03-31T21:11:15Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774991477",
+        "trigger": "working on pattern patterns",
+        "action": "Untracked test files can encode wrong assumptions about architecture",
+        "confidence": 0.70,
+        "status": "hypothesis",
+        "domain": "pattern",
+        "source": "promoted_from_learning",
+        "evidence": [
+          ""
+        ],
+        "tested": false,
+        "created_at": "2026-03-31T21:11:17Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1775064095",
+        "trigger": "working on pattern patterns",
+        "action": "Existing observations now recalculate trust_score on re-observation via trust-calculate with source_type/evidence_type/days_since (evidence: 34 tests pass, watcher quality 9/10)",
+        "confidence": 0.70,
+        "status": "hypothesis",
+        "domain": "pattern",
+        "source": "promoted_from_learning",
+        "evidence": [
+          ""
+        ],
+        "tested": false,
+        "created_at": "2026-04-01T17:21:35Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1775064098",
+        "trigger": "working on pattern patterns",
+        "action": "Modifying existing code (learning.sh) and verifying new modules (graph.sh, instinct-store.sh) can safely run in parallel when modifications are additive (evidence: 3 parallel builders, 0 merge conflicts)",
+        "confidence": 0.70,
+        "status": "hypothesis",
+        "domain": "pattern",
+        "source": "promoted_from_learning",
+        "evidence": [
+          ""
+        ],
+        "tested": false,
+        "created_at": "2026-04-01T17:21:38Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1775064631",
+        "trigger": "working on pattern patterns",
+        "action": "Standalone instinct storage with full schema is cleaner than embedding instincts in COLONY_STATE.json",
+        "confidence": 0.70,
+        "status": "hypothesis",
+        "domain": "pattern",
+        "source": "promoted_from_learning",
+        "evidence": [
+          ""
+        ],
+        "tested": false,
+        "created_at": "2026-04-01T17:30:31Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1775064634",
+        "trigger": "working on pattern patterns",
+        "action": "jq-based graph layer provides adequate relationship traversal for instinct networks",
+        "confidence": 0.70,
+        "status": "hypothesis",
+        "domain": "pattern",
+        "source": "promoted_from_learning",
+        "evidence": [
+          ""
+        ],
+        "tested": false,
+        "created_at": "2026-04-01T17:30:34Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1775064637",
+        "trigger": "working on pattern patterns",
+        "action": "Backward-compatible migration for existing observations lets new fields coexist with old data",
+        "confidence": 0.70,
+        "status": "hypothesis",
+        "domain": "pattern",
+        "source": "promoted_from_learning",
+        "evidence": [
+          ""
+        ],
+        "tested": false,
+        "created_at": "2026-04-01T17:30:37Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774991487",
+        "trigger": "commit audit phase with multiple areas to review",
+        "action": "deploy parallel swarm scouts (4+), each covering a specific audit area",
+        "confidence": 0.75,
+        "status": "hypothesis",
+        "domain": "workflow",
+        "source": "phase-1",
+        "evidence": [
+          "Swarm swarm-1774988242 completed 4 parallel audits in less time than sequential review"
+        ],
+        "tested": false,
+        "created_at": "2026-03-31T21:11:27Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1775064650",
+        "trigger": "storing learned patterns or instincts",
+        "action": "use standalone storage files with full schema (trust_score, provenance, application_history) rather than embedding in colony state — enables independent queries, decay, and archival without touching state",
+        "confidence": 0.75,
+        "status": "hypothesis",
+        "domain": "architecture",
+        "source": "success-phase-3",
+        "evidence": [
+          "instinct-store.sh with 16 tests, 50-instinct cap with auto-archival, all 524 tests pass"
+        ],
+        "tested": false,
+        "created_at": "2026-04-01T17:30:50Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1775064651",
+        "trigger": "adding new fields to existing data structures",
+        "action": "implement backward-compatible migration that backfills missing fields with safe defaults — new code reads old data, migration runs on write, no separate migration script needed",
+        "confidence": 0.75,
+        "status": "hypothesis",
+        "domain": "code-style",
+        "source": "success-phase-3",
+        "evidence": [
+          "learning-observe migration filled 62 existing entries with 0.49 default trust_score without breaking any reads"
+        ],
+        "tested": false,
+        "created_at": "2026-04-01T17:30:51Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      },
+      {
+        "id": "instinct_1774991488",
+        "trigger": "untracked test files or documentation exist from a prior session",
+        "action": "verify assumptions match actual architecture before trusting their assertions",
+        "confidence": 0.8,
+        "status": "hypothesis",
+        "domain": "testing",
+        "source": "phase-1",
+        "evidence": [
+          "test-colony-data-dir.sh encoded wrong assumption about COLONY_STATE.json location"
+        ],
+        "tested": false,
+        "created_at": "2026-03-31T21:11:28Z",
+        "last_applied": null,
+        "applications": 0,
+        "successes": 0,
+        "failures": 0
+      }
+    ]
   },
   "errors": {
     "records": []
-  }
+  },
+  "colony_depth": "standard",
+  "session_id": "session_1774942475_cf7bf701",
+  "colony_name": "Aether Colony",
+  "build_started_at": null
 }

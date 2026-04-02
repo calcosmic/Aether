@@ -49,7 +49,7 @@ If `--dry-run`: read COLONY_STATE.json, list remaining incomplete phases
 (applying `--max-phases` cap), display the plan, then stop without executing.
 
 ```
-━━━ A U T O P I L O T   P R E V I E W ━━━
+━━━ 🤖 A U T O P I L O T   P R E V I E W ━━━
 Goal: {goal} | Current: Phase {N} | Remaining: {count} | Max: {max or "all"}
 
   Phase {id}: {name} ({task_count} tasks) -> build -> continue -> advance
@@ -187,7 +187,7 @@ If `--continue` flag was passed: skip this check entirely (user dismissed replan
 If `result.should_replan == true`: **PAUSE** with replan suggestion banner:
 
 ```
-━━━ R E P L A N   S U G G E S T E D ━━━
+━━━ 🔄 R E P L A N   S U G G E S T E D ━━━
 Phases auto-completed: {N} | Learnings accumulated: {learnings_since_last}
 
 The colony has completed {N} phases since the last plan review.
@@ -205,7 +205,7 @@ If `result.should_replan == false`: proceed normally (no pause).
 ### Step 6: Final Summary
 
 ```
-━━━ A U T O P I L O T   C O M P L E T E ━━━
+━━━ ✅ A U T O P I L O T   C O M P L E T E ━━━
 Phases completed: {N} | Elapsed: {Xm Ys} | Now at: Phase {current}
 
 {all complete}  -> Colony goal achieved! Run /ant:seal

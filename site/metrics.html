@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Metrics — Aether Package Analytics</title>
+  <meta name="description" content="Live analytics for the Aether npm package: download trends, GitHub stars, and community growth." />
+  <meta property="og:title" content="Aether Metrics" />
+  <meta property="og:description" content="npm download stats, GitHub stars, and community growth for the Aether ant colony system." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://aetherantcolony.com/metrics.html" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐜</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <script defer data-domain="aetherantcolony.com" src="https://plausible.io/js/script.js"></script>
+  <style>
+    /* Metrics-specific styles */
+    .metric-card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: 28px;
+      box-shadow: var(--shadow-card);
+    }
+
+    .metric-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+
+    .metric-card-label {
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--color-text-muted);
+    }
+
+    .metric-card-icon {
+      font-size: 1.2rem;
+      opacity: 0.7;
+    }
+
+    .metric-primary-value {
+      font-size: 2.8rem;
+      font-weight: 800;
+      letter-spacing: -0.035em;
+      color: var(--color-accent);
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+
+    .metric-primary-value.loading {
+      height: 46px;
+      width: 140px;
+      border-radius: var(--radius-sm);
+    }
+
+    .metric-secondary {
+      font-size: 0.85rem;
+      color: var(--color-text-dim);
+      margin-bottom: 20px;
+    }
+
+    .chart-placeholder {
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      height: 80px;
+      position: relative;
+    }
+
+    .chart-bars {
+      display: flex;
+      align-items: flex-end;
+      gap: 3px;
+      height: 100%;
+      padding: 0 4px;
+    }
+
+    .chart-bar {
+      flex: 1;
+      border-radius: 2px 2px 0 0;
+      opacity: 0.35;
+      min-height: 8px;
+    }
+
+    .chart-bar.accent {
+      background: var(--color-accent);
+    }
+
+    .chart-bar.placeholder {
+      background: var(--color-border);
+    }
+
+    .badge-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-top: 16px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--color-surface-alt);
+      border: 1px solid var(--color-border);
+      border-radius: 999px;
+      padding: 4px 12px;
+      font-size: 0.8rem;
+      color: var(--color-text-muted);
+    }
+
+    .badge a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .badge a:hover {
+      color: var(--color-accent);
+    }
+
+    .info-banner {
+      background: var(--color-accent-glow);
+      border: 1px solid rgba(245, 158, 11, 0.2);
+      border-radius: var(--radius-md);
+      padding: 14px 20px;
+      font-size: 0.9rem;
+      color: var(--color-text-muted);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 40px;
+    }
+
+    .info-banner span:first-child {
+      flex-shrink: 0;
+    }
+
+    .trend-up {
+      color: var(--color-success);
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+
+    .trend-label {
+      font-size: 0.8rem;
+      color: var(--color-text-dim);
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    .data-table th {
+      text-align: left;
+      padding: 10px 16px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--color-text-dim);
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .data-table td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--color-border);
+      color: var(--color-text-muted);
+    }
+
+    .data-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .data-table td:first-child {
+      color: var(--color-text);
+      font-weight: 500;
+    }
+
+    .data-table .value-cell {
+      color: var(--color-text);
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav class="nav" role="navigation" aria-label="Main navigation">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-brand" aria-label="Aether home">
+        <span class="nav-brand-icon" aria-hidden="true">🐜</span>
+        Aether
+      </a>
+      <ul class="nav-links" role="list">
+        <li><a href="index.html">Home</a></li>
+        <li><a href="metrics.html" class="active" aria-current="page">Metrics</a></li>
+        <li><a href="sponsor.html" class="nav-hide-mobile">Sponsor</a></li>
+        <li>
+          <a href="https://github.com/calcosmic/Aether?utm_source=site&utm_medium=web&utm_campaign=aether"
+             target="_blank"
+             rel="noopener noreferrer"
+             class="nav-hide-mobile">GitHub</a>
+        </li>
+        <li>
+          <a href="https://www.npmjs.com/package/aether-colony?utm_source=site&utm_medium=web&utm_campaign=aether"
+             target="_blank"
+             rel="noopener noreferrer"
+             class="nav-cta plausible-event-name=NPM+Click">npm install</a>
+        </li>
+      </ul>
+    </div>
+  </nav>
+
+  <main>
+    <!-- Page Header -->
+    <div class="page-header container">
+      <div class="section-eyebrow">Colony Analytics</div>
+      <h1 class="section-title">Package Metrics</h1>
+      <p class="section-body">
+        Download trends, GitHub activity, and community growth —
+        all in one place.
+      </p>
+    </div>
+
+    <div class="container">
+      <!-- Info Banner -->
+      <div class="info-banner" role="note">
+        <span aria-hidden="true">📡</span>
+        <span>
+          Live stats are updated daily. Data sourced from npm registry and GitHub API.
+          Full analytics integration coming in v2.8.
+        </span>
+      </div>
+
+      <!-- Primary Stats Grid -->
+      <section aria-labelledby="overview-heading">
+        <h2 class="section-eyebrow mb-24" id="overview-heading">Overview</h2>
+        <div class="grid-3 mb-48">
+
+          <!-- npm Downloads (weekly) -->
+          <div class="metric-card">
+            <div class="metric-card-header">
+              <span class="metric-card-label">Weekly Downloads</span>
+              <span class="metric-card-icon" aria-hidden="true">📦</span>
+            </div>
+            <div class="metric-primary-value placeholder loading" aria-label="Loading weekly downloads"></div>
+            <div class="metric-secondary">npm · last 7 days</div>
+            <div class="chart-placeholder" aria-hidden="true">
+              <div class="chart-bars">
+                <div class="chart-bar placeholder" style="height:40%"></div>
+                <div class="chart-bar placeholder" style="height:55%"></div>
+                <div class="chart-bar placeholder" style="height:45%"></div>
+                <div class="chart-bar placeholder" style="height:70%"></div>
+                <div class="chart-bar placeholder" style="height:60%"></div>
+                <div class="chart-bar placeholder" style="height:80%"></div>
+                <div class="chart-bar accent" style="height:100%"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- npm Downloads (monthly) -->
+          <div class="metric-card">
+            <div class="metric-card-header">
+              <span class="metric-card-label">Monthly Downloads</span>
+              <span class="metric-card-icon" aria-hidden="true">📈</span>
+            </div>
+            <div class="metric-primary-value placeholder loading" aria-label="Loading monthly downloads"></div>
+            <div class="metric-secondary">npm · last 30 days</div>
+            <div class="chart-placeholder" aria-hidden="true">
+              <div class="chart-bars">
+                <div class="chart-bar placeholder" style="height:30%"></div>
+                <div class="chart-bar placeholder" style="height:45%"></div>
+                <div class="chart-bar placeholder" style="height:40%"></div>
+                <div class="chart-bar placeholder" style="height:60%"></div>
+                <div class="chart-bar placeholder" style="height:55%"></div>
+                <div class="chart-bar placeholder" style="height:75%"></div>
+                <div class="chart-bar placeholder" style="height:65%"></div>
+                <div class="chart-bar placeholder" style="height:85%"></div>
+                <div class="chart-bar accent" style="height:100%"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- GitHub Stars -->
+          <div class="metric-card">
+            <div class="metric-card-header">
+              <span class="metric-card-label">GitHub Stars</span>
+              <span class="metric-card-icon" aria-hidden="true">⭐</span>
+            </div>
+            <div class="metric-primary-value placeholder loading" aria-label="Loading GitHub stars"></div>
+            <div class="metric-secondary">github.com/calcosmic/Aether</div>
+            <div class="badge-row">
+              <div class="badge">
+                <span aria-hidden="true">🍴</span>
+                <a href="https://github.com/calcosmic/Aether/forks?utm_source=site&utm_medium=web&utm_campaign=aether"
+                   target="_blank"
+                   rel="noopener noreferrer">Forks</a>
+              </div>
+              <div class="badge">
+                <span aria-hidden="true">👁</span>
+                <a href="https://github.com/calcosmic/Aether/watchers?utm_source=site&utm_medium=web&utm_campaign=aether"
+                   target="_blank"
+                   rel="noopener noreferrer">Watchers</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Download Breakdown -->
+      <section aria-labelledby="breakdown-heading" class="mb-48">
+        <h2 class="section-eyebrow mb-24" id="breakdown-heading">Download Breakdown</h2>
+        <div class="metric-card">
+          <div class="metric-card-header">
+            <span class="metric-card-label">Downloads by Period</span>
+            <span class="metric-card-icon" aria-hidden="true">🗓</span>
+          </div>
+          <div style="overflow-x: auto;">
+            <table class="data-table" aria-label="Download statistics by time period">
+              <thead>
+                <tr>
+                  <th scope="col">Period</th>
+                  <th scope="col">Downloads</th>
+                  <th scope="col">Source</th>
+                  <th scope="col">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Last 7 days</td>
+                  <td class="value-cell">
+                    <span class="placeholder loading" style="display:inline-block;width:80px;height:18px;vertical-align:middle;" aria-label="Loading"></span>
+                  </td>
+                  <td>npm registry</td>
+                  <td><span class="trend-label">Updating daily</span></td>
+                </tr>
+                <tr>
+                  <td>Last 30 days</td>
+                  <td class="value-cell">
+                    <span class="placeholder loading" style="display:inline-block;width:80px;height:18px;vertical-align:middle;" aria-label="Loading"></span>
+                  </td>
+                  <td>npm registry</td>
+                  <td><span class="trend-label">Updating daily</span></td>
+                </tr>
+                <tr>
+                  <td>Last 365 days</td>
+                  <td class="value-cell">
+                    <span class="placeholder loading" style="display:inline-block;width:80px;height:18px;vertical-align:middle;" aria-label="Loading"></span>
+                  </td>
+                  <td>npm registry</td>
+                  <td><span class="trend-label">Updating daily</span></td>
+                </tr>
+                <tr>
+                  <td>All time</td>
+                  <td class="value-cell">
+                    <span class="placeholder loading" style="display:inline-block;width:80px;height:18px;vertical-align:middle;" aria-label="Loading"></span>
+                  </td>
+                  <td>npm registry</td>
+                  <td><span class="trend-label">Updating daily</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- GitHub Activity -->
+      <section aria-labelledby="github-heading" class="mb-48">
+        <h2 class="section-eyebrow mb-24" id="github-heading">GitHub Activity</h2>
+        <div class="grid-2">
+          <div class="metric-card">
+            <div class="metric-card-header">
+              <span class="metric-card-label">Repository Stats</span>
+              <span class="metric-card-icon" aria-hidden="true">🐙</span>
+            </div>
+            <table class="data-table" aria-label="GitHub repository statistics">
+              <tbody>
+                <tr>
+                  <td>Stars</td>
+                  <td class="value-cell">
+                    <span class="placeholder loading" style="display:inline-block;width:60px;height:18px;vertical-align:middle;" aria-label="Loading"></span>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Forks</td>
+                  <td class="value-cell">
+                    <span class="placeholder loading" style="display:inline-block;width:60px;height:18px;vertical-align:middle;" aria-label="Loading"></span>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Watchers</td>
+                  <td class="value-cell">
+                    <span class="placeholder loading" style="display:inline-block;width:60px;height:18px;vertical-align:middle;" aria-label="Loading"></span>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Open Issues</td>
+                  <td class="value-cell">
+                    <span class="placeholder loading" style="display:inline-block;width:60px;height:18px;vertical-align:middle;" aria-label="Loading"></span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="metric-card">
+            <div class="metric-card-header">
+              <span class="metric-card-label">Package Info</span>
+              <span class="metric-card-icon" aria-hidden="true">📋</span>
+            </div>
+            <table class="data-table" aria-label="npm package information">
+              <tbody>
+                <tr>
+                  <td>Package name</td>
+                  <td class="value-cell">aether-colony</td>
+                </tr>
+                <tr>
+                  <td>Current version</td>
+                  <td class="value-cell">v2.7.0</td>
+                </tr>
+                <tr>
+                  <td>License</td>
+                  <td class="value-cell">MIT</td>
+                </tr>
+                <tr>
+                  <td>Node requirement</td>
+                  <td class="value-cell">&gt;= 18</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Roadmap Note -->
+      <section aria-labelledby="roadmap-heading" class="mb-64">
+        <div class="card" style="border-color: rgba(245, 158, 11, 0.2);">
+          <div class="card-icon" aria-hidden="true">🗺️</div>
+          <h2 class="card-title" id="roadmap-heading">Analytics Roadmap</h2>
+          <div class="card-body">
+            <p style="margin-bottom: 16px;">
+              Full analytics integration is planned for the next release cycle.
+              Upcoming additions:
+            </p>
+            <ul style="padding-left: 20px; display: flex; flex-direction: column; gap: 8px;">
+              <li>Live npm download counters pulled from the npm registry API</li>
+              <li>GitHub stars and fork counts via the GitHub API</li>
+              <li>Spike correlation: correlate download spikes with content events
+                  (blog posts, HN mentions, new releases)</li>
+              <li>Plausible Analytics integration for site traffic (privacy-first,
+                  no cookies, no fingerprinting)</li>
+              <li>Historical trend charts with 30/90/365-day views</li>
+            </ul>
+          </div>
+          <div class="mt-24">
+            <a href="https://github.com/calcosmic/Aether?utm_source=site&utm_medium=web&utm_campaign=aether"
+               target="_blank"
+               rel="noopener noreferrer"
+               class="btn btn-secondary">
+              <span aria-hidden="true">👀</span>
+              Watch the Repo
+            </a>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer" role="contentinfo">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <span aria-hidden="true">🐜</span>
+        Aether Ant Colony
+      </div>
+      <ul class="footer-links" role="list">
+        <li><a href="index.html">Home</a></li>
+        <li><a href="sponsor.html">Sponsor</a></li>
+        <li>
+          <a href="https://github.com/calcosmic/Aether?utm_source=site&utm_medium=web&utm_campaign=aether"
+             target="_blank"
+             rel="noopener noreferrer">GitHub</a>
+        </li>
+        <li>
+          <a href="https://www.npmjs.com/package/aether-colony?utm_source=site&utm_medium=web&utm_campaign=aether"
+             target="_blank"
+             rel="noopener noreferrer">npm</a>
+        </li>
+      </ul>
+      <p class="footer-copy">
+        &copy; 2026 Aether Ant Colony. Released under the MIT License.
+      </p>
+    </div>
+  </footer>
+
+</body>
+</html>

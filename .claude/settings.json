@@ -32,6 +32,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .aether/utils/hooks/clash-pre-tool-use.js",
+            "timeout": 5
+          }
+        ]
       }
     ]
   },

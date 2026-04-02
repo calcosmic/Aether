@@ -61,3 +61,8 @@ venv/
 .vscode/
 .idea/
 *.swp
+
+# Analytics-only directories (never publish)
+site/
+docs/badges/
+docs/correlations/

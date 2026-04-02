@@ -229,7 +229,7 @@ _state_migrate() {
 # Gracefully degrades: missing files produce zero/default values
 # ============================================================================
 _colony_vital_signs() {
-    local cvs_state_file="$COLONY_DATA_DIR/COLONY_STATE.json"
+    local cvs_state_file="$DATA_DIR/COLONY_STATE.json"
     local cvs_midden_file="$COLONY_DATA_DIR/midden/midden.json"
     local cvs_phero_file="$COLONY_DATA_DIR/pheromones.json"
     local cvs_session_file="$COLONY_DATA_DIR/session.json"

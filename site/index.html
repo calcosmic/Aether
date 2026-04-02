@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aether — Multi-Agent Development for AI Coding Assistants</title>
+  <meta name="description" content="Aether is an npm package that brings ant-colony intelligence to AI-assisted development. Coordinate multiple AI agents, track colony state, and ship faster." />
+  <meta property="og:title" content="Aether — Multi-Agent Development" />
+  <meta property="og:description" content="Coordinate multiple AI agents like an ant colony. Build faster, learn continuously." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://aetherantcolony.com" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐜</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <script defer data-domain="aetherantcolony.com" src="https://plausible.io/js/script.js"></script>
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav class="nav" role="navigation" aria-label="Main navigation">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-brand" aria-label="Aether home">
+        <span class="nav-brand-icon" aria-hidden="true">🐜</span>
+        Aether
+      </a>
+      <ul class="nav-links" role="list">
+        <li><a href="index.html" class="active" aria-current="page">Home</a></li>
+        <li><a href="metrics.html" class="nav-hide-mobile">Metrics</a></li>
+        <li><a href="sponsor.html" class="nav-hide-mobile">Sponsor</a></li>
+        <li>
+          <a href="https://github.com/calcosmic/Aether?utm_source=site&utm_medium=web&utm_campaign=aether"
+             target="_blank"
+             rel="noopener noreferrer"
+             class="nav-hide-mobile">GitHub</a>
+        </li>
+        <li>
+          <a href="https://www.npmjs.com/package/aether-colony?utm_source=site&utm_medium=web&utm_campaign=aether"
+             target="_blank"
+             rel="noopener noreferrer"
+             class="nav-cta">npm install</a>
+        </li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <main>
+    <section class="hero container" aria-labelledby="hero-heading">
+      <div class="hero-badge">
+        <span aria-hidden="true">🐜</span>
+        Multi-agent development system
+      </div>
+      <h1 class="hero-title" id="hero-heading">
+        The Colony that<br />
+        <span class="accent">Builds With You</span>
+      </h1>
+      <p class="hero-subtitle">
+        Aether brings ant-colony intelligence to AI-assisted development.
+        Coordinate multiple AI agents, track colony state, and continuously
+        learn from every build — so each project gets smarter over time.
+      </p>
+      <div class="hero-actions">
+        <a href="https://www.npmjs.com/package/aether-colony?utm_source=site&utm_medium=web&utm_campaign=aether"
+           target="_blank"
+           rel="noopener noreferrer"
+           class="btn btn-primary plausible-event-name=Install+Click">
+          <span aria-hidden="true">📦</span>
+          Get on npm
+        </a>
+        <a href="https://github.com/calcosmic/Aether?utm_source=site&utm_medium=web&utm_campaign=aether"
+           target="_blank"
+           rel="noopener noreferrer"
+           class="btn btn-secondary plausible-event-name=GitHub+Click">
+          <span aria-hidden="true">⭐</span>
+          Star on GitHub
+        </a>
+      </div>
+
+      <div class="mt-48">
+        <div class="code-block" role="region" aria-label="Quick start command">
+          <span class="prompt">$ </span><span class="command">npm install -g aether-colony</span>
+          <br />
+          <span class="prompt">$ </span><span class="command">aether init "Build my next big thing"</span>
+          <br />
+          <span class="comment"># Colony started. Workers spawned. Building.</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- What is Aether -->
+    <section class="section container" aria-labelledby="what-heading">
+      <div class="section-eyebrow">What is Aether?</div>
+      <h2 class="section-title" id="what-heading">An operating system for AI agents</h2>
+      <p class="section-body">
+        Aether is an npm package that adds a persistent, learning colony layer
+        on top of Claude Code and OpenCode. Instead of isolated sessions,
+        your AI agents share memory, coordinate work, and get smarter with every
+        phase they complete.
+      </p>
+
+      <div class="grid-3 mt-48">
+        <div class="card">
+          <div class="card-icon" aria-hidden="true">🧠</div>
+          <div class="card-title">Persistent Memory</div>
+          <div class="card-body">
+            Colony state, decisions, and learnings persist across sessions.
+            Workers pick up exactly where the last one left off.
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-icon" aria-hidden="true">⚡</div>
+          <div class="card-title">Parallel Workers</div>
+          <div class="card-body">
+            Builder, Watcher, Scout, and 21 other specialist agents work
+            in coordinated waves — each focused on their caste.
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-icon" aria-hidden="true">📡</div>
+          <div class="card-title">Pheromone Signals</div>
+          <div class="card-body">
+            Guide every worker with FOCUS, REDIRECT, and FEEDBACK signals.
+            Hard constraints and gentle nudges, all in plain English.
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-icon" aria-hidden="true">🔬</div>
+          <div class="card-title">Quality Gates</div>
+          <div class="card-body">
+            Built-in security scanning, coverage analysis, and performance
+            measurement happen automatically at every phase boundary.
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-icon" aria-hidden="true">🌐</div>
+          <div class="card-title">Hive Brain</div>
+          <div class="card-body">
+            Wisdom learned in one project propagates across all your colonies.
+            The more you use it, the smarter it gets.
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-icon" aria-hidden="true">🚀</div>
+          <div class="card-title">Autopilot Mode</div>
+          <div class="card-body">
+            <code>/ant:run</code> chains build, verify, and advance
+            automatically — pausing only when your input genuinely matters.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- How It Works -->
+    <section class="section container" aria-labelledby="how-heading">
+      <div class="section-eyebrow">How It Works</div>
+      <h2 class="section-title" id="how-heading">From idea to shipped, in phases</h2>
+      <p class="section-body">
+        Aether breaks every project into phases. Each phase is executed by a
+        coordinated wave of AI agents, verified, and committed to colony memory.
+      </p>
+
+      <div class="grid-2 mt-48">
+        <div>
+          <div class="code-block" role="region" aria-label="Aether workflow commands">
+            <span class="comment"># 1. Initialise your colony</span><br />
+            <span class="prompt">$ </span><span class="command">aether init "Build payment flow"</span><br />
+            <br />
+            <span class="comment"># 2. Plan phases automatically</span><br />
+            <span class="prompt">$ </span><span class="command">/ant:plan</span><br />
+            <br />
+            <span class="comment"># 3. Run autopilot</span><br />
+            <span class="prompt">$ </span><span class="command">/ant:run</span><br />
+            <br />
+            <span class="comment"># Workers build, test, and verify</span><br />
+            <span class="comment"># each phase — then advance</span>
+          </div>
+        </div>
+        <div>
+          <div class="card" style="height: 100%;">
+            <div class="card-icon" aria-hidden="true">🗺️</div>
+            <div class="card-title">24 Specialist Agents</div>
+            <div class="card-body" style="margin-top: 12px;">
+              <p>Each agent has a defined caste:</p>
+              <ul style="margin-top: 12px; padding-left: 20px; display: flex; flex-direction: column; gap: 6px;">
+                <li><strong style="color: var(--color-text);">Builder</strong> — writes code TDD-first</li>
+                <li><strong style="color: var(--color-text);">Watcher</strong> — validates quality</li>
+                <li><strong style="color: var(--color-text);">Scout</strong> — researches context</li>
+                <li><strong style="color: var(--color-text);">Chaos</strong> — breaks things intentionally</li>
+                <li><strong style="color: var(--color-text);">Gatekeeper</strong> — security gate</li>
+                <li style="color: var(--color-text-dim);">…and 19 more</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Stats -->
+    <section class="section container" aria-labelledby="stats-heading">
+      <h2 class="section-title text-center" id="stats-heading">
+        Built for production-grade AI workflows
+      </h2>
+      <div class="grid-3 mt-48">
+        <div class="stat-block">
+          <div class="stat-value">24</div>
+          <div class="stat-label">Specialist Agents</div>
+          <div class="stat-note">Builder to Gatekeeper</div>
+        </div>
+        <div class="stat-block">
+          <div class="stat-value">45</div>
+          <div class="stat-label">Slash Commands</div>
+          <div class="stat-note">Claude Code + OpenCode</div>
+        </div>
+        <div class="stat-block">
+          <div class="stat-value">500+</div>
+          <div class="stat-label">Tests</div>
+          <div class="stat-note">Always green</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="section container text-center" aria-labelledby="cta-heading">
+      <div class="section-eyebrow">Get started in 60 seconds</div>
+      <h2 class="section-title" id="cta-heading">Ready to build with the colony?</h2>
+      <p class="section-body" style="margin: 0 auto 40px;">
+        Install Aether globally, point it at your project, and let the colony
+        coordinate your AI agents from day one.
+      </p>
+      <div class="hero-actions">
+        <a href="https://www.npmjs.com/package/aether-colony?utm_source=site&utm_medium=web&utm_campaign=aether"
+           target="_blank"
+           rel="noopener noreferrer"
+           class="btn btn-primary plausible-event-name=Install+Click">
+          <span aria-hidden="true">📦</span>
+          Install from npm
+        </a>
+        <a href="sponsor.html" class="btn btn-outline">
+          <span aria-hidden="true">💛</span>
+          Support Aether
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer" role="contentinfo">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <span aria-hidden="true">🐜</span>
+        Aether Ant Colony
+      </div>
+      <ul class="footer-links" role="list">
+        <li><a href="metrics.html">Metrics</a></li>
+        <li><a href="sponsor.html">Sponsor</a></li>
+        <li>
+          <a href="https://github.com/calcosmic/Aether?utm_source=site&utm_medium=web&utm_campaign=aether"
+             target="_blank"
+             rel="noopener noreferrer">GitHub</a>
+        </li>
+        <li>
+          <a href="https://www.npmjs.com/package/aether-colony?utm_source=site&utm_medium=web&utm_campaign=aether"
+             target="_blank"
+             rel="noopener noreferrer">npm</a>
+        </li>
+      </ul>
+      <p class="footer-copy">
+        &copy; 2026 Aether Ant Colony. Released under the MIT License.
+      </p>
+    </div>
+  </footer>
+
+</body>
+</html>

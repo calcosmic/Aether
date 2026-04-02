@@ -48,6 +48,21 @@ CURRENT_LOCK=${CURRENT_LOCK:-""}
 [[ -f "$SCRIPT_DIR/utils/council.sh" ]] && source "$SCRIPT_DIR/utils/council.sh"
 [[ -f "$SCRIPT_DIR/utils/clash-detect.sh" ]] && source "$SCRIPT_DIR/utils/clash-detect.sh"
 [[ -f "$SCRIPT_DIR/utils/worktree.sh" ]] && source "$SCRIPT_DIR/utils/worktree.sh"
+[[ -f "$SCRIPT_DIR/utils/event-bus.sh" ]] && source "$SCRIPT_DIR/utils/event-bus.sh"
+[[ -f "$SCRIPT_DIR/utils/trust-scoring.sh" ]] && source "$SCRIPT_DIR/utils/trust-scoring.sh"
+[[ -f "$SCRIPT_DIR/utils/instinct-store.sh" ]] && source "$SCRIPT_DIR/utils/instinct-store.sh"
+[[ -f "$SCRIPT_DIR/utils/graph.sh" ]] && source "$SCRIPT_DIR/utils/graph.sh"
+[[ -f "$SCRIPT_DIR/utils/curation-ants/sentinel.sh" ]] && source "$SCRIPT_DIR/utils/curation-ants/sentinel.sh"
+[[ -f "$SCRIPT_DIR/utils/curation-ants/janitor.sh" ]] && source "$SCRIPT_DIR/utils/curation-ants/janitor.sh"
+[[ -f "$SCRIPT_DIR/utils/curation-ants/archivist.sh" ]] && source "$SCRIPT_DIR/utils/curation-ants/archivist.sh"
+[[ -f "$SCRIPT_DIR/utils/curation-ants/scribe.sh" ]] && source "$SCRIPT_DIR/utils/curation-ants/scribe.sh"
+[[ -f "$SCRIPT_DIR/utils/curation-ants/nurse.sh" ]] && source "$SCRIPT_DIR/utils/curation-ants/nurse.sh"
+[[ -f "$SCRIPT_DIR/utils/curation-ants/herald.sh" ]] && source "$SCRIPT_DIR/utils/curation-ants/herald.sh"
+[[ -f "$SCRIPT_DIR/utils/curation-ants/librarian.sh" ]] && source "$SCRIPT_DIR/utils/curation-ants/librarian.sh"
+[[ -f "$SCRIPT_DIR/utils/curation-ants/critic.sh" ]] && source "$SCRIPT_DIR/utils/curation-ants/critic.sh"
+[[ -f "$SCRIPT_DIR/utils/curation-ants/orchestrator.sh" ]] && source "$SCRIPT_DIR/utils/curation-ants/orchestrator.sh"
+[[ -f "$SCRIPT_DIR/utils/consolidation-seal.sh" ]] && source "$SCRIPT_DIR/utils/consolidation-seal.sh"
+[[ -f "$SCRIPT_DIR/utils/consolidation.sh" ]] && source "$SCRIPT_DIR/utils/consolidation.sh"
 
 # Fallback error constants if error-handler.sh wasn't sourced
 # This prevents "unbound variable" errors in older installations
@@ -1260,13 +1275,16 @@ case "$cmd" in
       {"name": "pheromone-export", "description": "Export pheromone data to JSON"},
       {"name": "pheromone-export-xml", "description": "Export pheromone data to XML"},
       {"name": "pheromone-import-xml", "description": "Import pheromone data from XML"},
-      {"name": "pheromone-validate-xml", "description": "Validate pheromone XML against schema"}
+      {"name": "pheromone-validate-xml", "description": "Validate pheromone XML against schema"},
+      {"name": "pheromone-snapshot-inject", "description": "Copy active pheromone signals into a new worktree branch"},
+      {"name": "pheromone-export-branch", "description": "Export branch-specific pheromone signals for merge"},
+      {"name": "pheromone-merge-back", "description": "Merge eligible branch pheromone signals back to main"}
     ],
     "Utilities": [
       {"name": "generate-ant-name", "description": "Generate a unique ant name with caste prefix"},
       {"name": "activity-log", "description": "Append an entry to the activity log"},
       {"name": "activity-log-init", "description": "Initialize the activity log file"},
-      {"name": "activity-log-read", "description": "Read recent activity log entries"},
+      {"name": "activity-log-read", "description": "Read recent activity log entries; --no-errors excludes ERROR/WARN lines"},
       {"name": "generate-commit-message", "description": "Generate a commit message (types: milestone, pause, fix, contextual, seal)"},
       {"name": "version-check", "description": "Check if Aether version meets requirement"},
       {"name": "registry-add", "description": "Register a repo with Aether (supports --tags, --goal, --active)"},
@@ -1295,7 +1313,9 @@ case "$cmd" in
       {"name": "suggest-quick-dismiss", "description": "Dismiss all suggestions without approving"}
     ],
     "Maintenance": [
-      {"name": "data-clean", "description": "Scan and remove test/synthetic artifacts from colony data files"}
+      {"name": "data-clean", "description": "Scan and remove test/synthetic artifacts from colony data files"},
+      {"name": "backup-prune-global", "description": "Prune .aether/data/backups/ to 50-file global cap (newest kept)"},
+      {"name": "temp-clean", "description": "Remove files from .aether/temp/ older than 7 days"}
     ],
     "Autopilot": [
       {"name": "autopilot-init", "description": "Initialize autopilot run state (run-state.json)"},
@@ -1793,6 +1813,12 @@ HELP_EOF
     json_ok "{\"archived\":$archived_flag}"
     ;;
   activity-log-read)
+    # Parse optional --no-errors flag before positional caste_filter
+    _alr_no_errors=false
+    if [[ "${1:-}" == "--no-errors" ]]; then
+      _alr_no_errors=true
+      shift
+    fi
     caste_filter="${1:-}"
 
     # Graceful degradation: check if activity logging is enabled
@@ -1808,6 +1834,12 @@ HELP_EOF
     else
       content=$(cat "$log_file")
     fi
+
+    # Filter out ERROR/WARN lines if --no-errors flag was set
+    if [[ "$_alr_no_errors" == "true" ]]; then
+      content=$(echo "$content" | grep -vE 'ERROR|WARN' || true)
+    fi
+
     json_ok "$(echo "$content" | jq -Rs '.')"
     ;;
   learning-promote) _learning_promote "$@" ;;
@@ -3567,12 +3599,14 @@ Files: ${files_changed} files changed"
 
   memory-capture)
     # Capture learning/failure events with deterministic memory actions.
-    # Usage: memory-capture <event_type> <content> [wisdom_type] [source]
+    # Usage: memory-capture <event_type> <content> [wisdom_type] [source] [source_type] [evidence_type]
     # event_type: learning|failure|redirect|feedback|success|resolution
     mc_event="${1:-}"
     mc_content="${2:-}"
     mc_wisdom_type="${3:-}"
     mc_source="${4:-system:memory-capture}"
+    mc_source_type="${5:-observation}"
+    mc_evidence_type="${6:-anecdotal}"
 
     [[ -z "$mc_event" ]] && json_err "$E_VALIDATION_FAILED" "Usage: memory-capture <event_type> <content> [wisdom_type] [source]" '{"missing":"event_type"}'
     [[ -z "$mc_content" ]] && json_err "$E_VALIDATION_FAILED" "Usage: memory-capture <event_type> <content> [wisdom_type] [source]" '{"missing":"content"}'
@@ -3595,7 +3629,7 @@ Files: ${files_changed} files changed"
     [[ -z "$colony_name" ]] && colony_name="unknown"
 
     # SUPPRESS:OK -- read-default: returns fallback on failure
-    observe_result=$(bash "$0" learning-observe "$mc_content" "$mc_wisdom_type" "$colony_name" 2>/dev/null || echo '{}')
+    observe_result=$(bash "$0" learning-observe "$mc_content" "$mc_wisdom_type" "$colony_name" "$mc_source_type" "$mc_evidence_type" 2>/dev/null || echo '{}')
     if ! echo "$observe_result" | jq -e '.ok == true' >/dev/null 2>&1; then  # SUPPRESS:OK -- validation: testing JSON field
       # SUPPRESS:OK -- read-default: query may return empty
       obs_msg=$(echo "$observe_result" | jq -r '.error.message // "learning_observe_failed"' 2>/dev/null || echo "learning_observe_failed")
@@ -3907,6 +3941,9 @@ Files: ${files_changed} files changed"
   pheromone-count) _pheromone_count "$@" ;;
   pheromone-display) _pheromone_display "$@" ;;
   pheromone-read) _pheromone_read "$@" ;;
+  pheromone-snapshot-inject) _pheromone_snapshot_inject "$@" ;;
+  pheromone-export-branch) _pheromone_export_branch "$@" ;;
+  pheromone-merge-back) _pheromone_merge_back "$@" ;;
 
   instinct-read) _instinct_read "$@" ;;
   instinct-create) _instinct_create "$@" ;;
@@ -5174,6 +5211,50 @@ DRYRUN_EOF
       '{ok:true, removed:{pheromones:$phero, queen:$queen, observations:$obs, midden:$midden, spawn_tree:$spawn, constraints:$constraints}, total:$total}')"
     ;;
 
+  # --- Housekeeping Subcommands ---
+
+  backup-prune-global)
+    # Prune .aether/data/backups/ to a global cap of 50 files (newest kept).
+    # Per-filename rotation (MAX_BACKUPS=3) already runs in atomic-write.sh.
+    # This is the global sweep for unique-filename growth.
+    _bpg_cap=50
+    _bpg_dir="${BACKUP_DIR:-$DATA_DIR/backups}"
+
+    if [[ ! -d "$_bpg_dir" ]]; then
+      json_ok '{"pruned":0,"kept":0,"dir_exists":false}'; exit 0
+    fi
+
+    _bpg_total=$(find "$_bpg_dir" -maxdepth 1 -type f 2>/dev/null | wc -l | tr -d ' ')
+
+    if [[ "$_bpg_total" -le "$_bpg_cap" ]]; then
+      json_ok "$(jq -n --argjson pruned 0 --argjson kept "$_bpg_total" '{pruned:$pruned,kept:$kept}')"; exit 0
+    fi
+
+    _bpg_pruned=0
+    while IFS= read -r _bpg_file; do
+      rm -f "$_bpg_file" 2>/dev/null && _bpg_pruned=$((_bpg_pruned + 1))
+    done < <(find "$_bpg_dir" -maxdepth 1 -type f -print0 2>/dev/null | xargs -0 ls -t 2>/dev/null | tail -n +$((_bpg_cap + 1)))
+
+    _bpg_kept=$((_bpg_total - _bpg_pruned))
+    json_ok "$(jq -n --argjson pruned "$_bpg_pruned" --argjson kept "$_bpg_kept" '{pruned:$pruned,kept:$kept}')"
+    ;;
+
+  temp-clean)
+    # Remove files from .aether/temp/ older than 7 days.
+    _tc_dir="$AETHER_ROOT/.aether/temp"
+    _tc_cleaned=0
+
+    if [[ ! -d "$_tc_dir" ]]; then
+      json_ok '{"cleaned":0,"dir_exists":false}'; exit 0
+    fi
+
+    while IFS= read -r _tc_file; do
+      rm -f "$_tc_file" 2>/dev/null && _tc_cleaned=$((_tc_cleaned + 1))
+    done < <(find "$_tc_dir" -maxdepth 1 -type f -mtime +7 2>/dev/null)
+
+    json_ok "$(jq -n --argjson cleaned "$_tc_cleaned" '{cleaned:$cleaned}')"
+    ;;
+
   # --- Autopilot State Tracking ---
   # Tracks /ant:run autopilot sessions in run-state.json (separate from COLONY_STATE.json)
   # Optional — colonies without /ant:run are unaffected
@@ -5461,6 +5542,98 @@ DRYRUN_EOF
     ;;
   worktree-cleanup)
     _worktree_cleanup "$@"
+    ;;
+
+  # ── Event Bus ───────────────────────────────────────────────────────────────
+  event-publish)
+    _event_publish "$@"
+    ;;
+  event-subscribe)
+    _event_subscribe "$@"
+    ;;
+  event-cleanup)
+    _event_cleanup "$@"
+    ;;
+  event-replay)
+    _event_replay "$@"
+    ;;
+
+  # ── Trust Scoring ──────────────────────────────────────────────────────────
+  trust-calculate)
+    _trust_calculate "$@"
+    ;;
+  trust-decay)
+    _trust_decay "$@"
+    ;;
+  trust-tier)
+    _trust_tier "$@"
+    ;;
+
+  # ── Instinct Store ─────────────────────────────────────────────────────────
+  instinct-store)
+    _instinct_store "$@"
+    ;;
+  instinct-read-trusted)
+    _instinct_read_trusted "$@"
+    ;;
+  instinct-decay-all)
+    _instinct_decay_all "$@"
+    ;;
+  instinct-archive)
+    _instinct_archive "$@"
+    ;;
+
+  # ── Graph Traversal ────────────────────────────────────────────────────────
+  graph-link)
+    _graph_link "$@"
+    ;;
+  graph-neighbors)
+    _graph_neighbors "$@"
+    ;;
+  graph-reach)
+    _graph_reach "$@"
+    ;;
+  graph-cluster)
+    _graph_cluster "$@"
+    ;;
+
+  # ── Curation Ants ──────────────────────────────────────────────────────────
+  curation-sentinel)
+    _curation_sentinel "$@"
+    ;;
+  curation-janitor)
+    _curation_janitor "$@"
+    ;;
+  curation-archivist)
+    _curation_archivist "$@"
+    ;;
+  curation-scribe)
+    _curation_scribe "$@"
+    ;;
+  curation-nurse)
+    _curation_nurse "$@"
+    ;;
+  curation-herald)
+    _curation_herald "$@"
+    ;;
+  curation-librarian)
+    _curation_librarian "$@"
+    ;;
+  curation-critic)
+    _curation_critic "$@"
+    ;;
+  curation-run)
+    _curation_run "$@"
+    ;;
+
+  # ── Consolidation Seal ─────────────────────────────────────────────────────
+  consolidation-seal)
+    _consolidation_seal "$@"
+    ;;
+
+  # ── Consolidation Phase End ───────────────────────────────────────────────
+  consolidation-phase-end)
+    _consolidation_phase_end "$@"
     ;;
 
   *)

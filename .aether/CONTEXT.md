@@ -8,12 +8,12 @@
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2026-03-30T17:12:30Z |
-| **Current Phase** | 5 |
-| **Phase Name** | Fix hive-read null safety and learning recovery tests |
+| **Last Updated** | 2026-04-01T17:32:28Z |
+| **Current Phase** | 4 |
+| **Phase Name** | Curation Ants |
 | **Milestone** | First Mound |
 | **Colony Status** | initializing |
-| **Safe to Clear?** | YES — Build complete, ready to continue |
+| **Safe to Clear?** | YES — Phase advanced, ready to build |
 
 ---
 
@@ -23,9 +23,6 @@ Harden ~40 remaining json_ok call sites with safe escaping (A1+A4), add per-phas
 
 ---
 
-## 📍 What's In Progress
-
-**Build completed** — success
 ## ⚠️ Active Constraints (REDIRECT Signals)
 
 | Constraint | Source | Date Set |
@@ -52,6 +49,19 @@ Harden ~40 remaining json_ok call sites with safe escaping (A1+A4), add per-phas
 
 | Timestamp | Command | Result | Files Changed |
 |-----------|---------|--------|---------------|
+| 2026-04-01T17:32:28Z | continue | Phase 3 completed, advanced to 4 | — |
+| 2026-04-01T17:21:52Z | build 3 | completed | 3 |
+| 2026-04-01T10:22:02Z | continue | All 6 phases completed — colony goal achieved | — |
+| 2026-04-01T10:07:42Z | continue | Phase 5 completed, advanced to Phase 6 | — |
+| 2026-04-01T09:52:02Z | continue | Phase 4 completed, advanced to Phase 5 | — |
+| 2026-04-01T09:21:04Z | continue | Phase 3 completed, advanced to Phase 4 | — |
+| 2026-04-01T08:58:21Z | continue | Phase 2 completed, advanced to Phase 3 | — |
+| 2026-03-31T21:12:30Z | continue | Phase 1 completed, advanced to Phase 2 | — |
+| 2026-03-31T19:58:49Z | build 1 | completed | 0 |
+| 2026-03-31T09:53:56Z | continue | All 3 phases completed - colony goal achieved | — |
+| 2026-03-31T09:44:54Z | build 3 | completed | 0 |
+| 2026-03-31T09:08:17Z | continue | Phase 1 completed, advanced to 2 | — |
+| 2026-03-31T08:52:25Z | build 1 | completed | 4 |
 | 2026-03-30T17:12:30Z | build 2 | completed | 9 |
 | 2026-03-30T13:15:01Z | build 1 | completed | 1 |
 | 2026-03-30T11:58:17Z | build 5 | completed | 3 |

@@ -278,6 +278,41 @@ Describe the research topic in detail. The more specific, the better the Oracle'
 
 (The user will type their topic via the "Other" free-text option.)
 
+**Question 1.5: Research Brief — Formulate and Approve**
+
+Take the user's raw topic (from `$ARGUMENTS` or Question 1) and reformulate it into a structured research brief. The user may have typed casual natural language — your job is to sharpen it into a clear, well-scoped research prompt that will produce better results.
+
+Display the brief for approval:
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔮 R E S E A R C H   B R I E F
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**Topic:** {reformulated topic — clear, specific, actionable}
+**Core Question:** {the single most important question this research should answer}
+**Context:** {what we already know from the codebase or user input}
+**Success Criteria:** {what a good answer looks like — what would make this research useful}
+```
+
+Guidelines for formulation:
+- Turn vague topics into specific ones ("auth stuff" → "Authentication architecture: session-based vs token-based for this Node.js API")
+- Add codebase context if relevant (tech stack, existing patterns)
+- Make the core question answerable — not open-ended philosophy
+- Keep success criteria concrete ("A recommendation with trade-offs" not "understand everything")
+
+Then ask the user to approve:
+
+```
+Does this capture what you're looking for? (approve / edit)
+```
+
+- If the user approves: use the reformulated topic as the research topic going forward
+- If the user edits: incorporate their changes, display the updated brief, and ask again
+- Max 2 revision rounds (same as init). After 2, ask for final approval or cancel.
+
+The approved **Topic** from the brief becomes the topic used in all subsequent steps (state.json, plan.json, research-plan.md).
+
 **Question 2: Research Template**
 
 ```
