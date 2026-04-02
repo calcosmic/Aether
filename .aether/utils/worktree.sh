@@ -187,3 +187,100 @@ _worktree_cleanup() {
 
     json_ok "$result"
 }
+
+# _worktree_merge
+# Merges a worktree branch back to the target branch with safety checks.
+#
+# Usage: _worktree_merge --branch <branch-name> [--target <target-branch>] [--force]
+# Returns JSON: {ok:true, result:{merged, branch, target, sha, commits_merged}}
+_worktree_merge() {
+    local branch=""
+    local target=""
+    local force=false
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --branch) branch="${2:-}"; shift 2 ;;
+            --target) target="${2:-}"; shift 2 ;;
+            --force)  force=true; shift ;;
+            *) shift ;;
+        esac
+    done
+
+    if [[ -z "$branch" ]]; then
+        json_err "$E_VALIDATION_FAILED" "Usage: worktree-merge --branch <branch-name> [--target <target-branch>]"
+    fi
+
+    # Sanitize branch name
+    if [[ "$branch" == *..* ]] || [[ "$branch" == */* ]] || [[ "$branch" == *\\* ]]; then
+        json_err "$E_VALIDATION_FAILED" "Branch name must not contain '..', '/', or backslashes"
+    fi
+
+    local worktree_dir="$WORKTREE_BASE_DIR/$branch"
+
+    # Default target to current branch
+    if [[ -z "$target" ]]; then
+        target=$(git -C "$AETHER_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
+    fi
+
+    # Safety check 1: worktree must exist
+    if [[ ! -d "$worktree_dir" ]]; then
+        json_err "$E_RESOURCE_NOT_FOUND" "No worktree found for branch '$branch'"
+    fi
+
+    # Safety check 2: worktree must have committed changes (unless --force)
+    if [[ "$force" == "false" ]]; then
+        local dirty_count
+        dirty_count=$(git -C "$worktree_dir" status --porcelain 2>/dev/null \
+            | grep -v '\.aether/' \
+            | wc -l | tr -d ' ') || dirty_count=0
+        if [[ "$dirty_count" -gt 0 ]]; then
+            json_err "$E_VALIDATION_FAILED" "Worktree '$branch' has $dirty_count uncommitted changes. Commit or stash before merging."
+        fi
+    fi
+
+    # Safety check 3: worktree must have commits ahead of target
+    local ahead_count
+    ahead_count=$(git -C "$AETHER_ROOT" rev-list --count "${target}..${branch}" 2>/dev/null || echo "0")
+    if [[ "$ahead_count" -eq 0 ]]; then
+        # Nothing to merge — just clean up
+        _worktree_cleanup --branch "$branch" --force
+        return $?
+    fi
+
+    # Safety check 4: check for merge conflicts (dry run)
+    local conflict_check
+    conflict_check=$(git -C "$AETHER_ROOT" merge-tree $(git -C "$AETHER_ROOT" merge-base "$target" "$branch") "$target" "$branch" 2>/dev/null | grep -c "changed in both" || echo "0")
+    if [[ "$conflict_check" -gt 0 ]] && [[ "$force" == "false" ]]; then
+        json_err "$E_VALIDATION_FAILED" "Merge would produce $conflict_check conflict(s). Resolve manually or use --force."
+    fi
+
+    # Perform the merge
+    local merge_sha
+    if ! git -C "$AETHER_ROOT" merge "$branch" --no-edit --no-ff -m "merge: worktree branch $branch into $target" >/dev/null 2>&1; then
+        # Merge failed — abort
+        git -C "$AETHER_ROOT" merge --abort 2>/dev/null || true
+        json_err "$E_GIT_ERROR" "Merge of '$branch' into '$target' failed. Aborted."
+    fi
+
+    merge_sha=$(git -C "$AETHER_ROOT" rev-parse HEAD 2>/dev/null || echo "unknown")
+
+    # Export pheromones from the worktree branch before cleanup
+    if [[ -f "$worktree_dir/.aether/data/pheromones.json" ]]; then
+        mkdir -p "$AETHER_ROOT/.aether/exchange"
+        cp "$worktree_dir/.aether/data/pheromones.json" \
+           "$AETHER_ROOT/.aether/exchange/pheromone-branch-export.json" 2>/dev/null || true
+    fi
+
+    # Cleanup the worktree
+    _worktree_cleanup --branch "$branch" --force 2>/dev/null || true
+
+    local result
+    result=$(jq -n \
+        --arg branch "$branch" \
+        --arg target "$target" \
+        --arg sha "$merge_sha" \
+        --argjson ahead "$ahead_count" \
+        '{merged: true, branch: $branch, target: $target, sha: $sha, commits_merged: $ahead}')
+    json_ok "$result"
+}

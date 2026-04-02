@@ -328,6 +328,39 @@ bash .aether/aether-utils.sh state-mutate \
 Validate the state file:
 Run using the Bash tool with description "Validating colony state...": `bash .aether/aether-utils.sh validate-state colony`
 
+### Step 2.0.4: Worktree Merge-Back (NON-BLOCKING)
+
+After state update, check for any completed worktree branches from the build wave and merge them back to the target branch.
+
+Run using the Bash tool with description "Checking for worktree branches to merge...":
+```bash
+# List worktree branches created during this build
+branches=$(git -C "$AETHER_ROOT" worktree list --porcelain 2>/dev/null \
+    | grep "worktree-agent-\|worktree-" \
+    | awk '{print $NF}' || echo "")
+
+last_merged_branch=""
+last_merge_sha=""
+merged_count=0
+
+for branch in $branches; do
+    [[ -z "$branch" ]] && continue
+    result=$(bash "$AETHER_UTILS" worktree-merge --branch "$branch" 2>/dev/null || echo '{"ok":false}')
+    ok=$(echo "$result" | jq -r '.ok // false')
+    if [[ "$ok" == "true" ]]; then
+        last_merged_branch="$branch"
+        last_merge_sha=$(echo "$result" | jq -r '.result.sha // ""')
+        merged_count=$((merged_count + 1))
+    fi
+done
+
+if [[ "$merged_count" -gt 0 ]]; then
+    echo "Merged $merged_count worktree branch(es). Last: $last_merged_branch ($last_merge_sha)"
+fi
+```
+
+This step sets `$last_merged_branch` and `$last_merge_sha` which activates the existing dead code paths in Steps 2.0.5 and 2.0.6.
+
 ### Step 2.0.5: Pheromone Merge-Back (SILENT, NON-BLOCKING)
 
 If a `pheromone-branch-export.json` exists in `.aether/exchange/` (written by seal ceremony on a PR branch and merged to main), run merge-back to collect branch-discovered signals into main's pheromone store. This entire step is silent and non-blocking -- continue proceeds even if merge-back fails.
