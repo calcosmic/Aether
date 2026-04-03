@@ -1,6 +1,1 @@
-{
-  "schemaVersion": 1,
-  "label": "bundle size",
-  "message": "—",
-  "color": "green"
-}
+{"schemaVersion":1,"label":"bundle size","message":"4MB","color":"green"}
