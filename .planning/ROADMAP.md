@@ -21,7 +21,7 @@ Full shell-to-Go rewrite producing 254+ Cobra commands, 11 playbooks with 275 Go
 
 - [x] **Phase 48: goreleaser Release Pipeline** - Cross-platform binary builds on tag push (completed 2026-04-04)
 - [x] **Phase 49: Binary Downloader + npm Install** - Users receive Go binary on npm install (completed 2026-04-04)
-- [ ] **Phase 50: Update Flow Binary Refresh** - Users get updated binary via aether update
+- [ ] **Phase 50: Update Flow Binary Refresh** - aether update downloads binary when missing or outdated
 - [ ] **Phase 51: npm Shim Delegation + Version Gate** - aether command routes to Go binary when available
 
 ## Phase Details
@@ -62,7 +62,10 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. Running `aether update` downloads a new binary when the released version is newer than the installed binary
   2. If the binary download or update fails, the rest of the update flow (file sync, YAML refresh) still completes successfully
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 50-01-PLAN.md -- Add binary download to update flow with non-blocking guarantee
 
 ### Phase 51: npm Shim Delegation + Version Gate
 **Goal**: The aether command delegates to the Go binary when it is present and confirmed working, falling back to Node.js when it is not
