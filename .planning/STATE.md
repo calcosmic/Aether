@@ -1,163 +1,94 @@
 ---
 gsd_state_version: 1.0
 milestone: v5.4
-milestone_name: Shell-to-Go Rewrite
+milestone_name: milestone
 status: executing
-stopped_at: Completed 50-01-PLAN.md
-last_updated: "2026-04-02T06:47:01.606Z"
-last_activity: 2026-04-02
+stopped_at: Completed 10-01-PLAN.md
+last_updated: "2026-04-04T11:05:16.389Z"
+last_activity: 2026-04-04
 progress:
-  total_phases: 20
-  completed_phases: 14
-  total_plans: 59
-  completed_plans: 49
+  total_phases: 7
+  completed_phases: 2
+  total_plans: 9
+  completed_plans: 6
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-29)
+See: .planning/PROJECT.md
 
 **Core value:** Reliably interpret user requests, decompose into work, verify outputs, and ship correct work with minimal back-and-forth.
-**Current focus:** Phase 50 — cli-commands
+**Current focus:** Phase 10 — integration-parity-tests
 
 ## Current Position
 
-Phase: 50 (cli-commands) — EXECUTING
-Plan: 2 of 6
+Phase: 10 (integration-parity-tests) — EXECUTING
+Plan: 3 of 3
 Status: Ready to execute
-Last activity: 2026-04-02
+Last activity: 2026-04-04
 
 ## Performance Metrics
 
-**Velocity (from v2.1-v2.5):**
+**Velocity:**
 
-- Total plans completed: 88 (82 from v2.1-v2.5 + 6 from v2.6)
-- Average duration: 5min
-- Total execution time: ~7 hours
-
-**Milestone History:**
-
-- v1.3: 8 phases (1-8), 17 plans — shipped 2026-03-19
-- v2.1: 8 phases (9-16), 39 plans — shipped 2026-03-24
-- v2.2: 4 phases (17-20), 5 plans — shipped 2026-03-25
-- v2.3: 4 phases (21-24), 10 plans — shipped 2026-03-27
-- v2.4: 4 phases (25-28), 8 plans — shipped 2026-03-27
-- v2.5: 4 phases (29-32), 10 plans — shipped 2026-03-27
-- v2.6: 6 phases (33-38), TBD plans — in progress
+- Total plans completed: 4
+- Average duration: ~15min
+- Total execution time: ~1 hour
 
 | Phase | Plan | Duration | Tasks | Files |
 |-------|------|----------|-------|-------|
-| 33-01 | grep-F + json_ok escaping | 23min | 2 | 4 |
-| 33-02 | json_ok escaping + sanitize-on-read | 35min | 3 | 13 |
-| 33-03 | lock safety + atomic write hardening | 27min | 2 | 3 |
-| 33-04 | data safety tests + status display | 11min | 2 | 2 |
-| 34-01 | colony name extraction | 5min | 2 | 2 |
-| 34-02 | hub lock isolation | 4min | 2 | 2 |
-| 34-03 | per-colony data directory infrastructure | 4min | 2 | 1 |
-| 34-04 | utils modules COLONY_DATA_DIR migration | 10min | 2 | 14 |
-
-*Updated during Phase 34 execution*
-| Phase 34 P05 | 6min | 1 tasks | 1 files |
-| Phase 35 P04 | 6min | 2 tasks | 7 files |
-| Phase 36 P01 | 4min | 2 tasks | 2 files |
-| Phase 36 P03 | 14min | 2 tasks | 22 files |
-| Phase 37 P03 | 5min | 2 tasks | 7 files |
-| Phase 38 P01 | 8min | 2 tasks | 2 files |
-| Phase 41 P03 | 6min | 1 tasks | 3 files |
-| Phase 42.1 P01 | 4min | 2 tasks | 7 files |
-| Phase 43 P01 | 3min | 2 tasks | 1 files |
-| Phase 44 P02 | 3min | 2 tasks | 3 files |
-| Phase 45 P02 | 12min | 2 tasks | 6 files |
-| Phase 49 P01 | 472 | 2 tasks | 6 files |
-| Phase 49 P04 | 1 | 1 tasks | 10 files |
-| Phase 49 P03 | 6min | 2 tasks | 4 files |
-| Phase 50 P01 | 25min | 2 tasks | 8 files |
+| 05-01 | Trust scoring, event bus, instinct store, graph, consolidation | - | - | - |
+| 05-02 | Curation ants | - | - | - |
+| 06-01 | Swarm display, inline, text | - | - | - |
+| 06-02 | Suggest analyze, record, check | - | - | - |
+| Phase 07 P02 | 2min | 2 tasks | 4 files |
+| Phase 07 P01 | 5min | 2 tasks | 5 files |
+| Phase 07 P03 | 1030s | 2 tasks | 5 files |
+| Phase 07 P04 | 982 | 3 tasks | 4 files |
+| Phase 07 P04 | 157s | 3 tasks | 4 files |
+| Phase 08 P01 | 8min | 2 tasks | 8 files |
+| Phase 08 P02 | 602s | 2 tasks | 156 files |
+| Phase 08 P03 | 2min | 1 tasks | 0 files |
+| Phase 08 P03 | 2min | 1 tasks | 0 files |
+| Phase 09 P01 | 2min | 2 tasks | 5 files |
+| Phase 09 P02 | 2min | 2 tasks | 6 files |
+| Phase 10-integration-parity-tests P01 | 5183 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
-### Roadmap Evolution
-
-- Phase 42.1 inserted after Phase 42: Release hygiene — version drift, npm packaging, OpenCode agent parity, exchange distribution, doc accuracy, test coverage (URGENT)
-
 ### Decisions
 
-**From 36-01:**
-
-- Generated files include header comment marking them as generated artifacts
-- body_claude/body_opencode skip template processing since content is already provider-specific
-
-**From 34-04:**
-
-- Standalone scripts (swarm-display.sh, watch-spawn-tree.sh) resolve COLONY_DATA_DIR inline since they are not sourced by aether-utils.sh
-- error-handler.sh safely uses COLONY_DATA_DIR since it is sourced after COLONY_DATA_DIR initialization
-- state-api.sh and state-loader.sh unchanged -- they only reference COLONY_STATE.json at DATA_DIR
-
-**From 34-03:**
-
-- COLONY_STATE.json remains at DATA_DIR root as the colony identification anchor
-- Per-colony files use COLONY_DATA_DIR, shared files use DATA_DIR
-- Migration uses presence-based detection (no version field)
-- Migration function intentionally uses DATA_DIR for source paths
-
-**From Phase 33:**
-
-- Use `jq -n --arg` for strings and `--argjson` for numbers/booleans in json_ok construction
-- Drop `^` and `$` regex anchors when switching to `grep -F` since fixed-string mode treats them as literals
-- Ant names are unique per swarm, so `grep -F` without anchors is safe for timing file lookups
-- Trap-based lock cleanup is the standard pattern; explicit release_lock kept as defense-in-depth
-- Safety stats are best-effort and never fail the calling operation
-- Safety stats stored in .aether/data/safety-stats.json (local-only)
-- data-safety-stats subcommand returns zero defaults when no stats file exists
-- Integration tests use temp directory isolation with AETHER_ROOT override
-- [Phase 34]: Colony isolation integration tests verify COLONY_DATA_DIR resolution, auto-migration, lock tagging, name sanitization, and backward compatibility
-- [Phase 35]: Used DEPTH CHECK guard clause pattern at top of each gated spawn step for consistency
-- [Phase 35]: Inserted depth display as Step 2.5.5 in status.md to avoid renumbering existing non-sequential steps
-- [Phase 35]: Depth read uses graceful fallback to standard when colony-depth get fails
-- [Phase 36]: Used body_claude/body_opencode for 16 of 22 complex commands where provider bodies are structurally different
-- [Phase 36]: Used standard body with provider-exclusive blocks for focus, redirect, feedback, status, init, flag (6 commands with mixed shared/exclusive content)
-
-- [37-02] Import step placed after colony creation so data files exist as targets
-- [37-02] xmllint required before offering import (hard dependency of pheromone-import-xml)
-- [37-02] All three data types imported together, no cherry-picking (per D-09)
-- [Phase 37]: Check 7 in validate-package.sh validates exchange shell scripts (.sh), not XML data files
-- [Phase 38]: Pre-existing instinct-confidence test failures (4 tests) deferred as unrelated to spawn-tree.sh changes
-- [Phase 38]: error-codes.md descriptions verified accurate; only last-updated date needed changing
-- [Phase 41]: Step 2.0.6 added to both continue-verify.md and continue-advance.md since plan specified both as targets
-- [Phase 41]: All midden wiring is non-blocking following the pheromone merge-back pattern from Step 2.0.5
-- [Phase 42.1]: Added 23 missing entries to REQUIRED_FILES in one batch (20 shell + 3 non-shell)
-- [Phase 42.1]: Used generate-commands.js for bulk regeneration rather than manual editing
-- [42.1-02]: CLAUDE.md version tracks development milestone (v2.7-dev), not npm semver
-- [42.1-02]: Fixed 4 additional stale references in Architecture Overview and Key Directories beyond plan's explicit list to meet acceptance criteria
-- [Phase 43]: Dispatcher wiring pattern: source line, dispatch case, help JSON entry -- three-part registration
-- [Phase 43]: Research predicted 5/12 worktree test failures but dispatcher wiring resolved all 12
-- [Phase 44]: Used ~5,500 for aether-utils.sh line count (actual 5,469) for rounding stability
-- [Phase 44]: CHANGELOG uses npm version [5.3.0] as section header per keepachangelog convention
-- [45-02]: Used crypto/rand hex suffix for temp file naming instead of PID-only for concurrent safety
-- [45-02]: Used fmt.Fprintf to stderr for malformed JSONL logging instead of log.Printf
-- [45-02]: Created full Store type in storage.go since the file did not exist despite plan referencing it
-- [Phase 49]: Sentinel error types (DuplicateAgentError, AgentNotFoundError) for type-safe agent registry error handling
-- [Phase 49]: Registry.List/Match return agents sorted by name for deterministic ordering
-- [Phase 49]: YAML frontmatter parser strips leading whitespace before delimiter detection
-- [Phase 49]: Sentinel skips .jsonl files during corruption check since they are line-delimited, not single JSON objects
-- [Phase 49]: Curation ants return nil Triggers() since orchestrator handles event subscriptions for all ants
-- [Phase 49]: Pool mutex protects cancel/eventCh fields for concurrent Start/Stop safety (data race fix)
-- [Phase 49]: Spawn tree stores spawn entries and completion lines separately, merging on parse for shell format parity
-- [Phase 50]: Custom version template prints aether v<version> instead of default aether version v<version>
-- [Phase 50]: outputOK/outputError use manual JSON construction for exact key ordering matching shell json_ok/json_err format
-- [Phase 50]: stdout/stderr as package-level io.Writer vars for test injection rather than interface parameters
-
-### Pending Todos
-
-- Add Data Safety display step to .claude/commands/ant/status.md (requires command file edit permission)
+- Go binary has 193+ commands implemented out of ~305 shell subcommands
+- Phases 05 and 06 complete -- structural learning, XML exchange, display, and suggestion commands ported
+- 20 critical shell commands still missing (needed by slash commands)
+- Phase 07 targets remaining shell-only commands
+- [Phase 07]: Used local rand.Rand per invocation for deterministic --seed flag support (DIFF-01)
+- [Phase 07]: Midden-write uses flat midden.json path matching existing Go midden commands
+- [Phase 07]: check-antipattern returns clean:true for nonexistent files for shell compatibility
+- [Phase 07]: signature-match validates regex and returns error envelope for invalid patterns
+- [Phase 07]: [Phase 07 P03]: Alias commands share RunE helpers with nested exchange commands (zero duplication)
+- [Phase 07]: [Phase 07 P03]: context-update writes to rolling-summary.log pipe-delimited format, matching extractRollingSummary reader
+- [Phase ?]: [Phase 07 P04]: swarm-display-text already existed, 20 new commands instead of 21
+- [Phase ?]: [Phase 07 P04]: spawn-get-depth uses pipe-delimited format matching SpawnTree.Parse
+- [Phase 08]: normalize-args uses outputOK JSON envelope; YAML generator extracts with jq -r .result
+- [Phase 08]: JSON output flag pattern: check bool flag before table render, use outputOK envelope with typed nil-slices for empty arrays
+- [Phase 08]: [Phase 08 P02]: Used Python conversion script for systematic batch replacement of 345 shell invocations across 45 YAML files
+- [Phase 08]: [Phase 08 P02]: Parallel execution with 08-01 overlapped on 8 high-count files; verified identical results
+- [Phase 08]: Verification-only plan confirmed all 90 generated files already match YAML sources from 08-02; no file changes needed
+- [Phase 08]: [Phase 08 P03]: Verification-only plan confirmed all 90 generated files already match YAML sources from 08-02; no file changes needed
+- [Phase 09]: Used Python conversion script for systematic batch replacement of 220 shell calls across 5 playbook files
+- [Phase 09]: [Phase 09 P02]: Reused Python regex substitution from Plan 01; 73 shell calls replaced (more than estimated 67)
+- [Phase 10]: File-based shell output capture prevents pipe goroutine hangs in parity tests
+- [Phase 10]: Known parity breaks documented as test metadata, not suppressed
 
 ### Blockers/Concerns
 
-None active.
+- 1 failing test in pkg/colony (TestRoundTripRealColonyState)
 
 ## Session Continuity
 
-Last session: 2026-04-02T06:47:01.602Z
-Stopped at: Completed 50-01-PLAN.md
+Last session: 2026-04-04T11:05:16.386Z
+Stopped at: Completed 10-01-PLAN.md
 Resume file: None
