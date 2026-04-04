@@ -40,9 +40,13 @@ The system must reliably interpret a user request, decompose it into executable 
 
 ### Active
 
-- goreleaser config — produce platform binaries (darwin/linux/windows, amd64/arm64)
 - Binary install on update — `aether update` downloads binary if missing from PATH
 - Version-gated YAML wiring — only swap Go-wired YAML when binary confirmed working
+
+### Validated (v5.5 — partial)
+
+- ✓ goreleaser config — produce platform binaries (darwin/linux/windows, amd64/arm64) — v5.5 (Phase 48)
+- ✓ Binary downloader + npm install — users receive Go binary automatically on npm install -g — v5.5 (Phase 49)
 
 ### Validated (v5.4)
 
