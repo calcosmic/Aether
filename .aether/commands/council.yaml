@@ -22,7 +22,7 @@ body: |
 
   Run using the Bash tool with description "Checking deliberation budget...":
   ```bash
-  bash .aether/aether-utils.sh council-budget-check
+  aether council-budget-check
   ```
 
   Parse result. If `allowed` is `false`:
@@ -38,7 +38,7 @@ body: |
 
   Run using the Bash tool with description "Opening deliberation...":
   ```bash
-  bash .aether/aether-utils.sh council-deliberate --proposal "<proposal>"
+  aether council-deliberate --proposal "<proposal>"
   ```
 
   Capture `deliberation_id` from `result.id`.
@@ -81,7 +81,7 @@ body: |
 
   Record the argument:
   ```bash
-  bash .aether/aether-utils.sh council-advocate \
+  aether council-advocate \
     --deliberation-id "<deliberation_id>" \
     --argument "<advocate_argument>"
   ```
@@ -119,7 +119,7 @@ body: |
 
   Record the argument:
   ```bash
-  bash .aether/aether-utils.sh council-challenger \
+  aether council-challenger \
     --deliberation-id "<deliberation_id>" \
     --argument "<challenger_argument>"
   ```
@@ -162,7 +162,7 @@ body: |
 
   Record the sage synthesis:
   ```bash
-  bash .aether/aether-utils.sh council-sage \
+  aether council-sage \
     --deliberation-id "<deliberation_id>" \
     --synthesis "<synthesis>" \
     --recommendation "<recommendation>"
@@ -504,6 +504,6 @@ body: |
   state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
   current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
   total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
-  bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
+  aether print-next-up
   ```
   {{/claude}}

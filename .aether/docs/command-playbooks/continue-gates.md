@@ -32,8 +32,8 @@ The phase will NOT advance until spawning occurs.
 **CRITICAL:** Do NOT proceed to Step 1.7. Do NOT advance the phase.
 Log the violation:
 ```bash
-bash .aether/aether-utils.sh activity-log "BLOCKED" "colony" "Spawn gate failed: {task_count} tasks, 0 spawns"
-bash .aether/aether-utils.sh error-flag-pattern "no-spawn-violation" "Prime Worker completed phase without spawning specialists" "critical"
+aether activity-log "BLOCKED" "colony" "Spawn gate failed: {task_count} tasks, 0 spawns"
+aether error-flag-pattern "no-spawn-violation" "Prime Worker completed phase without spawning specialists" "critical"
 ```
 
 **HARD REJECTION - If watcher_count == 0 (no testing separation):**
@@ -73,7 +73,7 @@ Continue to Step 1.7.
 
 Scan all modified/created files for known anti-patterns. This catches recurring bugs before they reach production.
 
-For each file, run using the Bash tool with description "Scanning for anti-patterns...": `bash .aether/aether-utils.sh check-antipattern "{file_path}"`
+For each file, run using the Bash tool with description "Scanning for anti-patterns...": `aether check-antipattern "{file_path}"`
 
 Run for each file in `files_created` and `files_modified` from Prime Worker output.
 
@@ -184,7 +184,7 @@ If no CRITICAL issues, continue to Step 1.7.1.
    Run using the Bash tool with description "Establishing test baseline...": `test_output_before=$(npm test 2>&1 || echo "TEST_FAILED") && tests_passing_before=$(echo "$test_output_before" | grep -oE '[0-9]+ passing' | grep -oE '[0-9]+' || echo "0") && echo "Baseline: $tests_passing_before tests passing"`
 
    b. **Generate Weaver name and dispatch:**
-   Run using the Bash tool with description "Generating Weaver name...": `weaver_name=$(bash .aether/aether-utils.sh generate-ant-name "weaver" | jq -r '.result') && bash .aether/aether-utils.sh spawn-log "Queen" "weaver" "$weaver_name" "Proactive refactoring" && echo "{\"name\":\"$weaver_name\"}"`
+   Run using the Bash tool with description "Generating Weaver name...": `weaver_name=$(aether generate-ant-name "weaver" | jq -r '.result') && aether spawn-log "Queen" "weaver" "$weaver_name" "Proactive refactoring" && echo "{\"name\":\"$weaver_name\"}"`
 
    c. **Display:**
    ```
@@ -269,10 +269,10 @@ If no CRITICAL issues, continue to Step 1.7.1.
    ```
 
    g. **Log completion:**
-   Run using the Bash tool with description "Logging Weaver completion...": `bash .aether/aether-utils.sh spawn-complete "$weaver_name" "$weaver_status" "Refactoring $weaver_status"`
+   Run using the Bash tool with description "Logging Weaver completion...": `aether spawn-complete "$weaver_name" "$weaver_status" "Refactoring $weaver_status"`
 
    h. **Log to midden:**
-   Run using the Bash tool with description "Logging refactoring activity to midden...": `bash .aether/aether-utils.sh midden-write "refactoring" "Weaver refactored files, complexity before/after: ${complexity_before}/${complexity_after}" "weaver"`
+   Run using the Bash tool with description "Logging refactoring activity to midden...": `aether midden-write "refactoring" "Weaver refactored files, complexity before/after: ${complexity_before}/${complexity_after}" "weaver"`
 
 5. **Display completion:**
    ```
@@ -301,7 +301,7 @@ Continue to Step 1.9.
 **If package.json exists:**
 
 1. Generate Gatekeeper name and log spawn:
-Run using the Bash tool with description "Generating Gatekeeper name...": `gatekeeper_name=$(bash .aether/aether-utils.sh generate-ant-name "gatekeeper" | jq -r '.result') && bash .aether/aether-utils.sh spawn-log "Queen" "gatekeeper" "$gatekeeper_name" "Supply chain security audit" && echo "{\"name\":\"$gatekeeper_name\"}"`
+Run using the Bash tool with description "Generating Gatekeeper name...": `gatekeeper_name=$(aether generate-ant-name "gatekeeper" | jq -r '.result') && aether spawn-log "Queen" "gatekeeper" "$gatekeeper_name" "Supply chain security audit" && echo "{\"name\":\"$gatekeeper_name\"}"`
 
 2. Display:
 ```
@@ -350,7 +350,7 @@ Provide JSON output matching this schema:
 5. Parse Gatekeeper JSON output and log completion:
 Extract: `security.critical`, `security.high`, `status`
 
-Run using the Bash tool with description "Logging Gatekeeper completion...": `bash .aether/aether-utils.sh spawn-complete "$gatekeeper_name" "completed" "{\"security\":{\"critical\":$critical_count,\"high\":$high_count}}"`
+Run using the Bash tool with description "Logging Gatekeeper completion...": `aether spawn-complete "$gatekeeper_name" "completed" "{\"security\":{\"critical\":$critical_count,\"high\":$high_count}}"`
 
 **Gate Decision Logic:**
 
@@ -380,7 +380,7 @@ The phase will NOT advance with critical CVEs.
 Security warnings logged to midden for later review.
 Proceeding with caution...
 ```
-Run using the Bash tool with description "Logging high-severity warnings...": `bash .aether/aether-utils.sh midden-write "security" "High CVEs found: $high_count" "gatekeeper"`
+Run using the Bash tool with description "Logging high-severity warnings...": `aether midden-write "security" "High CVEs found: $high_count" "gatekeeper"`
 Continue to Step 1.9.
 
 - **If clean (no critical or high):**
@@ -394,7 +394,7 @@ Continue to Step 1.9.
 **Code quality audit — runs on every `/ant:continue` for consistent coverage.**
 
 1. Generate Auditor name and log spawn:
-Run using the Bash tool with description "Generating Auditor name...": `auditor_name=$(bash .aether/aether-utils.sh generate-ant-name "auditor" | jq -r '.result') && bash .aether/aether-utils.sh spawn-log "Queen" "auditor" "$auditor_name" "Code quality audit" && echo "{\"name\":\"$auditor_name\"}"`
+Run using the Bash tool with description "Generating Auditor name...": `auditor_name=$(aether generate-ant-name "auditor" | jq -r '.result') && aether spawn-log "Queen" "auditor" "$auditor_name" "Code quality audit" && echo "{\"name\":\"$auditor_name\"}"`
 
 2. Display:
 ```
@@ -455,7 +455,7 @@ Provide JSON output matching this schema:
 6. Parse Auditor JSON output and log completion:
 Extract: `findings.critical`, `findings.high`, `findings.medium`, `findings.low`, `findings.info`, `overall_score`, `dimensions_audited`
 
-Run using the Bash tool with description "Logging Auditor completion...": `bash .aether/aether-utils.sh spawn-complete "$auditor_name" "completed" "{\"findings\":{\"critical\":$critical_count,\"high\":$high_count,\"medium\":$medium_count,\"low\":$low_count,\"info\":$info_count},\"score\":$overall_score}"`
+Run using the Bash tool with description "Logging Auditor completion...": `aether spawn-complete "$auditor_name" "completed" "{\"findings\":{\"critical\":$critical_count,\"high\":$high_count,\"medium\":$medium_count,\"low\":$low_count,\"info\":$info_count},\"score\":$overall_score}"`
 
 **Gate Decision Logic:**
 
@@ -479,7 +479,7 @@ Critical Findings:
 
 The phase will NOT advance with critical quality issues.
 ```
-Run using the Bash tool with description "Logging critical quality block...": `bash .aether/aether-utils.sh error-flag-pattern "auditor-critical-findings" "$critical_count critical quality issues found" "critical"`
+Run using the Bash tool with description "Logging critical quality block...": `aether error-flag-pattern "auditor-critical-findings" "$critical_count critical quality issues found" "critical"`
 **CRITICAL:** Do NOT proceed to Step 1.10. Stop here.
 
 - **Else if `overall_score < 60`:**
@@ -500,7 +500,7 @@ Code quality score below threshold: {overall_score}/100 (threshold: 60)
 
 The phase will NOT advance with quality score below 60.
 ```
-Run using the Bash tool with description "Logging quality score block...": `bash .aether/aether-utils.sh error-flag-pattern "auditor-quality-score" "Score $overall_score below threshold 60" "critical"`
+Run using the Bash tool with description "Logging quality score block...": `aether error-flag-pattern "auditor-quality-score" "Score $overall_score below threshold 60" "critical"`
 **CRITICAL:** Do NOT proceed to Step 1.10. Stop here.
 
 - **Else if `findings.high > 0`:**
@@ -513,7 +513,7 @@ Run using the Bash tool with description "Logging quality score block...": `bash
 Quality warnings logged to midden for later review.
 Proceeding with caution...
 ```
-Run using the Bash tool with description "Logging high-quality warnings...": `bash .aether/aether-utils.sh midden-write "quality" "High severity issues: $high_count (score: $overall_score)" "auditor"`
+Run using the Bash tool with description "Logging high-quality warnings...": `aether midden-write "quality" "High severity issues: $high_count (score: $overall_score)" "auditor"`
 Continue to Step 1.10.
 
 - **If clean (score >= 60, no critical):**
@@ -556,7 +556,7 @@ The phase will NOT advance with fabricated metrics.
 
 **CRITICAL:** Do NOT proceed. Log the violation:
 ```bash
-bash .aether/aether-utils.sh error-flag-pattern "fabricated-tdd" "Prime Worker reported TDD metrics without creating test files" "critical"
+aether error-flag-pattern "fabricated-tdd" "Prime Worker reported TDD metrics without creating test files" "critical"
 ```
 
 **If tests_added == 0 or test files exist matching claims:**
@@ -602,7 +602,7 @@ Please describe the issues so they can be addressed:
 
 Use AskUserQuestion to get issue details. Log to errors.records:
 ```bash
-bash .aether/aether-utils.sh error-add "runtime" "critical" "{user_description}" {phase}
+aether error-add "runtime" "critical" "{user_description}" {phase}
 ```
 
 Do NOT proceed to Step 2.
@@ -637,10 +637,10 @@ Continue to Step 1.12.
 **The Iron Law:** No phase advancement with unresolved blockers.
 
 First, auto-resolve any flags eligible for resolution now that verification has passed:
-Run using the Bash tool with description "Auto-resolving flags...": `bash .aether/aether-utils.sh flag-auto-resolve "build_pass"`
+Run using the Bash tool with description "Auto-resolving flags...": `aether flag-auto-resolve "build_pass"`
 
 Then check for remaining blocking flags:
-Run using the Bash tool with description "Checking for blockers...": `bash .aether/aether-utils.sh flag-check-blockers {current_phase}`
+Run using the Bash tool with description "Checking for blockers...": `aether flag-check-blockers {current_phase}`
 
 Parse result for `blockers`, `issues`, and `notes` counts.
 

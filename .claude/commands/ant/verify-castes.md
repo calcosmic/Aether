@@ -62,7 +62,7 @@ Caste slots come from agent frontmatter (`model:` field).
 ## Step 2: Check System Status
 
 
-Run using the Bash tool with description "Checking colony version...": `bash .aether/aether-utils.sh version-check-cached 2>/dev/null || echo "Utils available"`
+Run using the Bash tool with description "Checking colony version...": `aether version-check-cached 2>/dev/null || echo "Utils available"`
 
 
 
@@ -122,7 +122,7 @@ Generate the state-based Next Up block by running using the Bash tool with descr
 state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
 current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
 total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
-bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
+aether print-next-up
 ```
 
 

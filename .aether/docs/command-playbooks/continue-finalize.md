@@ -20,7 +20,7 @@ if [[ -f "$obs_file" ]]; then
       colony=$(echo "$encoded" | base64 -d | jq -r '.colonies[0] // "unknown"')
       [[ -z "$content" ]] && continue
 
-      result=$(bash .aether/aether-utils.sh learning-promote-auto "$wisdom_type" "$content" "$colony" "learning" 2>/dev/null || echo '{}')
+      result=$(aether learning-promote-auto "$wisdom_type" "$content" "$colony" "learning" 2>/dev/null || echo '{}')
       was_promoted=$(echo "$result" | jq -r '.result.promoted // false' 2>/dev/null || echo "false")
       if [[ "$was_promoted" == "true" ]]; then
         promoted_count=$((promoted_count + 1))
@@ -63,7 +63,7 @@ learnings_count=$(echo "$learnings_json" | jq 'length' 2>/dev/null || echo "0")
 if [[ "$learnings_count" -gt 0 ]] && [[ "$learnings_json" != "[]" ]]; then
     prev_phase=$((current_phase - 1))
     queen_error="false"
-    result=$(bash .aether/aether-utils.sh queen-write-learnings \
+    result=$(aether queen-write-learnings \
         "$prev_phase" "$phase_name" "$learnings_json" 2>/dev/null || echo '{"ok":false}')
     [[ "$result" == '{"ok":false}' ]] && queen_error="true"
 
@@ -170,7 +170,7 @@ If no `CHANGELOG.md` exists, `changelog-append` creates one automatically.
 **Step 2.3.1: Collect plan data**
 
 ```bash
-bash .aether/aether-utils.sh changelog-collect-plan-data "{phase_identifier}" "{plan_number}"
+aether changelog-collect-plan-data "{phase_identifier}" "{plan_number}"
 ```
 
 Parse the returned JSON to extract `files`, `decisions`, `worked`, and `requirements` arrays.
@@ -186,7 +186,7 @@ If the command fails (e.g., no plan file found), fall back to collecting data ma
 **Step 2.3.2: Append changelog entry**
 
 ```bash
-bash .aether/aether-utils.sh changelog-append \
+aether changelog-append \
   "$(date +%Y-%m-%d)" \
   "{phase_identifier}" \
   "{plan_number}" \
@@ -227,7 +227,7 @@ Store this as `ai_description` for the commit message.
 #### Step 2.4.2: Generate Enhanced Commit Message
 
 ```bash
-bash .aether/aether-utils.sh generate-commit-message "contextual" {phase_id} "{phase_name}" "{ai_description}" {plan_number}
+aether generate-commit-message "contextual" {phase_id} "{phase_name}" "{ai_description}" {plan_number}
 ```
 
 Parse the returned JSON to extract:
@@ -342,18 +342,18 @@ After phase advancement is complete, update `.aether/CONTEXT.md`:
 
 **Log the activity:**
 ```bash
-bash .aether/aether-utils.sh context-update activity "continue" "Phase {prev_id} completed, advanced to {next_id}" "—"
+aether context-update activity "continue" "Phase {prev_id} completed, advanced to {next_id}" "—"
 ```
 
 **Update the phase:**
 ```bash
-bash .aether/aether-utils.sh context-update update-phase {next_id} "{next_phase_name}" "YES" "Phase advanced, ready to build"
+aether context-update update-phase {next_id} "{next_phase_name}" "YES" "Phase advanced, ready to build"
 ```
 
 **Log any decisions from this session:**
 If any architectural decisions were made during verification, also run:
 ```bash
-bash .aether/aether-utils.sh context-update decision "{decision_description}" "{rationale}" "Queen"
+aether context-update decision "{decision_description}" "{rationale}" "Queen"
 ```
 
 ### Step 2.7: Project Completion
@@ -441,10 +441,10 @@ Output:
 Update the session tracking file to enable `/ant:resume` after context clear:
 
 ```bash
-bash .aether/aether-utils.sh session-update "/ant:continue" "/ant:build {next_id}" "Phase {prev_id} completed, advanced to Phase {next_id}"
+aether session-update "/ant:continue" "/ant:build {next_id}" "Phase {prev_id} completed, advanced to Phase {next_id}"
 ```
 
-Run using the Bash tool with description "Saving session state...": `bash .aether/aether-utils.sh session-update "/ant:continue" "/ant:build {next_id}" "Phase {prev_id} completed, advanced to Phase {next_id}"`
+Run using the Bash tool with description "Saving session state...": `aether session-update "/ant:continue" "/ant:build {next_id}" "Phase {prev_id} completed, advanced to Phase {next_id}"`
 
 ### Step 4.5: Housekeeping (Non-Blocking)
 
@@ -452,10 +452,10 @@ Prune stale backups and temp files. This runs automatically — failures never a
 
 Run using the Bash tool with description "Pruning stale backups...":
 ```bash
-bash .aether/aether-utils.sh backup-prune-global 2>/dev/null || true
+aether backup-prune-global 2>/dev/null || true
 ```
 
 Run using the Bash tool with description "Cleaning temp files...":
 ```bash
-bash .aether/aether-utils.sh temp-clean 2>/dev/null || true
+aether temp-clean 2>/dev/null || true
 ```

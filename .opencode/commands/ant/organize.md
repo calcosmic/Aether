@@ -36,7 +36,7 @@ From COLONY_STATE.json, extract:
 
 Run using the Bash tool:
 ```bash
-bash .aether/aether-utils.sh pheromone-read
+aether pheromone-read
 ```
 
 Use `.result.signals` as the active signal list (already decay-filtered by runtime logic).
@@ -213,7 +213,7 @@ Next:
 
 Use the Bash tool to run:
 ```
-bash .aether/aether-utils.sh activity-log "COMPLETE" "queen" "Hygiene report generated"
+aether activity-log "COMPLETE" "queen" "Hygiene report generated"
 ```
 
 Display persistence confirmation:

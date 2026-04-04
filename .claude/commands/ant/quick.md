@@ -33,7 +33,7 @@ Stop here.
 
 Run using the Bash tool with description "Naming scout...":
 ```bash
-bash .aether/aether-utils.sh generate-ant-name "scout"
+aether generate-ant-name --caste "scout"
 ```
 
 Capture the output as `scout_name`.
@@ -48,7 +48,7 @@ Spawning {scout_name} — {query truncated to 50 chars}
 
 Run using the Bash tool with description "Dispatching scout...":
 ```bash
-bash .aether/aether-utils.sh spawn-log "Queen" "scout" "{scout_name}" "Quick query: {query}"
+aether spawn-log --name "Queen" --caste "scout" --id "{scout_name}" --description "Quick query: {query}"
 ```
 
 
@@ -82,14 +82,14 @@ Display the Scout's answer directly to the user.
 
 Run using the Bash tool with description "Recording scout completion...":
 ```bash
-bash .aether/aether-utils.sh spawn-complete "{scout_name}" "completed" "Quick query answered"
+aether spawn-complete --id "{scout_name}" --status "completed" --summary "Quick query answered"
 ```
 
 ### Step 5: Update Session (lightweight)
 
 Run using the Bash tool with description "Updating session...":
 ```bash
-bash .aether/aether-utils.sh session-update "/ant:quick" "" "Quick query: {query truncated to 60 chars}" 2>/dev/null || true
+aether session-update --command "/ant:quick" --worker "" --summary "Quick query: {query truncated to 60 chars}" 2>/dev/null || true
 ```
 
 **NOTE:** This command does NOT:

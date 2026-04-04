@@ -32,7 +32,7 @@ body: |
   {{#claude}}
   {{TOOL_PREFIX "Setting colony redirect..."}}
   ```bash
-  bash .aether/aether-utils.sh pheromone-write REDIRECT "<content>" --strength 0.9 --reason "User warned colony away from pattern" --ttl <ttl>
+  aether pheromone-write --type REDIRECT --content "<content>" --strength 0.9 --reason "User warned colony away from pattern" --ttl <ttl>
   ```
 
   Parse the returned JSON for the signal ID.
@@ -41,14 +41,14 @@ body: |
 
   {{TOOL_PREFIX "Updating context document..."}}
   ```bash
-  bash .aether/aether-utils.sh context-update constraint redirect "<content>" "user" 2>/dev/null || true
+  aether context-update --section constraint --key redirect --content "<content>" "user" 2>/dev/null || true
   ```
 
   ### Step 3: Get Active Counts
 
   {{TOOL_PREFIX "Counting active signals..."}}
   ```bash
-  bash .aether/aether-utils.sh pheromone-count
+  aether pheromone-count
   ```
 
   ### Step 4: Confirm
@@ -86,8 +86,8 @@ body: |
 
   **Write pheromone signal and update context:**
   ```bash
-  bash .aether/aether-utils.sh pheromone-write REDIRECT "$normalized_args" --strength 0.9 --reason "User warned colony away from pattern" 2>/dev/null || true
-  bash .aether/aether-utils.sh context-update constraint redirect "$normalized_args" "user" 2>/dev/null || true
+  aether pheromone-write --type REDIRECT --content "$normalized_args" --strength 0.9 --reason "User warned colony away from pattern" 2>/dev/null || true
+  aether context-update --section constraint --key redirect --content "$normalized_args" "user" 2>/dev/null || true
   ```
 
   ### Step 3: Confirm
@@ -118,6 +118,6 @@ body: |
   state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
   current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
   total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
-  bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
+  aether print-next-up
   ```
   {{/claude}}

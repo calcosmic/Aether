@@ -33,7 +33,7 @@ From COLONY_STATE.json, extract:
 
 Run using the Bash tool with description "Loading active pheromones...":
 ```bash
-bash .aether/aether-utils.sh pheromone-read
+aether pheromone-read
 ```
 
 Use `.result.signals` as the active signal list (already decay-filtered by runtime logic).
@@ -209,7 +209,7 @@ Next:
 
 Use the Bash tool with description "Logging hygiene activity..." to run:
 ```
-bash .aether/aether-utils.sh activity-log "COMPLETE" "queen" "Hygiene report generated"
+aether activity-log "COMPLETE" "queen" "Hygiene report generated"
 ```
 
 Display persistence confirmation:
@@ -228,5 +228,5 @@ Generate the state-based Next Up block by running using the Bash tool with descr
 state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
 current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
 total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
-bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
+aether print-next-up
 ```

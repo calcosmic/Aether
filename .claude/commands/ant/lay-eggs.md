@@ -142,7 +142,7 @@ echo "System files copied."
 
 Run using the Bash tool with description "Initializing QUEEN.md...":
 ```bash
-bash .aether/aether-utils.sh queen-init
+aether queen-init
 ```
 
 
@@ -160,7 +160,7 @@ Run using the Bash tool with description "Registering repo..." (ignore errors):
 
 
 ```bash
-bash .aether/aether-utils.sh registry-add "$(pwd)" "$(jq -r '.version // "unknown"' ~/.aether/version.json 2>/dev/null || echo 'unknown')" 2>/dev/null || true
+aether registry-add --path "$(pwd)" "$(jq -r '.version // "unknown"' ~/.aether/version.json 2>/dev/null || echo 'unknown')" 2>/dev/null || true
 ```
 
 ### Step 7: Verify Setup

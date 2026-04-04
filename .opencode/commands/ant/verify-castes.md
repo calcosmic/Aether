@@ -69,7 +69,7 @@ Caste slots come from agent frontmatter (`model:` field).
 
 
 
-Run using Bash tool: `bash .aether/aether-utils.sh version-check 2>/dev/null || echo "Utils available"`
+Run using Bash tool: `aether version-check-cached 2>/dev/null || echo "Utils available"`
 
 
 Check LiteLLM proxy status:

@@ -1669,6 +1669,23 @@ class UpdateTransaction {
                           (this.syncResult?.agents?.removed?.length || 0) +
                           (this.syncResult?.rules?.removed?.length || 0);
 
+      // Restore stashed files on success
+      let stashRestored = false;
+      let stashConflict = false;
+      if (!dryRun && this.checkpoint?.stashRef) {
+        try {
+          execSync(`git stash pop ${this.checkpoint.stashRef}`, {
+            cwd: this.repoPath,
+            stdio: 'pipe',
+          });
+          stashRestored = true;
+          this.log(`  Restored stash ${this.checkpoint.stashRef}`);
+        } catch (err) {
+          stashConflict = true;
+          this.log(`  Warning: stash pop had conflicts — manual merge needed`);
+        }
+      }
+
       return {
         success: true,
         status: dryRun ? 'dry-run' : 'updated',
@@ -1677,6 +1694,8 @@ class UpdateTransaction {
         files_removed: filesRemoved,
         sync_result: this.syncResult,
         cleanup_result: this.cleanupResult || { cleaned: [], failed: [] },
+        stash_restored: stashRestored,
+        stash_conflict: stashConflict,
       };
 
     } catch (error) {

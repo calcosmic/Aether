@@ -499,59 +499,81 @@ func (g *Graph) ShortestPath(from, to string) ([]string, error) {
 // Reachability
 // ============================================================================
 
-// ReachResult holds the output of a reachability search.
-type ReachResult struct {
-	Reachable    []string `json:"reachable"`
-	Count        int      `json:"count"`
-	HopsSearched int      `json:"hops_searched"`
+// ReachNode represents a node reachable from a start node via BFS.
+type ReachNode struct {
+	ID   string   `json:"id"`
+	Hop  int      `json:"hop"`
+	Path []string `json:"path"`
 }
 
-// Reach performs a BFS reachability search from the given node, following
-// edges up to maxHops hops and only traversing edges with weight >= minWeight.
-func (g *Graph) Reach(startNode string, maxHops int, minWeight float64) (*ReachResult, error) {
+// ReachResult holds the result of a reachability query.
+type ReachResult struct {
+	Reachable     []ReachNode `json:"reachable"`
+	Count         int         `json:"count"`
+	HopsSearched int         `json:"hops_searched"`
+}
+
+// Reach returns all nodes reachable from startID within maxHops using BFS.
+// maxHops is clamped to 3 (matching shell MAX_HOPS=3).
+// minWeight excludes edges with weight below the threshold (0 means no filter).
+// The start node is NOT included in results (matching shell behavior).
+func (g *Graph) Reach(startID string, maxHops int, minWeight float64) (*ReachResult, error) {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
-	if _, ok := g.nodes[startNode]; !ok {
-		return nil, fmt.Errorf("node %q not found", startNode)
+	if _, ok := g.nodes[startID]; !ok {
+		return nil, fmt.Errorf("graph: node %q not found", startID)
 	}
 
-	visited := map[string]bool{startNode: true}
-	queue := []struct {
-		node string
-		hop  int
-	}{{startNode, 0}}
+	if maxHops > 3 {
+		maxHops = 3
+	}
 
-	for len(queue) > 0 {
-		curr := queue[0]
-		queue = queue[1:]
-		if curr.hop >= maxHops {
-			continue
-		}
-		for _, e := range g.outEdges[curr.node] {
-			if !visited[e.Target] && e.Weight >= minWeight {
-				visited[e.Target] = true
-				queue = append(queue, struct {
-					node string
-					hop  int
-				}{e.Target, curr.hop + 1})
+	visited := map[string]bool{startID: true}
+	var reachable []ReachNode
+
+	type frontierNode struct {
+		id   string
+		path []string
+	}
+	frontier := []frontierNode{{id: startID, path: []string{startID}}}
+
+	for hop := 1; hop <= maxHops; hop++ {
+		var nextFrontier []frontierNode
+		for _, f := range frontier {
+			for _, edge := range g.outEdges[f.id] {
+				if minWeight > 0 && edge.Weight < minWeight {
+					continue
+				}
+				if visited[edge.Target] {
+					continue
+				}
+				visited[edge.Target] = true
+
+				newPath := make([]string, len(f.path)+1)
+				copy(newPath, f.path)
+				newPath[len(f.path)] = edge.Target
+
+				reachable = append(reachable, ReachNode{
+					ID:   edge.Target,
+					Hop:  hop,
+					Path: newPath,
+				})
+				nextFrontier = append(nextFrontier, frontierNode{id: edge.Target, path: newPath})
 			}
 		}
-	}
-
-	reachable := make([]string, 0, len(visited)-1)
-	for id := range visited {
-		if id != startNode {
-			reachable = append(reachable, id)
+		if len(nextFrontier) == 0 {
+			break
 		}
+		frontier = nextFrontier
 	}
-	sort.Strings(reachable)
 
-	return &ReachResult{
-		Reachable:    reachable,
-		Count:        len(reachable),
-		HopsSearched: maxHops,
-	}, nil
+	hopsSearched := maxHops
+	if len(reachable) == 0 {
+		hopsSearched = 0
+	}
+
+	return &ReachResult{Reachable: reachable, Count: len(reachable), HopsSearched: hopsSearched}, nil
 }
 
 // ============================================================================

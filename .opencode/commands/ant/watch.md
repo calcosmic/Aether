@@ -183,21 +183,21 @@ Attaching now...
 Workers and commands update watch files as they work:
 
 ### Activity Log
-Workers write via: `bash .aether/aether-utils.sh activity-log "ACTION" "caste" "description"`
+Workers write via: `aether activity-log "ACTION" "caste" "description"`
 
 For named ants (recommended):
 ```bash
 # Generate a name first
-ant_name=$(bash .aether/aether-utils.sh generate-ant-name "builder" | jq -r '.result')
+ant_name=$(aether generate-ant-name --caste "builder" | jq -r '.result')
 # Log with ant name
-bash .aether/aether-utils.sh activity-log "CREATED" "$ant_name (Builder)" "Implemented auth module"
+aether activity-log "CREATED" "$ant_name (Builder)" "Implemented auth module"
 ```
 
 ### Spawn Tracking
 Log spawns for tree visualization:
 ```bash
-bash .aether/aether-utils.sh spawn-log "Prime" "builder" "Hammer-42" "implementing auth"
-bash .aether/aether-utils.sh spawn-complete "Hammer-42" "completed" "auth module done"
+aether spawn-log --name "Prime" --caste "builder" --id "Hammer-42" --description "implementing auth"
+aether spawn-complete --id "Hammer-42" --status "completed" --summary "auth module done"
 ```
 
 ### Status File
@@ -208,11 +208,11 @@ Commands update `.aether/data/watch-status.txt` with current state:
 - Last Activity: most recent log entry
 
 ### Progress File
-Update via: `bash .aether/aether-utils.sh update-progress <percent> "<message>" <phase> <total>`
+Update via: `aether update-progress <percent> "<message>" <phase> <total>`
 
 Example:
 ```bash
-bash .aether/aether-utils.sh update-progress 45 "Building auth module..." 2 5
+aether update-progress 45 "Building auth module..." 2 5
 ```
 
 ---

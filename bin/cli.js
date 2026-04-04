@@ -1276,6 +1276,8 @@ async function updateRepo(repoPath, sourceVersion, opts) {
       removed: systemRemoved + commandsRemoved + agentsRemoved + rulesRemoved + agentsClaudeRemoved,
       removedFiles: allRemovedFiles,
       stashCreated: !!transaction.checkpoint?.stashRef,
+      stashRestored: result.stash_restored || false,
+      stashConflict: result.stash_conflict || false,
       checkpoint_id: result.checkpoint_id,
       cleanup: cleanupResult,
     };
@@ -1535,7 +1537,13 @@ program
               log(`    Distribution chain: ${c.success('\u2713')} clean`);
             }
             if (result.stashCreated) {
-              log(`  Stash created. Recover with: cd ${repo.path} && git stash pop`);
+              if (result.stashRestored) {
+                log(`  Local changes restored automatically`);
+              } else if (result.stashConflict) {
+                log(`  ${c.warning('Stash restore had conflicts')} — resolve manually: cd ${repo.path} && git stash pop`);
+              } else {
+                log(`  Stash created. Recover with: cd ${repo.path} && git stash pop`);
+              }
             }
             updated++;
           } else {
@@ -1639,7 +1647,11 @@ program
         if (result.cleanup && result.cleanup.cleaned.length === 0 && result.cleanup.failed.length === 0) {
           console.log(`  Distribution chain: ${c.success('\u2713')} clean`);
         }
-        if (result.stashCreated) {
+        if (result.stashRestored) {
+          console.log(`  ${c.success('\u2713')} Local changes restored`);
+        } else if (result.stashConflict) {
+          console.log(`  ${c.warning('\u26A0')} Stash restore had conflicts — resolve manually: git stash pop`);
+        } else if (result.stashCreated) {
           console.log('  Git stash created. Recover with: git stash pop');
         }
         if (result.checkpoint_id) {

@@ -295,12 +295,12 @@ After outputting the JSON report, iterate through the chaos report scenarios. Fo
 
 ```bash
 # For each scenario where status == "finding" AND severity is "CRITICAL" or "HIGH":
-bash .aether/aether-utils.sh flag-add "blocker" "{scenario.title}" "{scenario.description}" "chaos-standalone" {current_phase_number}
+aether flag-add --severity "blocker" --title "{scenario.title}" --description "{scenario.description}" --source "chaos-standalone" --phase {current_phase_number}
 ```
 
 Log each flag creation by running using the Bash tool with description "Logging chaos flag...":
 ```bash
-bash .aether/aether-utils.sh activity-log "FLAG" "Chaos Ant" "Created blocker: {scenario.title}"
+aether activity-log "FLAG" "Chaos Ant" "Created blocker: {scenario.title}"
 ```
 
 The `{current_phase_number}` comes from the colony state loaded in Step 1 (`.aether/data/COLONY_STATE.json` field `current_phase`).
@@ -311,7 +311,7 @@ The `{current_phase_number}` comes from the colony state loaded in Step 1 (`.aet
 
 Run using the Bash tool with description "Logging chaos activity...":
 ```bash
-bash .aether/aether-utils.sh activity-log "CHAOS" "Chaos Ant" "Resilience test on {target}: {findings_count} finding(s) ({critical} critical, {high} high, {medium} medium, {low} low), {resilient_count} resilient"
+aether activity-log "CHAOS" "Chaos Ant" "Resilience test on {target}: {findings_count} finding(s) ({critical} critical, {high} high, {medium} medium, {low} low), {resilient_count} resilient"
 ```
 
 Generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":
@@ -319,7 +319,7 @@ Generate the state-based Next Up block by running using the Bash tool with descr
 state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
 current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
 total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
-bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
+aether print-next-up
 ```
 
 ## Investigation Guidelines

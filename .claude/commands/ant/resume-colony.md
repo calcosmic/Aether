@@ -17,13 +17,13 @@ Parse `$ARGUMENTS`:
 If `visual_mode` is true, run using the Bash tool with description "Initializing resume display...":
 ### Step 0.5: Version Check (Non-blocking)
 
-Run using the Bash tool with description "Checking colony version...": `bash .aether/aether-utils.sh version-check-cached 2>/dev/null || true`
+Run using the Bash tool with description "Checking colony version...": `aether version-check-cached 2>/dev/null || true`
 
 If the command succeeds and the JSON result contains a non-empty string, display it as a one-line notice. Proceed regardless of outcome.
 
 ### Step 1: Load State and Validate
 
-Run using the Bash tool with description "Restoring colony session...": `bash .aether/aether-utils.sh load-state`
+Run using the Bash tool with description "Restoring colony session...": `aether load-state`
 
 If successful:
 1. Parse state from result
@@ -38,7 +38,7 @@ Keep state loaded (don't unload yet) - we'll need it for the full display.
 
 Run using the Bash tool with description "Loading active pheromones...":
 ```bash
-bash .aether/aether-utils.sh pheromone-read
+aether pheromone-read
 ```
 
 Use `.result.signals` as the active signal list (already decay-filtered by runtime logic).
@@ -130,7 +130,7 @@ Use Write tool to update COLONY_STATE.json:
 
 Use Bash tool with description "Cleaning up handoff file..." to remove HANDOFF.md: `rm -f .aether/HANDOFF.md`
 
-Run using the Bash tool with description "Releasing colony lock...": `bash .aether/aether-utils.sh unload-state` to release lock.
+Run using the Bash tool with description "Releasing colony lock...": `aether unload-state` to release lock.
 
 ### Step 7: Next Up
 
@@ -139,7 +139,7 @@ Generate the state-based Next Up block by running using the Bash tool with descr
 state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
 current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
 total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
-bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
+aether print-next-up
 ```
 
 ---

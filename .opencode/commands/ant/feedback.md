@@ -70,8 +70,8 @@ Write COLONY_STATE.json.
 
 **Write pheromone signal and update context:**
 ```bash
-bash .aether/aether-utils.sh pheromone-write FEEDBACK "$normalized_args" --strength 0.7 --reason "User feedback guidance" 2>/dev/null || true
-bash .aether/aether-utils.sh context-update constraint feedback "$normalized_args" "user" 2>/dev/null || true
+aether pheromone-write --type FEEDBACK --content "$normalized_args" --strength 0.7 --reason "User feedback guidance" 2>/dev/null || true
+aether context-update --section constraint --key feedback --content "$normalized_args" "user" 2>/dev/null || true
 ```
 
 ### Step 3: Confirm

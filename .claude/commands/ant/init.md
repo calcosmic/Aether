@@ -89,7 +89,7 @@ Stop here. Do not proceed.
 
 Run using the Bash tool with description "Initializing QUEEN.md...":
 ```
-bash .aether/aether-utils.sh queen-init
+aether queen-init
 ```
 
 Parse the JSON result:
@@ -102,7 +102,7 @@ This step is non-blocking -- proceed regardless of outcome.
 
 Run the scan via Bash tool:
 ```bash
-scan_result=$(bash .aether/aether-utils.sh init-research 2>/dev/null)
+scan_result=$(aether init-research 2>/dev/null)
 scan_data=$(echo "$scan_result" | jq '.result')
 ```
 
@@ -273,14 +273,14 @@ Only reached after user approval. ALL file writes happen here.
 
 1. Write charter content via:
 ```bash
-bash .aether/aether-utils.sh charter-write --intent "{approved_intent}" --vision "{approved_vision}" --governance "{approved_governance}" --goals "{approved_goals}"
+aether charter-write --intent "{approved_intent}" --vision "{approved_vision}" --governance "{approved_governance}" --goals "{approved_goals}"
 ```
 
 2. Auto-apply approved pheromone suggestions (see pheromone auto-apply below).
 
 3. Update the goal field in COLONY_STATE.json in-place using the state API:
 ```bash
-bash .aether/aether-utils.sh state-write "$(jq --arg new_goal "{approved_intent}" '.goal = $new_goal' .aether/data/COLONY_STATE.json)"
+aether state-write "$(jq --arg new_goal "{approved_intent}" '.goal = $new_goal' .aether/data/COLONY_STATE.json)"
 ```
 
 4. **Verify the write** — read back and confirm goal is set:
@@ -298,7 +298,7 @@ if [[ "$verify_goal" == "null" || -z "$verify_goal" ]]; then
 fi
 ```
 
-5. Run `bash .aether/aether-utils.sh session-init "$(jq -r '.session_id' .aether/data/COLONY_STATE.json)" "{approved_intent}"`
+5. Run `aether session-init "$(jq -r '.session_id' .aether/data/COLONY_STATE.json)" "{approved_intent}"`
 
 6. Skip to Step 8 (display result). Do NOT write COLONY_STATE.json from template, do NOT write constraints.json, do NOT write pheromones.json.
 
@@ -356,12 +356,12 @@ for template in pheromones midden learning-observations; do
 done
 ```
 
-8. Run `bash .aether/aether-utils.sh context-update init "{approved_intent}"`
-9. Run `bash .aether/aether-utils.sh validate-state colony`
+8. Run `aether context-update init "{approved_intent}"`
+9. Run `aether validate-state colony`
 10. Register repo (silent on failure):
 ```bash
-domain_tags=$(bash .aether/aether-utils.sh domain-detect 2>/dev/null | jq -r '.result.tags // ""' || echo "")
-bash .aether/aether-utils.sh registry-add "$(pwd)" "$(jq -r '.version // "unknown"' ~/.aether/version.json 2>/dev/null || echo 'unknown')" --goal "{approved_intent}" --active true --tags "$domain_tags" 2>/dev/null || true
+domain_tags=$(aether domain-detect 2>/dev/null | jq -r '.result.tags // ""' || echo "")
+aether registry-add --path "$(pwd)" "$(jq -r '.version // "unknown"' ~/.aether/version.json 2>/dev/null || echo 'unknown')" --goal "{approved_intent}" --active true --tags "$domain_tags" 2>/dev/null || true
 cp ~/.aether/version.json .aether/version.json 2>/dev/null || true
 ```
 11. Seed QUEEN.md from hive (non-blocking):
@@ -371,10 +371,10 @@ domain_tags=$(jq -r --arg repo "$(pwd)" \
   "$HOME/.aether/registry.json" 2>/dev/null || echo "")
 seed_args="queen-seed-from-hive --limit 5"
 [[ -n "$domain_tags" ]] && seed_args="$seed_args --domain $domain_tags"
-seed_result=$(bash .aether/aether-utils.sh $seed_args 2>/dev/null || echo '{}')
+seed_result=$(aether $seed_args 2>/dev/null || echo '{}')
 seeded_count=$(echo "$seed_result" | jq -r '.result.seeded // 0' 2>/dev/null || echo "0")
 ```
-12. Run `bash .aether/aether-utils.sh session-init "{session_id}" "{approved_intent}"`
+12. Run `aether session-init "{session_id}" "{approved_intent}"`
 
 **Pheromone auto-apply (referenced by both re-init and fresh init paths above):**
 
@@ -382,7 +382,7 @@ If approved pheromone suggestions exist (the user kept them in the prompt and di
 
 For each approved pheromone suggestion, call:
 ```bash
-bash .aether/aether-utils.sh pheromone-write "{type}" '{content}' --source "system:init" --reason '{reason}' --ttl "30d" 2>/dev/null || true
+aether pheromone-write "{type}" '{content}' --source "system:init" --reason '{reason}' --ttl "30d" 2>/dev/null || true
 ```
 
 Implementation notes:
@@ -440,21 +440,21 @@ Import ALL available data types (per D-09 -- no cherry-picking):
 ```bash
 # Import pheromones (per D-09)
 if [[ -f "$latest_chamber/pheromones.xml" ]]; then
-  pher_import=$(bash .aether/aether-utils.sh pheromone-import-xml "$latest_chamber/pheromones.xml" "imported" 2>/dev/null || echo '{"ok":false}')
+  pher_import=$(aether pheromone-import-xml --input "$latest_chamber/pheromones.xml" --colony "imported" 2>/dev/null || echo '{"ok":false}')
   pher_imported=$(echo "$pher_import" | jq -r '.result.imported // 0' 2>/dev/null || echo "0")
   echo "Pheromones: ${pher_imported} signal(s) imported"
 fi
 
 # Import wisdom to queen-wisdom.json (per D-09)
 if [[ -f "$latest_chamber/queen-wisdom.xml" ]]; then
-  wis_import=$(bash .aether/aether-utils.sh wisdom-import-xml "$latest_chamber/queen-wisdom.xml" ".aether/data/queen-wisdom.json" 2>/dev/null || echo '{"ok":false}')
+  wis_import=$(aether wisdom-import-xml "$latest_chamber/queen-wisdom.xml" ".aether/data/queen-wisdom.json" 2>/dev/null || echo '{"ok":false}')
   wis_imported=$(echo "$wis_import" | jq -r '.result.imported // 0' 2>/dev/null || echo "0")
   echo "Wisdom: ${wis_imported} entries(s) imported to queen-wisdom.json"
 fi
 
 # Import registry lineage (per D-09)
 if [[ -f "$latest_chamber/colony-registry.xml" ]]; then
-  reg_import=$(bash .aether/aether-utils.sh registry-import-xml "$latest_chamber/colony-registry.xml" 2>/dev/null || echo '{"ok":false}')
+  reg_import=$(aether registry-import-xml "$latest_chamber/colony-registry.xml" 2>/dev/null || echo '{"ok":false}')
   reg_imported=$(echo "$reg_import" | jq -r '.result.imported // 0' 2>/dev/null || echo "0")
   echo "Registry: ${reg_imported} colon(ies) lineage imported"
 fi
@@ -474,7 +474,7 @@ Skip silently -- proceed directly to Step 8 without any mention of import (per D
 If `.aether/utils/clash-detect.sh` exists, run:
 
 ```bash
-bash .aether/aether-utils.sh clash-setup --install 2>/dev/null || true
+aether clash-setup --install 2>/dev/null || true
 ```
 
 This installs the PreToolUse hook that prevents conflicting edits across worktrees.

@@ -28,7 +28,7 @@ If `goal` is null, output `No colony initialized. Nothing to pause.` and stop.
 
 Run using the Bash tool:
 ```bash
-bash .aether/aether-utils.sh pheromone-read
+aether pheromone-read
 ```
 
 Use `.result.signals` as the active signal list (already decay-filtered by runtime logic).
@@ -109,7 +109,7 @@ If `last_commit_suggestion_phase` equals the current phase, skip this step silen
 
 3. **Generate the commit message:**
 ```bash
-bash .aether/aether-utils.sh generate-commit-message "pause" {current_phase} "{phase_name}"
+aether generate-commit-message --type "pause" --phase {current_phase} --subject "{phase_name}"
 ```
 Parse the returned JSON to extract `message` and `files_changed`.
 

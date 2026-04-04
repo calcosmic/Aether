@@ -74,7 +74,7 @@ Update COLONY_STATE.json:
 
    if [[ "$patterns_count" -eq 0 ]]; then
      # Builder skipped learning output -- fire deterministic fallback
-     fallback_result=$(bash .aether/aether-utils.sh learning-extract-fallback 2>/dev/null || echo '{"learnings":[],"count":0}')
+     fallback_result=$(aether learning-extract-fallback 2>/dev/null || echo '{"learnings":[],"count":0}')
      fallback_count=$(echo "$fallback_result" | jq '.result.count // 0')
    fi
 
@@ -92,7 +92,7 @@ Update COLONY_STATE.json:
 
    Run using the Bash tool with description "Recording learning observations...":
    ```bash
-   colony_name=$(bash .aether/aether-utils.sh colony-name 2>/dev/null | jq -r '.result.name // ""')
+   colony_name=$(aether colony-name 2>/dev/null | jq -r '.result.name // ""')
    [[ -z "$colony_name" ]] && colony_name="unknown"
 
    # Get learnings from the current phase
@@ -101,7 +101,7 @@ Update COLONY_STATE.json:
    if [[ -n "$current_phase_learnings" ]]; then
      echo "$current_phase_learnings" | jq -r '.learnings[]?.claim // empty' 2>/dev/null | while read -r claim; do
        if [[ -n "$claim" ]]; then
-         bash .aether/aether-utils.sh memory-capture "learning" "$claim" "pattern" "worker:continue" 2>/dev/null || true
+         aether memory-capture "learning" "$claim" "pattern" "worker:continue" 2>/dev/null || true
        fi
      done
      echo "Recorded observations for threshold tracking"
@@ -123,7 +123,7 @@ Update COLONY_STATE.json:
 
    Run using the Bash tool with description "Creating instinct from pattern...":
    ```bash
-   bash .aether/aether-utils.sh instinct-create \
+   aether instinct-create \
      --trigger "<when this situation arises>" \
      --action "<what worked or should be done>" \
      --confidence <0.7-0.9 based on evidence strength> \
@@ -147,7 +147,7 @@ Update COLONY_STATE.json:
 
    Run using the Bash tool with description "Checking midden for error patterns...":
    ```bash
-   midden_result=$(bash .aether/aether-utils.sh midden-recent-failures 10 2>/dev/null || echo '{"count":0,"failures":[]}')
+   midden_result=$(aether midden-recent-failures 10 2>/dev/null || echo '{"count":0,"failures":[]}')
    midden_count=$(echo "$midden_result" | jq '.count // 0')
    ```
 
@@ -155,7 +155,7 @@ Update COLONY_STATE.json:
 
    Run using the Bash tool with description "Creating instinct from error pattern...":
    ```bash
-   bash .aether/aether-utils.sh instinct-create \
+   aether instinct-create \
      --trigger "<when this error condition arises>" \
      --action "<how to avoid or handle this error>" \
      --confidence 0.8 \
@@ -173,7 +173,7 @@ Update COLONY_STATE.json:
 
    Run using the Bash tool with description "Creating instinct from success pattern...":
    ```bash
-   bash .aether/aether-utils.sh instinct-create \
+   aether instinct-create \
      --trigger "<when this type of task arises>" \
      --action "<the approach that worked well>" \
      --confidence 0.7 \  # Base value; increase if observation_count > 1 per formula
@@ -203,7 +203,7 @@ Update COLONY_STATE.json:
        domain=$(echo "$encoded" | base64 -d | jq -r '.domain // "workflow"')
 
        # queen-promote-instinct handles dedup internally (skips if already in QUEEN.md)
-       result=$(bash .aether/aether-utils.sh queen-promote-instinct \
+       result=$(aether queen-promote-instinct \
            "$trigger" "$action" "$confidence" "$domain" 2>/dev/null || echo '{"ok":false}')
 
        was_promoted=$(echo "$result" | jq -r '.result.promoted // false' 2>/dev/null || echo "false")
@@ -260,7 +260,7 @@ Update COLONY_STATE.json:
      [[ -n "$repo_domain_tags" ]] && promote_args+=(--domain "$repo_domain_tags")
 
      # Call hive-promote which orchestrates abstract + store
-     result=$(bash .aether/aether-utils.sh "${promote_args[@]}" 2>/dev/null || echo '{}')
+     result=$(aether "${promote_args[@]}" 2>/dev/null || echo '{}')
      was_promoted=$(echo "$result" | jq -r '.result.action // "skipped"' 2>/dev/null || echo "skipped")
 
      if [[ "$was_promoted" == "promoted" || "$was_promoted" == "merged" ]]; then
@@ -303,15 +303,15 @@ Write the updated state through targeted `state-mutate` calls. Each call acquire
 Run using the Bash tool with description "Advancing colony state...":
 ```bash
 # Mark current phase completed
-bash .aether/aether-utils.sh state-mutate --argjson pid "$current_phase" \
+aether state-mutate --argjson pid "$current_phase" \
   '.plan.phases |= map(if .id == $pid then .status = "completed" else . end)'
 
 # Append learning (if any — skip if no learnings were extracted in Step 2)
-# bash .aether/aether-utils.sh state-mutate --argjson learning "$learning_json" \
+# aether state-mutate --argjson learning "$learning_json" \
 #   '.memory.phase_learnings += [$learning]'
 
 # Advance to next phase
-bash .aether/aether-utils.sh state-mutate \
+aether state-mutate \
   --argjson pid "$current_phase" \
   --argjson next "$next_phase" \
   --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
@@ -321,12 +321,12 @@ bash .aether/aether-utils.sh state-mutate \
 Run using the Bash tool with description "Enforcing memory caps...":
 ```bash
 # Cap enforcement — keep arrays bounded
-bash .aether/aether-utils.sh state-mutate \
+aether state-mutate \
   '.memory.phase_learnings = (.memory.phase_learnings[-20:]) | .memory.decisions = (.memory.decisions[-30:]) | .memory.instincts = (.memory.instincts | sort_by(.confidence) | .[-30:]) | .events = (.events[-100:])'
 ```
 
 Validate the state file:
-Run using the Bash tool with description "Validating colony state...": `bash .aether/aether-utils.sh validate-state colony`
+Run using the Bash tool with description "Validating colony state...": `aether validate-state colony`
 
 ### Step 2.0.4: Worktree Merge-Back (NON-BLOCKING)
 
@@ -345,7 +345,7 @@ merged_count=0
 
 for branch in $branches; do
     [[ -z "$branch" ]] && continue
-    result=$(bash "$AETHER_UTILS" worktree-merge --branch "$branch" 2>/dev/null || echo '{"ok":false}')
+    result=$(aether worktree-merge --branch "$branch" 2>/dev/null || echo '{"ok":false}')
     ok=$(echo "$result" | jq -r '.ok // false')
     if [[ "$ok" == "true" ]]; then
         last_merged_branch="$branch"
@@ -370,7 +370,7 @@ Run using the Bash tool with description "Checking for pheromone merge-back file
 # Check if a branch pheromone export was merged into main
 export_file=".aether/exchange/pheromone-branch-export.json"
 if [[ -f "$export_file" ]]; then
-  merge_result=$(bash .aether/aether-utils.sh pheromone-merge-back --export-file "$export_file" 2>/dev/null || echo '{"ok":false}')
+  merge_result=$(aether pheromone-merge-back --export-file "$export_file" 2>/dev/null || echo '{"ok":false}')
   merge_ok=$(echo "$merge_result" | jq -r '.ok // false' 2>/dev/null)
   if [[ "$merge_ok" == "true" ]]; then
     new_count=$(echo "$merge_result" | jq -r '.result.new_signals_written // 0' 2>/dev/null)
@@ -403,7 +403,7 @@ last_merge_branch="${last_merged_branch:-}"
 last_merge_sha="${last_merge_sha:-}"
 
 if [[ -n "$last_merge_branch" && -n "$last_merge_sha" ]]; then
-  collect_result=$(bash .aether/aether-utils.sh midden-collect \
+  collect_result=$(aether midden-collect \
     --branch "$last_merge_branch" --merge-sha "$last_merge_sha" \
     2>/dev/null || echo '{"ok":false}')
   collect_ok=$(echo "$collect_result" | jq -r '.ok // false' 2>/dev/null)
@@ -427,7 +427,7 @@ After midden collection (Step 2.0.6), run cross-PR analysis to detect systemic f
 
 Run using the Bash tool with description "Running cross-PR midden analysis...":
 ```bash
-analysis_result=$(bash .aether/aether-utils.sh midden-cross-pr-analysis --window 14 \
+analysis_result=$(aether midden-cross-pr-analysis --window 14 \
   2>/dev/null || echo '{"ok":false}')
 analysis_ok=$(echo "$analysis_result" | jq -r '.ok // false' 2>/dev/null)
 if [[ "$analysis_ok" == "true" ]]; then
@@ -459,7 +459,7 @@ After learning extraction completes in Step 2, auto-emit a FEEDBACK signal summa
 phase_feedback="Phase $phase_id ($phase_name) completed. Key patterns: {brief summary of 1-3 learnings from Step 2}"
 # Fallback if no learnings: "Phase $phase_id ($phase_name) completed without notable patterns."
 
-bash .aether/aether-utils.sh pheromone-write FEEDBACK "$phase_feedback" \
+aether pheromone-write FEEDBACK "$phase_feedback" \
   --strength 0.6 \
   --source "worker:continue" \
   --reason "Auto-emitted on phase advance: captures what worked and what was learned" \
@@ -495,7 +495,7 @@ if [[ -n "$decisions" ]]; then
       [.signals[] | select(.active == true and (.source == "auto:decision" or .source == "system:decision") and (.content.text | contains($text)))] | length
     ' .aether/data/pheromones.json 2>/dev/null || echo "0")
     if [[ "$existing" == "0" ]]; then
-      bash .aether/aether-utils.sh pheromone-write FEEDBACK \
+      aether pheromone-write FEEDBACK \
         "[decision] $dec" \
         --strength 0.6 \
         --source "auto:decision" \
@@ -514,7 +514,7 @@ Strength is 0.6 (auto-emitted = lower than user-emitted). Source is `"auto:decis
 Query the actual failure store (`midden.json`) for recurring error categories. Categories with 3+ occurrences indicate persistent issues that should steer workers away from known failure modes.
 
 ```bash
-midden_result=$(bash .aether/aether-utils.sh midden-recent-failures 50 2>/dev/null || echo '{"count":0,"failures":[]}')
+midden_result=$(aether midden-recent-failures 50 2>/dev/null || echo '{"count":0,"failures":[]}')
 midden_count=$(echo "$midden_result" | jq '.count // 0')
 
 if [[ "$midden_count" -gt 0 ]]; then
@@ -541,7 +541,7 @@ if [[ "$midden_count" -gt 0 ]]; then
     ' .aether/data/pheromones.json 2>/dev/null || echo "0")
 
     if [[ "$existing" == "0" ]]; then
-      bash .aether/aether-utils.sh pheromone-write REDIRECT \
+      aether pheromone-write REDIRECT \
         "[error-pattern] Category \"$category\" recurring ($count occurrences)" \
         --strength 0.7 \
         --source "auto:error" \
@@ -550,7 +550,7 @@ if [[ "$midden_count" -gt 0 ]]; then
       emit_count=$((emit_count + 1))
 
       # Capture as resolution candidate for promotion tracking
-      bash .aether/aether-utils.sh memory-capture \
+      aether memory-capture \
         "resolution" \
         "Recurring error pattern: $category ($count occurrences)" \
         "pattern" \
@@ -597,7 +597,7 @@ for encoded in $recurring_criteria; do
   ' .aether/data/pheromones.json 2>/dev/null || echo "0")
 
   if [[ "$existing" == "0" ]]; then
-    bash .aether/aether-utils.sh pheromone-write FEEDBACK \
+    aether pheromone-write FEEDBACK \
       "[success-pattern] \"$text\" recurs across phases $phases" \
       --strength 0.6 \
       --source "auto:success" \
@@ -613,7 +613,7 @@ Strength is 0.6 (auto-emitted). Source is `"auto:success"`. Cap: max 2 success c
 
 After auto-emission, expire all signals with `expires_at == "phase_end"`. The FEEDBACK from 2.1a uses a 30d TTL and is not affected by this step.
 
-Run using the Bash tool with description "Maintaining pheromone memory...": `bash .aether/aether-utils.sh pheromone-expire --phase-end-only 2>/dev/null && bash .aether/aether-utils.sh eternal-init 2>/dev/null`
+Run using the Bash tool with description "Maintaining pheromone memory...": `aether pheromone-expire --phase-end-only 2>/dev/null && aether eternal-init 2>/dev/null`
 
 This is idempotent — runs every time continue fires but only creates the directory/file once.
 
@@ -627,7 +627,7 @@ If `$ARGUMENTS` contains `--deferred`:
 ```bash
 if [[ "$ARGUMENTS" == *"--deferred"* ]] && [[ -f .aether/data/learning-deferred.json ]]; then
   echo "📦 Reviewing deferred proposals..."
-  bash .aether/aether-utils.sh learning-approve-proposals --deferred ${verbose:+--verbose}
+  aether learning-approve-proposals --deferred ${verbose:+--verbose}
 fi
 ```
 
@@ -635,7 +635,7 @@ fi
 
 1. **Check for proposals:**
    ```bash
-   proposals=$(bash .aether/aether-utils.sh learning-check-promotion 2>/dev/null || echo '{"proposals":[]}')
+   proposals=$(aether learning-check-promotion 2>/dev/null || echo '{"proposals":[]}')
    proposal_count=$(echo "$proposals" | jq '.proposals | length')
    ```
 
@@ -647,7 +647,7 @@ fi
    if [[ "$proposal_count" -gt 0 ]]; then
      verbose_flag=""
      [[ "$ARGUMENTS" == *"--verbose"* ]] && verbose_flag="--verbose"
-     bash .aether/aether-utils.sh learning-approve-proposals $verbose_flag
+     aether learning-approve-proposals $verbose_flag
    fi
    # If no proposals, silently skip without notice (per user decision)
    ```

@@ -109,14 +109,14 @@ Before dispatching surveyors, check for existing survey files and capture sessio
 SURVEY_START=$(date +%s)
 
 # Check for stale survey files
-stale_check=$(bash .aether/aether-utils.sh session-verify-fresh --command survey "" "$SURVEY_START")
+stale_check=$(aether session-verify-fresh --command survey "" "$SURVEY_START")
 has_stale=$(echo "$stale_check" | jq -r '.stale | length')
 has_fresh=$(echo "$stale_check" | jq -r '.fresh | length')
 
 if [[ "$has_stale" -gt 0 ]] || [[ "$has_fresh" -gt 0 ]]; then
   # Found existing survey files
   if [[ "$force_resurvey" == "true" ]]; then
-    bash .aether/aether-utils.sh session-clear --command survey
+    aether session-clear --command survey
     echo "Cleared existing survey files for fresh territory mapping"
   else
     echo "Found existing territory survey. Use --force-resurvey to remap."
@@ -127,15 +127,15 @@ fi
 
 Generate unique names for the 4 Surveyor Ants (each name must be captured separately):
 ```bash
- bash .aether/aether-utils.sh generate-ant-name "surveyor"
-bash .aether/aether-utils.sh generate-ant-name "surveyor"
-bash .aether/aether-utils.sh generate-ant-name "surveyor"
-bash .aether/aether-utils.sh generate-ant-name "surveyor"
+ aether generate-ant-name --caste "surveyor"
+aether generate-ant-name --caste "surveyor"
+aether generate-ant-name --caste "surveyor"
+aether generate-ant-name --caste "surveyor"
 ```
 
 Log the dispatches (consolidated - fire-and-forget logging):
 ```bash
-bash .aether/aether-utils.sh spawn-log "Queen" "surveyor" "{provisions_name}" "Mapping provisions and trails" && bash .aether/aether-utils.sh spawn-log "Queen" "surveyor" "{nest_name}" "Mapping nest structure" && bash .aether/aether-utils.sh spawn-log "Queen" "surveyor" "{disciplines_name}" "Mapping disciplines and sentinels" && bash .aether/aether-utils.sh spawn-log "Queen" "surveyor" "{pathogens_name}" "Identifying pathogens"
+aether spawn-log --name "Queen" --caste "surveyor" --id "{provisions_name}" --description "Mapping provisions and trails" && aether spawn-log --name "Queen" --caste "surveyor" --id "{nest_name}" --description "Mapping nest structure" && aether spawn-log --name "Queen" --caste "surveyor" --id "{disciplines_name}" --description "Mapping disciplines and sentinels" && aether spawn-log --name "Queen" --caste "surveyor" --id "{pathogens_name}" --description "Identifying pathogens"
 ```
 
 **Spawn 4 Surveyor Ants in parallel using the Task tool:**
@@ -179,7 +179,7 @@ If any documents are missing, note which ones in the output.
 
 Verify that all survey files were created after the session start:
 ```bash
-verify_result=$(bash .aether/aether-utils.sh session-verify-fresh --command survey "" "$SURVEY_START")
+verify_result=$(aether session-verify-fresh --command survey "" "$SURVEY_START")
 fresh_count=$(echo "$verify_result" | jq -r '.fresh | length')
 
 if [[ "$fresh_count" -lt 7 ]]; then
@@ -255,5 +255,5 @@ Generate the state-based Next Up block:
 state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
 current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
 total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
-bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
+aether print-next-up
 ```

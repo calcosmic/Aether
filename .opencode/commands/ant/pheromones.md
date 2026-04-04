@@ -118,7 +118,7 @@ Stop here.
 
 Run using the Bash tool with description "Displaying pheromones...":
 ```bash
-bash .aether/aether-utils.sh pheromone-display "{subcommand or 'all'}"
+aether pheromone-display "{subcommand or 'all'}"
 ```
 
 The output will be the formatted pheromone table.

@@ -20,13 +20,13 @@ Parse `$normalized_args`:
 
 ### Step 0.5: Version Check (Non-blocking)
 
-Run using the Bash tool: `bash .aether/aether-utils.sh version-check 2>/dev/null || true`
+Run using the Bash tool: `aether version-check-cached 2>/dev/null || true`
 
 If the command succeeds and the JSON result contains a non-empty string, display it as a one-line notice. Proceed regardless of outcome.
 
 ### Step 1: Load State and Validate
 
-Run using Bash tool: `bash .aether/aether-utils.sh load-state`
+Run using Bash tool: `aether load-state`
 
 If successful:
 1. Parse state from result
@@ -41,7 +41,7 @@ Keep state loaded (don't unload yet) - we'll need it for the full display.
 
 Run using the Bash tool:
 ```bash
-bash .aether/aether-utils.sh pheromone-read
+aether pheromone-read
 ```
 
 Use `.result.signals` as the active signal list (already decay-filtered by runtime logic).
@@ -133,7 +133,7 @@ Use Write tool to update COLONY_STATE.json:
 
 Use Bash tool to remove HANDOFF.md: `rm -f .aether/HANDOFF.md`
 
-Run: `bash .aether/aether-utils.sh unload-state` to release lock.
+Run: `aether unload-state` to release lock.
 
 ---
 

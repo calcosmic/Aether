@@ -225,7 +225,7 @@ body_claude: |
   Run using the Bash tool with description "Verifying skill frontmatter...":
 
   ```bash
-  bash .aether/aether-utils.sh skill-parse-frontmatter ~/.aether/skills/domain/{SKILL_NAME}/SKILL.md
+  aether skill-parse-frontmatter ~/.aether/skills/domain/{SKILL_NAME}/SKILL.md
   ```
 
   Check the output. If the result contains `"ok": true` (or the parsed JSON shows the correct name and type), the skill is valid. If parsing fails, fix the frontmatter and retry once.
@@ -235,7 +235,7 @@ body_claude: |
   Run using the Bash tool with description "Rebuilding skill cache...":
 
   ```bash
-  bash .aether/aether-utils.sh skill-cache-rebuild
+  aether skill-cache-rebuild
   ```
 
   **4d. Show the result**
@@ -330,8 +330,8 @@ body_opencode: |
   ### Step 4: Write and Verify
 
   1. Write to `~/.aether/skills/domain/{name}/SKILL.md`
-  2. Run: `bash .aether/aether-utils.sh skill-parse-frontmatter ~/.aether/skills/domain/{name}/SKILL.md`
-  3. Run: `bash .aether/aether-utils.sh skill-cache-rebuild`
+  2. Run: `aether skill-parse-frontmatter ~/.aether/skills/domain/{name}/SKILL.md`
+  3. Run: `aether skill-cache-rebuild`
   4. Show the generated skill to the user
   5. Ask if they want to adjust anything
 

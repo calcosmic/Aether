@@ -29,7 +29,7 @@ Parse `$normalized_args`:
 
 Run using the Bash tool with description "Exporting pheromone signals to XML...":
 ```bash
-bash .aether/aether-utils.sh pheromone-export-xml "<output_path>"
+aether pheromone-export-xml --output "<output_path>"
 ```
 
 Parse the returned JSON:

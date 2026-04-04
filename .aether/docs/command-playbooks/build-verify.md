@@ -25,14 +25,14 @@ REVIEW_CONTEXT=$(bash "$AETHER_UTILS" pr-context --compact 2>/dev/null) || true
 
 Spawn the Watcher using Task tool with `subagent_type="aether-watcher"`, include `description: "👁️ Watcher {Watcher-Name}: Independent verification"` (DO NOT use run_in_background - task blocks until complete):
 
-Run using the Bash tool with description "Dispatching watcher...": `bash .aether/aether-utils.sh spawn-log "Queen" "watcher" "{watcher_name}" "Independent verification"`
+Run using the Bash tool with description "Dispatching watcher...": `aether spawn-log "Queen" "watcher" "{watcher_name}" "Independent verification"`
 
 **Load skills for the Watcher role (NON-BLOCKING):**
 
 ```bash
-skill_match_result=$(bash .aether/aether-utils.sh skill-match "watcher" "{verification_context}" 2>/dev/null)
-skill_inject_result=$(bash .aether/aether-utils.sh skill-inject "$(echo $skill_match_result | jq -r '.result')" 2>/dev/null)
-skill_section=$(echo "$skill_inject_result" | jq -r '.result.skill_section // ""')
+skill_match_result=$(aether skill-match "watcher" "{verification_context}" 2>/dev/null)
+skill_inject_result=$(aether skill-inject "$(printf '%s\n' "$skill_match_result" | jq -r '.result')" 2>/dev/null)
+skill_section=$(printf '%s\n' "$skill_inject_result" | jq -r '.result.skill_section // ""')
 ```
 
 Display: `🧠 Skills loaded for watcher verification`
@@ -85,7 +85,7 @@ Return ONLY this JSON:
 **Task call returns results directly (no TaskOutput needed).**
 
 Validate watcher payload first:
-Run using the Bash tool with description "Validating watcher response...": `bash .aether/aether-utils.sh validate-worker-response watcher '{watcher_json}'`
+Run using the Bash tool with description "Validating watcher response...": `aether validate-worker-response watcher '{watcher_json}'`
 
 **Parse the Watcher's validated JSON response:** verification_passed, issues_found, quality_score, recommendation
 
@@ -138,8 +138,8 @@ For failed verification:
 
 3. **Generate Measurer name and dispatch:**
 
-   Run using the Bash tool with description "Naming measurer...": `bash .aether/aether-utils.sh generate-ant-name "measurer"` (store as `{measurer_name}`)
-   Run using the Bash tool with description "Dispatching measurer...": `bash .aether/aether-utils.sh spawn-log "Queen" "measurer" "{measurer_name}" "Performance baseline measurement"`
+   Run using the Bash tool with description "Naming measurer...": `aether generate-ant-name "measurer"` (store as `{measurer_name}`)
+   Run using the Bash tool with description "Dispatching measurer...": `aether spawn-log "Queen" "measurer" "{measurer_name}" "Performance baseline measurement"`
 
    Display:
    ```
@@ -184,7 +184,7 @@ For failed verification:
 
    **IMPORTANT:** You are strictly read-only. Do not modify any files.
 
-   Log activity: bash .aether/aether-utils.sh activity-log "BENCHMARKING" "{Measurer-Name}" "description"
+   Log activity: aether activity-log "BENCHMARKING" "{Measurer-Name}" "description"
 
    Return ONLY this JSON (no other text):
    {
@@ -216,7 +216,7 @@ For failed verification:
    Extract from response: `baselines_established`, `bottlenecks_identified`, `recommendations`, `tool_count`
 
    Log completion:
-   Run using the Bash tool with description "Recording measurer completion...": `bash .aether/aether-utils.sh spawn-complete "{measurer_name}" "completed" "Baselines established, bottlenecks identified"`
+   Run using the Bash tool with description "Recording measurer completion...": `aether spawn-complete "{measurer_name}" "completed" "Baselines established, bottlenecks identified"`
 
    **Display Measurer completion line:**
    ```
@@ -227,17 +227,17 @@ For failed verification:
 
    For each baseline established, run using the Bash tool with description "Logging baseline...":
    ```bash
-   bash .aether/aether-utils.sh midden-write "performance" "Baseline: {baseline.operation} ({baseline.complexity}) at {baseline.file}:{baseline.line}" "measurer"
+   aether midden-write "performance" "Baseline: {baseline.operation} ({baseline.complexity}) at {baseline.file}:{baseline.line}" "measurer"
    ```
 
    For each bottleneck identified, run using the Bash tool with description "Logging bottleneck...":
    ```bash
-   bash .aether/aether-utils.sh midden-write "performance" "Bottleneck: {bottleneck.description} ({bottleneck.severity}) at {bottleneck.location}" "measurer"
+   aether midden-write "performance" "Bottleneck: {bottleneck.description} ({bottleneck.severity}) at {bottleneck.location}" "measurer"
    ```
 
    For each recommendation, run using the Bash tool with description "Logging recommendation...":
    ```bash
-   bash .aether/aether-utils.sh midden-write "performance" "Recommendation (P{rec.priority}): {rec.change} - {rec.estimated_improvement}" "measurer"
+   aether midden-write "performance" "Recommendation (P{rec.priority}): {rec.change} - {rec.estimated_improvement}" "measurer"
    ```
 
 8. **Display summary and store for synthesis:**
@@ -265,10 +265,10 @@ For failed verification:
 **After the Watcher completes, spawn a Chaos Ant to probe the phase work for edge cases and boundary conditions.**
 
 Generate a chaos ant name and dispatch:
-Run using the Bash tool with description "Naming chaos ant...": `bash .aether/aether-utils.sh generate-ant-name "chaos"` (store as `{chaos_name}`)
-Run using the Bash tool with description "Loading existing flags...": `bash .aether/aether-utils.sh flag-list --phase {phase_number}`
+Run using the Bash tool with description "Naming chaos ant...": `aether generate-ant-name "chaos"` (store as `{chaos_name}`)
+Run using the Bash tool with description "Loading existing flags...": `aether flag-list --phase {phase_number}`
 Parse the result and extract unresolved flag titles into a list: `{existing_flag_titles}` (comma-separated titles from `.result.flags[].title`). If no flags exist, set `{existing_flag_titles}` to "None".
-Run using the Bash tool with description "Dispatching chaos ant...": `bash .aether/aether-utils.sh spawn-log "Queen" "chaos" "{chaos_name}" "Resilience testing of Phase {id} work"`
+Run using the Bash tool with description "Dispatching chaos ant...": `aether spawn-log "Queen" "chaos" "{chaos_name}" "Resilience testing of Phase {id} work"`
 
 **Announce the resilience testing wave:**
 ```
@@ -324,13 +324,13 @@ Return ONLY this JSON:
 **Flag critical/high findings:**
 
 If any findings have severity `"critical"` or `"high"`:
-Run using the Bash tool with description "Flagging {finding.title}...": `bash .aether/aether-utils.sh flag-add "blocker" "{finding.title}" "{finding.description}" "chaos-testing" {phase_number} && bash .aether/aether-utils.sh activity-log "FLAG" "Chaos" "Created blocker: {finding.title}"`
+Run using the Bash tool with description "Flagging {finding.title}...": `aether flag-add "blocker" "{finding.title}" "{finding.description}" "chaos-testing" {phase_number} && aether activity-log "FLAG" "Chaos" "Created blocker: {finding.title}"`
 
 **Log resilience finding to midden (MEM-02):**
 
 For each critical/high finding, run using the Bash tool with description "Logging resilience finding...":
 ```bash
-colony_name=$(bash .aether/aether-utils.sh colony-name 2>/dev/null | jq -r '.result.name // ""')
+colony_name=$(aether colony-name 2>/dev/null | jq -r '.result.name // ""')
 [[ -z "$colony_name" ]] && colony_name="unknown"
 phase_num=$(jq -r '.phase.number // "unknown"' .aether/data/COLONY_STATE.json 2>/dev/null || echo "unknown")
 
@@ -348,10 +348,10 @@ cat >> .aether/midden/build-failures.md << EOF
 EOF
 
 # Write to structured midden for threshold detection (MID-01)
-bash .aether/aether-utils.sh midden-write "resilience" "Chaos finding: ${finding.title} (${finding.severity})" "chaos" 2>/dev/null || true
+aether midden-write "resilience" "Chaos finding: ${finding.title} (${finding.severity})" "chaos" 2>/dev/null || true
 
 # Capture resilience failure in memory pipeline (observe + pheromone + auto-promotion)
-bash .aether/aether-utils.sh memory-capture \
+aether memory-capture \
   "failure" \
   "Resilience issue found: ${finding.title} (${finding.severity})" \
   "failure" \
@@ -359,7 +359,7 @@ bash .aether/aether-utils.sh memory-capture \
 ```
 
 Log chaos ant completion:
-Run using the Bash tool with description "Recording chaos completion...": `bash .aether/aether-utils.sh spawn-complete "{chaos_name}" "completed" "{summary}"`
+Run using the Bash tool with description "Recording chaos completion...": `aether spawn-complete "{chaos_name}" "completed" "{summary}"`
 
 **Success capture: chaos resilience (MEM-01):**
 
@@ -367,7 +367,7 @@ If `overall_resilience` is `"strong"`:
 
 Run using the Bash tool with description "Capturing chaos resilience success...":
 ```bash
-bash .aether/aether-utils.sh memory-capture \
+aether memory-capture \
   "success" \
   "Chaos resilience strong: ${summary}" \
   "pattern" \
@@ -381,13 +381,13 @@ This records the resilience success in learning-observations.json via the existi
 If the Watcher reported `verification_passed: false` or `recommendation: "fix_required"`:
 
 For each issue in `issues_found`:
-Run using the Bash tool with description "Flagging {issue_title}...": `bash .aether/aether-utils.sh flag-add "blocker" "{issue_title}" "{issue_description}" "verification" {phase_number} && bash .aether/aether-utils.sh activity-log "FLAG" "Watcher" "Created blocker: {issue_title}"`
+Run using the Bash tool with description "Flagging {issue_title}...": `aether flag-add "blocker" "{issue_title}" "{issue_description}" "verification" {phase_number} && aether activity-log "FLAG" "Watcher" "Created blocker: {issue_title}"`
 
 **Log verification failure to midden (MEM-02):**
 
 After flagging each issue, run using the Bash tool with description "Logging verification failure...":
 ```bash
-colony_name=$(bash .aether/aether-utils.sh colony-name 2>/dev/null | jq -r '.result.name // ""')
+colony_name=$(aether colony-name 2>/dev/null | jq -r '.result.name // ""')
 [[ -z "$colony_name" ]] && colony_name="unknown"
 phase_num=$(jq -r '.phase.number // "unknown"' .aether/data/COLONY_STATE.json 2>/dev/null || echo "unknown")
 
@@ -405,10 +405,10 @@ cat >> .aether/midden/test-failures.md << EOF
 EOF
 
 # Write to structured midden for threshold detection (MID-01)
-bash .aether/aether-utils.sh midden-write "verification" "Watcher verification failed: ${issue_title}" "watcher" 2>/dev/null || true
+aether midden-write "verification" "Watcher verification failed: ${issue_title}" "watcher" 2>/dev/null || true
 
 # Capture verification failure in memory pipeline (observe + pheromone + auto-promotion)
-bash .aether/aether-utils.sh memory-capture \
+aether memory-capture \
   "failure" \
   "Verification failed: ${issue_title} - ${issue_description}" \
   "failure" \
@@ -427,7 +427,7 @@ Run using the Bash tool with description "Collecting midden from merged branch..
 ```bash
 # Only runs if merge context is available
 if [[ -n "${last_merged_branch:-}" && -n "${last_merge_sha:-}" ]]; then
-  collect_result=$(bash .aether/aether-utils.sh midden-collect \
+  collect_result=$(aether midden-collect \
     --branch "$last_merged_branch" --merge-sha "$last_merge_sha" \
     2>/dev/null || echo '{"ok":false}')
   collect_ok=$(echo "$collect_result" | jq -r '.ok // false' 2>/dev/null)
@@ -440,7 +440,7 @@ if [[ -n "${last_merged_branch:-}" && -n "${last_merge_sha:-}" ]]; then
   fi
 
   # Run cross-PR analysis after collection (per D-05)
-  analysis_result=$(bash .aether/aether-utils.sh midden-cross-pr-analysis --window 14 \
+  analysis_result=$(aether midden-cross-pr-analysis --window 14 \
     2>/dev/null || echo '{"ok":false}')
   analysis_ok=$(echo "$analysis_result" | jq -r '.ok // false' 2>/dev/null)
   if [[ "$analysis_ok" == "true" ]]; then

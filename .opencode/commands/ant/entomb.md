@@ -194,7 +194,7 @@ version=$(jq -r '.version // "3.0"' .aether/data/COLONY_STATE.json)
 
 Create the chamber:
 ```bash
-bash .aether/aether-utils.sh chamber-create \
+aether chamber-create \
   ".aether/chambers/{chamber_name}" \
   ".aether/data/COLONY_STATE.json" \
   "{goal}" \
@@ -212,7 +212,7 @@ Export combined XML archive to the chamber. This is a HARD REQUIREMENT — entom
 
 ```bash
 chamber_dir=".aether/chambers/$chamber_name"
-xml_result=$(bash .aether/aether-utils.sh colony-archive-xml "$chamber_dir/colony-archive.xml" 2>&1)
+xml_result=$(aether colony-archive-xml --output "$chamber_dir/colony-archive.xml" 2>&1)
 xml_ok=$(echo "$xml_result" | jq -r '.ok // false' 2>/dev/null)
 
 if [[ "$xml_ok" != "true" ]]; then
@@ -248,7 +248,7 @@ done
 
 Run verification:
 ```bash
-bash .aether/aether-utils.sh chamber-verify ".aether/chambers/{chamber_name}"
+aether chamber-verify --path ".aether/chambers/{chamber_name}"
 ```
 
 If verification fails, display error and stop:

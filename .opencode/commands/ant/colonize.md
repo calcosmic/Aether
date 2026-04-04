@@ -77,18 +77,18 @@ mkdir -p .aether/data/survey
 
 Generate unique names for the 4 Surveyor Ants and log their dispatch:
 ```bash
-bash .aether/aether-utils.sh generate-ant-name "surveyor"
-bash .aether/aether-utils.sh generate-ant-name "surveyor"
-bash .aether/aether-utils.sh generate-ant-name "surveyor"
-bash .aether/aether-utils.sh generate-ant-name "surveyor"
+aether generate-ant-name --caste "surveyor"
+aether generate-ant-name --caste "surveyor"
+aether generate-ant-name --caste "surveyor"
+aether generate-ant-name --caste "surveyor"
 ```
 
 Log the dispatch:
 ```bash
-bash .aether/aether-utils.sh spawn-log "Queen" "surveyor" "{provisions_name}" "Mapping provisions and trails"
-bash .aether/aether-utils.sh spawn-log "Queen" "surveyor" "{nest_name}" "Mapping nest structure"
-bash .aether/aether-utils.sh spawn-log "Queen" "surveyor" "{disciplines_name}" "Mapping disciplines and sentinels"
-bash .aether/aether-utils.sh spawn-log "Queen" "surveyor" "{pathogens_name}" "Identifying pathogens"
+aether spawn-log --name "Queen" --caste "surveyor" --id "{provisions_name}" --description "Mapping provisions and trails"
+aether spawn-log --name "Queen" --caste "surveyor" --id "{nest_name}" --description "Mapping nest structure"
+aether spawn-log --name "Queen" --caste "surveyor" --id "{disciplines_name}" --description "Mapping disciplines and sentinels"
+aether spawn-log --name "Queen" --caste "surveyor" --id "{pathogens_name}" --description "Identifying pathogens"
 ```
 
 **Spawn 4 Surveyor Ants in parallel using the Task tool:**

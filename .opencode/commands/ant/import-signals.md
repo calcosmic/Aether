@@ -42,7 +42,7 @@ Verify the XML file exists. If not -> "File not found: <path>", stop.
 
 Run using the Bash tool with description "Importing pheromone signals from XML...":
 ```bash
-bash .aether/aether-utils.sh pheromone-import-xml "<xml_path>" "<colony_prefix>"
+aether pheromone-import-xml --input "<xml_path>" --colony "<colony_prefix>"
 ```
 
 Parse the returned JSON:

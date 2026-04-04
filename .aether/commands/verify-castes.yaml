@@ -65,10 +65,10 @@ body: |
   ## Step 2: Check System Status
 
   {{#claude}}
-  Run using the Bash tool with description "Checking colony version...": `bash .aether/aether-utils.sh version-check-cached 2>/dev/null || echo "Utils available"`
+  Run using the Bash tool with description "Checking colony version...": `aether version-check-cached 2>/dev/null || echo "Utils available"`
   {{/claude}}
   {{#opencode}}
-  Run using Bash tool: `bash .aether/aether-utils.sh version-check 2>/dev/null || echo "Utils available"`
+  Run using Bash tool: `aether version-check-cached 2>/dev/null || echo "Utils available"`
   {{/opencode}}
 
   Check LiteLLM proxy status:
@@ -138,7 +138,7 @@ body: |
   state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
   current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
   total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
-  bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
+  aether print-next-up
   ```
   {{/claude}}
 

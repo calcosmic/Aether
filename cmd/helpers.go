@@ -85,6 +85,9 @@ func mustGetFloat64(cmd *cobra.Command, flag string) float64 {
 
 // resolveHubPath returns the hub directory path (~/.aether/).
 func resolveHubPath() string {
+	if dir := os.Getenv("AETHER_HUB_DIR"); dir != "" {
+		return dir
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		outputError(1, fmt.Sprintf("cannot determine home directory: %v", err), nil)

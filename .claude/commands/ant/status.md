@@ -10,7 +10,7 @@ You are the **Queen**. Show colony status.
 
 ### Step 0: Version Check (Non-blocking)
 
-Run using the Bash tool with description "Checking colony version...": `bash .aether/aether-utils.sh version-check-cached 2>/dev/null || true`
+Run using the Bash tool with description "Checking colony version...": `aether version-check-cached 2>/dev/null || true`
 
 If the command succeeds and the JSON result contains a non-empty string, display it as a one-line notice. Proceed regardless of outcome.
 
@@ -52,7 +52,7 @@ If `version` field is missing, "1.0", or "2.0":
 
 ### Step 1.5: Load State and Show Resumption Context
 
-Run using the Bash tool with description "Loading colony state...": `bash .aether/aether-utils.sh load-state`
+Run using the Bash tool with description "Loading colony state...": `aether load-state`
 
 If successful and goal is not null:
 1. Extract current_phase from state
@@ -70,7 +70,7 @@ If successful and goal is not null:
    - Read .aether/HANDOFF.md content for additional context
    - Remove .aether/HANDOFF.md after displaying (cleanup)
 
-Run using the Bash tool with description "Releasing colony lock...": `bash .aether/aether-utils.sh unload-state` to release lock.
+Run using the Bash tool with description "Releasing colony lock...": `aether unload-state` to release lock.
 
 ### Step 2: Compute Summary
 
@@ -118,7 +118,7 @@ Format the timestamp as: YYYY-MM-DD HH:MM
 
 Run using the Bash tool with description "Reading colony depth...":
 ```bash
-depth_result=$(bash .aether/aether-utils.sh colony-depth get 2>/dev/null || echo '{"ok":true,"result":{"depth":"standard","source":"default"}}')
+depth_result=$(aether colony-depth get 2>/dev/null || echo '{"ok":true,"result":{"depth":"standard","source":"default"}}')
 colony_depth=$(echo "$depth_result" | jq -r '.result.depth // "standard"')
 depth_source=$(echo "$depth_result" | jq -r '.result.source // "default"')
 echo "colony_depth=$colony_depth"
@@ -152,7 +152,7 @@ Read `.aether/data/constraints.json` if exists:
 - Constraints count: `constraints.length`
 
 **Flags:**
-Run using the Bash tool with description "Checking for blockers...": `bash .aether/aether-utils.sh flag-check-blockers`
+Run using the Bash tool with description "Checking for blockers...": `aether flag-check-blockers`
 Extract:
 - Blockers count (critical, block advancement)
 - Issues count (high, warnings)
@@ -163,7 +163,7 @@ Count escalated flags by checking for blocker flags with source "escalation":
 
 Run using the Bash tool with description "Checking escalation state...":
 ```bash
-escalated_count=$(bash .aether/aether-utils.sh flag-list --type blocker 2>/dev/null | jq '[.result.flags[] | select(.source == "escalation")] | length' 2>/dev/null || echo "0")
+escalated_count=$(aether flag-list --type blocker --json 2>/dev/null | jq '[.result.flags[] | select(.source == "escalation")] | length' 2>/dev/null || echo "0")
 echo "escalated_count=$escalated_count"
 ```
 
@@ -182,7 +182,7 @@ From `memory.instincts`:
 
 ### Step 2.6: Detect Milestone
 
-Run using the Bash tool with description "Detecting colony milestone...": `bash .aether/aether-utils.sh milestone-detect`
+Run using the Bash tool with description "Detecting colony milestone...": `aether milestone-detect`
 
 Extract from JSON result:
 - `milestone`: Current milestone name
@@ -194,7 +194,7 @@ Extract from JSON result:
 
 Run using the Bash tool with description "Loading memory health metrics...":
 ```bash
-bash .aether/aether-utils.sh memory-metrics
+aether memory-metrics
 ```
 
 Extract from JSON result:
@@ -228,8 +228,8 @@ else
 fi
 
 # Generate progress bars
-phase_bar=$(bash .aether/aether-utils.sh generate-progress-bar "$current_phase" "$total_phases" 20)
-task_bar=$(bash .aether/aether-utils.sh generate-progress-bar "$tasks_completed" "$tasks_total" 20)
+phase_bar=$(aether generate-progress-bar "$current_phase" "$total_phases" 20)
+task_bar=$(aether generate-progress-bar "$tasks_completed" "$tasks_total" 20)
 
 echo "phase_bar=$phase_bar"
 echo "task_bar=$task_bar"
@@ -305,7 +305,7 @@ Use the `phase_bar` and `task_bar` values computed in Step 2.7 for the actual ba
 **Colony Vital Signs:**
 After the Memory Health table, run:
 ```bash
-bash .aether/aether-utils.sh colony-vital-signs
+aether colony-vital-signs
 ```
 
 Extract from JSON result:
@@ -349,7 +349,7 @@ If the command fails or returns no data, display:
 **Data Safety:**
 After the Colony Vital Signs panel, run:
 ```bash
-bash .aether/aether-utils.sh data-safety-stats
+aether data-safety-stats
 ```
 
 If the result contains non-zero counts, display:
@@ -367,7 +367,7 @@ If all counts are 0 or the subcommand returns no data, display:
 **Pheromone Summary:**
 After the Data Safety section, run:
 ```bash
-bash .aether/aether-utils.sh pheromone-count
+aether pheromone-count
 ```
 
 Display:
@@ -404,7 +404,7 @@ state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
 current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
 total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
 
-bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
+aether print-next-up
 ```
 
 This auto-generates state-based recommendations (IDLE → init, READY → build, EXECUTING → continue, PLANNING → plan).

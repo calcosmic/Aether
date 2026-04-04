@@ -36,7 +36,7 @@ Verify the XML file exists. If not -> "File not found: <path>", stop.
 
 Run using the Bash tool with description "Importing pheromone signals from XML...":
 ```bash
-bash .aether/aether-utils.sh pheromone-import-xml "<xml_path>" "<colony_prefix>"
+aether pheromone-import-xml --input "<xml_path>" --colony "<colony_prefix>"
 ```
 
 Parse the returned JSON:
@@ -66,6 +66,6 @@ Generate the state-based Next Up block by running using the Bash tool with descr
 state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
 current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
 total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
-bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
+aether print-next-up
 ```
 

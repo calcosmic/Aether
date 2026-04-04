@@ -4,7 +4,7 @@ Call `colony-prime --compact` to get unified worker context (wisdom + context ca
 
 Run using the Bash tool with description "Loading colony context...":
 ```bash
-prime_result=$(bash .aether/aether-utils.sh colony-prime --compact 2>/dev/null)
+prime_result=$(aether colony-prime --compact 2>/dev/null)
 ```
 
 **Parse the JSON response:**
@@ -22,7 +22,7 @@ Display after constraints:
 
 Then display the active pheromones table by running:
 ```bash
-bash .aether/aether-utils.sh pheromone-display
+aether pheromone-display
 ```
 
 This shows the user exactly what signals are guiding the colony:
@@ -38,7 +38,7 @@ Check if territory survey exists and load relevant documents:
 
 Run using the Bash tool with description "Loading territory survey...":
 ```bash
-bash .aether/aether-utils.sh survey-load "{phase_name}" 2>/dev/null
+aether survey-load "{phase_name}" 2>/dev/null
 ```
 
 **Parse the JSON response:**
@@ -152,14 +152,14 @@ Analyze codebase and suggest pheromone signals based on detected patterns.
 
 Run using the Bash tool with description "Analyzing codebase for suggestions...":
 ```bash
-bash .aether/aether-utils.sh suggest-approve --dry-run 2>/dev/null
+aether suggest-approve --dry-run 2>/dev/null
 ```
 
 Parse the JSON result to get `suggestion_count`.
 
 If `suggestion_count` > 0:
 - Display: "💡 {count} pheromone suggestion(s) detected from code analysis"
-- Run: `bash .aether/aether-utils.sh suggest-approve`
+- Run: `aether suggest-approve`
 - Parse result for approved/rejected/skipped counts
 - If approved > 0: Display "✓ {approved} FOCUS signal(s) added"
 
@@ -184,7 +184,7 @@ Build the skills index and detect which domain skills match the current codebase
 
 Run using the Bash tool with description "Building skills index...":
 ```bash
-skill_index_result=$(bash .aether/aether-utils.sh skill-index 2>/dev/null)
+skill_index_result=$(aether skill-index 2>/dev/null)
 ```
 
 **Parse the JSON response:**
@@ -195,7 +195,7 @@ skill_index_result=$(bash .aether/aether-utils.sh skill-index 2>/dev/null)
 
 Run using the Bash tool with description "Detecting codebase skills...":
 ```bash
-skill_detect_result=$(bash .aether/aether-utils.sh skill-detect "$(pwd)" 2>/dev/null)
+skill_detect_result=$(aether skill-detect "$(pwd)" 2>/dev/null)
 ```
 
 **Parse the JSON response:**
@@ -222,8 +222,8 @@ Display to user:
 2. **If existing code modification detected — spawn Archaeologist Scout:**
 
    Generate archaeologist name and dispatch:
-   Run using the Bash tool with description "Naming archaeologist...": `bash .aether/aether-utils.sh generate-ant-name "archaeologist"` (store as `{archaeologist_name}`)
-   Run using the Bash tool with description "Dispatching archaeologist...": `bash .aether/aether-utils.sh spawn-log "Queen" "scout" "{archaeologist_name}" "Pre-build archaeology scan"`
+   Run using the Bash tool with description "Naming archaeologist...": `aether generate-ant-name "archaeologist"` (store as `{archaeologist_name}`)
+   Run using the Bash tool with description "Dispatching archaeologist...": `aether spawn-log "Queen" "scout" "{archaeologist_name}" "Pre-build archaeology scan"`
 
    Display:
    ```
@@ -250,7 +250,7 @@ Display to user:
    4. Run: git blame "{file_path}" | head -40 for authorship
    5. Note TODO/FIXME/HACK markers
 
-   Log activity: bash .aether/aether-utils.sh activity-log "READ" "{Ant-Name}" "description"
+   Log activity: aether activity-log "READ" "{Ant-Name}" "description"
 
    Report (plain text):
    - WHY key code sections exist (from commits)
@@ -263,7 +263,7 @@ Display to user:
    **Wait for results** (blocking — use TaskOutput with `block: true`).
 
    Log completion:
-   Run using the Bash tool with description "Recording archaeologist findings...": `bash .aether/aether-utils.sh spawn-complete "{archaeologist_name}" "completed" "Pre-build archaeology scan"`
+   Run using the Bash tool with description "Recording archaeologist findings...": `aether spawn-complete "{archaeologist_name}" "completed" "Pre-build archaeology scan"`
 
 3. **Store and display findings:**
 

@@ -31,7 +31,7 @@ Extract: `goal`, `state`, `current_phase`, `plan.phases`, `errors`, `memory`, `e
 
 ### Step 1.5: Load State and Show Resumption Context
 
-Run using the Bash tool with description "Loading colony state...": `bash .aether/aether-utils.sh load-state`
+Run using the Bash tool with description "Loading colony state...": `aether load-state`
 
 If successful and goal is not null:
 1. Extract current_phase from state
@@ -46,7 +46,7 @@ If .aether/HANDOFF.md exists (detected in load-state output):
 - Read .aether/HANDOFF.md for additional context
 - Remove .aether/HANDOFF.md after display (cleanup)
 
-Run using the Bash tool with description "Releasing colony lock...": `bash .aether/aether-utils.sh unload-state` to release lock.
+Run using the Bash tool with description "Releasing colony lock...": `aether unload-state` to release lock.
 
 **Error handling:**
 - If E_FILE_NOT_FOUND: "No colony initialized. Run /ant:init first." and stop
@@ -147,7 +147,7 @@ Continue to Phase 5: Secrets Scan.
 3. **If spawning Probe:**
 
    a. Generate Probe name and dispatch:
-   Run using the Bash tool with description "Generating Probe name...": `probe_name=$(bash .aether/aether-utils.sh generate-ant-name "probe" | jq -r '.result') && bash .aether/aether-utils.sh spawn-log "Queen" "probe" "$probe_name" "Coverage improvement: ${coverage_percent}%" && echo "{\"name\":\"$probe_name\"}"`
+   Run using the Bash tool with description "Generating Probe name...": `probe_name=$(aether generate-ant-name "probe" | jq -r '.result') && aether spawn-log "Queen" "probe" "$probe_name" "Coverage improvement: ${coverage_percent}%" && echo "{\"name\":\"$probe_name\"}"`
 
 
    c. Display: `🧪🐜 Probe {probe_name} spawning — Coverage at {coverage_percent}%, generating tests for uncovered paths...`
@@ -208,13 +208,13 @@ Continue to Phase 5: Secrets Scan.
    f. Parse Probe JSON output and log completion:
    Extract: `tests_added`, `coverage.lines`, `coverage.branches`, `coverage.functions`, `edge_cases_discovered`, `mutation_score`
 
-   Run using the Bash tool with description "Logging Probe completion...": `bash .aether/aether-utils.sh spawn-complete "$probe_name" "completed" "{\"tests_added\":${#tests_added[@]},\"coverage\":{\"lines\":${coverage_lines},\"branches\":${coverage_branches},\"functions\":${coverage_functions}}}"`
+   Run using the Bash tool with description "Logging Probe completion...": `aether spawn-complete "$probe_name" "completed" "{\"tests_added\":${#tests_added[@]},\"coverage\":{\"lines\":${coverage_lines},\"branches\":${coverage_branches},\"functions\":${coverage_functions}}}"`
 
    g. Log findings to midden:
-   Run using the Bash tool with description "Logging Probe findings to midden...": `bash .aether/aether-utils.sh midden-write "coverage" "Probe generated tests, coverage: ${coverage_lines}%/${coverage_branches}%/${coverage_functions}%" "probe"`
+   Run using the Bash tool with description "Logging Probe findings to midden...": `aether midden-write "coverage" "Probe generated tests, coverage: ${coverage_lines}%/${coverage_branches}%/${coverage_functions}%" "probe"`
 
    If edge cases found:
-   Run using the Bash tool with description "Logging edge cases to midden...": `bash .aether/aether-utils.sh midden-write "edge_cases" "Found ${#edge_cases_discovered[@]} edge cases" "probe"`
+   Run using the Bash tool with description "Logging edge cases to midden...": `aether midden-write "edge_cases" "Found ${#edge_cases_discovered[@]} edge cases" "probe"`
 
 4. **NON-BLOCKING continuation:**
    Display Probe findings summary:
@@ -351,8 +351,8 @@ The phase will NOT advance until spawning occurs.
 **CRITICAL:** Do NOT proceed to Step 1.7. Do NOT advance the phase.
 Log the violation:
 ```bash
-bash .aether/aether-utils.sh activity-log "BLOCKED" "colony" "Spawn gate failed: {task_count} tasks, 0 spawns"
-bash .aether/aether-utils.sh error-flag-pattern "no-spawn-violation" "Prime Worker completed phase without spawning specialists" "critical"
+aether activity-log "BLOCKED" "colony" "Spawn gate failed: {task_count} tasks, 0 spawns"
+aether error-flag-pattern "no-spawn-violation" "Prime Worker completed phase without spawning specialists" "critical"
 ```
 
 **HARD REJECTION - If watcher_count == 0 (no testing separation):**
@@ -392,7 +392,7 @@ Continue to Step 1.7.
 
 Scan all modified/created files for known anti-patterns. This catches recurring bugs before they reach production.
 
-For each file, run using the Bash tool with description "Scanning for anti-patterns...": `bash .aether/aether-utils.sh check-antipattern "{file_path}"`
+For each file, run using the Bash tool with description "Scanning for anti-patterns...": `aether check-antipattern "{file_path}"`
 
 Run for each file in `files_created` and `files_modified` from Prime Worker output.
 
@@ -503,7 +503,7 @@ If no CRITICAL issues, continue to Step 1.7.1.
    Run using the Bash tool with description "Establishing test baseline...": `test_output_before=$(npm test 2>&1 || echo "TEST_FAILED") && tests_passing_before=$(echo "$test_output_before" | grep -oE '[0-9]+ passing' | grep -oE '[0-9]+' || echo "0") && echo "Baseline: $tests_passing_before tests passing"`
 
    b. **Generate Weaver name and dispatch:**
-   Run using the Bash tool with description "Generating Weaver name...": `weaver_name=$(bash .aether/aether-utils.sh generate-ant-name "weaver" | jq -r '.result') && bash .aether/aether-utils.sh spawn-log "Queen" "weaver" "$weaver_name" "Proactive refactoring" && echo "{\"name\":\"$weaver_name\"}"`
+   Run using the Bash tool with description "Generating Weaver name...": `weaver_name=$(aether generate-ant-name "weaver" | jq -r '.result') && aether spawn-log "Queen" "weaver" "$weaver_name" "Proactive refactoring" && echo "{\"name\":\"$weaver_name\"}"`
 
 
    d. **Display:** `🔄🐜 Weaver {weaver_name} spawning — Refactoring complex code...`
@@ -585,11 +585,11 @@ If no CRITICAL issues, continue to Step 1.7.1.
    ```
 
    g. **Log completion:**
-   Run using the Bash tool with description "Logging Weaver completion...": `bash .aether/aether-utils.sh spawn-complete "$weaver_name" "$weaver_status" "Refactoring $weaver_status"`
+   Run using the Bash tool with description "Logging Weaver completion...": `aether spawn-complete "$weaver_name" "$weaver_status" "Refactoring $weaver_status"`
 
 
    i. **Log to midden:**
-   Run using the Bash tool with description "Logging refactoring activity to midden...": `bash .aether/aether-utils.sh midden-write "refactoring" "Weaver refactored files, complexity before/after: ${complexity_before}/${complexity_after}" "weaver"`
+   Run using the Bash tool with description "Logging refactoring activity to midden...": `aether midden-write "refactoring" "Weaver refactored files, complexity before/after: ${complexity_before}/${complexity_after}" "weaver"`
 
 5. **Display completion:**
    ```
@@ -618,7 +618,7 @@ Continue to Step 1.9.
 **If package.json exists:**
 
 1. Generate Gatekeeper name and log spawn:
-Run using the Bash tool with description "Generating Gatekeeper name...": `gatekeeper_name=$(bash .aether/aether-utils.sh generate-ant-name "gatekeeper" | jq -r '.result') && bash .aether/aether-utils.sh spawn-log "Queen" "gatekeeper" "$gatekeeper_name" "Supply chain security audit" && echo "{\"name\":\"$gatekeeper_name\"}"`
+Run using the Bash tool with description "Generating Gatekeeper name...": `gatekeeper_name=$(aether generate-ant-name "gatekeeper" | jq -r '.result') && aether spawn-log "Queen" "gatekeeper" "$gatekeeper_name" "Supply chain security audit" && echo "{\"name\":\"$gatekeeper_name\"}"`
 
 2. Display: `📦🐜 Gatekeeper {name} spawning — Scanning dependencies for CVEs and license compliance...`
 
@@ -663,7 +663,7 @@ Provide JSON output matching this schema:
 5. Parse Gatekeeper JSON output and log completion:
 Extract: `security.critical`, `security.high`, `status`
 
-Run using the Bash tool with description "Logging Gatekeeper completion...": `bash .aether/aether-utils.sh spawn-complete "$gatekeeper_name" "completed" "{\"security\":{\"critical\":$critical_count,\"high\":$high_count}}"`
+Run using the Bash tool with description "Logging Gatekeeper completion...": `aether spawn-complete "$gatekeeper_name" "completed" "{\"security\":{\"critical\":$critical_count,\"high\":$high_count}}"`
 
 **Gate Decision Logic:**
 
@@ -693,7 +693,7 @@ The phase will NOT advance with critical CVEs.
 Security warnings logged to midden for later review.
 Proceeding with caution...
 ```
-Run using the Bash tool with description "Logging high-severity warnings...": `bash .aether/aether-utils.sh midden-write "security" "High CVEs found: $high_count" "gatekeeper"`
+Run using the Bash tool with description "Logging high-severity warnings...": `aether midden-write "security" "High CVEs found: $high_count" "gatekeeper"`
 Continue to Step 1.9.
 
 - **If clean (no critical or high):**
@@ -707,7 +707,7 @@ Continue to Step 1.9.
 **Code quality audit — runs on every `/ant:continue` for consistent coverage.**
 
 1. Generate Auditor name and log spawn:
-Run using the Bash tool with description "Generating Auditor name...": `auditor_name=$(bash .aether/aether-utils.sh generate-ant-name "auditor" | jq -r '.result') && bash .aether/aether-utils.sh spawn-log "Queen" "auditor" "$auditor_name" "Code quality audit" && echo "{\"name\":\"$auditor_name\"}"`
+Run using the Bash tool with description "Generating Auditor name...": `auditor_name=$(aether generate-ant-name "auditor" | jq -r '.result') && aether spawn-log "Queen" "auditor" "$auditor_name" "Code quality audit" && echo "{\"name\":\"$auditor_name\"}"`
 
 2. Display: `👥🐜 Auditor {name} spawning — Reviewing code with multi-lens analysis...`
 
@@ -764,7 +764,7 @@ Provide JSON output matching this schema:
 6. Parse Auditor JSON output and log completion:
 Extract: `findings.critical`, `findings.high`, `findings.medium`, `findings.low`, `findings.info`, `overall_score`, `dimensions_audited`
 
-Run using the Bash tool with description "Logging Auditor completion...": `bash .aether/aether-utils.sh spawn-complete "$auditor_name" "completed" "{\"findings\":{\"critical\":$critical_count,\"high\":$high_count,\"medium\":$medium_count,\"low\":$low_count,\"info\":$info_count},\"score\":$overall_score}"`
+Run using the Bash tool with description "Logging Auditor completion...": `aether spawn-complete "$auditor_name" "completed" "{\"findings\":{\"critical\":$critical_count,\"high\":$high_count,\"medium\":$medium_count,\"low\":$low_count,\"info\":$info_count},\"score\":$overall_score}"`
 
 **Gate Decision Logic:**
 
@@ -788,7 +788,7 @@ Critical Findings:
 
 The phase will NOT advance with critical quality issues.
 ```
-Run using the Bash tool with description "Logging critical quality block...": `bash .aether/aether-utils.sh error-flag-pattern "auditor-critical-findings" "$critical_count critical quality issues found" "critical"`
+Run using the Bash tool with description "Logging critical quality block...": `aether error-flag-pattern "auditor-critical-findings" "$critical_count critical quality issues found" "critical"`
 **CRITICAL:** Do NOT proceed to Step 1.10. Stop here.
 
 - **Else if `overall_score < 60`:**
@@ -809,7 +809,7 @@ Code quality score below threshold: {overall_score}/100 (threshold: 60)
 
 The phase will NOT advance with quality score below 60.
 ```
-Run using the Bash tool with description "Logging quality score block...": `bash .aether/aether-utils.sh error-flag-pattern "auditor-quality-score" "Score $overall_score below threshold 60" "critical"`
+Run using the Bash tool with description "Logging quality score block...": `aether error-flag-pattern "auditor-quality-score" "Score $overall_score below threshold 60" "critical"`
 **CRITICAL:** Do NOT proceed to Step 1.10. Stop here.
 
 - **Else if `findings.high > 0`:**
@@ -822,7 +822,7 @@ Run using the Bash tool with description "Logging quality score block...": `bash
 Quality warnings logged to midden for later review.
 Proceeding with caution...
 ```
-Run using the Bash tool with description "Logging high-quality warnings...": `bash .aether/aether-utils.sh midden-write "quality" "High severity issues: $high_count (score: $overall_score)" "auditor"`
+Run using the Bash tool with description "Logging high-quality warnings...": `aether midden-write "quality" "High severity issues: $high_count (score: $overall_score)" "auditor"`
 Continue to Step 1.10.
 
 - **If clean (score >= 60, no critical):**
@@ -865,7 +865,7 @@ The phase will NOT advance with fabricated metrics.
 
 **CRITICAL:** Do NOT proceed. Log the violation:
 ```bash
-bash .aether/aether-utils.sh error-flag-pattern "fabricated-tdd" "Prime Worker reported TDD metrics without creating test files" "critical"
+aether error-flag-pattern "fabricated-tdd" "Prime Worker reported TDD metrics without creating test files" "critical"
 ```
 
 **If tests_added == 0 or test files exist matching claims:**
@@ -911,7 +911,7 @@ Please describe the issues so they can be addressed:
 
 Use AskUserQuestion to get issue details. Log to errors.records:
 ```bash
-bash .aether/aether-utils.sh error-add "runtime" "critical" "{user_description}" {phase}
+aether error-add "runtime" "critical" "{user_description}" {phase}
 ```
 
 Do NOT proceed to Step 2.
@@ -946,10 +946,10 @@ Continue to Step 1.12.
 **The Iron Law:** No phase advancement with unresolved blockers.
 
 First, auto-resolve any flags eligible for resolution now that verification has passed:
-Run using the Bash tool with description "Auto-resolving flags...": `bash .aether/aether-utils.sh flag-auto-resolve "build_pass"`
+Run using the Bash tool with description "Auto-resolving flags...": `aether flag-auto-resolve "build_pass"`
 
 Then check for remaining blocking flags:
-Run using the Bash tool with description "Checking for blockers...": `bash .aether/aether-utils.sh flag-check-blockers {current_phase}`
+Run using the Bash tool with description "Checking for blockers...": `aether flag-check-blockers {current_phase}`
 
 Parse result for `blockers`, `issues`, and `notes` counts.
 
@@ -1056,7 +1056,7 @@ Update COLONY_STATE.json:
   if [[ -n "$current_phase_learnings" ]]; then
     echo "$current_phase_learnings" | jq -r '.learnings[]?.claim // empty' 2>/dev/null | while read -r claim; do
       if [[ -n "$claim" ]]; then
-        bash .aether/aether-utils.sh memory-capture "learning" "$claim" "pattern" "worker:continue"
+        aether memory-capture "learning" "$claim" "pattern" "worker:continue"
       fi
     done
     echo "Recorded observations for threshold tracking"
@@ -1140,7 +1140,7 @@ Update COLONY_STATE.json:
 Write COLONY_STATE.json.
 
 Validate the state file:
-Run using the Bash tool with description "Validating colony state...": `bash .aether/aether-utils.sh validate-state colony`
+Run using the Bash tool with description "Validating colony state...": `aether validate-state colony`
 
 ### Step 2.1: Auto-Emit Phase Pheromones (SILENT)
 
@@ -1160,7 +1160,7 @@ After learning extraction completes in Step 2, auto-emit a FEEDBACK signal summa
 phase_feedback="Phase $phase_id ($phase_name) completed. Key patterns: {brief summary of 1-3 learnings from Step 2}"
 # Fallback if no learnings: "Phase $phase_id ($phase_name) completed without notable patterns."
 
-bash .aether/aether-utils.sh pheromone-write FEEDBACK "$phase_feedback" \
+aether pheromone-write FEEDBACK "$phase_feedback" \
   --strength 0.6 \
   --source "worker:continue" \
   --reason "Auto-emitted on phase advance: captures what worked and what was learned" \
@@ -1196,7 +1196,7 @@ if [[ -n "$decisions" ]]; then
       [.signals[] | select(.active == true and (.source == "auto:decision" or .source == "system:decision") and (.content.text | contains($text)))] | length
     ' .aether/data/pheromones.json 2>/dev/null || echo "0")
     if [[ "$existing" == "0" ]]; then
-      bash .aether/aether-utils.sh pheromone-write FEEDBACK \
+      aether pheromone-write FEEDBACK \
         "[decision] $dec" \
         --strength 0.6 \
         --source "auto:decision" \
@@ -1215,7 +1215,7 @@ Strength is 0.6 (auto-emitted = lower than user-emitted). Source is `"auto:decis
 Query the actual failure store (`midden.json`) for recurring error categories. Categories with 3+ occurrences indicate persistent issues that should steer workers away from known failure modes.
 
 ```bash
-midden_result=$(bash .aether/aether-utils.sh midden-recent-failures 50 2>/dev/null || echo '{"count":0,"failures":[]}')
+midden_result=$(aether midden-recent-failures 50 2>/dev/null || echo '{"count":0,"failures":[]}')
 midden_count=$(echo "$midden_result" | jq '.count // 0')
 
 if [[ "$midden_count" -gt 0 ]]; then
@@ -1242,7 +1242,7 @@ if [[ "$midden_count" -gt 0 ]]; then
     ' .aether/data/pheromones.json 2>/dev/null || echo "0")
 
     if [[ "$existing" == "0" ]]; then
-      bash .aether/aether-utils.sh pheromone-write REDIRECT \
+      aether pheromone-write REDIRECT \
         "[error-pattern] Category \"$category\" recurring ($count occurrences)" \
         --strength 0.7 \
         --source "auto:error" \
@@ -1251,7 +1251,7 @@ if [[ "$midden_count" -gt 0 ]]; then
       emit_count=$((emit_count + 1))
 
       # Capture as resolution candidate for promotion tracking
-      bash .aether/aether-utils.sh memory-capture \
+      aether memory-capture \
         "resolution" \
         "Recurring error pattern: $category ($count occurrences)" \
         "pattern" \
@@ -1298,7 +1298,7 @@ for encoded in $recurring_criteria; do
   ' .aether/data/pheromones.json 2>/dev/null || echo "0")
 
   if [[ "$existing" == "0" ]]; then
-    bash .aether/aether-utils.sh pheromone-write FEEDBACK \
+    aether pheromone-write FEEDBACK \
       "[success-pattern] \"$text\" recurs across phases $phases" \
       --strength 0.6 \
       --source "auto:success" \
@@ -1314,7 +1314,7 @@ Strength is 0.6 (auto-emitted). Source is `"auto:success"`. Cap: max 2 success c
 
 After auto-emission, expire all signals with `expires_at == "phase_end"`. The FEEDBACK from 2.1a uses a 30d TTL and is not affected by this step.
 
-Run using the Bash tool with description "Maintaining pheromone memory...": `bash .aether/aether-utils.sh pheromone-expire --phase-end-only 2>/dev/null && bash .aether/aether-utils.sh eternal-init 2>/dev/null`
+Run using the Bash tool with description "Maintaining pheromone memory...": `aether pheromone-expire --phase-end-only 2>/dev/null && aether eternal-init 2>/dev/null`
 
 This is idempotent — runs every time continue fires but only creates the directory/file once.
 
@@ -1328,7 +1328,7 @@ If `$ARGUMENTS` contains `--deferred`:
 ```bash
 if [[ "$ARGUMENTS" == *"--deferred"* ]] && [[ -f .aether/data/learning-deferred.json ]]; then
   echo "📦 Reviewing deferred proposals..."
-  bash .aether/aether-utils.sh learning-approve-proposals --deferred ${verbose:+--verbose}
+  aether learning-approve-proposals --deferred ${verbose:+--verbose}
 fi
 ```
 
@@ -1336,7 +1336,7 @@ fi
 
 1. **Check for proposals:**
    ```bash
-   proposals=$(bash .aether/aether-utils.sh learning-check-promotion 2>/dev/null || echo '{"proposals":[]}')
+   proposals=$(aether learning-check-promotion 2>/dev/null || echo '{"proposals":[]}')
    proposal_count=$(echo "$proposals" | jq '.proposals | length')
    ```
 
@@ -1348,7 +1348,7 @@ fi
    if [[ "$proposal_count" -gt 0 ]]; then
      verbose_flag=""
      [[ "$ARGUMENTS" == *"--verbose"* ]] && verbose_flag="--verbose"
-     bash .aether/aether-utils.sh learning-approve-proposals $verbose_flag
+     aether learning-approve-proposals $verbose_flag
    fi
    # If no proposals, silently skip without notice (per user decision)
    ```
@@ -1388,7 +1388,7 @@ if [[ -f "$obs_file" ]]; then
       colony=$(echo "$encoded" | base64 -d | jq -r '.colonies[0] // "unknown"')
       [[ -z "$content" ]] && continue
 
-      result=$(bash .aether/aether-utils.sh learning-promote-auto "$wisdom_type" "$content" "$colony" "learning" 2>/dev/null || echo '{}')
+      result=$(aether learning-promote-auto "$wisdom_type" "$content" "$colony" "learning" 2>/dev/null || echo '{}')
       was_promoted=$(echo "$result" | jq -r '.result.promoted // false' 2>/dev/null || echo "false")
       if [[ "$was_promoted" == "true" ]]; then
         promoted_count=$((promoted_count + 1))
@@ -1452,7 +1452,7 @@ If no `CHANGELOG.md` exists, `changelog-append` creates one automatically.
 **Step 2.3.1: Collect plan data**
 
 ```bash
-bash .aether/aether-utils.sh changelog-collect-plan-data "{phase_identifier}" "{plan_number}"
+aether changelog-collect-plan-data "{phase_identifier}" "{plan_number}"
 ```
 
 Parse the returned JSON to extract `files`, `decisions`, `worked`, and `requirements` arrays.
@@ -1468,7 +1468,7 @@ If the command fails (e.g., no plan file found), fall back to collecting data ma
 **Step 2.3.2: Append changelog entry**
 
 ```bash
-bash .aether/aether-utils.sh changelog-append \
+aether changelog-append \
   "$(date +%Y-%m-%d)" \
   "{phase_identifier}" \
   "{plan_number}" \
@@ -1509,7 +1509,7 @@ Store this as `ai_description` for the commit message.
 #### Step 2.4.2: Generate Enhanced Commit Message
 
 ```bash
-bash .aether/aether-utils.sh generate-commit-message "contextual" {phase_id} "{phase_name}" "{ai_description}" {plan_number}
+aether generate-commit-message "contextual" {phase_id} "{phase_name}" "{ai_description}" {plan_number}
 ```
 
 Parse the returned JSON to extract:
@@ -1624,18 +1624,18 @@ After phase advancement is complete, update `.aether/CONTEXT.md`:
 
 **Log the activity:**
 ```bash
-bash .aether/aether-utils.sh context-update activity "continue" "Phase {prev_id} completed, advanced to {next_id}" "—"
+aether context-update activity "continue" "Phase {prev_id} completed, advanced to {next_id}" "—"
 ```
 
 **Update the phase:**
 ```bash
-bash .aether/aether-utils.sh context-update update-phase {next_id} "{next_phase_name}" "YES" "Phase advanced, ready to build"
+aether context-update update-phase {next_id} "{next_phase_name}" "YES" "Phase advanced, ready to build"
 ```
 
 **Log any decisions from this session:**
 If any architectural decisions were made during verification, also run:
 ```bash
-bash .aether/aether-utils.sh context-update decision "{decision_description}" "{rationale}" "Queen"
+aether context-update decision "{decision_description}" "{rationale}" "Queen"
 ```
 
 ### Step 2.7: Project Completion
@@ -1719,10 +1719,10 @@ Output:
 Update the session tracking file to enable `/ant:resume` after context clear:
 
 ```bash
-bash .aether/aether-utils.sh session-update "/ant:continue" "/ant:build {next_id}" "Phase {prev_id} completed, advanced to Phase {next_id}"
+aether session-update "/ant:continue" "/ant:build {next_id}" "Phase {prev_id} completed, advanced to Phase {next_id}"
 ```
 
-Run using the Bash tool with description "Saving session state...": `bash .aether/aether-utils.sh session-update "/ant:continue" "/ant:build {next_id}" "Phase {prev_id} completed, advanced to Phase {next_id}"`
+Run using the Bash tool with description "Saving session state...": `aether session-update "/ant:continue" "/ant:build {next_id}" "Phase {prev_id} completed, advanced to Phase {next_id}"`
 
 ### Step 4.5: Housekeeping (Non-Blocking)
 
@@ -1730,10 +1730,10 @@ Prune stale backups and temp files. This runs automatically — failures never a
 
 Run using the Bash tool with description "Pruning stale backups...":
 ```bash
-bash .aether/aether-utils.sh backup-prune-global 2>/dev/null || true
+aether backup-prune-global 2>/dev/null || true
 ```
 
 Run using the Bash tool with description "Cleaning temp files...":
 ```bash
-bash .aether/aether-utils.sh temp-clean 2>/dev/null || true
+aether temp-clean 2>/dev/null || true
 ```

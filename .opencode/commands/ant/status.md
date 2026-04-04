@@ -16,7 +16,7 @@ You are the **Queen**. Show colony status.
 
 ### Step 0: Version Check (Non-blocking)
 
-Run: `bash .aether/aether-utils.sh version-check-cached 2>/dev/null || true`
+Run: `aether version-check-cached 2>/dev/null || true`
 
 If the command succeeds and the JSON result contains a non-empty string, display it as a one-line notice. Proceed regardless of outcome.
 
@@ -58,7 +58,7 @@ If `version` field is missing, "1.0", or "2.0":
 
 ### Step 1.5: Load State and Show Resumption Context
 
-Run: `bash .aether/aether-utils.sh load-state`
+Run: `aether load-state`
 
 If successful and goal is not null:
 1. Extract current_phase from state
@@ -76,7 +76,7 @@ If successful and goal is not null:
    - Read .aether/HANDOFF.md content for additional context
    - Remove .aether/HANDOFF.md after displaying (cleanup)
 
-Run: `bash .aether/aether-utils.sh unload-state` to release lock.
+Run: `aether unload-state` to release lock.
 
 ### Step 2: Compute Summary
 
@@ -137,7 +137,7 @@ Read `.aether/data/constraints.json` if exists:
 - Constraints count: `constraints.length`
 
 **Flags:**
-Run: `bash .aether/aether-utils.sh flag-check-blockers`
+Run: `aether flag-check-blockers`
 Extract:
 - Blockers count (critical, block advancement)
 - Issues count (high, warnings)
@@ -148,7 +148,7 @@ Count escalated flags by checking for blocker flags with source "escalation":
 
 Run:
 ```bash
-escalated_count=$(bash .aether/aether-utils.sh flag-list --type blocker 2>/dev/null | jq '[.result.flags[] | select(.source == "escalation")] | length' 2>/dev/null || echo "0")
+escalated_count=$(aether flag-list --type blocker --json 2>/dev/null | jq '[.result.flags[] | select(.source == "escalation")] | length' 2>/dev/null || echo "0")
 echo "escalated_count=$escalated_count"
 ```
 
@@ -167,7 +167,7 @@ From `memory.instincts`:
 
 ### Step 2.6: Detect Milestone
 
-Run: `bash .aether/aether-utils.sh milestone-detect`
+Run: `aether milestone-detect`
 
 Extract from JSON result:
 - `milestone`: Current milestone name
@@ -179,7 +179,7 @@ Extract from JSON result:
 
 Run:
 ```bash
-bash .aether/aether-utils.sh memory-metrics
+aether memory-metrics
 ```
 
 Extract from JSON result:
@@ -213,8 +213,8 @@ else
 fi
 
 # Generate progress bars
-phase_bar=$(bash .aether/aether-utils.sh generate-progress-bar "$current_phase" "$total_phases" 20)
-task_bar=$(bash .aether/aether-utils.sh generate-progress-bar "$tasks_completed" "$tasks_total" 20)
+phase_bar=$(aether generate-progress-bar "$current_phase" "$total_phases" 20)
+task_bar=$(aether generate-progress-bar "$tasks_completed" "$tasks_total" 20)
 
 echo "phase_bar=$phase_bar"
 echo "task_bar=$task_bar"
@@ -301,7 +301,7 @@ state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
 current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
 total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
 
-bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
+aether print-next-up
 ```
 
 This auto-generates state-based recommendations (IDLE → init, READY → build, EXECUTING → continue, PLANNING → plan).

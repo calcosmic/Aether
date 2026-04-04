@@ -32,7 +32,7 @@ Stop here.
 
 ### Step 2: List All Chambers
 
-Run: `bash .aether/aether-utils.sh chamber-list`
+Run: `aether chamber-list`
 
 Parse JSON result into array of chambers.
 
@@ -95,7 +95,7 @@ Run /ant:tunnels to return to chamber list.
 ```
 
 To get the counts and hash status:
-- Run `bash .aether/aether-utils.sh chamber-verify .aether/chambers/{chamber_name}`
+- Run `aether chamber-verify --path .aether/chambers/{chamber_name}`
 - If verified: hash_status = "✅"
 - If not verified: hash_status = "⚠️ hash mismatch"
 - If error: hash_status = "⚠️ error"
@@ -338,7 +338,7 @@ Pass the extracted pheromone-only temp file (NOT the combined `colony-archive.xm
 # Import the EXTRACTED pheromone-only XML (NOT the combined colony-archive.xml)
 # $import_tmp_pheromones has <pheromones> as root — the format pheromone-import-xml expects
 # Second argument triggers prefix-tagging — imported signal IDs become "{source_colony}:original_id"
-import_result=$(bash .aether/aether-utils.sh pheromone-import-xml "$import_tmp_pheromones" "$source_colony" 2>&1)
+import_result=$(aether pheromone-import-xml --input "$import_tmp_pheromones" --colony "$source_colony" 2>&1)
 import_ok=$(echo "$import_result" | jq -r '.ok // false' 2>/dev/null)
 
 if [[ "$import_ok" == "true" ]]; then

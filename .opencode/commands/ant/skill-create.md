@@ -57,7 +57,7 @@ Create the skill file with proper frontmatter and body:
 ### Step 4: Write and Verify
 
 1. Write to `~/.aether/skills/domain/{name}/SKILL.md`
-2. Run: `bash .aether/aether-utils.sh skill-parse-frontmatter ~/.aether/skills/domain/{name}/SKILL.md`
-3. Run: `bash .aether/aether-utils.sh skill-cache-rebuild`
+2. Run: `aether skill-parse-frontmatter ~/.aether/skills/domain/{name}/SKILL.md`
+3. Run: `aether skill-cache-rebuild`
 4. Show the generated skill to the user
 5. Ask if they want to adjust anything

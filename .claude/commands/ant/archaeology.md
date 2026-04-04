@@ -309,7 +309,7 @@ Excavation date: {YYYY-MM-DD}
 
 Run using the Bash tool with description "Logging excavation activity...":
 ```bash
-bash .aether/aether-utils.sh activity-log "ARCHAEOLOGY" "Archaeologist" "Excavated {target}: {total_commits} commits, {author_count} authors, {findings_count} findings, {tech_debt_count} debt markers"
+aether activity-log "ARCHAEOLOGY" "Archaeologist" "Excavated {target}: {total_commits} commits, {author_count} authors, {findings_count} findings, {tech_debt_count} debt markers"
 ```
 
 Generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":
@@ -317,7 +317,7 @@ Generate the state-based Next Up block by running using the Bash tool with descr
 state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
 current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
 total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
-bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
+aether print-next-up
 ```
 
 ## Investigation Guidelines

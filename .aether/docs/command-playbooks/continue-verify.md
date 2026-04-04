@@ -31,7 +31,7 @@ Extract: `goal`, `state`, `current_phase`, `plan.phases`, `errors`, `memory`, `e
 
 ### Step 1.5: Load State and Show Resumption Context
 
-Run using the Bash tool with description "Loading colony state...": `bash .aether/aether-utils.sh load-state`
+Run using the Bash tool with description "Loading colony state...": `aether load-state`
 
 If successful and goal is not null:
 1. Extract current_phase from state
@@ -46,7 +46,7 @@ If .aether/HANDOFF.md exists (detected in load-state output):
 - Read .aether/HANDOFF.md for additional context
 - Remove .aether/HANDOFF.md after display (cleanup)
 
-Run using the Bash tool with description "Releasing colony lock...": `bash .aether/aether-utils.sh unload-state` to release lock.
+Run using the Bash tool with description "Releasing colony lock...": `aether unload-state` to release lock.
 
 **Error handling:**
 - If E_FILE_NOT_FOUND: "No colony initialized. Run /ant:init first." and stop
@@ -72,7 +72,7 @@ If `state != "EXECUTING"`:
 
 Run using the Bash tool with description "Checking survey context...":
 ```bash
-survey_check=$(bash .aether/aether-utils.sh survey-verify 2>/dev/null || true)
+survey_check=$(aether survey-verify 2>/dev/null || true)
 survey_docs=$(ls -1 .aether/data/survey/*.md 2>/dev/null | wc -l | tr -d ' ')
 survey_latest=$(ls -t .aether/data/survey/*.md 2>/dev/null | head -1)
 if [[ -n "$survey_latest" ]]; then
@@ -176,7 +176,7 @@ Continue to Phase 5: Secrets Scan.
 3. **If spawning Probe:**
 
    a. Generate Probe name and dispatch:
-   Run using the Bash tool with description "Generating Probe name...": `probe_name=$(bash .aether/aether-utils.sh generate-ant-name "probe" | jq -r '.result') && bash .aether/aether-utils.sh spawn-log "Queen" "probe" "$probe_name" "Coverage improvement: ${coverage_percent}%" && echo "{\"name\":\"$probe_name\"}"`
+   Run using the Bash tool with description "Generating Probe name...": `probe_name=$(aether generate-ant-name "probe" | jq -r '.result') && aether spawn-log "Queen" "probe" "$probe_name" "Coverage improvement: ${coverage_percent}%" && echo "{\"name\":\"$probe_name\"}"`
 
    b. Display:
    ```
@@ -240,13 +240,13 @@ Continue to Phase 5: Secrets Scan.
    f. Parse Probe JSON output and log completion:
    Extract: `tests_added`, `coverage.lines`, `coverage.branches`, `coverage.functions`, `edge_cases_discovered`, `mutation_score`
 
-   Run using the Bash tool with description "Logging Probe completion...": `bash .aether/aether-utils.sh spawn-complete "$probe_name" "completed" "{\"tests_added\":${#tests_added[@]},\"coverage\":{\"lines\":${coverage_lines},\"branches\":${coverage_branches},\"functions\":${coverage_functions}}}"`
+   Run using the Bash tool with description "Logging Probe completion...": `aether spawn-complete "$probe_name" "completed" "{\"tests_added\":${#tests_added[@]},\"coverage\":{\"lines\":${coverage_lines},\"branches\":${coverage_branches},\"functions\":${coverage_functions}}}"`
 
    g. Log findings to midden:
-   Run using the Bash tool with description "Logging Probe findings to midden...": `bash .aether/aether-utils.sh midden-write "coverage" "Probe generated tests, coverage: ${coverage_lines}%/${coverage_branches}%/${coverage_functions}%" "probe"`
+   Run using the Bash tool with description "Logging Probe findings to midden...": `aether midden-write "coverage" "Probe generated tests, coverage: ${coverage_lines}%/${coverage_branches}%/${coverage_functions}%" "probe"`
 
    If edge cases found:
-   Run using the Bash tool with description "Logging edge cases to midden...": `bash .aether/aether-utils.sh midden-write "edge_cases" "Found ${#edge_cases_discovered[@]} edge cases" "probe"`
+   Run using the Bash tool with description "Logging edge cases to midden...": `aether midden-write "edge_cases" "Found ${#edge_cases_discovered[@]} edge cases" "probe"`
 
 4. **NON-BLOCKING continuation:**
    Display Probe findings summary:
@@ -363,7 +363,7 @@ Cross-reference worker claims against reality. This step catches fabricated succ
 3. Run verification:
    Run using the Bash tool with description "Verifying worker claims...":
    ```bash
-   bash .aether/aether-utils.sh verify-claims ".aether/data/last-build-claims.json" "<watcher_json_or_path>" "<test_exit_code>"
+   aether verify-claims ".aether/data/last-build-claims.json" "<watcher_json_or_path>" "<test_exit_code>"
    ```
 
    For the watcher JSON: use the Watcher output from the most recent build (if available in COLONY_STATE.json events or build synthesis). If no Watcher output is available, pass `'{"verification_passed":true}'` as default (conservative -- only test exit code mismatch can trigger).
@@ -386,7 +386,7 @@ Cross-reference worker claims against reality. This step catches fabricated succ
    Log a flag for each mismatch:
    Run using the Bash tool with description "Flagging verification mismatch...":
    ```bash
-   bash .aether/aether-utils.sh flag-create "Verification mismatch: <summary>" --type blocker
+   aether flag-create "Verification mismatch: <summary>" --type blocker
    ```
 
    **Auto-retry once** (locked decision):
@@ -422,7 +422,7 @@ last_merge_branch="${last_merged_branch:-}"
 last_merge_sha="${last_merge_sha:-}"
 
 if [[ -n "$last_merge_branch" && -n "$last_merge_sha" ]]; then
-  collect_result=$(bash .aether/aether-utils.sh midden-collect \
+  collect_result=$(aether midden-collect \
     --branch "$last_merge_branch" --merge-sha "$last_merge_sha" \
     2>/dev/null || echo '{"ok":false}')
   collect_ok=$(echo "$collect_result" | jq -r '.ok // false' 2>/dev/null)

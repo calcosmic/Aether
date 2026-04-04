@@ -66,9 +66,9 @@ body: |
      - If `milestone` == `"Crowned Anthill"`: output "This colony has been sealed. Start a new colony with `/ant:init \"new goal\"`." and stop
   2. Determine remaining incomplete phases; apply `--max-phases` cap
   3. Set `phases_completed = 0`, `autopilot_start = $(date +%s)`
-  4. Record pre-build blocker count: `bash .aether/aether-utils.sh flag-check-blockers {phase}`
+  4. Record pre-build blocker count: `aether flag-check-blockers {phase}`
   5. If `--headless` flag is present:
-     - Run: `bash .aether/aether-utils.sh autopilot-set-headless true`
+     - Run: `aether autopilot-set-headless true`
      - Display: `Headless mode: ON — interactive prompts will be queued as pending decisions`
   6. Display: `AUTOPILOT ENGAGED | Goal: {goal} | Phase {N} | Max: {max or "all"}`
 
@@ -105,7 +105,7 @@ body: |
   visual checkpoint prompt would normally be shown to the user, instead queue it as
   a pending decision:
   ```bash
-  bash .aether/aether-utils.sh pending-decision-add \
+  aether pending-decision-add \
     --title "Visual checkpoint: Phase {id}" \
     --type "checkpoint" \
     --description "{checkpoint_description}" \
@@ -134,7 +134,7 @@ body: |
   **Headless override for runtime verification:** If headless mode is active and
   runtime verification would normally pause, queue as a pending decision instead:
   ```bash
-  bash .aether/aether-utils.sh pending-decision-add \
+  aether pending-decision-add \
     --title "Runtime verification needed: Phase {id}" \
     --type "runtime-verification" \
     --description "Manual testing required before advancing past Phase {id}" \
@@ -165,7 +165,7 @@ body: |
   ### Step 5: Auto-Advance and Loop
 
   1. Increment `phases_completed`
-  2. Update autopilot state: `bash .aether/aether-utils.sh autopilot-update --action advance --phase {next} --result success`
+  2. Update autopilot state: `aether autopilot-update --action advance --phase {next} --result success`
   3. Log: `"<timestamp>|autopilot_advance|run|Phase {prev} -> {next} ({phases_completed}/{max})"`
   4. Display: `--- Autopilot: Phase {prev} done -> Phase {next} ({N}/{max}) ---`
   5. **Replan check** (see Step 5.5)
@@ -177,7 +177,7 @@ body: |
   After each successful phase advance, check if a replan pause should fire:
 
   ```bash
-  bash .aether/aether-utils.sh autopilot-check-replan --interval {replan_interval}
+  aether autopilot-check-replan --interval {replan_interval}
   ```
 
   If `--continue` flag was passed: skip this check entirely (user dismissed replan).
@@ -218,7 +218,7 @@ body: |
   ```
 
   Update session:
-  `bash .aether/aether-utils.sh session-update "/ant:run" "/ant:run" "Autopilot: {N} phases, now Phase {current}"`
+  `aether session-update --command "/ant:run" --worker "/ant:run" --summary "Autopilot: {N} phases, now Phase {current}"`
 
   ## Execution Contract
 

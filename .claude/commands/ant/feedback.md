@@ -32,7 +32,7 @@ If `goal: null` -> "No colony initialized.", stop.
 
 Run using the Bash tool with description "Recording colony feedback...":
 ```bash
-bash .aether/aether-utils.sh pheromone-write FEEDBACK "<content>" --strength 0.7 --reason "User feedback guidance" --ttl <ttl>
+aether pheromone-write --type FEEDBACK --content "<content>" --strength 0.7 --reason "User feedback guidance" --ttl <ttl>
 ```
 
 **Create instinct from feedback:**
@@ -59,14 +59,14 @@ Write COLONY_STATE.json.
 
 Run using the Bash tool with description "Updating context document...":
 ```bash
-bash .aether/aether-utils.sh context-update constraint feedback "<content>" "user" 2>/dev/null || true
+aether context-update --section constraint --key feedback --content "<content>" "user" 2>/dev/null || true
 ```
 
 ### Step 3: Get Active Counts
 
 Run using the Bash tool with description "Counting active signals...":
 ```bash
-bash .aether/aether-utils.sh pheromone-count
+aether pheromone-count
 ```
 
 ### Step 4: Confirm
@@ -91,6 +91,6 @@ Generate the state-based Next Up block by running using the Bash tool with descr
 state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
 current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
 total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
-bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
+aether print-next-up
 ```
 

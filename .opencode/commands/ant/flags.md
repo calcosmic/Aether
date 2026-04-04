@@ -39,7 +39,7 @@ Examples:
 If `--resolve` was provided:
 
 ```bash
-bash .aether/aether-utils.sh flag-resolve "{flag_id}" "{resolution_message}"
+aether flag-resolve --id "{flag_id}" --message "{resolution_message}"
 ```
 Output:
 ```
@@ -54,7 +54,7 @@ Stop here.
 If `--ack` was provided:
 
 ```bash
-bash .aether/aether-utils.sh flag-acknowledge "{flag_id}"
+aether flag-acknowledge --id "{flag_id}"
 ```
 Output:
 ```
@@ -71,7 +71,7 @@ Stop here.
 Run:
 
 ```bash
-bash .aether/aether-utils.sh flag-list {options}
+aether flag-list {options}
 ```
 
 Parse result for flags array.

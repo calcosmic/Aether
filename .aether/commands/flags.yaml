@@ -32,7 +32,7 @@ body: |
   If `--resolve` was provided:
   {{/opencode}}
   ```bash
-  bash .aether/aether-utils.sh flag-resolve "{flag_id}" "{resolution_message}"
+  aether flag-resolve --id "{flag_id}" --message "{resolution_message}"
   ```
   Output:
   ```
@@ -49,7 +49,7 @@ body: |
   If `--ack` was provided:
   {{/opencode}}
   ```bash
-  bash .aether/aether-utils.sh flag-acknowledge "{flag_id}"
+  aether flag-acknowledge --id "{flag_id}"
   ```
   Output:
   ```
@@ -68,7 +68,7 @@ body: |
   Run:
   {{/opencode}}
   ```bash
-  bash .aether/aether-utils.sh flag-list {options}
+  aether flag-list {options}
   ```
 
   Parse result for flags array.
@@ -153,7 +153,7 @@ body: |
   state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
   current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
   total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
-  bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
+  aether print-next-up
   ```
   {{/claude}}
 

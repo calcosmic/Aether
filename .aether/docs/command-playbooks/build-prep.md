@@ -87,7 +87,7 @@ If proxy is not healthy, log a warning but continue (workers will fall back to d
 
 ### Step 0.5: Load Colony State
 
-Run using the Bash tool with description "Loading colony state...": `bash .aether/aether-utils.sh load-state`
+Run using the Bash tool with description "Loading colony state...": `aether load-state`
 
 If the command fails (non-zero exit or JSON has ok: false):
 1. Parse error JSON
@@ -106,7 +106,7 @@ If successful:
    ```
    (If HANDOFF.md exists, this provides orientation before the build proceeds)
 
-After displaying context, run using the Bash tool with description "Releasing colony lock...": `bash .aether/aether-utils.sh unload-state` to release the lock.
+After displaying context, run using the Bash tool with description "Releasing colony lock...": `aether unload-state` to release the lock.
 
 ### Step 1: Validate + Read State
 
@@ -142,7 +142,7 @@ Stop here.
 
 **Set colony depth (if --depth flag provided):**
 If `cli_depth_override` is set:
-1. Run using the Bash tool with description "Setting colony depth...": `bash .aether/aether-utils.sh colony-depth set "$cli_depth_override"`
+1. Run using the Bash tool with description "Setting colony depth...": `aether colony-depth set "$cli_depth_override"`
 2. Parse JSON result - if `.ok` is false:
    - Display: `Error: Invalid depth "$cli_depth_override". Use: light, standard, deep, full`
    - Stop here
@@ -152,7 +152,7 @@ If `cli_depth_override` is set:
 
 Run using the Bash tool with description "Reading colony depth...":
 ```bash
-depth_result=$(bash .aether/aether-utils.sh colony-depth get 2>/dev/null || echo '{"ok":true,"result":{"depth":"standard","source":"default"}}')
+depth_result=$(aether colony-depth get 2>/dev/null || echo '{"ok":true,"result":{"depth":"standard","source":"default"}}')
 colony_depth=$(echo "$depth_result" | jq -r '.result.depth // "standard"')
 depth_source=$(echo "$depth_result" | jq -r '.result.source // "default"')
 echo "colony_depth=$colony_depth"
@@ -201,7 +201,7 @@ Check for unresolved blocker flags on the requested phase:
 
 Run using the Bash tool with description "Checking for blockers...":
 ```bash
-bash .aether/aether-utils.sh flag-check-blockers {phase_number}
+aether flag-check-blockers {phase_number}
 ```
 
 Parse the JSON result (`.result.blockers`):
@@ -210,7 +210,7 @@ Parse the JSON result (`.result.blockers`):
 - **If blockers > 0:** Retrieve blocker details:
   Run using the Bash tool with description "Loading blocker details...":
   ```bash
-  bash .aether/aether-utils.sh flag-list --type blocker --phase {phase_number}
+  aether flag-list --type blocker --phase {phase_number}
   ```
   Parse `.result.flags` and display an advisory warning:
   ```
@@ -237,7 +237,7 @@ If `events` exceeds 100 entries, keep only the last 100.
 
 Run using the Bash tool with description "Updating colony state for build...":
 ```bash
-bash .aether/aether-utils.sh state-mutate \
+aether state-mutate \
   --argjson phase "$PHASE_NUMBER" \
   --arg phase_name "$PHASE_NAME" \
   --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
@@ -247,7 +247,7 @@ bash .aether/aether-utils.sh state-mutate \
 Validate the state file:
 Run using the Bash tool with description "Validating colony state...":
 ```bash
-bash .aether/aether-utils.sh validate-state colony
+aether validate-state colony
 ```
 
 ### Step 3: Git Checkpoint
@@ -284,7 +284,7 @@ Output header:
 
 Run using the Bash tool with description "Showing phase progress...":
 ```bash
-progress_bar=$(bash .aether/aether-utils.sh generate-progress-bar "$current_phase" "$total_phases" 20 2>/dev/null || echo "")
+progress_bar=$(aether generate-progress-bar "$current_phase" "$total_phases" 20 2>/dev/null || echo "")
 if [[ -n "$progress_bar" ]]; then
   echo "[Phase ${current_phase}/${total_phases}] ${progress_bar}"
 fi

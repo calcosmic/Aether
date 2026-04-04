@@ -147,7 +147,7 @@ echo "System files copied."
 
 
 
-Run: `bash .aether/aether-utils.sh queen-init`
+Run: `aether queen-init`
 
 
 Parse the JSON result:
@@ -163,7 +163,7 @@ Attempt to register this repo in the global hub. Silent on failure — registry 
 Run (ignore errors):
 
 ```bash
-bash .aether/aether-utils.sh registry-add "$(pwd)" "$(jq -r '.version // "unknown"' ~/.aether/version.json 2>/dev/null || echo 'unknown')" 2>/dev/null || true
+aether registry-add --path "$(pwd)" "$(jq -r '.version // "unknown"' ~/.aether/version.json 2>/dev/null || echo 'unknown')" 2>/dev/null || true
 ```
 
 ### Step 7: Verify Setup

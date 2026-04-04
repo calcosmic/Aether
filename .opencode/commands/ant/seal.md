@@ -171,7 +171,7 @@ Build a summary of what the colony accomplished across all phases:
 - Summarize the goal and key outcomes in one line
 
 ```bash
-bash .aether/aether-utils.sh changelog-append \
+aether changelog-append \
   "$(date +%Y-%m-%d)" \
   "seal-crowned-anthill" \
   "00" \
@@ -192,7 +192,7 @@ Mark the colony as inactive in the global registry. This is silent on failure â€
 
 Run using the Bash tool (ignore errors):
 ```bash
-bash .aether/aether-utils.sh registry-add "$(pwd)" "$(jq -r '.version // "unknown"' ~/.aether/version.json 2>/dev/null || echo 'unknown')" --active false 2>/dev/null || true
+aether registry-add --path "$(pwd)" "$(jq -r '.version // "unknown"' ~/.aether/version.json 2>/dev/null || echo 'unknown')" --active false 2>/dev/null || true
 ```
 
 If the command fails, proceed silently. This is optional bookkeeping.
@@ -237,7 +237,7 @@ for encoded in $high_conf_instincts; do
   [[ -n "$repo_domain_tags" ]] && promote_args+=(--domain "$repo_domain_tags")
 
   # Call hive-promote which orchestrates abstract + store
-  result=$(bash .aether/aether-utils.sh "${promote_args[@]}" 2>/dev/null || echo '{}')
+  result=$(aether "${promote_args[@]}" 2>/dev/null || echo '{}')
   was_promoted=$(echo "$result" | jq -r '.result.action // "skipped"' 2>/dev/null || echo "skipped")
 
   if [[ "$was_promoted" == "promoted" || "$was_promoted" == "merged" ]]; then
@@ -283,7 +283,7 @@ Export colony data as a combined XML archive and a standalone pheromones.xml. Bo
 ```bash
 # Check if xmllint is available
 if command -v xmllint >/dev/null 2>&1; then
-  xml_result=$(bash .aether/aether-utils.sh colony-archive-xml ".aether/exchange/colony-archive.xml" 2>&1)
+  xml_result=$(aether colony-archive-xml --output ".aether/exchange/colony-archive.xml" 2>&1)
   xml_ok=$(echo "$xml_result" | jq -r '.ok // false' 2>/dev/null)
   if [[ "$xml_ok" == "true" ]]; then
     xml_pheromone_count=$(echo "$xml_result" | jq -r '.result.pheromone_count // 0' 2>/dev/null)
@@ -293,7 +293,7 @@ if command -v xmllint >/dev/null 2>&1; then
   fi
 
   # Also export standalone pheromones.xml for cross-colony sharing
-  pher_result=$(bash .aether/aether-utils.sh pheromone-export-xml ".aether/exchange/pheromones.xml" 2>&1)
+  pher_result=$(aether pheromone-export-xml --output ".aether/exchange/pheromones.xml" 2>&1)
   pher_ok=$(echo "$pher_result" | jq -r '.ok // false' 2>/dev/null)
   if [[ "$pher_ok" == "true" ]]; then
     pher_signal_count=$(jq '[.signals[] | select(.active != false)] | length' .aether/data/pheromones.json 2>/dev/null || echo "0")
@@ -303,7 +303,7 @@ if command -v xmllint >/dev/null 2>&1; then
   fi
 
   # Export standalone queen-wisdom.xml for cross-colony wisdom sharing
-  wisdom_result=$(bash .aether/aether-utils.sh wisdom-export-xml ".aether/exchange/queen-wisdom.xml" 2>&1)
+  wisdom_result=$(aether wisdom-export-xml ".aether/exchange/queen-wisdom.xml" 2>&1)
   wisdom_ok=$(echo "$wisdom_result" | jq -r '.ok // false' 2>/dev/null)
   if [[ "$wisdom_ok" == "true" ]]; then
     wisdom_count=$(echo "$wisdom_result" | jq -r '.result.entries // 0' 2>/dev/null)
@@ -313,7 +313,7 @@ if command -v xmllint >/dev/null 2>&1; then
   fi
 
   # Export standalone colony-registry.xml for lineage tracking
-  registry_result=$(bash .aether/aether-utils.sh registry-export-xml ".aether/exchange/colony-registry.xml" 2>&1)
+  registry_result=$(aether registry-export-xml ".aether/exchange/colony-registry.xml" 2>&1)
   registry_ok=$(echo "$registry_result" | jq -r '.ok // false' 2>/dev/null)
   if [[ "$registry_ok" == "true" ]]; then
     registry_count=$(echo "$registry_result" | jq -r '.result.colonies // 0' 2>/dev/null)
@@ -384,7 +384,7 @@ After the ceremony, offer to commit all colony work.
 
 Generate a seal commit message:
 ```bash
-seal_commit=$(bash .aether/aether-utils.sh generate-commit-message seal "$phases_completed" "$goal" "$colony_age_days" 2>/dev/null)
+seal_commit=$(aether generate-commit-message seal "$phases_completed" "$goal" "$colony_age_days" 2>/dev/null)
 seal_message=$(echo "$seal_commit" | jq -r '.result.message // "aether-seal: colony sealed"')
 seal_body=$(echo "$seal_commit" | jq -r '.result.body // ""')
 ```

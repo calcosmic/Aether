@@ -23,7 +23,7 @@ Parse `$ARGUMENTS`:
 
 Run using the Bash tool with description "Exporting pheromone signals to XML...":
 ```bash
-bash .aether/aether-utils.sh pheromone-export-xml "<output_path>"
+aether pheromone-export-xml --output "<output_path>"
 ```
 
 Parse the returned JSON:
@@ -52,6 +52,6 @@ Generate the state-based Next Up block by running using the Bash tool with descr
 state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
 current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
 total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
-bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
+aether print-next-up
 ```
 

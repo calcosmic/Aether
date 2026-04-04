@@ -44,10 +44,10 @@ Oracle peering into the depths...
 
 ### Step 0b: Stop Oracle
 
-Create the stop signal file by running using the Bash tool with description "Stopping oracle research...":
+Stop any active Oracle research by running using the Bash tool with description "Stopping oracle research...":
 
 ```bash
-mkdir -p .aether/oracle && touch .aether/oracle/.stop
+mkdir -p .aether/oracle && touch .aether/oracle/.stop && rm -f .aether/oracle/.loop-active
 ```
 
 Output:
@@ -55,8 +55,11 @@ Output:
 ```
 🔮🐜 Oracle Stop Signal Sent
 
-   Created .aether/oracle/.stop
-   The research loop will halt at the end of the current iteration.
+   Removed loop state files.
+   - .aether/oracle/.stop (signal for legacy tmux loop)
+   - .aether/oracle/.loop-active (signal for in-session loop)
+
+   Any active research will halt at the next iteration boundary.
 
    To check final results: /ant:oracle status
 ```
@@ -409,14 +412,14 @@ ORACLE_START=$(date +%s)
 
 Check for stale files by running using the Bash tool with description "Checking for stale oracle session...":
 ```bash
-stale_check=$(bash .aether/aether-utils.sh session-verify-fresh --command oracle "" "$ORACLE_START")
+stale_check=$(aether session-verify-fresh --command oracle "" "$ORACLE_START")
 has_stale=$(echo "$stale_check" | jq -r '.stale | length')
 has_progress=$(echo "$stale_check" | jq -r '.fresh | length')
 
 if [[ "$has_stale" -gt 0 ]] || [[ "$has_progress" -gt 0 ]]; then
   # Found existing oracle session
   if [[ "$force_research" == "true" ]]; then
-    bash .aether/aether-utils.sh session-clear --command oracle
+    aether session-clear --command oracle
     echo "Cleared stale oracle session for fresh research"
   else
     # Existing session found - prompt user
@@ -482,7 +485,7 @@ Use the Write tool to create `.aether/oracle/state.json`:
 For each focus area string from Question 7, run using the Bash tool with description "Emitting focus area pheromones...":
 
 ```bash
-bash .aether/aether-utils.sh pheromone-write FOCUS "$focus_area" \
+aether pheromone-write --type FOCUS --content "$focus_area" \
   --strength 0.8 --source "oracle:wizard" \
   --reason "Focus area set in oracle wizard" --ttl "24h" 2>/dev/null || true
 ```
@@ -581,7 +584,7 @@ Next investigation: <text of q1, the first question>
 
 Verify that state.json, plan.json, gaps.md, synthesis.md, and research-plan.md were created successfully by running using the Bash tool with description "Verifying oracle files...":
 ```bash
-verify_result=$(bash .aether/aether-utils.sh session-verify-fresh --command oracle "" "$ORACLE_START")
+verify_result=$(aether session-verify-fresh --command oracle "" "$ORACLE_START")
 fresh_count=$(echo "$verify_result" | jq -r '.fresh | length')
 
 if [[ "$fresh_count" -lt 5 ]]; then
@@ -593,7 +596,7 @@ Proceed to Step 3.
 
 ---
 
-### Step 3: Launch
+### Step 3: Launch (In-Session Loop)
 
 Output the research configuration summary, showing the sub-questions from plan.json:
 
@@ -617,61 +620,59 @@ Output the research configuration summary, showing the sub-questions from plan.j
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-Now launch the loop. Try tmux first, fall back to manual.
-
-**Try tmux** by running using the Bash tool with description "Launching oracle in tmux...":
+**Create the loop marker file** by running using the Bash tool with description "Creating oracle loop marker...":
 
 ```bash
-tmux new-session -d -s oracle "cd $(pwd) && bash .aether/utils/oracle/oracle.sh; echo ''; echo '🔮🐜 Oracle loop finished. Press any key to close.'; read -n1" 2>/dev/null && echo "TMUX_OK" || echo "TMUX_FAIL"
+SESSION_ID="${CLAUDE_SESSION_ID:-$(uuidgen 2>/dev/null || date +%s)}"
+MAX_IT=<max_iterations from wizard>
+TARGET_CONF=<target_confidence from wizard>
+cat > .aether/oracle/.loop-active <<MARKER
+---
+iteration: 0
+max_iterations: $MAX_IT
+session_id: $SESSION_ID
+phase: survey
+target_confidence: $TARGET_CONF
+synthesis_done: false
+oracle_md_path: .aether/utils/oracle/oracle.md
+---
+Oracle research loop active
+MARKER
+echo "LOOP_MARKER_CREATED"
 ```
 
-**If TMUX_OK:**
+Output:
 
 ```
-🔮🐜 Oracle Launched
+🔮🐜 Oracle Research Started (In-Session Loop)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-   The Oracle is researching in a background tmux session.
+   The Oracle is researching IN THIS SESSION.
 
-   👁️  Watch live:     tmux attach -t oracle
+   The Stop hook will keep the loop running automatically:
+   - Each iteration researches one question
+   - Phases advance: survey -> investigate -> synthesize -> verify
+   - Loop ends when confidence reaches {target_confidence}% or max iterations hit
+   - A final synthesis pass produces the research report
+
    📊 Check status:   /ant:oracle status
    🛑 Stop early:     /ant:oracle stop
 
    Research progress visible at .aether/oracle/research-plan.md
-   The Oracle will stop when it reaches {target_confidence}% confidence
-   or completes {max_iterations} iterations.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-   You can keep working. The Oracle runs independently.
+   You can continue chatting. The Oracle loop runs between your messages.
 ```
 
-Stop here.
-
-**If TMUX_FAIL** (tmux not installed or error):
-
-```
-🔮 Ready to Launch
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-   tmux not available. Run this in a separate terminal:
-
-   cd {current_working_directory}
-   bash .aether/utils/oracle/oracle.sh
-
-   Then come back here:
-   📊 Check status:   /ant:oracle status
-   🛑 Stop early:     /ant:oracle stop
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-```
+**Now begin the first iteration.** Read `.aether/utils/oracle/oracle.md` and start the survey phase research immediately.
+Target the first untouched question from plan.json. Update state files as you go.
+When you try to stop, the Stop hook will check progress and continue the loop if needed.
 
 Generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":
 ```bash
 state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
 current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
 total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
-bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
+aether print-next-up
 ```
-
-Stop here.

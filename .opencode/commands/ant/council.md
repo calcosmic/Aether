@@ -31,7 +31,7 @@ When `--deliberate "<proposal>"` is passed, run a structured Advocate/Challenger
 
 Run using the Bash tool with description "Checking deliberation budget...":
 ```bash
-bash .aether/aether-utils.sh council-budget-check
+aether council-budget-check
 ```
 
 Parse result. If `allowed` is `false`:
@@ -47,7 +47,7 @@ Stop here.
 
 Run using the Bash tool with description "Opening deliberation...":
 ```bash
-bash .aether/aether-utils.sh council-deliberate --proposal "<proposal>"
+aether council-deliberate --proposal "<proposal>"
 ```
 
 Capture `deliberation_id` from `result.id`.
@@ -71,7 +71,7 @@ Spawn an Advocate scout to argue **in favor** of the proposal.
 
 Record the argument:
 ```bash
-bash .aether/aether-utils.sh council-advocate \
+aether council-advocate \
   --deliberation-id "<deliberation_id>" \
   --argument "<advocate_argument>"
 ```
@@ -90,7 +90,7 @@ Spawn a Challenger scout to argue **against** the proposal.
 
 Record the argument:
 ```bash
-bash .aether/aether-utils.sh council-challenger \
+aether council-challenger \
   --deliberation-id "<deliberation_id>" \
   --argument "<challenger_argument>"
 ```
@@ -109,7 +109,7 @@ Spawn a Sage scout to synthesize both positions and provide a recommendation.
 
 Record the sage synthesis:
 ```bash
-bash .aether/aether-utils.sh council-sage \
+aether council-sage \
   --deliberation-id "<deliberation_id>" \
   --synthesis "<synthesis>" \
   --recommendation "<recommendation>"

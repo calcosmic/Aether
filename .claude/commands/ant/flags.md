@@ -33,7 +33,7 @@ If `--resolve` was provided, run using the Bash tool with description "Resolving
 
 
 ```bash
-bash .aether/aether-utils.sh flag-resolve "{flag_id}" "{resolution_message}"
+aether flag-resolve --id "{flag_id}" --message "{resolution_message}"
 ```
 Output:
 ```
@@ -48,7 +48,7 @@ If `--ack` was provided, run using the Bash tool with description "Acknowledging
 
 
 ```bash
-bash .aether/aether-utils.sh flag-acknowledge "{flag_id}"
+aether flag-acknowledge --id "{flag_id}"
 ```
 Output:
 ```
@@ -65,7 +65,7 @@ Run using the Bash tool with description "Loading colony flags...":
 
 
 ```bash
-bash .aether/aether-utils.sh flag-list {options}
+aether flag-list {options}
 ```
 
 Parse result for flags array.
@@ -145,7 +145,7 @@ Generate the state-based Next Up block by running using the Bash tool with descr
 state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
 current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
 total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
-bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
+aether print-next-up
 ```
 
 

@@ -25,7 +25,7 @@ If `goal` is null, output `No colony initialized. Nothing to pause.` and stop.
 
 Run using the Bash tool with description "Loading active pheromones...":
 ```bash
-bash .aether/aether-utils.sh pheromone-read
+aether pheromone-read
 ```
 
 Use `.result.signals` as the active signal list (already decay-filtered by runtime logic).
@@ -117,7 +117,7 @@ Store this as `ai_description`. If no clear description emerges, leave empty (wi
 
 **4. Generate Enhanced Commit Message:**
 ```bash
-bash .aether/aether-utils.sh generate-commit-message "contextual" {current_phase} "{phase_name}" "{ai_description}" {plan_number}
+aether generate-commit-message --type "contextual" --phase {current_phase} --subject "{phase_name}" "{ai_description}" {plan_number}
 ```
 
 Parse the returned JSON to extract `message`, `body`, `files_changed`, `subsystem`, and `scope`.
@@ -173,12 +173,12 @@ Continue to Step 5.
 Log this pause activity to `.aether/CONTEXT.md` by running using the Bash tool with description "Updating context document...":
 
 ```bash
-bash .aether/aether-utils.sh context-update activity "pause-colony" "Colony paused — handoff created" "—"
+aether context-update activity "pause-colony" "Colony paused — handoff created" "—"
 ```
 
 Update safe-to-clear status by running using the Bash tool with description "Marking safe to clear...":
 ```bash
-bash .aether/aether-utils.sh context-update safe-to-clear "YES" "Colony paused — safe to /clear, run /ant:resume-colony to continue"
+aether context-update safe-to-clear "YES" "Colony paused — safe to /clear, run /ant:resume-colony to continue"
 ```
 
 ### Step 5: Display Confirmation
@@ -229,5 +229,5 @@ Generate the state-based Next Up block by running using the Bash tool with descr
 state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
 current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
 total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
-bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
+aether print-next-up
 ```

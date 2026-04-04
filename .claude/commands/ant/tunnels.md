@@ -31,7 +31,7 @@ Stop here.
 
 ### Step 2: List All Chambers
 
-Run using the Bash tool with description "Loading chamber list...": `bash .aether/aether-utils.sh chamber-list`
+Run using the Bash tool with description "Loading chamber list...": `aether chamber-list`
 
 Parse JSON result into array of chambers.
 
@@ -129,7 +129,7 @@ Run /ant:tunnels {chamber_a} {chamber_b} to compare chambers
 ```
 
 To get the hash status, run using the Bash tool with description "Verifying chamber integrity...":
-- Run `bash .aether/aether-utils.sh chamber-verify .aether/chambers/{chamber_name}`
+- Run `aether chamber-verify --path .aether/chambers/{chamber_name}`
 - If verified: hash_status = "verified"
 - If not verified: hash_status = "hash mismatch"
 - If error: hash_status = "error"
@@ -344,7 +344,7 @@ Run using the Bash tool with description "Importing pheromone signals...":
 # Import the EXTRACTED pheromone-only XML (NOT the combined colony-archive.xml)
 # $import_tmp_pheromones has <pheromones> as root — the format pheromone-import-xml expects
 # Second argument triggers prefix-tagging — imported signal IDs become "{source_colony}:original_id"
-import_result=$(bash .aether/aether-utils.sh pheromone-import-xml "$import_tmp_pheromones" "$source_colony" 2>&1)
+import_result=$(aether pheromone-import-xml --input "$import_tmp_pheromones" --colony "$source_colony" 2>&1)
 import_ok=$(echo "$import_result" | jq -r '.ok // false' 2>/dev/null)
 
 if [[ "$import_ok" == "true" ]]; then
@@ -397,7 +397,7 @@ Generate the state-based Next Up block by running using the Bash tool with descr
 state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
 current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
 total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
-bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
+aether print-next-up
 ```
 
 ## Implementation Notes

@@ -70,7 +70,7 @@ Example:
 Run using the Bash tool with description "Inserting corrective phase...":
 
 ```bash
-bash .aether/aether-utils.sh phase-insert "<phase_name>" "<goal_text>" "<constraints_text>"
+aether phase-insert --name "<phase_name>" --goal "<goal_text>" --constraints "<constraints_text>"
 ```
 
 Parse JSON result:

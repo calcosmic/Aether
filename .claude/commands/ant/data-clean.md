@@ -17,7 +17,7 @@ You are the **Queen Ant Colony**. Run the data cleaner to scan for and remove te
 
 Run using the Bash tool with description "Scanning colony data for test artifacts...":
 ```bash
-bash .aether/aether-utils.sh data-clean --dry-run
+aether data-clean --dry-run
 ```
 
 Display the output to the user. This shows artifact counts per data file without modifying anything.
@@ -46,7 +46,7 @@ If user says no, display "No changes made." and skip to Step 5.
 
 If user confirmed, run using the Bash tool with description "Removing test artifacts...":
 ```bash
-bash .aether/aether-utils.sh data-clean --confirm
+aether data-clean --confirm
 ```
 
 ### Step 4: Summary
@@ -76,6 +76,6 @@ Generate the state-based Next Up block by running using the Bash tool with descr
 state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
 current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
 total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
-bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
+aether print-next-up
 ```
 

@@ -32,7 +32,7 @@ If `goal: null` -> "No colony initialized.", stop.
 
 Run using the Bash tool with description "Setting colony focus...":
 ```bash
-bash .aether/aether-utils.sh pheromone-write FOCUS "<content>" --strength 0.8 --reason "User directed colony attention" --ttl <ttl>
+aether pheromone-write --type FOCUS --content "<content>" --strength 0.8 --reason "User directed colony attention" --ttl <ttl>
 ```
 
 Parse the returned JSON for the signal ID.
@@ -41,14 +41,14 @@ Parse the returned JSON for the signal ID.
 
 Run using the Bash tool with description "Updating context document...":
 ```bash
-bash .aether/aether-utils.sh context-update constraint focus "<content>" "user" 2>/dev/null || true
+aether context-update --section constraint --key focus --content "<content>" "user" 2>/dev/null || true
 ```
 
 ### Step 3: Get Active Counts
 
 Run using the Bash tool with description "Counting active signals...":
 ```bash
-bash .aether/aether-utils.sh pheromone-count
+aether pheromone-count
 ```
 
 ### Step 4: Confirm
@@ -71,6 +71,6 @@ Generate the state-based Next Up block by running using the Bash tool with descr
 state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
 current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
 total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
-bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
+aether print-next-up
 ```
 

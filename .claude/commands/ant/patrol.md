@@ -249,12 +249,12 @@ Run these commands in parallel using the Bash tool:
 
 **Flags check:**
 ```bash
-bash .aether/aether-utils.sh flag-list 2>/dev/null || echo '{"result":{"flags":[]}}'
+aether flag-list --json 2>/dev/null || echo '{"result":{"flags":[]}}'
 ```
 
 **Midden check:**
 ```bash
-bash .aether/aether-utils.sh midden-recent-failures 2>/dev/null || echo '{"result":{"failures":[]}}'
+aether midden-recent-failures 2>/dev/null || echo '{"result":{"failures":[]}}'
 ```
 
 **Parse flag results:**
@@ -332,12 +332,12 @@ Display: `Checking colony health...`
 
 **Expire stale pheromones:**
 ```bash
-bash .aether/aether-utils.sh pheromone-expire 2>/dev/null || true
+aether pheromone-expire 2>/dev/null || true
 ```
 
 **Load memory metrics:**
 ```bash
-bash .aether/aether-utils.sh memory-metrics 2>/dev/null || echo '{}'
+aether memory-metrics 2>/dev/null || echo '{}'
 ```
 
 **Load instincts:**
@@ -357,7 +357,7 @@ From COLONY_STATE.json `events`:
 
 **Count pheromone signals:**
 ```bash
-bash .aether/aether-utils.sh pheromone-count 2>/dev/null || echo '{"result":{"count":0}}'
+aether pheromone-count 2>/dev/null || echo '{"result":{"count":0}}'
 ```
 
 Display:
@@ -586,7 +586,7 @@ Next:
 
 Run using the Bash tool:
 ```bash
-bash .aether/aether-utils.sh activity-log "COMPLETE" "queen" "Colony audit completed - {recommendation}"
+aether activity-log "COMPLETE" "queen" "Colony audit completed - {recommendation}"
 ```
 
 Display persistence confirmation:

@@ -57,7 +57,7 @@ Stop here.
 
 Run:
 ```bash
-bash .aether/aether-utils.sh flag-add "{type}" "{title}" "{description}" "manual" {phase_or_null}
+aether flag-add --severity "{type}" --title "{title}" --description "{description}" --source "manual" --phase {phase_or_null}
 ```
 
 Parse the result for the flag ID.

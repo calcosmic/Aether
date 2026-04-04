@@ -60,7 +60,7 @@ Generate swarm ID: `swarm-<unix_timestamp>`
 
 Initialize swarm findings:
 ```bash
-bash .aether/aether-utils.sh swarm-findings-init "<swarm_id>"
+aether swarm-findings-init --id "<swarm_id>"
 ```
 
 #### Step 2.5: Check for Stale Swarm Session
@@ -72,19 +72,19 @@ SWARM_START=$(date +%s)
 
 Check for stale swarm files:
 ```bash
-stale_check=$(bash .aether/aether-utils.sh session-verify-fresh --command swarm "" "$SWARM_START")
+stale_check=$(aether session-verify-fresh --command swarm "" "$SWARM_START")
 has_stale=$(echo "$stale_check" | jq -r '.stale | length')
 
 if [[ "$has_stale" -gt 0 ]]; then
   # Auto-clear stale swarm findings (safe - findings are temporary)
-  bash .aether/aether-utils.sh session-clear --command swarm
+  aether session-clear --command swarm
   echo "Cleared stale swarm findings for fresh investigation"
 fi
 ```
 
 After initializing findings, verify swarm files are fresh:
 ```bash
-verify_result=$(bash .aether/aether-utils.sh session-verify-fresh --command swarm "" "$SWARM_START")
+verify_result=$(aether session-verify-fresh --command swarm "" "$SWARM_START")
 if [[ $(echo "$verify_result" | jq -r '.missing | length') -gt 0 ]]; then
   echo "Warning: Swarm files not properly initialized"
 fi
@@ -106,7 +106,7 @@ Display header:
 
 Before any investigation that might lead to fixes, run using the Bash tool:
 ```bash
-bash .aether/aether-utils.sh autofix-checkpoint "pre-swarm-$SWARM_ID"
+aether autofix-checkpoint --name "pre-swarm-$SWARM_ID"
 ```
 
 Store the result for potential rollback:
@@ -121,7 +121,7 @@ Store the result for potential rollback:
 
 Read existing blockers for context:
 ```bash
-bash .aether/aether-utils.sh flag-list --type blocker
+aether flag-list --type blocker --json
 ```
 
 Read recent activity:
@@ -209,7 +209,7 @@ Wait for all 4 scouts to complete.
 
 As each scout returns, add their findings:
 ```bash
-bash .aether/aether-utils.sh swarm-findings-add "{swarm_id}" "{scout_type}" "{confidence}" '{finding_json}'
+aether swarm-findings-add "{swarm_id}" "{scout_type}" "{confidence}" '{finding_json}'
 ```
 
 Display each scout's report as they complete:
@@ -294,8 +294,8 @@ Inject learnings:
 
 Set solution in swarm findings and log success:
 ```bash
-bash .aether/aether-utils.sh swarm-solution-set "{swarm_id}" '{solution_json}'
-bash .aether/aether-utils.sh activity-log "SWARM_SUCCESS" "Queen" "Swarm {swarm_id} fixed: {brief description}"
+aether swarm-solution-set "{swarm_id}" '{solution_json}'
+aether activity-log "SWARM_SUCCESS" "Queen" "Swarm {swarm_id} fixed: {brief description}"
 ```
 
 **If verification fails:**
@@ -310,8 +310,8 @@ Attempting rollback...
 
 Rollback and log failure:
 ```bash
-bash .aether/aether-utils.sh autofix-rollback "{checkpoint_type}" "{checkpoint_ref}"
-bash .aether/aether-utils.sh activity-log "SWARM_FAILED" "Queen" "Swarm {swarm_id} fix failed verification"
+aether autofix-rollback --type "{checkpoint_type}" --ref "{checkpoint_ref}"
+aether activity-log "SWARM_FAILED" "Queen" "Swarm {swarm_id} fix failed verification"
 ```
 
 Track attempt count. If this is the 3rd failure on the same issue:
@@ -337,7 +337,7 @@ Swarm will not attempt further fixes on this issue.
 
 Archive findings:
 ```bash
-bash .aether/aether-utils.sh swarm-cleanup "{swarm_id}" --archive
+aether swarm-cleanup "{swarm_id}" --archive
 ```
 
 Generate the state-based Next Up block:
@@ -345,5 +345,5 @@ Generate the state-based Next Up block:
 state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
 current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
 total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
-bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
+aether print-next-up
 ```

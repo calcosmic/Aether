@@ -46,7 +46,7 @@ Stop here.
 
 ### Step 1.5: Load State and Show Resumption Context
 
-Run using Bash tool: `bash .aether/aether-utils.sh load-state`
+Run using Bash tool: `aether load-state`
 
 If successful and goal is not null:
 1. Extract current_phase from state
@@ -61,7 +61,7 @@ If .aether/HANDOFF.md exists (detected in load-state output):
 - Read .aether/HANDOFF.md for additional context
 - Remove .aether/HANDOFF.md after display (cleanup)
 
-Run: `bash .aether/aether-utils.sh unload-state` to release lock.
+Run: `aether unload-state` to release lock.
 
 **Error handling:**
 - If E_FILE_NOT_FOUND: "No colony initialized. Run /ant:init first." and stop
@@ -97,7 +97,7 @@ Select planning depth (prompt user if not explicitly provided):
 
 Run using the Bash tool with description "Loading compact planning context...":
 ```bash
-bash .aether/aether-utils.sh context-capsule --compact --json 2>/dev/null
+aether context-capsule --compact --json 2>/dev/null
 ```
 
 If JSON is valid and `.ok == true`, extract `.result.prompt_section` into `context_capsule_prompt`.
@@ -179,7 +179,7 @@ Investigate domain knowledge for each phase before the planning loop begins. Thi
 **1. Retrieve hive wisdom for research priming:**
 
 ```bash
-hive_context=$(bash .aether/aether-utils.sh hive-read --limit 5 --format text 2>/dev/null)
+hive_context=$(aether hive-read --limit 5 --format text 2>/dev/null)
 ```
 
 Parse the JSON result to extract `.result.text` as `hive_text`. If command fails or returns empty, set `hive_text = ""`.
@@ -581,7 +581,7 @@ verify_state=$(jq -r '.state' .aether/data/COLONY_STATE.json)
 if [[ "$verify_phases" -lt 1 || "$verify_timestamp" == "null" || "$verify_state" != "READY" ]]; then
   echo "ERROR: Plan write verification failed (phases=$verify_phases, generated_at=$verify_timestamp, state=$verify_state)"
   echo "Attempting retry write..."
-  bash .aether/aether-utils.sh state-write "$(jq --argjson phases "$(echo '$PLAN_JSON' | jq '.plan.phases')" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '.plan.phases = $phases | .plan.generated_at = $ts | .state = "READY"' .aether/data/COLONY_STATE.json)"
+  aether state-write "$(jq --argjson phases "$(echo '$PLAN_JSON' | jq '.plan.phases')" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '.plan.phases = $phases | .plan.generated_at = $ts | .state = "READY"' .aether/data/COLONY_STATE.json)"
   verify_phases=$(jq '.plan.phases | length' .aether/data/COLONY_STATE.json)
   if [[ "$verify_phases" -lt 1 ]]; then
     echo "FATAL: Retry write also failed. Plan was not persisted."
@@ -592,7 +592,7 @@ fi
 echo "Plan verified: $verify_phases phases, generated_at=$verify_timestamp, state=$verify_state"
 ```
 
-Log plan completion: `bash .aether/aether-utils.sh activity-log "PLAN_COMPLETE" "queen" "Plan finalized with {confidence}% confidence"`
+Log plan completion: `aether activity-log "PLAN_COMPLETE" "queen" "Plan finalized with {confidence}% confidence"`
 
 Update watch-status.txt:
 ```

@@ -17,7 +17,7 @@ You are the **Queen**. Display the colony's maturity journey.
 ### Step 1: Detect Current Milestone
 
 Run:
-`bash .aether/aether-utils.sh milestone-detect`
+`aether milestone-detect`
 
 Parse JSON result to get:
 - `milestone`: Current milestone name (First Mound, Open Chambers, Brood Stable, Ventilated Nest, Sealed Chambers, Crowned Anthill)

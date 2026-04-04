@@ -20,7 +20,7 @@ Drill-down view of accumulated colony wisdom, pending promotions, and recent fai
 
 Run using the Bash tool with description "Loading colony memory...":
 ```bash
-bash .aether/aether-utils.sh memory-metrics
+aether memory-metrics
 ```
 
 ### Step 2: Display Wisdom (from QUEEN.md)

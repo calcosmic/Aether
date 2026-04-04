@@ -74,7 +74,7 @@ Collect all worker outputs and create phase summary:
 **Graveyard Recording:**
 For each worker that returned `status: "failed"`:
   For each file in that worker's `files_modified` or `files_created`:
-Run using the Bash tool with description "Recording failure grave...": `bash .aether/aether-utils.sh grave-add "{file}" "{ant_name}" "{task_id}" {phase} "{first blocker or summary}" && bash .aether/aether-utils.sh activity-log "GRAVE" "Queen" "Grave marker placed at {file} — {ant_name} failed: {summary}"`
+Run using the Bash tool with description "Recording failure grave...": `aether grave-add "{file}" "{ant_name}" "{task_id}" {phase} "{first blocker or summary}" && aether activity-log "GRAVE" "Queen" "Grave marker placed at {file} — {ant_name} failed: {summary}"`
   Then display a user-visible confirmation line:
   `⚰️ Grave recorded: {file} — {ant_name} failed ({summary})`
 
@@ -88,7 +88,7 @@ For each pattern in `learning.patterns_observed`:
 - If `success_capture_count >= 2`, stop (cap reached)
 - Run using the Bash tool with description "Capturing synthesis pattern success...":
 ```bash
-bash .aether/aether-utils.sh memory-capture \
+aether memory-capture \
   "success" \
   "${pattern.trigger}: ${pattern.action} (evidence: ${pattern.evidence})" \
   "pattern" \
@@ -290,7 +290,7 @@ This ensures the handoff always reflects the latest build state, even if the ses
 
 Log this build activity to `.aether/CONTEXT.md`:
 
-Run using the Bash tool with description "Updating build context...": `bash .aether/aether-utils.sh context-update activity "build {phase_id}" "{synthesis.status}" "{files_created_count + files_modified_count}" && bash .aether/aether-utils.sh context-update build-complete "{synthesis.status}" "{synthesis.status == 'completed' ? 'success' : 'failed'}"`
+Run using the Bash tool with description "Updating build context...": `aether context-update activity "build {phase_id}" "{synthesis.status}" "{files_created_count + files_modified_count}" && aether context-update build-complete "{synthesis.status}" "{synthesis.status == 'completed' ? 'success' : 'failed'}"`
 
 Also update safe-to-clear status:
 - If build completed successfully: `context-update safe-to-clear "YES" "Build complete, ready to continue"`
@@ -302,14 +302,14 @@ After build completion (success or failure), check if any observations have met 
 
 Run using the Bash tool with description "Checking for wisdom promotions...":
 ```bash
-proposals=$(bash .aether/aether-utils.sh learning-check-promotion 2>/dev/null || echo '{"proposals":[]}')
+proposals=$(aether learning-check-promotion 2>/dev/null || echo '{"proposals":[]}')
 proposal_count=$(echo "$proposals" | jq '.proposals | length')
 echo "{\"proposal_count\": $proposal_count}"
 ```
 
 Parse the result. If proposal_count > 0:
 - Display: "📚 $proposal_count wisdom proposal(s) ready for review"
-- Run: `bash .aether/aether-utils.sh learning-approve-proposals`
+- Run: `aether learning-approve-proposals`
 - This presents the one-at-a-time UI for user review
 
 If proposal_count == 0:
@@ -365,7 +365,7 @@ After displaying the BUILD SUMMARY (and optional verbose details), call the Next
 state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json 2>/dev/null || echo "IDLE")
 current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json 2>/dev/null || echo "0")
 total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json 2>/dev/null || echo "0")
-bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
+aether print-next-up "$state" "$current_phase" "$total_phases"
 ```
 
 **Routing Note:** The state-based Next Up block above routes based on colony state. If verification failed or blockers exist, review `/ant:flags` before continuing.
@@ -379,4 +379,4 @@ bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_pha
 
 Update the session tracking file to enable `/ant:resume` after context clear:
 
-Run using the Bash tool with description "Saving build session...": `bash .aether/aether-utils.sh session-update "/ant:build {phase_id}" "/ant:continue" "Phase {phase_id} build completed: {synthesis.status}"`
+Run using the Bash tool with description "Saving build session...": `aether session-update "/ant:build {phase_id}" "/ant:continue" "Phase {phase_id} build completed: {synthesis.status}"`

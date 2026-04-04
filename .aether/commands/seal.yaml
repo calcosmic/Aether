@@ -57,7 +57,7 @@ body_claude: |
 
   ### Step 2: Maturity Gate
 
-  Run `bash .aether/aether-utils.sh milestone-detect` to get `milestone`, `phases_completed`, `total_phases`.
+  Run `aether milestone-detect` to get `milestone`, `phases_completed`, `total_phases`.
 
   **If milestone is already "Crowned Anthill":**
   ```
@@ -119,8 +119,8 @@ body_claude: |
 
   if [[ "$phases_completed" -ge 3 ]]; then
     # Generate Sage name and dispatch
-    sage_name=$(bash .aether/aether-utils.sh generate-ant-name "sage")
-    bash .aether/aether-utils.sh spawn-log "Queen" "sage" "$sage_name" "Colony analytics review"
+    sage_name=$(aether generate-ant-name --caste "sage")
+    aether spawn-log --name "Queen" --caste "sage" --id "$sage_name" --description "Colony analytics review"
 
     # Display spawn notification
     echo ""
@@ -159,7 +159,7 @@ body_claude: |
 
   **IMPORTANT:** You are strictly read-only. Do not modify any files.
 
-  Log activity: bash .aether/aether-utils.sh activity-log "ANALYZING" "{sage_name}" "description"
+  Log activity: aether activity-log "ANALYZING" "{sage_name}" "description"
 
   Return ONLY this JSON (no other text):
   {{
@@ -192,7 +192,7 @@ body_claude: |
 
   Log completion and update swarm display:
   ```bash
-  bash .aether/aether-utils.sh spawn-complete "$sage_name" "completed" "Analytics review complete"
+  aether spawn-complete --id "$sage_name" --status "completed" --summary "Analytics review complete"
   ```
 
   **Display Sage completion line:**
@@ -204,7 +204,7 @@ body_claude: |
   **Log high-priority recommendations to midden (non-blocking):**
   For each recommendation with priority <= 2:
   ```bash
-  bash .aether/aether-utils.sh midden-write "analytics" "Sage recommendation (P{priority}): {action}" "sage"
+  aether midden-write "analytics" "Sage recommendation (P{priority}): {action}" "sage"
   ```
 
   **Display insights summary:**
@@ -239,7 +239,7 @@ body_claude: |
       colony=$(echo "$encoded" | base64 -d | jq -r '.colonies[0] // "unknown"')
       [[ -z "$content" ]] && continue
 
-      result=$(bash .aether/aether-utils.sh learning-promote-auto "$wisdom_type" "$content" "$colony" "learning" 2>/dev/null || echo '{}')
+      result=$(aether learning-promote-auto "$wisdom_type" "$content" "$colony" "learning" 2>/dev/null || echo '{}')
       was_promoted=$(echo "$result" | jq -r '.result.promoted // false' 2>/dev/null || echo "false")
       if [[ "$was_promoted" == "true" ]]; then
         auto_promoted_count=$((auto_promoted_count + 1))
@@ -254,7 +254,7 @@ body_claude: |
   # --- END Batch auto-promotion ---
 
   # Check for pending proposals
-  proposals=$(bash .aether/aether-utils.sh learning-check-promotion 2>/dev/null || echo '{"proposals":[]}')
+  proposals=$(aether learning-check-promotion 2>/dev/null || echo '{"proposals":[]}')
   proposal_count=$(echo "$proposals" | jq '.proposals | length')
 
   if [[ "$proposal_count" -gt 0 ]]; then
@@ -268,7 +268,7 @@ body_claude: |
     echo ""
 
     # Run approval workflow (blocking)
-    bash .aether/aether-utils.sh learning-approve-proposals
+    aether learning-approve-proposals
 
     echo ""
     echo "Wisdom review complete. Proceeding with sealing ceremony..."
@@ -318,7 +318,7 @@ body_claude: |
     [[ -n "$repo_domain_tags" ]] && promote_args+=(--domain "$repo_domain_tags")
 
     # Call hive-promote which orchestrates abstract + store
-    result=$(bash .aether/aether-utils.sh "${promote_args[@]}" 2>/dev/null || echo '{}')
+    result=$(aether "${promote_args[@]}" 2>/dev/null || echo '{}')
     was_promoted=$(echo "$result" | jq -r '.result.action // "skipped"' 2>/dev/null || echo "skipped")
 
     if [[ "$was_promoted" == "promoted" || "$was_promoted" == "merged" ]]; then
@@ -338,7 +338,7 @@ body_claude: |
 
   Log the seal ceremony to activity log:
   ```bash
-  bash .aether/aether-utils.sh activity-log "MODIFIED" "Queen" "Colony sealed - wisdom review completed"
+  aether activity-log "MODIFIED" "Queen" "Colony sealed - wisdom review completed"
   ```
 
   ### Step 4.4: Checkpoint State
@@ -347,7 +347,7 @@ body_claude: |
 
   Run using the Bash tool with description "Checkpointing colony state before seal...":
   ```bash
-  bash .aether/aether-utils.sh state-checkpoint "pre-seal" 2>/dev/null || echo "Warning: State checkpoint failed -- continuing without backup" >&2
+  aether state-checkpoint "pre-seal" 2>/dev/null || echo "Warning: State checkpoint failed -- continuing without backup" >&2
   ```
 
   ### Step 4.5: Increment Colony Version
@@ -382,7 +382,7 @@ body_claude: |
   2. Set `milestone_updated_at` to current ISO-8601 timestamp
   3. Append event: `"<timestamp>|milestone_reached|seal|Achieved Crowned Anthill milestone"`
 
-  Run `bash .aether/aether-utils.sh validate-state colony` after write.
+  Run `aether validate-state colony` after write.
 
   ### Step 5.1: Update Changelog
 
@@ -395,7 +395,7 @@ body_claude: |
   - Summarize the goal and key outcomes in one line
 
   ```bash
-  bash .aether/aether-utils.sh changelog-append \
+  aether changelog-append \
     "$(date +%Y-%m-%d)" \
     "seal-crowned-anthill" \
     "00" \
@@ -416,7 +416,7 @@ body_claude: |
 
   Run using the Bash tool (ignore errors):
   ```bash
-  bash .aether/aether-utils.sh registry-add "$(pwd)" "$(jq -r '.version // "unknown"' ~/.aether/version.json 2>/dev/null || echo 'unknown')" --active false 2>/dev/null || true
+  aether registry-add --path "$(pwd)" "$(jq -r '.version // "unknown"' ~/.aether/version.json 2>/dev/null || echo 'unknown')" --active false 2>/dev/null || true
   ```
 
   If the command fails, proceed silently. This is optional bookkeeping.
@@ -428,10 +428,10 @@ body_claude: |
   **Generate Chronicler name and dispatch:**
   ```bash
   # Generate unique chronicler name
-  chronicler_name=$(bash .aether/aether-utils.sh generate-ant-name "chronicler")
+  chronicler_name=$(aether generate-ant-name --caste "chronicler")
 
   # Log spawn and update swarm display
-  bash .aether/aether-utils.sh spawn-log "Queen" "chronicler" "$chronicler_name" "Documentation coverage audit"
+  aether spawn-log --name "Queen" --caste "chronicler" --id "$chronicler_name" --description "Documentation coverage audit"
   ```
 
   **Display:**
@@ -469,7 +469,7 @@ body_claude: |
 
   **IMPORTANT:** You are strictly read-only. Do not modify any files.
 
-  Log activity: bash .aether/aether-utils.sh activity-log "SURVEYING" "{chronicler_name}" "description"
+  Log activity: aether activity-log "SURVEYING" "{chronicler_name}" "description"
 
   Return ONLY this JSON (no other text):
   {
@@ -498,7 +498,7 @@ body_claude: |
 
   Log completion and update swarm display:
   ```bash
-  bash .aether/aether-utils.sh spawn-complete "$chronicler_name" "completed" "Documentation audit complete"
+  aether spawn-complete --id "$chronicler_name" --status "completed" --summary "Documentation audit complete"
   ```
 
   **Display Chronicler completion line:**
@@ -509,7 +509,7 @@ body_claude: |
   **Log gaps to midden (non-blocking):**
   For each gap in `gaps_identified` with severity "high" or "medium":
   ```bash
-  bash .aether/aether-utils.sh midden-write "documentation" "Gap ({severity}): {description} at {location}" "chronicler"
+  aether midden-write "documentation" "Gap ({severity}): {description} at {location}" "chronicler"
   ```
 
   **Display summary:**
@@ -580,7 +580,7 @@ body_claude: |
   ```bash
   # Check if xmllint is available
   if command -v xmllint >/dev/null 2>&1; then
-    xml_result=$(bash .aether/aether-utils.sh colony-archive-xml ".aether/exchange/colony-archive.xml" 2>&1)
+    xml_result=$(aether colony-archive-xml --output ".aether/exchange/colony-archive.xml" 2>&1)
     xml_ok=$(echo "$xml_result" | jq -r '.ok // false' 2>/dev/null)
     if [[ "$xml_ok" == "true" ]]; then
       xml_pheromone_count=$(echo "$xml_result" | jq -r '.result.pheromone_count // 0' 2>/dev/null)
@@ -590,7 +590,7 @@ body_claude: |
     fi
 
     # Also export standalone pheromones.xml for cross-colony sharing
-    pher_result=$(bash .aether/aether-utils.sh pheromone-export-xml ".aether/exchange/pheromones.xml" 2>&1)
+    pher_result=$(aether pheromone-export-xml --output ".aether/exchange/pheromones.xml" 2>&1)
     pher_ok=$(echo "$pher_result" | jq -r '.ok // false' 2>/dev/null)
     if [[ "$pher_ok" == "true" ]]; then
       pher_signal_count=$(jq '[.signals[] | select(.active != false)] | length' .aether/data/pheromones.json 2>/dev/null || echo "0")
@@ -600,7 +600,7 @@ body_claude: |
     fi
 
     # Export standalone queen-wisdom.xml for cross-colony wisdom sharing
-    wisdom_result=$(bash .aether/aether-utils.sh wisdom-export-xml ".aether/exchange/queen-wisdom.xml" 2>&1)
+    wisdom_result=$(aether wisdom-export-xml ".aether/exchange/queen-wisdom.xml" 2>&1)
     wisdom_ok=$(echo "$wisdom_result" | jq -r '.ok // false' 2>/dev/null)
     if [[ "$wisdom_ok" == "true" ]]; then
       wisdom_count=$(echo "$wisdom_result" | jq -r '.result.entries // 0' 2>/dev/null)
@@ -610,7 +610,7 @@ body_claude: |
     fi
 
     # Export standalone colony-registry.xml for lineage tracking
-    registry_result=$(bash .aether/aether-utils.sh registry-export-xml ".aether/exchange/colony-registry.xml" 2>&1)
+    registry_result=$(aether registry-export-xml ".aether/exchange/colony-registry.xml" 2>&1)
     registry_ok=$(echo "$registry_result" | jq -r '.ok // false' 2>/dev/null)
     if [[ "$registry_ok" == "true" ]]; then
       registry_count=$(echo "$registry_result" | jq -r '.result.colonies // 0' 2>/dev/null)
@@ -689,7 +689,7 @@ body_claude: |
 
   Generate a seal commit message:
   ```bash
-  seal_commit=$(bash .aether/aether-utils.sh generate-commit-message seal "$phases_completed" "$goal" "$colony_age_days" 2>/dev/null)
+  seal_commit=$(aether generate-commit-message seal "$phases_completed" "$goal" "$colony_age_days" 2>/dev/null)
   seal_message=$(echo "$seal_commit" | jq -r '.result.message // "aether-seal: colony sealed"')
   seal_body=$(echo "$seal_commit" | jq -r '.result.body // ""')
   ```
@@ -932,7 +932,7 @@ body_opencode: |
   - Summarize the goal and key outcomes in one line
 
   ```bash
-  bash .aether/aether-utils.sh changelog-append \
+  aether changelog-append \
     "$(date +%Y-%m-%d)" \
     "seal-crowned-anthill" \
     "00" \
@@ -953,7 +953,7 @@ body_opencode: |
 
   Run using the Bash tool (ignore errors):
   ```bash
-  bash .aether/aether-utils.sh registry-add "$(pwd)" "$(jq -r '.version // "unknown"' ~/.aether/version.json 2>/dev/null || echo 'unknown')" --active false 2>/dev/null || true
+  aether registry-add --path "$(pwd)" "$(jq -r '.version // "unknown"' ~/.aether/version.json 2>/dev/null || echo 'unknown')" --active false 2>/dev/null || true
   ```
 
   If the command fails, proceed silently. This is optional bookkeeping.
@@ -998,7 +998,7 @@ body_opencode: |
     [[ -n "$repo_domain_tags" ]] && promote_args+=(--domain "$repo_domain_tags")
 
     # Call hive-promote which orchestrates abstract + store
-    result=$(bash .aether/aether-utils.sh "${promote_args[@]}" 2>/dev/null || echo '{}')
+    result=$(aether "${promote_args[@]}" 2>/dev/null || echo '{}')
     was_promoted=$(echo "$result" | jq -r '.result.action // "skipped"' 2>/dev/null || echo "skipped")
 
     if [[ "$was_promoted" == "promoted" || "$was_promoted" == "merged" ]]; then
@@ -1044,7 +1044,7 @@ body_opencode: |
   ```bash
   # Check if xmllint is available
   if command -v xmllint >/dev/null 2>&1; then
-    xml_result=$(bash .aether/aether-utils.sh colony-archive-xml ".aether/exchange/colony-archive.xml" 2>&1)
+    xml_result=$(aether colony-archive-xml --output ".aether/exchange/colony-archive.xml" 2>&1)
     xml_ok=$(echo "$xml_result" | jq -r '.ok // false' 2>/dev/null)
     if [[ "$xml_ok" == "true" ]]; then
       xml_pheromone_count=$(echo "$xml_result" | jq -r '.result.pheromone_count // 0' 2>/dev/null)
@@ -1054,7 +1054,7 @@ body_opencode: |
     fi
 
     # Also export standalone pheromones.xml for cross-colony sharing
-    pher_result=$(bash .aether/aether-utils.sh pheromone-export-xml ".aether/exchange/pheromones.xml" 2>&1)
+    pher_result=$(aether pheromone-export-xml --output ".aether/exchange/pheromones.xml" 2>&1)
     pher_ok=$(echo "$pher_result" | jq -r '.ok // false' 2>/dev/null)
     if [[ "$pher_ok" == "true" ]]; then
       pher_signal_count=$(jq '[.signals[] | select(.active != false)] | length' .aether/data/pheromones.json 2>/dev/null || echo "0")
@@ -1064,7 +1064,7 @@ body_opencode: |
     fi
 
     # Export standalone queen-wisdom.xml for cross-colony wisdom sharing
-    wisdom_result=$(bash .aether/aether-utils.sh wisdom-export-xml ".aether/exchange/queen-wisdom.xml" 2>&1)
+    wisdom_result=$(aether wisdom-export-xml ".aether/exchange/queen-wisdom.xml" 2>&1)
     wisdom_ok=$(echo "$wisdom_result" | jq -r '.ok // false' 2>/dev/null)
     if [[ "$wisdom_ok" == "true" ]]; then
       wisdom_count=$(echo "$wisdom_result" | jq -r '.result.entries // 0' 2>/dev/null)
@@ -1074,7 +1074,7 @@ body_opencode: |
     fi
 
     # Export standalone colony-registry.xml for lineage tracking
-    registry_result=$(bash .aether/aether-utils.sh registry-export-xml ".aether/exchange/colony-registry.xml" 2>&1)
+    registry_result=$(aether registry-export-xml ".aether/exchange/colony-registry.xml" 2>&1)
     registry_ok=$(echo "$registry_result" | jq -r '.ok // false' 2>/dev/null)
     if [[ "$registry_ok" == "true" ]]; then
       registry_count=$(echo "$registry_result" | jq -r '.result.colonies // 0' 2>/dev/null)
@@ -1145,7 +1145,7 @@ body_opencode: |
 
   Generate a seal commit message:
   ```bash
-  seal_commit=$(bash .aether/aether-utils.sh generate-commit-message seal "$phases_completed" "$goal" "$colony_age_days" 2>/dev/null)
+  seal_commit=$(aether generate-commit-message seal "$phases_completed" "$goal" "$colony_age_days" 2>/dev/null)
   seal_message=$(echo "$seal_commit" | jq -r '.result.message // "aether-seal: colony sealed"')
   seal_body=$(echo "$seal_commit" | jq -r '.result.body // ""')
   ```

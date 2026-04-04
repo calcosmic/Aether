@@ -129,7 +129,7 @@ Before archiving, review wisdom proposals accumulated during this colony's lifec
 
 ```bash
 # Check for pending proposals
-proposals=$(bash .aether/aether-utils.sh learning-check-promotion 2>/dev/null || echo '{"proposals":[]}')
+proposals=$(aether learning-check-promotion 2>/dev/null || echo '{"proposals":[]}')
 proposal_count=$(echo "$proposals" | jq '.proposals | length')
 
 if [[ "$proposal_count" -gt 0 ]]; then
@@ -143,7 +143,7 @@ if [[ "$proposal_count" -gt 0 ]]; then
   echo ""
 
   # Run approval workflow (blocking)
-  bash .aether/aether-utils.sh learning-approve-proposals
+  aether learning-approve-proposals
 
   echo ""
   echo "Wisdom review complete. Proceeding with entombment..."
@@ -205,12 +205,12 @@ Verify QUEEN.md is initialized for wisdom storage:
 ```bash
 queen_file=".aether/QUEEN.md"
 if [[ ! -f "$queen_file" ]]; then
-  init_result=$(bash .aether/aether-utils.sh queen-init 2>/dev/null || echo '{"ok":false}')
+  init_result=$(aether queen-init 2>/dev/null || echo '{"ok":false}')
   init_ok=$(echo "$init_result" | jq -r '.ok // false')
   if [[ "$init_ok" == "true" ]]; then
     created=$(echo "$init_result" | jq -r '.result.created // false')
     if [[ "$created" == "true" ]]; then
-      bash .aether/aether-utils.sh activity-log "CREATED" "Queen" "Initialized QUEEN.md for wisdom storage"
+      aether activity-log "CREATED" "Queen" "Initialized QUEEN.md for wisdom storage"
     fi
   fi
 fi
@@ -248,7 +248,7 @@ version=$(jq -r '.version // "3.0"' .aether/data/COLONY_STATE.json)
 
 Create the chamber:
 ```bash
-bash .aether/aether-utils.sh chamber-create \
+aether chamber-create \
   ".aether/chambers/$chamber_name" \
   ".aether/data/COLONY_STATE.json" \
   "$goal" \
@@ -298,7 +298,7 @@ Export combined XML archive to the chamber. This is a HARD REQUIREMENT — entom
 
 ```bash
 chamber_dir=".aether/chambers/$chamber_name"
-xml_result=$(bash .aether/aether-utils.sh colony-archive-xml "$chamber_dir/colony-archive.xml" 2>&1)
+xml_result=$(aether colony-archive-xml --output "$chamber_dir/colony-archive.xml" 2>&1)
 xml_ok=$(echo "$xml_result" | jq -r '.ok // false' 2>/dev/null)
 
 if [[ "$xml_ok" != "true" ]]; then
@@ -326,7 +326,7 @@ xml_archive_line="XML Archive: colony-archive.xml (${xml_pheromone_count} signal
 
 Run verification:
 ```bash
-bash .aether/aether-utils.sh chamber-verify ".aether/chambers/$chamber_name"
+aether chamber-verify --path ".aether/chambers/$chamber_name"
 ```
 
 If verification fails, display error and stop:
@@ -344,7 +344,7 @@ Stop here.
 
 Write colony summary to eternal memory:
 ```bash
-bash .aether/aether-utils.sh eternal-init  # idempotent
+aether eternal-init  # idempotent
 eternal_file="$HOME/.aether/eternal/memory.json"
 if [[ -f "$eternal_file" ]]; then
   colony_entry=$(jq -n \

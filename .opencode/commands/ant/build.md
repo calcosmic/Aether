@@ -18,7 +18,7 @@ The phase to build is: `$normalized_args`
 
 ### Step 0.5: Load Colony State
 
-Run using Bash tool: `bash .aether/aether-utils.sh load-state`
+Run using Bash tool: `aether load-state`
 
 If the command fails (non-zero exit or JSON has ok: false):
 1. Parse error JSON
@@ -36,7 +36,7 @@ If successful:
    ```
    (If HANDOFF.md exists, this provides orientation before the build proceeds)
 
-After displaying context, run: `bash .aether/aether-utils.sh unload-state` to release the lock.
+After displaying context, run: `aether unload-state` to release the lock.
 
 ### Step 1: Validate + Read State
 
@@ -69,7 +69,7 @@ Stop here.
 
 **Set colony depth (if --depth flag provided):**
 If `cli_depth_override` is set:
-1. Run using Bash tool: `bash .aether/aether-utils.sh colony-depth set "$cli_depth_override"`
+1. Run using Bash tool: `aether colony-depth set "$cli_depth_override"`
 2. Parse JSON result - if `.ok` is false:
    - Display: `Error: Invalid depth "$cli_depth_override". Use: light, standard, deep, full`
    - Stop here
@@ -98,7 +98,7 @@ Extract:
 Check for unresolved blocker flags on the requested phase:
 
 ```bash
-bash .aether/aether-utils.sh flag-check-blockers {phase_number}
+aether flag-check-blockers {phase_number}
 ```
 
 Parse the JSON result (`.result.blockers`):
@@ -106,7 +106,7 @@ Parse the JSON result (`.result.blockers`):
 - **If blockers == 0:** Display nothing (or optionally a brief `No active blockers for Phase {id}.` line). Proceed to Step 2.
 - **If blockers > 0:** Retrieve blocker details:
   ```bash
-  bash .aether/aether-utils.sh flag-list --type blocker --phase {phase_number}
+  aether flag-list --type blocker --json --phase {phase_number}
   ```
   Parse `.result.flags` and display an advisory warning:
   ```
@@ -167,7 +167,7 @@ Output header:
 
 Run using the Bash tool with description "Showing phase progress...":
 ```bash
-progress_bar=$(bash .aether/aether-utils.sh generate-progress-bar "$current_phase" "$total_phases" 20 2>/dev/null || echo "")
+progress_bar=$(aether generate-progress-bar "$current_phase" "$total_phases" 20 2>/dev/null || echo "")
 if [[ -n "$progress_bar" ]]; then
   echo "[Phase ${current_phase}/${total_phases}] ${progress_bar}"
 fi
@@ -194,7 +194,7 @@ CONSTRAINTS: (none)
 Check if territory survey exists and load relevant documents:
 
 ```bash
-bash .aether/aether-utils.sh survey-load "{phase_name}" 2>/dev/null
+aether survey-load "{phase_name}" 2>/dev/null
 ```
 
 **Parse the JSON response:**
@@ -240,7 +240,7 @@ bash .aether/aether-utils.sh survey-load "{phase_name}" 2>/dev/null
 Call `queen-read` to extract eternal wisdom for worker priming:
 
 ```bash
-bash .aether/aether-utils.sh queen-read 2>/dev/null
+aether queen-read 2>/dev/null
 ```
 
 **Parse the JSON response:**
@@ -275,7 +275,7 @@ queen_decrees = .result.wisdom.decrees (if .result.priming.has_decrees)
 Call `pheromone-read` to extract active colony signals for worker priming:
 
 ```bash
-bash .aether/aether-utils.sh pheromone-read 2>/dev/null
+aether pheromone-read 2>/dev/null
 ```
 
 **Parse the JSON response:**
@@ -329,8 +329,8 @@ bash .aether/aether-utils.sh pheromone-read 2>/dev/null
 
    Generate archaeologist name and log:
    ```bash
-   bash .aether/aether-utils.sh generate-ant-name "archaeologist"
-   bash .aether/aether-utils.sh spawn-log "Queen" "scout" "{archaeologist_name}" "Pre-build archaeology scan"
+   aether generate-ant-name --caste "archaeologist"
+   aether spawn-log --name "Queen" --caste "scout" --id "{archaeologist_name}" --description "Pre-build archaeology scan"
    ```
 
    Display:
@@ -355,7 +355,7 @@ bash .aether/aether-utils.sh pheromone-read 2>/dev/null
    4. Run: git blame "{file_path}" | head -40 for authorship
    5. Note TODO/FIXME/HACK markers
 
-   Log activity: bash .aether/aether-utils.sh activity-log "READ" "{Ant-Name}" "description"
+   Log activity: aether activity-log "READ" "{Ant-Name}" "description"
 
    Report (plain text):
    - WHY key code sections exist (from commits)
@@ -369,7 +369,7 @@ bash .aether/aether-utils.sh pheromone-read 2>/dev/null
 
    Log completion:
    ```bash
-   bash .aether/aether-utils.sh spawn-complete "{archaeologist_name}" "completed" "Pre-build archaeology scan"
+   aether spawn-complete --id "{archaeologist_name}" --status "completed" --summary "Pre-build archaeology scan"
    ```
 
 3. **Store and display findings:**
@@ -420,9 +420,9 @@ Analyze the phase tasks:
 
 3. **Generate ant names for each worker:**
 ```bash
-bash .aether/aether-utils.sh generate-ant-name "builder"
-bash .aether/aether-utils.sh generate-ant-name "watcher"
-bash .aether/aether-utils.sh generate-ant-name "chaos"
+aether generate-ant-name --caste "builder"
+aether generate-ant-name --caste "watcher"
+aether generate-ant-name --caste "chaos"
 ```
 
 Display spawn plan with caste emojis:
@@ -501,12 +501,12 @@ For a single worker:
 
 **First, mark build start in context:**
 ```bash
-bash .aether/aether-utils.sh context-update build-start {phase_id} {wave_1_worker_count} {wave_1_task_count}
+aether context-update build-start {phase_id} {wave_1_worker_count} {wave_1_task_count}
 ```
 
 Before dispatching each worker, refresh colony context so new pheromones/memory are visible:
 ```bash
-prime_result=$(bash .aether/aether-utils.sh colony-prime --compact 2>/dev/null)
+prime_result=$(aether colony-prime --compact 2>/dev/null)
 ```
 Update `prompt_section` from `prime_result.result.prompt_section`.
 
@@ -514,8 +514,8 @@ For each Wave 1 task, use Task tool with `subagent_type="aether-builder"`, inclu
 
 Log each spawn and update swarm display:
 ```bash
-bash .aether/aether-utils.sh spawn-log "Queen" "builder" "{ant_name}" "{task_description}"
-bash .aether/aether-utils.sh context-update worker-spawn "{ant_name}" "builder" "{task_description}"
+aether spawn-log --name "Queen" --caste "builder" --id "{ant_name}" --description "{task_description}"
+aether context-update worker-spawn "{ant_name}" "builder" "{task_description}"
 ```
 
 **Builder Worker Prompt (CLEAN OUTPUT):**
@@ -535,13 +535,13 @@ Goal: "{colony_goal}"
 Work:
 1. Read .aether/workers.md for Builder discipline
 2. Implement task, write tests
-3. Log activity: bash .aether/aether-utils.sh activity-log "ACTION" "{Ant-Name}" "description"
+3. Log activity: aether activity-log "ACTION" "{Ant-Name}" "description"
 
 Spawn sub-workers ONLY if 3x complexity:
-- Check: bash .aether/aether-utils.sh spawn-can-spawn {depth} --enforce
-- Generate name: bash .aether/aether-utils.sh generate-ant-name "builder"
+- Check: aether spawn-can-spawn {depth} --enforce
+- Generate name: aether generate-ant-name --caste "builder"
 - Announce: "🐜 Spawning {child_name} for {reason}"
-- Log: bash .aether/aether-utils.sh spawn-log "{Ant-Name}" "builder" "{child_name}" "{task}"
+- Log: aether spawn-log --name "{Ant-Name}" --caste "builder" --id "{child_name}" --description "{task}"
 
 Count your total tool calls (Read + Grep + Edit + Bash + Write) and report as tool_count.
 
@@ -624,7 +624,7 @@ Return ONLY this JSON (no other text):
 
 Before using any worker payload, validate schema:
 ```bash
-bash .aether/aether-utils.sh validate-worker-response builder '{worker_json}'
+aether validate-worker-response builder '{worker_json}'
 ```
 If validation fails, treat the worker as failed with blocker `invalid_worker_response`.
 
@@ -644,8 +644,8 @@ Where `tool_count` comes from the worker's returned JSON `tool_count` field, and
 
 Log and update swarm display:
 ```bash
-bash .aether/aether-utils.sh spawn-complete "{ant_name}" "completed" "{summary}"
-bash .aether/aether-utils.sh context-update worker-complete "{ant_name}" "completed"
+aether spawn-complete --id "{ant_name}" --status "completed" --summary "{summary}"
+aether context-update worker-complete "{ant_name}" "completed"
 ```
 
 **Check for total wave failure:**
@@ -702,7 +702,7 @@ Awaiting your choice.
 
 Log escalation as flag:
 ```bash
-bash .aether/aether-utils.sh flag-add "blocker" "{task title}" "{failure summary}" "escalation" {phase_number}
+aether flag-add --severity "blocker" --title "{task title}" --description "{failure summary}" --source "escalation" --phase {phase_number}
 ```
 
 If at least one worker succeeded, continue normally to the next wave.
@@ -732,7 +732,7 @@ Repeat Step 5.1-5.2 for each subsequent wave, waiting for previous wave to compl
 Spawn the Watcher using Task tool with `subagent_type="aether-watcher"`, include `description: "👁️ Watcher {Watcher-Name}: Independent verification"` (DO NOT use run_in_background - task blocks until complete):
 
 ```bash
-bash .aether/aether-utils.sh spawn-log "Queen" "watcher" "{watcher_name}" "Independent verification"
+aether spawn-log --name "Queen" --caste "watcher" --id "{watcher_name}" --description "Independent verification"
 ```
 
 **Watcher Worker Prompt (CLEAN OUTPUT):**
@@ -752,7 +752,7 @@ Verification:
 4. Check success criteria: {list}
 
 Spawn sub-workers if needed:
-- Log: bash .aether/aether-utils.sh spawn-log "{Watcher-Name}" "watcher" "{child}" "{task}"
+- Log: aether spawn-log --name "{Watcher-Name}" --caste "watcher" --id "{child}" --description "{task}"
 - Announce: "🐜 Spawning {child} to investigate {issue}"
 
 Count your total tool calls (Read + Grep + Edit + Bash + Write) and report as tool_count.
@@ -767,7 +767,7 @@ Return ONLY this JSON:
 
 Validate watcher payload first:
 ```bash
-bash .aether/aether-utils.sh validate-worker-response watcher '{watcher_json}'
+aether validate-worker-response watcher '{watcher_json}'
 ```
 
 **Parse the Watcher's validated JSON response:** verification_passed, issues_found, quality_score, recommendation
@@ -792,13 +792,13 @@ For failed verification:
 
 Generate a chaos ant name and log the spawn:
 ```bash
-bash .aether/aether-utils.sh generate-ant-name "chaos"
-bash .aether/aether-utils.sh spawn-log "Queen" "chaos" "{chaos_name}" "Resilience testing of Phase {id} work"
+aether generate-ant-name --caste "chaos"
+aether spawn-log --name "Queen" --caste "chaos" --id "{chaos_name}" --description "Resilience testing of Phase {id} work"
 ```
 
 **Retrieve existing flags for this phase** (to avoid duplicate findings):
 ```bash
-bash .aether/aether-utils.sh flag-list --phase {phase_number}
+aether flag-list --phase {phase_number}
 ```
 Parse the result and extract unresolved flag titles into a list: `{existing_flag_titles}` (comma-separated titles from `.result.flags[].title`). If no flags exist, set `{existing_flag_titles}` to "None".
 
@@ -849,17 +849,17 @@ Return ONLY this JSON:
 If any findings have severity `"critical"` or `"high"`:
 ```bash
 # Create a blocker flag for each critical/high chaos finding
-bash .aether/aether-utils.sh flag-add "blocker" "{finding.title}" "{finding.description}" "chaos-testing" {phase_number}
+aether flag-add --severity "blocker" --title "{finding.title}" --description "{finding.description}" --source "chaos-testing" --phase {phase_number}
 ```
 
 Log the flag:
 ```bash
-bash .aether/aether-utils.sh activity-log "FLAG" "Chaos" "Created blocker: {finding.title}"
+aether activity-log "FLAG" "Chaos" "Created blocker: {finding.title}"
 ```
 
 Log chaos ant completion and update swarm display:
 ```bash
-bash .aether/aether-utils.sh spawn-complete "{chaos_name}" "completed" "{summary}"
+aether spawn-complete --id "{chaos_name}" --status "completed" --summary "{summary}"
 ```
 
 ### Step 5.8: Create Flags for Verification Failures
@@ -869,12 +869,12 @@ If the Watcher reported `verification_passed: false` or `recommendation: "fix_re
 For each issue in `issues_found`:
 ```bash
 # Create a blocker flag for each verification failure
-bash .aether/aether-utils.sh flag-add "blocker" "{issue_title}" "{issue_description}" "verification" {phase_number}
+aether flag-add --severity "blocker" --title "{issue_title}" --description "{issue_description}" --source "verification" --phase {phase_number}
 ```
 
 Log the flag creation:
 ```bash
-bash .aether/aether-utils.sh activity-log "FLAG" "Watcher" "Created blocker: {issue_title}"
+aether activity-log "FLAG" "Watcher" "Created blocker: {issue_title}"
 ```
 
 This ensures verification failures are persisted as blockers that survive context resets. Chaos Ant findings are flagged in Step 5.7.
@@ -953,11 +953,11 @@ Collect all worker outputs and create phase summary:
 For each worker that returned `status: "failed"`:
   For each file in that worker's `files_modified` or `files_created`:
 ```bash
-bash .aether/aether-utils.sh grave-add "{file}" "{ant_name}" "{task_id}" {phase} "{first blocker or summary}"
+aether grave-add "{file}" "{ant_name}" "{task_id}" {phase} "{first blocker or summary}"
 ```
   Log the grave marker:
 ```bash
-bash .aether/aether-utils.sh activity-log "GRAVE" "Queen" "Grave marker placed at {file} — {ant_name} failed: {summary}"
+aether activity-log "GRAVE" "Queen" "Grave marker placed at {file} — {ant_name} failed: {summary}"
 ```
 
 **Error Handoff Update:**
@@ -1132,12 +1132,12 @@ This ensures the handoff always reflects the latest build state, even if the ses
 Log this build activity to `.aether/CONTEXT.md`:
 
 ```bash
-bash .aether/aether-utils.sh context-update activity "build {phase_id}" "{synthesis.status}" "{files_created_count + files_modified_count}"
+aether context-update activity "build {phase_id}" "{synthesis.status}" "{files_created_count + files_modified_count}"
 ```
 
 Mark build as complete in context:
 ```bash
-bash .aether/aether-utils.sh context-update build-complete "{synthesis.status}" "{synthesis.status == 'completed' ? 'success' : 'failed'}"
+aether context-update build-complete "{synthesis.status}" "{synthesis.status == 'completed' ? 'success' : 'failed'}"
 ```
 
 Also update safe-to-clear status:
@@ -1184,7 +1184,7 @@ After displaying the BUILD SUMMARY (and optional verbose details), display Next 
 state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json 2>/dev/null || echo "IDLE")
 current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json 2>/dev/null || echo "0")
 total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json 2>/dev/null || echo "0")
-bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
+aether print-next-up
 ```
 
 **Routing Note:** The state-based Next Up block above routes based on colony state. If verification failed or blockers exist, review `/ant:flags` before continuing.
@@ -1199,5 +1199,5 @@ bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_pha
 Update the session tracking file to enable `/ant:resume` after context clear:
 
 ```bash
-bash .aether/aether-utils.sh session-update "/ant:build {phase_id}" "/ant:continue" "Phase {phase_id} build completed: {synthesis.status}"
+aether session-update --command "/ant:build {phase_id}" --worker "/ant:continue" --summary "Phase {phase_id} build completed: {synthesis.status}"
 ```

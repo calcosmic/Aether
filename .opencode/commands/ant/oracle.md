@@ -49,10 +49,10 @@ Oracle peering into the depths...
 
 ### Step 0b: Stop Oracle
 
-Create the stop signal file:
+Stop any active Oracle research:
 
 ```bash
-mkdir -p .aether/oracle && touch .aether/oracle/.stop
+mkdir -p .aether/oracle && touch .aether/oracle/.stop && rm -f .aether/oracle/.loop-active
 ```
 
 Output:
@@ -60,8 +60,9 @@ Output:
 ```
 🔮 Oracle Stop Signal Sent
 
-   Created .aether/oracle/.stop
-   The research loop will halt at the end of the current iteration.
+   Created .aether/oracle/.stop (legacy tmux signal)
+   Removed .aether/oracle/.loop-active (in-session loop marker)
+   The research loop will halt at the next iteration boundary.
 
    To check final results: /ant:oracle status
 ```
@@ -453,7 +454,7 @@ Use the Write tool to create `.aether/oracle/state.json`:
 For each focus area string from Question 7:
 
 ```bash
-bash .aether/aether-utils.sh pheromone-write FOCUS "$focus_area" \
+aether pheromone-write --type FOCUS --content "$focus_area" \
   --strength 0.8 --source "oracle:wizard" \
   --reason "Focus area set in oracle wizard" --ttl "24h" 2>/dev/null || true
 ```
@@ -552,7 +553,7 @@ Proceed to Step 3.
 
 ---
 
-### Step 3: Launch
+### Step 3: Launch (In-Session Loop)
 
 Output the research configuration summary, showing the sub-questions from plan.json:
 
@@ -576,53 +577,46 @@ Output the research configuration summary, showing the sub-questions from plan.j
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-Now launch the loop. Try tmux first, fall back to manual.
-
-**Try tmux:**
+**Create the loop marker file:**
 
 ```bash
-tmux new-session -d -s oracle "cd $(pwd) && bash .aether/utils/oracle/oracle.sh; echo ''; echo '🔮 Oracle loop finished. Press any key to close.'; read -n1" 2>/dev/null && echo "TMUX_OK" || echo "TMUX_FAIL"
+SESSION_ID="${CLAUDE_SESSION_ID:-$(uuidgen 2>/dev/null || date +%s)}"
+MAX_IT=<max_iterations from wizard>
+TARGET_CONF=<target_confidence from wizard>
+cat > .aether/oracle/.loop-active <<MARKER
+---
+iteration: 0
+max_iterations: $MAX_IT
+session_id: $SESSION_ID
+phase: survey
+target_confidence: $TARGET_CONF
+synthesis_done: false
+oracle_md_path: .aether/utils/oracle/oracle.md
+---
+Oracle research loop active
+MARKER
+echo "LOOP_MARKER_CREATED"
 ```
 
-**If TMUX_OK:**
+Output:
 
 ```
-🔮 Oracle Launched
+🔮 Oracle Research Started (In-Session Loop)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-   The Oracle is researching in a background tmux session.
+   The Oracle is researching IN THIS SESSION.
 
-   👁️  Watch live:     tmux attach -t oracle
-   📊 Check status:   /ant:oracle status
-   🛑 Stop early:     /ant:oracle stop
+   The Stop hook keeps the loop running automatically between iterations.
+   Phases advance: survey -> investigate -> synthesize -> verify
+   Loop ends when confidence target is reached or max iterations hit.
 
-   Research progress visible at .aether/oracle/research-plan.md
-   The Oracle will stop when it reaches {target_confidence}% confidence
-   or completes {max_iterations} iterations.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-   You can keep working. The Oracle runs independently.
-```
-
-Stop here.
-
-**If TMUX_FAIL** (tmux not installed or error):
-
-```
-🔮 Ready to Launch
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-   tmux not available. Run this in a separate terminal:
-
-   cd {current_working_directory}
-   bash .aether/utils/oracle/oracle.sh
-
-   Then come back here:
    📊 Check status:   /ant:oracle status
    🛑 Stop early:     /ant:oracle stop
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   You can continue chatting. The Oracle loop runs between your messages.
 ```
 
-Stop here.
+**Now begin the first iteration.** Read `.aether/utils/oracle/oracle.md` and start survey phase research.
+Target the first untouched question from plan.json. Update state files as you go.

@@ -57,8 +57,8 @@ Write constraints.json.
 
 **Write pheromone signal and update context:**
 ```bash
-bash .aether/aether-utils.sh pheromone-write REDIRECT "$normalized_args" --strength 0.9 --reason "User warned colony away from pattern" 2>/dev/null || true
-bash .aether/aether-utils.sh context-update constraint redirect "$normalized_args" "user" 2>/dev/null || true
+aether pheromone-write --type REDIRECT --content "$normalized_args" --strength 0.9 --reason "User warned colony away from pattern" 2>/dev/null || true
+aether context-update --section constraint --key redirect --content "$normalized_args" "user" 2>/dev/null || true
 ```
 
 ### Step 3: Confirm

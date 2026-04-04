@@ -25,7 +25,7 @@ When `--deliberate "<proposal>"` is passed, run a structured Advocate/Challenger
 
 Run using the Bash tool with description "Checking deliberation budget...":
 ```bash
-bash .aether/aether-utils.sh council-budget-check
+aether council-budget-check
 ```
 
 Parse result. If `allowed` is `false`:
@@ -41,7 +41,7 @@ Stop here.
 
 Run using the Bash tool with description "Opening deliberation...":
 ```bash
-bash .aether/aether-utils.sh council-deliberate --proposal "<proposal>"
+aether council-deliberate --proposal "<proposal>"
 ```
 
 Capture `deliberation_id` from `result.id`.
@@ -84,7 +84,7 @@ Capture the advocate's argument as `advocate_argument`.
 
 Record the argument:
 ```bash
-bash .aether/aether-utils.sh council-advocate \
+aether council-advocate \
   --deliberation-id "<deliberation_id>" \
   --argument "<advocate_argument>"
 ```
@@ -122,7 +122,7 @@ Capture the challenger's argument as `challenger_argument`.
 
 Record the argument:
 ```bash
-bash .aether/aether-utils.sh council-challenger \
+aether council-challenger \
   --deliberation-id "<deliberation_id>" \
   --argument "<challenger_argument>"
 ```
@@ -165,7 +165,7 @@ Parse the JSON response. Capture `synthesis` and `recommendation`.
 
 Record the sage synthesis:
 ```bash
-bash .aether/aether-utils.sh council-sage \
+aether council-sage \
   --deliberation-id "<deliberation_id>" \
   --synthesis "<synthesis>" \
   --recommendation "<recommendation>"
@@ -502,6 +502,6 @@ Generate the state-based Next Up block by running using the Bash tool with descr
 state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
 current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
 total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
-bash .aether/aether-utils.sh print-next-up "$state" "$current_phase" "$total_phases"
+aether print-next-up
 ```
 
