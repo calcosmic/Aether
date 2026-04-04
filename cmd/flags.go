@@ -11,6 +11,7 @@ import (
 var (
 	flagTypeFilter   string
 	flagStatusFilter string
+	flagListJSON     bool
 )
 
 var flagsCmd = &cobra.Command{
@@ -28,6 +29,12 @@ var flagsCmd = &cobra.Command{
 		// Try both file names for compatibility
 		if err := store.LoadJSON("pending-decisions.json", &flags); err != nil {
 			if err2 := store.LoadJSON("flags.json", &flags); err2 != nil {
+				if flagListJSON {
+					outputOK(map[string]interface{}{
+						"flags": []colony.FlagEntry{},
+					})
+					return nil
+				}
 				fmt.Fprintln(stdout, "No flags found.")
 				return nil
 			}
@@ -35,6 +42,16 @@ var flagsCmd = &cobra.Command{
 
 		// Apply filters
 		filtered := filterFlags(flags.Decisions)
+
+		if flagListJSON {
+			if filtered == nil {
+				filtered = []colony.FlagEntry{}
+			}
+			outputOK(map[string]interface{}{
+				"flags": filtered,
+			})
+			return nil
+		}
 
 		if len(filtered) == 0 {
 			fmt.Fprintln(stdout, "No flags found.")
@@ -50,6 +67,7 @@ func init() {
 	rootCmd.AddCommand(flagsCmd)
 	flagsCmd.Flags().StringVar(&flagTypeFilter, "type", "", "Filter by type (blocker, issue, note)")
 	flagsCmd.Flags().StringVar(&flagStatusFilter, "status", "", "Filter by status (active, resolved)")
+	flagsCmd.Flags().BoolVar(&flagListJSON, "json", false, "Output as JSON")
 }
 
 // filterFlags applies type and status filters to flag entries.

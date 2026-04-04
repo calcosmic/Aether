@@ -12,6 +12,7 @@ import (
 var (
 	historyLimit  int
 	historyFilter string
+	historyJSON   bool
 )
 
 var historyCmd = &cobra.Command{
@@ -26,12 +27,24 @@ var historyCmd = &cobra.Command{
 
 		var state colony.ColonyState
 		if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+			if historyJSON {
+				outputOK(map[string]interface{}{
+					"events": []interface{}{},
+				})
+				return nil
+			}
 			fmt.Fprintln(stdout, "No colony history found.")
 			return nil
 		}
 
 		events := state.Events
 		if len(events) == 0 {
+			if historyJSON {
+				outputOK(map[string]interface{}{
+					"events": []interface{}{},
+				})
+				return nil
+			}
 			fmt.Fprintln(stdout, "No events recorded.")
 			return nil
 		}
@@ -52,6 +65,27 @@ var historyCmd = &cobra.Command{
 			events = events[len(events)-historyLimit:]
 		}
 
+		if historyJSON {
+			type historyEntry struct {
+				Timestamp string `json:"timestamp"`
+				Type      string `json:"type"`
+				Source    string `json:"source"`
+				Message   string `json:"message"`
+			}
+			var entries []historyEntry
+			for i := len(events) - 1; i >= 0; i-- {
+				ts, et, src, msg := parseEvent(events[i])
+				entries = append(entries, historyEntry{Timestamp: ts, Type: et, Source: src, Message: msg})
+			}
+			if entries == nil {
+				entries = []historyEntry{}
+			}
+			outputOK(map[string]interface{}{
+				"events": entries,
+			})
+			return nil
+		}
+
 		// Display events in reverse chronological order
 		renderHistoryTable(events)
 		return nil
@@ -62,6 +96,7 @@ func init() {
 	rootCmd.AddCommand(historyCmd)
 	historyCmd.Flags().IntVar(&historyLimit, "limit", 20, "Maximum number of events to show")
 	historyCmd.Flags().StringVar(&historyFilter, "filter", "", "Filter events by type or text")
+	historyCmd.Flags().BoolVar(&historyJSON, "json", false, "Output as JSON")
 }
 
 // parseEvent splits a pipe-delimited event string into parts.

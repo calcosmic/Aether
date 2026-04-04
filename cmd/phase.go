@@ -9,7 +9,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var phaseNumber int
+var (
+	phaseNumber int
+	phaseJSON   bool
+)
 
 var phaseCmd = &cobra.Command{
 	Use:   "phase",
@@ -40,6 +43,33 @@ var phaseCmd = &cobra.Command{
 		}
 
 		phase := state.Plan.Phases[phaseNum-1]
+
+		if phaseJSON {
+			type taskEntry struct {
+				ID     string `json:"id"`
+				Goal   string `json:"goal"`
+				Status string `json:"status"`
+			}
+			var tasks []taskEntry
+			for _, t := range phase.Tasks {
+				id := ""
+				if t.ID != nil {
+					id = *t.ID
+				}
+				tasks = append(tasks, taskEntry{ID: id, Goal: t.Goal, Status: t.Status})
+			}
+			if tasks == nil {
+				tasks = []taskEntry{}
+			}
+			outputOK(map[string]interface{}{
+				"name":        phase.Name,
+				"status":      phase.Status,
+				"description": phase.Description,
+				"tasks":       tasks,
+			})
+			return nil
+		}
+
 		renderPhaseDetails(phase, phaseNum)
 		return nil
 	},
@@ -48,6 +78,7 @@ var phaseCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(phaseCmd)
 	phaseCmd.Flags().IntVar(&phaseNumber, "number", 0, "Phase number to display (default: current phase)")
+	phaseCmd.Flags().BoolVar(&phaseJSON, "json", false, "Output as JSON")
 }
 
 // renderPhaseDetails displays phase details with a task list table.
