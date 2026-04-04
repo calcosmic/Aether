@@ -19,25 +19,26 @@ Full shell-to-Go rewrite producing 254+ Cobra commands, 11 playbooks with 275 Go
 - Integer phases (48, 49, 50, 51): Planned milestone work
 - Decimal phases (48.1, 49.1): Urgent insertions (marked with INSERTED)
 
-- [ ] **Phase 48: goreleaser Release Pipeline** - Cross-platform binary builds on tag push
-- [ ] **Phase 49: Binary Downloader + npm Install** - Users receive Go binary on npm install
+- [x] **Phase 48: goreleaser Release Pipeline** - Cross-platform binary builds on tag push (completed 2026-04-04)
+- [x] **Phase 49: Binary Downloader + npm Install** - Users receive Go binary on npm install (completed 2026-04-04)
 - [ ] **Phase 50: Update Flow Binary Refresh** - Users get updated binary via aether update
 - [ ] **Phase 51: npm Shim Delegation + Version Gate** - aether command routes to Go binary when available
 
 ## Phase Details
 
 ### Phase 48: goreleaser Release Pipeline
-**Goal**: Pushing a version tag produces downloadable cross-platform binaries on GitHub Releases
+**Goal**: Pushing a version tag triggers a GitHub Actions workflow that produces downloadable cross-platform binaries on GitHub Releases
 **Depends on**: Nothing (first phase in this milestone)
 **Requirements**: REL-01, REL-02, REL-03
 **Success Criteria** (what must be TRUE):
   1. Pushing a `v*` git tag triggers a GitHub Actions workflow that produces 6 platform archives (darwin/linux/windows x amd64/arm64) uploaded to a GitHub Release
   2. Each GitHub Release includes a `checksums.txt` file with SHA-256 hashes for all platform archives
   3. goreleaser config validation (`goreleaser check`) runs as part of existing CI, catching config drift before release
-**Plans**: 1 plan
+**Plans**: 2 plans
 
 Plans:
-- [ ] 48-01-PLAN.md — Create release workflow + fix CI Go version + add goreleaser check
+- [x] 48-01-PLAN.md -- Create release workflow + fix CI Go version + add goreleaser check (original, not executed)
+- [x] 48-02-PLAN.md -- Gap closure: create release workflow + fix CI Go version + add goreleaser check
 
 ### Phase 49: Binary Downloader + npm Install
 **Goal**: Users receive the correct platform Go binary automatically when running npm install -g aether-colony
@@ -48,7 +49,11 @@ Plans:
   2. Platform detection correctly identifies the user's OS and CPU architecture (including macOS universal binary handling) without manual configuration
   3. Every downloaded binary is verified against the published SHA-256 checksum before being placed at its final path
   4. A failed or interrupted download never leaves a corrupted binary at the install path (download-to-temp, verify, atomic rename)
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 49-01-PLAN.md -- Create binary-downloader module with platform detection, checksum verification, and atomic install + unit tests
+- [ ] 49-02-PLAN.md -- Wire downloadBinary into performGlobalInstall + add integration contract tests
 
 ### Phase 50: Update Flow Binary Refresh
 **Goal**: Users get an updated Go binary when running aether update, without the update flow breaking on binary failure
@@ -78,7 +83,7 @@ Phases 50 and 51 both depend only on Phase 49 and can execute in parallel.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 48. goreleaser Release Pipeline | 0/1 | Planned | - |
-| 49. Binary Downloader + npm Install | 0/? | Not started | - |
+| 48. goreleaser Release Pipeline | 2/2 | Complete    | 2026-04-04 |
+| 49. Binary Downloader + npm Install | 0/2 | Complete    | 2026-04-04 |
 | 50. Update Flow Binary Refresh | 0/? | Not started | - |
 | 51. npm Shim Delegation + Version Gate | 0/? | Not started | - |

@@ -1,14 +1,19 @@
 {
-  "topic": "Comprehensive analysis of Aether's XML implementation, functionality, improvement opportunities, and cleanup for professional repository standards",
-  "scope": "both",
+  "topic": "Aether Shell-to-Go Transition Final Verification",
+  "scope": "codebase",
   "questions": [
-    "What is the current state of the XML implementation in Aether and how does it integrate with the existing system?",
-    "What are the strengths and weaknesses of Aether's overall architecture, functionality, and code organization?",
-    "What specific improvements are needed to make Aether work optimally and achieve production readiness?",
-    "What cleanup tasks are required to make the repository professional and sophisticated (file organization, documentation, dead code removal)?",
-    "What gaps exist between the current implementation and industry best practices for multi-agent CLI frameworks?"
+    "What is the current test health of the Go codebase? Run all tests and categorize failures by severity (compilation errors, runtime panics, assertion failures)",
+    "Identify all TODO/FIXME comments in Go code and assess which represent critical technical debt vs minor improvements",
+    "Locate any remaining unsafe json_ok call patterns that need hardening with safe escaping",
+    "Find hardcoded paths in Go code that should use path utilities from pkg/storage/paths.go",
+    "Check error handling completeness - identify unhandled errors, panic risks, and nil pointer dereference risks",
+    "Compare shell utility subcommands in .aether/aether-utils.sh to their Go equivalents and identify parity gaps",
+    "Cross-reference CLAUDE.md architecture claims with actual Go implementation to find stale or incorrect documentation",
+    "Review goroutine usage for leak risks, missing WaitGroups, and unbuffered channel issues",
+    "Check resource management for file handle leaks, unclosed files, and defer statement coverage",
+    "Assess file I/O patterns for race conditions and concurrent access safety"
   ],
   "max_iterations": 50,
   "target_confidence": 99,
-  "started_at": "2026-02-16T15:32:16Z"
+  "started_at": "2026-04-04T16:37:41Z"
 }

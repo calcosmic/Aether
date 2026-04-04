@@ -54,25 +54,36 @@ var pheromoneCountCmd = &cobra.Command{
 		var pf colony.PheromoneFile
 		if err := store.LoadJSON("pheromones.json", &pf); err != nil {
 			outputOK(map[string]interface{}{
-				"FOCUS":    0,
-				"REDIRECT": 0,
-				"FEEDBACK": 0,
+				"focus":    0,
+				"redirect": 0,
+				"feedback": 0,
+				"total":    0,
 			})
 			return nil
 		}
 
-		counts := map[string]int{
-			"FOCUS":    0,
-			"REDIRECT": 0,
-			"FEEDBACK": 0,
-		}
+		focusCount := 0
+		redirectCount := 0
+		feedbackCount := 0
 		for _, sig := range pf.Signals {
 			if sig.Active {
-				counts[sig.Type]++
+				switch sig.Type {
+				case "FOCUS":
+					focusCount++
+				case "REDIRECT":
+					redirectCount++
+				case "FEEDBACK":
+					feedbackCount++
+				}
 			}
 		}
 
-		outputOK(counts)
+		outputOK(map[string]interface{}{
+			"focus":    focusCount,
+			"redirect": redirectCount,
+			"feedback": feedbackCount,
+			"total":    focusCount + redirectCount + feedbackCount,
+		})
 		return nil
 	},
 }
