@@ -22,8 +22,8 @@ Requirements for Go Binary Release milestone. Each maps to roadmap phases.
 
 ### Update Flow
 
-- [ ] **UPD-01**: User gets an updated binary when running `aether update` if the released binary is newer than the installed one
-- [ ] **UPD-02**: Binary update failure does not block the rest of the update flow (file sync, YAML refresh still complete)
+- [x] **UPD-01**: User gets an updated binary when running `aether update` if the released binary is newer than installed one
+- [x] **UPD-02**: Binary update failure does not block the rest of the update flow (file sync, YAML refresh still complete)
 
 ### Version Gate
 
@@ -72,8 +72,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BIN-02 | 49 | Pending |
 | BIN-03 | 49 | Pending |
 | BIN-04 | 49 | Pending |
-| UPD-01 | 50 | Pending |
-| UPD-02 | 50 | Pending |
+| UPD-01 | 50 | Complete
+| UPD-02 | 50 | Complete |
 | GATE-01 | 51 | Pending |
 | GATE-02 | 51 | Pending |
 | SHM-01 | 51 | Pending |
