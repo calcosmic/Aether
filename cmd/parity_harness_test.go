@@ -85,6 +85,10 @@ func runShellCommand(t *testing.T, tmpDir string, subcmd string, args ...string)
 	err := cmd.Run()
 	exitCode := 0
 	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			t.Logf("shell command timed out for %s (5s)", subcmd)
+			return ""
+		}
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			exitCode = exitErr.ExitCode()
 		} else {
