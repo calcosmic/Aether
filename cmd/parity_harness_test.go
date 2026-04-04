@@ -68,7 +68,9 @@ func runShellCommand(t *testing.T, tmpDir string, subcmd string, args ...string)
 	scriptPath := filepath.Join(root, ".aether", "aether-utils.sh")
 
 	allArgs := append([]string{scriptPath, subcmd}, args...)
-	cmd := exec.Command("bash", allArgs...)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "bash", allArgs...)
 	cmd.Dir = root
 	cmd.Env = append(os.Environ(),
 		"AETHER_ROOT="+tmpDir,
