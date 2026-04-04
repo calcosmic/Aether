@@ -33,7 +33,7 @@ jobs:
         run: |
           bash bin/sync-to-runtime.sh
           if git diff --exit-code runtime/; then
-            echo "✓ runtime/ in sync with .aether/"
+            echo "runtime/ in sync with .aether/"
           else
             echo "ERROR: runtime/ out of sync"
             git diff --name-only runtime/
@@ -43,3 +43,29 @@ jobs:
       - name: Security audit
         run: npm audit --audit-level=high
         continue-on-error: true
+
+  go:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Build
+        run: go build ./cmd/aether
+
+      - name: Run Go tests
+        run: go test ./... -count=1 -timeout 300s
+
+      - name: Parity tests
+        run: go test ./cmd/... -run "TestParity|TestGoOnly" -count=1 -timeout 300s -v
+
+      - name: Test summary
+        if: always()
+        run: |
+          echo "Go tests: $(go test ./... -count=1 -timeout 300s -v 2>&1 | grep -c '--- PASS' || echo 'unknown') passed"
