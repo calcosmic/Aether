@@ -197,6 +197,14 @@ func isParityBreak(t *testing.T, shellOut, goOut string) bool {
 
 	// Both JSON: check if .result types differ (string vs object)
 	if shellErr == nil && goErr == nil {
+		// Check "ok" field presence mismatch (envelope vs non-envelope)
+		_, shellHasOK := shellJSON["ok"]
+		_, goHasOK := goJSON["ok"]
+		if shellHasOK != goHasOK {
+			t.Logf("PARITY BREAK: ok field presence differs (shell=%v go=%v)", shellHasOK, goHasOK)
+			return true
+		}
+
 		shellResult, shellHasResult := shellJSON["result"]
 		goResult, goHasResult := goJSON["result"]
 
