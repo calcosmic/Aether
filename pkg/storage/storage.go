@@ -100,6 +100,21 @@ func (s *Store) LoadJSON(path string, dest interface{}) error {
 	return nil
 }
 
+// LoadRawJSON reads a JSON file and returns raw bytes.
+func (s *Store) LoadRawJSON(path string) ([]byte, error) {
+	fullPath := s.resolvePath(path)
+	data, err := os.ReadFile(fullPath)
+	if err != nil {
+		return nil, fmt.Errorf("storage: read %q: %w", fullPath, err)
+	}
+	return data, nil
+}
+
+// SaveRawJSON writes raw bytes to a JSON file atomically.
+func (s *Store) SaveRawJSON(path string, data []byte) error {
+	return s.AtomicWrite(path, data)
+}
+
 // AppendJSONL appends a JSON entry as a single line to a JSONL file.
 func (s *Store) AppendJSONL(path string, entry interface{}) error {
 	fullPath := s.resolvePath(path)
