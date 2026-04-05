@@ -114,39 +114,92 @@ func TestAdvancePhase_CurrentBeyondLast(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// JSON round-trip test against real COLONY_STATE.json
+// JSON round-trip test with self-contained data
 // ---------------------------------------------------------------------------
 
-func TestRoundTripRealColonyState(t *testing.T) {
-	data, err := os.ReadFile("../../.aether/data/COLONY_STATE.json")
-	if err != nil {
-		t.Skip("COLONY_STATE.json not found, skipping round-trip test")
+func TestRoundTripColonyState(t *testing.T) {
+	now := time.Now().UTC()
+	milestoneAt := now.Format(time.RFC3339)
+	goal := "Build something great"
+	conf := 0.85
+	phase := 2
+	taskID := "1.1"
+
+	input := ColonyState{
+		Version:           "3.0",
+		Goal:              &goal,
+		ColonyName:        strPtr("Test Colony"),
+		ColonyVersion:     1,
+		State:             StateREADY,
+		CurrentPhase:      1,
+		SessionID:         strPtr("session_123_abc"),
+		InitializedAt:     &now,
+		BuildStartedAt:    &now,
+		ColonyDepth:       "standard",
+		Milestone:         "Crowned Anthill",
+		MilestoneUpdatedAt: &milestoneAt,
+		Plan: Plan{
+			GeneratedAt: &now,
+			Confidence:  &conf,
+			Phases: []Phase{
+				{
+					ID: 1, Name: "Phase 1", Description: "First phase",
+					Status: PhaseCompleted,
+					Tasks: []Task{
+						{ID: &taskID, Goal: "Do work", Status: TaskCompleted},
+					},
+				},
+			},
+		},
+		Memory: Memory{
+			PhaseLearnings: []PhaseLearning{
+				{
+					ID: "learning_1", Phase: 1, PhaseName: "Phase 1",
+					Learnings: []Learning{
+						{Claim: "Something learned", Status: "hypothesis", Tested: false, Evidence: "observed"},
+					},
+					Timestamp: now.Format(time.RFC3339),
+				},
+			},
+			Instincts: []Instinct{
+				{
+					ID: "instinct_1", Trigger: "test trigger", Action: "test action",
+					Confidence: 0.8, Status: "hypothesis", Domain: "pattern",
+					Source: "promoted_from_learning", Evidence: []string{""},
+					Tested: false, CreatedAt: now.Format(time.RFC3339),
+				},
+			},
+		},
+		Signals:    []Signal{},
+		Graveyards: []Graveyard{
+			{
+				ID: "grave_1", File: "test.ts", AntName: "Builder-1",
+				TaskID: "task-1", Phase: &phase,
+				FailureSummary: "crash", Timestamp: now.Format(time.RFC3339),
+			},
+		},
+		Events: []string{"2026-01-01T00:00:00Z|init|queen|colony initialized"},
 	}
 
-	var original ColonyState
-	if err := json.Unmarshal(data, &original); err != nil {
-		t.Fatalf("failed to unmarshal COLONY_STATE.json: %v", err)
+	// Verify key fields are set
+	if input.State != StateREADY {
+		t.Fatalf("expected state READY, got %q", input.State)
 	}
-
-	// Verify key fields parsed correctly
-	if original.State != StateREADY {
-		t.Fatalf("expected state READY, got %q", original.State)
+	if input.CurrentPhase < 0 {
+		t.Fatalf("expected current_phase >= 0, got %d", input.CurrentPhase)
 	}
-	if original.CurrentPhase < 0 {
-		t.Fatalf("expected current_phase >= 0, got %d", original.CurrentPhase)
+	if input.Milestone != "Crowned Anthill" {
+		t.Fatalf("expected milestone Crowned Anthill, got %q", input.Milestone)
 	}
-	if original.Milestone != "Crowned Anthill" {
-		t.Fatalf("expected milestone Crowned Anthill, got %q", original.Milestone)
-	}
-	if original.MilestoneUpdatedAt == nil {
+	if input.MilestoneUpdatedAt == nil {
 		t.Fatalf("expected milestone_updated_at to be non-nil, got nil")
 	}
-	if original.Version != "3.0" {
-		t.Fatalf("expected version 3.0, got %q", original.Version)
+	if input.Version != "3.0" {
+		t.Fatalf("expected version 3.0, got %q", input.Version)
 	}
 
-	// Re-marshal and compare
- remarshaled, err := json.Marshal(original)
+	// Marshal and unmarshal round-trip
+	remarshaled, err := json.Marshal(input)
 	if err != nil {
 		t.Fatalf("failed to marshal: %v", err)
 	}
@@ -157,7 +210,7 @@ func TestRoundTripRealColonyState(t *testing.T) {
 	}
 
 	// Deep equality check
-	assertColonyStateEqual(t, original, rematched)
+	assertColonyStateEqual(t, input, rematched)
 }
 
 func TestGoldenColonyState(t *testing.T) {

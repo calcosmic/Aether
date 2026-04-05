@@ -2,7 +2,7 @@
 <pheromones xmlns="http://aether.colony/schemas/pheromones"
             xmlns:ph="http://aether.colony/schemas/pheromones"
             version="1.0.0"
-            generated_at="2026-04-04T18:19:53Z"
+            generated_at="2026-04-05T15:19:32Z"
             colony_id="unknown">
   <metadata>
     <source type="system">aether-pheromone-converter</source>

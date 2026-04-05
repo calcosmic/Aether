@@ -28,9 +28,6 @@ This only applies to genuinely new conversations, not after /clear.
 | `/ant:plan` | Generate project phases |
 | `/ant:build <phase>` | Execute a phase with parallel workers |
 | `/ant:continue` | Verify work, extract learnings, advance |
-| `/ant:run` | Autopilot -- builds, verifies, learns, and advances through phases automatically |
-| `/ant:preferences` | Add or list user preferences in hub QUEEN.md |
-| `/ant:help` | Command reference and system overview |
 
 ### Pheromone Signals
 | Command | Priority | Purpose |
@@ -48,9 +45,6 @@ This only applies to genuinely new conversations, not after /clear.
 | `/ant:flag "<title>"` | Create a flag |
 | `/ant:history` | Browse colony events |
 | `/ant:watch` | Live tmux monitoring |
-| `/ant:pheromones` | View and manage active pheromone signals |
-| `/ant:memory-details` | Show detailed colony memory — wisdom, pending promotions, recent failures |
-| `/ant:verify-castes` | Verify colony caste assignments and system status |
 
 ### Session Management
 | Command | Purpose |
@@ -62,7 +56,6 @@ This only applies to genuinely new conversations, not after /clear.
 ### Lifecycle
 | Command | Purpose |
 |---------|---------|
-| `/ant:patrol` | Pre-seal review — verify work against plan, check docs, review issues |
 | `/ant:seal` | Seal colony (Crowned Anthill) |
 | `/ant:entomb` | Archive completed colony |
 | `/ant:maturity` | View colony maturity journey |
@@ -79,18 +72,6 @@ This only applies to genuinely new conversations, not after /clear.
 | `/ant:archaeology` | Git history analysis |
 | `/ant:organize` | Codebase hygiene report |
 | `/ant:council` | Intent clarification |
-| `/ant:skill-create "<topic>"` | Create custom domain skill with Oracle research |
-| `/ant:insert-phase` | Insert a corrective phase into the active plan |
-| `/ant:tunnels` | Browse archived colonies, compare chambers |
-| `/ant:quick` | Execute a quick task with minimal overhead |
-| `/ant:migrate-state` | One-time state migration from v1 to v2.0 format |
-
-### Data & Exchange
-| Command | Purpose |
-|---------|---------|
-| `/ant:data-clean` | Remove test artifacts from colony data |
-| `/ant:export-signals` | Export pheromone signals to XML |
-| `/ant:import-signals` | Import pheromone signals from XML |
 
 ## Typical Workflow
 
@@ -106,12 +87,6 @@ Starting a colony:
 5. /ant:build 1                            (workers execute phase 1)
 6. /ant:continue                           (verify, learn, advance)
 7. /ant:build 2                            (repeat until complete)
-
-Skills (optional, enhances builds):
-/ant:skill-create "tailwind"               (create a custom skill)
-
-Autopilot mode (alternative to steps 5-7):
-5. /ant:run                                (auto build/verify/advance all phases)
 
 After /clear or session break:
 8. /ant:resume-colony                      (restore full context)
@@ -161,11 +136,9 @@ State is stored in `.aether/data/COLONY_STATE.json` and includes:
 
 ## Pheromone System
 
-Signals guide colony behavior through prompt injection -- colony-prime assembles active signals and injects them into worker prompts:
+Signals guide colony behavior without hard-coding instructions:
 - **FOCUS** — attracts attention to an area (expires at phase end)
 - **REDIRECT** — repels workers from a pattern (high priority, hard constraint)
 - **FEEDBACK** — calibrates behavior based on observation (low priority)
-
-Workers do not independently read signal files. Builder, Watcher, and Scout have `pheromone_protocol` sections in their agent definitions that govern how they act on injected signals.
 
 Use FOCUS + REDIRECT before builds to steer. Use FEEDBACK after builds to adjust.

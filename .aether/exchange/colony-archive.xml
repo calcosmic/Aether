@@ -2,13 +2,13 @@
 <colony-archive
     xmlns="http://aether.colony/schemas/archive/1.0"
     colony_id="test-colony-goal-for-cli-development"
-    sealed_at="2026-04-04T18:19:54Z"
+    sealed_at="2026-04-05T15:19:32Z"
     version="1.0.0"
     pheromone_count="3">
 <pheromones xmlns="http://aether.colony/schemas/pheromones"
             xmlns:ph="http://aether.colony/schemas/pheromones"
             version="1.0.0"
-            generated_at="2026-04-04T18:19:53Z"
+            generated_at="2026-04-05T15:19:32Z"
             colony_id="unknown">
   <metadata>
     <source type="system">aether-pheromone-converter</source>
@@ -47,6 +47,6 @@
 </pheromones>
 <colony-registry xmlns="http://aether.colony/schemas/registry/1.0"
                  version="1.0.0"
-                 generated_at="2026-04-04T18:19:54Z">
+                 generated_at="2026-04-05T15:19:32Z">
 </colony-registry>
 </colony-archive>
