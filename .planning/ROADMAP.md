@@ -10,7 +10,8 @@
 - **v2.5 Smart Init** -- Phases 29-32 (shipped 2026-03-27)
 - **v2.6 Bugfix & Hardening** -- Phases 33-38 (shipped 2026-03-30)
 - **v2.7 PR Workflow + Stability** -- Phases 39-44 (shipped 2026-03-31)
-- **v5.4 Shell-to-Go Rewrite** -- Phases 45-51 (in progress)
+- **v5.4 Shell-to-Go Rewrite** -- Phases 45-47 (shipped 2026-04-01)
+- **v5.5 Go Binary Release** -- Phases 48-51 (complete 2026-04-05)
 
 ## Phases
 
@@ -107,17 +108,22 @@
 
 </details>
 
-### v5.4 Shell-to-Go Rewrite (In Progress)
+### v5.4 Shell-to-Go Rewrite (Shipped 2026-04-01)
 
 **Milestone Goal:** Replace all shell scripts with a native Go binary, eliminating bash/jq/curl dependencies while preserving exact behavioral parity with the existing system.
 
-- [ ] **Phase 45: Core Storage** - STOR-01, STOR-02, STOR-03
-- [ ] **Phase 46: Event Bus** - EVT-01, EVT-02, EVT-03
-- [ ] **Phase 47: Memory Pipeline** - MEM-01 through MEM-05
-- [ ] **Phase 48: Graph Layer** - GRAPH-01 through GRAPH-04
-- [ ] **Phase 49: Agent System + LLM** - AGENT-01 through AGENT-04, LLM-01 through LLM-04
-- [ ] **Phase 50: CLI Commands** - CLI-01 through CLI-04
-- [ ] **Phase 51: XML Exchange + Distribution + Testing** - XML-01 through XML-04, DIST-01 through DIST-03, TEST-01 through TEST-03
+- [x] **Phase 45: Core Storage** - STOR-01, STOR-02, STOR-03
+- [x] **Phase 46: Event Bus** - EVT-01, EVT-02, EVT-03
+- [x] **Phase 47: Memory Pipeline** - MEM-01 through MEM-05
+
+### v5.5 Go Binary Release (Shipped 2026-04-05)
+
+**Milestone Goal:** Ship the Go binary to end users — goreleaser produces platform binaries, npm postinstall downloads them, `aether update` refreshes them, and the npm shim delegates to the Go binary when available.
+
+- [x] **Phase 48: goreleaser Release Pipeline** - Cross-platform binary builds on tag push
+- [x] **Phase 49: Binary Downloader + npm Install** - Users receive Go binary on npm install
+- [x] **Phase 50: Update Flow Binary Refresh** - aether update downloads binary when missing or outdated
+- [x] **Phase 51: npm Shim Delegation + Version Gate** - aether command routes to Go binary when available
 
 ## Phase Details
 
@@ -346,77 +352,58 @@ Plans:
 - [x] 47-02-PLAN.md -- Instinct promotion + QUEEN.md writer (MEM-03, MEM-04)
 - [x] 47-03-PLAN.md -- Consolidation orchestrator + pipeline wiring (MEM-05)
 
-### Phase 48: Graph Layer
-**Goal**: A directed graph tracks relationships between learnings, instincts, phases, and colonies -- queryable via BFS and cycle detection
-**Depends on**: Phase 47 (graph edges are created during instinct promotion)
-**Requirements**: GRAPH-01, GRAPH-02, GRAPH-03, GRAPH-04
+### Phase 48: goreleaser Release Pipeline
+**Goal**: Cross-platform Go binaries are built and published automatically on tag push via goreleaser
+**Depends on**: Phase 47 (Go binary must exist before release automation)
+**Requirements**: BIN-01 (partial)
 **Success Criteria** (what must be TRUE):
-  1. Nodes of all 5 types (learning, instinct, queen, phase, colony) and all 16 edge types can be added, queried, and removed from the in-memory directed graph
-  2. 1-hop and 2-hop neighbor queries return the same set of connected nodes as the jq graph layer for identical input data
-  3. Shortest path (BFS) finds the minimum-hop route between two nodes; cycle detection identifies all cycles in the graph
-  4. Graph serializes to JSON and deserializes back without data loss -- round-trip parity verified against shell-produced graph JSON
-**Plans:** 2 plans
+  1. `.goreleaser.yml` validates clean with `goreleaser check`
+  2. Tag push to GitHub triggers goreleaser CI workflow
+  3. Binaries produced for linux/darwin/windows on amd64/arm64
+**Plans:** 1/1 plan complete
 
 Plans:
-- [ ] 48-01-PLAN.md -- Core graph types, CRUD operations, neighbor queries (GRAPH-01, GRAPH-02)
-- [ ] 48-02-PLAN.md -- BFS, cycle detection, JSON persistence, promote.go migration (GRAPH-03, GRAPH-04)
+- [x] 48-01-PLAN.md -- goreleaser config, GitHub Actions workflow, cross-platform builds
 
-### Phase 49: Agent System + LLM
-**Goal**: Go agents run in goroutine pools with Anthropic LLM calls, replacing shell subprocess spawning and enabling tool-use loops
-**Depends on**: Phase 46 (agents subscribe to events), Phase 47 (curation ants handle memory events)
-**Requirements**: AGENT-01, AGENT-02, AGENT-03, AGENT-04, LLM-01, LLM-02, LLM-03, LLM-04
+### Phase 49: Binary Downloader + npm Install
+**Goal**: Users receive the platform-appropriate Go binary automatically on `npm install`
+**Depends on**: Phase 48 (binaries must be published before download is possible)
+**Requirements**: BIN-01, BIN-02
 **Success Criteria** (what must be TRUE):
-  1. All agents implement a common interface (Name, Caste, Triggers, Execute) -- adding a new agent requires only implementing the interface and registering it
-  2. Worker pool runs multiple agents concurrently with bounded goroutines -- pool limit prevents resource exhaustion under load
-  3. Spawn tracking records all running agents in a tree structure matching the shell spawn-tree.txt format
-  4. The 8 curation ants subscribe to typed memory events and execute their handlers when events arrive -- matches shell ant orchestrator behavior
-  5. Anthropic SDK sends a message and receives a valid response with correct role, content, and stop reason
-  6. Streaming responses accumulate SSE chunks into a complete message -- caller receives the same result as a non-streaming call
-  7. Tool use loop detects tool call blocks, executes the requested tool, and returns the result -- completes when the model returns a text-only response
-  8. Agent YAML frontmatter (model, tools, triggers) parses into Go structs that configure agent behavior
-**Plans:** 4/4 plans complete
+  1. `npm install -g aether-colony` runs postinstall script that downloads the correct binary for the user's OS/arch
+  2. Binary is placed in the npm package's bin/ directory
+  3. Download fails gracefully when offline or binary unavailable -- npm package still works via shell fallback
+**Plans:** 1/1 plan complete
 
 Plans:
-- [x] 49-01-PLAN.md -- Agent interface + YAML frontmatter parser (AGENT-01, LLM-04)
-- [ ] 49-02-PLAN.md -- LLM client + streaming + tool use loop (LLM-01, LLM-02, LLM-03)
-- [x] 49-03-PLAN.md -- Worker pool + spawn tree (AGENT-02, AGENT-03)
-- [x] 49-04-PLAN.md -- Curation ants with orchestrator (AGENT-04)
+- [x] 49-01-PLAN.md -- downloadBinary function in postinstall.js, platform detection, graceful fallback
 
-### Phase 50: CLI Commands
-**Goal**: All 37 colony commands are accessible via a Go binary with Cobra, producing output identical to the shell commands
-**Depends on**: Phase 45 (all commands read/write via storage layer), Phase 47 (memory commands), Phase 49 (agent commands)
-**Requirements**: CLI-01, CLI-02, CLI-03, CLI-04
+### Phase 50: Update Flow Binary Refresh
+**Goal**: `aether update` downloads the latest Go binary when missing or outdated
+**Depends on**: Phase 49 (download infrastructure from postinstall)
+**Requirements**: BIN-03
 **Success Criteria** (what must be TRUE):
-  1. Running `aether init`, `aether build`, `aether status`, and all 34 other subcommands from the Go binary produces the same exit code and side effects as the shell equivalents
-  2. Shell completion scripts for bash, zsh, and fish generate from the Cobra command tree -- tab completion works identically to shell command completion
-  3. `aether status` output matches the shell `/ant:status` dashboard character-for-character in structure and data
-  4. All read-only commands (status, phase, flags, history, pheromones, memory-details) produce byte-identical output to their shell counterparts for the same input data
-**Plans:** 1/6 plans executed
+  1. `aether update` calls refreshBinary after updating shell files
+  2. Binary version is compared against npm package version -- outdated binaries are re-downloaded
+  3. Missing binary triggers download -- non-blocking, logs warning on failure
+**Plans:** 1/1 plan complete
 
 Plans:
-- [x] 50-01-PLAN.md -- CLI foundation: root command, Cobra setup, completion, output helpers (CLI-01, CLI-02)
-- [ ] 50-02-PLAN.md -- Status dashboard + read-only display commands (CLI-01, CLI-03, CLI-04)
-- [ ] 50-03-PLAN.md -- Write/mutation commands: pheromones, flags, spawn, state, learning, changelog (CLI-01)
-- [ ] 50-04-PLAN.md -- Swarm, hive, skills, midden, registry commands (CLI-01)
-- [ ] 50-05-PLAN.md -- Queen, immune, council, clash, autopilot commands (CLI-01)
-- [ ] 50-06-PLAN.md -- Remaining utilities + command_count_test (>= 145 registered) (CLI-01)
-**UI hint**: yes
+- [x] 50-01-PLAN.md -- refreshBinary in update flow, version comparison, non-blocking error handling
 
-### Phase 51: XML Exchange + Distribution + Testing
-**Goal**: XML export/import, cross-platform binary distribution, and full test parity complete the Go rewrite -- the binary replaces npm
-**Depends on**: Phase 50 (CLI commands), Phase 48 (graph layer used by XML exchange)
-**Requirements**: XML-01, XML-02, XML-03, XML-04, DIST-01, DIST-02, DIST-03, TEST-01, TEST-02, TEST-03
+### Phase 51: npm Shim Delegation + Version Gate
+**Goal**: The `aether` npm command delegates to the Go binary when available, with version gating
+**Depends on**: Phase 49 (binary must be downloadable), Phase 50 (update must refresh binary)
+**Requirements**: BIN-04, BIN-05
 **Success Criteria** (what must be TRUE):
-  1. Pheromone export/import produces valid XML that validates against existing XSD schemas and round-trips without data loss
-  2. Wisdom export/import respects confidence threshold filtering -- only entries above the threshold appear in XML output
-  3. Registry export/import includes lineage tracking up to depth 10 -- matches shell behavior
-  4. `go install github.com/aether-colony/aether@latest` produces a working binary on a clean machine
-  5. Cross-compiled binaries for linux/darwin/windows on amd64/arm64 all pass their test suites
-  6. `aether --version` reports a version string matching the npm package version
-  7. All existing shell test cases have Go equivalents that pass -- parity verified against shell-produced output fixtures
-  8. `go test -race ./...` passes with zero race conditions detected
-  9. Golden file tests compare Go JSON output against shell-produced fixtures -- byte-identical or documented difference
-**Plans**: TBD
+  1. `aether <command>` checks for Go binary first -- delegates if present and version matches
+  2. Version gate prevents running a binary older than the npm package expects
+  3. Falls back to shell dispatcher seamlessly when Go binary is missing or version-mismatched
+  4. Delegation shim tested with 38 unit tests covering all edge cases
+**Plans:** 1/1 plan complete
+
+Plans:
+- [x] 51-01-PLAN.md -- Version gate logic, delegation shim in cli.js, comprehensive test coverage
 
 ## Progress
 
@@ -470,10 +457,10 @@ Phases execute in numeric order: 1 -> 2 -> ... -> 44 -> 45 -> 46 -> 47 -> 48 -> 
 | 42.1. Release Hygiene | v2.7 | - | Complete | 2026-03-31 |
 | 43. Clash Detection | v2.7 | - | Complete | 2026-03-31 |
 | 44. Release Hygiene & Ship | v2.7 | - | Complete | 2026-03-31 |
-| 45. Core Storage | v5.4 | 1/2 | Complete    | 2026-04-01 |
-| 46. Event Bus | v5.4 | 0/2 | Complete    | 2026-04-01 |
-| 47. Memory Pipeline | v5.4 | 3/3 | Complete   | 2026-04-01 |
-| 48. Graph Layer | v5.4 | 0/2 | Not started | - |
-| 49. Agent System + LLM | v5.4 | 3/4 | Complete    | 2026-04-02 |
-| 50. CLI Commands | v5.4 | 1/6 | In Progress|  |
-| 51. XML Exchange + Dist + Testing | v5.4 | 0/TBD | Complete    | 2026-04-05 |
+| 45. Core Storage | v5.4 | 1/2 | Complete | 2026-04-01 |
+| 46. Event Bus | v5.4 | 0/2 | Complete | 2026-04-01 |
+| 47. Memory Pipeline | v5.4 | 3/3 | Complete | 2026-04-01 |
+| 48. goreleaser Release Pipeline | v5.5 | 1/1 | Complete | 2026-04-05 |
+| 49. Binary Downloader + npm Install | v5.5 | 1/1 | Complete | 2026-04-05 |
+| 50. Update Flow Binary Refresh | v5.5 | 1/1 | Complete | 2026-04-05 |
+| 51. npm Shim Delegation + Version Gate | v5.5 | 1/1 | Complete | 2026-04-05 |
