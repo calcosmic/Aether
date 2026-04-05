@@ -3,8 +3,9 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { execSync } = require('child_process');
+const { execSync, spawnSync } = require('child_process');
 const { program } = require('commander');
+const { shouldDelegate, getBinaryPath } = require('./lib/version-gate');
 
 // Error handling imports
 const {
@@ -2219,5 +2220,18 @@ function run() {
 
 // Parse command line arguments only when run directly (not when required as a module)
 if (require.main === module) {
+  // Delegation shim: if Go binary is available and version matches, pass through to it.
+  // Commands that must run in Node.js (install, update, setup) are excluded.
+  const { shouldDelegate, getBinaryPath } = require('./lib/version-gate');
+  if (shouldDelegate(process.argv)) {
+    const { spawnSync } = require('child_process');
+    const binaryPath = getBinaryPath();
+    const result = spawnSync(binaryPath, process.argv.slice(2), {
+      stdio: 'inherit',
+      env: process.env,
+    });
+    process.exit(result.status);
+  }
+
   run();
 }
