@@ -14,7 +14,7 @@ If `$ARGUMENTS` is empty or equals "--watch":
 
 Run the real-time swarm display:
 ```bash
-bash .aether/utils/swarm-display.sh
+aether swarm-display
 ```
 
 This shows:

@@ -21,7 +21,7 @@ body: |
   - Stop immediately.
 
   ### Test Command Failure
-  If npm test or bash test suites fail to run:
+  If go test or bash test suites fail to run:
   - Record the failure in the report as "Tests: UNABLE TO RUN"
   - Continue with remaining audit steps (non-blocking)
 
@@ -291,35 +291,24 @@ body: |
   Run using the Bash tool:
   ```bash
   # Count test files
-  test_count_unit=$(ls -1 tests/unit/*.test.sh 2>/dev/null | wc -l | tr -d ' ')
-  test_count_e2e=$(ls -1 tests/e2e/*.test.sh 2>/dev/null | wc -l | tr -d ' ')
-  test_count_js=$(find . -name "*.test.js" -o -name "*.test.ts" -o -name "*.spec.js" -o -name "*.spec.ts" 2>/dev/null | wc -l | tr -d ' ')
-  echo "unit=$test_count_unit"
-  echo "e2e=$test_count_e2e"
-  echo "js=$test_count_js"
-  echo "total=$((test_count_unit + test_count_e2e + test_count_js))"
+  test_count_go=$(find . -name "*_test.go" -not -path "./vendor/*" 2>/dev/null | wc -l | tr -d ' ')
+  echo "go=$test_count_go"
+  echo "total=$test_count_go"
   ```
 
   **Run test suites (capture counts, do not block on failure):**
 
   Run using the Bash tool (with timeout 120000):
   ```bash
-  npm test 2>&1 | tail -20
+  go test ./... 2>&1 | tail -20
   ```
 
   Parse output for pass/fail counts. If command fails, record as "UNABLE TO RUN".
 
-  Run bash test suites if they exist:
-  ```bash
-  if [[ -f "tests/e2e/run-all-e2e.sh" ]]; then
-    bash tests/e2e/run-all-e2e.sh 2>&1 | tail -10
-  fi
-  ```
-
   Display:
   ```
   Test Coverage:
-    Test files: {unit} unit | {e2e} e2e | {js} JS/TS
+    Test files: {go} Go test files
     Results: {pass_count} passing | {fail_count} failing
     {If any failing: "  FAILING: {list of failing test names}"}
   ```

@@ -103,10 +103,10 @@ tmux send-keys -t aether-colony:colony.0 'watch -n 1 cat .aether/data/watch-stat
 tmux send-keys -t aether-colony:colony.1 'watch -n 1 cat .aether/data/watch-progress.txt' C-m
 
 # Pane 2 (top-right): Spawn tree visualization
-tmux send-keys -t aether-colony:colony.2 'bash .aether/utils/watch-spawn-tree.sh .aether/data' C-m
+tmux send-keys -t aether-colony:colony.2 'aether spawn-tree-watch .aether/data' C-m
 
 # Pane 3 (bottom-right): Colorized activity log stream
-tmux send-keys -t aether-colony:colony.3 'bash .aether/utils/colorize-log.sh .aether/data/activity.log' C-m
+tmux send-keys -t aether-colony:colony.3 'aether log-stream .aether/data/activity.log' C-m
 
 # Set pane titles (if supported)
 tmux select-pane -t aether-colony:colony.0 -T "Status"

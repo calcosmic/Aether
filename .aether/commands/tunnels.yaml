@@ -180,8 +180,8 @@ body_claude: |
 
   Run comparison using the Bash tool with description "Comparing chambers...":
   ```bash
-  bash .aether/utils/chamber-compare.sh compare <chamber_a> <chamber_b>
-  bash .aether/utils/chamber-compare.sh stats <chamber_a> <chamber_b>
+  aether chamber-compare compare <chamber_a> <chamber_b>
+  aether chamber-compare stats <chamber_a> <chamber_b>
   ```
 
   Display comparison header:
@@ -230,7 +230,7 @@ body_claude: |
 
   Display pheromone trail diff (new decisions/learnings in B) by running using the Bash tool with description "Analyzing pheromone differences...":
   ```bash
-  bash .aether/utils/chamber-compare.sh diff <chamber_a> <chamber_b>
+  aether chamber-compare diff <chamber_a> <chamber_b>
   ```
 
   Parse result and show:
@@ -550,7 +550,7 @@ body_opencode: |
 
   If two arguments provided (chamber names separated by space):
   - Treat as: `/ant:tunnels <chamber_a> <chamber_b>`
-  - Run comparison: `bash .aether/utils/chamber-compare.sh compare <chamber_a> <chamber_b>`
+  - Run comparison: `aether chamber-compare compare <chamber_a> <chamber_b>`
 
   If either chamber not found:
   ```
@@ -609,7 +609,7 @@ body_opencode: |
 
   Display pheromone trail diff (new decisions/learnings in B):
   ```bash
-  bash .aether/utils/chamber-compare.sh diff <chamber_a> <chamber_b>
+  aether chamber-compare diff <chamber_a> <chamber_b>
   ```
 
   Parse result and show:

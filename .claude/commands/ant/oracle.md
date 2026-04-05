@@ -181,7 +181,6 @@ Run promotion using the Bash tool with description "Promoting oracle findings to
 
 ```bash
 ORACLE_DIR=".aether/oracle"
-UTILS=".aether/aether-utils.sh"
 topic=$(jq -r '.topic // "unknown"' "$ORACLE_DIR/state.json")
 promoted=0
 
@@ -191,7 +190,7 @@ while IFS= read -r question; do
   findings_text=$(echo "$question" | jq -r '[.key_findings[].text // .key_findings[]] | join("; ")' 2>/dev/null | head -c 200)
   first_finding=$(echo "$question" | jq -r '[.key_findings[].text // .key_findings[]] | first // "No findings"' 2>/dev/null)
 
-  bash "$UTILS" instinct-create \
+  aether instinct-create \
     --trigger "researching: $q_text" \
     --action "Oracle found (${q_confidence}% confidence): $findings_text" \
     --confidence "$(echo "scale=2; $q_confidence / 100" | bc)" \
@@ -199,13 +198,13 @@ while IFS= read -r question; do
     --source "oracle:$topic" \
     --evidence "Oracle research: $q_text" 2>/dev/null || true
 
-  bash "$UTILS" learning-promote \
+  aether learning-promote \
     "Oracle: $q_text -- $first_finding" \
     "oracle" \
     "oracle-research" \
     "oracle,research" 2>/dev/null || true
 
-  bash "$UTILS" memory-capture learning \
+  aether memory-capture learning \
     "Oracle research finding: $q_text (${q_confidence}%)" \
     "pattern" \
     "oracle:promote" 2>/dev/null || true

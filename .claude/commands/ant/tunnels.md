@@ -183,8 +183,8 @@ Stop here.
 
 Run comparison using the Bash tool with description "Comparing chambers...":
 ```bash
-bash .aether/utils/chamber-compare.sh compare <chamber_a> <chamber_b>
-bash .aether/utils/chamber-compare.sh stats <chamber_a> <chamber_b>
+aether chamber-compare compare <chamber_a> <chamber_b>
+aether chamber-compare stats <chamber_a> <chamber_b>
 ```
 
 Display comparison header:
@@ -233,7 +233,7 @@ If milestone changed: show "Milestone advanced: {milestone_a} -> {milestone_b}"
 
 Display pheromone trail diff (new decisions/learnings in B) by running using the Bash tool with description "Analyzing pheromone differences...":
 ```bash
-bash .aether/utils/chamber-compare.sh diff <chamber_a> <chamber_b>
+aether chamber-compare diff <chamber_a> <chamber_b>
 ```
 
 Parse result and show:
