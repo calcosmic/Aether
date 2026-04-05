@@ -7,32 +7,6 @@ on:
     branches: [main]
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run linters
-        run: npm run lint
-
-      - name: Run tests
-        run: npm test
-
-      - name: Security audit
-        run: npm audit --audit-level=high
-        continue-on-error: true
-
   go:
     runs-on: ubuntu-latest
 
@@ -53,9 +27,11 @@ jobs:
       - name: Validate goreleaser config
         run: goreleaser check
 
-
       - name: Build
         run: go build ./cmd/aether
+
+      - name: Vet
+        run: go vet ./...
 
       - name: Run Go tests
         run: go test ./... -count=1 -timeout 300s

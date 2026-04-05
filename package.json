@@ -1,6 +1,6 @@
 {
   "name": "aether-colony",
-  "version": "5.4.0",
+  "version": "3.0.0",
   "description": "Multi-agent system using ant colony intelligence for Claude Code and OpenCode — workers self-organize via pheromone signals",
   "files": [
     ".claude/commands/ant/",

@@ -12,9 +12,9 @@ This command sets up the `.aether/` directory structure and copies all system fi
 
 <failure_modes>
 ### Hub Not Found
-If `~/.aether/system/aether-utils.sh` does not exist:
+If `~/.aether/version.json` does not exist:
 - The global hub is not installed
-- Tell the user to run `npm install -g aether-colony` first
+- Tell the user to install the Aether Go binary and run `aether install` first
 - Stop — cannot proceed without hub
 
 ### Partial Copy Failure
@@ -44,7 +44,7 @@ Do not touch during lay-eggs:
 
 ### Step 1: Check Hub Availability
 
-Check if the global hub exists by reading `~/.aether/system/aether-utils.sh` (expand `~` to the user's home directory).
+Check if the global hub exists by reading `~/.aether/version.json` (expand `~` to the user's home directory).
 
 **If the hub does NOT exist:**
 ```
@@ -52,9 +52,10 @@ Aether hub not found at ~/.aether/system/
 
 The global hub must be installed before setting up a repo.
 
-  npm install -g aether-colony
+  go install github.com/calcosmic/Aether/cmd/aether@latest
+  aether install
 
-This installs the Aether CLI and populates the hub at ~/.aether/system/
+This installs the Aether Go binary and populates the hub at ~/.aether/system/
 with all the system files your repo needs.
 
 After installing, run /ant:lay-eggs again.
@@ -64,7 +65,7 @@ Stop here.
 ### Step 2: Check Existing Setup
 
 
-Check if `.aether/aether-utils.sh` already exists using the Read tool.
+Check if `.aether/workers.md` already exists using the Read tool.
 
 
 
@@ -116,26 +117,11 @@ touch .aether/data/midden/.gitkeep
 
 Run using the Bash tool with description "Copying system files from hub...":
 
-
 ```bash
-# Core system files
-cp -f ~/.aether/system/aether-utils.sh .aether/ && \
-chmod +x .aether/aether-utils.sh && \
-cp -f ~/.aether/system/workers.md .aether/ 2>/dev/null || true && \
-cp -f ~/.aether/system/CONTEXT.md .aether/ 2>/dev/null || true && \
-# Directories
-cp -Rf ~/.aether/system/docs/* .aether/docs/ 2>/dev/null || true && \
-cp -Rf ~/.aether/system/utils/* .aether/utils/ 2>/dev/null || true && \
-cp -Rf ~/.aether/system/templates/* .aether/templates/ 2>/dev/null || true && \
-cp -Rf ~/.aether/system/schemas/* .aether/schemas/ 2>/dev/null || true && \
-cp -Rf ~/.aether/system/exchange/* .aether/exchange/ 2>/dev/null || true && \
-cp -Rf ~/.aether/system/rules/* .claude/rules/ 2>/dev/null || true && \
-
-# Version tracking
-cp -f ~/.aether/version.json .aether/version.json 2>/dev/null || true
-
-echo "System files copied."
+aether setup
 ```
+
+Parse the JSON result for the sync summary (copied/skipped counts).
 
 ### Step 5: Initialize QUEEN.md
 

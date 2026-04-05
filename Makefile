@@ -1,4 +1,4 @@
-VERSION := $(shell node -e "console.log(require('./package.json').version)" 2>/dev/null || echo "0.0.0-dev")
+VERSION := $(shell sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' package.json | head -1)
 BINARY  := aether
 LDFLAGS := -X github.com/calcosmic/Aether/cmd.Version=$(VERSION)
 
