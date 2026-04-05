@@ -4,7 +4,7 @@
   "colony_name": null,
   "colony_version": 1,
   "state": "READY",
-  "current_phase": 2,
+  "current_phase": 3,
   "session_id": "session_1775424724_e24a467",
   "initialized_at": "2026-04-05T21:32:04Z",
   "build_started_at": null,
@@ -16,10 +16,12 @@
         "id": 1,
         "name": "Exec Command Timeouts",
         "description": "Convert all 23 bare exec.Command calls to exec.CommandContext with appropriate timeouts. Hung git operations block the CLI indefinitely.",
+        "status": "completed",
         "tasks": [
           {
             "id": "1.1",
             "goal": "Create timeout constants for different command categories",
+            "status": "completed",
             "constraints": [
               "Constants live in cmd/ package as exported vars",
               "Git ops 60s, build verification 120s, general commands 30s"
@@ -30,13 +32,12 @@
             "success_criteria": [
               "Constants defined and exported from cmd/",
               "go vet passes"
-            ],
-            "depends_on": [],
-            "status": "completed"
+            ]
           },
           {
             "id": "1.2",
             "goal": "Convert exec.Command to exec.CommandContext in cmd/clash.go and cmd/worktree_merge.go",
+            "status": "completed",
             "constraints": [
               "19 calls across these two files",
               "Context timeout errors wrapped with user-friendly messages",
@@ -52,12 +53,12 @@
             ],
             "depends_on": [
               "1.1"
-            ],
-            "status": "completed"
+            ]
           },
           {
             "id": "1.3",
             "goal": "Convert exec.Command to exec.CommandContext in cmd/context.go, cmd/session_cmds.go, and pkg/storage/paths.go",
+            "status": "completed",
             "constraints": [
               "4 remaining calls across 3 files",
               "pkg/storage/paths.go needs context parameter added to ResolveAetherRoot and ResolveDataDir"
@@ -73,12 +74,12 @@
             ],
             "depends_on": [
               "1.1"
-            ],
-            "status": "completed"
+            ]
           },
           {
             "id": "1.4",
             "goal": "Add tests proving exec commands time out correctly under hung subprocess conditions",
+            "status": "completed",
             "constraints": [
               "Test must simulate a command that never exits",
               "Timeout must trigger within test-acceptable bounds",
@@ -94,12 +95,12 @@
             "depends_on": [
               "1.2",
               "1.3"
-            ],
-            "status": "completed"
+            ]
           },
           {
             "id": "1.5",
             "goal": "Verify all callers of ResolveAetherRoot and ResolveDataDir pass context",
+            "status": "completed",
             "constraints": [
               "Called from cmd/chamber.go, cmd/internal_cmds.go, cmd/session_cmds.go, cmd/maintenance.go"
             ],
@@ -112,25 +113,25 @@
             ],
             "depends_on": [
               "1.3"
-            ],
-            "status": "completed"
+            ]
           }
         ],
         "success_criteria": [
           "Zero bare exec.Command in codebase",
           "Every external process invocation has a bounded lifetime",
           "Tests prove timeout behavior works"
-        ],
-        "status": "completed"
+        ]
       },
       {
         "id": 2,
         "name": "File Locking",
         "description": "Create cross-process file locking using syscall.Flock, integrate into Store methods, and remove the unused sync.Map mutexes field.",
+        "status": "completed",
         "tasks": [
           {
             "id": "2.1",
             "goal": "Create pkg/storage/lock.go with FileLocker using syscall.Flock for cross-process locking",
+            "status": "completed",
             "constraints": [
               "New file pkg/storage/lock.go",
               "FileLocker must be created from a file path",
@@ -146,12 +147,12 @@
               "FileLocker struct exists with Lock/Unlock/RLock/RUnlock methods",
               "go vet passes",
               "Unit tests for basic locking behavior"
-            ],
-            "depends_on": []
+            ]
           },
           {
             "id": "2.2",
             "goal": "Integrate FileLocker into Store methods: AtomicWrite, AppendJSONL, and remove dead mutexes sync.Map field",
+            "status": "completed",
             "constraints": [
               "AtomicWrite needs exclusive lock",
               "AppendJSONL needs exclusive lock",
@@ -177,6 +178,7 @@
           {
             "id": "2.3",
             "goal": "Add concurrent access tests proving AppendJSONL does not interleave under parallel writes",
+            "status": "completed",
             "constraints": [
               "Test must write from 10+ goroutines simultaneously",
               "Each written line must be valid JSON when read back",
@@ -205,10 +207,12 @@
         "id": 3,
         "name": "Context Propagation",
         "description": "Replace 17 bare context.Background() calls in command handlers with cmd.Context() to enable Ctrl+C cancellation support.",
+        "status": "",
         "tasks": [
           {
             "id": "3.1",
             "goal": "Create a context helper in cmd/ that derives a timeout context from cobra cmd.Context()",
+            "status": "",
             "constraints": [
               "Must use cmd.Context() as parent",
               "Default timeout 30s for most operations",
@@ -222,12 +226,12 @@
             "success_criteria": [
               "Context helper function exists in cmd/",
               "go vet passes"
-            ],
-            "depends_on": []
+            ]
           },
           {
             "id": "3.2",
             "goal": "Replace all bare context.Background() in cmd/learning.go and cmd/curation_cmds.go",
+            "status": "",
             "constraints": [
               "learning.go has 2 calls at lines 49 and 169",
               "curation_cmds.go has 9 calls at lines 26,56,86,116,147,177,208,236,267",
@@ -247,6 +251,7 @@
           {
             "id": "3.3",
             "goal": "Replace bare context.Background() in cmd/graph_consolidation_cmds.go and verify cmd/eventbus.go timeouts",
+            "status": "",
             "constraints": [
               "graph_consolidation_cmds.go has 2 calls at lines 205 and 251",
               "eventbus.go already uses WithTimeout(5s) — verify those timeouts are appropriate"
@@ -265,6 +270,7 @@
           {
             "id": "3.4",
             "goal": "Add test proving Ctrl+C cancellation propagates to command handlers",
+            "status": "",
             "constraints": [
               "Test must simulate signal delivery",
               "Must verify command exits cleanly on cancellation"
@@ -292,10 +298,12 @@
         "id": 4,
         "name": "Event Bus Cleanup",
         "description": "Add configurable --timeout flag to eventbus commands and clean up any event bus code smells.",
+        "status": "",
         "tasks": [
           {
             "id": "4.1",
             "goal": "Add configurable timeout flag to the 4 eventbus command handlers in cmd/eventbus.go",
+            "status": "",
             "constraints": [
               "eventbus.go already uses WithTimeout(5s) at lines 49,86,129,167",
               "Replace hardcoded 5s with a configurable flag defaulting to 5s",
@@ -308,8 +316,7 @@
               "--timeout flag available on eventbus commands",
               "Default remains 5s",
               "go test ./cmd/... passes"
-            ],
-            "depends_on": []
+            ]
           }
         ],
         "success_criteria": [
@@ -321,16 +328,17 @@
         "id": 5,
         "name": "Integration Verification",
         "description": "End-to-end verification that all fixes work together with race detector and build verification.",
+        "status": "",
         "tasks": [
           {
             "id": "5.1",
             "goal": "Run full test suite with race detector and verify zero data races",
+            "status": "",
             "constraints": [
               "Must run go test ./... -race",
               "Must run go vet ./...",
               "All existing tests must pass"
             ],
-            "hints": [],
             "success_criteria": [
               "go test ./... -race exits 0",
               "go vet ./... exits 0"
@@ -346,6 +354,7 @@
           {
             "id": "5.2",
             "goal": "Run grep audit to verify all 5 audit findings are resolved and binary builds cleanly",
+            "status": "",
             "constraints": [
               "grep exec.Command\\b returns 0 in production code",
               "grep context.Background returns 0 in cmd/ production code",
@@ -403,6 +412,28 @@
           }
         ],
         "timestamp": "2026-04-05T22:22:10Z"
+      },
+      {
+        "id": "learning_1775429394",
+        "phase": 2,
+        "phase_name": "File Locking",
+        "learnings": [
+          {
+            "claim": "syscall.Flock provides clean cross-process locking but a single in-process Mutex serializes all paths — use per-path mutex for better concurrency under high contention",
+            "status": "hypothesis",
+            "tested": true,
+            "evidence": "Auditor flagged lock.go:64 as HIGH — single sync.Mutex gates all lock paths",
+            "disproven_by": null
+          },
+          {
+            "claim": "Lock upgrade/downgrade (shared to exclusive or vice versa) is silently destructive with flock — the unlock-reacquire window breaks atomicity",
+            "status": "hypothesis",
+            "tested": true,
+            "evidence": "Auditor flagged lock.go:69 as HIGH — non-atomic release-and-reacquire",
+            "disproven_by": null
+          }
+        ],
+        "timestamp": "2026-04-05T22:49:54Z"
       }
     ],
     "decisions": [],
@@ -419,7 +450,9 @@
     "2026-04-05T22:01:46Z|plan_generated|plan|Generated 5 phases with 99% confidence",
     "2026-04-05T22:05:28Z|phase_started|build|Phase 1: Exec Command Timeouts started",
     "2026-04-05T22:09:24Z|territory_surveyed|colonize|Territory surveyed: 7 documents",
-    "2026-04-05T22:22:10Z|phase_advanced|continue|Completed Phase 1, advancing to Phase 2"
+    "2026-04-05T22:22:10Z|phase_advanced|continue|Completed Phase 1, advancing to Phase 2",
+    "2026-04-05T22:28:50Z|phase_started|build|Phase 2: File Locking started",
+    "2026-04-06T00:48:30Z|phase_advanced|continue|Completed Phase 2, advancing to Phase 3"
   ],
-  "territory_surveyed": "2026-04-05T22:09:07Z"
+  "milestone": ""
 }

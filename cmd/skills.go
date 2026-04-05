@@ -545,9 +545,17 @@ func findSkillDirs(baseDir string) []string {
 		return dirs
 	}
 	for _, e := range entries {
-		if e.IsDir() {
-			dirs = append(dirs, filepath.Join(baseDir, e.Name()))
+		if !e.IsDir() {
+			continue
 		}
+		dirPath := filepath.Join(baseDir, e.Name())
+		// If this directory contains SKILL.md, it's a skill directory
+		if _, err := os.Stat(filepath.Join(dirPath, "SKILL.md")); err == nil {
+			dirs = append(dirs, dirPath)
+			continue
+		}
+		// Otherwise recurse into it (e.g., colony/ and domain/ category folders)
+		dirs = append(dirs, findSkillDirs(dirPath)...)
 	}
 	return dirs
 }

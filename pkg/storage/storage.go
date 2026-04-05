@@ -12,23 +12,29 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 )
 
 // Store provides thread-safe atomic file operations within a base directory.
 // All file paths are resolved relative to basePath unless they are absolute.
+// File operations are coordinated via FileLocker for cross-process safety.
 type Store struct {
 	basePath string
-	mutexes  sync.Map // path string -> *sync.RWMutex
+	locker   *FileLocker
 }
 
 // NewStore creates a new Store rooted at basePath.
 // The directory is created if it does not exist.
+// A FileLocker is initialized in a sibling "locks" directory.
 func NewStore(basePath string) (*Store, error) {
 	if err := os.MkdirAll(basePath, 0755); err != nil {
 		return nil, fmt.Errorf("storage: create base dir %q: %w", basePath, err)
 	}
-	return &Store{basePath: basePath}, nil
+	locksDir := filepath.Join(filepath.Dir(basePath), "locks")
+	locker, err := NewFileLocker(locksDir)
+	if err != nil {
+		return nil, fmt.Errorf("storage: create file locker: %w", err)
+	}
+	return &Store{basePath: basePath, locker: locker}, nil
 }
 
 // BasePath returns the store's root directory.
@@ -40,6 +46,11 @@ func (s *Store) BasePath() string {
 // If path ends in .json, the content is validated as valid JSON before writing.
 // On error, the temporary file is cleaned up.
 func (s *Store) AtomicWrite(path string, data []byte) error {
+	if err := s.locker.Lock(path); err != nil {
+		return fmt.Errorf("storage: acquire lock for %q: %w", path, err)
+	}
+	defer s.locker.Unlock(path)
+
 	fullPath := s.resolvePath(path)
 	dir := filepath.Dir(fullPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -89,6 +100,11 @@ func (s *Store) SaveJSON(path string, data interface{}) error {
 
 // LoadJSON reads and unmarshals a JSON file.
 func (s *Store) LoadJSON(path string, dest interface{}) error {
+	if err := s.locker.RLock(path); err != nil {
+		return fmt.Errorf("storage: acquire read lock for %q: %w", path, err)
+	}
+	defer s.locker.RUnlock(path)
+
 	fullPath := s.resolvePath(path)
 	data, err := os.ReadFile(fullPath)
 	if err != nil {
@@ -102,6 +118,11 @@ func (s *Store) LoadJSON(path string, dest interface{}) error {
 
 // LoadRawJSON reads a JSON file and returns raw bytes.
 func (s *Store) LoadRawJSON(path string) ([]byte, error) {
+	if err := s.locker.RLock(path); err != nil {
+		return nil, fmt.Errorf("storage: acquire read lock for %q: %w", path, err)
+	}
+	defer s.locker.RUnlock(path)
+
 	fullPath := s.resolvePath(path)
 	data, err := os.ReadFile(fullPath)
 	if err != nil {
@@ -117,6 +138,11 @@ func (s *Store) SaveRawJSON(path string, data []byte) error {
 
 // AppendJSONL appends a JSON entry as a single line to a JSONL file.
 func (s *Store) AppendJSONL(path string, entry interface{}) error {
+	if err := s.locker.Lock(path); err != nil {
+		return fmt.Errorf("storage: acquire lock for %q: %w", path, err)
+	}
+	defer s.locker.Unlock(path)
+
 	fullPath := s.resolvePath(path)
 	dir := filepath.Dir(fullPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -143,6 +169,11 @@ func (s *Store) AppendJSONL(path string, entry interface{}) error {
 // ReadJSONL reads all valid JSON lines from a JSONL file.
 // Blank lines are skipped. Malformed lines are logged and skipped (not errored).
 func (s *Store) ReadJSONL(path string) ([]json.RawMessage, error) {
+	if err := s.locker.RLock(path); err != nil {
+		return nil, fmt.Errorf("storage: acquire read lock for %q: %w", path, err)
+	}
+	defer s.locker.RUnlock(path)
+
 	fullPath := s.resolvePath(path)
 	data, err := os.ReadFile(fullPath)
 	if err != nil {
@@ -167,6 +198,11 @@ func (s *Store) ReadJSONL(path string) ([]json.RawMessage, error) {
 
 // ReadFile reads raw file content from the store.
 func (s *Store) ReadFile(path string) ([]byte, error) {
+	if err := s.locker.RLock(path); err != nil {
+		return nil, fmt.Errorf("storage: acquire read lock for %q: %w", path, err)
+	}
+	defer s.locker.RUnlock(path)
+
 	fullPath := s.resolvePath(path)
 	data, err := os.ReadFile(fullPath)
 	if err != nil {
