@@ -103,20 +103,21 @@ function checkBinary(opts) {
     return { available: false, path: binaryPath, version: null, reason: 'binary not executable' };
   }
 
-  // Get binary version
+  // Get binary version — call `aether version` and strip "aether v" prefix
   let binaryVersion;
   try {
-    const output = cp.execSync(`"${binaryPath}" version --short`, {
+    const output = cp.execSync(`"${binaryPath}" version`, {
       encoding: 'utf8',
       timeout: 5000,
       stdio: ['pipe', 'pipe', 'pipe'],
     }).trim();
-    binaryVersion = output;
+    // Strip "aether " or "aether v" prefix (e.g. "aether v5.3.3" → "5.3.3")
+    binaryVersion = output.replace(/^aether\s+v?/, '');
   } catch {
     return { available: false, path: binaryPath, version: null, reason: 'binary version check failed' };
   }
 
-  // Compare versions
+  // Compare versions (compareVersions handles v-prefix on both sides)
   if (compareVersions(binaryVersion, pkgVersion) !== 0) {
     return {
       available: false,

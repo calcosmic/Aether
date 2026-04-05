@@ -27,13 +27,13 @@ Requirements for Go Binary Release milestone. Each maps to roadmap phases.
 
 ### Version Gate
 
-- [ ] **GATE-01**: System checks three conditions before routing to the Go binary: binary exists at expected path, is executable, and reports a version matching the npm package
-- [ ] **GATE-02**: Version comparison works without external npm dependencies (custom semver logic)
+- [x] **GATE-01**: System checks three conditions before routing to the Go binary: binary exists at expected path, is executable, and reports a version matching the npm package
+- [x] **GATE-02**: Version comparison works without external npm dependencies (custom semver logic)
 
 ### npm Shim
 
-- [ ] **SHM-01**: User's `aether` command delegates to the Go binary when the version gate passes, falling back to Node.js CLI when it does not
-- [ ] **SHM-02**: Commands that must run in Node.js (install, update, setupHub) always stay in Node.js regardless of binary availability
+- [x] **SHM-01**: User's `aether` command delegates to the Go binary when the version gate passes, falling back to Node.js CLI when it does not
+- [x] **SHM-02**: Commands that must run in Node.js (install, update, setupHub) always stay in Node.js regardless of binary availability
 
 ## v5.6 Requirements
 
@@ -74,10 +74,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BIN-04 | 49 | Pending |
 | UPD-01 | 50 | Complete
 | UPD-02 | 50 | Complete |
-| GATE-01 | 51 | Pending |
-| GATE-02 | 51 | Pending |
-| SHM-01 | 51 | Pending |
-| SHM-02 | 51 | Pending |
+| GATE-01 | 51 | Satisfied |
+| GATE-02 | 51 | Satisfied |
+| SHM-01 | 51 | Satisfied |
+| SHM-02 | 51 | Satisfied |
 
 **Coverage:**
 - v5.5 requirements: 13 total
