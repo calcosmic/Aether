@@ -4,13 +4,13 @@ milestone: v5.4
 milestone_name: Shell-to-Go Rewrite
 status: executing
 stopped_at: Completed 50-01-PLAN.md
-last_updated: "2026-04-02T06:47:01.606Z"
-last_activity: 2026-04-02
+last_updated: "2026-04-05T12:23:11.329Z"
+last_activity: 2026-04-05
 progress:
   total_phases: 20
-  completed_phases: 14
-  total_plans: 59
-  completed_plans: 49
+  completed_phases: 2
+  total_plans: 10
+  completed_plans: 41
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-03-29)
 
 ## Current Position
 
-Phase: 50 (cli-commands) — EXECUTING
-Plan: 2 of 6
+Phase: 51
+Plan: Not started
 Status: Ready to execute
-Last activity: 2026-04-02
+Last activity: 2026-04-05
 
 ## Performance Metrics
 
