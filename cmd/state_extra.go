@@ -45,12 +45,35 @@ var stateCheckpointCmd = &cobra.Command{
 }
 
 var stateWriteCmd = &cobra.Command{
-	Use:   "state-write",
+	Use:   "state-write [json-blob]",
 	Short: "Direct write to COLONY_STATE.json (bypasses transition validation)",
-	Args:  cobra.NoArgs,
+	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if store == nil {
 			outputErrorMessage("no store initialized")
+			return nil
+		}
+
+		// Positional JSON mode: replace entire state file
+		if len(args) > 0 {
+			if !json.Valid([]byte(args[0])) {
+				outputError(1, "positional argument must be valid JSON", nil)
+				return nil
+			}
+			// Reject if --field/--value flags also provided
+			field := mustGetString(cmd, "field")
+			if field != "" {
+				outputError(1, "cannot use both positional JSON and --field/--value flags", nil)
+				return nil
+			}
+			if err := store.AtomicWrite("COLONY_STATE.json", []byte(args[0])); err != nil {
+				outputError(2, fmt.Sprintf("failed to save state: %v", err), nil)
+				return nil
+			}
+			outputOK(map[string]interface{}{
+				"updated":  true,
+				"replaced": true,
+			})
 			return nil
 		}
 

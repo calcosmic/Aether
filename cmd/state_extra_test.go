@@ -151,6 +151,46 @@ func TestStateWrite(t *testing.T) {
 	}
 }
 
+func TestStateWritePositionalArg(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	goal := "test goal"
+	state := colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+	}
+	s.SaveJSON("COLONY_STATE.json", state)
+
+	// state-write should accept a positional JSON blob and write it directly
+	rootCmd.SetArgs([]string{"state-write", `{"goal":"updated goal","version":"3.0"}`})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("expected state-write to accept positional JSON, got error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] != true {
+		t.Fatalf("expected ok:true, got: %v", env["ok"])
+	}
+
+	// Verify the file was updated with the new JSON
+	data, _ := s.ReadFile("COLONY_STATE.json")
+	var m map[string]interface{}
+	json.Unmarshal(data, &m)
+	if m["goal"] != "updated goal" {
+		t.Errorf("goal in file = %v, want 'updated goal'", m["goal"])
+	}
+}
+
 func TestStateWriteMissingField(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
