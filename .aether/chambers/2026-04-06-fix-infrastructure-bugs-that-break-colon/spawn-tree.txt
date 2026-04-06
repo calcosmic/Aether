@@ -1,0 +1,71 @@
+2026-04-05T16:41:25Z|Queen|builder|Bolt-90|Run full test suite and fix remaining failures|1|completed
+2026-04-05T16:41:25Z|Queen|builder|Anvil-73|Verify npm package installs correctly|1|completed
+2026-04-05T16:43:20Z|Queen|builder|Forge-55|Clean up stale files and artifacts|1|completed
+2026-04-05T16:44:38Z|Queen|watcher|Watch-4|Independent verification|1|completed
+2026-04-05T22:02:03Z|Queen|surveyor|Weld-71|Mapping provisions and trails|0|spawned
+2026-04-05T22:02:03Z|Queen|surveyor|Forge-80|Mapping nest structure|0|spawned
+2026-04-05T22:02:03Z|Queen|surveyor|Mason-73|Mapping disciplines and sentinels|0|spawned
+2026-04-05T22:02:03Z|Queen|surveyor|Weld-55|Identifying pathogens|0|spawned
+2026-04-05T22:16:20Z|Queen|auditor|Assess-41|Code quality audit|1|completed
+2026-04-05T22:55:07Z|Queen|scout|Strata-67|Pre-build archaeology scan|1|completed
+2026-04-05T22:56:54Z|Queen|builder|Forge-18|Create context helper in cmd/|1|completed
+2026-04-05T22:59:00Z|Queen|builder|Chip-78|Replace context.Background() in learning.go + curation_cmds.go|1|completed
+2026-04-05T22:59:00Z|Queen|builder|Hammer-7|Replace context.Background() in graph_consolidation_cmds.go + verify eventbus.go|1|completed
+2026-04-05T23:01:35Z|Queen|builder|Forge-91|Add Ctrl+C cancellation test|1|completed
+2026-04-05T23:02:52Z|Queen|watcher|Alert-51|Independent verification of Phase 3|1|completed
+2026-04-05T23:07:54Z|Queen|auditor|auditor-phase3|Code quality audit|1|completed
+2026-04-05T23:17:22Z|Queen|scout|Dig-82|Pre-build archaeology scan|1|completed
+2026-04-05T23:20:46Z|Queen|builder|Brick-95|Add configurable timeout flag to eventbus commands|1|completed
+2026-04-05T23:22:36Z|Queen|watcher|Keen-61|Independent verification|1|completed
+2026-04-05T23:33:16Z|Queen|auditor|Verify-82|Code quality audit|1|completed
+2026-04-06T00:09:25Z|Queen|gatekeeper|Guard-44|Supply chain security audit|1|completed
+2026-04-06T01:20:23Z|Queen|sage|Helper-56|Colony analytics review|1|completed
+2026-04-06T01:26:14Z|Queen|chronicler|Scribe-57|Documentation coverage audit|1|completed
+2026-04-06T13:52:29Z|Queen|auditor|Assess-26|Code quality audit|1|completed
+2026-04-06T13:52:29Z|Queen|gatekeeper|Protect-81|Supply chain security audit|1|completed
+2026-04-06T14:22:06Z|Queen|builder|Hammer-32|Phase 3 TDD cycle|0|spawned
+2026-04-06T14:23:32Z|Queen|watcher|Sharp-78|Verify Phase 3 changes|0|completed
+2026-04-06T14:29:35Z|Queen|auditor|Auditor-QA-1|Code quality audit|0|completed
+2026-04-06T14:54:56Z|Queen|auditor|Inspect-50|Code quality audit|1|completed
+2026-04-06T15:11:13Z|Queen|scout|Strata-87|Pre-build archaeology scan|0|spawned
+2026-04-06T15:15:33Z|Queen|builder|Bolt-84|Task 5.1: Verify existing chamber tests cover path construction|0|spawned
+2026-04-06T15:17:29Z|Queen|builder|Bolt-84|Task 5.2: Fix entomb.md Steps 6 and 8 to use Go flag syntax|0|spawned
+2026-04-06T15:31:24Z|Queen|watcher|Vigil-83|Independent verification|0|spawned
+2026-04-06T15:41:49Z|Queen|auditor|Verify-47|Code quality audit|1|completed
+2026-04-06T16:10:46Z|Queen|auditor|Exam-56|Code quality audit|1|completed
+2026-04-06T17:49:22Z|Queen|builder|Weld-60|Convert all 8 entomb.md shell references to Go binary calls|1|spawned
+2026-04-06T17:52:52Z|Queen|watcher|Sharp-26|Independent verification|1|spawned
+2026-04-06T18:02:33Z|Queen|builder|Brick-15|Run full test suite with race detection|1|completed
+2026-04-06T18:02:33Z|Queen|builder|Mason-6|Verify zero shell references in seal.md and entomb.md|1|completed
+2026-04-06T18:02:33Z|Queen|builder|Weld-36|Build binary and smoke-test modified commands|1|completed
+2026-04-06T18:10:47Z|Queen|watcher|Sentinel-89|Independent verification|1|completed
+2026-04-05T16:45:36Z|Bolt-90|completed|
+2026-04-05T16:45:36Z|Anvil-73|completed|
+2026-04-05T16:45:36Z|Forge-55|completed|
+2026-04-05T16:45:36Z|Watch-4|completed|
+2026-04-05T22:20:33Z|Assess-41|completed|
+2026-04-05T22:58:33Z|Forge-18|completed|
+2026-04-05T23:01:25Z|Chip-78|completed|
+2026-04-05T23:01:25Z|Hammer-7|completed|
+2026-04-05T23:02:43Z|Forge-91|completed|
+2026-04-05T23:02:48Z|Strata-67|completed|
+2026-04-05T23:03:41Z|Alert-51|completed|
+2026-04-05T23:09:30Z|auditor-phase3|completed|
+2026-04-05T23:20:15Z|Dig-82|completed|
+2026-04-05T23:22:25Z|Brick-95|completed|
+2026-04-05T23:23:04Z|Keen-61|completed|
+2026-04-05T23:38:31Z|Verify-82|completed|
+2026-04-06T00:09:41Z|Guard-44|completed|
+2026-04-06T01:25:25Z|Helper-56|completed|
+2026-04-06T01:27:44Z|Scribe-57|completed|
+2026-04-06T13:53:33Z|Assess-26|completed|
+2026-04-06T13:53:33Z|Protect-81|completed|
+2026-04-06T14:24:46Z|Sharp-78|completed|
+2026-04-06T14:31:22Z|Auditor-QA-1|completed|
+2026-04-06T14:57:23Z|Inspect-50|completed|
+2026-04-06T15:44:36Z|Verify-47|completed|
+2026-04-06T16:11:05Z|Exam-56|completed|
+2026-04-06T18:10:54Z|Brick-15|completed|
+2026-04-06T18:10:58Z|Mason-6|completed|
+2026-04-06T18:10:58Z|Weld-36|completed|
+2026-04-06T18:11:40Z|Sentinel-89|completed|

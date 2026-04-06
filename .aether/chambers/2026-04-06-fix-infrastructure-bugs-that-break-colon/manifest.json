@@ -1,0 +1,102 @@
+{
+  "goal": "Fix infrastructure bugs that break colony seal: state-mutate panic on nested fields, chamber-create path doubling in entomb YAML, and XML export output format quirks",
+  "milestone": "Crowned Anthill",
+  "version": "3.0",
+  "phases_completed": 7,
+  "total_phases": 8,
+  "decisions": [],
+  "learnings": [
+    {
+      "id": "learning_1743958800",
+      "learnings": [
+        {
+          "claim": "When setting nested JSON fields via sjson, use SetRawBytes for raw JSON values (numbers, booleans, null, objects, arrays) and SetBytes only for plain strings — json.Unmarshal first to detect the type",
+          "disproven_by": null,
+          "evidence": "3 targeted tests pass: numeric values stored as numbers not quoted strings, deep nested paths work, array-indexed paths work",
+          "status": "validated",
+          "tested": true
+        }
+      ],
+      "phase": 1,
+      "phase_name": "Fix state-mutate panic on nested fields",
+      "timestamp": "2026-04-06T13:20:00Z"
+    },
+    {
+      "id": "learning_1743962400",
+      "learnings": [
+        {
+          "claim": "When building colony archive XML exports, load actual data from colony store (pheromones.json, instincts.json) and hub store (registry/colonies.json) rather than passing nil — use struct-based XML unmarshal round-trip for reliable output",
+          "disproven_by": null,
+          "evidence": "3 tests pass: output flag, positional arg, all sections present. Archive produces valid XML with pheromones, wisdom, and registry sections.",
+          "status": "validated",
+          "tested": true
+        },
+        {
+          "claim": "Cobra sticky-flag problem: flag values persist across Execute() calls on the same Command struct. Prefer positional args over --output flag to avoid stale flag values in alias commands",
+          "disproven_by": null,
+          "evidence": "TestColonyArchiveXMLPositionalArg passes with positional arg taking priority over --output flag",
+          "status": "validated",
+          "tested": true
+        }
+      ],
+      "phase": 2,
+      "phase_name": "Fix XML archive export format and output handling"
+    },
+    {
+      "id": "learning_1743966000",
+      "learnings": [
+        {
+          "claim": "When extending conventional commit type allowlists in Cobra commands, update both the validation slice and the --flag help string to prevent drift — use a derived help string from the slice",
+          "disproven_by": null,
+          "evidence": "Added seal/milestone/pause/contextual to validCommitTypes; Auditor flagged help string duplication as MEDIUM; tests confirm all 4 new types work",
+          "status": "hypothesis",
+          "tested": true
+        }
+      ],
+      "phase": 3,
+      "phase_name": "Fix generate-commit-message seal/milestone types",
+      "timestamp": "2026-04-06T14:30:00Z"
+    },
+    {
+      "id": "learning_1775491938",
+      "learnings": [
+        {
+          "claim": "learning-check-promotion needs --all flag to batch-check all observations for eligibility, not just single observation by ID — seal.md calls without args so both modes must work",
+          "evidence": "Tests pass: --all returns eligible list, --observation-id returns single check. Both modes verified.",
+          "status": "validated",
+          "tested": true
+        },
+        {
+          "claim": "learning-promote-auto must call PromoteService.Promote() not just count eligible — the stub only counted but never created instincts in instincts.json",
+          "evidence": "5 observations promoted to instincts.json (18 total). Verify-claims confirms file consistency.",
+          "status": "validated",
+          "tested": true
+        }
+      ],
+      "phase": 4,
+      "phase_name": "Fix learning-check-promotion --all and learning-promote-auto stub",
+      "timestamp": "2026-04-06T16:12:18Z"
+    },
+    {
+      "id": "learning_1775510400",
+      "learnings": [
+        {
+          "claim": "Race detector tests catch concurrency issues early — run with -race on all colony phases that involve parallel workers",
+          "evidence": "go test ./cmd/... -race passes with no race conditions detected",
+          "status": "validated",
+          "tested": true
+        },
+        {
+          "claim": "Smoke-test new CLI flags with --help before declaring feature complete — validates flag registration without complex integration tests",
+          "evidence": "Verified --all flag on learning-check-promotion and --active on registry-add via --help output",
+          "status": "validated",
+          "tested": true
+        }
+      ],
+      "phase": 8,
+      "phase_name": "Integration verification",
+      "timestamp": "2026-04-06T18:15:52Z"
+    }
+  ],
+  "entombed_at": "2026-04-06T18:21:24Z"
+}

@@ -123,7 +123,7 @@ phases_completed=$(jq '[.plan.phases[] | select(.status == "completed")] | lengt
 if [[ "$phases_completed" -ge 3 ]]; then
   # Generate Sage name and dispatch
   sage_name=$(aether generate-ant-name --caste "sage")
-  aether spawn-log --name "Queen" --caste "sage" --id "$sage_name" --description "Colony analytics review"
+  aether spawn-log --parent "Queen" --caste "sage" --name "$sage_name" --task "Colony analytics review" --depth 1
 
   # Display spawn notification
   echo ""
@@ -162,7 +162,7 @@ Work:
 
 **IMPORTANT:** You are strictly read-only. Do not modify any files.
 
-Log activity: aether activity-log "ANALYZING" "{sage_name}" "description"
+Log activity: aether activity-log --command "ANALYZING" --phase 0 --details "{sage_name}: description"
 
 Return ONLY this JSON (no other text):
 {{
@@ -195,7 +195,7 @@ After spawn, extract from response: `key_findings`, `trends`, `recommendations`
 
 Log completion and update swarm display:
 ```bash
-aether spawn-complete --id "$sage_name" --status "completed" --summary "Analytics review complete"
+aether spawn-complete --name "$sage_name" --status "completed"
 ```
 
 **Display Sage completion line:**
@@ -207,7 +207,7 @@ aether spawn-complete --id "$sage_name" --status "completed" --summary "Analytic
 **Log high-priority recommendations to midden (non-blocking):**
 For each recommendation with priority <= 2:
 ```bash
-aether midden-write "analytics" "Sage recommendation (P{priority}): {action}" "sage"
+aether midden-write --category "analytics" --message "Sage recommendation (P{priority}): {action}" --source "sage"
 ```
 
 **Display insights summary:**
@@ -242,7 +242,7 @@ if [[ -f "$obs_file" ]]; then
     colony=$(echo "$encoded" | base64 -d | jq -r '.colonies[0] // "unknown"')
     [[ -z "$content" ]] && continue
 
-    result=$(aether learning-promote-auto "$wisdom_type" "$content" "$colony" "learning" 2>/dev/null || echo '{}')
+    result=$(aether learning-promote-auto 2>/dev/null || echo '{}')
     was_promoted=$(echo "$result" | jq -r '.result.promoted // false' 2>/dev/null || echo "false")
     if [[ "$was_promoted" == "true" ]]; then
       auto_promoted_count=$((auto_promoted_count + 1))
@@ -341,7 +341,7 @@ Proceed to Step 4 regardless of hive promotion results — hive promotion is str
 
 Log the seal ceremony to activity log:
 ```bash
-aether activity-log "MODIFIED" "Queen" "Colony sealed - wisdom review completed"
+aether activity-log --command "seal" --phase 0 --result "success" --details "Colony sealed - wisdom review completed"
 ```
 
 ### Step 4.4: Checkpoint State
@@ -350,7 +350,7 @@ Before modifying colony state, create a rolling backup:
 
 Run using the Bash tool with description "Checkpointing colony state before seal...":
 ```bash
-aether state-checkpoint "pre-seal" 2>/dev/null || echo "Warning: State checkpoint failed -- continuing without backup" >&2
+aether state-checkpoint --name "pre-seal" 2>/dev/null || echo "Warning: State checkpoint failed -- continuing without backup" >&2
 ```
 
 ### Step 4.5: Increment Colony Version
@@ -398,18 +398,15 @@ Build a summary of what the colony accomplished across all phases:
 - Summarize the goal and key outcomes in one line
 
 ```bash
-aether changelog-append \
-  "$(date +%Y-%m-%d)" \
-  "seal-crowned-anthill" \
-  "00" \
-  "{key_files_csv}" \
-  "Colony sealed at Crowned Anthill;{goal}" \
-  "{phases_completed} phases completed;Colony wisdom promoted to QUEEN.md" \
-  ""
-```
+# Build changelog entry text - combine goal and phase completion info
+changelog_entry="Colony sealed at Crowned Anthill;${goal};${phases_completed} phases completed;Colony wisdom promoted to QUEEN.md"
 
-- `{key_files_csv}` — list the most significant files created or modified across the colony's lifetime (derive from phase plans or git log)
-- `{goal}` — the colony goal from COLONY_STATE.json
+aether changelog-append \
+  --date "$(date +%Y-%m-%d)" \
+  --phase "seal" \
+  --plan "00" \
+  --entry "$changelog_entry"
+```
 
 **Error handling:** If `changelog-append` fails, log to midden and continue — changelog failure never blocks sealing.
 
@@ -419,7 +416,7 @@ Mark the colony as inactive in the global registry. This is silent on failure �
 
 Run using the Bash tool (ignore errors):
 ```bash
-aether registry-add --path "$(pwd)" "$(jq -r '.version // "unknown"' ~/.aether/version.json 2>/dev/null || echo 'unknown')" --active false 2>/dev/null || true
+aether registry-add --repo "$(pwd)" --active=false 2>/dev/null || true
 ```
 
 If the command fails, proceed silently. This is optional bookkeeping.
@@ -434,7 +431,7 @@ Before writing the seal document, spawn a Chronicler to survey documentation cov
 chronicler_name=$(aether generate-ant-name --caste "chronicler")
 
 # Log spawn and update swarm display
-aether spawn-log --name "Queen" --caste "chronicler" --id "$chronicler_name" --description "Documentation coverage audit"
+aether spawn-log --parent "Queen" --caste "chronicler" --name "$chronicler_name" --task "Documentation coverage audit" --depth 1
 ```
 
 **Display:**
@@ -472,7 +469,7 @@ Work:
 
 **IMPORTANT:** You are strictly read-only. Do not modify any files.
 
-Log activity: aether activity-log "SURVEYING" "{chronicler_name}" "description"
+Log activity: aether activity-log --command "SURVEYING" --phase 0 --details "{chronicler_name}: description"
 
 Return ONLY this JSON (no other text):
 {
@@ -501,7 +498,7 @@ Extract from response: `coverage_percent`, `gaps_identified`, `pages_documented`
 
 Log completion and update swarm display:
 ```bash
-aether spawn-complete --id "$chronicler_name" --status "completed" --summary "Documentation audit complete"
+aether spawn-complete --name "$chronicler_name" --status "completed"
 ```
 
 **Display Chronicler completion line:**
@@ -512,7 +509,7 @@ aether spawn-complete --id "$chronicler_name" --status "completed" --summary "Do
 **Log gaps to midden (non-blocking):**
 For each gap in `gaps_identified` with severity "high" or "medium":
 ```bash
-aether midden-write "documentation" "Gap ({severity}): {description} at {location}" "chronicler"
+aether midden-write --category "documentation" --message "Gap ({severity}): {description} at {location}" --source "chronicler"
 ```
 
 **Display summary:**
@@ -603,7 +600,7 @@ if command -v xmllint >/dev/null 2>&1; then
   fi
 
   # Export standalone queen-wisdom.xml for cross-colony wisdom sharing
-  wisdom_result=$(aether wisdom-export-xml ".aether/exchange/queen-wisdom.xml" 2>&1)
+  wisdom_result=$(aether wisdom-export-xml --output ".aether/exchange/queen-wisdom.xml" 2>&1)
   wisdom_ok=$(echo "$wisdom_result" | jq -r '.ok // false' 2>/dev/null)
   if [[ "$wisdom_ok" == "true" ]]; then
     wisdom_count=$(echo "$wisdom_result" | jq -r '.result.entries // 0' 2>/dev/null)
@@ -613,7 +610,7 @@ if command -v xmllint >/dev/null 2>&1; then
   fi
 
   # Export standalone colony-registry.xml for lineage tracking
-  registry_result=$(aether registry-export-xml ".aether/exchange/colony-registry.xml" 2>&1)
+  registry_result=$(aether registry-export-xml --output ".aether/exchange/colony-registry.xml" 2>&1)
   registry_ok=$(echo "$registry_result" | jq -r '.ok // false' 2>/dev/null)
   if [[ "$registry_ok" == "true" ]]; then
     registry_count=$(echo "$registry_result" | jq -r '.result.colonies // 0' 2>/dev/null)
@@ -692,9 +689,9 @@ After the ceremony, offer to commit all colony work.
 
 Generate a seal commit message:
 ```bash
-seal_commit=$(aether generate-commit-message seal "$phases_completed" "$goal" "$colony_age_days" 2>/dev/null)
-seal_message=$(echo "$seal_commit" | jq -r '.result.message // "aether-seal: colony sealed"')
-seal_body=$(echo "$seal_commit" | jq -r '.result.body // ""')
+seal_commit=$(aether generate-commit-message --type seal --subject "crowned anthill v${colony_version}" --scope "colony" --body "Completed ${phases_completed} phases over ${colony_age_days} days. Goal: ${goal}" 2>/dev/null)
+seal_message=$(echo "$seal_commit" | jq -r '.message // "seal: colony sealed at Crowned Anthill"')
+seal_body=$(echo "$seal_commit" | jq -r '.body // ""')
 ```
 
 Display the suggestion:
@@ -716,7 +713,7 @@ Prompt with AskUserQuestion (3 options):
 If the user chooses option 1 or 2 and the commit succeeds, set `seal_committed = true`.
 If the commit fails or user skips, set `seal_committed = false`.
 
-**Error handling:** If `generate-commit-message` fails, fall back to message `"aether-seal: colony sealed"`. Never let commit suggestion failures stop the seal flow.
+**Error handling:** If `generate-commit-message` fails, fall back to message `"seal: colony sealed at Crowned Anthill"`. Never let commit suggestion failures stop the seal flow.
 
 ### Step 7.6: Push Suggestion (Non-blocking)
 

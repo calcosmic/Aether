@@ -1,0 +1,890 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<colony-archive colony_id="" sealed_at="2026-04-06T18:21:41Z" version="1.0">
+  <pheromones version="1.0" generated_at="2026-04-06T18:21:41Z" count="162">
+    <signal id="imported:" type="" priority="" source="" created_at="" active="false">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_001" type="FEEDBACK" priority="low" source="worker_builder" created_at="2026-02-16T12:00:00Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1773947444_5500" type="FEEDBACK" priority="low" source="worker:builder" created_at="2026-03-19T19:10:44Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1773947445_8361" type="FEEDBACK" priority="low" source="worker:builder" created_at="2026-03-19T19:10:45Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1773991241_8159" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-20T07:20:41Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1773991242_4782" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-20T07:20:42Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1773991243_5821" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-20T07:20:43Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1773992956_5767" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-20T07:49:16Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1773992957_5158" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-20T07:49:17Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1773995408_8861" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-20T08:30:08Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1773996777_3794" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-20T08:52:57Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774010222_2039" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-20T12:37:02Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774010223_310" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-20T12:37:03Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774010234_2399" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-20T12:37:14Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774012954_1562" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-20T13:22:34Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774012955_4365" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-20T13:22:35Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774012956_9091" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-20T13:22:36Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774023661_1997" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-20T16:21:01Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774029098_9942" type="FEEDBACK" priority="low" source="worker:chaos" created_at="2026-03-20T17:51:38Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774030142_9217" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-20T18:09:02Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774030143_3779" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-20T18:09:03Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774030156_4289" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-20T18:09:16Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774033631_2608" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-20T19:07:11Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774033631_7828" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-20T19:07:11Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774035499_2561" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-20T19:38:19Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774035500_3711" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-20T19:38:20Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774054977_6657" type="FEEDBACK" priority="low" source="worker:chaos" created_at="2026-03-21T01:02:57Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774056301_9599" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-21T01:25:01Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774056302_5139" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-21T01:25:02Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774056312_457" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-21T01:25:12Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774058602_3823" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-21T02:03:22Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774058603_8134" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-21T02:03:23Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774063282_4523" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-21T03:21:22Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774063283_1088" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-21T03:21:23Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774064431_2310" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-21T03:40:31Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774064432_1642" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-21T03:40:32Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774070995_5816" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-21T05:29:55Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774184122_5" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-22T12:55:22Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774184123_1952" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-22T12:55:23Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774184132_8868" type="FEEDBACK" priority="low" source="auto:decision" created_at="2026-03-22T12:55:32Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774208927_1093" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-22T19:48:47Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774208928_2567" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-22T19:48:48Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774208929_4042" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-22T19:48:49Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774208937_4173" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-22T19:48:57Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774279597_3017" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-23T15:26:37Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774279598_3636" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-23T15:26:38Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774280582_1933" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-23T15:43:02Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774280582_6713" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-23T15:43:02Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774281404_1656" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-23T15:56:44Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774281404_2366" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-23T15:56:44Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774287690_8334" type="FEEDBACK" priority="low" source="oracle:promote" created_at="2026-03-23T17:41:30Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774287691_218" type="FEEDBACK" priority="low" source="oracle:promote" created_at="2026-03-23T17:41:31Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774287693_9334" type="FEEDBACK" priority="low" source="oracle:promote" created_at="2026-03-23T17:41:33Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774287694_7542" type="FEEDBACK" priority="low" source="oracle:promote" created_at="2026-03-23T17:41:34Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774287695_9427" type="FEEDBACK" priority="low" source="oracle:promote" created_at="2026-03-23T17:41:35Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774648240_1054" type="FEEDBACK" priority="low" source="system:phase-insert" created_at="2026-03-27T21:50:40Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774653271_1522" type="FEEDBACK" priority="low" source="worker:chaos" created_at="2026-03-27T23:14:31Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774653615_6145" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-27T23:20:15Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774653647_8263" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-27T23:20:47Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774656890_2838" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-28T00:14:50Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774656894_5661" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-28T00:14:54Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774656934_855" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-28T00:15:34Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774657699_8936" type="FEEDBACK" priority="low" source="worker:weld-12" created_at="2026-03-28T00:28:33Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774659996_2339" type="FEEDBACK" priority="low" source="system:memory-capture" created_at="2026-03-28T01:06:36Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774660979_3211" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-28T01:22:59Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774660984_7446" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-28T01:23:04Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774661006_7342" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-28T01:23:26Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774661772_9290" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-28T01:36:12Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774661778_1293" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-28T01:36:18Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774669541_7818" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-28T03:45:41Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774669543_9197" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-28T03:45:43Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774669584_6077" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-28T03:46:24Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774742168_9612" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-28T23:56:08Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774742171_6467" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-28T23:56:11Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774742205_5511" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-28T23:56:45Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774746710_3994" type="FEEDBACK" priority="low" source="system:phase-insert" created_at="2026-03-29T01:11:50Z" active="true">
+      <content>
+        <text>Learning captured: Inserted phase 6 (Stabilize spawn-tree parsing and JSON output): Fix all 3 spawn-tree blockers: (1) Fix O(n^2) parse_spawn_tree scaling that causes test timeouts, (2) JSON-escape ant names before interpolation into JSON output strings, (3) Add structural JSON validation in spawn-tree-load before passing through json_ok</text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774749456_5544" type="FEEDBACK" priority="low" source="worker:chaos" created_at="2026-03-29T01:57:36Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774749989_515" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-29T02:06:29Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774749994_983" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-29T02:06:34Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774750002_2079" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-29T02:06:42Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774752156_2746" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-29T02:42:36Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774752161_6295" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-29T02:42:41Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774947117_9053" type="FEEDBACK" priority="low" source="worker:builder" created_at="2026-03-31T08:51:57Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774948067_5090" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-31T09:07:47Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_feedback_1774950813_2313" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-31T09:53:33Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_focus_1773991045_1869" type="FOCUS" priority="normal" source="test" created_at="2026-03-20T07:17:25Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_focus_1774637555_5246" type="FOCUS" priority="normal" source="system:init" created_at="2026-03-27T19:16:31Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_focus_1774637556_1863" type="FOCUS" priority="normal" source="system:init" created_at="2026-03-31T08:17:01Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_focus_1774637556_5136" type="FOCUS" priority="normal" source="system:init" created_at="2026-03-31T08:17:00Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_focus_1774638138_9979" type="FOCUS" priority="normal" source="user" created_at="2026-03-27T19:02:18Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_focus_1774641546_9085" type="FOCUS" priority="normal" source="system:init" created_at="2026-03-27T22:27:18Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_focus_1774641547_2971" type="FOCUS" priority="normal" source="system:init" created_at="2026-03-27T21:05:28Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_focus_1774641547_6244" type="FOCUS" priority="normal" source="system:init" created_at="2026-03-27T22:27:19Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_focus_1774645528_9997" type="FOCUS" priority="normal" source="system:init" created_at="2026-03-27T21:05:28Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_focus_1774648237_850" type="FOCUS" priority="normal" source="user:insert-phase" created_at="2026-03-27T21:50:37Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_focus_1774650440_1947" type="FOCUS" priority="normal" source="system:init" created_at="2026-03-27T22:27:20Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_focus_1774651980_2476" type="FOCUS" priority="normal" source="user" created_at="2026-03-27T22:53:00Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_focus_1774653316_9383" type="FOCUS" priority="normal" source="user" created_at="2026-03-27T23:15:16Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_focus_1774664831_21" type="FOCUS" priority="normal" source="swarm-fix" created_at="2026-03-28T02:27:11Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_focus_1774746708_7788" type="FOCUS" priority="normal" source="user:insert-phase" created_at="2026-03-29T01:11:48Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_focus_1774806114_183" type="FOCUS" priority="normal" source="system:init" created_at="2026-03-29T17:41:54Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_focus_1774856054_804" type="FOCUS" priority="normal" source="system:init" created_at="2026-03-30T14:22:13Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_focus_1774945019_8848" type="FOCUS" priority="normal" source="system:init" created_at="2026-03-31T08:16:59Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_redirect_001" type="REDIRECT" priority="high" source="system" created_at="2026-02-16T08:00:00Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_redirect_1771366398000" type="REDIRECT" priority="high" source="user" created_at="2026-02-17T22:13:18Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_redirect_1774008779_4117" type="REDIRECT" priority="high" source="worker:chaos" created_at="2026-03-20T12:12:59Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_redirect_1774032795_2205" type="REDIRECT" priority="high" source="worker:chaos" created_at="2026-03-20T18:53:15Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_redirect_1774663697_2058" type="REDIRECT" priority="high" source="worker:chaos" created_at="2026-03-28T02:08:17Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_redirect_1774663699_9357" type="REDIRECT" priority="high" source="worker:chaos" created_at="2026-03-28T02:08:19Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_redirect_1774664831_3975" type="REDIRECT" priority="high" source="swarm-fix" created_at="2026-03-28T02:27:11Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_redirect_1774667824_1679" type="REDIRECT" priority="high" source="worker:chaos" created_at="2026-03-28T03:17:04Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_redirect_1774745107_4249" type="REDIRECT" priority="high" source="worker:chaos" created_at="2026-03-29T00:45:07Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_redirect_1774745109_5540" type="REDIRECT" priority="high" source="worker:chaos" created_at="2026-03-29T00:45:09Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="imported:sig_redirect_1774746709_6763" type="REDIRECT" priority="high" source="user:insert-phase" created_at="2026-03-29T01:11:49Z" active="true">
+      <content>
+        <text></text>
+      </content>
+    </signal>
+    <signal id="sig_feedback_1774849554_9451" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-30T05:45:54Z" expires_at="2026-04-29T05:45:54Z" active="true">
+      <content>
+        <text>Learning captured: When adding awk gsub escaping, order matters: backslash must be first to prevent double-escaping</text>
+      </content>
+    </signal>
+    <signal id="sig_feedback_1774849556_4644" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-30T05:45:56Z" expires_at="2026-04-29T05:45:56Z" active="true">
+      <content>
+        <text>Learning captured: Literal newlines break awk NF guards, CR is the testable control char for embedded content</text>
+      </content>
+    </signal>
+    <signal id="sig_feedback_1774849568_740" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-30T05:46:08Z" expires_at="2026-04-29T05:46:08Z" active="true">
+      <content>
+        <text>Phase 1 (Harden JSON escaping) completed. Key patterns: gsub order matters (backslash first), CR is primary testable control char for pipe-delimited records</text>
+      </content>
+    </signal>
+    <signal id="sig_feedback_1774851263_7418" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-30T06:14:23Z" expires_at="2026-04-29T06:14:23Z" active="true">
+      <content>
+        <text>Learning captured: awk -v interprets C-style escapes — use ENVIRON[] for user content</text>
+      </content>
+    </signal>
+    <signal id="sig_feedback_1774851265_1998" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-30T06:14:25Z" expires_at="2026-04-29T06:14:25Z" active="true">
+      <content>
+        <text>Learning captured: Multi-line strings cannot pass via awk -v — use head/tail concatenation</text>
+      </content>
+    </signal>
+    <signal id="sig_feedback_1774851278_7636" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-30T06:14:38Z" expires_at="2026-04-29T06:14:38Z" active="true">
+      <content>
+        <text>Phase 2 (Fix queen-promote newline destruction) completed. Key patterns: use ENVIRON[] not awk -v for user content, head/tail for multi-line block replacement</text>
+      </content>
+    </signal>
+    <signal id="sig_feedback_1774852076_3184" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-30T06:27:56Z" expires_at="2026-04-29T06:27:56Z" active="true">
+      <content>
+        <text>Phase 3 (Filter test noise) completed. Guard pattern: AETHER_TESTING=1 check before activity.log writes</text>
+      </content>
+    </signal>
+    <signal id="sig_feedback_1774852964_3507" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-30T06:42:44Z" expires_at="2026-04-29T06:42:44Z" active="true">
+      <content>
+        <text>Phase 4 (Update high-CVE deps) completed. npm overrides for transitive dep pinning, 0 vulnerabilities</text>
+      </content>
+    </signal>
+    <signal id="sig_feedback_1774854719_7199" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-30T07:11:59Z" expires_at="2026-04-29T07:11:59Z" active="true">
+      <content>
+        <text>Phase 5 (Final verification) completed. All 5 phases done: spawn-tree JSON escaping, queen-promote awk fix, test noise filter, CVE deps, midden cleanup</text>
+      </content>
+    </signal>
+    <signal id="sig_feedback_1774857453_5595" type="FEEDBACK" priority="low" source="auto:decision" created_at="2026-03-30T07:57:33Z" expires_at="2026-04-29T07:57:33Z" active="true">
+      <content>
+        <text>[decision] test decision</text>
+      </content>
+    </signal>
+    <signal id="sig_feedback_1774857456_2207" type="FEEDBACK" priority="low" source="auto:decision" created_at="2026-03-30T07:57:36Z" expires_at="2026-04-29T07:57:36Z" active="true">
+      <content>
+        <text>[decision] test &#34;quoted&#34; decision</text>
+      </content>
+    </signal>
+    <signal id="sig_feedback_1774857528_2002" type="FEEDBACK" priority="low" source="auto:decision" created_at="2026-03-30T07:58:48Z" expires_at="2026-04-29T07:58:48Z" active="true">
+      <content>
+        <text>[decision] test with &#34;quotes&#34;</text>
+      </content>
+    </signal>
+    <signal id="sig_feedback_1774857764_4866" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-30T08:02:44Z" expires_at="2026-04-29T08:02:44Z" active="true">
+      <content>
+        <text>Phase 1 (context-update json_ok) completed. 10/11 already safe from prior colony, 1 fixed.</text>
+      </content>
+    </signal>
+    <signal id="sig_feedback_1774859339_9143" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-30T08:28:59Z" expires_at="2026-04-29T08:28:59Z" active="true">
+      <content>
+        <text>Learning captured: Empty data files (0 bytes) cause jq to produce no output — always guard with -s check before jq on data files</text>
+      </content>
+    </signal>
+    <signal id="sig_feedback_1774859340_6746" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-30T08:29:00Z" expires_at="2026-04-29T08:29:00Z" active="true">
+      <content>
+        <text>Learning captured: Shell &#39;local&#39; keyword only valid inside functions — never use in case statements at script top level</text>
+      </content>
+    </signal>
+    <signal id="sig_feedback_1774859342_2847" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-30T08:29:02Z" expires_at="2026-04-29T08:29:02Z" active="true">
+      <content>
+        <text>Phase 2 (Harden commit-message + changelog + activity-log json_ok sites) completed. Key patterns: empty data files need -s guard before jq; local keyword invalid outside functions</text>
+      </content>
+    </signal>
+    <signal id="sig_feedback_1774862094_6973" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-30T09:14:54Z" expires_at="2026-04-29T09:14:54Z" active="true">
+      <content>
+        <text>Phase 3 (Harden remaining scattered json_ok sites) completed. Key patterns: Builder agents may report success without modifying files; independent Watcher verification catches fabricated completions</text>
+      </content>
+    </signal>
+    <signal id="sig_feedback_1774862095_5775" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-30T09:14:55Z" expires_at="2026-04-29T09:14:55Z" active="true">
+      <content>
+        <text>Learning captured: Builder agents may report success without actually modifying files — independent Watcher verification is essential</text>
+      </content>
+    </signal>
+    <signal id="sig_feedback_1774866174_4543" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-30T10:22:54Z" expires_at="2026-04-29T10:22:54Z" active="true">
+      <content>
+        <text>Phase 2 (Harden commit-message + changelog + activity-log json_ok sites) completed. All 5 json_ok sites converted to jq --arg safe escaping. Empty-file guard added to validate-state.</text>
+      </content>
+    </signal>
+    <signal id="sig_feedback_1774871012_1525" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-30T11:43:32Z" expires_at="2026-04-29T11:43:32Z" active="true">
+      <content>
+        <text>Learning captured: json_ok hardening has two distinct injection classes: string interpolation in JSON output (json_ok pattern) and variable interpolation in jq filter expressions (.${var} pattern) — both require --arg parameterization but at different layers</text>
+      </content>
+    </signal>
+    <signal id="sig_feedback_1774871014_2541" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-30T11:43:34Z" expires_at="2026-04-29T11:43:34Z" active="true">
+      <content>
+        <text>Learning captured: Quality gate re-audit after fixing HIGH findings raised score from 53 to 73, confirming the fixes addressed the root issues not just symptoms</text>
+      </content>
+    </signal>
+    <signal id="sig_feedback_1774871045_6799" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-30T11:44:05Z" expires_at="2026-04-29T11:44:05Z" active="true">
+      <content>
+        <text>Phase 3 (Harden remaining scattered json_ok sites) completed. Key patterns: two distinct injection classes identified (json_ok string interpolation + jq filter expression injection); Auditor quality gate drove discovery of view-state vulnerabilities</text>
+      </content>
+    </signal>
+    <signal id="sig_feedback_1774873173_4799" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-30T12:19:33Z" expires_at="2026-04-29T12:19:33Z" active="true">
+      <content>
+        <text>Learning captured: Archaeology pre-build scans prevent regression when modifying same lines as prior bug fixes</text>
+      </content>
+    </signal>
+    <signal id="sig_feedback_1774873175_5700" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-30T12:19:35Z" expires_at="2026-04-29T12:19:35Z" active="true">
+      <content>
+        <text>Learning captured: After monolith extraction tests that grep source code break when code moves to extracted modules</text>
+      </content>
+    </signal>
+    <signal id="sig_feedback_1774873195_870" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-30T12:19:55Z" expires_at="2026-04-29T12:19:55Z" active="true">
+      <content>
+        <text>Phase 5 (Fix hive-read null safety and learning recovery tests) completed. Key patterns: archaeology pre-build scans catch prior fixes at exact change sites; stale grep targets after extraction need module-level updates</text>
+      </content>
+    </signal>
+    <signal id="sig_feedback_1774888147_2512" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-03-30T16:29:07Z" expires_at="2026-04-29T16:29:07Z" active="true">
+      <content>
+        <text>Phase 1 (State Coordination Design) completed. Key patterns: branch-local vs hub-global state classification; pheromone snapshot/merge-back protocol; idempotent midden collection</text>
+      </content>
+    </signal>
+    <signal id="sig_focus_1774845897_1157" type="FOCUS" priority="normal" source="system:init" created_at="2026-03-30T04:44:57Z" expires_at="2026-04-29T04:44:57Z" active="true">
+      <content>
+        <text>CI/CD pipeline active -- ensure changes pass all checks</text>
+      </content>
+    </signal>
+    <signal id="sig_focus_1774845897_3090" type="FOCUS" priority="normal" source="system:init" created_at="2026-03-30T04:44:57Z" expires_at="2026-04-29T04:44:57Z" active="true">
+      <content>
+        <text>Testing infrastructure present (64 test files) -- maintain TDD discipline</text>
+      </content>
+    </signal>
+    <signal id="sig_focus_1774845897_6067" type="FOCUS" priority="normal" source="system:init" created_at="2026-03-30T04:44:57Z" expires_at="2026-04-29T04:44:57Z" active="true">
+      <content>
+        <text>Large codebase -- scope changes carefully, prefer incremental work</text>
+      </content>
+    </signal>
+    <signal id="sig_focus_1774881237_3176" type="FOCUS" priority="normal" source="council:focus" created_at="2026-03-30T14:33:57Z" expires_at="2026-06-28T14:33:57Z" active="true">
+      <content>
+        <text>Full PR workflow -- implement worktree isolation, task-as-PR, 5-tier review pipeline, quality gates as CI checks, sequential merging, and cross-branch state coordination</text>
+      </content>
+    </signal>
+    <signal id="sig_focus_1774881238_2198" type="FOCUS" priority="normal" source="council:focus" created_at="2026-03-30T14:33:58Z" expires_at="2026-06-28T14:33:58Z" active="true">
+      <content>
+        <text>Each colony task should create its own git branch and PR -- agents never work directly on the main branch</text>
+      </content>
+    </signal>
+    <signal id="sig_focus_1774916915_7994" type="FOCUS" priority="normal" source="oracle:wizard" created_at="2026-03-31T00:28:35Z" expires_at="2026-04-01T00:28:35Z" active="true">
+      <content>
+        <text>sync-parity: Claude/OpenCode command and agent consistency</text>
+      </content>
+    </signal>
+    <signal id="sig_focus_1774916932_8497" type="FOCUS" priority="normal" source="oracle:wizard" created_at="2026-03-31T00:28:52Z" expires_at="2026-04-01T00:28:52Z" active="true">
+      <content>
+        <text>docs-accuracy: documentation matches reality on disk</text>
+      </content>
+    </signal>
+    <signal id="sig_focus_1774916933_9768" type="FOCUS" priority="normal" source="oracle:wizard" created_at="2026-03-31T00:28:53Z" expires_at="2026-04-01T00:28:53Z" active="true">
+      <content>
+        <text>utils-integrity: aether-utils.sh dispatcher and module consistency</text>
+      </content>
+    </signal>
+    <signal id="sig_focus_1774916935_6023" type="FOCUS" priority="normal" source="oracle:wizard" created_at="2026-03-31T00:28:55Z" expires_at="2026-04-01T00:28:55Z" active="true">
+      <content>
+        <text>cross-refs: all file paths and references resolve</text>
+      </content>
+    </signal>
+    <signal id="sig_focus_1774916937_7288" type="FOCUS" priority="normal" source="oracle:wizard" created_at="2026-03-31T00:28:57Z" expires_at="2026-04-01T00:28:57Z" active="true">
+      <content>
+        <text>packaging: npm packaging and distribution correctness</text>
+      </content>
+    </signal>
+    <signal id="sig_redirect_1774866172_1576" type="REDIRECT" priority="high" source="auto:error" created_at="2026-03-30T10:22:52Z" expires_at="2026-04-29T10:22:52Z" active="true">
+      <content>
+        <text>[error-pattern] Category &#34;quality&#34; recurring (3+ occurrences in midden)</text>
+      </content>
+    </signal>
+    <signal id="sig_redirect_1774866172_6718" type="REDIRECT" priority="high" source="auto:error" created_at="2026-03-30T10:22:52Z" expires_at="2026-04-29T10:22:52Z" active="true">
+      <content>
+        <text>[error-pattern] Category &#34;resilience&#34; recurring (3+ occurrences in midden)</text>
+      </content>
+    </signal>
+    <signal id="sig_redirect_1774866173_3755" type="REDIRECT" priority="high" source="auto:error" created_at="2026-03-30T10:22:53Z" expires_at="2026-04-29T10:22:53Z" active="true">
+      <content>
+        <text>[error-pattern] Category &#34;documentation&#34; recurring (3+ occurrences in midden)</text>
+      </content>
+    </signal>
+    <signal id="sig_redirect_1774881238_701" type="REDIRECT" priority="high" source="council:redirect" created_at="2026-03-30T14:33:58Z" expires_at="2026-06-28T14:33:58Z" active="true">
+      <content>
+        <text>Avoid modifying files directly on the main branch during builds -- all changes go through PRs</text>
+      </content>
+    </signal>
+    <signal id="sig_feedback_1775059035_1871" type="FEEDBACK" priority="low" source="worker:continue" created_at="2026-04-01T15:57:15Z" expires_at="2026-05-01T15:57:15Z" active="true">
+      <content>
+        <text>Phase 1 (Go Module Init &amp; Storage Foundation) completed. Key patterns: parallel builders for independent packages, atomic writes via temp+rename, per-path mutexes for concurrent safety</text>
+      </content>
+    </signal>
+    <signal id="sig_1775127264_6c598d03" type="FOCUS" priority="normal" source="cli" created_at="2026-04-02T10:54:24Z" active="true">
+      <content>
+        <text>test signal</text>
+      </content>
+    </signal>
+    <signal id="sig_1775127264_bd1a0ec9" type="REDIRECT" priority="high" source="cli" created_at="2026-04-02T10:54:24Z" expires_at="2026-05-02T10:54:24Z" active="true">
+      <content>
+        <text>avoid this</text>
+      </content>
+    </signal>
+    <signal id="sig_1775127264_12a86267" type="FEEDBACK" priority="low" source="cli" created_at="2026-04-02T10:54:24Z" expires_at="2026-04-09T10:54:24Z" active="true">
+      <content>
+        <text>nice work</text>
+      </content>
+    </signal>
+    <signal id="sig_1775404533_87318905" type="FEEDBACK" priority="low" source="cli" created_at="2026-04-05T15:55:33Z" expires_at="2026-04-12T15:55:33Z" active="true">
+      <content>
+        <text>Phase 2 (Port Remaining Shell Commands to Go) completed. All 141 shell subcommands now have Go equivalents.</text>
+      </content>
+    </signal>
+    <signal id="sig_1775429446_2b2ef72c" type="FEEDBACK" priority="low" source="cli" created_at="2026-04-05T22:50:46Z" expires_at="2026-04-12T22:50:46Z" active="true">
+      <content>
+        <text>Phase 2 (File Locking) completed. Key patterns: syscall.Flock works for cross-process safety; single Mutex bottleneck under high contention; lock upgrade/downgrade is non-atomic</text>
+      </content>
+    </signal>
+    <signal id="sig_1775486012_5c22a4d8" type="FEEDBACK" priority="low" source="cli" created_at="2026-04-06T14:33:32Z" expires_at="2026-04-13T14:33:32Z" active="true">
+      <content>
+        <text>Phase 3 (Fix generate-commit-message seal/milestone types) completed. Added seal/milestone/pause/contextual to validCommitTypes. Key: keep validation slice and help string in sync.</text>
+      </content>
+    </signal>
+    <signal id="sig_1775487911_7ed4b944" type="FEEDBACK" priority="low" source="cli" created_at="2026-04-06T15:05:11Z" expires_at="2026-04-13T15:05:11Z" active="true">
+      <content>
+        <text>Phase 4 (Fix learning-check-promotion --all and learning-promote-auto stub) completed. Key patterns: connect stubs to real service methods, use make([]T,0) not nil slices for JSON consistency</text>
+      </content>
+    </signal>
+  </pheromones>
+  <queen-wisdom version="1.0" colony_id="" generated_at="2026-04-06T18:21:41Z">
+    <philosophies></philosophies>
+    <patterns>
+      <pattern id="inst_1775264791" confidence="0.75" domain="" source="observation" created_at="2026-04-04T01:06:31Z">
+        <content>test_pattern</content>
+      </pattern>
+      <pattern id="inst_1775265406" confidence="0.85" domain="testing" source="observation" created_at="2026-04-04T01:16:46Z">
+        <content>test_uat_pattern</content>
+      </pattern>
+      <pattern id="inst_1775427740" confidence="0.80" domain="architecture" source="phase-1" created_at="2026-04-05T22:22:20Z">
+        <content>converting bare exec.Command to exec.CommandContext</content>
+      </pattern>
+      <pattern id="inst_1775427745" confidence="0.75" domain="code-style" source="phase-1" created_at="2026-04-05T22:22:25Z">
+        <content>timeout error handling in command context functions</content>
+      </pattern>
+      <pattern id="inst_1775429435" confidence="0.70" domain="architecture" source="phase-2" created_at="2026-04-05T22:50:35Z">
+        <content>implementing file locking in Go</content>
+      </pattern>
+      <pattern id="inst_1775430850" confidence="0.70" domain="architecture" source="success-phase-3" created_at="2026-04-05T23:14:10Z">
+        <content>replacing bare context.Background() with cobra cmd.Context()-derived contexts</content>
+      </pattern>
+      <pattern id="inst_1775432625" confidence="0.70" domain="code-style" source="phase-4" created_at="2026-04-05T23:43:45Z">
+        <content>adding timeout configuration to cobra commands</content>
+      </pattern>
+      <pattern id="inst_1775432625" confidence="0.75" domain="workflow" source="success-phase-4" created_at="2026-04-05T23:43:45Z">
+        <content>building on a well-designed abstraction from a prior phase</content>
+      </pattern>
+      <pattern id="inst_1775435736" confidence="0.90" domain="testing" source="phase-5" created_at="2026-04-06T00:35:36Z">
+        <content>running final integration phase after sequential fixes</content>
+      </pattern>
+      <pattern id="inst_1775481524" confidence="0.80" domain="code-style" source="phase-1" created_at="2026-04-06T13:18:44Z">
+        <content>setting nested JSON fields with sjson</content>
+      </pattern>
+      <pattern id="inst_1775484942" confidence="0.75" domain="architecture" source="phase-2" created_at="2026-04-06T14:15:42Z">
+        <content>exporting colony archive XML</content>
+      </pattern>
+      <pattern id="inst_1775484942" confidence="0.75" domain="code-style" source="phase-2" created_at="2026-04-06T14:15:42Z">
+        <content>Cobra alias command shares RunE with nested subcommand</content>
+      </pattern>
+      <pattern id="inst_1775490523" confidence="0.80" domain="architecture" source="phase-4" created_at="2026-04-06T15:48:43Z">
+        <content>a stub command that counts but never performs its action</content>
+      </pattern>
+      <pattern id="inst_1775491673_42b9b7" confidence="0.70" domain="pattern" source="sha256:8907ef9043107774fbe694defd18ba82e546e8e3a4940efc50d6c7ec9d2b7601" created_at="2026-04-06T16:07:53Z">
+        <content>syscall.Flock provides clean cross-process locking but a single in-process Mutex serializes all paths — use per-path mutex for better concurrency under high contention</content>
+      </pattern>
+      <pattern id="inst_1775491673_3ac05f" confidence="0.70" domain="pattern" source="sha256:540b1883527b2b1c7a65238f892ea2633f2acce5d3b9230789ba76a9fffdc0bf" created_at="2026-04-06T16:07:53Z">
+        <content>Lock upgrade/downgrade (shared to exclusive or vice versa) is silently destructive with flock — the unlock-reacquire window breaks atomicity</content>
+      </pattern>
+      <pattern id="inst_1775491673_ae6160" confidence="0.70" domain="pattern" source="sha256:5890b39bee27b967033bb31942c62706cc04f331c3370788bacfc76e46dd16b7" created_at="2026-04-06T16:07:53Z">
+        <content>When extending conventional commit type allowlists in Cobra commands, update both the validation slice and the --flag help string to prevent drift — use a derived help string from the slice</content>
+      </pattern>
+      <pattern id="inst_1775491673_9b0412" confidence="0.70" domain="pattern" source="sha256:44b1cacc861d7799d87c80700093ef363273cc0a4bf1d0b9217d11475933a0e9" created_at="2026-04-06T16:07:53Z">
+        <content>When implementing auto-promotion pipelines, connect stub implementations to actual service methods (e.g., PromoteService.Promote()) rather than leaving them as counting-only operations — callers expect side effects, not just counts</content>
+      </pattern>
+      <pattern id="inst_1775491673_0a9382" confidence="0.70" domain="pattern" source="sha256:8a8d616c0daaa6b8b381e960f929a14cc72ce1bef3f591e9057f3b0d155191ef" created_at="2026-04-06T16:07:53Z">
+        <content>When adding batch mode flags to existing Cobra commands (e.g., --all), ensure the flag name doesn&#39;t conflict with existing positional args and that the output schema is consistent between single-item and batch modes</content>
+      </pattern>
+      <pattern id="inst_1775491951" confidence="0.80" domain="code-style" source="phase-4" created_at="2026-04-06T16:12:31Z">
+        <content>building Cobra CLI commands that need both single-ID and batch modes</content>
+      </pattern>
+      <pattern id="inst_1775491960" confidence="0.85" domain="debugging" source="phase-4" created_at="2026-04-06T16:12:40Z">
+        <content>a Go command stub returns placeholder counts without calling the real service</content>
+      </pattern>
+      <pattern id="inst_1775498390" confidence="0.75" domain="workflow" source="phase-7" created_at="2026-04-06T17:59:50Z">
+        <content>migrating shell commands to Go binary</content>
+      </pattern>
+      <pattern id="inst_1775499359" confidence="0.80" domain="testing" source="phase-8" created_at="2026-04-06T18:15:59Z">
+        <content>Running final verification on Go projects</content>
+      </pattern>
+      <pattern id="inst_1775499359" confidence="0.75" domain="workflow" source="phase-8" created_at="2026-04-06T18:15:59Z">
+        <content>Adding new CLI flags to Go commands</content>
+      </pattern>
+    </patterns>
+  </queen-wisdom>
+  <colony-registry version="1.0" generated_at=""></colony-registry>
+</colony-archive>

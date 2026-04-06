@@ -200,7 +200,7 @@ func (tr *ToolRunner) RunStreaming(ctx context.Context, messages []anthropic.Mes
 		// No tool use -- stream the final response for text accumulation
 		if len(toolUseBlocks) == 0 {
 			stream := tr.client.apiClient.Messages.NewStreaming(ctx, params)
-			return AccumulateStream(stream)
+			return AccumulateStream(stream, nil)
 		}
 
 		// Append assistant response and tool results, then continue loop

@@ -29,7 +29,7 @@ func TestAccumulateStreamText(t *testing.T) {
 	defer server.Close()
 
 	stream := newTestStream(t, server.URL)
-	result, err := AccumulateStream(stream)
+	result, err := AccumulateStream(stream, nil)
 	if err != nil {
 		t.Fatalf("AccumulateStream() error = %v", err)
 	}
@@ -66,7 +66,7 @@ func TestAccumulateStreamEmpty(t *testing.T) {
 	defer server.Close()
 
 	stream := newTestStream(t, server.URL)
-	result, err := AccumulateStream(stream)
+	result, err := AccumulateStream(stream, nil)
 	if err != nil {
 		t.Fatalf("AccumulateStream() error = %v", err)
 	}
@@ -86,12 +86,139 @@ func TestAccumulateStreamError(t *testing.T) {
 	defer server.Close()
 
 	stream := newTestStream(t, server.URL)
-	_, err := AccumulateStream(stream)
+	_, err := AccumulateStream(stream, nil)
 	if err == nil {
 		t.Fatal("expected error from error stream")
 	}
 	if !strings.Contains(err.Error(), "overloaded") {
 		t.Errorf("error = %q, want containing 'overloaded'", err.Error())
+	}
+}
+
+// testStreamHandler is a test implementation of StreamHandler that records callbacks.
+type testStreamHandler struct {
+	tokens      []string
+	toolStarts  []struct{ name, id string }
+	toolEnds    []struct{ name, id, result string }
+	completed   bool
+	completeResult *StreamResult
+	err         error
+}
+
+func (h *testStreamHandler) OnToken(token string) {
+	h.tokens = append(h.tokens, token)
+}
+
+func (h *testStreamHandler) OnToolStart(toolName string, toolID string) {
+	h.toolStarts = append(h.toolStarts, struct{ name, id string }{toolName, toolID})
+}
+
+func (h *testStreamHandler) OnToolEnd(toolName string, toolID string, result string) {
+	h.toolEnds = append(h.toolEnds, struct{ name, id, result string }{toolName, toolID, result})
+}
+
+func (h *testStreamHandler) OnComplete(result *StreamResult) {
+	h.completed = true
+	h.completeResult = result
+}
+
+func (h *testStreamHandler) OnError(err error) {
+	h.err = err
+}
+
+func TestAccumulateStreamWithHandler(t *testing.T) {
+	// Build SSE events that simulate Anthropic streaming response
+	events := []sseEvent{
+		{eventType: "message_start", data: `{"type":"message_start","message":{"id":"msg_stream1","type":"message","role":"assistant","model":"claude-sonnet-4-20250514","content":[],"stop_reason":null,"usage":{"input_tokens":20,"output_tokens":0}}}`},
+		{eventType: "content_block_start", data: `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`},
+		{eventType: "content_block_delta", data: `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello "}}`},
+		{eventType: "content_block_delta", data: `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"World"}}`},
+		{eventType: "content_block_stop", data: `{"type":"content_block_stop","index":0}`},
+		{eventType: "message_delta", data: `{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":5}}`},
+		{eventType: "message_stop", data: `{"type":"message_stop"}`},
+	}
+
+	server := newSSEServer(t, events)
+	defer server.Close()
+
+	handler := &testStreamHandler{}
+	stream := newTestStream(t, server.URL)
+	result, err := AccumulateStream(stream, handler)
+	if err != nil {
+		t.Fatalf("AccumulateStream() error = %v", err)
+	}
+
+	// Verify accumulated result
+	if result.Text != "Hello World" {
+		t.Errorf("Text = %q, want %q", result.Text, "Hello World")
+	}
+
+	// Verify handler callbacks
+	if len(handler.tokens) != 2 {
+		t.Errorf("got %d tokens, want 2", len(handler.tokens))
+	}
+	if handler.tokens[0] != "Hello " {
+		t.Errorf("token[0] = %q, want %q", handler.tokens[0], "Hello ")
+	}
+	if handler.tokens[1] != "World" {
+		t.Errorf("token[1] = %q, want %q", handler.tokens[1], "World")
+	}
+
+	if !handler.completed {
+		t.Error("OnComplete was not called")
+	}
+	if handler.completeResult != result {
+		t.Error("OnComplete received different result than returned")
+	}
+	if handler.err != nil {
+		t.Errorf("OnError was called with: %v", handler.err)
+	}
+}
+
+func TestAccumulateStreamHandlerErrorCallback(t *testing.T) {
+	// Server that returns an error SSE event
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, "event: error\ndata: {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"Server is overloaded\"}}\n\n")
+	}))
+	defer server.Close()
+
+	handler := &testStreamHandler{}
+	stream := newTestStream(t, server.URL)
+	_, err := AccumulateStream(stream, handler)
+	if err == nil {
+		t.Fatal("expected error from error stream")
+	}
+
+	if handler.err == nil {
+		t.Error("OnError was not called")
+	}
+	if handler.completed {
+		t.Error("OnComplete should not be called on error")
+	}
+}
+
+func TestAccumulateStreamNilHandler(t *testing.T) {
+	// Ensure nil handler works silently (no panics)
+	events := []sseEvent{
+		{eventType: "message_start", data: `{"type":"message_start","message":{"id":"msg_stream1","type":"message","role":"assistant","model":"claude-sonnet-4-20250514","content":[],"stop_reason":null,"usage":{"input_tokens":20,"output_tokens":0}}}`},
+		{eventType: "content_block_delta", data: `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"test"}}`},
+		{eventType: "message_delta", data: `{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":5}}`},
+		{eventType: "message_stop", data: `{"type":"message_stop"}`},
+	}
+
+	server := newSSEServer(t, events)
+	defer server.Close()
+
+	stream := newTestStream(t, server.URL)
+	result, err := AccumulateStream(stream, nil)
+	if err != nil {
+		t.Fatalf("AccumulateStream() error = %v", err)
+	}
+
+	if result.Text != "test" {
+		t.Errorf("Text = %q, want %q", result.Text, "test")
 	}
 }
 

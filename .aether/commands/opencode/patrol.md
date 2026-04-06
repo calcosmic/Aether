@@ -1,0 +1,626 @@
+<!-- Generated from .aether/commands/patrol.yaml - DO NOT EDIT DIRECTLY -->
+---
+name: ant:patrol
+description: "🐜🔦 Patrol the colony — comprehensive pre-seal review of all work against the plan"
+---
+
+### Step -1: Normalize Arguments
+
+Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
+
+This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
+
+
+
+You are the **Queen**. Run a comprehensive audit of the colony before sealing.
+
+
+## Instructions
+
+Parse `$normalized_args`:
+- If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
+- Otherwise: set `visual_mode = true`
+
+<failure_modes>
+### State Read Failure
+If COLONY_STATE.json is missing or unreadable:
+- Report: "No colony initialized. Run /ant:init first."
+- Stop immediately.
+
+### Test Command Failure
+If npm test or bash test suites fail to run:
+- Record the failure in the report as "Tests: UNABLE TO RUN"
+- Continue with remaining audit steps (non-blocking)
+
+### Subagent Spawn Failure
+If a scout or watcher agent fails to spawn:
+- Fall back to running the verification inline (Queen does it directly)
+- Note the fallback in the report
+</failure_modes>
+
+<success_criteria>
+Command is complete when:
+- All 8 audit steps have been executed
+- completion-report.md is written to .aether/data/
+- User sees formatted audit results with pass/fail indicators
+- No files were modified except completion-report.md
+</success_criteria>
+
+<read_only>
+Do not touch during audit (except completion-report.md):
+- .aether/dreams/ (user notes)
+- .aether/chambers/ (archived colonies)
+- Source code files
+- .env* files
+- .claude/settings.json
+- COLONY_STATE.json (read-only during audit)
+- CLAUDE.md (read-only during audit)
+</read_only>
+
+### Step 1: Load Colony State
+
+Read these files in parallel using the Read tool:
+- `.aether/data/COLONY_STATE.json`
+- `CLAUDE.md`
+
+If `COLONY_STATE.json` is missing or `goal: null`:
+```
+No colony initialized. Run /ant:init first.
+```
+Stop here.
+
+Extract from COLONY_STATE.json:
+- `goal` — colony objective
+- `state` — current state (IDLE, READY, EXECUTING, PLANNING)
+- `current_phase` — active phase number
+- `plan.phases` — all phases with tasks and statuses
+- `memory.instincts` — learned patterns
+- `memory.phase_learnings` — phase-specific learnings
+- `memory.decisions` — recorded decisions
+- `events` — event log
+- `milestone` — current milestone
+- `initialized_at` — colony start time
+- `version` — state version
+
+Display audit header:
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔍 C O L O N Y   A U D I T
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Goal: {goal}
+Milestone: {milestone}
+State: {state}
+Auditing...
+```
+
+Initialize tracking variables:
+- `audit_issues = []` — list of issues found
+- `audit_passes = 0` — count of checks that passed
+- `audit_fails = 0` — count of checks that failed
+- `audit_warnings = 0` — count of warnings
+
+### Step 2: Plan vs Reality Verification
+
+Display: `Verifying plan against codebase...`
+
+For each phase in `plan.phases`:
+
+1. **Check phase status:** Record whether status is "completed", "in_progress", or "pending"
+
+2. **Verify task evidence:** For each task in the phase:
+   - Parse the task description for verifiable claims:
+     - If description mentions "create" or "add" a file: use Glob to check the file exists
+     - If description mentions "subcommand" or "command": use Grep to search for it in the codebase
+     - If description mentions "update" or "modify" a file: use Glob to check the file exists
+     - If description mentions "test": use Glob to check test files exist
+   - Classify each task as:
+     - **VERIFIED** — evidence found in codebase
+     - **UNVERIFIABLE** — task description too vague to verify programmatically
+     - **MISSING** — task claims to create/modify something that doesn't exist
+
+3. **Compile results:**
+   ```
+   Phase {N}: {name} [{status}]
+     Tasks: {verified} verified | {unverifiable} unverifiable | {missing} missing evidence
+     {For each MISSING task: "  MISSING: {task description}"}
+   ```
+
+Track totals:
+- `total_tasks`, `verified_tasks`, `unverifiable_tasks`, `missing_tasks`
+
+If `missing_tasks > 0`: increment `audit_fails` and add to `audit_issues`
+Otherwise: increment `audit_passes`
+
+### Step 3: Documentation Accuracy Audit
+
+Display: `Auditing documentation accuracy...`
+
+Spawn a **Watcher** using Task tool with `subagent_type="aether-watcher"`:
+
+```xml
+<task>
+  <description>Documentation accuracy audit for colony pre-seal review</description>
+  <prompt>
+You are a Watcher Ant performing a documentation accuracy audit.
+
+Mission: Verify that key documentation files accurately reflect the current codebase state.
+
+**IMPORTANT:** You are strictly read-only. Do not modify any files.
+
+## Checks to Perform
+
+### 1. Command Count Verification
+- Count files in .claude/commands/ant/ (use Glob: .claude/commands/ant/*.md)
+- Count files in .opencode/commands/ant/ (use Glob: .opencode/commands/ant/*.md)
+- Read CLAUDE.md and find the claimed command count (look for "Slash commands" in Quick Reference table)
+- Compare: do counts match claimed numbers?
+
+### 2. Agent Count Verification
+- Count files in .claude/agents/ant/ (use Glob: .claude/agents/ant/*.md)
+- Read CLAUDE.md and find the claimed agent count (look for "Agent definitions" in Quick Reference)
+- Compare: do counts match?
+
+### 3. Version Consistency
+- Read version from CLAUDE.md (look for "Current Version" in Quick Reference)
+- Read version from package.json (if exists)
+- Read version from .aether/docs/source-of-truth-map.md (if exists)
+- Compare: are all versions consistent?
+
+### 4. Colony Rules Verification
+- Read .claude/rules/aether-colony.md
+- Check the "Available Commands" table — does it list all commands that exist in .claude/commands/ant/?
+- Identify any commands that exist as files but are missing from the table
+- Identify any commands listed in the table but missing as files
+
+### 5. Source of Truth Map Spot-Check
+- Read .aether/docs/source-of-truth-map.md (if exists)
+- Pick 3-5 entries and verify the claimed paths exist
+- Report any broken references
+
+## Output
+
+Return ONLY this JSON (no other text):
+{
+  "ant_name": "audit-watcher",
+  "caste": "watcher",
+  "status": "completed",
+  "summary": "Documentation accuracy audit results",
+  "checks": [
+    {
+      "name": "command_count",
+      "status": "PASS|FAIL|WARN",
+      "expected": "value from docs",
+      "actual": "value from codebase",
+      "detail": "explanation"
+    },
+    {
+      "name": "agent_count",
+      "status": "PASS|FAIL|WARN",
+      "expected": "value from docs",
+      "actual": "value from codebase",
+      "detail": "explanation"
+    },
+    {
+      "name": "version_consistency",
+      "status": "PASS|FAIL|WARN",
+      "expected": "all same",
+      "actual": "list of versions found",
+      "detail": "explanation"
+    },
+    {
+      "name": "colony_rules_commands",
+      "status": "PASS|FAIL|WARN",
+      "expected": "all commands listed",
+      "actual": "missing or extra commands",
+      "detail": "explanation"
+    },
+    {
+      "name": "source_of_truth_map",
+      "status": "PASS|FAIL|WARN",
+      "expected": "all paths valid",
+      "actual": "broken paths if any",
+      "detail": "explanation"
+    }
+  ],
+  "accuracy_score": 0,
+  "blockers": []
+}
+  </prompt>
+</task>
+```
+
+**FALLBACK:** If "Agent type not found", use general-purpose agent and inject role: "You are a Watcher Ant - quality specialist that validates accuracy and consistency."
+
+**Parse Watcher output:**
+Extract `checks` array and `accuracy_score`.
+
+For each check:
+- If `status == "PASS"`: increment `audit_passes`
+- If `status == "FAIL"`: increment `audit_fails`, add to `audit_issues`
+- If `status == "WARN"`: increment `audit_warnings`, add to `audit_issues`
+
+Display:
+```
+Documentation Accuracy:
+  {For each check: "[PASS|FAIL|WARN] {name}: {detail}"}
+  Score: {accuracy_score}%
+```
+
+### Step 4: Unresolved Issues Review
+
+Display: `Reviewing unresolved issues...`
+
+Run these commands in parallel using the Bash tool:
+
+**Flags check:**
+```bash
+bash .aether/aether-utils.sh flag-list 2>/dev/null || echo '{"result":{"flags":[]}}'
+```
+
+**Midden check:**
+```bash
+bash .aether/aether-utils.sh midden-recent-failures 2>/dev/null || echo '{"result":{"failures":[]}}'
+```
+
+**Parse flag results:**
+- Count unresolved flags by severity (blocker, high, medium, low)
+- List any unresolved blockers with their titles
+
+**Parse midden results:**
+- Look for recurring patterns (same error type appearing 3+ times)
+- List recurring failure patterns
+
+Display:
+```
+Unresolved Issues:
+  Flags: {blocker_count} blockers | {high_count} high | {medium_count} medium | {low_count} low
+  {For each unresolved blocker: "  BLOCKER: {title}"}
+  Midden: {failure_count} recent failures | {recurring_count} recurring patterns
+  {For each recurring pattern: "  RECURRING: {pattern}"}
+```
+
+If `blocker_count > 0`: increment `audit_fails`, add blockers to `audit_issues`
+If `recurring_count > 0`: increment `audit_warnings`, add to `audit_issues`
+Otherwise: increment `audit_passes`
+
+### Step 5: Test Coverage Summary
+
+Display: `Checking test coverage...`
+
+
+
+**Count test files:**
+
+
+Run using the Bash tool:
+```bash
+# Count test files
+test_count_unit=$(ls -1 tests/unit/*.test.sh 2>/dev/null | wc -l | tr -d ' ')
+test_count_e2e=$(ls -1 tests/e2e/*.test.sh 2>/dev/null | wc -l | tr -d ' ')
+test_count_js=$(find . -name "*.test.js" -o -name "*.test.ts" -o -name "*.spec.js" -o -name "*.spec.ts" 2>/dev/null | wc -l | tr -d ' ')
+echo "unit=$test_count_unit"
+echo "e2e=$test_count_e2e"
+echo "js=$test_count_js"
+echo "total=$((test_count_unit + test_count_e2e + test_count_js))"
+```
+
+**Run test suites (capture counts, do not block on failure):**
+
+Run using the Bash tool (with timeout 120000):
+```bash
+npm test 2>&1 | tail -20
+```
+
+Parse output for pass/fail counts. If command fails, record as "UNABLE TO RUN".
+
+Run bash test suites if they exist:
+```bash
+if [[ -f "tests/e2e/run-all-e2e.sh" ]]; then
+  bash tests/e2e/run-all-e2e.sh 2>&1 | tail -10
+fi
+```
+
+Display:
+```
+Test Coverage:
+  Test files: {unit} unit | {e2e} e2e | {js} JS/TS
+  Results: {pass_count} passing | {fail_count} failing
+  {If any failing: "  FAILING: {list of failing test names}"}
+```
+
+If tests all pass: increment `audit_passes`
+If any fail: increment `audit_fails`, add to `audit_issues`
+
+### Step 6: Colony Health Check
+
+Display: `Checking colony health...`
+
+**Expire stale pheromones:**
+```bash
+bash .aether/aether-utils.sh pheromone-expire 2>/dev/null || true
+```
+
+**Load memory metrics:**
+```bash
+bash .aether/aether-utils.sh memory-metrics 2>/dev/null || echo '{}'
+```
+
+**Load instincts:**
+From COLONY_STATE.json `memory.instincts`:
+- Count total instincts
+- Count high-confidence instincts (>= 0.7)
+
+**Count learnings:**
+From COLONY_STATE.json `memory.phase_learnings`:
+- Count total learnings
+
+**Check event log for anomalies:**
+From COLONY_STATE.json `events`:
+- Count total events
+- Look for error events (events containing "error" or "failed")
+- Look for state corruption events
+
+**Count pheromone signals:**
+```bash
+bash .aether/aether-utils.sh pheromone-count 2>/dev/null || echo '{"result":{"count":0}}'
+```
+
+Display:
+```
+Colony Health:
+  Instincts: {total} ({high_confidence} strong)
+  Learnings: {learning_count}
+  Pheromones: {signal_count} active
+  Events: {event_count} total ({error_event_count} errors)
+  {If error_event_count > 0: "  WARNING: {error_event_count} error events in log"}
+```
+
+Increment `audit_passes` (health check is informational, not pass/fail)
+
+### Step 7: Generate Completion Report
+
+Calculate colony age:
+```bash
+initialized_at=$(jq -r '.initialized_at // empty' .aether/data/COLONY_STATE.json)
+if [[ -n "$initialized_at" ]]; then
+  init_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$initialized_at" +%s 2>/dev/null || echo 0)
+  now_epoch=$(date +%s)
+  if [[ "$init_epoch" -gt 0 ]]; then
+    colony_age_days=$(( (now_epoch - init_epoch) / 86400 ))
+  else
+    colony_age_days=0
+  fi
+else
+  colony_age_days=0
+fi
+```
+
+Count phases completed:
+```bash
+phases_completed=$(jq '[.plan.phases[] | select(.status == "completed")] | length' .aether/data/COLONY_STATE.json 2>/dev/null || echo "0")
+total_phases=$(jq '.plan.phases | length' .aether/data/COLONY_STATE.json 2>/dev/null || echo "0")
+```
+
+Determine recommendation:
+- If `audit_fails == 0` and `audit_warnings == 0`: `recommendation = "READY TO SEAL"`
+- If `audit_fails == 0` and `audit_warnings > 0`: `recommendation = "READY TO SEAL (with warnings)"`
+- If `audit_fails > 0`: `recommendation = "ISSUES TO RESOLVE"`
+
+Write `.aether/data/completion-report.md` using the Write tool:
+
+```markdown
+# Colony Completion Report
+
+**Generated:** {ISO-8601 timestamp}
+**Colony Goal:** {goal}
+**Milestone:** {milestone}
+**Colony Age:** {colony_age_days} days
+
+---
+
+## Recommendation: {recommendation}
+
+---
+
+## Plan vs Reality
+
+| Metric | Count |
+|--------|-------|
+| Total Tasks | {total_tasks} |
+| Verified | {verified_tasks} |
+| Unverifiable | {unverifiable_tasks} |
+| Missing Evidence | {missing_tasks} |
+
+**Phases:** {phases_completed} of {total_phases} completed
+
+{For each phase:}
+### Phase {N}: {name} [{status}]
+{For each MISSING task: "- MISSING: {description}"}
+{If no missing: "All tasks verified or unverifiable."}
+
+---
+
+## Documentation Accuracy
+
+**Score:** {accuracy_score}%
+
+| Check | Status | Detail |
+|-------|--------|--------|
+{For each doc check: "| {name} | {status} | {detail} |"}
+
+---
+
+## Unresolved Issues
+
+**Flags:** {blocker_count} blockers | {high_count} high | {medium_count} medium | {low_count} low
+
+{For each unresolved blocker: "- BLOCKER: {title}"}
+
+**Recurring Failures:** {recurring_count}
+{For each recurring pattern: "- {pattern}"}
+
+---
+
+## Test Coverage
+
+| Type | Count |
+|------|-------|
+| Unit Tests | {unit} |
+| E2E Tests | {e2e} |
+| JS/TS Tests | {js} |
+
+**Results:** {pass_count} passing | {fail_count} failing
+
+---
+
+## Colony Health
+
+| Metric | Value |
+|--------|-------|
+| Instincts | {total} ({high_confidence} strong) |
+| Learnings | {learning_count} |
+| Pheromones | {signal_count} active |
+| Events | {event_count} ({error_event_count} errors) |
+
+---
+
+## Audit Summary
+
+| Category | Result |
+|----------|--------|
+| Checks Passed | {audit_passes} |
+| Checks Failed | {audit_fails} |
+| Warnings | {audit_warnings} |
+
+{If audit_issues is not empty:}
+### Issues to Address
+
+{For each issue in audit_issues:}
+- {issue description}
+{end}
+```
+
+### Step 8: Display Results
+
+Display the formatted audit summary:
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 A U D I T   R E S U L T S
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Goal: {goal}
+Colony Age: {colony_age_days} days
+Milestone: {milestone}
+
+Plan Verification
+  Phases: {phases_completed}/{total_phases} completed
+  Tasks: {verified_tasks} verified | {unverifiable_tasks} unverifiable | {missing_tasks} missing
+  {PASS or FAIL indicator}
+
+Documentation Accuracy
+  Score: {accuracy_score}%
+  {For each check: "[PASS|FAIL|WARN] {name}"}
+  {PASS or FAIL indicator}
+
+Unresolved Issues
+  Flags: {blocker_count} blockers | {high_count} high
+  Recurring failures: {recurring_count}
+  {PASS, WARN, or FAIL indicator}
+
+Test Coverage
+  {pass_count} passing | {fail_count} failing
+  {PASS or FAIL indicator}
+
+Colony Health
+  Instincts: {total} | Learnings: {learning_count} | Signals: {signal_count}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PASSED: {audit_passes} | FAILED: {audit_fails} | WARNINGS: {audit_warnings}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+**If recommendation is "READY TO SEAL":**
+```
+Colony ready to seal.
+
+Report: .aether/data/completion-report.md
+
+Next:
+  /ant:seal              Seal colony at Crowned Anthill
+```
+
+**If recommendation is "READY TO SEAL (with warnings)":**
+```
+Colony ready to seal (with warnings).
+
+{For each warning: "  WARNING: {description}"}
+
+These warnings are non-blocking. You may seal or address them first.
+
+Report: .aether/data/completion-report.md
+
+Next:
+  /ant:seal              Seal colony at Crowned Anthill
+  /ant:build <phase>     Address remaining work
+```
+
+**If recommendation is "ISSUES TO RESOLVE":**
+```
+Issues found that should be addressed before sealing.
+
+{For each issue with audit_fails: "  ISSUE: {description}"}
+
+Suggested actions:
+{For each issue, suggest a concrete action:}
+  - Missing task evidence: Re-run the build or verify manually
+  - Documentation mismatch: Update docs to match reality
+  - Unresolved blockers: Run /ant:flags to review and resolve
+  - Failing tests: Fix tests before sealing
+  - Recurring failures: Investigate root cause via /ant:swarm
+
+Report: .aether/data/completion-report.md
+
+Next:
+  /ant:status            Check colony status
+  /ant:build <phase>     Address remaining work
+  /ant:flags             Review unresolved flags
+```
+
+### Step 9: Log Activity
+
+Run using the Bash tool:
+```bash
+bash .aether/aether-utils.sh activity-log "COMPLETE" "queen" "Colony audit completed - {recommendation}"
+```
+
+Display persistence confirmation:
+```
+All state persisted. Safe to /clear context if needed.
+  Report: .aether/data/completion-report.md
+  Resume: /ant:resume-colony
+```
+
+### Edge Cases
+
+**Colony has no plan (0 phases):**
+- Skip Step 2 (plan verification)
+- Note: "No plan generated. Skipping plan verification."
+- Recommendation defaults to "ISSUES TO RESOLVE" with note about missing plan
+
+**Colony is still EXECUTING:**
+- Warn: "Colony is still executing. Audit results may be incomplete."
+- Proceed with audit anyway (do not block)
+
+**No test files found:**
+- Report: "No test files detected."
+- Count as a warning, not a failure
+
+**COLONY_STATE.json version is old (< 3.0):**
+- Proceed with available fields
+- Note missing fields in report as "N/A (older state format)"
+
+**Subagent spawn fails:**
+- Fall back to running the documentation checks inline
+- Note the fallback in the report

@@ -1,0 +1,13 @@
+{
+  "entombed_at": "2026-03-31T10:11:27Z",
+  "goal": "Enforce non-skippable build playbook execution and verify the exchange distribution fix is fully resolved across all update paths",
+  "phases_completed": 3,
+  "total_phases": 3,
+  "milestone": "Crowned Anthill",
+  "version": "3.0",
+  "decisions": [],
+  "learnings": [{"id":"learning_1774948046","phase":1,"phase_name":"Enforce non-skippable playbook execution in build orchestrators","learnings":[{"claim":"Adding pre-synthesis verification gates to build orchestrators catches incomplete builds before synthesis — gate should name all prerequisite stages explicitly","status":"hypothesis","tested":false,"evidence":"All 6 success criteria passed on first build attempt, watcher quality 9/10","disproven_by":null}],"timestamp":"2026-03-31T09:07:26Z"},{"id":"learning_1774950789","phase":3,"phase_name":"Verify sync and lint clean","learnings":[{"claim":"Running lint:sync and lint as a dedicated verification phase after code changes confirms no sync drift — useful as a final gate before colony seal","status":"hypothesis","tested":false,"evidence":"lint:sync confirmed 45+45 commands and 24 agents in sync, lint (shellcheck+json+sync) all clean, 524 tests pass","disproven_by":null}],"timestamp":"2026-03-31T09:53:09Z"}],
+  "files": {
+    "COLONY_STATE.json": "af37e9854f8afc9bab6fffe75596eeaaed8b8140a9ca6a6fb86ad33168fe3c44"
+  }
+}

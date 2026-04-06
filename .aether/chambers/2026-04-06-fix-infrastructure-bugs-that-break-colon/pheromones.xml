@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<pheromones xmlns="http://aether.colony/schemas/pheromones"
+            xmlns:ph="http://aether.colony/schemas/pheromones"
+            version="1.0.0"
+            generated_at="2026-04-05T15:19:32Z"
+            colony_id="unknown">
+  <metadata>
+    <source type="system">aether-pheromone-converter</source>
+    <context>Colony pheromone signals</context>
+  </metadata>
+  <signal id="sig_001"
+          type="FOCUS"
+          priority="normal"
+          source="user"
+          created_at="2026-04-01T10:00:00Z"
+          active="true">
+    <content>
+      <text>Focus on testing</text>
+    </content>
+  </signal>
+  <signal id="sig_002"
+          type="REDIRECT"
+          priority="high"
+          source="user"
+          created_at="2026-04-01T10:01:00Z"
+          active="true">
+    <content>
+      <text>Avoid global state</text>
+    </content>
+  </signal>
+  <signal id="sig_003"
+          type="FEEDBACK"
+          priority="low"
+          source="auto"
+          created_at="2026-04-01T10:02:00Z"
+          active="true">
+    <content>
+      <text>Tests pass consistently</text>
+    </content>
+  </signal>
+</pheromones>

@@ -2,10 +2,12 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 
 	"github.com/calcosmic/Aether/pkg/events"
+	"github.com/calcosmic/Aether/pkg/llm"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -26,16 +28,34 @@ func WithMaxGoroutines(n int) PoolOption {
 	}
 }
 
+// WithPoolStreaming enables streaming support for the pool.
+// When enabled, the pool creates a StreamManager and routes streaming events
+// from agents without blocking pool goroutines.
+func WithPoolStreaming(streamMgr *StreamManager) PoolOption {
+	return func(p *Pool) {
+		p.streamMgr = streamMgr
+		p.enableStream = true
+	}
+}
+
 // Pool dispatches events from the bus to matching agents with bounded concurrency.
 // It subscribes to the event bus, matches incoming events against registered agents,
 // and runs matching agents using an errgroup with a configurable goroutine limit.
+//
+// Streaming Support:
+// The pool supports streaming execution for agents that implement StreamingAgent.
+// When streaming is enabled, the pool creates a StreamHandler per agent and
+// subscribes to agent-specific topics (agent.{name}.*). Events flow from agents
+// to the StreamManager without blocking pool goroutines.
 type Pool struct {
-	registry *Registry
-	bus      *events.Bus
-	maxG     int
-	eventCh  <-chan events.Event
-	cancel   context.CancelFunc
-	mu       sync.Mutex
+	registry     *Registry
+	bus          *events.Bus
+	maxG         int
+	eventCh      <-chan events.Event
+	cancel       context.CancelFunc
+	streamMgr    *StreamManager
+	enableStream bool
+	mu           sync.Mutex
 }
 
 // NewPool creates a worker pool that dispatches events to agents in the registry.
@@ -50,9 +70,10 @@ func NewPool(registry *Registry, bus *events.Bus, opts ...PoolOption) (*Pool, er
 	}
 
 	p := &Pool{
-		registry: registry,
-		bus:      bus,
-		maxG:     defaultMaxGoroutines,
+		registry:     registry,
+		bus:          bus,
+		maxG:         defaultMaxGoroutines,
+		enableStream: false,
 	}
 
 	for _, opt := range opts {
@@ -60,6 +81,111 @@ func NewPool(registry *Registry, bus *events.Bus, opts ...PoolOption) (*Pool, er
 	}
 
 	return p, nil
+}
+
+// createStreamHandler creates a StreamHandler for an agent that publishes
+// events to the bus without blocking the pool goroutine.
+func (p *Pool) createStreamHandler(agent Agent) llm.StreamHandler {
+	return &poolStreamHandler{
+		agentName: agent.Name(),
+		caste:     agent.Caste(),
+		bus:       p.bus,
+	}
+}
+
+// poolStreamHandler implements llm.StreamHandler and publishes events to the bus.
+// This decouples the agent execution from the consumer, preventing slow consumers
+// from blocking pool goroutines.
+type poolStreamHandler struct {
+	agentName string
+	caste     Caste
+	bus       *events.Bus
+}
+
+func (h *poolStreamHandler) OnToken(token string) {
+	// Publish token event asynchronously - don't block on slow consumers
+	payload := map[string]interface{}{
+		"agent":   h.agentName,
+		"caste":   string(h.caste),
+		"type":    "token",
+		"content": token,
+	}
+	h.publishEvent("token", payload)
+}
+
+func (h *poolStreamHandler) OnToolStart(toolName, toolID string) {
+	payload := map[string]interface{}{
+		"agent":   h.agentName,
+		"caste":   string(h.caste),
+		"type":    "tool_start",
+		"tool":    toolName,
+		"tool_id": toolID,
+	}
+	h.publishEvent("tool.start", payload)
+}
+
+func (h *poolStreamHandler) OnToolEnd(toolName, toolID, result string) {
+	payload := map[string]interface{}{
+		"agent":   h.agentName,
+		"caste":   string(h.caste),
+		"type":    "tool_end",
+		"tool":    toolName,
+		"tool_id": toolID,
+		"result":  result,
+	}
+	h.publishEvent("tool.end", payload)
+}
+
+func (h *poolStreamHandler) OnComplete(result *llm.StreamResult) {
+	payload := map[string]interface{}{
+		"agent":       h.agentName,
+		"caste":       string(h.caste),
+		"type":        "complete",
+		"text":        result.Text,
+		"role":        result.Role,
+		"model":       result.Model,
+		"stop_reason": result.StopReason,
+		"usage": map[string]int64{
+			"input_tokens":  result.Usage.InputTokens,
+			"output_tokens": result.Usage.OutputTokens,
+		},
+	}
+	h.publishEvent("complete", payload)
+}
+
+func (h *poolStreamHandler) OnError(err error) {
+	payload := map[string]interface{}{
+		"agent":   h.agentName,
+		"caste":   string(h.caste),
+		"type":    "error",
+		"message": err.Error(),
+	}
+	h.publishEvent("error", payload)
+}
+
+// publishEvent publishes an event to agent.{name}.{eventType} topic.
+// Uses background context since the pool's context may be cancelled.
+// Events are published asynchronously and won't block on slow consumers.
+func (h *poolStreamHandler) publishEvent(eventType string, payload map[string]interface{}) {
+	if h.bus == nil {
+		return
+	}
+
+	topic := fmt.Sprintf("agent.%s.%s", h.agentName, eventType)
+
+	// Use a goroutine to avoid blocking the agent execution
+	// This ensures slow consumers don't block pool goroutines
+	go func() {
+		// Serialize payload
+		payloadBytes, err := json.Marshal(payload)
+		if err != nil {
+			return
+		}
+
+		// Publish with background context - don't let pool context cancellation stop event publishing
+		ctx := context.Background()
+		_, _ = h.bus.Publish(ctx, topic, payloadBytes, h.agentName)
+	}()
 }
 
 // Start begins consuming events from the bus and dispatching them to matching agents.
@@ -96,9 +222,16 @@ func (p *Pool) Start(ctx context.Context) error {
 
 // dispatch runs all matching agents for a single event with bounded concurrency.
 // It blocks until all matching agents have completed (or the context is cancelled).
+//
+// Streaming Support:
+// When streaming is enabled and an agent implements StreamingAgent, the pool
+// creates a StreamHandler that publishes events to agent.{name}.* topics.
+// This allows real-time progress without blocking pool goroutines.
 func (p *Pool) dispatch(ctx context.Context, event events.Event) {
 	p.mu.Lock()
 	maxG := p.maxG
+	enableStream := p.enableStream
+	streamMgr := p.streamMgr
 	p.mu.Unlock()
 
 	agents := p.registry.Match(event.Topic)
@@ -112,6 +245,36 @@ func (p *Pool) dispatch(ctx context.Context, event events.Event) {
 	for _, a := range agents {
 		agent := a // capture loop variable
 		g.Go(func() error {
+			// Check if streaming is enabled and agent supports it
+			if enableStream {
+				if sa, ok := IsStreamingAgent(agent); ok {
+					// Create stream handler that publishes to bus
+					handler := p.createStreamHandler(agent)
+
+					// Register with stream manager if available
+					if streamMgr != nil {
+						_, _ = streamMgr.RegisterAgent(agent)
+					}
+
+					// Execute with streaming
+					err := sa.ExecuteStreaming(ctx, event, handler)
+
+					// Update stream manager state if available
+					if streamMgr != nil {
+						if state, ok := streamMgr.GetStream(agent.Name()); ok {
+							if err != nil {
+								state.SetError(err)
+							} else if !state.IsComplete() {
+								state.SetStatus(StreamStatusCompleted)
+							}
+						}
+					}
+
+					return err
+				}
+			}
+
+			// Fall back to regular execution (backward compatible)
 			return agent.Execute(ctx, event)
 		})
 	}
@@ -144,4 +307,27 @@ func (p *Pool) SetConcurrency(n int) {
 	p.mu.Lock()
 	p.maxG = n
 	p.mu.Unlock()
+}
+
+// StreamManager returns the pool's stream manager (may be nil if streaming not enabled).
+func (p *Pool) StreamManager() *StreamManager {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.streamMgr
+}
+
+// IsStreamingEnabled returns true if the pool has streaming support enabled.
+func (p *Pool) IsStreamingEnabled() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.enableStream
+}
+
+// EnableStreaming enables streaming support with the given StreamManager.
+// This can be called after pool creation to enable streaming dynamically.
+func (p *Pool) EnableStreaming(streamMgr *StreamManager) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.streamMgr = streamMgr
+	p.enableStream = true
 }

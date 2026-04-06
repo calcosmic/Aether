@@ -4,10 +4,10 @@
   "colony_name": null,
   "colony_version": 1,
   "state": "READY",
-  "current_phase": 4,
+  "current_phase": 6,
   "session_id": "session_1775476123_26bc29c9",
   "initialized_at": "2026-04-06T11:48:43Z",
-  "build_started_at": null,
+  "build_started_at": "2026-04-06T20:38:00Z",
   "plan": {
     "generated_at": "2026-04-06T13:00:58Z",
     "confidence": 94,
@@ -186,6 +186,7 @@
         "description": "learning-check-promotion requires --observation-id but seal.md calls without args. learning-promote-auto is a stub that counts but never promotes.",
         "id": 4,
         "name": "Fix learning-check-promotion --all and learning-promote-auto stub",
+        "status": "completed",
         "success_criteria": [
           "learning-check-promotion --all returns eligible",
           "learning-promote-auto promotes to instincts"
@@ -198,7 +199,7 @@
             "depends_on": [],
             "goal": "Write failing tests: --all returns eligible, promote-auto creates instincts",
             "hints": [
-              "Create observations with count\u003e=3"
+              "Create observations with count>=3"
             ],
             "id": "4.1",
             "success_criteria": [
@@ -289,7 +290,8 @@
               "All chamber tests pass"
             ]
           }
-        ]
+        ],
+        "status": "completed"
       },
       {
         "description": "seal.md has 25 aether-utils.sh references. Convert all to aether subcommand with flag syntax. Add --active flag to registry-add.",
@@ -362,7 +364,8 @@
               "All 25 shell refs replaced"
             ]
           }
-        ]
+        ],
+        "status": "completed"
       },
       {
         "description": "entomb.md has 8 aether-utils.sh references. Convert all to Go binary calls.",
@@ -508,6 +511,20 @@
         "phase": 3,
         "phase_name": "Fix generate-commit-message seal/milestone types",
         "timestamp": "2026-04-06T14:30:00Z"
+      },
+      {
+        "id": "learning_1775507705",
+        "phase": 5,
+        "phase_name": "Fix chamber-create path doubling and verify chamber integrity",
+        "timestamp": "2026-04-06T20:35:05Z",
+        "learnings": [
+          {
+            "claim": "chamber-create and chamber-verify commands correctly construct paths using filepath.Join(aetherRoot, .aether, chambers, name)",
+            "status": "validated",
+            "tested": true,
+            "evidence": "All 8 chamber tests pass, entomb.md uses --name flag correctly"
+          }
+        ]
       }
     ],
     "decisions": null,
@@ -520,12 +537,14 @@
   "signals": [],
   "graveyards": [],
   "events": [
-    ""
+    "",
+    "",
+    "2026-04-06T20:35:05Z|phase_completed|build|Phase 5 completed",
+    "2026-04-06T20:36:38Z|phase_advanced|continue|Completed Phase 5, advancing to Phase 6",
+    "2026-04-06T20:38:00Z|phase_started|build|Phase 6: Migrate seal.md started",
+    "2026-04-06T20:48:51Z|phase_completed|build|Phase 6 completed"
   ],
   "milestone": null,
   "milestone_updated_at": null
 }
-
-
-
 

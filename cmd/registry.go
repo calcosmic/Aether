@@ -37,6 +37,7 @@ var registryAddCmd = &cobra.Command{
 			return nil
 		}
 		domainsStr, _ := cmd.Flags().GetString("domain")
+		active, _ := cmd.Flags().GetBool("active")
 
 		hub := resolveHubPath()
 		registryPath := filepath.Join(hub, "registry", "registry.json")
@@ -56,7 +57,7 @@ var registryAddCmd = &cobra.Command{
 						rd.Colonies[i].Domains[j] = strings.TrimSpace(rd.Colonies[i].Domains[j])
 					}
 				}
-				rd.Colonies[i].Active = true
+				rd.Colonies[i].Active = active
 				if err := writeRegistry(registryPath, rd); err != nil {
 					outputError(2, fmt.Sprintf("failed to save: %v", err), nil)
 					return nil
@@ -77,7 +78,7 @@ var registryAddCmd = &cobra.Command{
 		entry := registryEntry{
 			RepoPath:     repo,
 			Domains:      domains,
-			Active:       true,
+			Active:       active,
 			RegisteredAt: time.Now().UTC().Format(time.RFC3339),
 		}
 
@@ -127,6 +128,7 @@ func writeRegistry(path string, rd registryData) error {
 func init() {
 	registryAddCmd.Flags().String("repo", "", "Repository path (required)")
 	registryAddCmd.Flags().String("domain", "", "Comma-separated domain tags")
+	registryAddCmd.Flags().Bool("active", true, "Set colony as active (default: true)")
 
 	rootCmd.AddCommand(registryAddCmd)
 	rootCmd.AddCommand(registryListCmd)

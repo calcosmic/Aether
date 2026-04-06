@@ -166,8 +166,8 @@ func TestPipeline_Consolidation(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Pre-populate instincts with old timestamps (90 days ago for decay)
-	oldTime := "2025-12-01T00:00:00Z"
+	// Pre-populate instincts with old timestamps (40 days ago for decay)
+	oldTime := "2026-02-25T00:00:00Z"
 	instincts := colony.InstinctsFile{
 		Version: "1.0",
 		Instincts: []colony.InstinctEntry{
