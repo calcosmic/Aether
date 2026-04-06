@@ -129,7 +129,7 @@ Run /ant:tunnels {chamber_a} {chamber_b} to compare chambers
 ```
 
 To get the hash status, run using the Bash tool with description "Verifying chamber integrity...":
-- Run `aether chamber-verify --path .aether/chambers/{chamber_name}`
+- Run `aether chamber-verify --name {chamber_name}`
 - If verified: hash_status = "verified"
 - If not verified: hash_status = "hash mismatch"
 - If error: hash_status = "error"

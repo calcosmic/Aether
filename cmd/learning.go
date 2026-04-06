@@ -75,14 +75,37 @@ var learningCheckPromotionCmd = &cobra.Command{
 			return nil
 		}
 
-		obsID := mustGetString(cmd, "observation-id")
-		if obsID == "" {
-			return nil
-		}
+		checkAll, _ := cmd.Flags().GetBool("all")
 
 		var file colony.LearningFile
 		if err := store.LoadJSON("learning-observations.json", &file); err != nil {
 			outputError(1, "learning-observations.json not found", nil)
+			return nil
+		}
+
+		if checkAll {
+			var eligible []map[string]interface{}
+			for _, obs := range file.Observations {
+				isEligible, reason := memory.CheckPromotion(obs)
+				if isEligible {
+					entry := map[string]interface{}{
+						"content_hash":      obs.ContentHash,
+						"observation_count": obs.ObservationCount,
+						"trust_score":       obs.TrustScore,
+						"reason":            reason,
+					}
+					eligible = append(eligible, entry)
+				}
+			}
+			outputOK(map[string]interface{}{
+				"eligible": eligible,
+				"total":    len(file.Observations),
+			})
+			return nil
+		}
+
+		obsID := mustGetString(cmd, "observation-id")
+		if obsID == "" {
 			return nil
 		}
 
@@ -127,11 +150,23 @@ var learningPromoteAutoCmd = &cobra.Command{
 			return nil
 		}
 
+		bus := events.NewBus(store, events.DefaultConfig())
+		promoteService := memory.NewPromoteService(store, bus)
+
+		ctx, cancel := timeoutCtx(cmd)
+		defer cancel()
+
 		promoted := 0
 		for _, obs := range file.Observations {
 			eligible, _ := memory.CheckPromotion(obs)
 			if eligible {
-				promoted++
+				result, err := promoteService.Promote(ctx, obs, "auto-promote")
+				if err != nil {
+					continue
+				}
+				if result.IsNew {
+					promoted++
+				}
 			}
 		}
 
@@ -190,6 +225,7 @@ func init() {
 	learningObserveCmd.Flags().String("evidence-type", "", "Evidence type")
 
 	learningCheckPromotionCmd.Flags().String("observation-id", "", "Observation content hash (required)")
+	learningCheckPromotionCmd.Flags().Bool("all", false, "Check all observations for promotion eligibility")
 
 	memoryCaptureCmd.Flags().String("content", "", "Observation content (required)")
 	memoryCaptureCmd.Flags().String("type", "", "Wisdom type (default: observation)")

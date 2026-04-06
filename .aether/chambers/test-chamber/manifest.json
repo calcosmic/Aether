@@ -1,7 +1,7 @@
 {
-  "goal": "build stuff",
-  "milestone": "Brood Stable",
+  "goal": "test",
+  "milestone": "test",
   "name": "test-chamber",
-  "phases_completed": 0,
-  "total_phases": 0
+  "phases_completed": 1,
+  "total_phases": 2
 }

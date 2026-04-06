@@ -95,7 +95,7 @@ Run /ant:tunnels to return to chamber list.
 ```
 
 To get the counts and hash status:
-- Run `aether chamber-verify --path .aether/chambers/{chamber_name}`
+- Run `aether chamber-verify --name {chamber_name}`
 - If verified: hash_status = "✅"
 - If not verified: hash_status = "⚠️ hash mismatch"
 - If error: hash_status = "⚠️ error"

@@ -246,18 +246,14 @@ total_phases=$(jq '.plan.phases | length' .aether/data/COLONY_STATE.json)
 version=$(jq -r '.version // "3.0"' .aether/data/COLONY_STATE.json)
 ```
 
-Create the chamber:
+Create the chamber (Go prepends `.aether/chambers/` internally):
 ```bash
 aether chamber-create \
-  ".aether/chambers/$chamber_name" \
-  ".aether/data/COLONY_STATE.json" \
-  "$goal" \
-  "$phases_completed" \
-  "$total_phases" \
-  "$milestone" \
-  "$version" \
-  "$decisions_json" \
-  "$learnings_json"
+  --name "$chamber_name" \
+  --goal "$goal" \
+  --milestone "$milestone" \
+  --phases-completed "$phases_completed" \
+  --total-phases "$total_phases"
 ```
 
 ### Step 7: Archive Additional Files
@@ -326,7 +322,7 @@ xml_archive_line="XML Archive: colony-archive.xml (${xml_pheromone_count} signal
 
 Run verification:
 ```bash
-aether chamber-verify --path ".aether/chambers/$chamber_name"
+aether chamber-verify --name "$chamber_name"
 ```
 
 If verification fails, display error and stop:

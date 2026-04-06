@@ -126,7 +126,7 @@ body_claude: |
   ```
 
   To get the hash status, run using the Bash tool with description "Verifying chamber integrity...":
-  - Run `aether chamber-verify --path .aether/chambers/{chamber_name}`
+  - Run `aether chamber-verify --name {chamber_name}`
   - If verified: hash_status = "verified"
   - If not verified: hash_status = "hash mismatch"
   - If error: hash_status = "error"
@@ -508,7 +508,7 @@ body_opencode: |
   ```
 
   To get the counts and hash status:
-  - Run `aether chamber-verify --path .aether/chambers/{chamber_name}`
+  - Run `aether chamber-verify --name {chamber_name}`
   - If verified: hash_status = "✅"
   - If not verified: hash_status = "⚠️ hash mismatch"
   - If error: hash_status = "⚠️ error"
