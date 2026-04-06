@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -15,6 +16,9 @@ import (
 // It creates the colony directory structure, COLONY_STATE.json, session.json,
 // CONTEXT.md, and activity.log. It is idempotent -- if a colony is already
 // initialized, it reports the existing state without overwriting.
+//
+// Sealed colony detection: if a sealed colony is detected, the command checks
+// for uncommitted changes (in-progress seal) before allowing overwrite.
 var initCmd = &cobra.Command{
 	Use:   "init <goal>",
 	Short: "Initialize a new colony in the current directory",
@@ -34,15 +38,26 @@ var initCmd = &cobra.Command{
 		dataDir := store.BasePath()
 		aetherDir := filepath.Dir(dataDir)
 
-		// Check idempotency: if COLONY_STATE.json exists, report and exit
+		// Check idempotency: if COLONY_STATE.json exists, inspect it
 		statePath := filepath.Join(dataDir, "COLONY_STATE.json")
 		if _, err := os.Stat(statePath); err == nil {
-			// Colony already initialized -- load and report
+			// Colony already initialized -- load and inspect
 			var existing colony.ColonyState
 			if loadErr := store.LoadJSON("COLONY_STATE.json", &existing); loadErr == nil {
-				outputError(1, fmt.Sprintf("colony already initialized (state=%s, phase=%d, goal=%q)",
-					existing.State, existing.CurrentPhase, ptrStr(existing.Goal)), nil)
-				return nil
+				// If colony is sealed, check for in-progress seal (uncommitted changes)
+				if existing.Milestone == "Crowned Anthill" {
+					if sealInProgress(dataDir) {
+						outputError(1, "a seal operation appears to be in progress (COLONY_STATE.json has uncommitted changes with Crowned Anthill milestone). Wait for the seal to complete, commit the seal state, or run `aether entomb` first.", nil)
+						return nil
+					}
+					// Sealed colony with committed state — allow overwrite (fresh init)
+					// Fall through to create new colony state
+				} else {
+					// Active (non-sealed) colony — block
+					outputError(1, fmt.Sprintf("colony already initialized (state=%s, phase=%d, goal=%q)",
+						existing.State, existing.CurrentPhase, ptrStr(existing.Goal)), nil)
+					return nil
+				}
 			}
 		}
 
@@ -57,6 +72,17 @@ var initCmd = &cobra.Command{
 		if err := os.MkdirAll(filepath.Join(aetherDir, "dreams"), 0755); err != nil {
 			outputError(1, fmt.Sprintf("failed to create directory structure: %v", err), nil)
 			return nil
+		}
+
+		// Backup old colony state before overwriting (sealed colony fresh-init)
+		if _, err := os.Stat(statePath); err == nil {
+			backupDir := filepath.Join(dataDir, "backups")
+			if err := os.MkdirAll(backupDir, 0755); err == nil {
+				backupFile := filepath.Join(backupDir, fmt.Sprintf("COLONY_STATE.pre-init.%s.bak", time.Now().Format("20060102-150405")))
+				if err := copyFile(statePath, backupFile); err == nil {
+					fmt.Fprintf(os.Stderr, "warning: backed up previous colony state to %s\n", backupFile)
+				}
+			}
 		}
 
 		// Create COLONY_STATE.json v3.0
@@ -160,4 +186,60 @@ func ptrStr(s *string) string {
 
 func init() {
 	rootCmd.AddCommand(initCmd)
+}
+
+// sealInProgress checks whether COLONY_STATE.json has uncommitted changes
+// that indicate a seal is in progress (working tree has Crowned Anthill milestone
+// but the HEAD commit does not). This prevents a new colony init from overwriting
+// a seal that hasn't been committed yet.
+func sealInProgress(dataDir string) bool {
+	// Resolve the repo root from dataDir (strip .aether/data to get project root)
+	projectRoot := filepath.Dir(filepath.Dir(dataDir))
+
+	// Check if we're in a git repo
+	gitCmd := exec.Command("git", "rev-parse", "--git-dir")
+	gitCmd.Dir = projectRoot
+	if _, err := gitCmd.CombinedOutput(); err != nil {
+		return false
+	}
+
+	// Get the repo root so we can compute a path relative to it
+	topCmd := exec.Command("git", "rev-parse", "--show-toplevel")
+	topCmd.Dir = projectRoot
+	rootOut, err := topCmd.CombinedOutput()
+	if err != nil {
+		return false
+	}
+	gitRoot := strings.TrimSpace(string(rootOut))
+
+	// Build path relative to git root.
+	// Use gitRoot (resolved by git) instead of dataDir to avoid
+	// macOS /var -> /private/var symlink mismatch.
+	stateRelPath := filepath.Join(".aether", "data", "COLONY_STATE.json")
+
+	// Check if COLONY_STATE.json has uncommitted changes
+	diffCmd := exec.Command("git", "diff", "--name-only", "HEAD", "--", stateRelPath)
+	diffCmd.Dir = gitRoot
+	diffOut, err := diffCmd.CombinedOutput()
+	if err != nil || len(strings.TrimSpace(string(diffOut))) == 0 {
+		return false
+	}
+
+	// The working tree differs from HEAD — check if HEAD has the seal milestone
+	showCmd := exec.Command("git", "show", "HEAD:"+stateRelPath)
+	showCmd.Dir = gitRoot
+	showOut, err := showCmd.CombinedOutput()
+	if err != nil {
+		// File doesn't exist in HEAD — it's a new file, not an in-progress seal
+		return false
+	}
+
+	// Check if the committed version has Crowned Anthill
+	committed := string(showOut)
+	if !strings.Contains(committed, "Crowned Anthill") {
+		// HEAD does NOT have the seal — the seal is uncommitted
+		return true
+	}
+
+	return false
 }

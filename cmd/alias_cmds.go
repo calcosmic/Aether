@@ -66,9 +66,10 @@ var registryImportXMLCmd = &cobra.Command{
 }
 
 var colonyArchiveXMLCmd = &cobra.Command{
-	Use:          "colony-archive-xml",
+	Use:          "colony-archive-xml [output-path]",
 	Short:        "Export complete colony archive to XML (alias for export archive)",
 	SilenceUsage: true,
+	Args:         cobra.MaximumNArgs(1),
 	RunE:         runExportArchive,
 }
 
@@ -87,5 +88,5 @@ func init() {
 
 	registryImportXMLCmd.Flags().String("input", "", "Input file path (positional arg preferred)")
 
-	colonyArchiveXMLCmd.Flags().String("output", "", "Output file path (required)")
+	colonyArchiveXMLCmd.Flags().String("output", "", "Output file path (--output or positional arg)")
 }

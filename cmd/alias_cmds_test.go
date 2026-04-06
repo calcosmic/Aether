@@ -3,11 +3,14 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"encoding/xml"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/exchange"
 )
 
 // TestPheromoneExportXMLHelp verifies the pheromone-export-xml command exists and shows help.
@@ -166,5 +169,199 @@ func TestPheromoneDisplayWithSignals(t *testing.T) {
 	// Should NOT show inactive REDIRECT (active-only defaults true)
 	if strings.Contains(output, "REDIRECT") {
 		t.Errorf("expected REDIRECT to be filtered out (inactive), got: %s", output)
+	}
+}
+
+// --- colony-archive-xml tests (TDD RED phase) ---
+
+// TestColonyArchiveXMLOutputFlag tests that colony-archive-xml --output writes
+// a valid colony-archive XML file containing pheromone data loaded from the store.
+func TestColonyArchiveXMLOutputFlag(t *testing.T) {
+	saveGlobalsCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+	var errBuf bytes.Buffer
+	stderr = &errBuf
+
+	s, tmpDir := newTestStoreCmd(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	// Seed the store with pheromone data so the archive has content.
+	content, _ := json.Marshal(map[string]string{"text": "Focus on archive testing"})
+	pf := colony.PheromoneFile{
+		Signals: []colony.PheromoneSignal{
+			{
+				ID:       "sig-archive-1",
+				Type:     "FOCUS",
+				Priority: "normal",
+				Source:   "user",
+				CreatedAt: "2026-04-06T10:00:00Z",
+				Active:   true,
+				Content:  content,
+			},
+		},
+	}
+	if err := s.SaveJSON("pheromones.json", pf); err != nil {
+		t.Fatal(err)
+	}
+
+	outputPath := filepath.Join(tmpDir, "archive.xml")
+
+	rootCmd.SetArgs([]string{"colony-archive-xml", "--output", outputPath})
+	defer rootCmd.SetArgs([]string{})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("colony-archive-xml returned error: %v", err)
+	}
+
+	// The output file must exist.
+	data, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("output file not created: %v", err)
+	}
+
+	output := string(data)
+
+	// Must have an XML header.
+	if !strings.HasPrefix(output, "<?xml") {
+		t.Errorf("output missing XML header, got:\n%s", output)
+	}
+
+	// Must be parseable as XML.
+	var archive exchange.ColonyArchiveXML
+	if err := xml.Unmarshal(data, &archive); err != nil {
+		t.Fatalf("output is not valid colony-archive XML: %v\noutput:\n%s", err, output)
+	}
+
+	// Must contain the pheromone data we seeded.
+	if archive.Pheromones == nil {
+		t.Fatal("archive missing pheromones section")
+	}
+	if archive.Pheromones.Count != 1 {
+		t.Errorf("pheromones.count = %d, want 1", archive.Pheromones.Count)
+	}
+	if len(archive.Pheromones.Signals) != 1 || archive.Pheromones.Signals[0].ID != "sig-archive-1" {
+		t.Errorf("expected pheromone signal sig-archive-1, got: %v", archive.Pheromones.Signals)
+	}
+}
+
+// TestColonyArchiveXMLPositionalArg tests backward compatibility: passing the
+// output path as a positional argument instead of --output flag.
+func TestColonyArchiveXMLPositionalArg(t *testing.T) {
+	saveGlobalsCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+	var errBuf bytes.Buffer
+	stderr = &errBuf
+
+	s, tmpDir := newTestStoreCmd(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	// Seed minimal colony data.
+	content, _ := json.Marshal(map[string]string{"text": "positional test"})
+	pf := colony.PheromoneFile{
+		Signals: []colony.PheromoneSignal{
+			{
+				ID:       "sig-pos-1",
+				Type:     "REDIRECT",
+				Priority: "high",
+				Source:   "user",
+				CreatedAt: "2026-04-06T11:00:00Z",
+				Active:   true,
+				Content:  content,
+			},
+		},
+	}
+	if err := s.SaveJSON("pheromones.json", pf); err != nil {
+		t.Fatal(err)
+	}
+
+	outputPath := filepath.Join(tmpDir, "archive-pos.xml")
+
+	rootCmd.SetArgs([]string{"colony-archive-xml", outputPath})
+	defer rootCmd.SetArgs([]string{})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("colony-archive-xml with positional arg returned error: %v", err)
+	}
+
+	data, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("output file not created: %v", err)
+	}
+
+	output := string(data)
+
+	// Must have XML header.
+	if !strings.HasPrefix(output, "<?xml") {
+		t.Errorf("output missing XML header, got:\n%s", output)
+	}
+
+	// Must parse as valid colony-archive XML.
+	var archive exchange.ColonyArchiveXML
+	if err := xml.Unmarshal(data, &archive); err != nil {
+		t.Fatalf("output is not valid colony-archive XML: %v\noutput:\n%s", err, output)
+	}
+
+	// Must contain our seeded pheromone.
+	if archive.Pheromones == nil {
+		t.Fatal("archive missing pheromones section")
+	}
+	if archive.Pheromones.Count != 1 {
+		t.Errorf("pheromones.count = %d, want 1", archive.Pheromones.Count)
+	}
+	if len(archive.Pheromones.Signals) != 1 || archive.Pheromones.Signals[0].ID != "sig-pos-1" {
+		t.Errorf("expected pheromone signal sig-pos-1, got: %v", archive.Pheromones.Signals)
+	}
+}
+
+// TestColonyArchiveXMLHasAllSections verifies the archive contains pheromones,
+// queen-wisdom, and colony-registry sections even when some are empty.
+func TestColonyArchiveXMLHasAllSections(t *testing.T) {
+	saveGlobalsCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+	var errBuf bytes.Buffer
+	stderr = &errBuf
+
+	s, tmpDir := newTestStoreCmd(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	outputPath := filepath.Join(tmpDir, "archive-sections.xml")
+
+	rootCmd.SetArgs([]string{"colony-archive-xml", "--output", outputPath})
+	defer rootCmd.SetArgs([]string{})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("colony-archive-xml returned error: %v", err)
+	}
+
+	data, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("output file not created: %v", err)
+	}
+
+	var archive exchange.ColonyArchiveXML
+	if err := xml.Unmarshal(data, &archive); err != nil {
+		t.Fatalf("output is not valid colony-archive XML: %v\noutput:\n%s", err, string(data))
+	}
+
+	// All three sections must be present (even if empty).
+	if archive.Pheromones == nil {
+		t.Error("archive missing pheromones section")
+	}
+	if archive.Wisdom == nil {
+		t.Error("archive missing queen-wisdom section")
+	}
+	if archive.Registry == nil {
+		t.Error("archive missing colony-registry section")
+	}
+
+	// Must have version attribute.
+	if archive.Version == "" {
+		t.Error("archive missing version attribute")
 	}
 }

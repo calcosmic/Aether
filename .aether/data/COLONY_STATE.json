@@ -4,7 +4,7 @@
   "colony_name": null,
   "colony_version": 1,
   "state": "READY",
-  "current_phase": 2,
+  "current_phase": 3,
   "session_id": "session_1775476123_26bc29c9",
   "initialized_at": "2026-04-06T11:48:43Z",
   "build_started_at": null,
@@ -72,6 +72,7 @@
         "description": "The export archive command passes nil to export functions instead of loading actual colony data. Alias commands use --output flag but seal.md/entomb.md pass positional paths.",
         "id": 2,
         "name": "Fix XML archive export format and output handling",
+        "status": "completed",
         "success_criteria": [
           "colony-archive-xml writes valid XML",
           "Positional arg backward compat",
@@ -470,6 +471,27 @@
         "phase": 1,
         "phase_name": "Fix state-mutate panic on nested fields",
         "timestamp": "2026-04-06T13:20:00Z"
+      },
+      {
+        "id": "learning_1743962400",
+        "learnings": [
+          {
+            "claim": "When building colony archive XML exports, load actual data from colony store (pheromones.json, instincts.json) and hub store (registry/colonies.json) rather than passing nil — use struct-based XML unmarshal round-trip for reliable output",
+            "disproven_by": null,
+            "evidence": "3 tests pass: output flag, positional arg, all sections present. Archive produces valid XML with pheromones, wisdom, and registry sections.",
+            "status": "validated",
+            "tested": true
+          },
+          {
+            "claim": "Cobra sticky-flag problem: flag values persist across Execute() calls on the same Command struct. Prefer positional args over --output flag to avoid stale flag values in alias commands",
+            "disproven_by": null,
+            "evidence": "TestColonyArchiveXMLPositionalArg passes with positional arg taking priority over --output flag",
+            "status": "validated",
+            "tested": true
+          }
+        ],
+        "phase": 2,
+        "phase_name": "Fix XML archive export format and output handling"
       }
     ],
     "decisions": null,
@@ -485,13 +507,12 @@
     "2026-04-06T11:48:43Z|colony_initialized|init|Colony initialized with goal: Fix infrastructure bugs that break colony seal: state-mutate panic on nested fields, chamber-create path doubling in entomb YAML, and XML export output format quirks",
     "2026-04-06T13:00:58Z|plan_generated|plan|Generated 8 phases with 94% confidence",
     "2026-04-06T13:03:08Z|phase_started|build|Phase 1: Fix state-mutate panic on nested fields started",
+    "2026-04-06T13:22:07Z|phase_started|build|Phase 2: Fix XML archive export format and output handling started",
     ""
   ],
   "milestone": null,
   "milestone_updated_at": null
 }
-
-
 
 
 

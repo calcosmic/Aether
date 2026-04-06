@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/exchange"
@@ -207,25 +209,130 @@ func runExportArchive(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no colony initialized")
 	}
 
-	outputFile, _ := cmd.Flags().GetString("output")
+	// Resolve output path.  Prefer positional arg over --output flag.
+	// This avoids cobra's sticky-flag problem where flag values persist
+	// across Execute() calls on the same Command struct.
+	outputFile := ""
+	if len(args) > 0 {
+		outputFile = args[0]
+	}
 	if outputFile == "" {
-		outputErrorMessage("flag --output is required for archive export")
+		outputFile, _ = cmd.Flags().GetString("output")
+	}
+	if outputFile == "" {
+		outputErrorMessage("output path is required (use --output flag or positional arg)")
 		return nil
 	}
 
-	// Export each section
-	pheromoneData, _ := exchange.ExportPheromones(nil)
-	wisdomData, _ := exchange.ExportWisdom(nil, 0.5, "")
-	registryData, _ := exchange.ExportRegistry(nil)
-
-	// Combine into archive sections
-	sections := map[string]string{
-		"pheromones": string(pheromoneData),
-		"wisdom":     string(wisdomData),
-		"registry":   string(registryData),
+	// Load pheromones from colony store.
+	var pheromoneXML *exchange.PheromoneXML
+	var pheromoneFile colony.PheromoneFile
+	if err := store.LoadJSON("pheromones.json", &pheromoneFile); err == nil {
+		data, err := exchange.ExportPheromones(pheromoneFile.Signals)
+		if err != nil {
+			outputErrorMessage(fmt.Sprintf("export pheromones: %v", err))
+			return nil
+		}
+		var parsed exchange.PheromoneXML
+		if err := xml.Unmarshal(data, &parsed); err == nil {
+			pheromoneXML = &parsed
+		}
+	} else {
+		// Empty pheromones section.
+		pheromoneXML = &exchange.PheromoneXML{Version: "1.0", Count: 0}
 	}
 
-	outputOK(map[string]interface{}{"file": outputFile, "sections": sections})
+	// Load instincts from colony store for wisdom section.
+	var wisdomXML *exchange.WisdomXML
+	var instFile colony.InstinctsFile
+	if err := store.LoadJSON("instincts.json", &instFile); err == nil {
+		var entries []exchange.WisdomEntry
+		for _, inst := range instFile.Instincts {
+			entries = append(entries, exchange.WisdomEntry{
+				ID:         inst.ID,
+				Category:   "pattern",
+				Confidence: inst.Confidence,
+				Domain:     inst.Domain,
+				Source:     inst.Provenance.Source,
+				CreatedAt:  inst.Provenance.CreatedAt,
+				Content:    inst.Trigger,
+			})
+		}
+		data, err := exchange.ExportWisdom(entries, 0.5, "")
+		if err != nil {
+			outputErrorMessage(fmt.Sprintf("export wisdom: %v", err))
+			return nil
+		}
+		var parsed exchange.WisdomXML
+		if err := xml.Unmarshal(data, &parsed); err == nil {
+			wisdomXML = &parsed
+		}
+	} else {
+		wisdomXML = &exchange.WisdomXML{Version: "1.0"}
+	}
+
+	// Load registry from hub store.
+	var registryXML *exchange.RegistryXML
+	hub := hubStore()
+	if hub != nil {
+		var regData map[string]interface{}
+		if err := hub.LoadJSON("registry/colonies.json", &regData); err == nil {
+			var entries []exchange.ColonyEntry
+			if coloniesRaw, ok := regData["colonies"]; ok {
+				if colonies, ok := coloniesRaw.([]interface{}); ok {
+					for _, c := range colonies {
+						if cm, ok := c.(map[string]interface{}); ok {
+							entry := exchange.ColonyEntry{
+								ID:     strVal(cm, "id"),
+								Name:   strVal(cm, "name"),
+								Status: strVal(cm, "status"),
+							}
+							if parentID, ok := cm["parent_id"].(string); ok {
+								entry.ParentID = parentID
+							}
+							entries = append(entries, entry)
+						}
+					}
+				}
+			}
+			data, err := exchange.ExportRegistry(entries)
+			if err != nil {
+				outputErrorMessage(fmt.Sprintf("export registry: %v", err))
+				return nil
+			}
+			var parsed exchange.RegistryXML
+			if err := xml.Unmarshal(data, &parsed); err == nil {
+				registryXML = &parsed
+			}
+		}
+	}
+	if registryXML == nil {
+		registryXML = &exchange.RegistryXML{Version: "1.0"}
+	}
+
+	// Build combined archive.
+	archive := exchange.ColonyArchiveXML{
+		Version:    "1.0",
+		SealedAt:   time.Now().UTC().Format(time.RFC3339),
+		Pheromones: pheromoneXML,
+		Wisdom:     wisdomXML,
+		Registry:   registryXML,
+	}
+
+	data, err := xml.MarshalIndent(archive, "", "  ")
+	if err != nil {
+		outputErrorMessage(fmt.Sprintf("marshal archive XML: %v", err))
+		return nil
+	}
+
+	fullData := append([]byte(xml.Header), data...)
+
+	if err := os.WriteFile(outputFile, fullData, 0644); err != nil {
+		outputErrorMessage(fmt.Sprintf("write file: %v", err))
+		return nil
+	}
+
+	outputOK(map[string]interface{}{"file": outputFile})
 	return nil
 }
 

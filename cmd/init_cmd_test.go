@@ -393,3 +393,210 @@ func TestInitCmd_OutputFormat(t *testing.T) {
 		t.Errorf("result.version = %v, want '3.0'", result["version"])
 	}
 }
+
+func TestInitCmd_SealedColonyAllowsFreshInit(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+
+	origDir := os.Getenv("COLONY_DATA_DIR")
+	os.Setenv("COLONY_DATA_DIR", dataDir)
+	defer os.Setenv("COLONY_DATA_DIR", origDir)
+
+	s, _ := storage.NewStore(dataDir)
+
+	// Create a sealed colony state
+	goal := "Old sealed goal"
+	state := colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateCOMPLETED,
+		CurrentPhase: 5,
+		Milestone:    "Crowned Anthill",
+	}
+	s.SaveJSON("COLONY_STATE.json", state)
+
+	// Running init on a sealed colony should allow fresh init
+	rootCmd.SetArgs([]string{"init", "New colony goal"})
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] != true {
+		t.Fatalf("expected ok:true for fresh init after seal, got: %v", env["ok"])
+	}
+
+	var stateAfter colony.ColonyState
+	s.LoadJSON("COLONY_STATE.json", &stateAfter)
+	if stateAfter.Goal == nil || *stateAfter.Goal != "New colony goal" {
+		t.Errorf("goal should be 'New colony goal', got: %v", stateAfter.Goal)
+	}
+}
+
+func TestInitCmd_SealedColonyCreatesBackup(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+
+	origDir := os.Getenv("COLONY_DATA_DIR")
+	os.Setenv("COLONY_DATA_DIR", dataDir)
+	defer os.Setenv("COLONY_DATA_DIR", origDir)
+
+	s, _ := storage.NewStore(dataDir)
+
+	// Create a sealed colony state
+	goal := "Old sealed goal"
+	state := colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateCOMPLETED,
+		CurrentPhase: 5,
+		Milestone:    "Crowned Anthill",
+	}
+	s.SaveJSON("COLONY_STATE.json", state)
+
+	rootCmd.SetArgs([]string{"init", "New colony goal"})
+	rootCmd.Execute()
+
+	// Verify backup was created
+	backupDir := filepath.Join(dataDir, "backups")
+	entries, err := os.ReadDir(backupDir)
+	if err != nil {
+		t.Fatalf("backups directory not created: %v", err)
+	}
+
+	found := false
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), "COLONY_STATE.pre-init.") && strings.HasSuffix(e.Name(), ".bak") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected backup file COLONY_STATE.pre-init.*.bak in backups directory")
+	}
+}
+
+func TestSealInProgress_NonGitRepo(t *testing.T) {
+	// sealInProgress should return false in a non-git directory
+	tmpDir := t.TempDir()
+	if sealInProgress(tmpDir) {
+		t.Error("sealInProgress should return false in non-git directory")
+	}
+}
+
+func TestSealInProgress_NoUncommittedChanges(t *testing.T) {
+	// sealInProgress should return false when there are no uncommitted changes
+	tmpDir := t.TempDir()
+
+	// Create a git repo
+	runGit(t, tmpDir, "init")
+	runGit(t, tmpDir, "commit", "--allow-empty", "-m", "initial")
+
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+
+	// Write a committed sealed state
+	writeSealedState(t, dataDir, "committed goal")
+	runGit(t, tmpDir, "add", ".")
+	runGit(t, tmpDir, "commit", "-m", "seal colony")
+
+	if sealInProgress(dataDir) {
+		t.Error("sealInProgress should return false when state is committed")
+	}
+}
+
+func TestSealInProgress_UncommittedSeal(t *testing.T) {
+	// sealInProgress should return true when seal is uncommitted
+	tmpDir := t.TempDir()
+
+	// Create a git repo
+	runGit(t, tmpDir, "init")
+	runGit(t, tmpDir, "commit", "--allow-empty", "-m", "initial")
+
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+
+	// Write an active (non-sealed) state and commit it
+	writeActiveState(t, dataDir, "active goal")
+	runGit(t, tmpDir, "add", ".")
+	runGit(t, tmpDir, "commit", "-m", "active colony")
+
+	// Now modify the state to sealed (uncommitted)
+	writeSealedState(t, dataDir, "sealed goal")
+
+	result := sealInProgress(dataDir)
+	if !result {
+		t.Errorf("sealInProgress returned false for dataDir=%q", dataDir)
+	}
+}
+
+func TestSealInProgress_CommittedSeal(t *testing.T) {
+	// sealInProgress should return false when seal is committed
+	tmpDir := t.TempDir()
+
+	// Create a git repo
+	runGit(t, tmpDir, "init")
+	runGit(t, tmpDir, "commit", "--allow-empty", "-m", "initial")
+
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+
+	// Write a sealed state and commit it
+	writeSealedState(t, dataDir, "sealed goal")
+	runGit(t, tmpDir, "add", ".")
+	runGit(t, tmpDir, "commit", "-m", "seal colony")
+
+	if sealInProgress(dataDir) {
+		t.Error("sealInProgress should return false when seal is committed")
+	}
+}
+
+// --- helpers ---
+
+func writeSealedState(t *testing.T, dataDir, goal string) {
+	t.Helper()
+	s, err := storage.NewStore(dataDir)
+	if err != nil {
+		t.Fatalf("create store: %v", err)
+	}
+	state := colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateCOMPLETED,
+		CurrentPhase: 5,
+		Milestone:    "Crowned Anthill",
+	}
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("write state: %v", err)
+	}
+}
+
+func writeActiveState(t *testing.T, dataDir, goal string) {
+	t.Helper()
+	s, err := storage.NewStore(dataDir)
+	if err != nil {
+		t.Fatalf("create store: %v", err)
+	}
+	state := colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 2,
+	}
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("write state: %v", err)
+	}
+}
