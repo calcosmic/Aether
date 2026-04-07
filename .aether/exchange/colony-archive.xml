@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<colony-archive colony_id="" sealed_at="2026-04-06T21:56:13Z" version="1.0">
-  <pheromones version="1.0" generated_at="2026-04-06T21:56:13Z" count="162">
+<colony-archive colony_id="" sealed_at="2026-04-07T01:47:13Z" version="1.0">
+  <pheromones version="1.0" generated_at="2026-04-07T01:47:13Z" count="164">
     <signal id="imported:" type="" priority="" source="" created_at="" active="false">
       <content>
         <text></text>
@@ -811,8 +811,18 @@
         <text>Phase 4 (Fix learning-check-promotion --all and learning-promote-auto stub) completed. Key patterns: connect stubs to real service methods, use make([]T,0) not nil slices for JSON consistency</text>
       </content>
     </signal>
+    <signal id="sig_1775519685_53df4547" type="FEEDBACK" priority="low" source="cli" created_at="2026-04-06T23:54:45Z" expires_at="2026-04-13T23:54:45Z" active="true">
+      <content>
+        <text>Phase 2 (pheromone dedup) completed. Key patterns: content-hash dedup with reinforcement counting prevents duplicate signals</text>
+      </content>
+    </signal>
+    <signal id="sig_1775520760_b009c44c" type="FEEDBACK" priority="low" source="cli" created_at="2026-04-07T00:12:40Z" expires_at="2026-04-14T00:12:40Z" active="true">
+      <content>
+        <text>Phase 3 (Fix state-mutate bracket notation) completed. Key patterns: regex widening + normalizeBracketPath is cleaner than teaching sjson bracket paths</text>
+      </content>
+    </signal>
   </pheromones>
-  <queen-wisdom version="1.0" colony_id="" generated_at="2026-04-06T21:56:13Z">
+  <queen-wisdom version="1.0" colony_id="" generated_at="2026-04-07T01:47:13Z">
     <philosophies></philosophies>
     <patterns>
       <pattern id="inst_1775264791" confidence="0.75" domain="" source="observation" created_at="2026-04-04T01:06:31Z">
@@ -883,6 +893,21 @@
       </pattern>
       <pattern id="inst_1775499359" confidence="0.75" domain="workflow" source="phase-8" created_at="2026-04-06T18:15:59Z">
         <content>Adding new CLI flags to Go commands</content>
+      </pattern>
+      <pattern id="inst_1775517543" confidence="0.80" domain="code-style" source="phase-1" created_at="2026-04-06T23:19:03Z">
+        <content>cobra command rejects positional args via NoArgs but callers pass positional JSON</content>
+      </pattern>
+      <pattern id="inst_1775519656" confidence="0.75" domain="code-style" source="phase-2" created_at="2026-04-06T23:54:16Z">
+        <content>writing duplicate signals to pheromone store</content>
+      </pattern>
+      <pattern id="inst_1775520749" confidence="0.70" domain="code-style" source="success-phase-3" created_at="2026-04-07T00:12:29Z">
+        <content>state-mutate needs to accept bracket notation paths</content>
+      </pattern>
+      <pattern id="inst_1775522304" confidence="0.75" domain="code-style" source="phase-4" created_at="2026-04-07T00:38:24Z">
+        <content>deprecating dead CLI commands</content>
+      </pattern>
+      <pattern id="inst_1775522304" confidence="0.70" domain="debugging" source="phase-4" created_at="2026-04-07T00:38:24Z">
+        <content>silent error sites in non-critical code paths</content>
       </pattern>
     </patterns>
   </queen-wisdom>

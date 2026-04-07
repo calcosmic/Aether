@@ -1,6 +1,6 @@
-# Crowned Anthill — Fix infrastructure bugs that break colony seal: state-mutate panic on nested fields, chamber-create path doubling in entomb YAML, and XML export output format quirks
+# Crowned Anthill — Fix Aether infrastructure gaps: wisdom pipeline conversion failure, state-mutate bracket notation bug, and silent command failure logging
 
-**Sealed:** 2026-04-06T21:55:44Z
+**Sealed:** 2026-04-07T01:45:55Z
 **Milestone:** Crowned Anthill
 **Version:** 3.0
 
@@ -9,8 +9,8 @@
 This colony set out to accomplish something real — and it did. Every phase pushed the anthill higher. Now it stands crowned.
 
 ## Colony Stats
-- Total Phases: 8
-- Phases Completed: 8 of 8
+- Total Phases: 5
+- Phases Completed: 5 of 5
 - Colony Age: 0 days of focused work
 - Wisdom Promoted: 0 entries carried forward
 
@@ -18,13 +18,10 @@ This colony set out to accomplish something real — and it did. Every phase pus
 
 Every phase below is a chapter in the story of this anthill's rise:
 
-  - Fix state-mutate panic on nested fields: completed
-  - Fix XML archive export format and output handling: completed
-  - Fix generate-commit-message seal/milestone types: completed
-  - Fix learning-check-promotion --all and learning-promote-auto stub: completed
-  - Fix chamber-create path doubling and verify chamber integrity: completed
-  - Migrate seal.md from shell to Go binary calls: completed
-  - Migrate entomb.md from shell to Go binary calls: completed
+  - Fix state-write positional arg rejection: completed
+  - Implement pheromone content dedup with reinforcement: completed
+  - Fix state-mutate bracket notation in expression parser: completed
+  - Deprecate dead code and add silent error logging: completed
   - Integration verification: completed
 
 ## Pheromone Legacy
@@ -35,6 +32,6 @@ What this colony learned, the next colony inherits.
 
 ## The Work
 
-Fix infrastructure bugs that break colony seal: state-mutate panic on nested fields, chamber-create path doubling in entomb YAML, and XML export output format quirks
+Fix Aether infrastructure gaps: wisdom pipeline conversion failure, state-mutate bracket notation bug, and silent command failure logging
 
 The anthill stands crowned. The work endures.

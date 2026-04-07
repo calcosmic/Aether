@@ -2,7 +2,7 @@
   "version": "3.0",
   "goal": "Fix Aether infrastructure gaps: wisdom pipeline conversion failure, state-mutate bracket notation bug, and silent command failure logging",
   "colony_name": null,
-  "colony_version": 1,
+  "colony_version": 2,
   "state": "READY",
   "current_phase": 5,
   "session_id": "session_1775515433_b88fc36a1e900e42",
@@ -13,185 +13,190 @@
     "confidence": 89,
     "phases": [
       {
+        "description": "state-write uses cobra.NoArgs but callers (init.md, plan.md) pass jq output as a positional argument. The command silently rejects these args. Fix by accepting an optional positional JSON blob that replaces the full state file.",
         "id": 1,
         "name": "Fix state-write positional arg rejection",
-        "description": "state-write uses cobra.NoArgs but callers (init.md, plan.md) pass jq output as a positional argument. The command silently rejects these args. Fix by accepting an optional positional JSON blob that replaces the full state file.",
         "status": "completed",
+        "success_criteria": [
+          "state-write accepts a positional JSON argument and writes it to COLONY_STATE.json",
+          "state-write --field/--value mode still works (backward compatible)",
+          "All existing state_extra_test.go tests pass"
+        ],
         "tasks": [
           {
-            "id": "1.1",
-            "goal": "Write a failing test proving state-write rejects positional JSON arguments",
-            "status": "",
             "constraints": [
               "Test file: cmd/state_extra_test.go",
               "Must call state-write with a positional JSON argument",
               "Must assert the command currently fails due to cobra.NoArgs"
             ],
+            "goal": "Write a failing test proving state-write rejects positional JSON arguments",
             "hints": [
               "Follow existing TestStateWrite pattern: saveGlobals, resetRootCmd, newTestStore, parseEnvelope",
               "Use rootCmd.SetArgs(['state-write', '{\"goal\":\"test\"}'])"
             ],
+            "id": "1.1",
+            "status": "",
             "success_criteria": [
               "Test fails (RED) because cobra.NoArgs rejects the positional argument",
               "go test ./cmd/ -run TestStateWrite -v shows failure"
             ]
           },
           {
-            "id": "1.2",
-            "goal": "Fix state-write to accept a positional JSON argument for backward compatibility with shell-script callers",
-            "status": "",
             "constraints": [
               "Source file: cmd/state_extra.go",
               "Must preserve existing --field/--value flag behavior as primary interface",
               "When positional arg provided, parse as JSON and write directly to COLONY_STATE.json",
               "Change Args from cobra.NoArgs to cobra.MaximumNArgs(1)"
             ],
+            "depends_on": [
+              "1.1"
+            ],
+            "goal": "Fix state-write to accept a positional JSON argument for backward compatibility with shell-script callers",
             "hints": [
-              "If len(args) \u003e 0, validate args[0] as JSON, save via store.SaveJSON",
+              "If len(args) > 0, validate args[0] as JSON, save via store.SaveJSON",
               "If both positional and flags provided, return an error"
             ],
+            "id": "1.2",
+            "status": "",
             "success_criteria": [
               "Test from 1.1 now passes (GREEN)",
               "Existing TestStateWrite for --field/--value still passes",
               "init.md and plan.md callers succeed with positional JSON"
-            ],
-            "depends_on": [
-              "1.1"
             ]
           }
-        ],
-        "success_criteria": [
-          "state-write accepts a positional JSON argument and writes it to COLONY_STATE.json",
-          "state-write --field/--value mode still works (backward compatible)",
-          "All existing state_extra_test.go tests pass"
         ]
       },
       {
+        "description": "pheromone-write already computes SHA-256 content_hash and PheromoneSignal already has ReinforcementCount. But the write always appends a new signal instead of checking for existing signals with same type + content_hash. Implement dedup: match on type + content_hash, increment ReinforcementCount on duplicate.",
         "id": 2,
         "name": "Implement pheromone content dedup with reinforcement",
-        "description": "pheromone-write already computes SHA-256 content_hash and PheromoneSignal already has ReinforcementCount. But the write always appends a new signal instead of checking for existing signals with same type + content_hash. Implement dedup: match on type + content_hash, increment ReinforcementCount on duplicate.",
         "status": "completed",
+        "success_criteria": [
+          "Duplicate pheromone-write calls produce 1 signal with ReinforcementCount incremented",
+          "Non-duplicate calls still append new signals",
+          "Output envelope reports replaced:true for dedup cases"
+        ],
         "tasks": [
           {
-            "id": "2.1",
-            "goal": "Write a failing test proving pheromone-write creates duplicate signals instead of reinforcing",
-            "status": "completed",
             "constraints": [
               "Test file: pkg/colony/pheromones_test.go",
               "Must call pheromone-write twice with same type and content",
               "Must assert only 1 signal exists after two writes",
               "Must assert ReinforcementCount is incremented"
             ],
+            "goal": "Write a failing test proving pheromone-write creates duplicate signals instead of reinforcing",
             "hints": [
               "Create test store with empty pheromones.json",
               "Call pheromone-write --type FOCUS --content 'test dedup' twice"
             ],
+            "id": "2.1",
+            "status": "completed",
             "success_criteria": [
               "Test fails (RED) because pheromone-write currently appends duplicates",
               "go test ./pkg/colony/ -run TestPheromoneDedup -v shows failure"
             ]
           },
           {
-            "id": "2.2",
-            "goal": "Add dedup logic to pheromone_write.go: scan existing signals for matching type + content_hash, increment ReinforcementCount instead of appending",
-            "status": "completed",
             "constraints": [
               "Source file: cmd/pheromone_write.go",
               "Check must happen after contentHash computation and before appending",
               "Only match on active signals (Active == true)",
               "On match: increment ReinforcementCount, max Strength, update timestamp, return replaced:true"
             ],
+            "depends_on": [
+              "2.1"
+            ],
+            "goal": "Add dedup logic to pheromone_write.go: scan existing signals for matching type + content_hash, increment ReinforcementCount instead of appending",
             "hints": [
               "PheromoneSignal already has ReinforcementCount *int field with omitempty",
               "Initialize to 1 if nil, then increment on each duplicate"
             ],
+            "id": "2.2",
+            "status": "completed",
             "success_criteria": [
               "Test from 2.1 now passes (GREEN)",
               "Non-duplicate calls still append new signals",
               "Output envelope correctly reports replaced:true for dedup cases"
-            ],
-            "depends_on": [
-              "2.1"
             ]
           }
-        ],
-        "success_criteria": [
-          "Duplicate pheromone-write calls produce 1 signal with ReinforcementCount incremented",
-          "Non-duplicate calls still append new signals",
-          "Output envelope reports replaced:true for dedup cases"
         ]
       },
       {
+        "description": "state-mutate's reFieldSet regex uses [\\w.]+ which does not match bracket notation like 'plan.phases[0].status'. When callers use bracket paths, the expression is rejected. Fix by widening the regex and relying on sjson's native bracket path support.",
         "id": 3,
         "name": "Fix state-mutate bracket notation in expression parser",
-        "description": "state-mutate's reFieldSet regex uses [\\w.]+ which does not match bracket notation like 'plan.phases[0].status'. When callers use bracket paths, the expression is rejected. Fix by widening the regex and relying on sjson's native bracket path support.",
         "status": "completed",
+        "success_criteria": [
+          "state-mutate accepts bracket notation paths like '.plan.phases[0].status = \"completed\"'",
+          "Existing dot-notation paths still work",
+          "sjson correctly resolves bracket notation"
+        ],
         "tasks": [
           {
-            "id": "3.1",
-            "goal": "Write a failing test proving state-mutate rejects bracket notation paths",
-            "status": "",
             "constraints": [
               "Test file: cmd/state_cmds_test.go",
               "Must create COLONY_STATE.json with plan.phases containing at least 1 phase",
               "Must call state-mutate with '.plan.phases[0].status = \"completed\"'"
             ],
+            "goal": "Write a failing test proving state-mutate rejects bracket notation paths",
             "hints": [
               "Follow existing state-mutate test patterns",
               "The regex currently only accepts [\\w.]+ for the field path"
             ],
+            "id": "3.1",
+            "status": "",
             "success_criteria": [
               "Test fails (RED) because reFieldSet regex rejects bracket notation",
               "go test ./cmd/ -run TestStateMutateBracket -v shows failure"
             ]
           },
           {
-            "id": "3.2",
-            "goal": "Update reFieldSet regex to accept bracket notation paths in state_cmds.go",
-            "status": "",
             "constraints": [
               "Source file: cmd/state_cmds.go",
               "Change regex from '([\\w.]+)' to '([\\w.\\[\\]]+)'",
-              "sjson.SetRawBytes already handles bracket notation natively — no other changes needed"
+              "sjson.SetRawBytes already handles bracket notation natively \u2014 no other changes needed"
             ],
+            "depends_on": [
+              "3.1"
+            ],
+            "goal": "Update reFieldSet regex to accept bracket notation paths in state_cmds.go",
             "hints": [
               "sjson supports paths like 'plan.phases.0.status' or 'plan.phases.[0].status' natively",
               "Verify existing dot-notation tests still pass after regex change"
             ],
+            "id": "3.2",
+            "status": "",
             "success_criteria": [
               "Test from 3.1 now passes (GREEN)",
               "Existing dot-notation state-mutate tests still pass",
               "go test ./cmd/ -run TestStateMutate -v shows all green"
-            ],
-            "depends_on": [
-              "3.1"
             ]
           }
-        ],
-        "success_criteria": [
-          "state-mutate accepts bracket notation paths like '.plan.phases[0].status = \"completed\"'",
-          "Existing dot-notation paths still work",
-          "sjson correctly resolves bracket notation"
         ]
       },
       {
+        "description": "worktree_merge.go and suggest.go are dead code (no callers from any colony command). Deprecate using existing deprecated_cmds.go pattern. Add error logging to silent error sites in active code paths: rotateSpawnTree, handleObserveEvent, parseMetadata, and low-risk os.* calls.",
         "id": 4,
         "name": "Deprecate dead code and add silent error logging",
-        "description": "worktree_merge.go and suggest.go are dead code (no callers from any colony command). Deprecate using existing deprecated_cmds.go pattern. Add error logging to silent error sites in active code paths: rotateSpawnTree, handleObserveEvent, parseMetadata, and low-risk os.* calls.",
         "status": "completed",
+        "success_criteria": [
+          "Dead code formally deprecated with clear JSON response",
+          "All active silent error sites produce log output on failure",
+          "No control flow changes \u2014 errors remain non-fatal"
+        ],
         "tasks": [
           {
-            "id": "4.1",
-            "goal": "Replace worktree_merge.go and suggest.go implementations with deprecated command stubs",
-            "status": "",
             "constraints": [
               "Source files: cmd/worktree_merge.go, cmd/suggest.go",
               "Use newDeprecatedCmd pattern from deprecated_cmds.go",
               "Verify all 5 suggest subcommands (analyze, approve, list, reject, clear) are dead code before deprecating"
             ],
+            "goal": "Replace worktree_merge.go and suggest.go implementations with deprecated command stubs",
             "hints": [
               "deprecated_cmds.go shows the pattern: register command, set Deprecated/Annotations, silence usage/errors"
             ],
+            "id": "4.1",
+            "status": "",
             "success_criteria": [
               "go build ./cmd/aether compiles",
               "worktree-merge and suggest-* commands return deprecated JSON response",
@@ -199,66 +204,61 @@
             ]
           },
           {
-            "id": "4.2",
-            "goal": "Add log.Printf error logging to all silent error sites in active code paths",
-            "status": "",
             "constraints": [
               "session_cmds.go rotateSpawnTree: 6 silent os.* calls (lines ~506, 511, 514, 529)",
               "pipeline.go handleObserveEvent: 2 silent returns (lines ~100, 106)",
               "queen.go parseMetadata/updateMetadata: 2 silent error swallows (lines ~305, 318)",
               "maintenance.go:156, install_cmd.go:199,297, setup_cmd.go:207: unchecked os.* calls",
-              "Do NOT change control flow — errors remain non-fatal, just logged"
+              "Do NOT change control flow \u2014 errors remain non-fatal, just logged"
             ],
+            "goal": "Add log.Printf error logging to all silent error sites in active code paths",
             "hints": [
               "Use log.Printf with descriptive prefix for each site",
-              "pipeline.go line 120 already has log.Printf — follow that exact style"
+              "pipeline.go line 120 already has log.Printf \u2014 follow that exact style"
             ],
+            "id": "4.2",
+            "status": "",
             "success_criteria": [
               "Each silent error site now logs before discarding",
               "go test ./... passes with no new failures",
               "go vet ./... shows no new issues"
             ]
           }
-        ],
-        "success_criteria": [
-          "Dead code formally deprecated with clear JSON response",
-          "All active silent error sites produce log output on failure",
-          "No control flow changes — errors remain non-fatal"
         ]
       },
       {
+        "description": "Run full test suite with race detection and verify all fixes work together without regressions.",
         "id": 5,
         "name": "Integration verification",
-        "description": "Run full test suite with race detection and verify all fixes work together without regressions.",
-        "status": "",
+        "status": "completed",
+        "success_criteria": [
+          "Full test suite passes with race detection",
+          "No regressions in any existing tests",
+          "Binary builds cleanly"
+        ],
         "tasks": [
           {
-            "id": "5.1",
-            "goal": "Run full test suite, go vet, and binary build to verify zero regressions",
-            "status": "",
             "constraints": [
               "Must run go test ./... -race from repo root",
               "Must run go vet ./...",
               "Must run go build ./cmd/aether",
               "All tests must pass"
             ],
-            "success_criteria": [
-              "go test ./... -race exits 0 with no failures",
-              "go vet ./... exits 0",
-              "go build ./cmd/aether succeeds"
-            ],
             "depends_on": [
               "1.2",
               "2.2",
               "3.2",
               "4.2"
+            ],
+            "goal": "Run full test suite, go vet, and binary build to verify zero regressions",
+            "id": "5.1",
+            "status": "",
+            "success_criteria": [
+              "go test ./... -race exits 0 with no failures",
+              "go vet ./... exits 0",
+              "go build ./cmd/aether succeeds"
             ]
           }
-        ],
-        "success_criteria": [
-          "Full test suite passes with race detection",
-          "No regressions in any existing tests",
-          "Binary builds cleanly"
         ]
       }
     ]
@@ -284,7 +284,7 @@
         "id": "learning_1775519651",
         "learnings": [
           {
-            "claim": "Content-hash based dedup with reinforcement counting is a clean pattern for idempotent signal writes — match on type+hash, increment count instead of appending",
+            "claim": "Content-hash based dedup with reinforcement counting is a clean pattern for idempotent signal writes \u2014 match on type+hash, increment count instead of appending",
             "disproven_by": null,
             "evidence": "TestPheromoneWriteDedup passes: 2 identical writes produce 1 signal with ReinforcementCount=2",
             "status": "hypothesis",
@@ -299,9 +299,9 @@
         "id": "learning_1775520703",
         "learnings": [
           {
-            "claim": "Widening regex to accept bracket notation then normalizing to dot notation is cleaner than teaching sjson bracket paths — keeps the expression parser simple while leveraging sjson native support",
+            "claim": "Widening regex to accept bracket notation then normalizing to dot notation is cleaner than teaching sjson bracket paths \u2014 keeps the expression parser simple while leveraging sjson native support",
             "disproven_by": null,
-            "evidence": "reFieldSet regex widened from ([\\\\w.]+) to ([\\\\w.\\\\[\\\\]]+); normalizeBracketPath converts [0] to .0; TestStateMutateBracket passes with .plan.phases[0].status",
+            "evidence": "reFieldSet regex widened from ([\\w.]+) to ([\\w.\\[\\]]+); normalizeBracketPath converts [0] to .0; TestStateMutateBracket passes with .plan.phases[0].status",
             "status": "hypothesis",
             "tested": true
           }
@@ -314,14 +314,14 @@
         "id": "learning_1775522299",
         "learnings": [
           {
-            "claim": "The deprecated command stub pattern (register command, set Deprecated/Annotations, silence usage/errors) provides a clean migration path that preserves CLI surface area while removing implementation — callers get a clear deprecation message instead of a command-not-found error",
+            "claim": "The deprecated command stub pattern (register command, set Deprecated/Annotations, silence usage/errors) provides a clean migration path that preserves CLI surface area while removing implementation \u2014 callers get a clear deprecation message instead of a command-not-found error",
             "disproven_by": null,
-            "evidence": "worktree_merge.go (217→26 lines) and suggest.go (591→66 lines) replaced with deprecated stubs; all 11 deprecated tests pass; existing command registration preserved",
+            "evidence": "worktree_merge.go (217\u219226 lines) and suggest.go (591\u219266 lines) replaced with deprecated stubs; all 11 deprecated tests pass; existing command registration preserved",
             "status": "hypothesis",
             "tested": true
           },
           {
-            "claim": "Adding log.Printf to previously-silent error sites is zero-risk observability — errors remain non-fatal (no control flow change), but failures become visible in logs for debugging. Pattern: wrap bare os.* calls in if err := ... ; log.Printf(...) blocks",
+            "claim": "Adding log.Printf to previously-silent error sites is zero-risk observability \u2014 errors remain non-fatal (no control flow change), but failures become visible in logs for debugging. Pattern: wrap bare os.* calls in if err := ... ; log.Printf(...) blocks",
             "disproven_by": null,
             "evidence": "11 silent error sites across 6 files now produce log output; go test ./... passes; go vet ./... clean",
             "status": "hypothesis",
@@ -343,11 +343,10 @@
   "signals": [],
   "graveyards": [],
   "events": [
-    "((.events[-99:]) + [$timestamp + \"|phase_started|build|Phase \" + ($phase|tostring) + \": \" + $phase_name + \" started\"])",
-    ""
+    "",
+    "2026-04-07T01:42:16Z|milestone_reached|seal|Achieved Crowned Anthill milestone v2",
+    "2026-04-07T01:45:47Z|milestone_reached|seal|Achieved Crowned Anthill milestone v2"
   ],
-  "milestone": ""
+  "milestone": "Crowned Anthill",
+  "milestone_updated_at": "2026-04-07T01:45:47Z"
 }
-
-
-
