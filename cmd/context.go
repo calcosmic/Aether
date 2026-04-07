@@ -684,6 +684,30 @@ var prContextCmd = &cobra.Command{
 	},
 }
 
+// contextBudgetCmd returns depth-based token budget values for build playbooks.
+// Per D-04: playbooks call `aether context-budget --depth <level>` to get
+// context and skills character budgets without hardcoding values.
+var contextBudgetCmd = &cobra.Command{
+	Use:   "context-budget",
+	Short: "Return context and skills budget for a depth level",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		depthStr, _ := cmd.Flags().GetString("depth")
+		d := colony.ColonyDepth(depthStr)
+		if !d.Valid() {
+			outputError(1, fmt.Sprintf("invalid depth %q: must be light, standard, deep, or full", depthStr), nil)
+			return nil
+		}
+		ctxBudget, skillsBudget := colony.DepthBudget(d)
+		outputOK(map[string]interface{}{
+			"depth":   string(d),
+			"context": ctxBudget,
+			"skills":  skillsBudget,
+		})
+		return nil
+	},
+}
+
 func init() {
 	contextCapsuleCmd.Flags().Bool("compact", false, "Compact mode with word budget")
 	contextCapsuleCmd.Flags().Bool("json", false, "Output as JSON only")
@@ -703,6 +727,9 @@ func init() {
 	rootCmd.AddCommand(contextCapsuleCmd)
 	rootCmd.AddCommand(prContextCmd)
 	rootCmd.AddCommand(contextUpdateCmd)
+	rootCmd.AddCommand(contextBudgetCmd)
+
+	contextBudgetCmd.Flags().String("depth", "", "Depth level (light|standard|deep|full)")
 }
 
 // --- Helper functions (file-private) ---
