@@ -600,3 +600,214 @@ func writeActiveState(t *testing.T, dataDir, goal string) {
 		t.Fatalf("write state: %v", err)
 	}
 }
+
+// --- init --depth tests ---
+
+func TestInitCmd_DepthLight(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+
+	origDir := os.Getenv("COLONY_DATA_DIR")
+	os.Setenv("COLONY_DATA_DIR", dataDir)
+	defer os.Setenv("COLONY_DATA_DIR", origDir)
+
+	rootCmd.SetArgs([]string{"init", "Build light", "--depth", "light"})
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] != true {
+		t.Fatalf("expected ok:true, got: %v", env["ok"])
+	}
+
+	s, _ := storage.NewStore(dataDir)
+	var state colony.ColonyState
+	s.LoadJSON("COLONY_STATE.json", &state)
+
+	if state.ColonyDepth != colony.DepthLight {
+		t.Errorf("ColonyDepth = %q, want %q", state.ColonyDepth, colony.DepthLight)
+	}
+}
+
+func TestInitCmd_DepthStandard(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+
+	origDir := os.Getenv("COLONY_DATA_DIR")
+	os.Setenv("COLONY_DATA_DIR", dataDir)
+	defer os.Setenv("COLONY_DATA_DIR", origDir)
+
+	rootCmd.SetArgs([]string{"init", "Build standard", "--depth", "standard"})
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] != true {
+		t.Fatalf("expected ok:true, got: %v", env["ok"])
+	}
+
+	s, _ := storage.NewStore(dataDir)
+	var state colony.ColonyState
+	s.LoadJSON("COLONY_STATE.json", &state)
+
+	if state.ColonyDepth != colony.DepthStandard {
+		t.Errorf("ColonyDepth = %q, want %q", state.ColonyDepth, colony.DepthStandard)
+	}
+}
+
+func TestInitCmd_DepthDeep(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+
+	origDir := os.Getenv("COLONY_DATA_DIR")
+	os.Setenv("COLONY_DATA_DIR", dataDir)
+	defer os.Setenv("COLONY_DATA_DIR", origDir)
+
+	rootCmd.SetArgs([]string{"init", "Build deep", "--depth", "deep"})
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] != true {
+		t.Fatalf("expected ok:true, got: %v", env["ok"])
+	}
+
+	s, _ := storage.NewStore(dataDir)
+	var state colony.ColonyState
+	s.LoadJSON("COLONY_STATE.json", &state)
+
+	if state.ColonyDepth != colony.DepthDeep {
+		t.Errorf("ColonyDepth = %q, want %q", state.ColonyDepth, colony.DepthDeep)
+	}
+}
+
+func TestInitCmd_DepthFull(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+
+	origDir := os.Getenv("COLONY_DATA_DIR")
+	os.Setenv("COLONY_DATA_DIR", dataDir)
+	defer os.Setenv("COLONY_DATA_DIR", origDir)
+
+	rootCmd.SetArgs([]string{"init", "Build full", "--depth", "full"})
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] != true {
+		t.Fatalf("expected ok:true, got: %v", env["ok"])
+	}
+
+	s, _ := storage.NewStore(dataDir)
+	var state colony.ColonyState
+	s.LoadJSON("COLONY_STATE.json", &state)
+
+	if state.ColonyDepth != colony.DepthFull {
+		t.Errorf("ColonyDepth = %q, want %q", state.ColonyDepth, colony.DepthFull)
+	}
+}
+
+func TestInitCmd_DepthDefault(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+
+	origDir := os.Getenv("COLONY_DATA_DIR")
+	os.Setenv("COLONY_DATA_DIR", dataDir)
+	defer os.Setenv("COLONY_DATA_DIR", origDir)
+
+	// No --depth flag -- should default to "standard" per D-06
+	rootCmd.SetArgs([]string{"init", "Build no depth"})
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] != true {
+		t.Fatalf("expected ok:true, got: %v", env["ok"])
+	}
+
+	s, _ := storage.NewStore(dataDir)
+	var state colony.ColonyState
+	s.LoadJSON("COLONY_STATE.json", &state)
+
+	if state.ColonyDepth != colony.DepthStandard {
+		t.Errorf("ColonyDepth = %q, want %q (explicit default per D-06)", state.ColonyDepth, colony.DepthStandard)
+	}
+}
+
+func TestInitCmd_DepthInvalid(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stderr = &buf
+
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+
+	origDir := os.Getenv("COLONY_DATA_DIR")
+	os.Setenv("COLONY_DATA_DIR", dataDir)
+	defer os.Setenv("COLONY_DATA_DIR", origDir)
+
+	rootCmd.SetArgs([]string{"init", "Build invalid", "--depth", "banana"})
+	rootCmd.Execute()
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] != false {
+		t.Fatalf("expected ok:false for invalid depth 'banana', got: %v", env["ok"])
+	}
+
+	errMsg, ok := env["error"].(string)
+	if !ok {
+		t.Fatalf("expected error string, got: %T", env["error"])
+	}
+	if !strings.Contains(errMsg, "invalid depth") {
+		t.Errorf("error message %q does not contain 'invalid depth'", errMsg)
+	}
+
+	// Verify no COLONY_STATE.json was created
+	s, _ := storage.NewStore(dataDir)
+	var state colony.ColonyState
+	if err := s.LoadJSON("COLONY_STATE.json", &state); err == nil {
+		t.Error("COLONY_STATE.json should not exist after invalid depth")
+	}
+}
