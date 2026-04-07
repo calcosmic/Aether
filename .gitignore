@@ -108,8 +108,10 @@ node_modules/
 .worktrees/
 .claude/worktrees/
 
-# GSD planning files
-# .planning/ — tracked for this project
+# GSD (Get Shit Done) — local dev tool, not part of Aether
+.claude/commands/gsd/
+.claude/agents/gsd-*
+.claude/gsd-*
 .planning/
 
 # Go build output
