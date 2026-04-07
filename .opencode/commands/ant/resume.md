@@ -4,12 +4,6 @@ name: ant:resume
 description: "Resume Previous Session"
 ---
 
-### Step -1: Normalize Arguments
-
-Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
-
-This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
-
 # /ant:resume — Resume Previous Session
 
 Resume work after `/clear` or in a new session. Reads colony state, detects codebase drift, and gives you a clear "do this next" recommendation.
@@ -374,7 +368,7 @@ aether print-next-up
 ## Key Constraints
 
 - Use Read tool for COLONY_STATE.json (not bash cat/jq). Use Bash tool for pheromone-read (applies decay calculation).
-- Use Bash tool only for aether-utils.sh commands and git commands
+- Use Bash tool only for `aether` CLI commands and git commands
 - Handle ALL missing/corrupted file cases gracefully
 - Time-agnostic: restore identically regardless of how long ago the session was
 - Decisions shown as flat list — no user vs Claude distinction

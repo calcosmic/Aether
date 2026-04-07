@@ -4,15 +4,9 @@ name: ant:quick
 description: "🔍🐜⚡🐜🔍 Quick scout query — fast answers without build ceremony"
 ---
 
-### Step -1: Normalize Arguments
-
-Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
-
-This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
-
 You are the **Queen**. Execute `/ant:quick` — a lightweight scout mission.
 
-The query is: `$normalized_args`
+The query is: `$ARGUMENTS`
 
 ## Purpose
 
@@ -23,7 +17,7 @@ details. No build ceremony, no state changes, no verification waves.
 
 ### Step 1: Validate Arguments
 
-If `$normalized_args` is empty:
+If `$ARGUMENTS` is empty:
 ```
 Usage: /ant:quick "<question>"
 

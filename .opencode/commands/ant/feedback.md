@@ -4,12 +4,6 @@ name: ant:feedback
 description: "💬🐜🧠🐜💬 Emit FEEDBACK signal to provide guidance to colony"
 ---
 
-### Step -1: Normalize Arguments
-
-Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
-
-This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
-
 
 
 You are the **Queen**. Emit a FEEDBACK signal.
@@ -17,11 +11,11 @@ You are the **Queen**. Emit a FEEDBACK signal.
 
 ## Instructions
 
-The feedback message is: `$normalized_args`
+The feedback message is: `$ARGUMENTS`
 
 ### Step 1: Validate
 
-If `$normalized_args` empty -> show usage: `/ant:feedback <message>`, stop.
+If `$ARGUMENTS` empty -> show usage: `/ant:feedback <message>`, stop.
 If content > 500 chars -> "Signal content too long (max 500 chars)", stop.
 
 
@@ -70,8 +64,8 @@ Write COLONY_STATE.json.
 
 **Write pheromone signal and update context:**
 ```bash
-aether pheromone-write --type FEEDBACK --content "$normalized_args" --strength 0.7 --reason "User feedback guidance" 2>/dev/null || true
-aether context-update --section constraint --key feedback --content "$normalized_args" "user" 2>/dev/null || true
+aether pheromone-write --type FEEDBACK --content "$ARGUMENTS" --strength 0.7 --reason "User feedback guidance" 2>/dev/null || true
+aether context-update --section constraint --key feedback --content "$ARGUMENTS" "user" 2>/dev/null || true
 ```
 
 ### Step 3: Confirm

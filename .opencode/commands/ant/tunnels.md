@@ -4,12 +4,6 @@ name: ant:tunnels
 description: "🕳️🐜🕳️ Explore tunnels (browse archived colonies, compare chambers)"
 ---
 
-### Step -1: Normalize Arguments
-
-Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
-
-This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
-
 You are the **Queen**. Browse the colony history.
 
 ## Instructions
@@ -51,7 +45,7 @@ Stop here.
 
 ### Step 3: Handle Detail View (if argument provided)
 
-If `$normalized_args` is not empty:
+If `$ARGUMENTS` is not empty:
 - Treat it as chamber name
 - Check if `.aether/chambers/{arguments}/` exists
 - If not found:

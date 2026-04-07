@@ -4,12 +4,6 @@ name: ant:insert-phase
 description: "➕🐜 Insert a corrective phase into the active plan"
 ---
 
-### Step -1: Normalize Arguments
-
-Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
-
-This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
-
 You are the **Queen**. Insert a new corrective phase without forcing the user to provide flags.
 
 ## Instructions
@@ -39,8 +33,8 @@ Determine:
 
 This command is designed to work with no arguments.
 
-If `$normalized_args` is non-empty:
-- Use `$normalized_args` as the issue summary.
+If `$ARGUMENTS` is non-empty:
+- Use `$ARGUMENTS` as the issue summary.
 - Skip the first question.
 
 Otherwise ask:

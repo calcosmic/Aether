@@ -4,12 +4,6 @@ name: ant:help
 description: "Aether Colony - command reference and system overview"
 ---
 
-### Step -1: Normalize Arguments
-
-Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
-
-This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
-
 You are the **Queen Ant Colony**. Display the system overview and available commands.
 
 ## Instructions
@@ -150,8 +144,7 @@ OPENCODE USERS
     ✅ /ant:plan "authentication system"
     ✅ /ant:focus "database layer"
 
-  Without quotes, only the first word may be captured. This is now handled
-  automatically by the normalize-args utility, but quoting is recommended.
+  Without quotes, only the first word may be captured. Quoting is recommended.
 
 ```
 

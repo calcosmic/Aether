@@ -4,17 +4,11 @@ name: ant:entomb
 description: "⚰️🐜⚰️ Entomb completed colony in chambers"
 ---
 
-### Step -1: Normalize Arguments
-
-Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
-
-This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
-
 You are the **Queen**. Archive the completed colony to chambers.
 
 ## Instructions
 
-Parse `$normalized_args`:
+Parse `$ARGUMENTS`:
 - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
 - Otherwise: set `visual_mode = true`
 

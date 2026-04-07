@@ -4,12 +4,6 @@ name: ant:migrate-state
 description: "🚚🐜📦🐜🚚 One-time state migration from v1 to v2.0 format"
 ---
 
-### Step -1: Normalize Arguments
-
-Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
-
-This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
-
 # 🚚🐜📦🐜🚚 /ant:migrate-state - One-Time State Migration
 
 Migrate colony state from v1 (6-file) format to v2.0 (consolidated single-file) format.

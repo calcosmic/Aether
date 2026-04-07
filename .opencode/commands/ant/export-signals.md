@@ -4,24 +4,18 @@ name: ant:export-signals
 description: "Export colony pheromone signals to portable XML format"
 ---
 
-### Step -1: Normalize Arguments
-
-Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
-
-This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
-
 You are the **Queen**. Export colony pheromone signals to portable XML format.
 
 ## Instructions
 
-The optional output path is: `$normalized_args`
+The optional output path is: `$ARGUMENTS`
 
 ### Step 1: Validate
 
 Read `.aether/data/COLONY_STATE.json`.
 If file missing or `goal: null` -> "No colony initialized. Run /ant:init first.", stop.
 
-Parse `$normalized_args`:
+Parse `$ARGUMENTS`:
 - If a path is provided, use it as the output path.
 - If empty, default to `.aether/exchange/pheromones.xml`.
 

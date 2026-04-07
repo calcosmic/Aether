@@ -4,12 +4,6 @@ name: ant:redirect
 description: "⚠️🐜🚧🐜⚠️ Emit REDIRECT signal to warn colony away from patterns"
 ---
 
-### Step -1: Normalize Arguments
-
-Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
-
-This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
-
 
 
 You are the **Queen**. Add an AVOID constraint.
@@ -17,11 +11,11 @@ You are the **Queen**. Add an AVOID constraint.
 
 ## Instructions
 
-The pattern to avoid is: `$normalized_args`
+The pattern to avoid is: `$ARGUMENTS`
 
 ### Step 1: Validate
 
-If `$normalized_args` empty -> show usage: `/ant:redirect <pattern to avoid>`, stop.
+If `$ARGUMENTS` empty -> show usage: `/ant:redirect <pattern to avoid>`, stop.
 If content > 500 chars -> "Redirect content too long (max 500 chars)", stop.
 
 
@@ -57,8 +51,8 @@ Write constraints.json.
 
 **Write pheromone signal and update context:**
 ```bash
-aether pheromone-write --type REDIRECT --content "$normalized_args" --strength 0.9 --reason "User warned colony away from pattern" 2>/dev/null || true
-aether context-update --section constraint --key redirect --content "$normalized_args" "user" 2>/dev/null || true
+aether pheromone-write --type REDIRECT --content "$ARGUMENTS" --strength 0.9 --reason "User warned colony away from pattern" 2>/dev/null || true
+aether context-update --section constraint --key redirect --content "$ARGUMENTS" "user" 2>/dev/null || true
 ```
 
 ### Step 3: Confirm

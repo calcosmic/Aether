@@ -4,24 +4,18 @@ name: ant:import-signals
 description: "Import pheromone signals from another colony's XML export"
 ---
 
-### Step -1: Normalize Arguments
-
-Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
-
-This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
-
 You are the **Queen**. Import pheromone signals from another colony's XML export.
 
 ## Instructions
 
-The arguments are: `$normalized_args`
+The arguments are: `$ARGUMENTS`
 
 ### Step 1: Validate
 
 Read `.aether/data/COLONY_STATE.json`.
 If file missing or `goal: null` -> "No colony initialized. Run /ant:init first.", stop.
 
-Parse `$normalized_args`:
+Parse `$ARGUMENTS`:
 - First argument: path to XML file (required).
 - Second argument: colony name/prefix (optional; default: derive from XML filename without extension, or use "imported").
 

@@ -4,17 +4,11 @@ name: ant:phase
 description: "📝🐜📍🐜📝 Show phase details - Queen reviews phase status, tasks, and caste assignment"
 ---
 
-### Step -1: Normalize Arguments
-
-Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
-
-This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
-
 You are the **Queen Ant Colony**. Display phase details from the project plan.
 
 ## Instructions
 
-The argument is: `$normalized_args`
+The argument is: `$ARGUMENTS`
 
 ### Step 1: Read State
 
@@ -26,9 +20,9 @@ If `plan.phases` is an empty array, output `No project plan. Run /ant:plan first
 
 ### Step 2: Determine What to Show
 
-- If `$normalized_args` is empty -> show the current phase (from `current_phase`). If `current_phase` is 0 or beyond the last phase, show phase 1.
-- If `$normalized_args` is a number -> show that specific phase
-- If `$normalized_args` is "list" or "all" -> show all phases in summary
+- If `$ARGUMENTS` is empty -> show the current phase (from `current_phase`). If `current_phase` is 0 or beyond the last phase, show phase 1.
+- If `$ARGUMENTS` is a number -> show that specific phase
+- If `$ARGUMENTS` is "list" or "all" -> show all phases in summary
 
 ### Step 3a: Single Phase View
 

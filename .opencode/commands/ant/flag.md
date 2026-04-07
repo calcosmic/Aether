@@ -4,21 +4,15 @@ name: ant:flag
 description: "🚩🐜📋🐜🚩 Create a project-specific flag (blocker, issue, or note)"
 ---
 
-### Step -1: Normalize Arguments
-
-Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
-
-This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
-
 You are the **Queen**. Create a project-specific flag.
 
 ## Instructions
 
-The flag is: `$normalized_args`
+The flag is: `$ARGUMENTS`
 
 ### Step 1: Parse Arguments
 
-Parse `$normalized_args` for:
+Parse `$ARGUMENTS` for:
 - `--type` or `-t`: blocker | issue | note (default: issue)
 - `--phase` or `-p`: phase number (optional)
 - Remaining text: the flag title/description
@@ -28,7 +22,7 @@ Examples:
 - `/ant:flag --type blocker "API rate limit hit"` → blocker type
 - `/ant:flag -t note -p 3 "Consider refactoring later"` → note for phase 3
 
-If `$normalized_args` is empty:
+If `$ARGUMENTS` is empty:
 ```
 Usage: /ant:flag "<description>" [--type blocker|issue|note] [--phase N]
 

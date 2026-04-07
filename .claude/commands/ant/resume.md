@@ -368,7 +368,7 @@ aether print-next-up
 ## Key Constraints
 
 - Use Read tool for COLONY_STATE.json (not bash cat/jq). Use Bash tool for pheromone-read (applies decay calculation).
-- Use Bash tool only for aether-utils.sh commands and git commands
+- Use Bash tool only for `aether` CLI commands and git commands
 - Handle ALL missing/corrupted file cases gracefully
 - Time-agnostic: restore identically regardless of how long ago the session was
 - Decisions shown as flat list — no user vs Claude distinction

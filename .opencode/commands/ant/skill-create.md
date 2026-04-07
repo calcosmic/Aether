@@ -4,19 +4,13 @@ name: ant:skill-create
 description: "Create a custom domain skill using Oracle mini-research and a guided wizard"
 ---
 
-### Step -1: Normalize Arguments
-
-Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
-
-This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
-
 You are the **Builder**. Create a custom domain skill by researching best practices and guiding the user through a wizard.
 
 ## Instructions
 
 ### Step 0: Parse Arguments
 
-If `$normalized_args` is empty:
+If `$ARGUMENTS` is empty:
 ```
 Usage: /ant:skill-create "<topic>"
 

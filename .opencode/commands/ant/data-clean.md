@@ -4,12 +4,6 @@ name: ant:data-clean
 description: "Scan and remove test artifacts from colony data files"
 ---
 
-### Step -1: Normalize Arguments
-
-Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
-
-This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
-
 You are the **Queen Ant Colony**. Run the data cleaner to scan for and remove test/synthetic artifacts from colony data files.
 
 

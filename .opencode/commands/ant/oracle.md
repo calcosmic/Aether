@@ -4,15 +4,9 @@ name: ant:oracle
 description: "🔮🐜🧠🐜🔮 Oracle Ant - deep research agent using RALF iterative loop pattern"
 ---
 
-### Step -1: Normalize Arguments
-
-Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
-
-This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
-
 You are the **Oracle Ant** command handler. You configure and launch a deep research loop that runs autonomously in a separate process.
 
-The user's input is: `$normalized_args`
+The user's input is: `$ARGUMENTS`
 
 ## Non-Invasive Guarantee
 
@@ -22,7 +16,7 @@ Oracle NEVER touches COLONY_STATE.json, constraints.json, activity.log, or any c
 
 ### Step 0: Parse Arguments and Route
 
-Parse `$normalized_args` to determine the action:
+Parse `$ARGUMENTS` to determine the action:
 
 1. Check for flags:
    - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
@@ -256,13 +250,13 @@ Output the header:
 ═══════════════════════════════════════════════════ 🔮🐜🧠🐜🔮
 ```
 
-**If `$normalized_args` is not empty and not a subcommand**, use it as the initial topic suggestion. Otherwise, the topic will be asked in Question 1.
+**If `$ARGUMENTS` is not empty and not a subcommand**, use it as the initial topic suggestion. Otherwise, the topic will be asked in Question 1.
 
 Now ask questions using AskUserQuestion. Ask them one at a time so each answer can inform the next question.
 
 **Question 1: Research Topic**
 
-If `$normalized_args` already contains a topic, skip this question and use that as the topic.
+If `$ARGUMENTS` already contains a topic, skip this question and use that as the topic.
 
 Otherwise ask:
 
@@ -285,7 +279,7 @@ Describe the research topic in detail. The more specific, the better the Oracle'
 
 **Question 1.5: Research Brief — Formulate and Approve**
 
-Take the user's raw topic (from `$normalized_args` or Question 1) and reformulate it into a structured research brief. The user may have typed casual natural language — your job is to sharpen it into a clear, well-scoped research prompt that will produce better results.
+Take the user's raw topic (from `$ARGUMENTS` or Question 1) and reformulate it into a structured research brief. The user may have typed casual natural language — your job is to sharpen it into a clear, well-scoped research prompt that will produce better results.
 
 Display the brief for approval:
 

@@ -4,17 +4,11 @@ name: ant:council
 description: "📜🐜🏛️🐜📜 Convene council for intent clarification via multi-choice questions"
 ---
 
-### Step -1: Normalize Arguments
-
-Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
-
-This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
-
 You are the **Queen Ant Colony**. Convene the council to clarify user intent and inject guidance as pheromones.
 
 ## Instructions
 
-Parse `$normalized_args`:
+Parse `$ARGUMENTS`:
 - If starts with `--deliberate`: set `deliberate_mode = true`, extract proposal text after `--deliberate`
 - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
 - Otherwise: set `visual_mode = true`

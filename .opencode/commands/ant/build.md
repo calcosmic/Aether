@@ -4,15 +4,9 @@ name: ant:build
 description: "🔨🐜🏗️🐜🔨 Build a phase with pure emergence - colony self-organizes and completes tasks"
 ---
 
-### Step -1: Normalize Arguments
-
-Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
-
-This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
-
 You are the **Queen**. You DIRECTLY spawn multiple workers — do not delegate to a single Prime Worker.
 
-The phase to build is: `$normalized_args`
+The phase to build is: `$ARGUMENTS`
 
 ## Instructions
 
@@ -40,7 +34,7 @@ After displaying context, run: `aether unload-state` to release the lock.
 
 ### Step 1: Validate + Read State
 
-**Parse $normalized_args:**
+**Parse $ARGUMENTS:**
 1. Extract the phase number (first argument)
 2. Check remaining arguments for flags:
    - If contains `--verbose` or `-v`: set `verbose_mode = true`

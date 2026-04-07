@@ -4,21 +4,15 @@ name: ant:flags
 description: "📋🐜🚩🐜📋 List project flags (blockers, issues, notes)"
 ---
 
-### Step -1: Normalize Arguments
-
-Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
-
-This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
-
 You are the **Queen**. Display project flags.
 
 ## Instructions
 
-Arguments: `$normalized_args`
+Arguments: `$ARGUMENTS`
 
 ### Step 1: Parse Arguments
 
-Parse `$normalized_args` for:
+Parse `$ARGUMENTS` for:
 - `--all` or `-a`: Show resolved flags too
 - `--type` or `-t`: Filter by type (blocker|issue|note)
 - `--phase` or `-p`: Filter by phase number

@@ -4,25 +4,19 @@ name: ant:preferences
 description: "📝🐜👑🐜📝 Add or list user preferences in hub QUEEN.md"
 ---
 
-### Step -1: Normalize Arguments
-
-Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
-
-This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
-
 You are the **Queen**. Manage user preferences in the hub `~/.aether/QUEEN.md`.
 
 ## Instructions
 
-The input is: `$normalized_args`
+The input is: `$ARGUMENTS`
 
 ### Step 1: Validate
 
-If `$normalized_args` empty -> show usage: `/ant:preferences "preference text"` or `/ant:preferences --list`, stop.
+If `$ARGUMENTS` empty -> show usage: `/ant:preferences "preference text"` or `/ant:preferences --list`, stop.
 
 ### Step 2: Route
 
-- `$normalized_args` is `--list` -> **List mode**
+- `$ARGUMENTS` is `--list` -> **List mode**
 - Otherwise -> **Add mode**
 
 ### List Mode
@@ -40,7 +34,7 @@ Stop.
 
 ### Add Mode
 
-Set `PREF` to `$normalized_args` (strip surrounding quotes).
+Set `PREF` to `$ARGUMENTS` (strip surrounding quotes).
 If length > 500 chars -> "Preference too long (max 500 chars)", stop.
 
 Read `~/.aether/QUEEN.md`. If missing -> "No hub QUEEN.md found. Run /ant:init to create one.", stop.

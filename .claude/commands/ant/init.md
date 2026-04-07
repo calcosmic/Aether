@@ -66,15 +66,15 @@ Stop here. Do not proceed.
 
 ### Step 1.5: Verify Aether Setup
 
-Check if `.aether/aether-utils.sh` exists using the Read tool.
+Check if the `aether` binary is available by running `aether version` using the Bash tool.
 
-**If the file already exists** -- skip this step entirely. Aether is set up.
+**If the command succeeds** -- skip this step entirely. Aether is set up.
 
-**If the file does NOT exist:**
+**If the command fails:**
 ```
 Aether is not set up in this repo yet.
 
-Run /ant:lay-eggs first to create the .aether/ directory
+Run `aether setup` first to create the .aether/ directory
 with all system files, then run /ant:init "your goal" to
 start a colony.
 

@@ -4,24 +4,18 @@ name: ant:init
 description: "Initialize Aether colony - scan repo, approve charter, create colony"
 ---
 
-### Step -1: Normalize Arguments
-
-Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
-
-This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
-
 You are the **Queen Ant Colony**. Initialize the colony with the Queen's intention.
 
 ## Instructions
 
-The user's goal is: `$normalized_args`
+The user's goal is: `$ARGUMENTS`
 
-Parse `$normalized_args`:
+Parse `$ARGUMENTS`:
 - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
 - Otherwise: set `visual_mode = true`
 
 
-Note: Use `$normalized_args` instead of `$ARGUMENTS` throughout this command.
+Note: Use `$ARGUMENTS` instead of `$ARGUMENTS` throughout this command.
 
 ### Step 0: Initialize Visual Mode (if enabled)
 
@@ -58,7 +52,7 @@ Do not touch during init:
 
 ### Step 1: Validate Input
 
-If `$normalized_args` is empty or blank, output:
+If `$ARGUMENTS` is empty or blank, output:
 
 ```
 Aether Colony
@@ -78,21 +72,21 @@ Stop here. Do not proceed.
 
 ### Step 1.5: Verify Aether Setup
 
-Check if `.aether/aether-utils.sh` exists using the Read tool.
+Check if the `aether` binary is available by running `aether version` using the Bash tool.
 
-**If the file already exists** -- skip this step entirely. Aether is set up.
+**If the command succeeds** -- skip this step entirely. Aether is set up.
 
-**If the file does NOT exist:**
+**If the command fails:**
 ```
 Aether is not set up in this repo yet.
 
-Run /ant:lay-eggs first to create the .aether/ directory
+Run `aether setup` first to create the .aether/ directory
 with all system files, then run /ant:init "your goal" to
 start a colony.
 
 If the global hub isn't installed either:
   npm install -g aether-colony   (installs the hub)
-  /ant:lay-eggs                  (sets up this repo)
+  aether setup                   (sets up this repo)
   /ant:init "your goal"          (starts the colony)
 ```
 Stop here. Do not proceed.
@@ -199,7 +193,7 @@ Keep each colony to 1-2 lines. Show goal, outcome (milestone), phase count, and 
 ```markdown
 ## Charter
 
-**Intent:** {user's goal from $normalized_args, or existing_intent if re-init}
+**Intent:** {user's goal from $ARGUMENTS, or existing_intent if re-init}
 **Vision:** {derived from user's goal by Claude, or existing_vision if re-init}
 **Governance:** {see governance logic below}
 **Goals:** {blank for fresh init, or existing_goals if re-init}

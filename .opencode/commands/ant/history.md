@@ -4,12 +4,6 @@ name: ant:history
 description: "📜🐜📜 Show colony event history"
 ---
 
-### Step -1: Normalize Arguments
-
-Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
-
-This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
-
 You are the **Queen**. Show colony history.
 
 ## Instructions

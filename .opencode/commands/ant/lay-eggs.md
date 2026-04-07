@@ -4,12 +4,6 @@ name: ant:lay-eggs
 description: "🥚🐜🥚 Set up Aether in this repo — creates .aether/ with all system files"
 ---
 
-### Step -1: Normalize Arguments
-
-Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
-
-This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
-
 You are the **Queen**. Prepare this repository for Aether colony development.
 
 ## Instructions
@@ -18,7 +12,7 @@ This command sets up the `.aether/` directory structure and copies all system fi
 
 <failure_modes>
 ### Hub Not Found
-If `~/.aether/system/aether-utils.sh` does not exist:
+If the `aether` binary is not available:
 - The global hub is not installed
 - Tell the user to run `npm install -g aether-colony` first
 - Stop — cannot proceed without hub
@@ -32,7 +26,7 @@ If some files fail to copy from hub:
 <success_criteria>
 Command is complete when:
 - `.aether/` directory exists with all subdirectories
-- System files (aether-utils.sh, workers.md, etc.) are present
+- System files (workers.md, etc.) are present
 - Templates, docs, utils, schemas are populated
 - QUEEN.md is initialized
 - User sees confirmation and next steps
@@ -50,7 +44,7 @@ Do not touch during lay-eggs:
 
 ### Step 1: Check Hub Availability
 
-Check if the global hub exists by reading `~/.aether/system/aether-utils.sh` (expand `~` to the user's home directory).
+Check if the global hub exists by checking `~/.aether/system/` directory.
 
 **If the hub does NOT exist:**
 ```
@@ -71,7 +65,7 @@ Stop here.
 
 
 
-Check if `.aether/aether-utils.sh` already exists.
+Check if the `aether` binary is already installed.
 
 
 **If it exists:**
@@ -125,8 +119,6 @@ Run:
 
 ```bash
 # Core system files
-cp -f ~/.aether/system/aether-utils.sh .aether/ && \
-chmod +x .aether/aether-utils.sh && \
 cp -f ~/.aether/system/workers.md .aether/ 2>/dev/null || true && \
 cp -f ~/.aether/system/CONTEXT.md .aether/ 2>/dev/null || true && \
 # Directories
@@ -179,7 +171,6 @@ files=0
 for d in .aether/data .aether/docs .aether/utils .aether/templates .aether/schemas .aether/exchange .aether/dreams .aether/chambers; do
   [ -d "$d" ] && dirs=$((dirs + 1))
 done
-[ -f .aether/aether-utils.sh ] && files=$((files + 1))
 [ -f .aether/workers.md ] && files=$((files + 1))
 [ -f .aether/QUEEN.md ] && files=$((files + 1))
 [ -f .aether/CONTEXT.md ] && files=$((files + 1))

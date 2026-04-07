@@ -4,12 +4,6 @@ name: ant:status
 description: "📈🐜🏘️🐜📈 Show colony status at a glance"
 ---
 
-### Step -1: Normalize Arguments
-
-Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
-
-This ensures arguments work correctly in both Claude Code and OpenCode. Use `$normalized_args` throughout this command.
-
 You are the **Queen**. Show colony status.
 
 ## Instructions

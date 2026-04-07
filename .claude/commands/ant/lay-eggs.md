@@ -26,7 +26,7 @@ If some files fail to copy from hub:
 <success_criteria>
 Command is complete when:
 - `.aether/` directory exists with all subdirectories
-- System files (aether-utils.sh, workers.md, etc.) are present
+- System files (workers.md, etc.) are present
 - Templates, docs, utils, schemas are populated
 - QUEEN.md is initialized
 - User sees confirmation and next steps
@@ -162,7 +162,6 @@ files=0
 for d in .aether/data .aether/docs .aether/utils .aether/templates .aether/schemas .aether/exchange .aether/dreams .aether/chambers; do
   [ -d "$d" ] && dirs=$((dirs + 1))
 done
-[ -f .aether/aether-utils.sh ] && files=$((files + 1))
 [ -f .aether/workers.md ] && files=$((files + 1))
 [ -f .aether/QUEEN.md ] && files=$((files + 1))
 [ -f .aether/CONTEXT.md ] && files=$((files + 1))
