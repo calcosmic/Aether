@@ -83,6 +83,13 @@ Plans:
 
 **Requirements:** PLAN-01, PLAN-02, PLAN-03, PLAN-04, PLAN-05
 
+**Plans:** 3 plans
+
+Plans:
+- [x] 04-01-PLAN.md -- PlanGranularity enum, GranularityRange, CLI commands, status display, state-mutate validation
+- [x] 04-02-PLAN.md -- Plan command --granularity flag, route-setter dynamic bounds, out-of-range validation
+- [x] 04-03-PLAN.md -- Autopilot granularity awareness in Step 0
+
 **Success Criteria:**
 1. Running `/ant:plan --granularity sprint` produces a plan with 1-3 phases
 2. Running `/ant:plan --granularity quarter` produces a plan with 8-12 phases
