@@ -11,6 +11,8 @@ You are the **Queen**. Orchestrate research and planning until the selected conf
 Parse `$ARGUMENTS`:
 - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
 - Otherwise: set `visual_mode = true`
+- If contains `--granularity sprint|milestone|quarter|major`: Set `granularity_override = <value>`
+- Otherwise: `granularity_override = ""`
 
 ### Step 1: Read State
 
@@ -68,6 +70,21 @@ If `plan.phases` has entries (non-empty array), skip to **Step 6** (Display Plan
 Parse `$ARGUMENTS`:
 - If contains `--accept`: Set `force_accept = true` (accept current plan regardless of confidence)
 - Otherwise: `force_accept = false`
+
+Select planning granularity:
+- If `plan.phases` has entries (plan already exists): skip granularity selection entirely
+- If `granularity_override` is set: use that value
+- Otherwise, read persisted granularity:
+  Run: `bash .aether/aether-utils.sh plan-granularity get`
+  - If `source == "state"` (persisted value exists): use that value
+  - If `source == "default"` (no persisted value): ask user:
+    `Planning granularity? 1) Sprint (1-3 phases) 2) Milestone (4-7 phases) 3) Quarter (8-12 phases) 4) Major (13-20 phases)`
+    Map user choice: 1->sprint, 2->milestone, 3->quarter, 4->major. Default to `milestone` on unclear input.
+- Persist selected granularity:
+  Run: `bash .aether/aether-utils.sh plan-granularity set --granularity {selected_value}`
+- Extract bounds:
+  Run: `bash .aether/aether-utils.sh plan-granularity get`
+  Set `granularity_min = .min`, `granularity_max = .max`, `granularity_label = .granularity`
 
 Select planning depth (prompt user if not explicitly provided):
 - Presets:
@@ -474,7 +491,7 @@ while iteration < max_iterations AND confidence < target_confidence:
     {end if}
 
     --- INSTRUCTIONS ---
-    1. If no plan exists, create 3-6 phases with concrete tasks
+    1. If no plan exists, create {granularity_min}-{granularity_max} phases with concrete tasks
     2. If plan exists, refine based on NEW information only
     3. Rate confidence across 5 dimensions
     4. Keep response concise — no verbose explanations
@@ -482,7 +499,7 @@ while iteration < max_iterations AND confidence < target_confidence:
     Do NOT assign castes to tasks - describe the work only.
 
     --- OUTPUT CONSTRAINTS ---
-    Maximum 6 phases. Maximum 4 tasks per phase.
+    Maximum {granularity_max} phases. Maximum 4 tasks per phase.
     Maximum 2 sentence description per task.
     Confidence dimensions as single numbers, not paragraphs.
 
