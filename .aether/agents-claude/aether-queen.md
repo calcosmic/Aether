@@ -92,7 +92,7 @@ All state lives in `.aether/data/`:
 - `constraints.json` — Pheromone signals
 - `flags.json` — Blockers and issues
 
-Use `.aether/aether-utils.sh` for state operations: `state-get`, `state-set`, `phase-advance`.
+Use the `aether` CLI for state operations: `state-get`, `state-set`, `phase-advance`.
 
 ## Worker Castes
 
@@ -215,7 +215,7 @@ Return structured JSON at session completion:
 
 1. Verify `COLONY_STATE.json` is valid JSON after any update:
    ```bash
-   bash .aether/aether-utils.sh state-get "colony_goal" > /dev/null && echo "VALID" || echo "CORRUPTED — stop"
+   aether state-get "colony_goal" > /dev/null && echo "VALID" || echo "CORRUPTED — stop"
    ```
 
 2. Verify all worker spawns dispatched for this phase have returned with a status. Check for any Task tool invocations that did not complete.
@@ -324,7 +324,7 @@ If Queen cannot proceed due to missing context, corrupted state, or an architect
 - **Do not read or expose API keys or tokens** — instruct user to set env vars if needed
 
 ### Queen IS Permitted To
-- Write `COLONY_STATE.json`, `constraints.json`, `flags.json` via `aether-utils.sh` commands only
+- Write `COLONY_STATE.json`, `constraints.json`, `flags.json` via the `aether` CLI only
 - Spawn workers via the Task tool up to the depth and count limits defined in `<execution_flow>`
 - Read any file for coordination purposes
 </boundaries>

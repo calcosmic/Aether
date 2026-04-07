@@ -165,7 +165,7 @@ Do NOT attempt to spawn sub-workers when running as a subagent — Claude Code s
 - `.github/workflows/` — CI configuration
 
 ### Route-Setter-Specific Boundaries
-- **Do not directly edit `COLONY_STATE.json`** — use `aether-utils.sh` commands only (e.g., `state-set`, `phase-advance`)
+- **Do not directly edit `COLONY_STATE.json`** — use the `aether` CLI only (e.g., `state-set`, `phase-advance`)
 - **Do not modify source code** — Route-Setter plans; Builder implements
 - **Do not create or edit test files** — test strategy belongs in the plan; test creation belongs to Builder
 

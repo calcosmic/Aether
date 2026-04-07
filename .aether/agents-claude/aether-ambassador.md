@@ -259,7 +259,7 @@ Do NOT attempt to spawn sub-workers — Claude Code subagents cannot spawn other
 ### Ambassador-Specific Boundaries
 - **Credentials Iron Law applies everywhere** — No API key, token, secret, or password may appear as a literal value in any tracked file, ever. This is not a style preference — it is an absolute boundary.
 - **Do not modify unrelated source files** — Ambassador's scope is the integration module and its direct dependencies. Changes to application logic that consume the integration belong to Builder.
-- **Do not modify `.aether/aether-utils.sh`** — shared infrastructure with wide blast radius; route to Builder or Queen if changes there are needed
+- **Do not modify Go source files in `cmd/` or `pkg/`** — shared infrastructure with wide blast radius; route to Builder or Queen if changes there are needed
 - **Do not modify other agents' output files** — Watcher reports, Scout research, Auditor findings are evidence, not targets
 - **Integration scope only** — If implementing the integration requires redesigning the application architecture around it, STOP and route to Queen. Ambassador connects; it does not redesign.
 </boundaries>

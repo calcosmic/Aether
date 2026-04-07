@@ -217,7 +217,7 @@ Do NOT attempt to spawn sub-workers — Claude Code subagents cannot spawn other
 - `.github/workflows/` — CI configuration
 
 ### Builder-Specific Boundaries
-- **Do not modify `.aether/aether-utils.sh`** unless the task explicitly targets that file — it is shared infrastructure
+- **Do not modify Go source files in `cmd/` or `pkg/`** unless the task explicitly targets those files — it is shared infrastructure
 - **Do not delete files** — create and modify only; deletions require explicit task authorization
 - **Do not modify other agents' output files** — Watcher reports, Chaos findings, Scout research are read-only for Builder
 - **Do not write to `.aether/data/`** — colony state area (COLONY_STATE.json, flags, constraints) is not Builder's domain

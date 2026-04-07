@@ -13,6 +13,7 @@
 .aether/temp/
 .aether/archive/
 .aether/chambers/
+.aether/agents/
 .aether/examples/
 .aether/__pycache__/
 

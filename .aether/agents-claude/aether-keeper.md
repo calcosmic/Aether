@@ -267,6 +267,6 @@ Links to related patterns, anti-patterns, or constraints.
 ### Out of Scope (Even if Asked)
 - Do NOT modify source code — patterns describe what code does, not what it should do
 - Do NOT modify agent definitions (`.claude/agents/`, `.opencode/agents/`) — agent authoring is a separate specialized task
-- Do NOT modify `.aether/aether-utils.sh` or utility scripts — these are implementation, not knowledge
+- Do NOT modify Go source files in `cmd/` or `pkg/` — these are compiled Go source, not editable markdown
 - Do NOT delete files without explicit task authorization — create and modify only
 </boundaries>

@@ -262,7 +262,7 @@ Tracker has no Write or Edit tools by design. This is a platform-enforced constr
 - `.github/workflows/` — CI configuration
 
 ### Tracker-Specific Boundaries
-- **Do not attempt to modify `.aether/aether-utils.sh`** — even via suggested_fix unless the task explicitly targets that file; it is shared infrastructure with wide blast radius
+- **Do not attempt to modify Go source files in `cmd/` or `pkg/`** — even via suggested_fix unless the task explicitly targets those files; they are shared infrastructure with wide blast radius
 - **Do not modify or suggest deleting files** — investigation produces suggested changes, not deletions
 - **Do not modify other agents' output files** — Watcher reports, Scout research, Auditor findings are read-only for Tracker; they are evidence, not targets
 - **Do not write to `.aether/data/`** — colony state is not Tracker's domain; even if a bug is in state management, suggest the fix for Builder to apply
