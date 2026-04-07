@@ -66,13 +66,23 @@ replan suggestion (every {replan_interval} phases)
 
 1. Read `.aether/data/COLONY_STATE.json`; validate goal + plan.phases exist
    - If `milestone` == `"Crowned Anthill"`: output "This colony has been sealed. Start a new colony with `/ant:init \"new goal\"`." and stop
+1b. Read planning granularity and validate plan scope:
+    Run: `aether plan-granularity get`
+    - Extract: `granularity_label = .granularity`, `gran_min = .min`, `gran_max = .max`
+    - If `granularity_label == "none"`: skip check (no granularity set)
+    - If `granularity_label != "none"`:
+      - Count total phases in `plan.phases`: `total_phases = length(plan.phases)`
+      - If `total_phases > gran_max`:
+        Display: `NOTE: Plan has {total_phases} phases but {granularity_label} granularity expects {gran_min}-{gran_max}. Plan was accepted during /ant:plan -- continuing.`
+      - If `total_phases < gran_min`:
+        Display: `NOTE: Plan has {total_phases} phases but {granularity_label} granularity expects {gran_min}-{gran_max}. Plan was accepted during /ant:plan -- continuing.`
 2. Determine remaining incomplete phases; apply `--max-phases` cap
 3. Set `phases_completed = 0`, `autopilot_start = $(date +%s)`
 4. Record pre-build blocker count: `aether flag-check-blockers {phase}`
 5. If `--headless` flag is present:
    - Run: `aether autopilot-set-headless true`
    - Display: `Headless mode: ON — interactive prompts will be queued as pending decisions`
-6. Display: `AUTOPILOT ENGAGED | Goal: {goal} | Phase {N} | Max: {max or "all"}`
+6. Display: `AUTOPILOT ENGAGED | Goal: {goal} | Phase {N} | Max: {max or "all"} | Granularity: {granularity_label or "none"}`
 
 ### Step 1: Build Phase
 
