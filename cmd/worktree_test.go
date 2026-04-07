@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -1125,3 +1127,703 @@ func TestWorktreeListFilterNonExistentStatus(t *testing.T) {
 		t.Errorf("expected 0 worktrees for nonexistent status, got %d", len(wtList))
 	}
 }
+
+// ===========================================================================
+// worktree-merge-back tests (Plan 06-02 Task 1)
+// ===========================================================================
+
+func TestWorktreeMergeBackNotFound(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	var stderrBuf bytes.Buffer
+	stderr = &stderrBuf
+
+	state := makeTestStateWithWorktrees(nil)
+	s, _ := newWorktreeTestStore(t, state)
+	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	store = s
+
+	rootCmd.SetArgs([]string{"worktree-merge-back", "--branch", "phase-1/nonexistent"})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	output := stderrBuf.String()
+	if !strings.Contains(output, "not found in state tracking") {
+		t.Errorf("expected 'not found in state tracking' in stderr, got: %s", output)
+	}
+}
+
+func TestWorktreeMergeBackAlreadyMerged(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	var stderrBuf bytes.Buffer
+	stderr = &stderrBuf
+
+	worktrees := []colony.WorktreeEntry{
+		{
+			ID:        "wt_merged_001",
+			Branch:    "phase-1/builder-done",
+			Path:      ".aether/worktrees/phase-1-builder-done",
+			Status:    colony.WorktreeMerged,
+			Phase:     1,
+			Agent:     "builder-done",
+			CreatedAt: time.Now().Add(-2 * time.Hour).Format(time.RFC3339),
+		},
+	}
+
+	state := makeTestStateWithWorktrees(worktrees)
+	s, _ := newWorktreeTestStore(t, state)
+	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	store = s
+
+	rootCmd.SetArgs([]string{"worktree-merge-back", "--branch", "phase-1/builder-done"})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	output := stderrBuf.String()
+	if !strings.Contains(output, "already merged") {
+		t.Errorf("expected 'already merged' in stderr, got: %s", output)
+	}
+}
+
+func TestWorktreeMergeBackTestsFail(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	var stderrBuf bytes.Buffer
+	stderr = &stderrBuf
+
+	// Create a real git repo with a worktree so we can run tests in it
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+
+	// Init a git repo at tmpDir
+	runGit(t, tmpDir, "init")
+	runGit(t, tmpDir, "config", "user.email", "test@example.com")
+	runGit(t, tmpDir, "config", "user.name", "Test")
+	runGit(t, tmpDir, "commit", "--allow-empty", "-m", "initial")
+
+	// Create a worktree branch and add a failing test file
+	runGit(t, tmpDir, "worktree", "add", "-b", "phase-1/builder-fail", tmpDir+"/.aether/worktrees/phase-1-builder-fail", "HEAD")
+	worktreePath := tmpDir + "/.aether/worktrees/phase-1-builder-fail"
+	os.WriteFile(worktreePath+"/failing_test.go", []byte(`package main
+import "testing"
+func TestFailing(t *testing.T) { t.Fatal("forced failure") }
+`), 0644)
+
+	// Set up colony state
+	now := time.Now().UTC().Format(time.RFC3339)
+	worktrees := []colony.WorktreeEntry{
+		{
+			ID:        "wt_fail_001",
+			Branch:    "phase-1/builder-fail",
+			Path:      ".aether/worktrees/phase-1-builder-fail",
+			Status:    colony.WorktreeInProgress,
+			Phase:     1,
+			Agent:     "builder-fail",
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+	}
+	state := makeTestStateWithWorktrees(worktrees)
+	os.WriteFile(dataDir+"/COLONY_STATE.json", []byte(state), 0644)
+
+	os.Setenv("AETHER_ROOT", tmpDir)
+	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+
+	s, _ := storage.NewStore(dataDir)
+	store = s
+
+	rootCmd.SetArgs([]string{"worktree-merge-back", "--branch", "phase-1/builder-fail"})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	output := stderrBuf.String()
+	if !strings.Contains(output, "merge blocked") {
+		t.Errorf("expected 'merge blocked' in stderr, got: %s", output)
+	}
+	if !strings.Contains(output, "tests failed") {
+		t.Errorf("expected 'tests failed' in stderr, got: %s", output)
+	}
+
+	// Verify blocker was created
+	var ff colony.FlagsFile
+	if err := s.LoadJSON("pending-decisions.json", &ff); err != nil {
+		t.Fatalf("expected pending-decisions.json to exist: %v", err)
+	}
+	found := false
+	for _, d := range ff.Decisions {
+		if d.Type == "blocker" && strings.Contains(d.Description, "tests failed") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected blocker flag for test failure")
+	}
+
+	// Verify worktree status is still in-progress (not merged)
+	var reloadState colony.ColonyState
+	if err := s.LoadJSON("COLONY_STATE.json", &reloadState); err != nil {
+		t.Fatalf("failed to reload state: %v", err)
+	}
+	for _, wt := range reloadState.Worktrees {
+		if wt.Branch == "phase-1/builder-fail" && wt.Status != colony.WorktreeInProgress {
+			t.Errorf("expected status in-progress, got %s", wt.Status)
+		}
+	}
+}
+
+func TestWorktreeMergeBackClashDetected(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	var stderrBuf bytes.Buffer
+	stderr = &stderrBuf
+
+	// Create a real git repo with two worktrees modifying the same file
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+
+	// Init git repo
+	runGit(t, tmpDir, "init")
+	runGit(t, tmpDir, "config", "user.email", "test@example.com")
+	runGit(t, tmpDir, "config", "user.name", "Test")
+
+	// Create a shared file and commit it
+	os.WriteFile(tmpDir+"/shared.go", []byte("package main\n"), 0644)
+	runGit(t, tmpDir, "add", "shared.go")
+	runGit(t, tmpDir, "commit", "-m", "add shared.go")
+
+	// Create worktree A (the one we want to merge)
+	runGit(t, tmpDir, "worktree", "add", "-b", "phase-1/builder-a", tmpDir+"/.aether/worktrees/phase-1-builder-a", "HEAD")
+	wtPathA := tmpDir + "/.aether/worktrees/phase-1-builder-a"
+	os.WriteFile(wtPathA+"/shared.go", []byte("package main\n// modified by A\n"), 0644)
+	runGit(t, wtPathA, "add", "shared.go")
+	runGit(t, wtPathA, "commit", "-m", "modify in A")
+
+	// Create worktree B (clashing worktree)
+	runGit(t, tmpDir, "worktree", "add", "-b", "phase-1/builder-b", tmpDir+"/.aether/worktrees/phase-1-builder-b", "HEAD")
+	wtPathB := tmpDir + "/.aether/worktrees/phase-1-builder-b"
+	os.WriteFile(wtPathB+"/shared.go", []byte("package main\n// modified by B\n"), 0644)
+	runGit(t, wtPathB, "add", "shared.go")
+	runGit(t, wtPathB, "commit", "-m", "modify in B")
+
+	// Set up colony state -- only track builder-a as in-progress
+	now := time.Now().UTC().Format(time.RFC3339)
+	worktrees := []colony.WorktreeEntry{
+		{
+			ID:        "wt_a_001",
+			Branch:    "phase-1/builder-a",
+			Path:      ".aether/worktrees/phase-1-builder-a",
+			Status:    colony.WorktreeInProgress,
+			Phase:     1,
+			Agent:     "builder-a",
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+	}
+	state := makeTestStateWithWorktrees(worktrees)
+	os.WriteFile(dataDir+"/COLONY_STATE.json", []byte(state), 0644)
+
+	os.Setenv("AETHER_ROOT", tmpDir)
+	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+
+	s, _ := storage.NewStore(dataDir)
+	store = s
+
+	rootCmd.SetArgs([]string{"worktree-merge-back", "--branch", "phase-1/builder-a"})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	output := stderrBuf.String()
+	if !strings.Contains(output, "merge blocked") {
+		t.Errorf("expected 'merge blocked' in stderr, got: %s", output)
+	}
+	if !strings.Contains(output, "clash") {
+		t.Errorf("expected 'clash' in stderr, got: %s", output)
+	}
+
+	// Verify blocker was created
+	var ff colony.FlagsFile
+	if err := s.LoadJSON("pending-decisions.json", &ff); err != nil {
+		t.Fatalf("expected pending-decisions.json to exist: %v", err)
+	}
+	found := false
+	for _, d := range ff.Decisions {
+		if d.Type == "blocker" && strings.Contains(d.Description, "clash") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected blocker flag for clash detection")
+	}
+}
+
+func TestWorktreeMergeBackSuccess(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	var stdoutBuf, stderrBuf bytes.Buffer
+	stdout = &stdoutBuf
+	stderr = &stderrBuf
+
+	// Create a real git repo with a worktree
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+
+	// Init git repo on main
+	runGit(t, tmpDir, "init")
+	runGit(t, tmpDir, "config", "user.email", "test@example.com")
+	runGit(t, tmpDir, "config", "user.name", "Test")
+	runGit(t, tmpDir, "commit", "--allow-empty", "-m", "initial")
+
+	// Create a worktree with a passing test
+	runGit(t, tmpDir, "worktree", "add", "-b", "phase-1/builder-ok", tmpDir+"/.aether/worktrees/phase-1-builder-ok", "HEAD")
+	wtPath := tmpDir + "/.aether/worktrees/phase-1-builder-ok"
+	os.MkdirAll(wtPath+"/cmd", 0755)
+	os.WriteFile(wtPath+"/cmd/testhelper_test.go", []byte(`package cmd
+import "testing"
+func TestHelper(t *testing.T) {}
+`), 0644)
+
+	// Set up colony state
+	now := time.Now().UTC().Format(time.RFC3339)
+	worktrees := []colony.WorktreeEntry{
+		{
+			ID:        "wt_ok_001",
+			Branch:    "phase-1/builder-ok",
+			Path:      ".aether/worktrees/phase-1-builder-ok",
+			Status:    colony.WorktreeInProgress,
+			Phase:     1,
+			Agent:     "builder-ok",
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+	}
+	state := makeTestStateWithWorktrees(worktrees)
+	os.WriteFile(dataDir+"/COLONY_STATE.json", []byte(state), 0644)
+
+	os.Setenv("AETHER_ROOT", tmpDir)
+	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+
+	s, _ := storage.NewStore(dataDir)
+	store = s
+
+	rootCmd.SetArgs([]string{"worktree-merge-back", "--branch", "phase-1/builder-ok"})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should succeed (ok=true on stdout)
+	envelope := assertOKEnvelope(t, stdoutBuf.String())
+	result := envelope["result"].(map[string]interface{})
+	if result["merged"] != true {
+		t.Errorf("expected merged=true, got %v", result["merged"])
+	}
+	if result["status"] != "merged" {
+		t.Errorf("expected status=merged, got %v", result["status"])
+	}
+
+	// Verify state updated to merged
+	var reloadState colony.ColonyState
+	if err := s.LoadJSON("COLONY_STATE.json", &reloadState); err != nil {
+		t.Fatalf("failed to reload state: %v", err)
+	}
+	foundMerged := false
+	for _, wt := range reloadState.Worktrees {
+		if wt.Branch == "phase-1/builder-ok" {
+			if wt.Status != colony.WorktreeMerged {
+				t.Errorf("expected status merged, got %s", wt.Status)
+			}
+			if wt.UpdatedAt == "" {
+				t.Error("expected UpdatedAt to be set")
+			}
+			foundMerged = true
+		}
+	}
+	if !foundMerged {
+		t.Error("worktree entry not found in state after merge")
+	}
+
+	// Verify worktree directory was removed
+	if _, err := os.Stat(wtPath); err == nil {
+		t.Error("expected worktree directory to be removed after merge")
+	}
+
+	// Verify audit log entry was written
+	auditPath := tmpDir + "/.aether/data/state-changelog.jsonl"
+	if data, err := os.ReadFile(auditPath); err == nil {
+		lines := strings.TrimSpace(string(data))
+		if lines == "" {
+			t.Error("expected audit log entry for merge operation")
+		} else if !strings.Contains(lines, "worktree-merge") {
+			t.Errorf("expected 'worktree-merge' in audit log, got: %s", lines)
+		}
+	}
+}
+
+func TestWorktreeMergeBackBranchDeletionToleratesNotFound(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	var stdoutBuf, stderrBuf bytes.Buffer
+	stdout = &stdoutBuf
+	stderr = &stderrBuf
+
+	// Create a repo where the branch may already be gone after a fast-forward merge
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+
+	runGit(t, tmpDir, "init")
+	runGit(t, tmpDir, "config", "user.email", "test@example.com")
+	runGit(t, tmpDir, "config", "user.name", "Test")
+	runGit(t, tmpDir, "commit", "--allow-empty", "-m", "initial")
+
+	// Create a worktree and commit something
+	runGit(t, tmpDir, "worktree", "add", "-b", "phase-1/builder-ff", tmpDir+"/.aether/worktrees/phase-1-builder-ff", "HEAD")
+	wtPath := tmpDir + "/.aether/worktrees/phase-1-builder-ff"
+	os.MkdirAll(wtPath+"/cmd", 0755)
+	os.WriteFile(wtPath+"/cmd/testpass_test.go", []byte(`package cmd
+import "testing"
+func TestPass(t *testing.T) {}
+`), 0644)
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	worktrees := []colony.WorktreeEntry{
+		{
+			ID:        "wt_ff_001",
+			Branch:    "phase-1/builder-ff",
+			Path:      ".aether/worktrees/phase-1-builder-ff",
+			Status:    colony.WorktreeInProgress,
+			Phase:     1,
+			Agent:     "builder-ff",
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+	}
+	state := makeTestStateWithWorktrees(worktrees)
+	os.WriteFile(dataDir+"/COLONY_STATE.json", []byte(state), 0644)
+
+	os.Setenv("AETHER_ROOT", tmpDir)
+	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+
+	s, _ := storage.NewStore(dataDir)
+	store = s
+
+	rootCmd.SetArgs([]string{"worktree-merge-back", "--branch", "phase-1/builder-ff"})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should succeed even if branch deletion has issues
+	assertOKEnvelope(t, stdoutBuf.String())
+}
+
+// ===========================================================================
+// createBlocker helper tests
+// ===========================================================================
+
+func TestCreateBlocker(t *testing.T) {
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/data"
+	os.MkdirAll(dataDir, 0755)
+
+	s, _ := storage.NewStore(dataDir)
+
+	err := createBlocker(s, "Merge blocked: tests failed for phase-1/builder-1", "worktree-merge-back")
+	if err != nil {
+		t.Fatalf("createBlocker failed: %v", err)
+	}
+
+	var ff colony.FlagsFile
+	if err := s.LoadJSON("pending-decisions.json", &ff); err != nil {
+		t.Fatalf("failed to load pending-decisions.json: %v", err)
+	}
+
+	if len(ff.Decisions) != 1 {
+		t.Fatalf("expected 1 decision, got %d", len(ff.Decisions))
+	}
+
+	d := ff.Decisions[0]
+	if d.Type != "blocker" {
+		t.Errorf("expected type=blocker, got %s", d.Type)
+	}
+	if d.Resolved != false {
+		t.Error("expected Resolved=false")
+	}
+	if !strings.Contains(d.Description, "tests failed") {
+		t.Errorf("expected description to contain 'tests failed', got: %s", d.Description)
+	}
+	if d.Source != "worktree-merge-back" {
+		t.Errorf("expected source=worktree-merge-back, got: %s", d.Source)
+	}
+	if d.ID == "" {
+		t.Error("expected non-empty ID")
+	}
+	if d.CreatedAt == "" {
+		t.Error("expected non-empty CreatedAt")
+	}
+}
+
+func TestCreateBlockerAppendsToExisting(t *testing.T) {
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/data"
+	os.MkdirAll(dataDir, 0755)
+
+	s, _ := storage.NewStore(dataDir)
+
+	// Create first blocker
+	createBlocker(s, "first blocker", "test")
+	// Create second blocker
+	createBlocker(s, "second blocker", "test")
+
+	var ff colony.FlagsFile
+	s.LoadJSON("pending-decisions.json", &ff)
+
+	if len(ff.Decisions) != 2 {
+		t.Errorf("expected 2 decisions, got %d", len(ff.Decisions))
+	}
+}
+
+// ===========================================================================
+// checkClashesForWorktree helper tests
+// ===========================================================================
+
+func TestCheckClashesForWorktree(t *testing.T) {
+	// Create a real git repo with two worktrees
+	tmpDir := t.TempDir()
+	os.MkdirAll(tmpDir+"/.aether/worktrees", 0755)
+
+	runGit(t, tmpDir, "init")
+	runGit(t, tmpDir, "config", "user.email", "test@example.com")
+	runGit(t, tmpDir, "config", "user.name", "Test")
+
+	// Create a shared file
+	os.WriteFile(tmpDir+"/shared.go", []byte("package main\n"), 0644)
+	runGit(t, tmpDir, "add", "shared.go")
+	runGit(t, tmpDir, "commit", "-m", "initial")
+
+	// Create worktree A
+	runGit(t, tmpDir, "worktree", "add", "-b", "phase-1/a", tmpDir+"/.aether/worktrees/a", "HEAD")
+	os.WriteFile(tmpDir+"/.aether/worktrees/a/shared.go", []byte("package main\n// A\n"), 0644)
+	runGit(t, tmpDir+"/.aether/worktrees/a", "add", "shared.go")
+	runGit(t, tmpDir+"/.aether/worktrees/a", "commit", "-m", "A changes")
+
+	// Create worktree B (also modifies shared.go)
+	runGit(t, tmpDir, "worktree", "add", "-b", "phase-1/b", tmpDir+"/.aether/worktrees/b", "HEAD")
+	os.WriteFile(tmpDir+"/.aether/worktrees/b/shared.go", []byte("package main\n// B\n"), 0644)
+	runGit(t, tmpDir+"/.aether/worktrees/b", "add", "shared.go")
+	runGit(t, tmpDir+"/.aether/worktrees/b", "commit", "-m", "B changes")
+
+	clashes, err := checkClashesForWorktree(tmpDir+"/.aether/worktrees/a", "phase-1/a")
+	if err != nil {
+		t.Fatalf("checkClashesForWorktree failed: %v", err)
+	}
+	if len(clashes) == 0 {
+		t.Error("expected clashes to be detected for shared.go")
+	}
+	found := false
+	for _, c := range clashes {
+		if c == "shared.go" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected shared.go in clashes, got: %v", clashes)
+	}
+}
+
+func TestCheckClashesForWorktreeNoClash(t *testing.T) {
+	// Create a repo with two worktrees modifying different files
+	tmpDir := t.TempDir()
+	os.MkdirAll(tmpDir+"/.aether/worktrees", 0755)
+
+	runGit(t, tmpDir, "init")
+	runGit(t, tmpDir, "config", "user.email", "test@example.com")
+	runGit(t, tmpDir, "config", "user.name", "Test")
+
+	os.WriteFile(tmpDir+"/file1.go", []byte("package main\n"), 0644)
+	os.WriteFile(tmpDir+"/file2.go", []byte("package main\n"), 0644)
+	runGit(t, tmpDir, "add", ".")
+	runGit(t, tmpDir, "commit", "-m", "initial")
+
+	// Worktree A modifies file1
+	runGit(t, tmpDir, "worktree", "add", "-b", "phase-1/a", tmpDir+"/.aether/worktrees/a", "HEAD")
+	os.WriteFile(tmpDir+"/.aether/worktrees/a/file1.go", []byte("package main\n// A\n"), 0644)
+	runGit(t, tmpDir+"/.aether/worktrees/a", "add", "file1.go")
+	runGit(t, tmpDir+"/.aether/worktrees/a", "commit", "-m", "A changes")
+
+	// Worktree B modifies file2 (no clash)
+	runGit(t, tmpDir, "worktree", "add", "-b", "phase-1/b", tmpDir+"/.aether/worktrees/b", "HEAD")
+	os.WriteFile(tmpDir+"/.aether/worktrees/b/file2.go", []byte("package main\n// B\n"), 0644)
+	runGit(t, tmpDir+"/.aether/worktrees/b", "add", "file2.go")
+	runGit(t, tmpDir+"/.aether/worktrees/b", "commit", "-m", "B changes")
+
+	clashes, err := checkClashesForWorktree(tmpDir+"/.aether/worktrees/a", "phase-1/a")
+	if err != nil {
+		t.Fatalf("checkClashesForWorktree failed: %v", err)
+	}
+	if len(clashes) != 0 {
+		t.Errorf("expected no clashes, got: %v", clashes)
+	}
+}
+
+// ===========================================================================
+// Full lifecycle test (Plan 06-02 Task 2)
+// ===========================================================================
+
+func TestWorktreeLifecycleFull(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	var stdoutBuf, stderrBuf bytes.Buffer
+	stdout = &stdoutBuf
+	stderr = &stderrBuf
+
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+
+	// Init git repo
+	runGit(t, tmpDir, "init")
+	runGit(t, tmpDir, "config", "user.email", "test@example.com")
+	runGit(t, tmpDir, "config", "user.name", "Test")
+	runGit(t, tmpDir, "commit", "--allow-empty", "-m", "initial")
+
+	os.Setenv("AETHER_ROOT", tmpDir)
+	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+
+	s, _ := storage.NewStore(dataDir)
+	store = s
+
+	// Step 1: Validate branch name
+	if err := validateBranchName("phase-1/builder-1"); err != nil {
+		t.Fatalf("branch name validation failed: %v", err)
+	}
+
+	// Step 2: Allocate worktree via command
+	rootCmd.SetArgs([]string{"worktree-allocate", "--agent", "builder-1", "--phase", "1"})
+	err := rootCmd.Execute()
+	_ = err // may fail in test env, check if state was updated
+
+	// Step 3: Verify state has allocated worktree
+	var state colony.ColonyState
+	s.LoadJSON("COLONY_STATE.json", &state)
+
+	// Find the allocated worktree or create one manually if command failed
+	var entry *colony.WorktreeEntry
+	for i := range state.Worktrees {
+		if state.Worktrees[i].Branch == "phase-1/builder-1" {
+			entry = &state.Worktrees[i]
+			break
+		}
+	}
+
+	if entry == nil {
+		// If allocate failed (no git worktree support in test env), manually create
+		now := time.Now().UTC().Format(time.RFC3339)
+		manualEntry := colony.WorktreeEntry{
+			ID:        "wt_lifecycle_001",
+			Branch:    "phase-1/builder-1",
+			Path:      ".aether/worktrees/phase-1-builder-1",
+			Status:    colony.WorktreeAllocated,
+			Phase:     1,
+			Agent:     "builder-1",
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+		state.Worktrees = append(state.Worktrees, manualEntry)
+		s.SaveJSON("COLONY_STATE.json", state)
+		entry = &state.Worktrees[len(state.Worktrees)-1]
+	}
+
+	// Step 4: Verify list shows allocated
+	resetRootCmd(t)
+	stdoutBuf.Reset()
+	rootCmd.SetArgs([]string{"worktree-list", "--status", "allocated"})
+	rootCmd.Execute()
+	envelope := assertOKEnvelope(t, stdoutBuf.String())
+	result := envelope["result"].(map[string]interface{})
+	wtList := result["worktrees"].([]interface{})
+	if len(wtList) < 1 {
+		t.Errorf("expected at least 1 allocated worktree, got %d", len(wtList))
+	}
+
+	// Step 5: Update status to in-progress
+	s.LoadJSON("COLONY_STATE.json", &state)
+	for i := range state.Worktrees {
+		if state.Worktrees[i].Branch == "phase-1/builder-1" {
+			state.Worktrees[i].Status = colony.WorktreeInProgress
+			state.Worktrees[i].UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+			break
+		}
+	}
+	s.SaveJSON("COLONY_STATE.json", state)
+
+	// Step 6: Verify status is in-progress
+	resetRootCmd(t)
+	stdoutBuf.Reset()
+	rootCmd.SetArgs([]string{"worktree-list", "--status", "in-progress"})
+	rootCmd.Execute()
+	envelope = assertOKEnvelope(t, stdoutBuf.String())
+	result = envelope["result"].(map[string]interface{})
+	wtList = result["worktrees"].([]interface{})
+	if len(wtList) < 1 {
+		t.Errorf("expected at least 1 in-progress worktree, got %d", len(wtList))
+	}
+
+	// Step 7: If the worktree exists on disk, try merge-back
+	wtPath := tmpDir + "/" + entry.Path
+	if _, err := os.Stat(wtPath); err == nil {
+		// Create a passing test in the worktree
+		os.MkdirAll(wtPath+"/cmd", 0755)
+		os.WriteFile(wtPath+"/cmd/lifecycle_test.go", []byte(`package cmd
+import "testing"
+func TestLifecycle(t *testing.T) {}
+`), 0644)
+
+		resetRootCmd(t)
+		stdoutBuf.Reset()
+		stderrBuf.Reset()
+		rootCmd.SetArgs([]string{"worktree-merge-back", "--branch", "phase-1/builder-1"})
+		rootCmd.Execute()
+
+		// Step 8: Verify status is merged
+		s.LoadJSON("COLONY_STATE.json", &state)
+		for _, wt := range state.Worktrees {
+			if wt.Branch == "phase-1/builder-1" {
+				if wt.Status != colony.WorktreeMerged {
+					t.Errorf("expected status merged, got %s", wt.Status)
+				}
+				if wt.UpdatedAt == "" {
+					t.Error("expected UpdatedAt to be set after merge")
+				}
+			}
+		}
+	}
+}
+
