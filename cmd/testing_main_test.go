@@ -24,7 +24,6 @@ func TestMain(m *testing.M) {
 	origHistoryLimit := historyLimit
 	origHistoryFilter := historyFilter
 	origPhaseNumber := phaseNumber
-	origAuditLogger := auditLogger
 
 	code := m.Run()
 
@@ -39,7 +38,6 @@ func TestMain(m *testing.M) {
 	historyLimit = origHistoryLimit
 	historyFilter = origHistoryFilter
 	phaseNumber = origPhaseNumber
-	auditLogger = origAuditLogger
 
 	os.Exit(code)
 }
@@ -61,7 +59,6 @@ func saveGlobals(t *testing.T) {
 	origHistoryLimit := historyLimit
 	origHistoryFilter := historyFilter
 	origPhaseNumber := phaseNumber
-	origAuditLogger := auditLogger
 	t.Cleanup(func() {
 		store = origStore
 		stdout = origStdout
@@ -74,14 +71,7 @@ func saveGlobals(t *testing.T) {
 		historyLimit = origHistoryLimit
 		historyFilter = origHistoryFilter
 		phaseNumber = origPhaseNumber
-		auditLogger = origAuditLogger
 	})
-}
-
-// resetAuditLogger resets the package-level audit logger so that the next
-// mutation command creates a fresh one from the current store.
-func resetAuditLogger() {
-	auditLogger = nil
 }
 
 // resetRootCmd restores rootCmd state (SetArgs, SetOut) and resets all

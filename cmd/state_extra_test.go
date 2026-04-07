@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/calcosmic/Aether/pkg/colony"
@@ -106,41 +105,6 @@ func TestStateWrite(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 	var buf bytes.Buffer
-	stderr = &buf
-
-	s, tmpDir := newTestStore(t)
-	defer os.RemoveAll(tmpDir)
-	store = s
-
-	goal := "original goal"
-	state := colony.ColonyState{
-		Version: "3.0",
-		Goal:    &goal,
-		State:   colony.StateREADY,
-	}
-	s.SaveJSON("COLONY_STATE.json", state)
-
-	// state-write without --force should produce an error
-	rootCmd.SetArgs([]string{"state-write", "--field", "version", "--value", "4.0"})
-
-	rootCmd.Execute()
-
-	errOutput := buf.String()
-	if !strings.Contains(errOutput, "state-mutate") {
-		t.Errorf("expected error suggesting state-mutate, got: %s", errOutput)
-	}
-
-	// No audit entry should be created for rejected writes
-	entries := readAuditChangelog(t, s)
-	if len(entries) != 0 {
-		t.Errorf("expected 0 audit entries for rejected state-write, got %d", len(entries))
-	}
-}
-
-func TestStateWriteForceSuccess(t *testing.T) {
-	saveGlobals(t)
-	resetRootCmd(t)
-	var buf bytes.Buffer
 	stdout = &buf
 
 	s, tmpDir := newTestStore(t)
@@ -155,7 +119,7 @@ func TestStateWriteForceSuccess(t *testing.T) {
 	}
 	s.SaveJSON("COLONY_STATE.json", state)
 
-	rootCmd.SetArgs([]string{"state-write", "--field", "version", "--value", "4.0", "--force"})
+	rootCmd.SetArgs([]string{"state-write", "--field", "version", "--value", "4.0"})
 
 	err := rootCmd.Execute()
 	if err != nil {
@@ -171,6 +135,12 @@ func TestStateWriteForceSuccess(t *testing.T) {
 	if result["updated"] != true {
 		t.Errorf("updated = %v, want true", result["updated"])
 	}
+	if result["field"] != "version" {
+		t.Errorf("field = %v, want version", result["field"])
+	}
+	if result["value"] != "4.0" {
+		t.Errorf("value = %v, want 4.0", result["value"])
+	}
 
 	// Verify the file was actually updated
 	data, _ := s.ReadFile("COLONY_STATE.json")
@@ -179,21 +149,9 @@ func TestStateWriteForceSuccess(t *testing.T) {
 	if m["version"] != "4.0" {
 		t.Errorf("version in file = %v, want 4.0", m["version"])
 	}
-
-	// Verify audit entry was created
-	entries := readAuditChangelog(t, s)
-	if len(entries) != 1 {
-		t.Fatalf("expected 1 audit entry, got %d", len(entries))
-	}
-	if entries[0].Command != "state-write" {
-		t.Errorf("audit command = %q, want %q", entries[0].Command, "state-write")
-	}
-	if !entries[0].Destructive {
-		t.Error("state-write --force should produce destructive=true audit entry")
-	}
 }
 
-func TestStateWriteForcePositionalJSON(t *testing.T) {
+func TestStateWritePositionalArg(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 	var buf bytes.Buffer
@@ -211,11 +169,12 @@ func TestStateWriteForcePositionalJSON(t *testing.T) {
 	}
 	s.SaveJSON("COLONY_STATE.json", state)
 
-	rootCmd.SetArgs([]string{"state-write", "--force", `{"goal":"updated goal","version":"3.0"}`})
+	// state-write should accept a positional JSON blob and write it directly
+	rootCmd.SetArgs([]string{"state-write", `{"goal":"updated goal","version":"3.0"}`})
 
 	err := rootCmd.Execute()
 	if err != nil {
-		t.Fatalf("expected state-write --force to accept positional JSON, got error: %v", err)
+		t.Fatalf("expected state-write to accept positional JSON, got error: %v", err)
 	}
 
 	env := parseEnvelope(t, buf.String())
@@ -229,44 +188,6 @@ func TestStateWriteForcePositionalJSON(t *testing.T) {
 	json.Unmarshal(data, &m)
 	if m["goal"] != "updated goal" {
 		t.Errorf("goal in file = %v, want 'updated goal'", m["goal"])
-	}
-
-	// Verify audit entry
-	entries := readAuditChangelog(t, s)
-	if len(entries) != 1 {
-		t.Fatalf("expected 1 audit entry, got %d", len(entries))
-	}
-	if entries[0].Command != "state-write" {
-		t.Errorf("audit command = %q, want %q", entries[0].Command, "state-write")
-	}
-}
-
-func TestStateWritePositionalArg(t *testing.T) {
-	saveGlobals(t)
-	resetRootCmd(t)
-	var buf bytes.Buffer
-	stderr = &buf
-
-	s, tmpDir := newTestStore(t)
-	defer os.RemoveAll(tmpDir)
-	store = s
-
-	goal := "test goal"
-	state := colony.ColonyState{
-		Version: "3.0",
-		Goal:    &goal,
-		State:   colony.StateREADY,
-	}
-	s.SaveJSON("COLONY_STATE.json", state)
-
-	// state-write positional JSON without --force should be rejected
-	rootCmd.SetArgs([]string{"state-write", `{"goal":"updated goal","version":"3.0"}`})
-
-	rootCmd.Execute()
-
-	errOutput := buf.String()
-	if !strings.Contains(errOutput, "state-mutate") {
-		t.Errorf("expected error suggesting state-mutate for positional JSON without --force, got: %s", errOutput)
 	}
 }
 
@@ -521,55 +442,6 @@ func TestValidateOracleStateInvalidJSON(t *testing.T) {
 	result := env["result"].(map[string]interface{})
 	if result["valid"] != false {
 		t.Errorf("valid = %v, want false for invalid JSON", result["valid"])
-	}
-}
-
-// --- phase-insert audit tests ---
-
-func TestPhaseInsertProducesAuditEntry(t *testing.T) {
-	saveGlobals(t)
-	resetRootCmd(t)
-	var buf bytes.Buffer
-	stdout = &buf
-
-	s, tmpDir := newTestStore(t)
-	defer os.RemoveAll(tmpDir)
-	store = s
-
-	goal := "test"
-	state := colony.ColonyState{
-		Version: "3.0",
-		Goal:    &goal,
-		Plan: colony.Plan{
-			Phases: []colony.Phase{
-				{ID: 1, Name: "Phase 1", Status: colony.PhaseCompleted, Tasks: []colony.Task{}},
-				{ID: 2, Name: "Phase 2", Status: colony.PhasePending, Tasks: []colony.Task{}},
-			},
-		},
-	}
-	s.SaveJSON("COLONY_STATE.json", state)
-
-	rootCmd.SetArgs([]string{"phase-insert", "--after", "1", "--name", "Fix Bug", "--description", "Fix critical bug"})
-
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	env := parseEnvelope(t, buf.String())
-	if env["ok"] != true {
-		t.Fatalf("expected ok:true, got: %v", env)
-	}
-
-	// Verify audit entry was created
-	entries := readAuditChangelog(t, s)
-	if len(entries) != 1 {
-		t.Fatalf("expected 1 audit entry, got %d", len(entries))
-	}
-	if entries[0].Command != "phase-insert" {
-		t.Errorf("audit command = %q, want %q", entries[0].Command, "phase-insert")
-	}
-	if entries[0].Destructive {
-		t.Error("phase-insert should produce destructive=false audit entry")
 	}
 }
 

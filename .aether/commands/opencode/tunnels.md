@@ -137,7 +137,7 @@ Stop here.
 
 If two arguments provided (chamber names separated by space):
 - Treat as: `/ant:tunnels <chamber_a> <chamber_b>`
-- Run comparison: `bash .aether/utils/chamber-compare.sh compare <chamber_a> <chamber_b>`
+- Run comparison: `aether chamber-compare compare <chamber_a> <chamber_b>`
 
 If either chamber not found:
 ```
@@ -196,7 +196,7 @@ If milestone changed: show "🏆 Milestone advanced: {milestone_a} → {mileston
 
 Display pheromone trail diff (new decisions/learnings in B):
 ```bash
-bash .aether/utils/chamber-compare.sh diff <chamber_a> <chamber_b>
+aether chamber-compare diff <chamber_a> <chamber_b>
 ```
 
 Parse result and show:

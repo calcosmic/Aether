@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -9,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/calcosmic/Aether/pkg/colony"
-	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/spf13/cobra"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
@@ -17,18 +17,6 @@ import (
 
 var mutateArgJSON []string
 var mutateArg []string
-
-// auditLogger is the package-level audit logger for state mutations.
-// It is lazily initialized via initAuditLogger when the store is available.
-var auditLogger *storage.AuditLogger
-
-// initAuditLogger creates the audit logger if it hasn't been created yet
-// and the store is available. Must be called after the nil store check.
-func initAuditLogger() {
-	if store != nil && auditLogger == nil {
-		auditLogger = storage.NewAuditLogger(store)
-	}
-}
 
 var stateMutateCmd = &cobra.Command{
 	Use:          "state-mutate [expression]",
@@ -99,99 +87,85 @@ func resetMutateFlags() {
 
 func executeFieldMode(cmd *cobra.Command, field string) error {
 	value := mustGetString(cmd, "value")
-	initAuditLogger()
-
-	// Determine if this is a destructive operation (phase advance)
-	destructive := (field == "current_phase")
-
-	err := auditLogger.WriteBoundary("state-mutate", destructive, func(state *colony.ColonyState) (string, error) {
-		summary := ""
-		switch field {
-		case "goal":
-			state.Goal = &value
-			summary = fmt.Sprintf("goal -> %s", value)
-		case "state":
-			newState := colony.State(value)
-			if err := colony.Transition(state.State, newState); err != nil {
-				return "", fmt.Errorf("invalid transition %s -> %s: %v", state.State, newState, err)
-			}
-			state.State = newState
-			summary = fmt.Sprintf("state -> %s", value)
-		case "current_phase":
-			phaseNum := 0
-			if _, err := fmt.Sscanf(value, "%d", &phaseNum); err != nil {
-				return "", fmt.Errorf("invalid phase number %q", value)
-			}
-			if phaseNum > 0 && phaseNum <= len(state.Plan.Phases) {
-				state.Plan.Phases[phaseNum-1].Status = colony.PhaseInProgress
-			}
-			state.CurrentPhase = phaseNum
-			summary = fmt.Sprintf("current_phase -> %d", phaseNum)
-		case "milestone":
-			state.Milestone = value
-			summary = fmt.Sprintf("milestone -> %s", value)
-		case "colony_depth":
-			state.ColonyDepth = value
-			summary = fmt.Sprintf("colony_depth -> %s", value)
-		case "colony_name":
-			state.ColonyName = &value
-			summary = fmt.Sprintf("colony_name -> %s", value)
-		default:
-			// For unknown fields, fall back to sjson-based approach
-			data, err := json.Marshal(state)
-			if err != nil {
-				return "", err
-			}
-			data, err = setNestedFieldJSON(data, field, value)
-			if err != nil {
-				return "", fmt.Errorf("unknown field %q", field)
-			}
-			if err := json.Unmarshal(data, state); err != nil {
-				return "", err
-			}
-			summary = fmt.Sprintf("%s -> %s", field, value)
-		}
-		return summary, nil
-	})
-
-	if err != nil {
-		outputError(1, fmt.Sprintf("mutation failed: %v", err), nil)
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		outputError(1, "COLONY_STATE.json not found", nil)
 		return nil
 	}
-
+	switch field {
+	case "goal":
+		state.Goal = &value
+	case "state":
+		newState := colony.State(value)
+		if err := colony.Transition(state.State, newState); err != nil {
+			outputError(1, fmt.Sprintf("invalid transition %s -> %s: %v", state.State, newState, err), nil)
+			return nil
+		}
+		state.State = newState
+	case "current_phase":
+		phaseNum := 0
+		if _, err := fmt.Sscanf(value, "%d", &phaseNum); err != nil {
+			outputError(1, fmt.Sprintf("invalid phase number %q", value), nil)
+			return nil
+		}
+		if phaseNum > 0 && phaseNum <= len(state.Plan.Phases) {
+			state.Plan.Phases[phaseNum-1].Status = colony.PhaseInProgress
+		}
+		state.CurrentPhase = phaseNum
+	case "milestone":
+		state.Milestone = value
+	case "colony_depth":
+		state.ColonyDepth = value
+	case "colony_name":
+		state.ColonyName = &value
+	default:
+		data, err := json.Marshal(state)
+		if err != nil {
+			outputError(2, fmt.Sprintf("marshal error: %v", err), nil)
+			return nil
+		}
+		data, err = setNestedFieldJSON(data, field, value)
+		if err != nil {
+			outputError(1, fmt.Sprintf("unknown field %q", field), nil)
+			return nil
+		}
+		if err := json.Unmarshal(data, &state); err != nil {
+			outputError(2, fmt.Sprintf("failed to round-trip state: %v", err), nil)
+			return nil
+		}
+	}
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		outputError(2, fmt.Sprintf("failed to save state: %v", err), nil)
+		return nil
+	}
 	outputOK(map[string]interface{}{"updated": true, "field": field, "value": value})
 	return nil
 }
 
 func executeExpression(expr string, vars map[string]interface{}) error {
-	initAuditLogger()
-
-	err := auditLogger.WriteBoundary("state-mutate", false, func(state *colony.ColonyState) (string, error) {
-		data, err := json.Marshal(state)
-		if err != nil {
-			return "", err
-		}
-		for _, sub := range splitChainedAssignments(expr) {
-			sub = strings.TrimSpace(sub)
-			if sub == "" {
-				continue
-			}
-			data, err = applySubExpression(data, sub, vars)
-			if err != nil {
-				return "", fmt.Errorf("expression error: %v", exprError(sub, err))
-			}
-		}
-		if err := json.Unmarshal(data, state); err != nil {
-			return "", err
-		}
-		return fmt.Sprintf("expr: %s", expr), nil
-	})
-
+	data, err := store.ReadFile("COLONY_STATE.json")
 	if err != nil {
-		outputError(1, fmt.Sprintf("mutation failed: %v", err), nil)
+		outputError(1, "COLONY_STATE.json not found", nil)
 		return nil
 	}
-
+	for _, sub := range splitChainedAssignments(expr) {
+		sub = strings.TrimSpace(sub)
+		if sub == "" {
+			continue
+		}
+		data, err = applySubExpression(data, sub, vars)
+		if err != nil {
+			outputError(1, fmt.Sprintf("expression error: %v", exprError(sub, err)), nil)
+			return nil
+		}
+	}
+	var pretty bytes.Buffer
+	json.Indent(&pretty, data, "", "  ")
+	pretty.WriteByte('\n')
+	if err := store.AtomicWrite("COLONY_STATE.json", pretty.Bytes()); err != nil {
+		outputError(2, fmt.Sprintf("failed to save state: %v", err), nil)
+		return nil
+	}
 	outputOK(map[string]interface{}{"updated": true, "expr": expr})
 	return nil
 }

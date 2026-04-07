@@ -13,18 +13,6 @@ import (
 	"github.com/calcosmic/Aether/pkg/storage"
 )
 
-// readAuditChangelogBuildFlow is a duplicate-free reference to the helper in state_cmds_test.go.
-// It reads audit entries from state-changelog.jsonl via the store.
-func readAuditChangelogBuildFlow(t *testing.T, s *storage.Store) []storage.AuditEntry {
-	t.Helper()
-	al := storage.NewAuditLogger(s)
-	entries, err := al.ReadHistory(0)
-	if err != nil {
-		t.Fatalf("failed to read audit changelog: %v", err)
-	}
-	return entries
-}
-
 // setupBuildFlowTest creates a temp directory with store initialized for testing.
 func setupBuildFlowTest(t *testing.T) string {
 	t.Helper()
@@ -518,52 +506,5 @@ func TestBuildFlowCommandsRegistered(t *testing.T) {
 		if !found {
 			t.Errorf("command %q not registered in rootCmd", name)
 		}
-	}
-}
-
-// --- update-progress audit tests ---
-
-func TestUpdateProgressProducesAuditEntry(t *testing.T) {
-	saveGlobals(t)
-	resetRootCmd(t)
-	dataDir := setupBuildFlowTest(t)
-
-	goal := "test goal"
-	name := "test-colony"
-	createTestColonyState(t, dataDir, colony.ColonyState{
-		Version:      "2.0",
-		Goal:         &goal,
-		ColonyName:   &name,
-		State:        colony.StateEXECUTING,
-		CurrentPhase: 1,
-		Plan: colony.Plan{
-			Phases: []colony.Phase{
-				{ID: 1, Name: "Phase 1", Status: "in_progress"},
-				{ID: 2, Name: "Phase 2", Status: "pending"},
-			},
-		},
-	})
-
-	rootCmd.SetArgs([]string{"update-progress", "--phase", "1", "--status", "completed"})
-
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("update-progress returned error: %v", err)
-	}
-
-	output := stdout.(*bytes.Buffer).String()
-	if !strings.Contains(output, `"ok":true`) {
-		t.Fatalf("expected ok:true, got: %s", output)
-	}
-
-	// Verify audit entry was created
-	entries := readAuditChangelogBuildFlow(t, store)
-	if len(entries) != 1 {
-		t.Fatalf("expected 1 audit entry, got %d", len(entries))
-	}
-	if entries[0].Command != "update-progress" {
-		t.Errorf("audit command = %q, want %q", entries[0].Command, "update-progress")
-	}
-	if entries[0].Destructive {
-		t.Error("update-progress should produce destructive=false audit entry")
 	}
 }

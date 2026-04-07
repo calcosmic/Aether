@@ -46,22 +46,13 @@ var stateCheckpointCmd = &cobra.Command{
 
 var stateWriteCmd = &cobra.Command{
 	Use:   "state-write [json-blob]",
-	Short: "Direct write to COLONY_STATE.json (requires --force)",
+	Short: "Direct write to COLONY_STATE.json (bypasses transition validation)",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if store == nil {
 			outputErrorMessage("no store initialized")
 			return nil
 		}
-
-		// --force is required (D-06)
-		force := mustGetBool(cmd, "force")
-		if !force {
-			outputError(1, "state-write requires --force. Use state-mutate for safe mutations, or add --force to bypass validation.", nil)
-			return nil
-		}
-
-		initAuditLogger()
 
 		// Positional JSON mode: replace entire state file
 		if len(args) > 0 {
@@ -75,20 +66,10 @@ var stateWriteCmd = &cobra.Command{
 				outputError(1, "cannot use both positional JSON and --field/--value flags", nil)
 				return nil
 			}
-
-			err := auditLogger.WriteBoundary("state-write", true, func(state *colony.ColonyState) (string, error) {
-				// Replace entire state with the positional JSON
-				if err := json.Unmarshal([]byte(args[0]), state); err != nil {
-					return "", fmt.Errorf("failed to parse JSON: %w", err)
-				}
-				return "replaced entire state", nil
-			})
-
-			if err != nil {
-				outputError(2, fmt.Sprintf("failed to write state: %v", err), nil)
+			if err := store.AtomicWrite("COLONY_STATE.json", []byte(args[0])); err != nil {
+				outputError(2, fmt.Sprintf("failed to save state: %v", err), nil)
 				return nil
 			}
-
 			outputOK(map[string]interface{}{
 				"updated":  true,
 				"replaced": true,
@@ -105,34 +86,23 @@ var stateWriteCmd = &cobra.Command{
 			return nil
 		}
 
-		// Use WriteBoundary for field/value mode
-		err := auditLogger.WriteBoundary("state-write", true, func(state *colony.ColonyState) (string, error) {
-			// Marshal to raw map, set field as raw string (preserving original behavior)
-			data, err := json.Marshal(state)
-			if err != nil {
-				return "", err
-			}
-			var m map[string]interface{}
-			if err := json.Unmarshal(data, &m); err != nil {
-				return "", err
-			}
-			m[field] = value
-			if err := json.Unmarshal(data, state); err != nil {
-				return "", err
-			}
-			// Re-marshal with the field set
-			updated, err := json.Marshal(m)
-			if err != nil {
-				return "", err
-			}
-			if err := json.Unmarshal(updated, state); err != nil {
-				return "", err
-			}
-			return fmt.Sprintf("%s -> %s", field, value), nil
-		})
-
+		// Load raw COLONY_STATE.json as map for arbitrary field setting
+		data, err := store.ReadFile("COLONY_STATE.json")
 		if err != nil {
-			outputError(2, fmt.Sprintf("failed to write state: %v", err), nil)
+			outputError(1, "COLONY_STATE.json not found", nil)
+			return nil
+		}
+
+		var m map[string]interface{}
+		if err := json.Unmarshal(data, &m); err != nil {
+			outputError(1, fmt.Sprintf("failed to parse COLONY_STATE.json: %v", err), nil)
+			return nil
+		}
+
+		m[field] = value
+
+		if err := store.SaveJSON("COLONY_STATE.json", m); err != nil {
+			outputError(2, fmt.Sprintf("failed to save state: %v", err), nil)
 			return nil
 		}
 
@@ -165,48 +135,47 @@ var phaseInsertCmd = &cobra.Command{
 			return nil
 		}
 
-		initAuditLogger()
+		var state colony.ColonyState
+		if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+			outputError(1, "COLONY_STATE.json not found", nil)
+			return nil
+		}
 
-		var phaseID int
-		err := auditLogger.WriteBoundary("phase-insert", false, func(state *colony.ColonyState) (string, error) {
-			// Validate after index
-			if after < 0 || after > len(state.Plan.Phases) {
-				return "", fmt.Errorf("invalid after index %d (plan has %d phases)", after, len(state.Plan.Phases))
+		// Validate after index
+		if after < 0 || after > len(state.Plan.Phases) {
+			outputError(1, fmt.Sprintf("invalid after index %d (plan has %d phases)", after, len(state.Plan.Phases)), nil)
+			return nil
+		}
+
+		// Compute next ID
+		maxID := 0
+		for _, p := range state.Plan.Phases {
+			if p.ID > maxID {
+				maxID = p.ID
 			}
+		}
+		newID := maxID + 1
 
-			// Compute next ID
-			maxID := 0
-			for _, p := range state.Plan.Phases {
-				if p.ID > maxID {
-					maxID = p.ID
-				}
-			}
-			newID := maxID + 1
-			phaseID = newID
+		newPhase := colony.Phase{
+			ID:          newID,
+			Name:        name,
+			Description: description,
+			Status:      colony.PhasePending,
+			Tasks:       []colony.Task{},
+		}
 
-			newPhase := colony.Phase{
-				ID:          newID,
-				Name:        name,
-				Description: description,
-				Status:      colony.PhasePending,
-				Tasks:       []colony.Task{},
-			}
+		// Insert after the specified index (0-based)
+		insertAt := after
+		state.Plan.Phases = append(state.Plan.Phases[:insertAt], append([]colony.Phase{newPhase}, state.Plan.Phases[insertAt:]...)...)
 
-			// Insert after the specified index (0-based)
-			insertAt := after
-			state.Plan.Phases = append(state.Plan.Phases[:insertAt], append([]colony.Phase{newPhase}, state.Plan.Phases[insertAt:]...)...)
-
-			return fmt.Sprintf("inserted phase %q after index %d", name, after), nil
-		})
-
-		if err != nil {
-			outputError(1, fmt.Sprintf("phase insert failed: %v", err), nil)
+		if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+			outputError(2, fmt.Sprintf("failed to save state: %v", err), nil)
 			return nil
 		}
 
 		outputOK(map[string]interface{}{
 			"inserted": true,
-			"phase_id": phaseID,
+			"phase_id": newID,
 			"after":    after,
 		})
 		return nil
@@ -266,7 +235,6 @@ func init() {
 
 	stateWriteCmd.Flags().String("field", "", "Field to set (required)")
 	stateWriteCmd.Flags().String("value", "", "Value to set (required)")
-	stateWriteCmd.Flags().Bool("force", false, "Bypass safety checks (audited)")
 
 	phaseInsertCmd.Flags().Int("after", 0, "Insert after this phase index (0-based, required)")
 	phaseInsertCmd.Flags().String("name", "", "Phase name (required)")

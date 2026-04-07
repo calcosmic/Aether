@@ -166,7 +166,7 @@ done
 [ -f .aether/QUEEN.md ] && files=$((files + 1))
 [ -f .aether/CONTEXT.md ] && files=$((files + 1))
 [ -d .aether/templates ] && templates=$(ls .aether/templates/*.template.* 2>/dev/null | wc -l | tr -d ' ') || templates=0
-[ -d .aether/utils ] && utils=$(ls .aether/utils/*.sh 2>/dev/null | wc -l | tr -d ' ') || utils=0
+[ -d .aether/utils ] && utils=$(find .aether/utils/ -type f | wc -l | tr -d ' ') || utils=0
 
 echo "{\"dirs\": $dirs, \"core_files\": $files, \"templates\": $templates, \"utils\": $utils}"
 ```
