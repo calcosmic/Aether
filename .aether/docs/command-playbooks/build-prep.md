@@ -168,9 +168,9 @@ Depth: {colony_depth} ({label})
 
 Where label maps:
 - light -> "Builder only -- fastest"
-- standard -> "Builder + Scout -- balanced"
-- deep -> "Builder + Scout + Oracle -- thorough"
-- full -> "All agents -- most thorough"
+- standard -> "Builder + Scout + Watcher -- balanced"
+- deep -> "All specialists except Chaos -- thorough"
+- full -> "All specialists including Chaos -- most thorough"
 
 If `colony_depth` is "standard" and `depth_source` is "default" (user never explicitly set it), also display:
 ```
