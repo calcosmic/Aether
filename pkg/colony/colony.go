@@ -44,6 +44,28 @@ func (d ColonyDepth) Valid() bool {
 // ErrInvalidDepth is returned when a depth value is not recognized.
 var ErrInvalidDepth = fmt.Errorf("invalid colony depth")
 
+// PlanGranularity represents the planning scope level (how many phases).
+type PlanGranularity string
+
+const (
+	GranularitySprint    PlanGranularity = "sprint"
+	GranularityMilestone PlanGranularity = "milestone"
+	GranularityQuarter   PlanGranularity = "quarter"
+	GranularityMajor     PlanGranularity = "major"
+)
+
+// Valid reports whether g is a recognized granularity level.
+func (g PlanGranularity) Valid() bool {
+	switch g {
+	case GranularitySprint, GranularityMilestone, GranularityQuarter, GranularityMajor:
+		return true
+	}
+	return false
+}
+
+// ErrInvalidGranularity is returned when a granularity value is not recognized.
+var ErrInvalidGranularity = fmt.Errorf("invalid plan granularity")
+
 // Phase status constants.
 const (
 	PhasePending    = "pending"
@@ -80,7 +102,8 @@ type ColonyState struct {
 	Signals            []Signal    `json:"signals"`
 	Graveyards         []Graveyard `json:"graveyards"`
 	Events             []string    `json:"events"`
-	ColonyDepth        ColonyDepth `json:"colony_depth,omitempty"`
+	ColonyDepth        ColonyDepth     `json:"colony_depth,omitempty"`
+	PlanGranularity    PlanGranularity `json:"plan_granularity,omitempty"`
 	Milestone          string      `json:"milestone"`
 	MilestoneUpdatedAt *string     `json:"milestone_updated_at,omitempty"`
 }

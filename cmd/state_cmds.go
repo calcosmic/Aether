@@ -121,6 +121,13 @@ func executeFieldMode(cmd *cobra.Command, field string) error {
 			return nil
 		}
 		state.ColonyDepth = d
+	case "plan_granularity":
+		g := colony.PlanGranularity(value)
+		if !g.Valid() {
+			outputError(1, fmt.Sprintf("invalid plan granularity %q: must be sprint, milestone, quarter, or major", value), nil)
+			return nil
+		}
+		state.PlanGranularity = g
 	case "colony_name":
 		state.ColonyName = &value
 	default:
@@ -173,6 +180,10 @@ func executeExpression(expr string, vars map[string]interface{}) error {
 	if err := json.Unmarshal(data, &validateState); err == nil {
 		if validateState.ColonyDepth != "" && !validateState.ColonyDepth.Valid() {
 			outputError(1, fmt.Sprintf("invalid colony depth %q: must be light, standard, deep, or full", validateState.ColonyDepth), nil)
+			return nil
+		}
+		if validateState.PlanGranularity != "" && !validateState.PlanGranularity.Valid() {
+			outputError(1, fmt.Sprintf("invalid plan_granularity %q: must be sprint, milestone, quarter, or major", validateState.PlanGranularity), nil)
 			return nil
 		}
 	}

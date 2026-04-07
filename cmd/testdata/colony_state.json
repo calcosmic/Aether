@@ -9,6 +9,7 @@
   "initialized_at": "2026-04-01T10:00:00Z",
   "build_started_at": "2026-04-01T12:00:00Z",
   "colony_depth": "standard",
+  "plan_granularity": "milestone",
   "milestone": "Open Chambers",
   "milestone_updated_at": "2026-04-01T10:00:00Z",
   "plan": {
