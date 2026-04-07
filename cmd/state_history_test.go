@@ -2,8 +2,8 @@ package cmd
 
 import (
 	"bytes"
-	"encoding/json"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -25,19 +25,13 @@ func setupAuditHistory(t *testing.T, n int) (*storage.Store, string) {
 
 	logger := storage.NewAuditLogger(s)
 	for i := 0; i < n; i++ {
-		newGoal := "goal " + itoa(i+1)
+		newGoal := "goal " + strconv.Itoa(i+1)
 		logger.WriteBoundary("state-mutate", false, func(st *colony.ColonyState) (string, error) {
 			st.Goal = &newGoal
 			return "goal -> " + newGoal, nil
 		})
 	}
 	return s, tmpDir
-}
-
-func itoa(n int) string {
-	return strings.TrimPrefix(strings.TrimPrefix(
-		func() string { b, _ := json.Marshal(n); return string(b) }(),
-		"\""), "\"")
 }
 
 // Test 1: Empty audit log prints "No mutation history found."
@@ -93,12 +87,12 @@ func TestStateHistoryCompact(t *testing.T) {
 	if !strings.Contains(output, "goal ->") {
 		t.Errorf("expected 'goal ->' summary in output, got: %s", output)
 	}
-	// Should contain table headers (go-pretty renders them)
-	if !strings.Contains(output, "Timestamp") {
-		t.Errorf("expected 'Timestamp' header in output, got: %s", output)
+	// Should contain table headers (go-pretty renders them uppercase)
+	if !strings.Contains(output, "TIMESTAMP") {
+		t.Errorf("expected 'TIMESTAMP' header in output, got: %s", output)
 	}
-	if !strings.Contains(output, "Command") {
-		t.Errorf("expected 'Command' header in output, got: %s", output)
+	if !strings.Contains(output, "COMMAND") {
+		t.Errorf("expected 'COMMAND' header in output, got: %s", output)
 	}
 }
 
