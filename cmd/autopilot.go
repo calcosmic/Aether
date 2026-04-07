@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/spf13/cobra"
 )
 
@@ -27,47 +26,7 @@ type autopilotState struct {
 	LastUpdated    string                 `json:"last_updated"`
 }
 
-const colonyStatePath = "COLONY_STATE.json"
-
-func loadAutopilotFromColony() (*autopilotState, error) {
-	var state colony.ColonyState
-	if err := store.LoadJSON(colonyStatePath, &state); err != nil {
-		return nil, err
-	}
-	if state.OrchestratorState == nil {
-		return nil, fmt.Errorf("orchestrator not initialized")
-	}
-	phases := make([]autopilotPhaseStatus, 0)
-	ap := &autopilotState{
-		CurrentPhase:   state.OrchestratorState.Phase,
-		Status:         state.OrchestratorState.Status,
-		TotalPhases:    state.OrchestratorState.TaskCount,
-		Headless:       state.OrchestratorState.Headless,
-		ReplanInterval: state.OrchestratorState.ReplanInterval,
-		InitializedAt:  state.OrchestratorState.StartedAt,
-		LastUpdated:    state.OrchestratorState.UpdatedAt,
-		Phases:         phases,
-	}
-	return ap, nil
-}
-
-func saveAutopilotToColony(ap *autopilotState) error {
-	var state colony.ColonyState
-	if err := store.LoadJSON(colonyStatePath, &state); err != nil {
-		return err
-	}
-	if state.OrchestratorState == nil {
-		state.OrchestratorState = &colony.OrchestratorState{}
-	}
-	state.OrchestratorState.Phase = ap.CurrentPhase
-	state.OrchestratorState.Status = ap.Status
-	state.OrchestratorState.TaskCount = ap.TotalPhases
-	state.OrchestratorState.UpdatedAt = ap.LastUpdated
-	state.OrchestratorState.Headless = ap.Headless
-	state.OrchestratorState.ReplanInterval = ap.ReplanInterval
-	state.OrchestratorState.StartedAt = ap.InitializedAt
-	return store.SaveJSON(colonyStatePath, state)
-}
+const autopilotStatePath = "autopilot/state.json"
 
 // --- autopilot-init ---
 
@@ -83,25 +42,18 @@ var autopilotInitCmd = &cobra.Command{
 		phases := mustGetInt(cmd, "phases")
 
 		now := time.Now().UTC().Format(time.RFC3339)
-
-		// Ensure COLONY_STATE.json exists with minimal state
-		var colonyState colony.ColonyState
-		if err := store.LoadJSON(colonyStatePath, &colonyState); err != nil {
-			colonyState = colony.ColonyState{
-				Version: "1.0",
-				State:   colony.StateREADY,
-			}
-		}
-		colonyState.OrchestratorState = &colony.OrchestratorState{
-			Phase:          0,
+		state := autopilotState{
+			InitializedAt:  now,
+			TotalPhases:    phases,
+			CurrentPhase:   0,
 			Status:         "initialized",
-			TaskCount:      phases,
-			StartedAt:      now,
-			UpdatedAt:      now,
 			Headless:       false,
 			ReplanInterval: 3,
+			Phases:         make([]autopilotPhaseStatus, 0, phases),
+			LastUpdated:    now,
 		}
-		if err := store.SaveJSON(colonyStatePath, colonyState); err != nil {
+
+		if err := store.SaveJSON(autopilotStatePath, state); err != nil {
 			outputError(2, fmt.Sprintf("failed to save autopilot state: %v", err), nil)
 			return nil
 		}
@@ -132,8 +84,8 @@ var autopilotUpdateCmd = &cobra.Command{
 			return nil
 		}
 
-		state, err := loadAutopilotFromColony()
-		if err != nil {
+		var state autopilotState
+		if err := store.LoadJSON(autopilotStatePath, &state); err != nil {
 			outputError(1, fmt.Sprintf("autopilot not initialized: %v", err), nil)
 			return nil
 		}
@@ -162,7 +114,7 @@ var autopilotUpdateCmd = &cobra.Command{
 			state.Status = "running"
 		}
 
-		if err := saveAutopilotToColony(state); err != nil {
+		if err := store.SaveJSON(autopilotStatePath, state); err != nil {
 			outputError(2, fmt.Sprintf("failed to save: %v", err), nil)
 			return nil
 		}
@@ -190,8 +142,8 @@ var autopilotStatusCmd = &cobra.Command{
 			return nil
 		}
 
-		state, err := loadAutopilotFromColony()
-		if err != nil {
+		var state autopilotState
+		if err := store.LoadJSON(autopilotStatePath, &state); err != nil {
 			outputOK(map[string]interface{}{"active": false, "reason": "not initialized"})
 			return nil
 		}
@@ -223,8 +175,8 @@ var autopilotStopCmd = &cobra.Command{
 			return nil
 		}
 
-		state, err := loadAutopilotFromColony()
-		if err != nil {
+		var state autopilotState
+		if err := store.LoadJSON(autopilotStatePath, &state); err != nil {
 			outputError(1, fmt.Sprintf("autopilot not initialized: %v", err), nil)
 			return nil
 		}
@@ -232,7 +184,7 @@ var autopilotStopCmd = &cobra.Command{
 		state.Status = "stopped"
 		state.LastUpdated = time.Now().UTC().Format(time.RFC3339)
 
-		if err := saveAutopilotToColony(state); err != nil {
+		if err := store.SaveJSON(autopilotStatePath, state); err != nil {
 			outputError(2, fmt.Sprintf("failed to save: %v", err), nil)
 			return nil
 		}
@@ -259,8 +211,8 @@ var autopilotCheckReplanCmd = &cobra.Command{
 		}
 		interval := mustGetInt(cmd, "interval")
 
-		state, err := loadAutopilotFromColony()
-		if err != nil {
+		var state autopilotState
+		if err := store.LoadJSON(autopilotStatePath, &state); err != nil {
 			outputOK(map[string]interface{}{"replan": false, "reason": "not initialized"})
 			return nil
 		}
@@ -314,8 +266,8 @@ var autopilotSetHeadlessCmd = &cobra.Command{
 		}
 		value := mustGetBool(cmd, "value")
 
-		state, err := loadAutopilotFromColony()
-		if err != nil {
+		var state autopilotState
+		if err := store.LoadJSON(autopilotStatePath, &state); err != nil {
 			outputError(1, fmt.Sprintf("autopilot not initialized: %v", err), nil)
 			return nil
 		}
@@ -323,7 +275,7 @@ var autopilotSetHeadlessCmd = &cobra.Command{
 		state.Headless = value
 		state.LastUpdated = time.Now().UTC().Format(time.RFC3339)
 
-		if err := saveAutopilotToColony(state); err != nil {
+		if err := store.SaveJSON(autopilotStatePath, state); err != nil {
 			outputError(2, fmt.Sprintf("failed to save: %v", err), nil)
 			return nil
 		}
@@ -345,8 +297,8 @@ var autopilotHeadlessCheckCmd = &cobra.Command{
 			return nil
 		}
 
-		state, err := loadAutopilotFromColony()
-		if err != nil {
+		var state autopilotState
+		if err := store.LoadJSON(autopilotStatePath, &state); err != nil {
 			outputOK(map[string]interface{}{"headless": false, "reason": "not initialized"})
 			return nil
 		}

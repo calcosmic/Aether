@@ -20,12 +20,6 @@ func outputOK(result interface{}) {
 	fmt.Fprintf(stdout, "{\"ok\":true,\"result\":%s}\n", string(resultJSON))
 }
 
-// Error message convention (INTG-03):
-// Format: "prefix: description. remediation hint"
-// Example: "store: no store initialized. Run 'aether init' first."
-// This convention applies to new and modified commands.
-// Existing commands will be updated incrementally in later phases.
-
 // outputError writes a JSON error envelope to stderr:
 //
 //	{"ok":false,"error":"<message>","code":<code>}

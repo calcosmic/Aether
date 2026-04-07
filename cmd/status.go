@@ -112,20 +112,12 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 	}
 
 	// Depth
-	depth := string(state.ColonyDepth)
+	depth := state.ColonyDepth
 	if depth == "" {
 		depth = "standard"
 	}
 	depthLabel := depthLabel(depth)
-	fmt.Fprintf(&b, "Depth: %s\n", depthLabel)
-
-	// Granularity
-	granularity := string(state.PlanGranularity)
-	if granularity == "" {
-		granularity = "not set"
-	}
-	granLbl := granularityLabel(granularity)
-	fmt.Fprintf(&b, "Granularity: %s\n\n", granLbl)
+	fmt.Fprintf(&b, "Depth: %s\n\n", depthLabel)
 
 	// Memory Health table
 	b.WriteString("Memory Health\n")
@@ -196,31 +188,15 @@ func countFlags(s *storage.Store) (blockers, issues, notes int) {
 func depthLabel(depth string) string {
 	switch depth {
 	case "light":
-		return "light (Builder only -- fastest)"
+		return "light (Builder only)"
 	case "standard":
-		return "standard (Builder + Scout + Watcher -- balanced)"
+		return "standard (Builder + Scout)"
 	case "deep":
-		return "deep (All specialists except Chaos -- thorough)"
+		return "deep (Builder + Scout + Oracle)"
 	case "full":
-		return "full (All specialists including Chaos -- most thorough)"
+		return "full (All agents)"
 	default:
 		return depth
-	}
-}
-
-// granularityLabel maps plan granularity to a human-readable description.
-func granularityLabel(granularity string) string {
-	switch granularity {
-	case "sprint":
-		return "sprint (1-3 phases)"
-	case "milestone":
-		return "milestone (4-7 phases)"
-	case "quarter":
-		return "quarter (8-12 phases)"
-	case "major":
-		return "major (13-20 phases)"
-	default:
-		return granularity
 	}
 }
 

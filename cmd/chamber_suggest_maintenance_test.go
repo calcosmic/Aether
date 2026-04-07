@@ -387,7 +387,7 @@ func TestBackupPruneGlobal(t *testing.T) {
 		os.WriteFile(filepath.Join(backupDir, "backup-"+strings.Repeat("0", i)+".json"), []byte("{}"), 0644)
 	}
 
-	rootCmd.SetArgs([]string{"backup-prune-global", "--cap", "3", "--confirm"})
+	rootCmd.SetArgs([]string{"backup-prune-global", "--cap", "3"})
 
 	err := rootCmd.Execute()
 	if err != nil {
@@ -453,7 +453,7 @@ func TestTempClean(t *testing.T) {
 	// Recent file
 	os.WriteFile(filepath.Join(tempDir, "recent-file.txt"), []byte("recent"), 0644)
 
-	rootCmd.SetArgs([]string{"temp-clean", "--confirm"})
+	rootCmd.SetArgs([]string{"temp-clean"})
 
 	err := rootCmd.Execute()
 	if err != nil {

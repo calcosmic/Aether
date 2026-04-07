@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"time"
 
@@ -258,6 +259,71 @@ var errorSummaryCmd = &cobra.Command{
 	},
 }
 
+// --- error-pattern-check (deprecated) ---
+
+var errorPatternCheckCmd = &cobra.Command{
+	Use:        "error-pattern-check",
+	Short:      "Check for recurring error patterns (deprecated)",
+	Args:       cobra.NoArgs,
+	Deprecated: "use error-flag-pattern instead",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if store == nil {
+			outputErrorMessage("no store initialized")
+			return nil
+		}
+
+		var state colony.ColonyState
+		if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+			outputError(1, "COLONY_STATE.json not found", nil)
+			return nil
+		}
+
+		records := state.Errors.Records
+		if records == nil {
+			outputOK([]interface{}{})
+			return nil
+		}
+
+		// Group by category
+		groups := map[string][]colony.ErrorRecord{}
+		for _, r := range records {
+			groups[r.Category] = append(groups[r.Category], r)
+		}
+
+		type patternGroup struct {
+			Category  string `json:"category"`
+			Count     int    `json:"count"`
+			FirstSeen string `json:"first_seen"`
+			LastSeen  string `json:"last_seen"`
+		}
+
+		var result []patternGroup
+		for cat, recs := range groups {
+			if len(recs) >= 3 {
+				// Sort by timestamp to find first and last
+				sorted := make([]colony.ErrorRecord, len(recs))
+				copy(sorted, recs)
+				sort.Slice(sorted, func(i, j int) bool {
+					return sorted[i].Timestamp < sorted[j].Timestamp
+				})
+				result = append(result, patternGroup{
+					Category:  cat,
+					Count:     len(recs),
+					FirstSeen: sorted[0].Timestamp,
+					LastSeen:  sorted[len(sorted)-1].Timestamp,
+				})
+			}
+		}
+
+		if result == nil {
+			outputOK([]interface{}{})
+			return nil
+		}
+		outputOK(result)
+		return nil
+	},
+}
+
 func init() {
 	errorAddCmd.Flags().String("category", "", "Error category (required)")
 	errorAddCmd.Flags().String("severity", "", "Error severity (required)")
@@ -271,4 +337,5 @@ func init() {
 	rootCmd.AddCommand(errorAddCmd)
 	rootCmd.AddCommand(errorFlagPatternCmd)
 	rootCmd.AddCommand(errorSummaryCmd)
+	rootCmd.AddCommand(errorPatternCheckCmd)
 }

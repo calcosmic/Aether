@@ -87,7 +87,7 @@ var colonyDepthGetCmd = &cobra.Command{
 			return nil
 		}
 
-		depth := string(state.ColonyDepth)
+		depth := state.ColonyDepth
 		source := "state"
 		if depth == "" {
 			depth = "standard"
@@ -117,8 +117,9 @@ var colonyDepthSetCmd = &cobra.Command{
 			return nil
 		}
 
-		d := colony.ColonyDepth(depth)
-		if !d.Valid() {
+		switch depth {
+		case "light", "standard", "deep", "full":
+		default:
 			outputError(1, fmt.Sprintf("invalid depth %q: must be light, standard, deep, or full", depth), nil)
 			return nil
 		}
@@ -129,7 +130,7 @@ var colonyDepthSetCmd = &cobra.Command{
 			return nil
 		}
 
-		state.ColonyDepth = d
+		state.ColonyDepth = depth
 		if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
 			outputError(2, fmt.Sprintf("failed to save state: %v", err), nil)
 			return nil
@@ -138,97 +139,6 @@ var colonyDepthSetCmd = &cobra.Command{
 		outputOK(map[string]interface{}{
 			"depth":  depth,
 			"source": "cli",
-		})
-		return nil
-	},
-}
-
-var planGranularityCmd = &cobra.Command{
-	Use:   "plan-granularity",
-	Short: "Get or set planning granularity",
-	Args:  cobra.NoArgs,
-}
-
-var planGranularityGetCmd = &cobra.Command{
-	Use:   "get",
-	Short: "Get current planning granularity",
-	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if store == nil {
-			outputErrorMessage("no store initialized")
-			return nil
-		}
-
-		var state colony.ColonyState
-		if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
-			outputOK(map[string]interface{}{
-				"granularity": "none",
-				"source":      "default",
-				"min":         0,
-				"max":         0,
-			})
-			return nil
-		}
-
-		g := string(state.PlanGranularity)
-		source := "state"
-		if g == "" {
-			g = "none"
-			source = "default"
-		}
-		min, max := colony.GranularityRange(state.PlanGranularity)
-		if state.PlanGranularity == "" {
-			min, max = 0, 0
-		}
-		outputOK(map[string]interface{}{
-			"granularity": g,
-			"source":      source,
-			"min":         min,
-			"max":         max,
-		})
-		return nil
-	},
-}
-
-var planGranularitySetCmd = &cobra.Command{
-	Use:   "set",
-	Short: "Set planning granularity",
-	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if store == nil {
-			outputErrorMessage("no store initialized")
-			return nil
-		}
-
-		granularity := mustGetString(cmd, "granularity")
-		if granularity == "" {
-			return nil
-		}
-
-		g := colony.PlanGranularity(granularity)
-		if !g.Valid() {
-			outputError(1, fmt.Sprintf("invalid granularity %q: must be sprint, milestone, quarter, or major", granularity), nil)
-			return nil
-		}
-
-		var state colony.ColonyState
-		if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
-			outputError(1, "COLONY_STATE.json not found", nil)
-			return nil
-		}
-
-		state.PlanGranularity = g
-		if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
-			outputError(2, fmt.Sprintf("failed to save state: %v", err), nil)
-			return nil
-		}
-
-		min, max := colony.GranularityRange(g)
-		outputOK(map[string]interface{}{
-			"granularity": granularity,
-			"source":      "cli",
-			"min":         min,
-			"max":         max,
 		})
 		return nil
 	},
@@ -281,13 +191,7 @@ func init() {
 	colonyDepthCmd.AddCommand(colonyDepthGetCmd)
 	colonyDepthCmd.AddCommand(colonyDepthSetCmd)
 
-	planGranularitySetCmd.Flags().String("granularity", "", "Granularity level: sprint, milestone, quarter, major (required)")
-
-	planGranularityCmd.AddCommand(planGranularityGetCmd)
-	planGranularityCmd.AddCommand(planGranularitySetCmd)
-
 	rootCmd.AddCommand(colonyNameCmd)
 	rootCmd.AddCommand(colonyDepthCmd)
-	rootCmd.AddCommand(planGranularityCmd)
 	rootCmd.AddCommand(domainDetectCmd)
 }

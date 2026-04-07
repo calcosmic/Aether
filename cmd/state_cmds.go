@@ -115,19 +115,7 @@ func executeFieldMode(cmd *cobra.Command, field string) error {
 	case "milestone":
 		state.Milestone = value
 	case "colony_depth":
-		d := colony.ColonyDepth(value)
-		if !d.Valid() {
-			outputError(1, fmt.Sprintf("invalid colony depth %q: must be light, standard, deep, or full", value), nil)
-			return nil
-		}
-		state.ColonyDepth = d
-	case "plan_granularity":
-		g := colony.PlanGranularity(value)
-		if !g.Valid() {
-			outputError(1, fmt.Sprintf("invalid plan granularity %q: must be sprint, milestone, quarter, or major", value), nil)
-			return nil
-		}
-		state.PlanGranularity = g
+		state.ColonyDepth = value
 	case "colony_name":
 		state.ColonyName = &value
 	default:
@@ -174,20 +162,6 @@ func executeExpression(expr string, vars map[string]interface{}) error {
 	var pretty bytes.Buffer
 	json.Indent(&pretty, data, "", "  ")
 	pretty.WriteByte('\n')
-
-	// Validate typed fields after expression mutation (per D-08)
-	var validateState colony.ColonyState
-	if err := json.Unmarshal(data, &validateState); err == nil {
-		if validateState.ColonyDepth != "" && !validateState.ColonyDepth.Valid() {
-			outputError(1, fmt.Sprintf("invalid colony depth %q: must be light, standard, deep, or full", validateState.ColonyDepth), nil)
-			return nil
-		}
-		if validateState.PlanGranularity != "" && !validateState.PlanGranularity.Valid() {
-			outputError(1, fmt.Sprintf("invalid plan_granularity %q: must be sprint, milestone, quarter, or major", validateState.PlanGranularity), nil)
-			return nil
-		}
-	}
-
 	if err := store.AtomicWrite("COLONY_STATE.json", pretty.Bytes()); err != nil {
 		outputError(2, fmt.Sprintf("failed to save state: %v", err), nil)
 		return nil
@@ -747,7 +721,7 @@ var stateReadFieldCmd = &cobra.Command{
 		case "milestone":
 			result = state.Milestone
 		case "colony_depth":
-			result = string(state.ColonyDepth)
+			result = state.ColonyDepth
 		case "colony_name":
 			result = state.ColonyName
 		case "session_id":

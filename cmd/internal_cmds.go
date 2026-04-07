@@ -354,6 +354,16 @@ var bootstrapSystemCmd = &cobra.Command{
 	},
 }
 
+// --- error-patterns-check (deprecated alias for error-pattern-check) ---
+
+var errorPatternsCheckCmd = &cobra.Command{
+	Use:        "error-patterns-check",
+	Short:      "[DEPRECATED] Check for known error patterns (use error-pattern-check)",
+	Deprecated: "use error-pattern-check instead",
+	Args:       cobra.NoArgs,
+	RunE:       errorPatternCheckCmd.RunE,
+}
+
 // --- instinct-read ---
 
 var instinctReadCmd = &cobra.Command{
@@ -517,8 +527,8 @@ var spawnCanSpawnSwarmCmd = &cobra.Command{
 
 		// Default budget is 5 unless colony_depth says otherwise
 		maxBudget := 5
-		if string(state.ColonyDepth) != "" {
-			if d := parseIntSafe(string(state.ColonyDepth)); d > 0 {
+		if state.ColonyDepth != "" {
+			if d := parseIntSafe(state.ColonyDepth); d > 0 {
 				maxBudget = d
 			}
 		}
@@ -744,6 +754,7 @@ func init() {
 	rootCmd.AddCommand(eternalStoreCmd)
 	rootCmd.AddCommand(incidentRuleAddCmd)
 	rootCmd.AddCommand(bootstrapSystemCmd)
+	rootCmd.AddCommand(errorPatternsCheckCmd)
 	rootCmd.AddCommand(instinctReadCmd)
 	rootCmd.AddCommand(instinctApplyCmd)
 	rootCmd.AddCommand(spawnGetDepthCmd)

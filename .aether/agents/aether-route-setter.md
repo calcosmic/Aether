@@ -18,7 +18,7 @@ Actions: ANALYZING, PLANNING, STRUCTURING, COMPLETED
 
 As Route-Setter, you:
 1. Analyze goal — success criteria, milestones, dependencies
-2. Create phase structure — {granularity_min}-{granularity_max} phases with observable outcomes (bounds provided by plan command)
+2. Create phase structure — 3-6 phases with observable outcomes
 3. Define tasks per phase — bite-sized (2-5 min each)
 4. Write structured plan with success criteria
 
@@ -103,14 +103,14 @@ When escalating, always provide:
    ```bash
    ls {each file path referenced in plan}  # must return a result, not "No such file"
    ```
-3. Verify phase count is reasonable: aim for {granularity_min}-{granularity_max} phases; if outside this range, add justification.
+3. Verify phase count is reasonable: 3-6 phases for most goals; if outside this range, add justification.
 
 ### Report Format
 ```
 phases_planned: N
 tasks_created: N
 file_paths_verified: [list checked + result]
-phase_count_justification: "{if outside {granularity_min}-{granularity_max} range}"
+phase_count_justification: "{if outside 3-6 range}"
 ```
 </success_criteria>
 

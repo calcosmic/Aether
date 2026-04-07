@@ -348,6 +348,118 @@ func TestErrorSummaryNoStateFile(t *testing.T) {
 	}
 }
 
+// --- error-pattern-check tests ---
+
+func TestErrorPatternCheck(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	goal := "test goal"
+	state := colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Errors: colony.Errors{
+			Records: []colony.ErrorRecord{
+				{ID: "1", Category: "build", Severity: "critical", Description: "err1", Timestamp: "2026-01-01T00:00:00Z"},
+				{ID: "2", Category: "build", Severity: "warning", Description: "err2", Timestamp: "2026-01-01T00:00:01Z"},
+				{ID: "3", Category: "build", Severity: "warning", Description: "err3", Timestamp: "2026-01-01T00:00:02Z"},
+				{ID: "4", Category: "test", Severity: "info", Description: "err4", Timestamp: "2026-01-01T00:00:03Z"},
+			},
+		},
+	}
+	s.SaveJSON("COLONY_STATE.json", state)
+
+	rootCmd.SetArgs([]string{"error-pattern-check"})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] != true {
+		t.Fatalf("expected ok:true, got: %v", env["ok"])
+	}
+
+	result := env["result"].([]interface{})
+	// Only "build" has 3+ entries
+	if len(result) != 1 {
+		t.Fatalf("pattern groups = %d, want 1", len(result))
+	}
+	group := result[0].(map[string]interface{})
+	if group["category"] != "build" {
+		t.Errorf("group category = %v, want build", group["category"])
+	}
+	if group["count"] != float64(3) {
+		t.Errorf("group count = %v, want 3", group["count"])
+	}
+}
+
+func TestErrorPatternCheckBelowThreshold(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	goal := "test goal"
+	state := colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Errors: colony.Errors{
+			Records: []colony.ErrorRecord{
+				{ID: "1", Category: "build", Severity: "critical", Description: "err1", Timestamp: "2026-01-01T00:00:00Z"},
+				{ID: "2", Category: "test", Severity: "warning", Description: "err2", Timestamp: "2026-01-01T00:00:01Z"},
+			},
+		},
+	}
+	s.SaveJSON("COLONY_STATE.json", state)
+
+	rootCmd.SetArgs([]string{"error-pattern-check"})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].([]interface{})
+	if len(result) != 0 {
+		t.Errorf("pattern groups = %d, want 0 (all below threshold of 3)", len(result))
+	}
+}
+
+func TestErrorPatternCheckNoStateFile(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stderr = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	rootCmd.SetArgs([]string{"error-pattern-check"})
+
+	rootCmd.Execute()
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] != false {
+		t.Errorf("expected ok:false when no state file, got: %v", env["ok"])
+	}
+}
+
 // parseErrorPatternsFile is a test helper to read error-patterns.json
 func parseErrorPatternsFile(t *testing.T, store interface {
 	LoadJSON(string, interface{}) error

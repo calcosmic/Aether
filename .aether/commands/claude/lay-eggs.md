@@ -125,8 +125,7 @@ cp -f ~/.aether/system/workers.md .aether/ 2>/dev/null || true && \
 cp -f ~/.aether/system/CONTEXT.md .aether/ 2>/dev/null || true && \
 # Directories
 cp -Rf ~/.aether/system/docs/* .aether/docs/ 2>/dev/null || true && \
-# utils/ now contains only non-script assets (oracle docs, hooks, XSL transforms)
-# No shell scripts to copy from hub
+cp -Rf ~/.aether/system/utils/* .aether/utils/ 2>/dev/null || true && \
 cp -Rf ~/.aether/system/templates/* .aether/templates/ 2>/dev/null || true && \
 cp -Rf ~/.aether/system/schemas/* .aether/schemas/ 2>/dev/null || true && \
 cp -Rf ~/.aether/system/exchange/* .aether/exchange/ 2>/dev/null || true && \
@@ -182,7 +181,7 @@ done
 [ -f .aether/QUEEN.md ] && files=$((files + 1))
 [ -f .aether/CONTEXT.md ] && files=$((files + 1))
 [ -d .aether/templates ] && templates=$(ls .aether/templates/*.template.* 2>/dev/null | wc -l | tr -d ' ') || templates=0
-[ -d .aether/utils ] && utils=$(find .aether/utils/ -type f | wc -l | tr -d ' ') || utils=0
+[ -d .aether/utils ] && utils=$(ls .aether/utils/*.sh 2>/dev/null | wc -l | tr -d ' ') || utils=0
 
 echo "{\"dirs\": $dirs, \"core_files\": $files, \"templates\": $templates, \"utils\": $utils}"
 ```

@@ -105,10 +105,6 @@ For failed verification:
 
 ### Step 5.5.1: Measurer Performance Agent (Conditional)
 
-**DEPTH CHECK: Measurer runs at deep and full depth only.**
-- If `colony_depth` is "light" or "standard": Display `Measurer skipped (depth: {colony_depth})` and skip to Step 5.6 (Chaos Ant).
-- If `colony_depth` is "deep" or "full": Proceed with existing Measurer spawn logic below.
-
 **Conditional step — only runs for performance-sensitive phases.**
 
 1. **Check if phase is performance-sensitive:**

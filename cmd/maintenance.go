@@ -39,7 +39,7 @@ var dataCleanCmd = &cobra.Command{
 
 		var pheromonesFile map[string]interface{}
 		if err := json.Unmarshal(data, &pheromonesFile); err != nil {
-			outputError(1, fmt.Sprintf("data-clean: failed to parse pheromones.json: %v. Check file is valid JSON.", err), nil)
+			outputError(1, fmt.Sprintf("failed to parse pheromones.json: %v", err), nil)
 			return nil
 		}
 
@@ -71,7 +71,7 @@ var dataCleanCmd = &cobra.Command{
 		if confirm && removed > 0 {
 			pheromonesFile["signals"] = kept
 			if err := store.SaveJSON("pheromones.json", pheromonesFile); err != nil {
-				outputError(2, fmt.Sprintf("data-clean: failed to save pheromones.json: %v. Check disk space and permissions.", err), nil)
+				outputError(2, fmt.Sprintf("failed to save pheromones.json: %v", err), nil)
 				return nil
 			}
 		}
@@ -101,8 +101,6 @@ var backupPruneGlobalCmd = &cobra.Command{
 			return nil
 		}
 
-		confirm, _ := cmd.Flags().GetBool("confirm")
-
 		cap, _ := cmd.Flags().GetInt("cap")
 		if cap <= 0 {
 			cap = 50
@@ -120,7 +118,7 @@ var backupPruneGlobalCmd = &cobra.Command{
 				})
 				return nil
 			}
-			outputError(1, fmt.Sprintf("backup: failed to read backup directory: %v. Verify the backup path exists.", err), nil)
+			outputError(1, fmt.Sprintf("failed to read backup directory: %v", err), nil)
 			return nil
 		}
 
@@ -155,20 +153,9 @@ var backupPruneGlobalCmd = &cobra.Command{
 		}
 
 		pruneCount := len(files) - cap
-
-		if !confirm {
-			outputOK(map[string]interface{}{
-				"pruned":      0,
-				"kept":        len(files),
-				"would_prune": pruneCount,
-				"dry_run":     true,
-			})
-			return nil
-		}
-
 		for i := 0; i < pruneCount; i++ {
 			if err := os.Remove(filepath.Join(backupDir, files[i].name)); err != nil {
-				log.Printf("backup: failed to remove backup %s: %v", files[i].name, err)
+				log.Printf("data-clean: failed to remove backup %s: %v", files[i].name, err)
 			}
 		}
 
@@ -185,8 +172,6 @@ var tempCleanCmd = &cobra.Command{
 	Short: "Remove temp files older than 7 days",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		confirm, _ := cmd.Flags().GetBool("confirm")
-
 		aetherRoot := storage.ResolveAetherRoot(context.Background())
 		tempDir := filepath.Join(aetherRoot, ".aether", "temp")
 
@@ -199,13 +184,13 @@ var tempCleanCmd = &cobra.Command{
 				})
 				return nil
 			}
-			outputError(1, fmt.Sprintf("temp: failed to read temp directory: %v. Verify the .aether/temp path.", err), nil)
+			outputError(1, fmt.Sprintf("failed to read temp directory: %v", err), nil)
 			return nil
 		}
 
 		cutoff := time.Now().Add(-7 * 24 * time.Hour)
+		cleaned := 0
 
-		var removable []string
 		for _, entry := range entries {
 			if entry.IsDir() {
 				continue
@@ -215,25 +200,13 @@ var tempCleanCmd = &cobra.Command{
 				continue
 			}
 			if info.ModTime().Before(cutoff) {
-				removable = append(removable, filepath.Join(tempDir, entry.Name()))
+				os.Remove(filepath.Join(tempDir, entry.Name()))
+				cleaned++
 			}
 		}
 
-		if !confirm {
-			outputOK(map[string]interface{}{
-				"cleaned":     0,
-				"would_clean": len(removable),
-				"dry_run":     true,
-			})
-			return nil
-		}
-
-		for _, path := range removable {
-			os.Remove(path)
-		}
-
 		outputOK(map[string]interface{}{
-			"cleaned": len(removable),
+			"cleaned": cleaned,
 		})
 		return nil
 	},
@@ -242,8 +215,6 @@ var tempCleanCmd = &cobra.Command{
 func init() {
 	dataCleanCmd.Flags().Bool("confirm", false, "Confirm removal (default: dry-run)")
 	backupPruneGlobalCmd.Flags().Int("cap", 50, "Maximum backups to keep")
-	backupPruneGlobalCmd.Flags().Bool("confirm", false, "Confirm pruning (default: dry-run)")
-	tempCleanCmd.Flags().Bool("confirm", false, "Confirm cleanup (default: dry-run)")
 
 	rootCmd.AddCommand(dataCleanCmd)
 	rootCmd.AddCommand(backupPruneGlobalCmd)

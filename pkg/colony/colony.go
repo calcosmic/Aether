@@ -22,50 +22,6 @@ const (
 	StateCOMPLETED State = "COMPLETED"
 )
 
-// ColonyDepth represents the build thoroughness level.
-type ColonyDepth string
-
-const (
-	DepthLight    ColonyDepth = "light"
-	DepthStandard ColonyDepth = "standard"
-	DepthDeep     ColonyDepth = "deep"
-	DepthFull     ColonyDepth = "full"
-)
-
-// Valid reports whether d is a recognized depth level.
-func (d ColonyDepth) Valid() bool {
-	switch d {
-	case DepthLight, DepthStandard, DepthDeep, DepthFull:
-		return true
-	}
-	return false
-}
-
-// ErrInvalidDepth is returned when a depth value is not recognized.
-var ErrInvalidDepth = fmt.Errorf("invalid colony depth")
-
-// PlanGranularity represents the planning scope level (how many phases).
-type PlanGranularity string
-
-const (
-	GranularitySprint    PlanGranularity = "sprint"
-	GranularityMilestone PlanGranularity = "milestone"
-	GranularityQuarter   PlanGranularity = "quarter"
-	GranularityMajor     PlanGranularity = "major"
-)
-
-// Valid reports whether g is a recognized granularity level.
-func (g PlanGranularity) Valid() bool {
-	switch g {
-	case GranularitySprint, GranularityMilestone, GranularityQuarter, GranularityMajor:
-		return true
-	}
-	return false
-}
-
-// ErrInvalidGranularity is returned when a granularity value is not recognized.
-var ErrInvalidGranularity = fmt.Errorf("invalid plan granularity")
-
 // Phase status constants.
 const (
 	PhasePending    = "pending"
@@ -102,41 +58,9 @@ type ColonyState struct {
 	Signals            []Signal    `json:"signals"`
 	Graveyards         []Graveyard `json:"graveyards"`
 	Events             []string    `json:"events"`
-	ColonyDepth        ColonyDepth     `json:"colony_depth,omitempty"`
-	PlanGranularity    PlanGranularity `json:"plan_granularity,omitempty"`
-	OrchestratorState  *OrchestratorState `json:"orchestrator_state,omitempty"`
-	Milestone          string             `json:"milestone"`
-	MilestoneUpdatedAt *string            `json:"milestone_updated_at,omitempty"`
-}
-
-// ---------------------------------------------------------------------------
-// Orchestrator
-// ---------------------------------------------------------------------------
-
-// TaskAssignment tracks a single task's orchestration state.
-type TaskAssignment struct {
-	TaskID    string `json:"task_id"`
-	Goal      string `json:"goal"`
-	Caste     string `json:"caste"`
-	AgentName string `json:"agent_name,omitempty"`
-	Status    string `json:"status"` // pending, in_progress, completed, failed
-	StartedAt string `json:"started_at,omitempty"`
-	EndedAt   string `json:"ended_at,omitempty"`
-	Error     string `json:"error,omitempty"`
-}
-
-// OrchestratorState holds the top-level orchestrator state.
-type OrchestratorState struct {
-	Phase          int              `json:"phase"`
-	Status         string           `json:"status"` // idle, decomposing, dispatching, collecting, validating, completed, failed
-	TaskCount      int              `json:"task_count"`
-	Completed      int              `json:"completed"`
-	Failed         int              `json:"failed"`
-	Headless       bool             `json:"headless"`
-	ReplanInterval int              `json:"replan_interval"`
-	StartedAt      string           `json:"started_at,omitempty"`
-	UpdatedAt      string           `json:"updated_at,omitempty"`
-	Assignments    []TaskAssignment `json:"assignments"`
+	ColonyDepth        string      `json:"colony_depth,omitempty"`
+	Milestone          string      `json:"milestone"`
+	MilestoneUpdatedAt *string     `json:"milestone_updated_at,omitempty"`
 }
 
 // ---------------------------------------------------------------------------

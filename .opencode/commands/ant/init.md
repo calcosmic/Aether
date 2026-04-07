@@ -477,9 +477,20 @@ Display "Import skipped. Starting fresh colony." and proceed to Step 8.
 Skip silently -- proceed directly to Step 8 without any mention of import (per D-11).
 ### Step 7.5: Install Clash Detection Hook
 
-The clash detection hook is now a native Go feature. If `.aether/utils/hooks/clash-pre-tool-use.js` exists, the hook is already active. No manual setup needed.
+If `.aether/utils/clash-detect.sh` exists, run:
 
-No merge driver configuration needed -- handled natively by Go.
+```bash
+aether clash-setup --install 2>/dev/null || true
+```
+
+This installs the PreToolUse hook that prevents conflicting edits across worktrees.
+Non-blocking — if it fails, init continues normally.
+
+Also configure the merge driver for lock files:
+
+```bash
+aether gitconfig merge-driver 2>/dev/null || true
+```
 
 ### Step 8: Display Result
 

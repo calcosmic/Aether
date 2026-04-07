@@ -117,6 +117,3 @@ node_modules/
 # Go build output
 /aether
 *.test
-cmd/.aether/
-cmd/.claude/
-cmd/.opencode/

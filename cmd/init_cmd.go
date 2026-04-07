@@ -19,8 +19,6 @@ import (
 //
 // Sealed colony detection: if a sealed colony is detected, the command checks
 // for uncommitted changes (in-progress seal) before allowing overwrite.
-var initDepth string
-
 var initCmd = &cobra.Command{
 	Use:   "init <goal>",
 	Short: "Initialize a new colony in the current directory",
@@ -35,18 +33,6 @@ var initCmd = &cobra.Command{
 		if goal == "" {
 			outputError(1, "goal must not be empty", nil)
 			return nil
-		}
-
-		// Validate --depth flag (per D-06)
-		var depth colony.ColonyDepth
-		if initDepth != "" {
-			depth = colony.ColonyDepth(initDepth)
-			if !depth.Valid() {
-				outputError(1, fmt.Sprintf("invalid depth %q: must be light, standard, deep, or full", initDepth), nil)
-				return nil
-			}
-		} else {
-			depth = colony.DepthStandard // explicit default per D-06
 		}
 
 		dataDir := store.BasePath()
@@ -105,7 +91,6 @@ var initCmd = &cobra.Command{
 			Goal:          &goal,
 			ColonyVersion: 0,
 			State:         colony.StateREADY,
-			ColonyDepth:   depth,
 			CurrentPhase:  0,
 			SessionID:     &sessionID,
 			InitializedAt: &now,
@@ -200,7 +185,6 @@ func ptrStr(s *string) string {
 }
 
 func init() {
-	initCmd.Flags().StringVar(&initDepth, "depth", "", "Set colony depth (light|standard|deep|full)")
 	rootCmd.AddCommand(initCmd)
 }
 
