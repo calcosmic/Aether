@@ -1,3 +1,10 @@
+# =============================================================================
+# DEPRECATED — This script has been superseded by the Go binary (aether CLI).
+# All functionality is now available via: aether <subcommand>
+# Do NOT modify this file — it is retained for reference only.
+# See: cmd/ (Go source) | Run: aether --help
+# =============================================================================
+#
 #!/bin/bash
 # Graph traversal layer for instinct relationships — Aether Structural Learning Stack
 # Provides: _graph_link, _graph_neighbors, _graph_reach, _graph_cluster

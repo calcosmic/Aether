@@ -1,3 +1,10 @@
+# =============================================================================
+# DEPRECATED — This script has been superseded by the Go binary (aether CLI).
+# All functionality is now available via: aether <subcommand>
+# Do NOT modify this file — it is retained for reference only.
+# See: cmd/ (Go source) | Run: aether --help
+# =============================================================================
+#
 #!/bin/bash
 # Event bus utility functions for the Aether Structural Learning Stack
 # Provides: _event_publish, _event_subscribe, _event_cleanup, _event_replay

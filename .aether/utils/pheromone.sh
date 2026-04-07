@@ -1,3 +1,10 @@
+# =============================================================================
+# DEPRECATED — This script has been superseded by the Go binary (aether CLI).
+# All functionality is now available via: aether <subcommand>
+# Do NOT modify this file — it is retained for reference only.
+# See: cmd/ (Go source) | Run: aether --help
+# =============================================================================
+#
 #!/usr/bin/env bash
 # Pheromone utility functions -- extracted from aether-utils.sh
 # Provides: _pheromone_export_eternal, _pheromone_write, _pheromone_count, _pheromone_display,

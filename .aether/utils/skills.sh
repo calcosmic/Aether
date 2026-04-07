@@ -1,3 +1,10 @@
+# =============================================================================
+# DEPRECATED — This script has been superseded by the Go binary (aether CLI).
+# All functionality is now available via: aether <subcommand>
+# Do NOT modify this file — it is retained for reference only.
+# See: cmd/ (Go source) | Run: aether --help
+# =============================================================================
+#
 #!/usr/bin/env bash
 # Skills utility — frontmatter parsing, indexing, detection, matching, injection
 # Provides: _skill_parse_frontmatter, _skill_build_index, _skill_read_index,

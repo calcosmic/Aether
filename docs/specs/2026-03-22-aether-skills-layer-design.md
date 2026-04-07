@@ -442,7 +442,7 @@ Worker prompt = task + prompt_section + skill_section
 
 This keeps colony-prime clean and means skills can be added/removed without touching the core context assembly pipeline.
 
-### New aether-utils.sh Subcommands
+### New aether CLI Subcommands
 
 | Subcommand | Purpose |
 |------------|---------|

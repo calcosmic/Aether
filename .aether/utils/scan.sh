@@ -1,3 +1,10 @@
+# =============================================================================
+# DEPRECATED — This script has been superseded by the Go binary (aether CLI).
+# All functionality is now available via: aether <subcommand>
+# Do NOT modify this file — it is retained for reference only.
+# See: cmd/ (Go source) | Run: aether --help
+# =============================================================================
+#
 #!/usr/bin/env bash
 # Scan utility -- repo scanning for smart init research data
 # Provides: _scan_init_research, _scan_tech_stack, _scan_directory_structure,

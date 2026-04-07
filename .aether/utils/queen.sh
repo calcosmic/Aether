@@ -1,3 +1,10 @@
+# =============================================================================
+# DEPRECATED — This script has been superseded by the Go binary (aether CLI).
+# All functionality is now available via: aether <subcommand>
+# Do NOT modify this file — it is retained for reference only.
+# See: cmd/ (Go source) | Run: aether --help
+# =============================================================================
+#
 #!/usr/bin/env bash
 # Queen utility functions -- extracted from aether-utils.sh
 # Provides: _queen_init, _queen_read, _queen_thresholds, _queen_promote

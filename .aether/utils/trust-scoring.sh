@@ -1,3 +1,10 @@
+# =============================================================================
+# DEPRECATED — This script has been superseded by the Go binary (aether CLI).
+# All functionality is now available via: aether <subcommand>
+# Do NOT modify this file — it is retained for reference only.
+# See: cmd/ (Go source) | Run: aether --help
+# =============================================================================
+#
 #!/bin/bash
 # Trust Scoring utility functions — Aether Structural Learning Stack
 # Provides: _trust_calculate, _trust_decay, _trust_tier

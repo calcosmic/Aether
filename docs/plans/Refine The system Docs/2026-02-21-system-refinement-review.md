@@ -14,7 +14,7 @@
 
 ## Version Evolution
 
-| Version | Date | aether-utils.sh | Commands | Key Milestone |
+| Version | Date | Core Runtime | Commands | Key Milestone |
 |---------|------|-----------------|----------|---------------|
 | v1.0.0 | Feb 9 | 984 lines | 20 | Initial stable release |
 | v2.2.0-stable | Feb 9 | 784 lines | 18 | Pre-council/swarm |
@@ -108,7 +108,7 @@ The metaphor is consistent and well-maintained.
 
 ## What's Wrong (Fix These)
 
-### 1. Dead Code in aether-utils.sh ⚠️
+### 1. Dead Code in Core Runtime ⚠️
 
 **133 subcommands** exist, but ~40 are **never called** from slash commands:
 
@@ -153,7 +153,7 @@ Recent commits added:
 - `learning-display-proposals` — Display proposals
 - `queen-promote` — Promote to queen wisdom
 
-These exist in `aether-utils.sh` but **are never called** from slash commands. The feature is half-built.
+These exist in `Core Runtime` but **are never called** from slash commands. The feature is half-built.
 
 **Fix:** Either integrate into commands, or remove if not needed.
 
@@ -263,7 +263,7 @@ These are out of sync.
 
 ## What Needs to Be Simplified
 
-### 1. aether-utils.sh (7,864 lines → ~4,000 lines)
+### 1. Core Runtime (7,864 lines → ~4,000 lines)
 
 **Approach:** Split into domain modules:
 
@@ -276,7 +276,7 @@ These are out of sync.
 | | `display.sh` — Visualization (~500 lines) |
 | | `utility.sh` — Helpers (~500 lines) |
 
-**Keep the main `aether-utils.sh` as a dispatcher:**
+**Keep the main `Core Runtime` as a dispatcher:**
 ```bash
 case "$1" in
   state-*) source utils/state.sh; handle_state "$@" ;;
@@ -297,8 +297,8 @@ esac
 | | `build-phase-3.md` — Verification (~300 lines) |
 
 Or move logic into bash:
-- `aether-utils.sh build-execute-phase 1`
-- `aether-utils.sh build-execute-phase 2`
+- `Core Runtime build-execute-phase 1`
+- `Core Runtime build-execute-phase 2`
 - etc.
 
 ### 3. Remove Unused Features
@@ -352,7 +352,7 @@ Or move logic into bash:
 
 ### Medium-term (Next Week)
 
-1. **Split aether-utils.sh** — Domain modules, not one giant file
+1. **Split Core Runtime** — Domain modules, not one giant file
 2. **Split build.md/continue.md** — Smaller composable pieces
 3. **Document the integration** — How all pieces connect
 
@@ -403,7 +403,7 @@ The engineering is solid. The integration is incomplete.
 
 | File | Lines |
 |------|-------|
-| `.aether/aether-utils.sh` | 7,864 |
+| `cmd/` (Go binary) | 7,864 |
 | `.claude/commands/ant/build.md` | 1,170 |
 | `.claude/commands/ant/continue.md` | 1,070 |
 | `.claude/commands/ant/plan.md` | 544 |

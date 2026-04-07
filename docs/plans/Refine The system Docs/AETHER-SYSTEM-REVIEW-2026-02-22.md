@@ -93,7 +93,7 @@ The pheromone system is well-designed:
 
 ## What's Wrong (Real Problems)
 
-### 1. **aether-utils.sh is 7,864 Lines** ❌
+### 1. **Core Runtime is 7,864 Lines** ❌
 
 | Version | Lines |
 |---------|-------|
@@ -165,7 +165,7 @@ Colony state is split across:
 
 ## What Needs Simplification (Not Removal)
 
-### 1. **Modularize aether-utils.sh**
+### 1. **Modularize Core Runtime**
 
 **Current:** 7,864 lines, 157 subcommands
 
@@ -268,7 +268,7 @@ Everything else derives from these.
 | 22 Agents | ❌ | ❌ | ✅ | ✅ |
 | Learning system | ❌ | ❌ | Basic | Complex |
 | XML exchange | ❌ | ❌ | ❌ | Unused |
-| aether-utils lines | 984 | 1,635 | 5,553 | 7,864 |
+| Core runtime lines | 984 | 1,635 | 5,553 | 7,864 |
 
 **Verdict:** Every version is **more capable** than the last. We did not go backwards in functionality.
 
@@ -304,7 +304,7 @@ Everything else derives from these.
 | XML exchange system | High | **Unused** — archive or delete |
 | Learning thresholds | High | **Over-engineered** — simplify |
 | Approval workflows | Medium | **Rarely used** — simplify |
-| 157 bash subcommands | Very High | **Unmaintainable** — modularize |
+| 157 subcommands | Very High | **Unmaintainable** — modularize |
 
 ---
 
@@ -319,7 +319,7 @@ Everything else derives from these.
 
 ### Phase 2: Modularization (Medium Effort, High Value)
 
-1. Split aether-utils.sh into 10 modules
+1. Split Core Runtime into 10 modules
 2. Create clear interfaces between modules
 3. Test each module independently
 
@@ -380,7 +380,7 @@ Everything else derives from these.
 
 | File | Lines |
 |------|-------|
-| `.aether/aether-utils.sh` | 7,864 |
+| `cmd/` (Go binary) | 7,864 |
 | `.aether/workers.md` | 766 |
 | `.claude/commands/ant/build.md` | 1,170 |
 | `.claude/commands/ant/continue.md` | 1,070 |

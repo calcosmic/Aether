@@ -1,3 +1,10 @@
+# =============================================================================
+# DEPRECATED — This script has been superseded by the Go binary (aether CLI).
+# All functionality is now available via: aether <subcommand>
+# Do NOT modify this file — it is retained for reference only.
+# See: cmd/ (Go source) | Run: aether --help
+# =============================================================================
+#
 #!/bin/bash
 # Council deliberation module — Advocate/Challenger/Sage model with spawn budget guards
 # Provides: _council_deliberate, _council_advocate, _council_challenger, _council_sage,

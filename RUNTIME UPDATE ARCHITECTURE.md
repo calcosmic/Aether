@@ -10,7 +10,7 @@
 │                                                                  │
 │   .aether/             ← SOURCE OF TRUTH (packaged directly)    │
 │   ├── workers.md       (edit here)                              │
-│   ├── aether-utils.sh                                           │
+│   ├── (Go binary — cmd/ and pkg/)                              │
 │   ├── utils/                                                    │
 │   └── docs/                                                     │
 │                                                                  │
@@ -134,7 +134,7 @@ sequenceDiagram
 `bin/validate-package.sh` runs before packaging to verify the `.aether/` directory is ready.
 
 - Runs automatically as npm `prepublishOnly` hook
-- Checks required files exist (workers.md, aether-utils.sh, etc.)
+- Checks required files exist (workers.md, Go binary, etc.)
 - Guards against private data exposure (verifies .aether/.npmignore covers data/, dreams/, oracle/, etc.)
 - Supports `--dry-run` mode for pre-commit checks
 

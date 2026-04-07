@@ -1,3 +1,10 @@
+# =============================================================================
+# DEPRECATED — This script has been superseded by the Go binary (aether CLI).
+# All functionality is now available via: aether <subcommand>
+# Do NOT modify this file — it is retained for reference only.
+# See: cmd/ (Go source) | Run: aether --help
+# =============================================================================
+#
 #!/bin/bash
 # Spawn utility functions — extracted from aether-utils.sh
 # Provides: _spawn_log, _spawn_complete, _spawn_can_spawn, _spawn_get_depth, _spawn_can_spawn_swarm, _spawn_tree_load, _spawn_tree_active, _spawn_tree_depth, _spawn_efficiency

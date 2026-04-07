@@ -1,6 +1,6 @@
 // Package storage provides atomic file operations, backup rotation, and path
 // resolution for Aether colony data files. It replaces the shell-based
-// atomic-write.sh and path resolution logic from aether-utils.sh.
+// atomic-write.sh and path resolution logic now provided by the aether Go binary.
 package storage
 
 import (

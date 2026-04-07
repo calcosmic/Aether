@@ -6,7 +6,7 @@
 
 **Architecture:** Skills live at `~/.aether/skills/` (installed) and `.aether/skills/` (source). A new `skills.sh` utility handles indexing, detection, matching, and injection. Skills are injected into worker prompts as a separate section OUTSIDE colony-prime, with their own 12K char budget. Colony-prime remains unchanged.
 
-**Tech Stack:** Bash (aether-utils.sh + skills.sh utility), Node.js (setupHub changes in cli.js), AVA + bash tests
+**Tech Stack:** Go binary (aether CLI) with shell utility integration, Node.js (setupHub changes in cli.js), AVA + bash tests
 
 **Spec:** `docs/specs/2026-03-22-aether-skills-layer-design.md`
 
@@ -31,9 +31,9 @@
 
 | File | Change |
 |------|--------|
-| `.aether/aether-utils.sh` (lines 26-32) | Add `source skills.sh` |
-| `.aether/aether-utils.sh` (dispatch table ~line 980) | Add 8 skill subcommand cases |
-| `.aether/aether-utils.sh` (help case ~line 988) | Add skill commands to help output |
+| `cmd/` (Go binary) | Add skill subcommand implementations |
+| `cmd/` (Go binary) (command registration) | Add 8 skill subcommand cases |
+| `cmd/` (Go binary) (help output) | Add skill commands to help output |
 | `.aether/docs/command-playbooks/build-context.md` | Add skill index + detect step |
 | `.aether/docs/command-playbooks/build-wave.md` | Add per-worker skill matching + injection |
 | `bin/cli.js` (setupHub) | Add skill directory sync to hub |
@@ -108,7 +108,7 @@ cleanup_test_env() {
 }
 
 # Source the utility
-AETHER_UTILS_SOURCE="$SCRIPT_DIR/../../.aether/aether-utils.sh"
+AETHER_UTILS="aether"  # Go binary
 
 test_parse_frontmatter() {
     test_start "parse-frontmatter returns valid JSON for colony skill"
@@ -180,7 +180,7 @@ Create `.aether/utils/skills.sh`:
 ```bash
 #!/usr/bin/env bash
 # Skills utility — frontmatter parsing, indexing, detection, matching, injection
-# Sourced by aether-utils.sh
+# Part of the aether Go CLI
 
 # Parse YAML-like frontmatter from a SKILL.md file
 # Returns JSON with all frontmatter fields
@@ -641,9 +641,9 @@ _skill_is_user_created() {
 }
 ```
 
-- [ ] **Step 4: Source skills.sh from aether-utils.sh**
+- [ ] **Step 4: Register skill subcommands in Go CLI**
 
-In `.aether/aether-utils.sh`, add after the midden.sh source line (~line 33):
+In the Go CLI (`cmd/`), register skill subcommands:
 
 ```bash
 [[ -f "$SCRIPT_DIR/utils/skills.sh" ]] && source "$SCRIPT_DIR/utils/skills.sh"
@@ -651,7 +651,7 @@ In `.aether/aether-utils.sh`, add after the midden.sh source line (~line 33):
 
 - [ ] **Step 5: Add dispatch cases for skill subcommands**
 
-In `.aether/aether-utils.sh` dispatch table (~line 980), add:
+In the Go CLI command registry, add:
 
 ```bash
 skill-parse-frontmatter)
@@ -700,7 +700,7 @@ Expected: PASS — all 3 frontmatter tests pass
 - [ ] **Step 8: Commit**
 
 ```bash
-git add .aether/utils/skills.sh .aether/aether-utils.sh tests/bash/test-skills.sh
+git add .aether/utils/skills.sh tests/bash/test-skills.sh
 git commit -m "feat(skills): add skills utility with frontmatter parser and index cache"
 ```
 
@@ -891,7 +891,7 @@ Create `.aether/skills/colony/.manifest.json`:
 
 - [ ] **Step 12: Verify all skills parse correctly**
 
-Run: `for d in .aether/skills/colony/*/SKILL.md; do echo "--- $d ---"; bash .aether/aether-utils.sh skill-parse-frontmatter "$d" | jq '.ok'; done`
+Run: `for d in .aether/skills/colony/*/SKILL.md; do echo "--- $d ---"; aether skill-parse-frontmatter "$d" | jq '.ok'; done`
 Expected: All return `true`
 
 - [ ] **Step 13: Commit**
@@ -935,7 +935,7 @@ Your custom skills are never overwritten by aether update.
 
 - [ ] **Step 7: Verify all domain skills parse**
 
-Run: `bash .aether/aether-utils.sh skill-index .aether/skills | jq '.result.skill_count'`
+Run: `aether skill-index .aether/skills | jq '.result.skill_count'`
 Expected: `28`
 
 - [ ] **Step 8: Commit**
@@ -964,8 +964,8 @@ After the colony-prime step (Step 4), add a new step:
 
 Run skill detection to identify which domain skills match the codebase:
 
-bash .aether/aether-utils.sh skill-index
-bash .aether/aether-utils.sh skill-detect "$(pwd)"
+aether skill-index
+aether skill-detect "$(pwd)"
 
 Store the detection results as cross-stage state variable `skill_detections`.
 Store the skills directory path as `skills_dir`.
@@ -983,8 +983,8 @@ In the worker spawn section of build-wave.md, AFTER the `{ prompt_section }` inj
 
 For each worker being spawned, run skill matching:
 
-skill_match=$(bash .aether/aether-utils.sh skill-match "{worker_role}" "{task_description}")
-skill_inject=$(bash .aether/aether-utils.sh skill-inject "$skill_match")
+skill_match=$(aether skill-match "{worker_role}" "{task_description}")
+skill_inject=$(aether skill-inject "$skill_match")
 skill_section=$(echo "$skill_inject" | jq -r '.result.skill_section')
 
 Append `skill_section` to the worker prompt after `prompt_section`.
@@ -1120,7 +1120,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
-const UTILS = join(import.meta.dirname, '../../.aether/aether-utils.sh');
+const UTILS = 'aether';  // Go CLI binary
 
 function runSkillCmd(cmd) {
     try {
@@ -1240,16 +1240,16 @@ Expected: Package validates with skills included
 
 ```bash
 # Index skills
-bash .aether/aether-utils.sh skill-index ~/.aether/skills
+aether skill-index ~/.aether/skills
 
 # List skills
-bash .aether/aether-utils.sh skill-list ~/.aether/skills | jq '.result.skill_count'
+aether skill-list ~/.aether/skills | jq '.result.skill_count'
 
 # Match skills for a builder
-bash .aether/aether-utils.sh skill-match builder "implement login page" ~/.aether/skills
+aether skill-match builder "implement login page" ~/.aether/skills
 
 # Inject matched skills
-bash .aether/aether-utils.sh skill-inject '{"colony_skills":[],"domain_skills":[]}'
+aether skill-inject '{"colony_skills":[],"domain_skills":[]}'
 ```
 
 - [ ] **Step 5: Commit any fixes**

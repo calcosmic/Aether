@@ -6,7 +6,6 @@ set -euo pipefail
 
 AETHER_ROOT="${AETHER_ROOT:-$(pwd)}"
 DATA_DIR="$AETHER_ROOT/.aether/data"
-UTILS="$AETHER_ROOT/.aether/aether-utils.sh"
 
 echo "# Colony Audit Report - $(date -u +%Y-%m-%d)"
 echo ""
@@ -27,7 +26,7 @@ echo "- Total signals: $signal_count"
 echo "- Expired signals: $expired_count"
 echo ""
 
-spawn_eff=$(bash "$UTILS" spawn-efficiency 2>/dev/null | jq -c '.result // {}' 2>/dev/null || echo '{}')
+spawn_eff=$(aether spawn-efficiency 2>/dev/null | jq -c '.result // {}' 2>/dev/null || echo '{}')
 total_spawned=$(echo "$spawn_eff" | jq -r '.total // 0')
 completed_spawned=$(echo "$spawn_eff" | jq -r '.completed // 0')
 efficiency_pct=$(echo "$spawn_eff" | jq -r '.efficiency_pct // 0')
@@ -58,7 +57,7 @@ if [[ -f "$DATA_DIR/midden/midden.json" ]]; then
   echo ""
 fi
 
-entropy=$(bash "$UTILS" entropy-score 2>/dev/null | jq -r '.result.score // "N/A"' 2>/dev/null || echo "N/A")
+entropy=$(aether entropy-score 2>/dev/null | jq -r '.result.score // "N/A"' 2>/dev/null || echo "N/A")
 echo "## Entropy Score"
 echo "- Current: $entropy"
 echo "- Threshold: 75 (organize required if exceeded)"

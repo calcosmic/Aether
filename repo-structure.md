@@ -6,7 +6,7 @@ One-line descriptions of top-level directories and key files.
 
 | Directory | Purpose |
 |-----------|---------|
-| `.aether/` | Colony system — workers.md, aether-utils.sh, docs/, utils/, templates/ |
+| `.aether/` | Colony system -- workers.md, docs/, utils/, templates/ |
 | `.aether/data/` | Colony state (COLONY_STATE.json, pheromones, spawn tree) — never distributed |
 | `.aether/docs/` | Developer reference — error codes, known issues, caste system |
 | `.claude/commands/ant/` | 34 Claude Code slash commands (/ant:build, /ant:plan, etc.) |

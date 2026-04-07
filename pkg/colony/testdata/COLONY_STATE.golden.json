@@ -63,13 +63,13 @@
           },
           {
             "id": "2.3",
-            "goal": "Register trust-scoring.sh and event-bus.sh in aether-utils.sh dispatcher — add source lines, case entries, and templates",
+            "goal": "Register trust-scoring.sh and event-bus.sh in aether dispatcher — add source lines, case entries, and templates",
             "status": "completed"
           }
         ],
         "success_criteria": [
           "trust-scoring.sh and event-bus.sh exist with working subcommands",
-          "Both registered in dispatcher and callable via aether-utils.sh",
+          "Both registered in dispatcher and callable via aether",
           "tests/bash/test-trust-scoring.sh and tests/bash/test-event-bus.sh pass"
         ]
       },

@@ -14,7 +14,7 @@
 | Slash commands | ~45 (Claude) + ~45 (OpenCode) |
 | Agent definitions | 24 |
 | Skills | 28 (10 colony + 18 domain) |
-| Go binary | `aether` CLI (replaces aether-utils.sh) |
+| Go binary | `aether` CLI (Go binary in cmd/) |
 | Tests | 524+ passing |
 | Architecture doc | `RUNTIME UPDATE ARCHITECTURE.md` |
 

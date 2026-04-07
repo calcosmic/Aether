@@ -1,3 +1,10 @@
+# =============================================================================
+# DEPRECATED — This script has been superseded by the Go binary (aether CLI).
+# All functionality is now available via: aether <subcommand>
+# Do NOT modify this file — it is retained for reference only.
+# See: cmd/ (Go source) | Run: aether --help
+# =============================================================================
+#
 #!/bin/bash
 # Instinct Store utility functions — standalone instinct storage with trust scoring
 # Provides: _instinct_store, _instinct_read_trusted, _instinct_decay_all, _instinct_archive

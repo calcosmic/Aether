@@ -226,7 +226,7 @@
       "timestamp": "2026-03-20T19:58:46Z",
       "category": "analytics",
       "source": "sage",
-      "message": "Sage recommendation (P1): aether-utils.sh fix ratio rising (33.8% -\u003e 45.8%) — 11,732 lines, 115 subcommands, top candidate for splitting",
+      "message": "Sage recommendation (P1): aether fix ratio rising (33.8% -\u003e 45.8%) — 11,732 lines, 115 subcommands, top candidate for splitting",
       "reviewed": false
     },
     {

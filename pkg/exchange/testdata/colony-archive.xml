@@ -1121,7 +1121,7 @@
           expires_at="2026-04-28T02:42:41Z"
           active="true">
     <content>
-      <text>Learning captured: Audit reports must use actual test output counts, not builder-claimed counts — always cross-verify bash test pass rates against live test-aether-utils.sh output</text>
+      <text>Learning captured: Audit reports must use actual test output counts, not builder-claimed counts — always cross-verify test pass rates against live test output</text>
     </content>
   </signal>
   <signal id="sig_focus_1774806114_183"

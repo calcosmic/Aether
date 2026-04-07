@@ -1,3 +1,10 @@
+# =============================================================================
+# DEPRECATED — This script has been superseded by the Go binary (aether CLI).
+# All functionality is now available via: aether <subcommand>
+# Do NOT modify this file — it is retained for reference only.
+# See: cmd/ (Go source) | Run: aether --help
+# =============================================================================
+#
 #!/bin/bash
 # Flag utility functions — extracted from aether-utils.sh
 # Provides: _flag_add, _flag_check_blockers, _flag_resolve, _flag_acknowledge, _flag_list, _flag_auto_resolve

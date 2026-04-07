@@ -1569,7 +1569,7 @@
       "strength": 0.8,
       "reason": "Oracle audit focus area",
       "content": {
-        "text": "utils-integrity: aether-utils.sh dispatcher and module consistency"
+        "text": "utils-integrity: aether dispatcher and module consistency"
       },
       "content_hash": "d0b56ce5cdfface30e996eef2a71a0db9b3b3802d58230d01f4bf5dc84d5dc1a",
       "reinforcement_count": 0

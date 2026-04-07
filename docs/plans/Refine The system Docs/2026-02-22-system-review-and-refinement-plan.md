@@ -116,7 +116,7 @@ Both Claude Code and OpenCode supported with mirrored commands.
 
 **Impact:** Claude reliably follows ~100-200 lines. At 1,000+ lines, it skips steps.
 
-### 2. `aether-utils.sh` Size ⚠️
+### 2. `Core Runtime` Size ⚠️
 
 - 7,865 lines (grew from 984 at v1.0.0)
 - 133 subcommands
@@ -182,7 +182,7 @@ The system is objectively better now:
 - 22 agent definitions
 - Test infrastructure
 - Pheromone schema
-- `aether-utils.sh` (too risky to refactor)
+- `Core Runtime` (too risky to refactor)
 
 ---
 

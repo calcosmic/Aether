@@ -136,7 +136,7 @@ Items below have been implemented and verified in the codebase.
 **Done.** `session.json` stored in `.aether/data/`, with `session-write`, `session-read`, and `/ant:resume` for instant context recovery.
 
 ### Smart Command Suggestion - 2026-02-10
-**Done.** `print-next-up` subcommand in `aether-utils.sh` provides context-aware next command suggestions based on colony state.
+**Done.** `print-next-up` subcommand in the `aether` Go binary provides context-aware next command suggestions based on colony state.
 
 ### Surface Dreams in /ant:status - 2026-02-11
 **Done.** `/ant:status` displays dream count and latest dream timestamp (Step 2.5 in status.md).

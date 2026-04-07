@@ -10,7 +10,7 @@ import (
 )
 
 // castePrefixes maps each caste name to a list of name prefixes.
-// This matches the shell implementation in aether-utils.sh generate-ant-name.
+// This matches the behavior of the aether generate-ant-name command.
 var castePrefixes = map[string][]string{
 	"builder":       {"Chip", "Hammer", "Forge", "Mason", "Brick", "Anvil", "Weld", "Bolt"},
 	"watcher":       {"Vigil", "Sentinel", "Guard", "Keen", "Sharp", "Hawk", "Watch", "Alert"},

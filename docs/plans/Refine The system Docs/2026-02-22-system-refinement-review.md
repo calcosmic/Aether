@@ -140,7 +140,7 @@ The context is spread across too many files:
 
 **Verdict:** Real problem, but not catastrophic. The context system we discussed (pheromone-based) would solve this.
 
-### 2.3 aether-utils.sh Growth
+### 2.3 Core Runtime Growth
 
 | Version | Date | Lines | Growth from Baseline |
 |---------|------|-------|---------------------|
@@ -298,7 +298,7 @@ Keep `CONTEXT.md` as human-readable summary. Keep `COLONY_STATE.json` as machine
 
 **The Solution:** Update `help.md` and `README.md` to surface hidden features. Or consciously decide to remove them.
 
-### 4.3 aether-utils.sh Modularization (Low Priority)
+### 4.3 Core Runtime Modularization (Low Priority)
 
 **The Problem:** 7,864 lines in one file.
 
@@ -308,7 +308,7 @@ Keep `CONTEXT.md` as human-readable summary. Keep `COLONY_STATE.json` as machine
 - `aether-pheromone.sh` (signal management subcommands)
 - `aether-display.sh` (visualization subcommands)
 - `aether-learning.sh` (wisdom/learning subcommands)
-- `aether-utils.sh` (entry point that sources others)
+- `Core Runtime` (entry point that sources others)
 
 ---
 
@@ -328,7 +328,7 @@ Keep `CONTEXT.md` as human-readable summary. Keep `COLONY_STATE.json` as machine
 
 | Metric | v1.0.0 | v5.0.0 | Change |
 |--------|--------|--------|--------|
-| aether-utils.sh lines | 984 | 7,864 | +700% |
+| Core Runtime lines | 984 | 7,864 | +700% |
 | Slash commands | 22 | 36 | +64% |
 | Agent definitions | 0 | 22 | New |
 | Test files | 0 | 59 | New |
@@ -402,7 +402,7 @@ Original principles from `QUEEN_ANT_ARCHITECTURE.md`:
 
 ### Do Eventually (Not Urgent)
 
-1. **Modularize aether-utils.sh** — Split by domain when making changes.
+1. **Modularize Core Runtime** — Split by domain when making changes.
 2. **Shorten longest commands** — Only if they start failing.
 3. **Feature audit** — Document or remove unused features.
 
@@ -431,7 +431,7 @@ Original principles from `QUEEN_ANT_ARCHITECTURE.md`:
 | File | Status | Keep |
 |------|--------|------|
 | `.aether/workers.md` | Comprehensive, organized | ✅ |
-| `.aether/aether-utils.sh` | Large but organized | ✅ (consider modularizing) |
+| `cmd/` (Go binary) | Large but organized | ✅ (consider modularizing) |
 | `.aether/data/pheromones.json` | Active, working | ✅ |
 | `tests/` | 490+ passing | ✅ |
 | `bin/lib/*.js` | Well-organized modules | ✅ |
@@ -446,7 +446,7 @@ Original principles from `QUEEN_ANT_ARCHITECTURE.md`:
 | Category | Count | Status |
 |----------|-------|--------|
 | **Code** | | |
-| aether-utils.sh lines | 7,864 | Large but organized |
+| Core Runtime lines | 7,864 | Large but organized |
 | Subcommands | 131 | Consider modularizing |
 | Utility scripts | 18 | Well-organized |
 | JS modules | 16 | Well-organized |

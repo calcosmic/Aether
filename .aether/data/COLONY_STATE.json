@@ -4,7 +4,7 @@
   "colony_name": null,
   "colony_version": 1,
   "state": "READY",
-  "current_phase": 4,
+  "current_phase": 6,
   "session_id": "session_1775528131_fbfbba9267fd172c",
   "initialized_at": "2026-04-07T02:15:31Z",
   "build_started_at": null,
@@ -13,234 +13,234 @@
     "confidence": 97,
     "phases": [
       {
+        "description": "Update 3 YAML source files and command template. lay-eggs.yaml (8 refs -> aether setup), init.yaml (1 ref), resume.yaml (1 ref), template.yaml (1 ref).",
         "id": 1,
         "name": "YAML source definitions",
-        "description": "Update 3 YAML source files and command template. lay-eggs.yaml (8 refs -\u003e aether setup), init.yaml (1 ref), resume.yaml (1 ref), template.yaml (1 ref).",
         "status": "completed",
+        "success_criteria": null,
         "tasks": [
           {
-            "id": "1.1",
-            "goal": "Replace 8 aether-utils.sh references in lay-eggs.yaml",
-            "status": "completed",
             "constraints": [
               "aether setup replaces hub sync, mkdir, chmod, .gitignore generation"
             ],
+            "goal": "Replace 8 aether-utils.sh references in lay-eggs.yaml",
+            "id": "1.1",
+            "status": "completed",
             "success_criteria": [
               "grep -c aether-utils.sh lay-eggs.yaml returns 0"
             ]
           },
           {
-            "id": "1.2",
             "goal": "Replace aether-utils.sh references in init.yaml",
+            "id": "1.2",
             "status": "completed",
             "success_criteria": [
               "grep -c aether-utils.sh init.yaml returns 0"
             ]
           },
           {
-            "id": "1.3",
             "goal": "Replace aether-utils.sh references in resume.yaml",
+            "id": "1.3",
             "status": "completed",
             "success_criteria": [
               "grep -c aether-utils.sh resume.yaml returns 0"
             ]
           },
           {
-            "id": "1.4",
             "goal": "Replace aether-utils.sh example in template.yaml",
+            "id": "1.4",
             "status": "completed",
             "success_criteria": [
               "grep -c aether-utils.sh template.yaml returns 0"
             ]
           }
-        ],
-        "success_criteria": null
+        ]
       },
       {
+        "description": "Batch-update 42 .aether/commands/claude/ files and 45 .aether/commands/opencode/ files. Apply sed: bash .aether/aether-utils.sh -> aether.",
         "id": 2,
         "name": "Claude + OpenCode command files (92 files)",
-        "description": "Batch-update 42 .aether/commands/claude/ files and 45 .aether/commands/opencode/ files. Apply sed: bash .aether/aether-utils.sh -\u003e aether.",
         "status": "completed",
+        "success_criteria": null,
         "tasks": [
           {
-            "id": "2.1",
-            "goal": "Batch-update 42 .aether/commands/claude/ files",
-            "status": "completed",
             "constraints": [
               "build-flow-start maps to context-update build-start"
             ],
+            "goal": "Batch-update 42 .aether/commands/claude/ files",
+            "id": "2.1",
+            "status": "completed",
             "success_criteria": [
               "grep -rl aether-utils.sh .aether/commands/claude/ returns empty"
             ]
           },
           {
-            "id": "2.2",
-            "goal": "Batch-update 45 .aether/commands/opencode/ files",
-            "status": "completed",
             "constraints": [
               "Same mappings as 2.1"
             ],
+            "goal": "Batch-update 45 .aether/commands/opencode/ files",
+            "id": "2.2",
+            "status": "completed",
             "success_criteria": [
               "grep -rl aether-utils.sh .aether/commands/opencode/ returns empty"
             ]
           }
-        ],
-        "success_criteria": null
+        ]
       },
       {
+        "description": "Update .claude/commands/ant/ (3 files: init.md, lay-eggs.md, resume.md) and .opencode/commands/ant/ (45 files). Runtime slash commands loaded by editors.",
         "id": 3,
         "name": "Claude Code + OpenCode runtime commands (48 files)",
-        "description": "Update .claude/commands/ant/ (3 files: init.md, lay-eggs.md, resume.md) and .opencode/commands/ant/ (45 files). Runtime slash commands loaded by editors.",
         "status": "completed",
+        "success_criteria": null,
         "tasks": [
           {
-            "id": "3.1",
             "goal": "Update 3 .claude/commands/ant/ files: init.md, lay-eggs.md, resume.md",
+            "id": "3.1",
             "status": "pending",
             "success_criteria": [
               "grep -rl aether-utils.sh .claude/commands/ant/ returns empty"
             ]
           },
           {
-            "id": "3.2",
             "goal": "Batch-update 45 .opencode/commands/ant/ files",
+            "id": "3.2",
             "status": "pending",
             "success_criteria": [
               "grep -rl aether-utils.sh .opencode/commands/ant/ returns empty"
             ]
           }
-        ],
-        "success_criteria": null
+        ]
       },
       {
+        "description": "Update .aether/agents/ (20), .claude/agents/ant/ (6), .opencode/agents/ (20). Replace do not modify aether-utils.sh directives with Go source references.",
         "id": 4,
         "name": "Agent definitions (46 files)",
-        "description": "Update .aether/agents/ (20), .claude/agents/ant/ (6), .opencode/agents/ (20). Replace do not modify aether-utils.sh directives with Go source references.",
-        "status": "pending",
+        "status": "completed",
+        "success_criteria": null,
         "tasks": [
           {
-            "id": "4.1",
             "goal": "Batch-update 20 .aether/agents/ files",
-            "status": "pending",
+            "id": "4.1",
+            "status": "completed",
             "success_criteria": [
               "grep -rl aether-utils.sh .aether/agents/ returns empty"
             ]
           },
           {
-            "id": "4.2",
             "goal": "Update 6 .claude/agents/ant/ files",
-            "status": "pending",
+            "id": "4.2",
+            "status": "completed",
             "success_criteria": [
               "grep -rl aether-utils.sh .claude/agents/ant/ returns empty"
             ]
           },
           {
-            "id": "4.3",
             "goal": "Batch-update 20 .opencode/agents/ files",
-            "status": "pending",
+            "id": "4.3",
+            "status": "completed",
             "success_criteria": [
               "grep -rl aether-utils.sh .opencode/agents/ returns empty"
             ]
           }
-        ],
-        "success_criteria": null
+        ]
       },
       {
+        "description": "Update .aether/docs/ (14), exchange XML (2), workers.md, QUEEN.md, CLAUDE.md, CHANGELOG.md, repo-structure.md, RUNTIME UPDATE ARCHITECTURE.md, TO-DOS.md, PROMPT-GO-CONVERSION.md, OPENCODE.md, docs/plans (7), Go source comments (2).",
         "id": 5,
         "name": "Documentation and source files (29 files)",
-        "description": "Update .aether/docs/ (14), exchange XML (2), workers.md, QUEEN.md, CLAUDE.md, CHANGELOG.md, repo-structure.md, RUNTIME UPDATE ARCHITECTURE.md, TO-DOS.md, PROMPT-GO-CONVERSION.md, OPENCODE.md, docs/plans (7), Go source comments (2).",
-        "status": "pending",
+        "status": "completed",
+        "success_criteria": null,
         "tasks": [
           {
-            "id": "5.1",
-            "goal": "Batch-update 14 .aether/docs/ files",
-            "status": "pending",
             "constraints": [
               "ci-context-assembly-design.md and state-contract-design.md need attribution table updates"
             ],
+            "goal": "Batch-update 14 .aether/docs/ files",
+            "id": "5.1",
+            "status": "completed",
             "success_criteria": [
               "grep -rl aether-utils.sh .aether/docs/ returns empty"
             ]
           },
           {
-            "id": "5.2",
             "goal": "Update workers.md, QUEEN.md, CLAUDE.md, architecture docs, exchange XML",
-            "status": "pending",
+            "id": "5.2",
+            "status": "completed",
             "success_criteria": [
               "grep -c aether-utils.sh returns 0 for each file"
             ]
           },
           {
-            "id": "5.3",
-            "goal": "Update Go source comments in cmd/generate_cmds.go and pkg/storage/storage.go",
-            "status": "pending",
             "constraints": [
               "Do not change functional code"
             ],
+            "goal": "Update Go source comments in cmd/generate_cmds.go and pkg/storage/storage.go",
+            "id": "5.3",
+            "status": "completed",
             "success_criteria": [
               "grep -c aether-utils.sh returns 0 for both files"
             ]
           },
           {
-            "id": "5.4",
             "goal": "Update 7 docs/plans/ and docs/specs/ files",
-            "status": "pending",
+            "id": "5.4",
+            "status": "completed",
             "success_criteria": [
               "grep -rl aether-utils.sh docs/ returns empty"
             ]
           }
-        ],
-        "success_criteria": null
+        ]
       },
       {
+        "description": "Update weekly-audit.sh, add deprecation headers to 38 dead .aether/utils/ scripts, run final grep verification and Go test suite.",
         "id": 6,
         "name": "Shell deprecation and final verification",
-        "description": "Update weekly-audit.sh, add deprecation headers to 38 dead .aether/utils/ scripts, run final grep verification and Go test suite.",
-        "status": "pending",
+        "status": "completed",
+        "success_criteria": null,
         "tasks": [
           {
-            "id": "6.1",
-            "goal": "Update weekly-audit.sh",
-            "status": "pending",
             "constraints": [
               "spawn-efficiency and entropy-score subcommands confirmed in Go binary"
             ],
+            "goal": "Update weekly-audit.sh",
+            "id": "6.1",
+            "status": "pending",
             "success_criteria": [
               "grep -c aether-utils.sh weekly-audit.sh returns 0"
             ]
           },
           {
-            "id": "6.2",
-            "goal": "Add DEPRECATED header to all 38 .aether/utils/ shell scripts",
-            "status": "pending",
             "constraints": [
               "Do not modify file contents, only prepend header"
             ],
+            "goal": "Add DEPRECATED header to all 38 .aether/utils/ shell scripts",
+            "id": "6.2",
+            "status": "pending",
             "success_criteria": [
               "All 38 files have deprecation comment block"
             ]
           },
           {
-            "id": "6.3",
-            "goal": "Final grep verification across entire repo",
-            "status": "pending",
             "constraints": [
               "Exclude archives, testdata, .aether/aether-utils.sh itself"
             ],
+            "goal": "Final grep verification across entire repo",
+            "id": "6.3",
+            "status": "pending",
             "success_criteria": [
               "Zero aether-utils.sh references in active scope"
             ]
           },
           {
-            "id": "6.4",
             "goal": "Run go test ./... -race",
+            "id": "6.4",
             "status": "pending",
             "success_criteria": [
               "All tests pass"
             ]
           }
-        ],
-        "success_criteria": null
+        ]
       }
     ]
   },
@@ -260,10 +260,25 @@
           }
         ],
         "timestamp": "2026-04-07T04:34:35Z"
+      },
+      {
+        "id": "learning_1775540069",
+        "phase": 4,
+        "phase_name": "Agent definitions (46 files)",
+        "learnings": [
+          {
+            "claim": "Agent definition files across .aether/agents/, .claude/agents/ant/, and .opencode/agents/ contain both bash invocations and prose references to aether-utils.sh — both patterns need contextual replacement, not just sed",
+            "status": "validated",
+            "tested": true,
+            "evidence": "47+47+8=102 references across 46 files; bash invocations replaced with aether CLI, prose references updated to reference Go source in cmd/ or pkg/",
+            "disproven_by": null
+          }
+        ],
+        "timestamp": "2026-04-07T04:28:00Z"
       }
     ],
     "decisions": null,
-    "instincts": []
+    "instincts": null
   },
   "errors": {
     "records": [],
@@ -272,9 +287,11 @@
   "signals": [],
   "graveyards": [],
   "events": [
-    ""
+    "2026-04-07T02:15:31Z|phase_started|build|Colony initialized",
+    "2026-04-07T05:52:10Z|phase_started|build|Phase 5: Documentation and source files (29 files) started",
+    "2026-04-07T06:22:00Z|phase_advanced|continue|Completed Phase 5, advancing to Phase 6",
+    "2026-04-07T06:41:53Z|phase_started|build|Phase 6: Shell deprecation and final verification started",
+    "2026-04-07T07:10:44Z|phase_advanced|continue|Completed Phase 6, all phases complete"
   ],
-  "milestone": ""
+  "milestone": "Crowned Anthill"
 }
-
-

@@ -20,7 +20,7 @@
 
 ### The Timeline
 
-| Version | Date | aether-utils.sh | Commands | Agents | Key Achievement |
+| Version | Date | Core Runtime | Commands | Agents | Key Achievement |
 |---------|------|-----------------|----------|--------|-----------------|
 | v1.0.0 | Feb 9 | 984 lines | 22 | 0 | First stable release |
 | v2.4.3 | Feb 13 | 1,390 lines | 30 | 0 | Flag system, auto-resolve |
@@ -33,7 +33,7 @@
 
 | Metric | v1.0.0 | Current | Growth Factor |
 |--------|--------|---------|---------------|
-| aether-utils.sh | 984 | 7,864 | **8x** |
+| Core Runtime | 984 | 7,864 | **8x** |
 | build.md | 504 | 1,170 | 2.3x |
 | continue.md | ~400 | 1,070 | 2.7x |
 | Commands | 22 | 36 | 1.6x |
@@ -143,7 +143,7 @@ FOCUS/REDIRECT/FEEDBACK signals with priority, scope, expiration, and tags.
 
 ## Part 3: What's Wrong (Needs Attention)
 
-### 1. aether-utils.sh Size — 7,864 lines, 130+ subcommands ⚠️
+### 1. Core Runtime Size — 7,864 lines, 130+ subcommands ⚠️
 
 This file has grown 8x since v1.0.0. It's now a "god file" with too many responsibilities.
 
@@ -153,7 +153,7 @@ This file has grown 8x since v1.0.0. It's now a "god file" with too many respons
 - Hard to maintain without introducing bugs
 - Single point of failure
 
-**Justification for concern:** Large files correlate with bug density. A 7,800-line shell script is objectively difficult to maintain.
+**Justification for concern:** Large files correlate with bug density. A 7,800-line monolithic file is objectively difficult to maintain.
 
 **Subcommand domains identified:**
 - Pheromone: 12 subcommands
@@ -314,7 +314,7 @@ Workers exist but don't naturally respond to pheromone signals.
 **Current:** 6 semantic subcommands, no integration
 **Proposed:** Either integrate with context system or remove
 
-### 3. Split aether-utils.sh
+### 3. Split Core Runtime
 
 **Current:** 7,864 lines, 130+ subcommands
 **Proposed:** 6 domain modules of ~1,000-1,500 lines each
@@ -374,7 +374,7 @@ Workers exist but don't naturally respond to pheromone signals.
 
 | Aspect | v1.0.0 | Current | Concern |
 |--------|--------|---------|---------|
-| aether-utils.sh | 984 lines | 7,864 lines | ⚠️ 8x growth |
+| Core Runtime | 984 lines | 7,864 lines | ⚠️ 8x growth |
 | build.md | 504 lines | 1,170 lines | ⚠️ Followability |
 | Unused features | None | Learning, semantic | ⚠️ Dead code |
 
@@ -400,7 +400,7 @@ The best engineered version with the most features. But also the most complex. T
 
 | Priority | Task | Justification | Effort |
 |----------|------|---------------|--------|
-| 4 | **Split aether-utils.sh** | 7,864 lines is unmaintainable | High |
+| 4 | **Split Core Runtime** | 7,864 lines is unmaintainable | High |
 | 5 | **Tie pheromones to context** | Solve the original problem the ant way | Medium |
 | 6 | **Tie workers to pheromones** | Workers should "smell" active signals | Medium |
 
@@ -418,7 +418,7 @@ The best engineered version with the most features. But also the most complex. T
 ### Learning System Audit
 
 **Files to check:**
-- `.aether/aether-utils.sh` — learning-* subcommands
+- `cmd/` (Go binary) — learning-* subcommands
 - `.claude/commands/ant/continue.md` — does it call learning functions?
 - `.aether/data/queen-wisdom.json` — is it ever populated?
 
@@ -430,7 +430,7 @@ The best engineered version with the most features. But also the most complex. T
 ### Semantic Layer Audit
 
 **Files to check:**
-- `.aether/aether-utils.sh` — semantic-* subcommands
+- `cmd/` (Go binary) — semantic-* subcommands
 - `.aether/utils/semantic-cli.sh` — utility implementation
 - Any command that uses semantic search
 
@@ -443,7 +443,7 @@ The best engineered version with the most features. But also the most complex. T
 
 **Files to check:**
 - `.aether/utils/xml-*.sh` — 7 XML utilities
-- `.aether/aether-utils.sh` — XML-related subcommands
+- `cmd/` (Go binary) — XML-related subcommands
 - `.aether/schemas/` — XSD schemas
 
 **Questions:**
