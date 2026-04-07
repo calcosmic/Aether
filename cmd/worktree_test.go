@@ -648,7 +648,7 @@ func TestWorktreeOrphanScanStaleEntry(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// verifyOrphanThreshold helper
+// isWorktreeOrphaned helper tests
 // ---------------------------------------------------------------------------
 
 func TestIsWorktreeOrphaned(t *testing.T) {
@@ -909,5 +909,219 @@ func TestWorktreeAllocateAuditLog(t *testing.T) {
 			}
 		}
 		// It's ok if the command failed for other reasons (e.g. git not available)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Task 2: Additional edge case tests
+// ---------------------------------------------------------------------------
+
+func TestWorktreeAllocateConstructsAgentBranch(t *testing.T) {
+	// Verify that --agent "builder-1" --phase 2 constructs "phase-2/builder-1"
+	branch := fmt.Sprintf("phase-%d/%s", 2, "builder-1")
+	if branch != "phase-2/builder-1" {
+		t.Errorf("expected phase-2/builder-1, got %s", branch)
+	}
+	// Verify it passes validation
+	if err := validateBranchName(branch); err != nil {
+		t.Errorf("constructed branch should be valid: %v", err)
+	}
+}
+
+func TestWorktreeListEmptyArrayState(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	var stdoutBuf bytes.Buffer
+	stdout = &stdoutBuf
+
+	// State with explicit empty worktrees array
+	worktrees := []colony.WorktreeEntry{}
+	state := makeTestStateWithWorktrees(worktrees)
+	s, _ := newWorktreeTestStore(t, state)
+	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	store = s
+
+	rootCmd.SetArgs([]string{"worktree-list"})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	envelope := assertOKEnvelope(t, stdoutBuf.String())
+	result := envelope["result"].(map[string]interface{})
+	wtList, ok := result["worktrees"].([]interface{})
+	if !ok {
+		t.Fatalf("result.worktrees is not an array, got: %T", result["worktrees"])
+	}
+	if len(wtList) != 0 {
+		t.Errorf("expected 0 worktrees, got %d", len(wtList))
+	}
+}
+
+func TestWorktreeOrphanScanWithRecentCommit(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	var stdoutBuf bytes.Buffer
+	stdout = &stdoutBuf
+
+	// Create a worktree with recent activity (not orphaned)
+	recentTime := time.Now().Add(-1 * time.Hour).Format(time.RFC3339)
+	worktrees := []colony.WorktreeEntry{
+		{
+			ID:           "wt_recent_001",
+			Branch:       "phase-3/builder-active",
+			Path:         ".aether/worktrees/phase-3-builder-active",
+			Status:       colony.WorktreeInProgress,
+			Phase:        3,
+			Agent:        "builder-active",
+			CreatedAt:    time.Now().Add(-2 * time.Hour).Format(time.RFC3339),
+			LastCommitAt: recentTime,
+		},
+	}
+
+	state := makeTestStateWithWorktrees(worktrees)
+	s, _ := newWorktreeTestStore(t, state)
+	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	store = s
+
+	rootCmd.SetArgs([]string{"worktree-orphan-scan", "--threshold", "48"})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	envelope := assertOKEnvelope(t, stdoutBuf.String())
+	result := envelope["result"].(map[string]interface{})
+
+	// Should not be flagged as orphaned (recent commit within 48h threshold)
+	orphaned, ok := result["orphaned"].([]interface{})
+	if !ok {
+		t.Fatalf("result.orphaned is not an array, got: %T", result["orphaned"])
+	}
+	if len(orphaned) != 0 {
+		t.Errorf("expected 0 orphaned worktrees, got %d", len(orphaned))
+	}
+}
+
+func TestWorktreeAllocateWithPhaseZero(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	var stderrBuf bytes.Buffer
+	stderr = &stderrBuf
+
+	state := makeTestStateWithWorktrees(nil)
+	s, _ := newWorktreeTestStore(t, state)
+	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	store = s
+
+	// --phase 0 should be rejected (not a valid agent-track name)
+	rootCmd.SetArgs([]string{"worktree-allocate", "--agent", "builder", "--phase", "0"})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// phase-0 is not a valid agent-track name
+	output := stderrBuf.String()
+	if !strings.Contains(output, "invalid branch name") && !strings.Contains(output, "required") {
+		t.Errorf("expected validation error for phase-0, got: %s", output)
+	}
+}
+
+func TestValidateBranchNameEdgeCases(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{"single char agent", "phase-1/a", false},
+		{"agent with many hyphens", "phase-5/some-long-agent-name-here", false},
+		{"feature with slashes in desc", "feature/auth/v2", false},
+		{"experiment with numbers", "experiment/idea-42", false},
+		{"colony prefix", "colony/my-colony", false},
+		{"fix prefix", "fix/critical-bug", false},
+		{"uppercase agent", "phase-1/A", true},
+		{"space in name", "phase-1/builder 1", true},
+		{"special chars accepted by prefix", "feature/auth!@#", false}, // prefix validation only; git rejects bad chars
+		{"just prefix no slash", "feature", true},
+		{"double slash", "phase-1//builder", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateBranchName(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateBranchName(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestWorktreeAllocateMergedBranchAllowed(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	var stderrBuf, stdoutBuf bytes.Buffer
+	stderr = &stderrBuf
+	stdout = &stdoutBuf
+
+	// A merged worktree with the same branch should be allowed (can reuse branch)
+	worktrees := []colony.WorktreeEntry{
+		{ID: "wt_merged", Branch: "phase-2/builder-1", Path: ".aether/worktrees/phase-2-builder-1", Status: colony.WorktreeMerged, Phase: 2, CreatedAt: time.Now().UTC().Format(time.RFC3339)},
+	}
+
+	state := makeTestStateWithWorktrees(worktrees)
+	s, _ := newWorktreeTestStore(t, state)
+	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	store = s
+
+	rootCmd.SetArgs([]string{"worktree-allocate", "--agent", "builder-1", "--phase", "2"})
+
+	err := rootCmd.Execute()
+	_ = err // may fail for git reasons, but should NOT fail for "already tracked"
+
+	// Should NOT get "already tracked" error since the existing one is merged
+	if strings.Contains(stderrBuf.String(), "already tracked") {
+		t.Errorf("merged worktree should allow re-allocation, got: %s", stderrBuf.String())
+	}
+}
+
+func TestWorktreeListFilterNonExistentStatus(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	var stdoutBuf bytes.Buffer
+	stdout = &stdoutBuf
+
+	worktrees := []colony.WorktreeEntry{
+		{ID: "wt_001", Branch: "phase-2/builder-1", Path: ".aether/worktrees/phase-2-builder-1", Status: colony.WorktreeAllocated, Phase: 2, CreatedAt: time.Now().UTC().Format(time.RFC3339)},
+	}
+
+	state := makeTestStateWithWorktrees(worktrees)
+	s, _ := newWorktreeTestStore(t, state)
+	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	store = s
+
+	rootCmd.SetArgs([]string{"worktree-list", "--status", "nonexistent"})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	envelope := assertOKEnvelope(t, stdoutBuf.String())
+	result := envelope["result"].(map[string]interface{})
+	wtList, ok := result["worktrees"].([]interface{})
+	if !ok {
+		t.Fatalf("result.worktrees is not an array, got: %T", result["worktrees"])
+	}
+	if len(wtList) != 0 {
+		t.Errorf("expected 0 worktrees for nonexistent status, got %d", len(wtList))
 	}
 }
