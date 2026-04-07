@@ -36,6 +36,7 @@ Analyze the phase tasks:
    - Research/docs tasks → 🔍🐜 Scout (**only if `colony_depth` is "standard", "deep", or "full"**; at "light" depth, reassign to Builder or skip)
    - Testing/validation → 👁️🐜 Watcher (ALWAYS spawn at least one)
    - Resilience testing → 🎲🐜 Chaos (ALWAYS spawn one after Watcher)
+   - **Builder count limits:** At `light` depth, limit to 1 builder regardless of task count. At `standard` depth, limit to 2 builders. At `deep` and `full` depth, no builder limit.
 
 3. **Generate ant names for each worker:**
 
@@ -58,7 +59,7 @@ Verification
   👁️🐜 {Watcher-Name}  Verify all work independently
   {if colony_depth == "full": 🎲🐜 {Chaos-Name}   Resilience testing (after Watcher)}
 
-Total: {N} Builders + 1 Watcher{if colony_depth == "full": " + 1 Chaos"}{if colony_depth in ["deep","full"]: " + 1 Oracle + 1 Architect"} = {total} spawns
+Total: {N} Builder(s){if colony_depth == "light": " (limited to 1)"} + 1 Watcher{if colony_depth == "full": " + 1 Chaos"}{if colony_depth in ["deep","full"]: " + 1 Oracle + 1 Architect"}{if colony_depth in ["deep","full"]: " + 1 Measurer"}{if colony_depth in ["deep","full"]: " + 1 Ambassador"} = {total} spawns
 ```
 
 **Caste Emoji Legend:**
@@ -271,6 +272,10 @@ For a single worker:
 
 ### Step 5.1.1: Ambassador External Integration (Conditional Caste Replacement)
 
+**DEPTH CHECK: Ambassador runs at deep and full depth only.**
+- If `colony_depth` is "light" or "standard": Display `Ambassador skipped (depth: {colony_depth})` and skip to Step 5.1 (standard Builder spawning).
+- If `colony_depth` is "deep" or "full": Proceed with existing Ambassador spawn logic below.
+
 **Check if any Wave 1 tasks involve external integration:**
 
 For each task in Wave 1, examine the task description and constraints for external integration keywords (case-insensitive):
@@ -467,8 +472,17 @@ Display per worker:
 
 **PER WORKER:** Run using the Bash tool with description "Preparing worker {name}...": `aether spawn-log "Queen" "builder" "{ant_name}" "{task_description}" && aether context-update worker-spawn "{ant_name}" "builder" "{task_description}"`
 
-**Context layer budget caps (enforce before injecting into prompt):**
-- `archaeology_context`: cap at 4000 characters. If it exceeds the cap, truncate and append `[archaeology truncated]`.
+**Context layer budget caps (depth-based, enforce before injecting into prompt):**
+
+Compute depth-based caps before spawning:
+```bash
+# Compute depth-based context budget caps
+budget_result=$(aether context-budget --depth "$colony_depth" 2>/dev/null || echo '{"ok":true,"result":{"context":8000}}')
+context_budget=$(echo "$budget_result" | jq -r '.result.context // 8000')
+archaeology_cap=$((context_budget / 2))  # Half of context budget for archaeology
+```
+
+- `archaeology_context`: cap at `$archaeology_cap` characters (half of depth context budget). If it exceeds the cap, truncate and append `[archaeology truncated]`.
 - `midden_context`: cap at 2000 characters (already enforced above).
 - `grave_context`: cap at 2000 characters per worker (already enforced above).
 
