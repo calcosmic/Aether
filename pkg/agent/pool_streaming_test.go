@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -473,14 +474,14 @@ func TestPoolAgentTopicSubscription(t *testing.T) {
 	bus.Publish(context.Background(), "test.run", payload2, "test")
 
 	// Collect events
-	var builderCount, watcherCount int
+	var builderCount, watcherCount atomic.Int32
 	deadline := time.After(2 * time.Second)
 
-	collectEvents := func(ch <-chan events.Event, count *int) {
+	collectEvents := func(ch <-chan events.Event, counter *atomic.Int32) {
 		for {
 			select {
 			case <-ch:
-				*count++
+				counter.Add(1)
 			case <-time.After(100 * time.Millisecond):
 				return
 			}
@@ -494,10 +495,10 @@ func TestPoolAgentTopicSubscription(t *testing.T) {
 	<-deadline
 
 	// Verify each agent published to its own topic
-	if builderCount == 0 {
+	if builderCount.Load() == 0 {
 		t.Error("Expected builder events on agent.builder-1.* topic")
 	}
-	if watcherCount == 0 {
+	if watcherCount.Load() == 0 {
 		t.Error("Expected watcher events on agent.watcher-1.* topic")
 	}
 

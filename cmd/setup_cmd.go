@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -204,7 +205,9 @@ func setupSyncDir(src, dest string) syncResult {
 
 		// Make .sh files executable
 		if strings.HasSuffix(relPath, ".sh") {
-			os.Chmod(destPath, 0755)
+			if err := os.Chmod(destPath, 0755); err != nil {
+				log.Printf("setup: failed to chmod %s: %v", destPath, err)
+			}
 		}
 
 		result.copied++

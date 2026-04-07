@@ -97,12 +97,14 @@ func (p *Pipeline) handleObserveEvent(ctx context.Context, evt events.Event) {
 		ColonyName string `json:"colony_name"`
 	}
 	if err := json.Unmarshal(evt.Payload, &payload); err != nil {
+		log.Printf("pipeline: handleObserveEvent unmarshal failed: %v", err)
 		return
 	}
 
 	// Load the observation to check promotion eligibility
 	var obsFile colony.LearningFile
 	if err := p.store.LoadJSON("learning-observations.json", &obsFile); err != nil {
+		log.Printf("pipeline: handleObserveEvent failed to load observations: %v", err)
 		return
 	}
 

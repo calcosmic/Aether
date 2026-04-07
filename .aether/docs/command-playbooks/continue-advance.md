@@ -328,34 +328,51 @@ aether state-mutate \
 Validate the state file:
 Run using the Bash tool with description "Validating colony state...": `aether validate-state colony`
 
-### Step 2.0.4: Worktree Merge-Back (NON-BLOCKING)
+### Step 2.0.4: Worktree Merge-Back (DEPRECATED, NON-BLOCKING)
 
 After state update, check for any completed worktree branches from the build wave and merge them back to the target branch.
 
+> **DEPRECATED**: The `worktree-merge` command has been deprecated and will be removed
+> in a future version. It returns `ok:true` with `deprecated:true` for backward
+> compatibility. This step now always skips gracefully. Use `git merge` directly instead.
+
 Run using the Bash tool with description "Checking for worktree branches to merge...":
 ```bash
-# List worktree branches created during this build
-branches=$(git -C "$AETHER_ROOT" worktree list --porcelain 2>/dev/null \
-    | grep "worktree-agent-\|worktree-" \
-    | awk '{print $NF}' || echo "")
+# Check if worktree-merge is deprecated (returns ok:true with deprecated:true)
+merge_check=$(aether worktree-merge --branch "check" 2>/dev/null || echo '{"ok":false}')
+merge_deprecated=$(echo "$merge_check" | jq -r '.result.deprecated // false')
 
-last_merged_branch=""
-last_merge_sha=""
-merged_count=0
+if [[ "$merge_deprecated" == "true" ]]; then
+    # Command is deprecated — skip worktree merge-back entirely.
+    # Set empty variables so downstream steps (2.0.5, 2.0.6) skip gracefully.
+    last_merged_branch=""
+    last_merge_sha=""
+    merged_count=0
+else
+    # Legacy path: for older aether versions that still have real worktree-merge
+    branches=$(git -C "$AETHER_ROOT" worktree list --porcelain 2>/dev/null \
+        | grep "worktree-agent-\|worktree-" \
+        | awk '{print $NF}' || echo "")
 
-for branch in $branches; do
-    [[ -z "$branch" ]] && continue
-    result=$(aether worktree-merge --branch "$branch" 2>/dev/null || echo '{"ok":false}')
-    ok=$(echo "$result" | jq -r '.ok // false')
-    if [[ "$ok" == "true" ]]; then
-        last_merged_branch="$branch"
-        last_merge_sha=$(echo "$result" | jq -r '.result.sha // ""')
-        merged_count=$((merged_count + 1))
+    last_merged_branch=""
+    last_merge_sha=""
+    merged_count=0
+
+    for branch in $branches; do
+        [[ -z "$branch" ]] && continue
+        result=$(aether worktree-merge --branch "$branch" 2>/dev/null || echo '{"ok":false}')
+        ok=$(echo "$result" | jq -r '.ok // false')
+        deprecated=$(echo "$result" | jq -r '.result.deprecated // false')
+        if [[ "$ok" == "true" && "$deprecated" != "true" ]]; then
+            last_merged_branch="$branch"
+            last_merge_sha=$(echo "$result" | jq -r '.result.sha // ""')
+            merged_count=$((merged_count + 1))
+        fi
+    done
+
+    if [[ "$merged_count" -gt 0 ]]; then
+        echo "Merged $merged_count worktree branch(es). Last: $last_merged_branch ($last_merge_sha)"
     fi
-done
-
-if [[ "$merged_count" -gt 0 ]]; then
-    echo "Merged $merged_count worktree branch(es). Last: $last_merged_branch ($last_merge_sha)"
 fi
 ```
 

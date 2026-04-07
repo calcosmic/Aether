@@ -124,7 +124,8 @@ func (sm *StreamMultiplexer) Unsubscribe(topicPattern, consumerID string) error 
 	// Remove consumer and close its channel
 	delete(stream.consumers, consumerID)
 	close(consumer.doneCh)
-	close(consumer.eventCh)
+	// Don't close eventCh here — broadcast goroutine may still be sending to it.
+	// The channel will be GC'd when all references are dropped.
 
 	// Check if this was the last consumer
 	shouldStop := len(stream.consumers) == 0
@@ -159,7 +160,7 @@ func (ms *multiplexedStream) broadcast() {
 				ms.mu.Lock()
 				for _, consumer := range ms.consumers {
 					close(consumer.doneCh)
-					close(consumer.eventCh)
+					// Don't close eventCh — broadcast is exiting so no more sends will occur
 				}
 				ms.consumers = make(map[string]*streamConsumer)
 				ms.stopped = true
@@ -285,7 +286,7 @@ func (sm *StreamMultiplexer) Close() {
 		stream.mu.Lock()
 		for _, consumer := range stream.consumers {
 			close(consumer.doneCh)
-			close(consumer.eventCh)
+			// Don't close eventCh — stopCh is already closed so broadcast will exit
 		}
 		stream.consumers = make(map[string]*streamConsumer)
 		stream.stopped = true

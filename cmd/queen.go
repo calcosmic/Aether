@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -323,7 +324,9 @@ var queenSeedFromHiveCmd = &cobra.Command{
 			outputError(1, fmt.Sprintf("failed to read hive wisdom: %v", err), nil)
 			return nil
 		} else {
-			json.Unmarshal(raw, &wisdom)
+			if err := json.Unmarshal(raw, &wisdom); err != nil {
+				log.Printf("queen-seed-from-hive: failed to unmarshal wisdom JSON: %v", err)
+			}
 		}
 
 		if len(wisdom.Entries) == 0 {

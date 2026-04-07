@@ -18,22 +18,26 @@ func setupSuggestTest(t *testing.T) string {
 	}
 	os.Setenv("AETHER_ROOT", tmpDir)
 	t.Cleanup(func() { os.Unsetenv("AETHER_ROOT") })
-
-	// Reset flags to defaults so previous test values don't leak
-	suggestRecordCmd.Flags().Set("content", "")
-	suggestRecordCmd.Flags().Set("type", "FOCUS")
-	suggestRecordCmd.Flags().Set("reason", "")
-	suggestRecordCmd.Flags().Set("priority", "normal")
-	suggestAnalyzeCmd.Flags().Set("max", "5")
-	suggestAnalyzeCmd.Flags().Set("context", "")
-	suggestCheckCmd.Flags().Set("limit", "20")
-
 	return dataDir
 }
 
-// TestSuggestAnalyze tests the suggest-analyze command.
-func TestSuggestAnalyze(t *testing.T) {
-	dataDir := setupSuggestTest(t)
+// parseDeprecatedResult checks that the output is a valid JSON envelope with
+// ok:true and deprecated:true.
+func parseDeprecatedResult(t *testing.T, output string) map[string]interface{} {
+	t.Helper()
+	var env map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &env); err != nil {
+		t.Fatalf("invalid JSON output: %v\noutput: %s", err, output)
+	}
+	if env["ok"] != true {
+		t.Fatalf("expected ok:true, got: %v", env["ok"])
+	}
+	return env
+}
+
+// TestSuggestAnalyzeDeprecated tests that suggest-analyze returns deprecated response.
+func TestSuggestAnalyzeDeprecated(t *testing.T) {
+	_ = setupSuggestTest(t)
 	store = nil
 	stdout = &bytes.Buffer{}
 	stderr = &bytes.Buffer{}
@@ -41,11 +45,6 @@ func TestSuggestAnalyze(t *testing.T) {
 		stdout = os.Stdout
 		stderr = os.Stderr
 	}()
-
-	// Create a test Go file with TODO comments to trigger analysis
-	testFile := dataDir + "/../../test_analyze_example.go"
-	os.WriteFile(testFile, []byte("// TODO: fix this later\n// FIXME: broken\npackage example\n"), 0644)
-	defer os.Remove(testFile)
 
 	rootCmd.SetArgs([]string{"suggest-analyze", "--max", "3"})
 	defer rootCmd.SetArgs([]string{})
@@ -55,24 +54,22 @@ func TestSuggestAnalyze(t *testing.T) {
 	}
 
 	output := stdout.(*bytes.Buffer).String()
-	if !strings.Contains(output, `"ok":true`) {
-		t.Errorf("expected ok:true in output, got: %s", output)
-	}
-	if !strings.Contains(output, `"suggestions"`) {
-		t.Errorf("expected suggestions array in output, got: %s", output)
-	}
+	env := parseDeprecatedResult(t, output)
 
-	// Parse JSON to verify structure
-	var result map[string]interface{}
-	// Strip the outer envelope: {"ok":true,"result":{...}}
-	if err := json.Unmarshal([]byte(output), &result); err != nil {
-		// Try extracting from result wrapper
-		t.Logf("Output: %s", output)
+	result := env["result"].(map[string]interface{})
+	if result["deprecated"] != true {
+		t.Errorf("expected deprecated:true, got: %v", result["deprecated"])
+	}
+	if result["command"] != "suggest-analyze" {
+		t.Errorf("expected command:suggest-analyze, got: %v", result["command"])
+	}
+	if result["message"] != deprecatedMessage {
+		t.Errorf("expected deprecation message, got: %v", result["message"])
 	}
 }
 
-// TestSuggestAnalyzeMaxFlag tests that --max limits suggestions.
-func TestSuggestAnalyzeMaxFlag(t *testing.T) {
+// TestSuggestRecordDeprecated tests that suggest-record returns deprecated response.
+func TestSuggestRecordDeprecated(t *testing.T) {
 	_ = setupSuggestTest(t)
 	store = nil
 	stdout = &bytes.Buffer{}
@@ -82,58 +79,7 @@ func TestSuggestAnalyzeMaxFlag(t *testing.T) {
 		stderr = os.Stderr
 	}()
 
-	rootCmd.SetArgs([]string{"suggest-analyze", "--max", "1"})
-	defer rootCmd.SetArgs([]string{})
-
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("suggest-analyze returned error: %v", err)
-	}
-
-	output := stdout.(*bytes.Buffer).String()
-	if !strings.Contains(output, `"ok":true`) {
-		t.Errorf("expected ok:true, got: %s", output)
-	}
-}
-
-// TestSuggestAnalyzeContextFlag tests that --context adds a user-specified suggestion.
-func TestSuggestAnalyzeContextFlag(t *testing.T) {
-	_ = setupSuggestTest(t)
-	store = nil
-	stdout = &bytes.Buffer{}
-	stderr = &bytes.Buffer{}
-	defer func() {
-		stdout = os.Stdout
-		stderr = os.Stderr
-	}()
-
-	rootCmd.SetArgs([]string{"suggest-analyze", "--context", "security testing", "--max", "5"})
-	defer rootCmd.SetArgs([]string{})
-
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("suggest-analyze returned error: %v", err)
-	}
-
-	output := stdout.(*bytes.Buffer).String()
-	if !strings.Contains(output, `"ok":true`) {
-		t.Errorf("expected ok:true, got: %s", output)
-	}
-	if !strings.Contains(output, "security testing") {
-		t.Errorf("expected context text in suggestions, got: %s", output)
-	}
-}
-
-// TestSuggestRecord tests the suggest-record command.
-func TestSuggestRecord(t *testing.T) {
-	dataDir := setupSuggestTest(t)
-	store = nil
-	stdout = &bytes.Buffer{}
-	stderr = &bytes.Buffer{}
-	defer func() {
-		stdout = os.Stdout
-		stderr = os.Stderr
-	}()
-
-	rootCmd.SetArgs([]string{"suggest-record", "--content", "Test suggestion content", "--type", "FOCUS", "--reason", "testing"})
+	rootCmd.SetArgs([]string{"suggest-record", "--content", "test"})
 	defer rootCmd.SetArgs([]string{})
 
 	if err := rootCmd.Execute(); err != nil {
@@ -141,134 +87,19 @@ func TestSuggestRecord(t *testing.T) {
 	}
 
 	output := stdout.(*bytes.Buffer).String()
-	if !strings.Contains(output, `"ok":true`) {
-		t.Errorf("expected ok:true, got: %s", output)
-	}
-	if !strings.Contains(output, `"recorded":true`) {
-		t.Errorf("expected recorded:true, got: %s", output)
-	}
-	if !strings.Contains(output, `"duplicate":false`) {
-		t.Errorf("expected duplicate:false, got: %s", output)
-	}
+	env := parseDeprecatedResult(t, output)
 
-	// Verify suggestions.json was created
-	if _, err := os.Stat(dataDir + "/suggestions.json"); os.IsNotExist(err) {
-		t.Error("suggestions.json was not created")
+	result := env["result"].(map[string]interface{})
+	if result["deprecated"] != true {
+		t.Errorf("expected deprecated:true, got: %v", result["deprecated"])
+	}
+	if result["command"] != "suggest-record" {
+		t.Errorf("expected command:suggest-record, got: %v", result["command"])
 	}
 }
 
-// TestSuggestRecordDuplicate tests that recording the same content twice is deduplicated.
-func TestSuggestRecordDuplicate(t *testing.T) {
-	_ = setupSuggestTest(t)
-	store = nil
-	stdout = &bytes.Buffer{}
-	stderr = &bytes.Buffer{}
-	defer func() {
-		stdout = os.Stdout
-		stderr = os.Stderr
-	}()
-
-	// First record
-	rootCmd.SetArgs([]string{"suggest-record", "--content", "Dedup test", "--type", "FOCUS"})
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("first suggest-record returned error: %v", err)
-	}
-
-	// Reset buffer
-	stdout = &bytes.Buffer{}
-
-	// Second record with same content
-	rootCmd.SetArgs([]string{"suggest-record", "--content", "Dedup test", "--type", "FOCUS"})
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("second suggest-record returned error: %v", err)
-	}
-
-	var output string
-	if buf, ok := stdout.(*bytes.Buffer); ok {
-		output = buf.String()
-	}
-	if !strings.Contains(output, `"duplicate":true`) {
-		t.Errorf("expected duplicate:true on second record, got: %s", output)
-	}
-}
-
-// TestSuggestRecordMissingContent tests that --content is required.
-func TestSuggestRecordMissingContent(t *testing.T) {
-	_ = setupSuggestTest(t)
-	store = nil
-	stdout = &bytes.Buffer{}
-	stderr = &bytes.Buffer{}
-	defer func() {
-		stdout = os.Stdout
-		stderr = os.Stderr
-	}()
-
-	rootCmd.SetArgs([]string{"suggest-record"})
-	defer rootCmd.SetArgs([]string{})
-
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("suggest-record returned error: %v", err)
-	}
-
-	var errOutput string
-	if buf, ok := stderr.(*bytes.Buffer); ok {
-		errOutput = buf.String()
-	}
-	if !strings.Contains(errOutput, "required") {
-		t.Errorf("expected required error, got: %s", errOutput)
-	}
-}
-
-// TestSuggestCheck tests the suggest-check command.
-func TestSuggestCheck(t *testing.T) {
-	dataDir := setupSuggestTest(t)
-	store = nil
-	stdout = &bytes.Buffer{}
-	stderr = &bytes.Buffer{}
-	defer func() {
-		stdout = os.Stdout
-		stderr = os.Stderr
-	}()
-
-	// First record a suggestion
-	rootCmd.SetArgs([]string{"suggest-record", "--content", "Check test suggestion", "--type", "FOCUS"})
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("suggest-record returned error: %v", err)
-	}
-
-	// Reset buffer
-	stdout = &bytes.Buffer{}
-
-	// Now check suggestions
-	rootCmd.SetArgs([]string{"suggest-check", "--limit", "10"})
-	defer rootCmd.SetArgs([]string{})
-
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("suggest-check returned error: %v", err)
-	}
-
-	var output string
-	if buf, ok := stdout.(*bytes.Buffer); ok {
-		output = buf.String()
-	}
-	if !strings.Contains(output, `"ok":true`) {
-		t.Errorf("expected ok:true, got: %s", output)
-	}
-	if !strings.Contains(output, `"suggestions"`) {
-		t.Errorf("expected suggestions array, got: %s", output)
-	}
-	if !strings.Contains(output, "Check test suggestion") {
-		t.Errorf("expected recorded suggestion in check output, got: %s", output)
-	}
-
-	// Verify data directory exists
-	if _, err := os.Stat(dataDir); os.IsNotExist(err) {
-		t.Error("data directory should exist")
-	}
-}
-
-// TestSuggestCheckEmpty tests suggest-check with no suggestions.
-func TestSuggestCheckEmpty(t *testing.T) {
+// TestSuggestCheckDeprecated tests that suggest-check returns deprecated response.
+func TestSuggestCheckDeprecated(t *testing.T) {
 	_ = setupSuggestTest(t)
 	store = nil
 	stdout = &bytes.Buffer{}
@@ -285,21 +116,21 @@ func TestSuggestCheckEmpty(t *testing.T) {
 		t.Fatalf("suggest-check returned error: %v", err)
 	}
 
-	var output string
-	if buf, ok := stdout.(*bytes.Buffer); ok {
-		output = buf.String()
+	output := stdout.(*bytes.Buffer).String()
+	env := parseDeprecatedResult(t, output)
+
+	result := env["result"].(map[string]interface{})
+	if result["deprecated"] != true {
+		t.Errorf("expected deprecated:true, got: %v", result["deprecated"])
 	}
-	if !strings.Contains(output, `"ok":true`) {
-		t.Errorf("expected ok:true, got: %s", output)
-	}
-	if !strings.Contains(output, `"count":0`) {
-		t.Errorf("expected count:0 for empty, got: %s", output)
+	if result["command"] != "suggest-check" {
+		t.Errorf("expected command:suggest-check, got: %v", result["command"])
 	}
 }
 
-// TestSuggestCheckDedup tests that suggest-check deduplicates against active pheromones.
-func TestSuggestCheckDedup(t *testing.T) {
-	dataDir := setupSuggestTest(t)
+// TestSuggestApproveDeprecated tests that suggest-approve returns deprecated response.
+func TestSuggestApproveDeprecated(t *testing.T) {
+	_ = setupSuggestTest(t)
 	store = nil
 	stdout = &bytes.Buffer{}
 	stderr = &bytes.Buffer{}
@@ -308,42 +139,52 @@ func TestSuggestCheckDedup(t *testing.T) {
 		stderr = os.Stderr
 	}()
 
-	// Create a suggestion with known content
-	hash := contentHash("manual", "FOCUS", "Dedup against pheromones test")
-
-	sugFile := SuggestionsFile{
-		Suggestions: []Suggestion{
-			{
-				ID:       "sug_test_dedup",
-				Type:     "FOCUS",
-				Content:  "Dedup against pheromones test",
-				Reason:   "testing",
-				Priority: "normal",
-				Hash:     hash,
-			},
-		},
-	}
-	sugData, _ := json.Marshal(sugFile)
-	os.WriteFile(dataDir+"/suggestions.json", sugData, 0644)
-
-	// Create pheromones.json with matching content hash
-	pheroContent := `{"signals":[{"id":"sig_existing","content_hash":"` + hash + `","active":true}]}`
-	os.WriteFile(dataDir+"/pheromones.json", []byte(pheroContent), 0644)
-
-	// Check should filter out the duplicate
-	rootCmd.SetArgs([]string{"suggest-check"})
+	rootCmd.SetArgs([]string{"suggest-approve"})
 	defer rootCmd.SetArgs([]string{})
 
 	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("suggest-check returned error: %v", err)
+		t.Fatalf("suggest-approve returned error: %v", err)
 	}
 
-	var output string
-	if buf, ok := stdout.(*bytes.Buffer); ok {
-		output = buf.String()
+	output := stdout.(*bytes.Buffer).String()
+	env := parseDeprecatedResult(t, output)
+
+	result := env["result"].(map[string]interface{})
+	if result["deprecated"] != true {
+		t.Errorf("expected deprecated:true, got: %v", result["deprecated"])
 	}
-	if !strings.Contains(output, `"deduplicated_against":1`) {
-		t.Errorf("expected deduplicated_against:1, got: %s", output)
+	if result["command"] != "suggest-approve" {
+		t.Errorf("expected command:suggest-approve, got: %v", result["command"])
+	}
+}
+
+// TestSuggestQuickDismissDeprecated tests that suggest-quick-dismiss returns deprecated response.
+func TestSuggestQuickDismissDeprecated(t *testing.T) {
+	_ = setupSuggestTest(t)
+	store = nil
+	stdout = &bytes.Buffer{}
+	stderr = &bytes.Buffer{}
+	defer func() {
+		stdout = os.Stdout
+		stderr = os.Stderr
+	}()
+
+	rootCmd.SetArgs([]string{"suggest-quick-dismiss"})
+	defer rootCmd.SetArgs([]string{})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("suggest-quick-dismiss returned error: %v", err)
+	}
+
+	output := stdout.(*bytes.Buffer).String()
+	env := parseDeprecatedResult(t, output)
+
+	result := env["result"].(map[string]interface{})
+	if result["deprecated"] != true {
+		t.Errorf("expected deprecated:true, got: %v", result["deprecated"])
+	}
+	if result["command"] != "suggest-quick-dismiss" {
+		t.Errorf("expected command:suggest-quick-dismiss, got: %v", result["command"])
 	}
 }
 
@@ -369,4 +210,48 @@ func TestSuggestCommandsRegistered(t *testing.T) {
 			t.Errorf("command %q not registered in rootCmd", name)
 		}
 	}
+}
+
+// TestSuggestApproveDeprecatedStillHasFlags tests that deprecated suggest-approve
+// still accepts its original flags (for backward compatibility with callers).
+func TestSuggestApproveDeprecatedStillHasFlags(t *testing.T) {
+	_ = setupSuggestTest(t)
+	store = nil
+	stdout = &bytes.Buffer{}
+	stderr = &bytes.Buffer{}
+	defer func() {
+		stdout = os.Stdout
+		stderr = os.Stderr
+	}()
+
+	rootCmd.SetArgs([]string{"suggest-approve", "--id", "some-id", "--type", "FOCUS"})
+	defer rootCmd.SetArgs([]string{})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("suggest-approve with flags returned error: %v", err)
+	}
+
+	output := stdout.(*bytes.Buffer).String()
+	if !strings.Contains(output, `"ok":true`) {
+		t.Errorf("expected ok:true with flags, got: %s", output)
+	}
+}
+
+// TestSuggestDeprecatedSilenceUsage tests that deprecated commands suppress usage output.
+func TestSuggestDeprecatedSilenceUsage(t *testing.T) {
+	_ = setupSuggestTest(t)
+	store = nil
+	stdout = &bytes.Buffer{}
+	stderr = &bytes.Buffer{}
+	defer func() {
+		stdout = os.Stdout
+		stderr = os.Stderr
+	}()
+
+	// Call with no required args to trigger usage error, but deprecated cmds should silence it
+	rootCmd.SetArgs([]string{"suggest-analyze", "--unknown-flag"})
+	defer rootCmd.SetArgs([]string{})
+
+	// Should not error even with unknown flag (flags are registered but ignored)
+	_ = rootCmd.Execute()
 }

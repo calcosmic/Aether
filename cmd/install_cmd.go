@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -196,7 +197,9 @@ func syncDirWithCleanup(src, dest string) syncResult {
 
 		// Make .sh files executable
 		if strings.HasSuffix(relPath, ".sh") {
-			os.Chmod(destPath, 0755)
+			if err := os.Chmod(destPath, 0755); err != nil {
+				log.Printf("install: failed to chmod %s: %v", destPath, err)
+			}
 		}
 
 		result.copied++
@@ -294,7 +297,9 @@ func cleanEmptyDirs(baseDir string) {
 			return nil
 		}
 		// Try to remove; will fail if not empty
-		os.Remove(path)
+		if err := os.Remove(path); err != nil {
+			log.Printf("install: cleanEmptyDirs failed to remove %s: %v", path, err)
+			}
 		return nil
 	})
 }

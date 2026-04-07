@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -503,15 +504,21 @@ func rotateSpawnTree(s *storage.Store) {
 
 	// Create archive directory
 	archiveDir := filepath.Join(filepath.Dir(spawnTreePath), "spawn-tree-archive")
-	os.MkdirAll(archiveDir, 0755)
+	if err := os.MkdirAll(archiveDir, 0755); err != nil {
+		log.Printf("rotateSpawnTree: failed to create archive dir %s: %v", archiveDir, err)
+	}
 
 	// Copy to archive with timestamp
 	timestamp := time.Now().Format("20060102_150405")
 	archivePath := filepath.Join(archiveDir, "spawn-tree."+timestamp+".txt")
-	os.WriteFile(archivePath, data, 0644)
+	if err := os.WriteFile(archivePath, data, 0644); err != nil {
+		log.Printf("rotateSpawnTree: failed to write archive %s: %v", archivePath, err)
+	}
 
 	// Truncate original in-place
-	os.WriteFile(spawnTreePath, []byte{}, 0644)
+	if err := os.WriteFile(spawnTreePath, []byte{}, 0644); err != nil {
+		log.Printf("rotateSpawnTree: failed to truncate spawn-tree %s: %v", spawnTreePath, err)
+	}
 
 	// Keep only 5 most recent archives
 	entries, err := os.ReadDir(archiveDir)
@@ -526,7 +533,9 @@ func rotateSpawnTree(s *storage.Store) {
 	}
 	sort.Sort(sort.Reverse(sort.StringSlice(archives)))
 	for i := 5; i < len(archives); i++ {
-		os.Remove(filepath.Join(archiveDir, archives[i]))
+		if err := os.Remove(filepath.Join(archiveDir, archives[i])); err != nil {
+			log.Printf("rotateSpawnTree: failed to remove old archive %s: %v", archives[i], err)
+		}
 	}
 }
 

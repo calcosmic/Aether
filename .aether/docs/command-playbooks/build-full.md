@@ -370,34 +370,40 @@ aether survey-load "{phase_name}" 2>/dev/null
    - Skip this step silently — produce no output, no spawn
    - Proceed directly to Step 4.2
 
-### Step 4.2: Suggest Pheromones
+### Step 4.2: Suggest Pheromones (DEPRECATED)
 
 **Conditional step — skipped if `--no-suggest` flag is passed.**
 
-Analyze codebase and suggest pheromone signals based on detected patterns.
+> **DEPRECATED**: The `suggest-*` commands have been deprecated and will be removed
+> in a future version. They return `ok:true` with `deprecated:true` for backward
+> compatibility. This step now always skips gracefully.
 
-Run using the Bash tool with description "Analyzing codebase for suggestions...":
+Run using the Bash tool with description "Checking suggest deprecation status...":
 ```bash
-aether suggest-approve --dry-run 2>/dev/null
+suggest_result=$(aether suggest-approve --dry-run 2>/dev/null)
+suggest_deprecated=$(echo "$suggest_result" | jq -r '.result.deprecated // false')
+
+if [[ "$suggest_deprecated" == "true" ]]; then
+    # Command is deprecated — skip silently, continue to Step 4.3
+    :
+elif [[ -z "$suggest_result" ]]; then
+    # Command failed entirely — skip silently
+    :
+else
+    # Legacy path: parse suggestion_count (for older aether versions)
+    suggestion_count=$(echo "$suggest_result" | jq -r '.result.suggestion_count // 0')
+    if [[ "$suggestion_count" -gt 0 ]]; then
+        echo "$suggestion_count pheromone suggestion(s) detected from code analysis"
+        aether suggest-approve 2>/dev/null || true
+    fi
+fi
 ```
 
-Parse the JSON result to get `suggestion_count`.
-
-If `suggestion_count` > 0:
-- Display: "💡 {count} pheromone suggestion(s) detected from code analysis"
-- Run: `aether suggest-approve`
-- Parse result for approved/rejected/skipped counts
-- If approved > 0: Display "✓ {approved} FOCUS signal(s) added"
-
-If `suggestion_count` == 0:
-- Skip silently (no output)
-
-**Non-blocking**: This step never stops the build. Even if suggest-approve fails,
-log a warning and continue to Step 5.
+**Non-blocking**: This step never stops the build.
 
 **Error handling**:
-- If suggest-analyze returns error: Log warning, continue
-- If suggest-approve returns error: Log warning, continue
+- If suggest-approve returns error: Skip silently, continue
+- If suggest-approve returns deprecated: Skip silently, continue
 - Never let suggestion failures block the build
 
 2. **If existing code modification detected — spawn Archaeologist Scout:**

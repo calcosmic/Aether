@@ -113,7 +113,31 @@ var pheromoneWriteCmd = &cobra.Command{
 			pf.Signals = []colony.PheromoneSignal{}
 		}
 
-		pf.Signals = append(pf.Signals, signal)
+		// Dedup: check for existing active signal with same type + content_hash
+		replaced := false
+		for i := range pf.Signals {
+			sig := &pf.Signals[i]
+			if !sig.Active {
+				continue
+			}
+			if sig.Type == sigType && sig.ContentHash != nil && *sig.ContentHash == contentHash {
+				// Reinforce existing signal instead of appending
+				sig.CreatedAt = now
+				if sig.ReinforcementCount == nil {
+					rc := 1
+					sig.ReinforcementCount = &rc
+				}
+				*sig.ReinforcementCount++
+				maxStr := 1.0
+				sig.Strength = &maxStr
+				replaced = true
+				break
+			}
+		}
+
+		if !replaced {
+			pf.Signals = append(pf.Signals, signal)
+		}
 
 		if err := store.SaveJSON("pheromones.json", pf); err != nil {
 			outputError(2, fmt.Sprintf("failed to save pheromones: %v", err), nil)
@@ -124,7 +148,7 @@ var pheromoneWriteCmd = &cobra.Command{
 			"created":  true,
 			"signal":   signal,
 			"total":    len(pf.Signals),
-			"replaced": false,
+			"replaced": replaced,
 		})
 		return nil
 	},

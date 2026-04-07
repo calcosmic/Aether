@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -13,33 +14,50 @@ import (
 
 // mockStreamHandler captures streaming events for testing.
 type mockStreamHandler struct {
-	tokens      []string
+	mu           sync.Mutex
+	tokens       []string
 	toolsStarted []string
 	toolsEnded   []string
-	completed   bool
-	err         error
-	result      *llm.StreamResult
+	completed    bool
+	err          error
+	result       *llm.StreamResult
 }
 
 func (m *mockStreamHandler) OnToken(token string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.tokens = append(m.tokens, token)
 }
 
 func (m *mockStreamHandler) OnToolStart(toolName, toolID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.toolsStarted = append(m.toolsStarted, toolName)
 }
 
 func (m *mockStreamHandler) OnToolEnd(toolName, toolID, result string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.toolsEnded = append(m.toolsEnded, toolName)
 }
 
 func (m *mockStreamHandler) OnComplete(result *llm.StreamResult) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.completed = true
 	m.result = result
 }
 
 func (m *mockStreamHandler) OnError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.err = err
+}
+
+func (m *mockStreamHandler) IsCompleted() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.completed
 }
 
 // Test that BuilderAgent implements Agent interface.
@@ -305,22 +323,27 @@ func TestMultipleStreamingAgents(t *testing.T) {
 	event := events.Event{Topic: "build.start"}
 	ctx := context.Background()
 
-	// Execute both agents concurrently
-	go builder1.ExecuteStreaming(ctx, event, handler1)
+	// Execute both agents concurrently with proper synchronization
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		builder1.ExecuteStreaming(ctx, event, handler1)
+	}()
 	err := builder2.ExecuteStreaming(ctx, event, handler2)
 
 	if err != nil {
 		t.Errorf("Second builder error = %v, want nil", err)
 	}
 
-	// Give first builder time to complete
-	time.Sleep(100 * time.Millisecond)
+	// Wait for first builder to complete
+	wg.Wait()
 
 	// Both should have completed
-	if !handler1.completed {
+	if !handler1.IsCompleted() {
 		t.Error("First builder should have completed")
 	}
-	if !handler2.completed {
+	if !handler2.IsCompleted() {
 		t.Error("Second builder should have completed")
 	}
 }

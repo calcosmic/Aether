@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -153,7 +154,9 @@ var backupPruneGlobalCmd = &cobra.Command{
 
 		pruneCount := len(files) - cap
 		for i := 0; i < pruneCount; i++ {
-			os.Remove(filepath.Join(backupDir, files[i].name))
+			if err := os.Remove(filepath.Join(backupDir, files[i].name)); err != nil {
+				log.Printf("data-clean: failed to remove backup %s: %v", files[i].name, err)
+			}
 		}
 
 		outputOK(map[string]interface{}{

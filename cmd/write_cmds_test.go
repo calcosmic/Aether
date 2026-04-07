@@ -128,6 +128,53 @@ func TestPheromoneWriteFeedback(t *testing.T) {
 	}
 }
 
+func TestPheromoneWriteDedup(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	// First write
+	buf.Reset()
+	rootCmd.SetArgs([]string{"pheromone-write", "--type", "FOCUS", "--content", "test dedup"})
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("first write error: %v", err)
+	}
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] != true {
+		t.Fatalf("first write not ok: %v", env)
+	}
+
+	// Second write with identical type and content
+	buf.Reset()
+	rootCmd.SetArgs([]string{"pheromone-write", "--type", "FOCUS", "--content", "test dedup"})
+	err = rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("second write error: %v", err)
+	}
+	env = parseEnvelope(t, buf.String())
+	if env["ok"] != true {
+		t.Fatalf("second write not ok: %v", env)
+	}
+
+	// Load pheromones.json and verify dedup behavior
+	var pf colony.PheromoneFile
+	s.LoadJSON("pheromones.json", &pf)
+
+	if len(pf.Signals) != 1 {
+		t.Errorf("signal count = %d, want 1 (duplicate should reinforce, not append)", len(pf.Signals))
+	}
+
+	if pf.Signals[0].ReinforcementCount == nil || *pf.Signals[0].ReinforcementCount < 2 {
+		t.Errorf("reinforcement_count = %v, want >= 2 after two identical writes", pf.Signals[0].ReinforcementCount)
+	}
+}
+
 func TestPheromoneWriteInvalidType(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)

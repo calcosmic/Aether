@@ -144,20 +144,31 @@ func TestSSEServerSpecificAgentSetsCorrectHeaders(t *testing.T) {
 
 	server := newStreamingServer(bus, 30, false)
 
-	req := httptest.NewRequest(http.MethodGet, "/sse/agents/builder", nil)
+	// Use a cancellable context so the handler exits cleanly without closing the bus.
+	ctx, cancel := context.WithCancel(context.Background())
+	req := httptest.NewRequest(http.MethodGet, "/sse/agents/builder", nil).WithContext(ctx)
 	rr := httptest.NewRecorder()
 
 	// Run handler in goroutine since it blocks
-	done := make(chan bool)
+	done := make(chan struct{})
 	go func() {
 		server.handleSpecificAgent(rr, req)
-		done <- true
+		close(done)
 	}()
 
-	// Give handler time to set up
+	// Wait for handler to set headers and start streaming.
+	// The handler sets headers immediately in serveSSE, then blocks on the event loop.
+	// Cancel the context to make the handler exit, then wait for it.
 	time.Sleep(50 * time.Millisecond)
+	cancel()
 
-	// Check headers were set before closing
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Error("handler did not complete")
+	}
+
+	// Now safely check headers — handler goroutine is done writing to rr.
 	headers := rr.Header()
 	if headers.Get("Content-Type") != "text/event-stream" {
 		t.Errorf("expected Content-Type text/event-stream, got %q", headers.Get("Content-Type"))
@@ -170,14 +181,6 @@ func TestSSEServerSpecificAgentSetsCorrectHeaders(t *testing.T) {
 	}
 	if headers.Get("Access-Control-Allow-Origin") != "*" {
 		t.Errorf("expected Access-Control-Allow-Origin *, got %q", headers.Get("Access-Control-Allow-Origin"))
-	}
-
-	// Cleanup - need to cancel the request context
-	bus.Close()
-	select {
-	case <-done:
-	case <-time.After(time.Second):
-		t.Error("handler did not complete")
 	}
 }
 
