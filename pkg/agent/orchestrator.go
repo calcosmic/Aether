@@ -94,7 +94,17 @@ func (o *PhaseOrchestrator) Run(ctx context.Context, phase colony.Phase) (*Orche
 	}
 
 	duration := time.Since(start)
+
+	// Validate collected results against success criteria.
 	result := o.buildResult(phase.ID, duration)
+	result.Validated = o.validateOutput(phase, o.results)
+
+	// Persist orchestrator progress to COLONY_STATE.json.
+	status := "completed"
+	if result.Failed > 0 {
+		status = "failed"
+	}
+	_ = o.updateState(phase.ID, status)
 
 	return result, nil
 }

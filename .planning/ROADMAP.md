@@ -109,6 +109,13 @@ Plans:
 
 **Requirements:** ORCH-01, ORCH-02, ORCH-03, ORCH-04, ORCH-05, ORCH-06, ORCH-07
 
+**Plans:** 3 plans
+
+Plans:
+- [x] 05-01-PLAN.md -- TaskGraph, TaskRouter, TaskContract foundation types
+- [ ] 05-02-PLAN.md -- OrchestratorState in ColonyState, autopilot migration to COLONY_STATE.json
+- [ ] 05-03-PLAN.md -- PhaseOrchestrator engine, orchestrator-decompose/assign/status commands
+
 **Success Criteria:**
 1. Running `aether orchestrator-decompose --phase 1` produces a list of tasks with assigned castes (builder, watcher, scout, etc.)
 2. Running `aether orchestrator-assign --phase 1` matches each task to a specific specialist agent based on task type, pheromones, and skills
