@@ -1,9 +1,12 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
+	"os"
 	"testing"
 
+	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/tidwall/gjson"
 )
 
@@ -118,5 +121,54 @@ func TestSetNestedFieldJSON_NumericArrayElement(t *testing.T) {
 	}
 	if seqResult.Int() != 42 {
 		t.Errorf("plan.phases.0.seq = %v, want 42", seqResult.Int())
+	}
+}
+
+func TestStateMutateBracket(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	goal := "build the thing"
+	state := colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateEXECUTING,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "phase one", Status: "pending"},
+			},
+		},
+	}
+	s.SaveJSON("COLONY_STATE.json", state)
+
+	// Bracket notation should set plan.phases[0].status to "completed".
+	// Currently fails because reFieldSet regex only accepts [\w.]+
+	// which does not include [ or ].
+	rootCmd.SetArgs([]string{"state-mutate", `.plan.phases[0].status = "completed"`})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected cobra error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] != true {
+		t.Fatalf("expected state-mutate to succeed with bracket notation, got: %v", env)
+	}
+
+	// Verify the phase status was actually updated in the file.
+	var updated colony.ColonyState
+	s.LoadJSON("COLONY_STATE.json", &updated)
+	if len(updated.Plan.Phases) == 0 {
+		t.Fatal("expected at least 1 phase in state")
+	}
+	if updated.Plan.Phases[0].Status != "completed" {
+		t.Errorf("phases[0].status = %q, want %q", updated.Plan.Phases[0].Status, "completed")
 	}
 }

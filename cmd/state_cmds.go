@@ -209,7 +209,7 @@ func splitChainedAssignments(expr string) []string {
 	return parts
 }
 
-var reFieldSet = regexp.MustCompile(`^\.([\w.]+)\s*=\s*(.+)$`)
+var reFieldSet = regexp.MustCompile(`^\.([\w.\[\]]+)\s*=\s*(.+)$`)
 var reConditionalMap = regexp.MustCompile(
 	`^\.([\w.]+)\s*\|=\s*map\(if \.([\w]+)\s*==\s*\$(\w+)\s+then \.([\w]+)\s*=\s*"([^"]+)"\s+else \.\s+end\)$`,
 )
@@ -264,11 +264,20 @@ func exprError(expr string, err error) error {
 	return fmt.Errorf("%s: %w", expr, err)
 }
 
+// normalizeBracketPath converts bracket notation (e.g. "phases[0]") to dot
+// notation (e.g. "phases.0") so that sjson can handle array indexing.
+func normalizeBracketPath(path string) string {
+	return bracketRe.ReplaceAllString(path, ".$1")
+}
+
+var bracketRe = regexp.MustCompile(`\[(\d+)\]`)
+
 func applyFieldSet(data []byte, path, valueExpr string, vars map[string]interface{}) ([]byte, error) {
 	value := resolveValue(valueExpr, vars)
 	if value == "" && strings.HasPrefix(valueExpr, "$") {
 		return nil, fmt.Errorf("undeclared variable %s", valueExpr)
 	}
+	path = normalizeBracketPath(path)
 	return sjson.SetRawBytes(data, path, []byte(value))
 }
 
