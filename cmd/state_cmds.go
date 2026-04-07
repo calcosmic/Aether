@@ -115,7 +115,7 @@ func executeFieldMode(cmd *cobra.Command, field string) error {
 	case "milestone":
 		state.Milestone = value
 	case "colony_depth":
-		state.ColonyDepth = value
+		state.ColonyDepth = colony.ColonyDepth(value)
 	case "colony_name":
 		state.ColonyName = &value
 	default:
@@ -721,7 +721,7 @@ var stateReadFieldCmd = &cobra.Command{
 		case "milestone":
 			result = state.Milestone
 		case "colony_depth":
-			result = state.ColonyDepth
+			result = string(state.ColonyDepth)
 		case "colony_name":
 			result = state.ColonyName
 		case "session_id":

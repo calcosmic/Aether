@@ -87,7 +87,7 @@ var colonyDepthGetCmd = &cobra.Command{
 			return nil
 		}
 
-		depth := state.ColonyDepth
+		depth := string(state.ColonyDepth)
 		source := "state"
 		if depth == "" {
 			depth = "standard"
@@ -117,9 +117,8 @@ var colonyDepthSetCmd = &cobra.Command{
 			return nil
 		}
 
-		switch depth {
-		case "light", "standard", "deep", "full":
-		default:
+		d := colony.ColonyDepth(depth)
+		if !d.Valid() {
 			outputError(1, fmt.Sprintf("invalid depth %q: must be light, standard, deep, or full", depth), nil)
 			return nil
 		}
@@ -130,7 +129,7 @@ var colonyDepthSetCmd = &cobra.Command{
 			return nil
 		}
 
-		state.ColonyDepth = depth
+		state.ColonyDepth = d
 		if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
 			outputError(2, fmt.Sprintf("failed to save state: %v", err), nil)
 			return nil

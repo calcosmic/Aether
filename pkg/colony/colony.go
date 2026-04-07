@@ -22,6 +22,28 @@ const (
 	StateCOMPLETED State = "COMPLETED"
 )
 
+// ColonyDepth represents the build thoroughness level.
+type ColonyDepth string
+
+const (
+	DepthLight    ColonyDepth = "light"
+	DepthStandard ColonyDepth = "standard"
+	DepthDeep     ColonyDepth = "deep"
+	DepthFull     ColonyDepth = "full"
+)
+
+// Valid reports whether d is a recognized depth level.
+func (d ColonyDepth) Valid() bool {
+	switch d {
+	case DepthLight, DepthStandard, DepthDeep, DepthFull:
+		return true
+	}
+	return false
+}
+
+// ErrInvalidDepth is returned when a depth value is not recognized.
+var ErrInvalidDepth = fmt.Errorf("invalid colony depth")
+
 // Phase status constants.
 const (
 	PhasePending    = "pending"
@@ -58,7 +80,7 @@ type ColonyState struct {
 	Signals            []Signal    `json:"signals"`
 	Graveyards         []Graveyard `json:"graveyards"`
 	Events             []string    `json:"events"`
-	ColonyDepth        string      `json:"colony_depth,omitempty"`
+	ColonyDepth        ColonyDepth `json:"colony_depth,omitempty"`
 	Milestone          string      `json:"milestone"`
 	MilestoneUpdatedAt *string     `json:"milestone_updated_at,omitempty"`
 }

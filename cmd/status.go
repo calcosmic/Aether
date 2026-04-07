@@ -112,7 +112,7 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 	}
 
 	// Depth
-	depth := state.ColonyDepth
+	depth := string(state.ColonyDepth)
 	if depth == "" {
 		depth = "standard"
 	}
@@ -188,13 +188,13 @@ func countFlags(s *storage.Store) (blockers, issues, notes int) {
 func depthLabel(depth string) string {
 	switch depth {
 	case "light":
-		return "light (Builder only)"
+		return "light (Builder only -- fastest)"
 	case "standard":
-		return "standard (Builder + Scout)"
+		return "standard (Builder + Scout + Watcher -- balanced)"
 	case "deep":
-		return "deep (Builder + Scout + Oracle)"
+		return "deep (All specialists except Chaos -- thorough)"
 	case "full":
-		return "full (All agents)"
+		return "full (All specialists including Chaos -- most thorough)"
 	default:
 		return depth
 	}

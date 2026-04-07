@@ -517,8 +517,8 @@ var spawnCanSpawnSwarmCmd = &cobra.Command{
 
 		// Default budget is 5 unless colony_depth says otherwise
 		maxBudget := 5
-		if state.ColonyDepth != "" {
-			if d := parseIntSafe(state.ColonyDepth); d > 0 {
+		if string(state.ColonyDepth) != "" {
+			if d := parseIntSafe(string(state.ColonyDepth)); d > 0 {
 				maxBudget = d
 			}
 		}
