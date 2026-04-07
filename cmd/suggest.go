@@ -2,9 +2,17 @@ package cmd
 
 import "strings"
 
-// isTestArtifact checks if a pheromone signal matches test artifact patterns.
-// This is used by cmd/maintenance.go for data-clean.
+// User-created signals (source="user" or source="cli") are never flagged as test
+// artifacts, regardless of content. This prevents false positives where a user's
+// pheromone containing words like "test" or "demo" would be deleted by data-clean.
+// Only system-generated sources ("auto", "promotion", etc.) are checked for
+// test artifact patterns.
 func isTestArtifact(signal map[string]interface{}) bool {
+	source, _ := signal["source"].(string)
+	if source == "user" || source == "cli" {
+		return false
+	}
+
 	id, _ := signal["id"].(string)
 	contentRaw := signal["content"]
 	content := ""
