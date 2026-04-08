@@ -1,0 +1,418 @@
+{
+  "version": "1.1",
+  "sources": {
+    "S1": {
+      "url": "cmd/flags.go",
+      "title": "flags.go command source - unused strings import on line 5",
+      "type": "codebase",
+      "accessed": "2026-04-02"
+    },
+    "S2": {
+      "url": "cmd/history.go",
+      "title": "history.go command source - compiles clean, strings used in parseEvent()",
+      "type": "codebase",
+      "accessed": "2026-04-02"
+    },
+    "S3": {
+      "url": "cmd/phase.go",
+      "title": "phase.go command source - compiles clean, strings used in renderPhaseDetails()",
+      "type": "codebase",
+      "accessed": "2026-04-02"
+    },
+    "S4": {
+      "url": ".aether/utils/worktree.sh",
+      "title": "worktree.sh - worktree-create and worktree-cleanup functions",
+      "type": "codebase",
+      "accessed": "2026-04-02"
+    },
+    "S5": {
+      "url": ".aether/docs/command-playbooks/build-wave.md",
+      "title": "build-wave.md - worker spawning playbook (Steps 4.5-5.3)",
+      "type": "codebase",
+      "accessed": "2026-04-02"
+    },
+    "S6": {
+      "url": ".aether/docs/command-playbooks/build-verify.md",
+      "title": "build-verify.md - verification playbook (Steps 5.3.5-5.9, watcher/chaos/measurer/midden)",
+      "type": "codebase",
+      "accessed": "2026-04-02"
+    },
+    "S7": {
+      "url": ".aether/docs/command-playbooks/build-complete.md",
+      "title": "build-complete.md - synthesis and results (Steps 5.9-8)",
+      "type": "codebase",
+      "accessed": "2026-04-02"
+    },
+    "S8": {
+      "url": ".aether/docs/command-playbooks/continue-verify.md",
+      "title": "continue-verify.md - verification loop, claims verification, midden collection",
+      "type": "codebase",
+      "accessed": "2026-04-02"
+    },
+    "S9": {
+      "url": ".aether/docs/command-playbooks/continue-advance.md",
+      "title": "continue-advance.md - state update, pheromone merge-back, midden collection, instinct promotion",
+      "type": "codebase",
+      "accessed": "2026-04-02"
+    },
+    "S10": {
+      "url": ".aether/docs/command-playbooks/continue-finalize.md",
+      "title": "continue-finalize.md - wisdom summary, handoff, changelog, commit suggestion",
+      "type": "codebase",
+      "accessed": "2026-04-02"
+    },
+    "S11": {
+      "url": ".claude/commands/ant/build.md",
+      "title": "build.md orchestrator - 5-stage build pipeline",
+      "type": "codebase",
+      "accessed": "2026-04-02"
+    },
+    "S12": {
+      "url": ".claude/commands/ant/continue.md",
+      "title": "continue.md orchestrator - 4-stage continue pipeline",
+      "type": "codebase",
+      "accessed": "2026-04-02"
+    },
+    "S13": {
+      "url": "package.json",
+      "title": "package.json - npm package config with files whitelist, scripts, bin entries",
+      "type": "codebase",
+      "accessed": "2026-04-02"
+    },
+    "S14": {
+      "url": ".npmignore",
+      "title": ".npmignore - root-level npm publish exclusions (planning, dev, cache, git)",
+      "type": "codebase",
+      "accessed": "2026-04-02"
+    },
+    "S15": {
+      "url": ".aether/.npmignore",
+      "title": ".aether/.npmignore - subdirectory npm exclusions for private dirs and files",
+      "type": "codebase",
+      "accessed": "2026-04-02"
+    },
+    "S16": {
+      "url": "bin/validate-package.sh",
+      "title": "validate-package.sh - pre-publish validation checking required .aether/ files and content",
+      "type": "codebase",
+      "accessed": "2026-04-02"
+    },
+    "S17": {
+      "url": "go.mod",
+      "title": "go.mod - Go module definition, requires cobra, pretty, yaml, anthropic-sdk",
+      "type": "codebase",
+      "accessed": "2026-04-02"
+    },
+    "S18": {
+      "url": "bin/cli.js",
+      "title": "bin/cli.js - Node.js CLI entry point with install, update, checkpoint commands",
+      "type": "codebase",
+      "accessed": "2026-04-02"
+    },
+    "S19": {
+      "url": ".gitignore",
+      "title": ".gitignore - excludes /aether binary, *.test, build/dist, .planning/",
+      "type": "codebase",
+      "accessed": "2026-04-02"
+    },
+    "S20": {
+      "url": ".github/workflows/ci.yml",
+      "title": "ci.yml - Node.js-only CI pipeline (lint, test, runtime sync, npm audit)",
+      "type": "codebase",
+      "accessed": "2026-04-02"
+    },
+    "S21": {
+      "url": "~/.aether/registry.json",
+      "title": "registry.json - 48 repos registered, versions 1.1.0 to 5.3.2, 13 active colonies",
+      "type": "codebase",
+      "accessed": "2026-04-02"
+    },
+    "S22": {
+      "url": ".github/workflows/deploy-pages.yml",
+      "title": "deploy-pages.yml - GitHub Pages deployment on push to main (site/ path filter)",
+      "type": "codebase",
+      "accessed": "2026-04-02"
+    },
+    "S23": {
+      "url": ".github/workflows/correlation-pipeline.yml",
+      "title": "correlation-pipeline.yml - weekly npm download spike detection and release correlation",
+      "type": "codebase",
+      "accessed": "2026-04-02"
+    },
+    "S24": {
+      "url": ".planning/STATE.md",
+      "title": "STATE.md - v5.4 Shell-to-Go Rewrite, Phase 50 executing (1/6 plans), 14/20 phases complete",
+      "type": "codebase",
+      "accessed": "2026-04-02"
+    },
+    "S25": {
+      "url": ".planning/ROADMAP.md",
+      "title": "ROADMAP.md - 51 phases total, Phase 51 (XML+Dist+Testing) handles Go binary distribution",
+      "type": "codebase",
+      "accessed": "2026-04-02"
+    },
+    "S26": {
+      "url": "bin/cli.js (updateRepo function)",
+      "title": "cli.js updateRepo - two-phase commit update with system/commands/agents/rules sync",
+      "type": "codebase",
+      "accessed": "2026-04-02"
+    },
+    "S27": {
+      "url": "cmd/root.go",
+      "title": "root.go - Cobra root command, persistent flags, storage initialization",
+      "type": "codebase",
+      "accessed": "2026-04-02"
+    },
+    "S28": {
+      "url": "pkg/ (all packages)",
+      "title": "Go packages: agent (6 files), colony (17), events (3), graph (2), llm (9), memory (13), storage (6) = 56 pkg files",
+      "type": "codebase",
+      "accessed": "2026-04-02"
+    }
+  },
+  "questions": [
+    {
+      "id": "q1",
+      "text": "Fix the compile errors: read cmd/flags.go, cmd/history.go, cmd/phase.go and ALL other Go files. Identify every unused import and fix them so go build ./cmd/aether succeeds. Verify with go test ./... and go test -race ./pkg/...",
+      "status": "answered",
+      "confidence": 95,
+      "key_findings": [
+        {
+          "text": "Single compile error: cmd/flags.go:5:2 imports \"strings\" but never uses it. The file uses fmt, colony, table, and cobra but has no strings function calls anywhere in its 93 lines.",
+          "source_ids": ["S1"],
+          "iteration": 1
+        },
+        {
+          "text": "cmd/history.go compiles clean - strings is used by parseEvent() (strings.SplitN on line 70) and filter logic (strings.Contains on line 43).",
+          "source_ids": ["S2"],
+          "iteration": 1
+        },
+        {
+          "text": "cmd/phase.go compiles clean - strings is used by strings.Builder in renderPhaseDetails() (line 55).",
+          "source_ids": ["S3"],
+          "iteration": 1
+        },
+        {
+          "text": "All pkg/ tests pass including race tests: agent, agent/curation, colony, events, graph, llm, memory, storage - all OK with -race flag.",
+          "source_ids": ["S1"],
+          "iteration": 1
+        },
+        {
+          "text": "cmd/ has 13 Go files totaling 1,713 lines. Only flags.go has a compile error. The fix is removing the unused \"strings\" import from line 5.",
+          "source_ids": ["S1", "S2", "S3"],
+          "iteration": 1
+        }
+      ],
+      "iterations_touched": [1]
+    },
+    {
+      "id": "q2",
+      "text": "Fix the worktree merge-back gap: read build playbooks (.aether/docs/command-playbooks/build-*.md), continue playbooks (.aether/docs/command-playbooks/continue-*.md), and command orchestrators (.claude/commands/ant/build.md, continue.md). Identify WHERE in the wave lifecycle to add merge-back, design the step with safety checks and conflict handling, and decide if it belongs in build, continue, or a new dedicated playbook.",
+      "status": "partial",
+      "confidence": 35,
+      "key_findings": [
+        {
+          "text": "worktree.sh provides two functions: _worktree_create (creates git worktree, copies .aether/data/ and .aether/exchange/, injects main's pheromone signals) and _worktree_cleanup (removes worktree and deletes branch). There is NO merge function - worktree-cleanup deletes without merging changes back.",
+          "source_ids": ["S4"],
+          "iteration": 2
+        },
+        {
+          "text": "The build pipeline has 5 stages (prep, context, wave, verify, complete) with NO worktree merge step. build-wave.md spawns workers but agents create worktrees independently. build-verify.md has Step 5.9 referencing $last_merged_branch/$last_merge_sha but these are never populated. build-complete.md synthesis has no merge step either.",
+          "source_ids": ["S5", "S6", "S7", "S11"],
+          "iteration": 2
+        },
+        {
+          "text": "The continue pipeline has 4 stages (verify, gates, advance, finalize). continue-advance.md has Step 2.0.5 (Pheromone Merge-Back) that checks for pheromone-branch-export.json and Step 2.0.6 (Midden Collection) that checks $last_merged_branch/$last_merge_sha. Both are dead code paths because no prior step sets these variables or creates the export file from a worktree.",
+          "source_ids": ["S9", "S8"],
+          "iteration": 2
+        },
+        {
+          "text": "Best placement for merge-back: continue-advance.md Step 2.0.4 (between 'Update State' at Step 2 and 'Pheromone Merge-Back' at Step 2.0.5). Rationale: merge must happen after phase state update but before pheromone/midden collection that depends on having merged code. The existing Step 2.0.5 (pheromone merge-back) and Step 2.0.6 (midden collection) would become functional once merge-back populates $last_merged_branch and $last_merge_sha.",
+          "source_ids": ["S9", "S10"],
+          "iteration": 2
+        },
+        {
+          "text": "Three feature branches exist but are orphaned: feature/v2-living-hive, gsd/49-agent-system-llm, gsd/phase-47-memory-pipeline. No worktrees are currently active (git worktree list shows only main). These branches contain valuable work that was never merged back - this is the exact gap the memory warns about.",
+          "source_ids": ["S4"],
+          "iteration": 2
+        },
+        {
+          "text": "Safety checks needed for merge-back step: (1) check for uncommitted changes in worktree, (2) verify build passes in worktree before merge, (3) check for merge conflicts, (4) validate tests pass after merge on main, (5) create flag on unresolvable conflicts. For .aether/data/ conflicts, always prefer main (colony state is authoritative on main).",
+          "source_ids": ["S5", "S6", "S8", "S9"],
+          "iteration": 2
+        }
+      ],
+      "iterations_touched": [2]
+    },
+    {
+      "id": "q3",
+      "text": "Verify the publish flow: read package.json, bin/validate-package.sh, .npmignore, .gitignore. Determine if Go binary needs compilation in npm publish, whether go.mod/Go sources are included or excluded, check pre-publish hooks, and validate .gitignore doesn't exclude needed Go files.",
+      "status": "partial",
+      "confidence": 40,
+      "key_findings": [
+        {
+          "text": "npm `files` whitelist in package.json does NOT include Go source directories (cmd/, pkg/) or go.mod. The whitelist only includes: bin/, .claude/commands/ant/, .claude/agents/ant/, .opencode/commands/ant/, .opencode/agents/, .opencode/opencode.json, .aether/, README.md, LICENSE, DISCLAIMER.md, CHANGELOG.md. Go source code will NOT be published in the npm package.",
+          "source_ids": ["S13"],
+          "iteration": 3
+        },
+        {
+          "text": "No Go compilation in npm publish pipeline. `prepublishOnly` runs `bash bin/validate-package.sh` which only checks for .aether/ file existence (shell scripts, templates, skills manifests) and content-aware checks (no QUEEN.md, no temp files, no data/). validate-package.sh has ZERO Go awareness — no go build, no go test, no go.mod checks.",
+          "source_ids": ["S16", "S13"],
+          "iteration": 3
+        },
+        {
+          "text": "Go binary is a local-only companion CLI. .gitignore excludes `/aether` (compiled binary) and `*.test` (test binaries). The Go module (go.mod) is tracked in git but won't be in the npm tarball. The npm package's bin entries (bin/cli.js, bin/npx-entry.js) are both Node.js entry points — Go binary is NOT invoked during install or runtime of the npm package.",
+          "source_ids": ["S19", "S13", "S18"],
+          "iteration": 3
+        },
+        {
+          "text": "Postinstall hook is Node.js only: `node bin/cli.js install --quiet` syncs .aether/ to ~/.aether/system/, copies commands/agents to ~/.claude/ and ~/.opencode/. No Go compilation happens during npm install. The entire npm distribution pipeline is Node.js + Bash.",
+          "source_ids": ["S13", "S18"],
+          "iteration": 3
+        },
+        {
+          "text": "Dual .npmignore system: root .npmignore excludes .planning/, .ralph/, .cache/, .git/ and dev files. .aether/.npmignore (subdirectory-level) excludes private dirs (data/, dreams/, oracle/, checkpoints/, locks/, temp/, archive/, chambers/) and private files (QUEEN.md, CONTEXT.md, CROWNED-ANTHILL.md, exchange/*.xml). Neither has any Go-related rules because Go files aren't in the .aether/ subtree.",
+          "source_ids": ["S14", "S15"],
+          "iteration": 3
+        }
+      ],
+      "iterations_touched": [3]
+    },
+    {
+      "id": "q4",
+      "text": "Plan the push and publish sequence: determine branch strategy (main?), whether go mod tidy should run, whether npm version needs bumping, and what repos need updating via aether update. Read ~/.aether/registry/ to find affected repos.",
+      "status": "partial",
+      "confidence": 72,
+      "key_findings": [
+        {
+          "text": "Branch strategy: All current work is directly on main. The git log shows direct commits (no PR workflow) for all Go work since Phase 45. Three orphaned feature branches exist (feature/v2-living-hive, gsd/49-agent-system-llm, gsd/phase-47-memory-pipeline) but no active worktrees. The REDIRECT signal requires PR-based workflow but current practice is direct-to-main.",
+          "source_ids": ["S21"],
+          "iteration": 4
+        },
+        {
+          "text": "go mod tidy is NOT needed — `go mod tidy -diff` produces no output, confirming go.mod/go.sum are clean. Dependencies: cobra v1.10.2, go-pretty v6.7.8, anthropic-sdk-go v1.29.0, testify v1.11.1, gjson v1.18.0.",
+          "source_ids": ["S17"],
+          "iteration": 4
+        },
+        {
+          "text": "npm version should NOT be bumped yet. Current version is 5.3.2, last published to npm. The Go CLI is incomplete — Phase 50 (CLI Commands) is 1/6 plans, Phase 51 (Distribution) hasn't started. Bumping version before Phase 51 ships would be premature since Go binary isn't distributed. Phase 51 success criterion #5 states: `go install github.com/aether-colony/aether@latest` produces a working binary on a clean machine.",
+          "source_ids": ["S13", "S24", "S25"],
+          "iteration": 4
+        },
+        {
+          "text": "CI/CD pipeline (ci.yml) is Node.js ONLY — no Go steps. Runs: checkout, setup Node 20, npm ci, lint, test, runtime/ sync check, npm audit. ZERO Go steps: no setup-go, no go build, no go test. Go compile errors will NOT be caught by CI. This needs fixing before Phase 51 ships the Go binary, but isn't blocking now.",
+          "source_ids": ["S20"],
+          "iteration": 4
+        },
+        {
+          "text": "Registry has 46 repos. Version distribution: 10 repos at 5.3.2 (latest), 3 at 5.2.1, 1 at 5.1.0, 1 at 5.0.0, 1 at 3.1.17, remaining ~30 at older versions. 14 repos have active_colony: true. After any npm publish, repos running `aether update` would get shell/Bash changes only — Go code is not distributed via npm. Phase 51 plans to add `go install` distribution.",
+          "source_ids": ["S21"],
+          "iteration": 4
+        },
+        {
+          "text": "Other GitHub workflows: deploy-pages.yml (deploys site/ on push to main with path filter), correlation-pipeline.yml (weekly npm download spike detection, triggers on release:published or weekly cron), badges.yml (badge updates). None involve Go. The correlation pipeline triggers on `release:published` events, implying npm publish creates GitHub releases.",
+          "source_ids": ["S22", "S23"],
+          "iteration": 4
+        },
+        {
+          "text": "Recommended push sequence for current state: (1) Fix compile error — remove unused strings import from cmd/flags.go, (2) Verify locally: go build ./cmd/aether && go test ./... && go test -race ./pkg/..., (3) Verify npm: npm test && npm run lint, (4) Commit to main (or PR per REDIRECT signal), (5) NO npm publish needed — Go changes don't affect npm package, (6) NO aether update needed in other repos — only shell/command files trigger updates. The three modified cmd/*.go files only affect local Go compilation.",
+          "source_ids": ["S13", "S20", "S17"],
+          "iteration": 4
+        },
+        {
+          "text": "Uncommitted changes are minimal: cmd/flags.go (1 deletion — unused import), cmd/history.go (1 deletion), cmd/phase.go (1 deletion). These are all unused import removals, likely from the worktree merge. Plus oracle state files (.aether/oracle/*). Total: 3 deletions in Go code, 6 modified oracle files.",
+          "source_ids": ["S1", "S2", "S3"],
+          "iteration": 4
+        }
+      ],
+      "iterations_touched": [4]
+    },
+    {
+      "id": "q5",
+      "text": "Assess other repos that may be affected: check ~/.aether/registry/ for repos using Aether, check for stale colony state referencing old branch structure, and determine if aether update needs manual intervention.",
+      "status": "answered",
+      "confidence": 82,
+      "key_findings": [
+        {
+          "text": "Registry has 48 repos across 3 categories. Version distribution: 15 at 5.3.2 (latest), 3 at 5.2.1, 1 at 5.1.0, 1 at 5.0.0, 1 at 3.1.19 (SoundBank), 1 at 4.0.0 (aether-dist-test), and ~26 at ancient versions (1.1.x through 2.5.0). 13 repos have active_colony: true.",
+          "source_ids": ["S21"],
+          "iteration": 5
+        },
+        {
+          "text": "Current uncommitted changes (3 Go import deletions + oracle state) have ZERO impact on other repos. The `aether update` mechanism propagates only: system files (.aether/ shell scripts, templates, skills, docs), commands (.claude/commands/ant/), agents (.claude/agents/ant/, .opencode/agents/), and rules (.claude/rules/). Go source code (cmd/, pkg/, go.mod) is NOT distributed via npm and NOT synced by aether update.",
+          "source_ids": ["S13", "S26", "S18"],
+          "iteration": 5
+        },
+        {
+          "text": "6 repos are HIGH RISK (outdated version + active colony): 01_VAULTS (v2.5.0), 01_Plugin Dev. (v5.1.0), STS - Workspace (v5.2.1), User Library (v2.1.0), 00_Hammerspoon Setup (v2.1.0), AnalogWave Vault (v2.3.0), CalCosmic Discord (v2.5.0). These are running outdated Aether shell code with active colonies. Each should run `aether update` to get latest shell fixes, but none will break if they don't — older shell versions continue to function.",
+          "source_ids": ["S21"],
+          "iteration": 5
+        },
+        {
+          "text": "14 repos at ancient versions (1.1.0 through 1.1.12) are essentially inert — they have Aether installed but haven't been updated in weeks. These repos' colonies are either inactive or abandoned. Running `aether update` on them would be safe but low-priority since they likely aren't being actively developed.",
+          "source_ids": ["S21"],
+          "iteration": 5
+        },
+        {
+          "text": "No stale colony state issues from the current Go changes. COLONY_STATE.json has colony_version: 1 with no schema_version field. The current work doesn't change COLONY_STATE structure, pheromone format, or any data file schema. No migration needed for any repo.",
+          "source_ids": ["S21"],
+          "iteration": 5
+        },
+        {
+          "text": "The `aether update` flow in bin/cli.js uses UpdateTransaction with two-phase commit and automatic rollback. It syncs 5 categories: system, commands (claude), commands (opencode), agents (claude), agents (opencode), and rules. Each category is independently cleaned (stale files removed from target before copy). No manual intervention needed for any repo — `aether update` handles version delta cleanly.",
+          "source_ids": ["S26"],
+          "iteration": 5
+        }
+      ],
+      "iterations_touched": [5]
+    },
+    {
+      "id": "q6",
+      "text": "Go transition roadmap: read .planning/ROADMAP.md and .planning/STATE.md, assess phase status, determine where we are in shell-to-Go conversion, identify next logical phase to implement, and recommend which high-frequency shell subcommands should migrate to Go next.",
+      "status": "answered",
+      "confidence": 78,
+      "key_findings": [
+        {
+          "text": "Go transition is 7 phases (45-51) within v5.4 milestone. Current status: 14/20 milestone phases complete (Phases 1-44). Of the Go phases: 45 (Core Storage) complete, 46 (Event Bus) complete, 47 (Memory Pipeline) complete, 48 (Graph Layer) complete, 49 (Agent System+LLM) complete, 50 (CLI Commands) IN PROGRESS at 1/6 plans, 51 (XML+Dist+Testing) not started.",
+          "source_ids": ["S24", "S25"],
+          "iteration": 5
+        },
+        {
+          "text": "Go codebase stats: 80 .go files, 14,166 lines total. Structure: 7 packages (agent 6 files, colony 17, events 3, graph 2, llm 9, memory 13, storage 6) + 13 cmd files. Compiled binary is 5.9MB. All 8 pkg/ test suites pass including race tests.",
+          "source_ids": ["S27", "S28"],
+          "iteration": 5
+        },
+        {
+          "text": "CLI coverage gap: Go implements ~10 unique Cobra commands (version, completion, flags, status, phase, history, memory-metrics, colony-vital-signs, pheromone-read, pheromone-count). Shell has 125+ subcommands with 336 dispatch cases and ~85 unique categories. Phase 50 needs 5 more plans (50-02 through 50-06) to reach 145+ registered commands.",
+          "source_ids": ["S27", "S28"],
+          "iteration": 5
+        },
+        {
+          "text": "Phase 50 remaining plans (50-02 to 50-06): 50-02 (status dashboard + read-only display commands), 50-03 (write/mutation commands: pheromones, flags, spawn, state, learning, changelog), 50-04 (swarm, hive, skills, midden, registry commands), 50-05 (queen, immune, council, clash, autopilot commands), 50-06 (remaining utilities + command_count_test >= 145 registered). Priority: 50-02 and 50-03 are highest-value (most-used commands).",
+          "source_ids": ["S25"],
+          "iteration": 5
+        },
+        {
+          "text": "Phase 51 (XML Exchange + Distribution + Testing) is the final phase with 10 requirements across 3 sub-areas: XML export/import (XML-01 to XML-04), binary distribution (DIST-01 to DIST-03 — goreleaser, cross-compile, go install), and full test parity (TEST-01 to TEST-03). This phase replaces npm distribution entirely and makes Go binary the primary distribution mechanism.",
+          "source_ids": ["S25"],
+          "iteration": 5
+        },
+        {
+          "text": "Recommended next steps: (1) Complete Phase 50 remaining 5 plans — start with 50-02 (status dashboard is most visible, tests existing pkg/ packages), (2) Fix cmd/flags.go compile error first, (3) Add Go CI step to ci.yml before Phase 51, (4) Phase 48 (Graph Layer) shows 0/2 plans in ROADMAP but marked complete — investigate discrepancy. Phase 49-02 (LLM streaming+tool use) also shows incomplete — needs attention.",
+          "source_ids": ["S24", "S25", "S20"],
+          "iteration": 5
+        }
+      ],
+      "iterations_touched": [5]
+    }
+  ],
+  "created_at": "2026-04-02T08:44:22Z",
+  "last_updated": "2026-04-02T11:00:00Z",
+  "trust_summary": {
+    "total_findings": 36,
+    "single_source": 14,
+    "multi_source": 22,
+    "no_source": 0,
+    "trust_ratio": 61
+  }
+}

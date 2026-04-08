@@ -32,30 +32,9 @@ Read the research request completely before beginning any investigation.
 5. **Write research output** -- Write structured findings to `.aether/data/research/oracle-{phase_id}.md`. Format: markdown with sections for Context, Key Findings, Recommendations, Sources, and Open Questions.
 6. **Return structured JSON** -- Include file path so downstream workers (Architect, Builder) can read the research.
 
-### /ant:oracle (In-Session Loop)
+### /ant:oracle (RALF Loop)
 
-When invoked via the /ant:oracle command, research runs as an in-session loop
-controlled by a Stop hook. Each iteration:
-
-1. The AI receives a phase-aware research prompt
-2. The AI researches and updates state files (plan.json, synthesis.md, etc.)
-3. The AI attempts to stop
-4. The Stop hook checks completion criteria
-5. If not complete, the hook blocks the stop and re-feeds the prompt
-
-The AI has **full conversation context** between iterations -- unlike the legacy
-bash/tmux loop which started fresh each time. This enables better research
-continuity: the AI remembers what it tried, what sources it already checked,
-and what approaches failed.
-
-The Stop hook manages:
-- Iteration counting and max iteration enforcement
-- Phase transitions (survey -> investigate -> synthesize -> verify)
-- Convergence detection and diminishing returns
-- Synthesis pass triggering (final report generation)
-- Loop termination
-
-Legacy mode (tmux-based loop) remains available as a fallback via --legacy flag.
+When invoked via the /ant:oracle command, the command handler manages iterative research. Your agent definition covers the worker behavior: thorough investigation, source evaluation, and structured output. The RALF loop's multi-round synthesis and confidence tracking are managed by the command, not this agent.
 
 ### Output File Convention
 

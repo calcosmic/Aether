@@ -3,7 +3,7 @@
 > Task 1.1: Define which colony state is branch-local vs hub-global
 > Author: Brick-81 (Builder)
 > Date: 2026-03-30
-> Verified against: aether CLI, pkg/ packages, actual file locations
+> Verified against: aether-utils.sh, utils/*.sh, actual file locations
 
 ---
 
@@ -20,24 +20,24 @@ colony context.
 
 | # | State File | Purpose | Source Module |
 |---|-----------|---------|---------------|
-| 1 | `COLONY_STATE.json` | Master colony state: goal, phases, memory (learnings, decisions, instincts, events), milestone | `aether state-*` commands |
-| 2 | `pheromones.json` | Active pheromone signals (FOCUS, REDIRECT, FEEDBACK) with strength, decay, dedup | `aether pheromone-*` commands |
-| 3 | `midden/midden.json` | Failure records with category, severity, acknowledgment status | `aether midden-*` commands |
-| 4 | `flags.json` | Active flags (blocking, informational) created by `/ant:flag` | `aether flag-*` commands |
-| 5 | `session.json` | Current session metadata: session_id, last command, colony_goal, baseline_commit | `aether session-*` commands |
-| 6 | `learning-observations.json` | Raw learning observations captured via `memory-capture` | `aether memory-*` commands |
-| 7 | `rolling-summary.log` | Rolling log of condensed learnings per phase | `aether memory-*` commands |
-| 8 | `spawn-tree.txt` | Tree of spawned agents with parent/child relationships | `aether spawn-*` commands |
-| 9 | `activity.log` | Timestamped activity entries (CREATED, MODIFIED, RESEARCH, etc.) | `aether CLI` |
+| 1 | `COLONY_STATE.json` | Master colony state: goal, phases, memory (learnings, decisions, instincts, events), milestone | `state-api.sh` |
+| 2 | `pheromones.json` | Active pheromone signals (FOCUS, REDIRECT, FEEDBACK) with strength, decay, dedup | `pheromone.sh` |
+| 3 | `midden/midden.json` | Failure records with category, severity, acknowledgment status | `midden.sh` |
+| 4 | `flags.json` | Active flags (blocking, informational) created by `/ant:flag` | `flag.sh` |
+| 5 | `session.json` | Current session metadata: session_id, last command, colony_goal, baseline_commit | `session.sh` |
+| 6 | `learning-observations.json` | Raw learning observations captured via `memory-capture` | `learning.sh` |
+| 7 | `rolling-summary.log` | Rolling log of condensed learnings per phase | `learning.sh` |
+| 8 | `spawn-tree.txt` | Tree of spawned agents with parent/child relationships | `spawn.sh` |
+| 9 | `activity.log` | Timestamped activity entries (CREATED, MODIFIED, RESEARCH, etc.) | `aether-utils.sh` |
 | 10 | `last-build-result.json` | Result of the most recent build (status, phase, tasks) | build commands |
 | 11 | `last-build-claims.json` | Files created/modified by the most recent build | build commands |
 | 12 | `pending-decisions.json` | Unresolved decisions (replan, visual checkpoint) | build/continue |
-| 13 | `errors.log` | Error entries for debugging | `aether error-*` commands |
-| 14 | `queen-wisdom.json` | Local colony-level wisdom cache (legacy) | `aether queen-*` commands |
-| 15 | `survey/` | Survey results from colonizer (architecture, disciplines, pathogens, provisions) | `aether session-*` commands |
-| 16 | `backups/` | Checkpoint backups of COLONY_STATE.json | `aether state-*` commands |
-| 17 | `constraints.json` | Focus areas and constraints (legacy, deprecating) | `aether pheromone-*` commands |
-| 18 | `colony-registry.json` | Local colony registry (legacy, superseded by hub) | `aether CLI` |
+| 13 | `errors.log` | Error entries for debugging | `error-handler.sh` |
+| 14 | `queen-wisdom.json` | Local colony-level wisdom cache (legacy) | `queen.sh` |
+| 15 | `survey/` | Survey results from colonizer (architecture, disciplines, pathogens, provisions) | `session.sh` |
+| 16 | `backups/` | Checkpoint backups of COLONY_STATE.json | `state-api.sh` |
+| 17 | `constraints.json` | Focus areas and constraints (legacy, deprecating) | `pheromone.sh` |
+| 18 | `colony-registry.json` | Local colony registry (legacy, superseded by hub) | `aether-utils.sh` |
 | 19 | `completion-report.md` | Summary report from colony completion | seal commands |
 | 20 | `watch/`, `watch-status.txt`, `watch-progress.txt` | Watcher agent monitoring state | watcher commands |
 | 21 | `council/`, `immune/` | Council and immune system state | council/immune commands |
@@ -56,15 +56,15 @@ branches, all worktrees, and all repositories.
 
 | # | State File | Purpose | Source Module |
 |---|-----------|---------|---------------|
-| 1 | `QUEEN.md` | Global colony wisdom: user preferences, codebase patterns, build learnings, instincts | `aether queen-*` commands |
-| 2 | `hive/wisdom.json` | Cross-colony wisdom (200-entry cap, LRU eviction, domain-scoped) | `aether hive-*` commands |
-| 3 | `eternal/memory.json` | High-value signals promoted from expired pheromones (legacy fallback) | `aether pheromone-*` commands |
-| 4 | `eternal/pheromones.xml` | XML export of pheromones for cross-colony sharing | `aether pheromone-*` commands |
-| 5 | `registry.json` | All repos using Aether with domain tags, goals, active status | `aether CLI` |
-| 6 | `skills/` | Installed skills (colony/ + domain/), manifest-based tracking | `aether skill-*` commands |
+| 1 | `QUEEN.md` | Global colony wisdom: user preferences, codebase patterns, build learnings, instincts | `queen.sh` |
+| 2 | `hive/wisdom.json` | Cross-colony wisdom (200-entry cap, LRU eviction, domain-scoped) | `hive.sh` |
+| 3 | `eternal/memory.json` | High-value signals promoted from expired pheromones (legacy fallback) | `pheromone.sh` |
+| 4 | `eternal/pheromones.xml` | XML export of pheromones for cross-colony sharing | `pheromone.sh` |
+| 5 | `registry.json` | All repos using Aether with domain tags, goals, active status | `aether-utils.sh` |
+| 6 | `skills/` | Installed skills (colony/ + domain/), manifest-based tracking | `skills.sh` |
 | 7 | `chambers/` | Entombed (archived) colony chambers | seal commands |
-| 8 | `data/activity.log` | Hub-level activity log (cross-colony) | `aether CLI` |
-| 9 | `version.json` | Installed Aether version | `aether CLI` |
+| 8 | `data/activity.log` | Hub-level activity log (cross-colony) | `aether-utils.sh` |
+| 9 | `version.json` | Installed Aether version | `aether-utils.sh` |
 | 10 | `manifest.json` | Package manifest for installed files | setupHub() |
 | 11 | `system/` | Installed system files (agents, commands, utils) | setupHub() |
 
@@ -181,7 +181,7 @@ When a PR is merged into main, state flows as follows:
 
 ### 4.1 Code changes (handled by git merge)
 
-All changes to `.aether/aether CLI`, `.aether/pkg/ packages`, `.claude/commands/`,
+All changes to `.aether/aether-utils.sh`, `.aether/utils/*.sh`, `.claude/commands/`,
 `.claude/agents/`, etc. are merged into main via git. These are source-of-truth
 files tracked by git.
 
@@ -323,7 +323,7 @@ Hub (~/.aether/):      Shared across ALL worktrees
 
 Since `.aether/data/` is gitignored and each worktree has its own working tree,
 each agent gets complete isolation of branch-local state. Hub state requires
-file locks for safe concurrent access (already implemented via `pkg/storage/storage.go`).
+file locks for safe concurrent access (already implemented via `file-lock.sh`).
 
 ---
 
@@ -362,7 +362,7 @@ All assertions in this document were verified against the actual codebase:
 - File existence verified for all 22 branch-local and 11 hub-global state types
 - `.gitignore` confirmed to exclude `.aether/data/` (line 80)
 - `~/.aether/` confirmed to be outside any git repo
-- Test file: `pkg/storage/storage_test.go` (34/34 passing)
+- Test file: `test/state-contract-assertions.sh` (34/34 passing)
 
 ---
 

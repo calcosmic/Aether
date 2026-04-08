@@ -11,6 +11,8 @@ You are the **Queen**. Orchestrate research and planning until the selected conf
 Parse `$ARGUMENTS`:
 - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
 - Otherwise: set `visual_mode = true`
+- If contains `--granularity sprint|milestone|quarter|major`: Set `granularity_override = <value>`
+- Otherwise: `granularity_override = ""`
 
 ### Step 1: Read State
 
@@ -68,6 +70,20 @@ If `plan.phases` has entries (non-empty array), skip to **Step 6** (Display Plan
 Parse `$ARGUMENTS`:
 - If contains `--accept`: Set `force_accept = true` (accept current plan regardless of confidence)
 - Otherwise: `force_accept = false`
+
+Select planning granularity:
+- If `granularity_override` is set: use that value
+- Otherwise, read persisted granularity:
+  Run: `aether plan-granularity get`
+  - If `source == "state"` (persisted value exists): use that value
+  - If `source == "default"` (no persisted value): ask user:
+    `Planning granularity? 1) Sprint (1-3 phases) 2) Milestone (4-7 phases) 3) Quarter (8-12 phases) 4) Major (13-20 phases)`
+    Map user choice: 1->sprint, 2->milestone, 3->quarter, 4->major. Default to `milestone` on unclear input.
+- Persist selected granularity:
+  Run: `aether plan-granularity set --granularity {selected_value}`
+- Extract bounds:
+  Run: `aether plan-granularity get`
+  Set `granularity_min = .min`, `granularity_max = .max`, `granularity_label = .granularity`
 
 Select planning depth (prompt user if not explicitly provided):
 - Presets:
@@ -474,7 +490,7 @@ while iteration < max_iterations AND confidence < target_confidence:
     {end if}
 
     --- INSTRUCTIONS ---
-    1. If no plan exists, create 3-6 phases with concrete tasks
+    1. If no plan exists, create {granularity_min}-{granularity_max} phases with concrete tasks
     2. If plan exists, refine based on NEW information only
     3. Rate confidence across 5 dimensions
     4. Keep response concise — no verbose explanations
@@ -482,7 +498,7 @@ while iteration < max_iterations AND confidence < target_confidence:
     Do NOT assign castes to tasks - describe the work only.
 
     --- OUTPUT CONSTRAINTS ---
-    Maximum 6 phases. Maximum 4 tasks per phase.
+    Maximum {granularity_max} phases. Maximum 4 tasks per phase.
     Maximum 2 sentence description per task.
     Confidence dimensions as single numbers, not paragraphs.
 
@@ -552,6 +568,37 @@ Note: {gaps.length} knowledge gap(s) deferred — these can be resolved during b
 ```
 
 Proceed directly to Step 5. No user confirmation needed — the plan auto-finalizes.
+
+### Step 4.5: Granularity Range Validation
+
+After the route-setter produces the accepted plan, validate phase count against selected granularity:
+
+1. Count phases in the accepted plan: `actual_phases = count of plan.phases`
+2. Compare against granularity bounds:
+   - If `actual_phases >= granularity_min AND actual_phases <= granularity_max`: proceed to finalization (no action needed)
+   - If outside range: display warning and present options:
+
+```
+WARNING: Plan has {actual_phases} phases, but {granularity_label} granularity expects {granularity_min}-{granularity_max} phases.
+
+Options:
+1) Accept as-is -- the plan may be better than the range suggests
+2) Adjust granularity -- change granularity to fit the plan
+3) Replan -- regenerate with current {granularity_label} granularity
+
+Choose (1/2/3):
+```
+
+3. Handle user choice:
+   - **Option 1 (Accept):** Continue to finalization. No changes to plan or granularity.
+   - **Option 2 (Adjust):** Determine best-fitting granularity:
+     - If actual_phases <= 3: set to sprint
+     - If actual_phases <= 7: set to milestone
+     - If actual_phases <= 12: set to quarter
+     - Otherwise: set to major
+     - Run: `aether plan-granularity set --granularity {best_fit}`
+     - Continue to finalization.
+   - **Option 3 (Replan):** Return to Step 4 (route-setter loop) with current granularity. Display: `Replanning with {granularity_label} granularity ({granularity_min}-{granularity_max} phases)...`
 
 ### Step 5: Finalize Plan
 

@@ -69,12 +69,12 @@ This document is the complete reference for all `E_*` error constants used in Ae
 
 - **Meaning:** A required utility script or binary is missing from the expected location.
 - **When it happens:**
-  - A utility script in `.aether/utils/` (e.g., `pkg/events/event.go`, `pkg/storage/storage.go`) can't be found.
+  - A utility script in `.aether/utils/` (e.g., `error-handler.sh`, `file-lock.sh`) can't be found.
   - A required binary (e.g., `jq`, `git`) isn't installed or isn't on `$PATH`.
 - **Suggested fix:** Run `aether install` to restore missing system files, or install the missing binary via your system package manager.
 - **Example output:**
   ```json
-  {"ok":false,"error":{"code":"E_DEPENDENCY_MISSING","message":"Couldn't load event.go. Try: run aether install to restore system files.","details":null,"recovery":"Install the required dependency","timestamp":"2026-02-19T13:00:00Z"}}
+  {"ok":false,"error":{"code":"E_DEPENDENCY_MISSING","message":"Couldn't load error-handler.sh. Try: run aether install to restore system files.","details":null,"recovery":"Install the required dependency","timestamp":"2026-02-19T13:00:00Z"}}
   ```
 
 ---
@@ -202,27 +202,27 @@ This document is the complete reference for all `E_*` error constants used in Ae
 
 When you need a new error code, follow this checklist:
 
-1. **Define the constant** in `.aether/utils/event.go` at the top of the file:
+1. **Define the constant** in `.aether/utils/error-handler.sh` at the top of the file:
    ```bash
    E_MY_NEW_CODE="E_MY_NEW_CODE"
    ```
 
-2. **Add a recovery function** in `pkg/events/event.go`:
+2. **Add a recovery function** in `error-handler.sh`:
    ```bash
    _recovery_my_new_code() { echo '"Description of how to fix this"'; }
    ```
 
-3. **Add a case entry** in the `_get_recovery` function in `pkg/events/event.go`:
+3. **Add a case entry** in the `_get_recovery` function in `error-handler.sh`:
    ```bash
    "$E_MY_NEW_CODE") _recovery_my_new_code ;;
    ```
 
-4. **Add a fallback definition** at the top of `aether CLI` (in the fallback constants block):
+4. **Add a fallback definition** at the top of `aether-utils.sh` (in the fallback constants block):
    ```bash
    : "${E_MY_NEW_CODE:=E_MY_NEW_CODE}"
    ```
 
-5. **Export the constant and function** at the bottom of `pkg/events/event.go`:
+5. **Export the constant and function** at the bottom of `error-handler.sh`:
    ```bash
    export E_MY_NEW_CODE
    export -f _recovery_my_new_code

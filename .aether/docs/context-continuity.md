@@ -17,7 +17,7 @@ Keep colony context stable across sessions and long conversations without high t
 
 ### Phase 1: Low-Token Context Backbone (implemented)
 
-1. Add `context-capsule` runtime command in `.aether/aether CLI`.
+1. Add `context-capsule` runtime command in `.aether/aether-utils.sh`.
 2. Generate compact capsule from:
    - `COLONY_STATE.json` (goal, phase, decisions, next action)
    - `pheromones.json` (priority-sorted active signals)

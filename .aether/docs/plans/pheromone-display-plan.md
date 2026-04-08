@@ -28,15 +28,15 @@ The pheromone system works but is invisible:
 | Redirect command | `.claude/commands/ant/redirect.md` | ✅ Works - emits REDIRECT signal |
 | Feedback command | `.claude/commands/ant/feedback.md` | ✅ Works - emits FEEDBACK signal |
 | Pheromone storage | `.aether/data/pheromones.json` | ✅ Works - stores signals |
-| Pheromone-prime | `aether CLI:6211` | ✅ Works - loads signals with decay |
-| Colony-prime | `aether CLI:6337` | ✅ Works - combines wisdom + signals |
-| Pheromone-count | `aether CLI:6036` | ✅ Works - counts active signals |
+| Pheromone-prime | `aether-utils.sh:6211` | ✅ Works - loads signals with decay |
+| Colony-prime | `aether-utils.sh:6337` | ✅ Works - combines wisdom + signals |
+| Pheromone-count | `aether-utils.sh:6036` | ✅ Works - counts active signals |
 
 ---
 
 ## What's Missing
 
-### 1. **Pheromone Display Function** (aether CLI)
+### 1. **Pheromone Display Function** (aether-utils.sh)
 
 A new `pheromone-display` function that outputs a formatted table:
 
@@ -69,7 +69,7 @@ After Step 4 (Load Colony Context), add Step 4.1:
 
 Run using the Bash tool:
 ```bash
-aether pheromone-display
+bash .aether/aether-utils.sh pheromone-display
 ```
 
 This displays the formatted pheromone table to the user so they can see what guidance is active.
@@ -112,7 +112,7 @@ Usage:
 
 ## Implementation Plan
 
-### Phase 1: pheromone-display Function (aether CLI)
+### Phase 1: pheromone-display Function (aether-utils.sh)
 
 **Location:** After `pheromone-count` (~line 6058)
 
@@ -228,7 +228,7 @@ Active signals: 5
 
 | File | Action | Purpose |
 |------|--------|---------|
-| `.aether/aether CLI` | Modify | Add `pheromone-display` function |
+| `.aether/aether-utils.sh` | Modify | Add `pheromone-display` function |
 | `.claude/commands/ant/build.md` | Modify | Add Step 4.1 - display pheromones |
 | `.claude/commands/ant/status.md` | Modify | Add pheromone summary section |
 | `.claude/commands/ant/pheromones.md` | Create | New command for viewing/managing |

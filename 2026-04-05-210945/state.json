@@ -1,0 +1,56 @@
+{
+  "version": "1.1",
+  "topic": "Post-worktree-merge recovery: fix Go compile errors (cmd/flags.go, cmd/history.go, cmd/phase.go unused imports), close the worktree merge-back gap in build playbooks, verify npm publish flow with Go code, plan push/publish sequence, assess other repos via registry, and chart Go transition roadmap from .planning/ phases.",
+  "scope": "both",
+  "template": "custom",
+  "phase": "investigate",
+  "iteration": 5,
+  "max_iterations": 30,
+  "target_confidence": 99,
+  "overall_confidence": 40,
+  "started_at": "2026-04-02T08:44:22Z",
+  "last_updated": "2026-04-02T09:16:41Z",
+  "status": "active",
+  "strategy": "adaptive",
+  "focus_areas": [],
+  "convergence": {
+    "prev_findings_count": 24,
+    "prev_overall_confidence": 40,
+    "history": [
+      {
+        "iteration": 2,
+        "novelty_delta": 6,
+        "confidence_delta": 10,
+        "gap_resolution_pct": 16,
+        "coverage_pct": 33,
+        "phase": "survey"
+      },
+      {
+        "iteration": 3,
+        "novelty_delta": 5,
+        "confidence_delta": 2,
+        "gap_resolution_pct": 0,
+        "coverage_pct": 50,
+        "phase": "survey"
+      },
+      {
+        "iteration": 4,
+        "novelty_delta": 8,
+        "confidence_delta": 12,
+        "gap_resolution_pct": 16,
+        "coverage_pct": 67,
+        "phase": "investigate"
+      },
+      {
+        "iteration": 5,
+        "novelty_delta": 0,
+        "confidence_delta": 12,
+        "gap_resolution_pct": 33,
+        "coverage_pct": 66,
+        "phase": "investigate"
+      }
+    ],
+    "composite_score": 62,
+    "converged": false
+  }
+}

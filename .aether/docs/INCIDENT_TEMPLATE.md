@@ -18,7 +18,7 @@
 ## Regression Test Added
 - Test file:
 - Test description:
-- How to run: `go test ./...`
+- How to run: `bash .aether/tests/{test_name}.sh`
 
 ## Rule Added
 - Rule type: [ ] QUEEN.md decree [ ] workers.md constraint [ ] command-playbooks gate

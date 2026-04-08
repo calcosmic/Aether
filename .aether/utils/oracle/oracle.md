@@ -119,7 +119,7 @@ After researching, update these files:
 **state.json:** Update:
 - `last_updated` to current ISO-8601 UTC timestamp
 - `overall_confidence` to the average of all remaining questions' confidence values
-- Do NOT change `iteration` or `phase` (the oracle loop manages these)
+- Do NOT change `iteration` or `phase` (oracle.sh manages these)
 
 ### Step 5: Assess and Complete
 

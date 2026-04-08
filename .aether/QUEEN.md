@@ -72,7 +72,7 @@ Validated approaches that work in this codebase, and anti-patterns to avoid. Inc
 - **1773987784** (2026-03-29T02:44:12Z): Two wisdom extraction functions must be updated in lockstep
 - **1773987784** (2026-03-29T02:44:06Z): Colony-prime token budget 8000 chars matches measured output of 2000-5000 chars
 - **1773987784** (2026-03-29T02:44:01Z): Prompt injection regex needs multi-word support with optional groups
-- **1774650429** (2026-03-29T02:42:42Z): Audit reports must use actual test output counts, not builder-claimed counts — always cross-verify test pass rates against live `go test` output
+- **1774650429** (2026-03-29T02:42:42Z): Audit reports must use actual test output counts, not builder-claimed counts — always cross-verify bash test pass rates against live test-aether-utils.sh output
 - **1774650429** (2026-03-29T02:06:34Z): awk NF==7 for spawn detection and $3 match for completion detection handles pipes-in-summary edge cases
 - **1774650429** (2026-03-29T02:06:30Z): Replacing bash while-read+sed loops with single-pass awk eliminates O(n^2) subprocess forking
 - **1774650429** (2026-03-29T01:57:37Z): Chaos resilience strong: 4/5 scenarios resilient for spawn-tree awk rewrite, 1 medium finding on newline edge case
@@ -93,7 +93,7 @@ Validated approaches that work in this codebase, and anti-patterns to avoid. Inc
 - [hive] When Deploying files via SFTP to Cloudways: Use -oPreferredAuthentications=password flags for Cloudways SFTP (cross-colony, confidence: 0.9)
 - [hive] When Verifying deployed changes on Cloudways: Use ?nocache= to bypass Varnish when verifying deploys (cross-colony, confidence: 0.9)
 - [hive] When building bash utilities with scoring/accumulation loops: use process substitution (&lt; &lt;(jq)) not pipes to while loops — pipes create subshells that lose variable modifications (cross-colony, confidence: 0.85)
-- [charter] **Governance**: CI/CD pipeline active — ensure all checks pass before merging; TDD discipline required for all new code; Go vet and static analysis compliance mandatory; use atomic writes for all JSON writes (Colony: Aether Colony)
+- [charter] **Governance**: CI/CD pipeline active — ensure all checks pass before merging; TDD discipline required for all new scripts; shellcheck compliance mandatory; use atomic-write.sh pattern for all JSON writes (Colony: Aether Colony)
 ---
 
 ## Build Learnings

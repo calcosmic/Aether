@@ -48,6 +48,7 @@ var emojiAuditCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		patterns := []string{
 			".claude/commands/ant/*.md",
+			".aether/commands/*.yaml",
 		}
 
 		type fileResult struct {

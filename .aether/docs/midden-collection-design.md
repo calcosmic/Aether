@@ -5,7 +5,7 @@
 > Author: Weld-19 (Builder)
 > Date: 2026-03-30
 > Depends on: Task 1.1 state-contract-design.md
-> Verified against: `.aether/utils/midden Go commands`, `.aether/aether CLI`
+> Verified against: `.aether/utils/midden.sh`, `.aether/aether-utils.sh`
 
 ---
 
@@ -30,7 +30,7 @@ merge-aware failure record.
 
 ### 2.1 Midden Entry Schema
 
-Each entry created by `_midden_write` (in `aether midden-*` commands) has this shape:
+Each entry created by `_midden_write` (in `utils/midden.sh`) has this shape:
 
 ```json
 {
@@ -49,13 +49,13 @@ Additional fields added by other operations:
 
 ### 2.2 Current Auto-REDIRECT Mechanism
 
-The `error-pattern-check` command (aether CLI line 1707) checks
+The `error-pattern-check` command (aether-utils.sh line 1707) checks
 `COLONY_STATE.json` `errors.records` for categories with `count >= 3`.
 This operates on branch-local state only -- no cross-branch visibility.
 
 ### 2.3 Existing Ingestion Pattern
 
-`_midden_ingest_errors` (midden Go commands line 188) demonstrates the ingestion
+`_midden_ingest_errors` (midden.sh line 188) demonstrates the ingestion
 pattern: read from a source file, create midden entries, move the source
 file to `.ingested`. This is the precedent for post-merge ingestion.
 
@@ -633,8 +633,8 @@ COMPLETE MIDDEN CROSS-BRANCH COLLECTION LIFECYCLE
 | `midden-handle-revert` | Tag entries from a reverted merge | `--revert-commit <sha>` | Tagged count, merge status |
 | `midden-cross-pr-analysis` | Detect systemic patterns across PRs | `--category`, `--window <days>` | Category analysis, scores, recommendations |
 
-All three are additions to `aether midden-*` commands and dispatched from
-`aether CLI`.
+All three are additions to `utils/midden.sh` and dispatched from
+`aether-utils.sh`.
 
 ---
 
@@ -710,8 +710,8 @@ MIDDEN DATA FLOW (aligned with state-contract-design.md Section 4.3)
 
 Assertions in this design verified against:
 
-- `aether midden-*` commands: Entry schema confirmed from `_midden_write` (line 57-63)
-- `aether CLI` line 1707: Auto-REDIRECT threshold (`>= 3`) confirmed
+- `utils/midden.sh`: Entry schema confirmed from `_midden_write` (line 57-63)
+- `aether-utils.sh` line 1707: Auto-REDIRECT threshold (`>= 3`) confirmed
 - `state-contract-design.md` Section 4.3: Midden is branch-local, NOT merged by git
 - `.gitignore` line 80: `.aether/data/` confirmed gitignored
 - `midden.template.json`: Dual schema (`signals` + `entries`) noted for backward compat
@@ -721,4 +721,4 @@ All assertions are grounded in the actual codebase as of 2026-03-30.
 ---
 
 *Design complete. Next steps: implement `midden-collect`, `midden-handle-revert`,
-and `midden-cross-pr-analysis` in `aether midden-*` commands (implementation tasks).*
+and `midden-cross-pr-analysis` in `utils/midden.sh` (implementation tasks).*

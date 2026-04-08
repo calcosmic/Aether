@@ -4,7 +4,7 @@
 > Author: Weld-83 (Builder)
 > Date: 2026-03-30
 > Depends on: Task 1.1 -- Branch-Local State Contract Design
-> Verified against: colony-prime (_pheromone_write, _pheromone_read, _pheromone_prime, _pheromone_expire)
+> Verified against: pheromone.sh (_pheromone_write, _pheromone_read, _pheromone_prime, _pheromone_expire)
 
 ---
 
@@ -46,7 +46,7 @@ it matters.
 ### 2.1 Signal Data Model
 
 Each signal in `pheromones.json` has the following structure (from
-`_pheromone_write`, colony-prime line 242):
+`_pheromone_write`, pheromone.sh line 242):
 
 ```
 {
@@ -77,7 +77,7 @@ Key fields for propagation:
 
 ### 2.2 Existing Dedup Behavior
 
-From `_pheromone_write` (colony-prime lines 194-233):
+From `_pheromone_write` (pheromone.sh lines 194-233):
 
 1. Compute `content_hash` = SHA-256 of content text
 2. Check for active signal with same `type` AND `content_hash`
@@ -628,7 +628,7 @@ File: `.aether/data/pheromone-merge-log.json` (gitignored, appended on main)
 ### 8.3 File Locking
 
 All write operations use existing `acquire_lock`/`release_lock` from
-`pkg/storage/storage.go`. The merge-back operation acquires a lock on main's
+`file-lock.sh`. The merge-back operation acquires a lock on main's
 `pheromones.json` before writing, preventing concurrent merge conflicts
 when multiple PRs merge in quick succession.
 
@@ -704,11 +704,11 @@ writes of the same signal reinforce rather than duplicate.
 
 All assertions in this document were verified against the actual codebase:
 
-- `_pheromone_write` dedup via `content_hash`: verified at colony-prime lines 194-233
-- Signal data model: verified at colony-prime lines 242-255
-- `_pheromone_read` decay and filtering: verified at colony-prime lines 463-541
-- `_pheromone_prime` prompt injection: verified at colony-prime lines 548-665
-- `_pheromone_expire` archival: verified at colony-prime lines 1559-1638
+- `_pheromone_write` dedup via `content_hash`: verified at pheromone.sh lines 194-233
+- Signal data model: verified at pheromone.sh lines 242-255
+- `_pheromone_read` decay and filtering: verified at pheromone.sh lines 463-541
+- `_pheromone_prime` prompt injection: verified at pheromone.sh lines 548-665
+- `_pheromone_expire` archival: verified at pheromone.sh lines 1559-1638
 - `.aether/data/` gitignored: verified in state-contract-design.md (Task 1.1)
 - State contract branch-local rules: verified in state-contract-design.md Section 3-4
 

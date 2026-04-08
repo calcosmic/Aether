@@ -46,11 +46,11 @@ func TestEmojiAudit(t *testing.T) {
 	}
 
 	result := env["result"].(map[string]interface{})
-	if result["files_scanned"] != float64(1) {
-		t.Errorf("files_scanned = %v, want 1", result["files_scanned"])
+	if result["files_scanned"] != float64(2) {
+		t.Errorf("files_scanned = %v, want 2", result["files_scanned"])
 	}
-	if result["total_emojis"].(float64) < 1 {
-		t.Errorf("total_emojis = %v, want >= 1", result["total_emojis"])
+	if result["total_emojis"] == nil || result["total_emojis"].(float64) < 2 {
+		t.Errorf("total_emojis = %v, want >= 2", result["total_emojis"])
 	}
 }
 

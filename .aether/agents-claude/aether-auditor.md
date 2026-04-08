@@ -61,7 +61,7 @@ Audit file by file — no random sampling. For each file in scope:
 
 Scope determination:
 - If the task names specific files: audit only those files
-- If the task names a directory: audit all `.js`, `.ts`, `.go`, `.py` (or relevant extension) files in that directory
+- If the task names a directory: audit all `.js`, `.ts`, `.sh`, `.py` (or relevant extension) files in that directory
 - If the task is broad ("audit the auth module"): use Glob to discover the files, audit all of them
 
 ```
