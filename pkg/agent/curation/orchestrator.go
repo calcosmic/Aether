@@ -1,7 +1,7 @@
 // Package curation implements the memory maintenance system for colony data.
 // It provides 8 curation ants (sentinel, nurse, critic, herald, janitor,
 // archivist, librarian, scribe) and an orchestrator that runs them in a
-// fixed sequential order matching the original sequential design.
+// fixed sequential order matching the shell orchestrator.sh behavior.
 // Sentinel abort prevents remaining steps when data corruption is detected.
 package curation
 
@@ -70,7 +70,7 @@ type Orchestrator struct {
 }
 
 // NewOrchestrator creates a curation orchestrator with all 8 ants in the
-// correct sequential order matching the original sequential design:
+// correct sequential order matching the shell orchestrator.sh behavior:
 // sentinel, nurse, critic, herald, janitor, archivist, librarian, scribe.
 func NewOrchestrator(store *storage.Store, bus *events.Bus) *Orchestrator {
 	o := &Orchestrator{
@@ -86,7 +86,7 @@ func NewOrchestrator(store *storage.Store, bus *events.Bus) *Orchestrator {
 		scribe:    NewScribe(),
 	}
 
-	// Fixed order matching original sequential design
+	// Fixed order matching shell orchestrator.sh
 	o.steps = []struct {
 		name string
 		ant  CurationAnt

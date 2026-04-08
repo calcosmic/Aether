@@ -1,0 +1,53 @@
+# Tool Name Mapping: Claude Code -> OpenCode
+# Used by generate-commands.sh to translate tool references
+
+tools:
+  # File operations
+  Read: read
+  Write: write
+  Edit: edit
+
+  # Search operations
+  Glob: glob
+  Grep: grep
+
+  # Execution
+  Bash: bash
+
+  # Agent spawning
+  Task: task
+  TaskOutput: null  # OpenCode returns inline, no separate tool
+
+  # User interaction
+  AskUserQuestion: context.ask
+
+# Subagent type mapping
+subagent_types:
+  general-purpose: general
+  Explore: explore
+  Plan: plan
+
+# Platform-specific syntax patterns
+patterns:
+  claude_code:
+    task_call: |
+      Use the Task tool with:
+      - subagent_type: "{subagent_type}"
+      - run_in_background: true
+      - prompt: "{prompt}"
+
+      Then use TaskOutput to collect results.
+
+    ask_user: |
+      Use AskUserQuestion with questions array...
+
+  opencode:
+    task_call: |
+      Use the task tool with:
+      - subagent_type: "{subagent_type}"
+      - prompt: "{prompt}"
+
+      Results return inline.
+
+    ask_user: |
+      Use context.ask() method with options...

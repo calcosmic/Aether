@@ -21,7 +21,7 @@ Valuable findings from Aether v3.1 development that apply to other projects.
    - Creates clear command ownership
 
 5. **CLI sync verification catches content drift**
-   - `aether generate-commands check` uses SHA-1 checksums
+   - `generate-commands.sh check` uses SHA-1 checksums
    - Detects when .claude/ and .opencode/ mirrors diverge
 
 ## Error Handling Patterns
@@ -60,10 +60,10 @@ fi
 ```
 
 ### Pattern 3: Atomic Write Pattern
-All state modifications use `atomic_write()` from pkg/storage/storage.go (temp file + mv)
+All state modifications use `atomic_write()` from atomic-write.sh (temp file + mv)
 
 ### Pattern 4: Trap-based Cleanup
-pkg/storage/storage.go uses `trap cleanup_locks EXIT TERM INT` for lock cleanup
+file-lock.sh uses `trap cleanup_locks EXIT TERM INT` for lock cleanup
 
 ### Pattern 5: Inconsistent Error Code Evolution
 Commands added early use hardcoded strings; commands added later use `$E_VALIDATION_FAILED` constant. This creates inconsistency that should be standardized.

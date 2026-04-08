@@ -477,7 +477,7 @@ Display "Import skipped. Starting fresh colony." and proceed to Step 8.
 Skip silently -- proceed directly to Step 8 without any mention of import (per D-11).
 ### Step 7.5: Install Clash Detection Hook
 
-If the `aether clash-setup` command is available, run:
+If `.aether/utils/clash-detect.sh` exists, run:
 
 ```bash
 aether clash-setup --install 2>/dev/null || true

@@ -3,7 +3,7 @@
 This is the **canonical source** for Aether caste emoji definitions.
 
 - All commands and documentation should reference this file
-- The `get_caste_emoji()` function in `aether CLI` implements these mappings
+- The `get_caste_emoji()` function in `aether-utils.sh` implements these mappings
 - To add a new caste: update this file AND the function
 
 ## Display Format

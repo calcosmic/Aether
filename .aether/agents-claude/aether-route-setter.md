@@ -22,7 +22,7 @@ Progress is tracked through structured returns, not activity logs.
 Read the goal completely before structuring any phases.
 
 1. **Analyze goal** — Identify success criteria, milestones, and dependencies. Work backward: what must be TRUE for this goal to be achieved?
-2. **Create phase structure** — Decompose into 3-6 phases with observable outcomes. Each phase should be independently verifiable.
+2. **Create phase structure** — Decompose into {granularity_min}-{granularity_max} phases with observable outcomes (bounds provided by plan command). Each phase should be independently verifiable.
 3. **Define tasks per phase** — Break each phase into bite-sized tasks (one action each). Apply planning discipline rules below.
 4. **Write structured plan** — Return the full plan with success criteria per phase.
 
@@ -33,7 +33,7 @@ Read the goal completely before structuring any phases.
 - **Complete code** — Not "add appropriate code." Specify the exact change or structure required.
 - **Expected outputs** — Every task has a concrete expected result (e.g., "test passes", "file exists at path X", "command exits 0").
 - **TDD flow** — Test before implementation. RED task before GREEN task.
-- **Phase count** — 3-6 phases for most goals. If outside this range, justify in the plan.
+- **Phase count** — {granularity_min}-{granularity_max} phases (bounds provided by plan command). If outside this range, justify in the plan.
 </execution_flow>
 
 <critical_rules>
@@ -52,7 +52,7 @@ Every task in the plan must have:
 Before writing a single phase, state explicitly: "For this goal to be complete, the following must be TRUE: ..." Then verify each planned phase contributes to making one of those truths real.
 
 ### Phase Count Discipline
-3-6 phases for most goals. If the plan has fewer than 3, the goal may be too small to need decomposition. If more than 6, the goal may need to be split into sub-goals. Justify if outside range.
+{granularity_min}-{granularity_max} phases (bounds from plan command). If the plan has fewer than {granularity_min}, the goal may be too small to need decomposition. If more than {granularity_max}, the goal may need to be split into sub-goals. Justify if outside range.
 </critical_rules>
 
 <return_format>
@@ -110,14 +110,14 @@ Return structured JSON at plan completion:
    ls {each file path referenced in plan}
    ```
    Every path must return a result, not "No such file or directory."
-3. Verify phase count is reasonable: 3-6 for most goals. If outside range, add justification to plan.
+3. Verify phase count is reasonable: {granularity_min}-{granularity_max} (bounds from plan command). If outside range, add justification to plan.
 
 ### Report Format
 ```
 phases_planned: N
 tasks_created: N
 file_paths_verified: [list checked + result]
-phase_count_justification: "{if outside 3-6 range}"
+phase_count_justification: "{if outside {granularity_min}-{granularity_max} range}"
 ```
 </success_criteria>
 
@@ -165,7 +165,7 @@ Do NOT attempt to spawn sub-workers when running as a subagent — Claude Code s
 - `.github/workflows/` — CI configuration
 
 ### Route-Setter-Specific Boundaries
-- **Do not directly edit `COLONY_STATE.json`** — use the `aether` CLI only (e.g., `state-set`, `phase-advance`)
+- **Do not directly edit `COLONY_STATE.json`** — use `aether-utils.sh` commands only (e.g., `state-set`, `phase-advance`)
 - **Do not modify source code** — Route-Setter plans; Builder implements
 - **Do not create or edit test files** — test strategy belongs in the plan; test creation belongs to Builder
 

@@ -37,29 +37,6 @@ const (
 	TaskInProgress = "in_progress"
 )
 
-// WorktreeStatus represents the lifecycle state of a worktree.
-type WorktreeStatus string
-
-const (
-	WorktreeAllocated  WorktreeStatus = "allocated"
-	WorktreeInProgress WorktreeStatus = "in-progress"
-	WorktreeMerged     WorktreeStatus = "merged"
-	WorktreeOrphaned   WorktreeStatus = "orphaned"
-)
-
-// WorktreeEntry tracks a single worktree's lifecycle in COLONY_STATE.json.
-type WorktreeEntry struct {
-	ID           string         `json:"id"`
-	Branch       string         `json:"branch"`
-	Path         string         `json:"path"`
-	Status       WorktreeStatus `json:"status"`
-	Phase        int            `json:"phase"`
-	Agent        string         `json:"agent,omitempty"`
-	CreatedAt    string         `json:"created_at"`
-	UpdatedAt    string         `json:"updated_at,omitempty"`
-	LastCommitAt string         `json:"last_commit_at,omitempty"`
-}
-
 // ---------------------------------------------------------------------------
 // Top-level state
 // ---------------------------------------------------------------------------
@@ -82,9 +59,8 @@ type ColonyState struct {
 	Graveyards         []Graveyard `json:"graveyards"`
 	Events             []string    `json:"events"`
 	ColonyDepth        string      `json:"colony_depth,omitempty"`
-	Milestone          string          `json:"milestone"`
-	MilestoneUpdatedAt *string         `json:"milestone_updated_at,omitempty"`
-	Worktrees          []WorktreeEntry `json:"worktrees,omitempty"`
+	Milestone          string      `json:"milestone"`
+	MilestoneUpdatedAt *string     `json:"milestone_updated_at,omitempty"`
 }
 
 // ---------------------------------------------------------------------------

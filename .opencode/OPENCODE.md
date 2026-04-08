@@ -24,7 +24,7 @@
 | Agent definitions | `.opencode/agents/` | Source of truth |
 | Slash commands | `.opencode/commands/ant/` | Source of truth |
 | workers.md | `.aether/workers.md` | Source of truth |
-| aether CLI | `cmd/` (Go binary) | Source of truth |
+| aether-utils.sh | `.aether/aether-utils.sh` | Source of truth |
 
 **After editing:**
 ```bash
@@ -42,7 +42,7 @@ npm install -g .   # Validates .aether/, then pushes to hub
 ```
 Aether Repo (this repo)
 ├── .aether/ (SOURCE OF TRUTH — packaged directly into npm)
-│   ├── workers.md, utils/, docs/
+│   ├── workers.md, aether-utils.sh, utils/, docs/
 │   ├── data/          ← LOCAL ONLY (excluded by .aether/.npmignore)
 │   └── dreams/        ← LOCAL ONLY (excluded by .aether/.npmignore)
 │
@@ -127,7 +127,7 @@ Results return inline.
 **Implementation:**
 ```bash
 # At start of each command
-Run: `normalized_args=$(aether normalize-args "$@")`
+Run: `normalized_args=$(bash .aether/aether-utils.sh normalize-args "$@")`
 
 # Then use `$normalized_args` instead of `$ARGUMENTS`
 ```

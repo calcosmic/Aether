@@ -3,7 +3,7 @@
 This directory contains actively maintained documentation for the Aether colony system.
 
 Runtime/behavior authority remains in:
-- `aether` CLI binary (Go implementation in `cmd/`)
+- `.aether/aether-utils.sh` (execution)
 - `.claude/commands/ant/*.md` (command flow)
 
 Docs in this directory are explanatory references and should not override runtime behavior.

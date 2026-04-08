@@ -8,7 +8,7 @@ Each worker should have a unique name generated at spawn time. This creates a mo
 
 ```bash
 # Generate a caste-specific name
-ant_name=$(aether generate-ant-name "builder" | jq -r '.result')
+ant_name=$(bash .aether/aether-utils.sh generate-ant-name "builder" | jq -r '.result')
 # Result: "Hammer-42" or "Forge-17", etc.
 ```
 
@@ -32,9 +32,9 @@ When logging activity, include the ant name:
 
 ```bash
 # Log with personality
-aether activity-log "CREATED" "Hammer-42 (Builder)" "Constructed auth module with JWT support"
-aether activity-log "RESEARCH" "Swift-7 (Scout)" "Discovered existing validation patterns in src/utils"
-aether activity-log "MODIFIED" "Vigil-23 (Watcher)" "Inspected test coverage: 87% achieved"
+bash .aether/aether-utils.sh activity-log "CREATED" "Hammer-42 (Builder)" "Constructed auth module with JWT support"
+bash .aether/aether-utils.sh activity-log "RESEARCH" "Swift-7 (Scout)" "Discovered existing validation patterns in src/utils"
+bash .aether/aether-utils.sh activity-log "MODIFIED" "Vigil-23 (Watcher)" "Inspected test coverage: 87% achieved"
 ```
 
 ### Spawn Tracking
@@ -43,10 +43,10 @@ Always log spawns to the spawn tree for visualization:
 
 ```bash
 # When spawning a worker
-aether spawn-log "Prime-1" "builder" "Hammer-42" "implementing auth module"
+bash .aether/aether-utils.sh spawn-log "Prime-1" "builder" "Hammer-42" "implementing auth module"
 
 # When worker completes
-aether spawn-complete "Hammer-42" "completed" "auth module with 5 tests"
+bash .aether/aether-utils.sh spawn-complete "Hammer-42" "completed" "auth module with 5 tests"
 ```
 
 ---
@@ -239,7 +239,7 @@ See `.aether/docs/disciplines/coding-standards.md` for full discipline reference
 Log progress as you work:
 
 ```bash
-aether activity-log "ACTION" "{caste}" "description"
+bash .aether/aether-utils.sh activity-log "ACTION" "{caste}" "description"
 ```
 
 Actions: CREATED (path + lines), MODIFIED (path), RESEARCH (finding), SPAWN (caste + reason), ERROR (description)
@@ -289,7 +289,7 @@ Only spawn if you encounter genuine surprise:
 **Step 1: Check if you can spawn**
 ```bash
 # Check spawn allowance at your depth (hard-enforced on deny)
-result=$(aether spawn-can-spawn {your_depth} --enforce)
+result=$(bash .aether/aether-utils.sh spawn-can-spawn {your_depth} --enforce)
 # Returns: {"can_spawn": true/false, "depth": N, "max_spawns": N, "current_total": N}
 ```
 
@@ -298,14 +298,14 @@ If `can_spawn` is false, complete the work inline.
 **Step 2: Generate child name**
 ```bash
 # Generate a name for the child worker
-child_name=$(aether generate-ant-name "{caste}" | jq -r '.result')
+child_name=$(bash .aether/aether-utils.sh generate-ant-name "{caste}" | jq -r '.result')
 # Returns: "Hammer-42", "Vigil-17", etc.
 ```
 
 **Step 3: Log the spawn and update swarm display**
 ```bash
-aether spawn-log "{your_name}" "{child_caste}" "{child_name}" "{task_summary}"
-aether swarm-display-update "{child_name}" "{child_caste}" "excavating" "{task_summary}" "{your_name}" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 10
+bash .aether/aether-utils.sh spawn-log "{your_name}" "{child_caste}" "{child_name}" "{task_summary}"
+bash .aether/aether-utils.sh swarm-display-update "{child_name}" "{child_caste}" "excavating" "{task_summary}" "{your_name}" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 10
 ```
 
 **Step 4: Use Task tool**
@@ -351,8 +351,8 @@ Return a compressed summary:
 **Step 5: Log completion and update swarm display**
 ```bash
 # After Task tool returns
-aether spawn-complete "{child_name}" "{status}" "{summary}"
-aether swarm-display-update "{child_name}" "{child_caste}" "completed" "{summary}" "{your_name}" '{"read":5,"grep":3,"edit":2,"bash":1}' 100 "fungus_garden" 100
+bash .aether/aether-utils.sh spawn-complete "{child_name}" "{status}" "{summary}"
+bash .aether/aether-utils.sh swarm-display-update "{child_name}" "{child_caste}" "completed" "{summary}" "{your_name}" '{"read":5,"grep":3,"edit":2,"bash":1}' 100 "fungus_garden" 100
 ```
 
 ---

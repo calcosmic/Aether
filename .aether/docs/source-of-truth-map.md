@@ -9,7 +9,7 @@ Define which files are authoritative for system behavior, which files are derive
 ## Authority Precedence (Highest to Lowest)
 
 1. **Executable runtime**
-- `.aether/aether CLI` and sourced scripts in `.aether/utils/`
+- `.aether/aether-utils.sh` and sourced scripts in `.aether/utils/`
 - Node CLI runtime in `bin/cli.js` and `bin/lib/*`
 - Why: these files are what actually execute.
 
@@ -34,13 +34,13 @@ Define which files are authoritative for system behavior, which files are derive
 
 | Domain | Authoritative Files | Notes |
 |---|---|---|
-| Core deterministic operations | `.aether/aether CLI` | Dispatcher that loads domain modules on demand (~5,200 lines) |
+| Core deterministic operations | `.aether/aether-utils.sh` | Dispatcher that loads domain modules on demand (~5,200 lines) |
 | Slash command orchestration | `.claude/commands/ant/*.md` | Includes build/continue orchestrators |
 | Worker behavior specs | `.claude/agents/ant/*.md` | 24 Claude agent definitions (Builder, Watcher, etc.) |
 | Packaged Claude agent mirror | `.aether/agents-claude/*.md` | Distribution mirror; must stay byte-identical with `.claude/agents/ant/*.md` |
 | OpenCode command surface | `.opencode/commands/ant/*.md` | 45 OpenCode command files; structure parity with Claude commands |
 | OpenCode worker behavior specs | `.opencode/agents/*.md` | 24 OpenCode agent definitions |
-| Domain modules | `cmd/` (Go binary) | Extracted from aether CLI in Phase 13; sourced on demand |
+| Domain modules | `.aether/utils/{flag,spawn,session,suggest,queen,swarm,learning,pheromone,state-api}.sh` | Extracted from aether-utils.sh in Phase 13; sourced on demand |
 | Build/continue split stages | `.aether/docs/command-playbooks/*.md` | Loaded by orchestrators; executable instruction docs |
 | Output templates | `.aether/templates/*` | Templates for generated state/handoff/wisdom/session artifacts |
 | Colony wisdom source | `.aether/QUEEN.md` + `~/.aether/QUEEN.md` | Read by `queen-read`/`colony-prime` |
@@ -55,8 +55,8 @@ Define which files are authoritative for system behavior, which files are derive
 
 ## Confirmed Implementation Facts
 
-- Utility dispatcher and subcommands are implemented in `.aether/aether CLI` (`case "$cmd" in`).
-- Context continuity primitives are runtime-backed in `.aether/aether CLI`:
+- Utility dispatcher and subcommands are implemented in `.aether/aether-utils.sh` (`case "$cmd" in`).
+- Context continuity primitives are runtime-backed in `.aether/aether-utils.sh`:
   - `context-capsule` (compact prompt context),
   - `rolling-summary` (bounded narrative log),
   - `pheromone-prime --compact` and `colony-prime --compact`.
@@ -81,9 +81,9 @@ Define which files are authoritative for system behavior, which files are derive
 
 | Category | Location | Count | Status |
 |---|---|---:|---|
-| Core utility entrypoint | `.aether/aether CLI` | 1 | Active |
-| Sourced shell utilities | `cmd/` (Go binary) | ~29 | Active (9 domain modules + infrastructure + XML) |
-| XML utility scripts | `pkg/exchange/` | 5 | Active (see drift note) |
+| Core utility entrypoint | `.aether/aether-utils.sh` | 1 | Active |
+| Sourced shell utilities | `.aether/utils/*.sh` | ~29 | Active (9 domain modules + infrastructure + XML) |
+| XML utility scripts | `.aether/utils/xml-*.sh` | 5 | Active (see drift note) |
 | Slash commands (Claude) | `.claude/commands/ant/*.md` | 45 | Active |
 | Slash commands (OpenCode) | `.opencode/commands/ant/*.md` | 45 | Active (content differs from Claude variants) |
 | Agent definitions (Claude) | `.claude/agents/ant/*.md` | 24 | Active |
@@ -102,7 +102,7 @@ No high-confidence drift items currently tracked in this document after the 2026
 
 When determining "how Aether works now", read in this order:
 
-1. `.aether/aether CLI`
+1. `.aether/aether-utils.sh`
 2. `.claude/commands/ant/build.md` and `.claude/commands/ant/continue.md`
 3. `.aether/docs/command-playbooks/*.md`
 4. `.claude/agents/ant/*.md`
@@ -124,7 +124,7 @@ When determining "how Aether works now", read in this order:
 2. [x] Update threshold descriptions in `.aether/docs/QUEEN-SYSTEM.md` to match runtime defaults.
 3. [x] Update root `README.md` command count (35 -> 36 -> 37 -> 40 after Phases 2, 6, 7).
 4. [x] Update `.aether/docs/README.md` to include `command-playbooks/` and clarify docs-vs-runtime authority.
-5. [x] Review `bootstrap-system` allowlist in `.aether/aether CLI` for stale doc entries.
+5. [x] Review `bootstrap-system` allowlist in `.aether/aether-utils.sh` for stale doc entries.
 6. [x] Add agent definitions to Ownership Map and authority hierarchy.
 7. [x] Document playbook staged Read-tool execution model.
 8. [x] Clarify OpenCode structural parity and non-identical content status.

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -566,18 +565,6 @@ func TestSealInProgress_CommittedSeal(t *testing.T) {
 }
 
 // --- helpers ---
-
-func runGit(t *testing.T, dir string, args ...string) {
-	t.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=test", "GIT_AUTHOR_EMAIL=test@example.com",
-		"GIT_COMMITTER_NAME=test", "GIT_COMMITTER_EMAIL=test@example.com")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("git %s in %s: %v\n%s", args[0], dir, err, out)
-	}
-}
 
 func writeSealedState(t *testing.T, dataDir, goal string) {
 	t.Helper()

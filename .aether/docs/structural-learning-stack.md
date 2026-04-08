@@ -44,7 +44,7 @@ The stack runs automatically at phase-end and seal — workers never call it dir
 
 ## Pipeline Stages
 
-### 1. Observation (pkg/memory/observe.go — `_learning_observe`)
+### 1. Observation (learning.sh — `_learning_observe`)
 
 Records an observation of a learning pattern into `.aether/data/learning-observations.json`.
 
@@ -57,7 +57,7 @@ Observation schema fields: `content_hash`, `content`, `wisdom_type`, `observatio
 
 ---
 
-### 2. Trust Scoring Engine (pkg/memory/trust.go)
+### 2. Trust Scoring Engine (trust-scoring.sh)
 
 A pure calculation module. No state is read or written. All functions accept `--flag value` arguments and return JSON.
 
@@ -103,7 +103,7 @@ score = 0.40 × source_score + 0.35 × evidence_score + 0.25 × activity_score
 
 ---
 
-### 3. Event Bus (pkg/events/event.go)
+### 3. Event Bus (event-bus.sh)
 
 A JSONL append-log at `.aether/data/event-bus.jsonl`. Each line is one JSON event object.
 
@@ -117,7 +117,7 @@ A JSONL append-log at `.aether/data/event-bus.jsonl`. Each line is one JSON even
 
 ---
 
-### 4. Instinct Storage (pkg/memory/promote.go)
+### 4. Instinct Storage (instinct-store.sh)
 
 Persistent trust-scored instincts at `.aether/data/instincts.json` (schema version 1.0).
 
@@ -152,7 +152,7 @@ Persistent trust-scored instincts at `.aether/data/instincts.json` (schema versi
 
 ---
 
-### 5. Graph Layer (pkg/graph/graph.go)
+### 5. Graph Layer (graph.sh)
 
 Tracks directed relationships between instincts at `.aether/data/instinct-graph.json`.
 
@@ -235,32 +235,32 @@ All steps are non-blocking. The seal report path is returned in the output.
 
 | Subcommand | Module | Usage |
 |-----------|--------|-------|
-| `trust-calculate` | pkg/memory/trust.go | `--source <type> --evidence <type> --days-since <N>` |
-| `trust-decay` | pkg/memory/trust.go | `--score <float> --days <N>` |
-| `trust-tier` | pkg/memory/trust.go | `--score <float>` |
-| `event-publish` | pkg/events/event.go | `--topic <topic> --payload <json> [--source <src>] [--ttl <days>]` |
-| `event-subscribe` | pkg/events/event.go | `--topic <pattern> [--since <ISO>] [--limit <N>]` |
-| `event-cleanup` | pkg/events/event.go | `[--dry-run]` |
-| `event-replay` | pkg/events/event.go | `--topic <topic> --since <ISO> [--limit <N>]` |
-| `instinct-store` | pkg/memory/promote.go | `--trigger <t> --action <a> --domain <d> --confidence <f> --source <s> --evidence <e> [--source-type <type>]` |
-| `instinct-read-trusted` | pkg/memory/promote.go | `[--min-score <f>] [--domain <d>] [--limit <N>]` |
-| `instinct-decay-all` | pkg/memory/promote.go | `[--days <N>] [--dry-run]` |
-| `instinct-archive` | pkg/memory/promote.go | `--id <id>` |
-| `graph-link` | pkg/graph/graph.go | `--source <id> --target <id> --relationship <type> [--weight <float>]` |
-| `graph-neighbors` | pkg/graph/graph.go | `--id <id> [--direction out\|in\|both] [--relationship <type>]` |
-| `graph-reach` | pkg/graph/graph.go | `--id <id> --hops <N> [--min-weight <float>]` |
-| `graph-cluster` | pkg/graph/graph.go | `[--min-edges <N>] [--min-weight <float>]` |
-| `curation-sentinel` | pkg/agent/curation/sentinel.go | `[--dry-run]` |
-| `curation-nurse` | pkg/agent/curation/nurse.go | `[--dry-run]` |
-| `curation-critic` | pkg/agent/curation/critic.go | `[--dry-run]` |
-| `curation-herald` | pkg/agent/curation/herald.go | `[--dry-run]` |
-| `curation-janitor` | pkg/agent/curation/janitor.go | `[--dry-run]` |
-| `curation-archivist` | pkg/agent/curation/archivist.go | `[--threshold <f>] [--dry-run]` |
-| `curation-librarian` | pkg/agent/curation/librarian.go | `[--dry-run]` |
-| `curation-scribe` | pkg/agent/curation/scribe.go | `[--dry-run]` |
-| `curation-run` | pkg/agent/curation/orchestrator.go | `[--dry-run] [--verbose]` |
-| `consolidation-phase-end` | pkg/memory/consolidate.go | `[--dry-run]` |
-| `consolidation-seal` | pkg/memory/consolidate.go | `[--dry-run]` |
+| `trust-calculate` | trust-scoring.sh | `--source <type> --evidence <type> --days-since <N>` |
+| `trust-decay` | trust-scoring.sh | `--score <float> --days <N>` |
+| `trust-tier` | trust-scoring.sh | `--score <float>` |
+| `event-publish` | event-bus.sh | `--topic <topic> --payload <json> [--source <src>] [--ttl <days>]` |
+| `event-subscribe` | event-bus.sh | `--topic <pattern> [--since <ISO>] [--limit <N>]` |
+| `event-cleanup` | event-bus.sh | `[--dry-run]` |
+| `event-replay` | event-bus.sh | `--topic <topic> --since <ISO> [--limit <N>]` |
+| `instinct-store` | instinct-store.sh | `--trigger <t> --action <a> --domain <d> --confidence <f> --source <s> --evidence <e> [--source-type <type>]` |
+| `instinct-read-trusted` | instinct-store.sh | `[--min-score <f>] [--domain <d>] [--limit <N>]` |
+| `instinct-decay-all` | instinct-store.sh | `[--days <N>] [--dry-run]` |
+| `instinct-archive` | instinct-store.sh | `--id <id>` |
+| `graph-link` | graph.sh | `--source <id> --target <id> --relationship <type> [--weight <float>]` |
+| `graph-neighbors` | graph.sh | `--id <id> [--direction out\|in\|both] [--relationship <type>]` |
+| `graph-reach` | graph.sh | `--id <id> --hops <N> [--min-weight <float>]` |
+| `graph-cluster` | graph.sh | `[--min-edges <N>] [--min-weight <float>]` |
+| `curation-sentinel` | curation-ants/sentinel.sh | `[--dry-run]` |
+| `curation-nurse` | curation-ants/nurse.sh | `[--dry-run]` |
+| `curation-critic` | curation-ants/critic.sh | `[--dry-run]` |
+| `curation-herald` | curation-ants/herald.sh | `[--dry-run]` |
+| `curation-janitor` | curation-ants/janitor.sh | `[--dry-run]` |
+| `curation-archivist` | curation-ants/archivist.sh | `[--threshold <f>] [--dry-run]` |
+| `curation-librarian` | curation-ants/librarian.sh | `[--dry-run]` |
+| `curation-scribe` | curation-ants/scribe.sh | `[--dry-run]` |
+| `curation-run` | curation-ants/orchestrator.sh | `[--dry-run] [--verbose]` |
+| `consolidation-phase-end` | consolidation.sh | `[--dry-run]` |
+| `consolidation-seal` | consolidation-seal.sh | `[--dry-run]` |
 
 ---
 
@@ -268,16 +268,16 @@ All steps are non-blocking. The seal report path is returned in the output.
 
 | Test file | What it covers |
 |-----------|---------------|
-| `tests/bash/test-pkg/memory/trust.go` | `trust-calculate`, `trust-decay`, `trust-tier`; formula weights, floor, tiers |
-| `tests/bash/test-pkg/events/event.go` | `event-publish`, `event-subscribe`, `event-cleanup`, `event-replay`; TTL, locking, wildcard patterns |
-| `tests/bash/test-pkg/memory/promote.go` | `instinct-store`, `instinct-read-trusted`, `instinct-decay-all`, `instinct-archive`; 50-cap, dedup, decay archival |
-| `pkg/memory/instincts_test.go` | Instinct application and provenance tracking |
-| `tests/bash/test-pkg/graph/graph.go` | `graph-link`, `graph-neighbors`, `graph-reach`, `graph-cluster`; BFS traversal, cluster detection |
-| `pkg/agent/curation/sentinel_test.go` | Core curation ant behavior (sentinel, nurse, critic) |
-| `pkg/agent/curation/janitor_test.go` | Operational curation ants (herald, janitor, archivist, librarian, scribe) |
-| `tests/bash/test-curation-orchestrator.go` | `curation-run` full sequence, sentinel abort path |
-| `tests/bash/test-pkg/memory/consolidate.go` | `consolidation-phase-end`; phase-end step sequence, event publishing |
-| `tests/bash/test-pkg/memory/consolidate.go` | `consolidation-seal`; full seal sequence, dry-run mode |
-| `pkg/memory/observe_test.go` | `learning-observe`; trust score on write, deduplication, observation_count increment |
-| `pkg/storage/backup_test.go` | Backup rotation and corrupt-file recovery logic |
-| `pkg/memory/trust_test.go` | Trust scoring integration with oracle/research paths |
+| `tests/bash/test-trust-scoring.sh` | `trust-calculate`, `trust-decay`, `trust-tier`; formula weights, floor, tiers |
+| `tests/bash/test-event-bus.sh` | `event-publish`, `event-subscribe`, `event-cleanup`, `event-replay`; TTL, locking, wildcard patterns |
+| `tests/bash/test-instinct-store.sh` | `instinct-store`, `instinct-read-trusted`, `instinct-decay-all`, `instinct-archive`; 50-cap, dedup, decay archival |
+| `tests/bash/test-instinct-apply.sh` | Instinct application and provenance tracking |
+| `tests/bash/test-graph.sh` | `graph-link`, `graph-neighbors`, `graph-reach`, `graph-cluster`; BFS traversal, cluster detection |
+| `tests/bash/test-curation-core.sh` | Core curation ant behavior (sentinel, nurse, critic) |
+| `tests/bash/test-curation-ops.sh` | Operational curation ants (herald, janitor, archivist, librarian, scribe) |
+| `tests/bash/test-curation-orchestrator.sh` | `curation-run` full sequence, sentinel abort path |
+| `tests/bash/test-consolidation.sh` | `consolidation-phase-end`; phase-end step sequence, event publishing |
+| `tests/bash/test-consolidation-seal.sh` | `consolidation-seal`; full seal sequence, dry-run mode |
+| `tests/bash/test-learning-module.sh` | `learning-observe`; trust score on write, deduplication, observation_count increment |
+| `tests/bash/test-learning-recovery.sh` | Backup rotation and corrupt-file recovery logic |
+| `tests/bash/test-oracle-trust.sh` | Trust scoring integration with oracle/research paths |

@@ -1132,7 +1132,7 @@ For failed verification:
 4. **Get files to measure:**
 
    Use `files_created` and `files_modified` from builder results (already collected in synthesis preparation). Filter for source files only:
-   - Include: `.js`, `.ts`, `.go`, `.py` files
+   - Include: `.js`, `.ts`, `.sh`, `.py` files
    - Exclude: `.test.js`, `.test.ts`, `.spec.js`, `.spec.ts`, `__tests__/`, config files
 
    Store filtered list as `{source_files_to_measure}`.

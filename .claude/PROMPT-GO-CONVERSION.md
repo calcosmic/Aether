@@ -1,19 +1,15 @@
 # Aether Shell-to-Go Conversion: Master Execution Plan
 
-> **NOTE:** This document is historical. The Shell-to-Go conversion is complete.
-> Aether now runs as a Go binary (`cmd/aether`). Shell scripts have been removed.
-> This file is retained for reference only.
-
 **Purpose:** This prompt contains everything needed to verify the Go implementation is complete, ensure zero functionality loss from the shell scripts, clean up the development environment, and get Aether to a clean working state with Go as the primary runtime.
 
-**How to use:** After `/clear`, paste this entire file as your prompt. It contains all context from the research -- you don't need to read any other files first.
+**How to use:** After `/clear`, paste this entire file as your prompt. It contains all context from the research — you don't need to read any other files first.
 
 ---
 
 ## CONTEXT: WHERE WE ARE
 
 ### The Project
-Aether is a multi-agent development framework. Users install it via `npm install -g .`, then run slash commands like `/ant:init`, `/ant:build`, `/ant:continue` in Claude Code or OpenCode. Under the hood, those commands call `aether CLI` (a 5,500-line bash dispatcher with 305 subcommands) and ~50 utility scripts in `.aether/utils/`.
+Aether is a multi-agent development framework. Users install it via `npm install -g .`, then run slash commands like `/ant:init`, `/ant:build`, `/ant:continue` in Claude Code or OpenCode. Under the hood, those commands call `aether-utils.sh` (a 5,500-line bash dispatcher with 305 subcommands) and ~50 utility scripts in `.aether/utils/`.
 
 ### The Goal
 Convert the entire shell backend to Go so that:
@@ -118,7 +114,7 @@ These can be handled after the critical 28 are done. Many may not need Go equiva
 There are **3 open worktrees** that need to be dealt with before anything else:
 
 ```
-worktree-agent-a17bd9aa  — Phase 40-01 (pheromone snapshot injection into worktree Go commands)
+worktree-agent-a17bd9aa  — Phase 40-01 (pheromone snapshot injection into worktree.sh)
                            1 commit ahead of main — shell plumbing, probably not needed for Go
                            Has a SUMMARY.md — plan is "complete"
 
@@ -174,7 +170,7 @@ These are the shell functions that slash commands actually call. Implement each 
 - version-check-cached
 
 For each command:
-1. Read the shell implementation in `.aether/utils/*.sh` or `.aether/aether CLI`
+1. Read the shell implementation in `.aether/utils/*.sh` or `.aether/aether-utils.sh`
 2. Implement equivalent Go function in the appropriate package
 3. Wire it to a cobra command in `cmd/`
 4. Write a test
@@ -186,7 +182,7 @@ Update `.claude/commands/ant/*.md` to call the Go binary instead of shell script
 
 **Current pattern in slash commands:**
 ```bash
-aether session-init --colony "my-colony"
+bash .aether/aether-utils.sh session-init --colony "my-colony"
 ```
 
 **New pattern:**
@@ -291,7 +287,7 @@ The `.planning/` directory has 59 phases of planning history. This is developmen
 - `README.md` — add Go installation instructions
 
 ### 5E. Shell Script Retirement
-- `.aether/aether CLI` — keep during transition, eventually deprecate
+- `.aether/aether-utils.sh` — keep during transition, eventually deprecate
 - `.aether/utils/*.sh` — keep during transition, eventually remove
 - Slash commands that call shell — update to call Go (Phase B above)
 
@@ -318,7 +314,7 @@ Start with the groups that unblock the most slash commands:
 8. Version (1 command) — unblocks status
 
 ### Step 4: Update slash commands to call Go
-Change `aether <cmd>` to `aether <cmd>` in all affected command files.
+Change `bash .aether/aether-utils.sh <cmd>` to `aether <cmd>` in all affected command files.
 
 ### Step 5: Integration testing
 Smoke test every slash command. Compare outputs. Run full test suites.

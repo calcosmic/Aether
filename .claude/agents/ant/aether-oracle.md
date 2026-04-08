@@ -55,7 +55,7 @@ The Stop hook manages:
 - Synthesis pass triggering (final report generation)
 - Loop termination
 
-Legacy mode (tmux-based loop) remains available as a fallback via --legacy flag.
+Legacy mode (oracle.sh in tmux) remains available as a fallback via --legacy flag.
 
 ### Output File Convention
 

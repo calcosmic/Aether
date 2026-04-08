@@ -117,7 +117,3 @@ node_modules/
 # Go build output
 /aether
 *.test
-
-# GSD research artifacts
-2026-*/
-20??-??-??-??????/

@@ -4,7 +4,7 @@
 > Author: Weld-53 (Builder)
 > Date: 2026-03-30
 > Depends on: Task 1.1 (Branch-Local State Contract), Task 1.2 (Pheromone Propagation)
-> Verified against: colony-prime (_colony_prime lines 737-1553), aether CLI (context-capsule lines 4172-4368)
+> Verified against: pheromone.sh (_colony_prime lines 737-1553), aether-utils.sh (context-capsule lines 4172-4368)
 
 ---
 
@@ -40,7 +40,7 @@ chain for missing sources.
 
 ## 2. Current System Reference
 
-### 2.1 colony-prime (colony-prime lines 737-1553)
+### 2.1 colony-prime (pheromone.sh lines 737-1553)
 
 colony-prime assembles worker context from 9 sections:
 
@@ -71,7 +71,7 @@ Trim order (first removed = lowest retention priority):
 9. pheromone-signals (REDIRECTs preserved even when section trimmed)
 10. Blockers: NEVER trimmed
 
-### 2.2 context-capsule (aether CLI lines 4172-4368)
+### 2.2 context-capsule (aether-utils.sh lines 4172-4368)
 
 Reads COLONY_STATE.json, flags.json, pheromones.json, rolling-summary.log.
 Produces a bounded snapshot (220 words max in compact mode) with goal, state,
@@ -286,7 +286,7 @@ NOTE: colony-prime line 924-929 exits with error if neither exists.
    FAIL or empty -> step 3
 
 3. Return empty hive section
-   (This matches colony-prime's existing behavior, colony-prime lines 1096-1171)
+   (This matches colony-prime's existing behavior, pheromone.sh lines 1096-1171)
 ```
 
 ### 5.3 Pheromone Signals Fallback Chain
@@ -297,7 +297,7 @@ NOTE: colony-prime line 924-929 exits with error if neither exists.
    EMPTY (no active signals) -> step 2
 
 2. Return empty signals section with warning
-   (This matches colony-prime's existing behavior, colony-prime lines 973-986)
+   (This matches colony-prime's existing behavior, pheromone.sh lines 973-986)
 
 NOTE: On a fresh PR branch, pheromones.json may not exist.
       The pheromone-snapshot-inject protocol (Task 1.2, Section 4) should
@@ -324,7 +324,7 @@ NOTE: On a fresh PR branch, pheromones.json may not exist.
 
 3. context-capsule subcommand already handles this:
    Returns {"exists":false,"prompt_section":"","word_count":0}
-   (verified at aether CLI line 4210-4213)
+   (verified at aether-utils.sh line 4210-4213)
 ```
 
 ### 5.5 Flags/Blockers Fallback Chain
@@ -413,13 +413,13 @@ When over budget, sections are removed in this order (first = trimmed first):
 9. pheromone-signals (REDIRECTs preserved)
 10. blockers: NEVER trimmed
 
-This matches colony-prime exactly (colony-prime lines 1376-1492) so agents
+This matches colony-prime exactly (pheromone.sh lines 1376-1492) so agents
 receive consistent context regardless of whether they run in interactive
 or CI mode.
 
 ### 6.4 Budget Enforcement Algorithm
 
-Reuse colony-prime's existing algorithm (colony-prime lines 1388-1492) with
+Reuse colony-prime's existing algorithm (pheromone.sh lines 1388-1492) with
 `cp_max_chars` set to 6,000 or 3,000 instead of 8,000/4,000.
 
 ---
@@ -442,7 +442,7 @@ Reuse colony-prime's existing algorithm (colony-prime lines 1388-1492) with
            v                                                     v
   +------------------+                                  +------------------+
   | colony-prime     |                                  | pr-context       |
-  | (colony-prime)   |                                  | (colony-prime)   |
+  | (pheromone.sh)   |                                  | (pheromone.sh)   |
   |                  |                                  |                  |
   | Assembles:       |                                  | Assembles:       |
   |  - QUEEN wisdom  |                                  |  - QUEEN wisdom  |
@@ -485,20 +485,20 @@ duplicating logic:
 
 | Function | Reuse Method |
 |----------|-------------|
-| `_extract_wisdom()` | Call directly (already defined in colony-prime) |
+| `_extract_wisdom()` | Call directly (already defined in pheromone.sh) |
 | `_filter_wisdom_entries()` | Call directly |
 | `context-capsule` | Call via subcommand invocation |
 | `pheromone-prime` | Call via subcommand invocation |
 | `hive-read` | Call via subcommand invocation |
 | Budget trimming | Extract to shared `_budget_enforce()` function |
 
-The budget trimming logic (colony-prime lines 1388-1492) should be extracted
+The budget trimming logic (pheromone.sh lines 1388-1492) should be extracted
 into a shared function `_budget_enforce()` that both `colony-prime` and
 `pr-context` call with different `max_chars` values.
 
 ### 7.3 Subcommand Registration
 
-Add to aether CLI case statement (near line 3905):
+Add to aether-utils.sh case statement (near line 3905):
 
 ```
 pr-context) _pr_context "$@" ;;
@@ -705,7 +705,7 @@ A PR branch may not have `.aether/data/COLONY_STATE.json` (e.g., a developer
 creates a branch without running `/ant:init`). In this case:
 
 - pr-context returns `colony_state.exists = false` with defaults
-- context-capsule returns `{"exists":false,...}` (verified at aether CLI 4210-4213)
+- context-capsule returns `{"exists":false,...}` (verified at aether-utils.sh 4210-4213)
 - All other sources are read independently
 - The CI agent receives wisdom and signals (if pheromones exist) but no colony
   state. This is acceptable -- the agent can still perform code review.
@@ -730,7 +730,7 @@ branch-local state is isolated per worktree/branch, there is no conflict for
 volatile sources. Hub state reads are safe (read-only). The cache file
 (`.aether/data/pr-context-cache.json`) is branch-local, so concurrent writes
 to different branches do not conflict. Concurrent writes to the same branch's
-cache file use the existing `acquire_lock` mechanism from `pkg/storage/storage.go`.
+cache file use the existing `acquire_lock` mechanism from `file-lock.sh`.
 
 ### 10.4 Stale Cache After Merge
 
@@ -757,7 +757,7 @@ output with a `warnings` entry noting the budget overflow.
 
 | Subcommand | Purpose | Location |
 |------------|---------|----------|
-| `pr-context` | Assemble CI-ready colony context | colony-prime (near colony-prime) |
+| `pr-context` | Assemble CI-ready colony context | pheromone.sh (near colony-prime) |
 
 ### 11.2 New Helper Functions
 
@@ -780,7 +780,7 @@ output with a `warnings` entry noting the budget overflow.
 
 - Cache reads: No lock needed (read-only)
 - Cache writes: Use `acquire_lock` on `.aether/data/pr-context-cache.json`
-  (same pattern as other data files, via `pkg/storage/storage.go`)
+  (same pattern as other data files, via `file-lock.sh`)
 - Volatile source reads: No lock needed (read-only, branch-local)
 - Hub state reads: No lock needed (read-only)
 
@@ -812,16 +812,16 @@ output with a `warnings` entry noting the budget overflow.
 
 All assertions in this document were verified against the actual codebase:
 
-- colony-prime function: verified at colony-prime lines 737-1553
-- colony-prime 9 sections assembled: verified at colony-prime lines 1000-1012
-- Budget trimming order: verified at colony-prime lines 1376-1492
-- HARD FAIL on no QUEEN.md: verified at colony-prime lines 924-929
-- SOFT FAIL on no pheromones.json: verified at colony-prime lines 973-986
-- context-capsule COLONY_STATE.json missing: verified at aether CLI lines 4210-4213
-- context-capsule word budget: verified at aether CLI lines 4344-4363
-- context-capsule max defaults: verified at aether CLI lines 4177-4181
-- Hive fallback to eternal: verified at colony-prime lines 1139-1171
-- Subcommand registration pattern: verified at aether CLI lines 3904-3906
+- colony-prime function: verified at pheromone.sh lines 737-1553
+- colony-prime 9 sections assembled: verified at pheromone.sh lines 1000-1012
+- Budget trimming order: verified at pheromone.sh lines 1376-1492
+- HARD FAIL on no QUEEN.md: verified at pheromone.sh lines 924-929
+- SOFT FAIL on no pheromones.json: verified at pheromone.sh lines 973-986
+- context-capsule COLONY_STATE.json missing: verified at aether-utils.sh lines 4210-4213
+- context-capsule word budget: verified at aether-utils.sh lines 4344-4363
+- context-capsule max defaults: verified at aether-utils.sh lines 4177-4181
+- Hive fallback to eternal: verified at pheromone.sh lines 1139-1171
+- Subcommand registration pattern: verified at aether-utils.sh lines 3904-3906
 - File lock mechanism: verified in state-contract-design.md Section 6
 - `.aether/data/` gitignored: verified in state-contract-design.md Section 1
 - State contract branch-local rules: verified in state-contract-design.md Sections 3-4
@@ -829,6 +829,6 @@ All assertions in this document were verified against the actual codebase:
 
 ---
 
-*Design complete. Next steps: implement pr-context subcommand in colony-prime,
+*Design complete. Next steps: implement pr-context subcommand in pheromone.sh,
 extract _budget_enforce() shared function, and add CI workflow integration
 (implementation tasks).*
