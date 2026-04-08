@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"log"
 	"os"
 	"time"
 
@@ -361,20 +362,48 @@ func runImportPheromones(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
+	// Sanitize signal content — skip invalid signals rather than failing the entire import.
+	var sanitized []colony.PheromoneSignal
+	for _, sig := range signals {
+		var contentMap map[string]string
+		if err := json.Unmarshal(sig.Content, &contentMap); err != nil {
+			log.Printf("import pheromones: skipping signal %s: malformed content JSON: %v", sig.ID, err)
+			continue
+		}
+		text, ok := contentMap["text"]
+		if !ok {
+			log.Printf("import pheromones: skipping signal %s: no text field in content", sig.ID)
+			continue
+		}
+		cleaned, err := colony.SanitizeSignalContent(text)
+		if err != nil {
+			log.Printf("import pheromones: skipping signal %s: %v", sig.ID, err)
+			continue
+		}
+		// Rebuild the content JSON with sanitized text.
+		newContent, err := json.Marshal(map[string]string{"text": cleaned})
+		if err != nil {
+			log.Printf("import pheromones: skipping signal %s: failed to marshal sanitized content: %v", sig.ID, err)
+			continue
+		}
+		sig.Content = json.RawMessage(newContent)
+		sanitized = append(sanitized, sig)
+	}
+
 	// Merge with existing pheromones
 	var file colony.PheromoneFile
 	store.LoadJSON("pheromones.json", &file)
 	if file.Signals == nil {
 		file.Signals = []colony.PheromoneSignal{}
 	}
-	file.Signals = append(file.Signals, signals...)
+	file.Signals = append(file.Signals, sanitized...)
 
 	if err := store.SaveJSON("pheromones.json", file); err != nil {
 		outputErrorMessage(fmt.Sprintf("save pheromones: %v", err))
 		return nil
 	}
 
-	outputOK(map[string]interface{}{"imported": len(signals), "total": len(file.Signals)})
+	outputOK(map[string]interface{}{"imported": len(sanitized), "total": len(file.Signals)})
 	return nil
 }
 

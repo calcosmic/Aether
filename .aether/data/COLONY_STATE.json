@@ -4,7 +4,7 @@
   "colony_name": "pheromone-speed-fix",
   "colony_version": 1,
   "state": "READY",
-  "current_phase": 2,
+  "current_phase": 3,
   "session_id": "session_1775643664_ba87cd71",
   "initialized_at": "2026-04-08T10:21:04Z",
   "build_started_at": null,
@@ -41,7 +41,7 @@
         "description": "Extract duplicated content validation into a single pkg-level function implementing all 5 documented sanitization rules, then wire it into pheromone-write and import paths.",
         "id": 2,
         "name": "Centralize Content Sanitization",
-        "status": "pending",
+        "status": "completed",
         "success_criteria": [
           "SanitizeSignalContent is the single validation entry point",
           "pheromone_write.go and exchange.go both call it",
@@ -359,6 +359,28 @@
         "phase": 1,
         "phase_name": "Performance Baseline Benchmarks",
         "timestamp": "2026-04-08T11:43:16Z"
+      },
+      {
+        "id": "learning_1775652599",
+        "learnings": [
+          {
+            "claim": "SanitizeSignalContent as single validation entry point eliminates duplication between pheromone-write and exchange import paths",
+            "disproven_by": null,
+            "evidence": "Both paths call SanitizeSignalContent, all 28 tests pass",
+            "status": "hypothesis",
+            "tested": true
+          },
+          {
+            "claim": "Hash-before-sanitize ordering preserves deduplication integrity — content hash must use raw input, sanitization applied after hash",
+            "disproven_by": null,
+            "evidence": "TestPheromoneWrite_HashOnRawContentNotSanitized verifies dedup works on raw content",
+            "status": "hypothesis",
+            "tested": true
+          }
+        ],
+        "phase": 2,
+        "phase_name": "Centralize Content Sanitization",
+        "timestamp": "2026-04-08T12:49:59Z"
       }
     ],
     "decisions": null,
@@ -374,12 +396,17 @@
     "2026-04-08T10:21:04Z|colony_initialized|init|Colony initialized with goal: Tackle the three speed fixes for pheromone injection: eliminate redundant process spawns, centralize validation, and add session-level caching",
     "2026-04-08T10:50:54Z|plan_generated|plan|Generated 10 phases with 82% confidence",
     "2026-04-08T10:57:13Z|phase_started|build|Phase 1: Performance Baseline Benchmarks started",
+    "",
     ""
   ],
   "plan_granularity": "quarter",
   "milestone": "",
   "build_baseline_sha": "5eca94d35673a9b549684b054f1555877c0c522d"
 }
+
+
+
+
 
 
 

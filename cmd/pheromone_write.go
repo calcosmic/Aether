@@ -64,12 +64,20 @@ var pheromoneWriteCmd = &cobra.Command{
 
 		now := time.Now().UTC().Format(time.RFC3339)
 
-		// Compute content hash: SHA-256 of content
+		// Compute content hash: SHA-256 of raw content (before sanitization)
+		// so deduplication compares against raw input.
 		h := sha256Sum(content)
 		contentHash := "sha256:" + h
 
+		// Sanitize content after hashing but before storage.
+		sanitized, err := colony.SanitizeSignalContent(content)
+		if err != nil {
+			outputError(1, fmt.Sprintf("invalid signal content: %v", err), nil)
+			return nil
+		}
+
 		// Build content as JSON object matching shell format: {"text": "..."}
-		contentJSON, _ := json.Marshal(map[string]string{"text": content})
+		contentJSON, _ := json.Marshal(map[string]string{"text": sanitized})
 
 		signal := colony.PheromoneSignal{
 			ID:          id,
