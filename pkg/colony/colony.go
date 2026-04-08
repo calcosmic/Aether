@@ -47,6 +47,28 @@ const (
 	WorktreeOrphaned   WorktreeStatus = "orphaned"
 )
 
+// PlanGranularity represents the planning scope level (how many phases).
+type PlanGranularity string
+
+const (
+	GranularitySprint    PlanGranularity = "sprint"
+	GranularityMilestone PlanGranularity = "milestone"
+	GranularityQuarter   PlanGranularity = "quarter"
+	GranularityMajor     PlanGranularity = "major"
+)
+
+// Valid reports whether g is a recognized granularity level.
+func (g PlanGranularity) Valid() bool {
+	switch g {
+	case GranularitySprint, GranularityMilestone, GranularityQuarter, GranularityMajor:
+		return true
+	}
+	return false
+}
+
+// ErrInvalidGranularity is returned when a granularity value is not recognized.
+var ErrInvalidGranularity = fmt.Errorf("invalid plan granularity")
+
 // WorktreeEntry tracks a single worktree's lifecycle in COLONY_STATE.json.
 type WorktreeEntry struct {
 	ID           string         `json:"id"`
@@ -81,8 +103,9 @@ type ColonyState struct {
 	Signals            []Signal    `json:"signals"`
 	Graveyards         []Graveyard `json:"graveyards"`
 	Events             []string    `json:"events"`
-	ColonyDepth        string      `json:"colony_depth,omitempty"`
-	Milestone          string          `json:"milestone"`
+	ColonyDepth        string           `json:"colony_depth,omitempty"`
+	PlanGranularity    PlanGranularity  `json:"plan_granularity,omitempty"`
+	Milestone          string           `json:"milestone"`
 	MilestoneUpdatedAt *string         `json:"milestone_updated_at,omitempty"`
 	Worktrees          []WorktreeEntry `json:"worktrees,omitempty"`
 }
