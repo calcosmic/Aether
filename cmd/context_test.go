@@ -1385,3 +1385,73 @@ func TestPRContextBlockersNeverTrimmed(t *testing.T) {
 		}
 	}
 }
+
+// TestPRContextUsesSessionCache verifies that pr-context creates a SessionCache
+// and that cache files (.cache_*) are created for the JSON files it loads.
+func TestPRContextUsesSessionCache(t *testing.T) {
+	saveGlobalsCmd(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+	var errBuf bytes.Buffer
+	stderr = &errBuf
+
+	s, tmpDir := newTestStoreCmd(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+	setupHubDir(t)
+
+	goal := "cache test"
+	now := time.Now().Format(time.RFC3339)
+	state := colony.ColonyState{
+		Version:      "1.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Testing", Status: "in_progress"},
+			},
+		},
+		Memory: colony.Memory{
+			Decisions: []colony.Decision{
+				{ID: "d1", Phase: 1, Claim: "Use cache", Rationale: "perf", Timestamp: now},
+			},
+		},
+	}
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatal(err)
+	}
+
+	s0_8 := 0.8
+	pf := colony.PheromoneFile{
+		Signals: []colony.PheromoneSignal{
+			{ID: "s1", Type: "FOCUS", Priority: "normal", Source: "user", CreatedAt: now, Active: true, Strength: &s0_8, Content: json.RawMessage(`{"text": "Focus on caching"}`)},
+		},
+	}
+	if err := s.SaveJSON("pheromones.json", pf); err != nil {
+		t.Fatal(err)
+	}
+
+	rootCmd.SetArgs([]string{"pr-context"})
+	defer rootCmd.SetArgs([]string{})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("pr-context returned error: %v", err)
+	}
+
+	// Verify that cache files were created for the loaded JSON files
+	dataDir := s.BasePath()
+
+	// COLONY_STATE.json should have a cache file
+	cacheFile := filepath.Join(dataDir, ".cache_COLONY_STATE.json")
+	if _, err := os.Stat(cacheFile); os.IsNotExist(err) {
+		t.Errorf("expected cache file %s to be created, but it does not exist", cacheFile)
+	}
+
+	// pheromones.json should have a cache file
+	pheromonesCache := filepath.Join(dataDir, ".cache_pheromones.json")
+	if _, err := os.Stat(pheromonesCache); os.IsNotExist(err) {
+		t.Errorf("expected cache file %s to be created, but it does not exist", pheromonesCache)
+	}
+}

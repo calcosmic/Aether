@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/cache"
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/spf13/cobra"
 )
@@ -170,9 +171,13 @@ var contextCapsuleCmd = &cobra.Command{
 			maxWords = 80
 		}
 
-		// Load COLONY_STATE.json
+		// Initialize session cache for this invocation
+		sc := cache.NewSessionCache(store.BasePath())
+
+		// Load COLONY_STATE.json via session cache
 		var state colony.ColonyState
-		if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		statePath := filepath.Join(store.BasePath(), "COLONY_STATE.json")
+		if err := sc.Load(statePath, &state); err != nil {
 			outputOK(ContextCapsuleOutput{
 				Exists:        false,
 				WordCount:     0,
@@ -208,8 +213,9 @@ var contextCapsuleCmd = &cobra.Command{
 		// Extract risks from flags
 		riskTexts := extractRiskTexts(maxRisks)
 
-		// Extract signals (shared pheromone load)
-		signalTexts := extractSignalTextsFrom(loadPheromones(), maxSignals)
+		// Extract signals (shared pheromone load via session cache)
+		pf, _ := loadPheromonesOnce(store, sc)
+		signalTexts := extractSignalTextsFrom(&pf, maxSignals)
 
 		// Extract rolling summary
 		summaryTexts := extractRollingSummary(3)
@@ -333,10 +339,14 @@ var prContextCmd = &cobra.Command{
 		var fallbacks []string
 		cacheStatus := map[string]string{}
 
+		// Initialize session cache for this invocation. All JSON file reads below
+		// go through the cache to avoid redundant disk I/O within the same command.
+		sc := cache.NewSessionCache(store.BasePath())
+
 		// Pre-load COLONY_STATE.json once for all sections that need it.
 		// Each section preserves its own error-handling semantics via colStateErr.
 		var colState colony.ColonyState
-		colStateErr := store.LoadJSON("COLONY_STATE.json", &colState)
+		colStateErr := sc.Load(filepath.Join(store.BasePath(), "COLONY_STATE.json"), &colState)
 
 		// 1. queen_global: Read ~/.aether/QUEEN.md
 		hubDir := resolveHubPath()
@@ -364,8 +374,8 @@ var prContextCmd = &cobra.Command{
 		var redirects, focusSignals, feedbackSignals []string
 		var instincts []colony.Instinct
 		signalCount := 0
-		pf := loadPheromones()
-		if pf != nil {
+		pf, _ := loadPheromonesOnce(store, sc)
+		if pf.Signals != nil {
 			for _, sig := range pf.Signals {
 				if !sig.Active {
 					continue
@@ -461,7 +471,7 @@ var prContextCmd = &cobra.Command{
 		// 9. midden: Load midden.json
 		middenMap := map[string]interface{}{"count": 0, "items": []string{}}
 		var midden colony.MiddenFile
-		if err := store.LoadJSON("midden/midden.json", &midden); err != nil {
+		if err := sc.Load(filepath.Join(store.BasePath(), "midden", "midden.json"), &midden); err != nil {
 			fallbacks = append(fallbacks, "midden: midden.json missing")
 			cacheStatus["midden"] = "missing"
 		} else {

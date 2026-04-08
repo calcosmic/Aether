@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -244,6 +245,168 @@ func TestColonyPrimeNoPheromones(t *testing.T) {
 	}
 	if strings.Contains(contextStr, "Pheromone Signals") {
 		t.Error("context should not contain 'Pheromone Signals' when no pheromones exist")
+	}
+}
+
+// --- TDD Cycle 4: colonyPrimeCmd uses SessionCache for all loads ---
+
+func TestColonyPrimePopulatesSessionCache(t *testing.T) {
+	saveGlobalsCmd(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+	var errBuf bytes.Buffer
+	stderr = &errBuf
+
+	s, tmpDir := newTestStoreCmd(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	goal := "cache wiring test"
+	state := colony.ColonyState{
+		Version:      "1.0",
+		Goal:         &goal,
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Phase One", Status: "in_progress", Tasks: []colony.Task{{Status: "in_progress", Goal: "Build feature"}}},
+			},
+		},
+	}
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Now().Format(time.RFC3339)
+	s1 := 0.9
+	pf := colony.PheromoneFile{
+		Signals: []colony.PheromoneSignal{
+			{ID: "sig_1", Type: "FOCUS", Priority: "normal", Source: "user", CreatedAt: now, Active: true, Strength: &s1, Content: json.RawMessage(`{"text": "Focus on caching"}`)},
+		},
+	}
+	if err := s.SaveJSON("pheromones.json", pf); err != nil {
+		t.Fatal(err)
+	}
+
+	instFile := colony.InstinctsFile{
+		Instincts: []colony.InstinctEntry{
+			{Trigger: "error in test", Action: "fix the test", Confidence: 0.9},
+		},
+	}
+	if err := s.SaveJSON("instincts.json", instFile); err != nil {
+		t.Fatal(err)
+	}
+
+	rootCmd.SetArgs([]string{"colony-prime"})
+	defer rootCmd.SetArgs([]string{})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("colony-prime returned error: %v", err)
+	}
+
+	envelope := parseEnvelopeCmd(t, buf.String())
+	if envelope["ok"] != true {
+		t.Fatalf("expected ok=true, got %v", envelope["ok"])
+	}
+
+	result := envelope["result"].(map[string]interface{})
+	contextStr := result["context"].(string)
+
+	// Verify all three data sources appear in output
+	if !strings.Contains(contextStr, "cache wiring test") {
+		t.Error("context missing goal from COLONY_STATE.json")
+	}
+	if !strings.Contains(contextStr, "Pheromone Signals") {
+		t.Error("context missing 'Pheromone Signals' section from pheromones.json")
+	}
+	if !strings.Contains(contextStr, "Active Instincts") {
+		t.Error("context missing 'Active Instincts' section from instincts.json")
+	}
+	if !strings.Contains(contextStr, "Focus on caching") {
+		t.Error("context missing pheromone signal text")
+	}
+	if !strings.Contains(contextStr, "fix the test") {
+		t.Error("context missing instinct action text")
+	}
+
+	// Verify cache wrote .cache_* files to disk (proving cache.Load was exercised)
+	sections := result["sections"].(float64)
+	if sections < 3 {
+		t.Errorf("expected at least 3 sections (state + pheromones + instincts), got %f", sections)
+	}
+
+	cacheStatePath := filepath.Join(s.BasePath(), ".cache_COLONY_STATE.json")
+	cachePheromonesPath := filepath.Join(s.BasePath(), ".cache_pheromones.json")
+	cacheInstinctsPath := filepath.Join(s.BasePath(), ".cache_instincts.json")
+
+	if _, err := os.Stat(cacheStatePath); err != nil {
+		t.Errorf("expected .cache_COLONY_STATE.json on disk, got: %v", err)
+	}
+	if _, err := os.Stat(cachePheromonesPath); err != nil {
+		t.Errorf("expected .cache_pheromones.json on disk, got: %v", err)
+	}
+	if _, err := os.Stat(cacheInstinctsPath); err != nil {
+		t.Errorf("expected .cache_instincts.json on disk, got: %v", err)
+	}
+}
+
+func TestColonyPrimeWithInstincts(t *testing.T) {
+	saveGlobalsCmd(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+	var errBuf bytes.Buffer
+	stderr = &errBuf
+
+	s, tmpDir := newTestStoreCmd(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	goal := "instincts cache test"
+	state := colony.ColonyState{
+		Version:      "1.0",
+		Goal:         &goal,
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Phase One", Status: "in_progress"},
+			},
+		},
+	}
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatal(err)
+	}
+
+	instFile := colony.InstinctsFile{
+		Instincts: []colony.InstinctEntry{
+			{Trigger: "nil pointer", Action: "add nil check", Confidence: 0.85},
+		},
+	}
+	if err := s.SaveJSON("instincts.json", instFile); err != nil {
+		t.Fatal(err)
+	}
+
+	rootCmd.SetArgs([]string{"colony-prime"})
+	defer rootCmd.SetArgs([]string{})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("colony-prime returned error: %v", err)
+	}
+
+	envelope := parseEnvelopeCmd(t, buf.String())
+	result := envelope["result"].(map[string]interface{})
+	contextStr := result["context"].(string)
+
+	if !strings.Contains(contextStr, "Active Instincts") {
+		t.Error("context missing 'Active Instincts' section")
+	}
+	if !strings.Contains(contextStr, "nil pointer") {
+		t.Error("context missing instinct trigger")
+	}
+	if !strings.Contains(contextStr, "add nil check") {
+		t.Error("context missing instinct action")
 	}
 }
 

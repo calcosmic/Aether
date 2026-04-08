@@ -3,9 +3,11 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 
+	"github.com/calcosmic/Aether/pkg/cache"
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/spf13/cobra"
 )
@@ -121,43 +123,49 @@ var colonyPrimeCmd = &cobra.Command{
 			budget = 4000
 		}
 
+		// Initialize session cache for this invocation
+		sc := cache.NewSessionCache(store.BasePath())
+
 		var sections []struct {
 			name     string
 			content  string
 			priority int // lower = trimmed first
 		}
 
-		// 1. Load COLONY_STATE.json
+		// 1. Load COLONY_STATE.json (via session cache)
 		var state colony.ColonyState
-		if err := store.LoadJSON("COLONY_STATE.json", &state); err == nil {
-			// Extract key context
-			var stateSection strings.Builder
-			stateSection.WriteString("## Colony State\n\n")
-			if state.Goal != nil {
-				stateSection.WriteString(fmt.Sprintf("Goal: %s\n", *state.Goal))
-			}
-			stateSection.WriteString(fmt.Sprintf("State: %s\n", state.State))
-			stateSection.WriteString(fmt.Sprintf("Phase: %d\n", state.CurrentPhase))
-			if len(state.Plan.Phases) > 0 && state.CurrentPhase > 0 && state.CurrentPhase <= len(state.Plan.Phases) {
-				phase := state.Plan.Phases[state.CurrentPhase-1]
-				stateSection.WriteString(fmt.Sprintf("Phase Name: %s\n", phase.Name))
-				if len(phase.Tasks) > 0 {
-					stateSection.WriteString("Tasks:\n")
-					for _, t := range phase.Tasks {
-						stateSection.WriteString(fmt.Sprintf("  - [%s] %s\n", t.Status, t.Goal))
-					}
+		statePath := filepath.Join(store.BasePath(), "COLONY_STATE.json")
+		if err := sc.Load(statePath, &state); err != nil {
+			// Cache load failed -- fall back to direct store read
+			_ = store.LoadJSON("COLONY_STATE.json", &state)
+		}
+		// Extract key context
+		var stateSection strings.Builder
+		stateSection.WriteString("## Colony State\n\n")
+		if state.Goal != nil {
+			stateSection.WriteString(fmt.Sprintf("Goal: %s\n", *state.Goal))
+		}
+		stateSection.WriteString(fmt.Sprintf("State: %s\n", state.State))
+		stateSection.WriteString(fmt.Sprintf("Phase: %d\n", state.CurrentPhase))
+		if len(state.Plan.Phases) > 0 && state.CurrentPhase > 0 && state.CurrentPhase <= len(state.Plan.Phases) {
+			phase := state.Plan.Phases[state.CurrentPhase-1]
+			stateSection.WriteString(fmt.Sprintf("Phase Name: %s\n", phase.Name))
+			if len(phase.Tasks) > 0 {
+				stateSection.WriteString("Tasks:\n")
+				for _, t := range phase.Tasks {
+					stateSection.WriteString(fmt.Sprintf("  - [%s] %s\n", t.Status, t.Goal))
 				}
 			}
-			sections = append(sections, struct {
-				name     string
-				content  string
-				priority int
-			}{"state", stateSection.String(), 5})
 		}
+		sections = append(sections, struct {
+			name     string
+			content  string
+			priority int
+		}{"state", stateSection.String(), 5})
 
-		// 2. Load pheromones (shared loader)
-		pf := loadPheromones()
-		if pf != nil {
+		// 2. Load pheromones (via session cache, shared loader)
+		pf, phErr := loadPheromonesOnce(store, sc)
+		if phErr == nil && len(pf.Signals) > 0 {
 			var active []colony.PheromoneSignal
 			for _, sig := range pf.Signals {
 				if sig.Active {
@@ -179,25 +187,28 @@ var colonyPrimeCmd = &cobra.Command{
 			}
 		}
 
-		// 3. Load instincts — from instincts.json (source of truth), falling back to state
+		// 3. Load instincts -- from instincts.json (source of truth), falling back to state
 		var instincts []struct {
 			trigger    string
 			action     string
 			confidence float64
 		}
-		// Primary source: instincts.json (written by instinct-create)
+		// Primary source: instincts.json (written by instinct-create), via session cache
 		var instFile colony.InstinctsFile
-		if err := store.LoadJSON("instincts.json", &instFile); err == nil {
-			for _, inst := range instFile.Instincts {
-				if inst.Archived {
-					continue
-				}
-				instincts = append(instincts, struct {
-					trigger    string
-					action     string
-					confidence float64
-				}{inst.Trigger, inst.Action, inst.Confidence})
+		instinctsPath := filepath.Join(store.BasePath(), "instincts.json")
+		if err := sc.Load(instinctsPath, &instFile); err != nil {
+			// Cache load failed -- fall back to direct store read
+			_ = store.LoadJSON("instincts.json", &instFile)
+		}
+		for _, inst := range instFile.Instincts {
+			if inst.Archived {
+				continue
 			}
+			instincts = append(instincts, struct {
+				trigger    string
+				action     string
+				confidence float64
+			}{inst.Trigger, inst.Action, inst.Confidence})
 		}
 		// Fallback: state memory instincts (if instincts.json had nothing)
 		if len(instincts) == 0 && state.Memory.Instincts != nil {
@@ -227,7 +238,7 @@ var colonyPrimeCmd = &cobra.Command{
 			var decSB strings.Builder
 			decSB.WriteString("## Key Decisions\n\n")
 			for _, d := range state.Memory.Decisions {
-				decSB.WriteString(fmt.Sprintf("- Phase %d: %s — %s\n", d.Phase, d.Claim, d.Rationale))
+				decSB.WriteString(fmt.Sprintf("- Phase %d: %s \u2014 %s\n", d.Phase, d.Claim, d.Rationale))
 			}
 			sections = append(sections, struct {
 				name     string

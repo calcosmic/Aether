@@ -3,11 +3,11 @@
   "goal": "Tackle the three speed fixes for pheromone injection: eliminate redundant process spawns, centralize validation, and add session-level caching",
   "colony_name": "pheromone-speed-fix",
   "colony_version": 1,
-  "state": "READY",
+  "state": "EXECUTING",
   "current_phase": 8,
   "session_id": "session_1775643664_ba87cd71",
   "initialized_at": "2026-04-08T10:21:04Z",
-  "build_started_at": null,
+  "build_started_at": "2026-04-08T21:36:28Z",
   "plan": {
     "generated_at": "2026-04-08T10:50:54Z",
     "confidence": 82,
@@ -228,7 +228,7 @@
         "description": "Integrate the session cache package into pr-context, context-capsule, and colony-prime so repeated loads within a session hit cache instead of disk.",
         "id": 8,
         "name": "Wire File Cache into Context Assembly Commands",
-        "status": "pending",
+        "status": "in_progress",
         "success_criteria": [
           "All three context assembly commands use SessionCache",
           "Cache hit logged or measurable via benchmark",
@@ -451,15 +451,11 @@
   },
   "signals": [],
   "graveyards": [],
-  "events": [
-    "2026-04-08T10:21:04Z|colony_initialized|init|Colony initialized",
-    "2026-04-08T10:50:54Z|plan_generated|plan|Generated 10 phases with 82% confidence",
-    "2026-04-08T20:48:34Z|phase_completed|continue|Phase 7: Eliminate Redundant Spawns in Skill Pipeline completed",
-    ""
-  ],
+  "events": "((.events[-99:]) + [$timestamp + \"|phase_started|build|Phase \" + ($phase|tostring) + \": \" + $phase_name + \" started\"])",
   "plan_granularity": "quarter",
   "milestone": "",
   "build_baseline_sha": "f409480b7f4116245f9dee171eb12451c7de00c1"
 }
+
 
 
