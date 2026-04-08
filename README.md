@@ -1,10 +1,14 @@
 <div align="center">
 
-<img src="./AetherBanner.png" alt="Aether" width="100%" />
+<img src="assets/banner/banner.jpg" alt="Aether Banner" width="100%" />
+
+<img src="assets/logo/logo.jpg" alt="Aether Logo" width="150" />
 
 # Aether
 
-**Artificial Ecology for Thought and Emergent Reasoning**
+**Stop herding cats. Start a colony.**
+
+Aether is an open-source AI agent orchestration tool modeled on ant colonies. 24 specialized workers self-organize around your goal — no prompt engineering, no micromanagement.
 
 <br>
 
@@ -16,6 +20,10 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/calcosmic/Aether?style=flat-square)](https://goreportcard.com/report/github.com/calcosmic/Aether)
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/calcosmic/Aether.svg)](https://pkg.go.dev/github.com/calcosmic/Aether)
+
+[![agents](https://img.shields.io/badge/agents-24-purple?style=flat-square)](https://github.com/calcosmic/Aether#key-features)
+[![commands](https://img.shields.io/badge/commands-45-orange?style=flat-square)](https://github.com/calcosmic/Aether#command-reference)
+[![colony](https://img.shields.io/badge/colony-v5.3.3-gold?style=flat-square)](https://github.com/calcosmic/Aether/releases)
 
 <br>
 
@@ -29,7 +37,7 @@
 
 ---
 
-## Why Aether
+## 🐜 Why Aether
 
 Every AI coding tool now has "agents." Most of them are the same thing repackaged — a loop that plans, executes, and checks. That's not a colony. That's one ant doing laps.
 
@@ -44,7 +52,15 @@ What makes this different:
 - **28 skills** inject knowledge into workers.
 - **Autopilot** — `/ant:run` automates the build-verify-advance loop across phases.
 
-## Install
+---
+
+<p align="center">
+  <img src="assets/illustrations/ants.jpg" alt="Ant Colony" width="600" />
+</p>
+
+---
+
+## 📦 Install
 
 **Option 1: Go binary (recommended)**
 
@@ -74,7 +90,7 @@ npm install -g aether-colony
 
 > **Note:** This installs companion/template files only — it does **not** include the Aether binary. Install the binary first (Option 1 or 2), then use `aether setup` to sync companion files.
 
-### Quick start after install
+### ⚡ Quick start after install
 
 ```bash
 aether install            # Populate the colony hub
@@ -91,7 +107,7 @@ aether setup             # Sync companion files to local repo
 
 Five commands from zero to shipped.
 
-## Key Features
+## ✨ Key Features
 
 | | Feature | Description |
 |---|---------|-------------|
@@ -106,7 +122,7 @@ Five commands from zero to shipped.
 | **Quality Gates** | 6-phase verification before advancing |
 | **Platforms** | Claude Code + OpenCode | Binary + agent support |
 
-### Worker Castes
+### 🐜 Worker Castes
 
 | | Caste | Role |
 |---|-------|------|
@@ -132,7 +148,7 @@ Five commands from zero to shipped.
 | 🔄🐜 | **Weaver** | Code refactoring — restructures and cleans codebases |
 | 💭🐜 | **Dreamer** | Creative ideation — imaginative exploration and blue-sky thinking |
 
-## Aether vs Others
+## ⚖️ Aether vs Others
 
 | Dimension | Aether | CrewAI | AutoGen | LangGraph |
 |-----------|--------|--------|---------|-----------|
@@ -148,7 +164,7 @@ Five commands from zero to shipped.
 | **Research** | Oracle + Scouts — autonomous deep research before task decomposition | No dedicated research agents | Group chat can approximate research | No built-in research pattern |
 | **Platform Support** | Claude Code, OpenCode (binary + agent definitions) | Any Python environment | Any Python environment | Any Python environment |
 
-## Architecture
+## 🏗️ Architecture
 
 ```
 .aether/                        Colony files (repo-local)
@@ -172,7 +188,7 @@ Five commands from zero to shipped.
   
 **Package:** `aether-colony` on npm (companion files only)
 
-### Colony Lifecycle
+### 🔄 Colony Lifecycle
 
 ```mermaid
 flowchart TD
@@ -238,7 +254,7 @@ flowchart TD
 <i>Five commands from zero to shipped. Workers self-organize around your goal.</i>
 </div>
 
-## Pheromone System
+## 📡 Pheromone System
 
 Every ant colony communicates through chemical signals. Aether works the same way — you guide workers with **pheromone signals**, not by micromanaging prompts. Emit a signal before a build, and every worker in the next wave sees it.
 
@@ -252,7 +268,7 @@ Three signal types, three levels of control:
 
 Signals expire at the end of the current phase by default. Use `--ttl` for wall-clock expiration (e.g., `--ttl 2h`, `--ttl 1d`). Run `/ant:status` anytime to see active signals.
 
-### FOCUS — Guide Attention
+### 🎯 FOCUS — Guide Attention
 
 FOCUS tells the colony where to spend extra effort. It's like shining a spotlight on an area you care about.
 
@@ -264,7 +280,7 @@ FOCUS tells the colony where to spend extra effort. It's like shining a spotligh
 
 **Don't overdo it.** One or two FOCUS signals per phase is the sweet spot. Five signals means no signal at all.
 
-### REDIRECT — Hard Constraints
+### 🚫 REDIRECT — Hard Constraints
 
 REDIRECT is the strongest signal. Workers actively avoid the specified pattern — it's a hard constraint, not a preference.
 
@@ -275,7 +291,7 @@ REDIRECT is the strongest signal. Workers actively avoid the specified pattern �
 
 **Rule of thumb:** Use REDIRECT for things that *will break* if ignored. For preferences, use FEEDBACK instead.
 
-### FEEDBACK — Gentle Course Correction
+### 💬 FEEDBACK — Gentle Course Correction
 
 FEEDBACK adjusts the colony's approach. It's not a command — it's an observation that influences how workers make decisions.
 
@@ -283,7 +299,7 @@ FEEDBACK adjusts the colony's approach. It's not a command — it's an observati
 /ant:feedback "Code is too abstract -- prefer simple, direct implementations"
 ```
 
-### Putting It Together
+### 🔀 Putting It Together
 
 ```
 /ant:focus "payment flow security"
@@ -291,11 +307,11 @@ FEEDBACK adjusts the colony's approach. It's not a command — it's an observati
 /ant:build 4
 ```
 
-### Auto-Emitted Signals
+### 🤖 Auto-Emitted Signals
 
 The colony also emits signals on its own. After every phase, it produces FEEDBACK summarizing what worked and what failed. If errors recur across builds, it auto-emits REDIRECT signals. You don't manage these — they're part of the colony's self-improvement loop.
 
-## Colony Wisdom Pipeline
+## 🧠 Colony Wisdom Pipeline
 
 Aether does not just complete tasks — it learns from them. Every build produces observations. Those observations are deduplicated, trust-scored, and promoted through a multi-stage pipeline that turns raw experience into actionable wisdom.
 
@@ -317,7 +333,11 @@ aether curation-run --verbose
 aether queen-read
 ```
 
-## Context Continuity
+<div align="center">
+  <img src="assets/logo/logo.jpg" alt="✦" width="80" />
+</div>
+
+## 🔗 Context Continuity
 
 Aether keeps colony context alive across `/clear`, context switches, and long conversations — without blasting full history into every prompt. It assembles a compact "context capsule" from the colony state, active pheromone signals, open flags, and the latest rolling summary.
 
@@ -329,7 +349,7 @@ aether context-capsule
 /ant:resume
 ```
 
-## Autopilot Mode
+## 🚀 Autopilot Mode
 
 `/ant:run` chains the build-verify-advance loop across multiple phases with intelligent pause conditions. Instead of running each command by hand, you engage autopilot and it handles the cycle automatically.
 
@@ -349,18 +369,29 @@ It pauses — not crashes — when something needs attention: test failures, cri
 /ant:run --headless
 ```
 
-## Works With
+<div align="center">
+  <img src="assets/logo/logo.jpg" alt="✦" width="80" />
+</div>
+
+## 🔌 Works With
 
 - **[Claude Code](https://docs.anthropic.com/en/docs/claude-code?utm_source=github&utm_medium=readme&utm_campaign=aether)** - 45 slash commands + 24 agent definitions
 - **[OpenCode](https://github.com/opencode-ai/opencode?utm_source=github&utm_medium=readme&utm_campaign=aether)** - 45 slash commands + agent definitions
 
-## Command Reference
+<div align="center">
+  <img src="assets/logo/logo.jpg" alt="✦" width="80" />
+</div>
+
+## 📋 Command Reference
+
+<details>
+<summary>45 commands across 7 categories — click to expand</summary>
 
 Aether provides 45 slash commands organized into seven categories. Each command is invoked via `/ant:<name>` in your Claude session. This section is a complete quick-reference for every command, including syntax, description, and key options.
 
 ---
 
-### Setup and Getting Started
+### 🚪 Setup and Getting Started
 
 These commands set up, initialize, and drive the core colony workflow from first use through phase completion.
 
@@ -376,7 +407,7 @@ These commands set up, initialize, and drive the core colony workflow from first
 
 ---
 
-### Pheromone Signals
+### 📡 Pheromone Signals
 
 Pheromones are the colony's guidance system. They inject signals that workers sense and respond to, without hard-coding instructions. Signals decay over time: FOCUS 30 days, REDIRECT 60 days, FEEDBACK 90 days.
 
@@ -391,7 +422,7 @@ Pheromones are the colony's guidance system. They inject signals that workers se
 
 ---
 
-### Status and Monitoring
+### 📊 Status and Monitoring
 
 These commands provide visibility into colony state, phase progress, flags, event history, and live activity.
 
@@ -408,7 +439,7 @@ These commands provide visibility into colony state, phase progress, flags, even
 
 ---
 
-### Session Management
+### 💾 Session Management
 
 Manage session state for handoff between conversations, so you can safely `/clear` and resume later.
 
@@ -420,7 +451,7 @@ Manage session state for handoff between conversations, so you can safely `/clea
 
 ---
 
-### Lifecycle
+### 🔄 Lifecycle
 
 These commands manage the beginning and end of a colony's life.
 
@@ -432,7 +463,7 @@ These commands manage the beginning and end of a colony's life.
 
 ---
 
-### Advanced
+### 🧪 Advanced
 
 Power-user commands for deep research, philosophical exploration, resilience testing, and specialized analysis.
 
@@ -449,7 +480,7 @@ Power-user commands for deep research, philosophical exploration, resilience tes
 
 ---
 
-### Utilities
+### 🔧 Utilities
 
 Maintenance, introspection, and convenience commands for operating the colony system.
 
@@ -467,23 +498,28 @@ Maintenance, introspection, and convenience commands for operating the colony sy
 | `/ant:tunnels [chamber] [chamber2]` | Browse archived colonies in `.aether/chambers/`. No arguments shows a timeline. One argument shows the seal document for that chamber. Two arguments compares chambers side-by-side with growth metrics and pheromone trail diffs. |
 | `/ant:verify-castes` | Display the colony caste system -- all 24 castes with their model slot assignments (opus, sonnet, inherit), system status (utils, proxy health), and current model configuration. |
 
-## Colony in Action
+</details>
+
+## 🎬 Colony in Action
 
 <div align="center">
-
-<img src="./AetherColonyArt.png" alt="Aether Colony — Multi-agent workers self-organizing around a goal" width="80%" />
-
+  <a href="https://github.com/calcosmic/Aether#colony-in-action">
+    <img src="assets/illustrations/colony-art.jpg" alt="▶ Aether Colony — Multi-agent workers self-organizing around a goal" width="80%" />
+  </a>
+  <em>Click to learn more about Aether's colony architecture</em>
 </div>
 
-## Use Case: From Zero to Shipped
+## 🛤️ Use Case: From Zero to Shipped
 
 You have a blank directory and an idea: a REST API for a task management app. Users can create accounts, manage projects, and track tasks. Nothing fancy -- just solid, tested, shipped.
 
 Here is what it looks like to build it with Aether, start to finish.
 
+> 📍 **The Roadmap:** 🔧 Install → 🥚 Lay Eggs → 🎯 Goal → 🔍 Colonize → 🗺️ Plan → 🧭 Steer → 🔨 Build → ✅ Continue → 🔨 Build → 📋 Phases → 🔨 Build → 👑 Seal → 🪦 Entomb → ⚡ Autopilot
+
 ---
 
-### Step 0 -- Install Aether
+### 🔧 Step 0 -- Install Aether
 
 ```bash
 go install github.com/calcosmic/Aether@latest
@@ -495,7 +531,7 @@ One-time setup. The colony hub lives at `~/.aether/` and persists across every p
 
 ---
 
-### Step 1 -- Lay Eggs
+### 🥚 Step 1 -- Lay Eggs
 
 ```bash
 cd ~/projects/task-api
@@ -515,7 +551,7 @@ This creates the nest -- the directory structure the colony needs to operate. Yo
 
 ---
 
-### Step 2 -- State the Goal
+### 🎯 Step 2 -- State the Goal
 
 ```bash
 /ant:init "Build a REST API for task management with user auth, project CRUD, and task tracking"
@@ -532,7 +568,7 @@ The colony now has a purpose. Every worker that spawns from this point knows the
 
 ---
 
-### Step 3 -- Colonize (Optional, but Smart)
+### 🔍 Step 3 -- Colonize (Optional, but Smart)
 
 ```bash
 /ant:colonize
@@ -554,11 +590,13 @@ Since this is a new project, there is not much to map. But if you were adding Ae
 
 ---
 
-### Step 4 -- Plan
+### 🗺️ Step 4 -- Plan
 
 ```bash
 /ant:plan
 ```
+
+<details><summary>Generated phased roadmap (click to expand)</summary>
 
 ```
 Generating phased roadmap...
@@ -589,13 +627,15 @@ Phase 5: Integration and Polish
   - API documentation
 ```
 
+</details>
+
 The Route Setter ant analyzed the goal and broke it into phases. Each phase has clear deliverables. The colony will not jump ahead -- it builds phase 1 first, verifies it works, then moves on.
 
 You can adjust the plan. Add phases, remove them, merge them. The colony follows your lead.
 
 ---
 
-### Step 5 -- Steer with Pheromones
+### 🧭 Step 5 -- Steer with Pheromones
 
 Before the first build, you set the guardrails:
 
@@ -622,11 +662,13 @@ Signals expire at the end of the current phase. You can also set a wall-clock ex
 
 ---
 
-### Step 6 -- Build Phase 1
+### 🔨 Step 6 -- Build Phase 1
 
 ```bash
 /ant:build 1
 ```
+
+<details><summary>Phase 1 build output (click to expand)</summary>
 
 ```
 Deploying worker wave for Phase 1: Foundation...
@@ -652,11 +694,13 @@ Build complete. 4 files created, 6 tests passing.
 Phase 1 status: VERIFIED
 ```
 
+</details>
+
 Behind the scenes, multiple builder ants worked in parallel. A Probe ant wrote tests. A Watcher verified everything compiled and tests passed. The REDIRECT signal about raw SQL was active -- Chip-34 used `pgxpool` with parameterized queries instead.
 
 ---
 
-### Step 7 -- Continue (Verify, Learn, Advance)
+### ✅ Step 7 -- Continue (Verify, Learn, Advance)
 
 ```bash
 /ant:continue
@@ -682,7 +726,7 @@ The FOCUS signal about migrations expired because the phase ended. If you want i
 
 ---
 
-### Step 8 -- Build Phase 2
+### 🔨 Step 8 -- Build Phase 2
 
 You emit new signals for the auth phase:
 
@@ -691,6 +735,8 @@ You emit new signals for the auth phase:
 /ant:redirect "Never store passwords in plain text -- always bcrypt"
 /ant:build 2
 ```
+
+<details><summary>Phase 2 build output (click to expand)</summary>
 
 ```
 Deploying worker wave for Phase 2: Authentication...
@@ -713,11 +759,13 @@ Build complete. 5 files created, 20 tests passing.
 Phase 2 status: VERIFIED
 ```
 
+</details>
+
 The REDIRECT signal about bcrypt was active. The Watcher explicitly verified no plaintext secrets made it into the code. This is the colony self-enforcing your constraints without you having to review every line.
 
 ---
 
-### Steps 9-12 -- Phases 3, 4, and 5
+### 📋 Steps 9-12 -- Phases 3, 4, and 5
 
 The pattern repeats. `/ant:build N`, then `/ant:continue`. Each phase builds on the verified output of the last. Instincts accumulate. The colony gets smarter about your project's patterns.
 
@@ -726,6 +774,8 @@ For phases 3 and 4, you decide to let autopilot handle it:
 ```bash
 /ant:run --max-phases 2
 ```
+
+<details><summary>Autopilot output (click to expand)</summary>
 
 ```
 Autopilot engaged. Max phases: 2.
@@ -750,11 +800,13 @@ Autopilot paused. Max phases reached (2/2).
 Run /ant:run to continue, or /ant:continue to advance manually.
 ```
 
+</details>
+
 Autopilot ran two phases without you touching the keyboard. It paused gracefully at the limit instead of running off into the distance. You review what landed, emit any new signals if needed, and decide whether to continue.
 
 ---
 
-### The Session Break
+### ☕ The Session Break
 
 Now suppose you close your laptop. The next morning, you open Claude Code in the same directory. You have lost your conversation context. No problem.
 
@@ -780,12 +832,14 @@ The colony reconstructed its full context from the colony state file, active sig
 
 ---
 
-### Step 13 -- Build Phase 5 (Final)
+### 🏁 Step 13 -- Build Phase 5 (Final)
 
 ```bash
 /ant:focus "API documentation -- generate OpenAPI spec from handlers"
 /ant:build 5
 ```
+
+<details><summary>Phase 5 build output (click to expand)</summary>
 
 ```
 Deploying worker wave for Phase 5: Integration and Polish...
@@ -806,13 +860,17 @@ Build complete. 3 files created, 80 tests passing.
 Phase 5 status: VERIFIED
 ```
 
+</details>
+
 ---
 
-### Step 14 -- Seal the Colony
+### 👑 Step 14 -- Seal the Colony
 
 ```bash
 /ant:seal
 ```
+
+<details><summary>Colony seal output (click to expand)</summary>
 
 ```
 Colony sealed.
@@ -831,11 +889,13 @@ Wisdom promotion:
 Colony status: CROWNED
 ```
 
+</details>
+
 The colony ran a final curation pass. High-confidence instincts were promoted to QUEEN.md -- your personal wisdom file that primes future colonies. The highest-scoring instincts also flowed into the Hive Brain, making them available to other projects on your machine.
 
 ---
 
-### Step 15 -- Entomb
+### 🪦 Step 15 -- Entomb
 
 ```bash
 /ant:entomb
@@ -852,7 +912,7 @@ The colony's work is archived. The directory is clean. But the knowledge persist
 
 ---
 
-### The Shortcut: Autopilot from Start
+### ⚡ The Shortcut: Autopilot from Start
 
 If you trust the plan and want hands-off execution, you can skip the manual loop entirely:
 
@@ -869,9 +929,29 @@ Autopilot runs every remaining phase, pausing only when something needs your att
 
 That is five commands from zero to shipped. The colony handles the rest.
 
-## Roadmap
+---
 
-### v1.0.0 -- Released (Current)
+<div align="center">
+
+### 🚀 Ship software while you sleep
+
+Five commands from zero to deployed. The colony writes code, verifies quality, and advances through phases — while you focus on what matters.
+
+<br>
+
+<code>go install github.com/calcosmic/Aether@latest</code>
+
+<br>
+
+[📦 View Releases](https://github.com/calcosmic/Aether/releases) &nbsp;·&nbsp; [⭐ Star on GitHub](https://github.com/calcosmic/Aether/stargazers) &nbsp;·&nbsp; [🌐 aetherantcolony.com](https://aetherantcolony.com)
+
+</div>
+
+---
+
+## 🗺️ Roadmap
+
+### 🎉 v1.0.0 -- Released (Current)
 
 - 24 specialized worker castes (Builder, Watcher, Scout, Tracker, Oracle, Archaeologist, and more)
 - 45 slash commands across the full colony lifecycle
@@ -882,14 +962,14 @@ That is five commands from zero to shipped. The colony handles the rest.
 - Claude Code and OpenCode support
 - Go binary distribution across Linux, macOS, and Windows (amd64 + arm64)
 
-### Near-Term
+### 📅 Near-Term
 
 - Additional platform support -- expanding beyond Claude Code and OpenCode to more AI coding tools
 - Enhanced Hive Brain cross-colony sharing -- richer wisdom exchange between projects with domain scoping
 - More domain skills -- expanding the 18 domain knowledge skills to cover additional frameworks, languages, and ecosystems
 - Community-contributed castes -- allowing teams to define and share custom worker roles
 
-### Future
+### 🔮 Future
 
 - Visual colony dashboard -- real-time view of worker activity, pheromone signals, and phase progress
 - Multi-user colony collaboration -- enabling teams to work within the same colony simultaneously
@@ -900,16 +980,19 @@ That is five commands from zero to shipped. The colony handles the rest.
 
 *Have ideas for what should come next? [Open an issue](https://github.com/calcosmic/Aether/issues) or [start a discussion](https://github.com/calcosmic/Aether/discussions) -- the colony listens.*
 
-## Contributing
+## 🤝 Contributing
+
+<details>
+<summary>🤝 Fork, branch, test, PR — click to expand</summary>
 
 Aether is shaped by its community. Whether you are fixing a bug, adding a command, or improving documentation, every contribution strengthens the colony. Here is how to get started.
 
-### Prerequisites
+### ✅ Prerequisites
 
 - **Go 1.22+** -- [Install Go](https://go.dev/dl/) if you don't have it
 - **Git** -- For cloning and branching
 
-### Development Setup
+### 🛠️ Development Setup
 
 ```bash
 git clone https://github.com/calcosmic/Aether.git
@@ -919,7 +1002,7 @@ make build
 
 That's it. The `make build` target compiles the binary with version injection from `package.json`. You will find the `aether` binary in the project root.
 
-### Build, Test, Lint
+### 🏗️ Build, Test, Lint
 
 | Command | What it does |
 |---------|-------------|
@@ -931,7 +1014,7 @@ That's it. The `make build` target compiles the binary with version injection fr
 
 Run `make test` and `make lint` before every commit. CI will do the same.
 
-### Project Structure
+### 📁 Project Structure
 
 ```
 cmd/aether/          CLI entry point (main.go)
@@ -943,7 +1026,7 @@ internal/            Core logic -- commands, pheromones, state, curation, and mo
 
 The Go code lives under `cmd/` and `internal/`. The colony's agent definitions, skills, templates, and command YAML files live under `.aether/`.
 
-### Contributing Workflow
+### 📝 Contributing Workflow
 
 1. **Fork the repo** and clone your fork locally
 2. **Create a feature branch** -- `git checkout -b my-feature`
@@ -953,7 +1036,7 @@ The Go code lives under `cmd/` and `internal/`. The colony's agent definitions, 
 
 Keep pull requests focused. One feature or fix per PR makes review easier and history cleaner.
 
-### Adding Commands
+### ➕ Adding Commands
 
 Aether commands are defined as YAML files in the `commands/` directory at the repo root. Each YAML file describes the command name, description, agent caste, and prompt template. The Go implementation lives in `internal/` as a matching command file.
 
@@ -965,7 +1048,7 @@ To add a new command:
 4. Add tests in a `_test.go` file alongside the implementation
 5. Run `make test` and `make lint`
 
-### Code of Conduct
+### 📜 Code of Conduct
 
 We are committed to providing a welcoming and inclusive experience for everyone. A Code of Conduct will be added before community contributions open.
 
@@ -973,7 +1056,9 @@ We are committed to providing a welcoming and inclusive experience for everyone.
 
 *The colony grows when new ants join. Welcome to the swarm.*
 
-## Support
+</details>
+
+## 💬 Support
 
 If Aether has been useful to you:
 
@@ -991,6 +1076,24 @@ If Aether has been useful to you:
 
 [PayPal](https://www.paypal.com/ncp/payment/RENG7ZMW5F59L?utm_source=github&utm_medium=readme&utm_campaign=aether) | [Buy Me a Coffee](https://buymeacoffee.com/music5y?utm_source=github&utm_medium=readme&utm_campaign=aether)
 
-## License
+## 📄 License
 
 MIT
+
+---
+
+<div align="center">
+
+[![MIT License](https://img.shields.io/badge/License-MIT-7B3FE4?style=flat-square)](LICENSE)
+[![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8B?style=flat-square&logo=go)](https://go.dev/)
+[![Latest Release](https://img.shields.io/github/v/release/calcosmic/Aether?style=flat-square&color=7B3FE4)](https://github.com/calcosmic/Aether/releases)
+
+<br>
+
+<em>The whole is greater than the sum of its ants.</em>
+
+<br>
+
+[🌐 aetherantcolony.com](https://aetherantcolony.com) &nbsp;·&nbsp; Made with 🐜 by the Aether colony
+
+</div>
