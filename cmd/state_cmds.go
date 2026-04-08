@@ -116,6 +116,13 @@ func executeFieldMode(cmd *cobra.Command, field string) error {
 		state.Milestone = value
 	case "colony_depth":
 		state.ColonyDepth = value
+	case "plan_granularity":
+		g := colony.PlanGranularity(value)
+		if !g.Valid() {
+			outputError(1, fmt.Sprintf("invalid plan granularity %q: must be sprint, milestone, quarter, or major", value), nil)
+			return nil
+		}
+		state.PlanGranularity = g
 	case "colony_name":
 		state.ColonyName = &value
 	default:
@@ -722,6 +729,8 @@ var stateReadFieldCmd = &cobra.Command{
 			result = state.Milestone
 		case "colony_depth":
 			result = state.ColonyDepth
+		case "plan_granularity":
+			result = string(state.PlanGranularity)
 		case "colony_name":
 			result = state.ColonyName
 		case "session_id":

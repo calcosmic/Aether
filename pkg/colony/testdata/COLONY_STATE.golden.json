@@ -519,6 +519,7 @@
     "2026-04-01T17:41:13Z|milestone_reached|seal|Achieved Crowned Anthill milestone v"
   ],
   "colony_depth": "standard",
+  "plan_granularity": "milestone",
   "milestone": "Crowned Anthill",
   "milestone_updated_at": "2026-04-01T17:41:13Z"
 }
