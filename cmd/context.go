@@ -174,6 +174,9 @@ var contextCapsuleCmd = &cobra.Command{
 		// Initialize session cache for this invocation
 		sc := cache.NewSessionCache(store.BasePath())
 
+		// Auto-cleanup stale cache files older than 24 hours (non-blocking)
+		sc.ClearStale(24 * time.Hour)
+
 		// Load COLONY_STATE.json via session cache
 		var state colony.ColonyState
 		statePath := filepath.Join(store.BasePath(), "COLONY_STATE.json")
@@ -342,6 +345,9 @@ var prContextCmd = &cobra.Command{
 		// Initialize session cache for this invocation. All JSON file reads below
 		// go through the cache to avoid redundant disk I/O within the same command.
 		sc := cache.NewSessionCache(store.BasePath())
+
+		// Auto-cleanup stale cache files older than 24 hours (non-blocking)
+		sc.ClearStale(24 * time.Hour)
 
 		// Pre-load COLONY_STATE.json once for all sections that need it.
 		// Each section preserves its own error-handling semantics via colStateErr.

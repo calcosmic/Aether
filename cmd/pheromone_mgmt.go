@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/cache"
 	"github.com/calcosmic/Aether/pkg/colony"
@@ -125,6 +126,9 @@ var colonyPrimeCmd = &cobra.Command{
 
 		// Initialize session cache for this invocation
 		sc := cache.NewSessionCache(store.BasePath())
+
+		// Auto-cleanup stale cache files older than 24 hours (non-blocking)
+		sc.ClearStale(24 * time.Hour)
 
 		var sections []struct {
 			name     string

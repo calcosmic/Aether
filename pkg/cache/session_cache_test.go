@@ -545,6 +545,90 @@ func TestLoad_InvalidatesStaleCache(t *testing.T) {
 	}
 }
 
+func TestAutoCleanup_RemovesStaleFilesOnStartup(t *testing.T) {
+	// This test verifies the auto-cleanup pattern used in context assembly commands:
+	// sc := cache.NewSessionCache(store.BasePath())
+	// sc.ClearStale(24 * time.Hour)
+	//
+	// Stale files (>24h old) should be removed; fresh files should remain.
+	dir := tempDir(t)
+
+	// Create a fresh cache file (just written, mtime is now)
+	fresh := filepath.Join(dir, ".cache_COLONY_STATE.json")
+	if err := os.WriteFile(fresh, []byte(`{}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a stale cache file (>24h old)
+	stale := filepath.Join(dir, ".cache_pheromones.json")
+	if err := os.WriteFile(stale, []byte(`{}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	staleTime := time.Now().Add(-25 * time.Hour)
+	if err := os.Chtimes(stale, staleTime, staleTime); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create another stale file just under the threshold (23h)
+	almostStale := filepath.Join(dir, ".cache_instincts.json")
+	if err := os.WriteFile(almostStale, []byte(`{}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	almostTime := time.Now().Add(-23 * time.Hour)
+	if err := os.Chtimes(almostStale, almostTime, almostTime); err != nil {
+		t.Fatal(err)
+	}
+
+	// Simulate what context assembly commands do: create cache and run auto-cleanup
+	sc := NewSessionCache(dir)
+	sc.ClearStale(24 * time.Hour) // fire-and-forget, errors silently ignored
+
+	// Verify stale file was removed
+	if _, err := os.Stat(stale); !os.IsNotExist(err) {
+		t.Error("stale cache file (>24h) should be removed by auto-cleanup")
+	}
+
+	// Verify fresh file still exists
+	if _, err := os.Stat(fresh); os.IsNotExist(err) {
+		t.Error("fresh cache file should not be removed by auto-cleanup")
+	}
+
+	// Verify almost-stale file (23h) still exists
+	if _, err := os.Stat(almostStale); os.IsNotExist(err) {
+		t.Error("cache file <24h old should not be removed by auto-cleanup")
+	}
+
+	// Verify the cache is still usable after cleanup
+	srcDir := tempDir(t)
+	srcPath := writeJSON(t, srcDir, "test.json", map[string]string{"key": "val"})
+	var result map[string]string
+	if err := sc.Load(srcPath, &result); err != nil {
+		t.Errorf("cache Load should still work after cleanup: %v", err)
+	}
+}
+
+func TestAutoCleanup_NonBlockingOnEmptyDir(t *testing.T) {
+	// Verify auto-cleanup is safe on an empty directory (no stale files to clean)
+	dir := tempDir(t)
+	sc := NewSessionCache(dir)
+	count, _ := sc.ClearStale(24 * time.Hour)
+	if count != 0 {
+		t.Errorf("expected 0 files cleaned, got %d", count)
+	}
+}
+
+func TestAutoCleanup_SilentlyIgnoresErrors(t *testing.T) {
+	// Verify that ClearStale on a non-existent directory doesn't panic or error
+	// when called in fire-and-forget mode (errors discarded)
+	sc := NewSessionCache("/nonexistent/path/that/does/not/exist")
+	// Fire-and-forget: errors silently ignored
+	count, _ := sc.ClearStale(24 * time.Hour)
+	// Should return 0, not panic
+	if count != 0 {
+		t.Errorf("expected 0 files cleaned for non-existent dir, got %d", count)
+	}
+}
+
 func TestCacheFileNaming(t *testing.T) {
 	dir := tempDir(t)
 	sc := NewSessionCache(dir)
