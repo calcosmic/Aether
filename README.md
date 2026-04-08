@@ -45,15 +45,15 @@ Aether rejects all of these. It's an **Artificial Ecology** modeled on how real 
 
 ### Not Prompt Engineering — Stigmergy
 
-Traditional frameworks force LLMs to output and parse complex JSON schemas. One hallucinated bracket crashes the system. Aether abandons this entirely in favor of biological **stigmergy** — agents communicate indirectly by leaving plain-English Pheromone Signals (FOCUS, REDIRECT, FEEDBACK) in the environment. This "soft logic" steers the colony without catastrophic failures when unexpected edge cases arise.
+Other approaches force LLMs to output and parse complex JSON schemas. One hallucinated bracket crashes the system. Aether abandons this entirely in favor of biological **stigmergy** — agents communicate indirectly by leaving plain-English Pheromone Signals (FOCUS, REDIRECT, FEEDBACK) in the environment. This "soft logic" steers the colony without catastrophic failures when unexpected edge cases arise.
 
 ### The Synthetic SLA: Trading Tokens for Certainty
 
-Most frameworks treat an LLM failure as a fatal exception. Aether acknowledges that no single inference is 100% accurate and wraps the colony in a **System of Inference**: a Watcher and Critic verify a Builder's output in a best-of-n loop. With a Best-of-3 consensus, system reliability jumps from ~80% model accuracy to **99.2%**. Aether intentionally burns more compute tokens to guarantee deterministic-grade certainty.
+Standard approaches treat an LLM failure as a fatal exception. Aether acknowledges that no single inference is 100% accurate and wraps the colony in a **System of Inference**: a Watcher and Critic verify a Builder's output in a best-of-n loop. With a Best-of-3 consensus, system reliability jumps from ~80% model accuracy to **99.2%**. Aether intentionally burns more compute tokens to guarantee deterministic-grade certainty.
 
 ### Platform-Enforced Discipline
 
-Most frameworks give agents a system prompt but let them access every tool. Aether physically removes capabilities to force discipline:
+Other tools give agents a system prompt but let them access every tool. Aether physically removes capabilities to force discipline:
 
 - The **Auditor** and **Gatekeeper** have Write, Edit, and Bash tools **platform-revoked** — they cannot run commands or fix bugs, forcing purely static analysis
 - The **Tracker** (bug hunter) is forbidden from modifying files so it never contaminates the "crime scene"
