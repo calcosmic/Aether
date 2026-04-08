@@ -13,7 +13,7 @@ Aether is an open-source biomimetic AI colony that replaces deterministic agent 
 <br>
 
 [![GitHub release](https://img.shields.io/github/v/release/calcosmic/Aether.svg?style=flat-square)](https://github.com/calcosmic/Aether/releases)
-[![License: Apache 2.0](https://img.shields.io/github/license/calcosmic/Aether.svg?style=flat-square)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-7B3FE4?style=flat-square)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/calcosmic/Aether.svg?style=flat-square)](https://github.com/calcosmic/Aether/stargazers)
 [![Sponsor](https://img.shields.io/badge/Sponsor-GitHub-%23ea4aaa.svg?style=flat-square&logo=github)](https://github.com/sponsors/calcosmic?utm_source=github&utm_medium=readme&utm_campaign=aether)
 
