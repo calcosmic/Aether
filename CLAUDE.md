@@ -1,7 +1,6 @@
 # CLAUDE.md — Aether Development Guide
 
-> **Current Version:** v1.0.0 (documentation version; npm package version in package.json)
-> **Architecture:** v5.0 (Go binary — shell scripts and Node.js runtime removed)
+> **Current Version:** v1.0.1 (npm package version in package.json)
 > **Last Updated:** 2026-04-09
 
 ---

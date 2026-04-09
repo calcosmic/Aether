@@ -1,6 +1,6 @@
-# Aether Architecture - How It Works (v5.0)
+# Aether Architecture - How It Works
 
-> **Historical note:** Prior to v5.0, a Node.js runtime (`bin/cli.js`, `bin/validate-package.sh`) handled distribution. This was replaced by a Go binary in v5.0. Prior to v4.0, a `runtime/` staging directory was used as an intermediary — also removed.
+> **Historical note:** The distribution system was originally Node.js-based (`bin/cli.js`, `bin/validate-package.sh`), which was later replaced by the current Go binary (`cmd/`, `pkg/`). Even earlier, a `runtime/` staging directory was used as an intermediary — also removed.
 
 ## The Core Concept
 
