@@ -13,9 +13,9 @@
 | Version | v1.0.0 |
 | Slash commands | ~45 (Claude) + ~45 (OpenCode) |
 | Agent definitions | 24 |
-| Skills | 29 (10 colony + 19 domain) |
+| Skills | 28 (10 colony + 18 domain) |
 | Go binary | `aether` CLI (Go binary in cmd/) |
-| Tests | 1077+ passing |
+| Tests | 1075+ passing |
 | Architecture doc | `RUNTIME UPDATE ARCHITECTURE.md` |
 
 ---
@@ -42,7 +42,7 @@
 │   .aether/             ← Companion files (distributed via npm)  │
 │   ├── commands/*.yaml   Slash command source definitions        │
 │   ├── agents-claude/    Agent definition mirror (packaging)     │
-│   ├── skills/           colony/ (10) + domain/ (19)            │
+│   ├── skills/           colony/ (10) + domain/ (18)            │
 │   ├── docs/             Distributed documentation              │
 │   └── templates/        Colony state, pheromones, etc.          │
 │                                                                  │
@@ -132,7 +132,7 @@ aether update      # or /ant:update
 ├── utils/               # Runtime utilities
 │   ├── oracle/oracle.md # Oracle loop instructions (loaded by /ant:oracle)
 │   └── queen-to-md.xsl  # XSL transform for queen wisdom export
-├── skills/              # colony/ (10) + domain/ (19) skill definitions
+├── skills/              # colony/ (10) + domain/ (18) skill definitions
 ├── templates/           # 12 templates (colony-state, pheromones, etc.)
 ├── docs/                # Distributed documentation
 ├── exchange/            # XML exchange modules (pheromone-xml, wisdom-xml)
