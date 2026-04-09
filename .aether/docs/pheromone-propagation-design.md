@@ -714,5 +714,6 @@ All assertions in this document were verified against the actual codebase:
 
 ---
 
-*Design complete. Next steps: implement pheromone-snapshot-inject and
-pheromone-merge-back subcommands (implementation task).*
+*Design complete. The `pheromone-snapshot-inject` and `pheromone-merge-back`
+subcommands exist as deferred placeholders (cobra `Deprecated` field set).
+Full implementation is a future task.*

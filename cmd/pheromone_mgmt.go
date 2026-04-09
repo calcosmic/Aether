@@ -422,9 +422,10 @@ var pheromoneDisplayCmd = &cobra.Command{
 }
 
 var pheromoneSnapshotInjectCmd = &cobra.Command{
-	Use:   "pheromone-snapshot-inject",
-	Short: "Inject pheromone snapshot into colony state",
-	Args:  cobra.NoArgs,
+	Use:        "pheromone-snapshot-inject",
+	Short:      "Inject pheromone snapshot into colony state (deferred -- returns placeholder response)",
+	Args:       cobra.NoArgs,
+	Deprecated: "deferred -- not yet implemented, returns placeholder response",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if store == nil {
 			outputErrorMessage("no store initialized")
@@ -454,9 +455,10 @@ var pheromoneSnapshotInjectCmd = &cobra.Command{
 }
 
 var pheromoneMergeBackCmd = &cobra.Command{
-	Use:   "pheromone-merge-back",
-	Short: "Merge pheromone changes back from worktree",
-	Args:  cobra.NoArgs,
+	Use:        "pheromone-merge-back",
+	Short:      "Merge pheromone changes back from worktree (deferred -- returns placeholder response)",
+	Args:       cobra.NoArgs,
+	Deprecated: "deferred -- not yet implemented, returns placeholder response",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		outputOK(map[string]interface{}{"merged": true})
 		return nil

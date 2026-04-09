@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -562,6 +563,96 @@ func TestSealInProgress_CommittedSeal(t *testing.T) {
 
 	if sealInProgress(dataDir) {
 		t.Error("sealInProgress should return false when seal is committed")
+	}
+}
+
+func TestInitCmd_NoPlaceholderStrings(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+
+	origDir := os.Getenv("COLONY_DATA_DIR")
+	os.Setenv("COLONY_DATA_DIR", dataDir)
+	defer os.Setenv("COLONY_DATA_DIR", origDir)
+
+	rootCmd.SetArgs([]string{"init", "Placeholder verification test"})
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] != true {
+		t.Fatalf("expected ok:true, got: %v", env["ok"])
+	}
+
+	// Read the raw COLONY_STATE.json content as a string
+	statePath := filepath.Join(dataDir, "COLONY_STATE.json")
+	raw, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatalf("COLONY_STATE.json not found: %v", err)
+	}
+	content := string(raw)
+
+	// Placeholder patterns to search for
+	placeholderPatterns := []*regexp.Regexp{
+		regexp.MustCompile(`__\w+__`),     // __PLACEHOLDER__ style
+		regexp.MustCompile(`\bTODO\b`),    // TODO markers
+		regexp.MustCompile(`\bFIXME\b`),   // FIXME markers
+		regexp.MustCompile(`\bXXX\b`),     // XXX markers
+		regexp.MustCompile(`\bHACK\b`),    // HACK markers
+		regexp.MustCompile(`<\w+>`),       // <PLACEHOLDER> angle-bracket style
+		regexp.MustCompile(`\{\{[^}]+\}\}`), // {{placeholder}} mustache style
+	}
+
+	for _, pattern := range placeholderPatterns {
+		matches := pattern.FindAllString(content, -1)
+		if len(matches) > 0 {
+			t.Errorf("COLONY_STATE.json contains placeholder-like strings matching %s: %v",
+				pattern.String(), matches)
+		}
+	}
+
+	// Also verify the state has all required fields by parsing as ColonyState
+	s, err := storage.NewStore(dataDir)
+	if err != nil {
+		t.Fatalf("create store: %v", err)
+	}
+	var state colony.ColonyState
+	if err := s.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("failed to parse COLONY_STATE.json: %v", err)
+	}
+
+	requiredFieldChecks := []struct {
+		name  string
+		check func() bool
+	}{
+		{"version", func() bool { return state.Version != "" }},
+		{"goal", func() bool { return state.Goal != nil && *state.Goal != "" }},
+		{"state", func() bool { return state.State != "" }},
+		{"current_phase", func() bool { return true }}, // always has zero value
+		{"session_id", func() bool { return state.SessionID != nil && *state.SessionID != "" }},
+		{"initialized_at", func() bool { return state.InitializedAt != nil }},
+		{"plan.phases", func() bool { return state.Plan.Phases != nil }},
+		{"memory.phase_learnings", func() bool { return state.Memory.PhaseLearnings != nil }},
+		{"memory.decisions", func() bool { return state.Memory.Decisions != nil }},
+		{"memory.instincts", func() bool { return state.Memory.Instincts != nil }},
+		{"errors.records", func() bool { return state.Errors.Records != nil }},
+		{"errors.flagged_patterns", func() bool { return state.Errors.FlaggedPatterns != nil }},
+		{"signals", func() bool { return state.Signals != nil }},
+		{"graveyards", func() bool { return state.Graveyards != nil }},
+		{"events", func() bool { return state.Events != nil }},
+	}
+
+	for _, fc := range requiredFieldChecks {
+		if !fc.check() {
+			t.Errorf("required field %s is missing or zero-value", fc.name)
+		}
 	}
 }
 

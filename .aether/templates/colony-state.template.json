@@ -1,21 +1,22 @@
 {
   "_template": "colony-state",
   "_version": "3.0",
-  "_instructions": "Write this file to .aether/data/COLONY_STATE.json. Replace every __PLACEHOLDER__ value with real data (see _comment_* fields for details). After filling all placeholders, remove every key whose name starts with underscore (_template, _version, _instructions, and all _comment_*) before writing the final file.",
-  "_comment_goal": "Replace __GOAL__ with the user's goal string exactly as provided to /ant:init.",
+  "_usage_note": "This template is for REFERENCE ONLY. The actual init command (cmd/init_cmd.go) constructs colony state programmatically. Do NOT use this template for programmatic state creation or file-copy initialization. The Go code is the single source of truth for state structure.",
+  "_instructions": "This file shows the shape of COLONY_STATE.json with example values. All underscore-prefixed keys (_template, _version, _usage_note, _instructions, and all _comment_*) are metadata and should be removed before writing the final file.",
+  "_comment_goal": "The user's goal string exactly as provided to /ant:init.",
   "_comment_colony_name": "Set during first charter-write. Human-readable name derived from repo directory or package.json.",
   "_comment_colony_version": "Integer counter incremented each time the colony is sealed. Starts at 1 on colony initialization. Reset to 0 on entomb (ready for next colony). Tracks how many times this colony has been sealed.",
-  "_comment_session": "Replace __SESSION_ID__ with a generated ID in the format: session_{unix_timestamp}_{random}. Replace __ISO8601_TIMESTAMP__ with the current UTC time in ISO-8601 format (e.g., 2026-02-20T00:00:00Z). The same timestamp value is used in both 'initialized_at' and the events array entry.",
-  "_comment_memory": "Replace __PHASE_LEARNINGS__ with a JSON array (e.g., [] if no prior colony found, or [{...}, ...] if inherited from completion-report.md). Replace __INSTINCTS__ with a JSON array (e.g., [] or [{...}, ...]). IMPORTANT: both must be JSON arrays, not strings — write [] not \"[]\".",
-  "_comment_events": "The events array records colony lifecycle events. Each entry is a pipe-delimited string: 'ISO8601_TIMESTAMP|event_type|source|description'. The initialization event uses the same __ISO8601_TIMESTAMP__ as 'initialized_at'. Do not add extra events during init — the single initialization entry is correct.",
+  "_comment_session": "Session ID format: session_{unix_timestamp}_{random}. Timestamps use ISO-8601 UTC format. The same timestamp value is used in both 'initialized_at' and the events array entry.",
+  "_comment_memory": "phase_learnings and instincts are JSON arrays. Empty [] if no prior colony found, or [{...}, ...] if inherited from completion-report.md. IMPORTANT: both must be JSON arrays, not strings.",
+  "_comment_events": "Each entry is a pipe-delimited string: 'ISO8601_TIMESTAMP|event_type|source|description'. The initialization event uses the same timestamp as 'initialized_at'. Only the single initialization entry is present at init time.",
   "version": "3.0",
-  "goal": "__GOAL__",
-  "colony_name": null,
+  "goal": "Build a REST API for task management",
+  "colony_name": "Example Colony",
   "colony_version": 1,
   "state": "READY",
   "current_phase": 0,
-  "session_id": "__SESSION_ID__",
-  "initialized_at": "__ISO8601_TIMESTAMP__",
+  "session_id": "session_1737000000_abc123",
+  "initialized_at": "2026-01-15T10:30:00Z",
   "build_started_at": null,
   "plan": {
     "generated_at": null,
@@ -23,9 +24,9 @@
     "phases": []
   },
   "memory": {
-    "phase_learnings": "__PHASE_LEARNINGS__",
+    "phase_learnings": [],
     "decisions": [],
-    "instincts": "__INSTINCTS__"
+    "instincts": []
   },
   "errors": {
     "records": [],
@@ -34,6 +35,6 @@
   "signals": [],
   "graveyards": [],
   "events": [
-    "__ISO8601_TIMESTAMP__|colony_initialized|init|Colony initialized with goal: __GOAL__"
+    "2026-01-15T10:30:00Z|colony_initialized|init|Colony initialized with goal: Build a REST API for task management"
   ]
 }

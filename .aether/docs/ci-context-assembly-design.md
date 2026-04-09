@@ -300,9 +300,9 @@ NOTE: colony-prime line 924-929 exits with error if neither exists.
    (This matches colony-prime's existing behavior, colony-prime lines 973-986)
 
 NOTE: On a fresh PR branch, pheromones.json may not exist.
-      The pheromone-snapshot-inject protocol (Task 1.2, Section 4) should
-      have created it during branch setup. If it did not, pr-context
-      gracefully continues without signals.
+      The pheromone-snapshot-inject protocol (Task 1.2, Section 4) is
+      currently a deferred placeholder and will create it once implemented.
+      If it did not, pr-context gracefully continues without signals.
 ```
 
 ### 5.4 Colony State Fallback Chain
