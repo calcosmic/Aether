@@ -1,14 +1,129 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<queen-wisdom xmlns="http://aether.colony/schemas/queen-wisdom/1.0"
-               xmlns:qw="http://aether.colony/schemas/queen-wisdom/1.0">
-  <metadata>
-    <version>1.0.0</version>
-    <created>2026-02-18T01:48:47Z</created>
-    <modified>2026-02-18T01:48:47Z</modified>
-    <colony_id></colony_id>
-  </metadata>
-  <philosophies>
-  </philosophies>
+<queen-wisdom version="1.0" colony_id="" generated_at="2026-04-09T14:21:04Z">
+  <philosophies></philosophies>
   <patterns>
+    <pattern id="inst_1775264791" confidence="0.75" domain="" source="observation" created_at="2026-04-04T01:06:31Z">
+      <content>test_pattern</content>
+    </pattern>
+    <pattern id="inst_1775265406" confidence="0.85" domain="testing" source="observation" created_at="2026-04-04T01:16:46Z">
+      <content>test_uat_pattern</content>
+    </pattern>
+    <pattern id="inst_1775427740" confidence="0.80" domain="architecture" source="phase-1" created_at="2026-04-05T22:22:20Z">
+      <content>converting bare exec.Command to exec.CommandContext</content>
+    </pattern>
+    <pattern id="inst_1775427745" confidence="0.75" domain="code-style" source="phase-1" created_at="2026-04-05T22:22:25Z">
+      <content>timeout error handling in command context functions</content>
+    </pattern>
+    <pattern id="inst_1775429435" confidence="0.70" domain="architecture" source="phase-2" created_at="2026-04-05T22:50:35Z">
+      <content>implementing file locking in Go</content>
+    </pattern>
+    <pattern id="inst_1775430850" confidence="0.70" domain="architecture" source="success-phase-3" created_at="2026-04-05T23:14:10Z">
+      <content>replacing bare context.Background() with cobra cmd.Context()-derived contexts</content>
+    </pattern>
+    <pattern id="inst_1775432625" confidence="0.70" domain="code-style" source="phase-4" created_at="2026-04-05T23:43:45Z">
+      <content>adding timeout configuration to cobra commands</content>
+    </pattern>
+    <pattern id="inst_1775432625" confidence="0.75" domain="workflow" source="success-phase-4" created_at="2026-04-05T23:43:45Z">
+      <content>building on a well-designed abstraction from a prior phase</content>
+    </pattern>
+    <pattern id="inst_1775435736" confidence="0.90" domain="testing" source="phase-5" created_at="2026-04-06T00:35:36Z">
+      <content>running final integration phase after sequential fixes</content>
+    </pattern>
+    <pattern id="inst_1775481524" confidence="0.80" domain="code-style" source="phase-1" created_at="2026-04-06T13:18:44Z">
+      <content>setting nested JSON fields with sjson</content>
+    </pattern>
+    <pattern id="inst_1775484942" confidence="0.75" domain="architecture" source="phase-2" created_at="2026-04-06T14:15:42Z">
+      <content>exporting colony archive XML</content>
+    </pattern>
+    <pattern id="inst_1775484942" confidence="0.75" domain="code-style" source="phase-2" created_at="2026-04-06T14:15:42Z">
+      <content>Cobra alias command shares RunE with nested subcommand</content>
+    </pattern>
+    <pattern id="inst_1775490523" confidence="0.80" domain="architecture" source="phase-4" created_at="2026-04-06T15:48:43Z">
+      <content>a stub command that counts but never performs its action</content>
+    </pattern>
+    <pattern id="inst_1775491673_42b9b7" confidence="0.90" domain="pattern" source="sha256:8907ef9043107774fbe694defd18ba82e546e8e3a4940efc50d6c7ec9d2b7601" created_at="2026-04-06T16:07:53Z">
+      <content>syscall.Flock provides clean cross-process locking but a single in-process Mutex serializes all paths — use per-path mutex for better concurrency under high contention</content>
+    </pattern>
+    <pattern id="inst_1775491673_3ac05f" confidence="0.90" domain="pattern" source="sha256:540b1883527b2b1c7a65238f892ea2633f2acce5d3b9230789ba76a9fffdc0bf" created_at="2026-04-06T16:07:53Z">
+      <content>Lock upgrade/downgrade (shared to exclusive or vice versa) is silently destructive with flock — the unlock-reacquire window breaks atomicity</content>
+    </pattern>
+    <pattern id="inst_1775491673_ae6160" confidence="0.90" domain="pattern" source="sha256:5890b39bee27b967033bb31942c62706cc04f331c3370788bacfc76e46dd16b7" created_at="2026-04-06T16:07:53Z">
+      <content>When extending conventional commit type allowlists in Cobra commands, update both the validation slice and the --flag help string to prevent drift — use a derived help string from the slice</content>
+    </pattern>
+    <pattern id="inst_1775491673_9b0412" confidence="0.90" domain="pattern" source="sha256:44b1cacc861d7799d87c80700093ef363273cc0a4bf1d0b9217d11475933a0e9" created_at="2026-04-06T16:07:53Z">
+      <content>When implementing auto-promotion pipelines, connect stub implementations to actual service methods (e.g., PromoteService.Promote()) rather than leaving them as counting-only operations — callers expect side effects, not just counts</content>
+    </pattern>
+    <pattern id="inst_1775491673_0a9382" confidence="0.90" domain="pattern" source="sha256:8a8d616c0daaa6b8b381e960f929a14cc72ce1bef3f591e9057f3b0d155191ef" created_at="2026-04-06T16:07:53Z">
+      <content>When adding batch mode flags to existing Cobra commands (e.g., --all), ensure the flag name doesn&#39;t conflict with existing positional args and that the output schema is consistent between single-item and batch modes</content>
+    </pattern>
+    <pattern id="inst_1775491951" confidence="0.80" domain="code-style" source="phase-4" created_at="2026-04-06T16:12:31Z">
+      <content>building Cobra CLI commands that need both single-ID and batch modes</content>
+    </pattern>
+    <pattern id="inst_1775491960" confidence="0.85" domain="debugging" source="phase-4" created_at="2026-04-06T16:12:40Z">
+      <content>a Go command stub returns placeholder counts without calling the real service</content>
+    </pattern>
+    <pattern id="inst_1775498390" confidence="0.75" domain="workflow" source="phase-7" created_at="2026-04-06T17:59:50Z">
+      <content>migrating shell commands to Go binary</content>
+    </pattern>
+    <pattern id="inst_1775499359" confidence="0.80" domain="testing" source="phase-8" created_at="2026-04-06T18:15:59Z">
+      <content>Running final verification on Go projects</content>
+    </pattern>
+    <pattern id="inst_1775499359" confidence="0.75" domain="workflow" source="phase-8" created_at="2026-04-06T18:15:59Z">
+      <content>Adding new CLI flags to Go commands</content>
+    </pattern>
+    <pattern id="inst_1775517543" confidence="0.80" domain="code-style" source="phase-1" created_at="2026-04-06T23:19:03Z">
+      <content>cobra command rejects positional args via NoArgs but callers pass positional JSON</content>
+    </pattern>
+    <pattern id="inst_1775519656" confidence="0.75" domain="code-style" source="phase-2" created_at="2026-04-06T23:54:16Z">
+      <content>writing duplicate signals to pheromone store</content>
+    </pattern>
+    <pattern id="inst_1775520749" confidence="0.70" domain="code-style" source="success-phase-3" created_at="2026-04-07T00:12:29Z">
+      <content>state-mutate needs to accept bracket notation paths</content>
+    </pattern>
+    <pattern id="inst_1775522304" confidence="0.75" domain="code-style" source="phase-4" created_at="2026-04-07T00:38:24Z">
+      <content>deprecating dead CLI commands</content>
+    </pattern>
+    <pattern id="inst_1775522304" confidence="0.70" domain="debugging" source="phase-4" created_at="2026-04-07T00:38:24Z">
+      <content>silent error sites in non-critical code paths</content>
+    </pattern>
+    <pattern id="inst_1775540915" confidence="0.80" domain="workflow" source="success-phase-4" created_at="2026-04-07T05:48:35Z">
+      <content>updating agent definition markdown files that reference shell utilities</content>
+    </pattern>
+    <pattern id="inst_1775543386" confidence="0.80" domain="workflow" source="phase-5" created_at="2026-04-07T06:29:46Z">
+      <content>batch-replacing references in documentation files that mix prose and command invocations</content>
+    </pattern>
+    <pattern id="inst_1775545709" confidence="0.70" domain="workflow" source="phase-6" created_at="2026-04-07T07:08:29Z">
+      <content>deprecating dead shell scripts after Go migration</content>
+    </pattern>
+    <pattern id="inst_1775648844" confidence="0.70" domain="testing" source="success-phase-1" created_at="2026-04-08T11:47:24Z">
+      <content>benchmarking Go CLI commands</content>
+    </pattern>
+    <pattern id="inst_1775652646" confidence="0.75" domain="architecture" source="phase-2" created_at="2026-04-08T12:50:46Z">
+      <content>When centralizing validation logic across multiple call sites</content>
+    </pattern>
+    <pattern id="inst_1775669719" confidence="0.75" domain="architecture" source="phase-3" created_at="2026-04-08T17:35:19Z">
+      <content>When building a generic cache for arbitrary JSON data</content>
+    </pattern>
+    <pattern id="inst_1775675232" confidence="0.80" domain="architecture" source="phase-5" created_at="2026-04-08T19:07:12Z">
+      <content>deduplicating file loads across commands</content>
+    </pattern>
+    <pattern id="inst_1775677376" confidence="0.80" domain="performance" source="phase-6" created_at="2026-04-08T19:42:56Z">
+      <content>function spawns external process (git, curl, etc) and is called multiple times</content>
+    </pattern>
+    <pattern id="inst_1775744194_95fe6f" confidence="0.90" domain="learning" source="sha256:852230c2566a7993016e3f1cf72d54fd76fc8767e2a68709ea2154b9b551336d" created_at="2026-04-09T14:16:34Z">
+      <content>cobra.MaximumNArgs(N) with positional arg + flag mutual exclusion is a clean backward-compat pattern for CLI commands</content>
+    </pattern>
+    <pattern id="inst_1775744194_3e56cb" confidence="0.90" domain="learning" source="sha256:fbd8e29075f0c2c6d4788b7f24a9ad062519bb4c64cd42701c9a150b474694e9" created_at="2026-04-09T14:16:34Z">
+      <content>Content-hash based dedup with reinforcement counting is a clean pattern for idempotent signal writes</content>
+    </pattern>
+    <pattern id="inst_1775744194_4be2b9" confidence="0.90" domain="pattern" source="sha256:4845d1947cb0760912015d3cd6d3862a94dcebe20170c38cffe097c44c1e6339" created_at="2026-04-09T14:16:34Z">
+      <content>Widening regex to accept bracket notation then normalizing to dot notation is cleaner than teaching sjson bracket paths</content>
+    </pattern>
+    <pattern id="inst_1775744194_b80142" confidence="0.90" domain="learning" source="sha256:92402fb53bdc17cf83972ddf8ac0e8fe359133e360e0ab6f23e6b6d287921ba6" created_at="2026-04-09T14:16:34Z">
+      <content>The deprecated command stub pattern provides a clean migration path that preserves CLI surface area while removing implementation</content>
+    </pattern>
+    <pattern id="inst_1775744194_cd8440" confidence="0.90" domain="learning" source="sha256:6865c2c085e341e26285b4c28bb3d8e5a067578e3ece7483632fdb6b29b0334b" created_at="2026-04-09T14:16:34Z">
+      <content>Adding log.Printf to previously-silent error sites is zero-risk observability — errors remain non-fatal but failures become visible in logs</content>
+    </pattern>
   </patterns>
 </queen-wisdom>

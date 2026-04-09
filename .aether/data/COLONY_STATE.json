@@ -2,12 +2,12 @@
   "version": "3.0",
   "goal": "Tackle the three speed fixes for pheromone injection: eliminate redundant process spawns, centralize validation, and add session-level caching",
   "colony_name": "pheromone-speed-fix",
-  "colony_version": 1,
-  "state": "EXECUTING",
-  "current_phase": 9,
+  "colony_version": 2,
+  "state": "READY",
+  "current_phase": 10,
   "session_id": "session_1775643664_ba87cd71",
   "initialized_at": "2026-04-08T10:21:04Z",
-  "build_started_at": "2026-04-08T22:13:08Z",
+  "build_started_at": null,
   "plan": {
     "generated_at": "2026-04-08T10:50:54Z",
     "confidence": 82,
@@ -280,7 +280,7 @@
             ],
             "goal": "Add cache-clean subcommand to aether CLI that calls SessionCache.Clear() and reports files removed.",
             "id": "9.1",
-            "status": "pending"
+            "status": "completed"
           },
           {
             "depends_on": [
@@ -288,7 +288,7 @@
             ],
             "goal": "Add auto-cleanup at start of each context assembly command: delete .cache_* files older than 24 hours.",
             "id": "9.2",
-            "status": "pending"
+            "status": "completed"
           }
         ]
       },
@@ -296,7 +296,7 @@
         "description": "End-to-end verification that all three speed fixes work together and existing functionality is preserved.",
         "id": 10,
         "name": "Integration Verification",
-        "status": "pending",
+        "status": "completed",
         "success_criteria": [
           "Full test suite passes with race detection",
           "Benchmarks show improvement over baseline",
@@ -311,7 +311,7 @@
             ],
             "goal": "Run full test suite: go test ./... -race and verify zero failures.",
             "id": "10.1",
-            "status": "pending"
+            "status": "completed"
           },
           {
             "depends_on": [
@@ -321,7 +321,7 @@
             ],
             "goal": "Run benchmarks from phase 1 and compare against baseline. Verify measurable improvement in ns/op.",
             "id": "10.2",
-            "status": "pending"
+            "status": "completed"
           },
           {
             "depends_on": [
@@ -330,7 +330,7 @@
             ],
             "goal": "Verify sanitization rejects malicious content end-to-end: write signal with XML tags (rejected), write valid signal (stored and appears in output).",
             "id": "10.3",
-            "status": "pending"
+            "status": "completed"
           }
         ]
       }
@@ -443,28 +443,72 @@
       },
       {
         "id": "learning_1775685583",
-        "phase": 8,
-        "phase_name": "Wire File Cache into Context Assembly Commands",
         "learnings": [
           {
             "claim": "SessionCache.Load provides a clean read-through pattern: check memory, validate mtime, fall back to disk, store result",
-            "status": "hypothesis",
-            "tested": true,
+            "disproven_by": null,
             "evidence": "All 3 context assembly commands successfully use sc.Load for COLONY_STATE.json and instincts.json",
-            "disproven_by": null
+            "status": "hypothesis",
+            "tested": true
           },
           {
             "claim": "When wiring cache into existing commands, keep single-load-then-distribute pattern rather than having each section call cache independently",
-            "status": "hypothesis",
-            "tested": true,
+            "disproven_by": null,
             "evidence": "Preserved colStateErr pattern from Phase 4 dedup while adding cache layer on top",
+            "status": "hypothesis",
+            "tested": true
+          }
+        ],
+        "phase": 8,
+        "phase_name": "Wire File Cache into Context Assembly Commands",
+        "timestamp": "2026-04-08T21:59:43Z"
+      },
+      {
+        "id": "learning_1744200000",
+        "learnings": [
+          {
+            "claim": "Auto-cleanup with ClearStale(24h) at command entry points prevents stale cache accumulation without requiring user intervention",
+            "disproven_by": null,
+            "evidence": "cache-clean and cache-clean-stale commands work, auto-cleanup wired in 3 context assembly entry points",
+            "status": "hypothesis",
+            "tested": true
+          },
+          {
+            "claim": "Separating full Clear from selective ClearStale gives both one-shot cleanup and ongoing hygiene without conflict",
+            "disproven_by": null,
+            "evidence": "Both commands tested independently, Clear removes all .cache_* files, ClearStale respects maxAge parameter",
+            "status": "hypothesis",
+            "tested": true
+          }
+        ],
+        "phase": 9,
+        "phase_name": "Cache Cleanup and Session Hygiene",
+        "timestamp": "2026-04-09T12:50:00Z"
+      },
+      {
+        "id": "learning_1775742215",
+        "phase": 10,
+        "phase_name": "Integration Verification",
+        "learnings": [
+          {
+            "claim": "End-to-end verification confirms 40% PRContext speed improvement through deduplication, caching, and centralized sanitization working together",
+            "status": "validated",
+            "tested": true,
+            "evidence": "go test ./... -race all 13 packages pass, benchmarks show 20.8ms to 12.5ms improvement",
+            "disproven_by": null
+          },
+          {
+            "claim": "Sanitization integration requires testing both write and import paths independently — each has different error handling (reject vs skip)",
+            "status": "validated",
+            "tested": true,
+            "evidence": "16 sanitization test cases pass covering pheromone-write (reject) and exchange import (skip) paths",
             "disproven_by": null
           }
         ],
-        "timestamp": "2026-04-08T21:59:43Z"
+        "timestamp": "2026-04-09T13:43:35Z"
       }
     ],
-    "decisions": null,
+    "decisions": [],
     "instincts": []
   },
   "errors": {
@@ -477,10 +521,14 @@
     "2026-04-08T10:21:04Z|colony_initialized|init|Colony initialized",
     "2026-04-08T10:50:54Z|plan_generated|plan|Generated 10 phases",
     "2026-04-08T20:58:15Z|phase_advanced|continue|Completed Phase 7, advancing to Phase 8",
-    "2026-04-08T21:57:57Z|phase_completed|continue|Phase 8 completed"
+    "2026-04-08T21:57:57Z|phase_completed|continue|Phase 8 completed",
+    "",
+    "2026-04-09T13:32:29Z|phase_started|build|Phase 10: Integration Verification started",
+    "2026-04-09T13:43:35Z|phase_completed|continue|Phase 10: Integration Verification completed - all 10 phases done",
+    "2026-04-09T14:18:10Z|milestone_reached|seal|Achieved Crowned Anthill milestone"
   ],
   "plan_granularity": "quarter",
-  "milestone": "",
-  "build_baseline_sha": "f409480b7f4116245f9dee171eb12451c7de00c1"
+  "milestone": "Crowned Anthill",
+  "build_baseline_sha": "6fab416a6f427bcb4bceac676555931eba403b06",
+  "milestone_updated_at": "2026-04-09T14:18:10Z"
 }
-
