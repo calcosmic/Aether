@@ -304,7 +304,24 @@ func cleanEmptyDirs(baseDir string) {
 	})
 }
 
-// setupInstallHub creates the hub directory at ~/.aether/ if it doesn't exist.
+// hubExcludeDirs are .aether/ subdirectories that should never be synced to the hub.
+// These match .npmignore — private/local data that belongs to individual colonies.
+var hubExcludeDirs = map[string]bool{
+	"data":        true,
+	"dreams":      true,
+	"oracle":      true,
+	"checkpoints": true,
+	"locks":       true,
+	"temp":        true,
+	"archive":     true,
+	"chambers":    true,
+	"agents":      true, // agents/ is opencode-only, agents-claude/ is the packaging mirror
+	"examples":    true,
+	"__pycache__": true,
+}
+
+// setupInstallHub creates the hub directory at ~/.aether/ and syncs companion files
+// from .aether/ to ~/.aether/system/.
 func setupInstallHub(hubDir, packageDir string) map[string]interface{} {
 	result := map[string]interface{}{
 		"label": "Hub",
@@ -316,6 +333,14 @@ func setupInstallHub(hubDir, packageDir string) map[string]interface{} {
 		result["error"] = fmt.Sprintf("failed to create hub: %v", err)
 		return result
 	}
+
+	// Sync companion files from .aether/ to ~/.aether/system/
+	systemDir := filepath.Join(hubDir, "system")
+	srcAether := filepath.Join(packageDir, ".aether")
+	hubSyncResult := syncDirToHub(srcAether, systemDir)
+	result["copied"] = hubSyncResult.copied
+	result["skipped"] = hubSyncResult.skipped
+	result["removed"] = len(hubSyncResult.removed)
 
 	// Create registry.json if it doesn't exist
 	registryPath := filepath.Join(hubDir, "registry.json")
@@ -338,11 +363,101 @@ func setupInstallHub(hubDir, packageDir string) map[string]interface{} {
 		result["version"] = resolved
 	}
 
-	result["copied"] = 0
-	result["skipped"] = 0
-	result["removed"] = 0
+	return result
+}
+
+// syncDirToHub copies files from src (.aether/) to dest (~/.aether/system/),
+// skipping excluded directories and unchanged files (by SHA-256 hash).
+// Also removes stale files in dest that no longer exist in src.
+func syncDirToHub(src, dest string) syncResult {
+	result := syncResult{}
+
+	srcInfo, err := os.Stat(src)
+	if err != nil || !srcInfo.IsDir() {
+		return result
+	}
+
+	if err := os.MkdirAll(dest, 0755); err != nil {
+		return result
+	}
+
+	// Walk source and copy files, skipping excluded directories
+	srcFiles := listFilesRecursiveWithExclusion(src, hubExcludeDirs)
+	for _, relPath := range srcFiles {
+		srcPath := filepath.Join(src, relPath)
+		destPath := filepath.Join(dest, relPath)
+
+		if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+			continue
+		}
+
+		// Check if file is unchanged
+		if _, err := os.Stat(destPath); err == nil {
+			srcHash, srcErr := fileSHA256(srcPath)
+			destHash, destErr := fileSHA256(destPath)
+			if srcErr == nil && destErr == nil && srcHash == destHash {
+				result.skipped++
+				continue
+			}
+		}
+
+		if err := copyFile(srcPath, destPath); err != nil {
+			continue
+		}
+		result.copied++
+	}
+
+	// Remove stale files (in dest but not in src)
+	destFiles := listFilesRecursive(dest)
+	srcSet := make(map[string]struct{}, len(srcFiles))
+	for _, f := range srcFiles {
+		srcSet[f] = struct{}{}
+	}
+	for _, relPath := range destFiles {
+		// Don't remove files in excluded dirs (they may have been added manually)
+		parts := strings.SplitN(relPath, string(filepath.Separator), 2)
+		if len(parts) > 0 && hubExcludeDirs[parts[0]] {
+			continue
+		}
+		if _, exists := srcSet[relPath]; !exists {
+			destPath := filepath.Join(dest, relPath)
+			if err := os.Remove(destPath); err == nil {
+				result.removed = append(result.removed, relPath)
+			}
+		}
+	}
+
+	if len(result.removed) > 0 {
+		cleanEmptyDirs(dest)
+	}
 
 	return result
+}
+
+// listFilesRecursiveWithExclusion returns all file paths relative to baseDir,
+// skipping directories listed in the exclude map.
+func listFilesRecursiveWithExclusion(baseDir string, exclude map[string]bool) []string {
+	var files []string
+	_ = filepath.WalkDir(baseDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			// Skip excluded directories
+			rel, relErr := filepath.Rel(baseDir, path)
+			if relErr == nil && exclude[rel] {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		rel, relErr := filepath.Rel(baseDir, path)
+		if relErr != nil {
+			return nil
+		}
+		files = append(files, rel)
+		return nil
+	})
+	return files
 }
 
 // runBinaryDownloadFromInstall handles the --download-binary flag on the install command.
