@@ -90,6 +90,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		{"commands/opencode", "../.opencode/commands/ant", "Commands (opencode)"},
 		{"agents", "../.opencode/agents", "Agents (opencode)"},
 		{"agents-claude", "../.claude/agents/ant", "Agents (claude)"},
+		{"rules", "../.claude/rules", "Rules (claude)"},
 	}
 
 	results := []map[string]interface{}{}

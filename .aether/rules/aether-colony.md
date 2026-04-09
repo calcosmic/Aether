@@ -35,6 +35,9 @@ This only applies to genuinely new conversations, not after /clear.
 | `/ant:focus "<area>"` | normal | Guide colony attention |
 | `/ant:redirect "<pattern>"` | high | Hard constraint — avoid this |
 | `/ant:feedback "<note>"` | low | Gentle adjustment |
+| `/ant:pheromones` | — | View all active signals |
+| `/ant:export-signals` | — | Export signals to XML |
+| `/ant:import-signals` | — | Import signals from XML |
 
 ### Status & Monitoring
 | Command | Purpose |
@@ -45,6 +48,9 @@ This only applies to genuinely new conversations, not after /clear.
 | `/ant:flag "<title>"` | Create a flag |
 | `/ant:history` | Browse colony events |
 | `/ant:watch` | Live tmux monitoring |
+| `/ant:memory-details` | Drill-down memory view |
+| `/ant:patrol` | System health check |
+| `/ant:help` | List available commands |
 
 ### Session Management
 | Command | Purpose |
@@ -60,10 +66,13 @@ This only applies to genuinely new conversations, not after /clear.
 | `/ant:entomb` | Archive completed colony |
 | `/ant:maturity` | View colony maturity journey |
 | `/ant:update` | Update system files from hub |
+| `/ant:migrate-state` | Migrate colony state between versions |
 
 ### Advanced
 | Command | Purpose |
 |---------|---------|
+| `/ant:run` | Autopilot — build, verify, advance automatically |
+| `/ant:quick` | Quick one-shot task |
 | `/ant:swarm "<bug>"` | Parallel bug investigation |
 | `/ant:oracle` | Deep research (RALF loop) |
 | `/ant:dream` | Philosophical observation |
@@ -72,6 +81,12 @@ This only applies to genuinely new conversations, not after /clear.
 | `/ant:archaeology` | Git history analysis |
 | `/ant:organize` | Codebase hygiene report |
 | `/ant:council` | Intent clarification |
+| `/ant:preferences` | Set user preferences |
+| `/ant:skill-create` | Create a custom skill |
+| `/ant:insert-phase` | Insert phase into plan |
+| `/ant:tunnels` | View colony communication tunnels |
+| `/ant:data-clean` | Clean test artifacts from data files |
+| `/ant:verify-castes` | Verify worker caste assignments |
 
 ## Typical Workflow
 
@@ -87,6 +102,7 @@ Starting a colony:
 5. /ant:build 1                            (workers execute phase 1)
 6. /ant:continue                           (verify, learn, advance)
 7. /ant:build 2                            (repeat until complete)
+   /ant:run                                (or use autopilot for all phases)
 
 After /clear or session break:
 8. /ant:resume-colony                      (restore full context)

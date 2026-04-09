@@ -165,6 +165,7 @@ func runUpdateSync(hubDir, repoDir string, force bool) updateSyncResult {
 		{"commands/opencode", "../.opencode/commands/ant", "Commands (opencode)"},
 		{"agents", "../.opencode/agents", "Agents (opencode)"},
 		{"agents-claude", "../.claude/agents/ant", "Agents (claude)"},
+		{"rules", "../.claude/rules", "Rules (claude)"},
 	}
 
 	for _, pair := range syncPairs {
