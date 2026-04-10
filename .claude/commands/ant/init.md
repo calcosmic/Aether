@@ -474,6 +474,26 @@ Parse the user's response:
 
 When applying edits, Claude updates the section content in memory (not files) and re-displays the full prompt. Each re-display includes a revision counter: "(Revision {N}/2)"
 
+### Step 6.5: Choose Parallel Strategy
+
+Ask the user to choose a parallel execution strategy using `AskUserQuestion`:
+
+```
+How should builders work in parallel?
+
+1. In-repo (recommended) -- All builders share the same repo directory. Simple and safe. Best for most projects.
+2. Worktree -- Each builder gets an isolated git worktree. Enables true parallel file changes. Requires git worktree support.
+
+Choose [1/2] (default: 1):
+```
+
+Parse the user's response:
+- If "1", "in-repo", or empty/no response: set `parallel_mode = "in-repo"`
+- If "2" or "worktree": set `parallel_mode = "worktree"`
+- Otherwise: default to `parallel_mode = "in-repo"` (safe default)
+
+Store the chosen mode as the variable `parallel_mode` for use in Step 7 and Step 8.
+
 ### Step 7: Create Colony (Post-Approval)
 
 Only reached after user approval. ALL file writes happen here.
@@ -511,7 +531,12 @@ fi
 
 5. Run `aether session-init "$(jq -r '.session_id' .aether/data/COLONY_STATE.json)" "{approved_intent}"`
 
-6. Skip to Step 8 (display result). Do NOT write COLONY_STATE.json from template, do NOT write constraints.json, do NOT write pheromones.json.
+6. Set parallel mode:
+```bash
+aether state-mutate --field parallel_mode --value "$parallel_mode"
+```
+
+7. Skip to Step 8 (display result). Do NOT write COLONY_STATE.json from template, do NOT write constraints.json, do NOT write pheromones.json.
 
 **If fresh init:**
 
@@ -538,6 +563,11 @@ if [[ "$verify_valid" != "valid" || "$verify_goal" == "null" || -z "$verify_goal
   stop
 fi
 echo "Colony state verified: goal=\"$verify_goal\""
+```
+
+5a. Set parallel mode:
+```bash
+aether state-mutate --field parallel_mode --value "$parallel_mode"
 ```
 
 6. Write constraints.json from template:
@@ -712,6 +742,7 @@ Display the success header and result block:
    "{approved_intent}"
 
    🟢 Colony Status: READY
+   🏗️  Parallel Strategy: {parallel_mode} ({if parallel_mode == "worktree": "builders work in isolated git worktrees" else: "builders share the same repo directory"})
 
 {If re-init: "   🔄 Mode: Re-init (charter updated, state preserved)"}
 {If fresh and seeded_count > 0: "   🧠 Hive wisdom: {seeded_count} cross-colony pattern(s) seeded into QUEEN.md"}

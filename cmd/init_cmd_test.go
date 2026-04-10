@@ -656,6 +656,33 @@ func TestInitCmd_NoPlaceholderStrings(t *testing.T) {
 	}
 }
 
+func TestInitCmd_ParallelModeDefault(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+
+	origDir := os.Getenv("COLONY_DATA_DIR")
+	os.Setenv("COLONY_DATA_DIR", dataDir)
+	defer os.Setenv("COLONY_DATA_DIR", origDir)
+
+	rootCmd.SetArgs([]string{"init", "Parallel mode default test"})
+	rootCmd.Execute()
+
+	s, _ := storage.NewStore(dataDir)
+
+	var state colony.ColonyState
+	s.LoadJSON("COLONY_STATE.json", &state)
+
+	if state.ParallelMode != colony.ModeInRepo {
+		t.Errorf("parallel_mode = %q, want %q (in-repo)", state.ParallelMode, colony.ModeInRepo)
+	}
+}
+
 // --- helpers ---
 
 func runGit(t *testing.T, dir string, args ...string) {

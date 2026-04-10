@@ -104,9 +104,10 @@ var initCmd = &cobra.Command{
 				Records:         []colony.ErrorRecord{},
 				FlaggedPatterns: []colony.FlaggedPattern{},
 			},
-			Signals:    []colony.Signal{},
-			Graveyards: []colony.Graveyard{},
-			Events:     []string{},
+			Signals:      []colony.Signal{},
+			Graveyards:   []colony.Graveyard{},
+			Events:       []string{},
+			ParallelMode: colony.ModeInRepo,
 		}
 
 		if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {

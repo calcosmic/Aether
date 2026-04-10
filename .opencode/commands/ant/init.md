@@ -271,6 +271,26 @@ Parse the user's response:
 
 When applying edits, Claude updates the section content in memory (not files) and re-displays the full prompt. Each re-display includes a revision counter: "(Revision {N}/2)"
 
+### Step 6.5: Choose Parallel Strategy
+
+Ask the user to choose a parallel execution strategy using `AskUserQuestion`:
+
+```
+How should builders work in parallel?
+
+1. In-repo (recommended) -- All builders share the same repo directory. Simple and safe. Best for most projects.
+2. Worktree -- Each builder gets an isolated git worktree. Enables true parallel file changes. Requires git worktree support.
+
+Choose [1/2] (default: 1):
+```
+
+Parse the user's response:
+- If "1", "in-repo", or empty/no response: set `parallel_mode = "in-repo"`
+- If "2" or "worktree": set `parallel_mode = "worktree"`
+- Otherwise: default to `parallel_mode = "in-repo"` (safe default)
+
+Store the chosen mode as the variable `parallel_mode` for use in Step 7 and Step 8.
+
 ### Step 7: Create Colony (Post-Approval)
 
 Only reached after user approval. ALL file writes happen here.
@@ -306,7 +326,12 @@ fi
 
 5. Run `aether session-init "$(jq -r '.session_id' .aether/data/COLONY_STATE.json)" "{approved_intent}"`
 
-6. Skip to Step 8 (display result). Do NOT write COLONY_STATE.json from template, do NOT write constraints.json, do NOT write pheromones.json.
+6. Set parallel mode:
+```bash
+aether state-mutate --field parallel_mode --value "$parallel_mode"
+```
+
+7. Skip to Step 8 (display result). Do NOT write COLONY_STATE.json from template, do NOT write constraints.json, do NOT write pheromones.json.
 
 **If fresh init:**
 
@@ -334,12 +359,17 @@ fi
 echo "Colony state verified: goal=\"$verify_goal\""
 ```
 
-6. Write constraints.json from template:
+6. Set parallel mode:
+```bash
+aether state-mutate --field parallel_mode --value "$parallel_mode"
+```
+
+7. Write constraints.json from template:
    - Resolve template: check `~/.aether/system/templates/constraints.template.json` first, then `.aether/templates/constraints.template.json`
    - If no template found: output "Template missing: constraints.template.json. Run aether update to fix." and stop
    - Read template, follow `_instructions`, remove `_` prefixed keys, write to `.aether/data/constraints.json`
 
-7. Initialize runtime files from templates (non-blocking):
+8. Initialize runtime files from templates (non-blocking):
 ```bash
 for template in pheromones midden learning-observations; do
   if [[ "$template" == "midden" ]]; then
@@ -362,15 +392,15 @@ for template in pheromones midden learning-observations; do
 done
 ```
 
-8. Run `aether context-update init "{approved_intent}"`
-9. Run `aether validate-state colony`
-10. Register repo (silent on failure):
+9. Run `aether context-update init "{approved_intent}"`
+10. Run `aether validate-state colony`
+11. Register repo (silent on failure):
 ```bash
 domain_tags=$(aether domain-detect 2>/dev/null | jq -r '.result.tags // ""' || echo "")
 aether registry-add --path "$(pwd)" "$(jq -r '.version // "unknown"' ~/.aether/version.json 2>/dev/null || echo 'unknown')" --goal "{approved_intent}" --active true --tags "$domain_tags" 2>/dev/null || true
 cp ~/.aether/version.json .aether/version.json 2>/dev/null || true
 ```
-11. Seed QUEEN.md from hive (non-blocking):
+12. Seed QUEEN.md from hive (non-blocking):
 ```bash
 domain_tags=$(jq -r --arg repo "$(pwd)" \
   '[.repos[] | select(.path == $repo) | .domain_tags // []] | .[0] // [] | join(",")' \
@@ -380,7 +410,7 @@ seed_args="queen-seed-from-hive --limit 5"
 seed_result=$(aether $seed_args 2>/dev/null || echo '{}')
 seeded_count=$(echo "$seed_result" | jq -r '.result.seeded // 0' 2>/dev/null || echo "0")
 ```
-12. Run `aether session-init "{session_id}" "{approved_intent}"`
+13. Run `aether session-init "{session_id}" "{approved_intent}"`
 
 **Pheromone auto-apply (referenced by both re-init and fresh init paths above):**
 
@@ -506,6 +536,7 @@ Display the success header and result block:
    "{approved_intent}"
 
    🟢 Colony Status: READY
+   🏗️  Parallel Strategy: {parallel_mode} ({if parallel_mode == "worktree": "builders work in isolated git worktrees" else: "builders share the same repo directory"})
 
 {If re-init: "   🔄 Mode: Re-init (charter updated, state preserved)"}
 {If fresh and seeded_count > 0: "   🧠 Hive wisdom: {seeded_count} cross-colony pattern(s) seeded into QUEEN.md"}
